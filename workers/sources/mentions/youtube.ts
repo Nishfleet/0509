@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import { isLostYoutubeChannel, isYoutubeChannelId } from "../../mentions/youtube-resolve";
 import { parseFeedEntries } from "./feed";
 import {
 	fetchUpstream,
@@ -22,17 +23,31 @@ const ENTRY_SCHEMA = z
 	}));
 
 export const youtubeAdapter: MentionsAdapter = async (target) => {
+	if (!isYoutubeChannelId(target.query)) {
+		return mentionsResultSchema.parse({ items: [], canaryCount: 0, rawBody: "", feedState: "stale" });
+	}
 	const url = `https://www.youtube.com/feeds/videos.xml?channel_id=${encodeURIComponent(target.query)}`;
 	const response = await fetchUpstream(url);
 	const rawBody = await response.text();
+	const contentType = response.headers.get("content-type") ?? "";
 
-	if (!response.ok) {
-		return mentionsResultSchema.parse({ items: [], canaryCount: 0, rawBody });
+	if (isLostYoutubeChannel(response.status, contentType, rawBody)) {
+		return mentionsResultSchema.parse({ items: [], canaryCount: 0, rawBody, feedState: "stale" });
 	}
 
-	const entries = parseFeedEntries(rawBody, (data) => ({
-		videoId: VIDEO_ID.safeParse(data["yt:videoId"] ?? data.videoId).data ?? null,
-	}));
+	if (!response.ok) {
+		return mentionsResultSchema.parse({ items: [], canaryCount: 0, rawBody, feedState: "ok" });
+	}
+
+	let entries: ReturnType<typeof parseFeedEntries>;
+	try {
+		entries = parseFeedEntries(rawBody, (data) => ({
+			videoId: VIDEO_ID.safeParse(data["yt:videoId"] ?? data.videoId).data ?? null,
+		}));
+	} catch {
+		const feedState = rawBody.includes("<feed") ? "ok" : "stale";
+		return mentionsResultSchema.parse({ items: [], canaryCount: 0, rawBody, feedState });
+	}
 
 	const items = entries.flatMap((entry) => {
 		const parsed = ENTRY_SCHEMA.safeParse(entry);
@@ -47,5 +62,5 @@ export const youtubeAdapter: MentionsAdapter = async (target) => {
 		];
 	});
 
-	return mentionsResultSchema.parse({ items, canaryCount: entries.length, rawBody });
+	return mentionsResultSchema.parse({ items, canaryCount: entries.length, rawBody, feedState: "ok" });
 };

@@ -2,17 +2,25 @@ import { env } from "cloudflare:workers";
 
 import { insertSignalAlert } from "../../app/lib/data/alert.server";
 import type { DiscoveryContext } from "../../app/lib/data/entity.server";
-import { readDiscoveryContext } from "../../app/lib/data/entity.server";
+import { readDiscoveryContext, readEntityIdentityJson } from "../../app/lib/data/entity.server";
 import { insertVerdict } from "../../app/lib/data/jev_verdict.server";
 import { insertMention, readSeenDedupKeys } from "../../app/lib/data/signal.server";
 import { insertWatchSnapshot } from "../../app/lib/data/snapshot.server";
 import type { WatchRow } from "../../app/lib/data/watch.server";
-import { markWatchPolled, readActiveWatches } from "../../app/lib/data/watch.server";
+import { markWatchPolled, readActiveWatches, readWatchConfigJson, writeWatchConfigJson } from "../../app/lib/data/watch.server";
 import type { NoulQuestion, NoulVerdict } from "../../app/lib/jev/client.server";
 import { askNoul, JevUnavailableError } from "../../app/lib/jev/client.server";
 import { noulAction } from "../../app/lib/jev/thresholds";
 import type { MentionItem } from "./map";
+import {
+  channelIdFromConfig,
+  lostChannelFlag,
+  resolveYoutubeChannelId,
+  withLostChannel,
+  withResolvedChannel,
+} from "./youtube-resolve";
 import { adapterFor } from "../sources/registry";
+import { fetchUpstream, type MentionsAdapter } from "../sources/mentions/types";
 
 const JUDGED_PER_WATCH = 12;
 
@@ -192,7 +200,87 @@ async function statementsForWatch(input: {
   return { statements, stored, unjudged };
 }
 
+async function commitMentionWatch(input: {
+  watch: WatchRow;
+  items: readonly MentionItem[];
+  rawBody: string;
+  pluginKey: string;
+  now: string;
+}): Promise<{ stored: number; unjudged: number }> {
+  const { watch, items, rawBody, pluginKey, now } = input;
+  const hash = await sha256Hex(rawBody);
+  const r2Key = `snapshot/mentions/${pluginKey}/${hash}`;
+  await env.SNAPSHOTS.put(r2Key, rawBody, { httpMetadata: { contentType: "application/octet-stream" } });
+  const context = await readDiscoveryContext(watch.workspace_id);
+  if (context === null) return { stored: 0, unjudged: 0 };
+  const titled = items.filter((item) => item.title.trim() !== "");
+  const written = await statementsForWatch({ watch, context, items: titled, snapshot: { r2Key, hash }, now });
+  await env.DB.batch(written.statements);
+  await markWatchPolled(watch.watch_id, now);
+  return { stored: written.stored, unjudged: written.unjudged };
+}
+
+async function sweepOneYoutube(
+  adapter: MentionsAdapter,
+  watch: WatchRow,
+  now: string,
+): Promise<TargetOutcome> {
+  const configRaw = await readWatchConfigJson(watch.watch_id);
+  const channelId = channelIdFromConfig(configRaw);
+  const first = await adapter({ query: channelId ?? "" }, null);
+  if (first.feedState !== "stale") {
+    if (lostChannelFlag(configRaw) !== null && channelId !== null) {
+      await writeWatchConfigJson(watch.watch_id, withResolvedChannel(configRaw, channelId));
+    }
+    const committed = await commitMentionWatch({
+      watch,
+      items: first.items,
+      rawBody: first.rawBody,
+      pluginKey: "youtube.channel_rss",
+      now,
+    });
+    return { items: first.items.length, stored: committed.stored, unjudged: committed.unjudged };
+  }
+
+  const flagged = withLostChannel(configRaw, now);
+  if (flagged !== configRaw) await writeWatchConfigJson(watch.watch_id, flagged);
+  const identity = await readEntityIdentityJson(watch.entity_id);
+  const candidate = await resolveYoutubeChannelId(identity, (url) => fetchUpstream(url));
+  if (candidate !== null && candidate !== channelId) {
+    const second = await adapter({ query: candidate }, null);
+    if (second.feedState !== "stale") {
+      await writeWatchConfigJson(watch.watch_id, withResolvedChannel(flagged, candidate));
+      const committed = await commitMentionWatch({
+        watch,
+        items: second.items,
+        rawBody: second.rawBody,
+        pluginKey: "youtube.channel_rss",
+        now,
+      });
+      return { items: second.items.length, stored: committed.stored, unjudged: committed.unjudged };
+    }
+  }
+  await markWatchPolled(watch.watch_id, now);
+  return { items: 0, stored: 0, unjudged: 0 };
+}
+
+async function sweepYoutubeTarget(target: MentionTarget, now: string): Promise<TargetOutcome> {
+  const adapter = adapterFor(target.pluginKey);
+  if (adapter === undefined) throw new Error(`no mentions adapter for ${target.pluginKey}`);
+  let items = 0;
+  let stored = 0;
+  let unjudged = 0;
+  for (const watch of target.watches) {
+    const outcome = await sweepOneYoutube(adapter, watch, now);
+    items += outcome.items;
+    stored += outcome.stored;
+    unjudged += outcome.unjudged;
+  }
+  return { items, stored, unjudged };
+}
+
 export async function sweepTarget(target: MentionTarget, now: string): Promise<TargetOutcome> {
+  if (target.pluginKey === "youtube.channel_rss") return sweepYoutubeTarget(target, now);
   const adapter = adapterFor(target.pluginKey);
   if (adapter === undefined) throw new Error(`no mentions adapter for ${target.pluginKey}`);
   const result = await adapter({ query: target.query }, null);

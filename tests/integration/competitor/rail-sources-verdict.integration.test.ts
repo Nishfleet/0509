@@ -186,6 +186,7 @@ describe("rail readEntitySources", () => {
         last_good_at: "2026-09-19T06:02:00.000Z",
       }),
     );
+    expect(hiring.source.watch_config_json).toBe("{}");
 
     const site = rows[1];
     expect(site.snapshot).toEqual({

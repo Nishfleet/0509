@@ -3,7 +3,7 @@ import { env } from "cloudflare:workers";
 const ENABLED_SOURCE_ID = `SELECT id FROM source WHERE key = ?1 AND is_enabled = 1`;
 
 const SELECT_ENTITY_SOURCES =
-  "SELECT s.key, s.platform, s.kind, s.is_enabled, s.config_json, (SELECT MAX(sn.fetched_at) FROM snapshot sn JOIN watch w2 ON w2.id = sn.watch_id WHERE w2.entity_id = ?2 AND w2.source_id = s.id) AS fetched_at, (SELECT sn.item_count FROM snapshot sn JOIN watch w2 ON w2.id = sn.watch_id WHERE w2.entity_id = ?2 AND w2.source_id = s.id ORDER BY sn.fetched_at DESC LIMIT 1) AS item_count FROM source s WHERE s.id IN (SELECT w.source_id FROM watch w JOIN entity e ON e.id = w.entity_id WHERE e.workspace_id = ?1 AND e.id = ?2) ORDER BY s.kind, s.key";
+  "SELECT s.key, s.platform, s.kind, s.is_enabled, s.config_json, (SELECT MAX(sn.fetched_at) FROM snapshot sn JOIN watch w2 ON w2.id = sn.watch_id WHERE w2.entity_id = ?2 AND w2.source_id = s.id) AS fetched_at, (SELECT sn.item_count FROM snapshot sn JOIN watch w2 ON w2.id = sn.watch_id WHERE w2.entity_id = ?2 AND w2.source_id = s.id ORDER BY sn.fetched_at DESC LIMIT 1) AS item_count, (SELECT w3.config_json FROM watch w3 WHERE w3.entity_id = ?2 AND w3.source_id = s.id AND w3.is_active = 1 ORDER BY CASE WHEN json_extract(w3.config_json, '$.degraded.state') = 'degraded' THEN 0 ELSE 1 END, w3.last_polled_at DESC LIMIT 1) AS watch_config_json FROM source s WHERE s.id IN (SELECT w.source_id FROM watch w JOIN entity e ON e.id = w.entity_id WHERE e.workspace_id = ?1 AND e.id = ?2) ORDER BY s.kind, s.key";
 
 export interface EntitySource {
   source: {
@@ -12,6 +12,7 @@ export interface EntitySource {
     kind: string;
     is_enabled: number;
     config_json: string;
+    watch_config_json: string | null;
   };
   snapshot: {
     item_count: number;
@@ -27,6 +28,7 @@ interface EntitySourceRow {
   config_json: string;
   fetched_at: string | null;
   item_count: number | null;
+  watch_config_json: string | null;
 }
 
 export async function readEnabledSourceId(key: string): Promise<string | null> {
@@ -48,6 +50,7 @@ export async function readEntitySources(
       kind: row.kind,
       is_enabled: row.is_enabled,
       config_json: row.config_json,
+      watch_config_json: row.watch_config_json,
     },
     snapshot:
       row.fetched_at === null
