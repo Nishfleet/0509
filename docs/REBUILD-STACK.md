@@ -301,7 +301,7 @@ npx shadcn@latest init
 npx shadcn@latest add button
 ```
 
-That is the whole installation. `init` writes `components.json`, rewrites `app/app.css` with the token blocks, and adds `clsx` `^2.1.1`, `tailwind-merge` `^3.7.0`, `class-variance-authority` `^0.7.1`, and `lucide-react`, plus `app/lib/utils.ts`. The first three are installed at those versions. `lucide-react` is not yet installed: no copied component imports it, and the engines that would render icons have not shipped. `npx shadcn@latest add badge avatar` also installs `@base-ui/react` 1.8.0, the primitive those copied files import (<https://base-ui.com/react/components/avatar>, DESIGN.md §11).
+That is the whole installation. `init` writes `components.json`, rewrites `app/app.css` with the token blocks, and adds `clsx` `^2.1.1`, `tailwind-merge` `^3.7.0`, `class-variance-authority` `^0.7.1`, and `lucide-react`, plus `app/lib/utils.ts`. The first three are installed at those versions. `lucide-react` is installed at `1.47.0`, pinned: the copied `dialog.tsx` imports its `XIcon`, and `components.json` names it as the icon library (`"iconLibrary": "lucide"`) every later `shadcn add` component imports from. `npx shadcn@latest add badge avatar` also installs `@base-ui/react` 1.8.0, the primitive those copied files import (<https://base-ui.com/react/components/avatar>, DESIGN.md §11).
 
 ### 3.3 Tokens, theming, dark mode
 
@@ -1068,7 +1068,7 @@ Every capability the rebuild needs → the one thing that provides it → the ve
 | OpenAPI document | `zod-openapi` (samchungy) | 6.0.2, not yet installed |
 | Agent-readable docs | `/llms.txt` + `Accept: text/markdown` + `rel="alternate"` | spec v2 (2026-08-10) |
 
-**Installed beyond the scaffold:** `better-auth` ^1.7.5, `@better-auth/passkey` ^1.7.5, `@better-auth/api-key` ^1.7.5, `zod` ^4.6.5 (also a better-auth peer), `@cloudflare/puppeteer` ^1.4.0, `@base-ui/react` 1.8.0, `clsx` ^2.1.1, `tailwind-merge` ^3.7.0, `class-variance-authority` ^0.7.1, `sonner` ^2.0.8, `diff` 9.0.0. **Not yet installed**, because the engine that needs them has not shipped: `@extractus/feed-extractor` 8.0.3 (`fast-xml-parser` 5.11.1 comes with it), `uplot` 1.6.32, `uplot-react` 1.2.4, `date-fns` 4.4.0, `@date-fns/tz` 1.5.0, `agents` 0.24.0, `@modelcontextprotocol/server` 2.0.0 and its peers `@modelcontextprotocol/client` and `@modelcontextprotocol/sdk`, `@cloudflare/workers-oauth-provider` 0.10.3, `zod-openapi` 6.0.2, `lucide-react`. Do not delete those rows. Platform rows have no package. `create-cloudflare`, `shadcn`, and `auth@1.7.5` are npx-only and are not missing dependencies.
+**Installed beyond the scaffold:** `better-auth` ^1.7.5, `@better-auth/passkey` ^1.7.5, `@better-auth/api-key` ^1.7.5, `zod` ^4.6.5 (also a better-auth peer), `@cloudflare/puppeteer` ^1.4.0, `@base-ui/react` 1.8.0, `clsx` ^2.1.1, `tailwind-merge` ^3.7.0, `class-variance-authority` ^0.7.1, `sonner` ^2.0.8, `diff` 9.0.0, `lucide-react` 1.47.0. **Not yet installed**, because the engine that needs them has not shipped: `@extractus/feed-extractor` 8.0.3 (`fast-xml-parser` 5.11.1 comes with it), `uplot` 1.6.32, `uplot-react` 1.2.4, `date-fns` 4.4.0, `@date-fns/tz` 1.5.0, `agents` 0.24.0, `@modelcontextprotocol/server` 2.0.0 and its peers `@modelcontextprotocol/client` and `@modelcontextprotocol/sdk`, `@cloudflare/workers-oauth-provider` 0.10.3, `zod-openapi` 6.0.2. Do not delete those rows. Platform rows have no package. `create-cloudflare`, `shadcn`, and `auth@1.7.5` are npx-only and are not missing dependencies.
 
 ---
 
