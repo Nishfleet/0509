@@ -11,7 +11,7 @@ The first slice runs every night and files real changes. Where it departs from t
 - **Scheduling is the Workflow's own `schedules` entry**, not a Worker cron plus queues. One `site-sweep` instance a night at 02:00 UTC; each page is its own retried `step.do`, and publishing a change is a second step so a retry never loses or duplicates a signal. Queues would need a queue created in the account first, which the deploy token cannot do; a Workflow is created by the deploy itself. Pages run one at a time, so the sweep never holds more than one browser.
 - **Homepages only, for now.** Picking a brand's pricing page is D9, a Jev judgment, and Jev is not reachable from the Worker yet. The `page` table already carries `role`, so pricing pages join the same sweep once D9 is wired.
 - **Changes are filed unjudged.** Every text-hash change becomes a `signal` with the before and after evidence. D3 `noteworthy_change` decides which ones reach customers as marks once Jev is wired; until then the standing's noteworthy bucket counts none of them.
-- **The own-site hourly lane and incidents (P6) are the next slice.**
+- **The own-site lane is hourly and decides on ground truth only.** An `own-site-check` Workflow reads each customer's own homepage every hour. An HTTP status of 400 or above, or a page that cannot be read at all, is read again five minutes later, and a second failure opens the incident, pins the alert and sends the incident email. Each later hour is the promised re-check; a clean read closes the incident and sends the one "looks fixed" email. Soft breaks (a 200 page that lost its pricing) are D3s, and wait for Jev.
 
 ---
 
