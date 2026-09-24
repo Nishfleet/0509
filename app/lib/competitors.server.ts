@@ -17,10 +17,10 @@ function text(form: FormData, name: string): string {
 async function addCompetitor(workspaceId: string, raw: string, now: string): Promise<CompetitorActionResult> {
   const normalised = normaliseSubject(raw);
   if (!normalised.ok || normalised.subject.kind !== "domain") {
-    return { message: "we couldn't read that, try their main website, like brand.com" };
+    return { message: "We couldn't read that. Try their main website, like brand.com." };
   }
   const domain = normalised.subject.registrable;
-  if (await isTakenDown(domain)) return { message: "we can't track that brand" };
+  if (await isTakenDown(domain)) return { message: "That brand asked not to be tracked, so we can't add it." };
   await addManualCompetitor({ workspaceId, domain, now });
   return DONE;
 }
