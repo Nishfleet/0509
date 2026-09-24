@@ -1,4 +1,5 @@
-import { briefText } from "../delivery-alert";
+import type { BriefPayload } from "../brief-payload";
+import { readBriefPayload } from "../brief-payload";
 
 const INSERT_DELIVERY_FAILED = `INSERT INTO alert (id, workspace_id, kind, severity, title, body, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO NOTHING`;
 
@@ -37,7 +38,7 @@ export interface DeliveryFailureRow {
   title: string;
   body: string | null;
   created_at: string;
-  brief_text: string;
+  brief: BriefPayload | null;
 }
 
 interface AlertJoinRow {
@@ -65,7 +66,7 @@ export async function readDeliveryFailures(
     title: row.title,
     body: row.body,
     created_at: row.created_at,
-    brief_text: briefText(row.payload_json),
+    brief: row.payload_json === null ? null : readBriefPayload(row.payload_json),
   }));
 }
 

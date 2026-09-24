@@ -133,6 +133,12 @@ describe("the brief view", () => {
     ).toContain("Your site looks fine.");
   });
 
+  it("never calls a broken site fine because its incident list is empty (0509#4642)", () => {
+    const html = render({ own_site: { status: "broken", incidents: [] } });
+    expect(html).toContain("Your site looks broken");
+    expect(html).not.toContain("Your site looks fine.");
+  });
+
   it("keeps the placeholder headline without a rank and never ships email-only lines", () => {
     expect(render({ headline_rank: null, headline_total: 0 })).toContain(
       "Add a competitor to see where you stand",
