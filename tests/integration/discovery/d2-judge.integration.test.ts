@@ -6,6 +6,7 @@ import {
   readRefreshTargets,
   type EntityOrigin,
 } from "../../../app/lib/data/entity.server";
+import { readRecentSignals } from "../../../app/lib/data/signal.server";
 import {
   judgeStillCompetitors,
   STILL_COMPETITOR,
@@ -83,19 +84,19 @@ describe("readRefreshTargets", () => {
   });
 });
 
-describe("judgeStillCompetitors", () => {
-  it("exposes stable Jev question contracts", () => {
-    expect(STILL_COMPETITOR.id).toBe("still_competitor");
-    expect(STILL_COMPETITOR_REASON.id).toBe("still_competitor_reason");
-    expect(Object.keys(STILL_COMPETITOR_REASON.options)).toEqual([
-      "active",
-      "acquired",
-      "shut_down",
-      "pivoted",
-      "dormant",
-    ]);
+describe("readRecentSignals", () => {
+  it("returns only signals inside the window, newest first", async () => {
+    const workspaceId = await seedWorkspace();
+    const targets = await readRefreshTargets(workspaceId);
+    const auto = targets.find((target) => target.domain === "auto.example");
+    if (auto === undefined) throw new Error("seed failed");
+    const signals = await readRecentSignals(auto.entityId, "2026-08-25T06:00:00.000Z");
+    expect(signals.map((signal) => signal.observedAt)).toEqual([RECENT_SIGNAL]);
+    expect(signals[0]).toMatchObject({ kind: "change", aspect: "home", url: "https://auto.example/" });
   });
+});
 
+describe("judgeStillCompetitors", () => {
   it("asks Jev once per target with both questions and the history, returns the verdicts, and does not write", async () => {
     const workspaceId = await seedWorkspace();
     const context = await readDiscoveryContext(workspaceId);
@@ -116,13 +117,25 @@ describe("judgeStillCompetitors", () => {
     const results = await judgeStillCompetitors(context, await readRefreshTargets(workspaceId), NOW);
 
     expect(run).toHaveBeenCalledTimes(4);
-    const requests = run.mock.calls.map((call) => call[1] as { state: { history_30d: unknown; subject: { domain: string } } });
-    const autoState = requests.map((request) => request.state).find((state) => state.subject.domain === "auto.example");
+    const requests = run.mock.calls.map(
+      (call) =>
+        call[1] as {
+          questions: Record<string, { type: string }>;
+          state: { history_30d: { observedAt: string }[]; subject: { domain: string } };
+        },
+    );
+    const asked = new Set(requests.flatMap((request) => Object.keys(request.questions)));
+    expect(asked).toEqual(new Set([STILL_COMPETITOR.id, STILL_COMPETITOR_REASON.id]));
+    const autoState = requests
+      .map((request) => request.state)
+      .find((state) => state.subject.domain === "auto.example");
     expect(autoState).toBeDefined();
     if (autoState === undefined) return;
-    expect((autoState.history_30d as { observedAt: string }[]).map((signal) => signal.observedAt)).toEqual([RECENT_SIGNAL]);
-    const manualState = requests.map((request) => request.state).find((state) => state.subject.domain === "manual.example");
-    expect((manualState?.history_30d as unknown[]).length).toBe(0);
+    expect(autoState.history_30d.map((signal) => signal.observedAt)).toEqual([RECENT_SIGNAL]);
+    const manualState = requests
+      .map((request) => request.state)
+      .find((state) => state.subject.domain === "manual.example");
+    expect(manualState?.history_30d).toEqual([]);
 
     for (const result of results) {
       expect(result.verdict).toMatchObject({ p: 0.05, cached: false });

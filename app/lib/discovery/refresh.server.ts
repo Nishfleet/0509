@@ -2,8 +2,9 @@ import type { DiscoveryContext, RefreshTarget } from "../data/entity.server";
 import { readRecentSignals, type RecentSignal } from "../data/signal.server";
 import type { ChoiceQuestion, ChoiceVerdict, NoulQuestion, NoulVerdict } from "../jev/client.server";
 import { askChoice, askNoul, JevUnavailableError } from "../jev/client.server";
+import { daysBefore } from "../site-changes.server";
 
-const DAY_MS = 86_400_000;
+const REFRESH_WINDOW_DAYS = 30;
 
 export const STILL_COMPETITOR: NoulQuestion = {
   id: "still_competitor",
@@ -55,7 +56,7 @@ export async function judgeStillCompetitors(
   targets: readonly RefreshTarget[],
   now: string,
 ): Promise<StillCompetitorResult[]> {
-  const since = new Date(Date.parse(now) - 30 * DAY_MS).toISOString();
+  const since = daysBefore(new Date(now), REFRESH_WINDOW_DAYS);
   const results: StillCompetitorResult[] = [];
   let available = true;
   for (const target of targets) {
