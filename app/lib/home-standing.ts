@@ -27,6 +27,11 @@ export interface HomeView {
   eyebrow: string;
   greeting: string;
   standing: HomeStanding;
+  footer: string;
+}
+
+export function nextHour(now: Date): Date {
+  return new Date((Math.floor(now.getTime() / 3_600_000) + 1) * 3_600_000);
 }
 
 const MOVEMENT = {
@@ -57,15 +62,18 @@ export function greetingFor(timezone: string, now: Date): string {
   return "Good evening";
 }
 
-function dayAndTime(timezone: string, at: Date): string {
-  const day = new Intl.DateTimeFormat("en-GB", { timeZone: timezone, weekday: "long" }).format(at);
-  const time = new Intl.DateTimeFormat("en-GB", {
+function hourAndMinute(timezone: string, at: Date): string {
+  return new Intl.DateTimeFormat("en-GB", {
     timeZone: timezone,
     hour: "2-digit",
     minute: "2-digit",
     hourCycle: "h23",
   }).format(at);
-  return `${day} ${time}`;
+}
+
+function dayAndTime(timezone: string, at: Date): string {
+  const day = new Intl.DateTimeFormat("en-GB", { timeZone: timezone, weekday: "long" }).format(at);
+  return `${day} ${hourAndMinute(timezone, at)}`;
 }
 
 function todayEyebrow(timezone: string, now: Date): string {
@@ -129,9 +137,15 @@ export function homeView(input: {
   schedule: BriefSchedule;
   now: Date;
 }): HomeView {
+  const onCount = input.entities.filter((entity) => entity.state === "on").length;
+  const brandWord = onCount === 1 ? "brand" : "brands";
+  const recheckTime = hourAndMinute(input.schedule.timezone, nextHour(input.now));
+  const briefTime = dayAndTime(input.schedule.timezone, nextBriefAt(input.schedule, input.now));
+  const footer = `Checked ${String(onCount)} ${brandWord} this week · brief ${briefTime} · your site re-checked at ${recheckTime}`;
   return {
     eyebrow: todayEyebrow(input.schedule.timezone, input.now),
     greeting: greetingFor(input.schedule.timezone, input.now),
     standing: homeStanding(input),
+    footer,
   };
 }
