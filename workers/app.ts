@@ -7,7 +7,7 @@ import { handleBatch } from "./delivery/consumer";
 import { handleDlqBatch } from "./delivery/dlq-consumer";
 import { NIGHTLY_CRON, sweepPending } from "./delivery/sweeper";
 
-type WorkerEnv = Env & { SENTRY_DSN?: string };
+type WorkerEnv = Env & { SENTRY_DSN?: string; LIVENESS_PING_URL?: string };
 
 const requestHandler = createRequestHandler(
   () => import("virtual:react-router/server-build"),
@@ -30,7 +30,7 @@ const handler = {
       ctx.waitUntil(sweepPending(env, new Date(controller.scheduledTime)));
       return;
     }
-    const ping = pingLiveness();
+    const ping = pingLiveness(env.LIVENESS_PING_URL);
     if (ping) ctx.waitUntil(ping);
   },
 

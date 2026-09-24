@@ -1,4 +1,5 @@
 import type { BriefContext, BriefPayload, RenderedBrief } from "../../app/lib/brief-payload";
+import { escapeHtml } from "../../app/lib/html";
 
 const COPY = {
   subject: (rank: number, total: number) =>
@@ -50,15 +51,6 @@ const FONT = '-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial
 
 function n(value: number): string {
   return String(value);
-}
-
-export function escapeHtml(value: string): string {
-  return value
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;");
 }
 
 const SAFE_URL_SCHEMES = ["https:", "http:", "mailto:"];
