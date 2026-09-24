@@ -56,6 +56,25 @@ describe("the competitor page frame", () => {
     expect(competitorPausedLine(null)).toBe("Paused");
   });
 
+  it("reads state_reason in customer words and never shows a code", () => {
+    expect(competitorPausedLine("2026-09-22T12:00:00.000Z", "acquired")).toBe(
+      "Paused 22 Sept · looks like it was acquired",
+    );
+    expect(competitorPausedLine("2026-09-22T12:00:00.000Z", "shut_down")).toBe(
+      "Paused 22 Sept · looks like it shut down",
+    );
+    expect(competitorPausedLine("2026-09-22T12:00:00.000Z", "some_code")).toBe("Paused 22 Sept");
+    const html = header({
+      name: "Kindred",
+      domain: "kindred.example",
+      state: "off",
+      stateChangedAt: "2026-09-22T12:00:00.000Z",
+      stateReason: "shut_down",
+    });
+    expect(html).toContain("looks like it shut down");
+    expect(html).not.toContain("shut_down");
+  });
+
   it("renders the blocks in DESIGN.md 2.5 order", () => {
     const html = render(
       createElement(

@@ -5,9 +5,19 @@ import { BrandSwitch, DAY_MONTH } from "./brand-switch";
 
 export { DAY_MONTH };
 
-export function competitorPausedLine(stateChangedAt: string | null): string {
-  if (stateChangedAt === null) return "Paused";
-  return `Paused ${DAY_MONTH.format(new Date(stateChangedAt))}`;
+const PAUSE_REASONS: Readonly<Record<string, string>> = {
+  acquired: "looks like it was acquired",
+  shut_down: "looks like it shut down",
+};
+
+export function competitorPausedLine(
+  stateChangedAt: string | null,
+  stateReason: string | null = null,
+): string {
+  const base = stateChangedAt === null ? "Paused" : `Paused ${DAY_MONTH.format(new Date(stateChangedAt))}`;
+  if (stateReason === null) return base;
+  const why = Object.hasOwn(PAUSE_REASONS, stateReason) ? PAUSE_REASONS[stateReason] : undefined;
+  return why === undefined ? base : `${base} · ${why}`;
 }
 
 export interface CompetitorHeaderProps {
@@ -15,6 +25,7 @@ export interface CompetitorHeaderProps {
   domain: string;
   state: "on" | "off";
   stateChangedAt: string | null;
+  stateReason?: string | null;
   control?: ReactNode;
 }
 
@@ -23,6 +34,7 @@ export function CompetitorHeader({
   domain,
   state,
   stateChangedAt,
+  stateReason = null,
   control,
 }: CompetitorHeaderProps): ReactElement {
   return (
@@ -43,7 +55,7 @@ export function CompetitorHeader({
           <p className="text-body-sm text-ink-soft [overflow-wrap:anywhere]">{domain}</p>
           {state === "off" ? (
             <p data-slot="competitor-paused" className="text-meta text-ink-soft font-mono uppercase">
-              {competitorPausedLine(stateChangedAt)}
+              {competitorPausedLine(stateChangedAt, stateReason)}
             </p>
           ) : null}
         </div>

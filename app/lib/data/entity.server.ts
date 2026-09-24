@@ -17,6 +17,7 @@ export interface CompetitorEntity {
   domain: string;
   state: CompetitorState;
   stateChangedAt: string | null;
+  stateReason: string | null;
 }
 
 export interface OnCompetitor {
@@ -39,6 +40,7 @@ interface Row {
   domain: string;
   state: CompetitorState;
   state_changed_at: string | null;
+  state_reason: string | null;
 }
 
 export interface RetireQuestion {
@@ -64,7 +66,7 @@ interface MaybeRow {
 }
 
 const SELECT_COMPETITOR =
-  "SELECT id, name, domain, state, state_changed_at FROM entity WHERE id = ? AND workspace_id = ? AND role = 'competitor' AND state IN ('on', 'off')";
+  "SELECT id, name, domain, state, state_changed_at, state_reason FROM entity WHERE id = ? AND workspace_id = ? AND role = 'competitor' AND state IN ('on', 'off')";
 
 const SET_COMPETITOR_STATE =
   "UPDATE entity SET state = ?, state_changed_at = ?, state_changed_by = 'user', state_reason = NULL WHERE id = ? AND workspace_id = ? AND role = 'competitor' AND state IN ('on', 'off') AND state <> ?";
@@ -95,6 +97,7 @@ export async function readCompetitor(
     domain: row.domain,
     state: row.state,
     stateChangedAt: row.state_changed_at,
+    stateReason: row.state_reason,
   };
 }
 
