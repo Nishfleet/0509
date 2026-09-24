@@ -4,6 +4,8 @@ import {
   evidenceLine,
   GENERATOR_ORDER,
   SHORTLIST_TOP,
+  nameKey,
+  partitionShortlist,
   shortlist,
   type ShortlistEntry,
 } from "../../../app/lib/discovery/shortlist";
@@ -33,8 +35,36 @@ describe("shortlist", () => {
     const merged: ShortlistEntry = result[0];
     expect(result).toHaveLength(1);
     expect(merged.name).toBe("Lush");
+    expect(merged.nameKeys).toEqual([nameKey("lush ")]);
     expect(merged.generators).toEqual(GENERATOR_ORDER.slice(0, 2));
     expect(merged.evidence).toHaveLength(2);
+  });
+
+  it("counts an article once when two candidates name it (0509#4745)", () => {
+    const url = "https://news.google.com/articles/same";
+    const { entries } = partitionShortlist([
+      candidate("Lush", "news", url),
+      candidate("Lush", "news", url),
+    ]);
+    expect(entries).toHaveLength(1);
+    expect(entries[0].evidence).toHaveLength(1);
+  });
+
+  it("returns every candidate the shortlist did not place as rest (0509#4745)", () => {
+    const duals = Array.from({ length: 21 }, (_, index) => dual(`Cand${index}`, index));
+    const hnOnly = candidate("Solo HN", "hn", "https://hn.example.com/solo");
+    const newsOnly = candidate("Solo News", "news", "https://news.example.com/solo");
+    const input = [...duals, hnOnly, newsOnly];
+    const { entries, rest } = partitionShortlist(input);
+    const entryNames = new Set(entries.map((entry) => entry.name));
+    expect(rest.map((notPlaced) => notPlaced.name)).toEqual(
+      input
+        .filter((notPlaced) => !entryNames.has(notPlaced.name))
+        .map((notPlaced) => notPlaced.name),
+    );
+    expect(entries.length + rest.length).toBe(
+      new Set(input.map((each) => each.name)).size,
+    );
   });
 
   it("merges two different names that resolve to one domain key", () => {

@@ -1,4 +1,5 @@
 import type { ReactElement } from "react";
+import { Link } from "react-router";
 
 import { brandMonogram } from "./brand-chip";
 import { EmptyState } from "./empty-state";
@@ -86,7 +87,17 @@ function RankedRow({ row }: { row: HomeRow }): ReactElement {
         {brandMonogram(row.name)}
       </span>
       <span className="min-w-0">
-        <span className="font-display text-row-name block truncate font-bold">{row.name}</span>
+        {row.self ? (
+          <span className="font-display text-row-name block truncate font-bold">{row.name}</span>
+        ) : (
+          <Link
+            to={`/app/competitors/${row.entityId}`}
+            prefetch="intent"
+            className="font-display text-row-name block truncate font-bold hover:underline"
+          >
+            {row.name}
+          </Link>
+        )}
         {row.domain === null ? null : (
           <span className="text-ink-soft block truncate text-[0.88rem]">{row.domain}</span>
         )}
