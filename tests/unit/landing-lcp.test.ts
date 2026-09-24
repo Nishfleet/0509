@@ -13,7 +13,7 @@ const REPO_ROOT = dirname(dirname(dirname(fileURLToPath(import.meta.url))));
 interface Face {
   family: string;
   weights: number[];
-  ranges: Array<[number, number]>;
+  ranges: [number, number][];
   src: string;
   display: string;
 }
