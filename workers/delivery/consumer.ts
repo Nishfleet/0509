@@ -84,6 +84,7 @@ interface IncidentRow {
   role: string;
   mark: string | null;
   own_site_alerts: number;
+  timezone: string;
 }
 
 async function readIncident(env: Env, incidentId: string): Promise<IncidentRow | null> {
@@ -97,6 +98,7 @@ async function readIncident(env: Env, incidentId: string): Promise<IncidentRow |
             e.domain,
             e.role,
             w.own_site_alerts,
+            w.timezone,
             (SELECT a.body FROM alert a WHERE a.incident_id = i.id ORDER BY a.created_at ASC LIMIT 1) AS mark
        FROM incident i
        JOIN entity e ON e.id = i.entity_id
@@ -280,12 +282,14 @@ export async function deliverIncident(
             recheck_at: new Date(Date.parse(incident.opened_at) + RECHECK_AFTER_MS).toISOString(),
             mark: incident.mark,
             link: INCIDENT_LINK,
+            timezone: incident.timezone,
           })
         : renderIncidentFixed({
             site: incident.domain,
             kind: incident.kind,
             closed_at: incident.closed_at,
             link: INCIDENT_LINK,
+            timezone: incident.timezone,
           });
     const result = await sendMessage(env.EMAIL, {
       to: target.target_value,
@@ -332,7 +336,8 @@ export function parseMessage(body: unknown): DeliveryMessage | null {
   if (typeof body === "string") {
     try {
       return toDeliveryMessage(JSON.parse(body) as unknown);
-    } catch {
+    } catch (error) {
+      console.error(JSON.stringify({ event: "delivery.message_unparseable", error: String(error) }));
       return null;
     }
   }

@@ -11,7 +11,7 @@ import { deleteAccount } from "../lib/account-delete.server";
 import { oauthHelpersContext } from "../lib/agent/context.server";
 import { signOut } from "../lib/auth.server";
 import { nextBriefAt } from "../lib/brief-schedule";
-import { nextBriefLine, parseScheduleForm } from "../lib/brief-settings";
+import { formatBriefAt, parseBriefSchedule } from "../lib/brief-settings";
 import { readBriefScheduleForOwner, updateBriefSchedule } from "../lib/data/workspace.server";
 import { requireSession } from "../lib/require-session.server";
 
@@ -28,7 +28,7 @@ export async function loader({ request }: Route.LoaderArgs) {
   const schedule =
     owned === null
       ? null
-      : { ...owned.schedule, nextLine: nextBriefLine(nextBriefAt(owned.schedule, new Date()), owned.schedule.timezone) };
+      : { ...owned.schedule, nextLine: formatBriefAt(nextBriefAt(owned.schedule, new Date()), owned.schedule.timezone) };
   return { email: session.user.email, schedule };
 }
 
@@ -49,7 +49,11 @@ export async function action({ request, context }: Route.ActionArgs) {
     throw redirect("/login", { headers });
   }
   const owned = await readBriefScheduleForOwner(session.user.id);
-  const schedule = parseScheduleForm(form);
+  const schedule = parseBriefSchedule({
+    weekday: form.get("weekday"),
+    hour: form.get("hour"),
+    timezone: form.get("timezone"),
+  });
   if (owned === null || schedule === null) return { saved: false, deleteError: null };
   await updateBriefSchedule(owned.workspaceId, schedule);
   return { saved: true, deleteError: null };

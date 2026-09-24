@@ -1,8 +1,13 @@
 import type { ReactElement } from "react";
 
 import { cn } from "../lib/utils";
-import { DAY_MONTH } from "./competitor-header";
 import { Switch } from "./ui/switch";
+
+export const DAY_MONTH = new Intl.DateTimeFormat("en-GB", {
+  day: "numeric",
+  month: "short",
+  timeZone: "UTC",
+});
 
 export type BrandSwitchState = "on" | "off" | "you";
 

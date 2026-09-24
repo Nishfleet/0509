@@ -63,6 +63,19 @@ const briefSchema = z
 export const briefResultSchema = z
   .object({ brief: briefSchema.nullable().meta({ description: "Null until your first weekly brief is ready" }) });
 
+export const standingResultSchema = z.object({
+  standing: z
+    .object({
+      rank: z.number().nullable(),
+      of: z.number(),
+      movement: z.number().nullable(),
+      isNew: z.boolean(),
+      why: z.string(),
+      lines: z.array(standingLineSchema),
+    })
+    .nullable(),
+});
+
 const competitorSchema = z
   .object({
     id: z.string(),
@@ -93,3 +106,4 @@ export const alertsResultSchema = z.object({ alerts: z.array(alertSchema) });
 export type BriefResult = z.output<typeof briefResultSchema>;
 export type CompetitorsResult = z.output<typeof competitorsResultSchema>;
 export type AlertsResult = z.output<typeof alertsResultSchema>;
+export type StandingResult = z.output<typeof standingResultSchema>;
