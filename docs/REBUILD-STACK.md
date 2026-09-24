@@ -859,6 +859,11 @@ Cache `.lycheecache` with `actions/cache@v4`; it is one block of stock YAML, not
 | A link crawler or markdown-link regex | `lycheeverse/lychee-action@v2` |
 | A config-migration script | `npx @cloudflare/codemods vitest:pool-workers-to-vitest-plugin` |
 | An action-version bumper | Dependabot `package-ecosystem: "github-actions"` |
+| A separate a11y runner | `new AxeBuilder({ page }).withTags([...]).analyze()` inside the Playwright spec |
+
+### 6.6 axe — accessibility in Playwright
+
+`@axe-core/playwright` **^4.13.0** runs Deque's axe-core inside the existing Playwright suite. `new AxeBuilder({ page }).withTags([...]).analyze()` returns an `AxeResults` whose `.violations` is the spec's pass/fail — the same suite, the same browser, the same sign-in path, no new runner. Per the Playwright accessibility doc (<https://playwright.dev/docs/accessibility-testing>), the WCAG tag set lives on `withTags`, so one tag list is the spec and the gate.
 
 ---
 
@@ -1088,6 +1093,7 @@ The version in this table is the `package.json` specifier. An earlier section of
 
 | Package | Specifier | Where it is named | Why this one | Rejected | Lock |
 |---|---|---|---|---|---|
+| `@axe-core/playwright` | ^4.13.0 | §6.6, #4149 | WCAG 2.2 AA scan inside Playwright specs. Doc: <https://playwright.dev/docs/accessibility-testing> | `axe-playwright` (third-party wrapper), Lighthouse's accessibility category (a subset of axe, per-URL, cannot sign in), hand-written contrast checks | 4.13.0 |
 | `@base-ui/react` | 1.8.0 | §3.2 | Badge and avatar import it | Radix. The copied shadcn files import Base UI | 1.8.0 |
 | `@better-auth/api-key` | ^1.7.5 | §7.3 | API keys, quotas, and expiry ship in this plugin | A hand-written key table | 1.7.5 |
 | `@better-auth/passkey` | ^1.7.5 | §2.5 | Passkeys. The plugin pulls SimpleWebAuthn | A hand-rolled WebAuthn | 1.7.5 |
