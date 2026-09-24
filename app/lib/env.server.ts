@@ -7,7 +7,6 @@ const BINDING_NAMES = [
   "BETTER_AUTH_SECRET",
   "EMAIL",
   "SEND_EMAIL",
-  "CARD_ARTIFACTS",
   "BROWSER",
 ] as const satisfies readonly (keyof Env)[];
 
@@ -17,7 +16,6 @@ const NOTES = {
   BETTER_AUTH_SECRET: "sign-in cannot be trusted",
   EMAIL: "magic links and briefs cannot send",
   SEND_EMAIL: "briefs sit unsent",
-  CARD_ARTIFACTS: "public standing cards cannot be served",
   BROWSER: "bot-gated page reads cannot escalate",
   LIVENESS_PING_URL: "absence means no monitor; a set value must be an http(s) URL",
 } as const satisfies Record<(typeof BINDING_NAMES)[number] | "LIVENESS_PING_URL", string>;
@@ -35,7 +33,7 @@ function isObject(value: unknown): value is object {
   return typeof value === "object" && value !== null;
 }
 
-function binding(method?: "prepare" | "get" | "sendBatch") {
+function binding(method?: "prepare" | "sendBatch") {
   return z.custom((value) => {
     if (!isObject(value)) return false;
     if (!method) return true;
@@ -49,7 +47,6 @@ const workerEnvSchema = z.object({
   BETTER_AUTH_SECRET: z.string().min(1),
   EMAIL: binding(),
   SEND_EMAIL: binding("sendBatch"),
-  CARD_ARTIFACTS: binding("get"),
   BROWSER: binding(),
   LIVENESS_PING_URL: httpUrl.optional(),
 });
@@ -85,7 +82,6 @@ function snapshot(): Snapshot {
     BETTER_AUTH_SECRET: blank(env.BETTER_AUTH_SECRET),
     EMAIL: env.EMAIL,
     SEND_EMAIL: env.SEND_EMAIL,
-    CARD_ARTIFACTS: env.CARD_ARTIFACTS,
     BROWSER: env.BROWSER,
     LIVENESS_PING_URL: livenessUrl(),
   };

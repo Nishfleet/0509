@@ -2,7 +2,6 @@ import { env } from "cloudflare:test";
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { isTakenDown } from "../../app/lib/data/takedown.server";
-import { serveCard } from "../../app/lib/card/serve.server";
 
 const NOW = "2026-09-24T00:00:00Z";
 const LATER = "2026-09-24T01:00:00Z";
@@ -99,17 +98,6 @@ describe("recording a takedown", () => {
     expect(self).toEqual({ state: "on" });
     const alerts = await env.DB.prepare("SELECT count(*) AS n FROM alert").first();
     expect(alerts).toEqual({ n: 0 });
-  });
-
-  it("drops the subject from a published card straight away", async () => {
-    await env.DB.prepare("UPDATE workspace SET card_slug = 'acme', card_is_published = 1 WHERE id = 'ws-a'").run();
-    await env.CARD_ARTIFACTS.put("card/ws-a/2026-09-21/index.html", "<p>card</p>");
-    await insertEntity("ent-a", "ws-a", "competitor", "removed.example").run();
-    expect((await serveCard("acme")).status).toBe(200);
-
-    await recordTakedown("removed.example").run();
-
-    expect((await serveCard("acme")).status).toBe(404);
   });
 });
 

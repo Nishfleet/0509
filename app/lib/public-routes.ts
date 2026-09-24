@@ -3,7 +3,6 @@ import { SITE_URL } from "./structured-data";
 
 export const PUBLIC_PATHS = ["/privacy"] as const;
 export const DISALLOWED_PREFIXES = ["/app", "/api", "/mcp", "/u", "/login", "/onboarding", "/design"] as const;
-export const CARD_ROUTE_PATH = "s/:slug";
 export const MCP_URL = `${SITE_URL}/mcp`;
 
 const PAGE_SUMMARIES: Record<(typeof PUBLIC_PATHS)[number], { title: string; summary: string }> = {
