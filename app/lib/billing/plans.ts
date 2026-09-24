@@ -1,7 +1,7 @@
 export const PLANS = [
-  { id: "scout", name: "Scout", monthlyPriceEur: 10 },
-  { id: "starter", name: "Starter", monthlyPriceEur: 46 },
-  { id: "agency", name: "Agency", monthlyPriceEur: 136 },
+  { id: "scout", name: "Scout", monthlyPriceEur: 10, competitors: 5 },
+  { id: "starter", name: "Starter", monthlyPriceEur: 46, competitors: 15 },
+  { id: "agency", name: "Agency", monthlyPriceEur: 136, competitors: 50 },
 ] as const;
 
 export type PlanId = (typeof PLANS)[number]["id"];
