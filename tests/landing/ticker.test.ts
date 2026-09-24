@@ -91,7 +91,7 @@ describe("tickerItems", () => {
     ]);
   });
 
-  it("has no items for no rows, and does not mutate its input", () => {
+  it("has no items for no rows", () => {
     const rows: readonly {
       id: string;
       entity_name: string | null;
@@ -100,6 +100,13 @@ describe("tickerItems", () => {
       observed_at: string;
     }[] = [];
     expect(tickerItems(rows, new Date())).toEqual([]);
+  });
+
+  it("does not mutate the rows it is given", () => {
+    const rows = [siteChangeRow({ id: "sig-1" }), siteChangeRow({ id: "sig-2" })];
+    const before = structuredClone(rows);
+    tickerItems(rows, new Date("2026-09-24T12:05:00.000Z"));
+    expect(rows).toEqual(before);
   });
 });
 
