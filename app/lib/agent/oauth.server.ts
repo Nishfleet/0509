@@ -1,6 +1,8 @@
+import { env } from "cloudflare:workers";
 import type { OAuthProviderOptions } from "@cloudflare/workers-oauth-provider";
-import { OAuthProvider } from "@cloudflare/workers-oauth-provider";
+import { ExternalTokenError, OAuthProvider } from "@cloudflare/workers-oauth-provider";
 
+import { clientIp, withinLimit } from "./client-limit.server";
 import { propsForApiKey } from "./keys.server";
 import { AUTHORIZE_PATH, MCP_PATH, READ_SCOPE } from "./paths";
 
@@ -26,7 +28,18 @@ export function createOAuthProvider<E>(handlers: Handlers<E>): OAuthProvider<E> 
     accessTokenTTL: HOUR,
     refreshTokenTTL: 30 * DAY,
     clientRegistrationTTL: 30 * DAY,
+    clientRegistrationCallback: async ({ request }) => {
+      if (await withinLimit(env.AGENT_REGISTER_LIMIT, clientIp(request))) return;
+      return { code: "temporarily_unavailable", description: "Too many app registrations. Retry in a minute.", status: 429 };
+    },
     resolveExternalToken: async ({ token, request }) => {
+      if (!(await withinLimit(env.AGENT_LIMIT, clientIp(request)))) {
+        throw new ExternalTokenError("temporarily_unavailable", {
+          description: "Too many requests. Slow down and retry in a minute.",
+          statusCode: 429,
+          headers: { "retry-after": "60" },
+        });
+      }
       const props = await propsForApiKey(token);
       if (props === null) return null;
       return { props, audience: `${new URL(request.url).origin}${MCP_PATH}` };

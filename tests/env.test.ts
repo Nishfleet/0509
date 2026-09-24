@@ -18,6 +18,9 @@ const KEYS = [
   "BROWSER",
   "OAUTH_KV",
   "AGENT_LIMIT",
+  "SIGN_IN_EMAIL_LIMIT",
+  "SIGN_IN_IP_LIMIT",
+  "AGENT_REGISTER_LIMIT",
 ] as const;
 
 function configured() {
@@ -31,6 +34,9 @@ function configured() {
     BROWSER: {},
     OAUTH_KV: { get: () => "grant" },
     AGENT_LIMIT: { limit: () => ({ success: true }) },
+    SIGN_IN_EMAIL_LIMIT: { limit: () => ({ success: true }) },
+    SIGN_IN_IP_LIMIT: { limit: () => ({ success: true }) },
+    AGENT_REGISTER_LIMIT: { limit: () => ({ success: true }) },
   };
 }
 
@@ -111,6 +117,9 @@ describe("worker env", () => {
       "BROWSER",
       "OAUTH_KV",
       "AGENT_LIMIT",
+      "SIGN_IN_EMAIL_LIMIT",
+      "SIGN_IN_IP_LIMIT",
+      "AGENT_REGISTER_LIMIT",
     ]);
   });
 

@@ -112,7 +112,7 @@ describe("brief block order", () => {
   it("renders the five blocks in the contract's order", () => {
     const { html } = renderBrief(payload(), CONTEXT);
 
-    const headline = html.indexOf("You&#39;re #3 of 8 this week");
+    const headline = html.indexOf(">#3</span> of 8 this week");
     const marks = html.indexOf("Read this first");
     const brands = html.indexOf("Your tracked brands");
     const ownSite = html.indexOf("Your site looks fine.");
@@ -205,7 +205,8 @@ describe("read this first is D4's, verbatim", () => {
     const { html } = renderBrief(payload(), CONTEXT);
     expect(html).toContain("Kindred · site change");
     expect(html).toContain("https://kindred.example/pricing");
-    expect(html).toContain("3 tiers → 2 tiers");
+    expect(html).toContain('<s class="brief-strike">3 tiers</s> → <span class="brief-marker"');
+    expect(html).toContain(">2 tiers</span>");
     expect(html).toContain("https://assets.0509.io/captures/ws_1/sig_1/before.png");
   });
 
@@ -406,8 +407,8 @@ describe("dates", () => {
     const tokyo = renderBrief(payload({ timezone: "Asia/Tokyo" }), CONTEXT);
     const newYork = renderBrief(payload(), CONTEXT);
     expect(tokyo.text).not.toEqual(newYork.text);
-    expect(tokyo.html).toContain("Sep 17, 2026, 12:30 AM");
-    expect(newYork.html).toContain("Sep 16, 2026, 11:30 AM");
+    expect(tokyo.html).toContain("Thu 17 Sept, 00:30");
+    expect(newYork.html).toContain("Wed 16 Sept, 11:30");
   });
 
   it("shows a malformed date as-is rather than as Invalid Date", () => {
@@ -431,7 +432,8 @@ describe("inline-styled html, and the voice", () => {
     expect(html).toContain(".brief-card{background-color:#1c1a15;color:#f2efe4;}");
     expect(html).toContain(".brief-muted{color:#a9a294;}");
     expect(html).toContain(".brief-page{background-color:#14130f;}");
-    expect(html).toContain('max-width:600px;margin:0 auto;padding:24px;border-radius:8px;');
+    expect(html).toContain('max-width:600px;margin:0 auto;padding:24px;"');
+    expect(html).not.toContain("border-radius");
     expect(html.match(/<style>/g)).toHaveLength(1);
   });
 
@@ -474,7 +476,7 @@ describe("inline-styled html, and the voice", () => {
     expect(both.html).toContain("<!doctype html>");
     expect(both.html).toContain("<body");
     expect(both.text.length).toBeGreaterThan(0);
-    expect(both.subject).toBe("Your weekly brief: you're #3 of 8 this week");
+    expect(both.subject).toBe("You're #3 of 8 this week, up 2");
   });
 
   it("widths the container for a 600 px read", () => {
@@ -588,9 +590,28 @@ describe("degraded sources", () => {
   });
 });
 
+describe("inline styles survive the attribute they sit in", () => {
+  it("closes every style attribute on its own quote, so a font stack cannot cut the rest of the style off", () => {
+    const { html } = renderBrief(payload(), CONTEXT);
+    const styles = [...html.matchAll(/style="([^"]*)"(.)/g)];
+    expect(styles.length).toBeGreaterThan(10);
+    for (const [, value, next] of styles) {
+      expect([" ", ">"]).toContain(next);
+      expect(value.endsWith(";")).toBe(true);
+    }
+  });
+
+  it("puts the rank on the green marker and the change on the one mark", () => {
+    const { html } = renderBrief(payload(), CONTEXT);
+    expect(html).toContain('<span class="brief-marker" style="padding:0 4px;">#3</span>');
+    expect(html).toContain(".brief-marker{background-color:#16c47f;");
+    expect(html).toContain(".brief-strike{color:#55524a;text-decoration-color:#e0442c;}");
+  });
+});
+
 describe("the subject line", () => {
   it("names the rank when there is one", () => {
-    expect(renderBrief(payload(), CONTEXT).subject).toBe("Your weekly brief: you're #3 of 8 this week");
+    expect(renderBrief(payload(), CONTEXT).subject).toBe("You're #3 of 8 this week, up 2");
   });
 
   it("stays generic when there is no rank", () => {

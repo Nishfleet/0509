@@ -1,5 +1,6 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+import { MemoryRouter } from "react-router";
 import { describe, expect, it } from "vitest";
 
 import { HomeStanding } from "../../app/components/home-standing";
@@ -71,7 +72,7 @@ function render(input: { payload: BriefPayload | null; entities?: readonly HomeE
     schedule: SCHEDULE,
     now: THURSDAY_MORNING,
   });
-  return renderToStaticMarkup(createElement(HomeStanding, { view }));
+  return renderToStaticMarkup(createElement(MemoryRouter, null, createElement(HomeStanding, { view })));
 }
 
 describe("Home standing", () => {

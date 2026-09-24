@@ -11,9 +11,8 @@ export default [
     route("app/competitors", "routes/app.competitors.tsx"),
     route("app/competitors/:entityId", "routes/app.competitor.tsx"),
     route("app/alerts", "routes/app.alerts.tsx"),
-    route("app/settings", "routes/app.settings.tsx", [
-      route("agents", "routes/settings.agents.tsx"),
-    ]),
+    route("app/settings", "routes/app.settings.tsx"),
+    route("app/settings/agents", "routes/settings.agents.tsx"),
   ]),
   route("app/share.png", "routes/app.share[.]png.ts"),
   route("app/changes/:signalId/:side", "routes/app.change-shot.ts"),

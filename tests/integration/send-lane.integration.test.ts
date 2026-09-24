@@ -444,7 +444,7 @@ describe("send lane (0509#3979)", () => {
     const result = await deliver(envWith(bindingFor(rec)), message(digestId));
 
     expect(result.outcome).toBe("sent");
-    expect(rec.sent[0].subject).toBe("Your weekly brief: you're #3 of 9 this week");
+    expect(rec.sent[0].subject).toBe("You're #3 of 9 this week, up 1");
     expect(rec.sent[0].text).toContain("You're #3 of 9 this week");
     expect(rec.sent[0].text).toContain("Quiet week: 3 mentions checked");
     expect(rec.sent[0].text).toMatch(/Unsubscribe: https:\/\/0509\.io\/u\/[0-9a-f]{64}/);

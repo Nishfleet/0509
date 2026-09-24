@@ -1,4 +1,9 @@
+import type { Route } from "./+types/design.brand-chips";
 import { BrandChipRow, type BrandChipBrand } from "../components/brand-chip";
+
+export function meta(_: Route.MetaArgs) {
+  return [{ name: "robots", content: "noindex" }];
+}
 
 const brands: readonly BrandChipBrand[] = [
   { name: "Loopwell", href: "/app/competitors/loopwell", self: true },
