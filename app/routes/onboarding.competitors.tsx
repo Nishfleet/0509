@@ -5,8 +5,7 @@ import { Form, redirect, useRevalidator } from "react-router";
 
 import { AddCompetitor, CompetitorMaybes } from "../components/competitor-maybes";
 import { Monogram } from "../components/monogram";
-import { ONBOARDING_PAGE } from "../components/page-heading";
-import { StepBar } from "../components/step-bar";
+import { OnboardingFrame } from "../components/onboarding-frame";
 import { Button } from "../components/ui/button";
 import { handleCompetitorIntent } from "../lib/competitors.server";
 import { readOnboardingCompetitors } from "../lib/data/entity.server";
@@ -54,9 +53,7 @@ export default function Page({ loaderData, actionData }: Route.ComponentProps) {
   }, [revalidator, searching]);
 
   return (
-    <main className={ONBOARDING_PAGE}>
-      <StepBar current={3} />
-      <h1 className="font-display text-display-2 mt-10 font-extrabold uppercase">Who you're up against</h1>
+    <OnboardingFrame step={3} heading="Who you're up against">
       {searching ? (
         <p role="status" className="text-ink-soft mt-3 max-w-prose leading-[1.55]">
           We're reading the news for brands named alongside you. They appear here as we find them.
@@ -68,7 +65,7 @@ export default function Page({ loaderData, actionData }: Route.ComponentProps) {
         </p>
       ) : null}
       {on.length === 0 ? null : (
-        <ul aria-label="Watching" className="border-line mt-8 border-b">
+        <ul aria-label="Watching" aria-live="polite" aria-relevant="additions" className="border-line mt-8 border-b">
           {on.map((competitor) => (
             <li key={competitor.entityId} className="border-line flex items-start gap-3 border-t py-4">
               <Monogram name={competitor.name} />
@@ -92,6 +89,6 @@ export default function Page({ loaderData, actionData }: Route.ComponentProps) {
         </Button>
         <p className="text-ink-soft mt-3 text-body-sm">You can switch any of them on or off later in Competitors.</p>
       </Form>
-    </main>
+    </OnboardingFrame>
   );
 }
