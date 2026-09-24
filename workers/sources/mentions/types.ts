@@ -5,6 +5,7 @@ export const mentionItemSchema = z.object({
 	url: z.url({ protocol: /^https?$/ }),
 	title: z.string(),
 	publishedAt: z.string().nullable(),
+	publisher: z.string().nullable().optional(),
 });
 
 export const mentionsResultSchema = z.object({
