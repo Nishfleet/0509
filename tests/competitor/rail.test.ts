@@ -6,41 +6,54 @@ import { describe, expect, it } from "vitest";
 import {
   CompetitorRail,
   type CompetitorRailProps,
+  factLabel,
+  type RailFact,
+  type RailPeer,
+  type RailSource,
+  type RailVerdict,
   verdictWords,
 } from "../../app/components/competitor-rail";
 
 const NOW = Date.parse("2026-09-22T12:00:00.000Z");
 
+const peers: readonly RailPeer[] = [
+  { entityId: "comp-on", name: "Kindred", role: "competitor", state: "on", rank: 1 },
+  { entityId: "self-a", name: "Acme", role: "self", state: "on", rank: 2 },
+  { entityId: "comp-off", name: "Casetta", role: "competitor", state: "off", rank: 3 },
+  { entityId: "comp-x", name: "Fieldset", role: "competitor", state: "on", rank: 4 },
+];
+
+const facts: readonly RailFact[] = [
+  { kind: "change", count: 2 },
+  { kind: "hiring", count: 1 },
+  { kind: "still_competitor", count: 9 },
+];
+
+const sources: readonly RailSource[] = [
+  {
+    source: { key: "site.web", platform: "web", is_enabled: 1 },
+    snapshot: { item_count: 3, fetched_at: "2026-09-22T06:00:00.000Z" },
+  },
+  {
+    source: {
+      key: "hiring.greenhouse",
+      platform: "greenhouse",
+      is_enabled: 1,
+      config_json:
+        '{"state":"degraded","reason":"rate-limited","last_good_at":"2026-09-19T06:02:00.000Z"}',
+    },
+    snapshot: null,
+  },
+];
+
+const verdict: RailVerdict = { choice: "shut_down", decidedAt: "2026-09-17T00:00:00.000Z" };
+
 const props: CompetitorRailProps = {
   entityId: "comp-on",
-  peers: [
-    { entityId: "comp-on", name: "Kindred", role: "competitor", state: "on", rank: 1 },
-    { entityId: "self-a", name: "Acme", role: "self", state: "on", rank: 2 },
-    { entityId: "comp-off", name: "Casetta", role: "competitor", state: "off", rank: 3 },
-    { entityId: "comp-x", name: "Fieldset", role: "competitor", state: "on", rank: 4 },
-  ],
-  facts: [
-    { kind: "change", count: 2 },
-    { kind: "hiring", count: 1 },
-    { kind: "still_competitor", count: 9 },
-  ],
-  sources: [
-    {
-      source: { key: "site.web", platform: "web", is_enabled: 1 },
-      snapshot: { item_count: 3, fetched_at: "2026-09-22T06:00:00.000Z" },
-    },
-    {
-      source: {
-        key: "hiring.greenhouse",
-        platform: "greenhouse",
-        is_enabled: 1,
-        config_json:
-          '{"state":"degraded","reason":"rate-limited","last_good_at":"2026-09-19T06:02:00.000Z"}',
-      },
-      snapshot: null,
-    },
-  ],
-  verdict: { choice: "shut_down", decidedAt: "2026-09-17T00:00:00.000Z" },
+  peers,
+  facts,
+  sources,
+  verdict,
   lastChecked: "2026-09-22 06:00 UTC",
   now: NOW,
 };
@@ -100,6 +113,10 @@ describe("the competitor rail", () => {
     expect(visible).toContain("2 site changes");
     expect(visible).toContain("1 new role");
     expect(visible).not.toContain("still_competitor");
+    expect(factLabel("change", 1)).toBe("1 site change");
+    expect(factLabel("ad", 2)).toBe("2 ads");
+    expect(factLabel("mention", 1)).toBe("1 mention");
+    expect(factLabel("still_competitor", 9)).toBeNull();
   });
 
   it("shows each source's live or degraded state and recorded reason", () => {
