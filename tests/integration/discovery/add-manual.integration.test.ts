@@ -182,7 +182,14 @@ describe("handleCompetitorIntent intent=add", () => {
   it("never writes a Jev verdict for a manual add", async () => {
     const workspaceId = await seedWorkspace();
     vi.stubGlobal("fetch", wikidataGymshark);
-    await handleCompetitorIntent(workspaceId, addForm("Gymshark"));
+    const result = await handleCompetitorIntent(workspaceId, addForm("Gymshark"));
+    expect(result).toEqual({ message: null });
+    const added = await env.DB.prepare(
+      "SELECT id FROM entity WHERE workspace_id = ? AND role = 'competitor' AND domain = 'gymshark.com'",
+    )
+      .bind(workspaceId)
+      .first<{ id: string }>();
+    expect(typeof added?.id).toBe("string");
 
     const count = await env.DB.prepare("SELECT COUNT(*) AS n FROM jev_verdict").first<{ n: number }>();
     expect(count?.n).toBe(0);
