@@ -90,3 +90,21 @@ export async function readSiteSweepTargets(sourceKey: string): Promise<readonly 
     url: row.url,
   }));
 }
+
+const SITE_WATCH_SUMMARY = `SELECT COUNT(*) AS pages, MAX(w.last_polled_at) AS last_polled_at
+FROM watch w
+JOIN source src ON src.id = w.source_id AND src.kind = 'site'
+JOIN entity e ON e.id = w.entity_id AND e.workspace_id = ?1
+WHERE w.entity_id = ?2 AND w.is_active = 1`;
+
+export interface SiteWatchSummary {
+  pages: number;
+  lastPolledAt: string | null;
+}
+
+export async function readSiteWatchSummary(workspaceId: string, entityId: string): Promise<SiteWatchSummary> {
+  const row = await env.DB.prepare(SITE_WATCH_SUMMARY)
+    .bind(workspaceId, entityId)
+    .first<{ pages: number; last_polled_at: string | null }>();
+  return { pages: row?.pages ?? 0, lastPolledAt: row?.last_polled_at ?? null };
+}
