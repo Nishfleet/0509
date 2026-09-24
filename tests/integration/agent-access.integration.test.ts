@@ -43,7 +43,7 @@ const PAYLOAD = {
       jev_reason: "They raised prices.",
     },
   ],
-  brands: [{ entity_id: "ent_agent_a", name: "Rival A", rank: 1, movement: 0, is_new: false, biggest_move: null, ad_delta: 2, mention_delta: 0, site_change_count: 1 }],
+  brands: [{ entity_id: "ent_agent_a", name: "Rival A", rank: 1, movement: 0, is_new: false, biggest_move: null, ad_delta: 2, mention_delta: 0, site_change_count: 1, new_roles: 0 }],
   own_site: { status: "ok", incidents: [] },
   checked: { mention_count: 0, site_change_count: 1, new_ad_count: 2, source_keys: [], degraded_source_keys: [], degraded_sources: [] },
   next_brief_at: "2026-09-28T07:00:00.000Z",

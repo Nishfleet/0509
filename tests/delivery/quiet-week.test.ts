@@ -38,6 +38,7 @@ function quiet(overrides: Partial<BriefPayload> = {}): BriefPayload {
         ad_delta: 3,
         mention_delta: 12,
         site_change_count: 1,
+        new_roles: 0,
       },
       {
         entity_id: "ent_self",
@@ -49,6 +50,7 @@ function quiet(overrides: Partial<BriefPayload> = {}): BriefPayload {
         ad_delta: 0,
         mention_delta: 4,
         site_change_count: 2,
+        new_roles: 0,
       },
       {
         entity_id: "ent_casetta",
@@ -60,6 +62,7 @@ function quiet(overrides: Partial<BriefPayload> = {}): BriefPayload {
         ad_delta: 4,
         mention_delta: 2,
         site_change_count: 6,
+        new_roles: 0,
       },
     ],
     own_site: { status: "ok", incidents: [] },
