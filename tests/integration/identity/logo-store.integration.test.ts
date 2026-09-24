@@ -77,14 +77,59 @@ describe("storeLogo and readLogo", () => {
     expect(await logoKeys()).toEqual([]);
   });
 
-  it("returns null without reading a body that declares more than the cap", async () => {
-    const bytes = new Uint8Array(2_000_000);
-    vi.stubGlobal("fetch", vi.fn(async () => new Response(bytes, {
+  it("returns null from the declared length alone when the body itself is under the cap", async () => {
+    const underCap = (): ReadableStream<Uint8Array> =>
+      new ReadableStream({
+        pull(controller) {
+          controller.enqueue(PNG_BYTES);
+          controller.close();
+        },
+      });
+    const declared = new Response(underCap(), {
       status: 200,
       headers: { "content-type": "image/png", "content-length": "2000000" },
-    })));
+    });
+    expect(declared.headers.get("content-length")).toBe("2000000");
+    vi.stubGlobal("fetch", vi.fn(async () => declared));
 
     expect(await storeLogo("gymshark.com", "https://gymshark.com/big.png")).toBeNull();
+    expect(await logoKeys()).toEqual([]);
+
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(underCap(), {
+      status: 200,
+      headers: { "content-type": "image/png" },
+    })));
+
+    expect(await storeLogo("gymshark.com", "https://gymshark.com/small.png"))
+      .toEqual({ contentType: "image/png", bytes: PNG_BYTES });
+  });
+
+  it("stops a streamed body once it passes the cap", async () => {
+    const overCap = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        controller.enqueue(new Uint8Array(600_000));
+        controller.enqueue(new Uint8Array(600_000));
+        controller.close();
+      },
+    });
+    const streaming = new Response(overCap, {
+      status: 200,
+      headers: { "content-type": "image/png" },
+    });
+    expect(streaming.headers.get("content-length")).toBeNull();
+    vi.stubGlobal("fetch", vi.fn(async () => streaming));
+
+    expect(await storeLogo("gymshark.com", "https://gymshark.com/endless.png")).toBeNull();
+    expect(await readLogo("gymshark.com")).toBeNull();
+    expect(await logoKeys()).toEqual([]);
+  });
+
+  it("returns null when a followed redirect lands on a host that is not public https", async () => {
+    const redirected = png();
+    Object.defineProperty(redirected, "url", { value: "https://127.0.0.1/logo.png", configurable: true });
+    vi.stubGlobal("fetch", vi.fn(async () => redirected));
+
+    expect(await storeLogo("gymshark.com", "https://gymshark.com/logo.png")).toBeNull();
     expect(await readLogo("gymshark.com")).toBeNull();
     expect(await logoKeys()).toEqual([]);
   });
