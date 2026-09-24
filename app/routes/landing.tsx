@@ -6,12 +6,13 @@ import { Faq } from "../components/landing/faq";
 import { Header } from "../components/landing/header";
 import { Hero } from "../components/landing/hero";
 import { HowItWorks } from "../components/landing/how-it-works";
+import { Marks } from "../components/landing/marks";
 import { Price } from "../components/landing/price";
 import { pageWidth } from "../components/landing/section";
-import { TheMark } from "../components/landing/the-mark";
 import { WhatWeWatch } from "../components/landing/what-we-watch";
 import { WATCHED_NOUNS } from "../lib/coverage";
 import { FAQ } from "../lib/faq";
+import { readLandingMarks } from "../lib/landing-marks.server";
 import {
   SITE_URL,
   faqPageJsonLd,
@@ -51,13 +52,17 @@ export function meta(_: Route.MetaArgs) {
   ];
 }
 
-export default function Landing() {
+export async function loader(_: Route.LoaderArgs) {
+  return { marks: await readLandingMarks(new Date()) };
+}
+
+export default function Landing({ loaderData }: Route.ComponentProps) {
   return (
     <div className="bg-bone text-ink">
       <Header />
       <main>
         <Hero />
-        <TheMark />
+        <Marks marks={loaderData.marks} />
         <HowItWorks />
         <WhatWeWatch />
         <Agents />
