@@ -12,6 +12,7 @@ export default [
     route("app/alerts", "routes/app.alerts.tsx"),
     route("app/settings", "routes/app.settings.tsx"),
   ]),
+  route("app/share.png", "routes/app.share[.]png.ts"),
   route("u/:token", "routes/u.$token.tsx"),
   route("api/health", "routes/api.health.ts"),
   route("api/auth/*", "routes/api.auth.$.ts"),

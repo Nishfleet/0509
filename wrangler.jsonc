@@ -150,6 +150,29 @@
       "name": "competitor-discovery",
       "binding": "DISCOVERY",
       "class_name": "DiscoveryWorkflow"
+    },
+    // The nightly website sweep (docs/engines/site-change.md). The Workflow's
+    // own schedule creates one instance a night, at 02:00 UTC so the changes
+    // it files land before the 03:00 standing refresh counts them. Each page
+    // is its own retried step; a page that cannot be read fails alone.
+    // Nothing to provision: deploy creates the Workflow, unlike a queue.
+    {
+      "name": "site-sweep",
+      "binding": "SITE_SWEEP",
+      "class_name": "SiteSweepWorkflow",
+      "schedules": ["0 2 * * *"]
+    },
+    // The own-site watch: every hour, each customer's own homepage is
+    // probed once with a plain fetch. A 5xx, 404 or no answer is probed
+    // again five minutes later, and only then opens an incident, pins an
+    // alert and puts { incident_id } on send-email. An open incident whose
+    // page answers cleanly again is closed and gets the one "looks fixed"
+    // email. This is the hourly re-check the incident email promises.
+    {
+      "name": "own-site-check",
+      "binding": "OWN_SITE_CHECK",
+      "class_name": "OwnSiteCheckWorkflow",
+      "schedules": ["0 * * * *"]
     }
   ],
 

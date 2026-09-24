@@ -1,12 +1,13 @@
 import { env } from "cloudflare:workers";
 
 const LATEST_SITE_SNAPSHOT = `SELECT id, payload_hash, payload_r2_key FROM snapshot
-WHERE watch_id = ? AND page_id = ?
+WHERE watch_id = ? AND page_id = ? AND fetched_at < ?
 ORDER BY fetched_at DESC LIMIT 1`;
 
 const INSERT_SNAPSHOT = `INSERT INTO snapshot
   (id, watch_id, page_id, fetched_at, payload_r2_key, payload_hash, item_count)
-VALUES (?, ?, ?, ?, ?, ?, 1)`;
+VALUES (?, ?, ?, ?, ?, ?, 1)
+ON CONFLICT (id) DO NOTHING`;
 
 interface SiteSnapshotRow {
   id: string;
@@ -17,9 +18,10 @@ interface SiteSnapshotRow {
 export async function latestSiteSnapshot(
   watchId: string,
   pageId: string,
+  before: string,
 ): Promise<SiteSnapshotRow | null> {
   return env.DB.prepare(LATEST_SITE_SNAPSHOT)
-    .bind(watchId, pageId)
+    .bind(watchId, pageId, before)
     .first<SiteSnapshotRow>();
 }
 
