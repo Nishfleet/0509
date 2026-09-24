@@ -49,10 +49,10 @@ export async function action({ request, context }: Route.ActionArgs) {
     const confirm = form.get("confirm");
     const typed = typeof confirm === "string" ? confirm.trim().toLowerCase() : "";
     if (typed !== session.user.email.toLowerCase()) {
-      return { saved: null, deleteError: MISMATCH, briefError: null };
+      return { deleteError: MISMATCH, briefError: null };
     }
     const headers = await deleteAccount(context.get(oauthHelpersContext), request, session.user.id);
-    if (headers === null) return { saved: null, deleteError: SIGN_IN_AGAIN, briefError: null };
+    if (headers === null) return { deleteError: SIGN_IN_AGAIN, briefError: null };
     throw redirect("/login", { headers });
   }
   if (intent === "brief-schedule") {
@@ -68,7 +68,7 @@ export async function action({ request, context }: Route.ActionArgs) {
     await updateBriefSchedule(owned.workspaceId, schedule);
     return { deleteError: null, briefError: null };
   }
-  return { saved: null, deleteError: null, briefError: null };
+  return { deleteError: null, briefError: null };
 }
 
 const BLOCK = "border-line mt-10 border-t pt-4";

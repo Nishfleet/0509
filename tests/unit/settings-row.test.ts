@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { createRoutesStub } from "react-router";
 import { describe, expect, it } from "vitest";
 
-import { BriefRow, type BriefRowProps } from "../../app/components/settings-row";
+import { BriefRow, briefEditorOpen, type BriefRowProps } from "../../app/components/settings-row";
 
 const ACTION_ERROR = "Pick a day, an hour and a timezone from the lists.";
 
@@ -66,5 +66,44 @@ describe("settings-row: BriefRow", () => {
     expect(html).toContain('id="brief-row-error"');
     expect(html).toContain('role="alert"');
     expect(html).toContain(ACTION_ERROR);
+  });
+});
+
+describe("settings-row: briefEditorOpen", () => {
+  const failed = { briefError: ACTION_ERROR };
+  const saved = { briefError: null };
+
+  it("stays closed on a fresh load, when nothing has been seen and nothing saved", () => {
+    expect(briefEditorOpen({ editing: false, state: "idle", data: undefined, seen: undefined })).toBe(
+      false,
+    );
+  });
+
+  it("opens on Change, and stays open while the save is in flight", () => {
+    expect(briefEditorOpen({ editing: true, state: "idle", data: undefined, seen: undefined })).toBe(
+      true,
+    );
+    expect(briefEditorOpen({ editing: true, state: "submitting", data: undefined, seen: undefined })).toBe(
+      true,
+    );
+  });
+
+  it("stays open and shows the error when the save fails", () => {
+    expect(briefEditorOpen({ editing: true, state: "idle", data: failed, seen: undefined })).toBe(true);
+    expect(briefEditorOpen({ editing: true, state: "idle", data: failed, seen: failed })).toBe(true);
+  });
+
+  it("closes once the save lands with a null briefError", () => {
+    expect(briefEditorOpen({ editing: true, state: "idle", data: saved, seen: undefined })).toBe(false);
+  });
+
+  it("reopens on Change after a save, because the click marks the result seen", () => {
+    expect(briefEditorOpen({ editing: true, state: "idle", data: saved, seen: saved })).toBe(true);
+  });
+
+  it("never opens while editing is false, even against a saved payload", () => {
+    expect(briefEditorOpen({ editing: false, state: "idle", data: saved, seen: undefined })).toBe(
+      false,
+    );
   });
 });

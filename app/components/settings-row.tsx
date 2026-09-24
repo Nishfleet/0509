@@ -63,6 +63,19 @@ function BriefForm({ weekday, hour, timezone, timezones, fetcher, message }: Bri
   );
 }
 
+export interface BriefEditorInput {
+  editing: boolean;
+  state: "idle" | "loading" | "submitting";
+  data: { briefError: string | null } | undefined;
+  seen: { briefError: string | null } | undefined;
+}
+
+export function briefEditorOpen({ editing, state, data, seen }: BriefEditorInput): boolean {
+  const saved =
+    state === "idle" && data !== undefined && data !== seen && data.briefError === null;
+  return editing && !saved;
+}
+
 export function BriefRow({
   weekday,
   hour,
@@ -75,13 +88,7 @@ export function BriefRow({
   const [editing, setEditing] = useState(error !== null);
   const [seen, setSeen] = useState<typeof fetcher.data>(undefined);
   const message = fetcher.data === undefined ? error : fetcher.data.briefError;
-  const saved =
-    editing &&
-    fetcher.state === "idle" &&
-    fetcher.data !== undefined &&
-    fetcher.data !== seen &&
-    fetcher.data.briefError === null;
-  const open = editing && !saved;
+  const open = briefEditorOpen({ editing, state: fetcher.state, data: fetcher.data, seen });
 
   return (
     <section aria-labelledby="brief-row" className="border-line border-t py-4">
