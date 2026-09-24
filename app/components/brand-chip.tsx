@@ -1,6 +1,7 @@
 import type { CSSProperties, ReactElement } from "react";
 import { Link } from "react-router";
 
+import { httpUrl } from "../lib/http-url";
 import { cn } from "../lib/utils";
 import { Avatar, AvatarFallback, AvatarImage } from "./ui/avatar";
 import { Badge } from "./ui/badge";
@@ -29,18 +30,6 @@ export function brandMonogram(name: string): string {
   const first = segments[Symbol.iterator]().next().value;
   if (first === undefined) return "";
   return first.segment.toLocaleUpperCase();
-}
-
-function httpUrl(value: string): string | null {
-  const trimmed = value.trim();
-  if (trimmed === "") return null;
-  try {
-    const url = new URL(trimmed);
-    if (url.protocol !== "http:" && url.protocol !== "https:") return null;
-    return url.href;
-  } catch {
-    return null;
-  }
 }
 
 function safeHref(value: string): string | null {

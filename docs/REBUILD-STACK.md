@@ -1102,6 +1102,7 @@ The version in this table is the `package.json` specifier. An earlier section of
 | `react` | ^19.2.8 | §1.1 | UI runtime the scaffold emits | Preact. React Router 8's types are React | 19.3.0 |
 | `react-dom` | ^19.2.8 | §1.1 | Client renderer. Unit tests call `react-dom/server` | A second renderer | 19.3.0 |
 | `react-router` | ^8.4.0 | §1, §8 | Framework mode, SSR, routing | `@react-router/node` and `@react-router/serve`. C3 deletes both | 8.4.0 |
+| `robots-parser` | 3.0.1 | #4741, REBUILD-GUARDRAILS robots line | robots.txt matching (groups, wildcards, Allow/Disallow precedence) for plain fetches of the customer's own site. Zero dependencies. Doc: <https://github.com/samclarke/robots-parser> | A hand-written robots.txt parser (charter #3842 forbids it), `robotstxt` ports of Google's C++ parser | 3.0.1 |
 | `sonner` | ^2.0.8 | §5.10 | The one toast surface: "saved" and "undo" per DESIGN.md §11 | A hand-rolled live region (Base UI ships no toast primitive), `react-hot-toast` | 2.0.8 |
 | `tailwind-merge` | ^3.7.0 | §3.2 | Class conflict resolution inside `cn()` | A hand-written Tailwind merger | 3.7.0 |
 | `tldts` | ^7.4.13 | `docs/engines/identity-card.md` P1 | Registrable domain and public-suffix handling for identity input normalisation. No dependencies, ships a Workers-clean ESM build | A hand-written public-suffix list, `split('.')`, `psl` (unmaintained) | 7.4.13 |
