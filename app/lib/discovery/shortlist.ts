@@ -100,6 +100,34 @@ function isSoleGenerator(generators: GeneratorKey[], key: GeneratorKey): boolean
   return generators.length === 1 && generators[0] === key;
 }
 
+export function evidenceLine(entry: ShortlistEntry): string {
+  const parts: string[] = [];
+  for (const key of GENERATOR_ORDER) {
+    if (!entry.generators.includes(key)) continue;
+    if (key === "news") {
+      const hosts = new Set<string>();
+      for (const item of entry.evidence) {
+        if (item.generator !== "news") continue;
+        const pub = publisherOf(item.sourceUrl);
+        if (pub !== null) hosts.add(pub);
+      }
+      const n = hosts.size;
+      if (n >= 1) parts.push(`named by ${n} news publisher${n !== 1 ? "s" : ""}`);
+    } else if (key === "hn") {
+      const urls = new Set<string>();
+      for (const item of entry.evidence) {
+        if (item.generator !== "hn") continue;
+        urls.add(item.sourceUrl);
+      }
+      const m = urls.size;
+      if (m >= 1) parts.push(`mentioned in ${m} Hacker News thread${m !== 1 ? "s" : ""}`);
+    } else if (key === "ads") {
+      parts.push("advertises in the same category");
+    }
+  }
+  return parts.join(", ");
+}
+
 export function shortlist(candidates: readonly Candidate[]): ShortlistEntry[] {
   const scored: Scored[] = buildGroups(candidates).map((group) => ({
     group,
