@@ -4,6 +4,7 @@ import { env } from "cloudflare:workers";
 import { Link, redirect } from "react-router";
 
 import { DeleteAccount, SignOut } from "../components/account-settings";
+import { OwnSiteAlertsSetting } from "../components/own-site-alerts-setting";
 import { BriefRow } from "../components/settings-row";
 import { BLOCK_HEADING, PAGE, PageHeading } from "../components/page-heading";
 import { AddPasskey } from "../components/passkey-button";
@@ -12,7 +13,13 @@ import { oauthHelpersContext } from "../lib/agent/context.server";
 import { signOut } from "../lib/auth.server";
 import { nextBriefAt } from "../lib/brief-schedule";
 import { formatBriefAt, parseBriefSchedule } from "../lib/brief-settings";
-import { readBriefScheduleForOwner, updateBriefSchedule } from "../lib/data/workspace.server";
+import {
+  readBriefScheduleForOwner,
+  updateBriefSchedule,
+  readOwnSiteAlerts,
+  setOwnSiteAlerts,
+  readWorkspaceIdForOwner,
+} from "../lib/data/workspace.server";
 import { requireSession } from "../lib/require-session.server";
 
 const MISMATCH = "That doesn't match your email. Type it exactly to delete your account.";
@@ -34,7 +41,9 @@ export async function loader({ request }: Route.LoaderArgs) {
           nextBrief: formatBriefAt(nextBriefAt(schedule, new Date()), schedule.timezone),
           timezones: [...new Set(["UTC", schedule.timezone, ...Intl.supportedValuesOf("timeZone")])],
         };
-  return { email: session.user.email, brief };
+  const workspaceId = await readWorkspaceIdForOwner(session.user.id);
+  const ownSiteAlerts = workspaceId === null ? true : await readOwnSiteAlerts(workspaceId);
+  return { email: session.user.email, brief, ownSiteAlerts };
 }
 
 export async function action({ request, context }: Route.ActionArgs) {
@@ -42,6 +51,15 @@ export async function action({ request, context }: Route.ActionArgs) {
   const form = await request.formData();
   const intent = form.get("intent");
 
+  if (intent === "own-site-alerts") {
+    const workspaceId = await readWorkspaceIdForOwner(session.user.id);
+    if (workspaceId === null) return { deleteError: null, briefError: null };
+    const raw = form.get("value");
+    const next = raw === "on" ? true : raw === "off" ? false : null;
+    if (next === null) return { deleteError: null, briefError: null };
+    await setOwnSiteAlerts(workspaceId, next);
+    return { deleteError: null, briefError: null };
+  }
   if (intent === "sign-out") {
     throw redirect("/login", { headers: await signOut(env, request) });
   }
@@ -80,6 +98,7 @@ export default function Page({ loaderData, actionData }: Route.ComponentProps) {
       {loaderData.brief === null ? null : (
         <BriefRow {...loaderData.brief} error={actionData?.briefError ?? null} />
       )}
+      <OwnSiteAlertsSetting on={loaderData.ownSiteAlerts} />
       <section aria-labelledby="settings-agents" className={BLOCK}>
         <h2 id="settings-agents" className={BLOCK_HEADING}>
           Agents and API
