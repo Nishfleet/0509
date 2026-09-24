@@ -27,4 +27,5 @@ export default [
   route("design/brand-switch", "routes/design.brand-switch.tsx"),
   route("llms.txt", "routes/llms[.]txt.ts"),
   route("design/landing", "routes/landing.tsx"),
+  route("onboarding/identity", "routes/onboarding.identity.tsx"),
 ] satisfies RouteConfig;

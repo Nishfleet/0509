@@ -128,3 +128,19 @@ export function insertCompetitorFromSuggestion(input: {
     .prepare(INSERT_COMPETITOR_FROM_SUGGESTION)
     .bind(input.entityId, input.now, input.suggestionId, input.workspaceId);
 }
+
+const INSERT_SELF =
+  "INSERT INTO entity (id, workspace_id, role, domain, name, identity_json, origin, confirmed_at, state, created_at) VALUES (?1, ?2, 'self', ?3, ?4, ?5, 'manual', ?6, 'on', ?6) ON CONFLICT DO NOTHING";
+
+export async function insertSelfEntity(input: {
+  id: string;
+  workspaceId: string;
+  domain: string;
+  name: string;
+  identityJson: string;
+  now: string;
+}): Promise<void> {
+  await env.DB.prepare(INSERT_SELF)
+    .bind(input.id, input.workspaceId, input.domain, input.name, input.identityJson, input.now)
+    .run();
+}

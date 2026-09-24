@@ -68,3 +68,22 @@ export async function readDeliveryFailures(
     brief_text: briefText(row.payload_json),
   }));
 }
+
+export interface TakedownNote {
+  id: string;
+  title: string;
+  created_at: string;
+}
+
+const SELECT_TAKEDOWN_NOTES = `SELECT id, title, created_at FROM alert
+WHERE workspace_id = ? AND kind = 'takedown'
+ORDER BY created_at DESC
+LIMIT 20`;
+
+export async function readTakedownNotes(
+  db: D1Database,
+  workspaceId: string,
+): Promise<TakedownNote[]> {
+  const { results } = await db.prepare(SELECT_TAKEDOWN_NOTES).bind(workspaceId).all<TakedownNote>();
+  return results;
+}
