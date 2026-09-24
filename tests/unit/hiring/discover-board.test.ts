@@ -340,6 +340,17 @@ describe("discoverBoard", () => {
     });
   });
 
+  it("caps a lead-revealed fan-out at 20 probes per run", async () => {
+    const leadUrl = "https://careers.acme.com/";
+    const links = Array.from({ length: 50 }, (_, index) => `<a href="https://boards.greenhouse.io/slug${index}/jobs/1">role</a>`).join("");
+    const { probe, calls } = recordingProbe({ [leadUrl]: htmlResponse(links + "x".repeat(220)) });
+
+    const board = await discoverBoard([leadUrl], "acme.com", { probe });
+
+    expect(board).toEqual(NONE);
+    expect(calls).toHaveLength(20);
+  });
+
   it("returns none, probing nothing, when every probe fails", async () => {
     const urls = [GH_URL("a"), "https://api.lever.co/v0/postings/b?mode=json"];
     const { probe, calls } = failingProbe(urls);
