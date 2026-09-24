@@ -105,11 +105,16 @@ const BANNED_SYNTAX = [
 const DML_WRITE_SHAPE =
   "INSERT(\\s+OR\\s+\\w+)?\\s+INTO|REPLACE\\s+INTO|UPDATE\\s+[\\w\".]+\\s+SET\\s+[\\w\".]+\\s*=|DELETE\\s+FROM";
 
-// Anchored at statement start, where a bare `UPDATE ` is already unambiguous,
-// plus `WITH`-led writes (a CTE can head INSERT/UPDATE/DELETE; a `WITH …
-// SELECT` read stays allowed because the inner shape must still match).
+// The same shapes anchored at statement start, plus `WITH`-led writes (a CTE
+// can head INSERT/UPDATE/DELETE; a `WITH … SELECT` read stays allowed because
+// the inner shape must still match). The UPDATE arm carries the table-then-SET
+// tail too: a bare `UPDATE\s` under the leading anchor only fixed position,
+// not shape, so prose literals like "Update saved" tripped the gate
+// (0509#4383). The `$` alternative is load-bearing for an interpolated table —
+// `UPDATE ${table} SET …` has `"UPDATE "` as its whole first quasi, which the
+// table-then-SET tail cannot span but end-of-quasi can.
 const RAW_DML_START =
-  `^\\s*(INSERT(\\s+OR\\s+\\w+)?\\s+INTO|REPLACE\\s+INTO|UPDATE\\s|DELETE\\s+FROM` +
+  `^\\s*(INSERT(\\s+OR\\s+\\w+)?\\s+INTO|REPLACE\\s+INTO|UPDATE\\s+([\\w".]+\\s+SET\\b|$)|DELETE\\s+FROM` +
   `|WITH\\b[\\s\\S]*\\b(${DML_WRITE_SHAPE}))`;
 
 const RAW_DML_WRITER = {
