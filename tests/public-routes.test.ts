@@ -6,7 +6,6 @@ import { describe, expect, it } from "vitest";
 
 import routes from "../app/routes";
 import {
-  CARD_ROUTE_PATH,
   DISALLOWED_PREFIXES,
   MCP_URL,
   PUBLIC_PATHS,
@@ -41,8 +40,7 @@ describe("public-route manifest", () => {
         (PUBLIC_PATHS as readonly string[]).includes(urlPath) ||
         DISALLOWED_PREFIXES.some(
           (prefix) => urlPath === prefix || urlPath.startsWith(`${prefix}/`),
-        ) ||
-        path === CARD_ROUTE_PATH;
+        );
       expect(
         classified,
         `route "${path}" is not classified in app/lib/public-routes.ts`,

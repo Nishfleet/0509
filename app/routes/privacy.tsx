@@ -61,7 +61,7 @@ const SECTIONS = [
   {
     heading: "Removal",
     paragraphs: [
-      "Any brand or person can ask to be removed from public standing cards and from tracking by any workspace, by email to the address in the footer.",
+      "Any brand or person can ask to be removed from tracking by any workspace, by email to the address in the footer.",
       "We handle that within 72 hours, by hand, and record the subject, the date, and the action on a takedown row.",
       "A subject on that list is refused at onboarding and dropped from existing workspaces at the next tick, with a one-line note to the owner.",
     ],

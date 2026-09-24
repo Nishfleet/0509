@@ -17,7 +17,7 @@ const NOTES = {
   BETTER_AUTH_SECRET: "sign-in cannot be trusted",
   EMAIL: "magic links and briefs cannot send",
   SEND_EMAIL: "briefs sit unsent",
-  SNAPSHOTS: "public standing cards and site snapshots cannot be read or stored",
+  SNAPSHOTS: "site snapshots cannot be read or stored",
   BROWSER: "bot-gated page reads cannot escalate",
   LIVENESS_PING_URL: "absence means no monitor; a set value must be an http(s) URL",
 } as const satisfies Record<(typeof BINDING_NAMES)[number] | "LIVENESS_PING_URL", string>;
