@@ -180,6 +180,7 @@ describe("shortlist", () => {
       generators: ["news", "hn"],
       publishers: ["glamourmagazine.co.uk", "vogue.co.uk"],
       slot: "top",
+      nameKeys: [nameKey("Alpha")],
     };
     expect(evidenceLine(entry)).toBe(
       "named by 2 news publishers, mentioned in 1 Hacker News thread",
@@ -193,6 +194,7 @@ describe("shortlist", () => {
       generators: ["ads"],
       publishers: [],
       slot: "top",
+      nameKeys: [nameKey("Beta")],
     };
     expect(evidenceLine(entry)).toBe("advertises in the same category");
   });

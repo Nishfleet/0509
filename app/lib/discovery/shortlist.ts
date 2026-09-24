@@ -110,31 +110,27 @@ function isSoleGenerator(generators: GeneratorKey[], key: GeneratorKey): boolean
 }
 
 export function evidenceLine(entry: ShortlistEntry): string {
-  const parts: string[] = [];
-  for (const key of GENERATOR_ORDER) {
-    if (!entry.generators.includes(key)) continue;
+  return GENERATOR_ORDER.flatMap((key) => {
+    if (!entry.generators.includes(key)) return [];
     if (key === "news") {
-      const hosts = new Set<string>();
-      for (const item of entry.evidence) {
-        if (item.generator !== "news") continue;
-        const pub = publisherOf(item.sourceUrl);
-        if (pub !== null) hosts.add(pub);
-      }
-      const n = Math.max(1, hosts.size);
-      parts.push(`named by ${String(n)} news publisher${n !== 1 ? "s" : ""}`);
-    } else if (key === "hn") {
-      const urls = new Set<string>();
-      for (const item of entry.evidence) {
-        if (item.generator !== "hn") continue;
-        urls.add(item.sourceUrl);
-      }
-      const m = urls.size;
-      parts.push(`mentioned in ${String(m)} Hacker News thread${m !== 1 ? "s" : ""}`);
-    } else if (key === "ads") {
-      parts.push("advertises in the same category");
+      const hosts = new Set(
+        entry.evidence.flatMap((item) => {
+          if (item.generator !== "news") return [];
+          const publisher = publisherOf(item.sourceUrl);
+          return publisher === null ? [] : [publisher];
+        }),
+      );
+      const count = Math.max(1, hosts.size);
+      return [`named by ${String(count)} news publisher${count !== 1 ? "s" : ""}`];
     }
-  }
-  return parts.join(", ");
+    if (key === "hn") {
+      const urls = new Set(
+        entry.evidence.flatMap((item) => (item.generator === "hn" ? [item.sourceUrl] : [])),
+      );
+      return [`mentioned in ${String(urls.size)} Hacker News thread${urls.size !== 1 ? "s" : ""}`];
+    }
+    return ["advertises in the same category"];
+  }).join(", ");
 }
 
 export function partitionShortlist(candidates: readonly Candidate[]): {

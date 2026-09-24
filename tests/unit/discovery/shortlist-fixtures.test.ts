@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { getDomain } from "tldts";
 import { describe, expect, it } from "vitest";
 
 import { hnGenerator } from "../../../app/lib/discovery/generators/hn";
@@ -18,15 +19,6 @@ const NEWS_FIXTURE = readFileSync(join(FIXTURES_DIR, "gnews-gymshark.xml"), "utf
 
 function fetchTextWith(body: string): (url: string) => Promise<FetchedText> {
   return (url) => Promise.resolve({ ok: true, url, contentType: null, body });
-}
-
-function publisherHost(sourceUrl: string): string | null {
-  try {
-    const host = new URL(sourceUrl).hostname.toLowerCase();
-    return host.startsWith("www.") ? host.slice(4) : host;
-  } catch {
-    return null;
-  }
 }
 
 interface Grouped {
@@ -61,34 +53,41 @@ describe("shortlist fixtures", () => {
       expect(evidenceLine(entry).length).toBeGreaterThan(0);
     }
 
-    const grouped = new Map<string, Grouped>();
-    for (const candidate of combined) {
-      const key = candidate.name.toLowerCase();
-      const existing = grouped.get(key);
-      const record: Grouped =
-        existing ?? { name: candidate.name, generators: new Set<string>(), publishers: new Set<string>() };
-      for (const item of candidate.evidence) {
-        record.generators.add(item.generator);
-        if (item.generator !== "news") continue;
-        const host = publisherHost(item.sourceUrl);
-        if (host !== null) record.publishers.add(host);
-      }
-      grouped.set(key, record);
-    }
+    const grouped = new Map(
+      combined.map((candidate): [string, Grouped] => {
+        const key = candidate.name.toLowerCase();
+        const evidence = combined
+          .filter((item) => item.name.toLowerCase() === key)
+          .flatMap((item) => item.evidence);
+        return [
+          key,
+          {
+            name: candidate.name,
+            generators: new Set(evidence.map((item) => item.generator)),
+            publishers: new Set(
+              evidence.flatMap((item) => {
+                if (item.generator !== "news") return [];
+                const publisher = getDomain(item.sourceUrl);
+                return publisher === null ? [] : [publisher];
+              }),
+            ),
+          },
+        ];
+      }),
+    );
 
     const shortlistedNames = new Set(lowercaseNames);
-    const rows: Row[] = [];
-    for (const [key, record] of grouped) {
+    const rows: Row[] = [...grouped].map(([key, record]) => {
       const entry = entries.find((item) => item.name.toLowerCase() === key);
-      rows.push({
+      return {
         candidate: record.name,
         generators: [...record.generators].join("+"),
         publishers: record.publishers.size,
         shortlisted: shortlistedNames.has(key) ? "yes" : "no",
         why: entry === undefined ? "outside top 20" : entry.slot,
         line: entry === undefined ? "" : evidenceLine(entry),
-      });
-    }
+      };
+    });
 
     console.table(rows, ["candidate", "generators", "publishers", "shortlisted", "why", "line"]);
   });
