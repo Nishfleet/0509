@@ -11,4 +11,3 @@ export {
 	withResolvedChannel,
 	youtubeUrlFromIdentity,
 } from "../../app/lib/mentions/youtube-channel";
-export type { LostChannelFlag } from "../../app/lib/mentions/youtube-channel";

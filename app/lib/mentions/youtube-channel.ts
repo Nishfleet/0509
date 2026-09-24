@@ -71,7 +71,7 @@ export async function resolveYoutubeChannelId(
 	return channelIdFromHtml(await response.text());
 }
 
-export interface LostChannelFlag {
+interface LostChannelFlag {
 	reason: string;
 	at: string;
 }
