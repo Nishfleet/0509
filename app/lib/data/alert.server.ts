@@ -1,5 +1,3 @@
-import { env } from "cloudflare:workers";
-
 import type { BriefPayload } from "../brief-payload";
 import { readBriefPayload } from "../brief-payload";
 
@@ -147,14 +145,17 @@ export async function readOwnSiteIncidents(
 const INSERT_COMPETITOR_RETIRED_ALERT =
   "INSERT INTO alert (id, workspace_id, entity_id, kind, title, body, created_at) VALUES (?, ?, ?, 'competitor_retired', ?, ?, ?)";
 
-export function insertCompetitorRetiredAlert(input: {
-  workspaceId: string;
-  entityId: string;
-  name: string;
-  line: string;
-  now: string;
-}): D1PreparedStatement {
-  return env.DB.prepare(INSERT_COMPETITOR_RETIRED_ALERT).bind(
+export function insertCompetitorRetiredAlert(
+  db: D1Database,
+  input: {
+    workspaceId: string;
+    entityId: string;
+    name: string;
+    line: string;
+    now: string;
+  },
+): D1PreparedStatement {
+  return db.prepare(INSERT_COMPETITOR_RETIRED_ALERT).bind(
     crypto.randomUUID(),
     input.workspaceId,
     input.entityId,

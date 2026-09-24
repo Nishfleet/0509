@@ -133,7 +133,7 @@ function statementsForStillCompetitor(
         reason: reason.choice,
         now,
       }),
-      insertCompetitorRetiredAlert({
+      insertCompetitorRetiredAlert(env.DB, {
         workspaceId,
         entityId: target.entityId,
         name: target.name,
