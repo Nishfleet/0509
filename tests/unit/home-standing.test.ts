@@ -7,6 +7,7 @@ import { HomeStanding } from "../../app/components/home-standing";
 import type { BriefPayload } from "../../app/lib/brief-payload";
 import type { BriefSchedule } from "../../app/lib/brief-schedule";
 import { greetingFor, homeStanding, homeView, movementLabel, nextHour, type HomeEntity } from "../../app/lib/home-standing";
+import type { HomeHistoryRow } from "../../app/lib/home-standing";
 
 const SCHEDULE: BriefSchedule = { timezone: "Europe/London", weekday: 1, hour: 8 };
 const THURSDAY_MORNING = new Date("2026-09-24T06:30:00.000Z");
@@ -71,6 +72,7 @@ function render(input: { payload: BriefPayload | null; entities?: readonly HomeE
     payload: input.payload,
     entities: input.entities ?? ENTITIES,
     schedule: SCHEDULE,
+    history: [],
     now: THURSDAY_MORNING,
   });
   return renderToStaticMarkup(createElement(MemoryRouter, null, createElement(HomeStanding, { view })));
@@ -86,7 +88,13 @@ describe("Home standing", () => {
   });
 
   it("lists every ranked brand in rank order with its domain and movement, yours marked", () => {
-    const standing = homeStanding({ payload: payload(), entities: ENTITIES, schedule: SCHEDULE, now: THURSDAY_MORNING });
+    const standing = homeStanding({
+      payload: payload(),
+      entities: ENTITIES,
+      schedule: SCHEDULE,
+      history: [],
+      now: THURSDAY_MORNING,
+    });
     expect(standing.kind).toBe("ranked");
     if (standing.kind !== "ranked") return;
     expect(standing.rows.map((row) => [row.position, row.name, row.domain, row.movement, row.self])).toEqual([
@@ -105,6 +113,7 @@ describe("Home standing", () => {
       payload: payload({ brands: [brand("ent_casetta", "Casetta", null, null), brand("ent_self", "Own Brand", 1, null)] }),
       entities: ENTITIES,
       schedule: SCHEDULE,
+      history: [],
       now: THURSDAY_MORNING,
     });
     if (standing.kind !== "ranked") throw new Error("expected a ranked standing");
@@ -159,10 +168,77 @@ describe("Home standing", () => {
       { id: "ent_casetta", role: "competitor", domain: "casetta.example", state: "on" },
       { id: "ent_hollow", role: "competitor", domain: "hollow.example", state: "on" },
     ];
-    const four = homeView({ payload: payload(), entities: fourOn, schedule: amsterdamSchedule, now });
+    const four = homeView({ payload: payload(), entities: fourOn, schedule: amsterdamSchedule, history: [], now });
     expect(four.footer).toBe("Checked 4 brands this week · brief Monday 08:00 · your site re-checked at 13:00");
 
-    const one = homeView({ payload: payload(), entities: [SELF], schedule: amsterdamSchedule, now });
+    const one = homeView({ payload: payload(), entities: [SELF], schedule: amsterdamSchedule, history: [], now });
     expect(one.footer).toBe("Checked 1 brand this week · brief Monday 08:00 · your site re-checked at 13:00");
+  });
+});
+
+const HISTORY_ENTITIES: readonly HomeEntity[] = [
+  SELF,
+  { id: "ent_kindred", role: "competitor", domain: "kindred.example", state: "on" },
+  { id: "ent_paused", role: "competitor", domain: "paused.example", state: "off" },
+];
+
+const HISTORY: readonly HomeHistoryRow[] = [
+  { entity_id: "ent_self", week_start_at: "2026-08-24T07:00:00.000Z", rank: 3 },
+  { entity_id: "ent_kindred", week_start_at: "2026-08-24T07:00:00.000Z", rank: 1 },
+  { entity_id: "ent_self", week_start_at: "2026-08-31T07:00:00.000Z", rank: 2 },
+  { entity_id: "ent_kindred", week_start_at: "2026-08-31T07:00:00.000Z", rank: 1 },
+  { entity_id: "ent_paused", week_start_at: "2026-08-31T07:00:00.000Z", rank: 3 },
+  { entity_id: "ent_kindred", week_start_at: "2026-09-07T07:00:00.000Z", rank: 2 },
+  { entity_id: "ent_paused", week_start_at: "2026-09-07T07:00:00.000Z", rank: 3 },
+  { entity_id: "ent_self", week_start_at: "2026-09-14T07:00:00.000Z", rank: 2 },
+  { entity_id: "ent_kindred", week_start_at: "2026-09-14T07:00:00.000Z", rank: 1 },
+  { entity_id: "ent_self", week_start_at: "2026-09-20T23:00:00.000Z", rank: 1 },
+  { entity_id: "ent_kindred", week_start_at: "2026-09-20T23:00:00.000Z", rank: 2 },
+];
+
+function chartStanding(history: readonly HomeHistoryRow[]) {
+  const standing = homeStanding({
+    payload: payload(),
+    entities: HISTORY_ENTITIES,
+    schedule: SCHEDULE,
+    history,
+    now: THURSDAY_MORNING,
+  });
+  if (standing.kind !== "ranked") throw new Error("expected a ranked standing");
+  return standing;
+}
+
+describe("four-week chart", () => {
+  it("shows four weeks ascending, dropping the oldest, with the London week labelled 21 SEP", () => {
+    const standing = chartStanding(HISTORY);
+    expect(standing.chart.weeks).toEqual(["31 AUG", "7 SEP", "14 SEP", "21 SEP"]);
+  });
+
+  it("keeps a missing week as null, never a zero", () => {
+    const standing = chartStanding(HISTORY);
+    const self = standing.chart.lines.find((line) => line.entityId === "ent_self");
+    expect(self?.ranks).toEqual([2, null, 2, 1]);
+  });
+
+  it("marks an entity whose state is off as paused", () => {
+    const standing = chartStanding(HISTORY);
+    const paused = standing.chart.lines.find((line) => line.entityId === "ent_paused");
+    expect(paused?.paused).toBe(true);
+    expect(paused?.ranks).toEqual([3, 3, null, null]);
+  });
+
+  it("labels the self line YOU and the others by their ranked name", () => {
+    const standing = chartStanding(HISTORY);
+    const self = standing.chart.lines.find((line) => line.self);
+    const kindred = standing.chart.lines.find((line) => line.entityId === "ent_kindred");
+    expect(self?.label).toBe("YOU");
+    expect(kindred?.label).toBe("Kindred");
+  });
+
+  it("leaves every line at length one when only one week is frozen", () => {
+    const standing = chartStanding([{ entity_id: "ent_self", week_start_at: "2026-09-20T23:00:00.000Z", rank: 1 }]);
+    expect(standing.chart.lines).toHaveLength(1);
+    expect(standing.chart.lines[0]?.ranks).toHaveLength(1);
+    expect(standing.chart.weeks).toEqual(["21 SEP"]);
   });
 });

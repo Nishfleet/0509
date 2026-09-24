@@ -61,7 +61,7 @@ function payload(overrides: Partial<BriefPayload> = {}): BriefPayload {
 }
 
 function card(overrides: Partial<BriefPayload> = {}) {
-  return shareCard({ payload: payload(overrides), entities: ENTITIES, schedule: SCHEDULE, now: NOW });
+  return shareCard({ payload: payload(overrides), entities: ENTITIES, schedule: SCHEDULE, history: [], now: NOW });
 }
 
 describe("share card", () => {
@@ -70,9 +70,11 @@ describe("share card", () => {
   });
 
   it("has nothing to share until there is a ranking", () => {
-    expect(shareCard({ payload: null, entities: ENTITIES, schedule: SCHEDULE, now: NOW })).toBeNull();
+    expect(shareCard({ payload: null, entities: ENTITIES, schedule: SCHEDULE, history: [], now: NOW })).toBeNull();
     expect(card({ headline_rank: null })).toBeNull();
-    expect(shareCard({ payload: payload(), entities: ENTITIES.slice(0, 1), schedule: SCHEDULE, now: NOW })).toBeNull();
+    expect(
+      shareCard({ payload: payload(), entities: ENTITIES.slice(0, 1), schedule: SCHEDULE, history: [], now: NOW }),
+    ).toBeNull();
   });
 });
 

@@ -52,6 +52,16 @@ async function seedDigest(id: string, periodEnd: string, rank: number) {
     .run();
 }
 
+async function seedStanding(label: string, weekStartAt: string, rank: number | null) {
+  await env.DB.batch([
+    ...[`${WS}_self`, `${WS}_rival`, `${WS}_paused`].map((entityId) =>
+      env.DB.prepare(
+        "INSERT INTO standing (id, workspace_id, entity_id, week_start_at, score, rank, computed_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+      ).bind(`${WS}_${label}_${entityId}`, WS, entityId, weekStartAt, rank ?? 0, rank, weekStartAt),
+    ),
+  ]);
+}
+
 beforeEach(async () => {
   runs += 1;
   WS = `ws_home_${String(runs)}`;
@@ -84,5 +94,36 @@ describe("readHomeStandingInputs", () => {
 
   it("returns null for a user with no workspace", async () => {
     expect(await readHomeStandingInputs(env.DB, "user_nobody")).toBeNull();
+  });
+
+  it("returns the last four frozen weeks from standing with no null rank, no extra, non-decreasing", async () => {
+    const rankedWeeks = [
+      "2026-08-24T07:00:00.000Z",
+      "2026-08-31T07:00:00.000Z",
+      "2026-09-07T07:00:00.000Z",
+      "2026-09-14T07:00:00.000Z",
+      "2026-09-20T23:00:00.000Z",
+    ];
+    for (const week of rankedWeeks) await seedStanding(week, week, 1);
+    await seedStanding("unranked", "2026-09-22T07:00:00.000Z", null);
+
+    const inputs = await readHomeStandingInputs(env.DB, USER);
+
+    expect(inputs).not.toBeNull();
+    const history = inputs?.history ?? [];
+    expect(history.length).toBeGreaterThan(0);
+    for (const row of history) {
+      expect(typeof row.rank).toBe("number");
+      expect(Number.isInteger(row.rank)).toBe(true);
+    }
+    const distinctWeeks = [...new Set(history.map((row) => row.week_start_at))];
+    expect(distinctWeeks.length).toBeLessThanOrEqual(4);
+    expect(distinctWeeks).not.toContain("2026-09-22T07:00:00.000Z");
+    for (let i = 1; i < distinctWeeks.length; i += 1) {
+      const prev = distinctWeeks[i - 1];
+      const cur = distinctWeeks[i];
+      if (prev === undefined || cur === undefined) continue;
+      expect(prev <= cur).toBe(true);
+    }
   });
 });
