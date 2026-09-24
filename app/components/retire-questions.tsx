@@ -5,7 +5,12 @@ import { BLOCK_HEADING } from "./page-heading";
 import { Monogram } from "./monogram";
 import { Button } from "./ui/button";
 
-import type { RetireQuestion } from "../lib/data/entity.server";
+export interface RetireQuestion {
+  suggestionId: string;
+  name: string;
+  domain: string;
+  reason: string | null;
+}
 
 export function RetireQuestions({ questions }: { questions: readonly RetireQuestion[] }): ReactElement | null {
   if (questions.length === 0) return null;
