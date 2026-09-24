@@ -31,7 +31,16 @@ describe("feature-map workflow", () => {
     expect(pin).not.toBeNull();
     expect(map).toContain(`anthropics/claude-code-action@${pin?.[1]}`);
     expect(map).toContain("claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}");
-    expect(map).toContain('allowed_bots: "nishfleet-worker"');
+    expect(map).toContain('allowed_bots: "nishfleet-worker,github-actions"');
+  });
+
+  it("re-dispatches a push because the action rejects that event", async () => {
+    const yaml = await readFile(path.join(REPO_ROOT, ".github/workflows/feature-map.yml"), "utf8");
+    expect(yaml).toContain('if: github.event_name == \'push\'');
+    expect(yaml).toContain('if: github.event_name == \'workflow_dispatch\'');
+    expect(yaml).toContain("gh workflow run feature-map.yml --ref \"$GITHUB_REF_NAME\" --repo \"$GITHUB_REPOSITORY\"");
+    expect(yaml).toContain("Unsupported event type: push");
+    expect(yaml).not.toContain("pull_request:");
   });
 
   it("keeps the sync prompt and fails a silent run", async () => {

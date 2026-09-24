@@ -1,6 +1,11 @@
 # Maintains .agents/skills/verify/feature-map.md from a run of the app (0509#4252).
 # A drifted map opens one PR. A clean map writes "no drift at <sha>" and the
 # route list to the job summary. A run that does neither fails.
+#
+# anthropics/claude-code-action throws "Unsupported event type: push"
+# (it accepts workflow_dispatch). A push re-dispatches this workflow, and the
+# action runs on that workflow_dispatch. GITHUB_TOKEN is allowed to create
+# workflow_dispatch runs.
 name: feature-map
 
 on:
@@ -22,13 +27,30 @@ permissions:
   contents: read
 
 jobs:
+  relay:
+    name: re-dispatch
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+    steps:
+      - name: Re-dispatch so the action runs on workflow_dispatch
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run feature-map.yml --ref "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY"
+
   sync:
     name: feature-map
+    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 60
+    env:
+      SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+      BASE: ${{ github.event.pull_request.head.ref || github.ref_name }}
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
+          ref: ${{ env.SHA }}
           fetch-depth: 1
           persist-credentials: false
 
@@ -58,26 +80,27 @@ jobs:
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           github_token: ${{ steps.app.outputs.token }}
-          # Pushes to main are by this app. The prompt is the workflow file,
-          # not text the actor supplies.
-          allowed_bots: "nishfleet-worker"
+          # workflow_dispatch from the relay is github-actions. A direct
+          # dispatch by the worker app is nishfleet-worker. The prompt is
+          # this file, not text the actor supplies.
+          allowed_bots: "nishfleet-worker,github-actions"
           prompt: |
-            SHA: ${{ github.sha }}
+            SHA: ${{ env.SHA }}
             REPO: ${{ github.repository }}
-            BASE: ${{ github.ref_name }}
+            BASE: ${{ env.BASE }}
 
             You maintain `.agents/skills/verify/feature-map.md`. Read `.agents/skills/verify/SKILL.md` and follow its Local section. Do this and nothing else.
 
             1. Read `app/routes.ts`, every route module's rendered controls, and the `e2e/` test titles.
-            2. Build the app and drive every route with the verify skill (`npm run verify:start`, then `take_snapshot` per route). The map's Reach column must name the controls the snapshot actually shows, by role and accessible name. Start the app the way the skill's Local section says: `npm run build`, `npx wrangler d1 migrations apply 0509 --local`, then `npx wrangler dev --env-file .dev.vars.example --local` on `PLAYWRIGHT_LOCAL_PORT` (`8000 + ($$ % 1000)` in one shell). Wait until `curl -fsS "http://127.0.0.1:${PLAYWRIGHT_LOCAL_PORT}/api/health"` returns. Then `npx chrome-devtools new_page` and `take_snapshot` for every route in `app/routes.ts`.
-            3. If any row drifted, open a pull request titled exactly `feature-map: sync with ${{ github.sha }}` against branch `${{ github.ref_name }}` that changes only `.agents/skills/verify/feature-map.md`. The pull request body carries the `take_snapshot` output each changed row was built from. Drift means: a route in `app/routes.ts` with no row; a route row whose path is not a route in `app/routes.ts`; a Proof cell that names a `e2e/` or `tests/` file that is not in the repo; a Reach cell that names a control the snapshot of that rendered page lacks. Rows under the heading "Not a route" are not route rows. A route that redirects to `/login` shows the login page to an anonymous session: record that snapshot, and do not rewrite that row's signed-in controls because they were behind the redirect.
-            4. No drift: write `no drift at ${{ github.sha }}` and the route list to `$GITHUB_STEP_SUMMARY`. A silent run counts as a failure: if you neither open that pull request nor write that line, exit non-zero.
+            2. Build the app and drive every route with the verify skill (`npm run verify:start`, then `take_snapshot` per route). The map's Reach column must name the controls the snapshot actually shows, by role and accessible name. In one shell: `npm run build`, `export PLAYWRIGHT_LOCAL_PORT="${PLAYWRIGHT_LOCAL_PORT:-$((8000 + $$ % 1000))}"`, `npx wrangler d1 migrations apply 0509 --local </dev/null`, then start the server in the background with `npx wrangler dev --env-file .dev.vars.example --local --port "$PLAYWRIGHT_LOCAL_PORT" </dev/null &`. Do not leave `wrangler dev` in the foreground. Wait until `curl -fsS "http://127.0.0.1:${PLAYWRIGHT_LOCAL_PORT}/api/health"` returns. Then `npx chrome-devtools new_page` and `take_snapshot` for every route in `app/routes.ts`.
+            3. If any row drifted, open a pull request titled exactly `feature-map: sync with ${{ env.SHA }}` against branch `${{ env.BASE }}` that changes only `.agents/skills/verify/feature-map.md`. The pull request body carries the `take_snapshot` output each changed row was built from. Drift means: a route in `app/routes.ts` with no row; a route row whose path is not a route in `app/routes.ts`; a Proof cell that names a `e2e/` or `tests/` file that is not in the repo; a Reach cell that names a control the snapshot of that rendered page lacks. Rows under the heading "Not a route" are not route rows. A route that redirects to `/login` shows the login page to an anonymous session: record that snapshot, and do not rewrite that row's signed-in controls because they were behind the redirect.
+            4. No drift: write `no drift at ${{ env.SHA }}` and the route list to `$GITHUB_STEP_SUMMARY`. A silent run counts as a failure: if you neither open that pull request nor write that line, exit non-zero.
             The job fails loudly if the app does not start or a route returns 5xx. Write the first line of `$RUNNER_TEMP/feature-map-outcome.txt` as exactly one of:
-            - `no drift at ${{ github.sha }}` followed by the route list, one path per line
+            - `no drift at ${{ env.SHA }}` followed by the route list, one path per line
             - `opened PR <number>`
             - `app failed: <reason>`
             - `route failed: <url> <status>`
-            Append that same text to `$GITHUB_STEP_SUMMARY`. On `app failed` or `route failed`, exit non-zero. Do not edit any file except `.agents/skills/verify/feature-map.md`. Do not push to `main`. Open the pull request with `gh pr create` using the branch `feature-map-sync-${{ github.sha }}`.
+            Append that same text to `$GITHUB_STEP_SUMMARY`. On `app failed` or `route failed`, exit non-zero. Do not edit any file except `.agents/skills/verify/feature-map.md`. Do not push to `main`. Open the pull request with `gh pr create` using the branch `feature-map-sync-${{ env.SHA }}`.
           claude_args: |
             --allowedTools "Read,Edit,Write,Grep,Glob,Bash(npm:*),Bash(npx:*),Bash(node:*),Bash(git:*),Bash(gh:*),Bash(curl:*)"
 
@@ -85,7 +108,6 @@ jobs:
         if: always()
         env:
           GH_TOKEN: ${{ steps.app.outputs.token }}
-          SHA: ${{ github.sha }}
           CLAUDE_OUTCOME: ${{ steps.claude.outcome }}
         run: |
           set -euo pipefail
