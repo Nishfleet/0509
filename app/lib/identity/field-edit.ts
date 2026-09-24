@@ -26,6 +26,26 @@ function cancelled(state: FieldEdit): FieldEdit {
   return { ...state, draft: state.committed, open: false };
 }
 
+function dismissed(state: FieldEdit, reason: PopoverRootChangeEventReason): FieldEdit {
+  switch (reason) {
+    case "trigger-press":
+    case "outside-press":
+      return saved(state);
+    case "escape-key":
+    case "trigger-hover":
+    case "trigger-focus":
+    case "focus-out":
+    case "close-press":
+    case "imperative-action":
+    case "none":
+      return cancelled(state);
+    default: {
+      const unclassified: never = reason;
+      return unclassified;
+    }
+  }
+}
+
 export function fieldEdit(state: FieldEdit, action: FieldEditAction): FieldEdit {
   switch (action.type) {
     case "open":
@@ -37,19 +57,7 @@ export function fieldEdit(state: FieldEdit, action: FieldEditAction): FieldEdit 
       if (action.key === "Escape") return cancelled(state);
       return state;
     case "dismiss":
-      switch (action.reason) {
-        case "trigger-press":
-        case "outside-press":
-          return saved(state);
-        case "escape-key":
-        case "trigger-hover":
-        case "trigger-focus":
-        case "focus-out":
-        case "close-press":
-        case "imperative-action":
-        case "none":
-          return cancelled(state);
-      }
+      return dismissed(state, action.reason);
     case "save":
       return saved(state);
     case "cancel":
