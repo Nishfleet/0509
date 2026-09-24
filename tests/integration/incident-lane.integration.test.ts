@@ -356,6 +356,30 @@ describe("incident lane (0509#4364)", () => {
     expect(rec.sent).toHaveLength(1);
   });
 
+  it("(i) sends nothing when own-site alerts are off, and keeps the alert row", async () => {
+    await env.DB.prepare(`UPDATE workspace SET own_site_alerts = 0 WHERE id = ?`)
+      .bind(WS)
+      .run();
+    const rec = recorder();
+
+    const result = await deliverIncident(envWith(bindingFor(rec)), message(INCIDENT_A));
+
+    expect(result.outcome).toBe("muted");
+    expect(rec.sent).toHaveLength(0);
+    const attempts = await env.DB.prepare(`SELECT count(*) AS n FROM send_attempt`).first<{
+      n: number;
+    }>();
+    expect(attempts?.n).toBe(0);
+    const notices = await env.DB.prepare(`SELECT count(*) AS n FROM incident_notice`).first<{
+      n: number;
+    }>();
+    expect(notices?.n).toBe(0);
+    const alerts = await env.DB.prepare(`SELECT count(*) AS n FROM alert WHERE incident_id = ?`)
+      .bind(INCIDENT_A)
+      .first<{ n: number }>();
+    expect(alerts?.n).toBe(1);
+  });
+
   it("returns no_incident when the incident row is gone", async () => {
     const rec = recorder();
     const result = await deliverIncident(envWith(bindingFor(rec)), message("incident-does-not-exist"));
