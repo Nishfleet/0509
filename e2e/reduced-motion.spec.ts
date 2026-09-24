@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Page, type TestInfo } from "@playwright/test";
 import type { RouteConfigEntry } from "@react-router/dev/routes";
 import routes from "../app/routes";
 
@@ -29,6 +29,30 @@ function visitPath(path: string): string {
   return `/${path.replace(/:[^/]+/g, "placeholder")}`;
 }
 
+// A route is a URL, so it is full of `/` and `.`; both are path separators or
+// awkward file names once the route becomes a screenshot filename. Collapse
+// everything unsafe into a single dash so the report stays a flat directory
+// instead of a tree that mirrors the route table.
+function slug(target: string): string {
+  return target.replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "") || "root";
+}
+
+// `testInfo.attach({ body })` keeps the buffer in memory and never writes a
+// file; only the `path:` form is persisted, which is what makes the
+// screenshots a reviewer can actually open. Writing through
+// `testInfo.outputPath()` keeps the file inside Playwright's output directory
+// (so `preserveOutput` governs it) without adding a path that escapes it.
+async function saveShot(
+  page: Page,
+  testInfo: TestInfo,
+  name: string,
+  options: { fullPage?: boolean } = {},
+): Promise<void> {
+  const file = testInfo.outputPath(`${name}.png`);
+  await page.screenshot({ path: file, fullPage: options.fullPage ?? false });
+  await testInfo.attach(name, { path: file, contentType: "image/png" });
+}
+
 const targets = ["/", ...screenPaths(routes, "").map(visitPath)];
 
 // The two assertions the browser can answer honestly:
@@ -57,14 +81,27 @@ async function inspectMotion(page: Page): Promise<MotionFinding[]> {
     const label = (element: Element) =>
       `${element.tagName.toLowerCase()}${element.id ? `#${element.id}` : ""}`;
 
-    // `subtree: true` is the part that matters. Without it a running
-    // animation inside a shadow root (Base UI dialog, sonner toast) is
-    // invisible to the check and the route passes for the wrong reason.
-    for (const animation of document.getAnimations({ subtree: true })) {
-      const target = animation.effect?.target as Element | null | undefined;
+    // `document.getAnimations()` takes no options — the `subtree` option only
+    // exists on `Element.getAnimations()` — so a shadow root opened by a Base
+    // UI dialog or a sonner toast would be invisible to it. Walk the tree,
+    // descend into every shadow root, and collect per element instead. The
+    // Set collapses the duplicates the document-level call shares with the
+    // element-level ones.
+    const animations = new Set<Animation>(document.getAnimations());
+    const walk = (root: ParentNode) => {
+      for (const element of root.querySelectorAll("*")) {
+        for (const animation of element.getAnimations()) animations.add(animation);
+        if (element.shadowRoot) walk(element.shadowRoot);
+      }
+    };
+    walk(document);
+
+    for (const animation of animations) {
+      const effect = animation.effect;
+      const target = effect instanceof KeyframeEffect ? effect.target : null;
       findings.push({
         selector: target ? label(target) : "(detached)",
-        reason: `running animation (playState=${animation.playState})`,
+        reason: `animation present (playState=${animation.playState})`,
       });
     }
 
@@ -81,8 +118,10 @@ async function inspectMotion(page: Page): Promise<MotionFinding[]> {
         .split(",")
         .some((part) => Number.parseFloat(part) > 0);
 
-    const everyElement = [...document.querySelectorAll("*"), document.documentElement];
-    for (const element of everyElement) {
+    // `querySelectorAll("*")` on a Document already includes the document
+    // element (`<html>`) — it is a child of the document node — so this is
+    // every element on the page, root included, without a special case.
+    for (const element of document.querySelectorAll("*")) {
       const cs = getComputedStyle(element);
       if (nonZero(cs.transitionDuration)) {
         findings.push({
@@ -123,14 +162,13 @@ for (const target of targets) {
 
     const findings = await inspectMotion(page);
 
-    // A screenshot proves the route actually rendered. On the unmatched
-    // route (status 404) the body is empty — that's fine, the motion
-    // assertion is what the issue asked for, and a still page is a
-    // trivially motion-free page.
-    await testInfo.attach(`reduced-motion-${target}`, {
-      body: await page.screenshot({ fullPage: true }),
-      contentType: "image/png",
-    });
+    // A screenshot proves the route actually rendered rather than returning
+    // a blank shell that happens to have no motion. Viewport-only, not
+    // fullPage: 21 routes x 2 projects is a lot of report weight and the
+    // first screen is what "did this route render" is asking. The full-page
+    // shots live on the two end-state tests below, where the whole point is
+    // the final layout.
+    await saveShot(page, testInfo, `reduced-motion-${slug(target)}`);
 
     expect(
       findings,
@@ -143,7 +181,7 @@ for (const target of targets) {
 // switch must produce the same visible state regardless of whether motion is
 // reduced. The whole point of "honoured" is "the user can still use the
 // thing"; a transition being stripped is fine only if the final state lands.
-test("the capture-pair sheet opens instantly under reduced motion", async ({ page }) => {
+test("the capture-pair sheet opens instantly under reduced motion", async ({ page }, testInfo) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
   const response = await page.goto("/design/capture-plates");
   expect(response?.status()).toBe(200);
@@ -172,9 +210,14 @@ test("the capture-pair sheet opens instantly under reduced motion", async ({ pag
       ),
     )
     .toEqual([true, true]);
+
+  // The end state, on disk: sheet open, both images loaded, under reduced
+  // motion. This is the screenshot the issue asks for — "instantly, not
+  // never" is only proved by the open sheet next to the no-motion finding.
+  await saveShot(page, testInfo, "end-state-capture-pair-open", { fullPage: true });
 });
 
-test("the brand switch toggles under reduced motion", async ({ page }) => {
+test("the brand switch toggles under reduced motion", async ({ page }, testInfo) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
   const response = await page.goto("/design/brand-switch");
   expect(response?.status()).toBe(200);
@@ -193,6 +236,11 @@ test("the brand switch toggles under reduced motion", async ({ page }) => {
 
   const findings = await inspectMotion(page);
   expect(findings, `after toggle: ${JSON.stringify(findings[0])}`).toEqual([]);
+
+  // Same for the switch: the row reads "paused", the thumb has moved, and
+  // nothing is animating. The motion assertion above already guaranteed the
+  // last part; this is the part a human looks at.
+  await saveShot(page, testInfo, "end-state-brand-switch-paused", { fullPage: true });
 });
 
 // Control assertion: without reduced motion, the switch thumb carries a
@@ -220,10 +268,7 @@ test("control: the switch thumb has a non-zero transition-duration without reduc
   // Tailwind compiles `duration-180` to `180ms`; the browser reports it as
   // `"0.18s"`. Either non-zero form is acceptable; `0s` is the failure.
   const numeric = parseFloat(duration);
-  await testInfo.attach("control-thumb-duration", {
-    body: await page.screenshot({ fullPage: true }),
-    contentType: "image/png",
-  });
+  await saveShot(page, testInfo, "control-switch-thumb-with-motion", { fullPage: true });
   expect(
     numeric,
     `expected switch thumb transition-duration > 0 without reduced motion, got "${duration}"`,
