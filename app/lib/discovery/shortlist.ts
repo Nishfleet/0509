@@ -111,8 +111,8 @@ export function evidenceLine(entry: ShortlistEntry): string {
         const pub = publisherOf(item.sourceUrl);
         if (pub !== null) hosts.add(pub);
       }
-      const n = hosts.size;
-      if (n >= 1) parts.push(`named by ${n} news publisher${n !== 1 ? "s" : ""}`);
+      const n = Math.max(1, hosts.size);
+      parts.push(`named by ${String(n)} news publisher${n !== 1 ? "s" : ""}`);
     } else if (key === "hn") {
       const urls = new Set<string>();
       for (const item of entry.evidence) {
@@ -120,7 +120,7 @@ export function evidenceLine(entry: ShortlistEntry): string {
         urls.add(item.sourceUrl);
       }
       const m = urls.size;
-      if (m >= 1) parts.push(`mentioned in ${m} Hacker News thread${m !== 1 ? "s" : ""}`);
+      parts.push(`mentioned in ${String(m)} Hacker News thread${m !== 1 ? "s" : ""}`);
     } else if (key === "ads") {
       parts.push("advertises in the same category");
     }

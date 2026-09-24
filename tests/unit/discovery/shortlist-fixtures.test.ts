@@ -29,6 +29,12 @@ function publisherHost(sourceUrl: string): string | null {
   }
 }
 
+interface Grouped {
+  name: string;
+  generators: Set<string>;
+  publishers: Set<string>;
+}
+
 interface Row {
   candidate: string;
   generators: string;
@@ -55,11 +61,6 @@ describe("shortlist fixtures", () => {
       expect(evidenceLine(entry).length).toBeGreaterThan(0);
     }
 
-    type Grouped = {
-      name: string;
-      generators: Set<string>;
-      publishers: Set<string>;
-    };
     const grouped = new Map<string, Grouped>();
     for (const candidate of combined) {
       const key = candidate.name.toLowerCase();
@@ -83,7 +84,7 @@ describe("shortlist fixtures", () => {
         candidate: record.name,
         generators: [...record.generators].join("+"),
         publishers: record.publishers.size,
-        shortlisted: entry === undefined ? "no" : "yes",
+        shortlisted: shortlistedNames.has(key) ? "yes" : "no",
         why: entry === undefined ? "outside top 20" : entry.slot,
         line: entry === undefined ? "" : evidenceLine(entry),
       });
