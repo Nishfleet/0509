@@ -299,7 +299,7 @@ export interface CompetitorRow {
 }
 
 const SELECT_COMPETITORS =
-  "SELECT e.id AS entity_id, e.name, e.domain, e.state, e.state_changed_at, s.verdict_reason AS reason FROM entity e LEFT JOIN suggestion s ON s.entity_id = e.id AND s.workspace_id = e.workspace_id WHERE e.workspace_id = ? AND e.role = 'competitor' AND e.state IN ('on', 'off') ORDER BY e.state = 'off', e.created_at ASC, e.id ASC";
+  "SELECT e.id AS entity_id, e.name, e.domain, e.state, e.state_changed_at, s.verdict_reason AS reason FROM entity e LEFT JOIN suggestion s ON s.entity_id = e.id AND s.workspace_id = e.workspace_id WHERE e.workspace_id = ? AND e.role = 'competitor' AND e.state IN ('on', 'off') ORDER BY e.state = 'off', e.origin <> 'manual', CASE WHEN e.origin = 'manual' THEN e.created_at END DESC, e.created_at ASC, e.id ASC";
 
 interface CompetitorDbRow {
   entity_id: string;
