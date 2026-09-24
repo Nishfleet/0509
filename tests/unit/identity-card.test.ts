@@ -253,7 +253,7 @@ function renderToStaticFallback(site: Promise<SiteFields>): string {
         subject: "https://www.gymshark.com/",
         domain: "gymshark.com",
         site,
-        logo: new Promise<string | null>(() => {}),
+        logo: new Promise<string | null>(() => undefined),
         message: undefined,
       }),
     },
