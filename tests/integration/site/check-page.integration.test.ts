@@ -120,7 +120,7 @@ describe("checkPage (0509#4433)", () => {
     readHolder.current = { ...readHolder.fresh(), html: FIRST_HTML };
   });
 
-  it("records a first snapshot, then an unchanged reuse, then a change, then a failed read", async () => {
+  it("records a first snapshot, then an unchanged reuse, then a change, then a failed read, and never names a before screenshot that was not stored (0509#4569)", async () => {
     const first = await checkPage({ watchId: WATCH, pageId: PAGE, url: URL });
     expect(first.outcome).toBe("first");
     if (first.outcome !== "first") throw new Error("expected first");
@@ -143,16 +143,24 @@ describe("checkPage (0509#4433)", () => {
     expect(changed.outcome).toBe("changed");
     if (changed.outcome !== "changed") throw new Error("expected changed");
     expect(changed.previousTextKey).toBe(first.textKey);
-    expect(changed.previousScreenshotKey.endsWith(".png")).toBe(true);
+    expect(changed.previousScreenshotKey).toBeNull();
     expect(changed.screenshotKey).toBeNull();
     expect(changed.status).toBe(200);
     expect(changed.transport).toBe("fetch");
     expect(await snapshotCount()).toBe(3);
     expect(await objectCount()).toBe(2);
 
+    const beforePng = changed.textKey.replace(/\.txt$/, ".png");
+    await env.SNAPSHOTS.put(beforePng, new Uint8Array([137, 80, 78, 71]));
+    readHolder.current = { ...readHolder.fresh(), html: FIRST_HTML };
+    const back = await checkPage({ watchId: WATCH, pageId: PAGE, url: URL });
+    if (back.outcome !== "changed") throw new Error("expected changed");
+    expect(back.previousScreenshotKey).toBe(beforePng);
+    expect(await snapshotCount()).toBe(4);
+
     readHolder.current = { ok: false, reason: "escalation-failed", detail: "x" };
     const failed = await checkPage({ watchId: WATCH, pageId: PAGE, url: URL });
     expect(failed).toEqual({ outcome: "failed", reason: "escalation-failed", detail: "x" });
-    expect(await snapshotCount()).toBe(3);
+    expect(await snapshotCount()).toBe(4);
   });
 });

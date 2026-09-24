@@ -503,7 +503,7 @@ describe("parseBriefPayload", () => {
   });
 
   it("throws on a payload that is not an object", () => {
-    expect(() => parseBriefPayload('["a"]')).toThrow(/not an object/);
+    expect(() => parseBriefPayload('["a"]')).toThrow(/expected object/);
   });
 
   it("skips a malformed brand row rather than dropping the whole brief", () => {

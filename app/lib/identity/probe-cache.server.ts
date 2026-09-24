@@ -17,13 +17,12 @@ export function probeKey(subject: Subject, probe: ProbeName): string {
   return `identity:${subject.registrable}:${probe}`;
 }
 
-export async function cachedProbe<T>(
-  subject: Subject,
-  probe: ProbeName,
+export async function readThrough<T>(
+  key: string,
   schema: z.ZodType<T>,
+  ttlSeconds: number,
   run: () => Promise<T>,
 ): Promise<T> {
-  const key = probeKey(subject, probe);
   const hit = await env.IDENTITY_CACHE.get(key, "json");
   const parsed = hit === null ? null : schema.safeParse(hit);
   if (parsed?.success) {
@@ -31,6 +30,15 @@ export async function cachedProbe<T>(
   }
 
   const value = await run();
-  await env.IDENTITY_CACHE.put(key, JSON.stringify(value), { expirationTtl: PROBE_TTL_SECONDS });
+  await env.IDENTITY_CACHE.put(key, JSON.stringify(value), { expirationTtl: ttlSeconds });
   return value;
+}
+
+export async function cachedProbe<T>(
+  subject: Subject,
+  probe: ProbeName,
+  schema: z.ZodType<T>,
+  run: () => Promise<T>,
+): Promise<T> {
+  return readThrough(probeKey(subject, probe), schema, PROBE_TTL_SECONDS, run);
 }

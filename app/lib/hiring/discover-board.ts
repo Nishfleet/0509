@@ -1,3 +1,5 @@
+import { getDomain, getSubdomain } from "tldts";
+
 export interface DiscoveredBoard {
   platform: "greenhouse" | "lever" | "ashby" | "workable" | "smartrecruiters" | "none";
   boardUrl: string | null;
@@ -101,18 +103,10 @@ function toUrl(value: string): URL | null {
   }
 }
 
-function bareHostName(host: string): string {
-  return host.startsWith("www.") ? host.slice(4) : host;
-}
-
-function isSubdomainOf(host: string, domain: string): boolean {
-  const bareDomain = bareHostName(domain);
-  return host.endsWith(`.${bareDomain}`) && host !== bareDomain;
-}
-
 function isCareersSubdomainOf(host: string, domain: string): boolean {
-  const firstLabel = host.split(".")[0] ?? "";
-  return CAREERS_LABELS.includes(firstLabel) && isSubdomainOf(host, domain);
+  const registrable = getDomain(host);
+  const firstLabel = getSubdomain(host)?.split(".")[0] ?? "";
+  return registrable !== null && registrable === getDomain(domain) && CAREERS_LABELS.includes(firstLabel);
 }
 
 function documentedHostFor(host: string): DocumentedHost | null {
@@ -137,7 +131,7 @@ function boardCandidate(host: DocumentedHost, matchedAlias: string, slug: string
 function navItemsFor(link: string, domain: string): NavItem[] {
   const url = toUrl(link);
   if (url?.protocol !== "https:") return [];
-  const host = bareHostName(url.hostname.toLowerCase());
+  const host = url.hostname.toLowerCase();
 
   const documented = documentedHostFor(host);
   if (documented) {
@@ -163,7 +157,7 @@ function documentedLinksInPage(body: string): BoardCandidate[] {
 function boardCandidateFromText(text: string): BoardCandidate | null {
   const url = toUrl(text);
   if (url?.protocol !== "https:" && url?.protocol !== "http:") return null;
-  const host = bareHostName(url.hostname.toLowerCase());
+  const host = url.hostname.toLowerCase();
   const documented = documentedHostFor(host);
   if (documented === null) return null;
   const slug = slugFromUrl(url);

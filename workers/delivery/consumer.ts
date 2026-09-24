@@ -152,7 +152,7 @@ function briefOf(message: MessageRow): BriefPayload {
     return parseBriefPayload(message.payload_json);
   } catch (cause) {
     const detail = cause instanceof Error ? cause.message : String(cause);
-    throw new PayloadError(`payload_json for digest ${message.id} is not a brief: ${detail}`);
+    throw new PayloadError(`digest ${message.id}: ${detail}`);
   }
 }
 

@@ -54,10 +54,10 @@ export async function serveCard(slug: string): Promise<Response> {
     .first<{ id: string }>();
   if (taken !== null) return notFound();
 
-  const key = await newestCardKey(env.CARD_ARTIFACTS, workspace.id);
+  const key = await newestCardKey(env.SNAPSHOTS, workspace.id);
   if (key === null) return notFound();
 
-  const object = await env.CARD_ARTIFACTS.get(key);
+  const object = await env.SNAPSHOTS.get(key);
   if (object === null) return notFound();
 
   return new Response(object.body, {

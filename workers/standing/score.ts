@@ -1,15 +1,22 @@
+import { z } from "zod";
+
 export const D3_QUESTION_ID = "noteworthy_change";
 export const D6_QUESTION_ID = "mention_matters";
 
-export type Reliability = "official_api" | "rss" | "scraped_page" | "best_effort";
+export const reliabilitySchema = z.enum(["official_api", "rss", "scraped_page", "best_effort"]);
 
-export type ScoreBucket =
-  | "mention_matters"
-  | "mention_normal"
-  | "site_change_noteworthy"
-  | "ad_new_creative"
-  | "ad_copy_change"
-  | "hiring_new_role";
+export type Reliability = z.infer<typeof reliabilitySchema>;
+
+export const scoreBucketSchema = z.enum([
+  "mention_matters",
+  "mention_normal",
+  "site_change_noteworthy",
+  "ad_new_creative",
+  "ad_copy_change",
+  "hiring_new_role",
+]);
+
+export type ScoreBucket = z.infer<typeof scoreBucketSchema>;
 
 export interface WeightRow {
   key: string;

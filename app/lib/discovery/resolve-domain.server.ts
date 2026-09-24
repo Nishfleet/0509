@@ -1,5 +1,8 @@
-import { readPageNames } from "./page-names";
+import { getDomain } from "tldts";
 import { z } from "zod";
+
+import { readThrough } from "../identity/probe-cache.server";
+import { readPageNames } from "./page-names";
 
 export interface Resolution {
   domain: string | null;
@@ -39,8 +42,15 @@ function slugOf(s: string): string {
   return s.normalize("NFKD").replace(/\p{M}/gu, "").toLowerCase().replace(/[^a-z0-9]+/g, "");
 }
 
-function hostOf(url: string): string {
-  return new URL(url).hostname.toLowerCase().replace(/^www\./, "");
+function logLookupFailure(step: "wikidata" | "slug", url: string, error: unknown): void {
+  console.error(
+    JSON.stringify({
+      event: "discovery.resolve_failed",
+      step,
+      url,
+      error: error instanceof Error ? error.message : String(error),
+    }),
+  );
 }
 
 async function wikidataGet(url: string): Promise<unknown> {
@@ -51,7 +61,8 @@ async function wikidataGet(url: string): Promise<unknown> {
     });
     if (!res.ok) return null;
     return await res.json();
-  } catch {
+  } catch (error) {
+    logLookupFailure("wikidata", url, error);
     return null;
   }
 }
@@ -78,7 +89,7 @@ async function wikidataDomain(name: string): Promise<string | null> {
   const p856 = p856ClaimSchema.safeParse(claim);
   if (!p856.success) return null;
 
-  return hostOf(p856.data.mainsnak.datavalue.value);
+  return getDomain(p856.data.mainsnak.datavalue.value);
 }
 
 async function slugDomain(name: string): Promise<string | null> {
@@ -102,28 +113,23 @@ async function slugDomain(name: string): Promise<string | null> {
       return `${slug}.com`;
     }
     return null;
-  } catch {
+  } catch (error) {
+    logLookupFailure("slug", `https://${slug}.com/`, error);
     return null;
   }
 }
 
-export async function resolveDomain(name: string, cache: KVNamespace): Promise<Resolution> {
-  const key = "resolve:" + name.trim().toLowerCase();
+export function resolveKey(name: string): string {
+  return `identity:name:${name.trim().toLowerCase()}:resolve`;
+}
 
-  const cached = resolutionSchema.safeParse(await cache.get(key, "json"));
-  if (cached.success) return cached.data;
-
+async function resolveUncached(name: string): Promise<Resolution> {
   const wikidata = await wikidataDomain(name);
-  if (wikidata !== null) {
-    const result: Resolution = { domain: wikidata, via: "wikidata" };
-    await cache.put(key, JSON.stringify(result), { expirationTtl: CACHE_TTL_SECONDS });
-    return result;
-  }
-
+  if (wikidata !== null) return { domain: wikidata, via: "wikidata" };
   const slug = await slugDomain(name);
-  const result: Resolution =
-    slug !== null ? { domain: slug, via: "slug" } : { ...UNRESOLVED };
+  return slug !== null ? { domain: slug, via: "slug" } : { ...UNRESOLVED };
+}
 
-  await cache.put(key, JSON.stringify(result), { expirationTtl: CACHE_TTL_SECONDS });
-  return result;
+export async function resolveDomain(name: string): Promise<Resolution> {
+  return readThrough(resolveKey(name), resolutionSchema, CACHE_TTL_SECONDS, () => resolveUncached(name));
 }

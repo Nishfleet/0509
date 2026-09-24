@@ -1,3 +1,5 @@
+import { getDomain } from "tldts";
+
 import type { Candidate, Evidence, GeneratorKey } from "./types";
 
 export const SHORTLIST_TOP = 20;
@@ -31,16 +33,11 @@ function nameKey(name: string): string {
 }
 
 function hostKey(value: string): string {
-  const host = value.toLowerCase();
-  return host.startsWith("www.") ? host.slice(4) : host;
+  return getDomain(value) ?? value.toLowerCase();
 }
 
 function publisherOf(sourceUrl: string): string | null {
-  try {
-    return hostKey(new URL(sourceUrl).hostname);
-  } catch {
-    return null;
-  }
+  return getDomain(sourceUrl);
 }
 
 function generatorsOf(group: Group): GeneratorKey[] {
