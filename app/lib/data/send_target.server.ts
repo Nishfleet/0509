@@ -1,5 +1,3 @@
-import { env } from "cloudflare:workers";
-
 const WRITE_UNSUBSCRIBE_TOKEN = `UPDATE send_target SET unsubscribe_token = ? WHERE id = ? AND unsubscribe_token IS NULL`;
 
 const SELECT_EMAIL_TARGET = `SELECT st.target_value FROM send_target st
@@ -25,7 +23,12 @@ SELECT 'st-email-' || w.id, w.id, c.id, u.email, u.emailVerified, ?
    )`;
 
 interface TargetDb {
-  prepare(query: string): { bind(...values: unknown[]): { run(): Promise<unknown> } };
+  prepare(query: string): {
+    bind(...values: unknown[]): {
+      first<T>(): Promise<T | null>;
+      run(): Promise<unknown>;
+    };
+  };
 }
 
 export async function writeUnsubscribeToken(
@@ -42,18 +45,20 @@ export async function ensureOwnerEmailTarget(
   await db.prepare(INSERT_OWNER_EMAIL_TARGET).bind(input.now, input.workspaceId).run();
 }
 
-export async function readEmailTarget(workspaceId: string): Promise<string | null> {
-  const row = await env.DB.prepare(SELECT_EMAIL_TARGET)
+export async function readEmailTarget(db: TargetDb, workspaceId: string): Promise<string | null> {
+  const row = await db
+    .prepare(SELECT_EMAIL_TARGET)
     .bind(workspaceId)
     .first<{ target_value: string }>();
   return row?.target_value ?? null;
 }
 
-export async function changeEmailTarget(input: {
-  workspaceId: string;
-  address: string;
-}): Promise<void> {
-  await env.DB.prepare(CHANGE_EMAIL_TARGET)
+export async function changeEmailTarget(
+  db: TargetDb,
+  input: { workspaceId: string; address: string },
+): Promise<void> {
+  await db
+    .prepare(CHANGE_EMAIL_TARGET)
     .bind(input.address, input.workspaceId, input.address)
     .run();
 }

@@ -12,7 +12,7 @@ const NO_WORKSPACE = "Finish setting up first, then choose where the brief goes.
 export async function readDeliveryAddress(userId: string, signInEmail: string): Promise<string> {
   const workspaceId = await readWorkspaceIdForOwner(userId);
   if (workspaceId === null) return signInEmail;
-  return (await readEmailTarget(workspaceId)) ?? signInEmail;
+  return (await readEmailTarget(env.DB, workspaceId)) ?? signInEmail;
 }
 
 export async function saveDeliveryAddress(input: {
@@ -36,6 +36,6 @@ export async function saveDeliveryAddress(input: {
   }
 
   await ensureOwnerEmailTarget(env.DB, { workspaceId, now: new Date().toISOString() });
-  await changeEmailTarget({ workspaceId, address });
+  await changeEmailTarget(env.DB, { workspaceId, address });
   return { error: null, suppressed: false };
 }
