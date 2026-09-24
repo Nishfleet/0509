@@ -3,6 +3,7 @@ import { Await, Form } from "react-router";
 import { Popover } from "@base-ui/react/popover";
 
 import type { SiteFields } from "../lib/identity/card-fields";
+import { closedFieldEdit, fieldEdit, type FieldEdit } from "../lib/identity/field-edit";
 import { cn } from "../lib/utils";
 import { Button } from "./ui/button";
 
@@ -34,31 +35,15 @@ function Field({
   multiline: boolean;
   uncertain: boolean;
 }): ReactNode {
-  const [open, setOpen] = useState(false);
-  const [draft, setDraft] = useState(initial);
-  const [committed, setCommitted] = useState(initial);
-
-  function openWithCurrentValue(next: boolean, reason: string): void {
-    if (next) setDraft(committed);
-    setOpen(next);
-    if (!next && reason !== "escape-key") setCommitted(draft);
-  }
-
-  function commit(): void {
-    setCommitted(draft);
-    setOpen(false);
-  }
+  const [state, setState] = useState<FieldEdit>(closedFieldEdit(initial));
+  const { open, draft, committed } = state;
 
   function handleKeyDown(event: KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>): void {
-    if (event.key === "Enter" && !multiline) {
-      event.preventDefault();
-      commit();
-      return;
-    }
-    if (event.key === "Escape") {
-      event.preventDefault();
-      setOpen(false);
-    }
+    if (event.key !== "Enter" && event.key !== "Escape") return;
+    const next = fieldEdit(state, { type: "key", key: event.key, multiline });
+    if (next === state) return;
+    event.preventDefault();
+    setState(next);
   }
 
   return (
@@ -67,7 +52,11 @@ function Field({
       <Popover.Root
         open={open}
         onOpenChange={(next, details) => {
-          openWithCurrentValue(next, details.reason);
+          if (next) {
+            setState((current) => fieldEdit(current, { type: "open" }));
+          } else {
+            setState((current) => fieldEdit(current, { type: "dismiss", reason: details.reason }));
+          }
         }}
       >
         <Popover.Trigger
@@ -95,7 +84,7 @@ function Field({
                   rows={3}
                   className={cn(EDITOR, "min-h-[5.5rem] resize-none py-2")}
                   onChange={(event) => {
-                    setDraft(event.target.value);
+                    setState((current) => fieldEdit(current, { type: "change", value: event.target.value }));
                   }}
                   onKeyDown={handleKeyDown}
                 />
@@ -106,7 +95,7 @@ function Field({
                   value={draft}
                   className={cn(EDITOR, "min-h-11")}
                   onChange={(event) => {
-                    setDraft(event.target.value);
+                    setState((current) => fieldEdit(current, { type: "change", value: event.target.value }));
                   }}
                   onKeyDown={handleKeyDown}
                 />
@@ -116,7 +105,7 @@ function Field({
                   type="button"
                   className="min-h-11 font-mono text-meta text-ink uppercase underline decoration-1 underline-offset-4"
                   onClick={() => {
-                    setOpen(false);
+                    setState((current) => fieldEdit(current, { type: "cancel" }));
                   }}
                 >
                   Cancel
@@ -125,7 +114,7 @@ function Field({
                   type="button"
                   className="border-ink bg-ink text-bone font-display min-h-11 px-4 font-bold tracking-[-0.01em] outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-green"
                   onClick={() => {
-                    commit();
+                    setState((current) => fieldEdit(current, { type: "save" }));
                   }}
                 >
                   Save
@@ -275,7 +264,7 @@ export function IdentityCard({
           )}
         </Await>
       </Suspense>
-      <Button type="submit" size="default" className="my-5 min-h-11">
+      <Button type="submit" size="lg" className="my-5 min-h-11">
         That&apos;s me
       </Button>
     </Form>

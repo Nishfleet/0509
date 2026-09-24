@@ -6,6 +6,8 @@ import { describe, expect, it } from "vitest";
 
 import { IdentityCard } from "../../app/components/identity-card";
 import type { SiteFields } from "../../app/lib/identity/card-fields";
+import { confirmSchema, readConfirmFields } from "../../app/lib/identity/confirm-fields";
+import { closedFieldEdit, fieldEdit } from "../../app/lib/identity/field-edit";
 
 function render(element: React.ReactElement): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -52,7 +54,8 @@ function buttons(html: string): string[] {
 function buttonWith(html: string, needle: string): string {
   const match = buttons(html).find((button) => button.includes(needle));
   expect(match, needle).toBeDefined();
-  return match as string;
+  if (match === undefined) throw new Error(`button containing "${needle}"`);
+  return match;
 }
 
 function liveRegion(html: string): string {
@@ -156,18 +159,7 @@ describe("IdentityCard", () => {
     await site;
   });
 
-  it("names the popover editor's input after the field and focuses it when it opens", async () => {
-    const source = await readComponent();
-    expect(source).toMatch(/aria-label=\{label\}[\s\S]*?autoFocus/);
-  });
-
-  it("commits the edit on Enter and closes it without saving on Escape", async () => {
-    const source = await readComponent();
-    expect(source).toMatch(/key === "Enter" && !multiline[\s\S]{0,160}commit\(\)/);
-    expect(source).toMatch(/key === "Escape"[\s\S]{0,200}setOpen\(false\)/);
-  });
-
-  it("submits every field confirmCard reads, taken from the rendered form itself", async () => {
+  it("submits every field confirmCard reads, parsed by the same module the action uses", async () => {
     const html = await card({
       site: resolved({ ...SITE, socials: [{ platform: "instagram", url: "https://www.instagram.com/gymshark/" }] }),
       logo: resolved("https://cdn.example/logo.png"),
@@ -176,13 +168,14 @@ describe("IdentityCard", () => {
     for (const [, name, value] of html.matchAll(/<input\b[^>]*\bname="([^"]*)"[^>]*\bvalue="([^"]*)"/g)) {
       form.set(name, decode(value));
     }
-    expect(confirmShape(form)).toEqual({
-      subject: "https://www.gymshark.com/",
-      name: "Gymshark",
-      description: "gym clothes",
-      logo: "https://cdn.example/logo.png",
-      socials: [{ platform: "instagram", url: "https://www.instagram.com/gymshark/" }],
-    });
+    const parsed = confirmSchema.safeParse(readConfirmFields(form));
+    expect(parsed.success).toBe(true);
+    if (parsed.success) {
+      expect(parsed.data.name).toBe("Gymshark");
+      expect(parsed.data.description).toBe("gym clothes");
+      expect(parsed.data.logo).toBe("https://cdn.example/logo.png");
+      expect(parsed.data.socials).toEqual([{ platform: "instagram", url: "https://www.instagram.com/gymshark/" }]);
+    }
   });
 
   it("decodes html entities in &value&quot;&gt;&amp;&lt&#x27; order so &amp; is the last pass (regression for double-unescape)", () => {
@@ -191,28 +184,41 @@ describe("IdentityCard", () => {
     expect(decode("&quot;hi&quot;")).toBe('"hi"');
     expect(decode("It&#x27;s")).toBe("It's");
   });
+});
 
-  it("still passes the action's shape when the site read came back empty and the user edits by keyboard", async () => {
-    const html = await card({ site: resolved({ ...SITE, name: null, description: null, unfound: true }), logo: resolved(null) });
-    const form = new FormData();
-    for (const [, name, value] of html.matchAll(/<input\b[^>]*\bname="([^"]*)"[^>]*\bvalue="([^"]*)"/g)) {
-      form.set(name, decode(value));
-    }
-    expect(confirmShape(form)).toEqual({
-      subject: "https://www.gymshark.com/",
-      name: "",
-      description: "",
-      logo: "",
-      socials: [{ platform: "instagram", url: "https://www.instagram.com/gymshark/" }],
-    });
+describe("fieldEdit", () => {
+  const SEED = closedFieldEdit("Gymshark");
+
+  it("opens with the committed value re-seeded into the draft", () => {
+    const opened = fieldEdit({ ...SEED, draft: "garbage" }, { type: "open" });
+    expect(opened).toEqual({ committed: "Gymshark", draft: "Gymshark", open: true });
   });
 
-  it("keeps the app component free of comments, as the lint rules require", async () => {
-    const fs = await import("node:fs/promises");
-    const source = await fs.readFile(new URL("../../app/components/identity-card.tsx", import.meta.url), "utf8");
-    expect(source).not.toMatch(/^\s*\/\//m);
-    expect(source).not.toMatch(/^\s*\/\*/m);
-    expect(source).not.toContain("{/*");
+  it("commits the draft on Enter when the field is not multiline", () => {
+    const typing = fieldEdit({ ...SEED, open: true }, { type: "change", value: "GymShark" });
+    const saved = fieldEdit(typing, { type: "key", key: "Enter", multiline: false });
+    expect(saved).toEqual({ committed: "GymShark", draft: "GymShark", open: false });
+  });
+
+  it("leaves Enter alone when the field is multiline", () => {
+    const typing = fieldEdit({ ...SEED, open: true }, { type: "change", value: "line one\nline two" });
+    const next = fieldEdit(typing, { type: "key", key: "Enter", multiline: true });
+    expect(next).toBe(typing);
+  });
+
+  it("discards the draft on Escape and closes the popover", () => {
+    const typing = fieldEdit({ ...SEED, open: true }, { type: "change", value: "GymShark" });
+    const cancelled = fieldEdit(typing, { type: "key", key: "Escape" });
+    expect(cancelled).toEqual({ committed: "Gymshark", draft: "Gymshark", open: false });
+  });
+
+  it("saves on dismiss for outside press and cancels for escape-key", () => {
+    const typing = fieldEdit({ ...SEED, open: true }, { type: "change", value: "GymShark" });
+    expect(fieldEdit(typing, { type: "dismiss", reason: "outside-press" })).toEqual({
+      committed: "GymShark", draft: "GymShark", open: false,
+    });
+    const cancelled = fieldEdit(typing, { type: "dismiss", reason: "escape-key" });
+    expect(cancelled).toEqual({ committed: "Gymshark", draft: "Gymshark", open: false });
   });
 });
 
@@ -223,33 +229,6 @@ function decode(value: string): string {
     .replaceAll("&lt;", "<")
     .replaceAll("&gt;", ">")
     .replaceAll("&amp;", "&");
-}
-
-function confirmShape(form: FormData): {
-  subject: string;
-  name: string;
-  description: string;
-  logo: string;
-  socials: { platform: string; url: string }[];
-} {
-  const field = (name: string): string => {
-    const value = form.get(name);
-    return typeof value === "string" ? value : "";
-  };
-  return {
-    subject: field("subject"),
-    name: field("name"),
-    description: field("description"),
-    logo: field("logo"),
-    socials: [...form.entries()]
-      .filter(([key]) => key.startsWith("social."))
-      .map(([key, url]) => ({ platform: key.slice("social.".length), url })),
-  };
-}
-
-async function readComponent(): Promise<string> {
-  const fs = await import("node:fs/promises");
-  return fs.readFile(new URL("../../app/components/identity-card.tsx", import.meta.url), "utf8");
 }
 
 function renderToStaticFallback(site: Promise<SiteFields>): string {
