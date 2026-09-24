@@ -133,4 +133,34 @@ describe("an AI app signing in to 0509", () => {
     const revoked = await send(new Request(`${ORIGIN}/mcp`, { headers: { authorization: `Bearer ${tokens.access_token}` } }));
     expect(revoked.status).toBe(401);
   });
+
+  it("refuses an authorization request without PKCE, even from a confidential app", async () => {
+    const withoutPkce = new URL(authorizeUrl);
+    withoutPkce.searchParams.delete("code_challenge");
+    withoutPkce.searchParams.delete("code_challenge_method");
+    const response = await decideConsent(helpers, new Request(withoutPkce, { method: "POST" }), {
+      userId: "u_oauth",
+      allow: true,
+    });
+    expect(response).toBeInstanceOf(Response);
+    const location = new URL((response as Response).headers.get("location") ?? "");
+    expect(location.searchParams.get("error")).toBe("invalid_request");
+    expect(location.searchParams.has("code")).toBe(false);
+  });
+
+  it("stops one address registering app after app", async () => {
+    const statuses = [];
+    for (let attempt = 0; attempt < 11; attempt += 1) {
+      const response = await send(
+        new Request(`${ORIGIN}/oauth/register`, {
+          method: "POST",
+          headers: { "content-type": "application/json", "cf-connecting-ip": "198.51.100.77" },
+          body: JSON.stringify({ redirect_uris: [REDIRECT], client_name: `Flood ${String(attempt)}`, token_endpoint_auth_method: "none" }),
+        }),
+      );
+      statuses.push(response.status);
+    }
+    expect(statuses.slice(0, 10).every((status) => status === 201)).toBe(true);
+    expect(statuses[10]).toBe(429);
+  });
 });
