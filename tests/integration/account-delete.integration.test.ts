@@ -17,6 +17,8 @@ const authEnv = {
       return { ok: true };
     },
   } as unknown as SendEmail,
+  SIGN_IN_EMAIL_LIMIT: env.SIGN_IN_EMAIL_LIMIT,
+  SIGN_IN_IP_LIMIT: env.SIGN_IN_IP_LIMIT,
   BETTER_AUTH_SECRET: "integration-test-secret",
   BETTER_AUTH_URL: ORIGIN,
 };
