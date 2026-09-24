@@ -126,6 +126,7 @@ function rankedRows(
   return payload.brands
     .map((brand) => {
       const entity = byId.get(brand.entity_id);
+      const deltaSignals = brand.ad_delta + brand.mention_delta + brand.site_change_count + brand.new_roles;
       const pills = sources.map((source) => {
         const count =
           counts.find((row) => row.entityId === brand.entity_id && row.sourceKey === source.key)?.count ?? 0;
@@ -134,7 +135,7 @@ function rankedRows(
       });
       return {
         entityId: brand.entity_id,
-        position: brand.rank,
+        position: deltaSignals === 0 ? null : brand.rank,
         name: brand.name,
         domain: entity?.domain ?? null,
         movement: movementLabel(brand.movement, brand.is_new),
