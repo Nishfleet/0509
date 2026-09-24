@@ -1,35 +1,14 @@
 import { env } from "cloudflare:test";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { checkPage } from "../../../app/lib/site/check-page.server";
 
-const readHolder = vi.hoisted(() => {
-  type HeldRead =
-    | {
-        ok: true;
-        html: string;
-        transport: "fetch";
-        status: number;
-        ms: number;
-        escalated: boolean;
-      }
-    | { ok: false; reason: "escalation-failed"; detail: string };
+type HeldRead = { ok: true; html: string; status: number } | { ok: false };
 
-  const fresh = (): HeldRead => ({
-    ok: true,
-    html: "",
-    transport: "fetch",
-    status: 200,
-    ms: 1,
-    escalated: false,
-  });
+const readHolder: { current: HeldRead } = { current: { ok: true, html: "", status: 200 } };
 
-  return { current: fresh(), fresh };
-});
-
-vi.mock("../../../app/lib/fetch/transport.server", () => ({
-  readUrl: () => Promise.resolve(readHolder.current),
-}));
+const PAD =
+  "Every plan includes unlimited projects, priority support, single sign-on, audit logs, and a named account manager who answers within one business day, with onboarding help for your whole team.";
 
 const USER = "user-check-page";
 const WS = "ws-check-page";
@@ -40,8 +19,8 @@ const WATCH = "watch-check-page";
 const URL = "https://competitor.example/pricing";
 const NOW = "2026-09-23T00:00:00Z";
 
-const FIRST_HTML = `<!doctype html><html><body><h1>Pricing</h1><p>Plan costs ten dollars.</p></body></html>`;
-const CHANGED_HTML = `<!doctype html><html><body><h1>Pricing</h1><p>Plan costs twenty dollars.</p></body></html>`;
+const FIRST_HTML = `<!doctype html><html><body><h1>Pricing</h1><p>Plan costs ten dollars.</p><p>${PAD}</p></body></html>`;
+const CHANGED_HTML = `<!doctype html><html><body><h1>Pricing</h1><p>Plan costs twenty dollars.</p><p>${PAD}</p></body></html>`;
 
 const seed = async () => {
   await env.DB.prepare(
@@ -117,7 +96,18 @@ describe("checkPage (0509#4433)", () => {
     const listed = await env.SNAPSHOTS.list({ prefix: "snapshot/site/" });
     for (const object of listed.objects) await env.SNAPSHOTS.delete(object.key);
     await seed();
-    readHolder.current = { ...readHolder.fresh(), html: FIRST_HTML };
+    readHolder.current = { ok: true, html: FIRST_HTML, status: 200 };
+    vi.stubGlobal("fetch", () =>
+      Promise.resolve(
+        readHolder.current.ok
+          ? new Response(readHolder.current.html, { status: readHolder.current.status })
+          : new Response("", { status: 503 }),
+      ),
+    );
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
   });
 
   it("records a first snapshot, then an unchanged reuse, then a change, then a failed read, and never names a before screenshot that was not stored (0509#4569)", async () => {
@@ -127,7 +117,7 @@ describe("checkPage (0509#4433)", () => {
     expect(first.screenshotKey).toBeNull();
     expect(await snapshotCount()).toBe(1);
     const stored = await env.SNAPSHOTS.get(first.textKey);
-    expect(await stored?.text()).toBe("Pricing Plan costs ten dollars.");
+    expect(await stored?.text()).toBe(`Pricing Plan costs ten dollars. ${PAD}`);
 
     const same = await checkPage({ watchId: WATCH, pageId: PAGE, url: URL });
     expect(same.outcome).toBe("unchanged");
@@ -138,7 +128,7 @@ describe("checkPage (0509#4433)", () => {
     expect(keys).toEqual([{ key: first.textKey }]);
     expect(await objectCount()).toBe(1);
 
-    readHolder.current = { ...readHolder.fresh(), html: CHANGED_HTML };
+    readHolder.current = { ok: true, html: CHANGED_HTML, status: 200 };
     const changed = await checkPage({ watchId: WATCH, pageId: PAGE, url: URL });
     expect(changed.outcome).toBe("changed");
     if (changed.outcome !== "changed") throw new Error("expected changed");
@@ -152,15 +142,15 @@ describe("checkPage (0509#4433)", () => {
 
     const beforePng = changed.textKey.replace(/\.txt$/, ".png");
     await env.SNAPSHOTS.put(beforePng, new Uint8Array([137, 80, 78, 71]));
-    readHolder.current = { ...readHolder.fresh(), html: FIRST_HTML };
+    readHolder.current = { ok: true, html: FIRST_HTML, status: 200 };
     const back = await checkPage({ watchId: WATCH, pageId: PAGE, url: URL });
     if (back.outcome !== "changed") throw new Error("expected changed");
     expect(back.previousScreenshotKey).toBe(beforePng);
     expect(await snapshotCount()).toBe(4);
 
-    readHolder.current = { ok: false, reason: "escalation-failed", detail: "x" };
+    readHolder.current = { ok: false };
     const failed = await checkPage({ watchId: WATCH, pageId: PAGE, url: URL });
-    expect(failed).toEqual({ outcome: "failed", reason: "escalation-failed", detail: "x" });
+    expect(failed).toMatchObject({ outcome: "failed", reason: "escalation-failed" });
     expect(await snapshotCount()).toBe(4);
   });
 });

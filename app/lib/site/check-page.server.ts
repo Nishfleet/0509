@@ -14,7 +14,9 @@ export type CheckPageResult =
       previousSnapshotId: string;
       previousTextKey: string;
       previousScreenshotKey: string | null;
+      previousHash: string;
       textKey: string;
+      hash: string;
       screenshotKey: string | null;
       status: number;
       transport: "fetch" | "browser";
@@ -108,7 +110,9 @@ export async function checkPage(input: {
     previousSnapshotId: previous.id,
     previousTextKey: previous.payload_r2_key,
     previousScreenshotKey: await storedKey(previous.payload_r2_key.replace(/\.txt$/, ".png")),
+    previousHash: previous.payload_hash,
     textKey,
+    hash: extracted.hash,
     screenshotKey,
     status: read.status,
     transport: read.transport,
