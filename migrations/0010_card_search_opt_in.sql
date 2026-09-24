@@ -1,0 +1,12 @@
+-- 0010_card_search_opt_in.sql — whether search engines may list a published card.
+-- Nish, 2026-09-24: a card is private by default, seen only by people the owner
+-- sends the link to. The owner can let search engines find it only after
+-- accepting an explicit warning in Settings.
+--
+-- Expand-only: one column with a DEFAULT, so the version of the code running
+-- before this file applies keeps working. D1 has no down-migrations; there is no
+-- DROP here and there must not be one.
+--
+-- Off for every existing and new workspace. 0 rather than NULL so the serve path
+-- and the sitemap read a flag, not a tri-state.
+ALTER TABLE workspace ADD COLUMN card_is_indexable INTEGER NOT NULL DEFAULT 0;
