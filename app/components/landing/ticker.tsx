@@ -12,24 +12,28 @@ export function Ticker({ items }: { items: readonly TickerItem[] }) {
       aria-label="Changes caught recently"
       className="bg-ink text-bone h-9 overflow-hidden"
     >
-      {animating ? (
-        <div className="flex h-full w-max items-center animate-[ticker_60s_linear_infinite] motion-reduce:animate-none">
-          <ul className={listClass}>
-            {items.map((item) => (
-              <li key={item.id} data-signal-id={item.id}>
-                <span>{item.text}</span> <span className="opacity-70">{item.ago}</span>
-              </li>
-            ))}
-          </ul>
-          <ul aria-hidden="true" className={listClass}>
-            {items.map((item) => (
-              <li key={item.id}>
-                <span>{item.text}</span> <span className="opacity-70">{item.ago}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
-      ) : null}
+      <div
+        className={`flex h-full w-max items-center${animating ? " animate-[ticker_60s_linear_infinite] motion-reduce:animate-none" : ""}`}
+      >
+        {animating ? (
+          <>
+            <ul className={listClass}>
+              {items.map((item) => (
+                <li key={item.id} data-signal-id={item.id}>
+                  <span>{item.text}</span> <span className="opacity-70">{item.ago}</span>
+                </li>
+              ))}
+            </ul>
+            <ul aria-hidden="true" className={listClass}>
+              {items.map((item) => (
+                <li key={item.id}>
+                  <span>{item.text}</span> <span className="opacity-70">{item.ago}</span>
+                </li>
+              ))}
+            </ul>
+          </>
+        ) : null}
+      </div>
     </div>
   );
 }
