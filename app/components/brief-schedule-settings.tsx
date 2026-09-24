@@ -98,6 +98,7 @@ export function BriefScheduleSettings({ schedule }: { schedule: ScheduleView }):
         <Button
           type="button"
           variant="tertiary"
+          className="whitespace-normal text-left"
           onClick={() => {
             save({ timezone: deviceZone });
           }}

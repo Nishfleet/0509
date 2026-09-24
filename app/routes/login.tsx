@@ -13,7 +13,6 @@ import { authClient } from "../lib/auth-client";
 import { createAuth } from "../lib/auth.server";
 import { timezoneCookie } from "../lib/timezone";
 
-
 export function meta() {
   return [{ title: "Sign in · Five to Nine" }];
 }
@@ -62,7 +61,7 @@ export default function Login() {
   }
 
   if (data?.sent) {
-    return <SignInSent email={data.sent.email} sentAt={data.sent.at} />;
+    return <SignInSent key={data.sent.at} email={data.sent.email} />;
   }
 
   return (
