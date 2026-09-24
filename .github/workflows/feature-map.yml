@@ -83,43 +83,23 @@ jobs:
             1. Read `app/routes.ts`, every route module's rendered controls, and the `e2e/` test titles.
             2. Build the app and drive every route with the verify skill (`npm run verify:start`, then `take_snapshot` per route). The map's Reach column must name the controls the snapshot actually shows, by role and accessible name. In one shell: `npm run build`, `export PLAYWRIGHT_LOCAL_PORT="${PLAYWRIGHT_LOCAL_PORT:-$((8000 + $$ % 1000))}"`, `npx wrangler d1 migrations apply 0509 --local </dev/null`, then start the server in the background with `npx wrangler dev --env-file .dev.vars.example --local --port "$PLAYWRIGHT_LOCAL_PORT" </dev/null &`. Do not leave `wrangler dev` in the foreground. Wait until `curl -fsS "http://127.0.0.1:${PLAYWRIGHT_LOCAL_PORT}/api/health"` returns. Then `npx chrome-devtools new_page` and `take_snapshot` for every route in `app/routes.ts`.
             3. Drift means: a route in `app/routes.ts` with no row; a route row whose path is not a route in `app/routes.ts`; a Proof cell that names a `e2e/` or `tests/` file that is not in the repo; a Reach cell that names a control the snapshot of that rendered page lacks. Rows under the heading "Not a route" are not route rows. The `*` route is the row whose Route cell is `any other path`. `/` is the static file `public/index.html` and its row is the `/` row. One row may name several paths. A route that redirects to `/login` shows the login page to an anonymous session: record that snapshot, and do not rewrite that row's signed-in controls because they were behind the redirect.
-            4. If any row drifted, open a pull request titled exactly `feature-map: sync with ${{ env.SHA }}` against branch `${{ env.BASE }}` that changes only `.agents/skills/verify/feature-map.md`. The pull request body carries the `take_snapshot` output each changed row was built from. Create branch `feature-map-sync-${{ env.SHA }}` from the commit you have checked out, commit only that file, and `gh pr create --base ${{ env.BASE }}`. Do not push to `main`. Do not open the pull request against a branch that does not already contain ${{ env.SHA }}.
-            5. If nothing drifted, do not open a pull request.
+            4. If any row drifted, open a pull request titled exactly `feature-map: sync with ${{ env.SHA }}` against branch `${{ env.BASE }}` that changes only `.agents/skills/verify/feature-map.md`. The pull request body carries the `take_snapshot` output each changed row was built from. Create branch `feature-map-sync-${{ env.SHA }}` from the commit you have checked out, commit only that file, and `gh pr create --base ${{ env.BASE }}`. Do not push to `main`. Do not open the pull request against a branch that does not already contain ${{ env.SHA }}. Then `gh pr view` that pull request. Exit non-zero unless the title is exactly `feature-map: sync with ${{ env.SHA }}`, the body is non-empty, and the only changed file is `.agents/skills/verify/feature-map.md`. `pullRequest` is that number.
+            5. If nothing drifted, do not open a pull request and omit `pullRequest`.
             The job fails if the app does not start or a route returns 5xx: exit non-zero in that case. Do not edit any file except `.agents/skills/verify/feature-map.md`.
             Your final answer is only the JSON object the schema requires. `kind` is `no-drift` or `opened-pr`. `sha` is ${{ env.SHA }}. `routes` is every path you drove, one string each, and must not be empty. `pullRequest` is the pull request number when `kind` is `opened-pr`, and omit it when `kind` is `no-drift`. A run that does not produce that object fails.
           claude_args: |
             --allowedTools "Read,Edit,Write,Grep,Glob,Bash(npm:*),Bash(npx:*),Bash(git:*),Bash(gh:*),Bash(curl:*)"
-            --json-schema '{"type":"object","additionalProperties":false,"properties":{"kind":{"enum":["no-drift","opened-pr"]},"sha":{"type":"string"},"routes":{"type":"array","items":{"type":"string"},"minItems":1},"pullRequest":{"type":"integer"}},"required":["kind","sha","routes"]}'
+            --json-schema '{"type":"object","additionalProperties":false,"properties":{"kind":{"enum":["no-drift","opened-pr"]},"sha":{"const":"${{ github.sha }}"},"routes":{"type":"array","items":{"type":"string"},"minItems":1},"pullRequest":{"type":"integer"}},"required":["kind","sha","routes"]}'
 
-      - name: A silent run is a failure
-        if: steps.claude.outcome == 'success'
+      - name: No drift summary
+        if: steps.claude.outcome == 'success' && fromJSON(steps.claude.outputs.structured_output || '{"kind":""}').kind == 'no-drift'
         env:
-          FEATURE_MAP_OUTCOME: ${{ steps.claude.outputs.structured_output }}
-          FEATURE_MAP_SHA: ${{ env.SHA }}
-          GH_TOKEN: ${{ steps.app.outputs.token }}
-        run: |
-          set -euo pipefail
-          test -n "${FEATURE_MAP_OUTCOME//[[:space:]]/}"
-          kind=$(jq -er --arg sha "$FEATURE_MAP_SHA" '
-            if (.sha | type != "string" or . != $sha) then error("outcome sha")
-            elif (.routes | type != "array" or length == 0 or any(type != "string" or . == "")) then error("outcome has no route list")
-            elif .kind == "no-drift" and .pullRequest != null then error("no drift opened a pull request")
-            elif .kind == "no-drift" then "no-drift"
-            elif .kind == "opened-pr" and (.pullRequest | type != "number" or . != floor) then error("opened pull request has no number")
-            elif .kind == "opened-pr" then "opened-pr"
-            else error("silent run: outcome shape")
-            end
-          ' <<<"$FEATURE_MAP_OUTCOME")
-          if [ "$kind" = "no-drift" ]; then
-            {
-              printf 'no drift at %s\n' "$FEATURE_MAP_SHA"
-              jq -r '.routes[]' <<<"$FEATURE_MAP_OUTCOME"
-            } | tee -a "$GITHUB_STEP_SUMMARY"
-          else
-            n=$(jq -er '.pullRequest' <<<"$FEATURE_MAP_OUTCOME")
-            gh pr view "$n" --repo "$GITHUB_REPOSITORY" --json title,body,files \
-              | jq -e --arg sha "$FEATURE_MAP_SHA" --arg map ".agents/skills/verify/feature-map.md" \
-                'select(.title == ("feature-map: sync with " + $sha) and ((.body // "") | gsub("^\\s+|\\s+$"; "") | length > 0) and ((.files // []) | map(.path // .filename) == [$map]))' \
-              >/dev/null
-            printf 'opened PR %s\n' "$n" | tee -a "$GITHUB_STEP_SUMMARY"
-          fi
+          FEATURE_MAP_SHA: ${{ fromJSON(steps.claude.outputs.structured_output).sha }}
+          FEATURE_MAP_ROUTES: ${{ join(fromJSON(steps.claude.outputs.structured_output).routes, ', ') }}
+        run: printf 'no drift at %s\n%s\n' "$FEATURE_MAP_SHA" "$FEATURE_MAP_ROUTES" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Opened pull request summary
+        if: steps.claude.outcome == 'success' && fromJSON(steps.claude.outputs.structured_output || '{"kind":""}').kind == 'opened-pr'
+        env:
+          FEATURE_MAP_PR: ${{ fromJSON(steps.claude.outputs.structured_output).pullRequest }}
+        run: printf 'opened PR %s\n' "$FEATURE_MAP_PR" >> "$GITHUB_STEP_SUMMARY"
