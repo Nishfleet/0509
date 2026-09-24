@@ -28,6 +28,7 @@ function brand(entityId: string, name: string, rank: number | null) {
     ad_delta: 0,
     mention_delta: 0,
     site_change_count: 0,
+    new_roles: 0,
   };
 }
 
