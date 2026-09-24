@@ -13,7 +13,7 @@ export function contentSecurityPolicy(nonce: string): string {
   ].join("; ");
 }
 
-export function documentSecurityHeaders(nonce: string): Readonly<Record<string, string>> {
+function documentSecurityHeaders(nonce: string): Readonly<Record<string, string>> {
   return {
     "Content-Security-Policy": contentSecurityPolicy(nonce),
     "Strict-Transport-Security": "max-age=31536000; includeSubDomains",
