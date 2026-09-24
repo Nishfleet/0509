@@ -1,7 +1,10 @@
-import { env } from "cloudflare:test";
+import type { OAuthHelpers } from "@cloudflare/workers-oauth-provider";
+import { createExecutionContext, env } from "cloudflare:test";
 import { beforeAll, describe, expect, it } from "vitest";
 
 import { propsForApiKey } from "../../app/lib/agent/keys.server";
+import { createOAuthProvider } from "../../app/lib/agent/oauth.server";
+import { toolResult } from "../../app/lib/agent/mcp.server";
 import { readAgentAlerts, readAgentBrief, readAgentCompetitors, readAgentStanding } from "../../app/lib/agent/read.server";
 import { apiResponse, mcpResponse } from "../../app/lib/agent/serve.server";
 import { createAuth } from "../../app/lib/auth.server";
@@ -43,7 +46,7 @@ const PAYLOAD = {
       jev_reason: "They raised prices.",
     },
   ],
-  brands: [{ entity_id: "ent_agent_a", name: "Rival A", rank: 1, movement: 0, is_new: false, biggest_move: null, ad_delta: 2, mention_delta: 0, site_change_count: 1 }],
+  brands: [{ entity_id: "ent_agent_a", name: "Rival A", rank: 1, movement: 0, is_new: false, biggest_move: null, ad_delta: 2, mention_delta: 0, site_change_count: 1, new_roles: 0 }],
   own_site: { status: "ok", incidents: [] },
   checked: { mention_count: 0, site_change_count: 1, new_ad_count: 2, source_keys: [], degraded_source_keys: [], degraded_sources: [] },
   next_brief_at: "2026-09-28T07:00:00.000Z",
@@ -100,6 +103,17 @@ async function rpcResult<T>(response: Response): Promise<T> {
   const data = text.split("\n").find((line) => line.startsWith("data: "));
   const parsed: { result: T } = JSON.parse(data === undefined ? text : data.slice("data: ".length));
   return parsed.result;
+}
+
+type OAuthTestEnv = typeof env & { OAUTH_PROVIDER?: OAuthHelpers };
+
+const oauthProvider = createOAuthProvider<OAuthTestEnv>({
+  apiHandler: { fetch: (_request, _env, ctx) => Response.json(ctx.props) },
+  defaultHandler: { fetch: () => new Response("default") },
+});
+
+function oauthBearerMcp(request: Request): Promise<Response> {
+  return oauthProvider.fetch(request, { ...env }, createExecutionContext());
 }
 
 describe("agent access, scoped to one workspace", () => {
@@ -169,6 +183,14 @@ describe("agent access, scoped to one workspace", () => {
     expect(call.structuredContent.tracked.map((row) => row.domain)).toEqual(["rival-b.example"]);
   });
 
+  it("answers a failing MCP tool with a fixed error and never the thrown text", async () => {
+    const failed = await toolResult(() => Promise.reject(new Error("D1_ERROR: no such column secret_internal")));
+    expect(failed).toMatchObject({ isError: true });
+    expect(JSON.stringify(failed)).not.toContain("secret_internal");
+    const ok = await toolResult(() => Promise.resolve({ alerts: [] }));
+    expect(ok).toMatchObject({ structuredContent: { alerts: [] } });
+  });
+
   it("reads standing for the caller's workspace and hides a paused competitor", async () => {
     const standingA = await readAgentStanding(a.workspaceId);
     expect(standingA.standing?.rank).toBe(2);
@@ -184,5 +206,47 @@ describe("agent access, scoped to one workspace", () => {
   it("refuses a signed-in user who has no workspace yet", async () => {
     const response = await mcpResponse(jsonRpc("tools/list"), { userId: "u_agent_nobody", clientId: "test" });
     expect(response.status).toBe(403);
+  });
+
+  it("answers a key over its own limit with 429, never 401", async () => {
+    const { key } = await auth.api.createApiKey({
+      body: { userId: a.userId, name: "limited", rateLimitEnabled: true, rateLimitMax: 1, rateLimitTimeWindow: 60_000 },
+    });
+    const call = () =>
+      apiResponse(
+        new Request("http://localhost/api/v1/brief", { headers: { authorization: `Bearer ${key}`, "cf-connecting-ip": "203.0.113.201" } }),
+        readAgentBrief,
+      );
+    expect((await call()).status).toBe(200);
+    const limited = await call();
+    expect(limited.status).toBe(429);
+    expect(limited.headers.get("retry-after")).toBe("60");
+  });
+
+  it("answers a key over its own limit with 429 on the MCP bearer path too", async () => {
+    const { key } = await auth.api.createApiKey({
+      body: { userId: a.userId, name: "limited-mcp", rateLimitEnabled: true, rateLimitMax: 1, rateLimitTimeWindow: 60_000 },
+    });
+    const call = () =>
+      oauthBearerMcp(
+        new Request("http://localhost/mcp", { headers: { authorization: `Bearer ${key}`, "cf-connecting-ip": "203.0.113.202" } }),
+      );
+    expect((await call()).status).toBe(200);
+    const limited = await call();
+    expect(limited.status).toBe(429);
+    expect(limited.headers.get("retry-after")).toBe("60");
+  });
+
+  it("refuses an MCP request from a foreign origin and serves one from the product's own", async () => {
+    const from = (origin: string) =>
+      new Request("http://localhost/mcp", {
+        method: "POST",
+        headers: { "content-type": "application/json", accept: "application/json, text/event-stream", origin },
+        body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list", params: {} }),
+      });
+    const foreign = await mcpResponse(from("https://evil.example"), { userId: a.userId, clientId: "test" });
+    expect(foreign.status).toBe(403);
+    const own = await mcpResponse(from(new URL(env.BETTER_AUTH_URL).origin), { userId: a.userId, clientId: "test" });
+    expect(own.status).toBe(200);
   });
 });

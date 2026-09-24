@@ -44,6 +44,7 @@ const brandLineSchema = z
     ad_delta: count,
     mention_delta: count,
     site_change_count: count,
+    new_roles: count,
   })
   .transform((line) => ({ ...line, name: line.name.length > 0 ? line.name : line.entity_id }));
 

@@ -299,7 +299,7 @@ export interface CompetitorRow {
 }
 
 const SELECT_COMPETITORS =
-  "SELECT e.id AS entity_id, e.name, e.domain, e.state, e.state_changed_at, s.verdict_reason AS reason FROM entity e LEFT JOIN suggestion s ON s.entity_id = e.id AND s.workspace_id = e.workspace_id WHERE e.workspace_id = ? AND e.role = 'competitor' AND e.state IN ('on', 'off') ORDER BY e.state = 'off', e.created_at ASC, e.id ASC";
+  "SELECT e.id AS entity_id, e.name, e.domain, e.state, e.state_changed_at, s.verdict_reason AS reason FROM entity e LEFT JOIN suggestion s ON s.entity_id = e.id AND s.workspace_id = e.workspace_id WHERE e.workspace_id = ? AND e.role = 'competitor' AND e.state IN ('on', 'off') ORDER BY e.state = 'off', e.origin <> 'manual', CASE WHEN e.origin = 'manual' THEN e.created_at END DESC, e.created_at ASC, e.id ASC";
 
 interface CompetitorDbRow {
   entity_id: string;
@@ -332,6 +332,20 @@ export function turnOffFromRetireSuggestion(input: {
   return env.DB
     .prepare(TURN_OFF_FROM_RETIRE_SUGGESTION)
     .bind(input.now, input.workspaceId, input.suggestionId);
+}
+
+const RETIRE_COMPETITOR_BY_JEV =
+  "UPDATE entity SET state = 'off', state_reason = ?1, state_changed_by = 'jev', state_changed_at = ?2 WHERE id = ?3 AND workspace_id = ?4 AND role = 'competitor' AND state = 'on' AND origin = 'auto'";
+
+export function retireCompetitorByJev(input: {
+  workspaceId: string;
+  entityId: string;
+  reason: string;
+  now: string;
+}): D1PreparedStatement {
+  return env.DB
+    .prepare(RETIRE_COMPETITOR_BY_JEV)
+    .bind(input.reason, input.now, input.entityId, input.workspaceId);
 }
 
 export async function readCompetitors(

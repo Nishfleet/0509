@@ -19,7 +19,14 @@ const ENTITIES: readonly HomeEntity[] = [
   { id: "ent_casetta", role: "competitor", domain: "casetta.example", state: "on" },
 ];
 
-function brand(entityId: string, name: string, rank: number | null, movement: number | null, isNew = false) {
+function brand(
+  entityId: string,
+  name: string,
+  rank: number | null,
+  movement: number | null,
+  isNew = false,
+  counts: { ad_delta?: number; mention_delta?: number; site_change_count?: number; new_roles?: number } = {},
+) {
   return {
     entity_id: entityId,
     name,
@@ -27,9 +34,10 @@ function brand(entityId: string, name: string, rank: number | null, movement: nu
     movement,
     is_new: isNew,
     biggest_move: null,
-    ad_delta: 0,
-    mention_delta: 0,
-    site_change_count: 0,
+    ad_delta: counts.ad_delta ?? 1,
+    mention_delta: counts.mention_delta ?? 0,
+    site_change_count: counts.site_change_count ?? 0,
+    new_roles: counts.new_roles ?? 0,
   };
 }
 
@@ -109,6 +117,25 @@ describe("Home standing", () => {
     if (standing.kind !== "ranked") throw new Error("expected a ranked standing");
     expect(standing.rows.map((row) => row.position)).toEqual([1, null]);
     expect(standing.rows[1]?.movement).toBe("first week");
+  });
+
+  it("shows a dash for a brand with zero signals this week", () => {
+    const p = payload({
+      brands: [
+        brand("ent_kindred", "Kindred", 1, 0, false, { ad_delta: 2 }),
+        brand("ent_casetta", "Casetta", 2, -1, false, {
+          ad_delta: 0,
+          mention_delta: 0,
+          site_change_count: 0,
+          new_roles: 0,
+        }),
+      ],
+    });
+    const standing = homeStanding({ payload: p, entities: ENTITIES, schedule: SCHEDULE, now: THURSDAY_MORNING });
+    if (standing.kind !== "ranked") throw new Error("expected a ranked standing");
+    expect(standing.rows.map((row) => row.position)).toEqual([1, null]);
+    const html = render({ payload: p });
+    expect(html).toContain(">—<");
   });
 
   it("asks for a competitor when fewer than two brands are on (REBUILD-STANDING rules)", () => {
