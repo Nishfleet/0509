@@ -144,6 +144,11 @@ export function createWorkerEnvCheck() {
 
 export const assertWorkerEnv = createWorkerEnvCheck();
 
+export function landingWorkspaceId(): string | null {
+  const value = blank(env.LANDING_WORKSPACE_ID);
+  return typeof value === "string" ? value : null;
+}
+
 export function workerEnvFailureResponse(error: WorkerEnvError): Response {
   console.error(error.message);
   return new Response(error.message, {

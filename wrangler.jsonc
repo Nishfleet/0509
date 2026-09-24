@@ -55,7 +55,9 @@
   // forwarded header: auth origin trust and the magic-link URL both come from
   // it, and a client-supplied value would let a link point anywhere.
   // BETTER_AUTH_SECRET stays a Worker secret.
-  "vars": { "BETTER_AUTH_URL": "https://0509.io" },
+  // LANDING_WORKSPACE_ID names the public workspace whose site changes the
+  // landing mark section shows. Empty draws no marks and never a sample.
+  "vars": { "BETTER_AUTH_URL": "https://0509.io", "LANDING_WORKSPACE_ID": "" },
 
   "d1_databases": [
     {

@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import { httpUrl } from "./http-url";
 import { shortUtc } from "./short-utc";
 
 const shotSide = z.object({
@@ -116,4 +117,26 @@ export interface SiteChangeView {
   mark: ChangeMark | null;
   before: ChangeShot;
   after: ChangeShot;
+}
+
+export interface PairedSiteChange extends SiteChangeView {
+  mark: { removed: string; added: string };
+}
+
+const MAX_LANDING_MARKS = 3;
+
+function isLandingPair(view: SiteChangeView): view is PairedSiteChange {
+  const removed = view.mark?.removed;
+  const added = view.mark?.added;
+  if (typeof removed !== "string" || typeof added !== "string") return false;
+  if (removed.trim() === "" || added.trim() === "") return false;
+  if (httpUrl(view.url) === null) return false;
+  return !Number.isNaN(Date.parse(view.capturedAt.trim()));
+}
+
+export function pickLandingMarks(views: readonly SiteChangeView[]): PairedSiteChange[] {
+  const paired = views.filter(isLandingPair);
+  const own = paired.find((view) => view.isSelf);
+  const rest = paired.filter((view) => view.id !== own?.id);
+  return (own === undefined ? rest : [own, ...rest]).slice(0, MAX_LANDING_MARKS);
 }
