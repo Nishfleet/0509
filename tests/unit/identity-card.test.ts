@@ -185,6 +185,13 @@ describe("IdentityCard", () => {
     });
   });
 
+  it("decodes html entities in &value&quot;&gt;&amp;&lt&#x27; order so &amp; is the last pass (regression for double-unescape)", () => {
+    expect(decode("a &amp; b")).toBe("a & b");
+    expect(decode("&amp;lt;")).toBe("&lt;");
+    expect(decode("&quot;hi&quot;")).toBe('"hi"');
+    expect(decode("It&#x27;s")).toBe("It's");
+  });
+
   it("still passes the action's shape when the site read came back empty and the user edits by keyboard", async () => {
     const html = await card({ site: resolved({ ...SITE, name: null, description: null, unfound: true }), logo: resolved(null) });
     const form = new FormData();
@@ -211,11 +218,11 @@ describe("IdentityCard", () => {
 
 function decode(value: string): string {
   return value
-    .replaceAll("&amp;", "&")
     .replaceAll("&quot;", '"')
     .replaceAll("&#x27;", "'")
     .replaceAll("&lt;", "<")
-    .replaceAll("&gt;", ">");
+    .replaceAll("&gt;", ">")
+    .replaceAll("&amp;", "&");
 }
 
 function confirmShape(form: FormData): {
