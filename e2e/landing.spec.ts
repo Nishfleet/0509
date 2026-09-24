@@ -118,3 +118,9 @@ test("the social preview image is served", async ({ request }) => {
   expect(response.status()).toBe(200);
   expect(response.headers()["content-type"]).toBe("image/png");
 });
+
+test("the organization logo is served", async ({ request }) => {
+  const response = await request.get("/logo.svg");
+  expect(response.status()).toBe(200);
+  expect(response.headers()["content-type"].startsWith("image/svg+xml")).toBe(true);
+});
