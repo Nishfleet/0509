@@ -154,6 +154,17 @@
       "name": "standing-rollover",
       "binding": "STANDING_ROLLOVER",
       "class_name": "StandingRolloverWorkflow"
+    },
+    // The nightly website sweep (docs/engines/site-change.md). The Workflow's
+    // own schedule creates one instance a night, at 02:00 UTC so the changes
+    // it files land before the 03:00 standing refresh counts them. Each page
+    // is its own retried step; a page that cannot be read fails alone.
+    // Nothing to provision: deploy creates the Workflow, unlike a queue.
+    {
+      "name": "site-sweep",
+      "binding": "SITE_SWEEP",
+      "class_name": "SiteSweepWorkflow",
+      "schedules": ["0 2 * * *"]
     }
   ],
 
