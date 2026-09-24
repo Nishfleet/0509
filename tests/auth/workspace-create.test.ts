@@ -15,7 +15,7 @@ import {
 function openDb(): DatabaseSync {
   const database = new DatabaseSync(":memory:");
   database.exec(`
-    CREATE TABLE "user" (id TEXT PRIMARY KEY NOT NULL, email TEXT NOT NULL);
+    CREATE TABLE "user" (id TEXT PRIMARY KEY NOT NULL, email TEXT NOT NULL, emailVerified INTEGER NOT NULL DEFAULT 1);
     CREATE TABLE workspace (
       id TEXT PRIMARY KEY NOT NULL,
       name TEXT NOT NULL,
@@ -27,6 +27,17 @@ function openDb(): DatabaseSync {
       FOREIGN KEY (owner_user_id) REFERENCES "user"(id)
     );
     CREATE INDEX idx_workspace_owner ON workspace(owner_user_id);
+    CREATE TABLE channel (id TEXT PRIMARY KEY NOT NULL, key TEXT NOT NULL UNIQUE, is_enabled INTEGER NOT NULL DEFAULT 1, config_json TEXT NOT NULL DEFAULT '{}');
+    INSERT INTO channel (id, key) VALUES ('chan-email', 'email');
+    CREATE TABLE send_target (
+      id TEXT PRIMARY KEY NOT NULL,
+      workspace_id TEXT NOT NULL,
+      channel_id TEXT NOT NULL,
+      target_value TEXT NOT NULL,
+      is_verified INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL,
+      UNIQUE (workspace_id, channel_id, target_value)
+    );
   `);
   return database;
 }
@@ -239,6 +250,19 @@ describe("ensureWorkspace", () => {
       brief_hour: 8,
     });
     expect(await ensureWorkspaceForSignIn(asWorkspaceDb(database), { userId: "missing", request })).toBeNull();
+  });
+
+  it("the sign-in hook gives the workspace exactly one email target, the owner's address", async () => {
+    const database = openDb();
+    seedUser(database, "user-1", "ada@example.com");
+    const request = new Request("https://0509.io/api/auth/magic-link/verify");
+    const signIn = () =>
+      ensureWorkspaceForSignIn(asWorkspaceDb(database), { userId: "user-1", request, now: "2026-09-22T12:00:00.000Z" });
+    await signIn();
+    await signIn();
+    expect(database.prepare("SELECT workspace_id, channel_id, target_value, is_verified FROM send_target").all()).toEqual([
+      { workspace_id: firstWorkspaceId("user-1"), channel_id: "chan-email", target_value: "ada@example.com", is_verified: 1 },
+    ]);
   });
 
   it("returns the row the other request wrote when the insert fails", async () => {
