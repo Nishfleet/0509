@@ -83,7 +83,7 @@ export default defineConfig({
         },
       },
       {
-        // The J8 fixture-site Worker (0509#4046): real workerd + real local KV.
+        // The J8 fixture-site Worker (0509#4046): real workerd + real local SQLite Durable Object.
         // Its token-gated flip route and both break modes run against the same
         // binding kinds production has, so a break that does not survive the
         // round-trip fails in a merge gate instead of a live incident run.

@@ -24,7 +24,8 @@ type Hit = z.infer<typeof HIT_SCHEMA>;
 function parseJson(body: string): unknown {
   try {
     return JSON.parse(body) as unknown;
-  } catch {
+  } catch (error) {
+    console.error(JSON.stringify({ event: "discovery.hn_unparseable", error: String(error) }));
     return null;
   }
 }

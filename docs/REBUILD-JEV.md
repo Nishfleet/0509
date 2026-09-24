@@ -41,6 +41,7 @@ This pack is the product's edge: a chat prompt has none of it.
 | D7 `identity_field_confidence` | Is this extracted value right for this brand's `field`? | Noul per field | p >= 0.9: fill silently. p <= 0.1: leave empty and say what fills it | fill, flagged for the user to confirm |
 | D8 `duplicate_signal` | Are these two items the same event seen twice (syndication, repost, re-crawl)? | Noul | p >= 0.9: collapse in the UI, keep both rows. p <= 0.1: keep separate | collapse, show "and 1 more" |
 | D9 `page_role` | What role does this page play for `subject`: home / pricing / product / blog / careers / legal / other? | Choice, cached per page by URL + title hash | recorded; feeds D3 and the snapshot schedule | never a URL regex |
+| **D10** `public_subject` | Does `item` (a domain, handle or channel) present itself to the public for commercial or audience reasons? | Noul | `p >= 0.9`: proceed. **`p <= 0.1`: refuse**, with the one line "we track brands and creators, not people", and record the refusal | **ask the user** to confirm the subject is a business or public creator, and record their answer in `user_decision` |
 
 Rules per decision:
 
@@ -52,6 +53,7 @@ Rules per decision:
 - D7 fields: name, logo, description, category, country, socials, pricing page. A field below 0.1 is left empty with an empty-state line ("we'll fill this after the first crawl").
 - D8 is the only dedup. No hand-rolled fuzzy matching beyond the stored normalized-URL and normalized-title hashes that feed it.
 - D9 runs once per discovered page and again only when the title changes. `/plans`, `/membership`, `/tarifs` are pricing pages; a regex would miss them, which is why this is a judgment.
+- D10 runs at onboarding before anything is fetched. Minors, accounts marked private and login walls are refused in code, never asked of Jev.
 
 ## What Jev is not used for
 

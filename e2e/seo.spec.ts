@@ -65,3 +65,11 @@ for (const path of [
     );
   });
 }
+
+test("GET /privacy serves robots index, follow", async ({ page }) => {
+  await page.goto("/privacy");
+  await expect(page.locator('meta[name="robots"]')).toHaveAttribute(
+    "content",
+    "index, follow",
+  );
+});
