@@ -56,7 +56,7 @@ describe("the competitor page frame", () => {
     expect(competitorPausedLine(null)).toBe("Paused");
   });
 
-  it("reads state_reason in customer words and never shows a code", () => {
+  it("reads state_reason in lowercase customer words and never shows a code", () => {
     expect(competitorPausedLine("2026-09-22T12:00:00.000Z", "acquired")).toBe(
       "Paused 22 Sept · looks like it was acquired",
     );
@@ -64,7 +64,7 @@ describe("the competitor page frame", () => {
       "Paused 22 Sept · looks like it shut down",
     );
     expect(competitorPausedLine("2026-09-22T12:00:00.000Z", "some_code")).toBe("Paused 22 Sept");
-
+    expect(competitorPausedLine("2026-09-22T12:00:00.000Z", "constructor")).toBe("Paused 22 Sept");
     const html = header({
       name: "Kindred",
       domain: "kindred.example",
