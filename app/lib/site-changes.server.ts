@@ -2,7 +2,8 @@ import { env } from "cloudflare:workers";
 
 import type { SiteChangeRow } from "./data/signal.server";
 import { readSiteChangePayload, readSiteChanges } from "./data/signal.server";
-import type { ChangeMark, ChangeShot, SiteChangePayload, SiteChangeView } from "./site-change";
+import { landingWorkspaceId } from "./env.server";
+import type { ChangeMark, ChangeShot, PairedSiteChange, SiteChangePayload, SiteChangeView } from "./site-change";
 import {
   captureLabel,
   changeHeadline,
@@ -10,6 +11,7 @@ import {
   pageLabel,
   parseDiffHunks,
   parseSiteChangePayload,
+  pickLandingMarks,
   wordsSentence,
 } from "./site-change";
 
@@ -85,4 +87,19 @@ export async function readChangeShot(
   const key = payload?.[side].screenshotKey;
   if (!key?.startsWith(SHOT_PREFIX)) return null;
   return env.SNAPSHOTS.get(key);
+}
+
+const LANDING_WINDOW_DAYS = 7;
+const LANDING_READ_LIMIT = 24;
+
+export async function readLandingMarks(now: Date): Promise<PairedSiteChange[]> {
+  const workspaceId = landingWorkspaceId();
+  if (workspaceId === null) return [];
+  const views = await readSiteChangeViews({
+    workspaceId,
+    entityId: null,
+    since: daysBefore(now, LANDING_WINDOW_DAYS),
+    limit: LANDING_READ_LIMIT,
+  });
+  return pickLandingMarks(views);
 }

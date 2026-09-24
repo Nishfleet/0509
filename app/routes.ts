@@ -35,6 +35,5 @@ export default [
   route("design/competitor", "routes/design.competitor.tsx"),
   route("llms.txt", "routes/llms[.]txt.ts"),
   route("design/landing", "routes/landing.tsx"),
-  route("design/landing/changes/:signalId/:side", "routes/landing.change-shot.ts"),
   route("onboarding/identity", "routes/onboarding.identity.tsx"),
 ] satisfies RouteConfig;

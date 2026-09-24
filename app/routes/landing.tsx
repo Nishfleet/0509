@@ -12,7 +12,7 @@ import { pageWidth } from "../components/landing/section";
 import { WhatWeWatch } from "../components/landing/what-we-watch";
 import { WATCHED_NOUNS } from "../lib/coverage";
 import { FAQ } from "../lib/faq";
-import { readLandingMarks } from "../lib/landing-marks.server";
+import { readLandingMarks } from "../lib/site-changes.server";
 import {
   SITE_URL,
   faqPageJsonLd,
@@ -53,7 +53,8 @@ export function meta(_: Route.MetaArgs) {
 }
 
 export async function loader(_: Route.LoaderArgs) {
-  return { marks: await readLandingMarks(new Date()) };
+  const now = new Date();
+  return { marks: await readLandingMarks(now), now: now.toISOString() };
 }
 
 export default function Landing({ loaderData }: Route.ComponentProps) {
@@ -62,7 +63,7 @@ export default function Landing({ loaderData }: Route.ComponentProps) {
       <Header />
       <main>
         <Hero />
-        <Marks marks={loaderData.marks} />
+        <Marks marks={loaderData.marks} now={loaderData.now} />
         <HowItWorks />
         <WhatWeWatch />
         <Agents />

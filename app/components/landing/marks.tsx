@@ -1,11 +1,13 @@
 import type { ReactElement } from "react";
 
-import type { LandingMark } from "../../lib/landing-marks";
+import { daysAgoLabel } from "../../lib/delivery-alert";
+import type { PairedSiteChange } from "../../lib/site-change";
 import { CapturePlate } from "../capture-plate";
 import { Mark } from "../mark";
 import { Section } from "./section";
 
-export function Marks({ marks }: { marks: readonly LandingMark[] }): ReactElement {
+export function Marks({ marks, now }: { marks: readonly PairedSiteChange[]; now: string }): ReactElement {
+  const instant = new Date(now);
   return (
     <Section
       id="mark"
@@ -18,27 +20,27 @@ export function Marks({ marks }: { marks: readonly LandingMark[] }): ReactElemen
           {marks.map((mark, index) => (
             <li
               key={mark.id}
-              className={mark.ownSite ? "bg-green-wash min-w-0 p-5" : "min-w-0"}
+              className={mark.isSelf ? "bg-green-wash min-w-0 p-5" : "min-w-0"}
               data-captured-at={mark.capturedAt}
-              data-own-site={mark.ownSite ? "true" : "false"}
+              data-own-site={mark.isSelf ? "true" : "false"}
               data-signal-id={mark.id}
             >
               <Mark
-                after={mark.after}
-                before={mark.before}
+                after={mark.mark.added}
+                before={mark.mark.removed}
                 capture={
                   <CapturePlate
-                    after={mark.afterShot}
-                    before={mark.beforeShot}
+                    after={mark.after}
+                    before={mark.before}
                     eager={index === 0}
                     label={mark.headline}
                   />
                 }
                 capturedAt={mark.capturedAt}
                 size="lg"
-                sourceUrl={mark.sourceUrl}
+                sourceUrl={mark.url}
               />
-              <p className="font-mono text-meta text-ink-soft mt-3">{mark.age}</p>
+              <p className="font-mono text-meta text-ink-soft mt-3">{daysAgoLabel(mark.capturedAt, instant)}</p>
             </li>
           ))}
         </ul>

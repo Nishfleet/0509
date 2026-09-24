@@ -3,52 +3,50 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
 import { Marks } from "../../app/components/landing/marks";
-import {
-  landingMarksFromChanges,
-  pickLandingMarks,
-  type LandingMarkInput,
-} from "../../app/lib/landing-marks";
+import { pickLandingMarks, type SiteChangeView } from "../../app/lib/site-change";
 
-const NOW = new Date("2026-09-25T06:00:00.000Z");
+const NOW = "2026-09-25T06:00:00.000Z";
 
-function change(overrides: Partial<LandingMarkInput> & Pick<LandingMarkInput, "id">): LandingMarkInput {
+function view(overrides: Partial<SiteChangeView> & Pick<SiteChangeView, "id">): SiteChangeView {
   return {
+    entityId: overrides.id,
     isSelf: false,
-    url: "https://rival.example/pricing",
-    capturedAt: "2026-09-24 02:10 UTC",
     headline: "Rival changed its pricing page",
-    removed: "Plans from $10.",
-    added: "Plans from $12.",
-    before: { src: "/app/changes/x/before", capturedAt: "2026-09-22 02:00 UTC" },
-    after: { src: "/app/changes/x/after", capturedAt: "2026-09-24 02:10 UTC" },
+    page: "pricing page",
+    url: "https://rival.example/pricing",
+    observedAt: "2026-09-24T02:10:00.000Z",
+    capturedAt: "2026-09-24 02:10 UTC",
+    wordsChanged: 2,
+    sentence: "1 word added, 1 word removed.",
+    mark: { removed: "Plans from $10.", added: "Plans from $12." },
+    before: { src: `/app/changes/${overrides.id}/before`, capturedAt: "2026-09-22 02:00 UTC" },
+    after: { src: `/app/changes/${overrides.id}/after`, capturedAt: "2026-09-24 02:10 UTC" },
     ...overrides,
   };
 }
 
-const ROWS: LandingMarkInput[] = [
-  change({ id: "sig-rival", capturedAt: "2026-09-24 02:10 UTC" }),
-  change({
+const ROWS: SiteChangeView[] = [
+  view({ id: "sig-rival", capturedAt: "2026-09-24 02:10 UTC" }),
+  view({
     id: "sig-own",
     isSelf: true,
     url: "https://own.example/",
-    capturedAt: "2026-09-23 08:00 UTC",
+    capturedAt: "2026-09-23 06:00 UTC",
     headline: "Your homepage changed",
-    removed: "Page loads",
-    added: "Error 503",
+    mark: { removed: "Page loads", added: "Error 503" },
   }),
-  change({
+  view({
     id: "sig-ads",
     url: "https://other.example/home",
     capturedAt: "2026-09-22 11:00 UTC",
     headline: "Other changed its homepage",
-    removed: "Built for teams",
-    added: "Built for everyone",
+    mark: { removed: "Built for teams", added: "Built for everyone" },
   }),
-  change({ id: "sig-fourth", capturedAt: "2026-09-21 01:00 UTC", removed: "Old line", added: "New line" }),
+  view({ id: "sig-fourth", capturedAt: "2026-09-21 01:00 UTC", mark: { removed: "Old line", added: "New line" } }),
 ];
 
-function markup(rows: readonly LandingMarkInput[]): string {
-  return renderToStaticMarkup(createElement(Marks, { marks: landingMarksFromChanges(rows, NOW) }));
+function markup(rows: readonly SiteChangeView[]): string {
+  return renderToStaticMarkup(createElement(Marks, { marks: pickLandingMarks(rows), now: NOW }));
 }
 
 describe("pickLandingMarks", () => {
@@ -58,17 +56,17 @@ describe("pickLandingMarks", () => {
 
   it("drops a one-sided change, a blank line, a bad url and an unreadable time", () => {
     const picked = pickLandingMarks([
-      change({ id: "one-sided", added: null }),
-      change({ id: "blank", removed: "   " }),
-      change({ id: "bad-url", url: "javascript:alert(1)" }),
-      change({ id: "bad-time", capturedAt: "yesterday" }),
-      change({ id: "kept" }),
+      view({ id: "one-sided", mark: { removed: "Plans from $10.", added: null } }),
+      view({ id: "blank", mark: { removed: "   ", added: "Plans from $12." } }),
+      view({ id: "bad-url", url: "javascript:alert(1)" }),
+      view({ id: "bad-time", capturedAt: "yesterday" }),
+      view({ id: "kept" }),
     ]);
     expect(picked.map((row) => row.id)).toEqual(["kept"]);
   });
 
   it("renders what exists when fewer than three real marks are paired", () => {
-    expect(pickLandingMarks([change({ id: "only" })]).map((row) => row.id)).toEqual(["only"]);
+    expect(pickLandingMarks([view({ id: "only" })]).map((row) => row.id)).toEqual(["only"]);
     expect(pickLandingMarks([])).toEqual([]);
   });
 });
@@ -79,15 +77,15 @@ describe("landing marks", () => {
     expect(html.match(/data-size="lg"/g)).toHaveLength(3);
     expect(html).toContain('data-signal-id="sig-own"');
     expect(html).toContain('data-own-site="true"');
-    expect(html).toContain('data-captured-at="2026-09-23 08:00 UTC"');
+    expect(html).toContain('data-captured-at="2026-09-23 06:00 UTC"');
     expect(html).toContain('href="https://own.example/"');
-    expect(html).toContain('dateTime="2026-09-23T08:00:00.000Z"');
+    expect(html).toContain('dateTime="2026-09-23T06:00:00.000Z"');
     expect(html).toContain("Page loads");
     expect(html).toContain("Error 503");
     expect(html).toContain("2 days ago");
-    expect(html).toContain("/design/landing/changes/sig-own/after?w=208");
+    expect(html).toContain("/app/changes/sig-own/after?w=208");
     expect(html).not.toContain("sig-fourth");
-    expect(html).not.toContain("/app/changes/");
+    expect(html).not.toContain("/design/landing/changes/");
 
     const items = html.split('data-signal-id="').slice(1);
     expect(items[0]).toContain('loading="eager"');
@@ -98,7 +96,7 @@ describe("landing marks", () => {
   });
 
   it("renders the marks that exist and never an invented one", () => {
-    const two = markup([change({ id: "a" }), change({ id: "b", url: "https://b.example/" })]);
+    const two = markup([view({ id: "a" }), view({ id: "b", url: "https://b.example/" })]);
     expect(two.match(/data-signal-id=/g)).toHaveLength(2);
     expect(two).not.toContain("€29");
     expect(two.toLowerCase()).not.toContain("sample");
