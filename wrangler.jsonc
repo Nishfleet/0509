@@ -226,8 +226,9 @@
     // The dead-man ping, every five minutes: an external service alerts when
     // the reports stop, which is the one failure a Worker cannot report about
     // itself. Also the nightly delivery sweeper, which re-enqueues stale
-    // pending digests and claims.
-    "crons": ["*/5 * * * *", "0 3 * * *"]
+    // pending digests and claims, and the Monday 04:00 UTC D2 competitor
+    // refresh.
+    "crons": ["*/5 * * * *", "0 3 * * *", "0 4 * * 1"]
   },
 
   "routes": [
