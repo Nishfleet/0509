@@ -2,8 +2,8 @@ import { env } from "cloudflare:test";
 import { beforeAll, describe, expect, it } from "vitest";
 
 import { propsForApiKey } from "../../app/lib/agent/keys.server";
-import { readAgentAlerts, readAgentBrief, readAgentCompetitors } from "../../app/lib/agent/read.server";
 import { toolResult } from "../../app/lib/agent/mcp.server";
+import { readAgentAlerts, readAgentBrief, readAgentCompetitors, readAgentStanding } from "../../app/lib/agent/read.server";
 import { apiResponse, mcpResponse } from "../../app/lib/agent/serve.server";
 import { createAuth } from "../../app/lib/auth.server";
 
@@ -159,7 +159,7 @@ describe("agent access, scoped to one workspace", () => {
     const listed = await mcpResponse(jsonRpc("tools/list"), { userId: a.userId, clientId: "test" });
     expect(listed.status).toBe(200);
     const list = await rpcResult<{ tools: { name: string; annotations: { readOnlyHint: boolean } }[] }>(listed);
-    expect(list.tools.map((tool) => tool.name).sort()).toEqual(["get_brief", "list_alerts", "list_competitors"]);
+    expect(list.tools.map((tool) => tool.name).sort()).toEqual(["get_brief", "get_standing", "list_alerts", "list_competitors"]);
     expect(list.tools.every((tool) => tool.annotations.readOnlyHint)).toBe(true);
 
     const called = await mcpResponse(jsonRpc("tools/call", { name: "list_competitors", arguments: {} }), {
@@ -176,6 +176,18 @@ describe("agent access, scoped to one workspace", () => {
     expect(JSON.stringify(failed)).not.toContain("secret_internal");
     const ok = await toolResult(() => Promise.resolve({ alerts: [] }));
     expect(ok).toMatchObject({ structuredContent: { alerts: [] } });
+  });
+
+  it("reads standing for the caller's workspace and hides a paused competitor", async () => {
+    const standingA = await readAgentStanding(a.workspaceId);
+    expect(standingA.standing?.rank).toBe(2);
+    expect(standingA.standing?.lines.map((line) => line.competitorId)).toEqual(["ent_agent_a"]);
+
+    await env.DB.prepare("UPDATE entity SET state = 'off' WHERE id = 'ent_agent_a'").run();
+    expect((await readAgentStanding(a.workspaceId)).standing?.lines).toEqual([]);
+    await env.DB.prepare("UPDATE entity SET state = 'on' WHERE id = 'ent_agent_a'").run();
+
+    expect(await readAgentStanding(b.workspaceId)).toEqual({ standing: null });
   });
 
   it("refuses a signed-in user who has no workspace yet", async () => {

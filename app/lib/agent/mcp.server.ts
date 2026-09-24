@@ -1,7 +1,7 @@
 import { createMcpHandler, McpServer } from "@modelcontextprotocol/server";
 
-import { readAgentAlerts, readAgentBrief, readAgentCompetitors } from "./read.server";
-import { alertsResultSchema, briefResultSchema, competitorsResultSchema } from "./schemas";
+import { readAgentAlerts, readAgentBrief, readAgentCompetitors, readAgentStanding } from "./read.server";
+import { alertsResultSchema, briefResultSchema, competitorsResultSchema, standingResultSchema } from "./schemas";
 
 const READ_ONLY = { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false };
 const TOOL_FAILED = "Five to Nine could not read this right now. Try again in a minute.";
@@ -26,6 +26,17 @@ function createServer(workspaceId: string): McpServer {
       instructions:
         "Five to Nine watches the user's competitors (ads, website changes, mentions, hiring) and ranks the user against them every week. Everything here is read-only and limited to the signed-in user's own workspace.",
     },
+  );
+
+  server.registerTool(
+    "get_standing",
+    {
+      title: "This week's standing",
+      description: "Where the user ranks against their tracked competitors this week, the movement since last week, the one-line why, and one line per competitor. Paused competitors are left out.",
+      outputSchema: standingResultSchema,
+      annotations: READ_ONLY,
+    },
+    async () => result(await readAgentStanding(workspaceId)),
   );
 
   server.registerTool(
