@@ -60,7 +60,14 @@
     }
   ],
 
-  // The public standing card's pre-rendered artifact (issue #3969, engine 9).
+  // One binding for the one bucket (#4569 had added a second binding to the
+  // same bucket). Two prefixes live in it, each with its own lifecycle rule in
+  // docs/REBUILD-GUARDRAILS.md:
+  //
+  // snapshot/site/ — raw site snapshots, text and screenshot (engine 4),
+  // under the one-year snapshot/ rule.
+  //
+  // card/ — the public standing card's pre-rendered artifact (issue #3969, engine 9).
   // The weekly rollover (engine 6) writes card/<workspace_id>/<week_start_at>/
   // {index.html,og.png} here and /s/<slug> streams it. A binding on the
   // existing 0509-snapshots bucket under the card/ prefix, not a bucket of its
@@ -72,12 +79,7 @@
   // The public-read separation argument is dropped and recorded as dropped:
   // the card objects stay public by serving through the route, while the
   // bucket itself is not exposed as a domain.
-  "r2_buckets": [
-    { "binding": "CARD_ARTIFACTS", "bucket_name": "0509-snapshots" },
-    // Raw site snapshots live under snapshot/site/, covered by the one-year
-    // snapshot/ lifecycle in docs/REBUILD-GUARDRAILS.md.
-    { "binding": "SNAPSHOTS", "bucket_name": "0509-snapshots" }
-  ],
+  "r2_buckets": [{ "binding": "SNAPSHOTS", "bucket_name": "0509-snapshots" }],
 
   // Identity probe cache (engine 1, issue #4419): a read-through cache for
   // probe results keyed identity:<registrable>:<probe> with a 24-hour TTL
@@ -141,6 +143,19 @@
       }
     ]
   },
+
+  // The weekly rollover (docs/engines/standing-home.md §2 and P6.3, 0509#4004).
+  // One instance per workspace per week, id `rollover-<workspace>-<closing
+  // instant>`. The nightly cron re-creates the next one with createBatch,
+  // which skips an id that already exists, so a lost instance is replaced
+  // within a day and a live one is never started twice.
+  "workflows": [
+    {
+      "name": "standing-rollover",
+      "binding": "STANDING_ROLLOVER",
+      "class_name": "StandingRolloverWorkflow"
+    }
+  ],
 
   "triggers": {
     // The dead-man ping, every five minutes: an external service alerts when

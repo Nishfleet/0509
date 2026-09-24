@@ -13,7 +13,7 @@ export type CheckPageResult =
       snapshotId: string;
       previousSnapshotId: string;
       previousTextKey: string;
-      previousScreenshotKey: string;
+      previousScreenshotKey: string | null;
       textKey: string;
       screenshotKey: string | null;
       status: number;
@@ -50,6 +50,10 @@ async function captureScreenshot(url: string, key: string): Promise<string | nul
     logScreenshotMiss(url, err instanceof Error ? err.message : String(err));
     return null;
   }
+}
+
+async function storedKey(key: string): Promise<string | null> {
+  return (await env.SNAPSHOTS.head(key)) === null ? null : key;
 }
 
 export async function checkPage(input: {
@@ -103,7 +107,7 @@ export async function checkPage(input: {
     snapshotId: id,
     previousSnapshotId: previous.id,
     previousTextKey: previous.payload_r2_key,
-    previousScreenshotKey: previous.payload_r2_key.replace(".txt", ".png"),
+    previousScreenshotKey: await storedKey(previous.payload_r2_key.replace(/\.txt$/, ".png")),
     textKey,
     screenshotKey,
     status: read.status,

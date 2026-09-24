@@ -6,9 +6,10 @@ import {
   readCardSettings,
   readWorkspaceIdForOwner,
   rotateCardSlug,
+  setCardIndexable,
   unpublishCard,
 } from "../../../app/lib/data/workspace.server";
-import { serveCard } from "../../../app/lib/card/serve.server";
+import { listIndexableCardSlugs, serveCard } from "../../../app/lib/card/serve.server";
 
 // Engine 9 P9.1 (#3969) against real workerd and real local D1 with the real
 // migrations applied (tests/integration/apply-migrations.ts). The unit under
@@ -35,7 +36,7 @@ async function seedWorkspace(workspaceId = WORKSPACE_ID, userId = USER_ID): Prom
 
 async function seedArtifact(workspaceId: string, weekStartAt: string, html: string): Promise<string> {
   const key = `card/${workspaceId}/${weekStartAt}/index.html`;
-  await env.CARD_ARTIFACTS.put(key, html, { httpMetadata: { contentType: "text/html" } });
+  await env.SNAPSHOTS.put(key, html, { httpMetadata: { contentType: "text/html" } });
   return key;
 }
 
@@ -73,15 +74,15 @@ beforeEach(async () => {
   await env.DB.prepare("DELETE FROM source").run();
   await env.DB.prepare("DELETE FROM workspace").run();
   await env.DB.prepare('DELETE FROM "user"').run();
-  const listed = await env.CARD_ARTIFACTS.list();
-  for (const object of listed.objects) await env.CARD_ARTIFACTS.delete(object.key);
+  const listed = await env.SNAPSHOTS.list();
+  for (const object of listed.objects) await env.SNAPSHOTS.delete(object.key);
   await seedWorkspace();
 });
 
 describe("card publish state (0003_card_publish.sql)", () => {
   it("starts unpublished with no slug", async () => {
     const settings = await readCardSettings(WORKSPACE_ID);
-    expect(settings).toEqual({ published: false, slug: null });
+    expect(settings).toEqual({ published: false, slug: null, indexable: false });
   });
 
   it("mints an opaque url-safe slug on publish and keeps it on a second publish", async () => {
@@ -101,7 +102,7 @@ describe("card publish state (0003_card_publish.sql)", () => {
 
     await unpublishCard(WORKSPACE_ID);
     const settings = await readCardSettings(WORKSPACE_ID);
-    expect(settings).toEqual({ published: false, slug: rotated });
+    expect(settings).toEqual({ published: false, slug: rotated, indexable: false });
 
     const republished = await publishCard(WORKSPACE_ID);
     expect(republished?.slug).toBe(rotated);
@@ -208,5 +209,64 @@ describe("the public serve path", () => {
     const response = await serveCard(settings?.slug ?? "");
     expect(response.status).toBe(200);
     expect(await response.text()).toBe("<html>card without the private mention</html>");
+  });
+});
+
+describe("search listing is opt-in (0010_card_search_opt_in.sql)", () => {
+  it("serves a published card with noindex and keeps it out of the listing by default", async () => {
+    const settings = await publishCard(WORKSPACE_ID);
+    await seedArtifact(WORKSPACE_ID, "2026-09-21T00:00:00Z", "<html>card</html>");
+
+    expect(settings?.indexable).toBe(false);
+    const response = await serveCard(settings?.slug ?? "");
+    expect(response.status).toBe(200);
+    expect(response.headers.get("x-robots-tag")).toBe("noindex");
+    expect(await listIndexableCardSlugs()).toEqual([]);
+  });
+
+  it("drops noindex and lists the slug once the owner opts in", async () => {
+    const settings = await publishCard(WORKSPACE_ID);
+    await seedArtifact(WORKSPACE_ID, "2026-09-21T00:00:00Z", "<html>card</html>");
+
+    expect(await setCardIndexable(WORKSPACE_ID, true)).toBe(true);
+    const response = await serveCard(settings?.slug ?? "");
+    expect(response.status).toBe(200);
+    expect(response.headers.get("x-robots-tag")).toBeNull();
+    expect(await listIndexableCardSlugs()).toEqual([settings?.slug]);
+
+    expect(await setCardIndexable(WORKSPACE_ID, false)).toBe(true);
+    expect((await serveCard(settings?.slug ?? "")).headers.get("x-robots-tag")).toBe("noindex");
+    expect(await listIndexableCardSlugs()).toEqual([]);
+  });
+
+  it("refuses to opt in a card that is not published", async () => {
+    expect(await setCardIndexable(WORKSPACE_ID, true)).toBe(false);
+    expect((await readCardSettings(WORKSPACE_ID))?.indexable).toBe(false);
+  });
+
+  it("forgets the opt-in when the card is turned off, so turning it back on starts unlisted", async () => {
+    await publishCard(WORKSPACE_ID);
+    await setCardIndexable(WORKSPACE_ID, true);
+    await unpublishCard(WORKSPACE_ID);
+    expect((await readCardSettings(WORKSPACE_ID))?.indexable).toBe(false);
+
+    const again = await publishCard(WORKSPACE_ID);
+    expect(again?.indexable).toBe(false);
+    expect(await listIndexableCardSlugs()).toEqual([]);
+  });
+
+  it("never lists an opted-in card whose workspace holds a taken-down subject", async () => {
+    await publishCard(WORKSPACE_ID);
+    await setCardIndexable(WORKSPACE_ID, true);
+    await seedTakenDownSubject(WORKSPACE_ID);
+    expect(await listIndexableCardSlugs()).toEqual([]);
+  });
+
+  it("lists only the workspaces that opted in", async () => {
+    await seedWorkspace("ws-2", "user-2");
+    const listed = await publishCard(WORKSPACE_ID);
+    await publishCard("ws-2");
+    await setCardIndexable(WORKSPACE_ID, true);
+    expect(await listIndexableCardSlugs()).toEqual([listed?.slug]);
   });
 });

@@ -1,10 +1,20 @@
 import { env } from "cloudflare:workers";
 
-const SELECT_PUBLISHED_WORKSPACE = `SELECT id FROM workspace
+const SELECT_PUBLISHED_WORKSPACE = `SELECT id, card_is_indexable FROM workspace
 WHERE card_slug = ? AND card_is_published = 1`;
 
 const SELECT_TAKEDOWN = `SELECT id FROM entity
 WHERE workspace_id = ? AND state = 'dismissed' AND state_reason = 'takedown' LIMIT 1`;
+
+const SELECT_INDEXABLE_SLUGS = `SELECT w.card_slug AS slug FROM workspace w
+WHERE w.card_is_published = 1 AND w.card_is_indexable = 1 AND w.card_slug IS NOT NULL
+AND NOT EXISTS (SELECT 1 FROM entity e WHERE e.workspace_id = w.id AND e.state = 'dismissed' AND e.state_reason = 'takedown')
+ORDER BY w.card_slug LIMIT 50000`;
+
+export async function listIndexableCardSlugs(): Promise<string[]> {
+  const { results } = await env.DB.prepare(SELECT_INDEXABLE_SLUGS).all<{ slug: string }>();
+  return results.map((row) => row.slug);
+}
 
 function notFound(): Response {
   return new Response("Not found", {
@@ -30,6 +40,7 @@ async function newestCardKey(bucket: R2Bucket, workspaceId: string): Promise<str
 
 interface PublishedWorkspace {
   id: string;
+  card_is_indexable: 0 | 1;
 }
 
 export async function serveCard(slug: string): Promise<Response> {
@@ -43,10 +54,10 @@ export async function serveCard(slug: string): Promise<Response> {
     .first<{ id: string }>();
   if (taken !== null) return notFound();
 
-  const key = await newestCardKey(env.CARD_ARTIFACTS, workspace.id);
+  const key = await newestCardKey(env.SNAPSHOTS, workspace.id);
   if (key === null) return notFound();
 
-  const object = await env.CARD_ARTIFACTS.get(key);
+  const object = await env.SNAPSHOTS.get(key);
   if (object === null) return notFound();
 
   return new Response(object.body, {
@@ -55,6 +66,7 @@ export async function serveCard(slug: string): Promise<Response> {
       "content-type": "text/html; charset=utf-8",
       "cache-control": "public, s-maxage=60",
       "x-content-type-options": "nosniff",
+      ...(workspace.card_is_indexable === 1 ? {} : { "x-robots-tag": "noindex" }),
     },
   });
 }
