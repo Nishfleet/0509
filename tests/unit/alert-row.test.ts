@@ -30,6 +30,20 @@ const FAILURE_ITEM: AlertFeedItem = {
   },
 };
 
+const SIGNAL_ITEM: AlertFeedItem = {
+  kind: "signal",
+  id: "mention-sig-1",
+  at: "2026-09-24T01:00:00Z",
+  signal: {
+    id: "mention-sig-1",
+    title: "Alphalete: Alphalete opens a London flagship",
+    body: "news.example.com",
+    url: "https://news.example.com/alphalete-london",
+    created_at: "2026-09-24T01:00:00Z",
+    when: "today",
+  },
+};
+
 function render(item: AlertFeedItem): string {
   return renderToStaticMarkup(createElement(AlertFeedRow, { item, eager: false }));
 }
@@ -54,8 +68,17 @@ describe("an alert feed row", () => {
     expect(html).not.toContain("Read the brief");
   });
 
+  it("links a news row's headline out to the article in a new tab, with the publisher under it", () => {
+    const html = render(SIGNAL_ITEM);
+    expect(html).toContain('data-testid="signal-alert"');
+    expect(html).toContain('href="https://news.example.com/alphalete-london"');
+    expect(html).toContain('rel="noopener noreferrer nofollow"');
+    expect(html).toContain('target="_blank"');
+    expect(html).toContain("news.example.com</p>");
+  });
+
   it("never renders a question id, a probability or a confidence label", () => {
-    const html = `${render(NOTE_ITEM)}${render(FAILURE_ITEM)}`;
+    const html = `${render(NOTE_ITEM)}${render(FAILURE_ITEM)}${render(SIGNAL_ITEM)}`;
     expect(html).not.toMatch(/probability|confidence|question/i);
   });
 });
