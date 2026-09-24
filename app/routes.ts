@@ -23,4 +23,6 @@ export default [
   route("onboarding/competitors", "routes/onboarding.competitors.tsx"),
   route("design/capture-plates", "routes/design.capture-plates.tsx"),
   route("design/brand-switch", "routes/design.brand-switch.tsx"),
+  route("llms.txt", "routes/llms[.]txt.ts"),
+  route("design/landing", "routes/landing.tsx"),
 ] satisfies RouteConfig;
