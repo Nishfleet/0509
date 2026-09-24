@@ -1,3 +1,4 @@
+import { env } from "cloudflare:workers";
 import { z } from "zod";
 
 import { readUrl } from "../fetch/transport.server";
@@ -62,6 +63,11 @@ async function readSiteCard(subject: Subject): Promise<{ card: SiteCard; reached
     console.log(JSON.stringify({ event: "identity-site-unreached", subject: subject.registrable, error: String(error) }));
     return { card: UNREACHED, reached: false };
   }
+}
+
+export async function withinProbeLimit(userId: string): Promise<boolean> {
+  const { success } = await env.PROBE_LIMIT.limit({ key: `user:${userId}` });
+  return success;
 }
 
 export function startCard(subject: Subject): { site: Promise<SiteFields>; logo: Promise<string | null> } {
