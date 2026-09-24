@@ -1,9 +1,19 @@
 import { getDomain, getSubdomain } from "tldts";
 
+export const BOARD_PLATFORMS = [
+  "greenhouse",
+  "lever",
+  "ashby",
+  "workable",
+  "smartrecruiters",
+] as const;
+
+export type BoardPlatform = (typeof BOARD_PLATFORMS)[number];
+
 export interface DiscoveredBoard {
-  platform: "greenhouse" | "lever" | "ashby" | "workable" | "smartrecruiters" | "none";
+  platform: BoardPlatform | "none";
   boardUrl: string | null;
-  via: "nav" | "subdomain" | "none";
+  via: "nav" | "careers-page" | "none";
 }
 
 export interface ProbeResponse {
@@ -12,21 +22,22 @@ export interface ProbeResponse {
   body: string;
 }
 
-export interface DiscoverOptions {
-  probe?: (url: string) => Promise<ProbeResponse>;
-}
+export type Probe = (url: string) => Promise<ProbeResponse>;
 
-type BoardPlatform = "greenhouse" | "lever" | "ashby" | "workable" | "smartrecruiters";
+export interface DiscoverOptions {
+  probe?: Probe;
+}
 
 interface DocumentedHost {
   platform: BoardPlatform;
   aliases: readonly string[];
-  listingUrl: (slug: string) => string;
+  listingUrl: (slug: string, matchedAlias: string) => string;
+  slugFrom: (url: URL) => string | null;
   hasListing: (body: string) => boolean;
 }
 
 interface BoardCandidate {
-  via: "nav" | "subdomain";
+  via: "nav" | "careers-page";
   platform: BoardPlatform;
   boardUrl: string;
   probeUrl: string;
@@ -37,7 +48,7 @@ interface LeadCandidate {
   leadUrl: string;
 }
 
-type NavItem = BoardCandidate | LeadCandidate;
+type LinkItem = BoardCandidate | LeadCandidate;
 
 const PROBE_TIMEOUT_MS = 8_000;
 
@@ -48,6 +59,21 @@ const SLUG_PATTERN = /^[A-Za-z0-9_-]+$/;
 const URL_IN_TEXT = /https?:\/\/[^\s"'<>\\]+/gi;
 
 const CAREERS_LABELS: readonly string[] = ["careers", "jobs", "hiring"];
+
+function firstPathSegment(url: URL): string | null {
+  const first = url.pathname.split("/").find((segment) => segment.length > 0);
+  return first !== undefined && SLUG_PATTERN.test(first) ? first : null;
+}
+
+function querySlug(url: URL, name: string): string | null {
+  const value = url.searchParams.get(name);
+  return value !== null && SLUG_PATTERN.test(value) ? value : null;
+}
+
+function greenhouseSlugFromUrl(url: URL): string | null {
+  const first = firstPathSegment(url);
+  return first === "embed" ? querySlug(url, "for") : first;
+}
 
 function parseJson(body: string): unknown {
   try {
@@ -67,30 +93,38 @@ const DOCUMENTED_HOSTS: readonly DocumentedHost[] = [
     platform: "greenhouse",
     aliases: ["boards.greenhouse.io", "job-boards.greenhouse.io", "job-boards.eu.greenhouse.io"],
     listingUrl: (slug) => `https://boards-api.greenhouse.io/v1/boards/${slug}/jobs`,
+    slugFrom: greenhouseSlugFromUrl,
     hasListing: (body) => textHasField(body, "jobs"),
   },
   {
     platform: "lever",
-    aliases: ["jobs.lever.co"],
-    listingUrl: (slug) => `https://api.lever.co/v0/postings/${slug}?mode=json`,
+    aliases: ["jobs.lever.co", "jobs.eu.lever.co"],
+    listingUrl: (slug, matchedAlias) =>
+      matchedAlias === "jobs.eu.lever.co"
+        ? `https://api.eu.lever.co/v0/postings/${slug}?mode=json`
+        : `https://api.lever.co/v0/postings/${slug}?mode=json`,
+    slugFrom: firstPathSegment,
     hasListing: (body) => Array.isArray(parseJson(body)),
   },
   {
     platform: "ashby",
     aliases: ["jobs.ashbyhq.com"],
     listingUrl: (slug) => `https://api.ashbyhq.com/posting-api/job-board/${slug}`,
+    slugFrom: firstPathSegment,
     hasListing: (body) => textHasField(body, "jobs"),
   },
   {
     platform: "workable",
     aliases: ["apply.workable.com"],
     listingUrl: (slug) => `https://apply.workable.com/api/v1/widget/accounts/${slug}`,
+    slugFrom: firstPathSegment,
     hasListing: (body) => textHasField(body, "jobs"),
   },
   {
     platform: "smartrecruiters",
     aliases: ["jobs.smartrecruiters.com", "careers.smartrecruiters.com"],
     listingUrl: (slug) => `https://api.smartrecruiters.com/v1/companies/${slug}/postings`,
+    slugFrom: firstPathSegment,
     hasListing: (body) => textHasField(body, "content"),
   },
 ];
@@ -103,43 +137,45 @@ function toUrl(value: string): URL | null {
   }
 }
 
-function isCareersSubdomainOf(host: string, domain: string): boolean {
+function firstSubdomainLabel(host: string): string {
+  return getSubdomain(host)?.split(".")[0] ?? "";
+}
+
+function isCareersLead(url: URL, domain: string): boolean {
+  const host = url.hostname.toLowerCase();
   const registrable = getDomain(host);
-  const firstLabel = getSubdomain(host)?.split(".")[0] ?? "";
-  return registrable !== null && registrable === getDomain(domain) && CAREERS_LABELS.includes(firstLabel);
+  if (registrable === null || registrable !== getDomain(domain)) return false;
+  if (CAREERS_LABELS.includes(firstSubdomainLabel(host))) return true;
+  const segment = firstPathSegment(url);
+  return segment !== null && CAREERS_LABELS.includes(segment);
 }
 
 function documentedHostFor(host: string): DocumentedHost | null {
   return DOCUMENTED_HOSTS.find((candidate) => candidate.aliases.includes(host)) ?? null;
 }
 
-function slugFromUrl(url: URL): string | null {
-  const first = url.pathname.split("/").find((segment) => segment.length > 0);
-  return first !== undefined && SLUG_PATTERN.test(first) ? first : null;
-}
-
-function boardCandidate(host: DocumentedHost, matchedAlias: string, slug: string, via: "nav" | "subdomain"): BoardCandidate {
+function boardCandidate(host: DocumentedHost, matchedAlias: string, slug: string, via: "nav" | "careers-page"): BoardCandidate {
   return {
     via,
     platform: host.platform,
     boardUrl: `https://${matchedAlias}/${slug}`,
-    probeUrl: host.listingUrl(slug),
+    probeUrl: host.listingUrl(slug, matchedAlias),
     hasListing: host.hasListing,
   };
 }
 
-function navItemsFor(link: string, domain: string): NavItem[] {
+function linkItemsFor(link: string, domain: string): LinkItem[] {
   const url = toUrl(link);
   if (url?.protocol !== "https:") return [];
   const host = url.hostname.toLowerCase();
 
   const documented = documentedHostFor(host);
   if (documented) {
-    const slug = slugFromUrl(url);
+    const slug = documented.slugFrom(url);
     return slug === null ? [] : [boardCandidate(documented, host, slug, "nav")];
   }
 
-  return isCareersSubdomainOf(host, domain) ? [{ leadUrl: url.href }] : [];
+  return isCareersLead(url, domain) ? [{ leadUrl: url.href }] : [];
 }
 
 function documentedLinksInPage(body: string): BoardCandidate[] {
@@ -160,8 +196,8 @@ function boardCandidateFromText(text: string): BoardCandidate | null {
   const host = url.hostname.toLowerCase();
   const documented = documentedHostFor(host);
   if (documented === null) return null;
-  const slug = slugFromUrl(url);
-  return slug === null ? null : boardCandidate(documented, host, slug, "subdomain");
+  const slug = documented.slugFrom(url);
+  return slug === null ? null : boardCandidate(documented, host, slug, "careers-page");
 }
 
 function isScannablePage(body: string, contentType: string | null): boolean {
@@ -179,12 +215,12 @@ const defaultProbe = async (url: string): Promise<ProbeResponse> => {
 };
 
 export async function discoverBoard(
-  navLinks: readonly string[],
+  links: readonly string[],
   domain: string,
   options: DiscoverOptions = {},
 ): Promise<DiscoveredBoard> {
   const probe = options.probe ?? defaultProbe;
-  const queue: NavItem[] = navLinks.flatMap((link) => navItemsFor(link, domain));
+  const queue: LinkItem[] = links.flatMap((link) => linkItemsFor(link, domain));
 
   while (queue.length > 0) {
     const item = queue.shift();
