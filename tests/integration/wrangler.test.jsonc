@@ -12,6 +12,11 @@
       "name": "standing-rollover-test",
       "binding": "STANDING_ROLLOVER",
       "class_name": "StandingRolloverWorkflow"
+    },
+    {
+      "name": "site-sweep-test",
+      "binding": "SITE_SWEEP",
+      "class_name": "SiteSweepWorkflow"
     }
   ],
   "kv_namespaces": [

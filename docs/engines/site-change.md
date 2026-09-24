@@ -4,6 +4,15 @@ Issue #3879. Umbrella #3842 (charter addendum, Nish 2026-09-21: website change t
 
 The job: snapshot each tracked brand's key pages, detect real changes, let Jev decide what is noteworthy, and show the survivors as before-and-after marks. On the user's own site the same engine guards the house — a break reaches Alerts immediately, not on the weekly cadence.
 
+## As built (2026-09-24)
+
+The first slice runs every night and files real changes. Where it departs from the packets below, and why:
+
+- **Scheduling is the Workflow's own `schedules` entry**, not a Worker cron plus queues. One `site-sweep` instance a night at 02:00 UTC; each page is its own retried `step.do`, and publishing a change is a second step so a retry never loses or duplicates a signal. Queues would need a queue created in the account first, which the deploy token cannot do; a Workflow is created by the deploy itself. Pages run one at a time, so the sweep never holds more than one browser.
+- **Homepages only, for now.** Picking a brand's pricing page is D9, a Jev judgment, and Jev is not reachable from the Worker yet. The `page` table already carries `role`, so pricing pages join the same sweep once D9 is wired.
+- **Changes are filed unjudged.** Every text-hash change becomes a `signal` with the before and after evidence. D3 `noteworthy_change` decides which ones reach customers as marks once Jev is wired; until then the standing's noteworthy bucket counts none of them.
+- **The own-site hourly lane and incidents (P6) are the next slice.**
+
 ---
 
 ## The two candidate shapes
