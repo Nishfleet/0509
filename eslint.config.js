@@ -51,6 +51,21 @@ const ONE_PAVED_PATH_IMPORTS = [
   SONNER_IMPORT,
 ];
 
+const UNSCOPED_WRITER_MESSAGE =
+  "Unscoped system writer: this writer updates by id alone, with no workspace_id, because only workers and workflows call it. A route importing it is a cross-workspace write. Routes go through a workspace-scoped writer instead. Source: 0509#4705.";
+
+const UNSCOPED_WRITER_PATTERNS = [
+  {
+    group: [
+      "**/data/send_attempt.server",
+      "**/data/watch.server",
+      "**/data/incident.server",
+      "**/data/snapshot.server",
+    ],
+    message: UNSCOPED_WRITER_MESSAGE,
+  },
+];
+
 const SUPPORT_ADDRESS_BAN = {
   selector:
     "Literal[value='support@0509.io'], TemplateLiteral[quasis.0.value.raw='support@0509.io'], JSXText[value=/support@0509\\.io/], Literal[value='mailto:support@0509.io']",
@@ -341,6 +356,21 @@ export default tseslint.config(
             ...ONE_PAVED_PATH_IMPORTS.filter((p) => p !== SONNER_IMPORT),
             CLOUDFLARE_WORKERS_IMPORT,
           ],
+        },
+      ],
+    },
+  },
+
+  // Flat config replaces a no-restricted-imports options object wholesale, so
+  // this block must restate both existing route restrictions (0509#4705).
+  {
+    files: ["app/routes/**/*.{ts,tsx}", "app/root.tsx"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          paths: ONE_PAVED_PATH_IMPORTS,
+          patterns: [...PAVED_PATH_PATTERNS, ...UNSCOPED_WRITER_PATTERNS],
         },
       ],
     },
