@@ -355,9 +355,10 @@ describe("per-brand line and own-site status", () => {
 describe("footer", () => {
   it("carries what was checked, the next brief date and the unsubscribe link", () => {
     const { html, text } = renderBrief(payload(), CONTEXT);
-    expect(html).toContain("meta, google_news, ddg");
+    expect(html).toContain("across 3 sources");
+    expect(html).not.toContain("google_news");
     expect(html).toContain("https://0509.io/u/opaque-token");
-    expect(text).toContain("What was checked: 61 mentions, 14 site changes, 9 new ads across meta, google_news, ddg.");
+    expect(text).toContain("What was checked: 61 mentions, 14 site changes, 9 new ads across 3 sources.");
     expect(text).toContain("Next brief:");
     expect(text).toContain("Unsubscribe: https://0509.io/u/opaque-token");
   });
@@ -541,7 +542,7 @@ describe("degraded sources", () => {
       }),
     );
     expect(parsed.checked.degraded_sources).toEqual([
-      { key: "reddit", last_landed_at: "2026-09-19T08:00:00.000Z" },
+      { key: "reddit", name: null, last_landed_at: "2026-09-19T08:00:00.000Z" },
     ]);
   });
 
@@ -552,7 +553,7 @@ describe("degraded sources", () => {
         checked: { degraded_source_keys: ["reddit"] },
       }),
     );
-    expect(parsed.checked.degraded_sources).toEqual([{ key: "reddit", last_landed_at: null }]);
+    expect(parsed.checked.degraded_sources).toEqual([{ key: "reddit", name: null, last_landed_at: null }]);
   });
 
   it("drops an empty key and a blank last-landed time", () => {
@@ -567,7 +568,7 @@ describe("degraded sources", () => {
         },
       }),
     );
-    expect(parsed.checked.degraded_sources).toEqual([{ key: "meta", last_landed_at: null }]);
+    expect(parsed.checked.degraded_sources).toEqual([{ key: "meta", name: null, last_landed_at: null }]);
   });
 
   it("keeps a named source's last-landed time when the same key is also listed", () => {
@@ -581,8 +582,8 @@ describe("degraded sources", () => {
       }),
     );
     expect(parsed.checked.degraded_sources).toEqual([
-      { key: "meta", last_landed_at: "2026-09-19T08:00:00.000Z" },
-      { key: "reddit", last_landed_at: null },
+      { key: "meta", name: null, last_landed_at: "2026-09-19T08:00:00.000Z" },
+      { key: "reddit", name: null, last_landed_at: null },
     ]);
   });
 });

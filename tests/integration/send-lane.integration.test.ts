@@ -385,6 +385,15 @@ describe("send lane (0509#3979)", () => {
     expect(await readAttempts()).toHaveLength(0);
   });
 
+  it("never sends a brief the dead-letter queue marked failed (0509#4375)", async () => {
+    const rec = recorder();
+    const digestId = await seedDigest("failed");
+    const result = await deliver(envWith(bindingFor(rec)), message(digestId));
+    expect(result.outcome).toBe("no_digest");
+    expect(rec.sent).toHaveLength(0);
+    expect(await readAttempts()).toHaveLength(0);
+  });
+
   it("reports no_target when the workspace has no email target", async () => {
     const rec = recorder();
     await env.DB.exec("DELETE FROM send_target");

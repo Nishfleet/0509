@@ -3,6 +3,7 @@ import { z } from "zod";
 import type { BriefPayload } from "../../app/lib/brief-payload";
 import type { BriefSchedule, BriefWeek } from "../../app/lib/brief-schedule";
 import { nextBriefAt } from "../../app/lib/brief-schedule";
+import { sourceName } from "../../app/lib/source-name";
 import { countPhrase } from "../delivery/brief-template";
 
 const RANKED_BRANDS = `SELECT s.entity_id AS entity_id,
@@ -29,6 +30,8 @@ WHERE s.workspace_id = ?1 AND s.observed_at >= ?2 AND s.observed_at < ?3 AND s.i
 GROUP BY s.entity_id`;
 
 const SOURCE_COVERAGE = `SELECT src.key AS key,
+       src.kind AS kind,
+       src.platform AS platform,
        MAX(sn.fetched_at) AS last_landed_at,
        MAX(CASE WHEN sn.fetched_at >= ?2 AND sn.fetched_at < ?3 THEN 1 ELSE 0 END) AS answered
 FROM watch w
@@ -36,7 +39,7 @@ JOIN entity e ON e.id = w.entity_id AND e.workspace_id = ?1 AND e.state = 'on'
 JOIN source src ON src.id = w.source_id AND src.is_enabled = 1
 LEFT JOIN snapshot sn ON sn.watch_id = w.id
 WHERE w.is_active = 1
-GROUP BY src.key
+GROUP BY src.key, src.kind, src.platform
 ORDER BY src.key`;
 
 const OWN_SITE_INCIDENTS = `SELECT p.url AS page_url, i.kind AS kind, i.opened_at AS opened_at, i.closed_at AS closed_at
@@ -70,6 +73,8 @@ const signalCountRows = z.array(
 const sourceCoverageRows = z.array(
   z.object({
     key: z.string(),
+    kind: z.string(),
+    platform: z.string(),
     last_landed_at: z.string().nullable(),
     answered: z.number().int(),
   }),
@@ -167,6 +172,7 @@ export async function composeBrief(db: D1Database, input: ComposeInput): Promise
       degraded_source_keys: degraded.map((source) => source.key),
       degraded_sources: degraded.map((source) => ({
         key: source.key,
+        name: sourceName(source.kind, source.platform),
         last_landed_at: source.last_landed_at,
       })),
     },

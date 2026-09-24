@@ -66,7 +66,7 @@ async function readDigest(env: Env, digestId: string): Promise<MessageRow | null
   return env.DB.prepare(
     `SELECT id, workspace_id, kind, subject, payload_json
        FROM digest
-      WHERE id = ?`,
+      WHERE id = ? AND status <> 'failed'`,
   )
     .bind(digestId)
     .first<MessageRow>();

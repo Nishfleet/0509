@@ -37,6 +37,7 @@ interface BriefOwnSite {
 
 interface BriefDegradedSource {
   key: string;
+  name: string | null;
   last_landed_at: string | null;
 }
 
@@ -187,6 +188,7 @@ export function parseBriefPayload(payloadJson: string): BriefPayload {
     if (typeof row.key !== "string" || row.key.length === 0) return null;
     return {
       key: row.key,
+      name: typeof row.name === "string" && row.name.length > 0 ? row.name : null,
       last_landed_at:
         typeof row.last_landed_at === "string" && row.last_landed_at.length > 0
           ? row.last_landed_at
@@ -203,7 +205,7 @@ export function parseBriefPayload(payloadJson: string): BriefPayload {
     ...namedDegraded,
     ...stringList(checked.degraded_source_keys)
       .filter((key) => !namedDegraded.some((source) => source.key === key))
-      .map((key) => ({ key, last_landed_at: null })),
+      .map((key) => ({ key, name: null, last_landed_at: null })),
   ];
   const checkedCounts: BriefChecked = {
     mention_count: numberOrNull(checked.mention_count) ?? 0,
