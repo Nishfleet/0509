@@ -174,6 +174,31 @@ describe("nightly site sweep", () => {
     expect(rows?.n).toBe(1);
   });
 
+  it("skips the customer's own page when its robots.txt disallows FiveToNineBot, and still reads competitors", async () => {
+    const fetched: string[] = [];
+    vi.stubGlobal("fetch", (input: RequestInfo | URL) => {
+      const url = input instanceof Request ? input.url : String(input);
+      fetched.push(url);
+      return Promise.resolve(
+        url === "https://mybrand.com/robots.txt"
+          ? new Response("User-agent: FiveToNineBot\nDisallow: /\n", { status: 200 })
+          : new Response(readHolder.html, { status: 200 }),
+      );
+    });
+
+    const targets = await planSiteSweep(NOW);
+    const self = targets.find((target) => target.entityId === "ent-self");
+    const rival = targets.find((target) => target.entityId === "ent-rival");
+    if (self === undefined || rival === undefined) {
+      throw new Error("expected the self and rival homepages");
+    }
+
+    expect((await checkSitePage(self, await nextTick("robots-self"))).outcome).toBe("failed");
+    expect(fetched).not.toContain("https://mybrand.com/");
+    expect((await checkSitePage(rival, await nextTick("robots-rival"))).outcome).toBe("first");
+    expect(fetched).not.toContain("https://rival.com/robots.txt");
+  });
+
   it("stops planning a brand once it is turned off", async () => {
     await planSiteSweep(NOW);
     await env.DB.prepare("UPDATE entity SET state = 'off' WHERE id = 'ent-rival'").run();

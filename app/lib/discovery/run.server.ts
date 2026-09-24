@@ -1,5 +1,6 @@
 import { getDomain } from "tldts";
 
+import type { BacklogRow } from "../data/discovery_backlog.server";
 import type { DiscoveryContext, DiscoverySelf } from "../data/entity.server";
 import type { DiscoveryResult } from "../data/suggestion.server";
 import { takenDownAmong } from "../data/takedown.server";
@@ -9,7 +10,8 @@ import { evidenceLine } from "./evidence-line";
 import { hnGenerator } from "./generators/hn";
 import { newsGenerator } from "./generators/news";
 import { resolveDomain } from "./resolve-domain.server";
-import { shortlist } from "./shortlist";
+import { nameKey, partitionShortlist } from "./shortlist";
+import type { ShortlistEntry } from "./shortlist";
 import type { Candidate, Evidence } from "./types";
 
 const EVIDENCE_KEPT = 5;
@@ -43,14 +45,44 @@ async function settledCandidates(self: DiscoverySelf): Promise<Candidate[]> {
   return runs.flatMap((run) => (run.status === "fulfilled" ? run.value : []));
 }
 
-export async function generateShortlist(self: DiscoverySelf): Promise<ShortlistedCandidate[]> {
-  const entries = shortlist(await settledCandidates(self));
-  return entries.map((entry) => ({
-    name: entry.name,
-    domain: entry.domain ?? null,
-    evidence: entry.evidence.slice(0, EVIDENCE_KEPT),
-    line: evidenceLine(entry.evidence),
-  }));
+export function withBacklog(
+  fresh: readonly Candidate[],
+  backlog: readonly Candidate[],
+): { entries: ShortlistEntry[]; rest: BacklogRow[]; promoted: string[] } {
+  const { entries, rest } = partitionShortlist([...backlog, ...fresh]);
+  const placed = new Set(entries.flatMap((entry) => entry.nameKeys));
+  const promoted = [
+    ...new Set(
+      backlog.map((candidate) => nameKey(candidate.name)).filter((key) => placed.has(key)),
+    ),
+  ];
+  return {
+    entries,
+    rest: rest.map((candidate) => ({
+      nameKey: nameKey(candidate.name),
+      name: candidate.name,
+      domain: candidate.domain ?? null,
+      evidence: candidate.evidence,
+    })),
+    promoted,
+  };
+}
+
+export async function generateShortlist(
+  self: DiscoverySelf,
+  backlog: readonly Candidate[],
+): Promise<{ shortlisted: ShortlistedCandidate[]; rest: BacklogRow[]; promoted: string[] }> {
+  const merged = withBacklog(await settledCandidates(self), backlog);
+  return {
+    shortlisted: merged.entries.map((entry) => ({
+      name: entry.name,
+      domain: entry.domain ?? null,
+      evidence: entry.evidence.slice(0, EVIDENCE_KEPT),
+      line: evidenceLine(entry.evidence),
+    })),
+    rest: merged.rest,
+    promoted: merged.promoted,
+  };
 }
 
 async function domainOf(candidate: ShortlistedCandidate): Promise<string | null> {

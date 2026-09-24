@@ -4,7 +4,7 @@ import { beforeAll, describe, expect, it } from "vitest";
 
 import { propsForApiKey } from "../../app/lib/agent/keys.server";
 import { createOAuthProvider } from "../../app/lib/agent/oauth.server";
-import { readAgentAlerts, readAgentBrief, readAgentCompetitors } from "../../app/lib/agent/read.server";
+import { readAgentAlerts, readAgentBrief, readAgentCompetitors, readAgentStanding } from "../../app/lib/agent/read.server";
 import { apiResponse, mcpResponse } from "../../app/lib/agent/serve.server";
 import { createAuth } from "../../app/lib/auth.server";
 
@@ -45,7 +45,7 @@ const PAYLOAD = {
       jev_reason: "They raised prices.",
     },
   ],
-  brands: [{ entity_id: "ent_agent_a", name: "Rival A", rank: 1, movement: 0, is_new: false, biggest_move: null, ad_delta: 2, mention_delta: 0, site_change_count: 1 }],
+  brands: [{ entity_id: "ent_agent_a", name: "Rival A", rank: 1, movement: 0, is_new: false, biggest_move: null, ad_delta: 2, mention_delta: 0, site_change_count: 1, new_roles: 0 }],
   own_site: { status: "ok", incidents: [] },
   checked: { mention_count: 0, site_change_count: 1, new_ad_count: 2, source_keys: [], degraded_source_keys: [], degraded_sources: [] },
   next_brief_at: "2026-09-28T07:00:00.000Z",
@@ -171,7 +171,7 @@ describe("agent access, scoped to one workspace", () => {
     const listed = await mcpResponse(jsonRpc("tools/list"), { userId: a.userId, clientId: "test" });
     expect(listed.status).toBe(200);
     const list = await rpcResult<{ tools: { name: string; annotations: { readOnlyHint: boolean } }[] }>(listed);
-    expect(list.tools.map((tool) => tool.name).sort()).toEqual(["get_brief", "list_alerts", "list_competitors"]);
+    expect(list.tools.map((tool) => tool.name).sort()).toEqual(["get_brief", "get_standing", "list_alerts", "list_competitors"]);
     expect(list.tools.every((tool) => tool.annotations.readOnlyHint)).toBe(true);
 
     const called = await mcpResponse(jsonRpc("tools/call", { name: "list_competitors", arguments: {} }), {
@@ -180,6 +180,18 @@ describe("agent access, scoped to one workspace", () => {
     });
     const call = await rpcResult<{ structuredContent: { tracked: { domain: string }[] } }>(called);
     expect(call.structuredContent.tracked.map((row) => row.domain)).toEqual(["rival-b.example"]);
+  });
+
+  it("reads standing for the caller's workspace and hides a paused competitor", async () => {
+    const standingA = await readAgentStanding(a.workspaceId);
+    expect(standingA.standing?.rank).toBe(2);
+    expect(standingA.standing?.lines.map((line) => line.competitorId)).toEqual(["ent_agent_a"]);
+
+    await env.DB.prepare("UPDATE entity SET state = 'off' WHERE id = 'ent_agent_a'").run();
+    expect((await readAgentStanding(a.workspaceId)).standing?.lines).toEqual([]);
+    await env.DB.prepare("UPDATE entity SET state = 'on' WHERE id = 'ent_agent_a'").run();
+
+    expect(await readAgentStanding(b.workspaceId)).toEqual({ standing: null });
   });
 
   it("refuses a signed-in user who has no workspace yet", async () => {

@@ -92,6 +92,39 @@ export async function insertSiteChange(row: SiteChangeSignal): Promise<void> {
     .run();
 }
 
+export interface RecentSignal {
+  kind: string;
+  title: string | null;
+  summary: string | null;
+  url: string | null;
+  aspect: string | null;
+  observedAt: string;
+}
+
+const SELECT_RECENT_SIGNALS =
+  "SELECT kind, title, summary, url, aspect, observed_at FROM signal WHERE entity_id = ? AND observed_at >= ? AND is_tombstoned = 0 ORDER BY observed_at DESC LIMIT 50";
+
+interface RecentSignalRow {
+  kind: string;
+  title: string | null;
+  summary: string | null;
+  url: string | null;
+  aspect: string | null;
+  observed_at: string;
+}
+
+export async function readRecentSignals(entityId: string, since: string): Promise<RecentSignal[]> {
+  const { results } = await env.DB.prepare(SELECT_RECENT_SIGNALS).bind(entityId, since).all<RecentSignalRow>();
+  return results.map((row) => ({
+    kind: row.kind,
+    title: row.title,
+    summary: row.summary,
+    url: row.url,
+    aspect: row.aspect,
+    observedAt: row.observed_at,
+  }));
+}
+
 export interface SiteChangeRow {
   id: string;
   entity_id: string;
