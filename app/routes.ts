@@ -1,16 +1,18 @@
-import { type RouteConfig, route } from "@react-router/dev/routes";
+import { type RouteConfig, layout, route } from "@react-router/dev/routes";
 
 export default [
   route("login", "routes/login.tsx"),
   route("privacy", "routes/privacy.tsx"),
   route("robots.txt", "routes/robots[.]txt.ts"),
   route("sitemap.xml", "routes/sitemap[.]xml.ts"),
-  route("app", "routes/app.home.tsx"),
-  route("app/competitors", "routes/app.competitors.tsx"),
-  route("app/competitors/:entityId", "routes/app.competitor.tsx"),
-  route("app/alerts", "routes/app.alerts.tsx"),
-  route("app/settings", "routes/app.settings.tsx", [
-    route("card", "routes/settings.card.tsx"),
+  layout("routes/app-layout.tsx", [
+    route("app", "routes/app.home.tsx"),
+    route("app/competitors", "routes/app.competitors.tsx"),
+    route("app/competitors/:entityId", "routes/app.competitor.tsx"),
+    route("app/alerts", "routes/app.alerts.tsx"),
+    route("app/settings", "routes/app.settings.tsx", [
+      route("card", "routes/settings.card.tsx"),
+    ]),
   ]),
   route("s/:slug", "routes/s.$slug.tsx"),
   route("u/:token", "routes/u.$token.tsx"),
@@ -23,4 +25,6 @@ export default [
   route("onboarding/competitors", "routes/onboarding.competitors.tsx"),
   route("design/capture-plates", "routes/design.capture-plates.tsx"),
   route("design/brand-switch", "routes/design.brand-switch.tsx"),
+  route("llms.txt", "routes/llms[.]txt.ts"),
+  route("design/landing", "routes/landing.tsx"),
 ] satisfies RouteConfig;

@@ -238,6 +238,78 @@ describe("acceptSuggestion against migrations/0001_rebuild.sql", () => {
     expect((await suggestionRow(suggestionId))?.entity_id).toBe(entityId);
   });
 
+  it("never turns a taken-down brand back on, and hides it from the maybes", async () => {
+    seededRuns += 1;
+    const n = String(seededRuns);
+    const userId = `user-takedown-${n}`;
+    const workspaceId = `ws-takedown-${n}`;
+    const domain = `takedown-${n}.example`;
+    const entityId = `takedown-${n}`;
+    const suggestionId = `sug-takedown-${n}`;
+
+    await seedUser(userId, `takedown-${n}@example.com`);
+    await seedWorkspace(workspaceId, userId, "Takedown");
+    await env.DB.prepare(
+      `INSERT INTO entity (id, workspace_id, role, domain, name, state, state_reason, state_changed_by, created_at)
+       VALUES (?, ?, 'competitor', ?, ?, 'dismissed', 'takedown', 'auto', ?)`,
+    )
+      .bind(entityId, workspaceId, domain, domain, "2026-09-24T12:00:00.000Z")
+      .run();
+    await seedSuggestion({
+      id: suggestionId,
+      workspaceId,
+      entityId: null,
+      domain,
+      name: "Taken down",
+      reason: "Same buyers",
+      p: 0.9,
+      status: "pending",
+    });
+
+    expect((await readOnboardingCompetitors(workspaceId)).maybes).toEqual([]);
+
+    await acceptSuggestion({ workspaceId, suggestionId, now: "2026-09-24T09:00:00.000Z" });
+
+    const entities = await env.DB.prepare(
+      "SELECT state, state_reason FROM entity WHERE workspace_id = ? AND domain = ?",
+    )
+      .bind(workspaceId, domain)
+      .all<{ state: string; state_reason: string | null }>();
+    expect(entities.results).toEqual([{ state: "dismissed", state_reason: "takedown" }]);
+    expect((await readOnboardingCompetitors(workspaceId)).on).toEqual([]);
+  });
+
+  it("never turns the workspace's own brand into a competitor", async () => {
+    seededRuns += 1;
+    const n = String(seededRuns);
+    const userId = `user-selfsug-${n}`;
+    const workspaceId = `ws-selfsug-${n}`;
+    const domain = `selfsug-${n}.example`;
+    const suggestionId = `sug-selfsug-${n}`;
+
+    await seedUser(userId, `selfsug-${n}@example.com`);
+    await seedWorkspace(workspaceId, userId, "Self");
+    await seedEntity({ id: `self-${n}`, workspaceId, role: "self", domain, state: "on" });
+    await seedSuggestion({
+      id: suggestionId,
+      workspaceId,
+      entityId: null,
+      domain,
+      name: "Self",
+      reason: "Same buyers",
+      p: 0.9,
+      status: "pending",
+    });
+
+    expect((await readOnboardingCompetitors(workspaceId)).maybes).toEqual([]);
+
+    await acceptSuggestion({ workspaceId, suggestionId, now: "2026-09-24T09:00:00.000Z" });
+
+    expect(await entityRows(workspaceId, domain)).toEqual([
+      expect.objectContaining({ role: "self", state: "on" }),
+    ]);
+  });
+
   it("a suggestion id from another workspace changes nothing in either", async () => {
     seededRuns += 1;
     const n = String(seededRuns);

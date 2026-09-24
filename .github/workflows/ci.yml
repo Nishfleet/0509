@@ -202,7 +202,7 @@ jobs:
           SHA: ${{ github.event.deployment.sha }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
-          TITLE="e2e-production red on ${SHA::7}"
+          TITLE="e2e-production red on main"
           FAILED=$(jq -r '.. | objects | select(has("specs")) | .specs[] | select(.ok == false) | "- `\(.file)`: \(.title)"' playwright-report/results.json || echo "- no results.json: the job failed before the suite ran")
           FILES=$(jq -r '[.. | objects | select(has("specs")) | .specs[] | select(.ok == false) | .file] | unique | .[]' playwright-report/results.json || true)
           ROWS=$(printf '%s\n' "$FILES" | grep -v '^$' | grep -F -f - .agents/skills/verify/feature-map.md | cut -d'|' -f2 || true)
@@ -253,7 +253,7 @@ jobs:
           ASSERTIONS: ${{ steps.lhci.outputs.assertionResults }}
           LINKS: ${{ steps.lhci.outputs.links }}
         run: |
-          TITLE="lighthouse red on ${SHA::7}"
+          TITLE="lighthouse red on main"
           FAILED=$(printf '%s' "$ASSERTIONS" | jq -r '.[] | "- \(.auditId) \(.auditProperty // ""): actual \(.actual), budget \(.expected)"' || echo "- no assertion results: the job failed before the audit ran")
           BODY=$(printf "Run: %s\nHead: %s\nReport: %s\n\nFailed budgets (lighthouse-budget.json):\n%s\n\nFeature-map row (.agents/skills/verify/feature-map.md): \`/\`, the audited URL.\n\nPacket rule: reproduce the failure with the verify skill (.agents/skills/verify/) against https://0509.io before changing code, and paste that run in the PR.\n" "$RUN_URL" "$SHA" "$LINKS" "$FAILED")
           N=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search "\"$TITLE\" in:title" --json number --jq '.[0].number // empty')
