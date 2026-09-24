@@ -1,8 +1,10 @@
 import { env } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
 
-import { readHowRankedInputs } from "../../app/lib/how-ranked.server";
+import { parseBriefPayload, type BriefPayload } from "../../app/lib/brief-payload";
+import { readHowRanked, readHowRankedInputs } from "../../app/lib/how-ranked.server";
 import type { BucketCount } from "../../app/lib/standing-score";
+import { refreshWorkspaceScores } from "../../workers/standing/refresh";
 
 /**
  * The "how this is ranked" sheet's read against the real D1 the deploy ships.
@@ -136,6 +138,24 @@ async function seed(): Promise<Seeded> {
   return { workspaceId, entityA, entityB };
 }
 
+function payloadFor(seeded: Seeded): BriefPayload {
+  return parseBriefPayload(
+    JSON.stringify({
+      workspace_id: seeded.workspaceId,
+      timezone: "UTC",
+      period_start: WINDOW_START,
+      period_end: WINDOW_END,
+      headline_rank: 2,
+      headline_total: 2,
+      why_line: "Brand A is the mover.",
+      brands: [
+        { entity_id: seeded.entityA, name: "Brand A" },
+        { entity_id: seeded.entityB, name: "Brand B" },
+      ],
+    }),
+  );
+}
+
 describe("readHowRankedInputs against real D1", () => {
   it("returns the window's bucket counts and drops a signal outside it", async () => {
     const seeded = await seed();
@@ -195,5 +215,27 @@ describe("readHowRankedInputs against real D1", () => {
     );
 
     expect(counts).toEqual([]);
+  });
+});
+
+describe("readHowRanked against real D1", () => {
+  it("is null with no payload, and matches the nightly score for the frozen week", async () => {
+    const seeded = await seed();
+    expect(await readHowRanked(env.DB, null)).toBeNull();
+
+    const sheet = await readHowRanked(env.DB, payloadFor(seeded));
+    const scores = await refreshWorkspaceScores(env.DB, {
+      workspaceId: seeded.workspaceId,
+      weekStartAt: WINDOW_START,
+      windowStartAt: WINDOW_START,
+      windowEndAt: WINDOW_END,
+      computedAt: SEEDED_AT,
+    });
+
+    expect(sheet?.brands).toHaveLength(2);
+    for (const brand of sheet?.brands ?? []) {
+      expect(brand.total).toBeCloseTo(scores.get(brand.entityId) ?? 0);
+    }
+    expect(scores.get(seeded.entityA)).toBeGreaterThan(0);
   });
 });

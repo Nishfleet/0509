@@ -17,6 +17,7 @@ export interface CompetitorEntity {
   domain: string;
   state: CompetitorState;
   stateChangedAt: string | null;
+  stateReason: string | null;
 }
 
 export interface OnCompetitor {
@@ -39,6 +40,7 @@ interface Row {
   domain: string;
   state: CompetitorState;
   state_changed_at: string | null;
+  state_reason: string | null;
 }
 
 export interface RetireQuestion {
@@ -64,7 +66,7 @@ interface MaybeRow {
 }
 
 const SELECT_COMPETITOR =
-  "SELECT id, name, domain, state, state_changed_at FROM entity WHERE id = ? AND workspace_id = ? AND role = 'competitor' AND state IN ('on', 'off')";
+  "SELECT id, name, domain, state, state_changed_at, state_reason FROM entity WHERE id = ? AND workspace_id = ? AND role = 'competitor' AND state IN ('on', 'off')";
 
 const SELECT_ENTITY_DOMAIN = "SELECT domain FROM entity WHERE id = ? AND workspace_id = ?";
 
@@ -97,6 +99,7 @@ export async function readCompetitor(
     domain: row.domain,
     state: row.state,
     stateChangedAt: row.state_changed_at,
+    stateReason: row.state_reason,
   };
 }
 
@@ -263,11 +266,12 @@ const COUNT_OTHER_ON =
 export async function addManualCompetitor(input: {
   workspaceId: string;
   domain: string;
+  name: string | null;
   now: string;
   cap: number;
 }): Promise<"added" | "at_cap"> {
   const result = await env.DB.prepare(INSERT_MANUAL_COMPETITOR)
-    .bind(crypto.randomUUID(), input.workspaceId, input.domain, input.domain, input.now, input.cap)
+    .bind(crypto.randomUUID(), input.workspaceId, input.domain, input.name, input.now, input.cap)
     .run();
   if (result.meta.changes === 1) return "added";
   const count = await env.DB.prepare(COUNT_OTHER_ON)
