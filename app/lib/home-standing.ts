@@ -97,9 +97,10 @@ function rankedRows(payload: BriefPayload, entities: readonly HomeEntity[]): rea
   return payload.brands
     .map((brand) => {
       const entity = byId.get(brand.entity_id);
+      const signals = brand.ad_delta + brand.mention_delta + brand.site_change_count + brand.new_roles;
       return {
         entityId: brand.entity_id,
-        position: brand.rank,
+        position: signals === 0 ? null : brand.rank,
         name: brand.name,
         domain: entity?.domain ?? null,
         movement: movementLabel(brand.movement, brand.is_new),
