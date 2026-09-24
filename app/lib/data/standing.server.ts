@@ -23,6 +23,41 @@ WHERE standing.rank IS NULL`;
 const FREEZE_STANDING_RANK = `UPDATE standing SET rank = ?4, movement = ?5
 WHERE workspace_id = ?1 AND entity_id = ?2 AND week_start_at = ?3`;
 
+export interface RankedStandingRow {
+  entityId: string;
+  name: string;
+  role: "self" | "competitor";
+  rank: number;
+  movement: number | null;
+  weekStartAt: string;
+}
+
+interface Row {
+  entity_id: string;
+  name: string;
+  role: "self" | "competitor";
+  rank: number;
+  movement: number | null;
+  week_start_at: string;
+}
+
+const SELECT_LATEST_RANKED_WEEK = "SELECT s.entity_id, COALESCE(NULLIF(e.name, ''), e.domain) AS name, e.role, s.rank, s.movement, s.week_start_at FROM standing s JOIN entity e ON e.id = s.entity_id WHERE s.workspace_id = ?1 AND s.rank IS NOT NULL AND s.week_start_at = (SELECT MAX(week_start_at) FROM standing WHERE workspace_id = ?1 AND rank IS NOT NULL) ORDER BY s.rank ASC";
+
+export async function readLatestRankedWeek(
+  db: D1Database,
+  workspaceId: string,
+): Promise<RankedStandingRow[]> {
+  const { results } = await db.prepare(SELECT_LATEST_RANKED_WEEK).bind(workspaceId).all<Row>();
+  return results.map((row) => ({
+    entityId: row.entity_id,
+    name: row.name,
+    role: row.role,
+    rank: row.rank,
+    movement: row.movement,
+    weekStartAt: row.week_start_at,
+  }));
+}
+
 export async function upsertStandingScores(
   db: D1Database,
   rows: readonly StandingScore[],
