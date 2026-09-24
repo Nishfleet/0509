@@ -1,0 +1,89 @@
+import { z } from "zod";
+
+import { readUrl } from "../fetch/transport.server";
+import type { SiteFields } from "./card-fields";
+import { extractIdentity } from "./extract";
+import { resolveLogo } from "./logo-cascade";
+import { resolveBrandName } from "./name-cascade";
+import type { Subject } from "./normalise";
+import { cachedProbe } from "./probe-cache.server";
+
+const socialSchema = z.object({ platform: z.string(), url: z.string() });
+
+const siteCardSchema = z.object({
+  name: z.string().nullable(),
+  description: z.string().nullable(),
+  socials: z.array(socialSchema),
+  logoCandidates: z.object({
+    ldOrganizationLogo: z.string().nullable(),
+    ogImage: z.string().nullable(),
+    appleTouchIcon: z.string().nullable(),
+  }),
+});
+
+type SiteCard = z.infer<typeof siteCardSchema>;
+
+const logoSchema = z.object({ url: z.string().nullable() });
+
+const UNREACHED: SiteCard = {
+  name: null,
+  description: null,
+  socials: [],
+  logoCandidates: { ldOrganizationLogo: null, ogImage: null, appleTouchIcon: null },
+};
+
+function wikidataTerm(subject: Subject): string {
+  return subject.registrable.split(".")[0] ?? subject.registrable;
+}
+
+async function probeSite(subject: Subject): Promise<SiteCard> {
+  if (subject.url === null) throw new Error("no site to read");
+  const page = await readUrl(subject.url);
+  if (!page.ok) throw new Error(page.detail);
+  const extract = await extractIdentity(page.html, subject.url);
+  const name = await resolveBrandName(extract.nameSources, wikidataTerm(subject));
+  return {
+    name: name?.name ?? null,
+    description: extract.description,
+    socials: extract.socials,
+    logoCandidates: {
+      ldOrganizationLogo: extract.ldOrganizationLogo,
+      ogImage: extract.ogImage,
+      appleTouchIcon: extract.appleTouchIcon,
+    },
+  };
+}
+
+async function readSiteCard(subject: Subject): Promise<{ card: SiteCard; reached: boolean }> {
+  if (subject.kind !== "domain") return { card: UNREACHED, reached: false };
+  try {
+    return { card: await cachedProbe(subject, "homepage", siteCardSchema, () => probeSite(subject)), reached: true };
+  } catch (error) {
+    console.log(JSON.stringify({ event: "identity-site-unreached", subject: subject.registrable, error: String(error) }));
+    return { card: UNREACHED, reached: false };
+  }
+}
+
+export function startCard(subject: Subject): { site: Promise<SiteFields>; logo: Promise<string | null> } {
+  const read = readSiteCard(subject);
+  const site = read.then(({ card, reached }): SiteFields => ({
+    name: card.name ?? (subject.kind === "domain" ? null : `@${subject.registrable}`),
+    description: card.description,
+    socials: subject.url !== null && subject.kind !== "domain"
+      ? [{ platform: subject.platform ?? "site", url: subject.url }]
+      : card.socials,
+    unfound: subject.kind === "domain" && !reached,
+  }));
+  const logo = read.then(async ({ card, reached }) => {
+    if (!reached) return null;
+    const cached = await cachedProbe(subject, "icon", logoSchema, async () => {
+      const result = await resolveLogo({ ...card.logoCandidates, registrableDomain: subject.registrable });
+      return { url: result.ok ? result.url : null };
+    });
+    return cached.url;
+  }).catch((error: unknown) => {
+    console.log(JSON.stringify({ event: "identity-logo-failed", subject: subject.registrable, error: String(error) }));
+    return null;
+  });
+  return { site, logo };
+}

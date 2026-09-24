@@ -1,21 +1,30 @@
-import { type RouteConfig, route } from "@react-router/dev/routes";
+import { type RouteConfig, layout, route } from "@react-router/dev/routes";
 
 export default [
   route("login", "routes/login.tsx"),
   route("privacy", "routes/privacy.tsx"),
+  route("terms", "routes/terms.tsx"),
   route("robots.txt", "routes/robots[.]txt.ts"),
   route("sitemap.xml", "routes/sitemap[.]xml.ts"),
-  route("app", "routes/app.home.tsx"),
-  route("app/competitors", "routes/app.competitors.tsx"),
-  route("app/competitors/:entityId", "routes/app.competitor.tsx"),
-  route("app/alerts", "routes/app.alerts.tsx"),
-  route("app/settings", "routes/app.settings.tsx", [
-    route("card", "routes/settings.card.tsx"),
+  layout("routes/app-layout.tsx", [
+    route("app", "routes/app.home.tsx"),
+    route("app/competitors", "routes/app.competitors.tsx"),
+    route("app/competitors/:entityId", "routes/app.competitor.tsx"),
+    route("app/alerts", "routes/app.alerts.tsx"),
+    route("app/settings", "routes/app.settings.tsx"),
+    route("app/settings/agents", "routes/settings.agents.tsx"),
   ]),
-  route("s/:slug", "routes/s.$slug.tsx"),
+  route("app/share.png", "routes/app.share[.]png.ts"),
+  route("app/changes/:signalId/:side", "routes/app.change-shot.ts"),
   route("u/:token", "routes/u.$token.tsx"),
   route("api/health", "routes/api.health.ts"),
   route("api/auth/*", "routes/api.auth.$.ts"),
+  route("mcp", "routes/mcp.ts"),
+  route("oauth/authorize", "routes/oauth.authorize.tsx"),
+  route("api/v1/brief", "routes/api.v1.brief.ts"),
+  route("api/v1/competitors", "routes/api.v1.competitors.ts"),
+  route("api/v1/alerts", "routes/api.v1.alerts.ts"),
+  route("api/v1/openapi.json", "routes/api.v1.openapi[.]json.ts"),
   route("onboarding", "routes/onboarding.tsx"),
   route("*", "routes/unmatched.tsx"),
   route("design/brand-chips", "routes/design.brand-chips.tsx"),
@@ -23,4 +32,7 @@ export default [
   route("onboarding/competitors", "routes/onboarding.competitors.tsx"),
   route("design/capture-plates", "routes/design.capture-plates.tsx"),
   route("design/brand-switch", "routes/design.brand-switch.tsx"),
+  route("llms.txt", "routes/llms[.]txt.ts"),
+  route("design/landing", "routes/landing.tsx"),
+  route("onboarding/identity", "routes/onboarding.identity.tsx"),
 ] satisfies RouteConfig;

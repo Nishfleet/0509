@@ -14,8 +14,13 @@ const KEYS = [
   "BETTER_AUTH_SECRET",
   "EMAIL",
   "SEND_EMAIL",
-  "CARD_ARTIFACTS",
+  "SNAPSHOTS",
   "BROWSER",
+  "OAUTH_KV",
+  "AGENT_LIMIT",
+  "SIGN_IN_EMAIL_LIMIT",
+  "SIGN_IN_IP_LIMIT",
+  "AGENT_REGISTER_LIMIT",
 ] as const;
 
 function configured() {
@@ -25,8 +30,13 @@ function configured() {
     BETTER_AUTH_SECRET: "present",
     EMAIL: {},
     SEND_EMAIL: { sendBatch: () => "queued" },
-    CARD_ARTIFACTS: { get: () => "card" },
+    SNAPSHOTS: { get: () => "card" },
     BROWSER: {},
+    OAUTH_KV: { get: () => "grant" },
+    AGENT_LIMIT: { limit: () => ({ success: true }) },
+    SIGN_IN_EMAIL_LIMIT: { limit: () => ({ success: true }) },
+    SIGN_IN_IP_LIMIT: { limit: () => ({ success: true }) },
+    AGENT_REGISTER_LIMIT: { limit: () => ({ success: true }) },
   };
 }
 
@@ -103,8 +113,13 @@ describe("worker env", () => {
       "BETTER_AUTH_SECRET",
       "EMAIL",
       "SEND_EMAIL",
-      "CARD_ARTIFACTS",
+      "SNAPSHOTS",
       "BROWSER",
+      "OAUTH_KV",
+      "AGENT_LIMIT",
+      "SIGN_IN_EMAIL_LIMIT",
+      "SIGN_IN_IP_LIMIT",
+      "AGENT_REGISTER_LIMIT",
     ]);
   });
 

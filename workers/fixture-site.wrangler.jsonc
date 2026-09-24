@@ -7,11 +7,10 @@
 // docs/engines/delivery.md P7.5 requires the incident round-trip to run against
 // this fixture and no other host.
 //
-// The KV binding is declared without an id on purpose, exactly as the e2e
-// inbox's is: wrangler's deploy-time resource provisioning creates the
-// 0509-fixture-site-state namespace on first deploy and keeps it linked across
-// later deploys, even though the id is never written back here (CI deploys have
-// no checkout to write to).
+// The KV binding pins the 0509-fixture-site-state namespace id (#4631): the
+// production deploy token cannot reach the KV namespaces endpoint, so an
+// id-less binding depends on wrangler's deploy-time provisioning and fails
+// with auth error 10000 whenever it has to look the namespace up.
 //
 // The break state has NO TTL and the deploy job never resets it, so it survives
 // deploys: a round-trip that forgets to repair leaves the fixture broken while
@@ -29,6 +28,6 @@
   "observability": {
     "enabled": true
   },
-  "kv_namespaces": [{ "binding": "STATE" }],
+  "kv_namespaces": [{ "binding": "STATE", "id": "da3bc903dec448d7ae445b7b173723bc" }],
   "routes": [{ "pattern": "fixture.0509.in", "custom_domain": true }]
 }

@@ -33,8 +33,8 @@ Umbrella #3842. Author: Fable. Checked by the Opus deputy. Nish's decisions stan
 
 ## Takedown
 
-- Any brand or person can ask to be removed from public standing cards and from tracking by any workspace, by email to the address in the footer. Handled within 72 hours by hand (Nish or the deputy), recorded on a `takedown` row with the subject, the date and the action. A subject on the takedown list is refused at onboarding and dropped from existing workspaces at the next tick, with a one-line note to the owner.
-- Public standing cards show only what docs/REBUILD-STANDING-CARD.md allows; a takedown removes the subject from every card on the next render.
+- Any brand or person can ask to be removed from tracking by any workspace, by email to the address in the footer. Handled within 72 hours by hand (Nish or the deputy), recorded on a `takedown` row with the subject, the date and the action. A subject on the takedown list is refused at onboarding and dropped from existing workspaces at the next tick, with a one-line note to the owner.
+- Share images show only what docs/REBUILD-STANDING-CARD.md allows. They are rendered from live rows, so a subject is out of every share image made after its takedown is recorded.
 
 ### Who reads it
 
@@ -53,13 +53,19 @@ Umbrella #3842. Author: Fable. Checked by the Opus deputy. Nish's decisions stan
 
 ### Recording it
 
-- The takedown row is every `entity` row whose domain is the subject, in every workspace, set to state `dismissed` with `state_reason` `takedown`, `state_changed_by` the handler and `state_changed_at` the time it was done. That is what `app/lib/card/serve.server.ts` reads to drop the subject from a card.
+- The takedown row is one row in the `takedown` table (`migrations/0009_takedown.sql`): the subject exactly as `entity.domain` holds it, the received time as `requested_at`, the time it was done as `actioned_at`, and the handler as `actioned_by`. It is never deleted.
+- Recording it is one statement, and the database does the rest in the same transaction: every competitor row for the subject, in every workspace, becomes `dismissed` with `state_reason` `takedown` (what `app/lib/card/serve.server.ts` reads to drop the subject from a card), each affected owner gets the note on Alerts, and pending suggestions of it are dismissed. From then on no workspace can add, re-suggest or turn it back on, and onboarding refuses it.
+
+```bash
+npx wrangler d1 execute 0509 --remote --command "INSERT INTO takedown (subject, requested_at, actioned_at, actioned_by) VALUES ('example.com', '<received, UTC>', '<now, UTC>', '<handler>')"
+```
+
 - This is a production D1 write, so it needs Nish's yes (CLAUDE.md). The deputy may prepare it; Nish authorizes it.
-- Each affected workspace owner gets the one-line note at the next tick: "<subject> asked to be removed from tracking, so we stopped tracking it."
+- The note each affected owner sees: "<subject> asked to be removed from tracking, so we stopped tracking it."
 
 ### What the requester is told
 
-- Done: "Done. <subject> is no longer tracked by any workspace on Five to Nine and no longer appears on any public standing card. We recorded your request on <date, UTC>."
+- Done: "Done. <subject> is no longer tracked by any workspace on Five to Nine. We recorded your request on <date, UTC>."
 - Refused: we refuse only when the request is about a subject the requester neither is nor says they act for. "We can't act on this request. We remove a brand or creator when they, or someone acting for them, ask. This request is about <subject>, and it does not say you act for them. If you do, reply saying so and we will handle it within 72 hours of your reply."
 
 ### No machinery

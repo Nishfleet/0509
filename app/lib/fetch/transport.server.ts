@@ -1,8 +1,11 @@
 import { env } from "cloudflare:workers";
+import { parse } from "tldts";
 
 const FETCH_TIMEOUT_MS = 8_000;
 
 const MIN_EXTRACTED_CHARS = 200;
+
+const MAX_BODY_BYTES = 5_000_000;
 
 type Transport = "fetch" | "browser";
 
@@ -18,6 +21,8 @@ interface ReadUrlSuccess {
 
 type ReadUrlFailure =
   | { ok: false; reason: "invalid-url"; detail: string }
+  | { ok: false; reason: "unreachable"; detail: string }
+  | { ok: false; reason: "too-large"; detail: string }
   | { ok: false; reason: "escalation-failed"; detail: string };
 
 export type ReadUrlResult = ReadUrlSuccess | ReadUrlFailure;
@@ -108,6 +113,36 @@ function parseBrowserMs(res: Response): number | null {
   return Number.isFinite(value) && value >= 0 ? value : null;
 }
 
+class BodyTooLargeError extends Error {
+  constructor() {
+    super(`body is over ${String(MAX_BODY_BYTES)} bytes`);
+    this.name = "BodyTooLargeError";
+  }
+}
+
+async function cappedText(res: Response): Promise<string> {
+  const declared = Number(res.headers.get("content-length"));
+  if (Number.isFinite(declared) && declared > MAX_BODY_BYTES) {
+    await res.body?.cancel();
+    throw new BodyTooLargeError();
+  }
+  if (res.body === null) return "";
+  let seen = 0;
+  const capped = res.body.pipeThrough(
+    new TransformStream<Uint8Array, Uint8Array>({
+      transform(chunk, controller) {
+        seen += chunk.byteLength;
+        if (seen > MAX_BODY_BYTES) {
+          controller.error(new BodyTooLargeError());
+          return;
+        }
+        controller.enqueue(chunk);
+      },
+    }),
+  );
+  return new Response(capped).text();
+}
+
 export async function readUrl(url: string): Promise<ReadUrlResult> {
   const started = Date.now();
 
@@ -124,6 +159,14 @@ export async function readUrl(url: string): Promise<ReadUrlResult> {
       detail: `unsupported scheme: ${target.protocol}`,
     };
   }
+  const host = parse(target.hostname);
+  if (host.isIp === true || host.isIcann !== true) {
+    return {
+      ok: false,
+      reason: "invalid-url",
+      detail: `not a public internet host: ${target.hostname}`,
+    };
+  }
 
   let fetchStatus: number;
   let fetchHtml: string;
@@ -133,13 +176,20 @@ export async function readUrl(url: string): Promise<ReadUrlResult> {
       signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
     });
     fetchStatus = res.status;
-    fetchHtml = await res.text();
+    fetchHtml = await cappedText(res);
   } catch (err) {
+    if (err instanceof BodyTooLargeError) {
+      return { ok: false, reason: "too-large", detail: err.message };
+    }
+    const detail = `fetch threw (${err instanceof Error ? err.message : String(err)})`;
+    if (!(err instanceof Error && err.name === "TimeoutError")) {
+      return { ok: false, reason: "unreachable", detail };
+    }
     const escalation = await escalate(url, started);
     return escalation.result ?? {
       ok: false,
       reason: "escalation-failed",
-      detail: `fetch threw (${err instanceof Error ? err.message : String(err)}); ${escalation.cause}`,
+      detail: `${detail}; ${escalation.cause}`,
     };
   }
 
@@ -194,7 +244,7 @@ async function escalate(
   let html: string;
   let status: number;
   try {
-    const body: unknown = await res.json();
+    const body: unknown = JSON.parse(await cappedText(res));
     const result = readField(body, "result");
     if (typeof result !== "string") return { result: null, cause: "browser body had no string result" };
     html = result;

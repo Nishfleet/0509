@@ -91,7 +91,7 @@ function brandsBlock(payload: BriefPayload): ReactElement {
 }
 
 function ownSiteBlock(payload: BriefPayload): ReactElement {
-  const fine = payload.own_site.status === "ok" || payload.own_site.incidents.length === 0;
+  const fine = payload.own_site.status === "ok";
   return (
     <section data-brief-block="own-site" className={SECTION}>
       {fine ? (

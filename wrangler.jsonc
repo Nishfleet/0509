@@ -15,6 +15,10 @@
   "name": "0509",
   // >= 2026-08-04, so nodejs_compat is on by default and needs no flag.
   "compatibility_date": "2026-09-16",
+  // Agent sign-in (@cloudflare/workers-oauth-provider) fetches a client's
+  // Client ID Metadata Document by URL; this flag keeps that fetch on the
+  // public internet so a client_id can never reach this zone's own origin.
+  "compatibility_flags": ["global_fetch_strictly_public"],
   "main": "./workers/app.ts",
   "observability": {
     // p95 request duration per route comes from here, which is how
@@ -60,24 +64,10 @@
     }
   ],
 
-  // The public standing card's pre-rendered artifact (issue #3969, engine 9).
-  // The weekly rollover (engine 6) writes card/<workspace_id>/<week_start_at>/
-  // {index.html,og.png} here and /s/<slug> streams it. A binding on the
-  // existing 0509-snapshots bucket under the card/ prefix, not a bucket of its
-  // own: docs/REBUILD-GUARDRAILS.md §3 (merged #4028) already assigns card/
-  // its 90-day expiry plus the 7-day multipart abort, and
-  // docs/engines/standing-card.md says this engine's R2 objects fall under
-  // that same rule. A separate bucket would carry no lifecycle rule and would
-  // name a bucket nobody has created on the first main deploy to reference R2.
-  // The public-read separation argument is dropped and recorded as dropped:
-  // the card objects stay public by serving through the route, while the
-  // bucket itself is not exposed as a domain.
-  "r2_buckets": [
-    { "binding": "CARD_ARTIFACTS", "bucket_name": "0509-snapshots" },
-    // Raw site snapshots live under snapshot/site/, covered by the one-year
-    // snapshot/ lifecycle in docs/REBUILD-GUARDRAILS.md.
-    { "binding": "SNAPSHOTS", "bucket_name": "0509-snapshots" }
-  ],
+  // One binding for the one bucket (#4569 had added a second binding to the
+  // same bucket). snapshot/site/ holds raw site snapshots, text and screenshot
+  // (engine 4), under the one-year snapshot/ rule in docs/REBUILD-GUARDRAILS.md.
+  "r2_buckets": [{ "binding": "SNAPSHOTS", "bucket_name": "0509-snapshots" }],
 
   // Identity probe cache (engine 1, issue #4419): a read-through cache for
   // probe results keyed identity:<registrable>:<probe> with a 24-hour TTL
@@ -85,12 +75,36 @@
   // the doc picks it: the cache is read-mostly, tolerant of the 60-second
   // propagation window and never same-key hot (docs/REBUILD-STACK.md §4.5).
   //
-  // No id on purpose, matching the fixture-site KV binding (also id-less):
-  // wrangler's deploy-time resource provisioning creates the namespace on
-  // first deploy and inherits it from the deployed Worker's settings on later
-  // ones. Creating it here rather than by hand keeps the namespace id out of
-  // git and puts its creation on the deploy Nish approves.
-  "kv_namespaces": [{ "binding": "IDENTITY_CACHE" }],
+  // The id is pinned (#4631). The production CLOUDFLARE_API_TOKEN cannot
+  // reach the KV namespaces endpoint, so an id-less binding sends wrangler to
+  // deploy-time provisioning and every deploy fails with auth error 10000 —
+  // the same failure 225c3eb fixed for the e2e inbox. The namespace is
+  // 0509-identity-cache, the name provisioning would have given it.
+  // tests/wrangler-bindings.test.ts keeps every deployed config pinned.
+  // OAUTH_KV holds agent sign-in state for @cloudflare/workers-oauth-provider:
+  // registered AI apps, grants, and hashed tokens (docs/REBUILD-STACK.md §7.2).
+  // Namespace 0509-oauth, pinned for the same reason as the one above.
+  "kv_namespaces": [
+    { "binding": "IDENTITY_CACHE", "id": "583a3ce85fac4da0b811902674481663" },
+    { "binding": "OAUTH_KV", "id": "c74722e9898d4ea5948e50110d2b9f20" }
+  ],
+
+  // The abuse shield in front of /mcp and /api/v1, keyed per user
+  // (docs/REBUILD-STACK.md §7.4). Per-colo and approximate by design; the exact
+  // per-key quota is the apikey row's own rate limit.
+  "ratelimits": [
+    { "name": "AGENT_LIMIT", "namespace_id": "5091", "simple": { "limit": 120, "period": 60 } },
+    // Sign-in link sends, checked in a better-auth before-hook so the /login
+    // form and a direct POST to /api/auth/sign-in/magic-link are both covered.
+    // Per address (hashed) it stops one inbox being flooded; per IP it slows a
+    // sender spraying many addresses. The IP ceiling leaves room for the
+    // production e2e run, which signs in about a dozen times from one runner.
+    { "name": "SIGN_IN_EMAIL_LIMIT", "namespace_id": "5092", "simple": { "limit": 5, "period": 60 } },
+    { "name": "SIGN_IN_IP_LIMIT", "namespace_id": "5093", "simple": { "limit": 20, "period": 60 } },
+    // Open AI-app registration (/oauth/register) writes a 30-day client row to
+    // OAUTH_KV per call; per client IP, a real app registers once.
+    { "name": "AGENT_REGISTER_LIMIT", "namespace_id": "5094", "simple": { "limit": 10, "period": 60 } }
+  ],
 
   // Browser Rendering: brand pages bot-gate a plain workerd fetch, so every
   // arbitrary-homepage read goes through real Chrome. Measured ~7 s per ads
@@ -102,6 +116,11 @@
   // first and only reaches for this binding when the fetch is refused, so the
   // binding now backs the interactive path as well as the sweep path.
   "browser": { "binding": "BROWSER" },
+
+  // Jev, the typed-decision model (docs/REBUILD-JEV.md), runs as the Workers AI
+  // model typesafe/jev through AI Gateway, paid from the account's AI Gateway
+  // credits (unified billing). No provider key lives in this Worker.
+  "ai": { "binding": "AI" },
 
   // Transactional send only. The weekly brief's standing on this lane is an
   // open question recorded on docs/REBUILD-DELIVERY.md.
@@ -138,6 +157,57 @@
       }
     ]
   },
+
+  // The weekly rollover (docs/engines/standing-home.md §2 and P6.3, 0509#4004).
+  // One instance per workspace per week, id `rollover-<workspace>-<closing
+  // instant>`. The nightly cron re-creates the next one with createBatch,
+  // which skips an id that already exists, so a lost instance is replaced
+  // within a day and a live one is never started twice.
+  "workflows": [
+    {
+      "name": "standing-rollover",
+      "binding": "STANDING_ROLLOVER",
+      "class_name": "StandingRolloverWorkflow"
+    },
+    // Competitor discovery (docs/engines/competitor-discovery.md): one instance
+    // when a workspace confirms its card, then one per workspace per night.
+    {
+      "name": "competitor-discovery",
+      "binding": "DISCOVERY",
+      "class_name": "DiscoveryWorkflow"
+    },
+    // The nightly website sweep (docs/engines/site-change.md). The Workflow's
+    // own schedule creates one instance a night, at 02:00 UTC so the changes
+    // it files land before the 03:00 standing refresh counts them. Each page
+    // is its own retried step; a page that cannot be read fails alone.
+    // Nothing to provision: deploy creates the Workflow, unlike a queue.
+    {
+      "name": "site-sweep",
+      "binding": "SITE_SWEEP",
+      "class_name": "SiteSweepWorkflow",
+      "schedules": ["0 2 * * *"]
+    },
+    // The own-site watch: every hour, each customer's own homepage is
+    // probed once with a plain fetch. A 5xx, 404 or no answer is probed
+    // again five minutes later, and only then opens an incident, pins an
+    // alert and puts { incident_id } on send-email. An open incident whose
+    // page answers cleanly again is closed and gets the one "looks fixed"
+    // email. This is the hourly re-check the incident email promises.
+    // Deleting an account (Settings): better-auth deletes the user and the
+    // database cascades every owned row; this Workflow empties the account's
+    // stored files, one retried step per page of up to 1,000 objects.
+    {
+      "name": "account-delete",
+      "binding": "ACCOUNT_DELETE",
+      "class_name": "AccountDeleteWorkflow"
+    },
+    {
+      "name": "own-site-check",
+      "binding": "OWN_SITE_CHECK",
+      "class_name": "OwnSiteCheckWorkflow",
+      "schedules": ["0 * * * *"]
+    }
+  ],
 
   "triggers": {
     // The dead-man ping, every five minutes: an external service alerts when

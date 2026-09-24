@@ -14,6 +14,7 @@ function markup(message?: string): string {
       name: "subject",
       action: "/onboarding",
       message,
+      submitLabel: "Draw my card",
     }),
   );
 }
@@ -29,10 +30,21 @@ describe("OneInput", () => {
     expect(html).not.toContain("required");
   });
 
+  it("leaves a typed domain or handle as typed on a phone keyboard", () => {
+    const html = markup();
+    expect(html).toContain('autoCapitalize="none"');
+    expect(html).toContain('autoCorrect="off"');
+    expect(html).toContain('spellCheck="false"');
+  });
+
   it("shows the parent copy line as a status when message is set", () => {
     const html = markup(PARENT_COPY);
     expect(html).toContain('role="status"');
     expect(html).toContain("find anything for that, try the main website");
+  });
+
+  it("carries a visible submit button, so the form is not Enter-only", () => {
+    expect(markup()).toMatch(/<button[^>]*type="submit"[^>]*>Draw my card<\/button>/);
   });
 
   it("renders no status when message is absent", () => {
