@@ -99,7 +99,7 @@ const DML_WRITE_SHAPE =
 // `UPDATE ${table} SET …` has `"UPDATE "` as its whole first quasi, which the
 // table-then-SET tail cannot span but end-of-quasi can.
 const RAW_DML_START =
-  `^\\s*(INSERT(\\s+OR\\s+\\w+)?\\s+INTO|REPLACE\\s+INTO|UPDATE\\s+([\\w\".]+\\s+SET\\b|$)|DELETE\\s+FROM` +
+  `^\\s*(INSERT(\\s+OR\\s+\\w+)?\\s+INTO|REPLACE\\s+INTO|UPDATE\\s+([\\w".]+\\s+SET\\b|$)|DELETE\\s+FROM` +
   `|WITH\\b[\\s\\S]*\\b(${DML_WRITE_SHAPE}))`;
 
 const RAW_DML_WRITER = {
