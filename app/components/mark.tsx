@@ -1,4 +1,4 @@
-import type { CSSProperties, ReactElement } from "react";
+import type { CSSProperties, ReactElement, ReactNode } from "react";
 
 const emailPaint = {
   bone: "#f4f1e8",
@@ -19,6 +19,7 @@ export interface MarkProps {
   capturedAt: string;
   size: MarkSize;
   screenshotUrl?: string;
+  capture?: ReactNode;
 }
 
 interface Paint {
@@ -48,6 +49,7 @@ export function Mark({
   capturedAt,
   size,
   screenshotUrl,
+  capture,
 }: MarkProps): ReactElement | null {
   const source = httpUrl(sourceUrl);
   const captured = capturedInstant(capturedAt);
@@ -78,11 +80,11 @@ export function Mark({
         padding: email ? "12px" : undefined,
       }}
     >
-      {shot === null ? (
+      {capture ?? (shot === null ? (
         <p style={{ margin: 0 }}>{screenshotUnavailable}</p>
       ) : (
         <img src={shot} alt={`Capture, ${capturedAt.trim()}`} width={104} height={74} />
-      )}
+      ))}
       <p style={line}>
         <s
           style={{

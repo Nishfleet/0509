@@ -1,4 +1,5 @@
 import { PLANS, TRIAL_TERMS } from "./billing/plans";
+import { WATCHED_NOUNS, WATCHED_ORIGINS } from "./coverage";
 
 export interface FaqEntry {
   question: string;
@@ -11,7 +12,7 @@ export const FAQ: readonly FaqEntry[] = [
   {
     question: "What is Five to Nine?",
     answer:
-      "Five to Nine is a competitor tracker for founders, brands and creators. It watches your rivals' ads, website changes, mentions and hiring, ranks you against them every week, and emails you one brief on Monday with a screenshot behind every change.",
+      `Five to Nine is a competitor tracker for founders, brands and creators. It watches your rivals' ${WATCHED_NOUNS}, ranks you against them every week, and emails you one brief on Monday with a screenshot behind every change.`,
   },
   {
     question: "Do I need to know who my competitors are?",
@@ -25,8 +26,7 @@ export const FAQ: readonly FaqEntry[] = [
   },
   {
     question: "Where does the data come from?",
-    answer:
-      "Public sources only: the ad libraries platforms publish, public web pages, news and public posts, and public job boards. We never log in anywhere, never track private individuals, and never buy personal data.",
+    answer: `Public sources only: ${WATCHED_ORIGINS}. We never log in anywhere, never track private individuals, and never buy personal data.`,
   },
   {
     question: "How much does it cost?",
