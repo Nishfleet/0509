@@ -11,6 +11,9 @@ const BINDING_NAMES = [
   "BROWSER",
   "OAUTH_KV",
   "AGENT_LIMIT",
+  "SIGN_IN_EMAIL_LIMIT",
+  "SIGN_IN_IP_LIMIT",
+  "AGENT_REGISTER_LIMIT",
 ] as const satisfies readonly (keyof Env)[];
 
 const NOTES = {
@@ -23,10 +26,17 @@ const NOTES = {
   BROWSER: "bot-gated page reads cannot escalate",
   OAUTH_KV: "AI apps cannot sign in to /mcp",
   AGENT_LIMIT: "/mcp and /api/v1 have no abuse limit",
+  SIGN_IN_EMAIL_LIMIT: "one inbox can be flooded with sign-in links",
+  SIGN_IN_IP_LIMIT: "one sender can spray sign-in links",
+  AGENT_REGISTER_LIMIT: "anyone can fill OAUTH_KV with app registrations",
   LIVENESS_PING_URL: "absence means no monitor; a set value must be an http(s) URL",
-} as const satisfies Record<(typeof BINDING_NAMES)[number] | "LIVENESS_PING_URL", string>;
+  SITE_SWEEP_PING_URL: "absence means no monitor; a set value must be an http(s) URL",
+} as const satisfies Record<
+  (typeof BINDING_NAMES)[number] | "LIVENESS_PING_URL" | "SITE_SWEEP_PING_URL",
+  string
+>;
 
-const NAMES = [...BINDING_NAMES, "LIVENESS_PING_URL"] as const satisfies readonly (keyof typeof NOTES)[];
+const NAMES = [...BINDING_NAMES, "LIVENESS_PING_URL", "SITE_SWEEP_PING_URL"] as const satisfies readonly (keyof typeof NOTES)[];
 
 type EnvName = (typeof NAMES)[number];
 type Snapshot = Record<(typeof NAMES)[number], unknown>;
@@ -57,7 +67,11 @@ const workerEnvSchema = z.object({
   BROWSER: binding(),
   OAUTH_KV: binding("get"),
   AGENT_LIMIT: binding("limit"),
+  SIGN_IN_EMAIL_LIMIT: binding("limit"),
+  SIGN_IN_IP_LIMIT: binding("limit"),
+  AGENT_REGISTER_LIMIT: binding("limit"),
   LIVENESS_PING_URL: httpUrl.optional(),
+  SITE_SWEEP_PING_URL: httpUrl.optional(),
 });
 
 export class WorkerEnvError extends Error {
@@ -80,8 +94,8 @@ function blank(value: unknown): unknown {
   return trimmed.length === 0 ? undefined : trimmed;
 }
 
-function livenessUrl(): unknown {
-  return blank(Reflect.get(globalThis, "LIVENESS_PING_URL"));
+function globalUrl(name: "LIVENESS_PING_URL" | "SITE_SWEEP_PING_URL"): unknown {
+  return blank(Reflect.get(globalThis, name));
 }
 
 function snapshot(): Snapshot {
@@ -95,7 +109,11 @@ function snapshot(): Snapshot {
     BROWSER: env.BROWSER,
     OAUTH_KV: env.OAUTH_KV,
     AGENT_LIMIT: env.AGENT_LIMIT,
-    LIVENESS_PING_URL: livenessUrl(),
+    SIGN_IN_EMAIL_LIMIT: env.SIGN_IN_EMAIL_LIMIT,
+    SIGN_IN_IP_LIMIT: env.SIGN_IN_IP_LIMIT,
+    AGENT_REGISTER_LIMIT: env.AGENT_REGISTER_LIMIT,
+    LIVENESS_PING_URL: globalUrl("LIVENESS_PING_URL"),
+    SITE_SWEEP_PING_URL: globalUrl("SITE_SWEEP_PING_URL"),
   };
 }
 

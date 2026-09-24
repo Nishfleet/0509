@@ -3,6 +3,10 @@ import { expect, test } from "@playwright/test";
 
 import { requireInboxToken, signInWithMagicLink } from "./inbox";
 
+// Production only, for the reason e2e/onboarding-input.spec.ts gives: the
+// preview lane's wrangler dev has no EMAIL binding and no inbox to read, so a
+// spec that signs in through the real magic link skips there rather than fakes
+// a session. The two tests below are the WCAG 2.2 AA proof for #4149.
 test.skip(
   !process.env.PLAYWRIGHT_TEST_BASE_URL,
   "the onboarding screens need a signed-in session; the preview lane cannot read the magic-link inbox",
@@ -40,13 +44,14 @@ test("the three onboarding screens pass axe at WCAG 2.2 AA in both themes and at
   await input.fill("nike.com");
   await input.press("Enter");
   await expect(page).toHaveURL(/\/onboarding\/identity\?subject=nike\.com$/);
-  await expect(page.getByRole("button", { name: "That's me" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "That's me" })).toBeVisible({ timeout: 30_000 });
 
   for (const colorScheme of ["light", "dark"] as const) {
     for (const width of [1440, 390]) {
       await page.emulateMedia({ colorScheme });
       await page.setViewportSize({ width, height: 900 });
       await page.reload();
+      await expect(page.getByRole("button", { name: "That's me" })).toBeVisible();
       await scan(`identity-${colorScheme}-${width}`);
     }
   }
@@ -77,6 +82,9 @@ test("screen 1 is operable by keyboard in order (#4149)", async ({ page }, testI
 
   const input = page.getByRole("textbox", { name: "your website, or a handle" });
   await expect(input).toBeFocused();
+
+  await page.keyboard.press("Tab");
+  await expect(page.getByRole("button", { name: "Draw my card" })).toBeFocused();
 
   await page.keyboard.press("Tab");
   const passkey = page.getByRole("button", { name: "Add a passkey" });

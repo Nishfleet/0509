@@ -145,7 +145,8 @@ export function parseBriefPayload(payloadJson: string): BriefPayload {
 export function readBriefPayload(payloadJson: string): BriefPayload | null {
   try {
     return parseBriefPayload(payloadJson);
-  } catch {
+  } catch (error) {
+    console.error(JSON.stringify({ event: "brief.payload_unreadable", error: String(error) }));
     return null;
   }
 }

@@ -29,11 +29,21 @@ function refusal(error: unknown): ConsentView | Response {
 }
 
 async function parse(helpers: OAuthHelpers, request: Request): Promise<AuthRequest | ConsentView | Response> {
+  let parsed: AuthRequest;
   try {
-    return await helpers.parseAuthRequest(request);
+    parsed = await helpers.parseAuthRequest(request);
   } catch (error) {
     return refusal(error);
   }
+  if (parsed.codeChallenge) return parsed;
+  return redirect(
+    withParams(parsed.redirectUri, {
+      error: "invalid_request",
+      error_description: "PKCE is required: send code_challenge with code_challenge_method=S256.",
+      state: parsed.state,
+      iss: parsed.issuer,
+    }),
+  );
 }
 
 function hostOf(uri: string): string {

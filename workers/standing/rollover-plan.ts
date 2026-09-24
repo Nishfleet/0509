@@ -1,17 +1,6 @@
 import { z } from "zod";
 
-import type { BriefSchedule } from "../../app/lib/brief-schedule";
-import { instantStamp } from "../../app/lib/brief-schedule";
-
-export interface RolloverParams {
-  workspaceId: string;
-  closesAt: string;
-}
-
-export interface RolloverInstance {
-  id: string;
-  params: RolloverParams;
-}
+import type { BriefSchedule, RolloverInstance, RolloverParams } from "../../app/lib/brief-schedule";
 
 export interface WorkspaceSchedule {
   workspaceId: string;
@@ -51,18 +40,6 @@ export async function readWorkspaceSchedule(
 ): Promise<WorkspaceSchedule | null> {
   const rows = await db.prepare(WORKSPACE_SCHEDULE).bind(workspaceId).all();
   return toSchedules(rows.results)[0] ?? null;
-}
-
-export function rolloverInstance(
-  workspaceId: string,
-  closesAt: Date,
-  kind: "scheduled" | "catch-up",
-): RolloverInstance {
-  const suffix = kind === "catch-up" ? "-catch-up" : "";
-  return {
-    id: `rollover-${workspaceId}-${instantStamp(closesAt)}${suffix}`,
-    params: { workspaceId, closesAt: closesAt.toISOString() },
-  };
 }
 
 export async function createRollovers(

@@ -13,8 +13,14 @@ export type ProbeName =
   | "wikidata-claims"
   | "browser";
 
+function cacheSubject(subject: Subject): string {
+  if (subject.kind !== "domain" || subject.url === null) return subject.registrable;
+  const host = new URL(subject.url).hostname;
+  return host.startsWith("www.") ? host.slice("www.".length) : host;
+}
+
 export function probeKey(subject: Subject, probe: ProbeName): string {
-  return `identity:${subject.registrable}:${probe}`;
+  return `identity:${cacheSubject(subject)}:${probe}`;
 }
 
 export async function readThrough<T>(

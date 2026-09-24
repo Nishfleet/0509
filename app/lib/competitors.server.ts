@@ -1,5 +1,5 @@
 import { addManualCompetitor, setCompetitorState } from "./data/entity.server";
-import { acceptSuggestion, dismissSuggestion } from "./data/suggestion.server";
+import { acceptSuggestion, confirmRetireSuggestion, dismissSuggestion, keepFromRetireSuggestion } from "./data/suggestion.server";
 import { isTakenDown } from "./data/takedown.server";
 import { normaliseSubject } from "./identity/normalise";
 
@@ -17,10 +17,10 @@ function text(form: FormData, name: string): string {
 async function addCompetitor(workspaceId: string, raw: string, now: string): Promise<CompetitorActionResult> {
   const normalised = normaliseSubject(raw);
   if (!normalised.ok || normalised.subject.kind !== "domain") {
-    return { message: "we couldn't read that, try their main website, like brand.com" };
+    return { message: "We couldn't read that. Try their main website, like brand.com." };
   }
   const domain = normalised.subject.registrable;
-  if (await isTakenDown(domain)) return { message: "we can't track that brand" };
+  if (await isTakenDown(domain)) return { message: "That brand asked not to be tracked, so we can't add it." };
   await addManualCompetitor({ workspaceId, domain, now });
   return DONE;
 }
@@ -32,6 +32,14 @@ export async function handleCompetitorIntent(workspaceId: string, form: FormData
   const entityId = text(form, "entityId");
   if (intent === "accept" && suggestionId !== "") {
     await acceptSuggestion({ workspaceId, suggestionId, now });
+    return DONE;
+  }
+  if (intent === "stop" && suggestionId !== "") {
+    await confirmRetireSuggestion({ workspaceId, suggestionId, now });
+    return DONE;
+  }
+  if (intent === "keep" && suggestionId !== "") {
+    await keepFromRetireSuggestion({ workspaceId, suggestionId, now });
     return DONE;
   }
   if (intent === "dismiss" && suggestionId !== "") {

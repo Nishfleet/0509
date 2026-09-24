@@ -49,6 +49,11 @@ JOIN page p ON p.id = i.page_id
 WHERE i.workspace_id = ?1 AND i.opened_at < ?3 AND (i.closed_at IS NULL OR i.closed_at >= ?2)
 ORDER BY i.opened_at ASC`;
 
+const PAUSED_COMPETITORS = `SELECT COALESCE(NULLIF(name, ''), domain) AS name
+FROM entity
+WHERE workspace_id = ?1 AND role = 'competitor' AND state = 'off' AND state_changed_at >= ?2 AND state_changed_at < ?3
+ORDER BY state_changed_at ASC`;
+
 const rankedBrandRows = z.array(
   z.object({
     entity_id: z.string(),
@@ -89,6 +94,8 @@ const incidentRows = z.array(
   }),
 );
 
+const pausedCompetitorRows = z.array(z.object({ name: z.string() }));
+
 export interface ComposeInput {
   workspaceId: string;
   schedule: BriefSchedule;
@@ -99,15 +106,22 @@ function quietWeekLine(mentions: number, siteChanges: number, newAds: number): s
   return `Quiet week: ${countPhrase(mentions, "mention", "mentions")} checked, ${countPhrase(siteChanges, "site change", "site changes")}, ${countPhrase(newAds, "new ad", "new ads")}.`;
 }
 
+export function pausedSentence(names: readonly string[]): string | null {
+  if (names.length === 0) return null;
+  if (names.length === 1) return `${names[0]} paused, so every brand below it moved up.`;
+  return `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]} paused, so every brand below them moved up.`;
+}
+
 export async function composeBrief(db: D1Database, input: ComposeInput): Promise<BriefPayload> {
   const startsAt = input.week.startsAt.toISOString();
   const closesAt = input.week.closesAt.toISOString();
-  const [ranked, frozen, counts, coverage, incidents] = await db.batch([
+  const [ranked, frozen, counts, coverage, incidents, pausedRows] = await db.batch([
     db.prepare(RANKED_BRANDS).bind(input.workspaceId, startsAt),
     db.prepare(PREVIOUS_FROZEN_WEEKS).bind(input.workspaceId, startsAt),
     db.prepare(SIGNAL_COUNTS).bind(input.workspaceId, startsAt, closesAt),
     db.prepare(SOURCE_COVERAGE).bind(input.workspaceId, startsAt, closesAt),
     db.prepare(OWN_SITE_INCIDENTS).bind(input.workspaceId, startsAt, closesAt),
+    db.prepare(PAUSED_COMPETITORS).bind(input.workspaceId, startsAt, closesAt),
   ]);
 
   const brands = rankedBrandRows.parse(ranked.results);
@@ -117,6 +131,7 @@ export async function composeBrief(db: D1Database, input: ComposeInput): Promise
   );
   const sources = sourceCoverageRows.parse(coverage.results);
   const ownSite = incidentRows.parse(incidents.results);
+  const pausedNames = pausedCompetitorRows.parse(pausedRows.results).map((row) => row.name);
 
   const lines = brands.map((brand) => {
     const count = countsByEntity.get(brand.entity_id);
@@ -139,6 +154,9 @@ export async function composeBrief(db: D1Database, input: ComposeInput): Promise
   const self = lines.find((line) => line.entity_id === selfId);
   const degraded = sources.filter((source) => source.answered === 0);
 
+  const pausedLine = pausedSentence(pausedNames);
+  const countsLine = quietWeekLine(mentionCount, siteChangeCount, newAdCount);
+
   return {
     workspace_id: input.workspaceId,
     timezone: input.schedule.timezone,
@@ -148,7 +166,7 @@ export async function composeBrief(db: D1Database, input: ComposeInput): Promise
     headline_total: lines.length,
     headline_movement: self?.movement ?? null,
     headline_is_new: self?.is_new ?? false,
-    why_line: quietWeekLine(mentionCount, siteChangeCount, newAdCount),
+    why_line: pausedLine === null ? countsLine : `${countsLine} ${pausedLine}`,
     is_quiet_week: true,
     read_this_first: [],
     brands: lines,

@@ -1,9 +1,10 @@
-import { env } from "cloudflare:test";
+import { env, introspectWorkflowInstance } from "cloudflare:test";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { checkSitePage, planSiteSweep, publishSiteChange } from "../../../app/lib/site/sweep.server";
 
 const readHolder = { html: "" };
+const calls: string[] = [];
 
 const PAD =
   "Every plan includes unlimited projects, priority support, single sign-on, audit logs, and a named account manager who answers within one business day, with onboarding help for your whole team.";
@@ -75,7 +76,12 @@ describe("nightly site sweep", () => {
     await seedEntity("ent-paused", "competitor", "paused.com", "off");
     await seedEntity("ent-handle", "competitor", "somecreator", "on");
     readHolder.html = BEFORE_HTML;
-    vi.stubGlobal("fetch", () => Promise.resolve(new Response(readHolder.html, { status: 200 })));
+    calls.length = 0;
+    vi.stubGlobal("fetch", (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = input instanceof Request ? input.url : String(input);
+      calls.push([init?.method ?? "GET", url].join(" "));
+      return Promise.resolve(new Response(readHolder.html, { status: 200 }));
+    });
   });
 
   afterEach(() => {
@@ -173,5 +179,15 @@ describe("nightly site sweep", () => {
     await env.DB.prepare("UPDATE entity SET state = 'off' WHERE id = 'ent-rival'").run();
     const targets = await planSiteSweep(NOW);
     expect(targets.map((t) => t.entityId)).toEqual(["ent-self"]);
+  });
+
+  it("pings the sweep's own monitor once, from its last step, when the run completes", async () => {
+    const id = "sweep-ping";
+    await using introspector = await introspectWorkflowInstance(env.SITE_SWEEP, id);
+    await env.SITE_SWEEP.create({ id });
+    await introspector.waitForStatus("complete");
+
+    expect(calls.filter((call) => call === "POST https://hc-ping.example/site-sweep")).toHaveLength(1);
+    expect(await introspector.getOutput()).toMatchObject({ pages: 2 });
   });
 });

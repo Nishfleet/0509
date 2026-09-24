@@ -49,9 +49,8 @@ not so you can follow them from memory — lint will tell you.
 - **Named exports.** `import-x/no-default-export` everywhere except route
   modules, config files, and the workerd entry files. A default export is
   not something you can find with grep.
-- **One paved path per thing.** `kysely` in `app/lib/db.server.ts` only;
-  `better-auth` in `app/lib/auth.server.ts` only. One data layer, one session
-  authority.
+- **One paved path per thing.** `better-auth` in `app/lib/auth.server.ts` only.
+  One session authority. The one data layer is the writer row below.
 - **One writer per table.** Writes live in `app/lib/data/<table>.server.ts`.
   A route that writes directly becomes the second writer the moment a second
   route needs the row.
@@ -156,9 +155,14 @@ check that cannot report blocks the queue forever.
 
 - Nothing merges on its own author's say-so. An independent reviewer or Nish,
   never the author reviewing itself.
-- Production state stays gated: remote D1 migrations, secrets and provider
-  mutations need Nish's explicit authorization. Merging a reviewed green PR is
-  ordinary work; mutating production data is not.
+- Production state stays gated: secrets and provider mutations need Nish's
+  explicit authorization. Merging a reviewed green PR is ordinary work.
+- Migrations (Nish 2026-09-24: "this is allowed too, use your best
+  judgement"): a merge to `main` applies them to production D1, so
+  `/migrations/` is code-owned and needs a code-owner review before merge.
+  The reviewer checks the SQL, re-checks `main` for the next free number, and
+  relies on D1 Time Travel to undo a drop or delete. Data left from the old
+  app may be dropped outright ("meh, delete, the old app had no users").
 - Deploys go through CI. Every push to `main` deploys via
   `.github/workflows/deploy-production.yml`. Local `npm run deploy` is
   break-glass only.
