@@ -1,12 +1,11 @@
-export interface MentionItem {
-	dedupKey: string;
-	title: string;
-	canonicalUrl: string;
-	publishedAt: string | null;
+import type { z } from "zod";
+import type { mentionItemSchema } from "../sources/mentions/types";
+
+export type MentionItem = z.infer<typeof mentionItemSchema> & {
 	author?: string | null;
 	publisher?: string | null;
 	engagement?: Record<string, number> | null;
-}
+};
 
 export interface SignalRowContext {
 	workspaceId: string;
@@ -48,8 +47,7 @@ export async function toSignalRow(
 	item: MentionItem,
 	ctx: SignalRowContext,
 ): Promise<SignalRow> {
-	const payload: Record<string, string> = {};
-	if (item.publisher) payload.publisher = item.publisher;
+	const payload = item.publisher ? { publisher: item.publisher } : {};
 	return {
 		workspace_id: ctx.workspaceId,
 		entity_id: ctx.entityId,
@@ -58,8 +56,8 @@ export async function toSignalRow(
 		snapshot_id: ctx.snapshotId,
 		kind: "mention",
 		title: item.title,
-		canonical_url: item.canonicalUrl,
-		url_hash: await sha256Hex(item.canonicalUrl),
+		canonical_url: item.url,
+		url_hash: await sha256Hex(item.url),
 		dedup_key: item.dedupKey,
 		published_at: item.publishedAt,
 		observed_at: ctx.observedAt,

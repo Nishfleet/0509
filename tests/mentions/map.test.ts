@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { mentionItemSchema } from "../../workers/sources/mentions/types";
 import type { MentionItem } from "../../workers/mentions/map";
 import { toSignalRow } from "../../workers/mentions/map";
 
@@ -17,8 +18,8 @@ const CTX = {
 
 const ITEM: MentionItem = {
 	dedupKey: "a",
+	url: URL_A,
 	title: "t",
-	canonicalUrl: URL_A,
 	publishedAt: "2026-09-23T03:00:00Z",
 	author: "alice",
 };
@@ -31,11 +32,27 @@ describe("toSignalRow", () => {
 
 	it("url_hash is the hex SHA-256 of canonical_url and changes when canonical_url changes", async () => {
 		const a = await toSignalRow(ITEM, CTX);
-		const b = await toSignalRow({ ...ITEM, canonicalUrl: URL_B }, CTX);
+		const b = await toSignalRow({ ...ITEM, url: URL_B }, CTX);
+		expect(a.canonical_url).toBe(URL_A);
+		expect(b.canonical_url).toBe(URL_B);
 		expect(a.url_hash).toBe(SHA256_A);
 		expect(b.url_hash).not.toBe(SHA256_A);
 		expect(a.url_hash).not.toBe(b.url_hash);
 		expect(a.url_hash).toMatch(/^[0-9a-f]{64}$/);
+	});
+
+	it("maps a real adapter item parsed by mentionItemSchema, with no renamed field", async () => {
+		const adapterItem = mentionItemSchema.parse({
+			dedupKey: "a",
+			url: URL_A,
+			title: "t",
+			publishedAt: "2026-09-23T03:00:00Z",
+		});
+		const row = await toSignalRow(adapterItem, CTX);
+		expect(row.canonical_url).toBe(URL_A);
+		expect(row.url_hash).toBe(SHA256_A);
+		expect(row.dedup_key).toBe("a");
+		expect(row.author).toBeNull();
 	});
 
 	it("null publishedAt stays null in published_at", async () => {
@@ -61,7 +78,9 @@ describe("toSignalRow", () => {
 			{ ...ITEM, engagement: { points: 12, replies: 3 } },
 			CTX,
 		);
-		expect(JSON.parse(withEngagement.engagement_json as string)).toEqual({
+		const engagementJson = withEngagement.engagement_json;
+		if (engagementJson === null) throw new Error("expected engagement_json to be set");
+		expect(JSON.parse(engagementJson)).toEqual({
 			points: 12,
 			replies: 3,
 		});
