@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+      - feature-map-probe-4252e
     paths:
       - app/routes.ts
       - app/routes/**

@@ -34,6 +34,7 @@ export default [
   route("design/capture-plates", "routes/design.capture-plates.tsx"),
   route("design/brand-switch", "routes/design.brand-switch.tsx"),
   route("design/competitor", "routes/design.competitor.tsx"),
+  route("design/map-probe", "routes/design.map-probe.tsx"),
   route("llms.txt", "routes/llms[.]txt.ts"),
   route("design/landing", "routes/landing.tsx"),
   route("onboarding/identity", "routes/onboarding.identity.tsx"),
