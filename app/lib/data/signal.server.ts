@@ -232,3 +232,21 @@ const DELETE_ENTITY_SIGNALS = `DELETE FROM signal WHERE workspace_id = ?1 AND en
 export function deleteEntitySignals(workspaceId: string, entityId: string): D1PreparedStatement {
   return env.DB.prepare(DELETE_ENTITY_SIGNALS).bind(workspaceId, entityId);
 }
+
+export interface SignalCount {
+  kind: string;
+  count: number;
+}
+
+const COUNT_SIGNALS_BY_KIND = `SELECT kind, COUNT(*) AS n FROM signal WHERE workspace_id = ?1 AND entity_id = ?2 AND observed_at >= ?3 AND is_tombstoned = 0 GROUP BY kind ORDER BY kind`;
+
+export async function readSignalCounts(
+  workspaceId: string,
+  entityId: string,
+  since: string,
+): Promise<readonly SignalCount[]> {
+  const { results } = await env.DB.prepare(COUNT_SIGNALS_BY_KIND)
+    .bind(workspaceId, entityId, since)
+    .all<{ kind: string; n: number }>();
+  return results.map((row) => ({ kind: row.kind, count: row.n }));
+}

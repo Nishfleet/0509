@@ -10,6 +10,8 @@ describe("document security headers", () => {
     expect(policy).toContain("object-src 'none'");
     expect(policy).toContain("base-uri 'none'");
     expect(policy).toContain("frame-ancestors 'none'");
+    expect(policy).toContain("img-src 'self' data: blob:");
+    expect(policy).not.toMatch(/img-src[^;]*https:/);
   });
 
   it("adds every header without dropping what a route set", () => {
