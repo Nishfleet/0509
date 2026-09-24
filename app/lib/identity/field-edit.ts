@@ -1,3 +1,5 @@
+import type { PopoverRootChangeEventReason } from "@base-ui/react/popover";
+
 export interface FieldEdit {
   committed: string;
   draft: string;
@@ -8,7 +10,7 @@ export type FieldEditAction =
   | { type: "open" }
   | { type: "change"; value: string }
   | { type: "key"; key: string; multiline: boolean }
-  | { type: "dismiss"; reason: string }
+  | { type: "dismiss"; reason: PopoverRootChangeEventReason }
   | { type: "save" }
   | { type: "cancel" };
 
@@ -35,7 +37,19 @@ export function fieldEdit(state: FieldEdit, action: FieldEditAction): FieldEdit 
       if (action.key === "Escape") return cancelled(state);
       return state;
     case "dismiss":
-      return action.reason === "escape-key" ? cancelled(state) : saved(state);
+      switch (action.reason) {
+        case "trigger-press":
+        case "outside-press":
+          return saved(state);
+        case "escape-key":
+        case "trigger-hover":
+        case "trigger-focus":
+        case "focus-out":
+        case "close-press":
+        case "imperative-action":
+        case "none":
+          return cancelled(state);
+      }
     case "save":
       return saved(state);
     case "cancel":

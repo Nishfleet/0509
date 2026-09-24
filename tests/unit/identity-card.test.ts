@@ -1,5 +1,5 @@
 import { createElement } from "react";
-import { renderToPipeableStream, renderToStaticMarkup } from "react-dom/server";
+import { renderToPipeableStream } from "react-dom/server";
 import { PassThrough } from "node:stream";
 import { createMemoryRouter, RouterProvider } from "react-router";
 import { describe, expect, it } from "vitest";
@@ -8,6 +8,25 @@ import { IdentityCard } from "../../app/components/identity-card";
 import type { SiteFields } from "../../app/lib/identity/card-fields";
 import { confirmSchema, readConfirmFields } from "../../app/lib/identity/confirm-fields";
 import { closedFieldEdit, fieldEdit } from "../../app/lib/identity/field-edit";
+
+function routerFor(props: {
+  site: Promise<SiteFields>;
+  logo: Promise<string | null>;
+  message?: string | undefined;
+}) {
+  return createMemoryRouter([
+    {
+      path: "/",
+      element: createElement(IdentityCard, {
+        subject: "https://www.gymshark.com/",
+        domain: "gymshark.com",
+        site: props.site,
+        logo: props.logo,
+        message: props.message,
+      }),
+    },
+  ]);
+}
 
 function render(element: React.ReactElement): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -23,24 +42,40 @@ function render(element: React.ReactElement): Promise<string> {
   });
 }
 
+// Streams the shell first so a test can see the pending rows, then hands back
+// the settled markup once the site promise resolves.
+function streamCard(props: {
+  site: Promise<SiteFields>;
+  logo: Promise<string | null>;
+  message?: string | undefined;
+}): { shell: Promise<string>; finished: Promise<string> } {
+  let html = "";
+  let shellSettled = false;
+  let resolveShell!: (value: string) => void;
+  let resolveFinished!: (value: string) => void;
+  const shell = new Promise<string>((r) => { resolveShell = r; });
+  const finished = new Promise<string>((r) => { resolveFinished = r; });
+  const sink = new PassThrough();
+  sink.on("data", (chunk) => {
+    html += String(chunk);
+    if (!shellSettled) {
+      shellSettled = true;
+      resolveShell(html);
+    }
+  });
+  sink.on("end", () => resolveFinished(html));
+  const { pipe } = renderToPipeableStream(createElement(RouterProvider, { router: routerFor(props) }), {
+    onShellReady() { pipe(sink); },
+  });
+  return { shell, finished };
+}
+
 function card(props: {
   site: Promise<SiteFields>;
   logo: Promise<string | null>;
   message?: string | undefined;
 }): Promise<string> {
-  const router = createMemoryRouter([
-    {
-      path: "/",
-      element: createElement(IdentityCard, {
-        subject: "https://www.gymshark.com/",
-        domain: "gymshark.com",
-        site: props.site,
-        logo: props.logo,
-        message: props.message,
-      }),
-    },
-  ]);
-  return render(createElement(RouterProvider, { router }));
+  return render(createElement(RouterProvider, { router: routerFor(props) }));
 }
 
 async function resolved<T>(value: T): Promise<T> {
@@ -147,15 +182,20 @@ describe("IdentityCard", () => {
     expect(region).not.toContain("couldn");
   });
 
-  it("shows the pending field rows inside the live region until the site lands", async () => {
+  it("shows the pending field rows inside the live region until the site lands, then swaps in the resolved rows", async () => {
     let settle!: (value: SiteFields) => void;
     const site = new Promise<SiteFields>((r) => { settle = r; });
-    const html = renderToStaticFallback(site);
-    const region = liveRegion(html);
-    expect(region).toContain("looking on the site");
-    expect(region).toContain("gymshark.com");
+    const streamed = streamCard({ site, logo: resolved(null) });
+    const shell = await streamed.shell;
+    const pendingRegion = liveRegion(shell);
+    expect(pendingRegion).toContain("looking on the site");
+    expect(pendingRegion).toContain("gymshark.com");
+    expect(shell).not.toContain("That&#x27;s me");
     settle(SITE);
-    await site;
+    const finished = await streamed.finished;
+    expect(finished).toContain(">Gymshark<");
+    expect(finished).toContain("Edit name");
+    expect(finished).toContain("That&#x27;s me");
   });
 
   it("submits every field confirmCard reads, parsed by the same module the action uses", async () => {
@@ -165,7 +205,7 @@ describe("IdentityCard", () => {
     });
     const form = new FormData();
     for (const [, name, value] of html.matchAll(/<input\b[^>]*\bname="([^"]*)"[^>]*\bvalue="([^"]*)"/g)) {
-      form.set(name, decode(value));
+      form.set(name, value);
     }
     const parsed = confirmSchema.safeParse(readConfirmFields(form));
     expect(parsed.success).toBe(true);
@@ -174,13 +214,6 @@ describe("IdentityCard", () => {
       expect(parsed.data.description).toBe("gym clothes");
       expect(parsed.data.socials).toEqual([{ platform: "instagram", url: "https://www.instagram.com/gymshark/" }]);
     }
-  });
-
-  it("decodes html entities in &value&quot;&gt;&amp;&lt&#x27; order so &amp; is the last pass (regression for double-unescape)", () => {
-    expect(decode("a &amp; b")).toBe("a & b");
-    expect(decode("&amp;lt;")).toBe("&lt;");
-    expect(decode("&quot;hi&quot;")).toBe('"hi"');
-    expect(decode("It&#x27;s")).toBe("It's");
   });
 });
 
@@ -210,37 +243,25 @@ describe("fieldEdit", () => {
     expect(cancelled).toEqual({ committed: "Gymshark", draft: "Gymshark", open: false });
   });
 
-  it("saves on dismiss for outside press and cancels for escape-key", () => {
+  it("saves on outside press / trigger-press and cancels on escape-key", () => {
     const typing = fieldEdit({ ...SEED, open: true }, { type: "change", value: "GymShark" });
     expect(fieldEdit(typing, { type: "dismiss", reason: "outside-press" })).toEqual({
+      committed: "GymShark", draft: "GymShark", open: false,
+    });
+    expect(fieldEdit(typing, { type: "dismiss", reason: "trigger-press" })).toEqual({
       committed: "GymShark", draft: "GymShark", open: false,
     });
     const cancelled = fieldEdit(typing, { type: "dismiss", reason: "escape-key" });
     expect(cancelled).toEqual({ committed: "Gymshark", draft: "Gymshark", open: false });
   });
+
+  it("cancels on trigger-hover and imperative close, never silently saving", () => {
+    const typing = fieldEdit({ ...SEED, open: true }, { type: "change", value: "GymShark" });
+    expect(fieldEdit(typing, { type: "dismiss", reason: "imperative-action" })).toEqual({
+      committed: "Gymshark", draft: "Gymshark", open: false,
+    });
+    expect(fieldEdit(typing, { type: "dismiss", reason: "trigger-hover" })).toEqual({
+      committed: "Gymshark", draft: "Gymshark", open: false,
+    });
+  });
 });
-
-function decode(value: string): string {
-  return value
-    .replaceAll("&quot;", '"')
-    .replaceAll("&#x27;", "'")
-    .replaceAll("&lt;", "<")
-    .replaceAll("&gt;", ">")
-    .replaceAll("&amp;", "&");
-}
-
-function renderToStaticFallback(site: Promise<SiteFields>): string {
-  const router = createMemoryRouter([
-    {
-      path: "/",
-      element: createElement(IdentityCard, {
-        subject: "https://www.gymshark.com/",
-        domain: "gymshark.com",
-        site,
-        logo: new Promise<string | null>(() => undefined),
-        message: undefined,
-      }),
-    },
-  ]);
-  return renderToStaticMarkup(createElement(RouterProvider, { router }));
-}

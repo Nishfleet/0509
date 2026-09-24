@@ -257,13 +257,13 @@ export function IdentityCard({
                 </p>
               ) : null}
               {message ? <p className="pt-3 text-[0.88rem]">{message}</p> : null}
+              <Button type="submit" size="lg" className="my-5 min-h-11">
+                That&apos;s me
+              </Button>
             </>
           )}
         </Await>
       </Suspense>
-      <Button type="submit" size="lg" className="my-5 min-h-11">
-        That&apos;s me
-      </Button>
     </Form>
   );
 }
