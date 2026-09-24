@@ -7,7 +7,11 @@ import { normaliseSubject } from "../../../app/lib/identity/normalise";
 import gym from "../../fixtures/gymshark-2026-09-22-a.html?raw";
 
 const NOW = "2026-09-24T00:00:00Z";
-const LOGO = "images.ctfassets.net";
+const LOGO_HOST = "images.ctfassets.net";
+
+function isLogo(url: string): boolean {
+  return new URL(url).hostname === LOGO_HOST;
+}
 
 function subjectFor(input: string) {
   const normalised = normaliseSubject(input);
@@ -20,7 +24,7 @@ function stubWeb(homepage: (url: string) => Response) {
   vi.stubGlobal("fetch", (input: RequestInfo | URL) => {
     const url = input instanceof Request ? input.url : String(input);
     calls.push(url);
-    if (url.includes(LOGO)) return Promise.resolve(new Response("png", { status: 200 }));
+    if (isLogo(url)) return Promise.resolve(new Response("png", { status: 200 }));
     return Promise.resolve(homepage(url));
   });
   return calls;
@@ -67,7 +71,7 @@ describe("startCard", () => {
     const calls = stubWeb(() => new Response(gym, { status: 200 }));
     await startCard(subjectFor("gymshark.com")).site;
     await startCard(subjectFor("https://www.gymshark.com/")).site;
-    expect(calls.filter((url) => !url.includes(LOGO))).toEqual(["https://gymshark.com/"]);
+    expect(calls.filter((url) => !isLogo(url))).toEqual(["https://gymshark.com/"]);
   });
 
   it("says nothing was found when the site cannot be read, and caches nothing", async () => {
