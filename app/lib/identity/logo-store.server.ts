@@ -1,6 +1,8 @@
 import { env } from "cloudflare:workers";
 import { parse } from "tldts";
 
+import { readEntityDomain } from "../data/entity.server";
+
 const MAX_LOGO_BYTES = 1_000_000;
 
 const FETCH_TIMEOUT_MS = 8_000;
@@ -103,4 +105,10 @@ export async function storeLogo(
 
 export function readLogo(registrable: string): Promise<R2ObjectBody | null> {
   return env.SNAPSHOTS.get(logoKey(registrable));
+}
+
+export async function readEntityLogo(workspaceId: string, entityId: string): Promise<R2ObjectBody | null> {
+  const domain = await readEntityDomain(workspaceId, entityId);
+  if (domain === null) return null;
+  return readLogo(domain);
 }
