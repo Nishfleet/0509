@@ -1,7 +1,7 @@
 import type { BriefPayload } from "./brief-payload";
 import type { BriefSchedule } from "./brief-schedule";
 import { homeStanding } from "./home-standing";
-import type { HomeEntity } from "./home-standing";
+import type { HomeCount, HomeEntity, HomeSource } from "./home-standing";
 
 export interface ShareCard {
   brand: string;
@@ -20,6 +20,8 @@ function weekLabel(periodEnd: string, timezone: string): string {
 export function shareCard(input: {
   payload: BriefPayload | null;
   entities: readonly HomeEntity[];
+  sources: readonly HomeSource[];
+  counts: readonly HomeCount[];
   schedule: BriefSchedule;
   now: Date;
 }): ShareCard | null {

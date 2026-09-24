@@ -1,12 +1,32 @@
 import type { BriefPayload } from "./brief-payload";
 import type { BriefSchedule } from "./brief-schedule";
 import { nextBriefAt } from "./brief-schedule";
+import { sourceName } from "./source-name";
 
 export interface HomeEntity {
   id: string;
   role: "self" | "competitor";
   domain: string;
   state: string;
+}
+
+export interface HomeSource {
+  key: string;
+  kind: "site" | "ads" | "mentions" | "hiring";
+  platform: string;
+}
+
+export interface HomeCount {
+  entityId: string;
+  sourceKey: string;
+  count: number;
+}
+
+export interface HomePill {
+  key: string;
+  label: string;
+  count: number;
+  state: "live" | "none" | "degraded";
 }
 
 export interface HomeRow {
@@ -16,6 +36,9 @@ export interface HomeRow {
   domain: string | null;
   movement: string;
   self: boolean;
+  signals: number;
+  why: string | null;
+  pills: readonly HomePill[];
 }
 
 export type HomeStanding =
@@ -92,11 +115,23 @@ function byRank(a: HomeRow, b: HomeRow): number {
   return a.position - b.position;
 }
 
-function rankedRows(payload: BriefPayload, entities: readonly HomeEntity[]): readonly HomeRow[] {
+function rankedRows(
+  payload: BriefPayload,
+  entities: readonly HomeEntity[],
+  sources: readonly HomeSource[],
+  counts: readonly HomeCount[],
+): readonly HomeRow[] {
   const byId = new Map(entities.map((entity) => [entity.id, entity]));
+  const degraded = new Set(payload.checked.degraded_sources.map((source) => source.key));
   return payload.brands
     .map((brand) => {
       const entity = byId.get(brand.entity_id);
+      const pills = sources.map((source) => {
+        const count =
+          counts.find((row) => row.entityId === brand.entity_id && row.sourceKey === source.key)?.count ?? 0;
+        const state: HomePill["state"] = degraded.has(source.key) ? "degraded" : count === 0 ? "none" : "live";
+        return { key: source.key, label: sourceName(source.kind, source.platform), count, state };
+      });
       return {
         entityId: brand.entity_id,
         position: brand.rank,
@@ -104,6 +139,9 @@ function rankedRows(payload: BriefPayload, entities: readonly HomeEntity[]): rea
         domain: entity?.domain ?? null,
         movement: movementLabel(brand.movement, brand.is_new),
         self: entity?.role === "self",
+        signals: pills.reduce((total, pill) => total + pill.count, 0),
+        why: brand.biggest_move,
+        pills,
       };
     })
     .sort(byRank);
@@ -112,6 +150,8 @@ function rankedRows(payload: BriefPayload, entities: readonly HomeEntity[]): rea
 export function homeStanding(input: {
   payload: BriefPayload | null;
   entities: readonly HomeEntity[];
+  sources: readonly HomeSource[];
+  counts: readonly HomeCount[];
   schedule: BriefSchedule;
   now: Date;
 }): HomeStanding {
@@ -127,13 +167,15 @@ export function homeStanding(input: {
     rank,
     total: payload.headline_total,
     whyLine: payload.why_line,
-    rows: rankedRows(payload, input.entities),
+    rows: rankedRows(payload, input.entities, input.sources, input.counts),
   };
 }
 
 export function homeView(input: {
   payload: BriefPayload | null;
   entities: readonly HomeEntity[];
+  sources: readonly HomeSource[];
+  counts: readonly HomeCount[];
   schedule: BriefSchedule;
   now: Date;
 }): HomeView {

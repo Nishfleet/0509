@@ -70,6 +70,8 @@ function render(input: { payload: BriefPayload | null; entities?: readonly HomeE
   const view = homeView({
     payload: input.payload,
     entities: input.entities ?? ENTITIES,
+    sources: [],
+    counts: [],
     schedule: SCHEDULE,
     now: THURSDAY_MORNING,
   });
@@ -86,7 +88,14 @@ describe("Home standing", () => {
   });
 
   it("lists every ranked brand in rank order with its domain and movement, yours marked", () => {
-    const standing = homeStanding({ payload: payload(), entities: ENTITIES, schedule: SCHEDULE, now: THURSDAY_MORNING });
+    const standing = homeStanding({
+      payload: payload(),
+      entities: ENTITIES,
+      sources: [],
+      counts: [],
+      schedule: SCHEDULE,
+      now: THURSDAY_MORNING,
+    });
     expect(standing.kind).toBe("ranked");
     if (standing.kind !== "ranked") return;
     expect(standing.rows.map((row) => [row.position, row.name, row.domain, row.movement, row.self])).toEqual([
@@ -104,6 +113,8 @@ describe("Home standing", () => {
     const standing = homeStanding({
       payload: payload({ brands: [brand("ent_casetta", "Casetta", null, null), brand("ent_self", "Own Brand", 1, null)] }),
       entities: ENTITIES,
+      sources: [],
+      counts: [],
       schedule: SCHEDULE,
       now: THURSDAY_MORNING,
     });
@@ -159,10 +170,24 @@ describe("Home standing", () => {
       { id: "ent_casetta", role: "competitor", domain: "casetta.example", state: "on" },
       { id: "ent_hollow", role: "competitor", domain: "hollow.example", state: "on" },
     ];
-    const four = homeView({ payload: payload(), entities: fourOn, schedule: amsterdamSchedule, now });
+    const four = homeView({
+      payload: payload(),
+      entities: fourOn,
+      sources: [],
+      counts: [],
+      schedule: amsterdamSchedule,
+      now,
+    });
     expect(four.footer).toBe("Checked 4 brands this week · brief Monday 08:00 · your site re-checked at 13:00");
 
-    const one = homeView({ payload: payload(), entities: [SELF], schedule: amsterdamSchedule, now });
+    const one = homeView({
+      payload: payload(),
+      entities: [SELF],
+      sources: [],
+      counts: [],
+      schedule: amsterdamSchedule,
+      now,
+    });
     expect(one.footer).toBe("Checked 1 brand this week · brief Monday 08:00 · your site re-checked at 13:00");
   });
 });

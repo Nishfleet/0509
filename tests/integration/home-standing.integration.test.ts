@@ -67,6 +67,7 @@ describe("readHomeStandingInputs", () => {
     const inputs = await readHomeStandingInputs(env.DB, USER);
 
     expect(inputs?.schedule).toEqual({ timezone: "Europe/London", weekday: 1, hour: 8 });
+    expect(inputs?.workspaceId).toBe(WS);
     expect(inputs?.entities.map((entity) => [entity.role, entity.domain, entity.state]).sort()).toEqual([
       ["competitor", "paused.example", "off"],
       ["competitor", "rival.example", "on"],
@@ -74,6 +75,58 @@ describe("readHomeStandingInputs", () => {
     ]);
     expect(inputs?.payload?.headline_rank).toBe(1);
     expect(inputs?.payload?.why_line).toBe("week ending 2026-09-21T07:00:00.000Z");
+  });
+
+  it("counts in-window signals per (entity, enabled source) and reads degraded source keys from the latest brief", async () => {
+    await env.DB.batch([
+      env.DB.prepare(
+        "INSERT INTO source (id, key, kind, platform, plugin_key, is_enabled) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+      ).bind(`${WS}_src_site`, "site-fetch", "site", "site", "site-fetch", 1),
+      env.DB.prepare(
+        "INSERT INTO source (id, key, kind, platform, plugin_key, is_enabled) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+      ).bind(`${WS}_src_mentions`, "reddit-mentions", "mentions", "reddit", "reddit-mentions", 1),
+      env.DB.prepare(
+        "INSERT INTO source (id, key, kind, platform, plugin_key, is_enabled) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+      ).bind(`${WS}_src_paused`, "paused-feed", "ads", "meta", "paused-feed", 0),
+    ]);
+    const periodEnd = "2026-09-21T07:00:00.000Z";
+    const periodStart = "2026-09-14T07:00:00.000Z";
+    const payload = {
+      workspace_id: WS,
+      timezone: "Europe/London",
+      period_start: periodStart,
+      period_end: periodEnd,
+      headline_rank: 1,
+      headline_total: 2,
+      why_line: "rival dropped a tier",
+      brands: [],
+      checked: { degraded_sources: [{ key: "reddit-mentions", name: null, last_landed_at: null }] },
+    };
+    await env.DB.prepare(
+      "INSERT INTO digest (id, workspace_id, kind, period_start, period_end, status, payload_json) VALUES (?1, ?2, 'weekly', ?3, ?4, 'sent', ?5)",
+    )
+      .bind(`${WS}_brief`, WS, periodStart, periodEnd, JSON.stringify(payload))
+      .run();
+    await env.DB.batch([
+      env.DB.prepare(
+        "INSERT INTO signal (id, workspace_id, entity_id, source_id, kind, dedup_key, observed_at, is_tombstoned) VALUES (?1, ?2, ?3, ?4, 'site', ?5, ?6, 0)",
+      ).bind(`${WS}_sig_in`, WS, `${WS}_rival`, `${WS}_src_site`, `dup_in_${WS}`, periodStart),
+      env.DB.prepare(
+        "INSERT INTO signal (id, workspace_id, entity_id, source_id, kind, dedup_key, observed_at, is_tombstoned) VALUES (?1, ?2, ?3, ?4, 'site', ?5, ?6, 0)",
+      ).bind(`${WS}_sig_out`, WS, `${WS}_rival`, `${WS}_src_site`, `dup_out_${WS}`, "2026-09-07T00:00:00.000Z"),
+      env.DB.prepare(
+        "INSERT INTO signal (id, workspace_id, entity_id, source_id, kind, dedup_key, observed_at, is_tombstoned) VALUES (?1, ?2, ?3, ?4, 'site', ?5, ?6, 1)",
+      ).bind(`${WS}_sig_tomb`, WS, `${WS}_rival`, `${WS}_src_site`, `dup_tomb_${WS}`, periodStart),
+    ]);
+
+    const inputs = await readHomeStandingInputs(env.DB, USER);
+    const keys = inputs?.sources.map((source) => source.key) ?? [];
+
+    expect(keys).toContain("reddit-mentions");
+    expect(keys).toContain("site-fetch");
+    expect(keys).not.toContain("paused-feed");
+    expect(keys).toEqual([...keys].sort((a, b) => a.localeCompare(b)));
+    expect(inputs?.counts).toEqual([{ entityId: `${WS}_rival`, sourceKey: "site-fetch", count: 1 }]);
   });
 
   it("has no brief to show before the first week closes", async () => {
