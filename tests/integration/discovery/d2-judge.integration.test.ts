@@ -1,8 +1,16 @@
 import { env } from "cloudflare:test";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { readDiscoveryContext, readRefreshTargets } from "../../../app/lib/data/entity.server";
-import { judgeStillCompetitors } from "../../../app/lib/discovery/refresh.server";
+import {
+  readDiscoveryContext,
+  readRefreshTargets,
+  type EntityOrigin,
+} from "../../../app/lib/data/entity.server";
+import {
+  judgeStillCompetitors,
+  STILL_COMPETITOR,
+  STILL_COMPETITOR_REASON,
+} from "../../../app/lib/discovery/refresh.server";
 
 const NOW = "2026-09-24T06:00:00.000Z";
 const OLD_SIGNAL = "2026-08-01T00:00:00.000Z";
@@ -69,14 +77,25 @@ describe("readRefreshTargets", () => {
   it("returns the on competitors in created_at order with their origins", async () => {
     const workspaceId = await seedWorkspace();
     const targets = await readRefreshTargets(workspaceId);
-    expect(targets.map((t) => [t.domain, t.origin])).toEqual([
-      ["manual.example", "manual"],
-      ["auto.example", "auto"],
-    ]);
+    const origins: readonly EntityOrigin[] = targets.map(({ origin }) => origin);
+    expect(targets.map(({ domain }) => domain)).toEqual(["manual.example", "auto.example"]);
+    expect(origins).toEqual(["manual", "auto"]);
   });
 });
 
 describe("judgeStillCompetitors", () => {
+  it("exposes stable Jev question contracts", () => {
+    expect(STILL_COMPETITOR.id).toBe("still_competitor");
+    expect(STILL_COMPETITOR_REASON.id).toBe("still_competitor_reason");
+    expect(Object.keys(STILL_COMPETITOR_REASON.options)).toEqual([
+      "active",
+      "acquired",
+      "shut_down",
+      "pivoted",
+      "dormant",
+    ]);
+  });
+
   it("asks Jev once per target with both questions and the history, returns the verdicts, and does not write", async () => {
     const workspaceId = await seedWorkspace();
     const context = await readDiscoveryContext(workspaceId);
