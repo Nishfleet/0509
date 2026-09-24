@@ -4,9 +4,12 @@ import { createAuth } from "../auth.server";
 import type { AgentProps } from "./context.server";
 import { API_KEY_PREFIX } from "./paths";
 
-export async function propsForApiKey(key: string): Promise<AgentProps | null> {
+export const RATE_LIMITED = "rate_limited";
+
+export async function propsForApiKey(key: string): Promise<AgentProps | typeof RATE_LIMITED | null> {
   if (!key.startsWith(API_KEY_PREFIX)) return null;
   const result = await createAuth(env).api.verifyApiKey({ body: { key } });
+  if (!result.valid && result.error?.code === "RATE_LIMITED") return RATE_LIMITED;
   if (!result.valid || result.key === null) return null;
   return { userId: result.key.referenceId, clientId: `apikey:${result.key.id}` };
 }
