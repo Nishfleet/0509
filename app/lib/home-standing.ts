@@ -9,6 +9,12 @@ export interface HomeEntity {
   state: string;
 }
 
+export interface HomeHistoryRow {
+  entity_id: string;
+  week_start_at: string;
+  rank: number;
+}
+
 export interface HomeRow {
   entityId: string;
   position: number | null;
@@ -18,10 +24,23 @@ export interface HomeRow {
   self: boolean;
 }
 
+interface FourWeekLineSeries {
+  entityId: string;
+  label: string;
+  self: boolean;
+  paused: boolean;
+  ranks: readonly (number | null)[];
+}
+
+interface FourWeekChart {
+  weeks: readonly string[];
+  lines: readonly FourWeekLineSeries[];
+}
+
 export type HomeStanding =
   | { kind: "add-competitor" }
   | { kind: "gathering"; briefAt: string; firstSweepAt: string; brands: number }
-  | { kind: "ranked"; rank: number; total: number; whyLine: string; rows: readonly HomeRow[] };
+  | { kind: "ranked"; rank: number; total: number; whyLine: string; rows: readonly HomeRow[]; chart: FourWeekChart };
 
 export interface HomeView {
   eyebrow: string;
@@ -119,10 +138,55 @@ function rankedRows(payload: BriefPayload, entities: readonly HomeEntity[]): rea
     .sort(byRank);
 }
 
+function weekLabel(timezone: string, weekStartAt: string): string {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: timezone,
+    day: "numeric",
+    month: "short",
+  }).formatToParts(new Date(weekStartAt));
+  const day = parts.find((part) => part.type === "day")?.value ?? "";
+  const month = parts.find((part) => part.type === "month")?.value ?? "";
+  return `${day} ${month}`.toUpperCase();
+}
+
+function weekKeys(history: readonly HomeHistoryRow[]): readonly string[] {
+  return [...new Set(history.map((row) => row.week_start_at))].sort().slice(-4);
+}
+
+function fourWeekChart(
+  history: readonly HomeHistoryRow[],
+  rows: readonly HomeRow[],
+  entities: readonly HomeEntity[],
+  timezone: string,
+): FourWeekChart {
+  const weeks = weekKeys(history);
+  const entitiesById = new Map(entities.map((entity) => [entity.id, entity]));
+  const rowsByEntityId = new Map(rows.map((row) => [row.entityId, row]));
+  const entityIds = [...new Set(history.map((row) => row.entity_id))];
+  const ranksByEntityId = new Map(
+    entityIds.map((entityId) => [
+      entityId,
+      weeks.map((week) => history.find((entry) => entry.entity_id === entityId && entry.week_start_at === week)?.rank ?? null),
+    ]),
+  );
+  return {
+    weeks: weeks.map((week) => weekLabel(timezone, week)),
+    lines: entityIds.map((entityId) => {
+      const entity = entitiesById.get(entityId);
+      const row = rowsByEntityId.get(entityId);
+      const self = entity?.role === "self";
+      const label = self ? "YOU" : (row?.name ?? entity?.domain ?? entityId);
+      const ranks = ranksByEntityId.get(entityId) ?? [];
+      return { entityId, label, self, paused: entity?.state !== "on", ranks };
+    }),
+  };
+}
+
 export function homeStanding(input: {
   payload: BriefPayload | null;
   entities: readonly HomeEntity[];
   schedule: BriefSchedule;
+  history: readonly HomeHistoryRow[];
   now: Date;
 }): HomeStanding {
   const onBrands = input.entities.filter((entity) => entity.state === "on").length;
@@ -137,12 +201,14 @@ export function homeStanding(input: {
       brands: onBrands,
     };
   }
+  const rows = rankedRows(payload, input.entities);
   return {
     kind: "ranked",
     rank,
     total: payload.headline_total,
     whyLine: payload.why_line,
-    rows: rankedRows(payload, input.entities),
+    rows,
+    chart: fourWeekChart(input.history, rows, input.entities, input.schedule.timezone),
   };
 }
 
@@ -150,6 +216,7 @@ export function homeView(input: {
   payload: BriefPayload | null;
   entities: readonly HomeEntity[];
   schedule: BriefSchedule;
+  history: readonly HomeHistoryRow[];
   now: Date;
 }): HomeView {
   const onCount = input.entities.filter((entity) => entity.state === "on").length;
