@@ -4,6 +4,7 @@ import { env } from "cloudflare:workers";
 import { Link, redirect } from "react-router";
 
 import { DeleteAccount, SignOut } from "../components/account-settings";
+import { DismissedBrands } from "../components/dismissed-brands";
 import { OwnSiteAlertsSetting } from "../components/own-site-alerts-setting";
 import { BriefRow } from "../components/settings-row";
 import { BLOCK_HEADING, PAGE, PageHeading } from "../components/page-heading";
@@ -13,6 +14,7 @@ import { oauthHelpersContext } from "../lib/agent/context.server";
 import { signOut } from "../lib/auth.server";
 import { nextBriefAt } from "../lib/brief-schedule";
 import { formatBriefAt, parseBriefSchedule } from "../lib/brief-settings";
+import { readUserDismissed, restoreSuggestion } from "../lib/data/suggestion.server";
 import {
   readBriefScheduleForOwner,
   updateBriefSchedule,
@@ -43,7 +45,8 @@ export async function loader({ request }: Route.LoaderArgs) {
         };
   const workspaceId = await readWorkspaceIdForOwner(session.user.id);
   const ownSiteAlerts = workspaceId === null ? true : await readOwnSiteAlerts(workspaceId);
-  return { email: session.user.email, brief, ownSiteAlerts };
+  const dismissed = workspaceId === null ? [] : await readUserDismissed(workspaceId);
+  return { email: session.user.email, brief, ownSiteAlerts, dismissed };
 }
 
 export async function action({ request, context }: Route.ActionArgs) {
@@ -73,6 +76,13 @@ export async function action({ request, context }: Route.ActionArgs) {
     if (headers === null) return { deleteError: SIGN_IN_AGAIN, briefError: null };
     throw redirect("/login", { headers });
   }
+  if (intent === "restore-suggestion") {
+    const workspaceId = await readWorkspaceIdForOwner(session.user.id);
+    const rawId = form.get("suggestionId");
+    const suggestionId = typeof rawId === "string" ? rawId.trim() : "";
+    if (workspaceId !== null && suggestionId !== "") await restoreSuggestion({ workspaceId, suggestionId });
+    return { deleteError: null, briefError: null };
+  }
   if (intent === "brief-schedule") {
     const owned = await readBriefScheduleForOwner(session.user.id);
     const schedule = parseBriefSchedule({
@@ -99,6 +109,7 @@ export default function Page({ loaderData, actionData }: Route.ComponentProps) {
         <BriefRow {...loaderData.brief} error={actionData?.briefError ?? null} />
       )}
       <OwnSiteAlertsSetting on={loaderData.ownSiteAlerts} />
+      <DismissedBrands dismissed={loaderData.dismissed} />
       <section aria-labelledby="settings-agents" className={BLOCK}>
         <h2 id="settings-agents" className={BLOCK_HEADING}>
           Agents and API

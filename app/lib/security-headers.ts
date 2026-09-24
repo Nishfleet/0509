@@ -3,7 +3,7 @@ export function contentSecurityPolicy(nonce: string): string {
     "default-src 'self'",
     `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'`,
     "style-src 'self' 'unsafe-inline'",
-    "img-src 'self' https: data: blob:",
+    "img-src 'self' data: blob:",
     "font-src 'self'",
     "connect-src 'self'",
     "object-src 'none'",

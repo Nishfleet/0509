@@ -1,8 +1,8 @@
 import type { ReactElement } from "react";
-import { Link } from "react-router";
+import { Form, Link } from "react-router";
 
 import { brandMonogram } from "./brand-chip";
-import { EmptyState } from "./empty-state";
+import { EmptyState, fewerThanTwoOnBrands } from "./empty-state";
 import type { HomeRow, HomeView } from "../lib/home-standing";
 import { cn } from "../lib/utils";
 
@@ -37,10 +37,10 @@ function body(view: HomeView): ReactElement {
   if (standing.kind === "add-competitor") {
     return (
       <div className="mt-6">
-        <EmptyState
-          sentence="Add a competitor to see where you stand."
-          action={{ kind: "link", label: "Add a competitor", href: "/onboarding/competitors" }}
-        />
+        <Form method="post" action="/app/competitors">
+          <input type="hidden" name="intent" value="add" />
+          <EmptyState {...fewerThanTwoOnBrands()} />
+        </Form>
       </div>
     );
   }
