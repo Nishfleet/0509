@@ -72,7 +72,7 @@ jobs:
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           github_token: ${{ steps.app.outputs.token }}
-          allowed_bots: "github-actions"
+          allowed_bots: "nishfleet-worker,github-actions"
           prompt: |
             SHA: ${{ env.SHA }}
             REPO: ${{ github.repository }}
@@ -97,4 +97,29 @@ jobs:
           FEATURE_MAP_OUTCOME: ${{ steps.claude.outputs.structured_output }}
           FEATURE_MAP_SHA: ${{ env.SHA }}
           GH_TOKEN: ${{ steps.app.outputs.token }}
-        run: node --experimental-strip-types tests/feature-map-outcome.ts
+        run: |
+          set -euo pipefail
+          test -n "${FEATURE_MAP_OUTCOME//[[:space:]]/}"
+          kind=$(jq -er --arg sha "$FEATURE_MAP_SHA" '
+            if (.sha | type != "string" or . != $sha) then error("outcome sha")
+            elif (.routes | type != "array" or length == 0 or any(type != "string" or . == "")) then error("outcome has no route list")
+            elif .kind == "no-drift" and .pullRequest != null then error("no drift opened a pull request")
+            elif .kind == "no-drift" then "no-drift"
+            elif .kind == "opened-pr" and (.pullRequest | type != "number" or . != floor) then error("opened pull request has no number")
+            elif .kind == "opened-pr" then "opened-pr"
+            else error("silent run: outcome shape")
+            end
+          ' <<<"$FEATURE_MAP_OUTCOME")
+          if [ "$kind" = "no-drift" ]; then
+            {
+              printf 'no drift at %s\n' "$FEATURE_MAP_SHA"
+              jq -r '.routes[]' <<<"$FEATURE_MAP_OUTCOME"
+            } | tee -a "$GITHUB_STEP_SUMMARY"
+          else
+            n=$(jq -er '.pullRequest' <<<"$FEATURE_MAP_OUTCOME")
+            gh pr view "$n" --repo "$GITHUB_REPOSITORY" --json title,body,files \
+              | jq -e --arg sha "$FEATURE_MAP_SHA" --arg map ".agents/skills/verify/feature-map.md" \
+                'select(.title == ("feature-map: sync with " + $sha) and ((.body // "") | gsub("^\\s+|\\s+$"; "") | length > 0) and ((.files // []) | map(.path // .filename) == [$map]))' \
+              >/dev/null
+            printf 'opened PR %s\n' "$n" | tee -a "$GITHUB_STEP_SUMMARY"
+          fi
