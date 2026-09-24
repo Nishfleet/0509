@@ -54,6 +54,8 @@ describe("the brand chip", () => {
     expect(html).toContain(">C<");
     expect(html).toContain("data-off");
     expect(html).not.toContain("data-self");
+    expect(html).toContain("focus-visible:outline-ink");
+    expect(html).toContain("border-dashed text-ink-soft");
     expect(html).toContain("width:26px");
     expect(html).toContain("height:26px");
   });

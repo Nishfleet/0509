@@ -90,9 +90,9 @@ export function BrandChip({
       data-self={self ? "" : undefined}
       data-off={off ? "" : undefined}
       className={cn(
-        "h-auto max-w-full min-h-11 min-w-0 shrink gap-[7px] rounded-none border-[1.5px] border-line bg-card py-[5px] pr-[11px] pl-[5px] text-[0.85rem] font-medium text-ink",
+        "h-auto max-w-full min-h-11 min-w-0 shrink gap-[7px] rounded-none border-[1.5px] border-line bg-card py-[5px] pr-[11px] pl-[5px] text-[0.85rem] font-medium text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink",
         self && "border-ink font-semibold",
-        off && "border-dashed text-ink-faint",
+        off && "border-dashed text-ink-soft",
       )}
     >
       <Avatar
@@ -151,7 +151,7 @@ export function BrandChipRow({
         <Badge
           variant="outline"
           render={chipLink(add)}
-          className="h-auto min-h-11 rounded-none border-[1.5px] border-dashed border-line bg-transparent px-[11px] font-mono text-[0.7rem] tracking-[0.08em] text-ink-soft uppercase"
+          className="h-auto min-h-11 rounded-none border-[1.5px] border-dashed border-line bg-transparent px-[11px] font-mono text-[0.7rem] tracking-[0.08em] text-ink-soft uppercase focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink"
         >
           + Add a competitor
         </Badge>
