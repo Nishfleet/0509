@@ -51,3 +51,11 @@ test("the sitemap leaves out the noindex rebuild notice at /", async ({
   const body = await (await request.get("/sitemap.xml")).text();
   expect(body).not.toMatch(/<loc>https?:\/\/[^<]+\/<\/loc>/);
 });
+
+test("GET /privacy serves robots index, follow", async ({ page }) => {
+  await page.goto("/privacy");
+  await expect(page.locator('meta[name="robots"]')).toHaveAttribute(
+    "content",
+    "index, follow",
+  );
+});

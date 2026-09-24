@@ -32,6 +32,25 @@ describe("mentions adapter contract", () => {
 		).toBe(false);
 	});
 
+	it("mentionItemSchema refuses a javascript: url and accepts an https url", () => {
+		expect(
+			mentionItemSchema.safeParse({
+				dedupKey: "a",
+				url: "javascript:alert(1)",
+				title: "t",
+				publishedAt: null,
+			}).success,
+		).toBe(false);
+		expect(
+			mentionItemSchema.safeParse({
+				dedupKey: "a",
+				url: "https://example.com/a",
+				title: "t",
+				publishedAt: null,
+			}).success,
+		).toBe(true);
+	});
+
 	it("mentionsResultSchema rejects an item missing dedupKey", () => {
 		expect(
 			mentionsResultSchema.safeParse({

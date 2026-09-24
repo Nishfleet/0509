@@ -28,6 +28,7 @@ export default [
   route("onboarding", "routes/onboarding.tsx"),
   route("*", "routes/unmatched.tsx"),
   route("onboarding/competitors", "routes/onboarding.competitors.tsx"),
+  route("design/competitor", "routes/design.competitor.tsx"),
   route("llms.txt", "routes/llms[.]txt.ts"),
   route("design/landing", "routes/landing.tsx"),
   route("onboarding/identity", "routes/onboarding.identity.tsx"),
