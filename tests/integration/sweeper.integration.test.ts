@@ -117,6 +117,29 @@ describe("delivery sweeper (0509#4353)", () => {
     expect(result).toEqual({ digests: 1, attempts: 1, enqueued: 1 });
   });
 
+  it("stops re-enqueueing a brief a week after its period ends (0509#4375)", async () => {
+    await seedDigest("d-pending-old", "pending", "2026-09-15T12:00:00.000Z");
+    await seedDigest("d-sent-old", "sent", "2026-09-15T12:00:00.000Z");
+    await seedAttempt("a-old", "d-sent-old", "pending", "2026-09-16T01:00:00.000Z");
+    const sent: unknown[] = [];
+
+    const result = await sweepPending(envWith(sent), NOW);
+
+    expect(sent).toEqual([]);
+    expect(result).toEqual({ digests: 0, attempts: 0, enqueued: 0 });
+  });
+
+  it("never re-enqueues a brief the dead-letter queue marked failed (0509#4375)", async () => {
+    await seedDigest("d-failed", "failed", "2026-09-22T12:00:00.000Z");
+    await seedAttempt("a-failed", "d-failed", "pending", "2026-09-23T01:00:00.000Z");
+    const sent: unknown[] = [];
+
+    const result = await sweepPending(envWith(sent), NOW);
+
+    expect(sent).toEqual([]);
+    expect(result).toEqual({ digests: 0, attempts: 0, enqueued: 0 });
+  });
+
   it("writes nothing to digest or send_attempt", async () => {
     await seedDigest("d-pending-stale", "pending", "2026-09-22T12:00:00.000Z");
     await seedDigest("d-sent-stale", "sent", "2026-09-22T12:00:00.000Z");

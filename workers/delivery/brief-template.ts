@@ -1,4 +1,5 @@
 import type { BriefContext, BriefPayload, RenderedBrief } from "../../app/lib/brief-payload";
+import { escapeHtml } from "../../app/lib/html";
 
 const COPY = {
   subject: (rank: number, total: number) =>
@@ -24,6 +25,8 @@ const COPY = {
   noUnsubscribe: "Unsubscribe is not available right now — reply to this email and we will stop sending.",
   degraded: (count: number) =>
     `${n(count)} ${count === 1 ? "source" : "sources"} did not answer this week, so these counts are short.`,
+  unnamedSource: "One of your sources",
+  sources: (count: number) => (count === 0 ? "no sources answered" : count === 1 ? "1 source" : `${n(count)} sources`),
   blind: (source: string, when: string) =>
     `${source} has not answered since ${when}, so this is not a quiet week we can vouch for.`,
   blindNever: (source: string) =>
@@ -52,15 +55,6 @@ function n(value: number): string {
   return String(value);
 }
 
-export function escapeHtml(value: string): string {
-  return value
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;");
-}
-
 const SAFE_URL_SCHEMES = ["https:", "http:", "mailto:"];
 
 function safeUrl(value: string): string | null {
@@ -85,7 +79,7 @@ function formatDate(iso: string, timezone: string, withTime: boolean): string {
   }
 }
 
-function countPhrase(count: number, one: string, many: string): string {
+export function countPhrase(count: number, one: string, many: string): string {
   if (count === 0) return `no ${many}`;
   return count === 1 ? `1 ${one}` : `${n(count)} ${many}`;
 }
@@ -302,8 +296,7 @@ function renderOwnSite(payload: BriefPayload): { html: string; text: string } {
 
 function renderFooter(payload: BriefPayload, unsubscribeUrl: string | null): { html: string; text: string } {
   const checked = countsSentence(payload.checked);
-  const sources =
-    payload.checked.source_keys.length > 0 ? payload.checked.source_keys.join(", ") : "no sources answered";
+  const sources = COPY.sources(payload.checked.source_keys.length);
 
   const nextAt =
     payload.next_brief_at === null
@@ -363,8 +356,8 @@ export function renderBrief(payload: BriefPayload, context: BriefContext): Rende
   const blindLine = payload.checked.degraded_sources
     .map((source) =>
       source.last_landed_at === null
-        ? COPY.blindNever(source.key)
-        : COPY.blind(source.key, formatDate(source.last_landed_at, payload.timezone, true)),
+        ? COPY.blindNever(source.name ?? COPY.unnamedSource)
+        : COPY.blind(source.name ?? COPY.unnamedSource, formatDate(source.last_landed_at, payload.timezone, true)),
     )
     .join(" ");
   const whyLine = quiet && blindLine !== "" ? blindLine : payload.why_line;

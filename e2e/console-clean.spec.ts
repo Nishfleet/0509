@@ -12,7 +12,7 @@ function screenPaths(entries: RouteConfigEntry[], parent: string): string[] {
   for (const entry of entries) {
     if (entry.file.endsWith(".ts")) continue;
     const path = [parent, entry.path].filter(Boolean).join("/");
-    paths.push(path);
+    if (entry.path !== undefined) paths.push(path);
     if (entry.children) paths.push(...screenPaths(entry.children, path));
   }
   return paths;

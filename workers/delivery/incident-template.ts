@@ -1,5 +1,5 @@
 import type { RenderedBrief } from "../../app/lib/brief-payload";
-import { escapeHtml } from "./brief-template";
+import { escapeHtml } from "../../app/lib/html";
 
 export interface IncidentOpenContext {
   site: string;

@@ -2,7 +2,10 @@ import { markDigestSent } from "../../app/lib/data/digest.server";
 import { claimIncidentNotice } from "../../app/lib/data/incident_notice.server";
 import { claimSendAttempt, resolveSendAttempt } from "../../app/lib/data/send_attempt.server";
 import { writeUnsubscribeToken } from "../../app/lib/data/send_target.server";
+import type { BriefPayload } from "../../app/lib/brief-payload";
+import { parseBriefPayload } from "../../app/lib/brief-payload";
 
+import { renderBrief } from "./brief-template";
 import { renderIncidentFixed, renderIncidentOpen } from "./incident-template";
 import { errorText, sendMessage } from "./send";
 
@@ -63,7 +66,7 @@ async function readDigest(env: Env, digestId: string): Promise<MessageRow | null
   return env.DB.prepare(
     `SELECT id, workspace_id, kind, subject, payload_json
        FROM digest
-      WHERE id = ?`,
+      WHERE id = ? AND status <> 'failed'`,
   )
     .bind(digestId)
     .first<MessageRow>();
@@ -144,28 +147,27 @@ async function ensureUnsubscribeToken(env: Env, target: TargetRow): Promise<stri
 
 const UNSUBSCRIBE_BASE_URL = "https://0509.io/u/";
 
-function render(message: MessageRow, to: string, token: string): EmailMessageBuilder {
-  let payload: { html?: string; text?: string };
+function briefOf(message: MessageRow): BriefPayload {
   try {
-    payload = JSON.parse(message.payload_json || "{}") as {
-      html?: string;
-      text?: string;
-    };
+    return parseBriefPayload(message.payload_json);
   } catch (cause) {
     const detail = cause instanceof Error ? cause.message : String(cause);
-    throw new PayloadError(`payload_json for digest ${message.id} is not valid JSON: ${detail}`);
+    throw new PayloadError(`digest ${message.id}: ${detail}`);
   }
-  const subject = message.subject ?? `Your ${message.kind} brief`;
-  const text = payload.text ?? "";
-  const html = payload.html ?? "";
+}
+
+function render(message: MessageRow, to: string, token: string): EmailMessageBuilder {
+  const payload = briefOf(message);
+  const unsubscribeUrl = `${UNSUBSCRIBE_BASE_URL}${token}`;
+  const rendered = renderBrief(payload, { unsubscribe_url: unsubscribeUrl, asset_base_url: null });
   return {
     to,
     from: "brief@0509.io",
-    subject,
-    html,
-    text,
+    subject: message.subject ?? rendered.subject,
+    html: rendered.html,
+    text: rendered.text,
     headers: {
-      "List-Unsubscribe": `<${UNSUBSCRIBE_BASE_URL}${token}>`,
+      "List-Unsubscribe": `<${unsubscribeUrl}>`,
       "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
     },
   };

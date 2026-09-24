@@ -30,7 +30,7 @@ export function CompetitorHeader({
   return (
     <header data-slot="competitor-header" className="flex min-w-0 flex-col gap-3">
       <nav aria-label="Breadcrumb" className="font-mono text-meta text-ink-soft uppercase">
-        <Link to="/app/competitors">Competitors</Link>
+        <Link to="/app/competitors" prefetch="intent">Competitors</Link>
         <span aria-hidden="true"> / </span>
         <span aria-current="page">{name}</span>
       </nav>

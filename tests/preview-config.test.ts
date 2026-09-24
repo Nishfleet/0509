@@ -9,11 +9,22 @@ const production = unstable_readConfig({ config: "wrangler.jsonc" });
 const environment = unstable_readConfig({ config: "wrangler.jsonc", env: "preview" });
 const previews = environment.previews ?? {};
 
-function storage(config: { d1_databases?: unknown; r2_buckets?: unknown; kv_namespaces?: unknown; queues?: { producers?: unknown } }) {
+function storage(config: {
+  d1_databases?: unknown;
+  r2_buckets?: unknown;
+  kv_namespaces?: unknown;
+  ratelimits?: unknown;
+  workflows?: unknown;
+  ai?: unknown;
+  queues?: { producers?: unknown };
+}) {
   return {
     d1_databases: config.d1_databases,
     r2_buckets: config.r2_buckets,
     kv_namespaces: config.kv_namespaces,
+    ratelimits: config.ratelimits,
+    workflows: config.workflows,
+    ai: config.ai,
     queue_producers: config.queues?.producers,
   };
 }
@@ -24,17 +35,22 @@ describe("the preview environment", () => {
     expect(environment.name).not.toBe(production.name);
   });
 
-  it("binds no production database, bucket, namespace or queue", () => {
+  it("binds no production database, bucket, namespace, queue or Workflow", () => {
     const productionIds = new Set<string>([
       ...production.d1_databases.flatMap((db) => [db.database_id ?? "", db.database_name ?? ""]),
       ...production.r2_buckets.map((bucket) => bucket.bucket_name ?? ""),
       ...production.kv_namespaces.map((namespace) => namespace.id ?? ""),
+      ...production.ratelimits.map((limit) => `ratelimit:${limit.namespace_id}`),
+      ...production.workflows.map((workflow) => workflow.name),
       ...(production.queues.producers ?? []).map((producer) => producer.queue),
     ].filter(Boolean));
     const previewIds = [
       ...(previews.d1_databases ?? []).flatMap((db) => [db.database_id ?? "", db.database_name ?? ""]),
       ...(previews.r2_buckets ?? []).map((bucket) => bucket.bucket_name ?? ""),
       ...(previews.kv_namespaces ?? []).map((namespace) => namespace.id ?? ""),
+      ...(previews.ratelimits ?? []).map((limit) => `ratelimit:${limit.namespace_id}`),
+      ...(previews.workflows ?? []).map((workflow) => workflow.name),
+      ...environment.workflows.map((workflow) => workflow.name),
       ...(previews.queues?.producers ?? []).map((producer) => producer.queue),
     ];
     expect(previewIds.length).toBeGreaterThan(0);
@@ -47,6 +63,11 @@ describe("the preview environment", () => {
     expect(names(previews.r2_buckets)).toEqual(names(production.r2_buckets));
     expect(names(previews.kv_namespaces)).toEqual(names(production.kv_namespaces));
     expect(names(previews.queues?.producers)).toEqual(names(production.queues.producers));
+    expect(names(previews.workflows)).toEqual(names(production.workflows));
+    expect((previews.ratelimits ?? []).map((limit) => limit.name).sort()).toEqual(
+      production.ratelimits.map((limit) => limit.name).sort(),
+    );
+    expect(previews.ai?.binding).toBe(production.ai?.binding);
   });
 
   it("types and migrates against the same resources the previews bind", () => {
@@ -54,8 +75,9 @@ describe("the preview environment", () => {
     expect(environment.vars).toEqual(previews.vars);
   });
 
-  it("runs no crons and claims no routes", () => {
+  it("runs no crons, no scheduled Workflows and claims no routes", () => {
     expect(environment.triggers.crons).toEqual([]);
+    expect(environment.workflows.flatMap((workflow) => workflow.schedules ?? [])).toEqual([]);
     expect(environment.routes).toEqual([]);
   });
 });

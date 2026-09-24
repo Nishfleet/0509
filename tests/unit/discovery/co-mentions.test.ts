@@ -39,6 +39,21 @@ describe("coMentions", () => {
   });
 });
 
+describe("coMentions on a Title Case headline (0509#4436)", () => {
+  it("never reads the last item's predicate as part of a name", () => {
+    expect(coMentions("Gymshark And Nike Report Record Growth", BRAND)).toEqual([]);
+    expect(coMentions("Gymshark And Nike Report Record Growth - Reuters", BRAND)).toEqual([]);
+  });
+
+  it("still takes a name that a separator closes on both sides", () => {
+    expect(coMentions("Nike, Gymshark And Adidas Report Record Growth", BRAND)).toEqual(["Nike"]);
+  });
+
+  it("leaves a sentence-case headline alone", () => {
+    expect(coMentions("Gymshark and Nike report record growth", BRAND)).toEqual(["Nike"]);
+  });
+});
+
 describe("leadingName", () => {
   it("returns the leading capitalised run", () => {
     expect(leadingName("Lush stop hiring")).toBe("Lush");

@@ -19,6 +19,9 @@ export function OneInput({
         aria-label={label}
         autoFocus
         autoComplete="off"
+        autoCapitalize="none"
+        autoCorrect="off"
+        spellCheck={false}
       />
       {message ? <p role="status">{message}</p> : null}
     </form>

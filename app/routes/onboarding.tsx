@@ -9,6 +9,8 @@ import { workspaceLandingForRequest } from "../lib/workspace.server";
 import { OneInput } from "../components/one-input";
 import { StepBar } from "../components/step-bar";
 import { subjectRedirect } from "../lib/onboarding-subject";
+import { isTakenDown } from "../lib/data/takedown.server";
+import { normaliseSubject } from "../lib/identity/normalise";
 
 export async function loader({ request }: Route.LoaderArgs) {
   const session = await requireSession(request);
@@ -19,7 +21,12 @@ export async function loader({ request }: Route.LoaderArgs) {
 
 export async function action({ request }: Route.ActionArgs) {
   await requireSession(request);
-  const target = subjectRedirect((await request.formData()).get("subject"));
+  const raw = (await request.formData()).get("subject");
+  const normalised = typeof raw === "string" ? normaliseSubject(raw) : null;
+  if (normalised?.ok && (await isTakenDown(normalised.subject.registrable))) {
+    return { message: "this brand asked not to be tracked, so we can't set it up" };
+  }
+  const target = subjectRedirect(raw);
   if (target) throw redirect(target);
   return { message: "we couldn't find anything for that, try the main website" };
 }

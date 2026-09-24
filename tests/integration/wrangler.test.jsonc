@@ -1,14 +1,40 @@
 {
   "name": "0509-test",
   "compatibility_date": "2026-09-16",
+  "compatibility_flags": ["global_fetch_strictly_public"],
   "main": "../../workers/app.ts",
   "d1_databases": [{ "binding": "DB", "database_name": "0509-test", "database_id": "test" }],
   "r2_buckets": [
-    { "binding": "CARD_ARTIFACTS", "bucket_name": "0509-snapshots-test" },
     { "binding": "SNAPSHOTS", "bucket_name": "0509-snapshots-test" }
+  ],
+  "queues": { "producers": [{ "queue": "send-email", "binding": "SEND_EMAIL" }] },
+  "workflows": [
+    {
+      "name": "standing-rollover-test",
+      "binding": "STANDING_ROLLOVER",
+      "class_name": "StandingRolloverWorkflow"
+    },
+    {
+      "name": "competitor-discovery-test",
+      "binding": "DISCOVERY",
+      "class_name": "DiscoveryWorkflow"
+    },
+    {
+      "name": "site-sweep-test",
+      "binding": "SITE_SWEEP",
+      "class_name": "SiteSweepWorkflow"
+    },
+    {
+      "name": "own-site-check-test",
+      "binding": "OWN_SITE_CHECK",
+      "class_name": "OwnSiteCheckWorkflow"
+    }
   ],
   "kv_namespaces": [
     { "binding": "IDENTITY_CACHE", "id": "test" },
-    { "binding": "RESOLVE_CACHE", "id": "resolve-cache-test" }
+    { "binding": "OAUTH_KV", "id": "test-oauth" }
+  ],
+  "ratelimits": [
+    { "name": "AGENT_LIMIT", "namespace_id": "5091", "simple": { "limit": 120, "period": 60 } }
   ]
 }

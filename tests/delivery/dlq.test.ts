@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 import {
+  DELIVERY_FAILED_BODY,
   DELIVERY_FAILED_KIND,
   DELIVERY_FAILED_TITLE,
   DLQ_ALERT_PREFIX,
@@ -47,32 +48,23 @@ function fakeBatch(body: unknown) {
 }
 
 describe("deliveryFailedAlert", () => {
-  it("names the digest and quotes the reason", () => {
+  it("names the digest and says in plain words that we stopped trying (0509#4375)", () => {
     const alert = deliveryFailedAlert({
       digest_id: "dg_1",
       workspace_id: "ws_1",
-      reason: "invalid recipient",
       now: "2026-09-23T00:00:00.000Z",
     });
     expect(alert.id).toBe(`${DLQ_ALERT_PREFIX}dg_1`);
     expect(alert.kind).toBe(DELIVERY_FAILED_KIND);
     expect(alert.title).toBe(DELIVERY_FAILED_TITLE);
-    expect(alert.body).toContain("invalid recipient");
-  });
-
-  it("says unknown error when the attempt recorded none", () => {
-    const alert = deliveryFailedAlert({
-      digest_id: "dg_1",
-      workspace_id: "ws_1",
-      reason: null,
-      now: "2026-09-23T00:00:00.000Z",
-    });
-    expect(alert.body).toContain("unknown error");
+    expect(alert.body).toBe(DELIVERY_FAILED_BODY);
+    expect(alert.body).not.toContain("2026-09-23");
   });
 });
 
 describe("handleDlqBatch", () => {
-  it("inserts one delivery_failed alert and acks", async () => {
+  it("marks the digest failed, inserts one plain delivery_failed alert and acks (0509#4375)", async () => {
+    const error = vi.spyOn(console, "error").mockImplementation(() => undefined);
     const { env, recorded } = fakeEnv((sql) => {
       if (sql.startsWith("SELECT workspace_id")) {
         return Promise.resolve({ workspace_id: "ws_1" });
@@ -89,9 +81,14 @@ describe("handleDlqBatch", () => {
     const inserts = recorded.filter((row) => row.sql.startsWith("INSERT INTO alert"));
     expect(inserts).toHaveLength(1);
     expect(inserts[0]?.args[0]).toBe("dlq:dg_1");
+    expect(inserts[0]?.args).not.toContain("invalid recipient");
+    const failed = recorded.filter((row) => row.sql.startsWith("UPDATE digest SET status = 'failed'"));
+    expect(failed.map((row) => row.args)).toEqual([["dg_1"]]);
+    expect(error).toHaveBeenCalledWith(expect.stringContaining("invalid recipient"));
     expect(ack).toHaveBeenCalledOnce();
     expect(retry).not.toHaveBeenCalled();
     expect(ids).toEqual(["dlq:dg_1"]);
+    error.mockRestore();
   });
 
   it("acks an unparseable message without inserting an alert", async () => {

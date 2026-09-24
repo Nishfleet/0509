@@ -15,6 +15,10 @@
   "name": "0509",
   // >= 2026-08-04, so nodejs_compat is on by default and needs no flag.
   "compatibility_date": "2026-09-16",
+  // Agent sign-in (@cloudflare/workers-oauth-provider) fetches a client's
+  // Client ID Metadata Document by URL; this flag keeps that fetch on the
+  // public internet so a client_id can never reach this zone's own origin.
+  "compatibility_flags": ["global_fetch_strictly_public"],
   "main": "./workers/app.ts",
   "observability": {
     // p95 request duration per route comes from here, which is how
@@ -60,24 +64,10 @@
     }
   ],
 
-  // The public standing card's pre-rendered artifact (issue #3969, engine 9).
-  // The weekly rollover (engine 6) writes card/<workspace_id>/<week_start_at>/
-  // {index.html,og.png} here and /s/<slug> streams it. A binding on the
-  // existing 0509-snapshots bucket under the card/ prefix, not a bucket of its
-  // own: docs/REBUILD-GUARDRAILS.md §3 (merged #4028) already assigns card/
-  // its 90-day expiry plus the 7-day multipart abort, and
-  // docs/engines/standing-card.md says this engine's R2 objects fall under
-  // that same rule. A separate bucket would carry no lifecycle rule and would
-  // name a bucket nobody has created on the first main deploy to reference R2.
-  // The public-read separation argument is dropped and recorded as dropped:
-  // the card objects stay public by serving through the route, while the
-  // bucket itself is not exposed as a domain.
-  "r2_buckets": [
-    { "binding": "CARD_ARTIFACTS", "bucket_name": "0509-snapshots" },
-    // Raw site snapshots live under snapshot/site/, covered by the one-year
-    // snapshot/ lifecycle in docs/REBUILD-GUARDRAILS.md.
-    { "binding": "SNAPSHOTS", "bucket_name": "0509-snapshots" }
-  ],
+  // One binding for the one bucket (#4569 had added a second binding to the
+  // same bucket). snapshot/site/ holds raw site snapshots, text and screenshot
+  // (engine 4), under the one-year snapshot/ rule in docs/REBUILD-GUARDRAILS.md.
+  "r2_buckets": [{ "binding": "SNAPSHOTS", "bucket_name": "0509-snapshots" }],
 
   // Identity probe cache (engine 1, issue #4419): a read-through cache for
   // probe results keyed identity:<registrable>:<probe> with a 24-hour TTL
@@ -91,8 +81,19 @@
   // the same failure 225c3eb fixed for the e2e inbox. The namespace is
   // 0509-identity-cache, the name provisioning would have given it.
   // tests/wrangler-bindings.test.ts keeps every deployed config pinned.
+  // OAUTH_KV holds agent sign-in state for @cloudflare/workers-oauth-provider:
+  // registered AI apps, grants, and hashed tokens (docs/REBUILD-STACK.md §7.2).
+  // Namespace 0509-oauth, pinned for the same reason as the one above.
   "kv_namespaces": [
-    { "binding": "IDENTITY_CACHE", "id": "583a3ce85fac4da0b811902674481663" }
+    { "binding": "IDENTITY_CACHE", "id": "583a3ce85fac4da0b811902674481663" },
+    { "binding": "OAUTH_KV", "id": "c74722e9898d4ea5948e50110d2b9f20" }
+  ],
+
+  // The abuse shield in front of /mcp and /api/v1, keyed per user
+  // (docs/REBUILD-STACK.md §7.4). Per-colo and approximate by design; the exact
+  // per-key quota is the apikey row's own rate limit.
+  "ratelimits": [
+    { "name": "AGENT_LIMIT", "namespace_id": "5091", "simple": { "limit": 120, "period": 60 } }
   ],
 
   // Browser Rendering: brand pages bot-gate a plain workerd fetch, so every
@@ -105,6 +106,11 @@
   // first and only reaches for this binding when the fetch is refused, so the
   // binding now backs the interactive path as well as the sweep path.
   "browser": { "binding": "BROWSER" },
+
+  // Jev, the typed-decision model (docs/REBUILD-JEV.md), runs as the Workers AI
+  // model typesafe/jev through AI Gateway, paid from the account's AI Gateway
+  // credits (unified billing). No provider key lives in this Worker.
+  "ai": { "binding": "AI" },
 
   // Transactional send only. The weekly brief's standing on this lane is an
   // open question recorded on docs/REBUILD-DELIVERY.md.
@@ -142,6 +148,49 @@
     ]
   },
 
+  // The weekly rollover (docs/engines/standing-home.md §2 and P6.3, 0509#4004).
+  // One instance per workspace per week, id `rollover-<workspace>-<closing
+  // instant>`. The nightly cron re-creates the next one with createBatch,
+  // which skips an id that already exists, so a lost instance is replaced
+  // within a day and a live one is never started twice.
+  "workflows": [
+    {
+      "name": "standing-rollover",
+      "binding": "STANDING_ROLLOVER",
+      "class_name": "StandingRolloverWorkflow"
+    },
+    // Competitor discovery (docs/engines/competitor-discovery.md): one instance
+    // when a workspace confirms its card, then one per workspace per night.
+    {
+      "name": "competitor-discovery",
+      "binding": "DISCOVERY",
+      "class_name": "DiscoveryWorkflow"
+    },
+    // The nightly website sweep (docs/engines/site-change.md). The Workflow's
+    // own schedule creates one instance a night, at 02:00 UTC so the changes
+    // it files land before the 03:00 standing refresh counts them. Each page
+    // is its own retried step; a page that cannot be read fails alone.
+    // Nothing to provision: deploy creates the Workflow, unlike a queue.
+    {
+      "name": "site-sweep",
+      "binding": "SITE_SWEEP",
+      "class_name": "SiteSweepWorkflow",
+      "schedules": ["0 2 * * *"]
+    },
+    // The own-site watch: every hour, each customer's own homepage is
+    // probed once with a plain fetch. A 5xx, 404 or no answer is probed
+    // again five minutes later, and only then opens an incident, pins an
+    // alert and puts { incident_id } on send-email. An open incident whose
+    // page answers cleanly again is closed and gets the one "looks fixed"
+    // email. This is the hourly re-check the incident email promises.
+    {
+      "name": "own-site-check",
+      "binding": "OWN_SITE_CHECK",
+      "class_name": "OwnSiteCheckWorkflow",
+      "schedules": ["0 * * * *"]
+    }
+  ],
+
   "triggers": {
     // The dead-man ping, every five minutes: an external service alerts when
     // the reports stop, which is the one failure a Worker cannot report about
@@ -168,17 +217,25 @@
   // https://developers.cloudflare.com/workers/previews/compare-workflows/
   //
   // Nothing here names a production resource: D1 0509-preview, R2
-  // 0509-preview-snapshots, KV 0509-identity-cache-preview and queue
-  // send-email-preview are preview twins. Previews run no crons and consume no
-  // queues, so a preview never sends a brief. Preview URLs sit behind
-  // Cloudflare Access, like the gated routes of 0509.io.
+  // 0509-preview-snapshots, KV 0509-identity-cache-preview and
+  // 0509-oauth-preview, rate-limit namespace 5092, queue send-email-preview and
+  // the four *-preview Workflows are preview twins. Previews run no crons and
+  // consume no queues, so a preview never sends a brief. Preview URLs sit
+  // behind Cloudflare Access, like the gated routes of 0509.io.
+  //
+  // A Preview can only bind to a Workflow that already exists
+  // (https://developers.cloudflare.com/workers/previews/resources/#workflows),
+  // so CI deploys 0509-preview itself first, which creates the *-preview
+  // Workflows from the same head. They carry no schedules: the nightly sweep
+  // and the hourly own-site check never run on their own here.
   //
   // The bindings appear twice on purpose. A Preview inherits nothing, so it
   // reads only `previews`
   // (https://developers.cloudflare.com/workers/previews/configuration/).
-  // `wrangler types` and `wrangler d1 migrations apply --env preview` read the
-  // environment's own top level. tests/preview-config.test.ts holds the two
-  // lists identical and fails on any preview binding to a production resource.
+  // `wrangler types`, `wrangler deploy` and `wrangler d1 migrations apply --env
+  // preview` read the environment's own top level.
+  // tests/preview-config.test.ts holds the two lists identical and fails on any
+  // preview binding to a production resource.
   //
   // A preview has no single origin, so it sets no BETTER_AUTH_URL. Auth
   // accepts only request hosts matching BETTER_AUTH_ALLOWED_HOSTS, and
@@ -202,11 +259,33 @@
           "database_id": "d6643a38-0666-470e-8e08-1953918dfd8a"
         }
       ],
-      "r2_buckets": [
-        { "binding": "CARD_ARTIFACTS", "bucket_name": "0509-preview-snapshots" },
-        { "binding": "SNAPSHOTS", "bucket_name": "0509-preview-snapshots" }
+      "r2_buckets": [{ "binding": "SNAPSHOTS", "bucket_name": "0509-preview-snapshots" }],
+      "kv_namespaces": [
+        { "binding": "IDENTITY_CACHE", "id": "c1e0df6e72a940948717a924af6dba7d" },
+        { "binding": "OAUTH_KV", "id": "41d23c5a12ab4effb4388cc8fecc7f36" }
       ],
-      "kv_namespaces": [{ "binding": "IDENTITY_CACHE", "id": "c1e0df6e72a940948717a924af6dba7d" }],
+      "ratelimits": [
+        { "name": "AGENT_LIMIT", "namespace_id": "5092", "simple": { "limit": 120, "period": 60 } }
+      ],
+      "workflows": [
+        {
+          "name": "standing-rollover-preview",
+          "binding": "STANDING_ROLLOVER",
+          "class_name": "StandingRolloverWorkflow"
+        },
+        {
+          "name": "competitor-discovery-preview",
+          "binding": "DISCOVERY",
+          "class_name": "DiscoveryWorkflow"
+        },
+        { "name": "site-sweep-preview", "binding": "SITE_SWEEP", "class_name": "SiteSweepWorkflow" },
+        {
+          "name": "own-site-check-preview",
+          "binding": "OWN_SITE_CHECK",
+          "class_name": "OwnSiteCheckWorkflow"
+        }
+      ],
+      "ai": { "binding": "AI" },
       "browser": { "binding": "BROWSER" },
       "send_email": [{ "name": "EMAIL" }],
       "queues": {
@@ -224,11 +303,33 @@
             "database_id": "d6643a38-0666-470e-8e08-1953918dfd8a"
           }
         ],
-        "r2_buckets": [
-          { "binding": "CARD_ARTIFACTS", "bucket_name": "0509-preview-snapshots" },
-          { "binding": "SNAPSHOTS", "bucket_name": "0509-preview-snapshots" }
+        "r2_buckets": [{ "binding": "SNAPSHOTS", "bucket_name": "0509-preview-snapshots" }],
+        "kv_namespaces": [
+          { "binding": "IDENTITY_CACHE", "id": "c1e0df6e72a940948717a924af6dba7d" },
+          { "binding": "OAUTH_KV", "id": "41d23c5a12ab4effb4388cc8fecc7f36" }
         ],
-        "kv_namespaces": [{ "binding": "IDENTITY_CACHE", "id": "c1e0df6e72a940948717a924af6dba7d" }],
+        "ratelimits": [
+          { "name": "AGENT_LIMIT", "namespace_id": "5092", "simple": { "limit": 120, "period": 60 } }
+        ],
+        "workflows": [
+          {
+            "name": "standing-rollover-preview",
+            "binding": "STANDING_ROLLOVER",
+            "class_name": "StandingRolloverWorkflow"
+          },
+          {
+            "name": "competitor-discovery-preview",
+            "binding": "DISCOVERY",
+            "class_name": "DiscoveryWorkflow"
+          },
+          { "name": "site-sweep-preview", "binding": "SITE_SWEEP", "class_name": "SiteSweepWorkflow" },
+          {
+            "name": "own-site-check-preview",
+            "binding": "OWN_SITE_CHECK",
+            "class_name": "OwnSiteCheckWorkflow"
+          }
+        ],
+        "ai": { "binding": "AI" },
         "browser": { "binding": "BROWSER" },
         "send_email": [{ "name": "EMAIL" }],
         "queues": {

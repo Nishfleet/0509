@@ -1,29 +1,52 @@
-import { withSentry } from "@sentry/cloudflare";
+import type { OAuthHelpers } from "@cloudflare/workers-oauth-provider";
+import type { CloudflareOptions } from "@sentry/cloudflare";
+import { instrumentWorkflowWithSentry, withSentry } from "@sentry/cloudflare";
 import { createRequestHandler } from "react-router";
 
+import { requestContext } from "../app/lib/agent/context.server";
+import { createOAuthProvider } from "../app/lib/agent/oauth.server";
+import { startNightlyDiscovery } from "../app/lib/discovery/start.server";
 import { pingLiveness } from "../app/lib/liveness-ping.server";
 import { handleBatch } from "./delivery/consumer";
 import { handleDlqBatch } from "./delivery/dlq-consumer";
 import { NIGHTLY_CRON, sweepPending } from "./delivery/sweeper";
+import { runNightlyStanding } from "./standing/nightly";
+import { Discovery } from "./workflows/discovery";
+import { OwnSiteCheck } from "./workflows/own-site-check";
+import { SiteSweep } from "./workflows/site-sweep";
+import { StandingRollover } from "./workflows/standing-rollover";
 
-type WorkerEnv = Env & { SENTRY_DSN?: string };
+type WorkerEnv = Env & { SENTRY_DSN?: string; LIVENESS_PING_URL?: string };
+type OAuthEnv = WorkerEnv & { OAUTH_PROVIDER?: OAuthHelpers };
 
 const requestHandler = createRequestHandler(
   () => import("virtual:react-router/server-build"),
   import.meta.env.MODE,
 );
 
+const oauth = createOAuthProvider<OAuthEnv>({
+  apiHandler: {
+    fetch: (request, env, ctx) => requestHandler(request, requestContext(env.OAUTH_PROVIDER, ctx.props)),
+  },
+  defaultHandler: {
+    fetch: (request, env) => requestHandler(request, requestContext(env.OAUTH_PROVIDER)),
+  },
+});
+
 const handler = {
-  async fetch(request) {
-    return requestHandler(request);
+  async fetch(request, env, ctx) {
+    return oauth.fetch(request, env, ctx);
   },
 
   scheduled(controller, env, ctx) {
     if (controller.cron === NIGHTLY_CRON) {
-      ctx.waitUntil(sweepPending(env, new Date(controller.scheduledTime)));
+      const now = new Date(controller.scheduledTime);
+      ctx.waitUntil(runNightlyStanding(env, now));
+      ctx.waitUntil(sweepPending(env, now));
+      ctx.waitUntil(startNightlyDiscovery(now));
       return;
     }
-    const ping = pingLiveness();
+    const ping = pingLiveness(env.LIVENESS_PING_URL);
     if (ping) ctx.waitUntil(ping);
   },
 
@@ -36,18 +59,25 @@ const handler = {
   },
 } satisfies ExportedHandler<WorkerEnv>;
 
-export default withSentry(
-  (env: WorkerEnv) => ({
-    dsn: env.SENTRY_DSN,
-    sendDefaultPii: false,
-    beforeBreadcrumb: () => null,
-    beforeSend: (event) => ({
-      ...event,
-      request: event.request && {
-        method: event.request.method,
-        url: event.request.url?.split("?")[0],
-      },
-    }),
+const sentryOptions = (env: WorkerEnv): CloudflareOptions => ({
+  dsn: env.SENTRY_DSN,
+  sendDefaultPii: false,
+  beforeBreadcrumb: () => null,
+  beforeSend: (event) => ({
+    ...event,
+    request: event.request && {
+      method: event.request.method,
+      url: event.request.url?.split("?")[0],
+    },
   }),
-  handler,
-);
+});
+
+export class StandingRolloverWorkflow extends instrumentWorkflowWithSentry(sentryOptions, StandingRollover) {}
+
+export class DiscoveryWorkflow extends instrumentWorkflowWithSentry(sentryOptions, Discovery) {}
+
+export class SiteSweepWorkflow extends instrumentWorkflowWithSentry(sentryOptions, SiteSweep) {}
+
+export class OwnSiteCheckWorkflow extends instrumentWorkflowWithSentry(sentryOptions, OwnSiteCheck) {}
+
+export default withSentry(sentryOptions, handler);

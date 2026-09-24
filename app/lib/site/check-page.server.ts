@@ -13,12 +13,16 @@ export type CheckPageResult =
       snapshotId: string;
       previousSnapshotId: string;
       previousTextKey: string;
-      previousScreenshotKey: string;
+      previousScreenshotKey: string | null;
+      previousHash: string;
       textKey: string;
+      hash: string;
       screenshotKey: string | null;
       status: number;
       transport: "fetch" | "browser";
     };
+
+const NO_CUTOFF = "9999-12-31T23:59:59.999Z";
 
 function logScreenshotMiss(url: string, cause: string): void {
   console.log(JSON.stringify({
@@ -52,10 +56,16 @@ async function captureScreenshot(url: string, key: string): Promise<string | nul
   }
 }
 
+async function storedKey(key: string): Promise<string | null> {
+  return (await env.SNAPSHOTS.head(key)) === null ? null : key;
+}
+
 export async function checkPage(input: {
   watchId: string;
   pageId: string;
   url: string;
+  snapshotId?: string;
+  before?: string;
 }): Promise<CheckPageResult> {
   const read = await readUrl(input.url);
   if (!read.ok) {
@@ -63,9 +73,9 @@ export async function checkPage(input: {
   }
 
   const extracted = await extractPageText(read.html);
-  const previous = await latestSiteSnapshot(input.watchId, input.pageId);
-  const id = crypto.randomUUID();
   const fetchedAt = new Date().toISOString();
+  const previous = await latestSiteSnapshot(input.watchId, input.pageId, input.before ?? NO_CUTOFF);
+  const id = input.snapshotId ?? crypto.randomUUID();
 
   if (previous !== null && previous.payload_hash === extracted.hash) {
     await insertSnapshot({
@@ -103,8 +113,10 @@ export async function checkPage(input: {
     snapshotId: id,
     previousSnapshotId: previous.id,
     previousTextKey: previous.payload_r2_key,
-    previousScreenshotKey: previous.payload_r2_key.replace(".txt", ".png"),
+    previousScreenshotKey: await storedKey(previous.payload_r2_key.replace(/\.txt$/, ".png")),
+    previousHash: previous.payload_hash,
     textKey,
+    hash: extracted.hash,
     screenshotKey,
     status: read.status,
     transport: read.transport,
