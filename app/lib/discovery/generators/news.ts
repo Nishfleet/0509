@@ -3,7 +3,6 @@ import type { FeedData } from "@extractus/feed-extractor";
 import { z } from "zod";
 
 import { coMentions } from "../co-mentions";
-import { harvestHeadings } from "../roundup-article";
 import type { Candidate, Evidence, FetchText, Generator, Subject } from "../types";
 
 const SEARCH_URL = "https://news.google.com/rss/search?hl=en-GB&gl=GB&ceid=GB:en&q=";
@@ -20,13 +19,9 @@ const ENTRY_SCHEMA = z
   })
   .transform((entry) => ({
     title: entry.title,
-    link: entry.link ?? null,
     sourceUrl: entry.publisher ?? entry.link ?? "",
   }))
-  .refine(
-    (entry): entry is { title: string; link: string | null; sourceUrl: string } =>
-      entry.sourceUrl.length > 0,
-  );
+  .refine((entry): entry is { title: string; sourceUrl: string } => entry.sourceUrl.length > 0);
 
 type Entry = z.infer<typeof ENTRY_SCHEMA>;
 
@@ -53,34 +48,6 @@ function parseEntries(body: string): Entry[] {
   return parsed;
 }
 
-const ARTICLE_LIMIT = 5;
-
-type Merge = Map<string, { name: string; evidence: Evidence[] }>;
-
-function addCandidate(merged: Merge, name: string, evidence: Evidence): void {
-  const key = name.toLowerCase();
-  const existing = merged.get(key);
-  merged.set(key, {
-    name: existing === undefined ? name : existing.name,
-    evidence: existing === undefined ? [evidence] : [...existing.evidence, evidence],
-  });
-}
-
-const GOOGLE_NEWS_HOST = "news.google.com";
-
-function hostnameOf(url: string): string | null {
-  try {
-    return new URL(url).hostname;
-  } catch {
-    return null;
-  }
-}
-
-function isGoogleNewsHost(hostname: string): boolean {
-  const host = hostname.toLowerCase();
-  return host === GOOGLE_NEWS_HOST || host.endsWith(`.${GOOGLE_NEWS_HOST}`);
-}
-
 const defaultFetchText: FetchText = async (url) => {
   try {
     const response = await fetch(url, { signal: AbortSignal.timeout(TIMEOUT_MS) });
@@ -102,49 +69,23 @@ export const newsGenerator: Generator = async (subject: Subject, fetchText?: Fet
     queries.map((query) => fetchFn(SEARCH_URL + encodeURIComponent(query))),
   );
 
-  const merged: Merge = new Map<string, { name: string; evidence: Evidence[] }>();
+  const merged = new Map<string, { name: string; evidence: Evidence[] }>();
   for (const page of pages) {
     if (page.status !== "fulfilled") continue;
     if (!page.value.ok) continue;
 
     for (const entry of parseEntries(page.value.body)) {
       for (const name of coMentions(entry.title, subject.name)) {
-        addCandidate(merged, name, {
+        const key = name.toLowerCase();
+        const item: Evidence = {
           sourceUrl: entry.sourceUrl,
           excerpt: entry.title,
           generator: "news",
-        });
-      }
-    }
-  }
-
-  const alternatives = pages[0];
-  if (alternatives?.status === "fulfilled" && alternatives.value.ok) {
-    const articles: { url: string; excerpt: string }[] = [];
-    for (const entry of parseEntries(alternatives.value.body)) {
-      if (entry.link === null) continue;
-      if (articles.length >= ARTICLE_LIMIT) break;
-      articles.push({ url: entry.link, excerpt: entry.title });
-    }
-
-    const outcomes = await Promise.allSettled(
-      articles.map(async (article) => ({ article, fetched: await fetchFn(article.url) })),
-    );
-    for (const outcome of outcomes) {
-      if (outcome.status !== "fulfilled") continue;
-      const { article, fetched } = outcome.value;
-      if (!fetched.ok) continue;
-      if (!(fetched.contentType ?? "").includes("html")) continue;
-
-      const hostname = hostnameOf(fetched.url);
-      if (hostname === null || isGoogleNewsHost(hostname)) continue;
-
-      const names = await harvestHeadings(fetched.body, subject.name);
-      for (const name of names) {
-        addCandidate(merged, name, {
-          sourceUrl: fetched.url,
-          excerpt: article.excerpt,
-          generator: "news",
+        };
+        const existing = merged.get(key);
+        merged.set(key, {
+          name: existing === undefined ? name : existing.name,
+          evidence: existing === undefined ? [item] : [...existing.evidence, item],
         });
       }
     }
