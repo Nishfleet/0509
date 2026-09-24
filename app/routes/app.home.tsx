@@ -5,6 +5,7 @@ import { useState } from "react";
 import { redirect } from "react-router";
 
 import { HomeStanding } from "../components/home-standing";
+import { ShareButton } from "../components/share-button";
 import { authClient } from "../lib/auth-client";
 import { homeView } from "../lib/home-standing";
 import { readHomeStandingInputs } from "../lib/home-standing.server";
@@ -37,6 +38,7 @@ export default function Page({ loaderData }: Route.ComponentProps) {
   return (
     <main className="mx-auto max-w-3xl px-4 py-10">
       <HomeStanding view={loaderData.view} />
+      {loaderData.view.standing.kind === "ranked" ? <ShareButton /> : null}
       <footer className="border-line mt-10 border-t pt-4">
         <p className="text-ink-soft leading-[1.65]">Signed in as {loaderData.email}</p>
         <button
