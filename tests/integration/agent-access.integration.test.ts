@@ -5,7 +5,13 @@ import { beforeAll, describe, expect, it } from "vitest";
 import { propsForApiKey } from "../../app/lib/agent/keys.server";
 import { createOAuthProvider } from "../../app/lib/agent/oauth.server";
 import { toolResult } from "../../app/lib/agent/mcp.server";
-import { readAgentAlerts, readAgentBrief, readAgentCompetitors, readAgentStanding } from "../../app/lib/agent/read.server";
+import {
+  readAgentAlerts,
+  readAgentBrief,
+  readAgentCompetitor,
+  readAgentCompetitors,
+  readAgentStanding,
+} from "../../app/lib/agent/read.server";
 import { apiResponse, mcpResponse } from "../../app/lib/agent/serve.server";
 import { createAuth } from "../../app/lib/auth.server";
 
@@ -75,6 +81,51 @@ async function seedWorkspace(suffix: string) {
   return { userId, workspaceId };
 }
 
+const SITE_CHANGE_ID = "sig_agent_a";
+const SITE_CHANGE_URL = "https://rival-a.example/pricing";
+const SITE_CHANGE_DIFF_KEY = "snapshot/site/watch_agent_a/site-change.diff.json";
+
+async function seedCompetitorChange(workspaceId: string) {
+  const watchId = "watch_agent_a";
+  const pageId = "page_agent_a";
+  const beforeSnapshotId = "snap_agent_a_before";
+  const afterSnapshotId = "snap_agent_a_after";
+  const payload = {
+    page: { role: "pricing", url: SITE_CHANGE_URL },
+    before: { snapshotId: beforeSnapshotId, screenshotKey: null },
+    after: { snapshotId: afterSnapshotId, screenshotKey: null },
+    diffKey: SITE_CHANGE_DIFF_KEY,
+    wordsAdded: 3,
+    wordsRemoved: 2,
+  };
+  await env.DB.batch([
+    env.DB.prepare("INSERT INTO page (id, entity_id, url, role, discovered_at) VALUES (?1, ?2, ?3, 'pricing', ?4)").bind(
+      pageId,
+      "ent_agent_a",
+      SITE_CHANGE_URL,
+      NOW,
+    ),
+    env.DB.prepare(
+      "INSERT INTO watch (id, entity_id, source_id, target_key, last_polled_at) VALUES (?1, 'ent_agent_a', 'src_site_web', ?2, ?3)",
+    ).bind(watchId, SITE_CHANGE_URL, NOW),
+    env.DB.prepare(
+      "INSERT INTO snapshot (id, watch_id, page_id, fetched_at, payload_hash) VALUES (?1, ?2, ?3, ?4, 'before-hash')",
+    ).bind(beforeSnapshotId, watchId, pageId, NOW),
+    env.DB.prepare(
+      "INSERT INTO snapshot (id, watch_id, page_id, fetched_at, payload_hash) VALUES (?1, ?2, ?3, ?4, 'after-hash')",
+    ).bind(afterSnapshotId, watchId, pageId, NOW),
+    env.DB.prepare(
+      `INSERT INTO signal (id, workspace_id, entity_id, source_id, watch_id, snapshot_id, kind, aspect, url, evidence_url,
+         payload_json, dedup_key, observed_at, last_seen_at)
+       VALUES (?1, ?2, 'ent_agent_a', 'src_site_web', ?3, ?4, 'change', 'pricing', ?5, ?5, ?6, ?4, ?7, ?7)`,
+    ).bind(SITE_CHANGE_ID, workspaceId, watchId, afterSnapshotId, SITE_CHANGE_URL, JSON.stringify(payload), NOW),
+  ]);
+  await env.SNAPSHOTS.put(
+    SITE_CHANGE_DIFF_KEY,
+    JSON.stringify({ hunks: [{ lines: [" context", "-Plans from $10.", "+Plans from $12."] }] }),
+  );
+}
+
 let a: { userId: string; workspaceId: string };
 let b: { userId: string; workspaceId: string };
 let keyA: string;
@@ -82,6 +133,7 @@ let keyA: string;
 beforeAll(async () => {
   a = await seedWorkspace("a");
   b = await seedWorkspace("b");
+  await seedCompetitorChange(a.workspaceId);
   await env.DB.prepare(
     "INSERT INTO digest (id, workspace_id, kind, period_start, period_end, status, payload_json) VALUES ('dg_agent_a', ?1, 'weekly', ?2, ?3, 'sent', ?4)",
   )
@@ -172,7 +224,13 @@ describe("agent access, scoped to one workspace", () => {
     const listed = await mcpResponse(jsonRpc("tools/list"), { userId: a.userId, clientId: "test" });
     expect(listed.status).toBe(200);
     const list = await rpcResult<{ tools: { name: string; annotations: { readOnlyHint: boolean } }[] }>(listed);
-    expect(list.tools.map((tool) => tool.name).sort()).toEqual(["get_brief", "get_standing", "list_alerts", "list_competitors"]);
+    expect(list.tools.map((tool) => tool.name).sort()).toEqual([
+      "get_brief",
+      "get_competitor",
+      "get_standing",
+      "list_alerts",
+      "list_competitors",
+    ]);
     expect(list.tools.every((tool) => tool.annotations.readOnlyHint)).toBe(true);
 
     const called = await mcpResponse(jsonRpc("tools/call", { name: "list_competitors", arguments: {} }), {
@@ -181,6 +239,38 @@ describe("agent access, scoped to one workspace", () => {
     });
     const call = await rpcResult<{ structuredContent: { tracked: { domain: string }[] } }>(called);
     expect(call.structuredContent.tracked.map((row) => row.domain)).toEqual(["rival-b.example"]);
+  });
+
+  it("reads one competitor only inside the caller's workspace", async () => {
+    const own = await readAgentCompetitor(a.workspaceId, "ent_agent_a");
+    expect(own.competitor).toMatchObject({
+      id: "ent_agent_a",
+      name: "Rival A",
+      domain: "rival-a.example",
+      state: "on",
+      stateChangedAt: null,
+      pagesWatched: 1,
+      lastCheckedAt: NOW,
+      changesThisWeek: 1,
+    });
+    expect(own.competitor?.changes).toEqual([
+      {
+        id: SITE_CHANGE_ID,
+        headline: "Rival A changed its pricing page",
+        page: "pricing page",
+        url: SITE_CHANGE_URL,
+        observedAt: NOW,
+        summary: '3 words added, 2 removed. Was: "Plans from $10." Now: "Plans from $12." https://rival-a.example/pricing',
+      },
+    ]);
+    expect(await readAgentCompetitor(b.workspaceId, "ent_agent_a")).toEqual({ competitor: null });
+
+    const called = await mcpResponse(
+      jsonRpc("tools/call", { name: "get_competitor", arguments: { competitorId: "ent_agent_a" } }),
+      { userId: a.userId, clientId: "test" },
+    );
+    const call = await rpcResult<{ structuredContent: { competitor: { id: string } | null } }>(called);
+    expect(call.structuredContent.competitor?.id).toBe("ent_agent_a");
   });
 
   it("answers a failing MCP tool with a fixed error and never the thrown text", async () => {
