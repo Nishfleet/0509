@@ -92,6 +92,57 @@ export async function insertSiteChange(row: SiteChangeSignal): Promise<void> {
     .run();
 }
 
+const INSERT_MENTION = `INSERT INTO signal
+  (id, workspace_id, entity_id, source_id, watch_id, snapshot_id, kind, title, url, canonical_url, url_hash,
+   author, payload_json, dedup_key, published_at, observed_at, last_seen_at, is_tombstoned)
+VALUES (?1, ?2, ?3, ?4, ?5, ?6, 'mention', ?7, ?8, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?14, ?15)
+ON CONFLICT (source_id, dedup_key) DO NOTHING`;
+
+const SEEN_KEYS = "SELECT dedup_key FROM signal WHERE source_id = ?1 AND dedup_key IN (SELECT value FROM json_each(?2))";
+
+export interface MentionSignal {
+  id: string;
+  workspaceId: string;
+  entityId: string;
+  sourceId: string;
+  watchId: string;
+  snapshotId: string;
+  title: string;
+  url: string;
+  urlHash: string;
+  publisher: string | null;
+  dedupKey: string;
+  publishedAt: string | null;
+  observedAt: string;
+  isNotAboutBrand: boolean;
+}
+
+export async function readSeenDedupKeys(sourceId: string, keys: readonly string[]): Promise<Set<string>> {
+  if (keys.length === 0) return new Set();
+  const rows = await env.DB.prepare(SEEN_KEYS).bind(sourceId, JSON.stringify(keys)).all<{ dedup_key: string }>();
+  return new Set(rows.results.map((row) => row.dedup_key));
+}
+
+export function insertMention(signal: MentionSignal): D1PreparedStatement {
+  return env.DB.prepare(INSERT_MENTION).bind(
+    signal.id,
+    signal.workspaceId,
+    signal.entityId,
+    signal.sourceId,
+    signal.watchId,
+    signal.snapshotId,
+    signal.title,
+    signal.url,
+    signal.urlHash,
+    signal.publisher,
+    JSON.stringify({ publisher: signal.publisher }),
+    signal.dedupKey,
+    signal.publishedAt,
+    signal.observedAt,
+    signal.isNotAboutBrand ? 1 : 0,
+  );
+}
+
 export interface RecentSignal {
   kind: string;
   title: string | null;
@@ -180,4 +231,22 @@ const DELETE_ENTITY_SIGNALS = `DELETE FROM signal WHERE workspace_id = ?1 AND en
 
 export function deleteEntitySignals(workspaceId: string, entityId: string): D1PreparedStatement {
   return env.DB.prepare(DELETE_ENTITY_SIGNALS).bind(workspaceId, entityId);
+}
+
+export interface SignalCount {
+  kind: string;
+  count: number;
+}
+
+const COUNT_SIGNALS_BY_KIND = `SELECT kind, COUNT(*) AS n FROM signal WHERE workspace_id = ?1 AND entity_id = ?2 AND observed_at >= ?3 AND is_tombstoned = 0 GROUP BY kind ORDER BY kind`;
+
+export async function readSignalCounts(
+  workspaceId: string,
+  entityId: string,
+  since: string,
+): Promise<readonly SignalCount[]> {
+  const { results } = await env.DB.prepare(COUNT_SIGNALS_BY_KIND)
+    .bind(workspaceId, entityId, since)
+    .all<{ kind: string; n: number }>();
+  return results.map((row) => ({ kind: row.kind, count: row.n }));
 }
