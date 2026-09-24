@@ -1,7 +1,7 @@
 import type { ReactElement, ReactNode } from "react";
 import { Link } from "react-router";
 
-import { competitorReasonFragment } from "../lib/competitor-reason";
+import { pausedReasonLine } from "../lib/competitor/reason-customer";
 import { BrandSwitch, DAY_MONTH } from "./brand-switch";
 
 export { DAY_MONTH };
@@ -10,9 +10,9 @@ export function competitorPausedLine(
   stateChangedAt: string | null,
   stateReason: string | null = null,
 ): string {
-  const base = stateChangedAt === null ? "Paused" : `Paused ${DAY_MONTH.format(new Date(stateChangedAt))}`;
-  if (stateReason === null) return base;
-  const why = competitorReasonFragment(stateReason);
+  const base =
+    stateChangedAt === null ? "Paused" : `Paused ${DAY_MONTH.format(new Date(stateChangedAt))}`;
+  const why = pausedReasonLine(stateReason);
   return why === undefined ? base : `${base} · ${why}`;
 }
 

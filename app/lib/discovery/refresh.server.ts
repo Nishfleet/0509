@@ -1,6 +1,6 @@
 import { env } from "cloudflare:workers";
 
-import { COMPETITOR_REASON_LINES } from "../competitor-reason";
+import { retireReasonLine } from "../competitor/reason-customer";
 import { insertCompetitorRetiredAlert } from "../data/alert.server";
 import type { DiscoveryContext, RefreshTarget } from "../data/entity.server";
 import { retireCompetitorByJev } from "../data/entity.server";
@@ -84,7 +84,7 @@ function statementsForStillCompetitor(
 ): D1PreparedStatement[] {
   const { target, verdict, reason } = result;
   if (verdict === null || reason === null) return [];
-  const line = COMPETITOR_REASON_LINES[reason.choice];
+  const line = retireReasonLine(reason.choice);
   const verdicts = [
     ...(verdict.cached
       ? []
