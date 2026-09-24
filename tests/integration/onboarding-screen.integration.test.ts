@@ -149,6 +149,60 @@ describe("screenOnboardingSubject", () => {
     expect(run).toHaveBeenCalledTimes(1);
   });
 
+  it("asks again with no answer without paying for a second judgment", async () => {
+    const { userId, workspaceId } = await seedWorkspace();
+    const run = stubRun(0.5);
+    const subject = `ask-twice-${String(runs)}.example`;
+
+    const first = await screenOnboardingSubject({
+      workspaceId,
+      userId,
+      subject: domainSubject(subject),
+      raw: subject,
+      answer: null,
+      now: NOW,
+    });
+    expect(first).toEqual({ kind: "ask", subject });
+
+    const second = await screenOnboardingSubject({
+      workspaceId,
+      userId,
+      subject: domainSubject(subject),
+      raw: subject,
+      answer: null,
+      now: NOW,
+    });
+    expect(second).toEqual({ kind: "ask", subject });
+    expect(run).toHaveBeenCalledTimes(1);
+  });
+
+  it("refuses again from the recorded decision without another judgment", async () => {
+    const { userId, workspaceId } = await seedWorkspace();
+    const run = stubRun(0.05);
+    const subject = `refuse-twice-${String(runs)}.example`;
+
+    const first = await screenOnboardingSubject({
+      workspaceId,
+      userId,
+      subject: domainSubject(subject),
+      raw: subject,
+      answer: null,
+      now: NOW,
+    });
+    expect(first).toEqual({ kind: "refuse", message: REFUSAL });
+
+    const second = await screenOnboardingSubject({
+      workspaceId,
+      userId,
+      subject: domainSubject(subject),
+      raw: subject,
+      answer: null,
+      now: NOW,
+    });
+    expect(second).toEqual({ kind: "refuse", message: REFUSAL });
+    expect(run).toHaveBeenCalledTimes(1);
+  });
+
   it("does not let an answer overturn a confident refusal", async () => {
     const { userId, workspaceId } = await seedWorkspace();
     stubRun(0.05);
