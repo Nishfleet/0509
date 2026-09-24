@@ -108,6 +108,11 @@
   // binding now backs the interactive path as well as the sweep path.
   "browser": { "binding": "BROWSER" },
 
+  // Jev, the typed-decision model (docs/REBUILD-JEV.md), runs as the Workers AI
+  // model typesafe/jev through AI Gateway, paid from the account's AI Gateway
+  // credits (unified billing). No provider key lives in this Worker.
+  "ai": { "binding": "AI" },
+
   // Transactional send only. The weekly brief's standing on this lane is an
   // open question recorded on docs/REBUILD-DELIVERY.md.
   "send_email": [{ "name": "EMAIL" }],
@@ -154,6 +159,13 @@
       "name": "standing-rollover",
       "binding": "STANDING_ROLLOVER",
       "class_name": "StandingRolloverWorkflow"
+    },
+    // Competitor discovery (docs/engines/competitor-discovery.md): one instance
+    // when a workspace confirms its card, then one per workspace per night.
+    {
+      "name": "competitor-discovery",
+      "binding": "DISCOVERY",
+      "class_name": "DiscoveryWorkflow"
     }
   ],
 

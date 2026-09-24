@@ -2,12 +2,14 @@ import type { CloudflareOptions } from "@sentry/cloudflare";
 import { instrumentWorkflowWithSentry, withSentry } from "@sentry/cloudflare";
 import { createRequestHandler } from "react-router";
 
+import { startNightlyDiscovery } from "../app/lib/discovery/start.server";
 import { assertWorkerEnv, WorkerEnvError, workerEnvFailureResponse } from "../app/lib/env.server";
 import { pingLiveness } from "../app/lib/liveness-ping.server";
 import { handleBatch } from "./delivery/consumer";
 import { handleDlqBatch } from "./delivery/dlq-consumer";
 import { NIGHTLY_CRON, sweepPending } from "./delivery/sweeper";
 import { runNightlyStanding } from "./standing/nightly";
+import { Discovery } from "./workflows/discovery";
 import { StandingRollover } from "./workflows/standing-rollover";
 
 type WorkerEnv = Env & { SENTRY_DSN?: string; LIVENESS_PING_URL?: string };
@@ -33,6 +35,7 @@ const handler = {
       const now = new Date(controller.scheduledTime);
       ctx.waitUntil(runNightlyStanding(env, now));
       ctx.waitUntil(sweepPending(env, now));
+      ctx.waitUntil(startNightlyDiscovery(now));
       return;
     }
     const ping = pingLiveness(env.LIVENESS_PING_URL);
@@ -62,5 +65,7 @@ const sentryOptions = (env: WorkerEnv): CloudflareOptions => ({
 });
 
 export class StandingRolloverWorkflow extends instrumentWorkflowWithSentry(sentryOptions, StandingRollover) {}
+
+export class DiscoveryWorkflow extends instrumentWorkflowWithSentry(sentryOptions, Discovery) {}
 
 export default withSentry(sentryOptions, handler);

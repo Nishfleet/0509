@@ -12,6 +12,11 @@
       "name": "standing-rollover-test",
       "binding": "STANDING_ROLLOVER",
       "class_name": "StandingRolloverWorkflow"
+    },
+    {
+      "name": "competitor-discovery-test",
+      "binding": "DISCOVERY",
+      "class_name": "DiscoveryWorkflow"
     }
   ],
   "kv_namespaces": [
