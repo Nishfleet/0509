@@ -1,7 +1,6 @@
 import { env } from "cloudflare:workers";
 
-import { ensureEmailChannel } from "./data/channel.server";
-import { insertDefaultEmailTarget } from "./data/send_target.server";
+import { ensureOwnerEmailTarget } from "./data/send_target.server";
 import { fillWorkspaceTimezone, insertWorkspace } from "./data/workspace.server";
 import type { WorkspaceDb } from "./data/workspace.server";
 import { canonicalTimezone, timezoneCookieValue } from "./timezone";
@@ -89,13 +88,7 @@ export async function ensureWorkspaceForSignIn(
     timezone: await timezoneCookieValue(input.request?.headers.get("cookie") ?? null),
     now: input.now,
   });
-  const channelId = await ensureEmailChannel(db);
-  await insertDefaultEmailTarget(db, {
-    workspaceId: workspace.id,
-    channelId,
-    address: user.email,
-    createdAt: input.now ?? new Date().toISOString(),
-  });
+  await ensureOwnerEmailTarget(db, { workspaceId: workspace.id, now: input.now ?? new Date().toISOString() });
   return workspace;
 }
 

@@ -26,25 +26,18 @@ function openDb(): DatabaseSync {
       created_at TEXT NOT NULL,
       FOREIGN KEY (owner_user_id) REFERENCES "user"(id)
     );
-    CREATE TABLE channel (
-      id TEXT PRIMARY KEY NOT NULL,
-      key TEXT NOT NULL UNIQUE,
-      is_enabled INTEGER NOT NULL DEFAULT 1,
-      config_json TEXT NOT NULL DEFAULT '{}'
-    );
+    CREATE INDEX idx_workspace_owner ON workspace(owner_user_id);
+    CREATE TABLE channel (id TEXT PRIMARY KEY NOT NULL, key TEXT NOT NULL UNIQUE, is_enabled INTEGER NOT NULL DEFAULT 1, config_json TEXT NOT NULL DEFAULT '{}');
+    INSERT INTO channel (id, key) VALUES ('chan-email', 'email');
     CREATE TABLE send_target (
       id TEXT PRIMARY KEY NOT NULL,
       workspace_id TEXT NOT NULL,
       channel_id TEXT NOT NULL,
       target_value TEXT NOT NULL,
       is_verified INTEGER NOT NULL DEFAULT 0,
-      unsubscribe_token TEXT,
       created_at TEXT NOT NULL,
-      FOREIGN KEY (workspace_id) REFERENCES workspace(id),
-      FOREIGN KEY (channel_id) REFERENCES channel(id),
       UNIQUE (workspace_id, channel_id, target_value)
     );
-    CREATE INDEX idx_workspace_owner ON workspace(owner_user_id);
   `);
   return database;
 }
@@ -268,7 +261,7 @@ describe("ensureWorkspace", () => {
     await signIn();
     await signIn();
     expect(database.prepare("SELECT workspace_id, channel_id, target_value, is_verified FROM send_target").all()).toEqual([
-      { workspace_id: firstWorkspaceId("user-1"), channel_id: "chan_email", target_value: "ada@example.com", is_verified: 1 },
+      { workspace_id: firstWorkspaceId("user-1"), channel_id: "chan-email", target_value: "ada@example.com", is_verified: 1 },
     ]);
   });
 

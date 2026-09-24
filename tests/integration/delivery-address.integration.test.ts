@@ -46,6 +46,9 @@ describe("delivery address on sign-in (0509#4776)", () => {
     await env.DB.exec("DELETE FROM workspace");
     await env.DB.exec('DELETE FROM "user"');
     await env.DB.prepare(
+      `INSERT INTO channel (id, key, is_enabled, config_json) VALUES ('chan-email', 'email', 1, '{}')`,
+    ).run();
+    await env.DB.prepare(
       `INSERT INTO "user" (id, name, email, emailVerified, createdAt, updatedAt)
        VALUES (?, 'Owner', ?, 1, ?, ?)`,
     )
@@ -75,6 +78,7 @@ describe("delivery address on sign-in (0509#4776)", () => {
   });
 
   it("(c) reuses the channel that already holds the email key", async () => {
+    await env.DB.exec("DELETE FROM channel");
     await env.DB.prepare(
       `INSERT INTO channel (id, key, is_enabled, config_json) VALUES ('chan-pre', 'email', 1, '{}')`,
     ).run();
