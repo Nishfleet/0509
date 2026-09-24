@@ -60,19 +60,18 @@ export default function Login() {
   }
 
   if (data && "sent" in data) {
+    const { email } = data;
     return (
       <main className="mx-auto flex min-h-dvh w-full max-w-[420px] flex-col justify-center gap-6 px-6 bg-bone text-ink">
         <p className="font-mono text-sm">Five to Nine</p>
         <h1>Check your email</h1>
-        <p>If {data.email} can sign in, a link is on its way. It works once and lasts 5 minutes.</p>
+        <p>If {email} can sign in, a link is on its way. It works once and lasts 5 minutes.</p>
         <button
           type="button"
           disabled={wait > 0}
           onClick={() => {
             setWait(30);
-            if (data.email) {
-              void fetcher.submit({ email: data.email }, { method: "post" });
-            }
+            void fetcher.submit({ email }, { method: "post" });
           }}
         >
           {wait > 0 ? `Send it again in ${String(wait)}s` : "Send it again"}
