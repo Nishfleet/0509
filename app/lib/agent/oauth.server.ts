@@ -41,7 +41,14 @@ export function createOAuthProvider<E>(handlers: Handlers<E>): OAuthProvider<E> 
         });
       }
       const props = await propsForApiKey(token);
-      if (props === null || props === RATE_LIMITED) return null;
+      if (props === RATE_LIMITED) {
+        throw new ExternalTokenError("temporarily_unavailable", {
+          description: "Too many requests. Slow down and retry in a minute.",
+          statusCode: 429,
+          headers: { "retry-after": "60" },
+        });
+      }
+      if (props === null) return null;
       return { props, audience: `${new URL(request.url).origin}${MCP_PATH}` };
     },
   });

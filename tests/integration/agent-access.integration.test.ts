@@ -1,7 +1,9 @@
-import { env } from "cloudflare:test";
+import type { OAuthHelpers } from "@cloudflare/workers-oauth-provider";
+import { createExecutionContext, env } from "cloudflare:test";
 import { beforeAll, describe, expect, it } from "vitest";
 
 import { propsForApiKey } from "../../app/lib/agent/keys.server";
+import { createOAuthProvider } from "../../app/lib/agent/oauth.server";
 import { readAgentAlerts, readAgentBrief, readAgentCompetitors } from "../../app/lib/agent/read.server";
 import { apiResponse, mcpResponse } from "../../app/lib/agent/serve.server";
 import { createAuth } from "../../app/lib/auth.server";
@@ -102,6 +104,17 @@ async function rpcResult<T>(response: Response): Promise<T> {
   return parsed.result;
 }
 
+type OAuthTestEnv = typeof env & { OAUTH_PROVIDER?: OAuthHelpers };
+
+const oauthProvider = createOAuthProvider<OAuthTestEnv>({
+  apiHandler: { fetch: (_request, _env, ctx) => Response.json(ctx.props) },
+  defaultHandler: { fetch: () => new Response("default") },
+});
+
+function oauthBearerMcp(request: Request): Promise<Response> {
+  return oauthProvider.fetch(request, { ...env }, createExecutionContext());
+}
+
 describe("agent access, scoped to one workspace", () => {
   it("issues keys with the 0509_ prefix and resolves them to their owner only", async () => {
     expect(keyA.startsWith("0509_")).toBe(true);
@@ -182,6 +195,20 @@ describe("agent access, scoped to one workspace", () => {
       apiResponse(
         new Request("http://localhost/api/v1/brief", { headers: { authorization: `Bearer ${key}`, "cf-connecting-ip": "203.0.113.201" } }),
         readAgentBrief,
+      );
+    expect((await call()).status).toBe(200);
+    const limited = await call();
+    expect(limited.status).toBe(429);
+    expect(limited.headers.get("retry-after")).toBe("60");
+  });
+
+  it("answers a key over its own limit with 429 on the MCP bearer path too", async () => {
+    const { key } = await auth.api.createApiKey({
+      body: { userId: a.userId, name: "limited-mcp", rateLimitEnabled: true, rateLimitMax: 1, rateLimitTimeWindow: 60_000 },
+    });
+    const call = () =>
+      oauthBearerMcp(
+        new Request("http://localhost/mcp", { headers: { authorization: `Bearer ${key}`, "cf-connecting-ip": "203.0.113.202" } }),
       );
     expect((await call()).status).toBe(200);
     const limited = await call();
