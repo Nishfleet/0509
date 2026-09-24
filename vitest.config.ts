@@ -43,8 +43,29 @@ export default defineConfig({
             "tests/integration/migration-rollback.test.ts",
             "tests/unit/site/**/*.test.ts",
           ],
+          // Applies the chain itself, in two steps, so it can seed rows
+          // before 0015. The workers setup would apply 0015 first.
+          exclude: ["tests/integration/entity-workspace-fk.integration.test.ts"],
           setupFiles: ["./tests/integration/apply-migrations.ts"],
           testTimeout: 30_000,
+        },
+      },
+      {
+        // 0509#4707 applies migrations in the test: prior files, seed, then
+        // 0015. The workers project setup applies the whole chain first, so
+        // this file cannot prove that the rebuild kept rows already stored.
+        plugins: [
+          cloudflareTest(async () => ({
+            wrangler: { configPath: "./tests/integration/wrangler.test.jsonc" },
+            miniflare: {
+              bindings: { TEST_MIGRATIONS: await readD1Migrations("migrations") },
+            },
+          })),
+        ],
+        test: {
+          name: "entity-fk",
+          include: ["tests/integration/entity-workspace-fk.integration.test.ts"],
+          testTimeout: 60_000,
         },
       },
       {
