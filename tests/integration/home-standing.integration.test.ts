@@ -52,6 +52,16 @@ async function seedDigest(id: string, periodEnd: string, rank: number) {
     .run();
 }
 
+async function seedStanding(label: string, weekStartAt: string, rank: number | null) {
+  await env.DB.batch(
+    ["self", "rival", "paused"].map((entity) =>
+      env.DB.prepare(
+        "INSERT INTO standing (id, workspace_id, entity_id, week_start_at, score, rank, computed_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+      ).bind(`${WS}_${label}_${entity}`, WS, `${WS}_${entity}`, weekStartAt, rank ?? 0, rank, weekStartAt),
+    ),
+  );
+}
+
 beforeEach(async () => {
   runs += 1;
   WS = `ws_home_${String(runs)}`;
@@ -117,5 +127,31 @@ describe("readHomeStandingInputs", () => {
     const inputs = await readHomeStandingInputs(env.DB, USER);
     expect(inputs?.schedule.timezone).toBe("Europe/London");
     expect(inputs?.entities.some((entity) => entity.domain === "newer.example")).toBe(false);
+  });
+
+  it("returns exactly the four newest frozen ranked weeks, ascending, with no null rank and no unranked week", async () => {
+    const rankedWeeks = [
+      "2026-08-24T07:00:00.000Z",
+      "2026-08-31T07:00:00.000Z",
+      "2026-09-07T07:00:00.000Z",
+      "2026-09-14T07:00:00.000Z",
+      "2026-09-20T23:00:00.000Z",
+    ];
+    for (const [index, week] of rankedWeeks.entries()) await seedStanding(week, week, index + 1);
+    await seedStanding("unranked", "2026-09-22T07:00:00.000Z", null);
+
+    const inputs = await readHomeStandingInputs(env.DB, USER);
+    expect(inputs).not.toBeNull();
+    const history = inputs?.history ?? [];
+
+    for (const row of history) expect(Number.isInteger(row.rank)).toBe(true);
+    const distinctWeeks = [...new Set(history.map((row) => row.week_start_at))];
+    expect(distinctWeeks).toEqual(rankedWeeks.slice(1));
+    expect(distinctWeeks).not.toContain("2026-09-22T07:00:00.000Z");
+    expect(history).toHaveLength(12);
+    for (const entity of ["self", "rival", "paused"]) {
+      expect(history.filter((row) => row.entity_id === `${WS}_${entity}`).map((row) => row.rank)).toEqual([2, 3, 4, 5]);
+    }
+    expect([...history].sort((a, b) => a.week_start_at.localeCompare(b.week_start_at))).toEqual(history);
   });
 });
