@@ -173,4 +173,17 @@ describe("agent access, scoped to one workspace", () => {
     const response = await mcpResponse(jsonRpc("tools/list"), { userId: "u_agent_nobody", clientId: "test" });
     expect(response.status).toBe(403);
   });
+
+  it("refuses an MCP request from a foreign origin and serves one from the product's own", async () => {
+    const from = (origin: string) =>
+      new Request("http://localhost/mcp", {
+        method: "POST",
+        headers: { "content-type": "application/json", accept: "application/json, text/event-stream", origin },
+        body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list", params: {} }),
+      });
+    const foreign = await mcpResponse(from("https://evil.example"), { userId: a.userId, clientId: "test" });
+    expect(foreign.status).toBe(403);
+    const own = await mcpResponse(from(new URL(env.BETTER_AUTH_URL).origin), { userId: a.userId, clientId: "test" });
+    expect(own.status).toBe(200);
+  });
 });

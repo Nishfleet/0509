@@ -27,6 +27,7 @@
     "enabled": true
   },
   "upload_source_maps": true,
+  "assets": { "run_worker_first": ["/mcp"] },
 
   // The pre-rebuild Worker declared one Durable Object class,
   // SelectionEnrichmentLease (tag v1, new_sqlite_classes). The fresh app does
