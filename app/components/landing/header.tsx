@@ -1,3 +1,4 @@
+import { Wordmark } from "../wordmark";
 import { eyebrow, pageWidth } from "./section";
 
 const LINKS = [
@@ -12,12 +13,7 @@ export function Header() {
   return (
     <header className="border-line border-b">
       <div className={`${pageWidth} flex min-h-16 items-center justify-between gap-6`}>
-        <a href="/" className="font-display text-[1.05rem] font-extrabold tracking-[-0.03em]">
-          <span className="sr-only">Five to Nine</span>
-          <span aria-hidden="true">
-            05<span className="bg-green text-on-green px-[5px]">09</span>
-          </span>
-        </a>
+        <Wordmark />
         <nav aria-label="On this page" className="hidden md:block">
           <ul className={`${eyebrow} text-ink-soft flex gap-7`}>
             {LINKS.map((link) => (

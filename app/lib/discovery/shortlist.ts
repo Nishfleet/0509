@@ -10,6 +10,7 @@ export interface ShortlistEntry {
   name: string;
   domain?: string;
   evidence: Evidence[];
+  nameKeys: string[];
   generators: GeneratorKey[];
   publishers: string[];
   slot: "top" | "guaranteed";
@@ -28,8 +29,12 @@ interface Scored {
   publishers: string[];
 }
 
-function nameKey(name: string): string {
+export function nameKey(name: string): string {
   return name.normalize("NFKC").trim().replace(/\s+/g, " ").toLowerCase();
+}
+
+function isSameEvidence(a: Evidence, b: Evidence): boolean {
+  return a.generator === b.generator && a.sourceUrl === b.sourceUrl;
 }
 
 function hostKey(value: string): string {
@@ -74,10 +79,13 @@ function buildGroups(candidates: readonly Candidate[]): Group[] {
         nameKeys: new Set([key]),
       });
     } else {
+      const additions = candidate.evidence.filter(
+        (item) => !existing.evidence.some((kept) => isSameEvidence(kept, item)),
+      );
       groups[matchIndex] = {
         name: existing.name,
         domain: existing.domain ?? candidate.domain,
-        evidence: [...existing.evidence, ...candidate.evidence],
+        evidence: [...existing.evidence, ...additions],
         nameKeys: new Set([...existing.nameKeys, key]),
       };
     }
@@ -90,6 +98,7 @@ function toEntry(scored: Scored, slot: ShortlistEntry["slot"]): ShortlistEntry {
     name: scored.group.name,
     domain: scored.group.domain,
     evidence: [...scored.group.evidence],
+    nameKeys: [...scored.group.nameKeys].sort((a, b) => a.localeCompare(b)),
     generators: scored.generators,
     publishers: scored.publishers,
     slot,
@@ -100,7 +109,10 @@ function isSoleGenerator(generators: GeneratorKey[], key: GeneratorKey): boolean
   return generators.length === 1 && generators[0] === key;
 }
 
-export function shortlist(candidates: readonly Candidate[]): ShortlistEntry[] {
+export function partitionShortlist(candidates: readonly Candidate[]): {
+  entries: ShortlistEntry[];
+  rest: Candidate[];
+} {
   const scored: Scored[] = buildGroups(candidates).map((group) => ({
     group,
     generators: generatorsOf(group),
@@ -125,5 +137,17 @@ export function shortlist(candidates: readonly Candidate[]): ShortlistEntry[] {
     entries.push(toEntry(next, "guaranteed"));
   }
 
-  return entries;
+  const rest: Candidate[] = sorted
+    .filter((item) => !placed.has(item))
+    .map((item) => ({
+      name: item.group.name,
+      evidence: [...item.group.evidence],
+      ...(item.group.domain === undefined ? {} : { domain: item.group.domain }),
+    }));
+
+  return { entries, rest };
+}
+
+export function shortlist(candidates: readonly Candidate[]): ShortlistEntry[] {
+  return partitionShortlist(candidates).entries;
 }

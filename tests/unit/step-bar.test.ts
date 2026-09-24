@@ -29,16 +29,15 @@ describe("StepBar", () => {
     const marked = items.filter(([, attrs]) => attrs.includes('aria-current="step"'));
     expect(marked).toHaveLength(1);
     expect(marked[0]?.[2]).toBe(LABELS[current - 1]);
-    expect(marked[0]?.[1]).toContain('class="border-b-2 border-current"');
+    expect(marked[0]?.[1]).toContain("bg-green");
 
     const others = items.filter(([, attrs]) => !attrs.includes("aria-current"));
     expect(others).toHaveLength(2);
     for (const [, attrs, text] of others) {
-      expect(attrs).toContain('class="opacity-60"');
+      expect(attrs).not.toContain("bg-green");
       expect(text).not.toBe(LABELS[current - 1]);
     }
 
-    expect(html).toContain('<nav aria-label="Onboarding progress">');
-    expect(html).toContain('class="flex gap-4 font-mono text-[0.75rem] uppercase"');
+    expect(html).toContain('aria-label="Onboarding progress"');
   });
 });

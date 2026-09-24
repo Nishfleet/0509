@@ -9,3 +9,8 @@
 **/bin/ @nish3451
 **/scripts/ @nish3451
 /.github/CODEOWNERS @nish3451
+
+# Migration lock: merging to main applies migrations/ to production D1
+# (deploy-production.yml), so a migration waits for a code-owner review
+# instead of riding a worker's auto-merge.
+/migrations/ @nish3451

@@ -171,6 +171,40 @@ describe("the weekly rollover Workflow (0509#4004)", () => {
     expect(["queued", "running", "waiting"]).toContain((await next.status()).status);
   });
 
+  it("names only competitors paused during the ranked week in the why-line", async () => {
+    const schedule = scheduleOffsetFromToday(3);
+    await seedWorkspace(schedule);
+    const closesAt = nextBriefAt(schedule, new Date());
+    const startsAt = previousBriefAt(schedule, closesAt);
+    const pausedDuring = new Date(startsAt.getTime() + hour).toISOString();
+    const pausedBefore = new Date(startsAt.getTime() - hour).toISOString();
+    await env.DB.batch([
+      env.DB.prepare(
+        "UPDATE entity SET state_changed_at = ?1, state_changed_by = 'user' WHERE workspace_id = ?2 AND id = ?3",
+      ).bind(pausedDuring, WS, `${WS}_${RIVAL_OFF}`),
+      env.DB.prepare(
+        "INSERT INTO entity (id, workspace_id, role, domain, name, state, state_changed_at, state_changed_by, created_at) VALUES (?1, ?2, 'competitor', 'before.example', 'Rival Before', 'off', ?3, 'user', ?3)",
+      ).bind(`${WS}_before`, WS, pausedBefore),
+    ]);
+
+    const instance = rolloverInstance(WS, closesAt, "scheduled");
+    await using introspector = await introspectWorkflowInstance(env.STANDING_ROLLOVER, instance.id);
+    await introspector.modify(async (m) => {
+      await m.disableSleeps();
+    });
+    await env.STANDING_ROLLOVER.create(instance);
+    await introspector.waitForStatus("complete");
+
+    const digestId = `digest_${WS}_${instantStamp(closesAt)}`;
+    const digest = await env.DB.prepare("SELECT payload_json FROM digest WHERE id = ?1")
+      .bind(digestId)
+      .first<{ payload_json: string }>();
+    const brief = parseBriefPayload(digest?.payload_json ?? "");
+
+    expect(brief.why_line).toContain("Rival Off paused, so every brand below it moved up.");
+    expect(brief.why_line).not.toContain("Rival Before");
+  });
+
   it("stands down when the workspace moved its brief time", async () => {
     const schedule = scheduleOffsetFromToday(3);
     await seedWorkspace({ ...schedule, hour: 9 });
