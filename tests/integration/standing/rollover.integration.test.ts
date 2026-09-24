@@ -3,9 +3,8 @@ import { beforeEach, describe, expect, it } from "vitest";
 
 import { parseBriefPayload } from "../../../app/lib/brief-payload";
 import type { BriefSchedule } from "../../../app/lib/brief-schedule";
-import { instantStamp, nextBriefAt, openWeek, previousBriefAt } from "../../../app/lib/brief-schedule";
+import { instantStamp, nextBriefAt, openWeek, previousBriefAt, rolloverInstance } from "../../../app/lib/brief-schedule";
 import { runNightlyStanding } from "../../../workers/standing/nightly";
-import { rolloverInstance } from "../../../workers/standing/rollover-plan";
 
 /**
  * The weekly rollover and the nightly cron against real workerd, real local D1
