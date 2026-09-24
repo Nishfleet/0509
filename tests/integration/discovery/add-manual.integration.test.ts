@@ -135,11 +135,11 @@ describe("handleCompetitorIntent intent=add", () => {
     vi.stubGlobal(
       "fetch",
       vi.fn((input: RequestInfo | URL) => {
-        const url = String(input);
-        if (url.includes("wbsearchentities")) {
+        const url = new URL(String(input));
+        if (url.hostname === "www.wikidata.org") {
           return Promise.resolve(Response.json({ search: [] }));
         }
-        if (url.includes("zzqxnonbrand0509.com")) {
+        if (url.hostname === "zzqxnonbrand0509.com") {
           return Promise.reject(new Error("network"));
         }
         return NOT_FOUND();
