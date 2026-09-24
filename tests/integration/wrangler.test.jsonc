@@ -15,7 +15,6 @@
     }
   ],
   "kv_namespaces": [
-    { "binding": "IDENTITY_CACHE", "id": "test" },
-    { "binding": "RESOLVE_CACHE", "id": "resolve-cache-test" }
+    { "binding": "IDENTITY_CACHE", "id": "test" }
   ]
 }

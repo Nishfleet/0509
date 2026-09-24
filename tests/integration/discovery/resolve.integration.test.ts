@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { env } from "cloudflare:test";
 
-import { resolveDomain } from "../../../app/lib/discovery/resolve-domain";
+import { resolveDomain, resolveKey } from "../../../app/lib/discovery/resolve-domain.server";
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -41,11 +41,11 @@ describe("resolveDomain", () => {
       }),
     );
 
-    await expect(resolveDomain("Gymshark", env.RESOLVE_CACHE)).resolves.toEqual({
+    await expect(resolveDomain("Gymshark")).resolves.toEqual({
       domain: "gymshark.com",
       via: "wikidata",
     });
-    await expect(env.RESOLVE_CACHE.get("resolve:gymshark", "json")).resolves.toEqual({
+    await expect(env.IDENTITY_CACHE.get(resolveKey("Gymshark"), "json")).resolves.toEqual({
       domain: "gymshark.com",
       via: "wikidata",
     });
@@ -71,7 +71,7 @@ describe("resolveDomain", () => {
       }),
     );
 
-    await expect(resolveDomain("Alphalete Athletics", env.RESOLVE_CACHE)).resolves.toEqual({
+    await expect(resolveDomain("Alphalete Athletics")).resolves.toEqual({
       domain: "alphaleteathletics.com",
       via: "slug",
     });
@@ -97,7 +97,7 @@ describe("resolveDomain", () => {
       }),
     );
 
-    await expect(resolveDomain("Sneaker Barn 0509", env.RESOLVE_CACHE)).resolves.toEqual({
+    await expect(resolveDomain("Sneaker Barn 0509")).resolves.toEqual({
       domain: null,
       via: "unresolved",
     });
@@ -118,25 +118,25 @@ describe("resolveDomain", () => {
       }),
     );
 
-    await expect(resolveDomain("Zzqx Nonbrand 0509", env.RESOLVE_CACHE)).resolves.toEqual({
+    await expect(resolveDomain("Zzqx Nonbrand 0509")).resolves.toEqual({
       domain: null,
       via: "unresolved",
     });
-    await expect(env.RESOLVE_CACHE.get("resolve:zzqx nonbrand 0509", "json")).resolves.toEqual({
+    await expect(env.IDENTITY_CACHE.get(resolveKey("Zzqx Nonbrand 0509"), "json")).resolves.toEqual({
       domain: null,
       via: "unresolved",
     });
   });
 
-  it("returns a cached Resolution without calling fetch", async () => {
-    await env.RESOLVE_CACHE.put(
-      "resolve:cached name 0509",
+  it("returns a cached Resolution from the one identity cache without calling fetch (0509#4608, 0509#4609)", async () => {
+    await env.IDENTITY_CACHE.put(
+      resolveKey("Cached Name 0509"),
       JSON.stringify({ domain: "cached.example", via: "slug" }),
     );
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
 
-    await expect(resolveDomain("Cached Name 0509", env.RESOLVE_CACHE)).resolves.toEqual({
+    await expect(resolveDomain("Cached Name 0509")).resolves.toEqual({
       domain: "cached.example",
       via: "slug",
     });
