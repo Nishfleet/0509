@@ -66,6 +66,20 @@ test("the hero's first viewport holds the outcome and the one priced input", asy
   expect(filled).toBe(1);
   expect(consoleErrors).toEqual([]);
 
+  const headlineBox = await hero.getByRole("heading", { level: 1 }).boundingBox();
+  const proofBox = await hero.locator("#hero-proof").boundingBox();
+  if (headlineBox === null || proofBox === null) {
+    throw new Error(headlineBox === null ? "headline has no box" : "proof has no box");
+  }
+  if (testInfo.project.name === "desktop-1440") {
+    expect(proofBox.x).toBeGreaterThan(headlineBox.x + headlineBox.width - 1);
+  }
+  if (testInfo.project.name === "phone-390") {
+    expect(proofBox.y).toBeGreaterThanOrEqual(headlineBox.y + headlineBox.height - 1);
+  }
+
+  await expect(page.locator('link[rel="preload"][href="/fonts/bricolage-grotesque-latin.woff2"]')).toHaveCount(1);
+
   if (testInfo.project.name === "phone-390") {
     const overflow = await page.evaluate(
       () => document.documentElement.scrollWidth > document.documentElement.clientWidth,

@@ -1,9 +1,9 @@
 import { type CoverageId, isLive, WATCHED_NOUNS } from "../../lib/coverage";
 import { cn } from "../../lib/utils";
-import { Input } from "../ui/input";
+import { OneInput } from "../one-input";
 import { ExampleMark } from "./example-mark";
 import { eyebrow, pageWidth } from "./section";
-import { startButtonClass, StartWatchingLabel } from "./start-button";
+import { StartWatchingLabel } from "./start-button";
 
 const EXAMPLES: readonly {
   needs: CoverageId;
@@ -36,26 +36,18 @@ export function Hero() {
             We watch {WATCHED_NOUNS} across your market, and we name the rivals for you, so you do not have to know
             them.
           </p>
-          <form method="get" action="/login" className="mt-9 max-w-[38rem]">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-stretch">
-              <Input
-                name="subject"
-                placeholder="your website, or a handle"
-                aria-label="your website, or a handle"
-                autoComplete="off"
-                autoCapitalize="none"
-                autoCorrect="off"
-                spellCheck={false}
-                enterKeyHint="go"
-                required
-                maxLength={200}
-                className="sm:min-w-0 sm:flex-1"
-              />
-              <button type="submit" className={`${startButtonClass} shrink-0`}>
-                <StartWatchingLabel />
-              </button>
-            </div>
-          </form>
+          <div className="max-w-[38rem]">
+            <OneInput
+              label="your website, or a handle"
+              placeholder="your website, or a handle"
+              name="subject"
+              action="/login"
+              method="get"
+              required
+              maxLength={200}
+              submitLabel={<StartWatchingLabel />}
+            />
+          </div>
           <p className="font-mono text-meta text-ink-soft mt-4 max-w-[38rem]">
             One input. Sixty seconds to your first standing.
           </p>
