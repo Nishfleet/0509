@@ -30,8 +30,8 @@ test("the Competitors page is landmarked, ordered and keyboard-operable at 1440 
       await page.emulateMedia({ colorScheme });
       await page.goto("/app/competitors");
 
-      // One landmark set per page: the page's own h1, and nothing that a
-      // screen reader would have to step through to find it.
+      // One landmark set: the page's own h1, exactly one `main`, and the
+      // "Places" navigation that carries the four places.
       await expect(page.getByRole("heading", { level: 1, name: "Competitors" })).toBeVisible();
       await expect(page.getByRole("heading", { level: 1 })).toHaveCount(1);
       await expect(page.getByRole("main")).toHaveCount(1);
@@ -71,9 +71,8 @@ test("the Competitors page is landmarked, ordered and keyboard-operable at 1440 
         path: test.info().outputPath(`competitors-focus-${String(viewport.width)}-${colorScheme}.png`),
       });
 
-      // The add control: the input is labelled in text, and the key that runs
-      // the label (its `for` attribute) reaches it by keyboard. Tabbing stops
-      // on the input, then on the Add button beside it.
+      // The add control: Tabbing reaches the labelled input, then the Add
+      // button beside it.
       const add = page.getByLabel("Add one we missed");
       for (let i = 0; i < 60; i += 1) {
         if (await add.evaluate((el) => el === document.activeElement)) break;
