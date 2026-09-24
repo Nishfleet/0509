@@ -23,9 +23,11 @@ describe("hasSessionCookie", () => {
     createAuth({
       DB: {} as never,
       EMAIL: { send: async () => undefined },
+      SIGN_IN_EMAIL_LIMIT: { limit: async () => ({ success: true }) },
+      SIGN_IN_IP_LIMIT: { limit: async () => ({ success: true }) },
     });
     expect(betterAuth).toHaveBeenCalledWith(
-      expect.objectContaining({ advanced: { cookiePrefix: "better-auth" } }),
+      expect.objectContaining({ advanced: expect.objectContaining({ cookiePrefix: "better-auth" }) }),
     );
     expect(hasSessionCookie(new Request("https://0509.io/missing"))).toBe(false);
     expect(

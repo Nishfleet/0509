@@ -40,6 +40,8 @@
     { "binding": "OAUTH_KV", "id": "test-oauth" }
   ],
   "ratelimits": [
-    { "name": "AGENT_LIMIT", "namespace_id": "5091", "simple": { "limit": 120, "period": 60 } }
+    { "name": "AGENT_LIMIT", "namespace_id": "5091", "simple": { "limit": 120, "period": 60 } },
+    { "name": "SIGN_IN_EMAIL_LIMIT", "namespace_id": "5092", "simple": { "limit": 5, "period": 60 } },
+    { "name": "SIGN_IN_IP_LIMIT", "namespace_id": "5093", "simple": { "limit": 20, "period": 60 } }
   ]
 }
