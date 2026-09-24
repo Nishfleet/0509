@@ -91,6 +91,35 @@ export const competitorsResultSchema = z
     suggested: z.array(competitorSchema).meta({ description: "Brands we think compete with you, waiting for your yes" }),
   });
 
+export const competitorArgsSchema = z.object({
+  competitorId: z.string().min(1).meta({ description: "A competitor id from list_competitors" }),
+});
+
+export const competitorResultSchema = z.object({
+  competitor: z
+    .object({
+      id: z.string(),
+      name: z.string(),
+      domain: z.string(),
+      state: z.enum(["on", "off"]),
+      stateChangedAt: isoTime.nullable(),
+      pagesWatched: z.number(),
+      lastCheckedAt: isoTime.nullable(),
+      changesThisWeek: z.number(),
+      changes: z.array(
+        z.object({
+          id: z.string(),
+          headline: z.string(),
+          page: z.string(),
+          url: z.string(),
+          observedAt: isoTime,
+          summary: z.string(),
+        }),
+      ),
+    })
+    .nullable(),
+});
+
 const alertSchema = z
   .object({
     id: z.string(),
@@ -105,5 +134,6 @@ export const alertsResultSchema = z.object({ alerts: z.array(alertSchema) });
 
 export type BriefResult = z.output<typeof briefResultSchema>;
 export type CompetitorsResult = z.output<typeof competitorsResultSchema>;
+export type CompetitorResult = z.output<typeof competitorResultSchema>;
 export type AlertsResult = z.output<typeof alertsResultSchema>;
 export type StandingResult = z.output<typeof standingResultSchema>;
