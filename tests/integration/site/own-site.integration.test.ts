@@ -7,7 +7,18 @@ const NOW = "2026-09-24T02:00:00Z";
 
 const HEALTHY_HTML = `<!doctype html><html><body><h1>My brand</h1><p>Every plan includes unlimited projects, priority support, single sign-on, audit logs, and a named account manager who answers within one business day, with onboarding help for your whole team.</p></body></html>`;
 
-const site = { status: 200 };
+const site: { status: number; apexDown: boolean; challenge: boolean } = {
+  status: 200,
+  apexDown: false,
+  challenge: false,
+};
+
+const respond = (input: RequestInfo | URL): Promise<Response> => {
+  const host = new URL(input instanceof Request ? input.url : String(input)).hostname;
+  if (site.apexDown && !host.startsWith("www.")) return Promise.reject(new Error("DNS lookup failed"));
+  const headers = site.challenge ? { "cf-mitigated": "challenge" } : undefined;
+  return Promise.resolve(new Response(site.status < 400 ? HEALTHY_HTML : "", { status: site.status, headers }));
+};
 
 const seedEntity = (id: string, role: "self" | "competitor", domain: string) =>
   env.DB.prepare(
@@ -70,9 +81,10 @@ describe("own-site check", () => {
     await seedEntity("ent-self", "self", "mybrand.com");
     await seedEntity("ent-rival", "competitor", "rival.com");
     site.status = 200;
-    vi.stubGlobal("fetch", () =>
-      Promise.resolve(new Response(site.status < 400 ? HEALTHY_HTML : "", { status: site.status })),
-    );
+    site.apexDown = false;
+    site.challenge = false;
+    await env.DB.exec("UPDATE source SET is_enabled = 1 WHERE id = 'src_site_web'");
+    vi.stubGlobal("fetch", respond);
   });
 
   afterEach(() => {
@@ -80,16 +92,16 @@ describe("own-site check", () => {
   });
 
   it("opens nothing while the customer's own site loads", async () => {
-    expect(await runCheck("own-healthy")).toEqual({ pages: 1, opened: 0, closed: 0 });
+    expect(await runCheck("own-healthy")).toEqual({ pages: 1, opened: 0, closed: 0, failed: 0 });
     expect(await incidents()).toEqual([]);
     expect(await alerts()).toEqual([]);
   });
 
   it("opens one incident with a pinned alert when the site still fails on the confirming read, and closes it on the next clean hour", async () => {
     site.status = 503;
-    expect(await runCheck("own-broken")).toEqual({ pages: 1, opened: 1, closed: 0 });
+    expect(await runCheck("own-broken")).toEqual({ pages: 1, opened: 1, closed: 0, failed: 0 });
     const [open] = await incidents();
-    expect(open).toMatchObject({ entity_id: "ent-self", closed_at: null });
+    expect(open).toMatchObject({ entity_id: "ent-self", kind: "error 503", closed_at: null });
     const [alert] = await alerts();
     expect(alert).toMatchObject({
       kind: "own_site_broken",
@@ -97,14 +109,35 @@ describe("own-site check", () => {
       title: `mybrand.com looks broken: ${open?.kind ?? ""}`,
     });
 
-    expect(await runCheck("own-still-broken")).toEqual({ pages: 1, opened: 0, closed: 0 });
+    expect(await runCheck("own-still-broken")).toEqual({ pages: 1, opened: 0, closed: 0, failed: 0 });
     expect(await incidents()).toHaveLength(1);
     expect(await alerts()).toHaveLength(1);
 
     site.status = 200;
-    expect(await runCheck("own-fixed")).toEqual({ pages: 1, opened: 0, closed: 1 });
+    expect(await runCheck("own-fixed")).toEqual({ pages: 1, opened: 0, closed: 1, failed: 0 });
     const [closed] = await incidents();
     expect(closed?.closed_at).not.toBeNull();
+  });
+
+  it("never calls a bot wall or a refusal a break", async () => {
+    site.status = 403;
+    expect(await runCheck("own-forbidden")).toEqual({ pages: 1, opened: 0, closed: 0, failed: 0 });
+    site.status = 503;
+    site.challenge = true;
+    expect(await runCheck("own-challenge")).toEqual({ pages: 1, opened: 0, closed: 0, failed: 0 });
+    expect(await incidents()).toEqual([]);
+  });
+
+  it("reads a site that lives only on www as healthy", async () => {
+    site.apexDown = true;
+    expect(await runCheck("own-www")).toEqual({ pages: 1, opened: 0, closed: 0, failed: 0 });
+    expect(await incidents()).toEqual([]);
+  });
+
+  it("keeps guarding the customer's own site when the nightly sweep's source is paused", async () => {
+    await env.DB.exec("UPDATE source SET is_enabled = 0 WHERE id = 'src_site_web'");
+    site.status = 500;
+    expect(await runCheck("own-paused")).toEqual({ pages: 1, opened: 1, closed: 0, failed: 0 });
   });
 
   it("never opens an incident for a competitor's site", async () => {

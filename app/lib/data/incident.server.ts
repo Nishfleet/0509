@@ -20,6 +20,9 @@ const OPEN_INCIDENTS = `SELECT id, page_id FROM incident WHERE closed_at IS NULL
 
 const CLOSE_INCIDENT = `UPDATE incident SET closed_at = ?2 WHERE id = ?1 AND closed_at IS NULL`;
 
+const CLOSE_UNWATCHED = `UPDATE incident SET closed_at = ?2
+WHERE closed_at IS NULL AND page_id NOT IN (SELECT value FROM json_each(?1))`;
+
 const openRows = z.array(z.object({ id: z.string(), page_id: z.string() }));
 
 export async function openIncident(row: NewIncident): Promise<string | null> {
@@ -37,4 +40,8 @@ export async function readOpenIncidents(): Promise<Record<string, string>> {
 
 export async function closeIncident(id: string, closedAt: string): Promise<void> {
   await env.DB.prepare(CLOSE_INCIDENT).bind(id, closedAt).run();
+}
+
+export async function closeIncidentsOutside(pageIds: readonly string[], closedAt: string): Promise<void> {
+  await env.DB.prepare(CLOSE_UNWATCHED).bind(JSON.stringify(pageIds), closedAt).run();
 }

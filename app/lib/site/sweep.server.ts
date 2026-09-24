@@ -1,7 +1,7 @@
 import { env } from "cloudflare:workers";
 import { getDomain } from "tldts";
 
-import { insertPages } from "../data/page.server";
+import { insertPages, readEntitiesWithoutHomePage } from "../data/page.server";
 import { insertSiteChange } from "../data/signal.server";
 import { readEnabledSourceId } from "../data/source.server";
 import type { SiteSweepTarget } from "../data/watch.server";
@@ -30,37 +30,52 @@ async function readText(key: string): Promise<string | null> {
   return object === null ? null : object.text();
 }
 
+function homeUrl(domain: string): string | null {
+  return getDomain(domain) === domain ? `https://${domain}/` : null;
+}
+
+export async function ensureHomePages(now: string): Promise<void> {
+  const entities = await readEntitiesWithoutHomePage();
+  await insertPages(
+    entities.flatMap((entity) => {
+      const url = homeUrl(entity.domain);
+      return url === null
+        ? []
+        : [{ id: crypto.randomUUID(), entityId: entity.id, url, role: "home" as const, discoveredAt: now }];
+    }),
+  );
+}
+
 export async function planSiteSweep(now: string): Promise<SiteSweepTarget[]> {
+  await ensureHomePages(now);
   const sourceId = await readEnabledSourceId(SITE_SOURCE_KEY);
   if (sourceId === null) return [];
 
-  const homes = (await readUnwatchedEntities(sourceId)).flatMap((entity) =>
-    getDomain(entity.domain) === entity.domain
-      ? [{ entityId: entity.id, url: `https://${entity.domain}/` }]
-      : [],
-  );
-  await insertPages(
-    homes.map((home) => ({
-      id: crypto.randomUUID(),
-      entityId: home.entityId,
-      url: home.url,
-      role: "home",
-      discoveredAt: now,
-    })),
-  );
+  const unwatched = await readUnwatchedEntities(sourceId);
   await insertWatches(
-    homes.map((home) => ({
-      id: crypto.randomUUID(),
-      entityId: home.entityId,
-      sourceId,
-      targetKey: home.url,
-    })),
+    unwatched.flatMap((entity) => {
+      const url = homeUrl(entity.domain);
+      return url === null
+        ? []
+        : [{ id: crypto.randomUUID(), entityId: entity.id, sourceId, targetKey: url }];
+    }),
   );
   return [...(await readSiteSweepTargets(SITE_SOURCE_KEY))];
 }
 
-export async function checkSitePage(target: SiteSweepTarget): Promise<CheckPageResult> {
-  const result = await checkPage({ watchId: target.watchId, pageId: target.pageId, url: target.url });
+export interface SweepTick {
+  instanceId: string;
+  plannedAt: string;
+}
+
+export async function checkSitePage(target: SiteSweepTarget, tick: SweepTick): Promise<CheckPageResult> {
+  const result = await checkPage({
+    watchId: target.watchId,
+    pageId: target.pageId,
+    url: target.url,
+    snapshotId: `${tick.instanceId}-${target.pageId}`,
+    before: tick.plannedAt,
+  });
   if (result.outcome === "failed") {
     console.log(JSON.stringify({
       event: "site.check_failed",

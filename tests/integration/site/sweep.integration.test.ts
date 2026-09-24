@@ -15,6 +15,11 @@ const NOW = "2026-09-24T02:00:00Z";
 const BEFORE_HTML = `<!doctype html><html><body><h1>Rival</h1><p>Plans start at ten dollars a month.</p><p>${PAD}</p></body></html>`;
 const AFTER_HTML = `<!doctype html><html><body><h1>Rival</h1><p>Plans start at twelve dollars a month. New: team seats.</p><p>${PAD}</p></body></html>`;
 
+const nextTick = async (name: string) => {
+  await new Promise((resolve) => setTimeout(resolve, 5));
+  return { instanceId: name, plannedAt: new Date().toISOString() };
+};
+
 const seedEntity = (id: string, role: "self" | "competitor", domain: string, state: "on" | "off") =>
   env.DB.prepare(
     `INSERT INTO entity (id, workspace_id, role, domain, identity_json, origin, state, created_at)
@@ -101,14 +106,17 @@ describe("nightly site sweep", () => {
     const [rival] = (await planSiteSweep(NOW)).filter((t) => t.entityId === "ent-rival");
     if (rival === undefined) throw new Error("expected the rival's homepage");
 
-    const first = await checkSitePage(rival);
+    const first = await checkSitePage(rival, await nextTick("night-1"));
     expect(first.outcome).toBe("first");
-    const same = await checkSitePage(rival);
+    const same = await checkSitePage(rival, await nextTick("night-2"));
     expect(same.outcome).toBe("unchanged");
     expect(await signals()).toEqual([]);
 
     readHolder.html = AFTER_HTML;
-    const changed = await checkSitePage(rival);
+    const night3 = await nextTick("night-3");
+    const changed = await checkSitePage(rival, night3);
+    const retried = await checkSitePage(rival, night3);
+    expect(retried).toEqual(changed);
     if (changed.outcome !== "changed" || first.outcome !== "first" || same.outcome !== "unchanged") throw new Error("expected a change");
     await publishSiteChange(rival, changed);
     await publishSiteChange(rival, changed);
@@ -146,6 +154,18 @@ describe("nightly site sweep", () => {
       .bind(rival.watchId)
       .first<{ last_polled_at: string | null }>();
     expect(polled?.last_polled_at).not.toBeNull();
+  });
+
+  it("counts one snapshot per page per night even when the check step is retried", async () => {
+    const [rival] = (await planSiteSweep(NOW)).filter((t) => t.entityId === "ent-rival");
+    if (rival === undefined) throw new Error("expected the rival's homepage");
+    const night = await nextTick("night-retry");
+    await checkSitePage(rival, night);
+    await checkSitePage(rival, night);
+    const rows = await env.DB.prepare("SELECT COUNT(*) AS n FROM snapshot WHERE watch_id = ?")
+      .bind(rival.watchId)
+      .first<{ n: number }>();
+    expect(rows?.n).toBe(1);
   });
 
   it("stops planning a brand once it is turned off", async () => {
