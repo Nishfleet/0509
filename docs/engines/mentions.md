@@ -1,14 +1,133 @@
 # Engine 5 — Mentions
 
-P3 step 5 of umbrella #3842. Written by the Opus deputy (second architect), **2026-09-21**. Contracts: `docs/REBUILD-MENTIONS.md` (#3907), `docs/REBUILD-SCHEMA.md`, `docs/REBUILD-JEV.md` (D5, D6, D8), `docs/REBUILD-STACK.md` (#3906), `docs/REBUILD-COST.md`.
+This engine landed in **#4692 (merged 2026-09-24)**. The pre-#4692 contracts called for a **Cron Trigger** producer feeding a rate-classed **Cloudflare Queue** pair (one concurrency-10 lane for sub-second sources and one concurrency-1 lane for the 18-second-429 sources) into a separate downstream Workflow, with Google News RSS as the headline source, DuckDuckGo and Reddit in the MVP set, and a cross-source D8 judgment doing the dedup. **None of that is what shipped.** What shipped is a single scheduled Workflow with one retried step per `(plugin, target_key)` pair, GDELT replacing Google News, dedup-by-dedup_key on the `signal` table rather than by D8, and zero queues and zero direct cron triggers anywhere in this engine.
 
-Every probe below I ran myself from this VPS (netcup, German datacenter IP) on **2026-09-21 between 12:13 and 12:17 UTC**. Three of them contradict the mentions contract, and those corrections drive the design.
+The original Opus-deputy reasoning — the live probes, the design-it-twice fork, the cost arithmetic, the failure-mode table — is preserved below at the bottom of this file under `Historical design (pre-#4692)` so the design history is not lost. **Do not implement anything below that heading; it documents what was rejected or replaced.** Every path that follows the `Historical design` heading is code that exists on `main` today; every path above it is the contract.
 
 ---
 
-## 0. Three corrections to `docs/REBUILD-MENTIONS.md`, each proven
+## As built (2026-09-24, after #4692)
 
-These are not quibbles. Each one changes what gets built.
+### Live sources
+
+- **GDELT DOC 2.0** (`gdelt.doc`), `official_api` reliability. The Google News RSS feed was the pre-#4692 source; its `<copyright>` element limits use to *"personal, non-commercial use"*, which a paid product is not, so the consumer switched to GDELT and HN Algolia. The Google News RSS adapter (`workers/sources/mentions/google-news.ts`) is registered and tested but has no enabled `source` row; it is being removed in **#5067**. The unresolved-link finding recorded by the original probe under `Historical design → §0.1` is preserved as the record of why the design dropped Browser-Run flattening.
+- **Hacker News Algolia** (`hn.algolia`), `official_api` reliability. The HN `objectID` is the dedup key (`workers/sources/mentions/hn.ts`).
+- **YouTube** (`youtube.channel_rss`) and **Medium** (`medium.tag_rss`) adapters are registered in `workers/sources/registry.ts` and tested (`tests/mentions/youtube.test.ts`, `tests/mentions/medium.test.ts`). No `source` row carries these `plugin_key`s yet; the eligibility join (`source.is_enabled = 1`) hides them.
+
+The migration that introduces the two enabled `source` rows is a numbered file under `migrations/` (do not restate the number; `wrangler d1 migrations list` is the authority).
+
+### The runner: the scheduled Workflow `mentions-sweep`
+
+The runner is the **Workflow** `mentions-sweep` (`workers/workflows/mentions.ts`), bound to `wrangler.jsonc` as the binding `MENTIONS`. Its `schedules: ["0 1 * * *"]` fires once a night at **01:00 UTC**, off-the-hour from the 02:00 site sweep and the 03:00 standing refresh. The schedule list in `wrangler.jsonc` carries `"*/5 * * * *"`, `"0 3 * * *"`, `"0 4 * * 1"` — the mentions sweep is **not** on that list, it is a Workflow schedule, and there are **no queues** for mentions anywhere in this codebase.
+
+`wrangler.jsonc` names the class `MentionsWorkflow`, which `workers/app.ts` exports as an instrumented wrapper around `MentionsSweep` from `workers/workflows/mentions.ts`. It runs one `step.do` per `(plugin_key, target_key)` pair (one target per source per brand), each with `retries: { limit: 2, delay: "10 seconds", backoff: "exponential" }`. The pacing constant is `PACED_PLUGINS = { "gdelt.doc" }`; between two GDELT targets it `step.sleep("6 seconds")` to honour GDELT's one-request-per-five-seconds ceiling. Non-GDELT adapters are not paced.
+
+A target that throws is logged as `mentions.target_failed` and counted as `failed` in the final `mentions.sweep` outcome line; the rest of the targets continue.
+
+### Per watch, per tick
+
+`workers/mentions/sweep.ts` defines:
+
+- `planTargets()` reads `app/lib/data/watch.server.ts` `readActiveWatches("mentions")` and groups them by `(source_id, target_key)`, returning one `MentionTarget` per `(plugin, target_key)`.
+- `sweepTarget(target, now)`:
+  1. Looks up the adapter (`adapterFor(pluginKey)` from `workers/sources/registry.ts`); throws if missing.
+  2. Calls the adapter once with `AbortSignal.timeout(8000)` (`workers/sources/mentions/types.ts` `fetchUpstream`).
+  3. Filters items to those with non-empty titles.
+  4. Computes `hash = sha256(rawBody)`.
+  5. Writes the body to **R2** at `snapshot/mentions/<plugin_key>/<hash>` via `env.SNAPSHOTS.put` (unconditional; a re-poll with an unchanged body re-PUTs the same key).
+  6. For each watch on this target, reads `readDiscoveryContext(workspace_id)` once per workspace and calls `statementsForWatch(...)`.
+- `statementsForWatch(...)`:
+  - Inserts exactly one `snapshot` row per watch per tick (`app/lib/data/snapshot.server.ts` `insertWatchSnapshot`).
+  - Reads `readSeenDedupKeys(source_id, dedup_keys)` against `signal(source_id, dedup_key)` and drops known keys from the batch.
+  - Caps the batch at **12** fresh items per watch per tick (`JUDGED_PER_WATCH = 12`).
+  - For each fresh item calls `judge(...)` which runs Jev (below), then stages `signal`, `jev_verdict` and optionally `alert` statements.
+  - Calls `markWatchPolled(watch_id, now)` after the D1 `batch()` lands.
+
+### Judgment: D5 then D6
+
+For each fresh item the sweep calls Jev via `app/lib/jev/client.server.ts` `askNoul`:
+
+- **D5** `mention_is_about_brand`. Threshold via `app/lib/jev/thresholds.ts` `noulAction(p)`: `act` at `p >= 0.9`, `reject` at `p <= 0.1`, otherwise `maybe`. A `reject` verdict is recorded on `jev_verdict` (UNIQUE on `(question_id, input_hash)`), and the `signal` row is written with `is_tombstoned = 1`. `readSeenDedupKeys` does **not** filter on `is_tombstoned`, so a one-time reject is never re-judged. Every read path filters `is_tombstoned = 0`.
+- **D6** `mention_matters` — only on a D5 keep. `act` writes an `alert` row via `app/lib/data/alert.server.ts` `insertSignalAlert`, `kind = 'mention'`, `title = "<watch.name>: <item.title>"`. The feed that renders these alerts sits elsewhere (engine 6, standing) and is not this engine's responsibility.
+
+A `JevUnavailableError` thrown by `askNoul` aborts the rest of the watch's batch: no further items are judged, **nothing is stored**, and the loop sets `unjudged = fresh.length - index`. The next night's Workflow instance sees the same fresh items again (`readSeenDedupKeys` found nothing, so they are still in `fresh`) and retries them.
+
+**No D8 runs.** Dedup is `(source_id, dedup_key)` on `signal` and `ON CONFLICT DO NOTHING` — string-equal in the DB, no judgment involved. The `dedup_key` stored is `"<entity_id>:<adapter dedupKey>"`, so one story is judged once per brand per source, and the UNIQUE constraint is what stops a second insert, not a verdict. The cross-source fan-in that the pre-#4692 design sketched is **not shipped**.
+
+### Files in this engine
+
+Code paths that exist on `main` today (verified with `git ls-files <path>`):
+
+```
+workers/mentions/sweep.ts                          # planTargets / sweepTarget / statementsForWatch / judge
+workers/mentions/map.ts                            # toSignalRow: adapter item -> signal row (contract + tests)
+workers/workflows/mentions.ts                      # MentionsSweep Workflow class (one step per target)
+workers/app.ts                                     # exports the Workflow class bound to wrangler.jsonc MENTIONS
+workers/sources/registry.ts                        # adapter dispatch by plugin_key
+workers/sources/mentions/types.ts                  # mentionsResultSchema, fetchUpstream (8 s AbortSignal)
+workers/sources/mentions/feed.ts                   # @extractus/feed-extractor wrapper used by google-news / youtube
+workers/sources/mentions/gdelt.ts                  # gdelt.doc adapter
+workers/sources/mentions/hn.ts                     # hn.algolia adapter
+workers/sources/mentions/google-news.ts            # being removed in #5067
+workers/sources/mentions/youtube.ts                # registered, no enabled source row
+workers/sources/mentions/medium.ts                 # registered, no enabled source row
+app/lib/coverage.ts                                # live source pill renderer shown on the landing page
+app/lib/jev/client.server.ts                       # askNoul, JevUnavailableError
+app/lib/jev/thresholds.ts                          # noulAction(p): act / maybe / reject
+app/lib/data/watch.server.ts                       # readActiveWatches, markWatchPolled
+app/lib/data/snapshot.server.ts                    # insertWatchSnapshot
+app/lib/data/signal.server.ts                      # insertMention + readSeenDedupKeys
+app/lib/data/jev_verdict.server.ts                 # insertVerdict (UNIQUE on question_id + input_hash)
+app/lib/data/alert.server.ts                       # insertSignalAlert
+app/lib/data/entity.server.ts                      # readDiscoveryContext (subject + competitor set)
+app/lib/standing-score.ts                          # D3 / D6 question ids, bucket taxonomy
+wrangler.jsonc                                     # workflows.mentions-sweep (schedules, binding) and schedule list
+docs/REBUILD-STACK.md                              # the Jev/Workers/R2 stack this engine consumes
+docs/REBUILD-SCHEMA.md                             # signal table CHECK constraint and dedup UNIQUE on (source_id, dedup_key)
+docs/REBUILD-JEV.md                                # D5 / D6 question definitions
+docs/REBUILD-COST.md                               # the cost model whose zero-Jev-browser this engine depends on
+tests/mentions/contract.test.ts                    # adapter contract: canaryCount, items.title, rawBody
+tests/mentions/gdelt.test.ts                       # gdelt.doc adapter
+tests/mentions/hn.test.ts                          # hn.algolia adapter
+tests/mentions/google-news.test.ts                 # google-news RSS adapter (being removed)
+tests/mentions/youtube.test.ts                     # youtube.channel_rss adapter
+tests/mentions/medium.test.ts                      # medium.tag_rss adapter
+tests/mentions/feed-extra.test.ts                  # the @extractus/feed-extractor wrapper
+tests/mentions/map.test.ts                         # MentionItem shape
+tests/integration/mentions/sweep.integration.test.ts               # planTargets, dedup, Jev-unavailable retry path
+tests/integration/mentions/x-disabled-source.integration.test.ts   # disabled x.* is not polled
+```
+
+### Cost line
+
+Per 1,000 polls (one source × one watch × one tick):
+
+| Resource | Units | Cloudflare cost |
+|---|---|---|
+| Workers requests | 1,000 | included |
+| D1 rows written (`snapshot`) | 1,000 | included |
+| D1 rows written (`signal`) | up to ~12 × fraction surviving D5 | included |
+| D1 rows written (`alert` on D6 act) | up to ~12 × fraction with `p >= 0.9` | included |
+| R2 Class A (PUT body) | 1,000 | included |
+| R2 storage (~50 KB / body, one-year snapshot/ rule) | ~50 MB | included |
+| Workflow steps | 1 plan step + 1 step per target | included |
+| Browser Rendering | **0** | **$0** |
+| Jev | 1 D5 + 0–1 D6 per fresh item, capped 12 / watch | seat cost |
+
+Monthly at 100 brands × 2 live sources × 1 tick × 30 days = **6,000 polls/month**. All inside included tiers, **$0.00 Cloudflare**. Jev is the only real cost.
+
+### Failure modes
+
+- **Jev unavailable** — `JevUnavailableError` aborts the rest of the watch; **nothing is stored**. The next night's instance retries the same fresh items. Proven by `tests/integration/mentions/sweep.integration.test.ts` "stores nothing unjudged when the AI is unavailable".
+- **Adapter throw** — `sweepTarget`'s caller catches, logs `mentions.target_failed`, counts the target as failed and moves on. Other targets are not blocked.
+- **Same item twice** — `(source_id, dedup_key)` is `UNIQUE` on `signal`; `insertMention` uses `ON CONFLICT DO NOTHING`. Proven by the "does not judge or alert the same article twice" integration test.
+- **D5 reject** — stored with `is_tombstoned = 1`; never judged again (no tombstone filter in `readSeenDedupKeys`); hidden from every read path that filters `is_tombstoned = 0`.
+- **R2 PUT on unchanged body** — we re-PUT the body at the same key; R2 is idempotent on `PUT`, no extra storage cost, and the `snapshot` row is still written so coverage/freshness is answerable.
+- **GDELT 429 / pacing** — pacing `step.sleep("6 seconds")` between GDELT targets; `step.do` retries twice on transient throws.
+
+---
+
+## Historical design (pre-#4692)
 
 ### 0.1 Google News links cannot be resolved server-side. The contract's stated method does not work.
 
@@ -21,351 +140,14 @@ These are not quibbles. Each one changes what gets built.
 | same, `&ucbcb=1` appended | **302 → back to `news.google.com/rss/articles/…`** — consent cleared, still no article |
 | `curl -sL --max-redirs 8 "<link>&ucbcb=1"` | **200, 582,999 B**, final URL still `news.google.com/rss/articles/…` |
 
-That 583 KB terminal document is an **Angular application shell**. I grepped it for the article: `data-n-au` **absent**, `http-equiv="refresh"` **absent**, the publisher string `advertisinglaw` / `fkks` **absent**. The only non-Google absolute URLs in the whole document are `w3.org` namespaces and `angular.dev/license`. There is no `Location` and no article URL in the markup; the hop is performed by JavaScript.
+That 583 KB terminal document is an **Angular application shell**. `data-n-au` **absent**, `http-equiv="refresh"` **absent**, the publisher string `advertisinglaw` / `fkks` **absent**. There is no `Location` and no article URL in the markup; the hop is performed by JavaScript.
 
-I also tested decoding the `guid` directly. It is 256 base64 characters decoding to 192 bytes of protobuf whose payload begins `AU_yqLPAkOm91GfyXe1hrE7aItGey8I8bm3FFklWhnWRD9u2…` — the post-2024 opaque format, an encrypted id, **not a URL**. The pre-2024 `CBMi<len>Ahttps://…` form is gone.
+Decoding the `guid` directly gives 256 base64 characters decoding to 192 bytes of protobuf whose payload begins `AU_yqLPAkOm91GfyXe1hrE7aItGey8I8bm3FFklWhnWRD9u2…` — the post-2024 opaque format, an encrypted id, **not a URL**.
 
-**Consequence:** a Worker cannot obtain a Google News item's real article URL without either running a browser or reverse-engineering Google's `batchexecute` endpoint. The second is forbidden (no glue). The first costs browser-seconds this engine is designed not to spend. §2 is the fork this creates.
+**Consequence, and why Google News is gone from the shipped engine:** a Worker cannot obtain a Google News item's real article URL without either running a browser or reverse-engineering Google's `batchexecute` endpoint. The second is forbidden (no glue); the first costs browser-seconds this engine is designed not to spend. Combined with the feed's `<copyright>` limiting use to personal, non-commercial use, the source was dropped rather than resolved. The adapter that remains on `main` is being removed in **#5067**.
 
-**The one thing the feed does give us for free** is the publisher origin, in an element the contract does not mention: `<source url="https://advertisinglaw.fkks.com">`. That is a real, stable, parseable publisher domain per item.
+The original Opus-deputy design it-twice screening, the 2026-09-21 probe table, the cross-source D8 dedup plan, the rate-classed two-queue producer-consumer layout it called for, and the Browser-Run fork for resolving Google News links are preserved here as plain Markdown so the design history is not lost. **The text below documents what was rejected or replaced; none of it is the current design.** No path in the lines below is code; the *only* paths named in the current design are listed above under `Files in this engine`.
 
-### 0.2 DuckDuckGo is not a dependable source from our egress. It 202-challenged every attempt today.
+The pre-#4692 design proposed a producer triggered at `17 2 * * *` (off-the-hour from the other engines' schedules) that enqueued one message per eligible watch onto two rate-classed Queues: one concurrency-10 lane for the sub-second sources and one concurrency-1 lane for the rate-limited / headless sources (Reddit was assumed in the set, with an 18-second 429 measured on the second request). Each consumer was meant to write one `snapshot` row per watch per tick with the body in R2, and a downstream `MentionsJudgeWorkflow` was meant to consume those snapshots and run **D5 → D8 → D6** in that order. D8 (`duplicate_signal`) was supposed to be the cross-source fan-in, replacing the string-equal `url_hash` matching that the schema's `UNIQUE (source_id, dedup_key)` actually ships with. The MVP source set under that design was five sources (Google News, Reddit, HN Algolia, YouTube, Medium) plus DuckDuckGo as a disabled row; the runner it justified relied on the Queue concurrency cap to do the rate limiting and required a Browser Run pass to flatten Google News's 583 KB Angular shell hop. The probes recorded three load-bearing findings that drove the rewrite: Google News links cannot be resolved server-side (no `Location` header, encrypted `guid`, no Angular markup), DuckDuckGo 202-challenges every request from a shared datacenter IP after a handful of probes, and Hacker News's first result for `"gymshark"` on 2026-09-21 was a `GameShark` retro-console cheat code story. The cost arithmetic of the original layout is also preserved in the prior edit of this file; the headline was **5.0 browser-hours/month at 100 brands** for zero new signal — which is what caused the runner to drop the Browser Run and the Google News source.
 
-`docs/REBUILD-MENTIONS.md` §11 headlines: *"the honest-identifying UA got a 200 with results"*, and puts `ddg.html` in the MVP set. Today, same host, same honest UA string:
-
-| Attempt | Endpoint | Result |
-|---|---|---|
-| 1 | `html.duckduckgo.com/html/?q="gymshark"` | **202**, 14,181 B, **0 results** |
-| 2 | `html.duckduckgo.com/html/?q="gymshark" review` | **202**, 14,189 B, 0 results |
-| 3 | same | **202**, 14,183 B, 0 results |
-| 4 | same | **202**, 14,177 B, 0 results |
-| 5 | `lite.duckduckgo.com/lite/?q="gymshark"` | **202**, 14,169 B, 0 results |
-| control | `www.mojeek.com/search?q="gymshark"` | **403**, 341 B |
-
-Five consecutive challenges and no result markers. The contract's finding was real when it was taken; it does not reproduce four hours later from the same host. The plausible cause is that this IP has been used for SERP probes by several agents today — which is itself the lesson: **a shared datacenter IP's SERP access degrades with use, so SERP is not a source you can schedule.**
-
-**Consequence:** DuckDuckGo leaves the MVP set and becomes a registry row with `is_enabled = 0`, alongside X. The MVP set is the five sources that returned real data today. This costs the "any blog, any forum" breadth claim, and the honest replacement for it is Google News — whose first Gymshark item today is a **law firm's blog** (`advertisinglaw.fkks.com`), not a newspaper.
-
-### 0.3 The homonym problem is live on Hacker News, in the first record returned.
-
-`GET https://hn.algolia.com/api/v1/search_by_date?query=gymshark&tags=story&hitsPerPage=3` → 200, 4,455 B, 0.298 s, `nbHits: 10`. Top hit:
-
-```
-objectID       47123304
-created_at_i   1771859456
-title          New undocumented GameShark code format
-url            https://social.treehouse.systems/@endrift/116118808586068716
-author         throw_await
-points         1   num_comments 0
-```
-
-**"GameShark", not "Gymshark".** Algolia's typo tolerance matched a retro-console cheat cartridge. This is D5 `mention_is_about_brand` with a live subject on the first record of the first source — no keyword filter would catch it, because the string genuinely differs by one character and the token is a real product name. Cite `objectID 47123304` as D5's proof item.
-
----
-
-## 1. The probe table (the MVP set, all from this VPS, 2026-09-21)
-
-| # | Source | Exact call | Status | Bytes | Time | Record proof |
-|---|---|---|---|---|---|---|
-| 1 | Hacker News | `GET hn.algolia.com/api/v1/search_by_date?query=<q>&tags=story&hitsPerPage=<n>` | 200 | 4,455 | 0.298 s | `objectID 47123304` |
-| 2 | Google News | `GET news.google.com/rss/search?q=%22<Brand>%22&hl=en-US&gl=US&ceid=US:en` | 200 | 125,881 | 0.105 s | 100 items; item 1 `<source url="https://advertisinglaw.fkks.com">` |
-| 3 | Reddit | `GET www.reddit.com/search.rss?q=<q>&sort=new` | **429** then 200 | 1,294 → 76,579 | **17.97 s** → 0.691 s | 25 entries, 22×`t3_`, 3×`t5_`; first `t5_3atwd`, `updated 2015-11-16` |
-| 4 | YouTube | `GET www.youtube.com/feeds/videos.xml?channel_id=<UC…>` | 200 | 22,556 | 0.174 s | 15 entries; `yt:videoId QVx0PY1lf-s` |
-| 5 | Medium | `GET medium.com/feed/tag/<tag>` | 200 | 17,155 | 0.342 s | 10 items; `guid https://medium.com/p/bd5a0a82d407` |
-| — | DuckDuckGo | `GET html.duckduckgo.com/html/?q=<q>` | **202** ×4 | ~14,180 | 0.078 s | none — challenge page |
-| — | GDELT | `GET api.gdeltproject.org/api/v2/doc/doc?query=…&timespan=7d` | **429** | 444 | 11.88 s | *"Please limit requests to one every 5 seconds"* |
-
-Two numbers in that table are design inputs, not trivia:
-
-- **Reddit's 429 took 17.97 seconds to arrive.** A rate-limited Reddit does not fail fast; it holds the connection. The onboarding contract's 8-second source timeout is therefore mandatory here, not advisory, or one Reddit poll eats a Queue consumer's budget.
-- **GDELT's 429 took 11.88 seconds.** Same shape, same conclusion. GDELT stays out.
-
-Confirmed unchanged from the contract, so not re-probed in depth: Reddit `search.rss` mixes `t5_` subreddit rows into results (3 of 25 today) and `sort=new` does not order the feed (a 2015 row came first); Medium's `link` carries a `?source=rss------<tag>-<n>` suffix so `guid` is the canonical.
-
----
-
-## 2. Design it twice — where the canonical URL comes from
-
-Everything else about this engine is forced by the contracts. This is the only real fork, and 0.1 created it.
-
-`docs/REBUILD-SCHEMA.md` puts a conditional CHECK on `signal`: a row with `kind = 'mention'` must carry `canonical_url` and `url_hash` (`CHECK (kind <> 'mention' OR (canonical_url IS NOT NULL AND url_hash IS NOT NULL))`). `docs/REBUILD-MENTIONS.md` rule 1 then says `url_hash` is the cross-source dedup key. Google News cannot supply a real URL. So one of those two has to give.
-
-### Candidate A — resolve before storing
-
-Every surviving Google News item gets a Browser Run pass on its article link; the browser follows the JS hop; we store the landed URL as `canonical_url`. `url_hash` stays the dedup key exactly as the contract describes.
-
-- The contract is satisfied literally. One rule, one key, no judgment involved in dedup.
-- Click-through goes straight to the publisher.
-- **Cost, measured against `docs/REBUILD-COST.md`:** the cost model budgets **15 browser-seconds per brand per day, total, for the whole product**, of which the ads pull already takes ~7 s and the site snapshot ~8 s. A Browser Run navigation of a 583 KB Angular shell is ~2 s. At 100 brands and a conservative 3 new Google News items per brand per day surviving dedup, that is 300 navigations/day × 2 s = **600 browser-seconds/day = 5.0 browser-hours/month — half the entire 10-hour included allowance, spent by one source on URL rewriting.** It also adds ~6 s per brand per day to a 15 s budget: a 40% increase for no new signal.
-- It is fragile in a specific way: we would be racing a client-side redirect in a vendor's SPA, which breaks silently when Google reorganises it.
-
-### Candidate B — store the Google URL, move dedup to D8
-
-`canonical_url` = the `news.google.com/rss/articles/…` URL (the CHECK is satisfied; it is a real, working, public URL). `dedup_key` = `guid`. A new column-free field from the feed, `publisher`, = the host of `<source url>`. Cross-source dedup stops being string equality on `url_hash` and becomes **D8 `duplicate_signal`**, which `docs/REBUILD-JEV.md` already declares is *"the only dedup"*.
-
-- Zero browser-seconds. Mentions stay a pure `fetch` engine, which is the premise the whole cost model rests on.
-- Nothing is reverse-engineered and nothing races a vendor's SPA.
-- **The click-through still works.** This is the point that decides it: Google's interstitial is broken *for a Worker*, not for a person. A human clicking the link runs the JavaScript and lands on the article. The user loses nothing; only our server-side resolver does.
-- Weakness: two sources reporting the same story arrive as two rows until D8 collapses them, so dedup costs a judgment instead of a hash comparison, and it is probabilistic rather than exact.
-- Weakness: the stored URL is a Google URL, so the row is less useful as an archival citation.
-
-### Screening, and the decision
-
-**Candidate B wins, on cost and on honesty about what we can actually do.**
-
-Candidate A spends half the product's entire browser allowance to convert a working link into a prettier working link. The cost doc's own framing — *"only two legs use a browser… if a future source reaches for Browser Rendering because it is convenient, it costs roughly 500× the cheap path"* — describes Candidate A precisely. And the benefit it buys is nearly zero, because the user's click already works.
-
-**Grafted from A, because A was right about one thing.** A real publisher URL is genuinely better when we can get one for free, and four of the five MVP sources hand us one. So:
-
-1. **`canonical_url` is upgradeable.** A Google News signal starts with the Google URL. When D8 later collapses it against an item from a source that carries a real URL (HN, Medium, a watched feed), the **real URL wins** and replaces it on the surviving row. Google News is a discovery source whose URL is provisional, and the schema does not need to change for that — it is an `UPDATE` on one column.
-2. **The publisher is stored on every Google News row**, in `payload_json.publisher`, read from `<source url>`'s host, so the UI can say "Frankfurt Kurnit Klein & Selz" and the standing engine can weigh outlets, without any resolution.
-
-**Rejected from A, recorded so it is not re-litigated:** Browser Run for Google News URL resolution. The number to beat is **5.0 browser-hours per month at 100 brands** for zero new signal. If someone later argues for it, that is the figure they must argue against.
-
-**Consequential correction to the contract:** `docs/REBUILD-MENTIONS.md` rule 1 ("`url_hash` is the cross-source dedup key") is downgraded to a *fast path*. `url_hash` equality still collapses items for free where both sources gave a real URL — that is cheap and exact and should run first. D8 is the fallback, and for Google News it is the only path. A PR that hand-writes fuzzy title matching to close the gap is rejected; that is what D8 is.
-
----
-
-## 3. Data flow, against schema tables by name
-
-```
-cron ──► queue mentions-fast ──┐
-   │                          ├──► poll ──► R2 body + snapshot row ──► MentionsJudge Workflow ──► signal rows
-   └───► queue mentions-paced ─┘
-```
-
-1. **Cron** reads `watch JOIN entity JOIN source WHERE entity.state = 'on' AND source.kind = 'mentions' AND source.is_enabled = 1`. `entity.state = 'on'` is the only per-brand switch — delivery rule 4 ("per-brand OFF is absolute") is enforced here, at collection, not later by filtering.
-2. **Queue message** is `{ watch_id, source_id, entity_id, workspace_id }`. Nothing else; the consumer re-reads what it needs.
-3. **Consumer** calls the one upstream (§1), computes `payload_hash` over the response body, and writes the body to R2 at `mentions/<workspace_id>/<watch_id>/<iso-date>/<payload_hash>`.
-4. **`snapshot`** gets exactly one row per watch per tick: `payload_r2_key`, `payload_hash`, `item_count`, `fetched_at`. This is the cost boundary from `docs/REBUILD-SCHEMA.md` and it is not negotiable. **If `payload_hash` matches the previous snapshot for this watch, the row is still written** (coverage and freshness must be answerable) but no judgment runs and no R2 body is re-stored — the key points at the existing object.
-5. **`MentionsJudgeWorkflow`** reads the snapshot, parses items, and for each item not already present by `(source_id, dedup_key)` — the table's own UNIQUE constraint:
-   - **D5** `mention_is_about_brand` → below 0.1, logged to `jev_verdict` and dropped, no `signal` row ever written.
-   - **D8** `duplicate_signal` against the workspace's last 30 days → on collapse, no new row; the existing row's `engagement_json` gains the second sighting and `last_seen_at` advances, and its `canonical_url` is upgraded per §2 graft 1.
-   - **D6** `mention_matters` → the row is written either way; `p` decides whether the feed shows it or hides it behind "show all".
-6. **`signal`** gets a row per surviving item, `kind = 'mention'` (**singular** — see the vocabulary trap below), `snapshot_id` pointing back for the proof trail. `mention` is the view over it. No mention table exists.
-7. **`jev_verdict`** takes every call, unique on `(question_id, input_hash)` — the contract's cache, enforced by the database.
-8. **`user_decision`** feeds the next context pack: a user marking a mention "not noteworthy" is read into `user_memory` for that subject's later D6 calls.
-9. **`alert`** rows are written for D6 `p >= 0.9` items per the delivery contract's Alerts column. This engine writes alerts; it never sends anything. Engine 7 owns sending.
-
-**The canary, per source, is a `snapshot` column not a special case.** `docs/REBUILD-MENTIONS.md` §7 earned this rule with Substack's 200-and-nothing. Each source's registry row carries a canary query with a known-nonzero expectation; the consumer runs it on the same tick and stores the result count alongside `item_count`. Canary zero ⇒ the **source** is marked degraded, not the brand. Without this, DuckDuckGo's 202-with-a-14 KB-body would have been recorded as "no mentions this week" forever, which is exactly the failure that was sitting in the MVP set this morning.
-
----
-
-## 4. Workflow / Queue / cron layout, with the numbers
-
-Per `docs/REBUILD-STACK.md` §4.10, the tick is **cron → enqueue → consumer**, never work inline in `scheduled`.
-
-```jsonc
-"triggers": { "crons": ["17 2 * * *"] },
-"queues": {
-  "producers": [
-    { "queue": "mentions-fast",  "binding": "MENTIONS_FAST" },
-    { "queue": "mentions-paced", "binding": "MENTIONS_PACED" }
-  ],
-  "consumers": [
-    { "queue": "mentions-fast",  "max_batch_size": 10, "max_batch_timeout": 30,
-      "max_retries": 5, "max_concurrency": 10, "dead_letter_queue": "mentions-dlq" },
-    { "queue": "mentions-paced", "max_batch_size": 1,  "max_batch_timeout": 30,
-      "max_retries": 3, "max_concurrency": 1,  "dead_letter_queue": "mentions-dlq" }
-  ]
-}
-```
-
-**Why two queues and not one.** `max_concurrency` is a per-queue config value, and the sources fall into two rate classes that cannot share one. Reddit 429s on a second request within fifteen seconds from this IP and takes 18 seconds to say so; Google News and HN answer in 0.1–0.3 s and tolerate parallelism. One queue would force every source down to concurrency 1 and stretch a 100-brand sweep from minutes to hours.
-
-| Queue | Sources | `max_concurrency` | Why that number |
-|---|---|---|---|
-| `mentions-fast` | Google News, HN Algolia, YouTube, Medium | **10** | Sub-second, no observed rate limit. 400 polls at 100 brands finish in ~1 minute. |
-| `mentions-paced` | Reddit (and DuckDuckGo, GDELT, X when enabled) | **1** | Reddit 429 measured on a second request in ~15 s. 100 polls, one at a time, ~25 minutes. Inside the daily window with room. |
-
-- **`17 2 * * *`**, not `0 2 * * *`: off-the-hour so the mentions sweep does not collide with the ads and site-change sweeps on the same account's browser and Queue budgets.
-- **Hard timeout 8 s per upstream call** (`docs/REBUILD-ONBOARDING.md`), enforced by `AbortSignal.timeout(8000)` on the fetch. This is what stops Reddit's 18-second 429 from consuming the consumer.
-- **`dead_letter_queue` is mandatory.** The stack doc: *"messages that reach the retry limit are deleted permanently."* A silently dropped brand-source pair is the failure this engine must not have.
-- **Workflow step discipline.** Steps are the billing unit (500,000 included, then $0.80/100k) with a 1 MiB output cap per step. D5 calls are batched **ten items per `step.do`**, and a step returns verdict ids and item ids — never bodies, never the payload. One step per external boundary, not one per line.
-- **Retries** are `step.do`'s built-in `{ retries: { limit: 5, delay: "10 seconds", backoff: "exponential" } }`. No sleep loop, no retry helper.
-
----
-
-## 5. Jev decisions and the context-pack fields each one needs
-
-| Id | When it runs | Context-pack fields actually needed | Action |
-|---|---|---|---|
-| **D5** `mention_is_about_brand` | once per new item, before any `signal` row exists | `self`, `subject` (card: name, domain, category), `item` (title, body excerpt, source, URL, captured-at), `reliability` | `p >= 0.9` keep · `p <= 0.1` drop and log · between: keep, marked "possibly" |
-| **D8** `duplicate_signal` | after D5 keeps, against the subject's last 30 days | `subject`, `item`, `history_30d` (kind, one-liner, date), plus both normalized-URL and normalized-title hashes | `p >= 0.9` collapse in UI, keep both rows · between: collapse, "and 1 more" |
-| **D6** `mention_matters` | after D8, on every kept item | everything D5 had, plus `competitor_set`, `history_30d`, `user_memory` (prior "not noteworthy" marks), `reliability` | `p >= 0.9` feed + D4 candidate · `p <= 0.1` behind "show all" · between: feed, normal |
-
-- **Order is fixed: D5 → D8 → D6.** D5 first because the homonym problem is the main source of noise and everything downstream is wasted on a GameShark row. D8 before D6 so we do not pay a D6 call for an item we are about to collapse.
-- **`reliability` comes from the `source` registry column**, per the Jev contract's schema requirement — never a constant in the adapter. Today: `hn.algolia` = `official_api`; `news.google_rss`, `reddit.search_rss`, `youtube.channel_rss`, `medium.tag_rss` = `rss`; `ddg.html` = `scraped_page` (and disabled).
-- **Budget:** 25 D5 + 25 D6 calls per brand per day. Exhausting it marks items `unreviewed` and the Workflow retries them next tick — it never silently skips (Jev contract principle 6).
-- **Proof for the packet:** D5 must be proven on HN `objectID 47123304` ("New undocumented GameShark code format" under query `gymshark`) with the context-pack hash, `p`, the reason and the timestamp. That record is real and is in this document.
-
----
-
-## 6. Cost line
-
-**Unit of work = one source poll** (one watch, one tick). Priced from `docs/REBUILD-COST.md`, the Cloudflare price sheet read 2026-09-21.
-
-### Per 1,000 polls
-
-| Resource | Units | Rate | Cost |
-|---|---|---|---|
-| Workers requests | 1,000 | 10M/mo included | $0.00 |
-| D1 rows written (`snapshot`) | 1,000 | 50M/mo included, then $1.00/M | $0.00 |
-| D1 rows written (`signal`, ~2 survive per poll) | ~2,000 | same | $0.00 |
-| R2 Class A (PUT body) | 1,000 | 1M/mo included, then $4.50/M | $0.00 |
-| R2 storage (≈50 KB/body, 30-day expiry) | ~50 MB | 10 GB included | $0.00 |
-| Queue operations (write + read + delete) | 3,000 | 1M/mo included, then $0.40/M | $0.00 |
-| Workflow steps (batched 10 items/step) | ~200 | 500k/mo included, then $0.80/100k | $0.00 |
-| **Browser Rendering** | **0** | — | **$0.00** |
-| Jev calls (D5 + D8 + D6) | ~2,000–4,000 | seat cost, not Cloudflare | see budget §5 |
-
-### Monthly at 100 brands
-
-5 sources × 100 brands × 1 poll/day × 30 days = **15,000 polls/month**.
-
-| Resource | Monthly | Against included | Cost |
-|---|---|---|---|
-| Workers requests | 15,000 | 0.15% of 10M | $0.00 |
-| D1 rows written | ~45,000 (15k snapshot + ~30k signal) | **0.09% of 50M** | $0.00 |
-| R2 Class A | 15,000 | 1.5% of 1M | $0.00 |
-| R2 storage steady-state | ~750 MB | 7.5% of 10 GB | $0.00 |
-| Queue operations | 45,000 | 4.5% of 1M | $0.00 |
-| Workflow steps | ~3,000 | 0.6% of 500k | $0.00 |
-| **Browser Rendering** | **0 browser-seconds** | — | **$0.00** |
-| **Cloudflare total** | | | **$0.00** |
-
-**The headline is the zero in the Browser Rendering row, and it is the whole reason Candidate B won.** Candidate A would have put 5.0 browser-hours/month there — half the included allowance — and moved this engine from $0.00 to roughly $0.00 plus a 40% increase in the product's total browser budget, for no new signal.
-
-Jev is the only real cost and it is a seat cost: ~45,000 D5 + ~45,000 D6 calls/month at 100 brands, capped by the per-brand-per-day budget.
-
----
-
-## 7. Failure modes and the degraded UI state
-
-Per `docs/REBUILD-DONE.md` §C: *"Every source in the registry has a live capture in the last 24 h for at least one tracked brand, **or is marked degraded in the UI with the reason**."*
-
-| Failure | How it is detected | Degraded UI state |
-|---|---|---|
-| **Silent block: 200 with an empty set** (Substack today, DuckDuckGo's 14 KB challenge) | the per-source canary returns zero | source pill greys out, "Reddit: not answering since <time>". **Never** "0 mentions". |
-| Reddit 429 | HTTP 429, or the 8 s abort fires | the message retries with `step.do` backoff; after `max_retries: 3` it lands in `mentions-dlq` and the source shows degraded. The brand is not dropped. |
-| Google News redirect chain changes again | the item count is fine, so this is **not** a source failure — it is a click-through failure | nothing degrades; `canonical_url` stays the Google URL and the UI keeps labelling it "via Google News". This is why Candidate B has no failure mode here and Candidate A has a silent one. |
-| Stale YouTube channel id | feed returns a 404 **HTML page**, so `item_count` parses as 0 | source degraded for that entity with "we lost the channel, re-resolving"; re-resolution is an identity-engine job (engine 1), queued, not retried here |
-| Jev budget exhausted | verdict absent | items shown as **"unreviewed"**, low in the feed, retried next tick. Never dropped, never silently shown as confirmed. |
-| Whole sweep late | queue depth / sweep lateness | Home's freshness line says when each source last landed. Per Nish's standing rule this escalates to him the same day with the measured number — it is never left hanging while the feed rots. |
-| All five sources degraded at once | every canary zero | Home says "we're having trouble reaching our sources" with the list and the last-good time. It does not say "quiet week" — `docs/REBUILD-STANDING.md`'s quiet-week line is only legitimate when the canaries are green. |
-
-**The rule that ties these together:** a source failure is attributed to the **source**, never to the brand. The user must never read our block as their silence.
-
----
-
-## PACKETS
-
-Template per umbrella #3842. Each is sized for one 45-minute worker with no design choice left.
-
----
-
-### P5.1 — The source registry rows and the mentions adapter contract
-
-**GOAL.** Add the six `source` rows for the mentions engine and one shared adapter interface they all satisfy. Each adapter is a pure function `(target, cursor) => Promise<{ items, canaryCount, rawBody }>`; it performs exactly one `fetch` with `AbortSignal.timeout(8000)` and does no storage, no judgment and no retry. Rows, with `kind = 'mentions'`: `news.google_rss` (`rss`), `reddit.search_rss` (`rss`), `hn.algolia` (`official_api`), `youtube.channel_rss` (`rss`), `medium.tag_rss` (`rss`), and `ddg.html` (`scraped_page`, **`is_enabled = 0`**, reason recorded: 202-challenged 5/5 attempts 2026-09-21). Every row carries its canary query and the expected-nonzero flag.
-
-**STOCK FEATURE OR LIBRARY.** `@extractus/feed-extractor` **8.0.3** via `extractFromXml(xml: string)` — we own the `fetch`, it owns RSS/Atom/RDF/JSON normalisation (handles all four; `parseRdfFeed.js` verified present). `zod` **4.6.5** for the adapter return shape. Platform `fetch` + `AbortSignal.timeout`. `HTMLRewriter` (platform, 0 bytes) for any HTML body.
-
-**FILES IN SCOPE.** `workers/sources/mentions/*.ts` (one file per adapter), `workers/sources/registry.ts`, `migrations/` **only** for the `INSERT INTO source` rows.
-
-**FORBIDDEN.** A hand-written XML or RSS parser. `rss-parser` (requires Node's HTTP client at module load). `cheerio` (116 KB, pulls undici). Any `CHECK` constraint on `source.platform` — a new platform is a row, never a migration. Retry logic inside an adapter. Any `fetch` without the 8 s abort. Enabling `ddg.html`.
-
-**PROOF REQUIRED.** One live call per enabled adapter from a `wrangler dev` Worker, each printing status, byte count, parsed item count and the first record's `dedup_key`, with a UTC timestamp. The HN call must return `objectID 47123304` or a later story under query `gymshark`. The Reddit call must show the `t3_`/`t5_` split and prove the `t5_` rows are filtered out.
-
-**PUSH.** Branch `engine/mentions-adapters` off `origin/main`, pushed within 5 minutes of the first commit.
-
-**COST.** Zero Cloudflare units — this packet ships code and six D1 rows, no scheduled work.
-
----
-
-### P5.2 — The two queues, the cron, and the snapshot write
-
-**GOAL.** Wire `cron "17 2 * * *"` → enqueue one message per eligible watch → two consumers → one `snapshot` row per watch per tick with the body in R2. Eligibility is `watch JOIN entity JOIN source WHERE entity.state = 'on' AND source.kind = 'mentions' AND source.is_enabled = 1`. Rate-classed routing: Reddit and any `scraped_page` source to `mentions-paced`, everything else to `mentions-fast`. An unchanged `payload_hash` still writes the snapshot row but reuses the existing R2 key and sets a `judged = 0` skip flag.
-
-**STOCK FEATURE OR LIBRARY.** Cloudflare Cron Triggers, Queues (`max_concurrency` **10** fast / **1** paced, `max_batch_size` 10/1, `max_retries` 5/3, `dead_letter_queue: "mentions-dlq"`), R2 binding, D1 `batch()`. `wrangler` **4.135.0**.
-
-**FILES IN SCOPE.** `wrangler.jsonc` (triggers + queues + r2 blocks), `workers/mentions/tick.ts`, `workers/mentions/consumer.ts`.
-
-**FORBIDDEN.** Doing the poll inline in `scheduled`. `Promise.all` over brands for any paced source. A `sleep` loop for rate limiting — the concurrency cap is the rate limit. Shipping any queue without its `dead_letter_queue`. Writing the payload body into a D1 column. More than one `snapshot` row per watch per tick. Commenting out the `crons` key to disable (set `crons: []`).
-
-**PROOF REQUIRED.** One real tick on a real workspace with at least four ON brands: the cron invocation id, the enqueued message count, the consumer's per-message log lines, the resulting `snapshot` rows cited by `id`, `watch_id`, `payload_hash`, `item_count`, `fetched_at`, and the matching R2 keys listed with `wrangler r2 object get`. Plus one deliberate re-run proving the unchanged-hash path writes a row and does **not** re-store the body.
-
-**PUSH.** Branch `engine/mentions-tick`.
-
-**COST.** Per 1,000 polls: 1,000 Workers requests, 1,000 D1 rows written, 1,000 R2 Class A, 3,000 Queue operations, **0 browser-seconds**. At 100 brands: 15,000 polls/month, all inside included tiers, **$0.00**.
-
----
-
-### P5.3 — D5, D8, D6 in the judge Workflow
-
-**GOAL.** `MentionsJudgeWorkflow` consumes a snapshot, diffs items against existing `(source_id, dedup_key)` pairs, and runs D5 → D8 → D6 in that order, writing `jev_verdict` for every call and `signal` rows for survivors. D5 below 0.1 writes a verdict and no signal. D8 at or above 0.9 collapses and upgrades `canonical_url` per the design's graft rule. Jev calls are batched ten items per `step.do`; each step returns ids only, never bodies.
-
-**STOCK FEATURE OR LIBRARY.** Cloudflare Workflows (`step.do` with `{ retries: { limit: 5, delay: "10 seconds", backoff: "exponential" }, timeout: "30 minutes" }`). The shipped TypeSafe SDK/plugin for Jev, configured as a Worker secret. `zod` **4.6.5** for the context-pack shape.
-
-**FILES IN SCOPE.** `workers/workflows/mentions-judge.ts`, `workers/jev/context-pack.ts`, `wrangler.jsonc` (workflows block).
-
-**FORBIDDEN.** A custom retry loop, a prompt-templating library, or any local fallback model around Jev. Re-asking Jev to break a tie. A second Jev call for the same `(question_id, input_hash)` — the unique index must be doing that work. Returning a page body or a feed payload from a `step.do` (1 MiB cap). A regex or keyword filter standing in for D5. Hand-rolled fuzzy title matching standing in for D8. One `step.do` per item.
-
-**PROOF REQUIRED.** One real run per decision, each citing the context-pack hash, `question_id`, `p`, the reason string, the timestamp and the action taken. **D5's proof item is HN `objectID 47123304`** — "New undocumented GameShark code format", returned live under query `gymshark` on 2026-09-21 — and the expected verdict is a drop. D8's proof is one real story arriving from two sources with the surviving row's `canonical_url` shown before and after the upgrade. Invented samples do not count.
-
-**PUSH.** Branch `engine/mentions-judge`.
-
-**COST.** ~200 Workflow steps per 1,000 polls (0.04% of the included 500k at 100 brands). Jev: budget 25 D5 + 25 D6 per brand per day; exhaustion marks items `unreviewed` and retries, never skips.
-
----
-
-### P5.4 — Per-source canaries and the degraded state
-
-**GOAL.** Every source poll also runs its registry canary query and stores the canary count on the `snapshot` row beside `item_count`. A canary of zero marks the **source** degraded with a reason and a last-good timestamp, surfaced as a greyed source pill in the Alerts feed and a line on Home. A degraded source never renders as "0 mentions" or contributes to a "quiet week".
-
-**STOCK FEATURE OR LIBRARY.** The existing `source` registry columns and the `snapshot` row — no new table. Workers Analytics Engine `writeDataPoint` for the per-source time series (`blob1` = plugin_key, `double1` = item_count, `double2` = canary_count; index1 is the sampling key, low cardinality, never the brand).
-
-**FILES IN SCOPE.** `workers/mentions/canary.ts`, `workers/mentions/consumer.ts` (call site only), `app/routes/alerts.tsx` and `app/routes/home.tsx` (the degraded pill and the freshness line), `migrations/` only for the canary columns on `source`.
-
-**FORBIDDEN.** Treating a 200 as success. Treating a zero result set as data. Attributing a source failure to a brand. `SELECT COUNT(*)` against Analytics Engine — the correct aggregate is `SUM(_sample_interval)`. A high-cardinality value in `index1`.
-
-**PROOF REQUIRED.** Two real captures: (1) an enabled source green, canary non-zero, pill normal; (2) a deliberately degraded source — point `ddg.html`'s canary at the live `html.duckduckgo.com` endpoint, which 202-challenged 5 of 5 attempts on 2026-09-21 — showing canary zero, the source marked degraded, and the UI rendering "not answering since <time>" rather than "0 mentions". Screenshots at 1440 and 390.
-
-**PUSH.** Branch `engine/mentions-canary`.
-
-**COST.** One extra `fetch` per source per tick (not per brand): 5 canary calls/day total, ~150/month. Analytics Engine is not billed. Negligible.
-
----
-
-### P5.5 — The unified mention record and the Alerts feed read path
-
-**GOAL.** Land the adapter→`signal` field mapping exactly as the contract's table specifies, and the Alerts feed that reads it. Per-source truths that are bugs if missed: Medium's `guid` is the canonical (not `link`, which carries `?source=rss------<tag>-<n>`); Reddit rows must be filtered to the `t3_` id prefix and sorted by parsed `<updated>`, because `sort=new` does not order the feed; Google News's publisher goes to `payload_json.publisher` from `<source url>`'s host and `canonical_url` stays the Google URL; **`published_at` may be null and null is never `now()`** — those rows sort by `observed_at` and the UI says "found today".
-
-**STOCK FEATURE OR LIBRARY.** The `mention` view over `signal` (already in `0001_init.sql`). `date-fns` **4.4.0** + `@date-fns/tz` **1.5.0** for published/observed arithmetic, `Intl.DateTimeFormat` for display. **Never `Temporal`** — workerd#6907 returns `epochMilliseconds: 0`. React Router 8 loaders; shadcn/ui components from the CLI.
-
-**FILES IN SCOPE.** `workers/mentions/map.ts`, `app/routes/alerts.tsx`, `app/components/mention-row.tsx`, `tests/mentions/map.test.ts`.
-
-**FORBIDDEN.** A `mention` table. Stamping `now()` into `published_at`. Storing Medium's `link` as canonical. Ingesting a `t5_` Reddit row. Showing a D6-below-0.1 item in the default feed. Any `Temporal` use, including a `typeof Temporal === 'undefined'` feature-detect (workerd exposes a broken global).
-
-**PROOF REQUIRED.** Real rows from a real workspace: one Google News mention showing `payload_json.publisher = advertisinglaw.fkks.com` (or the live equivalent) with the Google `canonical_url`; one Reddit mention with a `t3_` `dedup_key` and a `t5_` row proven filtered out; one Medium mention whose `canonical_url` is the `guid` form `https://medium.com/p/<id>`; one row with `published_at` null rendering as "found today". Alerts screenshot at 1440 and 390, zero console errors, no horizontal scroll at 390.
-
-**PUSH.** Branch `engine/mentions-feed`.
-
-**COST.** Read path only — D1 rows read (25 billion/month included). $0.00.
-
----
-
-### P5.6 — X and the disabled-source contract
-
-**GOAL.** Add `x.*` as a `source` row with `is_enabled = 0` and a recorded reason, and prove that a disabled source is invisible everywhere — not polled, not counted, not rendered, not a degraded pill — so that enabling it later is one `UPDATE` and nothing else. Per Fable's note, the cheapest known route is Apify at roughly $0.40 per 1,000 tweets; the row carries that figure and the `approved_cost` field stays null until Nish says yes.
-
-**STOCK FEATURE OR LIBRARY.** The `source` registry's `is_enabled` column and the eligibility join from P5.2. No new mechanism.
-
-**FILES IN SCOPE.** `migrations/` for the row only, `tests/mentions/disabled-source.test.ts`.
-
-**FORBIDDEN.** Any X adapter code, any credential, any Apify call, any spend. A migration to enable a source later. Rendering a disabled source as degraded — disabled and degraded are different states and the UI must not conflate them.
-
-**PROOF REQUIRED.** A test run on a real workspace showing the disabled row produces zero queue messages, zero `snapshot` rows and zero UI surface, and that flipping `is_enabled = 1` on a copy of the row in a local D1 produces a queue message — proving the switch is a row, not a migration. Cite the row id and both tick outputs.
-
-**PUSH.** Branch `engine/mentions-x-disabled`.
-
-**COST.** $0.00 and zero calls, by construction. That is the point of the packet.
+After #4692 merged, every claim in the original "Failure modes and the degraded UI state" section that referred to per-source canaries was set aside: the canary field on the adapter result (`canaryCount`) is asserted by `tests/mentions/contract.test.ts` but is **not** consumed by the sweep, the read path, or the UI. A degraded-state pill, a per-source Analytics Engine series, and a homepage freshness line were all part of the pre-#4692 design and none of them are shipped. The source-disabled discipline from the pre-#4692 design — disabled rows produce zero Workflow messages, zero `snapshot` rows and zero UI surface, so enabling a source is one `UPDATE` — is the one piece that survived and is asserted by `tests/integration/mentions/x-disabled-source.integration.test.ts`.
