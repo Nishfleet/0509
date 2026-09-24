@@ -4,6 +4,7 @@ import { MemoryRouter } from "react-router";
 import { describe, expect, it } from "vitest";
 
 import { CompetitorFrame, type CompetitorFrameProps, developmentsEmpty } from "../../app/components/competitor-frame";
+import { COMPETITOR_REASON_LINES, competitorReasonFragment } from "../../app/lib/competitor-reason";
 import type { SiteChangeItemData } from "../../app/components/site-change-item";
 import {
   CompetitorHeader,
@@ -56,14 +57,19 @@ describe("the competitor page frame", () => {
     expect(competitorPausedLine(null)).toBe("Paused");
   });
 
-  it("reads state_reason in customer words and never shows a code", () => {
+  it("reads state_reason in customer words from the canonical map and never shows a code", () => {
     expect(competitorPausedLine("2026-09-22T12:00:00.000Z", "acquired")).toBe(
-      "Paused 22 Sept · looks like it was acquired",
+      `Paused 22 Sept · ${competitorReasonFragment("acquired")}`,
     );
     expect(competitorPausedLine("2026-09-22T12:00:00.000Z", "shut_down")).toBe(
-      "Paused 22 Sept · looks like it shut down",
+      `Paused 22 Sept · ${competitorReasonFragment("shut_down")}`,
     );
+    expect(competitorReasonFragment("acquired")).toBe("looks like it was acquired");
+    expect(competitorReasonFragment("shut_down")).toBe("looks like it shut down");
+    expect(COMPETITOR_REASON_LINES.acquired).toBe("Looks like it was acquired");
+    expect(COMPETITOR_REASON_LINES.shut_down).toBe("Looks like it shut down");
     expect(competitorPausedLine("2026-09-22T12:00:00.000Z", "some_code")).toBe("Paused 22 Sept");
+
     const html = header({
       name: "Kindred",
       domain: "kindred.example",

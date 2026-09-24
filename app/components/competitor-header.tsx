@@ -1,14 +1,10 @@
 import type { ReactElement, ReactNode } from "react";
 import { Link } from "react-router";
 
+import { competitorReasonFragment } from "../lib/competitor-reason";
 import { BrandSwitch, DAY_MONTH } from "./brand-switch";
 
 export { DAY_MONTH };
-
-const PAUSE_REASONS: Readonly<Record<string, string>> = {
-  acquired: "looks like it was acquired",
-  shut_down: "looks like it shut down",
-};
 
 export function competitorPausedLine(
   stateChangedAt: string | null,
@@ -16,7 +12,7 @@ export function competitorPausedLine(
 ): string {
   const base = stateChangedAt === null ? "Paused" : `Paused ${DAY_MONTH.format(new Date(stateChangedAt))}`;
   if (stateReason === null) return base;
-  const why = Object.hasOwn(PAUSE_REASONS, stateReason) ? PAUSE_REASONS[stateReason] : undefined;
+  const why = competitorReasonFragment(stateReason);
   return why === undefined ? base : `${base} · ${why}`;
 }
 
