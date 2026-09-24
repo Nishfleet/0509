@@ -12,6 +12,12 @@ const ACCEPT_SUGGESTION =
 const DISMISS_SUGGESTION =
   "UPDATE suggestion SET status = 'dismissed', decided_by = 'user', decided_at = ?1 WHERE id = ?2 AND workspace_id = ?3 AND status = 'pending'";
 
+const SELECT_USER_DISMISSED =
+  "SELECT id, candidate_domain, candidate_name, decided_at FROM suggestion WHERE workspace_id = ?1 AND status = 'dismissed' AND decided_by = 'user' ORDER BY decided_at DESC";
+
+const RESTORE_SUGGESTION =
+  "UPDATE suggestion SET status = 'pending', decided_by = NULL, decided_at = NULL WHERE id = ?1 AND workspace_id = ?2 AND status = 'dismissed' AND decided_by = 'user'";
+
 const UPSERT_DISCOVERED =
   "INSERT INTO suggestion (id, workspace_id, kind, candidate_domain, candidate_name, evidence_json, verdict_p, verdict_reason, status, decided_by, decided_at, created_at) VALUES (?1, ?2, 'add', ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11) ON CONFLICT (workspace_id, candidate_domain) DO UPDATE SET evidence_json = excluded.evidence_json, verdict_p = excluded.verdict_p, verdict_reason = excluded.verdict_reason, status = excluded.status, decided_by = excluded.decided_by, decided_at = excluded.decided_at WHERE suggestion.status = 'pending'";
 
@@ -135,4 +141,30 @@ export async function dismissSuggestion(input: {
   now: string;
 }): Promise<void> {
   await env.DB.prepare(DISMISS_SUGGESTION).bind(input.now, input.suggestionId, input.workspaceId).run();
+}
+
+export interface DismissedSuggestion {
+  suggestionId: string;
+  name: string;
+  domain: string;
+  dismissedAt: string;
+}
+
+export async function readUserDismissed(workspaceId: string): Promise<DismissedSuggestion[]> {
+  const rows = await env.DB.prepare(SELECT_USER_DISMISSED).bind(workspaceId).all<{
+    id: string;
+    candidate_domain: string;
+    candidate_name: string | null;
+    decided_at: string;
+  }>();
+  return rows.results.map((row) => ({
+    suggestionId: row.id,
+    name: row.candidate_name ?? row.candidate_domain,
+    domain: row.candidate_domain,
+    dismissedAt: row.decided_at,
+  }));
+}
+
+export async function restoreSuggestion(input: { workspaceId: string; suggestionId: string }): Promise<void> {
+  await env.DB.prepare(RESTORE_SUGGESTION).bind(input.suggestionId, input.workspaceId).run();
 }
