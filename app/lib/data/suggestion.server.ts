@@ -63,6 +63,7 @@ function statementsFor(workspaceId: string, result: DiscoveryResult, now: string
             signalId: null,
             entityId: null,
             p: result.verdict.p,
+            choice: null,
             reason: result.line,
             decidedAt: now,
           }),
