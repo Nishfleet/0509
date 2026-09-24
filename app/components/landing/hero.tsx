@@ -1,14 +1,25 @@
 import { TRIAL_TERMS } from "../../lib/billing/plans";
+import { type CoverageId, isLive, WATCHED_NOUNS } from "../../lib/coverage";
 import { cn } from "../../lib/utils";
 import { ExampleMark } from "./example-mark";
 import { eyebrow, pageWidth } from "./section";
 import { StartButton } from "./start-button";
 
-const EXAMPLES = [
-  { who: "A rival", where: "pricing page", before: "20% off annual", after: "30% off annual", own: false },
-  { who: "A rival", where: "3 new Meta ads", before: "“Built for serious teams”", after: "“Affordable”", own: false },
-  { who: "Your site", where: "/pricing", before: "Start your trial", after: "Button missing", own: true },
-] as const;
+const EXAMPLES: readonly {
+  needs: CoverageId;
+  who: string;
+  where: string;
+  before: string;
+  after: string;
+  own: boolean;
+}[] = [
+  { needs: "site.pricing", who: "A rival", where: "pricing page", before: "20% off annual", after: "30% off annual", own: false },
+  { needs: "ads.meta", who: "A rival", where: "3 new Meta ads", before: "“Built for serious teams”", after: "“Affordable”", own: false },
+  { needs: "site.home", who: "A rival", where: "homepage", before: "“Built for serious teams”", after: "“Built for everyone”", own: false },
+  { needs: "own.breakage", who: "Your site", where: "homepage", before: "Page loads", after: "Error 503", own: true },
+];
+
+const SHOWN = EXAMPLES.filter((example) => isLive(example.needs)).slice(0, 3);
 
 export function Hero() {
   return (
@@ -22,8 +33,8 @@ export function Hero() {
             Know where you stand. And who’s gaining on you.
           </h1>
           <p className="text-ink-soft mt-6 max-w-[38rem] text-[clamp(1.05rem,1.4vw,1.2rem)] leading-[1.55]">
-            We watch the ads, mentions, site changes and hiring across your market, and we name the rivals for you, so
-            you don’t have to know them already.
+            We find the rivals in your market for you, so you don’t have to know them already, and we watch their{" "}
+            {WATCHED_NOUNS}.
           </p>
           <div className="mt-9">
             <StartButton />
@@ -35,9 +46,9 @@ export function Hero() {
             How a change reads
           </p>
           <ul className="mt-4 grid gap-3">
-            {EXAMPLES.map((example) => (
+            {SHOWN.map((example) => (
               <li
-                key={example.before}
+                key={example.needs}
                 className={cn("border-ink border-[1.5px] p-5", example.own ? "bg-green-wash" : "bg-card")}
               >
                 <p className="font-mono text-meta text-ink-soft">
