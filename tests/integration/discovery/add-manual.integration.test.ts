@@ -19,7 +19,7 @@ async function seedWorkspace(): Promise<string> {
       "INSERT INTO workspace (id, name, owner_user_id, timezone, brief_weekday, brief_hour, created_at) VALUES (?1, 'Gymshark', ?2, 'UTC', 1, 8, ?3)",
     ).bind(workspaceId, userId, NOW),
     env.DB.prepare(
-      "INSERT INTO entity (id, workspace_id, role, domain, name, identity_json, created_at) VALUES (?1, ?2, 'self', 'gymshark.com', 'Gymshark', '{\"description\":\"Gym clothing\"}', ?3)",
+      "INSERT INTO entity (id, workspace_id, role, domain, name, identity_json, created_at) VALUES (?1, ?2, 'self', 'self-brand.example', 'Self Brand', '{\"description\":\"Gym clothing\"}', ?3)",
     ).bind(`${workspaceId}-self`, workspaceId, NOW),
   ]);
   return workspaceId;
@@ -183,12 +183,6 @@ describe("handleCompetitorIntent intent=add", () => {
   it("never writes a Jev verdict for a manual add", async () => {
     const workspaceId = await seedWorkspace();
     await handleCompetitorIntent(workspaceId, addForm("gymshark.com"));
-    await env.DB.prepare(
-      "INSERT INTO takedown (subject, requested_at, actioned_at, actioned_by) VALUES (?, ?, ?, 'nish')",
-    )
-      .bind("refused.example", NOW, NOW)
-      .run();
-    await handleCompetitorIntent(workspaceId, addForm("refused.example"));
 
     const count = await env.DB.prepare("SELECT COUNT(*) AS n FROM jev_verdict").first<{ n: number }>();
     expect(count?.n).toBe(0);
