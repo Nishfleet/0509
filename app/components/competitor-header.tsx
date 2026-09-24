@@ -1,11 +1,9 @@
 import type { ReactElement, ReactNode } from "react";
 import { Link } from "react-router";
 
-export const DAY_MONTH = new Intl.DateTimeFormat("en-GB", {
-  day: "numeric",
-  month: "short",
-  timeZone: "UTC",
-});
+import { BrandSwitch, DAY_MONTH } from "./brand-switch";
+
+export { DAY_MONTH };
 
 export function competitorPausedLine(stateChangedAt: string | null): string {
   if (stateChangedAt === null) return "Paused";
@@ -52,5 +50,25 @@ export function CompetitorHeader({
         {control}
       </div>
     </header>
+  );
+}
+
+const CONSEQUENCE =
+  "Off stops the watching and the alerts. The history stays, and turning it back on picks up where it left off.";
+
+export function CompetitorSwitch({
+  state,
+  brandName,
+  onCheckedChange,
+}: {
+  state: "on" | "off";
+  brandName: string;
+  onCheckedChange?: (checked: boolean) => void;
+}): ReactElement {
+  return (
+    <div data-slot="competitor-switch" className="flex min-w-0 max-w-[26rem] items-center gap-3">
+      <BrandSwitch state={state} brandName={brandName} onCheckedChange={onCheckedChange} />
+      <p className="min-w-0 text-body-sm text-ink-soft">{CONSEQUENCE}</p>
+    </div>
   );
 }

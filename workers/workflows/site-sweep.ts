@@ -1,6 +1,7 @@
 import type { WorkflowEvent, WorkflowStep, WorkflowStepConfig } from "cloudflare:workers";
 import { WorkflowEntrypoint } from "cloudflare:workers";
 
+import { pingLiveness } from "../../app/lib/liveness-ping.server";
 import { checkSitePage, planSiteSweep, publishSiteChange } from "../../app/lib/site/sweep.server";
 
 const RETRY: WorkflowStepConfig = {
@@ -25,7 +26,7 @@ async function settle<T>(label: string, run: () => Promise<T>): Promise<T | null
   }
 }
 
-export class SiteSweep extends WorkflowEntrypoint<Env> {
+export class SiteSweep extends WorkflowEntrypoint<Env & { SITE_SWEEP_PING_URL?: string }> {
   async run(event: WorkflowEvent<unknown>, step: WorkflowStep): Promise<SiteSweepOutcome> {
     const tick = { instanceId: event.instanceId, plannedAt: event.timestamp.toISOString() };
     const targets = await step.do("plan", RETRY, () => planSiteSweep(tick.plannedAt));
@@ -54,6 +55,10 @@ export class SiteSweep extends WorkflowEntrypoint<Env> {
       changed: count("changed"),
     };
     console.log(JSON.stringify({ event: "site.sweep", ...summary }));
+    await step.do("report", RETRY, async () => {
+      await pingLiveness(this.env.SITE_SWEEP_PING_URL);
+      return null;
+    });
     return summary;
   }
 }
