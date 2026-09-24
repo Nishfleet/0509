@@ -1,7 +1,7 @@
 import { env } from "cloudflare:workers";
 import { z } from "zod";
 
-import { readCachedNoul } from "../data/jev_verdict.server";
+import { readCachedChoice, readCachedNoul } from "../data/jev_verdict.server";
 
 const MODEL = "typesafe/jev";
 
@@ -21,8 +21,25 @@ export interface NoulVerdict {
   cached: boolean;
 }
 
+export interface ChoiceQuestion {
+  id: string;
+  instructions: string;
+  options: Readonly<Record<string, string>>;
+}
+
+export interface ChoiceVerdict {
+  questionId: string;
+  inputHash: string;
+  choice: string;
+  cached: boolean;
+}
+
 const answerSchema = z.object({
   answers: z.record(z.string(), z.object({ type: z.literal("noul"), noul: z.number().min(0).max(1) })),
+});
+
+const choiceAnswerSchema = z.object({
+  answers: z.record(z.string(), z.object({ type: z.literal("choice"), choice: z.string() })),
 });
 
 export class JevUnavailableError extends Error {
@@ -75,4 +92,52 @@ export async function askNoul(workspaceId: string, question: NoulQuestion, state
   if (cached !== null) return { questionId: question.id, inputHash: hash, p: cached, cached: true };
   const p = await run(question, state);
   return { questionId: question.id, inputHash: hash, p, cached: false };
+}
+
+async function runChoice(question: ChoiceQuestion, state: unknown): Promise<string> {
+  let raw: unknown;
+  try {
+    raw = await env.AI.run(
+      MODEL,
+      {
+        state,
+        questions: {
+          [question.id]: {
+            type: "choice",
+            instructions: question.instructions,
+            criteria: question.options,
+          },
+        },
+      },
+      { gateway: { id: GATEWAY_ID } },
+    );
+  } catch (error) {
+    throw new JevUnavailableError(error);
+  }
+  const parsed = choiceAnswerSchema.safeParse(raw);
+  const answer = parsed.success ? parsed.data.answers[question.id] : undefined;
+  if (answer === undefined || !Object.keys(question.options).includes(answer.choice)) {
+    throw new JevUnavailableError(new Error("answer missing its choice"));
+  }
+  return answer.choice;
+}
+
+export async function askChoice(
+  workspaceId: string,
+  question: ChoiceQuestion,
+  state: unknown,
+): Promise<ChoiceVerdict> {
+  const hash = await sha256Hex(
+    JSON.stringify({
+      workspace: workspaceId,
+      question: question.id,
+      instructions: question.instructions,
+      options: question.options,
+      state,
+    }),
+  );
+  const cached = await readCachedChoice(question.id, hash);
+  if (cached !== null) return { questionId: question.id, inputHash: hash, choice: cached, cached: true };
+  const choice = await runChoice(question, state);
+  return { questionId: question.id, inputHash: hash, choice, cached: false };
 }

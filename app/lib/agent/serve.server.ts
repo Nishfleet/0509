@@ -1,6 +1,7 @@
 import { env } from "cloudflare:workers";
 
 import { readWorkspaceIdForOwner } from "../data/workspace.server";
+import { clientIp, withinLimit } from "./client-limit.server";
 import type { AgentProps } from "./context.server";
 import { bearerToken, propsForApiKey } from "./keys.server";
 import { serveMcp } from "./mcp.server";
@@ -26,6 +27,9 @@ export async function mcpResponse(request: Request, props: AgentProps): Promise<
 }
 
 export async function apiResponse<T>(request: Request, read: (workspaceId: string) => Promise<T>): Promise<Response> {
+  if (!(await withinLimit(env.AGENT_LIMIT, clientIp(request)))) {
+    return problem(429, "rate_limited", "Too many requests. Slow down and retry in a minute.", { "retry-after": "60" });
+  }
   const token = bearerToken(request);
   const props = token === null ? null : await propsForApiKey(token);
   if (props === null) {

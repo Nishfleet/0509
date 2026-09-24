@@ -3,7 +3,7 @@ import { env } from "cloudflare:workers";
 import type { NoulVerdict } from "../jev/client.server";
 import { noulAction } from "../jev/thresholds";
 import type { Evidence } from "../discovery/types";
-import { insertAutoCompetitor, insertCompetitorFromSuggestion } from "./entity.server";
+import { insertAutoCompetitor, insertCompetitorFromSuggestion, turnOffFromRetireSuggestion } from "./entity.server";
 import { insertVerdict } from "./jev_verdict.server";
 
 const ACCEPT_SUGGESTION =
@@ -63,6 +63,7 @@ function statementsFor(workspaceId: string, result: DiscoveryResult, now: string
             signalId: null,
             entityId: null,
             p: result.verdict.p,
+            choice: null,
             reason: result.line,
             decidedAt: now,
           }),
@@ -101,6 +102,31 @@ export async function acceptSuggestion(input: {
     }),
     env.DB.prepare(ACCEPT_SUGGESTION).bind(input.now, input.suggestionId, input.workspaceId),
   ]);
+}
+
+const ACCEPT_RETIRE_SUGGESTION =
+  "UPDATE suggestion SET status = 'accepted', decided_by = 'user', decided_at = ?1 WHERE id = ?2 AND workspace_id = ?3 AND kind = 'retire' AND status = 'pending'";
+
+const DISMISS_RETIRE_SUGGESTION =
+  "UPDATE suggestion SET status = 'dismissed', decided_by = 'user', decided_at = ?1 WHERE id = ?2 AND workspace_id = ?3 AND kind = 'retire' AND status = 'pending'";
+
+export async function confirmRetireSuggestion(input: {
+  workspaceId: string;
+  suggestionId: string;
+  now: string;
+}): Promise<void> {
+  await env.DB.batch([
+    turnOffFromRetireSuggestion(input),
+    env.DB.prepare(ACCEPT_RETIRE_SUGGESTION).bind(input.now, input.suggestionId, input.workspaceId),
+  ]);
+}
+
+export async function keepFromRetireSuggestion(input: {
+  workspaceId: string;
+  suggestionId: string;
+  now: string;
+}): Promise<void> {
+  await env.DB.prepare(DISMISS_RETIRE_SUGGESTION).bind(input.now, input.suggestionId, input.workspaceId).run();
 }
 
 export async function dismissSuggestion(input: {

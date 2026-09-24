@@ -1,11 +1,11 @@
 import type { Route } from "./+types/app.competitors";
 
-import { Link, redirect, useFetcher } from "react-router";
+import { redirect, useFetcher } from "react-router";
 
+import { BrandChip } from "../components/brand-chip";
 import { BrandSwitch, brandSwitchNote } from "../components/brand-switch";
 import { AddCompetitor, CompetitorMaybes } from "../components/competitor-maybes";
 import { EmptyState } from "../components/empty-state";
-import { Monogram } from "../components/monogram";
 import { PAGE, PageHeading } from "../components/page-heading";
 import { cn } from "../lib/utils";
 import { handleCompetitorIntent } from "../lib/competitors.server";
@@ -38,15 +38,8 @@ function CompetitorItem({ competitor }: { competitor: CompetitorRow }) {
   return (
     <li className="border-line flex flex-wrap items-center gap-x-4 gap-y-2 border-t py-4">
       <div className={cn("flex min-w-0 flex-1 items-start gap-3", off && "text-ink-faint")}>
-        <Monogram name={competitor.name} off={off} />
+        <BrandChip name={competitor.name} href={`/app/competitors/${competitor.entityId}`} off={off} />
         <div className="min-w-0">
-          <Link
-            to={`/app/competitors/${competitor.entityId}`}
-            prefetch="intent"
-            className="font-display text-row-name block truncate font-bold hover:underline"
-          >
-            {competitor.name}
-          </Link>
           <p className={cn("truncate text-body-sm", off ? "text-ink-faint" : "text-ink-soft")}>{competitor.domain}</p>
           {competitor.reason === null ? null : (
             <p className={cn("mt-1 text-body-sm", off ? "text-ink-faint" : "text-ink-soft")}>{competitor.reason}</p>
@@ -84,7 +77,7 @@ export default function Page({ loaderData, actionData }: Route.ComponentProps) {
           <EmptyState sentence="Add a competitor to see where you stand. We also look for new ones every night." />
         </div>
       ) : (
-        <ul aria-label="Competitors" className="border-line mt-8 border-b">
+        <ul aria-label="Competitors" className="bg-card border-line mt-6 border px-4">
           {competitors.map((competitor) => (
             <CompetitorItem key={competitor.entityId} competitor={competitor} />
           ))}
