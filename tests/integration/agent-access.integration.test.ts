@@ -2,7 +2,13 @@ import { env } from "cloudflare:test";
 import { beforeAll, describe, expect, it } from "vitest";
 
 import { propsForApiKey } from "../../app/lib/agent/keys.server";
-import { readAgentAlerts, readAgentBrief, readAgentCompetitors, readAgentStanding } from "../../app/lib/agent/read.server";
+import {
+  readAgentAlerts,
+  readAgentBrief,
+  readAgentCompetitor,
+  readAgentCompetitors,
+  readAgentStanding,
+} from "../../app/lib/agent/read.server";
 import { apiResponse, mcpResponse } from "../../app/lib/agent/serve.server";
 import { createAuth } from "../../app/lib/auth.server";
 
@@ -158,7 +164,13 @@ describe("agent access, scoped to one workspace", () => {
     const listed = await mcpResponse(jsonRpc("tools/list"), { userId: a.userId, clientId: "test" });
     expect(listed.status).toBe(200);
     const list = await rpcResult<{ tools: { name: string; annotations: { readOnlyHint: boolean } }[] }>(listed);
-    expect(list.tools.map((tool) => tool.name).sort()).toEqual(["get_brief", "get_standing", "list_alerts", "list_competitors"]);
+    expect(list.tools.map((tool) => tool.name).sort()).toEqual([
+      "get_brief",
+      "get_competitor",
+      "get_standing",
+      "list_alerts",
+      "list_competitors",
+    ]);
     expect(list.tools.every((tool) => tool.annotations.readOnlyHint)).toBe(true);
 
     const called = await mcpResponse(jsonRpc("tools/call", { name: "list_competitors", arguments: {} }), {
@@ -167,6 +179,19 @@ describe("agent access, scoped to one workspace", () => {
     });
     const call = await rpcResult<{ structuredContent: { tracked: { domain: string }[] } }>(called);
     expect(call.structuredContent.tracked.map((row) => row.domain)).toEqual(["rival-b.example"]);
+  });
+
+  it("reads one competitor only inside the caller's workspace", async () => {
+    const own = await readAgentCompetitor(a.workspaceId, "ent_agent_a");
+    expect(own.competitor).toMatchObject({ id: "ent_agent_a", domain: "rival-a.example", state: "on" });
+    expect(await readAgentCompetitor(b.workspaceId, "ent_agent_a")).toEqual({ competitor: null });
+
+    const called = await mcpResponse(
+      jsonRpc("tools/call", { name: "get_competitor", arguments: { competitorId: "ent_agent_a" } }),
+      { userId: a.userId, clientId: "test" },
+    );
+    const call = await rpcResult<{ structuredContent: { competitor: { id: string } | null } }>(called);
+    expect(call.structuredContent.competitor?.id).toBe("ent_agent_a");
   });
 
   it("reads standing for the caller's workspace and hides a paused competitor", async () => {

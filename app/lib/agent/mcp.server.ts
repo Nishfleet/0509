@@ -1,7 +1,20 @@
 import { createMcpHandler, McpServer } from "@modelcontextprotocol/server";
 
-import { readAgentAlerts, readAgentBrief, readAgentCompetitors, readAgentStanding } from "./read.server";
-import { alertsResultSchema, briefResultSchema, competitorsResultSchema, standingResultSchema } from "./schemas";
+import {
+  readAgentAlerts,
+  readAgentBrief,
+  readAgentCompetitor,
+  readAgentCompetitors,
+  readAgentStanding,
+} from "./read.server";
+import {
+  alertsResultSchema,
+  briefResultSchema,
+  competitorArgsSchema,
+  competitorResultSchema,
+  competitorsResultSchema,
+  standingResultSchema,
+} from "./schemas";
 
 const READ_ONLY = { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false };
 
@@ -50,6 +63,19 @@ function createServer(workspaceId: string): McpServer {
       annotations: READ_ONLY,
     },
     async () => result(await readAgentCompetitors(workspaceId)),
+  );
+
+  server.registerTool(
+    "get_competitor",
+    {
+      title: "One competitor",
+      description:
+        "One tracked competitor: its state (on, or paused), how many of its pages are watched and when they were last checked, and its website changes from the last 90 days. Returns null for an id that is not one of the user's competitors.",
+      inputSchema: competitorArgsSchema,
+      outputSchema: competitorResultSchema,
+      annotations: READ_ONLY,
+    },
+    async ({ competitorId }) => result(await readAgentCompetitor(workspaceId, competitorId)),
   );
 
   server.registerTool(
