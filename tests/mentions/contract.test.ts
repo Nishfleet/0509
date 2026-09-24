@@ -106,8 +106,12 @@ describe("mentions adapter contract", () => {
 		expect(parseFeedEntries(atom)).toHaveLength(1);
 	});
 
-	it("adapterFor returns undefined while the registry is empty", () => {
-		expect(adapterFor("news.google_rss")).toBeUndefined();
+	it("adapterFor returns the feed adapters and undefined for an unknown key", () => {
+		expect(adapterFor("news.google_rss")).toBeTypeOf("function");
+		expect(adapterFor("youtube.channel_rss")).toBeTypeOf("function");
+		expect(adapterFor("medium.tag_rss")).toBeTypeOf("function");
+		expect(adapterFor("ddg.html")).toBeUndefined();
+		expect(adapterFor("no.such_source")).toBeUndefined();
 	});
 
 	it("the adapter contract shape is implementable by a sample adapter", async () => {
