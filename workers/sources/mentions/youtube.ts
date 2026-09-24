@@ -39,15 +39,14 @@ export const youtubeAdapter: MentionsAdapter = async (target) => {
 		return mentionsResultSchema.parse({ items: [], canaryCount: 0, rawBody, feedState: "ok" });
 	}
 
-	let entries: ReturnType<typeof parseFeedEntries>;
-	try {
-		entries = parseFeedEntries(rawBody, (data) => ({
-			videoId: VIDEO_ID.safeParse(data["yt:videoId"] ?? data.videoId).data ?? null,
-		}));
-	} catch {
+	if (!rawBody.includes("<entry")) {
 		const feedState = rawBody.includes("<feed") ? "ok" : "stale";
 		return mentionsResultSchema.parse({ items: [], canaryCount: 0, rawBody, feedState });
 	}
+
+	const entries = parseFeedEntries(rawBody, (data) => ({
+		videoId: VIDEO_ID.safeParse(data["yt:videoId"] ?? data.videoId).data ?? null,
+	}));
 
 	const items = entries.flatMap((entry) => {
 		const parsed = ENTRY_SCHEMA.safeParse(entry);
