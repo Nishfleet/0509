@@ -53,7 +53,7 @@ test("a failed logo falls back to the monogram and the row does not scroll or sh
 
   const off = page.getByRole("link", { name: "Casetta · off" });
   await expect(off).toHaveCSS("border-top-style", "dashed");
-  await expect(off).toHaveCSS("color", "rgb(142, 136, 120)");
+  await expect(off).toHaveCSS("color", "rgb(85, 82, 74)");
 
   const longName = page.getByText("Northbeam International Holdings Group of the Northern Markets");
   await expect(longName).toHaveCSS("text-overflow", "ellipsis");
@@ -96,4 +96,20 @@ test("a failed logo falls back to the monogram and the row does not scroll or sh
   await self.click();
   await page.waitForURL(/\/login$/);
   expect(await page.evaluate(() => (window as unknown as { __stay?: number }).__stay)).toBe(1);
+});
+
+test("Tab reaches an off chip and draws the ink focus ring", async ({ page }, testInfo) => {
+  await page.emulateMedia({ colorScheme: "light" });
+  await page.goto("/design/brand-chips");
+  const off = page.getByRole("link", { name: "Casetta · off" });
+  for (let i = 0; i < 30; i += 1) {
+    if (await off.evaluate((el) => el === document.activeElement)) break;
+    await page.keyboard.press("Tab");
+  }
+  await expect(off).toBeFocused();
+  await expect(off).toHaveCSS("outline-style", "solid");
+  await testInfo.attach("brand-chip-focus", {
+    body: await page.screenshot(),
+    contentType: "image/png",
+  });
 });
