@@ -1,7 +1,8 @@
 import type { Route } from "./+types/app.competitors";
 
-import { Link, redirect, useFetcher } from "react-router";
+import { redirect, useFetcher } from "react-router";
 
+import { BrandChip } from "../components/brand-chip";
 import { BrandSwitchField } from "../components/brand-switch";
 import { AddCompetitor, CompetitorMaybes } from "../components/competitor-maybes";
 import { EmptyState } from "../components/empty-state";
@@ -34,9 +35,7 @@ function CompetitorItem({ competitor }: { competitor: CompetitorRow }) {
   return (
     <li className="border-line flex flex-wrap items-center gap-3 border-t py-3">
       <div className={state === "off" ? "text-ink-faint min-w-0 flex-1" : "min-w-0 flex-1"}>
-        <Link to={`/app/competitors/${competitor.entityId}`} className="font-semibold">
-          {competitor.name}
-        </Link>
+        <BrandChip name={competitor.name} href={`/app/competitors/${competitor.entityId}`} off={state === "off"} />
         <span className="text-ink-soft ml-2 text-sm">{competitor.domain}</span>
         {competitor.reason === null ? null : <p className="text-ink-soft text-sm">{competitor.reason}</p>}
       </div>
@@ -62,7 +61,7 @@ export default function Page({ loaderData, actionData }: Route.ComponentProps) {
           <EmptyState sentence="Add a competitor to see where you stand. We also look for new ones every night." />
         </div>
       ) : (
-        <ul aria-label="Competitors" className="mt-6">
+        <ul aria-label="Competitors" className="bg-card border-line mt-6 border px-4">
           {competitors.map((competitor) => (
             <CompetitorItem key={competitor.entityId} competitor={competitor} />
           ))}
