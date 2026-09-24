@@ -189,21 +189,23 @@ describe("Home standing", () => {
     ];
     const view = homeView({ payload: null, entities, schedule: SCHEDULE, history: [], now: THURSDAY_MORNING });
     expect(view.chips).toEqual([
-      { name: "Own Brand", href: "/app/settings" },
-      { name: "Kindred", href: "/app/competitors/ent_kindred" },
+      { name: "Own Brand", href: "/app/settings", self: true },
+      { name: "Kindred", href: "/app/competitors/ent_kindred", self: false },
     ]);
 
     const gathering = render({ payload: null, entities });
-    expect(gathering).toContain('class="mt-4 flex flex-wrap gap-2"');
+    expect(gathering.match(/data-slot="brand-chip-row"/g)).toHaveLength(1);
+    expect(gathering).toContain('role="group"');
+    expect(gathering).toContain('aria-label="Your set"');
     expect(gathering).toContain('href="/app/settings"');
     expect(gathering).toContain('href="/app/competitors/ent_kindred"');
-    expect(gathering).toContain("Own Brand");
+    expect(gathering).toContain("You · Own Brand");
     expect(gathering).toContain("Kindred");
     expect(gathering).not.toContain("Off Brand");
     expect(gathering).not.toContain('href="/app/competitors/ent_off"');
 
     const ranked = render({ payload: payload(), entities });
-    expect(ranked).not.toContain('class="mt-4 flex flex-wrap gap-2"');
+    expect(ranked).not.toContain('data-slot="brand-chip-row"');
   });
 
   it("lands the first site sweep on the next 02:00Z strictly after now", () => {
