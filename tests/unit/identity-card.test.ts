@@ -110,13 +110,12 @@ describe("IdentityCard", () => {
     expect(html).toContain('name="description" value="gym clothes"');
   });
 
-  it("carries the subject, logo and each social through hidden fields the action can read", async () => {
+  it("carries the subject and each social through hidden fields the action can read", async () => {
     const html = await card({
       site: resolved({ ...SITE, socials: [{ platform: "instagram", url: "https://www.instagram.com/gymshark/" }] }),
       logo: resolved("https://cdn.example/logo.png"),
     });
     expect(html).toContain('name="subject" value="https://www.gymshark.com/"');
-    expect(html).toContain('name="logo" value="https://cdn.example/logo.png"');
     expect(html).toContain('name="social.instagram" value="https://www.instagram.com/gymshark/"');
   });
 
@@ -173,7 +172,6 @@ describe("IdentityCard", () => {
     if (parsed.success) {
       expect(parsed.data.name).toBe("Gymshark");
       expect(parsed.data.description).toBe("gym clothes");
-      expect(parsed.data.logo).toBe("https://cdn.example/logo.png");
       expect(parsed.data.socials).toEqual([{ platform: "instagram", url: "https://www.instagram.com/gymshark/" }]);
     }
   });

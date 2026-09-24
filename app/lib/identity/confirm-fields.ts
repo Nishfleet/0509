@@ -10,7 +10,6 @@ export const confirmSchema = z.object({
   subject: z.string(),
   name: z.string().trim().min(1).max(120),
   description: z.string().trim().max(500),
-  logo: z.union([webUrl, z.literal("")]),
   socials: socialsSchema,
 });
 
@@ -18,7 +17,6 @@ export interface ConfirmFields {
   subject: string;
   name: string;
   description: string;
-  logo: string;
   socials: { platform: string; url: unknown }[];
 }
 
@@ -38,7 +36,6 @@ export function readConfirmFields(form: FormData): ConfirmFields {
     subject: field(form, "subject"),
     name: field(form, "name"),
     description: field(form, "description"),
-    logo: field(form, "logo"),
     socials: socials(form),
   };
 }

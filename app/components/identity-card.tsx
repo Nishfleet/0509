@@ -163,14 +163,11 @@ function LogoRow({ logo, uncertain }: { logo: Promise<string | null>; uncertain:
       <Await resolve={logo}>
         {(url) => (
           <StaticRow label="logo" uncertain={uncertain}>
-            <span className="flex min-w-0 items-baseline gap-2">
-              {url === null ? (
-                <span className="text-ink-soft">none found on the site</span>
-              ) : (
-                <img src={url} alt="" className="h-10 w-10 object-contain" />
-              )}
-            </span>
-            <input type="hidden" name="logo" value={url ?? ""} />
+            {url === null ? (
+              <span className="text-ink-soft text-[0.95rem]">none found on the site</span>
+            ) : (
+              <img src={url} alt="" className="h-10 w-10 object-contain" />
+            )}
           </StaticRow>
         )}
       </Await>
