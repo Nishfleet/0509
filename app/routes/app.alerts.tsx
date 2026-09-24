@@ -2,8 +2,10 @@ import type { Route } from "./+types/app.alerts";
 import { env } from "cloudflare:workers";
 
 import { readDeliveryFailures, readOwnSiteIncidents, readTakedownNotes } from "../lib/data/alert.server";
+import { readCompetitors } from "../lib/data/entity.server";
 import { readWorkspaceIdForOwner, readWorkspaceTimezone } from "../lib/data/workspace.server";
 import { daysAgoLabel } from "../lib/delivery-alert";
+import { offBrandsSentence } from "../lib/off-brands";
 import { requireSession } from "../lib/require-session.server";
 import { daysBefore, readSiteChangeViews } from "../lib/site-changes.server";
 import { groupByDay } from "../lib/alert-day";
@@ -15,6 +17,7 @@ const WHEN_CLASS = "text-ink-soft mt-2 block font-mono text-[0.75rem] tracking-[
 export async function loader({ request }: Route.LoaderArgs) {
   const session = await requireSession(request);
   const workspaceId = await readWorkspaceIdForOwner(session.user.id);
+  const competitors = workspaceId === null ? [] : (await readCompetitors(workspaceId)).competitors;
   const failures = workspaceId === null ? [] : await readDeliveryFailures(env.DB, workspaceId);
   const notes = workspaceId === null ? [] : await readTakedownNotes(env.DB, workspaceId);
   const incidents = workspaceId === null ? [] : await readOwnSiteIncidents(env.DB, workspaceId);
@@ -51,6 +54,9 @@ export async function loader({ request }: Route.LoaderArgs) {
       fixed: incident.closed_at === null ? null : daysAgoLabel(incident.closed_at, now),
     })),
     groups: groupByDay(items, now, timeZone),
+    offLine: offBrandsSentence(
+      competitors.filter((competitor) => competitor.state === "off").map((competitor) => competitor.name),
+    ),
   };
 }
 
@@ -94,6 +100,14 @@ export default function Page({ loaderData }: Route.ComponentProps) {
           ))}
         </section>
       ))}
+      {loaderData.offLine === null ? null : (
+        <p
+          data-testid="alerts-off-footer"
+          className="text-ink-soft border-line mt-10 border-t pt-6 leading-[1.65]"
+        >
+          {loaderData.offLine}
+        </p>
+      )}
     </main>
   );
 }
