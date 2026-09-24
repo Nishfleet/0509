@@ -224,10 +224,11 @@ const INSERT_MANUAL_COMPETITOR =
 export async function addManualCompetitor(input: {
   workspaceId: string;
   domain: string;
+  name: string | null;
   now: string;
 }): Promise<void> {
   await env.DB.prepare(INSERT_MANUAL_COMPETITOR)
-    .bind(crypto.randomUUID(), input.workspaceId, input.domain, input.domain, input.now)
+    .bind(crypto.randomUUID(), input.workspaceId, input.domain, input.name, input.now)
     .run();
 }
 
