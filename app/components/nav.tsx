@@ -19,6 +19,7 @@ export function Nav() {
           <li key={place.to} className="min-w-0">
             <NavLink
               to={place.to}
+              prefetch="intent"
               end={place.end}
               className="group text-ink-soft aria-[current=page]:text-ink focus-visible:outline-ink flex min-h-11 flex-col items-center justify-center gap-1 font-mono text-[0.68rem] tracking-[0.08em] uppercase outline-offset-[-2px] focus-visible:outline-2 min-[860px]:flex-row min-[860px]:justify-start min-[860px]:gap-2 min-[860px]:px-3"
             >
