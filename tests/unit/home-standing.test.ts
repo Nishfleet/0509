@@ -6,8 +6,17 @@ import { describe, expect, it } from "vitest";
 import { HomeStanding } from "../../app/components/home-standing";
 import type { BriefPayload } from "../../app/lib/brief-payload";
 import type { BriefSchedule } from "../../app/lib/brief-schedule";
-import { greetingFor, homeStanding, homeView, movementLabel, nextHour, type HomeEntity } from "../../app/lib/home-standing";
-import type { HomeHistoryRow } from "../../app/lib/home-standing";
+import type { HowRanked } from "../../app/lib/how-ranked";
+import {
+  greetingFor,
+  homeStanding,
+  homeView,
+  movementLabel,
+  nextHour,
+  nextSiteSweepAt,
+  type HomeEntity,
+  type HomeHistoryRow,
+} from "../../app/lib/home-standing";
 
 const SCHEDULE: BriefSchedule = { timezone: "Europe/London", weekday: 1, hour: 8 };
 const THURSDAY_MORNING = new Date("2026-09-24T06:30:00.000Z");
@@ -74,7 +83,30 @@ function payload(overrides: Partial<BriefPayload> = {}): BriefPayload {
   };
 }
 
-function render(input: { payload: BriefPayload | null; entities?: readonly HomeEntity[] }): string {
+const HOW_RANKED: HowRanked = {
+  weekStartAt: "2026-09-14T07:00:00.000Z",
+  weights: [
+    { key: "mention_matters", label: "Mentions that matter", weight: 3 },
+    { key: "mention_normal", label: "Mentions", weight: 1 },
+    { key: "site_change_noteworthy", label: "Noteworthy site changes", weight: 4 },
+    { key: "ad_new_creative", label: "New ad creatives", weight: 2 },
+    { key: "ad_copy_change", label: "Ad copy or offer changes", weight: 3 },
+    { key: "hiring_new_role", label: "New roles", weight: 1 },
+  ],
+  multipliers: [
+    { reliability: "official_api", label: "Official API", value: 1 },
+    { reliability: "rss", label: "RSS feed", value: 0.9 },
+    { reliability: "scraped_page", label: "Scraped page", value: 0.6 },
+    { reliability: "best_effort", label: "Best effort", value: 0.5 },
+  ],
+  brands: [{ entityId: "ent_self", name: "Own Brand", lines: [], total: 0 }],
+};
+
+function render(input: {
+  payload: BriefPayload | null;
+  entities?: readonly HomeEntity[];
+  howRanked?: HowRanked | null;
+}): string {
   const view = homeView({
     payload: input.payload,
     entities: input.entities ?? ENTITIES,
@@ -82,7 +114,9 @@ function render(input: { payload: BriefPayload | null; entities?: readonly HomeE
     history: [],
     now: THURSDAY_MORNING,
   });
-  const router = createMemoryRouter([{ path: "/", element: createElement(HomeStanding, { view }) }]);
+  const router = createMemoryRouter([
+    { path: "/", element: createElement(HomeStanding, { view, howRanked: input.howRanked }) },
+  ]);
   return renderToStaticMarkup(createElement(RouterProvider, { router }));
 }
 
@@ -93,6 +127,13 @@ describe("Home standing", () => {
     expect(html).toContain("Good morning. You&#x27;re <span");
     expect(html).toContain(">#2</span> of 3 this week.</h1>");
     expect(html).toContain("Kindred is the mover: 3 new ads and the loudest mention spike");
+  });
+
+  it("puts the how-ranked trigger under the why-line only when the week has one", () => {
+    const withSheet = render({ payload: payload(), howRanked: HOW_RANKED });
+    const withoutSheet = render({ payload: payload() });
+    expect(withSheet).toContain("How this is ranked");
+    expect(withoutSheet).not.toContain("How this is ranked");
   });
 
   it("lists every ranked brand in rank order with its domain and movement, yours marked", () => {
@@ -166,10 +207,16 @@ describe("Home standing", () => {
   it("says when the first standing comes while the first week is still open", () => {
     const html = render({ payload: null });
     expect(html).toContain(
-      "We&#x27;re gathering the first week. Your first standing comes with the brief on Monday 08:00.",
+      "We&#x27;re gathering the first week: site snapshots, ads and mentions for 3 brands. The first site snapshots land by Friday 03:00; your first read-this-first comes with the brief on Monday 08:00.",
     );
+    expect(html).toContain('data-home="first-file"');
     expect(html).toContain("Good morning.</h1>");
     expect(render({ payload: payload({ headline_rank: null }) })).toContain("gathering the first week");
+  });
+
+  it("lands the first site sweep on the next 02:00Z strictly after now", () => {
+    expect(nextSiteSweepAt(new Date("2026-09-24T01:00:00Z"))).toEqual(new Date("2026-09-24T02:00:00Z"));
+    expect(nextSiteSweepAt(new Date("2026-09-24T02:00:00Z"))).toEqual(new Date("2026-09-25T02:00:00Z"));
   });
 
   it("names the movement the way the brief does", () => {
