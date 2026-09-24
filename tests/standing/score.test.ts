@@ -10,7 +10,7 @@ import {
   type Reliability,
   type ScoreBucket,
   type WeightRow,
-} from "../../workers/standing/score";
+} from "../../app/lib/standing-score";
 
 const MENTION_ROWS: readonly WeightRow[] = [
   { key: "mention_matters", weight: 100, effective_from: "2026-09-07T00:00:00.000Z" },

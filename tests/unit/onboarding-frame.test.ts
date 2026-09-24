@@ -4,6 +4,12 @@ import { describe, expect, it } from "vitest";
 
 import { OnboardingFrame } from "../../app/components/onboarding-frame";
 
+const WATCHING_LIST = createElement(
+  "ul",
+  { "aria-label": "Watching", "aria-live": "polite", "aria-relevant": "additions" },
+  createElement("li", null, "Alive"),
+);
+
 function markup(props: { hideHeading?: boolean }): string {
   return renderToStaticMarkup(
     createElement(OnboardingFrame, { step: 2, heading: "H", ...props }, createElement("p", null, "body")),
@@ -25,6 +31,19 @@ describe("OnboardingFrame", () => {
     const html = markup({ hideHeading: true });
     expect(html).toContain('<h1 class="sr-only">');
     expect(html).toContain(">H</h1>");
+  });
+
+  it("keeps screen 3's watching list a polite additions-only live region inside the frame", () => {
+    const html = renderToStaticMarkup(
+      createElement(OnboardingFrame, { step: 3, heading: "Who you're up against" }, WATCHING_LIST),
+    );
+
+    expect(html).toContain("<main>");
+    expect(html).toContain('aria-current="step"');
+    expect(html).toContain('aria-label="Watching"');
+    expect(html).toContain('aria-live="polite"');
+    expect(html).toContain('aria-relevant="additions"');
+    expect(html).not.toContain('aria-live="assertive"');
   });
 
   it("puts the banner before main and main before the footer", () => {
