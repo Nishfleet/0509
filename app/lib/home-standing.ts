@@ -116,9 +116,10 @@ function rankedRows(payload: BriefPayload, entities: readonly HomeEntity[]): rea
   return payload.brands
     .map((brand) => {
       const entity = byId.get(brand.entity_id);
+      const signals = brand.ad_delta + brand.mention_delta + brand.site_change_count + brand.new_roles;
       return {
         entityId: brand.entity_id,
-        position: brand.rank,
+        position: signals === 0 ? null : brand.rank,
         name: brand.name,
         domain: entity?.domain ?? null,
         movement: movementLabel(brand.movement, brand.is_new),
@@ -152,20 +153,21 @@ function fourWeekChart(
   const weeks = weekKeys(history);
   const entitiesById = new Map(entities.map((entity) => [entity.id, entity]));
   const rowsByEntityId = new Map(rows.map((row) => [row.entityId, row]));
-  const ranked = history.reduce((seen, row) => {
-    const current = seen.get(row.entity_id);
-    if (current === undefined) seen.set(row.entity_id, [row]);
-    else current.push(row);
-    return seen;
-  }, new Map<string, HomeHistoryRow[]>());
+  const entityIds = [...new Set(history.map((row) => row.entity_id))];
+  const ranksByEntityId = new Map(
+    entityIds.map((entityId) => [
+      entityId,
+      weeks.map((week) => history.find((entry) => entry.entity_id === entityId && entry.week_start_at === week)?.rank ?? null),
+    ]),
+  );
   return {
     weeks: weeks.map((week) => weekLabel(timezone, week)),
-    lines: [...ranked.entries()].map(([entityId, rowsForEntity]) => {
+    lines: entityIds.map((entityId) => {
       const entity = entitiesById.get(entityId);
       const row = rowsByEntityId.get(entityId);
       const self = entity?.role === "self";
       const label = self ? "YOU" : (row?.name ?? entity?.domain ?? entityId);
-      const ranks = weeks.map((week) => rowsForEntity.find((entry) => entry.week_start_at === week)?.rank ?? null);
+      const ranks = ranksByEntityId.get(entityId) ?? [];
       return { entityId, label, self, paused: entity?.state !== "on", ranks };
     }),
   };

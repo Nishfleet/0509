@@ -50,7 +50,8 @@ type DeliveryOutcome =
   | "no_target"
   | "no_digest"
   | "no_incident"
-  | "not_self";
+  | "not_self"
+  | "muted";
 
 interface DeliveryResult {
   outcome: DeliveryOutcome;
@@ -82,6 +83,7 @@ interface IncidentRow {
   domain: string;
   role: string;
   mark: string | null;
+  own_site_alerts: number;
   timezone: string;
 }
 
@@ -95,6 +97,7 @@ async function readIncident(env: Env, incidentId: string): Promise<IncidentRow |
             i.closed_at,
             e.domain,
             e.role,
+            w.own_site_alerts,
             w.timezone,
             (SELECT a.body FROM alert a WHERE a.incident_id = i.id ORDER BY a.created_at ASC LIMIT 1) AS mark
        FROM incident i
@@ -230,6 +233,10 @@ export async function deliverIncident(
   }
   if (incident.role !== "self") {
     return { outcome: "not_self", attempt_id: null, idempotency_key: null };
+  }
+
+  if (incident.own_site_alerts === 0) {
+    return { outcome: "muted", attempt_id: null, idempotency_key: null };
   }
 
   const target = await readTarget(env, incident.workspace_id);

@@ -1,8 +1,8 @@
 import { z } from "zod";
 
 import { freezeStandingRanks } from "../../app/lib/data/standing.server";
-import type { RankedEntity } from "./score";
-import { rankWeek } from "./score";
+import type { RankedEntity } from "../../app/lib/standing-score";
+import { rankWeek } from "../../app/lib/standing-score";
 
 const WEEK_SCORES = `SELECT s.entity_id AS entity_id, s.score AS score
 FROM standing s
