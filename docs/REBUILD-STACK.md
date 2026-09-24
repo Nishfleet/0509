@@ -859,7 +859,6 @@ Cache `.lycheecache` with `actions/cache@v4`; it is one block of stock YAML, not
 | A link crawler or markdown-link regex | `lycheeverse/lychee-action@v2` |
 | A config-migration script | `npx @cloudflare/codemods vitest:pool-workers-to-vitest-plugin` |
 | An action-version bumper | Dependabot `package-ecosystem: "github-actions"` |
-| A separate a11y runner | `new AxeBuilder({ page }).withTags([...]).analyze()` inside the Playwright spec |
 
 ### 6.6 axe — accessibility in Playwright
 
