@@ -21,6 +21,11 @@ test("a passkey registered on first sign-in signs in on its own", async ({ page,
 
   await signInWithMagicLink(page, email, token);
 
+  const errors: string[] = [];
+  page.on("console", (message) => {
+    if (message.type() === "error") errors.push(message.text());
+  });
+
   const cdp = await context.newCDPSession(page);
   await cdp.send("WebAuthn.enable");
   const { authenticatorId } = (await cdp.send("WebAuthn.addVirtualAuthenticator", {
@@ -46,16 +51,10 @@ test("a passkey registered on first sign-in signs in on its own", async ({ page,
     expect((await registered).status()).toBe(200);
     await expect(page.getByRole("status")).toBeVisible();
 
-    // Sign out has no UI affordance yet; the session ends through better-auth's
-    // real endpoint, and the /app -> /login redirect proves it ended.
-    const signOut = await page.evaluate(() =>
-      fetch("/api/auth/sign-out", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: "{}",
-      }).then((response) => response.status),
-    );
-    expect(signOut).toBe(200);
+    await page.goto("/app/settings");
+    await page.getByRole("button", { name: "Sign out" }).click();
+    await page.waitForURL(/\/login/);
+    await page.screenshot({ path: test.info().outputPath("signed-out.png") });
     await page.goto("/app");
     await expect(page).toHaveURL(/\/login/);
 
@@ -70,6 +69,7 @@ test("a passkey registered on first sign-in signs in on its own", async ({ page,
     expect((await sessionReady).status()).toBe(200);
     await expect(page).toHaveURL(/\/onboarding/);
     await expect(page.getByText(email)).toBeVisible();
+    expect(errors).toEqual([]);
     console.log(`passkey sign-in email=${email} sessionAt=${new Date().toISOString()}`);
   } finally {
     // A teardown rejection must not mask the ceremony's own failure.

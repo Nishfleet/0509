@@ -1,4 +1,9 @@
+import type { Route } from "./+types/design.capture-plates";
 import { CapturePlate } from "../components/capture-plate";
+
+export function meta(_: Route.MetaArgs) {
+  return [{ name: "robots", content: "noindex" }];
+}
 
 const before = { src: "/capture-plate-before.svg", capturedAt: "2026-09-21 09:00 UTC" };
 
