@@ -139,7 +139,10 @@ jobs:
         # A per-process port, like playwright.config.ts: the fleet-ci runners share
         # this host with worker checkouts that run wrangler dev too (merge-group runs
         # 35746786576, 35748807411: "Address already in use").
-        run: P=$((18000 + $$ % 1000)); npx --yes @lhci/cli@0.15.1 collect --url=http://127.0.0.1:$P/ --url=http://127.0.0.1:$P/design/landing --start-server-command="npx wrangler dev --port $P --local" --start-server-ready-pattern="Ready on" --start-server-ready-timeout=120000 --number-of-runs=3
+        # / is a static asset, so it never enters the Worker. /design/landing does,
+        # and the Worker answers 503 until BETTER_AUTH_SECRET is present (run
+        # 36060236500). Same --env-file as playwright.config.ts.
+        run: P=$((18000 + $$ % 1000)); npx --yes @lhci/cli@0.15.1 collect --url=http://127.0.0.1:$P/ --url=http://127.0.0.1:$P/design/landing --start-server-command="npx wrangler dev --env-file .dev.vars.example --port $P --local" --start-server-ready-pattern="Ready on" --start-server-ready-timeout=120000 --number-of-runs=3
 
       - name: Assert the Lighthouse budgets
         # lighthouse-budget.pr.json is the deterministic subset of lighthouse-budget.json:

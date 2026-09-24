@@ -38,6 +38,7 @@ const heroText = heroSource.match(/<h1[^>]*>\s*([^<]+?)\s*<\/h1>/)?.[1] ?? "";
 const heroFace = readFileSync(join(REPO_ROOT, "app/components/landing/hero-face.css"), "utf8");
 const appCss = readFileSync(join(REPO_ROOT, "app/app.css"), "utf8");
 const root = readFileSync(join(REPO_ROOT, "app/root.tsx"), "utf8");
+const ci = readFileSync(join(REPO_ROOT, ".github/workflows/ci.yml"), "utf8");
 
 describe("landing LCP critical path", () => {
   it("paints the hero from the small face, not the full display file", () => {
@@ -62,6 +63,12 @@ describe("landing LCP critical path", () => {
     const heroRange = heroFace.match(/unicode-range:\s*([^;]+);/)?.[1];
     const appHero = appCss.split("@font-face").find((block) => block.includes("bricolage-hero.woff2"));
     expect(appHero).toContain(heroRange);
+  });
+
+  it("collects the staged homepage with the local worker secret", () => {
+    const collect = ci.split("\n").find((line) => line.includes("@lhci/cli") && line.includes(" collect "));
+    expect(collect).toContain("--url=http://127.0.0.1:$P/design/landing");
+    expect(collect).toContain("--env-file .dev.vars.example");
   });
 
   it("keeps the landing document off the full font and the module graph until after paint", () => {
