@@ -31,11 +31,6 @@ const SONNER_IMPORT = {
 
 const ONE_PAVED_PATH_IMPORTS = [
   {
-    name: "kysely",
-    message:
-      "kysely is imported in exactly one module, app/lib/db.server.ts, which exports the one query builder instance. One data layer, one connection, one place to change. docs/REBUILD-TRUST.md C4. Source: talk 25:26 (a single paved path per blessed pattern).",
-  },
-  {
     name: "better-auth",
     message:
       "better-auth is configured in exactly one module, app/lib/auth.server.ts, which exports createAuth(). A second betterAuth() call is a second session authority. docs/REBUILD-TRUST.md C4.",
@@ -291,7 +286,6 @@ export default tseslint.config(
   {
     files: ["app/**/*.{ts,tsx}", "workers/**/*.ts"],
     ignores: [
-      "app/lib/db.server.ts",
       "app/lib/auth.server.ts",
       "app/lib/auth-client.ts",
       "app/components/toaster.tsx",
@@ -375,7 +369,6 @@ export default tseslint.config(
         { type: "worker", pattern: "workers", partialMatch: false },
       ],
       "boundaries/files": [
-        { category: "db", pattern: "app/lib/db.server.ts" },
         { category: "auth", pattern: "app/lib/auth.server.ts" },
         { category: "data-writer", pattern: "app/lib/data/**/*.server.ts" },
         { category: "server-leaf", pattern: "app/lib/**/*.server.ts" },
@@ -427,7 +420,7 @@ export default tseslint.config(
                 to: [
                   { element: { type: "component" } },
                   { element: { type: "data-writer" } },
-                  { file: { categories: { anyOf: ["server-leaf", "db", "auth"] } } },
+                  { file: { categories: { anyOf: ["server-leaf", "auth"] } } },
                 ],
               },
             },
@@ -445,13 +438,13 @@ export default tseslint.config(
                 file: {
                   categories: {
                     anyOf: ["server-leaf"],
-                    noneOf: ["data-writer", "db", "auth"],
+                    noneOf: ["data-writer", "auth"],
                   },
                 },
               },
               allow: {
                 to: {
-                  file: { categories: { anyOf: ["server-leaf", "data-writer", "db", "auth"] } },
+                  file: { categories: { anyOf: ["server-leaf", "data-writer", "auth"] } },
                 },
               },
             },
@@ -461,7 +454,7 @@ export default tseslint.config(
                 to: {
                   file: {
                     categories: {
-                      anyOf: ["data-writer", "db", "server-leaf"],
+                      anyOf: ["data-writer", "server-leaf"],
                       noneOf: ["auth"],
                     },
                   },
@@ -472,7 +465,7 @@ export default tseslint.config(
               from: { file: { categories: "auth" } },
               allow: {
                 to: [
-                  { file: { categories: { anyOf: ["server-leaf", "data-writer", "db"] } } },
+                  { file: { categories: { anyOf: ["server-leaf", "data-writer"] } } },
                   { element: { type: "worker" } },
                 ],
               },
