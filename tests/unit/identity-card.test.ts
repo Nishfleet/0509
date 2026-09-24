@@ -208,7 +208,7 @@ describe("fieldEdit", () => {
 
   it("discards the draft on Escape and closes the popover", () => {
     const typing = fieldEdit({ ...SEED, open: true }, { type: "change", value: "GymShark" });
-    const cancelled = fieldEdit(typing, { type: "key", key: "Escape" });
+    const cancelled = fieldEdit(typing, { type: "key", key: "Escape", multiline: false });
     expect(cancelled).toEqual({ committed: "Gymshark", draft: "Gymshark", open: false });
   });
 
