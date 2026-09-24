@@ -9,6 +9,12 @@ on:
       - app/routes/**
       - e2e/**
       - .agents/skills/verify/**
+  pull_request:
+    paths:
+      - app/routes.ts
+      - app/routes/**
+      - e2e/**
+      - .agents/skills/verify/**
   workflow_dispatch:
 
 concurrency:
@@ -33,12 +39,12 @@ jobs:
 
   sync:
     name: feature-map
-    if: github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'workflow_dispatch' || github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 60
     env:
-      SHA: ${{ github.sha }}
-      BASE: ${{ github.ref_name }}
+      SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+      BASE: ${{ github.event_name == 'pull_request' && github.head_ref || github.ref_name }}
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
