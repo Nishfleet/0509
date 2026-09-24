@@ -8,7 +8,7 @@ import { ONBOARDING_PAGE } from "../components/page-heading";
 import { StepBar } from "../components/step-bar";
 import { isTakenDown } from "../lib/data/takedown.server";
 import { readWorkspaceIdForOwner } from "../lib/data/workspace.server";
-import { startCard } from "../lib/identity/card.server";
+import { startCard, withinProbeLimit } from "../lib/identity/card.server";
 import { confirmCard } from "../lib/identity/confirm.server";
 import { normaliseSubject } from "../lib/identity/normalise";
 import { requireSession } from "../lib/require-session.server";
@@ -20,11 +20,12 @@ export async function loader({ request }: Route.LoaderArgs) {
   if (!landing) throw redirect("/app");
   const raw = new URL(request.url).searchParams.get("subject") ?? "";
   const normalised = normaliseSubject(raw);
-  if (!normalised.ok) return { card: null };
+  if (!normalised.ok) return { card: null, limited: false };
   const { subject } = normalised;
   if (await isTakenDown(subject.registrable)) throw redirect("/onboarding");
+  if (!(await withinProbeLimit(session.user.id))) return { card: null, limited: true };
   const shown = subject.kind === "domain" ? subject.registrable : (subject.url ?? `@${subject.registrable}`);
-  return { card: { subject: raw, domain: shown, ...startCard(subject) } };
+  return { card: { subject: raw, domain: shown, ...startCard(subject) }, limited: false };
 }
 
 export async function action({ request }: Route.ActionArgs) {
@@ -36,7 +37,10 @@ export async function action({ request }: Route.ActionArgs) {
 }
 
 export default function Page({ loaderData, actionData }: Route.ComponentProps) {
-  const { card } = loaderData;
+  const { card, limited } = loaderData;
+  const message = limited
+    ? "That's a lot of lookups in a minute. Wait a minute, then try again."
+    : "We couldn't find anything for that, try the main website.";
   return (
     <main className={ONBOARDING_PAGE}>
       <StepBar current={2} />
@@ -46,7 +50,7 @@ export default function Page({ loaderData, actionData }: Route.ComponentProps) {
           placeholder="your website, or a handle"
           name="subject"
           action="/onboarding"
-          message="We couldn't find anything for that, try the main website."
+          message={message}
           submitLabel="Draw my card"
         />
       ) : (

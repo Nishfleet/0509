@@ -103,7 +103,9 @@
     { "name": "SIGN_IN_IP_LIMIT", "namespace_id": "5093", "simple": { "limit": 20, "period": 60 } },
     // Open AI-app registration (/oauth/register) writes a 30-day client row to
     // OAUTH_KV per call; per client IP, a real app registers once.
-    { "name": "AGENT_REGISTER_LIMIT", "namespace_id": "5094", "simple": { "limit": 10, "period": 60 } }
+    { "name": "AGENT_REGISTER_LIMIT", "namespace_id": "5094", "simple": { "limit": 10, "period": 60 } },
+    // Onboarding identity probes, per user; each probe is a site fetch and possibly a Browser Rendering session.
+    { "name": "PROBE_LIMIT", "namespace_id": "5095", "simple": { "limit": 10, "period": 60 } }
   ],
 
   // Browser Rendering: brand pages bot-gate a plain workerd fetch, so every
