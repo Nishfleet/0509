@@ -65,24 +65,8 @@
   ],
 
   // One binding for the one bucket (#4569 had added a second binding to the
-  // same bucket). Two prefixes live in it, each with its own lifecycle rule in
-  // docs/REBUILD-GUARDRAILS.md:
-  //
-  // snapshot/site/ — raw site snapshots, text and screenshot (engine 4),
-  // under the one-year snapshot/ rule.
-  //
-  // card/ — the public standing card's pre-rendered artifact (issue #3969, engine 9).
-  // The weekly rollover (engine 6) writes card/<workspace_id>/<week_start_at>/
-  // {index.html,og.png} here and /s/<slug> streams it. A binding on the
-  // existing 0509-snapshots bucket under the card/ prefix, not a bucket of its
-  // own: docs/REBUILD-GUARDRAILS.md §3 (merged #4028) already assigns card/
-  // its 90-day expiry plus the 7-day multipart abort, and
-  // docs/engines/standing-card.md says this engine's R2 objects fall under
-  // that same rule. A separate bucket would carry no lifecycle rule and would
-  // name a bucket nobody has created on the first main deploy to reference R2.
-  // The public-read separation argument is dropped and recorded as dropped:
-  // the card objects stay public by serving through the route, while the
-  // bucket itself is not exposed as a domain.
+  // same bucket). snapshot/site/ holds raw site snapshots, text and screenshot
+  // (engine 4), under the one-year snapshot/ rule in docs/REBUILD-GUARDRAILS.md.
   "r2_buckets": [{ "binding": "SNAPSHOTS", "bucket_name": "0509-snapshots" }],
 
   // Identity probe cache (engine 1, issue #4419): a read-through cache for
@@ -169,6 +153,17 @@
       "name": "standing-rollover",
       "binding": "STANDING_ROLLOVER",
       "class_name": "StandingRolloverWorkflow"
+    },
+    // The nightly website sweep (docs/engines/site-change.md). The Workflow's
+    // own schedule creates one instance a night, at 02:00 UTC so the changes
+    // it files land before the 03:00 standing refresh counts them. Each page
+    // is its own retried step; a page that cannot be read fails alone.
+    // Nothing to provision: deploy creates the Workflow, unlike a queue.
+    {
+      "name": "site-sweep",
+      "binding": "SITE_SWEEP",
+      "class_name": "SiteSweepWorkflow",
+      "schedules": ["0 2 * * *"]
     }
   ],
 

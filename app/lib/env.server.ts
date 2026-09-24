@@ -19,7 +19,7 @@ const NOTES = {
   BETTER_AUTH_SECRET: "sign-in cannot be trusted",
   EMAIL: "magic links and briefs cannot send",
   SEND_EMAIL: "briefs sit unsent",
-  SNAPSHOTS: "public standing cards and site snapshots cannot be read or stored",
+  SNAPSHOTS: "site snapshots cannot be read or stored",
   BROWSER: "bot-gated page reads cannot escalate",
   OAUTH_KV: "AI apps cannot sign in to /mcp",
   AGENT_LIMIT: "/mcp and /api/v1 have no abuse limit",

@@ -12,7 +12,7 @@ const SERVER_RECEIPT =
 
 const PROBES: Record<string, string> = {
   "app/components/boundary-probe.tsx":
-    'import { readCardSettings } from "../lib/data/workspace.server";\n\nexport const leaked = readCardSettings;\n',
+    'import { readWorkspaceIdForOwner } from "../lib/data/workspace.server";\n\nexport const leaked = readWorkspaceIdForOwner;\n',
   "app/lib/data/boundary-writer.server.ts":
     'import { createAuth } from "../auth.server";\n\nexport const leakedAuth = createAuth;\n',
   "app/lib/cycle-a.ts": 'import { b } from "./cycle-b";\n\nexport const a = b;\n',

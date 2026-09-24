@@ -33,8 +33,8 @@ Umbrella #3842. Author: Fable. Checked by the Opus deputy. Nish's decisions stan
 
 ## Takedown
 
-- Any brand or person can ask to be removed from public standing cards and from tracking by any workspace, by email to the address in the footer. Handled within 72 hours by hand (Nish or the deputy), recorded on a `takedown` row with the subject, the date and the action. A subject on the takedown list is refused at onboarding and dropped from existing workspaces at the next tick, with a one-line note to the owner.
-- Public standing cards show only what docs/REBUILD-STANDING-CARD.md allows; a takedown removes the subject from every card on the next render.
+- Any brand or person can ask to be removed from tracking by any workspace, by email to the address in the footer. Handled within 72 hours by hand (Nish or the deputy), recorded on a `takedown` row with the subject, the date and the action. A subject on the takedown list is refused at onboarding and dropped from existing workspaces at the next tick, with a one-line note to the owner.
+- Share images show only what docs/REBUILD-STANDING-CARD.md allows. They are rendered from live rows, so a subject is out of every share image made after its takedown is recorded.
 
 ### Who reads it
 
@@ -65,7 +65,7 @@ npx wrangler d1 execute 0509 --remote --command "INSERT INTO takedown (subject, 
 
 ### What the requester is told
 
-- Done: "Done. <subject> is no longer tracked by any workspace on Five to Nine and no longer appears on any public standing card. We recorded your request on <date, UTC>."
+- Done: "Done. <subject> is no longer tracked by any workspace on Five to Nine. We recorded your request on <date, UTC>."
 - Refused: we refuse only when the request is about a subject the requester neither is nor says they act for. "We can't act on this request. We remove a brand or creator when they, or someone acting for them, ask. This request is about <subject>, and it does not say you act for them. If you do, reply saying so and we will handle it within 72 hours of your reply."
 
 ### No machinery

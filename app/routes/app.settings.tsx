@@ -15,9 +15,6 @@ export default function Page({ loaderData }: Route.ComponentProps) {
       <h1>Settings</h1>
       <p>Signed in as {loaderData.email}</p>
       <p>
-        <Link to="/app/settings/card" prefetch="intent">Public card</Link>
-      </p>
-      <p>
         <Link to="/app/settings/agents" prefetch="intent">Agents and API</Link>
       </p>
       <Outlet />
