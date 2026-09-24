@@ -12,6 +12,10 @@ import { subjectRedirect } from "../lib/onboarding-subject";
 import { isTakenDown } from "../lib/data/takedown.server";
 import { normaliseSubject } from "../lib/identity/normalise";
 
+export function meta() {
+  return [{ title: "Start with your website · Five to Nine" }];
+}
+
 export async function loader({ request }: Route.LoaderArgs) {
   const session = await requireSession(request);
   const landing = await workspaceLandingForRequest(request, session.user.id);
