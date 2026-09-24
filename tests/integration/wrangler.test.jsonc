@@ -18,6 +18,11 @@
       "name": "site-sweep-test",
       "binding": "SITE_SWEEP",
       "class_name": "SiteSweepWorkflow"
+    },
+    {
+      "name": "own-site-check-test",
+      "binding": "OWN_SITE_CHECK",
+      "class_name": "OwnSiteCheckWorkflow"
     }
   ],
   "kv_namespaces": [

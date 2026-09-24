@@ -164,6 +164,18 @@
       "binding": "SITE_SWEEP",
       "class_name": "SiteSweepWorkflow",
       "schedules": ["0 2 * * *"]
+    },
+    // The own-site watch: every hour, each customer's own homepage is
+    // probed once with a plain fetch. A 5xx, 404 or no answer is probed
+    // again five minutes later, and only then opens an incident, pins an
+    // alert and puts { incident_id } on send-email. An open incident whose
+    // page answers cleanly again is closed and gets the one "looks fixed"
+    // email. This is the hourly re-check the incident email promises.
+    {
+      "name": "own-site-check",
+      "binding": "OWN_SITE_CHECK",
+      "class_name": "OwnSiteCheckWorkflow",
+      "schedules": ["0 * * * *"]
     }
   ],
 

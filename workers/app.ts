@@ -11,6 +11,7 @@ import { handleBatch } from "./delivery/consumer";
 import { handleDlqBatch } from "./delivery/dlq-consumer";
 import { NIGHTLY_CRON, sweepPending } from "./delivery/sweeper";
 import { runNightlyStanding } from "./standing/nightly";
+import { OwnSiteCheck } from "./workflows/own-site-check";
 import { SiteSweep } from "./workflows/site-sweep";
 import { StandingRollover } from "./workflows/standing-rollover";
 
@@ -78,5 +79,7 @@ const sentryOptions = (env: WorkerEnv): CloudflareOptions => ({
 export class StandingRolloverWorkflow extends instrumentWorkflowWithSentry(sentryOptions, StandingRollover) {}
 
 export class SiteSweepWorkflow extends instrumentWorkflowWithSentry(sentryOptions, SiteSweep) {}
+
+export class OwnSiteCheckWorkflow extends instrumentWorkflowWithSentry(sentryOptions, OwnSiteCheck) {}
 
 export default withSentry(sentryOptions, handler);
