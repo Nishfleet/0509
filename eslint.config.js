@@ -31,11 +31,6 @@ const SONNER_IMPORT = {
 
 const ONE_PAVED_PATH_IMPORTS = [
   {
-    name: "kysely",
-    message:
-      "kysely is imported in exactly one module, app/lib/db.server.ts, which exports the one query builder instance. One data layer, one connection, one place to change. docs/REBUILD-TRUST.md C4. Source: talk 25:26 (a single paved path per blessed pattern).",
-  },
-  {
     name: "better-auth",
     message:
       "better-auth is configured in exactly one module, app/lib/auth.server.ts, which exports createAuth(). A second betterAuth() call is a second session authority. docs/REBUILD-TRUST.md C4.",
@@ -105,11 +100,16 @@ const BANNED_SYNTAX = [
 const DML_WRITE_SHAPE =
   "INSERT(\\s+OR\\s+\\w+)?\\s+INTO|REPLACE\\s+INTO|UPDATE\\s+[\\w\".]+\\s+SET\\s+[\\w\".]+\\s*=|DELETE\\s+FROM";
 
-// Anchored at statement start, where a bare `UPDATE ` is already unambiguous,
-// plus `WITH`-led writes (a CTE can head INSERT/UPDATE/DELETE; a `WITH …
-// SELECT` read stays allowed because the inner shape must still match).
+// The same shapes anchored at statement start, plus `WITH`-led writes (a CTE
+// can head INSERT/UPDATE/DELETE; a `WITH … SELECT` read stays allowed because
+// the inner shape must still match). The UPDATE arm carries the table-then-SET
+// tail too: a bare `UPDATE\s` under the leading anchor only fixed position,
+// not shape, so prose literals like "Update saved" tripped the gate
+// (0509#4383). The `$` alternative is load-bearing for an interpolated table —
+// `UPDATE ${table} SET …` has `"UPDATE "` as its whole first quasi, which the
+// table-then-SET tail cannot span but end-of-quasi can.
 const RAW_DML_START =
-  `^\\s*(INSERT(\\s+OR\\s+\\w+)?\\s+INTO|REPLACE\\s+INTO|UPDATE\\s|DELETE\\s+FROM` +
+  `^\\s*(INSERT(\\s+OR\\s+\\w+)?\\s+INTO|REPLACE\\s+INTO|UPDATE\\s+([\\w".]+\\s+SET\\b|$)|DELETE\\s+FROM` +
   `|WITH\\b[\\s\\S]*\\b(${DML_WRITE_SHAPE}))`;
 
 const RAW_DML_WRITER = {
@@ -286,7 +286,6 @@ export default tseslint.config(
   {
     files: ["app/**/*.{ts,tsx}", "workers/**/*.ts"],
     ignores: [
-      "app/lib/db.server.ts",
       "app/lib/auth.server.ts",
       "app/lib/auth-client.ts",
       "app/components/toaster.tsx",
@@ -370,7 +369,6 @@ export default tseslint.config(
         { type: "worker", pattern: "workers", partialMatch: false },
       ],
       "boundaries/files": [
-        { category: "db", pattern: "app/lib/db.server.ts" },
         { category: "auth", pattern: "app/lib/auth.server.ts" },
         { category: "data-writer", pattern: "app/lib/data/**/*.server.ts" },
         { category: "server-leaf", pattern: "app/lib/**/*.server.ts" },
@@ -422,7 +420,7 @@ export default tseslint.config(
                 to: [
                   { element: { type: "component" } },
                   { element: { type: "data-writer" } },
-                  { file: { categories: { anyOf: ["server-leaf", "db", "auth"] } } },
+                  { file: { categories: { anyOf: ["server-leaf", "auth"] } } },
                 ],
               },
             },
@@ -440,13 +438,13 @@ export default tseslint.config(
                 file: {
                   categories: {
                     anyOf: ["server-leaf"],
-                    noneOf: ["data-writer", "db", "auth"],
+                    noneOf: ["data-writer", "auth"],
                   },
                 },
               },
               allow: {
                 to: {
-                  file: { categories: { anyOf: ["server-leaf", "data-writer", "db", "auth"] } },
+                  file: { categories: { anyOf: ["server-leaf", "data-writer", "auth"] } },
                 },
               },
             },
@@ -456,7 +454,7 @@ export default tseslint.config(
                 to: {
                   file: {
                     categories: {
-                      anyOf: ["data-writer", "db", "server-leaf"],
+                      anyOf: ["data-writer", "server-leaf"],
                       noneOf: ["auth"],
                     },
                   },
@@ -467,7 +465,7 @@ export default tseslint.config(
               from: { file: { categories: "auth" } },
               allow: {
                 to: [
-                  { file: { categories: { anyOf: ["server-leaf", "data-writer", "db"] } } },
+                  { file: { categories: { anyOf: ["server-leaf", "data-writer"] } } },
                   { element: { type: "worker" } },
                 ],
               },
