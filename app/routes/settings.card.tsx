@@ -1,32 +1,43 @@
 import type { Route } from "./+types/settings.card";
 
+import { CopyButton, SEARCH_CONSENT_MISSING, SearchSetting } from "../components/card-settings";
 import { requireSession } from "../lib/require-session.server";
 import {
   publishCard,
   readCardSettings,
   readWorkspaceIdForOwner,
   rotateCardSlug,
+  setCardIndexable,
   unpublishCard,
 } from "../lib/data/workspace.server";
 
 interface CardState {
   published: boolean;
   slug: string | null;
+  indexable: boolean;
   url: string | null;
   rotated: string | null;
   error: string | null;
 }
 
-const EMPTY: CardState = { published: false, slug: null, url: null, rotated: null, error: null };
+const EMPTY: CardState = {
+  published: false,
+  slug: null,
+  indexable: false,
+  url: null,
+  rotated: null,
+  error: null,
+};
 
 function cardState(
-  settings: { published: boolean; slug: string | null },
+  settings: { published: boolean; slug: string | null; indexable: boolean },
   rotated: string | null,
   error: string | null,
 ): CardState {
   return {
     published: settings.published,
     slug: settings.slug,
+    indexable: settings.indexable,
     url: settings.slug === null ? null : `/s/${settings.slug}`,
     rotated,
     error,
@@ -75,25 +86,20 @@ export async function action({ request }: Route.ActionArgs) {
         hasWorkspace: true,
       };
     }
-    return { card: cardState({ published: true, slug }, slug, null), hasWorkspace: true };
+    const settings = await readCardSettings(workspaceId);
+    return { card: cardState(settings ?? EMPTY, slug, null), hasWorkspace: true };
+  }
+
+  if (intent === "list" || intent === "unlist") {
+    const consented = intent === "unlist" || form.get("understood") === "yes";
+    if (consented) await setCardIndexable(workspaceId, intent === "list");
+    const settings = await readCardSettings(workspaceId);
+    const error = consented ? null : SEARCH_CONSENT_MISSING;
+    return { card: cardState(settings ?? EMPTY, null, error), hasWorkspace: true };
   }
 
   const settings = await readCardSettings(workspaceId);
   return { card: cardState(settings ?? EMPTY, null, null), hasWorkspace: true };
-}
-
-function CopyButton({ url }: { url: string | null }) {
-  return (
-    <button
-      type="button"
-      disabled={url === null}
-      onClick={() => {
-        if (url !== null) void navigator.clipboard.writeText(`${location.origin}${url}`);
-      }}
-    >
-      Copy link
-    </button>
-  );
 }
 
 export default function Page({ loaderData, actionData }: Route.ComponentProps) {
@@ -125,6 +131,7 @@ export default function Page({ loaderData, actionData }: Route.ComponentProps) {
             <input type="hidden" name="intent" value="unpublish" />
             <button type="submit">Turn the public card off</button>
           </form>
+          <SearchSetting indexable={card.indexable} />
         </>
       ) : null}
     </main>

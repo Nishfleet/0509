@@ -18,6 +18,7 @@ One public page per workspace, off by default, that shows this week's standing f
 - The card is cached at the edge and rendered on the weekly rollover, plus on demand when the owner toggles it; it never queries live. Cost: one render per workspace per week.
 - The slug is opaque and rotatable; turning the card off returns 404 within a minute (cache purge), and the OG image goes with it.
 - No login, no cookies, no tracking beyond Cloudflare Web Analytics.
+- Unlisted by default (Nish, 2026-09-24): a card is served with `X-Robots-Tag: noindex` and left out of `/sitemap.xml`, so only people the owner sends the link to find it. The owner can let search engines list it from Settings, only after ticking a box that confirms anyone searching will see their rank and every competitor they track, and that search engines can take days or weeks to drop it again. Turning the card off forgets that choice.
 - One CTA. Its price is on the button (Scout monthly, from the ledger).
 
 ## Proof required

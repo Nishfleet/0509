@@ -3,9 +3,11 @@ import { env } from "cloudflare:workers";
 interface CardRow {
   card_slug: string | null;
   card_is_published: 0 | 1;
+  card_is_indexable: 0 | 1;
 }
 
-const SELECT_CARD = "SELECT card_slug, card_is_published FROM workspace WHERE id = ?";
+const SELECT_CARD =
+  "SELECT card_slug, card_is_published, card_is_indexable FROM workspace WHERE id = ?";
 
 const SELECT_WORKSPACE_BY_OWNER = `SELECT id FROM workspace WHERE owner_user_id = ?
 ORDER BY created_at LIMIT 1`;
@@ -15,7 +17,11 @@ SET card_is_published = 1,
     card_slug = CASE WHEN card_slug IS NULL THEN ? ELSE card_slug END
 WHERE id = ? AND card_is_published = 0`;
 
-const UNPUBLISH_CARD = "UPDATE workspace SET card_is_published = 0 WHERE id = ?";
+const UNPUBLISH_CARD =
+  "UPDATE workspace SET card_is_published = 0, card_is_indexable = 0 WHERE id = ?";
+
+const SET_CARD_INDEXABLE = `UPDATE workspace SET card_is_indexable = ?1
+WHERE id = ?2 AND (?1 = 0 OR card_is_published = 1)`;
 
 const ROTATE_CARD_SLUG = `UPDATE workspace SET card_slug = ?
 WHERE id = ? AND card_is_published = 1`;
@@ -37,12 +43,17 @@ function newCardSlug(): string {
 export interface CardSettings {
   published: boolean;
   slug: string | null;
+  indexable: boolean;
 }
 
 export async function readCardSettings(workspaceId: string): Promise<CardSettings | null> {
   const row = await env.DB.prepare(SELECT_CARD).bind(workspaceId).first<CardRow>();
   if (row === null) return null;
-  return { published: row.card_is_published === 1, slug: row.card_slug };
+  return {
+    published: row.card_is_published === 1,
+    slug: row.card_slug,
+    indexable: row.card_is_indexable === 1,
+  };
 }
 
 export async function publishCard(workspaceId: string): Promise<CardSettings | null> {
@@ -64,6 +75,13 @@ export async function publishCard(workspaceId: string): Promise<CardSettings | n
 
 export async function unpublishCard(workspaceId: string): Promise<void> {
   await env.DB.prepare(UNPUBLISH_CARD).bind(workspaceId).run();
+}
+
+export async function setCardIndexable(workspaceId: string, indexable: boolean): Promise<boolean> {
+  const result = await env.DB.prepare(SET_CARD_INDEXABLE)
+    .bind(indexable ? 1 : 0, workspaceId)
+    .run();
+  return result.meta.changes === 1;
 }
 
 export async function rotateCardSlug(workspaceId: string): Promise<string | null> {
