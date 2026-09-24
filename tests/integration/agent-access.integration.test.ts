@@ -2,6 +2,7 @@ import { env } from "cloudflare:test";
 import { beforeAll, describe, expect, it } from "vitest";
 
 import { propsForApiKey } from "../../app/lib/agent/keys.server";
+import { toolResult } from "../../app/lib/agent/mcp.server";
 import { readAgentAlerts, readAgentBrief, readAgentCompetitors, readAgentStanding } from "../../app/lib/agent/read.server";
 import { apiResponse, mcpResponse } from "../../app/lib/agent/serve.server";
 import { createAuth } from "../../app/lib/auth.server";
@@ -167,6 +168,14 @@ describe("agent access, scoped to one workspace", () => {
     });
     const call = await rpcResult<{ structuredContent: { tracked: { domain: string }[] } }>(called);
     expect(call.structuredContent.tracked.map((row) => row.domain)).toEqual(["rival-b.example"]);
+  });
+
+  it("answers a failing MCP tool with a fixed error and never the thrown text", async () => {
+    const failed = await toolResult(() => Promise.reject(new Error("D1_ERROR: no such column secret_internal")));
+    expect(failed).toMatchObject({ isError: true });
+    expect(JSON.stringify(failed)).not.toContain("secret_internal");
+    const ok = await toolResult(() => Promise.resolve({ alerts: [] }));
+    expect(ok).toMatchObject({ structuredContent: { alerts: [] } });
   });
 
   it("reads standing for the caller's workspace and hides a paused competitor", async () => {
