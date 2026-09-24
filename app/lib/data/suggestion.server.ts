@@ -2,6 +2,7 @@ import { env } from "cloudflare:workers";
 
 import type { NoulVerdict } from "../jev/client.server";
 import { noulAction } from "../jev/thresholds";
+import { daysBefore } from "../site-changes.server";
 import type { Evidence } from "../discovery/types";
 import { insertAutoCompetitor, insertCompetitorFromSuggestion, turnOffFromRetireSuggestion } from "./entity.server";
 import { insertVerdict } from "./jev_verdict.server";
@@ -33,6 +34,8 @@ export interface DiscoveryResult {
 }
 
 type SuggestionStatus = "auto_on" | "pending" | "dismissed";
+
+const RETIRE_REASK_DAYS = 28;
 
 function statusOf(verdict: NoulVerdict | null): SuggestionStatus {
   if (verdict === null) return "pending";
@@ -133,6 +136,31 @@ export async function keepFromRetireSuggestion(input: {
   now: string;
 }): Promise<void> {
   await env.DB.prepare(DISMISS_RETIRE_SUGGESTION).bind(input.now, input.suggestionId, input.workspaceId).run();
+}
+
+const ASK_RETIRE_SUGGESTION =
+  "INSERT INTO suggestion (id, workspace_id, entity_id, kind, candidate_domain, candidate_name, verdict_p, verdict_reason, status, created_at) VALUES (?1, ?2, ?3, 'retire', ?4, ?5, ?6, ?7, 'pending', ?8) ON CONFLICT (workspace_id, candidate_domain) DO UPDATE SET kind = 'retire', entity_id = excluded.entity_id, verdict_p = excluded.verdict_p, verdict_reason = excluded.verdict_reason, status = 'pending', decided_by = NULL, decided_at = NULL WHERE NOT (suggestion.kind = 'retire' AND suggestion.status = 'dismissed' AND suggestion.decided_at > ?9)";
+
+export function askRetireSuggestion(input: {
+  workspaceId: string;
+  entityId: string;
+  domain: string;
+  name: string;
+  p: number;
+  line: string;
+  now: string;
+}): D1PreparedStatement {
+  return env.DB.prepare(ASK_RETIRE_SUGGESTION).bind(
+    crypto.randomUUID(),
+    input.workspaceId,
+    input.entityId,
+    input.domain,
+    input.name,
+    input.p,
+    input.line,
+    input.now,
+    daysBefore(new Date(input.now), RETIRE_REASK_DAYS),
+  );
 }
 
 export async function dismissSuggestion(input: {
