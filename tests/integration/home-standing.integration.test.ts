@@ -1,7 +1,7 @@
 import { env } from "cloudflare:test";
 import { beforeEach, describe, expect, it } from "vitest";
 
-import { readHomeStandingInputs } from "../../app/lib/home-standing.server";
+import { readHomeStandingInputs, SELECT_HOME_STANDING } from "../../app/lib/home-standing.server";
 
 /**
  * Home's standing reader against real local D1: the owner's workspace, its
@@ -52,6 +52,16 @@ async function seedDigest(id: string, periodEnd: string, rank: number) {
     .run();
 }
 
+async function seedStanding(label: string, weekStartAt: string, rank: number | null) {
+  await env.DB.batch(
+    ["self", "rival", "paused"].map((entity) =>
+      env.DB.prepare(
+        "INSERT INTO standing (id, workspace_id, entity_id, week_start_at, score, rank, computed_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+      ).bind(`${WS}_${label}_${entity}`, WS, `${WS}_${entity}`, weekStartAt, rank ?? 0, rank, weekStartAt),
+    ),
+  );
+}
+
 beforeEach(async () => {
   runs += 1;
   WS = `ws_home_${String(runs)}`;
@@ -84,5 +94,64 @@ describe("readHomeStandingInputs", () => {
 
   it("returns null for a user with no workspace", async () => {
     expect(await readHomeStandingInputs(env.DB, "user_nobody")).toBeNull();
+  });
+
+  it("reads and writes the newest brief through the digest index", async () => {
+    await seedDigest("older", "2026-09-14T07:00:00.000Z", 2);
+    await seedDigest("newest", "2026-09-21T07:00:00.000Z", 1);
+
+    const plan = await env.DB.prepare(`EXPLAIN QUERY PLAN ${SELECT_HOME_STANDING}`)
+      .bind(USER)
+      .all<{ detail: string }>();
+    const details = (plan.results ?? []).map((row) => row.detail);
+    expect(details.some((detail) => detail.includes("idx_digest_ws_kind_period"))).toBe(true);
+    expect(details.every((detail) => !detail.startsWith("SCAN "))).toBe(true);
+
+    const inputs = await readHomeStandingInputs(env.DB, USER);
+    expect(inputs?.payload?.headline_rank).toBe(1);
+    expect(inputs?.payload?.why_line).toBe("week ending 2026-09-21T07:00:00.000Z");
+  });
+
+  it("keeps the oldest workspace when the owner has two", async () => {
+    const newer = `${WS}_newer`;
+    const createdAt = "2026-09-01T00:00:00.000Z";
+    await env.DB.batch([
+      env.DB.prepare(
+        "INSERT INTO workspace (id, name, owner_user_id, timezone, brief_weekday, brief_hour, created_at) VALUES (?1, 'Newer', ?2, 'UTC', 2, 9, ?3)",
+      ).bind(newer, USER, createdAt),
+      env.DB.prepare(
+        "INSERT INTO entity (id, workspace_id, role, domain, name, state, created_at) VALUES (?1, ?2, 'self', 'newer.example', 'newer', 'on', ?3)",
+      ).bind(`${newer}_self`, newer, createdAt),
+    ]);
+
+    const inputs = await readHomeStandingInputs(env.DB, USER);
+    expect(inputs?.schedule.timezone).toBe("Europe/London");
+    expect(inputs?.entities.some((entity) => entity.domain === "newer.example")).toBe(false);
+  });
+
+  it("returns exactly the four newest frozen ranked weeks, ascending, with no null rank and no unranked week", async () => {
+    const rankedWeeks = [
+      "2026-08-24T07:00:00.000Z",
+      "2026-08-31T07:00:00.000Z",
+      "2026-09-07T07:00:00.000Z",
+      "2026-09-14T07:00:00.000Z",
+      "2026-09-20T23:00:00.000Z",
+    ];
+    for (const [index, week] of rankedWeeks.entries()) await seedStanding(week, week, index + 1);
+    await seedStanding("unranked", "2026-09-22T07:00:00.000Z", null);
+
+    const inputs = await readHomeStandingInputs(env.DB, USER);
+    expect(inputs).not.toBeNull();
+    const history = inputs?.history ?? [];
+
+    for (const row of history) expect(Number.isInteger(row.rank)).toBe(true);
+    const distinctWeeks = [...new Set(history.map((row) => row.week_start_at))];
+    expect(distinctWeeks).toEqual(rankedWeeks.slice(1));
+    expect(distinctWeeks).not.toContain("2026-09-22T07:00:00.000Z");
+    expect(history).toHaveLength(12);
+    for (const entity of ["self", "rival", "paused"]) {
+      expect(history.filter((row) => row.entity_id === `${WS}_${entity}`).map((row) => row.rank)).toEqual([2, 3, 4, 5]);
+    }
+    expect([...history].sort((a, b) => a.week_start_at.localeCompare(b.week_start_at))).toEqual(history);
   });
 });
