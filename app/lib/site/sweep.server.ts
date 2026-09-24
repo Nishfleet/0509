@@ -11,6 +11,7 @@ import {
   readSiteSweepTargets,
   readUnwatchedEntities,
 } from "../data/watch.server";
+import { robotsAllows } from "../fetch/robots.server";
 import type { CheckPageResult } from "./check-page.server";
 import { checkPage } from "./check-page.server";
 import { diffPageText } from "./diff";
@@ -69,6 +70,10 @@ export interface SweepTick {
 }
 
 export async function checkSitePage(target: SiteSweepTarget, tick: SweepTick): Promise<CheckPageResult> {
+  if (target.entityRole === "self" && !(await robotsAllows(target.url))) {
+    console.log(JSON.stringify({ event: "site.check_failed", url: target.url, reason: "robots", detail: "disallowed by robots.txt" }));
+    return { outcome: "failed", reason: "robots", detail: "disallowed by robots.txt" };
+  }
   const result = await checkPage({
     watchId: target.watchId,
     pageId: target.pageId,

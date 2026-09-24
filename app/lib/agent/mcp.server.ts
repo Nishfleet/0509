@@ -1,12 +1,22 @@
 import { createMcpHandler, McpServer } from "@modelcontextprotocol/server";
 
-import { readAgentAlerts, readAgentBrief, readAgentCompetitors } from "./read.server";
-import { alertsResultSchema, briefResultSchema, competitorsResultSchema } from "./schemas";
+import { readAgentAlerts, readAgentBrief, readAgentCompetitors, readAgentStanding } from "./read.server";
+import { alertsResultSchema, briefResultSchema, competitorsResultSchema, standingResultSchema } from "./schemas";
 
 const READ_ONLY = { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false };
+const TOOL_FAILED = "Five to Nine could not read this right now. Try again in a minute.";
 
 function result<T extends Record<string, unknown>>(value: T) {
   return { content: [{ type: "text" as const, text: JSON.stringify(value) }], structuredContent: value };
+}
+
+export async function toolResult<T extends Record<string, unknown>>(read: () => Promise<T>) {
+  try {
+    return result(await read());
+  } catch (error) {
+    console.error(JSON.stringify({ event: "agent.mcp_tool_failed", message: error instanceof Error ? error.message : String(error) }));
+    return { content: [{ type: "text" as const, text: TOOL_FAILED }], isError: true };
+  }
 }
 
 function createServer(workspaceId: string): McpServer {
@@ -19,6 +29,17 @@ function createServer(workspaceId: string): McpServer {
   );
 
   server.registerTool(
+    "get_standing",
+    {
+      title: "This week's standing",
+      description: "Where the user ranks against their tracked competitors this week, the movement since last week, the one-line why, and one line per competitor. Paused competitors are left out.",
+      outputSchema: standingResultSchema,
+      annotations: READ_ONLY,
+    },
+    async () => result(await readAgentStanding(workspaceId)),
+  );
+
+  server.registerTool(
     "get_brief",
     {
       title: "This week's brief",
@@ -27,7 +48,7 @@ function createServer(workspaceId: string): McpServer {
       outputSchema: briefResultSchema,
       annotations: READ_ONLY,
     },
-    async () => result(await readAgentBrief(workspaceId)),
+    async () => toolResult(() => readAgentBrief(workspaceId)),
   );
 
   server.registerTool(
@@ -38,7 +59,7 @@ function createServer(workspaceId: string): McpServer {
       outputSchema: competitorsResultSchema,
       annotations: READ_ONLY,
     },
-    async () => result(await readAgentCompetitors(workspaceId)),
+    async () => toolResult(() => readAgentCompetitors(workspaceId)),
   );
 
   server.registerTool(
@@ -49,7 +70,7 @@ function createServer(workspaceId: string): McpServer {
       outputSchema: alertsResultSchema,
       annotations: READ_ONLY,
     },
-    async () => result(await readAgentAlerts(workspaceId)),
+    async () => toolResult(() => readAgentAlerts(workspaceId)),
   );
 
   return server;

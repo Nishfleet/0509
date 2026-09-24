@@ -21,6 +21,10 @@ async function workspaceFor(props: AgentProps): Promise<string | Response> {
 }
 
 export async function mcpResponse(request: Request, props: AgentProps): Promise<Response> {
+  const origin = request.headers.get("origin");
+  if (origin !== null && origin !== new URL(env.BETTER_AUTH_URL).origin) {
+    return problem(403, "forbidden_origin", "This origin may not call the MCP server.");
+  }
   const workspace = await workspaceFor(props);
   if (workspace instanceof Response) return workspace;
   return serveMcp(request, workspace);
