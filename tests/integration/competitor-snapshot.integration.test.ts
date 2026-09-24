@@ -77,12 +77,17 @@ async function seedSignal(
   fields: {
     kind: "ad" | "mention" | "change" | "hiring";
     aspect?: string;
+    canonicalUrl?: string;
     publishedAt?: string | null;
     observedAt: string;
   },
 ): Promise<void> {
   const columns: string[] = ["id", "workspace_id", "entity_id", "source_id", "kind", "dedup_key", "observed_at"];
   const values: (string | number | null)[] = [id, ws, entityId, sourceId, fields.kind, `dedup-${id}`, fields.observedAt];
+  if (fields.canonicalUrl !== undefined) {
+    columns.push("canonical_url", "url_hash");
+    values.push(fields.canonicalUrl, `url-hash-${id}`);
+  }
   if (fields.aspect !== undefined) {
     columns.push("aspect");
     values.push(fields.aspect);
@@ -164,16 +169,29 @@ describe("readCompetitorSnapshot against real D1", () => {
       observedAt: "2026-09-14T10:00:00.000Z",
     });
 
+    await seedSignal("snap-sig-new-creative", ws, entity, sourceAds, {
+      kind: "ad",
+      publishedAt: "2026-09-23T10:00:00.000Z",
+      observedAt: "2026-09-23T10:00:00.000Z",
+    });
+
+    await seedSignal("snap-sig-mention", ws, entity, sourceSite, {
+      kind: "mention",
+      canonicalUrl: "https://news.example/article-1",
+      observedAt: "2026-09-22T10:00:00.000Z",
+    });
+    await seedVerdict("snap-jev-mention", ws, "mention_matters", "snap-sig-mention", 0.92);
+
     await seedStanding("snap-standing-1", ws, entity, "2026-09-21T00:00:00.000Z", 3, 1);
 
     const snapshot = await readCompetitorSnapshot(ws, entity, NOW);
 
     expect(snapshot.standing).toEqual({ rank: 3, movement: 1 });
     expect(snapshot.counts).toEqual({
-      newCreatives: 0,
+      newCreatives: 1,
       copyChanges: 1,
       noteworthyChanges: 1,
-      mentionsThatMatter: 0,
+      mentionsThatMatter: 1,
       newRoles: 0,
     });
     const byKey = new Map(snapshot.sources.map((source) => [source.kind, source]));
