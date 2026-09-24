@@ -97,3 +97,18 @@ export async function updateBriefSchedule(
     .bind(schedule.timezone, schedule.weekday, schedule.hour, workspaceId)
     .run();
 }
+
+const SELECT_OWN_SITE_ALERTS = "SELECT own_site_alerts FROM workspace WHERE id = ?";
+
+const UPDATE_OWN_SITE_ALERTS = "UPDATE workspace SET own_site_alerts = ? WHERE id = ?";
+
+export async function readOwnSiteAlerts(workspaceId: string): Promise<boolean> {
+  const row = await env.DB.prepare(SELECT_OWN_SITE_ALERTS)
+    .bind(workspaceId)
+    .first<{ own_site_alerts: number | null }>();
+  return (row?.own_site_alerts ?? 1) === 1;
+}
+
+export async function setOwnSiteAlerts(workspaceId: string, ownSiteAlerts: boolean): Promise<void> {
+  await env.DB.prepare(UPDATE_OWN_SITE_ALERTS).bind(ownSiteAlerts ? 1 : 0, workspaceId).run();
+}
