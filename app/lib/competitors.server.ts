@@ -1,5 +1,5 @@
 import { addManualCompetitor, setCompetitorState } from "./data/entity.server";
-import { acceptSuggestion, dismissSuggestion } from "./data/suggestion.server";
+import { acceptSuggestion, confirmRetireSuggestion, dismissSuggestion, keepFromRetireSuggestion } from "./data/suggestion.server";
 import { isTakenDown } from "./data/takedown.server";
 import { normaliseSubject } from "./identity/normalise";
 
@@ -32,6 +32,14 @@ export async function handleCompetitorIntent(workspaceId: string, form: FormData
   const entityId = text(form, "entityId");
   if (intent === "accept" && suggestionId !== "") {
     await acceptSuggestion({ workspaceId, suggestionId, now });
+    return DONE;
+  }
+  if (intent === "stop" && suggestionId !== "") {
+    await confirmRetireSuggestion({ workspaceId, suggestionId, now });
+    return DONE;
+  }
+  if (intent === "keep" && suggestionId !== "") {
+    await keepFromRetireSuggestion({ workspaceId, suggestionId, now });
     return DONE;
   }
   if (intent === "dismiss" && suggestionId !== "") {
