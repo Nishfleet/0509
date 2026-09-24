@@ -20,7 +20,7 @@ export interface HomeRow {
 
 export type HomeStanding =
   | { kind: "add-competitor" }
-  | { kind: "gathering"; briefAt: string }
+  | { kind: "gathering"; briefAt: string; firstSweepAt: string; brands: number }
   | { kind: "ranked"; rank: number; total: number; whyLine: string; rows: readonly HomeRow[] };
 
 export interface HomeView {
@@ -32,6 +32,15 @@ export interface HomeView {
 
 export function nextHour(now: Date): Date {
   return new Date((Math.floor(now.getTime() / 3_600_000) + 1) * 3_600_000);
+}
+
+export const SITE_SWEEP_UTC_HOUR = 2;
+
+export function nextSiteSweepAt(now: Date): Date {
+  const sweep = new Date(now.getTime());
+  sweep.setUTCHours(SITE_SWEEP_UTC_HOUR, 0, 0, 0);
+  if (sweep.getTime() <= now.getTime()) sweep.setUTCDate(sweep.getUTCDate() + 1);
+  return sweep;
 }
 
 const MOVEMENT = {
@@ -121,7 +130,12 @@ export function homeStanding(input: {
   const payload = input.payload;
   const rank = payload?.headline_rank ?? null;
   if (payload === null || rank === null || payload.headline_total < 2) {
-    return { kind: "gathering", briefAt: dayAndTime(input.schedule.timezone, nextBriefAt(input.schedule, input.now)) };
+    return {
+      kind: "gathering",
+      briefAt: dayAndTime(input.schedule.timezone, nextBriefAt(input.schedule, input.now)),
+      firstSweepAt: dayAndTime(input.schedule.timezone, nextSiteSweepAt(input.now)),
+      brands: onBrands,
+    };
   }
   return {
     kind: "ranked",
