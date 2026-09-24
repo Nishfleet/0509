@@ -69,7 +69,7 @@ const handler = {
       return;
     }
     if (batch.queue === "page-sweep-dlq") {
-      await handlePageSweepDlq(batch);
+      handlePageSweepDlq(batch);
       return;
     }
     await handleBatch(env, batch);
