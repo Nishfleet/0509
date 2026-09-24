@@ -23,6 +23,15 @@ function render(dismissed: readonly DismissedSuggestion[]): string {
   return renderToStaticMarkup(createElement(DismissedBrands, { dismissed }));
 }
 
+function rowHtml(html: string, suggestionId: string): string {
+  const start = html.indexOf(`value="${suggestionId}"`);
+  if (start < 0) throw new Error(`row not found for ${suggestionId}`);
+  const liOpen = html.lastIndexOf("<li", start);
+  const liClose = html.indexOf("</li>", start);
+  if (liOpen < 0 || liClose < 0) throw new Error(`row bounds not found for ${suggestionId}`);
+  return html.slice(liOpen, liClose + "</li>".length);
+}
+
 describe("the dismissed brands list", () => {
   it("renders nothing when no brand has been dismissed", () => {
     expect(render([])).toBe("");
@@ -53,4 +62,16 @@ describe("the dismissed brands list", () => {
     expect(html).toContain('aria-label="Bring back Kindred"');
     expect(html).toContain('aria-label="Bring back Casetta"');
   });
+
+  it("emits Dismissed <day> as a single text node so a screen reader does not hear two parts", () => {
+    const html = render([casetta, kindred]);
+    const row = rowHtml(html, "sug-dismissed-kindred");
+
+    const nodes = row.match(/>\s*Dismissed\s+2026-09-20\s*</g) ?? [];
+    expect(nodes).toHaveLength(1);
+
+    expect(row).not.toMatch(/>\s*Dismissed\s*</);
+    expect(row).not.toMatch(/>\s*2026-09-20\s*</);
+  });
 });
+
