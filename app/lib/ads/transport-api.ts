@@ -1,3 +1,5 @@
+import { z } from "zod";
+
 import {
 	readCursorPath,
 	renderDescriptorTemplate,
@@ -32,6 +34,8 @@ export class AdsTransportAuthError extends Error {
 const REQUEST_TIMEOUT_MS = 20_000;
 
 const MAX_PAGES = 5;
+
+const cursorSchema = z.string().min(1).max(512);
 
 export async function transportApi(
 	descriptor: AdsSourceDescriptor,
@@ -81,6 +85,7 @@ export async function transportApi(
 			headers,
 			body,
 			signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+			redirect: descriptor.auth.kind === "bearer" ? "manual" : "follow",
 		});
 		status = res.status;
 
@@ -94,9 +99,11 @@ export async function transportApi(
 		pages.push(pagePayload);
 
 		if (descriptor.paginationCursorPath === undefined || !res.ok) break;
-		const next = readCursorPath(pagePayload, descriptor.paginationCursorPath);
-		if (next === undefined || next === cursor) break;
-		cursor = next;
+		const parsed = cursorSchema.safeParse(
+			readCursorPath(pagePayload, descriptor.paginationCursorPath),
+		);
+		if (!parsed.success || parsed.data === cursor) break;
+		cursor = parsed.data;
 	}
 
 	return {
