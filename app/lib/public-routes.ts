@@ -1,4 +1,6 @@
 import { PLANS, TRIAL_TERMS } from "./billing/plans";
+import { LIVE_COVERAGE, PLAN_NOTE, WATCHED_NOUNS } from "./coverage";
+import { FAQ } from "./faq";
 import { SITE_URL } from "./structured-data";
 
 export const PUBLIC_PATHS = ["/privacy", "/terms"] as const;
@@ -43,15 +45,25 @@ export function robotsTxt(origin: string): string {
 
 export function llmsTxt(origin: string): string {
   const prices = PLANS.map((plan) => `${plan.name} €${String(plan.monthlyPriceEur)}/month`).join(", ");
+  const watched = LIVE_COVERAGE.flatMap((group) =>
+    group.sources.map(
+      (source) => `- ${group.kind}: ${source.label}${source.plan === undefined ? "" : ` (${PLAN_NOTE[source.plan]})`}`,
+    ),
+  );
   return (
     [
       "# Five to Nine",
       "",
-      "> Five to Nine (0509.io) tracks your competitors for you. It watches their ads, website changes, mentions and hiring from public sources, ranks you against them every week, and emails one brief every Monday with a screenshot behind every change.",
+      `> Five to Nine (0509.io) is a competitor tracker for founders, brands and creators. It finds your competitors for you, watches their ${WATCHED_NOUNS} from public sources, ranks you against them every week, and emails one brief every Monday with a screenshot behind every change.`,
       "",
       `- Plans: ${prices}. ${TRIAL_TERMS}`,
       `- Agents: every plan includes a read-only API and an MCP server at ${MCP_URL}.`,
       "",
+      "What it watches today:",
+      "",
+      ...watched,
+      "",
+      ...FAQ.flatMap((entry) => [`**${entry.question}** ${entry.answer}`, ""]),
       "## Agents",
       "",
       `- [MCP server](${MCP_URL}): add it as a connector in Claude, ChatGPT or Cursor and sign in; read-only tools get_brief, list_competitors and list_alerts, limited to your own workspace`,
