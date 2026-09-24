@@ -8,8 +8,6 @@ import { requireSession } from "../lib/require-session.server";
 export function headers() {
   return {
     "cache-control": "no-store",
-    "content-security-policy": "frame-ancestors 'none'",
-    "x-frame-options": "DENY",
     "referrer-policy": "no-referrer",
   };
 }

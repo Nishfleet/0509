@@ -1,15 +1,22 @@
 import type { Route } from "./+types/app.settings";
 
-import { Link } from "react-router";
+import { env } from "cloudflare:workers";
+import { Link, redirect } from "react-router";
 
+import { DeleteAccount, SignOut } from "../components/account-settings";
+import { BriefScheduleSettings } from "../components/brief-schedule-settings";
 import { BLOCK_HEADING, PAGE, PageHeading } from "../components/page-heading";
 import { AddPasskey } from "../components/passkey-button";
-import { BriefScheduleSettings } from "../components/brief-schedule-settings";
-import { SignOut } from "../components/sign-out";
+import { deleteAccount } from "../lib/account-delete.server";
+import { oauthHelpersContext } from "../lib/agent/context.server";
+import { signOut } from "../lib/auth.server";
 import { nextBriefAt } from "../lib/brief-schedule";
 import { nextBriefLine, parseScheduleForm } from "../lib/brief-settings";
 import { readBriefScheduleForOwner, updateBriefSchedule } from "../lib/data/workspace.server";
 import { requireSession } from "../lib/require-session.server";
+
+const MISMATCH = "That doesn't match your email. Type it exactly to delete your account.";
+const SIGN_IN_AGAIN = "For your safety, sign out and sign back in, then delete your account.";
 
 export function meta() {
   return [{ title: "Settings · Five to Nine" }];
@@ -25,24 +32,35 @@ export async function loader({ request }: Route.LoaderArgs) {
   return { email: session.user.email, schedule };
 }
 
-export async function action({ request }: Route.ActionArgs) {
+export async function action({ request, context }: Route.ActionArgs) {
   const session = await requireSession(request);
+  const form = await request.formData();
+  const intent = form.get("intent");
+
+  if (intent === "sign-out") {
+    throw redirect("/login", { headers: await signOut(env, request) });
+  }
+  if (intent === "delete-account") {
+    const confirm = form.get("confirm");
+    const typed = typeof confirm === "string" ? confirm.trim().toLowerCase() : "";
+    if (typed !== session.user.email.toLowerCase()) return { saved: null, deleteError: MISMATCH };
+    const headers = await deleteAccount(context.get(oauthHelpersContext), request, session.user.id);
+    if (headers === null) return { saved: null, deleteError: SIGN_IN_AGAIN };
+    throw redirect("/login", { headers });
+  }
   const owned = await readBriefScheduleForOwner(session.user.id);
-  const schedule = parseScheduleForm(await request.formData());
-  if (owned === null || schedule === null) return { saved: false };
+  const schedule = parseScheduleForm(form);
+  if (owned === null || schedule === null) return { saved: false, deleteError: null };
   await updateBriefSchedule(owned.workspaceId, schedule);
-  return { saved: true };
+  return { saved: true, deleteError: null };
 }
 
 const BLOCK = "border-line mt-10 border-t pt-4";
 
-export default function Page({ loaderData }: Route.ComponentProps) {
+export default function Page({ loaderData, actionData }: Route.ComponentProps) {
   return (
     <main className={PAGE}>
-      <PageHeading
-        title="Settings"
-        lede="Turn tracking for a brand on or off from its switch in Competitors."
-      />
+      <PageHeading title="Settings" lede="Turn tracking for a brand on or off from its switch in Competitors." />
       {loaderData.schedule === null ? null : (
         <section aria-labelledby="settings-brief" className={BLOCK}>
           <h2 id="settings-brief" className={BLOCK_HEADING}>
@@ -79,6 +97,7 @@ export default function Page({ loaderData }: Route.ComponentProps) {
           <SignOut />
         </div>
       </section>
+      <DeleteAccount email={loaderData.email} error={actionData?.deleteError ?? null} />
     </main>
   );
 }
