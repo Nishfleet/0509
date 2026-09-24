@@ -5,6 +5,7 @@ import { closeIncident, closeIncidentsOutside, openIncident, readOpenIncidents }
 import type { OwnSitePage } from "../data/page.server";
 import { readOwnSitePages } from "../data/page.server";
 import { ensureHomePages } from "./sweep.server";
+import { robotsAllows } from "../fetch/robots.server";
 
 export type OwnSiteHealth =
   | { state: "healthy" }
@@ -42,6 +43,7 @@ function wwwVariant(url: string): string {
 }
 
 export async function probeOwnSite(url: string): Promise<OwnSiteHealth> {
+  if (!(await robotsAllows(url))) return { state: "unknown", reason: "robots" };
   const first = await fetchStatus(url);
   const response = first instanceof Error ? await fetchStatus(wwwVariant(url)) : first;
   if (response instanceof Error) return { state: "broken", kind: "not loading" };
