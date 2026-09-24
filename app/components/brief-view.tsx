@@ -2,6 +2,7 @@ import { Fragment, type ReactElement } from "react";
 
 import { Mark } from "./mark";
 import type { BriefPayload } from "../lib/brief-payload";
+import { httpUrl } from "../lib/http-url";
 
 const SECTION = "border-line mt-5 border-t pt-4";
 const HEAD = "font-mono text-eyebrow text-ink-soft uppercase";
@@ -48,11 +49,18 @@ function readThisFirstBlock(payload: BriefPayload): ReactElement {
         payload.read_this_first.slice(0, MAX_MARKS).map((mark) => (
           <Fragment key={mark.signal_id}>
             {mark.before === null || mark.after === null ? (
-              <p className={BODY}>
-                <a className="underline decoration-1 underline-offset-4" href={mark.url}>
-                  {mark.title}
-                </a>
-              </p>
+              httpUrl(mark.url) === null ? (
+                <p className={BODY}>{mark.title}</p>
+              ) : (
+                <p className={BODY}>
+                  <a
+                    className="underline decoration-1 underline-offset-4"
+                    href={httpUrl(mark.url) ?? undefined}
+                  >
+                    {mark.title}
+                  </a>
+                </p>
+              )
             ) : (
               <Mark
                 before={mark.before}
