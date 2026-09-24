@@ -866,9 +866,19 @@ Cache `.lycheecache` with `actions/cache@v4`; it is one block of stock YAML, not
 
 Charter addendum: the product ships an API and an MCP server. Every version below read 2026-09-21.
 
-### 7.1 MCP on Workers — do not write an `McpAgent`
+### 7.1 MCP on Workers — `createMcpHandler` from `@modelcontextprotocol/server`
 
-**Not yet installed.** `agents` 0.24.0, `@modelcontextprotocol/server` 2.0.0, and the exact-pinned peers `@modelcontextprotocol/client` and `@modelcontextprotocol/sdk` are not in `package.json`. The MCP route has not shipped.
+**Installed and shipped** (2026-09-24): `@modelcontextprotocol/server` **2.1.0**. The route is `app/routes/mcp.ts`; the server is `app/lib/agent/mcp.server.ts`.
+
+The 2026-09-21 reading recommended `createMcpHandler` from `agents/mcp/server`. Since then the upstream SDK's 2.x server package ships the same stateless, web-standard entry itself: `createMcpHandler(factory)` returns `{ fetch(request, { authInfo }) }`, serves the 2026-07-28 revision, and falls back to stateless serving for 2025-era clients. So the MCP server needs **one** package, not `agents` plus three exact-pinned peers.
+
+| Rejected | Why |
+|---|---|
+| `agents` 0.24.0 (`agents/mcp/server`) | Same handler, but the package depends on `esbuild`, `@rolldown/plugin-babel`, `@babel/plugin-proposal-decorators`, `partysocket`, `capnweb` and exact-pins `@modelcontextprotocol/sdk` 1.30.0 as a peer. None of it runs for a stateless MCP route. |
+| `McpAgent` (`agents/mcp`) | Deprecated and feature-frozen by its own docs; forces a Durable Object + migration for state we do not need. |
+| `@modelcontextprotocol/sdk` 1.30.0 standalone | The legacy generation, and it hard-depends on `express`, `cors`, `raw-body` and `@hono/node-server`. |
+
+Original research, kept for the record:
 
 **Recommendation: `createMcpHandler` from `agents/mcp/server`, with `McpServer` from `@modelcontextprotocol/server` 2.0.0.**
 
@@ -915,7 +925,7 @@ Options on `createMcpHandler`: `route` (default `/mcp`), `corsOptions`, `allowed
 
 ### 7.2 MCP auth — OAuth 2.1 and RFC 9728 are a MUST
 
-**Not yet installed.** `@cloudflare/workers-oauth-provider` 0.10.3 is not in `package.json`. MCP auth has not shipped.
+**Installed and shipped** (2026-09-24): `@cloudflare/workers-oauth-provider` **0.10.4**, configured once in `app/lib/agent/oauth.server.ts` and wrapped around the Worker in `workers/app.ts`. `OAUTH_KV` is namespace `0509-oauth`, pinned by id. The provider protects `/mcp` and hands its helpers and the verified `props` to React Router as a `RouterContextProvider` (`app/lib/agent/context.server.ts`), so the consent page and Settings read them with `context.get(...)` rather than a second `getOAuthApi` instance. API keys reach `/mcp` through its `resolveExternalToken` hook. The consent dialog is `app/routes/oauth.authorize.tsx`.
 
 **`@cloudflare/workers-oauth-provider` 0.10.3** (2026-08-10, zero dependencies). It needs one KV binding:
 
@@ -973,7 +983,7 @@ So the division of labour is: **the binding is the cheap abuse shield** at the e
 
 ### 7.5 OpenAPI from zod schemas
 
-**Not yet installed.** `zod-openapi` 6.0.2 is not in `package.json`. The OpenAPI route has not shipped. `zod` itself is installed at `^4.6.5`.
+**Installed and shipped** (2026-09-24): `zod-openapi` **6.0.2**; the document is `app/lib/agent/openapi.ts`, served at `/api/v1/openapi.json`. `zod` itself is installed at `^4.6.5`.
 
 **Recommendation: `zod-openapi` (samchungy) 6.0.2 — zero runtime dependencies, peer `zod ^4.0.0` only, no router coupling.**
 
@@ -1061,14 +1071,14 @@ Every capability the rebuild needs → the one thing that provides it → the ve
 | E2E against production | `@playwright/test` | 1.63.0 |
 | Performance gate | `treosh/lighthouse-ci-action` | v12.6.2 |
 | Link checking | `lycheeverse/lychee-action` | v2.9.0 |
-| MCP server | `createMcpHandler` (`agents/mcp/server`) + `@modelcontextprotocol/server` | `agents` 0.24.0, not yet installed / 2.0.0, not yet installed |
-| MCP auth | `@cloudflare/workers-oauth-provider` | 0.10.3, not yet installed |
+| MCP server | `createMcpHandler` (`@modelcontextprotocol/server`) | 2.1.0 |
+| MCP auth | `@cloudflare/workers-oauth-provider` | 0.10.4 |
 | API keys + per-key quota | `@better-auth/api-key` (`apikey` table) | 1.7.5 |
 | Edge abuse shield | Cloudflare rate limiting binding (`period` 10 or 60 only) | platform |
-| OpenAPI document | `zod-openapi` (samchungy) | 6.0.2, not yet installed |
+| OpenAPI document | `zod-openapi` (samchungy) | 6.0.2 |
 | Agent-readable docs | `/llms.txt` + `Accept: text/markdown` + `rel="alternate"` | spec v2 (2026-08-10) |
 
-**Installed beyond the scaffold:** `better-auth` ^1.7.5, `@better-auth/passkey` ^1.7.5, `@better-auth/api-key` ^1.7.5, `zod` ^4.6.5 (also a better-auth peer), `@cloudflare/puppeteer` ^1.4.0, `@base-ui/react` 1.8.0, `clsx` ^2.1.1, `tailwind-merge` ^3.7.0, `class-variance-authority` ^0.7.1, `sonner` ^2.0.8, `diff` 9.0.0, `lucide-react` 1.47.0, `date-fns` 4.4.0, `@date-fns/tz` 1.5.0. **Not yet installed**, because the engine that needs them has not shipped: `@extractus/feed-extractor` 8.0.3 (`fast-xml-parser` 5.11.1 comes with it), `uplot` 1.6.32, `uplot-react` 1.2.4, `agents` 0.24.0, `@modelcontextprotocol/server` 2.0.0 and its peers `@modelcontextprotocol/client` and `@modelcontextprotocol/sdk`, `@cloudflare/workers-oauth-provider` 0.10.3, `zod-openapi` 6.0.2. Do not delete those rows. Platform rows have no package. `create-cloudflare`, `shadcn`, and `auth@1.7.5` are npx-only and are not missing dependencies.
+**Installed beyond the scaffold:** `better-auth` ^1.7.5, `@better-auth/passkey` ^1.7.5, `@better-auth/api-key` ^1.7.5, `zod` ^4.6.5 (also a better-auth peer), `@cloudflare/puppeteer` ^1.4.0, `@base-ui/react` 1.8.0, `clsx` ^2.1.1, `tailwind-merge` ^3.7.0, `class-variance-authority` ^0.7.1, `sonner` ^2.0.8, `diff` 9.0.0, `lucide-react` 1.47.0, `date-fns` 4.4.0, `@date-fns/tz` 1.5.0. **Not yet installed**, because the engine that needs them has not shipped: `@extractus/feed-extractor` 8.0.3 (`fast-xml-parser` 5.11.1 comes with it), `uplot` 1.6.32, `uplot-react` 1.2.4. Do not delete those rows. `@modelcontextprotocol/server` 2.1.0, `@cloudflare/workers-oauth-provider` 0.10.4 and `zod-openapi` 6.0.2 shipped with the agent surface (2026-09-24); `agents` is rejected in §7.1. Platform rows have no package. `create-cloudflare`, `shadcn`, and `auth@1.7.5` are npx-only and are not missing dependencies.
 
 ---
 
@@ -1082,6 +1092,8 @@ The version in this table is the `package.json` specifier. An earlier section of
 | `@better-auth/api-key` | ^1.7.5 | §7.3 | API keys, quotas, and expiry ship in this plugin | A hand-written key table | 1.7.5 |
 | `@better-auth/passkey` | ^1.7.5 | §2.5 | Passkeys. The plugin pulls SimpleWebAuthn | A hand-rolled WebAuthn | 1.7.5 |
 | `@sentry/cloudflare` | ^10.75.1 | #3926, REBUILD-TRUST §A5 | Worker error capture: `withSentry()` wraps the default export in `workers/app.ts`, and Sentry's own GitHub integration turns a new error into a GitHub issue with no code of ours in the path. Doc: <https://docs.sentry.io/platforms/javascript/guides/cloudflare/> | A Cloudflare Notifications webhook reshaped into a GitHub issue by a Worker or an Action (an adapter, which is glue) | 10.75.1 |
+| `@cloudflare/workers-oauth-provider` | ^0.10.4 | §7.2 | OAuth 2.1 for the MCP server: PKCE, token rotation, RFC 9728 and 8414 metadata, CIMD and DCR, hashed tokens in KV. Zero dependencies | better-auth's MCP / OAuth-provider plugin (a migration and tables for state KV already holds), a hand-written authorization server | 0.10.4 |
+| `@modelcontextprotocol/server` | ^2.1.0 | §7.1 | The MCP server and its stateless web-standard `createMcpHandler` | `agents` (build tooling as runtime dependencies), `McpAgent`, `@modelcontextprotocol/sdk` 1.x | 2.1.0 |
 | `@cloudflare/puppeteer` | ^1.4.0 | §4.3 | Session leg of the ads transport (`connect`, `launch`, `sessions`) | `@cloudflare/playwright`, the other session SDK. This file imports puppeteer | 1.4.0 |
 | `better-auth` | ^1.7.5 | §2 | Sessions and magic link on D1 | A custom session table, `kysely-d1`, `better-auth-cloudflare` | 1.7.5 |
 | `class-variance-authority` | ^0.7.1 | §3.2 | Variant map the badge component imports | A hand-written variant map | 0.7.1 |
@@ -1093,6 +1105,7 @@ The version in this table is the `package.json` specifier. An earlier section of
 | `sonner` | ^2.0.8 | §5.10 | The one toast surface: "saved" and "undo" per DESIGN.md §11 | A hand-rolled live region (Base UI ships no toast primitive), `react-hot-toast` | 2.0.8 |
 | `tailwind-merge` | ^3.7.0 | §3.2 | Class conflict resolution inside `cn()` | A hand-written Tailwind merger | 3.7.0 |
 | `tldts` | ^7.4.13 | `docs/engines/identity-card.md` P1 | Registrable domain and public-suffix handling for identity input normalisation. No dependencies, ships a Workers-clean ESM build | A hand-written public-suffix list, `split('.')`, `psl` (unmaintained) | 7.4.13 |
+| `zod-openapi` | ^6.0.2 | §7.5 | The API's OpenAPI 3.1 document from the zod schemas the MCP tools already use. Zero dependencies | `chanfana`, `@hono/zod-openapi` (both need a second router), `z.toJSONSchema()` alone | 6.0.2 |
 | `zod` | ^4.6.5 | §5.6 | Request validation. better-auth already depends on zod 4 | `valibot`, `arktype` | 4.6.5 |
 | `@cloudflare/vite-plugin` | ^1.56.0 | §1.2 | Workers dev and deploy from Vite | A hand-written wrangler wrapper, and a wrangler `assets` block | 1.56.0 |
 | `@cloudflare/vitest-plugin` | 1.1.13 | §6.1 | Tests run inside workerd | `@cloudflare/vitest-pool-workers` | 1.1.13 |

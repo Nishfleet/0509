@@ -1,6 +1,7 @@
 {
   "name": "0509-test",
   "compatibility_date": "2026-09-16",
+  "compatibility_flags": ["global_fetch_strictly_public"],
   "main": "../../workers/app.ts",
   "d1_databases": [{ "binding": "DB", "database_name": "0509-test", "database_id": "test" }],
   "r2_buckets": [
@@ -15,6 +16,10 @@
     }
   ],
   "kv_namespaces": [
-    { "binding": "IDENTITY_CACHE", "id": "test" }
+    { "binding": "IDENTITY_CACHE", "id": "test" },
+    { "binding": "OAUTH_KV", "id": "test-oauth" }
+  ],
+  "ratelimits": [
+    { "name": "AGENT_LIMIT", "namespace_id": "5091", "simple": { "limit": 120, "period": 60 } }
   ]
 }

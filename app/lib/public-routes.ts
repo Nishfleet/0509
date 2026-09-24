@@ -2,7 +2,7 @@ import { PLANS, TRIAL_TERMS } from "./billing/plans";
 import { SITE_URL } from "./structured-data";
 
 export const PUBLIC_PATHS = ["/privacy"] as const;
-export const DISALLOWED_PREFIXES = ["/app", "/api", "/mcp", "/u", "/login", "/onboarding", "/design"] as const;
+export const DISALLOWED_PREFIXES = ["/app", "/api", "/mcp", "/u", "/login", "/onboarding", "/oauth", "/design"] as const;
 export const CARD_ROUTE_PATH = "s/:slug";
 export const MCP_URL = `${SITE_URL}/mcp`;
 
@@ -48,6 +48,11 @@ export function llmsTxt(origin: string): string {
       "",
       `- Plans: ${prices}. ${TRIAL_TERMS}`,
       `- Agents: every plan includes a read-only API and an MCP server at ${MCP_URL}.`,
+      "",
+      "## Agents",
+      "",
+      `- [MCP server](${MCP_URL}): add it as a connector in Claude, ChatGPT or Cursor and sign in; read-only tools get_brief, list_competitors and list_alerts, limited to your own workspace`,
+      `- [API reference](${origin}/api/v1/openapi.json): OpenAPI 3.1 for the read-only REST API; send an API key from Settings as a Bearer token`,
       "",
       "## Pages",
       "",

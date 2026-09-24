@@ -16,6 +16,8 @@ const KEYS = [
   "SEND_EMAIL",
   "SNAPSHOTS",
   "BROWSER",
+  "OAUTH_KV",
+  "AGENT_LIMIT",
 ] as const;
 
 function configured() {
@@ -27,6 +29,8 @@ function configured() {
     SEND_EMAIL: { sendBatch: () => "queued" },
     SNAPSHOTS: { get: () => "card" },
     BROWSER: {},
+    OAUTH_KV: { get: () => "grant" },
+    AGENT_LIMIT: { limit: () => ({ success: true }) },
   };
 }
 
@@ -105,6 +109,8 @@ describe("worker env", () => {
       "SEND_EMAIL",
       "SNAPSHOTS",
       "BROWSER",
+      "OAUTH_KV",
+      "AGENT_LIMIT",
     ]);
   });
 
