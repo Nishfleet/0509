@@ -233,6 +233,8 @@ takedown   id, subject_kind ('domain' | 'handle'), subject_value, reason,
 
 ### P10.2 — The `takedown` table and the fan-out Workflow
 
+**Built differently (2026-09-24):** `migrations/0009_takedown.sql` does the fan-out as SQLite triggers on the `takedown` insert, in one transaction, so there is no Workflow, no eventual-consistency window and no nightly reconciliation. `docs/REBUILD-GUARDRAILS.md` § Recording it is the current procedure.
+
 **GOAL.** Add the `takedown` table (`subject_kind`, `subject_value`, `reason`, `requested_at`, `actioned_at`, `actioned_by`, `fanned_out_at`, `note`, `UNIQUE (subject_kind, subject_value)`) — it does not exist in `0001_rebuild.sql`. Add `TakedownWorkflow`: for every `entity` matching the subject **across all workspaces**, set `state='dismissed'`, `state_reason='takedown'`, `state_changed_by='auto'`, delete that entity's `signal` rows and R2 objects for that workspace, write an `alert` to the owner with the one-line note, then set `fanned_out_at`. Add the reconciliation of `fanned_out_at IS NULL` to engine 6's nightly cron.
 
 **STOCK FEATURE OR LIBRARY.** Cloudflare Workflows with the standard `step.do` retry policy. The existing `entity.state` machine — `dismissed` is already "never re-suggested", enforced by `suggestion`'s `UNIQUE(workspace_id, candidate_domain)`. D1 `batch()`.

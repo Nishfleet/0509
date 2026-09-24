@@ -10,7 +10,7 @@ import { NIGHTLY_CRON, sweepPending } from "./delivery/sweeper";
 import { runNightlyStanding } from "./standing/nightly";
 import { StandingRollover } from "./workflows/standing-rollover";
 
-type WorkerEnv = Env & { SENTRY_DSN?: string };
+type WorkerEnv = Env & { SENTRY_DSN?: string; LIVENESS_PING_URL?: string };
 
 const requestHandler = createRequestHandler(
   () => import("virtual:react-router/server-build"),
@@ -35,7 +35,7 @@ const handler = {
       ctx.waitUntil(sweepPending(env, now));
       return;
     }
-    const ping = pingLiveness();
+    const ping = pingLiveness(env.LIVENESS_PING_URL);
     if (ping) ctx.waitUntil(ping);
   },
 

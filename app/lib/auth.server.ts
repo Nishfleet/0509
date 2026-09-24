@@ -4,7 +4,7 @@ import { apiKey } from "@better-auth/api-key";
 import { passkey } from "@better-auth/passkey";
 
 import { ensureWorkspaceForSignIn } from "./workspace.server";
-import { magicLinkEmail } from "./auth/magic-link-email";
+import { MAGIC_LINK_TTL_SECONDS, magicLinkEmail } from "./auth/magic-link-email";
 import { sendOrThrow } from "../../workers/delivery/send";
 
 interface AuthEnv {
@@ -46,6 +46,7 @@ export function createAuth(env: AuthEnv) {
     },
     plugins: [
       magicLink({
+        expiresIn: MAGIC_LINK_TTL_SECONDS,
         sendMagicLink: async ({ email, url }) => {
           const message = magicLinkEmail({ email, url });
           await sendOrThrow(env.EMAIL, {
