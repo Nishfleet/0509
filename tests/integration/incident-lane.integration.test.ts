@@ -363,4 +363,17 @@ describe("incident lane (0509#4364)", () => {
     expect(rec.sent).toHaveLength(0);
     expect(await readNotices(PAGE_A)).toHaveLength(0);
   });
+
+  it("(i) formats the seen moment in the workspace's timezone, not UTC (0509#4751)", async () => {
+    await env.DB.prepare(`UPDATE workspace SET timezone = ? WHERE id = ?`).bind("Asia/Kolkata", WS).run();
+
+    const rec = recorder();
+    const result = await deliverIncident(envWith(bindingFor(rec)), message(INCIDENT_A));
+
+    expect(result.outcome).toBe("sent");
+    expect(rec.sent[0].text).toContain("Seen at Wed 23 Sept, 12:45.");
+    expect(rec.sent[0].text).not.toContain("2026-09-23 07:15 UTC");
+    expect(rec.sent[0].html).toContain("Seen at Wed 23 Sept, 12:45.");
+    expect(rec.sent[0].html).not.toContain("2026-09-23 07:15 UTC");
+  });
 });

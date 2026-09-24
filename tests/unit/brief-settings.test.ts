@@ -1,16 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { hourLabel, nextBriefLine, parseScheduleForm } from "../../app/lib/brief-settings";
-
-function form(values: Record<string, string>): FormData {
-  const data = new FormData();
-  for (const [key, value] of Object.entries(values)) data.set(key, value);
-  return data;
-}
+import { formatBriefAt, hourLabel, parseBriefSchedule } from "../../app/lib/brief-settings";
 
 describe("the brief schedule form", () => {
   it("accepts a day, an hour and a real time zone", () => {
-    expect(parseScheduleForm(form({ weekday: "3", hour: "7", timezone: "Europe/London" }))).toEqual({
+    expect(parseBriefSchedule({ weekday: 3, hour: 7, timezone: "Europe/London" })).toEqual({
       weekday: 3,
       hour: 7,
       timezone: "Europe/London",
@@ -18,18 +12,20 @@ describe("the brief schedule form", () => {
   });
 
   it.each([
-    { weekday: "7", hour: "8", timezone: "UTC" },
-    { weekday: "-1", hour: "8", timezone: "UTC" },
-    { weekday: "1", hour: "24", timezone: "UTC" },
-    { weekday: "1", hour: "8.5", timezone: "UTC" },
-    { weekday: "1", hour: "8", timezone: "Mars/Olympus" },
-    { weekday: "1", hour: "8", timezone: "" },
+    { weekday: 7, hour: 8, timezone: "UTC" },
+    { weekday: -1, hour: 8, timezone: "UTC" },
+    { weekday: 1, hour: 24, timezone: "UTC" },
+    { weekday: 1, hour: 8.5, timezone: "UTC" },
+    { weekday: "", hour: 8, timezone: "UTC" },
+    { weekday: null, hour: 8, timezone: "UTC" },
+    { weekday: 1, hour: 8, timezone: "Mars/Olympus" },
+    { weekday: 1, hour: 8, timezone: "" },
   ])("refuses %o rather than saving a schedule the rollover cannot run", (values) => {
-    expect(parseScheduleForm(form(values))).toBeNull();
+    expect(parseBriefSchedule(values)).toBeNull();
   });
 
   it("refuses a missing field", () => {
-    expect(parseScheduleForm(form({ weekday: "1", hour: "8" }))).toBeNull();
+    expect(parseBriefSchedule({ weekday: 1, hour: 8, timezone: undefined })).toBeNull();
   });
 
   it("labels hours on the 24-hour clock", () => {
@@ -40,6 +36,6 @@ describe("the brief schedule form", () => {
 
   it("names the next brief in the workspace's own zone", () => {
     const at = new Date("2026-09-28T07:00:00.000Z");
-    expect(nextBriefLine(at, "Europe/London")).toBe("Next one: Monday 28 September at 08:00");
+    expect(formatBriefAt(at, "Europe/London")).toBe("Monday 28 September 2026, 08:00 Europe/London");
   });
 });
