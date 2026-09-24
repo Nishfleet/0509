@@ -36,7 +36,9 @@ export function parseMetaAdlibMessage(body: unknown): MetaAdlibMessage | null {
 export async function enqueueMetaAdlib(
   workspaceId: string,
   now: Date = new Date(),
-  send: (message: MetaAdlibMessage) => Promise<void> = (message) => env.PAGE_SWEEP.send(message),
+  send: (message: MetaAdlibMessage) => Promise<void> = async (message) => {
+    await env.PAGE_SWEEP.send(message);
+  },
 ): Promise<string> {
   const enqueuedAt = now.toISOString();
   await send({ kind: "discovery-meta-adlib", workspaceId, enqueuedAt });
