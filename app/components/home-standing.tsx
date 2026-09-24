@@ -1,7 +1,7 @@
 import type { ReactElement } from "react";
 import { Form, Link } from "react-router";
 
-import { brandMonogram } from "./brand-chip";
+import { BrandChip, brandMonogram } from "./brand-chip";
 import { EmptyState, fewerThanTwoOnBrands } from "./empty-state";
 import { FirstFilePanel } from "./first-file-panel";
 import type { HomeRow, HomeView } from "../lib/home-standing";
@@ -16,8 +16,22 @@ export function HomeStanding({ view }: { view: HomeView }): ReactElement {
     <section data-home="standing" className="min-w-0 break-words">
       <p className={EYEBROW}>{view.eyebrow}</p>
       {greeting(view)}
+      {chips(view)}
       {body(view)}
     </section>
+  );
+}
+
+function chips(view: HomeView): ReactElement | null {
+  if (view.standing.kind !== "gathering") return null;
+  return (
+    <ul className="mt-4 flex flex-wrap gap-2">
+      {view.chips.map((chip) => (
+        <li key={chip.href}>
+          <BrandChip name={chip.name} href={chip.href} />
+        </li>
+      ))}
+    </ul>
   );
 }
 

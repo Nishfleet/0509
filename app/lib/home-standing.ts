@@ -6,6 +6,7 @@ export interface HomeEntity {
   id: string;
   role: "self" | "competitor";
   domain: string;
+  name: string;
   state: string;
 }
 
@@ -46,6 +47,7 @@ export interface HomeView {
   eyebrow: string;
   greeting: string;
   standing: HomeStanding;
+  chips: readonly { name: string; href: string }[];
   footer: string;
 }
 
@@ -212,6 +214,10 @@ export function homeStanding(input: {
   };
 }
 
+function chipHref(entity: HomeEntity): string {
+  return entity.role === "self" ? "/app/settings" : `/app/competitors/${entity.id}`;
+}
+
 export function homeView(input: {
   payload: BriefPayload | null;
   entities: readonly HomeEntity[];
@@ -228,6 +234,9 @@ export function homeView(input: {
     eyebrow: todayEyebrow(input.schedule.timezone, input.now),
     greeting: greetingFor(input.schedule.timezone, input.now),
     standing: homeStanding(input),
+    chips: input.entities
+      .filter((entity) => entity.state === "on")
+      .map((entity) => ({ name: entity.name, href: chipHref(entity) })),
     footer,
   };
 }

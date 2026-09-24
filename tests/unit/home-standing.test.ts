@@ -20,12 +20,12 @@ import {
 const SCHEDULE: BriefSchedule = { timezone: "Europe/London", weekday: 1, hour: 8 };
 const THURSDAY_MORNING = new Date("2026-09-24T06:30:00.000Z");
 
-const SELF: HomeEntity = { id: "ent_self", role: "self", domain: "own.example", state: "on" };
+const SELF: HomeEntity = { id: "ent_self", role: "self", domain: "own.example", name: "Own Brand", state: "on" };
 
 const ENTITIES: readonly HomeEntity[] = [
   SELF,
-  { id: "ent_kindred", role: "competitor", domain: "kindred.example", state: "on" },
-  { id: "ent_casetta", role: "competitor", domain: "casetta.example", state: "on" },
+  { id: "ent_kindred", role: "competitor", domain: "kindred.example", name: "Kindred", state: "on" },
+  { id: "ent_casetta", role: "competitor", domain: "casetta.example", name: "Casetta", state: "on" },
 ];
 
 function brand(
@@ -159,7 +159,7 @@ describe("Home standing", () => {
   it("asks for a competitor when fewer than two brands are on (REBUILD-STANDING rules)", () => {
     const html = render({
       payload: payload(),
-      entities: [SELF, { id: "ent_off", role: "competitor", domain: "off.example", state: "off" }],
+      entities: [SELF, { id: "ent_off", role: "competitor", domain: "off.example", name: "Off Brand", state: "off" }],
     });
     expect(html).toContain("Add a competitor to see where you stand.");
     expect(html).toContain('method="post"');
@@ -179,6 +179,31 @@ describe("Home standing", () => {
     expect(html).toContain('data-home="first-file"');
     expect(html).toContain("Good morning.</h1>");
     expect(render({ payload: payload({ headline_rank: null }) })).toContain("gathering the first week");
+  });
+
+  it("shows one chip per ON brand in the gathering state and no chip row once ranked", () => {
+    const entities: readonly HomeEntity[] = [
+      SELF,
+      { id: "ent_kindred", role: "competitor", domain: "kindred.example", name: "Kindred", state: "on" },
+      { id: "ent_off", role: "competitor", domain: "off.example", name: "Off Brand", state: "off" },
+    ];
+    const view = homeView({ payload: null, entities, schedule: SCHEDULE, history: [], now: THURSDAY_MORNING });
+    expect(view.chips).toEqual([
+      { name: "Own Brand", href: "/app/settings" },
+      { name: "Kindred", href: "/app/competitors/ent_kindred" },
+    ]);
+
+    const gathering = render({ payload: null, entities });
+    expect(gathering).toContain('class="mt-4 flex flex-wrap gap-2"');
+    expect(gathering).toContain('href="/app/settings"');
+    expect(gathering).toContain('href="/app/competitors/ent_kindred"');
+    expect(gathering).toContain("Own Brand");
+    expect(gathering).toContain("Kindred");
+    expect(gathering).not.toContain("Off Brand");
+    expect(gathering).not.toContain('href="/app/competitors/ent_off"');
+
+    const ranked = render({ payload: payload(), entities });
+    expect(ranked).not.toContain('class="mt-4 flex flex-wrap gap-2"');
   });
 
   it("lands the first site sweep on the next 02:00Z strictly after now", () => {
@@ -210,9 +235,9 @@ describe("Home standing", () => {
     const now = new Date("2026-09-24T10:17:00Z");
     const fourOn: readonly HomeEntity[] = [
       SELF,
-      { id: "ent_kindred", role: "competitor", domain: "kindred.example", state: "on" },
-      { id: "ent_casetta", role: "competitor", domain: "casetta.example", state: "on" },
-      { id: "ent_hollow", role: "competitor", domain: "hollow.example", state: "on" },
+      { id: "ent_kindred", role: "competitor", domain: "kindred.example", name: "Kindred", state: "on" },
+      { id: "ent_casetta", role: "competitor", domain: "casetta.example", name: "Casetta", state: "on" },
+      { id: "ent_hollow", role: "competitor", domain: "hollow.example", name: "Hollow", state: "on" },
     ];
     const four = homeView({ payload: payload(), entities: fourOn, schedule: amsterdamSchedule, history: [], now });
     expect(four.footer).toBe("Checked 4 brands this week · brief Monday 08:00 · your site re-checked at 13:00");
@@ -224,8 +249,8 @@ describe("Home standing", () => {
 
 const HISTORY_ENTITIES: readonly HomeEntity[] = [
   SELF,
-  { id: "ent_kindred", role: "competitor", domain: "kindred.example", state: "on" },
-  { id: "ent_paused", role: "competitor", domain: "paused.example", state: "off" },
+  { id: "ent_kindred", role: "competitor", domain: "kindred.example", name: "Kindred", state: "on" },
+  { id: "ent_paused", role: "competitor", domain: "paused.example", name: "Paused", state: "off" },
 ];
 
 const HISTORY: readonly HomeHistoryRow[] = [
