@@ -64,7 +64,7 @@ function chipLabel(name: string, self: boolean, off: boolean): string {
 }
 
 function chipLink(href: string): ReactElement {
-  if (href.startsWith("/")) return <Link to={href} />;
+  if (href.startsWith("/")) return <Link to={href} prefetch="intent" />;
   return <a href={href} rel="noreferrer" />;
 }
 
