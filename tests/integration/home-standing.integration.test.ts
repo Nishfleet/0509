@@ -1,7 +1,7 @@
 import { env } from "cloudflare:test";
 import { beforeEach, describe, expect, it } from "vitest";
 
-import { readHomeStandingInputs } from "../../app/lib/home-standing.server";
+import { readHomeStandingInputs, SELECT_HOME_STANDING } from "../../app/lib/home-standing.server";
 
 /**
  * Home's standing reader against real local D1: the owner's workspace, its
@@ -84,5 +84,38 @@ describe("readHomeStandingInputs", () => {
 
   it("returns null for a user with no workspace", async () => {
     expect(await readHomeStandingInputs(env.DB, "user_nobody")).toBeNull();
+  });
+
+  it("reads and writes the newest brief through the digest index", async () => {
+    await seedDigest("older", "2026-09-14T07:00:00.000Z", 2);
+    await seedDigest("newest", "2026-09-21T07:00:00.000Z", 1);
+
+    const plan = await env.DB.prepare(`EXPLAIN QUERY PLAN ${SELECT_HOME_STANDING}`)
+      .bind(USER)
+      .all<{ detail: string }>();
+    const details = (plan.results ?? []).map((row) => row.detail);
+    expect(details.some((detail) => detail.includes("idx_digest_ws_kind_period"))).toBe(true);
+    expect(details.every((detail) => !detail.startsWith("SCAN "))).toBe(true);
+
+    const inputs = await readHomeStandingInputs(env.DB, USER);
+    expect(inputs?.payload?.headline_rank).toBe(1);
+    expect(inputs?.payload?.why_line).toBe("week ending 2026-09-21T07:00:00.000Z");
+  });
+
+  it("keeps the oldest workspace when the owner has two", async () => {
+    const newer = `${WS}_newer`;
+    const createdAt = "2026-09-01T00:00:00.000Z";
+    await env.DB.batch([
+      env.DB.prepare(
+        "INSERT INTO workspace (id, name, owner_user_id, timezone, brief_weekday, brief_hour, created_at) VALUES (?1, 'Newer', ?2, 'UTC', 2, 9, ?3)",
+      ).bind(newer, USER, createdAt),
+      env.DB.prepare(
+        "INSERT INTO entity (id, workspace_id, role, domain, name, state, created_at) VALUES (?1, ?2, 'self', 'newer.example', 'newer', 'on', ?3)",
+      ).bind(`${newer}_self`, newer, createdAt),
+    ]);
+
+    const inputs = await readHomeStandingInputs(env.DB, USER);
+    expect(inputs?.schedule.timezone).toBe("Europe/London");
+    expect(inputs?.entities.some((entity) => entity.domain === "newer.example")).toBe(false);
   });
 });

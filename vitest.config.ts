@@ -18,7 +18,7 @@ export default defineConfig({
           name: "node",
           environment: "node",
           include: ["tests/**/*.test.ts"],
-          exclude: ["tests/integration/**", "tests/unit/site/**"],
+          exclude: ["tests/integration/**", "tests/unit/site/**", "tests/perf/**"],
         },
       },
       {
@@ -42,6 +42,7 @@ export default defineConfig({
             // .integration infix; it still needs real workerd + real D1.
             "tests/integration/migration-rollback.test.ts",
             "tests/unit/site/**/*.test.ts",
+            "tests/perf/**/*.test.ts",
           ],
           setupFiles: ["./tests/integration/apply-migrations.ts"],
           testTimeout: 30_000,
