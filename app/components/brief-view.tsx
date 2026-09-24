@@ -46,35 +46,35 @@ function readThisFirstBlock(payload: BriefPayload): ReactElement {
       {payload.read_this_first.length === 0 ? (
         <p className={BODY}>Nothing this week needed reading first.</p>
       ) : (
-        payload.read_this_first.slice(0, MAX_MARKS).map((mark) => (
-          <Fragment key={mark.signal_id}>
-            {mark.before === null || mark.after === null ? (
-              httpUrl(mark.url) === null ? (
-                <p className={BODY}>{mark.title}</p>
+        payload.read_this_first.slice(0, MAX_MARKS).map((mark) => {
+          const href = httpUrl(mark.url);
+          return (
+            <Fragment key={mark.signal_id}>
+              {mark.before === null || mark.after === null ? (
+                href === null ? (
+                  <p className={BODY}>{mark.title}</p>
+                ) : (
+                  <p className={BODY}>
+                    <a className="underline decoration-1 underline-offset-4" href={href}>
+                      {mark.title}
+                    </a>
+                  </p>
+                )
               ) : (
-                <p className={BODY}>
-                  <a
-                    className="underline decoration-1 underline-offset-4"
-                    href={httpUrl(mark.url) ?? undefined}
-                  >
-                    {mark.title}
-                  </a>
-                </p>
-              )
-            ) : (
-              <Mark
-                before={mark.before}
-                after={mark.after}
-                sourceUrl={mark.url}
-                capturedAt={mark.observed_at}
-                size="md"
-              />
-            )}
-            <p className="text-ink-soft mt-2 text-[0.88rem] leading-[1.6]">
-              {mark.entity_name}: {mark.jev_reason}
-            </p>
-          </Fragment>
-        ))
+                <Mark
+                  before={mark.before}
+                  after={mark.after}
+                  sourceUrl={mark.url}
+                  capturedAt={mark.observed_at}
+                  size="md"
+                />
+              )}
+              <p className="text-ink-soft mt-2 text-[0.88rem] leading-[1.6]">
+                {mark.entity_name}: {mark.jev_reason}
+              </p>
+            </Fragment>
+          );
+        })
       )}
     </section>
   );
