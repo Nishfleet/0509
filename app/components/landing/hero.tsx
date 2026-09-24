@@ -1,9 +1,9 @@
-import { TRIAL_TERMS } from "../../lib/billing/plans";
 import { type CoverageId, isLive, WATCHED_NOUNS } from "../../lib/coverage";
 import { cn } from "../../lib/utils";
+import { Input } from "../ui/input";
 import { ExampleMark } from "./example-mark";
 import { eyebrow, pageWidth } from "./section";
-import { StartButton } from "./start-button";
+import { startButtonClass, StartWatchingLabel } from "./start-button";
 
 const EXAMPLES: readonly {
   needs: CoverageId;
@@ -33,13 +33,32 @@ export function Hero() {
             Know where you stand. And who’s gaining on you.
           </h1>
           <p className="text-ink-soft mt-6 max-w-[38rem] text-[clamp(1.05rem,1.4vw,1.2rem)] leading-[1.55]">
-            We find the rivals in your market for you, so you don’t have to know them already, and we watch their{" "}
-            {WATCHED_NOUNS}.
+            We watch {WATCHED_NOUNS} across your market, and we name the rivals for you, so you do not have to know
+            them.
           </p>
-          <div className="mt-9">
-            <StartButton />
-          </div>
-          <p className="font-mono text-meta text-ink-soft mt-4 max-w-[38rem]">{TRIAL_TERMS}</p>
+          <form method="get" action="/login" className="mt-9 max-w-[38rem]">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-stretch">
+              <Input
+                name="subject"
+                placeholder="your website, or a handle"
+                aria-label="your website, or a handle"
+                autoComplete="off"
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck={false}
+                enterKeyHint="go"
+                required
+                maxLength={200}
+                className="sm:min-w-0 sm:flex-1"
+              />
+              <button type="submit" className={`${startButtonClass} shrink-0`}>
+                <StartWatchingLabel />
+              </button>
+            </div>
+          </form>
+          <p className="font-mono text-meta text-ink-soft mt-4 max-w-[38rem]">
+            One input. Sixty seconds to your first standing.
+          </p>
         </div>
         <aside aria-labelledby="hero-proof" className="min-w-0">
           <p id="hero-proof" className={`${eyebrow} text-green-ink`}>

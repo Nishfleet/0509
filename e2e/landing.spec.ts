@@ -20,10 +20,64 @@ test("the landing renders its sections in order under one headline", async ({ pa
 
 test("the landing's action names its price and leads to sign-in", async ({ page }) => {
   await page.goto(PATH);
-  const start = page.locator("#hero").getByRole("link", { name: /€\d+\/mo/ });
-  await expect(start).toBeVisible();
-  await expect(start).toHaveAttribute("href", "/login");
+  const hero = page.locator("#hero");
+  await expect(hero.getByRole("button", { name: /€\d+\/mo/ })).toBeVisible();
+  await expect(hero.locator("form")).toHaveAttribute("action", "/login");
+  await expect(hero.locator("form")).toHaveAttribute("method", "get");
   await expect(page.locator("#price").getByRole("link", { name: /€\d+\/mo/ })).toHaveAttribute("href", "/login");
+});
+
+test("the hero's first viewport holds the outcome and the one priced input", async ({ page }, testInfo) => {
+  const consoleErrors: string[] = [];
+  page.on("console", (message) => {
+    if (message.type() === "error") consoleErrors.push(message.text());
+  });
+  page.on("pageerror", (error) => consoleErrors.push(error.message));
+
+  await page.goto(PATH);
+  await page.waitForLoadState("networkidle");
+
+  const hero = page.locator("#hero");
+  const pieces = [
+    hero.getByText("For founders, brands and creators"),
+    hero.getByRole("heading", { level: 1, name: "Know where you stand. And who’s gaining on you." }),
+    hero.getByText(/we name the rivals for you, so you do not have to know them/i),
+    hero.getByRole("textbox", { name: "your website, or a handle" }),
+    hero.getByRole("button", { name: /€\d+\/mo/ }),
+    hero.getByText("One input. Sixty seconds to your first standing."),
+  ];
+  for (const piece of pieces) {
+    await expect(piece).toBeVisible();
+    const box = await piece.boundingBox();
+    const viewport = page.viewportSize();
+    expect(box, "piece has a box").not.toBeNull();
+    expect(viewport, "viewport is set").not.toBeNull();
+    expect(box!.y + box!.height).toBeLessThanOrEqual((viewport?.height ?? 0) + 1);
+  }
+
+  const filled = await page.evaluate(() => {
+    const height = window.innerHeight;
+    return [...document.querySelectorAll("a.bg-ink, button.bg-ink")].filter((node) => {
+      const rect = node.getBoundingClientRect();
+      return rect.width > 0 && rect.height > 0 && rect.bottom > 0 && rect.top < height;
+    }).length;
+  });
+  expect(filled).toBe(1);
+  expect(consoleErrors).toEqual([]);
+
+  if (testInfo.project.name === "phone-390") {
+    const overflow = await page.evaluate(
+      () => document.documentElement.scrollWidth > document.documentElement.clientWidth,
+    );
+    expect(overflow).toBe(false);
+  }
+});
+
+test("the hero input carries what you typed to sign-in", async ({ page }) => {
+  await page.goto(PATH);
+  await page.locator("#hero").getByRole("textbox", { name: "your website, or a handle" }).fill("example.com");
+  await page.locator("#hero").getByRole("button", { name: /€\d+\/mo/ }).click();
+  await expect(page).toHaveURL(/\/login\?subject=example\.com$/);
 });
 
 test("the landing carries its search metadata and structured data", async ({ page }) => {
