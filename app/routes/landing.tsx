@@ -10,6 +10,7 @@ import { Price } from "../components/landing/price";
 import { pageWidth } from "../components/landing/section";
 import { TheMark } from "../components/landing/the-mark";
 import { WhatWeWatch } from "../components/landing/what-we-watch";
+import { WATCHED_NOUNS } from "../lib/coverage";
 import { FAQ } from "../lib/faq";
 import {
   SITE_URL,
@@ -21,8 +22,7 @@ import {
 } from "../lib/structured-data";
 
 const TITLE = "Competitor tracking for founders and creators | Five to Nine";
-const DESCRIPTION =
-  "Five to Nine watches your competitors' ads, website changes, mentions and hiring, and emails you one brief every Monday with a screenshot behind every change.";
+const DESCRIPTION = `Five to Nine watches your competitors' ${WATCHED_NOUNS} and emails you one brief every Monday with a screenshot behind every change.`;
 const HOME = `${SITE_URL}/`;
 
 export function meta(_: Route.MetaArgs) {

@@ -1,4 +1,5 @@
 import { PLANS } from "./billing/plans";
+import { FEATURES } from "./coverage";
 import type { FaqEntry } from "./faq";
 
 export const SITE_URL = "https://0509.io";
@@ -32,6 +33,7 @@ export function softwareApplicationJsonLd() {
     url: SITE_URL,
     applicationCategory: "BusinessApplication",
     operatingSystem: "Web",
+    featureList: FEATURES,
     publisher: { "@id": ORGANIZATION_ID },
     offers: PLANS.map((plan) => ({
       "@type": "Offer",
