@@ -138,7 +138,12 @@
   // reach the retry limit are deleted permanently otherwise, and a silently
   // dropped brief is the failure the contract forbids.
   "queues": {
-    "producers": [{ "queue": "send-email", "binding": "SEND_EMAIL" }],
+    "producers": [
+      { "queue": "send-email", "binding": "SEND_EMAIL" },
+      // Discovery's Meta Ad Library keyword generator (0509#4161). The browser
+      // cap is this queue's max_concurrency of 8; onboarding never sends here.
+      { "queue": "page-sweep", "binding": "PAGE_SWEEP" }
+    ],
     "consumers": [
       {
         "queue": "send-email",
@@ -151,6 +156,20 @@
       // #4065: a message that exhausts send-email lands here and becomes one alert.
       {
         "queue": "send-email-dlq",
+        "max_batch_size": 1,
+        "max_batch_timeout": 30,
+        "max_retries": 3
+      },
+      {
+        "queue": "page-sweep",
+        "max_batch_size": 10,
+        "max_batch_timeout": 5,
+        "max_retries": 3,
+        "max_concurrency": 8,
+        "dead_letter_queue": "page-sweep-dlq"
+      },
+      {
+        "queue": "page-sweep-dlq",
         "max_batch_size": 1,
         "max_batch_timeout": 30,
         "max_retries": 3

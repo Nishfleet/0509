@@ -41,6 +41,8 @@ export default defineConfig({
             // #4180's acceptance names this file verbatim, without the
             // .integration infix; it still needs real workerd + real D1.
             "tests/integration/migration-rollback.test.ts",
+            // #4161's acceptance names this file verbatim.
+            "tests/integration/discovery/meta-gen.test.ts",
             "tests/unit/site/**/*.test.ts",
           ],
           setupFiles: ["./tests/integration/apply-migrations.ts"],
