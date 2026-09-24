@@ -3,18 +3,18 @@ import { appendFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-export type FeatureMapReport = {
+export interface FeatureMapReport {
   kind: "no-drift" | "opened-pr";
   sha: string;
   routes: string[];
   pullRequest?: number;
-};
+}
 
-export type SyncPull = {
+export interface SyncPull {
   title: string;
   body: string;
   files: { filename: string }[];
-};
+}
 
 const MAP_FILE = ".agents/skills/verify/feature-map.md";
 

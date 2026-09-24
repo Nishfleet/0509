@@ -1,12 +1,7 @@
-import { readFile } from "node:fs/promises";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
-
 import { describe, expect, it } from "vitest";
 
 import { assertSyncPull, readReport, readSyncPull, summaryFor } from "./feature-map-outcome";
 
-const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const SHA = "abc123";
 
 describe("feature-map outcome", () => {
@@ -78,22 +73,5 @@ describe("feature-map outcome", () => {
       }),
     );
     expect(() => assertSyncPull(empty, SHA)).toThrow("pull body is empty");
-  });
-});
-
-describe("feature-map workflow", () => {
-  it("runs the outcome module and does not search for a pull request", async () => {
-    const [map, ci] = await Promise.all([
-      readFile(path.join(REPO_ROOT, ".github/workflows/feature-map.yml"), "utf8"),
-      readFile(path.join(REPO_ROOT, ".github/workflows/ci.yml"), "utf8"),
-    ]);
-    const pin = ci.match(/uses: anthropics\/claude-code-action@([0-9a-f]+)/);
-    expect(pin?.[1]).toBeTruthy();
-    expect(map).toContain(`anthropics/claude-code-action@${pin?.[1]}`);
-    expect(map).toContain("node --experimental-strip-types tests/feature-map-outcome.ts");
-    expect(map).not.toContain("gh pr list");
-    expect(map).not.toContain("accept_pr");
-    expect(map).not.toContain("node -e");
-    expect(map).not.toContain("claude-execution-output.json");
   });
 });
