@@ -48,7 +48,7 @@ test("every signed-in screen has no horizontal scroll at 390", async ({ page }, 
   const email = `e2e+${crypto.randomUUID().replaceAll("-", "").slice(0, 12)}@0509.io`;
   await signInWithMagicLink(page, email, requireInboxToken());
 
-  let rows: Array<{ target: string; landed: string; scrollWidth: number; clientWidth: number }> = [];
+  let rows: { target: string; landed: string; scrollWidth: number; clientWidth: number }[] = [];
   for (const t of signedInTargets) {
     await page.goto(t);
     await page.waitForLoadState("networkidle");
