@@ -26,7 +26,7 @@ The port is per process, the same formula as `playwright.config.ts`: `8000 + (pi
 npm run build
 export PLAYWRIGHT_LOCAL_PORT="${PLAYWRIGHT_LOCAL_PORT:-$((8000 + $$ % 1000))}"
 npx wrangler d1 migrations apply 0509 --local </dev/null
-npx wrangler dev --env-file .dev.vars.example --local --port "$PLAYWRIGHT_LOCAL_PORT"
+npx wrangler dev --local --port "$PLAYWRIGHT_LOCAL_PORT"
 ```
 
 Wait until `curl -fsS "http://127.0.0.1:${PLAYWRIGHT_LOCAL_PORT}/api/health"` returns. Then open the page:
