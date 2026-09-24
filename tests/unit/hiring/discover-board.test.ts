@@ -296,6 +296,21 @@ describe("discoverBoard", () => {
     expect(calls).toEqual([]);
   });
 
+  it("follows a careers lead on the same registrable domain as the brand, under a two-part suffix (0509#4577)", async () => {
+    const leadUrl = "https://careers.brand.co.uk/";
+    const { probe, calls } = recordingProbe({
+      [leadUrl]: htmlResponse(
+        `<a href="https://job-boards.greenhouse.io/brand/jobs/1">Open role</a>` + "x".repeat(220),
+      ),
+      [GH_URL("brand")]: jsonResponse(GH_BODY("Store Manager")),
+    });
+
+    const board = await discoverBoard([leadUrl], "shop.brand.co.uk", { probe });
+
+    expect(board).toEqual({ platform: "greenhouse", boardUrl: "https://job-boards.greenhouse.io/brand", via: "subdomain" });
+    expect(calls).toEqual([leadUrl, GH_URL("brand")]);
+  });
+
   it("does not accept a host that merely ends with the brand's domain", async () => {
     const { probe, calls } = recordingProbe({
       "https://careers.notgymshark.com/": htmlResponse(`<html>${"x".repeat(400)}</html>`),

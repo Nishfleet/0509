@@ -2,26 +2,28 @@ import {
   insertDeliveryFailedAlert,
   type DeliveryFailedAlert,
 } from "../../app/lib/data/alert.server";
+import { markDigestFailed } from "../../app/lib/data/digest.server";
 import { parseMessage } from "./consumer";
 
 export const DELIVERY_FAILED_KIND = "delivery_failed";
 export const DLQ_ALERT_PREFIX = "dlq:";
 export const DELIVERY_FAILED_TITLE = "We could not send your brief — here it is in the app";
 
+export const DELIVERY_FAILED_BODY =
+  "We tried several times and could not deliver this brief by email, so we have stopped trying. Everything in it is below. Your next brief goes out on its usual day.";
+
 export function deliveryFailedAlert(input: {
   digest_id: string;
   workspace_id: string;
-  reason: string | null;
   now: string;
 }): DeliveryFailedAlert {
-  const reason = input.reason ?? "unknown error";
   return {
     id: `${DLQ_ALERT_PREFIX}${input.digest_id}`,
     workspace_id: input.workspace_id,
     kind: DELIVERY_FAILED_KIND,
     severity: "high",
     title: DELIVERY_FAILED_TITLE,
-    body: `Reason: ${reason}. We tried 6 times and stopped at ${input.now}. We will not resend this brief; your next one goes out on its usual day.`,
+    body: DELIVERY_FAILED_BODY,
     status: "unread",
     created_at: input.now,
   };
@@ -53,14 +55,20 @@ export async function handleDlqBatch(env: Env, batch: MessageBatch): Promise<str
     )
       .bind(parsed.digest_id)
       .first<{ error: string | null }>();
-    const reason = attempt?.error ?? null;
+    console.error(
+      JSON.stringify({
+        event: "delivery.dead_lettered",
+        digest_id: parsed.digest_id,
+        reason: attempt?.error ?? null,
+      }),
+    );
 
     const alert = deliveryFailedAlert({
       digest_id: parsed.digest_id,
       workspace_id: digest.workspace_id,
-      reason,
       now: new Date().toISOString(),
     });
+    await markDigestFailed(env.DB, parsed.digest_id);
     await insertDeliveryFailedAlert(env.DB, alert);
     item.ack();
     ids = [...ids, alert.id];

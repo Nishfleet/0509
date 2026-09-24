@@ -59,7 +59,7 @@ A takedown is **global** — any workspace, present or future. The data model is
 
 ### Candidate A — a global `takedown` table, checked everywhere
 
-Every read path joins or filters against `takedown`: Home, Competitors, Alerts, the brief, the API, the MCP tools, the public card, the collection tick.
+Every read path joins or filters against `takedown`: Home, Competitors, Alerts, the brief, the API, the MCP tools, the share image, the collection tick.
 
 - Correct by construction and instantly effective. A takedown row lands and the subject is gone from the next render everywhere, with no propagation delay.
 - One place to look for "is this subject blocked".
@@ -82,7 +82,7 @@ A takedown writes a row to a global `takedown` table, then a Workflow fans out: 
 
 **Grafted from A, at the points where B's eventual consistency is not acceptable:**
 
-1. **The public card checks `takedown` at serve time, every request.** This is the one unauthenticated surface, it serves a pre-rendered artifact that could be up to a week old, and it is the surface a takedown request is most likely to be *about*. Engine 9 already specifies this check; it is restated here because it is a guardrail requirement, not a rendering one. Removal must not wait for a fan-out or a render.
+1. **The public card is gone** (Nish, 2026-09-24): customers share a picture rendered from live rows instead (docs/REBUILD-STANDING-CARD.md), so there is no unauthenticated surface left to check at serve time.
 2. **Onboarding and discovery check `takedown` before anything is crawled.** These are the two places a subject enters the product, and B's fan-out cannot reach a workspace that does not exist yet.
 3. **The fan-out is a Workflow with retries**, not a best-effort loop, and the nightly cron reconciles any `takedown` row whose `fanned_out_at` is null — the same watchdog shape engines 6 and 7 use, for the same reason.
 
@@ -143,7 +143,7 @@ takedown   id, subject_kind ('domain' | 'handle'), subject_value, reason,
 3. **A takedown request arrives** → a human decides (72 hours, #3899) → `takedown` row written with `actioned_by` and `actioned_at` → fan-out Workflow.
 4. **Fan-out** → for every `entity` matching the subject across all workspaces: `state = 'dismissed'`, `state_reason = 'takedown'`, `state_changed_by = 'auto'`, `state_changed_at` set; delete that entity's `signal` rows and R2 objects; write an `alert` to the owner with the one-line note #3899 requires. Then set `fanned_out_at`.
 5. **Every existing surface** — Home, Competitors, Alerts, the brief, the standing score, the API, the MCP tools — is now correct with **no new code**, because each already filters on `entity.state`.
-6. **The public card** (engine 9) checks `takedown` at **serve time**, so removal is immediate rather than waiting for the next weekly render.
+6. **The share image** is rendered from live rows when the owner taps Share, so a dismissed subject is already absent.
 7. **The nightly cron** reconciles any `takedown` with `fanned_out_at IS NULL`, and re-runs the fan-out.
 
 ---
@@ -232,6 +232,8 @@ takedown   id, subject_kind ('domain' | 'handle'), subject_value, reason,
 ---
 
 ### P10.2 — The `takedown` table and the fan-out Workflow
+
+**Built differently (2026-09-24):** `migrations/0009_takedown.sql` does the fan-out as SQLite triggers on the `takedown` insert, in one transaction, so there is no Workflow, no eventual-consistency window and no nightly reconciliation. `docs/REBUILD-GUARDRAILS.md` § Recording it is the current procedure.
 
 **GOAL.** Add the `takedown` table (`subject_kind`, `subject_value`, `reason`, `requested_at`, `actioned_at`, `actioned_by`, `fanned_out_at`, `note`, `UNIQUE (subject_kind, subject_value)`) — it does not exist in `0001_rebuild.sql`. Add `TakedownWorkflow`: for every `entity` matching the subject **across all workspaces**, set `state='dismissed'`, `state_reason='takedown'`, `state_changed_by='auto'`, delete that entity's `signal` rows and R2 objects for that workspace, write an `alert` to the owner with the one-line note, then set `fanned_out_at`. Add the reconciliation of `fanned_out_at IS NULL` to engine 6's nightly cron.
 

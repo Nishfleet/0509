@@ -5,8 +5,8 @@ import { fileURLToPath } from "node:url";
 import { compile } from "tailwindcss";
 import { describe, expect, it } from "vitest";
 
-// #4309: the privacy wordmark used `bg-accent` / `text-on-accent` after #3984
-// retired those tokens. Tailwind emits no rule for an unregistered colour, so
+// #4309: the privacy wordmark, now drawn by the shared legal page, used
+// `bg-accent` / `text-on-accent` after #3984 retired those tokens. Tailwind emits no rule for an unregistered colour, so
 // the `09` span painted as a transparent box while a string assertion stayed
 // green. This compiles the page's colour and type utilities against the real
 // `app/app.css` and fails when one of them emits nothing.
@@ -15,7 +15,7 @@ import { describe, expect, it } from "vitest";
 // expression, a template, or a class on an imported component is not seen.
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
-const PRIVACY = path.join(REPO_ROOT, "app/routes/privacy.tsx");
+const PRIVACY = path.join(REPO_ROOT, "app/components/legal-page.tsx");
 const WORDMARK = 'className="bg-green text-on-green px-[5px]"';
 const RETIRED_WORDMARK = 'className="bg-accent text-on-accent px-[5px]"';
 

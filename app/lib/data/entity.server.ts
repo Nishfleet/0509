@@ -22,7 +22,6 @@ export interface MaybeCompetitor {
   name: string;
   domain: string;
   reason: string | null;
-  p: number | null;
 }
 
 interface Row {
@@ -45,7 +44,6 @@ interface MaybeRow {
   name: string | null;
   domain: string;
   reason: string | null;
-  p: number | null;
 }
 
 const SELECT_COMPETITOR =
@@ -55,13 +53,13 @@ const SET_COMPETITOR_STATE =
   "UPDATE entity SET state = ?, state_changed_at = ?, state_changed_by = 'user', state_reason = NULL WHERE id = ? AND workspace_id = ? AND role = 'competitor' AND state IN ('on', 'off') AND state <> ?";
 
 const INSERT_COMPETITOR_FROM_SUGGESTION =
-  "INSERT INTO entity (id, workspace_id, role, domain, name, origin, confirmed_at, state, state_changed_at, state_changed_by, created_at) SELECT ?1, workspace_id, 'competitor', candidate_domain, candidate_name, 'auto', ?2, 'on', ?2, 'user', ?2 FROM suggestion WHERE id = ?3 AND workspace_id = ?4 AND status = 'pending' ON CONFLICT (workspace_id, domain) DO UPDATE SET state = 'on', state_changed_at = excluded.state_changed_at, state_changed_by = 'user'";
+  "INSERT INTO entity (id, workspace_id, role, domain, name, origin, confirmed_at, state, state_changed_at, state_changed_by, created_at) SELECT ?1, workspace_id, 'competitor', candidate_domain, candidate_name, 'auto', ?2, 'on', ?2, 'user', ?2 FROM suggestion WHERE id = ?3 AND workspace_id = ?4 AND status = 'pending' ON CONFLICT (workspace_id, domain) DO UPDATE SET state = 'on', state_changed_at = excluded.state_changed_at, state_changed_by = 'user', state_reason = NULL WHERE entity.role = 'competitor' AND entity.state IN ('on', 'off')";
 
 const SELECT_ON =
   "SELECT e.id AS entity_id, e.name, e.domain, s.verdict_reason AS reason FROM entity e LEFT JOIN suggestion s ON s.entity_id = e.id AND s.workspace_id = e.workspace_id WHERE e.workspace_id = ? AND e.role = 'competitor' AND e.state = 'on' ORDER BY e.created_at ASC, e.id ASC";
 
 const SELECT_MAYBE =
-  "SELECT id AS suggestion_id, candidate_name AS name, candidate_domain AS domain, verdict_reason AS reason, verdict_p AS p FROM suggestion WHERE workspace_id = ? AND kind = 'add' AND status = 'pending' ORDER BY verdict_p IS NULL, verdict_p DESC, created_at ASC";
+  "SELECT id AS suggestion_id, candidate_name AS name, candidate_domain AS domain, verdict_reason AS reason FROM suggestion WHERE workspace_id = ? AND kind = 'add' AND status = 'pending' AND NOT EXISTS (SELECT 1 FROM entity e WHERE e.workspace_id = suggestion.workspace_id AND e.domain = suggestion.candidate_domain AND (e.role <> 'competitor' OR e.state NOT IN ('on', 'off'))) ORDER BY verdict_p IS NULL, verdict_p DESC, created_at ASC";
 
 function displayName(name: string | null, domain: string): string {
   if (name !== null && name !== "") return name;
@@ -115,7 +113,6 @@ export async function readOnboardingCompetitors(
     name: displayName(row.name, row.domain),
     domain: row.domain,
     reason: row.reason,
-    p: row.p,
   }));
 
   return { on, maybes };
@@ -130,4 +127,158 @@ export function insertCompetitorFromSuggestion(input: {
   return env.DB
     .prepare(INSERT_COMPETITOR_FROM_SUGGESTION)
     .bind(input.entityId, input.now, input.suggestionId, input.workspaceId);
+}
+
+const INSERT_SELF =
+  "INSERT INTO entity (id, workspace_id, role, domain, name, identity_json, origin, confirmed_at, state, created_at) VALUES (?1, ?2, 'self', ?3, ?4, ?5, 'manual', ?6, 'on', ?6) ON CONFLICT DO NOTHING";
+
+export async function insertSelfEntity(input: {
+  id: string;
+  workspaceId: string;
+  domain: string;
+  name: string;
+  identityJson: string;
+  now: string;
+}): Promise<void> {
+  await env.DB.prepare(INSERT_SELF)
+    .bind(input.id, input.workspaceId, input.domain, input.name, input.identityJson, input.now)
+    .run();
+}
+
+export interface DiscoverySelf {
+  workspaceId: string;
+  name: string;
+  domain: string;
+  description: string | null;
+}
+
+export interface DiscoveryContext {
+  self: DiscoverySelf;
+  competitors: { name: string; domain: string }[];
+  knownDomains: string[];
+  dismissedDomains: string[];
+}
+
+const SELECT_SELF =
+  "SELECT workspace_id, name, domain, json_extract(identity_json, '$.description') AS description FROM entity WHERE workspace_id = ? AND role = 'self'";
+
+const SELECT_KNOWN =
+  "SELECT domain, name, role, state FROM entity WHERE workspace_id = ?1 UNION ALL SELECT candidate_domain, candidate_name, 'suggestion', status FROM suggestion WHERE workspace_id = ?1 AND status <> 'pending'";
+
+const SELECT_SELF_WORKSPACES = "SELECT workspace_id FROM entity WHERE role = 'self' ORDER BY workspace_id";
+
+interface SelfRow {
+  workspace_id: string;
+  name: string | null;
+  domain: string;
+  description: string | null;
+}
+
+interface KnownRow {
+  domain: string;
+  name: string | null;
+  role: string;
+  state: string;
+}
+
+export async function readDiscoveryContext(workspaceId: string): Promise<DiscoveryContext | null> {
+  const [selfRow, known] = await Promise.all([
+    env.DB.prepare(SELECT_SELF).bind(workspaceId).first<SelfRow>(),
+    env.DB.prepare(SELECT_KNOWN).bind(workspaceId).all<KnownRow>(),
+  ]);
+  if (selfRow === null) return null;
+  const rows = known.results;
+  return {
+    self: {
+      workspaceId: selfRow.workspace_id,
+      name: displayName(selfRow.name, selfRow.domain),
+      domain: selfRow.domain,
+      description: selfRow.description,
+    },
+    competitors: rows
+      .filter((row) => row.role === "competitor" && row.state === "on")
+      .map((row) => ({ name: displayName(row.name, row.domain), domain: row.domain })),
+    knownDomains: rows.filter((row) => row.role !== "suggestion").map((row) => row.domain),
+    dismissedDomains: rows
+      .filter((row) => row.state === "dismissed" || (row.role === "competitor" && row.state === "off"))
+      .map((row) => row.domain),
+  };
+}
+
+export async function readSelfWorkspaceIds(): Promise<string[]> {
+  const rows = await env.DB.prepare(SELECT_SELF_WORKSPACES).all<{ workspace_id: string }>();
+  return rows.results.map((row) => row.workspace_id);
+}
+
+const INSERT_MANUAL_COMPETITOR =
+  "INSERT INTO entity (id, workspace_id, role, domain, name, origin, confirmed_at, state, state_changed_at, state_changed_by, created_at) VALUES (?1, ?2, 'competitor', ?3, ?4, 'manual', ?5, 'on', ?5, 'user', ?5) ON CONFLICT (workspace_id, domain) DO UPDATE SET state = 'on', state_changed_at = excluded.state_changed_at, state_changed_by = 'user', state_reason = NULL WHERE entity.role = 'competitor'";
+
+export async function addManualCompetitor(input: {
+  workspaceId: string;
+  domain: string;
+  now: string;
+}): Promise<void> {
+  await env.DB.prepare(INSERT_MANUAL_COMPETITOR)
+    .bind(crypto.randomUUID(), input.workspaceId, input.domain, input.domain, input.now)
+    .run();
+}
+
+const INSERT_AUTO_COMPETITOR =
+  "INSERT INTO entity (id, workspace_id, role, domain, name, origin, state, state_changed_at, state_changed_by, created_at) SELECT ?1, ?2, 'competitor', ?3, ?4, 'auto', 'on', ?5, 'jev', ?5 WHERE EXISTS (SELECT 1 FROM suggestion WHERE workspace_id = ?2 AND candidate_domain = ?3 AND status = 'auto_on' AND entity_id IS NULL) ON CONFLICT (workspace_id, domain) DO NOTHING";
+
+export function insertAutoCompetitor(input: {
+  entityId: string;
+  workspaceId: string;
+  domain: string;
+  name: string;
+  now: string;
+}): D1PreparedStatement {
+  return env.DB.prepare(INSERT_AUTO_COMPETITOR).bind(
+    input.entityId,
+    input.workspaceId,
+    input.domain,
+    input.name,
+    input.now,
+  );
+}
+
+export interface CompetitorRow {
+  entityId: string;
+  name: string;
+  domain: string;
+  state: CompetitorState;
+  stateChangedAt: string | null;
+  reason: string | null;
+}
+
+const SELECT_COMPETITORS =
+  "SELECT e.id AS entity_id, e.name, e.domain, e.state, e.state_changed_at, s.verdict_reason AS reason FROM entity e LEFT JOIN suggestion s ON s.entity_id = e.id AND s.workspace_id = e.workspace_id WHERE e.workspace_id = ? AND e.role = 'competitor' AND e.state IN ('on', 'off') ORDER BY e.state = 'off', e.created_at ASC, e.id ASC";
+
+interface CompetitorDbRow {
+  entity_id: string;
+  name: string | null;
+  domain: string;
+  state: CompetitorState;
+  state_changed_at: string | null;
+  reason: string | null;
+}
+
+export async function readCompetitors(
+  workspaceId: string,
+): Promise<{ competitors: CompetitorRow[]; maybes: MaybeCompetitor[] }> {
+  const [rows, { maybes }] = await Promise.all([
+    env.DB.prepare(SELECT_COMPETITORS).bind(workspaceId).all<CompetitorDbRow>(),
+    readOnboardingCompetitors(workspaceId),
+  ]);
+  return {
+    competitors: rows.results.map((row) => ({
+      entityId: row.entity_id,
+      name: displayName(row.name, row.domain),
+      domain: row.domain,
+      state: row.state,
+      stateChangedAt: row.state_changed_at,
+      reason: row.reason,
+    })),
+    maybes,
+  };
 }

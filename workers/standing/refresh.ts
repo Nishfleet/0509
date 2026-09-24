@@ -1,7 +1,15 @@
+import { z } from "zod";
+
 import type { StandingScore } from "../../app/lib/data/standing.server";
 import { upsertStandingScores } from "../../app/lib/data/standing.server";
-import type { BucketCount, Reliability, ScoreBucket, WeightRow } from "./score";
-import { D3_QUESTION_ID, D6_QUESTION_ID, scoreByEntity, weightsAsOf } from "./score";
+import {
+  D3_QUESTION_ID,
+  D6_QUESTION_ID,
+  reliabilitySchema,
+  scoreBucketSchema,
+  scoreByEntity,
+  weightsAsOf,
+} from "./score";
 
 export const COUNT_BUCKETS = `SELECT s.entity_id AS entity_id,
   CASE
@@ -27,22 +35,6 @@ const ON_ENTITY_IDS = `SELECT id FROM entity WHERE workspace_id = ?1 AND state =
 
 const ALL_WEIGHTS = `SELECT key, weight, effective_from FROM scoring_weight`;
 
-const RELIABILITY_VALUES: readonly string[] = [
-  "official_api",
-  "rss",
-  "scraped_page",
-  "best_effort",
-];
-
-const SCORE_BUCKET_VALUES: readonly string[] = [
-  "mention_matters",
-  "mention_normal",
-  "site_change_noteworthy",
-  "ad_new_creative",
-  "ad_copy_change",
-  "hiring_new_role",
-];
-
 export interface RefreshInput {
   workspaceId: string;
   weekStartAt: string;
@@ -51,67 +43,18 @@ export interface RefreshInput {
   computedAt: string;
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
+const entityIdRows = z.array(z.object({ id: z.string() }));
 
-function fieldAt(row: unknown, field: string, index: number): unknown {
-  if (!isRecord(row)) {
-    throw new Error(`standing refresh: batch row ${String(index)} is not an object`);
-  }
-  return row[field];
-}
+const weightRows = z.array(z.object({ key: z.string(), weight: z.number(), effective_from: z.string() }));
 
-function stringField(row: unknown, field: string, index: number): string {
-  const value = fieldAt(row, field, index);
-  if (typeof value !== "string") {
-    throw new Error(`standing refresh: batch row ${String(index)}.${field} is not a string`);
-  }
-  return value;
-}
-
-function numberField(row: unknown, field: string, index: number): number {
-  const value = fieldAt(row, field, index);
-  if (typeof value !== "number") {
-    throw new Error(`standing refresh: batch row ${String(index)}.${field} is not a number`);
-  }
-  return value;
-}
-
-function isReliability(value: string): value is Reliability {
-  return RELIABILITY_VALUES.includes(value);
-}
-
-function isScoreBucket(value: string): value is ScoreBucket {
-  return SCORE_BUCKET_VALUES.includes(value);
-}
-
-function bucketCountRows(rows: readonly unknown[]): readonly BucketCount[] {
-  return rows.map((row, index) => {
-    const bucket = stringField(row, "bucket", index);
-    const reliability = stringField(row, "reliability", index);
-    if (!isScoreBucket(bucket)) {
-      throw new Error(`standing refresh: batch row ${String(index)}.bucket is not a score bucket`);
-    }
-    if (!isReliability(reliability)) {
-      throw new Error(`standing refresh: batch row ${String(index)}.reliability is not a source reliability`);
-    }
-    return {
-      entity_id: stringField(row, "entity_id", index),
-      bucket,
-      reliability,
-      n: numberField(row, "n", index),
-    };
-  });
-}
-
-function weightRows(rows: readonly unknown[]): readonly WeightRow[] {
-  return rows.map((row, index) => ({
-    key: stringField(row, "key", index),
-    weight: numberField(row, "weight", index),
-    effective_from: stringField(row, "effective_from", index),
-  }));
-}
+const bucketCountRows = z.array(
+  z.object({
+    entity_id: z.string(),
+    bucket: scoreBucketSchema,
+    reliability: reliabilitySchema,
+    n: z.number().int(),
+  }),
+);
 
 export async function refreshWorkspaceScores(
   db: D1Database,
@@ -128,9 +71,9 @@ export async function refreshWorkspaceScores(
       D3_QUESTION_ID,
     ),
   ]);
-  const entityIds = reads[0].results.map((row, index) => stringField(row, "id", index));
-  const weights = weightsAsOf(weightRows(reads[1].results), input.weekStartAt);
-  const counts = bucketCountRows(reads[2].results);
+  const entityIds = entityIdRows.parse(reads[0].results).map((row) => row.id);
+  const weights = weightsAsOf(weightRows.parse(reads[1].results), input.weekStartAt);
+  const counts = bucketCountRows.parse(reads[2].results);
   const scores = scoreByEntity(counts, weights);
   const rows: StandingScore[] = entityIds.map((entity_id) => ({
     workspace_id: input.workspaceId,

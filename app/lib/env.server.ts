@@ -7,8 +7,13 @@ const BINDING_NAMES = [
   "BETTER_AUTH_SECRET",
   "EMAIL",
   "SEND_EMAIL",
-  "CARD_ARTIFACTS",
+  "SNAPSHOTS",
   "BROWSER",
+  "OAUTH_KV",
+  "AGENT_LIMIT",
+  "SIGN_IN_EMAIL_LIMIT",
+  "SIGN_IN_IP_LIMIT",
+  "AGENT_REGISTER_LIMIT",
 ] as const satisfies readonly (keyof Env)[];
 
 const NOTES = {
@@ -17,8 +22,13 @@ const NOTES = {
   BETTER_AUTH_SECRET: "sign-in cannot be trusted",
   EMAIL: "magic links and briefs cannot send",
   SEND_EMAIL: "briefs sit unsent",
-  CARD_ARTIFACTS: "public standing cards cannot be served",
+  SNAPSHOTS: "site snapshots cannot be read or stored",
   BROWSER: "bot-gated page reads cannot escalate",
+  OAUTH_KV: "AI apps cannot sign in to /mcp",
+  AGENT_LIMIT: "/mcp and /api/v1 have no abuse limit",
+  SIGN_IN_EMAIL_LIMIT: "one inbox can be flooded with sign-in links",
+  SIGN_IN_IP_LIMIT: "one sender can spray sign-in links",
+  AGENT_REGISTER_LIMIT: "anyone can fill OAUTH_KV with app registrations",
   LIVENESS_PING_URL: "absence means no monitor; a set value must be an http(s) URL",
 } as const satisfies Record<(typeof BINDING_NAMES)[number] | "LIVENESS_PING_URL", string>;
 
@@ -35,7 +45,7 @@ function isObject(value: unknown): value is object {
   return typeof value === "object" && value !== null;
 }
 
-function binding(method?: "prepare" | "get" | "sendBatch") {
+function binding(method?: "prepare" | "get" | "sendBatch" | "limit") {
   return z.custom((value) => {
     if (!isObject(value)) return false;
     if (!method) return true;
@@ -49,8 +59,13 @@ const workerEnvSchema = z.object({
   BETTER_AUTH_SECRET: z.string().min(1),
   EMAIL: binding(),
   SEND_EMAIL: binding("sendBatch"),
-  CARD_ARTIFACTS: binding("get"),
+  SNAPSHOTS: binding("get"),
   BROWSER: binding(),
+  OAUTH_KV: binding("get"),
+  AGENT_LIMIT: binding("limit"),
+  SIGN_IN_EMAIL_LIMIT: binding("limit"),
+  SIGN_IN_IP_LIMIT: binding("limit"),
+  AGENT_REGISTER_LIMIT: binding("limit"),
   LIVENESS_PING_URL: httpUrl.optional(),
 });
 
@@ -85,8 +100,13 @@ function snapshot(): Snapshot {
     BETTER_AUTH_SECRET: blank(env.BETTER_AUTH_SECRET),
     EMAIL: env.EMAIL,
     SEND_EMAIL: env.SEND_EMAIL,
-    CARD_ARTIFACTS: env.CARD_ARTIFACTS,
+    SNAPSHOTS: env.SNAPSHOTS,
     BROWSER: env.BROWSER,
+    OAUTH_KV: env.OAUTH_KV,
+    AGENT_LIMIT: env.AGENT_LIMIT,
+    SIGN_IN_EMAIL_LIMIT: env.SIGN_IN_EMAIL_LIMIT,
+    SIGN_IN_IP_LIMIT: env.SIGN_IN_IP_LIMIT,
+    AGENT_REGISTER_LIMIT: env.AGENT_REGISTER_LIMIT,
     LIVENESS_PING_URL: livenessUrl(),
   };
 }

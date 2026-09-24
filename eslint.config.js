@@ -58,8 +58,23 @@ const SUPPORT_ADDRESS_BAN = {
     "The support address is typed once, in app/components/footer.tsx; every page imports <Footer /> instead. A second literal is a second address to change and a page that silently keeps the old one. Source: 0509#3986 review — `encoded: structure` names rung 1, and a constant alone does not stop a re-type.",
 };
 
+// A catch whose only statement is `return null` swallows the error: a thrown
+// fetch, a bug, and a genuine "not found" all reach the caller as the same
+// null, so the failure leaves no trace. Match the block shape, not a promise
+// `.catch(() => null)` callback. The named clause in
+// app/lib/identity/name-cascade.ts is grandfathered by name (see the
+// exemption block) until the cascade grows a logged failure path. Source:
+// 0509#4462 (REBUILD-TRUST.md C1 Q1 — the D grade on PR #4457).
+const CATCH_RETURNS_NULL = {
+  selector:
+    "CatchClause > BlockStatement[body.length=1] > ReturnStatement[argument.value=null]",
+  message:
+    "A catch whose only statement is `return null` swallows the error, so a thrown fetch or a bug fails as silently as a real 'not found'. Give the clause an error binding and a logged failure path (or rethrow). Grandfathered sites are listed by name in the exemption block below until each grows one. Source: 0509#4462.",
+};
+
 const BANNED_SYNTAX = [
   SUPPORT_ADDRESS_BAN,
+  CATCH_RETURNS_NULL,
   {
     selector: "NewExpression[callee.name='RegExp'] > Literal.arguments, NewExpression[callee.name='RegExp'] > TemplateLiteral",
     message:
@@ -229,6 +244,39 @@ export default tseslint.config(
       "no-restricted-syntax": [
         "error",
         ...BANNED_SYNTAX.filter((rule) => rule !== SUPPORT_ADDRESS_BAN),
+        RAW_DML_WRITER,
+      ],
+    },
+  },
+
+  {
+    // Bare `catch { return null }` is banned everywhere via CATCH_RETURNS_NULL
+    // (in BANNED_SYNTAX). These clauses predate the rule and each is an
+    // intentional value-on-failure contract, so they are grandfathered by name
+    // until each grows a logged failure path — the same carve-out 0509#4422
+    // named for app/lib/identity/name-cascade.ts (the D grade on PR #4457,
+    // REBUILD-TRUST.md C1 Q1). A file is only exempt if it is listed here, so a
+    // NEW bare catch still fails; tests/eslint-catch-null-rule.test.ts proves
+    // both. A follow-up issue tracks converting each site to a logged failure
+    // path so it can be dropped from this list. Flat config replaces a rule's
+    // option array wholesale (see the RAW_DML block above), so this restates
+    // BANNED_SYNTAX minus CATCH_RETURNS_NULL plus RAW_DML_WRITER — every other
+    // ban is preserved and only the catch clause is lifted. Source: 0509#4462.
+    files: [
+      "app/lib/identity/name-cascade.ts",
+      "app/lib/identity/extract.ts",
+      "app/lib/hiring/discover-board.ts",
+      "app/lib/discovery/generators/news.ts",
+      "app/lib/discovery/generators/hn.ts",
+      "app/lib/brief-payload.ts",
+      "app/components/mark.tsx",
+      "app/components/brand-chip.tsx",
+      "workers/delivery/consumer.ts",
+    ],
+    rules: {
+      "no-restricted-syntax": [
+        "error",
+        ...BANNED_SYNTAX.filter((rule) => rule !== CATCH_RETURNS_NULL),
         RAW_DML_WRITER,
       ],
     },

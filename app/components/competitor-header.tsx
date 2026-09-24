@@ -30,7 +30,9 @@ export function CompetitorHeader({
   return (
     <header data-slot="competitor-header" className="flex min-w-0 flex-col gap-3">
       <nav aria-label="Breadcrumb" className="font-mono text-meta text-ink-soft uppercase">
-        <Link to="/app/competitors">Competitors</Link>
+        <Link to="/app/competitors" prefetch="intent" className="underline decoration-1 underline-offset-4">
+          Competitors
+        </Link>
         <span aria-hidden="true"> / </span>
         <span aria-current="page">{name}</span>
       </nav>
@@ -39,10 +41,10 @@ export function CompetitorHeader({
         className="flex min-w-0 flex-wrap items-center gap-x-6 gap-y-3"
       >
         <div className="min-w-0">
-          <h1 className="truncate font-display text-[2rem] leading-[1.1]">{name}</h1>
+          <h1 className="font-display text-display-2 font-extrabold break-words uppercase">{name}</h1>
           <p className="text-body-sm text-ink-soft [overflow-wrap:anywhere]">{domain}</p>
           {state === "off" ? (
-            <p data-slot="competitor-paused" className="text-meta text-ink-faint">
+            <p data-slot="competitor-paused" className="text-meta text-ink-soft font-mono uppercase">
               {competitorPausedLine(stateChangedAt)}
             </p>
           ) : null}

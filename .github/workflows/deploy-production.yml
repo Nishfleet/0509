@@ -77,11 +77,6 @@ jobs:
         # verification, which is exactly the inverting this comment needs to keep
         # false: test infrastructure must never stand between a good app deploy
         # and its verification.
-        #
-        # The KV binding has no id on purpose, matching the e2e inbox: wrangler's
-        # deploy-time resource provisioning creates the 0509-fixture-site-state
-        # namespace on first deploy and inherits it from the deployed Worker's
-        # settings on later ones.
         continue-on-error: true
         run: npx wrangler deploy --config workers/fixture-site.wrangler.jsonc
         env:
@@ -92,11 +87,7 @@ jobs:
         # The J1 mail sink (0509#3927): a separate Worker with its own name
         # and route, same fixture shape as J8's fixture.0509.in. Runs AFTER the
         # app smoke so test-infra can never stand between a good app deploy and
-        # its verification. The KV binding has no id on purpose: wrangler's
-        # deploy-time resource provisioning (default on, --x-provision) creates
-        # the 0509-e2e-inbox-inbox namespace on first deploy and inherits it
-        # from the deployed Worker's settings on later ones — verified against
-        # wrangler 4.136's provisionBindings/KVHandler source.
+        # its verification.
         run: npx wrangler deploy --config workers/e2e-inbox.wrangler.jsonc
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
