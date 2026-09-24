@@ -1,5 +1,6 @@
 import type { RenderedBrief } from "../../app/lib/brief-payload";
 import { escapeHtml } from "../../app/lib/html";
+import { EYEBROW, FONT, emailDocument } from "./email-shell";
 
 export interface IncidentOpenContext {
   site: string;
@@ -33,6 +34,14 @@ const COPY = {
     `We re-checked ${site} at ${utc(closed_at)} and it looks fixed.`,
 } as const;
 
+const HEADLINE = `margin:0;font-family:${FONT};font-size:24px;line-height:30px;font-weight:800;letter-spacing:-0.02em;`;
+const BODY = `margin:12px 0 0;font-family:${FONT};font-size:16px;line-height:24px;`;
+
+function linkLine(link: string): string {
+  const href = escapeHtml(link);
+  return `<p style="${BODY}">See it in Five to Nine: <a class="brief-ink" href="${href}">${href}</a></p>`;
+}
+
 export function renderIncidentOpen(ctx: IncidentOpenContext): RenderedBrief {
   const subject = COPY.openSubject(ctx.site, ctx.kind);
   const lines = [
@@ -44,9 +53,15 @@ export function renderIncidentOpen(ctx: IncidentOpenContext): RenderedBrief {
   return {
     subject,
     text: [...lines, COPY.openLink(ctx.link)].join("\n"),
-    html:
-      lines.map((line) => `<p>${escapeHtml(line)}</p>`).join("") +
-      `<p>See it in Five to Nine: <a href="${escapeHtml(ctx.link)}">${escapeHtml(ctx.link)}</a></p>`,
+    html: emailDocument(
+      subject,
+      [
+        `<p class="brief-muted" style="${EYEBROW}">Your site</p>`,
+        `<p style="${HEADLINE}">${escapeHtml(subject)}</p>`,
+        ...lines.slice(1).map((line) => `<p style="${BODY}">${escapeHtml(line)}</p>`),
+        linkLine(ctx.link),
+      ].join(""),
+    ),
   };
 }
 
@@ -56,6 +71,14 @@ export function renderIncidentFixed(ctx: IncidentFixedContext): RenderedBrief {
   return {
     subject,
     text: `${line} ${ctx.link}`,
-    html: `<p>${escapeHtml(line)} <a href="${escapeHtml(ctx.link)}">${escapeHtml(ctx.link)}</a></p>`,
+    html: emailDocument(
+      subject,
+      [
+        `<p class="brief-muted" style="${EYEBROW}">Your site</p>`,
+        `<p style="${HEADLINE}">${escapeHtml(subject)}</p>`,
+        `<p style="${BODY}">${escapeHtml(line)}</p>`,
+        linkLine(ctx.link),
+      ].join(""),
+    ),
   };
 }

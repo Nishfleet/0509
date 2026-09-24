@@ -1,6 +1,8 @@
 import { useState } from "react";
 import type { ReactElement } from "react";
 
+import { Button } from "./ui/button";
+
 const SHARE_IMAGE_PATH = "/app/share.png";
 const FILE_NAME = "0509-standing.png";
 
@@ -37,17 +39,12 @@ export function ShareButton(): ReactElement {
   }
 
   return (
-    <div className="mt-6">
-      <button
-        type="button"
-        className="font-display border-ink border-[1.5px] px-3 py-2 uppercase"
-        onClick={() => void share()}
-        disabled={state === "working"}
-      >
+    <div className="mt-8">
+      <Button type="button" variant="secondary" size="lg" onClick={() => void share()} disabled={state === "working"}>
         {state === "working" ? "Making your picture…" : "Share my rank"}
-      </button>
+      </Button>
       {state === "failed" ? (
-        <p role="alert" className="mt-2">
+        <p role="alert" className="mt-2 text-[0.95rem]">
           We could not make the picture. Try again in a minute.
         </p>
       ) : null}
