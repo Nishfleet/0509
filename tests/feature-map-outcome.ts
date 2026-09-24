@@ -82,22 +82,27 @@ export function assertSyncPull(view: SyncPull, sha: string): void {
   }
 }
 
-function readSyncPull(raw: string): SyncPull {
+export function readSyncPull(raw: string): SyncPull {
   const parsed: unknown = JSON.parse(raw);
-  if (!isRecord(parsed) || typeof parsed.title !== "string" || typeof parsed.body !== "string") {
+  if (!isRecord(parsed) || typeof parsed.title !== "string") {
     throw new Error("pull view");
   }
-  if (!Array.isArray(parsed.files)) {
+  const body = parsed.body == null ? "" : parsed.body;
+  if (typeof body !== "string" || !Array.isArray(parsed.files)) {
     throw new Error("pull view");
   }
   const files: { filename: string }[] = [];
   for (const file of parsed.files) {
-    if (!isRecord(file) || typeof file.filename !== "string") {
+    if (!isRecord(file)) {
       throw new Error("pull view");
     }
-    files.push({ filename: file.filename });
+    const filename = typeof file.path === "string" ? file.path : file.filename;
+    if (typeof filename !== "string") {
+      throw new Error("pull view");
+    }
+    files.push({ filename });
   }
-  return { title: parsed.title, body: parsed.body, files };
+  return { title: parsed.title, body, files };
 }
 
 function record(report: FeatureMapReport, sha: string): void {
