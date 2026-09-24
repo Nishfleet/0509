@@ -2,7 +2,7 @@
 
 This engine landed in **#4692 (merged 2026-09-24)**. The pre-#4692 contracts called for a **Cron Trigger** producer feeding a rate-classed **Cloudflare Queue** pair (one concurrency-10 lane for sub-second sources and one concurrency-1 lane for the 18-second-429 sources) into a separate downstream Workflow, with Google News RSS as the headline source, DuckDuckGo and Reddit in the MVP set, and a cross-source D8 judgment doing the dedup. **None of that is what shipped.** What shipped is a single scheduled Workflow with one retried step per `(plugin, target_key)` pair, GDELT replacing Google News, dedup-by-dedup_key on the `signal` table rather than by D8, and zero queues and zero direct cron triggers anywhere in this engine.
 
-The original Opus-deputy reasoning — the live probes, the design-it-twice fork, the cost arithmetic, the failure-mode table — is preserved below at the bottom of this file under `Historical design (pre-#4692)` so the design history is not lost. **Do not implement anything below that heading; it documents what was rejected or replaced.** Every path that follows the `Historical design` heading is code that exists on `main` today; every path above it is the contract.
+The original Opus-deputy reasoning — the live probes, the design-it-twice fork, the cost arithmetic, the failure-mode table — is preserved below at the bottom of this file under `Historical design (pre-#4692)` so the design history is not lost. Do not implement anything below that heading; it documents what was rejected or replaced. Every path named in the `As built` section above exists on `main` today and is verified with `git ls-files`; the `Historical design` section names no code paths, only the design that never shipped.
 
 ---
 
