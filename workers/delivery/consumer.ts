@@ -329,7 +329,8 @@ export function parseMessage(body: unknown): DeliveryMessage | null {
   if (typeof body === "string") {
     try {
       return toDeliveryMessage(JSON.parse(body) as unknown);
-    } catch {
+    } catch (error) {
+      console.error(JSON.stringify({ event: "delivery.message_unparseable", error: String(error) }));
       return null;
     }
   }

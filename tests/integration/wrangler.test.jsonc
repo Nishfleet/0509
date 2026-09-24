@@ -2,6 +2,7 @@
   "name": "0509-test",
   "compatibility_date": "2026-09-16",
   "compatibility_flags": ["global_fetch_strictly_public"],
+  "vars": { "SITE_SWEEP_PING_URL": "https://hc-ping.example/site-sweep" },
   "main": "../../workers/app.ts",
   "d1_databases": [{ "binding": "DB", "database_name": "0509-test", "database_id": "test" }],
   "r2_buckets": [
