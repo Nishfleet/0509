@@ -103,7 +103,7 @@ describe("recording a takedown", () => {
 
   it("drops the subject from a published card straight away", async () => {
     await env.DB.prepare("UPDATE workspace SET card_slug = 'acme', card_is_published = 1 WHERE id = 'ws-a'").run();
-    await env.CARD_ARTIFACTS.put("card/ws-a/2026-09-21/index.html", "<p>card</p>");
+    await env.SNAPSHOTS.put("card/ws-a/2026-09-21/index.html", "<p>card</p>");
     await insertEntity("ent-a", "ws-a", "competitor", "removed.example").run();
     expect((await serveCard("acme")).status).toBe(200);
 

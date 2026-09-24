@@ -36,7 +36,7 @@ async function seedWorkspace(workspaceId = WORKSPACE_ID, userId = USER_ID): Prom
 
 async function seedArtifact(workspaceId: string, weekStartAt: string, html: string): Promise<string> {
   const key = `card/${workspaceId}/${weekStartAt}/index.html`;
-  await env.CARD_ARTIFACTS.put(key, html, { httpMetadata: { contentType: "text/html" } });
+  await env.SNAPSHOTS.put(key, html, { httpMetadata: { contentType: "text/html" } });
   return key;
 }
 
@@ -74,8 +74,8 @@ beforeEach(async () => {
   await env.DB.prepare("DELETE FROM source").run();
   await env.DB.prepare("DELETE FROM workspace").run();
   await env.DB.prepare('DELETE FROM "user"').run();
-  const listed = await env.CARD_ARTIFACTS.list();
-  for (const object of listed.objects) await env.CARD_ARTIFACTS.delete(object.key);
+  const listed = await env.SNAPSHOTS.list();
+  for (const object of listed.objects) await env.SNAPSHOTS.delete(object.key);
   await seedWorkspace();
 });
 
