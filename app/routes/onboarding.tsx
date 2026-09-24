@@ -1,15 +1,18 @@
 import type { Route } from "./+types/onboarding";
 
-import { redirect } from "react-router";
+import { Form, redirect } from "react-router";
 
 import { requireSession } from "../lib/require-session.server";
 import { workspaceLandingForRequest } from "../lib/workspace.server";
 import { OneInput } from "../components/one-input";
 import { AddPasskey } from "../components/passkey-button";
 import { OnboardingFrame } from "../components/onboarding-frame";
+import { Button } from "../components/ui/button";
 import { subjectRedirect } from "../lib/onboarding-subject";
 import { isTakenDown } from "../lib/data/takedown.server";
+import { readWorkspaceIdForOwner } from "../lib/data/workspace.server";
 import { normaliseSubject } from "../lib/identity/normalise";
+import { screenOnboardingSubject } from "../lib/onboarding-screen.server";
 
 export function meta() {
   return [{ title: "Start with your website or a handle · Five to Nine" }];
@@ -23,15 +26,32 @@ export async function loader({ request }: Route.LoaderArgs) {
 }
 
 export async function action({ request }: Route.ActionArgs) {
-  await requireSession(request);
-  const raw = (await request.formData()).get("subject");
-  const normalised = typeof raw === "string" ? normaliseSubject(raw) : null;
+  const session = await requireSession(request);
+  const formData = await request.formData();
+  const raw = formData.get("subject");
+  const rawSubject = typeof raw === "string" ? raw : null;
+  const answer = formData.get("answer");
+  const normalised = rawSubject === null ? null : normaliseSubject(rawSubject);
   if (normalised?.ok && (await isTakenDown(normalised.subject.registrable))) {
-    return { message: "This brand asked not to be tracked, so we can't set it up. Try your own website." };
+    return { message: "This brand asked not to be tracked, so we can't set it up. Try your own website.", confirm: null };
+  }
+  if (normalised?.ok && rawSubject !== null) {
+    const workspaceId = await readWorkspaceIdForOwner(session.user.id);
+    if (workspaceId === null) throw redirect("/app");
+    const result = await screenOnboardingSubject({
+      workspaceId,
+      userId: session.user.id,
+      subject: normalised.subject,
+      raw: rawSubject,
+      answer: typeof answer === "string" ? answer : null,
+      now: new Date().toISOString(),
+    });
+    if (result.kind === "refuse" || result.kind === "unavailable") return { message: result.message, confirm: null };
+    if (result.kind === "ask") return { message: null, confirm: { subject: result.subject, raw: rawSubject } };
   }
   const target = subjectRedirect(raw);
   if (target) throw redirect(target);
-  return { message: "We couldn't find anything for that, try the main website." };
+  return { message: "We couldn't find anything for that, try the main website.", confirm: null };
 }
 
 export default function Page({ loaderData, actionData }: Route.ComponentProps) {
@@ -45,9 +65,23 @@ export default function Page({ loaderData, actionData }: Route.ComponentProps) {
         placeholder="your website, or a handle"
         name="subject"
         action="/onboarding"
-        message={actionData?.message}
+        message={actionData?.message ?? undefined}
         submitLabel="Draw my card"
       />
+      {actionData?.confirm ? (
+        <Form method="post" action="/onboarding" className="mt-6 flex flex-col gap-3">
+          <p>Is {actionData.confirm.subject} a business or a public creator?</p>
+          <input type="hidden" name="subject" value={actionData.confirm.raw} />
+          <div className="flex flex-wrap gap-3">
+            <Button type="submit" name="answer" value="business" size="lg">
+              Yes, a business or creator
+            </Button>
+            <Button type="submit" name="answer" value="person" variant="secondary" size="lg">
+              No, it's a person
+            </Button>
+          </div>
+        </Form>
+      ) : null}
       <footer className="border-line text-ink-soft mt-16 flex flex-wrap items-center gap-x-4 border-t pt-4 font-mono text-meta">
         <p className="[overflow-wrap:anywhere]">Signed in as {loaderData.email}</p>
         <AddPasskey />
