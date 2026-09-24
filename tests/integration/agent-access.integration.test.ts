@@ -2,6 +2,7 @@ import { env } from "cloudflare:test";
 import { beforeAll, describe, expect, it } from "vitest";
 
 import { propsForApiKey } from "../../app/lib/agent/keys.server";
+import { toolResult } from "../../app/lib/agent/mcp.server";
 import {
   readAgentAlerts,
   readAgentBrief,
@@ -49,7 +50,7 @@ const PAYLOAD = {
       jev_reason: "They raised prices.",
     },
   ],
-  brands: [{ entity_id: "ent_agent_a", name: "Rival A", rank: 1, movement: 0, is_new: false, biggest_move: null, ad_delta: 2, mention_delta: 0, site_change_count: 1 }],
+  brands: [{ entity_id: "ent_agent_a", name: "Rival A", rank: 1, movement: 0, is_new: false, biggest_move: null, ad_delta: 2, mention_delta: 0, site_change_count: 1, new_roles: 0 }],
   own_site: { status: "ok", incidents: [] },
   checked: { mention_count: 0, site_change_count: 1, new_ad_count: 2, source_keys: [], degraded_source_keys: [], degraded_sources: [] },
   next_brief_at: "2026-09-28T07:00:00.000Z",
@@ -78,6 +79,51 @@ async function seedWorkspace(suffix: string) {
   return { userId, workspaceId };
 }
 
+const SITE_CHANGE_ID = "sig_agent_a";
+const SITE_CHANGE_URL = "https://rival-a.example/pricing";
+const SITE_CHANGE_DIFF_KEY = "snapshot/site/watch_agent_a/site-change.diff.json";
+
+async function seedCompetitorChange(workspaceId: string) {
+  const watchId = "watch_agent_a";
+  const pageId = "page_agent_a";
+  const beforeSnapshotId = "snap_agent_a_before";
+  const afterSnapshotId = "snap_agent_a_after";
+  const payload = {
+    page: { role: "pricing", url: SITE_CHANGE_URL },
+    before: { snapshotId: beforeSnapshotId, screenshotKey: null },
+    after: { snapshotId: afterSnapshotId, screenshotKey: null },
+    diffKey: SITE_CHANGE_DIFF_KEY,
+    wordsAdded: 3,
+    wordsRemoved: 2,
+  };
+  await env.DB.batch([
+    env.DB.prepare("INSERT INTO page (id, entity_id, url, role, discovered_at) VALUES (?1, ?2, ?3, 'pricing', ?4)").bind(
+      pageId,
+      "ent_agent_a",
+      SITE_CHANGE_URL,
+      NOW,
+    ),
+    env.DB.prepare(
+      "INSERT INTO watch (id, entity_id, source_id, target_key, last_polled_at) VALUES (?1, 'ent_agent_a', 'src_site_web', ?2, ?3)",
+    ).bind(watchId, SITE_CHANGE_URL, NOW),
+    env.DB.prepare(
+      "INSERT INTO snapshot (id, watch_id, page_id, fetched_at, payload_hash) VALUES (?1, ?2, ?3, ?4, 'before-hash')",
+    ).bind(beforeSnapshotId, watchId, pageId, NOW),
+    env.DB.prepare(
+      "INSERT INTO snapshot (id, watch_id, page_id, fetched_at, payload_hash) VALUES (?1, ?2, ?3, ?4, 'after-hash')",
+    ).bind(afterSnapshotId, watchId, pageId, NOW),
+    env.DB.prepare(
+      `INSERT INTO signal (id, workspace_id, entity_id, source_id, watch_id, snapshot_id, kind, aspect, url, evidence_url,
+         payload_json, dedup_key, observed_at, last_seen_at)
+       VALUES (?1, ?2, 'ent_agent_a', 'src_site_web', ?3, ?4, 'change', 'pricing', ?5, ?5, ?6, ?4, ?7, ?7)`,
+    ).bind(SITE_CHANGE_ID, workspaceId, watchId, afterSnapshotId, SITE_CHANGE_URL, JSON.stringify(payload), NOW),
+  ]);
+  await env.SNAPSHOTS.put(
+    SITE_CHANGE_DIFF_KEY,
+    JSON.stringify({ hunks: [{ lines: [" context", "-Plans from $10.", "+Plans from $12."] }] }),
+  );
+}
+
 let a: { userId: string; workspaceId: string };
 let b: { userId: string; workspaceId: string };
 let keyA: string;
@@ -85,6 +131,7 @@ let keyA: string;
 beforeAll(async () => {
   a = await seedWorkspace("a");
   b = await seedWorkspace("b");
+  await seedCompetitorChange(a.workspaceId);
   await env.DB.prepare(
     "INSERT INTO digest (id, workspace_id, kind, period_start, period_end, status, payload_json) VALUES ('dg_agent_a', ?1, 'weekly', ?2, ?3, 'sent', ?4)",
   )
@@ -183,7 +230,26 @@ describe("agent access, scoped to one workspace", () => {
 
   it("reads one competitor only inside the caller's workspace", async () => {
     const own = await readAgentCompetitor(a.workspaceId, "ent_agent_a");
-    expect(own.competitor).toMatchObject({ id: "ent_agent_a", domain: "rival-a.example", state: "on" });
+    expect(own.competitor).toMatchObject({
+      id: "ent_agent_a",
+      name: "Rival A",
+      domain: "rival-a.example",
+      state: "on",
+      stateChangedAt: null,
+      pagesWatched: 1,
+      lastCheckedAt: NOW,
+      changesThisWeek: 1,
+    });
+    expect(own.competitor?.changes).toEqual([
+      {
+        id: SITE_CHANGE_ID,
+        headline: "Rival A changed its pricing page",
+        page: "pricing page",
+        url: SITE_CHANGE_URL,
+        observedAt: NOW,
+        summary: '3 words added, 2 removed. Was: "Plans from $10." Now: "Plans from $12." https://rival-a.example/pricing',
+      },
+    ]);
     expect(await readAgentCompetitor(b.workspaceId, "ent_agent_a")).toEqual({ competitor: null });
 
     const called = await mcpResponse(
@@ -192,6 +258,14 @@ describe("agent access, scoped to one workspace", () => {
     );
     const call = await rpcResult<{ structuredContent: { competitor: { id: string } | null } }>(called);
     expect(call.structuredContent.competitor?.id).toBe("ent_agent_a");
+  });
+
+  it("answers a failing MCP tool with a fixed error and never the thrown text", async () => {
+    const failed = await toolResult(() => Promise.reject(new Error("D1_ERROR: no such column secret_internal")));
+    expect(failed).toMatchObject({ isError: true });
+    expect(JSON.stringify(failed)).not.toContain("secret_internal");
+    const ok = await toolResult(() => Promise.resolve({ alerts: [] }));
+    expect(ok).toMatchObject({ structuredContent: { alerts: [] } });
   });
 
   it("reads standing for the caller's workspace and hides a paused competitor", async () => {
@@ -209,5 +283,18 @@ describe("agent access, scoped to one workspace", () => {
   it("refuses a signed-in user who has no workspace yet", async () => {
     const response = await mcpResponse(jsonRpc("tools/list"), { userId: "u_agent_nobody", clientId: "test" });
     expect(response.status).toBe(403);
+  });
+
+  it("refuses an MCP request from a foreign origin and serves one from the product's own", async () => {
+    const from = (origin: string) =>
+      new Request("http://localhost/mcp", {
+        method: "POST",
+        headers: { "content-type": "application/json", accept: "application/json, text/event-stream", origin },
+        body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list", params: {} }),
+      });
+    const foreign = await mcpResponse(from("https://evil.example"), { userId: a.userId, clientId: "test" });
+    expect(foreign.status).toBe(403);
+    const own = await mcpResponse(from(new URL(env.BETTER_AUTH_URL).origin), { userId: a.userId, clientId: "test" });
+    expect(own.status).toBe(200);
   });
 });

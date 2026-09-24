@@ -56,6 +56,7 @@ function payload(): BriefPayload {
         ad_delta: 2,
         mention_delta: 5,
         site_change_count: 1,
+        new_roles: 0,
       },
       {
         entity_id: "ent_drylight",
@@ -67,6 +68,7 @@ function payload(): BriefPayload {
         ad_delta: 0,
         mention_delta: 3,
         site_change_count: 0,
+        new_roles: 0,
       },
     ],
     own_site: {
