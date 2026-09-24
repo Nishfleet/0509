@@ -31,17 +31,17 @@ export async function loader({ request }: Route.LoaderArgs) {
       at: change.observedAt,
       change: { ...change, when: daysAgoLabel(change.observedAt, now) },
     })),
-    ...notes.map((note): TakedownNoteItem => ({
+    ...notes.map((note) => ({
       kind: "note" as const,
       id: note.id,
       at: note.created_at,
-      note: { ...note, when: daysAgoLabel(note.created_at, now) },
+      note: { ...note, when: daysAgoLabel(note.created_at, now) } satisfies TakedownNoteItem,
     })),
-    ...failures.map((failure): DeliveryFailureItem => ({
+    ...failures.map((failure) => ({
       kind: "failure" as const,
       id: failure.id,
       at: failure.created_at,
-      failure: { ...failure, when: daysAgoLabel(failure.created_at, now) },
+      failure: { ...failure, when: daysAgoLabel(failure.created_at, now) } satisfies DeliveryFailureItem,
     })),
   ];
   return {
