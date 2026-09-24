@@ -5,36 +5,30 @@ import {
   Outlet,
   Scripts,
   ScrollRestoration,
-  useLocation,
+  useMatches,
 } from "react-router";
 
 import type { Route } from "./+types/root";
 import { ErrorPage } from "./components/error-page";
 import { Toaster } from "./components/toaster";
 import { hasSessionCookie } from "./lib/auth.server";
-import facesHref from "./fonts.css?url";
 import "./app.css";
 
-const LANDING_PATH = "/design/landing";
+function staticDocument(): boolean {
+  return useMatches().some((match) => {
+    const handle: unknown = match.handle;
+    if (typeof handle !== "object" || handle === null || !("staticDocument" in handle)) return false;
+    return handle.staticDocument === true;
+  });
+}
 
 export function Layout({ children }: { children: React.ReactNode }) {
-  const landing = useLocation().pathname === LANDING_PATH;
+  const plain = staticDocument();
   return (
     <html lang="en">
       <head>
         <meta charSet="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
-        <link
-          rel="preload"
-          href={landing ? "/fonts/bricolage-hero.woff2" : "/fonts/bricolage-grotesque-latin.woff2"}
-          as="font"
-          type="font/woff2"
-          crossOrigin="anonymous"
-        />
-        {landing ? null : (
-          <link rel="preload" href="/fonts/instrument-sans-latin.woff2" as="font" type="font/woff2" crossOrigin="anonymous" />
-        )}
-        {landing ? null : <link rel="stylesheet" href={facesHref} />}
         <Meta />
         <Links />
       </head>
@@ -42,7 +36,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
         {children}
         <Toaster />
         <ScrollRestoration />
-        {landing ? null : <Scripts />}
+        {plain ? null : <Scripts />}
       </body>
     </html>
   );

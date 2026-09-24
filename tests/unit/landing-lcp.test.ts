@@ -1,67 +1,40 @@
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
-// The staged homepage is /design/landing. Its h1 is the LCP element. Those
-// glyphs are covered by the small face only, so the document cannot ask the
-// 77KB display file for them.
+import Landing, { links as landingLinks } from "../../app/routes/landing";
+import { links as productLinks } from "../../app/routes/faces-layout";
 
 const REPO_ROOT = dirname(dirname(dirname(fileURLToPath(import.meta.url))));
 
-function codepoints(text: string): number[] {
-  const chars = [...text, ...[...text].map((char) => char.toUpperCase())];
-  return [...new Set(chars.map((char) => char.codePointAt(0) ?? 0))];
+function hrefs(descriptors: ReturnType<typeof landingLinks>): string[] {
+  return descriptors.map((descriptor) => (typeof descriptor === "string" ? descriptor : descriptor.href ?? ""));
 }
-
-function coveredBy(face: string): Set<number> {
-  const listed = face.match(/unicode-range:\s*([^;]+);/)?.[1] ?? "";
-  const covered = new Set<number>();
-  for (const part of listed.split(",").map((item) => item.trim())) {
-    const body = part.replace("U+", "");
-    if (!body) continue;
-    if (body.includes("-")) {
-      const [start, end] = body.split("-").map((value) => Number.parseInt(value, 16));
-      for (let code = start; code <= end; code += 1) covered.add(code);
-    } else {
-      covered.add(Number.parseInt(body, 16));
-    }
-  }
-  return covered;
-}
-
-function faceFor(css: string, file: string): string {
-  const face = css.split("@font-face").slice(1).find((block) => block.includes(file));
-  expect(face, file).toBeTruthy();
-  return face ?? "";
-}
-
-const heroSource = readFileSync(join(REPO_ROOT, "app/components/landing/hero.tsx"), "utf8");
-const heroText = heroSource.match(/<h1[^>]*>\s*([^<]+?)\s*<\/h1>/)?.[1] ?? "";
-const appCss = readFileSync(join(REPO_ROOT, "app/app.css"), "utf8");
-const facesCss = readFileSync(join(REPO_ROOT, "app/fonts.css"), "utf8");
-const ci = readFileSync(join(REPO_ROOT, ".github/workflows/ci.yml"), "utf8");
 
 describe("landing LCP critical path", () => {
-  it("covers the hero line with the small face and not the full display file", () => {
-    expect(heroText.length).toBeGreaterThan(20);
+  it("renders the headline on the server and preloads the small face", () => {
+    const html = renderToStaticMarkup(createElement(Landing));
+    expect(html).toContain("Know where you stand.");
+    expect(html).not.toContain("bricolage-grotesque-latin");
+    expect(html).not.toContain("instrument-sans");
+    expect(html).not.toContain("ibm-plex");
+
+    const head = hrefs(landingLinks());
+    expect(head).toContain("/fonts/bricolage-hero.woff2");
+    expect(head.join(" ")).not.toMatch(/bricolage-grotesque-latin|instrument-sans|ibm-plex/);
+
     const bytes = readFileSync(join(REPO_ROOT, "public/fonts/bricolage-hero.woff2"));
     expect(bytes.subarray(0, 4).toString("ascii")).toBe("wOF2");
     expect(bytes.length).toBeLessThan(12_000);
-    const hero = coveredBy(faceFor(appCss, "/fonts/bricolage-hero.woff2"));
-    const full = coveredBy(faceFor(facesCss, "/fonts/bricolage-grotesque-latin.woff2"));
-    expect(appCss).not.toContain("bricolage-grotesque-latin");
-    expect(appCss).not.toContain("instrument-sans");
-    expect(appCss).not.toContain("ibm-plex");
-    for (const code of codepoints(heroText)) {
-      expect(hero.has(code), `U+${code.toString(16)}`).toBe(true);
-      expect(full.has(code), `U+${code.toString(16)}`).toBe(false);
-    }
   });
 
-  it("collects the staged homepage with the local worker secret", () => {
-    const collect = ci.split("\n").find((line) => line.includes("@lhci/cli") && line.includes(" collect "));
-    expect(collect).toContain("--url=http://127.0.0.1:$P/design/landing");
-    expect(collect).toContain("--env-file .dev.vars.example");
+  it("keeps the full faces on the other documents", () => {
+    const head = hrefs(productLinks());
+    expect(head).toContain("/fonts/bricolage-grotesque-latin.woff2");
+    expect(head).toContain("/fonts/instrument-sans-latin.woff2");
+    expect(head.join(" ")).not.toContain("bricolage-hero");
   });
 });

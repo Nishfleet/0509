@@ -1,6 +1,7 @@
 import { type RouteConfig, layout, route } from "@react-router/dev/routes";
 
 export default [
+  layout("routes/faces-layout.tsx", [
   route("login", "routes/login.tsx"),
   route("privacy", "routes/privacy.tsx"),
   route("terms", "routes/terms.tsx"),
@@ -34,6 +35,7 @@ export default [
   route("design/brand-switch", "routes/design.brand-switch.tsx"),
   route("design/competitor", "routes/design.competitor.tsx"),
   route("llms.txt", "routes/llms[.]txt.ts"),
-  route("design/landing", "routes/landing.tsx"),
   route("onboarding/identity", "routes/onboarding.identity.tsx"),
+  ]),
+  route("design/landing", "routes/landing.tsx"),
 ] satisfies RouteConfig;
