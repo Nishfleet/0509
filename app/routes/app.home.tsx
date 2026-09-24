@@ -1,7 +1,8 @@
 import type { Route } from "./+types/app.home";
 import { env } from "cloudflare:workers";
 
-import { redirect } from "react-router";
+import { useEffect } from "react";
+import { redirect, useRevalidator } from "react-router";
 
 import { HomeStanding } from "../components/home-standing";
 import { PAGE } from "../components/page-heading";
@@ -25,6 +26,20 @@ export async function loader({ request }: Route.LoaderArgs) {
 }
 
 export default function Page({ loaderData }: Route.ComponentProps) {
+  const revalidator = useRevalidator();
+  const standingKind = loaderData.view.standing.kind;
+  useEffect(() => {
+    if (standingKind === "ranked") return;
+    function onVisible(): void {
+      if (document.visibilityState !== "visible") return;
+      if (revalidator.state !== "idle") return;
+      void revalidator.revalidate();
+    }
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, [revalidator, standingKind]);
   return (
     <main className={PAGE}>
       <HomeStanding view={loaderData.view} />
