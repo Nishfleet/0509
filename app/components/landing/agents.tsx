@@ -19,8 +19,8 @@ export function Agents() {
             <Pill label="ChatGPT" />
           </ul>
           <p className="text-ink-soft mt-4 leading-[1.6]">
-            Connect the MCP server from Settings with a read-only key, and your agent reads the same standing, changes and
-            screenshots you do.
+            Add the MCP server as a connector and sign in, or make a read-only key in Settings. Your agent reads the same
+            standing, changes and alerts you do, and only your workspace.
           </p>
         </div>
         <div className="border-ink bg-card min-w-0 border-[1.5px] p-6">

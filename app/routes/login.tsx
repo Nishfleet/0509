@@ -1,9 +1,10 @@
 import type { Route } from "./+types/login";
 import { env } from "cloudflare:workers";
 import { useEffect, useState } from "react";
-import { Form, useActionData, useNavigate, useNavigation } from "react-router";
+import { Form, useActionData, useNavigate, useNavigation, useSearchParams } from "react-router";
 
 import { Footer } from "../components/footer";
+import { safeReturnTo } from "../lib/agent/paths";
 import { authClient } from "../lib/auth-client";
 import { createAuth } from "../lib/auth.server";
 import { timezoneCookie } from "../lib/timezone";
@@ -16,7 +17,10 @@ export async function action({ request }: Route.ActionArgs) {
 
   const auth = createAuth(env);
   await auth.api
-    .signInMagicLink({ body: { email, callbackURL: "/app" }, headers: request.headers })
+    .signInMagicLink({
+      body: { email, callbackURL: safeReturnTo(new URL(request.url).searchParams.get("next")) },
+      headers: request.headers,
+    })
     .catch(() => undefined);
 
   return { sent: true };
@@ -26,6 +30,7 @@ export default function Login() {
   const data = useActionData<typeof action>();
   const busy = useNavigation().state !== "idle";
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [passkeyState, setPasskeyState] = useState<"idle" | "working" | "failed">("idle");
 
   useEffect(() => {
@@ -40,7 +45,7 @@ export default function Login() {
     setPasskeyState("working");
     const result = await authClient.signIn.passkey().catch(() => null);
     if (result && !result.error) {
-      await navigate("/app");
+      await navigate(safeReturnTo(searchParams.get("next")));
       return;
     }
     const code = result?.error && "code" in result.error ? result.error.code : "";

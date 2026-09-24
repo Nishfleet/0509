@@ -10,7 +10,9 @@ import {
 import { readWorkspaceIdForOwner } from "../lib/data/workspace.server";
 import { daysAgoLabel } from "../lib/delivery-alert";
 import { requireSession } from "../lib/require-session.server";
+import { daysBefore, readSiteChangeViews } from "../lib/site-changes.server";
 import { BriefView } from "../components/brief-view";
+import { SiteChangeItem } from "../components/site-change-item";
 
 const WHEN_CLASS = "text-ink-soft mt-2 block font-mono text-[0.75rem] tracking-[0.04em] uppercase";
 
@@ -22,6 +24,10 @@ export async function loader({ request }: Route.LoaderArgs) {
   const incidents = workspaceId === null ? [] : await readOwnSiteIncidents(env.DB, workspaceId);
   const signals = workspaceId === null ? [] : await readSignalAlerts(env.DB, workspaceId);
   const now = new Date();
+  const changes =
+    workspaceId === null
+      ? []
+      : await readSiteChangeViews({ workspaceId, entityId: null, since: daysBefore(now, 30), limit: 30 });
   return {
     email: session.user.email,
     incidents: incidents.map((incident) => ({
@@ -29,6 +35,7 @@ export async function loader({ request }: Route.LoaderArgs) {
       when: daysAgoLabel(incident.created_at, now),
       fixed: incident.closed_at === null ? null : daysAgoLabel(incident.closed_at, now),
     })),
+    changes: changes.map((change) => ({ ...change, when: daysAgoLabel(change.observedAt, now) })),
     failures: failures.map((failure) => ({ ...failure, when: daysAgoLabel(failure.created_at, now) })),
     notes: notes.map((note) => ({ ...note, when: daysAgoLabel(note.created_at, now) })),
     signals: signals.map((signal) => ({ ...signal, when: daysAgoLabel(signal.created_at, now) })),
@@ -43,6 +50,7 @@ export default function Page({ loaderData }: Route.ComponentProps) {
       {loaderData.failures.length === 0 &&
       loaderData.notes.length === 0 &&
       loaderData.incidents.length === 0 &&
+      loaderData.changes.length === 0 &&
       loaderData.signals.length === 0 ? (
         <p className="mt-8 leading-[1.65]">
           Nothing has interrupted you. When your own site breaks you'll get an email; everything else waits here.
@@ -65,6 +73,9 @@ export default function Page({ loaderData }: Route.ComponentProps) {
             {incident.when}
           </time>
         </article>
+      ))}
+      {loaderData.changes.map((change, index) => (
+        <SiteChangeItem key={change.id} change={change} eager={index === 0} />
       ))}
       {loaderData.signals.map((signal) => (
         <article key={signal.id} id={signal.id} data-testid="signal-alert" className="border-line mt-8 border-t pt-6">
