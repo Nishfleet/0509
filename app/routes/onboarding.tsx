@@ -61,7 +61,7 @@ export default function Page({ loaderData, actionData }: Route.ComponentProps) {
         placeholder="your website, or a handle"
         name="subject"
         action="/onboarding"
-        message={actionData?.message}
+        message={actionData?.message ?? undefined}
         submitLabel="Draw my card"
       />
       {actionData?.confirm ? (
