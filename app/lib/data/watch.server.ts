@@ -91,6 +91,69 @@ export async function readSiteSweepTargets(sourceKey: string): Promise<readonly 
   }));
 }
 
+const ENTITIES_WITHOUT_HIRING_WATCH = `SELECT e.id AS id, e.domain AS domain
+FROM entity e
+WHERE e.state = 'on'
+  AND NOT EXISTS (
+    SELECT 1 FROM watch w
+    JOIN source src ON src.id = w.source_id AND src.kind = 'hiring' AND src.is_enabled = 1
+    WHERE w.entity_id = e.id AND w.is_active = 1
+  )
+ORDER BY e.id`;
+
+const HIRING_TARGETS = `SELECT e.workspace_id AS workspace_id, e.id AS entity_id, w.source_id AS source_id,
+       src.platform AS platform, w.id AS watch_id, w.target_key AS board_url
+FROM watch w
+JOIN source src ON src.id = w.source_id AND src.kind = 'hiring' AND src.is_enabled = 1
+JOIN entity e ON e.id = w.entity_id AND e.state = 'on'
+WHERE w.is_active = 1
+ORDER BY e.workspace_id, e.id, w.id`;
+
+const DEACTIVATE_WATCH = "UPDATE watch SET is_active = 0 WHERE id = ?1";
+
+const hiringTargetRows = z.array(
+  z.object({
+    workspace_id: z.string(),
+    entity_id: z.string(),
+    source_id: z.string(),
+    platform: z.string(),
+    watch_id: z.string(),
+    board_url: z.string(),
+  }),
+);
+
+export interface HiringTarget {
+  workspaceId: string;
+  entityId: string;
+  sourceId: string;
+  platform: string;
+  watchId: string;
+  boardUrl: string;
+}
+
+export async function readEntitiesWithoutHiringWatch(): Promise<
+  readonly { id: string; domain: string }[]
+> {
+  const rows = await env.DB.prepare(ENTITIES_WITHOUT_HIRING_WATCH).all();
+  return entityRows.parse(rows.results);
+}
+
+export async function readHiringTargets(): Promise<readonly HiringTarget[]> {
+  const rows = await env.DB.prepare(HIRING_TARGETS).all();
+  return hiringTargetRows.parse(rows.results).map((row) => ({
+    workspaceId: row.workspace_id,
+    entityId: row.entity_id,
+    sourceId: row.source_id,
+    platform: row.platform,
+    watchId: row.watch_id,
+    boardUrl: row.board_url,
+  }));
+}
+
+export async function deactivateWatch(watchId: string): Promise<void> {
+  await env.DB.prepare(DEACTIVATE_WATCH).bind(watchId).run();
+}
+
 const SITE_WATCH_SUMMARY = `SELECT COUNT(*) AS pages, MAX(w.last_polled_at) AS last_polled_at
 FROM watch w
 JOIN source src ON src.id = w.source_id AND src.kind = 'site'
