@@ -14,6 +14,7 @@ function markup(message?: string): string {
       name: "subject",
       action: "/onboarding",
       message,
+      submitLabel: "Draw my card",
     }),
   );
 }
@@ -40,6 +41,10 @@ describe("OneInput", () => {
     const html = markup(PARENT_COPY);
     expect(html).toContain('role="status"');
     expect(html).toContain("find anything for that, try the main website");
+  });
+
+  it("carries a visible submit button, so the form is not Enter-only", () => {
+    expect(markup()).toMatch(/<button[^>]*type="submit"[^>]*>Draw my card<\/button>/);
   });
 
   it("renders no status when message is absent", () => {

@@ -33,8 +33,15 @@ describe("identity probe cache", () => {
     await env.IDENTITY_CACHE.delete(KEY);
   });
 
-  it("keys identity:<registrable>:<probe>", () => {
+  it("keys identity:<host>:<probe>", () => {
     expect(probeKey(subject, "homepage")).toBe("identity:gymshark.com:homepage");
+  });
+
+  it("keeps a subdomain's card out of its brand's cache entry", () => {
+    const sub = normaliseSubject("careers.gymshark.com");
+    if (!sub.ok) throw new Error("careers.gymshark.com must normalise to a subject");
+    expect(sub.subject.registrable).toBe("gymshark.com");
+    expect(probeKey(sub.subject, "homepage")).toBe("identity:careers.gymshark.com:homepage");
   });
 
   it("a miss calls run once, returns its value and writes the cache", async () => {

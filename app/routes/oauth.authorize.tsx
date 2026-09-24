@@ -70,7 +70,7 @@ export default function Page({ loaderData, actionData }: Route.ComponentProps) {
         <Button type="submit" name="decision" value="allow" size="lg">
           Allow
         </Button>
-        <Button type="submit" name="decision" value="deny" size="lg" variant="outline">
+        <Button type="submit" name="decision" value="deny" size="lg" variant="secondary">
           Cancel
         </Button>
       </form>
