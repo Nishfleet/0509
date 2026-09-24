@@ -6,16 +6,6 @@ WHERE card_slug = ? AND card_is_published = 1`;
 const SELECT_TAKEDOWN = `SELECT id FROM entity
 WHERE workspace_id = ? AND state = 'dismissed' AND state_reason = 'takedown' LIMIT 1`;
 
-const SELECT_LISTED_SLUGS = `SELECT w.card_slug AS slug FROM workspace w
-WHERE w.card_is_published = 1 AND w.card_slug IS NOT NULL
-AND NOT EXISTS (SELECT 1 FROM entity e WHERE e.workspace_id = w.id AND e.state = 'dismissed' AND e.state_reason = 'takedown')
-ORDER BY w.card_slug LIMIT 50000`;
-
-export async function listPublishedCardSlugs(): Promise<string[]> {
-  const { results } = await env.DB.prepare(SELECT_LISTED_SLUGS).all<{ slug: string }>();
-  return results.map((row) => row.slug);
-}
-
 function notFound(): Response {
   return new Response("Not found", {
     status: 404,
