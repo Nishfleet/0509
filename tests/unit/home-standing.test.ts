@@ -1,6 +1,6 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { MemoryRouter } from "react-router";
+import { createMemoryRouter, RouterProvider } from "react-router";
 import { describe, expect, it } from "vitest";
 
 import { HomeStanding } from "../../app/components/home-standing";
@@ -80,7 +80,8 @@ function render(input: { payload: BriefPayload | null; entities?: readonly HomeE
     schedule: SCHEDULE,
     now: THURSDAY_MORNING,
   });
-  return renderToStaticMarkup(createElement(MemoryRouter, null, createElement(HomeStanding, { view })));
+  const router = createMemoryRouter([{ path: "/", element: createElement(HomeStanding, { view }) }]);
+  return renderToStaticMarkup(createElement(RouterProvider, { router }));
 }
 
 describe("Home standing", () => {
@@ -144,7 +145,13 @@ describe("Home standing", () => {
       entities: [SELF, { id: "ent_off", role: "competitor", domain: "off.example", state: "off" }],
     });
     expect(html).toContain("Add a competitor to see where you stand.");
-    expect(html).toContain('href="/onboarding/competitors"');
+    expect(html).toContain('method="post"');
+    expect(html).toContain('action="/app/competitors"');
+    expect(html).toContain('name="intent"');
+    expect(html).toContain('value="add"');
+    expect(html).toContain('name="competitor"');
+    expect(html).not.toContain("<button");
+    expect(html).not.toContain('href="/onboarding/competitors"');
     expect(html).not.toContain("standing-row");
   });
 
