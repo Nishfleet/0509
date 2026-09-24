@@ -41,6 +41,8 @@ type NavItem = BoardCandidate | LeadCandidate;
 
 const PROBE_TIMEOUT_MS = 8_000;
 
+const MAX_PROBES = 20;
+
 const MIN_LEAD_BYTES = 200;
 
 const SLUG_PATTERN = /^[A-Za-z0-9_-]+$/;
@@ -186,17 +188,21 @@ export async function discoverBoard(
   const probe = options.probe ?? defaultProbe;
   const queue: NavItem[] = navLinks.flatMap((link) => navItemsFor(link, domain));
 
-  while (queue.length > 0) {
+  let probes = 0;
+
+  while (queue.length > 0 && probes < MAX_PROBES) {
     const item = queue.shift();
     if (item === undefined) continue;
 
     if ("leadUrl" in item) {
+      probes += 1;
       const page = await probe(item.leadUrl);
       if (!page.ok || !isScannablePage(page.body, page.contentType)) continue;
       queue.push(...documentedLinksInPage(page.body));
       continue;
     }
 
+    probes += 1;
     const response = await probe(item.probeUrl);
     if (!response.ok || !item.hasListing(response.body)) continue;
     return { platform: item.platform, boardUrl: item.boardUrl, via: item.via };
