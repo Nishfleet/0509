@@ -183,6 +183,14 @@
     // alert and puts { incident_id } on send-email. An open incident whose
     // page answers cleanly again is closed and gets the one "looks fixed"
     // email. This is the hourly re-check the incident email promises.
+    // Deleting an account (Settings): better-auth deletes the user and the
+    // database cascades every owned row; this Workflow empties the account's
+    // stored files, one retried step per page of up to 1,000 objects.
+    {
+      "name": "account-delete",
+      "binding": "ACCOUNT_DELETE",
+      "class_name": "AccountDeleteWorkflow"
+    },
     {
       "name": "own-site-check",
       "binding": "OWN_SITE_CHECK",
