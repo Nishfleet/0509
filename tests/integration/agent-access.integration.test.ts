@@ -173,4 +173,19 @@ describe("agent access, scoped to one workspace", () => {
     const response = await mcpResponse(jsonRpc("tools/list"), { userId: "u_agent_nobody", clientId: "test" });
     expect(response.status).toBe(403);
   });
+
+  it("answers a key over its own limit with 429, never 401", async () => {
+    const { key } = await auth.api.createApiKey({
+      body: { userId: a.userId, name: "limited", rateLimitEnabled: true, rateLimitMax: 1, rateLimitTimeWindow: 60_000 },
+    });
+    const call = () =>
+      apiResponse(
+        new Request("http://localhost/api/v1/brief", { headers: { authorization: `Bearer ${key}`, "cf-connecting-ip": "203.0.113.201" } }),
+        readAgentBrief,
+      );
+    expect((await call()).status).toBe(200);
+    const limited = await call();
+    expect(limited.status).toBe(429);
+    expect(limited.headers.get("retry-after")).toBe("60");
+  });
 });

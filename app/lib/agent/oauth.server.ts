@@ -3,7 +3,7 @@ import type { OAuthProviderOptions } from "@cloudflare/workers-oauth-provider";
 import { ExternalTokenError, OAuthProvider } from "@cloudflare/workers-oauth-provider";
 
 import { clientIp, withinLimit } from "./client-limit.server";
-import { propsForApiKey } from "./keys.server";
+import { RATE_LIMITED, propsForApiKey } from "./keys.server";
 import { AUTHORIZE_PATH, MCP_PATH, READ_SCOPE } from "./paths";
 
 const HOUR = 60 * 60;
@@ -41,7 +41,7 @@ export function createOAuthProvider<E>(handlers: Handlers<E>): OAuthProvider<E> 
         });
       }
       const props = await propsForApiKey(token);
-      if (props === null) return null;
+      if (props === null || props === RATE_LIMITED) return null;
       return { props, audience: `${new URL(request.url).origin}${MCP_PATH}` };
     },
   });
