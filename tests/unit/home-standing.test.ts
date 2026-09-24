@@ -147,8 +147,7 @@ describe("Home standing", () => {
     expect(html).toContain("Add a competitor to see where you stand.");
     expect(html).toContain('method="post"');
     expect(html).toContain('action="/app/competitors"');
-    expect(html).toContain('name="intent"');
-    expect(html).toContain('value="add"');
+    expect(html).toContain('<input type="hidden" name="intent" value="add"/>');
     expect(html).toContain('name="competitor"');
     expect(html).not.toContain("<button");
     expect(html).not.toContain('href="/onboarding/competitors"');
