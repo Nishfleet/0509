@@ -1,4 +1,4 @@
--- 0012_discovery_backlog.sql — the candidates the discovery shortlist did not take.
+-- 0015_discovery_backlog.sql — the candidates the discovery shortlist did not take.
 --
 -- docs/engines/competitor-discovery.md graft 2: "unjudged is a queue, not a
 -- graveyard". A brand that a source named, but that did not clear the shortlist,
