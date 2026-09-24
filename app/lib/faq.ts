@@ -35,6 +35,6 @@ export const FAQ: readonly FaqEntry[] = [
   {
     question: "Can my AI agent read it?",
     answer:
-      "Yes. Every plan includes a read-only API and an MCP server, so Claude, Cursor or ChatGPT can read the same standing, changes and screenshots you see.",
+      "Yes. Every plan includes a read-only API and an MCP server, so Claude, Cursor or ChatGPT can read the same standing, changes and alerts you see, and nothing outside your workspace.",
   },
 ];

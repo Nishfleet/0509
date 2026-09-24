@@ -1,7 +1,10 @@
+import type { OAuthHelpers } from "@cloudflare/workers-oauth-provider";
 import type { CloudflareOptions } from "@sentry/cloudflare";
 import { instrumentWorkflowWithSentry, withSentry } from "@sentry/cloudflare";
 import { createRequestHandler } from "react-router";
 
+import { requestContext } from "../app/lib/agent/context.server";
+import { createOAuthProvider } from "../app/lib/agent/oauth.server";
 import { startNightlyDiscovery } from "../app/lib/discovery/start.server";
 import { assertWorkerEnv, WorkerEnvError, workerEnvFailureResponse } from "../app/lib/env.server";
 import { pingLiveness } from "../app/lib/liveness-ping.server";
@@ -15,21 +18,31 @@ import { SiteSweep } from "./workflows/site-sweep";
 import { StandingRollover } from "./workflows/standing-rollover";
 
 type WorkerEnv = Env & { SENTRY_DSN?: string; LIVENESS_PING_URL?: string };
+type OAuthEnv = WorkerEnv & { OAUTH_PROVIDER?: OAuthHelpers };
 
 const requestHandler = createRequestHandler(
   () => import("virtual:react-router/server-build"),
   import.meta.env.MODE,
 );
 
+const oauth = createOAuthProvider<OAuthEnv>({
+  apiHandler: {
+    fetch: (request, env, ctx) => requestHandler(request, requestContext(env.OAUTH_PROVIDER, ctx.props)),
+  },
+  defaultHandler: {
+    fetch: (request, env) => requestHandler(request, requestContext(env.OAUTH_PROVIDER)),
+  },
+});
+
 const handler = {
-  async fetch(request) {
+  async fetch(request, env, ctx) {
     try {
       assertWorkerEnv();
     } catch (error) {
       if (error instanceof WorkerEnvError) return workerEnvFailureResponse(error);
       throw error;
     }
-    return requestHandler(request);
+    return oauth.fetch(request, env, ctx);
   },
 
   scheduled(controller, env, ctx) {
