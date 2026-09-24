@@ -12,6 +12,7 @@ export function organizationJsonLd() {
     "@id": ORGANIZATION_ID,
     name: "Five to Nine",
     url: SITE_URL,
+    logo: `${SITE_URL}/logo.svg`,
   };
 }
 
