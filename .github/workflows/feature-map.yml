@@ -142,13 +142,9 @@ jobs:
                 ;;
             esac
           fi
-          number=$(gh pr list --repo "$GITHUB_REPOSITORY" --state open --search "feature-map: sync with ${SHA} in:title" --json number,title --jq ".[] | select(.title==\"feature-map: sync with ${SHA}\") | .number" | head -n 1)
+          number=$(gh pr list --repo "$GITHUB_REPOSITORY" --state open --search "feature-map: sync with ${SHA} in:title" --json number,title --jq "[.[] | select(.title==\"feature-map: sync with ${SHA}\") | .number][0] // empty")
           if [ -n "$number" ]; then
             accept_pr "$number"
-            exit 0
-          fi
-          if [ -f "${RUNNER_TEMP}/claude-execution-output.json" ] && grep -F "no drift at ${SHA}" "${RUNNER_TEMP}/claude-execution-output.json" >/dev/null; then
-            echo "no drift at ${SHA}" >> "$GITHUB_STEP_SUMMARY"
             exit 0
           fi
           echo "silent run: no outcome file" >&2

@@ -55,5 +55,6 @@ describe("feature-map workflow", () => {
     expect(yaml).toContain('tee -a "$GITHUB_STEP_SUMMARY"');
     expect(yaml).toContain('feature-map: sync with ${SHA} in:title');
     expect(yaml).toContain('.agents/skills/verify/feature-map.md');
+    expect(yaml).not.toContain("claude-execution-output.json");
   });
 });
