@@ -99,7 +99,7 @@ describe("nightly mentions sweep", () => {
     stubGdelt();
     Reflect.set(env, "AI", { run: jevAnswering() });
 
-    const outcome = await sweepTarget(await gdeltTargetFor(brand), NOW);
+    const outcome = await sweepTarget(await gdeltTargetFor(brand), NOW, null);
     expect(outcome).toEqual({ items: 3, stored: 2, unjudged: 0 });
 
     const alerts = await readSignalAlerts(env.DB, workspaceId);
@@ -131,9 +131,13 @@ describe("nightly mentions sweep", () => {
     const run = jevAnswering();
     Reflect.set(env, "AI", { run });
 
-    await sweepTarget(await gdeltTargetFor(brand), NOW);
+    await sweepTarget(await gdeltTargetFor(brand), NOW, null);
     const callsAfterFirst = run.mock.calls.length;
-    const second = await sweepTarget(await gdeltTargetFor(brand), "2026-09-25T03:00:00.000Z");
+    const second = await sweepTarget(
+      await gdeltTargetFor(brand),
+      "2026-09-25T03:00:00.000Z",
+      null,
+    );
 
     expect(run.mock.calls.length).toBe(callsAfterFirst);
     expect(second).toEqual({ items: 3, stored: 0, unjudged: 0 });
@@ -145,7 +149,7 @@ describe("nightly mentions sweep", () => {
     stubGdelt();
     Reflect.set(env, "AI", { run: vi.fn(() => Promise.reject(new Error("Insufficient balance"))) });
 
-    const outcome = await sweepTarget(await gdeltTargetFor(brand), NOW);
+    const outcome = await sweepTarget(await gdeltTargetFor(brand), NOW, null);
     expect(outcome).toEqual({ items: 3, stored: 0, unjudged: 3 });
 
     const signals = await env.DB.prepare("SELECT COUNT(*) AS n FROM signal WHERE entity_id = ?")
