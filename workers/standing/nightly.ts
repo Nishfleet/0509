@@ -1,9 +1,9 @@
 import { z } from "zod";
 
-import { openWeek, previousBriefAt } from "../../app/lib/brief-schedule";
+import { openWeek, previousBriefAt, rolloverInstance } from "../../app/lib/brief-schedule";
 import { refreshWorkspaceScores } from "./refresh";
 import type { WorkspaceSchedule } from "./rollover-plan";
-import { createRollovers, readWorkspaceSchedules, rolloverInstance } from "./rollover-plan";
+import { createRollovers, readWorkspaceSchedules } from "./rollover-plan";
 
 export interface NightlyResult {
   workspaces: number;

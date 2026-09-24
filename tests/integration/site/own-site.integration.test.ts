@@ -7,15 +7,23 @@ const NOW = "2026-09-24T02:00:00Z";
 
 const HEALTHY_HTML = `<!doctype html><html><body><h1>My brand</h1><p>Every plan includes unlimited projects, priority support, single sign-on, audit logs, and a named account manager who answers within one business day, with onboarding help for your whole team.</p></body></html>`;
 
-const site: { status: number; apexDown: boolean; challenge: boolean } = {
+const site: { status: number; apexDown: boolean; challenge: boolean; robots: string | null } = {
   status: 200,
   apexDown: false,
   challenge: false,
+  robots: null,
 };
 
+const fetched: string[] = [];
+
 const respond = (input: RequestInfo | URL): Promise<Response> => {
-  const host = new URL(input instanceof Request ? input.url : String(input)).hostname;
-  if (site.apexDown && !host.startsWith("www.")) return Promise.reject(new Error("DNS lookup failed"));
+  const requestUrl = new URL(input instanceof Request ? input.url : String(input));
+  fetched.push(requestUrl.toString());
+  if (site.apexDown && !requestUrl.hostname.startsWith("www."))
+    return Promise.reject(new Error("DNS lookup failed"));
+  if (requestUrl.pathname === "/robots.txt") {
+    return Promise.resolve(new Response(site.robots ?? "", { status: site.robots === null ? 404 : 200 }));
+  }
   const headers = site.challenge ? { "cf-mitigated": "challenge" } : undefined;
   return Promise.resolve(new Response(site.status < 400 ? HEALTHY_HTML : "", { status: site.status, headers }));
 };
@@ -83,6 +91,8 @@ describe("own-site check", () => {
     site.status = 200;
     site.apexDown = false;
     site.challenge = false;
+    site.robots = null;
+    fetched.length = 0;
     await env.DB.exec("UPDATE source SET is_enabled = 1 WHERE id = 'src_site_web'");
     vi.stubGlobal("fetch", respond);
   });
@@ -144,5 +154,13 @@ describe("own-site check", () => {
     site.status = 503;
     await runCheck("own-competitor");
     expect((await incidents()).map((i) => i.entity_id)).toEqual(["ent-self"]);
+  });
+
+  it("never fetches the customer's page when robots.txt disallows FiveToNineBot", async () => {
+    site.robots = "User-agent: FiveToNineBot\nDisallow: /\n";
+    site.status = 503;
+    expect(await runCheck("own-robots")).toEqual({ pages: 1, opened: 0, closed: 0, failed: 0 });
+    expect(await incidents()).toEqual([]);
+    expect(fetched.filter((u) => !u.endsWith("/robots.txt"))).toEqual([]);
   });
 });

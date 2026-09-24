@@ -1,5 +1,7 @@
 import type { CSSProperties, ReactElement } from "react";
 
+import { shortUtc } from "../lib/short-utc";
+
 export interface SourceRow {
   key: string;
   platform: string;
@@ -143,9 +145,5 @@ function configString(config: Record<string, unknown>, key: string): string | nu
 
 function lastGoodLabel(value: string | null): string | null {
   if (value === null) return null;
-  const ms = Date.parse(value);
-  if (Number.isNaN(ms)) return value;
-  const d = new Date(ms);
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${String(d.getUTCFullYear())}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())} ${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())} UTC`;
+  return shortUtc(value);
 }

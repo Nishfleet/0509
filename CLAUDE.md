@@ -49,9 +49,8 @@ not so you can follow them from memory — lint will tell you.
 - **Named exports.** `import-x/no-default-export` everywhere except route
   modules, config files, and the workerd entry files. A default export is
   not something you can find with grep.
-- **One paved path per thing.** `kysely` in `app/lib/db.server.ts` only;
-  `better-auth` in `app/lib/auth.server.ts` only. One data layer, one session
-  authority.
+- **One paved path per thing.** `better-auth` in `app/lib/auth.server.ts` only.
+  One session authority. The one data layer is the writer row below.
 - **One writer per table.** Writes live in `app/lib/data/<table>.server.ts`.
   A route that writes directly becomes the second writer the moment a second
   route needs the row.
