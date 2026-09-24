@@ -1,4 +1,4 @@
--- 0013_discovery_meta_adlib.sql — the Meta Ad Library keyword source.
+-- 0014_discovery_meta_adlib.sql — the Meta Ad Library keyword source.
 --
 -- Competitor discovery's one browser generator (0509#4161). It searches the
 -- ad library by category and market and writes one snapshot per run. This is
