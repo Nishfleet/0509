@@ -58,11 +58,7 @@ function firstContent(current: string | null, value: string | null): string | nu
 }
 
 function resolveUrl(href: string, pageUrl: string): URL | null {
-  try {
-    return new URL(href, pageUrl);
-  } catch {
-    return null;
-  }
+  return URL.canParse(href, pageUrl) ? new URL(href, pageUrl) : null;
 }
 
 function socialHost(hostname: string): string {
@@ -75,12 +71,8 @@ function socialHost(hostname: string): string {
 }
 
 function platformForUrl(href: string): SocialPlatform | null {
-  let url: URL;
-  try {
-    url = new URL(href);
-  } catch {
-    return null;
-  }
+  if (!URL.canParse(href)) return null;
+  const url = new URL(href);
   const host = socialHost(url.hostname);
   if (host === "instagram.com") return "instagram";
   if (host === "tiktok.com") return "tiktok";
@@ -95,11 +87,7 @@ function platformForUrl(href: string): SocialPlatform | null {
 
 function isAdLibraryHint(href: string): boolean {
   if (href.startsWith("https://www.facebook.com/ads/library")) return true;
-  try {
-    return new URL(href).hostname === "adstransparency.google.com";
-  } catch {
-    return false;
-  }
+  return URL.canParse(href) && new URL(href).hostname === "adstransparency.google.com";
 }
 
 function dedupe(values: readonly string[]): string[] {
@@ -166,7 +154,8 @@ function readOrganization(blocks: readonly string[]): {
   for (const block of blocks) {
     try {
       flattenLd(JSON.parse(block) as unknown, nodes);
-    } catch {
+    } catch (error) {
+      console.log(JSON.stringify({ event: "identity-ld-json-unreadable", error: String(error) }));
       continue;
     }
   }
