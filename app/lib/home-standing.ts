@@ -43,17 +43,11 @@ export type HomeStanding =
   | { kind: "gathering"; briefAt: string; firstSweepAt: string; brands: number }
   | { kind: "ranked"; rank: number; total: number; whyLine: string; rows: readonly HomeRow[]; chart: FourWeekChart };
 
-export interface HomeChip {
-  name: string;
-  href: string;
-  self: boolean;
-}
-
 export interface HomeView {
   eyebrow: string;
   greeting: string;
   standing: HomeStanding;
-  chips: readonly HomeChip[];
+  chips: readonly { name: string; href: string; self: boolean }[];
   footer: string;
 }
 
