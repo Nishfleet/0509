@@ -1,12 +1,14 @@
 import type { Route } from "./+types/app.settings";
 
-import { useState } from "react";
-import { Link, useNavigate } from "react-router";
+import { Link } from "react-router";
 
 import { BLOCK_HEADING, PAGE, PageHeading } from "../components/page-heading";
 import { AddPasskey } from "../components/passkey-button";
-import { Button } from "../components/ui/button";
-import { authClient } from "../lib/auth-client";
+import { BriefScheduleSettings } from "../components/brief-schedule-settings";
+import { SignOut } from "../components/sign-out";
+import { nextBriefAt } from "../lib/brief-schedule";
+import { nextBriefLine, parseScheduleForm } from "../lib/brief-settings";
+import { readBriefScheduleForOwner, updateBriefSchedule } from "../lib/data/workspace.server";
 import { requireSession } from "../lib/require-session.server";
 
 export function meta() {
@@ -15,7 +17,21 @@ export function meta() {
 
 export async function loader({ request }: Route.LoaderArgs) {
   const session = await requireSession(request);
-  return { email: session.user.email };
+  const owned = await readBriefScheduleForOwner(session.user.id);
+  const schedule =
+    owned === null
+      ? null
+      : { ...owned.schedule, nextLine: nextBriefLine(nextBriefAt(owned.schedule, new Date()), owned.schedule.timezone) };
+  return { email: session.user.email, schedule };
+}
+
+export async function action({ request }: Route.ActionArgs) {
+  const session = await requireSession(request);
+  const owned = await readBriefScheduleForOwner(session.user.id);
+  const schedule = parseScheduleForm(await request.formData());
+  if (owned === null || schedule === null) return { saved: false };
+  await updateBriefSchedule(owned.workspaceId, schedule);
+  return { saved: true };
 }
 
 const BLOCK = "border-line mt-10 border-t pt-4";
@@ -27,6 +43,15 @@ export default function Page({ loaderData }: Route.ComponentProps) {
         title="Settings"
         lede="Turn tracking for a brand on or off from its switch in Competitors."
       />
+      {loaderData.schedule === null ? null : (
+        <section aria-labelledby="settings-brief" className={BLOCK}>
+          <h2 id="settings-brief" className={BLOCK_HEADING}>
+            Your weekly brief
+          </h2>
+          <p className="mt-2 max-w-prose leading-[1.55]">One email a week, when you want to read it.</p>
+          <BriefScheduleSettings schedule={loaderData.schedule} />
+        </section>
+      )}
       <section aria-labelledby="settings-agents" className={BLOCK}>
         <h2 id="settings-agents" className={BLOCK_HEADING}>
           Agents and API
@@ -55,33 +80,5 @@ export default function Page({ loaderData }: Route.ComponentProps) {
         </div>
       </section>
     </main>
-  );
-}
-
-function SignOut() {
-  const navigate = useNavigate();
-  const [state, setState] = useState<"idle" | "working" | "failed">("idle");
-
-  async function signOut() {
-    setState("working");
-    const result = await authClient.signOut().catch(() => null);
-    if (result && !result.error) {
-      await navigate("/login");
-      return;
-    }
-    setState("failed");
-  }
-
-  return (
-    <div>
-      <Button type="button" variant="tertiary" onClick={() => void signOut()} disabled={state === "working"}>
-        {state === "working" ? "Signing out…" : "Sign out"}
-      </Button>
-      {state === "failed" ? (
-        <p role="alert" className="text-[0.95rem]">
-          We couldn't sign you out. Try again.
-        </p>
-      ) : null}
-    </div>
   );
 }

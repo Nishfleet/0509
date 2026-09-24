@@ -56,3 +56,33 @@ export async function readWorkspaceR2Prefixes(workspaceId: string): Promise<stri
 export async function deleteWorkspace(workspaceId: string): Promise<void> {
   await env.DB.prepare(DELETE_WORKSPACE).bind(workspaceId).run();
 }
+
+const SELECT_SCHEDULE_BY_OWNER = `SELECT id, timezone, brief_weekday, brief_hour FROM workspace WHERE owner_user_id = ?
+ORDER BY created_at LIMIT 1`;
+
+const UPDATE_SCHEDULE = `UPDATE workspace SET timezone = ?, brief_weekday = ?, brief_hour = ? WHERE id = ?`;
+
+export interface OwnedSchedule {
+  workspaceId: string;
+  schedule: { timezone: string; weekday: number; hour: number };
+}
+
+export async function readBriefScheduleForOwner(userId: string): Promise<OwnedSchedule | null> {
+  const row = await env.DB.prepare(SELECT_SCHEDULE_BY_OWNER)
+    .bind(userId)
+    .first<{ id: string; timezone: string; brief_weekday: number; brief_hour: number }>();
+  if (row === null) return null;
+  return {
+    workspaceId: row.id,
+    schedule: { timezone: row.timezone, weekday: row.brief_weekday, hour: row.brief_hour },
+  };
+}
+
+export async function updateBriefSchedule(
+  workspaceId: string,
+  schedule: { timezone: string; weekday: number; hour: number },
+): Promise<void> {
+  await env.DB.prepare(UPDATE_SCHEDULE)
+    .bind(schedule.timezone, schedule.weekday, schedule.hour, workspaceId)
+    .run();
+}
