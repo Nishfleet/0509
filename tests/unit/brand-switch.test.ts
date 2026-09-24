@@ -55,8 +55,7 @@ describe("the brand switch", () => {
 
 describe("the brand switch note", () => {
   it("prints the consequence for on: off pauses tracking, history kept", () => {
-    expect(brandSwitchNote("on", null)).toContain("history kept");
-    expect(brandSwitchNote("on", null)).toContain("Off pauses tracking");
+    expect(brandSwitchNote("on", null)).toBe("Off stops the watching and the alerts. The history stays, and turning it back on picks up where it left off.");
   });
 
   it("prints the paused date for off from the UTC instant", () => {
@@ -87,7 +86,7 @@ describe("the brand switch field", () => {
   });
 
   it("renders the note in every state", () => {
-    expect(renderField("on", null)).toContain("Off pauses tracking · history kept");
+    expect(renderField("on", null)).toContain("Off stops the watching and the alerts.");
     expect(renderField("you", null)).toContain("Your brand · always tracked");
     expect(renderField("off", null)).toContain("paused · history kept");
   });
