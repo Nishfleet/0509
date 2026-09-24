@@ -1,7 +1,7 @@
 import { env } from "cloudflare:workers";
 import { z } from "zod";
 
-import type { Candidate } from "../discovery/types";
+import type { Candidate, Evidence } from "../discovery/types";
 import type { GeneratorKey } from "../discovery/types";
 
 const READ_BACKLOG =
@@ -33,7 +33,7 @@ export interface BacklogRow {
   nameKey: string;
   name: string;
   domain: string | null;
-  evidence: { sourceUrl: string; excerpt: string; generator: GeneratorKey }[];
+  evidence: Evidence[];
 }
 
 export async function readBacklog(workspaceId: string): Promise<Candidate[]> {
