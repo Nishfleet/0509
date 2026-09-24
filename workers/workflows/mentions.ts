@@ -1,6 +1,8 @@
 import type { WorkflowEvent, WorkflowStep, WorkflowStepConfig } from "cloudflare:workers";
 import { WorkflowEntrypoint } from "cloudflare:workers";
 
+import { readCanarySources } from "../../app/lib/data/source.server";
+import { runCanary } from "../mentions/canary";
 import type { TargetOutcome } from "../mentions/sweep";
 import { PACED_PLUGINS, planTargets, sweepTarget } from "../mentions/sweep";
 
@@ -22,12 +24,24 @@ export class MentionsSweep extends WorkflowEntrypoint<Env> {
   async run(event: WorkflowEvent<unknown>, step: WorkflowStep): Promise<MentionsOutcome> {
     const now = event.timestamp.toISOString();
     const targets = await step.do("plan", RETRY, () => planTargets());
+    const canarySources = await step.do("canary plan", RETRY, () => readCanarySources());
+    const canaryEntries: [string, number][] = [];
+    for (const source of canarySources) {
+      canaryEntries.push([
+        source.id,
+        await step.do(`canary ${source.pluginKey}`, RETRY, () => runCanary(source, now)),
+      ]);
+      if (PACED_PLUGINS.has(source.pluginKey)) {
+        await step.sleep(`pace canary ${source.pluginKey}`, PACE);
+      }
+    }
+    const counts = new Map<string, number>(canaryEntries);
     const outcomes: (TargetOutcome | null)[] = [];
     for (const [index, target] of targets.entries()) {
       try {
         outcomes.push(
           await step.do(`sweep ${target.pluginKey} ${target.query}`, RETRY, () =>
-            sweepTarget(target, now),
+            sweepTarget(target, now, counts.get(target.sourceId) ?? null),
           ),
         );
       } catch (error) {
