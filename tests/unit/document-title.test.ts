@@ -10,6 +10,6 @@ describe("document titles", () => {
   it("names Home, Competitors and the first onboarding screen", () => {
     expect(homeMeta()).toEqual([{ title: "Home · Five to Nine" }]);
     expect(competitorsMeta()).toEqual([{ title: "Competitors · Five to Nine" }]);
-    expect(onboardingMeta()).toEqual([{ title: "Start with your website · Five to Nine" }]);
+    expect(onboardingMeta()).toEqual([{ title: "Start with your website or a handle · Five to Nine" }]);
   });
 });

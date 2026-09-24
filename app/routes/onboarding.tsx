@@ -12,7 +12,7 @@ import { isTakenDown } from "../lib/data/takedown.server";
 import { normaliseSubject } from "../lib/identity/normalise";
 
 export function meta() {
-  return [{ title: "Start with your website · Five to Nine" }];
+  return [{ title: "Start with your website or a handle · Five to Nine" }];
 }
 
 export async function loader({ request }: Route.LoaderArgs) {
