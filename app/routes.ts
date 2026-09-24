@@ -10,11 +10,8 @@ export default [
     route("app/competitors", "routes/app.competitors.tsx"),
     route("app/competitors/:entityId", "routes/app.competitor.tsx"),
     route("app/alerts", "routes/app.alerts.tsx"),
-    route("app/settings", "routes/app.settings.tsx", [
-      route("card", "routes/settings.card.tsx"),
-    ]),
+    route("app/settings", "routes/app.settings.tsx"),
   ]),
-  route("s/:slug", "routes/s.$slug.tsx"),
   route("u/:token", "routes/u.$token.tsx"),
   route("api/health", "routes/api.health.ts"),
   route("api/auth/*", "routes/api.auth.$.ts"),

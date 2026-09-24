@@ -47,7 +47,7 @@ render is checked at.
 
 ### 2.1 Landing (`/`)
 
-Order: ticker → header → hero (copy + live proof) → the mark → the live standing card →
+Order: ticker → header → hero (copy + live proof) → the mark → the live share image →
 how it works → what we watch → price → footer.
 
 **First viewport must contain, in this order:** who it is for (mono eyebrow), the
@@ -73,7 +73,7 @@ your first standing."**). No exclamation marks anywhere on the page.
 
 - Hero is a two-column grid at ≥1080px (1.15fr copy / 0.85fr proof), stacked below.
 - The proof column is live data from a public workspace we run ourselves, re-rendered
-  weekly (the standing card, §2.8). It is never sample data and never says "sample".
+  weekly (the share image, §2.8). It is never sample data and never says "sample".
 - "What we watch" is a wrapped pill row, not a card grid. Sources we cannot currently
   reach are shown dimmed with the reason, on the landing as in the app.
 - Exactly one filled button per viewport. The section CTA repeats the hero's.
@@ -194,13 +194,12 @@ one.
 
 ### 2.7 Settings
 
-Four settings and nothing else (`docs/REBUILD-DELIVERY.md`), as four ruled rows, each
+Three settings and nothing else (`docs/REBUILD-DELIVERY.md`), as three ruled rows, each
 edited in place:
 
 1. Brief day, time and timezone.
 2. Immediate alerts for your own site — on (default) / off.
 3. Delivery email address.
-4. Your public standing card — off (default) / on, with the URL and a "rotate the link".
 
 Then **"Connect your agent"** (§2.11) as its own block: the MCP server row with the URL,
 its own switch and the Claude / Cursor / ChatGPT pills, and the API key row with the
@@ -212,26 +211,18 @@ display face so they read as information: the plan with its price and one "Chang
 exactly what it removes. Per-brand tracking is **not** repeated here — it is the same
 switch that lives on the brand, and the page says so in its opening line.
 
-### 2.8 The public standing card (`/s/<slug>`)
+### 2.8 The share image
 
-One screen, no nav, no login. The top of Home in the same skin: the rank line, the
-four-week standing, the three read-this-first marks, the counts checked, a small wordmark
-and exactly one action — "Track your own brand — €10/mo". Nothing else, per
-`docs/REBUILD-STANDING-CARD.md` (#3898).
+No public card page (Nish, 2026-09-24). The owner shares a picture, made from Home in the
+signed-in app, the way Spotify shares work: the brand's own name and logo, the rank line
+with the rank on its green marker, the four-week standing line, the week label in mono,
+and the `05|09` wordmark with `0509.io`, on the real cream ground. No competitor names,
+no captures, no marks, no counts table. Per `docs/REBUILD-STANDING-CARD.md`.
 
-**The OG image is rendered by Cloudflare Browser Rendering from the same HTML and CSS
-as the card page itself** — not from a separate template. The engine design (#3914) chose
-this at roughly 0.06 browser-hours a month, which is the cheapest line in the cost model,
-and it means the OG image cannot drift from the card: there is one design, screenshotted
-at 1200x630. No second renderer, no second stylesheet, no hand-maintained SVG twin.
-
-What that buys: the OG image can carry exactly what the card carries — the rank line with
-the rank on its green marker, the four-week standing line, the week label in mono, and the
-wordmark, all in the real faces on the real cream ground. Keep it to those four things
-anyway, because an OG image is read at thumbnail size: no captures, no marks, no counts
-table. **Measure the render before you ship it** — one render per workspace per week is
-the budget, and a card that takes longer than the weekly rollover window is a defect, not
-a tolerance.
+**It is rendered by Cloudflare Browser Rendering from the same component and CSS as Home**
+at 1080x1080, on demand when the owner taps Share. One design, screenshotted: no second
+renderer, no second stylesheet, no hand-maintained SVG twin. On a phone the share sheet
+opens with the image; elsewhere it downloads.
 
 ---
 
@@ -444,7 +435,7 @@ action that fills it.
 the line labelled "first week". This is the rule the other empty states are a special case
 of: a surface that has *some* truth shows that truth at whatever size it is, because
 hiding it teaches the user the product is not running. Applies to the standing chart on
-Home, on the public card and in the OG image.
+Home and in the share image.
 | Identity card, field pending | "logo: looking on your site" / "we'll fill this on the first crawl, within the hour" |
 
 ---
@@ -552,12 +543,12 @@ re-issued, so the library names and versions are restated here as the contract.
 | Competitors list, alerts feed | `@tanstack/react-table` 9.2.4 headless + our row | Headless only; no themed table library |
 | Developments feed | plain list + `toggle-group` | Chronological; filters do not change the layout |
 | Incident block | `alert` | The only red in the product |
-| Settings rows | `card` + `switch` + `select` + `popover` | Four settings, then the agent block, then the quiet rows |
+| Settings rows | `card` + `switch` + `select` + `popover` | Three settings, then the agent block, then the quiet rows |
 | Key / URL with copy | `input` readonly + `button` + `tooltip` | Never a custom clipboard widget |
 | "Why we flagged this" | `drawer` on mobile, `popover` on desktop | The machinery, one tap away |
 | Sheets, dialogs, tooltips, menus | `dialog`, `sheet`, `tooltip`, `dropdown-menu` | Base UI 1.8.0 under all of them |
 | Toasts | `sonner` | Only for "saved" and "undo"; never for alerts |
-| Standing-card OG image | **Cloudflare Browser Rendering**, screenshotting the card page at 1200x630 | One design, not a twin (#3914, ~0.06 browser-hours/month). See §2.8 |
+| Share image | **Cloudflare Browser Rendering**, screenshotting the Home component at 1080x1080 | One design, not a twin. See §2.8 |
 | Icons | `lucide-react` 1.47.0 | Sparingly: the product's vocabulary is type, not icons |
 | Class merging | `cn` 0.3.0 | |
 | Any input that validates | **TanStack Form 1.33.5 + zod 4.6.5** | The same schema parses `formData` in the action |
@@ -579,7 +570,7 @@ These need Nish, and the brief deliberately stops rather than picking:
 2. **A trial.** Decided 2026-09-22 (#3912 item 2): a 7-day trial on every paid plan through
    Dodo, card up front, charged on day 8 unless cancelled. No free tier. Landing and pricing
    copy say so (#4014, #4132).
-3. **The landing's sample brand.** The live standing card needs one recognisable brand
+3. **The landing's sample brand.** The live share image needs one recognisable brand
    with active public competition, in a workspace we own. Not chosen.
 
 ---
