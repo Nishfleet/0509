@@ -1,3 +1,4 @@
+import type { RouteConfigEntry } from "@react-router/dev/routes";
 import { describe, expect, it } from "vitest";
 
 import routes from "../app/routes";
@@ -9,9 +10,15 @@ import {
   sitemapXml,
 } from "../app/lib/public-routes";
 
+function topLevel(entries: RouteConfigEntry[]): RouteConfigEntry[] {
+  return entries.flatMap((entry) =>
+    entry.path === undefined && entry.children ? topLevel(entry.children) : [entry],
+  );
+}
+
 describe("public-route manifest", () => {
   it("classifies every top-level route in app/routes.ts", () => {
-    for (const entry of routes) {
+    for (const entry of topLevel(routes)) {
       const path = "path" in entry ? entry.path : undefined;
       if (
         path === undefined ||
@@ -51,7 +58,7 @@ describe("public-route manifest", () => {
     for (const p of PUBLIC_PATHS) {
       expect(body).toContain(`<loc>https://0509.io${p}</loc>`);
     }
-    for (const entry of routes) {
+    for (const entry of topLevel(routes)) {
       const path = "path" in entry ? entry.path : undefined;
       if (path === undefined || path === "*") continue;
       if (!(PUBLIC_PATHS as readonly string[]).includes(`/${path}`)) continue;

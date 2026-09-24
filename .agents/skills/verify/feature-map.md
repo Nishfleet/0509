@@ -78,8 +78,10 @@ rule that keeps this file honest is the same one that keeps the product honest:
 a row describes what a user can do **today**, never what is planned.
 
 The four places — Home, Competitors, Alerts, Settings — are linked from
-`app/components/nav.tsx`, drawn by `app/components/app-shell.tsx` on each of the
-four routes. `/app/competitors/:entityId` has no path yet — `/app/competitors`
+`app/components/nav.tsx`, drawn by `app/components/app-shell.tsx` once, in the
+layout route `app/routes/app-layout.tsx` that wraps every `/app` route in
+`app/routes.ts`, so a new `/app` page gets the nav without drawing it itself.
+`/app/competitors/:entityId` has no path yet — `/app/competitors`
 is a stub (`app/routes/app.competitors.tsx`), so there is no row to open it
 from; `/app/settings/card` is reached from the Settings page. Neither is a nav
 place.
