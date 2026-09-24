@@ -60,8 +60,8 @@ export const TERMS: LegalDocument = {
       id: "agents",
       heading: "Agents and API access",
       paragraphs: [
-        "You can connect your own AI agents and tools with keys you create in 0509. A key can read your workspace and cannot change it.",
-        "Keep keys secret, and switch off any key you think has leaked. Agents follow these same terms and the same fair limits, and we may switch off a key that is overloading 0509 or breaking these terms.",
+        "You can connect your own AI agents and tools by approving them when they ask, or with keys you create in 0509. Either way they can read your workspace and cannot change it.",
+        "Keep keys secret, and disconnect any app or key you think has leaked. Agents follow these same terms and the same fair limits, and we may switch off a key that is overloading 0509 or breaking these terms.",
       ],
     },
     {

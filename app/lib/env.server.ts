@@ -9,6 +9,8 @@ const BINDING_NAMES = [
   "SEND_EMAIL",
   "SNAPSHOTS",
   "BROWSER",
+  "OAUTH_KV",
+  "AGENT_LIMIT",
 ] as const satisfies readonly (keyof Env)[];
 
 const NOTES = {
@@ -19,6 +21,8 @@ const NOTES = {
   SEND_EMAIL: "briefs sit unsent",
   SNAPSHOTS: "site snapshots cannot be read or stored",
   BROWSER: "bot-gated page reads cannot escalate",
+  OAUTH_KV: "AI apps cannot sign in to /mcp",
+  AGENT_LIMIT: "/mcp and /api/v1 have no abuse limit",
   LIVENESS_PING_URL: "absence means no monitor; a set value must be an http(s) URL",
 } as const satisfies Record<(typeof BINDING_NAMES)[number] | "LIVENESS_PING_URL", string>;
 
@@ -35,7 +39,7 @@ function isObject(value: unknown): value is object {
   return typeof value === "object" && value !== null;
 }
 
-function binding(method?: "prepare" | "get" | "sendBatch") {
+function binding(method?: "prepare" | "get" | "sendBatch" | "limit") {
   return z.custom((value) => {
     if (!isObject(value)) return false;
     if (!method) return true;
@@ -51,6 +55,8 @@ const workerEnvSchema = z.object({
   SEND_EMAIL: binding("sendBatch"),
   SNAPSHOTS: binding("get"),
   BROWSER: binding(),
+  OAUTH_KV: binding("get"),
+  AGENT_LIMIT: binding("limit"),
   LIVENESS_PING_URL: httpUrl.optional(),
 });
 
@@ -87,6 +93,8 @@ function snapshot(): Snapshot {
     SEND_EMAIL: env.SEND_EMAIL,
     SNAPSHOTS: env.SNAPSHOTS,
     BROWSER: env.BROWSER,
+    OAUTH_KV: env.OAUTH_KV,
+    AGENT_LIMIT: env.AGENT_LIMIT,
     LIVENESS_PING_URL: livenessUrl(),
   };
 }

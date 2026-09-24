@@ -22,6 +22,8 @@ export type CheckPageResult =
       transport: "fetch" | "browser";
     };
 
+const NO_CUTOFF = "9999-12-31T23:59:59.999Z";
+
 function logScreenshotMiss(url: string, cause: string): void {
   console.log(JSON.stringify({
     event: "screenshot-miss",
@@ -62,6 +64,8 @@ export async function checkPage(input: {
   watchId: string;
   pageId: string;
   url: string;
+  snapshotId?: string;
+  before?: string;
 }): Promise<CheckPageResult> {
   const read = await readUrl(input.url);
   if (!read.ok) {
@@ -69,9 +73,9 @@ export async function checkPage(input: {
   }
 
   const extracted = await extractPageText(read.html);
-  const previous = await latestSiteSnapshot(input.watchId, input.pageId);
-  const id = crypto.randomUUID();
   const fetchedAt = new Date().toISOString();
+  const previous = await latestSiteSnapshot(input.watchId, input.pageId, input.before ?? NO_CUTOFF);
+  const id = input.snapshotId ?? crypto.randomUUID();
 
   if (previous !== null && previous.payload_hash === extracted.hash) {
     await insertSnapshot({

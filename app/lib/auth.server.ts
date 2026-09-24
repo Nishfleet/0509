@@ -3,6 +3,7 @@ import { magicLink } from "better-auth/plugins";
 import { apiKey } from "@better-auth/api-key";
 import { passkey } from "@better-auth/passkey";
 
+import { API_KEY_PREFIX } from "./agent/paths";
 import { ensureWorkspaceForSignIn } from "./workspace.server";
 import { MAGIC_LINK_TTL_SECONDS, magicLinkEmail } from "./auth/magic-link-email";
 import { sendOrThrow } from "../../workers/delivery/send";
@@ -59,7 +60,10 @@ export function createAuth(env: AuthEnv) {
         },
       }),
       passkey(),
-      apiKey(),
+      apiKey({
+        defaultPrefix: API_KEY_PREFIX,
+        rateLimit: { enabled: true, timeWindow: 60_000, maxRequests: 120 },
+      }),
     ],
   });
 }

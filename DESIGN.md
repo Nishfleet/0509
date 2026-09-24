@@ -214,15 +214,16 @@ switch that lives on the brand, and the page says so in its opening line.
 ### 2.8 The share image
 
 No public card page (Nish, 2026-09-24). The owner shares a picture, made from Home in the
-signed-in app, the way Spotify shares work: the brand's own name and logo, the rank line
-with the rank on its green marker, the four-week standing line, the week label in mono,
-and the `05|09` wordmark with `0509.io`, on the real cream ground. No competitor names,
-no captures, no marks, no counts table. Per `docs/REBUILD-STANDING-CARD.md`.
+signed-in app, the way Spotify shares work: the brand's monogram and name, the rank line
+with the rank on its green marker, the week label in mono, and the `05|09` wordmark with
+`0509.io`, on the real cream ground. No competitor names, no captures, no marks, no counts
+table. Per `docs/REBUILD-STANDING-CARD.md`.
 
-**It is rendered by Cloudflare Browser Rendering from the same component and CSS as Home**
-at 1080x1080, on demand when the owner taps Share. One design, screenshotted: no second
-renderer, no second stylesheet, no hand-maintained SVG twin. On a phone the share sheet
-opens with the image; elsewhere it downloads.
+**It is a square composition (`app/components/share-image.tsx`) drawn with the same tokens,
+fonts and built stylesheet as Home**, screenshotted by Cloudflare Browser Rendering at
+1080x1080 on demand when the owner taps **Share my rank**. No second renderer, no second
+stylesheet, no hand-maintained SVG twin. On a phone the share sheet opens with the image;
+elsewhere it downloads.
 
 ---
 
@@ -230,8 +231,8 @@ opens with the image; elsewhere it downloads.
 
 Jev is how the product decides; it is not how the product talks. **No customer surface
 ever shows a question id, a decision code, a probability, an importance score or the word
-"Jev" as a system.** This applies to Home, Competitors, Alerts, the brief and the public
-card.
+"Jev" as a system.** This applies to Home, Competitors, Alerts, the brief and the share
+image.
 
 | Never | Instead |
 |---|---|
@@ -548,7 +549,7 @@ re-issued, so the library names and versions are restated here as the contract.
 | "Why we flagged this" | `drawer` on mobile, `popover` on desktop | The machinery, one tap away |
 | Sheets, dialogs, tooltips, menus | `dialog`, `sheet`, `tooltip`, `dropdown-menu` | Base UI 1.8.0 under all of them |
 | Toasts | `sonner` | Only for "saved" and "undo"; never for alerts |
-| Share image | **Cloudflare Browser Rendering**, screenshotting the Home component at 1080x1080 | One design, not a twin. See §2.8 |
+| Share image | **Cloudflare Browser Rendering**, screenshotting `app/components/share-image.tsx` at 1080x1080 | One design, not a twin. See §2.8 |
 | Icons | `lucide-react` 1.47.0 | Sparingly: the product's vocabulary is type, not icons |
 | Class merging | `cn` 0.3.0 | |
 | Any input that validates | **TanStack Form 1.33.5 + zod 4.6.5** | The same schema parses `formData` in the action |

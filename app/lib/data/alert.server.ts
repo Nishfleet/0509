@@ -88,3 +88,56 @@ export async function readTakedownNotes(
   const { results } = await db.prepare(SELECT_TAKEDOWN_NOTES).bind(workspaceId).all<TakedownNote>();
   return results;
 }
+
+export interface IncidentAlert {
+  incidentId: string;
+  workspaceId: string;
+  entityId: string;
+  pageId: string;
+  title: string;
+  createdAt: string;
+}
+
+const INSERT_INCIDENT_ALERT = `INSERT INTO alert (id, workspace_id, entity_id, page_id, incident_id, kind, severity, title, created_at)
+VALUES (?1, ?2, ?3, ?4, ?5, 'own_site_broken', 'high', ?6, ?7)
+ON CONFLICT(id) DO NOTHING`;
+
+export async function insertIncidentAlert(db: D1Database, alert: IncidentAlert): Promise<void> {
+  await db
+    .prepare(INSERT_INCIDENT_ALERT)
+    .bind(
+      `incident-${alert.incidentId}`,
+      alert.workspaceId,
+      alert.entityId,
+      alert.pageId,
+      alert.incidentId,
+      alert.title,
+      alert.createdAt,
+    )
+    .run();
+}
+
+export interface OwnSiteIncidentNote {
+  id: string;
+  title: string;
+  created_at: string;
+  closed_at: string | null;
+}
+
+const SELECT_OWN_SITE_INCIDENTS = `SELECT a.id, a.title, a.created_at, i.closed_at
+FROM alert a
+JOIN incident i ON i.id = a.incident_id
+WHERE a.workspace_id = ? AND a.kind = 'own_site_broken'
+ORDER BY a.created_at DESC
+LIMIT 20`;
+
+export async function readOwnSiteIncidents(
+  db: D1Database,
+  workspaceId: string,
+): Promise<OwnSiteIncidentNote[]> {
+  const { results } = await db
+    .prepare(SELECT_OWN_SITE_INCIDENTS)
+    .bind(workspaceId)
+    .all<OwnSiteIncidentNote>();
+  return results;
+}

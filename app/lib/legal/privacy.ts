@@ -41,7 +41,7 @@ export const PRIVACY: LegalDocument = {
         "Your sign-in: the public half of a passkey, if you set one up. Your fingerprint or face never leaves your device, and we store no passwords.",
         "Your sessions: when you signed in, and the IP address and browser you used, so you stay signed in and we can spot someone else using your account.",
         "Your workspace: your brand, the competitors you watch, your settings and time zone, and the choices you make, such as dismissing a suggestion or turning a brand off.",
-        "Your agent keys: a scrambled copy of each key you create, and when it was last used.",
+        "Your agent access: the apps you approved, and a scrambled copy of each key you create, with when it was last used.",
         "Billing: your plan and whether it is paid. Your card details go to our payment provider and never reach us.",
         "Emails you send us, so we can answer them.",
         "Page views, counted without cookies and without identifying you, and error reports with personal details removed, so we can keep 0509 fast and working.",
@@ -131,8 +131,8 @@ export const PRIVACY: LegalDocument = {
       id: "agents",
       heading: "Agents and API keys",
       paragraphs: [
-        "You can create keys so your own AI agents and tools can read your workspace. A key reads only the workspace that made it, and cannot change anything.",
-        "We keep only a scrambled copy of each key, so we cannot show it to you again after you create it. You can switch a key off at any time.",
+        "Your own AI agents and tools can read your workspace, either by asking you to sign in and approve them, or with a key you create. Either way they read only your workspace, and cannot change anything.",
+        "We keep only a scrambled copy of each key, so we show it to you once, when you create it. Settings lists every connected app and key, and you can disconnect any of them at any time.",
       ],
     },
     {

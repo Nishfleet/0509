@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import { insertSelfEntity } from "../data/entity.server";
+import { startDiscovery } from "../discovery/start.server";
 import { normaliseSubject } from "./normalise";
 
 const SOCIAL_PREFIX = "social.";
@@ -41,6 +42,7 @@ export async function confirmCard(workspaceId: string, form: FormData): Promise<
   if (!normalised.ok) return false;
   const { subject } = normalised;
   const card = parsed.data;
+  const now = new Date();
   await insertSelfEntity({
     id: crypto.randomUUID(),
     workspaceId,
@@ -54,7 +56,8 @@ export async function confirmCard(workspaceId: string, form: FormData): Promise<
       logoUrl: card.logo === "" ? null : card.logo,
       socials: card.socials,
     }),
-    now: new Date().toISOString(),
+    now: now.toISOString(),
   });
+  await startDiscovery(workspaceId, now);
   return true;
 }
