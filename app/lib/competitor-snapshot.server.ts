@@ -40,7 +40,7 @@ const countRow = z.object({
   new_roles: z.number(),
 });
 
-const countRows = z.array(countRow);
+const countRows = z.tuple([countRow]);
 
 const standingRows = z.array(
   z.object({ rank: z.number().int(), movement: z.number().int().nullable() }),
@@ -78,7 +78,7 @@ export async function readCompetitorSnapshot(
     env.DB.prepare(SELECT_COMPETITOR_COVERAGE).bind(workspaceId, entityId, since, until),
   ]);
 
-  const counts = countRows.parse(countsResult.results)[0];
+  const [counts] = countRows.parse(countsResult.results);
   const standing = standingRows.parse(standingResult.results)[0];
   const sources = coverageRows.parse(coverageResult.results);
 
@@ -88,11 +88,11 @@ export async function readCompetitorSnapshot(
         ? null
         : { rank: standing.rank, movement: standing.movement },
     counts: {
-      newCreatives: counts?.new_creatives ?? 0,
-      copyChanges: counts?.copy_changes ?? 0,
-      noteworthyChanges: counts?.site_changes ?? 0,
-      mentionsThatMatter: counts?.mentions ?? 0,
-      newRoles: counts?.new_roles ?? 0,
+      newCreatives: counts.new_creatives,
+      copyChanges: counts.copy_changes,
+      noteworthyChanges: counts.site_changes,
+      mentionsThatMatter: counts.mentions,
+      newRoles: counts.new_roles,
     },
     sources: sources.map((source) => ({
       kind: source.kind,
