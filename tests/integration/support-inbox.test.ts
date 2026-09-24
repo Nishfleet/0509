@@ -124,6 +124,25 @@ describe("0509-support-inbox-v2", () => {
     expect(issue.body).toContain("/app/pages");
   });
 
+  it("opens at most 3 issues per sender domain per day and still stores every mail", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValue(new Response("{}", { status: 201 }));
+
+    for (let i = 0; i < 5; i += 1) {
+      const ctx = createExecutionContext();
+      await worker.email(fakeMessage(vi.fn(() => Promise.resolve())), env, ctx);
+      await waitOnExecutionContext(ctx);
+    }
+
+    expect(fetchSpy).toHaveBeenCalledTimes(3);
+    const count = await env.DB.prepare("SELECT COUNT(*) AS n FROM support_report").first<{
+      n: number;
+    }>();
+    expect(count?.n).toBe(5);
+  });
+
   it("still stores and forwards with no GitHub token, and never calls fetch", async () => {
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
     const { forward, fetchSpy } = await deliver({

@@ -51,6 +51,8 @@ test("Tab reaches the switch and Space toggles it", async ({ page }) => {
     await page.keyboard.press("Tab");
   }
   await expect(kindred).toBeFocused();
+  await expect(kindred).toHaveCSS("outline-style", "solid");
+  await expect(kindred).toHaveAccessibleDescription(/Off stops the watching and the alerts/);
 
   await page.keyboard.press("Space");
   await expect(kindred).toHaveAttribute("aria-checked", "false");
