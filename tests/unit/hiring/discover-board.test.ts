@@ -1,8 +1,14 @@
 import { describe, expect, it } from "vitest";
 
-import { discoverBoard, type Probe, type ProbeResponse } from "../../../app/lib/hiring/discover-board";
+import {
+  BOARD_PLATFORMS,
+  discoverBoard,
+  type BoardPlatform,
+  type Probe,
+  type ProbeResponse,
+} from "../../../app/lib/hiring/discover-board";
 
-const KNOWN_PLATFORMS = ["greenhouse", "lever", "ashby", "workable", "smartrecruiters"] as const;
+const KNOWN_PLATFORMS: readonly BoardPlatform[] = BOARD_PLATFORMS;
 
 const JSON_TYPE = "application/json";
 
@@ -89,6 +95,34 @@ describe("discoverBoard", () => {
     expect(board.boardUrl).toBe("https://boards.greenhouse.io/figma");
   });
 
+  it("reads a Greenhouse embed slug from the for query, never the embed path segment (0509#4712)", async () => {
+    const { probe, calls } = recordingProbe({
+      [GH_URL("gymshark")]: jsonResponse(GH_BODY("Department Manager - Bond Street, New York")),
+    });
+
+    const board = await discoverBoard(
+      ["https://boards.greenhouse.io/embed/job_board?for=gymshark"],
+      "gymshark.com",
+      { probe },
+    );
+
+    expect(board).toEqual({ platform: "greenhouse", boardUrl: "https://boards.greenhouse.io/gymshark", via: "nav" });
+    expect(calls).toEqual([GH_URL("gymshark")]);
+  });
+
+  it("reads a job-boards Greenhouse embed link too (0509#4712)", async () => {
+    const { probe, calls } = recordingProbe({ [GH_URL("figma")]: jsonResponse(GH_BODY("Product Designer")) });
+
+    const board = await discoverBoard(
+      ["https://job-boards.greenhouse.io/embed/job_board?for=figma"],
+      "figma.com",
+      { probe },
+    );
+
+    expect(board).toEqual({ platform: "greenhouse", boardUrl: "https://job-boards.greenhouse.io/figma", via: "nav" });
+    expect(calls).toEqual([GH_URL("figma")]);
+  });
+
   it("reads a lever slug and accepts the bare postings array", async () => {
     const { probe, calls } = recordingProbe({
       "https://api.lever.co/v0/postings/spotify?mode=json": jsonResponse(
@@ -100,6 +134,19 @@ describe("discoverBoard", () => {
 
     expect(board).toEqual({ platform: "lever", boardUrl: "https://jobs.lever.co/spotify", via: "nav" });
     expect(calls).toEqual(["https://api.lever.co/v0/postings/spotify?mode=json"]);
+  });
+
+  it("probes lever's EU listing host and keeps the EU board URL (0509#4712)", async () => {
+    const { probe, calls } = recordingProbe({
+      "https://api.eu.lever.co/v0/postings/eurolab?mode=json": jsonResponse(
+        JSON.stringify([{ id: "4c1f2a90-0000-0000-0000-000000000000", text: "Backend Engineer", categories: {} }]),
+      ),
+    });
+
+    const board = await discoverBoard(["https://jobs.eu.lever.co/eurolab"], "eurolab.com", { probe });
+
+    expect(board).toEqual({ platform: "lever", boardUrl: "https://jobs.eu.lever.co/eurolab", via: "nav" });
+    expect(calls).toEqual(["https://api.eu.lever.co/v0/postings/eurolab?mode=json"]);
   });
 
   it("reads an ashby slug and requires the documented jobs object", async () => {
@@ -149,7 +196,7 @@ describe("discoverBoard", () => {
 
     const board = await discoverBoard([leadUrl, "https://webflow.com/"], "webflow.com", { probe });
 
-    expect(board).toEqual({ platform: "greenhouse", boardUrl: "https://job-boards.greenhouse.io/webflow", via: "subdomain" });
+    expect(board).toEqual({ platform: "greenhouse", boardUrl: "https://job-boards.greenhouse.io/webflow", via: "careers-page" });
     expect(calls).toEqual([leadUrl, GH_URL("webflow")]);
   });
 
@@ -170,7 +217,7 @@ describe("discoverBoard", () => {
     expect(board).toEqual({
       platform: "greenhouse",
       boardUrl: "https://job-boards.greenhouse.io/webflow",
-      via: "subdomain",
+      via: "careers-page",
     });
     expect(calls).toEqual([leadUrl, GH_URL("webflow")]);
   });
@@ -201,6 +248,18 @@ describe("discoverBoard", () => {
     });
 
     const board = await discoverBoard([leadUrl], "airbnb.com", { probe });
+
+    expect(board).toEqual(NONE);
+    expect(calls).toEqual([leadUrl]);
+  });
+
+  it("returns none when a careers-path lead page names no documented board (0509#4712)", async () => {
+    const leadUrl = "https://brand.com/careers";
+    const { probe, calls } = recordingProbe({
+      [leadUrl]: htmlResponse(`<html><body><div id=root></div>${"x".repeat(3000)}</body></html>`),
+    });
+
+    const board = await discoverBoard([leadUrl], "brand.com", { probe });
 
     expect(board).toEqual(NONE);
     expect(calls).toEqual([leadUrl]);
@@ -307,7 +366,7 @@ describe("discoverBoard", () => {
 
     const board = await discoverBoard([leadUrl], "shop.brand.co.uk", { probe });
 
-    expect(board).toEqual({ platform: "greenhouse", boardUrl: "https://job-boards.greenhouse.io/brand", via: "subdomain" });
+    expect(board).toEqual({ platform: "greenhouse", boardUrl: "https://job-boards.greenhouse.io/brand", via: "careers-page" });
     expect(calls).toEqual([leadUrl, GH_URL("brand")]);
   });
 
@@ -317,6 +376,41 @@ describe("discoverBoard", () => {
     });
 
     const board = await discoverBoard(["https://careers.notgymshark.com/"], "gymshark.com", { probe });
+
+    expect(board).toEqual(NONE);
+    expect(calls).toEqual([]);
+  });
+
+  it.each(["careers", "jobs", "hiring"])(
+    "follows a /%s path on the brand's own registrable domain as a lead (0509#4712)",
+    async (firstSegment) => {
+      const leadUrl = `https://brand.com/${firstSegment}`;
+      const { probe, calls } = recordingProbe({
+        [leadUrl]: htmlResponse(
+          `<a href="https://job-boards.greenhouse.io/brand/jobs/1">Open role</a>` + "x".repeat(220),
+        ),
+        [GH_URL("brand")]: jsonResponse(GH_BODY("Store Manager")),
+      });
+
+      const board = await discoverBoard([leadUrl], "brand.com", { probe });
+
+      expect(board).toEqual({
+        platform: "greenhouse",
+        boardUrl: "https://job-boards.greenhouse.io/brand",
+        via: "careers-page",
+      });
+      expect(calls).toEqual([leadUrl, GH_URL("brand")]);
+    },
+  );
+
+  it("does not treat a careers-stuff path, a nested careers path, or another domain's careers path as a lead (0509#4712)", async () => {
+    const { probe, calls } = recordingProbe({});
+
+    const board = await discoverBoard(
+      ["https://brand.com/careerstuff", "https://brand.com/shop/careers", "https://other.com/careers"],
+      "brand.com",
+      { probe },
+    );
 
     expect(board).toEqual(NONE);
     expect(calls).toEqual([]);
@@ -336,7 +430,7 @@ describe("discoverBoard", () => {
     expect(board).toEqual({
       platform: "greenhouse",
       boardUrl: "https://job-boards.greenhouse.io/webflow",
-      via: "subdomain",
+      via: "careers-page",
     });
   });
 
