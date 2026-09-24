@@ -42,7 +42,7 @@ function safeLogo(value: string | null | undefined): string | null {
   if (value == null) return null;
   const trimmed = value.trim();
   if (trimmed.startsWith("/") && !trimmed.startsWith("//")) return trimmed;
-  return httpUrl(trimmed);
+  return null;
 }
 
 function chipLabel(name: string, self: boolean, off: boolean): string {

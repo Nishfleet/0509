@@ -16,6 +16,7 @@ export default [
   ]),
   route("app/share.png", "routes/app.share[.]png.ts"),
   route("app/changes/:signalId/:side", "routes/app.change-shot.ts"),
+  route("app/logos/:entityId", "routes/app.logo.ts"),
   route("u/:token", "routes/u.$token.tsx"),
   route("api/health", "routes/api.health.ts"),
   route("api/auth/*", "routes/api.auth.$.ts"),
