@@ -22,7 +22,6 @@ export interface MaybeCompetitor {
   name: string;
   domain: string;
   reason: string | null;
-  p: number | null;
 }
 
 interface Row {
@@ -45,7 +44,6 @@ interface MaybeRow {
   name: string | null;
   domain: string;
   reason: string | null;
-  p: number | null;
 }
 
 const SELECT_COMPETITOR =
@@ -55,13 +53,13 @@ const SET_COMPETITOR_STATE =
   "UPDATE entity SET state = ?, state_changed_at = ?, state_changed_by = 'user', state_reason = NULL WHERE id = ? AND workspace_id = ? AND role = 'competitor' AND state IN ('on', 'off') AND state <> ?";
 
 const INSERT_COMPETITOR_FROM_SUGGESTION =
-  "INSERT INTO entity (id, workspace_id, role, domain, name, origin, confirmed_at, state, state_changed_at, state_changed_by, created_at) SELECT ?1, workspace_id, 'competitor', candidate_domain, candidate_name, 'auto', ?2, 'on', ?2, 'user', ?2 FROM suggestion WHERE id = ?3 AND workspace_id = ?4 AND status = 'pending' ON CONFLICT (workspace_id, domain) DO UPDATE SET state = 'on', state_changed_at = excluded.state_changed_at, state_changed_by = 'user'";
+  "INSERT INTO entity (id, workspace_id, role, domain, name, origin, confirmed_at, state, state_changed_at, state_changed_by, created_at) SELECT ?1, workspace_id, 'competitor', candidate_domain, candidate_name, 'auto', ?2, 'on', ?2, 'user', ?2 FROM suggestion WHERE id = ?3 AND workspace_id = ?4 AND status = 'pending' ON CONFLICT (workspace_id, domain) DO UPDATE SET state = 'on', state_changed_at = excluded.state_changed_at, state_changed_by = 'user', state_reason = NULL WHERE entity.role = 'competitor' AND entity.state IN ('on', 'off')";
 
 const SELECT_ON =
   "SELECT e.id AS entity_id, e.name, e.domain, s.verdict_reason AS reason FROM entity e LEFT JOIN suggestion s ON s.entity_id = e.id AND s.workspace_id = e.workspace_id WHERE e.workspace_id = ? AND e.role = 'competitor' AND e.state = 'on' ORDER BY e.created_at ASC, e.id ASC";
 
 const SELECT_MAYBE =
-  "SELECT id AS suggestion_id, candidate_name AS name, candidate_domain AS domain, verdict_reason AS reason, verdict_p AS p FROM suggestion WHERE workspace_id = ? AND kind = 'add' AND status = 'pending' ORDER BY verdict_p IS NULL, verdict_p DESC, created_at ASC";
+  "SELECT id AS suggestion_id, candidate_name AS name, candidate_domain AS domain, verdict_reason AS reason FROM suggestion WHERE workspace_id = ? AND kind = 'add' AND status = 'pending' AND NOT EXISTS (SELECT 1 FROM entity e WHERE e.workspace_id = suggestion.workspace_id AND e.domain = suggestion.candidate_domain AND (e.role <> 'competitor' OR e.state NOT IN ('on', 'off'))) ORDER BY verdict_p IS NULL, verdict_p DESC, created_at ASC";
 
 function displayName(name: string | null, domain: string): string {
   if (name !== null && name !== "") return name;
@@ -115,7 +113,6 @@ export async function readOnboardingCompetitors(
     name: displayName(row.name, row.domain),
     domain: row.domain,
     reason: row.reason,
-    p: row.p,
   }));
 
   return { on, maybes };

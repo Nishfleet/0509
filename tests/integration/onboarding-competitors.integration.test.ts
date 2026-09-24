@@ -240,21 +240,18 @@ describe("readOnboardingCompetitors against migrations/0001_rebuild.sql", () => 
         name: "Maybe Eight",
         domain: `maybe-08-${n}.example`,
         reason: "Same buyers",
-        p: 0.8,
       },
       {
         suggestionId: `sug-p06-${n}`,
         name: "Maybe Six",
         domain: `maybe-06-${n}.example`,
         reason: "Overlapping category",
-        p: 0.6,
       },
       {
         suggestionId: `sug-pnull-${n}`,
         name: `maybe-null-${n}.example`,
         domain: `maybe-null-${n}.example`,
         reason: null,
-        p: null,
       },
     ]);
   });

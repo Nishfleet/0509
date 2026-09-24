@@ -66,11 +66,8 @@ export default function Page({ loaderData }: Route.ComponentProps) {
             {maybes.map((maybe) => (
               <li key={maybe.suggestionId} className="py-2">
                 <span className="font-semibold">{maybe.name}</span>
-                {maybe.reason === null && maybe.p === null ? null : (
-                  <p className="text-sm truncate">
-                    {maybe.reason}
-                    {maybe.p === null ? "" : ` ${String(Math.round(maybe.p * 100))}%`}
-                  </p>
+                {maybe.reason === null ? null : (
+                  <p className="text-sm truncate">{maybe.reason}</p>
                 )}
                 <Form method="post">
                   <input type="hidden" name="intent" value="accept" />
@@ -90,7 +87,7 @@ export default function Page({ loaderData }: Route.ComponentProps) {
       ) : null}
       <Form method="post">
         <input type="hidden" name="intent" value="start" />
-        <button type="submit">Start watching — €10/mo</button>
+        <button type="submit">Start watching</button>
       </Form>
     </main>
   );
