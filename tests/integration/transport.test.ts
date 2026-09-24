@@ -315,6 +315,50 @@ describe("readUrl", () => {
     }
   });
 
+  it("refuses a page that declares more than 5 MB without reading it", async () => {
+    const stub = stubFetch({
+      "https://huge.example.com/": () =>
+        new Response("x", { status: 200, headers: { "content-length": "50000000" } }),
+    });
+    const browser = fakeBrowser({ ok: true, html: SUBSTANTIAL_PAGE });
+    try {
+      install(browser);
+      const result = await readUrl("https://huge.example.com/");
+      expect(result.ok).toBe(false);
+      if (result.ok) return;
+      expect(result.reason).toBe("too-large");
+      expect(browser.calls).toEqual([]);
+    } finally {
+      stub.restore();
+    }
+  });
+
+  it("stops reading a streamed page once it passes 5 MB", async () => {
+    const chunk = new Uint8Array(1_000_000).fill(97);
+    const stub = stubFetch({
+      "https://endless.example.com/": () =>
+        new Response(
+          new ReadableStream<Uint8Array>({
+            pull(controller) {
+              controller.enqueue(chunk);
+            },
+          }),
+          { status: 200 },
+        ),
+    });
+    const browser = fakeBrowser({ ok: true, html: SUBSTANTIAL_PAGE });
+    try {
+      install(browser);
+      const result = await readUrl("https://endless.example.com/");
+      expect(result.ok).toBe(false);
+      if (result.ok) return;
+      expect(result.reason).toBe("too-large");
+      expect(browser.calls).toEqual([]);
+    } finally {
+      stub.restore();
+    }
+  });
+
   it("does exactly ONE escalation, then a typed failure — no retry loop", async () => {
     const stub = stubFetch({
       "https://gated.example.com/": () => new Response("Forbidden", { status: 403 }),
