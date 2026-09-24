@@ -1,7 +1,7 @@
 import { PLANS, TRIAL_TERMS } from "./billing/plans";
 import { SITE_URL } from "./structured-data";
 
-export const PUBLIC_PATHS = ["/privacy"] as const;
+export const PUBLIC_PATHS = ["/privacy", "/terms"] as const;
 export const DISALLOWED_PREFIXES = ["/app", "/api", "/mcp", "/u", "/login", "/onboarding", "/design"] as const;
 export const CARD_ROUTE_PATH = "s/:slug";
 export const MCP_URL = `${SITE_URL}/mcp`;
@@ -9,7 +9,11 @@ export const MCP_URL = `${SITE_URL}/mcp`;
 const PAGE_SUMMARIES: Record<(typeof PUBLIC_PATHS)[number], { title: string; summary: string }> = {
   "/privacy": {
     title: "Privacy",
-    summary: "what we collect, how long we keep it, and how any brand or person can be removed",
+    summary: "what we collect, who helps run 0509, how long we keep it, and how any brand or creator can be removed",
+  },
+  "/terms": {
+    title: "Terms",
+    summary: "who can use 0509, fair use, agent access, plans and cancelling, and how either side can end the agreement",
   },
 };
 

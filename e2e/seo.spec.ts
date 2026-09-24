@@ -29,6 +29,7 @@ test("GET /sitemap.xml serves the manifest-generated urlset", async ({
     '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
   );
   expect(body).toMatch(/<loc>https?:\/\/[^<]+\/privacy<\/loc>/);
+  expect(body).toMatch(/<loc>https?:\/\/[^<]+\/terms<\/loc>/);
 });
 
 test("GET /llms.txt serves the manifest-generated summary", async ({
