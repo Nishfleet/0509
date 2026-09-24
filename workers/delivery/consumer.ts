@@ -82,6 +82,7 @@ interface IncidentRow {
   domain: string;
   role: string;
   mark: string | null;
+  timezone: string;
 }
 
 async function readIncident(env: Env, incidentId: string): Promise<IncidentRow | null> {
@@ -94,9 +95,11 @@ async function readIncident(env: Env, incidentId: string): Promise<IncidentRow |
             i.closed_at,
             e.domain,
             e.role,
+            w.timezone,
             (SELECT a.body FROM alert a WHERE a.incident_id = i.id ORDER BY a.created_at ASC LIMIT 1) AS mark
        FROM incident i
        JOIN entity e ON e.id = i.entity_id
+       JOIN workspace w ON w.id = i.workspace_id
       WHERE i.id = ?`,
   )
     .bind(incidentId)
@@ -272,12 +275,14 @@ export async function deliverIncident(
             recheck_at: new Date(Date.parse(incident.opened_at) + RECHECK_AFTER_MS).toISOString(),
             mark: incident.mark,
             link: INCIDENT_LINK,
+            timezone: incident.timezone,
           })
         : renderIncidentFixed({
             site: incident.domain,
             kind: incident.kind,
             closed_at: incident.closed_at,
             link: INCIDENT_LINK,
+            timezone: incident.timezone,
           });
     const result = await sendMessage(env.EMAIL, {
       to: target.target_value,
