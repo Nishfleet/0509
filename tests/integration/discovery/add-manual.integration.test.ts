@@ -34,6 +34,33 @@ function addForm(value: string): FormData {
 
 const NOT_FOUND = () => Promise.resolve(new Response("not found", { status: 404 }));
 
+const wikidataGymshark = vi.fn((input: RequestInfo | URL) => {
+  const url = String(input);
+  if (url.includes("wbsearchentities")) {
+    return Promise.resolve(Response.json({ search: [{ id: "Q123" }] }));
+  }
+  if (url.includes("wbgetentities")) {
+    return Promise.resolve(
+      Response.json({
+        entities: {
+          Q123: {
+            claims: {
+              P856: [
+                {
+                  mainsnak: {
+                    datavalue: { value: "https://www.gymshark.com" },
+                  },
+                },
+              ],
+            },
+          },
+        },
+      }),
+    );
+  }
+  return NOT_FOUND();
+});
+
 afterEach(() => {
   vi.unstubAllGlobals();
 });
@@ -73,35 +100,7 @@ describe("handleCompetitorIntent intent=add", () => {
 
   it("resolves a typed brand name through resolveDomain and stores it as typed", async () => {
     const workspaceId = await seedWorkspace();
-    vi.stubGlobal(
-      "fetch",
-      vi.fn((input: RequestInfo | URL) => {
-        const url = String(input);
-        if (url.includes("wbsearchentities")) {
-          return Promise.resolve(Response.json({ search: [{ id: "Q123" }] }));
-        }
-        if (url.includes("wbgetentities")) {
-          return Promise.resolve(
-            Response.json({
-              entities: {
-                Q123: {
-                  claims: {
-                    P856: [
-                      {
-                        mainsnak: {
-                          datavalue: { value: "https://www.gymshark.com" },
-                        },
-                      },
-                    ],
-                  },
-                },
-              },
-            }),
-          );
-        }
-        return NOT_FOUND();
-      }),
-    );
+    vi.stubGlobal("fetch", wikidataGymshark);
 
     const result = await handleCompetitorIntent(workspaceId, addForm("Gymshark"));
     expect(result).toEqual({ message: null });
@@ -182,35 +181,7 @@ describe("handleCompetitorIntent intent=add", () => {
 
   it("never writes a Jev verdict for a manual add", async () => {
     const workspaceId = await seedWorkspace();
-    vi.stubGlobal(
-      "fetch",
-      vi.fn((input: RequestInfo | URL) => {
-        const url = String(input);
-        if (url.includes("wbsearchentities")) {
-          return Promise.resolve(Response.json({ search: [{ id: "Q123" }] }));
-        }
-        if (url.includes("wbgetentities")) {
-          return Promise.resolve(
-            Response.json({
-              entities: {
-                Q123: {
-                  claims: {
-                    P856: [
-                      {
-                        mainsnak: {
-                          datavalue: { value: "https://www.gymshark.com" },
-                        },
-                      },
-                    ],
-                  },
-                },
-              },
-            }),
-          );
-        }
-        return NOT_FOUND();
-      }),
-    );
+    vi.stubGlobal("fetch", wikidataGymshark);
     await handleCompetitorIntent(workspaceId, addForm("Gymshark"));
 
     const count = await env.DB.prepare("SELECT COUNT(*) AS n FROM jev_verdict").first<{ n: number }>();

@@ -15,6 +15,10 @@ import { readCompetitors } from "../lib/data/entity.server";
 import { readWorkspaceIdForOwner } from "../lib/data/workspace.server";
 import { requireSession } from "../lib/require-session.server";
 
+export function meta() {
+  return [{ title: "Competitors · Five to Nine" }];
+}
+
 async function workspaceFor(request: Request): Promise<string> {
   const session = await requireSession(request);
   const workspaceId = await readWorkspaceIdForOwner(session.user.id);

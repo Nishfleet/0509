@@ -248,17 +248,27 @@ export async function readRefreshTargets(workspaceId: string): Promise<RefreshTa
 }
 
 const INSERT_MANUAL_COMPETITOR =
-  "INSERT INTO entity (id, workspace_id, role, domain, name, origin, confirmed_at, state, state_changed_at, state_changed_by, created_at) VALUES (?1, ?2, 'competitor', ?3, ?4, 'manual', ?5, 'on', ?5, 'user', ?5) ON CONFLICT (workspace_id, domain) DO UPDATE SET state = 'on', state_changed_at = excluded.state_changed_at, state_changed_by = 'user', state_reason = NULL WHERE entity.role = 'competitor'";
+  "INSERT INTO entity (id, workspace_id, role, domain, name, origin, confirmed_at, state, state_changed_at, state_changed_by, created_at) SELECT ?1, ?2, 'competitor', ?3, ?4, 'manual', ?5, 'on', ?5, 'user', ?5 WHERE (SELECT count(*) FROM entity WHERE workspace_id = ?2 AND role = 'competitor' AND state = 'on' AND domain <> ?3) < ?6 ON CONFLICT (workspace_id, domain) DO UPDATE SET state = 'on', state_changed_at = excluded.state_changed_at, state_changed_by = 'user', state_reason = NULL WHERE entity.role = 'competitor'";
+
+const COUNT_OTHER_ON =
+  "SELECT count(*) AS n FROM entity WHERE workspace_id = ? AND role = 'competitor' AND state = 'on' AND domain <> ?";
 
 export async function addManualCompetitor(input: {
   workspaceId: string;
   domain: string;
   name: string | null;
   now: string;
-}): Promise<void> {
-  await env.DB.prepare(INSERT_MANUAL_COMPETITOR)
-    .bind(crypto.randomUUID(), input.workspaceId, input.domain, input.name, input.now)
+  cap: number;
+}): Promise<"added" | "at_cap"> {
+  const result = await env.DB.prepare(INSERT_MANUAL_COMPETITOR)
+    .bind(crypto.randomUUID(), input.workspaceId, input.domain, input.name, input.now, input.cap)
     .run();
+  if (result.meta.changes === 1) return "added";
+  const count = await env.DB.prepare(COUNT_OTHER_ON)
+    .bind(input.workspaceId, input.domain)
+    .first<{ n: number }>();
+  if (count !== null && count.n >= input.cap) return "at_cap";
+  return "added";
 }
 
 const INSERT_AUTO_COMPETITOR =
@@ -290,7 +300,7 @@ export interface CompetitorRow {
 }
 
 const SELECT_COMPETITORS =
-  "SELECT e.id AS entity_id, e.name, e.domain, e.state, e.state_changed_at, s.verdict_reason AS reason FROM entity e LEFT JOIN suggestion s ON s.entity_id = e.id AND s.workspace_id = e.workspace_id WHERE e.workspace_id = ? AND e.role = 'competitor' AND e.state IN ('on', 'off') ORDER BY e.state = 'off', e.created_at ASC, e.id ASC";
+  "SELECT e.id AS entity_id, e.name, e.domain, e.state, e.state_changed_at, s.verdict_reason AS reason FROM entity e LEFT JOIN suggestion s ON s.entity_id = e.id AND s.workspace_id = e.workspace_id WHERE e.workspace_id = ? AND e.role = 'competitor' AND e.state IN ('on', 'off') ORDER BY e.state = 'off', e.origin <> 'manual', CASE WHEN e.origin = 'manual' THEN e.created_at END DESC, e.created_at ASC, e.id ASC";
 
 interface CompetitorDbRow {
   entity_id: string;
@@ -323,6 +333,20 @@ export function turnOffFromRetireSuggestion(input: {
   return env.DB
     .prepare(TURN_OFF_FROM_RETIRE_SUGGESTION)
     .bind(input.now, input.workspaceId, input.suggestionId);
+}
+
+const RETIRE_COMPETITOR_BY_JEV =
+  "UPDATE entity SET state = 'off', state_reason = ?1, state_changed_by = 'jev', state_changed_at = ?2 WHERE id = ?3 AND workspace_id = ?4 AND role = 'competitor' AND state = 'on' AND origin = 'auto'";
+
+export function retireCompetitorByJev(input: {
+  workspaceId: string;
+  entityId: string;
+  reason: string;
+  now: string;
+}): D1PreparedStatement {
+  return env.DB
+    .prepare(RETIRE_COMPETITOR_BY_JEV)
+    .bind(input.reason, input.now, input.entityId, input.workspaceId);
 }
 
 export async function readCompetitors(
