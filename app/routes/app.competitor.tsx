@@ -1,11 +1,13 @@
 import type { Route } from "./+types/app.competitor";
 
-import { redirect, useFetcher } from "react-router";
+import { Form, redirect, useFetcher } from "react-router";
 
 import { BrandSwitchField } from "../components/brand-switch";
 import { CompetitorFrame } from "../components/competitor-frame";
 import { CompetitorHeader, DAY_MONTH } from "../components/competitor-header";
+import { Button } from "../components/ui/button";
 import { readCompetitorPage } from "../lib/competitor-page.server";
+import { forgetCompetitor } from "../lib/competitor-forget.server";
 import { handleCompetitorIntent } from "../lib/competitors.server";
 import { readWorkspaceIdForOwner } from "../lib/data/workspace.server";
 import { daysAgoLabel } from "../lib/delivery-alert";
@@ -42,6 +44,10 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 export async function action({ request, params }: Route.ActionArgs) {
   const workspaceId = await workspaceFor(request);
   const intent = (await request.formData()).get("intent");
+  if (intent === "forget") {
+    await forgetCompetitor(workspaceId, params.entityId, new Date().toISOString());
+    throw redirect("/app/competitors");
+  }
   const form = new FormData();
   form.set("intent", intent === "on" || intent === "off" ? intent : "");
   form.set("entityId", params.entityId);
@@ -72,6 +78,15 @@ export default function Page({ loaderData }: Route.ComponentProps) {
           />
         }
       />
+      <Form method="post" className="flex min-w-0 flex-col items-start gap-2">
+        <input type="hidden" name="intent" value="forget" />
+        <Button type="submit" variant="secondary">
+          Stop tracking and delete its history
+        </Button>
+        <p className="text-meta text-ink-soft">
+          Turning it off keeps its history. This deletes every change and screenshot we kept for it.
+        </p>
+      </Form>
       <CompetitorFrame
         changes={loaderData.changes}
         weekCount={loaderData.weekCount}

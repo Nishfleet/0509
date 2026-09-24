@@ -1,4 +1,4 @@
--- 0013_news_sources.sql — the source rows the nightly mentions sweep reads.
+-- 0016_news_sources.sql — the source rows the nightly mentions sweep reads.
 --
 -- A source is a row plus a plugin (docs/REBUILD-SCHEMA.md), so this file only
 -- inserts rows; the plugins are workers/sources/registry.ts. Nothing here

@@ -11,7 +11,7 @@ import { markWatchPolled, readActiveWatches } from "../../app/lib/data/watch.ser
 import type { NoulQuestion, NoulVerdict } from "../../app/lib/jev/client.server";
 import { askNoul, JevUnavailableError } from "../../app/lib/jev/client.server";
 import { noulAction } from "../../app/lib/jev/thresholds";
-import type { MentionItem } from "../sources/mentions/types";
+import type { MentionItem } from "./map";
 import { adapterFor } from "../sources/registry";
 
 const JUDGED_PER_WATCH = 12;
@@ -75,7 +75,7 @@ function subjectOf(watch: WatchRow) {
 function itemOf(item: MentionItem, reliability: string) {
   return {
     title: item.title,
-    publisher: item.publisher,
+    publisher: item.publisher ?? null,
     url: item.url,
     published_at: item.publishedAt,
     reliability,
@@ -164,7 +164,7 @@ async function statementsForWatch(input: {
         title: item.title,
         url: item.url,
         urlHash: await sha256Hex(item.url),
-        publisher: item.publisher,
+        publisher: item.publisher ?? null,
         dedupKey,
         publishedAt: item.publishedAt,
         observedAt: now,
@@ -182,7 +182,7 @@ async function statementsForWatch(input: {
           signalId,
           kind: "mention",
           title: `${watch.name}: ${item.title}`,
-          body: item.publisher,
+          body: item.publisher ?? null,
           createdAt: now,
         }),
       );
@@ -195,7 +195,8 @@ async function statementsForWatch(input: {
 export async function sweepTarget(target: MentionTarget, now: string): Promise<TargetOutcome> {
   const adapter = adapterFor(target.pluginKey);
   if (adapter === undefined) throw new Error(`no mentions adapter for ${target.pluginKey}`);
-  const result = await adapter({ query: target.query });
+  const result = await adapter({ query: target.query }, null);
+  const titled = result.items.filter((item) => item.title.trim() !== "");
   const hash = await sha256Hex(result.rawBody);
   const r2Key = `snapshot/mentions/${target.pluginKey}/${hash}`;
   await env.SNAPSHOTS.put(r2Key, result.rawBody, { httpMetadata: { contentType: "application/octet-stream" } });
@@ -209,7 +210,7 @@ export async function sweepTarget(target: MentionTarget, now: string): Promise<T
     }
     const context = contexts.get(watch.workspace_id);
     if (context === null || context === undefined) continue;
-    const written = await statementsForWatch({ watch, context, items: result.items, snapshot: { r2Key, hash }, now });
+    const written = await statementsForWatch({ watch, context, items: titled, snapshot: { r2Key, hash }, now });
     await env.DB.batch(written.statements);
     await markWatchPolled(watch.watch_id, now);
     stored += written.stored;

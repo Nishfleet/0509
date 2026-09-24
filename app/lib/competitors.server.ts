@@ -1,5 +1,6 @@
 import { addManualCompetitor, setCompetitorState } from "./data/entity.server";
-import { acceptSuggestion, dismissSuggestion } from "./data/suggestion.server";
+import { readCompetitorCap } from "./data/plan.server";
+import { acceptSuggestion, confirmRetireSuggestion, dismissSuggestion, keepFromRetireSuggestion } from "./data/suggestion.server";
 import { isTakenDown } from "./data/takedown.server";
 import { normaliseSubject } from "./identity/normalise";
 
@@ -21,7 +22,11 @@ async function addCompetitor(workspaceId: string, raw: string, now: string): Pro
   }
   const domain = normalised.subject.registrable;
   if (await isTakenDown(domain)) return { message: "That brand asked not to be tracked, so we can't add it." };
-  await addManualCompetitor({ workspaceId, domain, now });
+  const cap = await readCompetitorCap(workspaceId);
+  const outcome = await addManualCompetitor({ workspaceId, domain, now, cap });
+  if (outcome === "at_cap") {
+    return { message: `Your plan watches up to ${String(cap)} competitors. Switch one off to add another.` };
+  }
   return DONE;
 }
 
@@ -32,6 +37,14 @@ export async function handleCompetitorIntent(workspaceId: string, form: FormData
   const entityId = text(form, "entityId");
   if (intent === "accept" && suggestionId !== "") {
     await acceptSuggestion({ workspaceId, suggestionId, now });
+    return DONE;
+  }
+  if (intent === "stop" && suggestionId !== "") {
+    await confirmRetireSuggestion({ workspaceId, suggestionId, now });
+    return DONE;
+  }
+  if (intent === "keep" && suggestionId !== "") {
+    await keepFromRetireSuggestion({ workspaceId, suggestionId, now });
     return DONE;
   }
   if (intent === "dismiss" && suggestionId !== "") {

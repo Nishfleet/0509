@@ -97,6 +97,55 @@ describe("transportApi", () => {
 		).rejects.toBeInstanceOf(AdsTransportAuthError);
 	});
 
+	it("asks fetch for a manual redirect when the request carries a bearer token", async () => {
+		let redirect: RequestRedirect | undefined;
+		const d = parseAdsDescriptor({
+			...apiBase,
+			endpoint: "https://api.example.com/{target}",
+			auth: { kind: "bearer", secretEnv: "EXAMPLE_TOKEN" },
+		});
+		await transportApi(d, "acme", {
+			secrets: { EXAMPLE_TOKEN: "tok-1" },
+			fetchImpl: async (_input, init) => {
+				redirect = init?.redirect;
+				return jsonResponse({});
+			},
+		});
+		expect(redirect).toBe("manual");
+	});
+
+	it("asks fetch to follow redirects when the descriptor has no bearer auth", async () => {
+		let redirect: RequestRedirect | undefined;
+		const d = parseAdsDescriptor({
+			...apiBase,
+			endpoint: "https://api.example.com/{target}",
+		});
+		await transportApi(d, "acme", {
+			fetchImpl: async (_input, init) => {
+				redirect = init?.redirect;
+				return jsonResponse({});
+			},
+		});
+		expect(redirect).toBe("follow");
+	});
+
+	it("drops a third-party pagination cursor that fails the zod check", async () => {
+		const d = parseAdsDescriptor({
+			...apiBase,
+			endpoint: "https://api.example.com/list?after={cursor}&q={target}",
+			paginationCursorPath: "next",
+		});
+		let calls = 0;
+		const r = await transportApi(d, "acme", {
+			fetchImpl: async () => {
+				calls++;
+				return jsonResponse({ next: "x".repeat(2000) });
+			},
+		});
+		expect(calls).toBe(1);
+		expect(r.payload).toHaveLength(1);
+	});
+
 	it("returns a non-2xx status with its body instead of throwing", async () => {
 		const d = parseAdsDescriptor({
 			...apiBase,

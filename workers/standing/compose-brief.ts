@@ -23,7 +23,8 @@ WHERE workspace_id = ?1 AND rank IS NOT NULL AND week_start_at < ?2`;
 const SIGNAL_COUNTS = `SELECT s.entity_id AS entity_id,
        SUM(CASE WHEN s.kind = 'ad' AND s.published_at >= ?2 AND s.published_at < ?3 THEN 1 ELSE 0 END) AS new_ads,
        SUM(CASE WHEN s.kind = 'mention' THEN 1 ELSE 0 END) AS mentions,
-       SUM(CASE WHEN s.kind = 'change' THEN 1 ELSE 0 END) AS site_changes
+       SUM(CASE WHEN s.kind = 'change' THEN 1 ELSE 0 END) AS site_changes,
+       SUM(CASE WHEN s.kind = 'hiring' THEN 1 ELSE 0 END) AS new_roles
 FROM signal s
 JOIN entity e ON e.id = s.entity_id AND e.workspace_id = ?1 AND e.state = 'on'
 WHERE s.workspace_id = ?1 AND s.observed_at >= ?2 AND s.observed_at < ?3 AND s.is_tombstoned = 0
@@ -49,6 +50,11 @@ JOIN page p ON p.id = i.page_id
 WHERE i.workspace_id = ?1 AND i.opened_at < ?3 AND (i.closed_at IS NULL OR i.closed_at >= ?2)
 ORDER BY i.opened_at ASC`;
 
+const PAUSED_COMPETITORS = `SELECT COALESCE(NULLIF(name, ''), domain) AS name
+FROM entity
+WHERE workspace_id = ?1 AND role = 'competitor' AND state = 'off' AND state_changed_at >= ?2 AND state_changed_at < ?3
+ORDER BY state_changed_at ASC`;
+
 const rankedBrandRows = z.array(
   z.object({
     entity_id: z.string(),
@@ -67,6 +73,7 @@ const signalCountRows = z.array(
     new_ads: z.number().int(),
     mentions: z.number().int(),
     site_changes: z.number().int(),
+    new_roles: z.number().int(),
   }),
 );
 
@@ -89,6 +96,8 @@ const incidentRows = z.array(
   }),
 );
 
+const pausedCompetitorRows = z.array(z.object({ name: z.string() }));
+
 export interface ComposeInput {
   workspaceId: string;
   schedule: BriefSchedule;
@@ -99,15 +108,22 @@ function quietWeekLine(mentions: number, siteChanges: number, newAds: number): s
   return `Quiet week: ${countPhrase(mentions, "mention", "mentions")} checked, ${countPhrase(siteChanges, "site change", "site changes")}, ${countPhrase(newAds, "new ad", "new ads")}.`;
 }
 
+export function pausedSentence(names: readonly string[]): string | null {
+  if (names.length === 0) return null;
+  if (names.length === 1) return `${names[0]} paused, so every brand below it moved up.`;
+  return `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]} paused, so every brand below them moved up.`;
+}
+
 export async function composeBrief(db: D1Database, input: ComposeInput): Promise<BriefPayload> {
   const startsAt = input.week.startsAt.toISOString();
   const closesAt = input.week.closesAt.toISOString();
-  const [ranked, frozen, counts, coverage, incidents] = await db.batch([
+  const [ranked, frozen, counts, coverage, incidents, pausedRows] = await db.batch([
     db.prepare(RANKED_BRANDS).bind(input.workspaceId, startsAt),
     db.prepare(PREVIOUS_FROZEN_WEEKS).bind(input.workspaceId, startsAt),
     db.prepare(SIGNAL_COUNTS).bind(input.workspaceId, startsAt, closesAt),
     db.prepare(SOURCE_COVERAGE).bind(input.workspaceId, startsAt, closesAt),
     db.prepare(OWN_SITE_INCIDENTS).bind(input.workspaceId, startsAt, closesAt),
+    db.prepare(PAUSED_COMPETITORS).bind(input.workspaceId, startsAt, closesAt),
   ]);
 
   const brands = rankedBrandRows.parse(ranked.results);
@@ -117,6 +133,7 @@ export async function composeBrief(db: D1Database, input: ComposeInput): Promise
   );
   const sources = sourceCoverageRows.parse(coverage.results);
   const ownSite = incidentRows.parse(incidents.results);
+  const pausedNames = pausedCompetitorRows.parse(pausedRows.results).map((row) => row.name);
 
   const lines = brands.map((brand) => {
     const count = countsByEntity.get(brand.entity_id);
@@ -130,6 +147,7 @@ export async function composeBrief(db: D1Database, input: ComposeInput): Promise
       ad_delta: count?.new_ads ?? 0,
       mention_delta: count?.mentions ?? 0,
       site_change_count: count?.site_changes ?? 0,
+      new_roles: count?.new_roles ?? 0,
     };
   });
   const mentionCount = lines.reduce((total, line) => total + line.mention_delta, 0);
@@ -138,6 +156,9 @@ export async function composeBrief(db: D1Database, input: ComposeInput): Promise
   const selfId = brands.find((brand) => brand.role === "self")?.entity_id;
   const self = lines.find((line) => line.entity_id === selfId);
   const degraded = sources.filter((source) => source.answered === 0);
+
+  const pausedLine = pausedSentence(pausedNames);
+  const countsLine = quietWeekLine(mentionCount, siteChangeCount, newAdCount);
 
   return {
     workspace_id: input.workspaceId,
@@ -148,7 +169,7 @@ export async function composeBrief(db: D1Database, input: ComposeInput): Promise
     headline_total: lines.length,
     headline_movement: self?.movement ?? null,
     headline_is_new: self?.is_new ?? false,
-    why_line: quietWeekLine(mentionCount, siteChangeCount, newAdCount),
+    why_line: pausedLine === null ? countsLine : `${countsLine} ${pausedLine}`,
     is_quiet_week: true,
     read_this_first: [],
     brands: lines,

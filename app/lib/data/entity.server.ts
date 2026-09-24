@@ -2,6 +2,15 @@ import { env } from "cloudflare:workers";
 
 export type CompetitorState = "on" | "off";
 
+export type EntityOrigin = "manual" | "auto" | "seed";
+
+export interface RefreshTarget {
+  entityId: string;
+  name: string;
+  domain: string;
+  origin: EntityOrigin;
+}
+
 export interface CompetitorEntity {
   id: string;
   name: string;
@@ -30,6 +39,14 @@ interface Row {
   domain: string;
   state: CompetitorState;
   state_changed_at: string | null;
+}
+
+export interface RetireQuestion {
+  suggestionId: string;
+  entityId: string;
+  name: string;
+  domain: string;
+  reason: string | null;
 }
 
 interface OnRow {
@@ -210,17 +227,47 @@ export async function readSelfWorkspaceIds(): Promise<string[]> {
   return rows.results.map((row) => row.workspace_id);
 }
 
+const SELECT_REFRESH_TARGETS =
+  "SELECT id, name, domain, origin FROM entity WHERE workspace_id = ? AND role = 'competitor' AND state = 'on' ORDER BY created_at ASC, id ASC";
+
+interface RefreshRow {
+  id: string;
+  name: string | null;
+  domain: string;
+  origin: EntityOrigin;
+}
+
+export async function readRefreshTargets(workspaceId: string): Promise<RefreshTarget[]> {
+  const { results } = await env.DB.prepare(SELECT_REFRESH_TARGETS).bind(workspaceId).all<RefreshRow>();
+  return results.map((row) => ({
+    entityId: row.id,
+    name: displayName(row.name, row.domain),
+    domain: row.domain,
+    origin: row.origin,
+  }));
+}
+
 const INSERT_MANUAL_COMPETITOR =
-  "INSERT INTO entity (id, workspace_id, role, domain, name, origin, confirmed_at, state, state_changed_at, state_changed_by, created_at) VALUES (?1, ?2, 'competitor', ?3, ?4, 'manual', ?5, 'on', ?5, 'user', ?5) ON CONFLICT (workspace_id, domain) DO UPDATE SET state = 'on', state_changed_at = excluded.state_changed_at, state_changed_by = 'user', state_reason = NULL WHERE entity.role = 'competitor'";
+  "INSERT INTO entity (id, workspace_id, role, domain, name, origin, confirmed_at, state, state_changed_at, state_changed_by, created_at) SELECT ?1, ?2, 'competitor', ?3, ?4, 'manual', ?5, 'on', ?5, 'user', ?5 WHERE (SELECT count(*) FROM entity WHERE workspace_id = ?2 AND role = 'competitor' AND state = 'on' AND domain <> ?3) < ?6 ON CONFLICT (workspace_id, domain) DO UPDATE SET state = 'on', state_changed_at = excluded.state_changed_at, state_changed_by = 'user', state_reason = NULL WHERE entity.role = 'competitor'";
+
+const COUNT_OTHER_ON =
+  "SELECT count(*) AS n FROM entity WHERE workspace_id = ? AND role = 'competitor' AND state = 'on' AND domain <> ?";
 
 export async function addManualCompetitor(input: {
   workspaceId: string;
   domain: string;
   now: string;
-}): Promise<void> {
-  await env.DB.prepare(INSERT_MANUAL_COMPETITOR)
-    .bind(crypto.randomUUID(), input.workspaceId, input.domain, input.domain, input.now)
+  cap: number;
+}): Promise<"added" | "at_cap"> {
+  const result = await env.DB.prepare(INSERT_MANUAL_COMPETITOR)
+    .bind(crypto.randomUUID(), input.workspaceId, input.domain, input.domain, input.now, input.cap)
     .run();
+  if (result.meta.changes === 1) return "added";
+  const count = await env.DB.prepare(COUNT_OTHER_ON)
+    .bind(input.workspaceId, input.domain)
+    .first<{ n: number }>();
+  if (count !== null && count.n >= input.cap) return "at_cap";
+  return "added";
 }
 
 const INSERT_AUTO_COMPETITOR =
@@ -252,7 +299,7 @@ export interface CompetitorRow {
 }
 
 const SELECT_COMPETITORS =
-  "SELECT e.id AS entity_id, e.name, e.domain, e.state, e.state_changed_at, s.verdict_reason AS reason FROM entity e LEFT JOIN suggestion s ON s.entity_id = e.id AND s.workspace_id = e.workspace_id WHERE e.workspace_id = ? AND e.role = 'competitor' AND e.state IN ('on', 'off') ORDER BY e.state = 'off', e.created_at ASC, e.id ASC";
+  "SELECT e.id AS entity_id, e.name, e.domain, e.state, e.state_changed_at, s.verdict_reason AS reason FROM entity e LEFT JOIN suggestion s ON s.entity_id = e.id AND s.workspace_id = e.workspace_id WHERE e.workspace_id = ? AND e.role = 'competitor' AND e.state IN ('on', 'off') ORDER BY e.state = 'off', e.origin <> 'manual', CASE WHEN e.origin = 'manual' THEN e.created_at END DESC, e.created_at ASC, e.id ASC";
 
 interface CompetitorDbRow {
   entity_id: string;
@@ -263,12 +310,37 @@ interface CompetitorDbRow {
   reason: string | null;
 }
 
+const SELECT_RETIRE_QUESTIONS =
+  "SELECT s.id AS suggestion_id, e.id AS entity_id, e.name, e.domain, s.verdict_reason AS reason FROM suggestion s JOIN entity e ON e.id = s.entity_id AND e.workspace_id = s.workspace_id WHERE s.workspace_id = ?1 AND s.kind = 'retire' AND s.status = 'pending' AND e.role = 'competitor' AND e.state = 'on' ORDER BY s.created_at ASC, s.id ASC";
+
+interface RetireQuestionRow {
+  suggestion_id: string;
+  entity_id: string;
+  name: string | null;
+  domain: string;
+  reason: string | null;
+}
+
+const TURN_OFF_FROM_RETIRE_SUGGESTION =
+  "UPDATE entity SET state = 'off', state_changed_at = ?1, state_changed_by = 'user', state_reason = NULL WHERE workspace_id = ?2 AND role = 'competitor' AND state = 'on' AND id = (SELECT entity_id FROM suggestion WHERE id = ?3 AND workspace_id = ?2 AND kind = 'retire' AND status = 'pending')";
+
+export function turnOffFromRetireSuggestion(input: {
+  workspaceId: string;
+  suggestionId: string;
+  now: string;
+}): D1PreparedStatement {
+  return env.DB
+    .prepare(TURN_OFF_FROM_RETIRE_SUGGESTION)
+    .bind(input.now, input.workspaceId, input.suggestionId);
+}
+
 export async function readCompetitors(
   workspaceId: string,
-): Promise<{ competitors: CompetitorRow[]; maybes: MaybeCompetitor[] }> {
-  const [rows, { maybes }] = await Promise.all([
+): Promise<{ competitors: CompetitorRow[]; maybes: MaybeCompetitor[]; questions: RetireQuestion[] }> {
+  const [rows, { maybes }, questions] = await Promise.all([
     env.DB.prepare(SELECT_COMPETITORS).bind(workspaceId).all<CompetitorDbRow>(),
     readOnboardingCompetitors(workspaceId),
+    env.DB.prepare(SELECT_RETIRE_QUESTIONS).bind(workspaceId).all<RetireQuestionRow>(),
   ]);
   return {
     competitors: rows.results.map((row) => ({
@@ -280,5 +352,12 @@ export async function readCompetitors(
       reason: row.reason,
     })),
     maybes,
+    questions: questions.results.map((row) => ({
+      suggestionId: row.suggestion_id,
+      entityId: row.entity_id,
+      name: displayName(row.name, row.domain),
+      domain: row.domain,
+      reason: row.reason,
+    })),
   };
 }

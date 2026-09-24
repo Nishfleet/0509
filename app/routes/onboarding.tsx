@@ -6,11 +6,14 @@ import { requireSession } from "../lib/require-session.server";
 import { workspaceLandingForRequest } from "../lib/workspace.server";
 import { OneInput } from "../components/one-input";
 import { AddPasskey } from "../components/passkey-button";
-import { ONBOARDING_PAGE } from "../components/page-heading";
-import { StepBar } from "../components/step-bar";
+import { OnboardingFrame } from "../components/onboarding-frame";
 import { subjectRedirect } from "../lib/onboarding-subject";
 import { isTakenDown } from "../lib/data/takedown.server";
 import { normaliseSubject } from "../lib/identity/normalise";
+
+export function meta() {
+  return [{ title: "Start with your website or a handle · Five to Nine" }];
+}
 
 export async function loader({ request }: Route.LoaderArgs) {
   const session = await requireSession(request);
@@ -33,9 +36,7 @@ export async function action({ request }: Route.ActionArgs) {
 
 export default function Page({ loaderData, actionData }: Route.ComponentProps) {
   return (
-    <main className={ONBOARDING_PAGE}>
-      <StepBar current={1} />
-      <h1 className="font-display text-display-2 mt-10 font-extrabold uppercase">Start with your website</h1>
+    <OnboardingFrame step={1} heading="Start with your website or a handle" hideHeading>
       <p className="text-ink-soft mt-3 max-w-prose leading-[1.55]">
         We read it and draw your card, then find who you're up against. A handle like @yourbrand works too.
       </p>
@@ -51,6 +52,6 @@ export default function Page({ loaderData, actionData }: Route.ComponentProps) {
         <p className="[overflow-wrap:anywhere]">Signed in as {loaderData.email}</p>
         <AddPasskey />
       </footer>
-    </main>
+    </OnboardingFrame>
   );
 }

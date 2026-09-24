@@ -7,12 +7,17 @@ import { BrandSwitch, brandSwitchNote } from "../components/brand-switch";
 import { AddCompetitor, CompetitorMaybes } from "../components/competitor-maybes";
 import { EmptyState } from "../components/empty-state";
 import { PAGE, PageHeading } from "../components/page-heading";
+import { RetireQuestions } from "../components/retire-questions";
 import { cn } from "../lib/utils";
 import { handleCompetitorIntent } from "../lib/competitors.server";
 import type { CompetitorRow } from "../lib/data/entity.server";
 import { readCompetitors } from "../lib/data/entity.server";
 import { readWorkspaceIdForOwner } from "../lib/data/workspace.server";
 import { requireSession } from "../lib/require-session.server";
+
+export function meta() {
+  return [{ title: "Competitors · Five to Nine" }];
+}
 
 async function workspaceFor(request: Request): Promise<string> {
   const session = await requireSession(request);
@@ -65,7 +70,7 @@ function CompetitorItem({ competitor }: { competitor: CompetitorRow }) {
 }
 
 export default function Page({ loaderData, actionData }: Route.ComponentProps) {
-  const { competitors, maybes } = loaderData;
+  const { competitors, maybes, questions } = loaderData;
   return (
     <main className={PAGE}>
       <PageHeading
@@ -83,6 +88,7 @@ export default function Page({ loaderData, actionData }: Route.ComponentProps) {
           ))}
         </ul>
       )}
+      <RetireQuestions questions={questions} />
       <CompetitorMaybes maybes={maybes} />
       <AddCompetitor message={actionData?.message} />
     </main>

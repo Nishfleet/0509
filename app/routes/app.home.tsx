@@ -11,6 +11,10 @@ import { readHomeStandingInputs } from "../lib/home-standing.server";
 import { requireSession } from "../lib/require-session.server";
 import { workspaceLandingForRequest } from "../lib/workspace.server";
 
+export function meta() {
+  return [{ title: "Home · Five to Nine" }];
+}
+
 export async function loader({ request }: Route.LoaderArgs) {
   const session = await requireSession(request);
   const landing = await workspaceLandingForRequest(request, session.user.id);
@@ -25,6 +29,9 @@ export default function Page({ loaderData }: Route.ComponentProps) {
     <main className={PAGE}>
       <HomeStanding view={loaderData.view} />
       {loaderData.view.standing.kind === "ranked" ? <ShareButton /> : null}
+      <footer className="border-line mt-14 border-t pt-7">
+        <p className="font-mono text-eyebrow text-ink-soft">{loaderData.view.footer}</p>
+      </footer>
     </main>
   );
 }

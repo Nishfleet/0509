@@ -5,6 +5,7 @@ import { createRequestHandler } from "react-router";
 
 import { requestContext } from "../app/lib/agent/context.server";
 import { createOAuthProvider } from "../app/lib/agent/oauth.server";
+import { deleteExpiredAuthRows } from "../app/lib/data/auth_expiry.server";
 import { startNightlyDiscovery } from "../app/lib/discovery/start.server";
 import { assertWorkerEnv, WorkerEnvError, workerEnvFailureResponse } from "../app/lib/env.server";
 import { pingLiveness } from "../app/lib/liveness-ping.server";
@@ -53,6 +54,7 @@ const handler = {
       ctx.waitUntil(runNightlyStanding(env, now));
       ctx.waitUntil(sweepPending(env, now));
       ctx.waitUntil(startNightlyDiscovery(now));
+      ctx.waitUntil(deleteExpiredAuthRows(env.DB, now));
       return;
     }
     const ping = pingLiveness(env.LIVENESS_PING_URL);

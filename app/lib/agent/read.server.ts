@@ -6,12 +6,14 @@ import { readDeliveryFailures, readTakedownNotes } from "../data/alert.server";
 import { readOnboardingCompetitors } from "../data/entity.server";
 import type { SiteChangeView } from "../site-change";
 import { daysBefore, readSiteChangeViews } from "../site-changes.server";
-import type { AlertsResult, BriefResult, CompetitorsResult } from "./schemas";
+import type { AlertsResult, BriefResult, CompetitorsResult, StandingResult } from "./schemas";
 
 const SELECT_LATEST_BRIEF = `SELECT payload_json FROM digest
 WHERE workspace_id = ? AND kind = 'weekly'
 ORDER BY period_end DESC
 LIMIT 1`;
+
+const SELECT_OFF_ENTITIES = `SELECT id FROM entity WHERE workspace_id = ? AND state = 'off'`;
 
 function toBrief(payload: BriefPayload): NonNullable<BriefResult["brief"]> {
   return {
@@ -81,6 +83,16 @@ export async function readAgentCompetitors(workspaceId: string): Promise<Competi
     tracked: on.map((row) => ({ id: row.entityId, name: row.name, domain: row.domain, reason: row.reason })),
     suggested: maybes.map((row) => ({ id: row.suggestionId, name: row.name, domain: row.domain, reason: row.reason })),
   };
+}
+
+export async function readAgentStanding(workspaceId: string): Promise<StandingResult> {
+  const [{ brief }, off] = await Promise.all([
+    readAgentBrief(workspaceId),
+    env.DB.prepare(SELECT_OFF_ENTITIES).bind(workspaceId).all<{ id: string }>(),
+  ]);
+  if (brief === null) return { standing: null };
+  const hidden = new Set(off.results.map((row) => row.id));
+  return { standing: { ...brief.headline, lines: brief.standing.filter((line) => !hidden.has(line.competitorId)) } };
 }
 
 function changeBody(change: SiteChangeView): string {

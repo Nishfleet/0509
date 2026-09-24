@@ -1,32 +1,32 @@
 import { z } from "zod";
 
 export const mentionItemSchema = z.object({
-  dedupKey: z.string().min(1),
-  url: z.url({ protocol: /^https?$/ }),
-  title: z.string().min(1),
-  publisher: z.string().nullable(),
-  publishedAt: z.string().nullable(),
+	dedupKey: z.string().min(1),
+	url: z.url({ protocol: /^https?$/ }),
+	title: z.string(),
+	publishedAt: z.string().nullable(),
+	publisher: z.string().nullable().optional(),
 });
 
-export type MentionItem = z.infer<typeof mentionItemSchema>;
+export const mentionsResultSchema = z.object({
+	items: z.array(mentionItemSchema),
+	canaryCount: z.number().int().nonnegative(),
+	rawBody: z.string(),
+});
 
-export function webItems(items: readonly unknown[]): MentionItem[] {
-  return items.flatMap((item) => {
-    const parsed = mentionItemSchema.safeParse(item);
-    return parsed.success ? [parsed.data] : [];
-  });
+export type MentionsResult = z.infer<typeof mentionsResultSchema>;
+
+export interface MentionsTarget {
+	readonly query: string;
 }
 
-interface MentionsResult {
-  items: MentionItem[];
-  rawBody: string;
-}
+export type MentionsCursor = string | null;
 
-export type MentionsAdapter = (target: { readonly query: string }) => Promise<MentionsResult>;
+export type MentionsAdapter = (
+	target: MentionsTarget,
+	cursor: MentionsCursor,
+) => Promise<MentionsResult>;
 
 export function fetchUpstream(url: string): Promise<Response> {
-  return fetch(url, {
-    headers: { "User-Agent": "0509.io/1.0 (https://0509.io)" },
-    signal: AbortSignal.timeout(8000),
-  });
+	return fetch(url, { signal: AbortSignal.timeout(8000) });
 }
