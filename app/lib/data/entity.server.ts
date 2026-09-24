@@ -341,6 +341,20 @@ export function turnOffFromRetireSuggestion(input: {
     .bind(input.now, input.workspaceId, input.suggestionId);
 }
 
+const RETIRE_COMPETITOR_BY_JEV =
+  "UPDATE entity SET state = 'off', state_reason = ?1, state_changed_by = 'jev', state_changed_at = ?2 WHERE id = ?3 AND workspace_id = ?4 AND role = 'competitor' AND state = 'on' AND origin = 'auto'";
+
+export function retireCompetitorByJev(input: {
+  workspaceId: string;
+  entityId: string;
+  reason: string;
+  now: string;
+}): D1PreparedStatement {
+  return env.DB
+    .prepare(RETIRE_COMPETITOR_BY_JEV)
+    .bind(input.reason, input.now, input.entityId, input.workspaceId);
+}
+
 export async function readCompetitors(
   workspaceId: string,
 ): Promise<{ competitors: CompetitorRow[]; maybes: MaybeCompetitor[]; questions: RetireQuestion[] }> {
