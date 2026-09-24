@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 
 import { describe, expect, it } from "vitest";
 
-import { assertSyncPull, readReport, summaryFor } from "./feature-map-outcome";
+import { assertSyncPull, readReport, readSyncPull, summaryFor } from "./feature-map-outcome";
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const SHA = "abc123";
@@ -59,6 +59,25 @@ describe("feature-map outcome", () => {
     expect(() =>
       assertSyncPull({ ...view, files: [...view.files, { filename: "app/routes.ts" }] }, SHA),
     ).toThrow("pull files");
+  });
+
+  it("reads the path field gh pr view returns", () => {
+    const view = readSyncPull(
+      JSON.stringify({
+        title: `feature-map: sync with ${SHA}`,
+        body: "take_snapshot\nbutton \"Map probe\"",
+        files: [{ path: ".agents/skills/verify/feature-map.md", additions: 2 }],
+      }),
+    );
+    expect(() => assertSyncPull(view, SHA)).not.toThrow();
+    const empty = readSyncPull(
+      JSON.stringify({
+        title: `feature-map: sync with ${SHA}`,
+        body: null,
+        files: [{ path: ".agents/skills/verify/feature-map.md" }],
+      }),
+    );
+    expect(() => assertSyncPull(empty, SHA)).toThrow("pull body is empty");
   });
 });
 
