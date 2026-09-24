@@ -125,7 +125,7 @@ function stubFetch(
 describe("readUrl", () => {
   it("serves a healthy page over plain fetch and never touches the browser", async () => {
     const stub = stubFetch({
-      "https://brand.example/": () =>
+      "https://brand.example.com/": () =>
         new Response(SUBSTANTIAL_PAGE, { status: 200 }),
     });
     const browser = fakeBrowser({
@@ -135,7 +135,7 @@ describe("readUrl", () => {
     });
     try {
       install(browser);
-      const result = await readUrl("https://brand.example/");
+      const result = await readUrl("https://brand.example.com/");
       expect(result.ok).toBe(true);
       if (!result.ok) return;
       expect(result.transport).toBe("fetch");
@@ -155,14 +155,14 @@ describe("readUrl", () => {
 
   it("bounds the plain fetch with AbortSignal.timeout(8000)", async () => {
     const stub = stubFetch({
-      "https://brand.example/": () =>
+      "https://brand.example.com/": () =>
         new Response(SUBSTANTIAL_PAGE, { status: 200 }),
     });
     const browser = fakeBrowser({ ok: true, html: SUBSTANTIAL_PAGE });
     const spy = vi.spyOn(AbortSignal, "timeout");
     try {
       install(browser);
-      await readUrl("https://brand.example/");
+      await readUrl("https://brand.example.com/");
       // The 8 s deadline from the packet, pinned: any other value would still
       // be an AbortSignal, so `instanceof` alone cannot catch a drift.
       expect(spy).toHaveBeenCalledWith(8000);
@@ -174,7 +174,7 @@ describe("readUrl", () => {
 
   it("escalates on a non-2xx and returns the page with its browser-time cost", async () => {
     const stub = stubFetch({
-      "https://gated.example/": () => new Response("Forbidden", { status: 403 }),
+      "https://gated.example.com/": () => new Response("Forbidden", { status: 403 }),
     });
     const browser = fakeBrowser({
       ok: true,
@@ -184,7 +184,7 @@ describe("readUrl", () => {
     });
     try {
       install(browser);
-      const result = await readUrl("https://gated.example/");
+      const result = await readUrl("https://gated.example.com/");
       expect(result.ok).toBe(true);
       if (!result.ok) return;
       expect(result.transport).toBe("browser");
@@ -193,7 +193,7 @@ describe("readUrl", () => {
       // The number the cost model is priced from, read off the header.
       expect(result.browserMsUsed).toBe(4123);
       expect(result.html).toBe(SUBSTANTIAL_PAGE);
-      expect(browser.calls).toEqual(["https://gated.example/"]);
+      expect(browser.calls).toEqual(["https://gated.example.com/"]);
     } finally {
       stub.restore();
     }
@@ -201,7 +201,7 @@ describe("readUrl", () => {
 
   it("escalates on a challenge body served with a 200", async () => {
     const stub = stubFetch({
-      "https://challenge.example/": () =>
+      "https://challenge.example.com/": () =>
         new Response(CHALLENGE_PAGE, { status: 200 }),
     });
     const browser = fakeBrowser({
@@ -211,7 +211,7 @@ describe("readUrl", () => {
     });
     try {
       install(browser);
-      const result = await readUrl("https://challenge.example/");
+      const result = await readUrl("https://challenge.example.com/");
       expect(result.ok).toBe(true);
       if (!result.ok) return;
       // The status alone cannot tell gated from served: this is a 200.
@@ -225,7 +225,7 @@ describe("readUrl", () => {
 
   it("escalates on a 200 whose extracted text is under the floor", async () => {
     const stub = stubFetch({
-      "https://shell.example/": () =>
+      "https://shell.example.com/": () =>
         new Response(
           `<!doctype html><html><body><div id="app"></div></body></html>`,
           { status: 200 },
@@ -238,7 +238,7 @@ describe("readUrl", () => {
     });
     try {
       install(browser);
-      const result = await readUrl("https://shell.example/");
+      const result = await readUrl("https://shell.example.com/");
       expect(result.ok).toBe(true);
       if (!result.ok) return;
       expect(result.transport).toBe("browser");
@@ -248,10 +248,10 @@ describe("readUrl", () => {
     }
   });
 
-  it("escalates when the plain fetch throws at the transport level", async () => {
+  it("escalates when the plain fetch times out", async () => {
     const stub = stubFetch({
-      "https://refused.example/": () => {
-        throw new Error("connection refused");
+      "https://slow.example.com/": () => {
+        throw new DOMException("The operation timed out.", "TimeoutError");
       },
     });
     const browser = fakeBrowser({
@@ -261,7 +261,7 @@ describe("readUrl", () => {
     });
     try {
       install(browser);
-      const result = await readUrl("https://refused.example/");
+      const result = await readUrl("https://slow.example.com/");
       expect(result.ok).toBe(true);
       if (!result.ok) return;
       expect(result.transport).toBe("browser");
@@ -271,14 +271,58 @@ describe("readUrl", () => {
     }
   });
 
+  it("does not hand an unreachable host to the browser", async () => {
+    const stub = stubFetch({
+      "https://refused.example.com/": () => {
+        throw new Error("connection refused");
+      },
+    });
+    const browser = fakeBrowser({ ok: true, html: SUBSTANTIAL_PAGE });
+    try {
+      install(browser);
+      const result = await readUrl("https://refused.example.com/");
+      expect(result.ok).toBe(false);
+      if (result.ok) return;
+      expect(result.reason).toBe("unreachable");
+      expect(browser.calls).toEqual([]);
+    } finally {
+      stub.restore();
+    }
+  });
+
+  it.each([
+    "http://foo.localhost/",
+    "http://metadata.google.internal/",
+    "http://printer.local/",
+    "http://kubernetes.default.svc/",
+    "http://127.0.0.1/",
+    "http://2130706433/",
+    "http://169.254.169.254/latest/meta-data/",
+    "http://[::1]/",
+  ])("refuses the non-public host %s before any outbound call", async (url) => {
+    const stub = stubFetch({});
+    const browser = fakeBrowser({ ok: true, html: SUBSTANTIAL_PAGE });
+    try {
+      install(browser);
+      const result = await readUrl(url);
+      expect(result.ok).toBe(false);
+      if (result.ok) return;
+      expect(result.reason).toBe("invalid-url");
+      expect(stub.seen).toEqual([]);
+      expect(browser.calls).toEqual([]);
+    } finally {
+      stub.restore();
+    }
+  });
+
   it("does exactly ONE escalation, then a typed failure — no retry loop", async () => {
     const stub = stubFetch({
-      "https://gated.example/": () => new Response("Forbidden", { status: 403 }),
+      "https://gated.example.com/": () => new Response("Forbidden", { status: 403 }),
     });
     const browser = fakeBrowser({ ok: false, throwOnCall: true });
     try {
       install(browser);
-      const result = await readUrl("https://gated.example/");
+      const result = await readUrl("https://gated.example.com/");
       expect(result.ok).toBe(false);
       if (result.ok) return;
       expect(result.reason).toBe("escalation-failed");
@@ -291,12 +335,12 @@ describe("readUrl", () => {
 
   it("fails typed when the escalation answers non-ok", async () => {
     const stub = stubFetch({
-      "https://gated.example/": () => new Response("Forbidden", { status: 403 }),
+      "https://gated.example.com/": () => new Response("Forbidden", { status: 403 }),
     });
     const browser = fakeBrowser({ ok: false, status: 429 });
     try {
       install(browser);
-      const result = await readUrl("https://gated.example/");
+      const result = await readUrl("https://gated.example.com/");
       expect(result.ok).toBe(false);
       if (result.ok) return;
       expect(result.reason).toBe("escalation-failed");
@@ -309,7 +353,7 @@ describe("readUrl", () => {
 
   it("logs the escalation even when the browser call throws", async () => {
     const stub = stubFetch({
-      "https://gated.example/": () => new Response("Forbidden", { status: 403 }),
+      "https://gated.example.com/": () => new Response("Forbidden", { status: 403 }),
     });
     const browser = fakeBrowser({ ok: false, throwOnCall: true });
     const lines: string[] = [];
@@ -318,7 +362,7 @@ describe("readUrl", () => {
     });
     try {
       install(browser);
-      const result = await readUrl("https://gated.example/");
+      const result = await readUrl("https://gated.example.com/");
       expect(result.ok).toBe(false);
       if (result.ok) return;
       // The throw is the case the cost model most needs to see: an escalation
@@ -355,7 +399,7 @@ describe("readUrl", () => {
     const browser = fakeBrowser({ ok: true, html: SUBSTANTIAL_PAGE });
     try {
       install(browser);
-      const result = await readUrl("ftp://brand.example/");
+      const result = await readUrl("ftp://brand.example.com/");
       expect(result.ok).toBe(false);
       if (result.ok) return;
       expect(result.reason).toBe("invalid-url");
@@ -367,7 +411,7 @@ describe("readUrl", () => {
 
   it("never calls browser.close(), even on a successful escalation", async () => {
     const stub = stubFetch({
-      "https://gated.example/": () => new Response("Forbidden", { status: 403 }),
+      "https://gated.example.com/": () => new Response("Forbidden", { status: 403 }),
     });
     const browser = fakeBrowser({
       ok: true,
@@ -376,7 +420,7 @@ describe("readUrl", () => {
     });
     try {
       install(browser);
-      await readUrl("https://gated.example/");
+      await readUrl("https://gated.example.com/");
       // A per-request close re-pays cold-launch seconds and burns the
       // 3-instances-per-second rate limit (REBUILD-STACK.md §4.3).
       expect(browser.closed).toBe(0);
@@ -387,7 +431,7 @@ describe("readUrl", () => {
 
   it("carries the escalation's page status, not the browser's own 200", async () => {
     const stub = stubFetch({
-      "https://gated.example/": () => new Response("Forbidden", { status: 403 }),
+      "https://gated.example.com/": () => new Response("Forbidden", { status: 403 }),
     });
     const browser = fakeBrowser({
       ok: true,
@@ -397,7 +441,7 @@ describe("readUrl", () => {
     });
     try {
       install(browser);
-      const result = await readUrl("https://gated.example/");
+      const result = await readUrl("https://gated.example.com/");
       expect(result.ok).toBe(true);
       if (!result.ok) return;
       expect(result.status).toBe(404);
@@ -408,7 +452,7 @@ describe("readUrl", () => {
 
   it("logs X-Browser-Ms-Used on every escalation", async () => {
     const stub = stubFetch({
-      "https://gated.example/": () => new Response("Forbidden", { status: 403 }),
+      "https://gated.example.com/": () => new Response("Forbidden", { status: 403 }),
     });
     const browser = fakeBrowser({
       ok: true,
@@ -421,13 +465,13 @@ describe("readUrl", () => {
     });
     try {
       install(browser);
-      await readUrl("https://gated.example/");
+      await readUrl("https://gated.example.com/");
       const escalation = lines
         .map((line) => JSON.parse(line) as { event?: string; url?: string; browserMsUsed?: number })
         .find((row) => row.event === "browser-escalation");
       expect(escalation).toMatchObject({
         event: "browser-escalation",
-        url: "https://gated.example/",
+        url: "https://gated.example.com/",
         browserMsUsed: 4123,
       });
     } finally {
@@ -438,7 +482,7 @@ describe("readUrl", () => {
 
   it("logs an escalation whose browser header is absent, as null", async () => {
     const stub = stubFetch({
-      "https://gated.example/": () => new Response("Forbidden", { status: 403 }),
+      "https://gated.example.com/": () => new Response("Forbidden", { status: 403 }),
     });
     const browser = fakeBrowser({ ok: true, html: SUBSTANTIAL_PAGE });
     const lines: string[] = [];
@@ -447,7 +491,7 @@ describe("readUrl", () => {
     });
     try {
       install(browser);
-      const result = await readUrl("https://gated.example/");
+      const result = await readUrl("https://gated.example.com/");
       expect(result.ok).toBe(true);
       if (!result.ok) return;
       expect(result.browserMsUsed).toBeUndefined();

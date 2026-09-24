@@ -1,4 +1,5 @@
 import { env } from "cloudflare:workers";
+import { parse } from "tldts";
 
 const FETCH_TIMEOUT_MS = 8_000;
 
@@ -18,6 +19,7 @@ interface ReadUrlSuccess {
 
 type ReadUrlFailure =
   | { ok: false; reason: "invalid-url"; detail: string }
+  | { ok: false; reason: "unreachable"; detail: string }
   | { ok: false; reason: "escalation-failed"; detail: string };
 
 export type ReadUrlResult = ReadUrlSuccess | ReadUrlFailure;
@@ -124,6 +126,14 @@ export async function readUrl(url: string): Promise<ReadUrlResult> {
       detail: `unsupported scheme: ${target.protocol}`,
     };
   }
+  const host = parse(target.hostname);
+  if (host.isIp === true || host.isIcann !== true) {
+    return {
+      ok: false,
+      reason: "invalid-url",
+      detail: `not a public internet host: ${target.hostname}`,
+    };
+  }
 
   let fetchStatus: number;
   let fetchHtml: string;
@@ -135,11 +145,15 @@ export async function readUrl(url: string): Promise<ReadUrlResult> {
     fetchStatus = res.status;
     fetchHtml = await res.text();
   } catch (err) {
+    const detail = `fetch threw (${err instanceof Error ? err.message : String(err)})`;
+    if (!(err instanceof Error && err.name === "TimeoutError")) {
+      return { ok: false, reason: "unreachable", detail };
+    }
     const escalation = await escalate(url, started);
     return escalation.result ?? {
       ok: false,
       reason: "escalation-failed",
-      detail: `fetch threw (${err instanceof Error ? err.message : String(err)}); ${escalation.cause}`,
+      detail: `${detail}; ${escalation.cause}`,
     };
   }
 
