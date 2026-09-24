@@ -3,7 +3,7 @@ import { httpUrl } from "./http-url";
 
 const MAX_MARKS = 3;
 
-export type LandingShot = { src: string; capturedAt: string } | { missing: string };
+type LandingShot = { src: string; capturedAt: string } | { missing: string };
 
 export interface LandingMarkInput {
   id: string;
