@@ -93,7 +93,17 @@
   // (docs/REBUILD-STACK.md §7.4). Per-colo and approximate by design; the exact
   // per-key quota is the apikey row's own rate limit.
   "ratelimits": [
-    { "name": "AGENT_LIMIT", "namespace_id": "5091", "simple": { "limit": 120, "period": 60 } }
+    { "name": "AGENT_LIMIT", "namespace_id": "5091", "simple": { "limit": 120, "period": 60 } },
+    // Sign-in link sends, checked in a better-auth before-hook so the /login
+    // form and a direct POST to /api/auth/sign-in/magic-link are both covered.
+    // Per address (hashed) it stops one inbox being flooded; per IP it slows a
+    // sender spraying many addresses. The IP ceiling leaves room for the
+    // production e2e run, which signs in about a dozen times from one runner.
+    { "name": "SIGN_IN_EMAIL_LIMIT", "namespace_id": "5092", "simple": { "limit": 5, "period": 60 } },
+    { "name": "SIGN_IN_IP_LIMIT", "namespace_id": "5093", "simple": { "limit": 20, "period": 60 } },
+    // Open AI-app registration (/oauth/register) writes a 30-day client row to
+    // OAUTH_KV per call; per client IP, a real app registers once.
+    { "name": "AGENT_REGISTER_LIMIT", "namespace_id": "5094", "simple": { "limit": 10, "period": 60 } }
   ],
 
   // Browser Rendering: brand pages bot-gate a plain workerd fetch, so every

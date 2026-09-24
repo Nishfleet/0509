@@ -9,6 +9,8 @@ import { createAuth } from "../../app/lib/auth.server";
 const auth = createAuth({
   DB: env.DB,
   EMAIL: { send: async () => ({ ok: true }) },
+  SIGN_IN_EMAIL_LIMIT: env.SIGN_IN_EMAIL_LIMIT,
+  SIGN_IN_IP_LIMIT: env.SIGN_IN_IP_LIMIT,
   BETTER_AUTH_SECRET: "integration-test-secret",
   BETTER_AUTH_URL: "http://localhost:8787",
 });
@@ -135,6 +137,21 @@ describe("agent access, scoped to one workspace", () => {
     expect(ok.headers.get("cache-control")).toBe("no-store");
     const body: { tracked: { domain: string }[] } = await ok.json();
     expect(body.tracked.map((row) => row.domain)).toEqual(["rival-a.example"]);
+  });
+
+  it("slows one address guessing keys before any key lookup", async () => {
+    const statuses = [];
+    for (let attempt = 0; attempt < 121; attempt += 1) {
+      const response = await apiResponse(
+        new Request("http://localhost/api/v1/brief", {
+          headers: { authorization: "Bearer 0509_not-a-real-key", "cf-connecting-ip": "203.0.113.200" },
+        }),
+        readAgentBrief,
+      );
+      statuses.push(response.status);
+    }
+    expect(statuses.slice(0, 120).every((status) => status === 401)).toBe(true);
+    expect(statuses[120]).toBe(429);
   });
 
   it("serves the MCP tools as read-only, and a call reads only the caller's workspace", async () => {
