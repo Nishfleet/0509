@@ -11,6 +11,10 @@ import { readHomeStandingInputs } from "../lib/home-standing.server";
 import { requireSession } from "../lib/require-session.server";
 import { workspaceLandingForRequest } from "../lib/workspace.server";
 
+export function meta() {
+  return [{ title: "Home · Five to Nine" }];
+}
+
 export async function loader({ request }: Route.LoaderArgs) {
   const session = await requireSession(request);
   const landing = await workspaceLandingForRequest(request, session.user.id);
