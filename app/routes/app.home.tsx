@@ -40,6 +40,7 @@ export default function Page({ loaderData }: Route.ComponentProps) {
       <HomeStanding view={loaderData.view} />
       {loaderData.view.standing.kind === "ranked" ? <ShareButton /> : null}
       <footer className="border-line mt-10 border-t pt-4">
+        <p className="font-mono text-eyebrow text-ink-soft">{loaderData.view.footer}</p>
         <p className="text-ink-soft leading-[1.65]">Signed in as {loaderData.email}</p>
         <button
           type="button"
