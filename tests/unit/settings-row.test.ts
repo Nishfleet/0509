@@ -3,23 +3,20 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { createRoutesStub } from "react-router";
 import { describe, expect, it } from "vitest";
 
-import { BriefRow } from "../../app/components/settings-row";
+import { BriefRow, type BriefRowProps } from "../../app/components/settings-row";
 
-const BASE_PROPS = {
+const ACTION_ERROR = "Pick a day, an hour and a timezone from the lists.";
+
+const BASE_PROPS: BriefRowProps = {
   weekday: 1,
   hour: 8,
   timezone: "Europe/London",
   nextBrief: "Monday 5 October 2026, 08:00 Europe/London",
+  timezones: ["UTC", "Europe/London"],
   error: null,
-} as const;
+};
 
-function render(props: {
-  weekday: number;
-  hour: number;
-  timezone: string;
-  nextBrief: string;
-  error: string | null;
-}): string {
+function render(props: BriefRowProps): string {
   const Stub = createRoutesStub([
     { path: "/app/settings", Component: () => createElement(BriefRow, props) },
   ]);
@@ -34,12 +31,40 @@ describe("settings-row: BriefRow", () => {
     expect(html).toContain("Next brief: Monday 5 October 2026, 08:00 Europe/London");
     expect(html).toContain("Change");
     expect(html).not.toMatch(/<label[^>]*>/);
+    expect(html).not.toMatch(/<select[^>]*>/);
   });
 
-  it("renders the validation error as an alert when the save fails", () => {
-    const html = render({ ...BASE_PROPS, error: "Pick a day, an hour and a timezone from the lists." });
+  it("edits in place with three selects, the hidden intent and one Save", () => {
+    const html = render({ ...BASE_PROPS, error: ACTION_ERROR });
 
+    expect(html).toMatch(/<form[^>]*action="\/app\/settings"[^>]*method="post"/);
+    expect(html).toContain('name="intent" value="brief-schedule"');
+    expect(html).toContain('name="weekday"');
+    expect(html).toContain('aria-label="Brief day"');
+    expect(html).toContain('name="hour"');
+    expect(html).toContain('aria-label="Brief hour"');
+    expect(html).toContain('name="timezone"');
+    expect(html).toContain('aria-label="Timezone"');
+    expect(html.match(/<select/g)).toHaveLength(3);
+    expect(html).not.toMatch(/<label[^>]*>/);
+    expect(html).toMatch(/<button[^>]*type="submit"/);
+    expect(html).toContain("Save");
+    expect(html).not.toContain("Change");
+  });
+
+  it("preselects the saved day, hour and zone in the edit state", () => {
+    const html = render({ ...BASE_PROPS, error: ACTION_ERROR });
+
+    expect(html).toMatch(/<option[^>]*value="1" selected="">Monday<\/option>/);
+    expect(html).toMatch(/<option[^>]*value="8" selected="">08:00<\/option>/);
+    expect(html).toMatch(/<option[^>]*value="Europe\/London" selected="">Europe\/London<\/option>/);
+  });
+
+  it("renders the validation error as an alert with the string the action returns", () => {
+    const html = render({ ...BASE_PROPS, error: ACTION_ERROR });
+
+    expect(html).toContain('id="brief-row-error"');
     expect(html).toContain('role="alert"');
-    expect(html).toContain("Pick a day, an hour and a timezone from the lists.");
+    expect(html).toContain(ACTION_ERROR);
   });
 });

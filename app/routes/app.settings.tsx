@@ -25,11 +25,16 @@ export function meta() {
 export async function loader({ request }: Route.LoaderArgs) {
   const session = await requireSession(request);
   const owned = await readBriefScheduleForOwner(session.user.id);
-  const schedule =
-    owned === null
+  const schedule = owned?.schedule ?? null;
+  const brief =
+    schedule === null
       ? null
-      : { ...owned.schedule, nextLine: formatBriefAt(nextBriefAt(owned.schedule, new Date()), owned.schedule.timezone) };
-  return { email: session.user.email, schedule };
+      : {
+          ...schedule,
+          nextBrief: formatBriefAt(nextBriefAt(schedule, new Date()), schedule.timezone),
+          timezones: [...new Set(["UTC", schedule.timezone, ...Intl.supportedValuesOf("timeZone")])],
+        };
+  return { email: session.user.email, brief };
 }
 
 export async function action({ request, context }: Route.ActionArgs) {
@@ -44,10 +49,10 @@ export async function action({ request, context }: Route.ActionArgs) {
     const confirm = form.get("confirm");
     const typed = typeof confirm === "string" ? confirm.trim().toLowerCase() : "";
     if (typed !== session.user.email.toLowerCase()) {
-      return { saved: null, deleteError: MISMATCH, briefSaved: false, briefError: null };
+      return { saved: null, deleteError: MISMATCH, briefError: null };
     }
     const headers = await deleteAccount(context.get(oauthHelpersContext), request, session.user.id);
-    if (headers === null) return { saved: null, deleteError: SIGN_IN_AGAIN, briefSaved: false, briefError: null };
+    if (headers === null) return { saved: null, deleteError: SIGN_IN_AGAIN, briefError: null };
     throw redirect("/login", { headers });
   }
   if (intent === "brief-schedule") {
@@ -58,12 +63,12 @@ export async function action({ request, context }: Route.ActionArgs) {
       timezone: form.get("timezone"),
     });
     if (owned === null || schedule === null) {
-      return { saved: null, deleteError: null, briefSaved: false, briefError: "Pick a day and a time from the lists." };
+      return { deleteError: null, briefError: "Pick a day, an hour and a timezone from the lists." };
     }
     await updateBriefSchedule(owned.workspaceId, schedule);
-    return { saved: null, deleteError: null, briefSaved: true, briefError: null };
+    return { deleteError: null, briefError: null };
   }
-  return { saved: null, deleteError: null, briefSaved: false, briefError: null };
+  return { saved: null, deleteError: null, briefError: null };
 }
 
 const BLOCK = "border-line mt-10 border-t pt-4";
@@ -72,20 +77,8 @@ export default function Page({ loaderData, actionData }: Route.ComponentProps) {
   return (
     <main className={PAGE}>
       <PageHeading title="Settings" lede="Turn tracking for a brand on or off from its switch in Competitors." />
-      {loaderData.schedule === null ? null : (
-        <section aria-labelledby="settings-brief" className={BLOCK}>
-          <h2 id="settings-brief" className={BLOCK_HEADING}>
-            Your weekly brief
-          </h2>
-          <p className="mt-2 max-w-prose leading-[1.55]">One email a week, when you want to read it.</p>
-          <BriefRow
-            weekday={loaderData.schedule.weekday}
-            hour={loaderData.schedule.hour}
-            timezone={loaderData.schedule.timezone}
-            nextBrief={loaderData.schedule.nextLine}
-            error={actionData?.briefError ?? null}
-          />
-        </section>
+      {loaderData.brief === null ? null : (
+        <BriefRow {...loaderData.brief} error={actionData?.briefError ?? null} />
       )}
       <section aria-labelledby="settings-agents" className={BLOCK}>
         <h2 id="settings-agents" className={BLOCK_HEADING}>
