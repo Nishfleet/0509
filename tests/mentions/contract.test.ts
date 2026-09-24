@@ -1,108 +1,115 @@
-import { describe, expect, it, vi } from "vitest";
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { adapterFor } from "../../workers/sources/registry";
-import {
-	fetchUpstream,
-	mentionItemSchema,
-	mentionsResultSchema,
-	type MentionsAdapter,
-	type MentionsCursor,
-	type MentionsResult,
-	type MentionsTarget,
-} from "../../workers/sources/mentions/types";
-import { parseFeedEntries } from "../../workers/sources/mentions/feed";
+import { fetchUpstream, mentionItemSchema, webItems } from "../../workers/sources/mentions/types";
+
+const hnFixture = readFileSync(
+  join(dirname(fileURLToPath(import.meta.url)), "../fixtures/hn-gymshark.json"),
+  "utf8",
+);
+
+const gdeltBody = JSON.stringify({
+  articles: [
+    {
+      url: "https://www.example-news.com/gymshark-opens-store",
+      title: "Gymshark opens a new flagship store",
+      seendate: "20260923T101500Z",
+      domain: "example-news.com",
+    },
+    {
+      url: "javascript:alert(1)",
+      title: "Not a web link",
+      seendate: "20260923T101500Z",
+      domain: "evil.example",
+    },
+  ],
+});
+
+function stubFetch(body: string, status = 200) {
+  const fetchMock = vi.fn(async () => new Response(body, { status }));
+  vi.stubGlobal("fetch", fetchMock);
+  return fetchMock;
+}
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
 
 describe("mentions adapter contract", () => {
-	it("mentionsResultSchema parses a well-formed result and rejects a negative canaryCount", () => {
-		const item = {
-			dedupKey: "a",
-			url: "https://example.com/a",
-			title: "t",
-			publishedAt: null,
-		};
-		const parsed = mentionsResultSchema.parse({
-			items: [item],
-			canaryCount: 1,
-			rawBody: "<x/>",
-		});
-		expect(parsed.items).toHaveLength(1);
-		expect(mentionItemSchema.safeParse(item).success).toBe(true);
-		expect(
-			mentionsResultSchema.safeParse({ items: [item], canaryCount: -1, rawBody: "<x/>" })
-				.success,
-		).toBe(false);
-	});
+  it("accepts only http and https links", () => {
+    const base = { dedupKey: "a", title: "t", publisher: null, publishedAt: null };
+    expect(mentionItemSchema.safeParse({ ...base, url: "https://example.com/a" }).success).toBe(true);
+    expect(mentionItemSchema.safeParse({ ...base, url: "javascript:alert(1)" }).success).toBe(false);
+    expect(webItems([{ ...base, url: "data:text/html,x" }, { ...base, url: "http://example.com" }])).toHaveLength(1);
+  });
 
-	it("mentionsResultSchema rejects an item missing dedupKey", () => {
-		expect(
-			mentionsResultSchema.safeParse({
-				items: [{ url: "https://example.com/a", title: "t", publishedAt: null }],
-				canaryCount: 1,
-				rawBody: "<x/>",
-			}).success,
-		).toBe(false);
-	});
+  it("fetchUpstream names 0509 and sets a timeout", async () => {
+    const fetchMock = stubFetch("ok");
+    await fetchUpstream("https://example.com/feed");
+    expect(fetchMock).toHaveBeenCalledWith("https://example.com/feed", {
+      headers: { "User-Agent": "0509.io/1.0 (https://0509.io)" },
+      signal: expect.any(AbortSignal),
+    });
+  });
 
-	it("fetchUpstream calls fetch exactly once with the URL and an abort signal", async () => {
-		const fetchMock = vi.fn(async () => new Response("ok"));
-		vi.stubGlobal("fetch", fetchMock);
-		try {
-			await fetchUpstream("https://example.com/feed");
-		} finally {
-			vi.unstubAllGlobals();
-		}
-		expect(fetchMock).toHaveBeenCalledTimes(1);
-		expect(fetchMock).toHaveBeenCalledWith("https://example.com/feed", {
-			signal: expect.any(AbortSignal),
-		});
-	});
+  it("the registry knows GDELT and Hacker News and nothing else", () => {
+    expect(adapterFor("gdelt.doc")).toBeTypeOf("function");
+    expect(adapterFor("hn.algolia")).toBeTypeOf("function");
+    expect(adapterFor("news.google_rss")).toBeUndefined();
+  });
+});
 
-	it("parseFeedEntries reads RSS 2.0 and Atom entries", () => {
-		const rss = [
-			'<?xml version="1.0" encoding="UTF-8"?>',
-			'<rss version="2.0">',
-			"<channel>",
-			"<title>Brand mentions</title>",
-			"<link>https://example.com</link>",
-			"<description>probe</description>",
-			"<item><title>First post</title><link>https://example.com/a</link><guid>https://example.com/a#1</guid><pubDate>Wed, 23 Sep 2026 10:00:00 GMT</pubDate></item>",
-			"<item><title>Second post</title><link>https://example.com/b</link><guid>https://example.com/b#1</guid><pubDate>Wed, 23 Sep 2026 11:00:00 GMT</pubDate></item>",
-			"</channel>",
-			"</rss>",
-		].join("");
-		const entries = parseFeedEntries(rss);
-		expect(entries).toHaveLength(2);
-		expect(entries[0]?.link).toBe("https://example.com/a");
-		expect(entries[1]?.link).toBe("https://example.com/b");
+describe("gdelt adapter", () => {
+  it("returns real article links with publisher and time, dropping non-web links", async () => {
+    const fetchMock = stubFetch(gdeltBody);
+    const result = await adapterFor("gdelt.doc")?.({ query: "Gymshark" });
+    expect(String(fetchMock.mock.calls[0]?.at(0))).toContain(encodeURIComponent('"Gymshark"'));
+    expect(result?.items).toEqual([
+      {
+        dedupKey: "https://www.example-news.com/gymshark-opens-store",
+        url: "https://www.example-news.com/gymshark-opens-store",
+        title: "Gymshark opens a new flagship store",
+        publisher: "example-news.com",
+        publishedAt: "2026-09-23T10:15:00Z",
+      },
+    ]);
+    expect(result?.rawBody).toBe(gdeltBody);
+  });
 
-		const atom = [
-			'<?xml version="1.0" encoding="utf-8"?>',
-			'<feed xmlns="http://www.w3.org/2005/Atom">',
-			"<title>Tag feed</title>",
-			'<link rel="alternate" href="https://example.com/tag"/>',
-			"<id>https://example.com/tag</id>",
-			"<updated>2026-09-23T00:00:00Z</updated>",
-			"<entry><title>Tagged post</title><link href=\"https://example.com/c\"/><id>https://example.com/c#1</id><updated>2026-09-23T09:00:00Z</updated></entry>",
-			"</feed>",
-		].join("");
-		expect(parseFeedEntries(atom)).toHaveLength(1);
-	});
+  it("treats an empty answer as no articles", async () => {
+    stubFetch("{}");
+    const result = await adapterFor("gdelt.doc")?.({ query: "Nobody" });
+    expect(result?.items).toEqual([]);
+  });
 
-	it("adapterFor returns undefined while the registry is empty", () => {
-		expect(adapterFor("news.google_rss")).toBeUndefined();
-	});
+  it("fails loudly on a text answer or an error status", async () => {
+    stubFetch("Please limit requests to one every 5 seconds");
+    await expect(adapterFor("gdelt.doc")?.({ query: "Gymshark" })).rejects.toThrow(/not JSON/);
+    stubFetch("", 429);
+    await expect(adapterFor("gdelt.doc")?.({ query: "Gymshark" })).rejects.toThrow(/429/);
+  });
+});
 
-	it("the adapter contract shape is implementable by a sample adapter", async () => {
-		const sample: MentionsAdapter = async (
-			target: MentionsTarget,
-			cursor: MentionsCursor,
-		): Promise<MentionsResult> =>
-			mentionsResultSchema.parse({
-				items: [],
-				canaryCount: 0,
-				rawBody: `query=${target.query} cursor=${cursor ?? "none"}`,
-			});
-		const result = await sample({ query: "gymshark" }, null);
-		expect(result.canaryCount).toBe(0);
-		expect(result.items).toEqual([]);
-	});
+describe("hacker news adapter", () => {
+  it("reads stories with their links, falling back to the discussion page", async () => {
+    stubFetch(hnFixture);
+    const result = await adapterFor("hn.algolia")?.({ query: "gymshark" });
+    const items = result?.items ?? [];
+    expect(items.length).toBeGreaterThan(0);
+    expect(items[0]).toMatchObject({
+      dedupKey: "42603967",
+      url: "https://www.theguardian.com/business/2025/jan/05/uniqlo-gymshark-and-lush-stop-hiring-uk-workers-via-gig-economy-apps",
+      publisher: "Hacker News",
+      publishedAt: "2025-01-05T18:49:30Z",
+    });
+    expect(items.every((item) => /^https?:\/\//.test(item.url))).toBe(true);
+  });
+
+  it("uses the discussion page when a story has no link", async () => {
+    stubFetch(JSON.stringify({ hits: [{ objectID: "7", title: "Ask HN: Gymshark?", url: null }] }));
+    const result = await adapterFor("hn.algolia")?.({ query: "gymshark" });
+    expect(result?.items[0]?.url).toBe("https://news.ycombinator.com/item?id=7");
+  });
 });

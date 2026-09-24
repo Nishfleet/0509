@@ -173,6 +173,16 @@
       "binding": "OWN_SITE_CHECK",
       "class_name": "OwnSiteCheckWorkflow",
       "schedules": ["0 * * * *"]
+    },
+    // The nightly news sweep (docs/engines/mentions.md): GDELT and Hacker
+    // News, one step per brand per source, paced for GDELT's one request per
+    // five seconds. 01:00 UTC so its alerts land before the 03:00 standing
+    // refresh counts them.
+    {
+      "name": "mentions-sweep",
+      "binding": "MENTIONS",
+      "class_name": "MentionsWorkflow",
+      "schedules": ["0 1 * * *"]
     }
   ],
 

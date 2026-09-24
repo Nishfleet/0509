@@ -141,3 +141,49 @@ export async function readOwnSiteIncidents(
     .all<OwnSiteIncidentNote>();
   return results;
 }
+
+const INSERT_SIGNAL_ALERT = `INSERT INTO alert (id, workspace_id, entity_id, signal_id, kind, severity, title, body, status, created_at)
+VALUES (?1, ?2, ?3, ?4, ?5, 'normal', ?6, ?7, 'unread', ?8) ON CONFLICT(id) DO NOTHING`;
+
+export function insertSignalAlert(db: D1Database, alert: {
+  workspaceId: string;
+  entityId: string;
+  signalId: string;
+  kind: "mention" | "ad";
+  title: string;
+  body: string | null;
+  createdAt: string;
+}): D1PreparedStatement {
+  return db.prepare(INSERT_SIGNAL_ALERT).bind(
+    `${alert.kind}-${alert.signalId}`,
+    alert.workspaceId,
+    alert.entityId,
+    alert.signalId,
+    alert.kind,
+    alert.title,
+    alert.body,
+    alert.createdAt,
+  );
+}
+
+export interface SignalAlert {
+  id: string;
+  kind: string;
+  title: string;
+  body: string | null;
+  url: string | null;
+  created_at: string;
+}
+
+const SELECT_SIGNAL_ALERTS = `SELECT a.id, a.kind, a.title, a.body, s.url, a.created_at
+FROM alert a
+JOIN signal s ON s.id = a.signal_id AND s.is_tombstoned = 0
+JOIN entity e ON e.id = a.entity_id AND e.state = 'on'
+WHERE a.workspace_id = ? AND a.kind IN ('mention', 'ad')
+ORDER BY a.created_at DESC
+LIMIT 50`;
+
+export async function readSignalAlerts(db: D1Database, workspaceId: string): Promise<SignalAlert[]> {
+  const { results } = await db.prepare(SELECT_SIGNAL_ALERTS).bind(workspaceId).all<SignalAlert>();
+  return results;
+}
