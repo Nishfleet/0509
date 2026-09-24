@@ -77,6 +77,10 @@ jobs:
         # verification, which is exactly the inverting this comment needs to keep
         # false: test infrastructure must never stand between a good app deploy
         # and its verification.
+        #
+        # The break and price state live in a SQLite Durable Object (0509#4305).
+        # Migration tag v1 in the wrangler config creates the class on deploy, so
+        # there is no KV namespace to provision.
         continue-on-error: true
         run: npx wrangler deploy --config workers/fixture-site.wrangler.jsonc
         env:

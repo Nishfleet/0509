@@ -18,6 +18,7 @@ export function organizationJsonLd() {
       contactType: "customer support",
       email: SUPPORT_ADDRESS,
     },
+    logo: `${SITE_URL}/logo.svg`,
   };
 }
 

@@ -7,6 +7,7 @@ import { BrandSwitch, brandSwitchNote } from "../components/brand-switch";
 import { AddCompetitor, CompetitorMaybes } from "../components/competitor-maybes";
 import { EmptyState } from "../components/empty-state";
 import { PAGE, PageHeading } from "../components/page-heading";
+import { RetireQuestions } from "../components/retire-questions";
 import { cn } from "../lib/utils";
 import { handleCompetitorIntent } from "../lib/competitors.server";
 import type { CompetitorRow } from "../lib/data/entity.server";
@@ -65,7 +66,7 @@ function CompetitorItem({ competitor }: { competitor: CompetitorRow }) {
 }
 
 export default function Page({ loaderData, actionData }: Route.ComponentProps) {
-  const { competitors, maybes } = loaderData;
+  const { competitors, maybes, questions } = loaderData;
   return (
     <main className={PAGE}>
       <PageHeading
@@ -83,6 +84,7 @@ export default function Page({ loaderData, actionData }: Route.ComponentProps) {
           ))}
         </ul>
       )}
+      <RetireQuestions questions={questions} />
       <CompetitorMaybes maybes={maybes} />
       <AddCompetitor message={actionData?.message} />
     </main>
