@@ -80,6 +80,8 @@ test("the hero's first viewport holds the outcome and the one priced input", asy
 
   await expect(page.locator('link[rel="preload"][href="/fonts/bricolage-hero.woff2"]')).toHaveCount(1);
   await expect(page.locator('link[rel="preload"][href="/fonts/bricolage-grotesque-latin.woff2"]')).toHaveCount(0);
+  await expect(page.locator('link[rel="modulepreload"]')).toHaveCount(0);
+  await expect(page.locator('script[type="module"]')).toHaveCount(0);
 
   if (testInfo.project.name === "phone-390") {
     const overflow = await page.evaluate(
