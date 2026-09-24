@@ -3,6 +3,7 @@ import type { Route } from "./+types/onboarding.competitors";
 import { useEffect } from "react";
 import { Form, redirect, useRevalidator } from "react-router";
 
+import { StepBar } from "../components/step-bar";
 import { readOnboardingCompetitors } from "../lib/data/entity.server";
 import { acceptSuggestion } from "../lib/data/suggestion.server";
 import { readWorkspaceIdForOwner } from "../lib/data/workspace.server";
@@ -45,6 +46,7 @@ export default function Page({ loaderData }: Route.ComponentProps) {
 
   return (
     <main>
+      <StepBar current={3} />
       <h1>Who you're up against</h1>
       {on.length === 0 && maybes.length === 0 ? (
         <p role="status">We're still looking, add one you know and we'll keep going.</p>
@@ -66,11 +68,8 @@ export default function Page({ loaderData }: Route.ComponentProps) {
             {maybes.map((maybe) => (
               <li key={maybe.suggestionId} className="py-2">
                 <span className="font-semibold">{maybe.name}</span>
-                {maybe.reason === null && maybe.p === null ? null : (
-                  <p className="text-sm truncate">
-                    {maybe.reason}
-                    {maybe.p === null ? "" : ` ${String(Math.round(maybe.p * 100))}%`}
-                  </p>
+                {maybe.reason === null ? null : (
+                  <p className="text-sm truncate">{maybe.reason}</p>
                 )}
                 <Form method="post">
                   <input type="hidden" name="intent" value="accept" />
@@ -90,7 +89,7 @@ export default function Page({ loaderData }: Route.ComponentProps) {
       ) : null}
       <Form method="post">
         <input type="hidden" name="intent" value="start" />
-        <button type="submit">Start watching — €10/mo</button>
+        <button type="submit">Start watching</button>
       </Form>
     </main>
   );
