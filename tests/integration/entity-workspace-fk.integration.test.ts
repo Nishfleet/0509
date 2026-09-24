@@ -31,7 +31,10 @@ const INCIDENT = "inc-fk-4707";
 const NOTICE = "notice-fk-4707";
 const STANDING = "stand-fk-4707";
 
-type Migration = { name: string; queries: string[] };
+interface Migration {
+  name: string;
+  queries: string[];
+}
 
 const TABLES = [
   "signal",
