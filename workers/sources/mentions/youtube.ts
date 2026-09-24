@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { isLostYoutubeChannel, isYoutubeChannelId } from "../../mentions/youtube-resolve";
+import { isLostYoutubeChannel, isYoutubeChannelId } from "../../../app/lib/mentions/youtube-channel";
 import { parseFeedEntries } from "./feed";
 import {
 	fetchUpstream,
@@ -36,7 +36,7 @@ export const youtubeAdapter: MentionsAdapter = async (target) => {
 	}
 
 	if (!response.ok) {
-		return mentionsResultSchema.parse({ items: [], canaryCount: 0, rawBody, feedState: "ok" });
+		return mentionsResultSchema.parse({ items: [], canaryCount: 0, rawBody, feedState: "error" });
 	}
 
 	if (!rawBody.includes("<entry")) {

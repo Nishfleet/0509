@@ -4,18 +4,18 @@ import { fileURLToPath } from "node:url";
 
 import { describe, expect, it, vi } from "vitest";
 
-import { youtubeAdapter } from "../../workers/sources/mentions/youtube";
 import {
 	LOST_CHANNEL_REASON,
-	channelIdFromHtml,
+	channelIdFromIdentity,
 	channelIdFromUrl,
 	isLostYoutubeChannel,
 	lostChannelFlag,
-	resolveYoutubeChannelId,
+	readWatchConfig,
 	withLostChannel,
 	withResolvedChannel,
 	youtubeUrlFromIdentity,
-} from "../../workers/mentions/youtube-resolve";
+} from "../../app/lib/mentions/youtube-channel";
+import { youtubeAdapter } from "../../workers/sources/mentions/youtube";
 
 const CHANNEL_ID = "UCma7hhYJ3bfEhZgw3xl77ww";
 const FIXTURE_PATH = join(
@@ -34,6 +34,8 @@ describe("stale YouTube channel", () => {
 		expect(isLostYoutubeChannel(404, "text/html; charset=UTF-8", body)).toBe(true);
 		expect(isLostYoutubeChannel(200, "text/html", body)).toBe(true);
 		expect(isLostYoutubeChannel(200, "text/xml", "<feed></feed>")).toBe(false);
+		expect(isLostYoutubeChannel(500, "text/html", body)).toBe(false);
+		expect(isLostYoutubeChannel(429, "text/plain", "rate")).toBe(false);
 	});
 
 	it("the adapter reports the fixture as stale and does not invent items", async () => {
@@ -48,30 +50,38 @@ describe("stale YouTube channel", () => {
 		expect(result.rawBody).toContain("<!DOCTYPE html>");
 	});
 
-	it("reads a channel id from a /channel/ URL and from externalId in HTML", () => {
-		expect(channelIdFromUrl(`https://www.youtube.com/channel/${CHANNEL_ID}`)).toBe(CHANNEL_ID);
-		expect(channelIdFromUrl("https://www.youtube.com/@gymshark")).toBeNull();
-		expect(channelIdFromHtml(`<html>"externalId":"${CHANNEL_ID}"</html>`)).toBe(CHANNEL_ID);
-		expect(channelIdFromHtml("<html>no channel here</html>")).toBeNull();
+	it("reports a 5xx feed as an error, not a quiet channel and not a lost one", async () => {
+		vi.stubGlobal(
+			"fetch",
+			vi.fn(async () => new Response("unavailable", { status: 503, headers: { "content-type": "text/plain" } })),
+		);
+		const result = await youtubeAdapter({ query: CHANNEL_ID }, null);
+		vi.unstubAllGlobals();
+		expect(result.feedState).toBe("error");
+		expect(result.items).toEqual([]);
 	});
 
-	it("resolves a stored channel URL without fetching, and a handle by one page read", async () => {
+	it("reads a channel id from a stored /channel/ URL and not from a handle", () => {
+		expect(channelIdFromUrl(`https://www.youtube.com/channel/${CHANNEL_ID}`)).toBe(CHANNEL_ID);
+		expect(channelIdFromUrl("https://www.youtube.com/@gymshark")).toBeNull();
 		const channelIdentity = JSON.stringify({
 			socials: [{ platform: "youtube", url: `https://www.youtube.com/channel/${CHANNEL_ID}` }],
 		});
 		expect(youtubeUrlFromIdentity(channelIdentity)).toContain(CHANNEL_ID);
-		const fetchPage = vi.fn(async () => new Response("no"));
-		await expect(resolveYoutubeChannelId(channelIdentity, fetchPage)).resolves.toBe(CHANNEL_ID);
-		expect(fetchPage).not.toHaveBeenCalled();
-
+		expect(channelIdFromIdentity(channelIdentity)).toBe(CHANNEL_ID);
 		const handleIdentity = JSON.stringify({
 			socials: [{ platform: "youtube", url: "https://www.youtube.com/@gymshark" }],
 		});
-		const pageFetch = vi.fn(
-			async () => new Response(`<html>"externalId":"${CHANNEL_ID}"</html>`, { status: 200 }),
-		);
-		await expect(resolveYoutubeChannelId(handleIdentity, pageFetch)).resolves.toBe(CHANNEL_ID);
-		expect(pageFetch).toHaveBeenCalledOnce();
+		expect(channelIdFromIdentity(handleIdentity)).toBeNull();
+		expect(channelIdFromIdentity('{"description":"Gym clothing"}')).toBeNull();
+	});
+
+	it("refuses an unreadable watch config instead of treating it as empty", () => {
+		expect(readWatchConfig("{").status).toBe("unreadable");
+		expect(readWatchConfig("[1,2]").status).toBe("unreadable");
+		expect(readWatchConfig('{"channelId":"not-a-channel"}').status).toBe("unreadable");
+		expect(lostChannelFlag("{")).toBeNull();
+		expect(() => withLostChannel("{", "2026-09-24T23:01:56.000Z")).toThrow(/unreadable/);
 	});
 
 	it("marks a watch degraded once, then clears that flag when a channel id is saved", () => {

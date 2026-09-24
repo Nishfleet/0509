@@ -13,14 +13,14 @@ import { askNoul, JevUnavailableError } from "../../app/lib/jev/client.server";
 import { noulAction } from "../../app/lib/jev/thresholds";
 import type { MentionItem } from "./map";
 import {
-  channelIdFromConfig,
-  lostChannelFlag,
-  resolveYoutubeChannelId,
+  channelIdFromIdentity,
+  readWatchConfig,
+  withChannelId,
   withLostChannel,
   withResolvedChannel,
-} from "./youtube-resolve";
+} from "../../app/lib/mentions/youtube-channel";
 import { adapterFor } from "../sources/registry";
-import { fetchUpstream, type MentionsAdapter } from "../sources/mentions/types";
+import type { MentionsAdapter } from "../sources/mentions/types";
 
 const JUDGED_PER_WATCH = 12;
 
@@ -226,42 +226,60 @@ async function sweepOneYoutube(
   now: string,
 ): Promise<TargetOutcome> {
   const configRaw = await readWatchConfigJson(watch.watch_id);
-  const channelId = channelIdFromConfig(configRaw);
-  const first = await adapter({ query: channelId ?? "" }, null);
-  if (first.feedState !== "stale") {
-    if (lostChannelFlag(configRaw) !== null && channelId !== null) {
-      await writeWatchConfigJson(watch.watch_id, withResolvedChannel(configRaw, channelId));
+  const config = readWatchConfig(configRaw);
+  if (config.status !== "ok") throw new Error(`watch ${watch.watch_id} config_json is unreadable`);
+
+  let channelId = config.channelId;
+  if (channelId === null) {
+    channelId = channelIdFromIdentity(await readEntityIdentityJson(watch.entity_id));
+    if (channelId === null) {
+      await markWatchPolled(watch.watch_id, now);
+      return { items: 0, stored: 0, unjudged: 0 };
     }
-    const committed = await commitMentionWatch({
-      watch,
-      items: first.items,
-      rawBody: first.rawBody,
-      pluginKey: "youtube.channel_rss",
-      now,
-    });
-    return { items: first.items.length, stored: committed.stored, unjudged: committed.unjudged };
+    await writeWatchConfigJson(watch.watch_id, withChannelId(configRaw, channelId));
   }
 
-  const flagged = withLostChannel(configRaw, now);
-  if (flagged !== configRaw) await writeWatchConfigJson(watch.watch_id, flagged);
-  const identity = await readEntityIdentityJson(watch.entity_id);
-  const candidate = await resolveYoutubeChannelId(identity, (url) => fetchUpstream(url));
-  if (candidate !== null && candidate !== channelId) {
-    const second = await adapter({ query: candidate }, null);
-    if (second.feedState !== "stale") {
-      await writeWatchConfigJson(watch.watch_id, withResolvedChannel(flagged, candidate));
-      const committed = await commitMentionWatch({
-        watch,
-        items: second.items,
-        rawBody: second.rawBody,
-        pluginKey: "youtube.channel_rss",
-        now,
-      });
-      return { items: second.items.length, stored: committed.stored, unjudged: committed.unjudged };
-    }
+  const first = await adapter({ query: channelId }, null);
+  if (first.feedState === "error") {
+    await markWatchPolled(watch.watch_id, now);
+    return { items: 0, stored: 0, unjudged: 0 };
   }
-  await markWatchPolled(watch.watch_id, now);
-  return { items: 0, stored: 0, unjudged: 0 };
+  if (first.feedState === "stale") {
+    const current = await readWatchConfigJson(watch.watch_id);
+    const flagged = withLostChannel(current, now);
+    if (flagged !== current) await writeWatchConfigJson(watch.watch_id, flagged);
+    const candidate = channelIdFromIdentity(await readEntityIdentityJson(watch.entity_id));
+    if (candidate !== null && candidate !== channelId) {
+      const second = await adapter({ query: candidate }, null);
+      if (second.feedState === "ok") {
+        await writeWatchConfigJson(watch.watch_id, withResolvedChannel(flagged, candidate));
+        const committed = await commitMentionWatch({
+          watch,
+          items: second.items,
+          rawBody: second.rawBody,
+          pluginKey: "youtube.channel_rss",
+          now,
+        });
+        return { items: second.items.length, stored: committed.stored, unjudged: committed.unjudged };
+      }
+    }
+    await markWatchPolled(watch.watch_id, now);
+    return { items: 0, stored: 0, unjudged: 0 };
+  }
+
+  const current = await readWatchConfigJson(watch.watch_id);
+  const currentConfig = readWatchConfig(current);
+  if (currentConfig.status === "ok" && currentConfig.degraded !== null) {
+    await writeWatchConfigJson(watch.watch_id, withResolvedChannel(current, channelId));
+  }
+  const committed = await commitMentionWatch({
+    watch,
+    items: first.items,
+    rawBody: first.rawBody,
+    pluginKey: "youtube.channel_rss",
+    now,
+  });
+  return { items: first.items.length, stored: committed.stored, unjudged: committed.unjudged };
 }
 
 async function sweepYoutubeTarget(target: MentionTarget, now: string): Promise<TargetOutcome> {

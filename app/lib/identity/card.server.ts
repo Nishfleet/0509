@@ -9,8 +9,7 @@ import { resolveLogo } from "./logo-cascade";
 import { resolveBrandName } from "./name-cascade";
 import type { Subject } from "./normalise";
 import { cachedProbe } from "./probe-cache.server";
-
-const socialSchema = z.object({ platform: z.string(), url: z.string() });
+import { socialSchema } from "./social";
 
 const siteCardSchema = z.object({
   name: z.string().nullable(),

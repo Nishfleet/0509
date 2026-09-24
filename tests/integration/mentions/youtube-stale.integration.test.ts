@@ -1,0 +1,179 @@
+import { env } from "cloudflare:test";
+import { afterEach, describe, expect, it, vi } from "vitest";
+
+import { LOST_CHANNEL_REASON } from "../../../app/lib/mentions/youtube-channel";
+import type { WatchRow } from "../../../app/lib/data/watch.server";
+import { sweepTarget } from "../../../workers/mentions/sweep";
+
+const NOW = "2026-09-24T23:01:56.000Z";
+const LOST_ID = "UCaaaaaaaaaaaaaaaaaaaaaa";
+const LIVE_ID = "UCma7hhYJ3bfEhZgw3xl77ww";
+const EMPTY_ATOM = `<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom"><title>Quiet</title></feed>`;
+
+let runs = 0;
+
+async function seed(identityJson: string, configJson: string): Promise<{ watchId: string; watch: WatchRow }> {
+  runs += 1;
+  const workspaceId = `ws-yt-${String(runs)}`;
+  const userId = `user-yt-${String(runs)}`;
+  const competitorId = `${workspaceId}-competitor`;
+  const watchId = `watch-yt-${String(runs)}`;
+  const domain = `brand-${String(runs)}.example`;
+  const name = `Brand ${String(runs)}`;
+  const sourceId = "src_mentions_youtube";
+  await env.DB.batch([
+    env.DB.prepare(
+      'INSERT INTO "user" (id, name, email, emailVerified, createdAt, updatedAt) VALUES (?1, ?2, ?2, 1, ?3, ?3)',
+    ).bind(userId, `${userId}@example.com`, NOW),
+    env.DB.prepare(
+      "INSERT INTO workspace (id, name, owner_user_id, timezone, brief_weekday, brief_hour, created_at) VALUES (?1, 'Gymshark', ?2, 'UTC', 1, 8, ?3)",
+    ).bind(workspaceId, userId, NOW),
+    env.DB.prepare(
+      "INSERT INTO entity (id, workspace_id, role, domain, name, identity_json, created_at) VALUES (?1, ?2, 'self', ?3, 'Gymshark', '{\"description\":\"Gym clothing\"}', ?4)",
+    ).bind(`${workspaceId}-self`, workspaceId, `self-${String(runs)}.example`, NOW),
+    env.DB.prepare(
+      "INSERT INTO entity (id, workspace_id, role, domain, name, identity_json, created_at) VALUES (?1, ?2, 'competitor', ?3, ?4, ?5, ?6)",
+    ).bind(competitorId, workspaceId, domain, name, identityJson, NOW),
+    env.DB.prepare(
+      "INSERT INTO source (id, key, kind, platform, plugin_key, reliability, is_enabled, config_json) VALUES (?1, 'youtube.channel_rss', 'mentions', 'youtube', 'youtube.channel_rss', 'rss', 0, '{}') ON CONFLICT (key) DO NOTHING",
+    ).bind(sourceId),
+    env.DB.prepare(
+      "INSERT INTO watch (id, entity_id, source_id, target_key, config_json) VALUES (?1, ?2, ?3, ?4, ?5)",
+    ).bind(watchId, competitorId, sourceId, name, configJson),
+  ]);
+  const watch: WatchRow = {
+    watch_id: watchId,
+    target_key: name,
+    entity_id: competitorId,
+    workspace_id: workspaceId,
+    role: "competitor",
+    name,
+    domain,
+    source_id: sourceId,
+    plugin_key: "youtube.channel_rss",
+    reliability: "rss",
+  };
+  return { watchId, watch };
+}
+
+function stubFeeds(): void {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes(LOST_ID)) {
+        return new Response("<!DOCTYPE html><html>missing</html>", {
+          status: 404,
+          headers: { "content-type": "text/html" },
+        });
+      }
+      if (url.includes(LIVE_ID)) {
+        return new Response(EMPTY_ATOM, { status: 200, headers: { "content-type": "text/xml" } });
+      }
+      return new Response("unavailable", { status: 503, headers: { "content-type": "text/plain" } });
+    }),
+  );
+}
+
+async function configOf(watchId: string): Promise<string> {
+  const row = await env.DB.prepare("SELECT config_json FROM watch WHERE id = ?1")
+    .bind(watchId)
+    .first<{ config_json: string }>();
+  return row?.config_json ?? "";
+}
+
+async function snapshotCount(watchId: string): Promise<number> {
+  const row = await env.DB.prepare("SELECT COUNT(*) AS n FROM snapshot WHERE watch_id = ?1")
+    .bind(watchId)
+    .first<{ n: number }>();
+  return row?.n ?? 0;
+}
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
+
+describe("YouTube sweep stale channel", () => {
+  it("does not flag a brand that was never resolved and has no channel URL", async () => {
+    const { watchId, watch } = await seed('{"description":"no socials"}', "{}");
+    stubFeeds();
+
+    const outcome = await sweepTarget(
+      { sourceId: watch.source_id, pluginKey: watch.plugin_key, query: watch.target_key, watches: [watch] },
+      NOW,
+    );
+
+    expect(outcome).toEqual({ items: 0, stored: 0, unjudged: 0 });
+    expect(JSON.parse(await configOf(watchId))).toEqual({});
+    expect(await snapshotCount(watchId)).toBe(0);
+  });
+
+  it("flags a stored channel whose feed is the 404 HTML page and writes no snapshot", async () => {
+    const { watchId, watch } = await seed("{}", JSON.stringify({ channelId: LOST_ID }));
+    stubFeeds();
+
+    await sweepTarget(
+      { sourceId: watch.source_id, pluginKey: watch.plugin_key, query: watch.target_key, watches: [watch] },
+      NOW,
+    );
+
+    expect(JSON.parse(await configOf(watchId))).toEqual({
+      channelId: LOST_ID,
+      degraded: { state: "degraded", reason: LOST_CHANNEL_REASON, at: NOW },
+    });
+    expect(await snapshotCount(watchId)).toBe(0);
+  });
+
+  it("stores a channel id from the identity URL, then clears the flag when that feed is Atom", async () => {
+    const lost = await seed("{}", JSON.stringify({ channelId: LOST_ID }));
+    stubFeeds();
+    await sweepTarget(
+      {
+        sourceId: lost.watch.source_id,
+        pluginKey: lost.watch.plugin_key,
+        query: lost.watch.target_key,
+        watches: [lost.watch],
+      },
+      NOW,
+    );
+    expect(JSON.parse(await configOf(lost.watchId)).degraded.reason).toBe(LOST_CHANNEL_REASON);
+
+    const identity = JSON.stringify({
+      socials: [{ platform: "youtube", url: `https://www.youtube.com/channel/${LIVE_ID}` }],
+    });
+    const resolved = await seed(identity, JSON.stringify({ channelId: LOST_ID }));
+    const outcome = await sweepTarget(
+      {
+        sourceId: resolved.watch.source_id,
+        pluginKey: resolved.watch.plugin_key,
+        query: resolved.watch.target_key,
+        watches: [resolved.watch],
+      },
+      NOW,
+    );
+
+    expect(outcome).toEqual({ items: 0, stored: 0, unjudged: 0 });
+    expect(JSON.parse(await configOf(resolved.watchId))).toEqual({ channelId: LIVE_ID });
+    expect(await snapshotCount(resolved.watchId)).toBe(1);
+    const snapshot = await env.DB.prepare(
+      "SELECT fetched_at, item_count FROM snapshot WHERE watch_id = ?1",
+    )
+      .bind(resolved.watchId)
+      .first<{ fetched_at: string; item_count: number }>();
+    expect(snapshot).toEqual({ fetched_at: NOW, item_count: 0 });
+  });
+
+  it("leaves the watch unmarked when the feed fails with 503", async () => {
+    const { watchId, watch } = await seed("{}", JSON.stringify({ channelId: "UCzzzzzzzzzzzzzzzzzzzzzz" }));
+    stubFeeds();
+
+    await sweepTarget(
+      { sourceId: watch.source_id, pluginKey: watch.plugin_key, query: watch.target_key, watches: [watch] },
+      NOW,
+    );
+
+    expect(JSON.parse(await configOf(watchId))).toEqual({ channelId: "UCzzzzzzzzzzzzzzzzzzzzzz" });
+    expect(await snapshotCount(watchId)).toBe(0);
+  });
+});

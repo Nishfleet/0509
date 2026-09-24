@@ -91,6 +91,16 @@ describe("youtubeAdapter", () => {
 		expect(result.items).toEqual([]);
 	});
 
+	it("reports a 503 as an error so the sweep does not store zero videos", async () => {
+		stubFetchWith("unavailable", { status: 503, headers: { "content-type": "text/html" } });
+
+		const result = await youtubeAdapter({ query: CHANNEL_ID }, null);
+
+		expect(result.feedState).toBe("error");
+		expect(result.items).toEqual([]);
+		expect(result.canaryCount).toBe(0);
+	});
+
 	it("keeps a 200 Atom feed with no entries as an empty result, not stale", async () => {
 		const body = `<?xml version="1.0" encoding="UTF-8"?>
 <feed xmlns="http://www.w3.org/2005/Atom" xmlns:yt="http://www.youtube.com/xml/schemas/2015">
