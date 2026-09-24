@@ -1,11 +1,9 @@
-import { readFileSync } from "node:fs";
-import { dirname, join } from "node:path";
-import { createElement } from "react";
+import { Children, createElement, isValidElement, type ReactElement, type ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 import { HowRankedSheet, HowRankedTable } from "../../app/components/how-ranked-sheet";
+import { DialogContent } from "../../app/components/ui/dialog";
 import type { HowRanked } from "../../app/lib/how-ranked";
 
 const RANKED: HowRanked = {
@@ -49,19 +47,35 @@ const RANKED: HowRanked = {
   ],
 };
 
-function renderTable(): string {
-  return renderToStaticMarkup(createElement(HowRankedTable, { howRanked: RANKED }));
+function renderTable(howRanked: HowRanked = RANKED): string {
+  return renderToStaticMarkup(createElement(HowRankedTable, { howRanked }));
 }
 
 function renderSheet(): string {
   return renderToStaticMarkup(createElement(HowRankedSheet, { howRanked: RANKED }));
 }
 
-const REPO_ROOT = dirname(dirname(dirname(fileURLToPath(import.meta.url))));
-const sheetSource = readFileSync(
-  join(REPO_ROOT, "app/components/how-ranked-sheet.tsx"),
-  "utf8",
-);
+function findElement(node: ReactNode, type: unknown): ReactElement | null {
+  for (const child of Children.toArray(node)) {
+    if (!isValidElement(child)) continue;
+    if (child.type === type) return child;
+    const nested = findElement((child.props as { children?: ReactNode }).children, type);
+    if (nested !== null) return nested;
+  }
+  return null;
+}
+
+function sheetContent(): ReactElement<{ className?: string }> {
+  const content = findElement(HowRankedSheet({ howRanked: RANKED }), DialogContent);
+  if (content === null) throw new Error("HowRankedSheet rendered no DialogContent");
+  return content;
+}
+
+function brandBlock(html: string, name: string): string {
+  const start = html.indexOf(`<h4 class="font-display font-bold">${name}</h4>`);
+  if (start < 0) throw new Error(`No brand block for ${name}`);
+  return html.slice(start, html.indexOf("</article>", start));
+}
 
 describe("HowRankedTable", () => {
   it("renders every weight label and value", () => {
@@ -88,23 +102,38 @@ describe("HowRankedTable", () => {
   });
 
   it("renders each brand line as n label (multiplier) × weight × multiplier = points", () => {
-    const html = renderTable();
-    expect(html).toContain(
-      "2 Mentions that matter (RSS feed) × 3 × 0.9 = 5.4",
-    );
-    expect(html).toContain("Total 5.4");
+    const block = brandBlock(renderTable(), "Kindred");
+    expect(block).toContain("2 Mentions that matter (RSS feed) × 3 × 0.9 = 5.4");
+    expect(block).toContain("Total 5.4");
+    expect(block).not.toContain("Total —");
   });
 
-  it("renders the empty brand with No signals this week and —", () => {
-    const html = renderTable();
-    expect(html).toContain("No signals this week");
-    expect(html).toContain("—");
+  it("shows the empty brand a dash total and never 0", () => {
+    const block = brandBlock(renderTable(), "Quiet");
+    expect(block).toContain("No signals this week");
+    expect(block).toContain("Total —");
+    expect(block).not.toContain("Total 0");
   });
 
   it("wraps each brand block with the how-ranked-brand test id", () => {
     const html = renderTable();
     const matches = html.match(/data-testid="how-ranked-brand"/g) ?? [];
     expect(matches).toHaveLength(2);
+  });
+
+  it("reads every label off the prop and throws instead of printing an internal key", () => {
+    const missingWeight: HowRanked = {
+      ...RANKED,
+      weights: RANKED.weights.filter((entry) => entry.key !== "mention_matters"),
+    };
+    const missingMultiplier: HowRanked = {
+      ...RANKED,
+      multipliers: RANKED.multipliers.filter((entry) => entry.reliability !== "rss"),
+    };
+    expect(() => renderTable(missingWeight)).toThrow(/Missing weight label for bucket mention_matters/);
+    expect(() => renderTable(missingMultiplier)).toThrow(
+      /Missing multiplier label for reliability rss/,
+    );
   });
 });
 
@@ -122,10 +151,11 @@ describe("HowRankedSheet", () => {
     expect(html).toContain("underline-offset-4");
   });
 
-  it("turns the dialog into a bottom sheet below 860px", () => {
-    expect(sheetSource).toContain("max-h-[85dvh] overflow-y-auto sm:max-w-lg");
-    expect(sheetSource).toContain("max-[859px]:top-auto max-[859px]:bottom-0");
-    expect(sheetSource).toContain(
+  it("turns the dialog it renders into a bottom sheet below 860px", () => {
+    const className = sheetContent().props.className ?? "";
+    expect(className).toContain("max-h-[85dvh] overflow-y-auto sm:max-w-lg");
+    expect(className).toContain("max-[859px]:top-auto max-[859px]:bottom-0");
+    expect(className).toContain(
       "max-[859px]:left-0 max-[859px]:max-w-none max-[859px]:translate-x-0 max-[859px]:translate-y-0 max-[859px]:rounded-b-none",
     );
   });

@@ -13,7 +13,8 @@ function format(value: number): string {
 
 function weightLabelFor(weights: readonly HowRankedWeight[], bucket: HowRankedLine["bucket"]): string {
   const match = weights.find((entry) => entry.key === bucket);
-  return match === undefined ? bucket : match.label;
+  if (match === undefined) throw new Error(`Missing weight label for bucket ${bucket}`);
+  return match.label;
 }
 
 function multiplierLabelFor(
@@ -21,7 +22,8 @@ function multiplierLabelFor(
   reliability: HowRankedLine["reliability"],
 ): string {
   const match = multipliers.find((entry) => entry.reliability === reliability);
-  return match === undefined ? reliability : match.label;
+  if (match === undefined) throw new Error(`Missing multiplier label for reliability ${reliability}`);
+  return match.label;
 }
 
 export function HowRankedTable({ howRanked }: { howRanked: HowRanked }): ReactElement {
