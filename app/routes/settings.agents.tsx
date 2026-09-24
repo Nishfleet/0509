@@ -1,5 +1,8 @@
 import type { Route } from "./+types/settings.agents";
 
+import { Link } from "react-router";
+
+import { PAGE, PageHeading } from "../components/page-heading";
 import { AgentKeys, ConnectedApps, ConnectDetails } from "../components/agent-settings";
 import {
   createAgentKey,
@@ -44,12 +47,18 @@ export async function action({ request, context }: Route.ActionArgs) {
 
 export default function Page({ loaderData, actionData }: Route.ComponentProps) {
   return (
-    <main>
-      <h1>Agents and API</h1>
-      <p>
-        Let Claude, ChatGPT, Cursor or your own code read your brief, competitors and alerts. Agents can only read, and
-        only your workspace.
-      </p>
+    <main className={PAGE}>
+      <nav aria-label="Breadcrumb" className="text-ink-soft mb-4 font-mono text-meta uppercase">
+        <Link to="/app/settings" prefetch="intent" className="underline decoration-1 underline-offset-4">
+          Settings
+        </Link>
+        <span aria-hidden="true"> / </span>
+        <span aria-current="page">Agents and API</span>
+      </nav>
+      <PageHeading
+        title="Agents and API"
+        lede="Let Claude, ChatGPT, Cursor or your own code read your brief, competitors and alerts. Agents can only read, and only your workspace."
+      />
       <ConnectDetails mcpUrl={loaderData.mcpUrl} origin={loaderData.origin} />
       <ConnectedApps apps={loaderData.apps} />
       <AgentKeys keys={loaderData.keys} newKey={actionData?.newKey ?? null} />

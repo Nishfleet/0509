@@ -4,6 +4,7 @@ import { redirect } from "react-router";
 
 import { IdentityCard } from "../components/identity-card";
 import { OneInput } from "../components/one-input";
+import { ONBOARDING_PAGE } from "../components/page-heading";
 import { StepBar } from "../components/step-bar";
 import { isTakenDown } from "../lib/data/takedown.server";
 import { readWorkspaceIdForOwner } from "../lib/data/workspace.server";
@@ -31,13 +32,13 @@ export async function action({ request }: Route.ActionArgs) {
   const workspaceId = await readWorkspaceIdForOwner(session.user.id);
   if (workspaceId === null) throw redirect("/onboarding");
   if (await confirmCard(workspaceId, await request.formData())) throw redirect("/onboarding/competitors");
-  return { message: "add your brand's name, then tap That's me" };
+  return { message: "Add your brand's name, then tap That's me." };
 }
 
 export default function Page({ loaderData, actionData }: Route.ComponentProps) {
   const { card } = loaderData;
   return (
-    <main>
+    <main className={ONBOARDING_PAGE}>
       <StepBar current={2} />
       {card === null ? (
         <OneInput
@@ -45,11 +46,14 @@ export default function Page({ loaderData, actionData }: Route.ComponentProps) {
           placeholder="your website, or a handle"
           name="subject"
           action="/onboarding"
-          message="we couldn't find anything for that, try the main website"
+          message="We couldn't find anything for that, try the main website."
+          submitLabel="Draw my card"
         />
       ) : (
         <>
-          <h1>This is you. Fix anything we got wrong.</h1>
+          <h1 className="font-display text-display-2 mt-10 font-extrabold uppercase">
+            This is you. Fix anything we got wrong.
+          </h1>
           <IdentityCard
             subject={card.subject}
             domain={card.domain}

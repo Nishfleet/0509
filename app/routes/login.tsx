@@ -4,16 +4,25 @@ import { useEffect, useState } from "react";
 import { Form, useActionData, useNavigate, useNavigation, useSearchParams } from "react-router";
 
 import { Footer } from "../components/footer";
+import { SIGN_IN_LEDE, SIGN_IN_SHELL, SIGN_IN_TITLE, SignInSent } from "../components/sign-in-sent";
+import { Wordmark } from "../components/wordmark";
+import { Button } from "../components/ui/button";
+import { Input } from "../components/ui/input";
 import { safeReturnTo } from "../lib/agent/paths";
 import { authClient } from "../lib/auth-client";
 import { createAuth } from "../lib/auth.server";
 import { timezoneCookie } from "../lib/timezone";
 
+
+export function meta() {
+  return [{ title: "Sign in · Five to Nine" }];
+}
+
 export async function action({ request }: Route.ActionArgs) {
   const form = await request.formData();
   const submitted = form.get("email");
   const email = typeof submitted === "string" ? submitted.trim().toLowerCase() : "";
-  if (!email) return { error: "Enter your email." };
+  if (!email) return { error: "Enter your email address, then we'll send the link." };
 
   const auth = createAuth(env);
   await auth.api
@@ -23,7 +32,7 @@ export async function action({ request }: Route.ActionArgs) {
     })
     .catch(() => undefined);
 
-  return { sent: true };
+  return { sent: { email, at: Date.now() } };
 }
 
 export default function Login() {
@@ -52,31 +61,43 @@ export default function Login() {
     setPasskeyState(code === "AUTH_CANCELLED" ? "idle" : "failed");
   }
 
-  if (data && "sent" in data) {
-    return (
-      <main>
-        <h1>Check your email</h1>
-        <p>If that address can sign in, a link is on its way. It works once and expires shortly.</p>
-        <Footer />
-      </main>
-    );
+  if (data?.sent) {
+    return <SignInSent email={data.sent.email} sentAt={data.sent.at} />;
   }
 
   return (
-    <main>
-      <h1>Sign in</h1>
-      <Form method="post">
-        <label htmlFor="email">Email</label>
-        <input id="email" name="email" type="email" autoComplete="email" required />
-        <button type="submit" disabled={busy}>{busy ? "Sending…" : "Send me a link"}</button>
+    <main className={SIGN_IN_SHELL}>
+      <Wordmark className="self-start" />
+      <h1 className={SIGN_IN_TITLE}>Sign in</h1>
+      <p className={SIGN_IN_LEDE}>We email you a link. Tap it and you're in. There is no password.</p>
+      <Form method="post" className="mt-8 flex flex-col gap-3">
+        <label htmlFor="email" className="font-mono text-eyebrow text-ink-soft uppercase">
+          Email
+        </label>
+        <Input id="email" name="email" type="email" autoComplete="email" inputMode="email" required />
+        <Button type="submit" size="lg" disabled={busy} className="mt-2">
+          {busy ? "Sending…" : "Email me a link"}
+        </Button>
       </Form>
-      <button type="button" onClick={() => void signInWithPasskey()} disabled={passkeyState === "working"}>
-        {passkeyState === "working" ? "Follow the prompt…" : "Sign in with a passkey"}
-      </button>
-      {passkeyState === "failed" ? (
-        <p role="alert">Passkey sign-in did not go through. Try again or use your email link.</p>
+      {data?.error ? (
+        <p role="alert" className="mt-3 text-[0.95rem]">
+          {data.error}
+        </p>
       ) : null}
-      {data && "error" in data ? <p role="alert">{data.error}</p> : null}
+      <Button
+        type="button"
+        variant="tertiary"
+        className="mt-4 self-start"
+        onClick={() => void signInWithPasskey()}
+        disabled={passkeyState === "working"}
+      >
+        {passkeyState === "working" ? "Follow the prompt…" : "Use a passkey instead"}
+      </Button>
+      {passkeyState === "failed" ? (
+        <p role="alert" className="text-[0.95rem]">
+          Your passkey didn't sign you in. Try it again, or use the email link.
+        </p>
+      ) : null}
       <Footer />
     </main>
   );
