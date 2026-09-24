@@ -85,7 +85,7 @@ function formatDate(iso: string, timezone: string, withTime: boolean): string {
   }
 }
 
-function countPhrase(count: number, one: string, many: string): string {
+export function countPhrase(count: number, one: string, many: string): string {
   if (count === 0) return `no ${many}`;
   return count === 1 ? `1 ${one}` : `${n(count)} ${many}`;
 }

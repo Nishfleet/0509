@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 
 import { deliver, handleBatch, type DeliveryMessage } from "../../workers/delivery/consumer";
 import { sendOrThrow } from "../../workers/delivery/send";
+import type { BriefPayload } from "../../app/lib/brief-payload";
 
 interface Recorder {
   sent: EmailMessageBuilder[];
@@ -51,13 +52,42 @@ const seedChannel = async () => {
     .run();
 };
 
-const seedDigest = async (status = "pending", payload: Record<string, unknown> = {}) => {
+const brief = (headlineRank: number): BriefPayload => ({
+  workspace_id: WS,
+  timezone: "UTC",
+  period_start: "2026-09-15T08:00:00.000Z",
+  period_end: "2026-09-22T08:00:00.000Z",
+  headline_rank: headlineRank,
+  headline_total: 9,
+  headline_movement: 1,
+  headline_is_new: false,
+  why_line: "Quiet week: 3 mentions checked, no site changes, no new ads.",
+  is_quiet_week: true,
+  read_this_first: [],
+  brands: [],
+  own_site: { status: "ok", incidents: [] },
+  checked: {
+    mention_count: 3,
+    site_change_count: 0,
+    new_ad_count: 0,
+    source_keys: [],
+    degraded_source_keys: [],
+    degraded_sources: [],
+  },
+  next_brief_at: "2026-09-29T08:00:00.000Z",
+});
+
+const seedDigest = async (
+  status = "pending",
+  payload: BriefPayload = brief(2),
+  subject: string | null = "You are #2 of 9 this week",
+) => {
   const id = `digest-${Math.random().toString(36).slice(2, 10)}`;
   await env.DB.prepare(
     `INSERT INTO digest (id, workspace_id, kind, period_start, period_end, status, subject, payload_json, sent_at)
-     VALUES (?, ?, 'weekly', '2026-09-15', '2026-09-22', ?, 'You are #2 of 9 this week', ?, NULL)`,
+     VALUES (?, ?, 'weekly', '2026-09-15', '2026-09-22', ?, ?, ?, NULL)`,
   )
-    .bind(id, WS, status, JSON.stringify(payload))
+    .bind(id, WS, status, subject, JSON.stringify(payload))
     .run();
   return id;
 };
@@ -137,10 +167,7 @@ describe("send lane (0509#3979)", () => {
 
   it("(a) sends a normal message and resolves the attempt to 'sent'", async () => {
     const rec = recorder();
-    const digestId = await seedDigest("pending", {
-      html: "<p>You are #2 of 9 this week.</p>",
-      text: "You are #2 of 9 this week.",
-    });
+    const digestId = await seedDigest("pending");
 
     const result = await deliver(envWith(bindingFor(rec)), message(digestId));
 
@@ -165,7 +192,7 @@ describe("send lane (0509#3979)", () => {
 
   it("(b) does not send twice when the same message is re-enqueued", async () => {
     const rec = recorder();
-    const digestId = await seedDigest("pending", { text: "brief" });
+    const digestId = await seedDigest("pending");
 
     const first = await deliver(envWith(bindingFor(rec)), message(digestId));
     expect(first.outcome).toBe("sent");
@@ -185,7 +212,7 @@ describe("send lane (0509#3979)", () => {
 
   it("(stale) re-claims a pending attempt older than 1 hour and sends once", async () => {
     const rec = recorder();
-    const digestId = await seedDigest("pending", { html: "<p>x</p>", text: "x" });
+    const digestId = await seedDigest("pending");
     const attemptedAt = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
     await env.DB.prepare(
       `INSERT INTO send_attempt
@@ -207,7 +234,7 @@ describe("send lane (0509#3979)", () => {
 
   it("(fresh) a pending attempt younger than 1 hour is a duplicate", async () => {
     const rec = recorder();
-    const digestId = await seedDigest("pending", { html: "<p>x</p>", text: "x" });
+    const digestId = await seedDigest("pending");
     const attemptedAt = new Date(Date.now() - 10 * 60 * 1000).toISOString();
     await env.DB.prepare(
       `INSERT INTO send_attempt
@@ -228,7 +255,7 @@ describe("send lane (0509#3979)", () => {
   });
 
   it("(b2) retries a failed attempt and sends on the redelivery", async () => {
-    const digestId = await seedDigest("pending", { text: "brief" });
+    const digestId = await seedDigest("pending");
     const failed = recorder();
     failed.fail = new Error("Email Service rejected the send");
 
@@ -253,7 +280,7 @@ describe("send lane (0509#3979)", () => {
 
   it("(c) skips a suppressed address before rendering and inserts no attempt row", async () => {
     const rec = recorder();
-    const digestId = await seedDigest("pending", { html: "<p>brief</p>", text: "brief" });
+    const digestId = await seedDigest("pending");
     await env.DB.prepare(
       `INSERT INTO email_suppression (address, reason, created_at) VALUES (?, 'unsubscribed', '2026-09-22T00:00:02Z')`,
     )
@@ -272,7 +299,7 @@ describe("send lane (0509#3979)", () => {
 
   it("never records 'delivered' any path", async () => {
     const rec = recorder();
-    const digestId = await seedDigest("pending", { text: "brief" });
+    const digestId = await seedDigest("pending");
     await deliver(envWith(bindingFor(rec)), message(digestId));
     const rows = await readAttempts();
     expect(rows.map((r) => r.status)).not.toContain("delivered");
@@ -309,7 +336,7 @@ describe("send lane (0509#3979)", () => {
   });
 
   it("never leaves a sent attempt reclaimable when a post-send write throws", async () => {
-    const digestId = await seedDigest("pending", { text: "brief" });
+    const digestId = await seedDigest("pending");
     const rec = recorder();
 
     const realPrepare = env.DB.prepare.bind(env.DB);
@@ -361,7 +388,7 @@ describe("send lane (0509#3979)", () => {
   it("reports no_target when the workspace has no email target", async () => {
     const rec = recorder();
     await env.DB.exec("DELETE FROM send_target");
-    const digestId = await seedDigest("pending", { text: "brief" });
+    const digestId = await seedDigest("pending");
     const result = await deliver(envWith(bindingFor(rec)), message(digestId));
     expect(result.outcome).toBe("no_target");
     expect(rec.sent).toHaveLength(0);
@@ -369,7 +396,7 @@ describe("send lane (0509#3979)", () => {
   });
 
   it("acks a duplicate and retries a failed send from the batch", async () => {
-    const digestId = await seedDigest("pending", { text: "brief" });
+    const digestId = await seedDigest("pending");
     const normal = recorder();
     await deliver(envWith(bindingFor(normal)), message(digestId));
 
@@ -380,7 +407,7 @@ describe("send lane (0509#3979)", () => {
     expect(duplicate.retried).toEqual([]);
     expect(normal.sent).toHaveLength(1);
 
-    const failingDigest = await seedDigest("pending", { text: "again" });
+    const failingDigest = await seedDigest("pending");
     const failed = recorder();
     failed.fail = new Error("throttled");
     const failBatch = batchFor([message(failingDigest)]);
@@ -392,7 +419,7 @@ describe("send lane (0509#3979)", () => {
 
   it("ignores a work item with no digest_id and a string body carries the id", async () => {
     const rec = recorder();
-    const digestId = await seedDigest("pending", { text: "brief" });
+    const digestId = await seedDigest("pending");
     const junk = batchFor([{ nope: true }, JSON.stringify({ digest_id: digestId })]);
     const results = await handleBatch(envWith(bindingFor(rec)), junk.batch);
     expect(results[0].outcome).toBe("no_digest");
@@ -401,12 +428,23 @@ describe("send lane (0509#3979)", () => {
     expect(rec.sent).toHaveLength(1);
   });
 
+  it("renders the stored brief, with its own subject when the row has none", async () => {
+    const rec = recorder();
+    const digestId = await seedDigest("pending", brief(3), null);
+
+    const result = await deliver(envWith(bindingFor(rec)), message(digestId));
+
+    expect(result.outcome).toBe("sent");
+    expect(rec.sent[0].subject).toBe("Your weekly brief: you're #3 of 9 this week");
+    expect(rec.sent[0].text).toContain("You're #3 of 9 this week");
+    expect(rec.sent[0].text).toContain("Quiet week: 3 mentions checked");
+    expect(rec.sent[0].text).toMatch(/Unsubscribe: https:\/\/0509\.io\/u\/[0-9a-f]{64}/);
+    expect(rec.sent[0].html).toContain("<!doctype html>");
+  });
+
   it("stamps a stable RFC 8058 unsubscribe token on every send", async () => {
     const rec = recorder();
-    const firstId = await seedDigest("pending", {
-      html: "<p>You are #2 of 9 this week.</p>",
-      text: "You are #2 of 9 this week.",
-    });
+    const firstId = await seedDigest("pending");
 
     const first = await deliver(envWith(bindingFor(rec)), message(firstId));
     expect(first.outcome).toBe("sent");
@@ -421,10 +459,7 @@ describe("send lane (0509#3979)", () => {
       "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
     });
 
-    const secondId = await seedDigest("pending", {
-      html: "<p>You are #3 of 9 this week.</p>",
-      text: "You are #3 of 9 this week.",
-    });
+    const secondId = await seedDigest("pending");
     const second = await deliver(envWith(bindingFor(rec)), message(secondId));
     expect(second.outcome).toBe("sent");
     expect(rec.sent[1].headers).toEqual({

@@ -142,6 +142,19 @@
     ]
   },
 
+  // The weekly rollover (docs/engines/standing-home.md §2 and P6.3, 0509#4004).
+  // One instance per workspace per week, id `rollover-<workspace>-<closing
+  // instant>`. The nightly cron re-creates the next one with createBatch,
+  // which skips an id that already exists, so a lost instance is replaced
+  // within a day and a live one is never started twice.
+  "workflows": [
+    {
+      "name": "standing-rollover",
+      "binding": "STANDING_ROLLOVER",
+      "class_name": "StandingRolloverWorkflow"
+    }
+  ],
+
   "triggers": {
     // The dead-man ping, every five minutes: an external service alerts when
     // the reports stop, which is the one failure a Worker cannot report about
