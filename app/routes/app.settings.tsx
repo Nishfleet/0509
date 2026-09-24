@@ -4,7 +4,7 @@ import { env } from "cloudflare:workers";
 import { Link, redirect } from "react-router";
 
 import { DeleteAccount, SignOut } from "../components/account-settings";
-import { BriefScheduleSettings } from "../components/brief-schedule-settings";
+import { BriefRow } from "../components/settings-row";
 import { BLOCK_HEADING, PAGE, PageHeading } from "../components/page-heading";
 import { AddPasskey } from "../components/passkey-button";
 import { deleteAccount } from "../lib/account-delete.server";
@@ -43,20 +43,27 @@ export async function action({ request, context }: Route.ActionArgs) {
   if (intent === "delete-account") {
     const confirm = form.get("confirm");
     const typed = typeof confirm === "string" ? confirm.trim().toLowerCase() : "";
-    if (typed !== session.user.email.toLowerCase()) return { saved: null, deleteError: MISMATCH };
+    if (typed !== session.user.email.toLowerCase()) {
+      return { saved: null, deleteError: MISMATCH, briefSaved: false, briefError: null };
+    }
     const headers = await deleteAccount(context.get(oauthHelpersContext), request, session.user.id);
-    if (headers === null) return { saved: null, deleteError: SIGN_IN_AGAIN };
+    if (headers === null) return { saved: null, deleteError: SIGN_IN_AGAIN, briefSaved: false, briefError: null };
     throw redirect("/login", { headers });
   }
-  const owned = await readBriefScheduleForOwner(session.user.id);
-  const schedule = parseBriefSchedule({
-    weekday: form.get("weekday"),
-    hour: form.get("hour"),
-    timezone: form.get("timezone"),
-  });
-  if (owned === null || schedule === null) return { saved: false, deleteError: null };
-  await updateBriefSchedule(owned.workspaceId, schedule);
-  return { saved: true, deleteError: null };
+  if (intent === "brief-schedule") {
+    const owned = await readBriefScheduleForOwner(session.user.id);
+    const schedule = parseBriefSchedule({
+      weekday: form.get("weekday"),
+      hour: form.get("hour"),
+      timezone: form.get("timezone"),
+    });
+    if (owned === null || schedule === null) {
+      return { saved: null, deleteError: null, briefSaved: false, briefError: "Pick a day and a time from the lists." };
+    }
+    await updateBriefSchedule(owned.workspaceId, schedule);
+    return { saved: null, deleteError: null, briefSaved: true, briefError: null };
+  }
+  return { saved: null, deleteError: null, briefSaved: false, briefError: null };
 }
 
 const BLOCK = "border-line mt-10 border-t pt-4";
@@ -71,7 +78,13 @@ export default function Page({ loaderData, actionData }: Route.ComponentProps) {
             Your weekly brief
           </h2>
           <p className="mt-2 max-w-prose leading-[1.55]">One email a week, when you want to read it.</p>
-          <BriefScheduleSettings schedule={loaderData.schedule} />
+          <BriefRow
+            weekday={loaderData.schedule.weekday}
+            hour={loaderData.schedule.hour}
+            timezone={loaderData.schedule.timezone}
+            nextBrief={loaderData.schedule.nextLine}
+            error={actionData?.briefError ?? null}
+          />
         </section>
       )}
       <section aria-labelledby="settings-agents" className={BLOCK}>
