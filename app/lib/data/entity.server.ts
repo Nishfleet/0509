@@ -266,11 +266,12 @@ const COUNT_OTHER_ON =
 export async function addManualCompetitor(input: {
   workspaceId: string;
   domain: string;
+  name: string | null;
   now: string;
   cap: number;
 }): Promise<"added" | "at_cap"> {
   const result = await env.DB.prepare(INSERT_MANUAL_COMPETITOR)
-    .bind(crypto.randomUUID(), input.workspaceId, input.domain, input.domain, input.now, input.cap)
+    .bind(crypto.randomUUID(), input.workspaceId, input.domain, input.name, input.now, input.cap)
     .run();
   if (result.meta.changes === 1) return "added";
   const count = await env.DB.prepare(COUNT_OTHER_ON)

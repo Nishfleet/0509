@@ -6,8 +6,16 @@ import { describe, expect, it } from "vitest";
 import { HomeStanding } from "../../app/components/home-standing";
 import type { BriefPayload } from "../../app/lib/brief-payload";
 import type { BriefSchedule } from "../../app/lib/brief-schedule";
-import { greetingFor, homeStanding, homeView, movementLabel, nextHour, type HomeEntity } from "../../app/lib/home-standing";
-import type { HomeHistoryRow } from "../../app/lib/home-standing";
+import {
+  greetingFor,
+  homeStanding,
+  homeView,
+  movementLabel,
+  nextHour,
+  nextSiteSweepAt,
+  type HomeEntity,
+  type HomeHistoryRow,
+} from "../../app/lib/home-standing";
 
 const SCHEDULE: BriefSchedule = { timezone: "Europe/London", weekday: 1, hour: 8 };
 const THURSDAY_MORNING = new Date("2026-09-24T06:30:00.000Z");
@@ -166,10 +174,16 @@ describe("Home standing", () => {
   it("says when the first standing comes while the first week is still open", () => {
     const html = render({ payload: null });
     expect(html).toContain(
-      "We&#x27;re gathering the first week. Your first standing comes with the brief on Monday 08:00.",
+      "We&#x27;re gathering the first week: site snapshots, ads and mentions for 3 brands. The first site snapshots land by Friday 03:00; your first read-this-first comes with the brief on Monday 08:00.",
     );
+    expect(html).toContain('data-home="first-file"');
     expect(html).toContain("Good morning.</h1>");
     expect(render({ payload: payload({ headline_rank: null }) })).toContain("gathering the first week");
+  });
+
+  it("lands the first site sweep on the next 02:00Z strictly after now", () => {
+    expect(nextSiteSweepAt(new Date("2026-09-24T01:00:00Z"))).toEqual(new Date("2026-09-24T02:00:00Z"));
+    expect(nextSiteSweepAt(new Date("2026-09-24T02:00:00Z"))).toEqual(new Date("2026-09-25T02:00:00Z"));
   });
 
   it("names the movement the way the brief does", () => {
