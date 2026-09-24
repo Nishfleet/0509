@@ -1,6 +1,8 @@
 import { env } from "cloudflare:workers";
+import { z } from "zod";
 
-import type { Candidate, Evidence } from "../discovery/types";
+import type { Candidate } from "../discovery/types";
+import type { GeneratorKey } from "../discovery/types";
 
 const READ_BACKLOG =
   "SELECT name, domain, evidence_json FROM discovery_backlog WHERE workspace_id = ?1 AND promoted_at IS NULL ORDER BY first_seen_at, name_key";
@@ -11,24 +13,37 @@ const UPSERT_ROW =
 const PROMOTE_ROW =
   "UPDATE discovery_backlog SET promoted_at = ?1, updated_at = ?1 WHERE workspace_id = ?2 AND name_key = ?3 AND promoted_at IS NULL";
 
+const backlogRows = z.array(
+  z.object({
+    name: z.string(),
+    domain: z.string().nullable(),
+    evidence_json: z.string(),
+  }),
+);
+
+const evidenceSchema = z.object({
+  sourceUrl: z.string(),
+  excerpt: z.string(),
+  generator: z.enum(["news", "hn", "ads"] satisfies GeneratorKey[]),
+});
+
+const evidenceEnvelopeSchema = z.object({ evidence: z.array(evidenceSchema) });
+
 export interface BacklogRow {
   nameKey: string;
   name: string;
   domain: string | null;
-  evidence: Evidence[];
+  evidence: { sourceUrl: string; excerpt: string; generator: GeneratorKey }[];
 }
 
 export async function readBacklog(workspaceId: string): Promise<Candidate[]> {
-  const { results } = await env.DB.prepare(READ_BACKLOG).bind(workspaceId).all<{
-    name: string;
-    domain: string | null;
-    evidence_json: string;
-  }>();
-  return (results ?? []).map((row) => {
-    const parsed = JSON.parse(row.evidence_json) as { evidence: Evidence[] };
-    const candidate: Candidate = { name: row.name, evidence: parsed.evidence };
-    if (row.domain !== null) candidate.domain = row.domain;
-    return candidate;
+  const rows = backlogRows.parse((await env.DB.prepare(READ_BACKLOG).bind(workspaceId).all()).results);
+  return rows.map((row) => {
+    const parsed = evidenceEnvelopeSchema.safeParse(JSON.parse(row.evidence_json));
+    if (!parsed.success) throw new Error(`discovery backlog evidence: ${z.prettifyError(parsed.error)}`);
+    return row.domain === null
+      ? { name: row.name, evidence: parsed.data.evidence }
+      : { name: row.name, domain: row.domain, evidence: parsed.data.evidence };
   });
 }
 
