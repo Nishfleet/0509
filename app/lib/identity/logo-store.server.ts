@@ -34,7 +34,10 @@ function publicHttps(raw: string): boolean {
 
 async function cappedBytes(res: Response): Promise<Uint8Array | null> {
   const declared = Number(res.headers.get("content-length"));
-  if (Number.isFinite(declared) && declared > MAX_LOGO_BYTES) return null;
+  if (Number.isFinite(declared) && declared > MAX_LOGO_BYTES) {
+    await res.body?.cancel();
+    return null;
+  }
   if (res.body === null) return null;
 
   const reader = res.body.getReader();
