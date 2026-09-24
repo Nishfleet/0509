@@ -6,7 +6,7 @@ import { describe, expect, it } from "vitest";
 import { HomeStanding } from "../../app/components/home-standing";
 import type { BriefPayload } from "../../app/lib/brief-payload";
 import type { BriefSchedule } from "../../app/lib/brief-schedule";
-import { greetingFor, homeStanding, homeView, movementLabel, type HomeEntity } from "../../app/lib/home-standing";
+import { greetingFor, homeStanding, homeView, movementLabel, nextHour, type HomeEntity } from "../../app/lib/home-standing";
 
 const SCHEDULE: BriefSchedule = { timezone: "Europe/London", weekday: 1, hour: 8 };
 const THURSDAY_MORNING = new Date("2026-09-24T06:30:00.000Z");
@@ -142,5 +142,26 @@ describe("Home standing", () => {
     expect(greetingFor("Europe/London", new Date("2026-09-24T06:30:00.000Z"))).toBe("Good morning");
     expect(greetingFor("Europe/London", new Date("2026-09-24T12:30:00.000Z"))).toBe("Good afternoon");
     expect(greetingFor("Asia/Kolkata", new Date("2026-09-24T12:30:00.000Z"))).toBe("Good evening");
+  });
+
+  it("rounds nextHour up to the next hour boundary", () => {
+    expect(nextHour(new Date("2026-09-24T10:17:00Z"))).toEqual(new Date("2026-09-24T11:00:00.000Z"));
+    expect(nextHour(new Date("2026-09-24T10:00:00Z"))).toEqual(new Date("2026-09-24T11:00:00.000Z"));
+  });
+
+  it("builds the footer with the brand count, brief time and own-site re-check, singular for one brand", () => {
+    const amsterdamSchedule: BriefSchedule = { timezone: "Europe/Amsterdam", weekday: 1, hour: 8 };
+    const now = new Date("2026-09-24T10:17:00Z");
+    const fourOn: readonly HomeEntity[] = [
+      SELF,
+      { id: "ent_kindred", role: "competitor", domain: "kindred.example", state: "on" },
+      { id: "ent_casetta", role: "competitor", domain: "casetta.example", state: "on" },
+      { id: "ent_hollow", role: "competitor", domain: "hollow.example", state: "on" },
+    ];
+    const four = homeView({ payload: payload(), entities: fourOn, schedule: amsterdamSchedule, now });
+    expect(four.footer).toBe("Checked 4 brands this week · brief Monday 08:00 · your site re-checked at 13:00");
+
+    const one = homeView({ payload: payload(), entities: [SELF], schedule: amsterdamSchedule, now });
+    expect(one.footer).toBe("Checked 1 brand this week · brief Monday 08:00 · your site re-checked at 13:00");
   });
 });

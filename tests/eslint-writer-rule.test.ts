@@ -69,12 +69,28 @@ export function runProbe(): string {
 }
 `,
   },
+  {
+    name: "interpolated-table UPDATE",
+    code: `export function runProbe(table: string): string {
+  return \`UPDATE \${table} SET name = 'probe' WHERE id = 'probe'\`;
+}
+`,
+  },
 ];
 
 // A WITH-led read is not a write; the gate must leave it alone.
 const READ_CTE = `const PROBE = "WITH n AS (SELECT 1 AS one) SELECT one FROM n";
 export function runProbe(): string {
   return PROBE;
+}
+`;
+
+// The B note on #4336: the leading anchor alone let a bare `UPDATE\s` match
+// prose that merely starts with "Update " (a toast copy like "Update saved").
+// A statement needs the table-then-SET tail (or the end of an interpolated
+// quasi above), so this copy must stay unblocked. 0509#4383.
+const PROSE_UPDATE = `export function savedCopy(): string {
+  return "Update saved";
 }
 `;
 
@@ -126,6 +142,12 @@ describe("eslint one-writer-per-table rule (#4313)", () => {
 
   it("leaves a WITH-led SELECT unblocked", { timeout: 60_000 }, async () => {
     const result = await lintProbe("app/lib/probe-writer-tmp.server.ts", READ_CTE);
+    expect(result.ignored).toBe(false);
+    expect(result.messages.some((m) => m.includes(WRITER_MESSAGE))).toBe(false);
+  });
+
+  it("leaves prose starting with Update unblocked", { timeout: 60_000 }, async () => {
+    const result = await lintProbe("app/lib/probe-writer-tmp.server.ts", PROSE_UPDATE);
     expect(result.ignored).toBe(false);
     expect(result.messages.some((m) => m.includes(WRITER_MESSAGE))).toBe(false);
   });

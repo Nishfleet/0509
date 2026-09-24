@@ -6,6 +6,7 @@ import {
 const FORWARD_TO = "nishant345@gmail.com";
 const ISSUES_URL = "https://api.github.com/repos/Nishfleet/0509/issues";
 const SITE_HOSTS = new Set(["0509.io", "www.0509.io"]);
+const TOKEN_PATH_PREFIXES = ["/u/", "/api/auth/"];
 const MAX_PATHS = 10;
 const MAX_UA = 200;
 
@@ -20,7 +21,12 @@ function sitePaths(text: string): string[] {
     if (!token.startsWith("http")) continue;
     try {
       const url = new URL(token);
-      if (SITE_HOSTS.has(url.hostname)) paths.add(url.pathname);
+      if (
+        SITE_HOSTS.has(url.hostname) &&
+        !TOKEN_PATH_PREFIXES.some((prefix) => url.pathname.startsWith(prefix))
+      ) {
+        paths.add(url.pathname);
+      }
     } catch {
       continue;
     }

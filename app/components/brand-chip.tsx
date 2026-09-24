@@ -1,6 +1,7 @@
 import type { CSSProperties, ReactElement } from "react";
 import { Link } from "react-router";
 
+import { httpUrl } from "../lib/http-url";
 import { cn } from "../lib/utils";
 import { Avatar, AvatarFallback, AvatarImage } from "./ui/avatar";
 import { Badge } from "./ui/badge";
@@ -29,18 +30,6 @@ export function brandMonogram(name: string): string {
   const first = segments[Symbol.iterator]().next().value;
   if (first === undefined) return "";
   return first.segment.toLocaleUpperCase();
-}
-
-function httpUrl(value: string): string | null {
-  const trimmed = value.trim();
-  if (trimmed === "") return null;
-  try {
-    const url = new URL(trimmed);
-    if (url.protocol !== "http:" && url.protocol !== "https:") return null;
-    return url.href;
-  } catch {
-    return null;
-  }
 }
 
 function safeHref(value: string): string | null {
@@ -90,9 +79,9 @@ export function BrandChip({
       data-self={self ? "" : undefined}
       data-off={off ? "" : undefined}
       className={cn(
-        "h-auto max-w-full min-h-11 min-w-0 shrink gap-[7px] rounded-none border-[1.5px] border-line bg-card py-[5px] pr-[11px] pl-[5px] text-[0.85rem] font-medium text-ink",
+        "h-auto max-w-full min-h-11 min-w-0 shrink gap-[7px] rounded-none border-[1.5px] border-line bg-card py-[5px] pr-[11px] pl-[5px] text-[0.85rem] font-medium text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink",
         self && "border-ink font-semibold",
-        off && "border-dashed text-ink-faint",
+        off && "border-dashed text-ink-soft",
       )}
     >
       <Avatar
@@ -151,7 +140,7 @@ export function BrandChipRow({
         <Badge
           variant="outline"
           render={chipLink(add)}
-          className="h-auto min-h-11 rounded-none border-[1.5px] border-dashed border-line bg-transparent px-[11px] font-mono text-[0.7rem] tracking-[0.08em] text-ink-soft uppercase"
+          className="h-auto min-h-11 rounded-none border-[1.5px] border-dashed border-line bg-transparent px-[11px] font-mono text-[0.7rem] tracking-[0.08em] text-ink-soft uppercase focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink"
         >
           + Add a competitor
         </Badge>
