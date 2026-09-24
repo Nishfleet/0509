@@ -36,6 +36,23 @@ describe("hn.algolia mentions adapter", () => {
 		}
 	});
 
+	it("falls back to the HN permalink when Algolia returns an empty url", () => {
+		const rawBody = JSON.stringify({
+			hits: [
+				{
+					objectID: "47123304",
+					title: "Ask HN: empty url",
+					url: "",
+					created_at: "2026-09-24T00:00:00.000Z",
+				},
+			],
+		});
+		const parsed = mentionsResultSchema.parse(parseHn(rawBody));
+		expect(parsed.items[0]?.url).toBe(
+			"https://news.ycombinator.com/item?id=47123304",
+		);
+	});
+
 	it("rejects an unsuccessful Algolia response", async () => {
 		const fetchMock = vi.fn(async () => new Response("", { status: 500 }));
 		vi.stubGlobal("fetch", fetchMock);

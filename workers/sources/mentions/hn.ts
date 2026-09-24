@@ -18,14 +18,18 @@ const algoliaSchema = z.object({
 
 export function parseHn(rawBody: string): MentionsResult {
 	const { hits } = algoliaSchema.parse(JSON.parse(rawBody));
-	const items = hits.map((hit) => ({
-		dedupKey: hit.objectID,
-		url:
-			hit.url ??
-			"https://news.ycombinator.com/item?id=" + hit.objectID,
-		title: hit.title ?? "",
-		publishedAt: hit.created_at,
-	}));
+	const items = hits.map((hit) => {
+		const upstreamUrl = hit.url ?? "";
+		return {
+			dedupKey: hit.objectID,
+			url:
+				upstreamUrl.length > 0
+					? upstreamUrl
+					: "https://news.ycombinator.com/item?id=" + hit.objectID,
+			title: hit.title ?? "",
+			publishedAt: hit.created_at,
+		};
+	});
 	return { items, canaryCount: hits.length, rawBody };
 }
 
