@@ -14,6 +14,7 @@ const KEYS = [
   "BETTER_AUTH_SECRET",
   "EMAIL",
   "SEND_EMAIL",
+  "SNAPSHOTS",
   "BROWSER",
 ] as const;
 
@@ -24,6 +25,7 @@ function configured() {
     BETTER_AUTH_SECRET: "present",
     EMAIL: {},
     SEND_EMAIL: { sendBatch: () => "queued" },
+    SNAPSHOTS: { get: () => "card" },
     BROWSER: {},
   };
 }
@@ -101,7 +103,8 @@ describe("worker env", () => {
       "BETTER_AUTH_SECRET",
       "EMAIL",
       "SEND_EMAIL",
-          "BROWSER",
+      "SNAPSHOTS",
+      "BROWSER",
     ]);
   });
 

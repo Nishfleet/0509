@@ -1,15 +1,22 @@
+import { z } from "zod";
+
 export const D3_QUESTION_ID = "noteworthy_change";
 export const D6_QUESTION_ID = "mention_matters";
 
-export type Reliability = "official_api" | "rss" | "scraped_page" | "best_effort";
+export const reliabilitySchema = z.enum(["official_api", "rss", "scraped_page", "best_effort"]);
 
-export type ScoreBucket =
-  | "mention_matters"
-  | "mention_normal"
-  | "site_change_noteworthy"
-  | "ad_new_creative"
-  | "ad_copy_change"
-  | "hiring_new_role";
+export type Reliability = z.infer<typeof reliabilitySchema>;
+
+export const scoreBucketSchema = z.enum([
+  "mention_matters",
+  "mention_normal",
+  "site_change_noteworthy",
+  "ad_new_creative",
+  "ad_copy_change",
+  "hiring_new_role",
+]);
+
+export type ScoreBucket = z.infer<typeof scoreBucketSchema>;
 
 export interface WeightRow {
   key: string;
@@ -67,4 +74,49 @@ export function scoreByEntity(
         ),
     ]),
   );
+}
+
+export interface WeekScore {
+  entity_id: string;
+  score: number;
+}
+
+export interface RankedEntity {
+  entity_id: string;
+  rank: number;
+  movement: number | null;
+}
+
+function previousRankOrder(
+  previousRanks: ReadonlyMap<string, number>,
+  left: string,
+  right: string,
+): number {
+  const leftRank = previousRanks.get(left);
+  const rightRank = previousRanks.get(right);
+  if (leftRank === rightRank) return 0;
+  if (leftRank === undefined) return 1;
+  if (rightRank === undefined) return -1;
+  return leftRank - rightRank;
+}
+
+export function rankWeek(
+  scores: readonly WeekScore[],
+  previousRanks: ReadonlyMap<string, number>,
+): readonly RankedEntity[] {
+  const sorted = [...scores].sort(
+    (left, right) =>
+      right.score - left.score ||
+      previousRankOrder(previousRanks, left.entity_id, right.entity_id) ||
+      left.entity_id.localeCompare(right.entity_id),
+  );
+  return sorted.map((row, index) => {
+    const previous = previousRanks.get(row.entity_id);
+    const rank = index + 1;
+    return {
+      entity_id: row.entity_id,
+      rank,
+      movement: previous === undefined ? null : previous - rank,
+    };
+  });
 }

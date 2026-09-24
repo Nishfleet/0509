@@ -94,12 +94,15 @@ describe("the quiet week brief", () => {
         checked: {
           ...quiet().checked,
           degraded_source_keys: ["reddit"],
-          degraded_sources: [{ key: "reddit", last_landed_at: "2026-09-19T08:00:00.000Z" }],
+          degraded_sources: [
+            { key: "reddit.search", name: "Reddit mentions", last_landed_at: "2026-09-19T08:00:00.000Z" },
+          ],
         },
       }),
       CONTEXT,
     );
-    expect(text).toContain("reddit has not answered since");
+    expect(text).toContain("Reddit mentions has not answered since");
+    expect(text).not.toContain("reddit.search");
     expect(text).toContain("so this is not a quiet week we can vouch for.");
     expect(text).not.toContain("Quiet week");
     expect(text).not.toContain("2026-09-19T08:00:00.000Z");
@@ -110,12 +113,13 @@ describe("the quiet week brief", () => {
       quiet({
         checked: {
           ...quiet().checked,
-          degraded_sources: [{ key: "reddit", last_landed_at: null }],
+          degraded_sources: [{ key: "reddit.search", name: null, last_landed_at: null }],
         },
       }),
       CONTEXT,
     );
-    expect(text).toContain("reddit has not answered yet");
+    expect(text).toContain("One of your sources has not answered yet");
+    expect(text).not.toContain("reddit.search");
   });
 
   it("keeps the read-this-first block on a non-quiet week", () => {

@@ -677,7 +677,7 @@ We need cards for a handful of public surfaces, not per-request at scale. Browse
 
 ### 5.9 Date and time with timezones
 
-**Not yet installed.** `date-fns` 4.4.0 and `@date-fns/tz` 1.5.0 are not in `package.json`. `Intl.DateTimeFormat` is the runtime and needs no dependency. The date engine that needs the two packages has not shipped.
+**Installed** by the standing rollover (0509#4004), pinned exactly: `date-fns` 4.4.0 and `@date-fns/tz` 1.5.0. `app/lib/brief-schedule.ts` uses `TZDate` with `setDay`, `setHours`, `startOfHour`, `addWeeks` and `subWeeks` to find each workspace's brief instant in its own zone, across daylight-saving changes. `Intl.DateTimeFormat` stays the display runtime and needs no dependency.
 
 **Recommendation: `Intl.DateTimeFormat` for display (0 bytes, in the runtime and every browser) + `date-fns` 4.4.0 (17.1 KB gzip full export, 0 deps) + `@date-fns/tz` 1.5.0 (1.97 KB gzip) for arithmetic across zones.**
 
@@ -1056,7 +1056,7 @@ Every capability the rebuild needs → the one thing that provides it → the ve
 | Validation | `zod` | 4.6.5 |
 | Charts | `uplot` (+ `uplot-react`), budget 30 KB gzip | 1.6.32 / 1.2.4, not yet installed |
 | OG images | Browser Run `/screenshot` → R2 | platform |
-| Dates + timezones | `Intl` + `date-fns` + `@date-fns/tz` (never `Temporal`, workerd#6907) | platform / 4.4.0, not yet installed / 1.5.0, not yet installed |
+| Dates + timezones | `Intl` + `date-fns` + `@date-fns/tz` (never `Temporal`, workerd#6907) | platform / 4.4.0 / 1.5.0 |
 | Unit + integration tests | `vitest` (**pinned 4.1.11**) + `@cloudflare/vitest-plugin` | 4.1.11 / 1.1.13 |
 | E2E against production | `@playwright/test` | 1.63.0 |
 | Performance gate | `treosh/lighthouse-ci-action` | v12.6.2 |
@@ -1068,7 +1068,7 @@ Every capability the rebuild needs → the one thing that provides it → the ve
 | OpenAPI document | `zod-openapi` (samchungy) | 6.0.2, not yet installed |
 | Agent-readable docs | `/llms.txt` + `Accept: text/markdown` + `rel="alternate"` | spec v2 (2026-08-10) |
 
-**Installed beyond the scaffold:** `better-auth` ^1.7.5, `@better-auth/passkey` ^1.7.5, `@better-auth/api-key` ^1.7.5, `zod` ^4.6.5 (also a better-auth peer), `@cloudflare/puppeteer` ^1.4.0, `@base-ui/react` 1.8.0, `clsx` ^2.1.1, `tailwind-merge` ^3.7.0, `class-variance-authority` ^0.7.1, `sonner` ^2.0.8, `diff` 9.0.0, `lucide-react` 1.47.0. **Not yet installed**, because the engine that needs them has not shipped: `@extractus/feed-extractor` 8.0.3 (`fast-xml-parser` 5.11.1 comes with it), `uplot` 1.6.32, `uplot-react` 1.2.4, `date-fns` 4.4.0, `@date-fns/tz` 1.5.0, `agents` 0.24.0, `@modelcontextprotocol/server` 2.0.0 and its peers `@modelcontextprotocol/client` and `@modelcontextprotocol/sdk`, `@cloudflare/workers-oauth-provider` 0.10.3, `zod-openapi` 6.0.2. Do not delete those rows. Platform rows have no package. `create-cloudflare`, `shadcn`, and `auth@1.7.5` are npx-only and are not missing dependencies.
+**Installed beyond the scaffold:** `better-auth` ^1.7.5, `@better-auth/passkey` ^1.7.5, `@better-auth/api-key` ^1.7.5, `zod` ^4.6.5 (also a better-auth peer), `@cloudflare/puppeteer` ^1.4.0, `@base-ui/react` 1.8.0, `clsx` ^2.1.1, `tailwind-merge` ^3.7.0, `class-variance-authority` ^0.7.1, `sonner` ^2.0.8, `diff` 9.0.0, `lucide-react` 1.47.0, `date-fns` 4.4.0, `@date-fns/tz` 1.5.0. **Not yet installed**, because the engine that needs them has not shipped: `@extractus/feed-extractor` 8.0.3 (`fast-xml-parser` 5.11.1 comes with it), `uplot` 1.6.32, `uplot-react` 1.2.4, `agents` 0.24.0, `@modelcontextprotocol/server` 2.0.0 and its peers `@modelcontextprotocol/client` and `@modelcontextprotocol/sdk`, `@cloudflare/workers-oauth-provider` 0.10.3, `zod-openapi` 6.0.2. Do not delete those rows. Platform rows have no package. `create-cloudflare`, `shadcn`, and `auth@1.7.5` are npx-only and are not missing dependencies.
 
 ---
 

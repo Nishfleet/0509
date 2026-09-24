@@ -7,24 +7,28 @@ export interface SweepResult {
 }
 
 const SIX_HOURS_MS = 6 * 60 * 60 * 1000;
+const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
 const ONE_HOUR_MS = 60 * 60 * 1000;
 const BATCH_LIMIT = 100;
 
 export async function sweepPending(env: Env, now: Date): Promise<SweepResult> {
   const digestCutoff = new Date(now.getTime() - SIX_HOURS_MS).toISOString();
   const attemptCutoff = new Date(now.getTime() - ONE_HOUR_MS).toISOString();
+  const staleAfter = new Date(now.getTime() - SEVEN_DAYS_MS).toISOString();
 
   const digestRows = await env.DB.prepare(
-    `SELECT id FROM digest WHERE status = 'pending' AND period_end < ?`,
+    `SELECT id FROM digest WHERE status = 'pending' AND period_end < ? AND period_end >= ?`,
   )
-    .bind(digestCutoff)
+    .bind(digestCutoff, staleAfter)
     .all<{ id: string }>();
   const digestIds = digestRows.results.map((row) => row.id);
 
   const attemptRows = await env.DB.prepare(
-    `SELECT DISTINCT digest_id FROM send_attempt WHERE status = 'pending' AND attempted_at < ? AND digest_id IS NOT NULL`,
+    `SELECT DISTINCT a.digest_id FROM send_attempt a
+     JOIN digest d ON d.id = a.digest_id
+     WHERE a.status = 'pending' AND a.attempted_at < ? AND d.status <> 'failed' AND d.period_end >= ?`,
   )
-    .bind(attemptCutoff)
+    .bind(attemptCutoff, staleAfter)
     .all<{ digest_id: string }>();
   const attemptIds = attemptRows.results.map((row) => row.digest_id);
 

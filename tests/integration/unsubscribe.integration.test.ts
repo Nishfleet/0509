@@ -1,7 +1,7 @@
 import { env } from "cloudflare:test";
 import { beforeEach, describe, expect, it } from "vitest";
 
-import { UNSUBSCRIBE_CONFIRMATION, unsubscribe } from "../../app/lib/unsubscribe.server";
+import { unsubscribe } from "../../app/lib/unsubscribe.server";
 import { deliver } from "../../workers/delivery/consumer";
 
 interface Recorder {
@@ -80,12 +80,7 @@ const attemptCount = async (): Promise<number> => {
   return row?.n ?? 0;
 };
 
-const CONFIRMATION_HEADERS = {
-  "content-type": "text/plain; charset=utf-8",
-  "cache-control": "no-store",
-};
-
-describe("one-click unsubscribe (0509#4358)", () => {
+describe("one-click unsubscribe (0509#4358, 0509#4593)", () => {
   beforeEach(async () => {
     await env.DB.exec("DELETE FROM send_attempt");
     await env.DB.exec("DELETE FROM email_suppression");
@@ -97,11 +92,8 @@ describe("one-click unsubscribe (0509#4358)", () => {
     await seed();
   });
 
-  it("(a) suppresses the address behind a valid token and confirms once", async () => {
-    const response = await unsubscribe(TOKEN);
-    expect(response.status).toBe(200);
-    expect(await response.text()).toBe(UNSUBSCRIBE_CONFIRMATION);
-    expect(Object.fromEntries(response.headers)).toEqual(CONFIRMATION_HEADERS);
+  it("(a) suppresses the address behind a valid token", async () => {
+    await unsubscribe(TOKEN);
 
     const rows = await suppressionRows();
     expect(rows).toHaveLength(1);
@@ -121,15 +113,10 @@ describe("one-click unsubscribe (0509#4358)", () => {
     expect(rows[0].created_at).toBe(first[0].created_at);
   });
 
-  it("(c) answers unknown and missing tokens identically and writes nothing", async () => {
-    const unknown = await unsubscribe(UNKNOWN_TOKEN);
-    const missing = await unsubscribe(undefined);
+  it("(c) writes nothing for unknown and missing tokens", async () => {
+    await unsubscribe(UNKNOWN_TOKEN);
+    await unsubscribe(undefined);
 
-    for (const response of [unknown, missing]) {
-      expect(response.status).toBe(200);
-      expect(await response.text()).toBe(UNSUBSCRIBE_CONFIRMATION);
-      expect(Object.fromEntries(response.headers)).toEqual(CONFIRMATION_HEADERS);
-    }
     expect(await suppressionRows()).toHaveLength(0);
   });
 

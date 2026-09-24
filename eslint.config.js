@@ -266,8 +266,6 @@ export default tseslint.config(
       "app/lib/identity/name-cascade.ts",
       "app/lib/identity/extract.ts",
       "app/lib/hiring/discover-board.ts",
-      "app/lib/discovery/resolve-domain.ts",
-      "app/lib/discovery/shortlist.ts",
       "app/lib/discovery/generators/news.ts",
       "app/lib/discovery/generators/hn.ts",
       "app/lib/brief-payload.ts",

@@ -60,11 +60,10 @@
     }
   ],
 
-  "r2_buckets": [
-    // Raw site snapshots live under snapshot/site/, covered by the one-year
-    // snapshot/ lifecycle in docs/REBUILD-GUARDRAILS.md.
-    { "binding": "SNAPSHOTS", "bucket_name": "0509-snapshots" }
-  ],
+  // One binding for the one bucket (#4569 had added a second binding to the
+  // same bucket). snapshot/site/ holds raw site snapshots, text and screenshot
+  // (engine 4), under the one-year snapshot/ rule in docs/REBUILD-GUARDRAILS.md.
+  "r2_buckets": [{ "binding": "SNAPSHOTS", "bucket_name": "0509-snapshots" }],
 
   // Identity probe cache (engine 1, issue #4419): a read-through cache for
   // probe results keyed identity:<registrable>:<probe> with a 24-hour TTL
@@ -128,6 +127,19 @@
       }
     ]
   },
+
+  // The weekly rollover (docs/engines/standing-home.md §2 and P6.3, 0509#4004).
+  // One instance per workspace per week, id `rollover-<workspace>-<closing
+  // instant>`. The nightly cron re-creates the next one with createBatch,
+  // which skips an id that already exists, so a lost instance is replaced
+  // within a day and a live one is never started twice.
+  "workflows": [
+    {
+      "name": "standing-rollover",
+      "binding": "STANDING_ROLLOVER",
+      "class_name": "StandingRolloverWorkflow"
+    }
+  ],
 
   "triggers": {
     // The dead-man ping, every five minutes: an external service alerts when

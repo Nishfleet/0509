@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   D3_QUESTION_ID,
   D6_QUESTION_ID,
+  rankWeek,
   scoreByEntity,
   weightsAsOf,
   type BucketCount,
@@ -124,5 +125,42 @@ describe("public contract", () => {
     }));
     expect(counts).toHaveLength(buckets.length);
     expect(counts.map((count) => count.bucket)).toEqual([...buckets]);
+  });
+});
+
+describe("rankWeek (0509#4004)", () => {
+  it("ranks by score, breaks ties by last week's rank, and computes movement", () => {
+    const ranked = rankWeek(
+      [
+        { entity_id: "a", score: 3 },
+        { entity_id: "b", score: 5 },
+        { entity_id: "c", score: 3 },
+        { entity_id: "d", score: 0 },
+      ],
+      new Map([
+        ["a", 4],
+        ["b", 2],
+        ["c", 1],
+      ]),
+    );
+    expect(ranked).toEqual([
+      { entity_id: "b", rank: 1, movement: 1 },
+      { entity_id: "c", rank: 2, movement: -1 },
+      { entity_id: "a", rank: 3, movement: 1 },
+      { entity_id: "d", rank: 4, movement: null },
+    ]);
+  });
+
+  it("puts a brand with no last-week rank after ranked ties, then orders by id", () => {
+    const ranked = rankWeek(
+      [
+        { entity_id: "z", score: 1 },
+        { entity_id: "new", score: 1 },
+        { entity_id: "old", score: 1 },
+      ],
+      new Map([["old", 3]]),
+    );
+    expect(ranked.map((row) => row.entity_id)).toEqual(["old", "new", "z"]);
+    expect(ranked.map((row) => row.movement)).toEqual([2, null, null]);
   });
 });

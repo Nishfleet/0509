@@ -1,15 +1,8 @@
-export function briefText(payloadJson: string | null): string {
-  if (payloadJson === null) return "";
-  try {
-    const parsed: unknown = JSON.parse(payloadJson);
-    if (typeof parsed !== "object" || parsed === null || !("text" in parsed)) return "";
-    const text = parsed.text;
-    return typeof text === "string" ? text : "";
-  } catch {
-    return "";
-  }
-}
+const DAY_MS = 24 * 60 * 60 * 1000;
 
-export function digestIdFromAlertId(alertId: string): string | null {
-  return alertId.startsWith("dlq:") ? alertId.slice(4) : null;
+const RELATIVE_DAYS = new Intl.RelativeTimeFormat("en", { numeric: "auto" });
+
+export function daysAgoLabel(at: string, now: Date): string {
+  const days = Math.max(0, Math.floor((now.getTime() - Date.parse(at)) / DAY_MS));
+  return RELATIVE_DAYS.format(-days, "day");
 }
