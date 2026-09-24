@@ -259,15 +259,6 @@ export interface MentionHistoryRow {
   engagement_json: string | null;
 }
 
-interface MentionHistorySqlRow {
-  id: string;
-  title: string | null;
-  canonical_url: string;
-  url_hash: string;
-  observed_at: string;
-  engagement_json: string | null;
-}
-
 export async function readRecentMentions(
   entityId: string,
   since: string,
@@ -275,7 +266,7 @@ export async function readRecentMentions(
 ): Promise<MentionHistoryRow[]> {
   const { results } = await env.DB.prepare(SELECT_RECENT_MENTIONS)
     .bind(entityId, since, limit)
-    .all<MentionHistorySqlRow>();
+    .all<MentionHistoryRow>();
   return results;
 }
 

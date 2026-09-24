@@ -12,6 +12,7 @@ import { markWatchPolled, readActiveWatches } from "../../app/lib/data/watch.ser
 import type { NoulQuestion, NoulVerdict } from "../../app/lib/jev/client.server";
 import { askNoul, JevUnavailableError } from "../../app/lib/jev/client.server";
 import { noulAction } from "../../app/lib/jev/thresholds";
+import { daysBefore } from "../../app/lib/site-changes.server";
 import {
   appendSighting,
   canonicalAfterCollapse,
@@ -107,12 +108,6 @@ function actionReason(questionId: string, p: number): string {
   return "keep";
 }
 
-function daysBefore(now: string, days: number): string {
-  const date = new Date(now);
-  date.setUTCDate(date.getUTCDate() - days);
-  return date.toISOString();
-}
-
 function mergeHistory(
   pending: readonly MentionHistoryRow[],
   stored: readonly MentionHistoryRow[],
@@ -125,13 +120,10 @@ function mergeHistory(
   return [...byId.values()].slice(0, HISTORY_LIMIT);
 }
 
-function remember(pending: MentionHistoryRow[], row: MentionHistoryRow): void {
+function remembered(pending: readonly MentionHistoryRow[], row: MentionHistoryRow): MentionHistoryRow[] {
   const index = pending.findIndex((entry) => entry.id === row.id);
-  if (index >= 0) {
-    pending[index] = row;
-  } else {
-    pending.unshift(row);
-  }
+  if (index < 0) return [row, ...pending];
+  return pending.map((entry, i) => (i === index ? row : entry));
 }
 
 function verdictStatement(watch: WatchRow, verdict: NoulVerdict, signalId: string | null, now: string) {
@@ -217,8 +209,8 @@ async function statementsForWatch(input: {
   ];
   let stored = 0;
   let unjudged = 0;
-  const pending: MentionHistoryRow[] = [];
-  const since = daysBefore(now, HISTORY_DAYS);
+  let pending: MentionHistoryRow[] = [];
+  const since = daysBefore(new Date(now), HISTORY_DAYS);
   const subject = subjectOf(watch);
   for (const [index, { item, dedupKey }] of fresh.entries()) {
     let about: NoulVerdict;
@@ -277,7 +269,7 @@ async function statementsForWatch(input: {
           urlHash: nextHash,
         }),
       );
-      remember(pending, {
+      pending = remembered(pending, {
         ...match,
         canonical_url: nextUrl,
         url_hash: nextHash,
@@ -323,7 +315,7 @@ async function statementsForWatch(input: {
         }),
       );
     }
-    remember(pending, {
+    pending = remembered(pending, {
       id: signalId,
       title: item.title,
       canonical_url: item.url,

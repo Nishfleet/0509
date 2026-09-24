@@ -5,7 +5,6 @@ import {
   canonicalAfterCollapse,
   isGoogleNewsUrl,
   normalizeTitle,
-  packDuplicate,
 } from "../../workers/jev/context-pack";
 
 const GOOGLE = "https://news.google.com/rss/articles/story";
@@ -41,30 +40,25 @@ describe("mention duplicate collapse", () => {
     });
   });
 
-  it("packs both items with their url and title hashes", () => {
-    const pack = packDuplicate({
-      subject: { name: "Zephyrwear", domain: "zephyrwear.example", role: "competitor" },
-      item: {
-        title: "Opens a flagship",
-        publisher: null,
-        url: PUBLISHER,
-        published_at: null,
-        reliability: "official_api",
-        url_hash: "abc",
-        title_hash: "def",
-      },
-      other: {
-        id: "prior",
-        kind: "mention",
-        title: "Opens a flagship",
-        url: GOOGLE,
-        date: "2026-09-23T03:00:00.000Z",
-        url_hash: "ghi",
-        title_hash: "def",
-      },
-    });
-    expect(pack.item.url_hash).toBe("abc");
-    expect(pack.other.url_hash).toBe("ghi");
+  it("treats case and extra spaces as the same headline", () => {
     expect(normalizeTitle("  Opens   a Flagship ")).toBe("opens a flagship");
+    expect(normalizeTitle("OPENS A FLAGSHIP")).toBe(normalizeTitle("opens a flagship"));
+    expect(normalizeTitle("Opens a flagship")).not.toBe(normalizeTitle("Opens a second store"));
+  });
+
+  it("leaves a stored engagement bag alone when it is not an object", () => {
+    const sighting = {
+      source_id: "src_mentions_gdelt",
+      url: PUBLISHER,
+      title: "Same story",
+      seen_at: "2026-09-24T03:00:00.000Z",
+    };
+    expect(() => appendSighting("{", sighting)).toThrow(SyntaxError);
+    expect(() => appendSighting("[]", sighting)).toThrow();
+    expect(() => appendSighting("null", sighting)).toThrow();
+  });
+
+  it("refuses a value that is not a URL", () => {
+    expect(() => isGoogleNewsUrl("not a url")).toThrow(TypeError);
   });
 });

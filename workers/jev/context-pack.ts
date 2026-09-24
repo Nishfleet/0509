@@ -49,13 +49,8 @@ export async function sha256Hex(text: string): Promise<string> {
 }
 
 export function isGoogleNewsUrl(url: string): boolean {
-  try {
-    const host = new URL(url).hostname;
-    return host === "news.google.com" || host.endsWith(".news.google.com");
-  } catch (error) {
-    console.error(JSON.stringify({ event: "mentions.url_unreadable", message: String(error) }));
-    return false;
-  }
+  const host = new URL(url).hostname;
+  return host === "news.google.com" || host.endsWith(".news.google.com");
 }
 
 export function canonicalAfterCollapse(existingUrl: string, incomingUrl: string): string {
@@ -73,24 +68,14 @@ export function packDuplicate(input: {
 
 const engagementSchema = z.object({ sightings: z.array(z.unknown()).optional() }).catchall(z.unknown());
 
-function readEngagement(existing: string | null): Record<string, unknown> {
+function readEngagement(existing: string | null): z.infer<typeof engagementSchema> {
   if (existing === null || existing === "") return {};
-  try {
-    const parsed: unknown = JSON.parse(existing);
-    const engagement = engagementSchema.safeParse(parsed);
-    if (engagement.success) return engagement.data;
-  } catch (error) {
-    console.error(JSON.stringify({ event: "mentions.engagement_unreadable", message: String(error) }));
-  }
-  return {};
-}
-
-function isUnknownArray(value: unknown): value is unknown[] {
-  return Array.isArray(value);
+  const parsed: unknown = JSON.parse(existing);
+  return engagementSchema.parse(parsed);
 }
 
 export function appendSighting(existing: string | null, sighting: Sighting): string {
   const base = readEngagement(existing);
-  const prior = isUnknownArray(base.sightings) ? base.sightings : [];
+  const prior = base.sightings ?? [];
   return JSON.stringify({ ...base, sightings: [...prior, sighting] });
 }
