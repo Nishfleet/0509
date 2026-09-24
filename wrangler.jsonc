@@ -85,12 +85,15 @@
   // the doc picks it: the cache is read-mostly, tolerant of the 60-second
   // propagation window and never same-key hot (docs/REBUILD-STACK.md §4.5).
   //
-  // No id on purpose, matching the fixture-site KV binding (also id-less):
-  // wrangler's deploy-time resource provisioning creates the namespace on
-  // first deploy and inherits it from the deployed Worker's settings on later
-  // ones. Creating it here rather than by hand keeps the namespace id out of
-  // git and puts its creation on the deploy Nish approves.
-  "kv_namespaces": [{ "binding": "IDENTITY_CACHE" }],
+  // The id is pinned (#4631). The production CLOUDFLARE_API_TOKEN cannot
+  // reach the KV namespaces endpoint, so an id-less binding sends wrangler to
+  // deploy-time provisioning and every deploy fails with auth error 10000 —
+  // the same failure 225c3eb fixed for the e2e inbox. The namespace is
+  // 0509-identity-cache, the name provisioning would have given it.
+  // tests/wrangler-bindings.test.ts keeps every deployed config pinned.
+  "kv_namespaces": [
+    { "binding": "IDENTITY_CACHE", "id": "583a3ce85fac4da0b811902674481663" }
+  ],
 
   // Browser Rendering: brand pages bot-gate a plain workerd fetch, so every
   // arbitrary-homepage read goes through real Chrome. Measured ~7 s per ads
