@@ -5,7 +5,6 @@ import {
   Outlet,
   Scripts,
   ScrollRestoration,
-  useMatches,
 } from "react-router";
 
 import type { Route } from "./+types/root";
@@ -14,16 +13,7 @@ import { Toaster } from "./components/toaster";
 import { hasSessionCookie } from "./lib/auth.server";
 import "./app.css";
 
-function staticDocument(): boolean {
-  return useMatches().some((match) => {
-    const handle: unknown = match.handle;
-    if (typeof handle !== "object" || handle === null || !("staticDocument" in handle)) return false;
-    return handle.staticDocument === true;
-  });
-}
-
 export function Layout({ children }: { children: React.ReactNode }) {
-  const plain = staticDocument();
   return (
     <html lang="en">
       <head>
@@ -36,7 +26,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
         {children}
         <Toaster />
         <ScrollRestoration />
-        {plain ? null : <Scripts />}
+        <Scripts />
       </body>
     </html>
   );

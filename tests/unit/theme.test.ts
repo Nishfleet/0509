@@ -462,7 +462,7 @@ describe("the one stylesheet stays the one stylesheet (#3984)", () => {
   });
 
   it("self-hosts the three faces with font-display: swap and no Google link", async () => {
-    const css = await readFile(path.join(REPO_ROOT, "app/app.css"), "utf8");
+    const css = await readFile(path.join(REPO_ROOT, "app/fonts.css"), "utf8");
     for (const family of ["Bricolage Grotesque", "Instrument Sans", "IBM Plex Mono"]) {
       expect(css).toContain(`font-family: "${family}"`);
     }
@@ -490,11 +490,14 @@ describe("the one stylesheet stays the one stylesheet (#3984)", () => {
     expect(css).not.toMatch(/border-radius:\s*(?:0\.[0-9]|[1-9])/);
   });
 
-  it("wires the token names into root.tsx's font preload links", async () => {
+  it("preloads the full display and body faces from the product layout", async () => {
+    const layout = await readFile(path.join(REPO_ROOT, "app/routes/faces-layout.tsx"), "utf8");
+    expect(layout).toContain("bricolage-grotesque-latin.woff2");
+    expect(layout).toContain("instrument-sans-latin.woff2");
+    expect(layout).not.toContain("fonts.googleapis.com");
+    expect(layout).not.toContain("fonts.gstatic.com");
     const root = await readFile(path.join(REPO_ROOT, "app/root.tsx"), "utf8");
-    expect(root).toContain("bricolage-grotesque-latin.woff2");
-    expect(root).toContain("instrument-sans-latin.woff2");
-    expect(root).not.toContain("fonts.googleapis.com");
-    expect(root).not.toContain("fonts.gstatic.com");
+    expect(root).not.toContain("bricolage-grotesque-latin.woff2");
+    expect(root).toContain("<Scripts />");
   });
 });
