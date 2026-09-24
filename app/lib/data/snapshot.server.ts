@@ -37,3 +37,13 @@ export async function insertSnapshot(row: {
     .bind(row.id, row.watchId, row.pageId, row.fetchedAt, row.r2Key, row.hash)
     .run();
 }
+
+const DELETE_ENTITY_SNAPSHOTS = `DELETE FROM snapshot WHERE watch_id IN (
+  SELECT w.id FROM watch w
+  JOIN entity e ON e.id = w.entity_id
+  WHERE e.id = ?2 AND e.workspace_id = ?1 AND e.role = 'competitor'
+)`;
+
+export function deleteEntitySnapshots(workspaceId: string, entityId: string): D1PreparedStatement {
+  return env.DB.prepare(DELETE_ENTITY_SNAPSHOTS).bind(workspaceId, entityId);
+}

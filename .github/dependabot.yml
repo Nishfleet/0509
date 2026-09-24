@@ -1,0 +1,18 @@
+# Stock dependency watch (docs/REBUILD-STACK.md §6.5, #4740). Actions are
+# pinned by SHA with a version comment; Dependabot keeps both current.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      npm-minor-patch:
+        update-types: [minor, patch]
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions-minor-patch:
+        update-types: [minor, patch]

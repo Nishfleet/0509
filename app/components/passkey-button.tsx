@@ -19,7 +19,13 @@ export function AddPasskey({ className }: { className?: string }): ReactElement 
 
   return (
     <div className={className}>
-      <Button type="button" variant="tertiary" onClick={() => void addPasskey()} disabled={state === "working"}>
+      <Button
+        type="button"
+        variant="tertiary"
+        className="min-h-11"
+        onClick={() => void addPasskey()}
+        disabled={state === "working"}
+      >
         {state === "working" ? "Follow the prompt…" : "Add a passkey"}
       </Button>
       {state === "added" ? (

@@ -133,6 +133,19 @@ describe("the brief view", () => {
     ).toContain("Your site looks fine.");
   });
 
+  it("keeps an unsafe read-this-first URL out of the markup", () => {
+    const html = render({
+      read_this_first: payload().read_this_first.map((mark) =>
+        mark.before === null
+          ? { ...mark, title: "Unsafe read-this-first link", url: "javascript:alert(1)" }
+          : mark,
+      ),
+    });
+
+    expect(html).toContain("Unsafe read-this-first link");
+    expect(html).not.toContain("javascript:");
+  });
+
   it("never calls a broken site fine because its incident list is empty (0509#4642)", () => {
     const html = render({ own_site: { status: "broken", incidents: [] } });
     expect(html).toContain("Your site looks broken");

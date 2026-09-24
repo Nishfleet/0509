@@ -2,7 +2,7 @@ import { getDomain } from "tldts";
 
 import type { DiscoveryContext, DiscoverySelf } from "../data/entity.server";
 import type { DiscoveryResult } from "../data/suggestion.server";
-import { isTakenDown } from "../data/takedown.server";
+import { takenDownAmong } from "../data/takedown.server";
 import type { NoulQuestion, NoulVerdict } from "../jev/client.server";
 import { askNoul, JevUnavailableError } from "../jev/client.server";
 import { evidenceLine } from "./evidence-line";
@@ -65,11 +65,13 @@ export async function resolveShortlist(
 ): Promise<ResolvedCandidate[]> {
   const known = new Set([context.self.domain, ...context.knownDomains]);
   const domains = await Promise.all(candidates.map(domainOf));
+  const blocked = await takenDownAmong(
+    domains.filter((domain): domain is string => domain !== null && domain !== undefined),
+  );
   const resolved: ResolvedCandidate[] = [];
   for (const [index, candidate] of candidates.entries()) {
     const domain = domains[index];
-    if (domain === null || domain === undefined || known.has(domain)) continue;
-    if (await isTakenDown(domain)) continue;
+    if (domain === null || domain === undefined || known.has(domain) || blocked.has(domain)) continue;
     known.add(domain);
     resolved.push({ name: candidate.name, domain, evidence: candidate.evidence, line: candidate.line });
   }

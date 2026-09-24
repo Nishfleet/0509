@@ -50,7 +50,7 @@ function safeUrl(value: string): string | null {
   return escapeHtml(trimmed);
 }
 
-function formatDate(iso: string, timezone: string, withTime: boolean): string {
+export function formatDate(iso: string, timezone: string, withTime: boolean): string {
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return iso;
   try {
