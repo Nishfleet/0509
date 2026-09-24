@@ -83,8 +83,8 @@ so every agent session drives the app the same way.
 
 | `PLAYWRIGHT_TEST_BASE_URL` | `webServer` | What runs | Where |
 |---|---|---|---|
-| unset | starts `npx wrangler dev --local` on a per-process port (8000 + pid % 1000), waits on `/api/health` | the built Worker | `preview-assert`, every PR, and `npm run e2e` on a laptop |
-| set | `undefined` | that URL | `e2e-production`, every successful deploy |
+| unset | starts `npx wrangler dev --local` on a per-process port (8000 + pid % 1000), waits on `/api/health` | the built Worker | `npm run e2e` on a laptop |
+| set | `undefined` | that URL | `preview-assert` on every PR (a Worker Preview of the head on the `0509-preview` Worker, #4262), and `e2e-production` on every successful deploy |
 
 This is the vendor's own division. `webServer`'s doc says it is for "when you
 don't have a staging or production url to test against"

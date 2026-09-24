@@ -156,5 +156,82 @@
     // http_request_dynamic_redirect, ruleset f7743879d6904ebea189b42c85713069),
     // which runs before the Worker and costs no invocation. Adding a route here
     // would put the Worker in that path for nothing.
-  ]
+  ],
+
+  // Pull-request previews (#4262) run on a Worker of their own, 0509-preview,
+  // never on 0509. The CI token that creates them is scoped to that one
+  // Worker, so a pull request cannot deploy the live site, and a live deploy
+  // cannot switch preview URLs off. Cloudflare's documented pattern:
+  // https://developers.cloudflare.com/workers/previews/compare-workflows/
+  //
+  // Nothing here names a production resource: D1 0509-preview, R2
+  // 0509-preview-snapshots, KV 0509-identity-cache-preview and queue
+  // send-email-preview are preview twins. Previews run no crons and consume no
+  // queues, so a preview never sends a brief. Preview URLs sit behind
+  // Cloudflare Access, like the gated routes of 0509.io.
+  //
+  // The bindings appear twice on purpose. A Preview inherits nothing, so it
+  // reads only `previews`
+  // (https://developers.cloudflare.com/workers/previews/configuration/).
+  // `wrangler types` and `wrangler d1 migrations apply --env preview` read the
+  // environment's own top level. tests/preview-config.test.ts holds the two
+  // lists identical and fails on any preview binding to a production resource.
+  //
+  // A preview has no single origin, so it sets no BETTER_AUTH_URL. Auth
+  // accepts only request hosts matching BETTER_AUTH_ALLOWED_HOSTS, and
+  // passkeys use the account's workers.dev subdomain as their RP ID.
+  "env": {
+    "preview": {
+      "name": "0509-preview",
+      "workers_dev": false,
+      "preview_urls": true,
+      "routes": [],
+      "triggers": { "crons": [] },
+      "migrations": [],
+      "vars": {
+        "BETTER_AUTH_ALLOWED_HOSTS": "*-0509-preview.nishant345.workers.dev",
+        "PASSKEY_RP_ID": "nishant345.workers.dev"
+      },
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "0509-preview",
+          "database_id": "d6643a38-0666-470e-8e08-1953918dfd8a"
+        }
+      ],
+      "r2_buckets": [
+        { "binding": "CARD_ARTIFACTS", "bucket_name": "0509-preview-snapshots" },
+        { "binding": "SNAPSHOTS", "bucket_name": "0509-preview-snapshots" }
+      ],
+      "kv_namespaces": [{ "binding": "IDENTITY_CACHE", "id": "c1e0df6e72a940948717a924af6dba7d" }],
+      "browser": { "binding": "BROWSER" },
+      "send_email": [{ "name": "EMAIL" }],
+      "queues": {
+        "producers": [{ "queue": "send-email-preview", "binding": "SEND_EMAIL" }]
+      },
+      "previews": {
+        "vars": {
+          "BETTER_AUTH_ALLOWED_HOSTS": "*-0509-preview.nishant345.workers.dev",
+          "PASSKEY_RP_ID": "nishant345.workers.dev"
+        },
+        "d1_databases": [
+          {
+            "binding": "DB",
+            "database_name": "0509-preview",
+            "database_id": "d6643a38-0666-470e-8e08-1953918dfd8a"
+          }
+        ],
+        "r2_buckets": [
+          { "binding": "CARD_ARTIFACTS", "bucket_name": "0509-preview-snapshots" },
+          { "binding": "SNAPSHOTS", "bucket_name": "0509-preview-snapshots" }
+        ],
+        "kv_namespaces": [{ "binding": "IDENTITY_CACHE", "id": "c1e0df6e72a940948717a924af6dba7d" }],
+        "browser": { "binding": "BROWSER" },
+        "send_email": [{ "name": "EMAIL" }],
+        "queues": {
+          "producers": [{ "queue": "send-email-preview", "binding": "SEND_EMAIL" }]
+        }
+      }
+    }
+  }
 }

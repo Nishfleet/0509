@@ -7,6 +7,7 @@ import { extractMagicLink } from "../e2e/inbox";
 // sends multipart/alternative (text and HTML); parts may be quoted-printable
 // or base64, and an HTML href escapes `&` as `&amp;` (0509#4355).
 
+const SITE = "https://0509.io";
 const EXPECTED = "https://0509.io/api/auth/magic-link/verify?token=abc123&callbackURL=%2Fapp";
 const PLAIN = [
   "Sign in to Five to Nine:",
@@ -82,40 +83,50 @@ const HTML_ONLY = [
 
 describe("extractMagicLink", () => {
   it("finds the verify URL in a plain body", () => {
-    expect(extractMagicLink(PLAIN)).toBe(EXPECTED);
+    expect(extractMagicLink(PLAIN, SITE)).toBe(EXPECTED);
   });
 
   it("decodes =3D inside the query before matching", () => {
-    expect(extractMagicLink(QUOTED_PRINTABLE)).toBe(
+    expect(extractMagicLink(QUOTED_PRINTABLE, SITE)).toBe(
       "https://0509.io/api/auth/magic-link/verify?token=abc123&callbackURL=%2Fapp",
     );
   });
 
   it("joins a soft-wrapped URL", () => {
-    expect(extractMagicLink(SOFT_WRAPPED)).toBe(
+    expect(extractMagicLink(SOFT_WRAPPED, SITE)).toBe(
       "https://0509.io/api/auth/magic-link/verify?token=abc123verylongtokenpart2&callbackURL=%2Fapp",
     );
   });
 
   it("leaves a literal = alone when the message is not quoted-printable", () => {
-    expect(extractMagicLink(PLAIN_WITH_EQUALS)).toBe(
+    expect(extractMagicLink(PLAIN_WITH_EQUALS, SITE)).toBe(
       "https://0509.io/api/auth/magic-link/verify?token=abc123&callbackURL=%2Fapp",
     );
   });
 
   it("returns null when the message carries no verify link", () => {
-    expect(extractMagicLink("Subject: hello\n\nno link here")).toBeNull();
+    expect(extractMagicLink("Subject: hello\n\nno link here", SITE)).toBeNull();
   });
 
   it("reads the HTML href out of a multipart/alternative message", () => {
-    expect(extractMagicLink(MULTIPART_QP)).toBe(EXPECTED);
+    expect(extractMagicLink(MULTIPART_QP, SITE)).toBe(EXPECTED);
   });
 
   it("decodes base64 parts in a multipart/alternative message", () => {
-    expect(extractMagicLink(MULTIPART_BASE64)).toBe(EXPECTED);
+    expect(extractMagicLink(MULTIPART_BASE64, SITE)).toBe(EXPECTED);
   });
 
   it("unescapes &amp; in an HTML-only href", () => {
-    expect(extractMagicLink(HTML_ONLY)).toBe(EXPECTED);
+    expect(extractMagicLink(HTML_ONLY, SITE)).toBe(EXPECTED);
+  });
+
+  it("reads a preview's link when the run targets that preview", () => {
+    const preview = "https://1a2b3c4d-0509-preview.nishant345.workers.dev";
+    const message = PLAIN.replace(SITE, preview);
+    expect(extractMagicLink(message, preview)).toBe(EXPECTED.replace(SITE, preview));
+  });
+
+  it("ignores a link to any origin other than the site under test", () => {
+    expect(extractMagicLink(PLAIN, "https://1a2b3c4d-0509-preview.nishant345.workers.dev")).toBeNull();
   });
 });

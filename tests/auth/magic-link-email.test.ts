@@ -40,6 +40,6 @@ describe("magicLinkEmail", () => {
   });
 
   it("round-trips through the e2e link extractor", () => {
-    expect(extractMagicLink(magicLinkEmail({ email, url }).html)).toBe(url);
+    expect(extractMagicLink(magicLinkEmail({ email, url }).html, new URL(url).origin)).toBe(url);
   });
 });

@@ -1,4 +1,4 @@
-import { betterAuth } from "better-auth";
+import { betterAuth, type BetterAuthOptions } from "better-auth";
 import { magicLink } from "better-auth/plugins";
 import { apiKey } from "@better-auth/api-key";
 import { passkey } from "@better-auth/passkey";
@@ -12,6 +12,8 @@ interface AuthEnv {
   EMAIL: SendEmail;
   BETTER_AUTH_SECRET?: string;
   BETTER_AUTH_URL?: string;
+  BETTER_AUTH_ALLOWED_HOSTS?: string;
+  PASSKEY_RP_ID?: string;
 }
 
 const COOKIE_PREFIX = "better-auth";
@@ -24,11 +26,16 @@ export function hasSessionCookie(request: Request) {
   return header.split(";").some((part) => sessionCookieNames.has(part.trim().split("=")[0] ?? ""));
 }
 
+function baseURL(env: AuthEnv): BetterAuthOptions["baseURL"] {
+  if (!env.BETTER_AUTH_ALLOWED_HOSTS) return env.BETTER_AUTH_URL;
+  return { allowedHosts: [env.BETTER_AUTH_ALLOWED_HOSTS], protocol: "https" };
+}
+
 export function createAuth(env: AuthEnv) {
   return betterAuth({
     database: env.DB,
     secret: env.BETTER_AUTH_SECRET,
-    baseURL: env.BETTER_AUTH_URL,
+    baseURL: baseURL(env),
     advanced: { cookiePrefix: COOKIE_PREFIX },
     databaseHooks: {
       session: {
@@ -57,7 +64,7 @@ export function createAuth(env: AuthEnv) {
           });
         },
       }),
-      passkey(),
+      passkey({ rpID: env.PASSKEY_RP_ID }),
       apiKey(),
     ],
   });
