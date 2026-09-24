@@ -46,17 +46,19 @@ export async function action({ request }: Route.ActionArgs) {
   if (workspaceId === null) throw redirect("/onboarding");
   const form = await request.formData();
   const rawSubject = form.get("subject");
-  const normalised = typeof rawSubject === "string" ? normaliseSubject(rawSubject) : null;
-  if (normalised?.ok && typeof rawSubject === "string") {
-    const screened = await screenOnboardingSubject({
-      workspaceId,
-      userId: session.user.id,
-      subject: normalised.subject,
-      raw: rawSubject,
-      answer: null,
-      now: new Date().toISOString(),
-    });
-    if (screened.kind !== "proceed") throw redirect("/onboarding");
+  if (typeof rawSubject === "string") {
+    const normalised = normaliseSubject(rawSubject);
+    if (normalised.ok) {
+      const screened = await screenOnboardingSubject({
+        workspaceId,
+        userId: session.user.id,
+        subject: normalised.subject,
+        raw: rawSubject,
+        answer: null,
+        now: new Date().toISOString(),
+      });
+      if (screened.kind !== "proceed") throw redirect("/onboarding");
+    }
   }
   if (await confirmCard(workspaceId, form)) throw redirect("/onboarding/competitors");
   return { message: "Add your brand's name, then tap That's me." };
