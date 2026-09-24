@@ -12,7 +12,7 @@ export function TheMark() {
       <figure className="border-ink bg-card border-[1.5px] p-6 sm:p-10">
         <ExampleMark before="€29 a month" after="€19 a month" className="text-mark-lg" />
         <figcaption className="font-mono text-meta text-ink-soft mt-6">
-          A rival’s pricing page · both screenshots kept · one tap to the page itself
+          A rival’s homepage · both screenshots kept · one tap to the page itself
         </figcaption>
       </figure>
     </Section>

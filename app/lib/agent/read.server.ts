@@ -4,6 +4,8 @@ import type { BriefPayload } from "../brief-payload";
 import { readBriefPayload } from "../brief-payload";
 import { readDeliveryFailures, readTakedownNotes } from "../data/alert.server";
 import { readOnboardingCompetitors } from "../data/entity.server";
+import type { SiteChangeView } from "../site-change";
+import { daysBefore, readSiteChangeViews } from "../site-changes.server";
 import type { AlertsResult, BriefResult, CompetitorsResult } from "./schemas";
 
 const SELECT_LATEST_BRIEF = `SELECT payload_json FROM digest
@@ -81,10 +83,19 @@ export async function readAgentCompetitors(workspaceId: string): Promise<Competi
   };
 }
 
+function changeBody(change: SiteChangeView): string {
+  const { removed, added } = change.mark ?? { removed: null, added: null };
+  const detail = [removed === null ? null : `Was: "${removed}"`, added === null ? null : `Now: "${added}"`]
+    .filter((line) => line !== null)
+    .join(" ");
+  return [change.sentence, detail, change.url].filter((line) => line !== "").join(" ");
+}
+
 export async function readAgentAlerts(workspaceId: string): Promise<AlertsResult> {
-  const [failures, notes] = await Promise.all([
+  const [failures, notes, changes] = await Promise.all([
     readDeliveryFailures(env.DB, workspaceId),
     readTakedownNotes(env.DB, workspaceId),
+    readSiteChangeViews({ workspaceId, entityId: null, since: daysBefore(new Date(), 30), limit: 30 }),
   ]);
   const alerts = [
     ...failures.map((row) => ({
@@ -95,6 +106,13 @@ export async function readAgentAlerts(workspaceId: string): Promise<AlertsResult
       createdAt: row.created_at,
     })),
     ...notes.map((row) => ({ id: row.id, kind: "takedown" as const, title: row.title, body: null, createdAt: row.created_at })),
+    ...changes.map((change) => ({
+      id: change.id,
+      kind: "site_change" as const,
+      title: change.headline,
+      body: changeBody(change),
+      createdAt: change.observedAt,
+    })),
   ];
   return { alerts: [...alerts].sort((a, b) => b.createdAt.localeCompare(a.createdAt)) };
 }
