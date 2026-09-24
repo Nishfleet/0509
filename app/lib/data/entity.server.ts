@@ -2,6 +2,15 @@ import { env } from "cloudflare:workers";
 
 export type CompetitorState = "on" | "off";
 
+export type EntityOrigin = "manual" | "auto" | "seed";
+
+export interface RefreshTarget {
+  entityId: string;
+  name: string;
+  domain: string;
+  origin: EntityOrigin;
+}
+
 export interface CompetitorEntity {
   id: string;
   name: string;
@@ -208,6 +217,26 @@ export async function readDiscoveryContext(workspaceId: string): Promise<Discove
 export async function readSelfWorkspaceIds(): Promise<string[]> {
   const rows = await env.DB.prepare(SELECT_SELF_WORKSPACES).all<{ workspace_id: string }>();
   return rows.results.map((row) => row.workspace_id);
+}
+
+const SELECT_REFRESH_TARGETS =
+  "SELECT id, name, domain, origin FROM entity WHERE workspace_id = ? AND role = 'competitor' AND state = 'on' ORDER BY created_at ASC, id ASC";
+
+interface RefreshRow {
+  id: string;
+  name: string | null;
+  domain: string;
+  origin: EntityOrigin;
+}
+
+export async function readRefreshTargets(workspaceId: string): Promise<RefreshTarget[]> {
+  const { results } = await env.DB.prepare(SELECT_REFRESH_TARGETS).bind(workspaceId).all<RefreshRow>();
+  return results.map((row) => ({
+    entityId: row.id,
+    name: displayName(row.name, row.domain),
+    domain: row.domain,
+    origin: row.origin,
+  }));
 }
 
 const INSERT_MANUAL_COMPETITOR =
