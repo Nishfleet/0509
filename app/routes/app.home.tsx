@@ -25,6 +25,9 @@ export default function Page({ loaderData }: Route.ComponentProps) {
     <main className={PAGE}>
       <HomeStanding view={loaderData.view} />
       {loaderData.view.standing.kind === "ranked" ? <ShareButton /> : null}
+      <footer className="border-line mt-14 border-t pt-7">
+        <p className="font-mono text-eyebrow text-ink-soft">{loaderData.view.footer}</p>
+      </footer>
     </main>
   );
 }
