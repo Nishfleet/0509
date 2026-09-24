@@ -16,6 +16,9 @@ describe("hn.algolia mentions adapter", () => {
 		expect(parsed.canaryCount).toBe(parsed.items.length);
 		const objectIds = parsed.items.map((item) => Number(item.dedupKey));
 		expect(Math.max(...objectIds)).toBeGreaterThanOrEqual(47123304);
+		expect(
+			parsed.items.some((item) => item.title.toLowerCase().includes("gymshark")),
+		).toBe(true);
 	});
 
 	it("adapterFor returns the HN adapter and it fetches the Algolia URL once", async () => {
