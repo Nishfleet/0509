@@ -182,7 +182,36 @@ describe("handleCompetitorIntent intent=add", () => {
 
   it("never writes a Jev verdict for a manual add", async () => {
     const workspaceId = await seedWorkspace();
-    await handleCompetitorIntent(workspaceId, addForm("gymshark.com"));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url.includes("wbsearchentities")) {
+          return Promise.resolve(Response.json({ search: [{ id: "Q123" }] }));
+        }
+        if (url.includes("wbgetentities")) {
+          return Promise.resolve(
+            Response.json({
+              entities: {
+                Q123: {
+                  claims: {
+                    P856: [
+                      {
+                        mainsnak: {
+                          datavalue: { value: "https://www.gymshark.com" },
+                        },
+                      },
+                    ],
+                  },
+                },
+              },
+            }),
+          );
+        }
+        return NOT_FOUND();
+      }),
+    );
+    await handleCompetitorIntent(workspaceId, addForm("Gymshark"));
 
     const count = await env.DB.prepare("SELECT COUNT(*) AS n FROM jev_verdict").first<{ n: number }>();
     expect(count?.n).toBe(0);
