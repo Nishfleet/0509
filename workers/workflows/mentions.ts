@@ -5,7 +5,7 @@ import type { TargetOutcome } from "../mentions/sweep";
 import { PACED_PLUGINS, planTargets, sweepTarget } from "../mentions/sweep";
 
 const RETRY: WorkflowStepConfig = {
-  retries: { limit: 2, delay: "10 seconds", backoff: "exponential" },
+  retries: { limit: 5, delay: "10 seconds", backoff: "exponential" },
 };
 
 const PACE = "6 seconds";

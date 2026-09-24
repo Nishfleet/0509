@@ -240,6 +240,61 @@ export interface SignalCount {
 
 const COUNT_SIGNALS_BY_KIND = `SELECT kind, COUNT(*) AS n FROM signal WHERE workspace_id = ?1 AND entity_id = ?2 AND observed_at >= ?3 AND is_tombstoned = 0 GROUP BY kind ORDER BY kind`;
 
+const SELECT_RECENT_MENTIONS = `SELECT id, title, canonical_url, url_hash, observed_at, engagement_json
+FROM signal
+WHERE entity_id = ?1 AND kind = 'mention' AND is_tombstoned = 0 AND observed_at >= ?2
+ORDER BY observed_at DESC
+LIMIT ?3`;
+
+const COLLAPSE_MENTION = `UPDATE signal
+SET last_seen_at = ?2, engagement_json = ?3, canonical_url = ?4, url = ?4, url_hash = ?5
+WHERE id = ?1`;
+
+export interface MentionHistoryRow {
+  id: string;
+  title: string | null;
+  canonical_url: string;
+  url_hash: string;
+  observed_at: string;
+  engagement_json: string | null;
+}
+
+interface MentionHistorySqlRow {
+  id: string;
+  title: string | null;
+  canonical_url: string;
+  url_hash: string;
+  observed_at: string;
+  engagement_json: string | null;
+}
+
+export async function readRecentMentions(
+  entityId: string,
+  since: string,
+  limit: number,
+): Promise<MentionHistoryRow[]> {
+  const { results } = await env.DB.prepare(SELECT_RECENT_MENTIONS)
+    .bind(entityId, since, limit)
+    .all<MentionHistorySqlRow>();
+  return results;
+}
+
+export function collapseMention(row: {
+  id: string;
+  lastSeenAt: string;
+  engagementJson: string;
+  canonicalUrl: string;
+  urlHash: string;
+}): D1PreparedStatement {
+  return env.DB.prepare(COLLAPSE_MENTION).bind(
+    row.id,
+    row.lastSeenAt,
+    row.engagementJson,
+    row.canonicalUrl,
+    row.urlHash,
+  );
+}
+
 export async function readSignalCounts(
   workspaceId: string,
   entityId: string,
