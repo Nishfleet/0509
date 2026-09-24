@@ -68,6 +68,8 @@ interface MaybeRow {
 const SELECT_COMPETITOR =
   "SELECT id, name, domain, state, state_changed_at, state_reason FROM entity WHERE id = ? AND workspace_id = ? AND role = 'competitor' AND state IN ('on', 'off')";
 
+const SELECT_ENTITY_DOMAIN = "SELECT domain FROM entity WHERE id = ? AND workspace_id = ?";
+
 const SET_COMPETITOR_STATE =
   "UPDATE entity SET state = ?, state_changed_at = ?, state_changed_by = 'user', state_reason = NULL WHERE id = ? AND workspace_id = ? AND role = 'competitor' AND state IN ('on', 'off') AND state <> ?";
 
@@ -99,6 +101,11 @@ export async function readCompetitor(
     stateChangedAt: row.state_changed_at,
     stateReason: row.state_reason,
   };
+}
+
+export async function readEntityDomain(workspaceId: string, entityId: string): Promise<string | null> {
+  const row = await env.DB.prepare(SELECT_ENTITY_DOMAIN).bind(entityId, workspaceId).first<{ domain: string }>();
+  return row?.domain ?? null;
 }
 
 export async function setCompetitorState(

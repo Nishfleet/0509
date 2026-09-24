@@ -24,7 +24,7 @@ function stubWeb(homepage: (url: string) => Response) {
   vi.stubGlobal("fetch", (input: RequestInfo | URL) => {
     const url = input instanceof Request ? input.url : String(input);
     calls.push(url);
-    if (isLogo(url)) return Promise.resolve(new Response("png", { status: 200 }));
+    if (isLogo(url)) return Promise.resolve(new Response(new Uint8Array([1, 2, 3]), { status: 200, headers: { "content-type": "image/png" } }));
     return Promise.resolve(homepage(url));
   });
   return calls;
@@ -39,6 +39,8 @@ function form(fields: Record<string, string>): FormData {
 beforeEach(async () => {
   const listed = await env.IDENTITY_CACHE.list();
   for (const key of listed.keys) await env.IDENTITY_CACHE.delete(key.name);
+  const logos = await env.SNAPSHOTS.list({ prefix: "logo/" });
+  for (const object of logos.objects) await env.SNAPSHOTS.delete(object.key);
   for (const table of ["entity", "takedown", "workspace", '"user"']) {
     await env.DB.prepare(`DELETE FROM ${table}`).run();
   }
@@ -64,7 +66,8 @@ describe("startCard", () => {
     expect(site.description).toContain("game-changing workout clothes");
     expect(site.socials.map((social) => social.platform)).toContain("instagram");
     expect(site.unfound).toBe(false);
-    expect(await card.logo).toContain("Gymshark_Combi_Logo_Black.png");
+    expect(await card.logo).toBe("data:image/png;base64,AQID");
+    expect(await env.SNAPSHOTS.get("logo/gymshark.com")).not.toBeNull();
   });
 
   it("reads the homepage once a day, not once per visit", async () => {
@@ -97,20 +100,20 @@ describe("startCard", () => {
 
 describe("confirmCard", () => {
   it("saves the card, with the user's edits, as the workspace's own brand", async () => {
+    await env.SNAPSHOTS.put("logo/gymshark.com", new Uint8Array([1]), { httpMetadata: { contentType: "image/png" } });
     const saved = await confirmCard(
       "ws-1",
       form({
         subject: "https://www.gymshark.com/en-GB/",
         name: " Gymshark UK ",
         description: "Gym clothes",
-        logo: "https://cdn.example/logo.png",
         "social.instagram": "https://www.instagram.com/gymshark/",
       }),
     );
     expect(saved).toBe(true);
 
     const row = await env.DB.prepare(
-      "SELECT role, domain, name, identity_json, origin, state, confirmed_at IS NOT NULL AS confirmed FROM entity",
+      "SELECT role, domain, name, identity_json, origin, state, confirmed_at IS NOT NULL AS confirmed, id FROM entity",
     ).first<Record<string, unknown>>();
     expect(row).toMatchObject({ role: "self", domain: "gymshark.com", name: "Gymshark UK", origin: "manual", state: "on", confirmed: 1 });
     expect(JSON.parse(String(row?.identity_json))).toEqual({
@@ -118,15 +121,30 @@ describe("confirmCard", () => {
       platform: null,
       url: "https://www.gymshark.com/",
       description: "Gym clothes",
-      logoUrl: "https://cdn.example/logo.png",
+      logoUrl: "/app/logos/" + String(row?.id),
       socials: [{ platform: "instagram", url: "https://www.instagram.com/gymshark/" }],
     });
   });
 
+  it("ignores a form-supplied logo URL when no logo is kept in R2", async () => {
+    const saved = await confirmCard(
+      "ws-1",
+      form({
+        subject: "gymshark.com",
+        name: "Gymshark",
+        description: "Gym clothes",
+        logo: "https://evil.example/x.png",
+      }),
+    );
+    expect(saved).toBe(true);
+    const row = await env.DB.prepare("SELECT identity_json FROM entity").first<Record<string, unknown>>();
+    expect(JSON.parse(String(row?.identity_json)).logoUrl).toBeNull();
+  });
+
   it("refuses a card with no name, and a second confirm keeps the first", async () => {
-    expect(await confirmCard("ws-1", form({ subject: "gymshark.com", name: "  ", description: "", logo: "" }))).toBe(false);
-    expect(await confirmCard("ws-1", form({ subject: "gymshark.com", name: "First", description: "", logo: "" }))).toBe(true);
-    expect(await confirmCard("ws-1", form({ subject: "gymshark.com", name: "Second", description: "", logo: "" }))).toBe(true);
+    expect(await confirmCard("ws-1", form({ subject: "gymshark.com", name: "  ", description: "" }))).toBe(false);
+    expect(await confirmCard("ws-1", form({ subject: "gymshark.com", name: "First", description: "" }))).toBe(true);
+    expect(await confirmCard("ws-1", form({ subject: "gymshark.com", name: "Second", description: "" }))).toBe(true);
     const { results } = await env.DB.prepare("SELECT name FROM entity").all();
     expect(results).toEqual([{ name: "First" }]);
   });
@@ -134,7 +152,7 @@ describe("confirmCard", () => {
   it("refuses a social link that is not a URL", async () => {
     const saved = await confirmCard(
       "ws-1",
-      form({ subject: "gymshark.com", name: "Gymshark", description: "", logo: "", "social.x": "javascript:alert(1)" }),
+      form({ subject: "gymshark.com", name: "Gymshark", description: "", "social.x": "javascript:alert(1)" }),
     );
     expect(saved).toBe(false);
   });
