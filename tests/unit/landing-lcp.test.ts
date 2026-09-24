@@ -39,6 +39,7 @@ function faceFor(css: string, file: string): string {
 const heroSource = readFileSync(join(REPO_ROOT, "app/components/landing/hero.tsx"), "utf8");
 const heroText = heroSource.match(/<h1[^>]*>\s*([^<]+?)\s*<\/h1>/)?.[1] ?? "";
 const appCss = readFileSync(join(REPO_ROOT, "app/app.css"), "utf8");
+const facesCss = readFileSync(join(REPO_ROOT, "app/fonts.css"), "utf8");
 const ci = readFileSync(join(REPO_ROOT, ".github/workflows/ci.yml"), "utf8");
 
 describe("landing LCP critical path", () => {
@@ -48,7 +49,10 @@ describe("landing LCP critical path", () => {
     expect(bytes.subarray(0, 4).toString("ascii")).toBe("wOF2");
     expect(bytes.length).toBeLessThan(12_000);
     const hero = coveredBy(faceFor(appCss, "/fonts/bricolage-hero.woff2"));
-    const full = coveredBy(faceFor(appCss, "/fonts/bricolage-grotesque-latin.woff2"));
+    const full = coveredBy(faceFor(facesCss, "/fonts/bricolage-grotesque-latin.woff2"));
+    expect(appCss).not.toContain("bricolage-grotesque-latin");
+    expect(appCss).not.toContain("instrument-sans");
+    expect(appCss).not.toContain("ibm-plex");
     for (const code of codepoints(heroText)) {
       expect(hero.has(code), `U+${code.toString(16)}`).toBe(true);
       expect(full.has(code), `U+${code.toString(16)}`).toBe(false);

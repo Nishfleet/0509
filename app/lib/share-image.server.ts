@@ -3,13 +3,14 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
 import stylesheet from "../app.css?url";
+import facesHref from "../fonts.css?url";
 import { SHARE_IMAGE_SIZE, ShareImage } from "../components/share-image";
 import type { ShareCard } from "./share-card";
 
 export function shareDocument(card: ShareCard, origin: string, cssHref: string = stylesheet): string {
   const body = renderToStaticMarkup(createElement(ShareImage, { card }));
   const base = new URL("/", origin).href;
-  return `<!doctype html><html lang="en" data-theme="light"><head><meta charset="utf-8"><base href="${base}"><link rel="stylesheet" href="${cssHref}"></head><body>${body}</body></html>`;
+  return `<!doctype html><html lang="en" data-theme="light"><head><meta charset="utf-8"><base href="${base}"><link rel="stylesheet" href="${facesHref}"><link rel="stylesheet" href="${cssHref}"></head><body>${body}</body></html>`;
 }
 
 function logShareMiss(cause: string): void {

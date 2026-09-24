@@ -12,6 +12,7 @@ import type { Route } from "./+types/root";
 import { ErrorPage } from "./components/error-page";
 import { Toaster } from "./components/toaster";
 import { hasSessionCookie } from "./lib/auth.server";
+import facesHref from "./fonts.css?url";
 import "./app.css";
 
 const LANDING_PATH = "/design/landing";
@@ -33,6 +34,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
         {landing ? null : (
           <link rel="preload" href="/fonts/instrument-sans-latin.woff2" as="font" type="font/woff2" crossOrigin="anonymous" />
         )}
+        {landing ? null : <link rel="stylesheet" href={facesHref} />}
         <Meta />
         <Links />
       </head>
