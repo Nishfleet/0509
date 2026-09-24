@@ -13,6 +13,17 @@ export type ScreenResult =
   | { kind: "ask"; subject: string }
   | { kind: "unavailable"; message: string };
 
+const runJevOutcome = (input: {
+  workspaceId: string;
+  subject: Subject;
+  raw: string;
+  now: string;
+}): Promise<{ outcome: "proceed" | "ask" | "refuse" } | null> =>
+  screenPublicSubject(input.workspaceId, input.subject, input.raw, input.now).catch((error: unknown) => {
+    if (error instanceof JevUnavailableError) return null;
+    throw error;
+  });
+
 export async function screenOnboardingSubject(input: {
   workspaceId: string;
   userId: string;
@@ -25,14 +36,9 @@ export async function screenOnboardingSubject(input: {
   if (decided === "public_subject:confirmed") return { kind: "proceed" };
   if (decided === "public_subject:refused") return { kind: "refuse", message: REFUSAL };
 
-  let outcome;
-  try {
-    ({ outcome } = await screenPublicSubject(input.workspaceId, input.subject, input.raw, input.now));
-  } catch (error) {
-    if (error instanceof JevUnavailableError) return { kind: "unavailable", message: UNAVAILABLE };
-    throw error;
-  }
-
+  const screened = await runJevOutcome(input);
+  if (screened === null) return { kind: "unavailable", message: UNAVAILABLE };
+  const { outcome } = screened;
   if (outcome === "proceed") return { kind: "proceed" };
 
   if (outcome === "refuse") {
