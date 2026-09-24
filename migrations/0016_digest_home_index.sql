@@ -1,4 +1,4 @@
--- 0015_digest_home_index.sql — Home's newest weekly brief.
+-- 0016_digest_home_index.sql — Home's newest weekly brief.
 --
 -- The loader reads one workspace's latest digest
 -- (workspace_id, kind = 'weekly', ORDER BY period_end DESC LIMIT 1).
