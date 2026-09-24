@@ -50,9 +50,10 @@ test("the hero's first viewport holds the outcome and the one priced input", asy
     await expect(piece).toBeVisible();
     const box = await piece.boundingBox();
     const viewport = page.viewportSize();
-    expect(box, "piece has a box").not.toBeNull();
-    expect(viewport, "viewport is set").not.toBeNull();
-    expect(box!.y + box!.height).toBeLessThanOrEqual((viewport?.height ?? 0) + 1);
+    if (box === null || viewport === null) {
+      throw new Error(box === null ? "piece has no box" : "viewport is unset");
+    }
+    expect(box.y + box.height).toBeLessThanOrEqual(viewport.height + 1);
   }
 
   const filled = await page.evaluate(() => {
