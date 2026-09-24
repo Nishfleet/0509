@@ -4,6 +4,7 @@ import { beforeAll, describe, expect, it } from "vitest";
 
 import { propsForApiKey } from "../../app/lib/agent/keys.server";
 import { createOAuthProvider } from "../../app/lib/agent/oauth.server";
+import { toolResult } from "../../app/lib/agent/mcp.server";
 import { readAgentAlerts, readAgentBrief, readAgentCompetitors, readAgentStanding } from "../../app/lib/agent/read.server";
 import { apiResponse, mcpResponse } from "../../app/lib/agent/serve.server";
 import { createAuth } from "../../app/lib/auth.server";
@@ -182,6 +183,14 @@ describe("agent access, scoped to one workspace", () => {
     expect(call.structuredContent.tracked.map((row) => row.domain)).toEqual(["rival-b.example"]);
   });
 
+  it("answers a failing MCP tool with a fixed error and never the thrown text", async () => {
+    const failed = await toolResult(() => Promise.reject(new Error("D1_ERROR: no such column secret_internal")));
+    expect(failed).toMatchObject({ isError: true });
+    expect(JSON.stringify(failed)).not.toContain("secret_internal");
+    const ok = await toolResult(() => Promise.resolve({ alerts: [] }));
+    expect(ok).toMatchObject({ structuredContent: { alerts: [] } });
+  });
+
   it("reads standing for the caller's workspace and hides a paused competitor", async () => {
     const standingA = await readAgentStanding(a.workspaceId);
     expect(standingA.standing?.rank).toBe(2);
@@ -226,5 +235,18 @@ describe("agent access, scoped to one workspace", () => {
     const limited = await call();
     expect(limited.status).toBe(429);
     expect(limited.headers.get("retry-after")).toBe("60");
+  });
+
+  it("refuses an MCP request from a foreign origin and serves one from the product's own", async () => {
+    const from = (origin: string) =>
+      new Request("http://localhost/mcp", {
+        method: "POST",
+        headers: { "content-type": "application/json", accept: "application/json, text/event-stream", origin },
+        body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list", params: {} }),
+      });
+    const foreign = await mcpResponse(from("https://evil.example"), { userId: a.userId, clientId: "test" });
+    expect(foreign.status).toBe(403);
+    const own = await mcpResponse(from(new URL(env.BETTER_AUTH_URL).origin), { userId: a.userId, clientId: "test" });
+    expect(own.status).toBe(200);
   });
 });
