@@ -3,7 +3,9 @@ import { z } from "zod";
 import { readBriefPayload } from "./brief-payload";
 import type { BriefPayload } from "./brief-payload";
 import type { BriefSchedule } from "./brief-schedule";
-import type { HomeEntity } from "./home-standing";
+import type { HomeEntity, HomeHistoryRow } from "./home-standing";
+
+const SELECT_HISTORY = `SELECT entity_id, week_start_at, rank FROM standing WHERE workspace_id = ?1 AND rank IS NOT NULL AND week_start_at IN (SELECT DISTINCT week_start_at FROM standing WHERE workspace_id = ?1 AND rank IS NOT NULL ORDER BY week_start_at DESC LIMIT 4) ORDER BY week_start_at ASC`;
 
 export const SELECT_HOME_STANDING = `SELECT
   w.id AS workspace_id,
@@ -45,10 +47,15 @@ const homeRow = z.object({
 
 const homeRows = z.array(homeRow);
 
+const historyRows = z.array(
+  z.object({ entity_id: z.string(), week_start_at: z.string(), rank: z.number().int() }),
+);
+
 export interface HomeStandingInputs {
   schedule: BriefSchedule;
   entities: readonly HomeEntity[];
   payload: BriefPayload | null;
+  history: readonly HomeHistoryRow[];
 }
 
 function entityFrom(row: z.infer<typeof homeRow>): HomeEntity | null {
@@ -65,6 +72,7 @@ export async function readHomeStandingInputs(
   const rows = homeRows.parse((await db.prepare(SELECT_HOME_STANDING).bind(ownerUserId).all()).results);
   const first = rows[0];
   if (first === undefined) return null;
+  const history = historyRows.parse((await db.prepare(SELECT_HISTORY).bind(first.workspace_id).all()).results);
   return {
     schedule: { timezone: first.timezone, weekday: first.brief_weekday, hour: first.brief_hour },
     entities: rows.flatMap((row) => {
@@ -72,5 +80,6 @@ export async function readHomeStandingInputs(
       return entity === null ? [] : [entity];
     }),
     payload: first.payload_json === null ? null : readBriefPayload(first.payload_json),
+    history,
   };
 }
