@@ -30,9 +30,13 @@ const NOTES = {
   SIGN_IN_IP_LIMIT: "one sender can spray sign-in links",
   AGENT_REGISTER_LIMIT: "anyone can fill OAUTH_KV with app registrations",
   LIVENESS_PING_URL: "absence means no monitor; a set value must be an http(s) URL",
-} as const satisfies Record<(typeof BINDING_NAMES)[number] | "LIVENESS_PING_URL", string>;
+  SITE_SWEEP_PING_URL: "absence means no monitor; a set value must be an http(s) URL",
+} as const satisfies Record<
+  (typeof BINDING_NAMES)[number] | "LIVENESS_PING_URL" | "SITE_SWEEP_PING_URL",
+  string
+>;
 
-const NAMES = [...BINDING_NAMES, "LIVENESS_PING_URL"] as const satisfies readonly (keyof typeof NOTES)[];
+const NAMES = [...BINDING_NAMES, "LIVENESS_PING_URL", "SITE_SWEEP_PING_URL"] as const satisfies readonly (keyof typeof NOTES)[];
 
 type EnvName = (typeof NAMES)[number];
 type Snapshot = Record<(typeof NAMES)[number], unknown>;
@@ -67,6 +71,7 @@ const workerEnvSchema = z.object({
   SIGN_IN_IP_LIMIT: binding("limit"),
   AGENT_REGISTER_LIMIT: binding("limit"),
   LIVENESS_PING_URL: httpUrl.optional(),
+  SITE_SWEEP_PING_URL: httpUrl.optional(),
 });
 
 export class WorkerEnvError extends Error {
@@ -89,8 +94,8 @@ function blank(value: unknown): unknown {
   return trimmed.length === 0 ? undefined : trimmed;
 }
 
-function livenessUrl(): unknown {
-  return blank(Reflect.get(globalThis, "LIVENESS_PING_URL"));
+function globalUrl(name: "LIVENESS_PING_URL" | "SITE_SWEEP_PING_URL"): unknown {
+  return blank(Reflect.get(globalThis, name));
 }
 
 function snapshot(): Snapshot {
@@ -107,7 +112,8 @@ function snapshot(): Snapshot {
     SIGN_IN_EMAIL_LIMIT: env.SIGN_IN_EMAIL_LIMIT,
     SIGN_IN_IP_LIMIT: env.SIGN_IN_IP_LIMIT,
     AGENT_REGISTER_LIMIT: env.AGENT_REGISTER_LIMIT,
-    LIVENESS_PING_URL: livenessUrl(),
+    LIVENESS_PING_URL: globalUrl("LIVENESS_PING_URL"),
+    SITE_SWEEP_PING_URL: globalUrl("SITE_SWEEP_PING_URL"),
   };
 }
 

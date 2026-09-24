@@ -23,6 +23,11 @@ describe("organizationJsonLd", () => {
       "@id": "https://0509.io/#organization",
       name: "Five to Nine",
       url: "https://0509.io",
+      contactPoint: {
+        "@type": "ContactPoint",
+        contactType: "customer support",
+        email: "support@0509.io",
+      },
       logo: "https://0509.io/logo.svg",
     });
     expect(node).not.toHaveProperty("sameAs");

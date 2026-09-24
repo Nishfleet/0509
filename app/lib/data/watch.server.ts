@@ -108,3 +108,16 @@ export async function readSiteWatchSummary(workspaceId: string, entityId: string
     .first<{ pages: number; last_polled_at: string | null }>();
   return { pages: row?.pages ?? 0, lastPolledAt: row?.last_polled_at ?? null };
 }
+
+const ENTITY_R2_PREFIXES = `SELECT w.id AS id
+FROM watch w
+JOIN entity e ON e.id = w.entity_id
+WHERE e.id = ?2 AND e.workspace_id = ?1 AND e.role = 'competitor'
+ORDER BY w.id`;
+
+export async function readEntityR2Prefixes(workspaceId: string, entityId: string): Promise<string[]> {
+  const { results } = await env.DB.prepare(ENTITY_R2_PREFIXES)
+    .bind(workspaceId, entityId)
+    .all<{ id: string }>();
+  return results.map((row) => `snapshot/site/${row.id}/`);
+}
