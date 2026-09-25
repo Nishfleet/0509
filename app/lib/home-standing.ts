@@ -1,6 +1,8 @@
 import type { BriefPayload } from "./brief-payload";
 import type { BriefSchedule } from "./brief-schedule";
 import { nextBriefAt } from "./brief-schedule";
+import { firstSiteSweepAt, nextSiteSweepAt } from "./onboarding/arrival-estimate";
+export { nextSiteSweepAt, SITE_SWEEP_UTC_HOUR } from "./onboarding/arrival-estimate";
 
 export interface HomeEntity {
   id: string;
@@ -44,7 +46,7 @@ interface FourWeekChart {
 
 export type HomeStanding =
   | { kind: "add-competitor" }
-  | { kind: "gathering"; briefAt: string; firstSweepAt: string; brands: number }
+  | { kind: "gathering"; briefAt: string; firstSweepAt: string | null; brands: number }
   | { kind: "ranked"; rank: number; total: number; whyLine: string; rows: readonly HomeRow[]; chart: FourWeekChart };
 
 export interface HomeView {
@@ -57,15 +59,6 @@ export interface HomeView {
 
 export function nextHour(now: Date): Date {
   return new Date((Math.floor(now.getTime() / 3_600_000) + 1) * 3_600_000);
-}
-
-export const SITE_SWEEP_UTC_HOUR = 2;
-
-export function nextSiteSweepAt(now: Date): Date {
-  const sweep = new Date(now.getTime());
-  sweep.setUTCHours(SITE_SWEEP_UTC_HOUR, 0, 0, 0);
-  if (sweep.getTime() <= now.getTime()) sweep.setUTCDate(sweep.getUTCDate() + 1);
-  return sweep;
 }
 
 const MOVEMENT = {
@@ -227,6 +220,7 @@ export function homeView(input: {
   entities: readonly HomeEntity[];
   schedule: BriefSchedule;
   history: readonly HomeHistoryRow[];
+  sources: readonly HomeSource[];
   now: Date;
 }): HomeView {
   const onCount = input.entities.filter((entity) => entity.state === "on").length;
@@ -234,10 +228,12 @@ export function homeView(input: {
   const recheckTime = hourAndMinute(input.schedule.timezone, nextHour(input.now));
   const briefTime = dayAndTime(input.schedule.timezone, nextBriefAt(input.schedule, input.now));
   const footer = `Checked ${String(onCount)} ${brandWord} this week · brief ${briefTime} · your site re-checked at ${recheckTime}`;
+  const standing = homeStanding(input);
+  const at = firstSiteSweepAt({ now: input.now, sources: input.sources });
   return {
     eyebrow: todayEyebrow(input.schedule.timezone, input.now),
     greeting: greetingFor(input.schedule.timezone, input.now),
-    standing: homeStanding(input),
+    standing: standing.kind === "gathering" ? { ...standing, firstSweepAt: at === null ? null : dayAndTime(input.schedule.timezone, at) } : standing,
     chips: input.entities
       .filter((entity) => entity.state === "on")
       .map((entity) => ({ name: entity.name, href: chipHref(entity), self: entity.role === "self" })),
