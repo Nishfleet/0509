@@ -61,6 +61,15 @@ async function seed(): Promise<string> {
     ).bind(id, workspaceId, `hash-${id}`, signalId, entityId, p, reason, decidedAt);
   await env.DB.batch([
     mention(
+      `sig-unjudged-${suffix}`,
+      onId,
+      "src_mentions_gdelt",
+      "Zephyrwear posts a hiring page",
+      "https://news.example/hiring",
+      "2026-09-25T07:00:00.000Z",
+      "2026-09-25T10:00:00.000Z",
+    ),
+    mention(
       `sig-news-${suffix}`,
       onId,
       "src_mentions_gdelt",
@@ -172,20 +181,29 @@ describe("mention feed read", () => {
     const workspaceId = await seed();
     const mentions = await readMentionFeed(workspaceId, NOW);
     expect(mentions.map((mention) => mention.title)).toEqual([
+      "Zephyrwear posts a hiring page",
       "Zephyrwear opens a London flagship",
       "Zephyrwear thread on Hacker News",
       "Zephyrwear shows up in a roundup",
       "Zephyrwear ticker line",
     ]);
-    expect(mentions.map((mention) => mention.treatment)).toEqual(["shown", "shown", "possibly", "held"]);
+    expect(mentions.map((mention) => mention.treatment)).toEqual([
+      "unreviewed",
+      "shown",
+      "shown",
+      "possibly",
+      "held",
+    ]);
     expect(mentions.map((mention) => mention.sourceName)).toEqual([
+      "News mentions",
       "News mentions",
       "Hacker News mentions",
       "Medium mentions",
       "News mentions",
     ]);
-    expect(mentions[2]?.when).toBe("found today");
+    expect(mentions[3]?.when).toBe("found today");
     expect(mentions.map((mention) => mention.why)).toEqual([
+      null,
       "A London flagship is a move worth knowing.",
       "A public thread about the brand is worth a look.",
       "A roundup mention, not a move of its own.",

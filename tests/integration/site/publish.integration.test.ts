@@ -4,6 +4,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { publishChange } from "../../../app/lib/site/publish.server";
 import type { ChangeJudgment } from "../../../app/lib/site/judge.server";
+import {
+  acknowledgeIncidentAlert,
+  readOpenIncidentBlock,
+} from "../../../app/lib/data/alert.server";
 
 const NOW = "2026-09-23T00:00:00.000Z";
 const USER = "user-publish";
@@ -142,6 +146,7 @@ describe("publishChange (0509#4435)", () => {
     await seedSnapshot("snap-publish-f-1", SELF_WATCH, SELF_PAGE, "snapshot/site/self-watch/snap-publish-f-1.txt");
     await seedSnapshot("snap-publish-f-2", SELF_WATCH, SELF_PAGE, "snapshot/site/self-watch/snap-publish-f-2.txt");
     await seedSnapshot("snap-publish-g", SELF_WATCH, SELF_PAGE, "snapshot/site/self-watch/snap-publish-g.txt");
+    await seedSnapshot("snap-publish-h", SELF_WATCH, SELF_PAGE, "snapshot/site/self-watch/snap-publish-h.txt");
   });
 
   it("(a) competitor noteworthy publish kind pricing → one change signal with aspect pricing and the four keys in payload_json", async () => {
@@ -317,7 +322,7 @@ describe("publishChange (0509#4435)", () => {
     expect(alerts.results).toEqual([
       {
         id: result.alertId,
-        kind: "own_site_breakage",
+        kind: "own_site_broken",
         severity: "high",
         incident_id: result.incidentId,
         signal_id: result.signalId,
@@ -377,7 +382,7 @@ describe("publishChange (0509#4435)", () => {
       "SELECT id, closed_at FROM incident",
     ).all<{ id: string; closed_at: string | null }>();
     expect(incidents.results).toEqual([{ id: first.incidentId, closed_at: null }]);
-    const alerts = await env.DB.prepare("SELECT id FROM alert WHERE kind = 'own_site_breakage'").all<{ id: string }>();
+    const alerts = await env.DB.prepare("SELECT id FROM alert WHERE kind = 'own_site_broken'").all<{ id: string }>();
     expect(alerts.results).toHaveLength(1);
     expect(alerts.results[0].id).toBe(first.alertId);
     const signals = await env.DB.prepare("SELECT COUNT(*) AS n FROM signal").first<{ n: number }>();
@@ -414,8 +419,37 @@ describe("publishChange (0509#4435)", () => {
       "SELECT id, kind, severity FROM alert",
     ).all<{ id: string; kind: string; severity: string }>();
     expect(alerts.results).toEqual([
-      { id: result.alertId, kind: "own_site_breakage", severity: "normal" },
+      { id: result.alertId, kind: "own_site_broken", severity: "normal" },
     ]);
     expect(send).not.toHaveBeenCalled();
+  });
+
+  it("(h) the own-site alert publishChange writes is the one readOpenIncidentBlock returns, and acknowledging it is readable", async () => {
+    const result = await publishChange(
+      baseInput(
+        {
+          deferred: false,
+          selfBreakage: { p: 0.81, band: "alert", reason: "checkout button gone" },
+          noteworthy: null,
+        },
+        {
+          workspaceId: SELF_WS,
+          entityId: SELF_ENTITY,
+          watchId: SELF_WATCH,
+          pageId: SELF_PAGE,
+          url: SELF_URL,
+          snapshotId: "snap-publish-h",
+        },
+      ),
+    );
+    const alertId = result.alertId;
+    if (alertId === null) throw new Error("publishChange wrote no own-site alert");
+    const open = await readOpenIncidentBlock(env.DB, SELF_WS);
+    expect(open?.alert_id).toBe(alertId);
+    await acknowledgeIncidentAlert(env.DB, SELF_WS, alertId, new Date().toISOString());
+    const acknowledged = await env.DB.prepare("SELECT status FROM alert WHERE id = ?")
+      .bind(alertId)
+      .first<{ status: string }>();
+    expect(acknowledged?.status).toBe("acknowledged");
   });
 });

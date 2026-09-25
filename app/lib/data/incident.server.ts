@@ -10,10 +10,6 @@ export interface NewIncident {
   openedAt: string;
 }
 
-const INSERT_INCIDENT = `INSERT INTO incident (id, workspace_id, entity_id, page_id, kind, opened_at)
-VALUES (?1, ?2, ?3, ?4, ?5, ?6)
-ON CONFLICT DO NOTHING`;
-
 const INSERT_OPEN_INCIDENT_ON_CONFLICT = `INSERT INTO incident (id, workspace_id, entity_id, page_id, kind, opened_at)
 VALUES (?1, ?2, ?3, ?4, ?5, ?6)
 ON CONFLICT (page_id) WHERE closed_at IS NULL DO NOTHING`;
@@ -36,9 +32,7 @@ WHERE closed_at IS NULL AND page_id NOT IN (SELECT value FROM json_each(?1))`;
 const openRows = z.array(z.object({ id: z.string(), page_id: z.string() }));
 
 export async function openIncident(row: NewIncident): Promise<string | null> {
-  await env.DB.prepare(INSERT_INCIDENT)
-    .bind(row.id, row.workspaceId, row.entityId, row.pageId, row.kind, row.openedAt)
-    .run();
+  await openIncidentStatement(row).run();
   const open = await env.DB.prepare(OPEN_INCIDENT_FOR_PAGE).bind(row.pageId).first<{ id: string }>();
   return open?.id ?? null;
 }

@@ -137,7 +137,7 @@ export interface OwnSiteBreakageAlertRow {
 
 const INSERT_OWN_SITE_BREAKAGE_ALERT = `INSERT INTO alert
   (id, workspace_id, entity_id, signal_id, page_id, incident_id, kind, severity, title, body, created_at)
-SELECT ?1, ?2, ?3, ?4, ?5, ?6, 'own_site_breakage', ?7, ?8, ?9, ?10
+SELECT ?1, ?2, ?3, ?4, ?5, ?6, 'own_site_broken', ?7, ?8, ?9, ?10
 WHERE EXISTS (SELECT 1 FROM incident WHERE id = ?11)`;
 
 export function insertIncidentAlertStatement(row: OwnSiteBreakageAlertRow): D1PreparedStatement {
