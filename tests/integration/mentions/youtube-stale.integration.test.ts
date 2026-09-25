@@ -1,8 +1,10 @@
 import { env } from "cloudflare:test";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { readEntityIdentityJson } from "../../../app/lib/data/entity.server";
 import { LOST_CHANNEL_REASON } from "../../../app/lib/mentions/youtube-channel";
 import type { WatchRow } from "../../../app/lib/data/watch.server";
+import { readWatchConfigJson, writeWatchConfigJson } from "../../../app/lib/data/watch.server";
 import { sweepTarget } from "../../../workers/mentions/sweep";
 
 const NOW = "2026-09-24T23:01:56.000Z";
@@ -180,5 +182,28 @@ describe("YouTube sweep stale channel", () => {
 
     expect(JSON.parse(await configOf(watchId))).toEqual({ channelId: "UCzzzzzzzzzzzzzzzzzzzzzz" });
     expect(await snapshotCount(watchId)).toBe(0);
+  });
+
+  it("fails when the watch or entity row is missing instead of pretending the config is empty", async () => {
+    expect(await readWatchConfigJson("watch-missing")).toBeNull();
+    expect(await readEntityIdentityJson("entity-missing")).toBeNull();
+    await expect(writeWatchConfigJson("watch-missing", "{}")).rejects.toThrow(/watch-missing was not updated/);
+
+    const { watch } = await seed('{"description":"no socials"}', "{}");
+    stubFeeds();
+    const target = {
+      sourceId: watch.source_id,
+      pluginKey: watch.plugin_key,
+      query: watch.target_key,
+      watches: [watch],
+    };
+    await expect(
+      sweepTarget({ ...target, watches: [{ ...watch, watch_id: "watch-missing" }] }, NOW, null),
+    ).rejects.toThrow(/watch-missing is missing/);
+    await expect(
+      sweepTarget({ ...target, watches: [{ ...watch, entity_id: "entity-missing" }] }, NOW, null),
+    ).rejects.toThrow(/entity-missing is missing/);
+    expect(JSON.parse(await configOf(watch.watch_id))).toEqual({});
+    expect(await snapshotCount(watch.watch_id)).toBe(0);
   });
 });

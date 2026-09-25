@@ -9,7 +9,6 @@ import {
 	channelIdFromIdentity,
 	channelIdFromUrl,
 	isLostYoutubeChannel,
-	lostChannelFlag,
 	readWatchConfig,
 	withLostChannel,
 	withResolvedChannel,
@@ -61,9 +60,10 @@ describe("stale YouTube channel", () => {
 		expect(result.items).toEqual([]);
 	});
 
-	it("reads a channel id from a stored /channel/ URL and not from a handle", () => {
+	it("reads a channel id from a stored /channel/ URL and not from a handle or another host", () => {
 		expect(channelIdFromUrl(`https://www.youtube.com/channel/${CHANNEL_ID}`)).toBe(CHANNEL_ID);
 		expect(channelIdFromUrl("https://www.youtube.com/@gymshark")).toBeNull();
+		expect(channelIdFromUrl(`https://evil.com/channel/${CHANNEL_ID}`)).toBeNull();
 		const channelIdentity = JSON.stringify({
 			socials: [{ platform: "youtube", url: `https://www.youtube.com/channel/${CHANNEL_ID}` }],
 		});
@@ -80,7 +80,6 @@ describe("stale YouTube channel", () => {
 		expect(readWatchConfig("{").status).toBe("unreadable");
 		expect(readWatchConfig("[1,2]").status).toBe("unreadable");
 		expect(readWatchConfig('{"channelId":"not-a-channel"}').status).toBe("unreadable");
-		expect(lostChannelFlag("{")).toBeNull();
 		expect(() => withLostChannel("{", "2026-09-24T23:01:56.000Z")).toThrow(/unreadable/);
 	});
 
@@ -92,9 +91,13 @@ describe("stale YouTube channel", () => {
 			degraded: { state: "degraded", reason: LOST_CHANNEL_REASON, at },
 		});
 		expect(withLostChannel(flagged, "2026-09-25T00:00:00.000Z")).toBe(flagged);
-		expect(lostChannelFlag(flagged)?.reason).toBe(LOST_CHANNEL_REASON);
+		const flaggedRead = readWatchConfig(flagged);
+		expect(flaggedRead.status).toBe("ok");
+		if (flaggedRead.status === "ok") expect(flaggedRead.degraded?.reason).toBe(LOST_CHANNEL_REASON);
 		const resolved = withResolvedChannel(flagged, CHANNEL_ID);
 		expect(JSON.parse(resolved)).toEqual({ kept: true, channelId: CHANNEL_ID });
-		expect(lostChannelFlag(resolved)).toBeNull();
+		const resolvedRead = readWatchConfig(resolved);
+		expect(resolvedRead.status).toBe("ok");
+		if (resolvedRead.status === "ok") expect(resolvedRead.degraded).toBeNull();
 	});
 });

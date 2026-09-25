@@ -225,6 +225,11 @@ describe("the source pill", () => {
     expect(html).not.toContain("— none");
     expect(sourcePillStatus(source, quietSnapshot, NOW).state).toBe("degraded");
     expect(sourcePillStatus(reddit, quietSnapshot, NOW).state).toBe("none");
+    const broken: SourceRow = { ...source, watch_config_json: "{" };
+    const brokenHtml = pill(broken, quietSnapshot);
+    expect(brokenHtml).toContain('data-state="degraded"');
+    expect(brokenHtml).toContain("watch config is unreadable");
+    expect(brokenHtml).not.toContain("— none");
   });
 
   it("survives malformed config_json and falls back to the row key for a name", () => {

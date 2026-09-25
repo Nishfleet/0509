@@ -1,6 +1,6 @@
 import type { CSSProperties, ReactElement } from "react";
 
-import { lostChannelFlag } from "../lib/mentions/youtube-channel";
+import { readWatchConfig } from "../lib/mentions/youtube-channel";
 import { shortUtc } from "../lib/short-utc";
 
 export interface SourceRow {
@@ -58,9 +58,12 @@ export function sourcePillStatus(
       (snapshot?.canary_count === 0 ? "not answering" : "no reason recorded");
     return { state: "degraded", reason, lastGoodAt };
   }
-  const lost = lostChannelFlag(source.watch_config_json);
-  if (lost !== null) {
-    return { state: "degraded", reason: lost.reason, lastGoodAt: lost.at };
+  const watchConfig = readWatchConfig(source.watch_config_json);
+  if (watchConfig.status === "unreadable") {
+    return { state: "degraded", reason: "watch config is unreadable", lastGoodAt: null };
+  }
+  if (watchConfig.degraded !== null) {
+    return { state: "degraded", reason: watchConfig.degraded.reason, lastGoodAt: watchConfig.degraded.at };
   }
   const fetchedAt = snapshot === null ? null : blankToNull(snapshot.fetched_at);
   const fetchedMs = fetchedAt === null ? Number.NaN : Date.parse(fetchedAt);

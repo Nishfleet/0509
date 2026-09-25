@@ -87,7 +87,7 @@ describe("youtubeAdapter", () => {
 		const result = await youtubeAdapter({ query: "Gymshark" }, null);
 
 		expect(fakeFetch).not.toHaveBeenCalled();
-		expect(result.feedState).toBe("stale");
+		expect(result.feedState).toBe("error");
 		expect(result.items).toEqual([]);
 	});
 

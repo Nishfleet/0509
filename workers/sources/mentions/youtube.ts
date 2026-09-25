@@ -24,7 +24,7 @@ const ENTRY_SCHEMA = z
 
 export const youtubeAdapter: MentionsAdapter = async (target) => {
 	if (!isYoutubeChannelId(target.query)) {
-		return mentionsResultSchema.parse({ items: [], canaryCount: 0, rawBody: "", feedState: "stale" });
+		return mentionsResultSchema.parse({ items: [], canaryCount: 0, rawBody: "", feedState: "error" });
 	}
 	const url = `https://www.youtube.com/feeds/videos.xml?channel_id=${encodeURIComponent(target.query)}`;
 	const response = await fetchUpstream(url);

@@ -361,9 +361,9 @@ export function retireCompetitorByJev(input: {
 
 const READ_IDENTITY_JSON = "SELECT identity_json FROM entity WHERE id = ?1";
 
-export async function readEntityIdentityJson(entityId: string): Promise<string> {
+export async function readEntityIdentityJson(entityId: string): Promise<string | null> {
   const row = await env.DB.prepare(READ_IDENTITY_JSON).bind(entityId).first<{ identity_json: string }>();
-  return row?.identity_json ?? "{}";
+  return row === null ? null : row.identity_json;
 }
 
 export async function readCompetitors(

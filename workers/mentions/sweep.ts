@@ -230,19 +230,31 @@ async function commitMentionWatch(input: {
   return { stored: written.stored, unjudged: written.unjudged };
 }
 
+async function requireWatchConfigJson(watchId: string): Promise<string> {
+  const raw = await readWatchConfigJson(watchId);
+  if (raw === null) throw new Error(`watch ${watchId} is missing`);
+  return raw;
+}
+
+async function requireEntityIdentityJson(entityId: string): Promise<string> {
+  const raw = await readEntityIdentityJson(entityId);
+  if (raw === null) throw new Error(`entity ${entityId} is missing`);
+  return raw;
+}
+
 async function sweepOneYoutube(
   adapter: MentionsAdapter,
   watch: WatchRow,
   now: string,
   canaryCount: number | null,
 ): Promise<TargetOutcome> {
-  const configRaw = await readWatchConfigJson(watch.watch_id);
+  const configRaw = await requireWatchConfigJson(watch.watch_id);
   const config = readWatchConfig(configRaw);
   if (config.status !== "ok") throw new Error(`watch ${watch.watch_id} config_json is unreadable`);
 
   let channelId = config.channelId;
   if (channelId === null) {
-    channelId = channelIdFromIdentity(await readEntityIdentityJson(watch.entity_id));
+    channelId = channelIdFromIdentity(await requireEntityIdentityJson(watch.entity_id));
     if (channelId === null) {
       await markWatchPolled(watch.watch_id, now);
       return { items: 0, stored: 0, unjudged: 0 };
@@ -256,10 +268,10 @@ async function sweepOneYoutube(
     return { items: 0, stored: 0, unjudged: 0 };
   }
   if (first.feedState === "stale") {
-    const current = await readWatchConfigJson(watch.watch_id);
+    const current = await requireWatchConfigJson(watch.watch_id);
     const flagged = withLostChannel(current, now);
     if (flagged !== current) await writeWatchConfigJson(watch.watch_id, flagged);
-    const candidate = channelIdFromIdentity(await readEntityIdentityJson(watch.entity_id));
+    const candidate = channelIdFromIdentity(await requireEntityIdentityJson(watch.entity_id));
     if (candidate !== null && candidate !== channelId) {
       const second = await adapter({ query: candidate }, null);
       if (second.feedState === "ok") {
@@ -279,7 +291,7 @@ async function sweepOneYoutube(
     return { items: 0, stored: 0, unjudged: 0 };
   }
 
-  const current = await readWatchConfigJson(watch.watch_id);
+  const current = await requireWatchConfigJson(watch.watch_id);
   const currentConfig = readWatchConfig(current);
   if (currentConfig.status === "ok" && currentConfig.degraded !== null) {
     await writeWatchConfigJson(watch.watch_id, withResolvedChannel(current, channelId));

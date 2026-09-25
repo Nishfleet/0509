@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import { normaliseSubject } from "../identity/normalise";
 import { socialSchema } from "../identity/social";
 
 const CHANNEL_ID = /^UC[0-9A-Za-z_-]{22}$/;
@@ -47,11 +48,11 @@ export function isLostYoutubeChannel(status: number, contentType: string, body: 
 }
 
 export function channelIdFromUrl(url: string): string | null {
-	if (!URL.canParse(url)) return null;
-	const parts = new URL(url).pathname.split("/").filter((part) => part.length > 0);
-	const id = parts[0] === "channel" ? parts[1] : undefined;
-	if (id === undefined || !isYoutubeChannelId(id)) return null;
-	return id;
+	const normalised = normaliseSubject(url);
+	if (!normalised.ok || normalised.subject.platform !== "youtube") return null;
+	if (normalised.subject.kind !== "channel") return null;
+	if (!isYoutubeChannelId(normalised.subject.registrable)) return null;
+	return normalised.subject.registrable;
 }
 
 export function readWatchConfig(raw: string | null | undefined): WatchConfigRead {
@@ -97,12 +98,6 @@ export function channelIdFromIdentity(raw: string): string | null {
 	const url = youtubeUrlFromIdentity(raw);
 	if (url === null) return null;
 	return channelIdFromUrl(url);
-}
-
-export function lostChannelFlag(raw: string | null | undefined): LostChannelFlag | null {
-	const read = readWatchConfig(raw);
-	if (read.status !== "ok") return null;
-	return read.degraded;
 }
 
 export function withLostChannel(raw: string, at: string): string {
