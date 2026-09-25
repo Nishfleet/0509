@@ -1,6 +1,6 @@
 import type { ReactElement } from "react";
 
-import { POSSIBLY_LINE, type MentionRowModel } from "../lib/mention-feed";
+import { POSSIBLY_LINE, UNREVIEWED_LINE, type MentionRowModel } from "../lib/mention-feed";
 
 const WHEN_CLASS = "text-ink-soft mt-2 block font-mono text-meta uppercase";
 const TITLE = "font-display text-lg font-semibold [overflow-wrap:anywhere]";
@@ -23,6 +23,7 @@ export function MentionRow({ mention }: { mention: MentionRowModel }): ReactElem
         </a>
       </h3>
       {mention.treatment === "possibly" ? <p className="mt-2 leading-[1.65]">{POSSIBLY_LINE}</p> : null}
+      {mention.treatment === "unreviewed" ? <p className="mt-2 leading-[1.65]">{UNREVIEWED_LINE}</p> : null}
       <p className="mt-2 flex min-w-0 flex-wrap items-baseline gap-x-3 gap-y-1">
         <span data-testid="mention-source" className={PILL}>
           {mention.sourceName}
