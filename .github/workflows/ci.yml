@@ -170,6 +170,7 @@ jobs:
     permissions:
       contents: read
       issues: write
+      actions: write
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
       - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
@@ -211,7 +212,20 @@ jobs:
           ROWS=$(printf '%s\n' "$FILES" | grep -v '^$' | grep -F -f - .agents/skills/verify/feature-map.md | cut -d'|' -f2 || true)
           BODY=$(printf 'Run: %s\nHead: %s\nArtifact: playwright-report-production on that run\n\nFailing tests:\n%s\n\nFeature-map rows (.agents/skills/verify/feature-map.md):\n%s\n\nPacket rule: reproduce the failure with the verify skill (.agents/skills/verify/) against https://0509.io before changing code, and paste that run in the PR.\n' "$RUN_URL" "$SHA" "$FAILED" "$ROWS")
           N=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search "\"$TITLE\" in:title" --json number --jq '.[0].number // empty')
-          if [ -n "$N" ]; then gh issue comment "$N" --repo "$GITHUB_REPOSITORY" --body "$BODY"; else gh issue create --repo "$GITHUB_REPOSITORY" --title "$TITLE" --label needs-split --label critical-path --body "$BODY"; fi
+          if [ -n "$N" ]; then gh issue comment "$N" --repo "$GITHUB_REPOSITORY" --body "$BODY"; else
+            N=$(gh issue create --repo "$GITHUB_REPOSITORY" --title "$TITLE" --label agent-ready --label critical-path --body "$BODY" | grep -o '[0-9]*$')
+            # A GITHUB_TOKEN label fires no workflow, so dispatch by number;
+            # agent.yml's Gate sizes it. needs-split alone left #4620 unworked.
+            gh workflow run agent-dispatch.yml --repo "$GITHUB_REPOSITORY" -f issue="$N"
+          fi
+      - name: Close the issue once this check is green again
+        if: success()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          N=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search '"e2e-production red on main" in:title' --json number --jq '.[0].number // empty')
+          [ -z "$N" ] || gh issue close "$N" --repo "$GITHUB_REPOSITORY" --reason completed --comment "Green again on $RUN_URL."
 
   lighthouse:
     name: lighthouse
@@ -227,6 +241,7 @@ jobs:
     permissions:
       contents: read
       issues: write
+      actions: write
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
       - name: Exchange the Access service token for the CF_Authorization cookie
@@ -260,7 +275,20 @@ jobs:
           FAILED=$(printf '%s' "$ASSERTIONS" | jq -r '.[] | "- \(.auditId) \(.auditProperty // ""): actual \(.actual), budget \(.expected)"' || echo "- no assertion results: the job failed before the audit ran")
           BODY=$(printf "Run: %s\nHead: %s\nReport: %s\n\nFailed budgets (lighthouse-budget.json):\n%s\n\nFeature-map row (.agents/skills/verify/feature-map.md): \`/\`, the audited URL.\n\nPacket rule: reproduce the failure with the verify skill (.agents/skills/verify/) against https://0509.io before changing code, and paste that run in the PR.\n" "$RUN_URL" "$SHA" "$LINKS" "$FAILED")
           N=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search "\"$TITLE\" in:title" --json number --jq '.[0].number // empty')
-          if [ -n "$N" ]; then gh issue comment "$N" --repo "$GITHUB_REPOSITORY" --body "$BODY"; else gh issue create --repo "$GITHUB_REPOSITORY" --title "$TITLE" --label needs-split --label critical-path --body "$BODY"; fi
+          if [ -n "$N" ]; then gh issue comment "$N" --repo "$GITHUB_REPOSITORY" --body "$BODY"; else
+            N=$(gh issue create --repo "$GITHUB_REPOSITORY" --title "$TITLE" --label agent-ready --label critical-path --body "$BODY" | grep -o '[0-9]*$')
+            # A GITHUB_TOKEN label fires no workflow, so dispatch by number;
+            # agent.yml's Gate sizes it. needs-split alone left #4620 unworked.
+            gh workflow run agent-dispatch.yml --repo "$GITHUB_REPOSITORY" -f issue="$N"
+          fi
+      - name: Close the issue once this check is green again
+        if: success()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          N=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search '"lighthouse red on main" in:title' --json number --jq '.[0].number // empty')
+          [ -z "$N" ] || gh issue close "$N" --repo "$GITHUB_REPOSITORY" --reason completed --comment "Green again on $RUN_URL."
 
   # Opus 5 grades every PR (Nish 2026-09-22: "have opus 5 grade glm and ds4.1
   # flash"). Stock anthropics/claude-code-action on the Claude subscription
