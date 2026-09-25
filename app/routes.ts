@@ -11,6 +11,7 @@ export default [
     route("app/competitors", "routes/app.competitors.tsx"),
     route("app/competitors/:entityId", "routes/app.competitor.tsx"),
     route("app/alerts", "routes/app.alerts.tsx"),
+    route("app/brief/:digestId?", "routes/app.brief.tsx"),
     route("app/settings", "routes/app.settings.tsx"),
     route("app/settings/agents", "routes/settings.agents.tsx"),
     route("app/settings/brief-pause", "routes/settings.brief-pause.ts"),

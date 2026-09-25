@@ -38,7 +38,7 @@ async function seedCanarySource(slot: string): Promise<CanarySource> {
   )
     .bind(sourceId, `canary.test.${slot}`, LAST_GOOD)
     .run();
-  return { id: sourceId, pluginKey: "gdelt.doc", canaryQuery: "google" };
+  return { id: sourceId, pluginKey: "gdelt.doc", canaryQuery: "google", minIntervalSeconds: 0 };
 }
 
 async function readSource(sourceId: string) {
