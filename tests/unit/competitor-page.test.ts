@@ -4,7 +4,9 @@ import { MemoryRouter } from "react-router";
 import { describe, expect, it } from "vitest";
 
 import { CompetitorFrame, type CompetitorFrameProps, developmentsEmpty } from "../../app/components/competitor-frame";
+import type { RailSource } from "../../app/components/competitor-rail";
 import type { SiteChangeItemData } from "../../app/components/site-change-item";
+import { LOST_CHANNEL_REASON } from "../../app/lib/mentions/youtube-channel";
 import {
   CompetitorHeader,
   CompetitorSwitch,
@@ -40,6 +42,8 @@ const quiet: CompetitorFrameProps = {
   pages: 0,
   lastChecked: null,
   pausedOn: null,
+  sources: [],
+  now: Date.parse("2026-09-25T12:00:00.000Z"),
 };
 
 function frame(props: Partial<CompetitorFrameProps> = {}): string {
@@ -146,6 +150,38 @@ describe("the competitor page frame", () => {
     expect(html).not.toContain(">—<");
     expect(html.toLowerCase()).not.toContain("no data");
     expect(html).not.toContain("Ads running");
+  });
+
+  it("draws a YouTube source as a degraded pill with the lost-channel reason", () => {
+    const sources: RailSource[] = [
+      {
+        source: {
+          key: "youtube.channel_rss",
+          platform: "youtube",
+          is_enabled: 1,
+          config_json: "{}",
+          watch_config_json: JSON.stringify({
+            channelId: "UCaaaaaaaaaaaaaaaaaaaaaa",
+            degraded: {
+              state: "degraded",
+              reason: LOST_CHANNEL_REASON,
+              at: "2026-09-25T02:00:00.000Z",
+            },
+          }),
+        },
+        snapshot: null,
+      },
+    ];
+    const html = frame({ sources });
+    expect(html).toContain('data-state="degraded"');
+    expect(html).toContain(LOST_CHANNEL_REASON);
+    expect(html).not.toMatch(/>\s*Website\s*</);
+  });
+
+  it("falls back to the one-website line when no source has ever been stored", () => {
+    const html = frame({ sources: [] });
+    expect(html).toContain(">Website<");
+    expect(html).toContain("Homepage, read every night");
   });
 
   it("draws a change as the mark with its before-and-after capture plate", () => {
