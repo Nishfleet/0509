@@ -50,7 +50,8 @@ const defaultFetchText: FetchText = async (url) => {
       contentType: response.headers.get("content-type"),
       body: await response.text(),
     };
-  } catch {
+  } catch (error) {
+    console.error(JSON.stringify({ event: "discovery.hn_fetch_failed", error: String(error) }));
     return { ok: false, url, contentType: null, body: "" };
   }
 };

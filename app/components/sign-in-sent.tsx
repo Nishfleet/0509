@@ -4,6 +4,7 @@ import { useNavigation, useSubmit } from "react-router";
 import { MAGIC_LINK_TTL_SECONDS } from "../lib/auth/magic-link-email";
 import { cn } from "../lib/utils";
 import { Footer } from "./footer";
+import { TurnstileWidget, turnstileResponse } from "./turnstile-widget";
 import { Button } from "./ui/button";
 import { Wordmark } from "./wordmark";
 
@@ -13,7 +14,7 @@ export const SIGN_IN_SHELL = "mx-auto flex min-h-dvh w-full max-w-[420px] min-w-
 export const SIGN_IN_TITLE = "font-display text-display-2 mt-10 font-extrabold uppercase";
 export const SIGN_IN_LEDE = "text-ink-soft mt-3 leading-[1.55] [overflow-wrap:anywhere]";
 
-export function SignInSent({ email }: { email: string }) {
+export function SignInSent({ email, turnstileSiteKey }: { email: string; turnstileSiteKey: string }) {
   const submit = useSubmit();
   const busy = useNavigation().state !== "idle";
   const wait = useCountdown(RESEND_AFTER_SECONDS);
@@ -37,13 +38,14 @@ export function SignInSent({ email }: { email: string }) {
           If <strong className="text-ink font-semibold">{email}</strong> can sign in, a link is on its way. It works
           once and expires in {minutes} minutes.
         </p>
+        <TurnstileWidget siteKey={turnstileSiteKey} startOn="mount" />
         <Button
           type="button"
           variant="secondary"
           size="lg"
           className="mt-8 self-start"
           disabled={wait > 0 || busy}
-          onClick={() => void submit({ email }, { method: "post" })}
+          onClick={() => void submit({ email, "cf-turnstile-response": turnstileResponse() }, { method: "post" })}
         >
           {wait > 0 ? `Send it again in ${String(wait)}s` : busy ? "Sending…" : "Send it again"}
         </Button>

@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 
 import { createAuth, deleteSignedInUser } from "../../app/lib/auth.server";
 import { firstWorkspaceId } from "../../app/lib/workspace.server";
+import { readAccountDeleteProgress } from "../../app/lib/account-delete.server";
 
 const ORIGIN = "http://localhost:8787";
 const ADDRESS = "leaving@0509.io";
@@ -102,5 +103,81 @@ describe("delete my account", () => {
     expect(await introspector.getOutput()).toEqual({ deleted: 3 });
     const left = await env.SNAPSHOTS.list();
     expect(left.objects.map((object) => object.key)).toEqual(["snapshot/site/watch-staying/1.txt"]);
+  });
+
+  it("reports the Workflow's own progress for the deleted account", async () => {
+    await env.SNAPSHOTS.put("card/ws-leaving/share.png", "a");
+    await env.SNAPSHOTS.put("snapshot/site/watch-leaving/1.txt", "b");
+    await env.SNAPSHOTS.put("snapshot/site/watch-leaving/1.png", "c");
+
+    const id = "account-delete-progress";
+    await using introspector = await introspectWorkflowInstance(env.ACCOUNT_DELETE, id);
+    await env.ACCOUNT_DELETE.create({
+      id,
+      params: { prefixes: ["card/ws-leaving/", "snapshot/site/watch-leaving/"] },
+    });
+    await introspector.waitForStatus("complete");
+
+    expect(await readAccountDeleteProgress(id)).toEqual({ rows: "removed", files: "removed", deleted: 3 });
+    expect(await readAccountDeleteProgress("no-such-instance")).toBeNull();
+  });
+
+  it("reports the Workflow still removing while the deletion step is retrying", async () => {
+    const id = "account-delete-removing";
+    await using introspector = await introspectWorkflowInstance(env.ACCOUNT_DELETE, id);
+    await introspector.modify(async (modifier) => {
+      await modifier.mockStepError(
+        { name: "delete card/ws-leaving/ page 0" },
+        new Error("R2 is slow"),
+      );
+    });
+    await env.ACCOUNT_DELETE.create({
+      id,
+      params: { prefixes: ["card/ws-leaving/"] },
+    });
+
+    await introspector.waitForStatus("running");
+    expect(await readAccountDeleteProgress(id)).toEqual({ rows: "removed", files: "removing", deleted: null });
+  });
+
+  it("reports the Workflow stopped when the instance errored out", async () => {
+    const id = "account-delete-failed";
+    await using introspector = await introspectWorkflowInstance(env.ACCOUNT_DELETE, id);
+    await introspector.modify(async (modifier) => {
+      await modifier.disableRetryDelays();
+      await modifier.mockStepError(
+        { name: "delete card/ws-leaving/ page 0" },
+        new Error("R2 blew up"),
+      );
+    });
+    await env.ACCOUNT_DELETE.create({
+      id,
+      params: { prefixes: ["card/ws-leaving/"] },
+    });
+
+    await introspector.waitForStatus("errored");
+    expect(await readAccountDeleteProgress(id)).toEqual({ rows: "removed", files: "failed", deleted: null });
+  });
+
+  it("reports the Workflow stopped when the instance was terminated", async () => {
+    const id = "account-delete-terminated";
+    await using introspector = await introspectWorkflowInstance(env.ACCOUNT_DELETE, id);
+    await introspector.modify(async (modifier) => {
+      await modifier.mockStepError(
+        { name: "delete card/ws-leaving/ page 0" },
+        new Error("R2 is slow"),
+      );
+    });
+    await env.ACCOUNT_DELETE.create({
+      id,
+      params: { prefixes: ["card/ws-leaving/"] },
+    });
+    await introspector.waitForStatus("running");
+
+    const instance = await env.ACCOUNT_DELETE.get(id);
+    await instance.terminate();
+    await introspector.waitForStatus("terminated");
+
+    expect(await readAccountDeleteProgress(id)).toEqual({ rows: "removed", files: "failed", deleted: null });
   });
 });

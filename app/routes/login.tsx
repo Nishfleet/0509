@@ -1,30 +1,35 @@
 import type { Route } from "./+types/login";
 import { env } from "cloudflare:workers";
 import { useEffect, useState } from "react";
-import { Form, useActionData, useNavigate, useNavigation, useSearchParams } from "react-router";
+import { Form, useActionData, useLoaderData, useNavigate, useNavigation, useSearchParams } from "react-router";
 
-import { Footer } from "../components/footer";
+import { AccountDeleteNotice } from "../components/account-delete-notice";
 import { SIGN_IN_LEDE, SIGN_IN_SHELL, SIGN_IN_TITLE, SignInSent } from "../components/sign-in-sent";
+import { TurnstileWidget } from "../components/turnstile-widget";
 import { Wordmark } from "../components/wordmark";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
+import { Footer } from "../components/footer";
 import { safeReturnTo } from "../lib/agent/paths";
 import { authClient } from "../lib/auth-client";
+import { formMagicLinkRequest } from "../lib/auth/login-magic-link.server";
 import { handleAuthRequest } from "../lib/auth.server";
+import { readAccountDeleteProgress } from "../lib/account-delete.server";
 import { timezoneCookie } from "../lib/timezone";
-
-const TURNSTILE_SCRIPT = "https://challenges.cloudflare.com/turnstile/v0/api.js";
 
 export function meta() {
   return [{ title: "Sign in · Five to Nine" }];
 }
 
-export function loader() {
+export async function loader({ request }: Route.LoaderArgs) {
   const siteKey = env.TURNSTILE_SITE_KEY;
   if (typeof siteKey !== "string" || siteKey.trim().length === 0) {
     throw new Response("misconfigured: TURNSTILE_SITE_KEY", { status: 503 });
   }
-  return { turnstileSiteKey: siteKey.trim() };
+  const turnstileSiteKey = siteKey.trim();
+  const id = new URL(request.url).searchParams.get("deleted");
+  if (id === null || id === "") return { turnstileSiteKey, id: null, progress: null };
+  return { turnstileSiteKey, id, progress: await readAccountDeleteProgress(id) };
 }
 
 export async function action({ request }: Route.ActionArgs) {
@@ -35,52 +40,27 @@ export async function action({ request }: Route.ActionArgs) {
 
   const captchaField = form.get("cf-turnstile-response");
   const captcha = typeof captchaField === "string" ? captchaField.trim() : "";
-  const site = new URL(env.BETTER_AUTH_URL);
-  const headers = new Headers();
-  headers.set("content-type", "application/json");
-  const ip = request.headers.get("cf-connecting-ip");
-  if (typeof ip === "string" && ip.length > 0) headers.set("cf-connecting-ip", ip);
-  if (captcha.length > 0) headers.set("x-captcha-response", captcha);
-  const response = await handleAuthRequest(
-    env,
-    new Request(new URL("/api/auth/sign-in/magic-link", site), {
-      method: "POST",
-      headers,
-      body: JSON.stringify({
-        email,
-        callbackURL: safeReturnTo(new URL(request.url).searchParams.get("next")),
-      }),
-    }),
-  );
+  const callbackURL = safeReturnTo(new URL(request.url).searchParams.get("next"));
+  let response: Response;
+  try {
+    response = await handleAuthRequest(env, formMagicLinkRequest(env.BETTER_AUTH_URL, request, email, captcha, callbackURL));
+  } catch (error: unknown) {
+    console.error(JSON.stringify({ event: "login.magic_link_send_failed", error: String(error) }));
+    return { sent: { email, at: Date.now() } };
+  }
+
   const status = response.status;
-  await response.text();
-  if (status === 400 || status === 403) {
-    return { error: "Confirm you're a person, then we'll send the link." };
+  const detail = await response.text();
+  if (status === 400 || status === 403) return { error: "Confirm you're a person, then we'll send the link." };
+  if (status !== 200) {
+    console.error(JSON.stringify({ event: "login.magic_link_send_failed", status, error: detail.slice(0, 200) }));
   }
   return { sent: { email, at: Date.now() } };
 }
 
-function TurnstileWidget({ siteKey }: { siteKey: string }) {
-  useEffect(() => {
-    const email = document.getElementById("email");
-    if (!(email instanceof HTMLInputElement)) return;
-    let script: HTMLScriptElement | undefined;
-    const start = () => {
-      if (script) return;
-      script = Object.assign(document.createElement("script"), { src: TURNSTILE_SCRIPT, async: true });
-      document.head.appendChild(script);
-    };
-    email.addEventListener("focus", start);
-    return () => {
-      email.removeEventListener("focus", start);
-      if (script) script.remove();
-    };
-  }, []);
-  return <div className="cf-turnstile" data-sitekey={siteKey} data-appearance="interaction-only" data-response-field="true" data-response-field-name="cf-turnstile-response" />;
-}
-
-export default function Login({ loaderData }: Route.ComponentProps) {
+export default function Login() {
   const data = useActionData<typeof action>();
+  const deleted = useLoaderData<typeof loader>();
   const busy = useNavigation().state !== "idle";
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -96,7 +76,10 @@ export default function Login({ loaderData }: Route.ComponentProps) {
 
   async function signInWithPasskey() {
     setPasskeyState("working");
-    const result = await authClient.signIn.passkey().catch(() => null);
+    const result = await authClient.signIn.passkey().catch((error: unknown) => {
+      console.error(JSON.stringify({ event: "login.passkey_sign_in_failed", error: String(error) }));
+      return null;
+    });
     if (result && !result.error) {
       await navigate(safeReturnTo(searchParams.get("next")));
       return;
@@ -106,19 +89,26 @@ export default function Login({ loaderData }: Route.ComponentProps) {
   }
 
   if (data?.sent) {
-    return <SignInSent key={data.sent.at} email={data.sent.email} />;
+    return <SignInSent key={data.sent.at} email={data.sent.email} turnstileSiteKey={deleted.turnstileSiteKey} />;
   }
 
   return (
     <div className={SIGN_IN_SHELL}>
-      <header className="self-start"><Wordmark /></header>
+      <header className="self-start">
+        <Wordmark />
+      </header>
       <main className="flex flex-col">
         <h1 className={SIGN_IN_TITLE}>Sign in</h1>
         <p className={SIGN_IN_LEDE}>We email you a link. Tap it and you're in. There is no password.</p>
+        {deleted.progress === null || deleted.id === null ? null : (
+          <AccountDeleteNotice id={deleted.id} progress={deleted.progress} />
+        )}
         <Form method="post" className="mt-8 flex flex-col gap-3">
-          <label htmlFor="email" className="font-mono text-eyebrow text-ink-soft uppercase">Email</label>
+          <label htmlFor="email" className="font-mono text-eyebrow text-ink-soft uppercase">
+            Email
+          </label>
           <Input id="email" name="email" type="email" autoComplete="email" inputMode="email" required />
-          <TurnstileWidget siteKey={loaderData.turnstileSiteKey} />
+          <TurnstileWidget siteKey={deleted.turnstileSiteKey} startOn="email-focus" />
           <Button type="submit" size="lg" disabled={busy} className="mt-2">
             {busy ? "Sending…" : "Email me a link"}
           </Button>
