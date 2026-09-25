@@ -8,6 +8,7 @@ import { ONBOARDING_PAGE } from "../components/page-heading";
 import { StepBar } from "../components/step-bar";
 import { isTakenDown } from "../lib/data/takedown.server";
 import { readWorkspaceIdForOwner } from "../lib/data/workspace.server";
+import { readDraft, saveDraftField } from "../lib/identity/card-draft.server";
 import { startCard, withinProbeLimit } from "../lib/identity/card.server";
 import { confirmCard } from "../lib/identity/confirm.server";
 import { normaliseSubject } from "../lib/identity/normalise";
@@ -37,7 +38,15 @@ export async function loader({ request }: Route.LoaderArgs) {
   if (screened.kind !== "proceed") throw redirect("/onboarding");
   if (!(await withinProbeLimit(session.user.id))) return { card: null, limited: true };
   const shown = subject.kind === "domain" ? subject.registrable : (subject.url ?? `@${subject.registrable}`);
-  return { card: { subject: raw, domain: shown, ...startCard(workspaceId, subject) }, limited: false };
+  return {
+    card: {
+      subject: raw,
+      domain: shown,
+      ...startCard(workspaceId, subject),
+      draft: await readDraft(workspaceId, subject.registrable),
+    },
+    limited: false,
+  };
 }
 
 export async function action({ request }: Route.ActionArgs) {
@@ -45,6 +54,22 @@ export async function action({ request }: Route.ActionArgs) {
   const workspaceId = await readWorkspaceIdForOwner(session.user.id);
   if (workspaceId === null) throw redirect("/onboarding");
   const form = await request.formData();
+  if (form.get("intent") === "draft") {
+    const draftSubject = form.get("subject");
+    const field = form.get("field");
+    const value = form.get("value");
+    if (
+      typeof draftSubject === "string" &&
+      (field === "name" || field === "description") &&
+      typeof value === "string"
+    ) {
+      const normalised = normaliseSubject(draftSubject);
+      if (normalised.ok) {
+        await saveDraftField(workspaceId, normalised.subject.registrable, field, value);
+      }
+    }
+    return null;
+  }
   const rawSubject = form.get("subject");
   if (typeof rawSubject === "string") {
     const normalised = normaliseSubject(rawSubject);
@@ -91,6 +116,7 @@ export default function Page({ loaderData, actionData }: Route.ComponentProps) {
             domain={card.domain}
             site={card.site}
             logo={card.logo}
+            draft={card.draft}
             message={actionData?.message}
           />
         </>
