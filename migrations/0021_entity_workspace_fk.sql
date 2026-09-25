@@ -329,9 +329,6 @@ CREATE VIEW change AS
          summary, evidence_url, observed_at
   FROM signal WHERE kind = 'change' AND is_tombstoned = 0;
 
-SELECT COUNT(*) FROM mention;
-SELECT COUNT(*) FROM change;
-
 INSERT INTO _fk_phase_guard (name, ok)
 SELECT 'restored_signal', CASE WHEN NOT EXISTS (
   SELECT 1 FROM signal_hold AS h LEFT JOIN signal AS s ON s.id = h.id WHERE s.id IS NULL

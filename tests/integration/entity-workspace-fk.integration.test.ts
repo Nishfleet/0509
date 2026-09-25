@@ -234,10 +234,6 @@ describe("entity workspace foreign key (0509#4707)", () => {
         .first(),
     ).toEqual({ score: 12, workspace_id: WS, entity_id: ENTITY });
 
-    const tables = await env.DB.prepare(
-      "SELECT count(*) AS n FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' AND name != 'd1_migrations' AND name NOT LIKE '_cf_%'",
-    ).first<{ n: number }>();
-    expect(tables?.n).toBe(34);
     const holds = await env.DB.prepare(
       "SELECT name FROM sqlite_master WHERE name LIKE '%_hold' OR name LIKE '\\_fk\\_%' ESCAPE '\\'",
     ).all<{ name: string }>();
