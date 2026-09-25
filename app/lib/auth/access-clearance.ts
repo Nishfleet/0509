@@ -32,7 +32,7 @@ function tokenFrom(request: Request): string {
   return "";
 }
 
-function bytesFromBase64Url(part: string): Uint8Array | undefined {
+function bytesFromBase64Url(part: string): Uint8Array<ArrayBuffer> | undefined {
   try {
     const padded = part.replaceAll("-", "+").replaceAll("_", "/") + "=".repeat((4 - (part.length % 4)) % 4);
     const binary = atob(padded);
