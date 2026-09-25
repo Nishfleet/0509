@@ -93,9 +93,9 @@ describe("startCard", () => {
     const run = vi.fn(() =>
       Promise.resolve({
         answers: {
-          "identity_field_confidence.name": { type: "noul", noul: p },
-          "identity_field_confidence.description": { type: "noul", noul: p },
-          "identity_field_confidence.socials": { type: "noul", noul: p },
+          "identity_field_confidence.name": { type: "boolean", probability: p },
+          "identity_field_confidence.description": { type: "boolean", probability: p },
+          "identity_field_confidence.socials": { type: "boolean", probability: p },
         },
       }),
     );
