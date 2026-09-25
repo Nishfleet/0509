@@ -1,7 +1,10 @@
 import { env } from "cloudflare:workers";
 
-import { parseSiteChangePayload } from "../site-change";
 import type { ShotWhich } from "./alerts-feed";
+import { readChangeShot } from "../site-changes.server";
+import { readSiteChangePayload } from "../data/signal.server";
+
+const SHOT_PREFIX = "snapshot/site/";
 
 const BANDS = ["publish", "uncertain", "alert", "check"] as const;
 
@@ -34,20 +37,11 @@ function publishedKeys(json: string): PublishedKeys | null {
   return { screenshotKey, previousScreenshotKey };
 }
 
-function publishedShot(json: string, which: ShotWhich): string | null {
+function shotKey(json: string, which: ShotWhich): string | null {
   const keys = publishedKeys(json);
   if (keys === null) return null;
-  return which === "before" ? keys.previousScreenshotKey : keys.screenshotKey;
-}
-
-function sweptShot(json: string, which: ShotWhich): string | null {
-  const swept = parseSiteChangePayload(json);
-  if (swept === null) return null;
-  return swept[which].screenshotKey;
-}
-
-function shotKey(json: string, which: ShotWhich): string | null {
-  return publishedShot(json, which) ?? sweptShot(json, which);
+  const key = which === "before" ? keys.previousScreenshotKey : keys.screenshotKey;
+  return key?.startsWith(SHOT_PREFIX) === true ? key : null;
 }
 
 export async function loadShot(
@@ -55,11 +49,10 @@ export async function loadShot(
   signalId: string,
   which: ShotWhich,
 ): Promise<R2ObjectBody | null> {
-  const row = await env.DB.prepare("SELECT payload_json FROM signal WHERE id = ? AND workspace_id = ?")
-    .bind(signalId, workspaceId)
-    .first<{ payload_json: string | null }>();
-  if (row === null) return null;
-  const key = row.payload_json === null ? null : shotKey(row.payload_json, which);
+  const swept = await readChangeShot(workspaceId, signalId, which);
+  if (swept !== null) return swept;
+  const json = await readSiteChangePayload(workspaceId, signalId);
+  const key = json === null ? null : shotKey(json, which);
   if (key === null) return null;
   return await env.SNAPSHOTS.get(key);
 }
