@@ -44,6 +44,15 @@ const STATE_NAME = "fixture";
 const isBreakMode = (value: string | null): value is BreakMode =>
   value === "off" || value === "hard" || value === "soft";
 
+type WallState = "on" | "off";
+
+const WALL_KEY = "bot-wall";
+const WALL_PAGE =
+  '<!doctype html><html><head><title>Just a moment...</title></head><body><p>Checking if the site connection is secure</p></body></html>';
+
+const isWallState = (value: string | null): value is WallState =>
+  value === "on" || value === "off";
+
 type PriceVariant = "base" | "raised";
 
 const PRICE_KEY = "price-variant";
@@ -109,6 +118,14 @@ export default {
     if (url.pathname === "/__price") {
       return price(request, env);
     }
+    if (url.pathname === "/__wall") {
+      return wall(request, env);
+    }
+
+    const walled = await env.STATE.getByName(STATE_NAME).get(WALL_KEY);
+    if (walled === "on") {
+      return new Response(WALL_PAGE, { status: 403, headers: HTML_HEADERS });
+    }
 
     const stored = await env.STATE.getByName(STATE_NAME).get(BREAK_KEY);
     const mode: BreakMode = isBreakMode(stored) ? stored : "off";
@@ -161,6 +178,19 @@ async function flip(request: Request, env: FixtureEnv): Promise<Response> {
   }
   await env.STATE.getByName(STATE_NAME).put(BREAK_KEY, requested);
   return new Response(`break mode set to ${requested}`, { status: 200 });
+}
+
+async function wall(request: Request, env: FixtureEnv): Promise<Response> {
+  const denied = authorize(request, env);
+  if (denied) {
+    return denied;
+  }
+  const requested = new URL(request.url).searchParams.get("state");
+  if (!isWallState(requested)) {
+    return new Response("state must be on or off", { status: 400 });
+  }
+  await env.STATE.getByName(STATE_NAME).put(WALL_KEY, requested);
+  return new Response(`bot wall set to ${requested}`, { status: 200 });
 }
 
 async function price(request: Request, env: FixtureEnv): Promise<Response> {
