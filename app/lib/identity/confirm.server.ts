@@ -1,12 +1,12 @@
 import { z } from "zod";
 
-import { insertSelfEntity } from "../data/entity.server";
-import { startDiscovery } from "../discovery/start.server";
+import { insertSelfEntity, readWorkspaceSelfId } from "../data/entity.server";
 import { readUrl } from "../fetch/transport.server";
 import { extractIdentity } from "./extract";
+import { readLogo } from "./logo-store.server";
 import { normaliseSubject, type Subject } from "./normalise";
 import { classifyNavPages } from "./page-role.server";
-import { readLogo } from "./logo-store.server";
+import { startIdentityTail } from "./tail.server";
 
 const SOCIAL_PREFIX = "social.";
 
@@ -41,7 +41,12 @@ async function classifyConfirmedSite(
   if (subject.kind !== "domain" || subject.url === null) return;
   try {
     const page = await readUrl(subject.url);
-    if (!page.ok) return;
+    if (!page.ok) {
+      console.log(
+        JSON.stringify({ event: "identity-page-role-skipped", subject: subject.registrable, error: page.detail }),
+      );
+      return;
+    }
     const extract = await extractIdentity(page.html, subject.url);
     await classifyNavPages(workspaceId, { id: entityId, domain: subject.registrable }, extract.navPages, now.toISOString());
   } catch (error) {
@@ -81,7 +86,15 @@ export async function confirmCard(workspaceId: string, form: FormData): Promise<
     }),
     now: now.toISOString(),
   });
-  await classifyConfirmedSite(workspaceId, subject, id, now);
-  await startDiscovery(workspaceId, now);
+  const entityId = await readWorkspaceSelfId(workspaceId);
+  if (entityId === null) return false;
+  await classifyConfirmedSite(workspaceId, subject, entityId, now);
+  await startIdentityTail({
+    workspaceId,
+    entityId,
+    name: card.name,
+    domain: subject.registrable,
+    homepageUrl: subject.kind === "domain" ? subject.url : null,
+  });
   return true;
 }

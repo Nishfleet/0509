@@ -1,4 +1,5 @@
 import { env } from "cloudflare:workers";
+import { z } from "zod";
 
 import type { FreshnessSource } from "../../components/freshness-line";
 
@@ -54,6 +55,17 @@ interface WorkspaceMentionSourceRow {
 export async function readEnabledSourceId(key: string): Promise<string | null> {
   const row = await env.DB.prepare(ENABLED_SOURCE_ID).bind(key).first<{ id: string }>();
   return row?.id ?? null;
+}
+
+const ENABLED_BY_KIND = "SELECT id, key FROM source WHERE kind = ?1 AND is_enabled = 1 ORDER BY key";
+
+const enabledSourceRows = z.array(z.object({ id: z.string(), key: z.string() }));
+
+export async function readEnabledSources(
+  kind: "ads" | "mentions" | "site" | "hiring",
+): Promise<{ id: string; key: string }[]> {
+  const rows = await env.DB.prepare(ENABLED_BY_KIND).bind(kind).all();
+  return enabledSourceRows.parse(rows.results);
 }
 
 const CANARY_SOURCES = `SELECT id, plugin_key, canary_query,

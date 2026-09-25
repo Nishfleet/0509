@@ -5,7 +5,7 @@ export interface NewPage {
   id: string;
   entityId: string;
   url: string;
-  role: "home";
+  role: "home" | "pricing";
   discoveredAt: string;
 }
 
