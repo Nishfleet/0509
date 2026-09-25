@@ -34,10 +34,23 @@ export interface ChoiceVerdict {
   cached: boolean;
 }
 
+const booleanType = z.literal("boolean");
+
+const booleanQuestionSchema = z.object({
+  type: booleanType,
+  instructions: z.string(),
+  criteria: z.object({
+    true: z.string(),
+    false: z.string(),
+  }),
+});
+
+type BooleanQuestion = z.infer<typeof booleanQuestionSchema>;
+
 const answerSchema = z.object({
   answers: z.record(
     z.string(),
-    z.object({ type: z.literal("boolean"), probability: z.number().min(0).max(1) }),
+    z.object({ type: booleanType, probability: z.number().min(0).max(1) }),
   ),
 });
 
@@ -65,7 +78,17 @@ function inputHash(workspaceId: string, question: NoulQuestion, state: unknown):
   );
 }
 
+function booleanQuestion(question: NoulQuestion): BooleanQuestion {
+  const body = {
+    type: "boolean",
+    instructions: question.instructions,
+    criteria: { true: question.whenTrue, false: question.whenFalse },
+  } satisfies BooleanQuestion;
+  return booleanQuestionSchema.parse(body);
+}
+
 async function run(question: NoulQuestion, state: unknown): Promise<number> {
+  const asked = booleanQuestion(question);
   let raw: unknown;
   try {
     raw = await env.AI.run(
@@ -73,11 +96,7 @@ async function run(question: NoulQuestion, state: unknown): Promise<number> {
       {
         state,
         questions: {
-          [question.id]: {
-            type: "boolean",
-            instructions: question.instructions,
-            criteria: { true: question.whenTrue, false: question.whenFalse },
-          },
+          [question.id]: asked,
         },
       },
       { gateway: { id: GATEWAY_ID } },
@@ -114,22 +133,14 @@ export async function askNouls(
   const pending = entries.filter((entry) => entry.cached === null);
   let answers: NoulAnswers = {};
   if (pending.length > 0) {
+    const asked = Object.fromEntries(pending.map((entry) => [entry.question.id, booleanQuestion(entry.question)]));
     let raw: unknown;
     try {
       raw = await env.AI.run(
         MODEL,
         {
           state,
-          questions: Object.fromEntries(
-            pending.map((entry) => [
-              entry.question.id,
-              {
-                type: "boolean",
-                instructions: entry.question.instructions,
-                criteria: { true: entry.question.whenTrue, false: entry.question.whenFalse },
-              },
-            ]),
-          ),
+          questions: asked,
         },
         { gateway: { id: GATEWAY_ID } },
       );
