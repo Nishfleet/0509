@@ -10,18 +10,15 @@ updates:
     cooldown:
       default-days: 7
     groups:
-      npm-major:
-        update-types: [major]
       npm-minor-patch:
         update-types: [minor, patch]
-    # A major that cannot install must never reopen a red, ownerless PR.
-    # typescript-eslint@8.70.1 still peers typescript <6.1 (0509#4913), and
-    # @cloudflare/vitest-plugin peers vitest ^4.1 (0509#4915).
+    # Majors stay manual. Every major this repo has seen arrived red and
+    # ownerless, and the rework path only follows claim/issue-* branches.
+    # typescript 7 needs typescript-eslint to peer >=6.1 and vitest 5 needs a
+    # pool that peers 5.x; neither exists (0509#4913, 0509#4915).
     ignore:
-      - dependency-name: typescript
-        versions: ['>=7.0.0']
-      - dependency-name: vitest
-        versions: ['>=5.0.0']
+      - dependency-name: '*'
+        update-types: ['version-update:semver-major']
   - package-ecosystem: github-actions
     directory: /
     schedule:
