@@ -25,7 +25,8 @@ function publicHttps(raw: string): boolean {
   let url: URL;
   try {
     url = new URL(raw);
-  } catch {
+  } catch (error) {
+    console.error(JSON.stringify({ event: "identity.logo_url_parse_failed", error: String(error) }));
     return false;
   }
   if (url.protocol !== "https:") return false;

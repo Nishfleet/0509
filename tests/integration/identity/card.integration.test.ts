@@ -1,7 +1,7 @@
 import { env } from "cloudflare:test";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { startCard } from "../../../app/lib/identity/card.server";
+import { readCachedSiteProof, startCard } from "../../../app/lib/identity/card.server";
 import { confirmCard } from "../../../app/lib/identity/confirm.server";
 import { extractIdentity } from "../../../app/lib/identity/extract";
 import { normaliseSubject } from "../../../app/lib/identity/normalise";
@@ -301,5 +301,23 @@ describe("confirmCard", () => {
       form({ subject: "gymshark.com", name: "Gymshark", description: "", "social.x": "javascript:alert(1)" }),
     );
     expect(saved).toBe(false);
+  });
+});
+
+describe("readCachedSiteProof", () => {
+  const subject = subjectFor("proof-test.example");
+  const key = probeKey(subject, "homepage");
+
+  afterEach(async () => {
+    await env.IDENTITY_CACHE.delete(key);
+  });
+
+  it("returns empty hints when the cache has no entry", async () => {
+    await expect(readCachedSiteProof(subject)).resolves.toEqual({ adLibraryHints: [], navLinks: [] });
+  });
+
+  it("throws when the cached entry does not match the site card", async () => {
+    await env.IDENTITY_CACHE.put(key, JSON.stringify({ name: 1 }));
+    await expect(readCachedSiteProof(subject)).rejects.toThrow();
   });
 });

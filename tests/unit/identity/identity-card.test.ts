@@ -42,6 +42,22 @@ function input(html: string, marker: string): string {
 	return tag === undefined ? "" : tag.slice(0, tag.indexOf(">") + 1);
 }
 
+function button(html: string, marker: string): string {
+	const tag = html.split("<button ").find((part) => part.includes(marker));
+	return tag === undefined ? "" : tag.slice(0, tag.indexOf(">") + 1);
+}
+
+function accessibleName(html: string, marker: string): string {
+	const tag = html.split("<button ").find((part) => part.includes(marker));
+	if (tag === undefined) return "";
+	const inner = tag.slice(tag.indexOf(">") + 1, tag.indexOf("</button>"));
+	return inner
+		.split("<")
+		.map((part, index) => (index === 0 ? part : part.slice(part.indexOf(">") + 1)))
+		.join("")
+		.trim();
+}
+
 describe("the identity card fields", () => {
 	it("fills every field Jev was sure about, and marks nothing to check", () => {
 		const html = render(site({ name: "fill", description: "fill", socials: "fill" }));
@@ -49,6 +65,35 @@ describe("the identity card fields", () => {
 		expect(input(html, 'name="name"')).toContain('value="Gymshark"');
 		expect(html).toContain(`value="${INSTAGRAM}"`);
 		expect(html).not.toContain("check this");
+	});
+
+	it("names each edit button by its field and its current value", () => {
+		const html = render(site({ name: "fill", description: "fill", socials: "fill" }));
+
+		expect(accessibleName(html, "edit name: ")).toBe("edit name: Gymshark");
+		expect(accessibleName(html, "edit about: ")).toBe("edit about: performance apparel");
+		expect(html).not.toContain('aria-label="edit ');
+		expect(button(html, "edit name: ")).toContain("min-h-11");
+		expect(button(html, "edit about: ")).toContain("min-h-11");
+	});
+
+	it("ties the check-this marker to the edit button it qualifies", () => {
+		const html = render(site({ name: "check", description: "fill", socials: "fill" }));
+
+		const id = /aria-describedby="([^"]+)"/.exec(html)?.[1];
+		expect(id).toBeDefined();
+		const marker = new RegExp(`<span id="${id}"[^>]*>([^<]*)</span>`).exec(html);
+		expect(marker?.[1].trim()).toBe("check this");
+		expect(accessibleName(html, `aria-describedby="${id}"`)).toBe("edit name: Gymshark");
+	});
+
+	it("gives an unsure social a 44px labelled row", () => {
+		const html = render(site({ name: "fill", description: "fill", socials: "check" }));
+
+		const label = /<label[^>]*>[\s\S]*?<\/label>/.exec(html)?.[0] ?? "";
+		expect(label).toContain("min-h-11");
+		expect(label).toContain(`value="${INSTAGRAM}"`);
+		expect(label).toContain(`>${INSTAGRAM}</span>`);
 	});
 
 	it("holds a name Jev was unsure about as placeholder text inside a check-this row, never as the value", () => {
@@ -98,6 +143,16 @@ describe("the identity card fields", () => {
 		expect(input(html, 'name="name"')).toContain('value="My Brand"');
 		expect(html).not.toContain('value="Gymshark"');
 		expect(html).toContain("my line");
+	});
+
+	it("keeps a saved draft on a field under review, so a reload holds the edit Jev marked check", () => {
+		const html = render(
+			site({ name: "check", description: "check", socials: "fill" }),
+			{ name: "My Brand", description: "my line" },
+		);
+
+		expect(input(html, 'name="name"')).toContain('value="My Brand"');
+		expect(input(html, 'name="description"')).toContain('value="my line"');
 	});
 
 	it("promises the hourly fill on an unread site, never the after-first-crawl line", () => {
