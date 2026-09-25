@@ -3,46 +3,59 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it } from "vitest";
+import { createRoutesStub } from "react-router";
+import { describe, expect, it, vi } from "vitest";
 
-import Landing, { handle, links as landingLinks } from "../../app/routes/landing";
-import { links as productLinks } from "../../app/routes/faces-layout";
+vi.mock("../../app/lib/auth.server", () => ({
+  hasSessionCookie: () => false,
+}));
+
+import { Layout } from "../../app/root";
+import Landing from "../../app/routes/landing";
 
 const REPO_ROOT = dirname(dirname(dirname(fileURLToPath(import.meta.url))));
-const HERO_FACE = "/fonts/bricolage-hero.woff2";
-const FULL_FACE = "/fonts/bricolage-grotesque-latin.woff2";
 
-function hrefOf(descriptor: { href?: string } | string): string {
-  return typeof descriptor === "string" ? descriptor : (descriptor.href ?? "");
-}
-
-function preloads(descriptors: readonly ({ rel?: string; as?: string; href?: string } | string)[], as: string): string[] {
-  return descriptors
-    .filter((descriptor) => typeof descriptor !== "string" && descriptor.rel === "preload" && descriptor.as === as)
-    .map(hrefOf);
+function renderDocument(id: string): string {
+  const Stub = createRoutesStub([
+    {
+      id,
+      path: "/",
+      Component: () => createElement(Layout, null, createElement(Landing)),
+    },
+  ]);
+  return renderToStaticMarkup(createElement(Stub, { initialEntries: ["/"] }));
 }
 
 describe("landing LCP critical path", () => {
-  it("ships the headline in the first markup and preloads styles ahead of the small face", () => {
-    const html = renderToStaticMarkup(createElement(Landing));
+  it("paints the headline from the server markup without a module script", () => {
+    const html = renderDocument("routes/landing");
     expect(html).toContain("Know where you stand.");
-    expect(html).not.toContain(FULL_FACE);
+    expect(html).toContain('rel="preload"');
+    expect(html).toContain("/fonts/bricolage-hero.woff2");
+    expect(html).not.toContain("bricolage-grotesque-latin");
+    expect(html).not.toContain("instrument-sans");
+    expect(html).not.toContain('type="module"');
+    expect(html).not.toContain("modulepreload");
+  });
 
-    const landing = landingLinks();
-    expect(preloads(landing, "font")).toEqual([HERO_FACE]);
-    expect(handle.scripts).toBe(false);
-    expect(landing.map(hrefOf).join(" ")).not.toContain("bricolage-grotesque-latin");
+  it("still ships the module script and the body face on every other document", () => {
+    const html = renderDocument("routes/login");
+    expect(html).toContain("<script");
+    expect(html).toContain("/fonts/instrument-sans-latin.woff2");
+    expect(html).toContain("/fonts/bricolage-hero.woff2");
+  });
 
+  it("keeps the headline face small and the text faces in the one stylesheet", () => {
+    const css = readFileSync(join(REPO_ROOT, "app/app.css"), "utf8");
+    for (const family of ["Bricolage Grotesque", "Instrument Sans", "IBM Plex Mono"]) {
+      expect(css).toContain(`font-family: "${family}"`);
+    }
+    expect(css).toContain("/fonts/bricolage-hero.woff2");
+    expect(css).toContain("/fonts/instrument-sans-latin.woff2");
+    expect(css).toContain("/fonts/ibm-plex-mono-latin-400.woff2");
+    expect(css).toContain("/fonts/ibm-plex-mono-latin-500.woff2");
     const shipped = readFileSync(join(REPO_ROOT, "public/fonts/bricolage-hero.woff2"));
     expect(shipped.subarray(0, 4).toString("ascii")).toBe("wOF2");
     expect(shipped.length).toBeLessThan(12_000);
-  });
-
-  it("preloads the full display and body faces for every other document", () => {
-    const head = productLinks().map(hrefOf);
-    expect(head).toContain(FULL_FACE);
-    expect(head).toContain("/fonts/instrument-sans-latin.woff2");
-    expect(head.join(" ")).not.toContain("data:font");
-    expect(head).not.toContain(HERO_FACE);
   });
 });

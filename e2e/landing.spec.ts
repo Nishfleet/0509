@@ -16,6 +16,7 @@ test("the landing document paints without a module graph", async ({ page }) => {
   expect(head).not.toContain('rel="modulepreload"');
   expect(head).toContain("/fonts/bricolage-hero.woff2");
   expect(head).not.toContain("bricolage-grotesque-latin");
+  expect(head).not.toContain('type="module"');
 });
 
 test("the landing renders its sections in order under one headline", async ({ page }) => {
@@ -46,7 +47,7 @@ test("the hero's first viewport holds the outcome and the one priced input", asy
   });
   page.on("pageerror", (error) => consoleErrors.push(error.message));
   page.on("request", (request) => {
-    if (request.url().includes("bricolage-grotesque-latin")) fullFace.push(request.url());
+    if (request.url().includes("/fonts/")) fullFace.push(request.url());
   });
 
   await page.goto(PATH);
@@ -100,10 +101,27 @@ test("the hero's first viewport holds the outcome and the one priced input", asy
     const texts = await Promise.all(hrefs.map((href) => fetch(href).then((response) => response.text())));
     return texts.join("\n");
   });
-  expect(styles).toContain("Bricolage Grotesque");
+  expect(styles).toContain('font-family: "Bricolage Grotesque"');
+  expect(styles).toContain('font-family: "Instrument Sans"');
+  expect(styles).toContain('font-family: "IBM Plex Mono"');
   expect(styles).toContain("/fonts/bricolage-hero.woff2");
-  expect(styles).not.toContain("bricolage-grotesque-latin");
-  expect(fullFace).toEqual([]);
+  expect(styles).toContain("/fonts/instrument-sans-latin.woff2");
+  expect(styles).toContain("/fonts/ibm-plex-mono-latin-400.woff2");
+  expect(styles).toContain("/fonts/ibm-plex-mono-latin-500.woff2");
+  const requested = fullFace.join(" ");
+  expect(requested).toContain("bricolage-hero.woff2");
+  expect(requested).toContain("instrument-sans-latin.woff2");
+  expect(requested).toContain("ibm-plex-mono");
+  expect(requested).not.toContain("bricolage-grotesque-latin");
+  const loaded = await page.evaluate(async () => {
+    await document.fonts.ready;
+    return {
+      display: document.fonts.check('800 16px "Bricolage Grotesque"'),
+      sans: document.fonts.check('400 16px "Instrument Sans"'),
+      mono: document.fonts.check('400 16px "IBM Plex Mono"'),
+    };
+  });
+  expect(loaded).toEqual({ display: true, sans: true, mono: true });
   await expect(page.locator('link[rel="preload"][href="/fonts/bricolage-hero.woff2"]')).toHaveCount(1);
   await expect(page.locator('link[rel="modulepreload"]')).toHaveCount(0);
 

@@ -39,15 +39,6 @@ test("an unknown path is a 404 page with one action", async ({ page }, testInfo)
   await expect(action).toHaveText("Back to the landing");
   await expect(action).toHaveAttribute("href", "/");
 
-  const styles = await page.evaluate(async () => {
-    const hrefs = [...document.querySelectorAll('link[rel="stylesheet"]')].flatMap((node) =>
-      node instanceof HTMLLinkElement ? [node.href] : [],
-    );
-    const texts = await Promise.all(hrefs.map((href) => fetch(href).then((response) => response.text())));
-    return texts.join("\n");
-  });
-  expect(styles).toContain("bricolage-grotesque-latin");
-
   const overflow = await page.evaluate(
     () => document.documentElement.scrollWidth > document.documentElement.clientWidth,
   );

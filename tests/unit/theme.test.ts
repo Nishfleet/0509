@@ -5,8 +5,6 @@ import { fileURLToPath } from "node:url";
 import { compile } from "tailwindcss";
 import { describe, expect, it } from "vitest";
 
-import { links as productFaceLinks } from "../../app/routes/faces-layout";
-
 // #3984: one stylesheet of colour, type and motion tokens. DESIGN.md is the
 // authority; this test reads §3 (type scale), §4 (colour) and §9 (motion) as
 // DATA and asserts app/app.css resolves every token they name to the documented
@@ -464,14 +462,12 @@ describe("the one stylesheet stays the one stylesheet (#3984)", () => {
   });
 
   it("self-hosts the three faces with font-display: swap and no Google link", async () => {
-    const css = [
-      await readFile(path.join(REPO_ROOT, "app/fonts-display.css"), "utf8"),
-      await readFile(path.join(REPO_ROOT, "app/fonts-text.css"), "utf8"),
-    ].join("\n");
+    const css = await readFile(path.join(REPO_ROOT, "app/app.css"), "utf8");
     for (const family of ["Bricolage Grotesque", "Instrument Sans", "IBM Plex Mono"]) {
       expect(css).toContain(`font-family: "${family}"`);
     }
     for (const file of [
+      "bricolage-hero.woff2",
       "bricolage-grotesque-latin.woff2",
       "instrument-sans-latin.woff2",
       "ibm-plex-mono-latin-400.woff2",
@@ -495,13 +491,11 @@ describe("the one stylesheet stays the one stylesheet (#3984)", () => {
     expect(css).not.toMatch(/border-radius:\s*(?:0\.[0-9]|[1-9])/);
   });
 
-  it("preloads the full display and body faces from the product layout", () => {
-    const hrefs = productFaceLinks()
-      .map((link) => link.href ?? "")
-      .join(" ");
-    expect(hrefs).toContain("/fonts/bricolage-grotesque-latin.woff2");
-    expect(hrefs).toContain("/fonts/instrument-sans-latin.woff2");
-    expect(hrefs).not.toContain("fonts.googleapis.com");
-    expect(hrefs).not.toContain("fonts.gstatic.com");
+  it("wires the token names into root.tsx's font preload links", async () => {
+    const root = await readFile(path.join(REPO_ROOT, "app/root.tsx"), "utf8");
+    expect(root).toContain("bricolage-hero.woff2");
+    expect(root).toContain("instrument-sans-latin.woff2");
+    expect(root).not.toContain("fonts.googleapis.com");
+    expect(root).not.toContain("fonts.gstatic.com");
   });
 });

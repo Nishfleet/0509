@@ -1,26 +1,37 @@
-import { Links, Meta, Outlet, Scripts, ScrollRestoration, unstable_useRoute } from "react-router";
+import { isRouteErrorResponse, Links, Meta, Outlet, Scripts, ScrollRestoration, useMatches } from "react-router";
 
 import type { Route } from "./+types/root";
-import { ProductError } from "./components/error-page";
+import { ErrorPage } from "./components/error-page";
 import { Toaster } from "./components/toaster";
 import { hasSessionCookie } from "./lib/auth.server";
 import "./app.css";
 
 export function Layout({ children }: { children: React.ReactNode }) {
-  const scripts = unstable_useRoute("routes/landing")?.handle.scripts !== false;
+  const landing = useMatches().some((match) => match.id === "routes/landing");
   return (
     <html lang="en">
       <head>
         <meta charSet="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <link
+          rel="preload"
+          href="/fonts/bricolage-hero.woff2"
+          as="font"
+          type="font/woff2"
+          crossOrigin="anonymous"
+          fetchPriority="high"
+        />
+        {landing ? null : (
+          <link rel="preload" href="/fonts/instrument-sans-latin.woff2" as="font" type="font/woff2" crossOrigin="anonymous" />
+        )}
         <Meta />
         <Links />
       </head>
       <body>
         {children}
         <Toaster />
-        {scripts ? <ScrollRestoration /> : null}
-        {scripts ? <Scripts /> : null}
+        {landing ? null : <ScrollRestoration />}
+        {landing ? null : <Scripts />}
       </body>
     </html>
   );
@@ -38,11 +49,15 @@ export function loader({ request }: Route.LoaderArgs) {
 }
 
 export function ErrorBoundary({ error, loaderData }: Route.ErrorBoundaryProps) {
+  const notFound = isRouteErrorResponse(error) && error.status === 404;
+  const signedIn = loaderData?.signedIn === true;
+  const where = loaderData?.pathname ?? "this address";
   return (
-    <ProductError
-      error={error}
-      signedIn={loaderData?.signedIn === true}
-      pathname={loaderData?.pathname ?? "this address"}
+    <ErrorPage
+      title={notFound ? "This page is not here" : "The product hit a problem"}
+      detail={notFound ? `Nothing in the product lives at ${where}.` : "We have been told."}
+      actionHref={signedIn ? "/app" : "/"}
+      actionLabel={signedIn ? "Back to home" : "Back to the landing"}
     />
   );
 }

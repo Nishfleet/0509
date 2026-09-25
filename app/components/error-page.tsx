@@ -1,26 +1,4 @@
-import { isRouteErrorResponse } from "react-router";
-
-export function ProductError({
-  error,
-  signedIn,
-  pathname,
-}: {
-  error: unknown;
-  signedIn: boolean;
-  pathname: string;
-}) {
-  const notFound = isRouteErrorResponse(error) && error.status === 404;
-  return (
-    <ErrorPage
-      title={notFound ? "This page is not here" : "The product hit a problem"}
-      detail={notFound ? `Nothing in the product lives at ${pathname}.` : "We have been told."}
-      actionHref={signedIn ? "/app" : "/"}
-      actionLabel={signedIn ? "Back to home" : "Back to the landing"}
-    />
-  );
-}
-
-function ErrorPage({
+export function ErrorPage({
   title,
   detail,
   actionHref,
