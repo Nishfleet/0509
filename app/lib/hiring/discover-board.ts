@@ -16,6 +16,12 @@ export interface DiscoveredBoard {
   via: "nav" | "careers-page" | "none";
 }
 
+export interface BoardListing {
+  platform: BoardPlatform;
+  slug: string;
+  listingUrl: string;
+}
+
 export interface ProbeResponse {
   ok: boolean;
   contentType: string | null;
@@ -125,7 +131,7 @@ const DOCUMENTED_HOSTS: readonly DocumentedHost[] = [
   {
     platform: "smartrecruiters",
     aliases: ["jobs.smartrecruiters.com", "careers.smartrecruiters.com"],
-    listingUrl: (slug) => `https://api.smartrecruiters.com/v1/companies/${slug}/postings`,
+    listingUrl: (slug) => `https://api.smartrecruiters.com/v1/companies/${slug}/postings?limit=100&offset=0`,
     slugFrom: firstPathSegment,
     hasListing: (body) => textHasField(body, "content"),
   },
@@ -150,6 +156,17 @@ function isCareersLead(url: URL, domain: string): boolean {
 
 function documentedHostFor(host: string): DocumentedHost | null {
   return DOCUMENTED_HOSTS.find((candidate) => candidate.aliases.includes(host)) ?? null;
+}
+
+export function listingForBoard(boardUrl: string): BoardListing | null {
+  const url = toUrl(boardUrl);
+  if (url?.protocol !== "https:") return null;
+  const host = url.hostname.toLowerCase();
+  const documented = documentedHostFor(host);
+  if (documented === null) return null;
+  const slug = documented.slugFrom(url);
+  if (slug === null) return null;
+  return { platform: documented.platform, slug, listingUrl: documented.listingUrl(slug, host) };
 }
 
 function boardCandidate(host: DocumentedHost, matchedAlias: string, slug: string, via: "nav" | "careers-page"): BoardCandidate {
