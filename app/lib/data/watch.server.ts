@@ -12,6 +12,8 @@ export interface SiteSweepTarget {
   workspaceId: string;
   entityId: string;
   entityRole: string;
+  entityName: string | null;
+  domain: string;
   sourceId: string;
   watchId: string;
   pageId: string;
@@ -36,6 +38,8 @@ const MARK_POLLED = `UPDATE watch SET last_polled_at = ?2 WHERE id = ?1`;
 const SITE_SWEEP_TARGETS = `SELECT e.workspace_id AS workspace_id,
        e.id AS entity_id,
        e.role AS entity_role,
+       e.name AS entity_name,
+       e.domain AS domain,
        w.source_id AS source_id,
        w.id AS watch_id,
        p.id AS page_id,
@@ -50,6 +54,16 @@ JOIN page p ON p.entity_id = e.id AND p.url = w.target_key
 WHERE w.is_active = 1
 ORDER BY e.workspace_id, e.id, p.url`;
 
+const SITE_SWEEP_COVERAGE = `SELECT COUNT(DISTINCT w.id) AS covered
+FROM watch w
+JOIN source src ON src.id = w.source_id AND src.key = ?1 AND src.is_enabled = 1
+JOIN entity e ON e.id = w.entity_id AND e.state = 'on'
+JOIN page p ON p.entity_id = e.id AND p.url = w.target_key
+JOIN snapshot sn ON sn.watch_id = w.id AND sn.page_id = p.id AND sn.fetched_at >= ?2
+WHERE w.is_active = 1
+  AND e.role = ?3
+  AND (?3 = 'competitor' OR p.role IN ('home', 'pricing'))`;
+
 const entityRows = z.array(z.object({ id: z.string(), domain: z.string() }));
 
 const targetRows = z.array(
@@ -57,6 +71,8 @@ const targetRows = z.array(
     workspace_id: z.string(),
     entity_id: z.string(),
     entity_role: z.string(),
+    entity_name: z.string().nullable(),
+    domain: z.string(),
     source_id: z.string(),
     watch_id: z.string(),
     page_id: z.string(),
@@ -138,6 +154,8 @@ export async function readSiteSweepTargets(sourceKey: string): Promise<readonly 
     workspaceId: row.workspace_id,
     entityId: row.entity_id,
     entityRole: row.entity_role,
+    entityName: row.entity_name,
+    domain: row.domain,
     sourceId: row.source_id,
     watchId: row.watch_id,
     pageId: row.page_id,
@@ -146,6 +164,17 @@ export async function readSiteSweepTargets(sourceKey: string): Promise<readonly 
     transport: row.transport,
     transportTestedAt: row.transport_tested_at,
   }));
+}
+
+export async function readSiteSweepCoverage(
+  sourceKey: string,
+  entityRole: "self" | "competitor",
+  sinceIso: string,
+): Promise<number> {
+  const row = await env.DB.prepare(SITE_SWEEP_COVERAGE)
+    .bind(sourceKey, sinceIso, entityRole)
+    .first<{ covered: number }>();
+  return row?.covered ?? 0;
 }
 
 const ENSURE_WATCHES = `INSERT INTO watch (id, entity_id, source_id, target_key)

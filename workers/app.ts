@@ -18,6 +18,7 @@ import { NIGHTLY_CRON, sweepPending } from "./delivery/sweeper";
 import { sentryOptions } from "./sentry";
 import { runNightlyStanding } from "./standing/nightly";
 import { IdentityTail } from "./identity-tail-workflow";
+import { SiteSweepWorkflow as SiteSweep } from "./site-sweep-workflow";
 import { AccountDelete } from "./workflows/account-delete";
 import { Discovery } from "./workflows/discovery";
 import { OwnSiteCheck } from "./workflows/own-site-check";
@@ -88,7 +89,7 @@ export class DiscoveryWorkflow extends instrumentWorkflowWithSentry(sentryOption
 
 export class IdentityTailWorkflow extends instrumentWorkflowWithSentry(sentryOptions, IdentityTail) {}
 
-export { SiteSweepWorkflow } from "./site-sweep-workflow";
+export class SiteSweepWorkflow extends instrumentWorkflowWithSentry(sentryOptions, SiteSweep) {}
 
 export class OwnSiteCheckWorkflow extends instrumentWorkflowWithSentry(sentryOptions, OwnSiteCheck) {}
 

@@ -55,16 +55,7 @@ async function runChunk(
 ): Promise<SweepTally> {
   const outcomes: SweepOutcome[] = [];
   for (const item of items) {
-    try {
-      outcomes.push(await sweepItem(item, { instanceId, plannedAt }));
-    } catch (error) {
-      console.error(JSON.stringify({
-        event: "site.sweep_step_failed",
-        step: item.pageId,
-        error: error instanceof Error ? error.message : String(error),
-      }));
-      outcomes.push("failed");
-    }
+    outcomes.push(await sweepItem(item, { instanceId, plannedAt }));
   }
   return outcomes.reduce(addOutcome, emptyTally());
 }
@@ -74,12 +65,12 @@ export class SiteSweepWorkflow extends WorkflowEntrypoint<Env & { SITE_SWEEP_PIN
     const scopes = event.payload?.scope === undefined ? SCOPES : [event.payload.scope];
     const scopeLabel = event.payload?.scope ?? "all";
 
-    const selection = await step.do("select", async () => {
+    const startedAt = await step.do("start", () => new Date().toISOString());
+    const items = await step.do("select", async () => {
       const planned: SweepItem[] = [];
       for (const scope of scopes) planned.push(...(await planSweep(scope)));
-      return { startedAt: new Date().toISOString(), items: planned };
+      return planned;
     });
-    const { startedAt, items } = selection;
 
     let tally: SweepTally = emptyTally();
     for (const [index, chunkItems] of chunks(items).entries()) {

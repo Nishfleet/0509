@@ -30,7 +30,6 @@ vi.mock("../../../app/lib/jev/client.server", () => {
 
 import { parseSiteChangePayload } from "../../../app/lib/site-change";
 import {
-  CHUNK_SIZE,
   countCovered,
   PAGES_PER_COMPETITOR,
   planSweep,
@@ -150,11 +149,6 @@ describe("site sweep scopes", () => {
 
   afterEach(() => {
     vi.unstubAllGlobals();
-  });
-
-  it("exports the chunk size and the competitor page budget", () => {
-    expect(CHUNK_SIZE).toBe(10);
-    expect(PAGES_PER_COMPETITOR).toBe(4);
   });
 
   it("plans the self scope as home and pricing pages only", async () => {

@@ -1,13 +1,15 @@
 import { env } from "cloudflare:workers";
 import { getDomain } from "tldts";
-import { z } from "zod";
 
 import { insertPages, readEntitiesWithoutHomePage } from "../data/page.server";
 import { insertSiteChange } from "../data/signal.server";
 import { readEnabledSourceId } from "../data/source.server";
+import type { SiteSweepTarget } from "../data/watch.server";
 import {
   insertWatches,
   markWatchPolled,
+  readSiteSweepCoverage,
+  readSiteSweepTargets,
   readUnwatchedEntities,
 } from "../data/watch.server";
 import { robotsAllows } from "../fetch/robots.server";
@@ -56,55 +58,6 @@ type ChangedPage = Extract<CheckPageResult, { outcome: "changed" }>;
 
 const WORDS = new Intl.Segmenter("en", { granularity: "word" });
 
-const SITE_ITEMS = `SELECT w.id AS watch_id,
-       p.id AS page_id,
-       p.url AS url,
-       p.role AS page_role,
-       e.id AS entity_id,
-       e.workspace_id AS workspace_id,
-       w.source_id AS source_id,
-       e.name AS entity_name,
-       e.domain AS domain,
-       e.role AS entity_role
-FROM watch w
-JOIN source s ON s.id = w.source_id
-JOIN entity e ON e.id = w.entity_id
-JOIN page p ON p.entity_id = e.id AND p.url = w.target_key
-WHERE w.is_active = 1
-  AND s.is_enabled = 1
-  AND s.kind = 'site'
-  AND e.state = 'on'
-  AND e.role = ?1
-ORDER BY e.workspace_id, e.id, p.url`;
-
-const COVERED = `SELECT COUNT(DISTINCT w.id) AS covered
-FROM watch w
-JOIN source s ON s.id = w.source_id
-JOIN entity e ON e.id = w.entity_id
-JOIN page p ON p.entity_id = e.id AND p.url = w.target_key
-JOIN snapshot sn ON sn.watch_id = w.id AND sn.page_id = p.id AND sn.fetched_at >= ?2
-WHERE w.is_active = 1
-  AND s.is_enabled = 1
-  AND s.kind = 'site'
-  AND e.state = 'on'
-  AND e.role = ?1
-  AND (?1 = 'competitor' OR p.role IN ('home', 'pricing'))`;
-
-const siteItemRows = z.array(
-  z.object({
-    watch_id: z.string(),
-    page_id: z.string(),
-    url: z.string(),
-    page_role: z.string().nullable(),
-    entity_id: z.string(),
-    workspace_id: z.string(),
-    source_id: z.string(),
-    entity_name: z.string().nullable(),
-    domain: z.string(),
-    entity_role: z.string(),
-  }),
-);
-
 function wordCount(value: string): number {
   return Array.from(WORDS.segment(value)).filter((segment) => segment.isWordLike).length;
 }
@@ -130,18 +83,18 @@ export async function ensureHomePages(now: string): Promise<void> {
   );
 }
 
-function toSweepItem(row: z.output<typeof siteItemRows>[number]): SweepItem {
+function toSweepItem(target: SiteSweepTarget): SweepItem {
   return {
-    watchId: row.watch_id,
-    pageId: row.page_id,
-    url: row.url,
-    pageRole: row.page_role,
-    entityId: row.entity_id,
-    workspaceId: row.workspace_id,
-    sourceId: row.source_id,
-    entityName: row.entity_name,
-    domain: row.domain,
-    isSelf: row.entity_role === "self",
+    watchId: target.watchId,
+    pageId: target.pageId,
+    url: target.url,
+    pageRole: target.pageRole === "other" ? null : target.pageRole,
+    entityId: target.entityId,
+    workspaceId: target.workspaceId,
+    sourceId: target.sourceId,
+    entityName: target.entityName,
+    domain: target.domain,
+    isSelf: target.entityRole === "self",
   };
 }
 
@@ -189,18 +142,20 @@ export async function planSweep(scope: SweepScope): Promise<SweepItem[]> {
     }),
   );
 
-  const rows = await env.DB.prepare(SITE_ITEMS)
-    .bind(scope === "self" ? "self" : "competitor")
-    .all();
-  const items = [...siteItemRows.parse(rows.results)].map(toSweepItem);
+  const entityRole = scope === "self" ? "self" : "competitor";
+  const targets = (await readSiteSweepTargets(SITE_SOURCE_KEY)).filter(
+    (target) => target.entityRole === entityRole,
+  );
+  const items = targets.map(toSweepItem);
   return scope === "self" ? selfItems(items) : competitorItems(items);
 }
 
 export async function countCovered(scope: SweepScope, sinceIso: string): Promise<number> {
-  const row = await env.DB.prepare(COVERED)
-    .bind(scope === "self" ? "self" : "competitor", sinceIso)
-    .first<{ covered: number }>();
-  return row?.covered ?? 0;
+  return readSiteSweepCoverage(
+    SITE_SOURCE_KEY,
+    scope === "self" ? "self" : "competitor",
+    sinceIso,
+  );
 }
 
 function publishedBand(judgment: ChangeJudgment): boolean {
@@ -309,7 +264,8 @@ export async function sweepItem(item: SweepItem, tick: SweepTick): Promise<Sweep
     }),
   });
   if (judgment.deferred) return "deferred";
+  if (!publishedBand(judgment)) return "quiet";
 
   await writeSiteChange(item, checked, diff);
-  return publishedBand(judgment) ? "published" : "quiet";
+  return "published";
 }
