@@ -1,58 +1,61 @@
 import { env } from "cloudflare:workers";
 
-import type { ShotWhich } from "./alerts-feed";
-import { readChangeShot } from "../site-changes.server";
-import { readSiteChangePayload } from "../data/signal.server";
+import type { ChangeAlertFeedRow } from "../data/signal.server";
+import { readChangeAlertFeed } from "../data/signal.server";
+import { isShotKey } from "../shot-path";
+import { parseChangeShotKeys } from "../site-change";
+import { daysBefore } from "../site-changes.server";
+import type { FeedItem } from "./alerts-feed";
 
-const SHOT_PREFIX = "snapshot/site/";
+const FEED_DAYS = 30;
+const FEED_LIMIT = 50;
 
-const BANDS = ["publish", "uncertain", "alert", "check"] as const;
+const BAND_ORDER: Record<FeedItem["band"], number> = { alert: 0, check: 1, publish: 2, uncertain: 3 };
 
-interface PublishedKeys {
-  screenshotKey: string | null;
-  previousScreenshotKey: string;
+function severityOf(value: string | null): FeedItem["severity"] {
+  return value === "high" || value === "normal" ? value : null;
 }
 
-function publishedKeys(json: string): PublishedKeys | null {
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(json);
-  } catch (error) {
-    console.log(JSON.stringify({ event: "alerts_feed.unreadable", error: String(error) }));
-    return null;
-  }
-  if (parsed === null || typeof parsed !== "object") return null;
-  const record = parsed as Record<string, unknown>;
-  const screenshotKey = record.screenshotKey;
-  const previousScreenshotKey = record.previousScreenshotKey;
-  const band = record.band;
-  if (
-    (typeof screenshotKey !== "string" && screenshotKey !== null) ||
-    typeof previousScreenshotKey !== "string" ||
-    typeof band !== "string" ||
-    BANDS.every((candidate) => candidate !== band)
-  ) {
-    return null;
-  }
-  return { screenshotKey, previousScreenshotKey };
+function toFeedItem(row: ChangeAlertFeedRow, keys: ReturnType<typeof parseChangeShotKeys>): FeedItem {
+  return {
+    signalId: row.id,
+    title: row.title ?? "",
+    summary: row.summary ?? "",
+    url: row.url,
+    observedAt: row.observed_at,
+    band: keys?.band ?? "publish",
+    isAlert: row.alert_id !== null,
+    severity: severityOf(row.severity),
+    hasBefore: false,
+    hasAfter: false,
+  };
 }
 
-function shotKey(json: string, which: ShotWhich): string | null {
-  const keys = publishedKeys(json);
-  if (keys === null) return null;
-  const key = which === "before" ? keys.previousScreenshotKey : keys.screenshotKey;
-  return key?.startsWith(SHOT_PREFIX) === true ? key : null;
+function feedOrder(left: FeedItem, right: FeedItem): number {
+  if (left.isAlert !== right.isAlert) return left.isAlert ? -1 : 1;
+  if (left.isAlert && left.severity !== right.severity) return left.severity === "high" ? -1 : 1;
+  const leftBand = BAND_ORDER[left.band];
+  const rightBand = BAND_ORDER[right.band];
+  if (leftBand !== rightBand) return leftBand - rightBand;
+  return right.observedAt.localeCompare(left.observedAt);
 }
 
-export async function loadShot(
-  workspaceId: string,
-  signalId: string,
-  which: ShotWhich,
-): Promise<R2ObjectBody | null> {
-  const swept = await readChangeShot(workspaceId, signalId, which);
-  if (swept !== null) return swept;
-  const json = await readSiteChangePayload(workspaceId, signalId);
-  const key = json === null ? null : shotKey(json, which);
-  if (key === null) return null;
-  return await env.SNAPSHOTS.get(key);
+async function shotExists(key: string | null): Promise<boolean> {
+  return isShotKey(key) && (await env.SNAPSHOTS.head(key)) !== null;
+}
+
+export async function loadAlertsFeed(workspaceId: string, now: Date = new Date()): Promise<FeedItem[]> {
+  const rows = await readChangeAlertFeed(workspaceId, daysBefore(now, FEED_DAYS), FEED_LIMIT);
+  const items = await Promise.all(
+    rows.map(async (row) => {
+      const keys = parseChangeShotKeys(row.payload_json);
+      const item = toFeedItem(row, keys);
+      const [hasBefore, hasAfter] = await Promise.all([
+        keys === null ? false : shotExists(keys.before),
+        keys === null ? false : shotExists(keys.after),
+      ]);
+      return { ...item, hasBefore, hasAfter };
+    }),
+  );
+  return [...items].sort(feedOrder);
 }

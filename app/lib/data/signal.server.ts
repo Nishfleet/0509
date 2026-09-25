@@ -356,6 +356,36 @@ export async function readSiteChangePayload(workspaceId: string, signalId: strin
   return row?.payload_json ?? null;
 }
 
+export interface ChangeAlertFeedRow {
+  id: string;
+  title: string | null;
+  summary: string | null;
+  url: string;
+  observed_at: string;
+  payload_json: string;
+  alert_id: string | null;
+  severity: string | null;
+}
+
+const SELECT_CHANGE_ALERT_FEED = `SELECT s.id, s.title, s.summary, s.url, s.observed_at, s.payload_json,
+  a.id AS alert_id, a.severity
+FROM signal s
+LEFT JOIN alert a ON a.signal_id = s.id AND a.workspace_id = s.workspace_id
+WHERE s.workspace_id = ?1 AND s.kind = 'change' AND s.is_tombstoned = 0 AND s.observed_at >= ?2
+ORDER BY s.observed_at DESC, s.id DESC
+LIMIT ?3`;
+
+export async function readChangeAlertFeed(
+  workspaceId: string,
+  since: string,
+  limit: number,
+): Promise<ChangeAlertFeedRow[]> {
+  const { results } = await env.DB.prepare(SELECT_CHANGE_ALERT_FEED)
+    .bind(workspaceId, since, limit)
+    .all<ChangeAlertFeedRow>();
+  return results;
+}
+
 const DELETE_ENTITY_SIGNALS = `DELETE FROM signal WHERE workspace_id = ?1 AND entity_id = ?2`;
 
 export function deleteEntitySignals(workspaceId: string, entityId: string): D1PreparedStatement {

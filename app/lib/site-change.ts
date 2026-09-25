@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import type { ChangeBand } from "./shot-path";
 import { shortUtc } from "./short-utc";
 import type { WhyFlagged } from "./why-flagged";
 
@@ -31,6 +32,43 @@ function parseJson(json: string, what: string): unknown {
 export function parseSiteChangePayload(json: string): SiteChangePayload | null {
   const parsed = siteChangePayload.safeParse(parseJson(json, "payload"));
   return parsed.success ? parsed.data : null;
+}
+
+const publishedBand = z.enum(["publish", "uncertain", "alert", "check"]);
+
+const publishedChangePayload = z.object({
+  previousScreenshotKey: z.string(),
+  screenshotKey: z.string().nullable(),
+  band: publishedBand,
+});
+
+const sweptShotPair = z.object({
+  before: z.object({ screenshotKey: z.string().nullable() }),
+  after: z.object({ screenshotKey: z.string().nullable() }),
+});
+
+const changeShotShape = z.union([publishedChangePayload, sweptShotPair]);
+
+export interface ChangeShotKeys {
+  before: string | null;
+  after: string | null;
+  band: ChangeBand;
+}
+
+export function parsePublishedChange(json: string): ChangeShotKeys | null {
+  const parsed = publishedChangePayload.safeParse(parseJson(json, "payload"));
+  return parsed.success
+    ? { before: parsed.data.previousScreenshotKey, after: parsed.data.screenshotKey, band: parsed.data.band }
+    : null;
+}
+
+export function parseChangeShotKeys(json: string): ChangeShotKeys | null {
+  const parsed = changeShotShape.safeParse(parseJson(json, "payload"));
+  if (!parsed.success) return null;
+  if ("previousScreenshotKey" in parsed.data) {
+    return parsePublishedChange(json);
+  }
+  return { before: parsed.data.before.screenshotKey, after: parsed.data.after.screenshotKey, band: "publish" };
 }
 
 const hunkFile = z.object({

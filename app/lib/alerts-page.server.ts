@@ -27,6 +27,7 @@ import { daysAgoLabel } from "./delivery-alert";
 import { nextOwnSiteCheck } from "./incident-recheck";
 import { withoutMentionAlerts } from "./mention-feed";
 import { offBrandsSentence } from "./off-brands";
+import { loadAlertsFeed } from "./site/alerts-feed.server";
 import { daysBefore, readSiteChangeViews } from "./site-changes.server";
 
 export async function loadAlertsPage(userId: string, chip: AlertChipKey) {
@@ -43,6 +44,7 @@ export async function loadAlertsPage(userId: string, chip: AlertChipKey) {
     workspaceId === null
       ? []
       : await readSiteChangeViews({ workspaceId, entityId: null, since: daysBefore(now, 30), limit: 30 });
+  const marks = workspaceId === null ? [] : await loadAlertsFeed(workspaceId, now);
   const timeZone = workspaceId === null ? "UTC" : await readWorkspaceTimezone(workspaceId);
   const open = workspaceId === null ? null : await readOpenIncidentBlock(env.DB, workspaceId);
   const recheckAt = nextOwnSiteCheck(now);
@@ -86,6 +88,7 @@ export async function loadAlertsPage(userId: string, chip: AlertChipKey) {
     })),
   ];
   return {
+    marks,
     incidents: incidents
       .filter((incident) => incident.id !== open?.alert_id)
       .map((incident) => ({

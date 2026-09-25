@@ -2,6 +2,7 @@ import type { Route } from "./+types/app.alerts";
 
 import { AlertChips } from "../components/alert-chips";
 import { AlertFeed } from "../components/alert-feed";
+import { BeforeAfterMark } from "../components/before-after-mark";
 import { IncidentBlock } from "../components/incident-block";
 import { PAGE, PageHeading } from "../components/page-heading";
 import { SourcePill } from "../components/source-pill";
@@ -63,6 +64,16 @@ export default function Page({ loaderData }: Route.ComponentProps) {
           </time>
         </article>
       ))}
+      {loaderData.marks.length > 0 ? (
+        <section data-testid="alerts-marks" className="mt-10">
+          <h2 className="font-mono text-[0.75rem] tracking-[0.04em] text-ink-soft uppercase">
+            Change signals
+          </h2>
+          {loaderData.marks.map((item) => (
+            <BeforeAfterMark key={item.signalId} item={item} />
+          ))}
+        </section>
+      ) : null}
       <AlertChips chip={loaderData.chip} counts={loaderData.chipCounts} />
       {loaderData.chipCounts.all === 0 && loaderData.openIncident === null ? (
         <p className="mt-8 leading-[1.65]">

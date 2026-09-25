@@ -1,7 +1,8 @@
 import type { ReactElement } from "react";
 
 import type { FeedItem } from "../lib/site/alerts-feed";
-import { markTitle, shotPath } from "../lib/site/alerts-feed";
+import { markTitle } from "../lib/site/alerts-feed";
+import { shotPath } from "../lib/shot-path";
 import { shortUtc } from "../lib/short-utc";
 
 const GRID = "grid gap-4 min-[860px]:grid-cols-2";
@@ -37,19 +38,17 @@ function Figure({
   hasShot: boolean;
   signalId: string;
 }): ReactElement {
-  const src = shotPath(signalId, side);
+  const caption = side === "before" ? "Before" : "After";
   return (
     <figure className={CARD}>
-      <figcaption className="font-mono text-[0.7rem] uppercase text-ink-soft">
-        {side === "before" ? "Before" : "After"}
-      </figcaption>
+      <figcaption className="font-mono text-[0.7rem] uppercase text-ink-soft">{caption}</figcaption>
       {hasShot ? (
         <img
-          alt={side === "before" ? "Before" : "After"}
+          alt={caption}
           className="mt-2 block size-full max-h-[420px] object-cover object-top"
           data-slot={`${side}-shot`}
           loading="lazy"
-          src={src}
+          src={shotPath(signalId, side)}
         />
       ) : (
         <p data-slot={`${side}-missing`} className="mt-2 font-mono text-meta text-ink-soft">

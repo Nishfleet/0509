@@ -3,12 +3,14 @@ import { env } from "cloudflare:workers";
 import type { SiteChangeRow } from "./data/signal.server";
 import { readSiteChangePayload, readSiteChanges } from "./data/signal.server";
 import type { ChangeMark, ChangeShot, SiteChangePayload, SiteChangeView } from "./site-change";
+import { isShotKey, shotPath } from "./shot-path";
 import { whyFlagged } from "./why-flagged";
 import {
   captureLabel,
   changeHeadline,
   markFromHunks,
   pageLabel,
+  parseChangeShotKeys,
   parseDiffHunks,
   parseSiteChangePayload,
   wordsSentence,
@@ -20,10 +22,6 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 
 export function daysBefore(now: Date, days: number): string {
   return new Date(now.getTime() - days * DAY_MS).toISOString();
-}
-
-function shotPath(id: string, side: ShotSide): string {
-  return `/app/changes/${encodeURIComponent(id)}/${side}`;
 }
 
 function shot(id: string, side: ShotSide, key: string | null, at: string | null): ChangeShot {
@@ -86,16 +84,13 @@ export async function readSiteChangeViews(input: {
   return Promise.all(parsed.map(({ row, payload }) => toView(row, payload)));
 }
 
-const SHOT_PREFIX = "snapshot/site/";
-
 export async function readChangeShot(
   workspaceId: string,
   signalId: string,
   side: ShotSide,
 ): Promise<R2ObjectBody | null> {
   const json = await readSiteChangePayload(workspaceId, signalId);
-  const payload = json === null ? null : parseSiteChangePayload(json);
-  const key = payload?.[side].screenshotKey;
-  if (!key?.startsWith(SHOT_PREFIX)) return null;
-  return env.SNAPSHOTS.get(key);
+  const keys = json === null ? null : parseChangeShotKeys(json);
+  const key = keys?.[side];
+  return key === undefined || key === null || !isShotKey(key) ? null : env.SNAPSHOTS.get(key);
 }

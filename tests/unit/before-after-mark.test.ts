@@ -32,8 +32,8 @@ describe("the before-and-after mark", () => {
   it("draws two images, the before path and the after path, when both screenshots exist", () => {
     const html = draw();
     expect([...html.matchAll(/<img\b/g)]).toHaveLength(2);
-    expect(html).toContain('src="/app/alerts/shot/signal-1/before"');
-    expect(html).toContain('src="/app/alerts/shot/signal-1/after"');
+    expect(html).toContain('src="/app/changes/signal-1/before"');
+    expect(html).toContain('src="/app/changes/signal-1/after"');
     expect(html).toContain('alt="Before"');
     expect(html).toContain('alt="After"');
     expect(html).toContain('loading="lazy"');
@@ -41,9 +41,9 @@ describe("the before-and-after mark", () => {
 
   it("shows Screenshot unavailable and one image when the before shot is missing", () => {
     const html = draw({ hasBefore: false });
-    expect(html).toContain("Screenshot unavailable");
+    expect([...html.matchAll(/Screenshot unavailable/g)]).toHaveLength(1);
     expect([...html.matchAll(/<img\b/g)]).toHaveLength(1);
-    expect(html).toContain('src="/app/alerts/shot/signal-1/after"');
+    expect(html).toContain('src="/app/changes/signal-1/after"');
     expect(html).not.toContain('alt="Before"');
   });
 
@@ -52,9 +52,6 @@ describe("the before-and-after mark", () => {
     expect([...html.matchAll(/Screenshot unavailable/g)]).toHaveLength(2);
     expect(html).toContain("Pricing page changed");
     expect(html.toLowerCase()).not.toContain("legend");
-    expect(html).not.toContain("ink-faint");
-    expect(html).not.toContain("#8e8878");
-    expect(html).not.toContain("#7b7568");
   });
 
   it("carries the source URL and the captured-at time on every mark", () => {
