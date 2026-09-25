@@ -3,6 +3,8 @@ import { describe, expect, it } from "vitest";
 import {
   FEED_FILTERS,
   FEED_KINDS,
+  FEED_PARAM,
+  SOURCE_LABEL,
   countByKind,
   filterFeed,
   isFeedKind,
@@ -85,5 +87,37 @@ describe("countByKind", () => {
 describe("FEED_FILTERS", () => {
   it("lists the labels in order", () => {
     expect(FEED_FILTERS.map((filter) => filter.label)).toEqual(["All", "Ads", "Site changes", "Mentions", "Hiring"]);
+  });
+});
+
+describe("FEED_PARAM", () => {
+  it("names the query parameter the chips write", () => {
+    expect(FEED_PARAM).toBe("kind");
+  });
+
+  it("round-trips a chip value through a URL query", () => {
+    const params = new URLSearchParams(`${FEED_PARAM}=hiring`);
+    expect(parseFeedFilter(params.get(FEED_PARAM))).toBe("hiring");
+  });
+
+  it("reads an absent or unknown parameter as all", () => {
+    expect(parseFeedFilter(new URLSearchParams().get(FEED_PARAM))).toBe("all");
+    const params = new URLSearchParams(`${FEED_PARAM}=bogus`);
+    expect(parseFeedFilter(params.get(FEED_PARAM))).toBe("all");
+  });
+});
+
+describe("SOURCE_LABEL", () => {
+  it("names the source behind every kind", () => {
+    expect(SOURCE_LABEL).toEqual({
+      ad: "Ad library",
+      change: "Website",
+      mention: "Mention",
+      hiring: "Careers page",
+    });
+  });
+
+  it("covers all and only the feed kinds", () => {
+    expect(Object.keys(SOURCE_LABEL).sort()).toEqual([...FEED_KINDS].sort());
   });
 });
