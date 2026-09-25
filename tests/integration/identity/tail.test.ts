@@ -2,12 +2,16 @@ import { env, introspectWorkflow } from "cloudflare:test";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 
-import { insertSelfEntity } from "../../../app/lib/data/entity.server";
+import { insertSelfEntity, readWorkspaceSelfId } from "../../../app/lib/data/entity.server";
 import { upsertJudgedPages } from "../../../app/lib/data/page.server";
 import { confirmCard } from "../../../app/lib/identity/confirm.server";
 import { normaliseSubject } from "../../../app/lib/identity/normalise";
 import { probeKey } from "../../../app/lib/identity/probe-cache.server";
-import { identityTailInstanceId, seedTailWatches } from "../../../app/lib/identity/tail.server";
+import {
+  identityTailInstanceId,
+  seedTailWatches,
+  startIdentityTail,
+} from "../../../app/lib/identity/tail.server";
 
 const DOMAIN = "gymshark.com";
 const GREENHOUSE_JOBS = "https://boards-api.greenhouse.io/v1/boards/gymshark/jobs";
@@ -163,6 +167,30 @@ describe("IdentityTailWorkflow", () => {
 
     await expect(env.DISCOVERY.get(output.discoveryInstanceId)).resolves.toBeDefined();
     expect(instanceId).toBe(`identity-tail-${entityId.id}`);
+  });
+
+  it("starting the tail twice keeps one instance", async () => {
+    await seed();
+    await using introspector = await introspectWorkflow(env.IDENTITY_TAIL);
+    expect(
+      await confirmCard(
+        workspaceId,
+        form({ subject: DOMAIN, name: "Gymshark", description: "Gym clothes" }),
+      ),
+    ).toBe(true);
+
+    const entityId = await readWorkspaceSelfId(workspaceId);
+    if (entityId === null) throw new Error("confirmed card was not stored");
+    await expect(
+      startIdentityTail({
+        workspaceId,
+        entityId,
+        name: "Gymshark",
+        domain: DOMAIN,
+        homepageUrl: "https://gymshark.com/",
+      }),
+    ).resolves.toBe(identityTailInstanceId(entityId));
+    expect(await introspector.get()).toHaveLength(1);
   });
 
   it("watches the page Jev judged pricing, not a /pricing path", async () => {
