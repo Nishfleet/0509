@@ -32,6 +32,7 @@ export interface IdentityTailOutcome {
   discoveryInstanceId: string | null;
   queued: string[];
   r2Keys: string[];
+  siteFill: "filled" | "gave_up" | null;
 }
 
 interface AdTarget {
