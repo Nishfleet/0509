@@ -12,9 +12,9 @@ const CHECK_STEP: WorkflowStepConfig = {
 
 const SCOPES: readonly SweepScope[] = ["competitors", "self"];
 
-export type SweepTally = Record<SweepOutcome, number> & { pages: number };
+type SweepTally = Record<SweepOutcome, number> & { pages: number };
 
-export interface SiteSweepOutcome {
+interface SiteSweepOutcome {
   planned: number;
   covered: number;
   short: boolean;
