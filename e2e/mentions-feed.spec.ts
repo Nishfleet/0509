@@ -298,15 +298,9 @@ test("a workspace shows the three mention treatments", async ({ page }, testInfo
   await expect(page.getByTestId("why-flagged-reason")).toHaveText("Our read: A ticker line, not a move.");
   const dialog = page.getByRole("dialog", { name: "Why we flagged this" });
   await expect(dialog).toBeVisible();
-  // Base UI's modal trap parks focus on a focus-guard span that is a sibling of
-  // the popup, then redirects back inside on the next animation frame. Reading
-  // document.activeElement synchronously after Tab samples that handoff, so
-  // poll for the redirect to land instead.
   for (let i = 0; i < 6; i += 1) {
     await page.keyboard.press("Tab");
-    await expect
-      .poll(async () => dialog.evaluate((el) => el.contains(document.activeElement)))
-      .toBe(true);
+    await expect(dialog.getByRole("button", { name: "Close" })).toBeFocused();
   }
   await page.keyboard.press("Escape");
   await expect(page.getByTestId("why-flagged")).toHaveCount(0);
