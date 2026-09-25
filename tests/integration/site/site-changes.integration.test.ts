@@ -130,6 +130,8 @@ describe("site changes a customer can see", () => {
     expect(page?.weekCount).toBe(1);
     expect(page?.biggestId).toBe("sig-paused");
     expect(page?.watch).toEqual({ pages: 1, lastPolledAt: "2026-09-23T02:10:00.000Z" });
+    expect(page?.rail.verdict).toBeNull();
+    expect(page?.rail.facts.every((fact) => fact.count > 0)).toBe(true);
   });
 
   it("never shows another workspace's competitor, its changes or its screenshots", async () => {
