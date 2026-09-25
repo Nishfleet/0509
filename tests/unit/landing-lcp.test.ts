@@ -10,6 +10,8 @@ vi.mock("../../app/lib/auth.server", () => ({
   hasSessionCookie: () => false,
 }));
 
+vi.mock("cloudflare:workers", () => ({ env: {} }));
+
 import { Layout } from "../../app/root";
 import Landing from "../../app/routes/landing";
 
@@ -20,7 +22,7 @@ function renderDocument(id: string): string {
     {
       id,
       path: "/",
-      Component: () => createElement(Layout, null, createElement(Landing)),
+      Component: () => createElement(Layout, null, createElement(Landing, { loaderData: { ticker: [] } })),
     },
   ]);
   return renderToStaticMarkup(createElement(Stub, { initialEntries: ["/"] }));

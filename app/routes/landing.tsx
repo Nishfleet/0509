@@ -58,7 +58,7 @@ export function meta(_: Route.MetaArgs) {
 }
 
 export async function loader(_: Route.LoaderArgs) {
-  const id = Reflect.get(env, "LANDING_WORKSPACE_ID");
+  const id: unknown = env.LANDING_WORKSPACE_ID;
   if (typeof id !== "string" || id.trim() === "") return { ticker: [] };
   const now = new Date();
   const rows = await readSiteChanges({
