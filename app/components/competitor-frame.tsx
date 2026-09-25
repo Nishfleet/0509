@@ -1,14 +1,17 @@
 import type { ReactElement } from "react";
 
+import { DevelopmentsFeed } from "./developments-feed";
 import { EmptyState } from "./empty-state";
 import { CompetitorRail, type CompetitorRailProps } from "./competitor-rail";
 import { SiteChangeItem } from "./site-change-item";
 import type { SiteChangeItemData } from "./site-change-item";
+import type { DevelopmentItem } from "../lib/developments";
 
 const HEADING = "mb-3 font-mono text-eyebrow text-ink-soft uppercase";
 
 export interface CompetitorFrameProps {
   changes: readonly SiteChangeItemData[];
+  developments: readonly (DevelopmentItem & { when: string })[];
   weekCount: number;
   biggestId: string | null;
   pages: number;
@@ -35,6 +38,7 @@ function Cell({ label, value }: { label: string; value: string }): ReactElement 
 
 export function CompetitorFrame({
   changes,
+  developments,
   weekCount,
   biggestId,
   pages,
@@ -78,10 +82,10 @@ export function CompetitorFrame({
               Paused {pausedOn}. We stopped checking here; turn it back on to pick up where it left off.
             </p>
           )}
-          {changes.length === 0 ? (
+          {developments.length === 0 ? (
             <EmptyState sentence={developmentsEmpty(lastChecked)} />
           ) : (
-            changes.map((change) => <SiteChangeItem key={change.id} change={change} />)
+            <DevelopmentsFeed items={developments} changes={changes} />
           )}
         </section>
       </div>
