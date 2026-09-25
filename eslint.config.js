@@ -156,8 +156,17 @@ const DOMAIN_HOSTNAME_BAN = {
     "URL-to-domain extraction is owned by the identity engine in app/lib/identity/ — `normaliseSubject` in app/lib/identity/normalise.ts. Reading `.hostname` anywhere else is a second domain normaliser that will drift from the engine's rules; the same shape on any URL argument, any binding name. Reuse the engine (or, for a non-identity host read, get the file added to the exemption block below). Source: 0509#4371.",
 };
 
+// DESIGN.md: fonts are self-hosted. A Google Fonts <link> put LCP at 2021 ms against the
+// 1500 ms budget (CI run 35635617508, main 5166ebb81; fixed in fd1457288).
+const GOOGLE_FONTS_BAN = {
+  selector: "Literal[value=/fonts\\.(googleapis|gstatic)\\.com/], TemplateElement[value.raw=/fonts\\.(googleapis|gstatic)\\.com/]",
+  message:
+    "Fonts are self-hosted (DESIGN.md). A Google Fonts link is render-blocking and broke the 1500 ms LCP budget once (fd1457288). Add the font file under public/ and an @font-face instead.",
+};
+
 const BANNED_SYNTAX = [
   SUPPORT_ADDRESS_BAN,
+  GOOGLE_FONTS_BAN,
   CATCH_RETURNS_NULL,
   XML_PARSER_CONSTRUCTOR,
   DOMAIN_HOSTNAME_BAN,
@@ -267,7 +276,9 @@ export default tseslint.config(
       },
       globals: { ...globals.browser, ...globals.node },
     },
-    linterOptions: { reportUnusedDisableDirectives: "error" },
+    // No inline `eslint-disable`: one comment would silence every ban in this file
+    // (the no-comments rule allows /eslint/ comments). Change the rule here, in review.
+    linterOptions: { noInlineConfig: true, reportUnusedDisableDirectives: "error" },
   },
 
   {
