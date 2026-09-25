@@ -33,14 +33,17 @@ test.describe("signed in", () => {
     await expect(page.getByRole("navigation", { name: "Onboarding progress" })).toBeVisible();
     await expect(page.getByText("gymshark.com", { exact: true })).toBeVisible();
 
-    const name = page.getByRole("textbox", { name: "name" });
-    await expect(name).toBeVisible({ timeout: 30_000 });
+    const editName = page.getByRole("button", { name: "edit name" });
+    await expect(editName).toBeVisible({ timeout: 30_000 });
     const noHorizontalScroll = await page.evaluate(
       () => document.documentElement.scrollWidth <= document.documentElement.clientWidth,
     );
     expect(noHorizontalScroll).toBe(true);
 
+    await editName.click();
+    const name = page.getByRole("textbox", { name: "name" });
     await name.fill("Gymshark");
+    await name.press("Escape");
     await page.getByRole("button", { name: "That's me" }).click();
 
     await expect(page).toHaveURL(/\/onboarding\/competitors$/);
