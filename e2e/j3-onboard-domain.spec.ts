@@ -43,6 +43,10 @@ for (const { width, height } of [
     await page.getByRole("button", { name: "That's me" }).click();
     await expect(page).toHaveURL(/\/onboarding\/competitors$/, { timeout: 30_000 });
     const cardConfirmedMs = Date.now() - started;
+    test.info().annotations.push({
+      type: "input-to-card-confirmed-ms",
+      description: String(cardConfirmedMs),
+    });
     expect(cardConfirmedMs).toBeLessThan(30_000);
 
     const listed = page
@@ -51,6 +55,10 @@ for (const { width, height } of [
       .or(page.getByRole("list", { name: "Maybe" }).getByRole("listitem"));
     await expect(listed.first()).toBeVisible({ timeout: 60_000 });
     const competitorsMs = Date.now() - started;
+    test.info().annotations.push({
+      type: "input-to-competitors-ms",
+      description: String(competitorsMs),
+    });
     expect(competitorsMs).toBeLessThan(60_000);
 
     const watching = page.getByRole("list", { name: "Watching" }).getByRole("listitem");
@@ -67,6 +75,10 @@ for (const { width, height } of [
     );
     await expect(panel).not.toContainText("as soon as the first sweep is scheduled");
     const homeMs = Date.now() - started;
+    test.info().annotations.push({
+      type: "input-to-home-first-file-ms",
+      description: String(homeMs),
+    });
 
     expect(consoleErrors).toEqual([]);
 
@@ -75,12 +87,7 @@ for (const { width, height } of [
     );
     expect(noHorizontalScroll).toBe(true);
 
-    test.info().annotations.push(
-      { type: "input-to-card-confirmed-ms", description: String(cardConfirmedMs) },
-      { type: "input-to-competitors-ms", description: String(competitorsMs) },
-      { type: "input-to-home-first-file-ms", description: String(homeMs) },
-      { type: "domain", description: "gymshark.com" },
-    );
+    test.info().annotations.push({ type: "domain", description: "gymshark.com" });
     await test.info().attach(`j3-home-${width}`, {
       body: await page.screenshot(),
       contentType: "image/png",
