@@ -33,13 +33,21 @@ export type SnapshotCellKey =
   | "mentions"
   | "new_roles";
 
-export interface SnapshotCell {
-  key: SnapshotCellKey;
-  label: string;
-  value: number | null;
-  movement: number | null;
-  reason: string | null;
-}
+export type SnapshotCell =
+  | {
+      key: SnapshotCellKey;
+      label: string;
+      value: number;
+      movement: number | null;
+      reason: null;
+    }
+  | {
+      key: SnapshotCellKey;
+      label: string;
+      value: null;
+      movement: null;
+      reason: string;
+    };
 
 interface CountCellSpec {
   key: SnapshotCellKey;

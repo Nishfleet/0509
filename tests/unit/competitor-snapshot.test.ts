@@ -4,7 +4,6 @@ import { describe, expect, it } from "vitest";
 
 import { CompetitorSnapshot } from "../../app/components/competitor-snapshot";
 import type { SnapshotCell } from "../../app/lib/competitor-snapshot";
-import { movementLabel } from "../../app/lib/home-standing";
 
 const dashReason = "Meta ads did not answer this week.";
 
@@ -85,7 +84,7 @@ describe("the competitor snapshot card", () => {
     const html = snapshot([cellFor("rank")]);
     expect(html).toContain('class="text-2xl font-semibold text-ink tabular-nums"');
     expect(visibleText(html)).toContain("#2");
-    expect(html).toContain(movementLabel(-1, false));
-    expect(visibleText(html)).toContain(movementLabel(-1, false));
+    expect(html).toContain("down 1");
+    expect(visibleText(html)).toContain("down 1");
   });
 });

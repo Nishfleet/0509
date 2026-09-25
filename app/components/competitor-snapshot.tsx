@@ -15,7 +15,7 @@ export function CompetitorSnapshot({ cells }: { cells: readonly SnapshotCell[] }
                 <details>
                   <summary
                     className="cursor-pointer text-2xl text-ink-soft"
-                    aria-label={`No number: ${cell.reason ?? ""}`}
+                    aria-label={`No number: ${cell.reason}`}
                   >
                     —
                   </summary>
