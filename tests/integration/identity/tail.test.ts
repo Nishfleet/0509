@@ -1,4 +1,5 @@
 import { env, introspectWorkflow } from "cloudflare:test";
+import { NonRetryableError } from "cloudflare:workflows";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 
@@ -9,6 +10,7 @@ import { normaliseSubject } from "../../../app/lib/identity/normalise";
 import { probeKey } from "../../../app/lib/identity/probe-cache.server";
 import {
   identityTailInstanceId,
+  persistTail,
   seedTailWatches,
   startIdentityTail,
 } from "../../../app/lib/identity/tail.server";
@@ -329,5 +331,32 @@ describe("IdentityTailWorkflow", () => {
     await instance.waitForStatus("errored");
     const error = await instance.getError();
     expect(error.message).toContain("forced step retry");
+  });
+
+  it("errors when the self entity is missing", async () => {
+    await seed();
+    await using introspector = await introspectWorkflow(env.IDENTITY_TAIL);
+    const params = {
+      workspaceId,
+      entityId: `entity-missing-${String(runs)}`,
+      name: "Gymshark",
+      domain: DOMAIN,
+      homepageUrl: null,
+    };
+
+    const rejection = await persistTail(params).then(
+      () => null,
+      (caught: unknown) => caught,
+    );
+    expect(rejection).toBeInstanceOf(NonRetryableError);
+    expect((rejection as Error).message).toContain(
+      `self entity ${params.entityId} is not in workspace ${workspaceId}`,
+    );
+
+    await startIdentityTail(params);
+    const [instance] = await introspector.get();
+    if (instance === undefined) throw new Error("tail instance was not started");
+    await instance.waitForStatus("errored");
+    expect((await instance.getError()).message).toContain("NonRetryableError");
   });
 });

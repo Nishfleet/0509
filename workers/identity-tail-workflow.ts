@@ -20,18 +20,9 @@ const SITE_FILL_WAIT = "1 hour";
 export class IdentityTail extends WorkflowEntrypoint<Env, IdentityTailParams> {
   async run(event: WorkflowEvent<IdentityTailParams>, step: WorkflowStep): Promise<IdentityTailOutcome> {
     const params = event.payload;
-    const persisted = await step.do("persist", RETRY, () => persistTail(params));
-    if (persisted.entityId === null) {
-      return {
-        entityId: params.entityId,
-        watches: [],
-        discoveryInstanceId: null,
-        queued: [],
-        r2Keys: [],
-        siteFill: null,
-      };
-    }
-    const entityId = persisted.entityId;
+    const entityId = (
+      await step.do("persist", RETRY, () => persistTail(params))
+    ).entityId;
     const watches = await step.do("seed-watches", RETRY, () =>
       seedTailWatches(params, event.timestamp.toISOString()),
     );
