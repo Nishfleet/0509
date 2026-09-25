@@ -12,6 +12,16 @@ const PRICING = "https://www.gymshark.com/pricing";
 const BOARD = "https://boards.greenhouse.io/gymshark";
 const AD_ID = "12345";
 const ADVERTISER = "Gymshark Ads";
+const SITE_FILL_ATTEMPTS = 24;
+
+const HOMEPAGE_HTML = [
+  '<html lang="en"><head><meta property="og:site_name" content="Gymshark">',
+  '<meta name="description" content="Gym clothes"></head><body>',
+  "<p>Gymshark makes gym clothes, sportswear and fitness equipment for men and women.",
+  "Shop the latest training tops, leggings, shorts and gym accessories from Gymshark.",
+  "Free delivery over fifty pounds on every order, with easy returns within thirty days.</p>",
+  "</body></html>",
+].join("");
 
 const outcomeSchema = z.object({
   entityId: z.string(),
@@ -55,6 +65,9 @@ async function seed(): Promise<void> {
      VALUES ('src_ads_meta_tail', 'ads.meta', 'ads', 'meta', 'ads.meta', 'official_api', 1, '{}')`,
   ).run();
   await env.DB.prepare("UPDATE source SET is_enabled = 1 WHERE id = 'src_hiring_greenhouse'").run();
+}
+
+async function answerHomepage(): Promise<void> {
   await env.IDENTITY_CACHE.put(
     probeKey(subject(), "homepage"),
     JSON.stringify({
@@ -68,15 +81,10 @@ async function seed(): Promise<void> {
   );
 }
 
-async function storedIdentity(entityId: string): Promise<Record<string, unknown>> {
-  const row = await env.DB.prepare("SELECT identity_json FROM entity WHERE id = ?1")
-    .bind(entityId)
-    .first<{ identity_json: string }>();
-  if (row === null) throw new Error("confirmed card was not stored");
-  return JSON.parse(row.identity_json) as Record<string, unknown>;
-}
-
-async function confirmedEntityId(): Promise<string> {
+async function confirmRefusedCard(): Promise<string> {
+  expect(
+    await confirmCard(workspaceId, form({ subject: DOMAIN, name: "Gymshark", description: "" })),
+  ).toBe(true);
   const row = await env.DB.prepare("SELECT id FROM entity WHERE workspace_id = ?1 AND role = 'self'")
     .bind(workspaceId)
     .first<{ id: string }>();
@@ -84,22 +92,40 @@ async function confirmedEntityId(): Promise<string> {
   return row.id;
 }
 
+async function storedIdentity(entityId: string): Promise<Record<string, unknown>> {
+  const row = await env.DB.prepare("SELECT identity_json FROM entity WHERE id = ?1")
+    .bind(entityId)
+    .first<{ identity_json: string }>();
+  if (row === null) throw new Error("self entity was not stored");
+  return JSON.parse(row.identity_json) as Record<string, unknown>;
+}
+
+function answerFetch(input: RequestInfo | URL): Promise<Response> {
+  const url = input instanceof Request ? input.url : String(input);
+  if (url === "https://gymshark.com/") {
+    return Promise.resolve(
+      new Response(HOMEPAGE_HTML, {
+        status: 200,
+        headers: { "content-type": "text/html; charset=utf-8" },
+      }),
+    );
+  }
+  if (url === GREENHOUSE_JOBS) {
+    return Promise.resolve(
+      new Response(JSON.stringify({ jobs: [] }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      }),
+    );
+  }
+  return Promise.resolve(new Response("", { status: 200 }));
+}
+
 beforeEach(() => {
   runs += 1;
   userId = `user-tail-retry-${String(runs)}`;
   workspaceId = `ws-tail-retry-${String(runs)}`;
-  vi.stubGlobal("fetch", (input: RequestInfo | URL) => {
-    const url = input instanceof Request ? input.url : String(input);
-    if (url === GREENHOUSE_JOBS) {
-      return Promise.resolve(
-        new Response(JSON.stringify({ jobs: [] }), {
-          status: 200,
-          headers: { "content-type": "application/json" },
-        }),
-      );
-    }
-    return Promise.resolve(new Response("", { status: 200 }));
-  });
+  vi.stubGlobal("fetch", answerFetch);
 });
 
 afterEach(async () => {
@@ -116,14 +142,10 @@ describe("IdentityTailWorkflow site-fill retry", () => {
     await using introspector = await introspectWorkflow(env.IDENTITY_TAIL);
     await introspector.modifyAll(async (modifier) => {
       await modifier.disableSleeps();
-      await modifier.mockStepResult({ name: "site-reached" }, false);
       await modifier.mockStepResult({ name: "site-fill-1" }, "pending");
     });
-    expect(
-      await confirmCard(workspaceId, form({ subject: DOMAIN, name: "Gymshark", description: "" })),
-    ).toBe(true);
+    const entityId = await confirmRefusedCard();
 
-    const entityId = await confirmedEntityId();
     const [instance] = await introspector.get();
     if (instance === undefined) throw new Error("tail instance was not started");
     await instance.waitForStatus("complete");
@@ -141,48 +163,33 @@ describe("IdentityTailWorkflow site-fill retry", () => {
     await using introspector = await introspectWorkflow(env.IDENTITY_TAIL);
     await introspector.modifyAll(async (modifier) => {
       await modifier.disableSleeps();
-      await modifier.mockStepResult({ name: "site-reached" }, false);
-      for (let n = 1; n <= 24; n += 1) {
+      for (let n = 1; n <= SITE_FILL_ATTEMPTS; n += 1) {
         await modifier.mockStepResult({ name: `site-fill-${String(n)}` }, "pending");
       }
     });
-    expect(
-      await confirmCard(workspaceId, form({ subject: DOMAIN, name: "Gymshark", description: "" })),
-    ).toBe(true);
+    const entityId = await confirmRefusedCard();
 
-    const entityId = await confirmedEntityId();
     const [instance] = await introspector.get();
     if (instance === undefined) throw new Error("tail instance was not started");
     await instance.waitForStatus("complete");
     const output = outcomeSchema.parse(await instance.getOutput());
 
     expect(output.siteFill).toBe("gave_up");
-    expect(await storedIdentity(entityId)).toMatchObject({
-      description: null,
-      siteFill: "gave_up",
-    });
+    expect(await storedIdentity(entityId)).toMatchObject({ description: null, siteFill: "gave_up" });
   });
 
   it("skips the retry leg when the site answered at onboarding", async () => {
     await seed();
+    await answerHomepage();
     await using introspector = await introspectWorkflow(env.IDENTITY_TAIL);
-    expect(
-      await confirmCard(workspaceId, form({ subject: DOMAIN, name: "Gymshark", description: "" })),
-    ).toBe(true);
+    const entityId = await confirmRefusedCard();
 
-    const entityId = await confirmedEntityId();
     const [instance] = await introspector.get();
     if (instance === undefined) throw new Error("tail instance was not started");
     await instance.waitForStatus("complete");
     const output = outcomeSchema.parse(await instance.getOutput());
 
     expect(output.siteFill).toBeNull();
-    const stored = await env.DB.prepare(
-      "SELECT json_extract(identity_json, '$.siteFill') AS site_fill FROM entity WHERE id = ?1",
-    )
-      .bind(entityId)
-      .first<{ site_fill: string | null }>();
-    if (stored === null) throw new Error("confirmed card was not stored");
-    expect(stored.site_fill).toBeNull();
+    expect(await storedIdentity(entityId)).not.toHaveProperty("siteFill");
   });
 });
