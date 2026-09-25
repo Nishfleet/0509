@@ -39,6 +39,7 @@ function EditRow({
   placeholder,
   check,
   empty,
+  emptyLine,
   multiline,
   onSave,
 }: {
@@ -48,6 +49,7 @@ function EditRow({
   placeholder: string;
   check?: boolean;
   empty?: boolean;
+  emptyLine: string;
   multiline?: boolean;
   onSave: (value: string) => void;
 }) {
@@ -87,7 +89,7 @@ function EditRow({
         <PopoverContent>{editor}</PopoverContent>
       </Popover>
       <input type="hidden" name={name} value={value} />
-      {empty === true ? <span className="text-ink-soft text-[0.88rem]">{EMPTY_LINE}</span> : null}
+      {empty === true ? <span className="text-ink-soft text-[0.88rem]">{emptyLine}</span> : null}
     </Row>
   );
 }
@@ -111,6 +113,7 @@ function Logo({ logo }: { logo: Promise<string | null> }) {
 }
 
 const EMPTY_LINE = "we'll fill this after the first crawl";
+const UNREAD_LINE = "we'll fill this on the first crawl, within the hour";
 
 export function Fields({
   subject,
@@ -123,6 +126,7 @@ export function Fields({
   logo: Promise<string | null>;
   draft: CardDraft;
 }) {
+  const emptyLine = site.unfound ? UNREAD_LINE : EMPTY_LINE;
   const nameCheck = site.review.name === "check";
   const descriptionCheck = site.review.description === "check";
   const fetcher = useFetcher();
@@ -135,6 +139,7 @@ export function Fields({
         placeholder={nameCheck ? (site.name ?? "") : "your brand's name"}
         check={nameCheck}
         empty={site.review.name === "empty"}
+        emptyLine={emptyLine}
         onSave={(value) => {
           void fetcher.submit(
             { intent: "draft", subject, field: "name", value },
@@ -150,6 +155,7 @@ export function Fields({
         placeholder={descriptionCheck ? (site.description ?? "") : "one line on what you do"}
         check={descriptionCheck}
         empty={site.review.description === "empty"}
+        emptyLine={emptyLine}
         multiline
         onSave={(value) => {
           void fetcher.submit(
@@ -160,7 +166,7 @@ export function Fields({
       />
       <Row label="socials" check={site.review.socials === "check"}>
         {site.review.socials === "empty" ? (
-          <span className="text-ink-soft text-[0.88rem]">{EMPTY_LINE}</span>
+          <span className="text-ink-soft text-[0.88rem]">{emptyLine}</span>
         ) : site.review.socials === "check" ? (
           <ul className="min-w-0 flex-1 text-[0.95rem]">
             {site.socials.map((social) => (

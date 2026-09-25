@@ -24,6 +24,44 @@ const INSERT_SITE_CHANGE = `INSERT INTO signal
 VALUES (?1, ?2, ?3, ?4, ?5, ?6, 'change', ?7, ?8, ?8, ?9, ?6, ?10, ?10)
 ON CONFLICT (source_id, dedup_key) DO NOTHING`;
 
+export interface ChangeSignalRow {
+  id: string;
+  workspaceId: string;
+  entityId: string;
+  sourceId: string;
+  watchId: string;
+  snapshotId: string;
+  title: string;
+  summary: string;
+  url: string;
+  aspect: string;
+  payloadJson: string;
+  observedAt: string;
+}
+
+const INSERT_CHANGE_SIGNAL = `INSERT INTO signal
+  (id, workspace_id, entity_id, source_id, watch_id, snapshot_id, kind, title, summary,
+   url, aspect, evidence_url, payload_json, dedup_key, observed_at)
+VALUES (?1, ?2, ?3, ?4, ?5, ?6, 'change', ?7, ?8, ?9, ?10, ?9, ?11, ?6, ?12)
+ON CONFLICT (source_id, dedup_key) DO NOTHING`;
+
+export function insertChangeSignalStatement(row: ChangeSignalRow): D1PreparedStatement {
+  return env.DB.prepare(INSERT_CHANGE_SIGNAL).bind(
+    row.id,
+    row.workspaceId,
+    row.entityId,
+    row.sourceId,
+    row.watchId,
+    row.snapshotId,
+    row.title,
+    row.summary,
+    row.url,
+    row.aspect,
+    row.payloadJson,
+    row.observedAt,
+  );
+}
+
 export interface NewHiringSignal {
   id: string;
   workspaceId: string;
