@@ -1,10 +1,12 @@
 import { env } from "cloudflare:test";
 import { beforeEach, describe, expect, it } from "vitest";
 
+import { readOpenIncidents } from "../../app/lib/data/incident.server";
 import {
   acknowledgeIncidentAlert,
   insertIncidentAlert,
   readOpenIncidentBlock,
+  readOwnSiteIncidents,
 } from "../../app/lib/data/alert.server";
 
 const USER = "user-incident-block";
@@ -171,7 +173,30 @@ describe("open incident block (0509#5142)", () => {
     });
   });
 
-  it("(e) picks the newest open incident when a workspace has more than one", async () => {
+  it("(e) acknowledging leaves the incident open, in the feed and on the re-check list (0509#4115)", async () => {
+    await seedIncident(OPEN_INCIDENT, WS, ENTITY, PAGE, OPENED_AT, null);
+    await seedIncidentAlert(OPEN_INCIDENT, WS, ENTITY, PAGE, "Checkout 500", OPENED_AT);
+    await acknowledgeIncidentAlert(env.DB, WS, `incident-${OPEN_INCIDENT}`, ACKED_AT);
+
+    expect(await readOpenIncidentBlock(env.DB, WS)).toBeNull();
+    const row = await env.DB.prepare(`SELECT closed_at FROM incident WHERE id = ?`)
+      .bind(OPEN_INCIDENT)
+      .first<{ closed_at: string | null }>();
+    expect(row?.closed_at).toBeNull();
+
+    expect(await readOwnSiteIncidents(env.DB, WS)).toEqual([
+      {
+        id: `incident-${OPEN_INCIDENT}`,
+        title: "Checkout 500",
+        created_at: OPENED_AT,
+        closed_at: null,
+      },
+    ]);
+
+    expect((await readOpenIncidents())[PAGE]).toBe(OPEN_INCIDENT);
+  });
+
+  it("(f) picks the newest open incident when a workspace has more than one", async () => {
     const secondPage = "page-incident-block-second";
     const secondIncident = "inc-block-newer";
     await seedPage(secondPage, ENTITY, "second.example");
