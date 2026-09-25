@@ -38,8 +38,7 @@ test("the hero's first viewport holds the outcome and the one priced input", asy
     if (request.url().includes("bricolage-grotesque-latin")) fullFace.push(request.url());
   });
 
-  const response = await page.goto(PATH);
-  expect(await response?.text()).not.toContain("modulepreload");
+  await page.goto(PATH);
   await page.waitForLoadState("networkidle");
 
   const hero = page.locator("#hero");

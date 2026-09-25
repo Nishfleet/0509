@@ -1,6 +1,4 @@
 import type { Route } from "./+types/landing";
-import rootCss from "../app.css?url";
-import heroCss from "../components/landing/hero-face.css?url";
 import "../components/landing/hero-face.css";
 
 import { Footer } from "../components/footer";
@@ -28,13 +26,16 @@ const TITLE = "Competitor tracking for founders and creators | Five to Nine";
 const DESCRIPTION = `Five to Nine watches your competitors' ${WATCHED_NOUNS} and emails you one brief every Monday with a screenshot behind every change.`;
 const HOME = `${SITE_URL}/`;
 
-export const headers: Route.HeadersFunction = () => ({
-  Link: [
-    `<${rootCss}>; rel=preload; as=style`,
-    `<${heroCss}>; rel=preload; as=style`,
-    "</fonts/bricolage-hero.woff2>; rel=preload; as=font; crossorigin",
-  ].join(", "),
-});
+const heroFontPreload = {
+  rel: "preload",
+  href: "/fonts/bricolage-hero.woff2",
+  as: "font",
+  type: "font/woff2",
+  crossOrigin: "anonymous",
+  fetchPriority: "high",
+} as const;
+
+export const links: Route.LinksFunction = () => [heroFontPreload];
 
 export function meta(_: Route.MetaArgs) {
   return [
@@ -65,14 +66,6 @@ export function meta(_: Route.MetaArgs) {
 export default function Landing() {
   return (
     <div className="bg-bone text-ink">
-      <link
-        rel="preload"
-        href="/fonts/bricolage-hero.woff2"
-        as="font"
-        type="font/woff2"
-        crossOrigin="anonymous"
-        fetchPriority="high"
-      />
       <Header />
       <main>
         <Hero />

@@ -43,18 +43,5 @@ export default async function handleRequest(
   }
 
   headers.set("Content-Type", "text/html");
-  const pathname = new URL(request.url).pathname;
-  return new Response(pathname === "/design/landing" ? withoutModulePreloads(body) : body, { headers, status });
-}
-
-function withoutModulePreloads(body: ReadableStream<Uint8Array>): ReadableStream<Uint8Array> {
-  const html = new Response(body, { headers: { "content-type": "text/html;charset=utf-8" } });
-  const rewritten = new HTMLRewriter()
-    .on("link", {
-      element(element) {
-        if (element.getAttribute("rel") === "modulepreload") element.remove();
-      },
-    })
-    .transform(html);
-  return rewritten.body ?? body;
+  return new Response(body, { headers, status });
 }

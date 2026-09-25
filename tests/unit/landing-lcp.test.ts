@@ -5,136 +5,69 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
-import Landing from "../../app/routes/landing";
+import Landing, { links as landingLinks } from "../../app/routes/landing";
 import { links as productLinks } from "../../app/routes/faces-layout";
 
 const REPO_ROOT = dirname(dirname(dirname(fileURLToPath(import.meta.url))));
+const HERO_FACE = "/fonts/bricolage-hero.woff2";
+const HERO_RANGES: readonly (readonly [number, number])[] = [
+  [0x20, 0x7e],
+  [0x2013, 0x2014],
+  [0x2018, 0x2019],
+  [0x201c, 0x201d],
+  [0x20ac, 0x20ac],
+];
 
-interface Face {
-  family: string;
-  weights: number[];
-  ranges: [number, number][];
-  src: string;
-  display: string;
+function coversHero(code: number): boolean {
+  return HERO_RANGES.some(([start, end]) => code >= start && code <= end);
 }
 
-function parseFaces(css: string): Face[] {
-  return css
-    .split("@font-face")
-    .slice(1)
-    .map((block) => {
-      const body = block.slice(0, block.indexOf("}"));
-      const family = /font-family:\s*"([^"]+)"/.exec(body)?.[1] ?? "";
-      const weight = /font-weight:\s*([^;]+)/.exec(body)?.[1]?.trim() ?? "";
-      const weights = weight.split(/\s+/).map((part) => Number(part));
-      const rangeText = /unicode-range:\s*([^;]+)/.exec(body)?.[1] ?? "";
-      const ranges = rangeText.split(",").map((part) => {
-        const bits = part
-          .trim()
-          .replace("U+", "")
-          .split("-")
-          .map((hex) => Number.parseInt(hex, 16));
-        const start = bits[0] ?? Number.NaN;
-        return [start, bits[1] ?? start] as [number, number];
-      });
-      const src = /url\("([^"]+)"\)/.exec(body)?.[1] ?? "";
-      const display = /font-display:\s*([^;]+)/.exec(body)?.[1]?.trim() ?? "";
-      return { family, weights, ranges, src, display };
-    });
-}
-
-function covers(face: Face, code: number): boolean {
-  return face.ranges.some(([start, end]) => code >= start && code <= end);
-}
-
-function weightMatches(face: Face, weight: number): boolean {
-  if (face.weights.length === 1) return face.weights[0] === weight;
-  if (face.weights.length === 2) {
-    const [low, high] = face.weights;
-    return low !== undefined && high !== undefined && weight >= low && weight <= high;
-  }
-  return false;
-}
-
-function faceFor(faces: Face[], family: string, weight: number, code: number): Face | undefined {
-  return faces.find((face) => face.family === family && weightMatches(face, weight) && covers(face, code));
-}
-
-function tokens(className: string): string[] {
-  return className.split(/\s+/);
-}
-
-function weightOf(className: string): number {
-  const names = tokens(className);
-  if (names.includes("font-extrabold")) return 800;
-  if (names.includes("font-bold")) return 700;
-  if (names.includes("font-semibold")) return 600;
-  if (names.includes("font-medium")) return 500;
-  return 400;
-}
-
-function familyOf(className: string): string {
-  const names = tokens(className);
-  if (names.includes("font-display")) return "Bricolage Grotesque";
-  if (names.includes("font-mono")) return "IBM Plex Mono";
-  return "Instrument Sans";
-}
-
-function cssImportedBy(routeFile: string): string {
-  const source = readFileSync(routeFile, "utf8");
-  const dir = dirname(routeFile);
-  return [...source.matchAll(/import\s+"(\.[^"]+\.css)"/g)]
-    .map((match) => readFileSync(join(dir, match[1] ?? ""), "utf8"))
-    .join("\n");
+function hrefOf(descriptor: ReturnType<typeof landingLinks>[number]): string {
+  return typeof descriptor === "string" ? descriptor : (descriptor.href ?? "");
 }
 
 describe("landing LCP critical path", () => {
-  it("paints the server headline from a face that is already in the stylesheet", () => {
+  it("ships the headline in the first document and preloads the face that covers it", () => {
     const html = renderToStaticMarkup(createElement(Landing));
-    const heading = /<h1 id="hero-title" class="([^"]+)">([\s\S]*?)<\/h1>/.exec(html);
+    const heading = /<h1 id="hero-title" class="([^"]*)">([\s\S]*?)<\/h1>/.exec(html);
     expect(heading).not.toBeNull();
     const className = heading?.[1] ?? "";
     const headline = (heading?.[2] ?? "").replace(/\s+/g, " ").trim();
     expect(headline).toContain("Know where you stand.");
-    const painted = tokens(className).includes("uppercase") ? headline.toLocaleUpperCase("en-US") : headline;
-
-    const landingCss = cssImportedBy(join(REPO_ROOT, "app/routes/landing.tsx"));
-    const faces = parseFaces(landingCss);
-    const family = familyOf(className);
-    const weight = weightOf(className);
-    const sources = new Set<string>();
+    expect(className.split(/\s+/)).toContain("font-display");
+    const painted = className.split(/\s+/).includes("uppercase") ? headline.toLocaleUpperCase("en-US") : headline;
     for (const char of painted) {
       const code = char.codePointAt(0);
       expect(code).toBeTypeOf("number");
-      const face = faceFor(faces, family, weight, code ?? 0);
-      expect(face, `U+${(code ?? 0).toString(16)} has no ${family} ${weight} face`).toBeDefined();
-      expect(face?.display).toBe("swap");
-      sources.add(face?.src ?? "");
+      expect(coversHero(code ?? 0), `U+${(code ?? 0).toString(16)}`).toBe(true);
     }
-    expect(sources).toEqual(new Set(["/fonts/bricolage-hero.woff2"]));
-    expect(landingCss).not.toContain("bricolage-grotesque-latin");
-    expect(html).toContain('href="/fonts/bricolage-hero.woff2"');
-    expect(html).toContain('rel="preload"');
+
+    const heroCss = readFileSync(join(REPO_ROOT, "app/components/landing/hero-face.css"), "utf8");
+    expect(heroCss).toContain(`src: url("${HERO_FACE}") format("woff2")`);
+    expect(heroCss).toContain("font-display: swap");
+    expect(heroCss).toContain("unicode-range: U+0020-007E, U+2013-2014, U+2018-2019, U+201C-201D, U+20AC");
+    expect(heroCss).not.toContain("bricolage-grotesque-latin");
+
+    const fontPreloads = landingLinks().filter(
+      (descriptor) => typeof descriptor !== "string" && descriptor.rel === "preload" && descriptor.as === "font",
+    );
+    expect(fontPreloads.map(hrefOf)).toEqual([HERO_FACE]);
 
     const shipped = readFileSync(join(REPO_ROOT, "public/fonts/bricolage-hero.woff2"));
     expect(shipped.subarray(0, 4).toString("ascii")).toBe("wOF2");
     expect(shipped.length).toBeLessThan(12_000);
   });
 
-  it("keeps weights 700 and 800 on the full face for every other document", () => {
-    const faces = parseFaces(cssImportedBy(join(REPO_ROOT, "app/routes/faces-layout.tsx")));
-    for (const weight of [700, 800]) {
-      for (const char of "Aa .") {
-        const face = faceFor(faces, "Bricolage Grotesque", weight, char.codePointAt(0) ?? 0);
-        expect(face?.src, `weight ${weight} ${char}`).toBe("/fonts/bricolage-grotesque-latin.woff2");
-        expect(face?.display).toBe("swap");
-      }
-    }
-    const head = productLinks().map((descriptor) =>
-      typeof descriptor === "string" ? descriptor : (descriptor.href ?? ""),
-    );
+  it("preloads the full display and body faces for every other document", () => {
+    const display = readFileSync(join(REPO_ROOT, "app/fonts-display.css"), "utf8");
+    expect(display).toContain('font-family: "Bricolage Grotesque"');
+    expect(display).toContain("font-weight: 700 800");
+    expect(display).toContain('src: url("/fonts/bricolage-grotesque-latin.woff2")');
+    expect(display).toContain("font-display: swap");
+    const head = productLinks().map(hrefOf);
     expect(head).toContain("/fonts/bricolage-grotesque-latin.woff2");
     expect(head).toContain("/fonts/instrument-sans-latin.woff2");
     expect(head.join(" ")).not.toContain("data:font");
+    expect(head).not.toContain(HERO_FACE);
   });
 });

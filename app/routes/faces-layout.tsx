@@ -1,5 +1,6 @@
-import { Outlet } from "react-router";
+import { Outlet, useRouteLoaderData } from "react-router";
 
+import { ProductError } from "../components/error-page";
 import type { Route } from "./+types/faces-layout";
 import "../fonts-display.css";
 import "../fonts-text.css";
@@ -23,4 +24,9 @@ export const links: Route.LinksFunction = () => [
 
 export default function FacesLayout() {
   return <Outlet />;
+}
+
+export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
+  const data = useRouteLoaderData<{ signedIn: boolean; pathname: string }>("root");
+  return <ProductError error={error} signedIn={data?.signedIn === true} pathname={data?.pathname ?? "this address"} />;
 }
