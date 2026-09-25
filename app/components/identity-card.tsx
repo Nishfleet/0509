@@ -147,7 +147,13 @@ export function Fields({
           );
         }}
       />
-      <Logo logo={logo} />
+      {site.unfound ? (
+        <Row label="logo">
+          <span className="text-ink-soft text-[0.88rem]">{UNREAD_LINE}</span>
+        </Row>
+      ) : (
+        <Logo logo={logo} />
+      )}
       <EditRow
         label="about"
         name="description"
