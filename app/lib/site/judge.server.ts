@@ -4,7 +4,7 @@ import { countVerdictsSince, findVerdict, insertVerdicts, type VerdictRow } from
 import { askChoice, askNoul, JevUnavailableError, type ChoiceQuestion, type NoulQuestion } from "../jev/client.server";
 import type { BreakageEvidence } from "./breakage-evidence";
 
-export const JEV_JUDGMENTS_PER_BRAND_PER_DAY = 6;
+const JEV_JUDGMENTS_PER_BRAND_PER_DAY = 6;
 
 const HISTORY_DAYS = 30;
 
@@ -19,11 +19,11 @@ const PUBLISH_P = 0.9;
 
 const DISCARD_P = 0.1;
 
-export const D3S_BREAKAGE_QID = "own_site_breakage";
+const D3S_BREAKAGE_QID = "own_site_breakage";
 
-export const D3_NOTEWORTHY_QID = "noteworthy_change";
+const D3_NOTEWORTHY_QID = "noteworthy_change";
 
-export const D3_KIND_QID = "change_kind";
+const D3_KIND_QID = "change_kind";
 
 const D3S_BREAKAGE: NoulQuestion = {
   id: D3S_BREAKAGE_QID,
@@ -54,13 +54,13 @@ const D3_KIND: ChoiceQuestion = {
   },
 };
 
-export interface BreakageBand {
+interface BreakageBand {
   p: number;
   band: "alert" | "check" | "clear";
   reason: string;
 }
 
-export interface NoteworthyBand {
+interface NoteworthyBand {
   p: number;
   kind: string;
   band: "publish" | "uncertain" | "discard";
