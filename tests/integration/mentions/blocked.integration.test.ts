@@ -47,10 +47,15 @@ async function seedBlockedSource(
   return { sourceId, workspaceId, competitorId, brand };
 }
 
-async function gdeltTargetFor(brand: string) {
+// planTargets() groups by (source_id, target_key), and migrations/0017 already
+// ships an enabled gdelt.doc row. Matching on sourceId as well as the brand is
+// what pins the assertion to the row this test seeded.
+async function gdeltTargetFor(sourceId: string, brand: string) {
   const targets = await planTargets();
-  const target = targets.find((entry) => entry.pluginKey === "gdelt.doc" && entry.query === brand);
-  if (target === undefined) throw new Error(`no gdelt target for ${brand}`);
+  const target = targets.find(
+    (entry) => entry.sourceId === sourceId && entry.pluginKey === "gdelt.doc" && entry.query === brand,
+  );
+  if (target === undefined) throw new Error(`no gdelt target for ${brand} on ${sourceId}`);
   return target;
 }
 
@@ -76,7 +81,7 @@ describe("a blocking upstream degrades the source and ends the step (0509#5159)"
     vi.stubGlobal("fetch", fetchMock);
 
     try {
-      const target = await gdeltTargetFor(brand);
+      const target = await gdeltTargetFor(sourceId, brand);
 
       await expect(sweepTarget(target, NOW, null)).rejects.toThrow(NonRetryableError);
 
@@ -110,7 +115,7 @@ describe("a blocking upstream degrades the source and ends the step (0509#5159)"
     vi.stubGlobal("fetch", fetchMock);
 
     try {
-      const target = await gdeltTargetFor(brand);
+      const target = await gdeltTargetFor(sourceId, brand);
       const error = await sweepTarget(target, NOW, null).then(
         () => null,
         (caught: unknown) => caught,
