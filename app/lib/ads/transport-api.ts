@@ -93,7 +93,8 @@ export async function transportApi(
 		let pagePayload: unknown;
 		try {
 			pagePayload = JSON.parse(text);
-		} catch {
+		} catch (error) {
+			console.error(JSON.stringify({ event: "ads.page_json_parse_failed", error: String(error) }));
 			pagePayload = text;
 		}
 		pages.push(pagePayload);
