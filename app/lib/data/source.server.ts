@@ -56,7 +56,8 @@ export async function readEnabledSourceId(key: string): Promise<string | null> {
   return row?.id ?? null;
 }
 
-const CANARY_SOURCES = `SELECT id, plugin_key, canary_query FROM source
+const CANARY_SOURCES = `SELECT id, plugin_key, canary_query,
+COALESCE(json_extract(config_json, '$.min_interval_seconds'), 0) AS min_interval_seconds FROM source
 WHERE kind = 'mentions' AND is_enabled = 1 AND canary_query IS NOT NULL
 ORDER BY id`;
 
@@ -68,6 +69,7 @@ export interface CanarySource {
   id: string;
   pluginKey: string;
   canaryQuery: string;
+  minIntervalSeconds: number;
 }
 
 export async function readCanarySources(): Promise<CanarySource[]> {
@@ -75,11 +77,13 @@ export async function readCanarySources(): Promise<CanarySource[]> {
     id: string;
     plugin_key: string;
     canary_query: string;
+    min_interval_seconds: number;
   }>();
   return results.map((row) => ({
     id: row.id,
     pluginKey: row.plugin_key,
     canaryQuery: row.canary_query,
+    minIntervalSeconds: row.min_interval_seconds,
   }));
 }
 
