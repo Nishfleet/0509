@@ -22,3 +22,7 @@ export interface CardDraft {
   name?: string;
   description?: string;
 }
+
+export function editedFields(draft: CardDraft): DraftField[] {
+  return (["name", "description"] as const).filter((field) => draft[field] !== undefined);
+}
