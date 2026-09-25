@@ -54,6 +54,19 @@ const UNSCOPED_WRITER_PATTERNS = [
     ],
     message: UNSCOPED_WRITER_MESSAGE,
   },
+  // These two modules are banned by import NAME, never as a whole module:
+  // routes legitimately import other names from them, so a module-wide ban
+  // would break the reads and the workspace-scoped schedule writer.
+  {
+    group: ["**/data/digest.server"],
+    importNames: ["markDigestSent", "markDigestFailed"],
+    message: UNSCOPED_WRITER_MESSAGE,
+  },
+  {
+    group: ["**/data/workspace.server"],
+    importNames: ["deleteWorkspace"],
+    message: UNSCOPED_WRITER_MESSAGE,
+  },
 ];
 
 const ONE_PAVED_PATH_IMPORTS = [
