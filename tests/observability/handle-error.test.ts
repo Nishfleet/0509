@@ -103,10 +103,24 @@ describe("handleError", () => {
     expect(calls).not.toContain("%zz");
   });
 
+  it("keeps a token carrying an encoded slash on the route pattern", () => {
+    const error = new Error("loader exploded");
+    const request = new Request("https://0509.io/u/a%2Fb");
+    const params = { token: "a/b" };
+
+    handleError(error, { request, params, context: new RouterContextProvider() });
+
+    expect(captureException).toHaveBeenCalledTimes(1);
+    expect(captureException).toHaveBeenCalledWith(error, { tags: { route: "/u/:token" } });
+    const calls = JSON.stringify(vi.mocked(captureException).mock.calls);
+    expect(calls).not.toContain("a%2Fb");
+    expect(calls).not.toContain("a/b");
+  });
+
   it("keeps a splat carrying an encoded slash on the route pattern", () => {
     const error = new Error("oauth failed");
     const request = new Request("https://0509.io/api/auth/callback%2Fgoogle");
-    const params = { "*": "callback%2Fgoogle" };
+    const params = { "*": "callback/google" };
 
     handleError(error, { request, params, context: new RouterContextProvider() });
 

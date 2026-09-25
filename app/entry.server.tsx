@@ -22,17 +22,20 @@ function decodePath(pathname: string): string {
 function routePattern(pathname: string, params: Params): string {
   const segments = decodePath(pathname).split("/");
   const splat = params["*"];
-  const splatSegments = splat === undefined ? [] : splat.split("/");
-  const splatLength = splatSegments.length;
-  const tail = segments.slice(segments.length - splatLength);
   const names = new Map(
     Object.entries(params).flatMap(([name, value]): [string, string][] =>
-      name === "*" || !value ? [] : [[value, `:${name}`]],
+      name === "*" || !value ? [] : [[value.replace(/\//g, "%2F"), `:${name}`]],
     ),
   );
   const mapped = segments.map((segment) => names.get(segment) ?? segment);
-  if (splatLength === 0 || tail.join("/") !== splat) return mapped.join("/");
-  return [...mapped.slice(0, mapped.length - splatLength), "*"].join("/");
+  if (splat === undefined) return mapped.join("/");
+  for (let length = 1; length <= segments.length; length++) {
+    const tail = segments.slice(segments.length - length).join("/");
+    if (tail.replace(/%2F/g, "/") === splat) {
+      return [...mapped.slice(0, mapped.length - length), "*"].join("/");
+    }
+  }
+  return mapped.join("/");
 }
 
 export const handleError: HandleErrorFunction = (error, { request, params }) => {
