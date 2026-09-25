@@ -32,6 +32,7 @@ const change: SiteChangeItemData = {
   mark: { removed: "Plans from $10.", added: "Plans from $12." },
   before: { src: "/app/changes/sig-1/before", capturedAt: "2026-09-23 02:09 UTC" },
   after: { src: "/app/changes/sig-1/after", capturedAt: "2026-09-24 02:09 UTC" },
+  whyFlagged: null,
   when: "today",
 };
 
@@ -193,6 +194,33 @@ describe("the competitor page frame", () => {
     expect(html).toContain("Plans from $12.");
     expect(html).toContain('aria-label="Open before and after: Kindred changed its homepage"');
     expect(html).toContain("/app/changes/sig-1/after?w=");
+  });
+
+  it("opens the latest WhyFlaggedSheet for a flagged change", () => {
+    const html = frame({
+      changes: [
+        {
+          ...change,
+          whyFlagged: {
+            verdictId: "v-9",
+            compared: [],
+            sure: "92%",
+            decision: "Flagged",
+            reason: null,
+            decidedAt: "2026-09-20T10:00:00.000Z",
+          },
+        },
+      ],
+      weekCount: 1,
+      biggestId: "sig-1",
+    });
+    expect(html).toContain("Why we flagged this");
+  });
+
+  it("does not open a WhyFlaggedSheet without a verdict", () => {
+    expect(frame({ changes: [change], weekCount: 1, biggestId: "sig-1" })).not.toContain(
+      "Why we flagged this",
+    );
   });
 
   it("says when the first change can land, and freezes the feed at the pause", () => {
