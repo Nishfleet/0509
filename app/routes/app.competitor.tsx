@@ -44,6 +44,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
     ...page,
     lastChecked: page.watch.lastPolledAt === null ? null : captureLabel(page.watch.lastPolledAt),
     changes: page.changes.map((change) => ({ ...change, when: daysAgoLabel(change.observedAt, now) })),
+    developments: page.developments.map((item) => ({ ...item, when: daysAgoLabel(item.observedAt, now) })),
     now: now.getTime(),
     snapshot: snapshotCells(snapshot),
   };
@@ -99,6 +100,7 @@ export default function Page({ loaderData }: Route.ComponentProps) {
       </Form>
       <CompetitorFrame
         changes={loaderData.changes}
+        developments={loaderData.developments}
         weekCount={loaderData.weekCount}
         biggestId={loaderData.biggestId}
         pages={loaderData.watch.pages}
