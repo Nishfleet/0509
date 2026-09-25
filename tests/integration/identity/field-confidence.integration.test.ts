@@ -110,6 +110,34 @@ describe("reviewFields", () => {
     expect(results.map((row) => String(row.question_id)).sort()).toEqual([DESCRIPTION_ID, SOCIALS_ID].sort());
   });
 
+  it("skips Jev entirely when every valued field was edited and shows them as fill", async () => {
+    const run = stubAi(runAnswer({ [SOCIALS_ID]: 0.95 }));
+
+    const review = await reviewFields(
+      WS_ID,
+      SUBJECT,
+      { name: "Gymshark", description: "game-changing workout clothes", socials: [] },
+      ["name", "description"],
+      NOW,
+    );
+
+    expect(review).toEqual({ name: "fill", description: "fill", socials: "empty" });
+    expect(run).not.toHaveBeenCalled();
+    const { results } = await env.DB.prepare("SELECT id FROM jev_verdict").all();
+    expect(results).toHaveLength(0);
+  });
+
+  it("shows an edited field as fill when Jev cannot be reached", async () => {
+    const run = stubAi(() => Promise.reject(new Error("jev down")));
+
+    const review = await reviewFields(WS_ID, SUBJECT, ALL_FIELDS, ["name"], NOW);
+
+    expect(review).toEqual({ name: "fill", description: "check", socials: "check" });
+    expect(run).toHaveBeenCalledTimes(1);
+    const { results } = await env.DB.prepare("SELECT id FROM jev_verdict").all();
+    expect(results).toHaveLength(0);
+  });
+
   it("does not ask about a field with no value", async () => {
     const run = stubAi(runAnswer({ [NAME_ID]: 0.95 }));
 
