@@ -60,7 +60,8 @@ export function formatDate(iso: string, timezone: string, withTime: boolean): st
         ? { weekday: "short" as const, day: "numeric" as const, month: "short" as const, hour: "2-digit" as const, minute: "2-digit" as const }
         : { weekday: "long" as const, day: "numeric" as const, month: "long" as const }),
     }).format(date);
-  } catch {
+  } catch (error) {
+    console.error(JSON.stringify({ event: "delivery.brief_date_format_failed", error: String(error) }));
     return iso;
   }
 }
