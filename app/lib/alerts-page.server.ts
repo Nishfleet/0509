@@ -5,6 +5,11 @@ import {
   type SignalAlertItem,
   type TakedownNoteItem,
 } from "../components/alert-row";
+import {
+  type AlertChipKey,
+  countAlertChips,
+  itemInChip,
+} from "./alert-chips";
 import { groupByDay } from "./alert-day";
 import {
   readDeliveryFailures,
@@ -21,7 +26,7 @@ import { withoutMentionAlerts } from "./mention-feed";
 import { offBrandsSentence } from "./off-brands";
 import { daysBefore, readSiteChangeViews } from "./site-changes.server";
 
-export async function loadAlertsPage(userId: string) {
+export async function loadAlertsPage(userId: string, chip: AlertChipKey) {
   const now = new Date();
   const workspaceId = await readWorkspaceIdForOwner(userId);
   const competitors = workspaceId === null ? [] : (await readCompetitors(workspaceId)).competitors;
@@ -81,7 +86,12 @@ export async function loadAlertsPage(userId: string) {
       when: daysAgoLabel(incident.created_at, now),
       fixed: incident.closed_at === null ? null : daysAgoLabel(incident.closed_at, now),
     })),
-    groups: groupByDay(items, now, timeZone),
+    chip,
+    chipCounts: countAlertChips(
+      items.map((item) => item.kind),
+      incidents.length,
+    ),
+    groups: groupByDay(items.filter((item) => itemInChip(item.kind, chip)), now, timeZone),
     sources,
     now: now.getTime(),
     offLine: offBrandsSentence(
