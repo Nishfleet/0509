@@ -90,18 +90,29 @@ describe("screenOnboardingSubject", () => {
     stubRun(0.05);
     const subject = `private-${String(runs)}.example`;
 
-    const result = await screenOnboardingSubject({
-      workspaceId,
-      userId,
-      subject: domainSubject(subject),
-      raw: subject,
-      answer: null,
-      now: NOW,
-    });
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+    const log = vi.spyOn(console, "log");
+    try {
+      const result = await screenOnboardingSubject({
+        workspaceId,
+        userId,
+        subject: domainSubject(subject),
+        raw: subject,
+        answer: null,
+        now: NOW,
+      });
 
-    expect(result).toEqual({ kind: "refuse", message: REFUSAL });
-    expect(await decisionCount(workspaceId, "public_subject:refused")).toBe(1);
-    expect(await subjectRows(workspaceId, subject)).toEqual({ entities: 0, watches: 0 });
+      expect(result).toEqual({ kind: "refuse", message: REFUSAL });
+      expect(fetchSpy).not.toHaveBeenCalled();
+      expect(log.mock.calls.map((call) => String(call[0]))).toContain(
+        JSON.stringify({ event: "public_subject.screen", fetched: false, jev: true, ground: null }),
+      );
+      expect(await decisionCount(workspaceId, "public_subject:refused")).toBe(1);
+      expect(await subjectRows(workspaceId, subject)).toEqual({ entities: 0, watches: 0 });
+    } finally {
+      fetchSpy.mockRestore();
+      log.mockRestore();
+    }
   });
 
   it("asks about an ambiguous subject when the user has not answered", async () => {
@@ -238,5 +249,37 @@ describe("screenOnboardingSubject", () => {
 
     expect(result).toEqual({ kind: "unavailable", message: UNAVAILABLE });
     expect(await decisionCount(workspaceId, "public_subject:refused")).toBe(0);
+  });
+
+  it("refuses a platform-private account in code and does not ask Jev or store the subject", async () => {
+    const { userId, workspaceId } = await seedWorkspace();
+    const run = vi.fn(() => Promise.reject(new Error("jev must not be asked")));
+    Reflect.set(env, "AI", { run });
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response('{"is_private":true}', { status: 200 }));
+    const subject = `private-ig-${String(runs)}`;
+
+    try {
+      const result = await screenOnboardingSubject({
+        workspaceId,
+        userId,
+        subject: {
+          kind: "handle",
+          platform: "instagram",
+          registrable: subject,
+          url: `https://www.instagram.com/${subject}/`,
+        },
+        raw: `@${subject}`,
+        answer: "business",
+        now: NOW,
+      });
+
+      expect(result).toEqual({ kind: "refuse", message: REFUSAL });
+      expect(run).not.toHaveBeenCalled();
+      expect(fetchSpy).toHaveBeenCalledTimes(1);
+      expect(await decisionCount(workspaceId, "public_subject:refused")).toBe(1);
+      expect(await subjectRows(workspaceId, subject)).toEqual({ entities: 0, watches: 0 });
+    } finally {
+      fetchSpy.mockRestore();
+    }
   });
 });

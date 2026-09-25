@@ -2,6 +2,7 @@ import type { Subject } from "./identity/normalise";
 import { readSubjectDecision, insertSubjectDecision } from "./data/user_decision.server";
 import { JevUnavailableError } from "./jev/client.server";
 import { screenPublicSubject } from "./jev/public-subject.server";
+import { readSubjectGroundTruth } from "./jev/subject-ground-truth.server";
 
 export const REFUSAL = "we track brands and creators, not people";
 
@@ -33,8 +34,28 @@ export async function screenOnboardingSubject(input: {
   now: string;
 }): Promise<ScreenResult> {
   const decided = await readSubjectDecision(input.workspaceId, input.subject.registrable);
-  if (decided === "public_subject:confirmed") return { kind: "proceed" };
   if (decided === "public_subject:refused") return { kind: "refuse", message: REFUSAL };
+
+  const ground = await readSubjectGroundTruth(input.subject);
+  console.log(
+    JSON.stringify({
+      event: "public_subject.screen",
+      fetched: ground.fetched,
+      jev: ground.refusal === null,
+      ground: ground.refusal,
+    }),
+  );
+  if (ground.refusal !== null) {
+    await insertSubjectDecision({
+      workspaceId: input.workspaceId,
+      userId: input.userId,
+      subject: input.subject.registrable,
+      verdict: "public_subject:refused",
+      decidedAt: input.now,
+    });
+    return { kind: "refuse", message: REFUSAL };
+  }
+  if (decided === "public_subject:confirmed") return { kind: "proceed" };
 
   const screened = await runJevOutcome(input);
   if (screened === null) return { kind: "unavailable", message: UNAVAILABLE };

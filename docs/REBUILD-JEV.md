@@ -53,7 +53,7 @@ Rules per decision:
 - D7 fields: name, logo, description, category, country, socials, pricing page. A field below 0.1 is left empty with an empty-state line ("we'll fill this after the first crawl").
 - D8 is the only dedup. No hand-rolled fuzzy matching beyond the stored normalized-URL and normalized-title hashes that feed it.
 - D9 runs once per discovered page and again only when the title changes. `/plans`, `/membership`, `/tarifs` are pricing pages; a regex would miss them, which is why this is a judgment.
-- D10 runs at onboarding before anything is fetched. Minors, accounts marked private and login walls are refused in code, never asked of Jev.
+- D10 runs at onboarding before anything is fetched. Where the platform states it, code refuses before Jev and does not ask Jev: a minor (TikTok `ftc`), an account marked private (Instagram `is_private`, TikTok `privateAccount`, X `protected`, YouTube `unlisted`), or a login wall (HTTP 401, or a login URL when no profile flag was readable). A domain or a bare handle has no such flag, so D10 judges it and nothing is fetched.
 
 ## What Jev is not used for
 
