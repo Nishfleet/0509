@@ -30,7 +30,7 @@ export class MentionsSweep extends WorkflowEntrypoint<Env> {
         await step.do(`canary ${source.pluginKey}`, RETRY, () => runCanary(source, now)),
       ]);
       if (source.minIntervalSeconds > 0) {
-        await step.sleep(`pace canary ${source.pluginKey}`, `${String(source.minIntervalSeconds)} seconds`);
+        await step.sleep(`pace canary ${source.pluginKey}`, `${source.minIntervalSeconds} seconds`);
       }
     }
     const counts = new Map<string, number>(canaryEntries);
@@ -49,7 +49,7 @@ export class MentionsSweep extends WorkflowEntrypoint<Env> {
         outcomes.push(null);
       }
       if (target.minIntervalSeconds > 0 && index < targets.length - 1) {
-        await step.sleep(`pace ${String(index)}`, `${String(target.minIntervalSeconds)} seconds`);
+        await step.sleep(`pace ${String(index)}`, `${target.minIntervalSeconds} seconds`);
       }
     }
     const done = outcomes.filter((outcome): outcome is TargetOutcome => outcome !== null);
