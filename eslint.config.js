@@ -29,6 +29,21 @@ const SONNER_IMPORT = {
     "sonner is imported in exactly one module, app/components/toaster.tsx, which owns every toast() call behind toastSaved(). DESIGN.md §11: toasts are only 'saved' and 'undo' — a second import site is a second toast authority. Source: 0509#4116.",
 };
 
+const UNSCOPED_WRITER_MESSAGE =
+  "Unscoped system writer: this writer updates by id alone, with no workspace_id, because only workers and workflows call it. A route importing it is a cross-workspace write. Routes go through a workspace-scoped writer instead. Source: 0509#4705.";
+
+const UNSCOPED_WRITER_PATTERNS = [
+  {
+    group: [
+      "**/data/send_attempt.server",
+      "**/data/watch.server",
+      "**/data/incident.server",
+      "**/data/snapshot.server",
+    ],
+    message: UNSCOPED_WRITER_MESSAGE,
+  },
+];
+
 const ONE_PAVED_PATH_IMPORTS = [
   {
     name: "better-auth",
@@ -308,6 +323,23 @@ export default tseslint.config(
             ...ONE_PAVED_PATH_IMPORTS.filter((p) => p !== SONNER_IMPORT),
             CLOUDFLARE_WORKERS_IMPORT,
           ],
+        },
+      ],
+    },
+  },
+
+  // Flat config replaces a rule's options wholesale, so this block restates
+  // ONE_PAVED_PATH_IMPORTS and PAVED_PATH_PATTERNS — a block with only the
+  // new pattern would silently drop the better-auth/sonner bans for routes.
+  // Source: 0509#4705.
+  {
+    files: ["app/routes/**/*.{ts,tsx}", "app/root.tsx"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          paths: ONE_PAVED_PATH_IMPORTS,
+          patterns: [...PAVED_PATH_PATTERNS, ...UNSCOPED_WRITER_PATTERNS],
         },
       ],
     },
