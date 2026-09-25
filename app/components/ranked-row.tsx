@@ -3,7 +3,10 @@ import { Link } from "react-router";
 
 import { BrandSwitch } from "./brand-switch";
 import { brandMonogram } from "./brand-chip";
+import { CapturePlate } from "./capture-plate";
+import { Mark } from "./mark";
 import type { HomePill, HomeRow } from "../lib/home-standing";
+import type { SiteChangeView } from "../lib/site-change";
 import { cn } from "../lib/utils";
 
 const PILL = "border-line border px-2 py-1 font-mono text-eyebrow uppercase";
@@ -56,6 +59,7 @@ export function RankedRow({
         brandName={row.name}
         onCheckedChange={(checked) => onSwitch?.(row.entityId, checked)}
       />
+      {row.move === null ? null : <RowMove move={row.move} />}
       {row.why === null ? null : (
         <p data-slot="row-why" className="col-span-full text-[0.88rem] leading-[1.5] text-ink-soft">
           Why it moved: {row.why}
@@ -73,6 +77,24 @@ export function RankedRow({
         ))}
       </ul>
     </li>
+  );
+}
+
+function RowMove({ move }: { move: SiteChangeView }): ReactElement | null {
+  const removed = move.mark?.removed ?? null;
+  const added = move.mark?.added ?? null;
+  if (removed === null || added === null) return null;
+  return (
+    <div data-slot="row-move" className="col-span-full">
+      <Mark
+        before={removed}
+        after={added}
+        sourceUrl={move.url}
+        capturedAt={move.capturedAt}
+        size="sm"
+        capture={<CapturePlate label={move.headline} before={move.before} after={move.after} />}
+      />
+    </div>
   );
 }
 
