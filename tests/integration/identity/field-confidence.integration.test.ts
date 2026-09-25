@@ -110,4 +110,13 @@ describe("reviewFields", () => {
     const { results } = await env.DB.prepare("SELECT id FROM jev_verdict").all();
     expect(results).toHaveLength(0);
   });
+
+  it("leaves a field with no value empty when Jev cannot be reached", async () => {
+    const run = stubAi(() => Promise.reject(new Error("jev down")));
+
+    const review = await reviewFields(WS_ID, SUBJECT, { name: "Gymshark", description: null, socials: [] }, NOW);
+
+    expect(review).toEqual({ name: "check", description: "empty", socials: "empty" });
+    expect(run).toHaveBeenCalledTimes(1);
+  });
 });

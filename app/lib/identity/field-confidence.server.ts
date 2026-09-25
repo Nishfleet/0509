@@ -50,6 +50,14 @@ function reviewAll(review: FieldReview): CardReview {
   return { name: review, description: review, socials: review };
 }
 
+function reviewValued(fields: CardFields, review: FieldReview): CardReview {
+  return {
+    name: fields.name === null ? "empty" : review,
+    description: fields.description === null ? "empty" : review,
+    socials: fields.socials.length === 0 ? "empty" : review,
+  };
+}
+
 export async function reviewFields(
   workspaceId: string,
   subject: Subject,
@@ -66,7 +74,7 @@ export async function reviewFields(
       reliability: "best_effort",
     });
   } catch (error) {
-    if (error instanceof JevUnavailableError) return reviewAll("check");
+    if (error instanceof JevUnavailableError) return reviewValued(fields, "check");
     throw error;
   }
   const rows: VerdictRow[] = verdicts
