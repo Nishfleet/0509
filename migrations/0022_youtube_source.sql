@@ -1,4 +1,4 @@
--- 0021_youtube_source.sql — the enabled YouTube channel-feed mentions source.
+-- 0022_youtube_source.sql — the enabled YouTube channel-feed mentions source.
 --
 -- Issue #5167 (parent #5082). A source is a row plus a plugin
 -- (docs/REBUILD-SCHEMA.md), so this file only inserts a row. The adapter is
