@@ -40,7 +40,7 @@ function candidate(name: string, domain: string): ResolvedCandidate {
 
 function jevStub(questionId: string) {
   return vi.fn(async (_model: string, request: { questions: Record<string, { type: string }> }) => {
-    const answer = { type: "noul", noul: 0.9 };
+    const answer = { type: "boolean", probability: 0.9 };
     return { answers: questionId in request.questions ? { [questionId]: answer } : {} };
   });
 }
