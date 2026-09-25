@@ -2,7 +2,7 @@ import type { Route } from "./+types/app.home";
 import { env } from "cloudflare:workers";
 
 import { useEffect } from "react";
-import { Link, redirect, useRevalidator } from "react-router";
+import { Link, redirect, useFetcher, useRevalidator } from "react-router";
 
 import { FreshnessLine, freshnessEntries } from "../components/freshness-line";
 import { HomeStanding } from "../components/home-standing";
@@ -52,6 +52,7 @@ function SiteFillLine({ state }: { state: "pending" | "gave_up" }) {
 }
 
 export default function Page({ loaderData }: Route.ComponentProps) {
+  const fetcher = useFetcher();
   const revalidator = useRevalidator();
   const standingKind = loaderData.view.standing.kind;
   useEffect(() => {
@@ -68,7 +69,16 @@ export default function Page({ loaderData }: Route.ComponentProps) {
   }, [revalidator, standingKind]);
   return (
     <main className={PAGE}>
-      <HomeStanding view={loaderData.view} howRanked={loaderData.howRanked} />
+      <HomeStanding
+        view={loaderData.view}
+        howRanked={loaderData.howRanked}
+        onSwitch={(entityId, checked) =>
+          void fetcher.submit(
+            { intent: checked ? "on" : "off", entityId },
+            { method: "post", action: "/app/competitors" },
+          )
+        }
+      />
       {loaderData.siteFill === "pending" || loaderData.siteFill === "gave_up" ? (
         <SiteFillLine state={loaderData.siteFill} />
       ) : null}

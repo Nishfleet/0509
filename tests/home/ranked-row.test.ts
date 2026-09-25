@@ -1,8 +1,12 @@
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import { createMemoryRouter, RouterProvider } from "react-router";
 import { describe, expect, it } from "vitest";
 
+import { RankedRow } from "../../app/components/ranked-row";
 import type { BriefPayload } from "../../app/lib/brief-payload";
 import type { BriefSchedule } from "../../app/lib/brief-schedule";
-import type { HomeCount, HomeEntity, HomePill, HomeSource } from "../../app/lib/home-standing";
+import type { HomeCount, HomeEntity, HomePill, HomeRow, HomeSource } from "../../app/lib/home-standing";
 import { homeStanding } from "../../app/lib/home-standing";
 
 const SCHEDULE: BriefSchedule = { timezone: "Europe/London", weekday: 1, hour: 8 };
@@ -65,22 +69,34 @@ const PAYLOAD: BriefPayload = {
   next_brief_at: null,
 };
 
-describe("ranked rows", () => {
-  it("carry the week signal count, the why sentence and one pill per source", () => {
-    const standing = homeStanding({
-      payload: PAYLOAD,
-      entities: ENTITIES,
-      sources: SOURCES,
-      counts: COUNTS,
-      history: [],
-      schedule: SCHEDULE,
-      now: NOW,
-    });
-    expect(standing.kind).toBe("ranked");
-    if (standing.kind !== "ranked") return;
-    const kindred = standing.rows.find((row) => row.entityId === "ent_kindred");
-    const casetta = standing.rows.find((row) => row.entityId === "ent_casetta");
-    if (kindred === undefined || casetta === undefined) throw new Error("expected Kindred and Casetta rows");
+function rowsFor(payload: BriefPayload): readonly HomeRow[] {
+  const standing = homeStanding({
+    payload,
+    entities: ENTITIES,
+    sources: SOURCES,
+    counts: COUNTS,
+    history: [],
+    schedule: SCHEDULE,
+    now: NOW,
+  });
+  if (standing.kind !== "ranked") throw new Error("expected a ranked standing");
+  return standing.rows;
+}
+
+function rowFor(entityId: string, payload: BriefPayload = PAYLOAD): HomeRow {
+  const row = rowsFor(payload).find((entry) => entry.entityId === entityId);
+  if (row === undefined) throw new Error(`expected a ${entityId} row`);
+  return row;
+}
+function render(row: HomeRow): string {
+  const router = createMemoryRouter([{ path: "/", element: createElement("ol", null, createElement(RankedRow, { row })) }]);
+  return renderToStaticMarkup(createElement(RouterProvider, { router }));
+}
+
+describe("ranked rows carry the week signal count, why and source pills", () => {
+  it("builds live, none and degraded pills on the view model", () => {
+    const kindred = rowFor("ent_kindred");
+    const casetta = rowFor("ent_casetta");
     const kindredPills: readonly HomePill[] = kindred.pills;
     const casettaPills: readonly HomePill[] = casetta.pills;
     expect(kindredPills.map((pill) => pill.state)).toEqual(["live", "degraded"]);
@@ -90,5 +106,45 @@ describe("ranked rows", () => {
     expect(casetta.signals).toBe(0);
     expect(kindred.why).toBe("Kindred launched 3 new ads");
     expect(casetta.why).toBeNull();
+  });
+});
+
+describe("RankedRow", () => {
+  it("renders the self row's switch as you: disabled and labelled YOU", () => {
+    const html = render(rowFor("ent_self"));
+    expect(html).toContain('data-slot="brand-switch"');
+    expect(html).toContain('data-state="you"');
+    expect(html).toContain(">YOU<");
+    expect(html).toContain('data-disabled=""');
+  });
+
+  it("renders a zero-signal row's position as a dash and never a zero", () => {
+    const html = render(rowFor("ent_casetta"));
+    expect(html).toContain(">—</span>");
+    expect(html).not.toContain("#0");
+  });
+
+  it("renders a row with signals as its position", () => {
+    expect(render(rowFor("ent_kindred"))).toContain(">#1</span>");
+  });
+
+  it("prints a none source as label — none and a degraded source as label — degraded", () => {
+    const html = render(rowFor("ent_casetta"));
+    expect(html).toContain("Your site checks source — none");
+    expect(html).toContain("Reddit mentions — degraded");
+  });
+
+  it("prints a source that produced nothing as label — none", () => {
+    const html = render(rowFor("ent_casetta", { ...PAYLOAD, checked: { ...PAYLOAD.checked, degraded_sources: [] } }));
+    expect(html).toContain("Reddit mentions — none");
+  });
+
+  it("prints a live source with its count", () => {
+    expect(render(rowFor("ent_kindred"))).toContain("Your site checks source · 3");
+  });
+
+  it("prints Why it moved only when the row has a why", () => {
+    expect(render(rowFor("ent_kindred"))).toContain("Why it moved: Kindred launched 3 new ads");
+    expect(render(rowFor("ent_casetta"))).not.toContain("Why it moved:");
   });
 });
