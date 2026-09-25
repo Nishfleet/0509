@@ -17,6 +17,7 @@ import { handleBatch } from "./delivery/consumer";
 import { handleDlqBatch } from "./delivery/dlq-consumer";
 import { NIGHTLY_CRON, sweepPending } from "./delivery/sweeper";
 import { runNightlyStanding } from "./standing/nightly";
+import { IdentityTail } from "./identity-tail-workflow";
 import { AccountDelete } from "./workflows/account-delete";
 import { Discovery } from "./workflows/discovery";
 import { OwnSiteCheck } from "./workflows/own-site-check";
@@ -96,6 +97,8 @@ export class StandingRolloverWorkflow extends instrumentWorkflowWithSentry(sentr
 export class AccountDeleteWorkflow extends instrumentWorkflowWithSentry(sentryOptions, AccountDelete) {}
 
 export class DiscoveryWorkflow extends instrumentWorkflowWithSentry(sentryOptions, Discovery) {}
+
+export class IdentityTailWorkflow extends instrumentWorkflowWithSentry(sentryOptions, IdentityTail) {}
 
 export class SiteSweepWorkflow extends instrumentWorkflowWithSentry(sentryOptions, SiteSweep) {}
 

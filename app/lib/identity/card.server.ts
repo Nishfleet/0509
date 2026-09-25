@@ -9,7 +9,7 @@ import { readLogo, storeLogo } from "./logo-store.server";
 import { resolveLogo } from "./logo-cascade";
 import { resolveBrandName } from "./name-cascade";
 import type { Subject } from "./normalise";
-import { cachedProbe } from "./probe-cache.server";
+import { cachedProbe, probeKey } from "./probe-cache.server";
 
 const socialSchema = z.object({ platform: z.string(), url: z.string() });
 
@@ -22,6 +22,8 @@ const siteCardSchema = z.object({
     ogImage: z.string().nullable(),
     appleTouchIcon: z.string().nullable(),
   }),
+  adLibraryHints: z.array(z.string()).default([]),
+  navLinks: z.array(z.string()).default([]),
 });
 
 type SiteCard = z.infer<typeof siteCardSchema>;
@@ -33,6 +35,8 @@ const UNREACHED: SiteCard = {
   description: null,
   socials: [],
   logoCandidates: { ldOrganizationLogo: null, ogImage: null, appleTouchIcon: null },
+  adLibraryHints: [],
+  navLinks: [],
 };
 
 function wikidataTerm(subject: Subject): string {
@@ -54,6 +58,8 @@ async function probeSite(subject: Subject): Promise<SiteCard> {
       ogImage: extract.ogImage,
       appleTouchIcon: extract.appleTouchIcon,
     },
+    adLibraryHints: extract.adLibraryHints,
+    navLinks: extract.navLinks,
   };
 }
 
@@ -130,6 +136,15 @@ export function startCard(
     return null;
   });
   return { site, logo };
+}
+
+export async function readCachedSiteProof(
+  subject: Subject,
+): Promise<{ adLibraryHints: string[]; navLinks: string[] }> {
+  const hit = await env.IDENTITY_CACHE.get(probeKey(subject, "homepage"), "json");
+  const parsed = siteCardSchema.safeParse(hit);
+  if (!parsed.success) return { adLibraryHints: [], navLinks: [] };
+  return { adLibraryHints: parsed.data.adLibraryHints, navLinks: parsed.data.navLinks };
 }
 
 function toDataUrl(contentType: string, bytes: Uint8Array): string {

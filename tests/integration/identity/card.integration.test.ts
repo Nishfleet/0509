@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { startCard } from "../../../app/lib/identity/card.server";
 import { confirmCard } from "../../../app/lib/identity/confirm.server";
 import { normaliseSubject } from "../../../app/lib/identity/normalise";
+import { identityTailInstanceId } from "../../../app/lib/identity/tail.server";
 import gym from "../../fixtures/gymshark-2026-09-22-a.html?raw";
 
 const NOW = "2026-09-24T00:00:00Z";
@@ -28,6 +29,20 @@ function stubWeb(homepage: (url: string) => Response) {
     return Promise.resolve(homepage(url));
   });
   return calls;
+}
+
+async function settledTail(): Promise<void> {
+  const row = await env.DB.prepare("SELECT id FROM entity WHERE workspace_id = 'ws-1' AND role = 'self'").first<{
+    id: string;
+  }>();
+  if (row === null) return;
+  const instance = await env.IDENTITY_TAIL.get(identityTailInstanceId(row.id));
+  for (let attempt = 0; attempt < 40; attempt += 1) {
+    const status = await instance.status();
+    if (status.status === "complete" || status.status === "errored") return;
+    await new Promise((resolve) => setTimeout(resolve, 25));
+  }
+  throw new Error("identity tail did not finish");
 }
 
 function form(fields: Record<string, string>): FormData {
@@ -151,6 +166,7 @@ describe("confirmCard", () => {
       logoUrl: "/app/logos/" + String(row?.id),
       socials: [{ platform: "instagram", url: "https://www.instagram.com/gymshark/" }],
     });
+    await settledTail();
   });
 
   it("ignores a form-supplied logo URL when no logo is kept in R2", async () => {
@@ -166,6 +182,7 @@ describe("confirmCard", () => {
     expect(saved).toBe(true);
     const row = await env.DB.prepare("SELECT identity_json FROM entity").first<Record<string, unknown>>();
     expect(JSON.parse(String(row?.identity_json)).logoUrl).toBeNull();
+    await settledTail();
   });
 
   it("refuses a card with no name, and a second confirm keeps the first", async () => {
@@ -174,6 +191,7 @@ describe("confirmCard", () => {
     expect(await confirmCard("ws-1", form({ subject: "gymshark.com", name: "Second", description: "" }))).toBe(true);
     const { results } = await env.DB.prepare("SELECT name FROM entity").all();
     expect(results).toEqual([{ name: "First" }]);
+    await settledTail();
   });
 
   it("refuses a social link that is not a URL", async () => {

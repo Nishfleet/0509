@@ -172,6 +172,21 @@ export async function insertSelfEntity(input: {
     .run();
 }
 
+const SELECT_WORKSPACE_SELF_ID = "SELECT id FROM entity WHERE workspace_id = ?1 AND role = 'self'";
+
+const SELECT_SELF_BY_ID =
+  "SELECT id FROM entity WHERE id = ?1 AND workspace_id = ?2 AND role = 'self'";
+
+export async function readWorkspaceSelfId(workspaceId: string): Promise<string | null> {
+  const row = await env.DB.prepare(SELECT_WORKSPACE_SELF_ID).bind(workspaceId).first<{ id: string }>();
+  return row?.id ?? null;
+}
+
+export async function readSelfEntityId(workspaceId: string, entityId: string): Promise<string | null> {
+  const row = await env.DB.prepare(SELECT_SELF_BY_ID).bind(entityId, workspaceId).first<{ id: string }>();
+  return row?.id ?? null;
+}
+
 export interface DiscoverySelf {
   workspaceId: string;
   name: string;
