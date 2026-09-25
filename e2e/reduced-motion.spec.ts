@@ -219,7 +219,7 @@ test("the capture-pair sheet opens instantly under reduced motion", async ({ pag
 
 test("the brand switch toggles under reduced motion", async ({ page }, testInfo) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
-  const response = await page.goto("/design/brand-switch");
+  const response = await page.goto("/design/competitor");
   expect(response?.status()).toBe(200);
 
   const kindred = page.getByRole("switch", { name: "Kindred tracking" });
@@ -228,16 +228,14 @@ test("the brand switch toggles under reduced motion", async ({ page }, testInfo)
   await kindred.click();
   await expect(kindred).toHaveAttribute("aria-checked", "false");
 
-  const kindredRow = page
-    .locator("[data-slot='brand-switch-row']")
-    .filter({ hasText: "Kindred" });
-  await expect(kindredRow).toHaveAttribute("data-state", "off");
-  await expect(kindredRow).toContainText("paused 22 Sept · history kept");
+  const field = page.locator("[data-slot='competitor-switch'] [data-slot='brand-switch']");
+  await expect(field).toHaveAttribute("data-state", "off");
+  await expect(page.locator("[data-slot='competitor-paused']")).toContainText("Paused");
 
   const findings = await inspectMotion(page);
   expect(findings, `after toggle: ${JSON.stringify(findings[0])}`).toEqual([]);
 
-  // Same for the switch: the row reads "paused", the thumb has moved, and
+  // Same for the switch: the header reads "Paused", the thumb has moved, and
   // nothing is animating. The motion assertion above already guaranteed the
   // last part; this is the part a human looks at.
   await saveShot(page, testInfo, "end-state-brand-switch-paused", { fullPage: true });
@@ -254,13 +252,13 @@ test("control: the switch thumb has a non-zero transition-duration without reduc
   page,
 }, testInfo) => {
   await page.emulateMedia({ reducedMotion: "no-preference" });
-  const response = await page.goto("/design/brand-switch");
+  const response = await page.goto("/design/competitor");
   expect(response?.status()).toBe(200);
 
   // The switch thumb is the element the brand-switch.tsx component pins at
   // `[&_[data-slot=switch-thumb]]:duration-180`. That utility is what we
   // expect the global reduced-motion block to neutralise.
-  const thumb = page.locator("[data-slot='brand-switch-row'] [data-slot='switch-thumb']").first();
+  const thumb = page.locator("[data-slot='competitor-switch'] [data-slot='switch-thumb']").first();
   await expect(thumb).toBeVisible();
 
   const duration = await thumb.evaluate((el) => getComputedStyle(el).transitionDuration);

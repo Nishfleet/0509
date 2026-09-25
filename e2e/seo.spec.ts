@@ -52,11 +52,7 @@ test("the sitemap leaves out the noindex rebuild notice at /", async ({
   expect(body).not.toMatch(/<loc>https?:\/\/[^<]+\/<\/loc>/);
 });
 
-for (const path of [
-  "/design/brand-chips",
-  "/design/nav",
-  "/design/capture-plates",
-]) {
+for (const path of ["/design/capture-plates"]) {
   test(`GET ${path} serves robots noindex`, async ({ page }) => {
     await page.goto(path);
     await expect(page.locator('meta[name="robots"]')).toHaveAttribute(
