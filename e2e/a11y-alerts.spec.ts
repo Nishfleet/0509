@@ -22,10 +22,10 @@ test("the Alerts page passes axe at WCAG 2.2 AA and is keyboard-operable at 1440
 }, testInfo) => {
   // One magic-link sign-in plus four shapes, each a full page load, an axe
   // scan, a reload, four Tab presses and a screenshot. Playwright's 30s default
-  // does not cover the sign-in's redirect chain plus the loop: the first
-  // production run read it as a timeout at page.reload(), before the gate. The
-  // same 120s no-horizontal-scroll.spec.ts:46 takes for its signed-in sweep.
-  test.setTimeout(120_000);
+  // does not cover the sign-in's redirect chain plus the loop: a production run
+  // read it as a timeout at page.reload(), before the gate. magic-link-email.spec.ts:35
+  // takes the same 180s for its signed-in production journey.
+  test.setTimeout(180_000);
   const token = requireInboxToken();
   const email = `e2e+${crypto.randomUUID().replaceAll("-", "").slice(0, 12)}@0509.io`;
   await signInWithMagicLink(page, email, token);
