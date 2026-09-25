@@ -3,12 +3,11 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
 import {
-  blindSourceNames,
   FreshnessLine,
-  freshnessEntries,
   freshnessText,
   type FreshnessEntry,
 } from "../../app/components/freshness-line";
+import { blindSourceNames, freshnessEntries } from "../../app/lib/freshness.server";
 import type { SourceRow, SourceSnapshot } from "../../app/components/source-pill";
 
 const NOW = Date.parse("2026-09-24T09:00:00.000Z");
