@@ -107,9 +107,10 @@ async function statementsForWatch(input: {
   context: DiscoveryContext;
   items: readonly MentionItem[];
   snapshot: { r2Key: string; hash: string };
+  canaryCount: number | null;
   now: string;
 }): Promise<{ statements: D1PreparedStatement[]; stored: number; unjudged: number }> {
-  const { watch, context, items, snapshot, now } = input;
+  const { watch, context, items, snapshot, canaryCount, now } = input;
   const snapshotId = crypto.randomUUID();
   const keyed = items.map((item) => ({ item, dedupKey: `${watch.entity_id}:${item.dedupKey}` }));
   const seen = await readSeenDedupKeys(
@@ -125,6 +126,7 @@ async function statementsForWatch(input: {
       r2Key: snapshot.r2Key,
       hash: snapshot.hash,
       itemCount: items.length,
+      canaryCount,
     }),
   ];
   let stored = 0;
@@ -192,7 +194,11 @@ async function statementsForWatch(input: {
   return { statements, stored, unjudged };
 }
 
-export async function sweepTarget(target: MentionTarget, now: string): Promise<TargetOutcome> {
+export async function sweepTarget(
+  target: MentionTarget,
+  now: string,
+  canaryCount: number | null,
+): Promise<TargetOutcome> {
   const adapter = adapterFor(target.pluginKey);
   if (adapter === undefined) throw new Error(`no mentions adapter for ${target.pluginKey}`);
   const result = await adapter({ query: target.query }, null);
@@ -210,7 +216,14 @@ export async function sweepTarget(target: MentionTarget, now: string): Promise<T
     }
     const context = contexts.get(watch.workspace_id);
     if (context === null || context === undefined) continue;
-    const written = await statementsForWatch({ watch, context, items: titled, snapshot: { r2Key, hash }, now });
+    const written = await statementsForWatch({
+      watch,
+      context,
+      items: titled,
+      snapshot: { r2Key, hash },
+      canaryCount,
+      now,
+    });
     await env.DB.batch(written.statements);
     await markWatchPolled(watch.watch_id, now);
     stored += written.stored;
