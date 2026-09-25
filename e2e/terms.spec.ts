@@ -17,7 +17,7 @@ test("the terms page renders its heading and date", async ({ page }) => {
   const heading = page.getByRole("heading", { level: 1 });
   await expect(heading).toBeVisible();
   await expect(heading).not.toBeEmpty();
-  await expect(page.locator("main header time")).toHaveAttribute("datetime", /^\d{4}-\d{2}-\d{2}$/);
+  await expect(page.locator("main time")).toHaveAttribute("datetime", /^\d{4}-\d{2}-\d{2}$/);
 });
 
 test("the terms page states who can use 0509 and what it does", async ({ page }) => {

@@ -18,6 +18,7 @@ test.skip(
   ({ viewport }) => viewport?.width !== 1440,
   "expiry costs five real minutes; one lane per deploy proves it",
 );
+test.describe.configure({ retries: 1 });
 
 const TOKEN_TTL_MS = 305_000;
 const SESSION_COOKIE = /better-auth\.session_token/;
@@ -47,7 +48,7 @@ async function followOnce(context: BrowserContext, link: string) {
   return {
     status: response.status(),
     location: response.headers()["location"] ?? "",
-    setsSession: cookies.some((c) => SESSION_COOKIE.test(c)),
+    setsSession: cookies.some((c) => SESSION_COOKIE.test(c) && !/;\s*max-age=0(;|$)/i.test(c) && (c.split(";")[0] ?? "").split("=").slice(1).join("=").trim() !== ""),
     at: new Date().toISOString(),
   };
 }
@@ -75,7 +76,8 @@ async function requestMagicLink(request: APIRequestContext, baseURL: string, ema
 // session's user when the jar holds one and null when it does not.
 async function sessionEmail(context: BrowserContext, baseURL: string): Promise<string | null> {
   const response = await context.request.get(`${baseURL}/api/auth/get-session`);
-  const body: unknown = await response.json().catch(() => null);
+  if (response.status() !== 200) throw new Error(`GET /api/auth/get-session answered HTTP ${response.status()} (expected 200)`);
+  const body: unknown = await response.json();
   if (body && typeof body === "object" && "user" in body) {
     const user = (body as { user?: { email?: string } }).user;
     return user?.email ?? null;
@@ -88,6 +90,7 @@ test("the sign-in link works once, survives a newer request, dies on its own clo
   browser,
   baseURL,
 }) => {
+  expect(test.info().project.name).toBe("desktop-1440");
   test.setTimeout(600_000);
   const token = requireInboxToken();
   if (!baseURL) throw new Error("PLAYWRIGHT_TEST_BASE_URL resolved to no baseURL");
@@ -160,6 +163,7 @@ test("the sign-in link works once, survives a newer request, dies on its own clo
   expect(expiredFollow.location).toContain(VERIFY_ERROR);
   expect(expiredFollow.setsSession).toBe(false);
   expect(await sessionEmail(expiredContext, baseURL)).toBeNull();
+  expect(Date.parse(expiredFollow.at)).toBeGreaterThanOrEqual(Date.parse(expiring.sentAt) + TOKEN_TTL_MS);
   console.log(
     `magic-link-expiry follow=expired status=${expiredFollow.status} location=${expiredFollow.location} session=none requestedAt=${expiring.sentAt} attemptedAt=${expiredFollow.at}`,
   );

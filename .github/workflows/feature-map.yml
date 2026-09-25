@@ -25,11 +25,16 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       actions: write
+      pull-requests: read
     steps:
-      - name: Dispatch
+      - name: Dispatch unless a sync pull request is already open
+        # One open sync PR at a time; it is armed for the merge queue when
+        # opened, and the next route push after it lands re-syncs (#5252).
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh workflow run feature-map.yml --ref "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY"
+        run: |
+          open=$(gh pr list --repo "$GITHUB_REPOSITORY" --head feature-map-sync --state open --json number --jq length)
+          if [ "$open" = 0 ]; then gh workflow run feature-map.yml --ref "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY"; fi
 
   sync:
     name: feature-map
@@ -83,7 +88,7 @@ jobs:
             1. Read `app/routes.ts`, every route module's rendered controls, and the `e2e/` test titles.
             2. Build the app and drive every route with the verify skill (`npm run verify:start`, then `take_snapshot` per route). The map's Reach column must name the controls the snapshot actually shows, by role and accessible name. In one shell: `npm run build`, `export PLAYWRIGHT_LOCAL_PORT="${PLAYWRIGHT_LOCAL_PORT:-$((8000 + $$ % 1000))}"`, `npx wrangler d1 migrations apply 0509 --local </dev/null`, then start the server in the background with `npx wrangler dev --env-file .dev.vars.example --local --port "$PLAYWRIGHT_LOCAL_PORT" </dev/null &`. Do not leave `wrangler dev` in the foreground. Wait until `curl -fsS "http://127.0.0.1:${PLAYWRIGHT_LOCAL_PORT}/api/health"` returns. Then `npx chrome-devtools new_page` and `take_snapshot` for every route in `app/routes.ts`.
             3. Drift means: a route in `app/routes.ts` with no row; a route row whose path is not a route in `app/routes.ts`; a Proof cell that names a `e2e/` or `tests/` file that is not in the repo; a Reach cell that names a control the snapshot of that rendered page lacks. Rows under the heading "Not a route" are not route rows. The `*` route is the row whose Route cell is `any other path`. `/` is the static file `public/index.html` and its row is the `/` row. One row may name several paths. A route that redirects to `/login` shows the login page to an anonymous session: record that snapshot, and do not rewrite that row's signed-in controls because they were behind the redirect.
-            4. If any row drifted, open a pull request titled exactly `feature-map: sync with ${{ env.SHA }}` against branch `${{ env.BASE }}` that changes only `.agents/skills/verify/feature-map.md`. The pull request body carries the `take_snapshot` output each changed row was built from. Create branch `feature-map-sync-${{ env.SHA }}` from the commit you have checked out, commit only that file, and `gh pr create --base ${{ env.BASE }}`. Do not push to `main`. Do not open the pull request against a branch that does not already contain ${{ env.SHA }}. Then `gh pr view` that pull request. Exit non-zero unless the title is exactly `feature-map: sync with ${{ env.SHA }}`, the body is non-empty, and the only changed file is `.agents/skills/verify/feature-map.md`. `pullRequest` is that number.
+            4. If any row drifted, open a pull request titled exactly `feature-map: sync with ${{ env.SHA }}` against branch `${{ env.BASE }}` that changes only `.agents/skills/verify/feature-map.md`. The pull request body carries the `take_snapshot` output each changed row was built from. Commit only that file on the commit you have checked out and push it with `git push --force origin HEAD:feature-map-sync` (the one fixed sync branch), then `gh pr create --base ${{ env.BASE }} --head feature-map-sync`, then arm it for the merge queue with `gh pr merge <number> --auto --squash`. Do not push to `main`. Do not open the pull request against a branch that does not already contain ${{ env.SHA }}. Then `gh pr view` that pull request. Exit non-zero unless the title is exactly `feature-map: sync with ${{ env.SHA }}`, the body is non-empty, auto-merge is enabled, and the only changed file is `.agents/skills/verify/feature-map.md`. `pullRequest` is that number.
             5. If nothing drifted, do not open a pull request and omit `pullRequest`.
             The job fails if the app does not start or a route returns 5xx: exit non-zero in that case. Do not edit any file except `.agents/skills/verify/feature-map.md`.
             Your final answer is only the JSON object the schema requires. `kind` is `no-drift` or `opened-pr`. `sha` is ${{ env.SHA }}. `routes` is every path you drove, one string each, and must not be empty. `pullRequest` is the pull request number when `kind` is `opened-pr`, and omit it when `kind` is `no-drift`. A run that does not produce that object fails.
