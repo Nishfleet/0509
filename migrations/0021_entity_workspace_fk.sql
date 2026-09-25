@@ -1,4 +1,4 @@
--- 0015_entity_workspace_fk.sql — a child row cannot pair workspace A with
+-- 0021_entity_workspace_fk.sql — a child row cannot pair workspace A with
 -- an entity that belongs to workspace B. Issue #4707.
 --
 -- entity.id is already the primary key, so (workspace_id, id) cannot

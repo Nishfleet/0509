@@ -2,13 +2,13 @@ import { applyD1Migrations, env } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
 
 /**
- * 0509#4707. Applies every migration except 0015, stores a connected set of
- * rows, then applies the rebuild. The rows must still read back, a matching
- * insert must succeed, and an insert that pairs another workspace's entity
- * must fail.
+ * 0509#4707. Applies every migration numbered before 0021, stores a connected
+ * set of rows, then applies the rebuild. A later file must not run first.
+ * The rows must still read back, a matching insert must succeed, and an
+ * insert that pairs another workspace's entity must fail.
  */
 
-const MIGRATION = "0015_entity_workspace_fk.sql";
+const MIGRATION = "0021_entity_workspace_fk.sql";
 const NOW = "2026-09-25T00:00:00.000Z";
 
 const USER = "user-fk-4707";
@@ -63,9 +63,13 @@ describe("entity workspace foreign key (0509#4707)", () => {
   it("keeps stored rows and rejects a cross-workspace entity", async () => {
     const all = env.TEST_MIGRATIONS as Migration[];
     const next = all.filter((migration) => migration.name === MIGRATION);
-    const prior = all.filter((migration) => migration.name !== MIGRATION);
+    const prior = all
+      .filter((migration) => migration.name < MIGRATION)
+      .sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
     expect(next).toHaveLength(1);
-    expect(prior).toHaveLength(all.length - 1);
+    expect(prior.map((migration) => migration.name)).toEqual(
+      [...all.map((migration) => migration.name)].filter((name) => name < MIGRATION).sort(),
+    );
 
     await applyD1Migrations(env.DB, prior);
 
