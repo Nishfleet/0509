@@ -197,7 +197,7 @@ one.
 Three settings and nothing else (`docs/REBUILD-DELIVERY.md`), as three ruled rows, each
 edited in place:
 
-1. Brief day, time and timezone.
+1. Brief day, time and timezone, and **Pause the brief** / **Resume the brief** (paused: "Paused since <date>. Your ranking still updates; the email doesn't come.").
 2. Immediate alerts for your own site — on (default) / off.
 3. Delivery email address.
 
