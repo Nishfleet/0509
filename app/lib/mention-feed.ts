@@ -2,7 +2,7 @@ import { daysAgoLabel } from "./delivery-alert";
 import { noulAction } from "./jev/thresholds";
 import { sourceName } from "./source-name";
 
-export type MentionTreatment = "shown" | "possibly" | "held";
+export type MentionTreatment = "shown" | "possibly" | "held" | "unreviewed";
 
 export interface MentionReadRow {
   id: string;
@@ -33,6 +33,9 @@ const FOUND_TODAY = "found today";
 export const POSSIBLY_LINE =
   "Possibly. We were not sure this mattered, so it sits here rather than in your brief.";
 
+export const UNREVIEWED_LINE =
+  "Unreviewed. We have not reviewed this yet, so it sits here rather than in your brief.";
+
 export function mentionTreatment(p: number): MentionTreatment {
   const action = noulAction(p);
   if (action === "act") return "shown";
@@ -53,7 +56,9 @@ function storedReason(reason: string | null): string | null {
 export function mentionsFromRows(rows: readonly MentionReadRow[], now: Date): MentionRowModel[] {
   return rows.flatMap((row) => {
     const title = row.title?.trim() ?? "";
-    if (row.p === null || !Number.isFinite(row.p) || title === "" || row.url === "") return [];
+    if (title === "" || row.url === "") return [];
+    const treatment: MentionTreatment =
+      row.p === null || !Number.isFinite(row.p) ? "unreviewed" : mentionTreatment(row.p);
     return [
       {
         id: row.id,
@@ -62,7 +67,7 @@ export function mentionsFromRows(rows: readonly MentionReadRow[], now: Date): Me
         sourceName: sourceName(row.kind, row.platform),
         publishedAt: row.publishedAt,
         observedAt: row.observedAt,
-        treatment: mentionTreatment(row.p),
+        treatment,
         when: mentionWhen(row.publishedAt, now),
         why: storedReason(row.reason),
       },
