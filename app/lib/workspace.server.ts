@@ -1,5 +1,6 @@
 import { env } from "cloudflare:workers";
 
+import { readWorkspaceSelfId } from "./data/entity.server";
 import { ensureOwnerEmailTarget } from "./data/send_target.server";
 import { fillWorkspaceTimezone, insertWorkspace } from "./data/workspace.server";
 import type { WorkspaceDb } from "./data/workspace.server";
@@ -21,8 +22,6 @@ const SELECT_WORKSPACE = `SELECT id, name, owner_user_id, timezone, brief_weekda
 FROM workspace WHERE owner_user_id = ?
 ORDER BY created_at ASC
 LIMIT 1`;
-
-const SELECT_SELF = `SELECT id FROM entity WHERE workspace_id = ? AND role = 'self' LIMIT 1`;
 
 export function firstWorkspaceId(userId: string): string {
   return `ws_${userId}`;
@@ -97,8 +96,8 @@ export async function workspaceLanding(
   input: { userId: string; email: string; timezone: string | null; now?: string },
 ): Promise<"/onboarding" | null> {
   const workspace = await ensureWorkspace(db, input);
-  const self = await db.prepare(SELECT_SELF).bind(workspace.id).first<{ id: string }>();
-  return self ? null : "/onboarding";
+  const selfId = await readWorkspaceSelfId(workspace.id);
+  return selfId === null ? "/onboarding" : null;
 }
 
 export async function workspaceLandingForRequest(request: Request, userId: string): Promise<"/onboarding" | null> {
