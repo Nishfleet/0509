@@ -9,8 +9,8 @@ import { ONBOARDING_PAGE } from "../components/page-heading";
 import { StepBar } from "../components/step-bar";
 import { isTakenDown } from "../lib/data/takedown.server";
 import { readWorkspaceIdForOwner } from "../lib/data/workspace.server";
+import { creatorRows, editedFields, isDraftSave } from "../lib/identity/card-fields";
 import { readDraft, saveDraftField } from "../lib/identity/card-draft.server";
-import { creatorRows, isDraftSave } from "../lib/identity/card-fields";
 import { startCard, withinProbeLimit } from "../lib/identity/card.server";
 import { confirmCard } from "../lib/identity/confirm.server";
 import { normaliseSubject } from "../lib/identity/normalise";
@@ -41,13 +41,14 @@ export async function loader({ request }: Route.LoaderArgs) {
   if (screened.kind !== "proceed") throw redirect("/onboarding");
   if (!(await withinProbeLimit(session.user.id))) return { card: null, limited: true };
   const shown = subject.kind === "domain" ? subject.registrable : (subject.url ?? `@${subject.registrable}`);
+  const draft = await readDraft(workspaceId, subject.registrable);
   return {
     card: {
       subject: raw,
       creator: creatorRows(subject),
       domain: shown,
-      ...timeCard(workspaceId, startCard(workspaceId, subject)),
-      draft: await readDraft(workspaceId, subject.registrable),
+      ...timeCard(workspaceId, startCard(workspaceId, subject, editedFields(draft))),
+      draft,
     },
     limited: false,
   };
