@@ -9,6 +9,7 @@ import { HomeStanding } from "../components/home-standing";
 import { PAGE } from "../components/page-heading";
 import { ShareButton } from "../components/share-button";
 import { readWorkspaceMentionSources } from "../lib/data/source.server";
+import { readSelfSiteFill } from "../lib/data/entity.server";
 import { readWorkspaceIdForOwner } from "../lib/data/workspace.server";
 import { homeView } from "../lib/home-standing";
 import { readHomeStandingInputs } from "../lib/home-standing.server";
@@ -28,12 +29,26 @@ export async function loader({ request }: Route.LoaderArgs) {
   if (inputs === null) throw redirect("/onboarding");
   const workspaceId = await readWorkspaceIdForOwner(session.user.id);
   const sources = workspaceId === null ? [] : await readWorkspaceMentionSources(workspaceId);
+  const siteFill = workspaceId === null ? null : await readSelfSiteFill(workspaceId);
   const howRanked = await readHowRanked(env.DB, inputs.payload);
   return {
     view: homeView({ ...inputs, now: new Date() }),
     howRanked,
     freshness: freshnessEntries(sources, Date.now()),
+    siteFill,
   };
+}
+
+function SiteFillLine({ state }: { state: "pending" | "gave_up" }) {
+  const text =
+    state === "pending"
+      ? "Your site didn't let us in yet. We're trying again every hour for a day and will fill your card when it does."
+      : "We couldn't read your site in a day of trying, so your card keeps what you entered. Everything else is still watched.";
+  return (
+    <p role="status" className="text-ink-soft mt-6 text-[0.88rem]">
+      {text}
+    </p>
+  );
 }
 
 export default function Page({ loaderData }: Route.ComponentProps) {
@@ -54,6 +69,9 @@ export default function Page({ loaderData }: Route.ComponentProps) {
   return (
     <main className={PAGE}>
       <HomeStanding view={loaderData.view} howRanked={loaderData.howRanked} />
+      {loaderData.siteFill === "pending" || loaderData.siteFill === "gave_up" ? (
+        <SiteFillLine state={loaderData.siteFill} />
+      ) : null}
       <FreshnessLine entries={loaderData.freshness} />
       {loaderData.view.standing.kind === "ranked" ? <ShareButton /> : null}
       <footer className="border-line mt-14 border-t pt-7">

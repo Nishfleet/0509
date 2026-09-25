@@ -428,3 +428,12 @@ const MARK_SELF_SITE_FILL =
 export async function markSelfSiteFill(entityId: string, state: SiteFillState): Promise<void> {
   await env.DB.prepare(MARK_SELF_SITE_FILL).bind(entityId, state).run();
 }
+
+const READ_SELF_SITE_FILL =
+  "SELECT json_extract(identity_json, '$.siteFill') AS site_fill FROM entity WHERE workspace_id = ?1 AND role = 'self'";
+
+export async function readSelfSiteFill(workspaceId: string): Promise<SiteFillState | null> {
+  const row = await env.DB.prepare(READ_SELF_SITE_FILL).bind(workspaceId).first<{ site_fill: string | null }>();
+  const value = row?.site_fill ?? null;
+  return value === "pending" || value === "filled" || value === "gave_up" ? value : null;
+}
