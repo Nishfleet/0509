@@ -1,3 +1,4 @@
+import type { ShouldRevalidateFunctionArgs } from "react-router";
 import type { Route } from "./+types/onboarding.identity";
 
 import { redirect } from "react-router";
@@ -8,7 +9,7 @@ import { ONBOARDING_PAGE } from "../components/page-heading";
 import { StepBar } from "../components/step-bar";
 import { isTakenDown } from "../lib/data/takedown.server";
 import { readWorkspaceIdForOwner } from "../lib/data/workspace.server";
-import { creatorRows, editedFields } from "../lib/identity/card-fields";
+import { creatorRows, editedFields, isDraftSave } from "../lib/identity/card-fields";
 import { readDraft, saveDraftField } from "../lib/identity/card-draft.server";
 import { startCard, withinProbeLimit } from "../lib/identity/card.server";
 import { confirmCard } from "../lib/identity/confirm.server";
@@ -91,6 +92,10 @@ export async function action({ request }: Route.ActionArgs) {
   }
   if (await confirmCard(workspaceId, form)) throw redirect("/onboarding/competitors");
   return { message: "Add your brand's name, then tap That's me." };
+}
+
+export function shouldRevalidate({ formData, defaultShouldRevalidate }: ShouldRevalidateFunctionArgs) {
+  return isDraftSave(formData) ? false : defaultShouldRevalidate;
 }
 
 export default function Page({ loaderData, actionData }: Route.ComponentProps) {

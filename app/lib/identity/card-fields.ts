@@ -48,3 +48,7 @@ export function creatorRows(subject: Subject): CreatorRows | null {
     handle: `@${subject.registrable}`,
   };
 }
+
+export function isDraftSave(formData: FormData | undefined): boolean {
+  return formData?.get("intent") === "draft";
+}
