@@ -3,6 +3,7 @@ import { env } from "cloudflare:workers";
 import { insertIncidentAlertStatement } from "../data/alert.server";
 import { openIncidentStatement } from "../data/incident.server";
 import { insertChangeSignalStatement } from "../data/signal.server";
+import { nextOwnSiteCheck } from "../incident-recheck";
 import type { ChangeJudgment } from "./judge.server";
 
 export interface PublishChangeInput {
@@ -34,7 +35,7 @@ interface PublishedBand {
   band: string;
 }
 
-function payloadJson(input: PublishChangeInput, verdict: PublishedBand): string {
+function payloadJson(input: PublishChangeInput, verdict: PublishedBand, seenAt: string | null = null): string {
   return JSON.stringify({
     textKey: input.textKey,
     previousTextKey: input.previousTextKey,
@@ -42,13 +43,14 @@ function payloadJson(input: PublishChangeInput, verdict: PublishedBand): string 
     previousScreenshotKey: input.previousScreenshotKey,
     p: verdict.p,
     band: verdict.band,
+    ...(seenAt === null ? {} : { seenAt, recheckAt: nextOwnSiteCheck(new Date(seenAt)) }),
   });
 }
 
 export async function publishChange(input: PublishChangeInput): Promise<PublishedChange> {
   const { selfBreakage, noteworthy } = input.judgment;
   if (selfBreakage !== null && (selfBreakage.band === "alert" || selfBreakage.band === "check")) {
-    const now = new Date().toISOString();
+    const seenAt = new Date().toISOString();
     const signalId = crypto.randomUUID();
     const incidentId = crypto.randomUUID();
     const alertId = crypto.randomUUID();
@@ -65,8 +67,8 @@ export async function publishChange(input: PublishChangeInput): Promise<Publishe
         summary: selfBreakage.reason,
         url: input.url,
         aspect: "breakage",
-        payloadJson: payloadJson(input, selfBreakage),
-        observedAt: now,
+        payloadJson: payloadJson(input, selfBreakage, seenAt),
+        observedAt: seenAt,
       }),
       openIncidentStatement({
         id: incidentId,
@@ -74,7 +76,7 @@ export async function publishChange(input: PublishChangeInput): Promise<Publishe
         entityId: input.entityId,
         pageId: input.pageId,
         kind: "breakage",
-        openedAt: now,
+        openedAt: seenAt,
       }),
       insertIncidentAlertStatement({
         id: alertId,
@@ -86,10 +88,20 @@ export async function publishChange(input: PublishChangeInput): Promise<Publishe
         severity: selfBreakage.band === "alert" ? "high" : "normal",
         title: `${title}: ${input.url}`,
         body: selfBreakage.reason,
-        createdAt: now,
+        createdAt: seenAt,
       }),
     ];
-    const [signal, incident, alert] = await env.DB.batch(statements);
+    const results = await env.DB.batch(statements);
+    const opened = results[1]?.meta.changes === 1;
+    if (!opened) {
+      return {
+        signalId: results[0]?.meta.changes === 1 ? signalId : null,
+        incidentId: null,
+        alertId: null,
+      };
+    }
+    const [signal, incident, alert] = results;
+    if (selfBreakage.band === "alert") await env.SEND_EMAIL.send({ incident_id: incidentId });
     return {
       signalId: signal.meta.changes === 1 ? signalId : null,
       incidentId: incident.meta.changes === 1 ? incidentId : null,
