@@ -83,9 +83,11 @@ describe("reviewFields", () => {
     expect(askedIds(run)[0]?.sort()).toEqual([NAME_ID, DESCRIPTION_ID, SOCIALS_ID].sort());
     const { results } = await env.DB.prepare("SELECT question_id, p, workspace_id FROM jev_verdict").all();
     expect(results).toHaveLength(3);
-    expect(results.map((row) => row.question_id).sort()).toEqual([NAME_ID, DESCRIPTION_ID, SOCIALS_ID].sort());
+    const byId = new Map(results.map((row) => [String(row.question_id), Number(row.p)] as const));
+    expect(byId.get(NAME_ID)).toBe(0.95);
+    expect(byId.get(DESCRIPTION_ID)).toBe(0.5);
+    expect(byId.get(SOCIALS_ID)).toBe(0.05);
     expect(results.every((row) => row.workspace_id === WS_ID)).toBe(true);
-    expect(results.every((row) => typeof row.p === "number")).toBe(true);
   });
 
   it("does not ask about a field with no value", async () => {
