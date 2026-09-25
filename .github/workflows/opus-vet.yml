@@ -6,7 +6,7 @@ on:
 jobs:
   vet:
     if: contains(fromJSON('["needs-orchestrator","needs-nish-decision","needs-split"]'), github.event.label.name)
-    uses: Nishfleet/fleet-ops/.github/workflows/opus-vet.yml@main
+    uses: Nishfleet/fleet-ops/.github/workflows/opus-vet.yml@26e6ac1a5821436660bca8922a95d50e79bf6a97 # main 2026-09-25 (fleet-ops#8608); bump when fleet-ops changes it
     permissions:
       contents: read
       issues: write
@@ -14,4 +14,5 @@ jobs:
       id-token: write
     with:
       close_fleet_work: true
-    secrets: inherit
+    secrets:
+      CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}

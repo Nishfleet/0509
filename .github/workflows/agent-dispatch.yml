@@ -20,7 +20,7 @@ on:
     - cron: '17 */6 * * *'
 jobs:
   dispatch:
-    uses: Nishfleet/fleet-ops/.github/workflows/agent-dispatch.yml@main
+    uses: Nishfleet/fleet-ops/.github/workflows/agent-dispatch.yml@26e6ac1a5821436660bca8922a95d50e79bf6a97 # main 2026-09-25 (fleet-ops#8608); bump when fleet-ops changes it
     permissions:
       issues: write
       pull-requests: write

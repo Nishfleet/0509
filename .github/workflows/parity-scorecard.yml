@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
 jobs:
   scorecard:
-    uses: Nishfleet/fleet-ops/.github/workflows/parity-scorecard.yml@main
+    uses: Nishfleet/fleet-ops/.github/workflows/parity-scorecard.yml@26e6ac1a5821436660bca8922a95d50e79bf6a97 # main 2026-09-25 (fleet-ops#8608); bump when fleet-ops changes it
     permissions:
       issues: write
       actions: read

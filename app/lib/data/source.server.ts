@@ -65,6 +65,8 @@ const MARK_CANARY_GOOD = `UPDATE source SET degraded_reason = NULL, last_good_at
 
 const MARK_CANARY_BAD = `UPDATE source SET degraded_reason = 'not answering' WHERE id = ?1`;
 
+const MARK_SOURCE_BLOCKED = "UPDATE source SET degraded_reason = ?2 WHERE id = ?1";
+
 export interface CanarySource {
   id: string;
   pluginKey: string;
@@ -97,6 +99,12 @@ export async function recordSourceCanary(
     return;
   }
   await env.DB.prepare(MARK_CANARY_BAD).bind(sourceId).run();
+}
+
+export async function markSourceBlocked(sourceId: string, status: number): Promise<void> {
+  await env.DB.prepare(MARK_SOURCE_BLOCKED)
+    .bind(sourceId, `blocked: HTTP ${String(status)}`)
+    .run();
 }
 
 export async function readEntitySources(

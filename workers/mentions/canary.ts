@@ -1,8 +1,9 @@
 import { env } from "cloudflare:workers";
 
 import type { CanarySource } from "../../app/lib/data/source.server";
-import { recordSourceCanary } from "../../app/lib/data/source.server";
+import { markSourceBlocked, recordSourceCanary } from "../../app/lib/data/source.server";
 import { adapterFor } from "../sources/registry";
+import { UpstreamBlockedError } from "../sources/mentions/types";
 
 export async function runCanary(source: CanarySource, now: string): Promise<number> {
   const adapter = adapterFor(source.pluginKey);
@@ -11,7 +12,11 @@ export async function runCanary(source: CanarySource, now: string): Promise<numb
     try {
       const result = await adapter({ query: source.canaryQuery }, null);
       count = result.canaryCount;
-    } catch {
+    } catch (error) {
+      if (error instanceof UpstreamBlockedError) {
+        await markSourceBlocked(source.id, error.status);
+        return 0;
+      }
       count = 0;
     }
   }

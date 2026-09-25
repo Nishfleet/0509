@@ -54,44 +54,71 @@ beforeEach(async () => {
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  Reflect.deleteProperty(env, "AI");
 });
 
 describe("startCard", () => {
+  function stubAi(p: number) {
+    const run = vi.fn(() =>
+      Promise.resolve({
+        answers: {
+          "identity_field_confidence.name": { type: "noul", noul: p },
+          "identity_field_confidence.description": { type: "noul", noul: p },
+          "identity_field_confidence.socials": { type: "noul", noul: p },
+        },
+      }),
+    );
+    Reflect.set(env, "AI", { run });
+    return run;
+  }
+
   it("draws the card from the brand's homepage", async () => {
+    stubAi(0.95);
     stubWeb(() => new Response(gym, { status: 200 }));
-    const card = startCard(subjectFor("gymshark.com"));
+    const card = startCard("ws-1", subjectFor("gymshark.com"));
 
     const site = await card.site;
     expect(site.name).toBe("Gymshark");
     expect(site.description).toContain("game-changing workout clothes");
     expect(site.socials.map((social) => social.platform)).toContain("instagram");
+    expect(site.review).toEqual({ name: "fill", description: "fill", socials: "fill" });
     expect(site.unfound).toBe(false);
     expect(await card.logo).toBe("data:image/png;base64,AQID");
     expect(await env.SNAPSHOTS.get("logo/gymshark.com")).not.toBeNull();
   });
 
   it("reads the homepage once a day, not once per visit", async () => {
+    stubAi(0.95);
     const calls = stubWeb(() => new Response(gym, { status: 200 }));
-    await startCard(subjectFor("gymshark.com")).site;
-    await startCard(subjectFor("https://www.gymshark.com/")).site;
+    await startCard("ws-1", subjectFor("gymshark.com")).site;
+    await startCard("ws-1", subjectFor("https://www.gymshark.com/")).site;
     expect(calls.filter((url) => !isLogo(url))).toEqual(["https://gymshark.com/"]);
   });
 
   it("says nothing was found when the site cannot be read, and caches nothing", async () => {
+    stubAi(0.95);
     stubWeb(() => new Response("blocked", { status: 403 }));
-    const card = startCard(subjectFor("unreachable.example"));
-    expect(await card.site).toEqual({ name: null, description: null, socials: [], unfound: true });
+    const card = startCard("ws-1", subjectFor("unreachable.example"));
+    expect(await card.site).toEqual({
+      name: null,
+      description: null,
+      socials: [],
+      review: { name: "empty", description: "empty", socials: "empty" },
+      unfound: true,
+    });
     expect(await card.logo).toBeNull();
     expect((await env.IDENTITY_CACHE.list()).keys).toEqual([]);
   });
 
   it("starts a creator's card from the handle, without reading any site", async () => {
+    stubAi(0.95);
     const calls = stubWeb(() => new Response(gym, { status: 200 }));
-    const site = await startCard(subjectFor("https://www.instagram.com/gymshark/")).site;
+    const site = await startCard("ws-1", subjectFor("https://www.instagram.com/gymshark/")).site;
     expect(site).toEqual({
       name: "@gymshark",
       description: null,
       socials: [{ platform: "instagram", url: "https://www.instagram.com/gymshark/" }],
+      review: { name: "fill", description: "empty", socials: "fill" },
       unfound: false,
     });
     expect(calls).toEqual([]);

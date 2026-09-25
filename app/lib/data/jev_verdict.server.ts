@@ -32,6 +32,11 @@ export interface VerdictRow {
   decidedAt: string;
 }
 
+export async function insertVerdicts(rows: readonly VerdictRow[]): Promise<void> {
+  if (rows.length === 0) return;
+  await env.DB.batch(rows.map(insertVerdict));
+}
+
 export async function readCachedNoul(questionId: string, inputHash: string): Promise<number | null> {
   const row = await env.DB.prepare(SELECT_VERDICT).bind(questionId, inputHash).first<{ p: number | null }>();
   return row?.p ?? null;

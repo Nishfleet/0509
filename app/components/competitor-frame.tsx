@@ -1,6 +1,7 @@
 import type { ReactElement } from "react";
 
 import { EmptyState } from "./empty-state";
+import { Sources, type RailSource } from "./competitor-rail";
 import { SiteChangeItem } from "./site-change-item";
 import type { SiteChangeItemData } from "./site-change-item";
 
@@ -13,6 +14,8 @@ export interface CompetitorFrameProps {
   pages: number;
   lastChecked: string | null;
   pausedOn: string | null;
+  sources: readonly RailSource[];
+  now: number;
 }
 
 export function developmentsEmpty(lastChecked: string | null): string {
@@ -38,6 +41,8 @@ export function CompetitorFrame({
   pages,
   lastChecked,
   pausedOn,
+  sources,
+  now,
 }: CompetitorFrameProps): ReactElement {
   const biggest = changes.find((change) => change.id === biggestId) ?? null;
   return (
@@ -87,12 +92,7 @@ export function CompetitorFrame({
           <h2 id="competitor-sources" className={HEADING}>
             Sources on this brand
           </h2>
-          <p className="font-display text-[1.02rem]">Website</p>
-          <p className="text-meta text-ink-soft">
-            {lastChecked === null
-              ? "Homepage, read every night. First read tonight at 02:00 UTC."
-              : `Homepage, read every night. Last read ${lastChecked}.`}
-          </p>
+          <Sources sources={sources} lastChecked={lastChecked} now={now} />
         </section>
       </aside>
     </div>
