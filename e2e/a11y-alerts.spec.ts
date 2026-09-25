@@ -20,6 +20,12 @@ test.skip(
 test("the Alerts page passes axe at WCAG 2.2 AA and is keyboard-operable at 1440 and 390 in light and dark (#4153)", async ({
   page,
 }, testInfo) => {
+  // One magic-link sign-in plus four shapes, each a full page load, an axe
+  // scan, a reload, four Tab presses and a screenshot. Playwright's 30s default
+  // does not cover the sign-in's redirect chain plus the loop: the first
+  // production run read it as a timeout at page.reload(), before the gate. The
+  // same 120s no-horizontal-scroll.spec.ts:46 takes for its signed-in sweep.
+  test.setTimeout(120_000);
   const token = requireInboxToken();
   const email = `e2e+${crypto.randomUUID().replaceAll("-", "").slice(0, 12)}@0509.io`;
   await signInWithMagicLink(page, email, token);
@@ -33,9 +39,13 @@ test("the Alerts page passes axe at WCAG 2.2 AA and is keyboard-operable at 1440
       await page.emulateMedia({ colorScheme });
       await page.goto("/app/alerts");
 
-      // The WCAG 2.2 AA gate: axe-core inside the existing Playwright suite,
-      // the same tag set the onboarding spec scans with, and the violations
-      // attached so a red run names the rule that failed.
+      // The WCAG 2.2 AA scan: axe-core inside the existing Playwright suite, the
+      // same tag set the onboarding spec scans with, and the violations
+      // attached so a red run names the rule that failed. The gate that reads
+      // this array is the last statement in the shape, after the landmark,
+      // heading and focus asserts, so a page that fails the scan still reports
+      // whether it is operable: one missing rule cannot hide the other half of
+      // what this test claims.
       const results = await new AxeBuilder({ page })
         .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"])
         .analyze();
@@ -43,7 +53,6 @@ test("the Alerts page passes axe at WCAG 2.2 AA and is keyboard-operable at 1440
         body: JSON.stringify(results.violations, null, 2),
         contentType: "application/json",
       });
-      expect(results.violations).toEqual([]);
 
       // One landmark set: the page's own h1, exactly one `main`, and the
       // "Places" navigation that carries the four places.
@@ -79,6 +88,11 @@ test("the Alerts page passes axe at WCAG 2.2 AA and is keyboard-operable at 1440
       await page.screenshot({
         path: test.info().outputPath(`alerts-focus-${String(viewport.width)}-${colorScheme}.png`),
       });
+
+      // The gate, last: zero violations at this shape. It is the same
+      // `toEqual([])` the onboarding spec asserts, on the same array the
+      // attachment above already carries in full.
+      expect(results.violations).toEqual([]);
     }
   }
 });
