@@ -356,12 +356,6 @@ export async function readSiteChangePayload(workspaceId: string, signalId: strin
   return row?.payload_json ?? null;
 }
 
-const DELETE_ENTITY_SIGNALS = `DELETE FROM signal WHERE workspace_id = ?1 AND entity_id = ?2`;
-
-export function deleteEntitySignals(workspaceId: string, entityId: string): D1PreparedStatement {
-  return env.DB.prepare(DELETE_ENTITY_SIGNALS).bind(workspaceId, entityId);
-}
-
 export interface SignalCount {
   kind: string;
   count: number;

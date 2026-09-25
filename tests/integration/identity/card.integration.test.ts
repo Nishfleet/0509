@@ -5,6 +5,7 @@ import { startCard } from "../../../app/lib/identity/card.server";
 import { confirmCard } from "../../../app/lib/identity/confirm.server";
 import { extractIdentity } from "../../../app/lib/identity/extract";
 import { normaliseSubject } from "../../../app/lib/identity/normalise";
+import { probeKey } from "../../../app/lib/identity/probe-cache.server";
 import { identityTailInstanceId } from "../../../app/lib/identity/tail.server";
 import gym from "../../fixtures/gymshark-2026-09-22-a.html?raw";
 
@@ -44,6 +45,20 @@ async function settledTail(): Promise<void> {
     await new Promise((resolve) => setTimeout(resolve, 25));
   }
   throw new Error("identity tail did not finish");
+}
+
+async function answerHomepage(): Promise<void> {
+  await env.IDENTITY_CACHE.put(
+    probeKey(subjectFor("gymshark.com"), "homepage"),
+    JSON.stringify({
+      name: "Gymshark",
+      description: "Gym clothes",
+      socials: [],
+      logoCandidates: { ldOrganizationLogo: null, ogImage: null, appleTouchIcon: null },
+      adLibraryHints: [],
+      navLinks: [],
+    }),
+  );
 }
 
 function form(fields: Record<string, string>): FormData {
@@ -139,11 +154,34 @@ describe("startCard", () => {
     });
     expect(calls).toEqual([]);
   });
+
+  it("reads the YouTube channel page and joins its socials", async () => {
+    stubAi(0.95);
+    const channelHtml =
+      '<html><head><title>Veritasium</title>' +
+      '<meta property="og:title" content="Veritasium">' +
+      '<meta property="og:description" content="An element of truth - videos about science, education, and anything else I find interesting.">' +
+      '</head><body>' +
+      '<section class="about">Elements of truth about the world, demonstrated with experiments and conversations with experts across physics, biology, engineering and the history of science. New videos every week on Veritasium.</section>' +
+      '<footer><a href="https://www.instagram.com/veritasium/">Instagram</a></footer>' +
+      '</body></html>';
+    stubWeb(() => new Response(channelHtml, { status: 200, headers: { "content-type": "text/html" } }));
+    const card = startCard("ws-1", subjectFor("https://www.youtube.com/@veritasium"), []);
+
+    const site = await card.site;
+    expect(site.name).toBe("Veritasium");
+    expect(site.description).toContain("element of truth");
+    expect(site.socials[0]).toEqual({ platform: "youtube", url: "https://www.youtube.com/@veritasium" });
+    expect(site.socials.map((social) => social.platform)).toContain("instagram");
+
+    expect(await card.logo).toBeNull();
+  });
 });
 
 describe("confirmCard", () => {
   it("saves the card, with the user's edits, as the workspace's own brand", async () => {
     stubWeb(() => new Response(gym, { status: 200, headers: { "content-type": "text/html" } }));
+    await answerHomepage();
     await env.SNAPSHOTS.put("logo/gymshark.com", new Uint8Array([1]), { httpMetadata: { contentType: "image/png" } });
     const saved = await confirmCard(
       "ws-1",
@@ -214,6 +252,7 @@ describe("confirmCard", () => {
 
   it("ignores a form-supplied logo URL when no logo is kept in R2", async () => {
     stubWeb(() => new Response(gym, { status: 200, headers: { "content-type": "text/html" } }));
+    await answerHomepage();
     const saved = await confirmCard(
       "ws-1",
       form({
@@ -230,6 +269,7 @@ describe("confirmCard", () => {
   });
 
   it("refuses a card with no name, and a second confirm keeps the first", async () => {
+    await answerHomepage();
     expect(await confirmCard("ws-1", form({ subject: "gymshark.com", name: "  ", description: "" }))).toBe(false);
     expect(await confirmCard("ws-1", form({ subject: "gymshark.com", name: "First", description: "" }))).toBe(true);
     expect(await confirmCard("ws-1", form({ subject: "gymshark.com", name: "Second", description: "" }))).toBe(true);

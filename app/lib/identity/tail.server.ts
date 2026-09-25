@@ -17,6 +17,7 @@ export interface IdentityTailParams {
   name: string;
   domain: string;
   homepageUrl: string | null;
+  handle?: string;
 }
 
 export interface TailWatch {
@@ -32,6 +33,7 @@ export interface IdentityTailOutcome {
   discoveryInstanceId: string | null;
   queued: string[];
   r2Keys: string[];
+  siteFill: "filled" | "gave_up" | null;
 }
 
 interface AdTarget {
@@ -91,8 +93,14 @@ export async function seedTailWatches(params: IdentityTailParams, discoveredAt: 
     }
   }
 
+  const mentionSources = await readEnabledSources("mentions");
   if (params.name.trim() !== "") {
-    for (const source of await readEnabledSources("mentions")) watch(source.id, params.name);
+    for (const source of mentionSources) watch(source.id, params.name);
+  }
+  if (params.handle !== undefined) {
+    for (const source of mentionSources.filter((source) => source.key !== "youtube.channel_rss")) {
+      watch(source.id, `@${params.handle}`);
+    }
   }
 
   for (const target of ads) {

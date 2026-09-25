@@ -64,7 +64,7 @@ async function probeSite(subject: Subject): Promise<SiteCard> {
 }
 
 export async function readSiteCard(subject: Subject): Promise<{ card: SiteCard; reached: boolean }> {
-  if (subject.kind !== "domain") return { card: UNREACHED, reached: false };
+  if (subject.kind === "handle" || subject.url === null) return { card: UNREACHED, reached: false };
   try {
     return { card: await cachedProbe(subject, "homepage", siteCardSchema, () => probeSite(subject)), reached: true };
   } catch (error) {
@@ -103,12 +103,13 @@ export function startCard(
 ): { site: Promise<SiteFields>; logo: Promise<string | null> } {
   const read = readSiteCard(subject);
   const site = read.then(async ({ card, reached }): Promise<SiteFields> => {
+    const subjectSocial = subject.kind !== "domain" && subject.url !== null
+      ? [{ platform: subject.platform ?? "site", url: subject.url }, ...card.socials.filter((social) => social.url !== subject.url)]
+      : card.socials;
     const values: CardValues = {
       name: card.name ?? (subject.kind === "domain" ? null : `@${subject.registrable}`),
       description: card.description,
-      socials: subject.url !== null && subject.kind !== "domain"
-        ? [{ platform: subject.platform ?? "site", url: subject.url }]
-        : card.socials,
+      socials: subjectSocial,
     };
     const review: CardReview = subject.kind === "domain" && reached
       ? await reviewFields(workspaceId, subject, values, edited, new Date().toISOString())
@@ -116,7 +117,7 @@ export function startCard(
     return { ...applyReview(values, review), unfound: subject.kind === "domain" && !reached };
   });
   const logo = read.then(async ({ card, reached }) => {
-    if (!reached) return null;
+    if (!reached || subject.kind !== "domain") return null;
     const cached = await cachedProbe(subject, "icon", logoSchema, async () => {
       const result = await resolveLogo({ ...card.logoCandidates, registrableDomain: subject.registrable });
       return { url: result.ok ? result.url : null };

@@ -1,4 +1,5 @@
 # Trigger stub. The vet and sizer live once in Nishfleet/fleet-ops.
+# keep and close there remove needs-nish-decision; park is the only verdict that leaves it.
 name: opus-vet
 on:
   issues:

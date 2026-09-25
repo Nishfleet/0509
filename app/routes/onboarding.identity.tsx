@@ -8,12 +8,13 @@ import { ONBOARDING_PAGE } from "../components/page-heading";
 import { StepBar } from "../components/step-bar";
 import { isTakenDown } from "../lib/data/takedown.server";
 import { readWorkspaceIdForOwner } from "../lib/data/workspace.server";
-import { editedFields } from "../lib/identity/card-fields";
+import { creatorRows, editedFields } from "../lib/identity/card-fields";
 import { readDraft, saveDraftField } from "../lib/identity/card-draft.server";
 import { startCard, withinProbeLimit } from "../lib/identity/card.server";
 import { confirmCard } from "../lib/identity/confirm.server";
 import { normaliseSubject } from "../lib/identity/normalise";
 import { screenOnboardingSubject } from "../lib/onboarding-screen.server";
+import { timeCard } from "../lib/onboarding/card-timing.server";
 import { requireSession } from "../lib/require-session.server";
 import { workspaceLandingForRequest } from "../lib/workspace.server";
 
@@ -43,8 +44,9 @@ export async function loader({ request }: Route.LoaderArgs) {
   return {
     card: {
       subject: raw,
+      creator: creatorRows(subject),
       domain: shown,
-      ...startCard(workspaceId, subject, editedFields(draft)),
+      ...timeCard(workspaceId, startCard(workspaceId, subject, editedFields(draft))),
       draft,
     },
     limited: false,
@@ -116,6 +118,7 @@ export default function Page({ loaderData, actionData }: Route.ComponentProps) {
           <IdentityCard
             subject={card.subject}
             domain={card.domain}
+            creator={card.creator}
             site={card.site}
             logo={card.logo}
             draft={card.draft}

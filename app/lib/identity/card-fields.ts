@@ -1,3 +1,5 @@
+import type { Subject } from "./normalise";
+
 export type FieldReview = "fill" | "check" | "empty";
 
 export interface CardReview {
@@ -25,4 +27,24 @@ export interface CardDraft {
 
 export function editedFields(draft: CardDraft): DraftField[] {
   return (["name", "description"] as const).filter((field) => draft[field] !== undefined);
+}
+
+export interface CreatorRows {
+  channel: string | null;
+  handle: string;
+}
+
+const CHANNELS: Record<NonNullable<Subject["platform"]>, string> = {
+  youtube: "YouTube",
+  instagram: "Instagram",
+  tiktok: "TikTok",
+  x: "X",
+};
+
+export function creatorRows(subject: Subject): CreatorRows | null {
+  if (subject.kind === "domain") return null;
+  return {
+    channel: subject.platform === undefined ? null : CHANNELS[subject.platform],
+    handle: `@${subject.registrable}`,
+  };
 }
