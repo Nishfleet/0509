@@ -1,5 +1,5 @@
-import type { FreshnessEntry } from "../components/freshness-line";
 import { sourcePillStatus, type SourceRow, type SourceSnapshot } from "../components/source-pill";
+import type { FreshnessEntry } from "../components/freshness-line";
 import { sourceName } from "./source-name";
 
 export interface FreshnessSource {
