@@ -1,5 +1,6 @@
 import { applyD1Migrations, env } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
+import type { D1Migration } from "./entity-workspace-fk";
 
 /**
  * 0509#4707. Applies every migration numbered before 0021, stores a connected
@@ -33,11 +34,6 @@ const INCIDENT = "inc-fk-4707";
 const NOTICE = "notice-fk-4707";
 const STANDING = "stand-fk-4707";
 
-interface Migration {
-  name: string;
-  queries: string[];
-}
-
 const TABLES = [
   "signal",
   "incident",
@@ -63,7 +59,7 @@ async function entityFk(table: string): Promise<{ seq: number; from: string; to:
 
 describe("entity workspace foreign key (0509#4707)", () => {
   it("keeps stored rows and rejects a cross-workspace entity", async () => {
-    const all = env.TEST_MIGRATIONS as Migration[];
+    const all: D1Migration[] = env.TEST_MIGRATIONS;
     const next = all.filter((migration) => migration.name === MIGRATION);
     const prior = all
       .filter((migration) => migration.name < MIGRATION)
