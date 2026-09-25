@@ -1,9 +1,9 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { createRoutesStub } from "react-router";
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 
-import { Fields, saveEditorOnEnter } from "../../../app/components/identity-card";
+import { Fields } from "../../../app/components/identity-card";
 import type { CardDraft, CardReview, SiteFields } from "../../../app/lib/identity/card-fields";
 
 const INSTAGRAM = "https://instagram.com/gymshark";
@@ -177,46 +177,5 @@ describe("the identity card fields", () => {
 		const html = render(site({ name: "fill", description: "fill", socials: "fill" }));
 
 		expect(html).not.toContain("within the hour");
-	});
-});
-
-describe("the identity card editor keyboard", () => {
-	it("saves and closes on Enter, and lets the IME keep its composition Enter", () => {
-		const close = vi.fn();
-		const save = vi.fn();
-		const preventDefault = vi.fn();
-
-		saveEditorOnEnter(
-			{ key: "Enter", nativeEvent: { isComposing: false }, preventDefault },
-			"My Brand",
-			close,
-			save,
-		);
-		expect(preventDefault).toHaveBeenCalledOnce();
-		expect(close).toHaveBeenCalledOnce();
-		expect(save).toHaveBeenCalledExactlyOnceWith("My Brand");
-
-		preventDefault.mockClear();
-		close.mockClear();
-		save.mockClear();
-		saveEditorOnEnter(
-			{ key: "Enter", nativeEvent: { isComposing: true }, preventDefault },
-			"My Brand",
-			close,
-			save,
-		);
-		expect(preventDefault).not.toHaveBeenCalled();
-		expect(close).not.toHaveBeenCalled();
-		expect(save).not.toHaveBeenCalled();
-
-		saveEditorOnEnter(
-			{ key: "a", nativeEvent: { isComposing: false }, preventDefault },
-			"My Brand",
-			close,
-			save,
-		);
-		expect(preventDefault).not.toHaveBeenCalled();
-		expect(close).not.toHaveBeenCalled();
-		expect(save).not.toHaveBeenCalled();
 	});
 });

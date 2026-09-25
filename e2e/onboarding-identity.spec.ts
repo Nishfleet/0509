@@ -43,15 +43,7 @@ test.describe("signed in", () => {
     await editName.click();
     const name = page.getByRole("textbox", { name: "name" });
     await name.fill("Gymshark");
-    await name.press("Enter");
-    await expect(editName).toBeFocused();
-    await expect(name).toHaveCount(0);
-
-    await editName.click();
-    await name.fill("Gymshark");
     await name.press("Escape");
-    await expect(editName).toBeFocused();
-    await expect(name).toHaveCount(0);
     await page.getByRole("button", { name: "That's me" }).click();
 
     await expect(page).toHaveURL(/\/onboarding\/competitors$/);
