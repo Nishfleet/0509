@@ -171,6 +171,22 @@ export async function dismissSuggestion(input: {
   await env.DB.prepare(DISMISS_SUGGESTION).bind(input.now, input.suggestionId, input.workspaceId).run();
 }
 
+const DISMISS_FORGOTTEN_COMPETITOR =
+  "INSERT INTO suggestion (id, workspace_id, kind, candidate_domain, candidate_name, status, decided_by, decided_at, created_at) SELECT ?1, workspace_id, 'add', domain, name, 'dismissed', 'user', ?2, ?2 FROM entity WHERE id = ?3 AND workspace_id = ?4 AND role = 'competitor' ON CONFLICT (workspace_id, candidate_domain) DO UPDATE SET kind = 'add', entity_id = NULL, evidence_json = '{}', verdict_p = NULL, verdict_reason = NULL, status = 'dismissed', decided_by = 'user', decided_at = excluded.decided_at";
+
+export function dismissForgottenCompetitor(input: {
+  workspaceId: string;
+  entityId: string;
+  now: string;
+}): D1PreparedStatement {
+  return env.DB.prepare(DISMISS_FORGOTTEN_COMPETITOR).bind(
+    crypto.randomUUID(),
+    input.now,
+    input.entityId,
+    input.workspaceId,
+  );
+}
+
 export interface DismissedSuggestion {
   suggestionId: string;
   name: string;

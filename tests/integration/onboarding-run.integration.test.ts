@@ -1,7 +1,7 @@
 import { env } from "cloudflare:test";
 import { beforeEach, describe, expect, it } from "vitest";
 
-import { markCardReady, startOnboardingRun } from "../../app/lib/data/onboarding_run.server";
+import { markCardReady, markCompetitorsReady, startOnboardingRun } from "../../app/lib/data/onboarding_run.server";
 import { timeCard } from "../../app/lib/onboarding/card-timing.server";
 import type { SiteFields } from "../../app/lib/identity/card-fields";
 
@@ -52,6 +52,28 @@ describe("startOnboardingRun", () => {
         first_signal_at: null,
       },
     ]);
+  });
+});
+
+describe("markCompetitorsReady", () => {
+  it("keeps the first competitors ready time a workspace gets", async () => {
+    await startOnboardingRun({
+      workspaceId,
+      userId,
+      inputRaw: "first.example",
+      startedAt: "2026-09-25T06:00:00.000Z",
+    });
+
+    await markCompetitorsReady(workspaceId, "2026-09-25T06:00:50.000Z");
+    await markCompetitorsReady(workspaceId, "2026-09-25T06:01:30.000Z");
+
+    const row = await env.DB.prepare(
+      "SELECT competitors_ready_at FROM onboarding_run WHERE workspace_id = ?",
+    )
+      .bind(workspaceId)
+      .first<{ competitors_ready_at: string | null }>();
+
+    expect(row?.competitors_ready_at).toBe("2026-09-25T06:00:50.000Z");
   });
 });
 

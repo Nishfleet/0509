@@ -17,6 +17,8 @@ WHERE first_signal_at IS NULL
 
 const UPDATE_CARD_READY_AT = `UPDATE onboarding_run SET card_ready_at = ?2 WHERE workspace_id = ?1 AND card_ready_at IS NULL`;
 
+const UPDATE_COMPETITORS_READY_AT = `UPDATE onboarding_run SET competitors_ready_at = ?2 WHERE workspace_id = ?1 AND competitors_ready_at IS NULL`;
+
 export async function stampFirstSignals(db: D1Database): Promise<void> {
   await db.prepare(STAMP_FIRST_SIGNALS).run();
 }
@@ -34,4 +36,8 @@ export async function startOnboardingRun(input: {
 
 export async function markCardReady(workspaceId: string, at: string): Promise<void> {
   await env.DB.prepare(UPDATE_CARD_READY_AT).bind(workspaceId, at).run();
+}
+
+export async function markCompetitorsReady(workspaceId: string, at: string): Promise<void> {
+  await env.DB.prepare(UPDATE_COMPETITORS_READY_AT).bind(workspaceId, at).run();
 }

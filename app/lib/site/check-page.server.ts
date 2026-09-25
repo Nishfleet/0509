@@ -1,7 +1,7 @@
 import { env } from "cloudflare:workers";
 
 import { insertSnapshot, latestSiteSnapshot } from "../data/snapshot.server";
-import { readUrl } from "../fetch/transport.server";
+import { readUrl, type ReadUrlResult } from "../fetch/transport.server";
 import { extractPageText } from "./extract-text";
 
 export type CheckPageResult =
@@ -66,8 +66,9 @@ export async function checkPage(input: {
   url: string;
   snapshotId?: string;
   before?: string;
+  read?: ReadUrlResult;
 }): Promise<CheckPageResult> {
-  const read = await readUrl(input.url);
+  const read = input.read ?? (await readUrl(input.url));
   if (!read.ok) {
     return { outcome: "failed", reason: read.reason, detail: read.detail };
   }
