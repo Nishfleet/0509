@@ -1,6 +1,7 @@
 import { env } from "cloudflare:workers";
 import { z } from "zod";
 
+import { isFeedKind, type DevelopmentItem } from "../developments";
 import { D3_QUESTION_ID } from "../standing-score";
 import type { HiringSignalState, HiringSignalUpdate } from "../hiring/role-lifecycle";
 
@@ -276,6 +277,35 @@ export async function readSiteChanges(input: {
     .bind(input.workspaceId, input.since, input.entityId, input.limit, D3_QUESTION_ID)
     .all<SiteChangeRow>();
   return results;
+}
+
+const SELECT_ENTITY_DEVELOPMENTS = `SELECT id, kind, title, summary, url, observed_at FROM signal
+WHERE workspace_id = ?1 AND entity_id = ?2 AND kind IN ('ad', 'change', 'mention', 'hiring')
+  AND is_tombstoned = 0 AND observed_at >= ?3 ORDER BY observed_at DESC, id DESC LIMIT ?4`;
+
+interface DevelopmentRow {
+  id: string;
+  kind: string;
+  title: string | null;
+  summary: string | null;
+  url: string | null;
+  observed_at: string;
+}
+
+export async function readEntityDevelopments(input: {
+  workspaceId: string;
+  entityId: string;
+  since: string;
+  limit: number;
+}): Promise<DevelopmentItem[]> {
+  const { results } = await env.DB.prepare(SELECT_ENTITY_DEVELOPMENTS)
+    .bind(input.workspaceId, input.entityId, input.since, input.limit)
+    .all<DevelopmentRow>();
+  return results.flatMap((row) =>
+    isFeedKind(row.kind)
+      ? [{ id: row.id, kind: row.kind, title: row.title, summary: row.summary, url: row.url, observedAt: row.observed_at }]
+      : [],
+  );
 }
 
 const SELECT_SITE_CHANGE_PAYLOAD = `SELECT payload_json FROM signal
