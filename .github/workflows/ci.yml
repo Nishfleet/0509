@@ -213,6 +213,8 @@ jobs:
           # Absent, the secret resolves to "" and the specs fail loudly naming
           # it — they never skip.
           E2E_INBOX_TOKEN: ${{ secrets.E2E_INBOX_TOKEN }}
+          # J5 raises and lowers the fixture bot wall with this token (0509#4121).
+          FIXTURE_SITE_TOKEN: ${{ secrets.FIXTURE_SITE_TOKEN }}
 
       - name: Keep the trace when it fails
         if: failure()
