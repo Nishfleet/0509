@@ -10,7 +10,7 @@ import type { FetchedText, Subject } from "../../../app/lib/discovery/types";
 const SUBJECT: Subject = { name: "Gymshark", domain: "gymshark.com" };
 
 const FIXTURE = readFileSync(
-  join(dirname(fileURLToPath(import.meta.url)), "../../fixtures/gnews-gymshark.xml"),
+  join(dirname(fileURLToPath(import.meta.url)), "../../fixtures/gdelt-gymshark.json"),
   "utf8",
 );
 
@@ -19,139 +19,164 @@ function fetchTextWith(body: string, ok = true): (url: string) => Promise<Fetche
     Promise.resolve({
       ok,
       url,
-      contentType: ok ? "application/rss+xml" : null,
+      contentType: ok ? "application/json" : null,
       body,
     });
 }
 
-function fetchTextWithBodies(
-  alternativesBody: string,
-  plainBody: string,
-): (url: string) => Promise<FetchedText> {
-  return (url) =>
-    Promise.resolve({
-      ok: true,
-      url,
-      contentType: "application/rss+xml",
-      body: url.includes("alternatives") ? alternativesBody : plainBody,
-    });
-}
-
-const GLAMOUR_TITLE = "Gymshark vs Alphalete Athletics: which is better? - Glamour UK";
+const MULTIBRAND_TITLE = "Gymshark, Adanola and Bratz launch activewear capsule";
 
 describe("newsGenerator", () => {
-  it("reads the live Gymshark fixture into candidates that each carry news evidence", async () => {
+  it("reads the live Gymshark fixture into candidates that each carry GDELT evidence", async () => {
     const candidates = await newsGenerator(SUBJECT, fetchTextWith(FIXTURE));
     console.log(
       "gymshark candidates:",
       candidates.map((candidate) => `${candidate.name} (${candidate.evidence.length})`).join(", "),
     );
 
-    expect(candidates.length).toBeGreaterThan(0);
+    expect(candidates.length).toBeGreaterThan(1);
     for (const candidate of candidates) {
       expect(candidate.evidence.length).toBeGreaterThan(0);
       for (const evidence of candidate.evidence) {
         expect(evidence.generator).toBe("news");
-        expect(evidence.sourceUrl.startsWith("https://")).toBe(true);
+        expect(evidence.sourceUrl).toContain(".");
       }
       expect(candidate.name.toLowerCase()).not.toBe("gymshark");
     }
   });
 
-  it("reads the co-mentioned brand out of one item with the publisher as evidence", async () => {
-    const body = `<?xml version="1.0" encoding="UTF-8"?>
-<rss version="2.0">
-  <channel>
-    <title>Gymshark news</title>
-    <link>https://news.google.com/</link>
-    <description>Google News</description>
-    <item>
-      <title>${GLAMOUR_TITLE}</title>
-      <link>https://news.google.com/rss/articles/CBMi123</link>
-      <pubDate>Mon, 22 Sep 2025 10:00:00 GMT</pubDate>
-      <source url="https://www.glamourmagazine.co.uk">Glamour UK</source>
-    </item>
-  </channel>
-</rss>`;
+  it("reads the co-mentioned brands out of one article with the publisher domain as evidence", async () => {
+    const body = JSON.stringify({
+      articles: [
+        {
+          url: "https://www.glamourmagazine.co.uk/style/gymshark-vs-vestiaire",
+          title: "Gymshark, Vestiaire and Bratz lead activewear",
+          seendate: "20260922T110000Z",
+          domain: "glamourmagazine.co.uk",
+        },
+      ],
+    });
 
     const candidates = await newsGenerator(SUBJECT, fetchTextWith(body));
 
-    expect(candidates).toHaveLength(1);
-    expect(candidates[0]?.name).toBe("Alphalete Athletics");
-    expect(candidates[0]?.evidence.length).toBeGreaterThan(0);
-    for (const evidence of candidates[0]?.evidence ?? []) {
-      expect(evidence.sourceUrl).toBe("https://www.glamourmagazine.co.uk");
-      expect(evidence.excerpt).toBe(GLAMOUR_TITLE);
-      expect(evidence.generator).toBe("news");
+    expect(candidates.map((candidate) => candidate.name)).toEqual(["Vestiaire", "Bratz"]);
+    for (const candidate of candidates) {
+      expect(candidate.evidence[0]?.sourceUrl).toBe("glamourmagazine.co.uk");
+      expect(candidate.evidence[0]?.excerpt).toBe(
+        "Gymshark, Vestiaire and Bratz lead activewear",
+      );
+      expect(candidate.evidence[0]?.generator).toBe("news");
     }
   });
 
-  it("ignores an entry that carries neither a publisher nor a link", async () => {
-    const body = `<?xml version="1.0" encoding="UTF-8"?>
-<rss version="2.0">
-  <channel>
-    <title>Gymshark news</title>
-    <link>https://news.google.com/</link>
-    <description>Google News</description>
-    <item>
-      <title>${GLAMOUR_TITLE}</title>
-    </item>
-  </channel>
-</rss>`;
+  it("keeps the publisher domain for each co-mentioned brand in the same article", async () => {
+    const body = JSON.stringify({
+      articles: [
+        {
+          url: "https://hypebae.com/gymshark-adanola-bratz",
+          title: MULTIBRAND_TITLE,
+          seendate: "20260920T070000Z",
+          domain: "hypebae.com",
+        },
+      ],
+    });
+
+    const candidates = await newsGenerator(SUBJECT, fetchTextWith(body));
+
+    expect(candidates).toHaveLength(2);
+    expect(candidates.map((candidate) => candidate.name)).toEqual(["Adanola", "Bratz"]);
+    for (const candidate of candidates) {
+      expect(candidate.evidence[0]?.sourceUrl).toBe("hypebae.com");
+    }
+  });
+
+  it("drops an article that is not an http or https url", async () => {
+    const body = JSON.stringify({
+      articles: [
+        {
+          url: "javascript:alert(1)",
+          title: "Gymshark, Adanola and Bratz announce partnership",
+          seendate: "20260920T070000Z",
+          domain: "evil.example",
+        },
+      ],
+    });
 
     const candidates = await newsGenerator(SUBJECT, fetchTextWith(body));
 
     expect(candidates).toEqual([]);
   });
 
-  it("merges the same co-mentioned brand across the two feeds into one candidate", async () => {
-    const alternativesBody = `<?xml version="1.0" encoding="UTF-8"?>
-<rss version="2.0">
-  <channel>
-    <title>Gymshark news</title>
-    <link>https://news.google.com/</link>
-    <description>Google News</description>
-    <item>
-      <title>${GLAMOUR_TITLE}</title>
-      <link>https://news.google.com/rss/articles/CBMi123</link>
-      <source url="https://www.glamourmagazine.co.uk">Glamour UK</source>
-    </item>
-  </channel>
-</rss>`;
-    const plainBody = `<?xml version="1.0" encoding="UTF-8"?>
-<rss version="2.0">
-  <channel>
-    <title>Gymshark news</title>
-    <link>https://news.google.com/</link>
-    <description>Google News</description>
-    <item>
-      <title>Gymshark and Alphalete Athletics in new collab</title>
-      <link>https://news.google.com/rss/articles/CBMi456</link>
-    </item>
-  </channel>
-</rss>`;
+  it("ignores an article that carries no publisher domain", async () => {
+    const body = JSON.stringify({
+      articles: [
+        {
+          url: "https://www.glamourmagazine.co.uk/style/gymshark-adanola",
+          title: "Gymshark, Adanola and Bratz announce partnership",
+          seendate: "20260920T070000Z",
+          domain: null,
+        },
+      ],
+    });
 
-    const candidates = await newsGenerator(
-      SUBJECT,
-      fetchTextWithBodies(alternativesBody, plainBody),
-    );
+    const candidates = await newsGenerator(SUBJECT, fetchTextWith(body));
 
-    expect(candidates).toHaveLength(1);
-    expect(candidates[0]?.name).toBe("Alphalete Athletics");
-    expect(candidates[0]?.evidence).toHaveLength(2);
-    expect(candidates[0]?.evidence.map((evidence) => evidence.sourceUrl)).toEqual([
-      "https://www.glamourmagazine.co.uk",
-      "https://news.google.com/rss/articles/CBMi456",
+    expect(candidates).toEqual([]);
+  });
+
+  it("merges the same co-mentioned brand across two articles into one candidate", async () => {
+    const body = JSON.stringify({
+      articles: [
+        {
+          url: "https://www.glamourmagazine.co.uk/style/gymshark-adanola-bratz",
+          title: "Gymshark, Adanola and Bratz launch activewear capsule",
+          seendate: "20260923T070000Z",
+          domain: "glamourmagazine.co.uk",
+        },
+        {
+          url: "https://hypebae.com/gymshark-adanola-bratz",
+          title: "Gymshark, Adanola and Bratz launch capsule",
+          seendate: "20260920T070000Z",
+          domain: "hypebae.com",
+        },
+      ],
+    });
+
+    const candidates = await newsGenerator(SUBJECT, fetchTextWith(body));
+
+    expect(candidates).toHaveLength(2);
+    const adanola = candidates.find((candidate) => candidate.name === "Adanola");
+    expect(adanola?.evidence.map((evidence) => evidence.sourceUrl)).toEqual([
+      "glamourmagazine.co.uk",
+      "hypebae.com",
     ]);
   });
 
-  it("returns nothing when both feeds failed", async () => {
+  it("requests one GDELT article list with the quoted subject and a 7d window", async () => {
+    const urls: string[] = [];
+    const record = (url: string): Promise<FetchedText> => {
+      urls.push(url);
+      return Promise.resolve({ ok: true, url, contentType: "application/json", body: "{}" });
+    };
+
+    await newsGenerator(SUBJECT, record);
+
+    expect(urls).toHaveLength(1);
+    expect(urls[0]).toContain("api.gdeltproject.org");
+    expect(urls[0]).toContain("mode=artlist");
+    expect(urls[0]).toContain("format=json");
+    expect(urls[0]).toContain("maxrecords=50");
+    expect(urls[0]).toContain("timespan=7d");
+    expect(urls[0]).toContain(encodeURIComponent('"Gymshark"'));
+  });
+
+  it("returns nothing when the request failed", async () => {
     const candidates = await newsGenerator(SUBJECT, fetchTextWith("", false));
     expect(candidates).toEqual([]);
   });
 
-  it("returns nothing when the bodies are not xml", async () => {
-    const candidates = await newsGenerator(SUBJECT, fetchTextWith("not xml"));
+  it("returns nothing when the body is not json", async () => {
+    const candidates = await newsGenerator(SUBJECT, fetchTextWith("not json"));
     expect(candidates).toEqual([]);
   });
 });

@@ -1,22 +1,27 @@
 import { env } from "cloudflare:workers";
 
 import type { AccountDeleteParams } from "./account-delete.server";
-import { setCompetitorState } from "./data/entity.server";
-import { deleteEntitySignals } from "./data/signal.server";
-import { deleteEntitySnapshots } from "./data/snapshot.server";
+import { deleteCompetitor, readCompetitor } from "./data/entity.server";
+import { dismissForgottenCompetitor } from "./data/suggestion.server";
 import { readEntityR2Prefixes } from "./data/watch.server";
+
+type ForgetOutcome = "forgotten" | "mismatch" | "missing";
 
 export async function forgetCompetitor(
   workspaceId: string,
   entityId: string,
-  now: string,
-): Promise<boolean> {
+  typedName: string,
+): Promise<ForgetOutcome> {
+  const competitor = await readCompetitor(workspaceId, entityId);
+  if (competitor === null) return "missing";
+  if (typedName.trim().toLowerCase() !== competitor.name.trim().toLowerCase()) return "mismatch";
   const prefixes = await readEntityR2Prefixes(workspaceId, entityId);
-  const flipped = await setCompetitorState(workspaceId, entityId, "off", now);
-  if (!flipped && prefixes.length === 0) return false;
-  await env.DB.batch([deleteEntitySignals(workspaceId, entityId), deleteEntitySnapshots(workspaceId, entityId)]);
+  await env.DB.batch([
+    dismissForgottenCompetitor({ workspaceId, entityId, now: new Date().toISOString() }),
+    deleteCompetitor(workspaceId, entityId),
+  ]);
   if (prefixes.length > 0) {
     await env.ACCOUNT_DELETE.create({ params: { prefixes } satisfies AccountDeleteParams });
   }
-  return true;
+  return "forgotten";
 }

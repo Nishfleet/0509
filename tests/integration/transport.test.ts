@@ -400,6 +400,50 @@ describe("readUrl", () => {
     }
   });
 
+  it("fails typed when the escalated browser page is refused", async () => {
+    const stub = stubFetch({
+      "https://gated.example.com/": () => new Response("Forbidden", { status: 403 }),
+    });
+    const browser = fakeBrowser({
+      ok: true,
+      html: `<html><head><title>Just a moment...</title></head><body></body></html>`,
+      status: 403,
+    });
+    try {
+      install(browser);
+      const result = await readUrl("https://gated.example.com/");
+      expect(result.ok).toBe(false);
+      if (result.ok) return;
+      expect(result.reason).toBe("escalation-failed");
+      expect(result.detail).toContain("browser page was refused (403)");
+      expect(browser.calls).toHaveLength(1);
+    } finally {
+      stub.restore();
+    }
+  });
+
+  it("fails typed when the escalated browser page is a challenge", async () => {
+    const stub = stubFetch({
+      "https://gated.example.com/": () => new Response("Forbidden", { status: 403 }),
+    });
+    const browser = fakeBrowser({
+      ok: true,
+      html: `<html><body><h1>Checking if the site connection is secure</h1></body></html>`,
+      status: 200,
+    });
+    try {
+      install(browser);
+      const result = await readUrl("https://gated.example.com/");
+      expect(result.ok).toBe(false);
+      if (result.ok) return;
+      expect(result.reason).toBe("escalation-failed");
+      expect(result.detail).toContain("browser page was refused (200)");
+      expect(browser.calls).toHaveLength(1);
+    } finally {
+      stub.restore();
+    }
+  });
+
   it("logs the escalation even when the browser call throws", async () => {
     const stub = stubFetch({
       "https://gated.example.com/": () => new Response("Forbidden", { status: 403 }),
@@ -566,7 +610,7 @@ describe("readUrl", () => {
     const browser = fakeBrowser({
       ok: true,
       html: SUBSTANTIAL_PAGE,
-      status: 404,
+      status: 203,
       browserMs: "900",
     });
     try {
@@ -574,7 +618,7 @@ describe("readUrl", () => {
       const result = await readUrl("https://gated.example.com/");
       expect(result.ok).toBe(true);
       if (!result.ok) return;
-      expect(result.status).toBe(404);
+      expect(result.status).toBe(203);
     } finally {
       stub.restore();
     }

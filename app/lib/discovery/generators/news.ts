@@ -1,53 +1,34 @@
-import { extractFromXml } from "@extractus/feed-extractor";
-import type { FeedData } from "@extractus/feed-extractor";
 import { z } from "zod";
 
 import { coMentions } from "../co-mentions";
 import type { Candidate, Evidence, FetchText, Generator, Subject } from "../types";
-
-const SEARCH_URL = "https://news.google.com/rss/search?hl=en-GB&gl=GB&ceid=GB:en&q=";
+import { GDELT_SEARCH_URL, gdeltResponseSchema, gdeltWebUrlSchema } from "../gdelt";
 
 const TIMEOUT_MS = 8_000;
 
-const SOURCE_SCHEMA = z.object({ "@_url": z.string().min(1) });
+const NEWS_ARTICLE_SCHEMA = z.object({
+  title: z.string().min(1),
+  domain: z.string().min(1),
+  url: gdeltWebUrlSchema,
+});
 
-const ENTRY_SCHEMA = z
-  .object({
-    title: z.string().min(1),
-    link: z.string().nullish(),
-    publisher: z.string().min(1).nullish(),
-  })
-  .transform((entry) => ({
-    title: entry.title,
-    link: entry.link ?? null,
-    sourceUrl: entry.publisher ?? entry.link ?? "",
-  }))
-  .refine(
-    (entry): entry is { title: string; link: string | null; sourceUrl: string } =>
-      entry.sourceUrl.length > 0,
-  );
+type NewsArticle = z.infer<typeof NEWS_ARTICLE_SCHEMA>;
 
-type Entry = z.infer<typeof ENTRY_SCHEMA>;
-
-function rawPublisherOf(entryData: Record<string, unknown>): string | undefined {
-  const source = SOURCE_SCHEMA.safeParse(entryData.source);
-  return source.success ? source.data["@_url"] : undefined;
-}
-
-function parseEntries(body: string): Entry[] {
-  let feed: FeedData;
+function parseArticles(body: string): NewsArticle[] {
+  let raw: unknown;
   try {
-    feed = extractFromXml(body, {
-      getExtraEntryFields: (entryData) => ({ publisher: rawPublisherOf(entryData) }),
-    });
+    raw = JSON.parse(body) as unknown;
   } catch (error) {
     console.error(JSON.stringify({ event: "discovery.news_feed_parse_failed", error: String(error) }));
     return [];
   }
 
-  const parsed: Entry[] = [];
-  for (const rawEntry of feed.entries ?? []) {
-    const result = ENTRY_SCHEMA.safeParse(rawEntry);
+  const response = gdeltResponseSchema.safeParse(raw);
+  if (!response.success) return [];
+
+  const parsed: NewsArticle[] = [];
+  for (const article of response.data.articles) {
+    const result = NEWS_ARTICLE_SCHEMA.safeParse(article);
     if (result.success) parsed.push(result.data);
   }
   return parsed;
@@ -81,24 +62,17 @@ const defaultFetchText: FetchText = async (url) => {
 
 export const newsGenerator: Generator = async (subject: Subject, fetchText?: FetchText) => {
   const fetchFn = fetchText ?? defaultFetchText;
-  const queries = [`"${subject.name}" alternatives`, `"${subject.name}"`];
-  const pages = await Promise.allSettled(
-    queries.map((query) => fetchFn(SEARCH_URL + encodeURIComponent(query))),
-  );
+  const page = await fetchFn(GDELT_SEARCH_URL + encodeURIComponent(`"${subject.name}"`));
+  if (!page.ok) return [];
 
   const merged: Merge = new Map<string, { name: string; evidence: Evidence[] }>();
-  for (const page of pages) {
-    if (page.status !== "fulfilled") continue;
-    if (!page.value.ok) continue;
-
-    for (const entry of parseEntries(page.value.body)) {
-      for (const name of coMentions(entry.title, subject.name)) {
-        addCandidate(merged, name, {
-          sourceUrl: entry.sourceUrl,
-          excerpt: entry.title,
-          generator: "news",
-        });
-      }
+  for (const article of parseArticles(page.body)) {
+    for (const name of coMentions(article.title, subject.name)) {
+      addCandidate(merged, name, {
+        sourceUrl: article.domain,
+        excerpt: article.title,
+        generator: "news",
+      });
     }
   }
 
