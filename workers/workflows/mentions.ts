@@ -4,13 +4,11 @@ import { WorkflowEntrypoint } from "cloudflare:workers";
 import { readCanarySources } from "../../app/lib/data/source.server";
 import { runCanary } from "../mentions/canary";
 import type { TargetOutcome } from "../mentions/sweep";
-import { PACED_PLUGINS, planTargets, sweepTarget } from "../mentions/sweep";
+import { planTargets, sweepTarget } from "../mentions/sweep";
 
 const RETRY: WorkflowStepConfig = {
   retries: { limit: 2, delay: "10 seconds", backoff: "exponential" },
 };
-
-const PACE = "6 seconds";
 
 export interface MentionsOutcome {
   targets: number;
@@ -31,8 +29,8 @@ export class MentionsSweep extends WorkflowEntrypoint<Env> {
         source.id,
         await step.do(`canary ${source.pluginKey}`, RETRY, () => runCanary(source, now)),
       ]);
-      if (PACED_PLUGINS.has(source.pluginKey)) {
-        await step.sleep(`pace canary ${source.pluginKey}`, PACE);
+      if (source.minIntervalSeconds > 0) {
+        await step.sleep(`pace canary ${source.pluginKey}`, source.minIntervalSeconds * 1000);
       }
     }
     const counts = new Map<string, number>(canaryEntries);
@@ -50,8 +48,8 @@ export class MentionsSweep extends WorkflowEntrypoint<Env> {
         );
         outcomes.push(null);
       }
-      if (PACED_PLUGINS.has(target.pluginKey) && index < targets.length - 1) {
-        await step.sleep(`pace ${String(index)}`, PACE);
+      if (target.minIntervalSeconds > 0 && index < targets.length - 1) {
+        await step.sleep(`pace ${String(index)}`, target.minIntervalSeconds * 1000);
       }
     }
     const done = outcomes.filter((outcome): outcome is TargetOutcome => outcome !== null);
