@@ -29,6 +29,10 @@
   "upload_source_maps": true,
   "assets": { "run_worker_first": ["/mcp"] },
 
+  "durable_objects": {
+    "bindings": [{ "name": "BROWSER_BUDGET", "class_name": "BrowserBudget" }]
+  },
+
   // The pre-rebuild Worker declared one Durable Object class,
   // SelectionEnrichmentLease (tag v1, new_sqlite_classes). The fresh app does
   // not export it, and Cloudflare refuses a version that drops a class still
@@ -48,7 +52,8 @@
   // pre-rebuild Worker did; v2 removes it. End state: no Durable Objects.
   "migrations": [
     { "tag": "v1", "new_sqlite_classes": ["SelectionEnrichmentLease"] },
-    { "tag": "v2", "deleted_classes": ["SelectionEnrichmentLease"] }
+    { "tag": "v2", "deleted_classes": ["SelectionEnrichmentLease"] },
+    { "tag": "v3", "new_sqlite_classes": ["BrowserBudget"] }
   ],
 
   // BETTER_AUTH_URL must be the canonical origin, never derived from a

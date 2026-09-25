@@ -366,6 +366,7 @@ export default tseslint.config(
             CLOUDFLARE_WORKERS_IMPORT,
             FULL_ZOD_IMPORT,
           ],
+          patterns: PAVED_PATH_PATTERNS,
         },
       ],
     },
