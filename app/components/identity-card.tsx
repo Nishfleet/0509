@@ -69,7 +69,7 @@ function EditRow({
   const [open, setOpen] = useState(false);
   const checkId = useId();
   const saveOnEnter = (event: KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-    if (event.key !== "Enter" || event.nativeEvent.isComposing) return;
+    if (event.key !== "Enter") return;
     event.preventDefault();
     setOpen(false);
     onSave(value);
