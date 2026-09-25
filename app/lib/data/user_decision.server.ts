@@ -75,7 +75,13 @@ export async function readEditedFields(entityId: string): Promise<DraftField[]> 
   const fields = rows.results.flatMap((row) => {
     try {
       const result = fieldEditNoteSchema.safeParse(JSON.parse(row.note));
-      return result.success ? [result.data.field] : [];
+      if (!result.success) {
+        console.error(
+          JSON.stringify({ event: "identity_field_edit.note_malformed", error: result.error.issues.map((issue) => issue.message).join("; ") }),
+        );
+        return [];
+      }
+      return [result.data.field];
     } catch (error) {
       console.error(JSON.stringify({ event: "identity_field_edit.note_unreadable", error: String(error) }));
       return [];

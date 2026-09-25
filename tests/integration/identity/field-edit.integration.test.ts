@@ -131,6 +131,15 @@ const fieldEditNoteSchema = z.object({
   to: z.string(),
 });
 
+async function insertStoredNote(note: string): Promise<void> {
+  await env.DB.prepare(
+    `INSERT INTO user_decision (id, workspace_id, user_id, signal_id, entity_id, verdict, note, decided_at)
+     VALUES (?1, ?2, ?3, NULL, ?4, ?5, ?6, ?7)`,
+  )
+    .bind(crypto.randomUUID(), workspaceId, userId, entityId, FIELDS_VERDICT, note, NOW)
+    .run();
+}
+
 async function confirmedEntityId(): Promise<string> {
   const row = await env.DB
     .prepare("SELECT id FROM entity WHERE workspace_id = ?1 AND role = 'self'")
@@ -142,14 +151,13 @@ async function confirmedEntityId(): Promise<string> {
 
 async function fieldEditRows(id: string): Promise<z.infer<typeof fieldEditNoteSchema>[]> {
   const { results } = await env.DB
-    .prepare(
-      "SELECT note FROM user_decision WHERE entity_id = ?1 AND verdict = ?2",
-    )
+    .prepare("SELECT note FROM user_decision WHERE entity_id = ?1 AND verdict = ?2 ORDER BY note")
     .bind(id, FIELDS_VERDICT)
     .all<{ note: string }>();
-  return results.flatMap((row) => {
+  return results.map((row) => {
     const parsed = fieldEditNoteSchema.safeParse(JSON.parse(row.note));
-    return parsed.success ? [parsed.data] : [];
+    if (!parsed.success) throw new Error(`stored field-edit note is malformed: ${row.note}`);
+    return parsed.data;
   });
 }
 
@@ -169,15 +177,16 @@ describe("field-edit records", () => {
 
     expect(await readEditedFields(entityId)).toEqual(["name"]);
     const row = await userDecisionsRow();
-    expect(row?.verdict).toBe(FIELDS_VERDICT);
-    expect(JSON.parse(row?.note ?? "null")).toEqual({
+    if (row === null) throw new Error("the field-edit row was not stored");
+    expect(row.verdict).toBe(FIELDS_VERDICT);
+    expect(JSON.parse(row.note)).toEqual({
       field: "name",
       from: "Gymshark Ltd",
       to: "Gymshark",
     });
-    expect(row?.workspace_id).toBe(workspaceId);
-    expect(row?.user_id).toBe(userId);
-    expect(row?.entity_id).toBe(entityId);
+    expect(row.workspace_id).toBe(workspaceId);
+    expect(row.user_id).toBe(userId);
+    expect(row.entity_id).toBe(entityId);
   });
 
   it("returns empty when the entity has no field-edit rows", async () => {
@@ -188,26 +197,15 @@ describe("field-edit records", () => {
 
   it("ignores a row whose note is not JSON", async () => {
     await seedEntity();
-    await env.DB.prepare(
-      `INSERT INTO user_decision (id, workspace_id, user_id, signal_id, entity_id, verdict, note, decided_at)
-       VALUES (?1, ?2, ?3, NULL, ?4, ?5, ?6, ?7)`,
-    )
-      .bind(crypto.randomUUID(), workspaceId, userId, entityId, FIELDS_VERDICT, "not json", NOW)
-      .run();
-    await env.DB.prepare(
-      `INSERT INTO user_decision (id, workspace_id, user_id, signal_id, entity_id, verdict, note, decided_at)
-       VALUES (?1, ?2, ?3, NULL, ?4, ?5, ?6, ?7)`,
-    )
-      .bind(
-        crypto.randomUUID(),
-        workspaceId,
-        userId,
-        entityId,
-        FIELDS_VERDICT,
-        JSON.stringify({ from: "a", to: "b" }),
-        NOW,
-      )
-      .run();
+    await insertStoredNote("not json");
+
+    expect(await readEditedFields(entityId)).toEqual([]);
+  });
+
+  it("ignores a row whose note names a field that is not a card field", async () => {
+    await seedEntity();
+    await insertStoredNote(JSON.stringify({ field: "logo", from: "a", to: "b" }));
+    await insertStoredNote(JSON.stringify({ from: "a", to: "b" }));
 
     expect(await readEditedFields(entityId)).toEqual([]);
   });
