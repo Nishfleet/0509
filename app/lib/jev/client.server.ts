@@ -34,8 +34,19 @@ export interface ChoiceVerdict {
   cached: boolean;
 }
 
+const booleanType = z.literal("boolean");
+
+interface BooleanQuestion {
+  type: z.infer<typeof booleanType>;
+  instructions: string;
+  criteria: { true: string; false: string };
+}
+
 const answerSchema = z.object({
-  answers: z.record(z.string(), z.object({ type: z.literal("noul"), noul: z.number().min(0).max(1) })),
+  answers: z.record(
+    z.string(),
+    z.object({ type: booleanType, probability: z.number().min(0).max(1) }),
+  ),
 });
 
 type NoulAnswers = z.infer<typeof answerSchema>["answers"];
@@ -62,7 +73,16 @@ function inputHash(workspaceId: string, question: NoulQuestion, state: unknown):
   );
 }
 
+function booleanQuestion(question: NoulQuestion): BooleanQuestion {
+  return {
+    type: "boolean",
+    instructions: question.instructions,
+    criteria: { true: question.whenTrue, false: question.whenFalse },
+  };
+}
+
 async function run(question: NoulQuestion, state: unknown): Promise<number> {
+  const asked = booleanQuestion(question);
   let raw: unknown;
   try {
     raw = await env.AI.run(
@@ -70,11 +90,7 @@ async function run(question: NoulQuestion, state: unknown): Promise<number> {
       {
         state,
         questions: {
-          [question.id]: {
-            type: "noul",
-            instructions: question.instructions,
-            criteria: { true: question.whenTrue, false: question.whenFalse },
-          },
+          [question.id]: asked,
         },
       },
       { gateway: { id: GATEWAY_ID } },
@@ -84,8 +100,8 @@ async function run(question: NoulQuestion, state: unknown): Promise<number> {
   }
   const parsed = answerSchema.safeParse(raw);
   const answer = parsed.success ? parsed.data.answers[question.id] : undefined;
-  if (answer === undefined) throw new JevUnavailableError(new Error("answer missing its noul"));
-  return answer.noul;
+  if (answer === undefined) throw new JevUnavailableError(new Error("answer missing its probability"));
+  return answer.probability;
 }
 
 export async function askNoul(workspaceId: string, question: NoulQuestion, state: unknown): Promise<NoulVerdict> {
@@ -111,22 +127,14 @@ export async function askNouls(
   const pending = entries.filter((entry) => entry.cached === null);
   let answers: NoulAnswers = {};
   if (pending.length > 0) {
+    const asked = Object.fromEntries(pending.map((entry) => [entry.question.id, booleanQuestion(entry.question)]));
     let raw: unknown;
     try {
       raw = await env.AI.run(
         MODEL,
         {
           state,
-          questions: Object.fromEntries(
-            pending.map((entry) => [
-              entry.question.id,
-              {
-                type: "noul",
-                instructions: entry.question.instructions,
-                criteria: { true: entry.question.whenTrue, false: entry.question.whenFalse },
-              },
-            ]),
-          ),
+          questions: asked,
         },
         { gateway: { id: GATEWAY_ID } },
       );
@@ -140,8 +148,8 @@ export async function askNouls(
     if (entry.cached !== null) {
       return { questionId: entry.question.id, inputHash: entry.hash, p: entry.cached, cached: true };
     }
-    const fresh = answers[entry.question.id]?.noul;
-    if (fresh === undefined) throw new JevUnavailableError(new Error("answer missing its noul"));
+    const fresh = answers[entry.question.id]?.probability;
+    if (fresh === undefined) throw new JevUnavailableError(new Error("answer missing its probability"));
     return { questionId: entry.question.id, inputHash: entry.hash, p: fresh, cached: false };
   });
 }
