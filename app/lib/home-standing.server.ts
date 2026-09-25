@@ -3,9 +3,13 @@ import { z } from "zod";
 import { readBriefPayload } from "./brief-payload";
 import type { BriefPayload } from "./brief-payload";
 import type { BriefSchedule } from "./brief-schedule";
-import type { HomeEntity, HomeHistoryRow } from "./home-standing";
+import type { HomeCount, HomeEntity, HomeHistoryRow, HomeSource } from "./home-standing";
 
 const SELECT_HISTORY = `SELECT entity_id, week_start_at, rank FROM standing WHERE workspace_id = ?1 AND rank IS NOT NULL AND week_start_at IN (SELECT DISTINCT week_start_at FROM standing WHERE workspace_id = ?1 AND rank IS NOT NULL ORDER BY week_start_at DESC LIMIT 4) ORDER BY week_start_at ASC`;
+
+const SELECT_HOME_SOURCES = `SELECT key, kind, platform FROM source WHERE is_enabled = 1 ORDER BY kind ASC, key ASC`;
+
+const SELECT_HOME_COUNTS = `SELECT s.entity_id, src.key AS source_key, COUNT(*) AS n FROM signal s JOIN source src ON src.id = s.source_id WHERE s.workspace_id = ?1 AND s.is_tombstoned = 0 AND s.observed_at >= (SELECT json_extract(payload_json, '$.period_start') FROM digest WHERE workspace_id = ?1 AND kind = 'weekly' ORDER BY period_end DESC LIMIT 1) GROUP BY s.entity_id, src.key`;
 
 export const SELECT_HOME_STANDING = `SELECT
   w.id AS workspace_id,
@@ -54,11 +58,17 @@ const historyRows = z.array(
   z.object({ entity_id: z.string(), week_start_at: z.string(), rank: z.number().int() }),
 );
 
+const sourceRows = z.array(z.object({ key: z.string(), kind: z.enum(["site", "ads", "mentions", "hiring"]), platform: z.string() }));
+
+const countRows = z.array(z.object({ entity_id: z.string(), source_key: z.string(), n: z.number().int() }));
+
 export interface HomeStandingInputs {
   schedule: BriefSchedule;
   entities: readonly HomeEntity[];
   payload: BriefPayload | null;
   history: readonly HomeHistoryRow[];
+  sources: readonly HomeSource[];
+  counts: readonly HomeCount[];
 }
 
 function entityFrom(row: z.infer<typeof homeRow>): HomeEntity | null {
@@ -81,7 +91,14 @@ export async function readHomeStandingInputs(
   const rows = homeRows.parse((await db.prepare(SELECT_HOME_STANDING).bind(ownerUserId).all()).results);
   const first = rows[0];
   if (first === undefined) return null;
-  const history = historyRows.parse((await db.prepare(SELECT_HISTORY).bind(first.workspace_id).all()).results);
+  const [historyResult, sourcesResult, countsResult] = await db.batch([
+    db.prepare(SELECT_HISTORY).bind(first.workspace_id),
+    db.prepare(SELECT_HOME_SOURCES),
+    db.prepare(SELECT_HOME_COUNTS).bind(first.workspace_id),
+  ]);
+  const history = historyRows.parse(historyResult?.results);
+  const sources = sourceRows.parse(sourcesResult?.results);
+  const counts = countRows.parse(countsResult?.results).map((row) => ({ entityId: row.entity_id, sourceKey: row.source_key, count: row.n }));
   return {
     schedule: { timezone: first.timezone, weekday: first.brief_weekday, hour: first.brief_hour },
     entities: rows.flatMap((row) => {
@@ -90,5 +107,7 @@ export async function readHomeStandingInputs(
     }),
     payload: first.payload_json === null ? null : readBriefPayload(first.payload_json),
     history,
+    sources,
+    counts,
   };
 }
