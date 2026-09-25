@@ -92,6 +92,19 @@ describe("readHomeStandingInputs", () => {
     expect(inputs?.entities).toHaveLength(3);
   });
 
+  it("reads the entity name and falls back to the domain when it is null", async () => {
+    await env.DB.prepare(
+      "INSERT INTO entity (id, workspace_id, role, domain, name, state, created_at) VALUES (?1, ?2, 'competitor', 'noname.example', NULL, 'on', ?3)",
+    )
+      .bind(`${WS}_noname`, WS, "2026-08-02T00:00:00.000Z")
+      .run();
+
+    const inputs = await readHomeStandingInputs(env.DB, USER);
+
+    expect(inputs?.entities.find((entity) => entity.domain === "rival.example")?.name).toBe("rival");
+    expect(inputs?.entities.find((entity) => entity.domain === "noname.example")?.name).toBe("noname.example");
+  });
+
   it("returns null for a user with no workspace", async () => {
     expect(await readHomeStandingInputs(env.DB, "user_nobody")).toBeNull();
   });
