@@ -39,5 +39,6 @@ describe("StepBar", () => {
     }
 
     expect(html).toContain('aria-label="Onboarding progress"');
+    expect(html).not.toMatch(/<a[\s>]/);
   });
 });

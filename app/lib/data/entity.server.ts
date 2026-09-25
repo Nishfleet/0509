@@ -174,6 +174,23 @@ export async function insertSelfEntity(input: {
 
 const SELECT_WORKSPACE_SELF_ID = "SELECT id FROM entity WHERE workspace_id = ?1 AND role = 'self'";
 
+const SELECT_SELF_CARD =
+  "SELECT domain, name, identity_json FROM entity WHERE workspace_id = ?1 AND role = 'self' LIMIT 1";
+
+export interface SelfCardRow {
+  domain: string;
+  name: string | null;
+  identityJson: string;
+}
+
+export async function readSelfCard(workspaceId: string): Promise<SelfCardRow | null> {
+  const row = await env.DB.prepare(SELECT_SELF_CARD)
+    .bind(workspaceId)
+    .first<{ domain: string; name: string | null; identity_json: string }>();
+  if (!row) return null;
+  return { domain: row.domain, name: row.name, identityJson: row.identity_json };
+}
+
 const SELECT_SELF_BY_ID =
   "SELECT id FROM entity WHERE id = ?1 AND workspace_id = ?2 AND role = 'self'";
 

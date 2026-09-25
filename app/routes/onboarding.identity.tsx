@@ -6,47 +6,17 @@ import { IdentityCard } from "../components/identity-card";
 import { OneInput } from "../components/one-input";
 import { ONBOARDING_PAGE } from "../components/page-heading";
 import { StepBar } from "../components/step-bar";
-import { isTakenDown } from "../lib/data/takedown.server";
 import { readWorkspaceIdForOwner } from "../lib/data/workspace.server";
-import { readDraft, saveDraftField } from "../lib/identity/card-draft.server";
-import { startCard, withinProbeLimit } from "../lib/identity/card.server";
+import { saveDraftField } from "../lib/identity/card-draft.server";
 import { confirmCard } from "../lib/identity/confirm.server";
+import { loadIdentityScreen } from "../lib/identity/identity-screen.server";
 import { normaliseSubject } from "../lib/identity/normalise";
 import { screenOnboardingSubject } from "../lib/onboarding-screen.server";
 import { requireSession } from "../lib/require-session.server";
-import { workspaceLandingForRequest } from "../lib/workspace.server";
 
 export async function loader({ request }: Route.LoaderArgs) {
   const session = await requireSession(request);
-  const landing = await workspaceLandingForRequest(request, session.user.id);
-  if (!landing) throw redirect("/app");
-  const raw = new URL(request.url).searchParams.get("subject") ?? "";
-  const normalised = normaliseSubject(raw);
-  if (!normalised.ok) return { card: null, limited: false };
-  const { subject } = normalised;
-  if (await isTakenDown(subject.registrable)) throw redirect("/onboarding");
-  const workspaceId = await readWorkspaceIdForOwner(session.user.id);
-  if (workspaceId === null) throw redirect("/onboarding");
-  const screened = await screenOnboardingSubject({
-    workspaceId,
-    userId: session.user.id,
-    subject,
-    raw,
-    answer: null,
-    now: new Date().toISOString(),
-  });
-  if (screened.kind !== "proceed") throw redirect("/onboarding");
-  if (!(await withinProbeLimit(session.user.id))) return { card: null, limited: true };
-  const shown = subject.kind === "domain" ? subject.registrable : (subject.url ?? `@${subject.registrable}`);
-  return {
-    card: {
-      subject: raw,
-      domain: shown,
-      ...startCard(workspaceId, subject),
-      draft: await readDraft(workspaceId, subject.registrable),
-    },
-    limited: false,
-  };
+  return loadIdentityScreen(request, session.user.id);
 }
 
 export async function action({ request }: Route.ActionArgs) {
