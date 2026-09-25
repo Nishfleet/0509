@@ -101,22 +101,31 @@ export async function confirmCard(workspaceId: string, userId: string, form: For
   if (entityId === null) return false;
   const cached = await readCachedSiteValues(subject);
   if (cached !== null) {
-    const edits: FieldEdit[] = [];
-    if (card.name !== cached.name) edits.push({ field: "name", from: cached.name, to: card.name });
-    if ((card.description === "" ? null : card.description) !== cached.description) {
-      edits.push({ field: "description", from: cached.description, to: card.description });
-    }
-    if (edits.length > 0) {
-      await insertFieldEdits(
-        edits.map((edit) => ({
+    const candidates: { edit: FieldEdit; changed: boolean }[] = [
+      {
+        edit: { field: "name", from: cached.name, to: card.name },
+        changed: card.name !== cached.name,
+      },
+      {
+        edit: {
+          field: "description",
+          from: cached.description,
+          to: card.description,
+        },
+        changed: (card.description === "" ? null : card.description) !== cached.description,
+      },
+    ];
+    await insertFieldEdits(
+      candidates
+        .filter((candidate) => candidate.changed)
+        .map((candidate) => ({
           workspaceId,
           userId,
           entityId,
-          edit,
+          edit: candidate.edit,
           decidedAt: now.toISOString(),
         })),
-      );
-    }
+    );
   }
   await classifyConfirmedSite(workspaceId, subject, entityId, now);
   const site = subject.kind === "domain" ? null : await creatorSite(card.socials);

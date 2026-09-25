@@ -1,17 +1,39 @@
-import { env } from "cloudflare:test";
-import { beforeEach, describe, expect, it } from "vitest";
+import { env, introspectWorkflow } from "cloudflare:test";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { insertSelfEntity } from "../../../app/lib/data/entity.server";
 import { insertFieldEdits, readEditedFields } from "../../../app/lib/data/user_decision.server";
+import { confirmCard } from "../../../app/lib/identity/confirm.server";
+import { normaliseSubject } from "../../../app/lib/identity/normalise";
+import { probeKey } from "../../../app/lib/identity/probe-cache.server";
 
 const NOW = "2026-09-25T10:30:00Z";
 const FIELDS_VERDICT = "identity_field:edited";
+const DOMAIN = "gymshark.com";
+const HOMEPAGE_HTML = `<html><head><title>Gymshark</title></head><body>${"Gymshark makes gym clothes and sportswear for everyone. ".repeat(4)}</body></html>`;
 
 let entityId = "";
 let userId = "";
 let workspaceId = "";
 
+function subject() {
+  const normalised = normaliseSubject(DOMAIN);
+  if (!normalised.ok) throw new Error("gymshark.com must normalise");
+  return normalised.subject;
+}
+
+function homepageKey(): string {
+  return probeKey(subject(), "homepage");
+}
+
+function form(fields: Record<string, string>): FormData {
+  const data = new FormData();
+  for (const [key, value] of Object.entries(fields)) data.append(key, value);
+  return data;
+}
+
 beforeEach(async () => {
+  await env.IDENTITY_CACHE.delete(homepageKey());
   for (const table of ["user_decision", "entity", "workspace", '"user"']) {
     await env.DB.prepare(`DELETE FROM ${table}`).run();
   }
@@ -19,6 +41,10 @@ beforeEach(async () => {
   entityId = `entity-field-edit-${suffix}`;
   userId = `user-field-edit-${suffix}`;
   workspaceId = `ws-field-edit-${suffix}`;
+});
+
+afterEach(async () => {
+  vi.unstubAllGlobals();
 });
 
 async function seed(): Promise<void> {
@@ -35,11 +61,49 @@ async function seed(): Promise<void> {
   await insertSelfEntity({
     id: entityId,
     workspaceId,
-    domain: "gymshark.com",
+    domain: DOMAIN,
     name: "Gymshark",
     identityJson: JSON.stringify({ description: null, socials: [] }),
     now: NOW,
   });
+}
+
+async function cachedHomepage(name: string, description: string): Promise<void> {
+  await env.IDENTITY_CACHE.put(
+    homepageKey(),
+    JSON.stringify({
+      name,
+      description,
+      socials: [],
+      logoCandidates: { ldOrganizationLogo: null, ogImage: null, appleTouchIcon: null },
+      adLibraryHints: [],
+      navLinks: [],
+    }),
+  );
+}
+
+function stubWeb(html: string): void {
+  vi.stubGlobal("fetch", (input: RequestInfo | URL) => {
+    const url = input instanceof Request ? input.url : String(input);
+    if (url === "https://gymshark.com/") return Promise.resolve(new Response(html, { status: 200, headers: { "content-type": "text/html" } }));
+    return Promise.resolve(new Response("", { status: 200 }));
+  });
+}
+
+async function settledTail(): Promise<void> {
+  const row = await env.DB
+    .prepare("SELECT id FROM entity WHERE workspace_id = ?1 AND role = 'self'")
+    .bind(workspaceId)
+    .first<{ id: string }>();
+  if (row === null) return;
+  const instance = await env.IDENTITY_TAIL.get(`identity-tail-${row.id}`);
+  if (instance === null) return;
+  for (let attempt = 0; attempt < 200; attempt += 1) {
+    const status = await instance.status();
+    if (status.status === "complete" || status.status === "errored") return;
+    await new Promise((resolve) => setTimeout(resolve, 25));
+  }
+  throw new Error("identity tail did not finish");
 }
 
 async function userDecisionsRow(): Promise<{
@@ -56,7 +120,17 @@ async function userDecisionsRow(): Promise<{
     .first<{ verdict: string; note: string; workspace_id: string; user_id: string; entity_id: string }>();
 }
 
-describe("field-edit decisions", () => {
+async function fieldEditRows(): Promise<{ field: string; from: string | null; to: string }[]> {
+  const { results } = await env.DB
+    .prepare(
+      "SELECT note FROM user_decision WHERE entity_id = ?1 AND verdict = ?2",
+    )
+    .bind(entityId, FIELDS_VERDICT)
+    .all<{ note: string }>();
+  return results.map((row) => JSON.parse(row.note) as { field: string; from: string | null; to: string });
+}
+
+describe("field-edit records", () => {
   it("records one row per edited field with the JSON note shape", async () => {
     await seed();
 
@@ -113,5 +187,69 @@ describe("field-edit decisions", () => {
       .run();
 
     expect(await readEditedFields(entityId)).toEqual([]);
+  });
+});
+
+describe("confirmCard field edits", () => {
+  it("records one row per field the user changed away from the cached probe", async () => {
+    await seed();
+    await cachedHomepage("Gymshark Ltd", "Gym clothes");
+    stubWeb(HOMEPAGE_HTML);
+
+    expect(
+      await confirmCard(
+        workspaceId,
+        userId,
+        form({ subject: DOMAIN, name: "Gymshark", description: "Gym clothes for everyone" }),
+      ),
+    ).toBe(true);
+
+    expect(await fieldEditRows()).toEqual([
+      { field: "name", from: "Gymshark Ltd", to: "Gymshark" },
+      { field: "description", from: "Gym clothes", to: "Gym clothes for everyone" },
+    ]);
+    await settledTail();
+  });
+
+  it("records only the field that changed", async () => {
+    await seed();
+    await cachedHomepage("Gymshark Ltd", "Gym clothes");
+    stubWeb(HOMEPAGE_HTML);
+
+    expect(
+      await confirmCard(
+        workspaceId,
+        userId,
+        form({ subject: DOMAIN, name: "Gymshark", description: "Gym clothes" }),
+      ),
+    ).toBe(true);
+
+    expect(await fieldEditRows()).toEqual([
+      { field: "name", from: "Gymshark Ltd", to: "Gymshark" },
+    ]);
+    await settledTail();
+  });
+
+  it("writes no rows when the homepage probe is not cached", async () => {
+    await seed();
+    stubWeb(HOMEPAGE_HTML);
+    await using introspector = await introspectWorkflow(env.IDENTITY_TAIL);
+    await introspector.modifyAll(async (modifier) => {
+      await modifier.disableSleeps();
+      for (let n = 1; n <= 24; n += 1) {
+        await modifier.mockStepResult({ name: `site-fill-${String(n)}` }, "pending");
+      }
+    });
+
+    expect(
+      await confirmCard(
+        workspaceId,
+        userId,
+        form({ subject: DOMAIN, name: "Gymshark", description: "Gym clothes" }),
+      ),
+    ).toBe(true);
+
+    expect(await fieldEditRows()).toEqual([]);
+    await settledTail();
   });
 });

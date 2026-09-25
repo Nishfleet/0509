@@ -73,20 +73,15 @@ export async function readEditedFields(entityId: string): Promise<DraftField[]> 
     .bind(entityId, FIELD_EDIT_VERDICT)
     .all<{ note: string }>();
   const fields: DraftField[] = [];
-  const seen = new Set<DraftField>();
   for (const row of rows.results) {
     try {
-      const parsed = JSON.parse(row.note) as unknown;
-      const result = fieldEditNoteSchema.safeParse(parsed);
-      if (!result.success) continue;
-      if (seen.has(result.data.field)) continue;
-      seen.add(result.data.field);
-      fields.push(result.data.field);
-    } catch {
-      continue;
+      const result = fieldEditNoteSchema.safeParse(JSON.parse(row.note));
+      if (result.success) fields.push(result.data.field);
+    } catch (error) {
+      console.error(JSON.stringify({ event: "identity_field_edit.note_unreadable", error: String(error) }));
     }
   }
-  return fields;
+  return [...new Set(fields)];
 }
 
 export async function readSubjectDecision(workspaceId: string, subject: string): Promise<SubjectVerdict | null> {
