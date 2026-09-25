@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  ENTITLEMENT_KEYS,
   MOST_RESTRICTIVE,
   resolveEntitlements,
   type Entitlements,
@@ -73,5 +74,6 @@ describe("resolveEntitlements", () => {
     const result = resolveEntitlements("scout", JSON.stringify({ unknown_key: true }));
     expect(result).toEqual(SCOUT);
     expect(result).not.toHaveProperty("unknown_key");
+    expect(Object.keys(result)).toEqual([...ENTITLEMENT_KEYS]);
   });
 });
