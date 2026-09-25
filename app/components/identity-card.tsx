@@ -34,7 +34,6 @@ function Logo({ logo }: { logo: Promise<string | null> }) {
             ) : (
               <img src={url} alt="" className="h-10 w-10 object-contain" />
             )}
-            <input type="hidden" name="logo" value={url ?? ""} />
           </Row>
         )}
       </Await>

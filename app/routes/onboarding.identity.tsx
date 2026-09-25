@@ -8,9 +8,10 @@ import { ONBOARDING_PAGE } from "../components/page-heading";
 import { StepBar } from "../components/step-bar";
 import { isTakenDown } from "../lib/data/takedown.server";
 import { readWorkspaceIdForOwner } from "../lib/data/workspace.server";
-import { startCard } from "../lib/identity/card.server";
+import { startCard, withinProbeLimit } from "../lib/identity/card.server";
 import { confirmCard } from "../lib/identity/confirm.server";
 import { normaliseSubject } from "../lib/identity/normalise";
+import { screenOnboardingSubject } from "../lib/onboarding-screen.server";
 import { requireSession } from "../lib/require-session.server";
 import { workspaceLandingForRequest } from "../lib/workspace.server";
 
@@ -20,23 +21,54 @@ export async function loader({ request }: Route.LoaderArgs) {
   if (!landing) throw redirect("/app");
   const raw = new URL(request.url).searchParams.get("subject") ?? "";
   const normalised = normaliseSubject(raw);
-  if (!normalised.ok) return { card: null };
+  if (!normalised.ok) return { card: null, limited: false };
   const { subject } = normalised;
   if (await isTakenDown(subject.registrable)) throw redirect("/onboarding");
+  const workspaceId = await readWorkspaceIdForOwner(session.user.id);
+  if (workspaceId === null) throw redirect("/onboarding");
+  const screened = await screenOnboardingSubject({
+    workspaceId,
+    userId: session.user.id,
+    subject,
+    raw,
+    answer: null,
+    now: new Date().toISOString(),
+  });
+  if (screened.kind !== "proceed") throw redirect("/onboarding");
+  if (!(await withinProbeLimit(session.user.id))) return { card: null, limited: true };
   const shown = subject.kind === "domain" ? subject.registrable : (subject.url ?? `@${subject.registrable}`);
-  return { card: { subject: raw, domain: shown, ...startCard(subject) } };
+  return { card: { subject: raw, domain: shown, ...startCard(subject) }, limited: false };
 }
 
 export async function action({ request }: Route.ActionArgs) {
   const session = await requireSession(request);
   const workspaceId = await readWorkspaceIdForOwner(session.user.id);
   if (workspaceId === null) throw redirect("/onboarding");
-  if (await confirmCard(workspaceId, await request.formData())) throw redirect("/onboarding/competitors");
+  const form = await request.formData();
+  const rawSubject = form.get("subject");
+  if (typeof rawSubject === "string") {
+    const normalised = normaliseSubject(rawSubject);
+    if (normalised.ok) {
+      const screened = await screenOnboardingSubject({
+        workspaceId,
+        userId: session.user.id,
+        subject: normalised.subject,
+        raw: rawSubject,
+        answer: null,
+        now: new Date().toISOString(),
+      });
+      if (screened.kind !== "proceed") throw redirect("/onboarding");
+    }
+  }
+  if (await confirmCard(workspaceId, form)) throw redirect("/onboarding/competitors");
   return { message: "Add your brand's name, then tap That's me." };
 }
 
 export default function Page({ loaderData, actionData }: Route.ComponentProps) {
-  const { card } = loaderData;
+  const { card, limited } = loaderData;
+  const message = limited
+    ? "That's a lot of lookups in a minute. Wait a minute, then try again."
+    : "We couldn't find anything for that, try the main website.";
   return (
     <main className={ONBOARDING_PAGE}>
       <StepBar current={2} />
@@ -46,7 +78,7 @@ export default function Page({ loaderData, actionData }: Route.ComponentProps) {
           placeholder="your website, or a handle"
           name="subject"
           action="/onboarding"
-          message="We couldn't find anything for that, try the main website."
+          message={message}
           submitLabel="Draw my card"
         />
       ) : (

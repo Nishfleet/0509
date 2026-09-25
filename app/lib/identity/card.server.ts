@@ -1,8 +1,10 @@
+import { env } from "cloudflare:workers";
 import { z } from "zod";
 
 import { readUrl } from "../fetch/transport.server";
 import type { SiteFields } from "./card-fields";
 import { extractIdentity } from "./extract";
+import { readLogo, storeLogo } from "./logo-store.server";
 import { resolveLogo } from "./logo-cascade";
 import { resolveBrandName } from "./name-cascade";
 import type { Subject } from "./normalise";
@@ -64,6 +66,11 @@ async function readSiteCard(subject: Subject): Promise<{ card: SiteCard; reached
   }
 }
 
+export async function withinProbeLimit(userId: string): Promise<boolean> {
+  const { success } = await env.PROBE_LIMIT.limit({ key: `user:${userId}` });
+  return success;
+}
+
 export function startCard(subject: Subject): { site: Promise<SiteFields>; logo: Promise<string | null> } {
   const read = readSiteCard(subject);
   const site = read.then(({ card, reached }): SiteFields => ({
@@ -80,10 +87,25 @@ export function startCard(subject: Subject): { site: Promise<SiteFields>; logo: 
       const result = await resolveLogo({ ...card.logoCandidates, registrableDomain: subject.registrable });
       return { url: result.ok ? result.url : null };
     });
-    return cached.url;
+    const url = cached.url;
+    if (url === null) return null;
+    const kept = await readLogo(subject.registrable);
+    if (kept !== null) {
+      const contentType = kept.httpMetadata?.contentType ?? "image/png";
+      const bytes = new Uint8Array(await kept.arrayBuffer());
+      return toDataUrl(contentType, bytes);
+    }
+    const stored = await storeLogo(subject.registrable, url);
+    if (stored === null) return null;
+    return toDataUrl(stored.contentType, stored.bytes);
   }).catch((error: unknown) => {
     console.log(JSON.stringify({ event: "identity-logo-failed", subject: subject.registrable, error: String(error) }));
     return null;
   });
   return { site, logo };
+}
+
+function toDataUrl(contentType: string, bytes: Uint8Array): string {
+  const base64 = btoa(Array.from(bytes, (b) => String.fromCharCode(b)).join(""));
+  return `data:${contentType};base64,${base64}`;
 }

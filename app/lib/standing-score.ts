@@ -46,7 +46,7 @@ export function weightsAsOf(
   return new Map(sorted.map((row) => [row.key, row.weight]));
 }
 
-function weightOf(weights: ReadonlyMap<string, number>, key: string): number {
+export function weightOf(weights: ReadonlyMap<string, number>, key: string): number {
   const weight = weights.get(key);
   if (weight === undefined) {
     throw new Error(`scoring_weight has no row for ${key}`);

@@ -23,7 +23,8 @@ WHERE workspace_id = ?1 AND rank IS NOT NULL AND week_start_at < ?2`;
 const SIGNAL_COUNTS = `SELECT s.entity_id AS entity_id,
        SUM(CASE WHEN s.kind = 'ad' AND s.published_at >= ?2 AND s.published_at < ?3 THEN 1 ELSE 0 END) AS new_ads,
        SUM(CASE WHEN s.kind = 'mention' THEN 1 ELSE 0 END) AS mentions,
-       SUM(CASE WHEN s.kind = 'change' THEN 1 ELSE 0 END) AS site_changes
+       SUM(CASE WHEN s.kind = 'change' THEN 1 ELSE 0 END) AS site_changes,
+       SUM(CASE WHEN s.kind = 'hiring' THEN 1 ELSE 0 END) AS new_roles
 FROM signal s
 JOIN entity e ON e.id = s.entity_id AND e.workspace_id = ?1 AND e.state = 'on'
 WHERE s.workspace_id = ?1 AND s.observed_at >= ?2 AND s.observed_at < ?3 AND s.is_tombstoned = 0
@@ -32,8 +33,8 @@ GROUP BY s.entity_id`;
 const SOURCE_COVERAGE = `SELECT src.key AS key,
        src.kind AS kind,
        src.platform AS platform,
-       MAX(sn.fetched_at) AS last_landed_at,
-       MAX(CASE WHEN sn.fetched_at >= ?2 AND sn.fetched_at < ?3 THEN 1 ELSE 0 END) AS answered
+       MAX(CASE WHEN COALESCE(sn.canary_count, 1) > 0 THEN sn.fetched_at END) AS last_landed_at,
+       MAX(CASE WHEN sn.fetched_at >= ?2 AND sn.fetched_at < ?3 AND COALESCE(sn.canary_count, 1) > 0 THEN 1 ELSE 0 END) AS answered
 FROM watch w
 JOIN entity e ON e.id = w.entity_id AND e.workspace_id = ?1 AND e.state = 'on'
 JOIN source src ON src.id = w.source_id AND src.is_enabled = 1
@@ -72,6 +73,7 @@ const signalCountRows = z.array(
     new_ads: z.number().int(),
     mentions: z.number().int(),
     site_changes: z.number().int(),
+    new_roles: z.number().int(),
   }),
 );
 
@@ -145,6 +147,7 @@ export async function composeBrief(db: D1Database, input: ComposeInput): Promise
       ad_delta: count?.new_ads ?? 0,
       mention_delta: count?.mentions ?? 0,
       site_change_count: count?.site_changes ?? 0,
+      new_roles: count?.new_roles ?? 0,
     };
   });
   const mentionCount = lines.reduce((total, line) => total + line.mention_delta, 0);

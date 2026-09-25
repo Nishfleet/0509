@@ -11,6 +11,7 @@ export interface NewWatch {
 export interface SiteSweepTarget {
   workspaceId: string;
   entityId: string;
+  entityRole: string;
   sourceId: string;
   watchId: string;
   pageId: string;
@@ -32,6 +33,7 @@ const MARK_POLLED = `UPDATE watch SET last_polled_at = ?2 WHERE id = ?1`;
 
 const SITE_SWEEP_TARGETS = `SELECT e.workspace_id AS workspace_id,
        e.id AS entity_id,
+       e.role AS entity_role,
        w.source_id AS source_id,
        w.id AS watch_id,
        p.id AS page_id,
@@ -50,6 +52,7 @@ const targetRows = z.array(
   z.object({
     workspace_id: z.string(),
     entity_id: z.string(),
+    entity_role: z.string(),
     source_id: z.string(),
     watch_id: z.string(),
     page_id: z.string(),
@@ -83,12 +86,47 @@ export async function readSiteSweepTargets(sourceKey: string): Promise<readonly 
   return targetRows.parse(rows.results).map((row) => ({
     workspaceId: row.workspace_id,
     entityId: row.entity_id,
+    entityRole: row.entity_role,
     sourceId: row.source_id,
     watchId: row.watch_id,
     pageId: row.page_id,
     pageRole: row.page_role,
     url: row.url,
   }));
+}
+
+const ENSURE_WATCHES = `INSERT INTO watch (id, entity_id, source_id, target_key)
+SELECT lower(hex(randomblob(16))), e.id, s.id, COALESCE(NULLIF(e.name, ''), e.domain)
+FROM entity e JOIN source s ON s.kind = ?1 AND s.is_enabled = 1
+WHERE e.state = 'on'
+ON CONFLICT (entity_id, source_id, target_key) DO NOTHING`;
+
+const SELECT_WATCHES = `SELECT w.id AS watch_id, w.target_key, e.id AS entity_id, e.workspace_id, e.role,
+  COALESCE(NULLIF(e.name, ''), e.domain) AS name, e.domain,
+  s.id AS source_id, s.plugin_key, s.reliability
+FROM watch w
+JOIN entity e ON e.id = w.entity_id AND e.state = 'on'
+JOIN source s ON s.id = w.source_id AND s.kind = ?1 AND s.is_enabled = 1
+WHERE w.is_active = 1 AND w.target_key = COALESCE(NULLIF(e.name, ''), e.domain)
+ORDER BY s.plugin_key, w.target_key, w.id`;
+
+export interface WatchRow {
+  watch_id: string;
+  target_key: string;
+  entity_id: string;
+  workspace_id: string;
+  role: "self" | "competitor";
+  name: string;
+  domain: string;
+  source_id: string;
+  plugin_key: string;
+  reliability: string;
+}
+
+export async function readActiveWatches(kind: "mentions" | "ads"): Promise<WatchRow[]> {
+  await env.DB.prepare(ENSURE_WATCHES).bind(kind).run();
+  const rows = await env.DB.prepare(SELECT_WATCHES).bind(kind).all<WatchRow>();
+  return rows.results;
 }
 
 const ENTITIES_WITHOUT_HIRING_WATCH = `SELECT e.id AS id, e.domain AS domain

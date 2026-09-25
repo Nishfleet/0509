@@ -6,7 +6,11 @@ import { createRequestHandler } from "react-router";
 import { requestContext } from "../app/lib/agent/context.server";
 import { createOAuthProvider } from "../app/lib/agent/oauth.server";
 import { deleteExpiredAuthRows } from "../app/lib/data/auth_expiry.server";
-import { startNightlyDiscovery } from "../app/lib/discovery/start.server";
+import {
+  startNightlyDiscovery,
+  startWeeklyRefresh,
+  WEEKLY_REFRESH_CRON,
+} from "../app/lib/discovery/start.server";
 import { assertWorkerEnv, WorkerEnvError, workerEnvFailureResponse } from "../app/lib/env.server";
 import { pingLiveness } from "../app/lib/liveness-ping.server";
 import { handleBatch } from "./delivery/consumer";
@@ -17,6 +21,7 @@ import { AccountDelete } from "./workflows/account-delete";
 import { Discovery } from "./workflows/discovery";
 import { OwnSiteCheck } from "./workflows/own-site-check";
 import { SiteSweep } from "./workflows/site-sweep";
+import { MentionsSweep } from "./workflows/mentions";
 import { StandingRollover } from "./workflows/standing-rollover";
 
 type WorkerEnv = Env & { SENTRY_DSN?: string; LIVENESS_PING_URL?: string };
@@ -56,6 +61,10 @@ const handler = {
       ctx.waitUntil(deleteExpiredAuthRows(env.DB, now));
       return;
     }
+    if (controller.cron === WEEKLY_REFRESH_CRON) {
+      ctx.waitUntil(startWeeklyRefresh(new Date(controller.scheduledTime)));
+      return;
+    }
     const ping = pingLiveness(env.LIVENESS_PING_URL);
     if (ping) ctx.waitUntil(ping);
   },
@@ -91,5 +100,7 @@ export class DiscoveryWorkflow extends instrumentWorkflowWithSentry(sentryOption
 export class SiteSweepWorkflow extends instrumentWorkflowWithSentry(sentryOptions, SiteSweep) {}
 
 export class OwnSiteCheckWorkflow extends instrumentWorkflowWithSentry(sentryOptions, OwnSiteCheck) {}
+
+export class MentionsWorkflow extends instrumentWorkflowWithSentry(sentryOptions, MentionsSweep) {}
 
 export default withSentry(sentryOptions, handler);

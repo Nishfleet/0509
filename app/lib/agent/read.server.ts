@@ -2,11 +2,12 @@ import { env } from "cloudflare:workers";
 
 import type { BriefPayload } from "../brief-payload";
 import { readBriefPayload } from "../brief-payload";
+import { readCompetitorPage } from "../competitor-page.server";
 import { readDeliveryFailures, readTakedownNotes } from "../data/alert.server";
 import { readOnboardingCompetitors } from "../data/entity.server";
 import type { SiteChangeView } from "../site-change";
 import { daysBefore, readSiteChangeViews } from "../site-changes.server";
-import type { AlertsResult, BriefResult, CompetitorsResult, StandingResult } from "./schemas";
+import type { AlertsResult, BriefResult, CompetitorResult, CompetitorsResult, StandingResult } from "./schemas";
 
 const SELECT_LATEST_BRIEF = `SELECT payload_json FROM digest
 WHERE workspace_id = ? AND kind = 'weekly'
@@ -101,6 +102,31 @@ function changeBody(change: SiteChangeView): string {
     .filter((line) => line !== null)
     .join(" ");
   return [change.sentence, detail, change.url].filter((line) => line !== "").join(" ");
+}
+
+export async function readAgentCompetitor(workspaceId: string, competitorId: string): Promise<CompetitorResult> {
+  const page = await readCompetitorPage(workspaceId, competitorId, new Date());
+  if (page === null) return { competitor: null };
+  return {
+    competitor: {
+      id: page.competitor.id,
+      name: page.competitor.name,
+      domain: page.competitor.domain,
+      state: page.competitor.state,
+      stateChangedAt: page.competitor.stateChangedAt,
+      pagesWatched: page.watch.pages,
+      lastCheckedAt: page.watch.lastPolledAt,
+      changesThisWeek: page.weekCount,
+      changes: page.changes.map((change) => ({
+        id: change.id,
+        headline: change.headline,
+        page: change.page,
+        url: change.url,
+        observedAt: change.observedAt,
+        summary: changeBody(change),
+      })),
+    },
+  };
 }
 
 export async function readAgentAlerts(workspaceId: string): Promise<AlertsResult> {
