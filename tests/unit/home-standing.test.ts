@@ -253,7 +253,7 @@ describe("Home standing", () => {
     expect(render({ payload: payload({ headline_rank: null }) })).toContain("gathering the first week");
   });
 
-  it("shows a chip per on and off brand in the gathering state and no chip row once ranked", () => {
+  it("shows a chip per on and off brand in the gathering state", () => {
     const entities: readonly HomeEntity[] = [
       SELF,
       { id: "ent_kindred", role: "competitor", domain: "kindred.example", name: "Kindred", state: "on" },
@@ -276,9 +276,57 @@ describe("Home standing", () => {
     expect(gathering).toContain('href="/app/competitors/ent_off"');
     expect(gathering).toContain("Off Brand · off");
     expect(gathering).toContain('data-off=""');
+  });
 
-    const ranked = render({ payload: payload(), entities });
-    expect(ranked).not.toContain('aria-label="Your set"');
+  it("places the chip row after the why-line and before this week's standing", () => {
+    const html = render({ payload: payload() });
+    const whyIndex = html.indexOf("Kindred is the mover: 3 new ads and the loudest mention spike");
+    const chipIndex = html.indexOf('data-slot="brand-chip-row"');
+    const standingIndex = html.indexOf("This week&#x27;s standing");
+
+    expect(whyIndex).toBeGreaterThanOrEqual(0);
+    expect(chipIndex).toBeGreaterThan(whyIndex);
+    expect(standingIndex).toBeGreaterThan(chipIndex);
+  });
+
+  it("keeps self first, shows off competitors, and omits dismissed competitors", () => {
+    const entities: readonly HomeEntity[] = [
+      SELF,
+      { id: "ent_kindred", role: "competitor", domain: "kindred.example", name: "Kindred", state: "on" },
+      { id: "ent_off", role: "competitor", domain: "off.example", name: "Off Brand", state: "off" },
+      { id: "ent_gone", role: "competitor", domain: "gone.example", name: "Gone", state: "dismissed" },
+    ];
+    const html = render({ payload: payload(), entities });
+    const rowIndex = html.indexOf('data-slot="brand-chip-row"');
+    const selfIndex = html.indexOf('data-self=""', rowIndex);
+    const onIndex = html.indexOf('href="/app/competitors/ent_kindred"', rowIndex);
+    const offIndex = html.indexOf('href="/app/competitors/ent_off"', rowIndex);
+
+    expect(rowIndex).toBeGreaterThanOrEqual(0);
+    expect(selfIndex).toBeGreaterThan(rowIndex);
+    expect(onIndex).toBeGreaterThan(selfIndex);
+    expect(offIndex).toBeGreaterThan(onIndex);
+    expect(html).toContain('data-off=""');
+    expect(html).not.toContain("gone.example");
+  });
+
+  it("ends the chip row with a link to the add competitor input", () => {
+    const html = render({ payload: payload() });
+    expect(html).toContain('href="/app/competitors#add-competitor"');
+    expect(html).toContain("+ Add a competitor");
+  });
+
+  it("keeps the chip row in the gathering and add-competitor states", () => {
+    const gathering = render({ payload: null, entities: ENTITIES });
+    const addCompetitor = render({
+      payload: payload(),
+      entities: [SELF, { id: "ent_off", role: "competitor", domain: "off.example", name: "Off Brand", state: "off" }],
+    });
+
+    expect(gathering).toContain('data-slot="brand-chip-row"');
+    expect(gathering).toContain('href="/app/competitors#add-competitor"');
+    expect(addCompetitor).toContain('data-slot="brand-chip-row"');
+    expect(addCompetitor).toContain('href="/app/competitors#add-competitor"');
   });
 
   it("lands the first site sweep on the next 02:00Z strictly after now", () => {

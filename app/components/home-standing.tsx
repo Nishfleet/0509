@@ -26,15 +26,18 @@ export function HomeStanding({
     <section data-home="standing" className="min-w-0 break-words">
       <p className={EYEBROW}>{view.eyebrow}</p>
       {greeting(view)}
-      <div className="mt-4">{chips(view)}</div>
+      {whyLine(view)}
+      <div className="mt-6">
+        <BrandChipRow brands={view.chips} addHref="/app/competitors#add-competitor" />
+      </div>
       {body(view, howRanked)}
     </section>
   );
 }
 
-function chips(view: HomeView): ReactElement | null {
-  if (view.standing.kind !== "gathering") return null;
-  return <BrandChipRow brands={view.chips} />;
+function whyLine(view: HomeView): ReactElement | null {
+  if (view.standing.kind !== "ranked") return null;
+  return <p className="mt-3 max-w-prose leading-[1.55]">{view.standing.whyLine}</p>;
 }
 
 function greeting(view: HomeView): ReactElement {
@@ -70,7 +73,6 @@ function body(view: HomeView, howRanked?: HowRanked | null): ReactElement {
   }
   return (
     <>
-      <p className="mt-3 max-w-prose leading-[1.55]">{standing.whyLine}</p>
       {howRanked ? (
         <div className="mt-2">
           <HowRankedSheet howRanked={howRanked} />
