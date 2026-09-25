@@ -1,7 +1,7 @@
 import { env } from "cloudflare:workers";
 import { z } from "zod";
 
-import type { FreshnessSource } from "../../components/freshness-line";
+import type { FreshnessSource } from "../freshness.server";
 import type { SourceTick } from "../observability/pipeline-health";
 import { BLIND_REASON } from "../observability/pipeline-health";
 
