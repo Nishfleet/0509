@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
 jobs:
   scorecard:
-    uses: Nishfleet/fleet-ops/.github/workflows/parity-scorecard.yml@26e6ac1a5821436660bca8922a95d50e79bf6a97 # main 2026-09-25 (fleet-ops#8608); bump when fleet-ops changes it
+    uses: Nishfleet/fleet-ops/.github/workflows/parity-scorecard.yml@main # same ref runner group 3 enforces for agent.yml; a SHA pin here drifts from agent.yml@main and strands jobs (0509#5231)
     permissions:
       issues: write
       actions: read
