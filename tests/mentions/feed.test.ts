@@ -90,6 +90,7 @@ describe("mentions feed", () => {
       "Hacker News mentions",
       "Medium mentions",
       "News mentions",
+      "News mentions",
     ]);
     expect(mentions[1]?.when).toBe("found today");
     expect(mentions.map((mention) => mention.why)).toEqual([
