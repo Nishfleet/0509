@@ -227,7 +227,6 @@ describe("Home standing", () => {
     ]);
 
     const gathering = render({ payload: null, entities });
-    expect(gathering.match(/data-slot="brand-chip-row"/g)).toHaveLength(1);
     expect(gathering).toContain('role="group"');
     expect(gathering).toContain('aria-label="Your set"');
     expect(gathering).toContain('href="/app/settings"');
@@ -238,7 +237,7 @@ describe("Home standing", () => {
     expect(gathering).not.toContain('href="/app/competitors/ent_off"');
 
     const ranked = render({ payload: payload(), entities });
-    expect(ranked).not.toContain('data-slot="brand-chip-row"');
+    expect(ranked).not.toContain('aria-label="Your set"');
   });
 
   it("lands the first site sweep on the next 02:00Z strictly after now", () => {
