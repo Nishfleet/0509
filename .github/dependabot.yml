@@ -6,9 +6,20 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    open-pull-requests-limit: 5
     groups:
+      npm-major:
+        update-types: [major]
       npm-minor-patch:
         update-types: [minor, patch]
+    # A major that cannot install must never reopen a red, ownerless PR.
+    # typescript-eslint@8.70.1 still peers typescript <6.1 (0509#4913), and
+    # @cloudflare/vitest-plugin peers vitest ^4.1 (0509#4915).
+    ignore:
+      - dependency-name: typescript
+        versions: ['>=7.0.0']
+      - dependency-name: vitest
+        versions: ['>=5.0.0']
   - package-ecosystem: github-actions
     directory: /
     schedule:
