@@ -6,14 +6,14 @@ import { isTakenDown } from "../data/takedown.server";
 import { readWorkspaceIdForOwner } from "../data/workspace.server";
 import { screenOnboardingSubject } from "../onboarding-screen.server";
 import { readDraft } from "./card-draft.server";
-import type { CardDraft, SiteFields } from "./card-fields";
+import { creatorRows, type CardDraft, type CreatorRows, type SiteFields } from "./card-fields";
 import { startCard, withinProbeLimit } from "./card.server";
-import { readLogo } from "./logo-store.server";
 import { normaliseSubject } from "./normalise";
 
 interface IdentityScreenCard {
   subject: string;
   domain: string;
+  creator: CreatorRows | null;
   site: Promise<SiteFields>;
   logo: Promise<string | null>;
   draft: CardDraft;
@@ -28,19 +28,14 @@ const identitySchema = z.object({
   kind: z.enum(["domain", "handle", "channel"]).optional(),
   url: z.string().nullable().optional(),
   description: z.string().nullable().optional(),
+  logoUrl: z.string().nullable().optional(),
   socials: z.array(z.object({ platform: z.string(), url: z.string() })).optional(),
 });
 
 type IdentityJson = z.infer<typeof identitySchema>;
 
 function parseIdentity(raw: string): IdentityJson {
-  try {
-    const parsed = identitySchema.safeParse(JSON.parse(raw));
-    return parsed.success ? parsed.data : {};
-  } catch (error) {
-    console.log(JSON.stringify({ event: "identity-card-unreadable", error: String(error) }));
-    return {};
-  }
+  return identitySchema.parse(JSON.parse(raw));
 }
 
 function shownDomain(domain: string, identity: IdentityJson): string {
@@ -54,22 +49,10 @@ function formSubject(domain: string, identity: IdentityJson): string {
   return domain;
 }
 
-function toDataUrl(contentType: string, bytes: Uint8Array): string {
-  const base64 = btoa(Array.from(bytes, (b) => String.fromCharCode(b)).join(""));
-  return `data:${contentType};base64,${base64}`;
-}
-
-async function savedLogo(domain: string): Promise<string | null> {
-  try {
-    const kept = await readLogo(domain);
-    if (kept === null) return null;
-    const contentType = kept.httpMetadata?.contentType ?? "image/png";
-    const bytes = new Uint8Array(await kept.arrayBuffer());
-    return toDataUrl(contentType, bytes);
-  } catch (error) {
-    console.log(JSON.stringify({ event: "identity-logo-failed", subject: domain, error: String(error) }));
-    return null;
-  }
+function savedCreator(domain: string, identity: IdentityJson): CreatorRows | null {
+  const normalised = normaliseSubject(formSubject(domain, identity));
+  if (!normalised.ok) throw new Error(`stored subject did not normalise: ${normalised.reason}`);
+  return creatorRows(normalised.subject);
 }
 
 async function savedCard(workspaceId: string): Promise<IdentityScreenCard | null> {
@@ -92,8 +75,9 @@ async function savedCard(workspaceId: string): Promise<IdentityScreenCard | null
   return {
     subject: formSubject(row.domain, identity),
     domain: shownDomain(row.domain, identity),
+    creator: savedCreator(row.domain, identity),
     site: Promise.resolve(site),
-    logo: savedLogo(row.domain),
+    logo: Promise.resolve(identity.logoUrl ?? null),
     draft: await readDraft(workspaceId, row.domain),
   };
 }
@@ -125,6 +109,7 @@ export async function loadIdentityScreen(request: Request, userId: string): Prom
     card: {
       subject: raw,
       domain: shown,
+      creator: creatorRows(subject),
       ...startCard(workspaceId, subject),
       draft: await readDraft(workspaceId, subject.registrable),
     },

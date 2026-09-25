@@ -84,6 +84,7 @@ export default function Page({ loaderData, actionData }: Route.ComponentProps) {
           <IdentityCard
             subject={card.subject}
             domain={card.domain}
+            creator={card.creator}
             site={card.site}
             logo={card.logo}
             draft={card.draft}

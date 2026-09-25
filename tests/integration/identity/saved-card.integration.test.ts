@@ -66,13 +66,11 @@ describe("loadIdentityScreen", () => {
         platform: null,
         url: "https://www.gymshark.com/",
         description: "Gym clothes",
-        logoUrl: null,
+        logoUrl: "/app/logos/ent-return",
         socials: [{ platform: "instagram", url: "https://www.instagram.com/gymshark/" }],
+        siteFill: "filled",
       }),
       now: NOW,
-    });
-    await env.SNAPSHOTS.put("logo/gymshark.com", new Uint8Array([1, 2, 3]), {
-      httpMetadata: { contentType: "image/png" },
     });
     await saveDraftField(WORKSPACE_ID, "gymshark.com", "name", "Draft Name");
 
@@ -90,6 +88,7 @@ describe("loadIdentityScreen", () => {
     expect(screen.limited).toBe(false);
     expect(screen.card?.domain).toBe("gymshark.com");
     expect(screen.card?.subject).toBe("https://www.gymshark.com/");
+    expect(screen.card?.creator).toBeNull();
     expect(screen.card?.draft.name).toBe("Draft Name");
     expect(await screen.card?.site).toEqual({
       name: "Returned Gymshark",
@@ -98,11 +97,11 @@ describe("loadIdentityScreen", () => {
       review: { name: "fill", description: "fill", socials: "fill" },
       unfound: false,
     });
-    expect(await screen.card?.logo).toBe("data:image/png;base64,AQID");
+    expect(await screen.card?.logo).toBe("/app/logos/ent-return");
     expect(calls).toEqual([]);
   });
 
-  it("still shows the saved name when identity_json cannot be read", async () => {
+  it("does not show a card when the stored identity cannot be read", async () => {
     await insertSelfEntity({
       id: "ent-return-bad",
       workspaceId: WORKSPACE_ID,
@@ -112,18 +111,9 @@ describe("loadIdentityScreen", () => {
       now: NOW,
     });
 
-    const screen = await loadIdentityScreen(
-      new Request("https://0509.io/onboarding/identity?subject=gymshark.com"),
-      USER_ID,
-    );
-    expect(await screen.card?.site).toMatchObject({
-      name: "Kept Name",
-      description: null,
-      socials: [],
-      unfound: false,
-    });
-    expect(screen.card?.domain).toBe("gymshark.com");
-    expect(screen.card?.subject).toBe("gymshark.com");
+    await expect(
+      loadIdentityScreen(new Request("https://0509.io/onboarding/identity?subject=gymshark.com"), USER_ID),
+    ).rejects.toThrow(SyntaxError);
   });
 
   it("shows a saved handle from the stored url", async () => {
@@ -144,5 +134,29 @@ describe("loadIdentityScreen", () => {
     const screen = await loadIdentityScreen(new Request("https://0509.io/onboarding/identity"), USER_ID);
     expect(screen.card?.domain).toBe("@gymshark");
     expect(screen.card?.subject).toBe("@gymshark");
+    expect(screen.card?.creator).toEqual({ channel: null, handle: "@gymshark" });
+  });
+
+  it("shows the saved channel from the stored url", async () => {
+    await insertSelfEntity({
+      id: "ent-return-channel",
+      workspaceId: WORKSPACE_ID,
+      domain: "veritasium",
+      name: "Veritasium",
+      identityJson: JSON.stringify({
+        kind: "channel",
+        platform: "youtube",
+        url: "https://www.youtube.com/@veritasium",
+        description: null,
+        logoUrl: null,
+        socials: [],
+      }),
+      now: NOW,
+    });
+
+    const screen = await loadIdentityScreen(new Request("https://0509.io/onboarding/identity"), USER_ID);
+    expect(screen.card?.domain).toBe("https://www.youtube.com/@veritasium");
+    expect(screen.card?.creator).toEqual({ channel: "YouTube", handle: "@veritasium" });
+    expect(await screen.card?.logo).toBeNull();
   });
 });
