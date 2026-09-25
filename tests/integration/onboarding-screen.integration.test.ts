@@ -85,33 +85,28 @@ describe("screenOnboardingSubject", () => {
     expect(rows?.n).toBe(0);
   });
 
-  it("refuses a confidently private subject, records the refusal, and creates no entity or watch", async () => {
+  it("refuses a confidently private handle, records the refusal, and creates no entity or watch", async () => {
     const { userId, workspaceId } = await seedWorkspace();
     stubRun(0.05);
-    const subject = `private-${String(runs)}.example`;
+    const subject = `private-${String(runs)}`;
 
     const fetchSpy = vi.spyOn(globalThis, "fetch");
-    const log = vi.spyOn(console, "log");
     try {
       const result = await screenOnboardingSubject({
         workspaceId,
         userId,
-        subject: domainSubject(subject),
-        raw: subject,
+        subject: { kind: "handle", registrable: subject, url: null },
+        raw: `@${subject}`,
         answer: null,
         now: NOW,
       });
 
       expect(result).toEqual({ kind: "refuse", message: REFUSAL });
       expect(fetchSpy).not.toHaveBeenCalled();
-      expect(log.mock.calls.map((call) => String(call[0]))).toContain(
-        JSON.stringify({ event: "public_subject.screen", fetched: false, jev: true, ground: null }),
-      );
       expect(await decisionCount(workspaceId, "public_subject:refused")).toBe(1);
       expect(await subjectRows(workspaceId, subject)).toEqual({ entities: 0, watches: 0 });
     } finally {
       fetchSpy.mockRestore();
-      log.mockRestore();
     }
   });
 
@@ -158,6 +153,47 @@ describe("screenOnboardingSubject", () => {
     });
     expect(second).toEqual({ kind: "proceed" });
     expect(run).toHaveBeenCalledTimes(1);
+    expect(await decisionCount(workspaceId, "public_subject:refused")).toBe(0);
+  });
+
+  it("does not write a refusal beside an existing confirmation", async () => {
+    const { userId, workspaceId } = await seedWorkspace();
+    const run = stubRun(0.5);
+    const subject = {
+      kind: "handle" as const,
+      platform: "instagram" as const,
+      registrable: "accounts",
+      url: "https://www.instagram.com/accounts/",
+    };
+
+    const first = await screenOnboardingSubject({
+      workspaceId,
+      userId,
+      subject,
+      raw: "https://www.instagram.com/accounts/",
+      answer: "business",
+      now: NOW,
+    });
+    expect(first).toEqual({ kind: "proceed" });
+
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+    try {
+      const second = await screenOnboardingSubject({
+        workspaceId,
+        userId,
+        subject,
+        raw: "https://www.instagram.com/accounts/login",
+        answer: null,
+        now: NOW,
+      });
+      expect(second).toEqual({ kind: "proceed" });
+      expect(fetchSpy).not.toHaveBeenCalled();
+      expect(run).toHaveBeenCalledTimes(1);
+      expect(await decisionCount(workspaceId, "public_subject:confirmed")).toBe(1);
+      expect(await decisionCount(workspaceId, "public_subject:refused")).toBe(0);
+    } finally {
+      fetchSpy.mockRestore();
+    }
   });
 
   it("asks again with no answer without paying for a second judgment", async () => {
@@ -251,12 +287,43 @@ describe("screenOnboardingSubject", () => {
     expect(await decisionCount(workspaceId, "public_subject:refused")).toBe(0);
   });
 
-  it("refuses a platform-private account in code and does not ask Jev or store the subject", async () => {
+  it("refuses a login address in code, asks neither Jev nor the network, and stores no entity or watch", async () => {
     const { userId, workspaceId } = await seedWorkspace();
     const run = vi.fn(() => Promise.reject(new Error("jev must not be asked")));
     Reflect.set(env, "AI", { run });
-    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response('{"is_private":true}', { status: 200 }));
-    const subject = `private-ig-${String(runs)}`;
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+    const raw = "https://www.instagram.com/accounts/login";
+
+    try {
+      const result = await screenOnboardingSubject({
+        workspaceId,
+        userId,
+        subject: {
+          kind: "handle",
+          platform: "instagram",
+          registrable: "accounts",
+          url: "https://www.instagram.com/accounts/",
+        },
+        raw,
+        answer: "business",
+        now: NOW,
+      });
+
+      expect(result).toEqual({ kind: "refuse", message: REFUSAL });
+      expect(run).not.toHaveBeenCalled();
+      expect(fetchSpy).not.toHaveBeenCalled();
+      expect(await decisionCount(workspaceId, "public_subject:refused")).toBe(1);
+      expect(await subjectRows(workspaceId, "accounts")).toEqual({ entities: 0, watches: 0 });
+    } finally {
+      fetchSpy.mockRestore();
+    }
+  });
+
+  it("does not fetch a platform profile before asking Jev", async () => {
+    const { userId, workspaceId } = await seedWorkspace();
+    const run = stubRun(0.95);
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+    const subject = `brand-${String(runs)}`;
 
     try {
       const result = await screenOnboardingSubject({
@@ -268,16 +335,14 @@ describe("screenOnboardingSubject", () => {
           registrable: subject,
           url: `https://www.instagram.com/${subject}/`,
         },
-        raw: `@${subject}`,
-        answer: "business",
+        raw: `https://www.instagram.com/${subject}/`,
+        answer: null,
         now: NOW,
       });
 
-      expect(result).toEqual({ kind: "refuse", message: REFUSAL });
-      expect(run).not.toHaveBeenCalled();
-      expect(fetchSpy).toHaveBeenCalledTimes(1);
-      expect(await decisionCount(workspaceId, "public_subject:refused")).toBe(1);
-      expect(await subjectRows(workspaceId, subject)).toEqual({ entities: 0, watches: 0 });
+      expect(result).toEqual({ kind: "proceed" });
+      expect(run).toHaveBeenCalledTimes(1);
+      expect(fetchSpy).not.toHaveBeenCalled();
     } finally {
       fetchSpy.mockRestore();
     }
