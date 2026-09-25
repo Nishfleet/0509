@@ -55,6 +55,7 @@ async function seed(identityJson: string, configJson: string): Promise<{ watchId
     source_id: sourceId,
     plugin_key: "youtube.channel_rss",
     reliability: "rss",
+    min_interval_seconds: 0,
   };
   return { watchId, watch };
 }

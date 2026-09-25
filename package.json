@@ -37,6 +37,8 @@
     "sonner": "^2.0.8",
     "tailwind-merge": "^3.7.0",
     "tldts": "^7.4.13",
+    "uplot": "1.6.32",
+    "uplot-react": "1.2.4",
     "zod": "^4.6.5",
     "zod-openapi": "^6.0.2"
   },

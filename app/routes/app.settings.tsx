@@ -22,9 +22,9 @@ import {
   readOwnSiteAlerts,
   readWorkspaceIdForOwner,
   setOwnSiteAlerts,
-  updateBriefSchedule,
 } from "../lib/data/workspace.server";
 import { requireSession } from "../lib/require-session.server";
+import { saveBriefSchedule } from "../lib/standing/reschedule.server";
 
 const MISMATCH = "That doesn't match your email. Type it exactly to delete your account.";
 const SIGN_IN_AGAIN = "For your safety, sign out and sign back in, then delete your account.";
@@ -90,7 +90,7 @@ export async function action({ request, context }: Route.ActionArgs) {
   const owned = await readBriefScheduleForOwner(session.user.id);
   const schedule = parseBriefSchedule({ weekday: form.get("weekday"), hour: form.get("hour"), timezone: form.get("timezone") });
   if (owned === null || schedule === null) return { saved: false, deleteError: null, deliveryError: null, deliverySuppressed: false };
-  await updateBriefSchedule(owned.workspaceId, schedule);
+  await saveBriefSchedule(owned.workspaceId, owned.schedule, schedule);
   return { saved: true, deleteError: null, deliveryError: null, deliverySuppressed: false };
 }
 
