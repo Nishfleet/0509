@@ -1093,7 +1093,7 @@ The version in this table is the `package.json` specifier. An earlier section of
 
 | Package | Specifier | Where it is named | Why this one | Rejected | Lock |
 |---|---|---|---|---|---|
-| `@axe-core/playwright` | ^4.13.0 | §6.6, #4148, #4149, REBUILD-DONE §B | WCAG 2.2 AA scan inside Playwright specs, run by `AxeBuilder`. Doc: <https://playwright.dev/docs/accessibility-testing> | `axe-playwright` (third-party wrapper), Lighthouse's accessibility category (a subset of axe, per-URL, cannot sign in), hand-written contrast checks | 4.13.0 |
+| `@axe-core/playwright` | ^4.13.0 | §6.6, #4148, #4149, REBUILD-DONE §B | WCAG 2.2 AA scan inside Playwright specs, run by `AxeBuilder`. Doc: <https://playwright.dev/docs/accessibility-testing>, <https://github.com/dequelabs/axe-core-npm/tree/develop/packages/playwright> | `axe-playwright` (third-party wrapper), a hand-injected `axe-core` via `page.addScriptTag`, Lighthouse's accessibility score (not rule-level, not per state) | 4.13.0 |
 | `@base-ui/react` | 1.8.0 | §3.2 | Badge and avatar import it | Radix. The copied shadcn files import Base UI | 1.8.0 |
 | `@better-auth/api-key` | ^1.7.5 | §7.3 | API keys, quotas, and expiry ship in this plugin | A hand-written key table | 1.7.5 |
 | `@better-auth/passkey` | ^1.7.5 | §2.5 | Passkeys. The plugin pulls SimpleWebAuthn | A hand-rolled WebAuthn | 1.7.5 |
