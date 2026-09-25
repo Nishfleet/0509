@@ -3,7 +3,10 @@ import { beforeEach, describe, expect, it } from "vitest";
 
 import { createAuth, deleteSignedInUser } from "../../app/lib/auth.server";
 import { firstWorkspaceId } from "../../app/lib/workspace.server";
-import { readAccountDeleteProgress } from "../../app/lib/account-delete.server";
+import {
+  isAccountDeleteInstanceMissing,
+  readAccountDeleteProgress,
+} from "../../app/lib/account-delete.server";
 
 const ORIGIN = "http://localhost:8787";
 const ADDRESS = "leaving@0509.io";
@@ -119,5 +122,44 @@ describe("delete my account", () => {
 
     expect(await readAccountDeleteProgress(id)).toEqual({ rows: "removed", files: "removed", deleted: 3 });
     expect(await readAccountDeleteProgress("no-such-instance")).toBeNull();
+    expect(isAccountDeleteInstanceMissing(new Error("instance.not_found"))).toBe(true);
+    expect(isAccountDeleteInstanceMissing(new Error("Engine was never started"))).toBe(false);
+    expect(isAccountDeleteInstanceMissing("not an error")).toBe(false);
+  });
+
+  it("reports the Workflow still removing while a step is between retries", async () => {
+    const id = "account-delete-removing";
+    await using introspector = await introspectWorkflowInstance(env.ACCOUNT_DELETE, id);
+    await introspector.modify(async (modifier) => {
+      await modifier.mockStepError(
+        { name: "delete card/ws-leaving/ page 0" },
+        new Error("R2 is slow"),
+      );
+    });
+    await env.ACCOUNT_DELETE.create({
+      id,
+      params: { prefixes: ["card/ws-leaving/"] },
+    });
+
+    expect(await readAccountDeleteProgress(id)).toEqual({ rows: "removed", files: "removing", deleted: null });
+  });
+
+  it("reports the Workflow stopped when the instance errored out", async () => {
+    const id = "account-delete-failed";
+    await using introspector = await introspectWorkflowInstance(env.ACCOUNT_DELETE, id);
+    await introspector.modify(async (modifier) => {
+      await modifier.disableRetryDelays();
+      await modifier.mockStepError(
+        { name: "delete card/ws-leaving/ page 0" },
+        new Error("R2 blew up"),
+      );
+    });
+    await env.ACCOUNT_DELETE.create({
+      id,
+      params: { prefixes: ["card/ws-leaving/"] },
+    });
+
+    await introspector.waitForStatus("errored");
+    expect(await readAccountDeleteProgress(id)).toEqual({ rows: "removed", files: "failed", deleted: null });
   });
 });

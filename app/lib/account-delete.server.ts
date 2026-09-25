@@ -38,10 +38,17 @@ export async function deleteStoredPage(prefix: string): Promise<{ deleted: numbe
   return { deleted: keys.length, more: listed.truncated };
 }
 
+export function isAccountDeleteInstanceMissing(error: unknown): boolean {
+  return error instanceof Error && error.message.includes("instance.not_found");
+}
+
 export async function readAccountDeleteProgress(
   instanceId: string,
 ): Promise<AccountDeleteProgress | null> {
-  const lookup = await env.ACCOUNT_DELETE.get(instanceId).catch(() => null);
+  const lookup = await env.ACCOUNT_DELETE.get(instanceId).catch((error: unknown) => {
+    if (isAccountDeleteInstanceMissing(error)) return null;
+    throw error;
+  });
   if (lookup === null) return null;
   const { status, output } = await lookup.status();
   if (status === "complete") {
