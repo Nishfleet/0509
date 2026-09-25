@@ -100,6 +100,16 @@ describe("the identity card fields", () => {
 		expect(html).toContain("my line");
 	});
 
+	it("keeps a saved draft on a field under review, so a reload holds the edit Jev marked check", () => {
+		const html = render(
+			site({ name: "check", description: "check", socials: "fill" }),
+			{ name: "My Brand", description: "my line" },
+		);
+
+		expect(input(html, 'name="name"')).toContain('value="My Brand"');
+		expect(html).toContain("my line");
+	});
+
 	it("promises the hourly fill on an unread site, never the after-first-crawl line", () => {
 		const html = render(
 			site({ name: "fill", description: "empty", socials: "empty" }, { description: null, socials: [], unfound: true }),

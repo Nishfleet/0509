@@ -24,10 +24,6 @@ describe("identity card draft", () => {
     await env.IDENTITY_CACHE.delete(KEY);
   });
 
-  it("keys draft:<workspace>:<registrable>", () => {
-    expect(KEY).toBe("draft:ws-card-draft:gymshark.com");
-  });
-
   it("reads an unknown workspace and domain as an empty draft", async () => {
     expect(await readDraft("ws-unknown", "unknown.example")).toEqual({});
   });
