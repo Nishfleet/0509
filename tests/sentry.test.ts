@@ -64,4 +64,28 @@ describe("Sentry beforeSend", () => {
 
     expect(result.request).toBeUndefined();
   });
+
+  it("uses the route tag as the request url and the transaction", async () => {
+    const result = await beforeSend({
+      type: undefined,
+      event_id: "e1",
+      tags: { route: "/u/:token" },
+      transaction: "GET /u/abc",
+      request: { method: "GET", url: "https://0509.io/u/abc?x=1" },
+    });
+
+    expect(result.request).toEqual({ method: "GET", url: "/u/:token" });
+    expect(result.transaction).toBe("/u/:token");
+  });
+
+  it("ignores a route tag that is not a string", async () => {
+    const result = await beforeSend({
+      type: undefined,
+      event_id: "e1",
+      tags: { route: 3 },
+      request: { method: "GET", url: "https://0509.io/u/abc?x=1" },
+    });
+
+    expect(result.request?.url).toBe("https://0509.io/u/[redacted]");
+  });
 });
