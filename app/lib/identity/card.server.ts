@@ -63,7 +63,7 @@ async function probeSite(subject: Subject): Promise<SiteCard> {
   };
 }
 
-async function readSiteCard(subject: Subject): Promise<{ card: SiteCard; reached: boolean }> {
+export async function readSiteCard(subject: Subject): Promise<{ card: SiteCard; reached: boolean }> {
   if (subject.kind !== "domain") return { card: UNREACHED, reached: false };
   try {
     return { card: await cachedProbe(subject, "homepage", siteCardSchema, () => probeSite(subject)), reached: true };

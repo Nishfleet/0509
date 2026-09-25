@@ -408,3 +408,23 @@ export async function readCompetitors(
     })),
   };
 }
+
+export type SiteFillState = "pending" | "filled" | "gave_up";
+
+const FILL_SELF_SITE_FIELDS =
+  "UPDATE entity SET identity_json = json_set(identity_json, '$.description', coalesce(json_extract(identity_json, '$.description'), ?2), '$.socials', CASE WHEN json_array_length(identity_json, '$.socials') > 0 THEN json(json_extract(identity_json, '$.socials')) ELSE json(?3) END, '$.siteFill', 'filled') WHERE id = ?1 AND role = 'self'";
+
+export async function fillSelfSiteFields(input: {
+  entityId: string;
+  description: string | null;
+  socialsJson: string;
+}): Promise<void> {
+  await env.DB.prepare(FILL_SELF_SITE_FIELDS).bind(input.entityId, input.description, input.socialsJson).run();
+}
+
+const MARK_SELF_SITE_FILL =
+  "UPDATE entity SET identity_json = json_set(identity_json, '$.siteFill', ?2) WHERE id = ?1 AND role = 'self'";
+
+export async function markSelfSiteFill(entityId: string, state: SiteFillState): Promise<void> {
+  await env.DB.prepare(MARK_SELF_SITE_FILL).bind(entityId, state).run();
+}
