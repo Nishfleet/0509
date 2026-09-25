@@ -94,8 +94,8 @@ export async function insertSiteChange(row: SiteChangeSignal): Promise<void> {
 
 const INSERT_MENTION = `INSERT INTO signal
   (id, workspace_id, entity_id, source_id, watch_id, snapshot_id, kind, title, url, canonical_url, url_hash,
-   author, payload_json, dedup_key, published_at, observed_at, last_seen_at, is_tombstoned)
-VALUES (?1, ?2, ?3, ?4, ?5, ?6, 'mention', ?7, ?8, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?14, ?15)
+   author, engagement_json, payload_json, dedup_key, published_at, observed_at, last_seen_at, is_tombstoned)
+VALUES (?1, ?2, ?3, ?4, ?5, ?6, 'mention', ?7, ?8, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?15, ?16)
 ON CONFLICT (source_id, dedup_key) DO NOTHING`;
 
 const SEEN_KEYS = "SELECT dedup_key FROM signal WHERE source_id = ?1 AND dedup_key IN (SELECT value FROM json_each(?2))";
@@ -110,7 +110,9 @@ export interface MentionSignal {
   title: string;
   url: string;
   urlHash: string;
-  publisher: string | null;
+  author: string | null;
+  engagementJson: string | null;
+  payloadJson: string;
   dedupKey: string;
   publishedAt: string | null;
   observedAt: string;
@@ -134,8 +136,9 @@ export function insertMention(signal: MentionSignal): D1PreparedStatement {
     signal.title,
     signal.url,
     signal.urlHash,
-    signal.publisher,
-    JSON.stringify({ publisher: signal.publisher }),
+    signal.author,
+    signal.engagementJson,
+    signal.payloadJson,
     signal.dedupKey,
     signal.publishedAt,
     signal.observedAt,

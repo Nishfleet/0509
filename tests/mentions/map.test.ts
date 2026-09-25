@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { mentionItemSchema } from "../../workers/sources/mentions/types";
 import type { MentionItem } from "../../workers/mentions/map";
-import { toSignalRow } from "../../workers/mentions/map";
+import { storedDedupKey, toSignalRow } from "../../workers/mentions/map";
 
 const URL_A = "https://example.com/mentions/a";
 const URL_B = "https://example.com/mentions/b";
@@ -115,5 +115,61 @@ describe("toSignalRow", () => {
 		);
 		expect(row.title).toBe("Gymshark launches X");
 		expect(row.dedup_key).toBe("abc-123");
+	});
+
+	it("stores the entity-prefixed key without changing the adapter dedup key", async () => {
+		const row = await toSignalRow({ ...ITEM, dedupKey: "49807834" }, CTX);
+		expect(row.dedup_key).toBe("49807834");
+		expect(storedDedupKey(CTX.entityId, row.dedup_key)).toBe("ent_1:49807834");
+	});
+
+	it("maps a GDELT-shaped item: publisher in payload, article url canonical, null published_at stays null", async () => {
+		const item: MentionItem = {
+			dedupKey: "https://example-news.com/gymshark",
+			url: "https://example-news.com/gymshark",
+			title: "Gymshark opens a store",
+			publishedAt: null,
+			publisher: "example-news.com",
+		};
+		const row = await toSignalRow(item, CTX);
+		expect(row.kind).toBe("mention");
+		expect(row.canonical_url).toBe("https://example-news.com/gymshark");
+		expect(row.published_at).toBeNull();
+		expect(row.published_at).not.toBe(CTX.observedAt);
+		expect(row.author).toBeNull();
+		expect(JSON.parse(row.payload_json)).toEqual({ publisher: "example-news.com" });
+		expect(storedDedupKey("ent_gdelt", row.dedup_key)).toBe(
+			"ent_gdelt:https://example-news.com/gymshark",
+		);
+	});
+
+	it("maps an HN-shaped item: objectID is the adapter dedup key and there is no publisher", async () => {
+		const item: MentionItem = {
+			dedupKey: "49807834",
+			url: "https://github.com/romshark/datapages/releases/tag/v0.10.0",
+			title: "Datapages v0.10.0 Beta Release",
+			publishedAt: "2026-09-22T20:46:13Z",
+		};
+		const row = await toSignalRow(item, CTX);
+		expect(row.dedup_key).toBe("49807834");
+		expect(row.canonical_url).toBe(item.url);
+		expect(row.published_at).toBe("2026-09-22T20:46:13Z");
+		expect(JSON.parse(row.payload_json)).toEqual({});
+		expect(storedDedupKey("ent_hn", row.dedup_key)).toBe("ent_hn:49807834");
+	});
+
+	it("maps a Medium-shaped item: canonical_url is the guid, never the tracking link", async () => {
+		const guid = "https://medium.com/p/abc123";
+		const item: MentionItem = {
+			dedupKey: guid,
+			url: guid,
+			title: "A post",
+			publishedAt: "2026-09-24T12:00:00Z",
+		};
+		const row = await toSignalRow(item, CTX);
+		expect(row.canonical_url).toBe(guid);
+		expect(row.canonical_url).not.toContain("?source=");
+		expect(row.dedup_key).toBe(guid);
+		expect(storedDedupKey("ent_med", row.dedup_key)).toBe(`ent_med:${guid}`);
 	});
 });

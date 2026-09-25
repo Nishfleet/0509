@@ -11,7 +11,7 @@ import { markWatchPolled, readActiveWatches } from "../../app/lib/data/watch.ser
 import type { NoulQuestion, NoulVerdict } from "../../app/lib/jev/client.server";
 import { askNoul, JevUnavailableError } from "../../app/lib/jev/client.server";
 import { noulAction } from "../../app/lib/jev/thresholds";
-import type { MentionItem } from "./map";
+import { storedDedupKey, toSignalRow, type MentionItem } from "./map";
 import { writeSourcePoint } from "./canary";
 import { adapterFor } from "../sources/registry";
 
@@ -113,7 +113,10 @@ async function statementsForWatch(input: {
 }): Promise<{ statements: D1PreparedStatement[]; stored: number; unjudged: number }> {
   const { watch, context, items, snapshot, canaryCount, now } = input;
   const snapshotId = crypto.randomUUID();
-  const keyed = items.map((item) => ({ item, dedupKey: `${watch.entity_id}:${item.dedupKey}` }));
+  const keyed = items.map((item) => ({
+    item,
+    dedupKey: storedDedupKey(watch.entity_id, item.dedupKey),
+  }));
   const seen = await readSeenDedupKeys(
     watch.source_id,
     keyed.map((entry) => entry.dedupKey),
@@ -132,7 +135,7 @@ async function statementsForWatch(input: {
   ];
   let stored = 0;
   let unjudged = 0;
-  for (const [index, { item, dedupKey }] of fresh.entries()) {
+  for (const [index, { item }] of fresh.entries()) {
     let verdicts: Awaited<ReturnType<typeof judge>>;
     try {
       verdicts = await judge(watch, context, item);
@@ -142,6 +145,15 @@ async function statementsForWatch(input: {
       console.error(JSON.stringify({ event: "mentions.jev_unavailable", message: error.message }));
       break;
     }
+    const mapped = await toSignalRow(item, {
+      workspaceId: watch.workspace_id,
+      entityId: watch.entity_id,
+      sourceId: watch.source_id,
+      watchId: watch.watch_id,
+      snapshotId,
+      observedAt: now,
+    });
+    const dedupKey = storedDedupKey(watch.entity_id, mapped.dedup_key);
     const signalId = `sig-${(await sha256Hex(`${watch.source_id}:${dedupKey}`)).slice(0, 32)}`;
     const rejected = noulAction(verdicts.about.p) === "reject";
     const verdictRow = (verdict: NoulVerdict) =>
@@ -159,18 +171,20 @@ async function statementsForWatch(input: {
     statements.push(
       insertMention({
         id: signalId,
-        workspaceId: watch.workspace_id,
-        entityId: watch.entity_id,
-        sourceId: watch.source_id,
+        workspaceId: mapped.workspace_id,
+        entityId: mapped.entity_id,
+        sourceId: mapped.source_id,
         watchId: watch.watch_id,
         snapshotId,
-        title: item.title,
-        url: item.url,
-        urlHash: await sha256Hex(item.url),
-        publisher: item.publisher ?? null,
+        title: mapped.title,
+        url: mapped.canonical_url,
+        urlHash: mapped.url_hash,
+        author: mapped.author,
+        engagementJson: mapped.engagement_json,
+        payloadJson: mapped.payload_json,
         dedupKey,
-        publishedAt: item.publishedAt,
-        observedAt: now,
+        publishedAt: mapped.published_at,
+        observedAt: mapped.observed_at,
         isNotAboutBrand: rejected,
       }),
       verdictRow(verdicts.about),
