@@ -6,6 +6,7 @@ import { IdentityCard } from "../components/identity-card";
 import { OneInput } from "../components/one-input";
 import { ONBOARDING_PAGE } from "../components/page-heading";
 import { StepBar } from "../components/step-bar";
+import { markCardReady } from "../lib/data/onboarding_run.server";
 import { isTakenDown } from "../lib/data/takedown.server";
 import { readWorkspaceIdForOwner } from "../lib/data/workspace.server";
 import { readDraft, saveDraftField } from "../lib/identity/card-draft.server";
@@ -85,7 +86,10 @@ export async function action({ request }: Route.ActionArgs) {
       if (screened.kind !== "proceed") throw redirect("/onboarding");
     }
   }
-  if (await confirmCard(workspaceId, form)) throw redirect("/onboarding/competitors");
+  if (await confirmCard(workspaceId, form)) {
+    await markCardReady(workspaceId, new Date().toISOString());
+    throw redirect("/onboarding/competitors");
+  }
   return { message: "Add your brand's name, then tap That's me." };
 }
 
