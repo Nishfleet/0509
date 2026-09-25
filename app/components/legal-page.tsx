@@ -64,47 +64,49 @@ function Section({ section }: { section: LegalSection }) {
 
 export function LegalPage({ doc }: { doc: LegalDocument }) {
   return (
-    <main className="bg-bone text-ink mx-auto w-full max-w-[46rem] px-6 py-16 sm:py-24">
+    <div className="bg-bone text-ink mx-auto w-full max-w-[46rem] px-6 py-16 sm:py-24">
       <header>
         <a className="font-display text-ink text-base font-bold tracking-[-0.03em]" href="/">
           05<span className="bg-green text-on-green px-[5px]">09</span>
         </a>
-        <h1 className="font-display mt-8 text-[clamp(1.75rem,3.6vw,2.9rem)] leading-[1.15] font-semibold tracking-[-0.02em]">
+      </header>
+      <main className="mt-8">
+        <h1 className="font-display text-[clamp(1.75rem,3.6vw,2.9rem)] leading-[1.15] font-semibold tracking-[-0.02em]">
           {doc.title}
         </h1>
-        <p className="text-ink-faint mt-4 font-mono text-[0.72rem] tracking-[0.06em]">
+        <p className="text-ink-soft mt-4 font-mono text-[0.72rem] tracking-[0.06em]">
           Last updated <time dateTime={LEGAL_UPDATED}>{updatedLabel}</time>
         </p>
         <p className="text-ink-soft mt-6 leading-[1.65]">{doc.intro}</p>
-      </header>
-      <nav aria-label="On this page" className="border-line mt-10 border-y py-5">
-        <ol className="grid gap-x-6 gap-y-2 text-[0.92rem] sm:grid-cols-2">
-          {doc.sections.map((section) => (
-            <li key={section.id}>
-              <a className="text-ink-soft hover:text-ink underline-offset-4 hover:underline" href={`#${section.id}`}>
-                {section.heading}
+        <nav aria-label="On this page" className="border-line mt-10 border-y py-5">
+          <ol className="grid gap-x-6 gap-y-2 text-[0.92rem] sm:grid-cols-2">
+            {doc.sections.map((section) => (
+              <li key={section.id}>
+                <a className="text-ink-soft hover:text-ink underline-offset-4 hover:underline" href={`#${section.id}`}>
+                  {section.heading}
+                </a>
+              </li>
+            ))}
+            <li>
+              <a className="text-ink-soft hover:text-ink underline-offset-4 hover:underline" href="#contact">
+                Contact
               </a>
             </li>
-          ))}
-          <li>
-            <a className="text-ink-soft hover:text-ink underline-offset-4 hover:underline" href="#contact">
-              Contact
-            </a>
-          </li>
-        </ol>
-      </nav>
-      {doc.sections.map((section) => (
-        <Section key={section.id} section={section} />
-      ))}
-      <section aria-labelledby="contact" className="mt-14 scroll-mt-6">
-        <h2 className="font-display text-[1.15rem] leading-[1.1] font-semibold tracking-[-0.02em]" id="contact">
-          Contact
-        </h2>
-        <p className={body}>
-          Email <SupportLink />. A person reads every message.
-        </p>
-      </section>
+          </ol>
+        </nav>
+        {doc.sections.map((section) => (
+          <Section key={section.id} section={section} />
+        ))}
+        <section aria-labelledby="contact" className="mt-14 scroll-mt-6">
+          <h2 className="font-display text-[1.15rem] leading-[1.1] font-semibold tracking-[-0.02em]" id="contact">
+            Contact
+          </h2>
+          <p className={body}>
+            Email <SupportLink />. A person reads every message.
+          </p>
+        </section>
+      </main>
       <Footer />
-    </main>
+    </div>
   );
 }

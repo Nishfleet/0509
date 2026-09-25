@@ -1,5 +1,6 @@
 import { env } from "cloudflare:test";
-import { beforeEach, describe, expect, it } from "vitest";
+import { env as workerEnv } from "cloudflare:workers";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { publishChange } from "../../../app/lib/site/publish.server";
 import type { ChangeJudgment } from "../../../app/lib/site/judge.server";
@@ -104,8 +105,15 @@ const baseInput = (
   previousScreenshotKey: `snapshot/site/${overrides.watchId}/old.png`,
 });
 
+let send: ReturnType<typeof vi.spyOn>;
+
 describe("publishChange (0509#4435)", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   beforeEach(async () => {
+    send = vi.spyOn(workerEnv.SEND_EMAIL, "send").mockResolvedValue(undefined);
     await env.DB.exec("DELETE FROM alert");
     await env.DB.exec("DELETE FROM incident");
     await env.DB.exec("DELETE FROM snapshot");
@@ -133,6 +141,7 @@ describe("publishChange (0509#4435)", () => {
     await seedSnapshot("snap-publish-e", SELF_WATCH, SELF_PAGE, "snapshot/site/self-watch/snap-publish-e.txt");
     await seedSnapshot("snap-publish-f-1", SELF_WATCH, SELF_PAGE, "snapshot/site/self-watch/snap-publish-f-1.txt");
     await seedSnapshot("snap-publish-f-2", SELF_WATCH, SELF_PAGE, "snapshot/site/self-watch/snap-publish-f-2.txt");
+    await seedSnapshot("snap-publish-g", SELF_WATCH, SELF_PAGE, "snapshot/site/self-watch/snap-publish-g.txt");
   });
 
   it("(a) competitor noteworthy publish kind pricing → one change signal with aspect pricing and the four keys in payload_json", async () => {
@@ -175,6 +184,7 @@ describe("publishChange (0509#4435)", () => {
       p: 0.92,
       band: "publish",
     });
+    expect(send).not.toHaveBeenCalled();
   });
 
   it("(b) competitor noteworthy uncertain → one signal whose payload_json band is uncertain", async () => {
@@ -275,16 +285,26 @@ describe("publishChange (0509#4435)", () => {
     expect(result.signalId).toEqual(expect.any(String));
     expect(result.incidentId).toEqual(expect.any(String));
     expect(result.alertId).toEqual(expect.any(String));
-    const signals = await env.DB.prepare("SELECT id, aspect FROM signal").all<{ id: string; aspect: string }>();
-    expect(signals.results).toEqual([{ id: result.signalId, aspect: "breakage" }]);
-    const incidents = await env.DB.prepare("SELECT id, kind, closed_at FROM incident").all<{
+    const signals = await env.DB.prepare("SELECT id, aspect, payload_json FROM signal").all<{
+      id: string;
+      aspect: string;
+      payload_json: string;
+    }>();
+    expect(signals.results.map((row) => ({ id: row.id, aspect: row.aspect }))).toEqual([
+      { id: result.signalId, aspect: "breakage" },
+    ]);
+    const incident = await env.DB.prepare("SELECT id, kind, opened_at, closed_at FROM incident").first<{
       id: string;
       kind: string;
+      opened_at: string;
       closed_at: string | null;
     }>();
-    expect(incidents.results).toEqual([
-      { id: result.incidentId, kind: "breakage", closed_at: null },
-    ]);
+    expect(incident).toEqual({
+      id: result.incidentId,
+      kind: "breakage",
+      opened_at: expect.any(String),
+      closed_at: null,
+    });
     const alerts = await env.DB.prepare(
       "SELECT id, kind, severity, incident_id, signal_id FROM alert",
     ).all<{
@@ -303,6 +323,14 @@ describe("publishChange (0509#4435)", () => {
         signal_id: result.signalId,
       },
     ]);
+    expect(send).toHaveBeenCalledTimes(1);
+    expect(send).toHaveBeenCalledWith({ incident_id: incident?.id });
+    const payload = JSON.parse(signals.results[0].payload_json) as {
+      seenAt: string;
+      recheckAt: string;
+    };
+    expect(payload.seenAt).toBe(incident?.opened_at);
+    expect(Date.parse(payload.recheckAt)).toBeGreaterThan(Date.parse(payload.seenAt));
   });
 
   it("(f) own-site break on the same page with a fresh snapshot still leaves one open incident and one alert", async () => {
@@ -342,6 +370,9 @@ describe("publishChange (0509#4435)", () => {
     );
     expect(first.incidentId).toBeTruthy();
     expect(second.incidentId).toBeNull();
+    expect(second.alertId).toBeNull();
+    expect(send).toHaveBeenCalledTimes(1);
+    expect(send).toHaveBeenCalledWith({ incident_id: first.incidentId });
     const incidents = await env.DB.prepare(
       "SELECT id, closed_at FROM incident",
     ).all<{ id: string; closed_at: string | null }>();
@@ -351,5 +382,40 @@ describe("publishChange (0509#4435)", () => {
     expect(alerts.results[0].id).toBe(first.alertId);
     const signals = await env.DB.prepare("SELECT COUNT(*) AS n FROM signal").first<{ n: number }>();
     expect(signals).toMatchObject({ n: 2 });
+  });
+
+  it("(g) self selfBreakage check p 0.3 on a fresh page → one open incident, one normal alert, no email", async () => {
+    const result = await publishChange(
+      baseInput(
+        {
+          deferred: false,
+          selfBreakage: { p: 0.3, band: "check", reason: "nav shifted" },
+          noteworthy: null,
+        },
+        {
+          workspaceId: SELF_WS,
+          entityId: SELF_ENTITY,
+          watchId: SELF_WATCH,
+          pageId: SELF_PAGE,
+          url: SELF_URL,
+          snapshotId: "snap-publish-g",
+        },
+      ),
+    );
+    expect(result.incidentId).toEqual(expect.any(String));
+    expect(result.alertId).toEqual(expect.any(String));
+    const incidents = await env.DB.prepare(
+      "SELECT id, kind, closed_at FROM incident",
+    ).all<{ id: string; kind: string; closed_at: string | null }>();
+    expect(incidents.results).toEqual([
+      { id: result.incidentId, kind: "breakage", closed_at: null },
+    ]);
+    const alerts = await env.DB.prepare(
+      "SELECT id, kind, severity FROM alert",
+    ).all<{ id: string; kind: string; severity: string }>();
+    expect(alerts.results).toEqual([
+      { id: result.alertId, kind: "own_site_breakage", severity: "normal" },
+    ]);
+    expect(send).not.toHaveBeenCalled();
   });
 });

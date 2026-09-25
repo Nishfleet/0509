@@ -35,6 +35,26 @@ const SONNER_IMPORT = {
     "sonner is imported in exactly one module, app/components/toaster.tsx, which owns every toast() call behind toastSaved(). DESIGN.md §11: toasts are only 'saved' and 'undo' — a second import site is a second toast authority. Source: 0509#4116.",
 };
 
+const UPLOT_IMPORT = {
+  name: "uplot",
+  message:
+    "uPlot is 22 KB gzipped and loads only in app/components/four-week-plot.tsx, which four-week-line.tsx pulls in with React.lazy so it stays out of the /app entry (docs/REBUILD-DONE.md §B, 150 KB). Source: 0509#5289.",
+};
+
+const UPLOT_REACT_IMPORT = {
+  name: "uplot-react",
+  message:
+    "uPlot is 22 KB gzipped and loads only in app/components/four-week-plot.tsx, which four-week-line.tsx pulls in with React.lazy so it stays out of the /app entry (docs/REBUILD-DONE.md §B, 150 KB). Source: 0509#5289.",
+};
+
+const FOUR_WEEK_PLOT_STATIC_IMPORT = {
+  name: "./four-week-plot",
+  message:
+    'Load four-week-plot with React.lazy(() => import("./four-week-plot")), never a static import: a static import puts uPlot back in the /app entry. Source: 0509#5289.',
+};
+
+const CHART_IMPORTS = [UPLOT_IMPORT, UPLOT_REACT_IMPORT, FOUR_WEEK_PLOT_STATIC_IMPORT];
+
 const FAST_XML_PARSER_IMPORT = {
   name: "fast-xml-parser",
   message:
@@ -108,10 +128,26 @@ const XML_PARSER_CONSTRUCTOR = {
     "Feed XML is parsed only by @extractus/feed-extractor in workers/sources/mentions/feed.ts. A second XMLParser is a second feed path. Source: 0509#4051.",
 };
 
+// The one domain normaliser. The identity engine — app/lib/identity/normalise.ts
+// (`normaliseSubject`) — owns every URL-to-domain reduction on the platform, so
+// the onboarding card, the engine and the share tail read one set of rules. A
+// second parser beside it can only drift: 0509#3999's review found a hand-rolled
+// host beside the engine path, and its fix cut that parser out (#4321). This
+// selector makes the second one structurally impossible rather than discouraged
+// by convention. A host read for a non-identity purpose (a public-host guard, a
+// job-board match, a www variant, a site-host allow) is grandfathered in the
+// exemption block below, not here.
+const DOMAIN_HOSTNAME_BAN = {
+  selector: "MemberExpression[property.name='hostname']",
+  message:
+    "URL-to-domain extraction is owned by the identity engine in app/lib/identity/ — `normaliseSubject` in app/lib/identity/normalise.ts. Reading `.hostname` anywhere else is a second domain normaliser that will drift from the engine's rules; the same shape on any URL argument, any binding name. Reuse the engine (or, for a non-identity host read, get the file added to the exemption block below). Source: 0509#4371.",
+};
+
 const BANNED_SYNTAX = [
   SUPPORT_ADDRESS_BAN,
   CATCH_RETURNS_NULL,
   XML_PARSER_CONSTRUCTOR,
+  DOMAIN_HOSTNAME_BAN,
   {
     selector: "NewExpression[callee.name='RegExp'] > Literal.arguments, NewExpression[callee.name='RegExp'] > TemplateLiteral",
     message:
@@ -294,6 +330,33 @@ export default tseslint.config(
   },
 
   {
+    // The one domain normaliser: the identity engine. These files read `.hostname`
+    // for a purpose that is not domain normalisation, so the shared selector is
+    // restated without `DOMAIN_HOSTNAME_BAN`: the identity engine itself, a
+    // public-host guard in the transport layer, the job-board host match, the www
+    // variant for this site, and the support worker's site-host allow. Every
+    // other `.hostname` read in app/ or workers/ keeps the ban. This block
+    // restates the list because a later matching block's no-restricted-syntax
+    // entry replaces the earlier one wholesale (flat config never merges a rule's
+    // option array). 0509#4371.
+    files: [
+      "app/lib/identity/**/*.{ts,tsx}",
+      "app/lib/fetch/transport.server.ts",
+      "app/lib/hiring/discover-board.ts",
+      "app/lib/site/own-site.server.ts",
+      "workers/support-inbox.ts",
+    ],
+    rules: {
+      "no-restricted-syntax": [
+        "error",
+        ...BANNED_SYNTAX.filter((rule) => rule !== DOMAIN_HOSTNAME_BAN),
+        RAW_DML_WRITER,
+        FEED_STATE_LITERAL,
+      ],
+    },
+  },
+
+  {
     files: ["app/**/*.{ts,tsx}", "workers/**/*.ts"],
     ignores: [
       "app/lib/auth.server.ts",
@@ -331,12 +394,12 @@ export default tseslint.config(
 
   {
     files: ["app/components/**/*.{ts,tsx}"],
-    ignores: ["app/components/toaster.tsx"],
+    ignores: ["app/components/toaster.tsx", "app/components/four-week-plot.tsx"],
     rules: {
       "no-restricted-imports": [
         "error",
         {
-          paths: [...ONE_PAVED_PATH_IMPORTS, CLOUDFLARE_WORKERS_IMPORT, FULL_ZOD_IMPORT],
+          paths: [...ONE_PAVED_PATH_IMPORTS, CLOUDFLARE_WORKERS_IMPORT, FULL_ZOD_IMPORT, ...CHART_IMPORTS],
           patterns: PAVED_PATH_PATTERNS,
         },
       ],
@@ -365,7 +428,21 @@ export default tseslint.config(
             ...ONE_PAVED_PATH_IMPORTS.filter((p) => p !== SONNER_IMPORT),
             CLOUDFLARE_WORKERS_IMPORT,
             FULL_ZOD_IMPORT,
+            ...CHART_IMPORTS,
           ],
+          patterns: PAVED_PATH_PATTERNS,
+        },
+      ],
+    },
+  },
+
+  {
+    files: ["app/components/four-week-plot.tsx"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          paths: [...ONE_PAVED_PATH_IMPORTS, CLOUDFLARE_WORKERS_IMPORT, FULL_ZOD_IMPORT],
           patterns: PAVED_PATH_PATTERNS,
         },
       ],

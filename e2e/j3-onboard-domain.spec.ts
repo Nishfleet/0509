@@ -4,10 +4,9 @@ import { requireInboxToken, signInWithMagicLink } from "./inbox";
 
 // J3 from docs/REBUILD-DONE.md §A: one input becomes a confirmed brand card
 // in under 30 s, a competitor list in under 60 s, and Home's first-file
-// panel names a real arrival time. Timings come from the test's own clock;
-// the app stores its own copy through the sibling child. Production only:
-// the preview lane's wrangler dev has no EMAIL binding and no inbox to read,
-// so the whole spec skips there rather than fake the journey.
+// panel names a real arrival time. Timings come from the test's own clock.
+// Production only: the preview lane's wrangler dev has no EMAIL binding and
+// no inbox to read, so the whole spec skips there rather than fake the journey.
 test.skip(
   !process.env.PLAYWRIGHT_TEST_BASE_URL,
   "J3 needs a signed-in session; the preview lane cannot read the magic-link inbox",
@@ -60,7 +59,10 @@ for (const { width, height } of [
     await expect(page).toHaveURL(/\/app$/);
 
     const panel = page.locator('[data-home="first-file"]');
-    await expect(panel).toContainText("The first site snapshots land by");
+    await expect(panel).toContainText(
+      /The first site snapshots land by (?:Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday) (?:[01]\d|2[0-3]):[0-5]\d;/,
+    );
+    await expect(panel).not.toContainText("as soon as the first sweep is scheduled");
     const homeMs = Date.now() - started;
 
     expect(consoleErrors).toEqual([]);
