@@ -37,7 +37,7 @@ export async function loader({ request }: Route.LoaderArgs) {
   if (screened.kind !== "proceed") throw redirect("/onboarding");
   if (!(await withinProbeLimit(session.user.id))) return { card: null, limited: true };
   const shown = subject.kind === "domain" ? subject.registrable : (subject.url ?? `@${subject.registrable}`);
-  return { card: { subject: raw, domain: shown, ...startCard(subject) }, limited: false };
+  return { card: { subject: raw, domain: shown, ...startCard(workspaceId, subject) }, limited: false };
 }
 
 export async function action({ request }: Route.ActionArgs) {
