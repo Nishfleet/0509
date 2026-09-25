@@ -61,7 +61,7 @@ describe("access service token clearance", () => {
     if (header === undefined || payload === undefined || signature === undefined || signature.length === 0) {
       throw new Error("signed token was not three parts");
     }
-    const flipped = signature.endsWith("A") ? `${signature.slice(0, -1)}B` : `${signature}A`;
+    const flipped = `${signature[0] === "A" ? "B" : "A"}${signature.slice(1)}`;
     await expect(
       accessServiceTokenClearsCaptcha(requestWith(`${header}.${payload}.${flipped}`), deps),
     ).resolves.toBe(false);
