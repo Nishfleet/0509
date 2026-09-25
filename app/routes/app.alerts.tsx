@@ -1,5 +1,6 @@
 import type { Route } from "./+types/app.alerts";
 
+import { AlertChips } from "../components/alert-chips";
 import { AlertFeed } from "../components/alert-feed";
 import { PAGE, PageHeading } from "../components/page-heading";
 import { SourcePill } from "../components/source-pill";
@@ -51,6 +52,7 @@ export default function Page({ loaderData }: Route.ComponentProps) {
           </time>
         </article>
       ))}
+      <AlertChips chip={loaderData.chip} counts={loaderData.chipCounts} />
       {loaderData.chipCounts.all === 0 ? (
         <p className="mt-8 leading-[1.65]">
           Nothing has interrupted you. When your own site breaks you'll get an email; everything else waits here.
