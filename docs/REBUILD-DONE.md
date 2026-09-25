@@ -44,6 +44,21 @@ Decisions recorded on 0509#3927 (2026-09-22):
   `/app/settings` (better-auth's `signOut`); the spec clicks it and proves the
   session ended by the `/app` → `/login` redirect before the passkey-only
   sign-in, with no console errors, at 1440 and 390.
+- **J11's brief** is the production mail path (`e2e/j11-weekly-brief.spec.ts`).
+  A fresh address confirms a brand, watches four competitors and turns one
+  off, then saves the brief for the hour that already started. That save
+  creates the rollover catch-up, so the week that just came due sends now,
+  and the spec reads the message from the e2e inbox — not from D1. At 600 px
+  it checks the contract order that a nothing-noteworthy week can show: the
+  headline, the tracked brands with the off brand absent rather than zeroed,
+  the own-site line, and the footer (what was checked, the next brief, the
+  unsubscribe link). "Read this first" is absent; that block is the one a
+  quiet week drops. When a source has not answered, the why-line names it
+  instead of claiming a quiet week. The `List-Unsubscribe` one-click POST
+  writes `email_suppression`, and a second schedule whose hour also already
+  started does not send. The five-block brief, with "Read this first"
+  present, needs a D3 or D6 verdict. Production has none until that judge
+  lands (0509#4041), so this spec does not invent one.
 
 ## B. Quality gates (each is a number, measured on production)
 

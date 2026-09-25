@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 import type { BriefSchedule, RolloverInstance } from "../../app/lib/brief-schedule";
-import { nextBriefAt, rolloverInstance } from "../../app/lib/brief-schedule";
+import { nextBriefAt, previousBriefAt, rolloverInstance } from "../../app/lib/brief-schedule";
 import { rescheduleRollover } from "../../app/lib/standing/reschedule";
 
 const WS = "ws_reschedule";
@@ -76,5 +76,47 @@ describe("rescheduling the standing rollover (0509#5156)", () => {
     expect(batch).toEqual([FRESH]);
     expect(batch[0].params.closesAt).toBe(nextBriefAt(NEXT, NOW).toISOString());
     expect(batch[0].params.closesAt).toBe("2026-09-23T09:00:00.000Z");
+  });
+
+  it("creates a catch-up when the saved slot already started this hour", async () => {
+    const now = new Date("2026-09-25T09:43:00.000Z");
+    const next: BriefSchedule = { timezone: "UTC", weekday: 5, hour: 9 };
+    const missed = previousBriefAt(next, now);
+    const catchUp = rolloverInstance(WS, missed, "catch-up");
+    const fresh = rolloverInstance(WS, nextBriefAt(next, now), "scheduled");
+    const workflow = fakeWorkflow(() => Promise.resolve({ terminate: vi.fn(() => Promise.resolve()) }));
+
+    const result = await rescheduleRollover(workflow, { workspaceId: WS, previous: PREVIOUS, next, now });
+
+    expect(workflow.createBatch).toHaveBeenNthCalledWith(1, [fresh]);
+    expect(workflow.createBatch).toHaveBeenNthCalledWith(2, [catchUp]);
+    expect(catchUp.params.closesAt).toBe("2026-09-25T09:00:00.000Z");
+    expect(nextBriefAt(next, new Date(missed.getTime() - 1)).toISOString()).toBe(missed.toISOString());
+    expect(result).toEqual({ cancelledId: expect.any(String), createdId: fresh.id });
+  });
+
+  it("creates only the catch-up when the future slot is unchanged", async () => {
+    const now = new Date("2026-09-25T09:43:00.000Z");
+    const next: BriefSchedule = { timezone: "UTC", weekday: 5, hour: 9 };
+    const catchUp = rolloverInstance(WS, previousBriefAt(next, now), "catch-up");
+    const workflow = fakeWorkflow(() => Promise.resolve({ terminate: vi.fn(() => Promise.resolve()) }));
+
+    const result = await rescheduleRollover(workflow, { workspaceId: WS, previous: next, next, now });
+
+    expect(workflow.get).not.toHaveBeenCalled();
+    expect(workflow.createBatch).toHaveBeenCalledTimes(1);
+    expect(workflow.createBatch).toHaveBeenCalledWith([catchUp]);
+    expect(result).toEqual({ cancelledId: null, createdId: catchUp.id });
+  });
+
+  it("leaves an existing catch-up in place", async () => {
+    const now = new Date("2026-09-25T09:43:00.000Z");
+    const next: BriefSchedule = { timezone: "UTC", weekday: 5, hour: 9 };
+    const workflow = fakeWorkflow(() => Promise.resolve({ terminate: vi.fn(() => Promise.resolve()) }));
+    workflow.createBatch.mockRejectedValueOnce(new Error("instance already exists"));
+
+    const result = await rescheduleRollover(workflow, { workspaceId: WS, previous: next, next, now });
+
+    expect(result.createdId).toBe(rolloverInstance(WS, previousBriefAt(next, now), "catch-up").id);
   });
 });
