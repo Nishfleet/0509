@@ -9,6 +9,17 @@ import { BLOCKING_STATUSES } from "../../../workers/sources/mentions/types";
 
 const NOW = "2026-09-24T03:00:00.000Z";
 
+const ONE_ARTICLE = {
+  articles: [
+    {
+      url: "https://news.example.com/blockedwear-opens-a-store",
+      title: "Blockedwear opens a store",
+      seendate: "20260923T101500Z",
+      domain: "news.example.com",
+    },
+  ],
+};
+
 let runs = 0;
 
 // A mentions source row plus the workspace and competitor rows
@@ -123,6 +134,23 @@ describe("a blocking upstream degrades the source and ends the step (0509#5159)"
 
       expect(error).toBeInstanceOf(Error);
       expect(error).not.toBeInstanceOf(NonRetryableError);
+      expect(await readReason(sourceId)).toBeNull();
+    } finally {
+      await env.DB.prepare("DELETE FROM source WHERE id = ?").bind(sourceId).run();
+    }
+  });
+
+  it("case D: a later good canary clears the blocked reason", async () => {
+    const { sourceId } = await seedBlockedSource("d", { enabled: false });
+    const source: CanarySource = { id: sourceId, pluginKey: "gdelt.doc", canaryQuery: "google" };
+
+    try {
+      vi.stubGlobal("fetch", vi.fn(async () => new Response("", { status: 403 })));
+      expect(await runCanary(source, NOW)).toBe(0);
+      expect(await readReason(sourceId)).toBe("blocked: HTTP 403");
+
+      vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify(ONE_ARTICLE))));
+      expect(await runCanary(source, NOW)).toBe(1);
       expect(await readReason(sourceId)).toBeNull();
     } finally {
       await env.DB.prepare("DELETE FROM source WHERE id = ?").bind(sourceId).run();
