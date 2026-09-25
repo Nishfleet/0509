@@ -114,19 +114,46 @@ const SUPPORT_ADDRESS_BAN = {
     "The support address is typed once, in app/components/footer.tsx; every page imports <Footer /> instead. A second literal is a second address to change and a page that silently keeps the old one. Source: 0509#3986 review — `encoded: structure` names rung 1, and a constant alone does not stop a re-type.",
 };
 
-// A catch whose only statement is `return null` swallows the error: a thrown
-// fetch, a bug, and a genuine "not found" all reach the caller as the same
-// null, so the failure leaves no trace. Match the block shape, not a promise
-// `.catch(() => null)` callback. The named clause in
-// app/lib/identity/name-cascade.ts is grandfathered by name (see the
-// exemption block) until the cascade grows a logged failure path. Source:
-// 0509#4462 (REBUILD-TRUST.md C1 Q1 — the D grade on PR #4457).
-const CATCH_RETURNS_NULL = {
-  selector:
-    "CatchClause > BlockStatement[body.length=1] > ReturnStatement[argument.value=null]",
-  message:
-    "A catch whose only statement is `return null` swallows the error, so a thrown fetch or a bug fails as silently as a real 'not found'. Give the clause an error binding and a logged failure path (or rethrow). Source: 0509#4462.",
-};
+// These selectors widen 0509#4462 after the same defect returned in other
+// shapes: an error thrown away leaves no trace, so a thrown fetch, a bug and a
+// genuine miss all reach the caller as the same value. Source: 0509#5392.
+// The `undefined` arm is `[argument.type='Identifier'][argument.name=
+// 'undefined']`, not the bare `[argument.name='undefined']` the issue printed:
+// esquery compares with `"".concat(getPath(node, path))`
+// (esquery.lite.js:3292-3298), so a missing field stringifies to the string
+// "undefined" and the bare form matches EVERY return whose argument is not an
+// Identifier. That flagged the rich object the issue's own test requires to
+// stay clean. The Identifier type guard restores the intended shape.
+const SWALLOWED_ERROR_TAIL =
+  " Bind the error and either rethrow a typed error or log a structured event/error failure line (console.error of JSON.stringify with an event name and String(error), as in app/lib/identity/name-cascade.ts) before returning. Source: 0509#5392, widening 0509#4462.";
+
+const SWALLOWED_ERROR = [
+  {
+    selector: "CatchClause[param=null]",
+    message: "A catch with no error binding swallows the error by construction." + SWALLOWED_ERROR_TAIL,
+  },
+  {
+    selector: "CatchClause > BlockStatement[body.length=0]",
+    message: "An empty catch swallows the error." + SWALLOWED_ERROR_TAIL,
+  },
+  {
+    selector:
+      "CatchClause > BlockStatement[body.length=1] > ReturnStatement:matches([argument=null], [argument.type='Literal'], [argument.type='Identifier'][argument.name='undefined'], [argument.type='ArrayExpression'][argument.elements.length=0], [argument.type='ObjectExpression'][argument.properties.length=0])",
+    message:
+      "A catch whose only statement returns a default (null, undefined, a literal, an empty array or object) swallows the error." +
+      SWALLOWED_ERROR_TAIL,
+  },
+  {
+    selector: "CallExpression[callee.property.name='catch'] > ArrowFunctionExpression[params.length=0]",
+    message: "A promise .catch callback that takes no parameter swallows the error." + SWALLOWED_ERROR_TAIL,
+  },
+  {
+    selector: "CatchClause > Identifier.param[name=/^_/]",
+    message:
+      "A catch binding that starts with an underscore swallows the error: the underscore only exists to silence no-unused-vars." +
+      SWALLOWED_ERROR_TAIL,
+  },
+];
 
 const FEED_STATE_LITERAL = {
   selector:
@@ -167,7 +194,7 @@ const GOOGLE_FONTS_BAN = {
 const BANNED_SYNTAX = [
   SUPPORT_ADDRESS_BAN,
   GOOGLE_FONTS_BAN,
-  CATCH_RETURNS_NULL,
+  ...SWALLOWED_ERROR,
   XML_PARSER_CONSTRUCTOR,
   DOMAIN_HOSTNAME_BAN,
   {
