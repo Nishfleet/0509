@@ -11,9 +11,10 @@ import {
 	channelIdFromUrl,
 	isLostYoutubeChannel,
 	readWatchConfig,
-	resolveYoutubeChannelId,
 	withLostChannel,
+	withPendingChannel,
 	withResolvedChannel,
+	withoutPendingChannel,
 	youtubeUrlFromIdentity,
 } from "../../app/lib/mentions/youtube-channel";
 import { youtubeAdapter } from "../../workers/sources/mentions/youtube";
@@ -78,32 +79,14 @@ describe("stale YouTube channel", () => {
 		expect(channelIdFromIdentity('{"description":"Gym clothing"}')).toBeNull();
 	});
 
-	it("takes a channel id from one handle page, and does not fetch when the URL already has one", async () => {
+	it("takes a channel id from a handle page, and not from a URL that is not YouTube", () => {
 		const html = `<!DOCTYPE html><html><link rel="canonical" href="https://www.youtube.com/channel/${CHANNEL_ID}"></html>`;
 		expect(channelIdFromHtml(html)).toBe(CHANNEL_ID);
 		expect(channelIdFromHtml(`{"externalId":"${CHANNEL_ID}"}`)).toBe(CHANNEL_ID);
 		expect(channelIdFromHtml("<!DOCTYPE html><html>no channel</html>")).toBeNull();
-		const handleIdentity = JSON.stringify({
-			socials: [{ platform: "youtube", url: "https://www.youtube.com/@gymshark" }],
-		});
-		const fetchPage = vi.fn(async () => new Response(html, { status: 200, headers: { "content-type": "text/html" } }));
-		expect(await resolveYoutubeChannelId(handleIdentity, fetchPage)).toBe(CHANNEL_ID);
-		expect(fetchPage).toHaveBeenCalledTimes(1);
-		expect(fetchPage).toHaveBeenCalledWith("https://www.youtube.com/@gymshark");
-		fetchPage.mockClear();
-		const channelIdentity = JSON.stringify({
-			socials: [{ platform: "youtube", url: `https://www.youtube.com/channel/${CHANNEL_ID}` }],
-		});
-		expect(await resolveYoutubeChannelId(channelIdentity, fetchPage)).toBe(CHANNEL_ID);
-		expect(fetchPage).not.toHaveBeenCalled();
-		const denied = vi.fn(async () => new Response("missing", { status: 404, headers: { "content-type": "text/html" } }));
-		expect(await resolveYoutubeChannelId(handleIdentity, denied)).toBeNull();
-		const evil = JSON.stringify({
-			socials: [{ platform: "youtube", url: `https://evil.example/watch?v=${CHANNEL_ID}` }],
-		});
-		const evilFetch = vi.fn(async () => new Response(html, { status: 200, headers: { "content-type": "text/html" } }));
-		expect(await resolveYoutubeChannelId(evil, evilFetch)).toBeNull();
-		expect(evilFetch).not.toHaveBeenCalled();
+		expect(channelIdFromUrl(`https://www.youtube.com/channel/${CHANNEL_ID}`)).toBe(CHANNEL_ID);
+		expect(channelIdFromUrl("https://www.youtube.com/@gymshark")).toBeNull();
+		expect(channelIdFromUrl(`https://evil.example/watch?v=${CHANNEL_ID}`)).toBeNull();
 	});
 
 	it("refuses an unreadable watch config instead of treating it as empty", () => {
@@ -124,7 +107,18 @@ describe("stale YouTube channel", () => {
 		const flaggedRead = readWatchConfig(flagged);
 		expect(flaggedRead.status).toBe("ok");
 		if (flaggedRead.status === "ok") expect(flaggedRead.degraded?.reason).toBe(LOST_CHANNEL_REASON);
-		const resolved = withResolvedChannel(flagged, CHANNEL_ID);
+		const pending = withPendingChannel(flagged, CHANNEL_ID);
+		expect(JSON.parse(pending)).toEqual({
+			kept: true,
+			degraded: { state: "degraded", reason: LOST_CHANNEL_REASON, at },
+			pendingChannelId: CHANNEL_ID,
+		});
+		const dropped = withoutPendingChannel(pending);
+		expect(JSON.parse(dropped)).toEqual({
+			kept: true,
+			degraded: { state: "degraded", reason: LOST_CHANNEL_REASON, at },
+		});
+		const resolved = withResolvedChannel(pending, CHANNEL_ID);
 		expect(JSON.parse(resolved)).toEqual({ kept: true, channelId: CHANNEL_ID });
 		const resolvedRead = readWatchConfig(resolved);
 		expect(resolvedRead.status).toBe("ok");

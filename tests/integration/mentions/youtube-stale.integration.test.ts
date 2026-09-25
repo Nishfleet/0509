@@ -105,8 +105,9 @@ async function snapshotCount(watchId: string): Promise<number> {
   return row?.n ?? 0;
 }
 
-afterEach(() => {
+afterEach(async () => {
   vi.unstubAllGlobals();
+  await env.IDENTITY_CACHE.delete("identity:gymshark:youtube-channel");
 });
 
 describe("YouTube sweep stale channel", () => {
@@ -173,6 +174,25 @@ describe("YouTube sweep stale channel", () => {
     );
 
     expect(outcome).toEqual({ items: 0, stored: 0, unjudged: 0 });
+    expect(JSON.parse(await configOf(resolved.watchId))).toEqual({
+      channelId: LOST_ID,
+      pendingChannelId: LIVE_ID,
+      degraded: { state: "degraded", reason: LOST_CHANNEL_REASON, at: NOW },
+    });
+    expect(await snapshotCount(resolved.watchId)).toBe(0);
+
+    const confirmed = await sweepTarget(
+      {
+        sourceId: resolved.watch.source_id,
+        pluginKey: resolved.watch.plugin_key,
+        query: resolved.watch.target_key,
+        watches: [resolved.watch],
+      },
+      NOW,
+      4,
+    );
+
+    expect(confirmed).toEqual({ items: 0, stored: 0, unjudged: 0 });
     expect(JSON.parse(await configOf(resolved.watchId))).toEqual({ channelId: LIVE_ID });
     expect(await snapshotCount(resolved.watchId)).toBe(1);
     const snapshot = await env.DB.prepare(
@@ -203,11 +223,28 @@ describe("YouTube sweep stale channel", () => {
     );
 
     expect(outcome).toEqual({ items: 0, stored: 0, unjudged: 0 });
-    expect(JSON.parse(await configOf(watchId))).toEqual({ channelId: LIVE_ID });
-    expect(await snapshotCount(watchId)).toBe(1);
+    expect(JSON.parse(await configOf(watchId))).toEqual({
+      channelId: LOST_ID,
+      pendingChannelId: LIVE_ID,
+      degraded: { state: "degraded", reason: LOST_CHANNEL_REASON, at: NOW },
+    });
+    expect(await snapshotCount(watchId)).toBe(0);
     expect(fakeFetch.mock.calls.map((call) => String(call[0]))).toEqual([
       `https://www.youtube.com/feeds/videos.xml?channel_id=${LOST_ID}`,
       "https://www.youtube.com/@gymshark",
+    ]);
+
+    fakeFetch.mockClear();
+    const confirmed = await sweepTarget(
+      { sourceId: watch.source_id, pluginKey: watch.plugin_key, query: watch.target_key, watches: [watch] },
+      NOW,
+      null,
+    );
+
+    expect(confirmed).toEqual({ items: 0, stored: 0, unjudged: 0 });
+    expect(JSON.parse(await configOf(watchId))).toEqual({ channelId: LIVE_ID });
+    expect(await snapshotCount(watchId)).toBe(1);
+    expect(fakeFetch.mock.calls.map((call) => String(call[0]))).toEqual([
       `https://www.youtube.com/feeds/videos.xml?channel_id=${LIVE_ID}`,
     ]);
   });
@@ -226,6 +263,19 @@ describe("YouTube sweep stale channel", () => {
         type: "text/html",
       },
     });
+
+    await sweepTarget(
+      { sourceId: watch.source_id, pluginKey: watch.plugin_key, query: watch.target_key, watches: [watch] },
+      NOW,
+      null,
+    );
+
+    expect(JSON.parse(await configOf(watchId))).toEqual({
+      channelId: LOST_ID,
+      pendingChannelId: dead,
+      degraded: { state: "degraded", reason: LOST_CHANNEL_REASON, at: NOW },
+    });
+    expect(await snapshotCount(watchId)).toBe(0);
 
     await sweepTarget(
       { sourceId: watch.source_id, pluginKey: watch.plugin_key, query: watch.target_key, watches: [watch] },
@@ -260,7 +310,7 @@ describe("YouTube sweep stale channel", () => {
     expect(await snapshotCount(watchId)).toBe(1);
   });
 
-  it("does not flag a handle whose page fetch fails", async () => {
+  it("flags a handle whose page fetch fails instead of reading as zero videos", async () => {
     const identity = JSON.stringify({
       socials: [{ platform: "youtube", url: "https://www.youtube.com/@gymshark" }],
     });
@@ -280,7 +330,9 @@ describe("YouTube sweep stale channel", () => {
     );
 
     expect(outcome).toEqual({ items: 0, stored: 0, unjudged: 0 });
-    expect(JSON.parse(await configOf(watchId))).toEqual({});
+    expect(JSON.parse(await configOf(watchId))).toEqual({
+      degraded: { state: "degraded", reason: LOST_CHANNEL_REASON, at: NOW },
+    });
     expect(await snapshotCount(watchId)).toBe(0);
   });
 

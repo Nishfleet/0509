@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 import { isLostYoutubeChannel, isYoutubeChannelId } from "../../../app/lib/mentions/youtube-channel";
-import { parseFeedEntries } from "./feed";
+import { entriesFromAtom } from "./feed";
 import {
 	fetchUpstream,
 	mentionsResultSchema,
@@ -39,14 +39,12 @@ export const youtubeAdapter: MentionsAdapter = async (target) => {
 		return mentionsResultSchema.parse({ items: [], canaryCount: 0, rawBody, feedState: "error" });
 	}
 
-	if (!rawBody.includes("<entry")) {
-		const feedState = rawBody.includes("<feed") ? "ok" : "stale";
-		return mentionsResultSchema.parse({ items: [], canaryCount: 0, rawBody, feedState });
-	}
-
-	const entries = parseFeedEntries(rawBody, (data) => ({
+	const entries = entriesFromAtom(rawBody, (data) => ({
 		videoId: VIDEO_ID.safeParse(data["yt:videoId"] ?? data.videoId).data ?? null,
 	}));
+	if (entries === null) {
+		return mentionsResultSchema.parse({ items: [], canaryCount: 0, rawBody, feedState: "stale" });
+	}
 
 	const items = entries.flatMap((entry) => {
 		const parsed = ENTRY_SCHEMA.safeParse(entry);

@@ -1,7 +1,8 @@
 import { z } from "zod";
 
 import { normaliseSubject } from "../identity/normalise";
-import { socialSchema } from "../identity/social";
+
+const socialSchema = z.object({ platform: z.string(), url: z.string() });
 
 const CHANNEL_ID = /^UC[0-9A-Za-z_-]{22}$/;
 const PAGE_CAP = 1_048_576;
@@ -35,6 +36,7 @@ type WatchConfigRead =
 	| {
 			status: "ok";
 			channelId: string | null;
+			pendingChannelId: string | null;
 			degraded: LostChannelFlag | null;
 			record: Record<string, unknown>;
 	  };
@@ -68,31 +70,19 @@ export function channelIdFromHtml(html: string): string | null {
 	return null;
 }
 
-export async function resolveYoutubeChannelId(
-	identityJson: string,
-	fetchPage: (url: string) => Promise<Response>,
-): Promise<string | null> {
-	const url = youtubeUrlFromIdentity(identityJson);
-	if (url === null) return null;
-	const fromUrl = channelIdFromUrl(url);
-	if (fromUrl !== null) return fromUrl;
-	const normalised = normaliseSubject(url);
-	if (!normalised.ok || normalised.subject.platform !== "youtube") return null;
-	const pageUrl = normalised.subject.url;
-	if (!pageUrl?.startsWith("https://www.youtube.com/")) return null;
-	const response = await fetchPage(pageUrl);
-	if (!response.ok) return null;
-	const html = await response.text();
-	const type = (response.headers.get("content-type") ?? "").toLowerCase();
-	const looksHtml =
-		type.includes("html") || /^\s*<!doctype html/i.test(html) || /^\s*<html[\s>]/i.test(html);
-	if (!looksHtml) return null;
-	return channelIdFromHtml(html);
+function readChannelField(
+	record: Record<string, unknown>,
+	key: string,
+): { ok: true; value: string | null } | { ok: false } {
+	if (!Object.hasOwn(record, key)) return { ok: true, value: null };
+	const parsed = channelIdSchema.safeParse(record[key]);
+	if (!parsed.success) return { ok: false };
+	return { ok: true, value: parsed.data };
 }
 
 export function readWatchConfig(raw: string | null | undefined): WatchConfigRead {
 	if (raw == null || raw.trim() === "") {
-		return { status: "ok", channelId: null, degraded: null, record: {} };
+		return { status: "ok", channelId: null, pendingChannelId: null, degraded: null, record: {} };
 	}
 	let value: unknown;
 	try {
@@ -103,12 +93,9 @@ export function readWatchConfig(raw: string | null | undefined): WatchConfigRead
 	const record = jsonObject.safeParse(value);
 	if (!record.success) return { status: "unreadable" };
 
-	let channelId: string | null = null;
-	if (Object.hasOwn(record.data, "channelId")) {
-		const parsed = channelIdSchema.safeParse(record.data.channelId);
-		if (!parsed.success) return { status: "unreadable" };
-		channelId = parsed.data;
-	}
+	const channelId = readChannelField(record.data, "channelId");
+	const pendingChannelId = readChannelField(record.data, "pendingChannelId");
+	if (!channelId.ok || !pendingChannelId.ok) return { status: "unreadable" };
 
 	let degraded: LostChannelFlag | null = null;
 	if (Object.hasOwn(record.data, "degraded")) {
@@ -117,7 +104,13 @@ export function readWatchConfig(raw: string | null | undefined): WatchConfigRead
 		degraded = { reason: parsed.data.reason, at: parsed.data.at };
 	}
 
-	return { status: "ok", channelId, degraded, record: record.data };
+	return {
+		status: "ok",
+		channelId: channelId.value,
+		pendingChannelId: pendingChannelId.value,
+		degraded,
+		record: record.data,
+	};
 }
 
 export function youtubeUrlFromIdentity(raw: string): string | null {
@@ -150,5 +143,20 @@ export function withResolvedChannel(raw: string, channelId: string): string {
 	if (read.status !== "ok") throw new Error("watch config_json is unreadable");
 	const next: Record<string, unknown> = { ...read.record, channelId };
 	delete next.degraded;
+	delete next.pendingChannelId;
+	return JSON.stringify(next);
+}
+
+export function withPendingChannel(raw: string, pendingChannelId: string): string {
+	const read = readWatchConfig(raw);
+	if (read.status !== "ok") throw new Error("watch config_json is unreadable");
+	return JSON.stringify({ ...read.record, pendingChannelId });
+}
+
+export function withoutPendingChannel(raw: string): string {
+	const read = readWatchConfig(raw);
+	if (read.status !== "ok") throw new Error("watch config_json is unreadable");
+	const next: Record<string, unknown> = { ...read.record };
+	delete next.pendingChannelId;
 	return JSON.stringify(next);
 }
