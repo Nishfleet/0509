@@ -10,6 +10,8 @@ const FIXTURES = join(dirname(fileURLToPath(import.meta.url)), "../../fixtures/h
 
 const GREENHOUSE_BOARD_URL = "https://job-boards.greenhouse.io/gitlab";
 const LEVER_BOARD_URL = "https://jobs.lever.co/palantir";
+const ASHBY_BOARD_URL = "https://jobs.ashbyhq.com/linear";
+const WORKABLE_BOARD_URL = "https://apply.workable.com/huggingface";
 
 function fixture(name: string): string {
   return readFileSync(join(FIXTURES, name), "utf8");
@@ -17,6 +19,8 @@ function fixture(name: string): string {
 
 const GREENHOUSE_FIXTURE = "greenhouse-gitlab-2026-09-25.json";
 const LEVER_FIXTURE = "lever-palantir-2026-09-25.json";
+const ASHBY_FIXTURE = "ashby-linear-2026-09-25.json";
+const WORKABLE_FIXTURE = "workable-huggingface-2026-09-25.json";
 
 describe("parseListing", () => {
   it("parses the Greenhouse GitLab fixture into one role per job", () => {
@@ -117,5 +121,99 @@ describe("parseListing", () => {
 
   it("throws ListingError when a Greenhouse body has the wrong shape", () => {
     expect(() => parseListing("greenhouse", "{}", GREENHOUSE_BOARD_URL)).toThrow(ListingError);
+  });
+
+  it("parses the Ashby Linear fixture into one role per listed job", () => {
+    const body = fixture(ASHBY_FIXTURE);
+    const jobs = (JSON.parse(body) as { jobs: { isListed?: boolean }[] }).jobs;
+    const listed = jobs.filter((job) => job.isListed !== false);
+    const roles = parseListing("ashby", body, ASHBY_BOARD_URL);
+
+    expect(roles).toHaveLength(listed.length);
+    expect(roles[0]).toEqual<OpenRole>({
+      id: "d3bc1ced-3ce4-4086-a050-555055dbb1ff",
+      title: "Senior / Staff Fullstack Engineer",
+      url: "https://jobs.ashbyhq.com/linear/d3bc1ced-3ce4-4086-a050-555055dbb1ff",
+      location: "Europe",
+      team: "Engineering",
+      postedAt: "2021-04-27T20:13:45.158Z",
+    });
+  });
+
+  it("parses the Workable Hugging Face fixture into one role per job", () => {
+    const body = fixture(WORKABLE_FIXTURE);
+    const jobs = (JSON.parse(body) as { jobs: unknown[] }).jobs;
+    const roles = parseListing("workable", body, WORKABLE_BOARD_URL);
+
+    expect(roles).toHaveLength(jobs.length);
+    expect(roles[0]).toEqual<OpenRole>({
+      id: "F4C096B22E",
+      title: "Low-level Senior Software Engineer, Xet Storage - EMEA Remote",
+      url: "https://apply.workable.com/j/F4C096B22E",
+      location: "Paris, France",
+      team: "Product",
+      postedAt: "2026-07-30T00:00:00.000Z",
+    });
+  });
+
+  it("drops an unlisted Ashby job and keeps the listed one", () => {
+    const body = JSON.stringify({
+      jobs: [
+        {
+          id: "hidden",
+          title: "Hidden",
+          jobUrl: "https://jobs.ashbyhq.com/linear/hidden",
+          isListed: false,
+        },
+        {
+          id: "shown",
+          title: "Shown",
+          jobUrl: "https://jobs.ashbyhq.com/linear/shown",
+          isListed: true,
+        },
+      ],
+    });
+
+    const roles = parseListing("ashby", body, ASHBY_BOARD_URL);
+
+    expect(roles).toHaveLength(1);
+    expect(roles[0]?.id).toBe("shown");
+  });
+
+  it("uses the jobUrl as the id when an Ashby job has no id", () => {
+    const body = JSON.stringify({
+      jobs: [
+        {
+          title: "No id",
+          jobUrl: "https://jobs.ashbyhq.com/linear/no-id",
+        },
+      ],
+    });
+
+    const roles = parseListing("ashby", body, ASHBY_BOARD_URL);
+
+    expect(roles).toHaveLength(1);
+    expect(roles[0]?.id).toBe("https://jobs.ashbyhq.com/linear/no-id");
+  });
+
+  it("joins Workable city and country and leaves location null when both are missing", () => {
+    const body = JSON.stringify({
+      jobs: [
+        { shortcode: "paris", title: "Paris job", url: "https://apply.workable.com/j/paris", city: "Paris", country: "France" },
+        { shortcode: "nowhere", title: "Nowhere job", url: "https://apply.workable.com/j/nowhere" },
+      ],
+    });
+
+    const roles = parseListing("workable", body, WORKABLE_BOARD_URL);
+
+    expect(roles).toHaveLength(2);
+    expect(roles[0]?.location).toBe("Paris, France");
+    expect(roles[1]?.location).toBeNull();
+  });
+
+  it("throws ListingError when a SmartRecruiters body is not supported", () => {
+    expect(() => parseListing("smartrecruiters", "{}", "https://jobs.smartrecruiters.com/acme")).toThrow(
+      ListingError,
+    );
   });
 });
