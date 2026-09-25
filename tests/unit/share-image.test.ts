@@ -12,9 +12,9 @@ const SCHEDULE: BriefSchedule = { timezone: "Europe/London", weekday: 1, hour: 8
 const NOW = new Date("2026-09-24T06:30:00.000Z");
 
 const ENTITIES: readonly HomeEntity[] = [
-  { id: "ent_self", role: "self", domain: "own.example", state: "on" },
-  { id: "ent_kindred", role: "competitor", domain: "kindred.example", state: "on" },
-  { id: "ent_casetta", role: "competitor", domain: "casetta.example", state: "on" },
+  { id: "ent_self", role: "self", domain: "own.example", name: "Own Brand", state: "on" },
+  { id: "ent_kindred", role: "competitor", domain: "kindred.example", name: "Kindred", state: "on" },
+  { id: "ent_casetta", role: "competitor", domain: "casetta.example", name: "Casetta", state: "on" },
 ];
 
 function brand(entityId: string, name: string, rank: number | null) {
