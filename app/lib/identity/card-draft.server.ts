@@ -1,11 +1,10 @@
 import { env } from "cloudflare:workers";
 import { z } from "zod";
 
+import type { CardDraft, DraftField } from "./card-fields";
 import { PROBE_TTL_SECONDS } from "./probe-cache.server";
 
-export type CardDraft = { name?: string; description?: string };
-
-export type DraftField = "name" | "description";
+export type { CardDraft, DraftField };
 
 const DRAFT_FIELD_MAX: Record<DraftField, number> = {
   name: 120,

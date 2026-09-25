@@ -1,8 +1,7 @@
 import { Suspense, type ReactNode } from "react";
 import { Await, Form, useFetcher } from "react-router";
 
-import type { CardDraft } from "../lib/identity/card-draft.server";
-import type { SiteFields } from "../lib/identity/card-fields";
+import type { CardDraft, SiteFields } from "../lib/identity/card-fields";
 import { Button } from "./ui/button";
 
 const FIELD = "min-w-0 flex-1 bg-transparent py-1 text-[0.95rem] outline-none focus:border-b focus:border-ink";
@@ -75,7 +74,7 @@ export function Fields({
           placeholder={nameCheck ? site.name ?? "" : "your brand's name"}
           className={FIELD}
           onChange={(event) =>
-            fetcher.submit(
+            void fetcher.submit(
               { intent: "draft", subject, field: "name", value: event.currentTarget.value },
               { method: "post" },
             )
@@ -95,7 +94,7 @@ export function Fields({
           rows={2}
           className={`${FIELD} resize-none`}
           onChange={(event) =>
-            fetcher.submit(
+            void fetcher.submit(
               { intent: "draft", subject, field: "description", value: event.currentTarget.value },
               { method: "post" },
             )

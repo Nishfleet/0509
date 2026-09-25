@@ -4,8 +4,7 @@ import { createRoutesStub } from "react-router";
 import { describe, expect, it } from "vitest";
 
 import { Fields } from "../../../app/components/identity-card";
-import type { CardDraft } from "../../../app/lib/identity/card-draft.server";
-import type { CardReview, SiteFields } from "../../../app/lib/identity/card-fields";
+import type { CardDraft, CardReview, SiteFields } from "../../../app/lib/identity/card-fields";
 
 const INSTAGRAM = "https://instagram.com/gymshark";
 
