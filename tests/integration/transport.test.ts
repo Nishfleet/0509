@@ -1,6 +1,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { countExtractedChars, readUrl } from "../../app/lib/fetch/transport.server";
+import {
+  countExtractedChars,
+  readUrl,
+  type EscalationReason,
+  type Transport,
+} from "../../app/lib/fetch/transport.server";
 
 const browserHolder = vi.hoisted(() => ({
   current: undefined as
@@ -464,8 +469,9 @@ describe("readUrl", () => {
     });
     try {
       install(browser);
+      const startWith: Transport = "browser";
       const result = await readUrl("https://learned.example.com/", {
-        startWith: "browser",
+        startWith,
       });
       expect(result.ok).toBe(true);
       if (!result.ok) return;
@@ -514,7 +520,7 @@ describe("readUrl", () => {
       html: SUBSTANTIAL_PAGE,
       browserMs: "1200",
     });
-    const seen: string[] = [];
+    const seen: EscalationReason[] = [];
     try {
       install(browser);
       const result = await readUrl("https://gated.example.com/", {
