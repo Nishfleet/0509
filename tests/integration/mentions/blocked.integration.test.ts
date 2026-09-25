@@ -140,6 +140,26 @@ describe("a blocking upstream degrades the source and ends the step (0509#5159)"
     }
   });
 
+  it("case E: an upstream timeout degrades the source and the sweep step rejects without retrying (0509#5106)", async () => {
+    const { sourceId, brand } = await seedBlockedSource("e", { enabled: true });
+    const timeoutError = new DOMException("The operation was aborted due to timeout", "TimeoutError");
+    const fetchMock = vi.fn(async () => {
+      throw timeoutError;
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    try {
+      const target = await gdeltTargetFor(sourceId, brand);
+
+      await expect(sweepTarget(target, NOW, null)).rejects.toThrow(NonRetryableError);
+
+      expect(await readReason(sourceId)).toBe("timed out");
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    } finally {
+      await env.DB.prepare("DELETE FROM source WHERE id = ?").bind(sourceId).run();
+    }
+  });
+
   it("case D: a later good canary clears the blocked reason", async () => {
     const { sourceId } = await seedBlockedSource("d", { enabled: false });
     const source: CanarySource = { id: sourceId, pluginKey: "gdelt.doc", canaryQuery: "google" };
