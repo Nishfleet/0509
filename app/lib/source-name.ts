@@ -6,12 +6,14 @@ const PLATFORM_NAMES: Readonly<Record<string, string>> = {
   greenhouse: "Greenhouse",
   hn: "Hacker News",
   linkedin: "LinkedIn",
+  medium: "Medium",
   meta: "Meta",
   pinterest: "Pinterest",
   reddit: "Reddit",
   snap: "Snapchat",
   tiktok: "TikTok",
   x: "X",
+  youtube: "YouTube",
 };
 
 const KIND_NOUNS: Readonly<Record<string, string>> = {
