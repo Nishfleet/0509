@@ -28,6 +28,9 @@ function row(overrides: Partial<MentionReadRow> & Pick<MentionReadRow, "id" | "p
     publishedAt: overrides.publishedAt === undefined ? "2026-09-24T08:00:00.000Z" : overrides.publishedAt,
     observedAt: overrides.observedAt ?? "2026-09-25T08:00:00.000Z",
     reason: overrides.reason === undefined ? "A London flagship is a move worth knowing." : overrides.reason,
+    verdictId: overrides.verdictId === undefined ? `v-${overrides.id}` : overrides.verdictId,
+    verdictDecidedAt:
+      overrides.verdictDecidedAt === undefined ? "2026-09-25T09:00:00.000Z" : overrides.verdictDecidedAt,
     id: overrides.id,
     p: overrides.p,
   };
@@ -145,11 +148,52 @@ describe("mentions feed", () => {
     expect(html).toContain("found today");
     expect(html).toContain(POSSIBLY);
     expect(html).toContain("Why we flagged this");
-    expect(html).toContain("A London flagship is a move worth knowing.");
-    expect(html).toContain("A roundup mention, not a move of its own.");
-    expect(html).toContain("A ticker line, not a move.");
+    expect(mentions.map((mention) => mention.whyFlagged?.reason ?? null)).toEqual([
+      "A London flagship is a move worth knowing.",
+      "A roundup mention, not a move of its own.",
+      "A ticker line, not a move.",
+    ]);
+    expect(html).not.toContain("A London flagship is a move worth knowing.");
+    expect(html).not.toContain("A roundup mention, not a move of its own.");
+    expect(html).not.toContain("A ticker line, not a move.");
     expect(html.match(/data-treatment="possibly"/g)).toHaveLength(1);
     expect(html).not.toMatch(BANNED);
+  });
+
+  it("builds the whyFlagged sheet from the stored verdict id and time, and leaves it null without them", () => {
+    const flagged = mentionsFromRows(
+      [
+        row({
+          id: "v1",
+          p: 0.95,
+          title: "Zephyrwear opens a London flagship",
+          reason: "A move.",
+          verdictId: "v-1",
+          verdictDecidedAt: "2026-09-20T10:00:00.000Z",
+        }),
+      ],
+      NOW,
+    )[0] as MentionRowModel;
+    expect(flagged.whyFlagged).not.toBeNull();
+    expect(flagged.whyFlagged?.verdictId).toBe("v-1");
+    expect(flagged.whyFlagged?.sure).toBe("95%");
+    expect(flagged.whyFlagged?.decision).toBe("Flagged");
+    expect(flagged.whyFlagged?.reason).toBe("A move.");
+
+    const unjudged = mentionsFromRows(
+      [
+        row({
+          id: "v0",
+          p: 0.95,
+          title: "Zephyrwear without a verdict",
+          reason: "Reason but no verdict row.",
+          verdictId: null,
+          verdictDecidedAt: "2026-09-20T10:00:00.000Z",
+        }),
+      ],
+      NOW,
+    )[0] as MentionRowModel;
+    expect(unjudged.whyFlagged).toBeNull();
   });
 
   it("keeps the low band out of the default feed until show all", () => {

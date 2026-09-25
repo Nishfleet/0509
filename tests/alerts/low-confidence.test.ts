@@ -25,6 +25,9 @@ function row(overrides: Partial<MentionReadRow> & Pick<MentionReadRow, "id" | "p
     publishedAt: overrides.publishedAt === undefined ? "2026-09-24T08:00:00.000Z" : overrides.publishedAt,
     observedAt: overrides.observedAt ?? "2026-09-25T08:00:00.000Z",
     reason: overrides.reason === undefined ? "A London flagship is a move worth knowing." : overrides.reason,
+    verdictId: overrides.verdictId === undefined ? `v-${overrides.id}` : overrides.verdictId,
+    verdictDecidedAt:
+      overrides.verdictDecidedAt === undefined ? "2026-09-25T09:00:00.000Z" : overrides.verdictDecidedAt,
     id: overrides.id,
     p: overrides.p,
   };
@@ -60,8 +63,8 @@ describe("low-confidence alerts", () => {
     expect(possiblyHtml).toContain(POSSIBLY_LINE);
     expect(unreviewedHtml).toContain(UNREVIEWED_LINE);
     expect(unreviewedHtml).toMatch(/unreviewed/i);
-    expect(possiblyHtml).toMatch(/<summary[^>]*>Why we flagged this/);
-    expect(unreviewedHtml).toMatch(/<summary[^>]*>Why we flagged this/);
+    expect(possiblyHtml).toMatch(/<button[^>]*>Why we flagged this</);
+    expect(unreviewedHtml).not.toMatch(/Why we flagged this/);
     expect(possiblyHtml).not.toMatch(BANNED);
     expect(unreviewedHtml).not.toMatch(BANNED);
   });
