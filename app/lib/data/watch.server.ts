@@ -81,6 +81,19 @@ export async function markWatchPolled(watchId: string, polledAt: string): Promis
   await env.DB.prepare(MARK_POLLED).bind(watchId, polledAt).run();
 }
 
+const READ_WATCH_CONFIG = "SELECT config_json FROM watch WHERE id = ?1";
+const WRITE_WATCH_CONFIG = "UPDATE watch SET config_json = ?2 WHERE id = ?1";
+
+export async function readWatchConfigJson(watchId: string): Promise<string | null> {
+  const row = await env.DB.prepare(READ_WATCH_CONFIG).bind(watchId).first<{ config_json: string }>();
+  return row === null ? null : row.config_json;
+}
+
+export async function writeWatchConfigJson(watchId: string, configJson: string): Promise<void> {
+  const result = await env.DB.prepare(WRITE_WATCH_CONFIG).bind(watchId, configJson).run();
+  if (result.meta.changes !== 1) throw new Error(`watch ${watchId} was not updated`);
+}
+
 export async function readSiteSweepTargets(sourceKey: string): Promise<readonly SiteSweepTarget[]> {
   const rows = await env.DB.prepare(SITE_SWEEP_TARGETS).bind(sourceKey).all();
   return targetRows.parse(rows.results).map((row) => ({

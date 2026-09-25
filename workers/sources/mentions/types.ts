@@ -12,9 +12,12 @@ export const mentionsResultSchema = z.object({
 	items: z.array(mentionItemSchema),
 	canaryCount: z.number().int().nonnegative(),
 	rawBody: z.string(),
+	feedState: z.enum(["ok", "stale", "error"]).optional(),
 });
 
 export type MentionsResult = z.infer<typeof mentionsResultSchema>;
+
+export type MentionItem = z.infer<typeof mentionItemSchema>;
 
 export interface MentionsTarget {
 	readonly query: string;
