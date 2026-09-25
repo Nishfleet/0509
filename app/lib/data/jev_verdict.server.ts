@@ -4,6 +4,11 @@ const SELECT_VERDICT = "SELECT p FROM jev_verdict WHERE question_id = ?1 AND inp
 
 const SELECT_CHOICE = "SELECT choice FROM jev_verdict WHERE question_id = ?1 AND input_hash = ?2";
 
+const SELECT_VERDICT_ROW = "SELECT id, p, choice FROM jev_verdict WHERE question_id = ?1 AND input_hash = ?2";
+
+const COUNT_VERDICTS =
+  "SELECT COUNT(*) AS n FROM jev_verdict WHERE entity_id = ?1 AND decided_at >= ?2";
+
 const SELECT_LAST_STILL_COMPETITOR =
   "SELECT choice, decided_at FROM jev_verdict WHERE workspace_id = ?1 AND entity_id = ?2 AND question_id = 'still_competitor_reason' AND choice IS NOT NULL ORDER BY decided_at DESC LIMIT 1";
 
@@ -30,6 +35,21 @@ export interface VerdictRow {
   choice: string | null;
   reason: string | null;
   decidedAt: string;
+}
+
+export interface Verdict {
+  id: string;
+  p: number | null;
+  choice: string | null;
+}
+
+export async function findVerdict(questionId: string, inputHash: string): Promise<Verdict | null> {
+  return env.DB.prepare(SELECT_VERDICT_ROW).bind(questionId, inputHash).first<Verdict>();
+}
+
+export async function countVerdictsSince(entityId: string, sinceIso: string): Promise<number> {
+  const row = await env.DB.prepare(COUNT_VERDICTS).bind(entityId, sinceIso).first<{ n: number }>();
+  return row?.n ?? 0;
 }
 
 export async function insertVerdicts(rows: readonly VerdictRow[]): Promise<void> {
