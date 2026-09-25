@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { startCard } from "../../../app/lib/identity/card.server";
 import { confirmCard } from "../../../app/lib/identity/confirm.server";
+import { extractIdentity } from "../../../app/lib/identity/extract";
 import { normaliseSubject } from "../../../app/lib/identity/normalise";
 import { identityTailInstanceId } from "../../../app/lib/identity/tail.server";
 import gym from "../../fixtures/gymshark-2026-09-22-a.html?raw";
@@ -142,6 +143,7 @@ describe("startCard", () => {
 
 describe("confirmCard", () => {
   it("saves the card, with the user's edits, as the workspace's own brand", async () => {
+    stubWeb(() => new Response(gym, { status: 200, headers: { "content-type": "text/html" } }));
     await env.SNAPSHOTS.put("logo/gymshark.com", new Uint8Array([1]), { httpMetadata: { contentType: "image/png" } });
     const saved = await confirmCard(
       "ws-1",
@@ -169,7 +171,49 @@ describe("confirmCard", () => {
     await settledTail();
   });
 
+  it("classifies the homepage's nav pages and writes them as judged page rows", async () => {
+    stubWeb(() => new Response(gym, { status: 200, headers: { "content-type": "text/html" } }));
+    const run = vi.fn(() => Promise.resolve({ answers: { page_role: { type: "choice", choice: "pricing" } } }));
+    Reflect.set(env, "AI", { run });
+
+    expect(
+      await confirmCard("ws-1", form({ subject: "https://www.gymshark.com/", name: "Gymshark", description: "" })),
+    ).toBe(true);
+
+    const entity = await env.DB.prepare("SELECT id FROM entity WHERE role = 'self'").first<{ id: string }>();
+    const expected = (await extractIdentity(gym, "https://www.gymshark.com/")).navPages.length;
+    expect(expected).toBeGreaterThan(0);
+
+    const { results } = await env.DB.prepare(
+      "SELECT role, role_decided_for_hash FROM page WHERE entity_id = ?1 AND role_decided_for_hash IS NOT NULL",
+    )
+      .bind(entity?.id ?? "")
+      .all<{ role: string; role_decided_for_hash: string }>();
+    expect(results).toHaveLength(expected);
+    for (const page of results) expect(page.role).toBe("pricing");
+  });
+
+  it("keeps the confirm and records no role when Jev is down", async () => {
+    stubWeb(() => new Response(gym, { status: 200, headers: { "content-type": "text/html" } }));
+    const run = vi.fn(() => Promise.reject(new Error("down")));
+    Reflect.set(env, "AI", { run });
+
+    expect(
+      await confirmCard("ws-1", form({ subject: "https://www.gymshark.com/", name: "Gymshark", description: "" })),
+    ).toBe(true);
+
+    const entity = await env.DB.prepare("SELECT id FROM entity WHERE role = 'self'").first<{ id: string }>();
+    expect(entity).not.toBeNull();
+    const { results } = await env.DB.prepare(
+      "SELECT id FROM page WHERE entity_id = ?1 AND role_decided_for_hash IS NOT NULL",
+    )
+      .bind(entity?.id ?? "")
+      .all();
+    expect(results).toEqual([]);
+  });
+
   it("ignores a form-supplied logo URL when no logo is kept in R2", async () => {
+    stubWeb(() => new Response(gym, { status: 200, headers: { "content-type": "text/html" } }));
     const saved = await confirmCard(
       "ws-1",
       form({
