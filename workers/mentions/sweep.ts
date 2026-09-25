@@ -395,7 +395,7 @@ export async function sweepTarget(
   canaryCount: number | null,
 ): Promise<TargetOutcome> {
   try {
-    if (target.pluginKey === "youtube.channel_rss") return sweepYoutubeTarget(target, now, canaryCount);
+    if (target.pluginKey === "youtube.channel_rss") return await sweepYoutubeTarget(target, now, canaryCount);
     const adapter = adapterFor(target.pluginKey);
     if (adapter === undefined) throw new Error(`no mentions adapter for ${target.pluginKey}`);
     const result = await adapter({ query: target.query }, null);
