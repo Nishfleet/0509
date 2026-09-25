@@ -126,8 +126,13 @@ async function seedCardSession(registrable: string): Promise<string> {
   }
 }
 
+const TRIGGERS: Record<"name" | "about", RegExp> = {
+  name: /^edit name\b/,
+  about: /^edit about\b/,
+};
+
 async function openEditor(page: Page, field: "name" | "about"): Promise<Locator> {
-  const trigger = page.getByRole("button", { name: new RegExp(`^edit ${field}\\b`) });
+  const trigger = page.getByRole("button", { name: TRIGGERS[field] });
   await expect(trigger).toBeVisible({ timeout: 30_000 });
   await trigger.click();
   const editor = page.getByRole("textbox", { name: field });
@@ -154,7 +159,7 @@ test("the identity card editor saves and closes on Enter, with focus back on the
   expect(response?.status()).toBe(200);
   await expect(page.getByRole("heading", { name: "This is you. Fix anything we got wrong." })).toBeVisible();
 
-  const trigger = page.getByRole("button", { name: /^edit name\b/ });
+  const trigger = page.getByRole("button", { name: TRIGGERS.name });
   const name = await openEditor(page, "name");
   await name.fill("Brand One");
   await name.press("Enter");
@@ -176,7 +181,7 @@ test("the identity card editor saves and closes on Escape, with focus back on th
   expect(response?.status()).toBe(200);
   await expect(page.getByRole("heading", { name: "This is you. Fix anything we got wrong." })).toBeVisible();
 
-  const trigger = page.getByRole("button", { name: /^edit about\b/ });
+  const trigger = page.getByRole("button", { name: TRIGGERS.about });
   const about = await openEditor(page, "about");
   await about.fill("one line on what we do");
   await about.press("Escape");
