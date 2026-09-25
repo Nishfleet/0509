@@ -3,8 +3,8 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
 import { FirstFilePanel } from "../../app/components/first-file-panel";
-import { firstSiteSweepAt } from "../../app/lib/onboarding/arrival-estimate";
 import type { BriefSchedule } from "../../app/lib/brief-schedule";
+import { firstSiteSweepAt } from "../../app/lib/onboarding/arrival-estimate";
 import type { HomeEntity, HomeSource } from "../../app/lib/home-standing";
 import { homeView } from "../../app/lib/home-standing";
 
