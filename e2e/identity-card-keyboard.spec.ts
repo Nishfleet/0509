@@ -140,6 +140,16 @@ async function openEditor(page: Page, field: "name" | "about"): Promise<Locator>
   return editor;
 }
 
+function watchDraftPosts(page: Page): string[] {
+  const posts: string[] = [];
+  page.on("request", (request) => {
+    if (request.method() === "POST" && new URL(request.url()).pathname === "/onboarding/identity.data") {
+      posts.push(request.url());
+    }
+  });
+  return posts;
+}
+
 function watchConsole(page: Page): string[] {
   const errors: string[] = [];
   page.on("console", (message) => {
@@ -152,6 +162,7 @@ function watchConsole(page: Page): string[] {
 test("the identity card editor saves and closes on Enter, with focus back on the trigger", async ({ page }) => {
   test.setTimeout(90_000);
   const consoleErrors = watchConsole(page);
+  const draftPosts = watchDraftPosts(page);
   const subject = "nope-card-keyboard-enter.example.com";
   await page.setExtraHTTPHeaders({ cookie: await seedCardSession("example.com") });
 
@@ -164,6 +175,10 @@ test("the identity card editor saves and closes on Enter, with focus back on the
   await name.fill("Brand One");
   await name.press("Enter");
 
+  // The controlled `open` prop closing does not fire Popover's onOpenChange, so
+  // Enter reaches onSave through exactly one path. A second submit would be a
+  // visible double write of the same draft.
+  await expect.poll(() => draftPosts.length).toBe(1);
   await expect(name).toHaveCount(0);
   await expect(trigger).toBeFocused();
   await expect(trigger).toContainText("Brand One");
@@ -174,6 +189,7 @@ test("the identity card editor saves and closes on Enter, with focus back on the
 test("the identity card editor saves and closes on Escape, with focus back on the trigger", async ({ page }) => {
   test.setTimeout(90_000);
   const consoleErrors = watchConsole(page);
+  const draftPosts = watchDraftPosts(page);
   const subject = "nope-card-keyboard-escape.example.com";
   await page.setExtraHTTPHeaders({ cookie: await seedCardSession("example.com") });
 
@@ -186,6 +202,7 @@ test("the identity card editor saves and closes on Escape, with focus back on th
   await about.fill("one line on what we do");
   await about.press("Escape");
 
+  await expect.poll(() => draftPosts.length).toBe(1);
   await expect(about).toHaveCount(0);
   await expect(trigger).toBeFocused();
   await expect(trigger).toContainText("one line on what we do");
