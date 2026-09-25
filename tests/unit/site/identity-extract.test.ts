@@ -115,4 +115,14 @@ describe("extractIdentity", () => {
 
     expect(card.navPages).toEqual([{ url: "https://www.gymshark.com/shop", title: "Shop" }]);
   });
+
+  it("skips in-page fragment links in the nav", async () => {
+    const card = await extractIdentity(
+      '<nav><a href="#top">Top</a><a href="/men">Men</a></nav>',
+      pageUrl,
+    );
+
+    expect(card.navLinks).toEqual(["https://www.gymshark.com/men"]);
+    expect(card.navPages).toEqual([{ url: "https://www.gymshark.com/men", title: "Men" }]);
+  });
 });

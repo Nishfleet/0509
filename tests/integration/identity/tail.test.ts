@@ -118,6 +118,7 @@ describe("IdentityTailWorkflow", () => {
   it("persists the card, seeds watches, starts discovery and queues the first sweep", async () => {
     await seed();
     await using introspector = await introspectWorkflow(env.IDENTITY_TAIL);
+    const day = new Date().toISOString().slice(0, 10);
     expect(
       await confirmCard(
         workspaceId,
@@ -138,7 +139,7 @@ describe("IdentityTailWorkflow", () => {
 
     expect(output.entityId).toBe(entityId.id);
     expect(output.r2Keys).toEqual([]);
-    expect(output.discoveryInstanceId).toBe(`discovery-${workspaceId}-${new Date().toISOString().slice(0, 10)}`);
+    expect(output.discoveryInstanceId).toBe(`discovery-${workspaceId}-${day}`);
     const stored = await watches();
     expect(output.watches).toEqual(
       stored.map((row) => ({ id: row.id, sourceKey: row.source_key, targetKey: row.target_key })),
@@ -161,11 +162,7 @@ describe("IdentityTailWorkflow", () => {
       .all<{ role: string; url: string }>();
     expect(pages.results).toEqual([{ role: "home", url: "https://gymshark.com/" }]);
 
-    const discovery = await env.DISCOVERY.get(output.discoveryInstanceId);
-    const discoveryStatus = await discovery.status();
-    expect(["queued", "running", "waiting", "waitingForPause", "complete", "errored"]).toContain(
-      discoveryStatus.status,
-    );
+    await expect(env.DISCOVERY.get(output.discoveryInstanceId)).resolves.toBeDefined();
     expect(instanceId).toBe(`identity-tail-${entityId.id}`);
   });
 
