@@ -38,6 +38,7 @@ const change: SiteChangeItemData = {
 
 const quiet: CompetitorFrameProps = {
   changes: [],
+  developments: [],
   weekCount: 0,
   biggestId: null,
   pages: 0,

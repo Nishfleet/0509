@@ -1,3 +1,5 @@
+import { env } from "cloudflare:workers";
+
 import type { BriefPayload } from "../brief-payload";
 import { readBriefPayload } from "../brief-payload";
 
@@ -118,6 +120,42 @@ export async function insertIncidentAlert(db: D1Database, alert: IncidentAlert):
       alert.createdAt,
     )
     .run();
+}
+
+export interface OwnSiteBreakageAlertRow {
+  id: string;
+  workspaceId: string;
+  entityId: string;
+  pageId: string;
+  signalId: string;
+  incidentId: string;
+  severity: "high" | "normal";
+  title: string;
+  body: string | null;
+  createdAt: string;
+}
+
+const INSERT_OWN_SITE_BREAKAGE_ALERT = `INSERT INTO alert
+  (id, workspace_id, entity_id, signal_id, page_id, incident_id, kind, severity, title, body, created_at)
+SELECT ?1, ?2, ?3, ?4, ?5, ?6, 'own_site_breakage', ?7, ?8, ?9, ?10
+WHERE EXISTS (SELECT 1 FROM incident WHERE id = ?11)`;
+
+export function insertIncidentAlertStatement(row: OwnSiteBreakageAlertRow): D1PreparedStatement {
+  return env.DB
+    .prepare(INSERT_OWN_SITE_BREAKAGE_ALERT)
+    .bind(
+      row.id,
+      row.workspaceId,
+      row.entityId,
+      row.signalId,
+      row.pageId,
+      row.incidentId,
+      row.severity,
+      row.title,
+      row.body,
+      row.createdAt,
+      row.incidentId,
+    );
 }
 
 export interface OwnSiteIncidentNote {
