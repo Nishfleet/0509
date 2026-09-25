@@ -71,7 +71,8 @@ interface DeliveryRow {
 const deliveryRow = (attemptId: string | null, signalId: string, deliveredAt: string) =>
   env.DB.prepare(
     `INSERT INTO signal_delivery (id, workspace_id, signal_id, channel_id, send_attempt_id, delivered_at)
-     VALUES (lower(hex(randomblob(16))), ?1, ?2, ?3, ?4, ?5)`,
+     VALUES (lower(hex(randomblob(16))), ?1, ?2, ?3, ?4, ?5)
+     ON CONFLICT (signal_id, channel_id) DO NOTHING`,
   ).bind(WS, signalId, CHANNEL, attemptId, deliveredAt);
 
 const deliveries = async (): Promise<DeliveryRow[]> =>
@@ -175,9 +176,11 @@ describe("delivered once across weeks (0509#4063)", () => {
     const week1 = await weekOne();
     expect(week1.outcome).toBe("sent");
 
-    // Stand-in for the signal_delivery rows the send-resolution batch writes;
-    // that writer is the pending #5548 re-cut, so the fixture inserts them
-    // directly. The tail asserts these two rows.
+    // The two rows week 1's send wrote. The resolution batch that writes them
+    // is #5548's, so until it lands the fixture inserts them here; the
+    // conflict clause is that writer's own, which makes the insert a no-op
+    // once it does. They are the precondition the picker reads: the tail
+    // asserts both landed keyed to this workspace, channel and attempt.
     await env.DB.batch([
       deliveryRow(week1.attempt_id, SIG_A, "2026-09-21T08:00:00.000Z"),
       deliveryRow(week1.attempt_id, SIG_B, "2026-09-21T08:00:00.000Z"),
@@ -201,6 +204,11 @@ describe("delivered once across weeks (0509#4063)", () => {
     expect(payload.read_this_first.map((mark) => mark.signal_id)).toEqual([SIG_C]);
 
     const rows = await deliveries();
-    expect(rows.map((row) => row.signal_id)).toEqual([SIG_A, SIG_B]);
+    expect(
+      rows.map((row) => [row.signal_id, row.workspace_id, row.channel_id, row.send_attempt_id]),
+    ).toEqual([
+      [SIG_A, WS, CHANNEL, week1.attempt_id],
+      [SIG_B, WS, CHANNEL, week1.attempt_id],
+    ]);
   });
 });
