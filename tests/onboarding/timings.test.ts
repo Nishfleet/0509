@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import type { OnboardingTimes } from "../../app/lib/data/onboarding_run.server";
+import type { OnboardingTimes } from "../../app/lib/onboarding/timings";
 import { onboardingTimingLines } from "../../app/lib/onboarding/timings";
 
 function times(overrides: Partial<OnboardingTimes>): OnboardingTimes {

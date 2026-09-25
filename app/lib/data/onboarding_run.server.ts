@@ -15,8 +15,6 @@ const UPDATE_FIRST_SIGNAL_AT = `UPDATE onboarding_run SET first_signal_at = (SEL
 const SELECT_ONBOARDING_TIMES = `SELECT started_at, card_ready_at, competitors_ready_at, first_signal_at
 FROM onboarding_run WHERE workspace_id = ?1 LIMIT 1`;
 
-export type { OnboardingTimes };
-
 interface OnboardingTimesRow {
   started_at: string;
   card_ready_at: string | null;
