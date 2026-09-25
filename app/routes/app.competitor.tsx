@@ -1,12 +1,12 @@
 import type { Route } from "./+types/app.competitor";
 
-import { Form, redirect, useFetcher } from "react-router";
+import { redirect, useFetcher } from "react-router";
 
 import { BrandSwitchField } from "../components/brand-switch";
+import { CompetitorForget } from "../components/competitor-forget";
 import { CompetitorFrame } from "../components/competitor-frame";
 import { CompetitorHeader, DAY_MONTH } from "../components/competitor-header";
 import { CompetitorSnapshot } from "../components/competitor-snapshot";
-import { Button } from "../components/ui/button";
 import { readCompetitorPage } from "../lib/competitor-page.server";
 import { snapshotCells } from "../lib/competitor-snapshot";
 import { readCompetitorSnapshot } from "../lib/competitor-snapshot.server";
@@ -16,6 +16,8 @@ import { readWorkspaceIdForOwner } from "../lib/data/workspace.server";
 import { daysAgoLabel } from "../lib/delivery-alert";
 import { requireSession } from "../lib/require-session.server";
 import { captureLabel } from "../lib/site-change";
+
+const FORGET_MISMATCH = "That doesn't match the name. Type it exactly as shown.";
 
 async function workspaceFor(request: Request): Promise<string> {
   const session = await requireSession(request);
@@ -52,18 +54,22 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 
 export async function action({ request, params }: Route.ActionArgs) {
   const workspaceId = await workspaceFor(request);
-  const intent = (await request.formData()).get("intent");
+  const submitted = await request.formData();
+  const intent = submitted.get("intent");
   if (intent === "forget") {
-    await forgetCompetitor(workspaceId, params.entityId, new Date().toISOString());
-    throw redirect("/app/competitors");
+    const confirm = submitted.get("confirm");
+    const outcome = await forgetCompetitor(workspaceId, params.entityId, typeof confirm === "string" ? confirm : "");
+    if (outcome === "forgotten") throw redirect("/app/competitors");
+    if (outcome === "missing") throw new Response("We don't track that competitor.", { status: 404 });
+    return { message: null, forgetError: FORGET_MISMATCH };
   }
   const form = new FormData();
   form.set("intent", intent === "on" || intent === "off" ? intent : "");
   form.set("entityId", params.entityId);
-  return handleCompetitorIntent(workspaceId, form);
+  return { ...(await handleCompetitorIntent(workspaceId, form)), forgetError: null };
 }
 
-export default function Page({ loaderData }: Route.ComponentProps) {
+export default function Page({ loaderData, actionData }: Route.ComponentProps) {
   const { competitor } = loaderData;
   const fetcher = useFetcher();
   const pending = fetcher.formData?.get("intent");
@@ -89,15 +95,6 @@ export default function Page({ loaderData }: Route.ComponentProps) {
         }
       />
       <CompetitorSnapshot cells={loaderData.snapshot} />
-      <Form method="post" className="flex min-w-0 flex-col items-start gap-2">
-        <input type="hidden" name="intent" value="forget" />
-        <Button type="submit" variant="secondary">
-          Stop tracking and delete its history
-        </Button>
-        <p className="text-meta text-ink-soft">
-          Turning it off keeps its history. This deletes every change and screenshot we kept for it.
-        </p>
-      </Form>
       <CompetitorFrame
         changes={loaderData.changes}
         developments={loaderData.developments}
@@ -108,6 +105,7 @@ export default function Page({ loaderData }: Route.ComponentProps) {
         pausedOn={pausedAt === null ? null : DAY_MONTH.format(new Date(pausedAt))}
         rail={{ ...loaderData.rail, entityId: competitor.id, now: loaderData.now }}
       />
+      <CompetitorForget name={competitor.name} error={actionData?.forgetError ?? null} />
     </main>
   );
 }

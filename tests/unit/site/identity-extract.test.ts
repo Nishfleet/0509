@@ -106,4 +106,13 @@ describe("extractIdentity", () => {
       { url: "https://www.gymshark.com/collections/all-products", title: "All Products" },
     ]);
   });
+
+  it("does not append off-origin anchor text to the previous nav title", async () => {
+    const card = await extractIdentity(
+      '<nav><a href="/shop">Shop</a><a href="https://www.instagram.com/gymshark/">Instagram</a></nav>',
+      pageUrl,
+    );
+
+    expect(card.navPages).toEqual([{ url: "https://www.gymshark.com/shop", title: "Shop" }]);
+  });
 });
