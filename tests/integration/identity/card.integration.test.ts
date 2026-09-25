@@ -139,6 +139,28 @@ describe("startCard", () => {
     });
     expect(calls).toEqual([]);
   });
+
+  it("reads the YouTube channel page and joins its socials", async () => {
+    stubAi(0.95);
+    const channelHtml =
+      '<html><head><title>Veritasium</title>' +
+      '<meta property="og:title" content="Veritasium">' +
+      '<meta property="og:description" content="An element of truth - videos about science, education, and anything else I find interesting.">' +
+      '</head><body>' +
+      '<section class="about">Elements of truth about the world, demonstrated with experiments and conversations with experts across physics, biology, engineering and the history of science. New videos every week on Veritasium.</section>' +
+      '<footer><a href="https://www.instagram.com/veritasium/">Instagram</a></footer>' +
+      '</body></html>';
+    stubWeb(() => new Response(channelHtml, { status: 200, headers: { "content-type": "text/html" } }));
+    const card = startCard("ws-1", subjectFor("https://www.youtube.com/@veritasium"));
+
+    const site = await card.site;
+    expect(site.name).toBe("Veritasium");
+    expect(site.description).toContain("element of truth");
+    expect(site.socials[0]).toEqual({ platform: "youtube", url: "https://www.youtube.com/@veritasium" });
+    expect(site.socials.map((social) => social.platform)).toContain("instagram");
+
+    expect(await card.logo).toBeNull();
+  });
 });
 
 describe("confirmCard", () => {
