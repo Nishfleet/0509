@@ -6,6 +6,7 @@ import { EmptyState, fewerThanTwoOnBrands } from "./empty-state";
 import { FirstFilePanel } from "./first-file-panel";
 import { FourWeekLine } from "./four-week-line";
 import { HowRankedSheet } from "./how-ranked-sheet";
+import { ReadThisFirst } from "./read-this-first";
 import type { HomeRow, HomeView } from "../lib/home-standing";
 import type { HowRanked } from "../lib/how-ranked";
 import { cn } from "../lib/utils";
@@ -75,6 +76,7 @@ function body(view: HomeView, howRanked?: HowRanked | null): ReactElement {
           <HowRankedSheet howRanked={howRanked} />
         </div>
       ) : null}
+      <ReadThisFirst marks={standing.readThisFirst} />
       <h2 className={cn(EYEBROW, "border-line mt-8 border-t pt-4")}>Four weeks</h2>
       <div className="mt-2">
         <FourWeekLine chart={standing.chart} />

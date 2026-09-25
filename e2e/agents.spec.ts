@@ -62,7 +62,13 @@ test("the consent screen sends a signed-out visitor to sign in and back", async 
 });
 
 test("the REST API refuses a request without a key and never caches the answer", async ({ request }) => {
-  for (const path of ["/api/v1/brief", "/api/v1/competitors", "/api/v1/alerts", "/api/v1/standing"]) {
+  for (const path of [
+    "/api/v1/brief",
+    "/api/v1/competitors",
+    "/api/v1/competitors/does-not-exist",
+    "/api/v1/alerts",
+    "/api/v1/standing",
+  ]) {
     const response = await request.get(path);
     expect(response.status(), path).toBe(401);
     expect(response.headers()["cache-control"], path).toBe("no-store");
@@ -79,6 +85,7 @@ test("the API reference is public OpenAPI 3.1", async ({ request }) => {
     "/api/v1/alerts",
     "/api/v1/brief",
     "/api/v1/competitors",
+    "/api/v1/competitors/{competitorId}",
     "/api/v1/standing",
   ]);
 });

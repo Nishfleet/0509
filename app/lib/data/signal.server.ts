@@ -1,6 +1,8 @@
 import { env } from "cloudflare:workers";
 import { z } from "zod";
 
+import { isFeedKind, type DevelopmentItem } from "../developments";
+import { D3_QUESTION_ID } from "../standing-score";
 import type { HiringSignalState, HiringSignalUpdate } from "../hiring/role-lifecycle";
 
 export interface SiteChangeSignal {
@@ -21,6 +23,44 @@ const INSERT_SITE_CHANGE = `INSERT INTO signal
    url, evidence_url, payload_json, dedup_key, observed_at, last_seen_at)
 VALUES (?1, ?2, ?3, ?4, ?5, ?6, 'change', ?7, ?8, ?8, ?9, ?6, ?10, ?10)
 ON CONFLICT (source_id, dedup_key) DO NOTHING`;
+
+export interface ChangeSignalRow {
+  id: string;
+  workspaceId: string;
+  entityId: string;
+  sourceId: string;
+  watchId: string;
+  snapshotId: string;
+  title: string;
+  summary: string;
+  url: string;
+  aspect: string;
+  payloadJson: string;
+  observedAt: string;
+}
+
+const INSERT_CHANGE_SIGNAL = `INSERT INTO signal
+  (id, workspace_id, entity_id, source_id, watch_id, snapshot_id, kind, title, summary,
+   url, aspect, evidence_url, payload_json, dedup_key, observed_at)
+VALUES (?1, ?2, ?3, ?4, ?5, ?6, 'change', ?7, ?8, ?9, ?10, ?9, ?11, ?6, ?12)
+ON CONFLICT (source_id, dedup_key) DO NOTHING`;
+
+export function insertChangeSignalStatement(row: ChangeSignalRow): D1PreparedStatement {
+  return env.DB.prepare(INSERT_CHANGE_SIGNAL).bind(
+    row.id,
+    row.workspaceId,
+    row.entityId,
+    row.sourceId,
+    row.watchId,
+    row.snapshotId,
+    row.title,
+    row.summary,
+    row.url,
+    row.aspect,
+    row.payloadJson,
+    row.observedAt,
+  );
+}
 
 export interface NewHiringSignal {
   id: string;
@@ -236,15 +276,26 @@ export interface SiteChangeRow {
   observed_at: string;
   before_at: string | null;
   after_at: string | null;
+  verdict_id: string | null;
+  verdict_p: number | null;
+  verdict_reason: string | null;
+  verdict_decided_at: string | null;
 }
 
 const SELECT_SITE_CHANGES = `SELECT s.id, s.entity_id, e.name AS entity_name, e.domain AS entity_domain,
   e.role AS entity_role, s.url, s.payload_json, s.observed_at,
-  b.fetched_at AS before_at, a.fetched_at AS after_at
+  b.fetched_at AS before_at, a.fetched_at AS after_at,
+  v.id AS verdict_id, v.p AS verdict_p, v.reason AS verdict_reason, v.decided_at AS verdict_decided_at
 FROM signal s
 JOIN entity e ON e.id = s.entity_id AND e.workspace_id = s.workspace_id
 LEFT JOIN snapshot a ON a.id = s.snapshot_id
 LEFT JOIN snapshot b ON b.id = json_extract(s.payload_json, '$.before.snapshotId')
+LEFT JOIN jev_verdict v ON v.id = (
+  SELECT v2.id FROM jev_verdict v2
+  WHERE v2.signal_id = s.id AND v2.workspace_id = s.workspace_id AND v2.question_id = ?5
+  ORDER BY v2.decided_at DESC
+  LIMIT 1
+)
 WHERE s.workspace_id = ?1
   AND s.kind = 'change'
   AND s.is_tombstoned = 0
@@ -261,9 +312,38 @@ export async function readSiteChanges(input: {
   limit: number;
 }): Promise<SiteChangeRow[]> {
   const { results } = await env.DB.prepare(SELECT_SITE_CHANGES)
-    .bind(input.workspaceId, input.since, input.entityId, input.limit)
+    .bind(input.workspaceId, input.since, input.entityId, input.limit, D3_QUESTION_ID)
     .all<SiteChangeRow>();
   return results;
+}
+
+const SELECT_ENTITY_DEVELOPMENTS = `SELECT id, kind, title, summary, url, observed_at FROM signal
+WHERE workspace_id = ?1 AND entity_id = ?2 AND kind IN ('ad', 'change', 'mention', 'hiring')
+  AND is_tombstoned = 0 AND observed_at >= ?3 ORDER BY observed_at DESC, id DESC LIMIT ?4`;
+
+interface DevelopmentRow {
+  id: string;
+  kind: string;
+  title: string | null;
+  summary: string | null;
+  url: string | null;
+  observed_at: string;
+}
+
+export async function readEntityDevelopments(input: {
+  workspaceId: string;
+  entityId: string;
+  since: string;
+  limit: number;
+}): Promise<DevelopmentItem[]> {
+  const { results } = await env.DB.prepare(SELECT_ENTITY_DEVELOPMENTS)
+    .bind(input.workspaceId, input.entityId, input.since, input.limit)
+    .all<DevelopmentRow>();
+  return results.flatMap((row) =>
+    isFeedKind(row.kind)
+      ? [{ id: row.id, kind: row.kind, title: row.title, summary: row.summary, url: row.url, observedAt: row.observed_at }]
+      : [],
+  );
 }
 
 const SELECT_SITE_CHANGE_PAYLOAD = `SELECT payload_json FROM signal

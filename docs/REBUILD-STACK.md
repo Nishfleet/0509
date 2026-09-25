@@ -1075,6 +1075,7 @@ Every capability the rebuild needs → the one thing that provides it → the ve
 | E2E against production | `@playwright/test` | 1.63.0 |
 | Performance gate | `treosh/lighthouse-ci-action` | v12.6.2 |
 | Link checking | `lycheeverse/lychee-action` | v2.9.0 |
+| Red-main issue create-or-update | `JasonEtco/create-an-issue` (update_existing, search_existing: open) | v2.9.2 |
 | MCP server | `createMcpHandler` (`@modelcontextprotocol/server`) | 2.1.0 |
 | MCP auth | `@cloudflare/workers-oauth-provider` | 0.10.4 |
 | API keys + per-key quota | `@better-auth/api-key` (`apikey` table) | 1.7.5 |

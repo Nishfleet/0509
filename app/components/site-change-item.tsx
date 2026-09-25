@@ -4,6 +4,7 @@ import type { SiteChangeView } from "../lib/site-change";
 import { CapturePlate } from "./capture-plate";
 import { Mark } from "./mark";
 import type { MarkSize } from "./mark";
+import { WhyFlaggedSheet } from "./why-flagged";
 
 export type SiteChangeItemData = SiteChangeView & { when: string };
 
@@ -58,6 +59,11 @@ export function SiteChangeItem({
       <time dateTime={change.observedAt} className={WHEN_CLASS}>
         {change.when}
       </time>
+      {change.whyFlagged === null ? null : (
+        <div className="mt-3">
+          <WhyFlaggedSheet why={change.whyFlagged} />
+        </div>
+      )}
     </article>
   );
 }

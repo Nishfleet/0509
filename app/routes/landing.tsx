@@ -1,5 +1,7 @@
 import type { Route } from "./+types/landing";
 
+import { env } from "cloudflare:workers";
+
 import { Footer } from "../components/footer";
 import { Agents } from "../components/landing/agents";
 import { Faq } from "../components/landing/faq";
@@ -9,9 +11,12 @@ import { HowItWorks } from "../components/landing/how-it-works";
 import { Price } from "../components/landing/price";
 import { pageWidth } from "../components/landing/section";
 import { TheMark } from "../components/landing/the-mark";
+import { Ticker } from "../components/landing/ticker";
 import { WhatWeWatch } from "../components/landing/what-we-watch";
 import { WATCHED_NOUNS } from "../lib/coverage";
+import { readSiteChanges } from "../lib/data/signal.server";
 import { FAQ } from "../lib/faq";
+import { daysBefore } from "../lib/site-changes.server";
 import {
   SITE_URL,
   faqPageJsonLd,
@@ -20,6 +25,7 @@ import {
   softwareApplicationJsonLd,
   websiteJsonLd,
 } from "../lib/structured-data";
+import { tickerItems } from "../lib/ticker";
 
 const TITLE = "Competitor tracking for founders and creators | Five to Nine";
 const DESCRIPTION = `Five to Nine watches your competitors' ${WATCHED_NOUNS} and emails you one brief every Monday with a screenshot behind every change.`;
@@ -51,9 +57,23 @@ export function meta(_: Route.MetaArgs) {
   ];
 }
 
-export default function Landing() {
+export async function loader(_: Route.LoaderArgs) {
+  const id: unknown = env.LANDING_WORKSPACE_ID;
+  if (typeof id !== "string" || id.trim() === "") return { ticker: [] };
+  const now = new Date();
+  const rows = await readSiteChanges({
+    workspaceId: id.trim(),
+    entityId: null,
+    since: daysBefore(now, 7),
+    limit: 24,
+  });
+  return { ticker: tickerItems(rows, now) };
+}
+
+export default function Landing({ loaderData }: Route.ComponentProps) {
   return (
     <div className="bg-bone text-ink">
+      <Ticker items={loaderData.ticker} />
       <Header />
       <main>
         <Hero />

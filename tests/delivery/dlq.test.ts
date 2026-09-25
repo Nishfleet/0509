@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
+vi.mock("cloudflare:workers", () => ({ env: {} }));
+
 import {
   DELIVERY_FAILED_BODY,
   DELIVERY_FAILED_KIND,

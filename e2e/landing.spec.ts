@@ -184,3 +184,80 @@ test("the organization logo is served", async ({ request }) => {
   expect(response.status()).toBe(200);
   expect(response.headers()["content-type"].startsWith("image/svg+xml")).toBe(true);
 });
+
+// The ticker is the one looping element on the landing (DESIGN.md §9). These
+// tests pin the physical contract #4083 bought: it sits above the main page
+// flow and holds its own height, it never widens the document, it does not
+// shift layout, it stops for prefers-reduced-motion, and every item is a
+// distinct real signal row.
+
+test("the ticker sits above the page and reserves its height", async ({ page }) => {
+  await page.goto(PATH);
+  const ticker = page.locator("#ticker");
+  await expect(ticker).toBeVisible();
+
+  const box = await ticker.boundingBox();
+  if (box === null) throw new Error("ticker has no box");
+  expect(box.height).toBeGreaterThan(0);
+
+  const mainFollowsTicker = await page.evaluate(() => {
+    const ticker = document.getElementById("ticker");
+    const main = document.querySelector("main");
+    if (ticker === null || main === null) throw new Error("ticker or main missing");
+    return (ticker.compareDocumentPosition(main) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0;
+  });
+  expect(mainFollowsTicker).toBe(true);
+});
+
+test("the ticker never scrolls the page sideways", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto(PATH);
+  await page.waitForLoadState("networkidle");
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto(PATH);
+  await page.waitForLoadState("networkidle");
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(1440);
+});
+
+test("the ticker causes no layout shift", async ({ page }) => {
+  await page.addInitScript(() => {
+    Reflect.set(window, "__cls", 0);
+    new PerformanceObserver((list) => {
+      for (const entry of list.getEntries()) {
+        if (!Reflect.get(entry, "hadRecentInput")) {
+          Reflect.set(window, "__cls", Reflect.get(window, "__cls") + Reflect.get(entry, "value"));
+        }
+      }
+    }).observe({ type: "layout-shift", buffered: true });
+  });
+
+  await page.goto(PATH);
+  await page.waitForLoadState("networkidle");
+  await page.waitForTimeout(1000);
+  expect(await page.evaluate(() => Reflect.get(window, "__cls"))).toBeLessThan(0.05);
+});
+
+test("the ticker stops under reduced motion", async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.goto(PATH);
+  const animations = await page.evaluate(
+    () => document.getElementById("ticker")?.getAnimations({ subtree: true }).length ?? 0,
+  );
+  expect(animations).toBe(0);
+});
+
+test("every ticker item is a real signal row, listed once", async ({ page }) => {
+  await page.goto(PATH);
+  const ids = await page
+    .locator("#ticker li[data-signal-id]")
+    .evaluateAll((els) => els.map((el) => el.getAttribute("data-signal-id")));
+
+  for (const id of ids) {
+    expect(typeof id).toBe("string");
+    expect((id ?? "").length).toBeGreaterThan(0);
+  }
+  expect(new Set(ids).size).toBe(ids.length);
+  expect(ids.length).toBeLessThanOrEqual(12);
+});

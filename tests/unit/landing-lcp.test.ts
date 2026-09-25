@@ -10,6 +10,8 @@ vi.mock("../../app/lib/auth.server", () => ({
   hasSessionCookie: () => false,
 }));
 
+vi.mock("cloudflare:workers", () => ({ env: {} }));
+
 import { Layout } from "../../app/root";
 import Landing from "../../app/routes/landing";
 
@@ -20,7 +22,7 @@ function renderDocument(id: string): string {
     {
       id,
       path: "/",
-      Component: () => createElement(Layout, null, createElement(Landing)),
+      Component: () => createElement(Layout, null, createElement(Landing, { loaderData: { ticker: [] } })),
     },
   ]);
   return renderToStaticMarkup(createElement(Stub, { initialEntries: ["/"] }));
@@ -57,5 +59,23 @@ describe("landing LCP critical path", () => {
     const shipped = readFileSync(join(REPO_ROOT, "public/fonts/bricolage-hero.woff2"));
     expect(shipped.subarray(0, 4).toString("ascii")).toBe("wOF2");
     expect(shipped.length).toBeLessThan(12_000);
+  });
+});
+
+describe("static home LCP critical path", () => {
+  const html = readFileSync(join(REPO_ROOT, "public/index.html"), "utf8");
+
+  it("paints the headline from the document with no font resource", () => {
+    expect(html).toContain("Quietly, we");
+    expect(html).not.toContain("data:font");
+    expect(html).not.toContain("@font-face");
+    expect(html).not.toContain("/fonts/");
+    expect(html).not.toContain('rel="stylesheet"');
+    expect(html).not.toContain('rel="preload"');
+    for (const family of ["Bricolage Grotesque", "Instrument Sans", "IBM Plex Mono"]) {
+      expect(html).not.toContain(family);
+    }
+    expect(html).toContain("ui-sans-serif, system-ui, sans-serif");
+    expect(Buffer.byteLength(html)).toBeLessThan(8_000);
   });
 });

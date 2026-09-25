@@ -1,3 +1,5 @@
+import { env } from "cloudflare:workers";
+
 import type { BriefPayload } from "../brief-payload";
 import { readBriefPayload } from "../brief-payload";
 
@@ -38,6 +40,7 @@ export interface DeliveryFailureRow {
   title: string;
   body: string | null;
   created_at: string;
+  digest_id: string | null;
   brief: BriefPayload | null;
 }
 
@@ -46,10 +49,11 @@ interface AlertJoinRow {
   title: string;
   body: string | null;
   created_at: string;
+  digest_id: string | null;
   payload_json: string | null;
 }
 
-const SELECT_DELIVERY_FAILURES = `SELECT a.id, a.title, a.body, a.created_at, d.payload_json
+const SELECT_DELIVERY_FAILURES = `SELECT a.id, a.title, a.body, a.created_at, d.id AS digest_id, d.payload_json
 FROM alert a
 LEFT JOIN digest d ON d.id = substr(a.id, 5) AND d.workspace_id = a.workspace_id
 WHERE a.workspace_id = ? AND a.kind = 'delivery_failed'
@@ -66,6 +70,7 @@ export async function readDeliveryFailures(
     title: row.title,
     body: row.body,
     created_at: row.created_at,
+    digest_id: row.digest_id,
     brief: row.payload_json === null ? null : readBriefPayload(row.payload_json),
   }));
 }
@@ -115,6 +120,42 @@ export async function insertIncidentAlert(db: D1Database, alert: IncidentAlert):
       alert.createdAt,
     )
     .run();
+}
+
+export interface OwnSiteBreakageAlertRow {
+  id: string;
+  workspaceId: string;
+  entityId: string;
+  pageId: string;
+  signalId: string;
+  incidentId: string;
+  severity: "high" | "normal";
+  title: string;
+  body: string | null;
+  createdAt: string;
+}
+
+const INSERT_OWN_SITE_BREAKAGE_ALERT = `INSERT INTO alert
+  (id, workspace_id, entity_id, signal_id, page_id, incident_id, kind, severity, title, body, created_at)
+SELECT ?1, ?2, ?3, ?4, ?5, ?6, 'own_site_breakage', ?7, ?8, ?9, ?10
+WHERE EXISTS (SELECT 1 FROM incident WHERE id = ?11)`;
+
+export function insertIncidentAlertStatement(row: OwnSiteBreakageAlertRow): D1PreparedStatement {
+  return env.DB
+    .prepare(INSERT_OWN_SITE_BREAKAGE_ALERT)
+    .bind(
+      row.id,
+      row.workspaceId,
+      row.entityId,
+      row.signalId,
+      row.pageId,
+      row.incidentId,
+      row.severity,
+      row.title,
+      row.body,
+      row.createdAt,
+      row.incidentId,
+    );
 }
 
 export interface OwnSiteIncidentNote {

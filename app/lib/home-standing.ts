@@ -47,7 +47,7 @@ export interface FourWeekChart {
 export type HomeStanding =
   | { kind: "add-competitor" }
   | { kind: "gathering"; briefAt: string; firstSweepAt: string | null; brands: number }
-  | { kind: "ranked"; rank: number; total: number; whyLine: string; rows: readonly HomeRow[]; chart: FourWeekChart };
+  | { kind: "ranked"; rank: number; total: number; whyLine: string; readThisFirst: BriefPayload["read_this_first"]; rows: readonly HomeRow[]; chart: FourWeekChart };
 
 export interface HomeView {
   eyebrow: string;
@@ -206,6 +206,7 @@ export function homeStanding(input: {
     rank,
     total: payload.headline_total,
     whyLine: payload.why_line,
+    readThisFirst: payload.read_this_first.slice(0, 3),
     rows,
     chart: fourWeekChart(input.history, rows, input.entities, input.schedule.timezone),
   };

@@ -5,13 +5,35 @@ export interface NewPage {
   id: string;
   entityId: string;
   url: string;
-  role: "home";
+  role: "home" | "pricing";
+  discoveredAt: string;
+}
+
+export interface JudgedPage {
+  id: string;
+  entityId: string;
+  url: string;
+  title: string;
+  role: "home" | "pricing" | "product" | "blog" | "careers" | "legal" | "other";
+  roleDecidedForHash: string;
   discoveredAt: string;
 }
 
 const INSERT_PAGE = `INSERT INTO page (id, entity_id, url, role, discovered_at)
 VALUES (?1, ?2, ?3, ?4, ?5)
 ON CONFLICT (entity_id, url) DO NOTHING`;
+
+const UPSERT_JUDGED_PAGE = `INSERT INTO page (id, entity_id, url, title, role, role_decided_for_hash, discovered_at)
+VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
+ON CONFLICT (entity_id, url) DO UPDATE SET
+  title = excluded.title,
+  role = excluded.role,
+  role_decided_for_hash = excluded.role_decided_for_hash`;
+
+const SELECT_JUDGED_HASHES =
+  "SELECT url, role_decided_for_hash FROM page WHERE entity_id = ?1 AND role_decided_for_hash IS NOT NULL";
+
+const pageHashes = z.array(z.object({ url: z.string(), role_decided_for_hash: z.string() }));
 
 export async function insertPages(rows: readonly NewPage[]): Promise<void> {
   if (rows.length === 0) return;
@@ -20,6 +42,23 @@ export async function insertPages(rows: readonly NewPage[]): Promise<void> {
       env.DB.prepare(INSERT_PAGE).bind(row.id, row.entityId, row.url, row.role, row.discoveredAt),
     ),
   );
+}
+
+export async function upsertJudgedPages(rows: readonly JudgedPage[]): Promise<void> {
+  if (rows.length === 0) return;
+  await env.DB.batch(
+    rows.map((row) =>
+      env.DB
+        .prepare(UPSERT_JUDGED_PAGE)
+        .bind(row.id, row.entityId, row.url, row.title, row.role, row.roleDecidedForHash, row.discoveredAt),
+    ),
+  );
+}
+
+export async function readPageHashes(entityId: string): Promise<ReadonlyMap<string, string>> {
+  const rows = await env.DB.prepare(SELECT_JUDGED_HASHES).bind(entityId).all();
+  const parsed = pageHashes.parse(rows.results);
+  return new Map(parsed.map((row) => [row.url, row.role_decided_for_hash]));
 }
 
 export interface OwnSitePage {

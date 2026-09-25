@@ -1,16 +1,25 @@
-import { Suspense, type ReactNode } from "react";
-import { Await, Form } from "react-router";
+import { Suspense, useState, type ReactNode } from "react";
+import { Await, Form, useFetcher } from "react-router";
 
-import type { SiteFields } from "../lib/identity/card-fields";
+import type { CardDraft, SiteFields } from "../lib/identity/card-fields";
 import { Button } from "./ui/button";
+import { Input } from "./ui/input";
+import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 
 const FIELD = "min-w-0 flex-1 bg-transparent py-1 text-[0.95rem] outline-none focus:border-b focus:border-ink";
 
-function Row({ label, children }: { label: string; children: ReactNode }) {
+function Row({ label, check, children }: { label: string; check?: boolean; children: ReactNode }) {
   return (
-    <div className="border-line flex items-baseline gap-4 border-b py-3">
+    <div
+      className={`border-line flex items-baseline gap-4 border-b py-3${
+        check === true ? " bg-green-wash text-green-ink px-2" : ""
+      }`}
+    >
       <span className="text-ink-soft w-20 shrink-0 font-mono text-[0.75rem] uppercase">{label}</span>
       {children}
+      {check === true ? (
+        <span className="text-green-ink font-mono text-[0.7rem] uppercase">check this</span>
+      ) : null}
     </div>
   );
 }
@@ -19,6 +28,68 @@ function Pending({ label, fill }: { label: string; fill: string }) {
   return (
     <Row label={label}>
       <span className="text-ink-soft text-[0.95rem]">{fill}</span>
+    </Row>
+  );
+}
+
+function EditRow({
+  label,
+  name,
+  initial,
+  placeholder,
+  check,
+  empty,
+  emptyLine,
+  multiline,
+  onSave,
+}: {
+  label: string;
+  name: string;
+  initial: string;
+  placeholder: string;
+  check?: boolean;
+  empty?: boolean;
+  emptyLine: string;
+  multiline?: boolean;
+  onSave: (value: string) => void;
+}) {
+  const [value, setValue] = useState(initial);
+  const editor =
+    multiline === true ? (
+      <textarea
+        aria-label={label}
+        autoFocus
+        value={value}
+        rows={2}
+        className={`${FIELD} resize-none`}
+        onChange={(event) => {
+          setValue(event.currentTarget.value);
+        }}
+      />
+    ) : (
+      <Input
+        aria-label={label}
+        autoFocus
+        value={value}
+        onChange={(event) => {
+          setValue(event.currentTarget.value);
+        }}
+      />
+    );
+  return (
+    <Row label={label} check={check}>
+      <Popover
+        onOpenChange={(open) => {
+          if (!open) onSave(value);
+        }}
+      >
+        <PopoverTrigger className={`${FIELD} text-left`} aria-label={`edit ${label}`}>
+          {value === "" ? <span className="text-ink-soft">{placeholder}</span> : value}
+        </PopoverTrigger>
+        <PopoverContent>{editor}</PopoverContent>
+      </Popover>
+      <input type="hidden" name={name} value={value} />
+      {empty === true ? <span className="text-ink-soft text-[0.88rem]">{emptyLine}</span> : null}
     </Row>
   );
 }
@@ -41,18 +112,72 @@ function Logo({ logo }: { logo: Promise<string | null> }) {
   );
 }
 
-function Fields({ site, logo }: { site: SiteFields; logo: Promise<string | null> }) {
+const EMPTY_LINE = "we'll fill this after the first crawl";
+const UNREAD_LINE = "we'll fill this on the first crawl, within the hour";
+
+export function Fields({
+  subject,
+  site,
+  logo,
+  draft,
+}: {
+  subject: string;
+  site: SiteFields;
+  logo: Promise<string | null>;
+  draft: CardDraft;
+}) {
+  const emptyLine = site.unfound ? UNREAD_LINE : EMPTY_LINE;
+  const nameCheck = site.review.name === "check";
+  const descriptionCheck = site.review.description === "check";
+  const fetcher = useFetcher();
   return (
     <>
-      <Row label="name">
-        <input name="name" aria-label="name" defaultValue={site.name ?? ""} placeholder="your brand's name" className={FIELD} />
-      </Row>
+      <EditRow
+        label="name"
+        name="name"
+        initial={nameCheck ? "" : (draft.name ?? (site.name ?? ""))}
+        placeholder={nameCheck ? (site.name ?? "") : "your brand's name"}
+        check={nameCheck}
+        empty={site.review.name === "empty"}
+        emptyLine={emptyLine}
+        onSave={(value) => {
+          void fetcher.submit(
+            { intent: "draft", subject, field: "name", value },
+            { method: "post" },
+          );
+        }}
+      />
       <Logo logo={logo} />
-      <Row label="about">
-        <textarea name="description" aria-label="about" defaultValue={site.description ?? ""} placeholder="one line on what you do" rows={2} className={`${FIELD} resize-none`} />
-      </Row>
-      <Row label="socials">
-        {site.socials.length === 0 ? (
+      <EditRow
+        label="about"
+        name="description"
+        initial={descriptionCheck ? "" : (draft.description ?? (site.description ?? ""))}
+        placeholder={descriptionCheck ? (site.description ?? "") : "one line on what you do"}
+        check={descriptionCheck}
+        empty={site.review.description === "empty"}
+        emptyLine={emptyLine}
+        multiline
+        onSave={(value) => {
+          void fetcher.submit(
+            { intent: "draft", subject, field: "description", value },
+            { method: "post" },
+          );
+        }}
+      />
+      <Row label="socials" check={site.review.socials === "check"}>
+        {site.review.socials === "empty" ? (
+          <span className="text-ink-soft text-[0.88rem]">{emptyLine}</span>
+        ) : site.review.socials === "check" ? (
+          <ul className="min-w-0 flex-1 text-[0.95rem]">
+            {site.socials.map((social) => (
+              <li key={social.platform} className="truncate">
+                <label>
+                  <input type="checkbox" name={`social.${social.platform}`} value={social.url} /> {social.url}
+                </label>
+              </li>
+            ))}
+          </ul>
+        ) : site.socials.length === 0 ? (
           <span className="text-ink-soft text-[0.95rem]">none found on the site</span>
         ) : (
           <ul className="min-w-0 flex-1 text-[0.95rem]">
@@ -74,12 +199,14 @@ export function IdentityCard({
   domain,
   site,
   logo,
+  draft,
   message,
 }: {
   subject: string;
   domain: string;
   site: Promise<SiteFields>;
   logo: Promise<string | null>;
+  draft: CardDraft;
   message: string | undefined;
 }) {
   return (
@@ -106,7 +233,7 @@ export function IdentityCard({
                   We couldn&apos;t read that site, so fill in what you can.
                 </p>
               ) : null}
-              <Fields site={fields} logo={logo} />
+              <Fields subject={subject} site={fields} logo={logo} draft={draft} />
               {message ? <p role="alert" className="pt-3 text-[0.88rem]">{message}</p> : null}
               <Button type="submit" size="lg" className="my-5">
                 That&apos;s me

@@ -1,4 +1,5 @@
 import { env } from "cloudflare:workers";
+import { z } from "zod";
 
 import type { FreshnessSource } from "../../components/freshness-line";
 
@@ -56,6 +57,17 @@ export async function readEnabledSourceId(key: string): Promise<string | null> {
   return row?.id ?? null;
 }
 
+const ENABLED_BY_KIND = "SELECT id, key FROM source WHERE kind = ?1 AND is_enabled = 1 ORDER BY key";
+
+const enabledSourceRows = z.array(z.object({ id: z.string(), key: z.string() }));
+
+export async function readEnabledSources(
+  kind: "ads" | "mentions" | "site" | "hiring",
+): Promise<{ id: string; key: string }[]> {
+  const rows = await env.DB.prepare(ENABLED_BY_KIND).bind(kind).all();
+  return enabledSourceRows.parse(rows.results);
+}
+
 const CANARY_SOURCES = `SELECT id, plugin_key, canary_query,
 COALESCE(json_extract(config_json, '$.min_interval_seconds'), 0) AS min_interval_seconds FROM source
 WHERE kind = 'mentions' AND is_enabled = 1 AND canary_query IS NOT NULL
@@ -64,6 +76,8 @@ ORDER BY id`;
 const MARK_CANARY_GOOD = `UPDATE source SET degraded_reason = NULL, last_good_at = ?2 WHERE id = ?1`;
 
 const MARK_CANARY_BAD = `UPDATE source SET degraded_reason = 'not answering' WHERE id = ?1`;
+
+const MARK_SOURCE_BLOCKED = "UPDATE source SET degraded_reason = ?2 WHERE id = ?1";
 
 export interface CanarySource {
   id: string;
@@ -97,6 +111,16 @@ export async function recordSourceCanary(
     return;
   }
   await env.DB.prepare(MARK_CANARY_BAD).bind(sourceId).run();
+}
+
+export async function markSourceBlocked(sourceId: string, status: number): Promise<void> {
+  await env.DB.prepare(MARK_SOURCE_BLOCKED)
+    .bind(sourceId, `blocked: HTTP ${String(status)}`)
+    .run();
+}
+
+export async function markSourceTimedOut(sourceId: string): Promise<void> {
+  await env.DB.prepare(MARK_SOURCE_BLOCKED).bind(sourceId, "timed out").run();
 }
 
 export async function readEntitySources(

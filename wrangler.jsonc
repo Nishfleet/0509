@@ -29,6 +29,10 @@
   "upload_source_maps": true,
   "assets": { "run_worker_first": ["/mcp"] },
 
+  "durable_objects": {
+    "bindings": [{ "name": "BROWSER_BUDGET", "class_name": "BrowserBudget" }]
+  },
+
   // The pre-rebuild Worker declared one Durable Object class,
   // SelectionEnrichmentLease (tag v1, new_sqlite_classes). The fresh app does
   // not export it, and Cloudflare refuses a version that drops a class still
@@ -48,14 +52,16 @@
   // pre-rebuild Worker did; v2 removes it. End state: no Durable Objects.
   "migrations": [
     { "tag": "v1", "new_sqlite_classes": ["SelectionEnrichmentLease"] },
-    { "tag": "v2", "deleted_classes": ["SelectionEnrichmentLease"] }
+    { "tag": "v2", "deleted_classes": ["SelectionEnrichmentLease"] },
+    { "tag": "v3", "new_sqlite_classes": ["BrowserBudget"] }
   ],
 
   // BETTER_AUTH_URL must be the canonical origin, never derived from a
   // forwarded header: auth origin trust and the magic-link URL both come from
   // it, and a client-supplied value would let a link point anywhere.
   // BETTER_AUTH_SECRET stays a Worker secret.
-  "vars": { "BETTER_AUTH_URL": "https://0509.io" },
+  // LANDING_WORKSPACE_ID: the public workspace we run ourselves whose changes the landing ticker shows (#4083). Empty renders an empty strip, never filler.
+  "vars": { "BETTER_AUTH_URL": "https://0509.io", "LANDING_WORKSPACE_ID": "" },
 
   "d1_databases": [
     {
@@ -144,7 +150,10 @@
   // reach the retry limit are deleted permanently otherwise, and a silently
   // dropped brief is the failure the contract forbids.
   "queues": {
-    "producers": [{ "queue": "send-email", "binding": "SEND_EMAIL" }],
+    "producers": [
+      { "queue": "send-email", "binding": "SEND_EMAIL" },
+      { "queue": "fetch-sweep", "binding": "FETCH_SWEEP" }
+    ],
     "consumers": [
       {
         "queue": "send-email",
@@ -222,6 +231,15 @@
       "binding": "MENTIONS",
       "class_name": "MentionsWorkflow",
       "schedules": ["0 1 * * *"]
+    },
+    // The durable tail of a confirmed identity card: persist, seed watches,
+    // start discovery, enqueue the first collection. Producer only — the
+    // consumer that drains fetch-sweep is a later engine, and this Worker's
+    // queue() handler is the email lane.
+    {
+      "name": "identity-tail",
+      "binding": "IDENTITY_TAIL",
+      "class_name": "IdentityTailWorkflow"
     }
   ],
 

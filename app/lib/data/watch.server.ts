@@ -70,6 +70,38 @@ export async function insertWatches(rows: readonly NewWatch[]): Promise<void> {
   );
 }
 
+const SELECT_ENTITY_WATCHES = `SELECT w.id AS id, s.id AS source_id, s.key AS source_key, w.target_key AS target_key
+FROM watch w
+JOIN source s ON s.id = w.source_id
+WHERE w.entity_id = ?1
+ORDER BY s.key, w.target_key, w.id`;
+
+const entityWatchRows = z.array(
+  z.object({
+    id: z.string(),
+    source_id: z.string(),
+    source_key: z.string(),
+    target_key: z.string(),
+  }),
+);
+
+export interface EntityWatch {
+  id: string;
+  sourceId: string;
+  sourceKey: string;
+  targetKey: string;
+}
+
+export async function readEntityWatches(entityId: string): Promise<EntityWatch[]> {
+  const rows = await env.DB.prepare(SELECT_ENTITY_WATCHES).bind(entityId).all();
+  return entityWatchRows.parse(rows.results).map((row) => ({
+    id: row.id,
+    sourceId: row.source_id,
+    sourceKey: row.source_key,
+    targetKey: row.target_key,
+  }));
+}
+
 export async function readUnwatchedEntities(
   sourceId: string,
 ): Promise<readonly { id: string; domain: string }[]> {
