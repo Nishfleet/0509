@@ -13,6 +13,7 @@ import { isTakenDown } from "../lib/data/takedown.server";
 import { readWorkspaceIdForOwner } from "../lib/data/workspace.server";
 import { normaliseSubject } from "../lib/identity/normalise";
 import { screenOnboardingSubject } from "../lib/onboarding-screen.server";
+import { startOnboardingRun } from "../lib/data/onboarding_run.server";
 
 export function meta() {
   return [{ title: "Start with your website or a handle · Five to Nine" }];
@@ -38,16 +39,18 @@ export async function action({ request }: Route.ActionArgs) {
   if (normalised?.ok && rawSubject !== null) {
     const workspaceId = await readWorkspaceIdForOwner(session.user.id);
     if (workspaceId === null) throw redirect("/app");
+    const now = new Date().toISOString();
     const result = await screenOnboardingSubject({
       workspaceId,
       userId: session.user.id,
       subject: normalised.subject,
       raw: rawSubject,
       answer: typeof answer === "string" ? answer : null,
-      now: new Date().toISOString(),
+      now,
     });
     if (result.kind === "refuse" || result.kind === "unavailable") return { message: result.message, confirm: null };
     if (result.kind === "ask") return { message: null, confirm: { subject: result.subject, raw: rawSubject } };
+    await startOnboardingRun({ workspaceId, userId: session.user.id, inputRaw: rawSubject, startedAt: now });
   }
   const target = subjectRedirect(raw);
   if (target) throw redirect(target);
