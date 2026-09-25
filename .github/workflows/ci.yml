@@ -103,6 +103,9 @@ jobs:
 
   preview-assert:
     name: preview-assert
+    # A PR whose lint, typecheck or unit tests are red cannot merge, so it must not hold
+    # a hosted slot for the browser suites; the free plan allows 20 org-wide (#5381).
+    needs: [codex-node-checks]
     if: github.event_name != 'deployment_status'
     # Hosted for every event. Public repo: minutes are free and the hosted pool
     # is wider than the 3 owned runners (fleet-ops#5935 reversed 2026-09-22).
