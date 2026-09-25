@@ -22,7 +22,8 @@ import {
 import { storedDedupKey, toSignalRow, type MentionItem } from "./map";
 import { writeSourcePoint } from "./canary";
 import { adapterFor } from "../sources/registry";
-import type { MentionsAdapter, MentionsResult } from "../sources/mentions/types";
+import { youtubeAdapter } from "../sources/mentions/youtube";
+import type { OkYoutubeFeed } from "../sources/mentions/youtube";
 
 const JUDGED_PER_WATCH = 12;
 
@@ -40,8 +41,6 @@ export interface TargetOutcome {
   stored: number;
   unjudged: number;
 }
-
-type OkYoutubeFeed = MentionsResult & { feedState: "ok" };
 
 const ABOUT_BRAND: NoulQuestion = {
   id: "mention_is_about_brand",
@@ -304,14 +303,13 @@ async function commitYoutubeFeed(
 }
 
 async function verifyPendingYoutube(
-  adapter: MentionsAdapter,
   watch: WatchRow,
   pendingId: string,
   pluginKey: string,
   now: string,
   canaryCount: number | null,
 ): Promise<TargetOutcome> {
-  const result = await adapter({ query: pendingId }, null);
+  const result = await youtubeAdapter({ query: pendingId }, null);
   if (result.feedState === "ok") {
     return commitYoutubeFeed(watch, result, pluginKey, canaryCount, now, pendingId);
   }
@@ -325,7 +323,6 @@ async function verifyPendingYoutube(
 }
 
 async function sweepOneYoutube(
-  adapter: MentionsAdapter,
   watch: WatchRow,
   pluginKey: string,
   now: string,
@@ -336,7 +333,7 @@ async function sweepOneYoutube(
   if (config.status !== "ok") throw new Error(`watch ${watch.watch_id} config_json is unreadable`);
 
   if (config.pendingChannelId !== null) {
-    return verifyPendingYoutube(adapter, watch, config.pendingChannelId, pluginKey, now, canaryCount);
+    return verifyPendingYoutube(watch, config.pendingChannelId, pluginKey, now, canaryCount);
   }
 
   let channelId = config.channelId;
@@ -350,7 +347,7 @@ async function sweepOneYoutube(
     channelId = lookup.channelId;
   }
 
-  const first = await adapter({ query: channelId }, null);
+  const first = await youtubeAdapter({ query: channelId }, null);
   if (first.feedState === "stale") {
     await flagLostChannel(watch.watch_id, now);
     const lookup = await lookupYoutubeChannel(await requireEntityIdentityJson(watch.entity_id));
@@ -373,13 +370,14 @@ async function sweepYoutubeTarget(
   now: string,
   canaryCount: number | null,
 ): Promise<TargetOutcome> {
-  const adapter = adapterFor(target.pluginKey);
-  if (adapter === undefined) throw new Error(`no mentions adapter for ${target.pluginKey}`);
+  if (adapterFor(target.pluginKey) !== youtubeAdapter) {
+    throw new Error(`no mentions adapter for ${target.pluginKey}`);
+  }
   let items = 0;
   let stored = 0;
   let unjudged = 0;
   for (const watch of target.watches) {
-    const outcome = await sweepOneYoutube(adapter, watch, target.pluginKey, now, canaryCount);
+    const outcome = await sweepOneYoutube(watch, target.pluginKey, now, canaryCount);
     items += outcome.items;
     stored += outcome.stored;
     unjudged += outcome.unjudged;

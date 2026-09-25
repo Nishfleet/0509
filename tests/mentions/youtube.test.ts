@@ -110,6 +110,17 @@ describe("youtubeAdapter", () => {
 		expect(result.items).toEqual([]);
 	});
 
+	it("does not treat a document that merely mentions the Atom namespace as an empty channel", async () => {
+		const body = `<?xml version="1.0"?>
+<html xmlns="http://www.w3.org/2005/Atom"><body>lost channel</body></html>`;
+		stubFetchWith(body, { status: 200, headers: { "content-type": "text/xml" } });
+
+		const result = await youtubeAdapter({ query: CHANNEL_ID }, null);
+
+		expect(result.feedState).toBe("stale");
+		expect(result.items).toEqual([]);
+	});
+
 	it("keeps a 200 Atom feed with no entries as an empty result, not stale", async () => {
 		const body = `<?xml version="1.0" encoding="UTF-8"?>
 <feed xmlns="http://www.w3.org/2005/Atom" xmlns:yt="http://www.youtube.com/xml/schemas/2015">

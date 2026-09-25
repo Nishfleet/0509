@@ -17,6 +17,8 @@ export const mentionsResultSchema = z.object({
 
 export type MentionsResult = z.infer<typeof mentionsResultSchema>;
 
+export type MentionItem = z.infer<typeof mentionItemSchema>;
+
 export interface MentionsTarget {
 	readonly query: string;
 }

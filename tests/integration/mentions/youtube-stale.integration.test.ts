@@ -372,4 +372,52 @@ describe("YouTube sweep stale channel", () => {
     expect(JSON.parse(await configOf(watch.watch_id))).toEqual({});
     expect(await snapshotCount(watch.watch_id)).toBe(0);
   });
+
+  it("rethrows a lookup error that is not a missed page and does not mark the watch lost", async () => {
+    const identity = JSON.stringify({
+      socials: [{ platform: "youtube", url: "https://www.youtube.com/@gymshark" }],
+    });
+    const { watchId, watch } = await seed(identity, "{}");
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        throw new Error("lookup failed");
+      }),
+    );
+
+    await expect(
+      sweepTarget(
+        { sourceId: watch.source_id, pluginKey: watch.plugin_key, query: watch.target_key, watches: [watch] },
+        NOW,
+        null,
+      ),
+    ).rejects.toThrow(/lookup failed/);
+    expect(JSON.parse(await configOf(watchId))).toEqual({});
+    expect(await snapshotCount(watchId)).toBe(0);
+  });
+
+  it("flags a handle page that fails as a network error and writes no snapshot", async () => {
+    const identity = JSON.stringify({
+      socials: [{ platform: "youtube", url: "https://www.youtube.com/@gymshark" }],
+    });
+    const { watchId, watch } = await seed(identity, "{}");
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        throw new TypeError("network down");
+      }),
+    );
+
+    const outcome = await sweepTarget(
+      { sourceId: watch.source_id, pluginKey: watch.plugin_key, query: watch.target_key, watches: [watch] },
+      NOW,
+      null,
+    );
+
+    expect(outcome).toEqual({ items: 0, stored: 0, unjudged: 0 });
+    expect(JSON.parse(await configOf(watchId))).toEqual({
+      degraded: { state: "degraded", reason: LOST_CHANNEL_REASON, at: NOW },
+    });
+    expect(await snapshotCount(watchId)).toBe(0);
+  });
 });
