@@ -37,7 +37,7 @@ interface FourWeekLineSeries {
   ranks: readonly (number | null)[];
 }
 
-interface FourWeekChart {
+export interface FourWeekChart {
   weeks: readonly string[];
   lines: readonly FourWeekLineSeries[];
 }
