@@ -107,7 +107,9 @@ jobs:
     # Hosted for every event. Public repo: minutes are free and the hosted pool
     # is wider than the 3 owned runners (fleet-ops#5935 reversed 2026-09-22).
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    # e2e-production runs this suite under 20 minutes; this job also builds,
+    # uploads a Preview and runs Lighthouse.
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
       - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
@@ -115,21 +117,65 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - name: Build the Worker as the deploy would
+
+      # The suite runs on a real Cloudflare Worker Preview at this head, not on
+      # a local wrangler dev (#4262). Everything below targets the 0509-preview
+      # Worker and its preview resources (wrangler.jsonc env.preview), with a
+      # token scoped to that Worker: nothing here can reach the 0509 Worker.
+      # Fork pull requests get no secrets, so wrangler fails on its first call
+      # with its own "CLOUDFLARE_API_TOKEN" error; there is no local fallback.
+      - name: Apply migrations to the preview database
+        run: npx wrangler d1 migrations apply DB --remote --env preview
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_PREVIEW_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+      - name: Build the Worker for the preview environment
+        # The Cloudflare Vite plugin picks the environment at build time.
+        # https://developers.cloudflare.com/workers/vite-plugin/reference/cloudflare-environments/
         run: npm run build
+        env:
+          CLOUDFLARE_ENV: preview
+
+      - name: Deploy the preview Worker and its Workflows
+        # A Preview binds only to a Workflow that already exists, so the
+        # 0509-preview Worker is deployed first from this head: that creates or
+        # updates its *-preview Workflows, unscheduled.
+        # https://developers.cloudflare.com/workers/previews/resources/#workflows
+        # It has no route and no workers.dev, and the token cannot deploy 0509.
+        run: npx wrangler deploy
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_PREVIEW_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+      - name: Upload the Worker Preview
+        id: preview
+        # BETTER_AUTH_SECRET is fresh for every upload and never stored.
+        # wrangler writes its machine-readable result to WRANGLER_OUTPUT_FILE_PATH;
+        # the suite targets that upload's pinned deployment URL, not the
+        # preview's moving alias.
+        run: |
+          npx wrangler preview --name "$PREVIEW_NAME" --secrets-file <(printf 'BETTER_AUTH_SECRET=%s\n' "$(head -c 32 /dev/urandom | base64)")
+          URL=$(jq -er 'select(.type == "preview") | .deployment_urls[0]' "$WRANGLER_OUTPUT_FILE_PATH")
+          echo "url=$URL" >> "$GITHUB_OUTPUT"
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_PREVIEW_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          PREVIEW_NAME: ${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || 'merge-queue' }}
+          WRANGLER_OUTPUT_FILE_PATH: ${{ runner.temp }}/wrangler-output.ndjson
 
       - name: Install the browser Playwright will drive
         run: npx playwright install --with-deps chromium
 
-      - name: Run the e2e suite against the built Worker
-        # This replaced a curl-and-grep loop against /api/health. The proof is
-        # the same shape — build it, run it, ask it — but now the agent that
-        # wrote the change runs the same suite a user's browser would, and a
-        # route that renders blank fails here instead of in production.
-        #
-        # PLAYWRIGHT_TEST_BASE_URL is deliberately unset: playwright.config.ts
-        # then starts `wrangler dev` itself through webServer and tears it down.
+      - name: Run the e2e suite against the Worker Preview
+        # Preview URLs sit behind Cloudflare Access; the setup project trades
+        # the agents' service token for the Access cookie, as in e2e-production.
         run: npm run e2e
+        env:
+          PLAYWRIGHT_TEST_BASE_URL: ${{ steps.preview.outputs.url }}
+          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+          E2E_INBOX_TOKEN: ${{ secrets.E2E_INBOX_TOKEN }}
 
       - name: Collect Lighthouse against the built Worker
         # Same budgets as the deployment_status lighthouse job, on the PR, so a

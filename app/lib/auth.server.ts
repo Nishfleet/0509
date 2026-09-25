@@ -1,4 +1,4 @@
-import { betterAuth } from "better-auth";
+import { betterAuth, type BetterAuthOptions } from "better-auth";
 import { APIError, createAuthMiddleware } from "better-auth/api";
 import { magicLink } from "better-auth/plugins";
 import { apiKey } from "@better-auth/api-key";
@@ -17,6 +17,8 @@ interface AuthEnv {
   SIGN_IN_IP_LIMIT: RateLimit;
   BETTER_AUTH_SECRET?: string;
   BETTER_AUTH_URL?: string;
+  BETTER_AUTH_ALLOWED_HOSTS?: string;
+  PASSKEY_RP_ID?: string;
 }
 
 const MAGIC_LINK_PATH = "/sign-in/magic-link";
@@ -39,12 +41,17 @@ export function hasSessionCookie(request: Request) {
   return header.split(";").some((part) => sessionCookieNames.has(part.trim().split("=")[0] ?? ""));
 }
 
+function baseURL(env: AuthEnv): BetterAuthOptions["baseURL"] {
+  if (!env.BETTER_AUTH_ALLOWED_HOSTS) return env.BETTER_AUTH_URL;
+  return { allowedHosts: [env.BETTER_AUTH_ALLOWED_HOSTS], protocol: "https" };
+}
+
 export function createAuth(env: AuthEnv) {
   const origin = env.BETTER_AUTH_URL === undefined ? undefined : new URL(env.BETTER_AUTH_URL).origin;
   return betterAuth({
     database: env.DB,
     secret: env.BETTER_AUTH_SECRET,
-    baseURL: env.BETTER_AUTH_URL,
+    baseURL: baseURL(env),
     advanced: {
       cookiePrefix: COOKIE_PREFIX,
       ipAddress: { ipAddressHeaders: [CLIENT_IP_HEADER] },
@@ -89,7 +96,7 @@ export function createAuth(env: AuthEnv) {
           });
         },
       }),
-      passkey({ rpName: "Five to Nine", origin }),
+      passkey({ rpID: env.PASSKEY_RP_ID, rpName: "Five to Nine", origin }),
       apiKey({
         defaultPrefix: API_KEY_PREFIX,
         maximumNameLength: 60,

@@ -243,5 +243,157 @@
     // http_request_dynamic_redirect, ruleset f7743879d6904ebea189b42c85713069),
     // which runs before the Worker and costs no invocation. Adding a route here
     // would put the Worker in that path for nothing.
-  ]
+  ],
+
+  // Pull-request previews (#4262) run on a Worker of their own, 0509-preview,
+  // never on 0509. The CI token that creates them is scoped to that one
+  // Worker, so a pull request cannot deploy the live site, and a live deploy
+  // cannot switch preview URLs off. Cloudflare's documented pattern:
+  // https://developers.cloudflare.com/workers/previews/compare-workflows/
+  //
+  // Nothing here names a production resource: D1 0509-preview, R2
+  // 0509-preview-snapshots, KV 0509-identity-cache-preview and
+  // 0509-oauth-preview, the 609x rate-limit namespaces (production uses
+  // 509x), the mentions_sources_preview dataset, queue send-email-preview and
+  // the *-preview Workflows are preview twins. Previews run no crons and
+  // consume no queues, so a preview never sends a brief. Preview URLs sit
+  // behind Cloudflare Access, like the gated routes of 0509.io.
+  //
+  // A Preview can only bind to a Workflow that already exists
+  // (https://developers.cloudflare.com/workers/previews/resources/#workflows),
+  // so CI deploys 0509-preview itself first, which creates the *-preview
+  // Workflows from the same head. They carry no schedules, so no sweep or
+  // check runs on its own here.
+  //
+  // The bindings appear twice on purpose. A Preview inherits nothing, so it
+  // reads only `previews`
+  // (https://developers.cloudflare.com/workers/previews/configuration/).
+  // `wrangler types`, `wrangler deploy` and `wrangler d1 migrations apply --env
+  // preview` read the environment's own top level.
+  // tests/preview-config.test.ts holds the two lists identical and fails on any
+  // preview binding to a production resource.
+  //
+  // A preview has no single origin, so it sets no BETTER_AUTH_URL. Auth
+  // accepts only request hosts matching BETTER_AUTH_ALLOWED_HOSTS, and
+  // passkeys use the account's workers.dev subdomain as their RP ID.
+  "env": {
+    "preview": {
+      "name": "0509-preview",
+      "workers_dev": false,
+      "preview_urls": true,
+      "routes": [],
+      "triggers": { "crons": [] },
+      "migrations": [],
+      "vars": {
+        "BETTER_AUTH_ALLOWED_HOSTS": "*-0509-preview.nishant345.workers.dev",
+        "PASSKEY_RP_ID": "nishant345.workers.dev"
+      },
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "0509-preview",
+          "database_id": "d6643a38-0666-470e-8e08-1953918dfd8a"
+        }
+      ],
+      "analytics_engine_datasets": [{ "binding": "MENTIONS_SOURCES", "dataset": "mentions_sources_preview" }],
+      "r2_buckets": [{ "binding": "SNAPSHOTS", "bucket_name": "0509-preview-snapshots" }],
+      "kv_namespaces": [
+        { "binding": "IDENTITY_CACHE", "id": "c1e0df6e72a940948717a924af6dba7d" },
+        { "binding": "OAUTH_KV", "id": "41d23c5a12ab4effb4388cc8fecc7f36" }
+      ],
+      "ratelimits": [
+        { "name": "AGENT_LIMIT", "namespace_id": "6091", "simple": { "limit": 120, "period": 60 } },
+        { "name": "SIGN_IN_EMAIL_LIMIT", "namespace_id": "6092", "simple": { "limit": 5, "period": 60 } },
+        { "name": "SIGN_IN_IP_LIMIT", "namespace_id": "6093", "simple": { "limit": 20, "period": 60 } },
+        { "name": "AGENT_REGISTER_LIMIT", "namespace_id": "6094", "simple": { "limit": 10, "period": 60 } },
+        { "name": "PROBE_LIMIT", "namespace_id": "6095", "simple": { "limit": 10, "period": 60 } }
+      ],
+      "workflows": [
+        {
+          "name": "standing-rollover-preview",
+          "binding": "STANDING_ROLLOVER",
+          "class_name": "StandingRolloverWorkflow"
+        },
+        {
+          "name": "competitor-discovery-preview",
+          "binding": "DISCOVERY",
+          "class_name": "DiscoveryWorkflow"
+        },
+        { "name": "site-sweep-preview", "binding": "SITE_SWEEP", "class_name": "SiteSweepWorkflow" },
+        {
+          "name": "account-delete-preview",
+          "binding": "ACCOUNT_DELETE",
+          "class_name": "AccountDeleteWorkflow"
+        },
+        {
+          "name": "own-site-check-preview",
+          "binding": "OWN_SITE_CHECK",
+          "class_name": "OwnSiteCheckWorkflow"
+        },
+        { "name": "mentions-sweep-preview", "binding": "MENTIONS", "class_name": "MentionsWorkflow" }
+      ],
+      "ai": { "binding": "AI" },
+      "browser": { "binding": "BROWSER" },
+      "send_email": [{ "name": "EMAIL" }],
+      "queues": {
+        "producers": [{ "queue": "send-email-preview", "binding": "SEND_EMAIL" }]
+      },
+      "previews": {
+        "vars": {
+          "BETTER_AUTH_ALLOWED_HOSTS": "*-0509-preview.nishant345.workers.dev",
+          "PASSKEY_RP_ID": "nishant345.workers.dev"
+        },
+        "d1_databases": [
+          {
+            "binding": "DB",
+            "database_name": "0509-preview",
+            "database_id": "d6643a38-0666-470e-8e08-1953918dfd8a"
+          }
+        ],
+        "analytics_engine_datasets": [{ "binding": "MENTIONS_SOURCES", "dataset": "mentions_sources_preview" }],
+        "r2_buckets": [{ "binding": "SNAPSHOTS", "bucket_name": "0509-preview-snapshots" }],
+        "kv_namespaces": [
+          { "binding": "IDENTITY_CACHE", "id": "c1e0df6e72a940948717a924af6dba7d" },
+          { "binding": "OAUTH_KV", "id": "41d23c5a12ab4effb4388cc8fecc7f36" }
+        ],
+        "ratelimits": [
+          { "name": "AGENT_LIMIT", "namespace_id": "6091", "simple": { "limit": 120, "period": 60 } },
+          { "name": "SIGN_IN_EMAIL_LIMIT", "namespace_id": "6092", "simple": { "limit": 5, "period": 60 } },
+          { "name": "SIGN_IN_IP_LIMIT", "namespace_id": "6093", "simple": { "limit": 20, "period": 60 } },
+          { "name": "AGENT_REGISTER_LIMIT", "namespace_id": "6094", "simple": { "limit": 10, "period": 60 } },
+          { "name": "PROBE_LIMIT", "namespace_id": "6095", "simple": { "limit": 10, "period": 60 } }
+        ],
+        "workflows": [
+          {
+            "name": "standing-rollover-preview",
+            "binding": "STANDING_ROLLOVER",
+            "class_name": "StandingRolloverWorkflow"
+          },
+          {
+            "name": "competitor-discovery-preview",
+            "binding": "DISCOVERY",
+            "class_name": "DiscoveryWorkflow"
+          },
+          { "name": "site-sweep-preview", "binding": "SITE_SWEEP", "class_name": "SiteSweepWorkflow" },
+          {
+            "name": "account-delete-preview",
+            "binding": "ACCOUNT_DELETE",
+            "class_name": "AccountDeleteWorkflow"
+          },
+          {
+            "name": "own-site-check-preview",
+            "binding": "OWN_SITE_CHECK",
+            "class_name": "OwnSiteCheckWorkflow"
+          },
+          { "name": "mentions-sweep-preview", "binding": "MENTIONS", "class_name": "MentionsWorkflow" }
+        ],
+        "ai": { "binding": "AI" },
+        "browser": { "binding": "BROWSER" },
+        "send_email": [{ "name": "EMAIL" }],
+        "queues": {
+          "producers": [{ "queue": "send-email-preview", "binding": "SEND_EMAIL" }]
+        }
+      }
+    }
+  }
 }

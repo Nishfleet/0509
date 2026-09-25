@@ -3,9 +3,10 @@ import { defineConfig, devices } from "@playwright/test";
 // One config, two run modes, decided by PLAYWRIGHT_TEST_BASE_URL alone.
 //
 // Unset  -> Playwright starts the built Worker itself (webServer) and tests it.
-//           This is what `preview-assert` does on every PR.
-// Set    -> no webServer; the suite runs against that URL. This is what the
-//           `deployment_status` run does against production.
+//           This is `npm run e2e` on a laptop.
+// Set    -> no webServer; the suite runs against that URL. `preview-assert`
+//           sets it to the PR head's Worker Preview deployment URL; the
+//           `deployment_status` run sets it to production.
 //
 // webServer's own doc says it is for "when you don't have a staging or
 // production url to test against", which is exactly the split above:
@@ -61,7 +62,7 @@ export default defineConfig({
         // session gate production does. Apply the same migrations
         // deploy-production.yml applies --remote, then start the Worker. This
         // is the stock `wrangler d1 migrations apply`; no wrapper.
-        command: `npx wrangler d1 migrations apply 0509 --local </dev/null && npx wrangler dev --env-file .dev.vars.example --port ${localPort} --local`,
+        command: `npx wrangler d1 migrations apply 0509 --local </dev/null && npx wrangler dev --port ${localPort} --local`,
         url: `http://127.0.0.1:${localPort}/api/health`,
         reuseExistingServer: false,
         timeout: 120_000,

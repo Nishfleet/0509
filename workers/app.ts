@@ -11,7 +11,6 @@ import {
   startWeeklyRefresh,
   WEEKLY_REFRESH_CRON,
 } from "../app/lib/discovery/start.server";
-import { assertWorkerEnv, WorkerEnvError, workerEnvFailureResponse } from "../app/lib/env.server";
 import { pingLiveness } from "../app/lib/liveness-ping.server";
 import { handleBatch } from "./delivery/consumer";
 import { handleDlqBatch } from "./delivery/dlq-consumer";
@@ -43,12 +42,6 @@ const oauth = createOAuthProvider<OAuthEnv>({
 
 const handler = {
   async fetch(request, env, ctx) {
-    try {
-      assertWorkerEnv();
-    } catch (error) {
-      if (error instanceof WorkerEnvError) return workerEnvFailureResponse(error);
-      throw error;
-    }
     return oauth.fetch(request, env, ctx);
   },
 

@@ -85,13 +85,14 @@ cite it as type evidence.
 
 **`npm run e2e` has two modes and the environment picks.** With
 `PLAYWRIGHT_TEST_BASE_URL` unset, `playwright.config.ts` starts `wrangler dev`
-itself and tests the built Worker — that is what `preview-assert` runs on every
-PR. With it set, there is no local server and the suite runs against that URL —
-that is what the `deployment_status` job runs against production. Same
-assertions both times.
+itself and tests the built Worker — that is `npm run e2e` on your machine.
+With it set, there is no local server and the suite runs against that URL —
+`preview-assert` sets it to a Cloudflare Worker Preview of the PR head (the
+`0509-preview` Worker, `wrangler.jsonc` `env.preview`), and the
+`deployment_status` job sets it to production. Same assertions every time.
 
 **Run it before the PR opens.** A change under `app/`, `workers/` or `e2e/`
-runs the specs that cover it locally first, in preview mode, by file:
+runs the specs that cover it locally first, in local mode, by file:
 `npm run e2e -- e2e/<name>.spec.ts` (Playwright's own file filter). Nothing
 is pasted into the PR body: `preview-assert` runs the whole suite at the PR
 head and is the proof. Do not run the full suite, `npm run build` or

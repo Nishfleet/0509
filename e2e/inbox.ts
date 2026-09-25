@@ -86,13 +86,26 @@ export async function readRawMessage(to: string, token: string): Promise<string>
   return response.text();
 }
 
-export function extractMagicLink(rawMessage: string): string | null {
-  const verifyUrl = /https:\/\/0509\.io\/api\/auth\/magic-link\/verify\?[^\s"'<>]+/;
+// The link must point back at the site under test: https://0509.io in the
+// production lane, the preview's own deployment host on a pull request. A
+// link to any other origin is not the link this run asked for.
+export function extractMagicLink(rawMessage: string, origin: string): string | null {
+  const prefix = `${origin}/api/auth/magic-link/verify?`;
   for (const body of decodedBodies(rawMessage)) {
-    const match = verifyUrl.exec(body);
+    const start = body.indexOf(prefix);
+    if (start < 0) continue;
+    const match = /^[^\s"'<>]+/.exec(body.slice(start));
     if (match) return match[0].replaceAll("&amp;", "&");
   }
   return null;
+}
+
+function siteOrigin(): string {
+  const base = process.env.PLAYWRIGHT_TEST_BASE_URL;
+  if (!base) {
+    throw new Error("PLAYWRIGHT_TEST_BASE_URL is empty: a magic link is only sent by a deployed Worker");
+  }
+  return new URL(base).origin;
 }
 
 // One probe before polling: expect.poll retries a thrown callback for the
@@ -116,6 +129,7 @@ async function probeInbox(url: string, headers: Record<string, string>): Promise
 // keeps waiting while the stored message still points at one of them.
 export async function waitForMagicLink(to: string, token: string, exclude: string[] = []): Promise<string> {
   const url = `${INBOX_URL}/message?to=${encodeURIComponent(to)}`;
+  const origin = siteOrigin();
   const headers = inboxHeaders(token);
   await probeInbox(url, headers);
 
@@ -127,7 +141,7 @@ export async function waitForMagicLink(to: string, token: string, exclude: strin
         async () => {
           const response = await fetch(url, { headers });
           if (response.status === 200) {
-            link = extractMagicLink(await response.text());
+            link = extractMagicLink(await response.text(), origin);
             if (link && !exclude.includes(link)) return true;
             lastDetail = link
               ? "inbox still holds an earlier message for this recipient; the newer email has not landed"
