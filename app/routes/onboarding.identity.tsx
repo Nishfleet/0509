@@ -9,10 +9,12 @@ import { StepBar } from "../components/step-bar";
 import { isTakenDown } from "../lib/data/takedown.server";
 import { readWorkspaceIdForOwner } from "../lib/data/workspace.server";
 import { readDraft, saveDraftField } from "../lib/identity/card-draft.server";
+import { creatorRows } from "../lib/identity/card-fields";
 import { startCard, withinProbeLimit } from "../lib/identity/card.server";
 import { confirmCard } from "../lib/identity/confirm.server";
 import { normaliseSubject } from "../lib/identity/normalise";
 import { screenOnboardingSubject } from "../lib/onboarding-screen.server";
+import { timeCard } from "../lib/onboarding/card-timing.server";
 import { requireSession } from "../lib/require-session.server";
 import { workspaceLandingForRequest } from "../lib/workspace.server";
 
@@ -41,8 +43,9 @@ export async function loader({ request }: Route.LoaderArgs) {
   return {
     card: {
       subject: raw,
+      creator: creatorRows(subject),
       domain: shown,
-      ...startCard(workspaceId, subject),
+      ...timeCard(workspaceId, startCard(workspaceId, subject)),
       draft: await readDraft(workspaceId, subject.registrable),
     },
     limited: false,
@@ -114,6 +117,7 @@ export default function Page({ loaderData, actionData }: Route.ComponentProps) {
           <IdentityCard
             subject={card.subject}
             domain={card.domain}
+            creator={card.creator}
             site={card.site}
             logo={card.logo}
             draft={card.draft}

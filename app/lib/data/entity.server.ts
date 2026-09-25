@@ -192,6 +192,7 @@ export interface DiscoverySelf {
   name: string;
   domain: string;
   description: string | null;
+  kind: "domain" | "creator";
 }
 
 export interface DiscoveryContext {
@@ -202,7 +203,7 @@ export interface DiscoveryContext {
 }
 
 const SELECT_SELF =
-  "SELECT workspace_id, name, domain, json_extract(identity_json, '$.description') AS description FROM entity WHERE workspace_id = ? AND role = 'self'";
+  "SELECT workspace_id, name, domain, json_extract(identity_json, '$.description') AS description, json_extract(identity_json, '$.kind') AS kind FROM entity WHERE workspace_id = ? AND role = 'self'";
 
 const SELECT_KNOWN =
   "SELECT domain, name, role, state FROM entity WHERE workspace_id = ?1 UNION ALL SELECT candidate_domain, candidate_name, 'suggestion', status FROM suggestion WHERE workspace_id = ?1 AND status <> 'pending'";
@@ -214,6 +215,7 @@ interface SelfRow {
   name: string | null;
   domain: string;
   description: string | null;
+  kind: string | null;
 }
 
 interface KnownRow {
@@ -236,6 +238,7 @@ export async function readDiscoveryContext(workspaceId: string): Promise<Discove
       name: displayName(selfRow.name, selfRow.domain),
       domain: selfRow.domain,
       description: selfRow.description,
+      kind: selfRow.kind === "channel" || selfRow.kind === "handle" ? "creator" : "domain",
     },
     competitors: rows
       .filter((row) => row.role === "competitor" && row.state === "on")
