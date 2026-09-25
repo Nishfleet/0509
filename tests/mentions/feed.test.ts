@@ -52,7 +52,7 @@ describe("mentions feed", () => {
     expect(mentionWhen("2026-09-23T00:00:00.000Z", NOW)).toBe("2 days ago");
   });
 
-  it("drops unjudged rows and empty titles, and keeps the stored reason instead of the score", () => {
+  it("keeps unjudged rows as unreviewed, drops empty titles, and keeps the stored reason instead of the score", () => {
     const mentions = mentionsFromRows(
       [
         row({ id: "high", p: 0.95, platform: "gdelt" }),
@@ -77,12 +77,19 @@ describe("mentions feed", () => {
       ],
       NOW,
     );
-    expect(mentions.map((mention) => mention.id)).toEqual(["high", "mid", "low", "blank-reason"]);
-    expect(mentions.map((mention) => mention.treatment)).toEqual(["shown", "possibly", "held", "shown"]);
+    expect(mentions.map((mention) => mention.id)).toEqual(["high", "mid", "low", "unjudged", "blank-reason"]);
+    expect(mentions.map((mention) => mention.treatment)).toEqual([
+      "shown",
+      "possibly",
+      "held",
+      "unreviewed",
+      "shown",
+    ]);
     expect(mentions.map((mention) => mention.sourceName)).toEqual([
       "News mentions",
       "Hacker News mentions",
       "Medium mentions",
+      "News mentions",
       "News mentions",
     ]);
     expect(mentions[1]?.when).toBe("found today");
@@ -90,6 +97,7 @@ describe("mentions feed", () => {
       "A London flagship is a move worth knowing.",
       "A roundup mention, not a move of its own.",
       "A ticker line, not a move.",
+      "Should not appear.",
       null,
     ]);
     expect(mentions.every((mention) => !("p" in mention))).toBe(true);

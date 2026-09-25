@@ -48,6 +48,11 @@ describe("the dismissed brands list", () => {
     expect(html).toContain("Dismissed 2026-09-20");
   });
 
+  it("shows the count in the heading", () => {
+    expect(render([casetta, kindred])).toContain("Brands you dismissed (2)");
+    expect(render([kindred])).toContain("Brands you dismissed (1)");
+  });
+
   it("posts the restore intent with each brand's own suggestion id", () => {
     const html = render([casetta, kindred]);
 
