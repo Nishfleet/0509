@@ -1,7 +1,7 @@
 import type { ReactElement } from "react";
 import { Form, Link } from "react-router";
 
-import { brandMonogram } from "./brand-chip";
+import { BrandChipRow, brandMonogram } from "./brand-chip";
 import { EmptyState, fewerThanTwoOnBrands } from "./empty-state";
 import { FirstFilePanel } from "./first-file-panel";
 import { HowRankedSheet } from "./how-ranked-sheet";
@@ -24,9 +24,15 @@ export function HomeStanding({
     <section data-home="standing" className="min-w-0 break-words">
       <p className={EYEBROW}>{view.eyebrow}</p>
       {greeting(view)}
+      <div className="mt-4">{chips(view)}</div>
       {body(view, howRanked)}
     </section>
   );
+}
+
+function chips(view: HomeView): ReactElement | null {
+  if (view.standing.kind !== "gathering") return null;
+  return <BrandChipRow brands={view.chips} />;
 }
 
 function greeting(view: HomeView): ReactElement {
