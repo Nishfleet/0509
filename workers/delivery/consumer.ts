@@ -212,10 +212,10 @@ export async function deliver(env: Env, message: DigestMessage): Promise<Deliver
     const email = render(digest, payload, target.target_value, token);
     const result = await sendMessage(env.EMAIL, email);
     sent = result.outcome === "sent";
+    await resolveSendAttemptStatement(env.DB, claim.id, result.outcome, result.error).run();
     if (result.outcome === "sent") {
       const now = new Date().toISOString();
       await env.DB.batch([
-        resolveSendAttemptStatement(env.DB, claim.id, result.outcome, result.error),
         markDigestSentStatement(env.DB, digest.id, now),
         insertSignalDeliveries(env.DB, {
           workspaceId: digest.workspace_id,
@@ -225,8 +225,6 @@ export async function deliver(env: Env, message: DigestMessage): Promise<Deliver
           signalIds: payload.read_this_first.map((mark) => mark.signal_id),
         }),
       ]);
-    } else {
-      await resolveSendAttempt(env.DB, claim.id, result.outcome, result.error);
     }
     return { outcome: result.outcome, attempt_id: claim.id, idempotency_key: idempotencyKey };
   } catch (cause) {
