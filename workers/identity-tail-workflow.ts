@@ -1,12 +1,12 @@
 import type { WorkflowEvent, WorkflowStep, WorkflowStepConfig } from "cloudflare:workers";
 import { WorkflowEntrypoint } from "cloudflare:workers";
 
+import { startDiscovery } from "../app/lib/discovery/start.server";
 import { attemptSiteFill, markSiteFill, siteWasReached } from "../app/lib/identity/site-fill.server";
 import {
   enqueueFirstSweep,
   persistTail,
   seedTailWatches,
-  startTailDiscovery,
 } from "../app/lib/identity/tail.server";
 import type { IdentityTailOutcome, IdentityTailParams } from "../app/lib/identity/tail.server";
 
@@ -20,23 +20,14 @@ const SITE_FILL_WAIT = "1 hour";
 export class IdentityTail extends WorkflowEntrypoint<Env, IdentityTailParams> {
   async run(event: WorkflowEvent<IdentityTailParams>, step: WorkflowStep): Promise<IdentityTailOutcome> {
     const params = event.payload;
-    const persisted = await step.do("persist", RETRY, () => persistTail(params));
-    if (persisted.entityId === null) {
-      return {
-        entityId: params.entityId,
-        watches: [],
-        discoveryInstanceId: null,
-        queued: [],
-        r2Keys: [],
-        siteFill: null,
-      };
-    }
-    const entityId = persisted.entityId;
+    const entityId = (
+      await step.do("persist", RETRY, () => persistTail(params))
+    ).entityId;
     const watches = await step.do("seed-watches", RETRY, () =>
       seedTailWatches(params, event.timestamp.toISOString()),
     );
     const discoveryInstanceId = await step.do("start-discovery", RETRY, () =>
-      startTailDiscovery(params.workspaceId, event.timestamp),
+      startDiscovery(params.workspaceId, event.timestamp),
     );
     const queued = await step.do("enqueue-first-sweep", RETRY, () => enqueueFirstSweep(entityId, watches));
     const siteFill =

@@ -41,7 +41,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 22
@@ -75,7 +75,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
       # The gitleaks BINARY is MIT and free; gitleaks-action@v2 is the part
@@ -96,32 +96,52 @@ jobs:
     container:
       image: semgrep/semgrep:1.170.0@sha256:c98f8829eea377274ee4b10656458b078b88232469b2ff913f091c2317347c9d
     steps:
-      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       # `semgrep ci` is the hosted mode and needs SEMGREP_APP_TOKEN, exiting 2
       # without one. `semgrep scan` is the local mode and needs nothing.
       - run: semgrep scan --config p/typescript --config p/security-audit --error
 
   preview-assert:
     name: preview-assert
+    # A PR whose lint, typecheck or unit tests are red cannot merge, so it must not hold
+    # a hosted slot for the browser suites; the free plan allows 20 org-wide (#5381).
+    needs: [codex-node-checks]
     if: github.event_name != 'deployment_status'
     # Hosted for every event. Public repo: minutes are free and the hosted pool
     # is wider than the 3 owned runners (fleet-ops#5935 reversed 2026-09-22).
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 2
+      - name: Skip the browser suites when the pull request touches only docs and unit tests
+        # A required check from a path-filtered workflow stays Pending and blocks the PR,
+        # so the filter lives here and the job still reports (#5381). merge_group always runs.
+        id: scope
+        if: github.event_name == 'pull_request'
+        run: if git diff --quiet HEAD^1 HEAD -- . ':(exclude)docs' ':(exclude)tests' ':(exclude).agents' ':(exclude)*.md'; then echo skip=true >> "$GITHUB_OUTPUT"; fi
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        if: steps.scope.outputs.skip != 'true'
         with:
           node-version: 22
           cache: npm
       - run: npm ci
+        if: steps.scope.outputs.skip != 'true'
       - name: Build the Worker as the deploy would
+        if: steps.scope.outputs.skip != 'true'
         run: npm run build
 
+      - name: Assert Home's JavaScript budget from the build manifest
+        # 0509#4134, docs/REBUILD-DONE.md §B and DESIGN.md §10: /app ratchets toward 150 KB gzipped (#5216), the chart stays under 30 KB.
+        run: npx vitest run --config vitest.bundle.config.ts
+
       - name: Install the browser Playwright will drive
+        if: steps.scope.outputs.skip != 'true'
         run: npx playwright install --with-deps chromium
 
       - name: Run the e2e suite against the built Worker
+        if: steps.scope.outputs.skip != 'true'
         # This replaced a curl-and-grep loop against /api/health. The proof is
         # the same shape — build it, run it, ask it — but now the agent that
         # wrote the change runs the same suite a user's browser would, and a
@@ -132,6 +152,7 @@ jobs:
         run: npm run e2e
 
       - name: Collect Lighthouse against the built Worker
+        if: steps.scope.outputs.skip != 'true'
         # Same budgets as the deployment_status lighthouse job, on the PR, so a
         # regression is red before merge (poteto 03:24: a trace per change, not
         # per deploy; #4224). lhci starts wrangler dev itself: start-server-command
@@ -145,6 +166,7 @@ jobs:
         run: P=$((18000 + $$ % 1000)); npx --yes @lhci/cli@0.15.1 collect --url=http://127.0.0.1:$P/ --url=http://127.0.0.1:$P/design/landing --start-server-command="npx wrangler dev --env-file .dev.vars.example --port $P --local" --start-server-ready-pattern="Ready on" --start-server-ready-timeout=120000 --number-of-runs=3
 
       - name: Assert the Lighthouse budgets
+        if: steps.scope.outputs.skip != 'true'
         # lighthouse-budget.pr.json is the deterministic subset of lighthouse-budget.json:
         # resource sizes and CLS. The timing rows (LCP, TTI) stay on the deployment_status
         # job: on a shared runner the unchanged page measured LCP 1657 one run and under
@@ -172,7 +194,7 @@ jobs:
       issues: write
       actions: write
     steps:
-      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 22
@@ -191,6 +213,8 @@ jobs:
           # Absent, the secret resolves to "" and the specs fail loudly naming
           # it — they never skip.
           E2E_INBOX_TOKEN: ${{ secrets.E2E_INBOX_TOKEN }}
+          # J5 raises and lowers the fixture bot wall with this token (0509#4121).
+          FIXTURE_SITE_TOKEN: ${{ secrets.FIXTURE_SITE_TOKEN }}
 
       - name: Keep the trace when it fails
         if: failure()
@@ -244,7 +268,7 @@ jobs:
       issues: write
       actions: write
     steps:
-      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Exchange the Access service token for the CF_Authorization cookie
         # Access issues the cookie on a token-authenticated request; grep prints
         # it as NAME=value, which is exactly the GITHUB_ENV line format.
@@ -295,8 +319,8 @@ jobs:
 
   # Opus 5 grades every PR (Nish 2026-09-22: "have opus 5 grade glm and ds4.1
   # flash"). Stock anthropics/claude-code-action on the Claude subscription
-  # token; no API spend. A D or F adds the blocked-by-judge label, which fails this
-  # check (the PR stays armed but cannot merge) and re-queues the issue; A to C removes it.
+  # token; no API spend. The check below reads both the newest grade comment and
+  # the blocked-by-judge label, so a D/F cannot pass when the label write is lost (fleet-ops#8635, 0509#5393).
   # Advisory in the ruleset on purpose: it runs only on pull_request, and a
   # required check must also report on merge_group.
   # Nish 2026-09-22: "you can't grade your own work. you grade opus." Opus
@@ -317,7 +341,7 @@ jobs:
       issues: write
       id-token: write
     steps:
-      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         if: github.event_name == 'pull_request'
         with:
           fetch-depth: 1
@@ -336,21 +360,28 @@ jobs:
             REPO: ${{ github.repository }}
             PR NUMBER: ${{ github.event.pull_request.number }}
 
-            You are the grader. The author is a fleet worker model (GLM or DeepSeek) executing a packet; you are Claude Opus 5. Read the PR body and the issue it cites, then the diff. Grade the PR A to F on: does the change do what the packet asked and nothing more; is every claim in the body proven by something in the diff or a cited run; tests assert behaviour, not implementation; no scripts, hooks, wrappers, helpers or inline programs (the repo's no-glue rule); no comment that justifies a workaround; the `encoded:` line names a real rung.
+            You are the grader. The author is a fleet worker model (GLM or DeepSeek) executing a packet; you are Claude Opus 5. Read the PR body and the issue it cites, then the diff. Grade the PR A+ to F on: does the change do what the packet asked and nothing more; is every claim in the body proven by something in the diff or a cited run; tests assert behaviour, not implementation; no scripts, hooks, wrappers, helpers or inline programs (the repo's no-glue rule); no comment that justifies a workaround; the `encoded:` line names a real rung. A+ means every item is met with zero findings; any finding makes the grade A or lower. The pass bar is A+ (Nish 2026-09-25: "pass bar is A+").
 
             Then answer docs/REBUILD-TRUST.md §C1's three questions, asked of the diff and nothing else: 1. **Does this diff add a workaround?** A retry around a thing that should not fail, a fallback that hides a missing case, a cast that silences a type, a `catch {}` that swallows. 2. **Does it add a comment that justifies one?** Per §B5 — the comment *is* the tell. If removing the comment would make the code look wrong, the code is wrong. 3. **Does it add a second way to do something that already has one paved path?** A second query builder, a second session read, a second fetch wrapper, a second date formatter.
 
             A "yes" to any of the three §C1 questions caps the grade at D unless the diff carries the lint rule that makes it impossible, or the body cites a filed 0509 issue for that rule.
 
-            Answer all three questions in your comment, each as a yes or a no with the file and line that decides it. Post ONE top-level comment via `gh pr comment` that starts with `Opus grade: <letter>` followed by at most eight lines of reasons, each tied to a file and line. Use inline comments only for concrete defects. If the grade is D or F run `gh pr edit --add-label blocked-by-judge` and hand the PR back to the queue: `gh issue edit <each issue the PR closes> --add-label agent-ready --remove-label agent-in-progress` (intake then starts a worker that continues this same PR, fleet-ops#8418). If A, B or C run `gh pr edit --remove-label blocked-by-judge` and `gh issue edit <each issue the PR closes> --remove-label agent-ready` (ignore the error if absent). Do not edit files. Do not approve or request changes through the review API.
+            Answer all three questions in your comment, each as a yes or a no with the file and line that decides it. Post ONE top-level comment via `gh pr comment` that starts with `Opus grade: <letter>` followed by at most eight lines of reasons, each tied to a file and line. Use inline comments only for concrete defects. If the grade is anything but A+ run `gh pr edit --add-label blocked-by-judge` and hand the PR back to the queue: `gh issue edit <each issue the PR closes> --add-label agent-ready --remove-label agent-in-progress` (intake then starts a worker that continues this same PR, fleet-ops#8418). If A+ run `gh pr edit --remove-label blocked-by-judge` and `gh issue edit <each issue the PR closes> --remove-label agent-ready` (ignore the error if absent). Do not edit files. Do not approve or request changes through the review API.
           claude_args: |
             --model claude-opus-5-5
             --allowedTools "mcp__github_inline_comment__create_inline_comment,Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*),Bash(gh pr edit:*),Bash(gh issue view:*),Bash(gh issue edit:*),Bash(git diff:*),Bash(git log:*),Bash(git show:*)"
-      - name: A D or F grade fails this check (fail closed if the label read fails)
+      - name: A D or F grade fails this check (reads the grade comment and label; 0509#5393)
         if: github.event_name == 'pull_request'
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh pr view ${{ github.event.pull_request.number }} --repo ${{ github.repository }} --json labels --jq '.labels[].name' > "$RUNNER_TEMP/labels" && ! grep -qx blocked-by-judge "$RUNNER_TEMP/labels"
+        run: |
+          gh pr view "${{ github.event.pull_request.number }}" --repo "${{ github.repository }}" --json comments \
+            --jq '[.comments[] | select(.body | startswith("Opus grade:"))][-1].body // empty' > "$RUNNER_TEMP/grade"
+          echo "opus-review read: $(head -n1 "$RUNNER_TEMP/grade")"
+          test -s "$RUNNER_TEMP/grade" \
+            && ! grep -qE '^Opus grade: *[DF]' "$RUNNER_TEMP/grade" \
+            && gh pr view "${{ github.event.pull_request.number }}" --repo "${{ github.repository }}" --json labels --jq '.labels[].name' > "$RUNNER_TEMP/labels" \
+            && ! grep -qx blocked-by-judge "$RUNNER_TEMP/labels"
       - name: merge_group reports the check so the queue can merge (the grade was enforced on the pull request)
         if: github.event_name == 'merge_group'
         run: "true"

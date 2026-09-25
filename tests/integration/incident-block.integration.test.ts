@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { readOpenIncidents } from "../../app/lib/data/incident.server";
 import {
   acknowledgeIncidentAlert,
-  insertIncidentAlert,
+  insertIncidentAlertStatement,
   readOpenIncidentBlock,
   readOwnSiteIncidents,
 } from "../../app/lib/data/alert.server";
@@ -87,14 +87,18 @@ const seedIncidentAlert = async (
   title: string,
   createdAt: string,
 ) => {
-  await insertIncidentAlert(env.DB, {
-    incidentId,
+  await insertIncidentAlertStatement({
+    id: `incident-${incidentId}`,
     workspaceId,
     entityId,
     pageId,
+    signalId: null,
+    incidentId,
+    severity: "high",
     title,
+    body: null,
     createdAt,
-  });
+  }).run();
 };
 
 const cleanTables = ["alert", "incident", "page", "entity", "workspace"];
@@ -210,5 +214,26 @@ describe("open incident block (0509#5142)", () => {
     expect(block?.alert_id).toBe(`incident-${secondIncident}`);
     expect(block?.url).toBe("https://second.example/");
     expect(block?.opened_at).toBe(OTHER_OPENED_AT);
+  });
+
+  it("(g) writing the same incident alert twice leaves one unlinked row", async () => {
+    await seedIncident(OPEN_INCIDENT, WS, ENTITY, PAGE, OPENED_AT, null);
+    await seedIncidentAlert(OPEN_INCIDENT, WS, ENTITY, PAGE, "Checkout 500", OPENED_AT);
+    await seedIncidentAlert(OPEN_INCIDENT, WS, ENTITY, PAGE, "Checkout 500", OPENED_AT);
+
+    const rows = await env.DB.prepare(
+      `SELECT id, signal_id, incident_id, kind FROM alert WHERE incident_id = ?`,
+    )
+      .bind(OPEN_INCIDENT)
+      .all<{ id: string; signal_id: string | null; incident_id: string; kind: string }>();
+
+    expect(rows.results).toEqual([
+      {
+        id: `incident-${OPEN_INCIDENT}`,
+        signal_id: null,
+        incident_id: OPEN_INCIDENT,
+        kind: "own_site_broken",
+      },
+    ]);
   });
 });

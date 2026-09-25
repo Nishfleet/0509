@@ -107,7 +107,7 @@ describe("resolveShortlist", () => {
     )
       .bind("taken-down.example", NOW, NOW)
       .run();
-    const run = vi.fn(() => Promise.resolve({ answers: { is_competitor: { type: "noul", noul: 0.92 } } }));
+    const run = vi.fn(() => Promise.resolve({ answers: { is_competitor: { type: "boolean", probability: 0.92 } } }));
     Reflect.set(env, "AI", { run });
     const prepare = vi.spyOn(env.DB, "prepare");
 
@@ -153,7 +153,7 @@ describe("judgeCandidates", () => {
     const workspaceId = await seedWorkspace();
     const context = await readDiscoveryContext(workspaceId);
     if (context === null) throw new Error("seed failed");
-    const run = vi.fn(() => Promise.resolve({ answers: { is_competitor: { type: "noul", noul: 0.92 } } }));
+    const run = vi.fn(() => Promise.resolve({ answers: { is_competitor: { type: "boolean", probability: 0.92 } } }));
     Reflect.set(env, "AI", { run });
 
     const first = await judgeCandidates(context, [candidate("Alphalete", "alphaleteathletics.com")]);

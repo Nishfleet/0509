@@ -61,7 +61,7 @@ function runAnswer(p: Record<string, number>) {
   return (_model: string, _input: unknown) =>
     Promise.resolve({
       answers: Object.fromEntries(
-        Object.entries(p).map(([id, value]) => [id, { type: "noul", noul: value }] as const),
+        Object.entries(p).map(([id, value]) => [id, { type: "boolean", probability: value }] as const),
       ),
     });
 }
@@ -76,7 +76,7 @@ describe("reviewFields", () => {
       }),
     );
 
-    const review = await reviewFields(WS_ID, SUBJECT, ALL_FIELDS, NOW);
+    const review = await reviewFields(WS_ID, SUBJECT, ALL_FIELDS, [], NOW);
 
     expect(review).toEqual({ name: "fill", description: "check", socials: "empty" });
     expect(run).toHaveBeenCalledTimes(1);
@@ -90,10 +90,58 @@ describe("reviewFields", () => {
     expect(results.every((row) => row.workspace_id === WS_ID)).toBe(true);
   });
 
+  it("trusts a field the customer edited: no question, no verdict row, shown as fill", async () => {
+    const run = stubAi(
+      runAnswer({
+        [NAME_ID]: 0.05,
+        [DESCRIPTION_ID]: 0.5,
+        [SOCIALS_ID]: 0.95,
+      }),
+    );
+
+    const review = await reviewFields(WS_ID, SUBJECT, ALL_FIELDS, ["name"], NOW);
+
+    expect(review).toEqual({ name: "fill", description: "check", socials: "fill" });
+    expect(run).toHaveBeenCalledTimes(1);
+    expect(askedIds(run)[0]?.sort()).toEqual([DESCRIPTION_ID, SOCIALS_ID].sort());
+    const state = (run.mock.calls[0]?.[1] as { state?: { user_memory?: { edited_fields?: unknown } } }).state;
+    expect(state?.user_memory?.edited_fields).toEqual(["name"]);
+    const { results } = await env.DB.prepare("SELECT question_id FROM jev_verdict").all();
+    expect(results.map((row) => String(row.question_id)).sort()).toEqual([DESCRIPTION_ID, SOCIALS_ID].sort());
+  });
+
+  it("skips Jev entirely when every valued field was edited and shows them as fill", async () => {
+    const run = stubAi(runAnswer({ [SOCIALS_ID]: 0.95 }));
+
+    const review = await reviewFields(
+      WS_ID,
+      SUBJECT,
+      { name: "Gymshark", description: "game-changing workout clothes", socials: [] },
+      ["name", "description"],
+      NOW,
+    );
+
+    expect(review).toEqual({ name: "fill", description: "fill", socials: "empty" });
+    expect(run).not.toHaveBeenCalled();
+    const { results } = await env.DB.prepare("SELECT id FROM jev_verdict").all();
+    expect(results).toHaveLength(0);
+  });
+
+  it("shows an edited field as fill when Jev cannot be reached", async () => {
+    const run = stubAi(() => Promise.reject(new Error("jev down")));
+
+    const review = await reviewFields(WS_ID, SUBJECT, ALL_FIELDS, ["name"], NOW);
+
+    expect(review).toEqual({ name: "fill", description: "check", socials: "check" });
+    expect(run).toHaveBeenCalledTimes(1);
+    const { results } = await env.DB.prepare("SELECT id FROM jev_verdict").all();
+    expect(results).toHaveLength(0);
+  });
+
   it("does not ask about a field with no value", async () => {
     const run = stubAi(runAnswer({ [NAME_ID]: 0.95 }));
 
-    const review = await reviewFields(WS_ID, SUBJECT, { name: "Gymshark", description: null, socials: [] }, NOW);
+    const review = await reviewFields(WS_ID, SUBJECT, { name: "Gymshark", description: null, socials: [] }, [], NOW);
 
     expect(review).toEqual({ name: "fill", description: "empty", socials: "empty" });
     expect(run).toHaveBeenCalledTimes(1);
@@ -103,7 +151,7 @@ describe("reviewFields", () => {
   it("returns check for every valued field and logs nothing when Jev cannot be reached", async () => {
     const run = stubAi(() => Promise.reject(new Error("jev down")));
 
-    const review = await reviewFields(WS_ID, SUBJECT, ALL_FIELDS, NOW);
+    const review = await reviewFields(WS_ID, SUBJECT, ALL_FIELDS, [], NOW);
 
     expect(review).toEqual({ name: "check", description: "check", socials: "check" });
     expect(run).toHaveBeenCalledTimes(1);
@@ -114,7 +162,7 @@ describe("reviewFields", () => {
   it("leaves a field with no value empty when Jev cannot be reached", async () => {
     const run = stubAi(() => Promise.reject(new Error("jev down")));
 
-    const review = await reviewFields(WS_ID, SUBJECT, { name: "Gymshark", description: null, socials: [] }, NOW);
+    const review = await reviewFields(WS_ID, SUBJECT, { name: "Gymshark", description: null, socials: [] }, [], NOW);
 
     expect(review).toEqual({ name: "check", description: "empty", socials: "empty" });
     expect(run).toHaveBeenCalledTimes(1);
