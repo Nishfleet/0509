@@ -344,12 +344,8 @@ describe("IdentityTailWorkflow", () => {
       homepageUrl: null,
     };
 
-    const rejection = await persistTail(params).then(
-      () => null,
-      (caught: unknown) => caught,
-    );
-    expect(rejection).toBeInstanceOf(NonRetryableError);
-    expect((rejection as Error).message).toContain(
+    await expect(persistTail(params)).rejects.toThrow(NonRetryableError);
+    await expect(persistTail(params)).rejects.toThrow(
       `self entity ${params.entityId} is not in workspace ${workspaceId}`,
     );
 
@@ -357,6 +353,8 @@ describe("IdentityTailWorkflow", () => {
     const [instance] = await introspector.get();
     if (instance === undefined) throw new Error("tail instance was not started");
     await instance.waitForStatus("errored");
-    expect((await instance.getError()).message).toContain("NonRetryableError");
+    expect((await instance.getError()).message).toContain(
+      "a step threw an NonRetryableError and it was not handled",
+    );
   });
 });
