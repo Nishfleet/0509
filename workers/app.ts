@@ -5,6 +5,7 @@ import { createRequestHandler } from "react-router";
 import { requestContext } from "../app/lib/agent/context.server";
 import { createOAuthProvider } from "../app/lib/agent/oauth.server";
 import { deleteExpiredAuthRows } from "../app/lib/data/auth_expiry.server";
+import { stampFirstSignals } from "../app/lib/data/onboarding_run.server";
 import {
   startNightlyDiscovery,
   startWeeklyRefresh,
@@ -60,6 +61,7 @@ const handler = {
       ctx.waitUntil(sweepPending(env, now));
       ctx.waitUntil(startNightlyDiscovery(now));
       ctx.waitUntil(deleteExpiredAuthRows(env.DB, now));
+      ctx.waitUntil(stampFirstSignals());
       return;
     }
     if (controller.cron === WEEKLY_REFRESH_CRON) {

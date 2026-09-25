@@ -2,12 +2,16 @@ import { env, introspectWorkflow } from "cloudflare:test";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 
-import { insertSelfEntity } from "../../../app/lib/data/entity.server";
+import { insertSelfEntity, readWorkspaceSelfId } from "../../../app/lib/data/entity.server";
 import { upsertJudgedPages } from "../../../app/lib/data/page.server";
 import { confirmCard } from "../../../app/lib/identity/confirm.server";
 import { normaliseSubject } from "../../../app/lib/identity/normalise";
 import { probeKey } from "../../../app/lib/identity/probe-cache.server";
-import { identityTailInstanceId, seedTailWatches } from "../../../app/lib/identity/tail.server";
+import {
+  identityTailInstanceId,
+  seedTailWatches,
+  startIdentityTail,
+} from "../../../app/lib/identity/tail.server";
 
 const DOMAIN = "gymshark.com";
 const GREENHOUSE_JOBS = "https://boards-api.greenhouse.io/v1/boards/gymshark/jobs";
@@ -118,6 +122,7 @@ describe("IdentityTailWorkflow", () => {
   it("persists the card, seeds watches, starts discovery and queues the first sweep", async () => {
     await seed();
     await using introspector = await introspectWorkflow(env.IDENTITY_TAIL);
+    const day = new Date().toISOString().slice(0, 10);
     expect(
       await confirmCard(
         workspaceId,
@@ -137,7 +142,7 @@ describe("IdentityTailWorkflow", () => {
 
     expect(output.entityId).toBe(entityId.id);
     expect(output.r2Keys).toEqual([]);
-    expect(output.discoveryInstanceId).toBe(`discovery-${workspaceId}-${new Date().toISOString().slice(0, 10)}`);
+    expect(output.discoveryInstanceId).toBe(`discovery-${workspaceId}-${day}`);
     const stored = await watches();
     expect(output.watches).toEqual(
       stored.map((row) => ({ id: row.id, sourceKey: row.source_key, targetKey: row.target_key })),
@@ -160,12 +165,32 @@ describe("IdentityTailWorkflow", () => {
       .all<{ role: string; url: string }>();
     expect(pages.results).toEqual([{ role: "home", url: "https://gymshark.com/" }]);
 
-    const discovery = await env.DISCOVERY.get(output.discoveryInstanceId);
-    const discoveryStatus = await discovery.status();
-    expect(["queued", "running", "waiting", "waitingForPause", "complete", "errored"]).toContain(
-      discoveryStatus.status,
-    );
+    await expect(env.DISCOVERY.get(output.discoveryInstanceId)).resolves.toBeDefined();
     expect(instanceId).toBe(`identity-tail-${entityId.id}`);
+  });
+
+  it("starting the tail twice keeps one instance", async () => {
+    await seed();
+    await using introspector = await introspectWorkflow(env.IDENTITY_TAIL);
+    expect(
+      await confirmCard(
+        workspaceId,
+        form({ subject: DOMAIN, name: "Gymshark", description: "Gym clothes" }),
+      ),
+    ).toBe(true);
+
+    const entityId = await readWorkspaceSelfId(workspaceId);
+    if (entityId === null) throw new Error("confirmed card was not stored");
+    await expect(
+      startIdentityTail({
+        workspaceId,
+        entityId,
+        name: "Gymshark",
+        domain: DOMAIN,
+        homepageUrl: "https://gymshark.com/",
+      }),
+    ).resolves.toBe(identityTailInstanceId(entityId));
+    expect(await introspector.get()).toHaveLength(1);
   });
 
   it("watches the page Jev judged pricing, not a /pricing path", async () => {

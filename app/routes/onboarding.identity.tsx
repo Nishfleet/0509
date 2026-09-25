@@ -4,13 +4,12 @@ import type { Route } from "./+types/onboarding.identity";
 import { redirect } from "react-router";
 
 import { IdentityCard } from "../components/identity-card";
+import { OnboardingFrame } from "../components/onboarding-frame";
 import { OneInput } from "../components/one-input";
-import { ONBOARDING_PAGE } from "../components/page-heading";
-import { StepBar } from "../components/step-bar";
 import { isTakenDown } from "../lib/data/takedown.server";
 import { readWorkspaceIdForOwner } from "../lib/data/workspace.server";
+import { creatorRows, editedFields, isDraftSave } from "../lib/identity/card-fields";
 import { readDraft, saveDraftField } from "../lib/identity/card-draft.server";
-import { creatorRows, isDraftSave } from "../lib/identity/card-fields";
 import { startCard, withinProbeLimit } from "../lib/identity/card.server";
 import { confirmCard } from "../lib/identity/confirm.server";
 import { normaliseSubject } from "../lib/identity/normalise";
@@ -41,13 +40,14 @@ export async function loader({ request }: Route.LoaderArgs) {
   if (screened.kind !== "proceed") throw redirect("/onboarding");
   if (!(await withinProbeLimit(session.user.id))) return { card: null, limited: true };
   const shown = subject.kind === "domain" ? subject.registrable : (subject.url ?? `@${subject.registrable}`);
+  const draft = await readDraft(workspaceId, subject.registrable);
   return {
     card: {
       subject: raw,
       creator: creatorRows(subject),
       domain: shown,
-      ...timeCard(workspaceId, startCard(workspaceId, subject)),
-      draft: await readDraft(workspaceId, subject.registrable),
+      ...timeCard(workspaceId, startCard(workspaceId, subject, editedFields(draft))),
+      draft,
     },
     limited: false,
   };
@@ -103,8 +103,10 @@ export default function Page({ loaderData, actionData }: Route.ComponentProps) {
     ? "That's a lot of lookups in a minute. Wait a minute, then try again."
     : "We couldn't find anything for that, try the main website.";
   return (
-    <main className={ONBOARDING_PAGE}>
-      <StepBar current={2} />
+    <OnboardingFrame step={2}
+      heading={card === null ? "Start with your website or a handle" : "This is you. Fix anything we got wrong."}
+      hideHeading={card === null}
+    >
       {card === null ? (
         <OneInput
           label="your website, or a handle"
@@ -115,21 +117,16 @@ export default function Page({ loaderData, actionData }: Route.ComponentProps) {
           submitLabel="Draw my card"
         />
       ) : (
-        <>
-          <h1 className="font-display text-display-2 mt-10 font-extrabold uppercase">
-            This is you. Fix anything we got wrong.
-          </h1>
-          <IdentityCard
-            subject={card.subject}
-            domain={card.domain}
-            creator={card.creator}
-            site={card.site}
-            logo={card.logo}
-            draft={card.draft}
-            message={actionData?.message}
-          />
-        </>
+        <IdentityCard
+          subject={card.subject}
+          domain={card.domain}
+          creator={card.creator}
+          site={card.site}
+          logo={card.logo}
+          draft={card.draft}
+          message={actionData?.message}
+        />
       )}
-    </main>
+    </OnboardingFrame>
   );
 }
