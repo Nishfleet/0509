@@ -42,6 +42,20 @@ function input(html: string, marker: string): string {
 	return tag === undefined ? "" : tag.slice(0, tag.indexOf(">") + 1);
 }
 
+function button(html: string, marker: string): string {
+	const tag = html.split("<button ").find((part) => part.includes(marker));
+	return tag === undefined ? "" : tag.slice(0, tag.indexOf(">") + 1);
+}
+
+function accessibleName(html: string, marker: string): string {
+	const tag = html.split("<button ").find((part) => part.includes(marker));
+	if (tag === undefined) return "";
+	return tag
+		.slice(tag.indexOf(">") + 1, tag.indexOf("</button>"))
+		.replace(/<[^>]+>/g, "")
+		.trim();
+}
+
 describe("the identity card fields", () => {
 	it("fills every field Jev was sure about, and marks nothing to check", () => {
 		const html = render(site({ name: "fill", description: "fill", socials: "fill" }));
@@ -54,10 +68,11 @@ describe("the identity card fields", () => {
 	it("names each edit button by its field and its current value", () => {
 		const html = render(site({ name: "fill", description: "fill", socials: "fill" }));
 
-		expect(html).toContain('<span class="sr-only">edit name: </span>Gymshark');
-		expect(html).toContain('<span class="sr-only">edit about: </span>performance apparel');
+		expect(accessibleName(html, "edit name: ")).toBe("edit name: Gymshark");
+		expect(accessibleName(html, "edit about: ")).toBe("edit about: performance apparel");
 		expect(html).not.toContain('aria-label="edit ');
-		expect(html).toContain("min-h-11");
+		expect(button(html, "edit name: ")).toContain("min-h-11");
+		expect(button(html, "edit about: ")).toContain("min-h-11");
 	});
 
 	it("ties the check-this marker to the edit button it qualifies", () => {
@@ -65,14 +80,18 @@ describe("the identity card fields", () => {
 
 		const id = /aria-describedby="([^"]+)"/.exec(html)?.[1];
 		expect(id).toBeDefined();
-		expect(html.indexOf(`id="${id}"`)).toBeGreaterThan(-1);
-		expect(html.indexOf(`id="${id}"`)).toBeLessThan(html.lastIndexOf("check this"));
+		const marker = new RegExp(`<span id="${id}"[^>]*>([^<]*)</span>`).exec(html);
+		expect(marker?.[1].trim()).toBe("check this");
+		expect(accessibleName(html, `aria-describedby="${id}"`)).toBe("edit name: Gymshark");
 	});
 
 	it("gives an unsure social a 44px labelled row", () => {
 		const html = render(site({ name: "fill", description: "fill", socials: "check" }));
 
-		expect(html).toContain('<label class="flex min-h-11 min-w-0 items-center gap-3">');
+		const label = /<label[^>]*>[\s\S]*?<\/label>/.exec(html)?.[0] ?? "";
+		expect(label).toContain("min-h-11");
+		expect(label).toContain(`value="${INSTAGRAM}"`);
+		expect(label).toContain(`>${INSTAGRAM}</span>`);
 	});
 
 	it("holds a name Jev was unsure about as placeholder text inside a check-this row, never as the value", () => {
