@@ -1,7 +1,7 @@
 import type { ReactElement } from "react";
 
 import { EmptyState } from "./empty-state";
-import { Sources, type RailSource } from "./competitor-rail";
+import { CompetitorRail, type CompetitorRailProps } from "./competitor-rail";
 import { SiteChangeItem } from "./site-change-item";
 import type { SiteChangeItemData } from "./site-change-item";
 
@@ -14,8 +14,7 @@ export interface CompetitorFrameProps {
   pages: number;
   lastChecked: string | null;
   pausedOn: string | null;
-  sources: readonly RailSource[];
-  now: number;
+  rail: Omit<CompetitorRailProps, "lastChecked">;
 }
 
 export function developmentsEmpty(lastChecked: string | null): string {
@@ -41,8 +40,7 @@ export function CompetitorFrame({
   pages,
   lastChecked,
   pausedOn,
-  sources,
-  now,
+  rail,
 }: CompetitorFrameProps): ReactElement {
   const biggest = changes.find((change) => change.id === biggestId) ?? null;
   return (
@@ -87,14 +85,7 @@ export function CompetitorFrame({
           )}
         </section>
       </div>
-      <aside data-slot="competitor-rail" className="flex min-w-0 flex-col gap-10">
-        <section data-section="sources" aria-labelledby="competitor-sources" className="min-w-0">
-          <h2 id="competitor-sources" className={HEADING}>
-            Sources on this brand
-          </h2>
-          <Sources sources={sources} lastChecked={lastChecked} now={now} />
-        </section>
-      </aside>
+      <CompetitorRail {...rail} lastChecked={lastChecked} />
     </div>
   );
 }

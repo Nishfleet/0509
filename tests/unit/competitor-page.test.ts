@@ -42,8 +42,14 @@ const quiet: CompetitorFrameProps = {
   pages: 0,
   lastChecked: null,
   pausedOn: null,
-  sources: [],
-  now: Date.parse("2026-09-25T12:00:00.000Z"),
+  rail: {
+    entityId: "ent-1",
+    peers: [],
+    facts: [],
+    sources: [],
+    verdict: null,
+    now: Date.parse("2026-09-22T12:00:00.000Z"),
+  },
 };
 
 function frame(props: Partial<CompetitorFrameProps> = {}): string {
@@ -103,7 +109,10 @@ describe("the competitor page frame", () => {
       'data-section="biggest-move"',
       'data-section="developments"',
       'data-slot="competitor-rail"',
+      'data-section="peers"',
+      'data-section="facts"',
       'data-section="sources"',
+      'data-section="still-competitor"',
     ];
     let at = -1;
     for (const marker of markers) {
@@ -172,14 +181,14 @@ describe("the competitor page frame", () => {
         snapshot: null,
       },
     ];
-    const html = frame({ sources });
+    const html = frame({ rail: { ...quiet.rail, sources } });
     expect(html).toContain('data-state="degraded"');
     expect(html).toContain(LOST_CHANNEL_REASON);
     expect(html).not.toMatch(/>\s*Website\s*</);
   });
 
   it("falls back to the one-website line when no source has ever been stored", () => {
-    const html = frame({ sources: [] });
+    const html = frame({ rail: { ...quiet.rail, sources: [] } });
     expect(html).toContain(">Website<");
     expect(html).toContain("Homepage, read every night");
   });
