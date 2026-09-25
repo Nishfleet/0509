@@ -131,7 +131,7 @@ describe("handleError", () => {
     expect(calls).not.toContain("callback/google");
   });
 
-  it("leaves an undecodable segment unmapped instead of throwing", () => {
+  it("tags a param the router left raw on a malformed segment, instead of throwing or leaking the segment", () => {
     const error = new Error("loader exploded");
     const request = new Request("https://0509.io/u/%zz");
     const params = { token: "%zz" };
@@ -140,5 +140,6 @@ describe("handleError", () => {
 
     expect(captureException).toHaveBeenCalledTimes(1);
     expect(captureException).toHaveBeenCalledWith(error, { tags: { route: "/u/:token" } });
+    expect(JSON.stringify(vi.mocked(captureException).mock.calls)).not.toContain("%zz");
   });
 });
