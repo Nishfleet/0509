@@ -1,11 +1,30 @@
-import type { EntryContext, RouterContextProvider } from "react-router";
-import { ServerRouter } from "react-router";
+import { captureException } from "@sentry/cloudflare";
+import type { EntryContext, HandleErrorFunction, Params, RouterContextProvider } from "react-router";
+import { isRouteErrorResponse, ServerRouter } from "react-router";
 import { isbot } from "isbot";
 import { renderToReadableStream } from "react-dom/server";
 
 import { withDocumentSecurityHeaders } from "./lib/security-headers";
 
 export const streamTimeout = 5_000;
+
+function routePattern(pathname: string, params: Params): string {
+  const splat = params["*"];
+  const base = splat && pathname.endsWith(splat) ? `${pathname.slice(0, -splat.length)}*` : pathname;
+  const names = new Map(
+    Object.entries(params).flatMap(([name, value]): [string, string][] =>
+      name === "*" || !value ? [] : [[value, `:${name}`], [encodeURIComponent(value), `:${name}`]],
+    ),
+  );
+  return base.split("/").map((segment) => names.get(segment) ?? segment).join("/");
+}
+
+export const handleError: HandleErrorFunction = (error, { request, params }) => {
+  if (request.signal.aborted) return;
+  console.error(error);
+  if (isRouteErrorResponse(error) && error.status < 500) return;
+  captureException(error, { tags: { route: routePattern(new URL(request.url).pathname, params) } });
+};
 
 export default async function handleRequest(
   request: Request,
