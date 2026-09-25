@@ -172,6 +172,10 @@ export async function clearSourceBlind(blindIds: readonly string[]): Promise<voi
     .run();
 }
 
+export async function markSourceTimedOut(sourceId: string): Promise<void> {
+  await env.DB.prepare(MARK_SOURCE_BLOCKED).bind(sourceId, "timed out").run();
+}
+
 export async function readEntitySources(
   workspaceId: string,
   entityId: string,
