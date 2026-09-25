@@ -1,7 +1,7 @@
 import { insertVerdicts, type VerdictRow } from "../data/jev_verdict.server";
 import { JevUnavailableError, askNouls, type NoulQuestion, type NoulVerdict } from "../jev/client.server";
 import { noulAction } from "../jev/thresholds";
-import type { CardReview, CardValues, FieldReview } from "./card-fields";
+import type { CardReview, CardValues, DraftField, FieldReview } from "./card-fields";
 import type { Subject } from "./normalise";
 
 const NAME_QUESTION: NoulQuestion = {
@@ -32,16 +32,12 @@ function reviewFor(p: number): FieldReview {
   return "empty";
 }
 
-function buildQuestions(fields: CardValues): NoulQuestion[] {
+function buildQuestions(fields: CardValues, edited: readonly DraftField[]): NoulQuestion[] {
   const out: NoulQuestion[] = [];
-  if (fields.name !== null) out.push(NAME_QUESTION);
-  if (fields.description !== null) out.push(DESCRIPTION_QUESTION);
+  if (fields.name !== null && !edited.includes("name")) out.push(NAME_QUESTION);
+  if (fields.description !== null && !edited.includes("description")) out.push(DESCRIPTION_QUESTION);
   if (fields.socials.length > 0) out.push(SOCIALS_QUESTION);
   return out;
-}
-
-function reviewAll(review: FieldReview): CardReview {
-  return { name: review, description: review, socials: review };
 }
 
 function reviewValued(fields: CardValues, review: FieldReview): CardReview {
@@ -50,6 +46,13 @@ function reviewValued(fields: CardValues, review: FieldReview): CardReview {
     description: fields.description === null ? "empty" : review,
     socials: fields.socials.length === 0 ? "empty" : review,
   };
+}
+
+function withEdited(review: CardReview, edited: readonly DraftField[]): CardReview {
+  let next = review;
+  if (edited.includes("name")) next = { ...next, name: "fill" };
+  if (edited.includes("description")) next = { ...next, description: "fill" };
+  return next;
 }
 
 const FIELD_BY_QUESTION: ReadonlyMap<string, keyof CardReview> = new Map([
@@ -62,19 +65,21 @@ export async function reviewFields(
   workspaceId: string,
   subject: Subject,
   fields: CardValues,
+  edited: readonly DraftField[],
   now: string,
 ): Promise<CardReview> {
-  const questions = buildQuestions(fields);
-  if (questions.length === 0) return reviewAll("empty");
+  const questions = buildQuestions(fields, edited);
+  if (questions.length === 0) return withEdited(reviewValued(fields, "empty"), edited);
   let verdicts: NoulVerdict[];
   try {
     verdicts = await askNouls(workspaceId, questions, {
       subject: { registrable: subject.registrable, url: subject.url, kind: subject.kind },
       fields: { name: fields.name, description: fields.description, socials: fields.socials },
+      user_memory: { edited_fields: edited },
       reliability: "best_effort",
     });
   } catch (error) {
-    if (error instanceof JevUnavailableError) return reviewValued(fields, "check");
+    if (error instanceof JevUnavailableError) return withEdited(reviewValued(fields, "check"), edited);
     throw error;
   }
   const rows: VerdictRow[] = verdicts
@@ -103,10 +108,10 @@ export async function reviewFields(
       })),
     }),
   );
-  const review = reviewValued(fields, "empty");
+  let review: CardReview = reviewValued(fields, "empty");
   for (const verdict of verdicts) {
     const field = FIELD_BY_QUESTION.get(verdict.questionId);
-    if (field !== undefined) review[field] = reviewFor(verdict.p);
+    if (field !== undefined) review = { ...review, [field]: reviewFor(verdict.p) };
   }
-  return review;
+  return withEdited(review, edited);
 }
