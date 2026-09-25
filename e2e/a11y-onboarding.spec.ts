@@ -6,7 +6,7 @@ import { requireInboxToken, signInWithMagicLink } from "./inbox";
 // Production only, for the reason e2e/onboarding-input.spec.ts gives: the
 // preview lane's wrangler dev has no EMAIL binding and no inbox to read, so a
 // spec that signs in through the real magic link skips there rather than fakes
-// a session. The two tests below are the WCAG 2.2 AA proof for #4149.
+// a session. The three tests below are the WCAG 2.2 AA proof for #4149.
 test.skip(
   !process.env.PLAYWRIGHT_TEST_BASE_URL,
   "the onboarding screens need a signed-in session; the preview lane cannot read the magic-link inbox",
@@ -130,15 +130,9 @@ test("screen 2 is operable by keyboard in order, with one polite live region (#4
   await input.press("Enter");
   await expect(page).toHaveURL(/\/onboarding\/identity\?subject=nike\.com$/);
   await expect(page.getByRole("button", { name: "That's me" })).toBeVisible({ timeout: 30_000 });
-  // The card is read and cached by now, so the reload is fast; it also puts
-  // the caret at the top of the document, which is where the Tab count below
-  // has to start.
   await page.reload();
   await expect(page.getByRole("button", { name: "That's me" })).toBeVisible();
 
-  // One polite region announces the card when the site read lands, and the
-  // alert is absent until the user's own "That's me" press has something to
-  // report.
   await expect(page.getByRole("status")).toHaveCount(1);
   await expect(page.getByRole("alert")).toHaveCount(0);
 
@@ -168,8 +162,6 @@ test("screen 2 is operable by keyboard in order, with one polite live region (#4
   await page.keyboard.press("Tab");
   await expect(page.getByRole("button", { name: "edit about" })).toBeFocused();
 
-  // The socials row shows checkboxes only when Jev was unsure, so every stop
-  // between the last edit and the confirm button is one of them.
   const thatsMe = page.getByRole("button", { name: "That's me" });
   for (let i = 0; i < 10; i += 1) {
     await page.keyboard.press("Tab");
