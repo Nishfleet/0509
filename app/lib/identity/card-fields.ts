@@ -15,3 +15,10 @@ export interface SiteFields {
 }
 
 export type CardValues = Pick<SiteFields, "name" | "description" | "socials">;
+
+export type DraftField = "name" | "description";
+
+export interface CardDraft {
+  name?: string;
+  description?: string;
+}

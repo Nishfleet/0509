@@ -1,9 +1,10 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+import { createRoutesStub } from "react-router";
 import { describe, expect, it } from "vitest";
 
 import { Fields } from "../../../app/components/identity-card";
-import type { CardReview, SiteFields } from "../../../app/lib/identity/card-fields";
+import type { CardDraft, CardReview, SiteFields } from "../../../app/lib/identity/card-fields";
 
 const INSTAGRAM = "https://instagram.com/gymshark";
 
@@ -18,8 +19,22 @@ function site(review: CardReview, overrides: Partial<SiteFields> = {}): SiteFiel
 	};
 }
 
-function render(fields: SiteFields): string {
-	return renderToStaticMarkup(createElement(Fields, { site: fields, logo: Promise.resolve(null) }));
+// A data router renders the fields: useFetcher needs the fetcher context that
+// createRoutesStub provides, which is why a bare render throws.
+function render(fields: SiteFields, draft: CardDraft = {}): string {
+	const Stub = createRoutesStub([
+		{
+			path: "/",
+			Component: () =>
+				createElement(Fields, {
+					subject: "gymshark.com",
+					site: fields,
+					logo: Promise.resolve(null),
+					draft,
+				}),
+		},
+	]);
+	return renderToStaticMarkup(createElement(Stub, { initialEntries: ["/"] }));
 }
 
 function input(html: string, marker: string): string {
@@ -72,5 +87,16 @@ describe("the identity card fields", () => {
 		expect(social).toContain(`value="${INSTAGRAM}"`);
 		expect(social).not.toContain("checked");
 		expect(html).toContain("check this");
+	});
+
+	it("shows a saved draft over the value Jev read, so a reload keeps the edit", () => {
+		const html = render(
+			site({ name: "fill", description: "fill", socials: "fill" }),
+			{ name: "My Brand", description: "my line" },
+		);
+
+		expect(input(html, 'name="name"')).toContain('value="My Brand"');
+		expect(html).not.toContain('value="Gymshark"');
+		expect(html).toContain("my line");
 	});
 });
