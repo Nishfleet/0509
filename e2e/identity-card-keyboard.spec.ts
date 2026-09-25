@@ -96,10 +96,8 @@ async function seedCardSession(registrable: string): Promise<string> {
       .map((header) => header.split(";")[0])
       .join("; ");
     if (cookie === "") throw new Error("magic link created no session cookie");
-    const user = db.prepare('SELECT id FROM "user" WHERE email = ?').get(email) as
-      | { id: string }
-      | undefined;
-    if (user === undefined) throw new Error("magic link created no user");
+    const userId = db.prepare('SELECT id FROM "user" WHERE email = ?').get(email)?.id;
+    if (typeof userId !== "string") throw new Error("magic link created no user");
     const workspaceId = `ws-${suffix}`;
     const stamp = "2026-09-25T00:00:00.000Z";
     run(
@@ -107,7 +105,7 @@ async function seedCardSession(registrable: string): Promise<string> {
       "INSERT INTO workspace (id, name, owner_user_id, timezone, brief_weekday, brief_hour, created_at) VALUES (?, ?, ?, 'UTC', 1, 8, ?)",
       workspaceId,
       "Card Keyboard",
-      user.id,
+      userId,
       stamp,
     );
     run(
@@ -115,7 +113,7 @@ async function seedCardSession(registrable: string): Promise<string> {
       "INSERT INTO user_decision (id, workspace_id, user_id, signal_id, entity_id, verdict, note, decided_at) VALUES (?, ?, ?, NULL, NULL, 'public_subject:confirmed', ?, ?)",
       `ud-${suffix}`,
       workspaceId,
-      user.id,
+      userId,
       registrable,
       stamp,
     );
@@ -176,9 +174,12 @@ test("the identity card editor saves and closes on Enter, with focus back on the
   await name.press("Enter");
 
   // The controlled `open` prop closing does not fire Popover's onOpenChange, so
-  // Enter reaches onSave through exactly one path. A second submit would be a
-  // visible double write of the same draft.
-  await expect.poll(() => draftPosts.length).toBe(1);
+  // Enter reaches onSave through exactly one path. The count is read once the
+  // network settles: a second submit is a second observed POST, not a count
+  // that already moved past 1.
+  await expect.poll(() => draftPosts.length).toBeGreaterThan(0);
+  await page.waitForLoadState("networkidle");
+  expect(draftPosts).toHaveLength(1);
   await expect(name).toHaveCount(0);
   await expect(trigger).toBeFocused();
   await expect(trigger).toContainText("Brand One");
@@ -202,7 +203,9 @@ test("the identity card editor saves and closes on Escape, with focus back on th
   await about.fill("one line on what we do");
   await about.press("Escape");
 
-  await expect.poll(() => draftPosts.length).toBe(1);
+  await expect.poll(() => draftPosts.length).toBeGreaterThan(0);
+  await page.waitForLoadState("networkidle");
+  expect(draftPosts).toHaveLength(1);
   await expect(about).toHaveCount(0);
   await expect(trigger).toBeFocused();
   await expect(trigger).toContainText("one line on what we do");
