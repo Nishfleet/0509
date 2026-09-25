@@ -14,6 +14,16 @@ const INSERT_INCIDENT = `INSERT INTO incident (id, workspace_id, entity_id, page
 VALUES (?1, ?2, ?3, ?4, ?5, ?6)
 ON CONFLICT DO NOTHING`;
 
+const INSERT_OPEN_INCIDENT_ON_CONFLICT = `INSERT INTO incident (id, workspace_id, entity_id, page_id, kind, opened_at)
+VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+ON CONFLICT (page_id) WHERE closed_at IS NULL DO NOTHING`;
+
+export function openIncidentStatement(row: NewIncident): D1PreparedStatement {
+  return env.DB
+    .prepare(INSERT_OPEN_INCIDENT_ON_CONFLICT)
+    .bind(row.id, row.workspaceId, row.entityId, row.pageId, row.kind, row.openedAt);
+}
+
 const OPEN_INCIDENT_FOR_PAGE = `SELECT id FROM incident WHERE page_id = ?1 AND closed_at IS NULL`;
 
 const OPEN_INCIDENTS = `SELECT id, page_id FROM incident WHERE closed_at IS NULL ORDER BY page_id`;
