@@ -15,6 +15,7 @@ export const SELECT_HOME_STANDING = `SELECT
   e.id AS entity_id,
   e.role,
   e.domain,
+  COALESCE(e.name, e.domain) AS name,
   e.state,
   (
     SELECT d.payload_json
@@ -31,7 +32,8 @@ WHERE w.owner_user_id = ?1
     WHERE owner_user_id = ?1
     ORDER BY created_at ASC
     LIMIT 1
-  )`;
+  )
+ORDER BY e.role DESC, e.created_at ASC`;
 
 const homeRow = z.object({
   workspace_id: z.string(),
@@ -41,6 +43,7 @@ const homeRow = z.object({
   entity_id: z.string().nullable(),
   role: z.enum(["self", "competitor"]).nullable(),
   domain: z.string().nullable(),
+  name: z.string().nullable(),
   state: z.string().nullable(),
   payload_json: z.string().nullable(),
 });
@@ -59,10 +62,16 @@ export interface HomeStandingInputs {
 }
 
 function entityFrom(row: z.infer<typeof homeRow>): HomeEntity | null {
-  if (row.entity_id === null || row.role === null || row.domain === null || row.state === null) {
+  if (
+    row.entity_id === null ||
+    row.role === null ||
+    row.domain === null ||
+    row.name === null ||
+    row.state === null
+  ) {
     return null;
   }
-  return { id: row.entity_id, role: row.role, domain: row.domain, state: row.state };
+  return { id: row.entity_id, role: row.role, domain: row.domain, name: row.name, state: row.state };
 }
 
 export async function readHomeStandingInputs(
