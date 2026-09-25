@@ -6,6 +6,8 @@ WHERE NOT EXISTS (SELECT 1 FROM onboarding_run WHERE workspace_id = ?2)`;
 
 const UPDATE_CARD_READY_AT = `UPDATE onboarding_run SET card_ready_at = ?2 WHERE workspace_id = ?1 AND card_ready_at IS NULL`;
 
+const UPDATE_COMPETITORS_READY_AT = `UPDATE onboarding_run SET competitors_ready_at = ?2 WHERE workspace_id = ?1 AND competitors_ready_at IS NULL`;
+
 export async function startOnboardingRun(input: {
   workspaceId: string;
   userId: string;
@@ -19,4 +21,8 @@ export async function startOnboardingRun(input: {
 
 export async function markCardReady(workspaceId: string, at: string): Promise<void> {
   await env.DB.prepare(UPDATE_CARD_READY_AT).bind(workspaceId, at).run();
+}
+
+export async function markCompetitorsReady(workspaceId: string, at: string): Promise<void> {
+  await env.DB.prepare(UPDATE_COMPETITORS_READY_AT).bind(workspaceId, at).run();
 }
