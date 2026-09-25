@@ -55,7 +55,7 @@ const PAYLOAD: BriefPayload = {
   brands: [
     brand("ent_self", "Own Brand", 2, null),
     brand("ent_kindred", "Kindred", 1, "Kindred launched 3 new ads"),
-    brand("ent_casetta", "Casetta", 3, null),
+    { ...brand("ent_casetta", "Casetta", 3, null), ad_delta: 0 },
   ],
   own_site: { status: "ok", incidents: [] },
   checked: {
@@ -118,10 +118,13 @@ describe("RankedRow", () => {
     expect(html).toContain('data-disabled=""');
   });
 
-  it("renders a zero-signal row's position as a dash and never a zero", () => {
-    const html = render(rowFor("ent_casetta"));
+  it("renders a zero-signal row's position as a dash and never a number", () => {
+    const row = rowFor("ent_casetta");
+    expect(row.signals).toBe(0);
+    expect(row.position).toBeNull();
+    const html = render(row);
     expect(html).toContain(">—</span>");
-    expect(html).not.toContain("#0");
+    expect(html).not.toContain(">#");
   });
 
   it("renders a row with signals as its position", () => {
