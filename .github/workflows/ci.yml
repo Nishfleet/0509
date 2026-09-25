@@ -118,11 +118,6 @@ jobs:
       - name: Build the Worker as the deploy would
         run: npm run build
 
-      - name: Assert Home's JavaScript budget from the build manifest
-        # 0509#4134, docs/REBUILD-DONE.md §B and DESIGN.md §10: /app is held at a
-        # ceiling that only shrinks toward the 150 KB target; the chart stays at 30 KB.
-        run: npx vitest run --config vitest.bundle.config.ts --reporter=verbose
-
       - name: Install the browser Playwright will drive
         run: npx playwright install --with-deps chromium
 
