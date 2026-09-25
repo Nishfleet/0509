@@ -34,8 +34,8 @@ export interface WeeklyDigest {
   payloadJson: string;
 }
 
-export async function markDigestSent(db: D1Database, digestId: string): Promise<void> {
-  await db.prepare(MARK_SENT).bind(new Date().toISOString(), digestId).run();
+export function markDigestSentStatement(db: D1Database, digestId: string, sentAt: string): D1PreparedStatement {
+  return db.prepare(MARK_SENT).bind(sentAt, digestId);
 }
 
 export async function cancelPendingDigests(db: D1Database, workspaceId: string): Promise<void> {

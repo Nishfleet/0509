@@ -1,7 +1,8 @@
-import { markDigestSent } from "../../app/lib/data/digest.server";
+import { markDigestSentStatement } from "../../app/lib/data/digest.server";
 import { claimIncidentNotice } from "../../app/lib/data/incident_notice.server";
-import { claimSendAttempt, resolveSendAttempt } from "../../app/lib/data/send_attempt.server";
+import { claimSendAttempt, resolveSendAttempt, resolveSendAttemptStatement } from "../../app/lib/data/send_attempt.server";
 import { writeUnsubscribeToken } from "../../app/lib/data/send_target.server";
+import { insertSignalDeliveries } from "../../app/lib/data/signal_delivery.server";
 import type { BriefPayload } from "../../app/lib/brief-payload";
 import { parseBriefPayload } from "../../app/lib/brief-payload";
 
@@ -162,8 +163,7 @@ function briefOf(message: MessageRow): BriefPayload {
   }
 }
 
-function render(message: MessageRow, to: string, token: string): EmailMessageBuilder {
-  const payload = briefOf(message);
+function render(message: MessageRow, payload: BriefPayload, to: string, token: string): EmailMessageBuilder {
   const unsubscribeUrl = `${UNSUBSCRIBE_BASE_URL}${token}`;
   const rendered = renderBrief(payload, { unsubscribe_url: unsubscribeUrl, asset_base_url: null });
   return {
@@ -208,12 +208,25 @@ export async function deliver(env: Env, message: DigestMessage): Promise<Deliver
   let sent = false;
   try {
     const token = await ensureUnsubscribeToken(env, target);
-    const email = render(digest, target.target_value, token);
+    const payload = briefOf(digest);
+    const email = render(digest, payload, target.target_value, token);
     const result = await sendMessage(env.EMAIL, email);
     sent = result.outcome === "sent";
-    await resolveSendAttempt(env.DB, claim.id, result.outcome, result.error);
     if (result.outcome === "sent") {
-      await markDigestSent(env.DB, digest.id);
+      const now = new Date().toISOString();
+      await env.DB.batch([
+        resolveSendAttemptStatement(env.DB, claim.id, result.outcome, result.error),
+        markDigestSentStatement(env.DB, digest.id, now),
+        insertSignalDeliveries(env.DB, {
+          workspaceId: digest.workspace_id,
+          channelId: target.channel_id,
+          sendAttemptId: claim.id,
+          deliveredAt: now,
+          signalIds: payload.read_this_first.map((mark) => mark.signal_id),
+        }),
+      ]);
+    } else {
+      await resolveSendAttempt(env.DB, claim.id, result.outcome, result.error);
     }
     return { outcome: result.outcome, attempt_id: claim.id, idempotency_key: idempotencyKey };
   } catch (cause) {
