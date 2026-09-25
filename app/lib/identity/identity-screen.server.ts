@@ -11,7 +11,7 @@ import { startCard, withinProbeLimit } from "./card.server";
 import { readLogo } from "./logo-store.server";
 import { normaliseSubject } from "./normalise";
 
-export interface IdentityScreenCard {
+interface IdentityScreenCard {
   subject: string;
   domain: string;
   site: Promise<SiteFields>;
