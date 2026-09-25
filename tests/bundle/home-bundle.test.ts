@@ -15,7 +15,7 @@ const manifest = JSON.parse(
 
 const startKeys = Object.keys(manifest).filter((key) => {
   const chunk = manifest[key];
-  if (chunk?.isEntry !== true) return false;
+  if (chunk.isEntry !== true) return false;
   if (!key.startsWith("app/routes/")) return true;
   return HOME_ROUTES.some((route) => key.startsWith(route));
 });
@@ -32,8 +32,10 @@ const files = (() => {
     const key = queue.pop();
     if (key === undefined || visited.has(key)) continue;
     visited.add(key);
+    if (!Object.hasOwn(manifest, key)) {
+      throw new Error(`the build manifest has no chunk for ${key}`);
+    }
     const chunk = manifest[key];
-    if (chunk === undefined) continue;
     collected.push(chunk.file);
     for (const imported of chunk.imports ?? []) queue.push(imported);
   }
