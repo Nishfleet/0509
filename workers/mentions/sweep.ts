@@ -22,7 +22,7 @@ import {
 import { storedDedupKey, toSignalRow, type MentionItem } from "./map";
 import { writeSourcePoint } from "./canary";
 import { adapterFor } from "../sources/registry";
-import type { MentionsAdapter } from "../sources/mentions/types";
+import type { MentionsAdapter, MentionsResult } from "../sources/mentions/types";
 
 const JUDGED_PER_WATCH = 12;
 
@@ -40,6 +40,8 @@ export interface TargetOutcome {
   stored: number;
   unjudged: number;
 }
+
+type OkYoutubeFeed = MentionsResult & { feedState: "ok" };
 
 const ABOUT_BRAND: NoulQuestion = {
   id: "mention_is_about_brand",
@@ -271,8 +273,7 @@ async function flagLostChannel(watchId: string, now: string): Promise<void> {
 
 async function commitYoutubeFeed(
   watch: WatchRow,
-  items: readonly MentionItem[],
-  rawBody: string,
+  feed: OkYoutubeFeed,
   pluginKey: string,
   canaryCount: number | null,
   now: string,
@@ -288,11 +289,18 @@ async function commitYoutubeFeed(
   ) {
     await writeWatchConfigJson(watch.watch_id, withResolvedChannel(current, channelId));
   }
-  const snapshot = await putMentionBody(pluginKey, rawBody);
+  const snapshot = await putMentionBody(pluginKey, feed.rawBody);
   const context = await readDiscoveryContext(watch.workspace_id);
-  if (context === null) return { items: items.length, stored: 0, unjudged: 0 };
-  const committed = await commitMentionWatch({ watch, context, items, snapshot, canaryCount, now });
-  return { items: items.length, stored: committed.stored, unjudged: committed.unjudged };
+  if (context === null) return { items: feed.items.length, stored: 0, unjudged: 0 };
+  const committed = await commitMentionWatch({
+    watch,
+    context,
+    items: feed.items,
+    snapshot,
+    canaryCount,
+    now,
+  });
+  return { items: feed.items.length, stored: committed.stored, unjudged: committed.unjudged };
 }
 
 async function verifyPendingYoutube(
@@ -305,7 +313,7 @@ async function verifyPendingYoutube(
 ): Promise<TargetOutcome> {
   const result = await adapter({ query: pendingId }, null);
   if (result.feedState === "ok") {
-    return commitYoutubeFeed(watch, result.items, result.rawBody, pluginKey, canaryCount, now, pendingId);
+    return commitYoutubeFeed(watch, result, pluginKey, canaryCount, now, pendingId);
   }
   if (result.feedState === "stale") {
     const current = await requireWatchConfigJson(watch.watch_id);
@@ -343,10 +351,6 @@ async function sweepOneYoutube(
   }
 
   const first = await adapter({ query: channelId }, null);
-  if (first.feedState === "error") {
-    await markWatchPolled(watch.watch_id, now);
-    return { items: 0, stored: 0, unjudged: 0 };
-  }
   if (first.feedState === "stale") {
     await flagLostChannel(watch.watch_id, now);
     const lookup = await lookupYoutubeChannel(await requireEntityIdentityJson(watch.entity_id));
@@ -357,8 +361,11 @@ async function sweepOneYoutube(
     await markWatchPolled(watch.watch_id, now);
     return { items: 0, stored: 0, unjudged: 0 };
   }
-
-  return commitYoutubeFeed(watch, first.items, first.rawBody, pluginKey, canaryCount, now, channelId);
+  if (first.feedState === "ok") {
+    return commitYoutubeFeed(watch, first, pluginKey, canaryCount, now, channelId);
+  }
+  await markWatchPolled(watch.watch_id, now);
+  return { items: 0, stored: 0, unjudged: 0 };
 }
 
 async function sweepYoutubeTarget(

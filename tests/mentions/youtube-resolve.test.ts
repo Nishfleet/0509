@@ -9,7 +9,6 @@ import {
 	channelIdFromHtml,
 	channelIdFromIdentity,
 	channelIdFromUrl,
-	isLostYoutubeChannel,
 	readWatchConfig,
 	withLostChannel,
 	withPendingChannel,
@@ -30,14 +29,24 @@ function staleFixture(): string {
 }
 
 describe("stale YouTube channel", () => {
-	it("treats the committed 404 HTML fixture as a lost channel, not an empty feed", () => {
+	it("treats the committed HTML fixture as stale on 404 and on 200, and a 500 as an error", async () => {
 		const body = staleFixture();
 		expect(body).toContain("<!DOCTYPE html>");
-		expect(isLostYoutubeChannel(404, "text/html; charset=UTF-8", body)).toBe(true);
-		expect(isLostYoutubeChannel(200, "text/html", body)).toBe(true);
-		expect(isLostYoutubeChannel(200, "text/xml", "<feed></feed>")).toBe(false);
-		expect(isLostYoutubeChannel(500, "text/html", body)).toBe(false);
-		expect(isLostYoutubeChannel(429, "text/plain", "rate")).toBe(false);
+		vi.stubGlobal(
+			"fetch",
+			vi.fn(async () => new Response(body, { status: 200, headers: { "content-type": "text/html" } })),
+		);
+		const html = await youtubeAdapter({ query: CHANNEL_ID }, null);
+		vi.stubGlobal(
+			"fetch",
+			vi.fn(async () => new Response(body, { status: 500, headers: { "content-type": "text/html" } })),
+		);
+		const server = await youtubeAdapter({ query: CHANNEL_ID }, null);
+		vi.unstubAllGlobals();
+		expect(html.feedState).toBe("stale");
+		expect(html.items).toEqual([]);
+		expect(server.feedState).toBe("error");
+		expect(server.items).toEqual([]);
 	});
 
 	it("the adapter reports the fixture as stale and does not invent items", async () => {

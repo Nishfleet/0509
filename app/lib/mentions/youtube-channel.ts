@@ -45,14 +45,6 @@ export function isYoutubeChannelId(value: string): boolean {
 	return CHANNEL_ID.test(value);
 }
 
-export function isLostYoutubeChannel(status: number, contentType: string, body: string): boolean {
-	if (status === 404) return true;
-	if (status !== 200) return false;
-	const type = contentType.toLowerCase();
-	if (type.includes("html")) return true;
-	return /^\s*<!doctype html/i.test(body) || /^\s*<html[\s>]/i.test(body);
-}
-
 export function channelIdFromUrl(url: string): string | null {
 	const normalised = normaliseSubject(url);
 	if (!normalised.ok || normalised.subject.platform !== "youtube") return null;
