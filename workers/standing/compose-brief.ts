@@ -33,8 +33,8 @@ GROUP BY s.entity_id`;
 const SOURCE_COVERAGE = `SELECT src.key AS key,
        src.kind AS kind,
        src.platform AS platform,
-       MAX(sn.fetched_at) AS last_landed_at,
-       MAX(CASE WHEN sn.fetched_at >= ?2 AND sn.fetched_at < ?3 THEN 1 ELSE 0 END) AS answered
+       MAX(CASE WHEN COALESCE(sn.canary_count, 1) > 0 THEN sn.fetched_at END) AS last_landed_at,
+       MAX(CASE WHEN sn.fetched_at >= ?2 AND sn.fetched_at < ?3 AND COALESCE(sn.canary_count, 1) > 0 THEN 1 ELSE 0 END) AS answered
 FROM watch w
 JOIN entity e ON e.id = w.entity_id AND e.workspace_id = ?1 AND e.state = 'on'
 JOIN source src ON src.id = w.source_id AND src.is_enabled = 1
