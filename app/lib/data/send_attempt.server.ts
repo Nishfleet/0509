@@ -27,20 +27,11 @@ export async function claimSendAttempt(
     .first<{ id: string }>();
 }
 
-function resolveSendAttemptStatement(
-  db: D1Database,
-  attemptId: string,
-  outcome: "sent" | "failed",
-  error: string | null,
-): D1PreparedStatement {
-  return db.prepare(RESOLVE_ATTEMPT).bind(outcome, error, attemptId);
-}
-
 export async function resolveSendAttempt(
   db: D1Database,
   attemptId: string,
   outcome: "sent" | "failed",
   error: string | null,
 ): Promise<void> {
-  await resolveSendAttemptStatement(db, attemptId, outcome, error).run();
+  await db.prepare(RESOLVE_ATTEMPT).bind(outcome, error, attemptId).run();
 }

@@ -169,7 +169,7 @@ beforeEach(async () => {
 });
 
 describe("delivered once across weeks (0509#4063)", () => {
-  it("(a) a sent brief writes one signal_delivery row per quoted signal in the resolution batch", async () => {
+  it("a sent brief writes one signal_delivery row per quoted signal in the resolution batch", async () => {
     const rec = recorder();
     const result = await weekOne(rec);
 
@@ -200,7 +200,7 @@ describe("delivered once across weeks (0509#4063)", () => {
     expect(attempt?.error).toBeNull();
   });
 
-  it("(b) a second resolution of the same send adds nothing", async () => {
+  it("a second resolution of the same send adds nothing", async () => {
     const first = await weekOne();
     const snapshot = await deliveries();
     expect(snapshot).toHaveLength(2);
@@ -223,7 +223,7 @@ describe("delivered once across weeks (0509#4063)", () => {
     expect(await deliveries()).toEqual(snapshot);
   });
 
-  it("(d) a quiet-week brief writes no rows", async () => {
+  it("a quiet-week brief writes no rows", async () => {
     const payload = await composeBrief(env.DB, {
       workspaceId: WS,
       schedule: MONDAY,
@@ -239,7 +239,7 @@ describe("delivered once across weeks (0509#4063)", () => {
     expect(await deliveries()).toEqual([]);
   });
 
-  it("(e) a quoted signal deleted before the send is skipped and the send still resolves", async () => {
+  it("a quoted signal deleted before the send is skipped and the send still resolves", async () => {
     const payload = await composeBrief(env.DB, {
       workspaceId: WS,
       schedule: MONDAY,
