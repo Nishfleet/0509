@@ -38,7 +38,7 @@ export async function deleteStoredPage(prefix: string): Promise<{ deleted: numbe
   return { deleted: keys.length, more: listed.truncated };
 }
 
-export function isAccountDeleteInstanceMissing(error: unknown): boolean {
+function isAccountDeleteInstanceMissing(error: unknown): boolean {
   return error instanceof Error && error.message.includes("instance.not_found");
 }
 
