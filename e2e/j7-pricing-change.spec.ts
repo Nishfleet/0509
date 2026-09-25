@@ -86,8 +86,10 @@ test("a fixture price change reaches Alerts as a before-and-after mark", async (
   await signInWithMagicLink(page, J7_EMAIL, requireInboxToken());
   await page.goto("/app/alerts");
 
+  // The site-change row, not the day group around it: a day group can hold
+  // other changes, and their times and text would answer for this mark.
   const mark = page
-    .locator("article, li, section")
+    .locator('[data-testid="site-change"]')
     .filter({ has: page.locator('a[href^="https://fixture.0509.in"]') })
     .filter({ has: page.locator('[data-slot="capture-plate"]') })
     .first();
@@ -97,7 +99,7 @@ test("a fixture price change reaches Alerts as a before-and-after mark", async (
   ).toBeVisible();
 
   const source = mark.locator('a[href^="https://fixture.0509.in"]').first();
-  await expect(source).toHaveText("https://fixture.0509.in/");
+  await expect(source).toHaveAttribute("href", /^https:\/\/fixture\.0509\.in\//);
 
   const capturedAt = await mark.locator("figure figcaption time[dateTime]").first().getAttribute("dateTime");
   if (capturedAt === null) {
@@ -110,18 +112,18 @@ test("a fixture price change reaches Alerts as a before-and-after mark", async (
     `the fixture mark was captured at ${capturedAt}, which is not after the flip at ${flippedAt}`,
   ).toBeGreaterThan(Date.parse(flippedAt));
 
-  // Both screenshots live in the capture-pair sheet the plate opens, captioned
-  // Before and After with their own capture times.
+  // Both screenshots live in the capture-pair sheet the plate opens. The sheet
+  // captions them Before and After, and the images are decorative, so loaded
+  // pixels are the proof rather than an accessible name.
   await mark.locator('[data-slot="capture-plate"]').click();
   const pair = page.locator('[data-slot="capture-pair"]');
   await expect(pair).toBeVisible();
-  const figures = pair.locator("figure");
-  await expect(figures).toHaveCount(2);
-  await expect(figures.nth(0)).toContainText("Before");
-  await expect(figures.nth(1)).toContainText("After");
+  await expect(pair).toContainText("Before");
+  await expect(pair).toContainText("After");
+  await expect(pair.locator("figure")).toHaveCount(2);
   await expect
     .poll(() =>
-      figures
+      pair
         .locator("img")
         .evaluateAll((images) => images.map((image) => (image as HTMLImageElement).naturalWidth > 0)),
     )
