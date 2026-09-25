@@ -1,12 +1,12 @@
 import { env } from "cloudflare:workers";
 
 import { readSelfEntityId } from "../data/entity.server";
-import { insertPages } from "../data/page.server";
+import { insertPages, readJudgedPricingUrl } from "../data/page.server";
 import type { NewPage } from "../data/page.server";
 import { readEnabledSourceId, readEnabledSources } from "../data/source.server";
 import { insertWatches, readEntityWatches } from "../data/watch.server";
-import type { NewWatch } from "../data/watch.server";
-import { startDiscovery, workflowInstanceExists } from "../discovery/start.server";
+import type { EntityWatch, NewWatch } from "../data/watch.server";
+import { workflowInstanceExists } from "../discovery/start.server";
 import { discoverBoard } from "../hiring/discover-board";
 import { readCachedSiteProof } from "./card.server";
 import { normaliseSubject, type Subject } from "./normalise";
@@ -18,13 +18,6 @@ export interface IdentityTailParams {
   domain: string;
   homepageUrl: string | null;
   handle?: string;
-}
-
-export interface TailWatch {
-  id: string;
-  sourceId: string;
-  sourceKey: string;
-  targetKey: string;
 }
 
 export interface IdentityTailOutcome {
@@ -59,10 +52,10 @@ export async function persistTail(params: IdentityTailParams): Promise<{ entityI
   return { entityId: await readSelfEntityId(params.workspaceId, params.entityId) };
 }
 
-export async function seedTailWatches(params: IdentityTailParams, discoveredAt: string): Promise<TailWatch[]> {
+export async function seedTailWatches(params: IdentityTailParams, discoveredAt: string): Promise<EntityWatch[]> {
   const subject = subjectFor(params);
   const proof = subject === null ? { adLibraryHints: [], navLinks: [] } : await readCachedSiteProof(subject);
-  const pricing = pricingUrl(proof.navLinks);
+  const pricing = await readJudgedPricingUrl(params.entityId);
   const ads = adTargets(proof.adLibraryHints);
   const hiring = await hiringTarget(proof.navLinks, params.domain);
   const siteSourceId = await readEnabledSourceId("site.web");
@@ -71,10 +64,10 @@ export async function seedTailWatches(params: IdentityTailParams, discoveredAt: 
   const seen = new Set<string>();
   const seenPages = new Set<string>();
 
-  function page(url: string, role: "home" | "pricing"): void {
+  function page(url: string): void {
     if (seenPages.has(url)) return;
     seenPages.add(url);
-    pages.push({ id: crypto.randomUUID(), entityId: params.entityId, url, role, discoveredAt });
+    pages.push({ id: crypto.randomUUID(), entityId: params.entityId, url, role: "home", discoveredAt });
   }
 
   function watch(sourceId: string, targetKey: string): void {
@@ -85,10 +78,9 @@ export async function seedTailWatches(params: IdentityTailParams, discoveredAt: 
   }
 
   if (siteSourceId !== null && params.homepageUrl !== null) {
-    page(params.homepageUrl, "home");
+    page(params.homepageUrl);
     watch(siteSourceId, params.homepageUrl);
     if (pricing !== null && pricing !== params.homepageUrl) {
-      page(pricing, "pricing");
       watch(siteSourceId, pricing);
     }
   }
@@ -118,7 +110,7 @@ export async function seedTailWatches(params: IdentityTailParams, discoveredAt: 
   return readEntityWatches(params.entityId);
 }
 
-export async function enqueueFirstSweep(entityId: string, watches: readonly TailWatch[]): Promise<string[]> {
+export async function enqueueFirstSweep(entityId: string, watches: readonly EntityWatch[]): Promise<string[]> {
   if (watches.length === 0) return [];
   await env.FETCH_SWEEP.sendBatch(
     watches.map((watch) => ({
@@ -133,25 +125,10 @@ export async function enqueueFirstSweep(entityId: string, watches: readonly Tail
   return watches.map((watch) => watch.id);
 }
 
-export async function startTailDiscovery(workspaceId: string, now: Date): Promise<string> {
-  return startDiscovery(workspaceId, now);
-}
-
 function subjectFor(params: IdentityTailParams): Subject | null {
   if (params.homepageUrl === null) return null;
   const normalised = normaliseSubject(params.homepageUrl);
   return normalised.ok ? normalised.subject : null;
-}
-
-function pricingUrl(links: readonly string[]): string | null {
-  for (const link of links) {
-    if (!URL.canParse(link)) continue;
-    const url = new URL(link);
-    if (url.protocol !== "https:" && url.protocol !== "http:") continue;
-    const segments = url.pathname.split("/").filter((segment) => segment.length > 0);
-    if (segments.some((segment) => segment.toLowerCase() === "pricing")) return url.href;
-  }
-  return null;
 }
 
 function adTargets(hints: readonly string[]): AdTarget[] {

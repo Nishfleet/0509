@@ -2,10 +2,12 @@ import { env, introspectWorkflow } from "cloudflare:test";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 
+import { insertSelfEntity } from "../../../app/lib/data/entity.server";
+import { upsertJudgedPages } from "../../../app/lib/data/page.server";
 import { confirmCard } from "../../../app/lib/identity/confirm.server";
 import { normaliseSubject } from "../../../app/lib/identity/normalise";
 import { probeKey } from "../../../app/lib/identity/probe-cache.server";
-import { identityTailInstanceId } from "../../../app/lib/identity/tail.server";
+import { identityTailInstanceId, seedTailWatches } from "../../../app/lib/identity/tail.server";
 
 const DOMAIN = "gymshark.com";
 const GREENHOUSE_JOBS = "https://boards-api.greenhouse.io/v1/boards/gymshark/jobs";
@@ -116,6 +118,7 @@ describe("IdentityTailWorkflow", () => {
   it("persists the card, seeds watches, starts discovery and queues the first sweep", async () => {
     await seed();
     await using introspector = await introspectWorkflow(env.IDENTITY_TAIL);
+    const day = new Date().toISOString().slice(0, 10);
     expect(
       await confirmCard(
         workspaceId,
@@ -135,7 +138,7 @@ describe("IdentityTailWorkflow", () => {
 
     expect(output.entityId).toBe(entityId.id);
     expect(output.r2Keys).toEqual([]);
-    expect(output.discoveryInstanceId).toBe(`discovery-${workspaceId}-${new Date().toISOString().slice(0, 10)}`);
+    expect(output.discoveryInstanceId).toBe(`discovery-${workspaceId}-${day}`);
     const stored = await watches();
     expect(output.watches).toEqual(
       stored.map((row) => ({ id: row.id, sourceKey: row.source_key, targetKey: row.target_key })),
@@ -148,7 +151,6 @@ describe("IdentityTailWorkflow", () => {
       `hiring.greenhouse ${BOARD}`,
       "hn.algolia Gymshark",
       "site.web https://gymshark.com/",
-      `site.web ${PRICING}`,
       "youtube.channel_rss Gymshark",
     ]);
 
@@ -157,17 +159,48 @@ describe("IdentityTailWorkflow", () => {
     )
       .bind(entityId.id)
       .all<{ role: string; url: string }>();
-    expect(pages.results).toEqual([
-      { role: "home", url: "https://gymshark.com/" },
-      { role: "pricing", url: PRICING },
+    expect(pages.results).toEqual([{ role: "home", url: "https://gymshark.com/" }]);
+
+    await expect(env.DISCOVERY.get(output.discoveryInstanceId)).resolves.toBeDefined();
+    expect(instanceId).toBe(`identity-tail-${entityId.id}`);
+  });
+
+  it("watches the page Jev judged pricing, not a /pricing path", async () => {
+    await seed();
+    const entityId = `entity-pricing-${String(runs)}`;
+    await insertSelfEntity({
+      id: entityId,
+      workspaceId,
+      domain: DOMAIN,
+      name: "Gymshark",
+      identityJson: "{}",
+      now: "2026-09-25T08:00:00Z",
+    });
+    await upsertJudgedPages([
+      {
+        id: crypto.randomUUID(),
+        entityId,
+        url: "https://www.gymshark.com/plans",
+        title: "Plans",
+        role: "pricing",
+        roleDecidedForHash: "h",
+        discoveredAt: "2026-09-25T08:00:00Z",
+      },
     ]);
 
-    const discovery = await env.DISCOVERY.get(output.discoveryInstanceId);
-    const discoveryStatus = await discovery.status();
-    expect(["queued", "running", "waiting", "waitingForPause", "complete", "errored"]).toContain(
-      discoveryStatus.status,
+    const seeded = await seedTailWatches(
+      {
+        workspaceId,
+        entityId,
+        name: "Gymshark",
+        domain: DOMAIN,
+        homepageUrl: "https://gymshark.com/",
+      },
+      "2026-09-25T08:00:00Z",
     );
-    expect(instanceId).toBe(`identity-tail-${entityId.id}`);
+
+    expect(seeded.map((watch) => watch.targetKey)).toContain("https://www.gymshark.com/plans");
+    expect(seeded.map((watch) => watch.targetKey)).not.toContain(PRICING);
   });
 
   it("seeds a creator's handle mentions and its named website", async () => {
@@ -199,7 +232,6 @@ describe("IdentityTailWorkflow", () => {
       "hn.algolia @gymshark",
       "hn.algolia Gymshark",
       "site.web https://gymshark.com/",
-      `site.web ${PRICING}`,
       "youtube.channel_rss Gymshark",
     ]);
   });
