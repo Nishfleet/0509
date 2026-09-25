@@ -4,6 +4,8 @@ export interface AgentKey {
   start: string | null;
   createdAt: string;
   lastUsedAt: string | null;
+  rateLimitMax: number | null;
+  remaining: number | null;
 }
 
 export interface ConnectedApp {
