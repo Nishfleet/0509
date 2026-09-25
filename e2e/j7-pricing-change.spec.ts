@@ -121,6 +121,10 @@ test("a fixture price change reaches Alerts as a before-and-after mark", async (
   await expect(pair).toContainText("Before");
   await expect(pair).toContainText("After");
   await expect(pair.locator("figure")).toHaveCount(2);
+  // A missing or failed shot renders its capture-missing text inside this
+  // portalled sheet, not in the row — the row check below only sees the
+  // plate's own after-shot fallback.
+  await expect(pair.locator('[data-slot="capture-missing"]')).toHaveCount(0);
   await expect
     .poll(() =>
       pair
@@ -132,18 +136,14 @@ test("a fixture price change reaches Alerts as a before-and-after mark", async (
   await expect(pair).toBeHidden();
 
   await expect(mark).not.toContainText("Screenshot unavailable");
-  await expect(mark).not.toContainText("No screenshot of the earlier version");
   await expect(mark.getByRole("heading", { level: 3 })).not.toHaveText(/^Possibly: /);
   await expect(mark).not.toContainText(/p=|\b0\.\d+/);
 
-  await testInfo.attach("j7-mark", {
-    body: JSON.stringify(
-      { sourceUrl: "https://fixture.0509.in/", capturedAt, flippedAt, variant, project: testInfo.project.name },
-      null,
-      2,
-    ),
-    contentType: "application/json",
-  });
+  // The asserting run is #4123's evidence, so the log line names the mark's
+  // real source URL and captured-at, not constants.
+  console.log(
+    `j7-mark source=${await source.getAttribute("href")} capturedAt=${capturedAt} flippedAt=${flippedAt}`,
+  );
 
   // The next tick needs the other variant, so the flip alternates base <-> raised.
   if (testInfo.project.name === "phone-390") {
