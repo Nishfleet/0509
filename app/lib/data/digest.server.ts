@@ -6,7 +6,7 @@ WHERE workspace_id = ? AND status = 'pending'`;
 const MARK_FAILED = `UPDATE digest SET status = 'failed' WHERE id = ? AND status = 'pending'`;
 
 const INSERT_WEEKLY_DIGEST = `INSERT INTO digest (id, workspace_id, kind, period_start, period_end, status, payload_json)
-VALUES (?1, ?2, 'weekly', ?3, ?4, 'pending', ?5)
+VALUES (?1, ?2, 'weekly', ?3, ?4, ?5, ?6)
 ON CONFLICT (id) DO NOTHING`;
 
 export interface WeeklyDigest {
@@ -14,6 +14,7 @@ export interface WeeklyDigest {
   workspaceId: string;
   periodStart: string;
   periodEnd: string;
+  status: "pending" | "paused";
   payloadJson: string;
 }
 
@@ -32,6 +33,13 @@ export async function markDigestFailed(db: D1Database, digestId: string): Promis
 export async function insertWeeklyDigest(db: D1Database, digest: WeeklyDigest): Promise<void> {
   await db
     .prepare(INSERT_WEEKLY_DIGEST)
-    .bind(digest.id, digest.workspaceId, digest.periodStart, digest.periodEnd, digest.payloadJson)
+    .bind(
+      digest.id,
+      digest.workspaceId,
+      digest.periodStart,
+      digest.periodEnd,
+      digest.status,
+      digest.payloadJson,
+    )
     .run();
 }
