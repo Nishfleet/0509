@@ -9,6 +9,7 @@ import type { BriefSchedule } from "../../app/lib/brief-schedule";
 import type { HowRanked } from "../../app/lib/how-ranked";
 import {
   greetingFor,
+  homeChips,
   homeStanding,
   homeView,
   movementLabel,
@@ -253,7 +254,7 @@ describe("Home standing", () => {
     expect(render({ payload: payload({ headline_rank: null }) })).toContain("gathering the first week");
   });
 
-  it("shows one chip per ON brand in the gathering state and no chip row once ranked", () => {
+  it("shows a chip per on and off brand in the gathering state and no chip row once ranked", () => {
     const entities: readonly HomeEntity[] = [
       SELF,
       { id: "ent_kindred", role: "competitor", domain: "kindred.example", name: "Kindred", state: "on" },
@@ -261,8 +262,9 @@ describe("Home standing", () => {
     ];
     const view = homeView({ payload: null, entities, schedule: SCHEDULE, history: [], sources: SITE_SOURCES, now: THURSDAY_MORNING, blindSources: [] });
     expect(view.chips).toEqual([
-      { name: "Own Brand", href: "/app/settings", self: true },
-      { name: "Kindred", href: "/app/competitors/ent_kindred", self: false },
+      { name: "Own Brand", href: "/app/settings", self: true, off: false },
+      { name: "Kindred", href: "/app/competitors/ent_kindred", self: false, off: false },
+      { name: "Off Brand", href: "/app/competitors/ent_off", self: false, off: true },
     ]);
 
     const gathering = render({ payload: null, entities });
@@ -272,8 +274,9 @@ describe("Home standing", () => {
     expect(gathering).toContain('href="/app/competitors/ent_kindred"');
     expect(gathering).toContain("You · Own Brand");
     expect(gathering).toContain("Kindred");
-    expect(gathering).not.toContain("Off Brand");
-    expect(gathering).not.toContain('href="/app/competitors/ent_off"');
+    expect(gathering).toContain('href="/app/competitors/ent_off"');
+    expect(gathering).toContain("Off Brand · off");
+    expect(gathering).toContain('data-off=""');
 
     const ranked = render({ payload: payload(), entities });
     expect(ranked).not.toContain('aria-label="Your set"');
@@ -351,6 +354,38 @@ function chartStanding(history: readonly HomeHistoryRow[]) {
   if (standing.kind !== "ranked") throw new Error("expected a ranked standing");
   return standing;
 }
+
+describe("Home chips", () => {
+  it("keeps an off competitor in the row with off true", () => {
+    const chips = homeChips([
+      SELF,
+      { id: "ent_kindred", role: "competitor", domain: "kindred.example", name: "Kindred", state: "on" },
+      { id: "ent_off", role: "competitor", domain: "off.example", name: "Off Brand", state: "off" },
+    ]);
+    expect(chips).toContainEqual({ name: "Off Brand", href: "/app/competitors/ent_off", self: false, off: true });
+  });
+
+  it("leaves a dismissed competitor out of the row", () => {
+    const chips = homeChips([
+      SELF,
+      { id: "ent_gone", role: "competitor", domain: "gone.example", name: "Gone", state: "dismissed" },
+      { id: "ent_kindred", role: "competitor", domain: "kindred.example", name: "Kindred", state: "on" },
+    ]);
+    expect(chips.map((chip) => chip.name)).toEqual(["Own Brand", "Kindred"]);
+  });
+
+  it("builds the view's chips with homeChips", () => {
+    const entities: readonly HomeEntity[] = [
+      { id: "ent_kindred", role: "competitor", domain: "kindred.example", name: "Kindred", state: "on" },
+      { id: "ent_gone", role: "competitor", domain: "gone.example", name: "Gone", state: "dismissed" },
+      { id: "ent_off", role: "competitor", domain: "off.example", name: "Off Brand", state: "off" },
+      SELF,
+    ];
+    const view = homeView({ payload: null, entities, schedule: SCHEDULE, history: [], sources: SITE_SOURCES, now: THURSDAY_MORNING });
+    expect(view.chips).toEqual(homeChips(entities));
+    expect(view.chips[0]?.self).toBe(true);
+  });
+});
 
 describe("four-week chart", () => {
   it("shows four weeks ascending, dropping the oldest, with the London week labelled 21 SEP", () => {

@@ -49,11 +49,18 @@ export type HomeStanding =
   | { kind: "gathering"; briefAt: string; firstSweepAt: string | null; brands: number }
   | { kind: "ranked"; rank: number; total: number; whyLine: string; readThisFirst: BriefPayload["read_this_first"]; rows: readonly HomeRow[]; chart: FourWeekChart };
 
+export interface HomeChip {
+  name: string;
+  href: string;
+  self: boolean;
+  off: boolean;
+}
+
 export interface HomeView {
   eyebrow: string;
   greeting: string;
   standing: HomeStanding;
-  chips: readonly { name: string; href: string; self: boolean }[];
+  chips: readonly HomeChip[];
   footer: string;
 }
 
@@ -216,6 +223,18 @@ function chipHref(entity: HomeEntity): string {
   return entity.role === "self" ? "/app/settings" : `/app/competitors/${entity.id}`;
 }
 
+export function homeChips(entities: readonly HomeEntity[]): readonly HomeChip[] {
+  const kept = entities.filter((entity) => entity.state === "on" || entity.state === "off");
+  const self = kept.filter((entity) => entity.role === "self");
+  const competitors = kept.filter((entity) => entity.role !== "self");
+  return [...self, ...competitors].map((entity) => ({
+    name: entity.name,
+    href: chipHref(entity),
+    self: entity.role === "self",
+    off: entity.state === "off",
+  }));
+}
+
 export function homeView(input: {
   payload: BriefPayload | null;
   entities: readonly HomeEntity[];
@@ -240,9 +259,7 @@ export function homeView(input: {
     eyebrow: todayEyebrow(input.schedule.timezone, input.now),
     greeting: greetingFor(input.schedule.timezone, input.now),
     standing: adjusted.kind === "gathering" ? { ...adjusted, firstSweepAt: at === null ? null : dayAndTime(input.schedule.timezone, at) } : adjusted,
-    chips: input.entities
-      .filter((entity) => entity.state === "on")
-      .map((entity) => ({ name: entity.name, href: chipHref(entity), self: entity.role === "self" })),
+    chips: homeChips(input.entities),
     footer,
   };
 }
