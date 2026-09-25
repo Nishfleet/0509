@@ -27,7 +27,7 @@ export async function claimSendAttempt(
     .first<{ id: string }>();
 }
 
-export function resolveSendAttemptStatement(
+function resolveSendAttemptStatement(
   db: D1Database,
   attemptId: string,
   outcome: "sent" | "failed",
