@@ -467,6 +467,7 @@ describe("the one stylesheet stays the one stylesheet (#3984)", () => {
       expect(css).toContain(`font-family: "${family}"`);
     }
     for (const file of [
+      "bricolage-hero.woff2",
       "bricolage-grotesque-latin.woff2",
       "instrument-sans-latin.woff2",
       "ibm-plex-mono-latin-400.woff2",
@@ -492,7 +493,7 @@ describe("the one stylesheet stays the one stylesheet (#3984)", () => {
 
   it("wires the token names into root.tsx's font preload links", async () => {
     const root = await readFile(path.join(REPO_ROOT, "app/root.tsx"), "utf8");
-    expect(root).toContain("bricolage-grotesque-latin.woff2");
+    expect(root).toContain("bricolage-hero.woff2");
     expect(root).toContain("instrument-sans-latin.woff2");
     expect(root).not.toContain("fonts.googleapis.com");
     expect(root).not.toContain("fonts.gstatic.com");

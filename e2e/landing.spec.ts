@@ -7,6 +7,18 @@ import { expect, test } from "@playwright/test";
 
 const PATH = "/design/landing";
 
+test("the landing document paints without a module graph", async ({ page }) => {
+  const response = await page.goto(PATH);
+  expect(response?.status()).toBe(200);
+  const html = (await response?.text()) ?? "";
+  const head = html.slice(html.indexOf("<head"), html.indexOf("</head>"));
+  expect(head).toContain('rel="stylesheet"');
+  expect(head).not.toContain('rel="modulepreload"');
+  expect(head).toContain("/fonts/bricolage-hero.woff2");
+  expect(head).not.toContain("bricolage-grotesque-latin");
+  expect(head).not.toContain('type="module"');
+});
+
 test("the landing renders its sections in order under one headline", async ({ page }) => {
   const response = await page.goto(PATH);
   expect(response?.status()).toBe(200);
@@ -29,10 +41,14 @@ test("the landing's action names its price and leads to sign-in", async ({ page 
 
 test("the hero's first viewport holds the outcome and the one priced input", async ({ page }, testInfo) => {
   const consoleErrors: string[] = [];
+  const fullFace: string[] = [];
   page.on("console", (message) => {
     if (message.type() === "error") consoleErrors.push(message.text());
   });
   page.on("pageerror", (error) => consoleErrors.push(error.message));
+  page.on("request", (request) => {
+    if (request.url().includes("/fonts/")) fullFace.push(request.url());
+  });
 
   await page.goto(PATH);
   await page.waitForLoadState("networkidle");
@@ -78,7 +94,36 @@ test("the hero's first viewport holds the outcome and the one priced input", asy
     expect(proofBox.y).toBeGreaterThanOrEqual(headlineBox.y + headlineBox.height - 1);
   }
 
-  await expect(page.locator('link[rel="preload"][href="/fonts/bricolage-grotesque-latin.woff2"]')).toHaveCount(1);
+  const styles = await page.evaluate(async () => {
+    const hrefs = [...document.querySelectorAll('link[rel="stylesheet"]')].flatMap((node) =>
+      node instanceof HTMLLinkElement ? [node.href] : [],
+    );
+    const texts = await Promise.all(hrefs.map((href) => fetch(href).then((response) => response.text())));
+    return texts.join("\n");
+  });
+  expect(styles).toContain("Bricolage Grotesque");
+  expect(styles).toContain("Instrument Sans");
+  expect(styles).toContain("IBM Plex Mono");
+  expect(styles).toContain("/fonts/bricolage-hero.woff2");
+  expect(styles).toContain("/fonts/instrument-sans-latin.woff2");
+  expect(styles).toContain("/fonts/ibm-plex-mono-latin-400.woff2");
+  expect(styles).toContain("/fonts/ibm-plex-mono-latin-500.woff2");
+  const requested = fullFace.join(" ");
+  expect(requested).toContain("bricolage-hero.woff2");
+  expect(requested).toContain("instrument-sans-latin.woff2");
+  expect(requested).toContain("ibm-plex-mono");
+  expect(requested).not.toContain("bricolage-grotesque-latin");
+  const loaded = await page.evaluate(async () => {
+    await document.fonts.ready;
+    return {
+      display: document.fonts.check('800 16px "Bricolage Grotesque"'),
+      sans: document.fonts.check('400 16px "Instrument Sans"'),
+      mono: document.fonts.check('400 16px "IBM Plex Mono"'),
+    };
+  });
+  expect(loaded).toEqual({ display: true, sans: true, mono: true });
+  await expect(page.locator('link[rel="preload"][href="/fonts/bricolage-hero.woff2"]')).toHaveCount(1);
+  await expect(page.locator('link[rel="modulepreload"]')).toHaveCount(0);
 
   if (testInfo.project.name === "phone-390") {
     const overflow = await page.evaluate(
