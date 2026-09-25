@@ -14,6 +14,8 @@ import { readWorkspaceIdForOwner } from "../lib/data/workspace.server";
 import { homeView } from "../lib/home-standing";
 import { readHomeStandingInputs } from "../lib/home-standing.server";
 import { readHowRanked } from "../lib/how-ranked.server";
+import { onboardingTimingLines } from "../lib/onboarding/timings";
+import { readOnboardingTimes } from "../lib/data/onboarding_run.server";
 import { requireSession } from "../lib/require-session.server";
 import { workspaceLandingForRequest } from "../lib/workspace.server";
 
@@ -31,11 +33,13 @@ export async function loader({ request }: Route.LoaderArgs) {
   const sources = workspaceId === null ? [] : await readWorkspaceMentionSources(workspaceId);
   const siteFill = workspaceId === null ? null : await readSelfSiteFill(workspaceId);
   const howRanked = await readHowRanked(env.DB, inputs.payload);
+  const times = workspaceId === null ? null : await readOnboardingTimes(workspaceId);
   return {
     view: homeView({ ...inputs, now: new Date() }),
     howRanked,
     freshness: freshnessEntries(sources, Date.now()),
     siteFill,
+    timings: times === null ? [] : onboardingTimingLines(times),
   };
 }
 
@@ -81,6 +85,15 @@ export default function Page({ loaderData }: Route.ComponentProps) {
             Read this week's brief
           </Link>
         </p>
+        {loaderData.timings.length > 0 ? (
+          <ul aria-label="Onboarding timings" className="mt-3">
+            {loaderData.timings.map((line) => (
+              <li key={line} className="font-mono text-eyebrow text-ink-soft">
+                {line}
+              </li>
+            ))}
+          </ul>
+        ) : null}
       </footer>
     </main>
   );
