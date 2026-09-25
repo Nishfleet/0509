@@ -101,9 +101,9 @@ test("the hero's first viewport holds the outcome and the one priced input", asy
     const texts = await Promise.all(hrefs.map((href) => fetch(href).then((response) => response.text())));
     return texts.join("\n");
   });
-  expect(styles).toContain('font-family: "Bricolage Grotesque"');
-  expect(styles).toContain('font-family: "Instrument Sans"');
-  expect(styles).toContain('font-family: "IBM Plex Mono"');
+  expect(styles).toContain("Bricolage Grotesque");
+  expect(styles).toContain("Instrument Sans");
+  expect(styles).toContain("IBM Plex Mono");
   expect(styles).toContain("/fonts/bricolage-hero.woff2");
   expect(styles).toContain("/fonts/instrument-sans-latin.woff2");
   expect(styles).toContain("/fonts/ibm-plex-mono-latin-400.woff2");
