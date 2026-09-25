@@ -4,8 +4,10 @@ import { describe, expect, it } from "vitest";
 /**
  * 0509#4707. Applies every migration numbered before 0021, stores a connected
  * set of rows, then applies the rebuild. A later file must not run first.
- * The rows must still read back, a matching insert must succeed, and an
- * insert that pairs another workspace's entity must fail.
+ * A standing row that pairs another workspace's entity aborts the rebuild
+ * before any table is dropped, and the stored rows are still there.
+ * After that row is removed, the rebuild keeps every stored row, a matching
+ * insert succeeds, and an insert that pairs another workspace's entity fails.
  */
 
 const MIGRATION = "0021_entity_workspace_fk.sql";
@@ -67,11 +69,12 @@ describe("entity workspace foreign key (0509#4707)", () => {
       .filter((migration) => migration.name < MIGRATION)
       .sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
     expect(next).toHaveLength(1);
-    expect(prior.map((migration) => migration.name)).toEqual(
-      [...all.map((migration) => migration.name)].filter((name) => name < MIGRATION).sort(),
-    );
+    expect(prior.at(-1)?.name).toBe("0020_hiring_sources.sql");
+    expect(prior.some((migration) => migration.name === MIGRATION)).toBe(false);
 
     await applyD1Migrations(env.DB, prior);
+    const appliedPrior = await env.DB.prepare("SELECT name FROM d1_migrations ORDER BY name").all<{ name: string }>();
+    expect((appliedPrior.results ?? []).map((row) => row.name)).toEqual(prior.map((migration) => migration.name));
 
     await env.DB.prepare(
       `INSERT INTO "user" (id, name, email, emailVerified, createdAt, updatedAt)
@@ -185,6 +188,25 @@ describe("entity workspace foreign key (0509#4707)", () => {
     )
       .bind(STANDING, WS, ENTITY, NOW, NOW)
       .run();
+    await env.DB.prepare(
+      `INSERT INTO standing (id, workspace_id, entity_id, week_start_at, score, computed_at)
+       VALUES ('stand-fk-4707-cross', ?, ?, '2026-09-11T00:00:00.000Z', 1, ?)`,
+    )
+      .bind(WS_OTHER, ENTITY, NOW)
+      .run();
+
+    const seeded = Object.fromEntries(await Promise.all(TABLES.map(async (table) => [table, await count(table)])));
+    await expect(applyD1Migrations(env.DB, next)).rejects.toThrow(/CHECK constraint failed/);
+    expect(Object.fromEntries(await Promise.all(TABLES.map(async (table) => [table, await count(table)])))).toEqual(
+      seeded,
+    );
+    const leftover = await env.DB.prepare(
+      "SELECT name FROM sqlite_master WHERE name LIKE '%_hold' OR name LIKE '\\_fk\\_%' ESCAPE '\\' OR name = 'idx_entity_workspace_id'",
+    ).all<{ name: string }>();
+    expect(leftover.results ?? []).toEqual([]);
+    const recorded = await env.DB.prepare("SELECT name FROM d1_migrations WHERE name = ?").bind(MIGRATION).all();
+    expect(recorded.results ?? []).toEqual([]);
+    await env.DB.prepare("DELETE FROM standing WHERE id = 'stand-fk-4707-cross'").run();
 
     const before = Object.fromEntries(await Promise.all(TABLES.map(async (table) => [table, await count(table)])));
 
