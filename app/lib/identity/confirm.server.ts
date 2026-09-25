@@ -82,7 +82,7 @@ export async function confirmCard(workspaceId: string, userId: string, form: For
   const id = crypto.randomUUID();
   const logoUrl = (await readLogo(subject.registrable)) !== null ? `/app/logos/${id}` : null;
   const now = new Date();
-  await insertSelfEntity({
+  const entityInserted = await insertSelfEntity({
     id,
     workspaceId,
     domain: subject.registrable,
@@ -100,7 +100,7 @@ export async function confirmCard(workspaceId: string, userId: string, form: For
   const entityId = await readWorkspaceSelfId(workspaceId);
   if (entityId === null) return false;
   const cached = await readCachedSiteValues(subject);
-  if (cached !== null) {
+  if (entityInserted && cached !== null) {
     const candidates: { edit: FieldEdit; changed: boolean }[] = [
       {
         edit: { field: "name", from: cached.name, to: card.name },

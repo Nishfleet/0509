@@ -1,5 +1,6 @@
 import { env, introspectWorkflow } from "cloudflare:test";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { z } from "zod";
 
 import { insertSelfEntity } from "../../../app/lib/data/entity.server";
 import { insertFieldEdits, readEditedFields } from "../../../app/lib/data/user_decision.server";
@@ -58,6 +59,10 @@ async function seed(): Promise<void> {
   )
     .bind(workspaceId, userId, NOW)
     .run();
+}
+
+async function seedEntity(): Promise<void> {
+  await seed();
   await insertSelfEntity({
     id: entityId,
     workspaceId,
@@ -120,19 +125,37 @@ async function userDecisionsRow(): Promise<{
     .first<{ verdict: string; note: string; workspace_id: string; user_id: string; entity_id: string }>();
 }
 
-async function fieldEditRows(): Promise<{ field: string; from: string | null; to: string }[]> {
+const fieldEditNoteSchema = z.object({
+  field: z.enum(["name", "description"]),
+  from: z.string().nullable(),
+  to: z.string(),
+});
+
+async function confirmedEntityId(): Promise<string> {
+  const row = await env.DB
+    .prepare("SELECT id FROM entity WHERE workspace_id = ?1 AND role = 'self'")
+    .bind(workspaceId)
+    .first<{ id: string }>();
+  if (row === null) throw new Error("confirmed entity was not stored");
+  return row.id;
+}
+
+async function fieldEditRows(id: string): Promise<z.infer<typeof fieldEditNoteSchema>[]> {
   const { results } = await env.DB
     .prepare(
       "SELECT note FROM user_decision WHERE entity_id = ?1 AND verdict = ?2",
     )
-    .bind(entityId, FIELDS_VERDICT)
+    .bind(id, FIELDS_VERDICT)
     .all<{ note: string }>();
-  return results.map((row) => JSON.parse(row.note) as { field: string; from: string | null; to: string });
+  return results.flatMap((row) => {
+    const parsed = fieldEditNoteSchema.safeParse(JSON.parse(row.note));
+    return parsed.success ? [parsed.data] : [];
+  });
 }
 
 describe("field-edit records", () => {
   it("records one row per edited field with the JSON note shape", async () => {
-    await seed();
+    await seedEntity();
 
     await insertFieldEdits([
       {
@@ -158,13 +181,13 @@ describe("field-edit records", () => {
   });
 
   it("returns empty when the entity has no field-edit rows", async () => {
-    await seed();
+    await seedEntity();
 
     expect(await readEditedFields(entityId)).toEqual([]);
   });
 
   it("ignores a row whose note is not JSON", async () => {
-    await seed();
+    await seedEntity();
     await env.DB.prepare(
       `INSERT INTO user_decision (id, workspace_id, user_id, signal_id, entity_id, verdict, note, decided_at)
        VALUES (?1, ?2, ?3, NULL, ?4, ?5, ?6, ?7)`,
@@ -204,10 +227,14 @@ describe("confirmCard field edits", () => {
       ),
     ).toBe(true);
 
-    expect(await fieldEditRows()).toEqual([
-      { field: "name", from: "Gymshark Ltd", to: "Gymshark" },
-      { field: "description", from: "Gym clothes", to: "Gym clothes for everyone" },
-    ]);
+    const rows = await fieldEditRows(await confirmedEntityId());
+    expect(rows).toHaveLength(2);
+    expect(rows).toEqual(
+      expect.arrayContaining([
+        { field: "name", from: "Gymshark Ltd", to: "Gymshark" },
+        { field: "description", from: "Gym clothes", to: "Gym clothes for everyone" },
+      ]),
+    );
     await settledTail();
   });
 
@@ -224,7 +251,33 @@ describe("confirmCard field edits", () => {
       ),
     ).toBe(true);
 
-    expect(await fieldEditRows()).toEqual([
+    expect(await fieldEditRows(await confirmedEntityId())).toEqual([
+      { field: "name", from: "Gymshark Ltd", to: "Gymshark" },
+    ]);
+    await settledTail();
+  });
+
+  it("does not record a repeated confirm whose values the self entity writer discarded", async () => {
+    await seed();
+    await cachedHomepage("Gymshark Ltd", "Gym clothes");
+    stubWeb(HOMEPAGE_HTML);
+
+    expect(
+      await confirmCard(
+        workspaceId,
+        userId,
+        form({ subject: DOMAIN, name: "Gymshark", description: "Gym clothes" }),
+      ),
+    ).toBe(true);
+    expect(
+      await confirmCard(
+        workspaceId,
+        userId,
+        form({ subject: DOMAIN, name: "Second", description: "Second description" }),
+      ),
+    ).toBe(true);
+
+    expect(await fieldEditRows(await confirmedEntityId())).toEqual([
       { field: "name", from: "Gymshark Ltd", to: "Gymshark" },
     ]);
     await settledTail();
@@ -249,7 +302,7 @@ describe("confirmCard field edits", () => {
       ),
     ).toBe(true);
 
-    expect(await fieldEditRows()).toEqual([]);
+    expect(await fieldEditRows(await confirmedEntityId())).toEqual([]);
     await settledTail();
   });
 });

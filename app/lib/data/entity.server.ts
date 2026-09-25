@@ -172,10 +172,11 @@ export async function insertSelfEntity(input: {
   name: string;
   identityJson: string;
   now: string;
-}): Promise<void> {
-  await env.DB.prepare(INSERT_SELF)
+}): Promise<boolean> {
+  const result = await env.DB.prepare(INSERT_SELF)
     .bind(input.id, input.workspaceId, input.domain, input.name, input.identityJson, input.now)
     .run();
+  return result.meta.changes === 1;
 }
 
 const SELECT_WORKSPACE_SELF_ID = "SELECT id FROM entity WHERE workspace_id = ?1 AND role = 'self'";
