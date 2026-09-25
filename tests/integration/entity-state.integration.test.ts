@@ -59,6 +59,7 @@ describe("entity data layer", () => {
       domain: "rival.example",
       state: "on",
       stateChangedAt: null,
+      stateReason: null,
     });
   });
 

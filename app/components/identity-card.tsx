@@ -2,13 +2,14 @@ import { Suspense, type ReactNode } from "react";
 import { Await, Form } from "react-router";
 
 import type { SiteFields } from "../lib/identity/card-fields";
+import { Button } from "./ui/button";
 
 const FIELD = "min-w-0 flex-1 bg-transparent py-1 text-[0.95rem] outline-none focus:border-b focus:border-ink";
 
 function Row({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div className="border-line flex items-baseline gap-4 border-b py-3">
-      <span className="text-ink-faint w-20 shrink-0 font-mono text-[0.75rem] uppercase">{label}</span>
+      <span className="text-ink-soft w-20 shrink-0 font-mono text-[0.75rem] uppercase">{label}</span>
       {children}
     </div>
   );
@@ -33,7 +34,6 @@ function Logo({ logo }: { logo: Promise<string | null> }) {
             ) : (
               <img src={url} alt="" className="h-10 w-10 object-contain" />
             )}
-            <input type="hidden" name="logo" value={url ?? ""} />
           </Row>
         )}
       </Await>
@@ -83,7 +83,7 @@ export function IdentityCard({
   message: string | undefined;
 }) {
   return (
-    <Form method="post" className="border-line bg-card mt-6 max-w-xl border px-4">
+    <Form method="post" className="border-ink bg-card mt-8 max-w-xl border-[1.5px] px-4">
       <input type="hidden" name="subject" value={subject} />
       <Row label="site">
         <span className="truncate text-[0.95rem]">{domain}</span>
@@ -103,14 +103,14 @@ export function IdentityCard({
             <>
               {fields.unfound ? (
                 <p role="status" className="text-ink-soft py-3 text-[0.88rem]">
-                  we couldn&apos;t find anything for that, try the main website
+                  We couldn&apos;t read that site, so fill in what you can.
                 </p>
               ) : null}
               <Fields site={fields} logo={logo} />
               {message ? <p role="alert" className="pt-3 text-[0.88rem]">{message}</p> : null}
-              <button type="submit" className="bg-ink text-bone my-4 px-4 py-2 font-display uppercase">
+              <Button type="submit" size="lg" className="my-5">
                 That&apos;s me
-              </button>
+              </Button>
             </>
           )}
         </Await>

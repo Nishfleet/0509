@@ -860,6 +860,10 @@ Cache `.lycheecache` with `actions/cache@v4`; it is one block of stock YAML, not
 | A config-migration script | `npx @cloudflare/codemods vitest:pool-workers-to-vitest-plugin` |
 | An action-version bumper | Dependabot `package-ecosystem: "github-actions"` |
 
+### 6.6 axe — accessibility in Playwright
+
+`@axe-core/playwright` **^4.13.0** runs Deque's axe-core inside the existing Playwright suite. `new AxeBuilder({ page }).withTags([...]).analyze()` returns an `AxeResults` whose `.violations` is the spec's pass/fail — the same suite, the same browser, the same sign-in path, no new runner. Per the Playwright accessibility doc (<https://playwright.dev/docs/accessibility-testing>), the WCAG tag set lives on `withTags`, so one tag list is the spec and the gate.
+
 ---
 
 ## 7. The API surface — agent-native by default
@@ -1088,6 +1092,7 @@ The version in this table is the `package.json` specifier. An earlier section of
 
 | Package | Specifier | Where it is named | Why this one | Rejected | Lock |
 |---|---|---|---|---|---|
+| `@axe-core/playwright` | ^4.13.0 | §6.6, #4149 | WCAG 2.2 AA scan inside Playwright specs. Doc: <https://playwright.dev/docs/accessibility-testing> | `axe-playwright` (third-party wrapper), Lighthouse's accessibility category (a subset of axe, per-URL, cannot sign in), hand-written contrast checks | 4.13.0 |
 | `@base-ui/react` | 1.8.0 | §3.2 | Badge and avatar import it | Radix. The copied shadcn files import Base UI | 1.8.0 |
 | `@better-auth/api-key` | ^1.7.5 | §7.3 | API keys, quotas, and expiry ship in this plugin | A hand-written key table | 1.7.5 |
 | `@better-auth/passkey` | ^1.7.5 | §2.5 | Passkeys. The plugin pulls SimpleWebAuthn | A hand-rolled WebAuthn | 1.7.5 |
@@ -1102,6 +1107,7 @@ The version in this table is the `package.json` specifier. An earlier section of
 | `react` | ^19.2.8 | §1.1 | UI runtime the scaffold emits | Preact. React Router 8's types are React | 19.3.0 |
 | `react-dom` | ^19.2.8 | §1.1 | Client renderer. Unit tests call `react-dom/server` | A second renderer | 19.3.0 |
 | `react-router` | ^8.4.0 | §1, §8 | Framework mode, SSR, routing | `@react-router/node` and `@react-router/serve`. C3 deletes both | 8.4.0 |
+| `robots-parser` | 3.0.1 | #4741, REBUILD-GUARDRAILS robots line | robots.txt matching (groups, wildcards, Allow/Disallow precedence) for plain fetches of the customer's own site. Zero dependencies. Doc: <https://github.com/samclarke/robots-parser> | A hand-written robots.txt parser (charter #3842 forbids it), `robotstxt` ports of Google's C++ parser | 3.0.1 |
 | `sonner` | ^2.0.8 | §5.10 | The one toast surface: "saved" and "undo" per DESIGN.md §11 | A hand-rolled live region (Base UI ships no toast primitive), `react-hot-toast` | 2.0.8 |
 | `tailwind-merge` | ^3.7.0 | §3.2 | Class conflict resolution inside `cn()` | A hand-written Tailwind merger | 3.7.0 |
 | `tldts` | ^7.4.13 | `docs/engines/identity-card.md` P1 | Registrable domain and public-suffix handling for identity input normalisation. No dependencies, ships a Workers-clean ESM build | A hand-written public-suffix list, `split('.')`, `psl` (unmaintained) | 7.4.13 |

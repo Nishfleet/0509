@@ -2,8 +2,10 @@
   "name": "0509-test",
   "compatibility_date": "2026-09-16",
   "compatibility_flags": ["global_fetch_strictly_public"],
+  "vars": { "SITE_SWEEP_PING_URL": "https://hc-ping.example/site-sweep", "BETTER_AUTH_URL": "https://0509.io" },
   "main": "../../workers/app.ts",
   "d1_databases": [{ "binding": "DB", "database_name": "0509-test", "database_id": "test" }],
+  "analytics_engine_datasets": [{ "binding": "MENTIONS_SOURCES", "dataset": "mentions_sources-test" }],
   "r2_buckets": [
     { "binding": "SNAPSHOTS", "bucket_name": "0509-snapshots-test" }
   ],
@@ -33,6 +35,11 @@
       "name": "own-site-check-test",
       "binding": "OWN_SITE_CHECK",
       "class_name": "OwnSiteCheckWorkflow"
+    },
+    {
+      "name": "mentions-sweep-test",
+      "binding": "MENTIONS",
+      "class_name": "MentionsWorkflow"
     }
   ],
   "kv_namespaces": [
@@ -40,6 +47,10 @@
     { "binding": "OAUTH_KV", "id": "test-oauth" }
   ],
   "ratelimits": [
-    { "name": "AGENT_LIMIT", "namespace_id": "5091", "simple": { "limit": 120, "period": 60 } }
+    { "name": "AGENT_LIMIT", "namespace_id": "5091", "simple": { "limit": 120, "period": 60 } },
+    { "name": "SIGN_IN_EMAIL_LIMIT", "namespace_id": "5092", "simple": { "limit": 5, "period": 60 } },
+    { "name": "SIGN_IN_IP_LIMIT", "namespace_id": "5093", "simple": { "limit": 20, "period": 60 } },
+    { "name": "AGENT_REGISTER_LIMIT", "namespace_id": "5094", "simple": { "limit": 10, "period": 60 } },
+    { "name": "PROBE_LIMIT", "namespace_id": "5095", "simple": { "limit": 10, "period": 60 } }
   ]
 }

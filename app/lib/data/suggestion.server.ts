@@ -2,8 +2,9 @@ import { env } from "cloudflare:workers";
 
 import type { NoulVerdict } from "../jev/client.server";
 import { noulAction } from "../jev/thresholds";
+import { daysBefore } from "../site-changes.server";
 import type { Evidence } from "../discovery/types";
-import { insertAutoCompetitor, insertCompetitorFromSuggestion } from "./entity.server";
+import { insertAutoCompetitor, insertCompetitorFromSuggestion, turnOffFromRetireSuggestion } from "./entity.server";
 import { insertVerdict } from "./jev_verdict.server";
 
 const ACCEPT_SUGGESTION =
@@ -11,6 +12,12 @@ const ACCEPT_SUGGESTION =
 
 const DISMISS_SUGGESTION =
   "UPDATE suggestion SET status = 'dismissed', decided_by = 'user', decided_at = ?1 WHERE id = ?2 AND workspace_id = ?3 AND status = 'pending'";
+
+const SELECT_USER_DISMISSED =
+  "SELECT id, candidate_domain, candidate_name, decided_at FROM suggestion WHERE workspace_id = ?1 AND status = 'dismissed' AND decided_by = 'user' ORDER BY decided_at DESC";
+
+const RESTORE_SUGGESTION =
+  "UPDATE suggestion SET status = 'pending', decided_by = NULL, decided_at = NULL WHERE id = ?1 AND workspace_id = ?2 AND status = 'dismissed' AND decided_by = 'user'";
 
 const UPSERT_DISCOVERED =
   "INSERT INTO suggestion (id, workspace_id, kind, candidate_domain, candidate_name, evidence_json, verdict_p, verdict_reason, status, decided_by, decided_at, created_at) VALUES (?1, ?2, 'add', ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11) ON CONFLICT (workspace_id, candidate_domain) DO UPDATE SET evidence_json = excluded.evidence_json, verdict_p = excluded.verdict_p, verdict_reason = excluded.verdict_reason, status = excluded.status, decided_by = excluded.decided_by, decided_at = excluded.decided_at WHERE suggestion.status = 'pending'";
@@ -27,6 +34,8 @@ export interface DiscoveryResult {
 }
 
 type SuggestionStatus = "auto_on" | "pending" | "dismissed";
+
+const RETIRE_REASK_DAYS = 28;
 
 function statusOf(verdict: NoulVerdict | null): SuggestionStatus {
   if (verdict === null) return "pending";
@@ -63,6 +72,7 @@ function statementsFor(workspaceId: string, result: DiscoveryResult, now: string
             signalId: null,
             entityId: null,
             p: result.verdict.p,
+            choice: null,
             reason: result.line,
             decidedAt: now,
           }),
@@ -103,10 +113,86 @@ export async function acceptSuggestion(input: {
   ]);
 }
 
+const ACCEPT_RETIRE_SUGGESTION =
+  "UPDATE suggestion SET status = 'accepted', decided_by = 'user', decided_at = ?1 WHERE id = ?2 AND workspace_id = ?3 AND kind = 'retire' AND status = 'pending'";
+
+const DISMISS_RETIRE_SUGGESTION =
+  "UPDATE suggestion SET status = 'dismissed', decided_by = 'user', decided_at = ?1 WHERE id = ?2 AND workspace_id = ?3 AND kind = 'retire' AND status = 'pending'";
+
+export async function confirmRetireSuggestion(input: {
+  workspaceId: string;
+  suggestionId: string;
+  now: string;
+}): Promise<void> {
+  await env.DB.batch([
+    turnOffFromRetireSuggestion(input),
+    env.DB.prepare(ACCEPT_RETIRE_SUGGESTION).bind(input.now, input.suggestionId, input.workspaceId),
+  ]);
+}
+
+export async function keepFromRetireSuggestion(input: {
+  workspaceId: string;
+  suggestionId: string;
+  now: string;
+}): Promise<void> {
+  await env.DB.prepare(DISMISS_RETIRE_SUGGESTION).bind(input.now, input.suggestionId, input.workspaceId).run();
+}
+
+const ASK_RETIRE_SUGGESTION =
+  "INSERT INTO suggestion (id, workspace_id, entity_id, kind, candidate_domain, candidate_name, verdict_p, verdict_reason, status, created_at) VALUES (?1, ?2, ?3, 'retire', ?4, ?5, ?6, ?7, 'pending', ?8) ON CONFLICT (workspace_id, candidate_domain) DO UPDATE SET kind = 'retire', entity_id = excluded.entity_id, verdict_p = excluded.verdict_p, verdict_reason = excluded.verdict_reason, status = 'pending', decided_by = NULL, decided_at = NULL WHERE NOT (suggestion.kind = 'retire' AND suggestion.status = 'dismissed' AND suggestion.decided_at > ?9)";
+
+export function askRetireSuggestion(input: {
+  workspaceId: string;
+  entityId: string;
+  domain: string;
+  name: string;
+  p: number;
+  line: string;
+  now: string;
+}): D1PreparedStatement {
+  return env.DB.prepare(ASK_RETIRE_SUGGESTION).bind(
+    crypto.randomUUID(),
+    input.workspaceId,
+    input.entityId,
+    input.domain,
+    input.name,
+    input.p,
+    input.line,
+    input.now,
+    daysBefore(new Date(input.now), RETIRE_REASK_DAYS),
+  );
+}
+
 export async function dismissSuggestion(input: {
   workspaceId: string;
   suggestionId: string;
   now: string;
 }): Promise<void> {
   await env.DB.prepare(DISMISS_SUGGESTION).bind(input.now, input.suggestionId, input.workspaceId).run();
+}
+
+export interface DismissedSuggestion {
+  suggestionId: string;
+  name: string;
+  domain: string;
+  dismissedAt: string;
+}
+
+export async function readUserDismissed(workspaceId: string): Promise<DismissedSuggestion[]> {
+  const rows = await env.DB.prepare(SELECT_USER_DISMISSED).bind(workspaceId).all<{
+    id: string;
+    candidate_domain: string;
+    candidate_name: string | null;
+    decided_at: string;
+  }>();
+  return rows.results.map((row) => ({
+    suggestionId: row.id,
+    name: row.candidate_name ?? row.candidate_domain,
+    domain: row.candidate_domain,
+    dismissedAt: row.decided_at,
+  }));
+}
+
+export async function restoreSuggestion(input: { workspaceId: string; suggestionId: string }): Promise<void> {
+  await env.DB.prepare(RESTORE_SUGGESTION).bind(input.suggestionId, input.workspaceId).run();
 }

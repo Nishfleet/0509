@@ -2,9 +2,10 @@ import { z } from "zod";
 
 export const mentionItemSchema = z.object({
 	dedupKey: z.string().min(1),
-	url: z.url(),
+	url: z.url({ protocol: /^https?$/ }),
 	title: z.string(),
 	publishedAt: z.string().nullable(),
+	publisher: z.string().nullable().optional(),
 });
 
 export const mentionsResultSchema = z.object({

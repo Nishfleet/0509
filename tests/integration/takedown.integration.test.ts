@@ -1,7 +1,7 @@
 import { env } from "cloudflare:test";
 import { beforeEach, describe, expect, it } from "vitest";
 
-import { isTakenDown } from "../../app/lib/data/takedown.server";
+import { isTakenDown, takenDownAmong } from "../../app/lib/data/takedown.server";
 
 const NOW = "2026-09-24T00:00:00Z";
 const LATER = "2026-09-24T01:00:00Z";
@@ -130,5 +130,10 @@ describe("after a takedown", () => {
 
   it("the takedown row is never duplicated", async () => {
     await expect(recordTakedown("removed.example").run()).rejects.toThrow(/UNIQUE|PRIMARY/);
+  });
+
+  it("takenDownAmong returns only the taken-down domains", async () => {
+    expect(await takenDownAmong(["removed.example", "kept.example"])).toEqual(new Set(["removed.example"]));
+    expect(await takenDownAmong([])).toEqual(new Set());
   });
 });

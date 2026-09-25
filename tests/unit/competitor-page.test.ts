@@ -7,6 +7,7 @@ import { CompetitorFrame, type CompetitorFrameProps, developmentsEmpty } from ".
 import type { SiteChangeItemData } from "../../app/components/site-change-item";
 import {
   CompetitorHeader,
+  CompetitorSwitch,
   competitorPausedLine,
   type CompetitorHeaderProps,
 } from "../../app/components/competitor-header";
@@ -55,6 +56,26 @@ describe("the competitor page frame", () => {
     expect(competitorPausedLine(null)).toBe("Paused");
   });
 
+  it("reads state_reason in lowercase customer words and never shows a code", () => {
+    expect(competitorPausedLine("2026-09-22T12:00:00.000Z", "acquired")).toBe(
+      "Paused 22 Sept · looks like it was acquired",
+    );
+    expect(competitorPausedLine("2026-09-22T12:00:00.000Z", "shut_down")).toBe(
+      "Paused 22 Sept · looks like it shut down",
+    );
+    expect(competitorPausedLine("2026-09-22T12:00:00.000Z", "some_code")).toBe("Paused 22 Sept");
+    expect(competitorPausedLine("2026-09-22T12:00:00.000Z", "constructor")).toBe("Paused 22 Sept");
+    const html = header({
+      name: "Kindred",
+      domain: "kindred.example",
+      state: "off",
+      stateChangedAt: "2026-09-22T12:00:00.000Z",
+      stateReason: "shut_down",
+    });
+    expect(html).toContain("looks like it shut down");
+    expect(html).not.toContain("shut_down");
+  });
+
   it("renders the blocks in DESIGN.md 2.5 order", () => {
     const html = render(
       createElement(
@@ -85,6 +106,18 @@ describe("the competitor page frame", () => {
       const index = html.indexOf(marker);
       expect(index).toBeGreaterThan(at);
       at = index;
+    }
+  });
+
+  it("prints the DESIGN.md 2.5 consequence beside the switch in both states, never a dialog", () => {
+    for (const state of ["on", "off"] as const) {
+      const html = render(createElement(CompetitorSwitch, { state, brandName: "Kindred" }));
+      expect(html).toContain('data-slot="competitor-switch"');
+      expect(html).toContain('role="switch"');
+      expect(html).toContain(
+        "Off stops the watching and the alerts. The history stays, and turning it back on picks up where it left off.",
+      );
+      expect(html).not.toContain('role="dialog"');
     }
   });
 

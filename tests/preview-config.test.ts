@@ -15,6 +15,7 @@ function storage(config: {
   kv_namespaces?: unknown;
   ratelimits?: unknown;
   workflows?: unknown;
+  analytics_engine_datasets?: unknown;
   ai?: unknown;
   queues?: { producers?: unknown };
 }) {
@@ -24,6 +25,7 @@ function storage(config: {
     kv_namespaces: config.kv_namespaces,
     ratelimits: config.ratelimits,
     workflows: config.workflows,
+    analytics_engine_datasets: config.analytics_engine_datasets,
     ai: config.ai,
     queue_producers: config.queues?.producers,
   };
@@ -35,13 +37,14 @@ describe("the preview environment", () => {
     expect(environment.name).not.toBe(production.name);
   });
 
-  it("binds no production database, bucket, namespace, queue or Workflow", () => {
+  it("binds no production database, bucket, namespace, dataset, queue or Workflow", () => {
     const productionIds = new Set<string>([
       ...production.d1_databases.flatMap((db) => [db.database_id ?? "", db.database_name ?? ""]),
       ...production.r2_buckets.map((bucket) => bucket.bucket_name ?? ""),
       ...production.kv_namespaces.map((namespace) => namespace.id ?? ""),
       ...production.ratelimits.map((limit) => `ratelimit:${limit.namespace_id}`),
       ...production.workflows.map((workflow) => workflow.name),
+      ...production.analytics_engine_datasets.map((dataset) => `dataset:${dataset.dataset ?? dataset.binding}`),
       ...(production.queues.producers ?? []).map((producer) => producer.queue),
     ].filter(Boolean));
     const previewIds = [
@@ -50,6 +53,7 @@ describe("the preview environment", () => {
       ...(previews.kv_namespaces ?? []).map((namespace) => namespace.id ?? ""),
       ...(previews.ratelimits ?? []).map((limit) => `ratelimit:${limit.namespace_id}`),
       ...(previews.workflows ?? []).map((workflow) => workflow.name),
+      ...(previews.analytics_engine_datasets ?? []).map((dataset) => `dataset:${dataset.dataset ?? dataset.binding}`),
       ...environment.workflows.map((workflow) => workflow.name),
       ...(previews.queues?.producers ?? []).map((producer) => producer.queue),
     ];
@@ -64,6 +68,7 @@ describe("the preview environment", () => {
     expect(names(previews.kv_namespaces)).toEqual(names(production.kv_namespaces));
     expect(names(previews.queues?.producers)).toEqual(names(production.queues.producers));
     expect(names(previews.workflows)).toEqual(names(production.workflows));
+    expect(names(previews.analytics_engine_datasets)).toEqual(names(production.analytics_engine_datasets));
     expect((previews.ratelimits ?? []).map((limit) => limit.name).sort()).toEqual(
       production.ratelimits.map((limit) => limit.name).sort(),
     );

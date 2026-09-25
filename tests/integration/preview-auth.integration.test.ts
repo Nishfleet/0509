@@ -20,6 +20,8 @@ function previewAuth(sent: string[]) {
         return { messageId: "test" };
       },
     },
+    SIGN_IN_EMAIL_LIMIT: env.SIGN_IN_EMAIL_LIMIT,
+    SIGN_IN_IP_LIMIT: env.SIGN_IN_IP_LIMIT,
     BETTER_AUTH_SECRET: "integration-test-secret-integration-test-secret",
     BETTER_AUTH_ALLOWED_HOSTS: PREVIEW_HOSTS,
     PASSKEY_RP_ID: "nishant345.workers.dev",

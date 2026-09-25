@@ -11,15 +11,17 @@ import worker from "../../workers/fixture-site";
  * case is the one D3s actually exercises, so its assertion is on the pricing
  * markup, not on a status code — a 200 that lost its prices is the regression.
  *
- * Real workerd against a real local KV, the same binding kinds production has:
- * a broken gate or a break state that does not survive the round-trip fails
- * here rather than in a live incident run.
+ * Real workerd against a real local SQLite Durable Object, the same binding kinds
+ * production has: a broken gate or a break state that does not survive the
+ * round-trip fails here rather than in a live incident run.
  *
  * The flip route mirrors the e2e inbox's token gate (0509#3927), including the
  * 503 when the secret is missing: a fixture that reads healthy because its
  * token was never set is worse than no fixture.
  */
 const TOKEN = "integration-token";
+
+const state = () => env.STATE.getByName("fixture");
 
 const get = () =>
   worker.fetch(new Request("https://fixture.0509.in/"), env, createExecutionContext());
@@ -50,12 +52,12 @@ const readPricing = (html: string) => {
 };
 
 describe("0509-fixture-site", () => {
-  // One KV key backs every test, so a flip in one test would leak into the next
+  // One Durable Object instance backs every test, so a flip in one test would leak into the next
   // and make the suite order-dependent. Reset to healthy before each: the
   // healthy-page test only passes reliably because it runs first otherwise, and
   // --sequence.shuffle turns that into a red gate.
   beforeEach(async () => {
-    await env.STATE.put("break-mode", "off");
+    await state().put("break-mode", "off");
   });
 
   it("serves the healthy page with its pricing section and price tokens", async () => {
@@ -85,7 +87,14 @@ describe("0509-fixture-site", () => {
     await waitOnExecutionContext(ctx);
     const res = await get();
     expect(res.status).toBe(500);
-    expect(await env.STATE.get("break-mode")).toBe("hard");
+    expect(await state().get("break-mode")).toBe("hard");
+  });
+
+  it("serves the hard break to the very next fetch, read from the Durable Object", async () => {
+    await flip("hard");
+    const res = await get();
+    expect(res.status).toBe(500);
+    expect(await state().get("break-mode")).toBe("hard");
   });
 
   it("flips to a soft break and answers 200 with the pricing section absent", async () => {
@@ -172,9 +181,9 @@ describe("0509-fixture-site", () => {
 
 describe("price variant", () => {
   beforeEach(async () => {
-    await env.STATE.put("break-mode", "off");
-    await env.STATE.put("price-variant", "base");
-    await env.STATE.delete("price-flipped-at");
+    await state().put("break-mode", "off");
+    await state().put("price-variant", "base");
+    await state().delete("price-flipped-at");
   });
 
   it("serves a fresh page on the base price with no flip time", async () => {

@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { readCompetitors, readDiscoveryContext, readOnboardingCompetitors } from "../../../app/lib/data/entity.server";
 import { writeDiscoveryResults } from "../../../app/lib/data/suggestion.server";
-import { judgeCandidates } from "../../../app/lib/discovery/run.server";
+import { judgeCandidates, resolveShortlist } from "../../../app/lib/discovery/run.server";
 import type { ResolvedCandidate } from "../../../app/lib/discovery/run.server";
 
 const NOW = "2026-09-24T06:00:00.000Z";
@@ -94,6 +94,57 @@ describe("writeDiscoveryResults", () => {
     const { on, maybes } = await readOnboardingCompetitors(workspaceId);
     expect(on.map((row) => row.domain)).toEqual(["nike.com"]);
     expect(maybes).toEqual([]);
+  });
+});
+
+describe("resolveShortlist", () => {
+  it("batches takedowns and keeps taken-down candidates out of Jev and every stored result", async () => {
+    const workspaceId = await seedWorkspace();
+    const context = await readDiscoveryContext(workspaceId);
+    if (context === null) throw new Error("seed failed");
+    await env.DB.prepare(
+      "INSERT INTO takedown (subject, requested_at, actioned_at, actioned_by) VALUES (?, ?, ?, 'nish')",
+    )
+      .bind("taken-down.example", NOW, NOW)
+      .run();
+    const run = vi.fn(() => Promise.resolve({ answers: { is_competitor: { type: "noul", noul: 0.92 } } }));
+    Reflect.set(env, "AI", { run });
+    const prepare = vi.spyOn(env.DB, "prepare");
+
+    const resolved = await resolveShortlist(context, [
+      candidate("Taken Down", "taken-down.example"),
+      candidate("Kept", "kept.example"),
+    ]);
+    const takedownQueries = prepare.mock.calls.filter(([query]) =>
+      String(query).includes("FROM takedown WHERE subject IN"),
+    ).length;
+    prepare.mockRestore();
+
+    expect(takedownQueries).toBe(1);
+    expect(resolved.map((item) => item.domain)).toEqual(["kept.example"]);
+
+    const results = await judgeCandidates(context, resolved);
+    await writeDiscoveryResults(workspaceId, results, NOW);
+
+    const asked = run.mock.calls.map(([, input]) => JSON.stringify(input));
+    expect(asked).toHaveLength(1);
+    expect(asked[0]).toContain("kept.example");
+    expect(asked[0]).not.toContain("taken-down.example");
+    expect(results[0]?.verdict).toMatchObject({ p: 0.92, cached: false });
+    const verdicts = await env.DB.prepare("SELECT COUNT(*) AS n FROM jev_verdict WHERE workspace_id = ?")
+      .bind(workspaceId)
+      .first<{ n: number }>();
+    const suggestions = await env.DB.prepare(
+      "SELECT COUNT(*) AS n FROM suggestion WHERE workspace_id = ? AND candidate_domain = ?",
+    )
+      .bind(workspaceId, "taken-down.example")
+      .first<{ n: number }>();
+    const entities = await env.DB.prepare("SELECT COUNT(*) AS n FROM entity WHERE workspace_id = ? AND domain = ?")
+      .bind(workspaceId, "taken-down.example")
+      .first<{ n: number }>();
+    expect(verdicts?.n).toBe(1);
+    expect(suggestions?.n).toBe(0);
+    expect(entities?.n).toBe(0);
   });
 });
 

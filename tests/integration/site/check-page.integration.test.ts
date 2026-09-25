@@ -16,7 +16,7 @@ const ENTITY = "ent-check-page";
 const SOURCE = "src-check-page";
 const PAGE = "page-check-page";
 const WATCH = "watch-check-page";
-const URL = "https://competitor.example/pricing";
+const URL = "https://competitor.example.com/pricing";
 const NOW = "2026-09-23T00:00:00Z";
 
 const FIRST_HTML = `<!doctype html><html><body><h1>Pricing</h1><p>Plan costs ten dollars.</p><p>${PAD}</p></body></html>`;
@@ -37,7 +37,7 @@ const seed = async () => {
     .run();
   await env.DB.prepare(
     `INSERT INTO entity (id, workspace_id, role, domain, identity_json, origin, state, created_at)
-     VALUES (?, ?, 'competitor', 'competitor.example', '{}', 'manual', 'on', ?)`,
+     VALUES (?, ?, 'competitor', 'competitor.example.com', '{}', 'manual', 'on', ?)`,
   )
     .bind(ENTITY, WS, NOW)
     .run();

@@ -1,4 +1,5 @@
 import { betterAuth, type BetterAuthOptions } from "better-auth";
+import { APIError, createAuthMiddleware } from "better-auth/api";
 import { magicLink } from "better-auth/plugins";
 import { apiKey } from "@better-auth/api-key";
 import { passkey } from "@better-auth/passkey";
@@ -6,15 +7,27 @@ import { passkey } from "@better-auth/passkey";
 import { API_KEY_PREFIX } from "./agent/paths";
 import { ensureWorkspaceForSignIn } from "./workspace.server";
 import { MAGIC_LINK_TTL_SECONDS, magicLinkEmail } from "./auth/magic-link-email";
+import { signInLinkAllowed } from "./auth/sign-in-limit";
 import { sendOrThrow } from "../../workers/delivery/send";
 
 interface AuthEnv {
   DB: D1Database;
   EMAIL: SendEmail;
+  SIGN_IN_EMAIL_LIMIT: RateLimit;
+  SIGN_IN_IP_LIMIT: RateLimit;
   BETTER_AUTH_SECRET?: string;
   BETTER_AUTH_URL?: string;
   BETTER_AUTH_ALLOWED_HOSTS?: string;
   PASSKEY_RP_ID?: string;
+}
+
+const MAGIC_LINK_PATH = "/sign-in/magic-link";
+const CLIENT_IP_HEADER = "cf-connecting-ip";
+
+function emailOf(body: unknown): string {
+  if (typeof body !== "object" || body === null) return "";
+  const email: unknown = Reflect.get(body, "email");
+  return typeof email === "string" ? email : "";
 }
 
 const COOKIE_PREFIX = "better-auth";
@@ -34,13 +47,26 @@ function baseURL(env: AuthEnv): BetterAuthOptions["baseURL"] {
 }
 
 export function createAuth(env: AuthEnv) {
+  const origin = env.BETTER_AUTH_URL === undefined ? undefined : new URL(env.BETTER_AUTH_URL).origin;
   return betterAuth({
     database: env.DB,
     secret: env.BETTER_AUTH_SECRET,
     baseURL: baseURL(env),
-    advanced: { cookiePrefix: COOKIE_PREFIX },
+    advanced: {
+      cookiePrefix: COOKIE_PREFIX,
+      ipAddress: { ipAddressHeaders: [CLIENT_IP_HEADER] },
+    },
     session: { freshAge: FRESH_SESSION_SECONDS },
     user: { deleteUser: { enabled: true } },
+    hooks: {
+      before: createAuthMiddleware(async (ctx) => {
+        if (ctx.path !== MAGIC_LINK_PATH) return;
+        const ip = ctx.headers?.get(CLIENT_IP_HEADER) ?? null;
+        if (!(await signInLinkAllowed(env, emailOf(ctx.body), ip))) {
+          throw new APIError("TOO_MANY_REQUESTS", { message: "Too many sign-in links. Wait a minute and try again." });
+        }
+      }),
+    },
     databaseHooks: {
       session: {
         create: {
@@ -58,6 +84,7 @@ export function createAuth(env: AuthEnv) {
     plugins: [
       magicLink({
         expiresIn: MAGIC_LINK_TTL_SECONDS,
+        storeToken: "hashed",
         sendMagicLink: async ({ email, url }) => {
           const message = magicLinkEmail({ email, url });
           await sendOrThrow(env.EMAIL, {
@@ -69,9 +96,10 @@ export function createAuth(env: AuthEnv) {
           });
         },
       }),
-      passkey({ rpID: env.PASSKEY_RP_ID }),
+      passkey({ rpID: env.PASSKEY_RP_ID, rpName: "Five to Nine", origin }),
       apiKey({
         defaultPrefix: API_KEY_PREFIX,
+        maximumNameLength: 60,
         rateLimit: { enabled: true, timeWindow: 60_000, maxRequests: 120 },
       }),
     ],

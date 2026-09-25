@@ -27,6 +27,7 @@
     "enabled": true
   },
   "upload_source_maps": true,
+  "assets": { "run_worker_first": ["/mcp"] },
 
   // The pre-rebuild Worker declared one Durable Object class,
   // SelectionEnrichmentLease (tag v1, new_sqlite_classes). The fresh app does
@@ -64,6 +65,9 @@
     }
   ],
 
+  // Mentions telemetry (#4003 slice 3/6, docs/engines/mentions.md P5.4).
+  "analytics_engine_datasets": [{ "binding": "MENTIONS_SOURCES", "dataset": "mentions_sources" }],
+
   // One binding for the one bucket (#4569 had added a second binding to the
   // same bucket). snapshot/site/ holds raw site snapshots, text and screenshot
   // (engine 4), under the one-year snapshot/ rule in docs/REBUILD-GUARDRAILS.md.
@@ -93,7 +97,19 @@
   // (docs/REBUILD-STACK.md §7.4). Per-colo and approximate by design; the exact
   // per-key quota is the apikey row's own rate limit.
   "ratelimits": [
-    { "name": "AGENT_LIMIT", "namespace_id": "5091", "simple": { "limit": 120, "period": 60 } }
+    { "name": "AGENT_LIMIT", "namespace_id": "5091", "simple": { "limit": 120, "period": 60 } },
+    // Sign-in link sends, checked in a better-auth before-hook so the /login
+    // form and a direct POST to /api/auth/sign-in/magic-link are both covered.
+    // Per address (hashed) it stops one inbox being flooded; per IP it slows a
+    // sender spraying many addresses. The IP ceiling leaves room for the
+    // production e2e run, which signs in about a dozen times from one runner.
+    { "name": "SIGN_IN_EMAIL_LIMIT", "namespace_id": "5092", "simple": { "limit": 5, "period": 60 } },
+    { "name": "SIGN_IN_IP_LIMIT", "namespace_id": "5093", "simple": { "limit": 20, "period": 60 } },
+    // Open AI-app registration (/oauth/register) writes a 30-day client row to
+    // OAUTH_KV per call; per client IP, a real app registers once.
+    { "name": "AGENT_REGISTER_LIMIT", "namespace_id": "5094", "simple": { "limit": 10, "period": 60 } },
+    // Onboarding identity probes, per user; each probe is a site fetch and possibly a Browser Rendering session.
+    { "name": "PROBE_LIMIT", "namespace_id": "5095", "simple": { "limit": 10, "period": 60 } }
   ],
 
   // Browser Rendering: brand pages bot-gate a plain workerd fetch, so every
@@ -196,6 +212,16 @@
       "binding": "OWN_SITE_CHECK",
       "class_name": "OwnSiteCheckWorkflow",
       "schedules": ["0 * * * *"]
+    },
+    // The nightly news sweep (docs/engines/mentions.md): GDELT and Hacker
+    // News, one step per brand per source, paced for GDELT's one request per
+    // five seconds. 01:00 UTC so its alerts land before the 03:00 standing
+    // refresh counts them.
+    {
+      "name": "mentions-sweep",
+      "binding": "MENTIONS",
+      "class_name": "MentionsWorkflow",
+      "schedules": ["0 1 * * *"]
     }
   ],
 
@@ -203,8 +229,9 @@
     // The dead-man ping, every five minutes: an external service alerts when
     // the reports stop, which is the one failure a Worker cannot report about
     // itself. Also the nightly delivery sweeper, which re-enqueues stale
-    // pending digests and claims.
-    "crons": ["*/5 * * * *", "0 3 * * *"]
+    // pending digests and claims, and the Monday 04:00 UTC D2 competitor
+    // refresh.
+    "crons": ["*/5 * * * *", "0 3 * * *", "0 4 * * 1"]
   },
 
   "routes": [
@@ -226,7 +253,8 @@
   //
   // Nothing here names a production resource: D1 0509-preview, R2
   // 0509-preview-snapshots, KV 0509-identity-cache-preview and
-  // 0509-oauth-preview, rate-limit namespace 5092, queue send-email-preview and
+  // 0509-oauth-preview, the 609x rate-limit namespaces (production uses
+  // 509x), the mentions_sources_preview dataset, queue send-email-preview and
   // the *-preview Workflows are preview twins. Previews run no crons and
   // consume no queues, so a preview never sends a brief. Preview URLs sit
   // behind Cloudflare Access, like the gated routes of 0509.io.
@@ -234,8 +262,8 @@
   // A Preview can only bind to a Workflow that already exists
   // (https://developers.cloudflare.com/workers/previews/resources/#workflows),
   // so CI deploys 0509-preview itself first, which creates the *-preview
-  // Workflows from the same head. They carry no schedules: the nightly sweep
-  // and the hourly own-site check never run on their own here.
+  // Workflows from the same head. They carry no schedules, so no sweep or
+  // check runs on its own here.
   //
   // The bindings appear twice on purpose. A Preview inherits nothing, so it
   // reads only `previews`
@@ -267,13 +295,18 @@
           "database_id": "d6643a38-0666-470e-8e08-1953918dfd8a"
         }
       ],
+      "analytics_engine_datasets": [{ "binding": "MENTIONS_SOURCES", "dataset": "mentions_sources_preview" }],
       "r2_buckets": [{ "binding": "SNAPSHOTS", "bucket_name": "0509-preview-snapshots" }],
       "kv_namespaces": [
         { "binding": "IDENTITY_CACHE", "id": "c1e0df6e72a940948717a924af6dba7d" },
         { "binding": "OAUTH_KV", "id": "41d23c5a12ab4effb4388cc8fecc7f36" }
       ],
       "ratelimits": [
-        { "name": "AGENT_LIMIT", "namespace_id": "5092", "simple": { "limit": 120, "period": 60 } }
+        { "name": "AGENT_LIMIT", "namespace_id": "6091", "simple": { "limit": 120, "period": 60 } },
+        { "name": "SIGN_IN_EMAIL_LIMIT", "namespace_id": "6092", "simple": { "limit": 5, "period": 60 } },
+        { "name": "SIGN_IN_IP_LIMIT", "namespace_id": "6093", "simple": { "limit": 20, "period": 60 } },
+        { "name": "AGENT_REGISTER_LIMIT", "namespace_id": "6094", "simple": { "limit": 10, "period": 60 } },
+        { "name": "PROBE_LIMIT", "namespace_id": "6095", "simple": { "limit": 10, "period": 60 } }
       ],
       "workflows": [
         {
@@ -296,7 +329,8 @@
           "name": "own-site-check-preview",
           "binding": "OWN_SITE_CHECK",
           "class_name": "OwnSiteCheckWorkflow"
-        }
+        },
+        { "name": "mentions-sweep-preview", "binding": "MENTIONS", "class_name": "MentionsWorkflow" }
       ],
       "ai": { "binding": "AI" },
       "browser": { "binding": "BROWSER" },
@@ -316,13 +350,18 @@
             "database_id": "d6643a38-0666-470e-8e08-1953918dfd8a"
           }
         ],
+        "analytics_engine_datasets": [{ "binding": "MENTIONS_SOURCES", "dataset": "mentions_sources_preview" }],
         "r2_buckets": [{ "binding": "SNAPSHOTS", "bucket_name": "0509-preview-snapshots" }],
         "kv_namespaces": [
           { "binding": "IDENTITY_CACHE", "id": "c1e0df6e72a940948717a924af6dba7d" },
           { "binding": "OAUTH_KV", "id": "41d23c5a12ab4effb4388cc8fecc7f36" }
         ],
         "ratelimits": [
-          { "name": "AGENT_LIMIT", "namespace_id": "5092", "simple": { "limit": 120, "period": 60 } }
+          { "name": "AGENT_LIMIT", "namespace_id": "6091", "simple": { "limit": 120, "period": 60 } },
+          { "name": "SIGN_IN_EMAIL_LIMIT", "namespace_id": "6092", "simple": { "limit": 5, "period": 60 } },
+          { "name": "SIGN_IN_IP_LIMIT", "namespace_id": "6093", "simple": { "limit": 20, "period": 60 } },
+          { "name": "AGENT_REGISTER_LIMIT", "namespace_id": "6094", "simple": { "limit": 10, "period": 60 } },
+          { "name": "PROBE_LIMIT", "namespace_id": "6095", "simple": { "limit": 10, "period": 60 } }
         ],
         "workflows": [
           {
@@ -345,7 +384,8 @@
             "name": "own-site-check-preview",
             "binding": "OWN_SITE_CHECK",
             "class_name": "OwnSiteCheckWorkflow"
-          }
+          },
+          { "name": "mentions-sweep-preview", "binding": "MENTIONS", "class_name": "MentionsWorkflow" }
         ],
         "ai": { "binding": "AI" },
         "browser": { "binding": "BROWSER" },

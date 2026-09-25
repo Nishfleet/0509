@@ -1,9 +1,13 @@
 import type { BriefContext, BriefPayload, RenderedBrief } from "../../app/lib/brief-payload";
 import { escapeHtml } from "../../app/lib/html";
+import { EYEBROW, FONT, MONO, emailDocument } from "./email-shell";
 
 const COPY = {
-  subject: (rank: number, total: number) =>
-    `Your weekly brief: you're #${n(rank)} of ${n(total)} this week`,
+  subject: (rank: number, total: number) => `You're #${n(rank)} of ${n(total)} this week`,
+  subjectMoved: (rank: number, total: number, movement: string) =>
+    `You're #${n(rank)} of ${n(total)} this week, ${movement}`,
+  noRankSubject: "Your weekly brief",
+  weekOf: (start: string) => `Week of ${start}`,
   headline: (rank: number, total: number) => `You're #${n(rank)} of ${n(total)} this week`,
   noRank: "Add a competitor to see where you stand",
   up: (count: number) => `up ${n(count)}`,
@@ -26,30 +30,12 @@ const COPY = {
   degraded: (count: number) =>
     `${n(count)} ${count === 1 ? "source" : "sources"} did not answer this week, so these counts are short.`,
   unnamedSource: "One of your sources",
-  sources: (count: number) => (count === 0 ? "no sources answered" : count === 1 ? "1 source" : `${n(count)} sources`),
+  sources: (count: number) => (count === 1 ? "1 source" : `${n(count)} sources`),
   blind: (source: string, when: string) =>
     `${source} has not answered since ${when}, so this is not a quiet week we can vouch for.`,
   blindNever: (source: string) =>
     `${source} has not answered yet, so this is not a quiet week we can vouch for.`,
 } as const;
-
-const COLORS = {
-  page: "#f4f1e8",
-  card: "#fffdf6",
-  ink: "#0e0d0a",
-  muted: "#55524a",
-  rule: "#ddd6c6",
-} as const;
-
-const DARK_COLORS = {
-  page: "#14130f",
-  card: "#1c1a15",
-  ink: "#f2efe4",
-  muted: "#a9a294",
-  rule: "#322e25",
-} as const;
-
-const FONT = '-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif';
 
 function n(value: number): string {
   return String(value);
@@ -64,15 +50,15 @@ function safeUrl(value: string): string | null {
   return escapeHtml(trimmed);
 }
 
-function formatDate(iso: string, timezone: string, withTime: boolean): string {
+export function formatDate(iso: string, timezone: string, withTime: boolean): string {
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return iso;
   try {
-    return new Intl.DateTimeFormat("en-US", {
+    return new Intl.DateTimeFormat("en-GB", {
       timeZone: timezone,
       ...(withTime
-        ? { dateStyle: "medium" as const, timeStyle: "short" as const }
-        : { dateStyle: "full" as const }),
+        ? { weekday: "short" as const, day: "numeric" as const, month: "short" as const, hour: "2-digit" as const, minute: "2-digit" as const }
+        : { weekday: "long" as const, day: "numeric" as const, month: "long" as const }),
     }).format(date);
   } catch {
     return iso;
@@ -116,15 +102,15 @@ function renderHeadline(payload: BriefPayload, whyLine: string): { html: string;
   }
 
   const movement = movementText(headline_movement, payload.headline_is_new);
-  const period = `${formatDate(payload.period_start, payload.timezone, false)} – ${formatDate(payload.period_end, payload.timezone, false)}`;
+  const period = COPY.weekOf(formatDate(payload.period_start, payload.timezone, false));
 
   const html = [
-    `<p style="margin:0;font-family:${FONT};font-size:24px;line-height:32px;font-weight:600;">`,
-    escapeHtml(COPY.headline(headline_rank, headline_total)),
-    `<span class="brief-muted" style="font-weight:400;"> ${escapeHtml(movement)}</span>`,
+    `<p class="brief-muted" style="${EYEBROW}">${escapeHtml(period)}</p>`,
+    `<p style="margin:0;font-family:${FONT};font-size:28px;line-height:34px;font-weight:800;letter-spacing:-0.02em;">`,
+    `You&#39;re <span class="brief-marker" style="padding:0 4px;">#${n(headline_rank)}</span> of ${n(headline_total)} this week`,
     `</p>`,
-    `<p class="brief-muted" style="margin:4px 0 0;font-family:${FONT};font-size:14px;line-height:20px;">${escapeHtml(period)}</p>`,
-    `<p style="margin:12px 0 0;font-family:${FONT};font-size:16px;line-height:24px;">${escapeHtml(whyLine)}</p>`,
+    `<p class="brief-muted" style="margin:4px 0 0;font-family:${MONO};font-size:13px;line-height:18px;letter-spacing:0.06em;text-transform:uppercase;">${escapeHtml(movement)}</p>`,
+    `<p style="margin:14px 0 0;font-family:${FONT};font-size:16px;line-height:24px;">${escapeHtml(whyLine)}</p>`,
   ].join("");
 
   const text = [
@@ -157,10 +143,10 @@ function renderMark(
       : `<a class="brief-ink" href="${href}">${escapeHtml(title)}</a>`,
     `</p>`,
     mark.before !== null && mark.after !== null
-      ? `<p class="brief-muted" style="margin:6px 0 0;font-family:${FONT};font-size:14px;line-height:20px;">${escapeHtml(`${mark.before} → ${mark.after}`)}</p>`
+      ? `<p style="margin:8px 0 0;font-family:${FONT};font-size:18px;line-height:26px;font-weight:700;"><s class="brief-strike">${escapeHtml(mark.before)}</s> → <span class="brief-marker" style="padding:0 4px;">${escapeHtml(mark.after)}</span></p>`
       : "",
     thumb !== null && href !== null
-      ? `<p style="margin:8px 0 0;"><a class="brief-ink" href="${href}"><img src="${thumb}" alt="screenshot thumbnail" width="${n(120)}" height="${n(90)}" style="display:block;border-radius:4px;"></a></p>`
+      ? `<p style="margin:10px 0 0;"><a class="brief-ink" href="${href}"><img src="${thumb}" alt="Screenshot of the change" width="${n(120)}" height="${n(90)}" style="display:block;"></a></p>`
       : "",
     `<p style="margin:8px 0 0;font-family:${FONT};font-size:14px;line-height:20px;">${escapeHtml(mark.jev_reason)}</p>`,
     `</div>`,
@@ -185,8 +171,7 @@ function renderReadThisFirst(
 ): { html: string; text: string } {
   const marks = payload.read_this_first.slice(0, 3);
 
-  const heading = (text: string) =>
-    `<h2 style="margin:0 0 4px;font-family:${FONT};font-size:18px;line-height:24px;font-weight:600;">${escapeHtml(text)}</h2>`;
+  const heading = (text: string) => `<h2 class="brief-muted" style="${EYEBROW}">${escapeHtml(text)}</h2>`;
 
   if (marks.length === 0) {
     return {
@@ -211,6 +196,9 @@ function renderBrandLine(line: BriefPayload["brands"][number]): { html: string; 
     countPhrase(line.ad_delta, "new ad", "new ads"),
     countPhrase(line.mention_delta, "mention", "mentions"),
     countPhrase(line.site_change_count, "site change", "site changes"),
+    ...(line.new_roles > 0
+      ? [countPhrase(line.new_roles, "new job post", "new job posts")]
+      : []),
   ];
 
   const rankLabel = line.rank === null ? "unranked" : `#${n(line.rank)}`;
@@ -241,8 +229,7 @@ function renderBrandLine(line: BriefPayload["brands"][number]): { html: string; 
 }
 
 function renderBrands(payload: BriefPayload): { html: string; text: string } {
-  const heading = (text: string) =>
-    `<h2 style="margin:0 0 4px;font-family:${FONT};font-size:18px;line-height:24px;font-weight:600;">${escapeHtml(text)}</h2>`;
+  const heading = (text: string) => `<h2 class="brief-muted" style="${EYEBROW}">${escapeHtml(text)}</h2>`;
 
   if (payload.brands.length === 0) {
     return {
@@ -296,7 +283,8 @@ function renderOwnSite(payload: BriefPayload): { html: string; text: string } {
 
 function renderFooter(payload: BriefPayload, unsubscribeUrl: string | null): { html: string; text: string } {
   const checked = countsSentence(payload.checked);
-  const sources = COPY.sources(payload.checked.source_keys.length);
+  const sourceCount = payload.checked.source_keys.length;
+  const across = sourceCount === 0 ? "" : ` across ${COPY.sources(sourceCount)}`;
 
   const nextAt =
     payload.next_brief_at === null
@@ -311,8 +299,8 @@ function renderFooter(payload: BriefPayload, unsubscribeUrl: string | null): { h
   const unsubscribeHref = unsubscribeUrl === null ? null : safeUrl(unsubscribeUrl);
   const html = [
     `<div class="brief-rule" style="padding:16px 0 0;">`,
-    `<p class="brief-muted" style="margin:0;font-family:${FONT};font-size:13px;line-height:18px;">${escapeHtml(COPY.footerTitle)}</p>`,
-    `<p class="brief-muted" style="margin:2px 0 0;font-family:${FONT};font-size:13px;line-height:18px;">${escapeHtml(`${checked} across ${sources}.${degraded}`)}</p>`,
+    `<p class="brief-muted" style="${EYEBROW}">${escapeHtml(COPY.footerTitle)}</p>`,
+    `<p class="brief-muted" style="margin:2px 0 0;font-family:${FONT};font-size:13px;line-height:18px;">${escapeHtml(`${checked}${across}.${degraded}`)}</p>`,
     `<p class="brief-muted" style="margin:8px 0 0;font-family:${FONT};font-size:13px;line-height:18px;">${escapeHtml(nextAt)}</p>`,
     `<p class="brief-muted" style="margin:8px 0 0;font-family:${FONT};font-size:13px;line-height:18px;">`,
     unsubscribeHref === null
@@ -323,7 +311,7 @@ function renderFooter(payload: BriefPayload, unsubscribeUrl: string | null): { h
   ].join("");
 
   const text = [
-    `${COPY.footerTitle}: ${checked} across ${sources}.${degraded}`,
+    `${COPY.footerTitle}: ${checked}${across}.${degraded}`,
     nextAt,
     unsubscribeUrl === null ? COPY.noUnsubscribe : `${COPY.unsubscribe}: ${unsubscribeUrl}`,
   ].join("\n");
@@ -331,24 +319,13 @@ function renderFooter(payload: BriefPayload, unsubscribeUrl: string | null): { h
   return { html, text };
 }
 
-function briefStyle(): string {
-  return [
-    `<style>`,
-    `.brief-page{background-color:${COLORS.page};}`,
-    `.brief-card{background-color:${COLORS.card};color:${COLORS.ink};}`,
-    `.brief-muted{color:${COLORS.muted};}`,
-    `.brief-rule{border-top:1px solid ${COLORS.rule};}`,
-    `.brief-rule img{border:1px solid ${COLORS.rule};}`,
-    `a.brief-ink,a.brief-muted{color:inherit;}`,
-    `@media (prefers-color-scheme: dark) {`,
-    `.brief-page{background-color:${DARK_COLORS.page};}`,
-    `.brief-card{background-color:${DARK_COLORS.card};color:${DARK_COLORS.ink};}`,
-    `.brief-muted{color:${DARK_COLORS.muted};}`,
-    `.brief-rule{border-top:1px solid ${DARK_COLORS.rule};}`,
-    `.brief-rule img{border:1px solid ${DARK_COLORS.rule};}`,
-    `}`,
-    `</style>`,
-  ].join("");
+function briefSubject(payload: BriefPayload): string {
+  const { headline_rank, headline_total, headline_movement } = payload;
+  if (headline_rank === null || headline_total < 2) return COPY.noRankSubject;
+  if (payload.headline_is_new || headline_movement === null || headline_movement === 0) {
+    return COPY.subject(headline_rank, headline_total);
+  }
+  return COPY.subjectMoved(headline_rank, headline_total, movementText(headline_movement, false));
 }
 
 export function renderBrief(payload: BriefPayload, context: BriefContext): RenderedBrief {
@@ -367,36 +344,21 @@ export function renderBrief(payload: BriefPayload, context: BriefContext): Rende
   const ownSite = renderOwnSite(payload);
   const footer = renderFooter(payload, context.unsubscribe_url);
 
-  const subject =
-    payload.headline_rank !== null && payload.headline_total >= 2
-      ? COPY.subject(payload.headline_rank, payload.headline_total)
-      : "Your weekly brief";
+  const subject = briefSubject(payload);
 
   const block = (inner: string) =>
     `<div class="brief-rule" style="padding:20px 0;">${inner}</div>`;
 
-  const html = [
-    `<!doctype html>`,
-    `<html lang="en">`,
-    `<head>`,
-    `<meta charset="utf-8">`,
-    `<meta name="viewport" content="width=device-width,initial-scale=1">`,
-    `<meta name="color-scheme" content="light dark">`,
-    briefStyle(),
-    `<title>${escapeHtml(subject)}</title>`,
-    `</head>`,
-    `<body class="brief-page" style="margin:0;padding:0;">`,
-    `<div style="padding:24px 12px;">`,
-    `<div class="brief-card" style="max-width:600px;margin:0 auto;padding:24px;border-radius:8px;">`,
-    headline.html,
-    ...(quiet ? [] : [block(marks.html)]),
-    block(brands.html),
-    block(ownSite.html),
-    footer.html,
-    `</div></div>`,
-    `</body>`,
-    `</html>`,
-  ].join("");
+  const html = emailDocument(
+    subject,
+    [
+      headline.html,
+      ...(quiet ? [] : [block(marks.html)]),
+      block(brands.html),
+      block(ownSite.html),
+      footer.html,
+    ].join(""),
+  );
 
   const text = [
     headline.text,

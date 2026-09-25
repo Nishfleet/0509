@@ -1,4 +1,5 @@
 import {
+  countRecentSupportReports,
   deleteExpiredSupportReports,
   insertSupportReport,
 } from "../app/lib/data/support_report.server";
@@ -6,8 +7,10 @@ import {
 const FORWARD_TO = "nishant345@gmail.com";
 const ISSUES_URL = "https://api.github.com/repos/Nishfleet/0509/issues";
 const SITE_HOSTS = new Set(["0509.io", "www.0509.io"]);
+const TOKEN_PATH_PREFIXES = ["/u/", "/api/auth/"];
 const MAX_PATHS = 10;
 const MAX_UA = 200;
+const MAX_ISSUES_PER_DOMAIN_PER_DAY = 3;
 
 interface SupportInboxEnv {
   DB: D1Database;
@@ -20,7 +23,12 @@ function sitePaths(text: string): string[] {
     if (!token.startsWith("http")) continue;
     try {
       const url = new URL(token);
-      if (SITE_HOSTS.has(url.hostname)) paths.add(url.pathname);
+      if (
+        SITE_HOSTS.has(url.hostname) &&
+        !TOKEN_PATH_PREFIXES.some((prefix) => url.pathname.startsWith(prefix))
+      ) {
+        paths.add(url.pathname);
+      }
     } catch {
       continue;
     }
@@ -38,10 +46,11 @@ export default {
     const raw = await new Response(message.raw).text();
     const id = crypto.randomUUID();
     const receivedAt = new Date().toISOString();
+    const fromDomain = (message.from.split("@").pop() ?? "").toLowerCase();
     await insertSupportReport(env.DB, {
       id,
       receivedAt,
-      fromDomain: (message.from.split("@").pop() ?? "").toLowerCase(),
+      fromDomain,
       subjectSha256: await sha256Hex(message.headers.get("subject") ?? ""),
       raw,
     });
@@ -49,6 +58,11 @@ export default {
     const token = env.SUPPORT_INBOX_GITHUB_TOKEN;
     if (!token) {
       console.error("support-inbox: SUPPORT_INBOX_GITHUB_TOKEN is not set", id);
+      return;
+    }
+    const recent = await countRecentSupportReports(env.DB, fromDomain, new Date(receivedAt));
+    if (recent > MAX_ISSUES_PER_DOMAIN_PER_DAY) {
+      console.error("support-inbox: issue cap reached", id);
       return;
     }
     const userAgent = (

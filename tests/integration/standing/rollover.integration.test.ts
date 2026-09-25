@@ -3,9 +3,8 @@ import { beforeEach, describe, expect, it } from "vitest";
 
 import { parseBriefPayload } from "../../../app/lib/brief-payload";
 import type { BriefSchedule } from "../../../app/lib/brief-schedule";
-import { instantStamp, nextBriefAt, openWeek, previousBriefAt } from "../../../app/lib/brief-schedule";
+import { instantStamp, nextBriefAt, openWeek, previousBriefAt, rolloverInstance } from "../../../app/lib/brief-schedule";
 import { runNightlyStanding } from "../../../workers/standing/nightly";
-import { rolloverInstance } from "../../../workers/standing/rollover-plan";
 
 /**
  * The weekly rollover and the nightly cron against real workerd, real local D1
@@ -169,6 +168,117 @@ describe("the weekly rollover Workflow (0509#4004)", () => {
     const successor = rolloverInstance(WS, nextBriefAt(schedule, closesAt), "scheduled");
     const next = await env.STANDING_ROLLOVER.get(successor.id);
     expect(["queued", "running", "waiting"]).toContain((await next.status()).status);
+  });
+
+  it("writes a paused workspace's brief as paused and sends nothing", async () => {
+    const schedule = scheduleOffsetFromToday(3);
+    await seedWorkspace(schedule);
+    await env.DB.prepare("UPDATE workspace SET brief_paused_at = '2026-09-25T10:00:00.000Z' WHERE id = ?1")
+      .bind(WS)
+      .run();
+    const closesAt = nextBriefAt(schedule, new Date());
+    const startsAt = previousBriefAt(schedule, closesAt);
+    const lastWeek = previousBriefAt(schedule, startsAt).toISOString();
+    await seedFrozenWeek(lastWeek, [
+      [SELF, 1],
+      [RIVAL_A, 2],
+      [RIVAL_B, 3],
+    ]);
+    const during = new Date(startsAt.getTime() + hour);
+    await seedMention("p1", RIVAL_B, during, 0.95);
+    await seedMention("p2", RIVAL_B, during, 0.95);
+    await seedMention("p3", SELF, during, 0.95);
+
+    const instance = rolloverInstance(WS, closesAt, "scheduled");
+    await using introspector = await introspectWorkflowInstance(env.STANDING_ROLLOVER, instance.id);
+    await introspector.modify(async (m) => {
+      await m.disableSleeps();
+    });
+    await env.STANDING_ROLLOVER.create(instance);
+    await introspector.waitForStatus("complete");
+
+    const digestId = `digest_${WS}_${instantStamp(closesAt)}`;
+    expect(await introspector.getOutput()).toMatchObject({ digestId, skipped: "brief_paused" });
+
+    const digest = await env.DB.prepare("SELECT status FROM digest WHERE id = ?1")
+      .bind(digestId)
+      .first<{ status: string }>();
+    expect(digest?.status).toBe("paused");
+
+    const successor = rolloverInstance(WS, nextBriefAt(schedule, closesAt), "scheduled");
+    const next = await env.STANDING_ROLLOVER.get(successor.id);
+    expect(["queued", "running", "waiting"]).toContain((await next.status()).status);
+  });
+
+  it("sends again once resumed", async () => {
+    const schedule = scheduleOffsetFromToday(3);
+    await seedWorkspace(schedule);
+    await env.DB.prepare("UPDATE workspace SET brief_paused_at = ?1 WHERE id = ?2")
+      .bind("2026-09-25T10:00:00.000Z", WS)
+      .run();
+    await env.DB.prepare("UPDATE workspace SET brief_paused_at = NULL WHERE id = ?1").bind(WS).run();
+    const closesAt = nextBriefAt(schedule, new Date());
+    const startsAt = previousBriefAt(schedule, closesAt);
+    const lastWeek = previousBriefAt(schedule, startsAt).toISOString();
+    await seedFrozenWeek(lastWeek, [
+      [SELF, 1],
+      [RIVAL_A, 2],
+      [RIVAL_B, 3],
+    ]);
+    const during = new Date(startsAt.getTime() + hour);
+    await seedMention("q1", RIVAL_B, during, 0.95);
+    await seedMention("q2", RIVAL_B, during, 0.95);
+    await seedMention("q3", SELF, during, 0.95);
+
+    const instance = rolloverInstance(WS, closesAt, "scheduled");
+    await using introspector = await introspectWorkflowInstance(env.STANDING_ROLLOVER, instance.id);
+    await introspector.modify(async (m) => {
+      await m.disableSleeps();
+    });
+    await env.STANDING_ROLLOVER.create(instance);
+    await introspector.waitForStatus("complete");
+
+    const digestId = `digest_${WS}_${instantStamp(closesAt)}`;
+    expect(await introspector.getOutput()).toMatchObject({ digestId, skipped: null });
+
+    const digest = await env.DB.prepare("SELECT status FROM digest WHERE id = ?1")
+      .bind(digestId)
+      .first<{ status: string }>();
+    expect(digest?.status).toBe("pending");
+  });
+
+  it("names only competitors paused during the ranked week in the why-line", async () => {
+    const schedule = scheduleOffsetFromToday(3);
+    await seedWorkspace(schedule);
+    const closesAt = nextBriefAt(schedule, new Date());
+    const startsAt = previousBriefAt(schedule, closesAt);
+    const pausedDuring = new Date(startsAt.getTime() + hour).toISOString();
+    const pausedBefore = new Date(startsAt.getTime() - hour).toISOString();
+    await env.DB.batch([
+      env.DB.prepare(
+        "UPDATE entity SET state_changed_at = ?1, state_changed_by = 'user' WHERE workspace_id = ?2 AND id = ?3",
+      ).bind(pausedDuring, WS, `${WS}_${RIVAL_OFF}`),
+      env.DB.prepare(
+        "INSERT INTO entity (id, workspace_id, role, domain, name, state, state_changed_at, state_changed_by, created_at) VALUES (?1, ?2, 'competitor', 'before.example', 'Rival Before', 'off', ?3, 'user', ?3)",
+      ).bind(`${WS}_before`, WS, pausedBefore),
+    ]);
+
+    const instance = rolloverInstance(WS, closesAt, "scheduled");
+    await using introspector = await introspectWorkflowInstance(env.STANDING_ROLLOVER, instance.id);
+    await introspector.modify(async (m) => {
+      await m.disableSleeps();
+    });
+    await env.STANDING_ROLLOVER.create(instance);
+    await introspector.waitForStatus("complete");
+
+    const digestId = `digest_${WS}_${instantStamp(closesAt)}`;
+    const digest = await env.DB.prepare("SELECT payload_json FROM digest WHERE id = ?1")
+      .bind(digestId)
+      .first<{ payload_json: string }>();
+    const brief = parseBriefPayload(digest?.payload_json ?? "");
+
+    expect(brief.why_line).toContain("Rival Off paused, so every brand below it moved up.");
+    expect(brief.why_line).not.toContain("Rival Before");
   });
 
   it("stands down when the workspace moved its brief time", async () => {

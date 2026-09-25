@@ -4,7 +4,9 @@ import { useEffect } from "react";
 import { Form, redirect, useRevalidator } from "react-router";
 
 import { AddCompetitor, CompetitorMaybes } from "../components/competitor-maybes";
-import { StepBar } from "../components/step-bar";
+import { Monogram } from "../components/monogram";
+import { OnboardingFrame } from "../components/onboarding-frame";
+import { Button } from "../components/ui/button";
 import { handleCompetitorIntent } from "../lib/competitors.server";
 import { readOnboardingCompetitors } from "../lib/data/entity.server";
 import { readWorkspaceIdForOwner } from "../lib/data/workspace.server";
@@ -51,36 +53,42 @@ export default function Page({ loaderData, actionData }: Route.ComponentProps) {
   }, [revalidator, searching]);
 
   return (
-    <main className="mx-auto max-w-3xl px-4 py-10">
-      <StepBar current={3} />
-      <h1 className="font-display mt-6 text-2xl font-semibold tracking-[-0.02em]">Who you're up against</h1>
+    <OnboardingFrame step={3} heading="Who you're up against">
       {searching ? (
-        <p role="status" className="text-ink-soft mt-2">
+        <p role="status" className="text-ink-soft mt-3 max-w-prose leading-[1.55]">
           We're reading the news for brands named alongside you. They appear here as we find them.
         </p>
       ) : null}
       {!searching && on.length === 0 && maybes.length === 0 ? (
-        <p role="status" className="mt-2">
+        <p role="status" className="text-ink-soft mt-3 max-w-prose leading-[1.55]">
           We didn't find anyone named alongside you yet. Add one you know and we'll keep looking every night.
         </p>
       ) : null}
-      <ul aria-label="Watching" className="mt-6">
-        {on.map((competitor) => (
-          <li key={competitor.entityId} className="border-line border-t py-3">
-            <span className="font-semibold">{competitor.name}</span>
-            <span className="text-ink-soft ml-2 text-sm">{competitor.domain}</span>
-            {competitor.reason === null ? null : <p className="text-ink-soft text-sm">{competitor.reason}</p>}
-          </li>
-        ))}
-      </ul>
+      {on.length === 0 ? null : (
+        <ul aria-label="Watching" aria-live="polite" aria-relevant="additions" className="border-line mt-8 border-b">
+          {on.map((competitor) => (
+            <li key={competitor.entityId} className="border-line flex items-start gap-3 border-t py-4">
+              <Monogram name={competitor.name} />
+              <div className="min-w-0">
+                <p className="font-display text-row-name truncate font-bold">{competitor.name}</p>
+                <p className="text-ink-soft truncate text-body-sm">{competitor.domain}</p>
+                {competitor.reason === null ? null : (
+                  <p className="text-ink-soft mt-1 text-body-sm">{competitor.reason}</p>
+                )}
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
       <CompetitorMaybes maybes={maybes} />
       <AddCompetitor message={actionData?.message} />
-      <Form method="post" className="mt-10">
+      <Form method="post" className="border-line mt-12 border-t pt-8">
         <input type="hidden" name="intent" value="start" />
-        <button type="submit" className="bg-ink text-card min-h-11 px-5 font-semibold">
+        <Button type="submit" size="lg">
           Start watching
-        </button>
+        </Button>
+        <p className="text-ink-soft mt-3 text-body-sm">You can switch any of them on or off later in Competitors.</p>
       </Form>
-    </main>
+    </OnboardingFrame>
   );
 }

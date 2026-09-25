@@ -33,6 +33,7 @@
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "react-router": "^8.4.0",
+    "robots-parser": "3.0.1",
     "sonner": "^2.0.8",
     "tailwind-merge": "^3.7.0",
     "tldts": "^7.4.13",
@@ -40,6 +41,7 @@
     "zod-openapi": "^6.0.2"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.13.0",
     "@cloudflare/vite-plugin": "^1.56.0",
     "@cloudflare/vitest-plugin": "1.1.13",
     "@eslint/js": "^10.0.1",
