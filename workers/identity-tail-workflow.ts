@@ -1,12 +1,12 @@
 import type { WorkflowEvent, WorkflowStep, WorkflowStepConfig } from "cloudflare:workers";
 import { WorkflowEntrypoint } from "cloudflare:workers";
 
+import { startDiscovery } from "../app/lib/discovery/start.server";
 import { attemptSiteFill, markSiteFill, siteWasReached } from "../app/lib/identity/site-fill.server";
 import {
   enqueueFirstSweep,
   persistTail,
   seedTailWatches,
-  startTailDiscovery,
 } from "../app/lib/identity/tail.server";
 import type { IdentityTailOutcome, IdentityTailParams } from "../app/lib/identity/tail.server";
 
@@ -36,7 +36,7 @@ export class IdentityTail extends WorkflowEntrypoint<Env, IdentityTailParams> {
       seedTailWatches(params, event.timestamp.toISOString()),
     );
     const discoveryInstanceId = await step.do("start-discovery", RETRY, () =>
-      startTailDiscovery(params.workspaceId, event.timestamp),
+      startDiscovery(params.workspaceId, event.timestamp),
     );
     const queued = await step.do("enqueue-first-sweep", RETRY, () => enqueueFirstSweep(entityId, watches));
     const siteFill =

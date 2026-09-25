@@ -5,25 +5,6 @@ import { isFeedKind, type DevelopmentItem } from "../developments";
 import { D3_QUESTION_ID } from "../standing-score";
 import type { HiringSignalState, HiringSignalUpdate } from "../hiring/role-lifecycle";
 
-export interface SiteChangeSignal {
-  id: string;
-  workspaceId: string;
-  entityId: string;
-  sourceId: string;
-  watchId: string;
-  snapshotId: string;
-  aspect: string;
-  url: string;
-  payloadJson: string;
-  observedAt: string;
-}
-
-const INSERT_SITE_CHANGE = `INSERT INTO signal
-  (id, workspace_id, entity_id, source_id, watch_id, snapshot_id, kind, aspect,
-   url, evidence_url, payload_json, dedup_key, observed_at, last_seen_at)
-VALUES (?1, ?2, ?3, ?4, ?5, ?6, 'change', ?7, ?8, ?8, ?9, ?6, ?10, ?10)
-ON CONFLICT (source_id, dedup_key) DO NOTHING`;
-
 export interface ChangeSignalRow {
   id: string;
   workspaceId: string;
@@ -31,8 +12,8 @@ export interface ChangeSignalRow {
   sourceId: string;
   watchId: string;
   snapshotId: string;
-  title: string;
-  summary: string;
+  title: string | null;
+  summary: string | null;
   url: string;
   aspect: string;
   payloadJson: string;
@@ -41,8 +22,8 @@ export interface ChangeSignalRow {
 
 const INSERT_CHANGE_SIGNAL = `INSERT INTO signal
   (id, workspace_id, entity_id, source_id, watch_id, snapshot_id, kind, title, summary,
-   url, aspect, evidence_url, payload_json, dedup_key, observed_at)
-VALUES (?1, ?2, ?3, ?4, ?5, ?6, 'change', ?7, ?8, ?9, ?10, ?9, ?11, ?6, ?12)
+   url, aspect, evidence_url, payload_json, dedup_key, observed_at, last_seen_at)
+VALUES (?1, ?2, ?3, ?4, ?5, ?6, 'change', ?7, ?8, ?9, ?10, ?9, ?11, ?6, ?12, ?12)
 ON CONFLICT (source_id, dedup_key) DO NOTHING`;
 
 export function insertChangeSignalStatement(row: ChangeSignalRow): D1PreparedStatement {
@@ -159,23 +140,6 @@ export async function applyHiringLifecycle(updates: readonly HiringSignalUpdate[
     for (const result of results) changes += result.meta.changes;
   }
   return changes;
-}
-
-export async function insertSiteChange(row: SiteChangeSignal): Promise<void> {
-  await env.DB.prepare(INSERT_SITE_CHANGE)
-    .bind(
-      row.id,
-      row.workspaceId,
-      row.entityId,
-      row.sourceId,
-      row.watchId,
-      row.snapshotId,
-      row.aspect,
-      row.url,
-      row.payloadJson,
-      row.observedAt,
-    )
-    .run();
 }
 
 const INSERT_MENTION = `INSERT INTO signal
@@ -354,12 +318,6 @@ export async function readSiteChangePayload(workspaceId: string, signalId: strin
     .bind(signalId, workspaceId)
     .first<{ payload_json: string }>();
   return row?.payload_json ?? null;
-}
-
-const DELETE_ENTITY_SIGNALS = `DELETE FROM signal WHERE workspace_id = ?1 AND entity_id = ?2`;
-
-export function deleteEntitySignals(workspaceId: string, entityId: string): D1PreparedStatement {
-  return env.DB.prepare(DELETE_ENTITY_SIGNALS).bind(workspaceId, entityId);
 }
 
 export interface SignalCount {

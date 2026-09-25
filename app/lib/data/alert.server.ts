@@ -94,40 +94,12 @@ export async function readTakedownNotes(
   return results;
 }
 
-export interface IncidentAlert {
-  incidentId: string;
-  workspaceId: string;
-  entityId: string;
-  pageId: string;
-  title: string;
-  createdAt: string;
-}
-
-const INSERT_INCIDENT_ALERT = `INSERT INTO alert (id, workspace_id, entity_id, page_id, incident_id, kind, severity, title, created_at)
-VALUES (?1, ?2, ?3, ?4, ?5, 'own_site_broken', 'high', ?6, ?7)
-ON CONFLICT(id) DO NOTHING`;
-
-export async function insertIncidentAlert(db: D1Database, alert: IncidentAlert): Promise<void> {
-  await db
-    .prepare(INSERT_INCIDENT_ALERT)
-    .bind(
-      `incident-${alert.incidentId}`,
-      alert.workspaceId,
-      alert.entityId,
-      alert.pageId,
-      alert.incidentId,
-      alert.title,
-      alert.createdAt,
-    )
-    .run();
-}
-
 export interface OwnSiteBreakageAlertRow {
   id: string;
   workspaceId: string;
   entityId: string;
   pageId: string;
-  signalId: string;
+  signalId: string | null;
   incidentId: string;
   severity: "high" | "normal";
   title: string;
@@ -137,8 +109,9 @@ export interface OwnSiteBreakageAlertRow {
 
 const INSERT_OWN_SITE_BREAKAGE_ALERT = `INSERT INTO alert
   (id, workspace_id, entity_id, signal_id, page_id, incident_id, kind, severity, title, body, created_at)
-SELECT ?1, ?2, ?3, ?4, ?5, ?6, 'own_site_breakage', ?7, ?8, ?9, ?10
-WHERE EXISTS (SELECT 1 FROM incident WHERE id = ?11)`;
+SELECT ?1, ?2, ?3, ?4, ?5, ?6, 'own_site_broken', ?7, ?8, ?9, ?10
+WHERE EXISTS (SELECT 1 FROM incident WHERE id = ?11)
+ON CONFLICT(id) DO NOTHING`;
 
 export function insertIncidentAlertStatement(row: OwnSiteBreakageAlertRow): D1PreparedStatement {
   return env.DB

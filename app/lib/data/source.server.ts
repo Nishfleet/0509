@@ -2,6 +2,8 @@ import { env } from "cloudflare:workers";
 import { z } from "zod";
 
 import type { FreshnessSource } from "../../components/freshness-line";
+import type { SourceTick } from "../observability/pipeline-health";
+import { BLIND_REASON } from "../observability/pipeline-health";
 
 const ENABLED_SOURCE_ID = `SELECT id FROM source WHERE key = ?1 AND is_enabled = 1`;
 
@@ -11,7 +13,30 @@ const SELECT_ENTITY_SOURCES =
 const LATEST_SNAPSHOT_COLUMN = (column: string) =>
   `(SELECT sn.${column} FROM snapshot sn JOIN watch w2 ON w2.id = sn.watch_id JOIN entity e2 ON e2.id = w2.entity_id WHERE e2.workspace_id = ?1 AND w2.source_id = s.id ORDER BY sn.fetched_at DESC LIMIT 1) AS ${column}`;
 
-const SELECT_WORKSPACE_MENTION_SOURCES = `SELECT s.key, s.platform, s.kind, s.is_enabled, s.config_json, s.degraded_reason, s.last_good_at, ${LATEST_SNAPSHOT_COLUMN("fetched_at")}, ${LATEST_SNAPSHOT_COLUMN("item_count")}, ${LATEST_SNAPSHOT_COLUMN("canary_count")} FROM source s WHERE s.kind = 'mentions' AND s.id IN (SELECT w.source_id FROM watch w JOIN entity e ON e.id = w.entity_id WHERE e.workspace_id = ?1 AND w.is_active = 1) ORDER BY s.key`;
+const SELECT_WORKSPACE_MENTION_SOURCES = `SELECT s.key, s.platform, s.kind, s.is_enabled, s.config_json, s.degraded_reason, s.last_good_at, ${LATEST_SNAPSHOT_COLUMN("fetched_at")}, ${LATEST_SNAPSHOT_COLUMN("item_count")}, ${LATEST_SNAPSHOT_COLUMN("canary_count")} FROM source s WHERE (s.kind = 'mentions' OR s.degraded_reason IS NOT NULL) AND s.id IN (SELECT w.source_id FROM watch w JOIN entity e ON e.id = w.entity_id WHERE e.workspace_id = ?1 AND w.is_active = 1) ORDER BY s.key`;
+
+const SELECT_SOURCE_TICKS = `SELECT source_id, source_key, kind, platform, watch_id, fetched_at, item_count FROM (SELECT s.id AS source_id, s.key AS source_key, s.kind, s.platform, w.id AS watch_id, sn.fetched_at, sn.item_count, ROW_NUMBER() OVER (PARTITION BY w.id ORDER BY sn.fetched_at DESC) AS rn FROM snapshot sn JOIN watch w ON w.id = sn.watch_id JOIN source s ON s.id = w.source_id WHERE s.is_enabled = 1 AND w.is_active = 1) WHERE rn <= 2 ORDER BY source_key, watch_id, fetched_at DESC`;
+
+const SELECT_SOURCE_LAST_GOOD = `SELECT w.source_id AS source_id, MAX(sn.fetched_at) AS at FROM snapshot sn JOIN watch w ON w.id = sn.watch_id WHERE sn.item_count > 0 GROUP BY w.source_id`;
+
+const MARK_SOURCE_BLIND = `UPDATE source SET degraded_reason = ?2 WHERE id = ?1 AND degraded_reason IS NULL`;
+
+const CLEAR_SOURCE_BLIND = `UPDATE source SET degraded_reason = NULL WHERE degraded_reason = ?1 AND id NOT IN (SELECT value FROM json_each(?2))`;
+
+interface SourceTickRow {
+  source_id: string;
+  source_key: string;
+  kind: string;
+  platform: string;
+  watch_id: string;
+  fetched_at: string;
+  item_count: number;
+}
+
+interface SourceLastGoodRow {
+  source_id: string;
+  at: string;
+}
 
 export interface EntitySource {
   source: {
@@ -116,6 +141,34 @@ export async function recordSourceCanary(
 export async function markSourceBlocked(sourceId: string, status: number): Promise<void> {
   await env.DB.prepare(MARK_SOURCE_BLOCKED)
     .bind(sourceId, `blocked: HTTP ${String(status)}`)
+    .run();
+}
+
+export async function readSourceTicks(): Promise<SourceTick[]> {
+  const { results } = await env.DB.prepare(SELECT_SOURCE_TICKS).all<SourceTickRow>();
+  return results.map((row) => ({
+    sourceId: row.source_id,
+    sourceKey: row.source_key,
+    kind: row.kind,
+    platform: row.platform,
+    watchId: row.watch_id,
+    fetchedAt: row.fetched_at,
+    itemCount: row.item_count,
+  }));
+}
+
+export async function readSourceLastGood(): Promise<ReadonlyMap<string, string>> {
+  const { results } = await env.DB.prepare(SELECT_SOURCE_LAST_GOOD).all<SourceLastGoodRow>();
+  return new Map(results.map((row) => [row.source_id, row.at]));
+}
+
+export async function markSourceBlind(sourceId: string): Promise<void> {
+  await env.DB.prepare(MARK_SOURCE_BLIND).bind(sourceId, BLIND_REASON).run();
+}
+
+export async function clearSourceBlind(blindIds: readonly string[]): Promise<void> {
+  await env.DB.prepare(CLEAR_SOURCE_BLIND)
+    .bind(BLIND_REASON, JSON.stringify(blindIds))
     .run();
 }
 

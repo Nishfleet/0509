@@ -86,7 +86,8 @@ function greenhouseSlugFromUrl(url: URL): string | null {
 function parseJson(body: string): unknown {
   try {
     return JSON.parse(body) as unknown;
-  } catch {
+  } catch (error) {
+    console.error(JSON.stringify({ event: "hiring.board_json_parse_failed", error: String(error) }));
     return undefined;
   }
 }
@@ -224,7 +225,8 @@ const defaultProbe = async (url: string): Promise<ProbeResponse> => {
   try {
     const response = await fetch(url, { signal: AbortSignal.timeout(PROBE_TIMEOUT_MS) });
     return { ok: response.ok, contentType: response.headers.get("content-type"), body: await response.text() };
-  } catch {
+  } catch (error) {
+    console.error(JSON.stringify({ event: "hiring.board_probe_failed", error: String(error) }));
     return { ok: false, contentType: null, body: "" };
   }
 };

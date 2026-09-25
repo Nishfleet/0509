@@ -2,14 +2,14 @@ import type { Route } from "./+types/app.alerts";
 
 import { AlertChips } from "../components/alert-chips";
 import { AlertFeed } from "../components/alert-feed";
-import { IncidentBlock } from "../components/incident-block";
+import { IncidentSlot } from "../components/incident-block";
 import { PAGE, PageHeading } from "../components/page-heading";
 import { SourcePill } from "../components/source-pill";
 import { acknowledgeOwnSiteIncident, loadAlertsPage } from "../lib/alerts-page.server";
 import { parseAlertChip } from "../lib/alert-chips";
 import { requireSession } from "../lib/require-session.server";
 
-const WHEN_CLASS = "text-ink-soft mt-2 block font-mono text-[0.75rem] tracking-[0.04em] uppercase";
+const WHEN_CLASS = "text-ink-soft mt-2 block font-mono text-meta uppercase";
 
 export async function loader({ request }: Route.LoaderArgs) {
   const session = await requireSession(request);
@@ -32,7 +32,7 @@ export default function Page({ loaderData }: Route.ComponentProps) {
       <p data-testid="alerts-contract" className="text-ink-soft mt-2 leading-[1.65]">
         One thing here interrupted you by email: your own site.
       </p>
-      {loaderData.openIncident === null ? null : <IncidentBlock {...loaderData.openIncident} />}
+      <IncidentSlot incident={loaderData.openIncident} />
       {loaderData.sources.length > 0 ? (
         <p data-testid="alerts-sources" className="mt-4 flex flex-wrap gap-2">
           {loaderData.sources.map((entry) => (
@@ -52,7 +52,9 @@ export default function Page({ loaderData }: Route.ComponentProps) {
           data-testid="own-site-incident"
           className="border-line mt-8 border-t pt-6"
         >
-          <h2 className="font-display text-lg font-semibold">{incident.title}</h2>
+          <h2 className="font-display text-row-name font-bold [overflow-wrap:anywhere]">
+            {incident.title}
+          </h2>
           <p className="mt-2 leading-[1.65]">
             {incident.fixed === null
               ? "We check it again every hour and email you once it's fixed."
