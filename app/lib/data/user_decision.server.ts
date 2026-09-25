@@ -2,7 +2,7 @@ import { z } from "zod";
 
 import { env } from "cloudflare:workers";
 
-import type { DraftField } from "../identity/card-fields";
+import { DRAFT_FIELDS, type DraftField } from "../identity/card-fields";
 
 export type SubjectVerdict = "public_subject:confirmed" | "public_subject:refused";
 
@@ -27,7 +27,7 @@ ORDER BY decided_at DESC LIMIT 1`;
 const SELECT_FIELD_EDITS = `SELECT note FROM user_decision
 WHERE entity_id = ?1 AND verdict = ?2`;
 
-const fieldEditNoteSchema = z.object({ field: z.enum(["name", "description"]) });
+const fieldEditNoteSchema = z.object({ field: z.enum(DRAFT_FIELDS) });
 
 export async function insertSubjectDecision(row: {
   workspaceId: string;
