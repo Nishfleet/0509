@@ -8,27 +8,30 @@ import { withDocumentSecurityHeaders } from "./lib/security-headers";
 
 export const streamTimeout = 5_000;
 
-function decodeSegment(segment: string): string {
+function decodePath(pathname: string): string {
   try {
-    return decodeURIComponent(segment).replace(/\//g, "%2F");
+    return pathname
+      .split("/")
+      .map((segment) => decodeURIComponent(segment).replace(/\//g, "%2F"))
+      .join("/");
   } catch {
-    return segment;
+    return pathname;
   }
 }
 
 function routePattern(pathname: string, params: Params): string {
-  const segments = pathname.split("/");
+  const segments = decodePath(pathname).split("/");
   const splat = params["*"];
   const splatSegments = splat === undefined ? [] : splat.split("/");
   const splatLength = splatSegments.length;
   const tail = segments.slice(segments.length - splatLength);
   const names = new Map(
     Object.entries(params).flatMap(([name, value]): [string, string][] =>
-      name === "*" || !value ? [] : [[decodeSegment(value), `:${name}`]],
+      name === "*" || !value ? [] : [[value, `:${name}`]],
     ),
   );
-  const mapped = segments.map((segment) => names.get(decodeSegment(segment)) ?? segment);
-  if (splatLength === 0 || tail.map(decodeSegment).join("/") !== splat) return mapped.join("/");
+  const mapped = segments.map((segment) => names.get(segment) ?? segment);
+  if (splatLength === 0 || tail.join("/") !== splat) return mapped.join("/");
   return [...mapped.slice(0, mapped.length - splatLength), "*"].join("/");
 }
 

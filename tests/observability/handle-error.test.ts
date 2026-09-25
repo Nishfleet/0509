@@ -88,6 +88,21 @@ describe("handleError", () => {
     expect(calls).not.toContain("café");
   });
 
+  it("tags a splat left raw by a malformed segment with the route pattern", () => {
+    const error = new Error("oauth failed");
+    const request = new Request("https://0509.io/api/auth/caf%C3%A9/%zz");
+    const params = { "*": "caf%C3%A9/%zz" };
+
+    handleError(error, { request, params, context: new RouterContextProvider() });
+
+    expect(captureException).toHaveBeenCalledTimes(1);
+    expect(captureException).toHaveBeenCalledWith(error, { tags: { route: "/api/auth/*" } });
+    const calls = JSON.stringify(vi.mocked(captureException).mock.calls);
+    expect(calls).not.toContain("caf%C3%A9");
+    expect(calls).not.toContain("café");
+    expect(calls).not.toContain("%zz");
+  });
+
   it("keeps a splat carrying an encoded slash on the route pattern", () => {
     const error = new Error("oauth failed");
     const request = new Request("https://0509.io/api/auth/callback%2Fgoogle");
