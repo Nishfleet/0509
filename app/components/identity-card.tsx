@@ -44,7 +44,7 @@ function Pending({ label, fill }: { label: string; fill: string }) {
   );
 }
 
-export function DraftNote({
+function DraftNote({
   edited,
   reverted,
   onRevert,

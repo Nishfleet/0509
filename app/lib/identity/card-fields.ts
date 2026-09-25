@@ -49,7 +49,6 @@ export function creatorRows(subject: Subject): CreatorRows | null {
   };
 }
 
-export function isDraftWrite(formData: FormData | undefined): boolean {
-  const intent = formData?.get("intent");
-  return intent === "draft" || intent === "revert";
+export function isDraftSave(formData: FormData | undefined): boolean {
+  return formData?.get("intent") === "draft";
 }

@@ -5,8 +5,6 @@ import type { CardDraft, DraftField } from "./card-fields";
 import { normaliseSubject } from "./normalise";
 import { PROBE_TTL_SECONDS } from "./probe-cache.server";
 
-export type { CardDraft, DraftField };
-
 const DRAFT_FIELD_MAX: Record<DraftField, number> = {
   name: 120,
   description: 500,

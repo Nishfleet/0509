@@ -8,7 +8,7 @@ import { OnboardingFrame } from "../components/onboarding-frame";
 import { OneInput } from "../components/one-input";
 import { isTakenDown } from "../lib/data/takedown.server";
 import { readWorkspaceIdForOwner } from "../lib/data/workspace.server";
-import { creatorRows, editedFields, isDraftWrite } from "../lib/identity/card-fields";
+import { creatorRows, editedFields, isDraftSave } from "../lib/identity/card-fields";
 import { applyDraftIntent, readDraft } from "../lib/identity/card-draft.server";
 import { startCard, withinProbeLimit } from "../lib/identity/card.server";
 import { confirmCard } from "../lib/identity/confirm.server";
@@ -79,7 +79,7 @@ export async function action({ request }: Route.ActionArgs) {
 }
 
 export function shouldRevalidate({ formData, defaultShouldRevalidate }: ShouldRevalidateFunctionArgs) {
-  return isDraftWrite(formData) ? false : defaultShouldRevalidate;
+  return isDraftSave(formData) ? false : defaultShouldRevalidate;
 }
 
 export default function Page({ loaderData, actionData }: Route.ComponentProps) {
