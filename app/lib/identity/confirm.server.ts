@@ -3,7 +3,7 @@ import { z } from "zod";
 import { insertSelfEntity, readWorkspaceSelfId } from "../data/entity.server";
 import { insertFieldEdits, type FieldEdit } from "../data/user_decision.server";
 import { readUrl } from "../fetch/transport.server";
-import { readCachedSiteValues } from "./card.server";
+import { readCachedSiteValues, readSiteCard } from "./card.server";
 import { extractIdentity } from "./extract";
 import { readLogo } from "./logo-store.server";
 import { normaliseSubject, type Subject } from "./normalise";
@@ -32,6 +32,15 @@ function socials(form: FormData): { platform: string; url: unknown }[] {
 function field(form: FormData, name: string): string {
   const value = form.get(name);
   return typeof value === "string" ? value : "";
+}
+
+async function creatorSite(socials: { platform: string; url: string }[]): Promise<Subject | null> {
+  const entry = socials.find((social) => social.platform === "site");
+  if (entry === undefined) return null;
+  const normalised = normaliseSubject(entry.url);
+  if (!normalised.ok || normalised.subject.kind !== "domain") return null;
+  await readSiteCard(normalised.subject);
+  return normalised.subject;
 }
 
 async function classifyConfirmedSite(
@@ -110,12 +119,14 @@ export async function confirmCard(workspaceId: string, userId: string, form: For
     }
   }
   await classifyConfirmedSite(workspaceId, subject, entityId, now);
+  const site = subject.kind === "domain" ? null : await creatorSite(card.socials);
   await startIdentityTail({
     workspaceId,
     entityId,
     name: card.name,
-    domain: subject.registrable,
-    homepageUrl: subject.kind === "domain" ? subject.url : null,
+    domain: site?.registrable ?? subject.registrable,
+    homepageUrl: subject.kind === "domain" ? subject.url : (site?.url ?? null),
+    ...(subject.kind === "domain" ? {} : { handle: subject.registrable }),
   });
   return true;
 }
