@@ -108,4 +108,19 @@ describe("the identity card fields", () => {
 		expect(html).toContain("on the first crawl, within the hour");
 		expect(html).not.toContain("after the first crawl");
 	});
+
+	it("names the hourly fill on the logo row of an unread site, never none found", () => {
+		const html = render(
+			site({ name: "empty", description: "empty", socials: "empty" }, { name: null, description: null, socials: [], unfound: true }),
+		);
+
+		expect(html.split("within the hour").length - 1).toBe(4);
+		expect(html).not.toContain("none found on the site");
+	});
+
+	it("says nothing about an hourly fill when the site was read and every field is filled", () => {
+		const html = render(site({ name: "fill", description: "fill", socials: "fill" }));
+
+		expect(html).not.toContain("within the hour");
+	});
 });
