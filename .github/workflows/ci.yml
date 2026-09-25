@@ -113,12 +113,23 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          fetch-depth: 2
+      - name: Skip the browser suites when the pull request touches only docs and unit tests
+        # A required check from a path-filtered workflow stays Pending and blocks the PR,
+        # so the filter lives here and the job still reports (#5381). merge_group always runs.
+        id: scope
+        if: github.event_name == 'pull_request'
+        run: if git diff --quiet HEAD^1 HEAD -- . ':(exclude)docs' ':(exclude)tests' ':(exclude).agents' ':(exclude)*.md'; then echo skip=true >> "$GITHUB_OUTPUT"; fi
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        if: steps.scope.outputs.skip != 'true'
         with:
           node-version: 22
           cache: npm
       - run: npm ci
+        if: steps.scope.outputs.skip != 'true'
       - name: Build the Worker as the deploy would
+        if: steps.scope.outputs.skip != 'true'
         run: npm run build
 
       - name: Assert Home's JavaScript budget from the build manifest
@@ -126,9 +137,11 @@ jobs:
         run: npx vitest run --config vitest.bundle.config.ts
 
       - name: Install the browser Playwright will drive
+        if: steps.scope.outputs.skip != 'true'
         run: npx playwright install --with-deps chromium
 
       - name: Run the e2e suite against the built Worker
+        if: steps.scope.outputs.skip != 'true'
         # This replaced a curl-and-grep loop against /api/health. The proof is
         # the same shape — build it, run it, ask it — but now the agent that
         # wrote the change runs the same suite a user's browser would, and a
@@ -139,6 +152,7 @@ jobs:
         run: npm run e2e
 
       - name: Collect Lighthouse against the built Worker
+        if: steps.scope.outputs.skip != 'true'
         # Same budgets as the deployment_status lighthouse job, on the PR, so a
         # regression is red before merge (poteto 03:24: a trace per change, not
         # per deploy; #4224). lhci starts wrangler dev itself: start-server-command
@@ -152,6 +166,7 @@ jobs:
         run: P=$((18000 + $$ % 1000)); npx --yes @lhci/cli@0.15.1 collect --url=http://127.0.0.1:$P/ --url=http://127.0.0.1:$P/design/landing --start-server-command="npx wrangler dev --env-file .dev.vars.example --port $P --local" --start-server-ready-pattern="Ready on" --start-server-ready-timeout=120000 --number-of-runs=3
 
       - name: Assert the Lighthouse budgets
+        if: steps.scope.outputs.skip != 'true'
         # lighthouse-budget.pr.json is the deterministic subset of lighthouse-budget.json:
         # resource sizes and CLS. The timing rows (LCP, TTI) stay on the deployment_status
         # job: on a shared runner the unchanged page measured LCP 1657 one run and under
@@ -198,6 +213,8 @@ jobs:
           # Absent, the secret resolves to "" and the specs fail loudly naming
           # it — they never skip.
           E2E_INBOX_TOKEN: ${{ secrets.E2E_INBOX_TOKEN }}
+          # J5 raises and lowers the fixture bot wall with this token (0509#4121).
+          FIXTURE_SITE_TOKEN: ${{ secrets.FIXTURE_SITE_TOKEN }}
 
       - name: Keep the trace when it fails
         if: failure()
