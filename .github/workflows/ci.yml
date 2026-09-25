@@ -295,8 +295,8 @@ jobs:
 
   # Opus 5 grades every PR (Nish 2026-09-22: "have opus 5 grade glm and ds4.1
   # flash"). Stock anthropics/claude-code-action on the Claude subscription
-  # token; no API spend. A D or F fails the check below; the label is a second
-  # signal so a lost label can never pass a D again (fleet-ops#8635, 0509#5393).
+  # token; no API spend. A D or F, or no grade comment, fails the check below;
+  # the label is a second signal so a lost label cannot pass a D (fleet-ops#8635, 0509#5393).
   # The grader still adds and removes the blocked-by-judge label to requeue.
   # Advisory in the ruleset on purpose: it runs only on pull_request, and a
   # required check must also report on merge_group.
@@ -353,7 +353,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh pr view "${{ github.event.pull_request.number }}" --repo "${{ github.repository }}" --json comments \
-            --jq '[.comments[] | select(.body | startswith("Opus grade:"))][-1].body // ""' > "$RUNNER_TEMP/grade"
+            --jq '[.comments[] | select(.body | startswith("Opus grade:"))][-1].body // empty' > "$RUNNER_TEMP/grade"
           echo "opus-review read: $(head -n1 "$RUNNER_TEMP/grade")"
           test -s "$RUNNER_TEMP/grade" \
             && ! grep -qE '^Opus grade: *[DF]' "$RUNNER_TEMP/grade" \
