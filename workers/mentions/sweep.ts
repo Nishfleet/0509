@@ -1,4 +1,5 @@
 import { env } from "cloudflare:workers";
+import { NonRetryableError } from "cloudflare:workflows";
 
 import { insertSignalAlert } from "../../app/lib/data/alert.server";
 import type { DiscoveryContext } from "../../app/lib/data/entity.server";
@@ -6,6 +7,7 @@ import { readDiscoveryContext, readEntityIdentityJson } from "../../app/lib/data
 import { insertVerdict } from "../../app/lib/data/jev_verdict.server";
 import { insertMention, readSeenDedupKeys } from "../../app/lib/data/signal.server";
 import { insertWatchSnapshot } from "../../app/lib/data/snapshot.server";
+import { markSourceBlocked } from "../../app/lib/data/source.server";
 import type { WatchRow } from "../../app/lib/data/watch.server";
 import { markWatchPolled, readActiveWatches, readWatchConfigJson, writeWatchConfigJson } from "../../app/lib/data/watch.server";
 import type { NoulQuestion, NoulVerdict } from "../../app/lib/jev/client.server";
@@ -23,6 +25,7 @@ import { storedDedupKey, toSignalRow, type MentionItem } from "./map";
 import { writeSourcePoint } from "./canary";
 import { adapterFor } from "../sources/registry";
 import { youtubeAdapter } from "../sources/mentions/youtube";
+import { UpstreamBlockedError } from "../sources/mentions/types";
 import type { OkYoutubeFeed } from "../sources/mentions/youtube";
 
 const JUDGED_PER_WATCH = 12;
@@ -391,31 +394,39 @@ export async function sweepTarget(
   now: string,
   canaryCount: number | null,
 ): Promise<TargetOutcome> {
-  if (target.pluginKey === "youtube.channel_rss") return sweepYoutubeTarget(target, now, canaryCount);
-  const adapter = adapterFor(target.pluginKey);
-  if (adapter === undefined) throw new Error(`no mentions adapter for ${target.pluginKey}`);
-  const result = await adapter({ query: target.query }, null);
-  writeSourcePoint(target.pluginKey, result.items.length, canaryCount);
-  const snapshot = await putMentionBody(target.pluginKey, result.rawBody);
-  const contexts = new Map<string, DiscoveryContext | null>();
-  let stored = 0;
-  let unjudged = 0;
-  for (const watch of target.watches) {
-    if (!contexts.has(watch.workspace_id)) {
-      contexts.set(watch.workspace_id, await readDiscoveryContext(watch.workspace_id));
+  try {
+    if (target.pluginKey === "youtube.channel_rss") return sweepYoutubeTarget(target, now, canaryCount);
+    const adapter = adapterFor(target.pluginKey);
+    if (adapter === undefined) throw new Error(`no mentions adapter for ${target.pluginKey}`);
+    const result = await adapter({ query: target.query }, null);
+    writeSourcePoint(target.pluginKey, result.items.length, canaryCount);
+    const snapshot = await putMentionBody(target.pluginKey, result.rawBody);
+    const contexts = new Map<string, DiscoveryContext | null>();
+    let stored = 0;
+    let unjudged = 0;
+    for (const watch of target.watches) {
+      if (!contexts.has(watch.workspace_id)) {
+        contexts.set(watch.workspace_id, await readDiscoveryContext(watch.workspace_id));
+      }
+      const context = contexts.get(watch.workspace_id);
+      if (context === null || context === undefined) continue;
+      const committed = await commitMentionWatch({
+        watch,
+        context,
+        items: result.items,
+        snapshot,
+        canaryCount,
+        now,
+      });
+      stored += committed.stored;
+      unjudged += committed.unjudged;
     }
-    const context = contexts.get(watch.workspace_id);
-    if (context === null || context === undefined) continue;
-    const committed = await commitMentionWatch({
-      watch,
-      context,
-      items: result.items,
-      snapshot,
-      canaryCount,
-      now,
-    });
-    stored += committed.stored;
-    unjudged += committed.unjudged;
+    return { items: result.items.length, stored, unjudged };
+  } catch (error) {
+    if (error instanceof UpstreamBlockedError) {
+      await markSourceBlocked(target.sourceId, error.status);
+      throw new NonRetryableError(error.message, "UpstreamBlockedError");
+    }
+    throw error;
   }
-  return { items: result.items.length, stored, unjudged };
 }
