@@ -4,6 +4,10 @@
   "compatibility_flags": ["global_fetch_strictly_public"],
   "vars": { "SITE_SWEEP_PING_URL": "https://hc-ping.example/site-sweep", "BETTER_AUTH_URL": "https://0509.io" },
   "main": "../../workers/app.ts",
+  "durable_objects": {
+    "bindings": [{ "name": "BROWSER_BUDGET", "class_name": "BrowserBudget" }]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["BrowserBudget"] }],
   "d1_databases": [{ "binding": "DB", "database_name": "0509-test", "database_id": "test" }],
   "analytics_engine_datasets": [{ "binding": "MENTIONS_SOURCES", "dataset": "mentions_sources-test" }],
   "r2_buckets": [

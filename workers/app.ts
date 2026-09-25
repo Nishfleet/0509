@@ -92,6 +92,8 @@ const sentryOptions = (env: WorkerEnv): CloudflareOptions => ({
   }),
 });
 
+export { BrowserBudget } from "./budget-counter";
+
 export class StandingRolloverWorkflow extends instrumentWorkflowWithSentry(sentryOptions, StandingRollover) {}
 
 export class AccountDeleteWorkflow extends instrumentWorkflowWithSentry(sentryOptions, AccountDelete) {}
