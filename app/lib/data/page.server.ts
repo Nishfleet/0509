@@ -1,8 +1,6 @@
 import { env } from "cloudflare:workers";
 import { z } from "zod";
 
-export type PageRole = "home" | "pricing" | "product" | "blog" | "careers" | "legal" | "other";
-
 export interface NewPage {
   id: string;
   entityId: string;
@@ -16,7 +14,7 @@ export interface JudgedPage {
   entityId: string;
   url: string;
   title: string;
-  role: PageRole;
+  role: "home" | "pricing" | "product" | "blog" | "careers" | "legal" | "other";
   roleDecidedForHash: string;
   discoveredAt: string;
 }
