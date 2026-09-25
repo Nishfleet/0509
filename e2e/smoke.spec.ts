@@ -19,6 +19,22 @@ import { expect, test } from "@playwright/test";
 // 5aa0e76a9). What is asserted is the contract: the element exists, is
 // labelled, is enabled, or points at the right destination.
 
+test("the rebuild notice shows its headline without fetching a brand face", async ({ page }) => {
+  const faces: string[] = [];
+  page.on("request", (request) => {
+    if (request.url().includes("/fonts/")) faces.push(request.url());
+  });
+
+  const response = await page.goto("/");
+  if (response === null) throw new Error("no response for /");
+  expect(response.status()).toBe(200);
+
+  const headline = page.getByRole("heading", { level: 1 });
+  await expect(headline).toBeVisible();
+  await expect(headline).not.toBeEmpty();
+  expect(faces).toEqual([]);
+});
+
 test("the landing page renders its headline and its contact link", async ({ page }) => {
   const response = await page.goto("/");
   expect(response?.status()).toBe(200);
