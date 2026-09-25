@@ -186,7 +186,7 @@ describe("mentions sweep telemetry (#4003 slice 3/6)", () => {
       const call = spy.mock.calls[0];
       if (!call || !call[0]) throw new Error("expected one MENTIONS_SOURCES point");
       const point = call[0];
-      const blobsAndIndexes: Array<string | ArrayBuffer | null> = [
+      const blobsAndIndexes: (string | ArrayBuffer | null)[] = [
         ...(point.blobs ?? []),
         ...(point.indexes ?? []),
       ];
