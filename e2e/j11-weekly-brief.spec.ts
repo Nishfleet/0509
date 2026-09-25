@@ -29,8 +29,13 @@ function htmlBodyFrom(raw: string): string {
   return "";
 }
 
-function header(raw: string, name: string): string | null {
-  return new RegExp(`^${name}:\\s*(.+)$`, "im").exec(raw)?.[1]?.trim() ?? null;
+const MESSAGE_ID = /^message-id:\s*(.+)$/im;
+const SENT_DATE = /^date:\s*(.+)$/im;
+const LIST_UNSUB = /^list-unsubscribe:\s*(.+)$/im;
+const LIST_UNSUB_POST = /^list-unsubscribe-post:\s*(.+)$/im;
+
+function header(raw: string, pattern: RegExp): string | null {
+  return pattern.exec(raw)?.[1]?.trim() ?? null;
 }
 
 function localSlot(now: Date, timezone: string): { weekday: number; hour: number } {
@@ -144,10 +149,10 @@ test("the weekly brief arrives from the inbox, in order, and unsubscribe stops t
   await saveSchedule(page, { ...utc, timezone: "UTC" });
 
   const raw = await waitForBrief(email, token);
-  const messageId = header(raw, "message-id");
-  const sentUtc = header(raw, "date");
-  const unsubHeader = header(raw, "list-unsubscribe");
-  const unsubPost = header(raw, "list-unsubscribe-post");
+  const messageId = header(raw, MESSAGE_ID);
+  const sentUtc = header(raw, SENT_DATE);
+  const unsubHeader = header(raw, LIST_UNSUB);
+  const unsubPost = header(raw, LIST_UNSUB_POST);
   expect(messageId, "the brief carries a Message-ID").toBeTruthy();
   expect(sentUtc, "the brief carries a Date").toBeTruthy();
   expect(unsubHeader, "List-Unsubscribe").toMatch(/^<https:\/\/0509\.io\/u\/[^>]+>$/);
@@ -220,5 +225,5 @@ test("the weekly brief arrives from the inbox, in order, and unsubscribe stops t
   // skipped. Wait the window the first brief used, then read again.
   await page.waitForTimeout(SUPPRESS_WAIT_MS);
   const later = await readRawMessage(email, token);
-  expect(header(later, "message-id"), "the next brief was not sent").toBe(messageId);
+  expect(header(later, MESSAGE_ID), "the next brief was not sent").toBe(messageId);
 });
