@@ -39,7 +39,7 @@ const MATCHED_CHANGE: SiteChangeItemData = {
   when: "12 Sept",
 };
 
-const CHANGES: readonly [] = [];
+const CHANGES: readonly SiteChangeItemData[] = [];
 
 function renderWith(rows: readonly FeedRow[], changes: readonly SiteChangeItemData[], url = "/"): string {
   return renderToStaticMarkup(
@@ -51,33 +51,40 @@ function render(url: string, rows: readonly FeedRow[] = ROWS): string {
   return renderWith(rows, CHANGES, url);
 }
 
-function plain(html: string): string {
-  return html.replace(/<[^>]*>/g, "");
+function chips(html: string): string[] {
+  const out: string[] = [];
+  for (const match of html.matchAll(/data-slot="toggle-group-item"[\s\S]*?<\/button>/g)) {
+    const block = match[0];
+    const openEnd = block.indexOf(">");
+    const closeStart = block.lastIndexOf("</button>");
+    if (openEnd === -1 || closeStart === -1) continue;
+    const inner = block.slice(openEnd + 1, closeStart);
+    const chip = inner.match(/^([^<]+)<span class="font-mono text-meta">(\d+)<\/span>$/);
+    if (chip && chip[1] !== undefined && chip[2] !== undefined) out.push(`${chip[1]}${chip[2]}`);
+  }
+  return out;
 }
 
-function chipTexts(html: string): string[] {
-  return (html.match(/data-slot="toggle-group-item"[\s\S]*?<\/button>/g) ?? []).map((chip) =>
-    plain(chip.slice(chip.indexOf(">") + 1, chip.lastIndexOf("</button>"))),
-  );
-}
-
-function rowKinds(html: string): string[] {
-  const kinds: string[] = [];
+function kinds(html: string): string[] {
+  const out: string[] = [];
   for (const match of html.matchAll(/data-kind="([^"]+)"/g)) {
     const kind = match[1];
-    if (typeof kind === "string") kinds.push(kind);
+    if (typeof kind === "string") out.push(kind);
   }
-  return kinds;
+  return out;
 }
 
-const CHIPS = ["All5", "Ads1", "Site changes1", "Mentions1", "Hiring2"];
+function sourcePill(html: string): string {
+  const match = html.match(/data-slot="source-pill"[^>]*>([^<]*)</);
+  return match && match[1] !== undefined ? match[1] : "";
+}
 
 describe("the developments feed", () => {
   it("lists every row under five labelled count chips on the bare page", () => {
     const html = render("/");
-    expect(rowKinds(html)).toEqual(["hiring", "ad", "change", "mention", "hiring"]);
+    expect(kinds(html)).toEqual(["hiring", "ad", "change", "mention", "hiring"]);
     expect(html.match(/data-kind=/g)).toHaveLength(5);
-    expect(chipTexts(html)).toEqual(CHIPS);
+    expect(chips(html)).toEqual(["All5", "Ads1", "Site changes1", "Mentions1", "Hiring2"]);
     expect(html).toContain('aria-label="Filter developments"');
     expect(html).toContain('data-slot="developments-list"');
     expect(html).toContain('data-slot="source-pill"');
@@ -87,15 +94,15 @@ describe("the developments feed", () => {
   it("shows only the kind the URL asks for and leaves the chip counts alone", () => {
     const html = render("/?kind=hiring");
     expect(html.match(/data-kind=/g)).toHaveLength(2);
-    expect(rowKinds(html)).toEqual(["hiring", "hiring"]);
-    expect(chipTexts(html)).toEqual(CHIPS);
+    expect(kinds(html)).toEqual(["hiring", "hiring"]);
+    expect(chips(html)).toEqual(["All5", "Ads1", "Site changes1", "Mentions1", "Hiring2"]);
   });
 
   it("falls back to the whole feed for an unknown kind", () => {
     const html = render("/?kind=bogus");
     expect(html.match(/data-kind=/g)).toHaveLength(5);
-    expect(rowKinds(html)).toEqual(["hiring", "ad", "change", "mention", "hiring"]);
-    expect(chipTexts(html)).toEqual(CHIPS);
+    expect(kinds(html)).toEqual(["hiring", "ad", "change", "mention", "hiring"]);
+    expect(chips(html)).toEqual(["All5", "Ads1", "Site changes1", "Mentions1", "Hiring2"]);
   });
 
   it("keeps one list element for every filter, empty rows included", () => {
@@ -105,26 +112,27 @@ describe("the developments feed", () => {
     const empty = render("/?kind=ad", HIRING_ONLY);
     expect(empty.match(/data-slot="developments-list"/g)).toHaveLength(1);
     expect(empty).not.toContain('data-testid="development"');
-    expect(plain(empty)).toContain("Nothing of this kind in the last 90 days.");
+    expect(empty).toContain("Nothing of this kind in the last 90 days.");
   });
 
   it("titles a row by title, then summary, then the source label", () => {
     const titled = render("/?kind=hiring");
-    expect(plain(titled)).toContain("Staff engineer, billing");
+    expect(titled).toContain(">Staff engineer, billing<");
     const summaryOnly: readonly FeedRow[] = [{ ...HIRING_FIRST, title: null, summary: "Summary carries the name" }];
-    expect(plain(render("/?kind=hiring", summaryOnly))).toContain("Summary carries the name");
+    expect(render("/?kind=hiring", summaryOnly)).toContain(">Summary carries the name<");
     const bare: readonly FeedRow[] = [{ ...HIRING_FIRST, title: null, summary: null }];
-    expect(plain(render("/?kind=hiring", bare))).toContain("Careers page");
+    expect(render("/?kind=hiring", bare)).toContain(">Careers page<");
   });
 
   it("prints a summary only beside a title, and the source pill and age every row", () => {
     const ad = render("/?kind=ad");
-    expect(plain(ad)).toContain("Runs the compare-against-us line again.");
-    expect(ad).toContain("Ad library");
+    expect(ad).toContain("Runs the compare-against-us line again.");
+    expect(ad).toContain('data-slot="source-pill"');
+    expect(sourcePill(ad)).toBe("Ad library");
     expect(ad).toContain("13 Sept");
     const change = render("/?kind=change");
     expect(change.match(/<p[ >]/g)).toBeNull();
-    expect(change).toContain("Website");
+    expect(sourcePill(change)).toBe("Website");
     expect(change).toContain("12 Sept");
   });
 
