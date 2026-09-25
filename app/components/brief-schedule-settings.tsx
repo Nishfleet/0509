@@ -3,6 +3,7 @@ import { useFetcher } from "react-router";
 
 import { HOURS, WEEKDAYS, hourLabel } from "../lib/brief-settings";
 import { toastSaved } from "./toaster";
+import { BriefPauseSetting } from "./brief-pause-setting";
 import { Button } from "./ui/button";
 
 const SELECT =
@@ -25,6 +26,7 @@ export interface ScheduleView {
   weekday: number;
   hour: number;
   timezone: string;
+  pausedAt: string | null;
   nextLine: string;
 }
 
@@ -111,6 +113,7 @@ export function BriefScheduleSettings({ schedule }: { schedule: ScheduleView }):
           That time didn&apos;t save. Pick it again.
         </p>
       ) : null}
+      <BriefPauseSetting pausedAt={schedule.pausedAt} timezone={schedule.timezone} />
     </div>
   );
 }
