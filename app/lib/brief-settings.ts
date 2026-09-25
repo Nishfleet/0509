@@ -42,3 +42,7 @@ export function parseBriefSchedule(input: {
 export function formatBriefAt(instant: Date, timezone: string): string {
   return `${format(new TZDate(instant.getTime(), timezone), "EEEE d MMMM yyyy, HH:mm")} ${timezone}`;
 }
+
+export function formatPausedSince(pausedAt: string, timezone: string): string {
+  return format(new TZDate(new Date(pausedAt).getTime(), timezone), "EEEE d MMMM");
+}
