@@ -12,6 +12,7 @@ const KEYS = [
   "DB",
   "BETTER_AUTH_URL",
   "BETTER_AUTH_SECRET",
+  "TURNSTILE_SECRET_KEY",
   "EMAIL",
   "SEND_EMAIL",
   "SNAPSHOTS",
@@ -29,6 +30,7 @@ function configured() {
     DB: { prepare: () => "stmt" },
     BETTER_AUTH_URL: "https://0509.io",
     BETTER_AUTH_SECRET: "present",
+    TURNSTILE_SECRET_KEY: "present",
     EMAIL: {},
     SEND_EMAIL: { sendBatch: () => "queued" },
     SNAPSHOTS: { get: () => "card" },
@@ -99,6 +101,13 @@ describe("worker env", () => {
     expect(error.names).toEqual(["BETTER_AUTH_SECRET"]);
   });
 
+  it("treats a blank turnstile secret as missing", () => {
+    useEnv({ ...configured(), TURNSTILE_SECRET_KEY: "   " });
+    const error = namesOf(createWorkerEnvCheck());
+    expect(error.names).toEqual(["TURNSTILE_SECRET_KEY"]);
+    expect(error.message).toContain("a botnet can spray sign-in links");
+  });
+
   it("checks once per isolate", () => {
     const check = createWorkerEnvCheck();
     useEnv(configured());
@@ -116,6 +125,7 @@ describe("worker env", () => {
       "DB",
       "BETTER_AUTH_URL",
       "BETTER_AUTH_SECRET",
+      "TURNSTILE_SECRET_KEY",
       "EMAIL",
       "SEND_EMAIL",
       "SNAPSHOTS",

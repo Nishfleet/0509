@@ -1,7 +1,7 @@
 import type { Route } from "./+types/login";
 import { env } from "cloudflare:workers";
-import { useEffect, useState } from "react";
-import { Form, useActionData, useNavigate, useNavigation, useSearchParams } from "react-router";
+import { useContext, useEffect, useState } from "react";
+import { Form, UNSAFE_FrameworkContext, useActionData, useNavigate, useNavigation, useSearchParams } from "react-router";
 
 import { Footer } from "../components/footer";
 import { SIGN_IN_LEDE, SIGN_IN_SHELL, SIGN_IN_TITLE, SignInSent } from "../components/sign-in-sent";
@@ -10,11 +10,21 @@ import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { safeReturnTo } from "../lib/agent/paths";
 import { authClient } from "../lib/auth-client";
-import { createAuth } from "../lib/auth.server";
+import { handleAuthRequest } from "../lib/auth.server";
 import { timezoneCookie } from "../lib/timezone";
+
+const TURNSTILE_SCRIPT = "https://challenges.cloudflare.com/turnstile/v0/api.js";
 
 export function meta() {
   return [{ title: "Sign in · Five to Nine" }];
+}
+
+export function loader() {
+  const siteKey = env.TURNSTILE_SITE_KEY;
+  if (typeof siteKey !== "string" || siteKey.trim().length === 0) {
+    throw new Response("misconfigured: TURNSTILE_SITE_KEY", { status: 503 });
+  }
+  return { turnstileSiteKey: siteKey.trim() };
 }
 
 export async function action({ request }: Route.ActionArgs) {
@@ -23,18 +33,49 @@ export async function action({ request }: Route.ActionArgs) {
   const email = typeof submitted === "string" ? submitted.trim().toLowerCase() : "";
   if (!email) return { error: "Enter your email address, then we'll send the link." };
 
-  const auth = createAuth(env);
-  await auth.api
-    .signInMagicLink({
-      body: { email, callbackURL: safeReturnTo(new URL(request.url).searchParams.get("next")) },
-      headers: request.headers,
-    })
-    .catch(() => undefined);
-
+  const captchaField = form.get("cf-turnstile-response");
+  const captcha = typeof captchaField === "string" ? captchaField.trim() : "";
+  const headers = new Headers(request.headers);
+  headers.delete("content-length");
+  headers.set("content-type", "application/json");
+  if (captcha.length > 0) headers.set("x-captcha-response", captcha);
+  const response = await handleAuthRequest(
+    env,
+    new Request(new URL("/api/auth/sign-in/magic-link", request.url), {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        email,
+        callbackURL: safeReturnTo(new URL(request.url).searchParams.get("next")),
+      }),
+    }),
+  );
+  const status = response.status;
+  await response.text();
+  if (status === 400 || status === 403) {
+    return { error: "Confirm you're a person, then we'll send the link." };
+  }
   return { sent: { email, at: Date.now() } };
 }
 
-export default function Login() {
+function TurnstileWidget({ siteKey }: { siteKey: string }) {
+  const framework = useContext(UNSAFE_FrameworkContext);
+  const nonce = framework === undefined ? undefined : framework.nonce;
+  return (
+    <>
+      <div
+        className="cf-turnstile"
+        data-sitekey={siteKey}
+        data-appearance="interaction-only"
+        data-response-field="true"
+        data-response-field-name="cf-turnstile-response"
+      />
+      <script nonce={nonce} src={TURNSTILE_SCRIPT} async defer suppressHydrationWarning />
+    </>
+  );
+}
+
+export default function Login({ loaderData }: Route.ComponentProps) {
   const data = useActionData<typeof action>();
   const busy = useNavigation().state !== "idle";
   const navigate = useNavigate();
@@ -77,6 +118,7 @@ export default function Login() {
             Email
           </label>
           <Input id="email" name="email" type="email" autoComplete="email" inputMode="email" required />
+          <TurnstileWidget siteKey={loaderData.turnstileSiteKey} />
           <Button type="submit" size="lg" disabled={busy} className="mt-2">
             {busy ? "Sending…" : "Email me a link"}
           </Button>

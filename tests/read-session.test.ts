@@ -9,7 +9,7 @@ vi.mock("better-auth", () => ({
   betterAuth: (options: unknown) => betterAuth(options),
 }));
 
-vi.mock("better-auth/plugins", () => ({ magicLink: () => ({}) }));
+vi.mock("better-auth/plugins", () => ({ magicLink: () => ({}), captcha: () => ({}) }));
 vi.mock("@better-auth/api-key", () => ({ apiKey: () => ({}) }));
 vi.mock("@better-auth/passkey", () => ({ passkey: () => ({}) }));
 vi.mock("../app/lib/workspace.server", () => ({
@@ -25,6 +25,7 @@ describe("hasSessionCookie", () => {
       EMAIL: { send: async () => undefined },
       SIGN_IN_EMAIL_LIMIT: { limit: async () => ({ success: true }) },
       SIGN_IN_IP_LIMIT: { limit: async () => ({ success: true }) },
+      TURNSTILE_SECRET_KEY: "present",
     });
     expect(betterAuth).toHaveBeenCalledWith(
       expect.objectContaining({ advanced: expect.objectContaining({ cookiePrefix: "better-auth" }) }),

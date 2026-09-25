@@ -156,6 +156,16 @@ export async function waitForMagicLink(to: string, token: string, exclude: strin
   );
 }
 
+const TURNSTILE_TEST_SITE_KEY = "1x00000000000000000000BB";
+
+export async function settleSignInWidget(page: Page): Promise<void> {
+  const host = page.locator("[data-sitekey]");
+  await expect(host).toHaveCount(1);
+  const siteKey = await host.getAttribute("data-sitekey");
+  if (siteKey !== TURNSTILE_TEST_SITE_KEY) return;
+  await expect(page.locator('input[name="cf-turnstile-response"]')).toHaveValue(/\S/);
+}
+
 // J1's core: submit the login form for a fresh e2e+ address, read the real
 // email out of the inbox Worker, follow the link, land signed in on /onboarding.
 // Timestamps are logged for the packet's proof line (send and session).
@@ -166,6 +176,7 @@ export async function signInWithMagicLink(
 ): Promise<{ link: string; status: number }> {
   await page.goto("/login");
   await page.locator('input[name="email"]').fill(email);
+  await settleSignInWidget(page);
   const sentAt = new Date().toISOString();
   await page.locator('button[type="submit"]').click();
   // Sent state replaces the form; asserting the field is gone asserts the swap
