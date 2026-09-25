@@ -213,7 +213,7 @@ jobs:
           BODY=$(printf 'Run: %s\nHead: %s\nArtifact: playwright-report-production on that run\n\nFailing tests:\n%s\n\nFeature-map rows (.agents/skills/verify/feature-map.md):\n%s\n\nPacket rule: reproduce the failure with the verify skill (.agents/skills/verify/) against https://0509.io before changing code, and paste that run in the PR.\n' "$RUN_URL" "$SHA" "$FAILED" "$ROWS")
           N=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search "\"$TITLE\" in:title" --json number --jq '.[0].number // empty')
           if [ -n "$N" ]; then gh issue comment "$N" --repo "$GITHUB_REPOSITORY" --body "$BODY"; else
-            N=$(gh issue create --repo "$GITHUB_REPOSITORY" --title "$TITLE" --label agent-ready --label critical-path --body "$BODY" | grep -o '[0-9]*$')
+            N=$(gh api "repos/$GITHUB_REPOSITORY/issues" -f title="$TITLE" -f body="$BODY" -f 'labels[]=agent-ready' -f 'labels[]=critical-path' --jq .number)
             # A GITHUB_TOKEN label fires no workflow, so dispatch by number;
             # agent.yml's Gate sizes it. needs-split alone left #4620 unworked.
             gh workflow run agent-dispatch.yml --repo "$GITHUB_REPOSITORY" -f issue="$N"
@@ -276,7 +276,7 @@ jobs:
           BODY=$(printf "Run: %s\nHead: %s\nReport: %s\n\nFailed budgets (lighthouse-budget.json):\n%s\n\nFeature-map row (.agents/skills/verify/feature-map.md): \`/\`, the audited URL.\n\nPacket rule: reproduce the failure with the verify skill (.agents/skills/verify/) against https://0509.io before changing code, and paste that run in the PR.\n" "$RUN_URL" "$SHA" "$LINKS" "$FAILED")
           N=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search "\"$TITLE\" in:title" --json number --jq '.[0].number // empty')
           if [ -n "$N" ]; then gh issue comment "$N" --repo "$GITHUB_REPOSITORY" --body "$BODY"; else
-            N=$(gh issue create --repo "$GITHUB_REPOSITORY" --title "$TITLE" --label agent-ready --label critical-path --body "$BODY" | grep -o '[0-9]*$')
+            N=$(gh api "repos/$GITHUB_REPOSITORY/issues" -f title="$TITLE" -f body="$BODY" -f 'labels[]=agent-ready' -f 'labels[]=critical-path' --jq .number)
             # A GITHUB_TOKEN label fires no workflow, so dispatch by number;
             # agent.yml's Gate sizes it. needs-split alone left #4620 unworked.
             gh workflow run agent-dispatch.yml --repo "$GITHUB_REPOSITORY" -f issue="$N"
