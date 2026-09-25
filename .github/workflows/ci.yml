@@ -385,3 +385,20 @@ jobs:
       - name: merge_group reports the check so the queue can merge (the grade was enforced on the pull request)
         if: github.event_name == 'merge_group'
         run: "true"
+
+  # no-glue: the shared fleet gate (fleet-ops#8756). One composite action in
+  # Nishfleet/fleet-ops; a job named `no-glue` invokes it as a step so the
+  # check context is exactly `no-glue` for the ruleset (a workflow_call
+  # caller would report "caller / called" and could never satisfy it). 0509
+  # has no .py/.mjs product code today, so it runs the strict default with
+  # no extra-allowed.
+  no-glue:
+    name: no-glue
+    if: github.event_name != 'deployment_status'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - uses: Nishfleet/fleet-ops/.github/actions/no-glue@main
