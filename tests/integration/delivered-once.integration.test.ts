@@ -59,15 +59,6 @@ const seedDigest = async (
     .run();
 };
 
-interface DeliveryRow {
-  id: string;
-  workspace_id: string;
-  signal_id: string;
-  channel_id: string;
-  send_attempt_id: string | null;
-  delivered_at: string;
-}
-
 const deliveryRow = (attemptId: string | null, signalId: string, deliveredAt: string) =>
   env.DB.prepare(
     `INSERT INTO signal_delivery (id, workspace_id, signal_id, channel_id, send_attempt_id, delivered_at)
@@ -75,12 +66,14 @@ const deliveryRow = (attemptId: string | null, signalId: string, deliveredAt: st
      ON CONFLICT (signal_id, channel_id) DO NOTHING`,
   ).bind(WS, signalId, CHANNEL, attemptId, deliveredAt);
 
-const deliveries = async (): Promise<DeliveryRow[]> =>
+const deliveries = async (): Promise<string[]> =>
   (
-    await env.DB.prepare(
-      "SELECT id, workspace_id, signal_id, channel_id, send_attempt_id, delivered_at FROM signal_delivery ORDER BY signal_id",
-    ).all<DeliveryRow>()
-  ).results ?? [];
+    (
+      await env.DB.prepare(
+        "SELECT signal_id FROM signal_delivery ORDER BY signal_id",
+      ).all<{ signal_id: string }>()
+    ).results ?? []
+  ).map((row) => row.signal_id);
 
 const stubJev = () => {
   const run = vi.fn(async () => ({
@@ -176,11 +169,10 @@ describe("delivered once across weeks (0509#4063)", () => {
     const week1 = await weekOne();
     expect(week1.outcome).toBe("sent");
 
-    // The two rows week 1's send wrote. The resolution batch that writes them
-    // is #5548's, so until it lands the fixture inserts them here; the
-    // conflict clause is that writer's own, which makes the insert a no-op
-    // once it does. They are the precondition the picker reads: the tail
-    // asserts both landed keyed to this workspace, channel and attempt.
+    // The send-resolution batch that writes signal_delivery rows is the
+    // pending #5548 re-cut, so the fixture inserts the two rows directly.
+    // The picker's NOT EXISTS reads signal_id only: the tail asserts both
+    // rows exist under that key.
     await env.DB.batch([
       deliveryRow(week1.attempt_id, SIG_A, "2026-09-21T08:00:00.000Z"),
       deliveryRow(week1.attempt_id, SIG_B, "2026-09-21T08:00:00.000Z"),
@@ -204,11 +196,6 @@ describe("delivered once across weeks (0509#4063)", () => {
     expect(payload.read_this_first.map((mark) => mark.signal_id)).toEqual([SIG_C]);
 
     const rows = await deliveries();
-    expect(
-      rows.map((row) => [row.signal_id, row.workspace_id, row.channel_id, row.send_attempt_id]),
-    ).toEqual([
-      [SIG_A, WS, CHANNEL, week1.attempt_id],
-      [SIG_B, WS, CHANNEL, week1.attempt_id],
-    ]);
+    expect(rows).toEqual([SIG_A, SIG_B]);
   });
 });
