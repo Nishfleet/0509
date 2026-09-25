@@ -38,7 +38,8 @@ test("the hero's first viewport holds the outcome and the one priced input", asy
     if (request.url().includes("bricolage-grotesque-latin")) fullFace.push(request.url());
   });
 
-  await page.goto(PATH);
+  const response = await page.goto(PATH);
+  expect(await response?.text()).not.toContain("modulepreload");
   await page.waitForLoadState("networkidle");
 
   const hero = page.locator("#hero");
@@ -103,7 +104,6 @@ test("the hero's first viewport holds the outcome and the one priced input", asy
   expect(display.join("\n")).not.toContain("bricolage-grotesque-latin");
   expect(fullFace).toEqual([]);
   await expect(page.locator('link[rel="preload"][href="/fonts/bricolage-hero.woff2"]')).toHaveCount(1);
-  await expect(page.locator('link[rel="modulepreload"]')).toHaveCount(0);
   await expect(page.locator('script[type="module"]')).not.toHaveCount(0);
 
   if (testInfo.project.name === "phone-390") {
