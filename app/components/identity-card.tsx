@@ -49,6 +49,7 @@ function Logo({ logo }: { logo: Promise<string | null> }) {
 }
 
 const EMPTY_LINE = "we'll fill this after the first crawl";
+const UNREAD_LINE = "we'll fill this on the first crawl, within the hour";
 
 export function Fields({
   subject,
@@ -61,6 +62,7 @@ export function Fields({
   logo: Promise<string | null>;
   draft: CardDraft;
 }) {
+  const emptyLine = site.unfound ? UNREAD_LINE : EMPTY_LINE;
   const nameCheck = site.review.name === "check";
   const descriptionCheck = site.review.description === "check";
   const fetcher = useFetcher();
@@ -81,7 +83,7 @@ export function Fields({
           }
         />
         {site.review.name === "empty" ? (
-          <span className="text-ink-soft text-[0.88rem]">{EMPTY_LINE}</span>
+          <span className="text-ink-soft text-[0.88rem]">{emptyLine}</span>
         ) : null}
       </Row>
       <Logo logo={logo} />
@@ -101,12 +103,12 @@ export function Fields({
           }
         />
         {site.review.description === "empty" ? (
-          <span className="text-ink-soft text-[0.88rem]">{EMPTY_LINE}</span>
+          <span className="text-ink-soft text-[0.88rem]">{emptyLine}</span>
         ) : null}
       </Row>
       <Row label="socials" check={site.review.socials === "check"}>
         {site.review.socials === "empty" ? (
-          <span className="text-ink-soft text-[0.88rem]">{EMPTY_LINE}</span>
+          <span className="text-ink-soft text-[0.88rem]">{emptyLine}</span>
         ) : site.review.socials === "check" ? (
           <ul className="min-w-0 flex-1 text-[0.95rem]">
             {site.socials.map((social) => (

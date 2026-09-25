@@ -99,4 +99,13 @@ describe("the identity card fields", () => {
 		expect(html).not.toContain('value="Gymshark"');
 		expect(html).toContain("my line");
 	});
+
+	it("promises the hourly fill on an unread site, never the after-first-crawl line", () => {
+		const html = render(
+			site({ name: "fill", description: "empty", socials: "empty" }, { description: null, socials: [], unfound: true }),
+		);
+
+		expect(html).toContain("on the first crawl, within the hour");
+		expect(html).not.toContain("after the first crawl");
+	});
 });
