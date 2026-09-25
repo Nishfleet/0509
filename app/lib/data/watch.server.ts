@@ -8,17 +8,6 @@ export interface NewWatch {
   targetKey: string;
 }
 
-export interface SiteSweepTarget {
-  workspaceId: string;
-  entityId: string;
-  entityRole: string;
-  sourceId: string;
-  watchId: string;
-  pageId: string;
-  pageRole: string;
-  url: string;
-}
-
 const INSERT_WATCH = `INSERT INTO watch (id, entity_id, source_id, target_key)
 VALUES (?1, ?2, ?3, ?4)
 ON CONFLICT (entity_id, source_id, target_key) DO NOTHING`;
@@ -31,35 +20,7 @@ ORDER BY e.id`;
 
 const MARK_POLLED = `UPDATE watch SET last_polled_at = ?2 WHERE id = ?1`;
 
-const SITE_SWEEP_TARGETS = `SELECT e.workspace_id AS workspace_id,
-       e.id AS entity_id,
-       e.role AS entity_role,
-       w.source_id AS source_id,
-       w.id AS watch_id,
-       p.id AS page_id,
-       COALESCE(p.role, 'other') AS page_role,
-       p.url AS url
-FROM watch w
-JOIN source src ON src.id = w.source_id AND src.key = ?1 AND src.is_enabled = 1
-JOIN entity e ON e.id = w.entity_id AND e.state = 'on'
-JOIN page p ON p.entity_id = e.id AND p.url = w.target_key
-WHERE w.is_active = 1
-ORDER BY e.workspace_id, e.id, p.url`;
-
 const entityRows = z.array(z.object({ id: z.string(), domain: z.string() }));
-
-const targetRows = z.array(
-  z.object({
-    workspace_id: z.string(),
-    entity_id: z.string(),
-    entity_role: z.string(),
-    source_id: z.string(),
-    watch_id: z.string(),
-    page_id: z.string(),
-    page_role: z.string(),
-    url: z.string(),
-  }),
-);
 
 export async function insertWatches(rows: readonly NewWatch[]): Promise<void> {
   if (rows.length === 0) return;
@@ -124,20 +85,6 @@ export async function readWatchConfigJson(watchId: string): Promise<string | nul
 export async function writeWatchConfigJson(watchId: string, configJson: string): Promise<void> {
   const result = await env.DB.prepare(WRITE_WATCH_CONFIG).bind(watchId, configJson).run();
   if (result.meta.changes !== 1) throw new Error(`watch ${watchId} was not updated`);
-}
-
-export async function readSiteSweepTargets(sourceKey: string): Promise<readonly SiteSweepTarget[]> {
-  const rows = await env.DB.prepare(SITE_SWEEP_TARGETS).bind(sourceKey).all();
-  return targetRows.parse(rows.results).map((row) => ({
-    workspaceId: row.workspace_id,
-    entityId: row.entity_id,
-    entityRole: row.entity_role,
-    sourceId: row.source_id,
-    watchId: row.watch_id,
-    pageId: row.page_id,
-    pageRole: row.page_role,
-    url: row.url,
-  }));
 }
 
 const ENSURE_WATCHES = `INSERT INTO watch (id, entity_id, source_id, target_key)

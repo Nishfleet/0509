@@ -21,7 +21,7 @@ import { IdentityTail } from "./identity-tail-workflow";
 import { AccountDelete } from "./workflows/account-delete";
 import { Discovery } from "./workflows/discovery";
 import { OwnSiteCheck } from "./workflows/own-site-check";
-import { SiteSweep } from "./workflows/site-sweep";
+import { SiteSweepWorkflow as SiteSweepWorkflowBase } from "./site-sweep-workflow";
 import { MentionsSweep } from "./workflows/mentions";
 import { StandingRollover } from "./workflows/standing-rollover";
 
@@ -102,7 +102,7 @@ export class DiscoveryWorkflow extends instrumentWorkflowWithSentry(sentryOption
 
 export class IdentityTailWorkflow extends instrumentWorkflowWithSentry(sentryOptions, IdentityTail) {}
 
-export class SiteSweepWorkflow extends instrumentWorkflowWithSentry(sentryOptions, SiteSweep) {}
+export class SiteSweepWorkflow extends instrumentWorkflowWithSentry(sentryOptions, SiteSweepWorkflowBase) {}
 
 export class OwnSiteCheckWorkflow extends instrumentWorkflowWithSentry(sentryOptions, OwnSiteCheck) {}
 

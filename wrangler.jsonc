@@ -191,9 +191,12 @@
       "binding": "DISCOVERY",
       "class_name": "DiscoveryWorkflow"
     },
-    // The nightly website sweep (docs/engines/site-change.md). The Workflow's
+    // The website sweep (docs/engines/site-change.md, #3879). The Workflow's
     // own schedule creates one instance a night, at 02:00 UTC so the changes
-    // it files land before the 03:00 standing refresh counts them. Each page
+    // it files land before the 03:00 standing refresh counts them. One
+    // instance covers both scopes: scope "competitors" plans up to four pages
+    // per brand, scope "self" plans the customer's own home and pricing pages.
+    // A created instance may instead name one scope. Each chunk of ten pages
     // is its own retried step; a page that cannot be read fails alone.
     // Nothing to provision: deploy creates the Workflow, unlike a queue.
     {
