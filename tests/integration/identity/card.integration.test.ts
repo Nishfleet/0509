@@ -144,36 +144,53 @@ describe("startCard", () => {
   it("starts a creator's card from the handle, without reading any site", async () => {
     stubAi(0.95);
     const calls = stubWeb(() => new Response(gym, { status: 200 }));
-    const site = await startCard("ws-1", subjectFor("https://www.instagram.com/gymshark/")).site;
+    const site = await startCard("ws-1", subjectFor("https://www.tiktok.com/@gymshark")).site;
     expect(site).toEqual({
       name: "@gymshark",
       description: null,
-      socials: [{ platform: "instagram", url: "https://www.instagram.com/gymshark/" }],
+      socials: [{ platform: "tiktok", url: "https://www.tiktok.com/@gymshark" }],
       review: { name: "fill", description: "empty", socials: "fill" },
       unfound: false,
     });
     expect(calls).toEqual([]);
   });
 
-  it("reads the YouTube channel page and joins its socials", async () => {
+  it("draws a YouTube creator's card from the channel page", async () => {
     stubAi(0.95);
-    const channelHtml =
-      '<html><head><title>Veritasium</title>' +
-      '<meta property="og:title" content="Veritasium">' +
-      '<meta property="og:description" content="An element of truth - videos about science, education, and anything else I find interesting.">' +
-      '</head><body>' +
-      '<section class="about">Elements of truth about the world, demonstrated with experiments and conversations with experts across physics, biology, engineering and the history of science. New videos every week on Veritasium.</section>' +
-      '<footer><a href="https://www.instagram.com/veritasium/">Instagram</a></footer>' +
-      '</body></html>';
-    stubWeb(() => new Response(channelHtml, { status: 200, headers: { "content-type": "text/html" } }));
-    const card = startCard("ws-1", subjectFor("https://www.youtube.com/@veritasium"));
-
+    const html = `<!doctype html>
+<html>
+  <head>
+    <title>Gymshark - YouTube</title>
+    <meta property="og:description" content="Official channel">
+    <meta property="og:image" content="https://images.ctfassets.net/avatar.png">
+  </head>
+  <body>
+    <a href="https://www.instagram.com/gymshark/">Instagram</a>
+    <h1>Gymshark</h1>
+    <p>Subscribe for workouts, training plans, athlete stories, product launches, and behind-the-scenes videos from the Gymshark team.</p>
+    <p>Gymshark is a global athletic wear and fitness brand with training plans, workouts, and athlete stories on YouTube.</p>
+  </body>
+</html>`;
+    stubWeb(() => new Response(html, { status: 200 }));
+    const card = startCard("ws-1", subjectFor("https://www.youtube.com/@Gymshark"));
     const site = await card.site;
-    expect(site.name).toBe("Veritasium");
-    expect(site.description).toContain("element of truth");
-    expect(site.socials[0]).toEqual({ platform: "youtube", url: "https://www.youtube.com/@veritasium" });
-    expect(site.socials.map((social) => social.platform)).toContain("instagram");
+    expect(site.name).toBe("Gymshark");
+    expect(site.description).toBe("Official channel");
+    expect(site.socials.map((social) => social.platform)).toEqual(["youtube", "instagram"]);
+    expect(site.review).toEqual({ name: "fill", description: "fill", socials: "fill" });
+    expect(site.unfound).toBe(false);
+    expect(await card.logo).toBe("data:image/png;base64,AQID");
+    expect(await env.IDENTITY_CACHE.get("identity:gymshark:youtube-profile")).not.toBeNull();
+  });
 
+  it("falls back to the handle card when the Instagram profile cannot be read", async () => {
+    stubAi(0.95);
+    stubWeb(() => new Response("blocked", { status: 403 }));
+    const card = startCard("ws-1", subjectFor("https://www.instagram.com/gymshark/"));
+    const site = await card.site;
+    expect(site.name).toBe("@gymshark");
+    expect(site.description).toBeNull();
+    expect(site.unfound).toBe(false);
     expect(await card.logo).toBeNull();
   });
 });
