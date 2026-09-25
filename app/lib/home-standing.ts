@@ -2,6 +2,7 @@ import type { BriefPayload } from "./brief-payload";
 import type { BriefSchedule } from "./brief-schedule";
 import { nextBriefAt } from "./brief-schedule";
 import { firstSiteSweepAt, nextSiteSweepAt } from "./onboarding/arrival-estimate";
+import type { SiteChangeView } from "./site-change";
 import { sourceName } from "./source-name";
 export { nextSiteSweepAt, SITE_SWEEP_UTC_HOUR } from "./onboarding/arrival-estimate";
 
@@ -34,6 +35,7 @@ export interface HomeRow {
   self: boolean;
   signals: number;
   why: string | null;
+  move: SiteChangeView | null;
   pills: readonly HomePill[];
 }
 
@@ -137,6 +139,7 @@ function rankedRows(
   entities: readonly HomeEntity[],
   sources: readonly HomeSource[],
   counts: readonly HomeCount[],
+  moves: readonly SiteChangeView[],
 ): readonly HomeRow[] {
   const byId = new Map(entities.map((entity) => [entity.id, entity]));
   return payload.brands
@@ -157,6 +160,7 @@ function rankedRows(
         self: entity?.role === "self",
         signals: pills.reduce((sum, pill) => sum + pill.count, 0),
         why: brand.biggest_move,
+        move: moves.find((move) => move.entityId === brand.entity_id) ?? null,
         pills,
       };
     })
@@ -214,6 +218,7 @@ export function homeStanding(input: {
   history: readonly HomeHistoryRow[];
   sources: readonly HomeSource[];
   counts: readonly HomeCount[];
+  moves: readonly SiteChangeView[];
   now: Date;
 }): HomeStanding {
   const onBrands = input.entities.filter((entity) => entity.state === "on").length;
@@ -228,7 +233,7 @@ export function homeStanding(input: {
       brands: onBrands,
     };
   }
-  const rows = rankedRows(payload, input.entities, input.sources, input.counts);
+  const rows = rankedRows(payload, input.entities, input.sources, input.counts, input.moves);
   return {
     kind: "ranked",
     rank,
@@ -263,6 +268,7 @@ export function homeView(input: {
   history: readonly HomeHistoryRow[];
   sources: readonly HomeSource[];
   counts: readonly HomeCount[];
+  moves: readonly SiteChangeView[];
   now: Date;
 }): HomeView {
   const onCount = input.entities.filter((entity) => entity.state === "on").length;

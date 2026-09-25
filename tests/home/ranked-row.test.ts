@@ -8,6 +8,7 @@ import type { BriefPayload } from "../../app/lib/brief-payload";
 import type { BriefSchedule } from "../../app/lib/brief-schedule";
 import type { HomeCount, HomeEntity, HomePill, HomeRow, HomeSource } from "../../app/lib/home-standing";
 import { homeStanding } from "../../app/lib/home-standing";
+import type { SiteChangeView } from "../../app/lib/site-change";
 
 const SCHEDULE: BriefSchedule = { timezone: "Europe/London", weekday: 1, hour: 8 };
 const NOW = new Date("2026-09-24T06:30:00.000Z");
@@ -69,7 +70,24 @@ const PAYLOAD: BriefPayload = {
   next_brief_at: null,
 };
 
-function rowsFor(payload: BriefPayload): readonly HomeRow[] {
+const MOVE: SiteChangeView = {
+  id: "sig_move_1",
+  entityId: "ent_kindred",
+  isSelf: false,
+  headline: "Kindred changed its homepage",
+  page: "homepage",
+  url: "https://kindred.example/",
+  observedAt: "2026-09-20T10:00:00.000Z",
+  capturedAt: "2026-09-20 10:05 UTC",
+  wordsChanged: 42,
+  sentence: "30 words added, 12 removed.",
+  mark: { removed: "Free for every team", added: "Free for open source" },
+  before: { missing: "No screenshot of the earlier version" },
+  after: { missing: "Screenshot unavailable" },
+  whyFlagged: null,
+};
+
+function rowsFor(payload: BriefPayload, moves: readonly SiteChangeView[] = []): readonly HomeRow[] {
   const standing = homeStanding({
     payload,
     entities: ENTITIES,
@@ -78,13 +96,14 @@ function rowsFor(payload: BriefPayload): readonly HomeRow[] {
     history: [],
     schedule: SCHEDULE,
     now: NOW,
+    moves,
   });
   if (standing.kind !== "ranked") throw new Error("expected a ranked standing");
   return standing.rows;
 }
 
-function rowFor(entityId: string, payload: BriefPayload = PAYLOAD): HomeRow {
-  const row = rowsFor(payload).find((entry) => entry.entityId === entityId);
+function rowFor(entityId: string, payload: BriefPayload = PAYLOAD, moves: readonly SiteChangeView[] = []): HomeRow {
+  const row = rowsFor(payload, moves).find((entry) => entry.entityId === entityId);
   if (row === undefined) throw new Error(`expected a ${entityId} row`);
   return row;
 }
@@ -149,5 +168,20 @@ describe("RankedRow", () => {
   it("prints Why it moved only when the row has a why", () => {
     expect(render(rowFor("ent_kindred"))).toContain("Why it moved: Kindred launched 3 new ads");
     expect(render(rowFor("ent_casetta"))).not.toContain("Why it moved:");
+  });
+
+  it("renders the brand's biggest site change of the week as a mark", () => {
+    const row = rowFor("ent_kindred", PAYLOAD, [MOVE]);
+    expect(row.move?.id).toBe("sig_move_1");
+    const html = render(row);
+    expect(html).toContain('data-slot="row-move"');
+    expect(html).toContain("Free for every team");
+    expect(html).toContain("Free for open source");
+  });
+
+  it("renders no move block when the brand has no site change this week", () => {
+    const row = rowFor("ent_kindred");
+    expect(row.move).toBeNull();
+    expect(render(row)).not.toContain('data-slot="row-move"');
   });
 });

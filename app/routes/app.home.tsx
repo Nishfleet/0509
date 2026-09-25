@@ -18,6 +18,7 @@ import { freshnessEntries } from "../lib/freshness.server";
 import { onboardingTimingLines } from "../lib/onboarding/timings";
 import { readOnboardingTimes } from "../lib/data/onboarding_run.server";
 import { requireSession } from "../lib/require-session.server";
+import { readBiggestSiteChanges } from "../lib/site-changes.server";
 import { workspaceLandingForRequest } from "../lib/workspace.server";
 
 export function meta() {
@@ -34,9 +35,13 @@ export async function loader({ request }: Route.LoaderArgs) {
   const sources = workspaceId === null ? [] : await readWorkspaceMentionSources(workspaceId);
   const siteFill = workspaceId === null ? null : await readSelfSiteFill(workspaceId);
   const howRanked = await readHowRanked(env.DB, inputs.payload);
+  const moves =
+    inputs.payload === null || workspaceId === null
+      ? []
+      : await readBiggestSiteChanges(workspaceId, inputs.payload.period_start);
   const times = workspaceId === null ? null : await readOnboardingTimes(workspaceId);
   return {
-    view: homeView({ ...inputs, now: new Date() }),
+    view: homeView({ ...inputs, moves, now: new Date() }),
     howRanked,
     freshness: freshnessEntries(sources, Date.now()),
     siteFill,
