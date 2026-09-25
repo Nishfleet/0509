@@ -1,4 +1,4 @@
-import { Links, Meta, Outlet, Scripts, ScrollRestoration, useMatches } from "react-router";
+import { Links, Meta, Outlet, Scripts, ScrollRestoration, unstable_useRoute } from "react-router";
 
 import type { Route } from "./+types/root";
 import { ProductError } from "./components/error-page";
@@ -6,13 +6,8 @@ import { Toaster } from "./components/toaster";
 import { hasSessionCookie } from "./lib/auth.server";
 import "./app.css";
 
-function includeScripts(handle: unknown): boolean {
-  if (typeof handle !== "object" || handle === null || !("scripts" in handle)) return true;
-  return handle.scripts !== false;
-}
-
 export function Layout({ children }: { children: React.ReactNode }) {
-  const scripts = useMatches().every((match) => includeScripts(match.handle));
+  const scripts = unstable_useRoute("routes/landing")?.handle.scripts !== false;
   return (
     <html lang="en">
       <head>
