@@ -6,11 +6,18 @@ import { Button } from "./ui/button";
 
 const FIELD = "min-w-0 flex-1 bg-transparent py-1 text-[0.95rem] outline-none focus:border-b focus:border-ink";
 
-function Row({ label, children }: { label: string; children: ReactNode }) {
+function Row({ label, check, children }: { label: string; check?: boolean; children: ReactNode }) {
   return (
-    <div className="border-line flex items-baseline gap-4 border-b py-3">
+    <div
+      className={`border-line flex items-baseline gap-4 border-b py-3${
+        check === true ? " outline outline-1 outline-ink -outline-offset-1 px-2" : ""
+      }`}
+    >
       <span className="text-ink-soft w-20 shrink-0 font-mono text-[0.75rem] uppercase">{label}</span>
       {children}
+      {check === true ? (
+        <span className="text-ink-soft font-mono text-[0.7rem] uppercase">check this</span>
+      ) : null}
     </div>
   );
 }
@@ -41,18 +48,53 @@ function Logo({ logo }: { logo: Promise<string | null> }) {
   );
 }
 
-function Fields({ site, logo }: { site: SiteFields; logo: Promise<string | null> }) {
+const EMPTY_LINE = "we'll fill this after the first crawl";
+
+export function Fields({ site, logo }: { site: SiteFields; logo: Promise<string | null> }) {
+  const nameCheck = site.review.name === "check";
+  const descriptionCheck = site.review.description === "check";
   return (
     <>
-      <Row label="name">
-        <input name="name" aria-label="name" defaultValue={site.name ?? ""} placeholder="your brand's name" className={FIELD} />
+      <Row label="name" check={nameCheck}>
+        <input
+          name="name"
+          aria-label="name"
+          defaultValue={nameCheck ? "" : site.name ?? ""}
+          placeholder={nameCheck ? site.name ?? "" : "your brand's name"}
+          className={FIELD}
+        />
+        {site.review.name === "empty" ? (
+          <span className="text-ink-soft text-[0.88rem]">{EMPTY_LINE}</span>
+        ) : null}
       </Row>
       <Logo logo={logo} />
-      <Row label="about">
-        <textarea name="description" aria-label="about" defaultValue={site.description ?? ""} placeholder="one line on what you do" rows={2} className={`${FIELD} resize-none`} />
+      <Row label="about" check={descriptionCheck}>
+        <textarea
+          name="description"
+          aria-label="about"
+          defaultValue={descriptionCheck ? "" : site.description ?? ""}
+          placeholder={descriptionCheck ? site.description ?? "" : "one line on what you do"}
+          rows={2}
+          className={`${FIELD} resize-none`}
+        />
+        {site.review.description === "empty" ? (
+          <span className="text-ink-soft text-[0.88rem]">{EMPTY_LINE}</span>
+        ) : null}
       </Row>
-      <Row label="socials">
-        {site.socials.length === 0 ? (
+      <Row label="socials" check={site.review.socials === "check"}>
+        {site.review.socials === "empty" ? (
+          <span className="text-ink-soft text-[0.88rem]">{EMPTY_LINE}</span>
+        ) : site.review.socials === "check" ? (
+          <ul className="min-w-0 flex-1 text-[0.95rem]">
+            {site.socials.map((social) => (
+              <li key={social.platform} className="truncate">
+                <label>
+                  <input type="checkbox" name={`social.${social.platform}`} value={social.url} /> {social.url}
+                </label>
+              </li>
+            ))}
+          </ul>
+        ) : site.socials.length === 0 ? (
           <span className="text-ink-soft text-[0.95rem]">none found on the site</span>
         ) : (
           <ul className="min-w-0 flex-1 text-[0.95rem]">
