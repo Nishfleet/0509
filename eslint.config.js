@@ -29,6 +29,12 @@ const SONNER_IMPORT = {
     "sonner is imported in exactly one module, app/components/toaster.tsx, which owns every toast() call behind toastSaved(). DESIGN.md §11: toasts are only 'saved' and 'undo' — a second import site is a second toast authority. Source: 0509#4116.",
 };
 
+const FAST_XML_PARSER_IMPORT = {
+  name: "fast-xml-parser",
+  message:
+    "Feed XML is parsed only by @extractus/feed-extractor in workers/sources/mentions/feed.ts. A direct fast-xml-parser import is a second parser. Source: 0509#4051.",
+};
+
 const UNSCOPED_WRITER_MESSAGE =
   "Unscoped system writer: this writer updates by id alone, with no workspace_id, because only workers and workflows call it. A route importing it is a cross-workspace write. Routes go through a workspace-scoped writer instead. Source: 0509#4705.";
 
@@ -59,6 +65,7 @@ const ONE_PAVED_PATH_IMPORTS = [
     message: "Same paved path as better-auth: app/lib/auth.server.ts only.",
   },
   SONNER_IMPORT,
+  FAST_XML_PARSER_IMPORT,
 ];
 
 const SUPPORT_ADDRESS_BAN = {
@@ -82,9 +89,23 @@ const CATCH_RETURNS_NULL = {
     "A catch whose only statement is `return null` swallows the error, so a thrown fetch or a bug fails as silently as a real 'not found'. Give the clause an error binding and a logged failure path (or rethrow). Source: 0509#4462.",
 };
 
+const FEED_STATE_LITERAL = {
+  selector:
+    "ObjectExpression > Property[key.name='feedState'][value.value=/^(ok|stale|error)$/]",
+  message:
+    "Only workers/sources/mentions/youtube.ts may build a YouTube feedState. commitYoutubeFeed accepts OkYoutubeFeed alone, so a stale or error feed cannot be stored as zero videos. Source: 0509#4051.",
+};
+
+const XML_PARSER_CONSTRUCTOR = {
+  selector: "NewExpression[callee.name='XMLParser']",
+  message:
+    "Feed XML is parsed only by @extractus/feed-extractor in workers/sources/mentions/feed.ts. A second XMLParser is a second feed path. Source: 0509#4051.",
+};
+
 const BANNED_SYNTAX = [
   SUPPORT_ADDRESS_BAN,
   CATCH_RETURNS_NULL,
+  XML_PARSER_CONSTRUCTOR,
   {
     selector: "NewExpression[callee.name='RegExp'] > Literal.arguments, NewExpression[callee.name='RegExp'] > TemplateLiteral",
     message:
@@ -227,7 +248,7 @@ export default tseslint.config(
         "error",
         { terms: WORKAROUND_TERMS, location: "anywhere" },
       ],
-      "no-restricted-syntax": ["error", ...BANNED_SYNTAX],
+      "no-restricted-syntax": ["error", ...BANNED_SYNTAX, FEED_STATE_LITERAL],
     },
   },
 
@@ -248,7 +269,7 @@ export default tseslint.config(
     files: ["app/**/*.{ts,tsx}", "workers/**/*.ts"],
     ignores: ["app/lib/data/**", "workers/e2e-inbox.ts", "workers/fixture-site.ts"],
     rules: {
-      "no-restricted-syntax": ["error", ...BANNED_SYNTAX, RAW_DML_WRITER],
+      "no-restricted-syntax": ["error", ...BANNED_SYNTAX, RAW_DML_WRITER, FEED_STATE_LITERAL],
     },
   },
 
@@ -261,6 +282,7 @@ export default tseslint.config(
         "error",
         ...BANNED_SYNTAX.filter((rule) => rule !== SUPPORT_ADDRESS_BAN),
         RAW_DML_WRITER,
+        FEED_STATE_LITERAL,
       ],
     },
   },
@@ -506,7 +528,20 @@ export default tseslint.config(
     files: ["app/routes/**/*.{ts,tsx}"],
     rules: {
       "max-lines": ["error", { max: 150, skipBlankLines: false, skipComments: false }],
-      "no-restricted-syntax": ["error", ...BANNED_SYNTAX, RAW_DML_WRITER, ENV_DB_IN_ROUTES],
+      "no-restricted-syntax": [
+        "error",
+        ...BANNED_SYNTAX,
+        RAW_DML_WRITER,
+        ENV_DB_IN_ROUTES,
+        FEED_STATE_LITERAL,
+      ],
+    },
+  },
+
+  {
+    files: ["workers/sources/mentions/youtube.ts"],
+    rules: {
+      "no-restricted-syntax": ["error", ...BANNED_SYNTAX, RAW_DML_WRITER],
     },
   },
 

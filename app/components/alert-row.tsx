@@ -1,8 +1,10 @@
 import type { ReactElement } from "react";
 
-import { BriefView } from "./brief-view";
-import { SiteChangeItem, type SiteChangeItemData } from "./site-change-item";
 import type { BriefPayload } from "../lib/brief-payload";
+import type { MentionRowModel } from "../lib/mention-feed";
+import { BriefView } from "./brief-view";
+import { MentionRow } from "./mention-row";
+import { SiteChangeItem, type SiteChangeItemData } from "./site-change-item";
 
 const WHEN_CLASS = "text-ink-soft mt-2 block font-mono text-[0.75rem] tracking-[0.04em] uppercase";
 
@@ -42,7 +44,8 @@ export type AlertFeedItem =
   | { kind: "change"; id: string; at: string; change: SiteChangeItemData }
   | { kind: "note"; id: string; at: string; note: TakedownNoteItem }
   | { kind: "failure"; id: string; at: string; failure: DeliveryFailureItem }
-  | { kind: "signal"; id: string; at: string; signal: SignalAlertItem };
+  | { kind: "signal"; id: string; at: string; signal: SignalAlertItem }
+  | { kind: "mention"; id: string; at: string; mention: MentionRowModel };
 
 export function AlertFeedRow({ item, eager }: { item: AlertFeedItem; eager: boolean }): ReactElement {
   if (item.kind === "change") {
@@ -58,6 +61,10 @@ export function AlertFeedRow({ item, eager }: { item: AlertFeedItem; eager: bool
         </time>
       </article>
     );
+  }
+
+  if (item.kind === "mention") {
+    return <MentionRow mention={item.mention} />;
   }
 
   if (item.kind === "signal") {
