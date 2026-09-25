@@ -73,6 +73,8 @@ const SELECT_ENTITY_DOMAIN = "SELECT domain FROM entity WHERE id = ? AND workspa
 const SET_COMPETITOR_STATE =
   "UPDATE entity SET state = ?, state_changed_at = ?, state_changed_by = 'user', state_reason = NULL WHERE id = ? AND workspace_id = ? AND role = 'competitor' AND state IN ('on', 'off') AND state <> ?";
 
+const DELETE_COMPETITOR = "DELETE FROM entity WHERE id = ? AND workspace_id = ? AND role = 'competitor'";
+
 const INSERT_COMPETITOR_FROM_SUGGESTION =
   "INSERT INTO entity (id, workspace_id, role, domain, name, origin, confirmed_at, state, state_changed_at, state_changed_by, created_at) SELECT ?1, workspace_id, 'competitor', candidate_domain, candidate_name, 'auto', ?2, 'on', ?2, 'user', ?2 FROM suggestion WHERE id = ?3 AND workspace_id = ?4 AND status = 'pending' ON CONFLICT (workspace_id, domain) DO UPDATE SET state = 'on', state_changed_at = excluded.state_changed_at, state_changed_by = 'user', state_reason = NULL WHERE entity.role = 'competitor' AND entity.state IN ('on', 'off')";
 
@@ -118,6 +120,10 @@ export async function setCompetitorState(
     .bind(state, now, entityId, workspaceId, state)
     .run();
   return result.meta.changes === 1;
+}
+
+export function deleteCompetitor(workspaceId: string, entityId: string): D1PreparedStatement {
+  return env.DB.prepare(DELETE_COMPETITOR).bind(entityId, workspaceId);
 }
 
 export async function readOnboardingCompetitors(

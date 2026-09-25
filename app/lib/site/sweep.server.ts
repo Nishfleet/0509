@@ -15,6 +15,7 @@ import { robotsAllows } from "../fetch/robots.server";
 import type { CheckPageResult } from "./check-page.server";
 import { checkPage } from "./check-page.server";
 import { diffPageText } from "./diff";
+import { readPage } from "./read-page.server";
 
 const SITE_SOURCE_KEY = "site.web";
 
@@ -74,12 +75,14 @@ export async function checkSitePage(target: SiteSweepTarget, tick: SweepTick): P
     console.log(JSON.stringify({ event: "site.check_failed", url: target.url, reason: "robots", detail: "disallowed by robots.txt" }));
     return { outcome: "failed", reason: "robots", detail: "disallowed by robots.txt" };
   }
+  const read = await readPage(target, tick.plannedAt);
   const result = await checkPage({
     watchId: target.watchId,
     pageId: target.pageId,
     url: target.url,
     snapshotId: `${tick.instanceId}-${target.pageId}`,
     before: tick.plannedAt,
+    read,
   });
   if (result.outcome === "failed") {
     console.log(JSON.stringify({

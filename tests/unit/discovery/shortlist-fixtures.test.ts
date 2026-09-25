@@ -15,7 +15,7 @@ const SUBJECT: Subject = { name: "Gymshark", domain: "gymshark.com" };
 const FIXTURES_DIR = join(dirname(fileURLToPath(import.meta.url)), "../../fixtures");
 
 const HN_FIXTURE = readFileSync(join(FIXTURES_DIR, "hn-gymshark.json"), "utf8");
-const NEWS_FIXTURE = readFileSync(join(FIXTURES_DIR, "gnews-gymshark.xml"), "utf8");
+const NEWS_FIXTURE = readFileSync(join(FIXTURES_DIR, "gdelt-gymshark.json"), "utf8");
 
 function fetchTextWith(body: string): (url: string) => Promise<FetchedText> {
   return (url) => Promise.resolve({ ok: true, url, contentType: null, body });
