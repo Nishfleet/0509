@@ -50,14 +50,18 @@ const questions: readonly NoulQuestion[] = [NAME_QUESTION, CATEGORY_QUESTION, CO
 const state = { subject: { name: "Gymshark", domain: "gymshark.com" } };
 
 function allFreshAnswers(): {
-  answers: Record<string, { type: "noul"; noul: number }>;
+  answers: Record<string, { type: "boolean"; probability: number }>;
+  usage: { inputTokens: number; outputTokens: number };
+  providerMetadata: { gateway: { cost: string } };
 } {
   return {
     answers: {
-      identity_name: { type: "noul", noul: 0.93 },
-      identity_category: { type: "noul", noul: 0.42 },
-      identity_country: { type: "noul", noul: 0.05 },
+      identity_name: { type: "boolean", probability: 0.93 },
+      identity_category: { type: "boolean", probability: 0.42 },
+      identity_country: { type: "boolean", probability: 0.05 },
     },
+    usage: { inputTokens: 380, outputTokens: 23 },
+    providerMetadata: { gateway: { cost: "0" } },
   };
 }
 
@@ -89,12 +93,12 @@ describe("askNouls", () => {
     };
     expect(Object.keys(request.questions)).toEqual(["identity_name", "identity_category", "identity_country"]);
     expect(request.questions.identity_name).toEqual({
-      type: "noul",
+      type: "boolean",
       instructions: questions[0]?.instructions,
       criteria: { true: questions[0]?.whenTrue, false: questions[0]?.whenFalse },
     });
-    expect(request.questions.identity_category?.type).toBe("noul");
-    expect(request.questions.identity_country?.type).toBe("noul");
+    expect(request.questions.identity_category?.type).toBe("boolean");
+    expect(request.questions.identity_country?.type).toBe("boolean");
   });
 
   it("reuses a cached verdict and asks Jev only about the uncached questions", async () => {
@@ -120,8 +124,8 @@ describe("askNouls", () => {
     run.mockImplementation(() =>
       Promise.resolve({
         answers: {
-          identity_name: { type: "noul", noul: 0.93 },
-          identity_country: { type: "noul", noul: 0.05 },
+          identity_name: { type: "boolean", probability: 0.93 },
+          identity_country: { type: "boolean", probability: 0.05 },
         },
       }),
     );
@@ -178,8 +182,8 @@ describe("askNouls", () => {
     const run = vi.fn(() =>
       Promise.resolve({
         answers: {
-          identity_name: { type: "noul", noul: 0.93 },
-          identity_country: { type: "noul", noul: 0.05 },
+          identity_name: { type: "boolean", probability: 0.93 },
+          identity_country: { type: "boolean", probability: 0.05 },
         },
       }),
     );

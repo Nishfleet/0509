@@ -35,7 +35,10 @@ export interface ChoiceVerdict {
 }
 
 const answerSchema = z.object({
-  answers: z.record(z.string(), z.object({ type: z.literal("noul"), noul: z.number().min(0).max(1) })),
+  answers: z.record(
+    z.string(),
+    z.object({ type: z.literal("boolean"), probability: z.number().min(0).max(1) }),
+  ),
 });
 
 type NoulAnswers = z.infer<typeof answerSchema>["answers"];
@@ -71,7 +74,7 @@ async function run(question: NoulQuestion, state: unknown): Promise<number> {
         state,
         questions: {
           [question.id]: {
-            type: "noul",
+            type: "boolean",
             instructions: question.instructions,
             criteria: { true: question.whenTrue, false: question.whenFalse },
           },
@@ -84,8 +87,8 @@ async function run(question: NoulQuestion, state: unknown): Promise<number> {
   }
   const parsed = answerSchema.safeParse(raw);
   const answer = parsed.success ? parsed.data.answers[question.id] : undefined;
-  if (answer === undefined) throw new JevUnavailableError(new Error("answer missing its noul"));
-  return answer.noul;
+  if (answer === undefined) throw new JevUnavailableError(new Error("answer missing its probability"));
+  return answer.probability;
 }
 
 export async function askNoul(workspaceId: string, question: NoulQuestion, state: unknown): Promise<NoulVerdict> {
@@ -121,7 +124,7 @@ export async function askNouls(
             pending.map((entry) => [
               entry.question.id,
               {
-                type: "noul",
+                type: "boolean",
                 instructions: entry.question.instructions,
                 criteria: { true: entry.question.whenTrue, false: entry.question.whenFalse },
               },
@@ -140,8 +143,8 @@ export async function askNouls(
     if (entry.cached !== null) {
       return { questionId: entry.question.id, inputHash: entry.hash, p: entry.cached, cached: true };
     }
-    const fresh = answers[entry.question.id]?.noul;
-    if (fresh === undefined) throw new JevUnavailableError(new Error("answer missing its noul"));
+    const fresh = answers[entry.question.id]?.probability;
+    if (fresh === undefined) throw new JevUnavailableError(new Error("answer missing its probability"));
     return { questionId: entry.question.id, inputHash: entry.hash, p: fresh, cached: false };
   });
 }

@@ -149,7 +149,7 @@ describe("per-source canary in the mentions sweep (#4003 slice 2/6)", () => {
       run: vi.fn((_model: string, input: { questions: Record<string, unknown> }) => {
         const [questionId] = Object.keys(input.questions);
         const p = questionId === "mention_matters" ? 0.94 : 0.96;
-        return Promise.resolve({ answers: { [questionId ?? ""]: { type: "noul", noul: p } } });
+        return Promise.resolve({ answers: { [questionId ?? ""]: { type: "boolean", probability: p } } });
       }),
     });
 

@@ -28,7 +28,7 @@ function domainSubject(registrable: string): Subject {
 }
 
 function stubRun(p: number) {
-  const run = vi.fn(() => Promise.resolve({ answers: { public_subject: { type: "noul", noul: p } } }));
+  const run = vi.fn(() => Promise.resolve({ answers: { public_subject: { type: "boolean", probability: p } } }));
   Reflect.set(env, "AI", { run });
   return run;
 }
