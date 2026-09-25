@@ -3,6 +3,7 @@ import { env } from "cloudflare:workers";
 import type { SiteChangeRow } from "./data/signal.server";
 import { readSiteChangePayload, readSiteChanges } from "./data/signal.server";
 import type { ChangeMark, ChangeShot, SiteChangePayload, SiteChangeView } from "./site-change";
+import { whyFlagged } from "./why-flagged";
 import {
   captureLabel,
   changeHeadline,
@@ -56,6 +57,18 @@ async function toView(row: SiteChangeRow, payload: SiteChangePayload): Promise<S
     mark: await readMark(payload.diffKey),
     before: shot(row.id, "before", payload.before.screenshotKey, row.before_at),
     after: shot(row.id, "after", payload.after.screenshotKey, row.after_at),
+    whyFlagged: whyFlagged({
+      verdictId: row.verdict_id,
+      p: row.verdict_p,
+      reason: row.verdict_reason,
+      decidedAt: row.verdict_decided_at,
+      compared: [
+        { label: "Page", value: pageLabel(payload.page.role) },
+        { label: "Link", value: row.url },
+        { label: "Before", value: row.before_at ?? "—" },
+        { label: "After", value: row.after_at ?? row.observed_at },
+      ],
+    }),
   };
 }
 

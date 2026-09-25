@@ -1,6 +1,7 @@
 import { env } from "cloudflare:workers";
 import { z } from "zod";
 
+import { D3_QUESTION_ID } from "../standing-score";
 import type { HiringSignalState, HiringSignalUpdate } from "../hiring/role-lifecycle";
 
 export interface SiteChangeSignal {
@@ -236,15 +237,26 @@ export interface SiteChangeRow {
   observed_at: string;
   before_at: string | null;
   after_at: string | null;
+  verdict_id: string | null;
+  verdict_p: number | null;
+  verdict_reason: string | null;
+  verdict_decided_at: string | null;
 }
 
 const SELECT_SITE_CHANGES = `SELECT s.id, s.entity_id, e.name AS entity_name, e.domain AS entity_domain,
   e.role AS entity_role, s.url, s.payload_json, s.observed_at,
-  b.fetched_at AS before_at, a.fetched_at AS after_at
+  b.fetched_at AS before_at, a.fetched_at AS after_at,
+  v.id AS verdict_id, v.p AS verdict_p, v.reason AS verdict_reason, v.decided_at AS verdict_decided_at
 FROM signal s
 JOIN entity e ON e.id = s.entity_id AND e.workspace_id = s.workspace_id
 LEFT JOIN snapshot a ON a.id = s.snapshot_id
 LEFT JOIN snapshot b ON b.id = json_extract(s.payload_json, '$.before.snapshotId')
+LEFT JOIN jev_verdict v ON v.id = (
+  SELECT v2.id FROM jev_verdict v2
+  WHERE v2.signal_id = s.id AND v2.workspace_id = s.workspace_id AND v2.question_id = ?5
+  ORDER BY v2.decided_at DESC
+  LIMIT 1
+)
 WHERE s.workspace_id = ?1
   AND s.kind = 'change'
   AND s.is_tombstoned = 0
@@ -261,7 +273,7 @@ export async function readSiteChanges(input: {
   limit: number;
 }): Promise<SiteChangeRow[]> {
   const { results } = await env.DB.prepare(SELECT_SITE_CHANGES)
-    .bind(input.workspaceId, input.since, input.entityId, input.limit)
+    .bind(input.workspaceId, input.since, input.entityId, input.limit, D3_QUESTION_ID)
     .all<SiteChangeRow>();
   return results;
 }
