@@ -67,6 +67,7 @@ export default function Page({ loaderData }: Route.ComponentProps) {
         domain={competitor.domain}
         state={competitor.state}
         stateChangedAt={competitor.stateChangedAt}
+        stateReason={competitor.stateReason}
         control={
           <BrandSwitchField
             state={state}

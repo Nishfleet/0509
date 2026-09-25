@@ -258,3 +258,74 @@ describe("new job posts reach the brief's brand line, through real D1", () => {
     expect(scores.get(hiredEntity)).toBeCloseTo(2, 10);
   });
 });
+
+/**
+ * The brief's quiet-week claim rests on source coverage: a source that did not
+ * answer this week lands in degraded_source_keys, and the template refuses to
+ * vouch for a quiet week while one is there. A canary of zero on the snapshot
+ * means the source is degraded, so it must not count as having answered. These
+ * cases run the real SOURCE_COVERAGE query against real D1.
+ */
+let canaryRuns = 0;
+
+async function seedCanary(canaryCount: number | null): Promise<{ workspaceId: string; sourceKey: string }> {
+  canaryRuns += 1;
+  const run = String(canaryRuns);
+  const now = "2026-09-21T12:00:00.000Z";
+  const weekStart = "2026-09-14T12:00:00.000Z";
+  const workspaceId = `ws_brief_canary_${run}`;
+  const userId = `u_canary_${run}`;
+  const entityId = `ent_canary_${run}`;
+  const sourceId = `src_canary_${run}`;
+  const sourceKey = `canary-mentions-${run}`;
+  const watchId = `watch_canary_${run}`;
+
+  await env.DB.batch([
+    env.DB.prepare(
+      "INSERT INTO user (id, name, email, emailVerified, createdAt, updatedAt) VALUES (?1, ?2, ?3, 1, ?4, ?4)",
+    ).bind(userId, "Test", `canary-${run}@example.test`, now),
+    env.DB.prepare(
+      "INSERT INTO workspace (id, name, owner_user_id, timezone, created_at) VALUES (?1, ?2, ?3, ?4, ?5)",
+    ).bind(workspaceId, "Canary Test", userId, "UTC", now),
+    env.DB.prepare(
+      "INSERT INTO entity (id, workspace_id, role, domain, name, state, created_at) VALUES (?1, ?2, 'competitor', ?3, 'Canary Brand', 'on', ?4)",
+    ).bind(entityId, workspaceId, `canary-${run}.example`, now),
+    env.DB.prepare(
+      "INSERT INTO source (id, key, kind, platform, plugin_key, reliability, is_enabled, canary_query) VALUES (?1, ?2, 'mentions', ?3, ?4, 'best_effort', 1, 'test-canary')",
+    ).bind(sourceId, sourceKey, `canary-pl-${run}`, `canary-plugin-${run}`),
+    env.DB.prepare(
+      "INSERT INTO watch (id, entity_id, source_id, target_key, is_active) VALUES (?1, ?2, ?3, ?4, 1)",
+    ).bind(watchId, entityId, sourceId, `canary-target-${run}`),
+    env.DB.prepare(
+      "INSERT INTO standing (id, workspace_id, entity_id, week_start_at, score, rank, movement, computed_at) VALUES (?1, ?2, ?3, ?4, 12, 1, 2, ?5)",
+    ).bind(`st_canary_${run}`, workspaceId, entityId, weekStart, now),
+  ]);
+
+  await env.DB.prepare(
+    "INSERT INTO snapshot (id, watch_id, fetched_at, payload_hash, item_count, canary_count) VALUES (?1, ?2, ?3, ?4, 0, ?5)",
+  )
+    .bind(`snap_canary_${run}`, watchId, "2026-09-18T10:00:00.000Z", `hash-${run}`, canaryCount)
+    .run();
+
+  return { workspaceId, sourceKey };
+}
+
+describe("a zero canary never counts as a source answering, through real D1", () => {
+  it("marks the source degraded on canary_count=0 and not degraded on canary_count=2", async () => {
+    const zero = await seedCanary(0);
+    const zeroPayload = await composeBrief(env.DB, {
+      workspaceId: zero.workspaceId,
+      schedule: { timezone: "UTC", weekday: 1, hour: 8 },
+      week: { startsAt: new Date("2026-09-14T12:00:00.000Z"), closesAt: new Date("2026-09-21T12:00:00.000Z") },
+    });
+    expect(zeroPayload.checked.degraded_source_keys).toContain(zero.sourceKey);
+
+    const healthy = await seedCanary(2);
+    const healthyPayload = await composeBrief(env.DB, {
+      workspaceId: healthy.workspaceId,
+      schedule: { timezone: "UTC", weekday: 1, hour: 8 },
+      week: { startsAt: new Date("2026-09-14T12:00:00.000Z"), closesAt: new Date("2026-09-21T12:00:00.000Z") },
+    });
+    expect(healthyPayload.checked.degraded_source_keys).toEqual([]);
+  });
+});

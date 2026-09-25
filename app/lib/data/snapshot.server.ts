@@ -40,8 +40,8 @@ export async function insertSnapshot(row: {
 }
 
 const INSERT_WATCH_SNAPSHOT = `INSERT INTO snapshot
-  (id, watch_id, page_id, fetched_at, payload_r2_key, payload_hash, item_count)
-VALUES (?, ?, NULL, ?, ?, ?, ?)`;
+  (id, watch_id, page_id, fetched_at, payload_r2_key, payload_hash, item_count, canary_count)
+VALUES (?, ?, NULL, ?, ?, ?, ?, ?)`;
 
 export function insertWatchSnapshot(row: {
   id: string;
@@ -50,6 +50,7 @@ export function insertWatchSnapshot(row: {
   r2Key: string;
   hash: string;
   itemCount: number;
+  canaryCount: number | null;
 }): D1PreparedStatement {
   return env.DB.prepare(INSERT_WATCH_SNAPSHOT).bind(
     row.id,
@@ -58,6 +59,7 @@ export function insertWatchSnapshot(row: {
     row.r2Key,
     row.hash,
     row.itemCount,
+    row.canaryCount,
   );
 }
 
