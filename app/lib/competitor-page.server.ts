@@ -5,7 +5,8 @@ import { readCompetitor } from "./data/entity.server";
 import type { PeerRow } from "./data/standing.server";
 import { readLatestPeers } from "./data/standing.server";
 import type { SignalCount } from "./data/signal.server";
-import { readSignalCounts } from "./data/signal.server";
+import { readEntityDevelopments, readSignalCounts } from "./data/signal.server";
+import type { DevelopmentItem } from "./developments";
 import type { EntitySource } from "./data/source.server";
 import { readEntitySources } from "./data/source.server";
 import type { StillCompetitorVerdict } from "./data/jev_verdict.server";
@@ -20,6 +21,7 @@ export interface CompetitorPage {
   competitor: CompetitorEntity;
   watch: SiteWatchSummary;
   changes: SiteChangeView[];
+  developments: DevelopmentItem[];
   weekCount: number;
   biggestId: string | null;
   rail: {
@@ -32,6 +34,7 @@ export interface CompetitorPage {
 
 const HISTORY_DAYS = 90;
 const HISTORY_LIMIT = 30;
+const FEED_LIMIT = 100;
 const FACT_DAYS = 30;
 
 function biggest(changes: readonly SiteChangeView[], since: string): SiteChangeView | null {
@@ -51,9 +54,10 @@ export async function readCompetitorPage(
   const competitor = await readCompetitor(workspaceId, entityId);
   if (competitor === null) return null;
   const anchor = historyAnchor(competitor.state, competitor.stateChangedAt, now);
-  const [watch, changes, peers, facts, sources, verdict] = await Promise.all([
+  const [watch, changes, developments, peers, facts, sources, verdict] = await Promise.all([
     readSiteWatchSummary(workspaceId, entityId),
     readSiteChangeViews({ workspaceId, entityId, since: daysBefore(anchor, HISTORY_DAYS), limit: HISTORY_LIMIT }),
+    readEntityDevelopments({ workspaceId, entityId, since: daysBefore(now, HISTORY_DAYS), limit: FEED_LIMIT }),
     readLatestPeers(env.DB, workspaceId),
     readSignalCounts(workspaceId, entityId, daysBefore(now, FACT_DAYS)),
     readEntitySources(workspaceId, entityId),
@@ -64,6 +68,7 @@ export async function readCompetitorPage(
     competitor,
     watch,
     changes,
+    developments,
     weekCount: changes.filter((change) => change.observedAt >= weekStart).length,
     biggestId: biggest(changes, weekStart)?.id ?? null,
     rail: { peers, facts, sources, verdict },

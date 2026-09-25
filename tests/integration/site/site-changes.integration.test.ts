@@ -30,23 +30,26 @@ async function seedChange(input: {
   state: "on" | "off";
   signal: string;
   observedAt: string;
+  existing?: boolean;
 }): Promise<void> {
   const watch = `watch-${input.entity}`;
   const page = `page-${input.entity}`;
   const url = `https://${input.entity}.example/`;
-  await env.DB.prepare(
-    `INSERT INTO entity (id, workspace_id, role, domain, name, state, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-  )
-    .bind(input.entity, input.ws, input.role, `${input.entity}.example`, input.name, input.state, SINCE)
-    .run();
-  await env.DB.prepare(`INSERT INTO page (id, entity_id, url, role, discovered_at) VALUES (?, ?, ?, 'home', ?)`)
-    .bind(page, input.entity, url, SINCE)
-    .run();
-  await env.DB.prepare(
-    `INSERT INTO watch (id, entity_id, source_id, target_key, last_polled_at) VALUES (?, ?, 'src_site_web', ?, ?)`,
-  )
-    .bind(watch, input.entity, url, input.observedAt)
-    .run();
+  if (input.existing !== true) {
+    await env.DB.prepare(
+      `INSERT INTO entity (id, workspace_id, role, domain, name, state, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    )
+      .bind(input.entity, input.ws, input.role, `${input.entity}.example`, input.name, input.state, SINCE)
+      .run();
+    await env.DB.prepare(`INSERT INTO page (id, entity_id, url, role, discovered_at) VALUES (?, ?, ?, 'home', ?)`)
+      .bind(page, input.entity, url, SINCE)
+      .run();
+    await env.DB.prepare(
+      `INSERT INTO watch (id, entity_id, source_id, target_key, last_polled_at) VALUES (?, ?, 'src_site_web', ?, ?)`,
+    )
+      .bind(watch, input.entity, url, input.observedAt)
+      .run();
+  }
   const prefix = `snapshot/site/${watch}`;
   await env.DB.batch([
     env.DB.prepare(
@@ -132,6 +135,21 @@ describe("site changes a customer can see", () => {
     expect(page?.watch).toEqual({ pages: 1, lastPolledAt: "2026-09-23T02:10:00.000Z" });
     expect(page?.rail.verdict).toBeNull();
     expect(page?.rail.facts.every((fact) => fact.count > 0)).toBe(true);
+  });
+
+  it("returns the seeded developments newest first", async () => {
+    await seedChange({
+      ws: "ws-mine",
+      entity: "rival",
+      name: "Rival",
+      role: "competitor",
+      state: "on",
+      signal: "sig-rival-newer",
+      observedAt: "2026-09-24T08:00:00.000Z",
+      existing: true,
+    });
+    const page = await readCompetitorPage("ws-mine", "rival", NOW);
+    expect(page?.developments.map((item) => item.id)).toEqual(["sig-rival-newer", "sig-rival"]);
   });
 
   it("never shows another workspace's competitor, its changes or its screenshots", async () => {
