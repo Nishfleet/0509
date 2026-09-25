@@ -36,10 +36,10 @@ export async function action({ request }: Route.ActionArgs) {
   const captchaField = form.get("cf-turnstile-response");
   const captcha = typeof captchaField === "string" ? captchaField.trim() : "";
   const site = new URL(env.BETTER_AUTH_URL);
-  const headers = new Headers(request.headers);
-  headers.delete("content-length");
+  const headers = new Headers();
   headers.set("content-type", "application/json");
-  headers.set("origin", site.origin);
+  const ip = request.headers.get("cf-connecting-ip");
+  if (typeof ip === "string" && ip.length > 0) headers.set("cf-connecting-ip", ip);
   if (captcha.length > 0) headers.set("x-captcha-response", captcha);
   const response = await handleAuthRequest(
     env,
