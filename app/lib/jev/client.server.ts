@@ -38,6 +38,8 @@ const answerSchema = z.object({
   answers: z.record(z.string(), z.object({ type: z.literal("noul"), noul: z.number().min(0).max(1) })),
 });
 
+type NoulAnswers = z.infer<typeof answerSchema>["answers"];
+
 const choiceAnswerSchema = z.object({
   answers: z.record(z.string(), z.object({ type: z.literal("choice"), choice: z.string() })),
 });
@@ -92,6 +94,56 @@ export async function askNoul(workspaceId: string, question: NoulQuestion, state
   if (cached !== null) return { questionId: question.id, inputHash: hash, p: cached, cached: true };
   const p = await run(question, state);
   return { questionId: question.id, inputHash: hash, p, cached: false };
+}
+
+export async function askNouls(
+  workspaceId: string,
+  questions: readonly NoulQuestion[],
+  state: unknown,
+): Promise<NoulVerdict[]> {
+  const entries = await Promise.all(
+    questions.map(async (question) => {
+      const hash = await inputHash(workspaceId, question, state);
+      const cached = await readCachedNoul(question.id, hash);
+      return { question, hash, cached };
+    }),
+  );
+  const pending = entries.filter((entry) => entry.cached === null);
+  let answers: NoulAnswers = {};
+  if (pending.length > 0) {
+    let raw: unknown;
+    try {
+      raw = await env.AI.run(
+        MODEL,
+        {
+          state,
+          questions: Object.fromEntries(
+            pending.map((entry) => [
+              entry.question.id,
+              {
+                type: "noul",
+                instructions: entry.question.instructions,
+                criteria: { true: entry.question.whenTrue, false: entry.question.whenFalse },
+              },
+            ]),
+          ),
+        },
+        { gateway: { id: GATEWAY_ID } },
+      );
+    } catch (error) {
+      throw new JevUnavailableError(error);
+    }
+    const parsed = answerSchema.safeParse(raw);
+    if (parsed.success) answers = parsed.data.answers;
+  }
+  return entries.map((entry) => {
+    if (entry.cached !== null) {
+      return { questionId: entry.question.id, inputHash: entry.hash, p: entry.cached, cached: true };
+    }
+    const fresh = answers[entry.question.id]?.noul;
+    if (fresh === undefined) throw new JevUnavailableError(new Error("answer missing its noul"));
+    return { questionId: entry.question.id, inputHash: entry.hash, p: fresh, cached: false };
+  });
 }
 
 async function runChoice(question: ChoiceQuestion, state: unknown): Promise<string> {

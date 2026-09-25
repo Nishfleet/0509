@@ -176,7 +176,7 @@ one.
 
 - **The incident block** is the only element in the product that carries red: a 5px red
   offset shadow, an "OPEN INCIDENT" tag, the mark, what we did, when we re-check, and two
-  actions — "Open the capture pair" and "I meant to do this". It stays pinned until
+  actions — "Open your site →" (the own-site probe takes no screenshot, so the live page is the evidence) and "I meant to do this". It stays pinned until
   acknowledged or closed.
 - **Type chips**: All, Site changes, Ads, Mentions, Hiring, Your site — each with a count.
 - **Rows** follow the notification pattern Deel, Qatalog and Fireflies use: the **first

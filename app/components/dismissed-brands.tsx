@@ -16,7 +16,7 @@ export function DismissedBrands({ dismissed }: { dismissed: readonly DismissedSu
   return (
     <section aria-labelledby="settings-dismissed" className="border-line mt-10 border-t pt-4">
       <h2 id="settings-dismissed" className={BLOCK_HEADING}>
-        Brands you dismissed
+        {`Brands you dismissed (${String(dismissed.length)})`}
       </h2>
       <p className="mt-2 max-w-prose leading-[1.55]">
         We won't suggest these again. Bring one back and it returns to your maybes on Competitors.

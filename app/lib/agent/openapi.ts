@@ -1,12 +1,13 @@
 import type { ZodType } from "zod";
 import { createDocument } from "zod-openapi";
 
-import { alertsResultSchema, briefResultSchema, competitorsResultSchema } from "./schemas";
+import { alertsResultSchema, briefResultSchema, competitorsResultSchema, standingResultSchema } from "./schemas";
 
 const API_PATHS = {
   brief: "/api/v1/brief",
   competitors: "/api/v1/competitors",
   alerts: "/api/v1/alerts",
+  standing: "/api/v1/standing",
 } as const;
 
 function read(summary: string, schema: ZodType) {
@@ -41,6 +42,7 @@ export function openApiDocument(origin: string) {
       [API_PATHS.brief]: read("Your latest weekly brief", briefResultSchema),
       [API_PATHS.competitors]: read("Your tracked and suggested competitors", competitorsResultSchema),
       [API_PATHS.alerts]: read("Your recent alerts", alertsResultSchema),
+      [API_PATHS.standing]: read("This week's standing against your competitors", standingResultSchema),
     },
   });
 }
