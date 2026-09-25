@@ -4,6 +4,10 @@ import { normaliseSubject } from "../identity/normalise";
 import { socialSchema } from "../identity/social";
 
 const CHANNEL_ID = /^UC[0-9A-Za-z_-]{22}$/;
+const PAGE_CAP = 1_048_576;
+const CANONICAL_CHANNEL = /https?:\/\/(?:www\.)?youtube\.com\/channel\/(UC[0-9A-Za-z_-]{22})/;
+const EXTERNAL_ID = /"externalId"\s*:\s*"(UC[0-9A-Za-z_-]{22})"/;
+const CHANNEL_ID_KEY = /"channelId"\s*:\s*"(UC[0-9A-Za-z_-]{22})"/;
 
 const channelIdSchema = z.string().regex(CHANNEL_ID);
 
@@ -53,6 +57,37 @@ export function channelIdFromUrl(url: string): string | null {
 	if (normalised.subject.kind !== "channel") return null;
 	if (!isYoutubeChannelId(normalised.subject.registrable)) return null;
 	return normalised.subject.registrable;
+}
+
+export function channelIdFromHtml(html: string): string | null {
+	const body = html.length > PAGE_CAP ? html.slice(0, PAGE_CAP) : html;
+	for (const pattern of [EXTERNAL_ID, CANONICAL_CHANNEL, CHANNEL_ID_KEY]) {
+		const id = pattern.exec(body)?.[1];
+		if (id !== undefined && isYoutubeChannelId(id)) return id;
+	}
+	return null;
+}
+
+export async function resolveYoutubeChannelId(
+	identityJson: string,
+	fetchPage: (url: string) => Promise<Response>,
+): Promise<string | null> {
+	const url = youtubeUrlFromIdentity(identityJson);
+	if (url === null) return null;
+	const fromUrl = channelIdFromUrl(url);
+	if (fromUrl !== null) return fromUrl;
+	const normalised = normaliseSubject(url);
+	if (!normalised.ok || normalised.subject.platform !== "youtube") return null;
+	const pageUrl = normalised.subject.url;
+	if (!pageUrl?.startsWith("https://www.youtube.com/")) return null;
+	const response = await fetchPage(pageUrl);
+	if (!response.ok) return null;
+	const html = await response.text();
+	const type = (response.headers.get("content-type") ?? "").toLowerCase();
+	const looksHtml =
+		type.includes("html") || /^\s*<!doctype html/i.test(html) || /^\s*<html[\s>]/i.test(html);
+	if (!looksHtml) return null;
+	return channelIdFromHtml(html);
 }
 
 export function readWatchConfig(raw: string | null | undefined): WatchConfigRead {
@@ -108,12 +143,6 @@ export function withLostChannel(raw: string, at: string): string {
 		...read.record,
 		degraded: { state: "degraded", reason: LOST_CHANNEL_REASON, at },
 	});
-}
-
-export function withChannelId(raw: string, channelId: string): string {
-	const read = readWatchConfig(raw);
-	if (read.status !== "ok") throw new Error("watch config_json is unreadable");
-	return JSON.stringify({ ...read.record, channelId });
 }
 
 export function withResolvedChannel(raw: string, channelId: string): string {

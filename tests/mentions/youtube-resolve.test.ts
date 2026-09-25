@@ -6,10 +6,12 @@ import { describe, expect, it, vi } from "vitest";
 
 import {
 	LOST_CHANNEL_REASON,
+	channelIdFromHtml,
 	channelIdFromIdentity,
 	channelIdFromUrl,
 	isLostYoutubeChannel,
 	readWatchConfig,
+	resolveYoutubeChannelId,
 	withLostChannel,
 	withResolvedChannel,
 	youtubeUrlFromIdentity,
@@ -74,6 +76,34 @@ describe("stale YouTube channel", () => {
 		});
 		expect(channelIdFromIdentity(handleIdentity)).toBeNull();
 		expect(channelIdFromIdentity('{"description":"Gym clothing"}')).toBeNull();
+	});
+
+	it("takes a channel id from one handle page, and does not fetch when the URL already has one", async () => {
+		const html = `<!DOCTYPE html><html><link rel="canonical" href="https://www.youtube.com/channel/${CHANNEL_ID}"></html>`;
+		expect(channelIdFromHtml(html)).toBe(CHANNEL_ID);
+		expect(channelIdFromHtml(`{"externalId":"${CHANNEL_ID}"}`)).toBe(CHANNEL_ID);
+		expect(channelIdFromHtml("<!DOCTYPE html><html>no channel</html>")).toBeNull();
+		const handleIdentity = JSON.stringify({
+			socials: [{ platform: "youtube", url: "https://www.youtube.com/@gymshark" }],
+		});
+		const fetchPage = vi.fn(async () => new Response(html, { status: 200, headers: { "content-type": "text/html" } }));
+		expect(await resolveYoutubeChannelId(handleIdentity, fetchPage)).toBe(CHANNEL_ID);
+		expect(fetchPage).toHaveBeenCalledTimes(1);
+		expect(fetchPage).toHaveBeenCalledWith("https://www.youtube.com/@gymshark");
+		fetchPage.mockClear();
+		const channelIdentity = JSON.stringify({
+			socials: [{ platform: "youtube", url: `https://www.youtube.com/channel/${CHANNEL_ID}` }],
+		});
+		expect(await resolveYoutubeChannelId(channelIdentity, fetchPage)).toBe(CHANNEL_ID);
+		expect(fetchPage).not.toHaveBeenCalled();
+		const denied = vi.fn(async () => new Response("missing", { status: 404, headers: { "content-type": "text/html" } }));
+		expect(await resolveYoutubeChannelId(handleIdentity, denied)).toBeNull();
+		const evil = JSON.stringify({
+			socials: [{ platform: "youtube", url: `https://evil.example/watch?v=${CHANNEL_ID}` }],
+		});
+		const evilFetch = vi.fn(async () => new Response(html, { status: 200, headers: { "content-type": "text/html" } }));
+		expect(await resolveYoutubeChannelId(evil, evilFetch)).toBeNull();
+		expect(evilFetch).not.toHaveBeenCalled();
 	});
 
 	it("refuses an unreadable watch config instead of treating it as empty", () => {

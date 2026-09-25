@@ -59,23 +59,36 @@ async function seed(identityJson: string, configJson: string): Promise<{ watchId
   return { watchId, watch };
 }
 
-function stubFeeds(): void {
-  vi.stubGlobal(
-    "fetch",
-    vi.fn(async (input: RequestInfo | URL) => {
-      const url = String(input);
-      if (url.includes(LOST_ID)) {
-        return new Response("<!DOCTYPE html><html>missing</html>", {
-          status: 404,
-          headers: { "content-type": "text/html" },
-        });
-      }
-      if (url.includes(LIVE_ID)) {
-        return new Response(EMPTY_ATOM, { status: 200, headers: { "content-type": "text/xml" } });
-      }
-      return new Response("unavailable", { status: 503, headers: { "content-type": "text/plain" } });
-    }),
-  );
+interface StubBody {
+  status: number;
+  body: string;
+  type: string;
+}
+
+function handlePage(channelId: string): string {
+  return `<!DOCTYPE html><html><head><link rel="canonical" href="https://www.youtube.com/channel/${channelId}"></head></html>`;
+}
+
+function stubFeeds(pages: Record<string, StubBody> = {}): ReturnType<typeof vi.fn> {
+  const fakeFetch = vi.fn(async (input: RequestInfo | URL) => {
+    const url = String(input);
+    const page = pages[url];
+    if (page !== undefined) {
+      return new Response(page.body, { status: page.status, headers: { "content-type": page.type } });
+    }
+    if (url.includes(LOST_ID)) {
+      return new Response("<!DOCTYPE html><html>missing</html>", {
+        status: 404,
+        headers: { "content-type": "text/html" },
+      });
+    }
+    if (url.includes(LIVE_ID)) {
+      return new Response(EMPTY_ATOM, { status: 200, headers: { "content-type": "text/xml" } });
+    }
+    return new Response("unavailable", { status: 503, headers: { "content-type": "text/plain" } });
+  });
+  vi.stubGlobal("fetch", fakeFetch);
+  return fakeFetch;
 }
 
 async function configOf(watchId: string): Promise<string> {
@@ -168,6 +181,107 @@ describe("YouTube sweep stale channel", () => {
       .bind(resolved.watchId)
       .first<{ fetched_at: string; item_count: number; canary_count: number | null }>();
     expect(snapshot).toEqual({ fetched_at: NOW, item_count: 0, canary_count: 4 });
+  });
+
+  it("re-resolves a stale channel from one handle page when that atom feed is 200", async () => {
+    const identity = JSON.stringify({
+      socials: [{ platform: "youtube", url: "https://www.youtube.com/@gymshark" }],
+    });
+    const { watchId, watch } = await seed(identity, JSON.stringify({ channelId: LOST_ID }));
+    const fakeFetch = stubFeeds({
+      "https://www.youtube.com/@gymshark": {
+        status: 200,
+        body: handlePage(LIVE_ID),
+        type: "text/html",
+      },
+    });
+
+    const outcome = await sweepTarget(
+      { sourceId: watch.source_id, pluginKey: watch.plugin_key, query: watch.target_key, watches: [watch] },
+      NOW,
+      null,
+    );
+
+    expect(outcome).toEqual({ items: 0, stored: 0, unjudged: 0 });
+    expect(JSON.parse(await configOf(watchId))).toEqual({ channelId: LIVE_ID });
+    expect(await snapshotCount(watchId)).toBe(1);
+    expect(fakeFetch.mock.calls.map((call) => String(call[0]))).toEqual([
+      `https://www.youtube.com/feeds/videos.xml?channel_id=${LOST_ID}`,
+      "https://www.youtube.com/@gymshark",
+      `https://www.youtube.com/feeds/videos.xml?channel_id=${LIVE_ID}`,
+    ]);
+  });
+
+  it("does not keep a page channel id whose atom feed is not 200", async () => {
+    const dead = "UCbbbbbbbbbbbbbbbbbbbbbb";
+    const identity = JSON.stringify({
+      socials: [{ platform: "youtube", url: "https://www.youtube.com/@gymshark" }],
+    });
+    const { watchId, watch } = await seed(identity, JSON.stringify({ channelId: LOST_ID }));
+    stubFeeds({
+      "https://www.youtube.com/@gymshark": { status: 200, body: handlePage(dead), type: "text/html" },
+      [`https://www.youtube.com/feeds/videos.xml?channel_id=${dead}`]: {
+        status: 404,
+        body: "<!DOCTYPE html><html>missing</html>",
+        type: "text/html",
+      },
+    });
+
+    await sweepTarget(
+      { sourceId: watch.source_id, pluginKey: watch.plugin_key, query: watch.target_key, watches: [watch] },
+      NOW,
+      null,
+    );
+
+    expect(JSON.parse(await configOf(watchId))).toEqual({
+      channelId: LOST_ID,
+      degraded: { state: "degraded", reason: LOST_CHANNEL_REASON, at: NOW },
+    });
+    expect(await snapshotCount(watchId)).toBe(0);
+  });
+
+  it("stores a channel id found on a handle page when the atom feed is 200", async () => {
+    const identity = JSON.stringify({
+      socials: [{ platform: "youtube", url: "https://www.youtube.com/@gymshark" }],
+    });
+    const { watchId, watch } = await seed(identity, "{}");
+    stubFeeds({
+      "https://www.youtube.com/@gymshark": { status: 200, body: handlePage(LIVE_ID), type: "text/html" },
+    });
+
+    const outcome = await sweepTarget(
+      { sourceId: watch.source_id, pluginKey: watch.plugin_key, query: watch.target_key, watches: [watch] },
+      NOW,
+      4,
+    );
+
+    expect(outcome).toEqual({ items: 0, stored: 0, unjudged: 0 });
+    expect(JSON.parse(await configOf(watchId))).toEqual({ channelId: LIVE_ID });
+    expect(await snapshotCount(watchId)).toBe(1);
+  });
+
+  it("does not flag a handle whose page fetch fails", async () => {
+    const identity = JSON.stringify({
+      socials: [{ platform: "youtube", url: "https://www.youtube.com/@gymshark" }],
+    });
+    const { watchId, watch } = await seed(identity, "{}");
+    stubFeeds({
+      "https://www.youtube.com/@gymshark": {
+        status: 404,
+        body: "<!DOCTYPE html><html>missing</html>",
+        type: "text/html",
+      },
+    });
+
+    const outcome = await sweepTarget(
+      { sourceId: watch.source_id, pluginKey: watch.plugin_key, query: watch.target_key, watches: [watch] },
+      NOW,
+      null,
+    );
+
+    expect(outcome).toEqual({ items: 0, stored: 0, unjudged: 0 });
+    expect(JSON.parse(await configOf(watchId))).toEqual({});
+    expect(await snapshotCount(watchId)).toBe(0);
   });
 
   it("leaves the watch unmarked when the feed fails with 503", async () => {
