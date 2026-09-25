@@ -4,7 +4,7 @@ import { env } from "cloudflare:workers";
 import { useEffect } from "react";
 import { Link, redirect, useRevalidator } from "react-router";
 
-import { FreshnessLine, freshnessEntries } from "../components/freshness-line";
+import { FreshnessLine } from "../components/freshness-line";
 import { HomeStanding } from "../components/home-standing";
 import { PAGE } from "../components/page-heading";
 import { ShareButton } from "../components/share-button";
@@ -14,6 +14,7 @@ import { readWorkspaceIdForOwner } from "../lib/data/workspace.server";
 import { homeView } from "../lib/home-standing";
 import { readHomeStandingInputs } from "../lib/home-standing.server";
 import { readHowRanked } from "../lib/how-ranked.server";
+import { freshnessEntries } from "../lib/freshness.server";
 import { onboardingTimingLines } from "../lib/onboarding/timings";
 import { readOnboardingTimes } from "../lib/data/onboarding_run.server";
 import { requireSession } from "../lib/require-session.server";
