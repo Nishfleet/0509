@@ -142,6 +142,41 @@ export async function readOwnSiteIncidents(
   return results;
 }
 
+export interface OpenIncidentBlock {
+  alert_id: string;
+  title: string;
+  kind: string;
+  url: string;
+  opened_at: string;
+}
+
+const SELECT_OPEN_INCIDENT_BLOCK = `SELECT a.id AS alert_id, a.title, i.kind, p.url, i.opened_at FROM alert a JOIN incident i ON i.id = a.incident_id JOIN page p ON p.id = i.page_id WHERE a.workspace_id = ?1 AND a.kind = 'own_site_broken' AND i.closed_at IS NULL AND a.status <> 'acknowledged' ORDER BY i.opened_at DESC LIMIT 1`;
+
+export async function readOpenIncidentBlock(
+  db: D1Database,
+  workspaceId: string,
+): Promise<OpenIncidentBlock | null> {
+  const row = await db
+    .prepare(SELECT_OPEN_INCIDENT_BLOCK)
+    .bind(workspaceId)
+    .first<OpenIncidentBlock>();
+  return row ?? null;
+}
+
+const ACKNOWLEDGE_INCIDENT_ALERT = `UPDATE alert SET status = 'acknowledged', read_at = ?3 WHERE workspace_id = ?1 AND id = ?2 AND kind = 'own_site_broken'`;
+
+export async function acknowledgeIncidentAlert(
+  db: D1Database,
+  workspaceId: string,
+  alertId: string,
+  at: string,
+): Promise<void> {
+  await db
+    .prepare(ACKNOWLEDGE_INCIDENT_ALERT)
+    .bind(workspaceId, alertId, at)
+    .run();
+}
+
 const INSERT_SIGNAL_ALERT = `INSERT INTO alert (id, workspace_id, entity_id, signal_id, kind, severity, title, body, status, created_at)
 VALUES (?1, ?2, ?3, ?4, ?5, 'normal', ?6, ?7, 'unread', ?8) ON CONFLICT(id) DO NOTHING`;
 

@@ -88,10 +88,19 @@ afterEach(() => {
 });
 
 describe("nightly mentions sweep", () => {
-  it("watches every brand that is on, on both news sources", async () => {
+  it("watches every brand that is on, on every enabled mentions source", async () => {
+    // #5167 seeds an enabled youtube.channel_rss row, so three mentions sources
+    // are now live (gdelt.doc, hn.algolia, youtube.channel_rss). The set below
+    // must match what migrations/0022_youtube_source.sql plus the rebuild enabled;
+    // adding a fourth enabled mentions row needs this test extended in the same
+    // PR, alongside the homepage / llms / JSON-LD feature surface.
     const { brand } = await seedWorkspace();
     const targets = (await planTargets()).filter((entry) => entry.query === brand);
-    expect(targets.map((entry) => entry.pluginKey).sort()).toEqual(["gdelt.doc", "hn.algolia"]);
+    expect(targets.map((entry) => entry.pluginKey).sort()).toEqual([
+      "gdelt.doc",
+      "hn.algolia",
+      "youtube.channel_rss",
+    ]);
   });
 
   it("alerts only on news that matters, hides look-alike names and keeps the proof", async () => {

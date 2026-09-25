@@ -4,6 +4,7 @@ import { Form, Link } from "react-router";
 import { BrandChipRow, brandMonogram } from "./brand-chip";
 import { EmptyState, fewerThanTwoOnBrands } from "./empty-state";
 import { FirstFilePanel } from "./first-file-panel";
+import { FourWeekLine } from "./four-week-line";
 import { HowRankedSheet } from "./how-ranked-sheet";
 import type { HomeRow, HomeView } from "../lib/home-standing";
 import type { HowRanked } from "../lib/how-ranked";
@@ -74,6 +75,10 @@ function body(view: HomeView, howRanked?: HowRanked | null): ReactElement {
           <HowRankedSheet howRanked={howRanked} />
         </div>
       ) : null}
+      <h2 className={cn(EYEBROW, "border-line mt-8 border-t pt-4")}>Four weeks</h2>
+      <div className="mt-2">
+        <FourWeekLine chart={standing.chart} />
+      </div>
       <h2 className={cn(EYEBROW, "border-line mt-8 border-t pt-4")}>This week's standing</h2>
       <ol className="mt-2">
         {standing.rows.map((row) => (

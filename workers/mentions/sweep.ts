@@ -30,12 +30,11 @@ import type { OkYoutubeFeed } from "../sources/mentions/youtube";
 
 const JUDGED_PER_WATCH = 12;
 
-export const PACED_PLUGINS: ReadonlySet<string> = new Set(["gdelt.doc"]);
-
 export interface MentionTarget {
   sourceId: string;
   pluginKey: string;
   query: string;
+  minIntervalSeconds: number;
   watches: WatchRow[];
 }
 
@@ -71,6 +70,7 @@ export async function planTargets(): Promise<MentionTarget[]> {
       sourceId: watch.source_id,
       pluginKey: watch.plugin_key,
       query: watch.target_key,
+      minIntervalSeconds: watch.min_interval_seconds,
       watches: [...(existing?.watches ?? []), watch],
     });
   }

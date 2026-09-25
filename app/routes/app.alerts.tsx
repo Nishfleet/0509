@@ -4,13 +4,14 @@ import { AlertFeed } from "../components/alert-feed";
 import { PAGE, PageHeading } from "../components/page-heading";
 import { SourcePill } from "../components/source-pill";
 import { loadAlertsPage } from "../lib/alerts-page.server";
+import { parseAlertChip } from "../lib/alert-chips";
 import { requireSession } from "../lib/require-session.server";
 
 const WHEN_CLASS = "text-ink-soft mt-2 block font-mono text-[0.75rem] tracking-[0.04em] uppercase";
 
 export async function loader({ request }: Route.LoaderArgs) {
   const session = await requireSession(request);
-  return loadAlertsPage(session.user.id);
+  return loadAlertsPage(session.user.id, parseAlertChip(new URL(request.url).searchParams.get("kind")));
 }
 
 export default function Page({ loaderData }: Route.ComponentProps) {
@@ -50,7 +51,7 @@ export default function Page({ loaderData }: Route.ComponentProps) {
           </time>
         </article>
       ))}
-      {loaderData.incidents.length === 0 && loaderData.groups.length === 0 ? (
+      {loaderData.chipCounts.all === 0 ? (
         <p className="mt-8 leading-[1.65]">
           Nothing has interrupted you. When your own site breaks you'll get an email; everything else waits here.
         </p>
