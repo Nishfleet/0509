@@ -68,6 +68,12 @@ interface DeliveryRow {
   delivered_at: string;
 }
 
+const deliveryRow = (attemptId: string | null, signalId: string, deliveredAt: string) =>
+  env.DB.prepare(
+    `INSERT INTO signal_delivery (id, workspace_id, signal_id, channel_id, send_attempt_id, delivered_at)
+     VALUES (lower(hex(randomblob(16))), ?1, ?2, ?3, ?4, ?5)`,
+  ).bind(WS, signalId, CHANNEL, attemptId, deliveredAt);
+
 const deliveries = async (): Promise<DeliveryRow[]> =>
   (
     await env.DB.prepare(
@@ -169,18 +175,13 @@ describe("delivered once across weeks (0509#4063)", () => {
     const week1 = await weekOne();
     expect(week1.outcome).toBe("sent");
 
-    // Stand-in for the signal_delivery rows the send-resolution batch writes;
-    // that writer is the pending #5434 re-cut. When it lands these inserts are
-    // deleted and the tail assertion returns to three rows.
+    // Stands in for the send-resolution writer #5548 tracks: the two rows
+    // week 1's send produces. Every later `deliver()` that returns "sent" gets
+    // its own row the same way, so the tail asserts what the product would hold
+    // and stays the same assertion once the writer lands.
     await env.DB.batch([
-      env.DB.prepare(
-        `INSERT INTO signal_delivery (id, workspace_id, signal_id, channel_id, send_attempt_id, delivered_at)
-         VALUES (lower(hex(randomblob(16))), ?1, ?2, ?3, ?4, ?5)`,
-      ).bind(WS, SIG_A, CHANNEL, week1.attempt_id, "2026-09-21T08:00:00.000Z"),
-      env.DB.prepare(
-        `INSERT INTO signal_delivery (id, workspace_id, signal_id, channel_id, send_attempt_id, delivered_at)
-         VALUES (lower(hex(randomblob(16))), ?1, ?2, ?3, ?4, ?5)`,
-      ).bind(WS, SIG_B, CHANNEL, week1.attempt_id, "2026-09-21T08:00:00.000Z"),
+      deliveryRow(week1.attempt_id, SIG_A, "2026-09-21T08:00:00.000Z"),
+      deliveryRow(week1.attempt_id, SIG_B, "2026-09-21T08:00:00.000Z"),
     ]);
 
     await env.DB.prepare(
@@ -203,8 +204,9 @@ describe("delivered once across weeks (0509#4063)", () => {
     await seedDigest("digest-w2", payload, "2026-09-18", "2026-09-25");
     const week2 = await deliver(envWith(bindingFor(recorder())), { digest_id: "digest-w2" });
     expect(week2.outcome).toBe("sent");
+    await deliveryRow(week2.attempt_id, SIG_C, "2026-09-25T08:00:00.000Z").run();
 
     const rows = await deliveries();
-    expect(rows.map((row) => row.signal_id)).toEqual([SIG_A, SIG_B]);
+    expect(rows.map((row) => row.signal_id)).toEqual([SIG_A, SIG_B, SIG_C]);
   });
 });
