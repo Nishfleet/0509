@@ -119,7 +119,7 @@ function Facts({ facts }: { facts: readonly RailFact[] }): ReactElement {
   );
 }
 
-function Sources({
+export function Sources({
   sources,
   lastChecked,
   now,

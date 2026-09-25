@@ -12,6 +12,7 @@ import { snapshotCells } from "../lib/competitor-snapshot";
 import { readCompetitorSnapshot } from "../lib/competitor-snapshot.server";
 import { forgetCompetitor } from "../lib/competitor-forget.server";
 import { handleCompetitorIntent } from "../lib/competitors.server";
+import { readEntitySources } from "../lib/data/source.server";
 import { readWorkspaceIdForOwner } from "../lib/data/workspace.server";
 import { daysAgoLabel } from "../lib/delivery-alert";
 import { requireSession } from "../lib/require-session.server";
@@ -40,10 +41,13 @@ export async function loader({ request, params }: Route.LoaderArgs) {
     readCompetitorSnapshot(workspaceId, params.entityId, now),
   ]);
   if (page === null) throw new Response("We don't track that competitor.", { status: 404 });
+  const sources = await readEntitySources(workspaceId, params.entityId);
   return {
     ...page,
     lastChecked: page.watch.lastPolledAt === null ? null : captureLabel(page.watch.lastPolledAt),
     changes: page.changes.map((change) => ({ ...change, when: daysAgoLabel(change.observedAt, now) })),
+    sources,
+    now: now.getTime(),
     snapshot: snapshotCells(snapshot),
   };
 }
@@ -103,6 +107,8 @@ export default function Page({ loaderData }: Route.ComponentProps) {
         pages={loaderData.watch.pages}
         lastChecked={loaderData.lastChecked}
         pausedOn={pausedAt === null ? null : DAY_MONTH.format(new Date(pausedAt))}
+        sources={loaderData.sources}
+        now={loaderData.now}
       />
     </main>
   );

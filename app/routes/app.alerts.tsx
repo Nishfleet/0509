@@ -2,9 +2,10 @@ import type { Route } from "./+types/app.alerts";
 
 import { AlertChips } from "../components/alert-chips";
 import { AlertFeed } from "../components/alert-feed";
+import { IncidentBlock } from "../components/incident-block";
 import { PAGE, PageHeading } from "../components/page-heading";
 import { SourcePill } from "../components/source-pill";
-import { loadAlertsPage } from "../lib/alerts-page.server";
+import { acknowledgeOwnSiteIncident, loadAlertsPage } from "../lib/alerts-page.server";
 import { parseAlertChip } from "../lib/alert-chips";
 import { requireSession } from "../lib/require-session.server";
 
@@ -15,6 +16,15 @@ export async function loader({ request }: Route.LoaderArgs) {
   return loadAlertsPage(session.user.id, parseAlertChip(new URL(request.url).searchParams.get("kind")));
 }
 
+export async function action({ request }: Route.ActionArgs) {
+  const session = await requireSession(request);
+  const form = await request.formData();
+  const alertId = form.get("alertId");
+  if (form.get("intent") !== "acknowledge" || typeof alertId !== "string") return { saved: false };
+  await acknowledgeOwnSiteIncident(session.user.id, alertId);
+  return { saved: true };
+}
+
 export default function Page({ loaderData }: Route.ComponentProps) {
   return (
     <main className={PAGE}>
@@ -22,6 +32,7 @@ export default function Page({ loaderData }: Route.ComponentProps) {
       <p data-testid="alerts-contract" className="text-ink-soft mt-2 leading-[1.65]">
         One thing here interrupted you by email: your own site.
       </p>
+      {loaderData.openIncident === null ? null : <IncidentBlock {...loaderData.openIncident} />}
       {loaderData.sources.length > 0 ? (
         <p data-testid="alerts-sources" className="mt-4 flex flex-wrap gap-2">
           {loaderData.sources.map((entry) => (
@@ -53,7 +64,7 @@ export default function Page({ loaderData }: Route.ComponentProps) {
         </article>
       ))}
       <AlertChips chip={loaderData.chip} counts={loaderData.chipCounts} />
-      {loaderData.chipCounts.all === 0 ? (
+      {loaderData.chipCounts.all === 0 && loaderData.openIncident === null ? (
         <p className="mt-8 leading-[1.65]">
           Nothing has interrupted you. When your own site breaks you'll get an email; everything else waits here.
         </p>
