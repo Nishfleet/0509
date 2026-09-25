@@ -81,11 +81,11 @@ describe("ranked rows", () => {
     const kindred = standing.rows.find((row) => row.entityId === "ent_kindred");
     const casetta = standing.rows.find((row) => row.entityId === "ent_casetta");
     if (kindred === undefined || casetta === undefined) throw new Error("expected Kindred and Casetta rows");
-    const liveThenDegraded: HomePill["state"][] = ["live", "degraded"];
-    const noneThenDegraded: HomePill["state"][] = ["none", "degraded"];
-    expect(kindred.pills.map((pill) => pill.state)).toEqual(liveThenDegraded);
-    expect(kindred.pills.map((pill) => pill.count)).toEqual([3, 0]);
-    expect(casetta.pills.map((pill) => pill.state)).toEqual(noneThenDegraded);
+    const kindredPills: readonly HomePill[] = kindred.pills;
+    const casettaPills: readonly HomePill[] = casetta.pills;
+    expect(kindredPills.map((pill) => pill.state)).toEqual(["live", "degraded"]);
+    expect(kindredPills.map((pill) => pill.count)).toEqual([3, 0]);
+    expect(casettaPills.map((pill) => pill.state)).toEqual(["none", "degraded"]);
     expect(kindred.signals).toBe(3);
     expect(casetta.signals).toBe(0);
     expect(kindred.why).toBe("Kindred launched 3 new ads");
