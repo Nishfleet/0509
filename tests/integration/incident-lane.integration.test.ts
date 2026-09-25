@@ -250,6 +250,25 @@ describe("incident lane (0509#4364)", () => {
     expect(notices?.every((row) => row.sent_on === DAY)).toBe(true);
   });
 
+  it("(c2) still sends the fixed follow-up after the alert is acknowledged (0509#4115)", async () => {
+    const rec = recorder();
+    await deliverIncident(envWith(bindingFor(rec)), message(INCIDENT_A));
+    await env.DB.prepare("UPDATE alert SET status = 'acknowledged', read_at = '2026-09-23T08:00:00Z' WHERE id = 'alert-lane'").run();
+    await closeIncident(INCIDENT_A);
+
+    const result = await deliverIncident(envWith(bindingFor(rec)), message(INCIDENT_A));
+
+    expect(result.outcome).toBe("sent");
+    expect(result.idempotency_key).toBe(`incident:${INCIDENT_A}:fixed`);
+    expect(rec.sent).toHaveLength(2);
+    expect(rec.sent[1].subject).toContain("looks fixed");
+
+    const notices = await readNotices(PAGE_A);
+    expect(notices).toHaveLength(2);
+    expect(notices?.map((row) => row.is_resolution)).toEqual([0, 1]);
+    expect(notices?.every((row) => row.sent_on === DAY)).toBe(true);
+  });
+
   it("(d) drops a different incident on the same page the same day", async () => {
     const rec = recorder();
     await deliverIncident(envWith(bindingFor(rec)), message(INCIDENT_A));
