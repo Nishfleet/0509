@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 
 import { createAuth, deleteSignedInUser } from "../../app/lib/auth.server";
 import { firstWorkspaceId } from "../../app/lib/workspace.server";
+import { readAccountDeleteProgress } from "../../app/lib/account-delete.server";
 
 const ORIGIN = "http://localhost:8787";
 const ADDRESS = "leaving@0509.io";
@@ -101,5 +102,22 @@ describe("delete my account", () => {
     expect(await introspector.getOutput()).toEqual({ deleted: 3 });
     const left = await env.SNAPSHOTS.list();
     expect(left.objects.map((object) => object.key)).toEqual(["snapshot/site/watch-staying/1.txt"]);
+  });
+
+  it("reports the Workflow's own progress for the deleted account", async () => {
+    await env.SNAPSHOTS.put("card/ws-leaving/share.png", "a");
+    await env.SNAPSHOTS.put("snapshot/site/watch-leaving/1.txt", "b");
+    await env.SNAPSHOTS.put("snapshot/site/watch-leaving/1.png", "c");
+
+    const id = "account-delete-progress";
+    await using introspector = await introspectWorkflowInstance(env.ACCOUNT_DELETE, id);
+    await env.ACCOUNT_DELETE.create({
+      id,
+      params: { prefixes: ["card/ws-leaving/", "snapshot/site/watch-leaving/"] },
+    });
+    await introspector.waitForStatus("complete");
+
+    expect(await readAccountDeleteProgress(id)).toEqual({ rows: "removed", files: "removed", deleted: 3 });
+    expect(await readAccountDeleteProgress("no-such-instance")).toBeNull();
   });
 });

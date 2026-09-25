@@ -1,9 +1,9 @@
 import type { Route } from "./+types/login";
 import { env } from "cloudflare:workers";
 import { useEffect, useState } from "react";
-import { Form, useActionData, useNavigate, useNavigation, useSearchParams } from "react-router";
+import { Link, Form, useActionData, useLoaderData, useNavigate, useNavigation, useSearchParams } from "react-router";
 
-import { Footer } from "../components/footer";
+import { Footer, SUPPORT_ADDRESS } from "../components/footer";
 import { SIGN_IN_LEDE, SIGN_IN_SHELL, SIGN_IN_TITLE, SignInSent } from "../components/sign-in-sent";
 import { Wordmark } from "../components/wordmark";
 import { Button } from "../components/ui/button";
@@ -12,9 +12,16 @@ import { safeReturnTo } from "../lib/agent/paths";
 import { authClient } from "../lib/auth-client";
 import { createAuth } from "../lib/auth.server";
 import { timezoneCookie } from "../lib/timezone";
+import { readAccountDeleteProgress } from "../lib/account-delete.server";
 
 export function meta() {
   return [{ title: "Sign in · Five to Nine" }];
+}
+
+export async function loader({ request }: Route.LoaderArgs) {
+  const id = new URL(request.url).searchParams.get("deleted") ?? "";
+  if (id === "") return { id, progress: null };
+  return { id, progress: await readAccountDeleteProgress(id) };
 }
 
 export async function action({ request }: Route.ActionArgs) {
@@ -36,6 +43,7 @@ export async function action({ request }: Route.ActionArgs) {
 
 export default function Login() {
   const data = useActionData<typeof action>();
+  const { id, progress } = useLoaderData<typeof loader>();
   const busy = useNavigation().state !== "idle";
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -72,6 +80,28 @@ export default function Login() {
       <main className="flex flex-col">
         <h1 className={SIGN_IN_TITLE}>Sign in</h1>
         <p className={SIGN_IN_LEDE}>We email you a link. Tap it and you're in. There is no password.</p>
+        {progress === null ? null : (
+          <section data-delete="progress" aria-live="polite">
+            <h2 className={SIGN_IN_TITLE}>Your account is deleted</h2>
+            <ul className={SIGN_IN_LEDE}>
+              <li>Brands, signals, briefs, send history, card, API keys and connected apps: removed</li>
+              <li>
+                {progress.files === "removing"
+                  ? "Snapshots and screenshots: still removing"
+                  : progress.files === "failed"
+                    ? `Snapshots and screenshots: stopped. Write to ${SUPPORT_ADDRESS} and we'll finish it.`
+                    : progress.deleted === null
+                      ? "Snapshots and screenshots: removed"
+                      : `Snapshots and screenshots: removed (${String(progress.deleted)} files)`}
+              </li>
+            </ul>
+            {progress.files === "removing" ? (
+              <Link to={`/login?deleted=${encodeURIComponent(id)}`} className={SIGN_IN_LEDE}>
+                Check again
+              </Link>
+            ) : null}
+          </section>
+        )}
         <Form method="post" className="mt-8 flex flex-col gap-3">
           <label htmlFor="email" className="font-mono text-eyebrow text-ink-soft uppercase">
             Email
