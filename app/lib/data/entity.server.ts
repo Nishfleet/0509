@@ -17,6 +17,7 @@ export interface CompetitorEntity {
   domain: string;
   state: CompetitorState;
   stateChangedAt: string | null;
+  stateReason: string | null;
 }
 
 export interface OnCompetitor {
@@ -39,6 +40,7 @@ interface Row {
   domain: string;
   state: CompetitorState;
   state_changed_at: string | null;
+  state_reason: string | null;
 }
 
 export interface RetireQuestion {
@@ -64,7 +66,9 @@ interface MaybeRow {
 }
 
 const SELECT_COMPETITOR =
-  "SELECT id, name, domain, state, state_changed_at FROM entity WHERE id = ? AND workspace_id = ? AND role = 'competitor' AND state IN ('on', 'off')";
+  "SELECT id, name, domain, state, state_changed_at, state_reason FROM entity WHERE id = ? AND workspace_id = ? AND role = 'competitor' AND state IN ('on', 'off')";
+
+const SELECT_ENTITY_DOMAIN = "SELECT domain FROM entity WHERE id = ? AND workspace_id = ?";
 
 const SET_COMPETITOR_STATE =
   "UPDATE entity SET state = ?, state_changed_at = ?, state_changed_by = 'user', state_reason = NULL WHERE id = ? AND workspace_id = ? AND role = 'competitor' AND state IN ('on', 'off') AND state <> ?";
@@ -95,7 +99,13 @@ export async function readCompetitor(
     domain: row.domain,
     state: row.state,
     stateChangedAt: row.state_changed_at,
+    stateReason: row.state_reason,
   };
+}
+
+export async function readEntityDomain(workspaceId: string, entityId: string): Promise<string | null> {
+  const row = await env.DB.prepare(SELECT_ENTITY_DOMAIN).bind(entityId, workspaceId).first<{ domain: string }>();
+  return row?.domain ?? null;
 }
 
 export async function setCompetitorState(
@@ -256,11 +266,12 @@ const COUNT_OTHER_ON =
 export async function addManualCompetitor(input: {
   workspaceId: string;
   domain: string;
+  name: string | null;
   now: string;
   cap: number;
 }): Promise<"added" | "at_cap"> {
   const result = await env.DB.prepare(INSERT_MANUAL_COMPETITOR)
-    .bind(crypto.randomUUID(), input.workspaceId, input.domain, input.domain, input.now, input.cap)
+    .bind(crypto.randomUUID(), input.workspaceId, input.domain, input.name, input.now, input.cap)
     .run();
   if (result.meta.changes === 1) return "added";
   const count = await env.DB.prepare(COUNT_OTHER_ON)
@@ -332,6 +343,20 @@ export function turnOffFromRetireSuggestion(input: {
   return env.DB
     .prepare(TURN_OFF_FROM_RETIRE_SUGGESTION)
     .bind(input.now, input.workspaceId, input.suggestionId);
+}
+
+const RETIRE_COMPETITOR_BY_JEV =
+  "UPDATE entity SET state = 'off', state_reason = ?1, state_changed_by = 'jev', state_changed_at = ?2 WHERE id = ?3 AND workspace_id = ?4 AND role = 'competitor' AND state = 'on' AND origin = 'auto'";
+
+export function retireCompetitorByJev(input: {
+  workspaceId: string;
+  entityId: string;
+  reason: string;
+  now: string;
+}): D1PreparedStatement {
+  return env.DB
+    .prepare(RETIRE_COMPETITOR_BY_JEV)
+    .bind(input.reason, input.now, input.entityId, input.workspaceId);
 }
 
 export async function readCompetitors(

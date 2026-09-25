@@ -4,6 +4,7 @@ import type { SiteWatchSummary } from "./data/watch.server";
 import { readSiteWatchSummary } from "./data/watch.server";
 import type { SiteChangeView } from "./site-change";
 import { daysBefore, readSiteChangeViews } from "./site-changes.server";
+import { historyAnchor } from "./competitor-history";
 
 export interface CompetitorPage {
   competitor: CompetitorEntity;
@@ -32,11 +33,12 @@ export async function readCompetitorPage(
 ): Promise<CompetitorPage | null> {
   const competitor = await readCompetitor(workspaceId, entityId);
   if (competitor === null) return null;
+  const anchor = historyAnchor(competitor.state, competitor.stateChangedAt, now);
   const [watch, changes] = await Promise.all([
     readSiteWatchSummary(workspaceId, entityId),
-    readSiteChangeViews({ workspaceId, entityId, since: daysBefore(now, HISTORY_DAYS), limit: HISTORY_LIMIT }),
+    readSiteChangeViews({ workspaceId, entityId, since: daysBefore(anchor, HISTORY_DAYS), limit: HISTORY_LIMIT }),
   ]);
-  const weekStart = daysBefore(now, 7);
+  const weekStart = daysBefore(anchor, 7);
   return {
     competitor,
     watch,

@@ -1,23 +1,41 @@
 import type { Route } from "./+types/app.alerts";
 import { env } from "cloudflare:workers";
 
-import { readDeliveryFailures, readOwnSiteIncidents, readTakedownNotes } from "../lib/data/alert.server";
+import {
+  readDeliveryFailures,
+  readOwnSiteIncidents,
+  readSignalAlerts,
+  readTakedownNotes,
+} from "../lib/data/alert.server";
+import { readCompetitors } from "../lib/data/entity.server";
+import { readWorkspaceMentionSources } from "../lib/data/source.server";
 import { readWorkspaceIdForOwner, readWorkspaceTimezone } from "../lib/data/workspace.server";
 import { daysAgoLabel } from "../lib/delivery-alert";
+import { offBrandsSentence } from "../lib/off-brands";
 import { requireSession } from "../lib/require-session.server";
 import { daysBefore, readSiteChangeViews } from "../lib/site-changes.server";
 import { groupByDay } from "../lib/alert-day";
-import { AlertFeedRow, type AlertFeedItem, type DeliveryFailureItem, type TakedownNoteItem } from "../components/alert-row";
+import {
+  AlertFeedRow,
+  type AlertFeedItem,
+  type DeliveryFailureItem,
+  type SignalAlertItem,
+  type TakedownNoteItem,
+} from "../components/alert-row";
 import { PAGE, PageHeading } from "../components/page-heading";
+import { SourcePill } from "../components/source-pill";
 
 const WHEN_CLASS = "text-ink-soft mt-2 block font-mono text-[0.75rem] tracking-[0.04em] uppercase";
 
 export async function loader({ request }: Route.LoaderArgs) {
   const session = await requireSession(request);
   const workspaceId = await readWorkspaceIdForOwner(session.user.id);
+  const competitors = workspaceId === null ? [] : (await readCompetitors(workspaceId)).competitors;
   const failures = workspaceId === null ? [] : await readDeliveryFailures(env.DB, workspaceId);
   const notes = workspaceId === null ? [] : await readTakedownNotes(env.DB, workspaceId);
   const incidents = workspaceId === null ? [] : await readOwnSiteIncidents(env.DB, workspaceId);
+  const signals = workspaceId === null ? [] : await readSignalAlerts(env.DB, workspaceId);
+  const sources = workspaceId === null ? [] : await readWorkspaceMentionSources(workspaceId);
   const now = new Date();
   const changes =
     workspaceId === null
@@ -43,6 +61,12 @@ export async function loader({ request }: Route.LoaderArgs) {
       at: failure.created_at,
       failure: { ...failure, when: daysAgoLabel(failure.created_at, now) } satisfies DeliveryFailureItem,
     })),
+    ...signals.map((signal) => ({
+      kind: "signal" as const,
+      id: signal.id,
+      at: signal.created_at,
+      signal: { ...signal, when: daysAgoLabel(signal.created_at, now) } satisfies SignalAlertItem,
+    })),
   ];
   return {
     incidents: incidents.map((incident) => ({
@@ -51,6 +75,11 @@ export async function loader({ request }: Route.LoaderArgs) {
       fixed: incident.closed_at === null ? null : daysAgoLabel(incident.closed_at, now),
     })),
     groups: groupByDay(items, now, timeZone),
+    sources,
+    now: now.getTime(),
+    offLine: offBrandsSentence(
+      competitors.filter((competitor) => competitor.state === "off").map((competitor) => competitor.name),
+    ),
   };
 }
 
@@ -61,6 +90,18 @@ export default function Page({ loaderData }: Route.ComponentProps) {
       <p data-testid="alerts-contract" className="text-ink-soft mt-2 leading-[1.65]">
         One thing here interrupted you by email: your own site.
       </p>
+      {loaderData.sources.length > 0 ? (
+        <p data-testid="alerts-sources" className="mt-4 flex flex-wrap gap-2">
+          {loaderData.sources.map((entry) => (
+            <SourcePill
+              key={entry.source.key}
+              source={entry.source}
+              snapshot={entry.snapshot}
+              now={loaderData.now}
+            />
+          ))}
+        </p>
+      ) : null}
       {loaderData.incidents.map((incident) => (
         <article
           key={incident.id}
@@ -94,6 +135,14 @@ export default function Page({ loaderData }: Route.ComponentProps) {
           ))}
         </section>
       ))}
+      {loaderData.offLine === null ? null : (
+        <p
+          data-testid="alerts-off-footer"
+          className="text-ink-soft border-line mt-10 border-t pt-6 leading-[1.65]"
+        >
+          {loaderData.offLine}
+        </p>
+      )}
     </main>
   );
 }

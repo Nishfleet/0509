@@ -39,6 +39,30 @@ export async function insertSnapshot(row: {
     .run();
 }
 
+const INSERT_WATCH_SNAPSHOT = `INSERT INTO snapshot
+  (id, watch_id, page_id, fetched_at, payload_r2_key, payload_hash, item_count, canary_count)
+VALUES (?, ?, NULL, ?, ?, ?, ?, ?)`;
+
+export function insertWatchSnapshot(row: {
+  id: string;
+  watchId: string;
+  fetchedAt: string;
+  r2Key: string;
+  hash: string;
+  itemCount: number;
+  canaryCount: number | null;
+}): D1PreparedStatement {
+  return env.DB.prepare(INSERT_WATCH_SNAPSHOT).bind(
+    row.id,
+    row.watchId,
+    row.fetchedAt,
+    row.r2Key,
+    row.hash,
+    row.itemCount,
+    row.canaryCount,
+  );
+}
+
 const LATEST_BOARD_SNAPSHOT = `SELECT id, payload_hash, payload_r2_key, item_count FROM snapshot
 WHERE watch_id = ?1 AND page_id IS NULL AND fetched_at < ?2
 ORDER BY fetched_at DESC LIMIT 1`;

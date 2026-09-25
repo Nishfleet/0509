@@ -1,23 +1,38 @@
 import type { ReactElement } from "react";
-import { Link } from "react-router";
+import { Form, Link } from "react-router";
 
-import { brandMonogram } from "./brand-chip";
-import { EmptyState } from "./empty-state";
+import { BrandChipRow, brandMonogram } from "./brand-chip";
+import { EmptyState, fewerThanTwoOnBrands } from "./empty-state";
+import { FirstFilePanel } from "./first-file-panel";
+import { HowRankedSheet } from "./how-ranked-sheet";
 import type { HomeRow, HomeView } from "../lib/home-standing";
+import type { HowRanked } from "../lib/how-ranked";
 import { cn } from "../lib/utils";
 
 const EYEBROW = "font-mono text-eyebrow text-ink-soft uppercase";
 const GREETING = "font-display text-display-2 mt-2 font-extrabold uppercase";
 const MARKER = "bg-green text-on-green px-[0.14em] [box-decoration-break:clone]";
 
-export function HomeStanding({ view }: { view: HomeView }): ReactElement {
+export function HomeStanding({
+  view,
+  howRanked,
+}: {
+  view: HomeView;
+  howRanked?: HowRanked | null;
+}): ReactElement {
   return (
     <section data-home="standing" className="min-w-0 break-words">
       <p className={EYEBROW}>{view.eyebrow}</p>
       {greeting(view)}
-      {body(view)}
+      <div className="mt-4">{chips(view)}</div>
+      {body(view, howRanked)}
     </section>
   );
+}
+
+function chips(view: HomeView): ReactElement | null {
+  if (view.standing.kind !== "gathering") return null;
+  return <BrandChipRow brands={view.chips} />;
 }
 
 function greeting(view: HomeView): ReactElement {
@@ -32,30 +47,33 @@ function greeting(view: HomeView): ReactElement {
   );
 }
 
-function body(view: HomeView): ReactElement {
+function body(view: HomeView, howRanked?: HowRanked | null): ReactElement {
   const { standing } = view;
   if (standing.kind === "add-competitor") {
     return (
       <div className="mt-6">
-        <EmptyState
-          sentence="Add a competitor to see where you stand."
-          action={{ kind: "link", label: "Add a competitor", href: "/onboarding/competitors" }}
-        />
+        <Form method="post" action="/app/competitors">
+          <input type="hidden" name="intent" value="add" />
+          <EmptyState {...fewerThanTwoOnBrands()} />
+        </Form>
       </div>
     );
   }
   if (standing.kind === "gathering") {
     return (
       <div className="mt-6">
-        <EmptyState
-          sentence={`We're gathering the first week. Your first standing comes with the brief on ${standing.briefAt}.`}
-        />
+        <FirstFilePanel brands={standing.brands} firstSweepAt={standing.firstSweepAt} briefAt={standing.briefAt} />
       </div>
     );
   }
   return (
     <>
       <p className="mt-3 max-w-prose leading-[1.55]">{standing.whyLine}</p>
+      {howRanked ? (
+        <div className="mt-2">
+          <HowRankedSheet howRanked={howRanked} />
+        </div>
+      ) : null}
       <h2 className={cn(EYEBROW, "border-line mt-8 border-t pt-4")}>This week's standing</h2>
       <ol className="mt-2">
         {standing.rows.map((row) => (
