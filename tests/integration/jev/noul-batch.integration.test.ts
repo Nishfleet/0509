@@ -49,19 +49,13 @@ const questions: readonly NoulQuestion[] = [NAME_QUESTION, CATEGORY_QUESTION, CO
 
 const state = { subject: { name: "Gymshark", domain: "gymshark.com" } };
 
-function allFreshAnswers(): {
-  answers: Record<string, { type: "boolean"; probability: number }>;
-  usage: { inputTokens: number; outputTokens: number };
-  providerMetadata: { gateway: { cost: string } };
-} {
+function allFreshAnswers(): { answers: Record<string, { type: "boolean"; probability: number }> } {
   return {
     answers: {
       identity_name: { type: "boolean", probability: 0.93 },
       identity_category: { type: "boolean", probability: 0.42 },
       identity_country: { type: "boolean", probability: 0.05 },
     },
-    usage: { inputTokens: 380, outputTokens: 23 },
-    providerMetadata: { gateway: { cost: "0" } },
   };
 }
 
