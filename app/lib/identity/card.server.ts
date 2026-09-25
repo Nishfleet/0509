@@ -195,9 +195,9 @@ export async function readCachedSiteProof(
   subject: Subject,
 ): Promise<{ adLibraryHints: string[]; navLinks: string[] }> {
   const hit = await env.IDENTITY_CACHE.get(probeKey(subject, "homepage"), "json");
-  const parsed = siteCardSchema.safeParse(hit);
-  if (!parsed.success) return { adLibraryHints: [], navLinks: [] };
-  return { adLibraryHints: parsed.data.adLibraryHints, navLinks: parsed.data.navLinks };
+  if (hit === null) return { adLibraryHints: [], navLinks: [] };
+  const parsed = siteCardSchema.parse(hit);
+  return { adLibraryHints: parsed.adLibraryHints, navLinks: parsed.navLinks };
 }
 
 export async function readCachedSiteValues(

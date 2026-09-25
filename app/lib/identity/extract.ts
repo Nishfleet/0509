@@ -50,6 +50,7 @@ interface IdentityRewriterState {
   anchors: string[];
   navLinks: string[];
   navPages: { url: string; title: string }[];
+  navTitleOpen: boolean;
 }
 
 const TITLE_SEPARATORS = [" - ", " | ", " – "];
@@ -197,6 +198,7 @@ export async function extractIdentity(html: string, pageUrl: string): Promise<Id
     anchors: [],
     navLinks: [],
     navPages: [],
+    navTitleOpen: false,
   };
   const pageOrigin = new URL(pageUrl).origin;
 
@@ -268,6 +270,7 @@ export async function extractIdentity(html: string, pageUrl: string): Promise<Id
     })
     .on("nav a[href]", {
       element(element) {
+        state.navTitleOpen = false;
         const href = element.getAttribute("href");
         if (href === null) return;
         const url = resolveUrl(href, pageUrl);
@@ -275,8 +278,10 @@ export async function extractIdentity(html: string, pageUrl: string): Promise<Id
         if (url.origin !== pageOrigin) return;
         state.navLinks.push(url.href);
         state.navPages.push({ url: url.href, title: "" });
+        state.navTitleOpen = true;
       },
       text(chunk) {
+        if (!state.navTitleOpen) return;
         const last = state.navPages[state.navPages.length - 1];
         if (last === undefined) return;
         state.navPages[state.navPages.length - 1] = { url: last.url, title: last.title + chunk.text };

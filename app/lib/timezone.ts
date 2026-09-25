@@ -22,7 +22,8 @@ export function canonicalTimezone(value: string | null | undefined): string {
   try {
     new Intl.DateTimeFormat("en-US", { timeZone: zone }).format(0);
     return zone;
-  } catch {
+  } catch (error) {
+    console.error(JSON.stringify({ event: "timezone.resolve_failed", error: String(error) }));
     return "UTC";
   }
 }
