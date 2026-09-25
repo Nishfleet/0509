@@ -13,6 +13,7 @@ import { startCard, withinProbeLimit } from "../lib/identity/card.server";
 import { confirmCard } from "../lib/identity/confirm.server";
 import { normaliseSubject } from "../lib/identity/normalise";
 import { screenOnboardingSubject } from "../lib/onboarding-screen.server";
+import { timeCard } from "../lib/onboarding/card-timing.server";
 import { requireSession } from "../lib/require-session.server";
 import { workspaceLandingForRequest } from "../lib/workspace.server";
 
@@ -42,7 +43,7 @@ export async function loader({ request }: Route.LoaderArgs) {
     card: {
       subject: raw,
       domain: shown,
-      ...startCard(workspaceId, subject),
+      ...timeCard(workspaceId, startCard(workspaceId, subject)),
       draft: await readDraft(workspaceId, subject.registrable),
     },
     limited: false,
