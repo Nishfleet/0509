@@ -68,24 +68,36 @@ export async function deleteWorkspace(workspaceId: string): Promise<void> {
   await env.DB.prepare(DELETE_WORKSPACE).bind(workspaceId).run();
 }
 
-const SELECT_SCHEDULE_BY_OWNER = `SELECT id, timezone, brief_weekday, brief_hour FROM workspace WHERE owner_user_id = ?
+const SELECT_SCHEDULE_BY_OWNER = `SELECT id, timezone, brief_weekday, brief_hour, brief_paused_at FROM workspace WHERE owner_user_id = ?
 ORDER BY created_at LIMIT 1`;
 
 const UPDATE_SCHEDULE = `UPDATE workspace SET timezone = ?, brief_weekday = ?, brief_hour = ? WHERE id = ?`;
 
 export interface OwnedSchedule {
   workspaceId: string;
-  schedule: { timezone: string; weekday: number; hour: number };
+  schedule: { timezone: string; weekday: number; hour: number; pausedAt: string | null };
 }
 
 export async function readBriefScheduleForOwner(userId: string): Promise<OwnedSchedule | null> {
-  const row = await env.DB.prepare(SELECT_SCHEDULE_BY_OWNER)
+  const row = await env.DB
+    .prepare(SELECT_SCHEDULE_BY_OWNER)
     .bind(userId)
-    .first<{ id: string; timezone: string; brief_weekday: number; brief_hour: number }>();
+    .first<{
+      id: string;
+      timezone: string;
+      brief_weekday: number;
+      brief_hour: number;
+      brief_paused_at: string | null;
+    }>();
   if (row === null) return null;
   return {
     workspaceId: row.id,
-    schedule: { timezone: row.timezone, weekday: row.brief_weekday, hour: row.brief_hour },
+    schedule: {
+      timezone: row.timezone,
+      weekday: row.brief_weekday,
+      hour: row.brief_hour,
+      pausedAt: row.brief_paused_at,
+    },
   };
 }
 
@@ -96,6 +108,12 @@ export async function updateBriefSchedule(
   await env.DB.prepare(UPDATE_SCHEDULE)
     .bind(schedule.timezone, schedule.weekday, schedule.hour, workspaceId)
     .run();
+}
+
+const UPDATE_BRIEF_PAUSED = "UPDATE workspace SET brief_paused_at = ? WHERE id = ?";
+
+export async function setBriefPaused(workspaceId: string, pausedAt: string | null): Promise<void> {
+  await env.DB.prepare(UPDATE_BRIEF_PAUSED).bind(pausedAt, workspaceId).run();
 }
 
 const SELECT_OWN_SITE_ALERTS = "SELECT own_site_alerts FROM workspace WHERE id = ?";
