@@ -198,7 +198,7 @@ describe("Home standing", () => {
     const html = render({ payload: payload() });
     expect(html.match(/data-testid="standing-row"/g)).toHaveLength(3);
     expect(html).toContain('data-self="true"');
-    expect(html).toContain("You · ");
+    expect(html).not.toContain("You · ");
   });
 
   it("puts an unranked brand last with a dash, never a zero", () => {
@@ -228,11 +228,21 @@ describe("Home standing", () => {
         }),
       ],
     });
-    const standing = homeStanding({ payload: p, entities: ENTITIES, schedule: SCHEDULE, history: [], sources: [], counts: [], now: THURSDAY_MORNING });
+    const standing = homeStanding({
+      payload: p,
+      entities: ENTITIES,
+      schedule: SCHEDULE,
+      history: [],
+      sources: SITE_SOURCES,
+      counts: [],
+      now: THURSDAY_MORNING,
+    });
     if (standing.kind !== "ranked") throw new Error("expected a ranked standing");
     expect(standing.rows.map((row) => row.position)).toEqual([1, null]);
+    expect(standing.rows.map((row) => row.signals)).toEqual([0, 0]);
     const html = render({ payload: p });
     expect(html).toContain(">—<");
+    expect(html).not.toContain("#1");
   });
 
   it("asks for a competitor when fewer than two brands are on (REBUILD-STANDING rules)", () => {
