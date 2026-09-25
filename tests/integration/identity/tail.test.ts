@@ -170,6 +170,68 @@ describe("IdentityTailWorkflow", () => {
     expect(instanceId).toBe(`identity-tail-${entityId.id}`);
   });
 
+  it("seeds a creator's handle mentions and its named website", async () => {
+    await seed();
+    await using introspector = await introspectWorkflow(env.IDENTITY_TAIL);
+    expect(
+      await confirmCard(
+        workspaceId,
+        form({
+          subject: "https://www.youtube.com/@gymshark",
+          name: "Gymshark",
+          description: "Gym clothes",
+          "social.youtube": "https://www.youtube.com/@gymshark",
+          "social.site": "https://gymshark.com/",
+        }),
+      ),
+    ).toBe(true);
+    const [instance] = await introspector.get();
+    if (instance === undefined) throw new Error("tail instance was not started");
+    await instance.waitForStatus("complete");
+    await instance.getOutput();
+    const stored = await watches();
+    expect(stored.map((row) => `${row.source_key} ${row.target_key}`)).toEqual([
+      `ads.meta ${AD_ID}`,
+      `ads.meta ${ADVERTISER}`,
+      "gdelt.doc @gymshark",
+      "gdelt.doc Gymshark",
+      `hiring.greenhouse ${BOARD}`,
+      "hn.algolia @gymshark",
+      "hn.algolia Gymshark",
+      "site.web https://gymshark.com/",
+      `site.web ${PRICING}`,
+      "youtube.channel_rss Gymshark",
+    ]);
+  });
+
+  it("seeds a creator with no website without any site, ads or hiring watch", async () => {
+    await seed();
+    await using introspector = await introspectWorkflow(env.IDENTITY_TAIL);
+    expect(
+      await confirmCard(
+        workspaceId,
+        form({
+          subject: "https://www.instagram.com/gymshark/",
+          name: "Gymshark",
+          description: "",
+          "social.instagram": "https://www.instagram.com/gymshark/",
+        }),
+      ),
+    ).toBe(true);
+    const [instance] = await introspector.get();
+    if (instance === undefined) throw new Error("tail instance was not started");
+    await instance.waitForStatus("complete");
+    await instance.getOutput();
+    const stored = await watches();
+    expect(stored.map((row) => `${row.source_key} ${row.target_key}`)).toEqual([
+      "gdelt.doc @gymshark",
+      "gdelt.doc Gymshark",
+      "hn.algolia @gymshark",
+      "hn.algolia Gymshark",
+      "youtube.channel_rss Gymshark",
+    ]);
+  });
+
   it("retries a failed step and still queues the sweep", async () => {
     await seed();
     await using introspector = await introspectWorkflow(env.IDENTITY_TAIL);
