@@ -2,8 +2,9 @@ import { env } from "cloudflare:workers";
 import { z } from "zod";
 
 import { readUrl } from "../fetch/transport.server";
-import type { SiteFields } from "./card-fields";
+import type { CardReview, SiteFields } from "./card-fields";
 import { extractIdentity } from "./extract";
+import { reviewFields } from "./field-confidence.server";
 import { readLogo, storeLogo } from "./logo-store.server";
 import { resolveLogo } from "./logo-cascade";
 import { resolveBrandName } from "./name-cascade";
@@ -71,16 +72,47 @@ export async function withinProbeLimit(userId: string): Promise<boolean> {
   return success;
 }
 
-export function startCard(subject: Subject): { site: Promise<SiteFields>; logo: Promise<string | null> } {
+function fillReview(fields: { name: string | null; description: string | null; socials: { platform: string; url: string }[] }): CardReview {
+  return {
+    name: fields.name === null ? "empty" : "fill",
+    description: fields.description === null ? "empty" : "fill",
+    socials: fields.socials.length === 0 ? "empty" : "fill",
+  };
+}
+
+function applyReview<T extends { name: string | null; description: string | null; socials: { platform: string; url: string }[] }>(
+  fields: T,
+  review: CardReview,
+): T {
+  return {
+    ...fields,
+    name: review.name === "empty" ? null : fields.name,
+    description: review.description === "empty" ? null : fields.description,
+    socials: review.socials === "empty" ? [] : fields.socials,
+    review,
+  };
+}
+
+export function startCard(
+  workspaceId: string,
+  subject: Subject,
+): { site: Promise<SiteFields>; logo: Promise<string | null> } {
   const read = readSiteCard(subject);
-  const site = read.then(({ card, reached }): SiteFields => ({
-    name: card.name ?? (subject.kind === "domain" ? null : `@${subject.registrable}`),
-    description: card.description,
-    socials: subject.url !== null && subject.kind !== "domain"
-      ? [{ platform: subject.platform ?? "site", url: subject.url }]
-      : card.socials,
-    unfound: subject.kind === "domain" && !reached,
-  }));
+  const site = read.then(async ({ card, reached }): Promise<SiteFields> => {
+    const fields: SiteFields = {
+      name: card.name ?? (subject.kind === "domain" ? null : `@${subject.registrable}`),
+      description: card.description,
+      socials: subject.url !== null && subject.kind !== "domain"
+        ? [{ platform: subject.platform ?? "site", url: subject.url }]
+        : card.socials,
+      review: { name: "fill", description: "fill", socials: "fill" },
+      unfound: subject.kind === "domain" && !reached,
+    };
+    const review: CardReview = subject.kind === "domain" && reached
+      ? await reviewFields(workspaceId, subject, fields, new Date().toISOString())
+      : fillReview(fields);
+    return applyReview(fields, review);
+  });
   const logo = read.then(async ({ card, reached }) => {
     if (!reached) return null;
     const cached = await cachedProbe(subject, "icon", logoSchema, async () => {
