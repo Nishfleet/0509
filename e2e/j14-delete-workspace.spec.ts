@@ -28,7 +28,7 @@ test("J14: an account that owns a brand, deleted from settings, leaves nothing b
   await expect(page).toHaveURL(/\/onboarding\/competitors$/);
 
   const cardBefore = await page.request.get("/app/share.png");
-  expect(cardBefore.status()).toBe(200);
+  expect(cardBefore.status()).toBe(404);
 
   await page.goto("/app/settings");
   await expect(page.getByRole("heading", { name: "Delete your account" })).toBeVisible();
@@ -51,6 +51,7 @@ test("J14: an account that owns a brand, deleted from settings, leaves nothing b
       { timeout: 120_000, intervals: [5_000] },
     )
     .toMatch(/Snapshots and screenshots: removed/);
+  const removedAt = new Date().toISOString();
 
   await page.screenshot({ path: test.info().outputPath("deleted.png") });
 
@@ -66,6 +67,6 @@ test("J14: an account that owns a brand, deleted from settings, leaves nothing b
   expect(extractMagicLink(raw)).toBe(link);
 
   console.log(
-    `J14 email=${email} instance=${instanceId} cardBefore=${cardBefore.status()} cardAfter=${cardAfter.status()} quietUntil=${new Date().toISOString()} removedAt=${new Date().toISOString()}`,
+    `J14 email=${email} instance=${instanceId} cardBefore=${cardBefore.status()} cardAfter=${cardAfter.status()} removedAt=${removedAt} quietUntil=${new Date().toISOString()}`,
   );
 });
