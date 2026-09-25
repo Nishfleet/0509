@@ -1,13 +1,9 @@
 import { env } from "cloudflare:workers";
 import { afterEach, describe, expect, it } from "vitest";
 
-import {
-  applyDraftIntent,
-  clearDraftField,
-  draftKey,
-  readDraft,
-  saveDraftField,
-} from "../../../app/lib/identity/card-draft.server";
+import * as publicSurface from "../../../app/lib/identity/card-draft.server";
+import { applyDraftIntent, draftKey, readDraft } from "../../../app/lib/identity/card-draft.server";
+import { clearDraftField, saveDraftField } from "../../../app/lib/identity/card-draft-internal.server";
 
 /**
  * The onboarding card's name/about draft (0509#5238), pinned against the real
@@ -82,5 +78,24 @@ describe("identity card draft", () => {
 
     expect(await applyDraftIntent(WORKSPACE, form)).toBe(false);
     expect(await env.IDENTITY_CACHE.get(KEY)).toBeNull();
+  });
+
+  it("applyDraftIntent with intent=draft writes the value through the one public path", async () => {
+    const form = new FormData();
+    form.set("intent", "draft");
+    form.set("subject", "gymshark.com");
+    form.set("field", "name");
+    form.set("value", "Gymshark");
+
+    expect(await applyDraftIntent(WORKSPACE, form)).toBe(true);
+    expect(await readDraft(WORKSPACE, REGISTRABLE)).toEqual({ name: "Gymshark" });
+  });
+
+  it("exports no field writer a route could call instead of applyDraftIntent", () => {
+    expect(Object.keys(publicSurface).toSorted()).toStrictEqual([
+      "applyDraftIntent",
+      "draftKey",
+      "readDraft",
+    ]);
   });
 });

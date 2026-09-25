@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { createRoutesStub } from "react-router";
 import { describe, expect, it } from "vitest";
 
-import { ArrivalLine, Fields } from "../../../app/components/identity-card";
+import { ArrivalLine, DraftNote, Fields } from "../../../app/components/identity-card";
 import type { CardDraft, CardReview, SiteFields } from "../../../app/lib/identity/card-fields";
 
 const INSTAGRAM = "https://instagram.com/gymshark";
@@ -177,6 +177,79 @@ describe("the identity card fields", () => {
 		const html = render(site({ name: "fill", description: "fill", socials: "fill" }));
 
 		expect(html).not.toContain("within the hour");
+	});
+
+	it("marks a saved draft row as edited by you and offers the found value back", () => {
+		const html = render(site({ name: "fill", description: "fill", socials: "fill" }), {
+			name: "My Brand",
+		});
+
+		expect(html).toContain("edited by you");
+		expect(html).toContain("use what we found");
+		const revert = button(html, "use what we found");
+		expect(revert).toContain('type="button"');
+	});
+
+	it("marks only the edited row, never the untouched one", () => {
+		const html = render(site({ name: "fill", description: "fill", socials: "fill" }), {
+			name: "My Brand",
+		});
+
+		expect(html.split("edited by you").length - 1).toBe(1);
+		expect(html).toContain('value="My Brand"');
+		expect(html).toContain('value="performance apparel"');
+	});
+
+	it("leaves a found row unmarked, with no revert control", () => {
+		const html = render(site({ name: "fill", description: "fill", socials: "fill" }));
+
+		expect(html).not.toContain("edited by you");
+		expect(html).not.toContain("use what we found");
+		expect(html).not.toContain("back to what we found");
+	});
+
+	it("renders the saved value in place of the found one, so a revert has a found value to remount to", () => {
+		const found = render(site({ name: "fill", description: "fill", socials: "fill" }));
+		const edited = render(site({ name: "fill", description: "fill", socials: "fill" }), {
+			name: "My Brand",
+		});
+
+		expect(accessibleName(found, "edit name: ")).toBe("edit name: Gymshark");
+		expect(accessibleName(edited, "edit name: ")).toBe("edit name: My Brand");
+		expect(found).not.toBe(edited);
+	});
+});
+
+describe("DraftNote", () => {
+	const noop = () => undefined;
+
+	it("shows the edited label and the revert button after an edit", () => {
+		const html = renderToStaticMarkup(
+			createElement(DraftNote, { edited: true, reverted: false, onRevert: noop }),
+		);
+
+		expect(html).toContain("edited by you");
+		expect(html).toContain('type="button"');
+		expect(html).toContain("use what we found");
+	});
+
+	it("shows the reverted status line after a revert, never the edited label", () => {
+		const html = renderToStaticMarkup(
+			createElement(DraftNote, { edited: false, reverted: true, onRevert: noop }),
+		);
+
+		expect(html).toContain('role="status"');
+		expect(html).toContain("back to what we found, we will check it again");
+		expect(html).not.toContain("edited by you");
+		expect(html).not.toContain("use what we found");
+	});
+
+	it("shows nothing on a found row", () => {
+		const html = renderToStaticMarkup(
+			createElement(DraftNote, { edited: false, reverted: false, onRevert: noop }),
+		);
+
+		expect(html).toBe("");
 	});
 });
 

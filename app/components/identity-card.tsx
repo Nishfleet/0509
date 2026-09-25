@@ -44,6 +44,39 @@ function Pending({ label, fill }: { label: string; fill: string }) {
   );
 }
 
+export function DraftNote({
+  edited,
+  reverted,
+  onRevert,
+}: {
+  edited: boolean;
+  reverted: boolean;
+  onRevert: () => void;
+}) {
+  if (edited) {
+    return (
+      <>
+        <span className="text-ink-soft font-mono text-[0.7rem] uppercase">edited by you</span>
+        <button
+          type="button"
+          className="text-ink-soft text-[0.88rem] underline"
+          onClick={onRevert}
+        >
+          use what we found
+        </button>
+      </>
+    );
+  }
+  if (reverted) {
+    return (
+      <span role="status" className="text-ink-soft text-[0.88rem]">
+        back to what we found, we will check it again
+      </span>
+    );
+  }
+  return null;
+}
+
 function EditRow({
   label,
   name,
@@ -111,22 +144,7 @@ function EditRow({
         </PopoverTrigger>
         <PopoverContent>{editor}</PopoverContent>
       </Popover>
-      {edited ? (
-        <>
-          <span className="text-ink-soft font-mono text-[0.7rem] uppercase">edited by you</span>
-          <button
-            type="button"
-            className="text-ink-soft text-[0.88rem] underline"
-            onClick={onRevert}
-          >
-            use what we found
-          </button>
-        </>
-      ) : reverted ? (
-        <span role="status" className="text-ink-soft text-[0.88rem]">
-          back to what we found, we will check it again
-        </span>
-      ) : null}
+      <DraftNote edited={edited} reverted={reverted} onRevert={onRevert} />
       <input type="hidden" name={name} value={value} />
       {empty === true ? <span className="text-ink-soft text-[0.88rem]">{emptyLine}</span> : null}
     </Row>
@@ -170,25 +188,30 @@ export function Fields({
   const descriptionCheck = site.review.description === "check";
   const fetcher = useFetcher();
   const [reverted, setReverted] = useState<DraftField | null>(null);
+  const [edited, setEdited] = useState<CardDraft>(draft);
+  const nameValue = edited.name ?? (nameCheck ? "" : (site.name ?? ""));
+  const descriptionValue = edited.description ?? (descriptionCheck ? "" : (site.description ?? ""));
   return (
     <>
       <EditRow
-        key={draft.name === undefined ? "name:found" : "name:edited"}
+        key={edited.name === undefined ? "name:found" : "name:edited"}
         label="name"
         name="name"
-        initial={draft.name ?? (nameCheck ? "" : (site.name ?? ""))}
+        initial={nameValue}
         placeholder={nameCheck ? (site.name ?? "") : "your brand's name"}
         check={nameCheck}
         empty={site.review.name === "empty"}
         emptyLine={emptyLine}
-        edited={draft.name !== undefined}
+        edited={edited.name !== undefined}
         reverted={reverted === "name"}
         onRevert={() => {
           setReverted("name");
+          setEdited({ ...edited, name: undefined });
           void fetcher.submit({ intent: "revert", subject, field: "name" }, { method: "post" });
         }}
         onSave={(value) => {
           setReverted(null);
+          setEdited({ ...edited, name: value });
           void fetcher.submit(
             { intent: "draft", subject, field: "name", value },
             { method: "post" },
@@ -203,19 +226,20 @@ export function Fields({
         <Logo logo={logo} />
       )}
       <EditRow
-        key={draft.description === undefined ? "description:found" : "description:edited"}
+        key={edited.description === undefined ? "description:found" : "description:edited"}
         label="about"
         name="description"
-        initial={draft.description ?? (descriptionCheck ? "" : (site.description ?? ""))}
+        initial={descriptionValue}
         placeholder={descriptionCheck ? (site.description ?? "") : "one line on what you do"}
         check={descriptionCheck}
         empty={site.review.description === "empty"}
         emptyLine={emptyLine}
         multiline
-        edited={draft.description !== undefined}
+        edited={edited.description !== undefined}
         reverted={reverted === "description"}
         onRevert={() => {
           setReverted("description");
+          setEdited({ ...edited, description: undefined });
           void fetcher.submit(
             { intent: "revert", subject, field: "description" },
             { method: "post" },
@@ -223,6 +247,7 @@ export function Fields({
         }}
         onSave={(value) => {
           setReverted(null);
+          setEdited({ ...edited, description: value });
           void fetcher.submit(
             { intent: "draft", subject, field: "description", value },
             { method: "post" },
@@ -333,7 +358,7 @@ export function IdentityCard({
         <Await resolve={site}>
           {(fields) => (
             <>
-              <Fields subject={subject} site={fields} logo={logo} draft={draft} />
+              <Fields key={subject} subject={subject} site={fields} logo={logo} draft={draft} />
               {message ? <p role="alert" className="pt-3 text-[0.88rem]">{message}</p> : null}
               <Button type="submit" size="lg" className="my-5">
                 That&apos;s me
