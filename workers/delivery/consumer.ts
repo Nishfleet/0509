@@ -1,6 +1,6 @@
 import { markDigestSentStatement } from "../../app/lib/data/digest.server";
 import { claimIncidentNotice } from "../../app/lib/data/incident_notice.server";
-import { claimSendAttempt, resolveSendAttempt, resolveSendAttemptStatement } from "../../app/lib/data/send_attempt.server";
+import { claimSendAttempt, resolveSendAttempt } from "../../app/lib/data/send_attempt.server";
 import { writeUnsubscribeToken } from "../../app/lib/data/send_target.server";
 import { insertSignalDeliveries } from "../../app/lib/data/signal_delivery.server";
 import type { BriefPayload } from "../../app/lib/brief-payload";
@@ -212,7 +212,7 @@ export async function deliver(env: Env, message: DigestMessage): Promise<Deliver
     const email = render(digest, payload, target.target_value, token);
     const result = await sendMessage(env.EMAIL, email);
     sent = result.outcome === "sent";
-    await resolveSendAttemptStatement(env.DB, claim.id, result.outcome, result.error).run();
+    await resolveSendAttempt(env.DB, claim.id, result.outcome, result.error);
     if (result.outcome === "sent") {
       const now = new Date().toISOString();
       await env.DB.batch([
