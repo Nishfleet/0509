@@ -18,7 +18,7 @@ export default defineConfig({
           name: "node",
           environment: "node",
           include: ["tests/**/*.test.ts"],
-          exclude: ["tests/integration/**", "tests/unit/site/**"],
+          exclude: ["tests/integration/**", "tests/unit/site/**", "tests/perf/**"],
         },
       },
       {
@@ -41,10 +41,34 @@ export default defineConfig({
             // #4180's acceptance names this file verbatim, without the
             // .integration infix; it still needs real workerd + real D1.
             "tests/integration/migration-rollback.test.ts",
+            // #3994's acceptance names this file verbatim.
+            "tests/integration/identity/tail.test.ts",
             "tests/unit/site/**/*.test.ts",
+            "tests/perf/**/*.test.ts",
           ],
+          // Applies the chain itself, in two steps, so it can seed rows
+          // before 0021. The workers setup would apply 0021 first.
+          exclude: ["tests/integration/entity-workspace-fk.integration.test.ts"],
           setupFiles: ["./tests/integration/apply-migrations.ts"],
           testTimeout: 30_000,
+        },
+      },
+      {
+        // 0509#4707 applies migrations in the test: earlier files, seed, then
+        // 0021. The workers project setup applies the whole chain first, so
+        // this file cannot prove that the rebuild kept rows already stored.
+        plugins: [
+          cloudflareTest(async () => ({
+            wrangler: { configPath: "./tests/integration/wrangler.test.jsonc" },
+            miniflare: {
+              bindings: { TEST_MIGRATIONS: await readD1Migrations("migrations") },
+            },
+          })),
+        ],
+        test: {
+          name: "entity-fk",
+          include: ["tests/integration/entity-workspace-fk.integration.test.ts"],
+          testTimeout: 60_000,
         },
       },
       {
@@ -83,7 +107,7 @@ export default defineConfig({
         },
       },
       {
-        // The J8 fixture-site Worker (0509#4046): real workerd + real local KV.
+        // The J8 fixture-site Worker (0509#4046): real workerd + real local SQLite Durable Object.
         // Its token-gated flip route and both break modes run against the same
         // binding kinds production has, so a break that does not survive the
         // round-trip fails in a merge gate instead of a live incident run.

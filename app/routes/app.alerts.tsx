@@ -1,51 +1,48 @@
 import type { Route } from "./+types/app.alerts";
-import { env } from "cloudflare:workers";
 
-import { readDeliveryFailures, readOwnSiteIncidents, readTakedownNotes } from "../lib/data/alert.server";
-import { readWorkspaceIdForOwner } from "../lib/data/workspace.server";
-import { daysAgoLabel } from "../lib/delivery-alert";
-import { requireSession } from "../lib/require-session.server";
-import { daysBefore, readSiteChangeViews } from "../lib/site-changes.server";
-import { BriefView } from "../components/brief-view";
+import { AlertChips } from "../components/alert-chips";
+import { AlertFeed } from "../components/alert-feed";
+import { IncidentBlock } from "../components/incident-block";
 import { PAGE, PageHeading } from "../components/page-heading";
-import { SiteChangeItem } from "../components/site-change-item";
+import { SourcePill } from "../components/source-pill";
+import { acknowledgeOwnSiteIncident, loadAlertsPage } from "../lib/alerts-page.server";
+import { parseAlertChip } from "../lib/alert-chips";
+import { requireSession } from "../lib/require-session.server";
 
 const WHEN_CLASS = "text-ink-soft mt-2 block font-mono text-[0.75rem] tracking-[0.04em] uppercase";
 
 export async function loader({ request }: Route.LoaderArgs) {
   const session = await requireSession(request);
-  const workspaceId = await readWorkspaceIdForOwner(session.user.id);
-  const failures = workspaceId === null ? [] : await readDeliveryFailures(env.DB, workspaceId);
-  const notes = workspaceId === null ? [] : await readTakedownNotes(env.DB, workspaceId);
-  const incidents = workspaceId === null ? [] : await readOwnSiteIncidents(env.DB, workspaceId);
-  const now = new Date();
-  const changes =
-    workspaceId === null
-      ? []
-      : await readSiteChangeViews({ workspaceId, entityId: null, since: daysBefore(now, 30), limit: 30 });
-  return {
-    email: session.user.email,
-    incidents: incidents.map((incident) => ({
-      ...incident,
-      when: daysAgoLabel(incident.created_at, now),
-      fixed: incident.closed_at === null ? null : daysAgoLabel(incident.closed_at, now),
-    })),
-    changes: changes.map((change) => ({ ...change, when: daysAgoLabel(change.observedAt, now) })),
-    failures: failures.map((failure) => ({ ...failure, when: daysAgoLabel(failure.created_at, now) })),
-    notes: notes.map((note) => ({ ...note, when: daysAgoLabel(note.created_at, now) })),
-  };
+  return loadAlertsPage(session.user.id, parseAlertChip(new URL(request.url).searchParams.get("kind")));
+}
+
+export async function action({ request }: Route.ActionArgs) {
+  const session = await requireSession(request);
+  const form = await request.formData();
+  const alertId = form.get("alertId");
+  if (form.get("intent") !== "acknowledge" || typeof alertId !== "string") return { saved: false };
+  await acknowledgeOwnSiteIncident(session.user.id, alertId);
+  return { saved: true };
 }
 
 export default function Page({ loaderData }: Route.ComponentProps) {
   return (
     <main className={PAGE}>
       <PageHeading title="Alerts" />
-      {loaderData.failures.length === 0 &&
-      loaderData.notes.length === 0 &&
-      loaderData.incidents.length === 0 &&
-      loaderData.changes.length === 0 ? (
-        <p className="mt-8 leading-[1.65]">
-          Nothing has interrupted you. When your own site breaks you'll get an email; everything else waits here.
+      <p data-testid="alerts-contract" className="text-ink-soft mt-2 leading-[1.65]">
+        One thing here interrupted you by email: your own site.
+      </p>
+      {loaderData.openIncident === null ? null : <IncidentBlock {...loaderData.openIncident} />}
+      {loaderData.sources.length > 0 ? (
+        <p data-testid="alerts-sources" className="mt-4 flex flex-wrap gap-2">
+          {loaderData.sources.map((entry) => (
+            <SourcePill
+              key={entry.source.key}
+              source={entry.source}
+              snapshot={entry.snapshot}
+              now={loaderData.now}
+            />
+          ))}
         </p>
       ) : null}
       {loaderData.incidents.map((incident) => (
@@ -66,46 +63,21 @@ export default function Page({ loaderData }: Route.ComponentProps) {
           </time>
         </article>
       ))}
-      {loaderData.changes.map((change, index) => (
-        <SiteChangeItem key={change.id} change={change} eager={index === 0} />
-      ))}
-      {loaderData.notes.map((note) => (
-        <article
-          key={note.id}
-          id={note.id}
-          data-testid="takedown-note"
-          className="border-line mt-8 border-t pt-6"
+      <AlertChips chip={loaderData.chip} counts={loaderData.chipCounts} />
+      {loaderData.chipCounts.all === 0 && loaderData.openIncident === null ? (
+        <p className="mt-8 leading-[1.65]">
+          Nothing has interrupted you. When your own site breaks you'll get an email; everything else waits here.
+        </p>
+      ) : null}
+      <AlertFeed groups={loaderData.groups} />
+      {loaderData.offLine === null ? null : (
+        <p
+          data-testid="alerts-off-footer"
+          className="text-ink-soft border-line mt-10 border-t pt-6 leading-[1.65]"
         >
-          <p className="leading-[1.65]">{note.title}</p>
-          <time dateTime={note.created_at} className={WHEN_CLASS}>
-            {note.when}
-          </time>
-        </article>
-      ))}
-      {loaderData.failures.map((failure) => (
-        <article
-          key={failure.id}
-          id={failure.id}
-          data-testid="delivery-failure"
-          className="border-line mt-8 border-t pt-6"
-        >
-          <h2 className="font-display text-lg font-semibold">{failure.title}</h2>
-          <p className="mt-2 leading-[1.65]">{failure.body}</p>
-          <time dateTime={failure.created_at} className={WHEN_CLASS}>
-            {failure.when}
-          </time>
-          {failure.brief === null ? null : (
-            <details className="mt-4">
-              <summary className="cursor-pointer underline decoration-1 underline-offset-4">
-                Read the brief
-              </summary>
-              <div className="mt-4">
-                <BriefView payload={failure.brief} />
-              </div>
-            </details>
-          )}
-        </article>
-      ))}
+          {loaderData.offLine}
+        </p>
+      )}
     </main>
   );
 }

@@ -44,7 +44,7 @@ export function DeleteAccount({ email, error }: { email: string; error: string |
             {error}
           </p>
         )}
-        <Button type="submit" variant="secondary" size="lg" className="border-red text-red self-start">
+        <Button type="submit" variant="secondary" size="lg" className="border-red self-start">
           Delete my account
         </Button>
       </Form>

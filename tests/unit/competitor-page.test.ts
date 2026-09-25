@@ -4,9 +4,12 @@ import { MemoryRouter } from "react-router";
 import { describe, expect, it } from "vitest";
 
 import { CompetitorFrame, type CompetitorFrameProps, developmentsEmpty } from "../../app/components/competitor-frame";
+import type { RailSource } from "../../app/components/competitor-rail";
 import type { SiteChangeItemData } from "../../app/components/site-change-item";
+import { LOST_CHANNEL_REASON } from "../../app/lib/mentions/youtube-channel";
 import {
   CompetitorHeader,
+  CompetitorSwitch,
   competitorPausedLine,
   type CompetitorHeaderProps,
 } from "../../app/components/competitor-header";
@@ -29,6 +32,7 @@ const change: SiteChangeItemData = {
   mark: { removed: "Plans from $10.", added: "Plans from $12." },
   before: { src: "/app/changes/sig-1/before", capturedAt: "2026-09-23 02:09 UTC" },
   after: { src: "/app/changes/sig-1/after", capturedAt: "2026-09-24 02:09 UTC" },
+  whyFlagged: null,
   when: "today",
 };
 
@@ -39,6 +43,14 @@ const quiet: CompetitorFrameProps = {
   pages: 0,
   lastChecked: null,
   pausedOn: null,
+  rail: {
+    entityId: "ent-1",
+    peers: [],
+    facts: [],
+    sources: [],
+    verdict: null,
+    now: Date.parse("2026-09-22T12:00:00.000Z"),
+  },
 };
 
 function frame(props: Partial<CompetitorFrameProps> = {}): string {
@@ -53,6 +65,26 @@ describe("the competitor page frame", () => {
   it("formats the paused line in en-GB UTC", () => {
     expect(competitorPausedLine("2026-09-22T12:00:00.000Z")).toBe("Paused 22 Sept");
     expect(competitorPausedLine(null)).toBe("Paused");
+  });
+
+  it("reads state_reason in lowercase customer words and never shows a code", () => {
+    expect(competitorPausedLine("2026-09-22T12:00:00.000Z", "acquired")).toBe(
+      "Paused 22 Sept · looks like it was acquired",
+    );
+    expect(competitorPausedLine("2026-09-22T12:00:00.000Z", "shut_down")).toBe(
+      "Paused 22 Sept · looks like it shut down",
+    );
+    expect(competitorPausedLine("2026-09-22T12:00:00.000Z", "some_code")).toBe("Paused 22 Sept");
+    expect(competitorPausedLine("2026-09-22T12:00:00.000Z", "constructor")).toBe("Paused 22 Sept");
+    const html = header({
+      name: "Kindred",
+      domain: "kindred.example",
+      state: "off",
+      stateChangedAt: "2026-09-22T12:00:00.000Z",
+      stateReason: "shut_down",
+    });
+    expect(html).toContain("looks like it shut down");
+    expect(html).not.toContain("shut_down");
   });
 
   it("renders the blocks in DESIGN.md 2.5 order", () => {
@@ -78,13 +110,28 @@ describe("the competitor page frame", () => {
       'data-section="biggest-move"',
       'data-section="developments"',
       'data-slot="competitor-rail"',
+      'data-section="peers"',
+      'data-section="facts"',
       'data-section="sources"',
+      'data-section="still-competitor"',
     ];
     let at = -1;
     for (const marker of markers) {
       const index = html.indexOf(marker);
       expect(index).toBeGreaterThan(at);
       at = index;
+    }
+  });
+
+  it("prints the DESIGN.md 2.5 consequence beside the switch in both states, never a dialog", () => {
+    for (const state of ["on", "off"] as const) {
+      const html = render(createElement(CompetitorSwitch, { state, brandName: "Kindred" }));
+      expect(html).toContain('data-slot="competitor-switch"');
+      expect(html).toContain('role="switch"');
+      expect(html).toContain(
+        "Off stops the watching and the alerts. The history stays, and turning it back on picks up where it left off.",
+      );
+      expect(html).not.toContain('role="dialog"');
     }
   });
 
@@ -115,6 +162,38 @@ describe("the competitor page frame", () => {
     expect(html).not.toContain("Ads running");
   });
 
+  it("draws a YouTube source as a degraded pill with the lost-channel reason", () => {
+    const sources: RailSource[] = [
+      {
+        source: {
+          key: "youtube.channel_rss",
+          platform: "youtube",
+          is_enabled: 1,
+          config_json: "{}",
+          watch_config_json: JSON.stringify({
+            channelId: "UCaaaaaaaaaaaaaaaaaaaaaa",
+            degraded: {
+              state: "degraded",
+              reason: LOST_CHANNEL_REASON,
+              at: "2026-09-25T02:00:00.000Z",
+            },
+          }),
+        },
+        snapshot: null,
+      },
+    ];
+    const html = frame({ rail: { ...quiet.rail, sources } });
+    expect(html).toContain('data-state="degraded"');
+    expect(html).toContain(LOST_CHANNEL_REASON);
+    expect(html).not.toMatch(/>\s*Website\s*</);
+  });
+
+  it("falls back to the one-website line when no source has ever been stored", () => {
+    const html = frame({ rail: { ...quiet.rail, sources: [] } });
+    expect(html).toContain(">Website<");
+    expect(html).toContain("Homepage, read every night");
+  });
+
   it("draws a change as the mark with its before-and-after capture plate", () => {
     const html = frame({ changes: [change], weekCount: 1, biggestId: "sig-1" });
     expect(html).toContain("Kindred changed its homepage");
@@ -124,6 +203,33 @@ describe("the competitor page frame", () => {
     expect(html).toContain("Plans from $12.");
     expect(html).toContain('aria-label="Open before and after: Kindred changed its homepage"');
     expect(html).toContain("/app/changes/sig-1/after?w=");
+  });
+
+  it("opens the latest WhyFlaggedSheet for a flagged change", () => {
+    const html = frame({
+      changes: [
+        {
+          ...change,
+          whyFlagged: {
+            verdictId: "v-9",
+            compared: [],
+            sure: "92%",
+            decision: "Flagged",
+            reason: null,
+            decidedAt: "2026-09-20T10:00:00.000Z",
+          },
+        },
+      ],
+      weekCount: 1,
+      biggestId: "sig-1",
+    });
+    expect(html).toContain("Why we flagged this");
+  });
+
+  it("does not open a WhyFlaggedSheet without a verdict", () => {
+    expect(frame({ changes: [change], weekCount: 1, biggestId: "sig-1" })).not.toContain(
+      "Why we flagged this",
+    );
   });
 
   it("says when the first change can land, and freezes the feed at the pause", () => {

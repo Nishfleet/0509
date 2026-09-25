@@ -3,7 +3,7 @@ import { env } from "cloudflare:workers";
 import { readWorkspaceIdForOwner } from "../data/workspace.server";
 import { clientIp, withinLimit } from "./client-limit.server";
 import type { AgentProps } from "./context.server";
-import { bearerToken, propsForApiKey } from "./keys.server";
+import { RATE_LIMITED, bearerToken, propsForApiKey } from "./keys.server";
 import { serveMcp } from "./mcp.server";
 
 const NO_STORE = { "cache-control": "no-store" };
@@ -21,6 +21,10 @@ async function workspaceFor(props: AgentProps): Promise<string | Response> {
 }
 
 export async function mcpResponse(request: Request, props: AgentProps): Promise<Response> {
+  const origin = request.headers.get("origin");
+  if (origin !== null && origin !== new URL(env.BETTER_AUTH_URL).origin) {
+    return problem(403, "forbidden_origin", "This origin may not call the MCP server.");
+  }
   const workspace = await workspaceFor(props);
   if (workspace instanceof Response) return workspace;
   return serveMcp(request, workspace);
@@ -32,6 +36,9 @@ export async function apiResponse<T>(request: Request, read: (workspaceId: strin
   }
   const token = bearerToken(request);
   const props = token === null ? null : await propsForApiKey(token);
+  if (props === RATE_LIMITED) {
+    return problem(429, "rate_limited", "Too many requests. Slow down and retry in a minute.", { "retry-after": "60" });
+  }
   if (props === null) {
     return problem(401, "invalid_token", "Send an API key from Settings as 'Authorization: Bearer <key>'.", {
       "www-authenticate": 'Bearer realm="0509", error="invalid_token"',

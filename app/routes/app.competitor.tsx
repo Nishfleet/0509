@@ -1,11 +1,16 @@
 import type { Route } from "./+types/app.competitor";
 
-import { redirect, useFetcher } from "react-router";
+import { Form, redirect, useFetcher } from "react-router";
 
 import { BrandSwitchField } from "../components/brand-switch";
 import { CompetitorFrame } from "../components/competitor-frame";
 import { CompetitorHeader, DAY_MONTH } from "../components/competitor-header";
+import { CompetitorSnapshot } from "../components/competitor-snapshot";
+import { Button } from "../components/ui/button";
 import { readCompetitorPage } from "../lib/competitor-page.server";
+import { snapshotCells } from "../lib/competitor-snapshot";
+import { readCompetitorSnapshot } from "../lib/competitor-snapshot.server";
+import { forgetCompetitor } from "../lib/competitor-forget.server";
 import { handleCompetitorIntent } from "../lib/competitors.server";
 import { readWorkspaceIdForOwner } from "../lib/data/workspace.server";
 import { daysAgoLabel } from "../lib/delivery-alert";
@@ -30,18 +35,27 @@ export function headers() {
 export async function loader({ request, params }: Route.LoaderArgs) {
   const workspaceId = await workspaceFor(request);
   const now = new Date();
-  const page = await readCompetitorPage(workspaceId, params.entityId, now);
+  const [page, snapshot] = await Promise.all([
+    readCompetitorPage(workspaceId, params.entityId, now),
+    readCompetitorSnapshot(workspaceId, params.entityId, now),
+  ]);
   if (page === null) throw new Response("We don't track that competitor.", { status: 404 });
   return {
     ...page,
     lastChecked: page.watch.lastPolledAt === null ? null : captureLabel(page.watch.lastPolledAt),
     changes: page.changes.map((change) => ({ ...change, when: daysAgoLabel(change.observedAt, now) })),
+    now: now.getTime(),
+    snapshot: snapshotCells(snapshot),
   };
 }
 
 export async function action({ request, params }: Route.ActionArgs) {
   const workspaceId = await workspaceFor(request);
   const intent = (await request.formData()).get("intent");
+  if (intent === "forget") {
+    await forgetCompetitor(workspaceId, params.entityId, new Date().toISOString());
+    throw redirect("/app/competitors");
+  }
   const form = new FormData();
   form.set("intent", intent === "on" || intent === "off" ? intent : "");
   form.set("entityId", params.entityId);
@@ -61,6 +75,7 @@ export default function Page({ loaderData }: Route.ComponentProps) {
         domain={competitor.domain}
         state={competitor.state}
         stateChangedAt={competitor.stateChangedAt}
+        stateReason={competitor.stateReason}
         control={
           <BrandSwitchField
             state={state}
@@ -72,6 +87,16 @@ export default function Page({ loaderData }: Route.ComponentProps) {
           />
         }
       />
+      <CompetitorSnapshot cells={loaderData.snapshot} />
+      <Form method="post" className="flex min-w-0 flex-col items-start gap-2">
+        <input type="hidden" name="intent" value="forget" />
+        <Button type="submit" variant="secondary">
+          Stop tracking and delete its history
+        </Button>
+        <p className="text-meta text-ink-soft">
+          Turning it off keeps its history. This deletes every change and screenshot we kept for it.
+        </p>
+      </Form>
       <CompetitorFrame
         changes={loaderData.changes}
         weekCount={loaderData.weekCount}
@@ -79,6 +104,7 @@ export default function Page({ loaderData }: Route.ComponentProps) {
         pages={loaderData.watch.pages}
         lastChecked={loaderData.lastChecked}
         pausedOn={pausedAt === null ? null : DAY_MONTH.format(new Date(pausedAt))}
+        rail={{ ...loaderData.rail, entityId: competitor.id, now: loaderData.now }}
       />
     </main>
   );

@@ -95,4 +95,15 @@ describe("extractIdentity", () => {
     ]);
     expect(card.socials).toEqual([]);
   });
+
+  it("returns same-origin nav pages with their anchor titles", async () => {
+    const card = await extractIdentity(
+      '<html><body><nav><a href="/collections/all-products">  All\n Products </a><a href="/collections/all-products">Dup</a><a href="https://other.example/x">Off</a></nav></body></html>',
+      pageUrl,
+    );
+
+    expect(card.navPages).toEqual([
+      { url: "https://www.gymshark.com/collections/all-products", title: "All Products" },
+    ]);
+  });
 });

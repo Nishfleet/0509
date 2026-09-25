@@ -35,12 +35,13 @@ This pack is the product's edge: a chat prompt has none of it.
 | D2 `still_competitor` | Given the last 30 days, is `subject` still a live competitor of `self`? | Noul, plus Choice `reason`: active / acquired / shut down / pivoted / dormant | p >= 0.9 active: keep. p <= 0.1 AND reason in {acquired, shut down}: retire with the reason, history kept | ask the user in Competitors; `dormant` and `pivoted` always ask, never auto-retire |
 | D3 `noteworthy_change` | Is this diff on `subject`'s `page_role` page worth telling the user? | Noul, plus Choice `kind`: offer / pricing / copy / launch / removal / breakage / unintended / noise | p >= 0.9: publish as a before-and-after mark with the kind. p <= 0.1: discard, log | publish low, marked "possibly" |
 | D3s `own_site_breakage` | With `subject == self`: does this change look broken or unintended rather than deliberate? | Noul | **p >= 0.5: immediate alert** (a false alarm costs ten seconds; silence on a broken site costs the customer). p < 0.1: treat as deliberate, hand to D3 | alert marked "check this" |
-| D4 `read_this_first` | Does this noteworthy item belong in `self`'s read-this-first for the week? | Noul per item, plus Score `importance` 0..10 for ordering | code takes items with p >= 0.5, orders by Score, shows the top three; none -> "quiet week" with the count of items behind it | n/a |
+| D4 `read_this_first` | Does this noteworthy item belong in `self`'s read-this-first for the week? | Noul per item; ordered by Noul `p` (highest first), ties by `observed_at` newest first. Score `importance` ordering is a later slice | code takes items with p >= 0.5, orders by p, shows the top three; none -> "quiet week" with the count of items behind it | n/a |
 | D5 `mention_is_about_brand` | Is this mention actually about `subject`, not a homonym or a different entity? | Noul | p >= 0.9: keep. p <= 0.1: discard, log | keep, marked "possibly" |
 | D6 `mention_matters` | Does this confirmed mention carry signal for `self` (reach, sentiment, source weight)? | Noul | p >= 0.9: feed + candidate for D4. p <= 0.1: hidden behind "show all" | feed, normal |
 | D7 `identity_field_confidence` | Is this extracted value right for this brand's `field`? | Noul per field | p >= 0.9: fill silently. p <= 0.1: leave empty and say what fills it | fill, flagged for the user to confirm |
 | D8 `duplicate_signal` | Are these two items the same event seen twice (syndication, repost, re-crawl)? | Noul | p >= 0.9: collapse in the UI, keep both rows. p <= 0.1: keep separate | collapse, show "and 1 more" |
 | D9 `page_role` | What role does this page play for `subject`: home / pricing / product / blog / careers / legal / other? | Choice, cached per page by URL + title hash | recorded; feeds D3 and the snapshot schedule | never a URL regex |
+| **D10** `public_subject` | Does `item` (a domain, handle or channel) present itself to the public for commercial or audience reasons? | Noul | `p >= 0.9`: proceed. **`p <= 0.1`: refuse**, with the one line "we track brands and creators, not people", and record the refusal | **ask the user** to confirm the subject is a business or public creator, and record their answer in `user_decision` |
 
 Rules per decision:
 
@@ -52,6 +53,7 @@ Rules per decision:
 - D7 fields: name, logo, description, category, country, socials, pricing page. A field below 0.1 is left empty with an empty-state line ("we'll fill this after the first crawl").
 - D8 is the only dedup. No hand-rolled fuzzy matching beyond the stored normalized-URL and normalized-title hashes that feed it.
 - D9 runs once per discovered page and again only when the title changes. `/plans`, `/membership`, `/tarifs` are pricing pages; a regex would miss them, which is why this is a judgment.
+- D10 runs at onboarding before anything is fetched. An address that is itself a login wall (`accounts.google.com`, or path `/login`, `/signin`, `/sign-in`, `/accounts/login`, `/i/flow/login`) is refused in code and Jev is not asked. A platform privacy or age flag lives on the profile page; reading that page is a request about the subject, so it is not read before the refusal. A domain or a handle is judged by D10 and nothing is fetched. When Jev cannot be reached, onboarding stops and says so.
 
 ## What Jev is not used for
 

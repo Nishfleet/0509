@@ -1,5 +1,6 @@
 import { env } from "cloudflare:workers";
 
+import { ensureOwnerEmailTarget } from "./data/send_target.server";
 import { fillWorkspaceTimezone, insertWorkspace } from "./data/workspace.server";
 import type { WorkspaceDb } from "./data/workspace.server";
 import { canonicalTimezone, timezoneCookieValue } from "./timezone";
@@ -81,12 +82,14 @@ export async function ensureWorkspaceForSignIn(
 ): Promise<WorkspaceRow | null> {
   const user = await db.prepare('SELECT email FROM "user" WHERE id = ?').bind(input.userId).first<{ email: string }>();
   if (!user?.email) return null;
-  return ensureWorkspace(db, {
+  const workspace = await ensureWorkspace(db, {
     userId: input.userId,
     email: user.email,
     timezone: await timezoneCookieValue(input.request?.headers.get("cookie") ?? null),
     now: input.now,
   });
+  await ensureOwnerEmailTarget(db, { workspaceId: workspace.id, now: input.now ?? new Date().toISOString() });
+  return workspace;
 }
 
 export async function workspaceLanding(

@@ -30,8 +30,8 @@ jobs:
       url: https://0509.io
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-node@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
         with:
           node-version: 22
           cache: npm
@@ -56,14 +56,7 @@ jobs:
 
       - name: Smoke the deployed Worker
         # A deploy that reports success while the site 500s is not a success.
-        run: |
-          set -euo pipefail
-          for i in $(seq 1 20); do
-            if curl -fsS https://0509.io/api/health >/tmp/health.json 2>/dev/null; then break; fi
-            sleep 5
-          done
-          cat /tmp/health.json
-          grep -q '"status":"ok"' /tmp/health.json
+        run: curl -fsS --retry 20 --retry-delay 5 --retry-all-errors https://0509.io/api/health | grep -q '"status":"ok"'
 
       - name: Deploy the fixture-site Worker
         # J8's breakable own-site fixture (0509#4046): a separate Worker with
@@ -77,6 +70,10 @@ jobs:
         # verification, which is exactly the inverting this comment needs to keep
         # false: test infrastructure must never stand between a good app deploy
         # and its verification.
+        #
+        # The break and price state live in a SQLite Durable Object (0509#4305).
+        # Migration tag v1 in the wrangler config creates the class on deploy, so
+        # there is no KV namespace to provision.
         continue-on-error: true
         run: npx wrangler deploy --config workers/fixture-site.wrangler.jsonc
         env:

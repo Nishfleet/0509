@@ -50,7 +50,7 @@ function safeUrl(value: string): string | null {
   return escapeHtml(trimmed);
 }
 
-function formatDate(iso: string, timezone: string, withTime: boolean): string {
+export function formatDate(iso: string, timezone: string, withTime: boolean): string {
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return iso;
   try {
@@ -196,6 +196,9 @@ function renderBrandLine(line: BriefPayload["brands"][number]): { html: string; 
     countPhrase(line.ad_delta, "new ad", "new ads"),
     countPhrase(line.mention_delta, "mention", "mentions"),
     countPhrase(line.site_change_count, "site change", "site changes"),
+    ...(line.new_roles > 0
+      ? [countPhrase(line.new_roles, "new job post", "new job posts")]
+      : []),
   ];
 
   const rankLabel = line.rank === null ? "unranked" : `#${n(line.rank)}`;

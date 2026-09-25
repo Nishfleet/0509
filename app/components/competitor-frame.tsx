@@ -1,6 +1,7 @@
 import type { ReactElement } from "react";
 
 import { EmptyState } from "./empty-state";
+import { CompetitorRail, type CompetitorRailProps } from "./competitor-rail";
 import { SiteChangeItem } from "./site-change-item";
 import type { SiteChangeItemData } from "./site-change-item";
 
@@ -13,6 +14,7 @@ export interface CompetitorFrameProps {
   pages: number;
   lastChecked: string | null;
   pausedOn: string | null;
+  rail: Omit<CompetitorRailProps, "lastChecked">;
 }
 
 export function developmentsEmpty(lastChecked: string | null): string {
@@ -38,6 +40,7 @@ export function CompetitorFrame({
   pages,
   lastChecked,
   pausedOn,
+  rail,
 }: CompetitorFrameProps): ReactElement {
   const biggest = changes.find((change) => change.id === biggestId) ?? null;
   return (
@@ -82,19 +85,7 @@ export function CompetitorFrame({
           )}
         </section>
       </div>
-      <aside data-slot="competitor-rail" className="flex min-w-0 flex-col gap-10">
-        <section data-section="sources" aria-labelledby="competitor-sources" className="min-w-0">
-          <h2 id="competitor-sources" className={HEADING}>
-            Sources on this brand
-          </h2>
-          <p className="font-display text-[1.02rem]">Website</p>
-          <p className="text-meta text-ink-soft">
-            {lastChecked === null
-              ? "Homepage, read every night. First read tonight at 02:00 UTC."
-              : `Homepage, read every night. Last read ${lastChecked}.`}
-          </p>
-        </section>
-      </aside>
+      <CompetitorRail {...rail} lastChecked={lastChecked} />
     </div>
   );
 }

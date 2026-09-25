@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { type BriefPayload } from "../../app/lib/brief-payload";
 import { renderBrief } from "../../workers/delivery/brief-template";
+import { pausedSentence } from "../../workers/standing/compose-brief";
 
 /**
  * The quiet week is the one block the brief is allowed to drop: an empty
@@ -37,6 +38,7 @@ function quiet(overrides: Partial<BriefPayload> = {}): BriefPayload {
         ad_delta: 3,
         mention_delta: 12,
         site_change_count: 1,
+        new_roles: 0,
       },
       {
         entity_id: "ent_self",
@@ -48,6 +50,7 @@ function quiet(overrides: Partial<BriefPayload> = {}): BriefPayload {
         ad_delta: 0,
         mention_delta: 4,
         site_change_count: 2,
+        new_roles: 0,
       },
       {
         entity_id: "ent_casetta",
@@ -59,6 +62,7 @@ function quiet(overrides: Partial<BriefPayload> = {}): BriefPayload {
         ad_delta: 4,
         mention_delta: 2,
         site_change_count: 6,
+        new_roles: 0,
       },
     ],
     own_site: { status: "ok", incidents: [] },
@@ -74,6 +78,22 @@ function quiet(overrides: Partial<BriefPayload> = {}): BriefPayload {
     ...overrides,
   };
 }
+
+describe("paused competitor sentences", () => {
+  it("returns null when no competitor paused", () => {
+    expect(pausedSentence([])).toBeNull();
+  });
+
+  it("uses singular movement language for one paused competitor", () => {
+    expect(pausedSentence(["Casetta"])).toBe("Casetta paused, so every brand below it moved up.");
+  });
+
+  it("lists multiple paused competitors in the order they paused", () => {
+    expect(pausedSentence(["Casetta", "Kindred", "Noul"])).toBe(
+      "Casetta, Kindred and Noul paused, so every brand below them moved up.",
+    );
+  });
+});
 
 describe("the quiet week brief", () => {
   it("still sends the headline and counts, and drops the empty read-this-first block", () => {

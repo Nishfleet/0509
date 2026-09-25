@@ -5,15 +5,26 @@ import { Link, redirect } from "react-router";
 
 import { DeleteAccount, SignOut } from "../components/account-settings";
 import { BriefScheduleSettings } from "../components/brief-schedule-settings";
+import { DeliveryAddress } from "../components/delivery-address";
+import { DismissedBrands } from "../components/dismissed-brands";
+import { OwnSiteAlertsSetting } from "../components/own-site-alerts-setting";
 import { BLOCK_HEADING, PAGE, PageHeading } from "../components/page-heading";
 import { AddPasskey } from "../components/passkey-button";
 import { deleteAccount } from "../lib/account-delete.server";
 import { oauthHelpersContext } from "../lib/agent/context.server";
 import { signOut } from "../lib/auth.server";
 import { nextBriefAt } from "../lib/brief-schedule";
-import { nextBriefLine, parseScheduleForm } from "../lib/brief-settings";
-import { readBriefScheduleForOwner, updateBriefSchedule } from "../lib/data/workspace.server";
+import { formatBriefAt, parseBriefSchedule } from "../lib/brief-settings";
+import { readDeliveryAddress, saveDeliveryAddress } from "../lib/delivery-address.server";
+import { readUserDismissed, restoreSuggestion } from "../lib/data/suggestion.server";
+import {
+  readBriefScheduleForOwner,
+  readOwnSiteAlerts,
+  readWorkspaceIdForOwner,
+  setOwnSiteAlerts,
+} from "../lib/data/workspace.server";
 import { requireSession } from "../lib/require-session.server";
+import { saveBriefSchedule } from "../lib/standing/reschedule.server";
 
 const MISMATCH = "That doesn't match your email. Type it exactly to delete your account.";
 const SIGN_IN_AGAIN = "For your safety, sign out and sign back in, then delete your account.";
@@ -28,8 +39,12 @@ export async function loader({ request }: Route.LoaderArgs) {
   const schedule =
     owned === null
       ? null
-      : { ...owned.schedule, nextLine: nextBriefLine(nextBriefAt(owned.schedule, new Date()), owned.schedule.timezone) };
-  return { email: session.user.email, schedule };
+      : { ...owned.schedule, nextLine: formatBriefAt(nextBriefAt(owned.schedule, new Date()), owned.schedule.timezone) };
+  const workspaceId = await readWorkspaceIdForOwner(session.user.id);
+  const ownSiteAlerts = workspaceId === null ? true : await readOwnSiteAlerts(workspaceId);
+  const dismissed = workspaceId === null ? [] : await readUserDismissed(workspaceId);
+  const deliveryAddress = await readDeliveryAddress(session.user.id, session.user.email);
+  return { email: session.user.email, schedule, ownSiteAlerts, dismissed, deliveryAddress };
 }
 
 export async function action({ request, context }: Route.ActionArgs) {
@@ -37,22 +52,46 @@ export async function action({ request, context }: Route.ActionArgs) {
   const form = await request.formData();
   const intent = form.get("intent");
 
+  if (intent === "own-site-alerts") {
+    const workspaceId = await readWorkspaceIdForOwner(session.user.id);
+    const next = form.get("value") === "on" ? true : form.get("value") === "off" ? false : null;
+    if (workspaceId === null || next === null) return { saved: false, deleteError: null, deliveryError: null, deliverySuppressed: false };
+    await setOwnSiteAlerts(workspaceId, next);
+    return { saved: true, deleteError: null, deliveryError: null, deliverySuppressed: false };
+  }
   if (intent === "sign-out") {
     throw redirect("/login", { headers: await signOut(env, request) });
+  }
+  if (intent === "delivery-address") {
+    const address = form.get("address");
+    const saved = await saveDeliveryAddress({
+      userId: session.user.id,
+      signInEmail: session.user.email,
+      address: typeof address === "string" ? address : "",
+      resume: form.get("resume") === "yes",
+    });
+    return { saved: null, deleteError: null, deliveryError: saved.error, deliverySuppressed: saved.suppressed };
   }
   if (intent === "delete-account") {
     const confirm = form.get("confirm");
     const typed = typeof confirm === "string" ? confirm.trim().toLowerCase() : "";
-    if (typed !== session.user.email.toLowerCase()) return { saved: null, deleteError: MISMATCH };
+    if (typed !== session.user.email.toLowerCase()) return { saved: null, deleteError: MISMATCH, deliveryError: null, deliverySuppressed: false };
     const headers = await deleteAccount(context.get(oauthHelpersContext), request, session.user.id);
-    if (headers === null) return { saved: null, deleteError: SIGN_IN_AGAIN };
+    if (headers === null) return { saved: null, deleteError: SIGN_IN_AGAIN, deliveryError: null, deliverySuppressed: false };
     throw redirect("/login", { headers });
   }
+  if (intent === "restore-suggestion") {
+    const workspaceId = await readWorkspaceIdForOwner(session.user.id);
+    const rawId = form.get("suggestionId");
+    const suggestionId = typeof rawId === "string" ? rawId.trim() : "";
+    if (workspaceId !== null && suggestionId !== "") await restoreSuggestion({ workspaceId, suggestionId });
+    return { saved: null, deleteError: null, deliveryError: null, deliverySuppressed: false };
+  }
   const owned = await readBriefScheduleForOwner(session.user.id);
-  const schedule = parseScheduleForm(form);
-  if (owned === null || schedule === null) return { saved: false, deleteError: null };
-  await updateBriefSchedule(owned.workspaceId, schedule);
-  return { saved: true, deleteError: null };
+  const schedule = parseBriefSchedule({ weekday: form.get("weekday"), hour: form.get("hour"), timezone: form.get("timezone") });
+  if (owned === null || schedule === null) return { saved: false, deleteError: null, deliveryError: null, deliverySuppressed: false };
+  await saveBriefSchedule(owned.workspaceId, owned.schedule, schedule);
+  return { saved: true, deleteError: null, deliveryError: null, deliverySuppressed: false };
 }
 
 const BLOCK = "border-line mt-10 border-t pt-4";
@@ -70,6 +109,8 @@ export default function Page({ loaderData, actionData }: Route.ComponentProps) {
           <BriefScheduleSettings schedule={loaderData.schedule} />
         </section>
       )}
+      <OwnSiteAlertsSetting on={loaderData.ownSiteAlerts} />
+      <DismissedBrands dismissed={loaderData.dismissed} />
       <section aria-labelledby="settings-agents" className={BLOCK}>
         <h2 id="settings-agents" className={BLOCK_HEADING}>
           Agents and API
@@ -92,6 +133,11 @@ export default function Page({ loaderData, actionData }: Route.ComponentProps) {
         <p className="mt-2 leading-[1.55] [overflow-wrap:anywhere]">
           Signed in as <strong className="font-semibold">{loaderData.email}</strong>
         </p>
+        <DeliveryAddress
+          address={loaderData.deliveryAddress}
+          error={actionData?.deliveryError ?? null}
+          suppressed={actionData?.deliverySuppressed ?? false}
+        />
         <div className="mt-2 flex flex-wrap items-start gap-x-6">
           <AddPasskey />
           <SignOut />

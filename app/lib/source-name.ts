@@ -1,17 +1,23 @@
 const PLATFORM_NAMES: Readonly<Record<string, string>> = {
   amazon: "Amazon",
   apple: "Apple",
+  ashby: "Ashby",
   gdelt: "News",
   google: "Google",
   greenhouse: "Greenhouse",
   hn: "Hacker News",
+  lever: "Lever",
   linkedin: "LinkedIn",
+  medium: "Medium",
   meta: "Meta",
   pinterest: "Pinterest",
   reddit: "Reddit",
+  smartrecruiters: "SmartRecruiters",
   snap: "Snapchat",
   tiktok: "TikTok",
+  workable: "Workable",
   x: "X",
+  youtube: "YouTube",
 };
 
 const KIND_NOUNS: Readonly<Record<string, string>> = {

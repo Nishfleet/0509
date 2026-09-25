@@ -46,11 +46,11 @@ export const COVERAGE = [
     noun: "news mentions",
     origin: "news and public posts",
     sources: [
-      { id: "mentions.news", label: "News", live: false },
-      { id: "mentions.hn", label: "Hacker News", live: false },
+      { id: "mentions.news", label: "News", live: true, sourceKey: "gdelt.doc" },
+      { id: "mentions.hn", label: "Hacker News", live: true, sourceKey: "hn.algolia" },
       { id: "mentions.reddit", label: "Reddit", live: false },
       { id: "mentions.medium", label: "Medium", live: false },
-      { id: "mentions.youtube", label: "YouTube", live: false },
+      { id: "mentions.youtube", label: "YouTube", live: true, sourceKey: "youtube.channel_rss" },
     ],
   },
   {

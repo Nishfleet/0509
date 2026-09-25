@@ -41,8 +41,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-node@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
         with:
           node-version: 22
           cache: npm
@@ -75,13 +75,13 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
           fetch-depth: 0
       # The gitleaks BINARY is MIT and free; gitleaks-action@v2 is the part
       # that demands an organisation licence and aborts without one. Run the
       # official image directly — no wrapper action, no script.
-      - uses: docker://ghcr.io/gitleaks/gitleaks:v8.29.0
+      - uses: docker://ghcr.io/gitleaks/gitleaks:v8.29.0@sha256:71d3ee5990f2176f763b438298453fc37e87b119122045e176ca9d44ff00b08b
         with:
           args: detect --source . --redact --exit-code 1
 
@@ -94,9 +94,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     container:
-      image: semgrep/semgrep
+      image: semgrep/semgrep:1.170.0@sha256:c98f8829eea377274ee4b10656458b078b88232469b2ff913f091c2317347c9d
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
       # `semgrep ci` is the hosted mode and needs SEMGREP_APP_TOKEN, exiting 2
       # without one. `semgrep scan` is the local mode and needs nothing.
       - run: semgrep scan --config p/typescript --config p/security-audit --error
@@ -109,8 +109,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-node@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
         with:
           node-version: 22
           cache: npm
@@ -139,7 +139,10 @@ jobs:
         # A per-process port, like playwright.config.ts: the fleet-ci runners share
         # this host with worker checkouts that run wrangler dev too (merge-group runs
         # 35746786576, 35748807411: "Address already in use").
-        run: P=$((18000 + $$ % 1000)); npx --yes @lhci/cli@0.15.1 collect --url=http://127.0.0.1:$P/ --start-server-command="npx wrangler dev --port $P --local" --start-server-ready-pattern="Ready on" --start-server-ready-timeout=120000 --number-of-runs=3
+        # / is a static asset, so it never enters the Worker. /design/landing does,
+        # and the Worker answers 503 until BETTER_AUTH_SECRET is present (run
+        # 36060236500). Same --env-file as playwright.config.ts.
+        run: P=$((18000 + $$ % 1000)); npx --yes @lhci/cli@0.15.1 collect --url=http://127.0.0.1:$P/ --url=http://127.0.0.1:$P/design/landing --start-server-command="npx wrangler dev --env-file .dev.vars.example --port $P --local" --start-server-ready-pattern="Ready on" --start-server-ready-timeout=120000 --number-of-runs=3
 
       - name: Assert the Lighthouse budgets
         # lighthouse-budget.pr.json is the deterministic subset of lighthouse-budget.json:
@@ -151,7 +154,7 @@ jobs:
 
       - name: Keep the trace when it fails
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: playwright-report-preview
           path: playwright-report/
@@ -167,9 +170,10 @@ jobs:
     permissions:
       contents: read
       issues: write
+      actions: write
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-node@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
         with:
           node-version: 22
           cache: npm
@@ -190,25 +194,39 @@ jobs:
 
       - name: Keep the trace when it fails
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: playwright-report-production
           path: playwright-report/
           retention-days: 7
       - name: Open or update the issue that dispatches the fix
         if: failure()
+        id: red
+        uses: JasonEtco/create-an-issue@1b14a70e4d8dc185e5cc76d3bec9eab20257b2c5 # v2.9.2
         env:
-          GH_TOKEN: ${{ github.token }}
+          GITHUB_TOKEN: ${{ github.token }}
           SHA: ${{ github.event.deployment.sha }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        with:
+          filename: .github/red-main/e2e-production.md
+          update_existing: true
+          search_existing: open
+      - name: Hand the issue to a worker
+        # A GITHUB_TOKEN label fires no workflow, so dispatch by number;
+        # agent.yml's Gate sizes it. needs-split alone left #4620 unworked.
+        if: failure() && steps.red.outputs.number
+        env:
+          GH_TOKEN: ${{ github.token }}
+          N: ${{ steps.red.outputs.number }}
+        run: gh workflow run agent-dispatch.yml --repo "$GITHUB_REPOSITORY" -f issue="$N"
+      - name: Close the issue once this check is green again
+        if: success()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
-          TITLE="e2e-production red on main"
-          FAILED=$(jq -r '.. | objects | select(has("specs")) | .specs[] | select(.ok == false) | "- `\(.file)`: \(.title)"' playwright-report/results.json || echo "- no results.json: the job failed before the suite ran")
-          FILES=$(jq -r '[.. | objects | select(has("specs")) | .specs[] | select(.ok == false) | .file] | unique | .[]' playwright-report/results.json || true)
-          ROWS=$(printf '%s\n' "$FILES" | grep -v '^$' | grep -F -f - .agents/skills/verify/feature-map.md | cut -d'|' -f2 || true)
-          BODY=$(printf 'Run: %s\nHead: %s\nArtifact: playwright-report-production on that run\n\nFailing tests:\n%s\n\nFeature-map rows (.agents/skills/verify/feature-map.md):\n%s\n\nPacket rule: reproduce the failure with the verify skill (.agents/skills/verify/) against https://0509.io before changing code, and paste that run in the PR.\n' "$RUN_URL" "$SHA" "$FAILED" "$ROWS")
-          N=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search "\"$TITLE\" in:title" --json number --jq '.[0].number // empty')
-          if [ -n "$N" ]; then gh issue comment "$N" --repo "$GITHUB_REPOSITORY" --body "$BODY"; else gh issue create --repo "$GITHUB_REPOSITORY" --title "$TITLE" --label needs-split --label critical-path --body "$BODY"; fi
+          N=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search '"e2e-production red on main" in:title' --json number --jq '.[0].number // empty')
+          [ -z "$N" ] || gh issue close "$N" --repo "$GITHUB_REPOSITORY" --reason completed --comment "Green again on $RUN_URL."
 
   lighthouse:
     name: lighthouse
@@ -224,8 +242,9 @@ jobs:
     permissions:
       contents: read
       issues: write
+      actions: write
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
       - name: Exchange the Access service token for the CF_Authorization cookie
         # Access issues the cookie on a token-authenticated request; grep prints
         # it as NAME=value, which is exactly the GITHUB_ENV line format.
@@ -246,18 +265,33 @@ jobs:
           temporaryPublicStorage: true
       - name: Open or update the issue that dispatches the fix
         if: failure()
+        id: red
+        uses: JasonEtco/create-an-issue@1b14a70e4d8dc185e5cc76d3bec9eab20257b2c5 # v2.9.2
         env:
-          GH_TOKEN: ${{ github.token }}
+          GITHUB_TOKEN: ${{ github.token }}
           SHA: ${{ github.event.deployment.sha }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-          ASSERTIONS: ${{ steps.lhci.outputs.assertionResults }}
           LINKS: ${{ steps.lhci.outputs.links }}
+        with:
+          filename: .github/red-main/lighthouse.md
+          update_existing: true
+          search_existing: open
+      - name: Hand the issue to a worker
+        # A GITHUB_TOKEN label fires no workflow, so dispatch by number;
+        # agent.yml's Gate sizes it. needs-split alone left #4620 unworked.
+        if: failure() && steps.red.outputs.number
+        env:
+          GH_TOKEN: ${{ github.token }}
+          N: ${{ steps.red.outputs.number }}
+        run: gh workflow run agent-dispatch.yml --repo "$GITHUB_REPOSITORY" -f issue="$N"
+      - name: Close the issue once this check is green again
+        if: success()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
-          TITLE="lighthouse red on main"
-          FAILED=$(printf '%s' "$ASSERTIONS" | jq -r '.[] | "- \(.auditId) \(.auditProperty // ""): actual \(.actual), budget \(.expected)"' || echo "- no assertion results: the job failed before the audit ran")
-          BODY=$(printf "Run: %s\nHead: %s\nReport: %s\n\nFailed budgets (lighthouse-budget.json):\n%s\n\nFeature-map row (.agents/skills/verify/feature-map.md): \`/\`, the audited URL.\n\nPacket rule: reproduce the failure with the verify skill (.agents/skills/verify/) against https://0509.io before changing code, and paste that run in the PR.\n" "$RUN_URL" "$SHA" "$LINKS" "$FAILED")
-          N=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search "\"$TITLE\" in:title" --json number --jq '.[0].number // empty')
-          if [ -n "$N" ]; then gh issue comment "$N" --repo "$GITHUB_REPOSITORY" --body "$BODY"; else gh issue create --repo "$GITHUB_REPOSITORY" --title "$TITLE" --label needs-split --label critical-path --body "$BODY"; fi
+          N=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search '"lighthouse red on main" in:title' --json number --jq '.[0].number // empty')
+          [ -z "$N" ] || gh issue close "$N" --repo "$GITHUB_REPOSITORY" --reason completed --comment "Green again on $RUN_URL."
 
   # Opus 5 grades every PR (Nish 2026-09-22: "have opus 5 grade glm and ds4.1
   # flash"). Stock anthropics/claude-code-action on the Claude subscription
@@ -283,7 +317,7 @@ jobs:
       issues: write
       id-token: write
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         if: github.event_name == 'pull_request'
         with:
           fetch-depth: 1

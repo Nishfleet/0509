@@ -40,10 +40,10 @@ Decisions recorded on 0509#3927 (2026-09-22):
   shipped in #3963 ("Add a passkey" on `/app`, "Sign in with a passkey" on
   `/login`), and `e2e/j2-passkey.spec.ts` drives those real buttons through
   the virtual authenticator — the wire shape is better-auth's client, not
-  bytes the spec constructed. Sign-out has no UI affordance yet, so the spec
-  ends the session through better-auth's real `POST /api/auth/sign-out` and
-  proves it by the `/app` → `/login` redirect before the passkey-only
-  sign-in.
+  bytes the spec constructed. Sign-out is the real **Sign out** button on
+  `/app/settings` (better-auth's `signOut`); the spec clicks it and proves the
+  session ended by the `/app` → `/login` redirect before the passkey-only
+  sign-in, with no console errors, at 1440 and 390.
 
 ## B. Quality gates (each is a number, measured on production)
 

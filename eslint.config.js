@@ -15,6 +15,12 @@ const CLOUDFLARE_WORKERS_IMPORT = {
     "cloudflare:workers is a Workers runtime module and does not exist in the browser. Bindings are read in *.server modules and passed down. Source: commit 7727bf787 / #3918.",
 };
 
+const FULL_ZOD_IMPORT = {
+  name: "zod",
+  message:
+    "app/components/ ships to the browser; full zod costs about 13 KB gzipped per object schema there. Import from \"zod/mini\" instead (docs/REBUILD-STACK.md, zod). Source: 0509#4134.",
+};
+
 const PAVED_PATH_PATTERNS = [
   {
     group: ["better-auth/*", "@better-auth/passkey/*", "@better-auth/api-key/*"],
@@ -29,12 +35,28 @@ const SONNER_IMPORT = {
     "sonner is imported in exactly one module, app/components/toaster.tsx, which owns every toast() call behind toastSaved(). DESIGN.md §11: toasts are only 'saved' and 'undo' — a second import site is a second toast authority. Source: 0509#4116.",
 };
 
-const ONE_PAVED_PATH_IMPORTS = [
+const FAST_XML_PARSER_IMPORT = {
+  name: "fast-xml-parser",
+  message:
+    "Feed XML is parsed only by @extractus/feed-extractor in workers/sources/mentions/feed.ts. A direct fast-xml-parser import is a second parser. Source: 0509#4051.",
+};
+
+const UNSCOPED_WRITER_MESSAGE =
+  "Unscoped system writer: this writer updates by id alone, with no workspace_id, because only workers and workflows call it. A route importing it is a cross-workspace write. Routes go through a workspace-scoped writer instead. Source: 0509#4705.";
+
+const UNSCOPED_WRITER_PATTERNS = [
   {
-    name: "kysely",
-    message:
-      "kysely is imported in exactly one module, app/lib/db.server.ts, which exports the one query builder instance. One data layer, one connection, one place to change. docs/REBUILD-TRUST.md C4. Source: talk 25:26 (a single paved path per blessed pattern).",
+    group: [
+      "**/data/send_attempt.server",
+      "**/data/watch.server",
+      "**/data/incident.server",
+      "**/data/snapshot.server",
+    ],
+    message: UNSCOPED_WRITER_MESSAGE,
   },
+];
+
+const ONE_PAVED_PATH_IMPORTS = [
   {
     name: "better-auth",
     message:
@@ -49,6 +71,7 @@ const ONE_PAVED_PATH_IMPORTS = [
     message: "Same paved path as better-auth: app/lib/auth.server.ts only.",
   },
   SONNER_IMPORT,
+  FAST_XML_PARSER_IMPORT,
 ];
 
 const SUPPORT_ADDRESS_BAN = {
@@ -69,12 +92,26 @@ const CATCH_RETURNS_NULL = {
   selector:
     "CatchClause > BlockStatement[body.length=1] > ReturnStatement[argument.value=null]",
   message:
-    "A catch whose only statement is `return null` swallows the error, so a thrown fetch or a bug fails as silently as a real 'not found'. Give the clause an error binding and a logged failure path (or rethrow). Grandfathered sites are listed by name in the exemption block below until each grows one. Source: 0509#4462.",
+    "A catch whose only statement is `return null` swallows the error, so a thrown fetch or a bug fails as silently as a real 'not found'. Give the clause an error binding and a logged failure path (or rethrow). Source: 0509#4462.",
+};
+
+const FEED_STATE_LITERAL = {
+  selector:
+    "ObjectExpression > Property[key.name='feedState'][value.value=/^(ok|stale|error)$/]",
+  message:
+    "Only workers/sources/mentions/youtube.ts may build a YouTube feedState. commitYoutubeFeed accepts OkYoutubeFeed alone, so a stale or error feed cannot be stored as zero videos. Source: 0509#4051.",
+};
+
+const XML_PARSER_CONSTRUCTOR = {
+  selector: "NewExpression[callee.name='XMLParser']",
+  message:
+    "Feed XML is parsed only by @extractus/feed-extractor in workers/sources/mentions/feed.ts. A second XMLParser is a second feed path. Source: 0509#4051.",
 };
 
 const BANNED_SYNTAX = [
   SUPPORT_ADDRESS_BAN,
   CATCH_RETURNS_NULL,
+  XML_PARSER_CONSTRUCTOR,
   {
     selector: "NewExpression[callee.name='RegExp'] > Literal.arguments, NewExpression[callee.name='RegExp'] > TemplateLiteral",
     message:
@@ -105,11 +142,16 @@ const BANNED_SYNTAX = [
 const DML_WRITE_SHAPE =
   "INSERT(\\s+OR\\s+\\w+)?\\s+INTO|REPLACE\\s+INTO|UPDATE\\s+[\\w\".]+\\s+SET\\s+[\\w\".]+\\s*=|DELETE\\s+FROM";
 
-// Anchored at statement start, where a bare `UPDATE ` is already unambiguous,
-// plus `WITH`-led writes (a CTE can head INSERT/UPDATE/DELETE; a `WITH …
-// SELECT` read stays allowed because the inner shape must still match).
+// The same shapes anchored at statement start, plus `WITH`-led writes (a CTE
+// can head INSERT/UPDATE/DELETE; a `WITH … SELECT` read stays allowed because
+// the inner shape must still match). The UPDATE arm carries the table-then-SET
+// tail too: a bare `UPDATE\s` under the leading anchor only fixed position,
+// not shape, so prose literals like "Update saved" tripped the gate
+// (0509#4383). The `$` alternative is load-bearing for an interpolated table —
+// `UPDATE ${table} SET …` has `"UPDATE "` as its whole first quasi, which the
+// table-then-SET tail cannot span but end-of-quasi can.
 const RAW_DML_START =
-  `^\\s*(INSERT(\\s+OR\\s+\\w+)?\\s+INTO|REPLACE\\s+INTO|UPDATE\\s|DELETE\\s+FROM` +
+  `^\\s*(INSERT(\\s+OR\\s+\\w+)?\\s+INTO|REPLACE\\s+INTO|UPDATE\\s+([\\w".]+\\s+SET\\b|$)|DELETE\\s+FROM` +
   `|WITH\\b[\\s\\S]*\\b(${DML_WRITE_SHAPE}))`;
 
 const RAW_DML_WRITER = {
@@ -212,7 +254,7 @@ export default tseslint.config(
         "error",
         { terms: WORKAROUND_TERMS, location: "anywhere" },
       ],
-      "no-restricted-syntax": ["error", ...BANNED_SYNTAX],
+      "no-restricted-syntax": ["error", ...BANNED_SYNTAX, FEED_STATE_LITERAL],
     },
   },
 
@@ -220,9 +262,10 @@ export default tseslint.config(
     // The writer rule fires on the DML statement text, not a call shape: this
     // repo keeps its SQL in module constants (0509#4313), so matching only a
     // prepare(<literal>) argument would stay green while a second writer
-    // exists. app/lib/data/** is the paved path. workers/e2e-inbox.ts writes
-    // to its own Durable Object sqlite via ctx.storage.sql — never env.DB —
-    // so it sits outside this rule's scope by kind, not by exemption. The
+    // exists. app/lib/data/** is the paved path. workers/e2e-inbox.ts and
+    // workers/fixture-site.ts write their own Durable Object sqlite via
+    // ctx.storage.sql — never env.DB — so they sit outside this rule's scope by
+    // kind, not by exemption. The
     // selector covers INSERT OR <conflict> INTO, REPLACE INTO and WITH-led
     // writes, not only a leading INSERT INTO/UPDATE/DELETE FROM.
     // A later matching block's no-restricted-syntax entry replaces the
@@ -230,9 +273,9 @@ export default tseslint.config(
     // array — which is why this array restates BANNED_SYNTAX instead of
     // appending.
     files: ["app/**/*.{ts,tsx}", "workers/**/*.ts"],
-    ignores: ["app/lib/data/**", "workers/e2e-inbox.ts"],
+    ignores: ["app/lib/data/**", "workers/e2e-inbox.ts", "workers/fixture-site.ts"],
     rules: {
-      "no-restricted-syntax": ["error", ...BANNED_SYNTAX, RAW_DML_WRITER],
+      "no-restricted-syntax": ["error", ...BANNED_SYNTAX, RAW_DML_WRITER, FEED_STATE_LITERAL],
     },
   },
 
@@ -245,39 +288,7 @@ export default tseslint.config(
         "error",
         ...BANNED_SYNTAX.filter((rule) => rule !== SUPPORT_ADDRESS_BAN),
         RAW_DML_WRITER,
-      ],
-    },
-  },
-
-  {
-    // Bare `catch { return null }` is banned everywhere via CATCH_RETURNS_NULL
-    // (in BANNED_SYNTAX). These clauses predate the rule and each is an
-    // intentional value-on-failure contract, so they are grandfathered by name
-    // until each grows a logged failure path — the same carve-out 0509#4422
-    // named for app/lib/identity/name-cascade.ts (the D grade on PR #4457,
-    // REBUILD-TRUST.md C1 Q1). A file is only exempt if it is listed here, so a
-    // NEW bare catch still fails; tests/eslint-catch-null-rule.test.ts proves
-    // both. A follow-up issue tracks converting each site to a logged failure
-    // path so it can be dropped from this list. Flat config replaces a rule's
-    // option array wholesale (see the RAW_DML block above), so this restates
-    // BANNED_SYNTAX minus CATCH_RETURNS_NULL plus RAW_DML_WRITER — every other
-    // ban is preserved and only the catch clause is lifted. Source: 0509#4462.
-    files: [
-      "app/lib/identity/name-cascade.ts",
-      "app/lib/identity/extract.ts",
-      "app/lib/hiring/discover-board.ts",
-      "app/lib/discovery/generators/news.ts",
-      "app/lib/discovery/generators/hn.ts",
-      "app/lib/brief-payload.ts",
-      "app/components/mark.tsx",
-      "app/components/brand-chip.tsx",
-      "workers/delivery/consumer.ts",
-    ],
-    rules: {
-      "no-restricted-syntax": [
-        "error",
-        ...BANNED_SYNTAX.filter((rule) => rule !== CATCH_RETURNS_NULL),
-        RAW_DML_WRITER,
+        FEED_STATE_LITERAL,
       ],
     },
   },
@@ -285,7 +296,6 @@ export default tseslint.config(
   {
     files: ["app/**/*.{ts,tsx}", "workers/**/*.ts"],
     ignores: [
-      "app/lib/db.server.ts",
       "app/lib/auth.server.ts",
       "app/lib/auth-client.ts",
       "app/components/toaster.tsx",
@@ -320,6 +330,20 @@ export default tseslint.config(
   },
 
   {
+    files: ["app/components/**/*.{ts,tsx}"],
+    ignores: ["app/components/toaster.tsx"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          paths: [...ONE_PAVED_PATH_IMPORTS, CLOUDFLARE_WORKERS_IMPORT, FULL_ZOD_IMPORT],
+          patterns: PAVED_PATH_PATTERNS,
+        },
+      ],
+    },
+  },
+
+  {
     files: ["app/lib/auth-client.ts"],
     rules: {
       "no-restricted-imports": [
@@ -340,7 +364,25 @@ export default tseslint.config(
           paths: [
             ...ONE_PAVED_PATH_IMPORTS.filter((p) => p !== SONNER_IMPORT),
             CLOUDFLARE_WORKERS_IMPORT,
+            FULL_ZOD_IMPORT,
           ],
+        },
+      ],
+    },
+  },
+
+  // Flat config replaces a rule's options wholesale, so this block restates
+  // ONE_PAVED_PATH_IMPORTS and PAVED_PATH_PATTERNS — a block with only the
+  // new pattern would silently drop the better-auth/sonner bans for routes.
+  // Source: 0509#4705.
+  {
+    files: ["app/routes/**/*.{ts,tsx}", "app/root.tsx"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          paths: ONE_PAVED_PATH_IMPORTS,
+          patterns: [...PAVED_PATH_PATTERNS, ...UNSCOPED_WRITER_PATTERNS],
         },
       ],
     },
@@ -369,7 +411,6 @@ export default tseslint.config(
         { type: "worker", pattern: "workers", partialMatch: false },
       ],
       "boundaries/files": [
-        { category: "db", pattern: "app/lib/db.server.ts" },
         { category: "auth", pattern: "app/lib/auth.server.ts" },
         { category: "data-writer", pattern: "app/lib/data/**/*.server.ts" },
         { category: "server-leaf", pattern: "app/lib/**/*.server.ts" },
@@ -421,7 +462,7 @@ export default tseslint.config(
                 to: [
                   { element: { type: "component" } },
                   { element: { type: "data-writer" } },
-                  { file: { categories: { anyOf: ["server-leaf", "db", "auth"] } } },
+                  { file: { categories: { anyOf: ["server-leaf", "auth"] } } },
                 ],
               },
             },
@@ -439,13 +480,13 @@ export default tseslint.config(
                 file: {
                   categories: {
                     anyOf: ["server-leaf"],
-                    noneOf: ["data-writer", "db", "auth"],
+                    noneOf: ["data-writer", "auth"],
                   },
                 },
               },
               allow: {
                 to: {
-                  file: { categories: { anyOf: ["server-leaf", "data-writer", "db", "auth"] } },
+                  file: { categories: { anyOf: ["server-leaf", "data-writer", "auth"] } },
                 },
               },
             },
@@ -455,7 +496,7 @@ export default tseslint.config(
                 to: {
                   file: {
                     categories: {
-                      anyOf: ["data-writer", "db", "server-leaf"],
+                      anyOf: ["data-writer", "server-leaf"],
                       noneOf: ["auth"],
                     },
                   },
@@ -466,7 +507,7 @@ export default tseslint.config(
               from: { file: { categories: "auth" } },
               allow: {
                 to: [
-                  { file: { categories: { anyOf: ["server-leaf", "data-writer", "db"] } } },
+                  { file: { categories: { anyOf: ["server-leaf", "data-writer"] } } },
                   { element: { type: "worker" } },
                 ],
               },
@@ -508,7 +549,20 @@ export default tseslint.config(
     files: ["app/routes/**/*.{ts,tsx}"],
     rules: {
       "max-lines": ["error", { max: 150, skipBlankLines: false, skipComments: false }],
-      "no-restricted-syntax": ["error", ...BANNED_SYNTAX, RAW_DML_WRITER, ENV_DB_IN_ROUTES],
+      "no-restricted-syntax": [
+        "error",
+        ...BANNED_SYNTAX,
+        RAW_DML_WRITER,
+        ENV_DB_IN_ROUTES,
+        FEED_STATE_LITERAL,
+      ],
+    },
+  },
+
+  {
+    files: ["workers/sources/mentions/youtube.ts"],
+    rules: {
+      "no-restricted-syntax": ["error", ...BANNED_SYNTAX, RAW_DML_WRITER],
     },
   },
 

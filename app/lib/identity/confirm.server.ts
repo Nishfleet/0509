@@ -1,8 +1,12 @@
 import { z } from "zod";
 
-import { insertSelfEntity } from "../data/entity.server";
-import { startDiscovery } from "../discovery/start.server";
-import { normaliseSubject } from "./normalise";
+import { insertSelfEntity, readWorkspaceSelfId } from "../data/entity.server";
+import { readUrl } from "../fetch/transport.server";
+import { extractIdentity } from "./extract";
+import { readLogo } from "./logo-store.server";
+import { normaliseSubject, type Subject } from "./normalise";
+import { classifyNavPages } from "./page-role.server";
+import { startIdentityTail } from "./tail.server";
 
 const SOCIAL_PREFIX = "social.";
 
@@ -14,7 +18,6 @@ const confirmSchema = z.object({
   subject: z.string(),
   name: z.string().trim().min(1).max(120),
   description: z.string().trim().max(500),
-  logo: z.union([webUrl, z.literal("")]),
   socials: socialsSchema,
 });
 
@@ -29,12 +32,35 @@ function field(form: FormData, name: string): string {
   return typeof value === "string" ? value : "";
 }
 
+async function classifyConfirmedSite(
+  workspaceId: string,
+  subject: Subject,
+  entityId: string,
+  now: Date,
+): Promise<void> {
+  if (subject.kind !== "domain" || subject.url === null) return;
+  try {
+    const page = await readUrl(subject.url);
+    if (!page.ok) {
+      console.log(
+        JSON.stringify({ event: "identity-page-role-skipped", subject: subject.registrable, error: page.detail }),
+      );
+      return;
+    }
+    const extract = await extractIdentity(page.html, subject.url);
+    await classifyNavPages(workspaceId, { id: entityId, domain: subject.registrable }, extract.navPages, now.toISOString());
+  } catch (error) {
+    console.log(
+      JSON.stringify({ event: "identity-page-role-skipped", subject: subject.registrable, error: String(error) }),
+    );
+  }
+}
+
 export async function confirmCard(workspaceId: string, form: FormData): Promise<boolean> {
   const parsed = confirmSchema.safeParse({
     subject: field(form, "subject"),
     name: field(form, "name"),
     description: field(form, "description"),
-    logo: field(form, "logo"),
     socials: socials(form),
   });
   if (!parsed.success) return false;
@@ -42,9 +68,11 @@ export async function confirmCard(workspaceId: string, form: FormData): Promise<
   if (!normalised.ok) return false;
   const { subject } = normalised;
   const card = parsed.data;
+  const id = crypto.randomUUID();
+  const logoUrl = (await readLogo(subject.registrable)) !== null ? `/app/logos/${id}` : null;
   const now = new Date();
   await insertSelfEntity({
-    id: crypto.randomUUID(),
+    id,
     workspaceId,
     domain: subject.registrable,
     name: card.name,
@@ -53,11 +81,20 @@ export async function confirmCard(workspaceId: string, form: FormData): Promise<
       platform: subject.platform ?? null,
       url: subject.url,
       description: card.description === "" ? null : card.description,
-      logoUrl: card.logo === "" ? null : card.logo,
+      logoUrl,
       socials: card.socials,
     }),
     now: now.toISOString(),
   });
-  await startDiscovery(workspaceId, now);
+  const entityId = await readWorkspaceSelfId(workspaceId);
+  if (entityId === null) return false;
+  await classifyConfirmedSite(workspaceId, subject, entityId, now);
+  await startIdentityTail({
+    workspaceId,
+    entityId,
+    name: card.name,
+    domain: subject.registrable,
+    homepageUrl: subject.kind === "domain" ? subject.url : null,
+  });
   return true;
 }

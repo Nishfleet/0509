@@ -1,37 +1,63 @@
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { describe, expect, it } from "vitest";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import { createRoutesStub } from "react-router";
+import { describe, expect, it, vi } from "vitest";
 
-// The deployment_status lighthouse job grades https://0509.io/ against a 1500ms
-// LCP budget on simulated 4G. Run 35826214144 measured the h1 at 1756ms because
-// the headline waited on a second request for the 77KB display face. The
-// landing document has to carry its own faces, or that round trip comes back.
+vi.mock("../../app/lib/auth.server", () => ({
+  hasSessionCookie: () => false,
+}));
+
+vi.mock("cloudflare:workers", () => ({ env: {} }));
+
+import { Layout } from "../../app/root";
+import Landing from "../../app/routes/landing";
 
 const REPO_ROOT = dirname(dirname(dirname(fileURLToPath(import.meta.url))));
-const html = readFileSync(join(REPO_ROOT, "public/index.html"), "utf8");
+
+function renderDocument(id: string): string {
+  const Stub = createRoutesStub([
+    {
+      id,
+      path: "/",
+      Component: () => createElement(Layout, null, createElement(Landing, { loaderData: { ticker: [] } })),
+    },
+  ]);
+  return renderToStaticMarkup(createElement(Stub, { initialEntries: ["/"] }));
+}
 
 describe("landing LCP critical path", () => {
-  it("ships the three landing faces inside the document", () => {
-    const faces = [...html.matchAll(/data:font\/woff2;base64,([A-Za-z0-9+/=]+)/g)];
-    expect(faces).toHaveLength(3);
-    for (const face of faces) {
-      const bytes = Buffer.from(face[1], "base64");
-      expect(bytes.subarray(0, 4).toString("ascii")).toBe("wOF2");
-      // The full Bricolage file is 77KB. A face this large is the round trip
-      // the budget cannot afford, even after base64.
-      expect(bytes.length).toBeLessThan(12_000);
-    }
-    expect(Buffer.byteLength(html)).toBeLessThan(40_000);
+  it("paints the headline from the server markup without a module script", () => {
+    const html = renderDocument("routes/landing");
+    expect(html).toContain("Know where you stand.");
+    expect(html).toContain('rel="preload"');
+    expect(html).toContain("/fonts/bricolage-hero.woff2");
+    expect(html).not.toContain("bricolage-grotesque-latin");
+    expect(html).not.toContain("instrument-sans");
+    expect(html).not.toContain('type="module"');
+    expect(html).not.toContain("modulepreload");
   });
 
-  it("does not request a stylesheet or a font file before first paint", () => {
-    expect(html).not.toContain("/fonts/");
-    expect(html).not.toContain("landing.css");
-    expect(html).not.toContain('rel="stylesheet"');
-    expect(html).not.toContain('rel="preload"');
-    expect(html).toContain('font-family: "Bricolage Grotesque"');
-    expect(html).toContain('font-family: "Instrument Sans"');
-    expect(html).toContain('font-family: "IBM Plex Mono"');
+  it("still ships the module script and the body face on every other document", () => {
+    const html = renderDocument("routes/login");
+    expect(html).toContain("<script");
+    expect(html).toContain("/fonts/instrument-sans-latin.woff2");
+    expect(html).toContain("/fonts/bricolage-hero.woff2");
+  });
+
+  it("keeps the headline face small and the text faces in the one stylesheet", () => {
+    const css = readFileSync(join(REPO_ROOT, "app/app.css"), "utf8");
+    for (const family of ["Bricolage Grotesque", "Instrument Sans", "IBM Plex Mono"]) {
+      expect(css).toContain(`font-family: "${family}"`);
+    }
+    expect(css).toContain("/fonts/bricolage-hero.woff2");
+    expect(css).toContain("/fonts/instrument-sans-latin.woff2");
+    expect(css).toContain("/fonts/ibm-plex-mono-latin-400.woff2");
+    expect(css).toContain("/fonts/ibm-plex-mono-latin-500.woff2");
+    const shipped = readFileSync(join(REPO_ROOT, "public/fonts/bricolage-hero.woff2"));
+    expect(shipped.subarray(0, 4).toString("ascii")).toBe("wOF2");
+    expect(shipped.length).toBeLessThan(12_000);
   });
 });

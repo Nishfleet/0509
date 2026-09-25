@@ -1,5 +1,8 @@
 import type { CSSProperties, ReactElement } from "react";
 
+import { readWatchConfig } from "../lib/mentions/youtube-channel";
+import { shortUtc } from "../lib/short-utc";
+
 export interface SourceRow {
   key: string;
   platform: string;
@@ -8,6 +11,7 @@ export interface SourceRow {
   degraded_reason?: string | null;
   last_good_at?: string | null;
   config_json?: string | null;
+  watch_config_json?: string | null;
 }
 
 export interface SourceSnapshot {
@@ -53,6 +57,13 @@ export function sourcePillStatus(
       configReason ??
       (snapshot?.canary_count === 0 ? "not answering" : "no reason recorded");
     return { state: "degraded", reason, lastGoodAt };
+  }
+  const watchConfig = readWatchConfig(source.watch_config_json);
+  if (watchConfig.status === "unreadable") {
+    return { state: "degraded", reason: "watch config is unreadable", lastGoodAt: null };
+  }
+  if (watchConfig.degraded !== null) {
+    return { state: "degraded", reason: watchConfig.degraded.reason, lastGoodAt: watchConfig.degraded.at };
   }
   const fetchedAt = snapshot === null ? null : blankToNull(snapshot.fetched_at);
   const fetchedMs = fetchedAt === null ? Number.NaN : Date.parse(fetchedAt);
@@ -143,9 +154,5 @@ function configString(config: Record<string, unknown>, key: string): string | nu
 
 function lastGoodLabel(value: string | null): string | null {
   if (value === null) return null;
-  const ms = Date.parse(value);
-  if (Number.isNaN(ms)) return value;
-  const d = new Date(ms);
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${String(d.getUTCFullYear())}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())} ${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())} UTC`;
+  return shortUtc(value);
 }

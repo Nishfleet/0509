@@ -27,6 +27,7 @@
     "enabled": true
   },
   "upload_source_maps": true,
+  "assets": { "run_worker_first": ["/mcp"] },
 
   // The pre-rebuild Worker declared one Durable Object class,
   // SelectionEnrichmentLease (tag v1, new_sqlite_classes). The fresh app does
@@ -54,7 +55,8 @@
   // forwarded header: auth origin trust and the magic-link URL both come from
   // it, and a client-supplied value would let a link point anywhere.
   // BETTER_AUTH_SECRET stays a Worker secret.
-  "vars": { "BETTER_AUTH_URL": "https://0509.io" },
+  // LANDING_WORKSPACE_ID: the public workspace we run ourselves whose changes the landing ticker shows (#4083). Empty renders an empty strip, never filler.
+  "vars": { "BETTER_AUTH_URL": "https://0509.io", "LANDING_WORKSPACE_ID": "" },
 
   "d1_databases": [
     {
@@ -63,6 +65,9 @@
       "database_id": "746c6e3d-782e-443a-82d6-28ca93a16294"
     }
   ],
+
+  // Mentions telemetry (#4003 slice 3/6, docs/engines/mentions.md P5.4).
+  "analytics_engine_datasets": [{ "binding": "MENTIONS_SOURCES", "dataset": "mentions_sources" }],
 
   // One binding for the one bucket (#4569 had added a second binding to the
   // same bucket). snapshot/site/ holds raw site snapshots, text and screenshot
@@ -103,7 +108,9 @@
     { "name": "SIGN_IN_IP_LIMIT", "namespace_id": "5093", "simple": { "limit": 20, "period": 60 } },
     // Open AI-app registration (/oauth/register) writes a 30-day client row to
     // OAUTH_KV per call; per client IP, a real app registers once.
-    { "name": "AGENT_REGISTER_LIMIT", "namespace_id": "5094", "simple": { "limit": 10, "period": 60 } }
+    { "name": "AGENT_REGISTER_LIMIT", "namespace_id": "5094", "simple": { "limit": 10, "period": 60 } },
+    // Onboarding identity probes, per user; each probe is a site fetch and possibly a Browser Rendering session.
+    { "name": "PROBE_LIMIT", "namespace_id": "5095", "simple": { "limit": 10, "period": 60 } }
   ],
 
   // Browser Rendering: brand pages bot-gate a plain workerd fetch, so every
@@ -138,7 +145,10 @@
   // reach the retry limit are deleted permanently otherwise, and a silently
   // dropped brief is the failure the contract forbids.
   "queues": {
-    "producers": [{ "queue": "send-email", "binding": "SEND_EMAIL" }],
+    "producers": [
+      { "queue": "send-email", "binding": "SEND_EMAIL" },
+      { "queue": "fetch-sweep", "binding": "FETCH_SWEEP" }
+    ],
     "consumers": [
       {
         "queue": "send-email",
@@ -206,6 +216,25 @@
       "binding": "OWN_SITE_CHECK",
       "class_name": "OwnSiteCheckWorkflow",
       "schedules": ["0 * * * *"]
+    },
+    // The nightly news sweep (docs/engines/mentions.md): GDELT and Hacker
+    // News, one step per brand per source, paced for GDELT's one request per
+    // five seconds. 01:00 UTC so its alerts land before the 03:00 standing
+    // refresh counts them.
+    {
+      "name": "mentions-sweep",
+      "binding": "MENTIONS",
+      "class_name": "MentionsWorkflow",
+      "schedules": ["0 1 * * *"]
+    },
+    // The durable tail of a confirmed identity card: persist, seed watches,
+    // start discovery, enqueue the first collection. Producer only — the
+    // consumer that drains fetch-sweep is a later engine, and this Worker's
+    // queue() handler is the email lane.
+    {
+      "name": "identity-tail",
+      "binding": "IDENTITY_TAIL",
+      "class_name": "IdentityTailWorkflow"
     }
   ],
 
@@ -213,8 +242,9 @@
     // The dead-man ping, every five minutes: an external service alerts when
     // the reports stop, which is the one failure a Worker cannot report about
     // itself. Also the nightly delivery sweeper, which re-enqueues stale
-    // pending digests and claims.
-    "crons": ["*/5 * * * *", "0 3 * * *"]
+    // pending digests and claims, and the Monday 04:00 UTC D2 competitor
+    // refresh.
+    "crons": ["*/5 * * * *", "0 3 * * *", "0 4 * * 1"]
   },
 
   "routes": [

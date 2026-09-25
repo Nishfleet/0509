@@ -1,13 +1,14 @@
 import type { WorkflowEvent, WorkflowStep, WorkflowStepConfig } from "cloudflare:workers";
 import { WorkflowEntrypoint } from "cloudflare:workers";
 
-import { instantStamp, nextBriefAt, weekClosingAt } from "../../app/lib/brief-schedule";
+import { instantStamp, nextBriefAt, rolloverInstance, weekClosingAt } from "../../app/lib/brief-schedule";
+import type { RolloverParams } from "../../app/lib/brief-schedule";
 import { insertWeeklyDigest } from "../../app/lib/data/digest.server";
 import { composeBrief } from "../standing/compose-brief";
 import { freezeWeek } from "../standing/freeze";
+import { judgeWeek } from "../standing/read-this-first";
 import { refreshWorkspaceScores } from "../standing/refresh";
-import type { RolloverParams } from "../standing/rollover-plan";
-import { createRollovers, readWorkspaceSchedule, rolloverInstance } from "../standing/rollover-plan";
+import { createRollovers, readWorkspaceSchedule } from "../standing/rollover-plan";
 
 const RETRY: WorkflowStepConfig = {
   retries: { limit: 5, delay: "10 seconds", backoff: "exponential" },
@@ -17,7 +18,7 @@ export interface RolloverOutcome {
   workspaceId: string;
   closesAt: string;
   digestId: string | null;
-  skipped: "workspace_gone" | "schedule_moved" | "nothing_to_compare" | null;
+  skipped: "workspace_gone" | "schedule_moved" | "nothing_to_compare" | "brief_paused" | null;
 }
 
 interface ClosingWeek {
@@ -25,6 +26,7 @@ interface ClosingWeek {
   weekday: number;
   hour: number;
   startsAt: string;
+  paused: boolean;
 }
 
 export class StandingRollover extends WorkflowEntrypoint<Env, RolloverParams> {
@@ -56,7 +58,7 @@ export class StandingRollover extends WorkflowEntrypoint<Env, RolloverParams> {
         windowEndAt: closesAt.toISOString(),
         computedAt: new Date().toISOString(),
       });
-      return { ...workspace.schedule, startsAt };
+      return { ...workspace.schedule, startsAt, paused: workspace.briefPausedAt !== null };
     });
     if (closing === "workspace_gone" || closing === "schedule_moved") return outcome(null, closing);
 
@@ -67,21 +69,35 @@ export class StandingRollover extends WorkflowEntrypoint<Env, RolloverParams> {
       return ranked.length;
     });
 
+    const readThisFirst =
+      rankedCount < 2
+        ? { picks: [], judged: 0 }
+        : await step.do("read-this-first", RETRY, async () =>
+            judgeWeek(this.env.DB, {
+              workspaceId,
+              startsAt: closing.startsAt,
+              closesAt: closesAt.toISOString(),
+              decidedAt: new Date().toISOString(),
+            }),
+          );
+
     const writeDigest = async (): Promise<string> => {
       const id = `digest_${workspaceId}_${instantStamp(closesAt)}`;
       const payload = await composeBrief(this.env.DB, {
         workspaceId,
         schedule,
         week: { startsAt: new Date(closing.startsAt), closesAt },
+        readThisFirst,
       });
       await insertWeeklyDigest(this.env.DB, {
         id,
         workspaceId,
         periodStart: payload.period_start,
         periodEnd: payload.period_end,
+        status: closing.paused ? "paused" : "pending",
         payloadJson: JSON.stringify(payload),
       });
-      await this.env.SEND_EMAIL.send({ digest_id: id });
+      if (!closing.paused) await this.env.SEND_EMAIL.send({ digest_id: id });
       return id;
     };
     const digestId = rankedCount < 2 ? null : await step.do("write-digest", RETRY, writeDigest);
@@ -92,6 +108,7 @@ export class StandingRollover extends WorkflowEntrypoint<Env, RolloverParams> {
       ]),
     );
 
-    return outcome(digestId, digestId === null ? "nothing_to_compare" : null);
+    if (digestId === null) return outcome(null, "nothing_to_compare");
+    return outcome(digestId, closing.paused ? "brief_paused" : null);
   }
 }
