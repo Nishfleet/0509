@@ -1,4 +1,7 @@
 import { env } from "cloudflare:workers";
+import { z } from "zod";
+
+import type { HiringSignalState, HiringSignalUpdate } from "../hiring/role-lifecycle";
 
 export interface SiteChangeSignal {
   id: string;
@@ -73,6 +76,49 @@ export async function insertHiringSignals(rows: readonly NewHiringSignal[]): Pro
       }),
     );
   }
+}
+
+const SELECT_HIRING_SIGNAL_STATES = `SELECT id, dedup_key, last_seen_at, payload_json FROM signal
+WHERE kind = 'hiring' AND watch_id = ?1 AND is_tombstoned = 0`;
+
+const hiringSignalStateRows = z.array(
+  z.object({
+    id: z.string(),
+    dedup_key: z.string(),
+    last_seen_at: z.string().nullable(),
+    payload_json: z.string(),
+  }),
+);
+
+export async function readHiringSignalStates(watchId: string): Promise<HiringSignalState[]> {
+  const rows = await env.DB.prepare(SELECT_HIRING_SIGNAL_STATES).bind(watchId).all();
+  return hiringSignalStateRows
+    .parse(rows.results)
+    .filter((row) => row.dedup_key.startsWith(`${watchId}:`))
+    .map((row) => ({
+      id: row.id,
+      roleId: row.dedup_key.slice(watchId.length + 1),
+      lastSeenAt: row.last_seen_at,
+      payloadJson: row.payload_json,
+    }));
+}
+
+const UPDATE_HIRING_LIFECYCLE = `UPDATE signal SET last_seen_at = ?2, payload_json = ?3
+WHERE id = ?1 AND kind = 'hiring'`;
+
+export async function applyHiringLifecycle(updates: readonly HiringSignalUpdate[]): Promise<number> {
+  if (updates.length === 0) return 0;
+  let changes = 0;
+  for (let offset = 0; offset < updates.length; offset += HIRING_BATCH) {
+    const chunk = updates.slice(offset, offset + HIRING_BATCH);
+    const results = await env.DB.batch(
+      chunk.map((update) =>
+        env.DB.prepare(UPDATE_HIRING_LIFECYCLE).bind(update.id, update.lastSeenAt, update.payloadJson),
+      ),
+    );
+    for (const result of results) changes += result.meta.changes;
+  }
+  return changes;
 }
 
 export async function insertSiteChange(row: SiteChangeSignal): Promise<void> {
