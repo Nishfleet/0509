@@ -2,7 +2,7 @@ import { env } from "cloudflare:workers";
 import { getDomain } from "tldts";
 
 import { insertPages, readEntitiesWithoutHomePage } from "../data/page.server";
-import { insertSiteChange } from "../data/signal.server";
+import { insertChangeSignalStatement } from "../data/signal.server";
 import { readEnabledSourceId } from "../data/source.server";
 import type { SiteSweepTarget } from "../data/watch.server";
 import {
@@ -134,17 +134,19 @@ export async function publishSiteChange(target: SiteSweepTarget, changed: Change
     transport: changed.transport,
   };
 
-  await insertSiteChange({
+  await insertChangeSignalStatement({
     id: crypto.randomUUID(),
     workspaceId: target.workspaceId,
     entityId: target.entityId,
     sourceId: target.sourceId,
     watchId: target.watchId,
     snapshotId: changed.snapshotId,
+    title: null,
+    summary: null,
     aspect: target.pageRole,
     url: target.url,
     payloadJson: JSON.stringify(payload),
     observedAt: new Date().toISOString(),
-  });
+  }).run();
   return changed.snapshotId;
 }
