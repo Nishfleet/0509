@@ -82,7 +82,7 @@ export async function confirmCard(workspaceId: string, userId: string, form: For
   const id = crypto.randomUUID();
   const logoUrl = (await readLogo(subject.registrable)) !== null ? `/app/logos/${id}` : null;
   const now = new Date();
-  const entityInserted = await insertSelfEntity({
+  await insertSelfEntity({
     id,
     workspaceId,
     domain: subject.registrable,
@@ -99,35 +99,33 @@ export async function confirmCard(workspaceId: string, userId: string, form: For
   });
   const entityId = await readWorkspaceSelfId(workspaceId);
   if (entityId === null) return false;
-  if (entityInserted) {
-    const cached = await readCachedSiteValues(subject);
-    if (cached !== null) {
-      const candidates: { edit: FieldEdit; changed: boolean }[] = [
-        {
-          edit: { field: "name", from: cached.name, to: card.name },
-          changed: card.name !== cached.name,
+  const cached = await readCachedSiteValues(subject);
+  if (cached !== null) {
+    const candidates: { edit: FieldEdit; changed: boolean }[] = [
+      {
+        edit: { field: "name", from: cached.name, to: card.name },
+        changed: card.name !== cached.name,
+      },
+      {
+        edit: {
+          field: "description",
+          from: cached.description,
+          to: card.description,
         },
-        {
-          edit: {
-            field: "description",
-            from: cached.description,
-            to: card.description,
-          },
-          changed: (card.description === "" ? null : card.description) !== cached.description,
-        },
-      ];
-      await insertFieldEdits(
-        candidates
-          .filter((candidate) => candidate.changed)
-          .map((candidate) => ({
-            workspaceId,
-            userId,
-            entityId,
-            edit: candidate.edit,
-            decidedAt: now.toISOString(),
-          })),
-      );
-    }
+        changed: (card.description === "" ? null : card.description) !== cached.description,
+      },
+    ];
+    await insertFieldEdits(
+      candidates
+        .filter((candidate) => candidate.changed)
+        .map((candidate) => ({
+          workspaceId,
+          userId,
+          entityId,
+          edit: candidate.edit,
+          decidedAt: now.toISOString(),
+        })),
+    );
   }
   await classifyConfirmedSite(workspaceId, subject, entityId, now);
   const site = subject.kind === "domain" ? null : await creatorSite(card.socials);

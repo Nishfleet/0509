@@ -255,32 +255,6 @@ describe("confirmCard field edits", () => {
     await settledTail();
   });
 
-  it("does not record a repeated confirm whose values the self entity writer discarded", async () => {
-    await seed();
-    await cachedHomepage("Gymshark Ltd", "Gym clothes");
-    stubWeb(HOMEPAGE_HTML);
-
-    expect(
-      await confirmCard(
-        workspaceId,
-        userId,
-        form({ subject: DOMAIN, name: "Gymshark", description: "Gym clothes" }),
-      ),
-    ).toBe(true);
-    expect(
-      await confirmCard(
-        workspaceId,
-        userId,
-        form({ subject: DOMAIN, name: "Second", description: "Second description" }),
-      ),
-    ).toBe(true);
-
-    expect(await fieldEditRows(await confirmedEntityId())).toEqual([
-      { field: "name", from: "Gymshark Ltd", to: "Gymshark" },
-    ]);
-    await settledTail();
-  });
-
   it("writes no rows when the homepage probe is not cached", async () => {
     await seed();
     stubWeb(HOMEPAGE_HTML);
