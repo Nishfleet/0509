@@ -26,7 +26,14 @@ export default function FacesLayout() {
   return <Outlet />;
 }
 
+function rootSession(value: unknown): { signedIn: boolean; pathname: string } {
+  if (typeof value !== "object" || value === null) return { signedIn: false, pathname: "this address" };
+  const signedIn = "signedIn" in value && value.signedIn === true;
+  const pathname = "pathname" in value && typeof value.pathname === "string" ? value.pathname : "this address";
+  return { signedIn, pathname };
+}
+
 export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
-  const data = useRouteLoaderData<{ signedIn: boolean; pathname: string }>("root");
-  return <ProductError error={error} signedIn={data?.signedIn === true} pathname={data?.pathname ?? "this address"} />;
+  const data = rootSession(useRouteLoaderData("root"));
+  return <ProductError error={error} signedIn={data.signedIn} pathname={data.pathname} />;
 }

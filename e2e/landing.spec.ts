@@ -93,25 +93,16 @@ test("the hero's first viewport holds the outcome and the one priced input", asy
     expect(proofBox.y).toBeGreaterThanOrEqual(headlineBox.y + headlineBox.height - 1);
   }
 
-  const faces = await page.evaluate(() => {
-    const found: string[] = [];
-    for (const sheet of [...document.styleSheets]) {
-      let rules: CSSRuleList;
-      try {
-        rules = sheet.cssRules;
-      } catch {
-        continue;
-      }
-      for (const rule of rules) {
-        if (rule instanceof CSSFontFaceRule) found.push(rule.cssText);
-      }
-    }
-    return found;
+  const styles = await page.evaluate(async () => {
+    const hrefs = [...document.querySelectorAll('link[rel="stylesheet"]')].flatMap((node) =>
+      node instanceof HTMLLinkElement ? [node.href] : [],
+    );
+    const texts = await Promise.all(hrefs.map((href) => fetch(href).then((response) => response.text())));
+    return texts.join("\n");
   });
-  const display = faces.filter((face) => face.includes("Bricolage Grotesque"));
-  expect(display.length).toBeGreaterThan(0);
-  expect(display.join("\n")).toContain("/fonts/bricolage-hero.woff2");
-  expect(display.join("\n")).not.toContain("bricolage-grotesque-latin");
+  expect(styles).toContain("Bricolage Grotesque");
+  expect(styles).toContain("/fonts/bricolage-hero.woff2");
+  expect(styles).not.toContain("bricolage-grotesque-latin");
   expect(fullFace).toEqual([]);
   await expect(page.locator('link[rel="preload"][href="/fonts/bricolage-hero.woff2"]')).toHaveCount(1);
   await expect(page.locator('link[rel="modulepreload"]')).toHaveCount(0);

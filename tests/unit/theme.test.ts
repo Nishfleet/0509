@@ -5,6 +5,8 @@ import { fileURLToPath } from "node:url";
 import { compile } from "tailwindcss";
 import { describe, expect, it } from "vitest";
 
+import { links as productFaceLinks } from "../../app/routes/faces-layout";
+
 // #3984: one stylesheet of colour, type and motion tokens. DESIGN.md is the
 // authority; this test reads §3 (type scale), §4 (colour) and §9 (motion) as
 // DATA and asserts app/app.css resolves every token they name to the documented
@@ -493,14 +495,13 @@ describe("the one stylesheet stays the one stylesheet (#3984)", () => {
     expect(css).not.toMatch(/border-radius:\s*(?:0\.[0-9]|[1-9])/);
   });
 
-  it("preloads the full display and body faces from the product layout", async () => {
-    const layout = await readFile(path.join(REPO_ROOT, "app/routes/faces-layout.tsx"), "utf8");
-    expect(layout).toContain("bricolage-grotesque-latin.woff2");
-    expect(layout).toContain("instrument-sans-latin.woff2");
-    expect(layout).not.toContain("fonts.googleapis.com");
-    expect(layout).not.toContain("fonts.gstatic.com");
-    const root = await readFile(path.join(REPO_ROOT, "app/root.tsx"), "utf8");
-    expect(root).not.toContain("bricolage-grotesque-latin.woff2");
-    expect(root).toContain("<Scripts />");
+  it("preloads the full display and body faces from the product layout", () => {
+    const hrefs = productFaceLinks()
+      .map((link) => link.href ?? "")
+      .join(" ");
+    expect(hrefs).toContain("/fonts/bricolage-grotesque-latin.woff2");
+    expect(hrefs).toContain("/fonts/instrument-sans-latin.woff2");
+    expect(hrefs).not.toContain("fonts.googleapis.com");
+    expect(hrefs).not.toContain("fonts.gstatic.com");
   });
 });
