@@ -1,3 +1,14 @@
+# 0509#5252: by 2026-09-25 13:30 IST this workflow had left 21 open
+# `feature-map: sync with <sha>` PRs (#5092..#5230), all adding the same
+# /design/competitor row. Each was one full Claude action run: 23
+# workflow_dispatch runs in 24h. Three stock pieces fix that and nothing else:
+#   1. a guard job -- one `gh pr list` -- skips this run while an open sync PR
+#      exists, so a redundant sync never starts (the job `if` in the finish line);
+#   2. the sync PR head is the fixed branch `feature-map-sync`, force-pushed, so
+#      GitHub permits exactly one open PR per head/base pair -- the durable
+#      backstop under the guard;
+#   3. an arm step runs `gh pr merge --auto` with the worker app token the moment
+#      the PR is opened, so `main-merge-queue` lands it once its checks are green.
 name: feature-map
 
 on:
@@ -11,6 +22,8 @@ on:
       - .agents/skills/verify/**
   workflow_dispatch:
 
+# Serialises the push run, the dispatch and the dispatched sync, so the guard in
+# the dispatched run already sees the PR the previous run opened.
 concurrency:
   group: feature-map
   cancel-in-progress: false
@@ -19,9 +32,40 @@ permissions:
   contents: read
 
 jobs:
+  guard:
+    name: guard
+    # 0509#5252: decides whether the expensive sync may start. `pull-requests:
+    # read` is what `gh pr list` needs, and the top-level block grants nothing
+    # else; the job is skipped on no event, because both triggers need the read.
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      sync_pr_open: ${{ steps.check.outputs.sync_pr_open }}
+    steps:
+      - name: Check for an open feature-map sync pull request
+        # The filter is local, not `--search`: search indexing lags creation by
+        # seconds, and a guard that misses a just-created sync PR lets the next
+        # run start anyway. `gh pr list` is the live list, and 100 is above the
+        # repo's open-PR count with room to spare. A gh failure fails this step,
+        # which fails `needs` and skips sync -- the guard fails closed.
+        id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          open="$(gh pr list --repo "$GH_REPO" --state open --limit 100 \
+            --json number,title \
+            --jq '[.[] | select(.title | startswith("feature-map: sync with"))] | length')"
+          echo "sync_pr_open=$open" >> "$GITHUB_OUTPUT"
+          echo "open feature-map sync pull requests: $open"
+
   dispatch:
     name: dispatch
-    if: github.event_name == 'push'
+    needs: [guard]
+    if: github.event_name == 'push' && needs.guard.outputs.sync_pr_open == '0'
     runs-on: ubuntu-latest
     permissions:
       actions: write
@@ -33,7 +77,8 @@ jobs:
 
   sync:
     name: feature-map
-    if: github.event_name == 'workflow_dispatch'
+    needs: [guard]
+    if: github.event_name == 'workflow_dispatch' && needs.guard.outputs.sync_pr_open == '0'
     runs-on: ubuntu-latest
     timeout-minutes: 60
     env:
@@ -83,13 +128,25 @@ jobs:
             1. Read `app/routes.ts`, every route module's rendered controls, and the `e2e/` test titles.
             2. Build the app and drive every route with the verify skill (`npm run verify:start`, then `take_snapshot` per route). The map's Reach column must name the controls the snapshot actually shows, by role and accessible name. In one shell: `npm run build`, `export PLAYWRIGHT_LOCAL_PORT="${PLAYWRIGHT_LOCAL_PORT:-$((8000 + $$ % 1000))}"`, `npx wrangler d1 migrations apply 0509 --local </dev/null`, then start the server in the background with `npx wrangler dev --env-file .dev.vars.example --local --port "$PLAYWRIGHT_LOCAL_PORT" </dev/null &`. Do not leave `wrangler dev` in the foreground. Wait until `curl -fsS "http://127.0.0.1:${PLAYWRIGHT_LOCAL_PORT}/api/health"` returns. Then `npx chrome-devtools new_page` and `take_snapshot` for every route in `app/routes.ts`.
             3. Drift means: a route in `app/routes.ts` with no row; a route row whose path is not a route in `app/routes.ts`; a Proof cell that names a `e2e/` or `tests/` file that is not in the repo; a Reach cell that names a control the snapshot of that rendered page lacks. Rows under the heading "Not a route" are not route rows. The `*` route is the row whose Route cell is `any other path`. `/` is the static file `public/index.html` and its row is the `/` row. One row may name several paths. A route that redirects to `/login` shows the login page to an anonymous session: record that snapshot, and do not rewrite that row's signed-in controls because they were behind the redirect.
-            4. If any row drifted, open a pull request titled exactly `feature-map: sync with ${{ env.SHA }}` against branch `${{ env.BASE }}` that changes only `.agents/skills/verify/feature-map.md`. The pull request body carries the `take_snapshot` output each changed row was built from. Create branch `feature-map-sync-${{ env.SHA }}` from the commit you have checked out, commit only that file, and `gh pr create --base ${{ env.BASE }}`. Do not push to `main`. Do not open the pull request against a branch that does not already contain ${{ env.SHA }}. Then `gh pr view` that pull request. Exit non-zero unless the title is exactly `feature-map: sync with ${{ env.SHA }}`, the body is non-empty, and the only changed file is `.agents/skills/verify/feature-map.md`. `pullRequest` is that number.
+            4. If any row drifted, open a pull request titled exactly `feature-map: sync with ${{ env.SHA }}` against branch `${{ env.BASE }}` that changes only `.agents/skills/verify/feature-map.md`. The pull request body carries the `take_snapshot` output each changed row was built from. Create branch `feature-map-sync` from the commit you have checked out, commit only that file, push it with `git push --force origin feature-map-sync`, and `gh pr create --base ${{ env.BASE }} --head feature-map-sync`. The head branch is fixed on purpose (#5252): the guard job above skips this run while a sync pull request is open, and a forced push to the same branch updates that pull request instead of opening another. Do not push to `main`. Do not open the pull request against a branch that does not already contain ${{ env.SHA }}. Then `gh pr view` that pull request. Exit non-zero unless the title is exactly `feature-map: sync with ${{ env.SHA }}`, the body is non-empty, and the only changed file is `.agents/skills/verify/feature-map.md`. `pullRequest` is that number.
             5. If nothing drifted, do not open a pull request and omit `pullRequest`.
             The job fails if the app does not start or a route returns 5xx: exit non-zero in that case. Do not edit any file except `.agents/skills/verify/feature-map.md`.
             Your final answer is only the JSON object the schema requires. `kind` is `no-drift` or `opened-pr`. `sha` is ${{ env.SHA }}. `routes` is every path you drove, one string each, and must not be empty. `pullRequest` is the pull request number when `kind` is `opened-pr`, and omit it when `kind` is `no-drift`. A run that does not produce that object fails.
           claude_args: |
             --allowedTools "Read,Edit,Write,Grep,Glob,Bash(npm:*),Bash(npx:*),Bash(git:*),Bash(gh:*),Bash(curl:*)"
             --json-schema '{"type":"object","additionalProperties":false,"properties":{"kind":{"enum":["no-drift","opened-pr"]},"sha":{"const":"${{ github.sha }}"},"routes":{"type":"array","items":{"type":"string"},"minItems":1},"pullRequest":{"type":"integer"}},"required":["kind","sha","routes"]}'
+
+      - name: Arm auto-merge on the sync pull request
+        # 0509#5252 (finish line): the PR is armed when it is opened, with the
+        # worker app token, so the merge queue lands it after the required
+        # checks. This is a workflow step, not a line in the prompt: the number
+        # comes from the action's structured output, so the arm cannot drift.
+        if: steps.claude.outcome == 'success' && fromJSON(steps.claude.outputs.structured_output || '{"kind":""}').kind == 'opened-pr'
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token }}
+          GH_REPO: ${{ github.repository }}
+          PR: ${{ fromJSON(steps.claude.outputs.structured_output).pullRequest }}
+        run: gh pr merge "$PR" --auto --squash
 
       - name: No drift summary
         if: steps.claude.outcome == 'success' && fromJSON(steps.claude.outputs.structured_output || '{"kind":""}').kind == 'no-drift'
