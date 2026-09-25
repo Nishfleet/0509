@@ -40,7 +40,8 @@ function parseEntries(body: string): Entry[] {
     feed = extractFromXml(body, {
       getExtraEntryFields: (entryData) => ({ publisher: rawPublisherOf(entryData) }),
     });
-  } catch {
+  } catch (error) {
+    console.error(JSON.stringify({ event: "discovery.news_feed_parse_failed", error: String(error) }));
     return [];
   }
 
@@ -72,7 +73,8 @@ const defaultFetchText: FetchText = async (url) => {
       contentType: response.headers.get("content-type"),
       body: await response.text(),
     };
-  } catch {
+  } catch (error) {
+    console.error(JSON.stringify({ event: "discovery.news_fetch_failed", error: String(error) }));
     return { ok: false, url, contentType: null, body: "" };
   }
 };
