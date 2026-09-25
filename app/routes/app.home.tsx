@@ -9,6 +9,7 @@ import { PAGE } from "../components/page-heading";
 import { ShareButton } from "../components/share-button";
 import { homeView } from "../lib/home-standing";
 import { readHomeStandingInputs } from "../lib/home-standing.server";
+import { readHowRanked } from "../lib/how-ranked.server";
 import { requireSession } from "../lib/require-session.server";
 import { workspaceLandingForRequest } from "../lib/workspace.server";
 
@@ -22,7 +23,8 @@ export async function loader({ request }: Route.LoaderArgs) {
   if (landing) throw redirect(landing);
   const inputs = await readHomeStandingInputs(env.DB, session.user.id);
   if (inputs === null) throw redirect("/onboarding");
-  return { view: homeView({ ...inputs, now: new Date() }) };
+  const howRanked = await readHowRanked(env.DB, inputs.payload);
+  return { view: homeView({ ...inputs, now: new Date() }), howRanked };
 }
 
 export default function Page({ loaderData }: Route.ComponentProps) {
@@ -42,7 +44,7 @@ export default function Page({ loaderData }: Route.ComponentProps) {
   }, [revalidator, standingKind]);
   return (
     <main className={PAGE}>
-      <HomeStanding view={loaderData.view} />
+      <HomeStanding view={loaderData.view} howRanked={loaderData.howRanked} />
       {loaderData.view.standing.kind === "ranked" ? <ShareButton /> : null}
       <footer className="border-line mt-14 border-t pt-7">
         <p className="font-mono text-eyebrow text-ink-soft">{loaderData.view.footer}</p>
