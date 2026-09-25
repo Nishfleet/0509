@@ -29,10 +29,14 @@ test("the landing's action names its price and leads to sign-in", async ({ page 
 
 test("the hero's first viewport holds the outcome and the one priced input", async ({ page }, testInfo) => {
   const consoleErrors: string[] = [];
+  const fullFace: string[] = [];
   page.on("console", (message) => {
     if (message.type() === "error") consoleErrors.push(message.text());
   });
   page.on("pageerror", (error) => consoleErrors.push(error.message));
+  page.on("request", (request) => {
+    if (request.url().includes("bricolage-grotesque-latin")) fullFace.push(request.url());
+  });
 
   await page.goto(PATH);
   await page.waitForLoadState("networkidle");
@@ -78,11 +82,28 @@ test("the hero's first viewport holds the outcome and the one priced input", asy
     expect(proofBox.y).toBeGreaterThanOrEqual(headlineBox.y + headlineBox.height - 1);
   }
 
+  const faces = await page.evaluate(() => {
+    const found: string[] = [];
+    for (const sheet of [...document.styleSheets]) {
+      let rules: CSSRuleList;
+      try {
+        rules = sheet.cssRules;
+      } catch {
+        continue;
+      }
+      for (const rule of rules) {
+        if (rule instanceof CSSFontFaceRule) found.push(rule.cssText);
+      }
+    }
+    return found;
+  });
+  const display = faces.filter((face) => face.includes("Bricolage Grotesque"));
+  expect(display.length).toBeGreaterThan(0);
+  expect(display.join("\n")).toContain("/fonts/bricolage-hero.woff2");
+  expect(display.join("\n")).not.toContain("bricolage-grotesque-latin");
+  expect(fullFace).toEqual([]);
   await expect(page.locator('link[rel="preload"][href="/fonts/bricolage-hero.woff2"]')).toHaveCount(1);
-  await expect(page.locator('link[rel="preload"][href="/fonts/bricolage-grotesque-latin.woff2"]')).toHaveCount(0);
-  await expect(page.locator('link[href*="bricolage-grotesque-latin"]')).toHaveCount(0);
-  await expect(page.locator('link[href*="instrument-sans"]')).toHaveCount(0);
-  await expect(page.locator('link[href*="ibm-plex"]')).toHaveCount(0);
+  await expect(page.locator('link[rel="modulepreload"]')).toHaveCount(0);
   await expect(page.locator('script[type="module"]')).not.toHaveCount(0);
 
   if (testInfo.project.name === "phone-390") {

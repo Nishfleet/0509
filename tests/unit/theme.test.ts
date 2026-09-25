@@ -462,7 +462,10 @@ describe("the one stylesheet stays the one stylesheet (#3984)", () => {
   });
 
   it("self-hosts the three faces with font-display: swap and no Google link", async () => {
-    const css = await readFile(path.join(REPO_ROOT, "app/fonts.css"), "utf8");
+    const css = [
+      await readFile(path.join(REPO_ROOT, "app/fonts-display.css"), "utf8"),
+      await readFile(path.join(REPO_ROOT, "app/fonts-text.css"), "utf8"),
+    ].join("\n");
     for (const family of ["Bricolage Grotesque", "Instrument Sans", "IBM Plex Mono"]) {
       expect(css).toContain(`font-family: "${family}"`);
     }

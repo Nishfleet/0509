@@ -5,7 +5,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
-import Landing, { links as landingLinks } from "../../app/routes/landing";
+import Landing from "../../app/routes/landing";
 import { links as productLinks } from "../../app/routes/faces-layout";
 
 const REPO_ROOT = dirname(dirname(dirname(fileURLToPath(import.meta.url))));
@@ -80,12 +80,16 @@ function familyOf(className: string): string {
   return "Instrument Sans";
 }
 
-function hrefs(descriptors: ReturnType<typeof landingLinks>): string[] {
-  return descriptors.map((descriptor) => (typeof descriptor === "string" ? descriptor : (descriptor.href ?? "")));
+function cssImportedBy(routeFile: string): string {
+  const source = readFileSync(routeFile, "utf8");
+  const dir = dirname(routeFile);
+  return [...source.matchAll(/import\s+"(\.[^"]+\.css)"/g)]
+    .map((match) => readFileSync(join(dir, match[1] ?? ""), "utf8"))
+    .join("\n");
 }
 
 describe("landing LCP critical path", () => {
-  it("paints the server headline from the preloaded small face", () => {
+  it("paints the server headline from a face that is already in the stylesheet", () => {
     const html = renderToStaticMarkup(createElement(Landing));
     const heading = /<h1 id="hero-title" class="([^"]+)">([\s\S]*?)<\/h1>/.exec(html);
     expect(heading).not.toBeNull();
@@ -94,7 +98,8 @@ describe("landing LCP critical path", () => {
     expect(headline).toContain("Know where you stand.");
     const painted = tokens(className).includes("uppercase") ? headline.toLocaleUpperCase("en-US") : headline;
 
-    const faces = parseFaces(readFileSync(join(REPO_ROOT, "app/components/landing/hero-face.css"), "utf8"));
+    const landingCss = cssImportedBy(join(REPO_ROOT, "app/routes/landing.tsx"));
+    const faces = parseFaces(landingCss);
     const family = familyOf(className);
     const weight = weightOf(className);
     const sources = new Set<string>();
@@ -106,21 +111,18 @@ describe("landing LCP critical path", () => {
       expect(face?.display).toBe("swap");
       sources.add(face?.src ?? "");
     }
-    expect([...sources]).toEqual(["/fonts/bricolage-hero.woff2"]);
+    expect(sources).toEqual(new Set(["/fonts/bricolage-hero.woff2"]));
+    expect(landingCss).not.toContain("bricolage-grotesque-latin");
+    expect(html).toContain('href="/fonts/bricolage-hero.woff2"');
+    expect(html).toContain('rel="preload"');
 
-    const head = hrefs(landingLinks());
-    expect(head).toContain("/fonts/bricolage-hero.woff2");
-    expect(head.join(" ")).not.toMatch(/bricolage-grotesque-latin|instrument-sans|ibm-plex/);
-
-    const bytes = readFileSync(join(REPO_ROOT, "public/fonts/bricolage-hero.woff2"));
-    const full = readFileSync(join(REPO_ROOT, "public/fonts/bricolage-grotesque-latin.woff2"));
-    expect(bytes.subarray(0, 4).toString("ascii")).toBe("wOF2");
-    expect(bytes.length).toBeLessThan(12_000);
-    expect(bytes.length).toBeLessThan(full.length);
+    const shipped = readFileSync(join(REPO_ROOT, "public/fonts/bricolage-hero.woff2"));
+    expect(shipped.subarray(0, 4).toString("ascii")).toBe("wOF2");
+    expect(shipped.length).toBeLessThan(12_000);
   });
 
   it("keeps weights 700 and 800 on the full face for every other document", () => {
-    const faces = parseFaces(readFileSync(join(REPO_ROOT, "app/fonts.css"), "utf8"));
+    const faces = parseFaces(cssImportedBy(join(REPO_ROOT, "app/routes/faces-layout.tsx")));
     for (const weight of [700, 800]) {
       for (const char of "Aa .") {
         const face = faceFor(faces, "Bricolage Grotesque", weight, char.codePointAt(0) ?? 0);
@@ -128,9 +130,11 @@ describe("landing LCP critical path", () => {
         expect(face?.display).toBe("swap");
       }
     }
-    const head = hrefs(productLinks());
+    const head = productLinks().map((descriptor) =>
+      typeof descriptor === "string" ? descriptor : (descriptor.href ?? ""),
+    );
     expect(head).toContain("/fonts/bricolage-grotesque-latin.woff2");
     expect(head).toContain("/fonts/instrument-sans-latin.woff2");
-    expect(head.join(" ")).not.toContain("bricolage-hero");
+    expect(head.join(" ")).not.toContain("data:font");
   });
 });

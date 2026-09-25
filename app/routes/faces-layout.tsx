@@ -1,9 +1,10 @@
 import { Outlet } from "react-router";
-import type { LinksFunction } from "react-router";
 
-import "../fonts.css";
+import type { Route } from "./+types/faces-layout";
+import "../fonts-display.css";
+import "../fonts-text.css";
 
-export const links: LinksFunction = () => [
+export const links: Route.LinksFunction = () => [
   {
     rel: "preload",
     href: "/fonts/bricolage-grotesque-latin.woff2",
