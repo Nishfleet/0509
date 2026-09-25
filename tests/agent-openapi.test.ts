@@ -9,8 +9,10 @@ describe("the API reference", () => {
       "/api/v1/alerts",
       "/api/v1/brief",
       "/api/v1/competitors",
+      "/api/v1/competitors/{competitorId}",
       "/api/v1/standing",
     ]);
+    expect(JSON.stringify(document.paths?.["/api/v1/competitors/{competitorId}"])).toContain('"in":"path"');
     expect(document.servers).toEqual([{ url: "https://0509.io" }]);
     expect(document.components?.securitySchemes).toHaveProperty("apiKey");
     expect(Object.keys(document.components?.schemas ?? {})).toEqual(
