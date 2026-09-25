@@ -8,6 +8,24 @@ import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 
 const FIELD = "min-w-0 flex-1 bg-transparent py-1 text-[0.95rem]";
 
+interface EditorKeyEvent {
+  key: string;
+  nativeEvent: { isComposing: boolean };
+  preventDefault: () => void;
+}
+
+export function saveEditorOnEnter(
+  event: EditorKeyEvent,
+  value: string,
+  close: () => void,
+  onSave: (value: string) => void,
+): void {
+  if (event.key !== "Enter" || event.nativeEvent.isComposing) return;
+  event.preventDefault();
+  close();
+  onSave(value);
+}
+
 function Row({
   label,
   check,
@@ -69,10 +87,7 @@ function EditRow({
   const [open, setOpen] = useState(false);
   const checkId = useId();
   const saveOnEnter = (event: KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-    if (event.key !== "Enter") return;
-    event.preventDefault();
-    setOpen(false);
-    onSave(value);
+    saveEditorOnEnter(event, value, () => { setOpen(false); }, onSave);
   };
   const editor =
     multiline === true ? (
