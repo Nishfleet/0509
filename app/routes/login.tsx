@@ -62,21 +62,21 @@ export async function action({ request }: Route.ActionArgs) {
 
 function TurnstileWidget({ siteKey }: { siteKey: string }) {
   useEffect(() => {
-    const script = document.createElement("script");
-    script.src = TURNSTILE_SCRIPT;
-    script.async = true;
-    document.head.appendChild(script);
-    return () => script.remove();
+    const email = document.getElementById("email");
+    if (!(email instanceof HTMLInputElement)) return;
+    let script: HTMLScriptElement | undefined;
+    const start = () => {
+      if (script) return;
+      script = Object.assign(document.createElement("script"), { src: TURNSTILE_SCRIPT, async: true });
+      document.head.appendChild(script);
+    };
+    email.addEventListener("focus", start);
+    return () => {
+      email.removeEventListener("focus", start);
+      if (script) script.remove();
+    };
   }, []);
-  return (
-    <div
-      className="cf-turnstile"
-      data-sitekey={siteKey}
-      data-appearance="interaction-only"
-      data-response-field="true"
-      data-response-field-name="cf-turnstile-response"
-    />
-  );
+  return <div className="cf-turnstile" data-sitekey={siteKey} data-appearance="interaction-only" data-response-field="true" data-response-field-name="cf-turnstile-response" />;
 }
 
 export default function Login({ loaderData }: Route.ComponentProps) {
