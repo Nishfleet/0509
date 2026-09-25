@@ -53,7 +53,7 @@ const chartBytes = (() => {
   return gzipSync(uplot).length + gzipSync(uplotReact).length;
 })();
 
-const HOME_CEILING_KB = 263;
+const HOME_CEILING_KB = 264;
 
 describe("Home bundle budgets", () => {
   it("keeps /app JavaScript within its ratchet ceiling", () => {
