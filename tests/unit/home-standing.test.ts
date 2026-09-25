@@ -53,6 +53,22 @@ function brand(
   };
 }
 
+function readMark(signalId: string, entityName: string, title: string) {
+  return {
+    signal_id: signalId,
+    entity_id: `ent_${signalId}`,
+    entity_name: entityName,
+    title,
+    source: "site change",
+    observed_at: "2026-09-16T15:30:00.000Z",
+    thumbnail_r2_key: null,
+    url: `https://${signalId}.example/page`,
+    before: "old copy",
+    after: "new copy",
+    jev_reason: `${entityName} moved.`,
+  };
+}
+
 function payload(overrides: Partial<BriefPayload> = {}): BriefPayload {
   return {
     workspace_id: "ws_1",
@@ -130,6 +146,25 @@ describe("Home standing", () => {
     expect(html).toContain("Good morning. You&#x27;re <span");
     expect(html).toContain(">#2</span> of 3 this week.</h1>");
     expect(html).toContain("Kindred is the mover: 3 new ads and the loudest mention spike");
+  });
+
+  it("carries the brief's read-this-first marks onto Home in payload order, capped at three", () => {
+    const standing = homeStanding({
+      payload: payload({
+        read_this_first: [
+          readMark("sig_3", "Casetta", "Third pick"),
+          readMark("sig_1", "Kindred", "First pick"),
+          readMark("sig_4", "Hollow", "Fourth pick"),
+          readMark("sig_2", "Oaks", "Second pick"),
+        ],
+      }),
+      entities: ENTITIES,
+      schedule: SCHEDULE,
+      history: [],
+      now: THURSDAY_MORNING,
+    });
+    if (standing.kind !== "ranked") throw new Error("expected a ranked standing");
+    expect(standing.readThisFirst.map((entry) => entry.signal_id)).toEqual(["sig_3", "sig_1", "sig_4"]);
   });
 
   it("puts the how-ranked trigger under the why-line only when the week has one", () => {
