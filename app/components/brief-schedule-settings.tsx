@@ -2,8 +2,8 @@ import { useEffect, useSyncExternalStore, type ReactElement } from "react";
 import { useFetcher } from "react-router";
 
 import { HOURS, WEEKDAYS, hourLabel } from "../lib/brief-settings";
-import { toastSaved } from "./toaster";
 import { BriefPauseSetting } from "./brief-pause-setting";
+import { toastSaved } from "./toaster";
 import { Button } from "./ui/button";
 
 const SELECT =
