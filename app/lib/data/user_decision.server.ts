@@ -6,7 +6,7 @@ import type { DraftField } from "../identity/card-fields";
 
 export type SubjectVerdict = "public_subject:confirmed" | "public_subject:refused";
 
-export const FIELD_EDIT_VERDICT = "identity_field:edited";
+const FIELD_EDIT_VERDICT = "identity_field:edited";
 
 export interface FieldEdit {
   field: DraftField;
