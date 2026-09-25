@@ -4,7 +4,12 @@ import { describe, expect, it } from "vitest";
 
 import { WhyFlaggedSheet } from "../../app/components/why-flagged";
 import { Dialog, DialogContent } from "../../app/components/ui/dialog";
-import { whyFlagged, type WhyFlagged, type WhyFlaggedField } from "../../app/lib/why-flagged";
+import {
+  whyFlagged,
+  type WhyFlagged,
+  type WhyFlaggedDecision,
+  type WhyFlaggedField,
+} from "../../app/lib/why-flagged";
 
 const COMPARED: readonly WhyFlaggedField[] = [
   { label: "Last week", value: "$49" },
@@ -66,9 +71,14 @@ describe("whyFlagged", () => {
   });
 
   it("rounds p to a percentage and maps noulAction to a decision word", () => {
-    expect(whyFlagged({ ...BASE, p: 0.95 })).toMatchObject({ sure: "95%", decision: "Flagged" });
-    expect(whyFlagged({ ...BASE, p: 0.5 })).toMatchObject({ sure: "50%", decision: "Possibly" });
-    expect(whyFlagged({ ...BASE, p: 0.05 })).toMatchObject({ sure: "5%", decision: "Held back" });
+    const expected: readonly { p: number; sure: string; decision: WhyFlaggedDecision }[] = [
+      { p: 0.95, sure: "95%", decision: "Flagged" },
+      { p: 0.5, sure: "50%", decision: "Possibly" },
+      { p: 0.05, sure: "5%", decision: "Held back" },
+    ];
+    for (const { p, sure, decision } of expected) {
+      expect(whyFlagged({ ...BASE, p })).toMatchObject({ sure, decision });
+    }
   });
 
   it("keeps a trimmed reason and drops one that trims to nothing", () => {
