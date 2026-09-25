@@ -6,6 +6,7 @@ import type { RolloverParams } from "../../app/lib/brief-schedule";
 import { insertWeeklyDigest } from "../../app/lib/data/digest.server";
 import { composeBrief } from "../standing/compose-brief";
 import { freezeWeek } from "../standing/freeze";
+import { judgeWeek } from "../standing/read-this-first";
 import { refreshWorkspaceScores } from "../standing/refresh";
 import { createRollovers, readWorkspaceSchedule } from "../standing/rollover-plan";
 
@@ -68,12 +69,25 @@ export class StandingRollover extends WorkflowEntrypoint<Env, RolloverParams> {
       return ranked.length;
     });
 
+    const readThisFirst =
+      rankedCount < 2
+        ? { picks: [], judged: 0 }
+        : await step.do("read-this-first", RETRY, async () =>
+            judgeWeek(this.env.DB, {
+              workspaceId,
+              startsAt: closing.startsAt,
+              closesAt: closesAt.toISOString(),
+              decidedAt: new Date().toISOString(),
+            }),
+          );
+
     const writeDigest = async (): Promise<string> => {
       const id = `digest_${workspaceId}_${instantStamp(closesAt)}`;
       const payload = await composeBrief(this.env.DB, {
         workspaceId,
         schedule,
         week: { startsAt: new Date(closing.startsAt), closesAt },
+        readThisFirst,
       });
       await insertWeeklyDigest(this.env.DB, {
         id,
