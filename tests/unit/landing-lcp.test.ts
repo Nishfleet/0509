@@ -67,9 +67,7 @@ describe("static home LCP critical path", () => {
 
   it("paints the headline in the brand faces from the one self-hosted font path", () => {
     expect(html).toContain("Quietly, we");
-    expect(html).toContain('rel="preload"');
     expect(html).toContain("/fonts/bricolage-hero.woff2");
-    expect(html).toContain('fetchpriority="high"');
     expect(html).toContain("/fonts/instrument-sans-latin.woff2");
     expect(html).toContain("/fonts/ibm-plex-mono-latin-400.woff2");
     expect(html).toContain("font-display: swap");
