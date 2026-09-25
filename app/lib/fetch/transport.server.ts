@@ -185,7 +185,8 @@ export async function readUrl(
   let target: URL;
   try {
     target = new URL(url);
-  } catch {
+  } catch (error) {
+    console.error(JSON.stringify({ event: "fetch.url_parse_failed", error: String(error) }));
     return { ok: false, reason: "invalid-url", detail: `not a URL: ${url}` };
   }
   if (target.protocol !== "http:" && target.protocol !== "https:") {
