@@ -20,7 +20,7 @@ const EXPECTED_HIRING_SOURCES: readonly HiringSourceRow[] = [
     platform: "ashby",
     plugin_key: "hiring.board",
     reliability: "official_api",
-    is_enabled: 1,
+    is_enabled: 0,
     config_json: "{}",
   },
   {
@@ -30,7 +30,7 @@ const EXPECTED_HIRING_SOURCES: readonly HiringSourceRow[] = [
     platform: "greenhouse",
     plugin_key: "hiring.board",
     reliability: "official_api",
-    is_enabled: 1,
+    is_enabled: 0,
     config_json: "{}",
   },
   {
@@ -40,7 +40,7 @@ const EXPECTED_HIRING_SOURCES: readonly HiringSourceRow[] = [
     platform: "lever",
     plugin_key: "hiring.board",
     reliability: "official_api",
-    is_enabled: 1,
+    is_enabled: 0,
     config_json: "{}",
   },
   {
@@ -50,7 +50,7 @@ const EXPECTED_HIRING_SOURCES: readonly HiringSourceRow[] = [
     platform: "smartrecruiters",
     plugin_key: "hiring.board",
     reliability: "official_api",
-    is_enabled: 1,
+    is_enabled: 0,
     config_json: "{}",
   },
   {
@@ -60,13 +60,13 @@ const EXPECTED_HIRING_SOURCES: readonly HiringSourceRow[] = [
     platform: "workable",
     plugin_key: "hiring.board",
     reliability: "official_api",
-    is_enabled: 1,
+    is_enabled: 0,
     config_json: "{}",
   },
 ];
 
 describe("job-board source rows", () => {
-  it("seeds exactly the five enabled official hiring sources", async () => {
+  it("seeds exactly the five official hiring sources, disabled", async () => {
     const rows = await env.DB.prepare(
       `SELECT id, key, kind, platform, plugin_key, reliability, is_enabled, config_json
        FROM source
