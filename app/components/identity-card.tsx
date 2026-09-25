@@ -1,4 +1,4 @@
-import { Suspense, useState, type ReactNode } from "react";
+import { Suspense, useId, useState, type ReactNode } from "react";
 import { Await, Form, useFetcher } from "react-router";
 
 import type { CardDraft, CreatorRows, SiteFields } from "../lib/identity/card-fields";
@@ -6,9 +6,19 @@ import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 
-const FIELD = "min-w-0 flex-1 bg-transparent py-1 text-[0.95rem] outline-none focus:border-b focus:border-ink";
+const FIELD = "min-w-0 flex-1 bg-transparent py-1 text-[0.95rem]";
 
-function Row({ label, check, children }: { label: string; check?: boolean; children: ReactNode }) {
+function Row({
+  label,
+  check,
+  checkId,
+  children,
+}: {
+  label: string;
+  check?: boolean;
+  checkId?: string;
+  children: ReactNode;
+}) {
   return (
     <div
       className={`border-line flex items-baseline gap-4 border-b py-3${
@@ -18,7 +28,9 @@ function Row({ label, check, children }: { label: string; check?: boolean; child
       <span className="text-ink-soft w-20 shrink-0 font-mono text-[0.75rem] uppercase">{label}</span>
       {children}
       {check === true ? (
-        <span className="text-green-ink font-mono text-[0.7rem] uppercase">check this</span>
+        <span id={checkId} className="text-green-ink font-mono text-[0.7rem] uppercase">
+          check this
+        </span>
       ) : null}
     </div>
   );
@@ -54,6 +66,7 @@ function EditRow({
   onSave: (value: string) => void;
 }) {
   const [value, setValue] = useState(initial);
+  const checkId = useId();
   const editor =
     multiline === true ? (
       <textarea
@@ -77,13 +90,17 @@ function EditRow({
       />
     );
   return (
-    <Row label={label} check={check}>
+    <Row label={label} check={check} checkId={checkId}>
       <Popover
         onOpenChange={(open) => {
           if (!open) onSave(value);
         }}
       >
-        <PopoverTrigger className={`${FIELD} text-left`} aria-label={`edit ${label}`}>
+        <PopoverTrigger
+          className={`${FIELD} min-h-11 text-left`}
+          aria-describedby={check === true ? checkId : undefined}
+        >
+          <span className="sr-only">{`edit ${label}: `}</span>
           {value === "" ? <span className="text-ink-soft">{placeholder}</span> : value}
         </PopoverTrigger>
         <PopoverContent>{editor}</PopoverContent>
@@ -103,7 +120,7 @@ function Logo({ logo }: { logo: Promise<string | null> }) {
             {url === null ? (
               <span className="text-ink-soft text-[0.95rem]">none found on the site</span>
             ) : (
-              <img src={url} alt="" className="h-10 w-10 object-contain" />
+              <img src={url} alt="your logo, as found on the site" className="h-10 w-10 object-contain" />
             )}
           </Row>
         )}
@@ -135,7 +152,7 @@ export function Fields({
       <EditRow
         label="name"
         name="name"
-        initial={nameCheck ? "" : (draft.name ?? (site.name ?? ""))}
+        initial={draft.name ?? (nameCheck ? "" : (site.name ?? ""))}
         placeholder={nameCheck ? (site.name ?? "") : "your brand's name"}
         check={nameCheck}
         empty={site.review.name === "empty"}
@@ -157,7 +174,7 @@ export function Fields({
       <EditRow
         label="about"
         name="description"
-        initial={descriptionCheck ? "" : (draft.description ?? (site.description ?? ""))}
+        initial={draft.description ?? (descriptionCheck ? "" : (site.description ?? ""))}
         placeholder={descriptionCheck ? (site.description ?? "") : "one line on what you do"}
         check={descriptionCheck}
         empty={site.review.description === "empty"}
@@ -176,9 +193,15 @@ export function Fields({
         ) : site.review.socials === "check" ? (
           <ul className="min-w-0 flex-1 text-[0.95rem]">
             {site.socials.map((social) => (
-              <li key={social.platform} className="truncate">
-                <label>
-                  <input type="checkbox" name={`social.${social.platform}`} value={social.url} /> {social.url}
+              <li key={social.platform} className="min-w-0">
+                <label className="flex min-h-11 min-w-0 items-center gap-3">
+                  <input
+                    type="checkbox"
+                    className="size-5 shrink-0"
+                    name={`social.${social.platform}`}
+                    value={social.url}
+                  />
+                  <span className="truncate">{social.url}</span>
                 </label>
               </li>
             ))}
