@@ -16,6 +16,10 @@ export interface HomeHistoryRow {
   rank: number;
 }
 
+export interface HomeSource { key: string; kind: "site" | "ads" | "mentions" | "hiring"; platform: string }
+
+export interface HomeCount { entityId: string; sourceKey: string; count: number }
+
 export interface HomeRow {
   entityId: string;
   position: number | null;
