@@ -35,6 +35,26 @@ const SONNER_IMPORT = {
     "sonner is imported in exactly one module, app/components/toaster.tsx, which owns every toast() call behind toastSaved(). DESIGN.md §11: toasts are only 'saved' and 'undo' — a second import site is a second toast authority. Source: 0509#4116.",
 };
 
+const UPLOT_IMPORT = {
+  name: "uplot",
+  message:
+    "uPlot is 22 KB gzipped and loads only in app/components/four-week-plot.tsx, which four-week-line.tsx pulls in with React.lazy so it stays out of the /app entry (docs/REBUILD-DONE.md §B, 150 KB). Source: 0509#5289.",
+};
+
+const UPLOT_REACT_IMPORT = {
+  name: "uplot-react",
+  message:
+    "uPlot is 22 KB gzipped and loads only in app/components/four-week-plot.tsx, which four-week-line.tsx pulls in with React.lazy so it stays out of the /app entry (docs/REBUILD-DONE.md §B, 150 KB). Source: 0509#5289.",
+};
+
+const FOUR_WEEK_PLOT_STATIC_IMPORT = {
+  name: "./four-week-plot",
+  message:
+    'Load four-week-plot with React.lazy(() => import("./four-week-plot")), never a static import: a static import puts uPlot back in the /app entry. Source: 0509#5289.',
+};
+
+const CHART_IMPORTS = [UPLOT_IMPORT, UPLOT_REACT_IMPORT, FOUR_WEEK_PLOT_STATIC_IMPORT];
+
 const FAST_XML_PARSER_IMPORT = {
   name: "fast-xml-parser",
   message:
@@ -374,12 +394,12 @@ export default tseslint.config(
 
   {
     files: ["app/components/**/*.{ts,tsx}"],
-    ignores: ["app/components/toaster.tsx"],
+    ignores: ["app/components/toaster.tsx", "app/components/four-week-plot.tsx"],
     rules: {
       "no-restricted-imports": [
         "error",
         {
-          paths: [...ONE_PAVED_PATH_IMPORTS, CLOUDFLARE_WORKERS_IMPORT, FULL_ZOD_IMPORT],
+          paths: [...ONE_PAVED_PATH_IMPORTS, CLOUDFLARE_WORKERS_IMPORT, FULL_ZOD_IMPORT, ...CHART_IMPORTS],
           patterns: PAVED_PATH_PATTERNS,
         },
       ],
@@ -408,7 +428,21 @@ export default tseslint.config(
             ...ONE_PAVED_PATH_IMPORTS.filter((p) => p !== SONNER_IMPORT),
             CLOUDFLARE_WORKERS_IMPORT,
             FULL_ZOD_IMPORT,
+            ...CHART_IMPORTS,
           ],
+          patterns: PAVED_PATH_PATTERNS,
+        },
+      ],
+    },
+  },
+
+  {
+    files: ["app/components/four-week-plot.tsx"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          paths: [...ONE_PAVED_PATH_IMPORTS, CLOUDFLARE_WORKERS_IMPORT, FULL_ZOD_IMPORT],
           patterns: PAVED_PATH_PATTERNS,
         },
       ],
