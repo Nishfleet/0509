@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import type { BriefPayload } from "../../app/lib/brief-payload";
 import type { BriefSchedule } from "../../app/lib/brief-schedule";
-import type { HomeCount, HomeEntity, HomeSource } from "../../app/lib/home-standing";
+import type { HomeCount, HomeEntity, HomePill, HomeSource } from "../../app/lib/home-standing";
 import { homeStanding } from "../../app/lib/home-standing";
 
 const SCHEDULE: BriefSchedule = { timezone: "Europe/London", weekday: 1, hour: 8 };
@@ -81,9 +81,11 @@ describe("ranked rows", () => {
     const kindred = standing.rows.find((row) => row.entityId === "ent_kindred");
     const casetta = standing.rows.find((row) => row.entityId === "ent_casetta");
     if (kindred === undefined || casetta === undefined) throw new Error("expected Kindred and Casetta rows");
-    expect(kindred.pills.map((pill) => pill.state)).toEqual(["live", "degraded"]);
+    const liveThenDegraded: HomePill["state"][] = ["live", "degraded"];
+    const noneThenDegraded: HomePill["state"][] = ["none", "degraded"];
+    expect(kindred.pills.map((pill) => pill.state)).toEqual(liveThenDegraded);
     expect(kindred.pills.map((pill) => pill.count)).toEqual([3, 0]);
-    expect(casetta.pills.map((pill) => pill.state)).toEqual(["none", "degraded"]);
+    expect(casetta.pills.map((pill) => pill.state)).toEqual(noneThenDegraded);
     expect(kindred.signals).toBe(3);
     expect(casetta.signals).toBe(0);
     expect(kindred.why).toBe("Kindred launched 3 new ads");
