@@ -194,6 +194,8 @@ jobs:
           # Absent, the secret resolves to "" and the specs fail loudly naming
           # it — they never skip.
           E2E_INBOX_TOKEN: ${{ secrets.E2E_INBOX_TOKEN }}
+          # J7 flips the fixture site's price for the next competitor-sweep tick (0509#4123).
+          FIXTURE_SITE_TOKEN: ${{ secrets.FIXTURE_SITE_TOKEN }}
 
       - name: Keep the trace when it fails
         if: failure()
