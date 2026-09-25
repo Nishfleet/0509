@@ -1,5 +1,10 @@
 import { env } from "cloudflare:workers";
 
+import {
+  type DeliveryFailureItem,
+  type SignalAlertItem,
+  type TakedownNoteItem,
+} from "../components/alert-row";
 import { groupByDay } from "./alert-day";
 import {
   readDeliveryFailures,
@@ -42,13 +47,13 @@ export async function loadAlertsPage(userId: string) {
       kind: "note" as const,
       id: note.id,
       at: note.created_at,
-      note: { ...note, when: daysAgoLabel(note.created_at, now) },
+      note: { ...note, when: daysAgoLabel(note.created_at, now) } satisfies TakedownNoteItem,
     })),
     ...failures.map((failure) => ({
       kind: "failure" as const,
       id: failure.id,
       at: failure.created_at,
-      failure: { ...failure, when: daysAgoLabel(failure.created_at, now) },
+      failure: { ...failure, when: daysAgoLabel(failure.created_at, now) } satisfies DeliveryFailureItem,
     })),
     ...withoutMentionAlerts(signals).map((signal) => ({
       kind: "signal" as const,
@@ -61,7 +66,7 @@ export async function loadAlertsPage(userId: string) {
         url: signal.url,
         created_at: signal.created_at,
         when: daysAgoLabel(signal.created_at, now),
-      },
+      } satisfies SignalAlertItem,
     })),
     ...mentions.map((mention) => ({
       kind: "mention" as const,

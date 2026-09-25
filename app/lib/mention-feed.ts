@@ -12,8 +12,8 @@ export interface MentionReadRow {
   kind: string;
   publishedAt: string | null;
   observedAt: string;
-  entityState: string;
   p: number | null;
+  reason: string | null;
 }
 
 export interface MentionRowModel {
@@ -25,31 +25,13 @@ export interface MentionRowModel {
   observedAt: string;
   treatment: MentionTreatment;
   when: string;
+  why: string | null;
 }
 
-export const FOUND_TODAY = "found today";
+const FOUND_TODAY = "found today";
 
 export const POSSIBLY_LINE =
   "Possibly. We were not sure this mattered, so it sits here rather than in your brief.";
-
-export const MENTION_FEED_SQL = `SELECT m.id, m.title, m.canonical_url AS url, m.published_at, m.observed_at,
-  s.platform, s.kind, e.state AS entity_state, v.p
-FROM mention m
-JOIN entity e ON e.id = m.entity_id AND e.workspace_id = m.workspace_id AND e.state = 'on'
-JOIN source s ON s.id = m.source_id
-JOIN jev_verdict v ON v.id = (
-  SELECT v2.id FROM jev_verdict v2
-  WHERE v2.signal_id = m.id AND v2.workspace_id = m.workspace_id AND v2.question_id = ?2
-  ORDER BY v2.decided_at DESC
-  LIMIT 1
-)
-WHERE m.workspace_id = ?1
-ORDER BY m.observed_at DESC, m.id DESC
-LIMIT 50`;
-
-export function mentionFeedBinds(workspaceId: string, questionId: string): [string, string] {
-  return [workspaceId, questionId];
-}
 
 export function mentionTreatment(p: number): MentionTreatment {
   const action = noulAction(p);
@@ -63,22 +45,15 @@ export function mentionWhen(publishedAt: string | null, now: Date): string {
   return daysAgoLabel(publishedAt, now);
 }
 
-export function mentionWhy(treatment: MentionTreatment, name: string): string {
-  if (treatment === "possibly") {
-    return `Marked as possibly worth a look. The article is from ${name}.`;
-  }
-  if (treatment === "held") {
-    return `Set aside until you show all. The article is from ${name}.`;
-  }
-  return `Kept in the feed. The article is from ${name}.`;
+function storedReason(reason: string | null): string | null {
+  const text = reason?.trim() ?? "";
+  return text === "" ? null : text;
 }
 
 export function mentionsFromRows(rows: readonly MentionReadRow[], now: Date): MentionRowModel[] {
   return rows.flatMap((row) => {
     const title = row.title?.trim() ?? "";
-    if (row.entityState !== "on" || row.p === null || !Number.isFinite(row.p) || title === "" || row.url === "") {
-      return [];
-    }
+    if (row.p === null || !Number.isFinite(row.p) || title === "" || row.url === "") return [];
     return [
       {
         id: row.id,
@@ -89,14 +64,10 @@ export function mentionsFromRows(rows: readonly MentionReadRow[], now: Date): Me
         observedAt: row.observedAt,
         treatment: mentionTreatment(row.p),
         when: mentionWhen(row.publishedAt, now),
+        why: storedReason(row.reason),
       },
     ];
   });
-}
-
-export function visibleMentions(mentions: readonly MentionRowModel[], showAll: boolean): MentionRowModel[] {
-  if (showAll) return [...mentions];
-  return mentions.filter((mention) => mention.treatment !== "held");
 }
 
 export function showInFeed(

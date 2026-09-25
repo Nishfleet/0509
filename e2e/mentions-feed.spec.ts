@@ -1,59 +1,17 @@
-import { execFileSync } from "node:child_process";
-import { readFileSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { readdirSync, readFileSync } from "node:fs";
+import { DatabaseSync } from "node:sqlite";
 import { join } from "node:path";
 
+import { betterAuth } from "better-auth";
+import { magicLink } from "better-auth/plugins";
 import { expect, test, type Page } from "@playwright/test";
 
-const TOKEN = "mention-feed-session-token";
-const COOKIE = "__Secure-better-auth.session_token";
+const BANNED = /mention_matters|mention_is_about_brand|probability|confidence/i;
 
-const SEED = `
-INSERT OR IGNORE INTO "user" (id, name, email, "emailVerified", "createdAt", "updatedAt")
-VALUES ('user-mention-feed', 'Mention Reader', 'mention-feed@0509.io', 1, '2026-09-25T00:00:00.000Z', '2026-09-25T00:00:00.000Z');
-
-INSERT OR IGNORE INTO "session" (id, "expiresAt", token, "createdAt", "updatedAt", "userId")
-VALUES ('sess-mention-feed', '2027-09-25T00:00:00.000Z', '${TOKEN}', '2026-09-25T00:00:00.000Z', '2026-09-25T00:00:00.000Z', 'user-mention-feed');
-
-INSERT OR IGNORE INTO workspace (id, name, owner_user_id, timezone, brief_weekday, brief_hour, created_at)
-VALUES ('ws-mention-feed', 'Mention Feed', 'user-mention-feed', 'UTC', 1, 8, '2026-09-25T00:00:00.000Z');
-
-INSERT OR IGNORE INTO entity (id, workspace_id, role, domain, name, identity_json, origin, state, created_at)
-VALUES
-  ('ent-mention-self', 'ws-mention-feed', 'self', 'self-mention.example', 'Self Brand', '{}', 'manual', 'on', '2026-09-25T00:00:00.000Z'),
-  ('ent-mention-on', 'ws-mention-feed', 'competitor', 'zephyrwear.example', 'Zephyrwear', '{}', 'manual', 'on', '2026-09-25T00:00:00.000Z'),
-  ('ent-mention-off', 'ws-mention-feed', 'competitor', 'paused-mention.example', 'Paused Brand', '{}', 'manual', 'off', '2026-09-25T00:00:00.000Z');
-
-INSERT OR IGNORE INTO source (id, key, kind, platform, plugin_key, reliability, is_enabled, config_json)
-VALUES ('src_mentions_medium', 'medium.tag_rss', 'mentions', 'medium', 'medium.tag_rss', 'rss', 1, '{}');
-
-INSERT OR IGNORE INTO signal (
-  id, workspace_id, entity_id, source_id, kind, title, canonical_url, url_hash, payload_json, dedup_key, published_at, observed_at
-) VALUES
-  ('sig-mention-news', 'ws-mention-feed', 'ent-mention-on', 'src_mentions_gdelt', 'mention',
-   'Zephyrwear opens a London flagship', 'https://news.example/flagship', 'hash-news-flagship', '{}', 'ent-mention-on:flagship',
-   '2026-09-24T08:00:00.000Z', '2026-09-25T09:00:00.000Z'),
-  ('sig-mention-hn', 'ws-mention-feed', 'ent-mention-on', 'src_mentions_hn', 'mention',
-   'Zephyrwear thread on Hacker News', 'https://news.ycombinator.com/item?id=1', 'hash-hn-thread', '{}', 'ent-mention-on:hn',
-   '2026-09-25T07:00:00.000Z', '2026-09-25T08:00:00.000Z'),
-  ('sig-mention-medium', 'ws-mention-feed', 'ent-mention-on', 'src_mentions_medium', 'mention',
-   'Zephyrwear shows up in a roundup', 'https://medium.example/roundup', 'hash-medium-roundup', '{}', 'ent-mention-on:roundup',
-   NULL, '2026-09-25T07:00:00.000Z'),
-  ('sig-mention-held', 'ws-mention-feed', 'ent-mention-on', 'src_mentions_gdelt', 'mention',
-   'Zephyrwear ticker line', 'https://news.example/ticker', 'hash-news-ticker', '{}', 'ent-mention-on:ticker',
-   '2026-09-25T06:00:00.000Z', '2026-09-25T06:00:00.000Z'),
-  ('sig-mention-off', 'ws-mention-feed', 'ent-mention-off', 'src_mentions_gdelt', 'mention',
-   'Paused brand should stay hidden', 'https://news.example/paused', 'hash-news-paused', '{}', 'ent-mention-off:paused',
-   '2026-09-25T06:00:00.000Z', '2026-09-25T06:00:00.000Z');
-
-INSERT OR IGNORE INTO jev_verdict (id, workspace_id, question_id, input_hash, signal_id, entity_id, p, decided_at)
-VALUES
-  ('jev-mention-news', 'ws-mention-feed', 'mention_matters', 'hash-jev-news', 'sig-mention-news', 'ent-mention-on', 0.95, '2026-09-25T09:00:00.000Z'),
-  ('jev-mention-hn', 'ws-mention-feed', 'mention_matters', 'hash-jev-hn', 'sig-mention-hn', 'ent-mention-on', 0.93, '2026-09-25T08:00:00.000Z'),
-  ('jev-mention-medium', 'ws-mention-feed', 'mention_matters', 'hash-jev-medium', 'sig-mention-medium', 'ent-mention-on', 0.42, '2026-09-25T07:00:00.000Z'),
-  ('jev-mention-held', 'ws-mention-feed', 'mention_matters', 'hash-jev-held', 'sig-mention-held', 'ent-mention-on', 0.05, '2026-09-25T06:00:00.000Z'),
-  ('jev-mention-off', 'ws-mention-feed', 'mention_matters', 'hash-jev-off', 'sig-mention-off', 'ent-mention-off', 0.99, '2026-09-25T06:00:00.000Z');
-`;
+test.skip(
+  Boolean(process.env.PLAYWRIGHT_TEST_BASE_URL),
+  "the three treatments are rows in the local preview database; production signs in through the magic-link inbox and has no fixture workspace",
+);
 
 function authSecret(): string {
   const line = readFileSync(".dev.vars.example", "utf8")
@@ -65,27 +23,226 @@ function authSecret(): string {
   return line.slice("BETTER_AUTH_SECRET=".length);
 }
 
-async function signedCookie(token: string, secret: string): Promise<string> {
-  const key = await crypto.subtle.importKey(
-    "raw",
-    new TextEncoder().encode(secret),
-    { name: "HMAC", hash: "SHA-256" },
-    false,
-    ["sign"],
-  );
-  const signature = new Uint8Array(await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(token)));
-  const binary = String.fromCharCode(...signature);
-  return `${token}.${btoa(binary)}`;
+function previewDatabasePath(): string {
+  const root = ".wrangler/state";
+  const files = readdirSync(root, { recursive: true, encoding: "utf8" }).filter((name) => name.endsWith(".sqlite"));
+  for (const name of files) {
+    const file = join(root, name);
+    const probe = new DatabaseSync(file, { readOnly: true, timeout: 15_000 });
+    try {
+      const row = probe.prepare("SELECT 1 AS ok FROM sqlite_master WHERE type = 'table' AND name = 'signal'").get();
+      if (row !== undefined) return file;
+    } finally {
+      probe.close();
+    }
+  }
+  throw new Error("local preview D1 has no signal table");
 }
 
-function seedWorkspace(): void {
-  const file = join(tmpdir(), "mention-feed-seed.sql");
-  writeFileSync(file, SEED);
-  execFileSync(
-    "npx",
-    ["wrangler", "d1", "execute", "0509", "--local", "--yes", `--file=${file}`],
-    { stdio: "pipe" },
-  );
+function run(db: DatabaseSync, sql: string, ...values: (string | number | null)[]): void {
+  db.prepare(sql).run(...values);
+}
+
+async function seedSession(): Promise<string> {
+  const suffix = crypto.randomUUID().slice(0, 8);
+  const email = `mention-feed-${suffix}@0509.io`;
+  const db = new DatabaseSync(previewDatabasePath(), { timeout: 15_000 });
+  db.exec("PRAGMA busy_timeout = 15000");
+  db.exec("PRAGMA foreign_keys = ON");
+  const links: string[] = [];
+  const auth = betterAuth({
+    database: db,
+    secret: authSecret(),
+    baseURL: "https://0509.io",
+    advanced: { cookiePrefix: "better-auth" },
+    plugins: [
+      magicLink({
+        expiresIn: 300,
+        sendMagicLink: ({ url }) => {
+          links.push(url);
+          return Promise.resolve();
+        },
+      }),
+    ],
+  });
+  try {
+    await auth.api.signInMagicLink({ body: { email }, headers: new Headers() });
+    const link = links.at(-1);
+    if (link === undefined) throw new Error("magic link was not issued");
+    const response = await auth.handler(new Request(link, { redirect: "manual" }));
+    const cookie = response.headers
+      .getSetCookie()
+      .map((header) => header.split(";")[0])
+      .join("; ");
+    if (cookie === "") throw new Error("magic link created no session cookie");
+    const user = db.prepare('SELECT id FROM "user" WHERE email = ?').get(email) as { id: string } | undefined;
+    if (user === undefined) throw new Error("magic link created no user");
+    const workspaceId = `ws-${suffix}`;
+    const onId = `ent-on-${suffix}`;
+    const offId = `ent-off-${suffix}`;
+    const sourceId = `src-medium-${suffix}`;
+    const stamp = "2026-09-25T00:00:00.000Z";
+    run(
+      db,
+      "INSERT INTO workspace (id, name, owner_user_id, timezone, brief_weekday, brief_hour, created_at) VALUES (?, ?, ?, 'UTC', 1, 8, ?)",
+      workspaceId,
+      "Mention Feed",
+      user.id,
+      stamp,
+    );
+    run(
+      db,
+      "INSERT INTO entity (id, workspace_id, role, domain, name, created_at) VALUES (?, ?, 'self', ?, 'Self Brand', ?)",
+      `ent-self-${suffix}`,
+      workspaceId,
+      `self-${suffix}.example`,
+      stamp,
+    );
+    run(
+      db,
+      "INSERT INTO entity (id, workspace_id, role, domain, name, created_at) VALUES (?, ?, 'competitor', ?, 'Zephyrwear', ?)",
+      onId,
+      workspaceId,
+      `zephyr-${suffix}.example`,
+      stamp,
+    );
+    run(
+      db,
+      "INSERT INTO entity (id, workspace_id, role, domain, name, state, created_at) VALUES (?, ?, 'competitor', ?, 'Paused Brand', 'off', ?)",
+      offId,
+      workspaceId,
+      `paused-${suffix}.example`,
+      stamp,
+    );
+    run(
+      db,
+      "INSERT INTO source (id, key, kind, platform, plugin_key, reliability, is_enabled, config_json) VALUES (?, ?, 'mentions', 'medium', ?, 'rss', 1, '{}')",
+      sourceId,
+      `medium.feed-${suffix}`,
+      `medium.feed-${suffix}`,
+    );
+    const mention = (
+      id: string,
+      entityId: string,
+      source: string,
+      title: string,
+      url: string,
+      publishedAt: string | null,
+      observedAt: string,
+    ) =>
+      run(
+        db,
+        `INSERT INTO signal (id, workspace_id, entity_id, source_id, kind, title, url, canonical_url, url_hash, payload_json, dedup_key, published_at, observed_at)
+         VALUES (?, ?, ?, ?, 'mention', ?, ?, ?, ?, '{}', ?, ?, ?)`,
+        id,
+        workspaceId,
+        entityId,
+        source,
+        title,
+        url,
+        `hash-${id}`,
+        `dedup-${id}`,
+        publishedAt,
+        observedAt,
+      );
+    const verdict = (id: string, signalId: string, entityId: string, p: number, reason: string, decidedAt: string) =>
+      run(
+        db,
+        `INSERT INTO jev_verdict (id, workspace_id, question_id, input_hash, signal_id, entity_id, p, reason, decided_at)
+         VALUES (?, ?, 'mention_matters', ?, ?, ?, ?, ?, ?)`,
+        id,
+        workspaceId,
+        `hash-${id}`,
+        signalId,
+        entityId,
+        p,
+        reason,
+        decidedAt,
+      );
+    mention(
+      `sig-news-${suffix}`,
+      onId,
+      "src_mentions_gdelt",
+      "Zephyrwear opens a London flagship",
+      "https://news.example/flagship",
+      "2026-09-24T08:00:00.000Z",
+      "2026-09-25T09:00:00.000Z",
+    );
+    mention(
+      `sig-hn-${suffix}`,
+      onId,
+      "src_mentions_hn",
+      "Zephyrwear thread on Hacker News",
+      "https://news.ycombinator.com/item?id=1",
+      "2026-09-25T07:00:00.000Z",
+      "2026-09-25T08:00:00.000Z",
+    );
+    mention(
+      `sig-medium-${suffix}`,
+      onId,
+      sourceId,
+      "Zephyrwear shows up in a roundup",
+      "https://medium.example/roundup",
+      null,
+      "2026-09-25T07:00:00.000Z",
+    );
+    mention(
+      `sig-held-${suffix}`,
+      onId,
+      "src_mentions_gdelt",
+      "Zephyrwear ticker line",
+      "https://news.example/ticker",
+      "2026-09-25T06:00:00.000Z",
+      "2026-09-25T06:00:00.000Z",
+    );
+    mention(
+      `sig-off-${suffix}`,
+      offId,
+      "src_mentions_gdelt",
+      "Paused brand should stay hidden",
+      "https://news.example/paused",
+      "2026-09-25T06:00:00.000Z",
+      "2026-09-25T06:00:00.000Z",
+    );
+    verdict(
+      `jev-news-old-${suffix}`,
+      `sig-news-${suffix}`,
+      onId,
+      0.04,
+      "An old read that should stay hidden.",
+      "2026-09-25T08:00:00.000Z",
+    );
+    verdict(
+      `jev-news-${suffix}`,
+      `sig-news-${suffix}`,
+      onId,
+      0.95,
+      "A London flagship is a move worth knowing.",
+      "2026-09-25T09:00:00.000Z",
+    );
+    verdict(
+      `jev-hn-${suffix}`,
+      `sig-hn-${suffix}`,
+      onId,
+      0.93,
+      "A public thread about the brand is worth a look.",
+      "2026-09-25T08:00:00.000Z",
+    );
+    verdict(
+      `jev-medium-${suffix}`,
+      `sig-medium-${suffix}`,
+      onId,
+      0.42,
+      "A roundup mention, not a move of its own.",
+      "2026-09-25T07:00:00.000Z",
+    );
+    verdict(`jev-held-${suffix}`, `sig-held-${suffix}`, onId, 0.05, "A ticker line, not a move.", "2026-09-25T06:00:00.000Z");
+    verdict(`jev-off-${suffix}`, `sig-off-${suffix}`, offId, 0.99, "Paused brand reason.", "2026-09-25T06:00:00.000Z");
+    db.exec("PRAGMA wal_checkpoint(PASSIVE)");
+    return cookie;
+  } finally {
+    db.close();
+  }
 }
 
 async function measure(page: Page) {
@@ -96,10 +253,6 @@ async function measure(page: Page) {
   }));
 }
 
-test.beforeAll(() => {
-  seedWorkspace();
-});
-
 test("a workspace shows the three mention treatments", async ({ page }, testInfo) => {
   test.setTimeout(90_000);
   const consoleErrors: string[] = [];
@@ -108,8 +261,7 @@ test("a workspace shows the three mention treatments", async ({ page }, testInfo
   });
   page.on("pageerror", (error) => consoleErrors.push(error.message));
 
-  const value = await signedCookie(TOKEN, authSecret());
-  await page.setExtraHTTPHeaders({ cookie: `${COOKIE}=${value}` });
+  await page.setExtraHTTPHeaders({ cookie: await seedSession() });
   const response = await page.goto("/app/alerts");
   expect(response?.status()).toBe(200);
   await expect(page).toHaveURL(/\/app\/alerts/);
@@ -127,9 +279,11 @@ test("a workspace shows the three mention treatments", async ({ page }, testInfo
   await expect(page.getByText("Hacker News mentions", { exact: true })).toBeVisible();
   await expect(page.getByText("Medium mentions", { exact: true })).toBeVisible();
   await expect(page.getByText("Paused brand should stay hidden")).toHaveCount(0);
+  await expect(page.getByText("A London flagship is a move worth knowing.")).toHaveCount(1);
+  await expect(page.getByText("An old read that should stay hidden.")).toHaveCount(0);
 
   const before = await page.locator("main").innerHTML();
-  expect(before).not.toMatch(/mention_matters|mention_is_about_brand|probability|confidence/i);
+  expect(before).not.toMatch(BANNED);
 
   await testInfo.attach(`alerts-${testInfo.project.name}`, {
     body: await page.screenshot({ fullPage: true }),
@@ -139,9 +293,10 @@ test("a workspace shows the three mention treatments", async ({ page }, testInfo
   await page.getByTestId("mentions-show-all").click();
   await expect(held).toHaveCount(1);
   await expect(held).toContainText("Zephyrwear ticker line");
+  await expect(held.getByTestId("mention-why")).toHaveText("A ticker line, not a move.");
   await expect(page.getByText("Paused brand should stay hidden")).toHaveCount(0);
   const after = await page.locator("main").innerHTML();
-  expect(after).not.toMatch(/mention_matters|mention_is_about_brand|probability|confidence/i);
+  expect(after).not.toMatch(BANNED);
 
   await testInfo.attach(`alerts-show-all-${testInfo.project.name}`, {
     body: await page.screenshot({ fullPage: true }),

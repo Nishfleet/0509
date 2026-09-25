@@ -6,23 +6,18 @@ import { AlertFeed } from "../../app/components/alert-feed";
 import type { AlertFeedItem } from "../../app/components/alert-row";
 import { MentionRow } from "../../app/components/mention-row";
 import {
-  FOUND_TODAY,
-  MENTION_FEED_SQL,
-  POSSIBLY_LINE,
-  mentionFeedBinds,
+  mentionsFromRows,
   mentionTreatment,
   mentionWhen,
-  mentionWhy,
-  mentionsFromRows,
   showInFeed,
-  visibleMentions,
   withoutMentionAlerts,
   type MentionReadRow,
   type MentionRowModel,
 } from "../../app/lib/mention-feed";
-import { D6_QUESTION_ID } from "../../app/lib/standing-score";
 
 const NOW = new Date("2026-09-25T12:00:00.000Z");
+const POSSIBLY = "Possibly. We were not sure this mattered, so it sits here rather than in your brief.";
+const BANNED = /probability|confidence|mention_matters|mention_is_about_brand|\b0\.\d{2,}\b/i;
 
 function row(overrides: Partial<MentionReadRow> & Pick<MentionReadRow, "id" | "p">): MentionReadRow {
   return {
@@ -32,7 +27,7 @@ function row(overrides: Partial<MentionReadRow> & Pick<MentionReadRow, "id" | "p
     kind: overrides.kind ?? "mentions",
     publishedAt: overrides.publishedAt === undefined ? "2026-09-24T08:00:00.000Z" : overrides.publishedAt,
     observedAt: overrides.observedAt ?? "2026-09-25T08:00:00.000Z",
-    entityState: overrides.entityState ?? "on",
+    reason: overrides.reason === undefined ? "A London flagship is a move worth knowing." : overrides.reason,
     id: overrides.id,
     p: overrides.p,
   };
@@ -42,16 +37,7 @@ function item(mention: MentionRowModel): AlertFeedItem {
   return { kind: "mention", id: mention.id, at: mention.observedAt, mention };
 }
 
-const BANNED = /probability|confidence|mention_matters|mention_is_about_brand|\b0\.\d{2,}\b/i;
-
 describe("mentions feed", () => {
-  it("reads the mention view and keeps off brands out of the query", () => {
-    expect(MENTION_FEED_SQL).toContain("FROM mention");
-    expect(MENTION_FEED_SQL).toContain("e.state = 'on'");
-    expect(MENTION_FEED_SQL).not.toMatch(/CREATE TABLE|mention_matters/);
-    expect(mentionFeedBinds("ws-1", D6_QUESTION_ID)).toEqual(["ws-1", "mention_matters"]);
-  });
-
   it("puts p >= 0.9 in the feed, the middle band on possibly, and p <= 0.1 behind show all", () => {
     expect(mentionTreatment(0.9)).toBe("shown");
     expect(mentionTreatment(1)).toBe("shown");
@@ -62,35 +48,52 @@ describe("mentions feed", () => {
   });
 
   it("says found today when published_at is null and a relative time otherwise", () => {
-    expect(mentionWhen(null, NOW)).toBe(FOUND_TODAY);
+    expect(mentionWhen(null, NOW)).toBe("found today");
     expect(mentionWhen("2026-09-23T00:00:00.000Z", NOW)).toBe("2 days ago");
-    expect(FOUND_TODAY).not.toBe("today");
   });
 
-  it("drops off brands, unjudged rows and empty titles, and never keeps the probability on the row", () => {
+  it("drops unjudged rows and empty titles, and keeps the stored reason instead of the score", () => {
     const mentions = mentionsFromRows(
       [
         row({ id: "high", p: 0.95, platform: "gdelt" }),
-        row({ id: "mid", p: 0.42, platform: "hn", publishedAt: null, title: "Zephyrwear shows up in a roundup" }),
-        row({ id: "low", p: 0.05, platform: "medium", title: "Zephyrwear ticker line" }),
-        row({ id: "off", p: 0.99, entityState: "off", title: "Paused brand should stay hidden" }),
-        row({ id: "dismissed", p: 0.99, entityState: "dismissed", title: "Dismissed brand should stay hidden" }),
-        row({ id: "unjudged", p: null, title: "No verdict yet" }),
-        row({ id: "blank", p: 0.95, title: "  " }),
+        row({
+          id: "mid",
+          p: 0.42,
+          platform: "hn",
+          publishedAt: null,
+          title: "Zephyrwear shows up in a roundup",
+          reason: "A roundup mention, not a move of its own.",
+        }),
+        row({
+          id: "low",
+          p: 0.05,
+          platform: "medium",
+          title: "Zephyrwear ticker line",
+          reason: "A ticker line, not a move.",
+        }),
+        row({ id: "unjudged", p: null, title: "No verdict yet", reason: "Should not appear." }),
+        row({ id: "blank", p: 0.95, title: "  ", reason: "Should not appear." }),
+        row({ id: "blank-reason", p: 0.92, title: "A bare headline", reason: "   " }),
       ],
       NOW,
     );
-    expect(mentions.map((mention) => mention.id)).toEqual(["high", "mid", "low"]);
-    expect(mentions.map((mention) => mention.treatment)).toEqual(["shown", "possibly", "held"]);
+    expect(mentions.map((mention) => mention.id)).toEqual(["high", "mid", "low", "blank-reason"]);
+    expect(mentions.map((mention) => mention.treatment)).toEqual(["shown", "possibly", "held", "shown"]);
     expect(mentions.map((mention) => mention.sourceName)).toEqual([
       "News mentions",
       "Hacker News mentions",
       "Medium mentions",
+      "News mentions",
     ]);
-    expect(mentions[1]?.when).toBe(FOUND_TODAY);
+    expect(mentions[1]?.when).toBe("found today");
+    expect(mentions.map((mention) => mention.why)).toEqual([
+      "A London flagship is a move worth knowing.",
+      "A roundup mention, not a move of its own.",
+      "A ticker line, not a move.",
+      null,
+    ]);
     expect(mentions.every((mention) => !("p" in mention))).toBe(true);
-    expect(visibleMentions(mentions, false).map((mention) => mention.id)).toEqual(["high", "mid"]);
-    expect(visibleMentions(mentions, true).map((mention) => mention.id)).toEqual(["high", "mid", "low"]);
+    expect(JSON.stringify(mentions)).not.toMatch(BANNED);
   });
 
   it("does not also show the mention alert row the sweep wrote for a high score", () => {
@@ -102,12 +105,25 @@ describe("mentions feed", () => {
     ).toEqual(["ad-sig"]);
   });
 
-  it("renders the three treatments with a source pill and a time, and no machinery in the open row", () => {
+  it("renders the three treatments with a source pill, a time, and the stored reason behind the tap", () => {
     const mentions = mentionsFromRows(
       [
         row({ id: "high", p: 0.95 }),
-        row({ id: "mid", p: 0.42, platform: "hn", publishedAt: null, title: "Zephyrwear shows up in a roundup" }),
-        row({ id: "low", p: 0.04, platform: "medium", title: "Zephyrwear ticker line" }),
+        row({
+          id: "mid",
+          p: 0.42,
+          platform: "hn",
+          publishedAt: null,
+          title: "Zephyrwear shows up in a roundup",
+          reason: "A roundup mention, not a move of its own.",
+        }),
+        row({
+          id: "low",
+          p: 0.04,
+          platform: "medium",
+          title: "Zephyrwear ticker line",
+          reason: "A ticker line, not a move.",
+        }),
       ],
       NOW,
     );
@@ -118,21 +134,21 @@ describe("mentions feed", () => {
     expect(html).toContain("News mentions");
     expect(html).toContain("Hacker News mentions");
     expect(html).toContain("Medium mentions");
-    expect(html).toContain(FOUND_TODAY);
-    expect(html).toContain(POSSIBLY_LINE);
+    expect(html).toContain("found today");
+    expect(html).toContain(POSSIBLY);
     expect(html).toContain("Why we flagged this");
+    expect(html).toContain("A London flagship is a move worth knowing.");
+    expect(html).toContain("A roundup mention, not a move of its own.");
+    expect(html).toContain("A ticker line, not a move.");
     expect(html.match(/data-treatment="possibly"/g)).toHaveLength(1);
     expect(html).not.toMatch(BANNED);
-    for (const mention of mentions) {
-      expect(mentionWhy(mention.treatment, mention.sourceName)).not.toMatch(BANNED);
-    }
   });
 
   it("keeps the low band out of the default feed until show all", () => {
     const mentions = mentionsFromRows(
       [
         row({ id: "high", p: 0.95 }),
-        row({ id: "low", p: 0.04, title: "Zephyrwear ticker line" }),
+        row({ id: "low", p: 0.04, title: "Zephyrwear ticker line", reason: "A ticker line, not a move." }),
       ],
       NOW,
     );

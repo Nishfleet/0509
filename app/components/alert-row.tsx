@@ -15,14 +15,14 @@ const DETAILS = "mt-4";
 const SUMMARY = "cursor-pointer underline decoration-1 underline-offset-4";
 const BRIEF = "mt-4";
 
-interface TakedownNoteItem {
+export interface TakedownNoteItem {
   id: string;
   title: string;
   created_at: string;
   when: string;
 }
 
-interface DeliveryFailureItem {
+export interface DeliveryFailureItem {
   id: string;
   title: string;
   body: string | null;
@@ -31,7 +31,7 @@ interface DeliveryFailureItem {
   brief: BriefPayload | null;
 }
 
-interface SignalAlertItem {
+export interface SignalAlertItem {
   id: string;
   title: string;
   body: string | null;
