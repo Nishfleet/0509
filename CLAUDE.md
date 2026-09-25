@@ -136,18 +136,12 @@ rejection**, not a review comment.
 
 ## What gates a merge
 
-Five required checks on the `main-merge-queue` ruleset (id 21391031), **empty
-bypass list** — verified live against
-`gh api repos/Nishfleet/0509/rulesets/21391031` on 2026-09-26:
+Four required checks on the `main-merge-queue` ruleset (id 21391031), **empty
+bypass list**:
 
 ```
-Gitleaks   codex-node-checks   semgrep   preview-assert   opus-review
+Gitleaks   codex-node-checks   semgrep   preview-assert
 ```
-
-`opus-review` grades worker-app PRs on `pull_request`; on `merge_group` it
-reports `true` (`ci.yml`: "the grade was enforced on the pull request"), so the
-queue's verdict still rests on the four mechanical checks. The `ci.yml:1-6`
-header still says four — it predates `opus-review`'s addition to the ruleset.
 
 Renaming one of these is not cosmetic. A required check that never reports fails
 closed and nothing can merge again, including the PR that renamed it. The merge
