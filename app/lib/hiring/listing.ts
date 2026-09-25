@@ -73,8 +73,32 @@ const leverRowSchema = z.object({
   }).nullish(),
 });
 
+const ashbyTopSchema = z.object({ jobs: z.array(z.unknown()) });
+const ashbyRowSchema = z.object({
+  id: z.string().nullish(),
+  title: z.string().nullish(),
+  jobUrl: z.string(),
+  location: z.string().nullish(),
+  team: z.string().nullish(),
+  department: z.string().nullish(),
+  publishedAt: z.string().nullish(),
+  isListed: z.boolean().nullish(),
+});
+
+const workableTopSchema = z.object({ jobs: z.array(z.unknown()) });
+const workableRowSchema = z.object({
+  shortcode: z.string(),
+  title: z.string().nullish(),
+  url: z.string().nullish(),
+  shortlink: z.string().nullish(),
+  city: z.string().nullish(),
+  country: z.string().nullish(),
+  department: z.string().nullish(),
+  published_on: z.string().nullish(),
+});
+
 export function parseListing(platform: BoardPlatform, body: string, boardUrl: string): OpenRole[] {
-  if (platform === "ashby" || platform === "workable" || platform === "smartrecruiters") {
+  if (platform === "smartrecruiters") {
     throw new ListingError(platform, "not supported yet");
   }
 
@@ -96,6 +120,48 @@ export function parseListing(platform: BoardPlatform, body: string, boardUrl: st
         location: text(r.location?.name),
         team: null,
         postedAt: isoDate(r.first_published),
+      }];
+    });
+  }
+
+  if (platform === "ashby") {
+    const top = ashbyTopSchema.safeParse(parsed);
+    if (!top.success) throw new ListingError(platform, "unexpected listing shape");
+    return top.data.jobs.flatMap((row) => {
+      const rowParsed = ashbyRowSchema.safeParse(row);
+      if (!rowParsed.success) return [];
+      const r = rowParsed.data;
+      if (r.isListed === false) return [];
+      const t = title(r.title);
+      if (t === null) return [];
+      return [{
+        id: r.id ?? r.jobUrl,
+        title: t,
+        url: httpsUrl(r.jobUrl, boardUrl),
+        location: text(r.location),
+        team: text(r.team) ?? text(r.department),
+        postedAt: isoDate(r.publishedAt),
+      }];
+    });
+  }
+
+  if (platform === "workable") {
+    const top = workableTopSchema.safeParse(parsed);
+    if (!top.success) throw new ListingError(platform, "unexpected listing shape");
+    return top.data.jobs.flatMap((row) => {
+      const rowParsed = workableRowSchema.safeParse(row);
+      if (!rowParsed.success) return [];
+      const r = rowParsed.data;
+      const t = title(r.title);
+      if (t === null) return [];
+      const location = [text(r.city), text(r.country)].filter((part) => part !== null);
+      return [{
+        id: r.shortcode,
+        title: t,
+        url: httpsUrl(r.url ?? r.shortlink, boardUrl),
+        location: location.length === 0 ? null : location.join(", "),
+        team: text(r.department),
+        postedAt: isoDate(r.published_on),
       }];
     });
   }
