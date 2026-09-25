@@ -1,7 +1,7 @@
 import type { Route } from "./+types/login";
 import { env } from "cloudflare:workers";
-import { useContext, useEffect, useState } from "react";
-import { Form, UNSAFE_FrameworkContext, useActionData, useNavigate, useNavigation, useSearchParams } from "react-router";
+import { useEffect, useState } from "react";
+import { Form, useActionData, useNavigate, useNavigation, useSearchParams } from "react-router";
 
 import { Footer } from "../components/footer";
 import { SIGN_IN_LEDE, SIGN_IN_SHELL, SIGN_IN_TITLE, SignInSent } from "../components/sign-in-sent";
@@ -35,13 +35,15 @@ export async function action({ request }: Route.ActionArgs) {
 
   const captchaField = form.get("cf-turnstile-response");
   const captcha = typeof captchaField === "string" ? captchaField.trim() : "";
+  const site = new URL(env.BETTER_AUTH_URL);
   const headers = new Headers(request.headers);
   headers.delete("content-length");
   headers.set("content-type", "application/json");
+  headers.set("origin", site.origin);
   if (captcha.length > 0) headers.set("x-captcha-response", captcha);
   const response = await handleAuthRequest(
     env,
-    new Request(new URL("/api/auth/sign-in/magic-link", request.url), {
+    new Request(new URL("/api/auth/sign-in/magic-link", site), {
       method: "POST",
       headers,
       body: JSON.stringify({
@@ -59,19 +61,21 @@ export async function action({ request }: Route.ActionArgs) {
 }
 
 function TurnstileWidget({ siteKey }: { siteKey: string }) {
-  const framework = useContext(UNSAFE_FrameworkContext);
-  const nonce = framework === undefined ? undefined : framework.nonce;
+  useEffect(() => {
+    const script = document.createElement("script");
+    script.src = TURNSTILE_SCRIPT;
+    script.async = true;
+    document.head.appendChild(script);
+    return () => script.remove();
+  }, []);
   return (
-    <>
-      <div
-        className="cf-turnstile"
-        data-sitekey={siteKey}
-        data-appearance="interaction-only"
-        data-response-field="true"
-        data-response-field-name="cf-turnstile-response"
-      />
-      <script nonce={nonce} src={TURNSTILE_SCRIPT} async defer suppressHydrationWarning />
-    </>
+    <div
+      className="cf-turnstile"
+      data-sitekey={siteKey}
+      data-appearance="interaction-only"
+      data-response-field="true"
+      data-response-field-name="cf-turnstile-response"
+    />
   );
 }
 
@@ -107,16 +111,12 @@ export default function Login({ loaderData }: Route.ComponentProps) {
 
   return (
     <div className={SIGN_IN_SHELL}>
-      <header className="self-start">
-        <Wordmark />
-      </header>
+      <header className="self-start"><Wordmark /></header>
       <main className="flex flex-col">
         <h1 className={SIGN_IN_TITLE}>Sign in</h1>
         <p className={SIGN_IN_LEDE}>We email you a link. Tap it and you're in. There is no password.</p>
         <Form method="post" className="mt-8 flex flex-col gap-3">
-          <label htmlFor="email" className="font-mono text-eyebrow text-ink-soft uppercase">
-            Email
-          </label>
+          <label htmlFor="email" className="font-mono text-eyebrow text-ink-soft uppercase">Email</label>
           <Input id="email" name="email" type="email" autoComplete="email" inputMode="email" required />
           <TurnstileWidget siteKey={loaderData.turnstileSiteKey} />
           <Button type="submit" size="lg" disabled={busy} className="mt-2">
