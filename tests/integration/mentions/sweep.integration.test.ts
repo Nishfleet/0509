@@ -71,7 +71,7 @@ function jevAnswering() {
         : title.includes("flagship")
           ? 0.94
           : 0.4;
-    return Promise.resolve({ answers: { [questionId ?? ""]: { type: "noul", noul: p } } });
+    return Promise.resolve({ answers: { [questionId ?? ""]: { type: "boolean", probability: p } } });
   });
 }
 

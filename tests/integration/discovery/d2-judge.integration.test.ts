@@ -103,9 +103,9 @@ describe("judgeStillCompetitors", () => {
     if (context === null) throw new Error("seed failed");
     const run = vi.fn(async (_model: string, request: { questions: Record<string, { type: string }> }) => {
       const questions = request.questions;
-      const answers: Record<string, { type: string; noul?: number; choice?: string }> = {};
+      const answers: Record<string, { type: string; probability?: number; choice?: string }> = {};
       if (questions["still_competitor"] !== undefined) {
-        answers["still_competitor"] = { type: "noul", noul: 0.05 };
+        answers["still_competitor"] = { type: "boolean", probability: 0.05 };
       }
       if (questions["still_competitor_reason"] !== undefined) {
         answers["still_competitor_reason"] = { type: "choice", choice: "shut_down" };

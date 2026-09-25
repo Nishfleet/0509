@@ -42,7 +42,7 @@ describe("screenPublicSubject", () => {
   it("returns proceed when Jev p is at or above 0.9", async () => {
     const workspaceId = await seedWorkspace();
     const run = vi.fn(() =>
-      Promise.resolve({ answers: { public_subject: { type: "noul", noul: 0.95 } } }),
+      Promise.resolve({ answers: { public_subject: { type: "boolean", probability: 0.95 } } }),
     );
     Reflect.set(env, "AI", { run });
 
@@ -61,7 +61,7 @@ describe("screenPublicSubject", () => {
       questions: { public_subject: { type: string; instructions: string; criteria: { true: string; false: string } } };
     };
     expect(request.questions.public_subject).toEqual({
-      type: "noul",
+      type: "boolean",
       instructions: PUBLIC_SUBJECT.instructions,
       criteria: { true: PUBLIC_SUBJECT.whenTrue, false: PUBLIC_SUBJECT.whenFalse },
     });
@@ -70,7 +70,7 @@ describe("screenPublicSubject", () => {
   it("returns ask when Jev p is in the ambiguous middle band", async () => {
     const workspaceId = await seedWorkspace();
     const run = vi.fn(() =>
-      Promise.resolve({ answers: { public_subject: { type: "noul", noul: 0.5 } } }),
+      Promise.resolve({ answers: { public_subject: { type: "boolean", probability: 0.5 } } }),
     );
     Reflect.set(env, "AI", { run });
 
@@ -88,7 +88,7 @@ describe("screenPublicSubject", () => {
   it("returns refuse when Jev p is at or below 0.1", async () => {
     const workspaceId = await seedWorkspace();
     const run = vi.fn(() =>
-      Promise.resolve({ answers: { public_subject: { type: "noul", noul: 0.05 } } }),
+      Promise.resolve({ answers: { public_subject: { type: "boolean", probability: 0.05 } } }),
     );
     Reflect.set(env, "AI", { run });
 
@@ -106,7 +106,7 @@ describe("screenPublicSubject", () => {
   it("persists a jev_verdict row on the first call and reuses the cached verdict on the second", async () => {
     const workspaceId = await seedWorkspace();
     const run = vi.fn(() =>
-      Promise.resolve({ answers: { public_subject: { type: "noul", noul: 0.95 } } }),
+      Promise.resolve({ answers: { public_subject: { type: "boolean", probability: 0.95 } } }),
     );
     Reflect.set(env, "AI", { run });
 
