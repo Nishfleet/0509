@@ -93,6 +93,12 @@ async function refusalReason(
   return null;
 }
 
+function browserRefused(status: number, html: string): boolean {
+  if (status < 200 || status > 299) return true;
+  const probe = html.slice(0, 20_000).toLowerCase();
+  return CHALLENGE_MARKERS.some((marker) => probe.includes(marker));
+}
+
 function readField(value: unknown, key: string): unknown {
   if (typeof value !== "object" || value === null) return undefined;
   return (value as Record<string, unknown>)[key];
@@ -256,6 +262,10 @@ async function escalate(
       result: null,
       cause: `browser body was unreadable (${err instanceof Error ? err.message : String(err)})`,
     };
+  }
+
+  if (browserRefused(status, html)) {
+    return { result: null, cause: `browser page was refused (${String(status)})` };
   }
 
   return {
