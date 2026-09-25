@@ -12,6 +12,13 @@ interface HiringSourceRow {
   config_json: string;
 }
 
+// Migration 0022 (P10.5a, #5147) writes the source's conduct policy into every
+// row's config_json. The hiring board sources fall through the migration's
+// `ELSE 'api_terms'` branch (kind='hiring', plugin_key='hiring.board'), so the
+// JSON now carries the registry's robots policy — the row no longer matches
+// the literal `{}` the migration-time fixture pinned.
+const HIRING_ROBOTS_POLICY = JSON.stringify({ robots: "api_terms" });
+
 const EXPECTED_HIRING_SOURCES: readonly HiringSourceRow[] = [
   {
     id: "src_hiring_ashby",
@@ -21,7 +28,7 @@ const EXPECTED_HIRING_SOURCES: readonly HiringSourceRow[] = [
     plugin_key: "hiring.board",
     reliability: "official_api",
     is_enabled: 0,
-    config_json: "{}",
+    config_json: HIRING_ROBOTS_POLICY,
   },
   {
     id: "src_hiring_greenhouse",
@@ -31,7 +38,7 @@ const EXPECTED_HIRING_SOURCES: readonly HiringSourceRow[] = [
     plugin_key: "hiring.board",
     reliability: "official_api",
     is_enabled: 0,
-    config_json: "{}",
+    config_json: HIRING_ROBOTS_POLICY,
   },
   {
     id: "src_hiring_lever",
@@ -41,7 +48,7 @@ const EXPECTED_HIRING_SOURCES: readonly HiringSourceRow[] = [
     plugin_key: "hiring.board",
     reliability: "official_api",
     is_enabled: 0,
-    config_json: "{}",
+    config_json: HIRING_ROBOTS_POLICY,
   },
   {
     id: "src_hiring_smartrecruiters",
@@ -51,7 +58,7 @@ const EXPECTED_HIRING_SOURCES: readonly HiringSourceRow[] = [
     plugin_key: "hiring.board",
     reliability: "official_api",
     is_enabled: 0,
-    config_json: "{}",
+    config_json: HIRING_ROBOTS_POLICY,
   },
   {
     id: "src_hiring_workable",
@@ -61,7 +68,7 @@ const EXPECTED_HIRING_SOURCES: readonly HiringSourceRow[] = [
     plugin_key: "hiring.board",
     reliability: "official_api",
     is_enabled: 0,
-    config_json: "{}",
+    config_json: HIRING_ROBOTS_POLICY,
   },
 ];
 
