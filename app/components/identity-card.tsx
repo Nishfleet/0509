@@ -1,4 +1,4 @@
-import { Suspense, useId, useState, type ReactNode } from "react";
+import { Suspense, useId, useState, type KeyboardEvent, type ReactNode } from "react";
 import { Await, Form, useFetcher } from "react-router";
 
 import type { CardDraft, CreatorRows, SiteFields } from "../lib/identity/card-fields";
@@ -66,7 +66,14 @@ function EditRow({
   onSave: (value: string) => void;
 }) {
   const [value, setValue] = useState(initial);
+  const [open, setOpen] = useState(false);
   const checkId = useId();
+  const saveOnEnter = (event: KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    if (event.key !== "Enter") return;
+    event.preventDefault();
+    setOpen(false);
+    onSave(value);
+  };
   const editor =
     multiline === true ? (
       <textarea
@@ -78,6 +85,7 @@ function EditRow({
         onChange={(event) => {
           setValue(event.currentTarget.value);
         }}
+        onKeyDown={saveOnEnter}
       />
     ) : (
       <Input
@@ -87,13 +95,16 @@ function EditRow({
         onChange={(event) => {
           setValue(event.currentTarget.value);
         }}
+        onKeyDown={saveOnEnter}
       />
     );
   return (
     <Row label={label} check={check} checkId={checkId}>
       <Popover
-        onOpenChange={(open) => {
-          if (!open) onSave(value);
+        open={open}
+        onOpenChange={(next) => {
+          setOpen(next);
+          if (!next) onSave(value);
         }}
       >
         <PopoverTrigger
