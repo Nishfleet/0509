@@ -36,6 +36,45 @@ export async function readEnabledSourceId(key: string): Promise<string | null> {
   return row?.id ?? null;
 }
 
+const CANARY_SOURCES = `SELECT id, plugin_key, canary_query FROM source
+WHERE kind = 'mentions' AND is_enabled = 1 AND canary_query IS NOT NULL
+ORDER BY id`;
+
+const MARK_CANARY_GOOD = `UPDATE source SET degraded_reason = NULL, last_good_at = ?2 WHERE id = ?1`;
+
+const MARK_CANARY_BAD = `UPDATE source SET degraded_reason = 'not answering' WHERE id = ?1`;
+
+export interface CanarySource {
+  id: string;
+  pluginKey: string;
+  canaryQuery: string;
+}
+
+export async function readCanarySources(): Promise<CanarySource[]> {
+  const { results } = await env.DB.prepare(CANARY_SOURCES).all<{
+    id: string;
+    plugin_key: string;
+    canary_query: string;
+  }>();
+  return results.map((row) => ({
+    id: row.id,
+    pluginKey: row.plugin_key,
+    canaryQuery: row.canary_query,
+  }));
+}
+
+export async function recordSourceCanary(
+  sourceId: string,
+  canaryCount: number,
+  now: string,
+): Promise<void> {
+  if (canaryCount > 0) {
+    await env.DB.prepare(MARK_CANARY_GOOD).bind(sourceId, now).run();
+    return;
+  }
+  await env.DB.prepare(MARK_CANARY_BAD).bind(sourceId).run();
+}
+
 export async function readEntitySources(
   workspaceId: string,
   entityId: string,

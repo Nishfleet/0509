@@ -115,9 +115,10 @@ async function statementsForWatch(input: {
   context: DiscoveryContext;
   items: readonly MentionItem[];
   snapshot: { r2Key: string; hash: string };
+  canaryCount: number | null;
   now: string;
 }): Promise<{ statements: D1PreparedStatement[]; stored: number; unjudged: number }> {
-  const { watch, context, items, snapshot, now } = input;
+  const { watch, context, items, snapshot, canaryCount, now } = input;
   const snapshotId = crypto.randomUUID();
   const keyed = items.map((item) => ({ item, dedupKey: `${watch.entity_id}:${item.dedupKey}` }));
   const seen = await readSeenDedupKeys(
@@ -133,6 +134,7 @@ async function statementsForWatch(input: {
       r2Key: snapshot.r2Key,
       hash: snapshot.hash,
       itemCount: items.length,
+      canaryCount,
     }),
   ];
   let stored = 0;
@@ -205,16 +207,24 @@ async function commitMentionWatch(input: {
   items: readonly MentionItem[];
   rawBody: string;
   pluginKey: string;
+  canaryCount: number | null;
   now: string;
 }): Promise<{ stored: number; unjudged: number }> {
-  const { watch, items, rawBody, pluginKey, now } = input;
+  const { watch, items, rawBody, pluginKey, canaryCount, now } = input;
   const hash = await sha256Hex(rawBody);
   const r2Key = `snapshot/mentions/${pluginKey}/${hash}`;
   await env.SNAPSHOTS.put(r2Key, rawBody, { httpMetadata: { contentType: "application/octet-stream" } });
   const context = await readDiscoveryContext(watch.workspace_id);
   if (context === null) return { stored: 0, unjudged: 0 };
   const titled = items.filter((item) => item.title.trim() !== "");
-  const written = await statementsForWatch({ watch, context, items: titled, snapshot: { r2Key, hash }, now });
+  const written = await statementsForWatch({
+    watch,
+    context,
+    items: titled,
+    snapshot: { r2Key, hash },
+    canaryCount,
+    now,
+  });
   await env.DB.batch(written.statements);
   await markWatchPolled(watch.watch_id, now);
   return { stored: written.stored, unjudged: written.unjudged };
@@ -224,6 +234,7 @@ async function sweepOneYoutube(
   adapter: MentionsAdapter,
   watch: WatchRow,
   now: string,
+  canaryCount: number | null,
 ): Promise<TargetOutcome> {
   const configRaw = await readWatchConfigJson(watch.watch_id);
   const config = readWatchConfig(configRaw);
@@ -258,6 +269,7 @@ async function sweepOneYoutube(
           items: second.items,
           rawBody: second.rawBody,
           pluginKey: "youtube.channel_rss",
+          canaryCount,
           now,
         });
         return { items: second.items.length, stored: committed.stored, unjudged: committed.unjudged };
@@ -277,19 +289,24 @@ async function sweepOneYoutube(
     items: first.items,
     rawBody: first.rawBody,
     pluginKey: "youtube.channel_rss",
+    canaryCount,
     now,
   });
   return { items: first.items.length, stored: committed.stored, unjudged: committed.unjudged };
 }
 
-async function sweepYoutubeTarget(target: MentionTarget, now: string): Promise<TargetOutcome> {
+async function sweepYoutubeTarget(
+  target: MentionTarget,
+  now: string,
+  canaryCount: number | null,
+): Promise<TargetOutcome> {
   const adapter = adapterFor(target.pluginKey);
   if (adapter === undefined) throw new Error(`no mentions adapter for ${target.pluginKey}`);
   let items = 0;
   let stored = 0;
   let unjudged = 0;
   for (const watch of target.watches) {
-    const outcome = await sweepOneYoutube(adapter, watch, now);
+    const outcome = await sweepOneYoutube(adapter, watch, now, canaryCount);
     items += outcome.items;
     stored += outcome.stored;
     unjudged += outcome.unjudged;
@@ -297,8 +314,12 @@ async function sweepYoutubeTarget(target: MentionTarget, now: string): Promise<T
   return { items, stored, unjudged };
 }
 
-export async function sweepTarget(target: MentionTarget, now: string): Promise<TargetOutcome> {
-  if (target.pluginKey === "youtube.channel_rss") return sweepYoutubeTarget(target, now);
+export async function sweepTarget(
+  target: MentionTarget,
+  now: string,
+  canaryCount: number | null,
+): Promise<TargetOutcome> {
+  if (target.pluginKey === "youtube.channel_rss") return sweepYoutubeTarget(target, now, canaryCount);
   const adapter = adapterFor(target.pluginKey);
   if (adapter === undefined) throw new Error(`no mentions adapter for ${target.pluginKey}`);
   const result = await adapter({ query: target.query }, null);
@@ -316,7 +337,14 @@ export async function sweepTarget(target: MentionTarget, now: string): Promise<T
     }
     const context = contexts.get(watch.workspace_id);
     if (context === null || context === undefined) continue;
-    const written = await statementsForWatch({ watch, context, items: titled, snapshot: { r2Key, hash }, now });
+    const written = await statementsForWatch({
+      watch,
+      context,
+      items: titled,
+      snapshot: { r2Key, hash },
+      canaryCount,
+      now,
+    });
     await env.DB.batch(written.statements);
     await markWatchPolled(watch.watch_id, now);
     stored += written.stored;

@@ -102,6 +102,7 @@ describe("YouTube sweep stale channel", () => {
     const outcome = await sweepTarget(
       { sourceId: watch.source_id, pluginKey: watch.plugin_key, query: watch.target_key, watches: [watch] },
       NOW,
+      null,
     );
 
     expect(outcome).toEqual({ items: 0, stored: 0, unjudged: 0 });
@@ -116,6 +117,7 @@ describe("YouTube sweep stale channel", () => {
     await sweepTarget(
       { sourceId: watch.source_id, pluginKey: watch.plugin_key, query: watch.target_key, watches: [watch] },
       NOW,
+      null,
     );
 
     expect(JSON.parse(await configOf(watchId))).toEqual({
@@ -136,6 +138,7 @@ describe("YouTube sweep stale channel", () => {
         watches: [lost.watch],
       },
       NOW,
+      null,
     );
     expect(JSON.parse(await configOf(lost.watchId)).degraded.reason).toBe(LOST_CHANNEL_REASON);
 
@@ -151,17 +154,18 @@ describe("YouTube sweep stale channel", () => {
         watches: [resolved.watch],
       },
       NOW,
+      4,
     );
 
     expect(outcome).toEqual({ items: 0, stored: 0, unjudged: 0 });
     expect(JSON.parse(await configOf(resolved.watchId))).toEqual({ channelId: LIVE_ID });
     expect(await snapshotCount(resolved.watchId)).toBe(1);
     const snapshot = await env.DB.prepare(
-      "SELECT fetched_at, item_count FROM snapshot WHERE watch_id = ?1",
+      "SELECT fetched_at, item_count, canary_count FROM snapshot WHERE watch_id = ?1",
     )
       .bind(resolved.watchId)
-      .first<{ fetched_at: string; item_count: number }>();
-    expect(snapshot).toEqual({ fetched_at: NOW, item_count: 0 });
+      .first<{ fetched_at: string; item_count: number; canary_count: number | null }>();
+    expect(snapshot).toEqual({ fetched_at: NOW, item_count: 0, canary_count: 4 });
   });
 
   it("leaves the watch unmarked when the feed fails with 503", async () => {
@@ -171,6 +175,7 @@ describe("YouTube sweep stale channel", () => {
     await sweepTarget(
       { sourceId: watch.source_id, pluginKey: watch.plugin_key, query: watch.target_key, watches: [watch] },
       NOW,
+      null,
     );
 
     expect(JSON.parse(await configOf(watchId))).toEqual({ channelId: "UCzzzzzzzzzzzzzzzzzzzzzz" });
