@@ -64,22 +64,38 @@ describe("landing LCP critical path", () => {
 
 describe("static home LCP critical path", () => {
   const html = readFileSync(join(REPO_ROOT, "public/index.html"), "utf8");
+  const faces = readFileSync(join(REPO_ROOT, "public/home-faces.css"), "utf8");
 
-  it("paints the headline in the brand faces from the one self-hosted font path", () => {
+  it("paints the headline before the brand faces are applied", () => {
     expect(html).toContain("Quietly, we");
-    expect(html).toContain('rel="preload"');
-    expect(html).toContain("/fonts/bricolage-hero.woff2");
-    expect(html).toContain('fetchpriority="high"');
-    expect(html).toContain("/fonts/instrument-sans-latin.woff2");
-    expect(html).toContain("/fonts/ibm-plex-mono-latin-400.woff2");
-    expect(html).toContain("font-display: swap");
-    for (const family of ["Bricolage Grotesque", "Instrument Sans", "IBM Plex Mono"]) {
-      expect(html).toContain(`font-family: "${family}"`);
-    }
+    expect(html).toContain('href="/home-faces.css"');
+    expect(html).toContain('media="print"');
+    expect(html).toContain("this.media='all'");
+    expect(html).not.toContain('rel="preload"');
+    expect(html).not.toContain("@font-face");
+    expect(html).not.toContain("<script");
+    const style = html.slice(html.indexOf("<style>"), html.indexOf("</style>"));
+    expect(style).toContain('--font-display: "Bricolage Grotesque"');
+    expect(style).toContain('--font-sans: "Instrument Sans"');
+    expect(style).toContain('--font-mono: "IBM Plex Mono"');
     expect(html).not.toContain("data:font");
     expect(html).not.toContain("bricolage-grotesque-latin");
     expect(html).not.toContain("/*");
     expect(html).not.toContain("ui-sans-serif, system-ui, sans-serif");
     expect(Buffer.byteLength(html)).toBeLessThan(8_000);
+
+    for (const file of [
+      "/fonts/bricolage-hero.woff2",
+      "/fonts/instrument-sans-latin.woff2",
+      "/fonts/ibm-plex-mono-latin-400.woff2",
+    ]) {
+      expect(faces).toContain(file);
+    }
+    expect(faces).not.toContain("bricolage-grotesque-latin");
+    const declarations = faces.split("@font-face").slice(1);
+    expect(declarations).toHaveLength(3);
+    for (const face of declarations) {
+      expect(face.slice(0, face.indexOf("}"))).toContain("font-display: swap");
+    }
   });
 });
