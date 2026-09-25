@@ -2,6 +2,7 @@ import type { BriefPayload } from "./brief-payload";
 import type { BriefSchedule } from "./brief-schedule";
 import { nextBriefAt } from "./brief-schedule";
 import { firstSiteSweepAt, nextSiteSweepAt } from "./onboarding/arrival-estimate";
+import { sourceName } from "./source-name";
 export { nextSiteSweepAt, SITE_SWEEP_UTC_HOUR } from "./onboarding/arrival-estimate";
 
 export interface HomeEntity {
@@ -22,6 +23,8 @@ export interface HomeSource { key: string; kind: "site" | "ads" | "mentions" | "
 
 export interface HomeCount { entityId: string; sourceKey: string; count: number }
 
+export interface HomePill { key: string; label: string; count: number; state: "live" | "none" | "degraded" }
+
 export interface HomeRow {
   entityId: string;
   position: number | null;
@@ -29,6 +32,9 @@ export interface HomeRow {
   domain: string | null;
   movement: string;
   self: boolean;
+  signals: number;
+  why: string | null;
+  pills: readonly HomePill[];
 }
 
 interface FourWeekLineSeries {
@@ -119,19 +125,32 @@ function byRank(a: HomeRow, b: HomeRow): number {
   return a.position - b.position;
 }
 
-function rankedRows(payload: BriefPayload, entities: readonly HomeEntity[]): readonly HomeRow[] {
+function rankedRows(
+  payload: BriefPayload,
+  entities: readonly HomeEntity[],
+  sources: readonly HomeSource[],
+  counts: readonly HomeCount[],
+): readonly HomeRow[] {
   const byId = new Map(entities.map((entity) => [entity.id, entity]));
   return payload.brands
     .map((brand) => {
       const entity = byId.get(brand.entity_id);
-      const signals = brand.ad_delta + brand.mention_delta + brand.site_change_count + brand.new_roles;
+      const activity = brand.ad_delta + brand.mention_delta + brand.site_change_count + brand.new_roles;
+      const pills = sources.map((source) => {
+        const count = counts.find((entry) => entry.entityId === brand.entity_id && entry.sourceKey === source.key)?.count ?? 0;
+        const degraded = payload.checked.degraded_sources.some((item) => item.key === source.key);
+        return { key: source.key, label: sourceName(source.kind, source.platform), count, state: degraded ? "degraded" : count === 0 ? "none" : "live" } as const;
+      });
       return {
         entityId: brand.entity_id,
-        position: signals === 0 ? null : brand.rank,
+        position: activity === 0 ? null : brand.rank,
         name: brand.name,
         domain: entity?.domain ?? null,
         movement: movementLabel(brand.movement, brand.is_new),
         self: entity?.role === "self",
+        signals: pills.reduce((sum, pill) => sum + pill.count, 0),
+        why: brand.biggest_move,
+        pills,
       };
     })
     .sort(byRank);
@@ -186,6 +205,8 @@ export function homeStanding(input: {
   entities: readonly HomeEntity[];
   schedule: BriefSchedule;
   history: readonly HomeHistoryRow[];
+  sources: readonly HomeSource[];
+  counts: readonly HomeCount[];
   now: Date;
 }): HomeStanding {
   const onBrands = input.entities.filter((entity) => entity.state === "on").length;
@@ -200,7 +221,7 @@ export function homeStanding(input: {
       brands: onBrands,
     };
   }
-  const rows = rankedRows(payload, input.entities);
+  const rows = rankedRows(payload, input.entities, input.sources, input.counts);
   return {
     kind: "ranked",
     rank,
@@ -222,6 +243,7 @@ export function homeView(input: {
   schedule: BriefSchedule;
   history: readonly HomeHistoryRow[];
   sources: readonly HomeSource[];
+  counts: readonly HomeCount[];
   now: Date;
 }): HomeView {
   const onCount = input.entities.filter((entity) => entity.state === "on").length;

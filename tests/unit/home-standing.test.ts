@@ -131,6 +131,7 @@ function render(input: {
     schedule: SCHEDULE,
     history: [],
     sources: SITE_SOURCES,
+    counts: [],
     now: THURSDAY_MORNING,
   });
   const router = createMemoryRouter([
@@ -161,6 +162,8 @@ describe("Home standing", () => {
       entities: ENTITIES,
       schedule: SCHEDULE,
       history: [],
+      sources: [],
+      counts: [],
       now: THURSDAY_MORNING,
     });
     if (standing.kind !== "ranked") throw new Error("expected a ranked standing");
@@ -180,6 +183,8 @@ describe("Home standing", () => {
       entities: ENTITIES,
       schedule: SCHEDULE,
       history: [],
+      sources: [],
+      counts: [],
       now: THURSDAY_MORNING,
     });
     expect(standing.kind).toBe("ranked");
@@ -201,6 +206,8 @@ describe("Home standing", () => {
       entities: ENTITIES,
       schedule: SCHEDULE,
       history: [],
+      sources: [],
+      counts: [],
       now: THURSDAY_MORNING,
     });
     if (standing.kind !== "ranked") throw new Error("expected a ranked standing");
@@ -220,7 +227,7 @@ describe("Home standing", () => {
         }),
       ],
     });
-    const standing = homeStanding({ payload: p, entities: ENTITIES, schedule: SCHEDULE, history: [], now: THURSDAY_MORNING });
+    const standing = homeStanding({ payload: p, entities: ENTITIES, schedule: SCHEDULE, history: [], sources: [], counts: [], now: THURSDAY_MORNING });
     if (standing.kind !== "ranked") throw new Error("expected a ranked standing");
     expect(standing.rows.map((row) => row.position)).toEqual([1, null]);
     const html = render({ payload: p });
@@ -258,7 +265,7 @@ describe("Home standing", () => {
       { id: "ent_kindred", role: "competitor", domain: "kindred.example", name: "Kindred", state: "on" },
       { id: "ent_off", role: "competitor", domain: "off.example", name: "Off Brand", state: "off" },
     ];
-    const view = homeView({ payload: null, entities, schedule: SCHEDULE, history: [], sources: SITE_SOURCES, now: THURSDAY_MORNING });
+    const view = homeView({ payload: null, entities, schedule: SCHEDULE, history: [], sources: SITE_SOURCES, counts: [], now: THURSDAY_MORNING });
     expect(view.chips).toEqual([
       { name: "Own Brand", href: "/app/settings", self: true },
       { name: "Kindred", href: "/app/competitors/ent_kindred", self: false },
@@ -311,10 +318,10 @@ describe("Home standing", () => {
       { id: "ent_casetta", role: "competitor", domain: "casetta.example", name: "Casetta", state: "on" },
       { id: "ent_hollow", role: "competitor", domain: "hollow.example", name: "Hollow", state: "on" },
     ];
-    const four = homeView({ payload: payload(), entities: fourOn, schedule: amsterdamSchedule, history: [], sources: SITE_SOURCES, now });
+    const four = homeView({ payload: payload(), entities: fourOn, schedule: amsterdamSchedule, history: [], sources: SITE_SOURCES, counts: [], now });
     expect(four.footer).toBe("Checked 4 brands this week · brief Monday 08:00 · your site re-checked at 13:00");
 
-    const one = homeView({ payload: payload(), entities: [SELF], schedule: amsterdamSchedule, history: [], sources: SITE_SOURCES, now });
+    const one = homeView({ payload: payload(), entities: [SELF], schedule: amsterdamSchedule, history: [], sources: SITE_SOURCES, counts: [], now });
     expect(one.footer).toBe("Checked 1 brand this week · brief Monday 08:00 · your site re-checked at 13:00");
   });
 });
@@ -345,6 +352,8 @@ function chartStanding(history: readonly HomeHistoryRow[]) {
     entities: HISTORY_ENTITIES,
     schedule: SCHEDULE,
     history,
+    sources: [],
+    counts: [],
     now: THURSDAY_MORNING,
   });
   if (standing.kind !== "ranked") throw new Error("expected a ranked standing");
