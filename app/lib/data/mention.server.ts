@@ -4,7 +4,7 @@ import { D6_QUESTION_ID } from "../standing-score";
 import { mentionsFromRows, type MentionReadRow, type MentionRowModel } from "../mention-feed";
 
 const MENTION_FEED_SQL = `SELECT m.id, m.title, m.canonical_url AS url, m.published_at, m.observed_at,
-  s.platform, s.kind, v.p, v.reason
+  s.platform, s.kind, v.p, v.reason, v.id AS verdict_id, v.decided_at AS verdict_decided_at
 FROM mention m
 JOIN entity e ON e.id = m.entity_id AND e.workspace_id = m.workspace_id AND e.state = 'on'
 JOIN source s ON s.id = m.source_id
@@ -28,6 +28,8 @@ interface MentionFeedSqlRow {
   kind: string;
   p: number | null;
   reason: string | null;
+  verdict_id: string;
+  verdict_decided_at: string;
 }
 
 function toReadRow(row: MentionFeedSqlRow): MentionReadRow {
@@ -41,6 +43,8 @@ function toReadRow(row: MentionFeedSqlRow): MentionReadRow {
     observedAt: row.observed_at,
     p: row.p,
     reason: row.reason,
+    verdictId: row.verdict_id,
+    verdictDecidedAt: row.verdict_decided_at,
   };
 }
 
