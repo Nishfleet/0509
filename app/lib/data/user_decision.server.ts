@@ -72,15 +72,15 @@ export async function readEditedFields(entityId: string): Promise<DraftField[]> 
   const rows = await env.DB.prepare(SELECT_FIELD_EDITS)
     .bind(entityId, FIELD_EDIT_VERDICT)
     .all<{ note: string }>();
-  const fields: DraftField[] = [];
-  for (const row of rows.results) {
+  const fields = rows.results.flatMap((row) => {
     try {
       const result = fieldEditNoteSchema.safeParse(JSON.parse(row.note));
-      if (result.success) fields.push(result.data.field);
+      return result.success ? [result.data.field] : [];
     } catch (error) {
       console.error(JSON.stringify({ event: "identity_field_edit.note_unreadable", error: String(error) }));
+      return [];
     }
-  }
+  });
   return [...new Set(fields)];
 }
 
