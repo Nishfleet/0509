@@ -65,10 +65,7 @@
     }
   ],
 
-  // Mentions telemetry (#4003 slice 3/6, docs/engines/mentions.md P5.4): one
-  // data point per swept source carrying its item count and canary count.
-  // index1 stays low-cardinality (plugin_key) and the brand or query string
-  // never enters any field.
+  // Mentions telemetry (#4003 slice 3/6, docs/engines/mentions.md P5.4).
   "analytics_engine_datasets": [{ "binding": "MENTIONS_SOURCES", "dataset": "mentions_sources" }],
 
   // One binding for the one bucket (#4569 had added a second binding to the

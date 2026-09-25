@@ -178,16 +178,20 @@ describe("mentions sweep telemetry (#4003 slice 3/6)", () => {
       const target = await gdeltTargetFor(brand);
       await sweepTarget(target, NOW, 3);
 
-      expect(spy).toHaveBeenCalledTimes(1);
-      const point = spy.mock.calls[0]?.[0] as {
-        blobs: string[];
-        doubles: number[];
-        indexes: string[];
-      };
-      expect(point.blobs).toEqual([target.pluginKey]);
-      expect(point.doubles).toEqual([1, 3]);
-      expect(point.indexes).toEqual([target.pluginKey]);
-      for (const value of [...point.blobs, ...point.indexes]) {
+      expect(spy).toHaveBeenCalledExactlyOnceWith({
+        blobs: [target.pluginKey],
+        doubles: [1, 3],
+        indexes: [target.pluginKey],
+      });
+      const call = spy.mock.calls[0];
+      if (!call || !call[0]) throw new Error("expected one MENTIONS_SOURCES point");
+      const point = call[0];
+      const blobsAndIndexes: Array<string | ArrayBuffer | null> = [
+        ...(point.blobs ?? []),
+        ...(point.indexes ?? []),
+      ];
+      for (const value of blobsAndIndexes) {
+        if (typeof value !== "string") continue;
         expect(value).not.toContain(target.query);
       }
     } finally {
