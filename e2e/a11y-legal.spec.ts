@@ -51,7 +51,7 @@ for (const path of ["/privacy", "/terms"]) {
           .evaluateAll((els) => els.map((el) => el.getAttribute("href")));
         await page.mouse.click(1, 1);
         const visited: (string | null)[] = [];
-        for (let i = 0; i < hrefs.length; i += 1) {
+        for (const _ of hrefs) {
           await page.keyboard.press("Tab");
           visited.push(await page.evaluate(() => document.activeElement?.getAttribute("href")));
         }
