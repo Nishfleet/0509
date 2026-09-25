@@ -50,9 +50,11 @@ function button(html: string, marker: string): string {
 function accessibleName(html: string, marker: string): string {
 	const tag = html.split("<button ").find((part) => part.includes(marker));
 	if (tag === undefined) return "";
-	return tag
-		.slice(tag.indexOf(">") + 1, tag.indexOf("</button>"))
-		.replace(/<[^>]+>/g, "")
+	const inner = tag.slice(tag.indexOf(">") + 1, tag.indexOf("</button>"));
+	return inner
+		.split("<")
+		.map((part, index) => (index === 0 ? part : part.slice(part.indexOf(">") + 1)))
+		.join("")
 		.trim();
 }
 
