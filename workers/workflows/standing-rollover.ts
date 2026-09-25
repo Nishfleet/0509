@@ -17,7 +17,7 @@ export interface RolloverOutcome {
   workspaceId: string;
   closesAt: string;
   digestId: string | null;
-  skipped: "workspace_gone" | "schedule_moved" | "nothing_to_compare" | null;
+  skipped: "workspace_gone" | "schedule_moved" | "nothing_to_compare" | "brief_paused" | null;
 }
 
 interface ClosingWeek {
@@ -25,6 +25,7 @@ interface ClosingWeek {
   weekday: number;
   hour: number;
   startsAt: string;
+  paused: boolean;
 }
 
 export class StandingRollover extends WorkflowEntrypoint<Env, RolloverParams> {
@@ -56,7 +57,7 @@ export class StandingRollover extends WorkflowEntrypoint<Env, RolloverParams> {
         windowEndAt: closesAt.toISOString(),
         computedAt: new Date().toISOString(),
       });
-      return { ...workspace.schedule, startsAt };
+      return { ...workspace.schedule, startsAt, paused: workspace.briefPausedAt !== null };
     });
     if (closing === "workspace_gone" || closing === "schedule_moved") return outcome(null, closing);
 
@@ -79,9 +80,10 @@ export class StandingRollover extends WorkflowEntrypoint<Env, RolloverParams> {
         workspaceId,
         periodStart: payload.period_start,
         periodEnd: payload.period_end,
+        status: closing.paused ? "paused" : "pending",
         payloadJson: JSON.stringify(payload),
       });
-      await this.env.SEND_EMAIL.send({ digest_id: id });
+      if (!closing.paused) await this.env.SEND_EMAIL.send({ digest_id: id });
       return id;
     };
     const digestId = rankedCount < 2 ? null : await step.do("write-digest", RETRY, writeDigest);
@@ -92,6 +94,7 @@ export class StandingRollover extends WorkflowEntrypoint<Env, RolloverParams> {
       ]),
     );
 
-    return outcome(digestId, digestId === null ? "nothing_to_compare" : null);
+    if (digestId === null) return outcome(null, "nothing_to_compare");
+    return outcome(digestId, closing.paused ? "brief_paused" : null);
   }
 }
