@@ -20,12 +20,12 @@ const jsonObject = z.record(z.string(), z.unknown());
 
 export const LOST_CHANNEL_REASON = "we lost the channel, re-resolving";
 
-export interface LostChannelFlag {
+interface LostChannelFlag {
 	reason: string;
 	at: string;
 }
 
-export type WatchConfigRead =
+type WatchConfigRead =
 	| { status: "unreadable" }
 	| {
 			status: "ok";
@@ -124,7 +124,7 @@ export function withChannelId(raw: string, channelId: string): string {
 export function withResolvedChannel(raw: string, channelId: string): string {
 	const read = readWatchConfig(raw);
 	if (read.status !== "ok") throw new Error("watch config_json is unreadable");
-	const next = { ...read.record, channelId };
+	const next: Record<string, unknown> = { ...read.record, channelId };
 	delete next.degraded;
 	return JSON.stringify(next);
 }
