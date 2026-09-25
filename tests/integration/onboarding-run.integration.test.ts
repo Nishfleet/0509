@@ -1,7 +1,9 @@
 import { env } from "cloudflare:test";
 import { beforeEach, describe, expect, it } from "vitest";
 
-import { startOnboardingRun } from "../../app/lib/data/onboarding_run.server";
+import { markCardReady, startOnboardingRun } from "../../app/lib/data/onboarding_run.server";
+import { timeCard } from "../../app/lib/onboarding/card-timing.server";
+import type { SiteFields } from "../../app/lib/identity/card-fields";
 
 let runs = 0;
 let userId = "";
@@ -50,5 +52,57 @@ describe("startOnboardingRun", () => {
         first_signal_at: null,
       },
     ]);
+  });
+});
+
+describe("markCardReady", () => {
+  it("keeps the first card ready time a workspace gets", async () => {
+    await startOnboardingRun({
+      workspaceId,
+      userId,
+      inputRaw: "first.example",
+      startedAt: "2026-09-25T06:00:00.000Z",
+    });
+
+    await markCardReady(workspaceId, "2026-09-25T06:00:20.000Z");
+    await markCardReady(workspaceId, "2026-09-25T06:00:40.000Z");
+
+    const row = await env.DB.prepare(
+      "SELECT card_ready_at FROM onboarding_run WHERE workspace_id = ?",
+    )
+      .bind(workspaceId)
+      .first<{ card_ready_at: string | null }>();
+
+    expect(row?.card_ready_at).toBe("2026-09-25T06:00:20.000Z");
+  });
+
+  it("marks the run when timeCard's logo resolves", async () => {
+    await startOnboardingRun({
+      workspaceId,
+      userId,
+      inputRaw: "first.example",
+      startedAt: "2026-09-25T06:00:00.000Z",
+    });
+    const fields: SiteFields = {
+      name: "Example",
+      description: null,
+      socials: [],
+      review: { name: "fill", description: "empty", socials: "empty" },
+      unfound: false,
+    };
+
+    const card = timeCard(workspaceId, {
+      site: Promise.resolve(fields),
+      logo: Promise.resolve("data:x"),
+    });
+
+    await expect(card.logo).resolves.toBe("data:x");
+    const row = await env.DB.prepare(
+      "SELECT card_ready_at FROM onboarding_run WHERE workspace_id = ?",
+    )
+      .bind(workspaceId)
+      .first<{ card_ready_at: string | null }>();
+
+    expect(row?.card_ready_at).not.toBeNull();
   });
 });

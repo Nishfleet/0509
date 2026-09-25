@@ -98,9 +98,13 @@ test("the sign-in link works once, survives a newer request, dies on its own clo
   const stranger = freshAddress("stranger");
 
   // First follow: the full J1 journey — real form, real email, real link.
+  const verifyResponse = page.waitForResponse((r) => r.url().includes("/api/auth/magic-link/verify"), { timeout: 240_000 });
   const first = await signInWithMagicLink(page, email, token);
+  const verifyStatus = (await verifyResponse).status();
+  expect(verifyStatus).toBeGreaterThanOrEqual(300);
+  expect(verifyStatus).toBeLessThan(400);
   await expect(page.getByText(email)).toBeVisible();
-  console.log(`magic-link-expiry follow=first status=${first.status} landed=${page.url()} at=${new Date().toISOString()}`);
+  console.log(`magic-link-expiry follow=first verifyStatus=${verifyStatus} email=${email} landed=${page.url()} at=${new Date().toISOString()}`);
 
   // Replay: the same link a second time, in a jar that has no session.
   const replayContext = await freshContext(browser);

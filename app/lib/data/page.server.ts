@@ -61,6 +61,25 @@ export async function readPageHashes(entityId: string): Promise<ReadonlyMap<stri
   return new Map(parsed.map((row) => [row.url, row.role_decided_for_hash]));
 }
 
+const RECORD_TRANSPORT = "UPDATE page SET transport = ?2, transport_reason = ?3, transport_tested_at = ?4, deferred_at = NULL WHERE id = ?1";
+
+const MARK_DEFERRED = "UPDATE page SET deferred_at = ?2 WHERE id = ?1";
+
+export async function recordPageTransport(input: {
+  pageId: string;
+  transport: "fetch" | "browser";
+  reason: string | null;
+  testedAt: string;
+}): Promise<void> {
+  await env.DB.prepare(RECORD_TRANSPORT)
+    .bind(input.pageId, input.transport, input.reason, input.testedAt)
+    .run();
+}
+
+export async function markPageDeferred(pageId: string, at: string): Promise<void> {
+  await env.DB.prepare(MARK_DEFERRED).bind(pageId, at).run();
+}
+
 export interface OwnSitePage {
   workspaceId: string;
   entityId: string;
