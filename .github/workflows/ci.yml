@@ -392,6 +392,14 @@ jobs:
   # caller would report "caller / called" and could never satisfy it). 0509
   # has no .py/.mjs product code today, so it runs the strict default with
   # no extra-allowed.
+  #
+  # The action ref is SHA-pinned like every other uses: in this file, unlike
+  # the agent-dispatch chain, the pin costs nothing — a fleet-ops change to
+  # the action reaches 0509 through a bump PR that this repo reviews, which
+  # is what a required check with empty bypass needs. agent-dispatch.yml,
+  # opus-vet.yml and parity-scorecard.yml stay @main for the opposite reason
+  # (0509#5231: runner group 3 allows only agent.yml@refs/heads/main, and a
+  # SHA pin there strands worker jobs).
   no-glue:
     name: no-glue
     if: github.event_name != 'deployment_status'
@@ -401,4 +409,4 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
-      - uses: Nishfleet/fleet-ops/.github/actions/no-glue@main
+      - uses: Nishfleet/fleet-ops/.github/actions/no-glue@3ef9967b06b04b0e21e138fa79592c9bdf883595 # 2026-09-25; shared gate lands here by bump PR
