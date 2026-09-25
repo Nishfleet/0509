@@ -1,7 +1,7 @@
 import { Suspense, useState, type ReactNode } from "react";
 import { Await, Form, useFetcher } from "react-router";
 
-import type { CardDraft, SiteFields } from "../lib/identity/card-fields";
+import type { CardDraft, CreatorRows, SiteFields } from "../lib/identity/card-fields";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
@@ -203,6 +203,7 @@ export function Fields({
 export function IdentityCard({
   subject,
   domain,
+  creator,
   site,
   logo,
   draft,
@@ -210,6 +211,7 @@ export function IdentityCard({
 }: {
   subject: string;
   domain: string;
+  creator: CreatorRows | null;
   site: Promise<SiteFields>;
   logo: Promise<string | null>;
   draft: CardDraft;
@@ -221,6 +223,16 @@ export function IdentityCard({
       <Row label="site">
         <span className="truncate text-[0.95rem]">{domain}</span>
       </Row>
+      {creator !== null && creator.channel !== null ? (
+        <Row label="channel">
+          <span className="truncate text-[0.95rem]">{creator.channel}</span>
+        </Row>
+      ) : null}
+      {creator !== null ? (
+        <Row label="handle">
+          <span className="truncate text-[0.95rem]">{creator.handle}</span>
+        </Row>
+      ) : null}
       <Suspense
         fallback={
           <>
