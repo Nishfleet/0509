@@ -52,10 +52,17 @@ describe("opus-review job guard rails", () => {
     expect(job).toContain("use_sticky_comment: true");
   });
 
-  it("restricts the grader to the nishfleet-worker bot and its own PRs", async () => {
+  // Nish 2026-09-25 17:09Z paused grading until Monday 2026-09-28 (#5567):
+  // the job then runs on merge_group only. Either way no PR but the worker
+  // bot's is ever graded; reverting #5567 restores the single form.
+  it("grades only the nishfleet-worker bot's PRs, or none while paused", async () => {
     const yaml = await readFile(path.join(REPO_ROOT, ".github/workflows/ci.yml"), "utf8");
     const job = readJob(yaml);
-    expect(job).toContain("github.event.pull_request.user.login == 'nishfleet-worker[bot]'");
+    const guard = job.split("\n").find((line) => line.startsWith("    if: "));
+    expect([
+      "    if: github.event_name == 'merge_group' || (github.event_name == 'pull_request' && github.event.pull_request.user.login == 'nishfleet-worker[bot]')",
+      "    if: github.event_name == 'merge_group'",
+    ]).toContain(guard);
     expect(job).toContain("allowed_bots: 'nishfleet-worker'");
   });
 
