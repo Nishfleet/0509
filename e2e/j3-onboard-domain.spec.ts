@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 
+import { nextSiteSweepAt } from "../app/lib/onboarding/arrival-estimate";
 import { requireInboxToken, signInWithMagicLink } from "./inbox";
 
 // J3 from docs/REBUILD-DONE.md §A: one input becomes a confirmed brand card
@@ -59,9 +60,31 @@ for (const { width, height } of [
     await expect(page).toHaveURL(/\/app$/);
 
     const panel = page.locator('[data-home="first-file"]');
-    await expect(panel).toContainText(
-      /The first site snapshots land by (?:Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday) (?:[01]\d|2[0-3]):[0-5]\d;/,
+    await expect(panel).toContainText("The first site snapshots land by");
+    // The time is the app's own next site-sweep time, not decorative text: match
+    // the label Home would render in the workspace zone. The sweep is computed
+    // before and after the read so an 02:00 UTC boundary inside the test cannot
+    // make the two clocks disagree.
+    const sweepLabel = (instant: Date, timeZone: string): string => {
+      const day = new Intl.DateTimeFormat("en-GB", { timeZone, weekday: "long" }).format(instant);
+      const clock = new Intl.DateTimeFormat("en-GB", {
+        timeZone,
+        hour: "2-digit",
+        minute: "2-digit",
+        hourCycle: "h23",
+      }).format(instant);
+      return `${day} ${clock}`;
+    };
+    const browserZone = await page.evaluate(() => Intl.DateTimeFormat().resolvedOptions().timeZone);
+    const panelText = await panel.innerText();
+    const match = /The first site snapshots land by (.+?);/.exec(panelText);
+    expect(match).not.toBeNull();
+    if (match === null) throw new Error(`j3: Home's first-file panel named no sweep time in: ${panelText}`);
+    const zones = [browserZone, "UTC"];
+    const expected = [started, Date.now()].flatMap((at) =>
+      zones.map((zone) => sweepLabel(nextSiteSweepAt(new Date(at)), zone)),
     );
+    expect(expected).toContain(match[1]);
     await expect(panel).not.toContainText("as soon as the first sweep is scheduled");
     const homeMs = Date.now() - started;
 
