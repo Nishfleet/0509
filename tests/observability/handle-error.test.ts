@@ -57,4 +57,59 @@ describe("handleError", () => {
     expect(captureException).toHaveBeenCalledTimes(1);
     expect(captureException).toHaveBeenCalledWith(error, { tags: { route: "/api/auth/*" } });
   });
+
+  it("tags an encoded token with the route pattern, leaking neither its raw nor its encoded form", () => {
+    const error = new Error("loader exploded");
+    const request = new Request("https://0509.io/u/caf%c3%a9");
+    const params = { token: "café" };
+
+    handleError(error, { request, params, context: new RouterContextProvider() });
+
+    expect(captureException).toHaveBeenCalledTimes(1);
+    expect(captureException).toHaveBeenCalledWith(error, { tags: { route: "/u/:token" } });
+    const calls = JSON.stringify(vi.mocked(captureException).mock.calls);
+    expect(calls).not.toContain("caf%c3%a9");
+    expect(calls).not.toContain("caf%C3%A9");
+    expect(calls).not.toContain("café");
+  });
+
+  it("tags an encoded splat with the route pattern, leaking neither its raw nor its decoded form", () => {
+    const error = new Error("oauth failed");
+    const request = new Request("https://0509.io/api/auth/caf%C3%A9");
+    const params = { "*": "café" };
+
+    handleError(error, { request, params, context: new RouterContextProvider() });
+
+    expect(captureException).toHaveBeenCalledTimes(1);
+    expect(captureException).toHaveBeenCalledWith(error, { tags: { route: "/api/auth/*" } });
+    const calls = JSON.stringify(vi.mocked(captureException).mock.calls);
+    expect(calls).not.toContain("caf%C3%A9");
+    expect(calls).not.toContain("caf%c3%a9");
+    expect(calls).not.toContain("café");
+  });
+
+  it("keeps a splat carrying an encoded slash on the route pattern", () => {
+    const error = new Error("oauth failed");
+    const request = new Request("https://0509.io/api/auth/callback%2Fgoogle");
+    const params = { "*": "callback%2Fgoogle" };
+
+    handleError(error, { request, params, context: new RouterContextProvider() });
+
+    expect(captureException).toHaveBeenCalledTimes(1);
+    expect(captureException).toHaveBeenCalledWith(error, { tags: { route: "/api/auth/*" } });
+    const calls = JSON.stringify(vi.mocked(captureException).mock.calls);
+    expect(calls).not.toContain("callback%2Fgoogle");
+    expect(calls).not.toContain("callback/google");
+  });
+
+  it("leaves an undecodable segment unmapped instead of throwing", () => {
+    const error = new Error("loader exploded");
+    const request = new Request("https://0509.io/u/%zz");
+    const params = { token: "%zz" };
+
+    handleError(error, { request, params, context: new RouterContextProvider() });
+
+    expect(captureException).toHaveBeenCalledTimes(1);
+    expect(captureException).toHaveBeenCalledWith(error, { tags: { route: "/u/:token" } });
+  });
 });

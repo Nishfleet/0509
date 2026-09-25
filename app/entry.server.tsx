@@ -8,15 +8,28 @@ import { withDocumentSecurityHeaders } from "./lib/security-headers";
 
 export const streamTimeout = 5_000;
 
+function decodeSegment(segment: string): string {
+  try {
+    return decodeURIComponent(segment).replace(/\//g, "%2F");
+  } catch {
+    return segment;
+  }
+}
+
 function routePattern(pathname: string, params: Params): string {
+  const segments = pathname.split("/");
   const splat = params["*"];
-  const base = splat && pathname.endsWith(splat) ? `${pathname.slice(0, -splat.length)}*` : pathname;
+  const splatSegments = splat === undefined ? [] : splat.split("/");
+  const splatLength = splatSegments.length;
+  const tail = segments.slice(segments.length - splatLength);
   const names = new Map(
     Object.entries(params).flatMap(([name, value]): [string, string][] =>
-      name === "*" || !value ? [] : [[value, `:${name}`], [encodeURIComponent(value), `:${name}`]],
+      name === "*" || !value ? [] : [[decodeSegment(value), `:${name}`]],
     ),
   );
-  return base.split("/").map((segment) => names.get(segment) ?? segment).join("/");
+  const mapped = segments.map((segment) => names.get(decodeSegment(segment)) ?? segment);
+  if (splatLength === 0 || tail.map(decodeSegment).join("/") !== splat) return mapped.join("/");
+  return [...mapped.slice(0, mapped.length - splatLength), "*"].join("/");
 }
 
 export const handleError: HandleErrorFunction = (error, { request, params }) => {
