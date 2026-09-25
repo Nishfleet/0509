@@ -26,6 +26,22 @@ const FAILURE_ITEM: AlertFeedItem = {
     body: "The brief did not go out. We will not try again.",
     created_at: "2026-09-22T08:00:00Z",
     when: "4 days ago",
+    digest_id: null,
+    brief: null,
+  },
+};
+
+const LINKED_FAILURE_ITEM: AlertFeedItem = {
+  kind: "failure",
+  id: "alert_failure_1",
+  at: "2026-09-22T08:00:00Z",
+  failure: {
+    id: "alert_failure_1",
+    title: "We stopped trying to send your brief",
+    body: "The brief did not go out. We will not try again.",
+    created_at: "2026-09-22T08:00:00Z",
+    when: "4 days ago",
+    digest_id: "dg_1",
     brief: null,
   },
 };
@@ -66,6 +82,13 @@ describe("an alert feed row", () => {
     expect(html).toContain("The brief did not go out. We will not try again.");
     expect(html).toContain("4 days ago");
     expect(html).not.toContain("Read the brief");
+    expect(html).not.toContain("/app/brief/");
+  });
+
+  it("links an undeliverable brief to its own page", () => {
+    const html = render(LINKED_FAILURE_ITEM);
+    expect(html).toContain('href="/app/brief/dg_1"');
+    expect(html).toContain("Open it with your past briefs");
   });
 
   it("links a news row's headline out to the article in a new tab, with the publisher under it", () => {

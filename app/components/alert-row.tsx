@@ -28,6 +28,7 @@ export interface DeliveryFailureItem {
   body: string | null;
   created_at: string;
   when: string;
+  digest_id: string | null;
   brief: BriefPayload | null;
 }
 
@@ -101,6 +102,13 @@ export function AlertFeedRow({ item, eager }: { item: AlertFeedItem; eager: bool
             <BriefView payload={item.failure.brief} />
           </div>
         </details>
+      )}
+      {item.failure.digest_id === null ? null : (
+        <p className={BODY}>
+          <a className={SUMMARY} href={`/app/brief/${item.failure.digest_id}`}>
+            Open it with your past briefs
+          </a>
+        </p>
       )}
     </article>
   );

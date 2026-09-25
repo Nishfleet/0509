@@ -38,6 +38,7 @@ export interface DeliveryFailureRow {
   title: string;
   body: string | null;
   created_at: string;
+  digest_id: string | null;
   brief: BriefPayload | null;
 }
 
@@ -46,10 +47,11 @@ interface AlertJoinRow {
   title: string;
   body: string | null;
   created_at: string;
+  digest_id: string | null;
   payload_json: string | null;
 }
 
-const SELECT_DELIVERY_FAILURES = `SELECT a.id, a.title, a.body, a.created_at, d.payload_json
+const SELECT_DELIVERY_FAILURES = `SELECT a.id, a.title, a.body, a.created_at, d.id AS digest_id, d.payload_json
 FROM alert a
 LEFT JOIN digest d ON d.id = substr(a.id, 5) AND d.workspace_id = a.workspace_id
 WHERE a.workspace_id = ? AND a.kind = 'delivery_failed'
@@ -66,6 +68,7 @@ export async function readDeliveryFailures(
     title: row.title,
     body: row.body,
     created_at: row.created_at,
+    digest_id: row.digest_id,
     brief: row.payload_json === null ? null : readBriefPayload(row.payload_json),
   }));
 }

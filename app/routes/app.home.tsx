@@ -2,7 +2,7 @@ import type { Route } from "./+types/app.home";
 import { env } from "cloudflare:workers";
 
 import { useEffect } from "react";
-import { redirect, useRevalidator } from "react-router";
+import { Link, redirect, useRevalidator } from "react-router";
 
 import { FreshnessLine, freshnessEntries } from "../components/freshness-line";
 import { HomeStanding } from "../components/home-standing";
@@ -58,6 +58,11 @@ export default function Page({ loaderData }: Route.ComponentProps) {
       {loaderData.view.standing.kind === "ranked" ? <ShareButton /> : null}
       <footer className="border-line mt-14 border-t pt-7">
         <p className="font-mono text-eyebrow text-ink-soft">{loaderData.view.footer}</p>
+        <p className="mt-3">
+          <Link className="underline decoration-1 underline-offset-4" to="/app/brief">
+            Read this week's brief
+          </Link>
+        </p>
       </footer>
     </main>
   );
