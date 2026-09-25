@@ -9,7 +9,7 @@ import { acknowledgeOwnSiteIncident, loadAlertsPage } from "../lib/alerts-page.s
 import { parseAlertChip } from "../lib/alert-chips";
 import { requireSession } from "../lib/require-session.server";
 
-const WHEN_CLASS = "text-ink-soft mt-2 block font-mono text-[0.75rem] tracking-[0.04em] uppercase";
+const WHEN_CLASS = "text-ink-soft mt-2 block font-mono text-meta uppercase";
 
 export async function loader({ request }: Route.LoaderArgs) {
   const session = await requireSession(request);
@@ -52,7 +52,9 @@ export default function Page({ loaderData }: Route.ComponentProps) {
           data-testid="own-site-incident"
           className="border-line mt-8 border-t pt-6"
         >
-          <h2 className="font-display text-lg font-semibold">{incident.title}</h2>
+          <h2 className="font-display text-row-name font-bold [overflow-wrap:anywhere]">
+            {incident.title}
+          </h2>
           <p className="mt-2 leading-[1.65]">
             {incident.fixed === null
               ? "We check it again every hour and email you once it's fixed."
