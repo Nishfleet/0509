@@ -11,13 +11,14 @@ import { markWatchPolled, readActiveWatches, readWatchConfigJson, writeWatchConf
 import type { NoulQuestion, NoulVerdict } from "../../app/lib/jev/client.server";
 import { askNoul, JevUnavailableError } from "../../app/lib/jev/client.server";
 import { noulAction } from "../../app/lib/jev/thresholds";
-import type { MentionItem } from "./map";
 import {
   readWatchConfig,
   resolveYoutubeChannelId,
   withLostChannel,
   withResolvedChannel,
 } from "../../app/lib/mentions/youtube-channel";
+import type { MentionItem } from "./map";
+import { writeSourcePoint } from "./canary";
 import { adapterFor } from "../sources/registry";
 import { fetchUpstream, type MentionsAdapter } from "../sources/mentions/types";
 
@@ -334,6 +335,7 @@ async function sweepYoutubeTarget(
     stored += outcome.stored;
     unjudged += outcome.unjudged;
   }
+  writeSourcePoint(target.pluginKey, items, canaryCount);
   return { items, stored, unjudged };
 }
 
@@ -346,6 +348,7 @@ export async function sweepTarget(
   const adapter = adapterFor(target.pluginKey);
   if (adapter === undefined) throw new Error(`no mentions adapter for ${target.pluginKey}`);
   const result = await adapter({ query: target.query }, null);
+  writeSourcePoint(target.pluginKey, result.items.length, canaryCount);
   const titled = result.items.filter((item) => item.title.trim() !== "");
   const hash = await sha256Hex(result.rawBody);
   const r2Key = `snapshot/mentions/${target.pluginKey}/${hash}`;
