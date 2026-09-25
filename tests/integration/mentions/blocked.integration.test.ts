@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { CanarySource } from "../../../app/lib/data/source.server";
 import { runCanary } from "../../../workers/mentions/canary";
 import { planTargets, sweepTarget } from "../../../workers/mentions/sweep";
+import { BLOCKING_STATUSES } from "../../../workers/sources/mentions/types";
 
 const NOW = "2026-09-24T03:00:00.000Z";
 
@@ -65,6 +66,10 @@ afterEach(() => {
 });
 
 describe("a blocking upstream degrades the source and ends the step (0509#5159)", () => {
+  it("the block set is exactly 202, 403 and 429", () => {
+    expect([...BLOCKING_STATUSES].sort((a, b) => a - b)).toEqual([202, 403, 429]);
+  });
+
   it("case A: HTTP 202 degrades the source, and the sweep step rejects without retrying", async () => {
     const { sourceId, brand } = await seedBlockedSource("a", { enabled: true });
     const fetchMock = vi.fn(async () => new Response("", { status: 202 }));
