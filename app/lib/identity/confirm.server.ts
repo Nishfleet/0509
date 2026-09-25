@@ -1,9 +1,9 @@
 import { z } from "zod";
 
-import { insertSelfEntity } from "../data/entity.server";
-import { startDiscovery } from "../discovery/start.server";
+import { insertSelfEntity, readWorkspaceSelfId } from "../data/entity.server";
 import { normaliseSubject } from "./normalise";
 import { readLogo } from "./logo-store.server";
+import { startIdentityTail } from "./tail.server";
 
 const SOCIAL_PREFIX = "social.";
 
@@ -59,6 +59,14 @@ export async function confirmCard(workspaceId: string, form: FormData): Promise<
     }),
     now: now.toISOString(),
   });
-  await startDiscovery(workspaceId, now);
+  const entityId = await readWorkspaceSelfId(workspaceId);
+  if (entityId === null) return false;
+  await startIdentityTail({
+    workspaceId,
+    entityId,
+    name: card.name,
+    domain: subject.registrable,
+    homepageUrl: subject.kind === "domain" ? subject.url : null,
+  });
   return true;
 }

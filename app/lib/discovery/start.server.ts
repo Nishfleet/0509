@@ -34,8 +34,21 @@ async function startAll(now: Date, mode: "create" | "refresh"): Promise<number> 
   return all.length;
 }
 
-export async function startDiscovery(workspaceId: string, now: Date): Promise<void> {
-  await env.DISCOVERY.createBatch(instances([workspaceId], now, "create"));
+export function workflowInstanceExists(error: unknown): boolean {
+  if (!(error instanceof Error)) return false;
+  const message = error.message.toLowerCase();
+  return message.includes("already exist") || message.includes("already_exists");
+}
+
+export async function startDiscovery(workspaceId: string, now: Date): Promise<string> {
+  const [instance] = instances([workspaceId], now, "create");
+  if (instance === undefined) throw new Error("discovery instance was not addressed");
+  try {
+    await env.DISCOVERY.createBatch([instance]);
+  } catch (error) {
+    if (!workflowInstanceExists(error)) throw error;
+  }
+  return instance.id;
 }
 
 export async function startNightlyDiscovery(now: Date): Promise<number> {
