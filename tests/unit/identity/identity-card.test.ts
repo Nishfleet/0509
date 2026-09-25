@@ -216,7 +216,8 @@ describe("the identity card fields", () => {
 
 		expect(accessibleName(found, "edit name: ")).toBe("edit name: Gymshark");
 		expect(accessibleName(edited, "edit name: ")).toBe("edit name: My Brand");
-		expect(found).not.toBe(edited);
+		expect(input(found, 'name="name"')).toContain('value="Gymshark"');
+		expect(input(edited, 'name="name"')).toContain('value="My Brand"');
 	});
 });
 

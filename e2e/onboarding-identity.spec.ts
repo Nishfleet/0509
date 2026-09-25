@@ -52,6 +52,53 @@ test.describe("signed in", () => {
     expect(consoleErrors).toEqual([]);
   });
 
+  test("an edit marks its row at once and 'use what we found' puts the read value back", async ({
+    page,
+  }) => {
+    const token = requireInboxToken();
+    const email = `e2e+${crypto.randomUUID().replaceAll("-", "").slice(0, 12)}@0509.io`;
+    await signInWithMagicLink(page, email, token);
+
+    const consoleErrors: string[] = [];
+    page.on("console", (message) => {
+      if (message.type() === "error") consoleErrors.push(message.text());
+    });
+
+    await page.goto("/onboarding");
+    const input = page.getByRole("textbox", { name: "your website, or a handle" });
+    await input.fill("gymshark.com");
+    await input.press("Enter");
+
+    await expect(page).toHaveURL(/\/onboarding\/identity\?subject=gymshark\.com$/);
+    const editName = page.getByRole("button", { name: /edit name: .+/ });
+    await expect(editName).toBeVisible({ timeout: 30_000 });
+    const found = (await editName.textContent())?.replace("edit name: ", "").trim() ?? "";
+    expect(found).not.toBe("");
+
+    await editName.click();
+    const name = page.getByRole("textbox", { name: "name" });
+    await name.fill("e2e name edit");
+    await name.press("Escape");
+
+    await expect(page.getByText("edited by you")).toHaveCount(1);
+    await expect(page.getByRole("button", { name: "use what we found" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "edit name: e2e name edit" })).toBeVisible();
+
+    await page.getByRole("button", { name: "use what we found" }).click();
+    await expect(
+      page.getByText("back to what we found, we will check it again"),
+    ).toBeVisible();
+    await expect(page.getByRole("button", { name: `edit name: ${found}` })).toBeVisible();
+    await expect(page.getByText("edited by you")).toHaveCount(0);
+
+    await page.reload();
+    await expect(page.getByRole("button", { name: `edit name: ${found}` })).toBeVisible({
+      timeout: 30_000,
+    });
+    await expect(page.getByText("edited by you")).toHaveCount(0);
+    expect(consoleErrors).toEqual([]);
+  });
+
   for (const { width, height } of [
     { width: 1440, height: 900 },
     { width: 390, height: 844 },
