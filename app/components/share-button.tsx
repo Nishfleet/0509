@@ -22,7 +22,9 @@ async function sharePicture(): Promise<boolean> {
   if (!response.ok) return false;
   const file = new File([await response.blob()], FILE_NAME, { type: "image/png" });
   if ("canShare" in navigator && navigator.canShare({ files: [file] })) {
-    await navigator.share({ files: [file] }).catch(() => undefined);
+    await navigator.share({ files: [file] }).catch((error: unknown) => {
+      console.error(JSON.stringify({ event: "share.native_share_failed", error: String(error) }));
+    });
     return true;
   }
   download(file);
@@ -34,7 +36,10 @@ export function ShareButton(): ReactElement {
 
   async function share() {
     setState("working");
-    const done = await sharePicture().catch(() => false);
+    const done = await sharePicture().catch((error: unknown) => {
+      console.error(JSON.stringify({ event: "share.picture_failed", error: String(error) }));
+      return false;
+    });
     setState(done ? "idle" : "failed");
   }
 
