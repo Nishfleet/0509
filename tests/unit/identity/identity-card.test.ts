@@ -51,6 +51,30 @@ describe("the identity card fields", () => {
 		expect(html).not.toContain("check this");
 	});
 
+	it("names each edit button by its field and its current value", () => {
+		const html = render(site({ name: "fill", description: "fill", socials: "fill" }));
+
+		expect(html).toContain('<span class="sr-only">edit name: </span>Gymshark');
+		expect(html).toContain('<span class="sr-only">edit about: </span>performance apparel');
+		expect(html).not.toContain('aria-label="edit ');
+		expect(html).toContain("min-h-11");
+	});
+
+	it("ties the check-this marker to the edit button it qualifies", () => {
+		const html = render(site({ name: "check", description: "fill", socials: "fill" }));
+
+		const id = /aria-describedby="([^"]+)"/.exec(html)?.[1];
+		expect(id).toBeDefined();
+		expect(html.indexOf(`id="${id}"`)).toBeGreaterThan(-1);
+		expect(html.indexOf(`id="${id}"`)).toBeLessThan(html.lastIndexOf("check this"));
+	});
+
+	it("gives an unsure social a 44px labelled row", () => {
+		const html = render(site({ name: "fill", description: "fill", socials: "check" }));
+
+		expect(html).toContain('<label class="flex min-h-11 min-w-0 items-center gap-3">');
+	});
+
 	it("holds a name Jev was unsure about as placeholder text inside a check-this row, never as the value", () => {
 		const html = render(site({ name: "check", description: "fill", socials: "fill" }));
 
