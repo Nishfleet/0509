@@ -156,15 +156,18 @@ export async function waitForMagicLink(to: string, token: string, exclude: strin
   );
 }
 
-const TURNSTILE_TEST_SITE_KEY = "1x00000000000000000000BB";
-
 export async function settleSignInWidget(page: Page): Promise<void> {
-  const host = page.locator("[data-sitekey]");
-  await expect(host).toHaveCount(1);
-  const siteKey = await host.getAttribute("data-sitekey");
-  if (siteKey !== TURNSTILE_TEST_SITE_KEY) return;
+  await expect(page.locator("[data-sitekey]")).toHaveCount(1);
   await page.locator("#email").focus();
   await expect(page.locator('input[name="cf-turnstile-response"]')).toHaveValue(/\S/);
+}
+
+export async function turnstileToken(page: Page): Promise<string> {
+  await page.goto("/login");
+  await settleSignInWidget(page);
+  const token = (await page.locator('input[name="cf-turnstile-response"]').inputValue()).trim();
+  if (token.length === 0) throw new Error("Turnstile issued no token");
+  return token;
 }
 
 // J1's core: submit the login form for a fresh e2e+ address, read the real

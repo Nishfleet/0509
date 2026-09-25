@@ -13,7 +13,7 @@ import { Footer } from "../components/footer";
 import { safeReturnTo } from "../lib/agent/paths";
 import { authClient } from "../lib/auth-client";
 import { formMagicLinkRequest } from "../lib/auth/login-magic-link.server";
-import { handleAuthRequest } from "../lib/auth.server";
+import { createAuth } from "../lib/auth.server";
 import { readAccountDeleteProgress } from "../lib/account-delete.server";
 import { timezoneCookie } from "../lib/timezone";
 
@@ -41,19 +41,16 @@ export async function action({ request }: Route.ActionArgs) {
   const captchaField = form.get("cf-turnstile-response");
   const captcha = typeof captchaField === "string" ? captchaField.trim() : "";
   const callbackURL = safeReturnTo(new URL(request.url).searchParams.get("next"));
-  let response: Response;
-  try {
-    response = await handleAuthRequest(env, formMagicLinkRequest(env.BETTER_AUTH_URL, request, email, captcha, callbackURL));
-  } catch (error: unknown) {
-    console.error(JSON.stringify({ event: "login.magic_link_send_failed", error: String(error) }));
-    return { sent: { email, at: Date.now() } };
-  }
-
+  const response = await createAuth(env).handler(
+    formMagicLinkRequest(env.BETTER_AUTH_URL, request, email, captcha, callbackURL),
+  );
   const status = response.status;
-  const detail = await response.text();
   if (status === 400 || status === 403) return { error: "Confirm you're a person, then we'll send the link." };
+  if (status === 429) return { error: "Too many sign-in links. Wait a minute and try again." };
   if (status !== 200) {
+    const detail = await response.text();
     console.error(JSON.stringify({ event: "login.magic_link_send_failed", status, error: detail.slice(0, 200) }));
+    return { error: "We couldn't send the link. Try again in a minute." };
   }
   return { sent: { email, at: Date.now() } };
 }

@@ -9,10 +9,8 @@ export function formMagicLinkRequest(
   const headers = new Headers();
   headers.set("content-type", "application/json");
   headers.set("origin", site.origin);
-  for (const name of ["cf-connecting-ip", "cf-access-jwt-assertion", "cookie"]) {
-    const value = request.headers.get(name);
-    if (value !== null && value.length > 0) headers.set(name, value);
-  }
+  const ip = request.headers.get("cf-connecting-ip");
+  if (ip !== null && ip.length > 0) headers.set("cf-connecting-ip", ip);
   if (captcha.length > 0) headers.set("x-captcha-response", captcha);
   return new Request(new URL("/api/auth/sign-in/magic-link", site), {
     method: "POST",

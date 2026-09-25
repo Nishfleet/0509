@@ -5,7 +5,6 @@ import { apiKey } from "@better-auth/api-key";
 import { passkey } from "@better-auth/passkey";
 
 import { API_KEY_PREFIX } from "./agent/paths";
-import { accessServiceTokenClearsCaptcha } from "./auth/access-clearance";
 import { ensureWorkspaceForSignIn } from "./workspace.server";
 import { MAGIC_LINK_TTL_SECONDS, magicLinkEmail } from "./auth/magic-link-email";
 import { signInLinkAllowed } from "./auth/sign-in-limit";
@@ -104,54 +103,6 @@ export function createAuth(env: AuthEnv) {
       }),
     ],
   });
-}
-
-function magicLinkPost(request: Request): boolean {
-  if (request.method.toUpperCase() !== "POST") return false;
-  const pathname = new URL(request.url).pathname.replace(/\/+$/, "");
-  return pathname.endsWith(MAGIC_LINK_PATH);
-}
-
-function magicLinkBody(body: unknown): { email: string; callbackURL?: string } | undefined {
-  if (typeof body !== "object" || body === null) return undefined;
-  const email: unknown = Reflect.get(body, "email");
-  if (typeof email !== "string" || email.length === 0) return undefined;
-  const callback: unknown = Reflect.get(body, "callbackURL");
-  if (typeof callback === "string" && callback.length > 0) return { email, callbackURL: callback };
-  return { email };
-}
-
-async function readMagicLinkBody(request: Request): Promise<{ email: string; callbackURL?: string } | undefined> {
-  let parsed: unknown;
-  try {
-    parsed = await request.clone().json();
-  } catch (error) {
-    if (error instanceof SyntaxError) return undefined;
-    throw error;
-  }
-  return magicLinkBody(parsed);
-}
-
-export async function handleAuthRequest(
-  env: AuthEnv,
-  request: Request,
-  accessCleared: (request: Request) => Promise<boolean> = accessServiceTokenClearsCaptcha,
-): Promise<Response> {
-  const headerToken = request.headers.get("x-captcha-response");
-  const captchaToken = headerToken === null ? "" : headerToken.trim();
-  if (magicLinkPost(request) && captchaToken.length === 0 && (await accessCleared(request))) {
-    const body = await readMagicLinkBody(request);
-    if (!body) return Response.json({ message: "Invalid email" }, { status: 400 });
-    const result = await createAuth(env).api.signInMagicLink({
-      body:
-        body.callbackURL === undefined ? { email: body.email } : { email: body.email, callbackURL: body.callbackURL },
-      headers: request.headers,
-      asResponse: true,
-    });
-    if (result instanceof Response) return result;
-    throw new Error("sign-in link did not return a response");
-  }
-  return createAuth(env).handler(request);
 }
 
 export async function signOut(env: AuthEnv, request: Request): Promise<Headers> {

@@ -5,8 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 
 vi.mock("cloudflare:workers", () => ({ env: {} }));
 vi.mock("../../app/lib/auth.server", () => ({
-  createAuth: () => ({}),
-  handleAuthRequest: async () => new Response(null, { status: 200 }),
+  createAuth: () => ({ handler: async () => new Response(null, { status: 200 }) }),
 }));
 
 import type { AccountDeleteProgress } from "../../app/lib/account-delete.server";

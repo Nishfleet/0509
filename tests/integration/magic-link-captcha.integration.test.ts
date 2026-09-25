@@ -1,9 +1,10 @@
 import { env } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
 
-import { handleAuthRequest } from "../../app/lib/auth.server";
+import { createAuth } from "../../app/lib/auth.server";
 
 const ORIGIN = "http://localhost:8787";
+const PASSING_TOKEN = "XXXX.DUMMY.TOKEN.XXXX";
 
 function authEnv(sent: string[], secret = "1x0000000000000000000000000000000AA") {
   return {
@@ -34,24 +35,22 @@ function magicLinkPost(token?: string): Request {
 
 describe("magic-link captcha", () => {
   it("refuses a post with no turnstile token", async () => {
-    const response = await handleAuthRequest(authEnv([]), magicLinkPost(), async () => false);
+    const response = await createAuth(authEnv([])).handler(magicLinkPost());
     expect(response.status).toBe(400);
     expect(await response.text()).toContain("Missing CAPTCHA response");
   });
 
-  it("sends the link when an access service token clears an empty widget", async () => {
+  it("sends the link when the published test token passes", async () => {
     const sent: string[] = [];
-    const response = await handleAuthRequest(authEnv(sent), magicLinkPost(), async () => true);
+    const response = await createAuth(authEnv(sent)).handler(magicLinkPost(PASSING_TOKEN));
     expect(response.status).toBe(200);
     expect(sent).toHaveLength(1);
   });
 
-  it("checks a presented token even when access would clear", async () => {
+  it("refuses a token the secret rejects", async () => {
     const sent: string[] = [];
-    const response = await handleAuthRequest(
-      authEnv(sent, "2x0000000000000000000000000000000AA"),
-      magicLinkPost("not-a-turnstile-token"),
-      async () => true,
+    const response = await createAuth(authEnv(sent, "2x0000000000000000000000000000000AA")).handler(
+      magicLinkPost(PASSING_TOKEN),
     );
     expect(response.status).toBe(403);
     expect(sent).toHaveLength(0);

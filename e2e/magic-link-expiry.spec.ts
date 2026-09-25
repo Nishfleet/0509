@@ -1,7 +1,7 @@
-import { expect, test, type Browser, type BrowserContext, type APIRequestContext } from "@playwright/test";
+import { expect, test, type Browser, type BrowserContext, type Page } from "@playwright/test";
 
 import { accessStatePath } from "../playwright.config";
-import { requireInboxToken, signInWithMagicLink, waitForMagicLink } from "./inbox";
+import { requireInboxToken, signInWithMagicLink, turnstileToken, waitForMagicLink } from "./inbox";
 
 // The sign-in link's real contract, proven on production every deploy: one use,
 // a TTL it cannot outlive, and a request path that stays silent about whether
@@ -57,10 +57,11 @@ async function followOnce(context: BrowserContext, link: string) {
 // a requester sees can be compared byte for byte between a known and an
 // unknown address. Origin is sent because the Access cookie rides along and
 // better-auth's CSRF check validates Origin whenever a cookie is present.
-async function requestMagicLink(request: APIRequestContext, baseURL: string, email: string) {
+async function requestMagicLink(page: Page, baseURL: string, email: string) {
+  const captcha = await turnstileToken(page);
   const sentAt = new Date().toISOString();
-  const response = await request.post(`${baseURL}/api/auth/sign-in/magic-link`, {
-    headers: { origin: baseURL },
+  const response = await page.request.post(`${baseURL}/api/auth/sign-in/magic-link`, {
+    headers: { origin: baseURL, "x-captcha-response": captcha },
     data: { email, callbackURL: "/app" },
   });
   const body = await response.text();
@@ -120,14 +121,14 @@ test("the sign-in link works once, survives a newer request, dies on its own clo
 
   // email is a known address now; stranger never signs in. The request path
   // must answer both identically.
-  const known = await requestMagicLink(page.request, baseURL, email);
+  const known = await requestMagicLink(page, baseURL, email);
   const secondLink = await waitForMagicLink(email, token, [first.link]);
-  await requestMagicLink(page.request, baseURL, email);
+  await requestMagicLink(page, baseURL, email);
   const thirdLink = await waitForMagicLink(email, token, [first.link, secondLink]);
-  const expiring = await requestMagicLink(page.request, baseURL, email);
+  const expiring = await requestMagicLink(page, baseURL, email);
   const expiresAfter = Date.parse(expiring.sentAt) + TOKEN_TTL_MS;
   const fourthLink = await waitForMagicLink(email, token, [first.link, secondLink, thirdLink]);
-  const unknown = await requestMagicLink(page.request, baseURL, stranger);
+  const unknown = await requestMagicLink(page, baseURL, stranger);
   expect(unknown.body).toBe(known.body);
   console.log(
     `magic-link-expiry request-opacity known=${known.body} unknown=${unknown.body} at=${new Date().toISOString()}`,

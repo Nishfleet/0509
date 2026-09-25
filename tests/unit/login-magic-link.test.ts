@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { handleAuthRequest } = vi.hoisted(() => ({
-  handleAuthRequest: vi.fn(async () => new Response("ok", { status: 200 })),
+const { handler } = vi.hoisted(() => ({
+  handler: vi.fn(async () => new Response("ok", { status: 200 })),
 }));
 
 vi.mock("cloudflare:workers", () => ({
@@ -12,7 +12,7 @@ vi.mock("cloudflare:workers", () => ({
 }));
 
 vi.mock("../../app/lib/auth.server", () => ({
-  handleAuthRequest: (env: unknown, request: Request) => handleAuthRequest(env, request),
+  createAuth: () => ({ handler }),
 }));
 
 import { action } from "../../app/routes/login";
@@ -25,43 +25,55 @@ function formRequest(fields: Record<string, string>, headers?: HeadersInit): Req
 
 describe("login magic-link action", () => {
   beforeEach(() => {
-    handleAuthRequest.mockReset();
-    handleAuthRequest.mockResolvedValue(new Response("ok", { status: 200 }));
+    handler.mockReset();
+    handler.mockResolvedValue(new Response("ok", { status: 200 }));
   });
 
   it("asks for an email before it calls the sign-in handler", async () => {
     const result = await action({ request: formRequest({ email: "  " }) });
     expect(result).toEqual({ error: "Enter your email address, then we'll send the link." });
-    expect(handleAuthRequest).not.toHaveBeenCalled();
+    expect(handler).not.toHaveBeenCalled();
   });
 
   it("sends the widget token and refuses when the handler does", async () => {
-    handleAuthRequest.mockResolvedValue(new Response("Missing CAPTCHA response", { status: 400 }));
+    handler.mockResolvedValue(new Response("Missing CAPTCHA response", { status: 400 }));
     const refused = await action({
       request: formRequest({ email: "Person@0509.io", "cf-turnstile-response": "  token-1  " }),
     });
     expect(refused).toEqual({ error: "Confirm you're a person, then we'll send the link." });
-    const forwarded = handleAuthRequest.mock.calls[0]?.[1];
-    expect(forwarded).toBeInstanceOf(Request);
+    const call = handler.mock.calls[0];
+    if (call === undefined) throw new Error("sign-in handler was not called");
+    const forwarded = call[0];
     if (!(forwarded instanceof Request)) throw new Error("sign-in handler was not given a request");
     expect(forwarded.headers.get("x-captcha-response")).toBe("token-1");
+    expect(forwarded.headers.get("origin")).toBe("https://0509.io");
     expect(await forwarded.json()).toEqual({ email: "person@0509.io", callbackURL: "/app" });
   });
 
-  it("forwards the access service credential when the widget sent no token", async () => {
+  it("forwards the client ip and does not invent a captcha header", async () => {
     const result = await action({
-      request: formRequest(
-        { email: "agent@0509.io" },
-        { cookie: "CF_Authorization=service-jwt", "cf-access-jwt-assertion": "header-jwt", "cf-connecting-ip": "203.0.113.5" },
-      ),
+      request: formRequest({ email: "agent@0509.io" }, { "cf-connecting-ip": "203.0.113.5" }),
     });
     expect(result).toMatchObject({ sent: { email: "agent@0509.io" } });
-    const forwarded = handleAuthRequest.mock.calls[0]?.[1];
+    const call = handler.mock.calls[0];
+    if (call === undefined) throw new Error("sign-in handler was not called");
+    const forwarded = call[0];
     if (!(forwarded instanceof Request)) throw new Error("sign-in handler was not given a request");
-    expect(forwarded.headers.get("cookie")).toBe("CF_Authorization=service-jwt");
-    expect(forwarded.headers.get("cf-access-jwt-assertion")).toBe("header-jwt");
     expect(forwarded.headers.get("cf-connecting-ip")).toBe("203.0.113.5");
-    expect(forwarded.headers.get("origin")).toBe("https://0509.io");
     expect(forwarded.headers.get("x-captcha-response")).toBeNull();
+    expect(forwarded.headers.get("cf-access-jwt-assertion")).toBeNull();
+  });
+
+  it("does not say the link was sent when the handler fails", async () => {
+    handler.mockResolvedValue(new Response("send failed", { status: 500 }));
+    const result = await action({ request: formRequest({ email: "person@0509.io", "cf-turnstile-response": "token-1" }) });
+    expect(result).toEqual({ error: "We couldn't send the link. Try again in a minute." });
+    expect(result).not.toHaveProperty("sent");
+  });
+
+  it("names the rate limit when the handler is too busy", async () => {
+    handler.mockResolvedValue(new Response("Too many sign-in links. Wait a minute and try again.", { status: 429 }));
+    const result = await action({ request: formRequest({ email: "person@0509.io", "cf-turnstile-response": "token-1" }) });
+    expect(result).toEqual({ error: "Too many sign-in links. Wait a minute and try again." });
   });
 });
