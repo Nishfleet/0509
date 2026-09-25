@@ -1,5 +1,4 @@
 import type { OAuthHelpers } from "@cloudflare/workers-oauth-provider";
-import type { CloudflareOptions } from "@sentry/cloudflare";
 import { instrumentWorkflowWithSentry, withSentry } from "@sentry/cloudflare";
 import { createRequestHandler } from "react-router";
 
@@ -16,6 +15,7 @@ import { pingLiveness } from "../app/lib/liveness-ping.server";
 import { handleBatch } from "./delivery/consumer";
 import { handleDlqBatch } from "./delivery/dlq-consumer";
 import { NIGHTLY_CRON, sweepPending } from "./delivery/sweeper";
+import { sentryOptions } from "./sentry";
 import { runNightlyStanding } from "./standing/nightly";
 import { IdentityTail } from "./identity-tail-workflow";
 import { AccountDelete } from "./workflows/account-delete";
@@ -78,19 +78,6 @@ const handler = {
     await handleBatch(env, batch);
   },
 } satisfies ExportedHandler<WorkerEnv>;
-
-const sentryOptions = (env: WorkerEnv): CloudflareOptions => ({
-  dsn: env.SENTRY_DSN,
-  sendDefaultPii: false,
-  beforeBreadcrumb: () => null,
-  beforeSend: (event) => ({
-    ...event,
-    request: event.request && {
-      method: event.request.method,
-      url: event.request.url?.split("?")[0],
-    },
-  }),
-});
 
 export { BrowserBudget } from "./budget-counter";
 
