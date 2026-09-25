@@ -65,17 +65,17 @@ describe("landing LCP critical path", () => {
 describe("static home LCP critical path", () => {
   const html = readFileSync(join(REPO_ROOT, "public/index.html"), "utf8");
 
-  it("paints the headline in the brand faces from the one self-hosted font path", () => {
+  it("paints the headline from the preloaded hero face", () => {
     expect(html).toContain("Quietly, we");
     expect(html).toContain('rel="preload"');
     expect(html).toContain("/fonts/bricolage-hero.woff2");
     expect(html).toContain('fetchpriority="high"');
-    expect(html).toContain("/fonts/instrument-sans-latin.woff2");
-    expect(html).toContain("/fonts/ibm-plex-mono-latin-400.woff2");
+    expect(html).toContain('font-family: "Bricolage Grotesque"');
     expect(html).toContain("font-display: swap");
-    for (const family of ["Bricolage Grotesque", "Instrument Sans", "IBM Plex Mono"]) {
-      expect(html).toContain(`font-family: "${family}"`);
-    }
+    expect(html).not.toContain("instrument-sans");
+    expect(html).not.toContain("ibm-plex");
+    expect(html).not.toContain("Instrument Sans");
+    expect(html).not.toContain("IBM Plex Mono");
     expect(html).not.toContain("data:font");
     expect(html).not.toContain("bricolage-grotesque-latin");
     expect(html).not.toContain("/*");
