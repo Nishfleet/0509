@@ -19,8 +19,8 @@ export function meta() {
 }
 
 export async function loader({ request }: Route.LoaderArgs) {
-  const id = new URL(request.url).searchParams.get("deleted") ?? "";
-  if (id === "") return { id, progress: null };
+  const id = new URL(request.url).searchParams.get("deleted");
+  if (id === null || id === "") return { id: null, progress: null };
   return { id, progress: await readAccountDeleteProgress(id) };
 }
 
@@ -43,7 +43,7 @@ export async function action({ request }: Route.ActionArgs) {
 
 export default function Login() {
   const data = useActionData<typeof action>();
-  const { id, progress } = useLoaderData<typeof loader>();
+  const deleted = useLoaderData<typeof loader>();
   const busy = useNavigation().state !== "idle";
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -80,23 +80,23 @@ export default function Login() {
       <main className="flex flex-col">
         <h1 className={SIGN_IN_TITLE}>Sign in</h1>
         <p className={SIGN_IN_LEDE}>We email you a link. Tap it and you're in. There is no password.</p>
-        {progress === null ? null : (
+        {deleted.progress === null ? null : (
           <section data-delete="progress" aria-live="polite">
             <h2 className={SIGN_IN_TITLE}>Your account is deleted</h2>
             <ul className={SIGN_IN_LEDE}>
               <li>Brands, signals, briefs, send history, card, API keys and connected apps: removed</li>
               <li>
-                {progress.files === "removing"
+                {deleted.progress.files === "removing"
                   ? "Snapshots and screenshots: still removing"
-                  : progress.files === "failed"
+                  : deleted.progress.files === "failed"
                     ? `Snapshots and screenshots: stopped. Write to ${SUPPORT_ADDRESS} and we'll finish it.`
-                    : progress.deleted === null
+                    : deleted.progress.deleted === null
                       ? "Snapshots and screenshots: removed"
-                      : `Snapshots and screenshots: removed (${String(progress.deleted)} files)`}
+                      : `Snapshots and screenshots: removed (${String(deleted.progress.deleted)} files)`}
               </li>
             </ul>
-            {progress.files === "removing" ? (
-              <Link to={`/login?deleted=${encodeURIComponent(id)}`} className={SIGN_IN_LEDE}>
+            {deleted.progress.files === "removing" ? (
+              <Link to={`/login?deleted=${encodeURIComponent(deleted.id)}`} className={SIGN_IN_LEDE}>
                 Check again
               </Link>
             ) : null}
