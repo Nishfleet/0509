@@ -15,6 +15,12 @@ const CLOUDFLARE_WORKERS_IMPORT = {
     "cloudflare:workers is a Workers runtime module and does not exist in the browser. Bindings are read in *.server modules and passed down. Source: commit 7727bf787 / #3918.",
 };
 
+const FULL_ZOD_IMPORT = {
+  name: "zod",
+  message:
+    "app/components/ ships to the browser; full zod costs about 13 KB gzipped per object schema there. Import from \"zod/mini\" instead (docs/REBUILD-STACK.md, zod). Source: 0509#4134.",
+};
+
 const PAVED_PATH_PATTERNS = [
   {
     group: ["better-auth/*", "@better-auth/passkey/*", "@better-auth/api-key/*"],
@@ -324,6 +330,20 @@ export default tseslint.config(
   },
 
   {
+    files: ["app/components/**/*.{ts,tsx}"],
+    ignores: ["app/components/toaster.tsx"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          paths: [...ONE_PAVED_PATH_IMPORTS, CLOUDFLARE_WORKERS_IMPORT, FULL_ZOD_IMPORT],
+          patterns: PAVED_PATH_PATTERNS,
+        },
+      ],
+    },
+  },
+
+  {
     files: ["app/lib/auth-client.ts"],
     rules: {
       "no-restricted-imports": [
@@ -344,6 +364,7 @@ export default tseslint.config(
           paths: [
             ...ONE_PAVED_PATH_IMPORTS.filter((p) => p !== SONNER_IMPORT),
             CLOUDFLARE_WORKERS_IMPORT,
+            FULL_ZOD_IMPORT,
           ],
         },
       ],
