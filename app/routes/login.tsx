@@ -29,7 +29,9 @@ export async function action({ request }: Route.ActionArgs) {
       body: { email, callbackURL: safeReturnTo(new URL(request.url).searchParams.get("next")) },
       headers: request.headers,
     })
-    .catch(() => undefined);
+    .catch((error: unknown) => {
+      console.error(JSON.stringify({ event: "login.magic_link_send_failed", error: String(error) }));
+    });
 
   return { sent: { email, at: Date.now() } };
 }
@@ -51,7 +53,10 @@ export default function Login() {
 
   async function signInWithPasskey() {
     setPasskeyState("working");
-    const result = await authClient.signIn.passkey().catch(() => null);
+    const result = await authClient.signIn.passkey().catch((error: unknown) => {
+      console.error(JSON.stringify({ event: "login.passkey_sign_in_failed", error: String(error) }));
+      return null;
+    });
     if (result && !result.error) {
       await navigate(safeReturnTo(searchParams.get("next")));
       return;
