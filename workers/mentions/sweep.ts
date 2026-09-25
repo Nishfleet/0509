@@ -7,7 +7,7 @@ import { readDiscoveryContext, readEntityIdentityJson } from "../../app/lib/data
 import { insertVerdict } from "../../app/lib/data/jev_verdict.server";
 import { insertMention, readSeenDedupKeys } from "../../app/lib/data/signal.server";
 import { insertWatchSnapshot } from "../../app/lib/data/snapshot.server";
-import { markSourceBlocked } from "../../app/lib/data/source.server";
+import { markSourceBlocked, markSourceTimedOut } from "../../app/lib/data/source.server";
 import type { WatchRow } from "../../app/lib/data/watch.server";
 import { markWatchPolled, readActiveWatches, readWatchConfigJson, writeWatchConfigJson } from "../../app/lib/data/watch.server";
 import type { NoulQuestion, NoulVerdict } from "../../app/lib/jev/client.server";
@@ -426,6 +426,10 @@ export async function sweepTarget(
     if (error instanceof UpstreamBlockedError) {
       await markSourceBlocked(target.sourceId, error.status);
       throw new NonRetryableError(error.message, "UpstreamBlockedError");
+    }
+    if (error instanceof DOMException && error.name === "TimeoutError") {
+      await markSourceTimedOut(target.sourceId);
+      throw new NonRetryableError(error.message, "TimeoutError");
     }
     throw error;
   }
