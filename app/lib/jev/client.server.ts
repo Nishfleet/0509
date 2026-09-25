@@ -37,7 +37,7 @@ export interface ChoiceVerdict {
 const booleanType = z.literal("boolean");
 
 interface BooleanQuestion {
-  type: "boolean";
+  type: z.infer<typeof booleanType>;
   instructions: string;
   criteria: { true: string; false: string };
 }
@@ -78,7 +78,7 @@ function booleanQuestion(question: NoulQuestion): BooleanQuestion {
     type: "boolean",
     instructions: question.instructions,
     criteria: { true: question.whenTrue, false: question.whenFalse },
-  } satisfies BooleanQuestion;
+  };
 }
 
 async function run(question: NoulQuestion, state: unknown): Promise<number> {
