@@ -6,7 +6,6 @@ import type { NewPage } from "../data/page.server";
 import { readEnabledSourceId, readEnabledSources } from "../data/source.server";
 import { insertWatches, readEntityWatches } from "../data/watch.server";
 import type { EntityWatch, NewWatch } from "../data/watch.server";
-import { workflowInstanceExists } from "../discovery/start.server";
 import { discoverBoard } from "../hiring/discover-board";
 import { readCachedSiteProof } from "./card.server";
 import { normaliseSubject, type Subject } from "./normalise";
@@ -40,11 +39,7 @@ export function identityTailInstanceId(entityId: string): string {
 
 export async function startIdentityTail(params: IdentityTailParams): Promise<string> {
   const id = identityTailInstanceId(params.entityId);
-  try {
-    await env.IDENTITY_TAIL.create({ id, params });
-  } catch (error) {
-    if (!workflowInstanceExists(error)) throw error;
-  }
+  await env.IDENTITY_TAIL.createBatch([{ id, params }]);
   return id;
 }
 
