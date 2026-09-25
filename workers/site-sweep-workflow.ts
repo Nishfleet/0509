@@ -71,15 +71,15 @@ async function runChunk(
 
 export class SiteSweepWorkflow extends WorkflowEntrypoint<Env & { SITE_SWEEP_PING_URL?: string }, { scope?: SweepScope }> {
   async run(event: WorkflowEvent<{ scope?: SweepScope }>, step: WorkflowStep): Promise<SiteSweepOutcome> {
-      const startedAt = await step.do("start", () => new Date().toISOString());
     const scopes = event.payload?.scope === undefined ? SCOPES : [event.payload.scope];
     const scopeLabel = event.payload?.scope ?? "all";
 
-    const items = await step.do("select", async () => {
+    const selection = await step.do("select", async () => {
       const planned: SweepItem[] = [];
       for (const scope of scopes) planned.push(...(await planSweep(scope)));
-      return planned;
+      return { startedAt: new Date().toISOString(), items: planned };
     });
+    const { startedAt, items } = selection;
 
     let tally: SweepTally = emptyTally();
     for (const [index, chunkItems] of chunks(items).entries()) {
