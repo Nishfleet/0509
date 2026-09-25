@@ -6,4 +6,4 @@
   Access-Control-Allow-Origin: *
 
 /
-  Cache-Control: public, max-age=300, no-transform
+  Cache-Control: public, max-age=300
