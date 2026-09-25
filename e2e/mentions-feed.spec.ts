@@ -140,6 +140,7 @@ async function seedSession(): Promise<string> {
         source,
         title,
         url,
+        url,
         `hash-${id}`,
         `dedup-${id}`,
         publishedAt,
