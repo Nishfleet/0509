@@ -5,8 +5,8 @@ import { insertPages, readJudgedPricingUrl } from "../data/page.server";
 import type { NewPage } from "../data/page.server";
 import { readEnabledSourceId, readEnabledSources } from "../data/source.server";
 import { insertWatches, readEntityWatches } from "../data/watch.server";
-import type { NewWatch } from "../data/watch.server";
-import { startDiscovery, workflowInstanceExists } from "../discovery/start.server";
+import type { EntityWatch, NewWatch } from "../data/watch.server";
+import { workflowInstanceExists } from "../discovery/start.server";
 import { discoverBoard } from "../hiring/discover-board";
 import { readCachedSiteProof } from "./card.server";
 import { normaliseSubject, type Subject } from "./normalise";
@@ -18,13 +18,6 @@ export interface IdentityTailParams {
   domain: string;
   homepageUrl: string | null;
   handle?: string;
-}
-
-export interface TailWatch {
-  id: string;
-  sourceId: string;
-  sourceKey: string;
-  targetKey: string;
 }
 
 export interface IdentityTailOutcome {
@@ -59,7 +52,7 @@ export async function persistTail(params: IdentityTailParams): Promise<{ entityI
   return { entityId: await readSelfEntityId(params.workspaceId, params.entityId) };
 }
 
-export async function seedTailWatches(params: IdentityTailParams, discoveredAt: string): Promise<TailWatch[]> {
+export async function seedTailWatches(params: IdentityTailParams, discoveredAt: string): Promise<EntityWatch[]> {
   const subject = subjectFor(params);
   const proof = subject === null ? { adLibraryHints: [], navLinks: [] } : await readCachedSiteProof(subject);
   const pricing = await readJudgedPricingUrl(params.entityId);
@@ -117,7 +110,7 @@ export async function seedTailWatches(params: IdentityTailParams, discoveredAt: 
   return readEntityWatches(params.entityId);
 }
 
-export async function enqueueFirstSweep(entityId: string, watches: readonly TailWatch[]): Promise<string[]> {
+export async function enqueueFirstSweep(entityId: string, watches: readonly EntityWatch[]): Promise<string[]> {
   if (watches.length === 0) return [];
   await env.FETCH_SWEEP.sendBatch(
     watches.map((watch) => ({
@@ -130,10 +123,6 @@ export async function enqueueFirstSweep(entityId: string, watches: readonly Tail
     })),
   );
   return watches.map((watch) => watch.id);
-}
-
-export async function startTailDiscovery(workspaceId: string, now: Date): Promise<string> {
-  return startDiscovery(workspaceId, now);
 }
 
 function subjectFor(params: IdentityTailParams): Subject | null {
