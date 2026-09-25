@@ -7,7 +7,19 @@ const MIN_EXTRACTED_CHARS = 200;
 
 const MAX_BODY_BYTES = 5_000_000;
 
-type Transport = "fetch" | "browser";
+export type Transport = "fetch" | "browser";
+
+export type EscalationReason =
+  | "status"
+  | "challenge"
+  | "thin-text"
+  | "timeout"
+  | "learned";
+
+export interface ReadUrlOptions {
+  startWith?: Transport;
+  mayEscalate?: (reason: EscalationReason) => Promise<boolean>;
+}
 
 interface ReadUrlSuccess {
   ok: true;
@@ -17,12 +29,14 @@ interface ReadUrlSuccess {
   ms: number;
   browserMsUsed?: number;
   escalated: boolean;
+  escalationReason?: EscalationReason;
 }
 
 type ReadUrlFailure =
   | { ok: false; reason: "invalid-url"; detail: string }
   | { ok: false; reason: "unreachable"; detail: string }
   | { ok: false; reason: "too-large"; detail: string }
+  | { ok: false; reason: "deferred"; detail: string }
   | { ok: false; reason: "escalation-failed"; detail: string };
 
 export type ReadUrlResult = ReadUrlSuccess | ReadUrlFailure;
@@ -81,7 +95,7 @@ export async function countExtractedChars(html: string): Promise<number> {
 async function refusalReason(
   status: number,
   html: string,
-): Promise<"status" | "challenge" | "thin-text" | null> {
+): Promise<Exclude<EscalationReason, "timeout" | "learned"> | null> {
   if (status < 200 || status > 299) return "status";
   const probe = html.slice(0, 20_000).toLowerCase();
   if (CHALLENGE_MARKERS.some((marker) => probe.includes(marker))) {
@@ -93,17 +107,36 @@ async function refusalReason(
   return null;
 }
 
+function browserRefused(status: number, html: string): boolean {
+  if (status < 200 || status > 299) return true;
+  const probe = html.slice(0, 20_000).toLowerCase();
+  return CHALLENGE_MARKERS.some((marker) => probe.includes(marker));
+}
+
 function readField(value: unknown, key: string): unknown {
   if (typeof value !== "object" || value === null) return undefined;
   return (value as Record<string, unknown>)[key];
 }
 
-function logEscalation(url: string, browserMsUsed: number | null) {
+function logEscalation(
+  url: string,
+  browserMsUsed: number | null,
+  reason: EscalationReason,
+) {
   console.log(JSON.stringify({
     event: "browser-escalation",
     url,
     browserMsUsed,
+    reason,
   }));
+}
+
+function deferredByBudget(reason: EscalationReason): ReadUrlFailure {
+  return {
+    ok: false,
+    reason: "deferred",
+    detail: `browser budget refused escalation (${reason})`,
+  };
 }
 
 function parseBrowserMs(res: Response): number | null {
@@ -143,7 +176,10 @@ async function cappedText(res: Response): Promise<string> {
   return new Response(capped).text();
 }
 
-export async function readUrl(url: string): Promise<ReadUrlResult> {
+export async function readUrl(
+  url: string,
+  options: ReadUrlOptions = {},
+): Promise<ReadUrlResult> {
   const started = Date.now();
 
   let target: URL;
@@ -168,6 +204,18 @@ export async function readUrl(url: string): Promise<ReadUrlResult> {
     };
   }
 
+  if (options.startWith === "browser") {
+    if (options.mayEscalate && !(await options.mayEscalate("learned"))) {
+      return deferredByBudget("learned");
+    }
+    const learned = await escalate(url, started, "learned");
+    return learned.result ?? {
+      ok: false,
+      reason: "escalation-failed",
+      detail: `learned browser transport; ${learned.cause}`,
+    };
+  }
+
   let fetchStatus: number;
   let fetchHtml: string;
   try {
@@ -185,7 +233,10 @@ export async function readUrl(url: string): Promise<ReadUrlResult> {
     if (!(err instanceof Error && err.name === "TimeoutError")) {
       return { ok: false, reason: "unreachable", detail };
     }
-    const escalation = await escalate(url, started);
+    if (options.mayEscalate && !(await options.mayEscalate("timeout"))) {
+      return deferredByBudget("timeout");
+    }
+    const escalation = await escalate(url, started, "timeout");
     return escalation.result ?? {
       ok: false,
       reason: "escalation-failed",
@@ -195,7 +246,10 @@ export async function readUrl(url: string): Promise<ReadUrlResult> {
 
   const refused = await refusalReason(fetchStatus, fetchHtml);
   if (refused) {
-    const escalation = await escalate(url, started);
+    if (options.mayEscalate && !(await options.mayEscalate(refused))) {
+      return deferredByBudget(refused);
+    }
+    const escalation = await escalate(url, started, refused);
     if (escalation.result !== null) return escalation.result;
     return {
       ok: false,
@@ -217,6 +271,7 @@ export async function readUrl(url: string): Promise<ReadUrlResult> {
 async function escalate(
   url: string,
   started: number,
+  reason: EscalationReason,
 ): Promise<{ result: ReadUrlSuccess | null; cause: string }> {
   if (!env.BROWSER || typeof env.BROWSER.quickAction !== "function") {
     return { result: null, cause: "browser binding is not configured" };
@@ -226,10 +281,7 @@ async function escalate(
   try {
     res = await env.BROWSER.quickAction("content", { url });
   } catch (err) {
-    
-    
-    
-    logEscalation(url, null);
+    logEscalation(url, null, reason);
     return {
       result: null,
       cause: `browser call threw (${err instanceof Error ? err.message : String(err)})`,
@@ -237,7 +289,7 @@ async function escalate(
   }
 
   const browserMsUsed = parseBrowserMs(res);
-  logEscalation(url, browserMsUsed);
+  logEscalation(url, browserMsUsed, reason);
 
   if (!res.ok) return { result: null, cause: `browser answered ${String(res.status)}` };
 
@@ -258,6 +310,10 @@ async function escalate(
     };
   }
 
+  if (browserRefused(status, html)) {
+    return { result: null, cause: `browser page was refused (${String(status)})` };
+  }
+
   return {
     result: {
       ok: true,
@@ -267,6 +323,7 @@ async function escalate(
       ms: Date.now() - started,
       browserMsUsed: browserMsUsed ?? undefined,
       escalated: true,
+      escalationReason: reason,
     },
     cause: "",
   };
