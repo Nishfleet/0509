@@ -21,7 +21,7 @@ function Row({
 }) {
   return (
     <div
-      className={`border-line flex items-baseline gap-4 border-b py-3${
+      className={`border-line flex flex-wrap items-baseline gap-4 border-b py-3${
         check === true ? " bg-green-wash text-green-ink px-2" : ""
       }`}
     >

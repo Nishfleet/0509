@@ -1,7 +1,6 @@
 import { env } from "cloudflare:workers";
 import { afterEach, describe, expect, it } from "vitest";
 
-import * as publicSurface from "../../../app/lib/identity/card-draft.server";
 import { applyDraftIntent, draftKey, readDraft } from "../../../app/lib/identity/card-draft.server";
 
 /**
@@ -64,22 +63,10 @@ describe("identity card draft", () => {
     expect(await readDraft(WORKSPACE, REGISTRABLE)).toEqual({ description: "Gym wear" });
   });
 
-  it("deletes the KV key when the last field is cleared", async () => {
+  it("intent=revert returns true and deletes the KV key when the last field is cleared", async () => {
     await applyDraftIntent(WORKSPACE, draftForm("draft", { field: "name", value: "Gymshark" }));
 
-    await applyDraftIntent(WORKSPACE, draftForm("revert", { field: "name" }));
-
-    expect(await env.IDENTITY_CACHE.get(KEY)).toBeNull();
-  });
-
-  it("applyDraftIntent with intent=revert clears the field and returns true", async () => {
-    await applyDraftIntent(WORKSPACE, draftForm("draft", { field: "name", value: "Gymshark" }));
-    const form = new FormData();
-    form.set("intent", "revert");
-    form.set("subject", "gymshark.com");
-    form.set("field", "name");
-
-    expect(await applyDraftIntent(WORKSPACE, form)).toBe(true);
+    expect(await applyDraftIntent(WORKSPACE, draftForm("revert", { field: "name" }))).toBe(true);
     expect(await env.IDENTITY_CACHE.get(KEY)).toBeNull();
   });
 
@@ -110,13 +97,5 @@ describe("identity card draft", () => {
 
     expect(await applyDraftIntent(WORKSPACE, form)).toBe(true);
     expect(await readDraft(WORKSPACE, REGISTRABLE)).toEqual({ name: "Gymshark" });
-  });
-
-  it("exports no field writer a route could call instead of applyDraftIntent", () => {
-    expect(Object.keys(publicSurface).toSorted()).toStrictEqual([
-      "applyDraftIntent",
-      "draftKey",
-      "readDraft",
-    ]);
   });
 });

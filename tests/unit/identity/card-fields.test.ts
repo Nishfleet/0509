@@ -1,21 +1,27 @@
 import { describe, expect, it } from "vitest";
 
-import { isDraftSave } from "../../../app/lib/identity/card-fields";
+import { isDraftWrite } from "../../../app/lib/identity/card-fields";
 
-describe("isDraftSave", () => {
+describe("isDraftWrite", () => {
   it("returns true when intent is draft", () => {
     const form = new FormData();
     form.set("intent", "draft");
-    expect(isDraftSave(form)).toBe(true);
+    expect(isDraftWrite(form)).toBe(true);
+  });
+
+  it("returns true when intent is revert", () => {
+    const form = new FormData();
+    form.set("intent", "revert");
+    expect(isDraftWrite(form)).toBe(true);
   });
 
   it("returns false when intent is missing", () => {
     const form = new FormData();
     form.set("subject", "example.com");
-    expect(isDraftSave(form)).toBe(false);
+    expect(isDraftWrite(form)).toBe(false);
   });
 
   it("returns false for undefined formData", () => {
-    expect(isDraftSave(undefined)).toBe(false);
+    expect(isDraftWrite(undefined)).toBe(false);
   });
 });
