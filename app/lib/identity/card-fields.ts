@@ -13,3 +13,5 @@ export interface SiteFields {
   review: CardReview;
   unfound: boolean;
 }
+
+export type CardValues = Pick<SiteFields, "name" | "description" | "socials">;

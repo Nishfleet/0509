@@ -2,7 +2,7 @@ import { env } from "cloudflare:workers";
 import { z } from "zod";
 
 import { readUrl } from "../fetch/transport.server";
-import type { CardReview, SiteFields } from "./card-fields";
+import type { CardReview, CardValues, SiteFields } from "./card-fields";
 import { extractIdentity } from "./extract";
 import { reviewFields } from "./field-confidence.server";
 import { readLogo, storeLogo } from "./logo-store.server";
@@ -72,7 +72,7 @@ export async function withinProbeLimit(userId: string): Promise<boolean> {
   return success;
 }
 
-function fillReview(fields: { name: string | null; description: string | null; socials: { platform: string; url: string }[] }): CardReview {
+function fillReview(fields: CardValues): CardReview {
   return {
     name: fields.name === null ? "empty" : "fill",
     description: fields.description === null ? "empty" : "fill",
@@ -80,10 +80,7 @@ function fillReview(fields: { name: string | null; description: string | null; s
   };
 }
 
-function applyReview<T extends { name: string | null; description: string | null; socials: { platform: string; url: string }[] }>(
-  fields: T,
-  review: CardReview,
-): T {
+function applyReview(fields: CardValues, review: CardReview): Omit<SiteFields, "unfound"> {
   return {
     ...fields,
     name: review.name === "empty" ? null : fields.name,
@@ -99,19 +96,17 @@ export function startCard(
 ): { site: Promise<SiteFields>; logo: Promise<string | null> } {
   const read = readSiteCard(subject);
   const site = read.then(async ({ card, reached }): Promise<SiteFields> => {
-    const fields: SiteFields = {
+    const values: CardValues = {
       name: card.name ?? (subject.kind === "domain" ? null : `@${subject.registrable}`),
       description: card.description,
       socials: subject.url !== null && subject.kind !== "domain"
         ? [{ platform: subject.platform ?? "site", url: subject.url }]
         : card.socials,
-      review: { name: "fill", description: "fill", socials: "fill" },
-      unfound: subject.kind === "domain" && !reached,
     };
     const review: CardReview = subject.kind === "domain" && reached
-      ? await reviewFields(workspaceId, subject, fields, new Date().toISOString())
-      : fillReview(fields);
-    return applyReview(fields, review);
+      ? await reviewFields(workspaceId, subject, values, new Date().toISOString())
+      : fillReview(values);
+    return { ...applyReview(values, review), unfound: subject.kind === "domain" && !reached };
   });
   const logo = read.then(async ({ card, reached }) => {
     if (!reached) return null;

@@ -1,7 +1,7 @@
 import { insertVerdicts, type VerdictRow } from "../data/jev_verdict.server";
 import { JevUnavailableError, askNouls, type NoulQuestion, type NoulVerdict } from "../jev/client.server";
 import { noulAction } from "../jev/thresholds";
-import type { CardReview, FieldReview } from "./card-fields";
+import type { CardReview, CardValues, FieldReview } from "./card-fields";
 import type { Subject } from "./normalise";
 
 const NAME_QUESTION: NoulQuestion = {
@@ -25,12 +25,6 @@ const SOCIALS_QUESTION: NoulQuestion = {
   whenFalse: "It is wrong, generic, or belongs to someone else.",
 };
 
-interface CardFields {
-  name: string | null;
-  description: string | null;
-  socials: { platform: string; url: string }[];
-}
-
 function reviewFor(p: number): FieldReview {
   const action = noulAction(p);
   if (action === "act") return "fill";
@@ -38,7 +32,7 @@ function reviewFor(p: number): FieldReview {
   return "empty";
 }
 
-function buildQuestions(fields: CardFields): NoulQuestion[] {
+function buildQuestions(fields: CardValues): NoulQuestion[] {
   const out: NoulQuestion[] = [];
   if (fields.name !== null) out.push(NAME_QUESTION);
   if (fields.description !== null) out.push(DESCRIPTION_QUESTION);
@@ -50,7 +44,7 @@ function reviewAll(review: FieldReview): CardReview {
   return { name: review, description: review, socials: review };
 }
 
-function reviewValued(fields: CardFields, review: FieldReview): CardReview {
+function reviewValued(fields: CardValues, review: FieldReview): CardReview {
   return {
     name: fields.name === null ? "empty" : review,
     description: fields.description === null ? "empty" : review,
@@ -58,10 +52,16 @@ function reviewValued(fields: CardFields, review: FieldReview): CardReview {
   };
 }
 
+const FIELD_BY_QUESTION: ReadonlyMap<string, keyof CardReview> = new Map([
+  [NAME_QUESTION.id, "name"],
+  [DESCRIPTION_QUESTION.id, "description"],
+  [SOCIALS_QUESTION.id, "socials"],
+]);
+
 export async function reviewFields(
   workspaceId: string,
   subject: Subject,
-  fields: CardFields,
+  fields: CardValues,
   now: string,
 ): Promise<CardReview> {
   const questions = buildQuestions(fields);
@@ -103,10 +103,10 @@ export async function reviewFields(
       })),
     }),
   );
-  const byId = new Map(verdicts.map((verdict) => [verdict.questionId, verdict.p] as const));
-  return {
-    name: byId.has(NAME_QUESTION.id) ? reviewFor(byId.get(NAME_QUESTION.id) ?? 0) : "empty",
-    description: byId.has(DESCRIPTION_QUESTION.id) ? reviewFor(byId.get(DESCRIPTION_QUESTION.id) ?? 0) : "empty",
-    socials: byId.has(SOCIALS_QUESTION.id) ? reviewFor(byId.get(SOCIALS_QUESTION.id) ?? 0) : "empty",
-  };
+  const review = reviewValued(fields, "empty");
+  for (const verdict of verdicts) {
+    const field = FIELD_BY_QUESTION.get(verdict.questionId);
+    if (field !== undefined) review[field] = reviewFor(verdict.p);
+  }
+  return review;
 }
