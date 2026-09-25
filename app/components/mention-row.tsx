@@ -1,6 +1,7 @@
 import type { ReactElement } from "react";
 
 import { POSSIBLY_LINE, UNREVIEWED_LINE, type MentionRowModel } from "../lib/mention-feed";
+import { WhyFlaggedSheet } from "./why-flagged";
 
 const WHEN_CLASS = "text-ink-soft mt-2 block font-mono text-meta uppercase";
 const TITLE = "font-display text-lg font-semibold [overflow-wrap:anywhere]";
@@ -32,16 +33,11 @@ export function MentionRow({ mention }: { mention: MentionRowModel }): ReactElem
           {mention.when}
         </time>
       </p>
-      <details className="mt-3 min-w-0">
-        <summary className="cursor-pointer font-mono text-meta underline decoration-1 underline-offset-4">
-          Why we flagged this
-        </summary>
-        {mention.why === null ? null : (
-          <p data-testid="mention-why" className="mt-2 leading-[1.65] [overflow-wrap:anywhere]">
-            {mention.why}
-          </p>
-        )}
-      </details>
+      {mention.whyFlagged === null ? null : (
+        <div className="mt-3">
+          <WhyFlaggedSheet why={mention.whyFlagged} />
+        </div>
+      )}
     </article>
   );
 }

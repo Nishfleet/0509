@@ -1,6 +1,7 @@
 import { daysAgoLabel } from "./delivery-alert";
 import { noulAction } from "./jev/thresholds";
 import { sourceName } from "./source-name";
+import { whyFlagged, type WhyFlagged } from "./why-flagged";
 
 export type MentionTreatment = "shown" | "possibly" | "held" | "unreviewed";
 
@@ -14,6 +15,8 @@ export interface MentionReadRow {
   observedAt: string;
   p: number | null;
   reason: string | null;
+  verdictId: string | null;
+  verdictDecidedAt: string | null;
 }
 
 export interface MentionRowModel {
@@ -26,6 +29,7 @@ export interface MentionRowModel {
   treatment: MentionTreatment;
   when: string;
   why: string | null;
+  whyFlagged: WhyFlagged | null;
 }
 
 const FOUND_TODAY = "found today";
@@ -70,6 +74,16 @@ export function mentionsFromRows(rows: readonly MentionReadRow[], now: Date): Me
         treatment,
         when: mentionWhen(row.publishedAt, now),
         why: storedReason(row.reason),
+        whyFlagged: whyFlagged({
+          verdictId: row.verdictId,
+          p: row.p,
+          reason: row.reason,
+          decidedAt: row.verdictDecidedAt,
+          compared: [
+            { label: "Source", value: sourceName(row.kind, row.platform) },
+            { label: "Link", value: row.url },
+          ],
+        }),
       },
     ];
   });

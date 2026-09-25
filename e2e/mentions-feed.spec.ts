@@ -280,7 +280,6 @@ test("a workspace shows the three mention treatments", async ({ page }, testInfo
   await expect(page.getByText("Hacker News mentions", { exact: true })).toBeVisible();
   await expect(page.getByText("Medium mentions", { exact: true })).toBeVisible();
   await expect(page.getByText("Paused brand should stay hidden")).toHaveCount(0);
-  await expect(page.getByText("A London flagship is a move worth knowing.")).toHaveCount(1);
   await expect(page.getByText("An old read that should stay hidden.")).toHaveCount(0);
 
   const before = await page.locator("main").innerHTML();
@@ -294,7 +293,12 @@ test("a workspace shows the three mention treatments", async ({ page }, testInfo
   await page.getByTestId("mentions-show-all").click();
   await expect(held).toHaveCount(1);
   await expect(held).toContainText("Zephyrwear ticker line");
-  await expect(held.getByTestId("mention-why")).toHaveText("A ticker line, not a move.");
+  const trigger = held.getByRole("button", { name: "Why we flagged this" });
+  await trigger.click();
+  await expect(page.getByTestId("why-flagged-reason")).toHaveText("Our read: A ticker line, not a move.");
+  await page.keyboard.press("Escape");
+  await expect(page.getByTestId("why-flagged")).toHaveCount(0);
+  await expect(trigger).toBeFocused();
   await expect(page.getByText("Paused brand should stay hidden")).toHaveCount(0);
   const after = await page.locator("main").innerHTML();
   expect(after).not.toMatch(BANNED);

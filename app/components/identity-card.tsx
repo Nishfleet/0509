@@ -10,13 +10,13 @@ function Row({ label, check, children }: { label: string; check?: boolean; child
   return (
     <div
       className={`border-line flex items-baseline gap-4 border-b py-3${
-        check === true ? " outline outline-1 outline-ink -outline-offset-1 px-2" : ""
+        check === true ? " bg-green-wash text-green-ink px-2" : ""
       }`}
     >
       <span className="text-ink-soft w-20 shrink-0 font-mono text-[0.75rem] uppercase">{label}</span>
       {children}
       {check === true ? (
-        <span className="text-ink-soft font-mono text-[0.7rem] uppercase">check this</span>
+        <span className="text-green-ink font-mono text-[0.7rem] uppercase">check this</span>
       ) : null}
     </div>
   );
