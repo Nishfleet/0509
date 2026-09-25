@@ -61,3 +61,21 @@ describe("landing LCP critical path", () => {
     expect(shipped.length).toBeLessThan(12_000);
   });
 });
+
+describe("static home LCP critical path", () => {
+  const html = readFileSync(join(REPO_ROOT, "public/index.html"), "utf8");
+
+  it("paints the headline from the document with no font resource", () => {
+    expect(html).toContain("Quietly, we");
+    expect(html).not.toContain("data:font");
+    expect(html).not.toContain("@font-face");
+    expect(html).not.toContain("/fonts/");
+    expect(html).not.toContain('rel="stylesheet"');
+    expect(html).not.toContain('rel="preload"');
+    for (const family of ["Bricolage Grotesque", "Instrument Sans", "IBM Plex Mono"]) {
+      expect(html).not.toContain(family);
+    }
+    expect(html).toContain("ui-sans-serif, system-ui, sans-serif");
+    expect(Buffer.byteLength(html)).toBeLessThan(8_000);
+  });
+});
