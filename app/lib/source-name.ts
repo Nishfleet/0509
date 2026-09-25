@@ -8,6 +8,7 @@ const PLATFORM_NAMES: Readonly<Record<string, string>> = {
   hn: "Hacker News",
   lever: "Lever",
   linkedin: "LinkedIn",
+  medium: "Medium",
   meta: "Meta",
   pinterest: "Pinterest",
   reddit: "Reddit",
@@ -16,6 +17,7 @@ const PLATFORM_NAMES: Readonly<Record<string, string>> = {
   tiktok: "TikTok",
   workable: "Workable",
   x: "X",
+  youtube: "YouTube",
 };
 
 const KIND_NOUNS: Readonly<Record<string, string>> = {
