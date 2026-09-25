@@ -1,7 +1,9 @@
 import { z } from "zod";
 
 import { insertSelfEntity, readWorkspaceSelfId } from "../data/entity.server";
+import { insertFieldEdits, type FieldEdit } from "../data/user_decision.server";
 import { readUrl } from "../fetch/transport.server";
+import { readCachedSiteValues } from "./card.server";
 import { extractIdentity } from "./extract";
 import { readLogo } from "./logo-store.server";
 import { normaliseSubject, type Subject } from "./normalise";
@@ -56,7 +58,7 @@ async function classifyConfirmedSite(
   }
 }
 
-export async function confirmCard(workspaceId: string, form: FormData): Promise<boolean> {
+export async function confirmCard(workspaceId: string, userId: string, form: FormData): Promise<boolean> {
   const parsed = confirmSchema.safeParse({
     subject: field(form, "subject"),
     name: field(form, "name"),
@@ -88,6 +90,25 @@ export async function confirmCard(workspaceId: string, form: FormData): Promise<
   });
   const entityId = await readWorkspaceSelfId(workspaceId);
   if (entityId === null) return false;
+  const cached = await readCachedSiteValues(subject);
+  if (cached !== null) {
+    const edits: FieldEdit[] = [];
+    if (card.name !== cached.name) edits.push({ field: "name", from: cached.name, to: card.name });
+    if ((card.description === "" ? null : card.description) !== cached.description) {
+      edits.push({ field: "description", from: cached.description, to: card.description });
+    }
+    if (edits.length > 0) {
+      await insertFieldEdits(
+        edits.map((edit) => ({
+          workspaceId,
+          userId,
+          entityId,
+          edit,
+          decidedAt: now.toISOString(),
+        })),
+      );
+    }
+  }
   await classifyConfirmedSite(workspaceId, subject, entityId, now);
   await startIdentityTail({
     workspaceId,

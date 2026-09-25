@@ -119,6 +119,7 @@ describe("IdentityTailWorkflow", () => {
     expect(
       await confirmCard(
         workspaceId,
+        userId,
         form({ subject: DOMAIN, name: "Gymshark", description: "Gym clothes" }),
       ),
     ).toBe(true);
@@ -178,7 +179,7 @@ describe("IdentityTailWorkflow", () => {
       await modifier.mockStepError({ name: "enqueue-first-sweep" }, new Error("forced step retry"), 1);
     });
     expect(
-      await confirmCard(workspaceId, form({ subject: DOMAIN, name: "Gymshark", description: "" })),
+      await confirmCard(workspaceId, userId, form({ subject: DOMAIN, name: "Gymshark", description: "" })),
     ).toBe(true);
     const [instance] = await introspector.get();
     if (instance === undefined) throw new Error("tail instance was not started");
@@ -200,7 +201,7 @@ describe("IdentityTailWorkflow", () => {
       await modifier.mockStepError({ name: "persist" }, new Error("forced step retry"), 4);
     });
     expect(
-      await confirmCard(workspaceId, form({ subject: DOMAIN, name: "Gymshark", description: "" })),
+      await confirmCard(workspaceId, userId, form({ subject: DOMAIN, name: "Gymshark", description: "" })),
     ).toBe(true);
     const [instance] = await introspector.get();
     if (instance === undefined) throw new Error("tail instance was not started");

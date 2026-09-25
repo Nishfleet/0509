@@ -147,6 +147,7 @@ describe("confirmCard", () => {
     await env.SNAPSHOTS.put("logo/gymshark.com", new Uint8Array([1]), { httpMetadata: { contentType: "image/png" } });
     const saved = await confirmCard(
       "ws-1",
+      "u1",
       form({
         subject: "https://www.gymshark.com/en-GB/",
         name: " Gymshark UK ",
@@ -177,7 +178,7 @@ describe("confirmCard", () => {
     Reflect.set(env, "AI", { run });
 
     expect(
-      await confirmCard("ws-1", form({ subject: "https://www.gymshark.com/", name: "Gymshark", description: "" })),
+      await confirmCard("ws-1", "u1", form({ subject: "https://www.gymshark.com/", name: "Gymshark", description: "" })),
     ).toBe(true);
 
     const entity = await env.DB.prepare("SELECT id FROM entity WHERE role = 'self'").first<{ id: string }>();
@@ -199,7 +200,7 @@ describe("confirmCard", () => {
     Reflect.set(env, "AI", { run });
 
     expect(
-      await confirmCard("ws-1", form({ subject: "https://www.gymshark.com/", name: "Gymshark", description: "" })),
+      await confirmCard("ws-1", "u1", form({ subject: "https://www.gymshark.com/", name: "Gymshark", description: "" })),
     ).toBe(true);
 
     const entity = await env.DB.prepare("SELECT id FROM entity WHERE role = 'self'").first<{ id: string }>();
@@ -216,6 +217,7 @@ describe("confirmCard", () => {
     stubWeb(() => new Response(gym, { status: 200, headers: { "content-type": "text/html" } }));
     const saved = await confirmCard(
       "ws-1",
+      "u1",
       form({
         subject: "gymshark.com",
         name: "Gymshark",
@@ -230,9 +232,9 @@ describe("confirmCard", () => {
   });
 
   it("refuses a card with no name, and a second confirm keeps the first", async () => {
-    expect(await confirmCard("ws-1", form({ subject: "gymshark.com", name: "  ", description: "" }))).toBe(false);
-    expect(await confirmCard("ws-1", form({ subject: "gymshark.com", name: "First", description: "" }))).toBe(true);
-    expect(await confirmCard("ws-1", form({ subject: "gymshark.com", name: "Second", description: "" }))).toBe(true);
+    expect(await confirmCard("ws-1", "u1", form({ subject: "gymshark.com", name: "  ", description: "" }))).toBe(false);
+    expect(await confirmCard("ws-1", "u1", form({ subject: "gymshark.com", name: "First", description: "" }))).toBe(true);
+    expect(await confirmCard("ws-1", "u1", form({ subject: "gymshark.com", name: "Second", description: "" }))).toBe(true);
     const { results } = await env.DB.prepare("SELECT name FROM entity").all();
     expect(results).toEqual([{ name: "First" }]);
     await settledTail();
@@ -241,6 +243,7 @@ describe("confirmCard", () => {
   it("refuses a social link that is not a URL", async () => {
     const saved = await confirmCard(
       "ws-1",
+      "u1",
       form({ subject: "gymshark.com", name: "Gymshark", description: "", "social.x": "javascript:alert(1)" }),
     );
     expect(saved).toBe(false);
