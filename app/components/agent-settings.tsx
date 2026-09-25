@@ -118,24 +118,30 @@ export function AgentKeys({ keys, newKey }: { keys: AgentKey[]; newKey: string |
         <p className="text-ink-soft mt-2 leading-[1.55]">No keys yet. A key lets your own code read the same things an app can.</p>
       ) : (
         <ul className="border-line mt-3 border-b">
-          {keys.map((key) => (
-            <li key={key.id} data-testid="api-key" className={ROW}>
-              <p className="min-w-0">
-                <span className="font-display font-bold">{key.name}</span>{" "}
-                <span className="text-ink-soft font-mono text-meta">{key.start ?? "key"}…</span>
-                <span className="text-ink-soft block text-body-sm">
-                  Made {day(key.createdAt)} · {key.lastUsedAt === null ? "never used" : `last used ${day(key.lastUsedAt)}`}
-                </span>
-              </p>
-              <Form method="post">
-                <input type="hidden" name="intent" value="revoke-key" />
-                <input type="hidden" name="id" value={key.id} />
-                <Button type="submit" variant="tertiary">
-                  Delete
-                </Button>
-              </Form>
-            </li>
-          ))}
+          {keys.map((key) => {
+            const detailParts = [
+              `Made ${day(key.createdAt)}`,
+              key.lastUsedAt === null ? "never used" : `last used ${day(key.lastUsedAt)}`,
+            ];
+            if (key.rateLimitMax !== null) detailParts.push(`up to ${String(key.rateLimitMax)} requests a minute`);
+            if (key.remaining !== null) detailParts.push(`${String(key.remaining)} requests left`);
+            return (
+              <li key={key.id} data-testid="api-key" className={ROW}>
+                <p className="min-w-0">
+                  <span className="font-display font-bold">{key.name}</span>{" "}
+                  <span className="text-ink-soft font-mono text-meta">{key.start ?? "key"}…</span>
+                  <span className="text-ink-soft block text-body-sm">{detailParts.join(" · ")}</span>
+                </p>
+                <Form method="post">
+                  <input type="hidden" name="intent" value="revoke-key" />
+                  <input type="hidden" name="id" value={key.id} />
+                  <Button type="submit" variant="tertiary">
+                    Delete
+                  </Button>
+                </Form>
+              </li>
+            );
+          })}
         </ul>
       )}
       <Form method="post" className="mt-6">
