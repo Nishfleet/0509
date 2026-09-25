@@ -5,7 +5,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
-import Landing, { links as landingLinks } from "../../app/routes/landing";
+import Landing, { handle, links as landingLinks } from "../../app/routes/landing";
 import { links as productLinks } from "../../app/routes/faces-layout";
 
 const REPO_ROOT = dirname(dirname(dirname(fileURLToPath(import.meta.url))));
@@ -29,8 +29,8 @@ describe("landing LCP critical path", () => {
     expect(html).not.toContain(FULL_FACE);
 
     const landing = landingLinks();
-    expect(preloads(landing, "style")).toHaveLength(1);
     expect(preloads(landing, "font")).toEqual([HERO_FACE]);
+    expect(handle.scripts).toBe(false);
     expect(landing.map(hrefOf).join(" ")).not.toContain("bricolage-grotesque-latin");
 
     const shipped = readFileSync(join(REPO_ROOT, "public/fonts/bricolage-hero.woff2"));

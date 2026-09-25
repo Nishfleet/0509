@@ -1,22 +1,18 @@
-import { Links, Meta, Outlet, Scripts, ScrollRestoration } from "react-router";
+import { Links, Meta, Outlet, Scripts, ScrollRestoration, useMatches } from "react-router";
 
 import type { Route } from "./+types/root";
 import { ProductError } from "./components/error-page";
 import { Toaster } from "./components/toaster";
 import { hasSessionCookie } from "./lib/auth.server";
-import appCss from "./app.css?url";
 import "./app.css";
 
-const appStylePreload = {
-  rel: "preload",
-  href: appCss,
-  as: "style",
-  fetchPriority: "high",
-} as const;
-
-export const links: Route.LinksFunction = () => [appStylePreload];
+function includeScripts(handle: unknown): boolean {
+  if (typeof handle !== "object" || handle === null || !("scripts" in handle)) return true;
+  return handle.scripts !== false;
+}
 
 export function Layout({ children }: { children: React.ReactNode }) {
+  const scripts = useMatches().every((match) => includeScripts(match.handle));
   return (
     <html lang="en">
       <head>
@@ -28,8 +24,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
       <body>
         {children}
         <Toaster />
-        <ScrollRestoration />
-        <Scripts />
+        {scripts ? <ScrollRestoration /> : null}
+        {scripts ? <Scripts /> : null}
       </body>
     </html>
   );

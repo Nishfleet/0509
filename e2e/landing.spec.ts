@@ -7,15 +7,13 @@ import { expect, test } from "@playwright/test";
 
 const PATH = "/design/landing";
 
-test("the landing document discovers its styles before the module graph", async ({ page }) => {
+test("the landing document paints without a module graph", async ({ page }) => {
   const response = await page.goto(PATH);
   expect(response?.status()).toBe(200);
   const html = (await response?.text()) ?? "";
   const head = html.slice(html.indexOf("<head"), html.indexOf("</head>"));
-  const stylePreload = head.indexOf('as="style"');
-  const modulePreload = head.indexOf('rel="modulepreload"');
-  expect(stylePreload).toBeGreaterThan(-1);
-  expect(modulePreload).toBeGreaterThan(stylePreload);
+  expect(head).toContain('rel="stylesheet"');
+  expect(head).not.toContain('rel="modulepreload"');
   expect(head).toContain("/fonts/bricolage-hero.woff2");
   expect(head).not.toContain("bricolage-grotesque-latin");
 });
@@ -116,7 +114,7 @@ test("the hero's first viewport holds the outcome and the one priced input", asy
   expect(display.join("\n")).not.toContain("bricolage-grotesque-latin");
   expect(fullFace).toEqual([]);
   await expect(page.locator('link[rel="preload"][href="/fonts/bricolage-hero.woff2"]')).toHaveCount(1);
-  await expect(page.locator('script[type="module"]')).not.toHaveCount(0);
+  await expect(page.locator('link[rel="modulepreload"]')).toHaveCount(0);
 
   if (testInfo.project.name === "phone-390") {
     const overflow = await page.evaluate(

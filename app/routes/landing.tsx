@@ -1,5 +1,4 @@
 import type { Route } from "./+types/landing";
-import heroFaceCss from "../components/landing/hero-face.css?url";
 import "../components/landing/hero-face.css";
 
 import { Footer } from "../components/footer";
@@ -27,13 +26,6 @@ const TITLE = "Competitor tracking for founders and creators | Five to Nine";
 const DESCRIPTION = `Five to Nine watches your competitors' ${WATCHED_NOUNS} and emails you one brief every Monday with a screenshot behind every change.`;
 const HOME = `${SITE_URL}/`;
 
-const heroStylePreload = {
-  rel: "preload",
-  href: heroFaceCss,
-  as: "style",
-  fetchPriority: "high",
-} as const;
-
 const heroFontPreload = {
   rel: "preload",
   href: "/fonts/bricolage-hero.woff2",
@@ -43,7 +35,9 @@ const heroFontPreload = {
   fetchPriority: "high",
 } as const;
 
-export const links: Route.LinksFunction = () => [heroStylePreload, heroFontPreload];
+export const handle = { scripts: false };
+
+export const links: Route.LinksFunction = () => [heroFontPreload];
 
 export function meta(_: Route.MetaArgs) {
   return [
