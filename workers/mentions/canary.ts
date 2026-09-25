@@ -1,3 +1,5 @@
+import { env } from "cloudflare:workers";
+
 import type { CanarySource } from "../../app/lib/data/source.server";
 import { recordSourceCanary } from "../../app/lib/data/source.server";
 import { adapterFor } from "../sources/registry";
@@ -15,4 +17,16 @@ export async function runCanary(source: CanarySource, now: string): Promise<numb
   }
   await recordSourceCanary(source.id, count, now);
   return count;
+}
+
+export function writeSourcePoint(
+  pluginKey: string,
+  itemCount: number,
+  canaryCount: number | null,
+): void {
+  env.MENTIONS_SOURCES.writeDataPoint({
+    blobs: [pluginKey],
+    doubles: [itemCount, canaryCount ?? -1],
+    indexes: [pluginKey],
+  });
 }

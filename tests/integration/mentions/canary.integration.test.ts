@@ -1,4 +1,5 @@
 import { env } from "cloudflare:test";
+import { env as workerEnv } from "cloudflare:workers";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { CanarySource } from "../../../app/lib/data/source.server";
@@ -163,6 +164,38 @@ describe("per-source canary in the mentions sweep (#4003 slice 2/6)", () => {
     expect(snapshots.results.length).toBeGreaterThan(0);
     for (const snapshot of snapshots.results) {
       expect(snapshot.canary_count).toBe(0);
+    }
+  });
+});
+
+describe("mentions sweep telemetry (#4003 slice 3/6)", () => {
+  it("case D: each swept source emits exactly one MENTIONS_SOURCES point with its item and canary counts", async () => {
+    const { brand } = await seedWorkspace();
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify(ONE_ARTICLE))));
+    const spy = vi.spyOn(workerEnv.MENTIONS_SOURCES, "writeDataPoint");
+
+    try {
+      const target = await gdeltTargetFor(brand);
+      await sweepTarget(target, NOW, 3);
+
+      expect(spy).toHaveBeenCalledExactlyOnceWith({
+        blobs: [target.pluginKey],
+        doubles: [1, 3],
+        indexes: [target.pluginKey],
+      });
+      const call = spy.mock.calls[0];
+      if (!call || !call[0]) throw new Error("expected one MENTIONS_SOURCES point");
+      const point = call[0];
+      const blobsAndIndexes: (string | ArrayBuffer | null)[] = [
+        ...(point.blobs ?? []),
+        ...(point.indexes ?? []),
+      ];
+      for (const value of blobsAndIndexes) {
+        if (typeof value !== "string") continue;
+        expect(value).not.toContain(target.query);
+      }
+    } finally {
+      spy.mockRestore();
     }
   });
 });
