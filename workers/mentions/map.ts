@@ -43,6 +43,10 @@ async function sha256Hex(input: string): Promise<string> {
 		.join("");
 }
 
+export function storedDedupKey(entityId: string, adapterDedupKey: string): string {
+	return `${entityId}:${adapterDedupKey}`;
+}
+
 export async function toSignalRow(
 	item: MentionItem,
 	ctx: SignalRowContext,
