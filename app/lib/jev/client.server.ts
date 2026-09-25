@@ -36,16 +36,11 @@ export interface ChoiceVerdict {
 
 const booleanType = z.literal("boolean");
 
-const booleanQuestionSchema = z.object({
-  type: booleanType,
-  instructions: z.string(),
-  criteria: z.object({
-    true: z.string(),
-    false: z.string(),
-  }),
-});
-
-type BooleanQuestion = z.infer<typeof booleanQuestionSchema>;
+interface BooleanQuestion {
+  type: "boolean";
+  instructions: string;
+  criteria: { true: string; false: string };
+}
 
 const answerSchema = z.object({
   answers: z.record(
@@ -79,12 +74,11 @@ function inputHash(workspaceId: string, question: NoulQuestion, state: unknown):
 }
 
 function booleanQuestion(question: NoulQuestion): BooleanQuestion {
-  const body = {
+  return {
     type: "boolean",
     instructions: question.instructions,
     criteria: { true: question.whenTrue, false: question.whenFalse },
   } satisfies BooleanQuestion;
-  return booleanQuestionSchema.parse(body);
 }
 
 async function run(question: NoulQuestion, state: unknown): Promise<number> {
