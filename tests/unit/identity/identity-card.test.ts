@@ -107,7 +107,7 @@ describe("the identity card fields", () => {
 		);
 
 		expect(input(html, 'name="name"')).toContain('value="My Brand"');
-		expect(html).toContain("my line");
+		expect(input(html, 'name="description"')).toContain('value="my line"');
 	});
 
 	it("promises the hourly fill on an unread site, never the after-first-crawl line", () => {
