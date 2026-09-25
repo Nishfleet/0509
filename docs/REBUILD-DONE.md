@@ -46,8 +46,10 @@ Decisions recorded on 0509#3927 (2026-09-22):
   sign-in, with no console errors, at 1440 and 390.
 - **J11's brief** is the production mail path (`e2e/j11-weekly-brief.spec.ts`).
   A fresh address confirms a brand, watches four competitors and turns one
-  off, then saves the brief for the hour that already started. That save
-  creates the rollover catch-up, so the week that just came due sends now,
+  off, then saves a brief time other than the default Monday 08:00 whose
+  hour has already started. That save includes the existing `-catch-up`
+  rollover in the one batch the save already creates, so the week that just
+  came due sends now,
   and the spec reads the message from the e2e inbox — not from D1. At 600 px
   it checks the contract order that a nothing-noteworthy week can show: the
   headline, the tracked brands with the off brand absent rather than zeroed,

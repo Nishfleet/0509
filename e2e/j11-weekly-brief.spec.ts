@@ -38,6 +38,9 @@ function header(raw: string, pattern: RegExp): string | null {
   return pattern.exec(raw)?.[1]?.trim() ?? null;
 }
 
+const DEFAULT_WEEKDAY = 1;
+const DEFAULT_HOUR = 8;
+
 function localSlot(now: Date, timezone: string): { weekday: number; hour: number } {
   const parts = new Intl.DateTimeFormat("en-US", {
     timeZone: timezone,
@@ -50,6 +53,18 @@ function localSlot(now: Date, timezone: string): { weekday: number; hour: number
   );
   const hour = Number(parts.find((part) => part.type === "hour")?.value);
   return { weekday, hour: hour === 24 ? 0 : hour };
+}
+
+function currentSlot(now: Date, timezone: string): { weekday: number; hour: number; timezone: string } {
+  return { ...localSlot(now, timezone), timezone };
+}
+
+function openingSlot(now: Date): { weekday: number; hour: number; timezone: string } {
+  const utc = currentSlot(now, "UTC");
+  if (utc.weekday === DEFAULT_WEEKDAY && utc.hour === DEFAULT_HOUR) {
+    return currentSlot(now, "Asia/Kolkata");
+  }
+  return utc;
 }
 
 async function saveSchedule(
@@ -144,9 +159,9 @@ test("the weekly brief arrives from the inbox, in order, and unsubscribe stops t
   await expect(page.getByRole("switch", { name: `${OFF} tracking` })).not.toBeChecked();
 
   const now = new Date();
-  const utc = localSlot(now, "UTC");
+  const opening = openingSlot(now);
   const scheduledAt = new Date().toISOString();
-  await saveSchedule(page, { ...utc, timezone: "UTC" });
+  await saveSchedule(page, opening);
 
   const raw = await waitForBrief(email, token);
   const messageId = header(raw, MESSAGE_ID);
@@ -214,12 +229,12 @@ test("the weekly brief arrives from the inbox, in order, and unsubscribe stops t
   await expect(page.getByText("unsubscribed from the brief")).toBeVisible();
   console.log(`j11 email_suppression address=${email} reason=unsubscribed post-at=${postAt}`);
 
-  const kolkata = localSlot(new Date(), "Asia/Kolkata");
-  const utcClose = previousBriefAt({ timezone: "UTC", ...utc }, now);
-  const kolkataClose = previousBriefAt({ timezone: "Asia/Kolkata", ...kolkata }, new Date());
-  expect(kolkataClose.getTime()).not.toBe(utcClose.getTime());
-  expect(Date.now() - kolkataClose.getTime()).toBeLessThan(HOUR_MS);
-  await saveSchedule(page, { ...kolkata, timezone: "Asia/Kolkata" });
+  const followUp = currentSlot(new Date(), opening.timezone === "UTC" ? "Asia/Kolkata" : "UTC");
+  const openingClose = previousBriefAt(opening, now);
+  const followUpClose = previousBriefAt(followUp, new Date());
+  expect(followUpClose.getTime()).not.toBe(openingClose.getTime());
+  expect(Date.now() - followUpClose.getTime()).toBeLessThan(HOUR_MS);
+  await saveSchedule(page, followUp);
 
   // A poll that succeeds on the first read cannot prove the next send was
   // skipped. Wait the window the first brief used, then read again.
