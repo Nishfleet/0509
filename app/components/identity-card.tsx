@@ -223,6 +223,23 @@ export function Fields({
   );
 }
 
+export function ArrivalLine({ fields }: { fields: SiteFields }) {
+  if (fields.unfound) {
+    return <span className="block py-3">We couldn&apos;t read that site, so fill in what you can.</span>;
+  }
+  const checks = [
+    fields.review.name === "check" ? "name" : null,
+    fields.review.description === "check" ? "about" : null,
+    fields.review.socials === "check" ? "socials" : null,
+  ].filter((label): label is string => label !== null);
+  const list = checks.join(", ");
+  return (
+    <span className="sr-only">
+      {checks.length === 0 ? "Your card is drawn." : `Your card is drawn. Check this: ${list}.`}
+    </span>
+  );
+}
+
 export function IdentityCard({
   subject,
   domain,
@@ -246,6 +263,11 @@ export function IdentityCard({
       <Row label="site">
         <span className="truncate text-[0.95rem]">{domain}</span>
       </Row>
+      <p role="status" className="text-ink-soft text-[0.88rem]">
+        <Suspense fallback={null}>
+          <Await resolve={site}>{(fields) => <ArrivalLine fields={fields} />}</Await>
+        </Suspense>
+      </p>
       {creator !== null && creator.channel !== null ? (
         <Row label="channel">
           <span className="truncate text-[0.95rem]">{creator.channel}</span>
@@ -269,11 +291,6 @@ export function IdentityCard({
         <Await resolve={site}>
           {(fields) => (
             <>
-              {fields.unfound ? (
-                <p role="status" className="text-ink-soft py-3 text-[0.88rem]">
-                  We couldn&apos;t read that site, so fill in what you can.
-                </p>
-              ) : null}
               <Fields subject={subject} site={fields} logo={logo} draft={draft} />
               {message ? <p role="alert" className="pt-3 text-[0.88rem]">{message}</p> : null}
               <Button type="submit" size="lg" className="my-5">
