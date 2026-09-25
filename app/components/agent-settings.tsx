@@ -119,18 +119,18 @@ export function AgentKeys({ keys, newKey }: { keys: AgentKey[]; newKey: string |
       ) : (
         <ul className="border-line mt-3 border-b">
           {keys.map((key) => {
-            const detailParts = [
+            const detail = [
               `Made ${day(key.createdAt)}`,
               key.lastUsedAt === null ? "never used" : `last used ${day(key.lastUsedAt)}`,
-            ];
-            if (key.rateLimitMax !== null) detailParts.push(`up to ${String(key.rateLimitMax)} requests a minute`);
-            if (key.remaining !== null) detailParts.push(`${String(key.remaining)} requests left`);
+              ...(key.rateLimitMax === null ? [] : [`up to ${String(key.rateLimitMax)} requests a minute`]),
+              ...(key.remaining === null ? [] : [`${String(key.remaining)} requests left`]),
+            ].join(" · ");
             return (
               <li key={key.id} data-testid="api-key" className={ROW}>
                 <p className="min-w-0">
                   <span className="font-display font-bold">{key.name}</span>{" "}
                   <span className="text-ink-soft font-mono text-meta">{key.start ?? "key"}…</span>
-                  <span className="text-ink-soft block text-body-sm">{detailParts.join(" · ")}</span>
+                  <span className="text-ink-soft block text-body-sm">{detail}</span>
                 </p>
                 <Form method="post">
                   <input type="hidden" name="intent" value="revoke-key" />
