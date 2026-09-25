@@ -65,6 +65,12 @@
     }
   ],
 
+  // Mentions telemetry (#4003 slice 3/6, docs/engines/mentions.md P5.4): one
+  // data point per swept source carrying its item count and canary count.
+  // index1 stays low-cardinality (plugin_key) and the brand or query string
+  // never enters any field.
+  "analytics_engine_datasets": [{ "binding": "MENTIONS_SOURCES", "dataset": "mentions_sources" }],
+
   // One binding for the one bucket (#4569 had added a second binding to the
   // same bucket). snapshot/site/ holds raw site snapshots, text and screenshot
   // (engine 4), under the one-year snapshot/ rule in docs/REBUILD-GUARDRAILS.md.
