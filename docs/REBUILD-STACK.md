@@ -648,7 +648,7 @@ uPlot's README claim of "~50 KB min" checks out exactly (51,081 B minified) — 
 
 `frappe-charts` is the only library under the bar and it is not a candidate: **last published 2021-06-16**, five years stale, imperative DOM mutation with no React wrapper, and it would fight React's reconciler.
 
-**Not yet installed.** No chart ships yet, so `uplot` 1.6.32 and `uplot-react` 1.2.4 are not in `package.json`.
+**Installed** at 1.6.32 / 1.2.4 by the Home four-week chart (#4055).
 
 **Decision (Fable, 2026-09-21): budget raised to 30 KB gzip; take `uplot` 1.6.32.** It is the only maintained candidate. `frappe-charts` is rejected as unmaintained since 2021 despite fitting the old bar, and inline SVG is rejected as hand-rolled. The 20 KB figure was an estimate written before anyone measured; 24–28 KB is the measured cost of the maintained option, and 30 KB is the bar that reflects it.
 
@@ -1068,7 +1068,7 @@ Every capability the rebuild needs → the one thing that provides it → the ve
 | Feed parsing | `@extractus/feed-extractor` (wraps `fast-xml-parser`) | 8.0.3 / 5.11.1, not yet installed |
 | Logo | page metadata via `HTMLRewriter`, DuckDuckGo icon fallback | platform |
 | Validation | `zod` | 4.6.5 |
-| Charts | `uplot` (+ `uplot-react`), budget 30 KB gzip | 1.6.32 / 1.2.4, not yet installed |
+| Charts | `uplot` (+ `uplot-react`), budget 30 KB gzip | 1.6.32 / 1.2.4, installed |
 | OG images | Browser Run `/screenshot` → R2 | platform |
 | Dates + timezones | `Intl` + `date-fns` + `@date-fns/tz` (never `Temporal`, workerd#6907) | platform / 4.4.0 / 1.5.0 |
 | Unit + integration tests | `vitest` (**pinned 4.1.11**) + `@cloudflare/vitest-plugin` | 4.1.11 / 1.1.13 |
@@ -1082,7 +1082,7 @@ Every capability the rebuild needs → the one thing that provides it → the ve
 | OpenAPI document | `zod-openapi` (samchungy) | 6.0.2 |
 | Agent-readable docs | `/llms.txt` + `Accept: text/markdown` + `rel="alternate"` | spec v2 (2026-08-10) |
 
-**Installed beyond the scaffold:** `better-auth` ^1.7.5, `@better-auth/passkey` ^1.7.5, `@better-auth/api-key` ^1.7.5, `zod` ^4.6.5 (also a better-auth peer), `@cloudflare/puppeteer` ^1.4.0, `@base-ui/react` 1.8.0, `clsx` ^2.1.1, `tailwind-merge` ^3.7.0, `class-variance-authority` ^0.7.1, `sonner` ^2.0.8, `diff` 9.0.0, `lucide-react` 1.47.0, `date-fns` 4.4.0, `@date-fns/tz` 1.5.0. **Not yet installed**, because the engine that needs them has not shipped: `@extractus/feed-extractor` 8.0.3 (`fast-xml-parser` 5.11.1 comes with it), `uplot` 1.6.32, `uplot-react` 1.2.4. Do not delete those rows. `@modelcontextprotocol/server` 2.1.0, `@cloudflare/workers-oauth-provider` 0.10.4 and `zod-openapi` 6.0.2 shipped with the agent surface (2026-09-24); `agents` is rejected in §7.1. Platform rows have no package. `create-cloudflare`, `shadcn`, and `auth@1.7.5` are npx-only and are not missing dependencies.
+**Installed beyond the scaffold:** `better-auth` ^1.7.5, `@better-auth/passkey` ^1.7.5, `@better-auth/api-key` ^1.7.5, `zod` ^4.6.5 (also a better-auth peer), `@cloudflare/puppeteer` ^1.4.0, `@base-ui/react` 1.8.0, `clsx` ^2.1.1, `tailwind-merge` ^3.7.0, `class-variance-authority` ^0.7.1, `sonner` ^2.0.8, `diff` 9.0.0, `lucide-react` 1.47.0, `date-fns` 4.4.0, `@date-fns/tz` 1.5.0, `uplot` 1.6.32, `uplot-react` 1.2.4. **Not yet installed**, because the engine that needs it has not shipped: `@extractus/feed-extractor` 8.0.3 (`fast-xml-parser` 5.11.1 comes with it). Do not delete that row. `@modelcontextprotocol/server` 2.1.0, `@cloudflare/workers-oauth-provider` 0.10.4 and `zod-openapi` 6.0.2 shipped with the agent surface (2026-09-24); `uplot` 1.6.32 and `uplot-react` 1.2.4 shipped with the Home four-week chart (#4055). `agents` is rejected in §7.1. Platform rows have no package. `create-cloudflare`, `shadcn`, and `auth@1.7.5` are npx-only and are not missing dependencies.
 
 ---
 
@@ -1111,6 +1111,8 @@ The version in this table is the `package.json` specifier. An earlier section of
 | `sonner` | ^2.0.8 | §5.10 | The one toast surface: "saved" and "undo" per DESIGN.md §11 | A hand-rolled live region (Base UI ships no toast primitive), `react-hot-toast` | 2.0.8 |
 | `tailwind-merge` | ^3.7.0 | §3.2 | Class conflict resolution inside `cn()` | A hand-written Tailwind merger | 3.7.0 |
 | `tldts` | ^7.4.13 | `docs/engines/identity-card.md` P1 | Registrable domain and public-suffix handling for identity input normalisation. No dependencies, ships a Workers-clean ESM build | A hand-written public-suffix list, `split('.')`, `psl` (unmaintained) | 7.4.13 |
+| `uplot` | 1.6.32 | §5.7, #4055 | The Home four-week standing line: a line-chart library, not a chart framework, at 22 KB gzip. Canvas-based, so the wrapper paints on mount and the server renders only the frame | `recharts` (over the 30 KB budget even tree-shaken), `frappe-charts` (unmaintained since 2021), hand-rolled inline SVG (glue) | 1.6.32 |
+| `uplot-react` | 1.2.4 | §5.7, #4055 | The one React wrapper over uPlot's imperative API, used once in `app/components/four-week-line.tsx` | A hand-written `useRef` + `useEffect` mount, a second chart wrapper | 1.2.4 |
 | `zod-openapi` | ^6.0.2 | §7.5 | The API's OpenAPI 3.1 document from the zod schemas the MCP tools already use. Zero dependencies | `chanfana`, `@hono/zod-openapi` (both need a second router), `z.toJSONSchema()` alone | 6.0.2 |
 | `zod` | ^4.6.5 | §5.6 | Request validation. better-auth already depends on zod 4 | `valibot`, `arktype` | 4.6.5 |
 | `@cloudflare/vite-plugin` | ^1.56.0 | §1.2 | Workers dev and deploy from Vite | A hand-written wrangler wrapper, and a wrangler `assets` block | 1.56.0 |
