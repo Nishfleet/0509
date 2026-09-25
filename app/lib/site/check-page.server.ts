@@ -1,5 +1,6 @@
 import { env } from "cloudflare:workers";
 
+import { setPageTransport } from "../data/page.server";
 import { insertSnapshot, latestSiteSnapshot } from "../data/snapshot.server";
 import { readUrl } from "../fetch/transport.server";
 import { extractPageText } from "./extract-text";
@@ -71,6 +72,8 @@ export async function checkPage(input: {
   if (!read.ok) {
     return { outcome: "failed", reason: read.reason, detail: read.detail };
   }
+
+  await setPageTransport(input.pageId, read.transport);
 
   const extracted = await extractPageText(read.html);
   const fetchedAt = new Date().toISOString();

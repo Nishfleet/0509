@@ -30,6 +30,8 @@ ON CONFLICT (entity_id, url) DO UPDATE SET
   role = excluded.role,
   role_decided_for_hash = excluded.role_decided_for_hash`;
 
+const SET_PAGE_TRANSPORT = "UPDATE page SET transport = ?2 WHERE id = ?1 AND transport <> ?2";
+
 const SELECT_JUDGED_HASHES =
   "SELECT url, role_decided_for_hash FROM page WHERE entity_id = ?1 AND role_decided_for_hash IS NOT NULL";
 
@@ -53,6 +55,13 @@ export async function upsertJudgedPages(rows: readonly JudgedPage[]): Promise<vo
         .bind(row.id, row.entityId, row.url, row.title, row.role, row.roleDecidedForHash, row.discoveredAt),
     ),
   );
+}
+
+export async function setPageTransport(
+  pageId: string,
+  transport: "fetch" | "browser",
+): Promise<void> {
+  await env.DB.prepare(SET_PAGE_TRANSPORT).bind(pageId, transport).run();
 }
 
 export async function readPageHashes(entityId: string): Promise<ReadonlyMap<string, string>> {

@@ -3,7 +3,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { checkPage } from "../../../app/lib/site/check-page.server";
 
-type HeldRead = { ok: true; html: string; status: number } | { ok: false };
+type HeldRead =
+  | { ok: true; html: string; status: number }
+  | { ok: false };
 
 const readHolder: { current: HeldRead } = { current: { ok: true, html: "", status: 200 } };
 
@@ -97,13 +99,11 @@ describe("checkPage (0509#4433)", () => {
     for (const object of listed.objects) await env.SNAPSHOTS.delete(object.key);
     await seed();
     readHolder.current = { ok: true, html: FIRST_HTML, status: 200 };
-    vi.stubGlobal("fetch", () =>
-      Promise.resolve(
-        readHolder.current.ok
-          ? new Response(readHolder.current.html, { status: readHolder.current.status })
-          : new Response("", { status: 503 }),
-      ),
-    );
+    vi.stubGlobal("fetch", () => {
+      const held = readHolder.current;
+      if (!held.ok) return Promise.resolve(new Response("", { status: 503 }));
+      return Promise.resolve(new Response(held.html, { status: held.status }));
+    });
   });
 
   afterEach(() => {
@@ -152,5 +152,30 @@ describe("checkPage (0509#4433)", () => {
     const failed = await checkPage({ watchId: WATCH, pageId: PAGE, url: URL });
     expect(failed).toMatchObject({ outcome: "failed", reason: "escalation-failed" });
     expect(await snapshotCount()).toBe(4);
+  });
+
+  it("records the transport of each page's last successful read (0509#5343)", async () => {
+    const readTransport = async () => {
+      const row = await env.DB.prepare("SELECT transport FROM page WHERE id = ?")
+        .bind(PAGE)
+        .first<{ transport: string }>();
+      return row?.transport;
+    };
+
+    readHolder.current = { ok: true, html: FIRST_HTML, status: 200 };
+    await checkPage({ watchId: WATCH, pageId: PAGE, url: URL });
+    expect(await readTransport()).toBe("fetch");
+
+    await env.DB.prepare("UPDATE page SET transport = 'browser' WHERE id = ?").bind(PAGE).run();
+    expect(await readTransport()).toBe("browser");
+
+    readHolder.current = { ok: true, html: FIRST_HTML, status: 200 };
+    await checkPage({ watchId: WATCH, pageId: PAGE, url: URL });
+    expect(await readTransport()).toBe("fetch");
+
+    await env.DB.prepare("UPDATE page SET transport = 'browser' WHERE id = ?").bind(PAGE).run();
+    vi.stubGlobal("fetch", () => Promise.reject(new Error("simulated read throw")));
+    await checkPage({ watchId: WATCH, pageId: PAGE, url: URL });
+    expect(await readTransport()).toBe("browser");
   });
 });
