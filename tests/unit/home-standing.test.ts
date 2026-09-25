@@ -381,7 +381,7 @@ describe("Home chips", () => {
       { id: "ent_off", role: "competitor", domain: "off.example", name: "Off Brand", state: "off" },
       SELF,
     ];
-    const view = homeView({ payload: null, entities, schedule: SCHEDULE, history: [], sources: SITE_SOURCES, now: THURSDAY_MORNING });
+    const view = homeView({ payload: null, entities, schedule: SCHEDULE, history: [], sources: SITE_SOURCES, now: THURSDAY_MORNING, blindSources: [] });
     expect(view.chips).toEqual(homeChips(entities));
     expect(view.chips[0]?.self).toBe(true);
   });

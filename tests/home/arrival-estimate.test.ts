@@ -42,6 +42,7 @@ describe("homeView gathering standing", () => {
       history: [],
       sources: [],
       now: new Date("2026-09-24T06:30:00.000Z"),
+      blindSources: [],
     });
     expect(view.standing.kind).toBe("gathering");
     if (view.standing.kind !== "gathering") return;

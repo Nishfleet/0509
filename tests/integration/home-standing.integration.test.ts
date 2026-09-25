@@ -162,6 +162,47 @@ describe("readHomeStandingInputs", () => {
     expect(inputs?.sources).toContainEqual({ key: "site.web", kind: "site", platform: "web" });
   });
 
+  it("reads the latest snapshot and degradation state for each active watched source", async () => {
+    const sourceId = `${WS}_freshness_source`;
+    const watchId = `${WS}_freshness_watch`;
+    const sourceConfig = '{"state":"degraded","reason":"login wall"}';
+    const watchConfig = '{"degraded":{"at":"2026-09-21T07:00:00.000Z","reason":"watch stopped"}}';
+    const olderAt = "2026-09-20T07:00:00.000Z";
+    const latestAt = "2026-09-24T07:00:00.000Z";
+    const lastGoodAt = "2026-09-20T07:00:00.000Z";
+
+    await env.DB.batch([
+      env.DB.prepare(
+        "INSERT INTO source (id, key, kind, platform, plugin_key, reliability, is_enabled, config_json, degraded_reason, last_good_at) VALUES (?1, ?2, 'mentions', 'reddit', 'reddit.search_rss', 'rss', 1, ?3, 'login wall', ?4)",
+      ).bind(sourceId, "home.freshness", sourceConfig, lastGoodAt),
+      env.DB.prepare(
+        "INSERT INTO watch (id, entity_id, source_id, target_key, is_active, config_json) VALUES (?1, ?2, ?3, 'home.freshness', 1, ?4)",
+      ).bind(watchId, `${WS}_self`, sourceId, watchConfig),
+      env.DB.prepare(
+        "INSERT INTO snapshot (id, watch_id, fetched_at, payload_hash, item_count, canary_count) VALUES (?1, ?2, ?3, 'older', 9, 4)",
+      ).bind(`${WS}_freshness_older`, watchId, olderAt),
+      env.DB.prepare(
+        "INSERT INTO snapshot (id, watch_id, fetched_at, payload_hash, item_count, canary_count) VALUES (?1, ?2, ?3, 'latest', 0, 0)",
+      ).bind(`${WS}_freshness_latest`, watchId, latestAt),
+    ]);
+
+    const inputs = await readHomeStandingInputs(env.DB, USER);
+
+    expect(inputs?.freshnessSources).toContainEqual({
+      kind: "mentions",
+      source: {
+        key: "home.freshness",
+        platform: "reddit",
+        is_enabled: 1,
+        config_json: sourceConfig,
+        degraded_reason: "login wall",
+        last_good_at: lastGoodAt,
+        watch_config_json: watchConfig,
+      },
+      snapshot: { fetched_at: latestAt, item_count: 0, canary_count: 0 },
+    });
+  });
+
   it("returns exactly the four newest frozen ranked weeks, ascending, with no null rank and no unranked week", async () => {
     const rankedWeeks = [
       "2026-08-24T07:00:00.000Z",
