@@ -227,6 +227,50 @@ const ENV_DB_IN_ROUTES = {
     "Routes do not touch env.DB. Go through the one data layer in app/lib/data/. docs/REBUILD-TRUST.md C4.",
 };
 
+const STATIC_HOME_HTML_PARSER = {
+  meta: { name: "static-home-html" },
+  parse(text) {
+    const lines = text.split("\n");
+    const last = lines.length - 1;
+    return {
+      type: "Program",
+      body: [],
+      sourceType: "script",
+      comments: [],
+      tokens: [],
+      loc: {
+        start: { line: 1, column: 0 },
+        end: { line: lines.length, column: lines[last].length },
+      },
+      range: [0, text.length],
+    };
+  },
+};
+
+const STATIC_HOME_FONT_PRELOAD = {
+  meta: {
+    type: "problem",
+    schema: [],
+    messages: {
+      preload:
+        "The static home must not preload a font. A preload holds the headline paint until the face arrives, so simulated LCP misses lighthouse-budget.json. The three faces stay on the @font-face rules with font-display: swap. Source: 0509#5580.",
+    },
+  },
+  create(context) {
+    return {
+      Program(node) {
+        const text = context.sourceCode.getText();
+        const preloadsFont =
+          /<link\b[^>]*\brel="preload"[^>]*\bas="font"/.test(text) ||
+          /<link\b[^>]*\bas="font"[^>]*\brel="preload"/.test(text);
+        if (preloadsFont) {
+          context.report({ node, messageId: "preload" });
+        }
+      },
+    };
+  },
+};
+
 const WORKAROUND_TERMS = [
   "todo",
   "fixme",
@@ -669,12 +713,30 @@ export default tseslint.config(
   },
 
   {
-    files: ["**/*.js", "**/*.mjs", "**/*.cjs", "*.config.ts", "e2e/**/*.ts", "tests/**/*.ts"],
+    files: ["**/*.js", "**/*.mjs", "**/*.cjs", "*.config.ts", "e2e/**/*.ts", "tests/**/*.ts", "public/index.html"],
     extends: [tseslint.configs.disableTypeChecked],
     rules: {
       "no-inline-comments": "off",
       "no-warning-comments": "off",
       "@typescript-eslint/no-unsafe-assignment": "off",
+    },
+  },
+
+  {
+    files: ["public/index.html"],
+    plugins: {
+      "static-home": {
+        rules: {
+          "no-font-preload": STATIC_HOME_FONT_PRELOAD,
+        },
+      },
+    },
+    languageOptions: {
+      parser: STATIC_HOME_HTML_PARSER,
+      parserOptions: { projectService: false },
+    },
+    rules: {
+      "static-home/no-font-preload": "error",
     },
   },
 );
