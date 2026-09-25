@@ -1,20 +1,29 @@
-import type { ZodType } from "zod";
+import type { ZodObject, ZodType } from "zod";
 import { createDocument } from "zod-openapi";
 
-import { alertsResultSchema, briefResultSchema, competitorsResultSchema, standingResultSchema } from "./schemas";
+import {
+  alertsResultSchema,
+  briefResultSchema,
+  competitorArgsSchema,
+  competitorResultSchema,
+  competitorsResultSchema,
+  standingResultSchema,
+} from "./schemas";
 
 const API_PATHS = {
   brief: "/api/v1/brief",
   competitors: "/api/v1/competitors",
+  competitor: "/api/v1/competitors/{competitorId}",
   alerts: "/api/v1/alerts",
   standing: "/api/v1/standing",
 } as const;
 
-function read(summary: string, schema: ZodType) {
+function read(summary: string, schema: ZodType, path?: ZodObject) {
   return {
     get: {
       summary,
       security: [{ apiKey: [] }],
+      ...(path === undefined ? {} : { requestParams: { path } }),
       responses: {
         "200": { description: summary, content: { "application/json": { schema } } },
         "401": { description: "Missing or invalid API key" },
@@ -41,6 +50,11 @@ export function openApiDocument(origin: string) {
     paths: {
       [API_PATHS.brief]: read("Your latest weekly brief", briefResultSchema),
       [API_PATHS.competitors]: read("Your tracked and suggested competitors", competitorsResultSchema),
+      [API_PATHS.competitor]: read(
+        "One of your competitors and its recent site changes",
+        competitorResultSchema,
+        competitorArgsSchema,
+      ),
       [API_PATHS.alerts]: read("Your recent alerts", alertsResultSchema),
       [API_PATHS.standing]: read("This week's standing against your competitors", standingResultSchema),
     },
