@@ -163,6 +163,7 @@ export async function settleSignInWidget(page: Page): Promise<void> {
   await expect(host).toHaveCount(1);
   const siteKey = await host.getAttribute("data-sitekey");
   if (siteKey !== TURNSTILE_TEST_SITE_KEY) return;
+  await page.locator("#email").focus();
   await expect(page.locator('input[name="cf-turnstile-response"]')).toHaveValue(/\S/);
 }
 

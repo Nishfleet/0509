@@ -16,7 +16,9 @@ export function TurnstileWidget({ siteKey, startOn }: { siteKey: string; startOn
     let script: HTMLScriptElement | undefined;
     const start = () => {
       if (script) return;
-      script = Object.assign(document.createElement("script"), { src: TURNSTILE_SCRIPT, async: true });
+      script = document.createElement("script");
+      script.src = TURNSTILE_SCRIPT;
+      script.async = true;
       if (typeof nonce === "string" && nonce.length > 0) script.nonce = nonce;
       document.head.appendChild(script);
     };
@@ -29,6 +31,7 @@ export function TurnstileWidget({ siteKey, startOn }: { siteKey: string; startOn
     const email = document.getElementById("email");
     if (!(email instanceof HTMLInputElement)) return;
     email.addEventListener("focus", start);
+    if (document.activeElement === email) start();
     return () => {
       email.removeEventListener("focus", start);
       if (script) script.remove();
