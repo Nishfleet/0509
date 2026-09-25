@@ -152,7 +152,7 @@ export function Fields({
       <EditRow
         label="name"
         name="name"
-        initial={nameCheck ? "" : (draft.name ?? (site.name ?? ""))}
+        initial={draft.name ?? (nameCheck ? "" : (site.name ?? ""))}
         placeholder={nameCheck ? (site.name ?? "") : "your brand's name"}
         check={nameCheck}
         empty={site.review.name === "empty"}
@@ -174,7 +174,7 @@ export function Fields({
       <EditRow
         label="about"
         name="description"
-        initial={descriptionCheck ? "" : (draft.description ?? (site.description ?? ""))}
+        initial={draft.description ?? (descriptionCheck ? "" : (site.description ?? ""))}
         placeholder={descriptionCheck ? (site.description ?? "") : "one line on what you do"}
         check={descriptionCheck}
         empty={site.review.description === "empty"}
