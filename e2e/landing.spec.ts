@@ -7,6 +7,19 @@ import { expect, test } from "@playwright/test";
 
 const PATH = "/design/landing";
 
+test("the landing document discovers its styles before the module graph", async ({ page }) => {
+  const response = await page.goto(PATH);
+  expect(response?.status()).toBe(200);
+  const html = (await response?.text()) ?? "";
+  const head = html.slice(html.indexOf("<head"), html.indexOf("</head>"));
+  const stylePreload = head.indexOf('as="style"');
+  const modulePreload = head.indexOf('rel="modulepreload"');
+  expect(stylePreload).toBeGreaterThan(-1);
+  expect(modulePreload).toBeGreaterThan(stylePreload);
+  expect(head).toContain("/fonts/bricolage-hero.woff2");
+  expect(head).not.toContain("bricolage-grotesque-latin");
+});
+
 test("the landing renders its sections in order under one headline", async ({ page }) => {
   const response = await page.goto(PATH);
   expect(response?.status()).toBe(200);

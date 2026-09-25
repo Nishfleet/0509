@@ -20,7 +20,7 @@ export function ProductError({
   );
 }
 
-export function ErrorPage({
+function ErrorPage({
   title,
   detail,
   actionHref,

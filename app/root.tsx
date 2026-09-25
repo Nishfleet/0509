@@ -4,7 +4,17 @@ import type { Route } from "./+types/root";
 import { ProductError } from "./components/error-page";
 import { Toaster } from "./components/toaster";
 import { hasSessionCookie } from "./lib/auth.server";
+import appCss from "./app.css?url";
 import "./app.css";
+
+const appStylePreload = {
+  rel: "preload",
+  href: appCss,
+  as: "style",
+  fetchPriority: "high",
+} as const;
+
+export const links: Route.LinksFunction = () => [appStylePreload];
 
 export function Layout({ children }: { children: React.ReactNode }) {
   return (
