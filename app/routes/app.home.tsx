@@ -4,11 +4,10 @@ import { env } from "cloudflare:workers";
 import { useEffect } from "react";
 import { Link, redirect, useRevalidator } from "react-router";
 
-import { FreshnessLine, freshnessEntries } from "../components/freshness-line";
+import { FreshnessLine, blindSourceNames, freshnessEntries } from "../components/freshness-line";
 import { HomeStanding } from "../components/home-standing";
 import { PAGE } from "../components/page-heading";
 import { ShareButton } from "../components/share-button";
-import { readWorkspaceMentionSources } from "../lib/data/source.server";
 import { readSelfSiteFill } from "../lib/data/entity.server";
 import { readWorkspaceIdForOwner } from "../lib/data/workspace.server";
 import { homeView } from "../lib/home-standing";
@@ -28,13 +27,14 @@ export async function loader({ request }: Route.LoaderArgs) {
   const inputs = await readHomeStandingInputs(env.DB, session.user.id);
   if (inputs === null) throw redirect("/onboarding");
   const workspaceId = await readWorkspaceIdForOwner(session.user.id);
-  const sources = workspaceId === null ? [] : await readWorkspaceMentionSources(workspaceId);
   const siteFill = workspaceId === null ? null : await readSelfSiteFill(workspaceId);
   const howRanked = await readHowRanked(env.DB, inputs.payload);
+  const now = new Date();
+  const freshness = freshnessEntries(inputs.freshnessSources, now.getTime());
   return {
-    view: homeView({ ...inputs, now: new Date() }),
+    view: homeView({ ...inputs, blindSources: blindSourceNames(freshness), now }),
     howRanked,
-    freshness: freshnessEntries(sources, Date.now()),
+    freshness,
     siteFill,
   };
 }
@@ -72,10 +72,10 @@ export default function Page({ loaderData }: Route.ComponentProps) {
       {loaderData.siteFill === "pending" || loaderData.siteFill === "gave_up" ? (
         <SiteFillLine state={loaderData.siteFill} />
       ) : null}
-      <FreshnessLine entries={loaderData.freshness} />
       {loaderData.view.standing.kind === "ranked" ? <ShareButton /> : null}
       <footer className="border-line mt-14 border-t pt-7">
         <p className="font-mono text-eyebrow text-ink-soft">{loaderData.view.footer}</p>
+        <FreshnessLine entries={loaderData.freshness} />
         <p className="mt-3">
           <Link className="underline decoration-1 underline-offset-4" to="/app/brief">
             Read this week's brief

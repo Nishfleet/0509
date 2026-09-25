@@ -10,6 +10,13 @@ import {
   type FreshnessEntry,
 } from "../../app/components/freshness-line";
 import type { SourceRow, SourceSnapshot } from "../../app/components/source-pill";
+import type { BriefPayload } from "../../app/lib/brief-payload";
+import type { BriefSchedule } from "../../app/lib/brief-schedule";
+import {
+  blindWhyLine,
+  homeView,
+  type HomeEntity,
+} from "../../app/lib/home-standing";
 
 const NOW = Date.parse("2026-09-24T09:00:00.000Z");
 
@@ -102,6 +109,139 @@ describe("freshness entries", () => {
     );
 
     expect(blindSourceNames(entries)).toEqual([]);
+  });
+});
+
+describe("quiet week while blind", () => {
+  const SCHEDULE: BriefSchedule = { timezone: "Europe/London", weekday: 1, hour: 8 };
+  const THURSDAY_MORNING = new Date("2026-09-24T06:30:00.000Z");
+
+  const ENTITIES: readonly HomeEntity[] = [
+    { id: "ent_self", role: "self", domain: "own.example", name: "Own Brand", state: "on" },
+    { id: "ent_kindred", role: "competitor", domain: "kindred.example", name: "Kindred", state: "on" },
+    { id: "ent_casetta", role: "competitor", domain: "casetta.example", name: "Casetta", state: "on" },
+  ];
+
+  function payload(overrides: Partial<BriefPayload> = {}): BriefPayload {
+    return {
+      workspace_id: "ws_1",
+      timezone: "Europe/London",
+      period_start: "2026-09-14T07:00:00.000Z",
+      period_end: "2026-09-21T07:00:00.000Z",
+      headline_rank: 2,
+      headline_total: 3,
+      headline_movement: 1,
+      headline_is_new: false,
+      why_line: "Quiet week: 0 mentions checked, 0 site changes, 0 new ads.",
+      is_quiet_week: true,
+      read_this_first: [],
+      brands: [
+        {
+          entity_id: "ent_casetta",
+          name: "Casetta",
+          rank: 3,
+          movement: -1,
+          is_new: false,
+          biggest_move: null,
+          ad_delta: 1,
+          mention_delta: 0,
+          site_change_count: 0,
+          new_roles: 0,
+        },
+        {
+          entity_id: "ent_self",
+          name: "Own Brand",
+          rank: 2,
+          movement: 1,
+          is_new: false,
+          biggest_move: null,
+          ad_delta: 1,
+          mention_delta: 0,
+          site_change_count: 0,
+          new_roles: 0,
+        },
+        {
+          entity_id: "ent_kindred",
+          name: "Kindred",
+          rank: 1,
+          movement: 0,
+          is_new: false,
+          biggest_move: null,
+          ad_delta: 1,
+          mention_delta: 0,
+          site_change_count: 0,
+          new_roles: 0,
+        },
+      ],
+      own_site: { status: "ok", incidents: [] },
+      checked: {
+        mention_count: 0,
+        site_change_count: 0,
+        new_ad_count: 0,
+        source_keys: [],
+        degraded_source_keys: [],
+        degraded_sources: [],
+      },
+      next_brief_at: null,
+      ...overrides,
+    };
+  }
+
+  it("names the blind sources instead of claiming a quiet week", () => {
+    const view = homeView({
+      payload: payload(),
+      entities: ENTITIES,
+      schedule: SCHEDULE,
+      history: [],
+      sources: [],
+      now: THURSDAY_MORNING,
+      blindSources: ["Reddit mentions"],
+    });
+
+    expect(view.standing.kind).toBe("ranked");
+    if (view.standing.kind !== "ranked") return;
+    expect(view.standing.whyLine).not.toContain("Quiet week");
+    expect(view.standing.whyLine).toContain("Reddit mentions");
+  });
+
+  it("keeps the payload why-line when nothing is blind", () => {
+    const view = homeView({
+      payload: payload(),
+      entities: ENTITIES,
+      schedule: SCHEDULE,
+      history: [],
+      sources: [],
+      now: THURSDAY_MORNING,
+      blindSources: [],
+    });
+
+    if (view.standing.kind !== "ranked") throw new Error("expected a ranked standing");
+    expect(view.standing.whyLine).toBe(payload().why_line);
+  });
+
+  it("keeps a non-quiet why-line even when a source is blind", () => {
+    const loud = payload({ is_quiet_week: false });
+    const view = homeView({
+      payload: loud,
+      entities: ENTITIES,
+      schedule: SCHEDULE,
+      history: [],
+      sources: [],
+      now: THURSDAY_MORNING,
+      blindSources: ["Reddit mentions"],
+    });
+
+    if (view.standing.kind !== "ranked") throw new Error("expected a ranked standing");
+    expect(view.standing.whyLine).toBe(loud.why_line);
+  });
+
+  it("words the blind why-line with every blind source and no trailing comma", () => {
+    expect(blindWhyLine(["Reddit mentions"])).toBe(
+      "Not a quiet week we can vouch for: Reddit mentions not answering.",
+    );
+    expect(blindWhyLine(["Reddit mentions", "Google ads"])).toBe(
+      "Not a quiet week we can vouch for: Reddit mentions, Google ads not answering.",
+    );
   });
 });
 

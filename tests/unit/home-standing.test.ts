@@ -132,6 +132,7 @@ function render(input: {
     history: [],
     sources: SITE_SOURCES,
     now: THURSDAY_MORNING,
+    blindSources: [],
   });
   const router = createMemoryRouter([
     { path: "/", element: createElement(HomeStanding, { view, howRanked: input.howRanked }) },
@@ -258,7 +259,7 @@ describe("Home standing", () => {
       { id: "ent_kindred", role: "competitor", domain: "kindred.example", name: "Kindred", state: "on" },
       { id: "ent_off", role: "competitor", domain: "off.example", name: "Off Brand", state: "off" },
     ];
-    const view = homeView({ payload: null, entities, schedule: SCHEDULE, history: [], sources: SITE_SOURCES, now: THURSDAY_MORNING });
+    const view = homeView({ payload: null, entities, schedule: SCHEDULE, history: [], sources: SITE_SOURCES, now: THURSDAY_MORNING, blindSources: [] });
     expect(view.chips).toEqual([
       { name: "Own Brand", href: "/app/settings", self: true },
       { name: "Kindred", href: "/app/competitors/ent_kindred", self: false },
@@ -311,10 +312,10 @@ describe("Home standing", () => {
       { id: "ent_casetta", role: "competitor", domain: "casetta.example", name: "Casetta", state: "on" },
       { id: "ent_hollow", role: "competitor", domain: "hollow.example", name: "Hollow", state: "on" },
     ];
-    const four = homeView({ payload: payload(), entities: fourOn, schedule: amsterdamSchedule, history: [], sources: SITE_SOURCES, now });
+    const four = homeView({ payload: payload(), entities: fourOn, schedule: amsterdamSchedule, history: [], sources: SITE_SOURCES, now, blindSources: [] });
     expect(four.footer).toBe("Checked 4 brands this week · brief Monday 08:00 · your site re-checked at 13:00");
 
-    const one = homeView({ payload: payload(), entities: [SELF], schedule: amsterdamSchedule, history: [], sources: SITE_SOURCES, now });
+    const one = homeView({ payload: payload(), entities: [SELF], schedule: amsterdamSchedule, history: [], sources: SITE_SOURCES, now, blindSources: [] });
     expect(one.footer).toBe("Checked 1 brand this week · brief Monday 08:00 · your site re-checked at 13:00");
   });
 });

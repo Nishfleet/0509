@@ -223,6 +223,7 @@ export function homeView(input: {
   history: readonly HomeHistoryRow[];
   sources: readonly HomeSource[];
   now: Date;
+  blindSources: readonly string[];
 }): HomeView {
   const onCount = input.entities.filter((entity) => entity.state === "on").length;
   const brandWord = onCount === 1 ? "brand" : "brands";
@@ -230,14 +231,22 @@ export function homeView(input: {
   const briefTime = dayAndTime(input.schedule.timezone, nextBriefAt(input.schedule, input.now));
   const footer = `Checked ${String(onCount)} ${brandWord} this week · brief ${briefTime} · your site re-checked at ${recheckTime}`;
   const standing = homeStanding(input);
+  const adjusted: HomeStanding =
+    standing.kind === "ranked" && input.payload?.is_quiet_week === true && input.blindSources.length > 0
+      ? { ...standing, whyLine: blindWhyLine(input.blindSources) }
+      : standing;
   const at = firstSiteSweepAt({ now: input.now, sources: input.sources });
   return {
     eyebrow: todayEyebrow(input.schedule.timezone, input.now),
     greeting: greetingFor(input.schedule.timezone, input.now),
-    standing: standing.kind === "gathering" ? { ...standing, firstSweepAt: at === null ? null : dayAndTime(input.schedule.timezone, at) } : standing,
+    standing: adjusted.kind === "gathering" ? { ...adjusted, firstSweepAt: at === null ? null : dayAndTime(input.schedule.timezone, at) } : adjusted,
     chips: input.entities
       .filter((entity) => entity.state === "on")
       .map((entity) => ({ name: entity.name, href: chipHref(entity), self: entity.role === "self" })),
     footer,
   };
+}
+
+export function blindWhyLine(names: readonly string[]): string {
+  return `Not a quiet week we can vouch for: ${names.join(", ")} not answering.`;
 }
