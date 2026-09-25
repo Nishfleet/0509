@@ -7,7 +7,7 @@ import { describe, expect, it } from "vitest";
  *
  * The rate that governs a source and whether it honours robots.txt live in the
  * row's `config_json`, not in an adapter, so a source's conduct is data the
- * registry carries. Migration 0022 records both for every row that exists when
+ * registry carries. Migration 0023 records both for every row that exists when
  * it runs; these assertions run against the real local D1 with the real
  * migrations applied — a mocked binding cannot see the schema.
  *
@@ -58,7 +58,7 @@ describe("collection conduct on every source row (#5147, P10.5a)", () => {
       .run();
 
     try {
-      // Exactly the two statements migration 0022 runs, scoped to this row.
+      // Exactly the two statements migration 0023 runs, scoped to this row.
       await env.DB.prepare(
         "UPDATE source SET config_json = json_set(config_json, '$.min_interval_seconds', 6) WHERE id = ?",
       )
