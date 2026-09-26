@@ -1,11 +1,12 @@
 import type { ReactElement } from "react";
-import { Link } from "react-router";
+import { useSearchParams } from "react-router";
 
 import { BrandSwitch } from "./brand-switch";
 import { brandMonogram } from "./brand-chip";
 import { CapturePlate } from "./capture-plate";
 import { Mark } from "./mark";
-import type { HomePill, HomeRow } from "../lib/home-standing";
+import { RowEvidence } from "./row-evidence";
+import type { HomePill, HomeRow, WeekEvidence } from "../lib/home-standing";
 import type { SiteChangeView } from "../lib/site-change";
 import { cn } from "../lib/utils";
 
@@ -14,17 +15,25 @@ const PILL = "border-line border px-2 py-1 font-mono text-eyebrow uppercase";
 export function RankedRow({
   row,
   onSwitch,
+  openId,
+  evidence,
 }: {
   row: HomeRow;
   onSwitch?: (entityId: string, checked: boolean) => void;
+  openId: string | null;
+  evidence: readonly WeekEvidence[] | null;
 }): ReactElement {
+  const [, setSearchParams] = useSearchParams();
+  const isOpen = openId === row.entityId;
   return (
     <li
       data-testid="standing-row"
       data-self={row.self ? "true" : undefined}
+      data-open={isOpen ? "true" : undefined}
       className={cn(
         "border-line grid grid-cols-[2.25rem_26px_minmax(0,1fr)_auto_auto] items-center gap-3 border-b px-2 py-3",
         row.self && "bg-green-wash",
+        isOpen && "border-l-4 border-l-green",
       )}
     >
       <span className="font-mono text-[0.88rem]">{positionLabel(row)}</span>
@@ -38,20 +47,29 @@ export function RankedRow({
         {brandMonogram(row.name)}
       </span>
       <span className="min-w-0">
-        {row.self ? (
+        <button
+          type="button"
+          data-slot="row-toggle"
+          aria-expanded={isOpen}
+          aria-controls={`evidence-${row.entityId}`}
+          onClick={() => {
+            setSearchParams(
+              (prev) => {
+                const next = new URLSearchParams(prev);
+                if (isOpen) next.delete("open");
+                else next.set("open", row.entityId);
+                return next;
+              },
+              { replace: true, preventScrollReset: true },
+            );
+          }}
+          className="block w-full min-w-0 text-left"
+        >
           <span className="font-display text-row-name block truncate font-bold">{row.name}</span>
-        ) : (
-          <Link
-            to={`/app/competitors/${row.entityId}`}
-            prefetch="intent"
-            className="font-display text-row-name block truncate font-bold hover:underline"
-          >
-            {row.name}
-          </Link>
-        )}
-        {row.domain === null ? null : (
-          <span className="text-ink-soft block truncate text-[0.88rem]">{row.domain}</span>
-        )}
+          {row.domain === null ? null : (
+            <span className="text-ink-soft block truncate text-[0.88rem]">{row.domain}</span>
+          )}
+        </button>
       </span>
       <span className="text-ink-soft text-right font-mono text-eyebrow uppercase">{row.movement}</span>
       <BrandSwitch
@@ -76,6 +94,15 @@ export function RankedRow({
           </li>
         ))}
       </ul>
+      {isOpen ? (
+        <div
+          id={`evidence-${row.entityId}`}
+          data-slot="row-evidence"
+          className="col-span-full max-[859px]:hidden"
+        >
+          {evidence === null ? null : <RowEvidence evidence={evidence} />}
+        </div>
+      ) : null}
     </li>
   );
 }

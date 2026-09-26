@@ -2,6 +2,7 @@ import { env } from "cloudflare:workers";
 import { z } from "zod";
 
 import { isFeedKind, type DevelopmentItem } from "../developments";
+import type { WeekEvidence } from "../home-standing";
 import { D3_QUESTION_ID } from "../standing-score";
 import type { HiringSignalState, HiringSignalUpdate } from "../hiring/role-lifecycle";
 
@@ -225,6 +226,40 @@ export async function readRecentSignals(entityId: string, since: string): Promis
     summary: row.summary,
     url: row.url,
     aspect: row.aspect,
+    observedAt: row.observed_at,
+  }));
+}
+
+const SELECT_WEEK_EVIDENCE = `SELECT s.id, src.kind AS source_kind, s.title, s.summary, s.url, s.evidence_url, s.observed_at
+FROM signal s JOIN source src ON src.id = s.source_id
+WHERE s.workspace_id = ?1 AND s.entity_id = ?2 AND s.observed_at >= ?3 AND s.is_tombstoned = 0
+ORDER BY s.observed_at DESC, s.id DESC LIMIT 100`;
+
+interface WeekEvidenceRow {
+  id: string;
+  source_kind: string;
+  title: string | null;
+  summary: string | null;
+  url: string | null;
+  evidence_url: string | null;
+  observed_at: string;
+}
+
+export async function readWeekEvidence(input: {
+  workspaceId: string;
+  entityId: string;
+  since: string;
+}): Promise<WeekEvidence[]> {
+  const { results } = await env.DB.prepare(SELECT_WEEK_EVIDENCE)
+    .bind(input.workspaceId, input.entityId, input.since)
+    .all<WeekEvidenceRow>();
+  return results.map((row) => ({
+    id: row.id,
+    sourceKind: row.source_kind,
+    title: row.title,
+    summary: row.summary,
+    url: row.url,
+    evidenceUrl: row.evidence_url,
     observedAt: row.observed_at,
   }));
 }

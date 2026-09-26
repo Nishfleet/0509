@@ -1,12 +1,19 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { createMemoryRouter, RouterProvider } from "react-router";
+import { createMemoryRouter, MemoryRouter, RouterProvider } from "react-router";
 import { describe, expect, it } from "vitest";
 
 import { RankedRow } from "../../app/components/ranked-row";
 import type { BriefPayload } from "../../app/lib/brief-payload";
 import type { BriefSchedule } from "../../app/lib/brief-schedule";
-import type { HomeCount, HomeEntity, HomePill, HomeRow, HomeSource } from "../../app/lib/home-standing";
+import type {
+  HomeCount,
+  HomeEntity,
+  HomePill,
+  HomeRow,
+  HomeSource,
+  WeekEvidence,
+} from "../../app/lib/home-standing";
 import { homeStanding } from "../../app/lib/home-standing";
 import type { SiteChangeView } from "../../app/lib/site-change";
 
@@ -108,7 +115,12 @@ function rowFor(entityId: string, payload: BriefPayload = PAYLOAD, moves: readon
   return row;
 }
 function render(row: HomeRow): string {
-  const router = createMemoryRouter([{ path: "/", element: createElement("ol", null, createElement(RankedRow, { row })) }]);
+  const router = createMemoryRouter([
+    {
+      path: "/",
+      element: createElement("ol", null, createElement(RankedRow, { row, openId: null, evidence: null })),
+    },
+  ]);
   return renderToStaticMarkup(createElement(RouterProvider, { router }));
 }
 
@@ -183,5 +195,77 @@ describe("RankedRow", () => {
     const row = rowFor("ent_kindred");
     expect(row.move).toBeNull();
     expect(render(row)).not.toContain('data-slot="row-move"');
+  });
+});
+
+const KINDRED_EVIDENCE: readonly WeekEvidence[] = [
+  {
+    id: "sig_ev_1",
+    sourceKind: "site",
+    title: "Pricing page rewrote its hero",
+    summary: null,
+    url: "https://kindred.example/pricing",
+    evidenceUrl: "https://shots.example/ev-1.png",
+    observedAt: "2026-09-20T10:00:00.000Z",
+  },
+  {
+    id: "sig_ev_2",
+    sourceKind: "site",
+    title: null,
+    summary: "Docs link added to the nav",
+    url: null,
+    evidenceUrl: null,
+    observedAt: "2026-09-19T09:00:00.000Z",
+  },
+  {
+    id: "sig_ev_3",
+    sourceKind: "mentions",
+    title: "Kindred mentioned on r/sysadmin",
+    summary: null,
+    url: "https://www.reddit.com/r/sysadmin/comments/abc",
+    evidenceUrl: null,
+    observedAt: "2026-09-18T08:00:00.000Z",
+  },
+];
+
+describe("a ranked row expands in place to the week's evidence", () => {
+  function renderStanding(openId: string | null, evidence: readonly WeekEvidence[] | null): string {
+    const entries = openId === null ? ["/app"] : [`/app?open=${openId}`];
+    return renderToStaticMarkup(
+      createElement(
+        MemoryRouter,
+        { initialEntries: entries },
+        createElement(
+          "ol",
+          null,
+          rowsFor(PAYLOAD).map((row) =>
+            createElement(RankedRow, { key: row.entityId, row, openId, evidence }),
+          ),
+        ),
+      ),
+    );
+  }
+
+  it("opens Kindred's row on ?open=ent_kindred with type tabs and its evidence", () => {
+    const html = renderStanding("ent_kindred", KINDRED_EVIDENCE);
+    expect(html).toContain('data-open="true"');
+    expect(html).toContain('aria-controls="evidence-ent_kindred"');
+    expect(html).toContain('id="evidence-ent_kindred"');
+    expect(html.match(/data-slot="row-evidence"/g)).toHaveLength(1);
+    expect(html.match(/aria-expanded="true"/g)).toHaveLength(1);
+    expect(html.match(/aria-expanded="false"/g)).toHaveLength(2);
+    expect(html).toContain("Site changes 2");
+    expect(html).toContain("Mentions 1");
+    expect(html).toContain("Ads 0");
+    expect(html).toContain("Hiring 0");
+    expect(html).toContain("Pricing page rewrote its hero");
+    expect(html).toContain('data-slot="evidence-row"');
+  });
+
+  it("keeps every row collapsed without an open param", () => {
+    const html = renderStanding(null, null);
+    expect(html).not.toContain('data-open="true"');
+    expect(html).not.toContain('data-slot="row-evidence"');
+    expect(html.match(/aria-expanded="false"/g)).toHaveLength(3);
   });
 });

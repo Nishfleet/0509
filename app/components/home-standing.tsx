@@ -8,7 +8,7 @@ import { FourWeekLine } from "./four-week-line";
 import { HowRankedSheet } from "./how-ranked-sheet";
 import { RankedRow } from "./ranked-row";
 import { ReadThisFirst } from "./read-this-first";
-import type { HomeView } from "../lib/home-standing";
+import type { HomeView, WeekEvidence } from "../lib/home-standing";
 import type { HowRanked } from "../lib/how-ranked";
 import { cn } from "../lib/utils";
 
@@ -20,17 +20,21 @@ export function HomeStanding({
   view,
   howRanked,
   onSwitch,
+  openId = null,
+  evidence = null,
 }: {
   view: HomeView;
   howRanked?: HowRanked | null;
   onSwitch?: (entityId: string, checked: boolean) => void;
+  openId?: string | null;
+  evidence?: readonly WeekEvidence[] | null;
 }): ReactElement {
   return (
     <section data-home="standing" className="min-w-0 break-words">
       <p className={EYEBROW}>{view.eyebrow}</p>
       {greeting(view)}
       <div className="mt-4">{chips(view)}</div>
-      {body(view, howRanked, onSwitch)}
+      {body(view, howRanked, onSwitch, openId, evidence)}
     </section>
   );
 }
@@ -54,8 +58,10 @@ function greeting(view: HomeView): ReactElement {
 
 function body(
   view: HomeView,
-  howRanked?: HowRanked | null,
-  onSwitch?: (entityId: string, checked: boolean) => void,
+  howRanked: HowRanked | null | undefined,
+  onSwitch: ((entityId: string, checked: boolean) => void) | undefined,
+  openId: string | null,
+  evidence: readonly WeekEvidence[] | null,
 ): ReactElement {
   const { standing } = view;
   if (standing.kind === "add-competitor") {
@@ -91,7 +97,7 @@ function body(
       <h2 className={cn(EYEBROW, "border-line mt-8 border-t pt-4")}>This week's standing</h2>
       <ol className="mt-2">
         {standing.rows.map((row) => (
-          <RankedRow key={row.entityId} row={row} onSwitch={onSwitch} />
+          <RankedRow key={row.entityId} row={row} onSwitch={onSwitch} openId={openId} evidence={evidence} />
         ))}
       </ol>
     </>

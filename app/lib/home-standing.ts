@@ -39,6 +39,16 @@ export interface HomeRow {
   pills: readonly HomePill[];
 }
 
+export interface WeekEvidence {
+  id: string;
+  sourceKind: string;
+  title: string | null;
+  summary: string | null;
+  url: string | null;
+  evidenceUrl: string | null;
+  observedAt: string;
+}
+
 interface FourWeekLineSeries {
   entityId: string;
   label: string;
