@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import {
   markCardReady,
   markCompetitorsReady,
+  markWatchingStarted,
   stampFirstSignals,
   startOnboardingRun,
 } from "../../app/lib/data/onboarding_run.server";
@@ -190,5 +191,58 @@ describe("stampFirstSignals", () => {
       .bind(workspaceId)
       .first<{ first_signal_at: string | null }>();
     expect(row?.first_signal_at).toBeNull();
+  });
+});
+
+describe("markWatchingStarted", () => {
+  it("stamps the watching start time a workspace gets", async () => {
+    await startOnboardingRun({
+      workspaceId,
+      userId,
+      inputRaw: "first.example",
+      startedAt: "2026-09-25T06:00:00.000Z",
+    });
+
+    await markWatchingStarted(workspaceId, "2026-09-25T06:01:00.000Z");
+
+    const row = await env.DB.prepare(
+      "SELECT watching_started_at FROM onboarding_run WHERE workspace_id = ?",
+    )
+      .bind(workspaceId)
+      .first<{ watching_started_at: string | null }>();
+
+    expect(row?.watching_started_at).toBe("2026-09-25T06:01:00.000Z");
+  });
+
+  it("keeps the first watching start time a workspace gets", async () => {
+    await startOnboardingRun({
+      workspaceId,
+      userId,
+      inputRaw: "first.example",
+      startedAt: "2026-09-25T06:00:00.000Z",
+    });
+
+    await markWatchingStarted(workspaceId, "2026-09-25T06:01:00.000Z");
+    await markWatchingStarted(workspaceId, "2026-09-25T07:00:00.000Z");
+
+    const row = await env.DB.prepare(
+      "SELECT watching_started_at FROM onboarding_run WHERE workspace_id = ?",
+    )
+      .bind(workspaceId)
+      .first<{ watching_started_at: string | null }>();
+
+    expect(row?.watching_started_at).toBe("2026-09-25T06:01:00.000Z");
+  });
+
+  it("creates no run row for a workspace that has none", async () => {
+    await markWatchingStarted(workspaceId, "2026-09-25T06:01:00.000Z");
+
+    const row = await env.DB.prepare(
+      "SELECT count(*) AS n FROM onboarding_run WHERE workspace_id = ?",
+    )
+      .bind(workspaceId)
+      .first<{ n: number }>();
+
+    expect(row?.n).toBe(0);
   });
 });

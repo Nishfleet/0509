@@ -10,6 +10,8 @@ const UPDATE_CARD_READY_AT = `UPDATE onboarding_run SET card_ready_at = ?2 WHERE
 
 const UPDATE_COMPETITORS_READY_AT = `UPDATE onboarding_run SET competitors_ready_at = ?2 WHERE workspace_id = ?1 AND competitors_ready_at IS NULL`;
 
+const UPDATE_WATCHING_STARTED_AT = `UPDATE onboarding_run SET watching_started_at = ?2 WHERE workspace_id = ?1 AND watching_started_at IS NULL`;
+
 const UPDATE_FIRST_SIGNAL_AT = `UPDATE onboarding_run SET first_signal_at = (SELECT MIN(s.observed_at) FROM signal s WHERE s.workspace_id = onboarding_run.workspace_id AND s.observed_at >= onboarding_run.started_at) WHERE first_signal_at IS NULL AND EXISTS (SELECT 1 FROM signal s WHERE s.workspace_id = onboarding_run.workspace_id AND s.observed_at >= onboarding_run.started_at)`;
 
 const SELECT_ONBOARDING_TIMES = `SELECT started_at, card_ready_at, competitors_ready_at, first_signal_at
@@ -56,4 +58,8 @@ export async function markCompetitorsReady(workspaceId: string, at: string): Pro
 
 export async function stampFirstSignals(): Promise<void> {
   await env.DB.prepare(UPDATE_FIRST_SIGNAL_AT).run();
+}
+
+export async function markWatchingStarted(workspaceId: string, at: string): Promise<void> {
+  await env.DB.prepare(UPDATE_WATCHING_STARTED_AT).bind(workspaceId, at).run();
 }
