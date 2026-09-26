@@ -8,7 +8,9 @@ import type { SourceRow, SourceSnapshot } from "./source-pill";
 
 const HEADING = "mb-3 font-mono text-eyebrow text-ink-soft uppercase";
 const ROW = "min-w-0";
-const OFF = "opacity-60";
+const OFF = "text-ink-soft";
+const PEER_LINK =
+  "inline-flex min-h-6 min-w-6 items-center underline decoration-1 underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-solid focus-visible:outline-ink";
 
 const VERDICT_WORDS: Record<string, string> = {
   active: "Yes. Still trading and selling to the same kind of customer as you.",
@@ -68,38 +70,45 @@ export function factLabel(kind: string, count: number): string | null {
   return `${String(count)} ${count === 1 ? nouns[0] : nouns[1]}`;
 }
 
+function peerLabel(peer: RailPeer): string {
+  const off = peer.state === "off" ? " · off" : "";
+  if (peer.role === "self") return `You${off}`;
+  return `${peer.name}${off}`;
+}
+
 function Peers({ entityId, peers }: { entityId: string; peers: readonly RailPeer[] }): ReactElement {
   if (peers.length === 0) {
     return <EmptyState sentence="No standing yet. It comes with your first weekly brief." />;
   }
   return (
-    <ol className={ROW}>
-      {peers.map((peer) => {
-        const self = peer.role === "self";
-        const current = peer.entityId === entityId;
-        return (
-          <li
-            key={peer.entityId}
-            data-entity-id={peer.entityId}
-            data-state={peer.state}
-            className={peer.state === "off" ? `${ROW} ${OFF}` : ROW}
-          >
-            <span className="font-mono text-meta text-ink-soft">#{peer.rank}</span>{" "}
-            {self ? (
-              <span>You</span>
-            ) : current ? (
-              <span aria-current="page" className="font-bold">
-                {peer.name}
-              </span>
-            ) : (
-              <Link to={`/app/competitors/${peer.entityId}`} prefetch="intent">
-                {peer.name}
-              </Link>
-            )}
-          </li>
-        );
-      })}
-    </ol>
+    <nav aria-label="Peers">
+      <ol className={ROW}>
+        {peers.map((peer) => {
+          const self = peer.role === "self";
+          const current = peer.entityId === entityId;
+          const label = peerLabel(peer);
+          return (
+            <li
+              key={peer.entityId}
+              data-entity-id={peer.entityId}
+              data-state={peer.state}
+              className={peer.state === "off" ? `${ROW} ${OFF}` : ROW}
+            >
+              <span className="font-mono text-meta text-ink-soft">#{peer.rank}</span>{" "}
+              {self || current ? (
+                <span aria-current={current ? "page" : undefined} className={current ? "font-bold" : undefined}>
+                  {label}
+                </span>
+              ) : (
+                <Link to={`/app/competitors/${peer.entityId}`} prefetch="intent" className={PEER_LINK}>
+                  {label}
+                </Link>
+              )}
+            </li>
+          );
+        })}
+      </ol>
+    </nav>
   );
 }
 
