@@ -201,6 +201,15 @@ export async function readCachedSiteProof(
   return { adLibraryHints: parsed.adLibraryHints, navLinks: parsed.navLinks };
 }
 
+export async function readCachedSiteValues(
+  subject: Subject,
+): Promise<{ name: string | null; description: string | null } | null> {
+  const hit = await env.IDENTITY_CACHE.get(probeKey(subject, "homepage"), "json");
+  const parsed = siteCardSchema.safeParse(hit);
+  if (!parsed.success) return null;
+  return { name: parsed.data.name, description: parsed.data.description };
+}
+
 function toDataUrl(contentType: string, bytes: Uint8Array): string {
   const base64 = btoa(Array.from(bytes, (b) => String.fromCharCode(b)).join(""));
   return `data:${contentType};base64,${base64}`;
