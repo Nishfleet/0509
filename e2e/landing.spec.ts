@@ -30,6 +30,33 @@ test("the landing renders its sections in order under one headline", async ({ pa
   expect(order).toEqual(["hero", "mark", "how-it-works", "what-we-watch", "agents", "price", "faq"]);
 });
 
+test("the agents section hands a visitor's agent the MCP address and the API docs", async ({ page }, testInfo) => {
+  const consoleErrors: string[] = [];
+  page.on("console", (message) => {
+    if (message.type() === "error") consoleErrors.push(message.text());
+  });
+  page.on("pageerror", (error) => consoleErrors.push(error.message));
+
+  await page.goto(PATH);
+  await page.waitForLoadState("networkidle");
+
+  const agents = page.locator("#agents");
+  await expect(agents.getByText("https://0509.io/mcp")).toBeVisible();
+  for (const name of ["Claude", "Cursor", "ChatGPT"]) {
+    await expect(agents.getByText(name, { exact: true })).toBeVisible();
+  }
+  await expect(agents.getByRole("link", { name: "Read the API docs" })).toHaveAttribute(
+    "href",
+    "/api/v1/openapi.json",
+  );
+  expect(consoleErrors).toEqual([]);
+
+  await testInfo.attach(`agents-${testInfo.project.name}`, {
+    body: await agents.screenshot(),
+    contentType: "image/png",
+  });
+});
+
 test("the landing's action names its price and leads to sign-in", async ({ page }) => {
   await page.goto(PATH);
   const hero = page.locator("#hero");
