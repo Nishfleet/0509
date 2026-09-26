@@ -254,6 +254,10 @@ const STATIC_HOME_FONT_PRELOAD = {
     messages: {
       preload:
         "The static home must not preload a font. A preload holds the headline paint until the face arrives, so simulated LCP misses lighthouse-budget.json. The three faces stay on the @font-face rules with font-display: swap. Source: 0509#5580.",
+      fontFace:
+        "The static home must not declare @font-face in the document. A face that finishes before the headline is a simulated-LCP dependency and misses lighthouse-budget.json. The three faces live in /home-faces.css, linked after </main>. Source: 0509#5598.",
+      facesLink:
+        "The static home must link /home-faces.css after </main>, so the headline paints before those faces are requested. Source: 0509#5598.",
     },
   },
   create(context) {
@@ -265,6 +269,14 @@ const STATIC_HOME_FONT_PRELOAD = {
           /<link\b[^>]*\bas="font"[^>]*\brel="preload"/.test(text);
         if (preloadsFont) {
           context.report({ node, messageId: "preload" });
+        }
+        if (text.includes("@font-face")) {
+          context.report({ node, messageId: "fontFace" });
+        }
+        const mainEnd = text.lastIndexOf("</main>");
+        const facesLink = text.indexOf('href="/home-faces.css"');
+        if (mainEnd < 0 || facesLink < mainEnd) {
+          context.report({ node, messageId: "facesLink" });
         }
       },
     };
