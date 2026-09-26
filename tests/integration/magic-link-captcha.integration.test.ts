@@ -243,7 +243,7 @@ describe("login form action access pre-clearance", () => {
     const assertion = await serviceTokenAssertion();
     const sent: string[] = [];
     actionEnv(sent);
-    const result = await loginAction({ request: loginFormPost(`CF_Authorization=${assertion}`) } as never);
+    const result = await loginAction({ request: loginFormPost(`CF_Authorization=${assertion}`) });
     expect(result).toMatchObject({ sent: { email: "cookie-precleared@test.dev" } });
     expect(sent).toHaveLength(1);
   });
@@ -251,7 +251,7 @@ describe("login form action access pre-clearance", () => {
   it("still refuses a form post with a forged cookie assertion and empty captcha", async () => {
     const sent: string[] = [];
     actionEnv(sent);
-    const result = await loginAction({ request: loginFormPost("CF_Authorization=forged.header.value") } as never);
+    const result = await loginAction({ request: loginFormPost("CF_Authorization=forged.header.value") });
     expect(result).toEqual({ error: "Confirm you're a person, then we'll send the link." });
     expect(sent).toHaveLength(0);
   });
@@ -277,7 +277,7 @@ describe("login form action access pre-clearance", () => {
 
     const sent: string[] = [];
     actionEnv(sent);
-    const result = await loginAction({ request: loginFormPost(`CF_Authorization=${assertion}`) } as never);
+    const result = await loginAction({ request: loginFormPost(`CF_Authorization=${assertion}`) });
     expect(result).toEqual({ error: "Confirm you're a person, then we'll send the link." });
     expect(sent).toHaveLength(0);
   });
