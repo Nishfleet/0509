@@ -234,3 +234,43 @@ export async function readWorkspaceMentionSources(
           },
   }));
 }
+
+const SELECT_REGISTRY_SOURCES = `SELECT s.key, s.plugin_key, s.platform, s.kind, s.is_enabled, s.config_json, s.degraded_reason, s.last_good_at, (SELECT MAX(sn.fetched_at) FROM snapshot sn JOIN watch w ON w.id = sn.watch_id WHERE w.source_id = s.id) AS fetched_at, (SELECT sn.item_count FROM snapshot sn JOIN watch w ON w.id = sn.watch_id WHERE w.source_id = s.id ORDER BY sn.fetched_at DESC LIMIT 1) AS item_count, (SELECT sn.canary_count FROM snapshot sn JOIN watch w ON w.id = sn.watch_id WHERE w.source_id = s.id ORDER BY sn.fetched_at DESC LIMIT 1) AS canary_count FROM source s ORDER BY s.kind, s.key`;
+
+interface RegistrySourceRow {
+  key: string;
+  plugin_key: string;
+  platform: string;
+  kind: string;
+  is_enabled: number;
+  config_json: string;
+  degraded_reason: string | null;
+  last_good_at: string | null;
+  fetched_at: string | null;
+  item_count: number | null;
+  canary_count: number | null;
+}
+
+export async function readRegistrySources(): Promise<readonly FreshnessSource[]> {
+  const { results } = await env.DB.prepare(SELECT_REGISTRY_SOURCES).all<RegistrySourceRow>();
+  return results.map((row) => ({
+    kind: row.kind,
+    source: {
+      key: row.key,
+      platform: row.platform,
+      name: row.plugin_key,
+      is_enabled: row.is_enabled,
+      config_json: row.config_json,
+      degraded_reason: row.degraded_reason,
+      last_good_at: row.last_good_at,
+    },
+    snapshot:
+      row.fetched_at === null
+        ? null
+        : {
+            fetched_at: row.fetched_at,
+            item_count: row.item_count ?? 0,
+            canary_count: row.canary_count ?? null,
+          },
+  }));
+}
