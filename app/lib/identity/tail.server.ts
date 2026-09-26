@@ -1,4 +1,5 @@
 import { env } from "cloudflare:workers";
+import { NonRetryableError } from "cloudflare:workflows";
 
 import { readSelfEntityId } from "../data/entity.server";
 import { insertPages, readJudgedPricingUrl } from "../data/page.server";
@@ -43,8 +44,14 @@ export async function startIdentityTail(params: IdentityTailParams): Promise<str
   return id;
 }
 
-export async function persistTail(params: IdentityTailParams): Promise<{ entityId: string | null }> {
-  return { entityId: await readSelfEntityId(params.workspaceId, params.entityId) };
+export async function persistTail(params: IdentityTailParams): Promise<{ entityId: string }> {
+  const entityId = await readSelfEntityId(params.workspaceId, params.entityId);
+  if (entityId === null) {
+    throw new NonRetryableError(
+      `self entity ${params.entityId} is not in workspace ${params.workspaceId}`,
+    );
+  }
+  return { entityId };
 }
 
 export async function seedTailWatches(params: IdentityTailParams, discoveredAt: string): Promise<EntityWatch[]> {

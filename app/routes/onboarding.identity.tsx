@@ -9,7 +9,7 @@ import { OneInput } from "../components/one-input";
 import { isTakenDown } from "../lib/data/takedown.server";
 import { readWorkspaceIdForOwner } from "../lib/data/workspace.server";
 import { creatorRows, editedFields, isDraftSave } from "../lib/identity/card-fields";
-import { readDraft, saveDraftField } from "../lib/identity/card-draft.server";
+import { applyDraftIntent, readDraft } from "../lib/identity/card-draft.server";
 import { startCard, withinProbeLimit } from "../lib/identity/card.server";
 import { confirmCard } from "../lib/identity/confirm.server";
 import { normaliseSubject } from "../lib/identity/normalise";
@@ -58,22 +58,7 @@ export async function action({ request }: Route.ActionArgs) {
   const workspaceId = await readWorkspaceIdForOwner(session.user.id);
   if (workspaceId === null) throw redirect("/onboarding");
   const form = await request.formData();
-  if (form.get("intent") === "draft") {
-    const draftSubject = form.get("subject");
-    const field = form.get("field");
-    const value = form.get("value");
-    if (
-      typeof draftSubject === "string" &&
-      (field === "name" || field === "description") &&
-      typeof value === "string"
-    ) {
-      const normalised = normaliseSubject(draftSubject);
-      if (normalised.ok) {
-        await saveDraftField(workspaceId, normalised.subject.registrable, field, value);
-      }
-    }
-    return null;
-  }
+  if (await applyDraftIntent(workspaceId, form)) return null;
   const rawSubject = form.get("subject");
   if (typeof rawSubject === "string") {
     const normalised = normaliseSubject(rawSubject);

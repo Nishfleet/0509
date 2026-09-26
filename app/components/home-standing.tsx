@@ -1,13 +1,15 @@
 import type { ReactElement } from "react";
-import { Form, Link } from "react-router";
+import { Form } from "react-router";
 
-import { BrandChipRow, brandMonogram } from "./brand-chip";
+import { BrandChipRow } from "./brand-chip";
 import { EmptyState, fewerThanTwoOnBrands } from "./empty-state";
 import { FirstFilePanel } from "./first-file-panel";
 import { FourWeekLine } from "./four-week-line";
 import { HowRankedSheet } from "./how-ranked-sheet";
+import { RankedRow } from "./ranked-row";
 import { ReadThisFirst } from "./read-this-first";
-import type { HomeRow, HomeView } from "../lib/home-standing";
+import { RowSheet } from "./row-sheet";
+import type { HomeRow, HomeView, WeekEvidence } from "../lib/home-standing";
 import type { HowRanked } from "../lib/how-ranked";
 import { cn } from "../lib/utils";
 
@@ -18,16 +20,22 @@ const MARKER = "bg-green text-on-green px-[0.14em] [box-decoration-break:clone]"
 export function HomeStanding({
   view,
   howRanked,
+  onSwitch,
+  openId = null,
+  evidence = null,
 }: {
   view: HomeView;
   howRanked?: HowRanked | null;
+  onSwitch?: (entityId: string, checked: boolean) => void;
+  openId?: string | null;
+  evidence?: readonly WeekEvidence[] | null;
 }): ReactElement {
   return (
     <section data-home="standing" className="min-w-0 break-words">
       <p className={EYEBROW}>{view.eyebrow}</p>
       {greeting(view)}
       <div className="mt-4">{chips(view)}</div>
-      {body(view, howRanked)}
+      {body(view, howRanked, onSwitch, openId, evidence)}
     </section>
   );
 }
@@ -49,7 +57,13 @@ function greeting(view: HomeView): ReactElement {
   );
 }
 
-function body(view: HomeView, howRanked?: HowRanked | null): ReactElement {
+function body(
+  view: HomeView,
+  howRanked: HowRanked | null | undefined,
+  onSwitch: ((entityId: string, checked: boolean) => void) | undefined,
+  openId: string | null,
+  evidence: readonly WeekEvidence[] | null,
+): ReactElement {
   const { standing } = view;
   if (standing.kind === "add-competitor") {
     return (
@@ -84,53 +98,21 @@ function body(view: HomeView, howRanked?: HowRanked | null): ReactElement {
       <h2 className={cn(EYEBROW, "border-line mt-8 border-t pt-4")}>This week's standing</h2>
       <ol className="mt-2">
         {standing.rows.map((row) => (
-          <RankedRow key={row.entityId} row={row} />
+          <RankedRow key={row.entityId} row={row} onSwitch={onSwitch} openId={openId} evidence={evidence} />
         ))}
       </ol>
+      {rowSheet(standing.rows, openId, evidence)}
     </>
   );
 }
 
-function RankedRow({ row }: { row: HomeRow }): ReactElement {
-  return (
-    <li
-      data-testid="standing-row"
-      data-self={row.self ? "true" : undefined}
-      className={cn(
-        "border-line grid grid-cols-[2.25rem_26px_minmax(0,1fr)_auto] items-center gap-3 border-b px-2 py-3",
-        row.self && "bg-green-wash",
-      )}
-    >
-      <span className="font-mono text-[0.88rem]">{row.position === null ? "—" : `#${String(row.position)}`}</span>
-      <span
-        aria-hidden="true"
-        className={cn(
-          "font-display flex size-[26px] items-center justify-center border-[1.5px] border-ink text-[0.8rem] font-extrabold",
-          row.self ? "bg-green" : "bg-card",
-        )}
-      >
-        {brandMonogram(row.name)}
-      </span>
-      <span className="min-w-0">
-        {row.self ? (
-          <span className="font-display text-row-name block truncate font-bold">{row.name}</span>
-        ) : (
-          <Link
-            to={`/app/competitors/${row.entityId}`}
-            prefetch="intent"
-            className="font-display text-row-name block truncate font-bold hover:underline"
-          >
-            {row.name}
-          </Link>
-        )}
-        {row.domain === null ? null : (
-          <span className="text-ink-soft block truncate text-[0.88rem]">{row.domain}</span>
-        )}
-      </span>
-      <span className="text-ink-soft text-right font-mono text-eyebrow uppercase">
-        {row.self ? "You · " : null}
-        {row.movement}
-      </span>
-    </li>
-  );
+function rowSheet(
+  rows: readonly HomeRow[],
+  openId: string | null,
+  evidence: readonly WeekEvidence[] | null,
+): ReactElement | null {
+  if (openId === null || evidence === null) return null;
+  const row = rows.find((entry) => entry.entityId === openId);
+  if (row === undefined) return null;
+  return <RowSheet title={row.name} evidence={evidence} />;
 }

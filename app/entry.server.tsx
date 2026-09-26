@@ -1,11 +1,49 @@
-import type { EntryContext, RouterContextProvider } from "react-router";
-import { ServerRouter } from "react-router";
+import { captureException } from "@sentry/cloudflare";
+import type { EntryContext, HandleErrorFunction, Params, RouterContextProvider } from "react-router";
+import { isRouteErrorResponse, ServerRouter } from "react-router";
 import { isbot } from "isbot";
 import { renderToReadableStream } from "react-dom/server";
 
 import { withDocumentSecurityHeaders } from "./lib/security-headers";
 
 export const streamTimeout = 5_000;
+
+function decodePath(pathname: string): string {
+  try {
+    return pathname
+      .split("/")
+      .map((segment) => decodeURIComponent(segment).replace(/\//g, "%2F"))
+      .join("/");
+  } catch {
+    return pathname;
+  }
+}
+
+function routePattern(pathname: string, params: Params): string {
+  const segments = decodePath(pathname).split("/");
+  const splat = params["*"];
+  const names = new Map(
+    Object.entries(params).flatMap(([name, value]): [string, string][] =>
+      name === "*" || !value ? [] : [[value.replace(/\//g, "%2F"), `:${name}`]],
+    ),
+  );
+  const mapped = segments.map((segment) => names.get(segment) ?? segment);
+  if (splat === undefined) return mapped.join("/");
+  for (let length = 1; length <= segments.length; length++) {
+    const tail = segments.slice(segments.length - length).join("/");
+    if (tail.replace(/%2F/g, "/") === splat) {
+      return [...mapped.slice(0, mapped.length - length), "*"].join("/");
+    }
+  }
+  return mapped.join("/");
+}
+
+export const handleError: HandleErrorFunction = (error, { request, params }) => {
+  if (request.signal.aborted) return;
+  console.error(error);
+  if (isRouteErrorResponse(error) && error.status < 500) return;
+  captureException(error, { tags: { route: routePattern(new URL(request.url).pathname, params) } });
+};
 
 export default async function handleRequest(
   request: Request,

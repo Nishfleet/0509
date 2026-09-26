@@ -42,6 +42,7 @@ describe("homeView gathering standing", () => {
       history: [],
       sources: [],
       counts: [],
+      moves: [],
       now: new Date("2026-09-24T06:30:00.000Z"),
     });
     expect(view.standing.kind).toBe("gathering");

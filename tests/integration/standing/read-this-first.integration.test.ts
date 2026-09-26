@@ -118,8 +118,8 @@ describe("judgeWeek", () => {
   it("judges the week's D3/D6-passed items and writes every verdict", async () => {
     const seeded = await seed();
     const run = vi.fn(async (_model: string, request: StubRequest) => {
-      const noul = request.state.item.title === seeded.titleA ? 0.8 : 0.6;
-      return { answers: { [READ_THIS_FIRST.id]: { type: "noul", noul } } };
+      const probability = request.state.item.title === seeded.titleA ? 0.8 : 0.6;
+      return { answers: { [READ_THIS_FIRST.id]: { type: "boolean", probability } } };
     });
     Reflect.set(env, "AI", { run });
 
@@ -137,8 +137,8 @@ describe("judgeWeek", () => {
   it("serves the second identical call from jev_verdict without new run calls", async () => {
     const seeded = await seed();
     const run = vi.fn(async (_model: string, request: StubRequest) => {
-      const noul = request.state.item.title === seeded.titleA ? 0.8 : 0.6;
-      return { answers: { [READ_THIS_FIRST.id]: { type: "noul", noul } } };
+      const probability = request.state.item.title === seeded.titleA ? 0.8 : 0.6;
+      return { answers: { [READ_THIS_FIRST.id]: { type: "boolean", probability } } };
     });
     Reflect.set(env, "AI", { run });
 
@@ -163,7 +163,7 @@ describe("judgeWeek", () => {
 
   it("never sends a tombstoned signal even with a 0.95 verdict", async () => {
     const seeded = await seed();
-    const run = vi.fn(async () => ({ answers: { [READ_THIS_FIRST.id]: { type: "noul", noul: 0.9 } } }));
+    const run = vi.fn(async () => ({ answers: { [READ_THIS_FIRST.id]: { type: "boolean", probability: 0.9 } } }));
     Reflect.set(env, "AI", { run });
 
     await judgeWeek(env.DB, inputFor(seeded.workspaceId));

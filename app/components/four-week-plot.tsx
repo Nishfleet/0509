@@ -1,4 +1,5 @@
 import type { ReactElement } from "react";
+import { useMemo } from "react";
 import type { AlignedData, Options, Series } from "uplot";
 import UplotReact from "uplot-react";
 
@@ -28,43 +29,44 @@ function lastRank(ranks: readonly (number | null)[]): number {
   return -1;
 }
 
-export function FourWeekPlot({ chart }: { chart: FourWeekChart }): ReactElement {
+export function FourWeekPlot({ chart, width }: { chart: FourWeekChart; width: number }): ReactElement {
   const color = tokens();
-  const other: Series = { stroke: color.inkSoft, width: 1, spanGaps: false, points: { show: true } };
-  const wide: Series = { stroke: color.green, width: 8, spanGaps: false, points: { show: false } };
-  const thin: Series = { stroke: color.ink, width: 2, spanGaps: false, points: { show: true } };
-  const series: Series[] = [{}, ...chart.lines.flatMap((line) => (line.self ? [wide, thin] : [other]))];
+  const options: Options = useMemo(() => {
+    const other: Series = { stroke: color.inkSoft, width: 1, spanGaps: false, points: { show: true } };
+    const wide: Series = { stroke: color.green, width: 8, spanGaps: false, points: { show: false } };
+    const thin: Series = { stroke: color.ink, width: 2, spanGaps: false, points: { show: true } };
+    return {
+      width,
+      height: 180,
+      legend: { show: false },
+      cursor: { show: false },
+      scales: { x: { time: false }, y: { dir: -1 } },
+      axes: [{ show: false }, { show: false }],
+      series: [{}, ...chart.lines.flatMap((line) => (line.self ? [wide, thin] : [other]))],
+      hooks: {
+        draw: [
+          (plot) => {
+            plot.ctx.font = "12px ui-monospace, monospace";
+            for (const line of chart.lines) {
+              const index = lastRank(line.ranks);
+              if (index < 0) continue;
+              const rank = line.ranks[index];
+              if (rank === null) continue;
+              plot.ctx.fillStyle = line.self ? color.ink : color.inkSoft;
+              plot.ctx.fillText(
+                line.paused ? "paused" : line.label,
+                plot.valToPos(index, "x", true) + 6,
+                plot.valToPos(rank, "y", true),
+              );
+            }
+          },
+        ],
+      },
+    };
+  }, [chart, width, color.ink, color.inkSoft, color.green]);
   const data: AlignedData = [
     chart.weeks.map((_week, index) => index),
     ...chart.lines.flatMap((line) => (line.self ? [[...line.ranks], [...line.ranks]] : [[...line.ranks]])),
   ];
-  const options: Options = {
-    width: 640,
-    height: 180,
-    legend: { show: false },
-    cursor: { show: false },
-    scales: { x: { time: false }, y: { dir: -1 } },
-    axes: [{ show: false }, { show: false }],
-    series,
-    hooks: {
-      draw: [
-        (plot) => {
-          plot.ctx.font = "12px ui-monospace, monospace";
-          for (const line of chart.lines) {
-            const index = lastRank(line.ranks);
-            if (index < 0) continue;
-            const rank = line.ranks[index];
-            if (rank === null) continue;
-            plot.ctx.fillStyle = line.self ? color.ink : color.inkSoft;
-            plot.ctx.fillText(
-              line.paused ? "paused" : line.label,
-              plot.valToPos(index, "x", true) + 6,
-              plot.valToPos(rank, "y", true),
-            );
-          }
-        },
-      ],
-    },
-  };
   return <UplotReact options={options} data={data} />;
 }

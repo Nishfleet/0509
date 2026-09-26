@@ -61,7 +61,7 @@ function runAnswer(p: Record<string, number>) {
   return (_model: string, _input: unknown) =>
     Promise.resolve({
       answers: Object.fromEntries(
-        Object.entries(p).map(([id, value]) => [id, { type: "noul", noul: value }] as const),
+        Object.entries(p).map(([id, value]) => [id, { type: "boolean", probability: value }] as const),
       ),
     });
 }
