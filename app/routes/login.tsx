@@ -1,27 +1,31 @@
 import type { Route } from "./+types/login";
 import { env } from "cloudflare:workers";
 import { useEffect, useState } from "react";
-import { Link, Form, useActionData, useLoaderData, useNavigate, useNavigation, useSearchParams } from "react-router";
+import { Form, useActionData, useLoaderData, useNavigate, useNavigation, useSearchParams } from "react-router";
 
-import { Footer, SUPPORT_ADDRESS } from "../components/footer";
+import { AccountDeleteNotice } from "../components/account-delete-notice";
 import { SIGN_IN_LEDE, SIGN_IN_SHELL, SIGN_IN_TITLE, SignInSent } from "../components/sign-in-sent";
+import { TurnstileWidget } from "../components/turnstile-widget";
 import { Wordmark } from "../components/wordmark";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
+import { Footer } from "../components/footer";
 import { safeReturnTo } from "../lib/agent/paths";
 import { authClient } from "../lib/auth-client";
+import { formMagicLinkRequest } from "../lib/auth/login-magic-link.server";
 import { createAuth } from "../lib/auth.server";
-import { timezoneCookie } from "../lib/timezone";
 import { readAccountDeleteProgress } from "../lib/account-delete.server";
+import { timezoneCookie } from "../lib/timezone";
 
 export function meta() {
   return [{ title: "Sign in · Five to Nine" }];
 }
 
 export async function loader({ request }: Route.LoaderArgs) {
+  const turnstileSiteKey = env.TURNSTILE_SITE_KEY;
   const id = new URL(request.url).searchParams.get("deleted");
-  if (id === null || id === "") return { id: null, progress: null };
-  return { id, progress: await readAccountDeleteProgress(id) };
+  if (id === null || id === "") return { turnstileSiteKey, id: null, progress: null };
+  return { turnstileSiteKey, id, progress: await readAccountDeleteProgress(id) };
 }
 
 export async function action({ request }: Route.ActionArgs) {
@@ -30,17 +34,23 @@ export async function action({ request }: Route.ActionArgs) {
   const email = typeof submitted === "string" ? submitted.trim().toLowerCase() : "";
   if (!email) return { error: "Enter your email address, then we'll send the link." };
 
-  const auth = createAuth(env);
-  await auth.api
-    .signInMagicLink({
-      body: { email, callbackURL: safeReturnTo(new URL(request.url).searchParams.get("next")) },
-      headers: request.headers,
-    })
-    .catch((error: unknown) => {
-      console.error(JSON.stringify({ event: "login.magic_link_send_failed", error: String(error) }));
-    });
-
-  return { sent: { email, at: Date.now() } };
+  const captchaField = form.get("cf-turnstile-response");
+  const captcha = typeof captchaField === "string" ? captchaField.trim() : "";
+  const callbackURL = safeReturnTo(new URL(request.url).searchParams.get("next"));
+  const response = await createAuth(env).handler(
+    formMagicLinkRequest(env.BETTER_AUTH_URL, request, email, captcha, callbackURL),
+  );
+  if (response.status === 200) return { sent: { email, at: Date.now() } };
+  const detail = await response.text();
+  if (response.status === 429) return { error: "Too many sign-in links. Wait a minute and try again." };
+  if (detail.includes("Missing CAPTCHA response") || detail.includes("Captcha verification failed")) {
+    return { error: "Confirm you're a person, then we'll send the link." };
+  }
+  if (response.status === 400) return { error: "Enter an email address we can send the link to." };
+  console.error(
+    JSON.stringify({ event: "login.magic_link_send_failed", status: response.status, error: detail.slice(0, 200) }),
+  );
+  return { error: "We couldn't send the link. Try again in a minute." };
 }
 
 export default function Login() {
@@ -74,7 +84,7 @@ export default function Login() {
   }
 
   if (data?.sent) {
-    return <SignInSent key={data.sent.at} email={data.sent.email} />;
+    return <SignInSent key={data.sent.at} email={data.sent.email} turnstileSiteKey={deleted.turnstileSiteKey} />;
   }
 
   return (
@@ -85,33 +95,15 @@ export default function Login() {
       <main className="flex flex-col">
         <h1 className={SIGN_IN_TITLE}>Sign in</h1>
         <p className={SIGN_IN_LEDE}>We email you a link. Tap it and you're in. There is no password.</p>
-        {deleted.progress === null ? null : (
-          <section data-delete="progress" aria-live="polite">
-            <h2 className={SIGN_IN_TITLE}>Your account is deleted</h2>
-            <ul className={SIGN_IN_LEDE}>
-              <li>Brands, signals, briefs, send history, card, API keys and connected apps: removed</li>
-              <li>
-                {deleted.progress.files === "removing"
-                  ? "Snapshots and screenshots: still removing"
-                  : deleted.progress.files === "failed"
-                    ? `Snapshots and screenshots: stopped. Write to ${SUPPORT_ADDRESS} and we'll finish it.`
-                    : deleted.progress.deleted === null
-                      ? "Snapshots and screenshots: removed"
-                      : `Snapshots and screenshots: removed (${String(deleted.progress.deleted)} files)`}
-              </li>
-            </ul>
-            {deleted.progress.files === "removing" ? (
-              <Link to={`/login?deleted=${encodeURIComponent(deleted.id)}`} className={SIGN_IN_LEDE}>
-                Check again
-              </Link>
-            ) : null}
-          </section>
+        {deleted.progress === null || deleted.id === null ? null : (
+          <AccountDeleteNotice id={deleted.id} progress={deleted.progress} />
         )}
         <Form method="post" className="mt-8 flex flex-col gap-3">
           <label htmlFor="email" className="font-mono text-eyebrow text-ink-soft uppercase">
             Email
           </label>
           <Input id="email" name="email" type="email" autoComplete="email" inputMode="email" required />
+          <TurnstileWidget siteKey={deleted.turnstileSiteKey} startOn="email-focus" />
           <Button type="submit" size="lg" disabled={busy} className="mt-2">
             {busy ? "Sending…" : "Email me a link"}
           </Button>

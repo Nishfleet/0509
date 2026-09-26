@@ -2,7 +2,7 @@
   "name": "0509-test",
   "compatibility_date": "2026-09-16",
   "compatibility_flags": ["global_fetch_strictly_public"],
-  "vars": { "SITE_SWEEP_PING_URL": "https://hc-ping.example/site-sweep", "BETTER_AUTH_URL": "https://0509.io" },
+  "vars": { "SITE_SWEEP_PING_URL": "https://hc-ping.example/site-sweep", "BETTER_AUTH_URL": "https://0509.io", "TURNSTILE_SITE_KEY": "1x00000000000000000000BB", "TURNSTILE_SECRET_KEY": "1x0000000000000000000000000000000AA" },
   "main": "../../workers/app.ts",
   "durable_objects": {
     "bindings": [{ "name": "BROWSER_BUDGET", "class_name": "BrowserBudget" }]
