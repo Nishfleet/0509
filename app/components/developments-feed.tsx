@@ -45,7 +45,11 @@ export function DevelopmentsFeed({
         className="flex min-w-0 flex-wrap gap-2"
       >
         {FEED_FILTERS.map((entry) => (
-          <ToggleGroupItem key={entry.value} value={entry.value}>
+          <ToggleGroupItem
+            key={entry.value}
+            value={entry.value}
+            className="min-h-11 border border-transparent px-3 text-ink-soft aria-pressed:border-ink aria-pressed:font-bold aria-pressed:text-ink focus-visible:outline-2! focus-visible:outline-offset-2! focus-visible:outline-solid! focus-visible:outline-ink!"
+          >
             {entry.label}
             <span className="font-mono text-meta">{counts[entry.value]}</span>
           </ToggleGroupItem>

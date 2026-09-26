@@ -90,7 +90,7 @@ describe("the competitor rail", () => {
     }
   });
 
-  it("keeps peer order, dims off brands and links only to other competitors", () => {
+  it("keeps peer order, names an off brand in text and links only to other competitors", () => {
     const html = render();
     expect([...html.matchAll(/data-entity-id="([^"]+)"/g)].map((match) => match[1])).toEqual([
       "comp-on",
@@ -100,7 +100,9 @@ describe("the competitor rail", () => {
     ]);
     const offRow = html.match(/<li data-entity-id="comp-off"[^>]*>/)?.[0];
     expect(offRow).toContain('data-state="off"');
-    expect(offRow).toContain("opacity-60");
+    expect(offRow).toContain("text-ink-soft");
+    expect(offRow).not.toContain("opacity-60");
+    expect(text(html)).toContain("Casetta · off");
     expect(text(html)).toContain("You");
     expect(html).toContain('href="/app/competitors/comp-x"');
     expect(html).toContain('href="/app/competitors/comp-off"');

@@ -7,6 +7,7 @@ import { CompetitorForget } from "../components/competitor-forget";
 import { CompetitorFrame } from "../components/competitor-frame";
 import { CompetitorHeader, DAY_MONTH } from "../components/competitor-header";
 import { CompetitorSnapshot } from "../components/competitor-snapshot";
+import { Footer } from "../components/footer";
 import { readCompetitorPage } from "../lib/competitor-page.server";
 import { snapshotCells } from "../lib/competitor-snapshot";
 import { readCompetitorSnapshot } from "../lib/competitor-snapshot.server";
@@ -76,7 +77,7 @@ export default function Page({ loaderData, actionData }: Route.ComponentProps) {
   const state = pending === "on" || pending === "off" ? pending : competitor.state;
   const pausedAt = competitor.state === "off" ? competitor.stateChangedAt : null;
   return (
-    <main className="mx-auto flex max-w-6xl min-w-0 flex-col gap-10 px-4 py-10">
+    <div className="mx-auto flex max-w-6xl min-w-0 flex-col gap-10 px-4 py-10">
       <CompetitorHeader
         name={competitor.name}
         domain={competitor.domain}
@@ -94,18 +95,21 @@ export default function Page({ loaderData, actionData }: Route.ComponentProps) {
           />
         }
       />
-      <CompetitorSnapshot cells={loaderData.snapshot} />
-      <CompetitorFrame
-        changes={loaderData.changes}
-        developments={loaderData.developments}
-        weekCount={loaderData.weekCount}
-        biggestId={loaderData.biggestId}
-        pages={loaderData.watch.pages}
-        lastChecked={loaderData.lastChecked}
-        pausedOn={pausedAt === null ? null : DAY_MONTH.format(new Date(pausedAt))}
-        rail={{ ...loaderData.rail, entityId: competitor.id, now: loaderData.now }}
-      />
-      <CompetitorForget name={competitor.name} error={actionData?.forgetError ?? null} />
-    </main>
+      <main className="flex min-w-0 flex-col gap-10">
+        <CompetitorSnapshot cells={loaderData.snapshot} />
+        <CompetitorFrame
+          changes={loaderData.changes}
+          developments={loaderData.developments}
+          weekCount={loaderData.weekCount}
+          biggestId={loaderData.biggestId}
+          pages={loaderData.watch.pages}
+          lastChecked={loaderData.lastChecked}
+          pausedOn={pausedAt === null ? null : DAY_MONTH.format(new Date(pausedAt))}
+          rail={{ ...loaderData.rail, entityId: competitor.id, now: loaderData.now }}
+        />
+        <CompetitorForget name={competitor.name} error={actionData?.forgetError ?? null} />
+      </main>
+      <Footer />
+    </div>
   );
 }
