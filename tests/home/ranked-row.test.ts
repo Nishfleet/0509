@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { createMemoryRouter, MemoryRouter, RouterProvider } from "react-router";
 import { describe, expect, it } from "vitest";
 
+import { HomeStanding } from "../../app/components/home-standing";
 import { RankedRow } from "../../app/components/ranked-row";
 import type { BriefPayload } from "../../app/lib/brief-payload";
 import type { BriefSchedule } from "../../app/lib/brief-schedule";
@@ -14,7 +15,7 @@ import type {
   HomeSource,
   WeekEvidence,
 } from "../../app/lib/home-standing";
-import { homeStanding } from "../../app/lib/home-standing";
+import { homeStanding, homeView } from "../../app/lib/home-standing";
 import type { SiteChangeView } from "../../app/lib/site-change";
 
 const SCHEDULE: BriefSchedule = { timezone: "Europe/London", weekday: 1, hour: 8 };
@@ -267,5 +268,30 @@ describe("a ranked row expands in place to the week's evidence", () => {
     expect(html).not.toContain('data-open="true"');
     expect(html).not.toContain('data-slot="row-evidence"');
     expect(html.match(/aria-expanded="false"/g)).toHaveLength(3);
+  });
+});
+
+describe("below 860px an open ranked row's evidence is a bottom sheet", () => {
+  it("server-render keeps the in-place evidence and the sheet stays closed", () => {
+    const view = homeView({
+      payload: PAYLOAD,
+      entities: ENTITIES,
+      sources: SOURCES,
+      counts: COUNTS,
+      history: [],
+      schedule: SCHEDULE,
+      now: NOW,
+      moves: [],
+    });
+    const html = renderToStaticMarkup(
+      createElement(
+        MemoryRouter,
+        { initialEntries: ["/app?open=ent_kindred"] },
+        createElement(HomeStanding, { view, openId: "ent_kindred", evidence: KINDRED_EVIDENCE }),
+      ),
+    );
+    expect(html.match(/data-slot="row-evidence"/g)).toHaveLength(1);
+    expect(html).toContain("Pricing page rewrote its hero");
+    expect(html).not.toContain('data-slot="row-sheet"');
   });
 });

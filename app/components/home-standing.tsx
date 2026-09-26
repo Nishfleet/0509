@@ -8,7 +8,8 @@ import { FourWeekLine } from "./four-week-line";
 import { HowRankedSheet } from "./how-ranked-sheet";
 import { RankedRow } from "./ranked-row";
 import { ReadThisFirst } from "./read-this-first";
-import type { HomeView, WeekEvidence } from "../lib/home-standing";
+import { RowSheet } from "./row-sheet";
+import type { HomeRow, HomeView, WeekEvidence } from "../lib/home-standing";
 import type { HowRanked } from "../lib/how-ranked";
 import { cn } from "../lib/utils";
 
@@ -100,6 +101,18 @@ function body(
           <RankedRow key={row.entityId} row={row} onSwitch={onSwitch} openId={openId} evidence={evidence} />
         ))}
       </ol>
+      {rowSheet(standing.rows, openId, evidence)}
     </>
   );
+}
+
+function rowSheet(
+  rows: readonly HomeRow[],
+  openId: string | null,
+  evidence: readonly WeekEvidence[] | null,
+): ReactElement | null {
+  if (openId === null || evidence === null) return null;
+  const row = rows.find((entry) => entry.entityId === openId);
+  if (row === undefined) return null;
+  return <RowSheet title={row.name} evidence={evidence} />;
 }
