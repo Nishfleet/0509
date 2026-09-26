@@ -379,12 +379,98 @@ jobs:
           CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}
           GH_TOKEN: ${{ github.token }}
         run: |
-          curl https://cursor.com/install -fsS | bash
+          curl -fsS https://cursor.com/install -o "$RUNNER_TEMP/cursor-install.sh"
+          bash "$RUNNER_TEMP/cursor-install.sh"
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
           export PATH="$HOME/.local/bin:$PATH"
           mkdir -p "$HOME/.cursor"
           cat > "$HOME/.cursor/cli-config.json" <<'EOF'
-          {"version":1,"editor":{"vimMode":false},"permissions":{"allow":["Read(**)","Read(*)","Shell(gh:pr comment*)","Shell(gh:pr diff*)","Shell(gh:pr view*)","Shell(gh:pr edit*)","Shell(gh:issue view*)","Shell(gh:issue edit*)","Shell(git:diff*)","Shell(git:log*)","Shell(git:show*)"],"deny":["Write(**)","WebFetch(*)","Mcp(*:*)","Shell(rm)","Shell(rmdir)","Shell(mv)","Shell(cp)","Shell(tee)","Shell(chmod)","Shell(chown)","Shell(sudo)","Shell(bash)","Shell(sh)","Shell(python)","Shell(python3)","Shell(node)","Shell(curl)","Shell(wget)","Shell(git:add*)","Shell(git:commit*)","Shell(git:push*)","Shell(git:checkout*)","Shell(git:reset*)","Shell(gh:pr merge*)","Shell(gh:api*)"]}}
+          {
+            "version": 1,
+            "editor": {"vimMode": false},
+            "approvalMode": "allowlist",
+            "sandbox": {"mode": "disabled"},
+            "permissions": {
+              "allow": [
+                "Read(**)",
+                "Read(*)",
+                "Shell(gh:pr comment*)",
+                "Shell(gh:pr diff*)",
+                "Shell(gh:pr view*)",
+                "Shell(gh:pr edit*)",
+                "Shell(gh:issue view*)",
+                "Shell(gh:issue edit*)",
+                "Shell(git:diff*)",
+                "Shell(git:log*)",
+                "Shell(git:show*)"
+              ],
+              "deny": [
+                "Write(**)",
+                "WebFetch(*)",
+                "Mcp(*:*)",
+                "Shell(rm)",
+                "Shell(rmdir)",
+                "Shell(mv)",
+                "Shell(cp)",
+                "Shell(tee)",
+                "Shell(chmod)",
+                "Shell(chown)",
+                "Shell(sudo)",
+                "Shell(bash)",
+                "Shell(sh)",
+                "Shell(zsh)",
+                "Shell(python)",
+                "Shell(python3)",
+                "Shell(node)",
+                "Shell(perl)",
+                "Shell(ruby)",
+                "Shell(php)",
+                "Shell(curl)",
+                "Shell(curl*)",
+                "Shell(wget)",
+                "Shell(wget*)",
+                "Shell(env*)",
+                "Shell(printenv*)",
+                "Shell(npm)",
+                "Shell(npx)",
+                "Shell(pip)",
+                "Shell(pip3)",
+                "Shell(make)",
+                "Shell(dd)",
+                "Shell(install)",
+                "Shell(touch)",
+                "Shell(mkdir)",
+                "Shell(git:add*)",
+                "Shell(git:commit*)",
+                "Shell(git:push*)",
+                "Shell(git:checkout*)",
+                "Shell(git:reset*)",
+                "Shell(git:switch*)",
+                "Shell(git:merge*)",
+                "Shell(git:rebase*)",
+                "Shell(git:pull*)",
+                "Shell(git:stash*)",
+                "Shell(git:branch*)",
+                "Shell(git:worktree*)",
+                "Shell(git:config*)",
+                "Shell(git:remote*)",
+                "Shell(git:clone*)",
+                "Shell(git:tag*)",
+                "Shell(gh:pr merge*)",
+                "Shell(gh:pr create*)",
+                "Shell(gh:pr close*)",
+                "Shell(gh:pr review*)",
+                "Shell(gh:pr ready*)",
+                "Shell(gh:api*)",
+                "Shell(gh:auth*)",
+                "Shell(gh:workflow*)",
+                "Shell(gh:run*)",
+                "Shell(gh:secret*)",
+                "Shell(gh:repo*)",
+                "Shell(gh:release*)"
+              ]
+            }
+          }
           EOF
           cursor-agent -p --output-format text --model kimi-k3-max --force --trust "$GRADE_PROMPT"
       - name: A D or F grade fails this check (reads the grade comment and label; 0509#5393)
