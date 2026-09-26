@@ -79,8 +79,6 @@ export function createAuth(env: AuthEnv, options?: { captcha?: boolean }) {
       },
     },
     plugins: [
-      // Skipped per request when the caller is pre-cleared (createAuthForRequest).
-      // Default stays on: a caller that did not ask is a caller that gets checked.
       ...(options?.captcha === false
         ? []
         : [
@@ -114,11 +112,6 @@ export function createAuth(env: AuthEnv, options?: { captcha?: boolean }) {
   });
 }
 
-// Per-request entry for the magic-link send. A request carrying a verified
-// Cloudflare Access service-token assertion is already authenticated at the
-// edge — pre-cleared, in #4702's terms — so the Turnstile captcha, which
-// managed mode correctly never resolves for an automated client, is skipped
-// for that request only. Everyone else gets the same auth object as before.
 export async function createAuthForRequest(env: AuthEnv, request: Request) {
   const cleared = await accessPrecleared(request, env);
   return createAuth(env, { captcha: !cleared });

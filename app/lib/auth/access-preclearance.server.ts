@@ -1,20 +1,3 @@
-// Access pre-clearance for the sign-in captcha.
-//
-// 0509.io sits behind a Cloudflare Access application, and Access forwards a
-// signed JWT as `cf-access-jwt-assertion` on every authenticated request. An
-// assertion in the service-token shape — `sub` empty, `common_name` ending
-// `.access` — already proved a fleet credential at the edge, so the Turnstile
-// challenge would only be a second wall that managed mode correctly never
-// resolves for an automated client. This is the "pre-clearance path for the
-// agents' Access service token" that #4702 accepted.
-//
-// The assertion is verified, never trusted: the RS256 signature must validate
-// against the team domain's published JWKS, and iss, aud and exp must match.
-// The header is also settable on a request that never touched Access, so none
-// of this may rely on the header merely being present — a forged, stale or
-// foreign token falls back to the captcha, exactly as a request with no
-// header does.
-
 const ASSERTION_HEADER = "cf-access-jwt-assertion";
 const SERVICE_TOKEN_SUFFIX = ".access";
 const JWKS_TTL_MS = 60 * 60 * 1000;
@@ -36,12 +19,12 @@ interface AccessJwk {
 let cachedJwks: { iss: string; at: number; keys: Map<string, AccessJwk> } | undefined;
 
 async function accessJwks(iss: string, fresh: boolean): Promise<Map<string, AccessJwk>> {
-  if (!fresh && cachedJwks && cachedJwks.iss === iss && Date.now() - cachedJwks.at < JWKS_TTL_MS) {
+  if (!fresh && cachedJwks?.iss === iss && Date.now() - cachedJwks.at < JWKS_TTL_MS) {
     return cachedJwks.keys;
   }
   const response = await fetch(`${iss}/cdn-cgi/access/certs`);
-  if (!response.ok) throw new Error(`Access JWKS at ${iss} answered HTTP ${response.status}`);
-  const body = (await response.json()) as { keys?: AccessJwk[] };
+  if (!response.ok) throw new Error(`Access JWKS at ${iss} answered HTTP ${String(response.status)}`);
+  const body: { keys?: AccessJwk[] } = await response.json();
   const keys = new Map<string, AccessJwk>();
   for (const key of body.keys ?? []) keys.set(key.kid, key);
   cachedJwks = { iss, at: Date.now(), keys };
@@ -90,7 +73,7 @@ async function denialReason(
     return "not-a-service-token";
   }
   let jwk = (await accessJwks(config.iss, false)).get(kid);
-  if (jwk === undefined) jwk = (await accessJwks(config.iss, true)).get(kid);
+  jwk ??= (await accessJwks(config.iss, true)).get(kid);
   if (jwk === undefined) return "unknown-kid";
   const key = await crypto.subtle.importKey(
     "jwk",
@@ -102,15 +85,12 @@ async function denialReason(
   const valid = await crypto.subtle.verify(
     "RSASSA-PKCS1-v1_5",
     key,
-    decodeBase64url(signature) as BufferSource,
+    decodeBase64url(signature),
     new TextEncoder().encode(`${head}.${payload}`),
   );
   return valid ? null : "bad-signature";
 }
 
-// True when the request carries a Cloudflare Access service-token assertion
-// verified against the team's published keys. Any failure denies: the captcha
-// then applies, which is the same posture a request without the header gets.
 export async function accessPrecleared(request: Request, env: AccessPreclearanceEnv): Promise<boolean> {
   const iss = env.ACCESS_TEAM_DOMAIN?.trim();
   const aud = env.ACCESS_AUD?.trim();
@@ -123,7 +103,10 @@ export async function accessPrecleared(request: Request, env: AccessPreclearance
     return false;
   } catch (error) {
     console.error(
-      JSON.stringify({ event: "access.preclearance_denied", reason: `verify-error: ${error instanceof Error ? error.message : String(error)}` }),
+      JSON.stringify({
+        event: "access.preclearance_denied",
+        reason: `verify-error: ${error instanceof Error ? error.message : String(error)}`,
+      }),
     );
     return false;
   }
