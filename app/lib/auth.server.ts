@@ -6,6 +6,7 @@ import { passkey } from "@better-auth/passkey";
 
 import { API_KEY_PREFIX } from "./agent/paths";
 import { ensureWorkspaceForSignIn } from "./workspace.server";
+import { accessPrecleared } from "./auth/access-preclearance.server";
 import { MAGIC_LINK_TTL_SECONDS, magicLinkEmail } from "./auth/magic-link-email";
 import { MAGIC_LINK_PATH } from "./auth/magic-link-path";
 import { signInLinkAllowed } from "./auth/sign-in-limit";
@@ -17,6 +18,8 @@ interface AuthEnv {
   SIGN_IN_EMAIL_LIMIT: RateLimit;
   SIGN_IN_IP_LIMIT: RateLimit;
   TURNSTILE_SECRET_KEY: string;
+  ACCESS_TEAM_DOMAIN?: string;
+  ACCESS_AUD?: string;
   BETTER_AUTH_SECRET?: string;
   BETTER_AUTH_URL?: string;
 }
@@ -40,7 +43,7 @@ export function hasSessionCookie(request: Request) {
   return header.split(";").some((part) => sessionCookieNames.has(part.trim().split("=")[0] ?? ""));
 }
 
-export function createAuth(env: AuthEnv) {
+export function createAuth(env: AuthEnv, options?: { captcha?: boolean }) {
   const origin = env.BETTER_AUTH_URL === undefined ? undefined : new URL(env.BETTER_AUTH_URL).origin;
   return betterAuth({
     database: env.DB,
@@ -76,11 +79,17 @@ export function createAuth(env: AuthEnv) {
       },
     },
     plugins: [
-      captcha({
-        provider: "cloudflare-turnstile",
-        secretKey: env.TURNSTILE_SECRET_KEY,
-        endpoints: [MAGIC_LINK_PATH],
-      }),
+      // Skipped per request when the caller is pre-cleared (createAuthForRequest).
+      // Default stays on: a caller that did not ask is a caller that gets checked.
+      ...(options?.captcha === false
+        ? []
+        : [
+            captcha({
+              provider: "cloudflare-turnstile",
+              secretKey: env.TURNSTILE_SECRET_KEY,
+              endpoints: [MAGIC_LINK_PATH],
+            }),
+          ]),
       magicLink({
         expiresIn: MAGIC_LINK_TTL_SECONDS,
         storeToken: "hashed",
@@ -103,6 +112,16 @@ export function createAuth(env: AuthEnv) {
       }),
     ],
   });
+}
+
+// Per-request entry for the magic-link send. A request carrying a verified
+// Cloudflare Access service-token assertion is already authenticated at the
+// edge — pre-cleared, in #4702's terms — so the Turnstile captcha, which
+// managed mode correctly never resolves for an automated client, is skipped
+// for that request only. Everyone else gets the same auth object as before.
+export async function createAuthForRequest(env: AuthEnv, request: Request) {
+  const cleared = await accessPrecleared(request, env);
+  return createAuth(env, { captcha: !cleared });
 }
 
 export async function signOut(env: AuthEnv, request: Request): Promise<Headers> {
