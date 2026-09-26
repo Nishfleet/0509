@@ -31,7 +31,7 @@ async function accessJwks(iss: string, fresh: boolean): Promise<Map<string, Acce
   return keys;
 }
 
-function decodeBase64url(input: string): Uint8Array {
+function decodeBase64url(input: string): Uint8Array<ArrayBuffer> {
   let base64 = input.replaceAll("-", "+").replaceAll("_", "/");
   while (base64.length % 4 !== 0) base64 += "=";
   const binary = atob(base64);
