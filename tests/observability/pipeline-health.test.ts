@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { blindSources, type SourceTick } from "../../app/lib/observability/pipeline-health";
+import {
+  blindAlertId,
+  blindAlertText,
+  blindSources,
+  type SourceTick,
+} from "../../app/lib/observability/pipeline-health";
 
 const tick = (overrides: Partial<SourceTick> & { itemCount: number }): SourceTick => ({
   sourceId: "src_a",
@@ -100,5 +105,39 @@ describe("blindSources", () => {
     const blind = blindSources(input, new Map());
     expect(blind.map((s) => s.sourceKey)).toEqual(["apple.mentions", "reddit.mentions"]);
     expect(input).toEqual(snapshot);
+  });
+});
+
+describe("blindAlertId", () => {
+  it("is one id per source, workspace and UTC day", () => {
+    expect(blindAlertId("src1", "ws1", new Date("2026-09-25T03:00:00Z"))).toBe(
+      "source-blind-src1-ws1-2026-09-25",
+    );
+    expect(blindAlertId("src1", "ws1", new Date("2026-09-25T23:59:00Z"))).toBe(
+      "source-blind-src1-ws1-2026-09-25",
+    );
+    expect(blindAlertId("src1", "ws1", new Date("2026-09-26T00:00:00Z"))).toBe(
+      "source-blind-src1-ws1-2026-09-26",
+    );
+  });
+});
+
+describe("blindAlertText", () => {
+  const source = {
+    sourceId: "src1",
+    sourceKey: "gdelt.mentions",
+    name: "News mentions",
+  };
+
+  it("says never when the source never captured with items", () => {
+    const text = blindAlertText({ ...source, lastGoodAt: null });
+    expect(text.title).toBe("News mentions captured nothing for two ticks");
+    expect(text.body).toContain("never");
+    expect(text.body).toContain("Nothing was removed from your brief.");
+  });
+
+  it("names the last capture in short UTC when one exists", () => {
+    const text = blindAlertText({ ...source, lastGoodAt: "2026-09-20T12:30:00.000Z" });
+    expect(text.body).toContain("2026-09-20 12:30 UTC");
   });
 });

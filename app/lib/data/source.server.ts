@@ -144,6 +144,15 @@ export async function markSourceBlocked(sourceId: string, status: number): Promi
     .run();
 }
 
+const SELECT_WORKSPACES_WATCHING_SOURCE = `SELECT DISTINCT e.workspace_id AS workspace_id FROM watch w JOIN entity e ON e.id = w.entity_id WHERE w.source_id = ?1 AND w.is_active = 1 ORDER BY e.workspace_id`;
+
+export async function readWorkspacesWatchingSource(sourceId: string): Promise<string[]> {
+  const { results } = await env.DB.prepare(SELECT_WORKSPACES_WATCHING_SOURCE)
+    .bind(sourceId)
+    .all<{ workspace_id: string }>();
+  return results.map((row) => row.workspace_id);
+}
+
 export async function readSourceTicks(): Promise<SourceTick[]> {
   const { results } = await env.DB.prepare(SELECT_SOURCE_TICKS).all<SourceTickRow>();
   return results.map((row) => ({
