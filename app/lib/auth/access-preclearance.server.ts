@@ -1,9 +1,4 @@
 const ASSERTION_HEADER = "cf-access-jwt-assertion";
-// Access issues the same JWT two ways: the cf-access-jwt-assertion header it
-// injects on requests it proxies, and the CF_Authorization cookie it sets for
-// the browser. The cookie matters because React Router submits actions to
-// `<route>.data` endpoints, and .data paths sit outside this app's Access
-// policy — the header never reaches a form action, the cookie always does.
 const ASSERTION_COOKIE = "CF_Authorization";
 const SERVICE_TOKEN_SUFFIX = ".access";
 const JWKS_TTL_MS = 60 * 60 * 1000;
