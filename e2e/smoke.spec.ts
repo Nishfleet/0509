@@ -61,6 +61,37 @@ test("the landing page does not scroll horizontally", async ({ page }) => {
   expect(overflow).toBe(false);
 });
 
+test("the landing headline is the largest paint and uses the brand display face", async ({ page }) => {
+  await page.goto("/");
+  await page.evaluate(() => document.fonts.ready.then(() => undefined));
+
+  const lcpTag = await page.evaluate(
+    () =>
+      new Promise<string>((resolve) => {
+        new PerformanceObserver((list) => {
+          const last = list
+            .getEntries()
+            .filter((entry) => entry instanceof LargestContentfulPaint)
+            .at(-1);
+          resolve(last?.element?.tagName ?? "");
+        }).observe({ type: "largest-contentful-paint", buffered: true });
+      }),
+  );
+  expect(lcpTag).toBe("H1");
+
+  const displayLoaded = await page.evaluate(() =>
+    Array.from(document.fonts).some(
+      (face) => face.family.replaceAll('"', "") === "Bricolage Grotesque" && face.status === "loaded",
+    ),
+  );
+  expect(displayLoaded).toBe(true);
+
+  const headlineFamily = await page
+    .getByRole("heading", { level: 1 })
+    .evaluate((node) => getComputedStyle(node).fontFamily);
+  expect(headlineFamily).toContain("Bricolage Grotesque");
+});
+
 test("/api/health answers ok", async ({ request }) => {
   const response = await request.get("/api/health");
   expect(response.status()).toBe(200);
