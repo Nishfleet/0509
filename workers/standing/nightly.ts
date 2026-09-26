@@ -57,7 +57,7 @@ async function planWorkspace(
 }
 
 export async function runNightlyStanding(env: Env, now: Date): Promise<NightlyResult> {
-  const [health] = await Promise.allSettled([runPipelineHealth()]);
+  const [health] = await Promise.allSettled([runPipelineHealth(now)]);
   console.log(
     JSON.stringify({
       event: "pipeline.health",
