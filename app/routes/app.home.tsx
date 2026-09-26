@@ -5,8 +5,7 @@ import { useEffect } from "react";
 import { Link, redirect, useFetcher, useRevalidator } from "react-router";
 
 import { FreshnessLine } from "../components/freshness-line";
-import { HomeStanding } from "../components/home-standing";
-import { PAGE } from "../components/page-heading";
+import { HomePageFrame, HomeStanding } from "../components/home-standing";
 import { ShareButton } from "../components/share-button";
 import { readWorkspaceMentionSources } from "../lib/data/source.server";
 import { readSelfSiteFill } from "../lib/data/entity.server";
@@ -91,12 +90,34 @@ export default function Page({ loaderData }: Route.ComponentProps) {
     };
   }, [revalidator, standingKind]);
   return (
-    <main className={PAGE}>
+    <HomePageFrame
+      eyebrow={loaderData.view.eyebrow}
+      footer={
+        <>
+          <p className="font-mono text-eyebrow text-ink-soft">{loaderData.view.footer}</p>
+          <p className="mt-3">
+            <Link className="underline decoration-1 underline-offset-4" to="/app/brief">
+              Read this week's brief
+            </Link>
+          </p>
+          {loaderData.timings.length > 0 ? (
+            <ul aria-label="Onboarding timings" className="mt-3">
+              {loaderData.timings.map((line) => (
+                <li key={line} className="font-mono text-eyebrow text-ink-soft">
+                  {line}
+                </li>
+              ))}
+            </ul>
+          ) : null}
+        </>
+      }
+    >
       <HomeStanding
         view={loaderData.view}
         howRanked={loaderData.howRanked}
         openId={loaderData.open}
         evidence={loaderData.evidence}
+        showEyebrow={false}
         onSwitch={(entityId, checked) =>
           void fetcher.submit(
             { intent: checked ? "on" : "off", entityId },
@@ -109,23 +130,6 @@ export default function Page({ loaderData }: Route.ComponentProps) {
       ) : null}
       <FreshnessLine entries={loaderData.freshness} />
       {loaderData.view.standing.kind === "ranked" ? <ShareButton /> : null}
-      <footer className="border-line mt-14 border-t pt-7">
-        <p className="font-mono text-eyebrow text-ink-soft">{loaderData.view.footer}</p>
-        <p className="mt-3">
-          <Link className="underline decoration-1 underline-offset-4" to="/app/brief">
-            Read this week's brief
-          </Link>
-        </p>
-        {loaderData.timings.length > 0 ? (
-          <ul aria-label="Onboarding timings" className="mt-3">
-            {loaderData.timings.map((line) => (
-              <li key={line} className="font-mono text-eyebrow text-ink-soft">
-                {line}
-              </li>
-            ))}
-          </ul>
-        ) : null}
-      </footer>
-    </main>
+    </HomePageFrame>
   );
 }
