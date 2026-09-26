@@ -340,6 +340,7 @@ jobs:
       contents: read
       pull-requests: write
       issues: write
+      actions: write
       id-token: write
     env:
       GRADE_PROMPT: |
@@ -485,6 +486,22 @@ jobs:
             && ! grep -qE '^(Opus|Kimi) grade: *[DF]' "$RUNNER_TEMP/grade" \
             && gh pr view "${{ github.event.pull_request.number }}" --repo "${{ github.repository }}" --json labels --jq '.labels[].name' > "$RUNNER_TEMP/labels" \
             && ! grep -qx blocked-by-judge "$RUNNER_TEMP/labels"
+      # The grader's own relabel uses GITHUB_TOKEN, which fires no workflow, so
+      # rework waited hours for the dispatch sweep (fleet-ops#8787). Below A+
+      # the claim issue is requeued and dispatched by number here, so the worker
+      # continues this PR from the grade within minutes (worker.md 2b). No grade
+      # (grader outage) requeues nothing; agent.yml's run cap bounds the loop.
+      - name: Below A+ goes back to the queue
+        if: failure() && github.event_name == 'pull_request' && startsWith(github.head_ref, 'claim/issue-')
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REF: ${{ github.head_ref }}
+        run: |
+          head -n1 "$RUNNER_TEMP/grade" | grep -qE '^(Opus|Kimi) grade: ' || exit 0
+          head -n1 "$RUNNER_TEMP/grade" | grep -qxE '(Opus|Kimi) grade: A\+' && exit 0
+          n=${REF#claim/issue-}
+          gh issue edit "$n" -R "$GITHUB_REPOSITORY" --add-label agent-ready --remove-label agent-in-progress
+          gh workflow run agent-dispatch.yml -R "$GITHUB_REPOSITORY" -f issue="$n"
       - name: merge_group reports the check so the queue can merge (the grade was enforced on the pull request)
         if: github.event_name == 'merge_group'
         run: "true"
