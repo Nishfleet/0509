@@ -1,4 +1,5 @@
 const ASSERTION_HEADER = "cf-access-jwt-assertion";
+const ASSERTION_COOKIE = "CF_Authorization";
 const SERVICE_TOKEN_SUFFIX = ".access";
 const JWKS_TTL_MS = 60 * 60 * 1000;
 
@@ -91,10 +92,19 @@ async function denialReason(
   return valid ? null : "bad-signature";
 }
 
+function assertionFromCookie(header: string | null): string | null {
+  if (!header) return null;
+  for (const part of header.split(";")) {
+    const [name, ...rest] = part.trim().split("=");
+    if (name === ASSERTION_COOKIE) return rest.join("=") || null;
+  }
+  return null;
+}
+
 export async function accessPrecleared(request: Request, env: AccessPreclearanceEnv): Promise<boolean> {
   const iss = env.ACCESS_TEAM_DOMAIN?.trim();
   const aud = env.ACCESS_AUD?.trim();
-  const assertion = request.headers.get(ASSERTION_HEADER);
+  const assertion = request.headers.get(ASSERTION_HEADER) ?? assertionFromCookie(request.headers.get("cookie"));
   if (!iss || !aud || !assertion) return false;
   try {
     const reason = await denialReason(assertion, { iss, aud });
