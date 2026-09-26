@@ -1,7 +1,12 @@
 import { env, introspectWorkflowInstance } from "cloudflare:test";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { checkSitePage, planSiteSweep, publishSiteChange } from "../../../app/lib/site/sweep.server";
+import {
+  checkSitePage,
+  planSiteSweep,
+  publishSiteChange,
+  uncoveredItems,
+} from "../../../app/lib/site/sweep.server";
 
 const readHolder = { html: "" };
 const calls: string[] = [];
@@ -50,34 +55,39 @@ const signals = async () => {
   return rows.results;
 };
 
+const seedSweep = async () => {
+  await env.DB.exec("DELETE FROM signal");
+  await env.DB.exec("DELETE FROM snapshot");
+  await env.DB.exec("DELETE FROM watch");
+  await env.DB.exec("DELETE FROM page");
+  await env.DB.exec("DELETE FROM entity");
+  await env.DB.exec("DELETE FROM workspace");
+  await env.DB.exec('DELETE FROM "user"');
+
+  await env.DB.prepare(
+    `INSERT INTO "user" (id, name, email, emailVerified, createdAt, updatedAt)
+     VALUES (?, 'Owner', 'site-sweep@0509.io', 1, ?, ?)`,
+  )
+    .bind(USER, NOW, NOW)
+    .run();
+  await env.DB.prepare(
+    `INSERT INTO workspace (id, name, owner_user_id, timezone, brief_weekday, brief_hour, created_at)
+     VALUES (?, 'Sweep', ?, 'UTC', 1, 8, ?)`,
+  )
+    .bind(WS, USER, NOW)
+    .run();
+  await seedEntity("ent-self", "self", "mybrand.com", "on");
+  await seedEntity("ent-rival", "competitor", "rival.com", "on");
+  await seedEntity("ent-paused", "competitor", "paused.com", "off");
+  await seedEntity("ent-handle", "competitor", "somecreator", "on");
+};
+
 describe("nightly site sweep", () => {
   beforeEach(async () => {
-    await env.DB.exec("DELETE FROM signal");
-    await env.DB.exec("DELETE FROM snapshot");
-    await env.DB.exec("DELETE FROM watch");
-    await env.DB.exec("DELETE FROM page");
-    await env.DB.exec("DELETE FROM entity");
-    await env.DB.exec("DELETE FROM workspace");
-    await env.DB.exec('DELETE FROM "user"');
+    await seedSweep();
     const listed = await env.SNAPSHOTS.list({ prefix: "snapshot/site/" });
     await Promise.all(listed.objects.map((object) => env.SNAPSHOTS.delete(object.key)));
 
-    await env.DB.prepare(
-      `INSERT INTO "user" (id, name, email, emailVerified, createdAt, updatedAt)
-       VALUES (?, 'Owner', 'site-sweep@0509.io', 1, ?, ?)`,
-    )
-      .bind(USER, NOW, NOW)
-      .run();
-    await env.DB.prepare(
-      `INSERT INTO workspace (id, name, owner_user_id, timezone, brief_weekday, brief_hour, created_at)
-       VALUES (?, 'Sweep', ?, 'UTC', 1, 8, ?)`,
-    )
-      .bind(WS, USER, NOW)
-      .run();
-    await seedEntity("ent-self", "self", "mybrand.com", "on");
-    await seedEntity("ent-rival", "competitor", "rival.com", "on");
-    await seedEntity("ent-paused", "competitor", "paused.com", "off");
-    await seedEntity("ent-handle", "competitor", "somecreator", "on");
     readHolder.html = BEFORE_HTML;
     calls.length = 0;
     vi.stubGlobal("fetch", (input: RequestInfo | URL, init?: RequestInit) => {
@@ -220,5 +230,53 @@ describe("nightly site sweep", () => {
 
     expect(calls.filter((call) => call === "POST https://hc-ping.example/site-sweep")).toHaveLength(1);
     expect(await introspector.getOutput()).toMatchObject({ pages: 2 });
+  });
+});
+
+const insertSiteSnapshot = (watchId: string, pageId: string, fetchedAt: string) =>
+  env.DB.prepare(
+    `INSERT INTO snapshot (id, watch_id, page_id, fetched_at, payload_r2_key, payload_hash)
+     VALUES (?, ?, ?, ?, ?, ?)`,
+  )
+    .bind(crypto.randomUUID(), watchId, pageId, fetchedAt, `snapshot/site/${watchId}/body.txt`, crypto.randomUUID())
+    .run();
+
+const rivalTarget = async () => {
+  const targets = await planSiteSweep(NOW);
+  const rival = targets.find((target) => target.entityId === "ent-rival");
+  if (rival === undefined) throw new Error("expected the rival's homepage target");
+  return { targets, rival };
+};
+
+describe("uncoveredItems", () => {
+  const oneMinuteAgo = () => new Date(Date.now() - 60_000).toISOString();
+
+  beforeEach(seedSweep);
+
+  it("returns every planned item when the tick wrote no snapshot rows", async () => {
+    const { targets } = await rivalTarget();
+    expect(targets).toHaveLength(2);
+    expect(await uncoveredItems(targets, oneMinuteAgo())).toHaveLength(2);
+  });
+
+  it("drops the competitor home watch once this tick's snapshot row exists", async () => {
+    const { targets, rival } = await rivalTarget();
+    await insertSiteSnapshot(rival.watchId, rival.pageId, new Date().toISOString());
+    const missing = await uncoveredItems(targets, oneMinuteAgo());
+    expect(missing).toHaveLength(1);
+    expect(missing.some((target) => target.watchId === rival.watchId)).toBe(false);
+  });
+
+  it("keeps a page whose only snapshot row predates the tick", async () => {
+    const { targets, rival } = await rivalTarget();
+    const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
+    await insertSiteSnapshot(rival.watchId, rival.pageId, twoHoursAgo);
+    const missing = await uncoveredItems(targets, oneMinuteAgo());
+    expect(missing).toHaveLength(2);
+    expect(missing.some((target) => target.watchId === rival.watchId)).toBe(true);
+  });
+
+  it("returns an empty list for an empty plan without touching D1", async () => {
+    expect(await uncoveredItems([], oneMinuteAgo())).toEqual([]);
   });
 });
