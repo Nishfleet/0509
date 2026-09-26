@@ -1,4 +1,4 @@
-import type { ReactElement } from "react";
+import type { ReactElement, ReactNode } from "react";
 import { Form } from "react-router";
 
 import { BrandChipRow } from "./brand-chip";
@@ -6,6 +6,7 @@ import { EmptyState, fewerThanTwoOnBrands } from "./empty-state";
 import { FirstFilePanel } from "./first-file-panel";
 import { FourWeekLine } from "./four-week-line";
 import { HowRankedSheet } from "./how-ranked-sheet";
+import { PAGE } from "./page-heading";
 import { RankedRow } from "./ranked-row";
 import { ReadThisFirst } from "./read-this-first";
 import { RowSheet } from "./row-sheet";
@@ -17,22 +18,44 @@ const EYEBROW = "font-mono text-eyebrow text-ink-soft uppercase";
 const GREETING = "font-display text-display-2 mt-2 font-extrabold uppercase";
 const MARKER = "bg-green text-on-green px-[0.14em] [box-decoration-break:clone]";
 
+export function HomePageFrame({
+  eyebrow,
+  children,
+  footer,
+}: {
+  eyebrow: string;
+  children: ReactNode;
+  footer: ReactNode;
+}): ReactElement {
+  return (
+    <div className={PAGE}>
+      <header>
+        <p className={EYEBROW}>{eyebrow}</p>
+      </header>
+      <main>{children}</main>
+      <footer className="border-line mt-14 border-t pt-7">{footer}</footer>
+    </div>
+  );
+}
+
 export function HomeStanding({
   view,
   howRanked,
   onSwitch,
   openId = null,
   evidence = null,
+  showEyebrow = true,
 }: {
   view: HomeView;
   howRanked?: HowRanked | null;
   onSwitch?: (entityId: string, checked: boolean) => void;
   openId?: string | null;
   evidence?: readonly WeekEvidence[] | null;
+  showEyebrow?: boolean;
 }): ReactElement {
   return (
     <section data-home="standing" className="min-w-0 break-words">
-      <p className={EYEBROW}>{view.eyebrow}</p>
+      {showEyebrow ? <p className={EYEBROW}>{view.eyebrow}</p> : null}
       {greeting(view)}
       <div className="mt-4">{chips(view)}</div>
       {body(view, howRanked, onSwitch, openId, evidence)}
@@ -90,7 +113,7 @@ function body(
           <HowRankedSheet howRanked={howRanked} />
         </div>
       ) : null}
-      <ReadThisFirst marks={standing.readThisFirst} />
+      <ReadThisFirst marks={standing.readThisFirst} headingLevel={2} />
       <h2 className={cn(EYEBROW, "border-line mt-8 border-t pt-4")}>Four weeks</h2>
       <div className="mt-2">
         <FourWeekLine chart={standing.chart} />

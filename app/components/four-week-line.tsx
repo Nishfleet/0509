@@ -37,33 +37,54 @@ export function FourWeekLine({ chart }: { chart: FourWeekChart }): ReactElement 
   const [frame, setFrame] = useState<HTMLDivElement | null>(null);
   const width = useWidth(frame);
 
+  const caption = chart.weeks.length === 1 ? "Four-week ranks, first week" : "Four-week ranks";
   return (
     <>
-      <figure data-chart="four-week" className="relative h-[180px]">
-        <div ref={setFrame} className="absolute inset-0">
-          {mounted && width > 0 ? (
-            <Suspense fallback={null}>
-              <FourWeekPlot chart={chart} width={width} />
-            </Suspense>
-          ) : null}
+      <figure data-chart="four-week">
+        <div className="relative h-[180px]" aria-hidden="true">
+          <div ref={setFrame} className="absolute inset-0">
+            {mounted && width > 0 ? (
+              <Suspense fallback={null}>
+                <FourWeekPlot chart={chart} width={width} />
+              </Suspense>
+            ) : null}
+          </div>
         </div>
+        <table className="sr-only">
+          <caption>{caption}</caption>
+          <thead>
+            <tr>
+              <th scope="col">Brand</th>
+              {chart.weeks.map((week, index) => (
+                <th key={`${week}-${String(index)}`} scope="col">
+                  {week}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {chart.lines.map((line) => (
+              <tr key={line.entityId}>
+                <th scope="row">
+                  {line.label}
+                  {line.paused ? " paused" : ""}
+                </th>
+                {line.ranks.map((rank, index) => (
+                  <td key={`${line.entityId}-${String(index)}`}>{rank === null ? "none" : String(rank)}</td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </figure>
-      <ol className="flex justify-between font-mono text-eyebrow text-ink-soft uppercase">
-        {chart.weeks.map((week) => (
-          <li key={week}>{week}</li>
+      <ol aria-hidden="true" className="flex justify-between font-mono text-eyebrow text-ink-soft uppercase">
+        {chart.weeks.map((week, index) => (
+          <li key={`${week}-${String(index)}`}>{week}</li>
         ))}
       </ol>
       {chart.weeks.length === 1 ? (
         <p className="font-mono text-eyebrow text-ink-soft uppercase">first week</p>
       ) : null}
-      <ul className="sr-only">
-        {chart.lines.map((line) => (
-          <li key={line.entityId}>
-            {line.label}
-            {line.paused ? " paused" : ""}
-          </li>
-        ))}
-      </ul>
     </>
   );
 }
