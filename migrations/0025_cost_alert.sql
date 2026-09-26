@@ -1,0 +1,1 @@
+CREATE TABLE cost_alert (id TEXT PRIMARY KEY NOT NULL, day TEXT NOT NULL, line TEXT NOT NULL, measured_per_brand REAL NOT NULL, expected_per_brand REAL NOT NULL, on_brands INTEGER NOT NULL, created_at TEXT NOT NULL, UNIQUE (day, line));
