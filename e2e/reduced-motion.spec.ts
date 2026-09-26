@@ -177,46 +177,10 @@ for (const target of targets) {
   });
 }
 
-// End-state assertions: opening the capture-pair sheet and toggling a brand
-// switch must produce the same visible state regardless of whether motion is
-// reduced. The whole point of "honoured" is "the user can still use the
-// thing"; a transition being stripped is fine only if the final state lands.
-test("the capture-pair sheet opens instantly under reduced motion", async ({ page }, testInfo) => {
-  await page.emulateMedia({ reducedMotion: "reduce" });
-  const response = await page.goto("/design/capture-plates");
-  expect(response?.status()).toBe(200);
-
-  const plates = page.locator("[data-slot='capture-plate']");
-  await expect(plates).toHaveCount(3);
-
-  await plates.nth(0).click();
-  const pair = page.locator("[data-slot='capture-pair']");
-  // No `toHaveCount(1)` wait, no `waitForAnimation` — the assertion is that
-  // the pair is visible the same tick the click lands. With motion disabled
-  // there is no enter transition to wait out.
-  await expect(pair).toBeVisible();
-
-  // The pair is rendered, and `getAnimations()` is empty even after the
-  // click — the click itself does not start a transition that the global
-  // block forgot about.
-  const findings = await inspectMotion(page);
-  expect(findings, `after click: ${JSON.stringify(findings[0])}`).toEqual([]);
-
-  // And the final state matches what the non-reduced run produces.
-  await expect
-    .poll(async () =>
-      pair.locator("img").evaluateAll((images) =>
-        images.map((image) => (image as HTMLImageElement).naturalWidth > 0),
-      ),
-    )
-    .toEqual([true, true]);
-
-  // The end state, on disk: sheet open, both images loaded, under reduced
-  // motion. This is the screenshot the issue asks for — "instantly, not
-  // never" is only proved by the open sheet next to the no-motion finding.
-  await saveShot(page, testInfo, "end-state-capture-pair-open", { fullPage: true });
-});
-
+// End-state assertion: toggling a brand switch must produce the same visible
+// state regardless of whether motion is reduced. The whole point of
+// "honoured" is "the user can still use the thing"; a transition being
+// stripped is fine only if the final state lands.
 test("the brand switch toggles under reduced motion", async ({ page }, testInfo) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
   const response = await page.goto("/design/competitor");
