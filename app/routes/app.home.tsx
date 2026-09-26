@@ -10,6 +10,7 @@ import { PAGE } from "../components/page-heading";
 import { ShareButton } from "../components/share-button";
 import { readWorkspaceMentionSources } from "../lib/data/source.server";
 import { readSelfSiteFill } from "../lib/data/entity.server";
+import { readWeekEvidence } from "../lib/data/signal.server";
 import { readWorkspaceIdForOwner } from "../lib/data/workspace.server";
 import { homeView } from "../lib/home-standing";
 import { readHomeStandingInputs } from "../lib/home-standing.server";
@@ -40,8 +41,20 @@ export async function loader({ request }: Route.LoaderArgs) {
       ? []
       : await readBiggestSiteChanges(workspaceId, inputs.payload.period_start);
   const times = workspaceId === null ? null : await readOnboardingTimes(workspaceId);
+  const open = new URL(request.url).searchParams.get("open");
+  const payload = inputs.payload;
+  const openId =
+    open !== null && payload !== null && inputs.entities.some((entity) => entity.id === open)
+      ? open
+      : null;
+  const evidence =
+    openId !== null && payload !== null && workspaceId !== null
+      ? await readWeekEvidence({ workspaceId, entityId: openId, since: payload.period_start })
+      : null;
   return {
     view: homeView({ ...inputs, moves, now: new Date() }),
+    open: openId,
+    evidence,
     howRanked,
     freshness: freshnessEntries(sources, Date.now()),
     siteFill,
@@ -82,6 +95,8 @@ export default function Page({ loaderData }: Route.ComponentProps) {
       <HomeStanding
         view={loaderData.view}
         howRanked={loaderData.howRanked}
+        openId={loaderData.open}
+        evidence={loaderData.evidence}
         onSwitch={(entityId, checked) =>
           void fetcher.submit(
             { intent: checked ? "on" : "off", entityId },
