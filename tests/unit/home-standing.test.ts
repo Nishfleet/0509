@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { createMemoryRouter, RouterProvider } from "react-router";
 import { describe, expect, it } from "vitest";
 
-import { HomeStanding } from "../../app/components/home-standing";
+import { HomePageFrame, HomeStanding } from "../../app/components/home-standing";
 import type { BriefPayload } from "../../app/lib/brief-payload";
 import type { BriefSchedule } from "../../app/lib/brief-schedule";
 import type { HowRanked } from "../../app/lib/how-ranked";
@@ -141,6 +141,27 @@ function render(input: {
   ]);
   return renderToStaticMarkup(createElement(RouterProvider, { router }));
 }
+
+describe("Home page frame", () => {
+  it("puts the date in the banner, the standing in main, and the footer in contentinfo", () => {
+    const html = renderToStaticMarkup(
+      createElement(
+        HomePageFrame,
+        { eyebrow: "Thursday 24 September", footer: "Checked today" },
+        createElement("h1", null, "Good morning"),
+      ),
+    );
+    const header = html.indexOf("<header");
+    const main = html.indexOf("<main>");
+    const footer = html.indexOf("<footer");
+    expect(header).toBeGreaterThan(-1);
+    expect(main).toBeGreaterThan(header);
+    expect(footer).toBeGreaterThan(main);
+    expect(html).toContain("Thursday 24 September");
+    expect(html).toContain("Good morning");
+    expect(html).toContain("Checked today");
+  });
+});
 
 describe("Home standing", () => {
   it("greets with the rank on the marker and the why-line under it", () => {

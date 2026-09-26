@@ -51,7 +51,7 @@ export function RankedRow({
           type="button"
           data-slot="row-toggle"
           aria-expanded={isOpen}
-          aria-controls={`evidence-${row.entityId}`}
+          aria-controls={isOpen ? `evidence-${row.entityId}` : undefined}
           onClick={() => {
             setSearchParams(
               (prev) => {
@@ -63,13 +63,16 @@ export function RankedRow({
               { replace: true, preventScrollReset: true },
             );
           }}
-          className="block w-full min-w-0 text-left"
+          className="block min-h-11 w-full min-w-0 text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-solid focus-visible:outline-ink"
         >
           <span className="font-display text-row-name block truncate font-bold">{row.name}</span>
           {row.domain === null ? null : (
             <span className="text-ink-soft block truncate text-[0.88rem]">{row.domain}</span>
           )}
         </button>
+        <span className="sr-only" role="status">
+          {row.name} {isOpen ? "expanded" : "collapsed"}
+        </span>
       </span>
       <span className="text-ink-soft text-right font-mono text-eyebrow uppercase">{row.movement}</span>
       <BrandSwitch
@@ -88,7 +91,7 @@ export function RankedRow({
           <li
             key={pill.key}
             data-state={pill.state}
-            className={cn(PILL, pill.state === "live" ? "text-ink-soft" : "text-ink-faint")}
+            className={cn(PILL, "text-ink-soft", pill.state === "live" ? "border-solid" : "border-dashed")}
           >
             {pillText(pill)}
           </li>

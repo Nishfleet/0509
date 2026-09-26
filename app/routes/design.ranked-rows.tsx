@@ -1,12 +1,11 @@
 import type { Route } from "./+types/design.ranked-rows";
 import { useSearchParams } from "react-router";
 
-import { HomeStanding } from "../components/home-standing";
-import { PAGE } from "../components/page-heading";
+import { HomePageFrame, HomeStanding } from "../components/home-standing";
 import type { HomeRow, HomeView, WeekEvidence } from "../lib/home-standing";
 
 export function meta(_: Route.MetaArgs) {
-  return [{ name: "robots", content: "noindex" }];
+  return [{ title: "Home · Five to Nine" }, { name: "robots", content: "noindex" }];
 }
 
 const ROWS: readonly HomeRow[] = [
@@ -114,8 +113,16 @@ export default function Page() {
   const [searchParams] = useSearchParams();
   const open = searchParams.get("open");
   return (
-    <main className={PAGE}>
-      <HomeStanding view={VIEW} openId={open} evidence={open === null ? null : EVIDENCE} />
-    </main>
+    <HomePageFrame
+      eyebrow={VIEW.eyebrow}
+      footer={<p className="font-mono text-eyebrow text-ink-soft">{VIEW.footer}</p>}
+    >
+      <HomeStanding
+        view={VIEW}
+        showEyebrow={false}
+        openId={open}
+        evidence={open === null ? null : EVIDENCE}
+      />
+    </HomePageFrame>
   );
 }

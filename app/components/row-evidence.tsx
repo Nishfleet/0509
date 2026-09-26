@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useId, useState } from "react";
 import type { ReactElement } from "react";
 
 import type { WeekEvidence } from "../lib/home-standing";
@@ -20,6 +20,7 @@ export function RowEvidence({ evidence }: { evidence: readonly WeekEvidence[] })
     () => TABS.find((tab) => (counts.get(tab.kind) ?? 0) > 0)?.kind ?? "site",
   );
   const rows = evidence.filter((item) => item.sourceKind === selected);
+  const panelId = useId();
   return (
     <div className="pt-2">
       <div role="tablist" aria-label="This week's evidence" className="flex flex-wrap gap-2">
@@ -31,12 +32,14 @@ export function RowEvidence({ evidence }: { evidence: readonly WeekEvidence[] })
               key={tab.kind}
               type="button"
               role="tab"
+              id={`${panelId}-${tab.kind}`}
+              aria-controls={panelId}
               aria-selected={active}
               onClick={() => {
                 setSelected(tab.kind);
               }}
               className={cn(
-                "border-line border px-2 py-1 font-mono text-eyebrow uppercase",
+                "border-line min-h-11 border px-2 py-1 font-mono text-eyebrow uppercase focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-solid focus-visible:outline-ink",
                 active ? "bg-green-wash text-ink" : "text-ink-soft",
               )}
             >
@@ -45,7 +48,7 @@ export function RowEvidence({ evidence }: { evidence: readonly WeekEvidence[] })
           );
         })}
       </div>
-      <div role="tabpanel" className="pt-2">
+      <div role="tabpanel" id={panelId} aria-labelledby={`${panelId}-${selected}`} className="pt-2">
         {rows.length === 0 ? (
           <p className="text-ink-soft text-[0.88rem]">Nothing this week.</p>
         ) : (
