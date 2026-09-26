@@ -30,6 +30,52 @@ test("the landing renders its sections in order under one headline", async ({ pa
   expect(order).toEqual(["hero", "mark", "how-it-works", "what-we-watch", "agents", "price", "faq"]);
 });
 
+test("how it works reads as three ruled steps in order, wide and narrow", async ({ page }, testInfo) => {
+  const consoleErrors: string[] = [];
+  page.on("console", (message) => {
+    if (message.type() === "error") consoleErrors.push(message.text());
+  });
+  page.on("pageerror", (error) => consoleErrors.push(error.message));
+
+  await page.goto(PATH);
+  await page.waitForLoadState("networkidle");
+
+  const section = page.locator("#how-it-works");
+  const steps = section.locator("ol > li");
+  await expect(steps).toHaveCount(3);
+  const titles = ["Paste your site or handle", "Meet who you’re up against", "Read one email on Monday"];
+  for (const [index, title] of titles.entries()) {
+    await expect(steps.nth(index).getByRole("heading", { level: 3, name: title })).toBeVisible();
+  }
+  expect(consoleErrors).toEqual([]);
+
+  if (testInfo.project.name === "desktop-1440") {
+    const rows = await steps.evaluateAll((items) =>
+      items.map((item) => {
+        const rect = item.getBoundingClientRect();
+        return { top: rect.top, bottom: rect.bottom };
+      }),
+    );
+    for (const [index, row] of rows.entries()) {
+      if (index === 0) continue;
+      const previous = rows.at(index - 1);
+      if (previous === undefined) throw new Error(`step ${index + 1} has no previous step`);
+      expect(row.top).toBeGreaterThanOrEqual(previous.bottom - 1);
+    }
+  }
+  if (testInfo.project.name === "phone-390") {
+    const overflow = await page.evaluate(
+      () => document.documentElement.scrollWidth > document.documentElement.clientWidth,
+    );
+    expect(overflow).toBe(false);
+  }
+
+  await testInfo.attach(`how-it-works-${testInfo.project.name}`, {
+    body: await section.screenshot(),
+    contentType: "image/png",
+  });
+});
+
 test("the agents section hands a visitor's agent the MCP address and the API docs", async ({ page }, testInfo) => {
   const consoleErrors: string[] = [];
   page.on("console", (message) => {
