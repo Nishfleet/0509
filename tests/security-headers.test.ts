@@ -5,7 +5,8 @@ import { contentSecurityPolicy, withDocumentSecurityHeaders } from "../app/lib/s
 describe("document security headers", () => {
   it("allows scripts only by this response's nonce", () => {
     const policy = contentSecurityPolicy("abc");
-    expect(policy).toContain("script-src 'self' 'nonce-abc' 'strict-dynamic'");
+    expect(policy).toContain("script-src 'self' 'nonce-abc' 'strict-dynamic' https://challenges.cloudflare.com");
+    expect(policy).toContain("frame-src https://challenges.cloudflare.com");
     expect(policy).not.toContain("'unsafe-eval'");
     expect(policy).toContain("object-src 'none'");
     expect(policy).toContain("base-uri 'none'");

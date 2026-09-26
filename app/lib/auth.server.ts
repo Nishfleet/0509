@@ -1,12 +1,13 @@
 import { betterAuth } from "better-auth";
 import { APIError, createAuthMiddleware } from "better-auth/api";
-import { magicLink } from "better-auth/plugins";
+import { captcha, magicLink } from "better-auth/plugins";
 import { apiKey } from "@better-auth/api-key";
 import { passkey } from "@better-auth/passkey";
 
 import { API_KEY_PREFIX } from "./agent/paths";
 import { ensureWorkspaceForSignIn } from "./workspace.server";
 import { MAGIC_LINK_TTL_SECONDS, magicLinkEmail } from "./auth/magic-link-email";
+import { MAGIC_LINK_PATH } from "./auth/magic-link-path";
 import { signInLinkAllowed } from "./auth/sign-in-limit";
 import { sendOrThrow } from "../../workers/delivery/send";
 
@@ -15,11 +16,11 @@ interface AuthEnv {
   EMAIL: SendEmail;
   SIGN_IN_EMAIL_LIMIT: RateLimit;
   SIGN_IN_IP_LIMIT: RateLimit;
+  TURNSTILE_SECRET_KEY: string;
   BETTER_AUTH_SECRET?: string;
   BETTER_AUTH_URL?: string;
 }
 
-const MAGIC_LINK_PATH = "/sign-in/magic-link";
 const CLIENT_IP_HEADER = "cf-connecting-ip";
 
 function emailOf(body: unknown): string {
@@ -75,6 +76,11 @@ export function createAuth(env: AuthEnv) {
       },
     },
     plugins: [
+      captcha({
+        provider: "cloudflare-turnstile",
+        secretKey: env.TURNSTILE_SECRET_KEY,
+        endpoints: [MAGIC_LINK_PATH],
+      }),
       magicLink({
         expiresIn: MAGIC_LINK_TTL_SECONDS,
         storeToken: "hashed",

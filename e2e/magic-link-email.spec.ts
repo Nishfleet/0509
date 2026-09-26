@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-import { decodedBodies, readRawMessage, requireInboxToken, waitForMagicLink } from "./inbox";
+import { decodedBodies, readRawMessage, requireInboxToken, settleSignInWidget, waitForMagicLink } from "./inbox";
 
 // Production only, for the same reason as J1: the preview Worker's wrangler dev
 // has no EMAIL binding, so no sign-in email is ever sent, and no inbox to read
@@ -38,6 +38,7 @@ test(
 
     await page.goto("/login");
     await page.locator('input[name="email"]').fill(email);
+    await settleSignInWidget(page);
     await page.locator('button[type="submit"]').click();
     // The send replaces the form; asserting the field is gone asserts the swap
     // without pinning the "Check your email" copy (smoke.spec.ts's
