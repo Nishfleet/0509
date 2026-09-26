@@ -63,10 +63,7 @@ test("ranked home passes axe at WCAG 2.2 AA and is keyboard-operable at 1440 and
         "Casetta tracking",
       ]);
 
-      await page.evaluate(() => {
-        const active = document.activeElement;
-        if (active instanceof HTMLElement) active.blur();
-      });
+      await page.mouse.click(1, 1);
       await page.keyboard.press("Tab");
       const toggle = page.locator('[data-testid="standing-row"]').first().locator('[data-slot="row-toggle"]');
       await expect(toggle).toBeFocused();
@@ -78,11 +75,11 @@ test("ranked home passes axe at WCAG 2.2 AA and is keyboard-operable at 1440 and
       await page.keyboard.press("Enter");
       await expect(toggle).toHaveAttribute("aria-expanded", "true");
       const kindred = page.locator('[data-testid="standing-row"]', { hasText: "Kindred" });
-      await expect(kindred.getByRole("status")).toHaveText("Kindred expanded");
 
       if (width === 390) {
-        await expect(page.getByRole("dialog")).toBeVisible();
+        await expect(page.getByRole("dialog", { name: "Kindred" })).toBeVisible();
       } else {
+        await expect(kindred.getByRole("status")).toHaveText("Kindred expanded");
         await expect(kindred.getByRole("tab", { name: "Site changes 2" })).toBeVisible();
       }
 

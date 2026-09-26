@@ -5,7 +5,7 @@ import { HomePageFrame, HomeStanding } from "../components/home-standing";
 import type { HomeRow, HomeView, WeekEvidence } from "../lib/home-standing";
 
 export function meta(_: Route.MetaArgs) {
-  return [{ name: "robots", content: "noindex" }];
+  return [{ title: "Home · Five to Nine" }, { name: "robots", content: "noindex" }];
 }
 
 const ROWS: readonly HomeRow[] = [
