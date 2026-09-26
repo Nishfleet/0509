@@ -71,7 +71,13 @@ describe("static home LCP critical path", () => {
     expect(html).toContain("Quietly, we");
     expect(html).not.toContain("@font-face");
     expect(html).not.toContain("/fonts/");
-    expect(html.indexOf('href="/home-faces.css"')).toBeGreaterThan(html.lastIndexOf("</main>"));
+    expect(html).not.toContain("<link");
+    expect(html).not.toContain("<script src");
+    const scriptAt = html.indexOf("<script>");
+    expect(scriptAt).toBeGreaterThan(html.lastIndexOf("</main>"));
+    const script = html.slice(scriptAt, html.indexOf("</script>", scriptAt));
+    expect(script).toContain('addEventListener("load"');
+    expect(script).toContain('faces.href = "/home-faces.css"');
     expect(faces).toContain("/fonts/bricolage-hero.woff2");
     expect(faces).toContain("/fonts/instrument-sans-latin.woff2");
     expect(faces).toContain("/fonts/ibm-plex-mono-latin-400.woff2");

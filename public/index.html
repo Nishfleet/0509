@@ -176,6 +176,13 @@ a {
         </a>
       </footer>
     </main>
-    <link rel="stylesheet" href="/home-faces.css" />
+    <script>
+      addEventListener("load", () => {
+        const faces = document.createElement("link");
+        faces.rel = "stylesheet";
+        faces.href = "/home-faces.css";
+        document.body.appendChild(faces);
+      });
+    </script>
   </body>
 </html>

@@ -60,8 +60,11 @@ async function followOnce(context: BrowserContext, link: string) {
 async function requestMagicLink(page: Page, baseURL: string, email: string) {
   const captcha = await turnstileToken(page);
   const sentAt = new Date().toISOString();
+  // The pre-cleared lane sends no token: its captcha field is empty by design.
+  const headers: Record<string, string> = { origin: baseURL };
+  if (captcha) headers["x-captcha-response"] = captcha;
   const response = await page.request.post(`${baseURL}/api/auth/sign-in/magic-link`, {
-    headers: { origin: baseURL, "x-captcha-response": captcha },
+    headers,
     data: { email, callbackURL: "/app" },
   });
   const body = await response.text();

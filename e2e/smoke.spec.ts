@@ -35,22 +35,22 @@ test("the landing page renders its headline and its contact link", async ({ page
 
 test("the rebuild notice renders in the three brand faces", async ({ page }) => {
   await page.goto("/");
-  await page.evaluate(() => document.fonts.ready);
-  const loaded = await page.evaluate(() => {
-    function faceLoaded(selector) {
-      const el = document.querySelector(selector);
-      if (!el) return false;
-      const style = getComputedStyle(el);
-      const family = style.fontFamily.split(",")[0].trim();
-      return document.fonts.check(`${style.fontStyle} ${style.fontWeight} ${style.fontSize} ${family}`);
-    }
-    return {
-      display: faceLoaded("header .font-display"),
-      body: faceLoaded("main p"),
-      mono: faceLoaded("footer"),
-    };
-  });
-  expect(loaded).toEqual({ display: true, body: true, mono: true });
+  await expect.poll(() =>
+    page.evaluate(() => {
+      function faceLoaded(selector) {
+        const el = document.querySelector(selector);
+        if (!el) return false;
+        const style = getComputedStyle(el);
+        const family = style.fontFamily.split(",")[0].trim();
+        return document.fonts.check(`${style.fontStyle} ${style.fontWeight} ${style.fontSize} ${family}`);
+      }
+      return {
+        display: faceLoaded("header .font-display"),
+        body: faceLoaded("main p"),
+        mono: faceLoaded("footer"),
+      };
+    }),
+  ).toEqual({ display: true, body: true, mono: true });
 });
 
 test("the landing page does not scroll horizontally", async ({ page }) => {
@@ -59,6 +59,37 @@ test("the landing page does not scroll horizontally", async ({ page }) => {
     () => document.documentElement.scrollWidth > document.documentElement.clientWidth,
   );
   expect(overflow).toBe(false);
+});
+
+test("the landing headline is the largest paint and uses the brand display face", async ({ page }) => {
+  await page.goto("/");
+  await page.evaluate(() => document.fonts.ready.then(() => undefined));
+
+  const lcpTag = await page.evaluate(
+    () =>
+      new Promise<string>((resolve) => {
+        new PerformanceObserver((list) => {
+          const last = list
+            .getEntries()
+            .filter((entry) => entry instanceof LargestContentfulPaint)
+            .at(-1);
+          resolve(last?.element?.tagName ?? "");
+        }).observe({ type: "largest-contentful-paint", buffered: true });
+      }),
+  );
+  expect(lcpTag).toBe("H1");
+
+  const displayLoaded = await page.evaluate(() =>
+    Array.from(document.fonts).some(
+      (face) => face.family.replaceAll('"', "") === "Bricolage Grotesque" && face.status === "loaded",
+    ),
+  );
+  expect(displayLoaded).toBe(true);
+
+  const headlineFamily = await page
+    .getByRole("heading", { level: 1 })
+    .evaluate((node) => getComputedStyle(node).fontFamily);
+  expect(headlineFamily).toContain("Bricolage Grotesque");
 });
 
 test("/api/health answers ok", async ({ request }) => {

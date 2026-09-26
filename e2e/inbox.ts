@@ -159,14 +159,27 @@ export async function waitForMagicLink(to: string, token: string, exclude: strin
 export async function settleSignInWidget(page: Page): Promise<void> {
   await expect(page.locator("[data-sitekey]")).toHaveCount(1);
   await page.locator("#email").focus();
-  await expect(page.locator('input[name="cf-turnstile-response"]')).toHaveValue(/\S/);
+  const field = page.locator('input[name="cf-turnstile-response"]');
+  // Production lane: the Access service token pre-clears the captcha server
+  // side, and managed-mode Turnstile correctly never mints a token for an
+  // automated browser (#5631). The regression guard that still holds is the
+  // widget rendering its response field at all — absent means the widget
+  // never mounted. The local lane has no pre-clearance, so there the field
+  // must carry the always-pass test token.
+  if (process.env.CF_ACCESS_CLIENT_ID) {
+    await expect(field).toHaveCount(1);
+    return;
+  }
+  await expect(field).toHaveValue(/\S/);
 }
 
 export async function turnstileToken(page: Page): Promise<string> {
   await page.goto("/login");
   await settleSignInWidget(page);
   const token = (await page.locator('input[name="cf-turnstile-response"]').inputValue()).trim();
-  if (token.length === 0) throw new Error("Turnstile issued no token");
+  // Pre-cleared callers send the request without a token; an empty return is
+  // only a failure where the captcha is still enforced.
+  if (token.length === 0 && !process.env.CF_ACCESS_CLIENT_ID) throw new Error("Turnstile issued no token");
   return token;
 }
 

@@ -12,7 +12,7 @@ vi.mock("cloudflare:workers", () => ({
 }));
 
 vi.mock("../../app/lib/auth.server", () => ({
-  createAuth: () => ({ handler }),
+  createAuthForRequest: async () => ({ handler }),
 }));
 
 import { action } from "../../app/routes/login";
