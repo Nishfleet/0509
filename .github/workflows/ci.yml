@@ -500,11 +500,11 @@ jobs:
           head -n1 "$RUNNER_TEMP/grade" | grep -qE '^(Opus|Kimi) grade: ' || exit 0
           head -n1 "$RUNNER_TEMP/grade" | grep -qxE '(Opus|Kimi) grade: A\+' && exit 0
           n=${REF#claim/issue-}; n=${n%%-*}
-          # Only a claim the fleet still owns: agent-in-progress and no park
-          # label (agent.yml's Deliverable list). A parked issue stays parked
-          # (0509#5619).
+          # Only a claim the fleet still owns: agent-in-progress, or agent-ready
+          # once the grader above has requeued it, and no park label (agent.yml's
+          # Deliverable list). A parked issue is not dispatched (0509#5619).
           labels=,$(gh issue view "$n" -R "$GITHUB_REPOSITORY" --json labels --jq '[.labels[].name]|join(",")'),
-          case $labels in *,agent-in-progress,*) ;; *) exit 0 ;; esac
+          case $labels in *,agent-in-progress,*|*,agent-ready,*) ;; *) exit 0 ;; esac
           case $labels in *,agent-blocked,*|*,needs-orchestrator,*|*,needs-nish-decision,*) exit 0 ;; esac
           gh issue edit "$n" -R "$GITHUB_REPOSITORY" --add-label agent-ready --remove-label agent-in-progress
           gh workflow run agent-dispatch.yml -R "$GITHUB_REPOSITORY" -f issue="$n"
