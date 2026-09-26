@@ -1,5 +1,5 @@
 import type { BriefSchedule, RolloverInstance } from "../brief-schedule";
-import { nextBriefAt, rolloverInstance } from "../brief-schedule";
+import { nextBriefAt, previousBriefAt, rolloverInstance } from "../brief-schedule";
 
 interface RolloverWorkflow {
   get(id: string): Promise<{ terminate(): Promise<void> }>;
@@ -10,6 +10,8 @@ export interface RescheduleResult {
   cancelledId: string | null;
   createdId: string | null;
 }
+
+const HOUR_MS = 60 * 60 * 1000;
 
 export async function rescheduleRollover(
   workflow: RolloverWorkflow,
@@ -25,6 +27,9 @@ export async function rescheduleRollover(
       () => stale.id,
       () => null,
     );
-  await workflow.createBatch([fresh]);
+  const due = previousBriefAt(input.next, input.now);
+  const age = input.now.getTime() - due.getTime();
+  const catchUp = age >= 0 && age < HOUR_MS ? rolloverInstance(input.workspaceId, due, "catch-up") : null;
+  await workflow.createBatch(catchUp === null ? [fresh] : [fresh, catchUp]);
   return { cancelledId, createdId: fresh.id };
 }
