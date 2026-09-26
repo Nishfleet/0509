@@ -113,3 +113,21 @@ export async function insertBoardSnapshot(row: {
     .bind(row.id, row.watchId, row.fetchedAt, row.r2Key, row.hash, row.itemCount)
     .run();
 }
+
+const COVERED_PAGE_PAIRS = `SELECT DISTINCT watch_id, page_id FROM snapshot
+WHERE fetched_at >= ?1 AND watch_id IN (SELECT value FROM json_each(?2))`;
+
+export interface CoveredPagePair {
+  watchId: string;
+  pageId: string;
+}
+
+export async function readCoveredPagePairs(
+  sinceIso: string,
+  watchIds: readonly string[],
+): Promise<readonly CoveredPagePair[]> {
+  const rows = await env.DB.prepare(COVERED_PAGE_PAIRS)
+    .bind(sinceIso, JSON.stringify(watchIds))
+    .all<{ watch_id: string; page_id: string }>();
+  return rows.results.map((row) => ({ watchId: row.watch_id, pageId: row.page_id }));
+}
