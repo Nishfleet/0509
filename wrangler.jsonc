@@ -64,7 +64,18 @@
   // them under secrets.required makes deploy inherit the values already on the
   // Worker instead of replacing them with a plaintext var.
   // LANDING_WORKSPACE_ID: the public workspace we run ourselves whose changes the landing ticker shows (#4083). Empty renders an empty strip, never filler.
-  "vars": { "BETTER_AUTH_URL": "https://0509.io", "LANDING_WORKSPACE_ID": "" },
+  // ACCESS_TEAM_DOMAIN / ACCESS_AUD pin the Access application that fronts
+  // 0509.io. They are public identifiers — the AUD appears in Access's own
+  // login redirect — not secrets. access-preclearance.server.ts uses them to
+  // verify the `cf-access-jwt-assertion` JWT Access forwards on every
+  // authenticated request; a verified service-token assertion pre-clears the
+  // magic-link captcha (#4702's accepted path for the e2e lane, #5631).
+  "vars": {
+    "BETTER_AUTH_URL": "https://0509.io",
+    "LANDING_WORKSPACE_ID": "",
+    "ACCESS_TEAM_DOMAIN": "https://nish345.cloudflareaccess.com",
+    "ACCESS_AUD": "b4fa400a1848c913b92c3212dc0714fcdbd1b1b66eb24659e4a7cc01c790575d"
+  },
   "secrets": {
     "required": ["BETTER_AUTH_SECRET", "TURNSTILE_SECRET_KEY", "TURNSTILE_SITE_KEY"]
   },

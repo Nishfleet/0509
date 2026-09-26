@@ -13,7 +13,7 @@ import { Footer } from "../components/footer";
 import { safeReturnTo } from "../lib/agent/paths";
 import { authClient } from "../lib/auth-client";
 import { formMagicLinkRequest } from "../lib/auth/login-magic-link.server";
-import { createAuth } from "../lib/auth.server";
+import { createAuthForRequest } from "../lib/auth.server";
 import { readAccountDeleteProgress } from "../lib/account-delete.server";
 import { timezoneCookie } from "../lib/timezone";
 
@@ -37,7 +37,7 @@ export async function action({ request }: Route.ActionArgs) {
   const captchaField = form.get("cf-turnstile-response");
   const captcha = typeof captchaField === "string" ? captchaField.trim() : "";
   const callbackURL = safeReturnTo(new URL(request.url).searchParams.get("next"));
-  const response = await createAuth(env).handler(
+  const response = await (await createAuthForRequest(env, request)).handler(
     formMagicLinkRequest(env.BETTER_AUTH_URL, request, email, captcha, callbackURL),
   );
   if (response.status === 200) return { sent: { email, at: Date.now() } };
