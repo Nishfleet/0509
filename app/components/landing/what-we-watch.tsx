@@ -1,37 +1,40 @@
-import { LIVE_COVERAGE, PLAN_NOTE, WATCHED_ORIGINS } from "../../lib/coverage";
-import { Pill } from "./pill";
-import { eyebrow, Section } from "./section";
+import { joinList } from "../../lib/coverage";
+import { sourceKindNoun } from "../../lib/source-name";
+import {
+  SourcePill,
+  sourcePillStatus,
+  type SourceRow,
+  type SourceSnapshot,
+} from "../source-pill";
+import { Section } from "./section";
 
-export function WhatWeWatch() {
+export interface WatchedSource {
+  kind: string;
+  source: SourceRow;
+  snapshot: SourceSnapshot | null;
+}
+
+export function WhatWeWatch({
+  sources,
+  now,
+}: {
+  sources: readonly WatchedSource[];
+  now?: number;
+}) {
+  const shown = sources.filter(
+    (entry) => sourcePillStatus(entry.source, entry.snapshot, now).state !== "disabled",
+  );
+  const nouns = [...new Set(shown.map((entry) => sourceKindNoun(entry.kind)))];
+  const lead = `We read ${nouns.length === 0 ? "public sources" : joinList(nouns)}. A source that stops answering shows here dimmed, with the reason — we never quietly drop it.`;
   return (
-    <Section
-      id="what-we-watch"
-      kicker="Public sources only"
-      title="What we watch"
-      lead={`We read ${WATCHED_ORIGINS}. A source that blocks us says so in the app. We never quietly drop it.`}
-    >
-      <dl className="border-line border-b">
-        {LIVE_COVERAGE.map((group) => (
-          <div
-            key={group.kind}
-            className="border-line grid gap-3 border-t py-5 sm:grid-cols-[12rem_1fr] sm:items-baseline sm:gap-6"
-          >
-            <dt className={`${eyebrow} text-ink-soft`}>{group.kind}</dt>
-            <dd className="min-w-0">
-              <ul className="flex flex-wrap gap-2">
-                {group.sources.map((source) => (
-                  <Pill
-                    key={source.id}
-                    label={source.label}
-                    {...(source.plan === undefined ? {} : { note: PLAN_NOTE[source.plan] })}
-                    highlight={source.instant === true}
-                  />
-                ))}
-              </ul>
-            </dd>
-          </div>
+    <Section id="what-we-watch" kicker="Public sources only" title="What we watch" lead={lead}>
+      <ul className="flex flex-wrap gap-2">
+        {shown.map((entry) => (
+          <li key={entry.source.key}>
+            <SourcePill source={entry.source} snapshot={entry.snapshot} now={now} />
+          </li>
         ))}
-      </dl>
+      </ul>
     </Section>
   );
 }
