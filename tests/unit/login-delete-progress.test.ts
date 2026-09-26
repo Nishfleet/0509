@@ -4,7 +4,9 @@ import { createRoutesStub } from "react-router";
 import { describe, expect, it, vi } from "vitest";
 
 vi.mock("cloudflare:workers", () => ({ env: {} }));
-vi.mock("../../app/lib/auth.server", () => ({ createAuth: () => ({}) }));
+vi.mock("../../app/lib/auth.server", () => ({
+  createAuth: () => ({ handler: async () => new Response(null, { status: 200 }) }),
+}));
 
 import type { AccountDeleteProgress } from "../../app/lib/account-delete.server";
 import Login from "../../app/routes/login";
@@ -14,7 +16,9 @@ function render(deleted: { id: string | null; progress: AccountDeleteProgress | 
   return renderToStaticMarkup(
     createElement(Stub, {
       initialEntries: ["/login"],
-      hydrationData: { loaderData: { "routes/login": deleted } },
+      hydrationData: {
+        loaderData: { "routes/login": { ...deleted, turnstileSiteKey: "1x00000000000000000000BB" } },
+      },
     }),
   );
 }

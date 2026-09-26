@@ -1,9 +1,15 @@
 import { env } from "cloudflare:workers";
 import { z } from "zod";
 
+import type { ScoredSignal } from "../biggest-move";
 import { isFeedKind, type DevelopmentItem } from "../developments";
 import type { WeekEvidence } from "../home-standing";
-import { D3_QUESTION_ID } from "../standing-score";
+import {
+  D3_QUESTION_ID,
+  D6_QUESTION_ID,
+  reliabilitySchema,
+  scoreBucketSchema,
+} from "../standing-score";
 import type { HiringSignalState, HiringSignalUpdate } from "../hiring/role-lifecycle";
 
 export interface ChangeSignalRow {
@@ -371,4 +377,77 @@ export async function readSignalCounts(
     .bind(workspaceId, entityId, since)
     .all<{ kind: string; n: number }>();
   return results.map((row) => ({ kind: row.kind, count: row.n }));
+}
+
+const SELECT_SCORED_SIGNALS = `SELECT * FROM (SELECT s.id, s.kind, s.title, s.summary, s.url, s.observed_at,
+  src.platform, src.reliability,
+  CASE
+    WHEN s.kind = 'mention' AND v.p >= 0.9 THEN 'mention_matters'
+    WHEN s.kind = 'mention' AND v.p > 0.1 THEN 'mention_normal'
+    WHEN s.kind = 'change' AND v.p >= 0.9 THEN 'site_change_noteworthy'
+    WHEN s.kind = 'ad' AND s.aspect IS NOT NULL THEN 'ad_copy_change'
+    WHEN s.kind = 'ad' AND s.published_at >= ?3 AND s.published_at < ?4 THEN 'ad_new_creative'
+    WHEN s.kind = 'hiring' THEN 'hiring_new_role'
+  END AS bucket
+FROM signal s
+JOIN source src ON src.id = s.source_id
+LEFT JOIN jev_verdict v ON v.id = (
+  SELECT v2.id FROM jev_verdict v2
+  WHERE v2.signal_id = s.id AND v2.workspace_id = s.workspace_id
+    AND v2.question_id = CASE s.kind WHEN 'mention' THEN ?5 WHEN 'change' THEN ?6 END
+  ORDER BY v2.decided_at DESC
+  LIMIT 1
+)
+WHERE s.workspace_id = ?1 AND s.entity_id = ?2
+  AND s.observed_at >= ?3 AND s.observed_at < ?4 AND s.is_tombstoned = 0)
+WHERE bucket IS NOT NULL
+ORDER BY observed_at DESC, id DESC`;
+
+const scoredSignalRows = z.array(
+  z.object({
+    id: z.string(),
+    kind: z.string(),
+    title: z.string().nullable(),
+    summary: z.string().nullable(),
+    url: z.string().nullable(),
+    observed_at: z.string(),
+    platform: z.string(),
+    reliability: reliabilitySchema,
+    bucket: scoreBucketSchema,
+  }),
+);
+
+export async function readScoredSignals(input: {
+  workspaceId: string;
+  entityId: string;
+  since: string;
+  until: string;
+}): Promise<ScoredSignal[]> {
+  const { results } = await env.DB.prepare(SELECT_SCORED_SIGNALS)
+    .bind(
+      input.workspaceId,
+      input.entityId,
+      input.since,
+      input.until,
+      D6_QUESTION_ID,
+      D3_QUESTION_ID,
+    )
+    .all();
+  return scoredSignalRows.parse(results).flatMap((row) =>
+    isFeedKind(row.kind)
+      ? [
+          {
+            id: row.id,
+            kind: row.kind,
+            bucket: row.bucket,
+            reliability: row.reliability,
+            platform: row.platform,
+            title: row.title,
+            summary: row.summary,
+            url: row.url,
+            observedAt: row.observed_at,
+          },
+        ]
+      : [],
+  );
 }
