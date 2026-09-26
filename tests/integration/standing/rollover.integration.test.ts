@@ -340,8 +340,8 @@ describe("the weekly rollover Workflow (0509#4004)", () => {
     const first = await seedTitledNotable("d4a", RIVAL_A, D4_TITLE_A, during);
     const second = await seedTitledNotable("d4b", RIVAL_B, D4_TITLE_B, new Date(during.getTime() + 1000));
     const run = vi.fn(async (_model: string, request: StubRequest) => {
-      const noul = request.state.item.title === D4_TITLE_A ? 0.8 : 0.6;
-      return { answers: { read_this_first: { type: "noul", noul } } };
+      const probability = request.state.item.title === D4_TITLE_A ? 0.8 : 0.6;
+      return { answers: { read_this_first: { type: "boolean", probability } } };
     });
     Reflect.set(env, "AI", { run });
 

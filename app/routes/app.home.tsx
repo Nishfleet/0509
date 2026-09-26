@@ -2,21 +2,24 @@ import type { Route } from "./+types/app.home";
 import { env } from "cloudflare:workers";
 
 import { useEffect } from "react";
-import { Link, redirect, useRevalidator } from "react-router";
+import { Link, redirect, useFetcher, useRevalidator } from "react-router";
 
-import { FreshnessLine, freshnessEntries } from "../components/freshness-line";
+import { FreshnessLine } from "../components/freshness-line";
 import { HomeStanding } from "../components/home-standing";
 import { PAGE } from "../components/page-heading";
 import { ShareButton } from "../components/share-button";
 import { readWorkspaceMentionSources } from "../lib/data/source.server";
 import { readSelfSiteFill } from "../lib/data/entity.server";
+import { readWeekEvidence } from "../lib/data/signal.server";
 import { readWorkspaceIdForOwner } from "../lib/data/workspace.server";
 import { homeView } from "../lib/home-standing";
 import { readHomeStandingInputs } from "../lib/home-standing.server";
 import { readHowRanked } from "../lib/how-ranked.server";
+import { freshnessEntries } from "../lib/freshness.server";
 import { onboardingTimingLines } from "../lib/onboarding/timings";
 import { readOnboardingTimes } from "../lib/data/onboarding_run.server";
 import { requireSession } from "../lib/require-session.server";
+import { readBiggestSiteChanges } from "../lib/site-changes.server";
 import { workspaceLandingForRequest } from "../lib/workspace.server";
 
 export function meta() {
@@ -33,9 +36,25 @@ export async function loader({ request }: Route.LoaderArgs) {
   const sources = workspaceId === null ? [] : await readWorkspaceMentionSources(workspaceId);
   const siteFill = workspaceId === null ? null : await readSelfSiteFill(workspaceId);
   const howRanked = await readHowRanked(env.DB, inputs.payload);
+  const moves =
+    inputs.payload === null || workspaceId === null
+      ? []
+      : await readBiggestSiteChanges(workspaceId, inputs.payload.period_start);
   const times = workspaceId === null ? null : await readOnboardingTimes(workspaceId);
+  const open = new URL(request.url).searchParams.get("open");
+  const payload = inputs.payload;
+  const openId =
+    open !== null && payload !== null && inputs.entities.some((entity) => entity.id === open)
+      ? open
+      : null;
+  const evidence =
+    openId !== null && payload !== null && workspaceId !== null
+      ? await readWeekEvidence({ workspaceId, entityId: openId, since: payload.period_start })
+      : null;
   return {
-    view: homeView({ ...inputs, now: new Date() }),
+    view: homeView({ ...inputs, moves, now: new Date() }),
+    open: openId,
+    evidence,
     howRanked,
     freshness: freshnessEntries(sources, Date.now()),
     siteFill,
@@ -56,6 +75,7 @@ function SiteFillLine({ state }: { state: "pending" | "gave_up" }) {
 }
 
 export default function Page({ loaderData }: Route.ComponentProps) {
+  const fetcher = useFetcher();
   const revalidator = useRevalidator();
   const standingKind = loaderData.view.standing.kind;
   useEffect(() => {
@@ -72,7 +92,18 @@ export default function Page({ loaderData }: Route.ComponentProps) {
   }, [revalidator, standingKind]);
   return (
     <main className={PAGE}>
-      <HomeStanding view={loaderData.view} howRanked={loaderData.howRanked} />
+      <HomeStanding
+        view={loaderData.view}
+        howRanked={loaderData.howRanked}
+        openId={loaderData.open}
+        evidence={loaderData.evidence}
+        onSwitch={(entityId, checked) =>
+          void fetcher.submit(
+            { intent: checked ? "on" : "off", entityId },
+            { method: "post", action: "/app/competitors" },
+          )
+        }
+      />
       {loaderData.siteFill === "pending" || loaderData.siteFill === "gave_up" ? (
         <SiteFillLine state={loaderData.siteFill} />
       ) : null}
