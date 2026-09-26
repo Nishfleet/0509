@@ -6,7 +6,7 @@ import { describe, expect, it } from "vitest";
 const REPO_ROOT = dirname(dirname(dirname(fileURLToPath(import.meta.url))));
 
 describe("static home analytics", () => {
-  it("keeps / measurable and paints the headline with no document script", () => {
+  it("keeps / measurable and leaves the beacon to the edge", () => {
     const html = readFileSync(join(REPO_ROOT, "public/index.html"), "utf8");
     const headers = readFileSync(join(REPO_ROOT, "public/_headers"), "utf8");
     const lines = headers.split("\n");
@@ -29,8 +29,9 @@ describe("static home analytics", () => {
 
     expect(directives).not.toContain("no-transform");
     expect(html).toContain("Quietly, we");
-    expect(html).not.toContain("<script");
+    expect(html).not.toContain("<script src");
     expect(html).not.toContain("cloudflareinsights.com");
+    expect(html).toContain('addEventListener("load"');
     expect(Buffer.byteLength(html)).toBeLessThan(8_000);
   });
 });

@@ -35,22 +35,22 @@ test("the landing page renders its headline and its contact link", async ({ page
 
 test("the rebuild notice renders in the three brand faces", async ({ page }) => {
   await page.goto("/");
-  await page.evaluate(() => document.fonts.ready);
-  const loaded = await page.evaluate(() => {
-    function faceLoaded(selector) {
-      const el = document.querySelector(selector);
-      if (!el) return false;
-      const style = getComputedStyle(el);
-      const family = style.fontFamily.split(",")[0].trim();
-      return document.fonts.check(`${style.fontStyle} ${style.fontWeight} ${style.fontSize} ${family}`);
-    }
-    return {
-      display: faceLoaded("header .font-display"),
-      body: faceLoaded("main p"),
-      mono: faceLoaded("footer"),
-    };
-  });
-  expect(loaded).toEqual({ display: true, body: true, mono: true });
+  await expect.poll(() =>
+    page.evaluate(() => {
+      function faceLoaded(selector) {
+        const el = document.querySelector(selector);
+        if (!el) return false;
+        const style = getComputedStyle(el);
+        const family = style.fontFamily.split(",")[0].trim();
+        return document.fonts.check(`${style.fontStyle} ${style.fontWeight} ${style.fontSize} ${family}`);
+      }
+      return {
+        display: faceLoaded("header .font-display"),
+        body: faceLoaded("main p"),
+        mono: faceLoaded("footer"),
+      };
+    }),
+  ).toEqual({ display: true, body: true, mono: true });
 });
 
 test("the landing page does not scroll horizontally", async ({ page }) => {
