@@ -249,9 +249,35 @@ describe("login form action access pre-clearance", () => {
   });
 
   it("still refuses a form post with a forged cookie assertion and empty captcha", async () => {
+    // Forged means signed by the wrong private key: the JWT claims a kid the
+    // team JWKS publishes, but Access's key never signed it.
+    const published = await crypto.subtle.generateKey(
+      { name: "RSASSA-PKCS1-v1_5", modulusLength: 2048, publicExponent: new Uint8Array([1, 0, 1]), hash: "SHA-256" },
+      true,
+      ["sign", "verify"],
+    );
+    const jwk = await crypto.subtle.exportKey("jwk", published.publicKey);
+    const kid = `kid-${crypto.randomUUID()}`;
+    jwk.kid = kid;
+    stubAccessJwks(jwk);
+    const attacker = await crypto.subtle.generateKey(
+      { name: "RSASSA-PKCS1-v1_5", modulusLength: 2048, publicExponent: new Uint8Array([1, 0, 1]), hash: "SHA-256" },
+      true,
+      ["sign", "verify"],
+    );
+    const assertion = await mintAccessJwt(attacker.privateKey, {
+      type: "app",
+      iss: ACCESS_ISS,
+      aud: ACCESS_AUD,
+      sub: "",
+      common_name: "19148d8d2392dad85a35d1d02591c769.access",
+      iat: Math.floor(Date.now() / 1000),
+      exp: Math.floor(Date.now() / 1000) + 3600,
+    }, kid);
+
     const sent: string[] = [];
     actionEnv(sent);
-    const result = await loginAction({ request: loginFormPost("CF_Authorization=forged.header.value") });
+    const result = await loginAction({ request: loginFormPost(`CF_Authorization=${assertion}`) });
     expect(result).toEqual({ error: "Confirm you're a person, then we'll send the link." });
     expect(sent).toHaveLength(0);
   });
@@ -263,7 +289,8 @@ describe("login form action access pre-clearance", () => {
       ["sign", "verify"],
     );
     const jwk = await crypto.subtle.exportKey("jwk", pair.publicKey);
-    jwk.kid = "test-kid";
+    const kid = `kid-${crypto.randomUUID()}`;
+    jwk.kid = kid;
     stubAccessJwks(jwk);
     const assertion = await mintAccessJwt(pair.privateKey, {
       type: "app",
@@ -273,7 +300,7 @@ describe("login form action access pre-clearance", () => {
       email: "person@0509.io",
       iat: Math.floor(Date.now() / 1000),
       exp: Math.floor(Date.now() / 1000) + 3600,
-    });
+    }, kid);
 
     const sent: string[] = [];
     actionEnv(sent);
