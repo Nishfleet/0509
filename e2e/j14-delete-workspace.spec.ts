@@ -8,7 +8,7 @@ test.skip(
 );
 
 // The delete affordance lives on /app/settings, which requireOnboarded gates
-// for an unfinished account (0509#5690): a fresh sign-in can only assert the
+// for an unfinished account (0509#5690): this fresh sign-in asserts the
 // resume point. The delete journey on a finished account is #5512's contract,
 // restored by 0509#5694's drive through onboarding.
 test("J14: a fresh unfinished account's /app/settings visit lands on /onboarding", async ({ page }) => {

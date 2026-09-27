@@ -17,9 +17,9 @@ test.skip(
   "the Alerts page needs a real session; the local preview Worker cannot mint one",
 );
 
-test("a signed-in unfinished account's /app/alerts visit lands on /onboarding (#4153)", async ({ page }) => {
+test("a signed-in unfinished account's /app/alerts visit lands on /onboarding", async ({ page }) => {
   // The production sign-in poll alone can overrun Playwright's 30 s default.
-  test.setTimeout(180_000);
+  test.setTimeout(120_000);
   const email = `e2e+${crypto.randomUUID().replaceAll("-", "").slice(0, 12)}@0509.io`;
   await signInWithMagicLink(page, email, requireInboxToken());
 

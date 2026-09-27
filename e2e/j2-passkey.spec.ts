@@ -54,10 +54,13 @@ test("a passkey registered on first sign-in signs in on its own", async ({ page,
     // The account is still unfinished, so requireOnboarded (0509#5690) sends
     // /app/settings — and the Sign out button on it — to the resume point; an
     // unfinished account has no reachable sign-out (0509#5695). Clearing the
-    // context's cookies is the signed-out state instead.
+    // app's own session cookies is the signed-out state instead — a blanket
+    // clearCookies would also drop CF_Authorization and land the next goto on
+    // the Access interstitial, whose URL matches /\/login/.
     await page.goto("/app/settings");
     await expect(page).toHaveURL(/\/onboarding/);
-    await context.clearCookies();
+    await context.clearCookies({ name: "better-auth.session_token" });
+    await context.clearCookies({ name: "__Secure-better-auth.session_token" });
     await page.goto("/app");
     await expect(page).toHaveURL(/\/login/);
     await page.screenshot({ path: test.info().outputPath("signed-out.png") });
