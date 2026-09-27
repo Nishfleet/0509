@@ -19,7 +19,6 @@ import { onboardingTimingLines } from "../lib/onboarding/timings";
 import { readOnboardingTimes } from "../lib/data/onboarding_run.server";
 import { requireSession } from "../lib/require-session.server";
 import { readBiggestSiteChanges } from "../lib/site-changes.server";
-import { workspaceLandingForRequest } from "../lib/workspace.server";
 
 export function meta() {
   return [{ title: "Home · Five to Nine" }];
@@ -27,8 +26,6 @@ export function meta() {
 
 export async function loader({ request }: Route.LoaderArgs) {
   const session = await requireSession(request);
-  const landing = await workspaceLandingForRequest(request, session.user.id);
-  if (landing) throw redirect(landing);
   const inputs = await readHomeStandingInputs(env.DB, session.user.id);
   if (inputs === null) throw redirect("/onboarding");
   const workspaceId = await readWorkspaceIdForOwner(session.user.id);
