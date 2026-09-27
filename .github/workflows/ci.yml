@@ -133,6 +133,7 @@ jobs:
         run: npm run build
 
       - name: Assert Home's JavaScript budget from the build manifest
+        if: steps.scope.outputs.skip != 'true'
         # 0509#4134, docs/REBUILD-DONE.md §B and DESIGN.md §10: /app ratchets toward 150 KB gzipped (#5216), the chart stays under 30 KB.
         run: npx vitest run --config vitest.bundle.config.ts
 
