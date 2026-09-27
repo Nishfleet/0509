@@ -48,8 +48,8 @@ Decisions recorded on 0509#3927 (2026-09-22):
   A fresh address confirms a brand, watches four competitors and turns one
   off, then saves a brief time other than the default Monday 08:00 whose
   hour has already started. That save includes the existing `-catch-up`
-  rollover in the one batch the save already creates, so the week that just
-  came due sends now,
+  rollover in the one batch the save already creates when the week that
+  just came due was not already briefed, so that week sends now,
   and the spec reads the message from the e2e inbox — not from D1. At 600 px
   it checks the contract order that a nothing-noteworthy week can show: the
   headline, the tracked brands with the off brand absent rather than zeroed,

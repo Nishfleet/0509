@@ -12,10 +12,17 @@ export interface RescheduleResult {
 }
 
 const HOUR_MS = 60 * 60 * 1000;
+const WEEK_MS = 7 * 24 * HOUR_MS;
 
 export async function rescheduleRollover(
   workflow: RolloverWorkflow,
-  input: { workspaceId: string; previous: BriefSchedule; next: BriefSchedule; now: Date },
+  input: {
+    workspaceId: string;
+    previous: BriefSchedule;
+    next: BriefSchedule;
+    now: Date;
+    lastBriefPeriodEnd: Date | null;
+  },
 ): Promise<RescheduleResult> {
   const stale = rolloverInstance(input.workspaceId, nextBriefAt(input.previous, input.now), "scheduled");
   const fresh = rolloverInstance(input.workspaceId, nextBriefAt(input.next, input.now), "scheduled");
@@ -29,7 +36,10 @@ export async function rescheduleRollover(
     );
   const due = previousBriefAt(input.next, input.now);
   const age = input.now.getTime() - due.getTime();
-  const catchUp = age >= 0 && age < HOUR_MS ? rolloverInstance(input.workspaceId, due, "catch-up") : null;
+  const weekUnbriefed =
+    input.lastBriefPeriodEnd === null || due.getTime() - input.lastBriefPeriodEnd.getTime() >= WEEK_MS;
+  const catchUp =
+    age >= 0 && age < HOUR_MS && weekUnbriefed ? rolloverInstance(input.workspaceId, due, "catch-up") : null;
   await workflow.createBatch(catchUp === null ? [fresh] : [fresh, catchUp]);
   return { cancelledId, createdId: fresh.id };
 }
