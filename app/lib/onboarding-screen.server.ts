@@ -5,13 +5,10 @@ import { screenPublicSubject } from "./jev/public-subject.server";
 
 export const REFUSAL = "we track brands and creators, not people";
 
-export const UNAVAILABLE = "we can't check that right now, so we haven't looked it up. Try again in a few minutes";
-
 export type ScreenResult =
   | { kind: "proceed" }
   | { kind: "refuse"; message: string }
-  | { kind: "ask"; subject: string }
-  | { kind: "unavailable"; message: string };
+  | { kind: "ask"; subject: string };
 
 const runJevOutcome = (input: {
   workspaceId: string;
@@ -50,8 +47,10 @@ export async function screenOnboardingSubject(input: {
   }
 
   const screened = await runJevOutcome(input);
-  if (screened === null) return { kind: "unavailable", message: UNAVAILABLE };
-  const { outcome } = screened;
+  if (screened === null) {
+    console.log(JSON.stringify({ event: "public_subject.jev_unavailable", workspaceId: input.workspaceId }));
+  }
+  const outcome = screened === null ? "ask" : screened.outcome;
   if (outcome === "proceed") return { kind: "proceed" };
 
   if (outcome === "refuse") {
