@@ -14,6 +14,8 @@ test.skip(
 );
 
 test("a signed-in user reaches the four places by tapping and by Tab+Enter", async ({ page }) => {
+  // Production lane: the magic-link sign-in plus the nav walk overruns the
+  // 30 s default (0509#5681); 120 s matches no-horizontal-scroll's budget.
   test.setTimeout(120_000);
   const errors: string[] = [];
   page.on("console", (message) => {
