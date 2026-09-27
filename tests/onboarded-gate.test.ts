@@ -55,15 +55,17 @@ const childPathsOf = (layoutFile: string) =>
 describe("app layout middleware", () => {
   it("gates the /app routes under app-layout with requireOnboarded", () => {
     expect(middleware).toEqual([requireOnboarded]);
-    for (const settingsPath of SETTINGS_PATHS) {
-      expect(childPathsOf("routes/app-layout.tsx")).not.toContain(settingsPath);
-    }
+    expect(childPathsOf("routes/app-layout.tsx")).toEqual([
+      "app",
+      "app/competitors",
+      "app/competitors/:entityId",
+      "app/alerts",
+      "app/brief/:digestId?",
+    ]);
   });
 
   it("leaves the /app/settings routes ungated, so account delete is always reachable", () => {
-    expect(childPathsOf("routes/app-settings-layout.tsx")).toEqual(
-      expect.arrayContaining(SETTINGS_PATHS),
-    );
+    expect(childPathsOf("routes/app-settings-layout.tsx")).toEqual(SETTINGS_PATHS);
     expect("middleware" in appSettingsLayout).toBe(false);
     expect(AppSettingsLayout().type).toBe(AppLayout().type);
   });
