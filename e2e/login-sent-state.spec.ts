@@ -3,7 +3,7 @@ import { expect, test } from "@playwright/test";
 import { settleSignInWidget } from "./inbox";
 
 // #4015, DESIGN.md §2.2: the sent state lands in place and the resend counts down for 30 s.
-test("the sent state lands in place and the resend waits 30 seconds with a visible count", async ({ page }) => {
+test("the sent state lands in place and the resend waits 30 seconds with a visible count", async ({ page }, testInfo) => {
   const consoleErrors: { text: string; url: string }[] = [];
   const pageErrors: string[] = [];
   page.on("console", (message) => {
@@ -47,5 +47,5 @@ test("the sent state lands in place and the resend waits 30 seconds with a visib
       .map((entry) => `${entry.text} @ ${entry.url}`),
     ...pageErrors,
   ];
-  expect(failures).toEqual([]);
+  expect(failures, testInfo.project.name).toEqual([]);
 });
