@@ -63,6 +63,9 @@ test("a passkey registered on first sign-in signs in on its own", async ({ page,
     await context.clearCookies({ name: "__Secure-better-auth.session_token" });
     await page.goto("/app");
     await expect(page).toHaveURL(/\/login/);
+    // The app's own login form, not the Access interstitial whose URL would
+    // also match /\/login/.
+    await expect(page.locator('input[name="email"]')).toBeVisible();
     await page.screenshot({ path: test.info().outputPath("signed-out.png") });
 
     // The passkey alone: a resident credential on the virtual authenticator

@@ -51,11 +51,11 @@ test("every signed-in screen has no horizontal scroll at 390", async ({ page }, 
   let rows: { target: string; landed: string; scrollWidth: number; clientWidth: number }[] = [];
   for (const t of signedInTargets) {
     await page.goto(t);
+    await page.waitForLoadState("networkidle");
     // The account is unfinished, so requireOnboarded (0509#5690) lands every
     // /app row on the resume point: the row measures /onboarding and `landed`
     // says so — it is not /app coverage.
     if (t.startsWith("/app")) await expect(page).toHaveURL(/\/onboarding/);
-    await page.waitForLoadState("networkidle");
     const m = await measure(page);
     rows = [...rows, { target: t, landed: new URL(page.url()).pathname, ...m }];
   }
