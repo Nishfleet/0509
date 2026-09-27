@@ -103,7 +103,7 @@ interface RunRow {
 
 function resumePoint(hasSelf: boolean, run: RunRow | null): string | null {
   if (!hasSelf) return run === null ? "/onboarding" : (subjectRedirect(run.input_raw) ?? "/onboarding");
-  if (run === null || run.watching_started_at !== null) return null;
+  if (run?.watching_started_at !== null) return null;
   return ONBOARDING_COMPETITORS;
 }
 
