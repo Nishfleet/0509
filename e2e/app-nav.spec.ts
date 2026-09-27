@@ -14,8 +14,8 @@ test.skip(
 );
 
 test("a signed-in user reaches the four places by tapping and by Tab+Enter", async ({ page }) => {
-  // Production lane: the magic-link sign-in (~10 s) plus the nav walk overruns
-  // the 30 s default (0509#5681); the other signed-in sweeps declare 120-180 s.
+  // Production lane: the sign-in poll plus the nav walk overruns the 30 s
+  // default (0509#5681).
   test.setTimeout(120_000);
   const errors: string[] = [];
   page.on("console", (message) => {
