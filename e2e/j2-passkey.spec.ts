@@ -51,12 +51,15 @@ test("a passkey registered on first sign-in signs in on its own", async ({ page,
     expect((await registered).status()).toBe(200);
     await expect(page.getByRole("status")).toBeVisible();
 
+    // The account is still unfinished, so requireOnboarded (0509#5690) sends
+    // /app/settings — and the Sign out button on it — to the resume point.
+    // Clearing the context's cookies is the signed-out state instead.
     await page.goto("/app/settings");
-    await page.getByRole("button", { name: "Sign out" }).click();
-    await page.waitForURL(/\/login/);
-    await page.screenshot({ path: test.info().outputPath("signed-out.png") });
+    await expect(page).toHaveURL(/\/onboarding/);
+    await context.clearCookies();
     await page.goto("/app");
     await expect(page).toHaveURL(/\/login/);
+    await page.screenshot({ path: test.info().outputPath("signed-out.png") });
 
     // The passkey alone: a resident credential on the virtual authenticator
     // answers the empty allowCredentials list the sign-in button produces.

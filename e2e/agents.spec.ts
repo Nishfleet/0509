@@ -90,30 +90,16 @@ test("the API reference is public OpenAPI 3.1", async ({ request }) => {
   ]);
 });
 
-test.describe("a signed-in customer's key", () => {
+test.describe("a signed-in unfinished account", () => {
   test.skip(!process.env.PLAYWRIGHT_TEST_BASE_URL, "needs the production mail path to sign in");
 
-  test("reads only its owner's workspace over MCP and REST, and stops working once deleted", async ({ page }) => {
+  test("cannot reach key management: /app/settings/agents lands on /onboarding", async ({ page }) => {
     const email = `e2e+${crypto.randomUUID().replaceAll("-", "").slice(0, 12)}@0509.io`;
     await signInWithMagicLink(page, email, requireInboxToken());
 
+    // requireOnboarded gates every /app route (0509#5690), so key management
+    // sits behind the resume point until onboarding finishes.
     await page.goto("/app/settings/agents");
-    await page.getByLabel("Name").fill("e2e agent");
-    await page.getByRole("button", { name: "Make a key" }).click();
-    const key = (await page.getByTestId("new-api-key").textContent()) ?? "";
-    expect(key).toMatch(/^0509_/);
-
-    const auth = { authorization: `Bearer ${key}` };
-    const listed = await page.request.post("/mcp", { data: MCP_INIT, headers: { ...MCP_HEADERS, ...auth } });
-    expect(listed.status()).toBe(200);
-    expect(await listed.text()).toContain("get_brief");
-
-    const competitors = await page.request.get("/api/v1/competitors", { headers: auth });
-    expect(competitors.status()).toBe(200);
-    expect(await competitors.json()).toEqual({ tracked: [], suggested: [] });
-
-    await page.getByRole("button", { name: "Delete" }).click();
-    await expect(page.getByTestId("api-key")).toHaveCount(0);
-    expect((await page.request.get("/api/v1/competitors", { headers: auth })).status()).toBe(401);
+    await expect(page).toHaveURL(/\/onboarding/);
   });
 });
