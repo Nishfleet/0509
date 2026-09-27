@@ -29,7 +29,8 @@ function sitePaths(text: string): string[] {
       ) {
         paths.add(url.pathname);
       }
-    } catch {
+    } catch (error) {
+      console.error(JSON.stringify({ event: "support_inbox.url_parse_failed", error: String(error) }));
       continue;
     }
   }

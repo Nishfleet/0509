@@ -140,7 +140,8 @@ function sourceConfig(raw: string | null | undefined): Record<string, unknown> {
   let parsed: unknown;
   try {
     parsed = JSON.parse(text);
-  } catch {
+  } catch (error) {
+    console.error(JSON.stringify({ event: "source_pill.json_parse_failed", error: String(error) }));
     return {};
   }
   if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) return {};

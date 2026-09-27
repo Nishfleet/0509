@@ -1,5 +1,7 @@
 import { expect, test } from "@playwright/test";
 
+import { settleSignInWidget } from "./inbox";
+
 // #4015, DESIGN.md §2.2: the sent state lands in place and the resend counts down for 30 s.
 test("the sent state lands in place and the resend waits 30 seconds with a visible count", async ({ page }) => {
   const errors: string[] = [];
@@ -15,6 +17,7 @@ test("the sent state lands in place and the resend waits 30 seconds with a visib
 
   const email = `e2e+${crypto.randomUUID().replaceAll("-", "").slice(0, 12)}@0509.io`;
   await page.locator('input[name="email"]').fill(email);
+  await settleSignInWidget(page);
   await page.locator('button[type="submit"]').click();
 
   await expect(page).toHaveURL(/\/login$/);

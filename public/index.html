@@ -10,11 +10,6 @@
     />
     <meta name="robots" content="noindex" />
     <style>
-/* Static coming-soon styles. Tailwind scans app/ only, so deleting the
-   landing route would drop these utilities from the hashed bundle.
-   The headline is the LCP element. A web face that finishes before it is a
-   simulated-4G dependency — inlined faces missed the 1.5s budget that way.
-   These stacks paint with the document. Brand faces stay on /design/landing. */
 :root {
   --color-bone: #f4f1e8;
   --color-ink: #0e0d0a;
@@ -23,9 +18,9 @@
   --color-line: #ddd6c6;
   --color-accent: #16c47f;
   --color-on-accent: #0e0d0a;
-  --font-display: ui-sans-serif, system-ui, sans-serif;
-  --font-sans: ui-sans-serif, system-ui, sans-serif;
-  --font-mono: ui-monospace, "SF Mono", Menlo, monospace;
+  --font-display: "Bricolage Grotesque", ui-sans-serif, sans-serif;
+  --font-sans: "Instrument Sans", ui-sans-serif, -apple-system, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
   --spacing: 0.25rem;
 }
 
@@ -181,5 +176,13 @@ a {
         </a>
       </footer>
     </main>
+    <script>
+      addEventListener("load", () => {
+        const faces = document.createElement("link");
+        faces.rel = "stylesheet";
+        faces.href = "/home-faces.css";
+        document.body.appendChild(faces);
+      });
+    </script>
   </body>
 </html>

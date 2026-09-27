@@ -35,6 +35,26 @@ const SONNER_IMPORT = {
     "sonner is imported in exactly one module, app/components/toaster.tsx, which owns every toast() call behind toastSaved(). DESIGN.md §11: toasts are only 'saved' and 'undo' — a second import site is a second toast authority. Source: 0509#4116.",
 };
 
+const UPLOT_IMPORT = {
+  name: "uplot",
+  message:
+    "uPlot is 22 KB gzipped and loads only in app/components/four-week-plot.tsx, which four-week-line.tsx pulls in with React.lazy so it stays out of the /app entry (docs/REBUILD-DONE.md §B, 150 KB). Source: 0509#5289.",
+};
+
+const UPLOT_REACT_IMPORT = {
+  name: "uplot-react",
+  message:
+    "uPlot is 22 KB gzipped and loads only in app/components/four-week-plot.tsx, which four-week-line.tsx pulls in with React.lazy so it stays out of the /app entry (docs/REBUILD-DONE.md §B, 150 KB). Source: 0509#5289.",
+};
+
+const FOUR_WEEK_PLOT_STATIC_IMPORT = {
+  name: "./four-week-plot",
+  message:
+    'Load four-week-plot with React.lazy(() => import("./four-week-plot")), never a static import: a static import puts uPlot back in the /app entry. Source: 0509#5289.',
+};
+
+const CHART_IMPORTS = [UPLOT_IMPORT, UPLOT_REACT_IMPORT, FOUR_WEEK_PLOT_STATIC_IMPORT];
+
 const FAST_XML_PARSER_IMPORT = {
   name: "fast-xml-parser",
   message:
@@ -52,6 +72,19 @@ const UNSCOPED_WRITER_PATTERNS = [
       "**/data/incident.server",
       "**/data/snapshot.server",
     ],
+    message: UNSCOPED_WRITER_MESSAGE,
+  },
+  // These two modules are banned by import NAME, never as a whole module:
+  // routes legitimately import other names from them, so a module-wide ban
+  // would break the reads and the workspace-scoped schedule writer.
+  {
+    group: ["**/data/digest.server"],
+    importNames: ["markDigestSent", "markDigestFailed"],
+    message: UNSCOPED_WRITER_MESSAGE,
+  },
+  {
+    group: ["**/data/workspace.server"],
+    importNames: ["deleteWorkspace"],
     message: UNSCOPED_WRITER_MESSAGE,
   },
 ];
@@ -123,8 +156,17 @@ const DOMAIN_HOSTNAME_BAN = {
     "URL-to-domain extraction is owned by the identity engine in app/lib/identity/ — `normaliseSubject` in app/lib/identity/normalise.ts. Reading `.hostname` anywhere else is a second domain normaliser that will drift from the engine's rules; the same shape on any URL argument, any binding name. Reuse the engine (or, for a non-identity host read, get the file added to the exemption block below). Source: 0509#4371.",
 };
 
+// DESIGN.md: fonts are self-hosted. A Google Fonts <link> put LCP at 2021 ms against the
+// 1500 ms budget (CI run 35635617508, main 5166ebb81; fixed in fd1457288).
+const GOOGLE_FONTS_BAN = {
+  selector: "Literal[value=/fonts\\.(googleapis|gstatic)\\.com/], TemplateElement[value.raw=/fonts\\.(googleapis|gstatic)\\.com/]",
+  message:
+    "Fonts are self-hosted (DESIGN.md). A Google Fonts link is render-blocking and broke the 1500 ms LCP budget once (fd1457288). Add the font file under public/ and an @font-face instead.",
+};
+
 const BANNED_SYNTAX = [
   SUPPORT_ADDRESS_BAN,
+  GOOGLE_FONTS_BAN,
   CATCH_RETURNS_NULL,
   XML_PARSER_CONSTRUCTOR,
   DOMAIN_HOSTNAME_BAN,
@@ -185,6 +227,72 @@ const ENV_DB_IN_ROUTES = {
     "Routes do not touch env.DB. Go through the one data layer in app/lib/data/. docs/REBUILD-TRUST.md C4.",
 };
 
+const STATIC_HOME_HTML_PARSER = {
+  meta: { name: "static-home-html" },
+  parse(text) {
+    const lines = text.split("\n");
+    const last = lines.length - 1;
+    return {
+      type: "Program",
+      body: [],
+      sourceType: "script",
+      comments: [],
+      tokens: [],
+      loc: {
+        start: { line: 1, column: 0 },
+        end: { line: lines.length, column: lines[last].length },
+      },
+      range: [0, text.length],
+    };
+  },
+};
+
+const STATIC_HOME_FONT_PRELOAD = {
+  meta: {
+    type: "problem",
+    schema: [],
+    messages: {
+      preload:
+        "The static home must not preload a font. A preload holds the headline paint until the face arrives, so simulated LCP misses lighthouse-budget.json. The three faces stay on the @font-face rules with font-display: swap. Source: 0509#5580.",
+      fontFace:
+        "The static home must not declare @font-face in the document. A face that finishes before the headline is a simulated-LCP dependency and misses lighthouse-budget.json. The three faces live in /home-faces.css. Source: 0509#5598.",
+      scannerLink:
+        "The static home must not include a link element. The preload scanner fetches it before the headline paints, which puts /home-faces.css on the simulated LCP chain. Source: 0509#5630.",
+      lateFaces:
+        "The static home must append /home-faces.css from a load listener placed after </main>, so the brand faces are requested after the headline paints. Source: 0509#5630.",
+    },
+  },
+  create(context) {
+    return {
+      Program(node) {
+        const text = context.sourceCode.getText();
+        const preloadsFont =
+          /<link\b[^>]*\brel="preload"[^>]*\bas="font"/.test(text) ||
+          /<link\b[^>]*\bas="font"[^>]*\brel="preload"/.test(text);
+        if (preloadsFont) {
+          context.report({ node, messageId: "preload" });
+        }
+        if (text.includes("@font-face")) {
+          context.report({ node, messageId: "fontFace" });
+        }
+        if (/<link\b/i.test(text)) {
+          context.report({ node, messageId: "scannerLink" });
+        }
+        const mainEnd = text.lastIndexOf("</main>");
+        const scriptAt = text.indexOf("<script>");
+        const scriptEnd = scriptAt < 0 ? -1 : text.indexOf("</script>", scriptAt);
+        const script = scriptAt >= 0 && scriptEnd > scriptAt ? text.slice(scriptAt, scriptEnd) : "";
+        const asksAfterLoad =
+          script.includes('addEventListener("load"') &&
+          script.includes('faces.href = "/home-faces.css"');
+        if (mainEnd < 0 || scriptAt < mainEnd || !asksAfterLoad) {
+          context.report({ node, messageId: "lateFaces" });
+        }
+      },
+    };
+  },
+};
+
 const WORKAROUND_TERMS = [
   "todo",
   "fixme",
@@ -234,7 +342,9 @@ export default tseslint.config(
       },
       globals: { ...globals.browser, ...globals.node },
     },
-    linterOptions: { reportUnusedDisableDirectives: "error" },
+    // No inline `eslint-disable`: one comment would silence every ban in this file
+    // (the no-comments rule allows /eslint/ comments). Change the rule here, in review.
+    linterOptions: { noInlineConfig: true, reportUnusedDisableDirectives: "error" },
   },
 
   {
@@ -374,12 +484,12 @@ export default tseslint.config(
 
   {
     files: ["app/components/**/*.{ts,tsx}"],
-    ignores: ["app/components/toaster.tsx"],
+    ignores: ["app/components/toaster.tsx", "app/components/four-week-plot.tsx"],
     rules: {
       "no-restricted-imports": [
         "error",
         {
-          paths: [...ONE_PAVED_PATH_IMPORTS, CLOUDFLARE_WORKERS_IMPORT, FULL_ZOD_IMPORT],
+          paths: [...ONE_PAVED_PATH_IMPORTS, CLOUDFLARE_WORKERS_IMPORT, FULL_ZOD_IMPORT, ...CHART_IMPORTS],
           patterns: PAVED_PATH_PATTERNS,
         },
       ],
@@ -408,7 +518,21 @@ export default tseslint.config(
             ...ONE_PAVED_PATH_IMPORTS.filter((p) => p !== SONNER_IMPORT),
             CLOUDFLARE_WORKERS_IMPORT,
             FULL_ZOD_IMPORT,
+            ...CHART_IMPORTS,
           ],
+          patterns: PAVED_PATH_PATTERNS,
+        },
+      ],
+    },
+  },
+
+  {
+    files: ["app/components/four-week-plot.tsx"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          paths: [...ONE_PAVED_PATH_IMPORTS, CLOUDFLARE_WORKERS_IMPORT, FULL_ZOD_IMPORT],
           patterns: PAVED_PATH_PATTERNS,
         },
       ],
@@ -611,12 +735,30 @@ export default tseslint.config(
   },
 
   {
-    files: ["**/*.js", "**/*.mjs", "**/*.cjs", "*.config.ts", "e2e/**/*.ts", "tests/**/*.ts"],
+    files: ["**/*.js", "**/*.mjs", "**/*.cjs", "*.config.ts", "e2e/**/*.ts", "tests/**/*.ts", "public/index.html"],
     extends: [tseslint.configs.disableTypeChecked],
     rules: {
       "no-inline-comments": "off",
       "no-warning-comments": "off",
       "@typescript-eslint/no-unsafe-assignment": "off",
+    },
+  },
+
+  {
+    files: ["public/index.html"],
+    plugins: {
+      "static-home": {
+        rules: {
+          "no-font-preload": STATIC_HOME_FONT_PRELOAD,
+        },
+      },
+    },
+    languageOptions: {
+      parser: STATIC_HOME_HTML_PARSER,
+      parserOptions: { projectService: false },
+    },
+    rules: {
+      "static-home/no-font-preload": "error",
     },
   },
 );

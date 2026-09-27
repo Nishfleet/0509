@@ -1,7 +1,12 @@
 import { env } from "cloudflare:test";
 import { beforeEach, describe, expect, it } from "vitest";
 
-import { markCardReady, startOnboardingRun } from "../../app/lib/data/onboarding_run.server";
+import {
+  markCardReady,
+  markCompetitorsReady,
+  stampFirstSignals,
+  startOnboardingRun,
+} from "../../app/lib/data/onboarding_run.server";
 import { timeCard } from "../../app/lib/onboarding/card-timing.server";
 import type { SiteFields } from "../../app/lib/identity/card-fields";
 
@@ -55,6 +60,28 @@ describe("startOnboardingRun", () => {
   });
 });
 
+describe("markCompetitorsReady", () => {
+  it("keeps the first competitors ready time a workspace gets", async () => {
+    await startOnboardingRun({
+      workspaceId,
+      userId,
+      inputRaw: "first.example",
+      startedAt: "2026-09-25T06:00:00.000Z",
+    });
+
+    await markCompetitorsReady(workspaceId, "2026-09-25T06:00:50.000Z");
+    await markCompetitorsReady(workspaceId, "2026-09-25T06:01:30.000Z");
+
+    const row = await env.DB.prepare(
+      "SELECT competitors_ready_at FROM onboarding_run WHERE workspace_id = ?",
+    )
+      .bind(workspaceId)
+      .first<{ competitors_ready_at: string | null }>();
+
+    expect(row?.competitors_ready_at).toBe("2026-09-25T06:00:50.000Z");
+  });
+});
+
 describe("markCardReady", () => {
   it("keeps the first card ready time a workspace gets", async () => {
     await startOnboardingRun({
@@ -104,5 +131,64 @@ describe("markCardReady", () => {
       .first<{ card_ready_at: string | null }>();
 
     expect(row?.card_ready_at).not.toBeNull();
+  });
+});
+
+describe("stampFirstSignals", () => {
+  async function seedSignal(id: string, observedAt: string): Promise<void> {
+    await env.DB.prepare(
+      `INSERT INTO signal (id, workspace_id, entity_id, source_id, kind, aspect, dedup_key, observed_at)
+       VALUES (?1, ?2, ?3, 'src_site_web', 'change', 'home', ?1, ?4)`,
+    )
+      .bind(id, workspaceId, `entity-${workspaceId}`, observedAt)
+      .run();
+  }
+
+  it("sets first_signal_at to the earliest signal at or after started_at, once", async () => {
+    const entityId = `entity-${workspaceId}`;
+    await env.DB.prepare(
+      `INSERT INTO entity (id, workspace_id, role, domain, name, state, created_at) VALUES (?1, ?2, 'competitor', ?3, 'Rival', 'on', '2026-08-01T00:00:00.000Z')`,
+    )
+      .bind(entityId, workspaceId, `${entityId}.example`)
+      .run();
+    await seedSignal(`sig-before-${workspaceId}`, "2026-09-25T05:00:00.000Z");
+    await seedSignal(`sig-after-${workspaceId}`, "2026-09-25T06:05:00.000Z");
+    await startOnboardingRun({
+      workspaceId,
+      userId,
+      inputRaw: "first.example",
+      startedAt: "2026-09-25T06:00:00.000Z",
+    });
+
+    await stampFirstSignals();
+
+    const row = await env.DB.prepare("SELECT first_signal_at FROM onboarding_run WHERE workspace_id = ?")
+      .bind(workspaceId)
+      .first<{ first_signal_at: string | null }>();
+    expect(row?.first_signal_at).toBe("2026-09-25T06:05:00.000Z");
+
+    await seedSignal(`sig-earlier-${workspaceId}`, "2026-09-25T06:02:00.000Z");
+    await stampFirstSignals();
+
+    const again = await env.DB.prepare("SELECT first_signal_at FROM onboarding_run WHERE workspace_id = ?")
+      .bind(workspaceId)
+      .first<{ first_signal_at: string | null }>();
+    expect(again?.first_signal_at).toBe("2026-09-25T06:05:00.000Z");
+  });
+
+  it("keeps first_signal_at null when the workspace has no signal", async () => {
+    await startOnboardingRun({
+      workspaceId,
+      userId,
+      inputRaw: "quiet.example",
+      startedAt: "2026-09-25T06:00:00.000Z",
+    });
+
+    await stampFirstSignals();
+
+    const row = await env.DB.prepare("SELECT first_signal_at FROM onboarding_run WHERE workspace_id = ?")
+      .bind(workspaceId)
+      .first<{ first_signal_at: string | null }>();
+    expect(row?.first_signal_at).toBeNull();
   });
 });

@@ -25,6 +25,10 @@ export interface CardDraft {
   description?: string;
 }
 
+export function editedFields(draft: CardDraft): DraftField[] {
+  return (["name", "description"] as const).filter((field) => draft[field] !== undefined);
+}
+
 export interface CreatorRows {
   channel: string | null;
   handle: string;
@@ -43,4 +47,8 @@ export function creatorRows(subject: Subject): CreatorRows | null {
     channel: subject.platform === undefined ? null : CHANNELS[subject.platform],
     handle: `@${subject.registrable}`,
   };
+}
+
+export function isDraftSave(formData: FormData | undefined): boolean {
+  return formData?.get("intent") === "draft";
 }

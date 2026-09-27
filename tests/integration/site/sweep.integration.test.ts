@@ -31,18 +31,21 @@ const seedEntity = (id: string, role: "self" | "competitor", domain: string, sta
 
 const signals = async () => {
   const rows = await env.DB.prepare(
-    "SELECT entity_id, source_id, kind, aspect, url, evidence_url, snapshot_id, payload_json FROM signal WHERE workspace_id = ?",
+    "SELECT entity_id, source_id, kind, title, aspect, url, evidence_url, snapshot_id, payload_json, observed_at, last_seen_at FROM signal WHERE workspace_id = ?",
   )
     .bind(WS)
     .all<{
       entity_id: string;
       source_id: string;
       kind: string;
+      title: string | null;
       aspect: string;
       url: string;
       evidence_url: string;
       snapshot_id: string;
       payload_json: string;
+      observed_at: string;
+      last_seen_at: string | null;
     }>();
   return rows.results;
 };
@@ -130,6 +133,7 @@ describe("nightly site sweep", () => {
     const filed = await signals();
     expect(filed).toHaveLength(1);
     const [signal] = filed;
+    if (signal === undefined) throw new Error("expected a change signal");
     expect(signal).toMatchObject({
       entity_id: "ent-rival",
       source_id: "src_site_web",
@@ -139,7 +143,9 @@ describe("nightly site sweep", () => {
       evidence_url: "https://rival.com/",
       snapshot_id: changed.snapshotId,
     });
-    const payload: unknown = JSON.parse(signal?.payload_json ?? "null");
+    expect(signal.title).toBeNull();
+    expect(signal.last_seen_at).toBe(signal.observed_at);
+    const payload: unknown = JSON.parse(signal.payload_json);
     expect(payload).toMatchObject({
       page: { role: "home", url: "https://rival.com/" },
       before: { snapshotId: same.snapshotId, textKey: first.textKey, screenshotKey: null },

@@ -24,13 +24,13 @@ const readPrompt = (yaml: string): string => {
   }
   let p = -1;
   for (let i = start + 1; i < lines.length; i += 1) {
-    if (lines[i].trim() === "prompt: |") {
+    if (lines[i].trim() === "GRADE_PROMPT: |") {
       p = i;
       break;
     }
   }
   if (p === -1) {
-    throw new Error("opus-review has no prompt: | block scalar");
+    throw new Error("opus-review has no GRADE_PROMPT: | block scalar");
   }
   const indent = lines[p].length - lines[p].trimStart().length;
   const collected: string[] = [];

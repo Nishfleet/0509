@@ -26,6 +26,8 @@ export async function readAgentAccess(
       start: key.start ?? null,
       createdAt: new Date(key.createdAt).toISOString(),
       lastUsedAt: key.lastRequest ? new Date(key.lastRequest).toISOString() : null,
+      rateLimitMax: key.rateLimitMax ?? null,
+      remaining: key.remaining ?? null,
     })),
     apps: grants.items.map((grant) => ({
       grantId: grant.id,

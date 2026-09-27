@@ -21,9 +21,13 @@ describe("the four-week line", () => {
     const html = renderToStaticMarkup(createElement(FourWeekLine, { chart: chart() }));
     expect(html).toContain("14 SEP");
     expect(html).toContain("21 SEP");
+    expect(html).toContain("Four-week ranks");
     expect(html).toContain("YOU");
     expect(html).toContain("Kindred");
     expect(html).toContain("paused");
+    expect(html).toContain(">1<");
+    expect(html).toContain(">2<");
+    expect(html).toContain(">none<");
     expect(html).not.toContain("<canvas");
   });
 

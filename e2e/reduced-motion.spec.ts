@@ -2,6 +2,8 @@ import { expect, test, type Page, type TestInfo } from "@playwright/test";
 import type { RouteConfigEntry } from "@react-router/dev/routes";
 import routes from "../app/routes";
 
+import { requireInboxToken, signInWithMagicLink } from "./inbox";
+
 interface MotionFinding {
   selector: string;
   reason: string;
@@ -54,6 +56,43 @@ async function saveShot(
 }
 
 const targets = ["/", ...screenPaths(routes, "").map(visitPath)];
+
+// The two end-state switch tests run against a real /app/competitors/:entityId
+// page, which exists only once a competitor is watched — so both open with
+// J3's journey (magic-link sign-in, gymshark.com onboarded through "Start
+// watching") and then walk /app/competitors onto the first watched chip. The
+// preview Worker cannot mint a session, so both tests skip on the preview lane
+// and run in the e2e-production job. The function returns nothing the tests
+// need beyond the open page: the detail page carries exactly one switch.
+async function openWatchedCompetitor(page: Page): Promise<void> {
+  const email = `e2e+${crypto.randomUUID().replaceAll("-", "").slice(0, 12)}@0509.io`;
+  await signInWithMagicLink(page, email, requireInboxToken());
+
+  await page.goto("/onboarding");
+  const input = page.getByRole("textbox", { name: "your website, or a handle" });
+  await input.fill("gymshark.com");
+  await input.press("Enter");
+
+  await expect(page.getByRole("button", { name: "edit name" })).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByText("looking on the site")).toHaveCount(0, { timeout: 30_000 });
+  await page.getByRole("button", { name: "That's me" }).click();
+  await expect(page).toHaveURL(/\/onboarding\/competitors$/, { timeout: 30_000 });
+
+  const watching = page.getByRole("list", { name: "Watching" }).getByRole("listitem");
+  await expect(
+    watching.first().or(page.getByRole("button", { name: /^Watch / }).first()),
+  ).toBeVisible({ timeout: 60_000 });
+  if ((await watching.count()) === 0) {
+    await page.getByRole("button", { name: /^Watch / }).first().click();
+    await expect(watching.first()).toBeVisible();
+  }
+  await page.getByRole("button", { name: "Start watching" }).click();
+  await expect(page).toHaveURL(/\/app$/);
+
+  await page.goto("/app/competitors");
+  await page.getByRole("list", { name: "Competitors" }).getByRole("link").first().click();
+  await expect(page).toHaveURL(/\/app\/competitors\/[^/]+$/);
+}
 
 // The two assertions the browser can answer honestly:
 //
@@ -177,58 +216,26 @@ for (const target of targets) {
   });
 }
 
-// End-state assertions: opening the capture-pair sheet and toggling a brand
-// switch must produce the same visible state regardless of whether motion is
-// reduced. The whole point of "honoured" is "the user can still use the
-// thing"; a transition being stripped is fine only if the final state lands.
-test("the capture-pair sheet opens instantly under reduced motion", async ({ page }, testInfo) => {
-  await page.emulateMedia({ reducedMotion: "reduce" });
-  const response = await page.goto("/design/capture-plates");
-  expect(response?.status()).toBe(200);
-
-  const plates = page.locator("[data-slot='capture-plate']");
-  await expect(plates).toHaveCount(3);
-
-  await plates.nth(0).click();
-  const pair = page.locator("[data-slot='capture-pair']");
-  // No `toHaveCount(1)` wait, no `waitForAnimation` — the assertion is that
-  // the pair is visible the same tick the click lands. With motion disabled
-  // there is no enter transition to wait out.
-  await expect(pair).toBeVisible();
-
-  // The pair is rendered, and `getAnimations()` is empty even after the
-  // click — the click itself does not start a transition that the global
-  // block forgot about.
-  const findings = await inspectMotion(page);
-  expect(findings, `after click: ${JSON.stringify(findings[0])}`).toEqual([]);
-
-  // And the final state matches what the non-reduced run produces.
-  await expect
-    .poll(async () =>
-      pair.locator("img").evaluateAll((images) =>
-        images.map((image) => (image as HTMLImageElement).naturalWidth > 0),
-      ),
-    )
-    .toEqual([true, true]);
-
-  // The end state, on disk: sheet open, both images loaded, under reduced
-  // motion. This is the screenshot the issue asks for — "instantly, not
-  // never" is only proved by the open sheet next to the no-motion finding.
-  await saveShot(page, testInfo, "end-state-capture-pair-open", { fullPage: true });
-});
-
+// End-state assertion: toggling a brand switch must produce the same visible
+// state regardless of whether motion is reduced. The whole point of
+// "honoured" is "the user can still use the thing"; a transition being
+// stripped is fine only if the final state lands.
 test("the brand switch toggles under reduced motion", async ({ page }, testInfo) => {
+  test.skip(
+    !process.env.PLAYWRIGHT_TEST_BASE_URL,
+    "the brand switch needs a real session; the preview Worker cannot mint one",
+  );
+  test.setTimeout(150_000);
   await page.emulateMedia({ reducedMotion: "reduce" });
-  const response = await page.goto("/design/competitor");
-  expect(response?.status()).toBe(200);
+  await openWatchedCompetitor(page);
 
-  const kindred = page.getByRole("switch", { name: "Kindred tracking" });
-  await expect(kindred).toHaveAttribute("aria-checked", "true");
+  const toggle = page.getByRole("switch", { name: / tracking$/ });
+  await expect(toggle).toHaveAttribute("aria-checked", "true");
 
-  await kindred.click();
-  await expect(kindred).toHaveAttribute("aria-checked", "false");
+  await toggle.click();
+  await expect(toggle).toHaveAttribute("aria-checked", "false");
 
-  const field = page.locator("[data-slot='competitor-switch'] [data-slot='brand-switch']");
+  const field = page.locator("[data-slot='brand-switch-field'] [data-slot='brand-switch']");
   await expect(field).toHaveAttribute("data-state", "off");
   await expect(page.locator("[data-slot='competitor-paused']")).toContainText("Paused");
 
@@ -251,14 +258,20 @@ test("the brand switch toggles under reduced motion", async ({ page }, testInfo)
 test("control: the switch thumb has a non-zero transition-duration without reduced motion", async ({
   page,
 }, testInfo) => {
+  test.skip(
+    !process.env.PLAYWRIGHT_TEST_BASE_URL,
+    "the switch thumb needs a real session; the preview Worker cannot mint one",
+  );
+  test.setTimeout(150_000);
   await page.emulateMedia({ reducedMotion: "no-preference" });
-  const response = await page.goto("/design/competitor");
-  expect(response?.status()).toBe(200);
+  await openWatchedCompetitor(page);
 
   // The switch thumb is the element the brand-switch.tsx component pins at
   // `[&_[data-slot=switch-thumb]]:duration-180`. That utility is what we
-  // expect the global reduced-motion block to neutralise.
-  const thumb = page.locator("[data-slot='competitor-switch'] [data-slot='switch-thumb']").first();
+  // expect the global reduced-motion block to neutralise. The real detail
+  // page wraps it in `brand-switch-field`, not the preview's
+  // `competitor-switch`.
+  const thumb = page.locator("[data-slot='brand-switch-field'] [data-slot='switch-thumb']").first();
   await expect(thumb).toBeVisible();
 
   const duration = await thumb.evaluate((el) => getComputedStyle(el).transitionDuration);

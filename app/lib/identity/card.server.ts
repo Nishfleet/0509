@@ -2,7 +2,7 @@ import { env } from "cloudflare:workers";
 import { z } from "zod";
 
 import { readUrl } from "../fetch/transport.server";
-import type { CardReview, CardValues, SiteFields } from "./card-fields";
+import type { CardReview, CardValues, DraftField, SiteFields } from "./card-fields";
 import { extractIdentity } from "./extract";
 import { reviewFields } from "./field-confidence.server";
 import { readLogo, storeLogo } from "./logo-store.server";
@@ -63,8 +63,58 @@ async function probeSite(subject: Subject): Promise<SiteCard> {
   };
 }
 
+async function probeProfile(subject: Subject): Promise<SiteCard> {
+  if (subject.url === null) throw new Error("no profile to read");
+  const page = await readUrl(subject.url);
+  if (!page.ok) throw new Error(page.detail);
+  const extract = await extractIdentity(page.html, subject.url);
+  return {
+    name: extract.nameSources.title,
+    description: extract.description,
+    socials: extract.socials,
+    logoCandidates: { ldOrganizationLogo: null, ogImage: extract.ogImage, appleTouchIcon: null },
+    adLibraryHints: [],
+    navLinks: [],
+  };
+}
+
+function profileProbe(subject: Subject): "youtube-profile" | "instagram-profile" | null {
+  if (subject.platform === "youtube") return "youtube-profile";
+  if (subject.platform === "instagram") return "instagram-profile";
+  return null;
+}
+
+function filledProfileFields(card: SiteCard): string[] {
+  const filled: string[] = [];
+  if (card.name !== null) filled.push("name");
+  if (card.description !== null) filled.push("description");
+  if (card.socials.length > 0) filled.push("socials");
+  if (card.logoCandidates.ogImage !== null) filled.push("avatar");
+  return filled;
+}
+
 export async function readSiteCard(subject: Subject): Promise<{ card: SiteCard; reached: boolean }> {
-  if (subject.kind === "handle" || subject.url === null) return { card: UNREACHED, reached: false };
+  if (subject.kind !== "domain") {
+    const probe = profileProbe(subject);
+    if (probe === null || subject.url === null) return { card: UNREACHED, reached: false };
+    try {
+      const card = await cachedProbe(subject, probe, siteCardSchema, () => probeProfile(subject));
+      console.log(
+        JSON.stringify({
+          event: "identity-creator-card",
+          subject: subject.registrable,
+          probe,
+          filled: filledProfileFields(card),
+        }),
+      );
+      return { card, reached: true };
+    } catch (error) {
+      console.log(
+        JSON.stringify({ event: "identity-creator-unreached", subject: subject.registrable, error: String(error) }),
+      );
+      return { card: UNREACHED, reached: false };
+    }
+  }
   try {
     return { card: await cachedProbe(subject, "homepage", siteCardSchema, () => probeSite(subject)), reached: true };
   } catch (error) {
@@ -99,24 +149,27 @@ function applyReview(fields: CardValues, review: CardReview): Omit<SiteFields, "
 export function startCard(
   workspaceId: string,
   subject: Subject,
+  edited: readonly DraftField[],
 ): { site: Promise<SiteFields>; logo: Promise<string | null> } {
   const read = readSiteCard(subject);
   const site = read.then(async ({ card, reached }): Promise<SiteFields> => {
-    const subjectSocial = subject.kind !== "domain" && subject.url !== null
-      ? [{ platform: subject.platform ?? "site", url: subject.url }, ...card.socials.filter((social) => social.url !== subject.url)]
-      : card.socials;
     const values: CardValues = {
       name: card.name ?? (subject.kind === "domain" ? null : `@${subject.registrable}`),
       description: card.description,
-      socials: subjectSocial,
+      socials: subject.url !== null && subject.kind !== "domain"
+        ? [
+            { platform: subject.platform ?? "site", url: subject.url },
+            ...card.socials.filter((social) => social.platform !== subject.platform),
+          ]
+        : card.socials,
     };
-    const review: CardReview = subject.kind === "domain" && reached
-      ? await reviewFields(workspaceId, subject, values, new Date().toISOString())
+    const review: CardReview = reached
+      ? await reviewFields(workspaceId, subject, values, edited, new Date().toISOString())
       : fillReview(values);
     return { ...applyReview(values, review), unfound: subject.kind === "domain" && !reached };
   });
   const logo = read.then(async ({ card, reached }) => {
-    if (!reached || subject.kind !== "domain") return null;
+    if (!reached) return null;
     const cached = await cachedProbe(subject, "icon", logoSchema, async () => {
       const result = await resolveLogo({ ...card.logoCandidates, registrableDomain: subject.registrable });
       return { url: result.ok ? result.url : null };
@@ -143,9 +196,9 @@ export async function readCachedSiteProof(
   subject: Subject,
 ): Promise<{ adLibraryHints: string[]; navLinks: string[] }> {
   const hit = await env.IDENTITY_CACHE.get(probeKey(subject, "homepage"), "json");
-  const parsed = siteCardSchema.safeParse(hit);
-  if (!parsed.success) return { adLibraryHints: [], navLinks: [] };
-  return { adLibraryHints: parsed.data.adLibraryHints, navLinks: parsed.data.navLinks };
+  if (hit === null) return { adLibraryHints: [], navLinks: [] };
+  const parsed = siteCardSchema.parse(hit);
+  return { adLibraryHints: parsed.adLibraryHints, navLinks: parsed.navLinks };
 }
 
 function toDataUrl(contentType: string, bytes: Uint8Array): string {

@@ -2,7 +2,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
-import { IncidentBlock, type IncidentBlockProps } from "../../app/components/incident-block";
+import { IncidentBlock, IncidentSlot, type IncidentBlockProps } from "../../app/components/incident-block";
 
 function props(): IncidentBlockProps {
   return {
@@ -48,5 +48,22 @@ describe("the incident block", () => {
     expect(html).not.toContain("%");
     expect(html).not.toContain("p=");
     expect(html).not.toContain("question");
+  });
+});
+
+describe("the incident slot", () => {
+  it("is always in the DOM and empty when there is no incident", () => {
+    const html = renderToStaticMarkup(createElement(IncidentSlot, { incident: null }));
+    expect(html).toContain('data-testid="incident-live"');
+    expect(html).toContain('aria-live="polite"');
+    expect(html).not.toContain("OPEN INCIDENT");
+  });
+
+  it("announces the incident without stealing focus", () => {
+    const html = renderToStaticMarkup(createElement(IncidentSlot, { incident: props() }));
+    expect(html).toContain('aria-live="polite"');
+    expect(html).toContain("OPEN INCIDENT");
+    expect(html.toLowerCase()).not.toContain("tabindex");
+    expect(html.toLowerCase()).not.toContain("autofocus");
   });
 });

@@ -9,6 +9,7 @@ import { OnboardingFrame } from "../components/onboarding-frame";
 import { Button } from "../components/ui/button";
 import { handleCompetitorIntent } from "../lib/competitors.server";
 import { readOnboardingCompetitors } from "../lib/data/entity.server";
+import { markCompetitorsReady } from "../lib/data/onboarding_run.server";
 import { readWorkspaceIdForOwner } from "../lib/data/workspace.server";
 import { isDiscoveryActive } from "../lib/discovery/start.server";
 import { requireSession } from "../lib/require-session.server";
@@ -28,6 +29,9 @@ export async function loader({ request }: Route.LoaderArgs) {
     readOnboardingCompetitors(workspaceId),
     isDiscoveryActive(workspaceId, new Date()),
   ]);
+  if (competitors.on.length + competitors.maybes.length > 0) {
+    await markCompetitorsReady(workspaceId, new Date().toISOString());
+  }
   return { ...competitors, searching };
 }
 

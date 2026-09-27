@@ -9,14 +9,19 @@ export const sentryOptions = (env: SentryEnv): CloudflareOptions => ({
   dsn: env.SENTRY_DSN,
   sendDefaultPii: false,
   beforeBreadcrumb: () => null,
-  beforeSend: (event) => ({
-    ...event,
-    ...(event.transaction === undefined ? {} : { transaction: scrubTokenPath(event.transaction) }),
-    request: event.request && {
-      method: event.request.method,
-      url: scrubRequestUrl(event.request.url),
-    },
-  }),
+  beforeSend: (event) => {
+    const route = typeof event.tags?.route === "string" ? event.tags.route : undefined;
+    const transaction =
+      route ?? (event.transaction === undefined ? undefined : scrubTokenPath(event.transaction));
+    return {
+      ...event,
+      ...(transaction === undefined ? {} : { transaction }),
+      request: event.request && {
+        method: event.request.method,
+        url: route ?? scrubRequestUrl(event.request.url),
+      },
+    };
+  },
 });
 
 function scrubRequestUrl(url: string | undefined): string | undefined {

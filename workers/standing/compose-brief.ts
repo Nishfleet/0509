@@ -124,13 +124,11 @@ const pickedSignalRows = z.array(
   }),
 );
 
-const NOTHING_JUDGED: JudgedWeek = { picks: [], judged: 0 };
-
 export interface ComposeInput {
   workspaceId: string;
   schedule: BriefSchedule;
   week: BriefWeek;
-  readThisFirst?: JudgedWeek;
+  readThisFirst: JudgedWeek;
 }
 
 function quietWeekLine(mentions: number, siteChanges: number, newAds: number): string {
@@ -146,7 +144,7 @@ export function pausedSentence(names: readonly string[]): string | null {
 export async function composeBrief(db: D1Database, input: ComposeInput): Promise<BriefPayload> {
   const startsAt = input.week.startsAt.toISOString();
   const closesAt = input.week.closesAt.toISOString();
-  const readThisFirst = input.readThisFirst ?? NOTHING_JUDGED;
+  const { readThisFirst } = input;
   const [ranked, frozen, counts, coverage, incidents, pausedRows, pickedRows] = await db.batch([
     db.prepare(RANKED_BRANDS).bind(input.workspaceId, startsAt),
     db.prepare(PREVIOUS_FROZEN_WEEKS).bind(input.workspaceId, startsAt),

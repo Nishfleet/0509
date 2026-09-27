@@ -2,6 +2,7 @@ import type { ReactElement, ReactNode } from "react";
 
 import { StepBar } from "./step-bar";
 import { Footer } from "./footer";
+import { ONBOARDING_PAGE } from "./page-heading";
 
 export function OnboardingFrame({
   step,
@@ -15,15 +16,17 @@ export function OnboardingFrame({
   children: ReactNode;
 }): ReactElement {
   return (
-    <>
+    <div className={ONBOARDING_PAGE}>
       <header>
         <StepBar current={step} />
       </header>
       <main>
-        <h1 className={hideHeading ? "sr-only" : undefined}>{heading}</h1>
+        <h1 className={hideHeading ? "sr-only" : "font-display text-display-2 mt-10 font-extrabold uppercase"}>
+          {heading}
+        </h1>
         {children}
       </main>
       <Footer />
-    </>
+    </div>
   );
 }

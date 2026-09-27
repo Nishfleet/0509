@@ -1,6 +1,8 @@
 import { env, introspectWorkflowInstance } from "cloudflare:test";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { openIncident } from "../../../app/lib/data/incident.server";
+
 const USER = "user-own-site";
 const WS = "ws-own-site";
 const NOW = "2026-09-24T02:00:00Z";
@@ -162,5 +164,35 @@ describe("own-site check", () => {
     expect(await runCheck("own-robots")).toEqual({ pages: 1, opened: 0, closed: 0, failed: 0 });
     expect(await incidents()).toEqual([]);
     expect(fetched.filter((u) => !u.endsWith("/robots.txt"))).toEqual([]);
+  });
+
+  it("opens one incident when openIncident is called twice for the same page (0509#5401)", async () => {
+    await env.DB.prepare(
+      `INSERT INTO page (id, entity_id, url, discovered_at) VALUES ('page-open-twice', 'ent-self', 'https://mybrand.com/', ?)`,
+    )
+      .bind(NOW)
+      .run();
+    const first = await openIncident({
+      id: "inc-open-twice-1",
+      workspaceId: WS,
+      entityId: "ent-self",
+      pageId: "page-open-twice",
+      kind: "error 503",
+      openedAt: NOW,
+    });
+    const second = await openIncident({
+      id: "inc-open-twice-2",
+      workspaceId: WS,
+      entityId: "ent-self",
+      pageId: "page-open-twice",
+      kind: "error 503",
+      openedAt: NOW,
+    });
+    expect(first).toBe("inc-open-twice-1");
+    expect(second).toBe("inc-open-twice-1");
+    const count = await env.DB.prepare("SELECT count(*) AS n FROM incident WHERE page_id = ?")
+      .bind("page-open-twice")
+      .first<{ n: number }>();
+    expect(count).toEqual({ n: 1 });
   });
 });
