@@ -2,7 +2,7 @@ import { env } from "cloudflare:test";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { Subject } from "../../app/lib/identity/normalise";
-import { REFUSAL, UNAVAILABLE, screenOnboardingSubject } from "../../app/lib/onboarding-screen.server";
+import { REFUSAL, screenOnboardingSubject } from "../../app/lib/onboarding-screen.server";
 
 const NOW = "2026-09-24T06:00:00.000Z";
 
@@ -268,7 +268,7 @@ describe("screenOnboardingSubject", () => {
     expect(await decisionCount(workspaceId, "public_subject:refused")).toBe(1);
   });
 
-  it("returns unavailable when Jev cannot be reached", async () => {
+  it("asks the user when Jev cannot be reached and no answer is recorded", async () => {
     const { userId, workspaceId } = await seedWorkspace();
     const run = vi.fn(() => Promise.reject(new Error("Jev unavailable")));
     Reflect.set(env, "AI", { run });
@@ -283,8 +283,49 @@ describe("screenOnboardingSubject", () => {
       now: NOW,
     });
 
-    expect(result).toEqual({ kind: "unavailable", message: UNAVAILABLE });
+    expect(result).toEqual({ kind: "ask", subject });
+    expect(await decisionCount(workspaceId, "public_subject:confirmed")).toBe(0);
     expect(await decisionCount(workspaceId, "public_subject:refused")).toBe(0);
+  });
+
+  it("records a business answer when Jev cannot be reached", async () => {
+    const { userId, workspaceId } = await seedWorkspace();
+    const run = vi.fn(() => Promise.reject(new Error("Jev unavailable")));
+    Reflect.set(env, "AI", { run });
+    const subject = `unavailable-business-${String(runs)}.example`;
+
+    const result = await screenOnboardingSubject({
+      workspaceId,
+      userId,
+      subject: domainSubject(subject),
+      raw: subject,
+      answer: "business",
+      now: NOW,
+    });
+
+    expect(result).toEqual({ kind: "proceed" });
+    expect(await decisionCount(workspaceId, "public_subject:confirmed")).toBe(1);
+    expect(await decisionCount(workspaceId, "public_subject:refused")).toBe(0);
+  });
+
+  it("records a person answer when Jev cannot be reached", async () => {
+    const { userId, workspaceId } = await seedWorkspace();
+    const run = vi.fn(() => Promise.reject(new Error("Jev unavailable")));
+    Reflect.set(env, "AI", { run });
+    const subject = `unavailable-person-${String(runs)}.example`;
+
+    const result = await screenOnboardingSubject({
+      workspaceId,
+      userId,
+      subject: domainSubject(subject),
+      raw: subject,
+      answer: "person",
+      now: NOW,
+    });
+
+    expect(result).toEqual({ kind: "refuse", message: REFUSAL });
+    expect(await decisionCount(workspaceId, "public_subject:refused")).toBe(1);
+    expect(await decisionCount(workspaceId, "public_subject:confirmed")).toBe(0);
   });
 
   it("refuses a login address in code, asks neither Jev nor the network, and stores no entity or watch", async () => {

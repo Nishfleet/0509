@@ -48,7 +48,7 @@ export async function action({ request }: Route.ActionArgs) {
       answer: typeof answer === "string" ? answer : null,
       now,
     });
-    if (result.kind === "refuse" || result.kind === "unavailable") return { message: result.message, confirm: null };
+    if (result.kind === "refuse") return { message: result.message, confirm: null };
     if (result.kind === "ask") return { message: null, confirm: { subject: result.subject, raw: rawSubject } };
     await startOnboardingRun({ workspaceId, userId: session.user.id, inputRaw: rawSubject, startedAt: now });
   }
