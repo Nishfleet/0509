@@ -1,5 +1,8 @@
 import type { Route } from "./+types/app.alerts";
 
+import { env } from "cloudflare:workers";
+import { Link } from "react-router";
+
 import { AlertChips } from "../components/alert-chips";
 import { AlertFeed } from "../components/alert-feed";
 import { IncidentSlot } from "../components/incident-block";
@@ -7,6 +10,9 @@ import { PAGE, PageHeading } from "../components/page-heading";
 import { SourcePill } from "../components/source-pill";
 import { acknowledgeOwnSiteIncident, loadAlertsPage } from "../lib/alerts-page.server";
 import { parseAlertChip } from "../lib/alert-chips";
+import { briefSendLine } from "../lib/brief-state";
+import { listBriefs } from "../lib/data/digest.server";
+import { readWorkspaceIdForOwner } from "../lib/data/workspace.server";
 import { requireSession } from "../lib/require-session.server";
 
 export function meta() {
@@ -17,7 +23,11 @@ const WHEN_CLASS = "text-ink-soft mt-2 block font-mono text-meta uppercase";
 
 export async function loader({ request }: Route.LoaderArgs) {
   const session = await requireSession(request);
-  return loadAlertsPage(session.user.id, parseAlertChip(new URL(request.url).searchParams.get("kind")));
+  const page = await loadAlertsPage(session.user.id, parseAlertChip(new URL(request.url).searchParams.get("kind")));
+  const workspaceId = await readWorkspaceIdForOwner(session.user.id);
+  const latest = workspaceId === null ? undefined : (await listBriefs(env.DB, workspaceId))[0];
+  const failedBrief = latest?.status === "failed" ? { id: latest.id, reason: briefSendLine(latest) } : null;
+  return { ...page, failedBrief };
 }
 
 export async function action({ request }: Route.ActionArgs) {
@@ -36,6 +46,15 @@ export default function Page({ loaderData }: Route.ComponentProps) {
       <p data-testid="alerts-contract" className="text-ink-soft mt-2 leading-[1.65]">
         One thing here interrupted you by email: your own site.
       </p>
+      {loaderData.failedBrief === null ? null : (
+        <p role="alert" data-alert="brief-send-failed" className="mt-4 leading-[1.65]">
+          We could not send your brief ({loaderData.failedBrief.reason}).{" "}
+          <Link className="underline decoration-1 underline-offset-4" to={`/app/brief/${loaderData.failedBrief.id}`}>
+            Here it is in the app
+          </Link>
+          .
+        </p>
+      )}
       <IncidentSlot incident={loaderData.openIncident} />
       {loaderData.sources.length > 0 ? (
         <p data-testid="alerts-sources" className="mt-4 flex flex-wrap gap-2">
