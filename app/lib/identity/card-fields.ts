@@ -25,6 +25,10 @@ export interface CardDraft {
   description?: string;
 }
 
+export function editedFields(draft: CardDraft): DraftField[] {
+  return (["name", "description"] as const).filter((field) => draft[field] !== undefined);
+}
+
 export interface CreatorRows {
   channel: string | null;
   handle: string;

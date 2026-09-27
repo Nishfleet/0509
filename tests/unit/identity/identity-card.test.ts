@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { createRoutesStub } from "react-router";
 import { describe, expect, it } from "vitest";
 
-import { Fields } from "../../../app/components/identity-card";
+import { ArrivalLine, Fields } from "../../../app/components/identity-card";
 import type { CardDraft, CardReview, SiteFields } from "../../../app/lib/identity/card-fields";
 
 const INSTAGRAM = "https://instagram.com/gymshark";
@@ -177,5 +177,39 @@ describe("the identity card fields", () => {
 		const html = render(site({ name: "fill", description: "fill", socials: "fill" }));
 
 		expect(html).not.toContain("within the hour");
+	});
+});
+
+describe("ArrivalLine", () => {
+	it("announces an unread site in words everyone sees", () => {
+		const html = renderToStaticMarkup(
+			createElement(ArrivalLine, {
+				fields: site(
+					{ name: "empty", description: "empty", socials: "empty" },
+					{ unfound: true },
+				),
+			}),
+		);
+
+		expect(html).toContain("We couldn&#x27;t read that site");
+		expect(html).not.toContain("sr-only");
+	});
+
+	it("announces a drawn card once, naming the fields to check", () => {
+		const drawn = renderToStaticMarkup(
+			createElement(ArrivalLine, {
+				fields: site({ name: "check", description: "fill", socials: "check" }),
+			}),
+		);
+		expect(drawn).toBe(
+			'<span class="sr-only">Your card is drawn. Check this: name, socials.</span>',
+		);
+
+		const clean = renderToStaticMarkup(
+			createElement(ArrivalLine, {
+				fields: site({ name: "fill", description: "fill", socials: "fill" }),
+			}),
+		);
+		expect(clean).toBe('<span class="sr-only">Your card is drawn.</span>');
 	});
 });

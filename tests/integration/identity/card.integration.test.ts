@@ -106,7 +106,7 @@ describe("startCard", () => {
   it("draws the card from the brand's homepage", async () => {
     stubAi(0.95);
     stubWeb(() => new Response(gym, { status: 200 }));
-    const card = startCard("ws-1", subjectFor("gymshark.com"));
+    const card = startCard("ws-1", subjectFor("gymshark.com"), []);
 
     const site = await card.site;
     expect(site.name).toBe("Gymshark");
@@ -121,15 +121,15 @@ describe("startCard", () => {
   it("reads the homepage once a day, not once per visit", async () => {
     stubAi(0.95);
     const calls = stubWeb(() => new Response(gym, { status: 200 }));
-    await startCard("ws-1", subjectFor("gymshark.com")).site;
-    await startCard("ws-1", subjectFor("https://www.gymshark.com/")).site;
+    await startCard("ws-1", subjectFor("gymshark.com"), []).site;
+    await startCard("ws-1", subjectFor("https://www.gymshark.com/"), []).site;
     expect(calls.filter((url) => !isLogo(url))).toEqual(["https://gymshark.com/"]);
   });
 
   it("says nothing was found when the site cannot be read, and caches nothing", async () => {
     stubAi(0.95);
     stubWeb(() => new Response("blocked", { status: 403 }));
-    const card = startCard("ws-1", subjectFor("unreachable.example"));
+    const card = startCard("ws-1", subjectFor("unreachable.example"), []);
     expect(await card.site).toEqual({
       name: null,
       description: null,
@@ -144,7 +144,7 @@ describe("startCard", () => {
   it("starts a creator's card from the handle, without reading any site", async () => {
     stubAi(0.95);
     const calls = stubWeb(() => new Response(gym, { status: 200 }));
-    const site = await startCard("ws-1", subjectFor("https://www.tiktok.com/@gymshark")).site;
+    const site = await startCard("ws-1", subjectFor("https://www.tiktok.com/@gymshark"), []).site;
     expect(site).toEqual({
       name: "@gymshark",
       description: null,
@@ -172,7 +172,7 @@ describe("startCard", () => {
   </body>
 </html>`;
     stubWeb(() => new Response(html, { status: 200 }));
-    const card = startCard("ws-1", subjectFor("https://www.youtube.com/@Gymshark"));
+    const card = startCard("ws-1", subjectFor("https://www.youtube.com/@Gymshark"), []);
     const site = await card.site;
     expect(site.name).toBe("Gymshark");
     expect(site.description).toBe("Official channel");
@@ -186,7 +186,7 @@ describe("startCard", () => {
   it("falls back to the handle card when the Instagram profile cannot be read", async () => {
     stubAi(0.95);
     stubWeb(() => new Response("blocked", { status: 403 }));
-    const card = startCard("ws-1", subjectFor("https://www.instagram.com/gymshark/"));
+    const card = startCard("ws-1", subjectFor("https://www.instagram.com/gymshark/"), []);
     const site = await card.site;
     expect(site.name).toBe("@gymshark");
     expect(site.description).toBeNull();

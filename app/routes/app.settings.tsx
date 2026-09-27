@@ -76,9 +76,9 @@ export async function action({ request, context }: Route.ActionArgs) {
     const confirm = form.get("confirm");
     const typed = typeof confirm === "string" ? confirm.trim().toLowerCase() : "";
     if (typed !== session.user.email.toLowerCase()) return { saved: null, deleteError: MISMATCH, deliveryError: null, deliverySuppressed: false };
-    const headers = await deleteAccount(context.get(oauthHelpersContext), request, session.user.id);
-    if (headers === null) return { saved: null, deleteError: SIGN_IN_AGAIN, deliveryError: null, deliverySuppressed: false };
-    throw redirect("/login", { headers });
+    const deleted = await deleteAccount(context.get(oauthHelpersContext), request, session.user.id);
+    if (deleted === null) return { saved: null, deleteError: SIGN_IN_AGAIN, deliveryError: null, deliverySuppressed: false };
+    throw redirect(`/login?deleted=${encodeURIComponent(deleted.instanceId)}`, { headers: deleted.headers });
   }
   if (intent === "restore-suggestion") {
     const workspaceId = await readWorkspaceIdForOwner(session.user.id);

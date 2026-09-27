@@ -272,7 +272,7 @@ export async function extractIdentity(html: string, pageUrl: string): Promise<Id
       element(element) {
         state.navTitleOpen = false;
         const href = element.getAttribute("href");
-        if (href === null) return;
+        if (href === null || href.trim().startsWith("#")) return;
         const url = resolveUrl(href, pageUrl);
         if (url === null) return;
         if (url.origin !== pageOrigin) return;

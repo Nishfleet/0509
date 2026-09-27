@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { createMemoryRouter, RouterProvider } from "react-router";
 import { describe, expect, it } from "vitest";
 
-import { HomeStanding } from "../../app/components/home-standing";
+import { HomePageFrame, HomeStanding } from "../../app/components/home-standing";
 import type { BriefPayload } from "../../app/lib/brief-payload";
 import type { BriefSchedule } from "../../app/lib/brief-schedule";
 import type { HowRanked } from "../../app/lib/how-ranked";
@@ -133,6 +133,7 @@ function render(input: {
     history: [],
     sources: SITE_SOURCES,
     counts: [],
+    moves: [],
     now: THURSDAY_MORNING,
   });
   const router = createMemoryRouter([
@@ -140,6 +141,27 @@ function render(input: {
   ]);
   return renderToStaticMarkup(createElement(RouterProvider, { router }));
 }
+
+describe("Home page frame", () => {
+  it("puts the date in the banner, the standing in main, and the footer in contentinfo", () => {
+    const html = renderToStaticMarkup(
+      createElement(
+        HomePageFrame,
+        { eyebrow: "Thursday 24 September", footer: "Checked today" },
+        createElement("h1", null, "Good morning"),
+      ),
+    );
+    const header = html.indexOf("<header");
+    const main = html.indexOf("<main>");
+    const footer = html.indexOf("<footer");
+    expect(header).toBeGreaterThan(-1);
+    expect(main).toBeGreaterThan(header);
+    expect(footer).toBeGreaterThan(main);
+    expect(html).toContain("Thursday 24 September");
+    expect(html).toContain("Good morning");
+    expect(html).toContain("Checked today");
+  });
+});
 
 describe("Home standing", () => {
   it("greets with the rank on the marker and the why-line under it", () => {
@@ -165,6 +187,7 @@ describe("Home standing", () => {
       history: [],
       sources: [],
       counts: [],
+      moves: [],
       now: THURSDAY_MORNING,
     });
     if (standing.kind !== "ranked") throw new Error("expected a ranked standing");
@@ -186,6 +209,7 @@ describe("Home standing", () => {
       history: [],
       sources: [],
       counts: [],
+      moves: [],
       now: THURSDAY_MORNING,
     });
     expect(standing.kind).toBe("ranked");
@@ -198,7 +222,7 @@ describe("Home standing", () => {
     const html = render({ payload: payload() });
     expect(html.match(/data-testid="standing-row"/g)).toHaveLength(3);
     expect(html).toContain('data-self="true"');
-    expect(html).toContain("You · ");
+    expect(html).not.toContain("You · ");
   });
 
   it("puts an unranked brand last with a dash, never a zero", () => {
@@ -209,6 +233,7 @@ describe("Home standing", () => {
       history: [],
       sources: [],
       counts: [],
+      moves: [],
       now: THURSDAY_MORNING,
     });
     if (standing.kind !== "ranked") throw new Error("expected a ranked standing");
@@ -228,11 +253,22 @@ describe("Home standing", () => {
         }),
       ],
     });
-    const standing = homeStanding({ payload: p, entities: ENTITIES, schedule: SCHEDULE, history: [], sources: [], counts: [], now: THURSDAY_MORNING });
+    const standing = homeStanding({
+      payload: p,
+      entities: ENTITIES,
+      schedule: SCHEDULE,
+      history: [],
+      sources: SITE_SOURCES,
+      counts: [],
+      moves: [],
+      now: THURSDAY_MORNING,
+    });
     if (standing.kind !== "ranked") throw new Error("expected a ranked standing");
     expect(standing.rows.map((row) => row.position)).toEqual([1, null]);
+    expect(standing.rows.map((row) => row.signals)).toEqual([0, 0]);
     const html = render({ payload: p });
     expect(html).toContain(">—<");
+    expect(html).not.toContain("#1");
   });
 
   it("asks for a competitor when fewer than two brands are on (REBUILD-STANDING rules)", () => {
@@ -266,7 +302,7 @@ describe("Home standing", () => {
       { id: "ent_kindred", role: "competitor", domain: "kindred.example", name: "Kindred", state: "on" },
       { id: "ent_off", role: "competitor", domain: "off.example", name: "Off Brand", state: "off" },
     ];
-    const view = homeView({ payload: null, entities, schedule: SCHEDULE, history: [], sources: SITE_SOURCES, counts: [], now: THURSDAY_MORNING });
+    const view = homeView({ payload: null, entities, schedule: SCHEDULE, history: [], sources: SITE_SOURCES, counts: [], moves: [], now: THURSDAY_MORNING });
     expect(view.chips).toEqual([
       { name: "Own Brand", href: "/app/settings", self: true, off: false },
       { name: "Kindred", href: "/app/competitors/ent_kindred", self: false, off: false },
@@ -321,10 +357,10 @@ describe("Home standing", () => {
       { id: "ent_casetta", role: "competitor", domain: "casetta.example", name: "Casetta", state: "on" },
       { id: "ent_hollow", role: "competitor", domain: "hollow.example", name: "Hollow", state: "on" },
     ];
-    const four = homeView({ payload: payload(), entities: fourOn, schedule: amsterdamSchedule, history: [], sources: SITE_SOURCES, counts: [], now });
+    const four = homeView({ payload: payload(), entities: fourOn, schedule: amsterdamSchedule, history: [], sources: SITE_SOURCES, counts: [], moves: [], now });
     expect(four.footer).toBe("Checked 4 brands this week · brief Monday 08:00 · your site re-checked at 13:00");
 
-    const one = homeView({ payload: payload(), entities: [SELF], schedule: amsterdamSchedule, history: [], sources: SITE_SOURCES, counts: [], now });
+    const one = homeView({ payload: payload(), entities: [SELF], schedule: amsterdamSchedule, history: [], sources: SITE_SOURCES, counts: [], moves: [], now });
     expect(one.footer).toBe("Checked 1 brand this week · brief Monday 08:00 · your site re-checked at 13:00");
   });
 });
@@ -357,6 +393,7 @@ function chartStanding(history: readonly HomeHistoryRow[]) {
     history,
     sources: [],
     counts: [],
+    moves: [],
     now: THURSDAY_MORNING,
   });
   if (standing.kind !== "ranked") throw new Error("expected a ranked standing");
@@ -389,7 +426,7 @@ describe("Home chips", () => {
       { id: "ent_off", role: "competitor", domain: "off.example", name: "Off Brand", state: "off" },
       SELF,
     ];
-    const view = homeView({ payload: null, entities, schedule: SCHEDULE, history: [], sources: SITE_SOURCES, now: THURSDAY_MORNING });
+    const view = homeView({ payload: null, entities, schedule: SCHEDULE, history: [], sources: SITE_SOURCES, counts: [], moves: [], now: THURSDAY_MORNING });
     expect(view.chips).toEqual(homeChips(entities));
     expect(view.chips[0]?.self).toBe(true);
   });

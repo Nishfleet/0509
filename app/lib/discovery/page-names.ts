@@ -41,7 +41,8 @@ function organizationName(scripts: string[]): string | null {
     let parsed: unknown;
     try {
       parsed = JSON.parse(script);
-    } catch {
+    } catch (error) {
+      console.error(JSON.stringify({ event: "discovery.page_names_json_parse_failed", error: String(error) }));
       continue;
     }
     for (const node of flattenNodes(parsed)) {

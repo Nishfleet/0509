@@ -24,7 +24,7 @@ export function shareCard(input: {
   history: readonly HomeHistoryRow[];
   now: Date;
 }): ShareCard | null {
-  const standing = homeStanding({ ...input, sources: [], counts: [] });
+  const standing = homeStanding({ ...input, sources: [], counts: [], moves: [] });
   if (standing.kind !== "ranked" || input.payload === null) return null;
   const self = standing.rows.find((row) => row.self);
   if (self === undefined) return null;

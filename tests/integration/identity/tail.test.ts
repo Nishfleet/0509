@@ -1,13 +1,19 @@
 import { env, introspectWorkflow } from "cloudflare:test";
+import { NonRetryableError } from "cloudflare:workflows";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 
-import { insertSelfEntity } from "../../../app/lib/data/entity.server";
+import { insertSelfEntity, readWorkspaceSelfId } from "../../../app/lib/data/entity.server";
 import { upsertJudgedPages } from "../../../app/lib/data/page.server";
 import { confirmCard } from "../../../app/lib/identity/confirm.server";
 import { normaliseSubject } from "../../../app/lib/identity/normalise";
 import { probeKey } from "../../../app/lib/identity/probe-cache.server";
-import { identityTailInstanceId, seedTailWatches } from "../../../app/lib/identity/tail.server";
+import {
+  identityTailInstanceId,
+  persistTail,
+  seedTailWatches,
+  startIdentityTail,
+} from "../../../app/lib/identity/tail.server";
 
 const DOMAIN = "gymshark.com";
 const GREENHOUSE_JOBS = "https://boards-api.greenhouse.io/v1/boards/gymshark/jobs";
@@ -165,6 +171,30 @@ describe("IdentityTailWorkflow", () => {
     expect(instanceId).toBe(`identity-tail-${entityId.id}`);
   });
 
+  it("starting the tail twice keeps one instance", async () => {
+    await seed();
+    await using introspector = await introspectWorkflow(env.IDENTITY_TAIL);
+    expect(
+      await confirmCard(
+        workspaceId,
+        form({ subject: DOMAIN, name: "Gymshark", description: "Gym clothes" }),
+      ),
+    ).toBe(true);
+
+    const entityId = await readWorkspaceSelfId(workspaceId);
+    if (entityId === null) throw new Error("confirmed card was not stored");
+    await expect(
+      startIdentityTail({
+        workspaceId,
+        entityId,
+        name: "Gymshark",
+        domain: DOMAIN,
+        homepageUrl: "https://gymshark.com/",
+      }),
+    ).resolves.toBe(identityTailInstanceId(entityId));
+    expect(await introspector.get()).toHaveLength(1);
+  });
+
   it("watches the page Jev judged pricing, not a /pricing path", async () => {
     await seed();
     const entityId = `entity-pricing-${String(runs)}`;
@@ -301,5 +331,30 @@ describe("IdentityTailWorkflow", () => {
     await instance.waitForStatus("errored");
     const error = await instance.getError();
     expect(error.message).toContain("forced step retry");
+  });
+
+  it("errors when the self entity is missing", async () => {
+    await seed();
+    await using introspector = await introspectWorkflow(env.IDENTITY_TAIL);
+    const params = {
+      workspaceId,
+      entityId: `entity-missing-${String(runs)}`,
+      name: "Gymshark",
+      domain: DOMAIN,
+      homepageUrl: null,
+    };
+
+    await expect(persistTail(params)).rejects.toThrow(NonRetryableError);
+    await expect(persistTail(params)).rejects.toThrow(
+      `self entity ${params.entityId} is not in workspace ${workspaceId}`,
+    );
+
+    await startIdentityTail(params);
+    const [instance] = await introspector.get();
+    if (instance === undefined) throw new Error("tail instance was not started");
+    await instance.waitForStatus("errored");
+    expect((await instance.getError()).message).toContain(
+      "a step threw an NonRetryableError and it was not handled",
+    );
   });
 });

@@ -259,3 +259,20 @@ export function insertCompetitorRetiredAlert(
     input.now,
   );
 }
+
+const INSERT_SOURCE_BLIND_ALERT = `INSERT INTO alert (id, workspace_id, kind, severity, title, body, status, created_at) VALUES (?1, ?2, 'source_blind', 'high', ?3, ?4, 'unread', ?5) ON CONFLICT(id) DO NOTHING`;
+
+export function insertSourceBlindAlert(
+  db: D1Database,
+  alert: {
+    id: string;
+    workspaceId: string;
+    title: string;
+    body: string;
+    createdAt: string;
+  },
+): D1PreparedStatement {
+  return db
+    .prepare(INSERT_SOURCE_BLIND_ALERT)
+    .bind(alert.id, alert.workspaceId, alert.title, alert.body, alert.createdAt);
+}

@@ -2,7 +2,7 @@ import { env } from "cloudflare:workers";
 import { z } from "zod";
 
 import { readUrl } from "../fetch/transport.server";
-import type { CardReview, CardValues, SiteFields } from "./card-fields";
+import type { CardReview, CardValues, DraftField, SiteFields } from "./card-fields";
 import { extractIdentity } from "./extract";
 import { reviewFields } from "./field-confidence.server";
 import { readLogo, storeLogo } from "./logo-store.server";
@@ -149,6 +149,7 @@ function applyReview(fields: CardValues, review: CardReview): Omit<SiteFields, "
 export function startCard(
   workspaceId: string,
   subject: Subject,
+  edited: readonly DraftField[],
 ): { site: Promise<SiteFields>; logo: Promise<string | null> } {
   const read = readSiteCard(subject);
   const site = read.then(async ({ card, reached }): Promise<SiteFields> => {
@@ -163,7 +164,7 @@ export function startCard(
         : card.socials,
     };
     const review: CardReview = reached
-      ? await reviewFields(workspaceId, subject, values, new Date().toISOString())
+      ? await reviewFields(workspaceId, subject, values, edited, new Date().toISOString())
       : fillReview(values);
     return { ...applyReview(values, review), unfound: subject.kind === "domain" && !reached };
   });
