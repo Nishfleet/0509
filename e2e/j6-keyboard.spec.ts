@@ -184,8 +184,9 @@ test("the per-brand switch is operable with a keyboard alone", async ({ page }) 
 
   // Reach the brand's switch by Tab alone. The list holds competitors only, so
   // every "… tracking" switch here is operable; focus lands on the first. The
-  // accessible name carries the state text too ("Zephyrwear tracking ON"), so
-  // the match is on the brand part, not the tail.
+  // wrapping <label> puts the state text in the rendered accessible name —
+  // Playwright computes "Zephyrwear tracking ON" (error-context snapshot) — so
+  // the match is on " tracking", not the tail.
   const toggle = page.getByRole("switch", { name: / tracking/ }).first();
   for (let i = 0; i < 60; i += 1) {
     if (await toggle.evaluate((el) => el === document.activeElement)) break;
