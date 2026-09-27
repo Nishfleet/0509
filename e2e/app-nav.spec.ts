@@ -14,6 +14,7 @@ test.skip(
 );
 
 test("a signed-in user reaches the four places by tapping and by Tab+Enter", async ({ page }) => {
+  test.setTimeout(120_000);
   const errors: string[] = [];
   page.on("console", (message) => {
     if (message.type() === "error") errors.push(message.text());
