@@ -9,6 +9,10 @@ import { acknowledgeOwnSiteIncident, loadAlertsPage } from "../lib/alerts-page.s
 import { parseAlertChip } from "../lib/alert-chips";
 import { requireSession } from "../lib/require-session.server";
 
+export function meta() {
+  return [{ title: "Alerts · Five to Nine" }];
+}
+
 const WHEN_CLASS = "text-ink-soft mt-2 block font-mono text-meta uppercase";
 
 export async function loader({ request }: Route.LoaderArgs) {
