@@ -2,6 +2,7 @@ import { env } from "cloudflare:test";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { insertSelfEntity, readEntityIdentityJson } from "../../../app/lib/data/entity.server";
+import { insertFieldEdits } from "../../../app/lib/data/user_decision.server";
 import { normaliseSubject } from "../../../app/lib/identity/normalise";
 import { probeKey } from "../../../app/lib/identity/probe-cache.server";
 import {
@@ -102,6 +103,27 @@ describe("site fill", () => {
     expect(await identity()).toEqual({
       description: "Mine",
       socials: [existing],
+      siteFill: "filled",
+    });
+  });
+
+  it("does not overwrite a description the customer edited", async () => {
+    await seed({ description: null, socials: [] });
+    await insertFieldEdits([
+      {
+        workspaceId,
+        userId,
+        entityId,
+        edit: { field: "description", from: "Gym clothes", to: "" },
+        decidedAt: NOW,
+      },
+    ]);
+    await env.IDENTITY_CACHE.put(key(), JSON.stringify(CARD));
+
+    expect(await attemptSiteFill(entityId, HOMEPAGE)).toBe("filled");
+    expect(await identity()).toEqual({
+      description: null,
+      socials: [SOCIAL],
       siteFill: "filled",
     });
   });
