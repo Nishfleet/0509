@@ -4,6 +4,7 @@ vi.mock("cloudflare:workers", () => ({ env: {} }));
 
 import { requireOnboarded } from "../app/lib/require-onboarded.server";
 import { middleware } from "../app/routes/app-layout";
+import * as appSettingsLayout from "../app/routes/app-settings-layout";
 
 vi.mock("../app/lib/require-session.server", () => ({
   requireSession: async () => ({ user: { id: "user-1" } }),
@@ -43,7 +44,11 @@ describe("requireOnboarded", () => {
 });
 
 describe("app layout middleware", () => {
-  it("is requireOnboarded, so every /app route is gated", () => {
+  it("gates the /app routes under app-layout with requireOnboarded", () => {
     expect(middleware).toEqual([requireOnboarded]);
+  });
+
+  it("leaves the /app/settings routes ungated, so account delete is always reachable", () => {
+    expect("middleware" in appSettingsLayout).toBe(false);
   });
 });
