@@ -10,13 +10,15 @@ import { requireInboxToken, signInWithMagicLink } from "./inbox";
 // The account is fresh and unfinished, so requireOnboarded — the app-layout
 // middleware from 0509#5690 — sends /app/competitors to the resume point. The
 // spec asserts the landing; the landmark and keyboard run of the page itself
-// needs a finished account.
+// returns on a finished account under 0509#5694.
 test.skip(
   !process.env.PLAYWRIGHT_TEST_BASE_URL,
   "the Competitors page needs a real session; the local preview Worker cannot mint one",
 );
 
 test("a signed-in unfinished account's /app/competitors visit lands on /onboarding", async ({ page }) => {
+  // The production sign-in poll alone can overrun Playwright's 30 s default.
+  test.setTimeout(120_000);
   const email = `e2e+${crypto.randomUUID().replaceAll("-", "").slice(0, 12)}@0509.io`;
   await signInWithMagicLink(page, email, requireInboxToken());
 

@@ -52,8 +52,9 @@ test("a passkey registered on first sign-in signs in on its own", async ({ page,
     await expect(page.getByRole("status")).toBeVisible();
 
     // The account is still unfinished, so requireOnboarded (0509#5690) sends
-    // /app/settings — and the Sign out button on it — to the resume point.
-    // Clearing the context's cookies is the signed-out state instead.
+    // /app/settings — and the Sign out button on it — to the resume point; an
+    // unfinished account has no reachable sign-out (0509#5695). Clearing the
+    // context's cookies is the signed-out state instead.
     await page.goto("/app/settings");
     await expect(page).toHaveURL(/\/onboarding/);
     await context.clearCookies();

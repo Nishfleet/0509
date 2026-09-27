@@ -94,11 +94,14 @@ test.describe("a signed-in unfinished account", () => {
   test.skip(!process.env.PLAYWRIGHT_TEST_BASE_URL, "needs the production mail path to sign in");
 
   test("cannot reach key management: /app/settings/agents lands on /onboarding", async ({ page }) => {
+    // The production sign-in poll alone can overrun Playwright's 30 s default.
+    test.setTimeout(120_000);
     const email = `e2e+${crypto.randomUUID().replaceAll("-", "").slice(0, 12)}@0509.io`;
     await signInWithMagicLink(page, email, requireInboxToken());
 
     // requireOnboarded gates every /app route (0509#5690), so key management
-    // sits behind the resume point until onboarding finishes.
+    // sits behind the resume point until onboarding finishes; the key
+    // lifecycle run returns on a finished account under 0509#5694.
     await page.goto("/app/settings/agents");
     await expect(page).toHaveURL(/\/onboarding/);
   });
