@@ -54,7 +54,10 @@ function previewDatabasePath(): string {
 }
 
 // One signed-in workspace that already watches one competitor — the smallest
-// seed that puts a switch on /app/competitors.
+// seed that puts a switch on /app/competitors. The self entity is what counts
+// the workspace as past onboarding: without it the /app layout middleware
+// (app/lib/require-onboarded.server.ts) redirects every /app page to
+// /onboarding before the loader runs.
 async function seedSession(): Promise<string> {
   const suffix = crypto.randomUUID().slice(0, 8);
   const email = `j6-keyboard-${suffix}@0509.io`;
@@ -93,6 +96,9 @@ async function seedSession(): Promise<string> {
     db.prepare(
       "INSERT INTO workspace (id, name, owner_user_id, timezone, brief_weekday, brief_hour, created_at) VALUES (?, ?, ?, 'UTC', 1, 8, ?)",
     ).run(`ws-${suffix}`, "Keyboard", user.id, stamp);
+    db.prepare(
+      "INSERT INTO entity (id, workspace_id, role, domain, name, created_at) VALUES (?, ?, 'self', ?, 'Self Brand', ?)",
+    ).run(`ent-self-${suffix}`, `ws-${suffix}`, `self-${suffix}.example`, stamp);
     db.prepare(
       "INSERT INTO entity (id, workspace_id, role, domain, name, created_at) VALUES (?, ?, 'competitor', ?, 'Zephyrwear', ?)",
     ).run(`ent-${suffix}`, `ws-${suffix}`, `zephyr-${suffix}.example`, stamp);
