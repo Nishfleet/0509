@@ -9,7 +9,7 @@ import { OnboardingFrame } from "../components/onboarding-frame";
 import { Button } from "../components/ui/button";
 import { handleCompetitorIntent } from "../lib/competitors.server";
 import { readOnboardingCompetitors } from "../lib/data/entity.server";
-import { markCompetitorsReady } from "../lib/data/onboarding_run.server";
+import { markCompetitorsReady, markWatchingStarted } from "../lib/data/onboarding_run.server";
 import { readWorkspaceIdForOwner } from "../lib/data/workspace.server";
 import { isDiscoveryActive } from "../lib/discovery/start.server";
 import { requireSession } from "../lib/require-session.server";
@@ -38,7 +38,10 @@ export async function loader({ request }: Route.LoaderArgs) {
 export async function action({ request }: Route.ActionArgs) {
   const workspaceId = await workspaceFor(request);
   const form = await request.formData();
-  if (form.get("intent") === "start") throw redirect("/app");
+  if (form.get("intent") === "start") {
+    await markWatchingStarted(workspaceId, new Date().toISOString());
+    throw redirect("/app");
+  }
   return handleCompetitorIntent(workspaceId, form);
 }
 
