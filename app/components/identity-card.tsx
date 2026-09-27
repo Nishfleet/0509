@@ -1,7 +1,7 @@
-import { Suspense, useId, useState, type ReactNode } from "react";
+import { Suspense, useId, useState, type KeyboardEvent, type ReactNode } from "react";
 import { Await, Form, useFetcher } from "react-router";
 
-import type { CardDraft, CreatorRows, SiteFields } from "../lib/identity/card-fields";
+import type { CardDraft, CreatorRows, DraftField, SiteFields } from "../lib/identity/card-fields";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
@@ -53,6 +53,9 @@ function EditRow({
   empty,
   emptyLine,
   multiline,
+  edited,
+  reverted,
+  onRevert,
   onSave,
 }: {
   label: string;
@@ -63,10 +66,20 @@ function EditRow({
   empty?: boolean;
   emptyLine: string;
   multiline?: boolean;
+  edited: boolean;
+  reverted: boolean;
+  onRevert: () => void;
   onSave: (value: string) => void;
 }) {
   const [value, setValue] = useState(initial);
+  const [open, setOpen] = useState(false);
   const checkId = useId();
+  const saveOnEnter = (event: KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    if (event.key !== "Enter") return;
+    event.preventDefault();
+    setOpen(false);
+    onSave(value);
+  };
   const editor =
     multiline === true ? (
       <textarea
@@ -78,6 +91,7 @@ function EditRow({
         onChange={(event) => {
           setValue(event.currentTarget.value);
         }}
+        onKeyDown={saveOnEnter}
       />
     ) : (
       <Input
@@ -87,13 +101,16 @@ function EditRow({
         onChange={(event) => {
           setValue(event.currentTarget.value);
         }}
+        onKeyDown={saveOnEnter}
       />
     );
   return (
     <Row label={label} check={check} checkId={checkId}>
       <Popover
-        onOpenChange={(open) => {
-          if (!open) onSave(value);
+        open={open}
+        onOpenChange={(next) => {
+          setOpen(next);
+          if (!next && value !== initial) onSave(value);
         }}
       >
         <PopoverTrigger
@@ -105,6 +122,22 @@ function EditRow({
         </PopoverTrigger>
         <PopoverContent>{editor}</PopoverContent>
       </Popover>
+      {edited ? (
+        <>
+          <span className="text-ink-soft font-mono text-[0.7rem] uppercase">edited by you</span>
+          <button
+            type="button"
+            className="text-ink-soft text-[0.88rem] underline"
+            onClick={onRevert}
+          >
+            use what we found
+          </button>
+        </>
+      ) : reverted ? (
+        <span role="status" className="text-ink-soft text-[0.88rem]">
+          back to what we found, we will check it again
+        </span>
+      ) : null}
       <input type="hidden" name={name} value={value} />
       {empty === true ? <span className="text-ink-soft text-[0.88rem]">{emptyLine}</span> : null}
     </Row>
@@ -147,9 +180,11 @@ export function Fields({
   const nameCheck = site.review.name === "check";
   const descriptionCheck = site.review.description === "check";
   const fetcher = useFetcher();
+  const [reverted, setReverted] = useState<DraftField | null>(null);
   return (
     <>
       <EditRow
+        key={draft.name === undefined ? "name:found" : "name:edited"}
         label="name"
         name="name"
         initial={draft.name ?? (nameCheck ? "" : (site.name ?? ""))}
@@ -157,7 +192,14 @@ export function Fields({
         check={nameCheck}
         empty={site.review.name === "empty"}
         emptyLine={emptyLine}
+        edited={draft.name !== undefined}
+        reverted={reverted === "name"}
+        onRevert={() => {
+          setReverted("name");
+          void fetcher.submit({ intent: "revert", subject, field: "name" }, { method: "post" });
+        }}
         onSave={(value) => {
+          setReverted(null);
           void fetcher.submit(
             { intent: "draft", subject, field: "name", value },
             { method: "post" },
@@ -172,6 +214,7 @@ export function Fields({
         <Logo logo={logo} />
       )}
       <EditRow
+        key={draft.description === undefined ? "description:found" : "description:edited"}
         label="about"
         name="description"
         initial={draft.description ?? (descriptionCheck ? "" : (site.description ?? ""))}
@@ -180,7 +223,17 @@ export function Fields({
         empty={site.review.description === "empty"}
         emptyLine={emptyLine}
         multiline
+        edited={draft.description !== undefined}
+        reverted={reverted === "description"}
+        onRevert={() => {
+          setReverted("description");
+          void fetcher.submit(
+            { intent: "revert", subject, field: "description" },
+            { method: "post" },
+          );
+        }}
         onSave={(value) => {
+          setReverted(null);
           void fetcher.submit(
             { intent: "draft", subject, field: "description", value },
             { method: "post" },

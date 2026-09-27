@@ -86,6 +86,23 @@ export async function readSiteChangeViews(input: {
   return Promise.all(parsed.map(({ row, payload }) => toView(row, payload)));
 }
 
+export async function readBiggestSiteChanges(workspaceId: string, since: string): Promise<SiteChangeView[]> {
+  const rows = await readSiteChanges({ workspaceId, entityId: null, since, limit: 200 });
+  const winners = new Map<string, { row: SiteChangeRow; payload: SiteChangePayload }>();
+  for (const row of rows) {
+    const payload = parseSiteChangePayload(row.payload_json);
+    if (payload === null) continue;
+    const current = winners.get(row.entity_id);
+    if (
+      current === undefined ||
+      payload.wordsAdded + payload.wordsRemoved > current.payload.wordsAdded + current.payload.wordsRemoved
+    ) {
+      winners.set(row.entity_id, { row, payload });
+    }
+  }
+  return Promise.all([...winners.values()].map(({ row, payload }) => toView(row, payload)));
+}
+
 const SHOT_PREFIX = "snapshot/site/";
 
 export async function readChangeShot(

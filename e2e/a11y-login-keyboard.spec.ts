@@ -1,5 +1,7 @@
 import { expect, test } from "@playwright/test";
 
+import { settleSignInWidget } from "./inbox";
+
 // #4148: the /login screens expose the three landmarks, the Tab order reaches
 // every action, the sent state moves focus to its heading, and the resend wait
 // is announced once, not every second.
@@ -39,6 +41,7 @@ test("/login keyboard path, landmarks and the sent-state announcement (#4148)", 
   const email = `e2e+${crypto.randomUUID().replaceAll("-", "").slice(0, 12)}@0509.io`;
   await page.getByLabel("Email").focus();
   await page.getByLabel("Email").fill(email);
+  await settleSignInWidget(page);
   await page.keyboard.press("Enter");
 
   await expect(page.getByRole("heading", { level: 1, name: "Check your email" })).toBeFocused();

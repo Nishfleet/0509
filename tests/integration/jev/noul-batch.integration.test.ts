@@ -49,9 +49,7 @@ const questions: readonly NoulQuestion[] = [NAME_QUESTION, CATEGORY_QUESTION, CO
 
 const state = { subject: { name: "Gymshark", domain: "gymshark.com" } };
 
-function allFreshAnswers(): {
-  answers: Record<string, { type: "noul"; noul: number }>;
-} {
+function allFreshAnswers(): { answers: Record<string, { type: "noul"; noul: number }> } {
   return {
     answers: {
       identity_name: { type: "noul", noul: 0.93 },

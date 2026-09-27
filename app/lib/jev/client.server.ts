@@ -34,8 +34,19 @@ export interface ChoiceVerdict {
   cached: boolean;
 }
 
+const noulType = z.literal("noul");
+
+interface NoulAsk {
+  type: z.infer<typeof noulType>;
+  instructions: string;
+  criteria: { true: string; false: string };
+}
+
 const answerSchema = z.object({
-  answers: z.record(z.string(), z.object({ type: z.literal("noul"), noul: z.number().min(0).max(1) })),
+  answers: z.record(
+    z.string(),
+    z.object({ type: noulType, noul: z.number().min(0).max(1) }),
+  ),
 });
 
 type NoulAnswers = z.infer<typeof answerSchema>["answers"];
@@ -62,7 +73,16 @@ function inputHash(workspaceId: string, question: NoulQuestion, state: unknown):
   );
 }
 
+function noulAsk(question: NoulQuestion): NoulAsk {
+  return {
+    type: "noul",
+    instructions: question.instructions,
+    criteria: { true: question.whenTrue, false: question.whenFalse },
+  };
+}
+
 async function run(question: NoulQuestion, state: unknown): Promise<number> {
+  const asked = noulAsk(question);
   let raw: unknown;
   try {
     raw = await env.AI.run(
@@ -70,11 +90,7 @@ async function run(question: NoulQuestion, state: unknown): Promise<number> {
       {
         state,
         questions: {
-          [question.id]: {
-            type: "noul",
-            instructions: question.instructions,
-            criteria: { true: question.whenTrue, false: question.whenFalse },
-          },
+          [question.id]: asked,
         },
       },
       { gateway: { id: GATEWAY_ID } },
@@ -111,22 +127,14 @@ export async function askNouls(
   const pending = entries.filter((entry) => entry.cached === null);
   let answers: NoulAnswers = {};
   if (pending.length > 0) {
+    const asked = Object.fromEntries(pending.map((entry) => [entry.question.id, noulAsk(entry.question)]));
     let raw: unknown;
     try {
       raw = await env.AI.run(
         MODEL,
         {
           state,
-          questions: Object.fromEntries(
-            pending.map((entry) => [
-              entry.question.id,
-              {
-                type: "noul",
-                instructions: entry.question.instructions,
-                criteria: { true: entry.question.whenTrue, false: entry.question.whenFalse },
-              },
-            ]),
-          ),
+          questions: asked,
         },
         { gateway: { id: GATEWAY_ID } },
       );

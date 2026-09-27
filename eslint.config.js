@@ -227,6 +227,72 @@ const ENV_DB_IN_ROUTES = {
     "Routes do not touch env.DB. Go through the one data layer in app/lib/data/. docs/REBUILD-TRUST.md C4.",
 };
 
+const STATIC_HOME_HTML_PARSER = {
+  meta: { name: "static-home-html" },
+  parse(text) {
+    const lines = text.split("\n");
+    const last = lines.length - 1;
+    return {
+      type: "Program",
+      body: [],
+      sourceType: "script",
+      comments: [],
+      tokens: [],
+      loc: {
+        start: { line: 1, column: 0 },
+        end: { line: lines.length, column: lines[last].length },
+      },
+      range: [0, text.length],
+    };
+  },
+};
+
+const STATIC_HOME_FONT_PRELOAD = {
+  meta: {
+    type: "problem",
+    schema: [],
+    messages: {
+      preload:
+        "The static home must not preload a font. A preload holds the headline paint until the face arrives, so simulated LCP misses lighthouse-budget.json. The three faces stay on the @font-face rules with font-display: swap. Source: 0509#5580.",
+      fontFace:
+        "The static home must not declare @font-face in the document. A face that finishes before the headline is a simulated-LCP dependency and misses lighthouse-budget.json. The three faces live in /home-faces.css. Source: 0509#5598.",
+      scannerLink:
+        "The static home must not include a link element. The preload scanner fetches it before the headline paints, which puts /home-faces.css on the simulated LCP chain. Source: 0509#5630.",
+      lateFaces:
+        "The static home must append /home-faces.css from a load listener placed after </main>, so the brand faces are requested after the headline paints. Source: 0509#5630.",
+    },
+  },
+  create(context) {
+    return {
+      Program(node) {
+        const text = context.sourceCode.getText();
+        const preloadsFont =
+          /<link\b[^>]*\brel="preload"[^>]*\bas="font"/.test(text) ||
+          /<link\b[^>]*\bas="font"[^>]*\brel="preload"/.test(text);
+        if (preloadsFont) {
+          context.report({ node, messageId: "preload" });
+        }
+        if (text.includes("@font-face")) {
+          context.report({ node, messageId: "fontFace" });
+        }
+        if (/<link\b/i.test(text)) {
+          context.report({ node, messageId: "scannerLink" });
+        }
+        const mainEnd = text.lastIndexOf("</main>");
+        const scriptAt = text.indexOf("<script>");
+        const scriptEnd = scriptAt < 0 ? -1 : text.indexOf("</script>", scriptAt);
+        const script = scriptAt >= 0 && scriptEnd > scriptAt ? text.slice(scriptAt, scriptEnd) : "";
+        const asksAfterLoad =
+          script.includes('addEventListener("load"') &&
+          script.includes('faces.href = "/home-faces.css"');
+        if (mainEnd < 0 || scriptAt < mainEnd || !asksAfterLoad) {
+          context.report({ node, messageId: "lateFaces" });
+        }
+      },
+    };
+  },
+};
+
 const WORKAROUND_TERMS = [
   "todo",
   "fixme",
@@ -669,12 +735,30 @@ export default tseslint.config(
   },
 
   {
-    files: ["**/*.js", "**/*.mjs", "**/*.cjs", "*.config.ts", "e2e/**/*.ts", "tests/**/*.ts"],
+    files: ["**/*.js", "**/*.mjs", "**/*.cjs", "*.config.ts", "e2e/**/*.ts", "tests/**/*.ts", "public/index.html"],
     extends: [tseslint.configs.disableTypeChecked],
     rules: {
       "no-inline-comments": "off",
       "no-warning-comments": "off",
       "@typescript-eslint/no-unsafe-assignment": "off",
+    },
+  },
+
+  {
+    files: ["public/index.html"],
+    plugins: {
+      "static-home": {
+        rules: {
+          "no-font-preload": STATIC_HOME_FONT_PRELOAD,
+        },
+      },
+    },
+    languageOptions: {
+      parser: STATIC_HOME_HTML_PARSER,
+      parserOptions: { projectService: false },
+    },
+    rules: {
+      "static-home/no-font-preload": "error",
     },
   },
 );

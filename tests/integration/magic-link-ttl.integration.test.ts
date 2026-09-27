@@ -23,6 +23,7 @@ describe("magic link expiry", () => {
       },
       SIGN_IN_EMAIL_LIMIT: env.SIGN_IN_EMAIL_LIMIT,
       SIGN_IN_IP_LIMIT: env.SIGN_IN_IP_LIMIT,
+      TURNSTILE_SECRET_KEY: "1x0000000000000000000000000000000AA",
       BETTER_AUTH_SECRET: "integration-test-secret-integration-test-secret",
       BETTER_AUTH_URL: ORIGIN,
     });
@@ -30,7 +31,11 @@ describe("magic link expiry", () => {
     const response = await auth.handler(
       new Request(`${ORIGIN}/api/auth/sign-in/magic-link`, {
         method: "POST",
-        headers: { "content-type": "application/json", origin: ORIGIN },
+        headers: {
+          "content-type": "application/json",
+          origin: ORIGIN,
+          "x-captcha-response": "XXXX.DUMMY.TOKEN.XXXX",
+        },
         body: JSON.stringify({ email: EMAIL, callbackURL: "/app" }),
       }),
     );

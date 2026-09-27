@@ -16,6 +16,7 @@ function authSending(sent: string[]) {
     },
     SIGN_IN_EMAIL_LIMIT: env.SIGN_IN_EMAIL_LIMIT,
     SIGN_IN_IP_LIMIT: env.SIGN_IN_IP_LIMIT,
+    TURNSTILE_SECRET_KEY: "1x0000000000000000000000000000000AA",
     BETTER_AUTH_SECRET: "integration-test-secret-integration-test-secret",
     BETTER_AUTH_URL: ORIGIN,
   });
@@ -25,7 +26,12 @@ function requestLink(auth: ReturnType<typeof createAuth>, email: string, ip: str
   return auth.handler(
     new Request(`${ORIGIN}/api/auth/sign-in/magic-link`, {
       method: "POST",
-      headers: { "content-type": "application/json", origin: ORIGIN, "cf-connecting-ip": ip },
+      headers: {
+        "content-type": "application/json",
+        origin: ORIGIN,
+        "cf-connecting-ip": ip,
+        "x-captcha-response": "XXXX.DUMMY.TOKEN.XXXX",
+      },
       body: JSON.stringify({ email, callbackURL: "/app" }),
     }),
   );

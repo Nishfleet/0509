@@ -10,6 +10,14 @@ export interface IncidentBlockProps {
   recheckLabel: string;
 }
 
+export function IncidentSlot({ incident }: { incident: IncidentBlockProps | null }): ReactElement {
+  return (
+    <div data-testid="incident-live" aria-live="polite">
+      {incident === null ? null : <IncidentBlock {...incident} />}
+    </div>
+  );
+}
+
 export function IncidentBlock({
   alertId,
   title,
