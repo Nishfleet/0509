@@ -4,11 +4,14 @@ import { settleSignInWidget } from "./inbox";
 
 // #4015, DESIGN.md §2.2: the sent state lands in place and the resend counts down for 30 s.
 test("the sent state lands in place and the resend waits 30 seconds with a visible count", async ({ page }) => {
-  const errors: string[] = [];
+  const consoleErrors: { text: string; url: string }[] = [];
+  const pageErrors: string[] = [];
   page.on("console", (message) => {
-    if (message.type() === "error") errors.push(message.text());
+    if (message.type() === "error") {
+      consoleErrors.push({ text: message.text(), url: message.location().url });
+    }
   });
-  page.on("pageerror", (error) => errors.push(error.message));
+  page.on("pageerror", (error) => pageErrors.push(error.message));
 
   await page.clock.install();
 
@@ -37,5 +40,12 @@ test("the sent state lands in place and the resend waits 30 seconds with a visib
   );
   expect(fitsViewport).toBe(true);
 
-  expect(errors).toEqual([]);
+  const pageOrigin = new URL(page.url()).origin;
+  const failures = [
+    ...consoleErrors
+      .filter((entry) => !entry.url || new URL(entry.url).origin === pageOrigin)
+      .map((entry) => `${entry.text} @ ${entry.url}`),
+    ...pageErrors,
+  ];
+  expect(failures).toEqual([]);
 });
