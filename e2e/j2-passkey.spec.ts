@@ -53,7 +53,7 @@ test("a passkey registered on first sign-in signs in on its own", async ({ page,
 
     // The account is still unfinished, so requireOnboarded (0509#5690) sends
     // /app/settings — and the Sign out button on it — to the resume point; an
-    // unfinished account has no reachable sign-out (0509#5695). Clearing the
+    // unfinished account has no reachable sign-out (0509#5696). Clearing the
     // app's own session cookies is the signed-out state instead — a blanket
     // clearCookies would also drop CF_Authorization and land the next goto on
     // the Access interstitial, whose URL matches /\/login/.
