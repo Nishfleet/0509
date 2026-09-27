@@ -1,6 +1,6 @@
 import { env } from "cloudflare:workers";
 
-import { insertIncidentAlert } from "../data/alert.server";
+import { insertIncidentAlertStatement } from "../data/alert.server";
 import { closeIncident, closeIncidentsOutside, openIncident, readOpenIncidents } from "../data/incident.server";
 import type { OwnSitePage } from "../data/page.server";
 import { readOwnSitePages } from "../data/page.server";
@@ -76,14 +76,18 @@ export async function openOwnSiteIncident(page: OwnSitePage, kind: string): Prom
     openedAt,
   });
   if (incidentId === null) return null;
-  await insertIncidentAlert(env.DB, {
-    incidentId,
+  await insertIncidentAlertStatement({
+    id: `incident-${incidentId}`,
     workspaceId: page.workspaceId,
     entityId: page.entityId,
     pageId: page.pageId,
+    signalId: null,
+    incidentId,
+    severity: "high",
     title: `${page.domain} looks broken: ${kind}`,
+    body: null,
     createdAt: openedAt,
-  });
+  }).run();
   await env.SEND_EMAIL.send({ incident_id: incidentId });
   return incidentId;
 }

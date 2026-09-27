@@ -3,12 +3,13 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { createMemoryRouter, RouterProvider } from "react-router";
 import { describe, expect, it } from "vitest";
 
-import { HomeStanding } from "../../app/components/home-standing";
+import { HomePageFrame, HomeStanding } from "../../app/components/home-standing";
 import type { BriefPayload } from "../../app/lib/brief-payload";
 import type { BriefSchedule } from "../../app/lib/brief-schedule";
 import type { HowRanked } from "../../app/lib/how-ranked";
 import {
   greetingFor,
+  homeChips,
   homeStanding,
   homeView,
   movementLabel,
@@ -131,6 +132,8 @@ function render(input: {
     schedule: SCHEDULE,
     history: [],
     sources: SITE_SOURCES,
+    counts: [],
+    moves: [],
     now: THURSDAY_MORNING,
   });
   const router = createMemoryRouter([
@@ -138,6 +141,27 @@ function render(input: {
   ]);
   return renderToStaticMarkup(createElement(RouterProvider, { router }));
 }
+
+describe("Home page frame", () => {
+  it("puts the date in the banner, the standing in main, and the footer in contentinfo", () => {
+    const html = renderToStaticMarkup(
+      createElement(
+        HomePageFrame,
+        { eyebrow: "Thursday 24 September", footer: "Checked today" },
+        createElement("h1", null, "Good morning"),
+      ),
+    );
+    const header = html.indexOf("<header");
+    const main = html.indexOf("<main>");
+    const footer = html.indexOf("<footer");
+    expect(header).toBeGreaterThan(-1);
+    expect(main).toBeGreaterThan(header);
+    expect(footer).toBeGreaterThan(main);
+    expect(html).toContain("Thursday 24 September");
+    expect(html).toContain("Good morning");
+    expect(html).toContain("Checked today");
+  });
+});
 
 describe("Home standing", () => {
   it("greets with the rank on the marker and the why-line under it", () => {
@@ -161,6 +185,9 @@ describe("Home standing", () => {
       entities: ENTITIES,
       schedule: SCHEDULE,
       history: [],
+      sources: [],
+      counts: [],
+      moves: [],
       now: THURSDAY_MORNING,
     });
     if (standing.kind !== "ranked") throw new Error("expected a ranked standing");
@@ -180,6 +207,9 @@ describe("Home standing", () => {
       entities: ENTITIES,
       schedule: SCHEDULE,
       history: [],
+      sources: [],
+      counts: [],
+      moves: [],
       now: THURSDAY_MORNING,
     });
     expect(standing.kind).toBe("ranked");
@@ -192,7 +222,7 @@ describe("Home standing", () => {
     const html = render({ payload: payload() });
     expect(html.match(/data-testid="standing-row"/g)).toHaveLength(3);
     expect(html).toContain('data-self="true"');
-    expect(html).toContain("You · ");
+    expect(html).not.toContain("You · ");
   });
 
   it("puts an unranked brand last with a dash, never a zero", () => {
@@ -201,6 +231,9 @@ describe("Home standing", () => {
       entities: ENTITIES,
       schedule: SCHEDULE,
       history: [],
+      sources: [],
+      counts: [],
+      moves: [],
       now: THURSDAY_MORNING,
     });
     if (standing.kind !== "ranked") throw new Error("expected a ranked standing");
@@ -220,11 +253,22 @@ describe("Home standing", () => {
         }),
       ],
     });
-    const standing = homeStanding({ payload: p, entities: ENTITIES, schedule: SCHEDULE, history: [], now: THURSDAY_MORNING });
+    const standing = homeStanding({
+      payload: p,
+      entities: ENTITIES,
+      schedule: SCHEDULE,
+      history: [],
+      sources: SITE_SOURCES,
+      counts: [],
+      moves: [],
+      now: THURSDAY_MORNING,
+    });
     if (standing.kind !== "ranked") throw new Error("expected a ranked standing");
     expect(standing.rows.map((row) => row.position)).toEqual([1, null]);
+    expect(standing.rows.map((row) => row.signals)).toEqual([0, 0]);
     const html = render({ payload: p });
     expect(html).toContain(">—<");
+    expect(html).not.toContain("#1");
   });
 
   it("asks for a competitor when fewer than two brands are on (REBUILD-STANDING rules)", () => {
@@ -252,16 +296,17 @@ describe("Home standing", () => {
     expect(render({ payload: payload({ headline_rank: null }) })).toContain("gathering the first week");
   });
 
-  it("shows one chip per ON brand in the gathering state and no chip row once ranked", () => {
+  it("shows a chip per on and off brand in the gathering state and no chip row once ranked", () => {
     const entities: readonly HomeEntity[] = [
       SELF,
       { id: "ent_kindred", role: "competitor", domain: "kindred.example", name: "Kindred", state: "on" },
       { id: "ent_off", role: "competitor", domain: "off.example", name: "Off Brand", state: "off" },
     ];
-    const view = homeView({ payload: null, entities, schedule: SCHEDULE, history: [], sources: SITE_SOURCES, now: THURSDAY_MORNING });
+    const view = homeView({ payload: null, entities, schedule: SCHEDULE, history: [], sources: SITE_SOURCES, counts: [], moves: [], now: THURSDAY_MORNING });
     expect(view.chips).toEqual([
-      { name: "Own Brand", href: "/app/settings", self: true },
-      { name: "Kindred", href: "/app/competitors/ent_kindred", self: false },
+      { name: "Own Brand", href: "/app/settings", self: true, off: false },
+      { name: "Kindred", href: "/app/competitors/ent_kindred", self: false, off: false },
+      { name: "Off Brand", href: "/app/competitors/ent_off", self: false, off: true },
     ]);
 
     const gathering = render({ payload: null, entities });
@@ -271,8 +316,9 @@ describe("Home standing", () => {
     expect(gathering).toContain('href="/app/competitors/ent_kindred"');
     expect(gathering).toContain("You · Own Brand");
     expect(gathering).toContain("Kindred");
-    expect(gathering).not.toContain("Off Brand");
-    expect(gathering).not.toContain('href="/app/competitors/ent_off"');
+    expect(gathering).toContain('href="/app/competitors/ent_off"');
+    expect(gathering).toContain("Off Brand · off");
+    expect(gathering).toContain('data-off=""');
 
     const ranked = render({ payload: payload(), entities });
     expect(ranked).not.toContain('aria-label="Your set"');
@@ -311,10 +357,10 @@ describe("Home standing", () => {
       { id: "ent_casetta", role: "competitor", domain: "casetta.example", name: "Casetta", state: "on" },
       { id: "ent_hollow", role: "competitor", domain: "hollow.example", name: "Hollow", state: "on" },
     ];
-    const four = homeView({ payload: payload(), entities: fourOn, schedule: amsterdamSchedule, history: [], sources: SITE_SOURCES, now });
+    const four = homeView({ payload: payload(), entities: fourOn, schedule: amsterdamSchedule, history: [], sources: SITE_SOURCES, counts: [], moves: [], now });
     expect(four.footer).toBe("Checked 4 brands this week · brief Monday 08:00 · your site re-checked at 13:00");
 
-    const one = homeView({ payload: payload(), entities: [SELF], schedule: amsterdamSchedule, history: [], sources: SITE_SOURCES, now });
+    const one = homeView({ payload: payload(), entities: [SELF], schedule: amsterdamSchedule, history: [], sources: SITE_SOURCES, counts: [], moves: [], now });
     expect(one.footer).toBe("Checked 1 brand this week · brief Monday 08:00 · your site re-checked at 13:00");
   });
 });
@@ -345,11 +391,46 @@ function chartStanding(history: readonly HomeHistoryRow[]) {
     entities: HISTORY_ENTITIES,
     schedule: SCHEDULE,
     history,
+    sources: [],
+    counts: [],
+    moves: [],
     now: THURSDAY_MORNING,
   });
   if (standing.kind !== "ranked") throw new Error("expected a ranked standing");
   return standing;
 }
+
+describe("Home chips", () => {
+  it("keeps an off competitor in the row with off true", () => {
+    const chips = homeChips([
+      SELF,
+      { id: "ent_kindred", role: "competitor", domain: "kindred.example", name: "Kindred", state: "on" },
+      { id: "ent_off", role: "competitor", domain: "off.example", name: "Off Brand", state: "off" },
+    ]);
+    expect(chips).toContainEqual({ name: "Off Brand", href: "/app/competitors/ent_off", self: false, off: true });
+  });
+
+  it("leaves a dismissed competitor out of the row", () => {
+    const chips = homeChips([
+      SELF,
+      { id: "ent_gone", role: "competitor", domain: "gone.example", name: "Gone", state: "dismissed" },
+      { id: "ent_kindred", role: "competitor", domain: "kindred.example", name: "Kindred", state: "on" },
+    ]);
+    expect(chips.map((chip) => chip.name)).toEqual(["Own Brand", "Kindred"]);
+  });
+
+  it("builds the view's chips with homeChips", () => {
+    const entities: readonly HomeEntity[] = [
+      { id: "ent_kindred", role: "competitor", domain: "kindred.example", name: "Kindred", state: "on" },
+      { id: "ent_gone", role: "competitor", domain: "gone.example", name: "Gone", state: "dismissed" },
+      { id: "ent_off", role: "competitor", domain: "off.example", name: "Off Brand", state: "off" },
+      SELF,
+    ];
+    const view = homeView({ payload: null, entities, schedule: SCHEDULE, history: [], sources: SITE_SOURCES, counts: [], moves: [], now: THURSDAY_MORNING });
+    expect(view.chips).toEqual(homeChips(entities));
+    expect(view.chips[0]?.self).toBe(true);
+  });
+});
 
 describe("four-week chart", () => {
   it("shows four weeks ascending, dropping the oldest, with the London week labelled 21 SEP", () => {

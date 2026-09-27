@@ -1,7 +1,7 @@
 import { env } from "cloudflare:workers";
 
-import { countVerdictsSince, findVerdict, insertVerdicts, type VerdictRow } from "../data/jev_verdict.server";
-import { askChoice, askNoul, JevUnavailableError, type ChoiceQuestion, type NoulQuestion } from "../jev/client.server";
+import { countVerdictsSince, insertVerdicts, type VerdictRow } from "../data/jev_verdict.server";
+import { askChoice, askNoul, JevUnavailableError, type ChoiceQuestion, type ChoiceVerdict, type NoulQuestion, type NoulVerdict } from "../jev/client.server";
 import type { BreakageEvidence } from "./breakage-evidence";
 
 const JEV_JUDGMENTS_PER_BRAND_PER_DAY = 6;
@@ -136,15 +136,6 @@ function verdictRow(input: {
   };
 }
 
-async function sha256Hex(text: string): Promise<string> {
-  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
-  return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
-}
-
-function groupHash(questionIds: readonly string[], state: unknown): Promise<string> {
-  return sha256Hex(JSON.stringify({ questionIds, state }));
-}
-
 async function readHistory30d(entityId: string, sinceIso: string): Promise<(string | null)[]> {
   const result = await env.DB.prepare(HISTORY_SQL).bind(entityId, sinceIso).all<HistoryRow>();
   return result.results.map((row) => row.summary);
@@ -172,28 +163,23 @@ export async function judgeChange(input: JudgeInput): Promise<ChangeJudgment> {
   let selfBreakage: BreakageBand | null = null;
 
   if (input.isSelf) {
-    const hash = await groupHash([D3S_BREAKAGE_QID], state);
-    const cached = await findVerdict(D3S_BREAKAGE_QID, hash);
-    let p: number;
-    if (typeof cached?.p === "number") {
-      p = cached.p;
-    } else {
-      try {
-        p = (await askNoul(input.workspaceId, D3S_BREAKAGE, state)).p;
-      } catch (error) {
-        if (error instanceof JevUnavailableError) {
-          return { deferred: true, selfBreakage: null, noteworthy: null };
-        }
-        throw error;
+    let breakage: NoulVerdict;
+    try {
+      breakage = await askNoul(input.workspaceId, D3S_BREAKAGE, state);
+    } catch (error) {
+      if (error instanceof JevUnavailableError) {
+        return { deferred: true, selfBreakage: null, noteworthy: null };
       }
+      throw error;
     }
+    const p = breakage.p;
     const band = breakageBandOf(p);
     const reason = bandReason(band, p);
     rows.push(verdictRow({
       workspaceId: input.workspaceId,
       entityId: input.entityId,
       questionId: D3S_BREAKAGE_QID,
-      inputHash: hash,
+      inputHash: breakage.inputHash,
       p,
       choice: null,
       reason,
@@ -206,32 +192,21 @@ export async function judgeChange(input: JudgeInput): Promise<ChangeJudgment> {
     }
   }
 
-  const hash = await groupHash([D3_NOTEWORTHY_QID, D3_KIND_QID], state);
-  const cachedNoul = await findVerdict(D3_NOTEWORTHY_QID, hash);
-  const cachedKind = await findVerdict(D3_KIND_QID, hash);
-
-  let p: number;
-  let kind: string;
-  if (cachedNoul?.p != null && cachedKind?.choice != null) {
-    p = cachedNoul.p;
-    kind = cachedKind.choice;
-  } else {
-    let noul: { p: number };
-    let choice: { choice: string };
-    try {
-      [noul, choice] = await Promise.all([
-        askNoul(input.workspaceId, D3_NOTEWORTHY, state),
-        askChoice(input.workspaceId, D3_KIND, state),
-      ]);
-    } catch (error) {
-      if (error instanceof JevUnavailableError) {
-        return { deferred: true, selfBreakage, noteworthy: null };
-      }
-      throw error;
+  let noul: NoulVerdict;
+  let choice: ChoiceVerdict;
+  try {
+    [noul, choice] = await Promise.all([
+      askNoul(input.workspaceId, D3_NOTEWORTHY, state),
+      askChoice(input.workspaceId, D3_KIND, state),
+    ]);
+  } catch (error) {
+    if (error instanceof JevUnavailableError) {
+      return { deferred: true, selfBreakage, noteworthy: null };
     }
-    p = noul.p;
-    kind = choice.choice;
+    throw error;
   }
+  const p = noul.p;
+  const kind = choice.choice;
 
   const band = noteworthyBandOf(p, kind);
   const reason = bandReason(band, p);
@@ -239,7 +214,7 @@ export async function judgeChange(input: JudgeInput): Promise<ChangeJudgment> {
     workspaceId: input.workspaceId,
     entityId: input.entityId,
     questionId: D3_NOTEWORTHY_QID,
-    inputHash: hash,
+    inputHash: noul.inputHash,
     p,
     choice: null,
     reason,
@@ -249,7 +224,7 @@ export async function judgeChange(input: JudgeInput): Promise<ChangeJudgment> {
     workspaceId: input.workspaceId,
     entityId: input.entityId,
     questionId: D3_KIND_QID,
-    inputHash: hash,
+    inputHash: choice.inputHash,
     p: null,
     choice: kind,
     reason,

@@ -61,6 +61,33 @@ export async function readPageHashes(entityId: string): Promise<ReadonlyMap<stri
   return new Map(parsed.map((row) => [row.url, row.role_decided_for_hash]));
 }
 
+const SELECT_JUDGED_PRICING =
+  "SELECT url FROM page WHERE entity_id = ?1 AND role = 'pricing' AND role_decided_for_hash IS NOT NULL ORDER BY url LIMIT 1";
+
+export async function readJudgedPricingUrl(entityId: string): Promise<string | null> {
+  const row = await env.DB.prepare(SELECT_JUDGED_PRICING).bind(entityId).first<{ url: string }>();
+  return row?.url ?? null;
+}
+
+const RECORD_TRANSPORT = "UPDATE page SET transport = ?2, transport_reason = ?3, transport_tested_at = ?4, deferred_at = NULL WHERE id = ?1";
+
+const MARK_DEFERRED = "UPDATE page SET deferred_at = ?2 WHERE id = ?1";
+
+export async function recordPageTransport(input: {
+  pageId: string;
+  transport: "fetch" | "browser";
+  reason: string | null;
+  testedAt: string;
+}): Promise<void> {
+  await env.DB.prepare(RECORD_TRANSPORT)
+    .bind(input.pageId, input.transport, input.reason, input.testedAt)
+    .run();
+}
+
+export async function markPageDeferred(pageId: string, at: string): Promise<void> {
+  await env.DB.prepare(MARK_DEFERRED).bind(pageId, at).run();
+}
+
 export interface OwnSitePage {
   workspaceId: string;
   entityId: string;

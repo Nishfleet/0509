@@ -17,6 +17,8 @@ export interface SiteSweepTarget {
   pageId: string;
   pageRole: string;
   url: string;
+  transport: "fetch" | "browser" | null;
+  transportTestedAt: string | null;
 }
 
 const INSERT_WATCH = `INSERT INTO watch (id, entity_id, source_id, target_key)
@@ -38,7 +40,9 @@ const SITE_SWEEP_TARGETS = `SELECT e.workspace_id AS workspace_id,
        w.id AS watch_id,
        p.id AS page_id,
        COALESCE(p.role, 'other') AS page_role,
-       p.url AS url
+       p.url AS url,
+       p.transport AS transport,
+       p.transport_tested_at AS transport_tested_at
 FROM watch w
 JOIN source src ON src.id = w.source_id AND src.key = ?1 AND src.is_enabled = 1
 JOIN entity e ON e.id = w.entity_id AND e.state = 'on'
@@ -58,6 +62,8 @@ const targetRows = z.array(
     page_id: z.string(),
     page_role: z.string(),
     url: z.string(),
+    transport: z.enum(["fetch", "browser"]).nullable(),
+    transport_tested_at: z.string().nullable(),
   }),
 );
 
@@ -137,6 +143,8 @@ export async function readSiteSweepTargets(sourceKey: string): Promise<readonly 
     pageId: row.page_id,
     pageRole: row.page_role,
     url: row.url,
+    transport: row.transport,
+    transportTestedAt: row.transport_tested_at,
   }));
 }
 

@@ -1,11 +1,49 @@
-import { createElement } from "react";
+import { createChangeEventDetails } from "@base-ui/react/internals/createBaseUIEventDetails";
+import { REASONS } from "@base-ui/react/internals/reasons";
+import { createElement, type ComponentProps } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { MemoryRouter } from "react-router";
-import { describe, expect, it } from "vitest";
+import type * as ReactRouterModule from "react-router";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { DevelopmentsFeed } from "../../app/components/developments-feed";
 import type { SiteChangeItemData } from "../../app/components/site-change-item";
 import type { DevelopmentItem } from "../../app/lib/developments";
+import type * as ToggleGroupModule from "../../app/components/ui/toggle-group";
+
+type ToggleGroupPrimitive = typeof ToggleGroupModule.ToggleGroup;
+
+type ToggleGroupProps = ComponentProps<ToggleGroupPrimitive>;
+
+const feedFilterHarness = vi.hoisted(() => ({
+  params: new URLSearchParams(),
+  onValueChange: null as ToggleGroupProps["onValueChange"] | null,
+  setSearchParams: null as ((next: URLSearchParamsInit, options?: unknown) => void) | null,
+}));
+
+vi.mock("react-router", async (importOriginal) => {
+  const actual = await importOriginal<ReactRouterModule>();
+  return {
+    ...actual,
+    useSearchParams: () => [
+      feedFilterHarness.params,
+      (next: URLSearchParamsInit, options?: unknown) => feedFilterHarness.setSearchParams?.(next, options),
+    ] as const,
+  };
+});
+
+vi.mock("../../app/components/ui/toggle-group", async (importOriginal) => {
+  const actual = await importOriginal<ToggleGroupModule>();
+  return {
+    ...actual,
+    ToggleGroup: ({ children, onValueChange, ...props }: ToggleGroupProps) => {
+      feedFilterHarness.onValueChange = onValueChange ?? null;
+      return createElement("div", { "aria-label": props["aria-label"], "data-slot": "toggle-group" }, children);
+    },
+    ToggleGroupItem: ({ children, value }: ComponentProps<typeof actual.ToggleGroupItem>) =>
+      createElement("button", { type: "button", "data-slot": "toggle-group-item", value }, children),
+  };
+});
 
 type FeedRow = DevelopmentItem & { when: string };
 
@@ -42,6 +80,7 @@ const MATCHED_CHANGE: SiteChangeItemData = {
 const CHANGES: readonly SiteChangeItemData[] = [];
 
 function renderWith(rows: readonly FeedRow[], changes: readonly SiteChangeItemData[], url = "/"): string {
+  feedFilterHarness.params = new URLSearchParams(new URL(url, "https://example.test").search);
   return renderToStaticMarkup(
     createElement(MemoryRouter, { initialEntries: [url] }, createElement(DevelopmentsFeed, { items: rows, changes })),
   );
@@ -80,6 +119,11 @@ function sourcePill(html: string): string {
 }
 
 describe("the developments feed", () => {
+  beforeEach(() => {
+    feedFilterHarness.onValueChange = null;
+    feedFilterHarness.setSearchParams = null;
+  });
+
   it("lists every row under five labelled count chips on the bare page", () => {
     const html = render("/");
     expect(kinds(html)).toEqual(["hiring", "ad", "change", "mention", "hiring"]);
@@ -149,5 +193,16 @@ describe("the developments feed", () => {
     const html = renderWith([ROWS[2]], []);
     expect(html).toContain('data-testid="development"');
     expect(html).not.toContain('data-testid="site-change"');
+  });
+
+  it("takes the first toggled kind and clears the kind param for all", () => {
+    const updates: URLSearchParamsInit[] = [];
+    feedFilterHarness.setSearchParams = (next) => updates.push(next);
+    render("/?kind=ad");
+    const details = createChangeEventDetails(REASONS.none);
+    feedFilterHarness.onValueChange?.(["hiring", "ad"], details);
+    expect(updates).toEqual([{ kind: "hiring" }]);
+    feedFilterHarness.onValueChange?.([], details);
+    expect(updates).toEqual([{ kind: "hiring" }, {}]);
   });
 });

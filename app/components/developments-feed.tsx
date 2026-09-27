@@ -2,7 +2,7 @@ import { useMemo } from "react";
 import type { ReactElement } from "react";
 import { useSearchParams } from "react-router";
 
-import type { DevelopmentItem, FeedFilter } from "../lib/developments";
+import type { DevelopmentItem } from "../lib/developments";
 import {
   FEED_FILTERS,
   FEED_PARAM,
@@ -16,15 +16,6 @@ import { SiteChangeItem, type SiteChangeItemData } from "./site-change-item";
 import { ToggleGroup, ToggleGroupItem } from "./ui/toggle-group";
 
 type FeedRow = DevelopmentItem & { when: string };
-
-function isFilter(value: unknown): value is FeedFilter {
-  return typeof value === "string" && FEED_FILTERS.some((entry) => entry.value === value);
-}
-
-function pickFilter(values: readonly unknown[]): FeedFilter {
-  const last = values.at(-1);
-  return isFilter(last) ? last : "all";
-}
 
 function findChange(changes: readonly SiteChangeItemData[], id: string): SiteChangeItemData | undefined {
   return changes.find((entry) => entry.id === id);
@@ -48,7 +39,7 @@ export function DevelopmentsFeed({
         aria-label="Filter developments"
         value={[filter]}
         onValueChange={(values) => {
-          const next = pickFilter(values);
+          const next = parseFeedFilter(values[0]);
           setParams(next === "all" ? {} : { [FEED_PARAM]: next }, { replace: true, preventScrollReset: true });
         }}
         className="flex min-w-0 flex-wrap gap-2"

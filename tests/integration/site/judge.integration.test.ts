@@ -18,7 +18,7 @@ vi.mock("../../../app/lib/jev/client.server", () => {
   }
   return {
     JevUnavailableError,
-    askNoul: async (_workspaceId: string, question: { id: string }) => {
+    askNoul: async (workspaceId: string, question: { id: string }) => {
       jevAnswers.calls += 1;
       if (jevFailures.next > 0) {
         jevFailures.next -= 1;
@@ -26,13 +26,13 @@ vi.mock("../../../app/lib/jev/client.server", () => {
       }
       const p = jevAnswers.noul.get(question.id);
       if (p === undefined) throw new JevUnavailableError(new Error(`no answer for ${question.id}`));
-      return { questionId: question.id, inputHash: `noul-${question.id}`, p, cached: false };
+      return { questionId: question.id, inputHash: `noul-${workspaceId}-${question.id}`, p, cached: false };
     },
-    askChoice: async (_workspaceId: string, question: { id: string }) => {
+    askChoice: async (workspaceId: string, question: { id: string }) => {
       jevAnswers.calls += 1;
       const choice = jevAnswers.choice.get(question.id);
       if (choice === undefined) throw new JevUnavailableError(new Error(`no answer for ${question.id}`));
-      return { questionId: question.id, inputHash: `choice-${question.id}`, choice, cached: false };
+      return { questionId: question.id, inputHash: `choice-${workspaceId}-${question.id}`, choice, cached: false };
     },
   };
 });
@@ -197,16 +197,15 @@ describe("judgeChange", () => {
     expect(await rowsFor("mine")).toHaveLength(3);
   });
 
-  it("case e: the same input on the same entity repeats without calling the client again", async () => {
+  it("case e: the same change in two workspaces logs a verdict in each", async () => {
     jevAnswers.noul.set("noteworthy_change", 0.95);
     jevAnswers.choice.set("change_kind", "pricing");
 
-    const first = await judgeChange(judgeInput({ entity: "rival", isSelf: false }));
-    const afterFirst = jevAnswers.calls;
-    const second = await judgeChange(judgeInput({ entity: "rival", isSelf: false }));
+    await judgeChange(judgeInput({ entity: "rival", isSelf: false }));
+    await judgeChange({ ...judgeInput({ entity: "rival", isSelf: false }), workspaceId: "ws-history", entityId: "dated" });
 
-    expect(second).toEqual(first);
-    expect(jevAnswers.calls).toBe(afterFirst);
+    expect(await rowsFor("rival")).toHaveLength(2);
+    expect(await rowsFor("dated")).toHaveLength(2);
   });
 
   it("case f: an entity at budget defers without calling the client", async () => {
@@ -294,19 +293,22 @@ describe("judgeChange", () => {
     expect(await rowsFor("mine")).toEqual([]);
   });
 
-  it("case j: the group hash covers the kebab-only band choices", async () => {
+  it("case j: each logged verdict carries the input hash the client returned", async () => {
     jevAnswers.noul.set("noteworthy_change", 0.89);
     jevAnswers.choice.set("change_kind", "launch");
 
     const judgment = await judgeChange(judgeInput({ entity: "rival", isSelf: false }));
 
     expect(judgment.noteworthy).toEqual({ p: 0.89, kind: "launch", band: "uncertain", reason: "uncertain at p=0.89" });
-    const rows = await rowsFor("rival");
-    const hashes = await env.DB.prepare("SELECT DISTINCT input_hash FROM jev_verdict WHERE entity_id = ?")
+    const rows = await env.DB.prepare(
+      "SELECT question_id, input_hash FROM jev_verdict WHERE entity_id = ? ORDER BY question_id",
+    )
       .bind("rival")
-      .all<{ input_hash: string }>();
-    expect(rows).toHaveLength(2);
-    expect(hashes.results).toHaveLength(1);
+      .all<{ question_id: string; input_hash: string }>();
+    expect(rows.results).toEqual([
+      { question_id: "change_kind", input_hash: "choice-ws-mine-change_kind" },
+      { question_id: "noteworthy_change", input_hash: "noul-ws-mine-noteworthy_change" },
+    ]);
   });
 });
 

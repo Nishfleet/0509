@@ -1,14 +1,24 @@
-import { Suspense, useState, type ReactNode } from "react";
+import { Suspense, useId, useState, type KeyboardEvent, type ReactNode } from "react";
 import { Await, Form, useFetcher } from "react-router";
 
-import type { CardDraft, SiteFields } from "../lib/identity/card-fields";
+import type { CardDraft, CreatorRows, DraftField, SiteFields } from "../lib/identity/card-fields";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 
-const FIELD = "min-w-0 flex-1 bg-transparent py-1 text-[0.95rem] outline-none focus:border-b focus:border-ink";
+const FIELD = "min-w-0 flex-1 bg-transparent py-1 text-[0.95rem]";
 
-function Row({ label, check, children }: { label: string; check?: boolean; children: ReactNode }) {
+function Row({
+  label,
+  check,
+  checkId,
+  children,
+}: {
+  label: string;
+  check?: boolean;
+  checkId?: string;
+  children: ReactNode;
+}) {
   return (
     <div
       className={`border-line flex items-baseline gap-4 border-b py-3${
@@ -18,7 +28,9 @@ function Row({ label, check, children }: { label: string; check?: boolean; child
       <span className="text-ink-soft w-20 shrink-0 font-mono text-[0.75rem] uppercase">{label}</span>
       {children}
       {check === true ? (
-        <span className="text-green-ink font-mono text-[0.7rem] uppercase">check this</span>
+        <span id={checkId} className="text-green-ink font-mono text-[0.7rem] uppercase">
+          check this
+        </span>
       ) : null}
     </div>
   );
@@ -41,6 +53,9 @@ function EditRow({
   empty,
   emptyLine,
   multiline,
+  edited,
+  reverted,
+  onRevert,
   onSave,
 }: {
   label: string;
@@ -51,9 +66,20 @@ function EditRow({
   empty?: boolean;
   emptyLine: string;
   multiline?: boolean;
+  edited: boolean;
+  reverted: boolean;
+  onRevert: () => void;
   onSave: (value: string) => void;
 }) {
   const [value, setValue] = useState(initial);
+  const [open, setOpen] = useState(false);
+  const checkId = useId();
+  const saveOnEnter = (event: KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    if (event.key !== "Enter") return;
+    event.preventDefault();
+    setOpen(false);
+    onSave(value);
+  };
   const editor =
     multiline === true ? (
       <textarea
@@ -65,6 +91,7 @@ function EditRow({
         onChange={(event) => {
           setValue(event.currentTarget.value);
         }}
+        onKeyDown={saveOnEnter}
       />
     ) : (
       <Input
@@ -74,20 +101,43 @@ function EditRow({
         onChange={(event) => {
           setValue(event.currentTarget.value);
         }}
+        onKeyDown={saveOnEnter}
       />
     );
   return (
-    <Row label={label} check={check}>
+    <Row label={label} check={check} checkId={checkId}>
       <Popover
-        onOpenChange={(open) => {
-          if (!open) onSave(value);
+        open={open}
+        onOpenChange={(next) => {
+          setOpen(next);
+          if (!next && value !== initial) onSave(value);
         }}
       >
-        <PopoverTrigger className={`${FIELD} text-left`} aria-label={`edit ${label}`}>
+        <PopoverTrigger
+          className={`${FIELD} min-h-11 text-left`}
+          aria-describedby={check === true ? checkId : undefined}
+        >
+          <span className="sr-only">{`edit ${label}: `}</span>
           {value === "" ? <span className="text-ink-soft">{placeholder}</span> : value}
         </PopoverTrigger>
         <PopoverContent>{editor}</PopoverContent>
       </Popover>
+      {edited ? (
+        <>
+          <span className="text-ink-soft font-mono text-[0.7rem] uppercase">edited by you</span>
+          <button
+            type="button"
+            className="text-ink-soft text-[0.88rem] underline"
+            onClick={onRevert}
+          >
+            use what we found
+          </button>
+        </>
+      ) : reverted ? (
+        <span role="status" className="text-ink-soft text-[0.88rem]">
+          back to what we found, we will check it again
+        </span>
+      ) : null}
       <input type="hidden" name={name} value={value} />
       {empty === true ? <span className="text-ink-soft text-[0.88rem]">{emptyLine}</span> : null}
     </Row>
@@ -103,7 +153,7 @@ function Logo({ logo }: { logo: Promise<string | null> }) {
             {url === null ? (
               <span className="text-ink-soft text-[0.95rem]">none found on the site</span>
             ) : (
-              <img src={url} alt="" className="h-10 w-10 object-contain" />
+              <img src={url} alt="your logo, as found on the site" className="h-10 w-10 object-contain" />
             )}
           </Row>
         )}
@@ -130,34 +180,60 @@ export function Fields({
   const nameCheck = site.review.name === "check";
   const descriptionCheck = site.review.description === "check";
   const fetcher = useFetcher();
+  const [reverted, setReverted] = useState<DraftField | null>(null);
   return (
     <>
       <EditRow
+        key={draft.name === undefined ? "name:found" : "name:edited"}
         label="name"
         name="name"
-        initial={nameCheck ? "" : (draft.name ?? (site.name ?? ""))}
+        initial={draft.name ?? (nameCheck ? "" : (site.name ?? ""))}
         placeholder={nameCheck ? (site.name ?? "") : "your brand's name"}
         check={nameCheck}
         empty={site.review.name === "empty"}
         emptyLine={emptyLine}
+        edited={draft.name !== undefined}
+        reverted={reverted === "name"}
+        onRevert={() => {
+          setReverted("name");
+          void fetcher.submit({ intent: "revert", subject, field: "name" }, { method: "post" });
+        }}
         onSave={(value) => {
+          setReverted(null);
           void fetcher.submit(
             { intent: "draft", subject, field: "name", value },
             { method: "post" },
           );
         }}
       />
-      <Logo logo={logo} />
+      {site.unfound ? (
+        <Row label="logo">
+          <span className="text-ink-soft text-[0.88rem]">{UNREAD_LINE}</span>
+        </Row>
+      ) : (
+        <Logo logo={logo} />
+      )}
       <EditRow
+        key={draft.description === undefined ? "description:found" : "description:edited"}
         label="about"
         name="description"
-        initial={descriptionCheck ? "" : (draft.description ?? (site.description ?? ""))}
+        initial={draft.description ?? (descriptionCheck ? "" : (site.description ?? ""))}
         placeholder={descriptionCheck ? (site.description ?? "") : "one line on what you do"}
         check={descriptionCheck}
         empty={site.review.description === "empty"}
         emptyLine={emptyLine}
         multiline
+        edited={draft.description !== undefined}
+        reverted={reverted === "description"}
+        onRevert={() => {
+          setReverted("description");
+          void fetcher.submit(
+            { intent: "revert", subject, field: "description" },
+            { method: "post" },
+          );
+        }}
         onSave={(value) => {
+          setReverted(null);
           void fetcher.submit(
             { intent: "draft", subject, field: "description", value },
             { method: "post" },
@@ -170,9 +246,15 @@ export function Fields({
         ) : site.review.socials === "check" ? (
           <ul className="min-w-0 flex-1 text-[0.95rem]">
             {site.socials.map((social) => (
-              <li key={social.platform} className="truncate">
-                <label>
-                  <input type="checkbox" name={`social.${social.platform}`} value={social.url} /> {social.url}
+              <li key={social.platform} className="min-w-0">
+                <label className="flex min-h-11 min-w-0 items-center gap-3">
+                  <input
+                    type="checkbox"
+                    className="size-5 shrink-0"
+                    name={`social.${social.platform}`}
+                    value={social.url}
+                  />
+                  <span className="truncate">{social.url}</span>
                 </label>
               </li>
             ))}
@@ -194,9 +276,27 @@ export function Fields({
   );
 }
 
+export function ArrivalLine({ fields }: { fields: SiteFields }) {
+  if (fields.unfound) {
+    return <span className="block py-3">We couldn&apos;t read that site, so fill in what you can.</span>;
+  }
+  const checks = [
+    fields.review.name === "check" ? "name" : null,
+    fields.review.description === "check" ? "about" : null,
+    fields.review.socials === "check" ? "socials" : null,
+  ].filter((label): label is string => label !== null);
+  const list = checks.join(", ");
+  return (
+    <span className="sr-only">
+      {checks.length === 0 ? "Your card is drawn." : `Your card is drawn. Check this: ${list}.`}
+    </span>
+  );
+}
+
 export function IdentityCard({
   subject,
   domain,
+  creator,
   site,
   logo,
   draft,
@@ -204,6 +304,7 @@ export function IdentityCard({
 }: {
   subject: string;
   domain: string;
+  creator: CreatorRows | null;
   site: Promise<SiteFields>;
   logo: Promise<string | null>;
   draft: CardDraft;
@@ -215,6 +316,21 @@ export function IdentityCard({
       <Row label="site">
         <span className="truncate text-[0.95rem]">{domain}</span>
       </Row>
+      <p role="status" className="text-ink-soft text-[0.88rem]">
+        <Suspense fallback={null}>
+          <Await resolve={site}>{(fields) => <ArrivalLine fields={fields} />}</Await>
+        </Suspense>
+      </p>
+      {creator !== null && creator.channel !== null ? (
+        <Row label="channel">
+          <span className="truncate text-[0.95rem]">{creator.channel}</span>
+        </Row>
+      ) : null}
+      {creator !== null ? (
+        <Row label="handle">
+          <span className="truncate text-[0.95rem]">{creator.handle}</span>
+        </Row>
+      ) : null}
       <Suspense
         fallback={
           <>
@@ -228,11 +344,6 @@ export function IdentityCard({
         <Await resolve={site}>
           {(fields) => (
             <>
-              {fields.unfound ? (
-                <p role="status" className="text-ink-soft py-3 text-[0.88rem]">
-                  We couldn&apos;t read that site, so fill in what you can.
-                </p>
-              ) : null}
               <Fields subject={subject} site={fields} logo={logo} draft={draft} />
               {message ? <p role="alert" className="pt-3 text-[0.88rem]">{message}</p> : null}
               <Button type="submit" size="lg" className="my-5">

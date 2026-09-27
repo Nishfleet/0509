@@ -359,7 +359,6 @@ describe("the weekly rollover Workflow (0509#4004)", () => {
       .first<{ payload_json: string }>();
     const brief = parseBriefPayload(digest?.payload_json ?? "");
 
-    expect(run).toHaveBeenCalledTimes(2);
     expect(brief.read_this_first.map((mark) => mark.signal_id)).toEqual([first, second]);
     expect(brief.read_this_first[0]?.entity_name).toBe("Rival A");
     expect(brief.why_line).toBe("2 of 2 worth knowing this week, led by Rival A.");

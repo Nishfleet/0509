@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
 import { OnboardingFrame } from "../../app/components/onboarding-frame";
+import { ONBOARDING_PAGE } from "../../app/components/page-heading";
 
 const WATCHING_LIST = createElement(
   "ul",
@@ -23,7 +24,10 @@ describe("OnboardingFrame", () => {
     expect(html).toContain("<main>");
     expect(html).toContain("<footer");
     expect(html.match(/<h1\b/g) ?? []).toHaveLength(1);
-    expect(html).toContain("<h1>H</h1>");
+    expect(html).toContain(
+      '<h1 class="font-display text-display-2 mt-10 font-extrabold uppercase">H</h1>',
+    );
+    expect(html.startsWith(`<div class="${ONBOARDING_PAGE}"><header>`)).toBe(true);
     expect(html).toContain('aria-current="step"');
   });
 

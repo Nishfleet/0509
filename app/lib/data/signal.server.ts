@@ -1,28 +1,16 @@
 import { env } from "cloudflare:workers";
 import { z } from "zod";
 
+import type { ScoredSignal } from "../biggest-move";
 import { isFeedKind, type DevelopmentItem } from "../developments";
-import { D3_QUESTION_ID } from "../standing-score";
+import type { WeekEvidence } from "../home-standing";
+import {
+  D3_QUESTION_ID,
+  D6_QUESTION_ID,
+  reliabilitySchema,
+  scoreBucketSchema,
+} from "../standing-score";
 import type { HiringSignalState, HiringSignalUpdate } from "../hiring/role-lifecycle";
-
-export interface SiteChangeSignal {
-  id: string;
-  workspaceId: string;
-  entityId: string;
-  sourceId: string;
-  watchId: string;
-  snapshotId: string;
-  aspect: string;
-  url: string;
-  payloadJson: string;
-  observedAt: string;
-}
-
-const INSERT_SITE_CHANGE = `INSERT INTO signal
-  (id, workspace_id, entity_id, source_id, watch_id, snapshot_id, kind, aspect,
-   url, evidence_url, payload_json, dedup_key, observed_at, last_seen_at)
-VALUES (?1, ?2, ?3, ?4, ?5, ?6, 'change', ?7, ?8, ?8, ?9, ?6, ?10, ?10)
-ON CONFLICT (source_id, dedup_key) DO NOTHING`;
 
 export interface ChangeSignalRow {
   id: string;
@@ -31,8 +19,8 @@ export interface ChangeSignalRow {
   sourceId: string;
   watchId: string;
   snapshotId: string;
-  title: string;
-  summary: string;
+  title: string | null;
+  summary: string | null;
   url: string;
   aspect: string;
   payloadJson: string;
@@ -41,8 +29,8 @@ export interface ChangeSignalRow {
 
 const INSERT_CHANGE_SIGNAL = `INSERT INTO signal
   (id, workspace_id, entity_id, source_id, watch_id, snapshot_id, kind, title, summary,
-   url, aspect, evidence_url, payload_json, dedup_key, observed_at)
-VALUES (?1, ?2, ?3, ?4, ?5, ?6, 'change', ?7, ?8, ?9, ?10, ?9, ?11, ?6, ?12)
+   url, aspect, evidence_url, payload_json, dedup_key, observed_at, last_seen_at)
+VALUES (?1, ?2, ?3, ?4, ?5, ?6, 'change', ?7, ?8, ?9, ?10, ?9, ?11, ?6, ?12, ?12)
 ON CONFLICT (source_id, dedup_key) DO NOTHING`;
 
 export function insertChangeSignalStatement(row: ChangeSignalRow): D1PreparedStatement {
@@ -161,23 +149,6 @@ export async function applyHiringLifecycle(updates: readonly HiringSignalUpdate[
   return changes;
 }
 
-export async function insertSiteChange(row: SiteChangeSignal): Promise<void> {
-  await env.DB.prepare(INSERT_SITE_CHANGE)
-    .bind(
-      row.id,
-      row.workspaceId,
-      row.entityId,
-      row.sourceId,
-      row.watchId,
-      row.snapshotId,
-      row.aspect,
-      row.url,
-      row.payloadJson,
-      row.observedAt,
-    )
-    .run();
-}
-
 const INSERT_MENTION = `INSERT INTO signal
   (id, workspace_id, entity_id, source_id, watch_id, snapshot_id, kind, title, url, canonical_url, url_hash,
    author, engagement_json, payload_json, dedup_key, published_at, observed_at, last_seen_at, is_tombstoned)
@@ -261,6 +232,40 @@ export async function readRecentSignals(entityId: string, since: string): Promis
     summary: row.summary,
     url: row.url,
     aspect: row.aspect,
+    observedAt: row.observed_at,
+  }));
+}
+
+const SELECT_WEEK_EVIDENCE = `SELECT s.id, src.kind AS source_kind, s.title, s.summary, s.url, s.evidence_url, s.observed_at
+FROM signal s JOIN source src ON src.id = s.source_id
+WHERE s.workspace_id = ?1 AND s.entity_id = ?2 AND s.observed_at >= ?3 AND s.is_tombstoned = 0
+ORDER BY s.observed_at DESC, s.id DESC LIMIT 100`;
+
+interface WeekEvidenceRow {
+  id: string;
+  source_kind: string;
+  title: string | null;
+  summary: string | null;
+  url: string | null;
+  evidence_url: string | null;
+  observed_at: string;
+}
+
+export async function readWeekEvidence(input: {
+  workspaceId: string;
+  entityId: string;
+  since: string;
+}): Promise<WeekEvidence[]> {
+  const { results } = await env.DB.prepare(SELECT_WEEK_EVIDENCE)
+    .bind(input.workspaceId, input.entityId, input.since)
+    .all<WeekEvidenceRow>();
+  return results.map((row) => ({
+    id: row.id,
+    sourceKind: row.source_kind,
+    title: row.title,
+    summary: row.summary,
+    url: row.url,
+    evidenceUrl: row.evidence_url,
     observedAt: row.observed_at,
   }));
 }
@@ -356,12 +361,6 @@ export async function readSiteChangePayload(workspaceId: string, signalId: strin
   return row?.payload_json ?? null;
 }
 
-const DELETE_ENTITY_SIGNALS = `DELETE FROM signal WHERE workspace_id = ?1 AND entity_id = ?2`;
-
-export function deleteEntitySignals(workspaceId: string, entityId: string): D1PreparedStatement {
-  return env.DB.prepare(DELETE_ENTITY_SIGNALS).bind(workspaceId, entityId);
-}
-
 export interface SignalCount {
   kind: string;
   count: number;
@@ -378,4 +377,77 @@ export async function readSignalCounts(
     .bind(workspaceId, entityId, since)
     .all<{ kind: string; n: number }>();
   return results.map((row) => ({ kind: row.kind, count: row.n }));
+}
+
+const SELECT_SCORED_SIGNALS = `SELECT * FROM (SELECT s.id, s.kind, s.title, s.summary, s.url, s.observed_at,
+  src.platform, src.reliability,
+  CASE
+    WHEN s.kind = 'mention' AND v.p >= 0.9 THEN 'mention_matters'
+    WHEN s.kind = 'mention' AND v.p > 0.1 THEN 'mention_normal'
+    WHEN s.kind = 'change' AND v.p >= 0.9 THEN 'site_change_noteworthy'
+    WHEN s.kind = 'ad' AND s.aspect IS NOT NULL THEN 'ad_copy_change'
+    WHEN s.kind = 'ad' AND s.published_at >= ?3 AND s.published_at < ?4 THEN 'ad_new_creative'
+    WHEN s.kind = 'hiring' THEN 'hiring_new_role'
+  END AS bucket
+FROM signal s
+JOIN source src ON src.id = s.source_id
+LEFT JOIN jev_verdict v ON v.id = (
+  SELECT v2.id FROM jev_verdict v2
+  WHERE v2.signal_id = s.id AND v2.workspace_id = s.workspace_id
+    AND v2.question_id = CASE s.kind WHEN 'mention' THEN ?5 WHEN 'change' THEN ?6 END
+  ORDER BY v2.decided_at DESC
+  LIMIT 1
+)
+WHERE s.workspace_id = ?1 AND s.entity_id = ?2
+  AND s.observed_at >= ?3 AND s.observed_at < ?4 AND s.is_tombstoned = 0)
+WHERE bucket IS NOT NULL
+ORDER BY observed_at DESC, id DESC`;
+
+const scoredSignalRows = z.array(
+  z.object({
+    id: z.string(),
+    kind: z.string(),
+    title: z.string().nullable(),
+    summary: z.string().nullable(),
+    url: z.string().nullable(),
+    observed_at: z.string(),
+    platform: z.string(),
+    reliability: reliabilitySchema,
+    bucket: scoreBucketSchema,
+  }),
+);
+
+export async function readScoredSignals(input: {
+  workspaceId: string;
+  entityId: string;
+  since: string;
+  until: string;
+}): Promise<ScoredSignal[]> {
+  const { results } = await env.DB.prepare(SELECT_SCORED_SIGNALS)
+    .bind(
+      input.workspaceId,
+      input.entityId,
+      input.since,
+      input.until,
+      D6_QUESTION_ID,
+      D3_QUESTION_ID,
+    )
+    .all();
+  return scoredSignalRows.parse(results).flatMap((row) =>
+    isFeedKind(row.kind)
+      ? [
+          {
+            id: row.id,
+            kind: row.kind,
+            bucket: row.bucket,
+            reliability: row.reliability,
+            platform: row.platform,
+            title: row.title,
+            summary: row.summary,
+            url: row.url,
+            observedAt: row.observed_at,
+          },
+        ]
+      : [],
+  );
 }

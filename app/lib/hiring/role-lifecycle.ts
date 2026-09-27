@@ -42,7 +42,8 @@ const DEFAULT_LIFECYCLE: Lifecycle = {
 function parsePayload(payloadJson: string): unknown {
   try {
     return JSON.parse(payloadJson) as unknown;
-  } catch {
+  } catch (error) {
+    console.error(JSON.stringify({ event: "hiring.role_payload_parse_failed", error: String(error) }));
     return undefined;
   }
 }

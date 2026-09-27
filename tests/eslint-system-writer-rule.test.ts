@@ -37,6 +37,15 @@ const PAVED_PATH_STILL_ENFORCED = `import { toast } from "sonner";\nexport const
 // layer).
 const NON_ROUTE_IMPORT = `import * as probe from "./data/watch.server";\nexport const probeKeys = Object.keys(probe);\n`;
 
+// Scoped by import NAME, not by module: routes legitimately import other
+// names from these two modules, so a whole-module ban would break them.
+const MARK_DIGEST_SENT = `import { markDigestSent } from "../lib/data/digest.server";\nexport const probe = markDigestSent;\n`;
+const MARK_DIGEST_FAILED = `import { markDigestFailed } from "../lib/data/digest.server";\nexport const probe = markDigestFailed;\n`;
+const DELETE_WORKSPACE = `import { deleteWorkspace } from "../lib/data/workspace.server";\nexport const probe = deleteWorkspace;\n`;
+const WORKSPACE_NAMESPACE = `import * as probe from "../lib/data/workspace.server";\nexport const probeKeys = Object.keys(probe);\n`;
+const ALLOWED_DIGEST_READ = `import { cancelPendingDigests } from "../lib/data/digest.server";\nexport const probe = cancelPendingDigests;\n`;
+const ALLOWED_WORKSPACE_WRITER = `import { readBriefScheduleForOwner, updateBriefSchedule } from "../lib/data/workspace.server";\nexport const probe = [readBriefScheduleForOwner, updateBriefSchedule];\n`;
+
 async function lintProbe(rel: string, code: string): Promise<{ ignored: boolean; messages: string[] }> {
   const file = path.join(REPO_ROOT, rel);
   await mkdir(path.dirname(file), { recursive: true });
@@ -89,6 +98,42 @@ describe("eslint unscoped system writer route rule (#4705/#5125)", () => {
 
   it("does not cover non-route files", { timeout: 60_000 }, async () => {
     const result = await lintProbe("app/lib/probe-system-writer-tmp.server.ts", NON_ROUTE_IMPORT);
+    expect(result.ignored).toBe(false);
+    expect(result.messages.some((m) => m.includes(MARKER))).toBe(false);
+  });
+
+  it("rejects a route importing markDigestSent by name", { timeout: 60_000 }, async () => {
+    const result = await lintProbe("app/routes/probe-system-writer-tmp.tsx", MARK_DIGEST_SENT);
+    expect(result.ignored).toBe(false);
+    expect(result.messages.some((m) => m.includes(MARKER))).toBe(true);
+  });
+
+  it("rejects a route importing markDigestFailed by name", { timeout: 60_000 }, async () => {
+    const result = await lintProbe("app/routes/probe-system-writer-tmp.tsx", MARK_DIGEST_FAILED);
+    expect(result.ignored).toBe(false);
+    expect(result.messages.some((m) => m.includes(MARKER))).toBe(true);
+  });
+
+  it("rejects a route importing deleteWorkspace by name", { timeout: 60_000 }, async () => {
+    const result = await lintProbe("app/routes/probe-system-writer-tmp.tsx", DELETE_WORKSPACE);
+    expect(result.ignored).toBe(false);
+    expect(result.messages.some((m) => m.includes(MARKER))).toBe(true);
+  });
+
+  it("rejects a namespace import of workspace.server", { timeout: 60_000 }, async () => {
+    const result = await lintProbe("app/routes/probe-system-writer-tmp.tsx", WORKSPACE_NAMESPACE);
+    expect(result.ignored).toBe(false);
+    expect(result.messages.some((m) => m.includes(MARKER))).toBe(true);
+  });
+
+  it("leaves the scoped digest reader import unblocked", { timeout: 60_000 }, async () => {
+    const result = await lintProbe("app/routes/probe-system-writer-tmp.tsx", ALLOWED_DIGEST_READ);
+    expect(result.ignored).toBe(false);
+    expect(result.messages.some((m) => m.includes(MARKER))).toBe(false);
+  });
+
+  it("leaves the scoped brief-schedule writer import unblocked", { timeout: 60_000 }, async () => {
+    const result = await lintProbe("app/routes/probe-system-writer-tmp.tsx", ALLOWED_WORKSPACE_WRITER);
     expect(result.ignored).toBe(false);
     expect(result.messages.some((m) => m.includes(MARKER))).toBe(false);
   });

@@ -39,6 +39,15 @@ const IS_COMPETITOR: NoulQuestion = {
     "It is a publisher, retailer, marketplace, supplier, partner, investor, a product line of `self`, `self` itself, or an unrelated company that only shares a headline.",
 };
 
+const IS_CREATOR_RIVAL: NoulQuestion = {
+  id: "is_creator_rival",
+  instructions:
+    "Is `item` a real rival of `self`, a creator: another creator, channel or media brand competing for the same audience's attention, or a brand in the category `self` sells into, so `self` would want to watch what it does? `item.evidence` is where the two were named together.",
+  whenTrue: "It competes with `self` for the same audience or sells into the same category as `self`.",
+  whenFalse:
+    "It is a platform, publisher, sponsor, retailer, a product of `self`, `self` itself, or an unrelated name that only shares a headline.",
+};
+
 async function settledCandidates(self: DiscoverySelf): Promise<Candidate[]> {
   const subject = { name: self.name, domain: self.domain };
   const runs = await Promise.allSettled([newsGenerator(subject), hnGenerator(subject)]);
@@ -138,7 +147,11 @@ export async function judgeCandidates(
     let verdict: NoulVerdict | null = null;
     if (available) {
       try {
-        verdict = await askNoul(context.self.workspaceId, IS_COMPETITOR, competitorState(context, candidate));
+        verdict = await askNoul(
+          context.self.workspaceId,
+          context.self.kind === "creator" ? IS_CREATOR_RIVAL : IS_COMPETITOR,
+          competitorState(context, candidate),
+        );
       } catch (error) {
         if (!(error instanceof JevUnavailableError)) throw error;
         console.error(JSON.stringify({ event: "discovery.jev_unavailable", message: error.message }));

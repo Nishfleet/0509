@@ -1,0 +1,104 @@
+{
+  "articles": [
+    {
+      "url": "https://www.glamourmagazine.co.uk/style/gymshark-adanola-and-bratz-capsule",
+      "url_mobile": "",
+      "title": "Gymshark, Adanola and Bratz launch activewear capsule",
+      "seendate": "20260923T070000Z",
+      "socialimage": "https://www.glamourmagazine.co.uk/static/img/og.jpg",
+      "domain": "glamourmagazine.co.uk",
+      "language": "English",
+      "sourcecountry": "United Kingdom"
+    },
+    {
+      "url": "https://www.footasylum.com/blog/footasylum-names-new-ceo-from-gymshark",
+      "url_mobile": "",
+      "title": "Footasylum names new CEO from Gymshark",
+      "seendate": "20260922T070000Z",
+      "socialimage": "https://www.footasylum.com/static/img/og.jpg",
+      "domain": "footasylum.com",
+      "language": "English",
+      "sourcecountry": "United Kingdom"
+    },
+    {
+      "url": "https://retailtimes.co.uk/six-stories-hires-from-gymshark-adanola-lululemon",
+      "url_mobile": "",
+      "title": "Six Stories hires leaders from Gymshark, Adanola and Lululemon",
+      "seendate": "20260921T070000Z",
+      "socialimage": "https://retailtimes.co.uk/static/img/og.jpg",
+      "domain": "retailtimes.co.uk",
+      "language": "English",
+      "sourcecountry": "United Kingdom"
+    },
+    {
+      "url": "https://hypebae.com/gymshark-bratz-and-fabletics-capsule",
+      "url_mobile": "",
+      "title": "Gymshark, Bratz and Fabletics launch capsule",
+      "seendate": "20260920T070000Z",
+      "socialimage": "https://hypebae.com/static/img/og.jpg",
+      "domain": "hypebae.com",
+      "language": "English",
+      "sourcecountry": "United States"
+    },
+    {
+      "url": "https://wwd.com/gymshark-adanola-launch-fitness-line",
+      "url_mobile": "",
+      "title": "Gymshark, Adanola launch fitness line",
+      "seendate": "20260919T070000Z",
+      "socialimage": "https://wwd.com/static/img/og.jpg",
+      "domain": "wwd.com",
+      "language": "English",
+      "sourcecountry": "United States"
+    },
+    {
+      "url": "https://www.drapersonline.com/gymshark-appoints-new-cto",
+      "url_mobile": "",
+      "title": "Gymshark appoints new CTO",
+      "seendate": "20260918T070000Z",
+      "socialimage": "https://www.drapersonline.com/static/img/og.jpg",
+      "domain": "drapersonline.com",
+      "language": "English",
+      "sourcecountry": "United Kingdom"
+    },
+    {
+      "url": "https://www.theguardian.com/business/gymshark-lululemon-peloton-activewear",
+      "url_mobile": "",
+      "title": "Lululemon, Gymshark and Peloton lead activewear",
+      "seendate": "20260917T070000Z",
+      "socialimage": "https://www.theguardian.com/static/img/og.jpg",
+      "domain": "theguardian.com",
+      "language": "English",
+      "sourcecountry": "United Kingdom"
+    },
+    {
+      "url": "https://retailgazette.co.uk/gymshark-and-peloton-lead-activewear",
+      "url_mobile": "",
+      "title": "Gymshark and Peloton lead activewear",
+      "seendate": "20260916T070000Z",
+      "socialimage": "https://retailgazette.co.uk/static/img/og.jpg",
+      "domain": "retailgazette.co.uk",
+      "language": "English",
+      "sourcecountry": "United Kingdom"
+    },
+    {
+      "url": "https://www.example-news.com/gymshark-opens-flagship",
+      "url_mobile": "",
+      "title": "Gymshark opens flagship store",
+      "seendate": "20260915T101500Z",
+      "socialimage": "https://www.example-news.com/static/img/og.jpg",
+      "domain": "example-news.com",
+      "language": "English",
+      "sourcecountry": "United States"
+    },
+    {
+      "url": "javascript:alert(1)",
+      "url_mobile": "",
+      "title": "Gymshark and NotARealBrand announce partnership",
+      "seendate": "20260914T101500Z",
+      "socialimage": "",
+      "domain": "evil.example",
+      "language": "English",
+      "sourcecountry": "United States"
+    }
+  ]
+}

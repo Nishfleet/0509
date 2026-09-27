@@ -22,7 +22,8 @@ function renderDocument(id: string): string {
     {
       id,
       path: "/",
-      Component: () => createElement(Layout, null, createElement(Landing, { loaderData: { ticker: [] } })),
+      Component: () =>
+        createElement(Layout, null, createElement(Landing, { loaderData: { ticker: [], sources: [], now: 0 } })),
     },
   ]);
   return renderToStaticMarkup(createElement(Stub, { initialEntries: ["/"] }));
@@ -64,18 +65,33 @@ describe("landing LCP critical path", () => {
 
 describe("static home LCP critical path", () => {
   const html = readFileSync(join(REPO_ROOT, "public/index.html"), "utf8");
+  const faces = readFileSync(join(REPO_ROOT, "public/home-faces.css"), "utf8");
 
-  it("paints the headline from the document with no font resource", () => {
+  it("paints the headline before the brand faces are requested", () => {
     expect(html).toContain("Quietly, we");
-    expect(html).not.toContain("data:font");
     expect(html).not.toContain("@font-face");
     expect(html).not.toContain("/fonts/");
-    expect(html).not.toContain('rel="stylesheet"');
-    expect(html).not.toContain('rel="preload"');
+    expect(html).not.toContain("<link");
+    expect(html).not.toContain("<script src");
+    const scriptAt = html.indexOf("<script>");
+    expect(scriptAt).toBeGreaterThan(html.lastIndexOf("</main>"));
+    const script = html.slice(scriptAt, html.indexOf("</script>", scriptAt));
+    expect(script).toContain('addEventListener("load"');
+    expect(script).toContain('faces.href = "/home-faces.css"');
+    expect(faces).toContain("/fonts/bricolage-hero.woff2");
+    expect(faces).toContain("/fonts/instrument-sans-latin.woff2");
+    expect(faces).toContain("/fonts/ibm-plex-mono-latin-400.woff2");
+    expect(faces).toContain("font-display: swap");
     for (const family of ["Bricolage Grotesque", "Instrument Sans", "IBM Plex Mono"]) {
-      expect(html).not.toContain(family);
+      expect(html).toContain(`"${family}"`);
+      expect(faces).toContain(`font-family: "${family}"`);
     }
-    expect(html).toContain("ui-sans-serif, system-ui, sans-serif");
+    expect(html).not.toContain("data:font");
+    expect(faces).not.toContain("data:font");
+    expect(html).not.toContain("bricolage-grotesque-latin");
+    expect(faces).not.toContain("bricolage-grotesque-latin");
+    expect(html).not.toContain("/*");
+    expect(html).not.toContain("ui-sans-serif, system-ui, sans-serif");
     expect(Buffer.byteLength(html)).toBeLessThan(8_000);
   });
 });

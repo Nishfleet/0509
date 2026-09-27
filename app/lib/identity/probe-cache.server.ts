@@ -12,7 +12,9 @@ export type ProbeName =
   | "wikidata-search"
   | "wikidata-claims"
   | "browser"
-  | "youtube-channel";
+  | "youtube-channel"
+  | "youtube-profile"
+  | "instagram-profile";
 
 function cacheSubject(subject: Subject): string {
   if (subject.kind !== "domain" || subject.url === null) return subject.registrable;

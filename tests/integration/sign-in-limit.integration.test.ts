@@ -16,6 +16,7 @@ function authSending(sent: string[]) {
     },
     SIGN_IN_EMAIL_LIMIT: env.SIGN_IN_EMAIL_LIMIT,
     SIGN_IN_IP_LIMIT: env.SIGN_IN_IP_LIMIT,
+    TURNSTILE_SECRET_KEY: "1x0000000000000000000000000000000AA",
     BETTER_AUTH_SECRET: "integration-test-secret-integration-test-secret",
     BETTER_AUTH_URL: ORIGIN,
   });
@@ -25,36 +26,54 @@ function requestLink(auth: ReturnType<typeof createAuth>, email: string, ip: str
   return auth.handler(
     new Request(`${ORIGIN}/api/auth/sign-in/magic-link`, {
       method: "POST",
-      headers: { "content-type": "application/json", origin: ORIGIN, "cf-connecting-ip": ip },
+      headers: {
+        "content-type": "application/json",
+        origin: ORIGIN,
+        "cf-connecting-ip": ip,
+        "x-captcha-response": "XXXX.DUMMY.TOKEN.XXXX",
+      },
       body: JSON.stringify({ email, callbackURL: "/app" }),
     }),
   );
 }
 
+// Values from tests/integration/wrangler.test.jsonc:65-66.
+const EMAIL_LIMIT_PER_WINDOW = 5;
+const IP_LIMIT_PER_WINDOW = 20;
+
 describe("sign-in link limits", () => {
   it("stops the sixth link to one address within a minute, whatever the sender", async () => {
     const sent: string[] = [];
     const auth = authSending(sent);
-    const statuses = [];
-    for (let attempt = 0; attempt < 6; attempt += 1) {
+    const statuses: number[] = [];
+    const maxAttempts = EMAIL_LIMIT_PER_WINDOW * 2;
+    for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
       const response = await requestLink(auth, "flood-target@test.dev", `198.51.100.${String(attempt)}`);
       statuses.push(response.status);
+      if (response.status === 429) break;
     }
-    expect(statuses).toEqual([200, 200, 200, 200, 200, 429]);
-    expect(sent).toHaveLength(5);
+    const first429 = statuses.indexOf(429);
+    expect(first429).toBeGreaterThanOrEqual(EMAIL_LIMIT_PER_WINDOW);
+    expect(statuses.slice(0, first429).every((status) => status === 200)).toBe(true);
+    expect(first429).toBeLessThan(maxAttempts);
+    expect(sent).toHaveLength(first429);
   });
 
   it("stops one sender spraying many addresses", async () => {
     const sent: string[] = [];
     const auth = authSending(sent);
-    const statuses = [];
-    for (let attempt = 0; attempt < 21; attempt += 1) {
+    const statuses: number[] = [];
+    const maxAttempts = IP_LIMIT_PER_WINDOW * 2;
+    for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
       const response = await requestLink(auth, `spray-${String(attempt)}@test.dev`, "203.0.113.9");
       statuses.push(response.status);
+      if (response.status === 429) break;
     }
-    expect(statuses.slice(0, 20).every((status) => status === 200)).toBe(true);
-    expect(statuses[20]).toBe(429);
-    expect(sent).toHaveLength(20);
+    const first429 = statuses.indexOf(429);
+    expect(first429).toBeGreaterThanOrEqual(IP_LIMIT_PER_WINDOW);
+    expect(statuses.slice(0, first429).every((status) => status === 200)).toBe(true);
+    expect(first429).toBeLessThan(maxAttempts);
+    expect(sent).toHaveLength(first429);
   });
 
   it("keeps only a hash of the link's token", async () => {

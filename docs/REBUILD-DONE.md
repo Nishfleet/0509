@@ -9,7 +9,7 @@ Umbrella #3842. Author: Fable. Checked by the Opus deputy. Nish's words: "you ca
 | J1 | Sign in with a magic link | fresh email, link arrives, session lands on the one-input screen |
 | J2 | Sign in with a passkey | register on first sign-in, sign out, sign in with the passkey alone |
 | J3 | Onboard a company domain | card confirmed under 30 s, competitors under 60 s, Home not empty (docs/REBUILD-ONBOARDING.md budgets, timings stored) |
-| J4 | Onboard a creator handle | same budgets; card shows channel, handle, socials |
+| J4 | Onboard a creator handle | same budgets; card shows channel, handle, socials — e2e/j4-onboard-creator.spec.ts |
 | J5 | Onboard a bot-blocking site | card still confirmed; site fields say what fills them and when |
 | J6 | Turn a competitor off and back on | off: absent from Home, Alerts, brief; on: history intact |
 | J7 | A competitor changes its pricing page | before-and-after mark in Alerts within one tick, correct kind, screenshot pair, in the next brief |

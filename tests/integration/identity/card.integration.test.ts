@@ -1,10 +1,11 @@
 import { env } from "cloudflare:test";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { startCard } from "../../../app/lib/identity/card.server";
+import { readCachedSiteProof, startCard } from "../../../app/lib/identity/card.server";
 import { confirmCard } from "../../../app/lib/identity/confirm.server";
 import { extractIdentity } from "../../../app/lib/identity/extract";
 import { normaliseSubject } from "../../../app/lib/identity/normalise";
+import { probeKey } from "../../../app/lib/identity/probe-cache.server";
 import { identityTailInstanceId } from "../../../app/lib/identity/tail.server";
 import gym from "../../fixtures/gymshark-2026-09-22-a.html?raw";
 
@@ -44,6 +45,20 @@ async function settledTail(): Promise<void> {
     await new Promise((resolve) => setTimeout(resolve, 25));
   }
   throw new Error("identity tail did not finish");
+}
+
+async function answerHomepage(): Promise<void> {
+  await env.IDENTITY_CACHE.put(
+    probeKey(subjectFor("gymshark.com"), "homepage"),
+    JSON.stringify({
+      name: "Gymshark",
+      description: "Gym clothes",
+      socials: [],
+      logoCandidates: { ldOrganizationLogo: null, ogImage: null, appleTouchIcon: null },
+      adLibraryHints: [],
+      navLinks: [],
+    }),
+  );
 }
 
 function form(fields: Record<string, string>): FormData {
@@ -91,7 +106,7 @@ describe("startCard", () => {
   it("draws the card from the brand's homepage", async () => {
     stubAi(0.95);
     stubWeb(() => new Response(gym, { status: 200 }));
-    const card = startCard("ws-1", subjectFor("gymshark.com"));
+    const card = startCard("ws-1", subjectFor("gymshark.com"), []);
 
     const site = await card.site;
     expect(site.name).toBe("Gymshark");
@@ -106,15 +121,15 @@ describe("startCard", () => {
   it("reads the homepage once a day, not once per visit", async () => {
     stubAi(0.95);
     const calls = stubWeb(() => new Response(gym, { status: 200 }));
-    await startCard("ws-1", subjectFor("gymshark.com")).site;
-    await startCard("ws-1", subjectFor("https://www.gymshark.com/")).site;
+    await startCard("ws-1", subjectFor("gymshark.com"), []).site;
+    await startCard("ws-1", subjectFor("https://www.gymshark.com/"), []).site;
     expect(calls.filter((url) => !isLogo(url))).toEqual(["https://gymshark.com/"]);
   });
 
   it("says nothing was found when the site cannot be read, and caches nothing", async () => {
     stubAi(0.95);
     stubWeb(() => new Response("blocked", { status: 403 }));
-    const card = startCard("ws-1", subjectFor("unreachable.example"));
+    const card = startCard("ws-1", subjectFor("unreachable.example"), []);
     expect(await card.site).toEqual({
       name: null,
       description: null,
@@ -129,21 +144,61 @@ describe("startCard", () => {
   it("starts a creator's card from the handle, without reading any site", async () => {
     stubAi(0.95);
     const calls = stubWeb(() => new Response(gym, { status: 200 }));
-    const site = await startCard("ws-1", subjectFor("https://www.instagram.com/gymshark/")).site;
+    const site = await startCard("ws-1", subjectFor("https://www.tiktok.com/@gymshark"), []).site;
     expect(site).toEqual({
       name: "@gymshark",
       description: null,
-      socials: [{ platform: "instagram", url: "https://www.instagram.com/gymshark/" }],
+      socials: [{ platform: "tiktok", url: "https://www.tiktok.com/@gymshark" }],
       review: { name: "fill", description: "empty", socials: "fill" },
       unfound: false,
     });
     expect(calls).toEqual([]);
+  });
+
+  it("draws a YouTube creator's card from the channel page", async () => {
+    stubAi(0.95);
+    const html = `<!doctype html>
+<html>
+  <head>
+    <title>Gymshark - YouTube</title>
+    <meta property="og:description" content="Official channel">
+    <meta property="og:image" content="https://images.ctfassets.net/avatar.png">
+  </head>
+  <body>
+    <a href="https://www.instagram.com/gymshark/">Instagram</a>
+    <h1>Gymshark</h1>
+    <p>Subscribe for workouts, training plans, athlete stories, product launches, and behind-the-scenes videos from the Gymshark team.</p>
+    <p>Gymshark is a global athletic wear and fitness brand with training plans, workouts, and athlete stories on YouTube.</p>
+  </body>
+</html>`;
+    stubWeb(() => new Response(html, { status: 200 }));
+    const card = startCard("ws-1", subjectFor("https://www.youtube.com/@Gymshark"), []);
+    const site = await card.site;
+    expect(site.name).toBe("Gymshark");
+    expect(site.description).toBe("Official channel");
+    expect(site.socials.map((social) => social.platform)).toEqual(["youtube", "instagram"]);
+    expect(site.review).toEqual({ name: "fill", description: "fill", socials: "fill" });
+    expect(site.unfound).toBe(false);
+    expect(await card.logo).toBe("data:image/png;base64,AQID");
+    expect(await env.IDENTITY_CACHE.get("identity:gymshark:youtube-profile")).not.toBeNull();
+  });
+
+  it("falls back to the handle card when the Instagram profile cannot be read", async () => {
+    stubAi(0.95);
+    stubWeb(() => new Response("blocked", { status: 403 }));
+    const card = startCard("ws-1", subjectFor("https://www.instagram.com/gymshark/"), []);
+    const site = await card.site;
+    expect(site.name).toBe("@gymshark");
+    expect(site.description).toBeNull();
+    expect(site.unfound).toBe(false);
+    expect(await card.logo).toBeNull();
   });
 });
 
 describe("confirmCard", () => {
   it("saves the card, with the user's edits, as the workspace's own brand", async () => {
     stubWeb(() => new Response(gym, { status: 200, headers: { "content-type": "text/html" } }));
+    await answerHomepage();
     await env.SNAPSHOTS.put("logo/gymshark.com", new Uint8Array([1]), { httpMetadata: { contentType: "image/png" } });
     const saved = await confirmCard(
       "ws-1",
@@ -214,6 +269,7 @@ describe("confirmCard", () => {
 
   it("ignores a form-supplied logo URL when no logo is kept in R2", async () => {
     stubWeb(() => new Response(gym, { status: 200, headers: { "content-type": "text/html" } }));
+    await answerHomepage();
     const saved = await confirmCard(
       "ws-1",
       form({
@@ -230,6 +286,7 @@ describe("confirmCard", () => {
   });
 
   it("refuses a card with no name, and a second confirm keeps the first", async () => {
+    await answerHomepage();
     expect(await confirmCard("ws-1", form({ subject: "gymshark.com", name: "  ", description: "" }))).toBe(false);
     expect(await confirmCard("ws-1", form({ subject: "gymshark.com", name: "First", description: "" }))).toBe(true);
     expect(await confirmCard("ws-1", form({ subject: "gymshark.com", name: "Second", description: "" }))).toBe(true);
@@ -244,5 +301,23 @@ describe("confirmCard", () => {
       form({ subject: "gymshark.com", name: "Gymshark", description: "", "social.x": "javascript:alert(1)" }),
     );
     expect(saved).toBe(false);
+  });
+});
+
+describe("readCachedSiteProof", () => {
+  const subject = subjectFor("proof-test.example");
+  const key = probeKey(subject, "homepage");
+
+  afterEach(async () => {
+    await env.IDENTITY_CACHE.delete(key);
+  });
+
+  it("returns empty hints when the cache has no entry", async () => {
+    await expect(readCachedSiteProof(subject)).resolves.toEqual({ adLibraryHints: [], navLinks: [] });
+  });
+
+  it("throws when the cached entry does not match the site card", async () => {
+    await env.IDENTITY_CACHE.put(key, JSON.stringify({ name: 1 }));
+    await expect(readCachedSiteProof(subject)).rejects.toThrow();
   });
 });

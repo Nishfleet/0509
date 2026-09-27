@@ -79,7 +79,8 @@ export function readWatchConfig(raw: string | null | undefined): WatchConfigRead
 	let value: unknown;
 	try {
 		value = JSON.parse(raw);
-	} catch {
+	} catch (error) {
+		console.error(JSON.stringify({ event: "mentions.youtube_channel_json_parse_failed", error: String(error) }));
 		return { status: "unreadable" };
 	}
 	const record = jsonObject.safeParse(value);

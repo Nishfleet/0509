@@ -5,14 +5,16 @@ import type { MentionRowModel } from "../lib/mention-feed";
 import { BriefView } from "./brief-view";
 import { MentionRow } from "./mention-row";
 import { SiteChangeItem, type SiteChangeItemData } from "./site-change-item";
+import { buttonVariants } from "./ui/button";
 
-const WHEN_CLASS = "text-ink-soft mt-2 block font-mono text-[0.75rem] tracking-[0.04em] uppercase";
+const WHEN_CLASS = "text-ink-soft mt-2 block font-mono text-meta uppercase";
 
 const CARD = "border-line mt-8 border-t pt-6";
-const TITLE = "font-display text-lg font-semibold";
+const TITLE = "font-display text-row-name font-bold [overflow-wrap:anywhere]";
 const BODY = "mt-2 leading-[1.65]";
 const DETAILS = "mt-4";
 const SUMMARY = "cursor-pointer underline decoration-1 underline-offset-4";
+const READ_BRIEF = buttonVariants({ variant: "tertiary", className: "cursor-pointer" });
 const BRIEF = "mt-4";
 
 export interface TakedownNoteItem {
@@ -97,7 +99,7 @@ export function AlertFeedRow({ item, eager }: { item: AlertFeedItem; eager: bool
       </time>
       {item.failure.brief === null ? null : (
         <details className={DETAILS}>
-          <summary className={SUMMARY}>Read the brief</summary>
+          <summary className={READ_BRIEF}>Read the brief</summary>
           <div className={BRIEF}>
             <BriefView payload={item.failure.brief} />
           </div>
