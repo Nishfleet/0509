@@ -178,6 +178,7 @@ describe("IdentityTailWorkflow", () => {
     expect(
       await confirmCard(
         workspaceId,
+        userId,
         form({ subject: DOMAIN, name: "Gymshark", description: "Gym clothes" }),
       ),
     ).toBe(true);
