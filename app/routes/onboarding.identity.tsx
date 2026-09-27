@@ -74,7 +74,7 @@ export async function action({ request }: Route.ActionArgs) {
       if (screened.kind !== "proceed") throw redirect("/onboarding");
     }
   }
-  if (await confirmCard(workspaceId, form)) throw redirect("/onboarding/competitors");
+  if (await confirmCard(workspaceId, session.user.id, form)) throw redirect("/onboarding/competitors");
   return { message: "Add your brand's name, then tap That's me." };
 }
 
