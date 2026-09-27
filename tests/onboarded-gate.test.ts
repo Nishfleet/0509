@@ -3,7 +3,9 @@ import { describe, expect, it, vi } from "vitest";
 vi.mock("cloudflare:workers", () => ({ env: {} }));
 
 import { requireOnboarded } from "../app/lib/require-onboarded.server";
-import { middleware } from "../app/routes/app-layout";
+import routes from "../app/routes";
+import AppLayout, { middleware } from "../app/routes/app-layout";
+import AppSettingsLayout, * as appSettingsLayout from "../app/routes/app-settings-layout";
 
 vi.mock("../app/lib/require-session.server", () => ({
   requireSession: async () => ({ user: { id: "user-1" } }),
@@ -42,8 +44,29 @@ describe("requireOnboarded", () => {
   });
 });
 
+const SETTINGS_PATHS = ["app/settings", "app/settings/agents", "app/settings/brief-pause"];
+
+const childPathsOf = (layoutFile: string) =>
+  routes
+    .filter((entry) => entry.file === layoutFile)
+    .flatMap((entry) => entry.children ?? [])
+    .map((child) => child.path);
+
 describe("app layout middleware", () => {
-  it("is requireOnboarded, so every /app route is gated", () => {
+  it("gates the /app routes under app-layout with requireOnboarded", () => {
     expect(middleware).toEqual([requireOnboarded]);
+    expect(childPathsOf("routes/app-layout.tsx")).toEqual([
+      "app",
+      "app/competitors",
+      "app/competitors/:entityId",
+      "app/alerts",
+      "app/brief/:digestId?",
+    ]);
+  });
+
+  it("leaves the /app/settings routes ungated, so account delete is always reachable", () => {
+    expect(childPathsOf("routes/app-settings-layout.tsx")).toEqual(SETTINGS_PATHS);
+    expect("middleware" in appSettingsLayout).toBe(false);
+    expect(AppSettingsLayout().type).toBe(AppLayout().type);
   });
 });
