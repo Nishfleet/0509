@@ -189,7 +189,7 @@ jobs:
     # required check that never reports blocks the merge queue forever.
     if: github.event_name == 'deployment_status' && github.event.deployment_status.state == 'success'
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     permissions:
       contents: read
       issues: write
@@ -218,14 +218,14 @@ jobs:
           FIXTURE_SITE_TOKEN: ${{ secrets.FIXTURE_SITE_TOKEN }}
 
       - name: Keep the trace when it fails
-        if: failure()
+        if: failure() || cancelled()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: playwright-report-production
           path: playwright-report/
           retention-days: 7
       - name: Open or update the issue that dispatches the fix
-        if: failure()
+        if: failure() || cancelled()
         id: red
         uses: JasonEtco/create-an-issue@1b14a70e4d8dc185e5cc76d3bec9eab20257b2c5 # v2.9.2
         env:
@@ -239,7 +239,7 @@ jobs:
       - name: Hand the issue to a worker
         # A GITHUB_TOKEN label fires no workflow, so dispatch by number;
         # agent.yml's Gate sizes it. needs-split alone left #4620 unworked.
-        if: failure() && steps.red.outputs.number
+        if: (failure() || cancelled()) && steps.red.outputs.number
         env:
           GH_TOKEN: ${{ github.token }}
           N: ${{ steps.red.outputs.number }}
