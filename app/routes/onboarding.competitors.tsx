@@ -13,11 +13,14 @@ import { markCompetitorsReady, markWatchingStarted } from "../lib/data/onboardin
 import { readWorkspaceIdForOwner } from "../lib/data/workspace.server";
 import { isDiscoveryActive } from "../lib/discovery/start.server";
 import { requireSession } from "../lib/require-session.server";
+import { ONBOARDING_COMPETITORS, workspaceLandingForRequest } from "../lib/workspace.server";
 
 const POLL_MS = 3000;
 
 async function workspaceFor(request: Request): Promise<string> {
   const session = await requireSession(request);
+  const landing = await workspaceLandingForRequest(request, session.user.id);
+  if (landing !== null && landing !== ONBOARDING_COMPETITORS) throw redirect(landing);
   const workspaceId = await readWorkspaceIdForOwner(session.user.id);
   if (workspaceId === null) throw redirect("/onboarding");
   return workspaceId;
