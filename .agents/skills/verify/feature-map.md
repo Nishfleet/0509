@@ -42,7 +42,7 @@ Every route below goes through `requireSession` (`app/lib/require-session.server
 which redirects to `/login` when there is no session. There is no half-authenticated
 state.
 
-Every route under `app/routes/app-layout.tsx` also runs `requireOnboarded` (`app/lib/require-onboarded.server.ts`) as layout middleware before its loader. An unfinished workspace is redirected to its resume point (`workspaceLanding` in `app/lib/workspace.server.ts`): no subject → `/onboarding`, subject but no confirmed card → `/onboarding/identity?subject=<first subject>`, confirmed card without Start watching → `/onboarding/competitors`. `/onboarding*`, `/app/share.png`, `/app/changes/*` and `/app/logos/*` never run it.
+Every route under `app/routes/app-layout.tsx` also runs `requireOnboarded` (`app/lib/require-onboarded.server.ts`) as layout middleware before its loader and action. An unfinished workspace is redirected to its resume point (`workspaceLanding` in `app/lib/workspace.server.ts`): no subject → `/onboarding`, subject but no confirmed card → `/onboarding/identity?subject=<first subject>`, confirmed card without Start watching → `/onboarding/competitors`. `/onboarding*`, `/app/share.png`, `/app/changes/*` and `/app/logos/*` never run it.
 
 | Route | File | Reach | Does | Proof |
 |---|---|---|---|---|
