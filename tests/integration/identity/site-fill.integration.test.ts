@@ -27,7 +27,6 @@ let entityId = "";
 let userId = "";
 let workspaceId = "";
 let otherWorkspaceId = "";
-let otherUserId = "";
 
 function key(): string {
   const normalised = normaliseSubject("gymshark.com");
@@ -54,6 +53,16 @@ async function seed(identity: Record<string, unknown>): Promise<void> {
     identityJson: JSON.stringify(identity),
     now: NOW,
   });
+  await env.DB.prepare(
+    `INSERT INTO "user" (id, name, email, emailVerified, createdAt, updatedAt) VALUES (?1, 'Owner', ?2, 0, ?3, ?3)`,
+  )
+    .bind(`${userId}-b`, `${userId}-b@0509.io`, NOW)
+    .run();
+  await env.DB.prepare(
+    `INSERT INTO workspace (id, name, owner_user_id, created_at) VALUES (?1, 'Owner', ?2, ?3)`,
+  )
+    .bind(otherWorkspaceId, `${userId}-b`, NOW)
+    .run();
 }
 
 async function identity(): Promise<Record<string, unknown>> {
@@ -67,20 +76,13 @@ beforeEach(() => {
   entityId = `entity-site-fill-${suffix}`;
   userId = `user-site-fill-${suffix}`;
   workspaceId = `ws-site-fill-${suffix}`;
-  otherWorkspaceId = "";
-  otherUserId = "";
+  otherWorkspaceId = `ws-site-fill-other-${suffix}`;
 });
 
 afterEach(async () => {
   vi.unstubAllGlobals();
   await env.IDENTITY_CACHE.delete(key());
-  if (otherWorkspaceId !== "") {
-    await env.DB.prepare("DELETE FROM workspace WHERE id = ?1").bind(otherWorkspaceId).run();
-  }
-  if (otherUserId !== "") {
-    await env.DB.prepare('DELETE FROM "user" WHERE id = ?1').bind(otherUserId).run();
-  }
-  await env.DB.prepare('DELETE FROM "user" WHERE id = ?1').bind(userId).run();
+  await env.DB.prepare('DELETE FROM "user" WHERE id = ?1 OR id = ?2').bind(userId, `${userId}-b`).run();
 });
 
 describe("site fill", () => {
@@ -140,22 +142,11 @@ describe("site fill", () => {
 
   it("ignores a field edit recorded in another workspace", async () => {
     await seed({ description: null, socials: [] });
-    otherWorkspaceId = `ws-site-fill-other-${crypto.randomUUID()}`;
-    otherUserId = `user-site-fill-other-${crypto.randomUUID()}`;
-    await env.DB.prepare(
-      `INSERT INTO "user" (id, name, email, emailVerified, createdAt, updatedAt) VALUES (?1, 'Other', ?2, 0, ?3, ?3)`,
-    )
-      .bind(otherUserId, `${otherUserId}@0509.io`, NOW)
-      .run();
-    await env.DB.prepare(
-      `INSERT INTO workspace (id, name, owner_user_id, created_at) VALUES (?1, 'Other', ?2, ?3)`,
-    )
-      .bind(otherWorkspaceId, otherUserId, NOW)
-      .run();
+    // user_decision.entity_id is a bare entity FK until 0509#4965 lands the composite key.
     await insertFieldEdits([
       {
         workspaceId: otherWorkspaceId,
-        userId: otherUserId,
+        userId: `${userId}-b`,
         entityId,
         edit: { field: "description", from: "Gym clothes", to: "" },
         decidedAt: NOW,
