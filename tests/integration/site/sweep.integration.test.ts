@@ -35,19 +35,6 @@ const seedEntity = (id: string, role: "self" | "competitor", domain: string, sta
     .bind(id, WS, role, domain, state, NOW)
     .run();
 
-const seedIdentifiedEntity = (
-  id: string,
-  role: "self" | "competitor",
-  domain: string,
-  identityJson: string,
-) =>
-  env.DB.prepare(
-    `INSERT INTO entity (id, workspace_id, role, domain, identity_json, origin, state, created_at)
-     VALUES (?, ?, ?, ?, ?, 'manual', 'on', ?)`,
-  )
-    .bind(id, WS, role, domain, identityJson, NOW)
-    .run();
-
 const homePageUrls = async () => {
   const rows = await env.DB.prepare("SELECT entity_id, url FROM page WHERE role = 'home' ORDER BY entity_id")
     .all<{ entity_id: string; url: string }>();
