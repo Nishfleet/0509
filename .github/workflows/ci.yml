@@ -180,7 +180,12 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: playwright-report-preview
-          path: playwright-report/
+          # Retry traces (trace: on-first-retry) land in test-results/, not the
+          # report dir; the CI reporter writes no HTML report, so
+          # playwright-report/ alone can keep an artifact with no trace in it.
+          path: |
+            playwright-report/
+            test-results/
           retention-days: 7
 
   e2e-production:
