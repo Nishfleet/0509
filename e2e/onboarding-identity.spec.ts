@@ -1,6 +1,14 @@
 import { expect, test } from "@playwright/test";
 
-import { consoleFailures, requireInboxToken, signInWithMagicLink, watchConsole } from "./inbox";
+import { consoleFailures, deleteCreatedAccount, requireInboxToken, signInWithMagicLink, watchConsole } from "./inbox";
+
+let createdEmail = "";
+test.afterEach(async ({ page }, testInfo) => {
+  if (createdEmail === "") return;
+  testInfo.setTimeout(testInfo.timeout + 60_000);
+  await deleteCreatedAccount(page, createdEmail);
+  createdEmail = "";
+});
 
 test("the card screen sends a signed-out visitor to the login page", async ({ page }) => {
   await page.goto("/onboarding/identity?subject=gymshark.com");
@@ -16,6 +24,7 @@ test.describe("signed in", () => {
   test("one input becomes a card the user can fix and confirm", async ({ page }, testInfo) => {
     const token = requireInboxToken();
     const email = `e2e+${crypto.randomUUID().replaceAll("-", "").slice(0, 12)}@0509.io`;
+    createdEmail = email;
     await signInWithMagicLink(page, email, token);
 
     const watched = watchConsole(page);
@@ -56,6 +65,7 @@ test.describe("signed in", () => {
     test(`the card fills within 30 s at ${width}`, async ({ page }, testInfo) => {
       const token = requireInboxToken();
       const email = `e2e+${crypto.randomUUID().replaceAll("-", "").slice(0, 12)}@0509.io`;
+      createdEmail = email;
 
       await page.setViewportSize({ width, height });
       await signInWithMagicLink(page, email, token);
