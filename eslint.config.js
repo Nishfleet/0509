@@ -428,17 +428,20 @@ export default tseslint.config(
     // for a purpose that is not domain normalisation, so the shared selector is
     // restated without `DOMAIN_HOSTNAME_BAN`: the identity engine itself, a
     // public-host guard in the transport layer, the job-board host match, the www
-    // variant for this site, and the support worker's site-host allow. Every
-    // other `.hostname` read in app/ or workers/ keeps the ban. This block
-    // restates the list because a later matching block's no-restricted-syntax
-    // entry replaces the earlier one wholesale (flat config never merges a rule's
-    // option array). 0509#4371.
+    // variant for this site, the support worker's site-host allow, and the
+    // incident emails' page-host display (0509#5834: the email names the page's
+    // host, which is not the entity's registrable domain, so the identity engine
+    // cannot produce it). Every other `.hostname` read in app/ or workers/ keeps
+    // the ban. This block restates the list because a later matching block's
+    // no-restricted-syntax entry replaces the earlier one wholesale (flat config
+    // never merges a rule's option array). 0509#4371.
     files: [
       "app/lib/identity/**/*.{ts,tsx}",
       "app/lib/fetch/transport.server.ts",
       "app/lib/hiring/discover-board.ts",
       "app/lib/site/own-site.server.ts",
       "workers/support-inbox.ts",
+      "workers/delivery/consumer.ts",
     ],
     rules: {
       "no-restricted-syntax": [
