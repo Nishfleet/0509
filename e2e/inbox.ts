@@ -226,6 +226,8 @@ export async function consoleFailures(
   exclude: (entry: ConsoleEntry) => boolean = () => false,
 ): Promise<string[]> {
   const pageOrigin = new URL(page.url()).origin;
+  // `!entry.url` is load-bearing: a console error with no location would make
+  // `new URL("")` throw inside the predicate.
   const sameOrigin = (entry: ConsoleEntry) => !entry.url || new URL(entry.url).origin === pageOrigin;
   const dropped = watched.consoleErrors.filter((entry) => !sameOrigin(entry));
   if (dropped.length > 0) {
@@ -243,16 +245,11 @@ export async function consoleFailures(
 }
 
 // The 404 specs' shared exclusion: a document 404 surfaces as a console error
-// on the page's own URL, and that one line is expected — console-clean also
-// asserts it fired exactly once; a 404 for any other URL still fails. The url
-// match is pathname equality, not a suffix: a console error for a different
-// path that happens to end in the same string still fails. Match the
-// status-code phrase, never the reason phrase: production is served over
-// HTTP/2, which has no reason phrase, so Chromium prints `status of 404 ()`
-// while the HTTP/1.1 local webServer prints `status of 404 (Not Found)` —
-// pinning the phrase made this assertion true only in preview (0509#4244,
-// run 35754687604). The empty-url guard is load-bearing: a console error with
-// no location would make `new URL("")` throw inside the predicate.
+// on the page's own URL — expected, and a 404 for any other URL still fails.
+// Pathname equality, not a suffix match: a different path ending the same way
+// still fails. `status of 404` is the phrase Chromium emits over HTTP/1.1 and
+// HTTP/2 alike — never the reason phrase, which HTTP/2 drops (0509#4244). The
+// empty-url guard keeps `new URL("")` from throwing on a location-less error.
 export function ownDocument404For(pathname: string): (entry: ConsoleEntry) => boolean {
   return (entry) =>
     /status of 404\b/.test(entry.text) &&

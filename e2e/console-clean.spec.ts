@@ -30,15 +30,15 @@ for (const target of targets) {
     await page.waitForLoadState("networkidle");
 
     const status = response?.status() ?? 0;
-    const pagePath = new URL(page.url()).pathname;
+    const pageDocument404 = ownDocument404For(new URL(page.url()).pathname);
     // The status conjunct stays outside the shared predicate: the exclusion
     // holds only when the page itself answered 404 — a 200 page that logged a
     // "status of 404" line for the same path still fails.
-    const ownDocument404 = (entry: ConsoleEntry) => status === 404 && ownDocument404For(pagePath)(entry);
+    const ownDocument404 = (entry: ConsoleEntry) => status === 404 && pageDocument404(entry);
 
     if (status === 404) {
       expect(
-        watched.consoleErrors.filter(ownDocument404),
+        watched.consoleErrors.filter(pageDocument404),
         `${target} logs its own document 404 exactly once`,
       ).toHaveLength(1);
     }

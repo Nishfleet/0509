@@ -5,7 +5,8 @@ import { consoleFailures, ownDocument404For, watchConsole } from "./inbox";
 test("an unknown path is a 404 page with one action", async ({ page }, testInfo) => {
   const watched = watchConsole(page);
 
-  const response = await page.goto("/this-page-is-not-here");
+  const path = "/this-page-is-not-here";
+  const response = await page.goto(path);
   expect(response?.status()).toBe(404);
 
   const headline = page.getByRole("heading", { level: 1 });
@@ -24,7 +25,7 @@ test("an unknown path is a 404 page with one action", async ({ page }, testInfo)
 
   // Chromium reports the document's own 404 as a console error. That line is
   // the status this test asserts. A 404 for any other URL still fails.
-  const ownDocument404 = ownDocument404For("/this-page-is-not-here");
+  const ownDocument404 = ownDocument404For(path);
   expect(
     await consoleFailures(page, watched, testInfo, ownDocument404),
     testInfo.project.name,
