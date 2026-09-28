@@ -1,5 +1,5 @@
-# The four checks the main-merge-queue ruleset requires, by exactly these names:
-#   Gitleaks   codex-node-checks   semgrep   preview-assert
+# The five checks the main-merge-queue ruleset requires, by exactly these names:
+#   Gitleaks   codex-node-checks   semgrep   preview-assert   opus-review
 # Bypass actors on that ruleset is empty, so a renamed job is not a cosmetic
 # change — a required check that never reports fails closed and nothing can
 # merge, including the PR that renamed it. Verified against the live ruleset
@@ -12,8 +12,9 @@ name: CI
 # `deployment_status` is the third trigger and it is the stock one: Cloudflare
 # Workers Builds emit GitHub deployments, so the production suites fire on the
 # real deploy with no polling. https://playwright.dev/docs/ci#on-deployment
-# The four required jobs guard themselves off that event; they have nothing to
-# say about a deployment and a job that reports on the wrong event is noise.
+# The five required jobs run on every event because a skipped required check
+# counts as a pass (0509#5738, #4664); their steps skip `deployment_status`,
+# so the job reports a pass there and has nothing to say about a deploy.
 on:
   pull_request:
   merge_group:
@@ -35,23 +36,27 @@ permissions:
 jobs:
   codex-node-checks:
     name: codex-node-checks
-    if: github.event_name != 'deployment_status'
     # Hosted for every event. Public repo: minutes are free and the hosted pool
     # is wider than the 3 owned runners (fleet-ops#5935 reversed 2026-09-22).
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: github.event_name != 'deployment_status'
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        if: github.event_name != 'deployment_status'
         with:
           node-version: 22
           cache: npm
       - run: npm ci
+        if: github.event_name != 'deployment_status'
       - name: Typecheck
+        if: github.event_name != 'deployment_status'
         # cf-typegen and react-router typegen generate worker-configuration.d.ts
         # and the route types, so `tsc -b` cannot run before them.
         run: npm run typecheck
       - name: Lint
+        if: github.event_name != 'deployment_status'
         # Rung 2 of the correction ladder (docs/REBUILD-TRUST.md B): every
         # mistake worth correcting twice becomes a rule here rather than a
         # sentence in a doc. `npm run lint` is `eslint . && knip` — the rules
@@ -60,13 +65,14 @@ jobs:
         run: npm run lint
 
       - name: Test
+        if: github.event_name != 'deployment_status'
         run: npm test
       - name: Build
+        if: github.event_name != 'deployment_status'
         run: npm run build
 
   Gitleaks:
     name: Gitleaks
-    if: github.event_name != 'deployment_status'
     # Hosted for every event. Public repo: minutes are free and the hosted pool
     # is wider than the 3 owned runners (fleet-ops#5935 reversed 2026-09-22).
     # Stays on a hosted runner: the docker:// step below runs as root and leaves
@@ -76,18 +82,19 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: github.event_name != 'deployment_status'
         with:
           fetch-depth: 0
       # The gitleaks BINARY is MIT and free; gitleaks-action@v2 is the part
       # that demands an organisation licence and aborts without one. Run the
       # official image directly — no wrapper action, no script.
       - uses: docker://ghcr.io/gitleaks/gitleaks:v8.29.0@sha256:71d3ee5990f2176f763b438298453fc37e87b119122045e176ca9d44ff00b08b
+        if: github.event_name != 'deployment_status'
         with:
           args: detect --source . --redact --exit-code 1
 
   semgrep:
     name: semgrep
-    if: github.event_name != 'deployment_status'
     # Hosted on purpose: this is a docker job and the container runs as root
     # on the self-hosted runners, leaving root-owned files in _work/0509 that
     # break every later checkout on that runner (#3946; same class as #3948).
@@ -97,25 +104,28 @@ jobs:
       image: semgrep/semgrep:1.170.0@sha256:c98f8829eea377274ee4b10656458b078b88232469b2ff913f091c2317347c9d
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: github.event_name != 'deployment_status'
       # `semgrep ci` is the hosted mode and needs SEMGREP_APP_TOKEN, exiting 2
       # without one. `semgrep scan` is the local mode and needs nothing.
       - run: semgrep scan --config p/typescript --config p/security-audit --config .semgrep/rollover-catch-up.yml --error
+        if: github.event_name != 'deployment_status'
       # Keep the local rule's fixture honest: --test fails if ruleid:/ok:
       # annotations in .semgrep/<rule>.ts stop matching what the rule fires on.
       - run: semgrep scan --test --config .semgrep/rollover-catch-up.yml .semgrep/rollover-catch-up.ts
+        if: github.event_name != 'deployment_status'
 
   preview-assert:
     name: preview-assert
     # A PR whose lint, typecheck or unit tests are red cannot merge, so it must not hold
     # a hosted slot for the browser suites; the free plan allows 20 org-wide (#5381).
     needs: [codex-node-checks]
-    if: github.event_name != 'deployment_status'
     # Hosted for every event. Public repo: minutes are free and the hosted pool
     # is wider than the 3 owned runners (fleet-ops#5935 reversed 2026-09-22).
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: github.event_name != 'deployment_status'
         with:
           fetch-depth: 2
       - name: Skip the browser suites when the pull request touches only docs and unit tests
@@ -125,27 +135,27 @@ jobs:
         if: github.event_name == 'pull_request'
         run: if git diff --quiet HEAD^1 HEAD -- . ':(exclude)docs' ':(exclude)tests' ':(exclude).agents' ':(exclude)*.md'; then echo skip=true >> "$GITHUB_OUTPUT"; fi
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        if: steps.scope.outputs.skip != 'true'
+        if: steps.scope.outputs.skip != 'true' && github.event_name != 'deployment_status'
         with:
           node-version: 22
           cache: npm
       - run: npm ci
-        if: steps.scope.outputs.skip != 'true'
+        if: steps.scope.outputs.skip != 'true' && github.event_name != 'deployment_status'
       - name: Build the Worker as the deploy would
-        if: steps.scope.outputs.skip != 'true'
+        if: steps.scope.outputs.skip != 'true' && github.event_name != 'deployment_status'
         run: npm run build
 
       - name: Assert Home's JavaScript budget from the build manifest
-        if: steps.scope.outputs.skip != 'true'
+        if: steps.scope.outputs.skip != 'true' && github.event_name != 'deployment_status'
         # 0509#4134, docs/REBUILD-DONE.md §B and DESIGN.md §10: /app ratchets toward 150 KB gzipped (#5216), the chart stays under 30 KB.
         run: npx vitest run --config vitest.bundle.config.ts
 
       - name: Install the browser Playwright will drive
-        if: steps.scope.outputs.skip != 'true'
+        if: steps.scope.outputs.skip != 'true' && github.event_name != 'deployment_status'
         run: npx playwright install --with-deps chromium
 
       - name: Run the e2e suite against the built Worker
-        if: steps.scope.outputs.skip != 'true'
+        if: steps.scope.outputs.skip != 'true' && github.event_name != 'deployment_status'
         # This replaced a curl-and-grep loop against /api/health. The proof is
         # the same shape — build it, run it, ask it — but now the agent that
         # wrote the change runs the same suite a user's browser would, and a
@@ -156,7 +166,7 @@ jobs:
         run: npm run e2e
 
       - name: Collect Lighthouse against the built Worker
-        if: steps.scope.outputs.skip != 'true'
+        if: steps.scope.outputs.skip != 'true' && github.event_name != 'deployment_status'
         # Same budgets as the deployment_status lighthouse job, on the PR, so a
         # regression is red before merge (poteto 03:24: a trace per change, not
         # per deploy; #4224). lhci starts wrangler dev itself: start-server-command
@@ -170,7 +180,7 @@ jobs:
         run: P=$((18000 + $$ % 1000)); npx --yes @lhci/cli@0.15.1 collect --url=http://127.0.0.1:$P/ --url=http://127.0.0.1:$P/design/landing --start-server-command="npx wrangler dev --env-file .dev.vars.example --port $P --local" --start-server-ready-pattern="Ready on" --start-server-ready-timeout=120000 --number-of-runs=3
 
       - name: Assert the Lighthouse budgets
-        if: steps.scope.outputs.skip != 'true'
+        if: steps.scope.outputs.skip != 'true' && github.event_name != 'deployment_status'
         # lighthouse-budget.pr.json is the deterministic subset of lighthouse-budget.json:
         # resource sizes and CLS. The timing rows (LCP, TTI) stay on the deployment_status
         # job: on a shared runner the unchanged page measured LCP 1657 one run and under
@@ -328,8 +338,10 @@ jobs:
   # Kimi K3 Max while Claude is out. The check below reads the newest Opus or
   # Kimi grade comment and the blocked-by-judge label, so a D/F cannot pass
   # when the label write is lost (fleet-ops#8635, 0509#5393).
-  # Advisory in the ruleset on purpose: it runs only on pull_request, and a
-  # required check must also report on merge_group.
+  # Required by ruleset 21391031, so the job carries no job-level if: — a
+  # skipped required check counts as a pass (#4664). The steps below decide
+  # event and author, so a non-worker pull request and a deployment_status
+  # run pass explicitly.
   # Nish 2026-09-22: "you can't grade your own work. you grade opus." This job
   # grades only PRs opened by the worker app (GLM / DeepSeek packets). PRs by
   # the Opus deputy or by Fable are reviewed by Fable, never by this job.
@@ -339,7 +351,6 @@ jobs:
   opus-review:
     name: opus-review
     needs: [codex-node-checks, semgrep, preview-assert]
-    if: github.event_name == 'merge_group' || (github.event_name == 'pull_request' && github.event.pull_request.user.login == 'nishfleet-worker[bot]')
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
@@ -361,11 +372,11 @@ jobs:
         Answer all three questions in your comment, each as a yes or a no with the file and line that decides it. Post ONE top-level comment via `gh pr comment` that starts with `${{ vars.GRADER == 'kimi' && 'Kimi' || 'Opus' }} grade: <letter>` followed by at most eight lines of reasons, each tied to a file and line. Use inline comments only for concrete defects. If the grade is anything but A+ run `gh pr edit --add-label blocked-by-judge` and hand the PR back to the queue: `gh issue edit <each issue the PR closes> --add-label agent-ready --remove-label agent-in-progress` (intake then starts a worker that continues this same PR, fleet-ops#8418). If A+ run `gh pr edit --remove-label blocked-by-judge` and `gh issue edit <each issue the PR closes> --remove-label agent-ready` (ignore the error if absent). Do not edit files. Do not approve or request changes through the review API.
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        if: github.event_name == 'pull_request'
+        if: github.event_name == 'pull_request' && github.event.pull_request.user.login == 'nishfleet-worker[bot]'
         with:
           fetch-depth: 1
       - uses: anthropics/claude-code-action@9ca9355b36297178e28d37c799d1c9c8a28e6507 # main 2026-09-22, Claude Code 2.1.280 (first to know claude-opus-5-5)
-        if: github.event_name == 'pull_request' && vars.GRADER != 'kimi'
+        if: github.event_name == 'pull_request' && github.event.pull_request.user.login == 'nishfleet-worker[bot]' && vars.GRADER != 'kimi'
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           # The Claude GitHub App is not installed on the org; the workflow token
@@ -380,7 +391,7 @@ jobs:
             --model claude-opus-5-5
             --allowedTools "mcp__github_inline_comment__create_inline_comment,Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*),Bash(gh pr edit:*),Bash(gh issue view:*),Bash(gh issue edit:*),Bash(git diff:*),Bash(git log:*),Bash(git show:*)"
       - name: Grade with Kimi K3 Max
-        if: github.event_name == 'pull_request' && vars.GRADER == 'kimi'
+        if: github.event_name == 'pull_request' && github.event.pull_request.user.login == 'nishfleet-worker[bot]' && vars.GRADER == 'kimi'
         env:
           CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}
           GH_TOKEN: ${{ github.token }}
@@ -480,7 +491,7 @@ jobs:
           EOF
           cursor-agent -p --output-format text --model kimi-k3-max --force --trust "$GRADE_PROMPT"
       - name: A D or F grade fails this check (reads the grade comment and label; 0509#5393)
-        if: github.event_name == 'pull_request'
+        if: github.event_name == 'pull_request' && github.event.pull_request.user.login == 'nishfleet-worker[bot]'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
