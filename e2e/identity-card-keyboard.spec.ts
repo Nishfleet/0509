@@ -164,14 +164,18 @@ test("the identity card editor saves and closes on Enter, with focus back on the
   const trigger = page.getByRole("button", { name: TRIGGERS.name });
   const name = await openEditor(page, "name");
   await name.fill("Brand One");
+  const saveResponse = page.waitForResponse(
+    (response) => response.request().method() === "POST" && new URL(response.url()).pathname === "/onboarding/identity.data",
+  );
   await name.press("Enter");
 
   // The controlled `open` prop closing does not fire Popover's onOpenChange, so
-  // Enter reaches onSave through exactly one path. The count is read once the
-  // network settles: a second submit is a second observed POST, not a count
-  // that already moved past 1.
-  await expect.poll(() => draftPosts.length).toBeGreaterThan(0);
-  await page.waitForLoadState("networkidle");
+  // Enter reaches onSave through exactly one path. Awaiting the save response
+  // proves that one save round-tripped, and a second submit from the same
+  // keypress would be dispatched — and observed by `watchDraftPosts` — before
+  // that response returns, so the `expect(draftPosts).toHaveLength(1)` read
+  // below is exact.
+  await saveResponse;
   expect(draftPosts).toHaveLength(1);
   await expect(name).toHaveCount(0);
   await expect(trigger).toBeFocused();
@@ -194,10 +198,12 @@ test("the identity card editor saves and closes on Escape, with focus back on th
   const trigger = page.getByRole("button", { name: TRIGGERS.about });
   const about = await openEditor(page, "about");
   await about.fill("one line on what we do");
+  const saveResponse = page.waitForResponse(
+    (response) => response.request().method() === "POST" && new URL(response.url()).pathname === "/onboarding/identity.data",
+  );
   await about.press("Escape");
 
-  await expect.poll(() => draftPosts.length).toBeGreaterThan(0);
-  await page.waitForLoadState("networkidle");
+  await saveResponse;
   expect(draftPosts).toHaveLength(1);
   await expect(about).toHaveCount(0);
   await expect(trigger).toBeFocused();
