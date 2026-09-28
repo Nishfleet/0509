@@ -153,7 +153,7 @@ const XML_PARSER_CONSTRUCTOR = {
 const DOMAIN_HOSTNAME_BAN = {
   selector: "MemberExpression[property.name='hostname']",
   message:
-    "URL-to-domain extraction is owned by the identity engine in app/lib/identity/ — `normaliseSubject` in app/lib/identity/normalise.ts. Reading `.hostname` anywhere else is a second domain normaliser that will drift from the engine's rules; the same shape on any URL argument, any binding name. Reuse the engine (or, for a non-identity host read, get the file added to the exemption block below). Source: 0509#4371.",
+    "URL-to-domain extraction is owned by the identity engine in app/lib/identity/ — `normaliseSubject` in app/lib/identity/normalise.ts. Reading `.hostname` anywhere else is a second domain normaliser that will drift from the engine's rules; the same shape on any URL argument, any binding name. Reuse the engine, or add the file to one of the two exemption blocks below: the shared identity block when that block's rules already fit, otherwise a block of its own that restates the array without this selector (workers/fixture-site.ts is the precedent, because the shared block would re-arm RAW_DML_WRITER there). Source: 0509#4371, 0509#5833.",
 };
 
 // DESIGN.md: fonts are self-hosted. A Google Fonts <link> put LCP at 2021 ms against the
@@ -474,9 +474,10 @@ export default tseslint.config(
     // state row. That is a non-identity host read, not domain normalisation — the
     // identity engine reduces both names to the same registrable `0509.in`, which
     // is exactly the collision being fixed — so it is exempted from
-    // `DOMAIN_HOSTNAME_BAN` alone. It keeps every other ban, including
-    // `RAW_DML_WRITER`, which the shared identity block above would re-arm
-    // because this file writes its own Durable Object sqlite. 0509#5833.
+    // `DOMAIN_HOSTNAME_BAN` alone. It is a block of its own rather than more
+    // entries in the shared identity block because that block restates
+    // `RAW_DML_WRITER`, which the writer block's `ignores` keeps off this file
+    // (its own Durable Object sqlite is never an `env.DB` writer). 0509#5833.
     files: ["workers/fixture-site.ts"],
     rules: {
       "no-restricted-syntax": [

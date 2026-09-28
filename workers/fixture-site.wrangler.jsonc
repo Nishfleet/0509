@@ -1,18 +1,20 @@
 // Config for the J8 fixture-site Worker (0509#4046). It is a separate Worker
 // with its own name and routes block, same shape as the J1 mail sink in
-// workers/e2e-inbox.wrangler.jsonc. It lives on fixture.0509.in and NEVER on
-// 0509.in: 0509.in is a live production 308 redirect to 0509.io (a zone-level
-// Redirect Rule on the 0509.in zone), and a deliberate break there would break
-// production. docs/REBUILD-DONE.md J8 says this outright, and
-// docs/engines/delivery.md P7.5 requires the incident round-trip to run against
-// this fixture and no other host.
+// workers/e2e-inbox.wrangler.jsonc. It lives on fixture.0509.in and
+// j8.fixture.0509.in and NEVER on 0509.in: 0509.in is a live production 308
+// redirect to 0509.io (a zone-level Redirect Rule on the 0509.in zone), and a
+// deliberate break there would break production. docs/REBUILD-DONE.md J8 says
+// this outright, and docs/engines/delivery.md P7.5 requires the incident
+// round-trip to run against this fixture and no other host.
 //
 // The break and price state live in one SQLite Durable Object per hostname
-// (0509#4305). State is per hostname (0509#4124), so J8 on j8.fixture.0509.in
-// never disturbs J5/J7 on fixture.0509.in. Workers KV could serve a stale
-// break-mode for up to 60s at a POP, so a flip
-// could read healthy to the round-trip that just made it. Tag v1 creates the
-// class; wrangler applies it on deploy. There is no KV binding.
+// (0509#4305, 0509#4124): the object is named for the request's host, so J8 on
+// j8.fixture.0509.in never disturbs J5/J7 on fixture.0509.in. `FIXTURE_HOSTS`
+// in workers/fixture-site.ts lists exactly these routes and answers 404 to any
+// other host, so a wrong-host flip cannot read as a silent pass. Workers KV
+// could serve a stale break-mode for up to 60s at a POP, so a flip could read
+// healthy to the round-trip that just made it. Tag v1 creates the class;
+// wrangler applies it on deploy. There is no KV binding.
 //
 // The break state has no expiry and the deploy job never resets it, so it survives
 // deploys: a round-trip that forgets to repair leaves the fixture broken while

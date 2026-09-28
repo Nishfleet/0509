@@ -414,4 +414,26 @@ describe("per-hostname state", () => {
     expect(fixture.status).toBe(200);
     expect(await state().get("bot-wall")).toBe("off");
   });
+
+  it("answers a host that is not one of the two with 404", async () => {
+    // A host outside FIXTURE_HOSTS would otherwise mint a fresh empty Durable
+    // Object and answer a flip with 200 while the page under test stayed
+    // healthy: a round-trip that broke nothing would read as a pass.
+    const page = await worker.fetch(
+      new Request("https://other.fixture.0509.in/"),
+      env,
+      createExecutionContext(),
+    );
+    expect(page.status).toBe(404);
+    const flipRes = await worker.fetch(
+      new Request("https://other.fixture.0509.in/__break?mode=hard", {
+        method: "POST",
+        headers: { authorization: `Bearer ${TOKEN}` },
+      }),
+      env,
+      createExecutionContext(),
+    );
+    expect(flipRes.status).toBe(404);
+    expect(await state("other.fixture.0509.in").get("break-mode")).toBeNull();
+  });
 });
