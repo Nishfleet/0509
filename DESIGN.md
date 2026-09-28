@@ -36,7 +36,7 @@ competitor, alerts — rendered at 1440 and 390).
    judgment sits low and says "possibly". A paused brand shows the date it was paused.
    We never round a gap up into a clean number. The one place a degraded row is replaced
    rather than shown is the landing's all-degraded gate (§2.1), and there it is replaced
-   by a line that says what is degraded and what still arrives — never by silence.
+   by a line that says coverage is rebuilding and what still arrives — never by silence.
 8. **The accent is one colour.** Green marker. Red exists only as the strike on a
    "before" and the rule on an open incident. Nothing else is coloured, ever.
 
