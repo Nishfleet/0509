@@ -1,5 +1,6 @@
-import { env } from "cloudflare:workers";
 import { parse } from "tldts";
+
+import { browserContent } from "../site/browser-budget.server";
 
 const FETCH_TIMEOUT_MS = 8_000;
 
@@ -206,7 +207,7 @@ export async function readUrl(
   }
 
   if (options.startWith === "browser") {
-    if (options.mayEscalate && !(await options.mayEscalate("learned"))) {
+    if (!options.mayEscalate || !(await options.mayEscalate("learned"))) {
       return deferredByBudget("learned");
     }
     const learned = await escalate(url, started, "learned");
@@ -234,7 +235,7 @@ export async function readUrl(
     if (!(err instanceof Error && err.name === "TimeoutError")) {
       return { ok: false, reason: "unreachable", detail };
     }
-    if (options.mayEscalate && !(await options.mayEscalate("timeout"))) {
+    if (!options.mayEscalate || !(await options.mayEscalate("timeout"))) {
       return deferredByBudget("timeout");
     }
     const escalation = await escalate(url, started, "timeout");
@@ -247,7 +248,7 @@ export async function readUrl(
 
   const refused = await refusalReason(fetchStatus, fetchHtml);
   if (refused) {
-    if (options.mayEscalate && !(await options.mayEscalate(refused))) {
+    if (!options.mayEscalate || !(await options.mayEscalate(refused))) {
       return deferredByBudget(refused);
     }
     const escalation = await escalate(url, started, refused);
@@ -274,20 +275,14 @@ async function escalate(
   started: number,
   reason: EscalationReason,
 ): Promise<{ result: ReadUrlSuccess | null; cause: string }> {
-  if (!env.BROWSER || typeof env.BROWSER.quickAction !== "function") {
-    return { result: null, cause: "browser binding is not configured" };
+  const content = await browserContent(url);
+  if (!content.ok) {
+    if (content.cause.startsWith("browser call threw")) {
+      logEscalation(url, null, reason);
+    }
+    return { result: null, cause: content.cause };
   }
-
-  let res: Response;
-  try {
-    res = await env.BROWSER.quickAction("content", { url });
-  } catch (err) {
-    logEscalation(url, null, reason);
-    return {
-      result: null,
-      cause: `browser call threw (${err instanceof Error ? err.message : String(err)})`,
-    };
-  }
+  const res = content.res;
 
   const browserMsUsed = parseBrowserMs(res);
   logEscalation(url, browserMsUsed, reason);
