@@ -15,7 +15,7 @@ function notInWorkspace(entityId: string, workspaceId: string): NonRetryableErro
 
 export async function siteWasReached(homepageUrl: string): Promise<boolean> {
   const normalised = normaliseSubject(homepageUrl);
-  if (!normalised.ok) return true;
+  if (!normalised.ok) return false;
   return (await env.IDENTITY_CACHE.get(probeKey(normalised.subject, "homepage"))) !== null;
 }
 
@@ -33,7 +33,7 @@ export async function attemptSiteFill(
   };
   const { card, reached } = await readSiteCard(subject, mayEscalate);
   if (!reached) return "pending";
-  const edited = await readEditedFields(entityId);
+  const edited = await readEditedFields(workspaceId, entityId);
   const filled = await fillSelfSiteFields({
     workspaceId,
     entityId,

@@ -116,7 +116,7 @@ async function readTarget(env: Env, workspaceId: string): Promise<TargetRow | nu
     `SELECT st.id, st.workspace_id, st.channel_id, st.target_value, st.unsubscribe_token
        FROM send_target st
        JOIN channel c ON c.id = st.channel_id
-      WHERE st.workspace_id = ? AND c.key = ? AND c.is_enabled = 1
+      WHERE st.workspace_id = ? AND c.key = ? AND c.is_enabled = 1 AND st.is_verified = 1
       ORDER BY st.created_at ASC
       LIMIT 1`,
   )
