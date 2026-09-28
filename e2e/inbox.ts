@@ -71,6 +71,19 @@ export function decodedBodies(raw: string): string[] {
   return bodies;
 }
 
+// The inbox's non-200 answer, carrying the status so a caller can tell a
+// missing message (404) from a real failure (500). A caller that maps 404 to
+// "nothing stored" must rethrow the rest: swallowing a 500 would turn an inbox
+// failure into a stale-link timeout.
+export class InboxReadError extends Error {
+  readonly status: number;
+  constructor(status: number, to: string) {
+    super(`inbox answered HTTP ${status} for ${to}`);
+    this.name = "InboxReadError";
+    this.status = status;
+  }
+}
+
 // The whole stored message exactly as the inbox Worker holds it, headers
 // included. `waitForMagicLink` returns the link it polled for; a spec that
 // asserts the email's own content (its Message-ID, its send time, its HTML
@@ -81,7 +94,7 @@ export async function readRawMessage(to: string, token: string): Promise<string>
     headers: inboxHeaders(token),
   });
   if (response.status !== 200) {
-    throw new Error(`inbox answered HTTP ${response.status} for ${to}`);
+    throw new InboxReadError(response.status, to);
   }
   return response.text();
 }
@@ -93,6 +106,24 @@ export function extractMagicLink(rawMessage: string): string | null {
     if (match) return match[0].replaceAll("&amp;", "&");
   }
   return null;
+}
+
+// The link this recipient already has stored, for waitForMagicLink to skip: the
+// inbox keeps one message per recipient for an hour, so a fixed fixture address
+// still holds the previous run's spent link, and a poll that accepted it would
+// follow a token the app has already burned. At most one link ever comes back,
+// but waitForMagicLink takes an exclude array. Only a 404 (nothing stored) is an
+// empty list; every other answer is the inbox failing, and reading one as "no
+// message" would hand back the spent link as if arriving mail had been seen.
+export async function staleLinks(to: string, token: string): Promise<string[]> {
+  const stored = await readRawMessage(to, token).then(
+    (raw) => extractMagicLink(raw),
+    (error: unknown) => {
+      if (error instanceof InboxReadError && error.status === 404) return null;
+      throw error;
+    },
+  );
+  return stored === null ? [] : [stored];
 }
 
 // One probe before polling: expect.poll retries a thrown callback for the
@@ -258,25 +289,47 @@ export function ownDocument404For(pathname: string): (entry: ConsoleEntry) => bo
 }
 
 // J1's core: submit the login form for a fresh e2e+ address, read the real
-// email out of the inbox Worker, follow the link, land signed in on /onboarding.
+// email out of the inbox Worker, follow the link, land signed in. The link's
+// callbackURL is /app (safeReturnTo's default in lib/agent/paths.ts), and
+// requireOnboarded in app-layout.tsx bounces a session whose landing is not
+// null to that landing, so a fresh user lands on /onboarding and a fully
+// onboarded returning one stays on /app. `landing` says which of the two this
+// sign-in expects and defaults to the fresh-address one J1 asserts; it has no
+// call site until the fixed-address specs (#4123, #4124, #4125) use it. Where
+// resumePoint sends an unfinished user is its own business
+// (app/lib/workspace.server.ts) — every branch it can return matches the
+// default.
+// staleLinks is read before the send and excluded from the wait, so a fixed
+// address cannot land on the previous run's spent token; a message that arrives
+// between that read and the send is outside the guarantee, which is the
+// "stored before this sign-in" the issue asked for. The read is one-shot by
+// design: it runs ahead of the click, so a failing inbox throws where the
+// browser is still on the form instead of spending the poll's 120s on an answer
+// that cannot change; the read has no timeout of its own, so a stalled answer
+// rides on the spec's own deadline. Playwright runs a file's tests in parallel
+// (fullyParallel
+// in playwright.config.ts) against one inbox slot per recipient, so two tests
+// sharing one fixed address need serial mode or an address each.
 // Timestamps are logged for the packet's proof line (send and session).
 export async function signInWithMagicLink(
   page: Page,
   email: string,
   token: string,
+  landing = /\/onboarding/,
 ): Promise<{ link: string; status: number }> {
   await page.goto("/login");
   await page.locator('input[name="email"]').fill(email);
   await settleSignInWidget(page);
+  const stale = await staleLinks(email, token);
   const sentAt = new Date().toISOString();
   await page.locator('button[type="submit"]').click();
   // Sent state replaces the form; asserting the field is gone asserts the swap
   // without pinning copy (smoke.spec.ts's contract-not-copy convention).
   await expect(page.locator('input[name="email"]')).toHaveCount(0);
-  const link = await waitForMagicLink(email, token);
+  const link = await waitForMagicLink(email, token, stale);
   const linkReadAt = new Date().toISOString();
   const response = await page.goto(link);
-  await expect(page).toHaveURL(/\/onboarding/);
+  await expect(page).toHaveURL(landing);
   console.log(
     `magic-link sign-in email=${email} sentAt=${sentAt} linkReadAt=${linkReadAt} sessionAt=${new Date().toISOString()}`,
   );

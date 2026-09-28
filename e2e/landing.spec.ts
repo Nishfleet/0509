@@ -33,11 +33,39 @@ test("the landing renders its sections in order under one headline", async ({ pa
   expect(order).toEqual(["hero", "mark", "how-it-works", "what-we-watch", "agents", "price", "faq"]);
 });
 
+test("the landing route data and document carry no disabled source's internal notes", async ({ page, request }) => {
+  const response = await page.goto(PATH);
+  expect(response?.status()).toBe(200);
+
+  // Migration 0007 seeds `x.search` disabled with `disabled_reason` and
+  // `cheapest_route` in config_json; migration 0002 seeds the five parked
+  // `ads.*_parked` rows with their probe evidence. The loader must drop both
+  // classes before the route serializes anything (0509#5828). The `.data`
+  // payload is the route's own client-navigation serialization and is where
+  // the filter has to bite; app/root.tsx:34 omits <Scripts /> for the landing,
+  // so the document carries no loader data — its negatives below are a guard
+  // for the day hydration comes back, and the two positives are the evidence
+  // the route still has sources.
+  const data = await request.get(`${PATH}.data`);
+  expect(data.status()).toBe(200);
+  const payload = await data.text();
+  const document = await page.content();
+
+  expect(document).toContain("site.page");
+  expect(payload).toContain("site.page");
+  for (const body of [document, payload]) {
+    expect(body).not.toContain("x.search");
+    expect(body).not.toContain("cheapest_route");
+    expect(body).not.toContain("disabled_reason");
+    expect(body).not.toContain("ads.snap_parked");
+    expect(body).not.toContain("ad-transparency search surface");
+  }
+});
+
 test("how it works reads as three ruled steps in order, wide and narrow", async ({ page }, testInfo) => {
   const watched = watchConsole(page);
 
   await page.goto(PATH);
-  await page.waitForLoadState("networkidle");
 
   const section = page.locator("#how-it-works");
   const steps = section.locator("ol > li");
@@ -79,7 +107,6 @@ test("the agents section hands a visitor's agent the MCP address and the API doc
   const watched = watchConsole(page);
 
   await page.goto(PATH);
-  await page.waitForLoadState("networkidle");
 
   const agents = page.locator("#agents");
   await expect(agents.getByText("https://0509.io/mcp")).toBeVisible();
@@ -115,7 +142,9 @@ test("the hero's first viewport holds the outcome and the one priced input", asy
   });
 
   await page.goto(PATH);
-  await page.waitForLoadState("networkidle");
+  await expectFaceLoaded(page, "Bricolage Grotesque", 800);
+  await expectFaceLoaded(page, "Instrument Sans", 400);
+  await expectFaceLoaded(page, "IBM Plex Mono", 400);
 
   const hero = page.locator("#hero");
   const pieces = [
@@ -270,12 +299,18 @@ test("the ticker sits above the page and reserves its height", async ({ page }) 
 test("the ticker never scrolls the page sideways", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto(PATH);
-  await page.waitForLoadState("networkidle");
+  await expect(page.locator("#ticker")).toBeVisible();
+  await expectFaceLoaded(page, "Bricolage Grotesque", 800);
+  await expectFaceLoaded(page, "Instrument Sans", 400);
+  await expectFaceLoaded(page, "IBM Plex Mono", 400);
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
 
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto(PATH);
-  await page.waitForLoadState("networkidle");
+  await expect(page.locator("#ticker")).toBeVisible();
+  await expectFaceLoaded(page, "Bricolage Grotesque", 800);
+  await expectFaceLoaded(page, "Instrument Sans", 400);
+  await expectFaceLoaded(page, "IBM Plex Mono", 400);
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(1440);
 });
 
@@ -292,8 +327,9 @@ test("the ticker causes no layout shift", async ({ page }) => {
   });
 
   await page.goto(PATH);
-  await page.waitForLoadState("networkidle");
-  await page.waitForTimeout(1000);
+  await expectFaceLoaded(page, "Bricolage Grotesque", 800);
+  await expectFaceLoaded(page, "Instrument Sans", 400);
+  await expectFaceLoaded(page, "IBM Plex Mono", 400);
   expect(await page.evaluate(() => Reflect.get(window, "__cls"))).toBeLessThan(0.05);
 });
 
