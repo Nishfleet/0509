@@ -280,23 +280,6 @@ async function flagNoChannel(watchId: string, now: string): Promise<void> {
   if (flagged !== current) await writeWatchConfigJson(watchId, flagged);
 }
 
-async function flagUnresolvedChannel(
-  watchId: string,
-  status: "no-url" | "unresolved",
-  now: string,
-): Promise<void> {
-  switch (status) {
-    case "no-url":
-      return flagNoChannel(watchId, now);
-    case "unresolved":
-      return flagLostChannel(watchId, now);
-    default: {
-      const unhandled: never = status;
-      throw new Error(`unhandled YouTube channel lookup: ${JSON.stringify(unhandled)}`);
-    }
-  }
-}
-
 async function commitYoutubeFeed(
   watch: WatchRow,
   feed: OkYoutubeFeed,
@@ -369,7 +352,8 @@ async function sweepOneYoutube(
       await requireEntityIdentityJson(watch.workspace_id, watch.entity_id),
     );
     if (lookup.status !== "id") {
-      await flagUnresolvedChannel(watch.watch_id, lookup.status, now);
+      if (lookup.status === "no-url") await flagNoChannel(watch.watch_id, now);
+      if (lookup.status === "unresolved") await flagLostChannel(watch.watch_id, now);
       await markWatchPolled(watch.watch_id, now);
       return { items: 0, stored: 0, unjudged: 0 };
     }
