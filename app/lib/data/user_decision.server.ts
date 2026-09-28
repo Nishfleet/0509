@@ -25,7 +25,7 @@ WHERE workspace_id = ?1 AND note = ?2 AND verdict IN ('public_subject:confirmed'
 ORDER BY decided_at DESC LIMIT 1`;
 
 const SELECT_FIELD_EDITS = `SELECT note FROM user_decision
-WHERE entity_id = ?1 AND verdict = ?2`;
+WHERE workspace_id = ?1 AND entity_id = ?2 AND verdict = ?3`;
 
 const fieldEditNoteSchema = z.object({ field: z.enum(DRAFT_FIELDS) });
 
@@ -68,9 +68,9 @@ export async function insertFieldEdits(
   );
 }
 
-export async function readEditedFields(entityId: string): Promise<DraftField[]> {
+export async function readEditedFields(workspaceId: string, entityId: string): Promise<DraftField[]> {
   const rows = await env.DB.prepare(SELECT_FIELD_EDITS)
-    .bind(entityId, FIELD_EDIT_VERDICT)
+    .bind(workspaceId, entityId, FIELD_EDIT_VERDICT)
     .all<{ note: string }>();
   const fields = rows.results.flatMap((row) => {
     try {
