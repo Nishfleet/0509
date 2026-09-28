@@ -175,6 +175,13 @@ const NO_USER_DATA_IN_LOGS = [
     message: NO_USER_DATA_IN_LOGS_MESSAGE,
   },
   { selector: `${LOG_OR_CAPTURE_CALL} > Identifier.arguments[name=/${USER_DATA_NAME}/]`, message: NO_USER_DATA_IN_LOGS_MESSAGE },
+  // The first two cover a named key and a named value. These three close the
+  // shapes the message promises but a name-only match misses: the `email` in
+  // `console.log(`user ${email}`)`, the `subject` in `JSON.stringify(subject)`,
+  // and the `subject` in `{ ...subject }`. 0509#5786.
+  { selector: `${LOG_OR_CAPTURE_CALL} TemplateLiteral > Identifier[name=/${USER_DATA_NAME}/]`, message: NO_USER_DATA_IN_LOGS_MESSAGE },
+  { selector: `${LOG_OR_CAPTURE_CALL} CallExpression > Identifier[name=/${USER_DATA_NAME}/]`, message: NO_USER_DATA_IN_LOGS_MESSAGE },
+  { selector: `${LOG_OR_CAPTURE_CALL} SpreadElement > Identifier[name=/${USER_DATA_NAME}/]`, message: NO_USER_DATA_IN_LOGS_MESSAGE },
 ];
 
 const BANNED_SYNTAX = [
