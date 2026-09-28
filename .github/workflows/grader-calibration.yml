@@ -20,8 +20,13 @@ on:
       - .github/grader-calibration/**
   workflow_dispatch:
     inputs:
+      grader:
+        description: kimi grades with the Cursor CLI on a hosted runner; devin grades with the shared grade.yml Devin steps on a fleet-ci runner, one case at a time (fleet-ops#8922)
+        type: choice
+        options: [kimi, devin]
+        default: kimi
       model:
-        description: Cursor model to grade with
+        description: Cursor model to grade with (grader kimi only)
         type: string
         default: kimi-k3-max
       issue:
@@ -53,14 +58,14 @@ jobs:
   grade:
     name: grade
     needs: cases
-    runs-on: ubuntu-latest
+    runs-on: ${{ fromJSON(inputs.grader == 'devin' && '["self-hosted","fleet-ci"]' || '"ubuntu-latest"') }}
     timeout-minutes: 40
     permissions:
       contents: read
       issues: write
     strategy:
       fail-fast: false
-      max-parallel: 6
+      max-parallel: ${{ inputs.grader == 'devin' && 1 || 6 }}
       matrix:
         case: ${{ fromJSON(needs.cases.outputs.ids) }}
     env:
@@ -115,8 +120,34 @@ jobs:
           ls
           find head -type f
       - name: Install the Cursor CLI
+        if: inputs.grader != 'devin'
         run: bash -eo pipefail "$RUNNER_TEMP/cursor-install.sh.run"
+      - name: Load the Devin grader exactly as grade.yml runs it
+        if: inputs.grader == 'devin'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: Nishfleet/fleet-ops
+          ref: main
+          path: .bar
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Grade with Devin
+        if: inputs.grader == 'devin'
+        timeout-minutes: 30
+        shell: bash
+        run: |
+          rm -rf "$RUNNER_TEMP/case"
+          mv "$RUNNER_TEMP/grade-files" "$RUNNER_TEMP/case"
+          mkdir "$RUNNER_TEMP/case/bar"
+          cp .bar/docs/quality-bar.md "$RUNNER_TEMP/case/bar/quality-bar.md"
+          echo docs/REBUILD-TRUST.md > "$RUNNER_TEMP/case/trust-doc.txt"
+          grade=.bar/.github/workflows/grade.yml
+          yq -e '.jobs.grade.env.DEVIN_PROMPT' "$grade" > "$RUNNER_TEMP/devin-prompt.txt"
+          yq -e '.jobs.grade.steps[] | select(.id == "devin-grade") | .run' "$grade" > "$RUNNER_TEMP/devin-grade.sh"
+          test -s "$RUNNER_TEMP/devin-prompt.txt" && test -s "$RUNNER_TEMP/devin-grade.sh"
+          DEVIN_PROMPT=$(cat "$RUNNER_TEMP/devin-prompt.txt") bash -eo pipefail "$RUNNER_TEMP/devin-grade.sh"
       - name: Grade
+        if: inputs.grader != 'devin'
         working-directory: ${{ runner.temp }}/grade-files
         timeout-minutes: 30
         env:
@@ -127,16 +158,18 @@ jobs:
         if: ${{ !cancelled() }}
         env:
           GH_TOKEN: ${{ github.token }}
-          MODEL: ${{ inputs.model || 'kimi-k3-max' }}
+          MODEL: ${{ inputs.grader == 'devin' && 'swe-2-max' || inputs.model || 'kimi-k3-max' }}
+          LABEL: ${{ inputs.grader == 'devin' && 'Devin' || 'Kimi' }}
+          OUT: ${{ inputs.grader == 'devin' && 'devin' || 'kimi' }}
         run: |
           expect=$(jq -r .expect "$RUNNER_TEMP/case.json")
-          tr -d '\r' < "$RUNNER_TEMP/kimi.txt" > "$RUNNER_TEMP/kimi-clean.txt" 2>/dev/null || : > "$RUNNER_TEMP/kimi-clean.txt"
-          : > "$RUNNER_TEMP/kimi-graded.txt"
-          if [ "$(grep -cxE 'Kimi grade: (A\+|A|A-|B\+|B|B-|C\+|C|C-|D|F)' "$RUNNER_TEMP/kimi-clean.txt")" = 1 ]; then
-            sed -nE '/^Kimi grade: (A\+|A|A-|B\+|B|B-|C\+|C|C-|D|F)$/,$p' "$RUNNER_TEMP/kimi-clean.txt" > "$RUNNER_TEMP/kimi-graded.txt"
+          tr -d '\r' < "$RUNNER_TEMP/$OUT.txt" > "$RUNNER_TEMP/$OUT-clean.txt" 2>/dev/null || : > "$RUNNER_TEMP/$OUT-clean.txt"
+          : > "$RUNNER_TEMP/$OUT-graded.txt"
+          if [ "$(grep -cxE "$LABEL grade: (A\+|A|A-|B\+|B|B-|C\+|C|C-|D|F)" "$RUNNER_TEMP/$OUT-clean.txt")" = 1 ]; then
+            sed -nE "/^$LABEL grade: (A\+|A|A-|B\+|B|B-|C\+|C|C-|D|F)\$/,\$p" "$RUNNER_TEMP/$OUT-clean.txt" > "$RUNNER_TEMP/$OUT-graded.txt"
           fi
-          line=$(head -n1 "$RUNNER_TEMP/kimi-graded.txt")
-          got=$(printf '%s\n' "$line" | sed -nE 's/^Kimi grade: (A\+|A|A-|B\+|B|B-|C\+|C|C-|D|F)$/\1/p')
+          line=$(head -n1 "$RUNNER_TEMP/$OUT-graded.txt")
+          got=$(printf '%s\n' "$line" | sed -nE "s/^$LABEL grade: (A\+|A|A-|B\+|B|B-|C\+|C|C-|D|F)\$/\1/p")
           case "$expect:${got:-none}" in
             *:none) result=no-grade ;;
             block:A+) result=false-A+ ;;
@@ -147,10 +180,14 @@ jobs:
           {
             printf 'calibration run %s case %s model %s expect=%s got=%s result=%s\n\n' "$GITHUB_RUN_ID" "$CASE" "$MODEL" "$expect" "${got:-none}" "$result"
             printf 'Why this case: %s\n\n~~~text\n' "$(jq -r .why "$RUNNER_TEMP/case.json")"
-            head -n 12 "$RUNNER_TEMP/kimi-graded.txt" | head -c 8000 | tr -d '~'
+            head -n 12 "$RUNNER_TEMP/$OUT-graded.txt" | head -c 8000 | tr -d '~'
             printf '~~~\n'
           } > "$RUNNER_TEMP/result.md"
           gh issue comment "$RESULTS_ISSUE" --repo "$GITHUB_REPOSITORY" --body-file "$RUNNER_TEMP/result.md"
+
+      - name: Remove the copied Devin login
+        if: always() && inputs.grader == 'devin'
+        run: rm -rf "$RUNNER_TEMP/devin-home" "$RUNNER_TEMP/case"
 
   summary:
     name: summary
@@ -166,7 +203,7 @@ jobs:
       - name: Count catches and false A+ grades for this run
         env:
           GH_TOKEN: ${{ github.token }}
-          MODEL: ${{ inputs.model || 'kimi-k3-max' }}
+          MODEL: ${{ inputs.grader == 'devin' && 'swe-2-max' || inputs.model || 'kimi-k3-max' }}
         run: |
           gh api --paginate "repos/$GITHUB_REPOSITORY/issues/$RESULTS_ISSUE/comments?per_page=100" \
             --jq ".[] | select(.user.login == \"github-actions[bot]\") | .body | select(startswith(\"calibration run $GITHUB_RUN_ID \")) | split(\"\n\")[0]" \
