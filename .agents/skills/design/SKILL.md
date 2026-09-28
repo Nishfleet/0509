@@ -13,7 +13,7 @@ A new screen extends the nearest keyframe in `docs/design-directions/a-final/`. 
 
 ## Tokens and components only
 
-Colour comes only from the `@theme` tokens in `app/app.css` — the `--color-*` block is the list. Green is the one accent; red exists only as the strike on a "before" and the rule on an open incident (DESIGN.md rule 8). Components come from the map in DESIGN.md §11: the app-level components in `app/components/` composing the shadcn primitives in `app/components/ui/`, nothing hand-rolled. The §11 list is the target inventory — a primitive it names but the tree lacks is Fable's call, recorded in the PR, not a silent divergence.
+Outside the shadcn kit, colour comes only from the `@theme` tokens in `app/app.css` — the `--color-*` block is the list. Inside `app/components/ui/`, stock shadcn tokens are grandfathered until the restyle slice; a new component must not copy them. Green is the one accent; red exists only as the strike on a "before" and the rule on an open incident (DESIGN.md rule 8). Components come from the map in DESIGN.md §11: the app-level components in `app/components/` composing the shadcn primitives in `app/components/ui/`, nothing hand-rolled. The §11 list is the target inventory — a primitive it names but the tree lacks is Fable's call, recorded in the PR, not a silent divergence.
 
 ## No nearby keyframe: pull Mobbin references
 
@@ -21,4 +21,4 @@ A screen with no nearby keyframe (settings subpages, empty and error states, aut
 
 ## Screenshot before the PR
 
-Screenshot the screen at 1440×900 and 390×844 with chrome-devtools before opening a PR — `--filePath /tmp/verify-proof/<screen>-desktop-1440.png` and `/tmp/verify-proof/<screen>-mobile-390.png` — and attach both shots. The Layout section of the verify skill (`.agents/skills/verify/SKILL.md`) has the commands.
+Screenshot the screen at 1440 and 390 with chrome-devtools before opening a PR and attach both shots. The verify skill (`.agents/skills/verify/SKILL.md`) has the commands: start the app first, then the Layout section's screenshots give the exact `--filePath` paths.
