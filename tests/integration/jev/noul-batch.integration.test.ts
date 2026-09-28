@@ -171,7 +171,7 @@ describe("askNouls", () => {
     expect(verdicts.map((verdict) => verdict.p)).toEqual([0.91, 0.35, 0.07]);
   });
 
-  it("throws JevUnavailableError when an asked question is missing from the answers", async () => {
+  it("names the missing question when the answer parses but an asked one is absent", async () => {
     const workspaceId = await seedWorkspace();
     const run = vi.fn(() =>
       Promise.resolve({
@@ -183,7 +183,13 @@ describe("askNouls", () => {
     );
     Reflect.set(env, "AI", { run });
 
-    await expect(askNouls(workspaceId, questions, state)).rejects.toThrow(JevUnavailableError);
+    const thrown: unknown = await askNouls(workspaceId, questions, state).catch((error: unknown) => error);
+    expect(thrown).toBeInstanceOf(JevUnavailableError);
+    if (!(thrown instanceof JevUnavailableError)) throw new Error("unreachable");
+
+    expect(thrown.message).toBe(
+      "jev unavailable: answer missing its noul; keys=answers; issues=; missing=identity_category",
+    );
   });
 
   it("names the shape that came back, and no value, when the answer is not the agreed shape", async () => {
@@ -215,5 +221,13 @@ describe("askNouls", () => {
     if (!(knownKey instanceof JevUnavailableError)) throw new Error("unreachable");
 
     expect(knownKey.message).toContain("answers.identity_name:invalid_type");
+
+    run.mockImplementation(() => Promise.resolve({ "441234567890": "x" }));
+    const digits: unknown = await askNouls(workspaceId, questions, state).catch((error: unknown) => error);
+    expect(digits).toBeInstanceOf(JevUnavailableError);
+    if (!(digits instanceof JevUnavailableError)) throw new Error("unreachable");
+
+    expect(digits.message).toBe("jev unavailable: answer missing its noul; keys=?; issues=answers:invalid_type");
+    expect(digits.message).not.toContain("441234567890");
   });
 });

@@ -64,10 +64,17 @@ export class JevUnavailableError extends Error {
 
 const SHAPE_TOKENS = new Set(["answers", "choice", "noul", "response", "type"]);
 
+function missingFrom(parsed: ZodSafeParseResult<unknown>, questionIds: readonly string[]): readonly string[] {
+  const data = parsed.data;
+  if (typeof data !== "object" || data === null || !("answers" in data)) return questionIds;
+  const answers = data.answers;
+  if (typeof answers !== "object" || answers === null) return questionIds;
+  return questionIds.filter((id) => !Object.hasOwn(answers, id));
+}
+
 function shapeOf(raw: unknown, parsed: ZodSafeParseResult<unknown>, questionIds: readonly string[]): string {
   const token = (value: PropertyKey): string =>
-    typeof value === "number" ||
-    (typeof value === "string" && (SHAPE_TOKENS.has(value) || questionIds.includes(value) || /^\d+$/.test(value)))
+    typeof value === "number" || (typeof value === "string" && (SHAPE_TOKENS.has(value) || questionIds.includes(value)))
       ? String(value)
       : "?";
   const keys =
@@ -78,7 +85,9 @@ function shapeOf(raw: unknown, parsed: ZodSafeParseResult<unknown>, questionIds:
         .slice(0, 5)
         .map((issue) => `${issue.path.map(token).join(".")}:${issue.code}`)
         .join(" ");
-  return `keys=${keys}; issues=${issues}`;
+  const missing = parsed.success ? missingFrom(parsed, questionIds) : [];
+  const missingTag = missing.length === 0 ? "" : `; missing=${missing.join(",")}`;
+  return `keys=${keys}; issues=${issues}${missingTag}`;
 }
 
 async function sha256Hex(text: string): Promise<string> {
@@ -206,8 +215,13 @@ async function runChoice(question: ChoiceQuestion, state: unknown): Promise<stri
   }
   const parsed = choiceAnswerSchema.safeParse(raw);
   const answer = parsed.success ? parsed.data.answers[question.id] : undefined;
-  if (answer === undefined || !Object.keys(question.options).includes(answer.choice)) {
+  if (answer === undefined) {
     throw new JevUnavailableError(new Error(`answer missing its choice; ${shapeOf(raw, parsed, [question.id])}`));
+  }
+  if (!Object.hasOwn(question.options, answer.choice)) {
+    throw new JevUnavailableError(
+      new Error(`answer names a choice that is not one of the offered options; ${shapeOf(raw, parsed, [question.id])}`),
+    );
   }
   return answer.choice;
 }

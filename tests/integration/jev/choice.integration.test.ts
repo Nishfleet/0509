@@ -83,7 +83,25 @@ describe("askChoice", () => {
     const run = vi.fn(() => Promise.resolve({ answers: { activity: { type: "choice", choice: "exploded" } } }));
     Reflect.set(env, "AI", { run });
 
-    await expect(askChoice(workspaceId, question, state)).rejects.toThrow(JevUnavailableError);
+    const thrown: unknown = await askChoice(workspaceId, question, state).catch((error: unknown) => error);
+    expect(thrown).toBeInstanceOf(JevUnavailableError);
+    if (!(thrown instanceof JevUnavailableError)) throw new Error("unreachable");
+
+    expect(thrown.message).toBe(
+      "jev unavailable: answer names a choice that is not one of the offered options; keys=answers; issues=",
+    );
+  });
+
+  it("names the shape and no value when the choice answer is not the agreed shape", async () => {
+    const workspaceId = await seedWorkspace();
+    const run = vi.fn(() => Promise.resolve({ response: "x" }));
+    Reflect.set(env, "AI", { run });
+
+    const thrown: unknown = await askChoice(workspaceId, question, state).catch((error: unknown) => error);
+    expect(thrown).toBeInstanceOf(JevUnavailableError);
+    if (!(thrown instanceof JevUnavailableError)) throw new Error("unreachable");
+
+    expect(thrown.message).toBe("jev unavailable: answer missing its choice; keys=response; issues=answers:invalid_type");
   });
 
   it("throws JevUnavailableError when Jev refuses", async () => {
