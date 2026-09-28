@@ -1,11 +1,6 @@
 import { joinList } from "../../lib/coverage";
 import { sourceKindNoun } from "../../lib/source-name";
-import {
-  SourcePill,
-  sourcePillStatus,
-  type SourceRow,
-  type SourceSnapshot,
-} from "../source-pill";
+import { SourcePill, type SourceRow, type SourceSnapshot } from "../source-pill";
 import { Section } from "./section";
 
 export interface WatchedSource {
@@ -21,9 +16,7 @@ export function WhatWeWatch({
   sources: readonly WatchedSource[];
   now?: number;
 }) {
-  const shown = sources.filter(
-    (entry) => sourcePillStatus(entry.source, entry.snapshot, now).state !== "disabled",
-  );
+  const shown = sources;
   const nouns = [...new Set(shown.map((entry) => sourceKindNoun(entry.kind)))];
   const lead = `We read ${nouns.length === 0 ? "public sources" : joinList(nouns)}. A source that stops answering shows here dimmed, with the reason — we never quietly drop it.`;
   return (

@@ -33,6 +33,18 @@ test("the landing renders its sections in order under one headline", async ({ pa
   expect(order).toEqual(["hero", "mark", "how-it-works", "what-we-watch", "agents", "price", "faq"]);
 });
 
+test("the landing never serializes a disabled source's internal notes", async ({ page }) => {
+  const response = await page.goto(PATH);
+  expect(response?.status()).toBe(200);
+
+  // Migration 0007 seeds `x.search` disabled with `disabled_reason` and
+  // `cheapest_route` in config_json; the loader must filter it before the
+  // page is serialized, so neither key reaches the document (0509#5828).
+  const content = await page.content();
+  expect(content).not.toContain("cheapest_route");
+  expect(content).not.toContain("disabled_reason");
+});
+
 test("how it works reads as three ruled steps in order, wide and narrow", async ({ page }, testInfo) => {
   const watched = watchConsole(page);
 
