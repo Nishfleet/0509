@@ -18,6 +18,7 @@ const SOURCE_BACKFILL = "src-latest-backfill";
 const WATCH = "watch-src-latest";
 const WATCH_TIE = "watch-src-latest-tie";
 const WATCH_BACKFILL = "watch-src-latest-backfill";
+const WATCH_BACKFILL_OTHER = "watch-src-latest-backfill-other";
 const PAGE = "page-src-latest";
 const SEEDED_AT = "2026-09-24T00:00:00Z";
 
@@ -285,9 +286,11 @@ describe("source latest snapshot facts (0509#5724)", () => {
   it("backfill: the migration's own UPDATE seeds the facts from stored snapshots", async () => {
     await seedSource(SOURCE, WATCH);
     await seedSource(SOURCE_BACKFILL, WATCH_BACKFILL);
+    await seedWatch(WATCH_BACKFILL_OTHER, SOURCE_BACKFILL, "backfill-other");
     await env.DB.batch([
       snapshotStatement("snap-bf-1", WATCH_BACKFILL, "2026-09-25T01:00:00Z", 4, 2),
-      snapshotStatement("snap-bf-2", WATCH_BACKFILL, "2026-09-25T02:00:00Z", 6, 8),
+      snapshotStatement("snap-bf-2", WATCH_BACKFILL_OTHER, "2026-09-25T02:00:00Z", 6, 8),
+      snapshotStatement("snap-bf-3", WATCH_BACKFILL, "2026-09-25T03:00:00Z", 10, 5),
     ]);
 
     const migration: D1Migration[] = env.TEST_MIGRATIONS;
@@ -301,9 +304,9 @@ describe("source latest snapshot facts (0509#5724)", () => {
     await env.DB.prepare(statement).run();
 
     expect(await latestFacts(SOURCE_BACKFILL)).toEqual({
-      latest_fetched_at: "2026-09-25T02:00:00Z",
-      latest_item_count: 6,
-      latest_canary_count: 8,
+      latest_fetched_at: "2026-09-25T03:00:00Z",
+      latest_item_count: 10,
+      latest_canary_count: 5,
     });
     expect(await latestFacts(SOURCE)).toEqual({
       latest_fetched_at: null,
