@@ -175,7 +175,7 @@ describe("field-edit records", () => {
       },
     ]);
 
-    expect(await readEditedFields(entityId)).toEqual(["name"]);
+    expect(await readEditedFields(workspaceId, entityId)).toEqual(["name"]);
     const row = await userDecisionsRow();
     if (row === null) throw new Error("the field-edit row was not stored");
     expect(row.verdict).toBe(FIELDS_VERDICT);
@@ -192,14 +192,14 @@ describe("field-edit records", () => {
   it("returns empty when the entity has no field-edit rows", async () => {
     await seedEntity();
 
-    expect(await readEditedFields(entityId)).toEqual([]);
+    expect(await readEditedFields(workspaceId, entityId)).toEqual([]);
   });
 
   it("ignores a row whose note is not JSON", async () => {
     await seedEntity();
     await insertStoredNote("not json");
 
-    expect(await readEditedFields(entityId)).toEqual([]);
+    expect(await readEditedFields(workspaceId, entityId)).toEqual([]);
   });
 
   it("ignores a row whose note names a field that is not a card field", async () => {
@@ -207,7 +207,7 @@ describe("field-edit records", () => {
     await insertStoredNote(JSON.stringify({ field: "logo", from: "a", to: "b" }));
     await insertStoredNote(JSON.stringify({ from: "a", to: "b" }));
 
-    expect(await readEditedFields(entityId)).toEqual([]);
+    expect(await readEditedFields(workspaceId, entityId)).toEqual([]);
   });
 });
 
