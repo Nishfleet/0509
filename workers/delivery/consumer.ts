@@ -8,7 +8,7 @@ import { pageHost } from "../../app/lib/site/own-site.server";
 
 import { renderBrief } from "./brief-template";
 import { renderIncidentFixed, renderIncidentOpen } from "./incident-template";
-import { errorText, sendMessage } from "./send";
+import { errorText, sendMessage, type SendResult } from "./send";
 
 class PayloadError extends Error {
   constructor(message: string) {
@@ -181,6 +181,38 @@ function render(message: MessageRow, to: string, token: string): EmailMessageBui
   };
 }
 
+interface SendAttemptHandles {
+  send: () => Promise<SendResult>;
+  onSent?: () => Promise<void>;
+}
+
+interface SendAttemptId {
+  claimId: string;
+  idempotencyKey: string;
+}
+
+async function sendAndResolve(
+  env: Env,
+  attempt: SendAttemptId,
+  handles: SendAttemptHandles,
+): Promise<DeliveryResult> {
+  const { claimId, idempotencyKey } = attempt;
+  let sent = false;
+  try {
+    const result = await handles.send();
+    sent = result.outcome === "sent";
+    await resolveSendAttempt(env.DB, claimId, result.outcome, result.error);
+    if (handles.onSent !== undefined && result.outcome === "sent") {
+      await handles.onSent();
+    }
+    return { outcome: result.outcome, attempt_id: claimId, idempotency_key: idempotencyKey };
+  } catch (cause) {
+    if (sent) throw cause;
+    await resolveSendAttempt(env.DB, claimId, "failed", errorText(cause));
+    return { outcome: "failed", attempt_id: claimId, idempotency_key: idempotencyKey };
+  }
+}
+
 export async function deliver(env: Env, message: DigestMessage): Promise<DeliveryResult> {
   const digest = await readDigest(env, message.digest_id);
   if (!digest) {
@@ -207,22 +239,18 @@ export async function deliver(env: Env, message: DigestMessage): Promise<Deliver
     return { outcome: "duplicate", attempt_id: null, idempotency_key: idempotencyKey };
   }
 
-  let sent = false;
-  try {
-    const token = await ensureUnsubscribeToken(env, target);
-    const email = render(digest, target.target_value, token);
-    const result = await sendMessage(env.EMAIL, email);
-    sent = result.outcome === "sent";
-    await resolveSendAttempt(env.DB, claim.id, result.outcome, result.error);
-    if (result.outcome === "sent") {
-      await markDigestSent(env.DB, digest.id);
-    }
-    return { outcome: result.outcome, attempt_id: claim.id, idempotency_key: idempotencyKey };
-  } catch (cause) {
-    if (sent) throw cause;
-    await resolveSendAttempt(env.DB, claim.id, "failed", errorText(cause));
-    return { outcome: "failed", attempt_id: claim.id, idempotency_key: idempotencyKey };
-  }
+  return sendAndResolve(
+    env,
+    { claimId: claim.id, idempotencyKey },
+    {
+      send: async () => {
+        const token = await ensureUnsubscribeToken(env, target);
+        const email = render(digest, target.target_value, token);
+        return sendMessage(env.EMAIL, email);
+      },
+      onSent: () => markDigestSent(env.DB, digest.id),
+    },
+  );
 }
 
 export async function deliverIncident(
@@ -273,42 +301,36 @@ export async function deliverIncident(
     return { outcome: "duplicate", attempt_id: null, idempotency_key: idempotencyKey };
   }
 
-  let sent = false;
-  try {
-    const site = pageHost(incident.page_url);
-    const rendered =
-      incident.closed_at === null
-        ? renderIncidentOpen({
-            site,
-            kind: incident.kind,
-            opened_at: incident.opened_at,
-            recheck_at: new Date(Date.parse(incident.opened_at) + RECHECK_AFTER_MS).toISOString(),
-            mark: incident.mark,
-            link: INCIDENT_LINK,
-            timezone: incident.timezone,
-          })
-        : renderIncidentFixed({
-            site,
-            kind: incident.kind,
-            closed_at: incident.closed_at,
-            link: INCIDENT_LINK,
-            timezone: incident.timezone,
-          });
-    const result = await sendMessage(env.EMAIL, {
-      to: target.target_value,
-      from: "brief@0509.io",
-      subject: rendered.subject,
-      html: rendered.html,
-      text: rendered.text,
-    });
-    sent = result.outcome === "sent";
-    await resolveSendAttempt(env.DB, claim.id, result.outcome, result.error);
-    return { outcome: result.outcome, attempt_id: claim.id, idempotency_key: idempotencyKey };
-  } catch (cause) {
-    if (sent) throw cause;
-    await resolveSendAttempt(env.DB, claim.id, "failed", errorText(cause));
-    return { outcome: "failed", attempt_id: claim.id, idempotency_key: idempotencyKey };
-  }
+  return sendAndResolve(env, { claimId: claim.id, idempotencyKey }, {
+    send: () => {
+      const site = pageHost(incident.page_url);
+      const rendered =
+        incident.closed_at === null
+          ? renderIncidentOpen({
+              site,
+              kind: incident.kind,
+              opened_at: incident.opened_at,
+              recheck_at: new Date(Date.parse(incident.opened_at) + RECHECK_AFTER_MS).toISOString(),
+              mark: incident.mark,
+              link: INCIDENT_LINK,
+              timezone: incident.timezone,
+            })
+          : renderIncidentFixed({
+              site,
+              kind: incident.kind,
+              closed_at: incident.closed_at,
+              link: INCIDENT_LINK,
+              timezone: incident.timezone,
+            });
+      return sendMessage(env.EMAIL, {
+        to: target.target_value,
+        from: "brief@0509.io",
+        subject: rendered.subject,
+        html: rendered.html,
+        text: rendered.text,
+      });
+    },
+  });
 }
 
 export async function handleBatch(
