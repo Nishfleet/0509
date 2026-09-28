@@ -12,7 +12,7 @@ Umbrella #3842. Author: Fable. Checked by the Opus deputy. Nish's decisions stan
 
 - Public pages, public posts, public ad libraries, public feeds. Screenshots of public pages. No DMs, no private groups, no purchased personal data.
 - Stored bodies on the `0509-snapshots` bucket, and on its `0509-snapshots-backup` copy, follow this table. The platform deletes an object when its rule expires. Age expiry is not a cron and not a Worker. Expiry is day-granular, and Cloudflare typically removes an object within 24 hours of the day it expires, so the promise is the period in the table.
-- `0509-snapshots-backup` is the disaster-recovery copy of `0509-snapshots` (`wrangler.jsonc` binds it as `SNAPSHOTS_BACKUP`, and the nightly `snapshot-backup` Workflow fills it). The Workflow lists the source once a night at 05:00 UTC and copies every key the copy does not already hold, so the copy carries the source's object count. The same five per-prefix rules below apply to it, and a copied object's own clock starts at the copy, so it ages out behind the object it copies. Nothing syncs deletes: a takedown or an account deletion removes the source objects, and the copy loses them by aging, not by sync.
+- `0509-snapshots-backup` is the disaster-recovery copy of `0509-snapshots` (`wrangler.jsonc` binds it as `SNAPSHOTS_BACKUP`; the nightly `snapshot-backup` Workflow fills it). The Workflow lists the source once a night at 05:00 UTC and copies every key the copy does not already hold, and it syncs no deletes: a takedown or an account deletion removes the source objects, and a copy leaves by aging, never by sync. The aging is the same five per-prefix rules below, with a copied object's clock starting at the copy — a requirement, not yet a fact: the 2026-09-28 check found only the default multipart-abort rule on the copy and the five rules on the source, so nothing in the copy expires until #5950 is done.
 
 | Prefix | What it holds | Kept |
 |---|---|---|
@@ -29,7 +29,7 @@ Umbrella #3842. Author: Fable. Checked by the Opus deputy. Nish's decisions stan
 
 ## Deletion
 
-- Deleting a workspace deletes every owned row (ownership manifest) and every R2 object under its prefix, within one Workflow run, and stops every email. J14 in docs/REBUILD-DONE.md proves it.
+- Deleting a workspace deletes every owned row (ownership manifest) and every R2 object under its prefix, within one Workflow run, and stops every email. J14 in docs/REBUILD-DONE.md proves it. The `0509-snapshots-backup` copy is not part of that run: the source objects go, and the copies stay until the copy's own rule removes them — and on 2026-09-28 the copy had no such rule, so they stay indefinitely (#5950). The promise's wording, here and on `/privacy`, is #5901.
 - A user removing a competitor keeps history (product rule) unless they choose "remove and forget", which deletes that entity's signals for that workspace.
 
 ## Takedown
@@ -86,4 +86,4 @@ Privacy and terms pages exist from day one, plain words, matching this document:
 
 ## Proof required
 
-A refused private-handle onboarding (recorded), a completed takedown round-trip on a test subject (row, timestamps, card re-rendered without it), a workspace deletion verified against R2 and D1, and the R2 lifecycle rules visible in the Cloudflare dashboard on both `0509-snapshots` and `0509-snapshots-backup`.
+A refused private-handle onboarding (recorded), a completed takedown round-trip on a test subject (row, timestamps, card re-rendered without it), a workspace deletion verified against R2 and D1 (the copy in `0509-snapshots-backup` is not in that run; it ages out), and the R2 lifecycle rules visible in the Cloudflare dashboard on both `0509-snapshots` and `0509-snapshots-backup` — owed, because the 2026-09-28 check found the copy carrying only the default multipart-abort rule (#5950).
