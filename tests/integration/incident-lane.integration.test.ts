@@ -442,8 +442,13 @@ describe("incident lane (0509#4364)", () => {
     expect(rec.sent).toHaveLength(0);
     expect(await readAttempts()).toHaveLength(0);
     expect(await readNotices(PAGE_A)).toHaveLength(0);
-    expect(lines.join("\n")).toContain(`"event":"delivery.no_target"`);
-    expect(lines.join("\n")).toContain(`"reason":"unverified"`);
-    expect(lines.join("\n")).toContain(`"workspace_id":"${WS}"`);
+    const logLine = lines.find((l) => l.includes(`"event":"delivery.no_target"`));
+    const parsed = logLine ? (JSON.parse(logLine) as Record<string, unknown>) : {};
+    expect(parsed).toMatchObject({
+      event: "delivery.no_target",
+      reason: "unverified",
+      workspace_id: WS,
+      incident_id: INCIDENT_A,
+    });
   });
 });

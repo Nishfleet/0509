@@ -402,10 +402,24 @@ describe("send lane (0509#3979)", () => {
     const rec = recorder();
     await env.DB.exec("DELETE FROM send_target");
     const digestId = await seedDigest("pending");
+    const lines: string[] = [];
+    vi.spyOn(console, "log").mockImplementation((...args: unknown[]) => {
+      lines.push(args.map((arg) => String(arg)).join(" "));
+    });
+
     const result = await deliver(envWith(bindingFor(rec)), message(digestId));
+
     expect(result.outcome).toBe("no_target");
     expect(rec.sent).toHaveLength(0);
     expect(await readAttempts()).toHaveLength(0);
+    const logLine = lines.find((l) => l.includes(`"event":"delivery.no_target"`));
+    const parsed = logLine ? (JSON.parse(logLine) as Record<string, unknown>) : {};
+    expect(parsed).toMatchObject({
+      event: "delivery.no_target",
+      reason: "no_row",
+      workspace_id: WS,
+      digest_id: digestId,
+    });
   });
 
   it("reports no_target when the only email target is unverified", async () => {
@@ -427,9 +441,38 @@ describe("send lane (0509#3979)", () => {
     expect(rec.sent).toHaveLength(0);
     expect(await readAttempts()).toHaveLength(0);
     expect((await digestStatus(digestId))?.status).toBe("pending");
-    expect(lines.join("\n")).toContain(`"event":"delivery.no_target"`);
-    expect(lines.join("\n")).toContain(`"reason":"unverified"`);
-    expect(lines.join("\n")).toContain(`"workspace_id":"${WS}"`);
+    const logLine = lines.find((l) => l.includes(`"event":"delivery.no_target"`));
+    const parsed = logLine ? (JSON.parse(logLine) as Record<string, unknown>) : {};
+    expect(parsed).toMatchObject({
+      event: "delivery.no_target",
+      reason: "unverified",
+      workspace_id: WS,
+      digest_id: digestId,
+    });
+  });
+
+  it("reports no_target with reason channel_disabled when the email channel is off", async () => {
+    const rec = recorder();
+    await env.DB.prepare(`UPDATE channel SET is_enabled = 0 WHERE id = ?`).bind(CHANNEL).run();
+    const digestId = await seedDigest("pending");
+    const lines: string[] = [];
+    vi.spyOn(console, "log").mockImplementation((...args: unknown[]) => {
+      lines.push(args.map((arg) => String(arg)).join(" "));
+    });
+
+    const result = await deliver(envWith(bindingFor(rec)), message(digestId));
+
+    expect(result.outcome).toBe("no_target");
+    expect(rec.sent).toHaveLength(0);
+    expect(await readAttempts()).toHaveLength(0);
+    const logLine = lines.find((l) => l.includes(`"event":"delivery.no_target"`));
+    const parsed = logLine ? (JSON.parse(logLine) as Record<string, unknown>) : {};
+    expect(parsed).toMatchObject({
+      event: "delivery.no_target",
+      reason: "channel_disabled",
+      workspace_id: WS,
+      digest_id: digestId,
+    });
   });
 
   it("acks a duplicate and retries a failed send from the batch", async () => {
