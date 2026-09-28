@@ -53,6 +53,7 @@ describe("landing what we watch", () => {
         },
         snapshot: LIVE,
       }),
+      entry({ source: { key: "hn.algolia", name: "hn.algolia", platform: "hn", is_enabled: 1 }, snapshot: LIVE }),
     ]);
     expect(html).toContain('data-state="degraded"');
     expect(html).toContain("degraded: not answering");
@@ -62,6 +63,10 @@ describe("landing what we watch", () => {
   it("dims an enabled source with no snapshot as degraded, not as live", () => {
     const html = markup([
       entry({ source: { key: "site.web", name: "site.page", platform: "web", is_enabled: 1 }, snapshot: null }),
+      entry({
+        source: { key: "hn.algolia", name: "hn.algolia", platform: "hn", is_enabled: 1 },
+        snapshot: { fetched_at: "2026-09-26T11:00:00.000Z", item_count: 0 },
+      }),
     ]);
     expect(html).toContain('data-state="degraded"');
     expect(html).toContain("degraded: no fresh data");
@@ -78,10 +83,84 @@ describe("landing what we watch", () => {
         source: { key: "b.two", name: "b.two", platform: "gdelt", is_enabled: 1 },
         snapshot: { fetched_at: "2026-09-26T11:00:00.000Z", item_count: 5, canary_count: 0 },
       }),
+      entry({ source: { key: "c.three", name: "c.three", platform: "hn", is_enabled: 1 }, snapshot: LIVE }),
     ]);
     expect(html.match(/data-state="degraded"/g)).toHaveLength(2);
     expect(html).toContain("degraded: no fresh data");
     expect(html).toContain("degraded: not answering");
+  });
+
+  it("replaces the pill row with the one rebuilding line when every visible source is degraded", () => {
+    const html = markup([
+      entry({
+        source: {
+          key: "gdelt.doc",
+          name: "gdelt.doc",
+          platform: "gdelt",
+          is_enabled: 1,
+          degraded_reason: "not answering",
+          last_good_at: "2026-09-20T03:04:05.000Z",
+        },
+        snapshot: LIVE,
+      }),
+      entry({ source: { key: "site.web", name: "site.page", platform: "web", is_enabled: 1 }, snapshot: null }),
+    ]);
+    const text = html.replaceAll("&#x27;", "'");
+    expect(text).toContain(
+      "We're rebuilding coverage of news mentions. Briefs and standing still arrive from site changes; mentions resume as their sources come back.",
+    );
+    expect(html).not.toContain("data-state=");
+    expect(html).not.toContain("last good");
+  });
+
+  it("keeps the degraded pills, with their reasons, when a live source is visible too", () => {
+    const html = markup([
+      entry({
+        source: { key: "a.one", name: "a.one", platform: "hn", is_enabled: 1, degraded_reason: "not answering" },
+        snapshot: LIVE,
+      }),
+      entry({
+        source: { key: "b.two", name: "b.two", platform: "gdelt", is_enabled: 1, degraded_reason: "rate limited" },
+        snapshot: LIVE,
+      }),
+      entry({ source: { key: "hn.algolia", name: "hn.algolia", platform: "hn", is_enabled: 1 }, snapshot: LIVE }),
+    ]);
+    const text = html.replaceAll("&#x27;", "'");
+    expect(text).not.toContain("We're rebuilding coverage of news mentions");
+    expect(html).toContain("degraded: not answering");
+    expect(html).toContain("degraded: rate limited");
+    expect(html.match(/data-state="degraded"/g)).toHaveLength(2);
+    expect(html.match(/data-state="live"/g)).toHaveLength(1);
+  });
+
+  it("keeps a degraded pill when a none-state source is visible too", () => {
+    const html = markup([
+      entry({
+        source: { key: "gdelt.doc", name: "gdelt.doc", platform: "gdelt", is_enabled: 1, degraded_reason: "not answering" },
+        snapshot: LIVE,
+      }),
+      entry({
+        source: { key: "hn.algolia", name: "hn.algolia", platform: "hn", is_enabled: 1 },
+        snapshot: { fetched_at: "2026-09-26T11:00:00.000Z", item_count: 0 },
+      }),
+    ]);
+    const text = html.replaceAll("&#x27;", "'");
+    expect(text).not.toContain("We're rebuilding coverage of news mentions");
+    expect(html).toContain('data-state="degraded"');
+    expect(html).toContain('data-state="none"');
+    expect(html).toContain("degraded: not answering");
+  });
+
+  it("does not replace the row when every source is disabled", () => {
+    const html = markup([
+      entry({
+        source: { key: "x.search", name: "x.search", platform: "x", is_enabled: 0 },
+        snapshot: null,
+      }),
+    ]);
+    const text = html.replaceAll("&#x27;", "'");
+    expect(text).not.toContain("We're rebuilding coverage of news mentions");
+    expect(html).not.toContain("data-state=");
   });
 
   it("says what we watch from the registry kinds it is given, not a list written into the component", () => {
