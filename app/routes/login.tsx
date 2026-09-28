@@ -83,7 +83,7 @@ export default function Login() {
     setPasskeyState(code === "AUTH_CANCELLED" ? "idle" : "failed");
   }
 
-  if (actionData?.sent) {
+  if (actionData && "sent" in actionData && actionData.sent) {
     return <SignInSent key={actionData.sent.at} email={actionData.sent.email} turnstileSiteKey={deleted.turnstileSiteKey} />;
   }
 
