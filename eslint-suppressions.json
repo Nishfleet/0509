@@ -314,9 +314,6 @@
     }
   },
   "app/lib/onboarding-screen.server.ts": {
-    "complexity": {
-      "count": 1
-    },
     "max-lines-per-function": {
       "count": 1
     }
@@ -447,8 +444,18 @@
       "count": 1
     }
   },
+  "workers/workflows/own-site-check.ts": {
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
   "workers/workflows/site-sweep.ts": {
     "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "workers/workflows/snapshot-backup.ts": {
+    "max-params": {
       "count": 1
     }
   },
