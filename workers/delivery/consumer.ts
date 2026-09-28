@@ -181,7 +181,7 @@ function render(message: MessageRow, to: string, token: string): EmailMessageBui
   };
 }
 
-interface SendAttempt {
+interface SendAndResolveInput {
   claimId: string;
   idempotencyKey: string;
   send: () => Promise<SendResult>;
@@ -190,9 +190,9 @@ interface SendAttempt {
 
 async function sendAndResolve(
   env: Env,
-  attempt: SendAttempt,
+  input: SendAndResolveInput,
 ): Promise<DeliveryResult> {
-  const { claimId, idempotencyKey, send, onSent } = attempt;
+  const { claimId, idempotencyKey, send, onSent } = input;
   let sent = false;
   try {
     const result = await send();
