@@ -26,6 +26,9 @@ declare const prompt: string;
 declare const input: { workspaceId: string };
 declare const workspaceId: string;
 declare const error: Error;
+declare const controller: { cron: string };
+declare function setTag(key: string, value: string): void;
+declare function setExtra(key: string, value: string): void;
 `;
 
 async function lintProbe(code: string): Promise<string[]> {
@@ -86,6 +89,15 @@ describe("eslint no-user-data-in-logs rule (#5786)", () => {
 
   it("flags a user-data name sent to Sentry", { timeout: 60_000 }, async () => {
     expect(flagged(await lintProbe(`import { captureException } from "@sentry/cloudflare";\ncaptureException(error, { extra: { prompt } });\n`))).toBe(true);
+  });
+
+  it("flags a user-data name sent to a Sentry scope setter", { timeout: 60_000 }, async () => {
+    expect(flagged(await lintProbe(`setExtra("subject", subject.registrable);\n`))).toBe(true);
+    expect(flagged(await lintProbe(`setTag("email", email);\n`))).toBe(true);
+  });
+
+  it("leaves the live scope setters in workers/app.ts alone", { timeout: 60_000 }, async () => {
+    expect(flagged(await lintProbe(`setTag("cron", controller.cron);\n`))).toBe(false);
   });
 
   it("leaves the ids an operator needs and a capped error message alone", { timeout: 60_000 }, async () => {
