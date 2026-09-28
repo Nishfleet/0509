@@ -66,6 +66,16 @@ describe("resolveEntitlements", () => {
     ).toEqual(SCOUT);
   });
 
+  it("is silent for the empty override object a workspace with no plan row gets", () => {
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    try {
+      expect(resolveEntitlements("scout", "{}")).toEqual(SCOUT);
+      expect(errorSpy).not.toHaveBeenCalled();
+    } finally {
+      errorSpy.mockRestore();
+    }
+  });
+
   it("falls back to the tier defaults and logs when limitsJson is not JSON", () => {
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
     try {
