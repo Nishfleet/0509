@@ -154,6 +154,9 @@ describe("alerts mentions source pills (#4003 4/6)", () => {
       const status = sourcePillStatus(youtube.source, youtube.snapshot, NOW_MS);
       expect(status.state).toBe("degraded");
       expect(status.reason).toBe(NO_CHANNEL_REASON);
+      // The pill returns the flag's write time as lastGoodAt today; #5936 owns
+      // whether that stays. Pinned so the flip lands here when it changes.
+      expect(status.lastGoodAt).toBe(NOW);
 
       // The landing page reads the registry, which has no workspace scope, and
       // it reaches anonymous visitors. The same no-channel reason has to reach
@@ -165,6 +168,7 @@ describe("alerts mentions source pills (#4003 4/6)", () => {
       const registryStatus = sourcePillStatus(registryYoutube.source, registryYoutube.snapshot, NOW_MS);
       expect(registryStatus.state).toBe("degraded");
       expect(registryStatus.reason).toBe(NO_CHANNEL_REASON);
+      expect(registryStatus.lastGoodAt).toBe(NOW);
     } finally {
       await clearOwner(USER, WS, COMP);
     }
