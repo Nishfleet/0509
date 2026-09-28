@@ -28,7 +28,8 @@ const CHANNEL = "chan-email";
 const TARGET = "watcher@0509.io";
 const TARGET_ID = "watcher-target";
 const ENTITY = "ent-incident-lane";
-const DOMAIN = "shop.example";
+const DOMAIN = "example.com";
+const PAGE_HOST = "shop.example.com";
 const PAGE_A = "page-incident-lane-a";
 const KIND = "error";
 const INCIDENT_A = "inc-a";
@@ -79,7 +80,7 @@ const seedPage = async (id: string, entityId: string) => {
     `INSERT INTO page (id, entity_id, url, discovered_at)
      VALUES (?, ?, ?, '2026-09-23T00:00:00Z')`,
   )
-    .bind(id, entityId, `https://${DOMAIN}/`)
+    .bind(id, entityId, `https://${PAGE_HOST}/`)
     .run();
 };
 
@@ -201,7 +202,7 @@ describe("incident lane (0509#4364)", () => {
     expect(rec.sent).toHaveLength(1);
     expect(rec.sent[0].to).toBe(TARGET);
     expect(rec.sent[0].from).toBe("brief@0509.io");
-    expect(rec.sent[0].subject).toBe(`${DOMAIN} looks broken: ${KIND}`);
+    expect(rec.sent[0].subject).toBe(`${PAGE_HOST} looks broken: ${KIND}`);
     expect(rec.sent[0].text).toContain("What changed: Checkout was 500ing");
     expect(rec.sent[0].html).toContain("https://0509.io/app/alerts");
 
@@ -242,7 +243,7 @@ describe("incident lane (0509#4364)", () => {
     expect(result.outcome).toBe("sent");
     expect(result.idempotency_key).toBe(`incident:${INCIDENT_A}:fixed`);
     expect(rec.sent).toHaveLength(2);
-    expect(rec.sent[1].subject).toContain("looks fixed");
+    expect(rec.sent[1].subject).toBe(`${PAGE_HOST} looks fixed: ${KIND}`);
 
     const notices = await readNotices(PAGE_A);
     expect(notices).toHaveLength(2);
@@ -261,7 +262,7 @@ describe("incident lane (0509#4364)", () => {
     expect(result.outcome).toBe("sent");
     expect(result.idempotency_key).toBe(`incident:${INCIDENT_A}:fixed`);
     expect(rec.sent).toHaveLength(2);
-    expect(rec.sent[1].subject).toContain("looks fixed");
+    expect(rec.sent[1].subject).toBe(`${PAGE_HOST} looks fixed: ${KIND}`);
 
     const notices = await readNotices(PAGE_A);
     expect(notices).toHaveLength(2);
@@ -418,5 +419,21 @@ describe("incident lane (0509#4364)", () => {
     expect(rec.sent[0].text).not.toContain("2026-09-23 07:15 UTC");
     expect(rec.sent[0].html).toContain("Seen at Wed 23 Sept, 12:45.");
     expect(rec.sent[0].html).not.toContain("2026-09-23 07:15 UTC");
+  });
+
+  it("(j) reports no_target when the only email target is unverified", async () => {
+    await env.DB.prepare(`UPDATE send_target SET is_verified = 0 WHERE id = ?`)
+      .bind(TARGET_ID)
+      .run();
+    const rec = recorder();
+
+    const result = await deliverIncident(envWith(bindingFor(rec)), message(INCIDENT_A));
+
+    expect(result.outcome).toBe("no_target");
+    expect(result.attempt_id).toBeNull();
+    expect(result.idempotency_key).toBeNull();
+    expect(rec.sent).toHaveLength(0);
+    expect(await readAttempts()).toHaveLength(0);
+    expect(await readNotices(PAGE_A)).toHaveLength(0);
   });
 });
