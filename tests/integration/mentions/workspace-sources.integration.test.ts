@@ -1,7 +1,7 @@
 import { env } from "cloudflare:workers";
 import { describe, expect, it } from "vitest";
 
-import { readWorkspaceMentionSources } from "../../../app/lib/data/source.server";
+import { readRegistrySources, readWorkspaceMentionSources } from "../../../app/lib/data/source.server";
 import { sourcePillStatus } from "../../../app/components/source-pill";
 import { NO_CHANNEL_REASON } from "../../../app/lib/mentions/youtube-channel";
 
@@ -152,6 +152,19 @@ describe("alerts mentions source pills (#4003 4/6)", () => {
       expect(youtube.snapshot).toBeNull();
       expect(youtube.source.degraded_reason).toBeNull();
       expect(sourcePillStatus(youtube.source, youtube.snapshot, NOW_MS)).toEqual({
+        state: "degraded",
+        reason: NO_CHANNEL_REASON,
+        lastGoodAt: NOW,
+      });
+
+      // The landing page reads the registry, which has no workspace scope, and
+      // it reaches anonymous visitors. The same no-channel reason has to reach
+      // it, or the public list still says "no fresh data".
+      const registry = (await readRegistrySources()).filter((item) => item.source.key === "youtube.channel_rss");
+      const registryYoutube = registry[0];
+      if (!registryYoutube) throw new Error("the enabled YouTube source must be in the registry");
+      expect(registryYoutube.snapshot).toBeNull();
+      expect(sourcePillStatus(registryYoutube.source, registryYoutube.snapshot, NOW_MS)).toEqual({
         state: "degraded",
         reason: NO_CHANNEL_REASON,
         lastGoodAt: NOW,
