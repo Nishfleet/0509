@@ -1,4 +1,5 @@
 import { env } from "cloudflare:workers";
+import { getDomain } from "tldts";
 
 import { insertIncidentAlertStatement } from "../data/alert.server";
 import { closeIncident, closeIncidentsOutside, openIncident, readOpenBreakageBaselines, readOpenIncidents } from "../data/incident.server";
@@ -40,10 +41,17 @@ async function fetchStatus(url: string): Promise<Response | Error> {
   }
 }
 
-function alternateHost(url: string): string {
+function alternateHost(url: string): string | null {
   const parsed = new URL(url);
-  const host = parsed.hostname.startsWith("www.") ? parsed.hostname.slice(4) : `www.${parsed.hostname}`;
-  return `${parsed.protocol}//${host}${parsed.pathname}`;
+  const registrable = getDomain(parsed.hostname);
+  if (registrable === null) return null;
+  const twin =
+    parsed.hostname === registrable
+      ? `www.${registrable}`
+      : parsed.hostname === `www.${registrable}`
+        ? registrable
+        : null;
+  return twin === null ? null : `${parsed.protocol}//${twin}${parsed.pathname}`;
 }
 
 export function pageHost(url: string): string {
@@ -53,7 +61,8 @@ export function pageHost(url: string): string {
 export async function probeOwnSite(url: string): Promise<OwnSiteHealth> {
   if (!(await robotsAllows(url))) return { state: "unknown", reason: "robots" };
   const first = await fetchStatus(url);
-  const response = first instanceof Error ? await fetchStatus(alternateHost(url)) : first;
+  const alternate = first instanceof Error ? alternateHost(url) : null;
+  const response = alternate === null ? first : await fetchStatus(alternate);
   if (response instanceof Error) return { state: "broken", kind: "not loading" };
   if (response.headers.get("cf-mitigated") === "challenge") return { state: "unknown", reason: "challenge" };
   if (response.status >= 500 || response.status === 404 || response.status === 410) {

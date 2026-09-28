@@ -47,6 +47,29 @@ const watchTargets = async () => {
   return new Map(rows.results.map((row) => [row.entity_id, row.target_key]));
 };
 
+const rowCount = async (table: "page" | "watch") => {
+  const row = await env.DB.prepare(`SELECT COUNT(*) AS n FROM ${table}`).first<{ n: number }>();
+  return row?.n;
+};
+
+interface SiteEvent {
+  event: string;
+  [key: string]: unknown;
+}
+
+const captureSiteEvents = async (run: () => Promise<unknown>): Promise<SiteEvent[]> => {
+  const lines: string[] = [];
+  const spy = vi.spyOn(console, "log").mockImplementation((line) => {
+    lines.push(String(line));
+  });
+  try {
+    await run();
+  } finally {
+    spy.mockRestore();
+  }
+  return lines.map((line) => JSON.parse(line) as SiteEvent);
+};
+
 const signals = async () => {
   const rows = await env.DB.prepare(
     "SELECT entity_id, source_id, kind, title, aspect, url, evidence_url, snapshot_id, payload_json, observed_at, last_seen_at FROM signal WHERE workspace_id = ?",
@@ -132,10 +155,8 @@ describe("nightly site sweep", () => {
 
     const again = await planSiteSweep(NOW);
     expect(again).toEqual(targets);
-    const pages = await env.DB.prepare("SELECT COUNT(*) AS n FROM page").first<{ n: number }>();
-    const watches = await env.DB.prepare("SELECT COUNT(*) AS n FROM watch").first<{ n: number }>();
-    expect(pages?.n).toBe(2);
-    expect(watches?.n).toBe(2);
+    expect(await rowCount("page")).toBe(2);
+    expect(await rowCount("watch")).toBe(2);
   });
 
   it("keeps the first read as the baseline, files nothing for an unchanged night, and files one change with its before and after", async () => {
@@ -313,6 +334,10 @@ const seedHomeEntities = async (
 };
 
 describe("home url resolution", () => {
+  afterEach(async () => {
+    await env.DB.exec("UPDATE source SET is_enabled = 1 WHERE id = 'src_site_web'");
+  });
+
   it("uses the entered host when it shares the entity's registrable domain", async () => {
     await seedHomeEntities([
       {
@@ -377,26 +402,19 @@ describe("home url resolution", () => {
         identityJson: '{"kind":"domain","url":"https://adidas.com/"}',
       },
     ]);
-    const lines: string[] = [];
-    const spy = vi.spyOn(console, "log").mockImplementation((line) => {
-      lines.push(String(line));
-    });
-    try {
-      await ensureHomePages(NOW);
 
-      expect((await homePageUrls()).get("ent-other")).toBe("https://nike.com/");
-      expect(lines.map((line) => JSON.parse(line)).filter((line) => line.event === "site.identity_url_ignored")).toEqual([
-        {
-          event: "site.identity_url_ignored",
-          entityId: "ent-other",
-          domain: "nike.com",
-          enteredUrl: "https://adidas.com/",
-          homeUrl: "https://nike.com/",
-        },
-      ]);
-    } finally {
-      spy.mockRestore();
-    }
+    const events = await captureSiteEvents(() => ensureHomePages(NOW));
+
+    expect((await homePageUrls()).get("ent-other")).toBe("https://nike.com/");
+    expect(events.filter((event) => event.event === "site.identity_url_ignored")).toEqual([
+      {
+        event: "site.identity_url_ignored",
+        entityId: "ent-other",
+        domain: "nike.com",
+        enteredUrl: "https://adidas.com/",
+        homeUrl: "https://nike.com/",
+      },
+    ]);
   });
 
   it("watches the entered host for the site.web source", async () => {
@@ -428,23 +446,57 @@ describe("home url resolution", () => {
     )
       .bind("page-taken", "ent-taken", "https://fixture.0509.in/", NOW)
       .run();
-    const lines: string[] = [];
-    const spy = vi.spyOn(console, "log").mockImplementation((line) => {
-      lines.push(String(line));
-    });
-    try {
-      const targets = await planSiteSweep(NOW);
 
-      expect((await homePageUrls()).has("ent-taken")).toBe(false);
-      expect(lines.map((line) => JSON.parse(line)).filter((line) => line.event === "site.home_page_role_taken")).toEqual([
-        { event: "site.home_page_role_taken", entityId: "ent-taken", url: "https://fixture.0509.in/" },
-      ]);
-      expect(targets.map((target) => [target.entityId, target.url, target.pageRole])).toEqual([
-        ["ent-taken", "https://fixture.0509.in/", "product"],
-      ]);
-    } finally {
-      spy.mockRestore();
-    }
+    let targets: Awaited<ReturnType<typeof planSiteSweep>> = [];
+    const events = await captureSiteEvents(async () => {
+      targets = await planSiteSweep(NOW);
+    });
+
+    expect((await homePageUrls()).has("ent-taken")).toBe(false);
+    expect(events.filter((event) => event.event === "site.home_page_role_occupied")).toEqual([
+      { event: "site.home_page_role_occupied", entityId: "ent-taken", url: "https://fixture.0509.in/" },
+    ]);
+    expect(targets.map((target) => [target.entityId, target.url, target.pageRole])).toEqual([
+      ["ent-taken", "https://fixture.0509.in/", "product"],
+    ]);
+  });
+
+  it("watches one page per entity when the entity already has two home rows", async () => {
+    await seedHomeEntities([
+      { id: "ent-two", role: "self", domain: "nike.com", identityJson: "{}" },
+    ]);
+    await env.DB.prepare(
+      `INSERT INTO page (id, entity_id, url, role, discovered_at) VALUES (?, ?, ?, 'home', ?)`,
+    )
+      .bind("page-two-early", "ent-two", "https://nike.com/", "2026-09-23T02:00:00Z")
+      .run();
+    await env.DB.prepare(
+      `INSERT INTO page (id, entity_id, url, role, discovered_at) VALUES (?, ?, ?, 'home', ?)`,
+    )
+      .bind("page-two-late", "ent-two", "https://shop.nike.com/", "2026-09-23T03:00:00Z")
+      .run();
+
+    const targets = await planSiteSweep(NOW);
+
+    expect(targets.map((target) => [target.entityId, target.url])).toEqual([
+      ["ent-two", "https://nike.com/"],
+    ]);
+    expect(await rowCount("watch")).toBe(1);
+  });
+
+  it("still creates the home pages when the site source is paused", async () => {
+    await env.DB.exec("UPDATE source SET is_enabled = 0 WHERE id = 'src_site_web'");
+    await seedHomeEntities([
+      {
+        id: "ent-fixture",
+        role: "self",
+        domain: "0509.in",
+        identityJson: '{"kind":"domain","url":"https://fixture.0509.in/"}',
+      },
+    ]);
+
+    expect(await planSiteSweep(NOW)).toEqual([]);
+    expect((await homePageUrls()).get("ent-fixture")).toBe("https://fixture.0509.in/");
   });
 
   it("keeps the watch on the home page an entity already has, so the row still sweeps", async () => {

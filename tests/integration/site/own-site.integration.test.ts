@@ -140,6 +140,20 @@ describe("own-site check", () => {
     expect(fetched).not.toContain("https://www.www.mybrand.com/");
   });
 
+  it("opens an incident for a subdomain home instead of probing a www twin that answers", async () => {
+    await env.DB.prepare(
+      `INSERT INTO page (id, entity_id, url, role, discovered_at) VALUES ('page-sub-home', 'ent-self', 'https://shop.mybrand.com/', 'home', ?)`,
+    )
+      .bind(NOW)
+      .run();
+    site.apexDown = true;
+
+    expect(await runCheck("own-sub-home")).toEqual({ pages: 1, opened: 1, closed: 0, failed: 0 });
+    const [open] = await incidents();
+    expect(open).toMatchObject({ entity_id: "ent-self", kind: "not loading", closed_at: null });
+    expect(fetched).not.toContain("https://www.shop.mybrand.com/");
+  });
+
   it("opens one incident with a pinned alert when the site still fails on the confirming read, and closes it on the next clean hour", async () => {
     site.status = 503;
     await env.DB.prepare(

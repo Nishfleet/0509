@@ -1,7 +1,7 @@
 import { env } from "cloudflare:workers";
 import { getDomain } from "tldts";
 
-import { insertPages, readEntitiesWithoutHomePage, type EntityWithoutHomePage, type NewPage } from "../data/page.server";
+import { insertPages, readEntitiesWithoutHomePage, type EntityWithoutHomePage, type NewPage, type PageInsertResult } from "../data/page.server";
 import { insertChangeSignalStatement } from "../data/signal.server";
 import { readCoveredPagePairs } from "../data/snapshot.server";
 import { readEnabledSourceId } from "../data/source.server";
@@ -36,10 +36,6 @@ async function readText(key: string): Promise<string | null> {
   return object === null ? null : object.text();
 }
 
-function isHomeHost(host: string, domain: string): boolean {
-  return host === domain || host.endsWith(`.${domain}`);
-}
-
 function enteredHomeUrl(entity: EntityWithoutHomePage): string | null {
   if (entity.url === null) return null;
   const entered = normaliseSubject(entity.url);
@@ -47,7 +43,7 @@ function enteredHomeUrl(entity: EntityWithoutHomePage): string | null {
     !entered.ok ||
     entered.subject.kind !== "domain" ||
     entered.subject.url === null ||
-    !isHomeHost(entered.subject.registrable, entity.domain)
+    entered.subject.registrable !== entity.domain
   ) {
     return null;
   }
@@ -80,16 +76,16 @@ function homePageRows(entities: readonly EntityWithoutHomePage[], now: string): 
   });
 }
 
-export async function ensureHomePages(now: string): Promise<readonly NewPage[]> {
-  const taken = await insertPages(homePageRows(await readEntitiesWithoutHomePage(), now));
-  for (const row of taken) {
-    console.log(JSON.stringify({ event: "site.home_page_role_taken", entityId: row.entityId, url: row.url }));
+export async function ensureHomePages(now: string): Promise<PageInsertResult> {
+  const outcome = await insertPages(homePageRows(await readEntitiesWithoutHomePage(), now));
+  for (const row of outcome.existing) {
+    console.log(JSON.stringify({ event: "site.home_page_role_occupied", entityId: row.entityId, url: row.url }));
   }
-  return taken;
+  return outcome;
 }
 
 export async function planSiteSweep(now: string): Promise<SiteSweepTarget[]> {
-  const taken = await ensureHomePages(now);
+  const { existing } = await ensureHomePages(now);
   const sourceId = await readEnabledSourceId(SITE_SOURCE_KEY);
   if (sourceId === null) return [];
 
@@ -100,7 +96,7 @@ export async function planSiteSweep(now: string): Promise<SiteSweepTarget[]> {
       sourceId,
       targetKey: entity.pageUrl,
     })),
-    ...taken.map((row) => ({ id: crypto.randomUUID(), entityId: row.entityId, sourceId, targetKey: row.url })),
+    ...existing.map((row) => ({ id: crypto.randomUUID(), entityId: row.entityId, sourceId, targetKey: row.url })),
   ]);
   return [...(await readSiteSweepTargets(SITE_SOURCE_KEY))];
 }
