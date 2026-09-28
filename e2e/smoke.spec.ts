@@ -81,12 +81,15 @@ test("the landing headline is the largest paint and uses the brand display face"
   );
   expect(lcpTag).toBe("H1");
 
-  const displayLoaded = await page.evaluate(() =>
-    Array.from(document.fonts).some(
-      (face) => face.family.replaceAll('"', "") === "Bricolage Grotesque" && face.status === "loaded",
+  await expect.poll(() =>
+    page.evaluate(
+      () =>
+        Array.from(document.fonts).some(
+          (face) =>
+            face.family.replaceAll('"', "") === "Bricolage Grotesque" && face.status === "loaded",
+        ),
     ),
-  );
-  expect(displayLoaded).toBe(true);
+  ).toBe(true);
 
   const headlineFamily = await page
     .getByRole("heading", { level: 1 })
