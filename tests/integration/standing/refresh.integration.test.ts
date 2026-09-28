@@ -212,7 +212,7 @@ describe("refreshWorkspaceScores against real D1", () => {
     }
   });
 
-  it("buckets a mention on the act threshold as matters and one just over the reject threshold as normal", async () => {
+  it("buckets a mention at the act threshold as matters, one just under it as normal, and one on the reject threshold as neither", async () => {
     const seeded = await seed();
     const source = await env.DB.prepare(
       "SELECT source_id, reliability FROM signal s JOIN source src ON src.id = s.source_id WHERE s.entity_id = ?1 AND s.kind = 'mention' LIMIT 1",
@@ -238,7 +238,8 @@ describe("refreshWorkspaceScores against real D1", () => {
     const signals: readonly [string, number][] = [
       [`${seeded.workspaceId}-sig-at-act`, ACT_AT],
       [`${seeded.workspaceId}-sig-at-reject`, REJECT_AT],
-      [`${seeded.workspaceId}-sig-over-reject`, REJECT_AT + 0.01],
+      [`${seeded.workspaceId}-sig-over-reject`, REJECT_AT + Number.EPSILON],
+      [`${seeded.workspaceId}-sig-under-act`, ACT_AT - Number.EPSILON],
     ];
     await env.DB.batch(
       signals.flatMap(([id, p]) => [
@@ -254,7 +255,7 @@ describe("refreshWorkspaceScores against real D1", () => {
     const after = await bucketsForSource();
     const gained = (bucket: string): number => (after.get(bucket) ?? 0) - (before.get(bucket) ?? 0);
     expect(gained("mention_matters")).toBe(1);
-    expect(gained("mention_normal")).toBe(1);
+    expect(gained("mention_normal")).toBe(2);
   });
 
   it("uses the signal index rather than scanning signal", async () => {
