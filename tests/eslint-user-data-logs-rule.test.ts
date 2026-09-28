@@ -6,13 +6,14 @@ import { ESLint } from "eslint";
 import { describe, expect, it } from "vitest";
 
 // #5786 (privacy rule from #5776): logs and Sentry never carry customer data
-// or prompt input. NO_USER_DATA_IN_LOGS is two-plus `no-restricted-syntax`
-// selectors over `console.*` and `captureException`/`captureMessage`. These
-// probes boot the real eslint.config.js (same rig as
+// or prompt input. NO_USER_DATA_IN_LOGS is a set of `no-restricted-syntax`
+// selectors over `console.*` and the Sentry capture*/set* sinks, bare or on a
+// namespace. These probes boot the real eslint.config.js (same rig as
 // eslint-catch-null-rule.test.ts) and hold both directions: a value named like
 // user data is flagged as a key, a value, a property read, a template
-// interpolation, a nested call argument and a spread; the ids an operator
-// needs, `workspaceId` and a capped error message, stay clean.
+// interpolation, a nested call argument, a spread, a member read, a wrapped
+// expression and each Sentry receiver form; the ids an operator needs,
+// `workspaceId` and a capped error message, stay clean.
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -23,12 +24,21 @@ const PROBE = "app/lib/probe-user-data-logs-tmp.ts";
 const HEADER = `declare const email: string;
 declare const subject: { registrable: string };
 declare const prompt: string;
+declare const ip: string;
+declare const userId: string;
+declare const flag: boolean;
 declare const input: { workspaceId: string };
 declare const workspaceId: string;
 declare const error: Error;
 declare const controller: { cron: string };
 declare function setTag(key: string, value: string): void;
 declare function setExtra(key: string, value: string): void;
+declare const Sentry: {
+  setTag(key: string, value: string): void;
+  setUser(value: { id: string }): void;
+  captureEvent(value: { extra?: unknown }): void;
+};
+declare const scope: { setUser(value: { id: string }): void };
 `;
 
 async function lintProbe(code: string): Promise<string[]> {
@@ -43,6 +53,12 @@ async function lintProbe(code: string): Promise<string[]> {
   } finally {
     await rm(file, { force: true });
   }
+}
+
+async function lintExisting(rel: string): Promise<string[]> {
+  const eslint = new ESLint({ cwd: REPO_ROOT });
+  const results = await eslint.lintFiles([path.join(REPO_ROOT, rel)]);
+  return results.flatMap((result) => result.messages.map((message) => message.message));
 }
 
 function flagged(messages: string[]): boolean {
@@ -68,6 +84,13 @@ describe("eslint no-user-data-in-logs rule (#5786)", () => {
 
   it("flags a user-data name inside a template literal", { timeout: 60_000 }, async () => {
     expect(flagged(await lintProbe("console.log(`user ${email}`);\n"))).toBe(true);
+  });
+
+  it("flags a user-data name inside a wrapped expression", { timeout: 60_000 }, async () => {
+    expect(flagged(await lintProbe(`console.log("ip " + ip);\n`))).toBe(true);
+    expect(flagged(await lintProbe(`console.log([email]);\n`))).toBe(true);
+    expect(flagged(await lintProbe(`console.log(email ?? "");\n`))).toBe(true);
+    expect(flagged(await lintProbe(`console.log(flag ? email : "x");\n`))).toBe(true);
   });
 
   it("flags a user-data name wrapped in a call", { timeout: 60_000 }, async () => {
@@ -96,8 +119,16 @@ describe("eslint no-user-data-in-logs rule (#5786)", () => {
     expect(flagged(await lintProbe(`setTag("email", email);\n`))).toBe(true);
   });
 
+  it("flags a user-data name sent to a namespaced Sentry sink", { timeout: 60_000 }, async () => {
+    expect(flagged(await lintProbe(`Sentry.setTag("email", email);\n`))).toBe(true);
+    expect(flagged(await lintProbe(`Sentry.setUser({ id: userId });\n`))).toBe(true);
+    expect(flagged(await lintProbe(`scope.setUser({ id: userId });\n`))).toBe(true);
+    expect(flagged(await lintProbe(`Sentry.captureEvent({ extra: { prompt } });\n`))).toBe(true);
+  });
+
   it("leaves the live scope setters in workers/app.ts alone", { timeout: 60_000 }, async () => {
     expect(flagged(await lintProbe(`setTag("cron", controller.cron);\n`))).toBe(false);
+    expect(flagged(await lintExisting("workers/app.ts"))).toBe(false);
   });
 
   it("leaves the ids an operator needs and a capped error message alone", { timeout: 60_000 }, async () => {
@@ -109,6 +140,7 @@ describe("eslint no-user-data-in-logs rule (#5786)", () => {
 
   it("leaves the workspaceId read off a user-data-named binding alone", { timeout: 60_000 }, async () => {
     expect(flagged(await lintProbe(`console.log(JSON.stringify({ event: "probe", workspaceId: input.workspaceId }));\n`))).toBe(false);
+    expect(flagged(await lintProbe(`console.log("ws " + input.workspaceId);\n`))).toBe(false);
   });
 
   it("leaves a non-user-data name alone", { timeout: 60_000 }, async () => {

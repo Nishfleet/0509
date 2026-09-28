@@ -169,9 +169,9 @@ const USER_DATA_NAME = "^(email|emails|userId|ip|input|raw|prompt|password|token
 // Widen it only with a comment here naming why the new id is not user data.
 const LOGGABLE_OPERATOR_ID = "workspaceId";
 const LOG_OR_CAPTURE_CALL =
-  "CallExpression:matches([callee.object.name='console'], [callee.name=/^capture(Exception|Message)$/], [callee.property.name=/^capture(Exception|Message)$/], [callee.name=/^set(Tag|Extra|Context|User)$/])";
+  "CallExpression:matches([callee.object.name='console'], [callee.name=/^(capture(Exception|Message|Event|Feedback)|set(Tag|Tags|Extra|Extras|Context|Attributes|User|ConversationId))$/], [callee.property.name=/^(capture(Exception|Message|Event|Feedback)|set(Tag|Tags|Extra|Extras|Context|Attributes|User|ConversationId))$/])";
 const NO_USER_DATA_IN_LOGS_MESSAGE =
-  "Logs and Sentry never carry customer data or prompt input: no email, user id, IP, raw input, prompt, subject, password or token, as a key, a value or a property read. Log the ids an operator needs (event, workspaceId) and an error message capped with .slice(0, 300). Privacy first (CLAUDE.md; workers/sentry.ts sendDefaultPii: false). Source: 0509#5776.";
+  "Logs and Sentry never carry customer data or prompt input: no email, user id, IP, raw input, prompt, subject, password or token, as a key, a value or a property read. Log the ids an operator needs (event, workspaceId) and an error message capped with .slice(0, 300). The selector matches names, so a renamed or aliased value is out of reach; review it. Privacy first (CLAUDE.md; workers/sentry.ts sendDefaultPii: false). Source: 0509#5776.";
 const NO_USER_DATA_IN_LOGS = [
   {
     selector: `${LOG_OR_CAPTURE_CALL} :matches(Property[key.name=/${USER_DATA_NAME}/], Property[value.name=/${USER_DATA_NAME}/], MemberExpression[property.name=/${USER_DATA_NAME}/])`,
@@ -186,6 +186,12 @@ const NO_USER_DATA_IN_LOGS = [
   { selector: `${LOG_OR_CAPTURE_CALL} TemplateLiteral > Identifier[name=/${USER_DATA_NAME}/]`, message: NO_USER_DATA_IN_LOGS_MESSAGE },
   { selector: `${LOG_OR_CAPTURE_CALL} CallExpression > Identifier[name=/${USER_DATA_NAME}/]`, message: NO_USER_DATA_IN_LOGS_MESSAGE },
   { selector: `${LOG_OR_CAPTURE_CALL} SpreadElement > Identifier[name=/${USER_DATA_NAME}/]`, message: NO_USER_DATA_IN_LOGS_MESSAGE },
+  // The identifier wrapped in one expression: `"ip " + ip`, `[email]`,
+  // `email ?? ""`, `flag ? email : "x"`. 0509#5786.
+  {
+    selector: `${LOG_OR_CAPTURE_CALL} :matches(BinaryExpression, ArrayExpression, LogicalExpression, ConditionalExpression) > Identifier[name=/${USER_DATA_NAME}/]`,
+    message: NO_USER_DATA_IN_LOGS_MESSAGE,
+  },
   // A read off a binding named like user data. `workspaceId` is the one
   // operator id the message allows, so `input.workspaceId` stays clean while
   // `subject.registrable` and `email.trim()` do not. An alias
