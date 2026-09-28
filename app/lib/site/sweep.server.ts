@@ -3,6 +3,7 @@ import { getDomain } from "tldts";
 
 import { insertPages, readEntitiesWithoutHomePage } from "../data/page.server";
 import { insertChangeSignalStatement } from "../data/signal.server";
+import { readCoveredPagePairs } from "../data/snapshot.server";
 import { readEnabledSourceId } from "../data/source.server";
 import type { SiteSweepTarget } from "../data/watch.server";
 import {
@@ -18,6 +19,8 @@ import { diffPageText } from "./diff";
 import { readPage } from "./read-page.server";
 
 const SITE_SOURCE_KEY = "site.web";
+
+export const CHUNK_SIZE = 10;
 
 export type ChangedPage = Extract<CheckPageResult, { outcome: "changed" }>;
 
@@ -63,6 +66,19 @@ export async function planSiteSweep(now: string): Promise<SiteSweepTarget[]> {
     }),
   );
   return [...(await readSiteSweepTargets(SITE_SOURCE_KEY))];
+}
+
+export async function uncoveredItems(
+  items: readonly SiteSweepTarget[],
+  sinceIso: string,
+): Promise<SiteSweepTarget[]> {
+  if (items.length === 0) return [];
+  const covered = new Set(
+    (await readCoveredPagePairs(sinceIso, items.map((item) => item.watchId))).map(
+      (row) => `${row.watchId}|${row.pageId}`,
+    ),
+  );
+  return items.filter((item) => !covered.has(`${item.watchId}|${item.pageId}`));
 }
 
 export interface SweepTick {
