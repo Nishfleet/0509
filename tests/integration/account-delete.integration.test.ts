@@ -3,7 +3,11 @@ import { beforeEach, describe, expect, it } from "vitest";
 
 import { createAuth, deleteSignedInUser } from "../../app/lib/auth.server";
 import { firstWorkspaceId } from "../../app/lib/workspace.server";
-import { readAccountDeleteProgress } from "../../app/lib/account-delete.server";
+import {
+  readAccountDeleteProgress,
+  sealAccountDeleteInstanceId,
+} from "../../app/lib/account-delete.server";
+import { loader as loginLoader } from "../../app/routes/login";
 
 const ORIGIN = "http://localhost:8787";
 const ADDRESS = "leaving@0509.io";
@@ -179,5 +183,38 @@ describe("delete my account", () => {
     await introspector.waitForStatus("terminated");
 
     expect(await readAccountDeleteProgress(id)).toEqual({ rows: "removed", files: "failed", deleted: null });
+  });
+
+  it("shows the instance status only to the browser the delete ran in", async () => {
+    await env.SNAPSHOTS.put("card/ws-leaving/share.png", "a");
+    const id = "account-delete-sealed";
+    await using introspector = await introspectWorkflowInstance(env.ACCOUNT_DELETE, id);
+    await env.ACCOUNT_DELETE.create({
+      id,
+      params: { prefixes: ["card/ws-leaving/"] },
+    });
+    await introspector.waitForStatus("complete");
+
+    const page = `${ORIGIN}/login?deleted=${id}`;
+    const anonymous = await loginLoader({ request: new Request(page) } as never);
+    expect(anonymous).toMatchObject({ id: null, progress: null });
+
+    const forged = await loginLoader({
+      request: new Request(page, { headers: { cookie: `account-delete=${id}` } }),
+    } as never);
+    expect(forged).toMatchObject({ id: null, progress: null });
+
+    const other = (await sealAccountDeleteInstanceId("a-different-instance", new Request(page))).split(";")[0];
+    const wrongSeal = await loginLoader({
+      request: new Request(page, { headers: { cookie: other } }),
+    } as never);
+    expect(wrongSeal).toMatchObject({ id: null, progress: null });
+
+    const sealed = (await sealAccountDeleteInstanceId(id, new Request(page))).split(";")[0];
+    const owned = await loginLoader({
+      request: new Request(page, { headers: { cookie: sealed } }),
+    } as never);
+    expect(owned.id).toBe(id);
+    expect(owned.progress).toEqual({ rows: "removed", files: "removed", deleted: 1 });
   });
 });

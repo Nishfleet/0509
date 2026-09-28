@@ -1,10 +1,12 @@
 import type { OAuthHelpers } from "@cloudflare/workers-oauth-provider";
 import { env } from "cloudflare:workers";
+import { createCookie } from "react-router";
 
 import { deleteSignedInUser } from "./auth.server";
 import { readWorkspaceIdForOwner, readWorkspaceR2Prefixes } from "./data/workspace.server";
 
 const PAGE_SIZE = 1000;
+const DELETE_INSTANCE_COOKIE = "account-delete";
 
 export interface AccountDeleteParams {
   prefixes: string[];
@@ -26,9 +28,33 @@ export async function deleteAccount(
   const headers = await deleteSignedInUser(env, request, new Date());
   if (headers === null) return null;
   const instance = await env.ACCOUNT_DELETE.create({ params: { prefixes } satisfies AccountDeleteParams });
+  headers.append("set-cookie", await sealAccountDeleteInstanceId(instance.id, request));
   const grants = await helpers.listUserGrants(userId, { limit: 100 });
   await Promise.all(grants.items.map((grant) => helpers.revokeGrant(grant.id, userId)));
   return { headers, instanceId: instance.id };
+}
+
+function deleteInstanceCookie() {
+  return createCookie(DELETE_INSTANCE_COOKIE, {
+    httpOnly: true,
+    maxAge: 60 * 60,
+    path: "/login",
+    sameSite: "lax",
+    secrets: [env.BETTER_AUTH_SECRET],
+  });
+}
+
+export async function sealAccountDeleteInstanceId(instanceId: string, request: Request): Promise<string> {
+  return deleteInstanceCookie().serialize(instanceId, {
+    secure: new URL(request.url).protocol === "https:",
+  });
+}
+
+export async function readAccountDeleteInstanceId(request: Request): Promise<string | null> {
+  const parsed: unknown = await deleteInstanceCookie()
+    .parse(request.headers.get("cookie"))
+    .catch(() => null);
+  return typeof parsed === "string" && parsed.length > 0 ? parsed : null;
 }
 
 export async function deleteStoredPage(prefix: string): Promise<{ deleted: number; more: boolean }> {
