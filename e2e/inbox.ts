@@ -79,6 +79,7 @@ export class InboxReadError extends Error {
   readonly status: number;
   constructor(status: number, to: string) {
     super(`inbox answered HTTP ${status} for ${to}`);
+    this.name = "InboxReadError";
     this.status = status;
   }
 }
@@ -304,7 +305,9 @@ export function ownDocument404For(pathname: string): (entry: ConsoleEntry) => bo
 // "stored before this sign-in" the issue asked for. The read is one-shot by
 // design: it runs ahead of the click, so a failing inbox throws where the
 // browser is still on the form instead of spending the poll's 120s on an answer
-// that cannot change. Playwright runs a file's tests in parallel (fullyParallel
+// that cannot change; the read has no timeout of its own, so a stalled answer
+// rides on the spec's own deadline. Playwright runs a file's tests in parallel
+// (fullyParallel
 // in playwright.config.ts) against one inbox slot per recipient, so two tests
 // sharing one fixed address need serial mode or an address each.
 // Timestamps are logged for the packet's proof line (send and session).
