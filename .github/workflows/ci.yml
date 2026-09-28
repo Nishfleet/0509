@@ -13,8 +13,9 @@
 name: CI
 
 # `deployment_status` is the third trigger and it is the stock one: Cloudflare
-# Workers Builds emit GitHub deployments, so the production suites fire on the
-# real deploy with no polling. https://playwright.dev/docs/ci#on-deployment
+# Workers Builds emit GitHub deployments, so lighthouse fires on the real deploy
+# with no polling; the full production e2e no longer does (its sign-ins send
+# real emails against a spent daily quota) and runs from e2e-scheduled.yml. https://playwright.dev/docs/ci#on-deployment
 # The required jobs report on every event and pass explicitly on a deployment
 # they have nothing to say about (#4664).
 on:
@@ -24,10 +25,10 @@ on:
 
 concurrency:
   # A deployment_status run verifies one deploy and must finish. Sharing the
-  # branch group with cancel-in-progress cancelled every production e2e today:
+  # branch group with cancel-in-progress cancelled every production run that day:
   # each deploy emits pending, in_progress and success events, each a run, and
   # merges 90 s apart cancelled the previous deploy's run (35754511999, 35754574851
-  # and four more, all "cancelled", 16:29-16:31Z). PR and queue runs keep the
+  # and four more, all "cancelled", 16:29-16:31Z), which is why lighthouse keeps it. PR and queue runs keep the
   # branch group so a superseded head is still cancelled.
   group: ci-${{ github.event_name == 'deployment_status' && github.run_id || github.ref }}
   cancel-in-progress: ${{ github.event_name != 'deployment_status' }}

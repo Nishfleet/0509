@@ -1,8 +1,11 @@
 name: e2e-scheduled
 
 # Journeys that need calendar time or break the fixture for hours run here on
-# their own clock, never per deploy: ci.yml e2e-production inverts @scheduled
-# (0509#4124, 0509#4128). Not a required check.
+# their own clock, never per deploy (0509#4124, 0509#4128). So does the full
+# production suite, `journey=suite` (the `e2e-production` job below): it runs
+# everything except @scheduled, on demand, off the deploy path because its
+# sign-ins send real emails against the daily quota (0509#6033, 0509#6034).
+# Not a required check.
 on:
   schedule:
     - cron: "5 10 * * 3"
@@ -87,7 +90,9 @@ jobs:
         run: tail -n +1 test-results/*/error-context.md
   production-sha:
     name: production-sha
-    # The suite runs the code of the deploy that is live, not main's head.
+    # The suite runs the code of the deploy that is live, not main's head; no
+    # deployment, or one that is not yet successful, fails this job and the
+    # shards never start.
     if: inputs.journey == 'suite'
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -100,13 +105,21 @@ jobs:
         id: deploy
         env:
           GH_TOKEN: ${{ github.token }}
-        run: echo "sha=$(gh api "repos/$GITHUB_REPOSITORY/deployments?environment=production&per_page=1" --jq '.[0].sha')" >> "$GITHUB_OUTPUT"
+        run: |
+          deploy=$(gh api "repos/$GITHUB_REPOSITORY/deployments?environment=production&per_page=1" --jq '.[0] // empty')
+          test -n "$deploy"
+          sha=$(jq -r .sha <<<"$deploy")
+          test "${#sha}" = 40
+          state=$(gh api "repos/$GITHUB_REPOSITORY/deployments/$(jq -r .id <<<"$deploy")/statuses?per_page=1" --jq '.[0].state')
+          test "$state" = success
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
   suite-shard:
     name: e2e-production shard ${{ matrix.shard }}
     # Every sign-in in the suite sends a real email and the Cloudflare Email
     # Service daily quota is spent (0509#6033, 0509#6034), so the full suite no
     # longer starts on every deploy (Nish 2026-09-28: "take the full production
-    # e2e off every deploy ... run it on demand and hourly instead"). No trace is
+    # e2e off every deploy ... run it on demand and hourly instead"; hourly after
+    # 0509#6034 lands, when a run signs in once). No trace is
     # uploaded: the repo is public and a trace can hold the Access cookie
     # (0509#5999); a failure is read from the job log.
     needs: production-sha
