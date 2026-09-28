@@ -1,0 +1,12 @@
+fileType: momentic/test/v2
+id: legal-pages-from-landing-footer
+description: The landing footer opens the Privacy policy and the Terms of service
+url: https://0509.io
+steps:
+  - click: Privacy link in the footer
+  - waitForUrl: /privacy
+  - assert: The page heading reads "Privacy policy" and a "Last updated" date is shown
+  - goBack
+  - click: Terms link in the footer
+  - waitForUrl: /terms
+  - assert: The page heading reads "Terms of service" and a "Last updated" date is shown

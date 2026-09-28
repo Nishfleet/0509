@@ -11,7 +11,8 @@
     "lint": "eslint . && knip && jscpd",
     "e2e": "playwright test",
     "verify:start": "chrome-devtools start --headless --chromeArg=--no-sandbox --executablePath \"$(node -p \"require('playwright-core').chromium.executablePath()\")\"",
-    "verify:stop": "chrome-devtools stop"
+    "verify:stop": "chrome-devtools stop",
+    "e2e:momentic": "momentic run"
   },
   "dependencies": {
     "@base-ui/react": "1.8.0",
@@ -63,6 +64,7 @@
     "globals": "^17.12.0",
     "jscpd": "^5.3.3",
     "knip": "^6.37.0",
+    "momentic": "^3.60.2",
     "tailwindcss": "^4.3.3",
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.70.0",

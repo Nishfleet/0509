@@ -1156,6 +1156,7 @@ The version in this table is the `package.json` specifier. An earlier section of
 | `globals` | ^17.12.0 | §9 | Browser and Node globals in `eslint.config.js` | A handwritten globals list | 17.12.0 |
 | `jscpd` | ^5.3.3 | §9 | Third part of `npm run lint`: copy-paste detection over `app/` and `workers/`, config in `.jscpd.json` ([docs](https://github.com/kucherenko/jscpd)). The threshold sits at main's measured 0.1237% (three clones, 0509#5783), pinned at 0.124 and drops to 0 once they are removed | ESLint `sonarjs/no-identical-functions` (whole functions only), a reviewer | 5.3.3 |
 | `knip` | ^6.37.0 | §9 | Second half of `npm run lint`. Fails on an unused dependency | An allowlist. This file's rule is to remove the unused dependency | 6.37.0 |
+| `momentic` | ^3.60.2 | §9 | Free for us (Nish 2026-09-28: "its free for us"). Runs the AI browser checks in `web/*.test.yaml` against https://0509.io with `npm run e2e:momentic`, read-only, no login and no token ([docs](https://momentic.ai/docs/cli/configuration)) | Adding these to Playwright, which stays the gate. Momentic runs beside it and is not a required check | 3.60.2 |
 | `tailwindcss` | ^4.3.3 | §3.1 | Styling, configured in CSS | Tailwind 3 and a `tailwind.config.js` | 4.3.3 |
 | `typescript` | ^5.9.3 | §9 | `tsc -b` in `npm run typecheck` | swc or babel, which strip types and do not check them | 5.9.3 |
 | `typescript-eslint` | ^8.70.0 | §9 | Type-checked lint rules | ESLint with no type information | 8.70.0 |
