@@ -1,6 +1,6 @@
 ---
 title: lighthouse red on main
-labels: agent-ready, critical-path
+labels: agent-ready, critical-path, red-main-lighthouse
 ---
 Run: {{ env.RUN_URL }}
 Head: {{ env.SHA }}
