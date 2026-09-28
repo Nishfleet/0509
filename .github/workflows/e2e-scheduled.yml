@@ -80,3 +80,8 @@ jobs:
           CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
           CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
           E2E_INBOX_TOKEN: ${{ secrets.E2E_INBOX_TOKEN }}
+      - name: Print what the page showed when it failed
+        # Playwright writes the page snapshot next to each failure; printing it
+        # is how a failure is read, since nothing is uploaded.
+        if: failure()
+        run: tail -n +1 test-results/*/error-context.md
