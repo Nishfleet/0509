@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { extractMagicLink, InboxReadError, readRawMessage, staleLinks, waitForMagicLink } from "../e2e/inbox";
 
@@ -81,6 +81,21 @@ const HTML_ONLY = [
 ].join("\r\n");
 
 describe("extractMagicLink", () => {
+  // The 0509.io cases pin the no-lane-set default, so a developer whose shell
+  // exports PLAYWRIGHT_TEST_BASE_URL — CLAUDE.md and README.md both tell them
+  // to — does not see eight extraction failures that are not extraction bugs.
+  beforeEach(() => {
+    vi.stubEnv("PLAYWRIGHT_TEST_BASE_URL", undefined);
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it("defaults to production's origin when no lane sets one", () => {
+    expect(extractMagicLink(PLAIN)).toBe(EXPECTED);
+  });
+
   it("finds the verify URL in a plain body", () => {
     expect(extractMagicLink(PLAIN)).toBe(EXPECTED);
   });
@@ -120,29 +135,49 @@ describe("extractMagicLink", () => {
   });
 });
 
-// The link is only the one this run asked for. In the merge-queue lane the
-// Preview mails on its own workers.dev origin, so the extractor takes that
-// origin and a 0509.io link read there is a link this run never sent.
+// The link is only the one this run asked for. The preview lane's Worker
+// mails on its own origin, so the extractor takes the base URL the browser is
+// driving and a 0509.io link read there is a link this run never sent.
+const PREVIEW_ORIGIN = "https://mq-1-0509-preview.example.workers.dev";
+const PREVIEW_EXPECTED = `${PREVIEW_ORIGIN}/api/auth/magic-link/verify?token=abc123&callbackURL=%2Fapp`;
+const PREVIEW_PLAIN = ["Sign in to Five to Nine:", "", PREVIEW_EXPECTED].join("\n");
+
 describe("on a preview lane", () => {
   afterEach(() => {
     vi.unstubAllEnvs();
+    vi.unstubAllGlobals();
   });
 
   it("takes the verify URL the Preview mailed on its own origin", () => {
-    vi.stubEnv("PLAYWRIGHT_TEST_BASE_URL", "https://mq-1-0509-preview.example.workers.dev");
-    const body = [
-      "Sign in to Five to Nine:",
-      "",
-      "https://mq-1-0509-preview.example.workers.dev/api/auth/magic-link/verify?token=abc123&callbackURL=%2Fapp",
-    ].join("\n");
-    expect(extractMagicLink(body)).toBe(
-      "https://mq-1-0509-preview.example.workers.dev/api/auth/magic-link/verify?token=abc123&callbackURL=%2Fapp",
-    );
+    vi.stubEnv("PLAYWRIGHT_TEST_BASE_URL", PREVIEW_ORIGIN);
+    expect(extractMagicLink(PREVIEW_PLAIN)).toBe(PREVIEW_EXPECTED);
   });
 
   it("refuses a link on another origin", () => {
-    vi.stubEnv("PLAYWRIGHT_TEST_BASE_URL", "https://mq-1-0509-preview.example.workers.dev");
+    vi.stubEnv("PLAYWRIGHT_TEST_BASE_URL", PREVIEW_ORIGIN);
     expect(extractMagicLink(PLAIN)).toBeNull();
+  });
+
+  it("reads the origin off a base URL that carries a path or a trailing slash", () => {
+    vi.stubEnv("PLAYWRIGHT_TEST_BASE_URL", `${PREVIEW_ORIGIN}/app/`);
+    expect(extractMagicLink(PREVIEW_PLAIN)).toBe(PREVIEW_EXPECTED);
+  });
+
+  // Actions sets an unset workflow env var to "", not to an absent one, and
+  // new URL("") throws: an empty base URL has to fall back like an absent one.
+  it("takes production's origin when the base URL is empty", () => {
+    vi.stubEnv("PLAYWRIGHT_TEST_BASE_URL", "");
+    expect(extractMagicLink(PLAIN)).toBe(EXPECTED);
+  });
+
+  // The poll's catch swallows everything, so an unusable base URL has to name
+  // itself out here rather than surface as a 120s no-mail timeout.
+  it("names an unparseable base URL instead of timing out", async () => {
+    vi.stubEnv("PLAYWRIGHT_TEST_BASE_URL", "not-a-url");
+    vi.stubGlobal("fetch", () => Promise.resolve(new Response(PLAIN, { status: 200 })));
+    await expect(waitForMagicLink("e2e+stale@0509.io", "token")).rejects.toThrow(
+      "PLAYWRIGHT_TEST_BASE_URL is not a URL: not-a-url",
+    );
   });
 });
 
@@ -176,10 +211,16 @@ describe("readRawMessage", () => {
 // The pre-send read on the sign-in path (0509#5839): a fixed fixture address
 // still holds the previous run's spent link, so staleLinks is what the wait
 // skips. Only a 404 is nothing stored; every other inbox answer is a failure
-// that must name itself rather than hand back the spent link.
+// that must name itself rather than hand back the spent link. The fixtures are
+// 0509.io links, so the lane is pinned to no lane.
 describe("staleLinks", () => {
+  beforeEach(() => {
+    vi.stubEnv("PLAYWRIGHT_TEST_BASE_URL", undefined);
+  });
+
   afterEach(() => {
     vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
   });
 
   it("is empty when the inbox holds nothing for the address", async () => {

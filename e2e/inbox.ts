@@ -10,13 +10,21 @@ const INBOX_URL = "https://e2e-inbox.0509.io";
 const POLL_LIMIT_MS = 120_000;
 const POLL_INTERVAL_MS = 3_000;
 
-// The origin the run's links must carry. In the merge-queue lane the Preview's
-// BETTER_AUTH_URL is its own workers.dev URL, so a link mailed on 0509.io is
-// not the link this run asked for.
+// The origin this run's verify links must carry: the base URL the browser is
+// driving, or production when the suite runs without one. The preview lane's
+// Worker mails on its own BETTER_AUTH_URL (wrangler.jsonc pins production's;
+// the preview lane overrides it), so a link on another origin is not the link
+// this run asked for. An empty or unparseable base URL fails here with its own
+// name: new URL("") throws inside the poll, whose catch reads as a timeout.
 const PRODUCTION_ORIGIN = "https://0509.io";
 
 function laneOrigin(): string {
-  return new URL(process.env.PLAYWRIGHT_TEST_BASE_URL ?? PRODUCTION_ORIGIN).origin;
+  const base = process.env.PLAYWRIGHT_TEST_BASE_URL;
+  if (!base) return PRODUCTION_ORIGIN;
+  if (!URL.canParse(base)) {
+    throw new Error(`PLAYWRIGHT_TEST_BASE_URL is not a URL: ${base}`);
+  }
+  return new URL(base).origin;
 }
 
 // Fail loudly, never skip: the amended decision on #3927 requires a missing
@@ -26,7 +34,7 @@ export function requireInboxToken(): string {
   const token = process.env.E2E_INBOX_TOKEN;
   if (!token) {
     throw new Error(
-      "E2E_INBOX_TOKEN is empty: the repo secret is not wired into the e2e job env in .github/workflows/ci.yml (e2e-production, merge-e2e)",
+      "E2E_INBOX_TOKEN is empty: the repo secret is not wired into an e2e job env in .github/workflows/ci.yml (e2e-production, lighthouse, e2e-scheduled)",
     );
   }
   return token;
@@ -162,6 +170,9 @@ async function probeInbox(url: string, headers: Record<string, string>): Promise
 export async function waitForMagicLink(to: string, token: string, exclude: string[] = []): Promise<string> {
   const url = `${INBOX_URL}/message?to=${encodeURIComponent(to)}`;
   const headers = inboxHeaders(token);
+  // Resolved before the poll, whose catch swallows everything: an unusable
+  // base URL must name itself here rather than surface as the poll's timeout.
+  const origin = laneOrigin();
   await probeInbox(url, headers);
 
   let lastDetail = "the inbox endpoint did not respond";
@@ -176,7 +187,7 @@ export async function waitForMagicLink(to: string, token: string, exclude: strin
             if (link && !exclude.includes(link)) return true;
             lastDetail = link
               ? "inbox still holds an earlier message for this recipient; the newer email has not landed"
-              : "a message arrived but carried no magic-link verify URL";
+              : `a message arrived but carried no magic-link verify URL on ${origin}`;
             link = null;
           } else {
             lastDetail =
