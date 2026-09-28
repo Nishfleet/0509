@@ -1,8 +1,11 @@
 name: e2e-scheduled
 
 # Journeys that need calendar time or break the fixture for hours run here on
-# their own clock, never per deploy: ci.yml e2e-production inverts @scheduled
-# (0509#4124, 0509#4128). Not a required check.
+# their own clock, never per deploy (0509#4124, 0509#4128). So does the full
+# production suite, `journey=suite` (the `e2e-production` job below): it runs
+# everything except @scheduled, on demand, off the deploy path because its
+# sign-ins send real emails against the daily quota (0509#6033, 0509#6034).
+# Not a required check.
 on:
   schedule:
     - cron: "5 10 * * 3"
@@ -11,13 +14,18 @@ on:
       journey:
         description: Journey to run now
         type: choice
-        options: [j12]
+        options: [none, j12, suite]
+        default: none
+      spec:
+        description: 'One spec or a filter to run now against https://0509.io, e.g. e2e/j3-onboard-domain.spec.ts (0509 sign-up verdict, 2026-09-28)'
+        type: string
+        default: ''
 
 permissions:
   contents: read
 
 concurrency:
-  group: e2e-scheduled-${{ inputs.journey || 'j12' }}
+  group: e2e-scheduled-${{ inputs.spec && 'spec' || inputs.journey == 'suite' && 'suite' || 'j12' }}
   cancel-in-progress: false
 
 jobs:
@@ -50,3 +58,143 @@ jobs:
           name: playwright-report-j12
           path: playwright-report/
           retention-days: 7
+  spec:
+    name: spec
+    # No trace is uploaded: the repo is public and a trace can hold the Access
+    # cookie (0509#5999); a failure is read from the job log.
+    if: inputs.spec != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - name: Run the spec against production
+        run: npm run e2e -- "$SPEC" --project=desktop-1440 --retries=0 --reporter=github,list
+        env:
+          SPEC: ${{ inputs.spec }}
+          PLAYWRIGHT_TEST_BASE_URL: https://0509.io
+          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+          E2E_INBOX_TOKEN: ${{ secrets.E2E_INBOX_TOKEN }}
+      - name: Print what the page showed when it failed
+        # Playwright writes the page snapshot next to each failure; printing it
+        # is how a failure is read, since nothing is uploaded.
+        if: failure()
+        run: tail -n +1 test-results/*/error-context.md
+  production-sha:
+    name: production-sha
+    # The suite runs the code of the deploy that is live, not main's head; no
+    # deployment, or one that is not yet successful, fails this job and the
+    # shards never start.
+    if: inputs.journey == 'suite'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      deployments: read
+    outputs:
+      sha: ${{ steps.deploy.outputs.sha }}
+    steps:
+      - name: Newest production deployment
+        id: deploy
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          deploy=$(gh api "repos/$GITHUB_REPOSITORY/deployments?environment=production&per_page=1" --jq '.[0] // empty')
+          test -n "$deploy"
+          sha=$(jq -r .sha <<<"$deploy")
+          test "${#sha}" = 40
+          state=$(gh api "repos/$GITHUB_REPOSITORY/deployments/$(jq -r .id <<<"$deploy")/statuses?per_page=1" --jq '.[0].state')
+          test "$state" = success
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+  suite-shard:
+    name: e2e-production shard ${{ matrix.shard }}
+    # Every sign-in in the suite sends a real email and the Cloudflare Email
+    # Service daily quota is spent (0509#6033, 0509#6034), so the full suite no
+    # longer starts on every deploy (Nish 2026-09-28: "take the full production
+    # e2e off every deploy ... run it on demand and hourly instead"; hourly after
+    # 0509#6034 lands, when a run signs in once). No trace is
+    # uploaded: the repo is public and a trace can hold the Access cookie
+    # (0509#5999); a failure is read from the job log.
+    needs: production-sha
+    if: inputs.journey == 'suite'
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.production-sha.outputs.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - name: Run this shard of the suite against production
+        # @scheduled journeys run on their own clock above: J12 now, J8 with its spec (0509#4124, 0509#4128).
+        # https://playwright.dev/docs/test-sharding
+        timeout-minutes: 25
+        run: npm run e2e -- --shard=${{ matrix.shard }}/4 --reporter=github,list --grep-invert @scheduled --retries=0
+        env:
+          PLAYWRIGHT_TEST_BASE_URL: https://0509.io
+          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+          E2E_INBOX_TOKEN: ${{ secrets.E2E_INBOX_TOKEN }}
+          FIXTURE_SITE_TOKEN: ${{ secrets.FIXTURE_SITE_TOKEN }}
+  suite:
+    name: e2e-production
+    needs: [production-sha, suite-shard]
+    if: always() && inputs.journey == 'suite'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      issues: write
+      actions: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      SHARDS: ${{ needs.suite-shard.result }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Open or update the issue that dispatches the fix
+        if: env.SHARDS == 'failure'
+        id: red
+        uses: JasonEtco/create-an-issue@1b14a70e4d8dc185e5cc76d3bec9eab20257b2c5 # v2.9.2
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          SHA: ${{ needs.production-sha.outputs.sha }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        with:
+          filename: .github/red-main/e2e-production.md
+          update_existing: true
+          search_existing: open
+      - name: Hand the issue to a worker
+        # A GITHUB_TOKEN label fires no workflow, so dispatch by number.
+        if: steps.red.outputs.number
+        env:
+          N: ${{ steps.red.outputs.number }}
+        run: gh workflow run agent-dispatch.yml --repo "$GITHUB_REPOSITORY" -f issue="$N"
+      - name: Close the issue once this check is green again
+        if: env.SHARDS == 'success'
+        env:
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          N=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search '"e2e-production red on main" in:title' --json number --jq '.[0].number // empty')
+          [ -z "$N" ] || gh issue close "$N" --repo "$GITHUB_REPOSITORY" --reason completed --comment "Green again on $RUN_URL."
+      - name: Red unless every shard passed
+        run: test "$SHARDS" = success
