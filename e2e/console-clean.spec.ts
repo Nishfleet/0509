@@ -27,7 +27,7 @@ for (const target of targets) {
     const watched = watchConsole(page);
 
     const response = await page.goto(target);
-    await page.waitForLoadState("networkidle");
+    await expect(page.locator("main")).toBeVisible();
 
     const status = response?.status() ?? 0;
     const pageDocument404 = ownDocument404For(new URL(page.url()).pathname);
