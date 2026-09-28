@@ -74,6 +74,8 @@ This is precisely the shape that produced the $105 rows-written bill: a row per 
 
 **`suggestion`** — the judge queue and the pre-entity dismissal memory. Carries D1's verdict and `status`; `UNIQUE(workspace_id, candidate_domain)` is what makes "dismissed is never re-suggested" true.
 
+**`discovery_backlog`** — candidates below the discovery shortlist, keyed by normalised name, with their accumulated evidence. Never deleted; `promoted_at` records the run whose counts put it on the shortlist (docs/engines/competitor-discovery.md graft 2).
+
 **`source`** — the global registry. No workspace column by design: that is what makes a new source a row plus a plugin. Carries **`reliability`** (`official_api` / `rss` / `scraped_page` / `best_effort`) per the Jev contract, plus **`kind`** and **`platform`** per #3891.
 
 The asymmetry between those last two is deliberate. `kind` is CHECKed to `ads` / `mentions` / `site` / `hiring`, because every view and every Jev question branches on it and a free-text value would leak into query logic as string matching. `platform` — meta, google, tiktok, linkedin, snap, x, pinterest, reddit, apple, amazon, greenhouse, gdelt, hn — carries **no** CHECK, because constraining it would put the platform roster inside a migration, which is exactly the rule the column exists to protect. `UNIQUE (platform, kind, plugin_key)` lets one platform serve several kinds: Meta ads and Meta mentions are two rows, not one.

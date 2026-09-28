@@ -44,6 +44,7 @@ const brandLineSchema = z
     ad_delta: count,
     mention_delta: count,
     site_change_count: count,
+    new_roles: count,
   })
   .transform((line) => ({ ...line, name: line.name.length > 0 ? line.name : line.entity_id }));
 
@@ -145,7 +146,8 @@ export function parseBriefPayload(payloadJson: string): BriefPayload {
 export function readBriefPayload(payloadJson: string): BriefPayload | null {
   try {
     return parseBriefPayload(payloadJson);
-  } catch {
+  } catch (error) {
+    console.error(JSON.stringify({ event: "brief.payload_unreadable", error: String(error) }));
     return null;
   }
 }

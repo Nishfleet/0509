@@ -8,7 +8,10 @@ export function AddPasskey({ className }: { className?: string }): ReactElement 
 
   async function addPasskey() {
     setState("working");
-    const result = await authClient.passkey.addPasskey().catch(() => null);
+    const result = await authClient.passkey.addPasskey().catch((error: unknown) => {
+      console.error(JSON.stringify({ event: "passkey.add_failed", error: String(error) }));
+      return null;
+    });
     if (result && !result.error) {
       setState("added");
       return;
@@ -19,7 +22,13 @@ export function AddPasskey({ className }: { className?: string }): ReactElement 
 
   return (
     <div className={className}>
-      <Button type="button" variant="tertiary" onClick={() => void addPasskey()} disabled={state === "working"}>
+      <Button
+        type="button"
+        variant="tertiary"
+        className="min-h-11"
+        onClick={() => void addPasskey()}
+        disabled={state === "working"}
+      >
         {state === "working" ? "Follow the prompt…" : "Add a passkey"}
       </Button>
       {state === "added" ? (

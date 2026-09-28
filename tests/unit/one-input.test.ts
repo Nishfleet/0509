@@ -51,4 +51,25 @@ describe("OneInput", () => {
     const html = markup();
     expect(html).not.toContain('role="status"');
   });
+
+  it("can GET, require the field, and label the submit with a node", () => {
+    const html = renderToStaticMarkup(
+      createElement(OneInput, {
+        label: "your website, or a handle",
+        placeholder: "your website, or a handle",
+        name: "subject",
+        action: "/login",
+        method: "get",
+        required: true,
+        maxLength: 200,
+        submitLabel: createElement("span", null, "€10/mo"),
+      }),
+    );
+    expect(html).toContain('method="get"');
+    expect(html).toContain('action="/login"');
+    expect(html).toContain("required");
+    expect(html).toContain('maxLength="200"');
+    expect(html).toContain("€10/mo");
+    expect(html).toMatch(/<button[^>]*type="submit"[^>]*>/);
+  });
 });

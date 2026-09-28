@@ -1,15 +1,19 @@
 import type { ReactElement, ReactNode } from "react";
 import { Link } from "react-router";
 
-export const DAY_MONTH = new Intl.DateTimeFormat("en-GB", {
-  day: "numeric",
-  month: "short",
-  timeZone: "UTC",
-});
+import { pausedReasonLine } from "../lib/competitor/reason-customer";
+import { BrandSwitch, DAY_MONTH } from "./brand-switch";
 
-export function competitorPausedLine(stateChangedAt: string | null): string {
-  if (stateChangedAt === null) return "Paused";
-  return `Paused ${DAY_MONTH.format(new Date(stateChangedAt))}`;
+export { DAY_MONTH };
+
+export function competitorPausedLine(
+  stateChangedAt: string | null,
+  stateReason: string | null = null,
+): string {
+  const base =
+    stateChangedAt === null ? "Paused" : `Paused ${DAY_MONTH.format(new Date(stateChangedAt))}`;
+  const why = pausedReasonLine(stateReason);
+  return why === undefined ? base : `${base} · ${why}`;
 }
 
 export interface CompetitorHeaderProps {
@@ -17,6 +21,7 @@ export interface CompetitorHeaderProps {
   domain: string;
   state: "on" | "off";
   stateChangedAt: string | null;
+  stateReason?: string | null;
   control?: ReactNode;
 }
 
@@ -25,6 +30,7 @@ export function CompetitorHeader({
   domain,
   state,
   stateChangedAt,
+  stateReason = null,
   control,
 }: CompetitorHeaderProps): ReactElement {
   return (
@@ -45,12 +51,32 @@ export function CompetitorHeader({
           <p className="text-body-sm text-ink-soft [overflow-wrap:anywhere]">{domain}</p>
           {state === "off" ? (
             <p data-slot="competitor-paused" className="text-meta text-ink-soft font-mono uppercase">
-              {competitorPausedLine(stateChangedAt)}
+              {competitorPausedLine(stateChangedAt, stateReason)}
             </p>
           ) : null}
         </div>
         {control}
       </div>
     </header>
+  );
+}
+
+const CONSEQUENCE =
+  "Off stops the watching and the alerts. The history stays, and turning it back on picks up where it left off.";
+
+export function CompetitorSwitch({
+  state,
+  brandName,
+  onCheckedChange,
+}: {
+  state: "on" | "off";
+  brandName: string;
+  onCheckedChange?: (checked: boolean) => void;
+}): ReactElement {
+  return (
+    <div data-slot="competitor-switch" className="flex min-w-0 max-w-[26rem] items-center gap-3">
+      <BrandSwitch state={state} brandName={brandName} onCheckedChange={onCheckedChange} />
+      <p className="min-w-0 text-body-sm text-ink-soft">{CONSEQUENCE}</p>
+    </div>
   );
 }

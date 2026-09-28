@@ -1,8 +1,12 @@
-import type { ReactElement } from "react";
+import { type ReactElement, useId } from "react";
 
-import { cn } from "../lib/utils";
-import { DAY_MONTH } from "./competitor-header";
 import { Switch } from "./ui/switch";
+
+export const DAY_MONTH = new Intl.DateTimeFormat("en-GB", {
+  day: "numeric",
+  month: "short",
+  timeZone: "UTC",
+});
 
 export type BrandSwitchState = "on" | "off" | "you";
 
@@ -38,10 +42,11 @@ export function BrandSwitchField({
   pausedOn: Date | null;
   onCheckedChange?: (checked: boolean) => void;
 }): ReactElement {
+  const noteId = useId();
   return (
     <div data-slot="brand-switch-field" data-state={state} className="flex min-w-0 flex-wrap items-center gap-3">
-      <BrandSwitch state={state} brandName={brandName} onCheckedChange={onCheckedChange} />
-      <p className={cn("min-w-0 text-meta", state === "off" ? "text-ink-faint" : "text-ink-soft")}>
+      <BrandSwitch state={state} brandName={brandName} describedBy={noteId} onCheckedChange={onCheckedChange} />
+      <p id={noteId} className="min-w-0 text-meta text-ink-soft">
         {brandSwitchNote(state, pausedOn)}
       </p>
     </div>
@@ -51,10 +56,12 @@ export function BrandSwitchField({
 export function BrandSwitch({
   state,
   brandName,
+  describedBy,
   onCheckedChange,
 }: {
   state: BrandSwitchState;
   brandName: string;
+  describedBy?: string;
   onCheckedChange?: (checked: boolean) => void;
 }): ReactElement {
   return (
@@ -67,8 +74,9 @@ export function BrandSwitch({
         checked={state !== "off"}
         disabled={state === "you"}
         aria-label={`${brandName} tracking`}
+        aria-describedby={describedBy}
         onCheckedChange={(checked) => onCheckedChange?.(checked)}
-        className="h-[22px] w-[38px] shrink-0 rounded-none border-[1.5px] border-ink bg-card data-checked:bg-green data-disabled:bg-green-wash data-disabled:opacity-100 [&_[data-slot=switch-thumb]]:size-4 [&_[data-slot=switch-thumb]]:rounded-none [&_[data-slot=switch-thumb]]:bg-ink [&_[data-slot=switch-thumb]]:transition-transform [&_[data-slot=switch-thumb]]:duration-180 [&_[data-slot=switch-thumb]]:translate-x-[1.5px] data-checked:[&_[data-slot=switch-thumb]]:translate-x-[17.5px]"
+        className="h-[22px] w-[38px] shrink-0 rounded-none border-[1.5px] border-ink bg-card data-checked:bg-green data-disabled:bg-green-wash data-disabled:opacity-100 [&_[data-slot=switch-thumb]]:size-4 [&_[data-slot=switch-thumb]]:rounded-none [&_[data-slot=switch-thumb]]:bg-ink [&_[data-slot=switch-thumb]]:transition-transform [&_[data-slot=switch-thumb]]:duration-180 [&_[data-slot=switch-thumb]]:translate-x-[1.5px] data-checked:[&_[data-slot=switch-thumb]]:translate-x-[17.5px] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink focus-visible:outline-solid"
       />
       <span>{STATE_TEXT[state]}</span>
     </label>

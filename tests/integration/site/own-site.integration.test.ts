@@ -1,21 +1,31 @@
 import { env, introspectWorkflowInstance } from "cloudflare:test";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { openIncident } from "../../../app/lib/data/incident.server";
+
 const USER = "user-own-site";
 const WS = "ws-own-site";
 const NOW = "2026-09-24T02:00:00Z";
 
 const HEALTHY_HTML = `<!doctype html><html><body><h1>My brand</h1><p>Every plan includes unlimited projects, priority support, single sign-on, audit logs, and a named account manager who answers within one business day, with onboarding help for your whole team.</p></body></html>`;
 
-const site: { status: number; apexDown: boolean; challenge: boolean } = {
+const site: { status: number; apexDown: boolean; challenge: boolean; robots: string | null } = {
   status: 200,
   apexDown: false,
   challenge: false,
+  robots: null,
 };
 
+const fetched: string[] = [];
+
 const respond = (input: RequestInfo | URL): Promise<Response> => {
-  const host = new URL(input instanceof Request ? input.url : String(input)).hostname;
-  if (site.apexDown && !host.startsWith("www.")) return Promise.reject(new Error("DNS lookup failed"));
+  const requestUrl = new URL(input instanceof Request ? input.url : String(input));
+  fetched.push(requestUrl.toString());
+  if (site.apexDown && !requestUrl.hostname.startsWith("www."))
+    return Promise.reject(new Error("DNS lookup failed"));
+  if (requestUrl.pathname === "/robots.txt") {
+    return Promise.resolve(new Response(site.robots ?? "", { status: site.robots === null ? 404 : 200 }));
+  }
   const headers = site.challenge ? { "cf-mitigated": "challenge" } : undefined;
   return Promise.resolve(new Response(site.status < 400 ? HEALTHY_HTML : "", { status: site.status, headers }));
 };
@@ -83,6 +93,8 @@ describe("own-site check", () => {
     site.status = 200;
     site.apexDown = false;
     site.challenge = false;
+    site.robots = null;
+    fetched.length = 0;
     await env.DB.exec("UPDATE source SET is_enabled = 1 WHERE id = 'src_site_web'");
     vi.stubGlobal("fetch", respond);
   });
@@ -144,5 +156,43 @@ describe("own-site check", () => {
     site.status = 503;
     await runCheck("own-competitor");
     expect((await incidents()).map((i) => i.entity_id)).toEqual(["ent-self"]);
+  });
+
+  it("never fetches the customer's page when robots.txt disallows FiveToNineBot", async () => {
+    site.robots = "User-agent: FiveToNineBot\nDisallow: /\n";
+    site.status = 503;
+    expect(await runCheck("own-robots")).toEqual({ pages: 1, opened: 0, closed: 0, failed: 0 });
+    expect(await incidents()).toEqual([]);
+    expect(fetched.filter((u) => !u.endsWith("/robots.txt"))).toEqual([]);
+  });
+
+  it("opens one incident when openIncident is called twice for the same page (0509#5401)", async () => {
+    await env.DB.prepare(
+      `INSERT INTO page (id, entity_id, url, discovered_at) VALUES ('page-open-twice', 'ent-self', 'https://mybrand.com/', ?)`,
+    )
+      .bind(NOW)
+      .run();
+    const first = await openIncident({
+      id: "inc-open-twice-1",
+      workspaceId: WS,
+      entityId: "ent-self",
+      pageId: "page-open-twice",
+      kind: "error 503",
+      openedAt: NOW,
+    });
+    const second = await openIncident({
+      id: "inc-open-twice-2",
+      workspaceId: WS,
+      entityId: "ent-self",
+      pageId: "page-open-twice",
+      kind: "error 503",
+      openedAt: NOW,
+    });
+    expect(first).toBe("inc-open-twice-1");
+    expect(second).toBe("inc-open-twice-1");
+    const count = await env.DB.prepare("SELECT count(*) AS n FROM incident WHERE page_id = ?")
+      .bind("page-open-twice")
+      .first<{ n: number }>();
+    expect(count).toEqual({ n: 1 });
   });
 });

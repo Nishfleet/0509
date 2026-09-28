@@ -3,6 +3,7 @@ import { env } from "cloudflare:workers";
 import type { SiteChangeRow } from "./data/signal.server";
 import { readSiteChangePayload, readSiteChanges } from "./data/signal.server";
 import type { ChangeMark, ChangeShot, SiteChangePayload, SiteChangeView } from "./site-change";
+import { whyFlagged } from "./why-flagged";
 import {
   captureLabel,
   changeHeadline,
@@ -56,6 +57,18 @@ async function toView(row: SiteChangeRow, payload: SiteChangePayload): Promise<S
     mark: await readMark(payload.diffKey),
     before: shot(row.id, "before", payload.before.screenshotKey, row.before_at),
     after: shot(row.id, "after", payload.after.screenshotKey, row.after_at),
+    whyFlagged: whyFlagged({
+      verdictId: row.verdict_id,
+      p: row.verdict_p,
+      reason: row.verdict_reason,
+      decidedAt: row.verdict_decided_at,
+      compared: [
+        { label: "Page", value: pageLabel(payload.page.role) },
+        { label: "Link", value: row.url },
+        { label: "Before", value: row.before_at ?? "—" },
+        { label: "After", value: row.after_at ?? row.observed_at },
+      ],
+    }),
   };
 }
 
@@ -71,6 +84,23 @@ export async function readSiteChangeViews(input: {
     return payload === null ? [] : [{ row, payload }];
   });
   return Promise.all(parsed.map(({ row, payload }) => toView(row, payload)));
+}
+
+export async function readBiggestSiteChanges(workspaceId: string, since: string): Promise<SiteChangeView[]> {
+  const rows = await readSiteChanges({ workspaceId, entityId: null, since, limit: 200 });
+  const winners = new Map<string, { row: SiteChangeRow; payload: SiteChangePayload }>();
+  for (const row of rows) {
+    const payload = parseSiteChangePayload(row.payload_json);
+    if (payload === null) continue;
+    const current = winners.get(row.entity_id);
+    if (
+      current === undefined ||
+      payload.wordsAdded + payload.wordsRemoved > current.payload.wordsAdded + current.payload.wordsRemoved
+    ) {
+      winners.set(row.entity_id, { row, payload });
+    }
+  }
+  return Promise.all([...winners.values()].map(({ row, payload }) => toView(row, payload)));
 }
 
 const SHOT_PREFIX = "snapshot/site/";

@@ -32,6 +32,25 @@ describe("mentions adapter contract", () => {
 		).toBe(false);
 	});
 
+	it("mentionItemSchema refuses a javascript: url and accepts an https url", () => {
+		expect(
+			mentionItemSchema.safeParse({
+				dedupKey: "a",
+				url: "javascript:alert(1)",
+				title: "t",
+				publishedAt: null,
+			}).success,
+		).toBe(false);
+		expect(
+			mentionItemSchema.safeParse({
+				dedupKey: "a",
+				url: "https://example.com/a",
+				title: "t",
+				publishedAt: null,
+			}).success,
+		).toBe(true);
+	});
+
 	it("mentionsResultSchema rejects an item missing dedupKey", () => {
 		expect(
 			mentionsResultSchema.safeParse({
@@ -87,8 +106,12 @@ describe("mentions adapter contract", () => {
 		expect(parseFeedEntries(atom)).toHaveLength(1);
 	});
 
-	it("adapterFor returns undefined while the registry is empty", () => {
+	it("adapterFor returns the feed adapters and undefined for an unknown key", () => {
 		expect(adapterFor("news.google_rss")).toBeUndefined();
+		expect(adapterFor("youtube.channel_rss")).toBeTypeOf("function");
+		expect(adapterFor("medium.tag_rss")).toBeTypeOf("function");
+		expect(adapterFor("ddg.html")).toBeUndefined();
+		expect(adapterFor("no.such_source")).toBeUndefined();
 	});
 
 	it("the adapter contract shape is implementable by a sample adapter", async () => {

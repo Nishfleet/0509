@@ -109,6 +109,30 @@ function isSoleGenerator(generators: GeneratorKey[], key: GeneratorKey): boolean
   return generators.length === 1 && generators[0] === key;
 }
 
+export function evidenceLine(entry: ShortlistEntry): string {
+  return GENERATOR_ORDER.flatMap((key) => {
+    if (!entry.generators.includes(key)) return [];
+    if (key === "news") {
+      const hosts = new Set(
+        entry.evidence.flatMap((item) => {
+          if (item.generator !== "news") return [];
+          const publisher = publisherOf(item.sourceUrl);
+          return publisher === null ? [] : [publisher];
+        }),
+      );
+      const count = Math.max(1, hosts.size);
+      return [`named by ${String(count)} news publisher${count !== 1 ? "s" : ""}`];
+    }
+    if (key === "hn") {
+      const urls = new Set(
+        entry.evidence.flatMap((item) => (item.generator === "hn" ? [item.sourceUrl] : [])),
+      );
+      return [`mentioned in ${String(urls.size)} Hacker News thread${urls.size !== 1 ? "s" : ""}`];
+    }
+    return ["advertises in the same category"];
+  }).join(", ");
+}
+
 export function partitionShortlist(candidates: readonly Candidate[]): {
   entries: ShortlistEntry[];
   rest: Candidate[];

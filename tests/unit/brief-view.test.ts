@@ -56,6 +56,7 @@ function payload(): BriefPayload {
         ad_delta: 2,
         mention_delta: 5,
         site_change_count: 1,
+        new_roles: 0,
       },
       {
         entity_id: "ent_drylight",
@@ -67,6 +68,7 @@ function payload(): BriefPayload {
         ad_delta: 0,
         mention_delta: 3,
         site_change_count: 0,
+        new_roles: 0,
       },
     ],
     own_site: {
@@ -131,6 +133,19 @@ describe("the brief view", () => {
     expect(
       render({ own_site: { status: "ok", incidents: [] } }),
     ).toContain("Your site looks fine.");
+  });
+
+  it("keeps an unsafe read-this-first URL out of the markup", () => {
+    const html = render({
+      read_this_first: payload().read_this_first.map((mark) =>
+        mark.before === null
+          ? { ...mark, title: "Unsafe read-this-first link", url: "javascript:alert(1)" }
+          : mark,
+      ),
+    });
+
+    expect(html).toContain("Unsafe read-this-first link");
+    expect(html).not.toContain("javascript:");
   });
 
   it("never calls a broken site fine because its incident list is empty (0509#4642)", () => {

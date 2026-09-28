@@ -1,11 +1,4 @@
-import {
-  isRouteErrorResponse,
-  Links,
-  Meta,
-  Outlet,
-  Scripts,
-  ScrollRestoration,
-} from "react-router";
+import { isRouteErrorResponse, Links, Meta, Outlet, Scripts, ScrollRestoration, useMatches } from "react-router";
 
 import type { Route } from "./+types/root";
 import { ErrorPage } from "./components/error-page";
@@ -14,21 +7,31 @@ import { hasSessionCookie } from "./lib/auth.server";
 import "./app.css";
 
 export function Layout({ children }: { children: React.ReactNode }) {
+  const landing = useMatches().some((match) => match.id === "routes/landing");
   return (
     <html lang="en">
       <head>
         <meta charSet="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
-        <link rel="preload" href="/fonts/bricolage-grotesque-latin.woff2" as="font" type="font/woff2" crossOrigin="anonymous" />
-        <link rel="preload" href="/fonts/instrument-sans-latin.woff2" as="font" type="font/woff2" crossOrigin="anonymous" />
+        <link
+          rel="preload"
+          href="/fonts/bricolage-hero.woff2"
+          as="font"
+          type="font/woff2"
+          crossOrigin="anonymous"
+          fetchPriority="high"
+        />
+        {landing ? null : (
+          <link rel="preload" href="/fonts/instrument-sans-latin.woff2" as="font" type="font/woff2" crossOrigin="anonymous" />
+        )}
         <Meta />
         <Links />
       </head>
       <body>
         {children}
         <Toaster />
-        <ScrollRestoration />
-        <Scripts />
+        {landing ? null : <ScrollRestoration />}
+        {landing ? null : <Scripts />}
       </body>
     </html>
   );

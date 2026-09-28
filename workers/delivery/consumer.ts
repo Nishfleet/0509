@@ -50,7 +50,8 @@ type DeliveryOutcome =
   | "no_target"
   | "no_digest"
   | "no_incident"
-  | "not_self";
+  | "not_self"
+  | "muted";
 
 interface DeliveryResult {
   outcome: DeliveryOutcome;
@@ -82,6 +83,8 @@ interface IncidentRow {
   domain: string;
   role: string;
   mark: string | null;
+  own_site_alerts: number;
+  timezone: string;
 }
 
 async function readIncident(env: Env, incidentId: string): Promise<IncidentRow | null> {
@@ -94,9 +97,12 @@ async function readIncident(env: Env, incidentId: string): Promise<IncidentRow |
             i.closed_at,
             e.domain,
             e.role,
+            w.own_site_alerts,
+            w.timezone,
             (SELECT a.body FROM alert a WHERE a.incident_id = i.id ORDER BY a.created_at ASC LIMIT 1) AS mark
        FROM incident i
        JOIN entity e ON e.id = i.entity_id
+       JOIN workspace w ON w.id = i.workspace_id
       WHERE i.id = ?`,
   )
     .bind(incidentId)
@@ -229,6 +235,10 @@ export async function deliverIncident(
     return { outcome: "not_self", attempt_id: null, idempotency_key: null };
   }
 
+  if (incident.own_site_alerts === 0) {
+    return { outcome: "muted", attempt_id: null, idempotency_key: null };
+  }
+
   const target = await readTarget(env, incident.workspace_id);
   if (!target) {
     return { outcome: "no_target", attempt_id: null, idempotency_key: null };
@@ -272,12 +282,14 @@ export async function deliverIncident(
             recheck_at: new Date(Date.parse(incident.opened_at) + RECHECK_AFTER_MS).toISOString(),
             mark: incident.mark,
             link: INCIDENT_LINK,
+            timezone: incident.timezone,
           })
         : renderIncidentFixed({
             site: incident.domain,
             kind: incident.kind,
             closed_at: incident.closed_at,
             link: INCIDENT_LINK,
+            timezone: incident.timezone,
           });
     const result = await sendMessage(env.EMAIL, {
       to: target.target_value,
@@ -324,7 +336,8 @@ export function parseMessage(body: unknown): DeliveryMessage | null {
   if (typeof body === "string") {
     try {
       return toDeliveryMessage(JSON.parse(body) as unknown);
-    } catch {
+    } catch (error) {
+      console.error(JSON.stringify({ event: "delivery.message_unparseable", error: String(error) }));
       return null;
     }
   }

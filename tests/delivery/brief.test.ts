@@ -70,6 +70,7 @@ function payload(overrides: Partial<BriefPayload> = {}): BriefPayload {
         ad_delta: 3,
         mention_delta: 12,
         site_change_count: 1,
+        new_roles: 2,
       },
       {
         entity_id: "ent_self",
@@ -81,6 +82,7 @@ function payload(overrides: Partial<BriefPayload> = {}): BriefPayload {
         ad_delta: 0,
         mention_delta: 4,
         site_change_count: 2,
+        new_roles: 0,
       },
       {
         entity_id: "ent_casetta",
@@ -92,6 +94,7 @@ function payload(overrides: Partial<BriefPayload> = {}): BriefPayload {
         ad_delta: 4,
         mention_delta: 2,
         site_change_count: 6,
+        new_roles: 0,
       },
     ],
     own_site: { status: "ok", incidents: [] },
@@ -166,7 +169,7 @@ describe("off brands are absent, not zeroed", () => {
 
   it("never renders a zeroed counts line for a brand that is not on the payload", () => {
     const { html, text } = renderBrief(
-      payload({ brands: [{ ...payload().brands[0], ad_delta: 0, mention_delta: 0, site_change_count: 0 }] }),
+      payload({ brands: [{ ...payload().brands[0], ad_delta: 0, mention_delta: 0, site_change_count: 0, new_roles: 0 }] }),
       CONTEXT,
     );
     expect(text).not.toContain("0 new ads");
@@ -197,6 +200,34 @@ describe("off brands are absent, not zeroed", () => {
     expect(sql).toContain("e.state = 'on'");
     expect(sql).toContain("s.week_start_at = ?2");
     expect(sql).toContain("FROM standing s");
+  });
+});
+
+describe("new job posts ride the brand line", () => {
+  it("puts the count on the brand that has them, next to the other counts", () => {
+    const { html, text } = renderBrief(payload(), CONTEXT);
+    const kindred = text.split("Kindred — #1, up 3")[1] ?? "";
+    expect(kindred).toContain("3 new ads · 12 mentions · 1 site change · 2 new job posts");
+    expect(html).toContain("3 new ads · 12 mentions · 1 site change · 2 new job posts");
+  });
+
+  it("says one job post in the singular", () => {
+    const { text } = renderBrief(
+      payload({ brands: [{ ...payload().brands[0], new_roles: 1 }] }),
+      CONTEXT,
+    );
+    expect(text).toContain("1 new job post");
+    expect(text).not.toContain("1 new job posts");
+  });
+
+  it("omits the phrase entirely for a brand with no hiring", () => {
+    const { html, text } = renderBrief(
+      payload({ brands: [{ ...payload().brands[0], new_roles: 0 }] }),
+      CONTEXT,
+    );
+    expect(text).not.toContain("job post");
+    expect(html).not.toContain("job post");
+    expect(text).toContain("3 new ads · 12 mentions · 1 site change");
   });
 });
 

@@ -1,3 +1,4 @@
+import { SUPPORT_ADDRESS } from "../components/footer";
 import { PLANS } from "./billing/plans";
 import { FEATURES } from "./coverage";
 import type { FaqEntry } from "./faq";
@@ -12,6 +13,12 @@ export function organizationJsonLd() {
     "@id": ORGANIZATION_ID,
     name: "Five to Nine",
     url: SITE_URL,
+    contactPoint: {
+      "@type": "ContactPoint",
+      contactType: "customer support",
+      email: SUPPORT_ADDRESS,
+    },
+    logo: `${SITE_URL}/logo.svg`,
   };
 }
 

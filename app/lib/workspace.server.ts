@@ -1,8 +1,10 @@
 import { env } from "cloudflare:workers";
 
+import { readWorkspaceSelfId } from "./data/entity.server";
 import { ensureOwnerEmailTarget } from "./data/send_target.server";
 import { fillWorkspaceTimezone, insertWorkspace } from "./data/workspace.server";
 import type { WorkspaceDb } from "./data/workspace.server";
+import { subjectRedirect } from "./onboarding-subject";
 import { canonicalTimezone, timezoneCookieValue } from "./timezone";
 
 export type { WorkspaceDb };
@@ -21,8 +23,6 @@ const SELECT_WORKSPACE = `SELECT id, name, owner_user_id, timezone, brief_weekda
 FROM workspace WHERE owner_user_id = ?
 ORDER BY created_at ASC
 LIMIT 1`;
-
-const SELECT_SELF = `SELECT id FROM entity WHERE workspace_id = ? AND role = 'self' LIMIT 1`;
 
 export function firstWorkspaceId(userId: string): string {
   return `ws_${userId}`;
@@ -92,16 +92,34 @@ export async function ensureWorkspaceForSignIn(
   return workspace;
 }
 
+export const ONBOARDING_COMPETITORS = "/onboarding/competitors";
+
+const SELECT_RUN = "SELECT input_raw, watching_started_at FROM onboarding_run WHERE workspace_id = ? ORDER BY started_at ASC LIMIT 1";
+
+interface RunRow {
+  input_raw: string;
+  watching_started_at: string | null;
+}
+
+function resumePoint(hasSelf: boolean, run: RunRow | null): string | null {
+  if (!hasSelf) return run === null ? "/onboarding" : (subjectRedirect(run.input_raw) ?? "/onboarding");
+  if (run?.watching_started_at !== null) return null;
+  return ONBOARDING_COMPETITORS;
+}
+
 export async function workspaceLanding(
   db: WorkspaceDb,
   input: { userId: string; email: string; timezone: string | null; now?: string },
-): Promise<"/onboarding" | null> {
+): Promise<string | null> {
   const workspace = await ensureWorkspace(db, input);
-  const self = await db.prepare(SELECT_SELF).bind(workspace.id).first<{ id: string }>();
-  return self ? null : "/onboarding";
+  const [selfId, run] = await Promise.all([
+    readWorkspaceSelfId(workspace.id),
+    db.prepare(SELECT_RUN).bind(workspace.id).first<RunRow>(),
+  ]);
+  return resumePoint(selfId !== null, run);
 }
 
-export async function workspaceLandingForRequest(request: Request, userId: string): Promise<"/onboarding" | null> {
+export async function workspaceLandingForRequest(request: Request, userId: string): Promise<string | null> {
   const header = request.headers.get("cookie");
   const user = await env.DB.prepare('SELECT email FROM "user" WHERE id = ?').bind(userId).first<{ email: string }>();
   if (!user?.email) return "/onboarding";

@@ -62,7 +62,8 @@ export async function transportBrowser(
 					status = parsed.meta.status;
 				}
 			}
-		} catch {
+		} catch (error) {
+			console.error(JSON.stringify({ event: "ads.browser_json_parse_failed", error: String(error) }));
 			payload = body;
 			status = res.status;
 		}
@@ -89,13 +90,15 @@ export async function transportBrowser(
 			const status = response?.status() ?? 0;
 			await page
 				.waitForSelector(descriptor.waitForSelector, { timeout: SELECTOR_TIMEOUT_MS })
-				.catch(() => undefined);
+				.catch((error: unknown) => {
+					console.error(JSON.stringify({ event: "ads.wait_for_selector_failed", error: String(error) }));
+				});
 			const html = await page.content();
 			return { payload: html, status, ms: Date.now() - started };
 		} finally {
-			
-			
-			await page.close().catch(() => undefined);
+			await page.close().catch((error: unknown) => {
+				console.error(JSON.stringify({ event: "ads.page_close_failed", error: String(error) }));
+			});
 		}
 	} finally {
 		await browser.disconnect();

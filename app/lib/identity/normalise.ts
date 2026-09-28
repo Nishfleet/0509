@@ -16,6 +16,22 @@ export type NormaliseResult =
 
 const HANDLE = /^[A-Za-z0-9._-]{1,50}$/;
 
+const LOGIN_HOSTS = new Set(["accounts.google.com"]);
+
+const LOGIN_PATHS = new Set(["/login", "/signin", "/sign-in", "/accounts/login", "/i/flow/login"]);
+
+export function isLoginWall(raw: string): boolean {
+  const trimmed = raw.trim();
+  if (trimmed.startsWith("@")) return false;
+  const candidate = URL.canParse(trimmed) ? trimmed : `https://${trimmed}`;
+  if (!URL.canParse(candidate)) return false;
+  const url = new URL(candidate);
+  if (url.protocol !== "http:" && url.protocol !== "https:") return false;
+  if (LOGIN_HOSTS.has(url.hostname)) return true;
+  const path = url.pathname.length > 1 && url.pathname.endsWith("/") ? url.pathname.slice(0, -1) : url.pathname;
+  return LOGIN_PATHS.has(path.toLowerCase());
+}
+
 function ok(subject: z.input<typeof SubjectSchema>): NormaliseResult {
   return { ok: true, subject: SubjectSchema.parse(subject) };
 }

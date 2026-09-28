@@ -27,6 +27,11 @@
     "enabled": true
   },
   "upload_source_maps": true,
+  "assets": { "run_worker_first": ["/mcp"] },
+
+  "durable_objects": {
+    "bindings": [{ "name": "BROWSER_BUDGET", "class_name": "BrowserBudget" }]
+  },
 
   // The pre-rebuild Worker declared one Durable Object class,
   // SelectionEnrichmentLease (tag v1, new_sqlite_classes). The fresh app does
@@ -47,14 +52,33 @@
   // pre-rebuild Worker did; v2 removes it. End state: no Durable Objects.
   "migrations": [
     { "tag": "v1", "new_sqlite_classes": ["SelectionEnrichmentLease"] },
-    { "tag": "v2", "deleted_classes": ["SelectionEnrichmentLease"] }
+    { "tag": "v2", "deleted_classes": ["SelectionEnrichmentLease"] },
+    { "tag": "v3", "new_sqlite_classes": ["BrowserBudget"] }
   ],
 
   // BETTER_AUTH_URL must be the canonical origin, never derived from a
   // forwarded header: auth origin trust and the magic-link URL both come from
   // it, and a client-supplied value would let a link point anywhere.
   // BETTER_AUTH_SECRET stays a Worker secret.
-  "vars": { "BETTER_AUTH_URL": "https://0509.io" },
+  // TURNSTILE_SECRET_KEY and TURNSTILE_SITE_KEY are Worker secrets too. Listing
+  // them under secrets.required makes deploy inherit the values already on the
+  // Worker instead of replacing them with a plaintext var.
+  // LANDING_WORKSPACE_ID: the public workspace we run ourselves whose changes the landing ticker shows (#4083). Empty renders an empty strip, never filler.
+  // ACCESS_TEAM_DOMAIN / ACCESS_AUD pin the Access application that fronts
+  // 0509.io. They are public identifiers — the AUD appears in Access's own
+  // login redirect — not secrets. access-preclearance.server.ts uses them to
+  // verify the `cf-access-jwt-assertion` JWT Access forwards on every
+  // authenticated request; a verified service-token assertion pre-clears the
+  // magic-link captcha (#4702's accepted path for the e2e lane, #5631).
+  "vars": {
+    "BETTER_AUTH_URL": "https://0509.io",
+    "LANDING_WORKSPACE_ID": "",
+    "ACCESS_TEAM_DOMAIN": "https://nish345.cloudflareaccess.com",
+    "ACCESS_AUD": "b4fa400a1848c913b92c3212dc0714fcdbd1b1b66eb24659e4a7cc01c790575d"
+  },
+  "secrets": {
+    "required": ["BETTER_AUTH_SECRET", "TURNSTILE_SECRET_KEY", "TURNSTILE_SITE_KEY"]
+  },
 
   "d1_databases": [
     {
@@ -63,6 +87,9 @@
       "database_id": "746c6e3d-782e-443a-82d6-28ca93a16294"
     }
   ],
+
+  // Mentions telemetry (#4003 slice 3/6, docs/engines/mentions.md P5.4).
+  "analytics_engine_datasets": [{ "binding": "MENTIONS_SOURCES", "dataset": "mentions_sources" }],
 
   // One binding for the one bucket (#4569 had added a second binding to the
   // same bucket). snapshot/site/ holds raw site snapshots, text and screenshot
@@ -103,7 +130,9 @@
     { "name": "SIGN_IN_IP_LIMIT", "namespace_id": "5093", "simple": { "limit": 20, "period": 60 } },
     // Open AI-app registration (/oauth/register) writes a 30-day client row to
     // OAUTH_KV per call; per client IP, a real app registers once.
-    { "name": "AGENT_REGISTER_LIMIT", "namespace_id": "5094", "simple": { "limit": 10, "period": 60 } }
+    { "name": "AGENT_REGISTER_LIMIT", "namespace_id": "5094", "simple": { "limit": 10, "period": 60 } },
+    // Onboarding identity probes, per user; each probe is a site fetch and possibly a Browser Rendering session.
+    { "name": "PROBE_LIMIT", "namespace_id": "5095", "simple": { "limit": 10, "period": 60 } }
   ],
 
   // Browser Rendering: brand pages bot-gate a plain workerd fetch, so every
@@ -140,6 +169,7 @@
   "queues": {
     "producers": [
       { "queue": "send-email", "binding": "SEND_EMAIL" },
+      { "queue": "fetch-sweep", "binding": "FETCH_SWEEP" },
       // Discovery's Meta Ad Library keyword generator (0509#4161). The browser
       // cap is this queue's max_concurrency of 8; onboarding never sends here.
       { "queue": "page-sweep", "binding": "PAGE_SWEEP" }
@@ -225,6 +255,25 @@
       "binding": "OWN_SITE_CHECK",
       "class_name": "OwnSiteCheckWorkflow",
       "schedules": ["0 * * * *"]
+    },
+    // The nightly news sweep (docs/engines/mentions.md): GDELT and Hacker
+    // News, one step per brand per source, paced for GDELT's one request per
+    // five seconds. 01:00 UTC so its alerts land before the 03:00 standing
+    // refresh counts them.
+    {
+      "name": "mentions-sweep",
+      "binding": "MENTIONS",
+      "class_name": "MentionsWorkflow",
+      "schedules": ["0 1 * * *"]
+    },
+    // The durable tail of a confirmed identity card: persist, seed watches,
+    // start discovery, enqueue the first collection. Producer only — the
+    // consumer that drains fetch-sweep is a later engine, and this Worker's
+    // queue() handler is the email lane.
+    {
+      "name": "identity-tail",
+      "binding": "IDENTITY_TAIL",
+      "class_name": "IdentityTailWorkflow"
     }
   ],
 
@@ -232,8 +281,9 @@
     // The dead-man ping, every five minutes: an external service alerts when
     // the reports stop, which is the one failure a Worker cannot report about
     // itself. Also the nightly delivery sweeper, which re-enqueues stale
-    // pending digests and claims.
-    "crons": ["*/5 * * * *", "0 3 * * *"]
+    // pending digests and claims, and the Monday 04:00 UTC D2 competitor
+    // refresh.
+    "crons": ["*/5 * * * *", "0 3 * * *", "0 4 * * 1"]
   },
 
   "routes": [

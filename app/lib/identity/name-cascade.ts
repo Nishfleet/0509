@@ -47,7 +47,8 @@ export async function resolveBrandName(
 		const label = parsed.data.search[0]?.label.trim();
 		if (!label) return null;
 		return { name: label, source: "wikidata" };
-	} catch {
+	} catch (error) {
+		console.error(JSON.stringify({ event: "identity.wikidata_failed", term, error: String(error) }));
 		return null;
 	}
 }

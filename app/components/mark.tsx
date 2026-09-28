@@ -1,5 +1,7 @@
 import type { CSSProperties, ReactElement, ReactNode } from "react";
 
+import { httpUrl } from "../lib/http-url";
+
 const emailPaint = {
   bone: "#f4f1e8",
   inkSoft: "#55524a",
@@ -153,19 +155,6 @@ function paint(email: boolean): Paint {
     onMarker: "var(--on-green, var(--color-on-green))",
     ground: "transparent",
   };
-}
-
-function httpUrl(value: string): string | null {
-  const trimmed = value.trim();
-  if (trimmed === "") return null;
-  let url: URL;
-  try {
-    url = new URL(trimmed);
-  } catch {
-    return null;
-  }
-  if (url.protocol !== "http:" && url.protocol !== "https:") return null;
-  return url.href;
 }
 
 function capturedInstant(value: string): string | null {

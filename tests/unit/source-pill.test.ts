@@ -205,6 +205,33 @@ describe("the source pill", () => {
     expect(sourcePillStatus(reddit, unparseable, NOW).state).toBe("degraded");
   });
 
+  it("shows a lost YouTube channel as degraded for that watch, never as none", () => {
+    const source: SourceRow = {
+      ...reddit,
+      key: "youtube.channel_rss",
+      platform: "youtube",
+      watch_config_json: JSON.stringify({
+        degraded: {
+          state: "degraded",
+          reason: "we lost the channel, re-resolving",
+          at: "2026-09-24T23:01:56.000Z",
+        },
+      }),
+    };
+    const html = pill(source, quietSnapshot);
+    expect(html).toContain('data-state="degraded"');
+    expect(html).toContain("we lost the channel, re-resolving");
+    expect(html).toContain("last good 2026-09-24 23:01 UTC");
+    expect(html).not.toContain("— none");
+    expect(sourcePillStatus(source, quietSnapshot, NOW).state).toBe("degraded");
+    expect(sourcePillStatus(reddit, quietSnapshot, NOW).state).toBe("none");
+    const broken: SourceRow = { ...source, watch_config_json: "{" };
+    const brokenHtml = pill(broken, quietSnapshot);
+    expect(brokenHtml).toContain('data-state="degraded"');
+    expect(brokenHtml).toContain("watch config is unreadable");
+    expect(brokenHtml).not.toContain("— none");
+  });
+
   it("survives malformed config_json and falls back to the row key for a name", () => {
     for (const raw of ["not json", "[1,2]", "null", "42", '["degraded"]']) {
       const source: SourceRow = { ...reddit, config_json: raw };

@@ -5,7 +5,7 @@ import { legalMeta } from "../lib/legal/meta";
 import { PRIVACY } from "../lib/legal/privacy";
 
 export function meta(_: Route.MetaArgs) {
-  return legalMeta(PRIVACY);
+  return [...legalMeta(PRIVACY), { name: "robots", content: "index, follow" }];
 }
 
 export default function Privacy() {

@@ -11,15 +11,17 @@ import worker from "../../workers/fixture-site";
  * case is the one D3s actually exercises, so its assertion is on the pricing
  * markup, not on a status code — a 200 that lost its prices is the regression.
  *
- * Real workerd against a real local KV, the same binding kinds production has:
- * a broken gate or a break state that does not survive the round-trip fails
- * here rather than in a live incident run.
+ * Real workerd against a real local SQLite Durable Object, the same binding kinds
+ * production has: a broken gate or a break state that does not survive the
+ * round-trip fails here rather than in a live incident run.
  *
  * The flip route mirrors the e2e inbox's token gate (0509#3927), including the
  * 503 when the secret is missing: a fixture that reads healthy because its
  * token was never set is worse than no fixture.
  */
 const TOKEN = "integration-token";
+
+const state = () => env.STATE.getByName("fixture");
 
 const get = () =>
   worker.fetch(new Request("https://fixture.0509.in/"), env, createExecutionContext());
@@ -44,18 +46,29 @@ const setPrice = (variant: string, token: string | null = TOKEN, method = "POST"
     createExecutionContext(),
   );
 
+const setWall = (state: string, token: string | null = TOKEN, method = "POST") =>
+  worker.fetch(
+    new Request(`https://fixture.0509.in/__wall?state=${state}`, {
+      method,
+      headers: token === null ? {} : { authorization: `Bearer ${token}` },
+    }),
+    env,
+    createExecutionContext(),
+  );
+
 const readPricing = (html: string) => {
   const section = /<section id="pricing"[\s\S]*?<\/section>/.exec(html);
   return section?.[0] ?? null;
 };
 
 describe("0509-fixture-site", () => {
-  // One KV key backs every test, so a flip in one test would leak into the next
+  // One Durable Object instance backs every test, so a flip in one test would leak into the next
   // and make the suite order-dependent. Reset to healthy before each: the
   // healthy-page test only passes reliably because it runs first otherwise, and
   // --sequence.shuffle turns that into a red gate.
   beforeEach(async () => {
-    await env.STATE.put("break-mode", "off");
+    await state().put("break-mode", "off");
+    await state().put("bot-wall", "off");
   });
 
   it("serves the healthy page with its pricing section and price tokens", async () => {
@@ -85,7 +98,14 @@ describe("0509-fixture-site", () => {
     await waitOnExecutionContext(ctx);
     const res = await get();
     expect(res.status).toBe(500);
-    expect(await env.STATE.get("break-mode")).toBe("hard");
+    expect(await state().get("break-mode")).toBe("hard");
+  });
+
+  it("serves the hard break to the very next fetch, read from the Durable Object", async () => {
+    await flip("hard");
+    const res = await get();
+    expect(res.status).toBe(500);
+    expect(await state().get("break-mode")).toBe("hard");
   });
 
   it("flips to a soft break and answers 200 with the pricing section absent", async () => {
@@ -172,9 +192,10 @@ describe("0509-fixture-site", () => {
 
 describe("price variant", () => {
   beforeEach(async () => {
-    await env.STATE.put("break-mode", "off");
-    await env.STATE.put("price-variant", "base");
-    await env.STATE.delete("price-flipped-at");
+    await state().put("break-mode", "off");
+    await state().put("price-variant", "base");
+    await state().delete("price-flipped-at");
+    await state().put("bot-wall", "off");
   });
 
   it("serves a fresh page on the base price with no flip time", async () => {
@@ -254,5 +275,56 @@ describe("price variant", () => {
     const html = await (await get()).text();
     expect(readPricing(html)).toBeNull();
     expect(html).toContain('data-variant="raised"');
+  });
+});
+
+describe("bot wall", () => {
+  // Its own key, never BREAK_KEY: J5 turns the wall on to make the site refuse
+  // both our fetch and the browser, and it must not leave J8's break mode dirty
+  // (0509#5339). The wall survives the reset by default so every later test
+  // starts unwalled.
+  beforeEach(async () => {
+    await state().put("break-mode", "off");
+    await state().put("bot-wall", "off");
+  });
+
+  it("403s on a wall flip with no token", async () => {
+    const res = await setWall("on", null);
+    expect(res.status).toBe(403);
+    expect(await res.text()).toBe("forbidden");
+  });
+
+  it("405s a GET on the wall route, so no prefetch can wall the site", async () => {
+    expect((await setWall("on", TOKEN, "GET")).status).toBe(405);
+  });
+
+  it("400s on an unknown wall state", async () => {
+    expect((await setWall("maybe")).status).toBe(400);
+  });
+
+  it("walls the page with a 403 Cloudflare-style challenge, then unwalls it", async () => {
+    expect((await setWall("on")).status).toBe(200);
+    const walled = await get();
+    expect(walled.status).toBe(403);
+    expect(await walled.text()).toContain("Just a moment...");
+
+    expect((await setWall("off")).status).toBe(200);
+    const unwalled = await get();
+    expect(unwalled.status).toBe(200);
+    expect(readPricing(await unwalled.text())).not.toBeNull();
+  });
+
+  it("leaves the break mode alone while the wall turns on and off", async () => {
+    await flip("soft");
+    await setWall("on");
+    await setWall("off");
+    const html = await (await get()).text();
+    // Still soft after the wall round-trip: the wall is stored under its own
+    // key, so a J5 run never repairs or breaks J8's state.
+    expect(readPricing(html)).toBeNull();
+    expect(await state().get("break-mode")).toBe("soft");
+    expect(await state().get("bot-wall")).toBe("off");
+    await flip("off");
+    expect(readPricing(await (await get()).text())).not.toBeNull();
   });
 });

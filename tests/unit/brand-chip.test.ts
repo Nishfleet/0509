@@ -54,6 +54,8 @@ describe("the brand chip", () => {
     expect(html).toContain(">C<");
     expect(html).toContain("data-off");
     expect(html).not.toContain("data-self");
+    expect(html).toContain("focus-visible:outline-ink");
+    expect(html).toContain("border-dashed text-ink-soft");
     expect(html).toContain("width:26px");
     expect(html).toContain("height:26px");
   });
@@ -62,10 +64,10 @@ describe("the brand chip", () => {
     const html = chip({
       name: "Kindred",
       href: "https://0509.test/app/competitors/kindred",
-      logoUrl: "https://cdn.example.com/kindred.png",
+      logoUrl: "/app/logos/kindred",
     });
     expect(html).toContain('href="https://0509.test/app/competitors/kindred"');
-    expect(html).toContain('src="https://cdn.example.com/kindred.png"');
+    expect(html).toContain('src="/app/logos/kindred"');
     expect(html).toContain('width="26"');
     expect(html).toContain('height="26"');
     expect(html).toContain("width:26px");
@@ -75,7 +77,18 @@ describe("the brand chip", () => {
     expect(html).not.toContain("You ·");
   });
 
-  it("drops a logo that is not an http address and a chip that cannot route", () => {
+  it("shows only the monogram for a logo on another origin", () => {
+    const html = chip({
+      name: "Kindred",
+      href: "/app/competitors/kindred",
+      logoUrl: "https://cdn.example.com/kindred.png",
+    });
+    expect(html).not.toContain("<img");
+    expect(html).not.toContain("cdn.example.com");
+    expect(html).toContain(">K<");
+  });
+
+  it("drops a logo that is not a same-origin path and a chip that cannot route", () => {
     expect(
       chip({
         name: "Bramble",
@@ -83,6 +96,9 @@ describe("the brand chip", () => {
         logoUrl: "javascript:alert(1)",
       }),
     ).not.toContain("<img");
+    expect(chip({ name: "Bramble", href: "/app/competitors/bramble", logoUrl: "//evil.test/x.png" })).not.toContain(
+      "<img",
+    );
     expect(chip({ name: "Bramble", href: "javascript:alert(1)" })).toBe("");
     expect(chip({ name: "   ", href: "/app/competitors/bramble" })).toBe("");
     expect(chip({ name: "Bramble", href: "   " })).toBe("");

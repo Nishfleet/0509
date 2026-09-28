@@ -1,9 +1,10 @@
 import { env } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
 
-import { D3_QUESTION_ID, D6_QUESTION_ID } from "../../../workers/standing/score";
+import { D3_QUESTION_ID, D6_QUESTION_ID } from "../../../app/lib/standing-score";
+import { COUNT_BUCKETS } from "../../../app/lib/standing-score.server";
 import type { RefreshInput } from "../../../workers/standing/refresh";
-import { COUNT_BUCKETS, refreshWorkspaceScores } from "../../../workers/standing/refresh";
+import { refreshWorkspaceScores } from "../../../workers/standing/refresh";
 
 /**
  * The nightly refresh against the real D1 the deploy ships.

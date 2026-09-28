@@ -1,9 +1,10 @@
 import { z } from "zod";
 
-import { openWeek, previousBriefAt } from "../../app/lib/brief-schedule";
+import { openWeek, previousBriefAt, rolloverInstance } from "../../app/lib/brief-schedule";
+import { runPipelineHealth } from "../../app/lib/observability/pipeline-health.server";
 import { refreshWorkspaceScores } from "./refresh";
 import type { WorkspaceSchedule } from "./rollover-plan";
-import { createRollovers, readWorkspaceSchedules, rolloverInstance } from "./rollover-plan";
+import { createRollovers, readWorkspaceSchedules } from "./rollover-plan";
 
 export interface NightlyResult {
   workspaces: number;
@@ -56,6 +57,13 @@ async function planWorkspace(
 }
 
 export async function runNightlyStanding(env: Env, now: Date): Promise<NightlyResult> {
+  const [health] = await Promise.allSettled([runPipelineHealth(now)]);
+  console.log(
+    JSON.stringify({
+      event: "pipeline.health",
+      ...(health.status === "fulfilled" ? health.value : { error: String(health.reason) }),
+    }),
+  );
   const workspaces = await readWorkspaceSchedules(env.DB);
   const settled = await workspaces.reduce<Promise<readonly PromiseSettledResult<WorkspacePlan>[]>>(
     async (done, workspace) => {

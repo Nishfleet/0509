@@ -1,9 +1,10 @@
 export function contentSecurityPolicy(nonce: string): string {
   return [
     "default-src 'self'",
-    `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'`,
+    `script-src 'self' 'nonce-${nonce}' 'strict-dynamic' https://challenges.cloudflare.com`,
     "style-src 'self' 'unsafe-inline'",
-    "img-src 'self' https: data: blob:",
+    "frame-src https://challenges.cloudflare.com",
+    "img-src 'self' data: blob:",
     "font-src 'self'",
     "connect-src 'self'",
     "object-src 'none'",

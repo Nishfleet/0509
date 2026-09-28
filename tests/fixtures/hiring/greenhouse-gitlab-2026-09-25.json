@@ -1,0 +1,54 @@
+{
+  "jobs": [
+    {
+      "id": 8556658002,
+      "title": "AI Engineer",
+      "absolute_url": "https://job-boards.greenhouse.io/gitlab/jobs/8556658002",
+      "location": {
+        "name": "Remote, Bangalore"
+      },
+      "first_published": "2026-05-22T09:16:29-04:00",
+      "updated_at": "2026-09-14T16:01:39-04:00"
+    },
+    {
+      "id": 8638232002,
+      "title": "AI Transformation Owner, CRO",
+      "absolute_url": "https://job-boards.greenhouse.io/gitlab/jobs/8638232002",
+      "location": {
+        "name": "Remote, United States"
+      },
+      "first_published": "2026-07-22T13:38:40-04:00",
+      "updated_at": "2026-09-14T16:01:39-04:00"
+    },
+    {
+      "id": 8716179002,
+      "title": "AI Transformation Owner, Product & Design",
+      "absolute_url": "https://job-boards.greenhouse.io/gitlab/jobs/8716179002",
+      "location": {
+        "name": "Remote, Canada; Remote, United Kingdom; Remote, United States"
+      },
+      "first_published": "2026-08-19T16:52:27-04:00",
+      "updated_at": "2026-09-14T16:01:39-04:00"
+    },
+    {
+      "id": 8785825002,
+      "title": "Associate Renewals Manager",
+      "absolute_url": "https://job-boards.greenhouse.io/gitlab/jobs/8785825002",
+      "location": {
+        "name": "Remote Ireland; Remote, Israel"
+      },
+      "first_published": "2026-09-09T11:28:46-04:00",
+      "updated_at": "2026-09-14T16:01:39-04:00"
+    },
+    {
+      "id": 8698314002,
+      "title": "Backend Engineer, AI Engineering: Duo Chat",
+      "absolute_url": "https://job-boards.greenhouse.io/gitlab/jobs/8698314002",
+      "location": {
+        "name": "Remote, Canada; Remote, United States"
+      },
+      "first_published": "2026-08-20T17:35:39-04:00",
+      "updated_at": "2026-09-14T16:01:39-04:00"
+    }
+  ]
+}

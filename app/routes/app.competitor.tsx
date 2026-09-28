@@ -3,14 +3,21 @@ import type { Route } from "./+types/app.competitor";
 import { redirect, useFetcher } from "react-router";
 
 import { BrandSwitchField } from "../components/brand-switch";
+import { CompetitorForget } from "../components/competitor-forget";
 import { CompetitorFrame } from "../components/competitor-frame";
 import { CompetitorHeader, DAY_MONTH } from "../components/competitor-header";
+import { CompetitorSnapshot } from "../components/competitor-snapshot";
 import { readCompetitorPage } from "../lib/competitor-page.server";
+import { snapshotCells } from "../lib/competitor-snapshot";
+import { readCompetitorSnapshot } from "../lib/competitor-snapshot.server";
+import { forgetCompetitor } from "../lib/competitor-forget.server";
 import { handleCompetitorIntent } from "../lib/competitors.server";
 import { readWorkspaceIdForOwner } from "../lib/data/workspace.server";
 import { daysAgoLabel } from "../lib/delivery-alert";
 import { requireSession } from "../lib/require-session.server";
 import { captureLabel } from "../lib/site-change";
+
+const FORGET_MISMATCH = "That doesn't match the name. Type it exactly as shown.";
 
 async function workspaceFor(request: Request): Promise<string> {
   const session = await requireSession(request);
@@ -30,25 +37,39 @@ export function headers() {
 export async function loader({ request, params }: Route.LoaderArgs) {
   const workspaceId = await workspaceFor(request);
   const now = new Date();
-  const page = await readCompetitorPage(workspaceId, params.entityId, now);
+  const [page, snapshot] = await Promise.all([
+    readCompetitorPage(workspaceId, params.entityId, now),
+    readCompetitorSnapshot(workspaceId, params.entityId, now),
+  ]);
   if (page === null) throw new Response("We don't track that competitor.", { status: 404 });
   return {
     ...page,
     lastChecked: page.watch.lastPolledAt === null ? null : captureLabel(page.watch.lastPolledAt),
     changes: page.changes.map((change) => ({ ...change, when: daysAgoLabel(change.observedAt, now) })),
+    developments: page.developments.map((item) => ({ ...item, when: daysAgoLabel(item.observedAt, now) })),
+    now: now.getTime(),
+    snapshot: snapshotCells(snapshot),
   };
 }
 
 export async function action({ request, params }: Route.ActionArgs) {
   const workspaceId = await workspaceFor(request);
-  const intent = (await request.formData()).get("intent");
+  const submitted = await request.formData();
+  const intent = submitted.get("intent");
+  if (intent === "forget") {
+    const confirm = submitted.get("confirm");
+    const outcome = await forgetCompetitor(workspaceId, params.entityId, typeof confirm === "string" ? confirm : "");
+    if (outcome === "forgotten") throw redirect("/app/competitors");
+    if (outcome === "missing") throw new Response("We don't track that competitor.", { status: 404 });
+    return { message: null, forgetError: FORGET_MISMATCH };
+  }
   const form = new FormData();
   form.set("intent", intent === "on" || intent === "off" ? intent : "");
   form.set("entityId", params.entityId);
-  return handleCompetitorIntent(workspaceId, form);
+  return { ...(await handleCompetitorIntent(workspaceId, form)), forgetError: null };
 }
 
-export default function Page({ loaderData }: Route.ComponentProps) {
+export default function Page({ loaderData, actionData }: Route.ComponentProps) {
   const { competitor } = loaderData;
   const fetcher = useFetcher();
   const pending = fetcher.formData?.get("intent");
@@ -61,6 +82,7 @@ export default function Page({ loaderData }: Route.ComponentProps) {
         domain={competitor.domain}
         state={competitor.state}
         stateChangedAt={competitor.stateChangedAt}
+        stateReason={competitor.stateReason}
         control={
           <BrandSwitchField
             state={state}
@@ -72,14 +94,18 @@ export default function Page({ loaderData }: Route.ComponentProps) {
           />
         }
       />
+      <CompetitorSnapshot cells={loaderData.snapshot} />
       <CompetitorFrame
         changes={loaderData.changes}
+        developments={loaderData.developments}
         weekCount={loaderData.weekCount}
         biggestId={loaderData.biggestId}
         pages={loaderData.watch.pages}
         lastChecked={loaderData.lastChecked}
         pausedOn={pausedAt === null ? null : DAY_MONTH.format(new Date(pausedAt))}
+        rail={{ ...loaderData.rail, entityId: competitor.id, now: loaderData.now }}
       />
+      <CompetitorForget name={competitor.name} error={actionData?.forgetError ?? null} />
     </main>
   );
 }

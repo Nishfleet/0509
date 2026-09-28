@@ -252,7 +252,7 @@ that trips it reads the reason at the moment it matters:
 | `import-x/no-cycle` on `app/**` and `workers/**` | no import cycles | closes the gap §B4 used to record |
 | `import-x/no-default-export` | named exports, so a module can be found by grep | off for route modules, config files, and the three workerd entries |
 | `no-restricted-imports` `cloudflare:workers` in client modules | same boundary, the other direction | 7727bf787 |
-| `no-restricted-imports` `kysely` outside `app/lib/db.server.ts`; `better-auth` and its plugins outside `app/lib/auth.server.ts` | one paved path per blessed pattern | 25:26 |
+| `no-restricted-imports` `better-auth` and its plugins outside `app/lib/auth.server.ts` | one paved path per blessed pattern | 25:26 |
 | `no-restricted-syntax` on DML write text — `INSERT [OR …] INTO`, `REPLACE INTO`, `UPDATE … SET`, `DELETE FROM`, `WITH …` writes — in `app/**` and `workers/**` outside `app/lib/data/**` | one writer per table | 25:26; #4313 — the kysely selectors matched nothing after the raw-D1 rebuild, so the rule fires on the SQL text itself |
 | `no-restricted-syntax` on `env.DB` in `app/routes/**` | one data layer | 25:26 |
 | `max-lines: 150` on `app/routes/**` | routes stay thin | house rule, `coding-style.md` |
@@ -297,25 +297,24 @@ flat config replaces a rule instead of merging it, and the paved-path
 `app/lib/data/workspace.server.ts` was green.
 
 `data-writer`, `component`, `route`, and `worker` are folders, so they are
-element types. `db` and `auth` are single files, so they are file categories.
+element types. `auth` is a single file, so it is a file category.
 7.2.0 matches an element pattern as a folder. A file category is how it
 classifies one file, and one file can carry more than one. `server-leaf` is
-the category on every `app/lib/**/*.server.ts`. `db`, `auth`, and
+the category on every `app/lib/**/*.server.ts`. `auth` and
 `data-writer` are extra categories on the files the table names.
 
 | Type | Files |
 |---|---|
 | `route` | `app/routes/**`, `app/root.tsx` |
-| `server-leaf` | `app/lib/**/*.server.ts`, including the three rows below |
+| `server-leaf` | `app/lib/**/*.server.ts`, including the two rows below |
 | `data-writer` | `app/lib/data/**/*.server.ts` |
-| `db` | `app/lib/db.server.ts` |
 | `auth` | `app/lib/auth.server.ts` |
 | `component` | `app/components/**` |
 | `worker` | `workers/**` |
 
 A route may import a component or any server element. A server-leaf may
-import a server-leaf, a data-writer, `db`, or `auth`. A data-writer may
-import a data-writer, `db`, or a server-leaf. `auth` may also import a
+import a server-leaf, a data-writer, or `auth`. A data-writer may
+import a data-writer or a server-leaf. `auth` may also import a
 worker, because `app/lib/auth.server.ts` imports `workers/delivery/send.ts`.
 A worker may import any server element, because `workers/app.ts` imports
 `app/lib/liveness-ping.server.ts`. Any file may import a shared client
@@ -329,7 +328,7 @@ files, and the three workerd entries (`workers/app.ts`,
 configs require a default export. workerd requires one on the Worker entry.
 Everything else is a named export, so grep can find it.
 
-`kysely`, `better-auth`, and `cloudflare:workers` stay on
+`better-auth` and `cloudflare:workers` stay on
 `no-restricted-imports`. Those are package names, not element types. The
 client block is the later one, and it repeats the paved-path list, because
 a later block replaces the rule. `app/lib/auth-client.ts` is the one module
@@ -495,7 +494,7 @@ re-enabling is a config change and not a design session.
 >
 > **3. Duplicate-pattern hunt.** Pick the paved paths from `CLAUDE.md` and check
 > each for a second implementation:
-> - who imports `kysely` other than `app/lib/db.server.ts`
+> - who writes DML (`INSERT`, `UPDATE`, `DELETE`) outside `app/lib/data/`
 > - who calls `betterAuth(` other than `app/lib/auth.server.ts`
 > - how many distinct date/number formatters exist under `app/`
 > - how many `fetch(` call sites are not behind a named module
@@ -540,13 +539,13 @@ a React Router 8 app on one Worker, and the equivalent conventions are these —
 |---|---|---|
 | Features co-located in one folder | A feature is its route module plus its `app/lib/<feature>*.server.ts` leaf plus its `app/lib/data/<table>.server.ts` writer — not split by file type | `max-lines` on routes pushes logic to the leaf; the paved-path import rules keep it from going anywhere else |
 | Main process vs renderer thread | `*.server` modules vs client modules | `boundaries/dependencies` |
-| One blessed way per pattern | one data layer (`app/lib/db.server.ts`), one session authority (`app/lib/auth.server.ts`) | `no-restricted-imports` on `kysely`, `better-auth` and its plugins |
+| One blessed way per pattern | one data layer (`app/lib/data/<table>.server.ts`), one session authority (`app/lib/auth.server.ts`) | `no-restricted-syntax` on DML text outside `app/lib/data/**`; `no-restricted-imports` on `better-auth` and its plugins |
 | Thin entry points | routes are 150 lines and do not query | `max-lines`, plus `no-restricted-syntax` on `env.DB` in routes |
 | — | one writer per table | `no-restricted-syntax` on DML statement text in `app/**` + `workers/**` outside `app/lib/data/**` |
 | Comments banned | comments banned in app code | `no-inline-comments`, `no-warning-comments`, §B5 |
 
-Two of these name files that do not exist yet — `app/lib/db.server.ts` and
-`app/lib/data/`. That is deliberate. **The rule is written before the first
+When this table was written, `app/lib/data/` did not exist yet. That was
+deliberate. **The rule is written before the first
 module, so the first module lands on the paved path instead of paving a second
 one.** A rule added after the fact has to fight an existing pattern; a rule added
 before has nothing to fight.

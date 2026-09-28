@@ -2,7 +2,7 @@ import { env } from "cloudflare:workers";
 import { getDomain } from "tldts";
 
 import { insertPages, readEntitiesWithoutHomePage } from "../data/page.server";
-import { insertSiteChange } from "../data/signal.server";
+import { insertChangeSignalStatement } from "../data/signal.server";
 import { readEnabledSourceId } from "../data/source.server";
 import type { SiteSweepTarget } from "../data/watch.server";
 import {
@@ -11,9 +11,11 @@ import {
   readSiteSweepTargets,
   readUnwatchedEntities,
 } from "../data/watch.server";
+import { robotsAllows } from "../fetch/robots.server";
 import type { CheckPageResult } from "./check-page.server";
 import { checkPage } from "./check-page.server";
 import { diffPageText } from "./diff";
+import { readPage } from "./read-page.server";
 
 const SITE_SOURCE_KEY = "site.web";
 
@@ -69,12 +71,18 @@ export interface SweepTick {
 }
 
 export async function checkSitePage(target: SiteSweepTarget, tick: SweepTick): Promise<CheckPageResult> {
+  if (target.entityRole === "self" && !(await robotsAllows(target.url))) {
+    console.log(JSON.stringify({ event: "site.check_failed", url: target.url, reason: "robots", detail: "disallowed by robots.txt" }));
+    return { outcome: "failed", reason: "robots", detail: "disallowed by robots.txt" };
+  }
+  const read = await readPage(target, tick.plannedAt);
   const result = await checkPage({
     watchId: target.watchId,
     pageId: target.pageId,
     url: target.url,
     snapshotId: `${tick.instanceId}-${target.pageId}`,
     before: tick.plannedAt,
+    read,
   });
   if (result.outcome === "failed") {
     console.log(JSON.stringify({
@@ -129,17 +137,19 @@ export async function publishSiteChange(target: SiteSweepTarget, changed: Change
     transport: changed.transport,
   };
 
-  await insertSiteChange({
+  await insertChangeSignalStatement({
     id: crypto.randomUUID(),
     workspaceId: target.workspaceId,
     entityId: target.entityId,
     sourceId: target.sourceId,
     watchId: target.watchId,
     snapshotId: changed.snapshotId,
+    title: null,
+    summary: null,
     aspect: target.pageRole,
     url: target.url,
     payloadJson: JSON.stringify(payload),
     observedAt: new Date().toISOString(),
-  });
+  }).run();
   return changed.snapshotId;
 }

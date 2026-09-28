@@ -41,3 +41,25 @@ export function weekClosingAt(schedule: BriefSchedule, closesAt: Date): BriefWee
 export function instantStamp(instant: Date): string {
   return instant.toISOString().slice(0, 16).replace(/[-:]/g, "");
 }
+
+export interface RolloverParams {
+  workspaceId: string;
+  closesAt: string;
+}
+
+export interface RolloverInstance {
+  id: string;
+  params: RolloverParams;
+}
+
+export function rolloverInstance(
+  workspaceId: string,
+  closesAt: Date,
+  kind: "scheduled" | "catch-up",
+): RolloverInstance {
+  const suffix = kind === "catch-up" ? "-catch-up" : "";
+  return {
+    id: `rollover-${workspaceId}-${instantStamp(closesAt)}${suffix}`,
+    params: { workspaceId, closesAt: closesAt.toISOString() },
+  };
+}

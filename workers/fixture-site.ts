@@ -1,18 +1,57 @@
+import { DurableObject } from "cloudflare:workers";
+
 interface FixtureEnv {
-  
-  
-  
-  
-  STATE: KVNamespace;
+  STATE: DurableObjectNamespace<FixtureState>;
   FIXTURE_SITE_TOKEN?: string;
+}
+
+export class FixtureState extends DurableObject<FixtureEnv> {
+  constructor(ctx: DurableObjectState, env: FixtureEnv) {
+    super(ctx, env);
+    void ctx.blockConcurrencyWhile(() => {
+      this.ctx.storage.sql.exec(
+        `CREATE TABLE IF NOT EXISTS state (key TEXT PRIMARY KEY, value TEXT NOT NULL)`,
+      );
+      return Promise.resolve();
+    });
+  }
+
+  get(key: string): string | null {
+    const row = this.ctx.storage.sql
+      .exec<{ value: string }>("SELECT value FROM state WHERE key = ?", key)
+      .toArray()[0];
+    return row?.value ?? null;
+  }
+
+  put(key: string, value: string): void {
+    this.ctx.storage.sql.exec(
+      `INSERT INTO state (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
+      key,
+      value,
+    );
+  }
+
+  delete(key: string): void {
+    this.ctx.storage.sql.exec("DELETE FROM state WHERE key = ?", key);
+  }
 }
 
 type BreakMode = "off" | "hard" | "soft";
 
 const BREAK_KEY = "break-mode";
+const STATE_NAME = "fixture";
 
 const isBreakMode = (value: string | null): value is BreakMode =>
   value === "off" || value === "hard" || value === "soft";
+
+type WallState = "on" | "off";
+
+const WALL_KEY = "bot-wall";
+const WALL_PAGE =
+  '<!doctype html><html><head><title>Just a moment...</title></head><body><p>Checking if the site connection is secure</p></body></html>';
+
+const isWallState = (value: string | null): value is WallState =>
+  value === "on" || value === "off";
 
 type PriceVariant = "base" | "raised";
 
@@ -79,8 +118,16 @@ export default {
     if (url.pathname === "/__price") {
       return price(request, env);
     }
+    if (url.pathname === "/__wall") {
+      return wall(request, env);
+    }
 
-    const stored = await env.STATE.get(BREAK_KEY);
+    const walled = await env.STATE.getByName(STATE_NAME).get(WALL_KEY);
+    if (walled === "on") {
+      return new Response(WALL_PAGE, { status: 403, headers: HTML_HEADERS });
+    }
+
+    const stored = await env.STATE.getByName(STATE_NAME).get(BREAK_KEY);
     const mode: BreakMode = isBreakMode(stored) ? stored : "off";
 
     if (mode === "hard") {
@@ -90,9 +137,9 @@ export default {
       });
     }
 
-    const storedVariant = await env.STATE.get(PRICE_KEY);
+    const storedVariant = await env.STATE.getByName(STATE_NAME).get(PRICE_KEY);
     const variant: PriceVariant = isPriceVariant(storedVariant) ? storedVariant : "base";
-    const flippedAt = (await env.STATE.get(PRICE_AT_KEY)) ?? "";
+    const flippedAt = (await env.STATE.getByName(STATE_NAME).get(PRICE_AT_KEY)) ?? "";
 
     return new Response(renderPage(mode, variant, flippedAt), {
       status: 200,
@@ -129,8 +176,21 @@ async function flip(request: Request, env: FixtureEnv): Promise<Response> {
   if (!isBreakMode(requested)) {
     return new Response("mode must be off, hard or soft", { status: 400 });
   }
-  await env.STATE.put(BREAK_KEY, requested);
+  await env.STATE.getByName(STATE_NAME).put(BREAK_KEY, requested);
   return new Response(`break mode set to ${requested}`, { status: 200 });
+}
+
+async function wall(request: Request, env: FixtureEnv): Promise<Response> {
+  const denied = authorize(request, env);
+  if (denied) {
+    return denied;
+  }
+  const requested = new URL(request.url).searchParams.get("state");
+  if (!isWallState(requested)) {
+    return new Response("state must be on or off", { status: 400 });
+  }
+  await env.STATE.getByName(STATE_NAME).put(WALL_KEY, requested);
+  return new Response(`bot wall set to ${requested}`, { status: 200 });
 }
 
 async function price(request: Request, env: FixtureEnv): Promise<Response> {
@@ -143,7 +203,7 @@ async function price(request: Request, env: FixtureEnv): Promise<Response> {
     return new Response("variant must be base or raised", { status: 400 });
   }
   const at = new Date().toISOString();
-  await env.STATE.put(PRICE_KEY, variant);
-  await env.STATE.put(PRICE_AT_KEY, at);
+  await env.STATE.getByName(STATE_NAME).put(PRICE_KEY, variant);
+  await env.STATE.getByName(STATE_NAME).put(PRICE_AT_KEY, at);
   return new Response(`price variant set to ${variant} at ${at}`, { status: 200 });
 }

@@ -5,6 +5,8 @@ const BINDING_NAMES = [
   "DB",
   "BETTER_AUTH_URL",
   "BETTER_AUTH_SECRET",
+  "TURNSTILE_SECRET_KEY",
+  "TURNSTILE_SITE_KEY",
   "EMAIL",
   "SEND_EMAIL",
   "SNAPSHOTS",
@@ -14,12 +16,15 @@ const BINDING_NAMES = [
   "SIGN_IN_EMAIL_LIMIT",
   "SIGN_IN_IP_LIMIT",
   "AGENT_REGISTER_LIMIT",
+  "PROBE_LIMIT",
 ] as const satisfies readonly (keyof Env)[];
 
 const NOTES = {
   DB: "every read and write fails",
   BETTER_AUTH_URL: "magic links have no canonical origin",
   BETTER_AUTH_SECRET: "sign-in cannot be trusted",
+  TURNSTILE_SECRET_KEY: "a botnet can spray sign-in links",
+  TURNSTILE_SITE_KEY: "the sign-in form has no Turnstile widget",
   EMAIL: "magic links and briefs cannot send",
   SEND_EMAIL: "briefs sit unsent",
   SNAPSHOTS: "site snapshots cannot be read or stored",
@@ -29,10 +34,15 @@ const NOTES = {
   SIGN_IN_EMAIL_LIMIT: "one inbox can be flooded with sign-in links",
   SIGN_IN_IP_LIMIT: "one sender can spray sign-in links",
   AGENT_REGISTER_LIMIT: "anyone can fill OAUTH_KV with app registrations",
+  PROBE_LIMIT: "one user can run unlimited identity probes",
   LIVENESS_PING_URL: "absence means no monitor; a set value must be an http(s) URL",
-} as const satisfies Record<(typeof BINDING_NAMES)[number] | "LIVENESS_PING_URL", string>;
+  SITE_SWEEP_PING_URL: "absence means no monitor; a set value must be an http(s) URL",
+} as const satisfies Record<
+  (typeof BINDING_NAMES)[number] | "LIVENESS_PING_URL" | "SITE_SWEEP_PING_URL",
+  string
+>;
 
-const NAMES = [...BINDING_NAMES, "LIVENESS_PING_URL"] as const satisfies readonly (keyof typeof NOTES)[];
+const NAMES = [...BINDING_NAMES, "LIVENESS_PING_URL", "SITE_SWEEP_PING_URL"] as const satisfies readonly (keyof typeof NOTES)[];
 
 type EnvName = (typeof NAMES)[number];
 type Snapshot = Record<(typeof NAMES)[number], unknown>;
@@ -57,6 +67,8 @@ const workerEnvSchema = z.object({
   DB: binding("prepare"),
   BETTER_AUTH_URL: httpUrl,
   BETTER_AUTH_SECRET: z.string().min(1),
+  TURNSTILE_SECRET_KEY: z.string().min(1),
+  TURNSTILE_SITE_KEY: z.string().min(1),
   EMAIL: binding(),
   SEND_EMAIL: binding("sendBatch"),
   SNAPSHOTS: binding("get"),
@@ -66,7 +78,9 @@ const workerEnvSchema = z.object({
   SIGN_IN_EMAIL_LIMIT: binding("limit"),
   SIGN_IN_IP_LIMIT: binding("limit"),
   AGENT_REGISTER_LIMIT: binding("limit"),
+  PROBE_LIMIT: binding("limit"),
   LIVENESS_PING_URL: httpUrl.optional(),
+  SITE_SWEEP_PING_URL: httpUrl.optional(),
 });
 
 export class WorkerEnvError extends Error {
@@ -89,8 +103,8 @@ function blank(value: unknown): unknown {
   return trimmed.length === 0 ? undefined : trimmed;
 }
 
-function livenessUrl(): unknown {
-  return blank(Reflect.get(globalThis, "LIVENESS_PING_URL"));
+function globalUrl(name: "LIVENESS_PING_URL" | "SITE_SWEEP_PING_URL"): unknown {
+  return blank(Reflect.get(globalThis, name));
 }
 
 function snapshot(): Snapshot {
@@ -98,6 +112,8 @@ function snapshot(): Snapshot {
     DB: env.DB,
     BETTER_AUTH_URL: blank(env.BETTER_AUTH_URL),
     BETTER_AUTH_SECRET: blank(env.BETTER_AUTH_SECRET),
+    TURNSTILE_SECRET_KEY: blank(env.TURNSTILE_SECRET_KEY),
+    TURNSTILE_SITE_KEY: blank(env.TURNSTILE_SITE_KEY),
     EMAIL: env.EMAIL,
     SEND_EMAIL: env.SEND_EMAIL,
     SNAPSHOTS: env.SNAPSHOTS,
@@ -107,7 +123,9 @@ function snapshot(): Snapshot {
     SIGN_IN_EMAIL_LIMIT: env.SIGN_IN_EMAIL_LIMIT,
     SIGN_IN_IP_LIMIT: env.SIGN_IN_IP_LIMIT,
     AGENT_REGISTER_LIMIT: env.AGENT_REGISTER_LIMIT,
-    LIVENESS_PING_URL: livenessUrl(),
+    PROBE_LIMIT: env.PROBE_LIMIT,
+    LIVENESS_PING_URL: globalUrl("LIVENESS_PING_URL"),
+    SITE_SWEEP_PING_URL: globalUrl("SITE_SWEEP_PING_URL"),
   };
 }
 

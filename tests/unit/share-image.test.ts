@@ -12,9 +12,9 @@ const SCHEDULE: BriefSchedule = { timezone: "Europe/London", weekday: 1, hour: 8
 const NOW = new Date("2026-09-24T06:30:00.000Z");
 
 const ENTITIES: readonly HomeEntity[] = [
-  { id: "ent_self", role: "self", domain: "own.example", state: "on" },
-  { id: "ent_kindred", role: "competitor", domain: "kindred.example", state: "on" },
-  { id: "ent_casetta", role: "competitor", domain: "casetta.example", state: "on" },
+  { id: "ent_self", role: "self", domain: "own.example", name: "Own Brand", state: "on" },
+  { id: "ent_kindred", role: "competitor", domain: "kindred.example", name: "Kindred", state: "on" },
+  { id: "ent_casetta", role: "competitor", domain: "casetta.example", name: "Casetta", state: "on" },
 ];
 
 function brand(entityId: string, name: string, rank: number | null) {
@@ -28,6 +28,7 @@ function brand(entityId: string, name: string, rank: number | null) {
     ad_delta: 0,
     mention_delta: 0,
     site_change_count: 0,
+    new_roles: 0,
   };
 }
 
@@ -60,7 +61,7 @@ function payload(overrides: Partial<BriefPayload> = {}): BriefPayload {
 }
 
 function card(overrides: Partial<BriefPayload> = {}) {
-  return shareCard({ payload: payload(overrides), entities: ENTITIES, schedule: SCHEDULE, now: NOW });
+  return shareCard({ payload: payload(overrides), entities: ENTITIES, schedule: SCHEDULE, history: [], now: NOW });
 }
 
 describe("share card", () => {
@@ -69,9 +70,11 @@ describe("share card", () => {
   });
 
   it("has nothing to share until there is a ranking", () => {
-    expect(shareCard({ payload: null, entities: ENTITIES, schedule: SCHEDULE, now: NOW })).toBeNull();
+    expect(shareCard({ payload: null, entities: ENTITIES, schedule: SCHEDULE, history: [], now: NOW })).toBeNull();
     expect(card({ headline_rank: null })).toBeNull();
-    expect(shareCard({ payload: payload(), entities: ENTITIES.slice(0, 1), schedule: SCHEDULE, now: NOW })).toBeNull();
+    expect(
+      shareCard({ payload: payload(), entities: ENTITIES.slice(0, 1), schedule: SCHEDULE, history: [], now: NOW }),
+    ).toBeNull();
   });
 });
 

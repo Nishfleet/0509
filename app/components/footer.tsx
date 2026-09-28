@@ -1,4 +1,4 @@
-const SUPPORT_ADDRESS = "support@0509.io";
+export const SUPPORT_ADDRESS = "support@0509.io";
 
 const linkClass =
   "text-ink-soft hover:text-ink underline decoration-1 underline-offset-4 transition-colors duration-150";

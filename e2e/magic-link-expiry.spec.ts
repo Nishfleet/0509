@@ -1,7 +1,7 @@
-import { expect, test, type Browser, type BrowserContext, type APIRequestContext } from "@playwright/test";
+import { expect, test, type Browser, type BrowserContext, type Page } from "@playwright/test";
 
 import { accessStatePath } from "../playwright.config";
-import { requireInboxToken, signInWithMagicLink, waitForMagicLink } from "./inbox";
+import { requireInboxToken, signInWithMagicLink, turnstileToken, waitForMagicLink } from "./inbox";
 
 // The sign-in link's real contract, proven on production every deploy: one use,
 // a TTL it cannot outlive, and a request path that stays silent about whether
@@ -18,6 +18,7 @@ test.skip(
   ({ viewport }) => viewport?.width !== 1440,
   "expiry costs five real minutes; one lane per deploy proves it",
 );
+test.describe.configure({ retries: 1 });
 
 const TOKEN_TTL_MS = 305_000;
 const SESSION_COOKIE = /better-auth\.session_token/;
@@ -47,7 +48,7 @@ async function followOnce(context: BrowserContext, link: string) {
   return {
     status: response.status(),
     location: response.headers()["location"] ?? "",
-    setsSession: cookies.some((c) => SESSION_COOKIE.test(c)),
+    setsSession: cookies.some((c) => SESSION_COOKIE.test(c) && !/;\s*max-age=0(;|$)/i.test(c) && (c.split(";")[0] ?? "").split("=").slice(1).join("=").trim() !== ""),
     at: new Date().toISOString(),
   };
 }
@@ -56,10 +57,14 @@ async function followOnce(context: BrowserContext, link: string) {
 // a requester sees can be compared byte for byte between a known and an
 // unknown address. Origin is sent because the Access cookie rides along and
 // better-auth's CSRF check validates Origin whenever a cookie is present.
-async function requestMagicLink(request: APIRequestContext, baseURL: string, email: string) {
+async function requestMagicLink(page: Page, baseURL: string, email: string) {
+  const captcha = await turnstileToken(page);
   const sentAt = new Date().toISOString();
-  const response = await request.post(`${baseURL}/api/auth/sign-in/magic-link`, {
-    headers: { origin: baseURL },
+  // The pre-cleared lane sends no token: its captcha field is empty by design.
+  const headers: Record<string, string> = { origin: baseURL };
+  if (captcha) headers["x-captcha-response"] = captcha;
+  const response = await page.request.post(`${baseURL}/api/auth/sign-in/magic-link`, {
+    headers,
     data: { email, callbackURL: "/app" },
   });
   const body = await response.text();
@@ -75,7 +80,8 @@ async function requestMagicLink(request: APIRequestContext, baseURL: string, ema
 // session's user when the jar holds one and null when it does not.
 async function sessionEmail(context: BrowserContext, baseURL: string): Promise<string | null> {
   const response = await context.request.get(`${baseURL}/api/auth/get-session`);
-  const body: unknown = await response.json().catch(() => null);
+  if (response.status() !== 200) throw new Error(`GET /api/auth/get-session answered HTTP ${response.status()} (expected 200)`);
+  const body: unknown = await response.json();
   if (body && typeof body === "object" && "user" in body) {
     const user = (body as { user?: { email?: string } }).user;
     return user?.email ?? null;
@@ -88,6 +94,7 @@ test("the sign-in link works once, survives a newer request, dies on its own clo
   browser,
   baseURL,
 }) => {
+  expect(test.info().project.name).toBe("desktop-1440");
   test.setTimeout(600_000);
   const token = requireInboxToken();
   if (!baseURL) throw new Error("PLAYWRIGHT_TEST_BASE_URL resolved to no baseURL");
@@ -95,9 +102,13 @@ test("the sign-in link works once, survives a newer request, dies on its own clo
   const stranger = freshAddress("stranger");
 
   // First follow: the full J1 journey — real form, real email, real link.
+  const verifyResponse = page.waitForResponse((r) => r.url().includes("/api/auth/magic-link/verify"), { timeout: 240_000 });
   const first = await signInWithMagicLink(page, email, token);
+  const verifyStatus = (await verifyResponse).status();
+  expect(verifyStatus).toBeGreaterThanOrEqual(300);
+  expect(verifyStatus).toBeLessThan(400);
   await expect(page.getByText(email)).toBeVisible();
-  console.log(`magic-link-expiry follow=first status=${first.status} landed=${page.url()} at=${new Date().toISOString()}`);
+  console.log(`magic-link-expiry follow=first verifyStatus=${verifyStatus} email=${email} landed=${page.url()} at=${new Date().toISOString()}`);
 
   // Replay: the same link a second time, in a jar that has no session.
   const replayContext = await freshContext(browser);
@@ -113,14 +124,14 @@ test("the sign-in link works once, survives a newer request, dies on its own clo
 
   // email is a known address now; stranger never signs in. The request path
   // must answer both identically.
-  const known = await requestMagicLink(page.request, baseURL, email);
+  const known = await requestMagicLink(page, baseURL, email);
   const secondLink = await waitForMagicLink(email, token, [first.link]);
-  await requestMagicLink(page.request, baseURL, email);
+  await requestMagicLink(page, baseURL, email);
   const thirdLink = await waitForMagicLink(email, token, [first.link, secondLink]);
-  const expiring = await requestMagicLink(page.request, baseURL, email);
+  const expiring = await requestMagicLink(page, baseURL, email);
   const expiresAfter = Date.parse(expiring.sentAt) + TOKEN_TTL_MS;
   const fourthLink = await waitForMagicLink(email, token, [first.link, secondLink, thirdLink]);
-  const unknown = await requestMagicLink(page.request, baseURL, stranger);
+  const unknown = await requestMagicLink(page, baseURL, stranger);
   expect(unknown.body).toBe(known.body);
   console.log(
     `magic-link-expiry request-opacity known=${known.body} unknown=${unknown.body} at=${new Date().toISOString()}`,
@@ -160,6 +171,7 @@ test("the sign-in link works once, survives a newer request, dies on its own clo
   expect(expiredFollow.location).toContain(VERIFY_ERROR);
   expect(expiredFollow.setsSession).toBe(false);
   expect(await sessionEmail(expiredContext, baseURL)).toBeNull();
+  expect(Date.parse(expiredFollow.at)).toBeGreaterThanOrEqual(Date.parse(expiring.sentAt) + TOKEN_TTL_MS);
   console.log(
     `magic-link-expiry follow=expired status=${expiredFollow.status} location=${expiredFollow.location} session=none requestedAt=${expiring.sentAt} attemptedAt=${expiredFollow.at}`,
   );

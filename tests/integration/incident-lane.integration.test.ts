@@ -250,6 +250,25 @@ describe("incident lane (0509#4364)", () => {
     expect(notices?.every((row) => row.sent_on === DAY)).toBe(true);
   });
 
+  it("(c2) still sends the fixed follow-up after the alert is acknowledged (0509#4115)", async () => {
+    const rec = recorder();
+    await deliverIncident(envWith(bindingFor(rec)), message(INCIDENT_A));
+    await env.DB.prepare("UPDATE alert SET status = 'acknowledged', read_at = '2026-09-23T08:00:00Z' WHERE id = 'alert-lane'").run();
+    await closeIncident(INCIDENT_A);
+
+    const result = await deliverIncident(envWith(bindingFor(rec)), message(INCIDENT_A));
+
+    expect(result.outcome).toBe("sent");
+    expect(result.idempotency_key).toBe(`incident:${INCIDENT_A}:fixed`);
+    expect(rec.sent).toHaveLength(2);
+    expect(rec.sent[1].subject).toContain("looks fixed");
+
+    const notices = await readNotices(PAGE_A);
+    expect(notices).toHaveLength(2);
+    expect(notices?.map((row) => row.is_resolution)).toEqual([0, 1]);
+    expect(notices?.every((row) => row.sent_on === DAY)).toBe(true);
+  });
+
   it("(d) drops a different incident on the same page the same day", async () => {
     const rec = recorder();
     await deliverIncident(envWith(bindingFor(rec)), message(INCIDENT_A));
@@ -356,11 +375,48 @@ describe("incident lane (0509#4364)", () => {
     expect(rec.sent).toHaveLength(1);
   });
 
+  it("(i) sends nothing when own-site alerts are off, and keeps the alert row", async () => {
+    await env.DB.prepare(`UPDATE workspace SET own_site_alerts = 0 WHERE id = ?`)
+      .bind(WS)
+      .run();
+    const rec = recorder();
+
+    const result = await deliverIncident(envWith(bindingFor(rec)), message(INCIDENT_A));
+
+    expect(result.outcome).toBe("muted");
+    expect(rec.sent).toHaveLength(0);
+    const attempts = await env.DB.prepare(`SELECT count(*) AS n FROM send_attempt`).first<{
+      n: number;
+    }>();
+    expect(attempts?.n).toBe(0);
+    const notices = await env.DB.prepare(`SELECT count(*) AS n FROM incident_notice`).first<{
+      n: number;
+    }>();
+    expect(notices?.n).toBe(0);
+    const alerts = await env.DB.prepare(`SELECT count(*) AS n FROM alert WHERE incident_id = ?`)
+      .bind(INCIDENT_A)
+      .first<{ n: number }>();
+    expect(alerts?.n).toBe(1);
+  });
+
   it("returns no_incident when the incident row is gone", async () => {
     const rec = recorder();
     const result = await deliverIncident(envWith(bindingFor(rec)), message("incident-does-not-exist"));
     expect(result.outcome).toBe("no_incident");
     expect(rec.sent).toHaveLength(0);
     expect(await readNotices(PAGE_A)).toHaveLength(0);
+  });
+
+  it("(i) formats the seen moment in the workspace's timezone, not UTC (0509#4751)", async () => {
+    await env.DB.prepare(`UPDATE workspace SET timezone = ? WHERE id = ?`).bind("Asia/Kolkata", WS).run();
+
+    const rec = recorder();
+    const result = await deliverIncident(envWith(bindingFor(rec)), message(INCIDENT_A));
+
+    expect(result.outcome).toBe("sent");
+    expect(rec.sent[0].text).toContain("Seen at Wed 23 Sept, 12:45.");
+    expect(rec.sent[0].text).not.toContain("2026-09-23 07:15 UTC");
+    expect(rec.sent[0].html).toContain("Seen at Wed 23 Sept, 12:45.");
+    expect(rec.sent[0].html).not.toContain("2026-09-23 07:15 UTC");
   });
 });

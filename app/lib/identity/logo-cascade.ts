@@ -41,7 +41,8 @@ export async function resolveLogo(
 			});
 			await res.body?.cancel();
 			if (res.ok) return { ok: true, url, source };
-		} catch {
+		} catch (error) {
+			console.error(JSON.stringify({ event: "identity.logo_probe_failed", error: String(error) }));
 			continue;
 		}
 	}
