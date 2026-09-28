@@ -1,4 +1,4 @@
-export const NIGHTLY_CRON = "0 3 * * *";
+export { NIGHTLY_CRON } from "../../app/lib/cadence";
 
 export const SELECT_STALE_PENDING_DIGESTS = `SELECT id FROM digest WHERE status = 'pending' AND period_end < ? AND period_end >= ?`;
 
