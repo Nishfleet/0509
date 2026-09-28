@@ -13,8 +13,9 @@
 name: CI
 
 # `deployment_status` is the third trigger and it is the stock one: Cloudflare
-# Workers Builds emit GitHub deployments, so the production suites fire on the
-# real deploy with no polling. https://playwright.dev/docs/ci#on-deployment
+# Workers Builds emit GitHub deployments, so lighthouse fires on the real deploy
+# with no polling; the full production e2e no longer does (its sign-ins send
+# real emails against a spent daily quota) and runs from e2e-scheduled.yml. https://playwright.dev/docs/ci#on-deployment
 # The required jobs report on every event and pass explicitly on a deployment
 # they have nothing to say about (#4664).
 on:
@@ -24,10 +25,10 @@ on:
 
 concurrency:
   # A deployment_status run verifies one deploy and must finish. Sharing the
-  # branch group with cancel-in-progress cancelled every production e2e today:
+  # branch group with cancel-in-progress cancelled every production run that day:
   # each deploy emits pending, in_progress and success events, each a run, and
   # merges 90 s apart cancelled the previous deploy's run (35754511999, 35754574851
-  # and four more, all "cancelled", 16:29-16:31Z). PR and queue runs keep the
+  # and four more, all "cancelled", 16:29-16:31Z), which is why lighthouse keeps it. PR and queue runs keep the
   # branch group so a superseded head is still cancelled.
   group: ci-${{ github.event_name == 'deployment_status' && github.run_id || github.ref }}
   cancel-in-progress: ${{ github.event_name != 'deployment_status' }}
@@ -248,79 +249,6 @@ jobs:
             test-results/
           retention-days: 7
 
-  e2e-production:
-    name: e2e-production
-    # Not a required check, on purpose: it cannot run on a pull request, and a
-    # required check that never reports blocks the merge queue forever.
-    if: github.event_name == 'deployment_status' && github.event.deployment_status.state == 'success'
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    permissions:
-      contents: read
-      issues: write
-      actions: write
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version: 22
-          cache: npm
-      - run: npm ci
-      - run: npx playwright install --with-deps chromium
-      - name: Run the same suite against what was just deployed
-        # @scheduled journeys run from e2e-scheduled.yml on their own clock: J12 now, J8 with its spec (0509#4124, 0509#4128).
-        run: npm run e2e -- --reporter=github,json --grep-invert @scheduled
-        env:
-          # Setting this switches playwright.config.ts out of webServer mode.
-          PLAYWRIGHT_TEST_BASE_URL: ${{ github.event.deployment_status.environment_url }}
-          PLAYWRIGHT_JSON_OUTPUT_FILE: playwright-report/results.json
-          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
-          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
-          # J1/J2 read the e2e inbox Worker through this token (0509#3927).
-          # Absent, the secret resolves to "" and the specs fail loudly naming
-          # it — they never skip.
-          E2E_INBOX_TOKEN: ${{ secrets.E2E_INBOX_TOKEN }}
-          # J5 raises and lowers the fixture bot wall with this token (0509#4121).
-          FIXTURE_SITE_TOKEN: ${{ secrets.FIXTURE_SITE_TOKEN }}
-
-      - name: Keep the trace when it fails
-        if: failure() || cancelled()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: playwright-report-production
-          path: playwright-report/
-          retention-days: 7
-      - name: Open or update the issue that dispatches the fix
-        if: failure() || cancelled()
-        id: red
-        uses: JasonEtco/create-an-issue@1b14a70e4d8dc185e5cc76d3bec9eab20257b2c5 # v2.9.2
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-          SHA: ${{ github.event.deployment.sha }}
-          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-        with:
-          filename: .github/red-main/e2e-production.md
-          update_existing: true
-          search_existing: open
-      - name: Hand the issue to a worker
-        # A GITHUB_TOKEN label fires no workflow, so dispatch by number;
-        # agent.yml's Gate sizes it. needs-split alone left #4620 unworked.
-        if: (failure() || cancelled()) && steps.red.outputs.number
-        env:
-          GH_TOKEN: ${{ github.token }}
-          N: ${{ steps.red.outputs.number }}
-        run: gh workflow run agent-dispatch.yml --repo "$GITHUB_REPOSITORY" -f issue="$N"
-      - name: Close the issue once this check is green again
-        if: success()
-        env:
-          GH_TOKEN: ${{ github.token }}
-          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-        run: |
-          N=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search '"e2e-production red on main" in:title' --json number --jq '.[0].number // empty')
-          [ -z "$N" ] || gh issue close "$N" --repo "$GITHUB_REPOSITORY" --reason completed --comment "Green again on $RUN_URL."
-
   lighthouse:
     name: lighthouse
     # The performance half of verification (talk 14:30): correctness says the
@@ -340,25 +268,24 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - name: Exchange the Access service token for the CF_Authorization cookie
-        # Access issues the cookie on a token-authenticated request; grep prints
-        # it as NAME=value, which is exactly the GITHUB_ENV line format.
-        run: |
-          curl -sS -o /dev/null -D - -H "CF-Access-Client-Id: $CF_ACCESS_CLIENT_ID" -H "CF-Access-Client-Secret: $CF_ACCESS_CLIENT_SECRET" "$ENVIRONMENT_URL/login" | grep -io 'CF_Authorization=[^;]*' >> "$GITHUB_ENV"
-        env:
-          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
-          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
-          ENVIRONMENT_URL: ${{ github.event.deployment_status.environment_url }}
-      - name: Audit the deployed URL against the budgets
+      - name: Audit the deployed URLs against the budgets
         id: lhci
         uses: treosh/lighthouse-ci-action@3e7e23fb74242897f95c0ba9cabad3d0227b9b18 # v12
         with:
+          # The public pages: no Access, no session, so a deploy sends no
+          # email and needs no secret. /design/landing is the staged homepage
+          # (the landing LCP bar in docs/REBUILD-DONE.md B) and is public until
+          # 0509#4834 moves it to /. The signed-in pages are measured by the
+          # scheduled suite once 0509#6034 lands.
           urls: |
-            ${{ github.event.deployment_status.environment_url }}
+            ${{ github.event.deployment_status.environment_url }}/
+            ${{ github.event.deployment_status.environment_url }}/privacy
+            ${{ github.event.deployment_status.environment_url }}/terms
+            ${{ github.event.deployment_status.environment_url }}/design/landing
           budgetPath: ./lighthouse-budget.json
           configPath: ./lighthouserc.cjs
-          uploadArtifacts: true
-          temporaryPublicStorage: true
+          uploadArtifacts: false
+          temporaryPublicStorage: false
       - name: Open or update the issue that dispatches the fix
         if: failure() || cancelled()
         id: red
@@ -367,7 +294,6 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
           SHA: ${{ github.event.deployment.sha }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-          LINKS: ${{ steps.lhci.outputs.links }}
         with:
           filename: .github/red-main/lighthouse.md
           update_existing: true

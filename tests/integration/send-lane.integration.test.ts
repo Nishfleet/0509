@@ -405,6 +405,23 @@ describe("send lane (0509#3979)", () => {
     expect(await readAttempts()).toHaveLength(0);
   });
 
+  it("reports no_target when the only email target is unverified", async () => {
+    const rec = recorder();
+    await env.DB.prepare(`UPDATE send_target SET is_verified = 0 WHERE id = ?`)
+      .bind(TARGET_ID)
+      .run();
+    const digestId = await seedDigest("pending");
+
+    const result = await deliver(envWith(bindingFor(rec)), message(digestId));
+
+    expect(result.outcome).toBe("no_target");
+    expect(result.attempt_id).toBeNull();
+    expect(result.idempotency_key).toBeNull();
+    expect(rec.sent).toHaveLength(0);
+    expect(await readAttempts()).toHaveLength(0);
+    expect((await digestStatus(digestId))?.status).toBe("pending");
+  });
+
   it("acks a duplicate and retries a failed send from the batch", async () => {
     const digestId = await seedDigest("pending");
     const normal = recorder();

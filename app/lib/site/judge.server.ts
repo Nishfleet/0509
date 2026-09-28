@@ -57,14 +57,12 @@ const D3_KIND: ChoiceQuestion = {
 interface BreakageBand {
   p: number;
   band: "alert" | "check" | "clear";
-  reason: string;
 }
 
 interface NoteworthyBand {
   p: number;
   kind: string;
   band: "publish" | "uncertain" | "discard";
-  reason: string;
 }
 
 export interface ChangeJudgment {
@@ -87,10 +85,6 @@ export interface JudgeInput {
 
 interface HistoryRow {
   summary: string | null;
-}
-
-function bandReason(band: string, p: number): string {
-  return `${band} at p=${String(p)}`;
 }
 
 function breakageBandOf(p: number): BreakageBand["band"] {
@@ -122,7 +116,6 @@ function verdictRow(input: {
   inputHash: string;
   p: number | null;
   choice: string | null;
-  reason: string;
   decidedAt: string;
 }): VerdictRow {
   return {
@@ -133,7 +126,7 @@ function verdictRow(input: {
     entityId: input.entityId,
     p: input.p,
     choice: input.choice,
-    reason: input.reason,
+    reason: null,
     decidedAt: input.decidedAt,
   };
 }
@@ -176,7 +169,6 @@ export async function judgeChange(input: JudgeInput): Promise<ChangeJudgment> {
     }
     const p = breakage.p;
     const band = breakageBandOf(p);
-    const reason = bandReason(band, p);
     rows.push(verdictRow({
       workspaceId: input.workspaceId,
       entityId: input.entityId,
@@ -185,10 +177,9 @@ export async function judgeChange(input: JudgeInput): Promise<ChangeJudgment> {
       inputHash: breakage.inputHash,
       p,
       choice: null,
-      reason,
       decidedAt,
     }));
-    selfBreakage = { p, band, reason };
+    selfBreakage = { p, band };
     if (band !== "clear") {
       await insertVerdicts(rows);
       return { deferred: false, selfBreakage, noteworthy: null };
@@ -212,7 +203,6 @@ export async function judgeChange(input: JudgeInput): Promise<ChangeJudgment> {
   const kind = choice.choice;
 
   const band = noteworthyBandOf(p, kind);
-  const reason = bandReason(band, p);
   rows.push(verdictRow({
     workspaceId: input.workspaceId,
     entityId: input.entityId,
@@ -221,7 +211,6 @@ export async function judgeChange(input: JudgeInput): Promise<ChangeJudgment> {
     inputHash: noul.inputHash,
     p,
     choice: null,
-    reason,
     decidedAt,
   }));
   rows.push(verdictRow({
@@ -232,10 +221,9 @@ export async function judgeChange(input: JudgeInput): Promise<ChangeJudgment> {
     inputHash: choice.inputHash,
     p: null,
     choice: kind,
-    reason,
     decidedAt,
   }));
   await insertVerdicts(rows);
 
-  return { deferred: false, selfBreakage, noteworthy: { p, kind, band, reason } };
+  return { deferred: false, selfBreakage, noteworthy: { p, kind, band } };
 }

@@ -62,6 +62,7 @@ not so you can follow them from memory — lint will tell you.
   (`todo`, `hack`, `for now`, `revisit`, …); the rest is the reviewer's job.
   Put the reason in the commit message, where it is read at the moment it
   matters. Config files and tests are exempt.
+- **No user data in logs or Sentry.** `no-restricted-syntax` (NO_USER_DATA_IN_LOGS). Source: 0509#5776.
 - **Immutability.** New objects, never mutation.
 
 ## Commands
@@ -150,9 +151,12 @@ job-level `if:` that can skip it: they report on every event, and on an event
 with nothing to do they pass through one explicit step. The merge queue tests
 the merge result, so a PR that would redden `main` never lands.
 
-`e2e-production` and `lighthouse` run on `deployment_status` and are
-deliberately **not** required: they cannot run on a pull request, and a required
-check that cannot report blocks the queue forever.
+`lighthouse` runs on `deployment_status` and `e2e-production` (the sharded full
+suite in `e2e-scheduled.yml`, dispatched with `journey=suite`) runs on demand.
+Neither is **required**, deliberately: they cannot run on a pull request, and a
+required check that cannot report blocks the queue forever. The suite is off the
+deploy path because every sign-in in it sends a real email against the Email
+Service daily quota (Nish 2026-09-28).
 
 ## Rules that are not about code
 

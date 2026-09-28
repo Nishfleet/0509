@@ -75,6 +75,19 @@ describe("resolveBrandName", () => {
 		expect(called).toContain("search=Gymshark");
 	});
 
+	it("names itself to Wikidata, which refuses requests with no user agent", async () => {
+		const fetchMock = vi.fn(async (_url: string, init?: RequestInit) =>
+			new Headers(init?.headers).get("user-agent")?.startsWith("FiveToNineBot/")
+				? Response.json({ search: [{ id: "Q56246099", label: "Gymshark" }] })
+				: new Response("Please set a user-agent", { status: 403 }),
+		);
+		vi.stubGlobal("fetch", fetchMock);
+
+		const result = await resolveBrandName(sources({ ldOrganizationName: "", ogSiteName: "", title: "" }), "Gymshark");
+
+		expect(result).toEqual({ name: "Gymshark", source: "wikidata" });
+	});
+
 	it("returns null when Wikidata responds 500", async () => {
 		vi.stubGlobal(
 			"fetch",

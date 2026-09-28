@@ -9,7 +9,7 @@ export interface DiscoveryParams {
 
 const BATCH_LIMIT = 100;
 
-export const WEEKLY_REFRESH_CRON = "0 4 * * 1";
+export { WEEKLY_REFRESH_CRON } from "../cadence";
 
 const ACTIVE = new Set(["queued", "running", "waiting", "waitingForPause"]);
 
