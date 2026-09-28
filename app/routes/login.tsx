@@ -53,6 +53,15 @@ export async function action({ request }: Route.ActionArgs) {
   return data({ error: "We couldn't send the link. Try again in a minute." }, { status: 503 });
 }
 
+function magicLinkSent(
+  actionData: ReturnType<typeof useActionData<typeof action>>,
+): actionData is { sent: { email: string; at: number } } {
+  if (typeof actionData !== "object" || actionData === null) return false;
+  const sent: unknown = Reflect.get(actionData, "sent");
+  if (typeof sent !== "object" || sent === null) return false;
+  return typeof Reflect.get(sent, "email") === "string" && typeof Reflect.get(sent, "at") === "number";
+}
+
 export default function Login() {
   const actionData = useActionData<typeof action>();
   const deleted = useLoaderData<typeof loader>();
@@ -83,7 +92,7 @@ export default function Login() {
     setPasskeyState(code === "AUTH_CANCELLED" ? "idle" : "failed");
   }
 
-  if (actionData && "sent" in actionData && actionData.sent) {
+  if (magicLinkSent(actionData)) {
     return <SignInSent key={actionData.sent.at} email={actionData.sent.email} turnstileSiteKey={deleted.turnstileSiteKey} />;
   }
 
