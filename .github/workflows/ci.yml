@@ -268,64 +268,24 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - name: Exchange the Access service token for the CF_Authorization cookie
-        # Access issues the cookie on a token-authenticated request; grep prints
-        # it as NAME=value, which is exactly the GITHUB_ENV line format.
-        run: |
-          curl -sS -o /dev/null -D - -H "CF-Access-Client-Id: $CF_ACCESS_CLIENT_ID" -H "CF-Access-Client-Secret: $CF_ACCESS_CLIENT_SECRET" "$ENVIRONMENT_URL/login" | grep -io 'CF_Authorization=[^;]*' >> "$GITHUB_ENV"
-        env:
-          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
-          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
-          ENVIRONMENT_URL: ${{ github.event.deployment_status.environment_url }}
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version: 22
-          cache: npm
-      - run: npm ci
-      - name: Sign in a fresh e2e address and record the session cookie
-        # /app needs a better-auth session on top of CF_Authorization or the
-        # audit measures its redirect to /login (0509#5767). The lhci-session
-        # project is J1's magic-link sign-in over the request fixture — no
-        # browser, so no playwright install — and it leaves
-        # BETTER_AUTH_SESSION_COOKIE in the env for lighthouserc.cjs.
-        run: npx playwright test --project=lhci-session
-        env:
-          LHCI_SESSION: "1"
-          PLAYWRIGHT_TEST_BASE_URL: ${{ github.event.deployment_status.environment_url }}
-          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
-          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
-          E2E_INBOX_TOKEN: ${{ secrets.E2E_INBOX_TOKEN }}
       - name: Audit the deployed URLs against the budgets
         id: lhci
         uses: treosh/lighthouse-ci-action@3e7e23fb74242897f95c0ba9cabad3d0227b9b18 # v12
         with:
-          # / is the noindex rebuild notice until #4834 lands; the landing page
-          # it will replace lives at /design/landing today. The signed-in audit
-          # is /onboarding, not /app: a fresh e2e session's /app redirects there
-          # anyway, and Chrome does not carry the injected Cookie header across
-          # the redirect, so the follow loses the session and ends on the
-          # Access login page. Audited directly it returns 200 signed-in.
+          # The public pages: no Access, no session, so a deploy sends no
+          # email and needs no secret. /design/landing is the staged homepage
+          # (the landing LCP bar in docs/REBUILD-DONE.md B) and is public until
+          # 0509#4834 moves it to /. The signed-in pages are measured by the
+          # scheduled suite once 0509#6034 lands.
           urls: |
+            ${{ github.event.deployment_status.environment_url }}/
+            ${{ github.event.deployment_status.environment_url }}/privacy
+            ${{ github.event.deployment_status.environment_url }}/terms
             ${{ github.event.deployment_status.environment_url }}/design/landing
-            ${{ github.event.deployment_status.environment_url }}/login
-            ${{ github.event.deployment_status.environment_url }}/onboarding
           budgetPath: ./lighthouse-budget.json
           configPath: ./lighthouserc.cjs
           uploadArtifacts: false
           temporaryPublicStorage: false
-      - name: Delete the signed-in e2e address
-        # The sign-in mints a real user+workspace+send_target row set on every
-        # deploy and nothing removed it (#5723's deleteCreatedAccount
-        # convention, request-only so the job still needs no browser).
-        # BETTER_AUTH_SESSION_COOKIE and LHCI_EMAIL arrive from GITHUB_ENV;
-        # always() so a failed audit does not leak the address either.
-        if: always()
-        run: npx playwright test --project=lhci-teardown
-        env:
-          LHCI_TEARDOWN: "1"
-          PLAYWRIGHT_TEST_BASE_URL: ${{ github.event.deployment_status.environment_url }}
-          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
-          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
       - name: Open or update the issue that dispatches the fix
         if: failure() || cancelled()
         id: red
