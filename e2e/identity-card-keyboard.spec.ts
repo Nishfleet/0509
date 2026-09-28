@@ -170,11 +170,12 @@ test("the identity card editor saves and closes on Enter, with focus back on the
   await name.press("Enter");
 
   // The controlled `open` prop closing does not fire Popover's onOpenChange, so
-  // Enter reaches onSave through exactly one path. onSave runs inside the
-  // keydown handler, so a second submit added to that same keypress would be
-  // dispatched before this response returns and `watchDraftPosts` would count it
-  // ahead of the read below.
-  await saveResponse;
+  // Enter reaches onSave through exactly one path; onSave runs inside the keydown
+  // handler, so a duplicate submit would be dispatched before this response
+  // returns and `watchDraftPosts` would count it ahead of the read below. The
+  // status is asserted because the trigger text and the hidden input both read
+  // `EditRow`'s local state, so a rejected save leaves them green.
+  expect((await saveResponse).status()).toBe(200);
   expect(draftPosts).toHaveLength(1);
   await expect(name).toHaveCount(0);
   await expect(trigger).toBeFocused();
@@ -202,7 +203,7 @@ test("the identity card editor saves and closes on Escape, with focus back on th
   );
   await about.press("Escape");
 
-  await saveResponse;
+  expect((await saveResponse).status()).toBe(200);
   expect(draftPosts).toHaveLength(1);
   await expect(about).toHaveCount(0);
   await expect(trigger).toBeFocused();
