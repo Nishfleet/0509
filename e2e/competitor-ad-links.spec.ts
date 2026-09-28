@@ -165,7 +165,7 @@ test("the competitor header's two ad-library links open that brand's live ads", 
   // the Places nav first, then this link.
   await page.goto("/app/competitors");
   const chip = page.getByRole("list", { name: "Competitors" }).getByRole("link").first();
-  for (let i = 0; i < 12; i += 1) {
+  for (let i = 0; i < 60; i += 1) {
     if (await chip.evaluate((el) => el === document.activeElement)) break;
     await page.keyboard.press("Tab");
   }
