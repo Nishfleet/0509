@@ -30,11 +30,7 @@ test.skip(
 // `w-20 shrink-0` label and the "we'll fill this on the first crawl" line
 // beside the `flex-1` trigger, and at 390 the trigger measures 0px wide, so
 // Playwright never sees it. That squeeze is on `origin/main` and is filed as
-// its own issue, not this packet's slice.
-test.skip(
-  ({ viewport }) => viewport?.width !== 1440,
-  "the unfound card's 0px trigger at 390 is filed separately; the keyboard contract does not vary by viewport",
-);
+// its own issue (0509#5557), not this packet's slice.
 
 function authSecret(): string {
   const line = readFileSync(".dev.vars.example", "utf8")
@@ -151,6 +147,10 @@ function watchDraftPosts(page: Page): string[] {
 }
 
 test("the identity card editor saves and closes on Enter, with focus back on the trigger", async ({ page }, testInfo) => {
+  test.fail(
+    testInfo.project.name === "phone-390",
+    "the unfound card's 0px trigger at 390 is filed separately; the keyboard contract does not vary by viewport, 0509#5557",
+  );
   test.setTimeout(90_000);
   const watched = watchConsole(page);
   const draftPosts = watchDraftPosts(page);
@@ -181,6 +181,10 @@ test("the identity card editor saves and closes on Enter, with focus back on the
 });
 
 test("the identity card editor saves and closes on Escape, with focus back on the trigger", async ({ page }, testInfo) => {
+  test.fail(
+    testInfo.project.name === "phone-390",
+    "the unfound card's 0px trigger at 390 is filed separately; the keyboard contract does not vary by viewport, 0509#5557",
+  );
   test.setTimeout(90_000);
   const watched = watchConsole(page);
   const draftPosts = watchDraftPosts(page);
