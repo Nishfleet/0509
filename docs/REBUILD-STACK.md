@@ -167,7 +167,7 @@ npx auth@1.7.5 generate     # emit the schema
 npx auth@1.7.5 migrate      # apply it (Kysely adapters only)
 ```
 
-**Pin the CLI version; never `@latest`.** better-auth validates the schema against the live database **in production** (§2.3, point 3), so the generator and the library have to agree by construction. `@latest` silently drifts ahead of the installed `better-auth` on some future run, emits a schema the running library does not expect, and the first request after deploy fails that validation check. `auth@1.7.5` matches `better-auth` 1.7.5 exactly and moves only when that does.
+**Pin the CLI version; never `@latest`.** `@latest` silently drifts ahead of the installed `better-auth` on some future run and emits a schema the running library does not expect — and with runtime schema validation off in production (§2.3, point 3), that drift no longer fails loudly on the first request; it surfaces as the first touched query failing. `auth@1.7.5` matches `better-auth` 1.7.5 exactly and moves only when that does.
 
 Cited: <https://www.better-auth.com/docs/concepts/cli>, <https://www.better-auth.com/docs/adapters/sqlite> (both read 2026-09-21). `generate` flags: `-c/--cwd`, `--output`, `--config`, `-y/--yes`, `--adapter` (`prisma|drizzle|kysely`), `--dialect`. Other commands: `create-admin`, `init`, `upgrade`, `info`, `secret`.
 
@@ -228,7 +228,7 @@ Three things the docs make mandatory and are easy to miss:
 
 1. **`nodejs_compat` is required.** "Better Auth uses `AsyncLocalStorage`." — <https://www.better-auth.com/docs/integrations/hono> §Cloudflare Workers. It is on by default for `compatibility_date` ≥ `2026-08-04` (§5, platform fact 2), so the scaffold already satisfies it — **set it explicitly anyway**, because the Vitest plugin injects it into tests regardless and an implicit dependency is exactly how a green test suite ships a broken deploy.
 2. **`advanced.database.joins: true`** — "The Kysely SQLite dialect supports joins out of the box since version `1.4.0` … seeing upwards of 2x to 3x performance improvements depending on database latency." (<https://www.better-auth.com/docs/adapters/sqlite>). Off by default. `/get-session` runs on every request; this is the single cheapest latency win in the auth path.
-3. **Schema validation runs in production.** "Validation is enabled by default, including in production … Requests await the same check and fail if the schema does not match" (<https://www.better-auth.com/docs/concepts/database>). Kysely "reads live database metadata and needs database access during initialization" — so a drift between `0001_rebuild.sql` and better-auth's expectations is a **runtime 500 on first request**, not a startup warning. `REBUILD-SCHEMA.md` already carries the four auth tables verbatim; that is why.
+3. **Schema validation is stock-on but deliberately off here.** "Validation is enabled by default, including in production" (<https://www.better-auth.com/docs/concepts/database>) — and the default check cost ~6.5M D1 rows a day, one `sqlite_master`/`pragma_table_info` burst per `createAuth` call (0509#5721), so `createAuth` sets `advanced.database.validateSchema: false`. What still catches a drift between `0001_rebuild.sql` and better-auth's expectations: `tests/integration/auth-schema-check.integration.test.ts` builds one `createAuth` with the check explicitly on — better-auth's router awaits it in `onRequest` before any endpoint logic, so a column-level drift against `getExpectedSchema` throws `SchemaMismatchError` there, in CI, at zero production cost — `tests/integration/schema.integration.test.ts` pins the table count and the six auth tables by name, and the auth integration suite (`apikey`, `magic-link-ttl`, `sign-in-*`) drives the plugins' real write/read queries against real D1. `REBUILD-SCHEMA.md` still carries the four auth tables verbatim for that reason.
 
 ### 2.4 Generating the schema against D1
 
@@ -277,6 +277,14 @@ Core (<https://www.better-auth.com/docs/concepts/database>, field lists read fro
 **passkey adds exactly one table**, `passkey` (<https://www.better-auth.com/docs/plugins/passkey>): `id`, `name?`, `publicKey`, `userId` → `user.id`, `credentialID`, `counter`, `deviceType`, `backedUp`, `transports?`, `createdAt`. It moved out of the main package in 1.7 — `npm install @better-auth/passkey`, `import { passkey } from "@better-auth/passkey"`, client `@better-auth/passkey/client`. It pulls `@simplewebauthn/server` ^13.3.1 and `@simplewebauthn/browser` ^13.3.0, which is the reference WebAuthn implementation, not a hand-roll.
 
 Total for our set: **five tables**, four core plus `passkey`.
+
+### 2.6 Access JWT verification is `jose`, not a hand-rolled verifier
+
+Cloudflare's own "Validate JWTs" guide uses `jose` (`createRemoteJWKSet` + `jwtVerify`): <https://developers.cloudflare.com/cloudflare-one/identity/authorization-cookie/validating-json/> (301 to <https://developers.cloudflare.com/cloudflare-one/access-controls/applications/http-apps/authorization-cookie/validating-json/>, read 2026-09-28). The page names the `jose` NPM package and the JWKS URL `${teamdomain}/cdn-cgi/access/certs`.
+
+**Rejected:** the hand-rolled RS256 verifier in `app/lib/auth/access-preclearance.server.ts` (#5638, #5641) — `crypto.subtle`, a module-level JWKS map, and unsigned `iss`/`aud`/`exp` checks before the signature. An unknown `kid` forced a fresh JWKS fetch with no cooldown, so a forged token with a random `kid` cost one subrequest per request.
+
+`jose` **6.2.12**, exact pin (`npm install --save-exact jose@6.2.12`). Already a transitive of `better-auth`; the Access path imports the direct pin. `createRemoteJWKSet` refetches an unknown `kid` only after `cooldownDuration` (default 30s).
 
 ---
 
@@ -1053,6 +1061,7 @@ Every capability the rebuild needs → the one thing that provides it → the ve
 | Worker runtime, deploy, types | `wrangler` (`wrangler types`) | 4.135.0 |
 | Scaffold | `create-cloudflare --framework=react-router` | 2.72.9 |
 | Auth (sessions, magic link) | `better-auth` | 1.7.5 |
+| Access service-token JWT | `jose` (`createRemoteJWKSet` + `jwtVerify`) | 6.2.12 |
 | Auth ↔ D1 | better-auth's built-in D1 Kysely dialect — binding passed directly | bundled in 1.7.5 |
 | Passkeys | `@better-auth/passkey` (SimpleWebAuthn) | 1.7.5 |
 | Auth schema generation | `npx auth@1.7.5 generate` against an empty local SQLite (§2.4) | `auth` 1.7.5, pinned |
@@ -1091,7 +1100,7 @@ Every capability the rebuild needs → the one thing that provides it → the ve
 | OpenAPI document | `zod-openapi` (samchungy) | 6.0.2 |
 | Agent-readable docs | `/llms.txt` + `Accept: text/markdown` + `rel="alternate"` | spec v2 (2026-08-10) |
 
-**Installed beyond the scaffold:** `better-auth` ^1.7.5, `@better-auth/passkey` ^1.7.5, `@better-auth/api-key` ^1.7.5, `zod` ^4.6.5 (also a better-auth peer), `@cloudflare/puppeteer` ^1.4.0, `@base-ui/react` 1.8.0, `clsx` ^2.1.1, `tailwind-merge` ^3.7.0, `class-variance-authority` ^0.7.1, `sonner` ^2.0.8, `diff` 9.0.0, `lucide-react` 1.47.0, `date-fns` 4.4.0, `@date-fns/tz` 1.5.0, `uplot` 1.6.32, `uplot-react` 1.2.4. **Not yet installed**, because the engine that needs it has not shipped: `@extractus/feed-extractor` 8.0.3 (`fast-xml-parser` 5.11.1 comes with it). Do not delete that row. `@modelcontextprotocol/server` 2.1.0, `@cloudflare/workers-oauth-provider` 0.10.4 and `zod-openapi` 6.0.2 shipped with the agent surface (2026-09-24); `uplot` 1.6.32 and `uplot-react` 1.2.4 shipped with the Home four-week chart (#4055). `agents` is rejected in §7.1. Platform rows have no package. `create-cloudflare`, `shadcn`, and `auth@1.7.5` are npx-only and are not missing dependencies.
+**Installed beyond the scaffold:** `better-auth` ^1.7.5, `@better-auth/passkey` ^1.7.5, `@better-auth/api-key` ^1.7.5, `jose` 6.2.12 (Access JWT; already a better-auth transitive), `zod` ^4.6.5 (also a better-auth peer), `@cloudflare/puppeteer` ^1.4.0, `@base-ui/react` 1.8.0, `clsx` ^2.1.1, `tailwind-merge` ^3.7.0, `class-variance-authority` ^0.7.1, `sonner` ^2.0.8, `diff` 9.0.0, `lucide-react` 1.47.0, `date-fns` 4.4.0, `@date-fns/tz` 1.5.0, `uplot` 1.6.32, `uplot-react` 1.2.4. **Not yet installed**, because the engine that needs it has not shipped: `@extractus/feed-extractor` 8.0.3 (`fast-xml-parser` 5.11.1 comes with it). Do not delete that row. `@modelcontextprotocol/server` 2.1.0, `@cloudflare/workers-oauth-provider` 0.10.4 and `zod-openapi` 6.0.2 shipped with the agent surface (2026-09-24); `uplot` 1.6.32 and `uplot-react` 1.2.4 shipped with the Home four-week chart (#4055). `agents` is rejected in §7.1. Platform rows have no package. `create-cloudflare`, `shadcn`, and `auth@1.7.5` are npx-only and are not missing dependencies.
 
 ---
 
@@ -1113,6 +1122,7 @@ The version in this table is the `package.json` specifier. An earlier section of
 | `class-variance-authority` | ^0.7.1 | §3.2 | Variant map the badge component imports | A hand-written variant map | 0.7.1 |
 | `clsx` | ^2.1.1 | §3.2 | `cn()` in `app/lib/utils.ts` | String concatenation | 2.1.1 |
 | `isbot` | ^5.1.36 | §9 | React Router's server runtime uses it to tell a bot request from a browser request. `react-router typegen` writes `isbot` back into `package.json` if the direct dependency is missing | Dropping it. Typegen then inserts `isbot@^5`, a looser pin, and `@react-router/dev` already depends on a copy of its own | 5.2.2 |
+| `jose` | 6.2.12 | §2.6, #5830 | Access JWT via `createRemoteJWKSet` + `jwtVerify`. Cloudflare's Validate JWTs guide: <https://developers.cloudflare.com/cloudflare-one/identity/authorization-cookie/validating-json/> | The hand-rolled RS256 verifier (`crypto.subtle`, unsigned claims before the signature, unknown `kid` refetch with no cooldown) | 6.2.12 |
 | `react` | ^19.2.8 | §1.1 | UI runtime the scaffold emits | Preact. React Router 8's types are React | 19.3.0 |
 | `react-dom` | ^19.2.8 | §1.1 | Client renderer. Unit tests call `react-dom/server` | A second renderer | 19.3.0 |
 | `react-router` | ^8.4.0 | §1, §8 | Framework mode, SSR, routing | `@react-router/node` and `@react-router/serve`. C3 deletes both | 8.4.0 |
