@@ -1,7 +1,15 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
 
-import { requireInboxToken, signInWithMagicLink } from "./inbox";
+import { deleteCreatedAccount, requireInboxToken, signInWithMagicLink } from "./inbox";
+
+let createdEmail = "";
+test.afterEach(async ({ page }, testInfo) => {
+  if (createdEmail === "") return;
+  testInfo.setTimeout(testInfo.timeout + 60_000);
+  await deleteCreatedAccount(page, createdEmail);
+  createdEmail = "";
+});
 
 // The Alerts page measured at each shape the product ships, the same production
 // lane and the same reason as e2e/a11y-competitors.spec.ts and
@@ -28,6 +36,7 @@ test("the Alerts page passes axe at WCAG 2.2 AA and is keyboard-operable at 1440
   test.setTimeout(180_000);
   const token = requireInboxToken();
   const email = `e2e+${crypto.randomUUID().replaceAll("-", "").slice(0, 12)}@0509.io`;
+  createdEmail = email;
   await signInWithMagicLink(page, email, token);
 
   for (const viewport of [

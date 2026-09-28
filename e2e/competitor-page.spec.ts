@@ -1,6 +1,14 @@
 import { expect, test } from "@playwright/test";
 
-import { consoleFailures, requireInboxToken, signInWithMagicLink, watchConsole } from "./inbox";
+import { consoleFailures, deleteCreatedAccount, requireInboxToken, signInWithMagicLink, watchConsole } from "./inbox";
+
+let createdEmail = "";
+test.afterEach(async ({ page }, testInfo) => {
+  if (createdEmail === "") return;
+  testInfo.setTimeout(testInfo.timeout + 60_000);
+  await deleteCreatedAccount(page, createdEmail);
+  createdEmail = "";
+});
 
 test("a competitor page sends a signed-out visitor to the login page", async ({ request }) => {
   const response = await request.get("/app/competitors/ent-anything", { maxRedirects: 0 });
@@ -35,6 +43,7 @@ test("a watched competitor page leads with the switch and its consequence, and t
   const watched = watchConsole(page);
 
   const email = `e2e+${crypto.randomUUID().replaceAll("-", "").slice(0, 12)}@0509.io`;
+  createdEmail = email;
   await signInWithMagicLink(page, email, requireInboxToken());
 
   await page.goto("/onboarding");

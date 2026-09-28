@@ -1,6 +1,14 @@
 import { expect, test, type Page } from "@playwright/test";
 
-import { consoleFailures, requireInboxToken, signInWithMagicLink, watchConsole } from "./inbox";
+import { consoleFailures, deleteCreatedAccount, requireInboxToken, signInWithMagicLink, watchConsole } from "./inbox";
+
+let createdEmail = "";
+test.afterEach(async ({ page }, testInfo) => {
+  if (createdEmail === "") return;
+  testInfo.setTimeout(testInfo.timeout + 60_000);
+  await deleteCreatedAccount(page, createdEmail);
+  createdEmail = "";
+});
 
 // Filter vocabulary is the feed's own (app/lib/developments.ts FEED_FILTERS);
 // the counts are live and asserted only as numerals — a just-watched
@@ -36,6 +44,7 @@ test("the developments feed filters by kind and keeps its layout across filters"
   const watched = watchConsole(page);
 
   const email = `e2e+${crypto.randomUUID().replaceAll("-", "").slice(0, 12)}@0509.io`;
+  createdEmail = email;
   await signInWithMagicLink(page, email, requireInboxToken());
 
   await page.goto("/onboarding");
