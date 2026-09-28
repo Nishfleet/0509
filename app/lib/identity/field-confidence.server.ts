@@ -99,7 +99,7 @@ export async function reviewFields(
   console.log(
     JSON.stringify({
       event: "identity-field-confidence",
-      subject: subject.registrable,
+      workspaceId,
       verdicts: verdicts.map((verdict) => ({
         questionId: verdict.questionId,
         inputHash: verdict.inputHash,
