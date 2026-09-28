@@ -294,7 +294,7 @@ export async function signInWithMagicLink(
   page: Page,
   email: string,
   token: string,
-  landing: string | RegExp = /\/onboarding/,
+  landing = /\/onboarding/,
 ): Promise<{ link: string; status: number }> {
   await page.goto("/login");
   await page.locator('input[name="email"]').fill(email);
