@@ -1,5 +1,7 @@
 import { expect, test } from "@playwright/test";
 
+import { expectFaceLoaded } from "./fonts";
+
 // The homepage, staged at /design/landing behind the staff gate until launch;
 // / keeps the static rebuild notice (Nish, 2026-09-24). What is asserted is the
 // contract: section order, one headline, the priced action and where it goes,
@@ -186,26 +188,9 @@ test("the hero's first viewport holds the outcome and the one priced input", asy
   expect(requested).toContain("instrument-sans-latin.woff2");
   expect(requested).toContain("ibm-plex-mono");
   expect(requested).not.toContain("bricolage-grotesque-latin");
-  await expect
-    .poll(() =>
-      page.evaluate(() => {
-        function faceLoaded(family: string, weight: number): boolean {
-          return Array.from(document.fonts).some((face) => {
-            if (face.family.replaceAll('"', "") !== family || face.status !== "loaded") {
-              return false;
-            }
-            const [low, high] = face.weight.split(" ").map(Number);
-            return weight >= low && weight <= (high ?? low);
-          });
-        }
-        return {
-          display: faceLoaded("Bricolage Grotesque", 800),
-          sans: faceLoaded("Instrument Sans", 400),
-          mono: faceLoaded("IBM Plex Mono", 400),
-        };
-      }),
-    )
-    .toEqual({ display: true, sans: true, mono: true });
+  await expectFaceLoaded(page, "Bricolage Grotesque", 800);
+  await expectFaceLoaded(page, "Instrument Sans", 400);
+  await expectFaceLoaded(page, "IBM Plex Mono", 400);
   await expect(page.locator('link[rel="preload"][href="/fonts/bricolage-hero.woff2"]')).toHaveCount(1);
   await expect(page.locator('link[rel="modulepreload"]')).toHaveCount(0);
 

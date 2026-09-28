@@ -1,5 +1,7 @@
 import { expect, test } from "@playwright/test";
 
+import { expectFaceLoaded } from "./fonts";
+
 // The smallest suite that is still an honest answer to "does the thing we are
 // about to ship start and serve". It runs twice: against the built Worker on
 // every PR, and against production on every successful deployment.
@@ -78,15 +80,7 @@ test("the landing headline is the largest paint and uses the brand display face"
   );
   expect(lcpTag).toBe("H1");
 
-  await expect.poll(() =>
-    page.evaluate(
-      () =>
-        Array.from(document.fonts).some(
-          (face) =>
-            face.family.replaceAll('"', "") === "Bricolage Grotesque" && face.status === "loaded",
-        ),
-    ),
-  ).toBe(true);
+  await expectFaceLoaded(page, "Bricolage Grotesque");
 
   const headlineFamily = await page
     .getByRole("heading", { level: 1 })
