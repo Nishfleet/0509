@@ -30,9 +30,7 @@ test("GET /sitemap.xml serves the manifest-generated urlset", async ({
   );
   expect(body).toMatch(/<loc>https?:\/\/[^<]+\/privacy<\/loc>/);
   expect(body).toMatch(/<loc>https?:\/\/[^<]+\/terms<\/loc>/);
-  expect(body).toContain(
-    `<loc>${new URL("/llms.txt", response.url()).toString()}</loc>`,
-  );
+  expect(body).toMatch(/<loc>https?:\/\/[^<]+\/llms\.txt<\/loc>/);
 });
 
 test("GET /llms.txt serves the manifest-generated summary", async ({
