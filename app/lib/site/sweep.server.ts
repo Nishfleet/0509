@@ -42,7 +42,8 @@ function homeUrl(entity: { id: string; domain: string; url: string | null }): st
     entered !== null &&
     entered.ok &&
     entered.subject.kind === "domain" &&
-    entered.subject.registrable === entity.domain
+    entered.subject.registrable === entity.domain &&
+    entered.subject.url !== null
   ) {
     return entered.subject.url;
   }

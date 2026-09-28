@@ -382,10 +382,20 @@ describe("home url resolution", () => {
         identityJson: '{"kind":"domain","url":"https://adidas.com/"}',
       },
     ]);
+    const lines: string[] = [];
+    const spy = vi.spyOn(console, "log").mockImplementation((line) => {
+      lines.push(String(line));
+    });
+    try {
+      await ensureHomePages(NOW);
 
-    await ensureHomePages(NOW);
-
-    expect((await homePageUrls()).get("ent-other")).toBe("https://nike.com/");
+      expect((await homePageUrls()).get("ent-other")).toBe("https://nike.com/");
+      expect(lines.map((line) => JSON.parse(line)).filter((line) => line.event === "site.identity_url_ignored")).toEqual([
+        { event: "site.identity_url_ignored", entityId: "ent-other", domain: "nike.com", url: "https://adidas.com/" },
+      ]);
+    } finally {
+      spy.mockRestore();
+    }
   });
 
   it("watches the entered host for the site.web source", async () => {

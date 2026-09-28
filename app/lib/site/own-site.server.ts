@@ -40,7 +40,7 @@ async function fetchStatus(url: string): Promise<Response | Error> {
   }
 }
 
-function wwwVariant(url: string): string {
+function alternateHost(url: string): string {
   const parsed = new URL(url);
   const host = parsed.hostname.startsWith("www.") ? parsed.hostname.slice(4) : `www.${parsed.hostname}`;
   return `${parsed.protocol}//${host}${parsed.pathname}`;
@@ -49,7 +49,7 @@ function wwwVariant(url: string): string {
 export async function probeOwnSite(url: string): Promise<OwnSiteHealth> {
   if (!(await robotsAllows(url))) return { state: "unknown", reason: "robots" };
   const first = await fetchStatus(url);
-  const response = first instanceof Error ? await fetchStatus(wwwVariant(url)) : first;
+  const response = first instanceof Error ? await fetchStatus(alternateHost(url)) : first;
   if (response instanceof Error) return { state: "broken", kind: "not loading" };
   if (response.headers.get("cf-mitigated") === "challenge") return { state: "unknown", reason: "challenge" };
   if (response.status >= 500 || response.status === 404 || response.status === 410) {
