@@ -11,13 +11,18 @@ on:
       journey:
         description: Journey to run now
         type: choice
-        options: [j12]
+        options: [none, j12]
+        default: none
+      spec:
+        description: 'One spec or a filter to run now against https://0509.io, e.g. e2e/j3-onboard-domain.spec.ts (0509 sign-up verdict, 2026-09-28)'
+        type: string
+        default: ''
 
 permissions:
   contents: read
 
 concurrency:
-  group: e2e-scheduled-${{ inputs.journey || 'j12' }}
+  group: e2e-scheduled-${{ inputs.spec && 'spec' || 'j12' }}
   cancel-in-progress: false
 
 jobs:
@@ -48,5 +53,35 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: playwright-report-j12
+          path: playwright-report/
+          retention-days: 7
+  spec:
+    name: spec
+    if: inputs.spec != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - name: Run the spec against production
+        run: npm run e2e -- "$SPEC" --project=desktop-1440 --retries=0 --reporter=github,list
+        env:
+          SPEC: ${{ inputs.spec }}
+          PLAYWRIGHT_TEST_BASE_URL: https://0509.io
+          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+          E2E_INBOX_TOKEN: ${{ secrets.E2E_INBOX_TOKEN }}
+      - name: Keep the trace when it fails
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: playwright-report-spec
           path: playwright-report/
           retention-days: 7
