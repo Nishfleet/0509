@@ -1,0 +1,35 @@
+name: vps-access-token
+
+# Run this once after every Cloudflare Access service-token rotation (the agents
+# token: Zero Trust > Access controls > Service credentials > Refresh). It writes
+# the repo secrets CF_ACCESS_CLIENT_ID and CF_ACCESS_CLIENT_SECRET into
+# ~/.config/cloudflare/access-0509-agents.env on the fleet host, which is where
+# .agents/skills/verify/SKILL.md tells workers to read them from, so a rotated
+# token never has to be pasted into a chat. Manual, main only, not a required
+# check. It prints "updated" and the file mode, never a value.
+on:
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  write:
+    name: write
+    if: github.ref == 'refs/heads/main'
+    runs-on: [self-hosted, fleet-ci]
+    timeout-minutes: 5
+    env:
+      CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+      CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+    steps:
+      - name: Replace access-0509-agents.env
+        shell: bash
+        run: |
+          umask 077
+          dir="$HOME/.config/cloudflare"
+          mkdir -p "$dir"
+          tmp=$(mktemp "$dir/access-0509-agents.env.XXXXXX")
+          printf 'CF_ACCESS_CLIENT_ID=%s\nCF_ACCESS_CLIENT_SECRET=%s\n' "$CF_ACCESS_CLIENT_ID" "$CF_ACCESS_CLIENT_SECRET" > "$tmp"
+          mv "$tmp" "$dir/access-0509-agents.env"
+          echo updated
+          stat -c '%a' "$dir/access-0509-agents.env"
