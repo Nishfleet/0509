@@ -26,9 +26,10 @@ export async function attemptSiteFill(
 ): Promise<"filled" | "pending"> {
   const normalised = normaliseSubject(homepageUrl);
   if (!normalised.ok) return "pending";
-  const { card, reached } = await readSiteCard(normalised.subject, () =>
-    takeBrowserEscalation(workspaceId, entityId, new Date().toISOString().slice(0, 10)),
-  );
+  const { subject } = normalised;
+  const mayEscalate = () =>
+    takeBrowserEscalation(workspaceId, subject.registrable, new Date().toISOString().slice(0, 10));
+  const { card, reached } = await readSiteCard(subject, mayEscalate);
   if (!reached) return "pending";
   const edited = await readEditedFields(entityId);
   const filled = await fillSelfSiteFields({

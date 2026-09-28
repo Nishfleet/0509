@@ -255,7 +255,10 @@ describe("startCard", () => {
     expect(site.review).toEqual({ name: "fill", description: "fill", socials: "empty" });
     expect(stub.calls).toEqual(["https://botgatedbudget.com/"]);
     let left = 0;
-    while (await takeBrowserEscalation("ws-1", subject.registrable, day)) left += 1;
+    for (let attempt = 0; attempt < 16; attempt += 1) {
+      if (!(await takeBrowserEscalation("ws-1", subject.registrable, day))) break;
+      left += 1;
+    }
     expect(left).toBe(3);
   });
 
@@ -341,6 +344,24 @@ describe("confirmCard", () => {
       .all<{ role: string; role_decided_for_hash: string }>();
     expect(results).toHaveLength(expected);
     for (const page of results) expect(page.role).toBe("pricing");
+  });
+
+  it("spends the brand's browser budget on the brand, and stops escalating once it is gone", async () => {
+    const domain = "botgatedconfirm.com";
+    const day = new Date().toISOString().slice(0, 10);
+    for (let attempt = 0; attempt < 4; attempt += 1) {
+      expect(await takeBrowserEscalation("ws-1", domain, day)).toBe(true);
+    }
+    stubWeb(() => new Response("blocked", { status: 403 }));
+    const stub = stubBrowser(BOT_GATED_HTML);
+    browser = stub;
+    installBrowser();
+
+    expect(
+      await confirmCard("ws-1", "u1", form({ subject: domain, name: "Botgated Confirm", description: "" })),
+    ).toBe(true);
+
+    expect(stub.calls).toEqual([]);
   });
 
   it("keeps the confirm and records no role when Jev is down", async () => {
