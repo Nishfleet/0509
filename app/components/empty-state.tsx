@@ -73,10 +73,9 @@ export interface HomeSecondZero {
 }
 
 export function homeSecondZero(now: Date): HomeSecondZero {
-  const firstRead = shift(now, 1);
   const brief = shift(now, 6);
   return {
-    sentence: `We're gathering the first week. Your first read-this-first lands by ${clock(firstRead)} today; the brief comes ${weekday(brief)} ${clock(brief)}.`,
+    sentence: `We're gathering the first week. Your first read-this-first comes with the brief on ${weekday(brief)} ${clock(brief)}.`,
     action: { kind: "link", label: "Add a competitor", href: "/app/competitors" },
   };
 }
@@ -114,7 +113,7 @@ export function evidenceEmpty(paths: readonly string[], lastCheckedAt: Date): { 
 export function competitorJustAdded(): { sentence: string } {
   return {
     sentence:
-      "Watching from today. The first ads and mentions land within the hour; site changes need a second snapshot, so the first mark comes tomorrow.",
+      "Watching from today. The first mentions land in the nightly sweep; site changes need a second snapshot, so the first mark comes tomorrow.",
   };
 }
 
