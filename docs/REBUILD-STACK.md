@@ -167,7 +167,7 @@ npx auth@1.7.5 generate     # emit the schema
 npx auth@1.7.5 migrate      # apply it (Kysely adapters only)
 ```
 
-**Pin the CLI version; never `@latest`.** better-auth validates the schema against the live database **in production** (§2.3, point 3), so the generator and the library have to agree by construction. `@latest` silently drifts ahead of the installed `better-auth` on some future run, emits a schema the running library does not expect, and the first request after deploy fails that validation check. `auth@1.7.5` matches `better-auth` 1.7.5 exactly and moves only when that does.
+**Pin the CLI version; never `@latest`.** `@latest` silently drifts ahead of the installed `better-auth` on some future run and emits a schema the running library does not expect — and with runtime schema validation off in production (§2.3, point 3), that drift no longer fails loudly on the first request; it surfaces as the first touched query failing. `auth@1.7.5` matches `better-auth` 1.7.5 exactly and moves only when that does.
 
 Cited: <https://www.better-auth.com/docs/concepts/cli>, <https://www.better-auth.com/docs/adapters/sqlite> (both read 2026-09-21). `generate` flags: `-c/--cwd`, `--output`, `--config`, `-y/--yes`, `--adapter` (`prisma|drizzle|kysely`), `--dialect`. Other commands: `create-admin`, `init`, `upgrade`, `info`, `secret`.
 
@@ -228,7 +228,7 @@ Three things the docs make mandatory and are easy to miss:
 
 1. **`nodejs_compat` is required.** "Better Auth uses `AsyncLocalStorage`." — <https://www.better-auth.com/docs/integrations/hono> §Cloudflare Workers. It is on by default for `compatibility_date` ≥ `2026-08-04` (§5, platform fact 2), so the scaffold already satisfies it — **set it explicitly anyway**, because the Vitest plugin injects it into tests regardless and an implicit dependency is exactly how a green test suite ships a broken deploy.
 2. **`advanced.database.joins: true`** — "The Kysely SQLite dialect supports joins out of the box since version `1.4.0` … seeing upwards of 2x to 3x performance improvements depending on database latency." (<https://www.better-auth.com/docs/adapters/sqlite>). Off by default. `/get-session` runs on every request; this is the single cheapest latency win in the auth path.
-3. **Schema validation runs in production.** "Validation is enabled by default, including in production … Requests await the same check and fail if the schema does not match" (<https://www.better-auth.com/docs/concepts/database>). Kysely "reads live database metadata and needs database access during initialization" — so a drift between `0001_rebuild.sql` and better-auth's expectations is a **runtime 500 on first request**, not a startup warning. `REBUILD-SCHEMA.md` already carries the four auth tables verbatim; that is why.
+3. **Schema validation is stock-on but deliberately off here.** "Validation is enabled by default, including in production" (<https://www.better-auth.com/docs/concepts/database>) — and the default check cost ~6.5M D1 rows a day, one `sqlite_master`/`pragma_table_info` burst per `createAuth` call (0509#5721), so `createAuth` sets `advanced.database.validateSchema: false`. What still catches a drift between `0001_rebuild.sql` and better-auth's expectations: `tests/integration/auth-schema-check.integration.test.ts` builds one `createAuth` with the check explicitly on — better-auth's router awaits it in `onRequest` before any endpoint logic, so a column-level drift against `getExpectedSchema` throws `SchemaMismatchError` there, in CI, at zero production cost — `tests/integration/schema.integration.test.ts` pins the table count and the six auth tables by name, and the auth integration suite (`apikey`, `magic-link-ttl`, `sign-in-*`) drives the plugins' real write/read queries against real D1. `REBUILD-SCHEMA.md` still carries the four auth tables verbatim for that reason.
 
 ### 2.4 Generating the schema against D1
 
@@ -1111,6 +1111,8 @@ The version in this table is the `package.json` specifier. An earlier section of
 | Package | Specifier | Where it is named | Why this one | Rejected | Lock |
 |---|---|---|---|---|---|
 | `@axe-core/playwright` | ^4.13.0 | §6.6, #4149 | WCAG 2.2 AA scan inside Playwright specs. Doc: <https://playwright.dev/docs/accessibility-testing> | `axe-playwright` (third-party wrapper), Lighthouse's accessibility category (a subset of axe, per-URL, cannot sign in), hand-written contrast checks | 4.13.0 |
+| `@date-fns/tz` | 1.5.0 | §5.9, #4004 | `TZDate` for brief-schedule arithmetic in the workspace's zone, 1.97 KB gzip | `luxon`, `dayjs` plugins, `Temporal` (not on Workers) | 1.5.0 |
+| `@extractus/feed-extractor` | 8.0.3 | §5.3, #4051 | The one RSS/Atom/RDF parser, `workers/sources/mentions/feed.ts` | `rss-parser` (Node HTTP at load), `feedparser` | 8.0.3 |
 | `@base-ui/react` | 1.8.0 | §3.2 | Badge and avatar import it | Radix. The copied shadcn files import Base UI | 1.8.0 |
 | `@better-auth/api-key` | ^1.7.5 | §7.3 | API keys, quotas, and expiry ship in this plugin | A hand-written key table | 1.7.5 |
 | `@better-auth/passkey` | ^1.7.5 | §2.5 | Passkeys. The plugin pulls SimpleWebAuthn | A hand-rolled WebAuthn | 1.7.5 |
@@ -1120,12 +1122,15 @@ The version in this table is the `package.json` specifier. An earlier section of
 | `@cloudflare/puppeteer` | ^1.4.0 | §4.3 | Session leg of the ads transport (`connect`, `launch`, `sessions`) | `@cloudflare/playwright`, the other session SDK. This file imports puppeteer | 1.4.0 |
 | `better-auth` | ^1.7.5 | §2 | Sessions and magic link on D1 | A custom session table, `kysely-d1`, `better-auth-cloudflare` | 1.7.5 |
 | `class-variance-authority` | ^0.7.1 | §3.2 | Variant map the badge component imports | A hand-written variant map | 0.7.1 |
+| `date-fns` | 4.4.0 | §5.9, #4004 | Zone-aware date arithmetic with `@date-fns/tz`, tree-shaken | `luxon` (no tree-shaking), `dayjs` | 4.4.0 |
+| `diff` | 9.0.0 | §5.2, #4403 | `diffWords` / `structuredPatch` in `app/lib/site/diff.ts` | `fast-diff` (characters only), `diff-match-patch` | 9.0.0 |
 | `clsx` | ^2.1.1 | §3.2 | `cn()` in `app/lib/utils.ts` | String concatenation | 2.1.1 |
 | `isbot` | ^5.1.36 | §9 | React Router's server runtime uses it to tell a bot request from a browser request. `react-router typegen` writes `isbot` back into `package.json` if the direct dependency is missing | Dropping it. Typegen then inserts `isbot@^5`, a looser pin, and `@react-router/dev` already depends on a copy of its own | 5.2.2 |
 | `jose` | 6.2.12 | §2.6, #5830 | Access JWT via `createRemoteJWKSet` + `jwtVerify`. Cloudflare's Validate JWTs guide: <https://developers.cloudflare.com/cloudflare-one/identity/authorization-cookie/validating-json/> | The hand-rolled RS256 verifier (`crypto.subtle`, unsigned claims before the signature, unknown `kid` refetch with no cooldown) | 6.2.12 |
 | `react` | ^19.2.8 | §1.1 | UI runtime the scaffold emits | Preact. React Router 8's types are React | 19.3.0 |
 | `react-dom` | ^19.2.8 | §1.1 | Client renderer. Unit tests call `react-dom/server` | A second renderer | 19.3.0 |
 | `react-router` | ^8.4.0 | §1, §8 | Framework mode, SSR, routing | `@react-router/node` and `@react-router/serve`. C3 deletes both | 8.4.0 |
+| `lucide-react` | 1.47.0 | §3.2 | Icons the shadcn/ui components import (`app/components/ui/dialog.tsx`) | A second icon set, inline SVG copies | 1.47.0 |
 | `robots-parser` | 3.0.1 | #4741, REBUILD-GUARDRAILS robots line | robots.txt matching (groups, wildcards, Allow/Disallow precedence) for plain fetches of the customer's own site. Zero dependencies. Doc: <https://github.com/samclarke/robots-parser> | A hand-written robots.txt parser (charter #3842 forbids it), `robotstxt` ports of Google's C++ parser | 3.0.1 |
 | `sonner` | ^2.0.8 | §5.10 | The one toast surface: "saved" and "undo" per DESIGN.md §11 | A hand-rolled live region (Base UI ships no toast primitive), `react-hot-toast` | 2.0.8 |
 | `tailwind-merge` | ^3.7.0 | §3.2 | Class conflict resolution inside `cn()` | A hand-written Tailwind merger | 3.7.0 |
@@ -1146,8 +1151,10 @@ The version in this table is the `package.json` specifier. An earlier section of
 | `eslint` | ^10.11.0 | §9 | `npm run lint` is `eslint . && knip` | oxlint or biome. Neither loads this type-checked config or its AST bans | 10.11.0 |
 | `eslint-plugin-boundaries` | ^7.2.0 | §9, REBUILD-TRUST §B4 | Declares element types and which of them may import which. Replaces the `**/*.server` glob | dependency-cruiser (a second tool, CI-only feedback), Sheriff (cannot add the other rules this config already runs), Feature-Sliced Design with steiger (a full restructure during the rebuild) | 7.2.0 |
 | `eslint-plugin-import-x` | ^4.17.1 | §9, REBUILD-TRUST §B4 | `import-x/no-cycle` on `app/**` and `workers/**`, and `import-x/no-default-export` except where the framework requires a default export | `eslint-plugin-import` (unmaintained). dependency-cruiser's cycle check, for the same second-tool reason as boundaries | 4.17.1 |
+| `eslint-plugin-no-comments` | ^1.2.1 | §9, CLAUDE.md "Comments are banned in app code" | `no-comments/disallowComments` makes any comment in `app/` and `workers/` red (0509#4225, [npm](https://www.npmjs.com/package/eslint-plugin-no-comments)) | Stock `no-inline-comments` alone, which misses whole-line comments. A reviewer | 1.2.1 |
 | `eslint-plugin-react-hooks` | ^7.1.1 | §9 | Hooks rules on `app/` and `workers/` | Turning the rules off | 7.1.1 |
 | `globals` | ^17.12.0 | §9 | Browser and Node globals in `eslint.config.js` | A handwritten globals list | 17.12.0 |
+| `jscpd` | ^5.3.3 | §9 | Third part of `npm run lint`: copy-paste detection over `app/` and `workers/`, config in `.jscpd.json` ([docs](https://github.com/kucherenko/jscpd)). The threshold sits at main's measured 0.1237% (three clones, 0509#5783), pinned at 0.124 and drops to 0 once they are removed | ESLint `sonarjs/no-identical-functions` (whole functions only), a reviewer | 5.3.3 |
 | `knip` | ^6.37.0 | §9 | Second half of `npm run lint`. Fails on an unused dependency | An allowlist. This file's rule is to remove the unused dependency | 6.37.0 |
 | `tailwindcss` | ^4.3.3 | §3.1 | Styling, configured in CSS | Tailwind 3 and a `tailwind.config.js` | 4.3.3 |
 | `typescript` | ^5.9.3 | §9 | `tsc -b` in `npm run typecheck` | swc or babel, which strip types and do not check them | 5.9.3 |
