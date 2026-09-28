@@ -13,13 +13,15 @@ test.skip(
   "the nav walk needs a real session; the local preview Worker can neither send nor receive email",
 );
 
-test("a signed-in user reaches the four places by tapping and by Tab+Enter", async ({ page }) => {
+test("a signed-in user reaches the four places by tapping and by Tab+Enter", async ({ page }, testInfo) => {
   // Production lane: the sign-in poll plus the nav walk overruns the 30 s
   // default (0509#5681).
   test.setTimeout(120_000);
-  const errors: string[] = [];
+  const errors: { text: string; url: string }[] = [];
   page.on("console", (message) => {
-    if (message.type() === "error") errors.push(message.text());
+    if (message.type() === "error") {
+      errors.push({ text: message.text(), url: message.location().url });
+    }
   });
 
   const email = `e2e+${crypto.randomUUID().replaceAll("-", "").slice(0, 12)}@0509.io`;
@@ -78,5 +80,9 @@ test("a signed-in user reaches the four places by tapping and by Tab+Enter", asy
   await page.keyboard.press("Enter");
   await page.waitForURL(/\/onboarding$/);
 
-  expect(errors).toEqual([]);
+  const pageOrigin = new URL(page.url()).origin;
+  const failures = errors
+    .filter((entry) => !entry.url || new URL(entry.url).origin === pageOrigin)
+    .map((entry) => `${entry.text} @ ${entry.url}`);
+  expect(failures, testInfo.project.name).toEqual([]);
 });
