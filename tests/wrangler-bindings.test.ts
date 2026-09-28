@@ -31,4 +31,11 @@ describe("deployed wrangler configs", () => {
     expect(siteSweep).toBeDefined();
     expect(siteSweep?.schedules).toEqual(["0 " + String(SITE_SWEEP_UTC_HOUR) + " * * *"]);
   });
+
+  it("schedules the snapshot-backup Workflow every night at 05:00 UTC", () => {
+    const { rawConfig } = experimental_readRawConfig({ config: "wrangler.jsonc" });
+    const snapshotBackup = (rawConfig.workflows ?? []).find((workflow) => workflow.name === "snapshot-backup");
+    expect(snapshotBackup).toBeDefined();
+    expect(snapshotBackup?.schedules).toEqual(["0 5 * * *"]);
+  });
 });

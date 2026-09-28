@@ -1,0 +1,23 @@
+diff --git a/app/lib/data/alert.server.ts b/app/lib/data/alert.server.ts
+index ce844b46..cab3dc9e 100644
+--- a/app/lib/data/alert.server.ts
++++ b/app/lib/data/alert.server.ts
+@@ -19,8 +19,8 @@ export interface DeliveryFailedAlert {
+ export async function insertDeliveryFailedAlert(
+   db: D1Database,
+   alert: DeliveryFailedAlert,
+-): Promise<void> {
+-  await db
++): Promise<boolean> {
++  const result = await db
+     .prepare(INSERT_DELIVERY_FAILED)
+     .bind(
+       alert.id,
+@@ -33,6 +33,7 @@ export async function insertDeliveryFailedAlert(
+       alert.created_at,
+     )
+     .run();
++  return result.meta.changes > 0;
+ }
+ 
+ export interface DeliveryFailureRow {
