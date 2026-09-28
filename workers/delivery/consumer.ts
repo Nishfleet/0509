@@ -4,6 +4,7 @@ import { claimSendAttempt, resolveSendAttempt } from "../../app/lib/data/send_at
 import { writeUnsubscribeToken } from "../../app/lib/data/send_target.server";
 import type { BriefPayload } from "../../app/lib/brief-payload";
 import { parseBriefPayload } from "../../app/lib/brief-payload";
+import { pageHost } from "../../app/lib/site/own-site.server";
 
 import { renderBrief } from "./brief-template";
 import { renderIncidentFixed, renderIncidentOpen } from "./incident-template";
@@ -80,7 +81,7 @@ interface IncidentRow {
   kind: string;
   opened_at: string;
   closed_at: string | null;
-  domain: string;
+  page_url: string;
   role: string;
   mark: string | null;
   own_site_alerts: number;
@@ -95,13 +96,14 @@ async function readIncident(env: Env, incidentId: string): Promise<IncidentRow |
             i.kind,
             i.opened_at,
             i.closed_at,
-            e.domain,
+            p.url AS page_url,
             e.role,
             w.own_site_alerts,
             w.timezone,
             (SELECT a.body FROM alert a WHERE a.incident_id = i.id ORDER BY a.created_at ASC LIMIT 1) AS mark
        FROM incident i
        JOIN entity e ON e.id = i.entity_id
+       JOIN page p ON p.id = i.page_id
        JOIN workspace w ON w.id = i.workspace_id
       WHERE i.id = ?`,
   )
@@ -273,10 +275,11 @@ export async function deliverIncident(
 
   let sent = false;
   try {
+    const site = pageHost(incident.page_url);
     const rendered =
       incident.closed_at === null
         ? renderIncidentOpen({
-            site: incident.domain,
+            site,
             kind: incident.kind,
             opened_at: incident.opened_at,
             recheck_at: new Date(Date.parse(incident.opened_at) + RECHECK_AFTER_MS).toISOString(),
@@ -285,7 +288,7 @@ export async function deliverIncident(
             timezone: incident.timezone,
           })
         : renderIncidentFixed({
-            site: incident.domain,
+            site,
             kind: incident.kind,
             closed_at: incident.closed_at,
             link: INCIDENT_LINK,

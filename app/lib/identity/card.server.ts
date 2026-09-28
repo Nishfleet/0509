@@ -30,6 +30,12 @@ const siteCardSchema = z.object({
 
 type SiteCard = z.infer<typeof siteCardSchema>;
 
+function hasIdentity(card: SiteCard): boolean {
+  return card.name !== null || card.description !== null || card.socials.length > 0;
+}
+
+const readSiteCardSchema = siteCardSchema.refine(hasIdentity);
+
 const logoSchema = z.object({ url: z.string().nullable() });
 
 const UNREACHED: SiteCard = {
@@ -53,7 +59,7 @@ async function probeSite(subject: Subject, mayEscalate: MayEscalate): Promise<Si
   if (!page.ok) throw new Error(page.detail);
   const extract = await extractIdentity(page.html, subject.url);
   const name = await resolveBrandName(extract.nameSources, wikidataTerm(subject));
-  return {
+  const card: SiteCard = {
     name: name?.name ?? null,
     description: extract.description,
     socials: extract.socials,
@@ -65,6 +71,10 @@ async function probeSite(subject: Subject, mayEscalate: MayEscalate): Promise<Si
     adLibraryHints: extract.adLibraryHints,
     navLinks: extract.navLinks,
   };
+  if (!hasIdentity(card)) {
+    throw new Error(`site read found no name, description or socials (${page.transport} ${String(page.status)})`);
+  }
+  return card;
 }
 
 async function probeProfile(subject: Subject, mayEscalate: MayEscalate): Promise<SiteCard> {
@@ -111,7 +121,6 @@ export async function readSiteCard(
       console.log(
         JSON.stringify({
           event: "identity-creator-card",
-          subject: subject.registrable,
           probe,
           filled: filledProfileFields(card),
         }),
@@ -119,18 +128,20 @@ export async function readSiteCard(
       return { card, reached: true };
     } catch (error) {
       console.log(
-        JSON.stringify({ event: "identity-creator-unreached", subject: subject.registrable, error: String(error) }),
+        JSON.stringify({ event: "identity-creator-unreached", error: String(error) }),
       );
       return { card: UNREACHED, reached: false };
     }
   }
   try {
     return {
-      card: await cachedProbe(subject, "homepage", siteCardSchema, () => probeSite(subject, mayEscalate)),
+      card: await cachedProbe(subject, "homepage", readSiteCardSchema, () =>
+        probeSite(subject, mayEscalate),
+      ),
       reached: true,
     };
   } catch (error) {
-    console.log(JSON.stringify({ event: "identity-site-unreached", subject: subject.registrable, error: String(error) }));
+    console.log(JSON.stringify({ event: "identity-site-unreached", error: String(error) }));
     return { card: UNREACHED, reached: false };
   }
 }
@@ -200,7 +211,7 @@ export function startCard(
     if (stored === null) return null;
     return toDataUrl(stored.contentType, stored.bytes);
   }).catch((error: unknown) => {
-    console.log(JSON.stringify({ event: "identity-logo-failed", subject: subject.registrable, error: String(error) }));
+    console.log(JSON.stringify({ event: "identity-logo-failed", workspaceId, error: String(error) }));
     return null;
   });
   return { site, logo };

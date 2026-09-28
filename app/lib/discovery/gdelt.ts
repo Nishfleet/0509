@@ -5,7 +5,7 @@ export const GDELT_SEARCH_URL =
 
 const gdeltArticleSchema = z.object({
   url: z.string(),
-  title: z.string().min(1),
+  title: z.string(),
   seendate: z.string().nullish(),
   domain: z.string().nullish(),
 });

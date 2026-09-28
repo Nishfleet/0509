@@ -64,7 +64,7 @@ async function classifyConfirmedSite(
     });
     if (!page.ok) {
       console.log(
-        JSON.stringify({ event: "identity-page-role-skipped", subject: subject.registrable, error: page.detail }),
+        JSON.stringify({ event: "identity-page-role-skipped", workspaceId, error: page.detail }),
       );
       return;
     }
@@ -72,7 +72,7 @@ async function classifyConfirmedSite(
     await classifyNavPages(workspaceId, { id: entityId, domain: subject.registrable }, extract.navPages, now.toISOString());
   } catch (error) {
     console.log(
-      JSON.stringify({ event: "identity-page-role-skipped", subject: subject.registrable, error: String(error) }),
+      JSON.stringify({ event: "identity-page-role-skipped", workspaceId, error: String(error) }),
     );
   }
 }
