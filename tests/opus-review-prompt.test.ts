@@ -16,7 +16,7 @@ const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..
 
 const normalize = (s: string) => s.replace(/\s+/g, " ").trim();
 
-const readPrompt = (yaml: string): string => {
+const readBlock = (yaml: string, key: string): string => {
   const lines = yaml.split("\n");
   const start = lines.indexOf("  opus-review:");
   if (start === -1) {
@@ -24,13 +24,13 @@ const readPrompt = (yaml: string): string => {
   }
   let p = -1;
   for (let i = start + 1; i < lines.length; i += 1) {
-    if (lines[i].trim() === "GRADE_PROMPT: |") {
+    if (lines[i].trim() === `${key}: |`) {
       p = i;
       break;
     }
   }
   if (p === -1) {
-    throw new Error("opus-review has no GRADE_PROMPT: | block scalar");
+    throw new Error(`opus-review has no ${key}: | block scalar`);
   }
   const indent = lines[p].length - lines[p].trimStart().length;
   const collected: string[] = [];
@@ -51,6 +51,14 @@ const readPrompt = (yaml: string): string => {
     .join("\n")
     .trim();
 };
+
+// #5875 split the grader text: GRADE_RUBRIC is the contract both graders
+// read (Opus through `${{ env.GRADE_RUBRIC }}`, Kimi through the env var),
+// and the Opus step's own `prompt:` wraps it with the repo header and the
+// posting rules.
+const readPrompt = (yaml: string): string => readBlock(yaml, "prompt");
+
+const readRubric = (yaml: string): string => readBlock(yaml, "GRADE_RUBRIC");
 
 const readC1Questions = (md: string): string[] => {
   const start = md.indexOf("### C1.");
@@ -91,10 +99,11 @@ describe("opus-review prompt", () => {
     );
     expect(prompt.startsWith("REPO: ${{ github.repository }}")).toBe(true);
     expect(prompt.endsWith("Do not approve or request changes through the review API.")).toBe(true);
+    expect(prompt).toContain("${{ env.GRADE_RUBRIC }}");
   });
 
   it("asks all three §C1 questions word for word", async () => {
-    const prompt = readPrompt(
+    const prompt = readRubric(
       await readFile(path.join(REPO_ROOT, ".github/workflows/ci.yml"), "utf8"),
     );
     const trust = await readFile(path.join(REPO_ROOT, "docs/REBUILD-TRUST.md"), "utf8");
@@ -106,7 +115,7 @@ describe("opus-review prompt", () => {
   });
 
   it("states the verdict rule in its grade-capping form", async () => {
-    const prompt = readPrompt(
+    const prompt = readRubric(
       await readFile(path.join(REPO_ROOT, ".github/workflows/ci.yml"), "utf8"),
     );
     expect(normalize(prompt)).toContain(
@@ -115,7 +124,7 @@ describe("opus-review prompt", () => {
   });
 
   it("keeps the criteria that predate §C1", async () => {
-    const prompt = readPrompt(
+    const prompt = readRubric(
       await readFile(path.join(REPO_ROOT, ".github/workflows/ci.yml"), "utf8"),
     );
     const normalized = normalize(prompt);

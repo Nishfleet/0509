@@ -7,7 +7,7 @@ import { WATCHED_NOUNS } from "../../app/lib/coverage";
 
 const HEADLINE = "Know where you stand. And who’s gaining on you.";
 const SENTENCE = `We watch ${WATCHED_NOUNS} across your market, and we name the rivals for you, so you do not have to know them.`;
-const MICROCOPY = "One input. Sixty seconds to your first standing.";
+const MICROCOPY = "One input. Sixty seconds to who’s gaining on you.";
 
 function markup(): string {
   return renderToStaticMarkup(createElement(Hero));
