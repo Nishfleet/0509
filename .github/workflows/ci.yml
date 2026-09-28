@@ -100,6 +100,9 @@ jobs:
       # `semgrep ci` is the hosted mode and needs SEMGREP_APP_TOKEN, exiting 2
       # without one. `semgrep scan` is the local mode and needs nothing.
       - run: semgrep scan --config p/typescript --config p/security-audit --config .semgrep/rollover-catch-up.yml --error
+      # Keep the local rule's fixture honest: --test fails if ruleid:/ok:
+      # annotations in .semgrep/<rule>.ts stop matching what the rule fires on.
+      - run: semgrep scan --test --config .semgrep/rollover-catch-up.yml .semgrep/rollover-catch-up.ts
 
   preview-assert:
     name: preview-assert

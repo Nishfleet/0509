@@ -8,10 +8,18 @@ rules:
       reschedule (app/lib/standing/reschedule.ts). A third call site is a
       second send path with no test covering it.
     # "catch-up" in any argument position, so arity growth cannot silently
-    # un-match the call. Excluded: the two sanctioned creators plus tests/.
-    pattern: rolloverInstance(..., "catch-up", ...)
+    # un-match the call. The second pattern covers `import { rolloverInstance
+    # as x }` aliases. Excluded: the two sanctioned creators plus tests/.
+    pattern-either:
+      - pattern: rolloverInstance(..., "catch-up", ...)
+      - patterns:
+          - pattern-inside: |
+              import { rolloverInstance as $X } from $P;
+              ...
+          - pattern: $X(..., "catch-up", ...)
     paths:
       exclude:
-        - tests/**
-        - workers/standing/nightly.ts
-        - app/lib/standing/reschedule.ts
+        - /tests/**
+        - /workers/standing/nightly.ts
+        - /app/lib/standing/reschedule.ts
+        - /.semgrep/**
