@@ -28,7 +28,7 @@ const siteCardSchema = z.object({
 
 type SiteCard = z.infer<typeof siteCardSchema>;
 
-const logoSchema = z.object({ url: z.string().nullable() });
+const logoSchema = z.object({ v: z.literal(2), url: z.string().nullable() });
 
 const UNREACHED: SiteCard = {
   name: null,
@@ -173,9 +173,13 @@ export function startCard(
     const cached = await cachedProbe(subject, "icon", logoSchema, async () => {
       for (const url of logoCandidateUrls({ ...card.logoCandidates, registrableDomain: subject.registrable })) {
         const stored = await storeLogo(subject.registrable, url);
-        if (stored !== null) return { url };
+        if (stored !== null) {
+          console.log(JSON.stringify({ event: "identity-logo-stored", subject: subject.registrable, url }));
+          return { v: 2, url };
+        }
+        console.log(JSON.stringify({ event: "identity-logo-refused", subject: subject.registrable, url }));
       }
-      return { url: null };
+      return { v: 2, url: null };
     });
     const url = cached.url;
     if (url === null) return null;
