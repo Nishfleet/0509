@@ -3,6 +3,7 @@ import { z } from "zod";
 import { insertVerdicts, type VerdictRow } from "../data/jev_verdict.server";
 import { readPageHashes, upsertJudgedPages, type JudgedPage } from "../data/page.server";
 import { askChoice, type ChoiceQuestion } from "../jev/client.server";
+import { sha256Hex } from "../sha256";
 
 export interface NavPage {
   url: string;
@@ -26,11 +27,7 @@ export const PAGE_ROLE: ChoiceQuestion = {
 const pageRole = z.enum(["home", "pricing", "product", "blog", "careers", "legal", "other"]);
 
 async function pageHash(page: NavPage): Promise<string> {
-  const digest = await crypto.subtle.digest(
-    "SHA-256",
-    new TextEncoder().encode(JSON.stringify({ url: page.url, title: page.title })),
-  );
-  return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+  return sha256Hex(JSON.stringify({ url: page.url, title: page.title }));
 }
 
 export async function classifyNavPages(
