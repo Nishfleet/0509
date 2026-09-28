@@ -1,5 +1,7 @@
 import { expect, test } from "@playwright/test";
 
+import { SITEMAP_PATHS } from "../app/lib/public-routes";
+
 // The /robots.txt contract (0509#4398). The body is generated from the
 // public-route manifest in app/lib/public-routes.ts; what is asserted is the
 // contract — the disallow rows and the sitemap line — never the full file
@@ -38,28 +40,30 @@ test("every sitemap url is served as an indexable 200, not noindex", async ({
 }) => {
   const sitemap = await (await request.get("/sitemap.xml")).text();
   const locs = [...sitemap.matchAll(/<loc>([^<]+)<\/loc>/g)];
-  expect(locs.length).toBeGreaterThan(0);
-  for (const loc of locs) {
-    const path = new URL(loc[1]).pathname;
-    const response = await request.get(path);
-    expect(response.status(), `${path} is not a 200`).toBe(200);
-    const robotsTag = response.headers()["x-robots-tag"];
-    if (robotsTag !== undefined) {
+  expect(
+    locs.length,
+    "sitemap row count differs from SITEMAP_PATHS",
+  ).toBe(SITEMAP_PATHS.length);
+  await Promise.all(
+    locs.map(async (loc) => {
+      const path = new URL(loc[1]).pathname;
+      const response = await request.get(path);
+      expect(response.status(), `${path} is not a 200`).toBe(200);
       expect(
-        robotsTag.toLowerCase(),
+        (response.headers()["x-robots-tag"] ?? "").toLowerCase(),
         `${path} is noindex by header`,
       ).not.toContain("noindex");
-    }
-    const robotsMeta = /<meta[^>]*name="robots"[^>]*content="([^"]*)"/.exec(
-      await response.text(),
-    );
-    if (robotsMeta !== null) {
-      expect(
-        robotsMeta[1].toLowerCase(),
-        `${path} is noindex in its robots meta`,
-      ).not.toContain("noindex");
-    }
-  }
+      const robotsMetas = ((await response.text()).match(/<meta\b[^>]*>/gi) ??
+        []
+      ).filter((tag) => /\bname\s*=\s*["']robots["']/i.test(tag));
+      for (const tag of robotsMetas) {
+        expect(
+          tag.toLowerCase(),
+          `${path} is noindex in its robots meta`,
+        ).not.toContain("noindex");
+      }
+    }),
+  );
 });
 
 test("GET /llms.txt serves the manifest-generated summary", async ({

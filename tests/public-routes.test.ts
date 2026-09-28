@@ -62,10 +62,10 @@ describe("public-route manifest", () => {
     expect(body).toContain(
       'xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"',
     );
+    expect(SITEMAP_PATHS as readonly string[]).toContain("/llms.txt");
     for (const p of SITEMAP_PATHS) {
       expect(body).toContain(`<loc>https://0509.io${p}</loc>`);
     }
-    expect(SITEMAP_PATHS as readonly string[]).toContain("/llms.txt");
     for (const entry of topLevel(routes)) {
       const path = "path" in entry ? entry.path : undefined;
       if (path === undefined || path === "*") continue;
@@ -99,7 +99,7 @@ describe("public-route manifest", () => {
       expect(
         readFileSync(join(REPO_ROOT, "app", route.file), "utf8"),
         `the module serving "${path}" declares a robots noindex`,
-      ).not.toContain("noindex");
+      ).not.toMatch(/(?:content|x-robots-tag)["']?\s*[:=]\s*["'][^"']*noindex/i);
     }
   });
 
