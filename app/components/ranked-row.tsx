@@ -31,7 +31,7 @@ export function RankedRow({
       data-self={row.self ? "true" : undefined}
       data-open={isOpen ? "true" : undefined}
       className={cn(
-        "border-line grid grid-cols-[2.25rem_26px_minmax(0,1fr)_auto_auto] items-center gap-3 border-b px-2 py-3",
+        "grid grid-cols-[2.25rem_26px_minmax(0,1fr)_auto_auto] items-center gap-3 border-b border-line px-2 py-3",
         row.self && "bg-green-wash",
         isOpen && "border-l-4 border-l-green",
       )}
@@ -40,7 +40,7 @@ export function RankedRow({
       <span
         aria-hidden="true"
         className={cn(
-          "font-display flex size-[26px] items-center justify-center border-[1.5px] border-ink text-[0.8rem] font-extrabold",
+          "flex size-[26px] items-center justify-center border-[1.5px] border-ink font-display text-[0.8rem] font-extrabold",
           row.self ? "bg-green" : "bg-card",
         )}
       >
@@ -63,18 +63,18 @@ export function RankedRow({
               { replace: true, preventScrollReset: true },
             );
           }}
-          className="block min-h-11 w-full min-w-0 text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-solid focus-visible:outline-ink"
+          className="block min-h-11 w-full min-w-0 text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink focus-visible:outline-solid"
         >
-          <span className="font-display text-row-name block truncate font-bold">{row.name}</span>
+          <span className="block truncate font-display text-row-name font-bold">{row.name}</span>
           {row.domain === null ? null : (
-            <span className="text-ink-soft block truncate text-[0.88rem]">{row.domain}</span>
+            <span className="block truncate text-[0.88rem] text-ink-soft">{row.domain}</span>
           )}
         </button>
         <span className="sr-only" role="status">
           {row.name} {isOpen ? "expanded" : "collapsed"}
         </span>
       </span>
-      <span className="text-ink-soft text-right font-mono text-eyebrow uppercase">{row.movement}</span>
+      <span className="text-right font-mono text-eyebrow text-ink-soft uppercase">{row.movement}</span>
       <BrandSwitch
         state={row.self ? "you" : "on"}
         brandName={row.name}

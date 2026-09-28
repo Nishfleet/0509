@@ -49,15 +49,15 @@ export function ConnectDetails({ mcpUrl, origin }: { mcpUrl: string; origin: str
       </p>
       <ul aria-label="Works with" className="mt-3 flex flex-wrap gap-2">
         {CLIENTS.map((client) => (
-          <li key={client} data-testid="agent-client" className="border-line border px-2 py-0.5 font-mono text-meta">
+          <li key={client} data-testid="agent-client" className="border border-line px-2 py-0.5 font-mono text-meta">
             {client}
           </li>
         ))}
       </ul>
       <CopyField label="Connector address" value={mcpUrl} />
-      <p className="text-ink-soft mt-3 text-body-sm">Connecting with a key instead? Send it in this header.</p>
+      <p className="mt-3 text-body-sm text-ink-soft">Connecting with a key instead? Send it in this header.</p>
       <CopyField label="Header" value="Authorization: Bearer <your key>" />
-      <p className="text-ink-soft mt-3 text-body-sm">
+      <p className="mt-3 text-body-sm text-ink-soft">
         Writing your own code? Make a key below and read the{" "}
         <a className="text-ink underline decoration-1 underline-offset-4" href={`${origin}/api/v1/openapi.json`}>
           API reference
@@ -75,14 +75,14 @@ export function ConnectedApps({ apps }: { apps: ConnectedApp[] }) {
         Connected apps
       </h2>
       {apps.length === 0 ? (
-        <p className="text-ink-soft mt-2 leading-[1.55]">None yet. Apps you connect show here, and you can disconnect them any time.</p>
+        <p className="mt-2 leading-[1.55] text-ink-soft">None yet. Apps you connect show here, and you can disconnect them any time.</p>
       ) : (
-        <ul className="border-line mt-3 border-b">
+        <ul className="mt-3 border-b border-line">
           {apps.map((app) => (
             <li key={app.grantId} data-testid="connected-app" className={ROW}>
               <p className="min-w-0">
                 <span className="font-display font-bold">{app.name}</span>
-                <span className="text-ink-soft block text-body-sm">Connected {day(app.connectedAt)}</span>
+                <span className="block text-body-sm text-ink-soft">Connected {day(app.connectedAt)}</span>
               </p>
               <Form method="post">
                 <input type="hidden" name="intent" value="disconnect-app" />
@@ -106,8 +106,8 @@ export function AgentKeys({ keys, newKey }: { keys: AgentKey[]; newKey: string |
         API keys
       </h2>
       {newKey === null ? null : (
-        <div role="status" className="border-ink bg-green-wash mt-3 border-[1.5px] p-4">
-          <p className="text-green-ink font-semibold">Copy your new key now. For your safety it won't be shown again.</p>
+        <div role="status" className="mt-3 border-[1.5px] border-ink bg-green-wash p-4">
+          <p className="font-semibold text-green-ink">Copy your new key now. For your safety it won't be shown again.</p>
           <code data-testid="new-api-key" className="mt-2 block font-mono text-[0.9rem] [overflow-wrap:anywhere]">
             {newKey}
           </code>
@@ -115,9 +115,9 @@ export function AgentKeys({ keys, newKey }: { keys: AgentKey[]; newKey: string |
         </div>
       )}
       {keys.length === 0 ? (
-        <p className="text-ink-soft mt-2 leading-[1.55]">No keys yet. A key lets your own code read the same things an app can.</p>
+        <p className="mt-2 leading-[1.55] text-ink-soft">No keys yet. A key lets your own code read the same things an app can.</p>
       ) : (
-        <ul className="border-line mt-3 border-b">
+        <ul className="mt-3 border-b border-line">
           {keys.map((key) => {
             const detail = [
               `Made ${day(key.createdAt)}`,
@@ -129,8 +129,8 @@ export function AgentKeys({ keys, newKey }: { keys: AgentKey[]; newKey: string |
               <li key={key.id} data-testid="api-key" className={ROW}>
                 <p className="min-w-0">
                   <span className="font-display font-bold">{key.name}</span>{" "}
-                  <span className="text-ink-soft font-mono text-meta">{key.start ?? "key"}…</span>
-                  <span className="text-ink-soft block text-body-sm">{detail}</span>
+                  <span className="font-mono text-meta text-ink-soft">{key.start ?? "key"}…</span>
+                  <span className="block text-body-sm text-ink-soft">{detail}</span>
                 </p>
                 <Form method="post">
                   <input type="hidden" name="intent" value="revoke-key" />

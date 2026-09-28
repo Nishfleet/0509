@@ -40,7 +40,7 @@ function CompetitorItem({ competitor }: { competitor: CompetitorRow }) {
   const state = pending === "on" || pending === "off" ? pending : competitor.state;
   const off = state === "off";
   return (
-    <li className="border-line flex flex-wrap items-center gap-x-4 gap-y-2 border-t py-4">
+    <li className="flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-line py-4">
       <div className="flex min-w-0 flex-1 items-start gap-3">
         <BrandChip name={competitor.name} href={`/app/competitors/${competitor.entityId}`} off={off} />
         <div className="min-w-0">
@@ -75,7 +75,7 @@ export default function Page({ loaderData, actionData }: Route.ComponentProps) {
           <EmptyState sentence="Add a competitor to see where you stand. We also look for new ones every night." />
         </div>
       ) : (
-        <ul aria-label="Competitors" className="bg-card border-line mt-6 border px-4">
+        <ul aria-label="Competitors" className="mt-6 border border-line bg-card px-4">
           {competitors.map((competitor) => (
             <CompetitorItem key={competitor.entityId} competitor={competitor} />
           ))}

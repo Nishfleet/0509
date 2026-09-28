@@ -30,7 +30,7 @@ export function HowRankedTable({ howRanked }: { howRanked: HowRanked }): ReactEl
   return (
     <section data-testid="how-ranked-table" className="font-mono">
       <h2 className={HEADING_CLASS}>How this is ranked</h2>
-      <p className="text-ink-soft mt-2">
+      <p className="mt-2 text-ink-soft">
         Ranked by what the internet did about each brand this week.
       </p>
 
@@ -77,7 +77,7 @@ function BrandBlock({
 }): ReactElement {
   const isEmpty = brand.lines.length === 0;
   return (
-    <article className="border-line mt-4 border-t pt-3" data-testid="how-ranked-brand">
+    <article className="mt-4 border-t border-line pt-3" data-testid="how-ranked-brand">
       <h4 className="font-display font-bold">{brand.name}</h4>
       <ul className="mt-1">
         {isEmpty && <li className={ROW_CLASS}>No signals this week</li>}
@@ -97,12 +97,12 @@ export function HowRankedSheet({ howRanked }: { howRanked: HowRanked }): ReactEl
     <Dialog>
       <DialogTrigger
         render={<button type="button" />}
-        className="text-ink-soft font-mono text-eyebrow uppercase underline underline-offset-4 min-h-11"
+        className="min-h-11 font-mono text-eyebrow text-ink-soft uppercase underline underline-offset-4"
         title="ranked by what the internet did about each brand this week"
       >
         How this is ranked
       </DialogTrigger>
-      <DialogContent className="max-h-[85dvh] overflow-y-auto sm:max-w-lg max-[859px]:top-auto max-[859px]:bottom-0 max-[859px]:left-0 max-[859px]:max-w-none max-[859px]:translate-x-0 max-[859px]:translate-y-0 max-[859px]:rounded-b-none">
+      <DialogContent className="max-h-[85dvh] overflow-y-auto max-[859px]:top-auto max-[859px]:bottom-0 max-[859px]:left-0 max-[859px]:max-w-none max-[859px]:translate-x-0 max-[859px]:translate-y-0 max-[859px]:rounded-b-none sm:max-w-lg">
         <DialogTitle className="sr-only">How this is ranked</DialogTitle>
         <HowRankedTable howRanked={howRanked} />
       </DialogContent>

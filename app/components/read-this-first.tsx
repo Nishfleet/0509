@@ -47,7 +47,7 @@ export function ReadThisFirst({
                   size="md"
                 />
               )}
-              <p className="text-ink-soft mt-2 text-[0.88rem] leading-[1.6]">
+              <p className="mt-2 text-[0.88rem] leading-[1.6] text-ink-soft">
                 {mark.entity_name}: {mark.jev_reason}
               </p>
             </Fragment>

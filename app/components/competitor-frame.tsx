@@ -78,7 +78,7 @@ export function CompetitorFrame({
             Developments
           </h2>
           {pausedOn === null ? null : (
-            <p data-slot="feed-paused" className="border-ink border-t pt-3 text-meta text-ink-soft">
+            <p data-slot="feed-paused" className="border-t border-ink pt-3 text-meta text-ink-soft">
               Paused {pausedOn}. We stopped checking here; turn it back on to pick up where it left off.
             </p>
           )}

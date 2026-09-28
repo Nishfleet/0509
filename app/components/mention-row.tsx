@@ -16,7 +16,7 @@ export function MentionRow({ mention }: { mention: MentionRowModel }): ReactElem
       id={mention.id}
       data-testid="mention-row"
       data-treatment={mention.treatment}
-      className={card ? "border-line bg-card mt-8 min-w-0 border-t pt-6" : "bg-bone mt-8 min-w-0 py-6"}
+      className={card ? "mt-8 min-w-0 border-t border-line bg-card pt-6" : "mt-8 min-w-0 bg-bone py-6"}
     >
       <h3 className={TITLE}>
         <a href={mention.url} rel="noopener noreferrer nofollow" target="_blank" className={LINK}>

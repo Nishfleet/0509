@@ -121,7 +121,7 @@ export default function Page({ loaderData, actionData }: Route.ComponentProps) {
         <Link
           to="/app/settings/agents"
           prefetch="intent"
-          className="font-display mt-3 inline-flex min-h-11 items-center gap-2 font-bold underline decoration-1 underline-offset-4"
+          className="mt-3 inline-flex min-h-11 items-center gap-2 font-display font-bold underline decoration-1 underline-offset-4"
         >
           Connect an agent <span aria-hidden="true">→</span>
         </Link>

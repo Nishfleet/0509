@@ -36,7 +36,7 @@ export function SiteChangeItem({
   const removed = change.mark?.removed ?? null;
   const added = change.mark?.added ?? null;
   return (
-    <article id={change.id} data-testid="site-change" className="border-line mt-8 min-w-0 border-t pt-6">
+    <article id={change.id} data-testid="site-change" className="mt-8 min-w-0 border-t border-line pt-6">
       <h3 className="font-display text-row-name font-bold [overflow-wrap:anywhere]">{change.headline}</h3>
       <div className="mt-3 flex min-w-0 flex-col gap-3">
         {removed !== null && added !== null ? (

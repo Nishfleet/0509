@@ -20,16 +20,16 @@ export function CompetitorMaybes({ maybes }: { maybes: readonly Maybe[] }): Reac
       <h2 id="maybes-heading" className={BLOCK_HEADING}>
         Maybe
       </h2>
-      <p className="text-ink-soft mt-1 text-body-sm">We weren't sure about these. Watch the ones that matter.</p>
-      <ul aria-label="Maybe" className="border-line mt-3 border-b">
+      <p className="mt-1 text-body-sm text-ink-soft">We weren't sure about these. Watch the ones that matter.</p>
+      <ul aria-label="Maybe" className="mt-3 border-b border-line">
         {maybes.map((maybe) => (
-          <li key={maybe.suggestionId} className="border-line flex flex-wrap items-center gap-x-4 gap-y-2 border-t py-4">
+          <li key={maybe.suggestionId} className="flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-line py-4">
             <div className="flex min-w-0 flex-1 items-start gap-3">
               <Monogram name={maybe.name} off />
               <div className="min-w-0">
-                <p className="font-display text-row-name truncate font-bold">{maybe.name}</p>
-                <p className="text-ink-soft truncate text-body-sm">{maybe.domain}</p>
-                {maybe.reason === null ? null : <p className="text-ink-soft mt-1 text-body-sm">{maybe.reason}</p>}
+                <p className="truncate font-display text-row-name font-bold">{maybe.name}</p>
+                <p className="truncate text-body-sm text-ink-soft">{maybe.domain}</p>
+                {maybe.reason === null ? null : <p className="mt-1 text-body-sm text-ink-soft">{maybe.reason}</p>}
               </div>
             </div>
             <Form method="post" className="flex gap-2">
