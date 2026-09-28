@@ -516,7 +516,7 @@ jobs:
             --jq '[.comments[] | select(.author.login == "github-actions") | select(.body | startswith("Opus grade:") or startswith("Kimi grade:"))][-1].body // empty' > "$RUNNER_TEMP/grade"
           echo "opus-review read: $(head -n1 "$RUNNER_TEMP/grade")"
           test -s "$RUNNER_TEMP/grade" \
-            && head -n1 "$RUNNER_TEMP/grade" | grep -qE '^(Opus|Kimi) grade: *\**A\+\**( |$)' \
+            && head -n1 "$RUNNER_TEMP/grade" | tr -d '\r' | grep -qxE '(Opus|Kimi) grade: (A\+|\*\*A\+\*\*)' \
             && gh pr view "${{ github.event.pull_request.number }}" --repo "${{ github.repository }}" --json labels --jq '.labels[].name' > "$RUNNER_TEMP/labels" \
             && ! grep -qx blocked-by-judge "$RUNNER_TEMP/labels"
       - name: merge_group reports the check so the queue can merge (the grade was enforced on the pull request)
