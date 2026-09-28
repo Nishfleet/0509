@@ -1,17 +1,7 @@
-export interface AdLibraryLinkInput {
-  name: string;
-  domain: string;
-}
-
-export interface AdLibraryLinks {
-  meta: string;
-  google: string;
-}
-
 const META_AD_LIBRARY = "https://www.facebook.com/ads/library/";
 const GOOGLE_AD_TRANSPARENCY = "https://adstransparency.google.com/";
 
-export function adLibraryLinks({ name, domain }: AdLibraryLinkInput): AdLibraryLinks {
+export function adLibraryLinks({ name, domain }: { name: string; domain: string }): { meta: string; google: string } {
   const meta = new URL(META_AD_LIBRARY);
   meta.searchParams.set("active_status", "active");
   meta.searchParams.set("ad_type", "all");

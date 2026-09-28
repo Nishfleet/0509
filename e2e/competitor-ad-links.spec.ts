@@ -143,7 +143,7 @@ test("the competitor header's two ad-library links open that brand's live ads", 
 
   // Tab to the brand's chip and Enter. The pointer is not the contract here:
   // the switch in the same row carries a hit area wider than its control, so
-  // a click on the chip lands on the switch instead (0509#5916). Tab order is
+  // a click on the chip lands on the switch instead (0509#5923). Tab order is
   // the Places nav first, then this link.
   await page.goto("/app/competitors");
   const chip = page.getByRole("list", { name: "Competitors" }).getByRole("link").first();

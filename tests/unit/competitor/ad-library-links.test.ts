@@ -20,6 +20,13 @@ function metaQ(name: string): string | null {
   return new URL(adLibraryLinks({ name, domain: "example.com" }).meta).searchParams.get("q");
 }
 
+// What renderToStaticMarkup writes for a URL: searchParams percent-encodes
+// quotes, angle brackets and apostrophes already, so the ampersands between
+// the pairs are the only characters React escapes in the attribute.
+function hrefAsMarkup(url: string): string {
+  return `href="${url.replaceAll("&", "&amp;")}"`;
+}
+
 describe("the live ad-library links on a competitor header", () => {
   it("points Meta at the Ad Library and Google at Ads Transparency", () => {
     const { meta, google } = adLibraryLinks({ name: "Kindred", domain: "kindred.example" });
@@ -53,23 +60,35 @@ describe("the live ad-library links on a competitor header", () => {
     expect(new URL(google).searchParams.get("domain")).toBe("shop.example.com");
   });
 
-  it("builds both URLs with URL, never by string concatenation", () => {
+  it("encodes a name and a domain that carry URL syntax, without splitting the query", () => {
     const { meta, google } = adLibraryLinks({ name: "A&B", domain: "a&b.example" });
-    expect(meta).toContain("q=%22A%26B%22");
-    expect(google).toContain("domain=a%26b.example");
-    expect(new URL(meta).searchParams.get("q")).toBe('"A&B"');
-    expect(new URL(google).searchParams.get("domain")).toBe("a&b.example");
+    const metaUrl = new URL(meta);
+    const googleUrl = new URL(google);
+    expect(metaUrl.searchParams.get("q")).toBe('"A&B"');
+    expect(googleUrl.searchParams.get("domain")).toBe("a&b.example");
+    expect([...metaUrl.searchParams.keys()].sort()).toEqual([
+      "active_status",
+      "ad_type",
+      "country",
+      "media_type",
+      "q",
+      "search_type",
+    ]);
+    expect([...googleUrl.searchParams.keys()].sort()).toEqual(["domain", "region"]);
   });
 
   it("renders both quiet links in the header, each opening in a new tab", () => {
-    const html = renderHeader("Bramble & Co", "shop.example.com");
+    const name = "Bramble & Co";
+    const domain = "shop.example.com";
+    const links = adLibraryLinks({ name, domain });
+    const html = renderHeader(name, domain);
+    expect(html).toContain(hrefAsMarkup(links.meta));
+    expect(html).toContain(hrefAsMarkup(links.google));
     expect(html).toContain(">Their ads on Meta</a>");
     expect(html).toContain(">Their ads on Google</a>");
     expect(html).toContain('aria-label="Bramble &amp; Co&#x27;s ads on Meta (opens in a new tab)"');
     expect(html).toContain('aria-label="Bramble &amp; Co&#x27;s ads on Google (opens in a new tab)"');
     expect(html).toContain('target="_blank"');
     expect(html).toContain('rel="noopener noreferrer"');
-    expect(html).toContain("q=%22Bramble+%26+Co%22");
-    expect(html).toContain("domain=shop.example.com");
   });
 });
