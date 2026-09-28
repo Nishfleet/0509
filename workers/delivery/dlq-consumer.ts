@@ -12,6 +12,8 @@ export const DELIVERY_FAILED_TITLE = "We could not send your brief — here it i
 export const DELIVERY_FAILED_BODY =
   "We tried several times and could not deliver this brief by email, so we have stopped trying. Everything in it is below. Your next brief goes out on its usual day.";
 
+export const SELECT_LATEST_ATTEMPT_ERROR = `SELECT error FROM send_attempt WHERE digest_id = ? ORDER BY attempted_at DESC LIMIT 1`;
+
 export function deliveryFailedAlert(input: {
   digest_id: string;
   workspace_id: string;
@@ -50,9 +52,7 @@ export async function handleDlqBatch(env: Env, batch: MessageBatch): Promise<str
       continue;
     }
 
-    const attempt = await env.DB.prepare(
-      `SELECT error FROM send_attempt WHERE digest_id = ? ORDER BY attempted_at DESC LIMIT 1`,
-    )
+    const attempt = await env.DB.prepare(SELECT_LATEST_ATTEMPT_ERROR)
       .bind(parsed.digest_id)
       .first<{ error: string | null }>();
     console.error(

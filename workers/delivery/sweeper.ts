@@ -1,5 +1,11 @@
 export const NIGHTLY_CRON = "0 3 * * *";
 
+export const SELECT_STALE_PENDING_DIGESTS = `SELECT id FROM digest WHERE status = 'pending' AND period_end < ? AND period_end >= ?`;
+
+export const SELECT_STALE_PENDING_ATTEMPTS = `SELECT DISTINCT a.digest_id FROM send_attempt a
+     JOIN digest d ON d.id = a.digest_id
+     WHERE a.status = 'pending' AND a.attempted_at < ? AND d.status <> 'failed' AND d.period_end >= ?`;
+
 export interface SweepResult {
   digests: number;
   attempts: number;
@@ -16,18 +22,12 @@ export async function sweepPending(env: Env, now: Date): Promise<SweepResult> {
   const attemptCutoff = new Date(now.getTime() - ONE_HOUR_MS).toISOString();
   const staleAfter = new Date(now.getTime() - SEVEN_DAYS_MS).toISOString();
 
-  const digestRows = await env.DB.prepare(
-    `SELECT id FROM digest WHERE status = 'pending' AND period_end < ? AND period_end >= ?`,
-  )
+  const digestRows = await env.DB.prepare(SELECT_STALE_PENDING_DIGESTS)
     .bind(digestCutoff, staleAfter)
     .all<{ id: string }>();
   const digestIds = digestRows.results.map((row) => row.id);
 
-  const attemptRows = await env.DB.prepare(
-    `SELECT DISTINCT a.digest_id FROM send_attempt a
-     JOIN digest d ON d.id = a.digest_id
-     WHERE a.status = 'pending' AND a.attempted_at < ? AND d.status <> 'failed' AND d.period_end >= ?`,
-  )
+  const attemptRows = await env.DB.prepare(SELECT_STALE_PENDING_ATTEMPTS)
     .bind(attemptCutoff, staleAfter)
     .all<{ digest_id: string }>();
   const attemptIds = attemptRows.results.map((row) => row.digest_id);

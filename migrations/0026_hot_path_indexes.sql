@@ -1,17 +1,23 @@
--- 0509#5755 (audit §V26): five hot or scheduled statements full-scan their
--- table because the column they filter on has no child index. Each of the five
--- statements below is a nightly job or a request-path read; the plan was SCAN
--- before this file and SEARCH ... USING INDEX after it.
---   onboarding_run(workspace_id) — the /app landing read, ordered by started_at
---   signal(watch_id)             — the hiring read and the watch delete cascade
---   send_attempt(digest_id)      — the dead-letter reader, ordered by attempted_at
---   session(expiresAt)           — the nightly expired-session delete
---   digest(status)               — the nightly pending-brief sweep, ranged by period_end
+-- 0509#5755 (audit §V26): five hot or scheduled statements full-scanned their
+-- table because the column they filter on had no child index. Each index carries
+-- the column the statement orders or ranges by, so the two that sorted through a
+-- temp B-tree no longer do.
+--   onboarding_run(workspace_id, started_at) — the /app landing read
+--   signal(watch_id, kind)                    — the hiring read, the watch cascade
+--   send_attempt(digest_id, attempted_at)     — the dead-letter reader
+--   digest(status, period_end)                — the nightly pending-brief sweep
+-- The class gate the issue asked for found a sixth in the same nightly auth
+-- sweep as the session delete, so verification(expiresAt) is indexed here too.
+-- Still scanning on purpose: the sweeper's second read filters
+-- send_attempt(status, attempted_at), not a child column, and belongs to the
+-- pending-sweeper issue (#4008).
 -- Expand-only: CREATE INDEX only, no DROP, no ALTER, no rename, no NOT NULL, so
--- the previous Worker version keeps working unchanged.
+-- the previous Worker version keeps working unchanged and a rollback is a code
+-- rollback.
 
 CREATE INDEX idx_onboarding_run_workspace ON onboarding_run(workspace_id, started_at);
 CREATE INDEX idx_signal_watch_kind ON signal(watch_id, kind);
 CREATE INDEX idx_send_attempt_digest ON send_attempt(digest_id, attempted_at DESC);
 CREATE INDEX idx_session_expires ON session(expiresAt);
+CREATE INDEX idx_verification_expires ON verification(expiresAt);
 CREATE INDEX idx_digest_status_period ON digest(status, period_end);
