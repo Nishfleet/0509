@@ -303,7 +303,8 @@ export async function signInWithMagicLink(
 // 0509#5688 (fleet-manager): the journey specs keep these four accounts on
 // purpose; the recurring teardown must never delete them. Match these exact
 // addresses, never a pattern. The one-time purge (0509#5730) kept the same
-// four; the journey specs create them again if they are ever gone.
+// four; once the kept-account journey specs land (0509#4123, #4124, #4125,
+// #4128) they create them again if they are ever gone.
 const KEPT_JOURNEY_ACCOUNTS: readonly string[] = [
   "e2e+j7@0509.io",
   "e2e+j8-soft@0509.io",
