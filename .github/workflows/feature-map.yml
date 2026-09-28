@@ -1,14 +1,10 @@
 name: feature-map
 
+# Daily, not per route push: each sync is a full Claude Opus session and the
+# weekly Claude allowance is shared with every agent (Nish 2026-09-28 13:51Z).
 on:
-  push:
-    branches:
-      - main
-    paths:
-      - app/routes.ts
-      - app/routes/**
-      - e2e/**
-      - .agents/skills/verify/**
+  schedule:
+    - cron: "40 4 * * *"
   workflow_dispatch:
 
 concurrency:
@@ -21,7 +17,7 @@ permissions:
 jobs:
   dispatch:
     name: dispatch
-    if: github.event_name == 'push'
+    if: github.event_name == 'schedule'
     runs-on: ubuntu-latest
     permissions:
       actions: write
@@ -29,7 +25,7 @@ jobs:
     steps:
       - name: Dispatch unless a sync pull request is already open
         # One open sync PR at a time; it is armed for the merge queue when
-        # opened, and the next route push after it lands re-syncs (#5252).
+        # opened, and the next daily run after it lands re-syncs (#5252).
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
