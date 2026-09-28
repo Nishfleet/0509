@@ -319,7 +319,7 @@ describe("screenOnboardingSubject", () => {
       expect(unavailable.map((line) => line.error)).toEqual([
         expect.stringContaining("2021: Insufficient credits"),
       ]);
-      expect(logged.join(" ")).not.toContain(raw);
+      expect(logSpy.mock.calls.flat().join(" ")).not.toContain(raw);
       expect(captureException).toHaveBeenCalledTimes(1);
       expect(vi.mocked(captureException).mock.calls[0]?.[1]).toEqual({ tags: { jev: "public_subject" } });
     } finally {

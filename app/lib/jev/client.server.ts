@@ -139,7 +139,6 @@ export async function askNouls(
   );
   const pending = entries.filter((entry) => entry.cached === null);
   let answers: NoulAnswers = {};
-  let shape: string | undefined;
   if (pending.length > 0) {
     const asked = Object.fromEntries(pending.map((entry) => [entry.question.id, noulAsk(entry.question)]));
     let raw: unknown;
@@ -156,18 +155,19 @@ export async function askNouls(
       throw new JevUnavailableError(error);
     }
     const parsed = answerSchema.safeParse(raw);
-    shape = shapeOf(raw, parsed);
-    if (parsed.success) answers = parsed.data.answers;
+    const shape = shapeOf(raw, parsed);
+    if (!parsed.success) throw new JevUnavailableError(new Error(`answer missing its noul; ${shape}`));
+    const fresh = parsed.data.answers;
+    if (pending.some((entry) => fresh[entry.question.id] === undefined)) {
+      throw new JevUnavailableError(new Error(`answer missing its noul; ${shape}`));
+    }
+    answers = fresh;
   }
   return entries.map((entry) => {
     if (entry.cached !== null) {
       return { questionId: entry.question.id, inputHash: entry.hash, p: entry.cached, cached: true };
     }
-    const fresh = answers[entry.question.id]?.noul;
-    if (fresh === undefined) {
-      const detail = shape === undefined ? "" : `; ${shape}`;
-      throw new JevUnavailableError(new Error(`answer missing its noul${detail}`));
-    }
+    const fresh = answers[entry.question.id].noul;
     return { questionId: entry.question.id, inputHash: entry.hash, p: fresh, cached: false };
   });
 }

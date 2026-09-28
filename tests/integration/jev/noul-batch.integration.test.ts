@@ -195,15 +195,15 @@ describe("askNouls", () => {
     expect(thrown).toBeInstanceOf(JevUnavailableError);
     if (!(thrown instanceof JevUnavailableError)) throw new Error("unreachable");
 
-    expect(thrown.message).toContain("answer missing its noul; keys=response;");
-    expect(thrown.message).toContain("issues=");
-    expect(thrown.message).not.toContain("x");
+    expect(thrown.message).toBe("jev unavailable: answer missing its noul; keys=response; issues=answers:invalid_type");
 
     run.mockImplementation(() => Promise.resolve({ response: "nevEr-ShApE-7731" }));
-    const leaked: unknown = await askNouls(workspaceId, questions, state).catch((error: unknown) => error);
-    expect(leaked).toBeInstanceOf(JevUnavailableError);
-    if (!(leaked instanceof JevUnavailableError)) throw new Error("unreachable");
+    const leaky: unknown = await askNouls(workspaceId, questions, state).catch((error: unknown) => error);
+    expect(leaky).toBeInstanceOf(JevUnavailableError);
+    if (!(leaky instanceof JevUnavailableError)) throw new Error("unreachable");
 
-    expect(leaked.message).not.toContain("nevEr-ShApE-7731");
+    expect(leaky.message).toContain("keys=response;");
+    expect(leaky.message).not.toContain("nevEr-ShApE-7731");
+    expect(leaky.message).not.toContain("Gymshark");
   });
 });
