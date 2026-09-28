@@ -14,7 +14,7 @@ function parseBody(rawBody: string): unknown {
   }
 }
 
-export const GDELT_TIMEOUT_MS = 30_000;
+const GDELT_TIMEOUT_MS = 30_000;
 
 export const gdelt: MentionsAdapter = async (target, _cursor) => {
   const response = await fetchUpstream(

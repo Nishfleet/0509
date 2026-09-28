@@ -31,7 +31,7 @@ A target that throws is logged as `mentions.target_failed` and counted as `faile
 - `planTargets()` reads `app/lib/data/watch.server.ts` `readActiveWatches("mentions")` and groups them by `(source_id, target_key)`, returning one `MentionTarget` per `(plugin, target_key)`.
 - `sweepTarget(target, now)`:
   1. Looks up the adapter (`adapterFor(pluginKey)` from `workers/sources/registry.ts`); throws if missing.
-  2. Calls the adapter once with `AbortSignal.timeout(8000)` (`workers/sources/mentions/types.ts` `fetchUpstream`).
+  2. Calls the adapter once with a request timeout that defaults to 8000 ms (`fetchUpstream` in `workers/sources/mentions/types.ts`); the GDELT adapter passes 30000 ms.
   3. Filters items to those with non-empty titles.
   4. Computes `hash = sha256(rawBody)`.
   5. Writes the body to **R2** at `snapshot/mentions/<plugin_key>/<hash>` via `env.SNAPSHOTS.put` (unconditional; a re-poll with an unchanged body re-PUTs the same key).
