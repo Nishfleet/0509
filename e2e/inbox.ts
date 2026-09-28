@@ -76,12 +76,24 @@ export function decodedBodies(raw: string): string[] {
 // asserts the email's own content (its Message-ID, its send time, its HTML
 // part) needs the headers too, and a second poll cannot be trusted to return
 // the same message.
+// The inbox's non-200 answer, carrying the status so a caller can tell a
+// missing message (404) from a real inbox failure (403 secret mismatch, 503
+// token unset, 500). A caller that maps 404 to "nothing stored" must rethrow
+// the rest: swallowing a 403 would turn a bad token into a stale-link timeout.
+class InboxReadError extends Error {
+  readonly status: number;
+  constructor(status: number, to: string) {
+    super(`inbox answered HTTP ${status} for ${to}`);
+    this.status = status;
+  }
+}
+
 export async function readRawMessage(to: string, token: string): Promise<string> {
   const response = await fetch(`${INBOX_URL}/message?to=${encodeURIComponent(to)}`, {
     headers: inboxHeaders(token),
   });
   if (response.status !== 200) {
-    throw new Error(`inbox answered HTTP ${response.status} for ${to}`);
+    throw new InboxReadError(response.status, to);
   }
   return response.text();
 }
@@ -258,12 +270,15 @@ export function ownDocument404For(pathname: string): (entry: ConsoleEntry) => bo
 }
 
 // J1's core: submit the login form for a fresh e2e+ address, read the real
-// email out of the inbox Worker, follow the link, land signed in on /onboarding.
-// A returning, onboarded fixture address lands on /app instead (the redirect
-// in app/routes/onboarding.tsx), so `landing` carries the expectation. The
-// inbox holds one message per recipient for an hour, so a fixed address can
-// still hold the previous run's used link: it is read before this sign-in can
-// overwrite it and excluded from the wait.
+// email out of the inbox Worker, follow the link, land signed in. A fresh
+// address is bounced to /onboarding by requireOnboarded in app-layout.tsx
+// (the landing workspace.server.ts computes is /onboarding); a returning,
+// onboarded fixture address is not, and app/routes/onboarding.tsx redirects
+// it to /app. `landing` carries which expectation this sign-in has, and
+// defaults to the fresh-address one J1 asserts.
+// The inbox holds one message per recipient for an hour, so a fixed address
+// can still hold the previous run's used link: it is read before this
+// sign-in can overwrite it and excluded from the wait.
 // Timestamps are logged for the packet's proof line (send and session).
 export async function signInWithMagicLink(
   page: Page,
@@ -276,11 +291,15 @@ export async function signInWithMagicLink(
   await settleSignInWidget(page);
   const sentAt = new Date().toISOString();
   // Reading before the send captures the message already stored for this
-  // address, so the wait does not accept it as this sign-in's link.
-  // readRawMessage throws on 404 when nothing is stored, and that maps to [].
+  // address, so the wait does not accept it as this sign-in's link. Only a
+  // 404 (nothing stored) maps to an empty exclusion; a 403, 503 or 500 is the
+  // inbox failing and is rethrown rather than silently read as "no message".
   const stale = await readRawMessage(email, token).then(
     (raw) => extractMagicLink(raw),
-    () => null,
+    (error: unknown) => {
+      if (error instanceof InboxReadError && error.status === 404) return null;
+      throw error;
+    },
   );
   await page.locator('button[type="submit"]').click();
   // Sent state replaces the form; asserting the field is gone asserts the swap
