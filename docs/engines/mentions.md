@@ -104,7 +104,7 @@ Per 1,000 polls (one source × one watch × one tick):
 |---|---|---|
 | Workers requests | 1,000 | included |
 | D1 rows written (`snapshot`) | 1,000 | included |
-| D1 rows written (`source` latest facts, one per watch per tick) | 1,000 | included |
+| D1 rows written (`source` latest facts, at most one per source per tick) | 1,000 | included |
 | D1 rows written (`signal`) | up to ~12 × fraction surviving D5 | included |
 | D1 rows written (`alert` on D6 act) | up to ~12 × fraction with `p >= 0.9` | included |
 | R2 Class A (PUT body) | 1,000 | included |
