@@ -7,7 +7,7 @@ export async function takeBrowserEscalation(workspaceId: string, entityId: strin
   return env.BROWSER_BUDGET.get(id).take(ESCALATIONS_PER_BRAND_PER_DAY);
 }
 
-export type BrowserContent =
+type BrowserContent =
   | { ok: true; res: Response }
   | { ok: false; kind: "unconfigured"; cause: "browser binding is not configured" }
   | { ok: false; kind: "threw"; cause: `browser call threw (${string})` };
