@@ -30,17 +30,22 @@ test("GET /sitemap.xml serves the manifest-generated urlset", async ({
   expect(body).toContain(
     '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
   );
-  // The loader builds each loc from the request origin, which is what
-  // response.url() reports, so this is the absolute form in the body — no
-  // second guess at the domain.
-  const origin = new URL(response.url()).origin;
+  // wrangler dev serves the configured route (0509.io), so the origin in the
+  // body is the worker's, never the one the suite dialled. Read it from the
+  // body and check every member is on that one origin, as the loader builds
+  // them all from one request origin.
   const locs = [...body.matchAll(/<loc>([^<]+)<\/loc>/g)].map(([, loc]) => loc);
+  const origins = new Set(locs.map((loc) => new URL(loc).origin));
+  expect([...origins], "the sitemap mixes origins").toHaveLength(1);
+  expect(locs, "sitemap row count differs from SITEMAP_PATHS").toHaveLength(
+    SITEMAP_PATHS.length,
+  );
   for (const path of SITEMAP_PATHS) {
-    expect(locs).toContain(`${origin}${path}`);
+    expect(locs).toContain(`${[...origins][0]}${path}`);
   }
-  // The sitemap is published from https://0509.io. e2e-production sets
-  // PLAYWRIGHT_TEST_BASE_URL=https://0509.io, and that is the run that pins
-  // the domain; the preview origin is 127.0.0.1 with a per-process port.
+  // The sitemap is published from https://0509.io. `e2e-production` sets
+  // PLAYWRIGHT_TEST_BASE_URL=https://0509.io and is the run that pins the
+  // absolute form the issue asks for; local preview serves http://0509.io.
   if (process.env.PLAYWRIGHT_TEST_BASE_URL === "https://0509.io") {
     expect(locs).toContain("https://0509.io/llms.txt");
   }
