@@ -22,7 +22,7 @@ WHERE s.workspace_id = ?1 AND s.observed_at >= ?2 AND s.observed_at < ?3 AND s.i
 GROUP BY s.entity_id, bucket, src.reliability
 HAVING bucket IS NOT NULL`;
 
-export const COUNT_UNJUDGED_INPUTS = `SELECT COUNT(*) AS n
+const COUNT_UNJUDGED_INPUTS = `SELECT COUNT(*) AS n
 FROM signal s
 JOIN entity e ON e.id = s.entity_id AND e.workspace_id = ?1 AND e.state = 'on'
 WHERE s.workspace_id = ?1 AND s.observed_at >= ?2 AND s.observed_at < ?3 AND s.is_tombstoned = 0
