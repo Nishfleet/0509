@@ -37,13 +37,6 @@ export function deliveryFailedAlert(input: {
   };
 }
 
-/**
- * The own-site lane's counterpart to `deliveryFailedAlert`. Same `alert.kind`,
- * so `/app/alerts` renders it through the path brief failures already use,
- * with the incident on the row so the customer can see which breakage never
- * reached their inbox. Keyed on the incident, so a message that dead-letters
- * twice writes one row.
- */
 export function incidentUndeliveredAlert(input: {
   incident_id: string;
   workspace_id: string;
@@ -131,15 +124,6 @@ export async function handleDlqBatch(env: Env, batch: MessageBatch): Promise<str
   return ids;
 }
 
-/**
- * An own-site alert that exhausts `send-email` reaches this queue as
- * `{ incident_id }`. Before this branch existed the message was logged as
- * "unparseable" and acked, so the outage the product is sold around produced
- * nothing the customer could see and nothing Sentry could page on (0509#5761).
- *
- * Sentry is captured before the row is written: if D1 is the thing that is
- * broken, the signal must not depend on D1.
- */
 async function deadLetteredIncident(
   env: Env,
   messageId: string,

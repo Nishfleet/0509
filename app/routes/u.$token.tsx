@@ -1,10 +1,12 @@
 import type { Route } from "./+types/u.$token";
-import { data, Form } from "react-router";
+import { Form } from "react-router";
 
 import { Footer } from "../components/footer";
 import { Button } from "../components/ui/button";
 import { isUnsubscribeTokenKnown } from "../lib/data/email_suppression.server";
 import { unsubscribe } from "../lib/unsubscribe.server";
+
+const INVALID_LINK = "This link is not valid";
 
 export function meta(_: Route.MetaArgs) {
   return [
@@ -19,22 +21,22 @@ export function headers(_: Route.HeadersArgs) {
 
 export async function loader({ params }: Route.LoaderArgs) {
   if (!(await isUnsubscribeTokenKnown(params.token))) {
-    return data({ link: "invalid" as const }, { status: 404 });
+    throw new Response(INVALID_LINK, { status: 404 });
   }
   return { link: "confirm" as const };
 }
 
 export async function action({ params }: Route.ActionArgs) {
   if ((await unsubscribe(params.token)) === "invalid_token") {
-    return data({ link: "invalid" as const, unsubscribed: false }, { status: 404 });
+    throw new Response(INVALID_LINK, { status: 404 });
   }
-  return { link: "done" as const, unsubscribed: true };
+  return { unsubscribed: true as const };
 }
 
-function InvalidLink() {
+export function ErrorBoundary(_: Route.ErrorBoundaryProps) {
   return (
     <main className="mx-auto max-w-xl px-4 py-16">
-      <h1 className="font-display text-2xl font-semibold tracking-[-0.02em]">This link is not valid</h1>
+      <h1 className="font-display text-2xl font-semibold tracking-[-0.02em]">{INVALID_LINK}</h1>
       <p className="text-ink-soft mt-4 leading-[1.65]">
         The unsubscribe link in that email is expired or mistyped, so nothing was changed. Use the link in
         the most recent brief to stop the weekly email, or email us and we will do it.
@@ -44,12 +46,8 @@ function InvalidLink() {
   );
 }
 
-export default function Unsubscribe({ loaderData, actionData }: Route.ComponentProps) {
-  if (actionData?.link === "invalid" || (actionData === undefined && loaderData.link === "invalid")) {
-    return <InvalidLink />;
-  }
-
-  if (actionData !== undefined) {
+export default function Unsubscribe({ actionData }: Route.ComponentProps) {
+  if (actionData?.unsubscribed) {
     return (
       <main className="mx-auto max-w-xl px-4 py-16">
         <h1 className="font-display text-2xl font-semibold tracking-[-0.02em]">You're unsubscribed</h1>

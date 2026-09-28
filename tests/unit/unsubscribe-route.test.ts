@@ -14,29 +14,25 @@ vi.mock("../../app/lib/unsubscribe.server", () => ({
   unsubscribe: () => Promise.resolve(holder.outcome),
 }));
 
-import Unsubscribe, { action, loader } from "../../app/routes/u.$token";
+import Unsubscribe, { ErrorBoundary, action, loader } from "../../app/routes/u.$token";
 
-// `data()` returns a plain marker object rather than a Response, so the two
-// accessors below read the status and body the route actually returned.
-function bodyOf(value: unknown): unknown {
-  if (value !== null && typeof value === "object" && "type" in value && "data" in value) {
-    return (value as { data: unknown }).data;
+async function statusOf(run: () => Promise<unknown>): Promise<number> {
+  const outcome = await run().then(
+    (value) => ({ ok: true as const, value }),
+    (thrown: unknown) => ({ ok: false as const, thrown }),
+  );
+  if (outcome.ok) throw new Error(`expected a thrown 404, got ${JSON.stringify(outcome.value)}`);
+  if (!(outcome.thrown instanceof Response)) {
+    throw new Error(`expected a Response, got ${String(outcome.thrown)}`);
   }
-  return value;
+  return outcome.thrown.status;
 }
 
-function statusOf(value: unknown): number {
-  if (value !== null && typeof value === "object" && "init" in value) {
-    const init = (value as { init?: { status?: number } }).init;
-    if (init?.status !== undefined) return init.status;
-  }
-  return 200;
+function renderInvalid(): string {
+  return renderToStaticMarkup(createElement(ErrorBoundary, {} as never));
 }
 
-function render(
-  loaderData: { link: string },
-  actionData?: { link: string; unsubscribed: boolean },
-): string {
+function renderConfirm(unsubscribed: boolean): string {
   const Stub = createRoutesStub([
     { id: "routes/u.$token", path: "/u/:token", Component: Unsubscribe },
   ]);
@@ -44,76 +40,63 @@ function render(
     createElement(Stub, {
       initialEntries: ["/u/t"],
       hydrationData: {
-        loaderData: { "routes/u.$token": loaderData },
-        ...(actionData === undefined ? {} : { actionData: { "routes/u.$token": actionData } }),
+        loaderData: { "routes/u.$token": { link: "confirm" } },
+        ...(unsubscribed
+          ? { actionData: { "routes/u.$token": { unsubscribed: true } } }
+          : {}),
       },
     }),
   );
 }
 
 describe("/u/:token (0509#5761)", () => {
-  it("serves the invalid-link page with a 404 for a token no target holds", async () => {
+  it("serves a 404 for a token no target holds", async () => {
     holder.known = false;
 
-    const response = await loader({ params: { token: "deadbeef" } } as never);
-
-    expect(statusOf(response)).toBe(404);
-    expect(bodyOf(response)).toEqual({ link: "invalid" });
+    expect(await statusOf(() => loader({ params: { token: "deadbeef" } } as never))).toBe(404);
   });
 
-  it("serves the confirm form for a live token", async () => {
+  it("serves the confirm page for a live token", async () => {
     holder.known = true;
 
-    const response = await loader({ params: { token: "a".repeat(64) } } as never);
+    const data = await loader({ params: { token: "a".repeat(64) } } as never);
 
-    expect(statusOf(response)).toBe(200);
-    expect(bodyOf(response)).toEqual({ link: "confirm" });
+    expect(data).toEqual({ link: "confirm" });
   });
 
   it("answers a POST with a bogus token as a 404 instead of claiming success", async () => {
     holder.outcome = "invalid_token";
 
-    const response = await action({ params: { token: "deadbeef" } } as never);
-
-    expect(statusOf(response)).toBe(404);
-    expect(bodyOf(response)).toEqual({ link: "invalid", unsubscribed: false });
+    expect(await statusOf(() => action({ params: { token: "deadbeef" } } as never))).toBe(404);
   });
 
   it("answers a POST with a live token as success", async () => {
     holder.outcome = "unsubscribed";
 
-    const response = await action({ params: { token: "a".repeat(64) } } as never);
+    const data = await action({ params: { token: "a".repeat(64) } } as never);
 
-    expect(statusOf(response)).toBe(200);
-    expect(bodyOf(response)).toEqual({ link: "done", unsubscribed: true });
+    expect(data).toEqual({ unsubscribed: true });
   });
 
-  it("renders 'This link is not valid' rather than the confirm form when the loader says invalid", () => {
-    const html = render({ link: "invalid" });
+  it("renders 'This link is not valid' with no unsubscribe claim in it", () => {
+    const html = renderInvalid();
 
     expect(html).toContain("This link is not valid");
+    expect(html).not.toContain("You&#x27;re unsubscribed");
     expect(html).not.toContain("Stop the weekly brief?");
-    expect(html).not.toContain("You&#x27;re unsubscribed");
   });
 
-  it("renders the invalid-link page after a POST that found nothing to suppress", () => {
-    const html = render({ link: "confirm" }, { link: "invalid", unsubscribed: false });
+  it("renders the confirm form for a live token", () => {
+    const html = renderConfirm(false);
 
-    expect(html).toContain("This link is not valid");
-    expect(html).not.toContain("You&#x27;re unsubscribed");
-  });
-
-  it("renders the confirmation after a POST that suppressed the address", () => {
-    const html = render({ link: "confirm" }, { link: "done", unsubscribed: true });
-
-    expect(html).toContain("You&#x27;re unsubscribed");
+    expect(html).toContain("Stop the weekly brief?");
     expect(html).not.toContain("This link is not valid");
   });
 
-  it("renders the confirm form when the loader finds the token", () => {
-    const html = render({ link: "confirm" });
+  it("renders the confirmation after a POST that suppressed the address", () => {
+    const html = renderConfirm(true);
 
-    expect(html).toContain("Stop the weekly brief?");
+    expect(html).toContain("You&#x27;re unsubscribed");
     expect(html).not.toContain("This link is not valid");
   });
 });

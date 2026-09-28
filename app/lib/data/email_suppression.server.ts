@@ -14,10 +14,6 @@ ON CONFLICT(address) DO NOTHING`;
 
 const SELECT_SUPPRESSION = `SELECT address FROM email_suppression WHERE address = ?`;
 
-// The unsubscribe route's liveness check: an unknown token belongs to no
-// target, so the route can answer with the invalid-link page instead of
-// claiming a suppression that never happened (0509#5761). Served by
-// idx_send_target_unsubscribe_token, so it is one indexed read.
 const SELECT_UNSUBSCRIBE_TOKEN = `SELECT 1 AS present FROM send_target WHERE unsubscribe_token = ?`;
 
 const DELETE_SUPPRESSION = `DELETE FROM email_suppression WHERE address = ?`;
