@@ -6,7 +6,15 @@ import { betterAuth } from "better-auth";
 import { magicLink } from "better-auth/plugins";
 import { expect, test, type Page } from "@playwright/test";
 
-import { consoleFailures, requireInboxToken, signInWithMagicLink, watchConsole } from "./inbox";
+import { consoleFailures, deleteCreatedAccount, requireInboxToken, signInWithMagicLink, watchConsole } from "./inbox";
+
+let createdEmail = "";
+test.afterEach(async ({ page }, testInfo) => {
+  if (createdEmail === "") return;
+  testInfo.setTimeout(testInfo.timeout + 60_000);
+  await deleteCreatedAccount(page, createdEmail);
+  createdEmail = "";
+});
 
 // J6 by keyboard alone (0509#4158): a customer can turn a competitor off and
 // back on without a pointer. From whatever app page the session lands on, the
@@ -114,6 +122,7 @@ async function seedSession(): Promise<string> {
 // competitor.
 async function watchOneCompetitor(page: Page): Promise<void> {
   const email = `e2e+${crypto.randomUUID().replaceAll("-", "").slice(0, 12)}@0509.io`;
+  createdEmail = email;
   await signInWithMagicLink(page, email, requireInboxToken());
 
   await page.goto("/onboarding");

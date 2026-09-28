@@ -11,6 +11,6 @@ const SELECT_PLAN_LIMITS = "SELECT tier, limits_json FROM plan WHERE workspace_i
 
 export async function readEntitlements(workspaceId: string): Promise<Entitlements> {
   const row = await env.DB.prepare(SELECT_PLAN_LIMITS).bind(workspaceId).first<PlanLimitsRow>();
-  if (row === null) return resolveEntitlements("scout", "");
+  if (row === null) return resolveEntitlements("scout", "{}");
   return resolveEntitlements(row.tier, row.limits_json);
 }

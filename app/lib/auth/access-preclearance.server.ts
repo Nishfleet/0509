@@ -14,7 +14,7 @@ const jwksByIssuer = new Map<string, ReturnType<typeof createRemoteJWKSet>>();
 function jwksFor(iss: string) {
   const cached = jwksByIssuer.get(iss);
   if (cached) return cached;
-  const jwks = createRemoteJWKSet(new URL(`${iss}/cdn-cgi/access/certs`));
+  const jwks = createRemoteJWKSet(new URL(`${iss}/cdn-cgi/access/certs`), { timeoutDuration: 8000 });
   jwksByIssuer.set(iss, jwks);
   return jwks;
 }
