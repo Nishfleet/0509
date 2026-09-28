@@ -30,9 +30,20 @@ test("GET /sitemap.xml serves the manifest-generated urlset", async ({
   expect(body).toContain(
     '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
   );
-  expect(body).toMatch(/<loc>https?:\/\/[^<]+\/privacy<\/loc>/);
-  expect(body).toMatch(/<loc>https?:\/\/[^<]+\/terms<\/loc>/);
-  expect(body).toMatch(/<loc>https?:\/\/[^<]+\/llms\.txt<\/loc>/);
+  // The loader builds each loc from the request origin, which is what
+  // response.url() reports, so this is the absolute form in the body — no
+  // second guess at the domain.
+  const origin = new URL(response.url()).origin;
+  const locs = [...body.matchAll(/<loc>([^<]+)<\/loc>/g)].map(([, loc]) => loc);
+  for (const path of SITEMAP_PATHS) {
+    expect(locs).toContain(`${origin}${path}`);
+  }
+  // The sitemap is published from https://0509.io. e2e-production sets
+  // PLAYWRIGHT_TEST_BASE_URL=https://0509.io, and that is the run that pins
+  // the domain; the preview origin is 127.0.0.1 with a per-process port.
+  if (process.env.PLAYWRIGHT_TEST_BASE_URL === "https://0509.io") {
+    expect(locs).toContain("https://0509.io/llms.txt");
+  }
 });
 
 test("every sitemap url is served as an indexable 200, not noindex", async ({

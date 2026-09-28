@@ -28,10 +28,35 @@ const isDisallowed = (urlPath: string) =>
     (prefix) => urlPath === prefix || urlPath.startsWith(`${prefix}/`),
   );
 
-const robotsMetaTags = (document: string) =>
-  (document.match(/<meta\b[^>]*>/gi) ?? []).filter((tag) =>
-    /\bname\s*=\s*["']robots["']/i.test(tag),
-  );
+// A robots directive is a robots <meta> tag in a document, and a string
+// literal in a module: a JSX attribute value, a template literal, or a plain
+// literal. Reading only string literals in a module is what keeps a
+// "robots" spelled as an identifier or a type out; reading the literals
+// whole is what keeps `content={cond ? "noindex" : "index, follow"}` in.
+const withoutComments = (source: string) =>
+  source
+    .replace(/\/\*[\s\S]*?\*\//g, " ")
+    .replace(/\/\/[^\n]*/g, " ");
+const documentsDeclaringNoindex = (document: string) =>
+  (withoutComments(document).match(/<meta\b[^>]*>/gi) ?? [])
+    .filter((tag) => /\bname\s*=\s*["']robots["']/i.test(tag))
+    .some((tag) => /\bnoindex\b/i.test(tag));
+const modulesDeclaringNoindex = (module: string) =>
+  (
+    withoutComments(module).match(/"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|`[^`]*`/g) ??
+    []
+  ).some((literal) => /\bnoindex\b/i.test(literal));
+// The modules that decide what a matched path renders: the route's own
+// module, and app/root.tsx, the document React Router wraps every route in.
+// Both clear the check together, so a robots tag the root hands down counts.
+const servingSources = (route: RouteConfigEntry) =>
+  [
+    join(REPO_ROOT, "app", route.file),
+    join(REPO_ROOT, "app", "root.tsx"),
+  ].map((absolute) => ({
+    absolute,
+    noindex: modulesDeclaringNoindex(readFileSync(absolute, "utf8")),
+  }));
 
 describe("public-route manifest", () => {
   it("classifies every top-level route in app/routes.ts", () => {
@@ -82,6 +107,16 @@ describe("public-route manifest", () => {
     }
   });
 
+  it("keeps every SITEMAP_PATHS member a public route, not just a route", () => {
+    for (const path of SITEMAP_PATHS) {
+      expect(
+        (PUBLIC_PATHS as readonly string[]).includes(path) ||
+          path === "/llms.txt",
+        `sitemap path "${path}" is public neither to /llms.txt's ## Pages nor as the agent manifest`,
+      ).toBe(true);
+    }
+  });
+
   it("keeps every SITEMAP_PATHS member a declared, robots-allowed, non-noindex route", () => {
     const routesByUrl = new Map<string, RouteConfigEntry>();
     for (const entry of topLevel(routes)) {
@@ -92,37 +127,36 @@ describe("public-route manifest", () => {
       }
     }
     for (const path of SITEMAP_PATHS) {
-      const route = routesByUrl.get(path);
       expect(
         isDisallowed(path),
         `sitemap path "${path}" is disallowed by robots.txt`,
       ).toBe(false);
-      if (path === "/") {
+      if (path === "/" && existsSync(join(REPO_ROOT, "public/index.html"))) {
         // "/" is the static rebuild notice until the landing ships an index
-        // route; whichever document serves is the one checked for noindex.
-        const file = join(REPO_ROOT, "public/index.html");
-        if (existsSync(file)) {
-          for (const tag of robotsMetaTags(readFileSync(file, "utf8"))) {
-            expect(
-              tag.toLowerCase(),
-              `the document serving "${path}" declares a robots noindex`,
-            ).not.toContain("noindex");
-          }
-          continue;
-        }
+        // route; the document that serves it is the one read for noindex.
+        expect(
+          documentsDeclaringNoindex(
+            readFileSync(join(REPO_ROOT, "public/index.html"), "utf8"),
+          ),
+          "the document serving / declares a robots noindex",
+        ).toBe(false);
+        continue;
       }
+      const route = routesByUrl.get(path);
       expect(
         route,
         `sitemap path "${path}" is not a route in app/routes.ts`,
       ).toBeDefined();
-      if (route === undefined) continue;
-      const source = readFileSync(join(REPO_ROOT, "app", route.file), "utf8")
-        .replace(/\/\*[\s\S]*?\*\//g, " ")
-        .replace(/\/\/[^\n]*/g, " ");
+      if (route === undefined) {
+        throw new Error(`app/routes.ts declares no route for "${path}"`);
+      }
       expect(
-        source,
-        `the module serving "${path}" declares a robots noindex`,
-      ).not.toMatch(/(?:content|x-robots-tag)["']?\s*[:=]\s*["'`]\s*noindex\b/i);
+        servingSources(route),
+        `a module serving "${path}" declares a robots noindex`,
+      ).toEqual([
+        expect.objectContaining({ noindex: false }),
+        expect.objectContaining({ noindex: false }),
+      ]);
     }
   });
 
@@ -133,9 +167,7 @@ describe("public-route manifest", () => {
   it("keeps a noindex page out of the sitemap", () => {
     const file = join(REPO_ROOT, "public/index.html");
     const staticHome = existsSync(file) ? readFileSync(file, "utf8") : "";
-    const noindex = robotsMetaTags(staticHome).some((tag) =>
-      tag.toLowerCase().includes("noindex"),
-    );
+    const noindex = documentsDeclaringNoindex(staticHome);
     expect((SITEMAP_PATHS as readonly string[]).includes("/")).toBe(!noindex);
   });
 
