@@ -283,6 +283,38 @@ jobs:
           configPath: ./lighthouserc.cjs
           uploadArtifacts: false
           temporaryPublicStorage: false
+      - name: Exchange the Access service token for the CF_Authorization cookie
+        # /design/landing is behind Access (the real landing page, REBUILD-DONE
+        # B). One request with the service token, no email and no session. The
+        # cookie is masked before anything else can print it and lives only in
+        # this job's env. Until the rotated token works no cookie comes back:
+        # the step then reports ok=false and the landing audit is skipped, not red.
+        if: ${{ !cancelled() }}
+        id: access
+        run: |
+          cookie=$(curl -sS -o /dev/null -D - -H "CF-Access-Client-Id: $CF_ACCESS_CLIENT_ID" -H "CF-Access-Client-Secret: $CF_ACCESS_CLIENT_SECRET" "$ENVIRONMENT_URL/login" | grep -io 'CF_Authorization=[^;]*' | cut -d= -f2- || true)
+          if [ -z "$cookie" ]; then
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::No Access cookie from the service token; /design/landing not audited"
+            exit 0
+          fi
+          echo "::add-mask::$cookie"
+          echo "CF_Authorization=$cookie" >> "$GITHUB_ENV"
+          echo "ok=true" >> "$GITHUB_OUTPUT"
+        env:
+          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+          ENVIRONMENT_URL: ${{ github.event.deployment_status.environment_url }}
+      - name: Audit the landing page against the budgets
+        if: ${{ !cancelled() && steps.access.outputs.ok == 'true' }}
+        uses: treosh/lighthouse-ci-action@3e7e23fb74242897f95c0ba9cabad3d0227b9b18 # v12
+        with:
+          urls: |
+            ${{ github.event.deployment_status.environment_url }}/design/landing
+          budgetPath: ./lighthouse-budget.json
+          configPath: ./lighthouserc.cjs
+          uploadArtifacts: false
+          temporaryPublicStorage: false
       - name: Open or update the issue that dispatches the fix
         if: failure() || cancelled()
         id: red
