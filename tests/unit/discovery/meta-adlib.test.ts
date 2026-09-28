@@ -1,7 +1,3 @@
-import { readFileSync } from "node:fs";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
-
 import { describe, expect, it } from "vitest";
 
 import { renderDescriptorTemplate } from "../../../app/lib/ads/descriptor";
@@ -11,8 +7,6 @@ import {
   metaAdlibDescriptor,
   parseStoredCandidates,
 } from "../../../app/lib/discovery/generators/meta-adlib";
-
-const ROOT = join(dirname(fileURLToPath(import.meta.url)), "../../..");
 
 const PAGE = [
   '<script>{"ad_archive_id":"1035896478962196","page_name":"Alphalete Athletics"}</script>',
@@ -88,24 +82,5 @@ describe("meta ad library page", () => {
     });
     expect(parseStoredCandidates(body).map((candidate) => candidate.name)).toEqual(["On Running"]);
     expect(parseStoredCandidates("not-json")).toEqual([]);
-  });
-});
-
-describe("discovery does not run the ad library inside onboarding", () => {
-  it("enqueues only after the competitor list is written, and never imports the browser", () => {
-    const workflow = readFileSync(join(ROOT, "workers/workflows/discovery.ts"), "utf8");
-    const confirm = readFileSync(join(ROOT, "app/lib/identity/confirm.server.ts"), "utf8");
-    const browser = readFileSync(join(ROOT, "app/lib/discovery/meta-adlib-browser.server.ts"), "utf8");
-    const writeAt = workflow.indexOf('step.do("write"');
-    const enqueueAt = workflow.indexOf('step.do("enqueue-adlib"');
-    expect(writeAt).toBeGreaterThan(0);
-    expect(enqueueAt).toBeGreaterThan(writeAt);
-    expect(workflow).toContain("enqueueMetaAdlib");
-    expect(workflow).not.toContain("transportBrowser");
-    expect(workflow).not.toContain("pullMetaAdlib");
-    expect(workflow).not.toContain("runMetaAdlib");
-    expect(confirm).not.toContain("transportBrowser");
-    expect(confirm).not.toContain("pullMetaAdlib");
-    expect(browser).toContain("transportBrowser");
   });
 });

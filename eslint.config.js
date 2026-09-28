@@ -557,6 +557,30 @@ export default tseslint.config(
   },
 
   {
+    files: ["workers/workflows/discovery.ts", "app/lib/identity/confirm.server.ts"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          paths: ONE_PAVED_PATH_IMPORTS,
+          patterns: [
+            ...PAVED_PATH_PATTERNS,
+            {
+              group: [
+                "**/meta-adlib-browser.server",
+                "**/meta-adlib-run.server",
+                "**/transport-browser",
+              ],
+              message:
+                "The Meta Ad Library pull is a page-sweep job. Discovery only enqueues; identity confirm never opens a browser. Source: 0509#4161.",
+            },
+          ],
+        },
+      ],
+    },
+  },
+
+  {
     files: ["app/**/*.{ts,tsx}", "workers/**/*.ts"],
     plugins: { boundaries, "import-x": importX },
     settings: {
