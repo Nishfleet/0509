@@ -1,6 +1,7 @@
 import type { Route } from "./+types/u.$token";
-import { Form } from "react-router";
+import { Form, isRouteErrorResponse } from "react-router";
 
+import { ErrorPage } from "../components/error-page";
 import { Footer } from "../components/footer";
 import { Button } from "../components/ui/button";
 import { isUnsubscribeTokenKnown } from "../lib/data/email_suppression.server";
@@ -33,7 +34,17 @@ export async function action({ params }: Route.ActionArgs) {
   return { unsubscribed: true as const };
 }
 
-export function ErrorBoundary(_: Route.ErrorBoundaryProps) {
+export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
+  if (!(isRouteErrorResponse(error) && error.status === 404)) {
+    return (
+      <ErrorPage
+        title="The product hit a problem"
+        detail="We have been told. Nothing was changed."
+        actionHref="/"
+        actionLabel="Back to the landing"
+      />
+    );
+  }
   return (
     <main className="mx-auto max-w-xl px-4 py-16">
       <h1 className="font-display text-2xl font-semibold tracking-[-0.02em]">{INVALID_LINK}</h1>

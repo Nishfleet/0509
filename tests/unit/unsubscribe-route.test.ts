@@ -28,8 +28,8 @@ async function statusOf(run: () => Promise<unknown>): Promise<number> {
   return outcome.thrown.status;
 }
 
-function renderInvalid(): string {
-  return renderToStaticMarkup(createElement(ErrorBoundary, {} as never));
+function renderBoundary(error: unknown): string {
+  return renderToStaticMarkup(createElement(ErrorBoundary, { error } as never));
 }
 
 function renderConfirm(unsubscribed: boolean): string {
@@ -79,11 +79,23 @@ describe("/u/:token (0509#5761)", () => {
   });
 
   it("renders 'This link is not valid' with no unsubscribe claim in it", () => {
-    const html = renderInvalid();
+    const html = renderBoundary({ status: 404, statusText: "Not Found", internal: true, data: "" });
 
     expect(html).toContain("This link is not valid");
     expect(html).not.toContain("You&#x27;re unsubscribed");
     expect(html).not.toContain("Stop the weekly brief?");
+  });
+
+  it("renders the generic problem page for a failure that is not a 404", () => {
+    for (const error of [
+      new Error("D1 unavailable"),
+      { status: 500, statusText: "Internal Server Error", internal: true, data: "" },
+    ]) {
+      const html = renderBoundary(error);
+
+      expect(html).toContain("The product hit a problem");
+      expect(html).not.toContain("This link is not valid");
+    }
   });
 
   it("renders the confirm form for a live token", () => {
