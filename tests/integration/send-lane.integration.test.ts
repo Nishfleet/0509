@@ -412,6 +412,7 @@ describe("send lane (0509#3979)", () => {
     expect(result.outcome).toBe("no_target");
     expect(rec.sent).toHaveLength(0);
     expect(await readAttempts()).toHaveLength(0);
+    expect((await digestStatus(digestId))?.status).toBe("pending");
     const logLine = lines.find((l) => l.includes(`"event":"delivery.no_target"`));
     const parsed = logLine ? (JSON.parse(logLine) as Record<string, unknown>) : {};
     expect(parsed).toMatchObject({
@@ -465,6 +466,7 @@ describe("send lane (0509#3979)", () => {
     expect(result.outcome).toBe("no_target");
     expect(rec.sent).toHaveLength(0);
     expect(await readAttempts()).toHaveLength(0);
+    expect((await digestStatus(digestId))?.status).toBe("pending");
     const logLine = lines.find((l) => l.includes(`"event":"delivery.no_target"`));
     const parsed = logLine ? (JSON.parse(logLine) as Record<string, unknown>) : {};
     expect(parsed).toMatchObject({

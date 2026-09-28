@@ -163,7 +163,7 @@ async function logNoTarget(
     );
   }
   console.log(
-    JSON.stringify({ event: "delivery.no_target", reason, workspace_id: workspaceId, ...workItem }),
+    JSON.stringify({ ...workItem, event: "delivery.no_target", reason, workspace_id: workspaceId }),
   );
 }
 
