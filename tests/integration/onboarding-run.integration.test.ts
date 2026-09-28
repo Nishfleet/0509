@@ -133,6 +133,31 @@ describe("markCardReady", () => {
 
     expect(row?.card_ready_at).not.toBeNull();
   });
+
+  it("resolves the logo and marks the run when the site read fails", async () => {
+    await startOnboardingRun({
+      workspaceId,
+      userId,
+      inputRaw: "first.example",
+      startedAt: "2026-09-25T06:00:00.000Z",
+    });
+
+    const site = Promise.reject<SiteFields>(new Error("site read failed"));
+    site.catch(() => undefined);
+    const card = timeCard(workspaceId, {
+      site,
+      logo: Promise.resolve("data:x"),
+    });
+
+    await expect(card.logo).resolves.toBe("data:x");
+    const row = await env.DB.prepare(
+      "SELECT card_ready_at FROM onboarding_run WHERE workspace_id = ?",
+    )
+      .bind(workspaceId)
+      .first<{ card_ready_at: string | null }>();
+
+    expect(row?.card_ready_at).not.toBeNull();
+  });
 });
 
 describe("stampFirstSignals", () => {
