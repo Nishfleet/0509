@@ -1,6 +1,8 @@
 import type { WorkflowEvent, WorkflowStep, WorkflowStepConfig } from "cloudflare:workers";
 import { WorkflowEntrypoint } from "cloudflare:workers";
 
+import { withMonitor } from "@sentry/cloudflare";
+
 import type { OwnSitePage } from "../../app/lib/data/page.server";
 import type { OwnSiteHealth } from "../../app/lib/site/own-site.server";
 import {
@@ -16,6 +18,12 @@ const RETRY: WorkflowStepConfig = {
 };
 
 const CONFIRM_AFTER = "5 minutes";
+
+const MONITOR = {
+  schedule: { type: "crontab", value: "0 * * * *" },
+  checkinMargin: 15,
+  timezone: "UTC",
+} as const;
 
 export interface OwnSiteCheckOutcome {
   pages: number;
@@ -44,6 +52,13 @@ async function settle<T>(label: string, run: () => Promise<T>): Promise<T | null
 
 export class OwnSiteCheck extends WorkflowEntrypoint<Env> {
   async run(event: WorkflowEvent<unknown>, step: WorkflowStep): Promise<OwnSiteCheckOutcome> {
+    return withMonitor("own-site-check", () => this.runCheck(event, step), MONITOR);
+  }
+
+  private async runCheck(
+    event: WorkflowEvent<unknown>,
+    step: WorkflowStep,
+  ): Promise<OwnSiteCheckOutcome> {
     const plannedAt = event.timestamp.toISOString();
     const plan = await step.do("plan", RETRY, () => planOwnSiteCheck(plannedAt));
 
