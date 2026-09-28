@@ -1,5 +1,4 @@
-import type { D1Migration } from "cloudflare:test";
-import { env } from "cloudflare:test";
+import { env, type D1Migration } from "cloudflare:test";
 import { beforeEach, describe, expect, it } from "vitest";
 
 import {
@@ -284,7 +283,7 @@ describe("source latest snapshot facts (0509#5724)", () => {
     });
   });
 
-  it("adds three nullable columns to source, proven with PRAGMA on real D1", async () => {
+  it("adds three nullable columns to source, checked with PRAGMA on the migrated database", async () => {
     const { results } = await env.DB.prepare("PRAGMA table_info(source)").all<{
       name: string;
       type: string;

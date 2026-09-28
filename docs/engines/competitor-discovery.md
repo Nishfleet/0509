@@ -89,7 +89,7 @@ Each `<item>` carries `<title>`, `<link>`, `<pubDate>` and `<source url="…">`.
 
 | Step | Reads | Writes |
 |---|---|---|
-| Generators | `entity` (the self card), `source` (registry rows, for rate limits and `reliability`) | R2: one raw payload per generator run; `snapshot`: **one row per generator run**, with `item_count` and `payload_hash`, paired in the same `batch()` with the `source` latest-facts update — the cost boundary, two rows per watch per tick |
+| Generators | `entity` (the self card), `source` (registry rows, for rate limits and `reliability`) | R2: one raw payload per generator run; `snapshot`: **one row per generator run**, with `item_count` and `payload_hash` — the cost boundary, one row per watch per tick |
 | Evidence count | those snapshot payloads | nothing |
 | Resolve name → domain | — | KV `resolve:<name>` 30-day TTL |
 | Jev D1 | `entity`, `suggestion` (dismissal memory), `user_decision` | `jev_verdict`, one row per judged candidate |
@@ -143,11 +143,11 @@ Per discovery run (one brand), priced from `REBUILD-COST.md` (2026-09-21):
 | Meta Ad Library keyword leg (browser, async) | ~7 browser-seconds | **1.94 browser-hours** |
 | Queue | ~10 messages × 3 operations | 30,000 ops — **$0.012** |
 | Jev | ~26 calls (20 shortlist + 6 guaranteed) | 26,000 calls; $0 on the seat, **$0.41** at the measured market rate |
-| D1 | 4 snapshot rows (planned; no writer on main yet, each will pair a `source` latest-facts row) + ~12 entity/watch/suggestion rows + 26 verdict rows ≈ 46, one `batch()` | 46,000 rows — **0.09% of the 50M included** |
+| D1 | 4 snapshot rows + ~12 entity/watch/suggestion rows + 26 verdict rows ≈ 42, one `batch()` | 42,000 rows — **0.08% of the 50M included** |
 | R2 | 4 PUTs, ~150 KB total | 4,000 Class A — **$0.018** |
 | Workflow | 6 steps | 6,000 steps — inside 500,000 included |
 
-**Monthly at 100 brands:** one create per brand plus four refreshes each = 500 runs → **0.97 browser-hours** (inside the 10 h allotment), **23,000 D1 rows written** (0.05% of included), **15,000 queue operations**, **13,000 Jev calls** ($0 on the seat, **$0.21** at market). **Cloudflare cost: $0.00.**
+**Monthly at 100 brands:** one create per brand plus four refreshes each = 500 runs → **0.97 browser-hours** (inside the 10 h allotment), **21,000 D1 rows written** (0.04% of included), **15,000 queue operations**, **13,000 Jev calls** ($0 on the seat, **$0.21** at market). **Cloudflare cost: $0.00.**
 
 The number to watch is not money, it is the browser leg: if the ad-library generator is ever run synchronously inside onboarding it becomes 7 seconds of the 60-second budget **and** a slot out of the capped 8. It is asynchronous by design for that reason.
 
