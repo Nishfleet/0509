@@ -73,3 +73,24 @@ test.fail("the collector catches a deliberate console error", async ({ page }) =
   await caught;
   expect(errors).toEqual([]);
 });
+
+test.fail("the collector catches a deliberate page error", async ({ page }) => {
+  const errors: string[] = [];
+  page.on("console", (message) => {
+    if (message.type() === "error") errors.push(`${message.text()} @ ${message.location().url}`);
+  });
+  page.on("pageerror", (error) => errors.push(error.message));
+
+  await page.goto("/");
+  const caught = page.waitForEvent("pageerror");
+  // A synchronous throw inside evaluate is marshaled back to the evaluate
+  // promise and never emits pageerror; a deferred throw is uncaught in the
+  // page and does.
+  await page.evaluate(() => {
+    setTimeout(() => {
+      throw new Error("deliberate page error");
+    }, 0);
+  });
+  await caught;
+  expect(errors).toEqual([]);
+});
