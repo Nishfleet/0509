@@ -154,7 +154,7 @@ Limits that shape the design, all from the same section:
 1. Engine 6's rollover writes `digest` (`kind='weekly'`, `period_start`, `period_end`, `payload_json` carrying the standing rows and D4's picks, `status='pending'`) and completes.
 2. The nightly cron — and an immediate enqueue from the rollover, so the normal path has no delay — puts `{ digest_id }` on `send-email`.
 3. The consumer, in one D1 `batch()`:
-   - reads the `digest`, its `workspace`, and its `send_target` for `channel.key = 'email'`;
+   - reads the `digest`, its `workspace`, and its verified `send_target` (`is_verified = 1`) for `channel.key = 'email'`;
    - checks `email_suppression` for the target address — **an unsubscribed address is skipped before rendering**, not after;
    - inserts `send_attempt` with `idempotency_key = digest:<digest_id>:<send_target_id>` and `status='pending'`. **This insert is the claim.** A `UNIQUE` conflict means another consumer already owns this send, so this delivery returns without sending.
 4. Render (§2 sub-decision), then `env.EMAIL.send`.
