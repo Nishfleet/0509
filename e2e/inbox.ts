@@ -11,20 +11,23 @@ const POLL_LIMIT_MS = 120_000;
 const POLL_INTERVAL_MS = 3_000;
 
 // The origin this run's verify links must carry: the base URL the browser is
-// driving, or production when the suite runs without one. The preview lane's
-// Worker mails on its own BETTER_AUTH_URL (wrangler.jsonc pins production's;
-// the preview lane overrides it), so a link on another origin is not the link
-// this run asked for. An empty or unparseable base URL fails here with its own
-// name: new URL("") throws inside the poll, whose catch reads as a timeout.
+// driving, or production when the suite runs without one. The merge-queue
+// Preview Worker mails on its own BETTER_AUTH_URL (#5737; wrangler.jsonc pins
+// production's, the preview lane overrides it), so a link on another origin is
+// not the link this run asked for. An empty base URL (Actions sets an unset
+// env var to "") falls back like an absent one; anything that is not an http(s)
+// URL throws here with its own name rather than degrading into the poll's
+// 120s no-mail timeout.
 const PRODUCTION_ORIGIN = "https://0509.io";
 
 function laneOrigin(): string {
   const base = process.env.PLAYWRIGHT_TEST_BASE_URL;
   if (!base) return PRODUCTION_ORIGIN;
-  if (!URL.canParse(base)) {
-    throw new Error(`PLAYWRIGHT_TEST_BASE_URL is not a URL: ${base}`);
+  const url = URL.canParse(base) ? new URL(base) : null;
+  if (url === null || (url.protocol !== "http:" && url.protocol !== "https:")) {
+    throw new Error(`PLAYWRIGHT_TEST_BASE_URL is not an http(s) URL: ${base}`);
   }
-  return new URL(base).origin;
+  return url.origin;
 }
 
 // Fail loudly, never skip: the amended decision on #3927 requires a missing
@@ -34,7 +37,7 @@ export function requireInboxToken(): string {
   const token = process.env.E2E_INBOX_TOKEN;
   if (!token) {
     throw new Error(
-      "E2E_INBOX_TOKEN is empty: the repo secret is not wired into an e2e job env in .github/workflows/ci.yml (e2e-production, lighthouse, e2e-scheduled)",
+      "E2E_INBOX_TOKEN is empty: the repo secret is not wired into this job's env. It reaches the suite through e2e-production-shard and lighthouse in .github/workflows/ci.yml, and j12 and spec in .github/workflows/e2e-scheduled.yml",
     );
   }
   return token;

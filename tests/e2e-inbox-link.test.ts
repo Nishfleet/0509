@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { extractMagicLink, InboxReadError, readRawMessage, staleLinks, waitForMagicLink } from "../e2e/inbox";
 
@@ -81,21 +81,6 @@ const HTML_ONLY = [
 ].join("\r\n");
 
 describe("extractMagicLink", () => {
-  // The 0509.io cases pin the no-lane-set default, so a developer whose shell
-  // exports PLAYWRIGHT_TEST_BASE_URL — CLAUDE.md and README.md both tell them
-  // to — does not see eight extraction failures that are not extraction bugs.
-  beforeEach(() => {
-    vi.stubEnv("PLAYWRIGHT_TEST_BASE_URL", undefined);
-  });
-
-  afterEach(() => {
-    vi.unstubAllEnvs();
-  });
-
-  it("defaults to production's origin when no lane sets one", () => {
-    expect(extractMagicLink(PLAIN)).toBe(EXPECTED);
-  });
-
   it("finds the verify URL in a plain body", () => {
     expect(extractMagicLink(PLAIN)).toBe(EXPECTED);
   });
@@ -171,12 +156,25 @@ describe("on a preview lane", () => {
   });
 
   // The poll's catch swallows everything, so an unusable base URL has to name
-  // itself out here rather than surface as a 120s no-mail timeout.
+  // itself before the poll starts rather than surface as a 120s no-mail timeout.
+  // The fetch stub is not what makes these pass — laneOrigin() throws first. It
+  // keeps a regression off the network: without the guard, this would reach the
+  // production inbox Worker for real.
   it("names an unparseable base URL instead of timing out", async () => {
     vi.stubEnv("PLAYWRIGHT_TEST_BASE_URL", "not-a-url");
     vi.stubGlobal("fetch", () => Promise.resolve(new Response(PLAIN, { status: 200 })));
     await expect(waitForMagicLink("e2e+stale@0509.io", "token")).rejects.toThrow(
-      "PLAYWRIGHT_TEST_BASE_URL is not a URL: not-a-url",
+      "PLAYWRIGHT_TEST_BASE_URL is not an http(s) URL: not-a-url",
+    );
+  });
+
+  // A scheme-less value parses (origin "null"), so it would key the extractor
+  // on "null" and end in the same silent timeout; only http(s) is a lane.
+  it("names a base URL that parses but is not http(s)", async () => {
+    vi.stubEnv("PLAYWRIGHT_TEST_BASE_URL", "localhost:8787");
+    vi.stubGlobal("fetch", () => Promise.resolve(new Response(PLAIN, { status: 200 })));
+    await expect(waitForMagicLink("e2e+stale@0509.io", "token")).rejects.toThrow(
+      "PLAYWRIGHT_TEST_BASE_URL is not an http(s) URL: localhost:8787",
     );
   });
 });
@@ -211,16 +209,10 @@ describe("readRawMessage", () => {
 // The pre-send read on the sign-in path (0509#5839): a fixed fixture address
 // still holds the previous run's spent link, so staleLinks is what the wait
 // skips. Only a 404 is nothing stored; every other inbox answer is a failure
-// that must name itself rather than hand back the spent link. The fixtures are
-// 0509.io links, so the lane is pinned to no lane.
+// that must name itself rather than hand back the spent link.
 describe("staleLinks", () => {
-  beforeEach(() => {
-    vi.stubEnv("PLAYWRIGHT_TEST_BASE_URL", undefined);
-  });
-
   afterEach(() => {
     vi.unstubAllGlobals();
-    vi.unstubAllEnvs();
   });
 
   it("is empty when the inbox holds nothing for the address", async () => {
