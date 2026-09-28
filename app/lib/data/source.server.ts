@@ -186,6 +186,19 @@ export async function markSourceTimedOut(sourceId: string): Promise<void> {
   await env.DB.prepare(MARK_SOURCE_BLOCKED).bind(sourceId, "timed out").run();
 }
 
+function snapshotOf(row: {
+  fetched_at: string | null;
+  item_count: number | null;
+  canary_count: number | null;
+}): FreshnessSource["snapshot"] {
+  if (row.fetched_at === null) return null;
+  return {
+    fetched_at: row.fetched_at,
+    item_count: row.item_count ?? 0,
+    canary_count: row.canary_count ?? null,
+  };
+}
+
 export async function readEntitySources(
   workspaceId: string,
   entityId: string,
@@ -226,14 +239,7 @@ export async function readWorkspaceMentionSources(
       last_good_at: row.last_good_at,
       watch_config_json: row.watch_config_json,
     },
-    snapshot:
-      row.fetched_at === null
-        ? null
-        : {
-            fetched_at: row.fetched_at,
-            item_count: row.item_count ?? 0,
-            canary_count: row.canary_count ?? null,
-          },
+    snapshot: snapshotOf(row),
   }));
 }
 
@@ -268,13 +274,6 @@ export async function readRegistrySources(): Promise<readonly FreshnessSource[]>
       last_good_at: row.last_good_at,
       watch_config_json: row.watch_config_json,
     },
-    snapshot:
-      row.fetched_at === null
-        ? null
-        : {
-            fetched_at: row.fetched_at,
-            item_count: row.item_count ?? 0,
-            canary_count: row.canary_count ?? null,
-          },
+    snapshot: snapshotOf(row),
   }));
 }
