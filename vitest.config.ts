@@ -17,12 +17,13 @@ export default defineConfig({
     // not match vitest.config.ts itself (PR #5874 ran zero tests), hence the
     // explicit config globs. migrations/ is read through readD1Migrations,
     // the wrangler configs hold the bindings, apply-migrations.ts is a
-    // project setupFile.
+    // project setupFile, the tsconfigs change how every file compiles.
     forceRerunTriggers: [
       ...configDefaults.forceRerunTriggers,
       "**/vitest.config.*",
       "**/vite.config.*",
       "**/package-lock.json",
+      "**/tsconfig*.json",
       "**/migrations/**",
       "**/wrangler*.jsonc",
       "**/tests/integration/apply-migrations.ts",

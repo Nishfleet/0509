@@ -227,10 +227,7 @@ jobs:
         # / is a static asset, so it never enters the Worker. /design/landing does,
         # and the Worker answers 503 until BETTER_AUTH_SECRET is present (run
         # 36060236500). Same --env-file as playwright.config.ts.
-        # One run per URL: lighthouse-budget.pr.json asserts resource sizes and
-        # CLS only, which do not vary run to run, so three runs repeated the same
-        # answer for 93 s of run 36432985831 (#5849).
-        run: P=$((18000 + $$ % 1000)); npx --yes @lhci/cli@0.15.1 collect --url=http://127.0.0.1:$P/ --url=http://127.0.0.1:$P/design/landing --start-server-command="npx wrangler dev --env-file .dev.vars.example --port $P --local" --start-server-ready-pattern="Ready on" --start-server-ready-timeout=120000 --number-of-runs=1
+        run: P=$((18000 + $$ % 1000)); npx --yes @lhci/cli@0.15.1 collect --url=http://127.0.0.1:$P/ --url=http://127.0.0.1:$P/design/landing --start-server-command="npx wrangler dev --env-file .dev.vars.example --port $P --local" --start-server-ready-pattern="Ready on" --start-server-ready-timeout=120000 --number-of-runs=3
 
       - name: Assert the Lighthouse budgets
         if: github.event_name != 'deployment_status' && steps.scope.outputs.skip != 'true'
