@@ -13,6 +13,11 @@
 -- Historical facts, not a mirror: the rows they summarise cascade away with a
 -- deleted entity (0001_rebuild.sql) and are never restored, so these three
 -- columns keep reporting the last fetch a source made.
+--
+-- A tie on fetched_at is not resolved exactly. The seed takes MAX(fetched_at)
+-- for the timestamp and the newest row the scan reaches for the counts, and the
+-- runtime writer keeps the first committed set (its guard is a strict `<`).
+-- These columns record one real fetch per source, not a tie-broken winner.
 
 ALTER TABLE source ADD COLUMN latest_fetched_at TEXT;
 ALTER TABLE source ADD COLUMN latest_item_count INTEGER;

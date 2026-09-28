@@ -1,7 +1,7 @@
 import { env } from "cloudflare:workers";
 import { z } from "zod";
 
-import { recordSourceLatestSnapshot } from "./source.server";
+import { recordSourceLatestSnapshotAfterInsert } from "./source.server";
 
 const LATEST_SITE_SNAPSHOT = `SELECT id, payload_hash, payload_r2_key FROM snapshot
 WHERE watch_id = ? AND page_id = ? AND fetched_at < ?
@@ -45,7 +45,7 @@ export async function insertSnapshot(row: {
       row.r2Key,
       row.hash,
     ),
-    recordSourceLatestSnapshot(row.id),
+    recordSourceLatestSnapshotAfterInsert(row.id),
   ]);
 }
 
@@ -72,7 +72,7 @@ export function insertWatchSnapshot(row: {
       row.itemCount,
       row.canaryCount,
     ),
-    recordSourceLatestSnapshot(row.id),
+    recordSourceLatestSnapshotAfterInsert(row.id),
   ];
 }
 
@@ -131,7 +131,7 @@ export async function insertBoardSnapshot(row: {
       row.hash,
       row.itemCount,
     ),
-    recordSourceLatestSnapshot(row.id),
+    recordSourceLatestSnapshotAfterInsert(row.id),
   ]);
 }
 

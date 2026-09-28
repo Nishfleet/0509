@@ -250,7 +250,7 @@ describe("source latest snapshot facts (0509#5724)", () => {
     });
   });
 
-  it("one source, two watches in the same tick: the first committed wins the tie", async () => {
+  it("an equal fetched_at is not newer: the first committed fact set stays", async () => {
     await seedSource(SOURCE, WATCH);
     await seedWatch(WATCH_TIE, SOURCE, "acme-campaign");
     await env.DB.batch(
@@ -283,7 +283,27 @@ describe("source latest snapshot facts (0509#5724)", () => {
     });
   });
 
-  it("backfill: the migration's own UPDATE seeds the facts from stored snapshots", async () => {
+  it("adds three nullable columns to source, proven with PRAGMA on real D1", async () => {
+    const info = await env.DB.prepare("PRAGMA table_info(source)").all<{
+      name: string;
+      type: string;
+      notnull: number;
+    }>();
+    const columns = new Map((info.results ?? []).map((column) => [column.name, column]));
+
+    for (const [name, type] of [
+      ["latest_fetched_at", "TEXT"],
+      ["latest_item_count", "INTEGER"],
+      ["latest_canary_count", "INTEGER"],
+    ] as const) {
+      const column = columns.get(name);
+      if (!column) throw new Error(`source is missing the ${name} column`);
+      expect(column.type, `${name} must be ${type}`).toBe(type);
+      expect(column.notnull, `${name} must be nullable so a code rollback stays safe`).toBe(0);
+    }
+  });
+
+  it("the migration's backfill statement seeds the facts from stored snapshots", async () => {
     await seedSource(SOURCE, WATCH);
     await seedSource(SOURCE_BACKFILL, WATCH_BACKFILL);
     await seedWatch(WATCH_BACKFILL_OTHER, SOURCE_BACKFILL, "backfill-other");

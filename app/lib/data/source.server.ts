@@ -111,7 +111,7 @@ const RECORD_SOURCE_LATEST_SNAPSHOT = `UPDATE source SET
 WHERE id = (SELECT w.source_id FROM snapshot sn JOIN watch w ON w.id = sn.watch_id WHERE sn.id = ?1)
   AND (latest_fetched_at IS NULL OR latest_fetched_at < (SELECT sn.fetched_at FROM snapshot sn WHERE sn.id = ?1))`;
 
-export function recordSourceLatestSnapshot(snapshotId: string): D1PreparedStatement {
+export function recordSourceLatestSnapshotAfterInsert(snapshotId: string): D1PreparedStatement {
   return env.DB.prepare(RECORD_SOURCE_LATEST_SNAPSHOT).bind(snapshotId);
 }
 
