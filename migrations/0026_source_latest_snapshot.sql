@@ -18,6 +18,11 @@
 -- for the timestamp and the newest row the scan reaches for the counts, and the
 -- runtime writer keeps the first committed set (its guard is a strict `<`).
 -- These columns record one real fetch per source, not a tie-broken winner.
+--
+-- Multi-statement atomicity inside one D1 migration is not documented, so this
+-- file assumes none: if the seed fails after the ALTERs commit, a retry stops
+-- on duplicate column name and the recovery is a corrective migration — the
+-- same contract 0018_source_canary.sql runs under.
 
 ALTER TABLE source ADD COLUMN latest_fetched_at TEXT;
 ALTER TABLE source ADD COLUMN latest_item_count INTEGER;

@@ -185,7 +185,7 @@ Per 1,000 page checks, priced from `REBUILD-COST.md` (2026-09-21):
 |---|---|---|
 | Unchanged page (fetch + extract + hash) — the common case | 1 subrequest, ~1.1 s wall, negligible CPU | free |
 | Changed page (escalation: 1 render + 1 screenshot ≈ 8 browser-seconds) | browser-seconds | at a 10% change rate: 100 × 8 s = **0.22 browser-hours** → **$0.02** |
-| D1 | 1 snapshot row per check + 1 `source` latest-facts row per check + 1 signal row per published change | 2,000 + ~50 = **2,050 rows written** — 0.004% of the 50M included |
+| D1 | 1 snapshot row per check + up to 1 `source` latest-facts row per check + 1 signal row per published change | 2,000 + ~50 = **2,050 rows written** — 0.004% of the 50M included |
 | R2 | 1 text PUT per check + 2 screenshot PUTs per change | 1,200 Class A (**$0.005**), ~1 GB-mo (**$0.015**) |
 | Queue | 3 ops per check | 3,000 — **$0.0012** |
 | Jev | ~100 calls (changes only) | $0 on the seat, **$0.0016** at the measured market rate |
