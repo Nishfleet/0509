@@ -78,10 +78,10 @@ export class SiteSweep extends WorkflowEntrypoint<Env & { SITE_SWEEP_PING_URL?: 
       Promise.resolve([]),
     );
     const recheckByPage = new Map(
-      missing.map((target, index) => [target.pageId, recheckOutcomes[index] ?? "failed"] as const),
+      missing.map((target, index) => [target.pageId, recheckOutcomes[index]] as const),
     );
     const finalOutcomes = targets.map(
-      (target, index) => recheckByPage.get(target.pageId) ?? outcomes[index] ?? "failed",
+      (target, index) => recheckByPage.get(target.pageId) ?? outcomes[index],
     );
 
     const count = (outcome: PageOutcome) => finalOutcomes.filter((o) => o === outcome).length;
