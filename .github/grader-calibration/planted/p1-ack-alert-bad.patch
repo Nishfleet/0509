@@ -1,0 +1,13 @@
+diff --git a/app/lib/data/alert.server.ts b/app/lib/data/alert.server.ts
+index ce844b46..b223e7f5 100644
+--- a/app/lib/data/alert.server.ts
++++ b/app/lib/data/alert.server.ts
+@@ -177,7 +177,7 @@ export async function readOpenIncidentBlock(
+   return row ?? null;
+ }
+ 
+-const ACKNOWLEDGE_INCIDENT_ALERT = `UPDATE alert SET status = 'acknowledged', read_at = ?3 WHERE workspace_id = ?1 AND id = ?2 AND kind = 'own_site_broken'`;
++const ACKNOWLEDGE_INCIDENT_ALERT = `UPDATE alert SET status = 'acknowledged', read_at = ?3 WHERE id = ?2 AND kind IN ('own_site_broken', 'delivery_failed')`;
+ 
+ export async function acknowledgeIncidentAlert(
+   db: D1Database,
