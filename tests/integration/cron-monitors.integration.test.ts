@@ -12,12 +12,12 @@ import { NIGHTLY_CRON } from "../../workers/delivery/sweeper";
  */
 
 describe("cronMonitor", () => {
-  it("maps the nightly cron to a 30-minute check-in margin and a 30-minute run budget", () => {
+  it("maps the nightly cron to a 60-minute check-in margin and a 30-minute run budget", () => {
     expect(NIGHTLY_CRON).toBe("0 3 * * *");
     expect(cronMonitor(NIGHTLY_CRON)).toEqual({
       slug: "nightly",
       schedule: "0 3 * * *",
-      checkinMargin: 30,
+      checkinMargin: 60,
       maxRuntime: 30,
     });
   });
@@ -32,11 +32,11 @@ describe("cronMonitor", () => {
     });
   });
 
-  it("maps the liveness cron to a 5-minute check-in margin and a 1-minute run budget", () => {
+  it("maps the liveness cron to a 10-minute check-in margin and a 1-minute run budget", () => {
     expect(cronMonitor("*/5 * * * *")).toEqual({
       slug: "liveness-ping",
       schedule: "*/5 * * * *",
-      checkinMargin: 5,
+      checkinMargin: 10,
       maxRuntime: 1,
     });
   });

@@ -18,8 +18,8 @@ import { describe, expect, it } from "vitest";
  *
  * mechanism-impossible: the acceptance bullet "produces zero queue messages" is
  * not measurable in this packet because the sweep that enqueues queue messages
- * does not exist — `workers/app.ts`'s `scheduled` handler is a stub and there is
- * no queue binding in `wrangler.jsonc`. A queue-message count asserted here
+ * does not exist — `workers/scheduled.ts`'s `handleScheduled` runs no ads sweep
+ * and there is no queue binding for it in `wrangler.jsonc`. A queue-message count asserted here
  * would be a number the implementation does not yet produce. Declared per the
  * fleet convention (fleet-ops#366) rather than implied by an empty assertion;
  * #4000 ships the sweep and that test measures a real tick.

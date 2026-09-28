@@ -1,30 +1,14 @@
 import type { OAuthHelpers } from "@cloudflare/workers-oauth-provider";
-import {
-  captureException,
-  instrumentWorkflowWithSentry,
-  setTag,
-  withMonitor,
-  withSentry,
-} from "@sentry/cloudflare";
+import { instrumentWorkflowWithSentry, setTag, withSentry } from "@sentry/cloudflare";
 import { createRequestHandler } from "react-router";
 
 import { requestContext } from "../app/lib/agent/context.server";
 import { createOAuthProvider } from "../app/lib/agent/oauth.server";
-import { deleteExpiredAuthRows } from "../app/lib/data/auth_expiry.server";
-import { stampFirstSignals } from "../app/lib/data/onboarding_run.server";
-import {
-  startNightlyDiscovery,
-  startWeeklyRefresh,
-  WEEKLY_REFRESH_CRON,
-} from "../app/lib/discovery/start.server";
 import { assertWorkerEnv, WorkerEnvError, workerEnvFailureResponse } from "../app/lib/env.server";
-import { pingLiveness } from "../app/lib/liveness-ping.server";
-import { cronMonitor } from "./cron-monitors";
 import { handleBatch } from "./delivery/consumer";
 import { handleDlqBatch } from "./delivery/dlq-consumer";
-import { NIGHTLY_CRON, sweepPending } from "./delivery/sweeper";
 import { sentryOptions } from "./sentry";
-import { runNightlyStanding } from "./standing/nightly";
+import { handleScheduled } from "./scheduled";
 import { IdentityTail } from "./identity-tail-workflow";
 import { AccountDelete } from "./workflows/account-delete";
 import { Discovery } from "./workflows/discovery";
@@ -62,40 +46,7 @@ const handler = {
   },
 
   async scheduled(controller, env, ctx) {
-    setTag("cron", controller.cron);
-    const run = async () => {
-      if (controller.cron === NIGHTLY_CRON) {
-        const now = new Date(controller.scheduledTime);
-        const results = await Promise.allSettled([
-          runNightlyStanding(env, now),
-          sweepPending(env, now),
-          startNightlyDiscovery(now),
-          deleteExpiredAuthRows(env.DB, now),
-          stampFirstSignals(),
-        ]);
-        results.forEach((result) => {
-          if (result.status === "rejected") captureException(result.reason);
-        });
-        return;
-      }
-      if (controller.cron === WEEKLY_REFRESH_CRON) {
-        await startWeeklyRefresh(new Date(controller.scheduledTime));
-        return;
-      }
-      const ping = pingLiveness(env.LIVENESS_PING_URL);
-      if (ping) ctx.waitUntil(ping);
-    };
-    const monitor = cronMonitor(controller.cron);
-    if (!monitor) {
-      await run();
-      return;
-    }
-    await withMonitor(monitor.slug, run, {
-      schedule: { type: "crontab", value: monitor.schedule },
-      checkinMargin: monitor.checkinMargin,
-      maxRuntime: monitor.maxRuntime,
-      timezone: "UTC",
-    });
+    await handleScheduled(controller, env, ctx);
   },
 
   async queue(batch: MessageBatch, env: Env) {
