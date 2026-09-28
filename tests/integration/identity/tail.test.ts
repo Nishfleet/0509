@@ -177,7 +177,7 @@ describe("IdentityTailWorkflow", () => {
   it("judges the homepage's nav pages off the request path, before it seeds watches", async () => {
     await seed();
     await using introspector = await introspectWorkflow(env.IDENTITY_TAIL);
-    let openHomepageRead: () => void = () => {};
+    let openHomepageRead: () => void = () => undefined;
     const homepageRead = new Promise<void>((resolve) => {
       openHomepageRead = resolve;
     });
