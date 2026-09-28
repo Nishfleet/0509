@@ -4,7 +4,7 @@ import { nextBriefAt } from "./brief-schedule";
 import { firstSiteSweepAt, nextSiteSweepAt } from "./onboarding/arrival-estimate";
 import type { SiteChangeView } from "./site-change";
 import { sourceName } from "./source-name";
-export { nextSiteSweepAt, SITE_SWEEP_UTC_HOUR } from "./onboarding/arrival-estimate";
+export { nextSiteSweepAt } from "./onboarding/arrival-estimate";
 
 export interface HomeEntity {
   id: string;
