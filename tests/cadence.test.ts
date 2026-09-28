@@ -43,7 +43,7 @@ describe("cadence", () => {
     expect(rawConfig.triggers?.crons).toContain(WEEKLY_REFRESH_CRON);
   });
 
-  it("derives the site-sweep cron and label from the UTC hour Home names", () => {
+  it("pins the site-sweep cron and label to the UTC hour the sweep runs at", () => {
     expect(SITE_SWEEP_CRON).toBe(`0 ${SITE_SWEEP_UTC_HOUR} * * *`);
     expect(SITE_SWEEP_UTC_LABEL).toBe(`${String(SITE_SWEEP_UTC_HOUR).padStart(2, "0")}:00 UTC`);
   });
