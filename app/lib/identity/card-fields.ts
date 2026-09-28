@@ -18,7 +18,9 @@ export interface SiteFields {
 
 export type CardValues = Pick<SiteFields, "name" | "description" | "socials">;
 
-export type DraftField = "name" | "description";
+export const DRAFT_FIELDS = ["name", "description"] as const;
+
+export type DraftField = (typeof DRAFT_FIELDS)[number];
 
 export interface CardDraft {
   name?: string;
@@ -26,7 +28,7 @@ export interface CardDraft {
 }
 
 export function editedFields(draft: CardDraft): DraftField[] {
-  return (["name", "description"] as const).filter((field) => draft[field] !== undefined);
+  return DRAFT_FIELDS.filter((field) => draft[field] !== undefined);
 }
 
 export interface CreatorRows {

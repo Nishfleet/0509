@@ -15,6 +15,7 @@ import { Ticker } from "../components/landing/ticker";
 import { WhatWeWatch } from "../components/landing/what-we-watch";
 import { WATCHED_NOUNS } from "../lib/coverage";
 import { readSiteChanges } from "../lib/data/signal.server";
+import { readRegistrySources } from "../lib/data/source.server";
 import { FAQ } from "../lib/faq";
 import { daysBefore } from "../lib/site-changes.server";
 import {
@@ -58,16 +59,17 @@ export function meta(_: Route.MetaArgs) {
 }
 
 export async function loader(_: Route.LoaderArgs) {
+  const sources = await readRegistrySources();
+  const now = Date.now();
   const id: unknown = env.LANDING_WORKSPACE_ID;
-  if (typeof id !== "string" || id.trim() === "") return { ticker: [] };
-  const now = new Date();
+  if (typeof id !== "string" || id.trim() === "") return { ticker: [], sources, now };
   const rows = await readSiteChanges({
     workspaceId: id.trim(),
     entityId: null,
-    since: daysBefore(now, 7),
+    since: daysBefore(new Date(now), 7),
     limit: 24,
   });
-  return { ticker: tickerItems(rows, now) };
+  return { ticker: tickerItems(rows, new Date(now)), sources, now };
 }
 
 export default function Landing({ loaderData }: Route.ComponentProps) {
@@ -79,7 +81,7 @@ export default function Landing({ loaderData }: Route.ComponentProps) {
         <Hero />
         <TheMark />
         <HowItWorks />
-        <WhatWeWatch />
+        <WhatWeWatch sources={loaderData.sources} now={loaderData.now} />
         <Agents />
         <Price />
         <Faq />

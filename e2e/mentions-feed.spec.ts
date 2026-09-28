@@ -6,6 +6,8 @@ import { betterAuth } from "better-auth";
 import { magicLink } from "better-auth/plugins";
 import { expect, test, type Page } from "@playwright/test";
 
+import { consoleFailures, watchConsole } from "./inbox";
+
 const BANNED = /mention_matters|mention_is_about_brand|probability|confidence/i;
 
 test.skip(
@@ -256,11 +258,7 @@ async function measure(page: Page) {
 
 test("a workspace shows the three mention treatments", async ({ page }, testInfo) => {
   test.setTimeout(90_000);
-  const consoleErrors: string[] = [];
-  page.on("console", (message) => {
-    if (message.type() === "error") consoleErrors.push(message.text());
-  });
-  page.on("pageerror", (error) => consoleErrors.push(error.message));
+  const watched = watchConsole(page);
 
   await page.setExtraHTTPHeaders({ cookie: await seedSession() });
   const response = await page.goto("/app/alerts");
@@ -313,5 +311,5 @@ test("a workspace shows the three mention treatments", async ({ page }, testInfo
     expect(widths.scrollWidth, JSON.stringify(widths)).toBe(widths.clientWidth);
   }
 
-  expect(consoleErrors).toEqual([]);
+  expect(await consoleFailures(page, watched, testInfo), testInfo.project.name).toEqual([]);
 });

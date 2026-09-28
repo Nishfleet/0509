@@ -9,7 +9,7 @@ Umbrella #3842. Author: Fable. Checked by the Opus deputy. Nish's words: "you ca
 | J1 | Sign in with a magic link | fresh email, link arrives, session lands on the one-input screen |
 | J2 | Sign in with a passkey | register on first sign-in, sign out, sign in with the passkey alone |
 | J3 | Onboard a company domain | card confirmed under 30 s, competitors under 60 s, Home not empty (docs/REBUILD-ONBOARDING.md budgets, timings stored) |
-| J4 | Onboard a creator handle | same budgets; card shows channel, handle, socials |
+| J4 | Onboard a creator handle | same budgets; card shows channel, handle, socials — e2e/j4-onboard-creator.spec.ts |
 | J5 | Onboard a bot-blocking site | card still confirmed; site fields say what fills them and when |
 | J6 | Turn a competitor off and back on | off: absent from Home, Alerts, brief; on: history intact |
 | J7 | A competitor changes its pricing page | before-and-after mark in Alerts within one tick, correct kind, screenshot pair, in the next brief |
@@ -44,6 +44,23 @@ Decisions recorded on 0509#3927 (2026-09-22):
   `/app/settings` (better-auth's `signOut`); the spec clicks it and proves the
   session ended by the `/app` → `/login` redirect before the passkey-only
   sign-in, with no console errors, at 1440 and 390.
+- **J11's brief** is the production mail path (`e2e/j11-weekly-brief.spec.ts`).
+  A fresh address confirms a brand, watches four competitors and turns one
+  off, then saves a brief time other than the default Monday 08:00 whose
+  hour has already started. That save includes the existing `-catch-up`
+  rollover in the one batch the save already creates when the week that
+  just came due was not already briefed, so that week sends now,
+  and the spec reads the message from the e2e inbox — not from D1. At 600 px
+  it checks the contract order that a nothing-noteworthy week can show: the
+  headline, the tracked brands with the off brand absent rather than zeroed,
+  the own-site line, and the footer (what was checked, the next brief, the
+  unsubscribe link). "Read this first" is absent; that block is the one a
+  quiet week drops. When a source has not answered, the why-line names it
+  instead of claiming a quiet week. The `List-Unsubscribe` one-click POST
+  writes `email_suppression`, and a second schedule whose hour also already
+  started does not send. The five-block brief, with "Read this first"
+  present, needs a D3 or D6 verdict. Production has none until that judge
+  lands (0509#4041), so this spec does not invent one.
 
 ## B. Quality gates (each is a number, measured on production)
 
