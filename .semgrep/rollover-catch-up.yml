@@ -7,7 +7,9 @@ rules:
       nightly reconciliation (workers/standing/nightly.ts) or the save-time
       reschedule (app/lib/standing/reschedule.ts). A third call site is a
       second send path with no test covering it.
-    pattern: rolloverInstance($W, $C, "catch-up")
+    # "catch-up" in any argument position, so arity growth cannot silently
+    # un-match the call. Excluded: the two sanctioned creators plus tests/.
+    pattern: rolloverInstance(..., "catch-up", ...)
     paths:
       exclude:
         - tests/**
