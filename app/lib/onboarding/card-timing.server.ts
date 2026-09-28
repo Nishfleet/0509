@@ -8,8 +8,16 @@ export function timeCard(
 ): ReturnType<typeof startCard> {
   return {
     site: card.site,
-    logo: Promise.all([card.site, card.logo]).then(async ([, logo]) => {
-      await markCardReady(workspaceId, new Date().toISOString());
+    logo: card.logo.then(async (logo) => {
+      await Promise.allSettled([card.site]);
+      await markCardReady(workspaceId, new Date().toISOString()).catch((error: unknown) => {
+        console.error(
+          JSON.stringify({
+            event: "onboarding.card_ready_mark_failed",
+            message: String(error),
+          }),
+        );
+      });
       return logo;
     }),
   };
