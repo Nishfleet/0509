@@ -1,5 +1,5 @@
 import { env } from "cloudflare:test";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { createAuth } from "../../app/lib/auth.server";
 
@@ -8,8 +8,8 @@ const ORIGIN = "http://localhost:8787";
 // 0509#5721: better-auth re-reads sqlite_master and pragma_table_info once per
 // auth instance unless advanced.database.validateSchema is false. createAuth
 // builds an instance per request, so the schema was costing ~6.5M D1 rows a
-// day. Migrations and this suite already prove the schema; the runtime check
-// stays off.
+// day. The schema itself is pinned by migrations/ and
+// schema.integration.test.ts; the runtime check stays off.
 describe("auth schema validation", () => {
   it("issues no schema introspection queries when building the auth instance", async () => {
     const introspected: string[] = [];
@@ -42,12 +42,23 @@ describe("auth schema validation", () => {
     );
 
     // The check rides on better-auth's async context init: one real request
-    // forces it to resolve, then a macrotask lets the introspection finish.
+    // forces it to resolve. base.mjs runs ctx.checkSchema() detached (the
+    // promise is never awaited), so the introspection burst lands after the
+    // response — a fixed sleep would race it. Poll until the count stops
+    // growing: on the fix it stays zero, on the old code it converges to ~38.
     const response = await auth.handler(
       new Request(`${ORIGIN}/api/auth/get-session`, { headers: { origin: ORIGIN } }),
     );
     expect(response.status).toBe(200);
-    await new Promise((resolve) => setTimeout(resolve, 100));
+    let previous = -1;
+    await vi.waitFor(
+      () => {
+        if (introspected.length === previous) return;
+        previous = introspected.length;
+        throw new Error("schema introspection still in flight");
+      },
+      { timeout: 5_000, interval: 50 },
+    );
 
     expect(introspected).toEqual([]);
   });
