@@ -7,14 +7,8 @@ let createdEmail = "";
 test.afterEach(async ({ page }, testInfo) => {
   if (createdEmail === "") return;
   testInfo.setTimeout(testInfo.timeout + 60_000);
-  // The delete failing is a test failure, not a reason to keep the address:
-  // clearing in finally means the next test in this worker cannot try to
-  // delete an account that is already gone.
-  try {
-    await deleteCreatedAccount(page, createdEmail);
-  } finally {
-    createdEmail = "";
-  }
+  await deleteCreatedAccount(page, createdEmail);
+  createdEmail = "";
 });
 
 // The sign-in link's real contract, proven on production every deploy: one use,
