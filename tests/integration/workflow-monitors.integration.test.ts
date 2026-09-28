@@ -10,10 +10,6 @@ vi.mock("@sentry/cloudflare", () => ({
   withMonitor: vi.fn((_slug: string, cb: () => unknown) => cb()),
 }));
 
-// The workflow modules are already in the module-runner registry (they belong
-// to the main Worker's graph) before this file's mocks register, so a static
-// import binds the real @sentry/cloudflare. Resetting the registry and
-// re-importing inside beforeAll returns copies bound to the mock.
 let siteSweep: { prototype: SiteSweep };
 let mentionsSweep: { prototype: MentionsSweep };
 let ownSiteCheck: { prototype: OwnSiteCheck };
@@ -48,11 +44,6 @@ const immediateStep = {
   sleep: async () => undefined,
 } as unknown as WorkflowStep;
 
-// `new WorkflowEntrypoint(ctx, env)` requires workerd's own ExecutionContext,
-// which exists only inside a real binding invocation; createExecutionContext()
-// is a duck type and fails the native brand check. The methods under test need
-// only the prototype and own `env`/`ctx` properties, so the instance is built
-// by hand.
 const makeWorkflow = <T extends object>(workflow: { prototype: T }): T => {
   const instance = Object.create(workflow.prototype) as T;
   Object.assign(instance, { env, ctx: createExecutionContext() });
@@ -79,8 +70,6 @@ describe("workflow Sentry cron monitors", () => {
   });
 
   it("checks mentions-sweep in on its 01:00 UTC monitor and returns the zeroed sweep", async () => {
-    // Migration 0018 seeds canary_query on the gdelt/hn sources; clearing it
-    // keeps this run to plan + canary-plan only, with no upstream calls.
     await env.DB.exec("UPDATE source SET canary_query = NULL");
     const outcome = await makeWorkflow(mentionsSweep).run(event, immediateStep);
     expect(monitorMock).toHaveBeenCalledTimes(1);
