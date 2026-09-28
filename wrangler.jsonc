@@ -24,7 +24,50 @@
     // p95 request duration per route comes from here, which is how
     // docs/REBUILD-DONE.md's performance gate gets measured without a load
     // generator pointed at production.
-    "enabled": true
+    "enabled": true,
+    // Stated rather than left at the platform default (0509#5758). The whole
+    // policy is in `logs`, so the two keys below are the ones that bind the
+    // bill; the top-level sampling rate is left unset on purpose because
+    // setting it too would sample the `logs` block below as well, and the two
+    // rates multiply. Workers Logs is 20M events included per month, then
+    // $0.60 per additional million.
+    "logs": {
+      // Every request emits one invocation log, so at 1.0 this Worker writes
+      // an event per request (~450k/day at the measured 09-21..09-28 volume,
+      // ~13.5M/month) against a 20M/month included allowance: the allowance is
+      // the constraint at relaunch scale, and 1.0 is also the platform default,
+      // so a deliberate 1.0 changes no behaviour while making the whole bill
+      // the p95-per-route gate is measured from an explicit choice.
+      "head_sampling_rate": 1,
+      // The invocation log carries the request URL, which is what the p95
+      // per-route measurement reads. Turning it off would make that gate
+      // unmeasurable; the app's own console JSON is what the per-route queries
+      // filter, and it is not affected by this key.
+      "invocation_logs": true,
+      // Persisted logs are what docs/REBUILD-DONE.md's performance gate is
+      // measured from; a non-persisted log cannot be queried a day later.
+      "persist": true
+    }
+  },
+  // Runtime caps, so a runaway path costs a per-invocation error instead of a
+  // core-second (0509#5758). Both numbers are from `workersInvocationsAdaptive`
+  // for script 0509, 2026-09-21T00:00Z..2026-09-28T11:00Z, measured this run:
+  //   cpuTime  p50 11.4 ms, p90 38.1 ms, p99 86.9 ms, p99.9 1,085.6 ms
+  //   233,475 invocations, 34,567 subrequests total (0.15 per invocation)
+  // The slowest invocation in the window is a 3,637 ms `internalError`, so the
+  // cap sits above every invocation ever observed here, while the paid default
+  // (30,000 ms) is 6x further out. Sized as the measured p99 x ~58: the tail is
+  // the thing the launch yardstick is already watching, so the cap guards the
+  // runaway without turning the p99 into a hard 5xx.
+  "limits": {
+    "cpu_ms": 5000,
+    // Declared at the paid default (10,000) rather than left implicit. TIGHTEN
+    // ONLY AFTER #5753: the widest fan-out today is the nightly cron's serial
+    // walk of every workspace (workers/standing/nightly.ts:67-77, 3 D1 reads
+    // each), which is already over this cap and is the failure #5753 exists to
+    // remove. A lower number here would become the thing that kills the walk
+    // before the real fix lands.
+    "subrequests": 10000
   },
   "upload_source_maps": true,
   "assets": { "run_worker_first": ["/mcp"] },
