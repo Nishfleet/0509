@@ -26,6 +26,7 @@ function stubFetch(body: string, status = 200) {
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  vi.restoreAllMocks();
 });
 
 describe("gdelt adapter", () => {
@@ -50,6 +51,13 @@ describe("gdelt adapter", () => {
     stubFetch("{}");
     const result = await adapterFor("gdelt.doc")?.({ query: "Nobody" }, null);
     expect(result?.items).toEqual([]);
+  });
+
+  it("gives GDELT 30 seconds before the request is aborted", async () => {
+    stubFetch(gdeltBody);
+    const timeoutSpy = vi.spyOn(AbortSignal, "timeout");
+    await adapterFor("gdelt.doc")?.({ query: "Gymshark" }, null);
+    expect(timeoutSpy).toHaveBeenCalledWith(30_000);
   });
 
   it("fails loudly on a text answer or an error status", async () => {
