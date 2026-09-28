@@ -1,5 +1,7 @@
 import { expect, test } from "@playwright/test";
 
+import { consoleFailures, watchConsole } from "./inbox";
+
 // The /privacy contract (0509#3986). Every assertion here is reachable from the
 // /privacy row in .agents/skills/verify/feature-map.md.
 //
@@ -122,17 +124,13 @@ test("the privacy page does not scroll horizontally", async ({ page }) => {
   }
 });
 
-test("the privacy page reaches first paint with no console errors", async ({ page }) => {
-  const errors: string[] = [];
-  page.on("console", (message) => {
-    if (message.type() === "error") errors.push(message.text());
-  });
-  page.on("pageerror", (error) => errors.push(error.message));
+test("the privacy page reaches first paint with no console errors", async ({ page }, testInfo) => {
+  const watched = watchConsole(page);
 
   await page.goto("/privacy");
   await page.waitForLoadState("networkidle");
 
-  expect(errors).toEqual([]);
+  expect(await consoleFailures(page, watched, testInfo), testInfo.project.name).toEqual([]);
 });
 
 test("the privacy page serves one ld+json graph naming the organization and breadcrumbs", async ({

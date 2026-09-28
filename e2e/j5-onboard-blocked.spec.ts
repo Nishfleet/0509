@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-import { requireInboxToken, signInWithMagicLink } from "./inbox";
+import { consoleFailures, requireInboxToken, signInWithMagicLink, watchConsole } from "./inbox";
 
 function fixtureToken(): string {
   const token = process.env.FIXTURE_SITE_TOKEN;
@@ -35,14 +35,11 @@ test.describe("J5", () => {
 
   test("J5: a bot-blocking site still gets a card whose empty fields say when they fill", async ({
     page,
-  }) => {
+  }, testInfo) => {
     const email = `e2e+${crypto.randomUUID().replaceAll("-", "").slice(0, 12)}@0509.io`;
     await signInWithMagicLink(page, email, requireInboxToken());
 
-    const consoleErrors: string[] = [];
-    page.on("console", (message) => {
-      if (message.type() === "error") consoleErrors.push(message.text());
-    });
+    const watched = watchConsole(page);
 
     await page.goto("/onboarding");
     const input = page.getByRole("textbox", { name: "your website, or a handle" });
@@ -67,6 +64,6 @@ test.describe("J5", () => {
     await page.getByRole("button", { name: "That's me" }).click();
 
     await expect(page).toHaveURL(/\/onboarding\/competitors$/);
-    expect(consoleErrors).toEqual([]);
+    expect(await consoleFailures(page, watched, testInfo), testInfo.project.name).toEqual([]);
   });
 });

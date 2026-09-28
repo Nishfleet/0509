@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-import { requireInboxToken, signInWithMagicLink } from "./inbox";
+import { consoleFailures, requireInboxToken, signInWithMagicLink, watchConsole } from "./inbox";
 
 const SUBJECT = "https://www.youtube.com/@veritasium";
 
@@ -14,7 +14,7 @@ test.describe("J4 onboard a creator handle", () => {
     { width: 1440, height: 900 },
     { width: 390, height: 844 },
   ]) {
-    test(`J4 a creator handle onboards at ${width}`, async ({ page }) => {
+    test(`J4 a creator handle onboards at ${width}`, async ({ page }, testInfo) => {
       test.setTimeout(240_000);
       const token = requireInboxToken();
       const email = `e2e+${crypto.randomUUID().replaceAll("-", "").slice(0, 12)}@0509.io`;
@@ -22,10 +22,7 @@ test.describe("J4 onboard a creator handle", () => {
       await page.setViewportSize({ width, height });
       await signInWithMagicLink(page, email, token);
 
-      const consoleErrors: string[] = [];
-      page.on("console", (message) => {
-        if (message.type() === "error") consoleErrors.push(message.text());
-      });
+      const watched = watchConsole(page);
 
       await page.goto("/onboarding");
       const input = page.getByRole("textbox", { name: "your website, or a handle" });
@@ -75,7 +72,7 @@ test.describe("J4 onboard a creator handle", () => {
         () => document.documentElement.scrollWidth <= document.documentElement.clientWidth,
       );
       expect(noHorizontalScroll).toBe(true);
-      expect(consoleErrors).toEqual([]);
+      expect(await consoleFailures(page, watched, testInfo), testInfo.project.name).toEqual([]);
       await test.info().attach(`j4-${width}`, {
         body: await page.screenshot(),
         contentType: "image/png",
