@@ -22,7 +22,7 @@ How the budget is kept (measured 2026-09-21 by the deputy: the ads leg is ~7 s, 
 **4. Who you're up against.** Discovery ran in the background since step 2. Shows the competitors Jev accepted (D1 p >= 0.9) as ON, and the maybes as a short second list the user can flip on. "Add a competitor" is a single input that goes through the same identity engine. No minimum, no maximum in v1 (plan limits apply later, at the plan gate, not here). One action: "Start watching".
 - If discovery found nothing yet (slow sources): the screen says "we're still looking, add one you know and we'll keep going", and continues in the background; the Competitors page fills as results land.
 
-**5. Home, second zero.** The first snapshots, ad pulls and mention pulls were queued at step 4. Home shows the greeting, the chip row, and a "first file" panel that says exactly what is being gathered and when the first read-this-first arrives (a real time from the Workflow, not "soon"). Rows fill live as signals land. The weekly brief date is shown.
+**5. Home, second zero.** The first snapshots and mention pulls were queued at step 4. Home shows the greeting, the chip row, and a "first file" panel that says exactly what is being gathered and when the first read-this-first arrives (a real time from the Workflow, not "soon"). Rows fill live as signals land. The weekly brief date is shown.
 
 ## Rules
 
