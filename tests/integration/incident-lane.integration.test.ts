@@ -420,4 +420,20 @@ describe("incident lane (0509#4364)", () => {
     expect(rec.sent[0].html).toContain("Seen at Wed 23 Sept, 12:45.");
     expect(rec.sent[0].html).not.toContain("2026-09-23 07:15 UTC");
   });
+
+  it("(j) reports no_target when the only email target is unverified", async () => {
+    await env.DB.prepare(`UPDATE send_target SET is_verified = 0 WHERE id = ?`)
+      .bind(TARGET_ID)
+      .run();
+    const rec = recorder();
+
+    const result = await deliverIncident(envWith(bindingFor(rec)), message(INCIDENT_A));
+
+    expect(result.outcome).toBe("no_target");
+    expect(result.attempt_id).toBeNull();
+    expect(result.idempotency_key).toBeNull();
+    expect(rec.sent).toHaveLength(0);
+    expect(await readAttempts()).toHaveLength(0);
+    expect(await readNotices(PAGE_A)).toHaveLength(0);
+  });
 });
