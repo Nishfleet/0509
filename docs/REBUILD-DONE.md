@@ -15,11 +15,12 @@ Umbrella #3842. Author: Fable. Checked by the Opus deputy. Nish's words: "you ca
 | J7 | A competitor changes its pricing page | before-and-after mark in Alerts within one tick, correct kind, screenshot pair, in the next brief |
 | J8 | Your own site breaks | incident email within one tick, "fixed" follow-up after repair, one email per incident. Fixture is **`fixture.0509.in`** — a separate Worker with its own name and `routes` block, deployed by normal CI, state in a KV flag flipped through a token-guarded route. **Not `0509.in`**: that is a live production redirect (verified 308 to `0509.io`, 2026-09-21) and breaking it on purpose would break production. Break it two ways: hard (500) and soft (200 with the pricing section gone), because only the soft case exercises D3s |
 | J9 | Mentions land from three sources | news, HN, RSS at minimum; homonym mention correctly dropped (D5) |
-| J10 | New ad creative appears | visible on the competitor page within one tick, deduped on re-crawl |
 | J11 | The weekly brief | real inbox, real workspace, order per docs/REBUILD-DELIVERY.md, quiet-week variant also sent |
 | J12 | Two weekly rollovers | standing rows match Home and the brief (docs/REBUILD-STANDING.md), movement correct after a brand went off |
 | J13 | Upgrade to paid | Dodo checkout from the plan gate, webhook lands, entitlement flips without a reload |
 | J14 | Delete the workspace | every owned row gone (ownership manifest), R2 objects gone, no email after |
+
+J10 (a new ad creative appears) was dropped from the launch bar on 2026-09-28. Nish: "drop ads until we research and reach a better solution" (#3974). The other journeys keep their numbers, so the bar is 13 journeys: J1 to J9 and J11 to J14.
 
 Decisions recorded on 0509#3927 (2026-09-22):
 
