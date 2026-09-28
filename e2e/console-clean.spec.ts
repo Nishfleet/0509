@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 import type { RouteConfigEntry } from "@react-router/dev/routes";
 import routes from "../app/routes";
 
-import { consoleFailures, watchConsole } from "./inbox";
+import { consoleFailures, ownDocument404For, watchConsole, type ConsoleEntry } from "./inbox";
 
 function screenPaths(entries: RouteConfigEntry[], parent: string): string[] {
   const paths: string[] = [];
@@ -30,18 +30,15 @@ for (const target of targets) {
     await page.waitForLoadState("networkidle");
 
     const status = response?.status() ?? 0;
-    const pagePath = new URL(page.url()).pathname;
-    // The empty-url guard is load-bearing: a console error with no location
-    // would make `new URL("")` throw inside the predicate.
-    const ownDocument404 = (entry: { text: string; url: string }) =>
-      status === 404 &&
-      /status of 404\b/.test(entry.text) &&
-      entry.url.length > 0 &&
-      new URL(entry.url).pathname === pagePath;
+    const pageDocument404 = ownDocument404For(new URL(page.url()).pathname);
+    // The status conjunct stays outside the shared predicate: the exclusion
+    // holds only when the page itself answered 404 — a 200 page that logged a
+    // "status of 404" line for the same path still fails.
+    const ownDocument404 = (entry: ConsoleEntry) => status === 404 && pageDocument404(entry);
 
     if (status === 404) {
       expect(
-        watched.consoleErrors.filter(ownDocument404),
+        watched.consoleErrors.filter(pageDocument404),
         `${target} logs its own document 404 exactly once`,
       ).toHaveLength(1);
     }

@@ -183,6 +183,14 @@ export async function turnstileToken(page: Page): Promise<string> {
   return token;
 }
 
+// One collected console error: the text and the url of the script that
+// logged it. watchConsole's array, the same-origin filter and every spec's
+// exclude predicate all state this one shape.
+export interface ConsoleEntry {
+  text: string;
+  url: string;
+}
+
 // The console-error gate's collector, shared by every spec that holds the
 // same-origin gate — j3-onboard-domain keeps its own collector (0509#5680
 // carve).
@@ -192,10 +200,10 @@ export async function turnstileToken(page: Page): Promise<string> {
 // code (0509#5682). Pageerrors carry no location to scope by, so they are
 // always gated — a cross-origin script's uncaught exception still fails.
 export function watchConsole(page: Page): {
-  consoleErrors: { text: string; url: string }[];
+  consoleErrors: ConsoleEntry[];
   pageErrors: string[];
 } {
-  const consoleErrors: { text: string; url: string }[] = [];
+  const consoleErrors: ConsoleEntry[] = [];
   const pageErrors: string[] = [];
   page.on("console", (message) => {
     if (message.type() === "error") {
@@ -215,10 +223,12 @@ export async function consoleFailures(
   page: Page,
   watched: ReturnType<typeof watchConsole>,
   testInfo: TestInfo,
-  exclude: (entry: { text: string; url: string }) => boolean = () => false,
+  exclude: (entry: ConsoleEntry) => boolean = () => false,
 ): Promise<string[]> {
   const pageOrigin = new URL(page.url()).origin;
-  const sameOrigin = (entry: { url: string }) => !entry.url || new URL(entry.url).origin === pageOrigin;
+  // `!entry.url` is load-bearing: a console error with no location would make
+  // `new URL("")` throw inside the predicate.
+  const sameOrigin = (entry: ConsoleEntry) => !entry.url || new URL(entry.url).origin === pageOrigin;
   const dropped = watched.consoleErrors.filter((entry) => !sameOrigin(entry));
   if (dropped.length > 0) {
     await testInfo.attach("cross-origin console errors (excluded from the gate)", {
@@ -232,6 +242,19 @@ export async function consoleFailures(
       .map((entry) => `${entry.text} @ ${entry.url}`),
     ...watched.pageErrors,
   ];
+}
+
+// The 404 specs' shared exclusion: a document 404 surfaces as a console error
+// on the page's own URL — expected, and a 404 for any other URL still fails.
+// Pathname equality, not a suffix match: a different path ending the same way
+// still fails. `status of 404` is the phrase Chromium emits over HTTP/1.1 and
+// HTTP/2 alike — never the reason phrase, which HTTP/2 drops (0509#4244). The
+// empty-url guard keeps `new URL("")` from throwing on a location-less error.
+export function ownDocument404For(pathname: string): (entry: ConsoleEntry) => boolean {
+  return (entry) =>
+    /status of 404\b/.test(entry.text) &&
+    entry.url.length > 0 &&
+    new URL(entry.url).pathname === pathname;
 }
 
 // J1's core: submit the login form for a fresh e2e+ address, read the real
