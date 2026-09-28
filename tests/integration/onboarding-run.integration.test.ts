@@ -1,5 +1,21 @@
 import { env } from "cloudflare:test";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+const cardReadyFailures = vi.hoisted(() => ({ next: 0 }));
+
+vi.mock("../../app/lib/data/onboarding_run.server", async (importOriginal) => {
+  const orig = await importOriginal<{ markCardReady: typeof markCardReady }>();
+  return {
+    ...orig,
+    markCardReady: async (...args: Parameters<typeof markCardReady>): Promise<void> => {
+      if (cardReadyFailures.next > 0) {
+        cardReadyFailures.next -= 1;
+        throw new Error("d1 write failed");
+      }
+      return orig.markCardReady(...args);
+    },
+  };
+});
 
 import {
   markCardReady,
@@ -157,6 +173,42 @@ describe("markCardReady", () => {
       .first<{ card_ready_at: string | null }>();
 
     expect(row?.card_ready_at).not.toBeNull();
+  });
+
+  it("resolves the logo and logs when the timing write fails", async () => {
+    await startOnboardingRun({
+      workspaceId,
+      userId,
+      inputRaw: "first.example",
+      startedAt: "2026-09-25T06:00:00.000Z",
+    });
+    const fields: SiteFields = {
+      name: "Example",
+      description: null,
+      socials: [],
+      review: { name: "fill", description: "empty", socials: "empty" },
+      unfound: false,
+    };
+    cardReadyFailures.next = 1;
+    const error = vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+    const card = timeCard(workspaceId, {
+      site: Promise.resolve(fields),
+      logo: Promise.resolve("data:x"),
+    });
+
+    await expect(card.logo).resolves.toBe("data:x");
+    expect(error).toHaveBeenCalledWith(
+      expect.stringContaining('"event":"onboarding.card_ready_mark_failed"'),
+    );
+    error.mockRestore();
+    const row = await env.DB.prepare(
+      "SELECT card_ready_at FROM onboarding_run WHERE workspace_id = ?",
+    )
+      .bind(workspaceId)
+      .first<{ card_ready_at: string | null }>();
+
+    expect(row?.card_ready_at).toBeNull();
   });
 });
 
