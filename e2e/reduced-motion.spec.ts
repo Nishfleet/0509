@@ -231,7 +231,7 @@ for (const target of targets) {
 // state regardless of whether motion is reduced. The whole point of
 // "honoured" is "the user can still use the thing"; a transition being
 // stripped is fine only if the final state lands.
-test("the brand switch toggles under reduced motion", async ({ page }, testInfo) => {
+test("the brand switch toggles under reduced motion @own-signin", async ({ page }, testInfo) => {
   test.skip(
     !process.env.PLAYWRIGHT_TEST_BASE_URL,
     "the brand switch needs a real session; the preview Worker cannot mint one",
@@ -266,7 +266,7 @@ test("the brand switch toggles under reduced motion", async ({ page }, testInfo)
 // proves the inspection is actually looking at the live styles. If the
 // non-reduced visit lands with all-zero durations too, the assertions
 // above are vacuous and this file's PR should not merge.
-test("control: the switch thumb has a non-zero transition-duration without reduced motion", async ({
+test("control: the switch thumb has a non-zero transition-duration without reduced motion @own-signin", async ({
   page,
 }, testInfo) => {
   test.skip(

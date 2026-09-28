@@ -39,7 +39,7 @@ function list(page: Page) {
 // Worker cannot mint a session, so this test skips there. The journey is J3's
 // — gymshark.com onboarded through "Start watching" — then the first watched
 // chip on /app/competitors opens a real /app/competitors/:entityId page.
-test("the developments feed filters by kind and keeps its layout across filters", async ({
+test("the developments feed filters by kind and keeps its layout across filters @own-signin", async ({
   page,
 }, testInfo) => {
   test.skip(

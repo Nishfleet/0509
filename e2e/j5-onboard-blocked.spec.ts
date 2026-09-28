@@ -47,7 +47,7 @@ test.describe("J5", () => {
     await setWall("off");
   });
 
-  test("J5: a bot-blocking site still gets a card whose empty fields say when they fill", async ({
+  test("J5: a bot-blocking site still gets a card whose empty fields say when they fill @own-signin", async ({
     page,
   }, testInfo) => {
     const email = `e2e+${crypto.randomUUID().replaceAll("-", "").slice(0, 12)}@0509.io`;

@@ -5,7 +5,7 @@ import { settleSignInWidget } from "./inbox";
 // #4148: the /login screens expose the three landmarks, the Tab order reaches
 // every action, the sent state moves focus to its heading, and the resend wait
 // is announced once, not every second.
-test("/login keyboard path, landmarks and the sent-state announcement (#4148)", async ({ page }) => {
+test("/login keyboard path, landmarks and the sent-state announcement (#4148) @own-signin", async ({ page }) => {
   await page.clock.install();
   await page.goto("/login");
 
