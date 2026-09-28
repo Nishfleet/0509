@@ -41,8 +41,8 @@ test("the one input posts and redirects every non-empty value to the card", asyn
     );
     await expect(input).toBeFocused();
 
-    // `/onboarding/identity` is a 404 until #3993 lands, so its noise would
-    // land in this array; the emptiness proof is taken before the redirects.
+    // The redirects' noise would land in this array; the emptiness proof is
+    // taken before them.
     expect(await consoleFailures(page, watched, testInfo), testInfo.project.name).toEqual([]);
     page.removeAllListeners("console");
     page.removeAllListeners("pageerror");

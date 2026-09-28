@@ -32,7 +32,10 @@ for (const target of targets) {
     const status = response?.status() ?? 0;
     const pagePath = new URL(page.url()).pathname;
     const ownDocument404 = (entry: { text: string; url: string }) =>
-      status === 404 && /status of 404\b/.test(entry.text) && new URL(entry.url).pathname === pagePath;
+      status === 404 &&
+      /status of 404\b/.test(entry.text) &&
+      entry.url.length > 0 &&
+      new URL(entry.url).pathname === pagePath;
 
     if (status === 404) {
       expect(

@@ -185,7 +185,7 @@ export async function turnstileToken(page: Page): Promise<string> {
 
 // The console-error gate's collector, shared by every spec that holds the
 // same-origin gate — j3-onboard-domain keeps its own collector (0509#5680
-// carve) and the remaining own-collector specs are filed as 0509#5706.
+// carve).
 // Console errors keep the url of the script that logged them so the gate can
 // hold only same-origin messages — the real Turnstile widget on /login logs
 // its NaN noise from challenges.cloudflare.com, cross-origin JS and not app
