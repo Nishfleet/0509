@@ -20,7 +20,12 @@ process.env.PLAYWRIGHT_LOCAL_PORT ??= String(8000 + (process.pid % 1000));
 const localPort = process.env.PLAYWRIGHT_LOCAL_PORT;
 const baseURL = process.env.PLAYWRIGHT_TEST_BASE_URL ?? `http://127.0.0.1:${localPort}`;
 export const accessStatePath = "e2e/.auth/access.json";
+export const sessionStatePath = "e2e/.auth/session.json";
 const accessState = process.env.CF_ACCESS_CLIENT_ID ? { storageState: accessStatePath } : {};
+// The production lane is the gated one: against a real URL behind Access, the
+// session project mints the shared better-auth session and its teardown
+// deletes the account. Locally there is no inbox to read, so none of it runs.
+const productionLane = Boolean(process.env.PLAYWRIGHT_TEST_BASE_URL && process.env.CF_ACCESS_CLIENT_ID);
 
 export default defineConfig({
   testDir: "./e2e",
@@ -39,7 +44,10 @@ export default defineConfig({
   // saves the CF_Authorization cookie Access issues; the browser then sends
   // that cookie to 0509.io only, so third-party origins (fonts, the beacon)
   // never see an Access header and CORS stays quiet. Locally (no token) the
-  // setup project is absent and tests run without it.
+  // setup project is absent and tests run without it. In the production lane
+  // the `session` project then signs in one fresh e2e address per run and saves
+  // the merged Access+session storageState the browser projects reuse, and
+  // `session-teardown` deletes that account afterwards.
   projects: [
     ...(process.env.CF_ACCESS_CLIENT_ID ? [{ name: "setup", testMatch: /auth\.setup\.ts/ }] : []),
     // The lighthouse job's sign-in (0509#5767): a request-only setup that mints
@@ -51,15 +59,24 @@ export default defineConfig({
     // the sign-in minted, via the product's own settings delete path. Gated on
     // its own env var so the e2e suite never runs it.
     ...(process.env.LHCI_TEARDOWN ? [{ name: "lhci-teardown", testMatch: /lhci-teardown\.setup\.ts/ }] : []),
+    // One magic-link send per production run (0509#6034): the shared session
+    // every signed-in spec starts from. `session` runs after `setup` because
+    // its context starts from accessStatePath, and its teardown runs last.
+    ...(productionLane
+      ? [
+          { name: "session", testMatch: /session\.setup\.ts/, dependencies: ["setup"], teardown: "session-teardown" },
+          { name: "session-teardown", testMatch: /session\.teardown\.ts/ },
+        ]
+      : []),
     {
       name: "desktop-1440",
       use: { ...devices["Desktop Chrome"], viewport: { width: 1440, height: 900 }, ...accessState },
-      dependencies: process.env.CF_ACCESS_CLIENT_ID ? ["setup"] : [],
+      dependencies: productionLane ? ["setup", "session"] : process.env.CF_ACCESS_CLIENT_ID ? ["setup"] : [],
     },
     {
       name: "phone-390",
       use: { ...devices["Desktop Chrome"], viewport: { width: 390, height: 844 }, ...accessState },
-      dependencies: process.env.CF_ACCESS_CLIENT_ID ? ["setup"] : [],
+      dependencies: productionLane ? ["setup", "session"] : process.env.CF_ACCESS_CLIENT_ID ? ["setup"] : [],
     },
   ],
   webServer: process.env.PLAYWRIGHT_TEST_BASE_URL
