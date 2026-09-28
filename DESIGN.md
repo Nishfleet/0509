@@ -444,6 +444,10 @@ hiding it teaches the user the product is not running. Applies to the standing c
 Home and in the share image.
 | Identity card, field pending | "logo: looking on your site" / "we'll fill this on the first crawl, within the hour" |
 
+The landing's all-degraded gate is the one exception (§2.1): with no session to show a
+source's history and every visible source degraded, the public page replaces the pill row
+with the one rebuilding line. Every signed-in surface keeps the degraded row and its reason.
+
 ---
 
 ## 8. Mobile

@@ -51,15 +51,6 @@ test("the landing route data and document carry no disabled source's internal no
   const payload = await data.text();
   const document = await page.content();
 
-  // #5674 at the real HTTP surface: the What we watch section holds the pill
-  // row with at least one pill not degraded, or the all-degraded gate has
-  // replaced the row entirely. The local preview is the gated state; the
-  // scheduled production lane is whichever state its sources are in, and both
-  // are correct — an all-degraded pill row is not.
-  const watch = page.locator("#what-we-watch");
-  const pills = await watch.locator("[data-state]").count();
-  const degraded = await watch.locator('[data-state="degraded"]').count();
-  expect(pills === 0 || degraded < pills).toBe(true);
   expect(payload).toContain("site.page");
   for (const body of [document, payload]) {
     expect(body).not.toContain("x.search");
@@ -68,6 +59,25 @@ test("the landing route data and document carry no disabled source's internal no
     expect(body).not.toContain("ads.snap_parked");
     expect(body).not.toContain("ad-transparency search surface");
   }
+});
+
+test("the landing never leads with a full row of dimmed sources", async ({ page }) => {
+  const response = await page.goto(PATH);
+  expect(response?.status()).toBe(200);
+
+  // #5674 at the real HTTP surface: the What we watch section holds the pill
+  // row with at least one pill not degraded, or the all-degraded gate has
+  // replaced the row with the one rebuilding line and left no row behind. The
+  // local preview is always the gated state — no migration seeds a `snapshot`
+  // row, so every enabled source reads degraded — and the production lane
+  // carries whichever state its sources are in; both are correct here, an
+  // all-degraded pill row is not.
+  const watch = page.locator("#what-we-watch");
+  const pills = await watch.locator("[data-state]").count();
+  const degraded = await watch.locator('[data-state="degraded"]').count();
+  const row = await watch.locator("ul").count();
+  expect(pills > 0).toBe(row > 0);
+  expect(degraded === pills && pills > 0).toBe(false);
 });
 
 test("how it works reads as three ruled steps in order, wide and narrow", async ({ page }, testInfo) => {
