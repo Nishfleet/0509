@@ -78,6 +78,11 @@ test("the landing never leads with a full row of dimmed sources", async ({ page 
   const row = await watch.locator("ul").count();
   expect(pills > 0).toBe(row > 0);
   expect(degraded === pills && pills > 0).toBe(false);
+  if (row === 0) {
+    // The gate leaves the one rebuilding line where the row was; a bare section
+    // with neither row nor line is the regression this guards.
+    expect(await watch.textContent()).toContain("We're rebuilding coverage of news mentions");
+  }
 });
 
 test("how it works reads as three ruled steps in order, wide and narrow", async ({ page }, testInfo) => {
