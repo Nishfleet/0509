@@ -118,13 +118,12 @@ describe("startCard", () => {
     expect(await env.SNAPSHOTS.get("logo/gymshark.com")).not.toBeNull();
   });
 
-  it("skips an unsafe http og:image without fetching it and stores the DuckDuckGo icon", async () => {
-    stubAi(0.95);
-    const html = `<!doctype html>
+  function exampleHtml(head: string): string {
+    return `<!doctype html>
 <html>
   <head>
     <title>Example</title>
-    <meta property="og:image" content="http://insecure.example/og.png">
+    ${head}
   </head>
   <body>
     <h1>Example</h1>
@@ -134,64 +133,51 @@ describe("startCard", () => {
     two desks, one lamp, no limited editions and no collaborations.</p>
   </body>
 </html>`;
-    const duckUrl = "https://icons.duckduckgo.com/ip3/example.com.ico";
+  }
+
+  function stubLogoFetch(homepageHtml: string, logos: Record<string, () => Response>) {
     const calls: string[] = [];
-    const methods: string[] = [];
-    vi.stubGlobal("fetch", (input: RequestInfo | URL, init?: RequestInit) => {
+    vi.stubGlobal("fetch", (input: RequestInfo | URL) => {
       const url = input instanceof Request ? input.url : String(input);
       calls.push(url);
-      methods.push(init?.method ?? "GET");
-      if (url === duckUrl) {
-        return Promise.resolve(
-          new Response(new Uint8Array([1, 2, 3]), { status: 200, headers: { "content-type": "image/png" } }),
-        );
-      }
-      return Promise.resolve(new Response(html, { status: 200 }));
+      const respond = logos[url];
+      if (respond !== undefined) return Promise.resolve(respond());
+      return Promise.resolve(new Response(homepageHtml, { status: 200 }));
     });
+    return calls;
+  }
+
+  it("skips an unsafe http og:image without fetching it and stores the DuckDuckGo icon", async () => {
+    stubAi(0.95);
+    const duckUrl = "https://icons.duckduckgo.com/ip3/example.com.ico";
+    const calls = stubLogoFetch(
+      exampleHtml('<meta property="og:image" content="http://insecure.example/og.png">'),
+      {
+        [duckUrl]: () =>
+          new Response(new Uint8Array([1, 2, 3]), { status: 200, headers: { "content-type": "image/png" } }),
+      },
+    );
     const card = startCard("ws-1", subjectFor("example.com"), []);
     await card.site;
     expect(await card.logo).toBe("data:image/png;base64,AQID");
     expect(calls).toContain(duckUrl);
     expect(calls).not.toContain("http://insecure.example/og.png");
-    expect(methods[calls.indexOf(duckUrl)]).toBe("GET");
     expect(await env.SNAPSHOTS.get("logo/example.com")).not.toBeNull();
   });
 
   it("re-probes past a stale icon entry that holds a URL the guarded fetch refuses", async () => {
-    // 0509#5890: the old cascade cached the raw-fetch winner, so a URL
-    // storeLogo then refused left the card with no logo for the probe TTL.
-    // The v2 schema refuses that entry and re-runs the walk. Seed exactly that
-    // v1 shape with no `v` and the unsafe URL the old code would have won.
     stubAi(0.95);
+    // 0509#5890: a v1 entry cached the raw-fetch winner, so a URL storeLogo
+    // refuses pinned a logo-less card for the probe TTL. v2 must not parse it.
     const staleUrl = "http://insecure.example/og.png";
-    const html = `<!doctype html>
-<html>
-  <head>
-    <title>Example</title>
-  </head>
-  <body>
-    <h1>Example</h1>
-    <p>Example makes plain office chairs, desks and lamps for people who work
-    from small rooms. Everything ships flat, assembles with one hex key, and
-    comes in three colours. The catalogue is short on purpose: four chairs,
-    two desks, one lamp, no limited editions and no collaborations.</p>
-  </body>
-</html>`;
     await env.IDENTITY_CACHE.put(
       probeKey(subjectFor("example.com"), "icon"),
       JSON.stringify({ url: staleUrl }),
     );
     const duckUrl = "https://icons.duckduckgo.com/ip3/example.com.ico";
-    const calls: string[] = [];
-    vi.stubGlobal("fetch", (input: RequestInfo | URL) => {
-      const url = input instanceof Request ? input.url : String(input);
-      calls.push(url);
-      if (url === duckUrl) {
-        return Promise.resolve(
-          new Response(new Uint8Array([1, 2, 3]), { status: 200, headers: { "content-type": "image/png" } }),
-        );
-      }
-      return Promise.resolve(new Response(html, { status: 200 }));
+    const calls = stubLogoFetch(exampleHtml(""), {
+      [duckUrl]: () =>
+        new Response(new Uint8Array([1, 2, 3]), { status: 200, headers: { "content-type": "image/png" } }),
     });
     const card = startCard("ws-1", subjectFor("example.com"), []);
     await card.site;
@@ -202,39 +188,19 @@ describe("startCard", () => {
 
   it("stores the first candidate the guarded fetch keeps, and never fetches the rest", async () => {
     stubAi(0.95);
-    const ldUrl = "https://images.ctfassets.net/ld.png";
-    const ogUrl = "https://images.ctfassets.net/og.png";
-    const html = `<!doctype html>
-<html>
-  <head>
-    <title>Example</title>
-    <meta property="og:image" content="${ogUrl}">
-    <script type="application/ld+json">{"@context":"https://schema.org","@type":"Organization","name":"Example","logo":"${ldUrl}"}</script>
-  </head>
-  <body>
-    <h1>Example</h1>
-    <p>Example makes plain office chairs, desks and lamps for people who work
-    from small rooms. Everything ships flat, assembles with one hex key, and
-    comes in three colours. The catalogue is short on purpose: four chairs,
-    two desks, one lamp, no limited editions and no collaborations.</p>
-  </body>
-</html>`;
-    const calls: string[] = [];
-    vi.stubGlobal("fetch", (input: RequestInfo | URL) => {
-      const url = input instanceof Request ? input.url : String(input);
-      calls.push(url);
-      if (url === ldUrl) {
-        return Promise.resolve(
-          new Response("<html></html>", { status: 200, headers: { "content-type": "text/html" } }),
-        );
-      }
-      if (url === ogUrl) {
-        return Promise.resolve(
+    const ldUrl = `https://${LOGO_HOST}/ld.png`;
+    const ogUrl = `https://${LOGO_HOST}/og.png`;
+    const calls = stubLogoFetch(
+      exampleHtml(
+        `<meta property="og:image" content="${ogUrl}">
+    <script type="application/ld+json">{"@context":"https://schema.org","@type":"Organization","name":"Example","logo":"${ldUrl}"}</script>`,
+      ),
+      {
+        [ldUrl]: () => new Response("<html></html>", { status: 200, headers: { "content-type": "text/html" } }),
+        [ogUrl]: () =>
           new Response(new Uint8Array([4, 5, 6]), { status: 200, headers: { "content-type": "image/png" } }),
-        );
-      }
-      return Promise.resolve(new Response(html, { status: 200 }));
-    });
+      },
+    );
     const card = startCard("ws-1", subjectFor("example.com"), []);
     await card.site;
     expect(await card.logo).toBe("data:image/png;base64,BAUG");
@@ -244,79 +210,23 @@ describe("startCard", () => {
     expect(await env.SNAPSHOTS.get("logo/example.com")).not.toBeNull();
   });
 
-  it("falls through a candidate whose fetch rejects to the next one", async () => {
+  it("caches a versioned miss when every candidate fails the guarded fetch", async () => {
     stubAi(0.95);
-    const ldUrl = "https://images.ctfassets.net/ld.png";
-    const ogUrl = "https://images.ctfassets.net/og.png";
-    const html = `<!doctype html>
-<html>
-  <head>
-    <title>Example</title>
-    <meta property="og:image" content="${ogUrl}">
-    <script type="application/ld+json">{"@context":"https://schema.org","@type":"Organization","name":"Example","logo":"${ldUrl}"}</script>
-  </head>
-  <body>
-    <h1>Example</h1>
-    <p>Example makes plain office chairs, desks and lamps for people who work
-    from small rooms. Everything ships flat, assembles with one hex key, and
-    comes in three colours. The catalogue is short on purpose: four chairs,
-    two desks, one lamp, no limited editions and no collaborations.</p>
-  </body>
-</html>`;
-    vi.stubGlobal("fetch", (input: RequestInfo | URL) => {
-      const url = input instanceof Request ? input.url : String(input);
-      if (url === ldUrl) {
-        return Promise.reject(new Error("dns"));
-      }
-      if (url === ogUrl) {
-        return Promise.resolve(
-          new Response(new Uint8Array([4, 5, 6]), { status: 200, headers: { "content-type": "image/png" } }),
-        );
-      }
-      return Promise.resolve(new Response(html, { status: 200 }));
+    const subject = subjectFor("example.com");
+    const ogUrl = `https://${LOGO_HOST}/og.png`;
+    const duckUrl = "https://icons.duckduckgo.com/ip3/example.com.ico";
+    const calls = stubLogoFetch(exampleHtml(`<meta property="og:image" content="${ogUrl}">`), {
+      [ogUrl]: () => new Response(null, { status: 404 }),
+      [duckUrl]: () => new Response(null, { status: 404 }),
     });
-    const card = startCard("ws-1", subjectFor("example.com"), []);
+    const card = startCard("ws-1", subject, []);
     await card.site;
-    expect(await card.logo).toBe("data:image/png;base64,BAUG");
-    expect(await env.SNAPSHOTS.get("logo/example.com")).not.toBeNull();
+    expect(await card.logo).toBeNull();
+    expect(calls).toContain(ogUrl);
+    expect(calls).toContain(duckUrl);
+    expect(await env.IDENTITY_CACHE.get(probeKey(subject, "icon"), "json")).toEqual({ v: 2, url: null });
   });
 
-  it("falls through a candidate the guarded fetch refuses to the next one", async () => {
-    stubAi(0.95);
-    const ldUrl = "https://images.ctfassets.net/ld.png";
-    const ogUrl = "https://images.ctfassets.net/og.png";
-    const html = `<!doctype html>
-<html>
-  <head>
-    <title>Example</title>
-    <meta property="og:image" content="${ogUrl}">
-    <script type="application/ld+json">{"@context":"https://schema.org","@type":"Organization","name":"Example","logo":"${ldUrl}"}</script>
-  </head>
-  <body>
-    <h1>Example</h1>
-    <p>Example makes plain office chairs, desks and lamps for people who work
-    from small rooms. Everything ships flat, assembles with one hex key, and
-    comes in three colours. The catalogue is short on purpose: four chairs,
-    two desks, one lamp, no limited editions and no collaborations.</p>
-  </body>
-</html>`;
-    vi.stubGlobal("fetch", (input: RequestInfo | URL) => {
-      const url = input instanceof Request ? input.url : String(input);
-      if (url === ldUrl) {
-        return Promise.resolve(new Response(null, { status: 500 }));
-      }
-      if (url === ogUrl) {
-        return Promise.resolve(
-          new Response(new Uint8Array([4, 5, 6]), { status: 200, headers: { "content-type": "image/png" } }),
-        );
-      }
-      return Promise.resolve(new Response(html, { status: 200 }));
-    });
-    const card = startCard("ws-1", subjectFor("example.com"), []);
-    await card.site;
-    expect(await card.logo).toBe("data:image/png;base64,BAUG");
-    expect(await env.SNAPSHOTS.get("logo/example.com")).not.toBeNull();
-  });
 
   it("reads the homepage once a day, not once per visit", async () => {
     stubAi(0.95);

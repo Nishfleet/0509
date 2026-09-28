@@ -158,7 +158,7 @@ function applyReview(fields: CardValues, review: CardReview): Omit<SiteFields, "
   };
 }
 
-async function firstStorableLogo(candidates: LogoCandidates): Promise<string | null> {
+async function firstStorableLogoUrl(candidates: LogoCandidates): Promise<string | null> {
   const registrable = candidates.registrableDomain;
   for (const url of logoCandidateUrls(candidates)) {
     const stored = await storeLogo(registrable, url);
@@ -192,7 +192,7 @@ export function startCard(
   const logo = read.then(async ({ card, reached }) => {
     if (!reached) return null;
     const cached = await cachedProbe(subject, "icon", logoSchema, async () => {
-      const url = await firstStorableLogo({
+      const url = await firstStorableLogoUrl({
         ...card.logoCandidates,
         registrableDomain: subject.registrable,
       });
