@@ -239,19 +239,24 @@ describe("startCard", () => {
   });
 
   it("fills a bot-gated homepage through exactly one budgeted browser escalation", async () => {
+    const subject = subjectFor("botgatedbudget.com");
+    const day = new Date().toISOString().slice(0, 10);
     stubAi(0.95);
     stubWeb(() => new Response("blocked", { status: 403 }));
     const stub = stubBrowser(BOT_GATED_HTML);
     browser = stub;
     installBrowser();
 
-    const site = await startCard("ws-1", subjectFor("botgatedbudget.com"), []).site;
+    const site = await startCard("ws-1", subject, []).site;
 
     expect(site.name).toBe("Botgated");
     expect(site.description).toBe("A description that only the browser could read");
     expect(site.unfound).toBe(false);
     expect(site.review).toEqual({ name: "fill", description: "fill", socials: "empty" });
     expect(stub.calls).toEqual(["https://botgatedbudget.com/"]);
+    let left = 0;
+    while (await takeBrowserEscalation("ws-1", subject.registrable, day)) left += 1;
+    expect(left).toBe(3);
   });
 
   it("returns the unreached card without a browser call when the day's budget is spent", async () => {
