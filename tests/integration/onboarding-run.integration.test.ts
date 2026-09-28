@@ -28,6 +28,14 @@ import {
 import { timeCard } from "../../app/lib/onboarding/card-timing.server";
 import type { SiteFields } from "../../app/lib/identity/card-fields";
 
+const FIELDS: SiteFields = {
+  name: "Example",
+  description: null,
+  socials: [],
+  review: { name: "fill", description: "empty", socials: "empty" },
+  unfound: false,
+};
+
 let runs = 0;
 let userId = "";
 let workspaceId = "";
@@ -130,16 +138,9 @@ describe("markCardReady", () => {
       inputRaw: "first.example",
       startedAt: "2026-09-25T06:00:00.000Z",
     });
-    const fields: SiteFields = {
-      name: "Example",
-      description: null,
-      socials: [],
-      review: { name: "fill", description: "empty", socials: "empty" },
-      unfound: false,
-    };
 
     const card = timeCard(workspaceId, {
-      site: Promise.resolve(fields),
+      site: Promise.resolve(FIELDS),
       logo: Promise.resolve("data:x"),
     });
 
@@ -185,19 +186,12 @@ describe("markCardReady", () => {
       inputRaw: "first.example",
       startedAt: "2026-09-25T06:00:00.000Z",
     });
-    const fields: SiteFields = {
-      name: "Example",
-      description: null,
-      socials: [],
-      review: { name: "fill", description: "empty", socials: "empty" },
-      unfound: false,
-    };
     cardReadyMock.failNext = 1;
     const error = vi.spyOn(console, "error").mockImplementation(() => undefined);
 
     try {
       const card = timeCard(workspaceId, {
-        site: Promise.resolve(fields),
+        site: Promise.resolve(FIELDS),
         logo: Promise.resolve("data:x"),
       });
 
@@ -225,13 +219,6 @@ describe("markCardReady", () => {
       inputRaw: "first.example",
       startedAt: "2026-09-25T06:00:00.000Z",
     });
-    const fields: SiteFields = {
-      name: "Example",
-      description: null,
-      socials: [],
-      review: { name: "fill", description: "empty", socials: "empty" },
-      unfound: false,
-    };
     let settleSite: (value: SiteFields) => void = () => undefined;
     const site = new Promise<SiteFields>((resolve) => {
       settleSite = resolve;
@@ -247,7 +234,7 @@ describe("markCardReady", () => {
     await Promise.resolve();
     expect(cardReadyMock.calls).toBe(0);
 
-    settleSite(fields);
+    settleSite(FIELDS);
     await expect(card.logo).resolves.toBe("data:x");
     expect(cardReadyMock.calls).toBe(1);
     const row = await env.DB.prepare(
