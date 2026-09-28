@@ -239,6 +239,9 @@ describe("delete my account", () => {
     expect(baked).toContain("Path=/login");
     expect(baked).toContain("SameSite=Lax");
 
+    const secure = await sealAccountDeleteInstanceId(deleted.instanceId, new Request("https://0509.io/login"));
+    expect(secure).toContain("; Secure");
+
     const pair = baked.split(";")[0];
     if (!pair) throw new Error("the account-delete cookie carried no pair");
     const page = `${ORIGIN}/login?deleted=${deleted.instanceId}`;
