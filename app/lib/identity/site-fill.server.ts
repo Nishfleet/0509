@@ -14,7 +14,7 @@ function notInWorkspace(entityId: string, workspaceId: string): NonRetryableErro
 
 export async function siteWasReached(homepageUrl: string): Promise<boolean> {
   const normalised = normaliseSubject(homepageUrl);
-  if (!normalised.ok) return true;
+  if (!normalised.ok) return false;
   return (await env.IDENTITY_CACHE.get(probeKey(normalised.subject, "homepage"))) !== null;
 }
 
