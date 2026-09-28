@@ -4,7 +4,7 @@ import { Dialog, DialogContent, DialogTitle, DialogTrigger } from "./ui/dialog";
 import type { HowRanked, HowRankedBrand, HowRankedLine, HowRankedMultiplier, HowRankedWeight } from "../lib/how-ranked";
 
 const HEADING_CLASS = "font-mono text-eyebrow text-ink-soft uppercase";
-const ROW_CLASS = "border-line border-b py-2 font-mono last:border-b-0";
+const ROW_CLASS = "border-b border-line py-2 font-mono last:border-b-0";
 const LABEL_CLASS = "text-ink-soft";
 
 function format(value: number): string {

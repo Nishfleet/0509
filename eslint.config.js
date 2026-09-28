@@ -300,14 +300,14 @@ const STATIC_HOME_FONT_PRELOAD = {
 // diff the lint rejects instead of a review comment.
 const TAILWIND_ARBITRARY_COLOUR = {
   pattern:
-    "^(?:[a-z0-9-]+:)*(?:bg|text|border|fill|stroke|ring|from|via|to|decoration|accent|caret|divide|outline|placeholder|shadow)-(?:\\[(?:#|rgb|hsl|oklch|oklab|lab|lch|color-mix|var\\()|\\(--)",
+    "^(?:[^\\s]*:)*(?:bg|text|border|fill|stroke|ring|from|via|to|decoration|accent|caret|divide|outline|placeholder|shadow)-(?:\\[(?:#|rgb|hsl|oklch|oklab|lab|lch|color-mix|var\\()|\\(--)",
   message:
     "Arbitrary colour values are banned: every colour is a @theme token in app/app.css and the accent is one colour (DESIGN.md rule 8). Source: 0509#5871.",
 };
 
 const TAILWIND_DEFAULT_PALETTE = {
   pattern:
-    "^(?:[a-z0-9-]+:)*(?:bg|text|border|fill|stroke|ring|from|via|to|decoration|accent|caret|divide|outline|placeholder|shadow)-(?:slate|gray|zinc|neutral|stone|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose)-[0-9]",
+    "^(?:[^\\s]*:)*(?:bg|text|border|fill|stroke|ring|from|via|to|decoration|accent|caret|divide|outline|placeholder|shadow)-(?:slate|gray|zinc|neutral|stone|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose)-[0-9]",
   message:
     "The Tailwind default palette is banned: every colour is a @theme token in app/app.css (bg-green is the one accent, DESIGN.md rule 8). Source: 0509#5871.",
 };
@@ -317,6 +317,53 @@ const SHADCN_STOCK_TOKEN_CLASSES =
 
 const TW_ANIMATE_STOCK_CLASSES =
   "(?:^|:)(?:animate-in|animate-out|fade-in-0|fade-out-0|zoom-in-95|zoom-out-95|slide-in-from-(?:top|bottom|left|right)-2)$";
+
+// The plugin lints a `const X = "..."` class list only when it has been told
+// the name: its own defaults are `className`, `classNames`, `classes` and
+// `styles`, and this repo's convention is a bare SHOUTY name instead (ROW,
+// WHEN_CLASS, BLOCK, TITLE, …). The list below is every class-list constant on
+// main, so a colour smuggled into one of them is red, not green — without it
+// `const ROW = "bg-[#ff0000]"` passed all three rules. A new class-list
+// constant must add its name here; a name that is already used for a string
+// that is not a class list (a `<title>`, a CSS custom property fallback) will
+// report the words of that string as unknown classes, which is why the two
+// such constants on main are named PAGE_TITLE (app/routes/landing.tsx) and
+// LINE_FALLBACK (app/components/source-pill.tsx).
+const TAILWIND_CLASS_VARIABLES = [
+  // The plugin's own defaults, kept so setting this list does not drop them.
+  "^classNames?$",
+  "^classes$",
+  "^styles?$",
+  "^BLOCK$",
+  "^BODY$",
+  "^BRIEF$",
+  "^BRIEF_LINE$",
+  "^CARD$",
+  "^DETAILS$",
+  "^EYEBROW$",
+  "^FIELD$",
+  "^GREETING$",
+  "^HEAD$",
+  "^HEADING$",
+  "^HEADING_CLASS$",
+  "^LABEL$",
+  "^LABEL_CLASS$",
+  "^LINE$",
+  "^LINK$",
+  "^MARKER$",
+  "^NOTE$",
+  "^OFF$",
+  "^PILL$",
+  "^PREVIOUS_HEADING$",
+  "^PREVIOUS_LINK$",
+  "^PREVIOUS_LIST$",
+  "^ROW$",
+  "^ROW_CLASS$",
+  "^SECTION$",
+  "^SUMMARY$",
+  "^TITLE$",
+  "^WHEN_CLASS$",
+];
 
 const WORKAROUND_TERMS = [
   "todo",
@@ -811,20 +858,26 @@ export default tseslint.config(
 
   // The DESIGN.md colour gate (0509#5871). The parent issue says
   // `no-unregistered-classes`; the rule shipped in 4.7.0 is named
-  // `no-unknown-classes`, so that is the name here. The `ui/` ignore list
-  // covers stock shadcn semantic tokens and tw-animate-css classes that are
-  // dead on main: the tokens are not in `@theme`, and registering them would
-  // start painting, a design change out of scope for this slice. 81 hits were
-  // probed on a74ad41 — 80 in app/components/ui/, one `cf-turnstile` in
+  // `no-unknown-classes`, so that is the name here. Both patterns open with
+  // `(?:[^\s]*:)*` because a variant prefix is not always one word: this repo
+  // writes `max-[859px]:`, `aria-[current=page]:` and `[&:hover]:`, and a
+  // prefix pattern of `[a-z0-9-]+` let a banned colour hide behind all three.
+  // The `ui/` ignore list covers stock shadcn semantic tokens and
+  // tw-animate-css classes that are dead on main: the tokens are not in
+  // `@theme`, and registering them would start painting, a design change out
+  // of scope for this slice. 81 hits were probed on a74ad41 — 80 in
+  // app/components/ui/, one `cf-turnstile` in
   // app/components/turnstile-widget.tsx, which is Cloudflare's widget class,
   // never a Tailwind class. The `ui/` override is a later matching block
-  // because flat config replaces a rule's options per matching block: it widens
-  // `no-unknown-classes` only, and the strict block's restricted-classes and
-  // class-order settings stay in force there.
+  // because flat config replaces a rule's options per matching block: it
+  // widens `no-unknown-classes` only, and the strict block's
+  // restricted-classes and class-order settings stay in force there.
   {
     files: ["app/**/*.{ts,tsx}"],
     plugins: { "better-tailwindcss": betterTailwindcss },
-    settings: { "better-tailwindcss": { entryPoint: "app/app.css" } },
+    settings: {
+      "better-tailwindcss": { entryPoint: "app/app.css", variables: TAILWIND_CLASS_VARIABLES },
+    },
     rules: {
       "better-tailwindcss/no-unknown-classes": ["error", { ignore: ["^cf-turnstile$"] }],
       "better-tailwindcss/no-restricted-classes": [

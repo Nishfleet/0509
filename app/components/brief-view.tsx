@@ -3,7 +3,7 @@ import { Fragment, type ReactElement } from "react";
 import { ReadThisFirst } from "./read-this-first";
 import type { BriefPayload } from "../lib/brief-payload";
 
-const SECTION = "border-line mt-5 border-t pt-4";
+const SECTION = "mt-5 border-t border-line pt-4";
 const HEAD = "font-mono text-eyebrow text-ink-soft uppercase";
 const BODY = "mt-2 text-[0.95rem] leading-[1.6]";
 const LINE = "mt-2 text-[0.92rem] leading-[1.6]";

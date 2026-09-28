@@ -10,7 +10,7 @@ import type { HomePill, HomeRow, WeekEvidence } from "../lib/home-standing";
 import type { SiteChangeView } from "../lib/site-change";
 import { cn } from "../lib/utils";
 
-const PILL = "border-line border px-2 py-1 font-mono text-eyebrow uppercase";
+const PILL = "border border-line px-2 py-1 font-mono text-eyebrow uppercase";
 
 export function RankedRow({
   row,

@@ -8,7 +8,7 @@ import { WhyFlaggedSheet } from "./why-flagged";
 
 export type SiteChangeItemData = SiteChangeView & { when: string };
 
-const WHEN_CLASS = "text-ink-soft mt-2 block font-mono text-meta uppercase";
+const WHEN_CLASS = "mt-2 block font-mono text-meta text-ink-soft uppercase";
 
 function OneSided({ added, removed }: { added: string | null; removed: string | null }): ReactElement | null {
   const text = added ?? removed;

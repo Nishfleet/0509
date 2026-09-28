@@ -15,8 +15,8 @@ import type { HowRanked } from "../lib/how-ranked";
 import { cn } from "../lib/utils";
 
 const EYEBROW = "font-mono text-eyebrow text-ink-soft uppercase";
-const GREETING = "font-display text-display-2 mt-2 font-extrabold uppercase";
-const MARKER = "bg-green text-on-green px-[0.14em] [box-decoration-break:clone]";
+const GREETING = "mt-2 font-display text-display-2 font-extrabold uppercase";
+const MARKER = "bg-green [box-decoration-break:clone] px-[0.14em] text-on-green";
 
 export function HomePageFrame({
   eyebrow,

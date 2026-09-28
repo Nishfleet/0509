@@ -94,7 +94,7 @@ export async function action({ request, context }: Route.ActionArgs) {
   return { saved: true, deleteError: null, deliveryError: null, deliverySuppressed: false };
 }
 
-const BLOCK = "border-line mt-10 border-t pt-4";
+const BLOCK = "mt-10 border-t border-line pt-4";
 
 export default function Page({ loaderData, actionData }: Route.ComponentProps) {
   return (

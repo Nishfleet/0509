@@ -31,6 +31,15 @@ function component(className: string): string {
 `;
 }
 
+function constant(name: string, classes: string): string {
+  return `const ${name} = "${classes}";
+
+export function ProbeTwTmp() {
+  return <div className={${name}} />;
+}
+`;
+}
+
 async function lintProbe(
   rel: string,
   code: string,
@@ -120,5 +129,17 @@ describe("eslint DESIGN.md colour gate (#5871)", () => {
   it("allows Cloudflare's cf-turnstile widget class", { timeout: 60_000 }, async () => {
     const messages = await lintExisting("app/components/turnstile-widget.tsx");
     expect(messages.some((m) => m.includes(UNKNOWN))).toBe(false);
+  });
+
+  it("rejects a banned colour inside a registered class-list constant", { timeout: 60_000 }, async () => {
+    const result = await lintProbe(PROBE, constant("ROW", "bg-[#ff0000] border-line"));
+    expect(result.messages.some((m) => m.includes(ARBITRARY))).toBe(true);
+  });
+
+  it("rejects a banned colour behind a bracket variant", { timeout: 60_000 }, async () => {
+    const arbitrary = await lintProbe(PROBE, component("max-[859px]:bg-[#ff0000]"));
+    expect(arbitrary.messages.some((m) => m.includes(ARBITRARY))).toBe(true);
+    const palette = await lintProbe(PROBE, component("[&:hover]:bg-red-500"));
+    expect(palette.messages.some((m) => m.includes(PALETTE))).toBe(true);
   });
 });

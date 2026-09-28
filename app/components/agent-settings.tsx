@@ -7,8 +7,8 @@ import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 
 const DAY = new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
-const BLOCK = "border-line mt-10 border-t pt-4";
-const ROW = "border-line flex flex-wrap items-center justify-between gap-x-4 gap-y-1 border-t py-3";
+const BLOCK = "mt-10 border-t border-line pt-4";
+const ROW = "flex flex-wrap items-center justify-between gap-x-4 gap-y-1 border-t border-line py-3";
 const CLIENTS = ["Claude", "ChatGPT", "Cursor"];
 
 function day(iso: string): string {
