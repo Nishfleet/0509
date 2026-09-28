@@ -197,13 +197,23 @@ describe("askNouls", () => {
 
     expect(thrown.message).toBe("jev unavailable: answer missing its noul; keys=response; issues=answers:invalid_type");
 
-    run.mockImplementation(() => Promise.resolve({ response: "nevEr-ShApE-7731" }));
+    run.mockImplementation(() =>
+      Promise.resolve({ "gymshark.com": "x", response: "x", answers: { Gymshark: { type: "noul", noul: "x" } } }),
+    );
     const leaky: unknown = await askNouls(workspaceId, questions, state).catch((error: unknown) => error);
     expect(leaky).toBeInstanceOf(JevUnavailableError);
     if (!(leaky instanceof JevUnavailableError)) throw new Error("unreachable");
 
-    expect(leaky.message).toContain("keys=response;");
-    expect(leaky.message).not.toContain("nevEr-ShApE-7731");
+    expect(leaky.message).toContain("keys=?,response,answers;");
+    expect(leaky.message).toContain("answers.?.noul:invalid_type");
     expect(leaky.message).not.toContain("Gymshark");
+    expect(leaky.message).not.toContain("gymshark.com");
+
+    run.mockImplementation(() => Promise.resolve({ answers: { identity_name: "x" } }));
+    const knownKey: unknown = await askNouls(workspaceId, questions, state).catch((error: unknown) => error);
+    expect(knownKey).toBeInstanceOf(JevUnavailableError);
+    if (!(knownKey instanceof JevUnavailableError)) throw new Error("unreachable");
+
+    expect(knownKey.message).toContain("answers.identity_name:invalid_type");
   });
 });

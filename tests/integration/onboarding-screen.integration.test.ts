@@ -6,6 +6,7 @@ vi.mock("@sentry/cloudflare", () => ({ captureException: vi.fn() }));
 import { captureException } from "@sentry/cloudflare";
 
 import type { Subject } from "../../app/lib/identity/normalise";
+import { JevUnavailableError } from "../../app/lib/jev/client.server";
 import { REFUSAL, screenOnboardingSubject } from "../../app/lib/onboarding-screen.server";
 
 const NOW = "2026-09-24T06:00:00.000Z";
@@ -321,7 +322,10 @@ describe("screenOnboardingSubject", () => {
       ]);
       expect(logSpy.mock.calls.flat().join(" ")).not.toContain(raw);
       expect(captureException).toHaveBeenCalledTimes(1);
-      expect(vi.mocked(captureException).mock.calls[0]?.[1]).toEqual({ tags: { jev: "public_subject" } });
+      const captured = vi.mocked(captureException).mock.calls[0];
+      expect(captured?.[0]).toBeInstanceOf(JevUnavailableError);
+      expect(String(captured?.[0])).not.toContain(raw);
+      expect(captured?.[1]).toEqual({ tags: { jev: "public_subject" } });
     } finally {
       logSpy.mockRestore();
     }

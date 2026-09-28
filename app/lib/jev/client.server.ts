@@ -62,13 +62,21 @@ export class JevUnavailableError extends Error {
   }
 }
 
-function shapeOf(raw: unknown, parsed: ZodSafeParseResult<unknown>): string {
-  const keys = typeof raw === "object" && raw !== null ? Object.keys(raw).slice(0, 20).join(",") : typeof raw;
+const SHAPE_TOKENS = new Set(["answers", "choice", "noul", "response", "type"]);
+
+function shapeOf(raw: unknown, parsed: ZodSafeParseResult<unknown>, questionIds: readonly string[]): string {
+  const token = (value: PropertyKey): string =>
+    typeof value === "number" ||
+    (typeof value === "string" && (SHAPE_TOKENS.has(value) || questionIds.includes(value) || /^\d+$/.test(value)))
+      ? String(value)
+      : "?";
+  const keys =
+    typeof raw === "object" && raw !== null ? Object.keys(raw).slice(0, 20).map(token).join(",") : typeof raw;
   const issues = parsed.success
     ? ""
     : parsed.error.issues
         .slice(0, 5)
-        .map((issue) => `${issue.path.join(".")}:${issue.code}`)
+        .map((issue) => `${issue.path.map(token).join(".")}:${issue.code}`)
         .join(" ");
   return `keys=${keys}; issues=${issues}`;
 }
@@ -112,7 +120,7 @@ async function run(question: NoulQuestion, state: unknown): Promise<number> {
   const parsed = answerSchema.safeParse(raw);
   const answer = parsed.success ? parsed.data.answers[question.id] : undefined;
   if (answer === undefined) {
-    throw new JevUnavailableError(new Error(`answer missing its noul; ${shapeOf(raw, parsed)}`));
+    throw new JevUnavailableError(new Error(`answer missing its noul; ${shapeOf(raw, parsed, [question.id])}`));
   }
   return answer.noul;
 }
@@ -155,7 +163,11 @@ export async function askNouls(
       throw new JevUnavailableError(error);
     }
     const parsed = answerSchema.safeParse(raw);
-    const shape = shapeOf(raw, parsed);
+    const shape = shapeOf(
+      raw,
+      parsed,
+      pending.map((entry) => entry.question.id),
+    );
     if (!parsed.success) throw new JevUnavailableError(new Error(`answer missing its noul; ${shape}`));
     const fresh = parsed.data.answers;
     if (pending.some((entry) => fresh[entry.question.id] === undefined)) {
@@ -195,7 +207,7 @@ async function runChoice(question: ChoiceQuestion, state: unknown): Promise<stri
   const parsed = choiceAnswerSchema.safeParse(raw);
   const answer = parsed.success ? parsed.data.answers[question.id] : undefined;
   if (answer === undefined || !Object.keys(question.options).includes(answer.choice)) {
-    throw new JevUnavailableError(new Error(`answer missing its choice; ${shapeOf(raw, parsed)}`));
+    throw new JevUnavailableError(new Error(`answer missing its choice; ${shapeOf(raw, parsed, [question.id])}`));
   }
   return answer.choice;
 }
