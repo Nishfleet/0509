@@ -286,14 +286,20 @@ export async function signInWithMagicLink(
 // Every production sign-in above creates a real row in the user table, and
 // until 0509#5723 the suite never removed it. This is the product's own
 // delete path — the settings flow J14 proves end to end — called from each
-// spec's afterEach so a failed test still cleans up. The /login short-circuit
-// is the no-row case: the user row is created when the link is verified, so a
-// page that never reached a session means nothing leaked (and the preview
-// lane never verifies).
+// spec's afterEach so a failed test still cleans up. better-auth inserts the
+// user row when the magic link is verified, which is the line above that
+// asserts /onboarding; a page that never got past it has no session, so
+// /app/settings redirects to /login and there is nothing to delete (the
+// preview lane never verifies, so it always takes that branch).
 export async function deleteCreatedAccount(page: Page, email: string): Promise<void> {
   await page.goto("/app/settings");
   if (page.url().includes("/login")) return;
   await page.getByLabel("Type " + email + " to confirm").fill(email);
   await page.getByRole("button", { name: "Delete my account" }).click();
   await page.waitForURL(/\/login\?deleted=/);
+  // J14's own proof: the deleted account is signed out. The redirect lands on
+  // /login, and /app must bounce back there — a delete that left a session
+  // behind would hide the row it was meant to remove.
+  await page.goto("/app");
+  await expect(page).toHaveURL(/\/login/);
 }
