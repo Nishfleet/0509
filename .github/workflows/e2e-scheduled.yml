@@ -17,7 +17,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: e2e-scheduled-${{ github.event.schedule || inputs.journey }}
+  group: e2e-scheduled-${{ inputs.journey || 'j12' }}
   cancel-in-progress: false
 
 jobs:
