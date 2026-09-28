@@ -122,7 +122,7 @@ The design choice still stands, for reasons that survive the correction: it boun
 
 On 2026-09-17 this account's D1 rows-written reached roughly **$105**. At $1.00 per million rows beyond the included 50 million, that is about **155 million rows written in a month** — some 5 million a day.
 
-No design in this document approaches that: the largest here is 300,000 rows a month at 1,000 brands. Reaching 155M means writing per *observed element* rather than per item — a row per ad impression, per page element, per poll result — which is the pattern the batching rule exists to forbid. The lesson priced: **the gap between "a row per item" and "a row per element" is the gap between $0 and $105.**
+No design in this document approaches that: the largest here is 600,000 D1 rows a month at 1,000 brands. Reaching 155M means writing per *observed element* rather than per item — a row per ad impression, per page element, per poll result — which is the pattern the batching rule exists to forbid. The lesson priced: **the gap between "a row per item" and "a row per element" is the gap between $0 and $105.**
 
 ## Guardrails, as numbers
 

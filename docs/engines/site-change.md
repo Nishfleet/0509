@@ -128,8 +128,8 @@ A URL regex would have filed `/collections/all-products` as `other` and never sn
 | Select | `watch JOIN entity WHERE entity.state='on' AND source.kind='site'`, `page` (role, transport) | — |
 | Fetch | `page.transport` | — |
 | Extract + hash | — | — |
-| Unchanged | previous `snapshot.payload_hash` | **one `snapshot` row**: `payload_r2_key`, `payload_hash`, `item_count`, `fetched_at`. Nothing else. No screenshot, no Jev, no signal |
-| Changed | the previous snapshot's R2 body | R2: new text body + **screenshot pair**; one `snapshot` row |
+| Unchanged | previous `snapshot.payload_hash` | **one `snapshot` row** plus its paired `source` latest-facts update in the same `batch()`: `payload_r2_key`, `payload_hash`, `item_count`, `fetched_at`. Nothing else. No screenshot, no Jev, no signal |
+| Changed | the previous snapshot's R2 body | R2: new text body + **screenshot pair**; one `snapshot` row plus its paired `source` latest-facts update |
 | Diff | both bodies | the diff hunks stored in R2 alongside, referenced by key |
 | Judge | `entity`, `signal` history, `user_decision` | `jev_verdict` (D3s first for self, then D3) |
 | Publish | — | `signal`, `kind='change'` — the conditional CHECK requires `aspect`; the `change` view reads it |

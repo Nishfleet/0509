@@ -89,7 +89,7 @@ Each `<item>` carries `<title>`, `<link>`, `<pubDate>` and `<source url="…">`.
 
 | Step | Reads | Writes |
 |---|---|---|
-| Generators | `entity` (the self card), `source` (registry rows, for rate limits and `reliability`) | R2: one raw payload per generator run; `snapshot`: **one row per generator run**, with `item_count` and `payload_hash` — the cost boundary, one row per watch per tick |
+| Generators | `entity` (the self card), `source` (registry rows, for rate limits and `reliability`) | R2: one raw payload per generator run; `snapshot`: **one row per generator run**, with `item_count` and `payload_hash`, paired in the same `batch()` with the `source` latest-facts update — the cost boundary, two rows per watch per tick |
 | Evidence count | those snapshot payloads | nothing |
 | Resolve name → domain | — | KV `resolve:<name>` 30-day TTL |
 | Jev D1 | `entity`, `suggestion` (dismissal memory), `user_decision` | `jev_verdict`, one row per judged candidate |
