@@ -252,14 +252,18 @@ jobs:
     name: e2e-production shard ${{ matrix.shard }}
     # Not a required check, on purpose: it cannot run on a pull request, and a
     # required check that never reports blocks the merge queue forever.
-    if: github.event_name == 'deployment_status' && github.event.deployment_status.state == 'success'
+    if: >-
+      github.event_name == 'deployment_status' && github.event.deployment_status.state == 'success' &&
+      github.event.deployment_status.environment == 'production'
     runs-on: ubuntu-latest
     # The step below stops at 25 minutes and fails, so a run that is too slow is
     # red. The job cap is only the backstop: hitting it reads as "cancelled",
     # which is what a superseded deploy also reads as.
-    timeout-minutes: 30
+    timeout-minutes: 35
     # One suite in one job outran the 30 minute cap on every deploy and never
-    # gave a verdict (run 36468302758). Four shards each fit under it. A newer
+    # gave a verdict (run 36468302758). Four shards each fit under it. No trace
+    # is uploaded: the repo is public and a trace can hold the Access cookie
+    # (0509#5999), so a failure is read from the job log. A newer
     # deploy cancels the older one's shard: only the latest deploy needs a
     # verdict, and merges 90 s apart already cancelled every run when the
     # workflow-level group did it (35754511999, 35754574851); at job level only
@@ -300,35 +304,37 @@ jobs:
           E2E_INBOX_TOKEN: ${{ secrets.E2E_INBOX_TOKEN }}
           # J5 raises and lowers the fixture bot wall with this token (0509#4121).
           FIXTURE_SITE_TOKEN: ${{ secrets.FIXTURE_SITE_TOKEN }}
-      - name: Keep the trace when it fails
-        if: failure()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: playwright-report-production-${{ matrix.shard }}
-          path: playwright-report/
-          retention-days: 7
 
   e2e-production:
     name: e2e-production
     needs: e2e-production-shard
-    # Runs when the shards finished, red or green. A superseded deploy cancels
-    # its shards, so no verdict is filed for it and no issue opens for a run
-    # nobody needs.
+    # Always runs after the shards and is red unless every shard passed, so a
+    # cancelled or skipped shard never reads as green. The red issue is opened
+    # only for a real shard failure on the deploy that is still current, so a
+    # superseded deploy files nothing.
     if: >-
       always() && github.event_name == 'deployment_status' && github.event.deployment_status.state == 'success' &&
-      (needs.e2e-production-shard.result == 'success' || needs.e2e-production-shard.result == 'failure')
+      github.event.deployment_status.environment == 'production'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
       contents: read
       issues: write
       actions: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      SHARDS: ${{ needs.e2e-production-shard.result }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      - name: Is this still the current production deploy
+        id: current
+        run: echo "yes=$([ "$(gh api "repos/$GITHUB_REPOSITORY/deployments?environment=production&per_page=1" --jq '.[0].sha')" = "$DEPLOY_SHA" ] && echo true)" >> "$GITHUB_OUTPUT"
+        env:
+          DEPLOY_SHA: ${{ github.event.deployment.sha }}
       - name: Open or update the issue that dispatches the fix
-        if: needs.e2e-production-shard.result == 'failure'
+        if: env.SHARDS == 'failure' && steps.current.outputs.yes == 'true'
         id: red
         uses: JasonEtco/create-an-issue@1b14a70e4d8dc185e5cc76d3bec9eab20257b2c5 # v2.9.2
         env:
@@ -344,17 +350,17 @@ jobs:
         # agent.yml's Gate sizes it. needs-split alone left #4620 unworked.
         if: steps.red.outputs.number
         env:
-          GH_TOKEN: ${{ github.token }}
           N: ${{ steps.red.outputs.number }}
         run: gh workflow run agent-dispatch.yml --repo "$GITHUB_REPOSITORY" -f issue="$N"
       - name: Close the issue once this check is green again
-        if: needs.e2e-production-shard.result == 'success'
+        if: env.SHARDS == 'success'
         env:
-          GH_TOKEN: ${{ github.token }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           N=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search '"e2e-production red on main" in:title' --json number --jq '.[0].number // empty')
           [ -z "$N" ] || gh issue close "$N" --repo "$GITHUB_REPOSITORY" --reason completed --comment "Green again on $RUN_URL."
+      - name: Red unless every shard passed
+        run: test "$SHARDS" = success
 
   lighthouse:
     name: lighthouse
