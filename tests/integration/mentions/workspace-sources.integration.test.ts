@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 
 import { readWorkspaceMentionSources } from "../../../app/lib/data/source.server";
 import { sourcePillStatus } from "../../../app/components/source-pill";
+import { NO_CHANNEL_REASON } from "../../../app/lib/mentions/youtube-channel";
 
 const WS = "ws-mention-sources";
 const WS_OTHER = "ws-mention-sources-other";
@@ -16,6 +17,7 @@ const NOW_MS = Date.parse(NOW);
 
 const GDELT_SRC = "src_mentions_gdelt";
 const HN_SRC = "src_mentions_hn";
+const YOUTUBE_SRC = "src_mentions_youtube";
 
 async function seedOwner(id: string, workspaceId: string, entityId: string): Promise<void> {
   await env.DB.prepare(
@@ -38,12 +40,18 @@ async function seedOwner(id: string, workspaceId: string, entityId: string): Pro
     .run();
 }
 
-async function seedWatch(id: string, entityId: string, sourceId: string, active: number): Promise<void> {
+async function seedWatch(
+  id: string,
+  entityId: string,
+  sourceId: string,
+  active: number,
+  configJson = "{}",
+): Promise<void> {
   await env.DB.prepare(
     `INSERT INTO watch (id, entity_id, source_id, target_key, is_active, config_json)
-     VALUES (?, ?, ?, ?, ?, '{}')`,
+     VALUES (?, ?, ?, ?, ?, ?)`,
   )
-    .bind(id, entityId, sourceId, `mentions:${id}`, active)
+    .bind(id, entityId, sourceId, `mentions:${id}`, active, configJson)
     .run();
 }
 
@@ -118,6 +126,38 @@ describe("alerts mentions source pills (#4003 4/6)", () => {
       await clearOwner(USER, WS, COMP);
       await clearOwner(`${USER}-other`, WS_OTHER, COMP_OTHER);
       await clearOwner(`${USER}-inactive`, WS_INACTIVE, COMP_INACTIVE);
+    }
+  });
+
+  it("surfaces the per-watch no-channel reason instead of 'no fresh data' (#5827)", async () => {
+    await seedOwner(USER, WS, COMP);
+    // The nightly sweep flagged this watch: the confirmed card carries no
+    // YouTube URL, so no snapshot will ever land. The pill has to say that,
+    // not fall through to the freshness "no fresh data" default.
+    await seedWatch(
+      `watch-${COMP}-youtube`,
+      COMP,
+      YOUTUBE_SRC,
+      1,
+      JSON.stringify({
+        degraded: { state: "degraded", reason: NO_CHANNEL_REASON, at: NOW },
+      }),
+    );
+
+    try {
+      const entries = await readWorkspaceMentionSources(WS);
+      expect(entries.map((entry) => entry.source.key)).toEqual(["youtube.channel_rss"]);
+      const youtube = entries[0];
+      if (!youtube) throw new Error("the watched YouTube mentions source must be read");
+      expect(youtube.snapshot).toBeNull();
+      expect(youtube.source.degraded_reason).toBeNull();
+      expect(sourcePillStatus(youtube.source, youtube.snapshot, NOW_MS)).toEqual({
+        state: "degraded",
+        reason: NO_CHANNEL_REASON,
+        lastGoodAt: NOW,
+      });
+    } finally {
+      await clearOwner(USER, WS, COMP);
     }
   });
 
