@@ -1,7 +1,14 @@
 import { env } from "cloudflare:test";
 import { beforeEach, describe, expect, it } from "vitest";
 
-import { insertSnapshot, insertBoardSnapshot, insertWatchSnapshot } from "../../app/lib/data/snapshot.server";
+import {
+  insertSnapshot,
+  insertBoardSnapshot,
+  insertWatchSnapshot,
+} from "../../app/lib/data/snapshot.server";
+import type { D1Migration } from "cloudflare:test";
+
+const MIGRATION = "0026_source_latest_snapshot.sql";
 
 const OWNER = "user-src-latest";
 const WS = "ws-src-latest";
@@ -12,11 +19,6 @@ const WATCH = "watch-src-latest";
 const WATCH_BACKFILL = "watch-src-latest-backfill";
 const PAGE = "page-src-latest";
 const SEEDED_AT = "2026-09-24T00:00:00Z";
-
-const BACKFILL = `UPDATE source SET
-  latest_fetched_at = (SELECT MAX(sn.fetched_at) FROM snapshot sn JOIN watch w ON w.id = sn.watch_id WHERE w.source_id = source.id),
-  latest_item_count = (SELECT sn.item_count FROM snapshot sn JOIN watch w ON w.id = sn.watch_id WHERE w.source_id = source.id ORDER BY sn.fetched_at DESC LIMIT 1),
-  latest_canary_count = (SELECT sn.canary_count FROM snapshot sn JOIN watch w ON w.id = sn.watch_id WHERE w.source_id = source.id ORDER BY sn.fetched_at DESC LIMIT 1)`;
 
 interface LatestFacts {
   latest_fetched_at: string | null;
@@ -216,14 +218,21 @@ describe("source latest snapshot facts (0509#5724)", () => {
     });
   });
 
-  it("backfill: the migration's UPDATE seeds the facts from stored snapshots", async () => {
+  it("backfill: the migration's own UPDATE seeds the facts from stored snapshots", async () => {
     await seedSource(SOURCE, WATCH);
     await seedSource(SOURCE_BACKFILL, WATCH_BACKFILL);
     await env.DB.batch([
       snapshotStatement("snap-bf-1", WATCH_BACKFILL, "2026-09-25T01:00:00Z", 4, 2),
       snapshotStatement("snap-bf-2", WATCH_BACKFILL, "2026-09-25T02:00:00Z", 6, 8),
     ]);
-    await env.DB.prepare(BACKFILL).run();
+
+    const migration: D1Migration[] = env.TEST_MIGRATIONS;
+    const backfill = migration
+      .filter((one) => one.name === MIGRATION)
+      .flatMap((one) => one.queries)
+      .filter((query) => query.startsWith("UPDATE source"));
+    expect(backfill).toHaveLength(1);
+    await env.DB.prepare(backfill[0] as string).run();
 
     expect(await latestFacts(SOURCE_BACKFILL)).toEqual({
       latest_fetched_at: "2026-09-25T02:00:00Z",
