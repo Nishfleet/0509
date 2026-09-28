@@ -7,8 +7,14 @@ let createdEmail = "";
 test.afterEach(async ({ page }, testInfo) => {
   if (createdEmail === "") return;
   testInfo.setTimeout(testInfo.timeout + 60_000);
-  await deleteCreatedAccount(page, createdEmail);
-  createdEmail = "";
+  // The delete failing is a test failure, not a reason to keep the address:
+  // clearing in finally means the next test in this worker cannot try to
+  // delete an account that is already gone.
+  try {
+    await deleteCreatedAccount(page, createdEmail);
+  } finally {
+    createdEmail = "";
+  }
 });
 
 // The Alerts page measured at each shape the product ships, the same production
@@ -17,9 +23,10 @@ test.afterEach(async ({ page }, testInfo) => {
 // inbox to read, so it cannot mint a session, and this spec skips there rather
 // than fake the journey. It runs in the `e2e-production` job after deploy.
 //
-// The spec reads. It clicks no chip and submits no form, because it runs
+// The spec body reads. It clicks no chip and submits no form, because it runs
 // against production and a visit that wrote data would put a row in a real
-// workspace for a mailbox nobody owns.
+// workspace for a mailbox nobody owns. The teardown above is the one write:
+// it deletes the account the sign-in created, so the run leaves nothing.
 test.skip(
   !process.env.PLAYWRIGHT_TEST_BASE_URL,
   "the Alerts page needs a real session; the local preview Worker cannot mint one",
