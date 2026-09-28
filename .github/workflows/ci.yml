@@ -284,14 +284,6 @@ jobs:
           E2E_INBOX_TOKEN: ${{ secrets.E2E_INBOX_TOKEN }}
           # J5 raises and lowers the fixture bot wall with this token (0509#4121).
           FIXTURE_SITE_TOKEN: ${{ secrets.FIXTURE_SITE_TOKEN }}
-
-      - name: Keep the trace when it fails
-        if: failure() || cancelled()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: playwright-report-production
-          path: playwright-report/
-          retention-days: 7
       - name: Open or update the issue that dispatches the fix
         if: failure() || cancelled()
         id: red
@@ -357,8 +349,8 @@ jobs:
             ${{ github.event.deployment_status.environment_url }}
           budgetPath: ./lighthouse-budget.json
           configPath: ./lighthouserc.cjs
-          uploadArtifacts: true
-          temporaryPublicStorage: true
+          uploadArtifacts: false
+          temporaryPublicStorage: false
       - name: Open or update the issue that dispatches the fix
         if: failure() || cancelled()
         id: red
@@ -367,7 +359,6 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
           SHA: ${{ github.event.deployment.sha }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-          LINKS: ${{ steps.lhci.outputs.links }}
         with:
           filename: .github/red-main/lighthouse.md
           update_existing: true
