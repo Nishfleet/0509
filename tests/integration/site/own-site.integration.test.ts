@@ -135,6 +135,7 @@ describe("own-site check", () => {
 
     expect(await runCheck("own-www-home")).toEqual({ pages: 1, opened: 0, closed: 0, failed: 0 });
     expect(await incidents()).toEqual([]);
+    expect(fetched).toContain("https://www.mybrand.com/");
     expect(fetched).toContain("https://mybrand.com/");
     expect(fetched).not.toContain("https://www.www.mybrand.com/");
   });

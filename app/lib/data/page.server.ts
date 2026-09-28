@@ -35,13 +35,14 @@ const SELECT_JUDGED_HASHES =
 
 const pageHashes = z.array(z.object({ url: z.string(), role_decided_for_hash: z.string() }));
 
-export async function insertPages(rows: readonly NewPage[]): Promise<void> {
-  if (rows.length === 0) return;
-  await env.DB.batch(
+export async function insertPages(rows: readonly NewPage[]): Promise<readonly NewPage[]> {
+  if (rows.length === 0) return [];
+  const results = await env.DB.batch(
     rows.map((row) =>
       env.DB.prepare(INSERT_PAGE).bind(row.id, row.entityId, row.url, row.role, row.discoveredAt),
     ),
   );
+  return rows.filter((row, index) => results[index].meta.changes === 0);
 }
 
 export async function upsertJudgedPages(rows: readonly JudgedPage[]): Promise<void> {
@@ -110,6 +111,12 @@ JOIN page p ON p.entity_id = e.id AND p.role = 'home'
 WHERE e.role = 'self' AND e.state = 'on'
 ORDER BY e.workspace_id, p.id`;
 
+export interface EntityWithoutHomePage {
+  id: string;
+  domain: string;
+  url: string | null;
+}
+
 const entityRows = z.array(z.object({ id: z.string(), domain: z.string(), url: z.string().nullable() }));
 
 const ownSiteRows = z.array(
@@ -121,7 +128,7 @@ const ownSiteRows = z.array(
   }),
 );
 
-export async function readEntitiesWithoutHomePage(): Promise<readonly { id: string; domain: string; url: string | null }[]> {
+export async function readEntitiesWithoutHomePage(): Promise<readonly EntityWithoutHomePage[]> {
   const rows = await env.DB.prepare(ENTITIES_WITHOUT_HOME).all();
   return entityRows.parse(rows.results);
 }

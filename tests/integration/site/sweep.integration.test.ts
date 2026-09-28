@@ -27,12 +27,12 @@ const nextTick = async (name: string) => {
   return { instanceId: name, plannedAt: new Date().toISOString() };
 };
 
-const seedEntity = (id: string, role: "self" | "competitor", domain: string, state: "on" | "off") =>
+const seedEntity = (id: string, role: "self" | "competitor", domain: string, state: "on" | "off", identityJson = "{}") =>
   env.DB.prepare(
     `INSERT INTO entity (id, workspace_id, role, domain, identity_json, origin, state, created_at)
-     VALUES (?, ?, ?, ?, '{}', 'manual', ?, ?)`,
+     VALUES (?, ?, ?, ?, ?, 'manual', ?, ?)`,
   )
-    .bind(id, WS, role, domain, state, NOW)
+    .bind(id, WS, role, domain, identityJson, state, NOW)
     .run();
 
 const homePageUrls = async () => {
@@ -308,12 +308,7 @@ const seedHomeEntities = async (
 ) => {
   await resetTenant();
   for (const row of rows) {
-    await env.DB.prepare(
-      `INSERT INTO entity (id, workspace_id, role, domain, identity_json, origin, state, created_at)
-       VALUES (?, ?, ?, ?, ?, 'manual', 'on', ?)`,
-    )
-      .bind(row.id, WS, row.role, row.domain, row.identityJson, NOW)
-      .run();
+    await seedEntity(row.id, row.role, row.domain, "on", row.identityJson);
   }
 };
 
@@ -391,7 +386,13 @@ describe("home url resolution", () => {
 
       expect((await homePageUrls()).get("ent-other")).toBe("https://nike.com/");
       expect(lines.map((line) => JSON.parse(line)).filter((line) => line.event === "site.identity_url_ignored")).toEqual([
-        { event: "site.identity_url_ignored", entityId: "ent-other", domain: "nike.com", url: "https://adidas.com/" },
+        {
+          event: "site.identity_url_ignored",
+          entityId: "ent-other",
+          domain: "nike.com",
+          enteredUrl: "https://adidas.com/",
+          homeUrl: "https://nike.com/",
+        },
       ]);
     } finally {
       spy.mockRestore();
@@ -411,6 +412,39 @@ describe("home url resolution", () => {
     await planSiteSweep(NOW);
 
     expect((await watchTargets()).get("ent-fixture")).toBe("https://fixture.0509.in/");
+  });
+
+  it("logs and watches the entered host when its page row is already judged as another role", async () => {
+    await seedHomeEntities([
+      {
+        id: "ent-taken",
+        role: "self",
+        domain: "0509.in",
+        identityJson: '{"kind":"domain","url":"https://fixture.0509.in/"}',
+      },
+    ]);
+    await env.DB.prepare(
+      `INSERT INTO page (id, entity_id, url, role, discovered_at) VALUES (?, ?, ?, 'product', ?)`,
+    )
+      .bind("page-taken", "ent-taken", "https://fixture.0509.in/", NOW)
+      .run();
+    const lines: string[] = [];
+    const spy = vi.spyOn(console, "log").mockImplementation((line) => {
+      lines.push(String(line));
+    });
+    try {
+      const targets = await planSiteSweep(NOW);
+
+      expect((await homePageUrls()).has("ent-taken")).toBe(false);
+      expect(lines.map((line) => JSON.parse(line)).filter((line) => line.event === "site.home_page_role_taken")).toEqual([
+        { event: "site.home_page_role_taken", entityId: "ent-taken", url: "https://fixture.0509.in/" },
+      ]);
+      expect(targets.map((target) => [target.entityId, target.url, target.pageRole])).toEqual([
+        ["ent-taken", "https://fixture.0509.in/", "product"],
+      ]);
+    } finally {
+      spy.mockRestore();
+    }
   });
 
   it("keeps the watch on the home page an entity already has, so the row still sweeps", async () => {

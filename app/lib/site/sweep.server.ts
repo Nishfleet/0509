@@ -1,7 +1,7 @@
 import { env } from "cloudflare:workers";
 import { getDomain } from "tldts";
 
-import { insertPages, readEntitiesWithoutHomePage } from "../data/page.server";
+import { insertPages, readEntitiesWithoutHomePage, type EntityWithoutHomePage, type NewPage } from "../data/page.server";
 import { insertChangeSignalStatement } from "../data/signal.server";
 import { readCoveredPagePairs } from "../data/snapshot.server";
 import { readEnabledSourceId } from "../data/source.server";
@@ -36,55 +36,71 @@ async function readText(key: string): Promise<string | null> {
   return object === null ? null : object.text();
 }
 
-function homeUrl(entity: { id: string; domain: string; url: string | null }): string | null {
-  const entered = entity.url === null ? null : normaliseSubject(entity.url);
+function isHomeHost(host: string, domain: string): boolean {
+  return host === domain || host.endsWith(`.${domain}`);
+}
+
+function enteredHomeUrl(entity: EntityWithoutHomePage): string | null {
+  if (entity.url === null) return null;
+  const entered = normaliseSubject(entity.url);
   if (
-    entered !== null &&
-    entered.ok &&
-    entered.subject.kind === "domain" &&
-    entered.subject.registrable === entity.domain &&
-    entered.subject.url !== null
+    !entered.ok ||
+    entered.subject.kind !== "domain" ||
+    entered.subject.url === null ||
+    !isHomeHost(entered.subject.registrable, entity.domain)
   ) {
-    return entered.subject.url;
+    return null;
   }
-  const fallback = getDomain(entity.domain) === entity.domain ? `https://${entity.domain}/` : null;
-  if (fallback !== null && entity.url !== null) {
+  return entered.subject.url;
+}
+
+function homePageFor(entity: EntityWithoutHomePage, now: string): NewPage | null {
+  const entered = enteredHomeUrl(entity);
+  if (entered !== null) {
+    return { id: crypto.randomUUID(), entityId: entity.id, url: entered, role: "home", discoveredAt: now };
+  }
+  if (getDomain(entity.domain) !== entity.domain) return null;
+  const url = `https://${entity.domain}/`;
+  if (entity.url !== null) {
     console.log(JSON.stringify({
       event: "site.identity_url_ignored",
       entityId: entity.id,
       domain: entity.domain,
-      url: entity.url,
+      enteredUrl: entity.url,
+      homeUrl: url,
     }));
   }
-  return fallback;
+  return { id: crypto.randomUUID(), entityId: entity.id, url, role: "home", discoveredAt: now };
+}
+
+function homePageRows(entities: readonly EntityWithoutHomePage[], now: string): NewPage[] {
+  return entities.flatMap((entity) => {
+    const row = homePageFor(entity, now);
+    return row === null ? [] : [row];
+  });
 }
 
 export async function ensureHomePages(now: string): Promise<void> {
-  const entities = await readEntitiesWithoutHomePage();
-  await insertPages(
-    entities.flatMap((entity) => {
-      const url = homeUrl(entity);
-      return url === null
-        ? []
-        : [{ id: crypto.randomUUID(), entityId: entity.id, url, role: "home" as const, discoveredAt: now }];
-    }),
-  );
+  await insertPages(homePageRows(await readEntitiesWithoutHomePage(), now));
 }
 
 export async function planSiteSweep(now: string): Promise<SiteSweepTarget[]> {
-  await ensureHomePages(now);
   const sourceId = await readEnabledSourceId(SITE_SOURCE_KEY);
   if (sourceId === null) return [];
 
-  const unwatched = await readUnwatchedEntities(sourceId);
-  await insertWatches(
-    unwatched.map((entity) => ({
+  const taken = await insertPages(homePageRows(await readEntitiesWithoutHomePage(), now));
+  for (const row of taken) {
+    console.log(JSON.stringify({ event: "site.home_page_role_taken", entityId: row.entityId, url: row.url }));
+  }
+  await insertWatches([
+    ...(await readUnwatchedEntities(sourceId)).map((entity) => ({
       id: crypto.randomUUID(),
       entityId: entity.id,
       sourceId,
       targetKey: entity.pageUrl,
     })),
-  );
+    ...taken.map((row) => ({ id: crypto.randomUUID(), entityId: row.entityId, sourceId, targetKey: row.url })),
+  ]);
   return [...(await readSiteSweepTargets(SITE_SOURCE_KEY))];
 }
 
