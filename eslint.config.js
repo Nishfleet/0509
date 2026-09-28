@@ -117,10 +117,10 @@ const SUPPORT_ADDRESS_BAN = {
 // A catch whose only statement is `return null` swallows the error: a thrown
 // fetch, a bug, and a genuine "not found" all reach the caller as the same
 // null, so the failure leaves no trace. Match the block shape, not a promise
-// `.catch(() => null)` callback. The named clause in
-// app/lib/identity/name-cascade.server.ts is grandfathered by name (see the
-// exemption block) until the cascade grows a logged failure path. Source:
-// 0509#4462 (REBUILD-TRUST.md C1 Q1 — the D grade on PR #4457).
+// `.catch(() => null)` callback. The clause in
+// app/lib/identity/name-cascade.server.ts logs via console.error before its
+// `return null`, so it holds two statements and does not match this shape.
+// Source: 0509#4462 (REBUILD-TRUST.md C1 Q1 — the D grade on PR #4457).
 const CATCH_RETURNS_NULL = {
   selector:
     "CatchClause > BlockStatement[body.length=1] > ReturnStatement[argument.value=null]",
@@ -168,7 +168,7 @@ const CRAWLER_USER_AGENT_BAN = {
   selector:
     "Literal[value=/FiveToNineBot\\/\\d|0509\\.io\\/\\d/], TemplateElement[value.raw=/FiveToNineBot\\/\\d|0509\\.io\\/\\d/]",
   message:
-    "The crawler User-Agent is typed once, in app/lib/fetch/robots.server.ts as CRAWLER_USER_AGENT (built from ROBOTS_AGENT, the token robots.txt is matched against); every module that fetches today imports it. A second literal is a second identity to change and a fetch that silently keeps the old one, which is how five modules came to hold the string in two spellings. The version is matched as /\\d/ so a bump is this edit, not a new literal. Modules that fetch without a User-Agent at all are 0509#5960. Source: 0509#5883.",
+    "The crawler User-Agent is typed once, in app/lib/fetch/robots.server.ts as CRAWLER_USER_AGENT (built from ROBOTS_AGENT, the token robots.txt is matched against); every module that fetches today imports it. A second literal is a second identity to change and a fetch that silently keeps the old one, which is how the same identity came to be typed in more than one place. The version is matched as /\\d/ so a bump is this edit, not a new literal. Modules that fetch without a User-Agent at all are 0509#5960. Source: 0509#5883.",
 };
 
 const USER_DATA_NAME = "^(email|emails|userId|ip|input|raw|prompt|password|token|subject)$";
