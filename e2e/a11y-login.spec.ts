@@ -1,6 +1,8 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
 
+import { settleSignInWidget } from "./inbox";
+
 // #4148: /login is measured with Deque's axe-core at WCAG 2.2 AA on both of its
 // states, in both themes, at both config widths. The form and the sent state are
 // separate tests so a violation names which state it is in.
@@ -26,6 +28,7 @@ for (const scheme of ["light", "dark"] as const) {
 
     const email = `e2e+${crypto.randomUUID().replaceAll("-", "").slice(0, 12)}@0509.io`;
     await page.locator('input[name="email"]').fill(email);
+    await settleSignInWidget(page);
     await page.locator('button[type="submit"]').click();
     await expect(page.getByRole("heading", { level: 1, name: "Check your email" })).toBeVisible();
 

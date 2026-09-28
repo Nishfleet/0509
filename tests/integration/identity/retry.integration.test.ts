@@ -83,7 +83,7 @@ async function answerHomepage(): Promise<void> {
 
 async function confirmRefusedCard(): Promise<string> {
   expect(
-    await confirmCard(workspaceId, form({ subject: DOMAIN, name: "Gymshark", description: "" })),
+    await confirmCard(workspaceId, userId, form({ subject: DOMAIN, name: "Gymshark", description: "" })),
   ).toBe(true);
   const row = await env.DB.prepare("SELECT id FROM entity WHERE workspace_id = ?1 AND role = 'self'")
     .bind(workspaceId)

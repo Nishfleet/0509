@@ -9,7 +9,7 @@ import {
   type WeightRow,
 } from "./standing-score";
 
-const BUCKET_LABELS = {
+export const BUCKET_LABELS = {
   mention_matters: "Mentions that matter",
   mention_normal: "Mentions",
   site_change_noteworthy: "Noteworthy site changes",

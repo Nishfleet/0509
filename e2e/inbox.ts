@@ -1,4 +1,4 @@
-import { expect, type Page } from "@playwright/test";
+import { expect, type Page, type TestInfo } from "@playwright/test";
 
 // The J1 mail path, per the amended decision on 0509#3927: Email Routing's
 // e2e@0509.io rule delivers e2e+<run-id>@0509.io (zone subaddressing on, RFC
@@ -156,6 +156,107 @@ export async function waitForMagicLink(to: string, token: string, exclude: strin
   );
 }
 
+export async function settleSignInWidget(page: Page): Promise<void> {
+  await expect(page.locator("[data-sitekey]")).toHaveCount(1);
+  await page.locator("#email").focus();
+  const field = page.locator('input[name="cf-turnstile-response"]');
+  // Production lane: the Access service token pre-clears the captcha server
+  // side, and managed-mode Turnstile correctly never mints a token for an
+  // automated browser (#5631). The regression guard that still holds is the
+  // widget rendering its response field at all — absent means the widget
+  // never mounted. The local lane has no pre-clearance, so there the field
+  // must carry the always-pass test token.
+  if (process.env.CF_ACCESS_CLIENT_ID) {
+    await expect(field).toHaveCount(1);
+    return;
+  }
+  await expect(field).toHaveValue(/\S/);
+}
+
+export async function turnstileToken(page: Page): Promise<string> {
+  await page.goto("/login");
+  await settleSignInWidget(page);
+  const token = (await page.locator('input[name="cf-turnstile-response"]').inputValue()).trim();
+  // Pre-cleared callers send the request without a token; an empty return is
+  // only a failure where the captcha is still enforced.
+  if (token.length === 0 && !process.env.CF_ACCESS_CLIENT_ID) throw new Error("Turnstile issued no token");
+  return token;
+}
+
+// One collected console error: the text and the url of the script that
+// logged it. watchConsole's array, the same-origin filter and every spec's
+// exclude predicate all state this one shape.
+export interface ConsoleEntry {
+  text: string;
+  url: string;
+}
+
+// The console-error gate's collector, shared by every spec that holds the
+// same-origin gate — j3-onboard-domain keeps its own collector (0509#5680
+// carve).
+// Console errors keep the url of the script that logged them so the gate can
+// hold only same-origin messages — the real Turnstile widget on /login logs
+// its NaN noise from challenges.cloudflare.com, cross-origin JS and not app
+// code (0509#5682). Pageerrors carry no location to scope by, so they are
+// always gated — a cross-origin script's uncaught exception still fails.
+export function watchConsole(page: Page): {
+  consoleErrors: ConsoleEntry[];
+  pageErrors: string[];
+} {
+  const consoleErrors: ConsoleEntry[] = [];
+  const pageErrors: string[] = [];
+  page.on("console", (message) => {
+    if (message.type() === "error") {
+      consoleErrors.push({ text: message.text(), url: message.location().url });
+    }
+  });
+  page.on("pageerror", (error) => pageErrors.push(error.message));
+  return { consoleErrors, pageErrors };
+}
+
+// Same-origin entries fail the test as "text @ url"; the excluded cross-origin
+// entries are attached to the report so a green run still shows what the gate
+// dropped. `exclude` drops a same-origin console entry a spec expects — the
+// 404-page specs' own-document line — at entry level, before the line is
+// composed. Pageerrors have no location to scope by and are never excludable.
+export async function consoleFailures(
+  page: Page,
+  watched: ReturnType<typeof watchConsole>,
+  testInfo: TestInfo,
+  exclude: (entry: ConsoleEntry) => boolean = () => false,
+): Promise<string[]> {
+  const pageOrigin = new URL(page.url()).origin;
+  // `!entry.url` is load-bearing: a console error with no location would make
+  // `new URL("")` throw inside the predicate.
+  const sameOrigin = (entry: ConsoleEntry) => !entry.url || new URL(entry.url).origin === pageOrigin;
+  const dropped = watched.consoleErrors.filter((entry) => !sameOrigin(entry));
+  if (dropped.length > 0) {
+    await testInfo.attach("cross-origin console errors (excluded from the gate)", {
+      body: dropped.map((entry) => `${entry.text} @ ${entry.url}`).join("\n"),
+      contentType: "text/plain",
+    });
+  }
+  return [
+    ...watched.consoleErrors
+      .filter((entry) => sameOrigin(entry) && !exclude(entry))
+      .map((entry) => `${entry.text} @ ${entry.url}`),
+    ...watched.pageErrors,
+  ];
+}
+
+// The 404 specs' shared exclusion: a document 404 surfaces as a console error
+// on the page's own URL — expected, and a 404 for any other URL still fails.
+// Pathname equality, not a suffix match: a different path ending the same way
+// still fails. `status of 404` is the phrase Chromium emits over HTTP/1.1 and
+// HTTP/2 alike — never the reason phrase, which HTTP/2 drops (0509#4244). The
+// empty-url guard keeps `new URL("")` from throwing on a location-less error.
+export function ownDocument404For(pathname: string): (entry: ConsoleEntry) => boolean {
+  return (entry) =>
+    /status of 404\b/.test(entry.text) &&
+    entry.url.length > 0 &&
+    new URL(entry.url).pathname === pathname;
+}
+
 // J1's core: submit the login form for a fresh e2e+ address, read the real
 // email out of the inbox Worker, follow the link, land signed in on /onboarding.
 // Timestamps are logged for the packet's proof line (send and session).
@@ -166,6 +267,7 @@ export async function signInWithMagicLink(
 ): Promise<{ link: string; status: number }> {
   await page.goto("/login");
   await page.locator('input[name="email"]').fill(email);
+  await settleSignInWidget(page);
   const sentAt = new Date().toISOString();
   await page.locator('button[type="submit"]').click();
   // Sent state replaces the form; asserting the field is gone asserts the swap
