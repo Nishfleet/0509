@@ -39,8 +39,8 @@ export class UpstreamBlockedError extends Error {
 	}
 }
 
-export async function fetchUpstream(url: string): Promise<Response> {
-	const response = await fetch(url, { signal: AbortSignal.timeout(8000) });
+export async function fetchUpstream(url: string, timeoutMs = 8000): Promise<Response> {
+	const response = await fetch(url, { signal: AbortSignal.timeout(timeoutMs) });
 	if (BLOCKING_STATUSES.has(response.status)) throw new UpstreamBlockedError(response.status);
 	return response;
 }
