@@ -20,11 +20,15 @@ function metaQ(name: string): string | null {
   return new URL(adLibraryLinks({ name, domain: "example.com" }).meta).searchParams.get("q");
 }
 
-// What renderToStaticMarkup writes for a URL: searchParams percent-encodes
-// quotes, angle brackets and apostrophes already, so the ampersands between
-// the pairs are the only characters React escapes in the attribute.
-function hrefAsMarkup(url: string): string {
-  return `href="${url.replaceAll("&", "&amp;")}"`;
+// What renderToStaticMarkup writes an `href` attribute as, decoded back to the
+// URL the browser would navigate to. The direction matters: this decodes the
+// markup React produced instead of re-encoding the expected URL, so a React
+// that stops escaping an `&` still passes. Only `&` appears in these URLs —
+// searchParams percent-encodes quotes and angle brackets already.
+function hrefsIn(markup: string): string[] {
+  return [...markup.matchAll(/href="([^"]*)"/g)].map(([, href]) =>
+    href.replaceAll("&amp;", "&").replaceAll("&quot;", '"').replaceAll("&#x27;", "'"),
+  );
 }
 
 describe("the live ad-library links on a competitor header", () => {
@@ -85,8 +89,9 @@ describe("the live ad-library links on a competitor header", () => {
     const domain = "shop.example.com";
     const links = adLibraryLinks({ name, domain });
     const html = renderHeader(name, domain);
-    expect(html).toContain(hrefAsMarkup(links.meta));
-    expect(html).toContain(hrefAsMarkup(links.google));
+    const hrefs = hrefsIn(html);
+    expect(hrefs).toContain(links.meta);
+    expect(hrefs).toContain(links.google);
     expect(html).toContain(">Their ads on Meta</a>");
     expect(html).toContain(">Their ads on Google</a>");
     // The accessible name leads with the visible text, so a voice-control user

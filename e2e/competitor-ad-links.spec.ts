@@ -149,6 +149,7 @@ test.afterEach(async ({ page }, testInfo) => {
 });
 
 test("the competitor header's two ad-library links carry that brand's ad-library search", async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== "phone-390", "runs once; both widths are set by setViewportSize");
   test.setTimeout(150_000);
   const watched = watchConsole(page);
 
@@ -180,7 +181,7 @@ test("the competitor header's two ad-library links carry that brand's ad-library
 
   // The accessible name leads with the visible text so a voice-control user
   // matches the label (WCAG 2.2 SC 2.5.3), then names the brand and the new
-  // tab. Exact matches, in a real browser, on a brand with an `&`.
+  // tab. Exact matches, in a real browser, on a real competitor page.
   const meta = page.getByRole("link", { name: `Their ads on Meta, ${brand} (opens in a new tab)`, exact: true });
   const google = page.getByRole("link", { name: `Their ads on Google, ${brand} (opens in a new tab)`, exact: true });
   await expect(meta).toBeVisible();
@@ -206,24 +207,15 @@ test("the competitor header's two ad-library links carry that brand's ad-library
   expect(googleUrl.searchParams.get("region")).toBe("anywhere");
   expect(googleUrl.searchParams.get("domain")).toBe(domain);
 
-  // 390: the pair wraps rather than pushing the page sideways. The measurement
-  // is no-horizontal-scroll.spec.ts's idiom, and it is that file's because the
-  // stylesheet sets `html, body { overflow-x: hidden }` (app/app.css), which
-  // has to be lifted before documentElement.scrollWidth can report an overflow.
-  await page.setViewportSize({ width: 390, height: 844 });
-  await page.addStyleTag({ content: "html, body { overflow-x: visible !important; }" });
-  const widths = await page.evaluate(() => ({
-    scrollWidth: document.documentElement.scrollWidth,
-    clientWidth: document.documentElement.clientWidth,
-  }));
-  expect(widths.scrollWidth, JSON.stringify(widths)).toBe(widths.clientWidth);
   const links = page.locator("[data-slot='competitor-ad-links']");
   await expect(links).toBeVisible();
+
   // The design skill's proof (.agents/skills/design/SKILL.md): the screen at
-  // 1440 and 390 with both shots attached. At 1440 this is the first viewport,
-  // and DESIGN.md 2.5's claim is that the name, the switch and the snapshot row
-  // are all in it — so the snapshot row is asserted to be, not left to the
-  // reader of the attachment.
+  // 1440 and 390 with both shots attached. Taken before the overflow override
+  // below, so the attachments are the shipped rendering and not a page a style
+  // tag mutated. At 1440 this is the first viewport, and DESIGN.md 2.5's claim
+  // is that the name, the switch and the snapshot row are all in it — so the
+  // snapshot row is asserted to be, not left to the reader of the attachment.
   await page.setViewportSize({ width: 1440, height: 900 });
   await expect(page.locator("[data-section='snapshot']")).toBeInViewport();
   await testInfo.attach("competitor-ad-links-1440", {
@@ -235,16 +227,27 @@ test("the competitor header's two ad-library links carry that brand's ad-library
     body: await page.screenshot(),
     contentType: "image/png",
   });
+  await testInfo.attach("competitor-ad-links", {
+    body: await links.screenshot(),
+    contentType: "image/png",
+  });
+
+  // 390: the pair wraps rather than pushing the page sideways. The measurement
+  // is no-horizontal-scroll.spec.ts's idiom, and it is that file's because the
+  // stylesheet sets `html, body { overflow-x: hidden }` (app/app.css), which
+  // has to be lifted before documentElement.scrollWidth can report an overflow.
+  await page.addStyleTag({ content: "html, body { overflow-x: visible !important; }" });
+  const widths = await page.evaluate(() => ({
+    scrollWidth: document.documentElement.scrollWidth,
+    clientWidth: document.documentElement.clientWidth,
+  }));
+  expect(widths.scrollWidth, JSON.stringify(widths)).toBe(widths.clientWidth);
   console.log(
     `ad-links[brand=${brand}] meta.host=${metaUrl.hostname} meta.q=${String(metaUrl.searchParams.get("q"))} google.host=${googleUrl.hostname} google.domain=${String(googleUrl.searchParams.get("domain"))}`,
   );
   console.log(
     `ad-links[width=390 brand=${brand}] scrollWidth=${String(widths.scrollWidth)} clientWidth=${String(widths.clientWidth)}`,
   );
-  await testInfo.attach("competitor-ad-links", {
-    body: await links.screenshot(),
-    contentType: "image/png",
-  });
 
   expect(await consoleFailures(page, watched, testInfo), testInfo.project.name).toEqual([]);
 });
