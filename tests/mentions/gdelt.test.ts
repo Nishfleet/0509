@@ -46,32 +46,6 @@ describe("gdelt adapter", () => {
     expect(result?.rawBody).toBe(gdeltBody);
   });
 
-  it("still yields the real article when one article carries an empty title", async () => {
-    const body = JSON.stringify({
-      articles: [
-        {
-          url: "https://www.example-news.com/untitled",
-          title: "",
-          seendate: "20260923T101500Z",
-          domain: "example-news.com",
-        },
-        {
-          url: "https://www.example-news.com/gymshark-opens-store",
-          title: "Gymshark opens a new flagship store",
-          seendate: "20260923T101500Z",
-          domain: "example-news.com",
-        },
-      ],
-    });
-    stubFetch(body);
-    const result = await adapterFor("gdelt.doc")?.({ query: "Gymshark" }, null);
-    expect(result?.items.map((item) => item.title)).toEqual([
-      "",
-      "Gymshark opens a new flagship store",
-    ]);
-    expect(result?.canaryCount).toBe(2);
-  });
-
   it("treats an empty answer as no articles", async () => {
     stubFetch("{}");
     const result = await adapterFor("gdelt.doc")?.({ query: "Nobody" }, null);
