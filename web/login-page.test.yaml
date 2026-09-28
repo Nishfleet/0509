@@ -1,0 +1,21 @@
+fileType: momentic/test/v2
+id: login-page-shows-sign-in-form
+description: Through the Cloudflare Access gate, /login shows the email sign-in form and the passkey option; nothing is submitted
+url: https://0509.io
+before:
+  - javascript:
+      code: |
+        setVariable("CF_ACCESS_CLIENT_ID", process.env.CF_ACCESS_CLIENT_ID);
+        setVariable("CF_ACCESS_CLIENT_SECRET", process.env.CF_ACCESS_CLIENT_SECRET);
+      environment: node
+  - header:
+      name: CF-Access-Client-Id
+      value: "{{ env.CF_ACCESS_CLIENT_ID }}"
+  - header:
+      name: CF-Access-Client-Secret
+      value: "{{ env.CF_ACCESS_CLIENT_SECRET }}"
+steps:
+  - navigate: https://0509.io/login
+  - waitForUrl: /login
+  - checkPageContains: Sign in
+  - assert: The page has an Email field, an "Email me a link" button and a "Use a passkey instead" option

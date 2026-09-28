@@ -1,0 +1,8 @@
+fileType: momentic/test/v2
+id: landing-page-holding-message
+description: The 0509 landing page shows the rebuilding message and its footer links
+url: https://0509.io
+steps:
+  - checkPageContains: Quietly, we’re rebuilding.
+  - checkPageContains: You’ll see where you stand when it’s ready.
+  - assert: The footer shows a support@0509.io email link, a Privacy link and a Terms link

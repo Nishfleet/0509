@@ -1,0 +1,8 @@
+fileType: momentic/test/v2
+id: unknown-path-shows-not-found
+description: An unknown path shows the not-found page, and its link returns to the landing page
+url: https://0509.io/nope-404
+steps:
+  - checkPageContains: This page is not here
+  - click: Back to the landing link
+  - assert: The page shows the message "Quietly, we’re rebuilding."
