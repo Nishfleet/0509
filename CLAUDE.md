@@ -136,16 +136,19 @@ rejection**, not a review comment.
 
 ## What gates a merge
 
-Four required checks on the `main-merge-queue` ruleset (id 21391031), **empty
+Five required checks on the `main-merge-queue` ruleset (id 21391031), **empty
 bypass list**:
 
 ```
-Gitleaks   codex-node-checks   semgrep   preview-assert
+Gitleaks   codex-node-checks   semgrep   preview-assert   opus-review
 ```
 
 Renaming one of these is not cosmetic. A required check that never reports fails
-closed and nothing can merge again, including the PR that renamed it. The merge
-queue tests the merge result, so a PR that would redden `main` never lands.
+closed and nothing can merge again, including the PR that renamed it. A
+*skipped* required check counts as passing, so none of these five carries a
+job-level `if:` that can skip it: they report on every event, and on an event
+with nothing to do they pass through one explicit step. The merge queue tests
+the merge result, so a PR that would redden `main` never lands.
 
 `e2e-production` and `lighthouse` run on `deployment_status` and are
 deliberately **not** required: they cannot run on a pull request, and a required
