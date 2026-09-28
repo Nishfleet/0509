@@ -1,6 +1,10 @@
 import { env } from "cloudflare:test";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+vi.mock("@sentry/cloudflare", () => ({ captureException: vi.fn() }));
+
+import { captureException } from "@sentry/cloudflare";
+
 import type { Subject } from "../../app/lib/identity/normalise";
 import { REFUSAL, screenOnboardingSubject } from "../../app/lib/onboarding-screen.server";
 
@@ -60,6 +64,7 @@ async function subjectRows(workspaceId: string, subject: string): Promise<{ enti
 
 afterEach(() => {
   Reflect.deleteProperty(env, "AI");
+  vi.mocked(captureException).mockReset();
 });
 
 describe("screenOnboardingSubject", () => {
@@ -306,15 +311,17 @@ describe("screenOnboardingSubject", () => {
       });
 
       expect(result).toEqual({ kind: "ask", subject: raw });
-      const lines = logSpy.mock.calls
-        .map((call) => call[0])
-        .filter((line): line is string => typeof line === "string")
+      const logged = logSpy.mock.calls.map((call) => call[0]);
+      const lines = logged
+        .filter((line): line is string => typeof line === "string" && line.startsWith('{"event"'))
         .map((line) => JSON.parse(line) as { event?: string; error?: string });
       const unavailable = lines.filter((line) => line.event === "public_subject.jev_unavailable");
       expect(unavailable.map((line) => line.error)).toEqual([
         expect.stringContaining("2021: Insufficient credits"),
       ]);
-      expect(logSpy.mock.calls.flat().join(" ")).not.toContain(raw);
+      expect(logged.join(" ")).not.toContain(raw);
+      expect(captureException).toHaveBeenCalledTimes(1);
+      expect(vi.mocked(captureException).mock.calls[0]?.[1]).toEqual({ tags: { jev: "public_subject" } });
     } finally {
       logSpy.mockRestore();
     }

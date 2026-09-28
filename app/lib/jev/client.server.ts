@@ -1,5 +1,5 @@
 import { env } from "cloudflare:workers";
-import { z } from "zod";
+import { z, type ZodSafeParseResult } from "zod";
 
 import { readCachedChoice, readCachedNoul } from "../data/jev_verdict.server";
 
@@ -62,16 +62,15 @@ export class JevUnavailableError extends Error {
   }
 }
 
-function answerShape(
-  raw: unknown,
-  issues: readonly { readonly path: readonly PropertyKey[]; readonly code: string }[] | null,
-): string {
+function shapeOf(raw: unknown, parsed: ZodSafeParseResult<unknown>): string {
   const keys = typeof raw === "object" && raw !== null ? Object.keys(raw).slice(0, 20).join(",") : typeof raw;
-  const issueList =
-    issues === null
-      ? ""
-      : issues.slice(0, 5).map((issue) => `${issue.path.join(".")}:${issue.code}`).join(" ");
-  return `keys=${keys}; issues=${issueList}`;
+  const issues = parsed.success
+    ? ""
+    : parsed.error.issues
+        .slice(0, 5)
+        .map((issue) => `${issue.path.join(".")}:${issue.code}`)
+        .join(" ");
+  return `keys=${keys}; issues=${issues}`;
 }
 
 async function sha256Hex(text: string): Promise<string> {
@@ -113,9 +112,7 @@ async function run(question: NoulQuestion, state: unknown): Promise<number> {
   const parsed = answerSchema.safeParse(raw);
   const answer = parsed.success ? parsed.data.answers[question.id] : undefined;
   if (answer === undefined) {
-    throw new JevUnavailableError(
-      new Error(`answer missing its noul; ${answerShape(raw, parsed.success ? null : parsed.error.issues)}`),
-    );
+    throw new JevUnavailableError(new Error(`answer missing its noul; ${shapeOf(raw, parsed)}`));
   }
   return answer.noul;
 }
@@ -142,7 +139,7 @@ export async function askNouls(
   );
   const pending = entries.filter((entry) => entry.cached === null);
   let answers: NoulAnswers = {};
-  let shape = answerShape(undefined, null);
+  let shape: string | undefined;
   if (pending.length > 0) {
     const asked = Object.fromEntries(pending.map((entry) => [entry.question.id, noulAsk(entry.question)]));
     let raw: unknown;
@@ -159,7 +156,7 @@ export async function askNouls(
       throw new JevUnavailableError(error);
     }
     const parsed = answerSchema.safeParse(raw);
-    shape = answerShape(raw, parsed.success ? null : parsed.error.issues);
+    shape = shapeOf(raw, parsed);
     if (parsed.success) answers = parsed.data.answers;
   }
   return entries.map((entry) => {
@@ -167,7 +164,10 @@ export async function askNouls(
       return { questionId: entry.question.id, inputHash: entry.hash, p: entry.cached, cached: true };
     }
     const fresh = answers[entry.question.id]?.noul;
-    if (fresh === undefined) throw new JevUnavailableError(new Error(`answer missing its noul; ${shape}`));
+    if (fresh === undefined) {
+      const detail = shape === undefined ? "" : `; ${shape}`;
+      throw new JevUnavailableError(new Error(`answer missing its noul${detail}`));
+    }
     return { questionId: entry.question.id, inputHash: entry.hash, p: fresh, cached: false };
   });
 }
@@ -195,9 +195,7 @@ async function runChoice(question: ChoiceQuestion, state: unknown): Promise<stri
   const parsed = choiceAnswerSchema.safeParse(raw);
   const answer = parsed.success ? parsed.data.answers[question.id] : undefined;
   if (answer === undefined || !Object.keys(question.options).includes(answer.choice)) {
-    throw new JevUnavailableError(
-      new Error(`answer missing its choice; ${answerShape(raw, parsed.success ? null : parsed.error.issues)}`),
-    );
+    throw new JevUnavailableError(new Error(`answer missing its choice; ${shapeOf(raw, parsed)}`));
   }
   return answer.choice;
 }
