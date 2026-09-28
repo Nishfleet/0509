@@ -21,6 +21,9 @@ test.skip(
 test.describe.configure({ retries: 1 });
 
 const TOKEN_TTL_MS = 305_000;
+// Headroom over the TTL so a starved event loop cannot time the poll out
+// before the deadline it is watching for.
+const DEADLINE_SLACK_MS = 30_000;
 const SESSION_COOKIE = /better-auth\.session_token/;
 const VERIFY_ERROR = "error=INVALID_TOKEN";
 
@@ -164,7 +167,10 @@ test("the sign-in link works once, survives a newer request, dies on its own clo
 
   // Expiry: the fourth link is never followed until its TTL has fully elapsed.
   await expect
-    .poll(() => Date.now(), { timeout: Math.max(expiresAfter - Date.now(), 0) + 30_000 })
+    .poll(() => Date.now(), {
+      timeout: Math.max(expiresAfter - Date.now(), 0) + DEADLINE_SLACK_MS,
+      message: `the sign-in link's ${TOKEN_TTL_MS / 1000}s TTL to fully elapse`,
+    })
     .toBeGreaterThanOrEqual(expiresAfter);
   const expiredContext = await freshContext(browser);
   const expiredFollow = await followOnce(expiredContext, fourthLink);
