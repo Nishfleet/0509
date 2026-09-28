@@ -345,6 +345,19 @@ jobs:
           configPath: ./lighthouserc.cjs
           uploadArtifacts: true
           temporaryPublicStorage: true
+      - name: Delete the signed-in e2e address
+        # The sign-in mints a real user+workspace+send_target row set on every
+        # deploy and nothing removed it (#5723's deleteCreatedAccount
+        # convention, request-only so the job still needs no browser).
+        # BETTER_AUTH_SESSION_COOKIE and LHCI_EMAIL arrive from GITHUB_ENV;
+        # always() so a failed audit does not leak the address either.
+        if: always()
+        run: npx playwright test --project=lhci-teardown
+        env:
+          LHCI_TEARDOWN: "1"
+          PLAYWRIGHT_TEST_BASE_URL: ${{ github.event.deployment_status.environment_url }}
+          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
       - name: Open or update the issue that dispatches the fix
         if: failure() || cancelled()
         id: red

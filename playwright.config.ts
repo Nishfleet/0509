@@ -47,6 +47,10 @@ export default defineConfig({
     // on its own env var so the e2e suite never runs it, and request-only so
     // the job needs no browser install.
     ...(process.env.LHCI_SESSION ? [{ name: "lhci-session", testMatch: /lhci-session\.setup\.ts/ }] : []),
+    // The lighthouse job's post-audit teardown (0509#5767): deletes the address
+    // the sign-in minted, via the product's own settings delete path. Gated on
+    // its own env var so the e2e suite never runs it.
+    ...(process.env.LHCI_TEARDOWN ? [{ name: "lhci-teardown", testMatch: /lhci-teardown\.setup\.ts/ }] : []),
     {
       name: "desktop-1440",
       use: { ...devices["Desktop Chrome"], viewport: { width: 1440, height: 900 }, ...accessState },

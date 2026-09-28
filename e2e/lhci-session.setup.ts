@@ -40,4 +40,5 @@ setup("sign in a fresh e2e address and record the session cookie", async ({ requ
   const session = state.cookies.find((cookie) => cookie.name.endsWith("better-auth.session_token"));
   if (!session) throw new Error(`magic-link verify set no session cookie for ${email}`);
   appendFileSync(githubEnv, `BETTER_AUTH_SESSION_COOKIE=${session.name}=${session.value}\n`);
+  appendFileSync(githubEnv, `LHCI_EMAIL=${email}\n`);
 });
