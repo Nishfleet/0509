@@ -97,7 +97,6 @@ export async function storeLogo(
   } catch (error) {
     console.log(JSON.stringify({
       event: "identity-logo-store-failed",
-      subject: registrable,
       error: String(error),
     }));
     return null;
