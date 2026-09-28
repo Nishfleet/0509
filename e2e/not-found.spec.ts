@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-import { consoleFailures, watchConsole } from "./inbox";
+import { consoleFailures, ownDocument404For, watchConsole } from "./inbox";
 
 test("an unknown path is a 404 page with one action", async ({ page }, testInfo) => {
   const watched = watchConsole(page);
@@ -24,21 +24,7 @@ test("an unknown path is a 404 page with one action", async ({ page }, testInfo)
 
   // Chromium reports the document's own 404 as a console error. That line is
   // the status this test asserts. A 404 for any other URL still fails.
-  //
-  // Match the status code phrase, never the reason phrase. Production is
-  // served over HTTP/2, which has no reason phrase, so Chromium prints
-  // `status of 404 ()`; the local webServer is HTTP/1.1 and prints
-  // `status of 404 (Not Found)`. Pinning the whole line with the phrase
-  // made this assertion true only in preview (0509#4244, run 35754687604:
-  // expected `404 (Not Found)`, received `404 ()`). `status of 404` is
-  // the part Chromium emits in both modes. Measured against the live
-  // origin:
-  //   curl -s --max-time 20 -o /dev/null -D - https://0509.io/this-page-is-not-here | head -1
-  //   HTTP/2 404
-  //   curl -s --http1.1 --max-time 20 -o /dev/null -D - https://0509.io/this-page-is-not-here | head -1
-  //   HTTP/1.1 404 Not Found
-  const ownDocument404 = (entry: { text: string; url: string }) =>
-    /status of 404\b/.test(entry.text) && entry.url.endsWith("/this-page-is-not-here");
+  const ownDocument404 = ownDocument404For("/this-page-is-not-here");
   expect(
     await consoleFailures(page, watched, testInfo, ownDocument404),
     testInfo.project.name,
