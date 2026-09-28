@@ -93,8 +93,9 @@ jobs:
           esac
           mkdir -p "$RUNNER_TEMP/audit-files"
           git ls-files -z -- "$@" CLAUDE.md docs/REBUILD-TRUST.md eslint.config.js \
-            | xargs -0 cp -P --parents -t "$RUNNER_TEMP/audit-files"
+            | xargs -0 cp -P --parents -t "$RUNNER_TEMP/audit-files" --
           find "$RUNNER_TEMP/audit-files" -type l -delete
+          find "$RUNNER_TEMP/audit-files" \( -name .cursor -o -name .cursorrules \) -prune -exec rm -rf {} +
           find "$RUNNER_TEMP/audit-files" -type f | wc -l
       - name: Install the Cursor CLI
         # Its own step, so the installer never runs with the API key in env.
@@ -134,7 +135,7 @@ jobs:
           printf '%s\n' "$grade" | grep -qxE 'Audit grade: (A\+|A|A-|B\+|B|B-|C\+|C|C-|D|F)'
           {
             printf 'Area "%s" at %s, %s\n\n~~~text\n' "$AREA" "$GITHUB_SHA" "$RUN_URL"
-            head -n 61 "$RUNNER_TEMP/audit.txt" | tr -d '\r~'
+            head -n 61 "$RUNNER_TEMP/audit.txt" | head -c 60000 | tr -d '\r~'
             printf '~~~\n'
           } > "$RUNNER_TEMP/audit-post.md"
           gh issue comment "$UMBRELLA" --repo "$GITHUB_REPOSITORY" --body-file "$RUNNER_TEMP/audit-post.md"
