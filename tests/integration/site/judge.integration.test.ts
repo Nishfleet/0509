@@ -144,11 +144,15 @@ describe("judgeChange", () => {
 
     expect(judgment.deferred).toBe(false);
     expect(judgment.selfBreakage).toBeNull();
-    expect(judgment.noteworthy).toEqual({ p: 0.95, kind: "pricing", band: "publish", reason: "publish at p=0.95" });
+    expect(judgment.noteworthy).toEqual({ p: 0.95, kind: "pricing", band: "publish" });
     expect(await rowsFor("rival")).toEqual([
-      { question_id: "change_kind", p: null, choice: "pricing", entity_id: "rival", reason: "publish at p=0.95" },
-      { question_id: "noteworthy_change", p: 0.95, choice: null, entity_id: "rival", reason: "publish at p=0.95" },
+      { question_id: "change_kind", p: null, choice: "pricing", entity_id: "rival", reason: null },
+      { question_id: "noteworthy_change", p: 0.95, choice: null, entity_id: "rival", reason: null },
     ]);
+    const leaked = await env.DB.prepare(
+      "SELECT COUNT(*) AS n FROM jev_verdict WHERE reason LIKE '%p=%'",
+    ).first<{ n: number }>();
+    expect(leaked).toMatchObject({ n: 0 });
   });
 
   it("case b: a competitor change at 0.5 stays uncertain", async () => {
@@ -157,7 +161,7 @@ describe("judgeChange", () => {
 
     const judgment = await judgeChange(judgeInput({ entity: "rival", isSelf: false }));
 
-    expect(judgment.noteworthy).toEqual({ p: 0.5, kind: "copy", band: "uncertain", reason: "uncertain at p=0.5" });
+    expect(judgment.noteworthy).toEqual({ p: 0.5, kind: "copy", band: "uncertain" });
     expect(await rowsFor("rival")).toHaveLength(2);
   });
 
@@ -167,10 +171,10 @@ describe("judgeChange", () => {
 
     const judgment = await judgeChange(judgeInput({ entity: "rival", isSelf: false }));
 
-    expect(judgment.noteworthy).toEqual({ p: 0.05, kind: "copy", band: "discard", reason: "discard at p=0.05" });
+    expect(judgment.noteworthy).toEqual({ p: 0.05, kind: "copy", band: "discard" });
     expect(await rowsFor("rival")).toEqual([
-      { question_id: "change_kind", p: null, choice: "copy", entity_id: "rival", reason: "discard at p=0.05" },
-      { question_id: "noteworthy_change", p: 0.05, choice: null, entity_id: "rival", reason: "discard at p=0.05" },
+      { question_id: "change_kind", p: null, choice: "copy", entity_id: "rival", reason: null },
+      { question_id: "noteworthy_change", p: 0.05, choice: null, entity_id: "rival", reason: null },
     ]);
   });
 
@@ -191,10 +195,16 @@ describe("judgeChange", () => {
     const judgment = await judgeChange(judgeInput({ entity: "mine", isSelf: true }));
 
     expect(judgment.deferred).toBe(false);
-    expect(judgment.selfBreakage).toEqual({ p: 0.7, band: "alert", reason: "alert at p=0.7" });
+    expect(judgment.selfBreakage).toEqual({ p: 0.7, band: "alert" });
     expect(judgment.noteworthy).toBeNull();
     expect(jevAnswers.calls).toBe(1);
-    expect((await rowsFor("mine")).map((row) => row.question_id)).toEqual(["own_site_breakage"]);
+    expect(await rowsFor("mine")).toEqual([
+      { question_id: "own_site_breakage", p: 0.7, choice: null, entity_id: "mine", reason: null },
+    ]);
+    const leaked = await env.DB.prepare(
+      "SELECT COUNT(*) AS n FROM jev_verdict WHERE reason LIKE '%p=%'",
+    ).first<{ n: number }>();
+    expect(leaked).toMatchObject({ n: 0 });
   });
 
   it("case d2: a self change rated clear runs D3 too", async () => {
@@ -310,7 +320,7 @@ describe("judgeChange", () => {
 
     const judgment = await judgeChange(judgeInput({ entity: "rival", isSelf: false }));
 
-    expect(judgment.noteworthy).toEqual({ p: 0.89, kind: "launch", band: "uncertain", reason: "uncertain at p=0.89" });
+    expect(judgment.noteworthy).toEqual({ p: 0.89, kind: "launch", band: "uncertain" });
     const rows = await env.DB.prepare(
       "SELECT question_id, input_hash FROM jev_verdict WHERE entity_id = ? ORDER BY question_id",
     )
