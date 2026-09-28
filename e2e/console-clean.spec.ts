@@ -41,15 +41,10 @@ for (const target of targets) {
       ).toHaveLength(1);
     }
 
-    // The shared same-origin gate supplies the failures list; this spec's own
-    // policy then removes the document's own 404 line, which the assertion
-    // above already counted as expected.
-    const own404Lines = new Set(
-      watched.consoleErrors.filter(ownDocument404).map((entry) => `${entry.text} @ ${entry.url}`),
-    );
-    const failures = (await consoleFailures(page, watched, testInfo)).filter(
-      (line) => !own404Lines.has(line),
-    );
+    // The shared same-origin gate keeps this spec's own policy through its
+    // `exclude` predicate: the document's own 404 line is expected (asserted
+    // above), never a failure.
+    const failures = await consoleFailures(page, watched, testInfo, ownDocument404);
     expect(failures, testInfo.project.name).toEqual([]);
   });
 }

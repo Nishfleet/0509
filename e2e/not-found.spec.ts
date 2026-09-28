@@ -37,8 +37,10 @@ test("an unknown path is a 404 page with one action", async ({ page }, testInfo)
   //   HTTP/2 404
   //   curl -s --http1.1 --max-time 20 -o /dev/null -D - https://0509.io/this-page-is-not-here | head -1
   //   HTTP/1.1 404 Not Found
-  const ownDocument404 = (line: string) =>
-    /status of 404\b/.test(line) && line.endsWith("/this-page-is-not-here");
-  const failures = (await consoleFailures(page, watched, testInfo)).filter((line) => !ownDocument404(line));
-  expect(failures, testInfo.project.name).toEqual([]);
+  const ownDocument404 = (entry: { text: string; url: string }) =>
+    /status of 404\b/.test(entry.text) && entry.url.endsWith("/this-page-is-not-here");
+  expect(
+    await consoleFailures(page, watched, testInfo, ownDocument404),
+    testInfo.project.name,
+  ).toEqual([]);
 });
