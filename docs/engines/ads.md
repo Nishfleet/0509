@@ -91,7 +91,7 @@ This replaces #3891's stated order (Meta, then Google, then "one adapter per rem
 | Step | Reads | Writes |
 |---|---|---|
 | Select | `watch JOIN entity WHERE entity.state='on'` and `source.kind='ads'` | — |
-| Collect | `source` (descriptor, rate limit, reliability) | R2: the raw payload per (watch, tick); `snapshot`: **one row** per watch per tick with `payload_r2_key`, `payload_hash`, `item_count`, `fetched_at` |
+| Collect | `source` (descriptor, rate limit, reliability) | R2: the raw payload per (watch, tick); `snapshot`: **one row** per watch per tick with `payload_r2_key`, `payload_hash`, `item_count`, `fetched_at`, paired in the same `batch()` with the `source` latest-facts update |
 | Diff the ad set | the previous `snapshot.payload_hash` for that watch | nothing when the hash is unchanged — no creative rows, no screenshots, no Jev |
 | New creatives | — | `signal` rows, `kind='ad'`, one **per creative**, never per impression or per element; the creative screenshot and image go to R2 by key |
 | Dedup | existing `signal` rows for the entity | `jev_verdict` (D8) only for the cross-platform / re-upload case |
@@ -145,7 +145,7 @@ Per 1,000 ad pulls, priced from `REBUILD-COST.md` (2026-09-21):
 | Fetch pull (Reddit, TikTok API once approved) | subrequests | 1,000 — free |
 | Queue | 1 message × 3 ops, plus retries | 3,000 ops — **$0.0012** |
 | R2 | 1 payload PUT + ~2 creative image PUTs on a changed tick | ~3,000 Class A (**$0.0135**), ~0.5 GB-mo (**$0.008**) |
-| D1 | 1 snapshot row always + 1 `source` latest-facts row + ~2 signal rows on a changed tick (~30% of ticks) | ~2,600 rows — **0.005% of the 50M included** |
+| D1 | 1 snapshot row always + 1 `source` latest-facts row (both planned — no ads snapshot writer on main yet) + ~2 signal rows on a changed tick (~30% of ticks) | ~2,600 rows — **0.005% of the 50M included** |
 | Jev | ≤2 calls per changed pull ≈ 600 | $0 on the seat, **$0.0096** at the measured market rate |
 
 **Monthly at 100 brands**, daily cadence, Meta + Google browser plus Reddit fetch:

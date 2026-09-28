@@ -405,7 +405,7 @@ Plus **Pinterest `pinterest.user_rss`** where the brand has a handle — filed a
 
 Aligned to `docs/REBUILD-SCHEMA.md` on main. **A mention is not its own table.** It is a `signal` row with `kind = 'mentions'`, and `mention` is a view over `signal` — so the vocabulary in the issue maps to a real schema object without a second store.
 
-**What the poll writes** (the cost boundary, `REBUILD-SCHEMA.md`): one `snapshot` row per `watch` per tick, paired in the same `batch()` with the `source` row's latest-facts update — `payload_r2_key`, `payload_hash`, `item_count`, `fetched_at` — with the raw feed body in R2. An unchanged feed is a hash comparison, not an R2 write: the snapshot row and its paired `source` update still commit.
+**What the poll writes** (the cost boundary, `REBUILD-SCHEMA.md`): one `snapshot` row per `watch` per tick, paired in the same `batch()` with the `source` row's latest-facts update — `payload_r2_key`, `payload_hash`, `item_count`, `fetched_at` — with the raw feed body in R2. An unchanged feed still commits its snapshot row and its paired `source` update.
 
 **What survives judgment (D5) becomes a `signal` row.** The per-kind CHECK on the spine already requires `canonical_url` and `url_hash` for `kind = 'mentions'`. The shape each adapter must produce:
 
