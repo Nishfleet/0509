@@ -116,6 +116,7 @@ beforeEach(() => {
 
 afterEach(async () => {
   vi.unstubAllGlobals();
+  Reflect.deleteProperty(env, "AI");
   await env.IDENTITY_CACHE.delete(probeKey(subject(), "homepage"));
   await env.DB.prepare('DELETE FROM "user" WHERE id = ?1').bind(userId).run();
   await env.DB.prepare("DELETE FROM source WHERE id = 'src_ads_meta_tail'").run();
