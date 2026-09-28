@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 import routes from "../app/routes";
+import type { SourceRow, SourceSnapshot } from "../app/components/source-pill";
 import {
   DISALLOWED_PREFIXES,
   MCP_URL,
@@ -12,6 +13,7 @@ import {
   llmsTxt,
   robotsTxt,
   sitemapXml,
+  type LlmsTxtSource,
 } from "../app/lib/public-routes";
 
 function topLevel(entries: RouteConfigEntry[]): RouteConfigEntry[] {
@@ -84,12 +86,80 @@ describe("public-route manifest", () => {
   });
 
   it("llms.txt has the spec's title and summary and links every public path", () => {
-    const body = llmsTxt("https://0509.io");
+    const body = llmsTxt("https://0509.io", healthyRegistry(), NOW);
     expect(body.startsWith("# Five to Nine\n\n> ")).toBe(true);
     expect(body).toContain("## Pages");
     expect(body).toContain(MCP_URL);
+    expect(body).toContain("- Site changes: Homepage\n");
+    expect(body).toContain("- Mentions: News\n");
+    expect(body).toContain("- Mentions: Hacker News\n");
+    expect(body).toContain("- Mentions: YouTube\n");
+    expect(body).not.toContain("not answering today");
     for (const p of PUBLIC_PATHS) {
       expect(body).toMatch(new RegExp(`^- \\[[^\\]]+\\]\\(https://0509\\.io${p}\\): \\S`, "m"));
     }
   });
+
+  it("qualifies a mixed live registry at the line, and does not drop the line", () => {
+    const body = llmsTxt(
+      "https://0509.io",
+      [
+        registryEntry("site.web", "web", {}, FRESH),
+        registryEntry("hn.algolia", "hn", {}, FRESH),
+        registryEntry("gdelt.doc", "gdelt", { degraded_reason: "timed out", last_good_at: null }, FRESH),
+        registryEntry("youtube.channel_rss", "youtube", { last_good_at: null }, null),
+      ],
+      NOW,
+    );
+    expect(body).toMatch(/^- Site changes: Homepage$/m);
+    expect(body).toMatch(/^- Mentions: Hacker News$/m);
+    expect(body).toContain("- Mentions: News (degraded: timed out — not answering today)");
+    expect(body).toContain("- Mentions: YouTube (no data yet)");
+    expect(body).toContain("Some sources are not answering today; those lines say so.");
+    expect(body).toContain("- Your own site: Breakage alerts (Starter and up)");
+  });
+
+  it("omits a disabled registry source from the watches list", () => {
+    const body = llmsTxt(
+      "https://0509.io",
+      [
+        registryEntry("site.web", "web", { is_enabled: 0 }, FRESH),
+        registryEntry("hn.algolia", "hn", {}, FRESH),
+        registryEntry("gdelt.doc", "gdelt", {}, FRESH),
+        registryEntry("youtube.channel_rss", "youtube", {}, FRESH),
+      ],
+      NOW,
+    );
+    expect(body).not.toContain("Site changes: Homepage");
+    expect(body).toMatch(/^- Mentions: Hacker News$/m);
+    expect(body).not.toContain("not answering today");
+  });
 });
+
+const NOW = Date.parse("2026-09-28T12:00:00.000Z");
+const FRESH: SourceSnapshot = {
+  item_count: 4,
+  fetched_at: "2026-09-28T11:00:00.000Z",
+  canary_count: 1,
+};
+
+function registryEntry(
+  key: string,
+  platform: string,
+  extra: Partial<SourceRow>,
+  snapshot: SourceSnapshot | null,
+): LlmsTxtSource {
+  return {
+    source: { key, platform, is_enabled: 1, ...extra },
+    snapshot,
+  };
+}
+
+function healthyRegistry(): readonly LlmsTxtSource[] {
+  return [
+    registryEntry("site.web", "web", {}, FRESH),
+    registryEntry("hn.algolia", "hn", {}, FRESH),
+    registryEntry("gdelt.doc", "gdelt", {}, FRESH),
+    registryEntry("youtube.channel_rss", "youtube", {}, FRESH),
+  ];
+}
