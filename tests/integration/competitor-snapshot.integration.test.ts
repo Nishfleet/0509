@@ -2,6 +2,7 @@ import { env } from "cloudflare:test";
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { readCompetitorSnapshot } from "../../app/lib/competitor-snapshot.server";
+import { ACT_AT } from "../../app/lib/jev/thresholds";
 
 /**
  * One brand's last 7 days as the brief sees it: the counted signals joined to
@@ -199,6 +200,43 @@ describe("readCompetitorSnapshot against real D1", () => {
     expect(byKey.get("site")?.name).toBe("Your site checks source");
     expect(byKey.get("ads")?.answered).toBe(false);
     expect(byKey.get("ads")?.name).toBe("Meta ads");
+  });
+
+  it("counts a verdict sitting exactly on the act threshold and leaves one just under it out", async () => {
+    const ws = "ws-snap-edge";
+    const user = "user-snap-edge";
+    const entity = "snap-edge-rival";
+    const sourceSite = "snap-edge-src-site";
+
+    await seedOwner(ws, user);
+    await seedEntity(ws, entity, `${entity}.example`, "Edge Rival");
+    await seedSource(sourceSite, "site", "web", "snap-edge-site-web");
+
+    await seedSignal("snap-edge-sig-at-act", ws, entity, sourceSite, {
+      kind: "change",
+      aspect: "home",
+      observedAt: "2026-09-20T10:00:00.000Z",
+    });
+    await seedVerdict("snap-edge-jev-at-act", ws, "noteworthy_change", "snap-edge-sig-at-act", ACT_AT);
+
+    await seedSignal("snap-edge-sig-below", ws, entity, sourceSite, {
+      kind: "change",
+      aspect: "pricing",
+      observedAt: "2026-09-21T10:00:00.000Z",
+    });
+    await seedVerdict("snap-edge-jev-below", ws, "noteworthy_change", "snap-edge-sig-below", 0.5);
+
+    await seedSignal("snap-edge-sig-mention-at-act", ws, entity, sourceSite, {
+      kind: "mention",
+      canonicalUrl: "https://news.example/edge",
+      observedAt: "2026-09-22T10:00:00.000Z",
+    });
+    await seedVerdict("snap-edge-jev-mention-at-act", ws, "mention_matters", "snap-edge-sig-mention-at-act", ACT_AT);
+
+    const snapshot = await readCompetitorSnapshot(ws, entity, NOW);
+
+    expect(snapshot.counts.noteworthyChanges).toBe(1);
+    expect(snapshot.counts.mentionsThatMatter).toBe(1);
   });
 
   it("returns zero counts, null standing and no sources for an unrelated workspace", async () => {
