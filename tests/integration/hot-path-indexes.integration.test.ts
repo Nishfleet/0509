@@ -104,7 +104,7 @@ async function liveIndexColumns(name: string): Promise<string[]> {
  * Most entries are FK children whose parent is never deleted on a live path,
  * so nothing scans them; 0509#5938 owns indexing them. The five that did scan
  * — on the account-delete cascade from `user` through `workspace` — are
- * indexed by migration 0026 and are no longer in this list.
+ * indexed by migration 0027 and are no longer in this list.
  */
 const LEGACY_UNINDEXED_ID_COLUMNS: readonly string[] = [
   "alert.entity_id",
@@ -160,7 +160,7 @@ async function unindexedIdColumns(): Promise<string[]> {
   return offenders.sort();
 }
 
-describe("0026_hot_path_indexes_and_sweep_run.sql", () => {
+describe("0027_hot_path_indexes_and_sweep_run.sql", () => {
   it("gives every hot or scheduled statement an index starting with its columns", async () => {
     for (const statement of HOT_STATEMENTS) {
       expect(
