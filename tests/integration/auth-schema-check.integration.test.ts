@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 import { createAuth } from "../../app/lib/auth.server";
 
 const ORIGIN = "http://localhost:8787";
+const INTROSPECTION = /pragma_table_info|sqlite_master|pragma_index_(list|info)/i;
 
 // 0509#5721: better-auth re-reads sqlite_master and pragma_table_info once per
 // auth instance unless advanced.database.validateSchema is false. createAuth
@@ -12,23 +13,11 @@ const ORIGIN = "http://localhost:8787";
 // schema.integration.test.ts; the runtime check stays off.
 describe("auth schema validation", () => {
   it("issues no schema introspection queries when building the auth instance", async () => {
-    const introspected: string[] = [];
-    const db = new Proxy(env.DB, {
-      get(target, prop) {
-        if (prop === "prepare") {
-          return (query: string) => {
-            if (/pragma_table_info|sqlite_master/i.test(query)) introspected.push(query);
-            return target.prepare(query);
-          };
-        }
-        const value: unknown = Reflect.get(target, prop);
-        return typeof value === "function" ? value.bind(target) : value;
-      },
-    });
+    const prepare = vi.spyOn(env.DB, "prepare");
 
     const auth = createAuth(
       {
-        DB: db,
+        DB: env.DB,
         EMAIL: {
           send: async () => ({ messageId: "test" }),
         },
@@ -41,25 +30,29 @@ describe("auth schema validation", () => {
       { captcha: false },
     );
 
-    // The check rides on better-auth's async context init: one real request
-    // forces it to resolve. base.mjs runs ctx.checkSchema() detached (the
-    // promise is never awaited), so the introspection burst lands after the
-    // response — a fixed sleep would race it. Poll until the count stops
+    // base.mjs runs ctx.checkSchema() detached — scheduled on a microtask
+    // ahead of the handler continuation, never awaited — so the introspection
+    // burst lands around and after the response. Poll until the count stops
     // growing: on the fix it stays zero, on the old code it converges to ~38.
     const response = await auth.handler(
       new Request(`${ORIGIN}/api/auth/get-session`, { headers: { origin: ORIGIN } }),
     );
     expect(response.status).toBe(200);
+
+    const introspected = () =>
+      prepare.mock.calls.map(([query]) => String(query)).filter((query) => INTROSPECTION.test(query));
     let previous = -1;
     await vi.waitFor(
       () => {
-        if (introspected.length === previous) return;
-        previous = introspected.length;
+        if (introspected().length === previous) return;
+        previous = introspected().length;
         throw new Error("schema introspection still in flight");
       },
       { timeout: 5_000, interval: 50 },
     );
+    const found = introspected();
+    prepare.mockRestore();
 
-    expect(introspected).toEqual([]);
+    expect(found).toEqual([]);
   });
 });
