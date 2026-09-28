@@ -296,15 +296,14 @@ export async function signInWithMagicLink(
 // user row when the magic link is verified, inside signInWithMagicLink, so a
 // test that never got past that link has no session and no row; the skip
 // logs "deleteCreatedAccount: no session for <email>; nothing to delete"
-// before it returns. It is also
-// the shape a J2 failure mid-ceremony leaves behind — signed out, row still
-// there — and this helper cannot tell the two apart, so that leak is a named
-// gap (#5733), not a solved case.
+// before it returns. It is also the shape a J2 failure mid-ceremony leaves
+// behind — signed out, row still there — and this helper cannot tell the
+// two apart, so that leak is a named gap (#5733), not a solved case.
 
 // 0509#5688 (fleet-manager): the journey specs keep these four accounts on
 // purpose; the recurring teardown must never delete them. Match these exact
-// addresses, never a pattern. The one-time purge (0509#5730) may delete
-// them; the specs create them again.
+// addresses, never a pattern. The one-time purge (0509#5730) kept the same
+// four; the journey specs create them again if they are ever gone.
 const KEPT_JOURNEY_ACCOUNTS: readonly string[] = [
   "e2e+j7@0509.io",
   "e2e+j8-soft@0509.io",
