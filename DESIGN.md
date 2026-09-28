@@ -69,7 +69,7 @@ the brands you compete with."
 The sub is **one sentence**: what we watch (ads, mentions, site changes, hiring) and that
 we name the rivals so you do not have to know them. Under the CTA, one line of microcopy
 in the Canny pattern ("No credit card required" → ours: **"One input. Sixty seconds to
-your first standing."**). No exclamation marks anywhere on the page.
+who’s gaining on you."**). No exclamation marks anywhere on the page.
 
 - Hero is a two-column grid at ≥1080px (1.15fr copy / 0.85fr proof), stacked below.
 - The proof column is live data from a public workspace we run ourselves, re-rendered
