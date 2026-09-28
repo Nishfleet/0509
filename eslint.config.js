@@ -469,6 +469,25 @@ export default tseslint.config(
   },
 
   {
+    // The fixture site names its Durable Object for the request's hostname, so J5
+    // and J7 on `fixture.0509.in` and J8 on `j8.fixture.0509.in` never share a
+    // state row. That is a non-identity host read, not domain normalisation — the
+    // identity engine reduces both names to the same registrable `0509.in`, which
+    // is exactly the collision being fixed — so it is exempted from
+    // `DOMAIN_HOSTNAME_BAN` alone. It keeps every other ban, including
+    // `RAW_DML_WRITER`, which the shared identity block above would re-arm
+    // because this file writes its own Durable Object sqlite. 0509#5833.
+    files: ["workers/fixture-site.ts"],
+    rules: {
+      "no-restricted-syntax": [
+        "error",
+        ...BANNED_SYNTAX.filter((rule) => rule !== DOMAIN_HOSTNAME_BAN),
+        FEED_STATE_LITERAL,
+      ],
+    },
+  },
+
+  {
     files: ["app/**/*.{ts,tsx}", "workers/**/*.ts"],
     ignores: [
       "app/lib/auth.server.ts",

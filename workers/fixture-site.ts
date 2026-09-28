@@ -5,10 +5,6 @@ interface FixtureEnv {
   FIXTURE_SITE_TOKEN?: string;
 }
 
-// The stub type the namespace hands back, named without re-declaring the DO
-// shape: every route writes to the object named for the request's hostname.
-type FixtureStateStub = ReturnType<FixtureEnv["STATE"]["getByName"]>;
-
 export class FixtureState extends DurableObject<FixtureEnv> {
   constructor(ctx: DurableObjectState, env: FixtureEnv) {
     super(ctx, env);
@@ -174,7 +170,7 @@ function authorize(request: Request, env: FixtureEnv): Response | null {
 async function flip(
   request: Request,
   env: FixtureEnv,
-  state: FixtureStateStub,
+  state: DurableObjectStub<FixtureState>,
 ): Promise<Response> {
   const denied = authorize(request, env);
   if (denied) {
@@ -191,7 +187,7 @@ async function flip(
 async function wall(
   request: Request,
   env: FixtureEnv,
-  state: FixtureStateStub,
+  state: DurableObjectStub<FixtureState>,
 ): Promise<Response> {
   const denied = authorize(request, env);
   if (denied) {
@@ -208,7 +204,7 @@ async function wall(
 async function price(
   request: Request,
   env: FixtureEnv,
-  state: FixtureStateStub,
+  state: DurableObjectStub<FixtureState>,
 ): Promise<Response> {
   const denied = authorize(request, env);
   if (denied) {
