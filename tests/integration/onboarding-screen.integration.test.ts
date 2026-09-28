@@ -293,7 +293,7 @@ describe("screenOnboardingSubject", () => {
     const run = vi.fn(() => Promise.reject(new Error("2021: Insufficient credits")));
     Reflect.set(env, "AI", { run });
     const raw = `credits-${String(runs)}.example`;
-    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => undefined);
 
     try {
       const result = await screenOnboardingSubject({

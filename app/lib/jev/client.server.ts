@@ -64,7 +64,7 @@ export class JevUnavailableError extends Error {
 
 function answerShape(
   raw: unknown,
-  issues: readonly { readonly path: readonly PropertyKey[]; readonly code: string | undefined }[] | null,
+  issues: readonly { readonly path: readonly PropertyKey[]; readonly code: string }[] | null,
 ): string {
   const keys = typeof raw === "object" && raw !== null ? Object.keys(raw).slice(0, 20).join(",") : typeof raw;
   const issueList =
