@@ -688,6 +688,12 @@ export default tseslint.config(
               from: { element: { type: "worker" } },
               allow: { to: { file: { categories: "server-module" } } },
             },
+            {
+              from: { file: { path: "app/lib/delivery-address.server.ts" } },
+              allow: { to: { element: { type: "worker" } } },
+              message:
+                "The delivery-address save is the second app-side sender after app/lib/auth.server.ts, and it goes through the one paved path (workers/delivery/send.ts) instead of calling env.EMAIL.send a second time. Only that one module reaches the worker; every other server leaf keeps the boundary. Source: 0509#5811.",
+            },
           ],
         },
       ],

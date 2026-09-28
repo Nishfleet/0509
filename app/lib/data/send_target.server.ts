@@ -1,10 +1,18 @@
 const WRITE_UNSUBSCRIBE_TOKEN = `UPDATE send_target SET unsubscribe_token = ? WHERE id = ? AND unsubscribe_token IS NULL`;
 
-const SELECT_EMAIL_TARGET = `SELECT st.target_value FROM send_target st
+const SELECT_EMAIL_TARGET = `SELECT st.target_value, st.is_verified FROM send_target st
 JOIN channel c ON c.id = st.channel_id
 WHERE st.workspace_id = ? AND c.key = 'email'
 ORDER BY st.created_at ASC
 LIMIT 1`;
+
+const WRITE_VERIFY_TOKEN = `UPDATE send_target SET verify_token = ?
+WHERE workspace_id = ?
+  AND channel_id = (SELECT id FROM channel WHERE key = 'email')`;
+
+const MARK_EMAIL_TARGET_VERIFIED = `UPDATE send_target SET is_verified = 1, verify_token = NULL
+WHERE workspace_id = ?
+  AND channel_id = (SELECT id FROM channel WHERE key = 'email')`;
 
 const CHANGE_EMAIL_TARGET = `UPDATE send_target
 SET target_value = ?, is_verified = 0, unsubscribe_token = NULL
@@ -45,12 +53,29 @@ export async function ensureOwnerEmailTarget(
   await db.prepare(INSERT_OWNER_EMAIL_TARGET).bind(input.now, input.workspaceId).run();
 }
 
-export async function readEmailTarget(db: TargetDb, workspaceId: string): Promise<string | null> {
+export async function readEmailTarget(
+  db: TargetDb,
+  workspaceId: string,
+): Promise<{ target_value: string; is_verified: number } | null> {
   const row = await db
     .prepare(SELECT_EMAIL_TARGET)
     .bind(workspaceId)
-    .first<{ target_value: string }>();
-  return row?.target_value ?? null;
+    .first<{ target_value: string; is_verified: number }>();
+  return row ?? null;
+}
+
+export async function writeVerifyToken(
+  db: TargetDb,
+  input: { workspaceId: string; token: string },
+): Promise<void> {
+  await db.prepare(WRITE_VERIFY_TOKEN).bind(input.token, input.workspaceId).run();
+}
+
+export async function markEmailTargetVerified(
+  db: TargetDb,
+  input: { workspaceId: string },
+): Promise<void> {
+  await db.prepare(MARK_EMAIL_TARGET_VERIFIED).bind(input.workspaceId).run();
 }
 
 export async function changeEmailTarget(

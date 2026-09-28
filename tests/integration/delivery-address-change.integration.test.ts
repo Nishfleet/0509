@@ -8,17 +8,33 @@ const USER_ID = "user-da";
 const SIGN_IN_EMAIL = "owner@0509.io";
 const NOW = "2026-09-24T00:00:00Z";
 
+interface Recorder {
+  sent: EmailMessageBuilder[];
+  fail: Error | null;
+}
+
+const recorder = (): Recorder => ({ sent: [], fail: null });
+
+const bindingFor = (rec: Recorder): SendEmail => ({
+  send(message: EmailMessageBuilder) {
+    if (rec.fail) throw rec.fail;
+    rec.sent.push(message);
+    return Promise.resolve({} as EmailSendResult);
+  },
+});
+
 interface TargetRow {
   workspace_id: string;
   target_value: string;
   is_verified: number;
   unsubscribe_token: string | null;
+  verify_token: string | null;
 }
 
 const allTargets = async (workspaceId: string): Promise<TargetRow[]> =>
   (
     await env.DB.prepare(
-      `SELECT workspace_id, target_value, is_verified, unsubscribe_token
+      `SELECT workspace_id, target_value, is_verified, unsubscribe_token, verify_token
          FROM send_target
         WHERE workspace_id = ?
         ORDER BY target_value ASC`,
@@ -79,6 +95,7 @@ describe("change the workspace's email address (0509#4779)", () => {
     const first = await saveDeliveryAddress({
       userId: USER_ID,
       signInEmail: SIGN_IN_EMAIL,
+      email: bindingFor(recorder()),
       address: " new@0509.io ",
       resume: false,
     });
@@ -95,6 +112,7 @@ describe("change the workspace's email address (0509#4779)", () => {
     const second = await saveDeliveryAddress({
       userId: USER_ID,
       signInEmail: SIGN_IN_EMAIL,
+      email: bindingFor(recorder()),
       address: "other@0509.io",
       resume: false,
     });
@@ -117,6 +135,7 @@ describe("change the workspace's email address (0509#4779)", () => {
     const result = await saveDeliveryAddress({
       userId: USER_ID,
       signInEmail: SIGN_IN_EMAIL,
+      email: bindingFor(recorder()),
       address: SIGN_IN_EMAIL,
       resume: false,
     });
@@ -140,6 +159,7 @@ describe("change the workspace's email address (0509#4779)", () => {
     const blocked = await saveDeliveryAddress({
       userId: USER_ID,
       signInEmail: SIGN_IN_EMAIL,
+      email: bindingFor(recorder()),
       address: "gone@0509.io",
       resume: false,
     });
@@ -154,6 +174,7 @@ describe("change the workspace's email address (0509#4779)", () => {
     const resumed = await saveDeliveryAddress({
       userId: USER_ID,
       signInEmail: SIGN_IN_EMAIL,
+      email: bindingFor(recorder()),
       address: "gone@0509.io",
       resume: true,
     });
@@ -168,6 +189,7 @@ describe("change the workspace's email address (0509#4779)", () => {
     const result = await saveDeliveryAddress({
       userId: USER_ID,
       signInEmail: SIGN_IN_EMAIL,
+      email: bindingFor(recorder()),
       address: "not-an-address",
       resume: false,
     });
@@ -186,6 +208,7 @@ describe("change the workspace's email address (0509#4779)", () => {
     const result = await saveDeliveryAddress({
       userId: USER_ID,
       signInEmail: SIGN_IN_EMAIL,
+      email: bindingFor(recorder()),
       address: "new@0509.io",
       resume: false,
     });
@@ -200,16 +223,17 @@ describe("change the workspace's email address (0509#4779)", () => {
     await env.DB.exec("DELETE FROM send_target");
 
     const beforeStored = await readDeliveryAddress(USER_ID, SIGN_IN_EMAIL);
-    expect(beforeStored).toBe(SIGN_IN_EMAIL);
+    expect(beforeStored).toEqual({ address: SIGN_IN_EMAIL, verified: true });
 
     await saveDeliveryAddress({
       userId: USER_ID,
       signInEmail: SIGN_IN_EMAIL,
+      email: bindingFor(recorder()),
       address: "new@0509.io",
       resume: false,
     });
 
     const afterStored = await readDeliveryAddress(USER_ID, SIGN_IN_EMAIL);
-    expect(afterStored).toBe("new@0509.io");
+    expect(afterStored).toEqual({ address: "new@0509.io", verified: false });
   });
 });

@@ -37,7 +37,8 @@ From `migrations/0001_rebuild.sql`, with `incident_notice` as widened by `migrat
 
 ```
 channel          id, key UNIQUE, is_enabled, config_json
-send_target      id, workspace_id, channel_id, target_value, is_verified, created_at
+send_target      id, workspace_id, channel_id, target_value, is_verified,
+                 unsubscribe_token, verify_token, created_at
                  UNIQUE (workspace_id, channel_id, target_value)
 send_attempt     id, workspace_id, send_target_id, digest_id,
                  idempotency_key TEXT NOT NULL UNIQUE, status, error, attempted_at

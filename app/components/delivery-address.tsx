@@ -4,11 +4,11 @@ import { BLOCK_HEADING } from "./page-heading";
 import { Button } from "./ui/button";
 
 export function DeliveryAddress({
-  address,
+  delivery,
   error,
   suppressed,
 }: {
-  address: string;
+  delivery: { address: string; verified: boolean };
   error: string | null;
   suppressed: boolean;
 }) {
@@ -32,11 +32,17 @@ export function DeliveryAddress({
           type="email"
           autoComplete="email"
           required
-          defaultValue={address}
+          defaultValue={delivery.address}
           className="border-line h-11 border px-3"
           aria-invalid={hasError ? true : undefined}
           aria-describedby={hasError ? "delivery-address-error" : undefined}
         />
+        {delivery.verified ? null : (
+          <p className="mt-2 max-w-prose leading-[1.55]">
+            This address is unconfirmed. We emailed a confirmation link — the brief doesn't go out
+            until you confirm.
+          </p>
+        )}
         {suppressed ? (
           <label className="leading-[1.55]">
             <input type="checkbox" name="resume" value="yes" className="mr-2" />

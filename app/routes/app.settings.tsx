@@ -43,8 +43,8 @@ export async function loader({ request }: Route.LoaderArgs) {
   const workspaceId = await readWorkspaceIdForOwner(session.user.id);
   const ownSiteAlerts = workspaceId === null ? true : await readOwnSiteAlerts(workspaceId);
   const dismissed = workspaceId === null ? [] : await readUserDismissed(workspaceId);
-  const deliveryAddress = await readDeliveryAddress(session.user.id, session.user.email);
-  return { email: session.user.email, schedule, ownSiteAlerts, dismissed, deliveryAddress };
+  const delivery = await readDeliveryAddress(session.user.id, session.user.email);
+  return { email: session.user.email, schedule, ownSiteAlerts, dismissed, delivery };
 }
 
 export async function action({ request, context }: Route.ActionArgs) {
@@ -66,7 +66,7 @@ export async function action({ request, context }: Route.ActionArgs) {
     const address = form.get("address");
     const saved = await saveDeliveryAddress({
       userId: session.user.id,
-      signInEmail: session.user.email,
+      signInEmail: session.user.email, email: env.EMAIL,
       address: typeof address === "string" ? address : "",
       resume: form.get("resume") === "yes",
     });
@@ -134,7 +134,7 @@ export default function Page({ loaderData, actionData }: Route.ComponentProps) {
           Signed in as <strong className="font-semibold">{loaderData.email}</strong>
         </p>
         <DeliveryAddress
-          address={loaderData.deliveryAddress}
+          delivery={loaderData.delivery}
           error={actionData?.deliveryError ?? null}
           suppressed={actionData?.deliverySuppressed ?? false}
         />
