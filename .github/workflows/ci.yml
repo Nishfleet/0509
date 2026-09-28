@@ -424,8 +424,8 @@ jobs:
             ${{ github.event.deployment_status.environment_url }}/onboarding
           budgetPath: ./lighthouse-budget.json
           configPath: ./lighthouserc.cjs
-          uploadArtifacts: true
-          temporaryPublicStorage: true
+          uploadArtifacts: false
+          temporaryPublicStorage: false
       - name: Delete the signed-in e2e address
         # The sign-in mints a real user+workspace+send_target row set on every
         # deploy and nothing removed it (#5723's deleteCreatedAccount
@@ -447,7 +447,6 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
           SHA: ${{ github.event.deployment.sha }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-          LINKS: ${{ steps.lhci.outputs.links }}
         with:
           filename: .github/red-main/lighthouse.md
           update_existing: true
