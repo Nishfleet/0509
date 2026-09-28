@@ -282,3 +282,18 @@ export async function signInWithMagicLink(
   );
   return { link, status: response?.status() ?? 0 };
 }
+
+// Every production sign-in above creates a real row in the user table, and
+// until 0509#5723 the suite never removed it. This is the product's own
+// delete path — the settings flow J14 proves end to end — called from each
+// spec's afterEach so a failed test still cleans up. The /login short-circuit
+// is the no-row case: the user row is created when the link is verified, so a
+// page that never reached a session means nothing leaked (and the preview
+// lane never verifies).
+export async function deleteCreatedAccount(page: Page, email: string): Promise<void> {
+  await page.goto("/app/settings");
+  if (page.url().includes("/login")) return;
+  await page.getByLabel("Type " + email + " to confirm").fill(email);
+  await page.getByRole("button", { name: "Delete my account" }).click();
+  await page.waitForURL(/\/login\?deleted=/);
+}

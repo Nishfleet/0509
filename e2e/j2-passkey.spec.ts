@@ -1,6 +1,14 @@
 import { expect, test } from "@playwright/test";
 
-import { consoleFailures, requireInboxToken, signInWithMagicLink, watchConsole } from "./inbox";
+import { consoleFailures, deleteCreatedAccount, requireInboxToken, signInWithMagicLink, watchConsole } from "./inbox";
+
+let createdEmail = "";
+test.afterEach(async ({ page }, testInfo) => {
+  if (createdEmail === "") return;
+  testInfo.setTimeout(testInfo.timeout + 60_000);
+  await deleteCreatedAccount(page, createdEmail);
+  createdEmail = "";
+});
 
 // J2 from docs/REBUILD-DONE.md §A: register a passkey on first sign-in, sign
 // out, sign in with the passkey alone. The amended decision on 0509#3927
@@ -18,6 +26,7 @@ test.skip(
 test("a passkey registered on first sign-in signs in on its own", async ({ page, context }, testInfo) => {
   const token = requireInboxToken();
   const email = `e2e+${crypto.randomUUID().replaceAll("-", "").slice(0, 12)}@0509.io`;
+  createdEmail = email;
 
   await signInWithMagicLink(page, email, token);
 

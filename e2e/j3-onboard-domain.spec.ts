@@ -1,6 +1,14 @@
 import { expect, test } from "@playwright/test";
 
-import { requireInboxToken, signInWithMagicLink } from "./inbox";
+import { deleteCreatedAccount, requireInboxToken, signInWithMagicLink } from "./inbox";
+
+let createdEmail = "";
+test.afterEach(async ({ page }, testInfo) => {
+  if (createdEmail === "") return;
+  testInfo.setTimeout(testInfo.timeout + 60_000);
+  await deleteCreatedAccount(page, createdEmail);
+  createdEmail = "";
+});
 
 // J3 from docs/REBUILD-DONE.md §A: one input becomes a confirmed brand card
 // in under 30 s, a competitor list in under 60 s, and Home's first-file
@@ -22,6 +30,7 @@ for (const { width, height } of [
     test.setTimeout(150_000);
     const token = requireInboxToken();
     const email = `e2e+${crypto.randomUUID().replaceAll("-", "").slice(0, 12)}@0509.io`;
+    createdEmail = email;
 
     await page.setViewportSize({ width, height });
     await signInWithMagicLink(page, email, token);
