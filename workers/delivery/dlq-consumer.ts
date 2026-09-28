@@ -54,7 +54,7 @@ export function incidentUndeliveredAlert(input: {
   };
 }
 
-export function incidentDeadLetterError(input: {
+function incidentDeadLetterError(input: {
   message_id: string;
   incident_id: string;
   reason: string;
