@@ -163,8 +163,9 @@ test("the sign-in link works once, survives a newer request, dies on its own clo
   await newerContext.close();
 
   // Expiry: the fourth link is never followed until its TTL has fully elapsed.
-  const remaining = expiresAfter - Date.now();
-  if (remaining > 0) await page.waitForTimeout(remaining);
+  await expect
+    .poll(() => Date.now(), { timeout: Math.max(expiresAfter - Date.now(), 0) + 30_000 })
+    .toBeGreaterThanOrEqual(expiresAfter);
   const expiredContext = await freshContext(browser);
   const expiredFollow = await followOnce(expiredContext, fourthLink);
   expect(expiredFollow.status).toBe(302);
