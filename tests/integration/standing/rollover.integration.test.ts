@@ -446,7 +446,7 @@ describe("the nightly standing cron (0509#3978)", () => {
     await using introspector = await introspectWorkflow(env.STANDING_ROLLOVER);
     const result = await runNightlyStanding(env, now);
 
-    expect(result).toMatchObject({ failed: 0, refreshed: 0, catchUps: 1 });
+    expect(result).toMatchObject({ catchUps: 1 });
     expect(await standingFor(week.startsAt.toISOString())).toEqual([]);
 
     const scheduled = rolloverInstance(WS, week.closesAt, "scheduled");
@@ -467,12 +467,32 @@ describe("the nightly standing cron (0509#3978)", () => {
     ]);
 
     const again = await runNightlyStanding(env, now);
-    expect(again).toMatchObject({ failed: 0, catchUps: 0 });
+    expect(again).toMatchObject({ catchUps: 0 });
   });
 
   it("does not enqueue a rollover for an e2e fixture workspace", async () => {
     const schedule = scheduleOffsetFromToday(3);
     await seedWorkspace(schedule, `e2e+nightly-${String(runs)}@0509.io`);
+    const now = new Date();
+    const week = openWeek(schedule, now);
+    const scheduled = rolloverInstance(WS, week.closesAt, "scheduled");
+    const catchUp = rolloverInstance(WS, week.startsAt, "catch-up");
+    await runNightlyStanding(env, now);
+    await expect(env.STANDING_ROLLOVER.get(scheduled.id)).rejects.toThrow();
+    await expect(env.STANDING_ROLLOVER.get(catchUp.id)).rejects.toThrow();
+  });
+
+  it("does not enqueue a workspace with no self entity", async () => {
+    const schedule = scheduleOffsetFromToday(3);
+    const createdAt = new Date(Date.now() - 60 * 24 * hour).toISOString();
+    await env.DB.batch([
+      env.DB.prepare(
+        "INSERT INTO user (id, name, email, emailVerified, createdAt, updatedAt) VALUES (?1, 'Rollover', ?2, 1, ?3, ?3)",
+      ).bind(USER, `${USER}@example.test`, createdAt),
+      env.DB.prepare(
+        "INSERT INTO workspace (id, name, owner_user_id, timezone, brief_weekday, brief_hour, created_at) VALUES (?1, 'Rollover', ?2, ?3, ?4, ?5, ?6)",
+      ).bind(WS, USER, schedule.timezone, schedule.weekday, schedule.hour, createdAt),
+    ]);
     const now = new Date();
     const scheduled = rolloverInstance(WS, openWeek(schedule, now).closesAt, "scheduled");
     await runNightlyStanding(env, now);

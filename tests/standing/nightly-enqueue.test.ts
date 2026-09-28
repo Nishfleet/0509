@@ -22,26 +22,32 @@ function workspace(id: string): WorkspaceSchedule {
 }
 
 describe("nightly standing enqueue (0509#5753)", () => {
-  it("fails if the nightly cron awaits per-workspace work in a loop", async () => {
+  it("fails if the nightly cron awaits per-workspace work instead of enqueueing", async () => {
     const source = await readFile(path.join(REPO_ROOT, "workers/standing/nightly.ts"), "utf8");
+    const plan = await readFile(path.join(REPO_ROOT, "workers/standing/rollover-plan.ts"), "utf8");
     expect(source).toContain("createRollovers");
+    expect(plan).toMatch(/week_start_at >= \?1/);
+    expect(plan).toContain("UNRANKED_LOOKBACK_MS");
+    expect(source).toMatch(/rolloverInstance\([\s\S]*"catch-up"/);
+    expect(source).not.toContain("refreshWorkspaceScores");
+    expect(source).not.toContain("planWorkspace");
     expect(source).not.toMatch(/reduce\s*(?:<[^>]*>)?\s*\(\s*async/);
-    expect(source).not.toMatch(/await refreshWorkspaceScores/);
-    expect(source).not.toMatch(/await planWorkspace/);
+    expect(source).not.toMatch(/for await\s*\(/);
+    expect(source).not.toMatch(/Promise\.all\(\s*\w+\.map\(\s*async/);
     expect(source).not.toMatch(/for\s*\([^)]*\sof\s[^)]+\)\s*\{[^}]*\bawait\b/);
   });
 
   it("schedules the next close and a catch-up when the last week is unranked past grace", () => {
     const week = openWeek(UTC_MONDAY, NOW);
     const closedWeekStart = previousBriefAt(UTC_MONDAY, week.startsAt).toISOString();
-    const { scheduled, catchUps } = planRollovers(
+    const { scheduled, catchUpAt } = planRollovers(
       [workspace(WS)],
       new Set([unrankedWeekKey(WS, closedWeekStart)]),
       NOW,
     );
 
     expect(scheduled).toEqual([rolloverInstance(WS, week.closesAt, "scheduled")]);
-    expect(catchUps).toEqual([rolloverInstance(WS, week.startsAt, "catch-up")]);
+    expect(catchUpAt).toEqual([{ workspaceId: WS, closesAt: week.startsAt }]);
     expect(NOW.getTime() - week.startsAt.getTime()).toBeGreaterThan(CATCH_UP_GRACE_MS);
   });
 
@@ -49,16 +55,16 @@ describe("nightly standing enqueue (0509#5753)", () => {
     const week = openWeek(UTC_MONDAY, NOW);
     const justClosed = new Date(week.startsAt.getTime() + 1_000);
     const closedWeekStart = previousBriefAt(UTC_MONDAY, week.startsAt).toISOString();
-    const { catchUps } = planRollovers(
+    const { catchUpAt } = planRollovers(
       [workspace(WS)],
       new Set([unrankedWeekKey(WS, closedWeekStart)]),
       justClosed,
     );
-    expect(catchUps).toEqual([]);
+    expect(catchUpAt).toEqual([]);
   });
 
   it("does not catch up a week that already has ranks", () => {
-    const { catchUps } = planRollovers([workspace(WS)], new Set(), NOW);
-    expect(catchUps).toEqual([]);
+    const { catchUpAt } = planRollovers([workspace(WS)], new Set(), NOW);
+    expect(catchUpAt).toEqual([]);
   });
 });

@@ -10,12 +10,13 @@ export interface WorkspaceSchedule {
 }
 
 export const CATCH_UP_GRACE_MS = 60 * 60 * 1000;
+export const UNRANKED_LOOKBACK_MS = 16 * 24 * 60 * 60 * 1000;
 
-const WORKSPACE_SCHEDULES = `SELECT w.id, w.timezone, w.brief_weekday, w.brief_hour, w.brief_paused_at
+const WORKSPACE_SCHEDULES = `SELECT DISTINCT w.id, w.timezone, w.brief_weekday, w.brief_hour, w.brief_paused_at
 FROM entity e
 INNER JOIN workspace w ON w.id = e.workspace_id
 INNER JOIN "user" u ON u.id = w.owner_user_id
-WHERE e.role = 'self' AND e.state = 'on' AND u.email NOT LIKE 'e2e+%'
+WHERE e.role = 'self' AND e.state = 'on' AND (u.email IS NULL OR u.email NOT LIKE 'e2e+%')
 ORDER BY w.id`;
 
 const WORKSPACE_SCHEDULE = `SELECT id, timezone, brief_weekday, brief_hour, brief_paused_at FROM workspace WHERE id = ?1`;
@@ -25,7 +26,7 @@ FROM standing s
 INNER JOIN entity e ON e.workspace_id = s.workspace_id AND e.role = 'self' AND e.state = 'on'
 INNER JOIN workspace w ON w.id = s.workspace_id
 INNER JOIN "user" u ON u.id = w.owner_user_id
-WHERE u.email NOT LIKE 'e2e+%'
+WHERE (u.email IS NULL OR u.email NOT LIKE 'e2e+%') AND s.week_start_at >= ?1
 GROUP BY s.workspace_id, s.week_start_at
 HAVING COUNT(s.rank) = 0`;
 
@@ -73,8 +74,9 @@ export async function readWorkspaceSchedule(
   return toSchedules(rows.results)[0] ?? null;
 }
 
-export async function readUnrankedWeeks(db: D1Database): Promise<ReadonlySet<string>> {
-  const rows = await db.prepare(UNRANKED_WEEKS).all();
+export async function readUnrankedWeeks(db: D1Database, now: Date): Promise<ReadonlySet<string>> {
+  const since = new Date(now.getTime() - UNRANKED_LOOKBACK_MS).toISOString();
+  const rows = await db.prepare(UNRANKED_WEEKS).bind(since).all();
   return new Set(
     unrankedRows.parse(rows.results).map((row) => unrankedWeekKey(row.workspace_id, row.week_start_at)),
   );
@@ -84,9 +86,9 @@ export function planRollovers(
   workspaces: readonly WorkspaceSchedule[],
   unrankedWeekStarts: ReadonlySet<string>,
   now: Date,
-): { scheduled: RolloverInstance[]; catchUps: RolloverInstance[] } {
+): { scheduled: RolloverInstance[]; catchUpAt: { workspaceId: string; closesAt: Date }[] } {
   const scheduled: RolloverInstance[] = [];
-  const catchUps: RolloverInstance[] = [];
+  const catchUpAt: { workspaceId: string; closesAt: Date }[] = [];
   for (const workspace of workspaces) {
     const week = openWeek(workspace.schedule, now);
     scheduled.push(rolloverInstance(workspace.workspaceId, week.closesAt, "scheduled"));
@@ -96,10 +98,10 @@ export function planRollovers(
       unrankedWeekStarts.has(unrankedWeekKey(workspace.workspaceId, closedWeekStart)) &&
       now.getTime() - lastClose.getTime() > CATCH_UP_GRACE_MS
     ) {
-      catchUps.push(rolloverInstance(workspace.workspaceId, lastClose, "catch-up"));
+      catchUpAt.push({ workspaceId: workspace.workspaceId, closesAt: lastClose });
     }
   }
-  return { scheduled, catchUps };
+  return { scheduled, catchUpAt };
 }
 
 export async function createRollovers(
