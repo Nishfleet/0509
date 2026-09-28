@@ -52,6 +52,7 @@ export function createAuth(env: AuthEnv, options?: { captcha?: boolean }) {
     advanced: {
       cookiePrefix: COOKIE_PREFIX,
       ipAddress: { ipAddressHeaders: [CLIENT_IP_HEADER] },
+      database: { validateSchema: false },
     },
     session: { freshAge: FRESH_SESSION_SECONDS },
     user: { deleteUser: { enabled: true } },
