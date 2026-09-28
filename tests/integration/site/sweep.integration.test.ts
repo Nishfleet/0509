@@ -276,7 +276,7 @@ describe("uncoveredItems", () => {
     expect(missing.some((target) => target.watchId === rival.watchId)).toBe(true);
   });
 
-  it("returns an empty list for an empty plan without touching D1", async () => {
+  it("returns an empty list for an empty plan", async () => {
     expect(await uncoveredItems([], oneMinuteAgo())).toEqual([]);
   });
 });
