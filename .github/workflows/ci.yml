@@ -13,8 +13,9 @@
 name: CI
 
 # `deployment_status` is the third trigger and it is the stock one: Cloudflare
-# Workers Builds emit GitHub deployments, so the production suites fire on the
-# real deploy with no polling. https://playwright.dev/docs/ci#on-deployment
+# Workers Builds emit GitHub deployments, so lighthouse fires on the real deploy
+# with no polling; the full production e2e no longer does (its sign-ins send
+# real emails against a spent daily quota) and runs from e2e-scheduled.yml. https://playwright.dev/docs/ci#on-deployment
 # The required jobs report on every event and pass explicitly on a deployment
 # they have nothing to say about (#4664).
 on:
@@ -24,10 +25,10 @@ on:
 
 concurrency:
   # A deployment_status run verifies one deploy and must finish. Sharing the
-  # branch group with cancel-in-progress cancelled every production e2e today:
+  # branch group with cancel-in-progress cancelled every production run that day:
   # each deploy emits pending, in_progress and success events, each a run, and
   # merges 90 s apart cancelled the previous deploy's run (35754511999, 35754574851
-  # and four more, all "cancelled", 16:29-16:31Z). PR and queue runs keep the
+  # and four more, all "cancelled", 16:29-16:31Z), which is why lighthouse keeps it. PR and queue runs keep the
   # branch group so a superseded head is still cancelled.
   group: ci-${{ github.event_name == 'deployment_status' && github.run_id || github.ref }}
   cancel-in-progress: ${{ github.event_name != 'deployment_status' }}
@@ -247,120 +248,6 @@ jobs:
             playwright-report/
             test-results/
           retention-days: 7
-
-  e2e-production-shard:
-    name: e2e-production shard ${{ matrix.shard }}
-    # Not a required check, on purpose: it cannot run on a pull request, and a
-    # required check that never reports blocks the merge queue forever.
-    if: >-
-      github.event_name == 'deployment_status' && github.event.deployment_status.state == 'success' &&
-      github.event.deployment_status.environment == 'production'
-    runs-on: ubuntu-latest
-    # The step below stops at 25 minutes and fails, so a run that is too slow is
-    # red. The job cap is only the backstop: hitting it reads as "cancelled",
-    # which is what a superseded deploy also reads as.
-    timeout-minutes: 35
-    # One suite in one job outran the 30 minute cap on every deploy and never
-    # gave a verdict (run 36468302758). Four shards each fit under it. No trace
-    # is uploaded: the repo is public and a trace can hold the Access cookie
-    # (0509#5999), so a failure is read from the job log. A newer
-    # deploy cancels the older one's shard: only the latest deploy needs a
-    # verdict, and merges 90 s apart already cancelled every run when the
-    # workflow-level group did it (35754511999, 35754574851); at job level only
-    # the superseded shard stops and the newest deploy still reports.
-    concurrency:
-      group: e2e-production-${{ matrix.shard }}
-      cancel-in-progress: true
-    strategy:
-      fail-fast: false
-      matrix:
-        shard: [1, 2, 3, 4]
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version: 22
-          cache: npm
-      - run: npm ci
-      - run: npx playwright install --with-deps chromium
-      - name: Run this shard of the suite against what was just deployed
-        # @scheduled journeys run from e2e-scheduled.yml on their own clock: J12 now, J8 with its spec (0509#4124, 0509#4128).
-        # https://playwright.dev/docs/test-sharding
-        timeout-minutes: 25
-        run: npm run e2e -- --shard=${{ matrix.shard }}/4 --reporter=github,json --grep-invert @scheduled
-        env:
-          # Setting this switches playwright.config.ts out of webServer mode.
-          PLAYWRIGHT_TEST_BASE_URL: ${{ github.event.deployment_status.environment_url }}
-          PLAYWRIGHT_JSON_OUTPUT_FILE: playwright-report/results.json
-          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
-          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
-          # J1/J2 read the e2e inbox Worker through this token (0509#3927).
-          # Absent, the secret resolves to "" and the specs fail loudly naming
-          # it — they never skip.
-          E2E_INBOX_TOKEN: ${{ secrets.E2E_INBOX_TOKEN }}
-          # J5 raises and lowers the fixture bot wall with this token (0509#4121).
-          FIXTURE_SITE_TOKEN: ${{ secrets.FIXTURE_SITE_TOKEN }}
-
-  e2e-production:
-    name: e2e-production
-    needs: e2e-production-shard
-    # Always runs after the shards and is red unless every shard passed, so a
-    # cancelled or skipped shard never reads as green. The red issue is opened
-    # only for a real shard failure on the deploy that is still current, so a
-    # superseded deploy files nothing.
-    if: >-
-      always() && github.event_name == 'deployment_status' && github.event.deployment_status.state == 'success' &&
-      github.event.deployment_status.environment == 'production'
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    permissions:
-      contents: read
-      issues: write
-      actions: write
-    env:
-      GH_TOKEN: ${{ github.token }}
-      SHARDS: ${{ needs.e2e-production-shard.result }}
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - name: Is this still the current production deploy
-        id: current
-        run: echo "yes=$([ "$(gh api "repos/$GITHUB_REPOSITORY/deployments?environment=production&per_page=1" --jq '.[0].sha')" = "$DEPLOY_SHA" ] && echo true)" >> "$GITHUB_OUTPUT"
-        env:
-          DEPLOY_SHA: ${{ github.event.deployment.sha }}
-      - name: Open or update the issue that dispatches the fix
-        if: env.SHARDS == 'failure' && steps.current.outputs.yes == 'true'
-        id: red
-        uses: JasonEtco/create-an-issue@1b14a70e4d8dc185e5cc76d3bec9eab20257b2c5 # v2.9.2
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-          SHA: ${{ github.event.deployment.sha }}
-          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-        with:
-          filename: .github/red-main/e2e-production.md
-          update_existing: true
-          search_existing: open
-      - name: Hand the issue to a worker
-        # A GITHUB_TOKEN label fires no workflow, so dispatch by number;
-        # agent.yml's Gate sizes it. needs-split alone left #4620 unworked.
-        if: steps.red.outputs.number
-        env:
-          N: ${{ steps.red.outputs.number }}
-        run: gh workflow run agent-dispatch.yml --repo "$GITHUB_REPOSITORY" -f issue="$N"
-      - name: Close the issue once this check is green again
-        if: env.SHARDS == 'success'
-        env:
-          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-        run: |
-          N=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search '"e2e-production red on main" in:title' --json number --jq '.[0].number // empty')
-          [ -z "$N" ] || gh issue close "$N" --repo "$GITHUB_REPOSITORY" --reason completed --comment "Green again on $RUN_URL."
-      - name: Red unless every shard passed
-        run: test "$SHARDS" = success
 
   lighthouse:
     name: lighthouse
