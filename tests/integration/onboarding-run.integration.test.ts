@@ -1,15 +1,16 @@
 import { env } from "cloudflare:test";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const cardReadyFailures = vi.hoisted(() => ({ next: 0 }));
+const cardReadyMock = vi.hoisted(() => ({ failNext: 0, calls: 0 }));
 
 vi.mock("../../app/lib/data/onboarding_run.server", async (importOriginal) => {
   const orig = await importOriginal<{ markCardReady: typeof markCardReady }>();
   return {
     ...orig,
     markCardReady: async (...args: Parameters<typeof markCardReady>): Promise<void> => {
-      if (cardReadyFailures.next > 0) {
-        cardReadyFailures.next -= 1;
+      cardReadyMock.calls += 1;
+      if (cardReadyMock.failNext > 0) {
+        cardReadyMock.failNext -= 1;
         throw new Error("d1 write failed");
       }
       return orig.markCardReady(...args);
@@ -33,6 +34,8 @@ let workspaceId = "";
 
 beforeEach(async () => {
   runs += 1;
+  cardReadyMock.failNext = 0;
+  cardReadyMock.calls = 0;
   userId = `user-onboarding-run-${String(runs)}`;
   workspaceId = `ws-onboarding-run-${String(runs)}`;
   const createdAt = "2026-08-01T00:00:00.000Z";
@@ -189,26 +192,71 @@ describe("markCardReady", () => {
       review: { name: "fill", description: "empty", socials: "empty" },
       unfound: false,
     };
-    cardReadyFailures.next = 1;
+    cardReadyMock.failNext = 1;
     const error = vi.spyOn(console, "error").mockImplementation(() => undefined);
 
+    try {
+      const card = timeCard(workspaceId, {
+        site: Promise.resolve(fields),
+        logo: Promise.resolve("data:x"),
+      });
+
+      await expect(card.logo).resolves.toBe("data:x");
+      expect(cardReadyMock.calls).toBe(1);
+      expect(error).toHaveBeenCalledWith(
+        expect.stringContaining('"event":"onboarding.card_ready_mark_failed"'),
+      );
+      const row = await env.DB.prepare(
+        "SELECT card_ready_at FROM onboarding_run WHERE workspace_id = ?",
+      )
+        .bind(workspaceId)
+        .first<{ card_ready_at: string | null }>();
+
+      expect(row?.card_ready_at).toBeNull();
+    } finally {
+      error.mockRestore();
+    }
+  });
+
+  it("waits for the site to settle before the timing write", async () => {
+    await startOnboardingRun({
+      workspaceId,
+      userId,
+      inputRaw: "first.example",
+      startedAt: "2026-09-25T06:00:00.000Z",
+    });
+    const fields: SiteFields = {
+      name: "Example",
+      description: null,
+      socials: [],
+      review: { name: "fill", description: "empty", socials: "empty" },
+      unfound: false,
+    };
+    let settleSite: (value: SiteFields) => void = () => undefined;
+    const site = new Promise<SiteFields>((resolve) => {
+      settleSite = resolve;
+    });
+
     const card = timeCard(workspaceId, {
-      site: Promise.resolve(fields),
+      site,
       logo: Promise.resolve("data:x"),
     });
 
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(cardReadyMock.calls).toBe(0);
+
+    settleSite(fields);
     await expect(card.logo).resolves.toBe("data:x");
-    expect(error).toHaveBeenCalledWith(
-      expect.stringContaining('"event":"onboarding.card_ready_mark_failed"'),
-    );
-    error.mockRestore();
+    expect(cardReadyMock.calls).toBe(1);
     const row = await env.DB.prepare(
       "SELECT card_ready_at FROM onboarding_run WHERE workspace_id = ?",
     )
       .bind(workspaceId)
       .first<{ card_ready_at: string | null }>();
 
-    expect(row?.card_ready_at).toBeNull();
+    expect(row?.card_ready_at).not.toBeNull();
   });
 });
 
