@@ -36,7 +36,7 @@ async function readText(key: string): Promise<string | null> {
   return object === null ? null : object.text();
 }
 
-function homeUrl(entity: { domain: string; url: string | null }): string | null {
+function homeUrl(entity: { id: string; domain: string; url: string | null }): string | null {
   if (entity.url !== null) {
     const entered = normaliseSubject(entity.url);
     if (
@@ -48,7 +48,16 @@ function homeUrl(entity: { domain: string; url: string | null }): string | null 
       return entered.subject.url;
     }
   }
-  return getDomain(entity.domain) === entity.domain ? `https://${entity.domain}/` : null;
+  const fallback = getDomain(entity.domain) === entity.domain ? `https://${entity.domain}/` : null;
+  if (fallback !== null && entity.url !== null) {
+    console.log(JSON.stringify({
+      event: "site.home_url_ignored_identity",
+      entityId: entity.id,
+      domain: entity.domain,
+      url: entity.url,
+    }));
+  }
+  return fallback;
 }
 
 export async function ensureHomePages(now: string): Promise<void> {
