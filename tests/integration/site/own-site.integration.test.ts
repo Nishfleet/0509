@@ -125,6 +125,11 @@ describe("own-site check", () => {
 
   it("opens one incident with a pinned alert when the site still fails on the confirming read, and closes it on the next clean hour", async () => {
     site.status = 503;
+    await env.DB.prepare(
+      `INSERT INTO page (id, entity_id, url, role, discovered_at) VALUES ('page-own-broken', 'ent-self', 'https://shop.mybrand.com/', 'home', ?)`,
+    )
+      .bind(NOW)
+      .run();
     expect(await runCheck("own-broken")).toEqual({ pages: 1, opened: 1, closed: 0, failed: 0 });
     const [open] = await incidents();
     expect(open).toMatchObject({ entity_id: "ent-self", kind: "error 503", closed_at: null });
@@ -132,7 +137,7 @@ describe("own-site check", () => {
     expect(alert).toMatchObject({
       kind: "own_site_broken",
       severity: "high",
-      title: `mybrand.com looks broken: ${open?.kind ?? ""}`,
+      title: `shop.mybrand.com looks broken: ${open?.kind ?? ""}`,
     });
 
     expect(await runCheck("own-still-broken")).toEqual({ pages: 1, opened: 0, closed: 0, failed: 0 });
