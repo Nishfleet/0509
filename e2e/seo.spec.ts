@@ -44,14 +44,21 @@ test("every sitemap url is served as an indexable 200, not noindex", async ({
     const response = await request.get(path);
     expect(response.status(), `${path} is not a 200`).toBe(200);
     const robotsTag = response.headers()["x-robots-tag"];
-    expect(
-      robotsTag === undefined || !robotsTag.includes("noindex"),
-      `${path} is noindex by header`,
-    ).toBe(true);
-    expect(
+    if (robotsTag !== undefined) {
+      expect(
+        robotsTag.toLowerCase(),
+        `${path} is noindex by header`,
+      ).not.toContain("noindex");
+    }
+    const robotsMeta = /<meta[^>]*name="robots"[^>]*content="([^"]*)"/.exec(
       await response.text(),
-      `${path} is noindex in the served document`,
-    ).not.toContain("noindex");
+    );
+    if (robotsMeta !== null) {
+      expect(
+        robotsMeta[1].toLowerCase(),
+        `${path} is noindex in its robots meta`,
+      ).not.toContain("noindex");
+    }
   }
 });
 

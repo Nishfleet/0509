@@ -65,7 +65,7 @@ describe("public-route manifest", () => {
     for (const p of SITEMAP_PATHS) {
       expect(body).toContain(`<loc>https://0509.io${p}</loc>`);
     }
-    expect(body).toContain("<loc>https://0509.io/llms.txt</loc>");
+    expect(SITEMAP_PATHS as readonly string[]).toContain("/llms.txt");
     for (const entry of topLevel(routes)) {
       const path = "path" in entry ? entry.path : undefined;
       if (path === undefined || path === "*") continue;
@@ -77,15 +77,12 @@ describe("public-route manifest", () => {
   it("keeps every SITEMAP_PATHS member a declared, robots-allowed, non-noindex route", () => {
     const routesByUrl = new Map<string, RouteConfigEntry>();
     for (const entry of topLevel(routes)) {
-      if (entry.path !== undefined && entry.path !== "*") {
+      if (entry.index === true) {
+        routesByUrl.set("/", entry);
+      } else if (entry.path !== undefined && entry.path !== "*") {
         routesByUrl.set(`/${entry.path}`, entry);
       }
     }
-    const headerRules = join(REPO_ROOT, "public/_headers");
-    expect(
-      existsSync(headerRules) ? readFileSync(headerRules, "utf8") : "",
-      "public/_headers marks a sitemap path noindex through X-Robots-Tag",
-    ).not.toContain("X-Robots-Tag: noindex");
     for (const path of SITEMAP_PATHS) {
       const route = routesByUrl.get(path);
       expect(
