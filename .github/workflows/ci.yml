@@ -450,8 +450,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           PR: ${{ github.event.pull_request.number }}
         run: |
-          mkdir -p "$RUNNER_TEMP/grade"
-          cd "$RUNNER_TEMP/grade"
+          mkdir -p "$RUNNER_TEMP/grade-files"
+          cd "$RUNNER_TEMP/grade-files"
           gh pr view "$PR" --repo "$GITHUB_REPOSITORY" --json title,body,closingIssuesReferences > pr.json
           gh pr diff "$PR" --repo "$GITHUB_REPOSITORY" > pr.diff
           jq -r '.closingIssuesReferences[].number' pr.json > "$RUNNER_TEMP/issues.txt"
@@ -468,7 +468,7 @@ jobs:
         # committed symlink or project .cursor config is in reach, and the
         # allowlist reads only those three files.
         if: github.event_name == 'pull_request' && github.event.pull_request.user.login == 'nishfleet-worker[bot]' && vars.GRADER == 'kimi'
-        working-directory: ${{ runner.temp }}/grade
+        working-directory: ${{ runner.temp }}/grade-files
         env:
           CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}
         run: |
