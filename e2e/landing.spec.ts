@@ -45,20 +45,18 @@ test("the landing route data and document carry no disabled source's internal no
   // the filter has to bite; app/root.tsx:34 omits <Scripts /> for the landing,
   // so the document carries no loader data — its negatives below are a guard
   // for the day hydration comes back, and the two positives are the evidence
-  // the route still has sources. The document renders one of two states and
-  // the test below pins which: the pill row, or — 0509#5987 — the one
-  // rebuilding line that replaces it when no visible source has fresh data,
-  // the state a preview DB renders in because it seeds no snapshot row.
+  // the route still has sources. 0509#5674's own verify predicate runs on the
+  // document here: the acquisition page never leads with three dimmed "last
+  // good unknown" pills. The preview carries no snapshot row, so this read 4
+  // before 0509#5987 and reads 0 after it — the same fail-on-old, pass-on-new
+  // the unit test makes, at the real HTTP surface.
   const data = await request.get(`${PATH}.data`);
   expect(data.status()).toBe(200);
   const payload = await data.text();
   const document = await page.content();
 
-  if (document.includes("We're rebuilding coverage of news mentions")) {
-    expect(document).not.toContain("site.page");
-  } else {
-    expect(document).toContain("site.page");
-  }
+  const text = document.replace(/<[^>]+>/g, " ");
+  expect((text.match(/last good unknown/g) ?? []).length).toBeLessThan(3);
   expect(payload).toContain("site.page");
   for (const body of [document, payload]) {
     expect(body).not.toContain("x.search");

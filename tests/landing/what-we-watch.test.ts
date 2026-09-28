@@ -117,7 +117,6 @@ describe("landing what we watch", () => {
     );
     expect(html).not.toContain("data-state=");
     expect(html).not.toContain("last good");
-    expect(html).not.toContain("· last good");
   });
 
   it("keeps the degraded pills, with their reasons, when a live source is visible too", () => {
