@@ -186,3 +186,48 @@ describe("askNouls", () => {
     await expect(askNouls(workspaceId, questions, state)).rejects.toThrow(JevUnavailableError);
   });
 });
+
+describe("the answer body the AI binding returns", () => {
+  const documented = {
+    model: "typesafe/jev",
+    answers: { identity_name: { type: "noul", noul: 0.71 } },
+    usage: { prompt_tokens: 1, completion_tokens: 1 },
+  };
+
+  it.each([
+    ["the documented body", documented],
+    ["a response string", { response: JSON.stringify(documented) }],
+    ["a response object", { response: documented }],
+    ["a result object", { result: documented }],
+  ])("reads the noul from %s", async (_label, body) => {
+    const workspaceId = await seedWorkspace();
+    Reflect.set(env, "AI", { run: vi.fn(() => Promise.resolve(body)) });
+
+    const verdict = await askNoul(workspaceId, NAME_QUESTION, state);
+
+    expect(verdict.p).toBe(0.71);
+  });
+
+  it("says which keys came back, and no value, when a response string is not json", async () => {
+    const workspaceId = await seedWorkspace();
+    Reflect.set(env, "AI", { run: vi.fn(() => Promise.resolve({ response: "not json" })) });
+
+    const thrown = await askNoul(workspaceId, NAME_QUESTION, state).catch((error: unknown) => error);
+
+    expect(thrown).toBeInstanceOf(JevUnavailableError);
+    expect(String(thrown)).toContain("keys=response");
+    expect(String(thrown)).not.toContain("not json");
+  });
+
+  it("says which keys and issue paths came back, and no value, when the batch answer does not parse", async () => {
+    const workspaceId = await seedWorkspace();
+    Reflect.set(env, "AI", { run: vi.fn(() => Promise.resolve({ response: "x" })) });
+
+    const thrown = await askNouls(workspaceId, questions, state).catch((error: unknown) => error);
+
+    expect(thrown).toBeInstanceOf(JevUnavailableError);
+    expect(String(thrown)).toContain("keys=response");
+    expect(String(thrown)).toContain("issues=answers:invalid_type");
+    expect(String(thrown)).not.toContain('"x"');
+  });
+});
