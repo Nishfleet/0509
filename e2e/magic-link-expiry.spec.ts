@@ -1,7 +1,21 @@
 import { expect, test, type Browser, type BrowserContext, type Page } from "@playwright/test";
 
 import { accessStatePath } from "../playwright.config";
-import { requireInboxToken, signInWithMagicLink, turnstileToken, waitForMagicLink } from "./inbox";
+import { deleteCreatedAccount, requireInboxToken, signInWithMagicLink, turnstileToken, waitForMagicLink } from "./inbox";
+
+let createdEmail = "";
+test.afterEach(async ({ page }, testInfo) => {
+  if (createdEmail === "") return;
+  testInfo.setTimeout(testInfo.timeout + 60_000);
+  // The delete failing is a test failure, not a reason to keep the address:
+  // clearing in finally means the next test in this worker cannot try to
+  // delete an account that is already gone.
+  try {
+    await deleteCreatedAccount(page, createdEmail);
+  } finally {
+    createdEmail = "";
+  }
+});
 
 // The sign-in link's real contract, proven on production every deploy: one use,
 // a TTL it cannot outlive, and a request path that stays silent about whether
@@ -99,6 +113,7 @@ test("the sign-in link works once, survives a newer request, dies on its own clo
   const token = requireInboxToken();
   if (!baseURL) throw new Error("PLAYWRIGHT_TEST_BASE_URL resolved to no baseURL");
   const email = freshAddress("expiry");
+  createdEmail = email;
   const stranger = freshAddress("stranger");
 
   // First follow: the full J1 journey — real form, real email, real link.

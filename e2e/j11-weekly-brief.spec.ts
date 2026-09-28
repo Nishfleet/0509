@@ -1,7 +1,21 @@
 import { expect, test, type Page } from "@playwright/test";
 
 import { previousBriefAt } from "../app/lib/brief-schedule";
-import { decodedBodies, readRawMessage, requireInboxToken, signInWithMagicLink } from "./inbox";
+import { decodedBodies, deleteCreatedAccount, readRawMessage, requireInboxToken, signInWithMagicLink } from "./inbox";
+
+let createdEmail = "";
+test.afterEach(async ({ page }, testInfo) => {
+  if (createdEmail === "") return;
+  testInfo.setTimeout(testInfo.timeout + 60_000);
+  // The delete failing is a test failure, not a reason to keep the address:
+  // clearing in finally means the next test in this worker cannot try to
+  // delete an account that is already gone.
+  try {
+    await deleteCreatedAccount(page, createdEmail);
+  } finally {
+    createdEmail = "";
+  }
+});
 
 // J11 from docs/REBUILD-DONE.md §A. Production only: the preview Worker has
 // no EMAIL binding and no inbox. One project — the phone project would send a
@@ -134,6 +148,7 @@ test("the weekly brief arrives from the inbox, in order, and unsubscribe stops t
   const token = requireInboxToken();
   const tag = crypto.randomUUID().replaceAll("-", "").slice(0, 12);
   const email = `e2e+${tag}@0509.io`;
+  createdEmail = email;
   const selfName = `J11 ${tag}`;
 
   await signInWithMagicLink(page, email, token);
