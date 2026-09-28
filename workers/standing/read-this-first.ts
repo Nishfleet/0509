@@ -6,6 +6,7 @@ import { askNoul, JevUnavailableError } from "../../app/lib/jev/client.server";
 import type { D4Verdict } from "../../app/lib/read-this-first";
 import { D4_QUESTION_ID, pickReadThisFirst } from "../../app/lib/read-this-first";
 import { D3_QUESTION_ID, D6_QUESTION_ID } from "../../app/lib/standing-score";
+import { countUnjudgedInputs } from "../../app/lib/standing-score.server";
 
 const JUDGE_CHUNK = 10;
 
@@ -64,6 +65,7 @@ export interface JudgeWeekInput {
 export interface JudgedWeek {
   picks: string[];
   judged: number;
+  unjudged: boolean;
 }
 
 interface LocatedItem {
@@ -115,8 +117,9 @@ export async function judgeWeek(db: D1Database, input: JudgeWeekInput): Promise<
   ]);
   const items = weekItemRows.parse(weekItemResult.results);
   const entities = entityRows.parse(entityResult.results);
+  const unjudgedInputs = await countUnjudgedInputs(db, input.workspaceId, input.startsAt, input.closesAt);
   if (items.length === 0) {
-    return { picks: [], judged: 0 };
+    return { picks: [], judged: 0, unjudged: unjudgedInputs > 0 };
   }
   const byId = new Map(entities.map((entity) => [entity.id, entity]));
   const located = items.flatMap((item) => {
@@ -164,9 +167,9 @@ export async function judgeWeek(db: D1Database, input: JudgeWeekInput): Promise<
     }
   } catch (error) {
     if (error instanceof JevUnavailableError) {
-      return { picks: [], judged: 0 };
+      return { picks: [], judged: 0, unjudged: true };
     }
     throw error;
   }
-  return { picks: pickReadThisFirst(collected), judged: items.length };
+  return { picks: pickReadThisFirst(collected), judged: items.length, unjudged: unjudgedInputs > 0 };
 }

@@ -38,6 +38,7 @@ const PAYLOAD = {
   headline_is_new: false,
   why_line: "You climbed one place on new ads.",
   is_quiet_week: false,
+  is_unjudged: false,
   read_this_first: [
     {
       signal_id: "sig_1",

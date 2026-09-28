@@ -105,6 +105,14 @@ function body(
       </div>
     );
   }
+  if (standing.kind === "unjudged") {
+    return (
+      <>
+        <p className="mt-3 max-w-prose leading-[1.55]">{standing.whyLine}</p>
+        <ReadThisFirst marks={[]} unjudged headingLevel={2} />
+      </>
+    );
+  }
   return (
     <>
       <p className="mt-3 max-w-prose leading-[1.55]">{standing.whyLine}</p>
@@ -113,7 +121,7 @@ function body(
           <HowRankedSheet howRanked={howRanked} />
         </div>
       ) : null}
-      <ReadThisFirst marks={standing.readThisFirst} headingLevel={2} />
+      <ReadThisFirst marks={standing.readThisFirst} unjudged={standing.unjudged} headingLevel={2} />
       <h2 className={cn(EYEBROW, "border-line mt-8 border-t pt-4")}>Four weeks</h2>
       <div className="mt-2">
         <FourWeekLine chart={standing.chart} />

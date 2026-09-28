@@ -15,7 +15,7 @@ export function BriefView({ payload }: { payload: BriefPayload }) {
       className="border-line min-w-0 border break-words p-4"
     >
       {headlineBlock(payload)}
-      <ReadThisFirst marks={payload.read_this_first} />
+      <ReadThisFirst marks={payload.read_this_first} unjudged={payload.is_unjudged} />
       {brandsBlock(payload)}
       {ownSiteBlock(payload)}
       {checkedBlock(payload)}
@@ -27,7 +27,9 @@ function headlineBlock(payload: BriefPayload): ReactElement {
   return (
     <section data-brief-block="headline">
       <h2 className="font-display text-[1.5rem] leading-[1.2] text-ink">
-        {payload.headline_rank !== null && payload.headline_total >= 2
+        {payload.is_unjudged
+          ? payload.why_line
+          : payload.headline_rank !== null && payload.headline_total >= 2
           ? `You're #${String(payload.headline_rank)} of ${String(payload.headline_total)} this week`
           : "Add a competitor to see where you stand"}
       </h2>

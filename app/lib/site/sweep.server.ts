@@ -13,9 +13,11 @@ import {
   readUnwatchedEntities,
 } from "../data/watch.server";
 import { robotsAllows } from "../fetch/robots.server";
+import { computeBreakageEvidence } from "./breakage-evidence";
 import type { CheckPageResult } from "./check-page.server";
 import { checkPage } from "./check-page.server";
 import { diffPageText } from "./diff";
+import { judgeChange } from "./judge.server";
 import { readPage } from "./read-page.server";
 
 const SITE_SOURCE_KEY = "site.web";
@@ -153,8 +155,10 @@ export async function publishSiteChange(target: SiteSweepTarget, changed: Change
     transport: changed.transport,
   };
 
+  const signalId = crypto.randomUUID();
+  const observedAt = new Date().toISOString();
   await insertChangeSignalStatement({
-    id: crypto.randomUUID(),
+    id: signalId,
     workspaceId: target.workspaceId,
     entityId: target.entityId,
     sourceId: target.sourceId,
@@ -165,7 +169,27 @@ export async function publishSiteChange(target: SiteSweepTarget, changed: Change
     aspect: target.pageRole,
     url: target.url,
     payloadJson: JSON.stringify(payload),
-    observedAt: new Date().toISOString(),
+    observedAt,
   }).run();
+
+  const subject = await env.DB.prepare("SELECT name, domain FROM entity WHERE id = ?1 AND workspace_id = ?2")
+    .bind(target.entityId, target.workspaceId)
+    .first<{ name: string | null; domain: string }>();
+  if (subject === null) {
+    throw new Error(`missing entity ${target.entityId}`);
+  }
+  const beforeText = before ?? "";
+  const afterText = after ?? "";
+  await judgeChange({
+    workspaceId: target.workspaceId,
+    entityId: target.entityId,
+    signalId,
+    isSelf: target.entityRole === "self",
+    subject,
+    pageUrl: target.url,
+    pageRole: target.pageRole,
+    hunks: diff === null ? [] : diff.hunks,
+    evidence: computeBreakageEvidence({ status: changed.status, beforeText, afterText }),
+  });
   return changed.snapshotId;
 }

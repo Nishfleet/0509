@@ -63,6 +63,7 @@ const brief = (headlineRank: number): BriefPayload => ({
   headline_is_new: false,
   why_line: "Quiet week: 3 mentions checked, no site changes, no new ads.",
   is_quiet_week: true,
+  is_unjudged: false,
   read_this_first: [],
   brands: [],
   own_site: { status: "ok", incidents: [] },

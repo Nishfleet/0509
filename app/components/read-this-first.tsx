@@ -3,6 +3,7 @@ import { Fragment, type ReactElement } from "react";
 import { Mark } from "./mark";
 import type { BriefPayload } from "../lib/brief-payload";
 import { httpUrl } from "../lib/http-url";
+import { UNJUDGED_WEEK_LINE } from "../lib/read-this-first";
 
 const SECTION = "border-line mt-5 border-t pt-4";
 const HEAD = "font-mono text-eyebrow text-ink-soft uppercase";
@@ -12,16 +13,20 @@ const MAX_MARKS = 3;
 
 export function ReadThisFirst({
   marks,
+  unjudged = false,
   headingLevel = 3,
 }: {
   marks: BriefPayload["read_this_first"];
+  unjudged?: boolean;
   headingLevel?: 2 | 3;
 }): ReactElement {
   const HeadingTag = headingLevel === 2 ? "h2" : "h3";
   return (
     <section data-brief-block="read-this-first" className={SECTION}>
       <HeadingTag className={HEAD}>Read this first</HeadingTag>
-      {marks.length === 0 ? (
+      {unjudged ? (
+        <p className={BODY}>{UNJUDGED_WEEK_LINE}</p>
+      ) : marks.length === 0 ? (
         <p className={BODY}>Nothing this week needed reading first.</p>
       ) : (
         marks.slice(0, MAX_MARKS).map((mark) => {

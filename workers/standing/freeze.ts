@@ -1,8 +1,8 @@
 import { z } from "zod";
 
 import { freezeStandingRanks } from "../../app/lib/data/standing.server";
-import type { RankedEntity } from "../../app/lib/standing-score";
-import { rankWeek } from "../../app/lib/standing-score";
+import { type RankedEntity, rankWeek } from "../../app/lib/standing-score";
+import { countUnjudgedInputs } from "../../app/lib/standing-score.server";
 
 const WEEK_SCORES = `SELECT s.entity_id AS entity_id, s.score AS score
 FROM standing s
@@ -25,7 +25,12 @@ export async function freezeWeek(
   db: D1Database,
   workspaceId: string,
   weekStartAt: string,
+  weekEndAt: string,
 ): Promise<readonly RankedEntity[]> {
+  const unjudged = await countUnjudgedInputs(db, workspaceId, weekStartAt, weekEndAt);
+  if (unjudged > 0) {
+    return [];
+  }
   const [scores, previous] = await db.batch([
     db.prepare(WEEK_SCORES).bind(workspaceId, weekStartAt),
     db.prepare(PREVIOUS_RANKS).bind(workspaceId, weekStartAt),

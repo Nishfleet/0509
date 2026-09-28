@@ -65,7 +65,8 @@ export interface FourWeekChart {
 export type HomeStanding =
   | { kind: "add-competitor" }
   | { kind: "gathering"; briefAt: string; firstSweepAt: string | null; brands: number }
-  | { kind: "ranked"; rank: number; total: number; whyLine: string; readThisFirst: BriefPayload["read_this_first"]; rows: readonly HomeRow[]; chart: FourWeekChart };
+  | { kind: "unjudged"; whyLine: string }
+  | { kind: "ranked"; rank: number; total: number; whyLine: string; unjudged: boolean; readThisFirst: BriefPayload["read_this_first"]; rows: readonly HomeRow[]; chart: FourWeekChart };
 
 export interface HomeChip {
   name: string;
@@ -235,6 +236,9 @@ export function homeStanding(input: {
   if (onBrands < 2) return { kind: "add-competitor" };
   const payload = input.payload;
   const rank = payload?.headline_rank ?? null;
+  if (payload !== null && payload.is_unjudged && (rank === null || payload.headline_total < 2)) {
+    return { kind: "unjudged", whyLine: payload.why_line };
+  }
   if (payload === null || rank === null || payload.headline_total < 2) {
     return {
       kind: "gathering",
@@ -249,6 +253,7 @@ export function homeStanding(input: {
     rank,
     total: payload.headline_total,
     whyLine: payload.why_line,
+    unjudged: payload.is_unjudged,
     readThisFirst: payload.read_this_first.slice(0, 3),
     rows,
     chart: fourWeekChart(input.history, rows, input.entities, input.schedule.timezone),

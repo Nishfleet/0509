@@ -202,7 +202,7 @@ describe("new job posts reach the brief's brand line, through real D1", () => {
       workspaceId,
       schedule: { timezone: "UTC", weekday: 1, hour: 8 },
       week: { startsAt: new Date("2026-09-14T12:00:00.000Z"), closesAt: new Date("2026-09-21T12:00:00.000Z") },
-      readThisFirst: { picks: [], judged: 0 },
+      readThisFirst: { picks: [], judged: 0, unjudged: false },
     });
 
     const hiring = payload.brands.find((b) => b.entity_id.startsWith("ent_hiring_"));
@@ -215,7 +215,7 @@ describe("new job posts reach the brief's brand line, through real D1", () => {
       workspaceId,
       schedule: { timezone: "UTC", weekday: 1, hour: 8 },
       week: { startsAt: new Date("2026-09-14T12:00:00.000Z"), closesAt: new Date("2026-09-21T12:00:00.000Z") },
-      readThisFirst: { picks: [], judged: 0 },
+      readThisFirst: { picks: [], judged: 0, unjudged: false },
     });
 
     const { text } = renderBrief(parseBriefPayload(JSON.stringify(payload)), {
@@ -233,7 +233,7 @@ describe("new job posts reach the brief's brand line, through real D1", () => {
       workspaceId,
       schedule: { timezone: "UTC", weekday: 1, hour: 8 },
       week: { startsAt: new Date("2026-09-14T12:00:00.000Z"), closesAt: new Date("2026-09-21T12:00:00.000Z") },
-      readThisFirst: { picks: [], judged: 0 },
+      readThisFirst: { picks: [], judged: 0, unjudged: false },
     });
 
     const { text } = renderBrief(parseBriefPayload(JSON.stringify(payload)), {
@@ -320,7 +320,7 @@ describe("a zero canary never counts as a source answering, through real D1", ()
       workspaceId: zero.workspaceId,
       schedule: { timezone: "UTC", weekday: 1, hour: 8 },
       week: { startsAt: new Date("2026-09-14T12:00:00.000Z"), closesAt: new Date("2026-09-21T12:00:00.000Z") },
-      readThisFirst: { picks: [], judged: 0 },
+      readThisFirst: { picks: [], judged: 0, unjudged: false },
     });
     expect(zeroPayload.checked.degraded_source_keys).toContain(zero.sourceKey);
 
@@ -329,7 +329,7 @@ describe("a zero canary never counts as a source answering, through real D1", ()
       workspaceId: healthy.workspaceId,
       schedule: { timezone: "UTC", weekday: 1, hour: 8 },
       week: { startsAt: new Date("2026-09-14T12:00:00.000Z"), closesAt: new Date("2026-09-21T12:00:00.000Z") },
-      readThisFirst: { picks: [], judged: 0 },
+      readThisFirst: { picks: [], judged: 0, unjudged: false },
     });
     expect(healthyPayload.checked.degraded_source_keys).toEqual([]);
   });
