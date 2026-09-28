@@ -1,6 +1,20 @@
 import { expect, test } from "@playwright/test";
 
-import { decodedBodies, readRawMessage, requireInboxToken, settleSignInWidget, waitForMagicLink } from "./inbox";
+import { decodedBodies, deleteCreatedAccount, readRawMessage, requireInboxToken, settleSignInWidget, waitForMagicLink } from "./inbox";
+
+let createdEmail = "";
+test.afterEach(async ({ page }, testInfo) => {
+  if (createdEmail === "") return;
+  testInfo.setTimeout(testInfo.timeout + 60_000);
+  // The delete failing is a test failure, not a reason to keep the address:
+  // clearing in finally means the next test in this worker cannot try to
+  // delete an account that is already gone.
+  try {
+    await deleteCreatedAccount(page, createdEmail);
+  } finally {
+    createdEmail = "";
+  }
+});
 
 // Production only, for the same reason as J1: the preview Worker's wrangler dev
 // has no EMAIL binding, so no sign-in email is ever sent, and no inbox to read
@@ -35,6 +49,7 @@ test(
     test.setTimeout(180_000);
     const token = requireInboxToken();
     const email = `e2e+${crypto.randomUUID().replaceAll("-", "").slice(0, 12)}@0509.io`;
+    createdEmail = email;
 
     await page.goto("/login");
     await page.locator('input[name="email"]').fill(email);
