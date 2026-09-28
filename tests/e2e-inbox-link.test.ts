@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { extractMagicLink, InboxReadError, readRawMessage, staleLinks, waitForMagicLink } from "../e2e/inbox";
 
@@ -81,6 +81,17 @@ const HTML_ONLY = [
 ].join("\r\n");
 
 describe("extractMagicLink", () => {
+  // extractMagicLink reads the ambient lane (e2e/inbox.ts), so these 0509.io
+  // fixtures hold only with no lane set: pin it rather than depend on the
+  // shell that started the suite.
+  beforeEach(() => {
+    vi.stubEnv("PLAYWRIGHT_TEST_BASE_URL", undefined);
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
   it("finds the verify URL in a plain body", () => {
     expect(extractMagicLink(PLAIN)).toBe(EXPECTED);
   });
@@ -163,6 +174,10 @@ describe("on a preview lane", () => {
   it("names an unparseable base URL instead of timing out", async () => {
     vi.stubEnv("PLAYWRIGHT_TEST_BASE_URL", "not-a-url");
     vi.stubGlobal("fetch", () => Promise.resolve(new Response(PLAIN, { status: 200 })));
+    // The extractor itself is the path staleLinks takes on a 200 body.
+    expect(() => extractMagicLink(PLAIN)).toThrow(
+      "PLAYWRIGHT_TEST_BASE_URL is not an http(s) URL: not-a-url",
+    );
     await expect(waitForMagicLink("e2e+stale@0509.io", "token")).rejects.toThrow(
       "PLAYWRIGHT_TEST_BASE_URL is not an http(s) URL: not-a-url",
     );
@@ -209,10 +224,16 @@ describe("readRawMessage", () => {
 // The pre-send read on the sign-in path (0509#5839): a fixed fixture address
 // still holds the previous run's spent link, so staleLinks is what the wait
 // skips. Only a 404 is nothing stored; every other inbox answer is a failure
-// that must name itself rather than hand back the spent link.
+// that must name itself rather than hand back the spent link. The fixtures are
+// 0509.io links, so the lane is pinned to no lane.
 describe("staleLinks", () => {
+  beforeEach(() => {
+    vi.stubEnv("PLAYWRIGHT_TEST_BASE_URL", undefined);
+  });
+
   afterEach(() => {
     vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
   });
 
   it("is empty when the inbox holds nothing for the address", async () => {

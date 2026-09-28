@@ -11,13 +11,16 @@ const POLL_LIMIT_MS = 120_000;
 const POLL_INTERVAL_MS = 3_000;
 
 // The origin this run's verify links must carry: the base URL the browser is
-// driving, or production when the suite runs without one. The merge-queue
-// Preview Worker mails on its own BETTER_AUTH_URL (#5737; wrangler.jsonc pins
-// production's, the preview lane overrides it), so a link on another origin is
-// not the link this run asked for. An empty base URL (Actions sets an unset
-// env var to "") falls back like an absent one; anything that is not an http(s)
-// URL throws here with its own name rather than degrading into the poll's
-// 120s no-mail timeout.
+// driving, or production when the suite runs without one. The verify link is
+// built from the sending Worker's BETTER_AUTH_URL (app/lib/auth.server.ts),
+// which wrangler.jsonc pins to production today. #5737 (part 1 of #5736) is
+// the merge-queue lane that will run the production-lane specs against a
+// preview version, whose mailbox carries a link on the preview's own origin —
+// not the link that run asked for. Until that lane lands, every run is
+// production or unset, so this resolves to the origin the old hard-coded regex
+// accepted. An empty base URL (Actions sets an unset env var to "") falls back
+// like an absent one; anything that is not an http(s) URL throws here by name
+// rather than degrading into the poll's 120s no-mail timeout.
 const PRODUCTION_ORIGIN = "https://0509.io";
 
 function laneOrigin(): string {
