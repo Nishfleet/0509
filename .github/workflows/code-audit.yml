@@ -130,12 +130,15 @@ jobs:
           UMBRELLA: ${{ inputs.umbrella }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
-          grade=$(head -n1 "$RUNNER_TEMP/audit.txt" | tr -d '\r')
+          tr -d '\r' < "$RUNNER_TEMP/audit.txt" > "$RUNNER_TEMP/audit-clean.txt"
+          test "$(grep -cxE 'Audit grade: (A\+|A|A-|B\+|B|B-|C\+|C|C-|D|F)' "$RUNNER_TEMP/audit-clean.txt")" = 1
+          sed -nE '/^Audit grade: (A\+|A|A-|B\+|B|B-|C\+|C|C-|D|F)$/,$p' "$RUNNER_TEMP/audit-clean.txt" > "$RUNNER_TEMP/audit-graded.txt"
+          grade=$(head -n1 "$RUNNER_TEMP/audit-graded.txt")
           echo "kimi said: $grade"
           printf '%s\n' "$grade" | grep -qxE 'Audit grade: (A\+|A|A-|B\+|B|B-|C\+|C|C-|D|F)'
           {
             printf 'Area "%s" at %s, %s\n\n~~~text\n' "$AREA" "$GITHUB_SHA" "$RUN_URL"
-            head -n 61 "$RUNNER_TEMP/audit.txt" | head -c 60000 | tr -d '\r~'
+            head -n 61 "$RUNNER_TEMP/audit-graded.txt" | head -c 60000 | tr -d '~'
             printf '~~~\n'
           } > "$RUNNER_TEMP/audit-post.md"
           gh issue comment "$UMBRELLA" --repo "$GITHUB_REPOSITORY" --body-file "$RUNNER_TEMP/audit-post.md"
