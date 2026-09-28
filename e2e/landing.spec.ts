@@ -124,7 +124,7 @@ test("the hero's first viewport holds the outcome and the one priced input", asy
     hero.getByText(/we name the rivals for you, so you do not have to know them/i),
     hero.getByRole("textbox", { name: "your website, or a handle" }),
     hero.getByRole("button", { name: /€\d+\/mo/ }),
-    hero.getByText("One input. Sixty seconds to your first standing."),
+    hero.getByText("One input. Sixty seconds to who’s gaining on you."),
   ];
   for (const piece of pieces) {
     await expect(piece).toBeVisible();
