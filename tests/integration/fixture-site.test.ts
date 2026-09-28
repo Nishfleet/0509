@@ -33,12 +33,16 @@ const state = (host = FIXTURE_HOST) => env.STATE.getByName(host);
 const get = (host = FIXTURE_HOST) =>
   worker.fetch(new Request(`https://${host}/`), env, createExecutionContext());
 
-const flip = (
-  mode: string,
-  token: string | null = TOKEN,
-  method = "POST",
-  host = FIXTURE_HOST,
-) =>
+// Flip options for the token-gated routes. `host` defaults to the fixture host
+// J5/J7 use; J8's cases pass `{ host: J8_HOST }`, so no call carries a filler
+// `TOKEN, "POST"` to reach the host argument.
+interface FlipOptions {
+  token?: string | null;
+  method?: string;
+  host?: string;
+}
+
+const flip = (mode: string, { token = TOKEN, method = "POST", host = FIXTURE_HOST }: FlipOptions = {}) =>
   worker.fetch(
     new Request(`https://${host}/__break?mode=${mode}`, {
       method,
@@ -50,9 +54,7 @@ const flip = (
 
 const setPrice = (
   variant: string,
-  token: string | null = TOKEN,
-  method = "POST",
-  host = FIXTURE_HOST,
+  { token = TOKEN, method = "POST", host = FIXTURE_HOST }: FlipOptions = {},
 ) =>
   worker.fetch(
     new Request(`https://${host}/__price?variant=${variant}`, {
@@ -65,9 +67,7 @@ const setPrice = (
 
 const setWall = (
   wallState: string,
-  token: string | null = TOKEN,
-  method = "POST",
-  host = FIXTURE_HOST,
+  { token = TOKEN, method = "POST", host = FIXTURE_HOST }: FlipOptions = {},
 ) =>
   worker.fetch(
     new Request(`https://${host}/__wall?state=${wallState}`, {
@@ -183,15 +183,15 @@ describe("0509-fixture-site", () => {
     // Same byte length as `Bearer integration-token` (23): the gate short-circuits
     // on byteLength before timingSafeEqual, so a shorter wrong token never reaches
     // the compare and a stubbed timingSafeEqual would still pass.
-    expect((await flip("hard", "integration-tokeX")).status).toBe(403);
+    expect((await flip("hard", { token: "integration-tokeX" })).status).toBe(403);
   });
 
   it("403s on no Authorization header", async () => {
-    expect((await flip("hard", null)).status).toBe(403);
+    expect((await flip("hard", { token: null })).status).toBe(403);
   });
 
   it("405s a GET on the flip route, so no prefetch can break the fixture", async () => {
-    expect((await flip("hard", TOKEN, "GET")).status).toBe(405);
+    expect((await flip("hard", { method: "GET" })).status).toBe(405);
   });
 
   it("400s on an unknown mode", async () => {
@@ -266,8 +266,8 @@ describe("price variant", () => {
   });
 
   it("403s with no token, 405s a GET, and 400s an unknown variant", async () => {
-    expect((await setPrice("raised", null)).status).toBe(403);
-    expect((await setPrice("raised", TOKEN, "GET")).status).toBe(405);
+    expect((await setPrice("raised", { token: null })).status).toBe(403);
+    expect((await setPrice("raised", { method: "GET" })).status).toBe(405);
     expect((await setPrice("cheap")).status).toBe(400);
   });
 
@@ -311,13 +311,13 @@ describe("bot wall", () => {
   });
 
   it("403s on a wall flip with no token", async () => {
-    const res = await setWall("on", null);
+    const res = await setWall("on", { token: null });
     expect(res.status).toBe(403);
     expect(await res.text()).toBe("forbidden");
   });
 
   it("405s a GET on the wall route, so no prefetch can wall the site", async () => {
-    expect((await setWall("on", TOKEN, "GET")).status).toBe(405);
+    expect((await setWall("on", { method: "GET" })).status).toBe(405);
   });
 
   it("400s on an unknown wall state", async () => {
@@ -365,9 +365,7 @@ describe("per-hostname state", () => {
   });
 
   it("keeps j8's hard break off the fixture host", async () => {
-    // The same helper the other break cases use, aimed at J8's host: the `host`
-    // parameter is the thing under test, not a second way to build a request.
-    expect((await flip("hard", TOKEN, "POST", J8_HOST)).status).toBe(200);
+    expect((await flip("hard", { host: J8_HOST })).status).toBe(200);
 
     const j8 = await get(J8_HOST);
     expect(j8.status).toBe(500);
@@ -380,7 +378,7 @@ describe("per-hostname state", () => {
   });
 
   it("keeps a fixture-host price flip off j8's page", async () => {
-    expect((await setPrice("raised", TOKEN, "POST", FIXTURE_HOST)).status).toBe(200);
+    expect((await setPrice("raised")).status).toBe(200);
     expect(await state().get("price-variant")).toBe("raised");
 
     const j8 = await get(J8_HOST);
@@ -395,7 +393,7 @@ describe("per-hostname state", () => {
   });
 
   it("keeps a j8 wall flip off the fixture host", async () => {
-    expect((await setWall("on", TOKEN, "POST", J8_HOST)).status).toBe(200);
+    expect((await setWall("on", { host: J8_HOST })).status).toBe(200);
     const j8 = await get(J8_HOST);
     expect(j8.status).toBe(403);
     const fixture = await get();

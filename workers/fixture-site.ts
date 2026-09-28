@@ -1,5 +1,7 @@
 import { DurableObject } from "cloudflare:workers";
 
+import { FIXTURE_HOSTS } from "./fixture-site-hosts";
+
 interface FixtureEnv {
   STATE: DurableObjectNamespace<FixtureState>;
   FIXTURE_SITE_TOKEN?: string;
@@ -40,7 +42,7 @@ type BreakMode = "off" | "hard" | "soft";
 
 const BREAK_KEY = "break-mode";
 
-const FIXTURE_HOSTS = new Set(["fixture.0509.in", "j8.fixture.0509.in"]);
+const FIXTURE_HOST_SET = new Set<string>(FIXTURE_HOSTS);
 
 const isBreakMode = (value: string | null): value is BreakMode =>
   value === "off" || value === "hard" || value === "soft";
@@ -112,8 +114,8 @@ const HTML_HEADERS = {
 export default {
   async fetch(request, env): Promise<Response> {
     const url = new URL(request.url);
-    if (!FIXTURE_HOSTS.has(url.hostname)) {
-      return new Response("unknown fixture host", { status: 404 });
+    if (!FIXTURE_HOST_SET.has(url.hostname)) {
+      return new Response("unknown fixture host", { status: 404, headers: HTML_HEADERS });
     }
     const state = env.STATE.getByName(url.hostname);
 

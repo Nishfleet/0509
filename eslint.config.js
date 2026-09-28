@@ -153,7 +153,7 @@ const XML_PARSER_CONSTRUCTOR = {
 const DOMAIN_HOSTNAME_BAN = {
   selector: "MemberExpression[property.name='hostname']",
   message:
-    "URL-to-domain extraction is owned by the identity engine in app/lib/identity/ — `normaliseSubject` in app/lib/identity/normalise.ts. Reading `.hostname` anywhere else is a second domain normaliser that will drift from the engine's rules; the same shape on any URL argument, any binding name. Reuse the engine, or add the file to one of the two exemption blocks below: the shared identity block when that block's rules already fit, otherwise a block of its own that restates the array without this selector (workers/fixture-site.ts is the precedent, because the shared block would re-arm RAW_DML_WRITER there). Source: 0509#4371, 0509#5833.",
+    "URL-to-domain extraction is owned by the identity engine in app/lib/identity/ — `normaliseSubject` in app/lib/identity/normalise.ts. Reading `.hostname` anywhere else is a second domain normaliser that will drift from the engine's rules; the same shape on any URL argument, any binding name. Reuse the engine, or add the file to one of the exemption blocks below: the shared identity-exemption block when that block's rules already fit, otherwise a block of its own that restates the array without this selector (the fixture-site block is the precedent, because the shared block would re-arm RAW_DML_WRITER there). Source: 0509#4371, 0509#5833.",
 };
 
 // DESIGN.md: fonts are self-hosted. A Google Fonts <link> put LCP at 2021 ms against the

@@ -357,7 +357,7 @@ Everything else — Queues, D1, R2, Workers — is inside included tiers by thre
 
 **FORBIDDEN.** A second `EMAIL.send` call site. More than one open-incident email per page per day. Batching an incident email behind the weekly brief — it is the one thing that interrupts. Dropping the "fixed" follow-up to avoid the constraint conflict; fix the constraint. Sending an incident email for a competitor's site — D3s runs only where `subject == self`.
 
-**PROOF REQUIRED.** One real incident round-trip against the **`fixture.0509.in`** fixture Worker (`docs/REBUILD-DONE.md` J8 — a separate Worker with its own `routes` block, never `0509.in`, which is a live 308 redirect to `0509.io`): break it **soft** (200 with the pricing section removed, the case that actually exercises D3s), show the incident email in a real inbox with its UTC timestamp and the D3s verdict id and `p`; repair it; show the "fixed" follow-up **sent the same day** and `incident.closed_at` set. Plus proof that a second open-notice attempt the same day was dropped by the constraint.
+**PROOF REQUIRED.** One real incident round-trip against J8's **`j8.fixture.0509.in`** host of the fixture-site Worker (`docs/REBUILD-DONE.md` J8 — the same Worker serves J5/J7 on `fixture.0509.in`; never `0509.in`, which is a live 308 redirect to `0509.io`): break it **soft** (200 with the pricing section removed, the case that actually exercises D3s), show the incident email in a real inbox with its UTC timestamp and the D3s verdict id and `p`; repair it; show the "fixed" follow-up **sent the same day** and `incident.closed_at` set. Plus proof that a second open-notice attempt the same day was dropped by the constraint.
 
 **PUSH.** Branch `engine/incident-email`.
 

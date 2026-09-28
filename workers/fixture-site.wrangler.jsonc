@@ -5,13 +5,18 @@
 // redirect to 0509.io (a zone-level Redirect Rule on the 0509.in zone), and a
 // deliberate break there would break production. docs/REBUILD-DONE.md J8 says
 // this outright, and docs/engines/delivery.md P7.5 requires the incident
-// round-trip to run against this fixture and no other host.
+// round-trip to run against this fixture and no other host. `wrangler dev`
+// serves a `*.workers.dev` URL, which the host gate refuses with 404; only the
+// two custom domains above are accepted.
 //
-// The break and price state live in one SQLite Durable Object per hostname
+// The break, price and bot-wall state live in one SQLite Durable Object per
+// hostname
 // (0509#4305, 0509#4124): the object is named for the request's host, so J8 on
 // j8.fixture.0509.in never disturbs J5/J7 on fixture.0509.in. `FIXTURE_HOSTS`
-// in workers/fixture-site.ts lists exactly these routes and answers 404 to any
-// other host, so a wrong-host flip cannot read as a silent pass. Workers KV
+// in workers/fixture-site-hosts.ts is the same two hosts; the Worker answers 404
+// to any other, so a wrong-host flip cannot read as a silent pass, and
+// tests/wrangler-bindings.test.ts asserts the list and the routes block agree,
+// so a host added to one and not the other is a red gate. Workers KV
 // could serve a stale break-mode for up to 60s at a POP, so a flip could read
 // healthy to the round-trip that just made it. Tag v1 creates the class;
 // wrangler applies it on deploy. There is no KV binding.
