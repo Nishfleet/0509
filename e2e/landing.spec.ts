@@ -66,7 +66,6 @@ test("how it works reads as three ruled steps in order, wide and narrow", async 
   const watched = watchConsole(page);
 
   await page.goto(PATH);
-  await page.waitForLoadState("networkidle");
 
   const section = page.locator("#how-it-works");
   const steps = section.locator("ol > li");
@@ -108,7 +107,6 @@ test("the agents section hands a visitor's agent the MCP address and the API doc
   const watched = watchConsole(page);
 
   await page.goto(PATH);
-  await page.waitForLoadState("networkidle");
 
   const agents = page.locator("#agents");
   await expect(agents.getByText("https://0509.io/mcp")).toBeVisible();
@@ -144,7 +142,9 @@ test("the hero's first viewport holds the outcome and the one priced input", asy
   });
 
   await page.goto(PATH);
-  await page.waitForLoadState("networkidle");
+  await expectFaceLoaded(page, "Bricolage Grotesque", 800);
+  await expectFaceLoaded(page, "Instrument Sans", 400);
+  await expectFaceLoaded(page, "IBM Plex Mono", 400);
 
   const hero = page.locator("#hero");
   const pieces = [
@@ -299,12 +299,18 @@ test("the ticker sits above the page and reserves its height", async ({ page }) 
 test("the ticker never scrolls the page sideways", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto(PATH);
-  await page.waitForLoadState("networkidle");
+  await expect(page.locator("#ticker")).toBeVisible();
+  await expectFaceLoaded(page, "Bricolage Grotesque", 800);
+  await expectFaceLoaded(page, "Instrument Sans", 400);
+  await expectFaceLoaded(page, "IBM Plex Mono", 400);
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
 
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto(PATH);
-  await page.waitForLoadState("networkidle");
+  await expect(page.locator("#ticker")).toBeVisible();
+  await expectFaceLoaded(page, "Bricolage Grotesque", 800);
+  await expectFaceLoaded(page, "Instrument Sans", 400);
+  await expectFaceLoaded(page, "IBM Plex Mono", 400);
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(1440);
 });
 
@@ -321,8 +327,9 @@ test("the ticker causes no layout shift", async ({ page }) => {
   });
 
   await page.goto(PATH);
-  await page.waitForLoadState("networkidle");
-  await page.waitForTimeout(1000);
+  await expectFaceLoaded(page, "Bricolage Grotesque", 800);
+  await expectFaceLoaded(page, "Instrument Sans", 400);
+  await expectFaceLoaded(page, "IBM Plex Mono", 400);
   expect(await page.evaluate(() => Reflect.get(window, "__cls"))).toBeLessThan(0.05);
 });
 
