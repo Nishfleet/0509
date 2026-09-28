@@ -24,6 +24,35 @@ function newVerifyToken(): string {
   return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
 }
 
+function isAddressShape(address: string): boolean {
+  const at = address.indexOf("@");
+  return at >= 1 && at === address.lastIndexOf("@") && at !== address.length - 1;
+}
+
+async function sendVerifyConfirmation(
+  email: SendEmail,
+  workspaceId: string,
+  address: string,
+): Promise<string | null> {
+  const token = newVerifyToken();
+  await writeVerifyToken(env.DB, { workspaceId, token });
+  const message = verifyAddressEmail({ email: address, url: `https://0509.io/v/${token}` });
+  const outcome = await sendMessage(email, {
+    to: address,
+    from: { email: "hello@0509.io", name: "Five to Nine" },
+    subject: message.subject,
+    text: message.text,
+    html: message.html,
+  });
+  if (outcome.outcome === "failed") {
+    console.error(
+      JSON.stringify({ event: "delivery.address_verify_send_failed", error: outcome.error }),
+    );
+    return SEND_FAILED;
+  }
+  return null;
+}
+
 export async function readDeliveryAddress(
   userId: string,
   signInEmail: string,
@@ -43,10 +72,7 @@ export async function saveDeliveryAddress(input: {
   email: SendEmail;
 }): Promise<{ error: string | null; suppressed: boolean }> {
   const address = input.address.trim().toLowerCase();
-  const at = address.indexOf("@");
-  if (at < 1 || at !== address.lastIndexOf("@") || at === address.length - 1) {
-    return { error: INVALID, suppressed: false };
-  }
+  if (!isAddressShape(address)) return { error: INVALID, suppressed: false };
 
   const workspaceId = await readWorkspaceIdForOwner(input.userId);
   if (workspaceId === null) return { error: NO_WORKSPACE, suppressed: false };
@@ -69,21 +95,6 @@ export async function saveDeliveryAddress(input: {
     return { error: null, suppressed: false };
   }
 
-  const token = newVerifyToken();
-  await writeVerifyToken(env.DB, { workspaceId, token });
-  const message = verifyAddressEmail({ email: address, url: `https://0509.io/v/${token}` });
-  const outcome = await sendMessage(input.email, {
-    to: address,
-    from: { email: "hello@0509.io", name: "Five to Nine" },
-    subject: message.subject,
-    text: message.text,
-    html: message.html,
-  });
-  if (outcome.outcome === "failed") {
-    console.error(
-      JSON.stringify({ event: "delivery.address_verify_send_failed", error: outcome.error }),
-    );
-    return { error: SEND_FAILED, suppressed: false };
-  }
-  return { error: null, suppressed: false };
+  const error = await sendVerifyConfirmation(input.email, workspaceId, address);
+  return { error, suppressed: false };
 }
