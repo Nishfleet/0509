@@ -150,7 +150,7 @@ describe("checkPage (0509#4433)", () => {
 
     readHolder.current = { ok: false };
     const failed = await checkPage({ watchId: WATCH, pageId: PAGE, url: URL });
-    expect(failed).toMatchObject({ outcome: "failed", reason: "escalation-failed" });
+    expect(failed).toMatchObject({ outcome: "failed", reason: "deferred" });
     expect(await snapshotCount()).toBe(4);
   });
 });

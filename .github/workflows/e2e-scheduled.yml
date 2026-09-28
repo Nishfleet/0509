@@ -11,13 +11,18 @@ on:
       journey:
         description: Journey to run now
         type: choice
-        options: [j12]
+        options: [none, j12]
+        default: none
+      spec:
+        description: 'One spec or a filter to run now against https://0509.io, e.g. e2e/j3-onboard-domain.spec.ts (0509 sign-up verdict, 2026-09-28)'
+        type: string
+        default: ''
 
 permissions:
   contents: read
 
 concurrency:
-  group: e2e-scheduled-${{ inputs.journey || 'j12' }}
+  group: e2e-scheduled-${{ inputs.spec && 'spec' || 'j12' }}
   cancel-in-progress: false
 
 jobs:
@@ -50,3 +55,33 @@ jobs:
           name: playwright-report-j12
           path: playwright-report/
           retention-days: 7
+  spec:
+    name: spec
+    # No trace is uploaded: the repo is public and a trace can hold the Access
+    # cookie (0509#5999); a failure is read from the job log.
+    if: inputs.spec != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - name: Run the spec against production
+        run: npm run e2e -- "$SPEC" --project=desktop-1440 --retries=0 --reporter=github,list
+        env:
+          SPEC: ${{ inputs.spec }}
+          PLAYWRIGHT_TEST_BASE_URL: https://0509.io
+          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+          E2E_INBOX_TOKEN: ${{ secrets.E2E_INBOX_TOKEN }}
+      - name: Print what the page showed when it failed
+        # Playwright writes the page snapshot next to each failure; printing it
+        # is how a failure is read, since nothing is uploaded.
+        if: failure()
+        run: tail -n +1 test-results/*/error-context.md
