@@ -123,12 +123,6 @@ export function channelIdFromIdentity(raw: string): string | null {
 	return channelIdFromUrl(url);
 }
 
-// One flag slot, one truthful reason. A watch carries at most one degraded
-// reason, so the writer is keyed on the reason: the same reason twice is a
-// no-op, and a different reason replaces the stale one instead of leaving the
-// card describing what is no longer true (a "no channel" flag left standing
-// after the card gains a YouTube URL, or a "lost channel" flag after the card
-// loses its last one).
 function withDegradedReason(raw: string, reason: string, at: string): string {
 	const read = readWatchConfig(raw);
 	if (read.status !== "ok") throw new Error("watch config_json is unreadable");

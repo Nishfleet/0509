@@ -360,8 +360,6 @@ async function sweepOneYoutube(
           await flagLostChannel(watch.watch_id, now);
           break;
         default: {
-          // Exhaustiveness, not a runtime branch: a fourth lookup status has to
-          // decide which flag it writes, or it writes none and the pill lies.
           const unhandled: never = lookup;
           throw new Error(`unhandled YouTube channel lookup: ${JSON.stringify(unhandled)}`);
         }
