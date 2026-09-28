@@ -492,6 +492,24 @@ export default tseslint.config(
     },
   },
 
+  // Lean code is a lint, not a review note: Nish 2026-09-28 16:47Z, "all work
+  // anywhere by any agent should be done as a pro dev team would. lean and
+  // mean", and "make this non negotiable as lints and hard blocks" (0509#5783).
+  // Limits sit at the common industry defaults, below main's p99. Code on main
+  // that is already over them is listed in eslint-suppressions.json (ESLint
+  // bulk suppressions), so new code meets the limit, a listed function cannot
+  // grow its count, and a fix that removes one fails lint until the entry is
+  // pruned with `npx eslint --prune-suppressions`.
+  {
+    files: ["app/**/*.{ts,tsx}", "workers/**/*.ts"],
+    rules: {
+      complexity: ["error", 10],
+      "max-depth": ["error", 3],
+      "max-params": ["error", 3],
+      "max-lines-per-function": ["error", { max: 50, skipBlankLines: true, skipComments: true }],
+    },
+  },
+
   {
     files: ["app/**/*.{ts,tsx}", "workers/**/*.ts"],
     ignores: [
