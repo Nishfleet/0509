@@ -11,7 +11,8 @@ Umbrella #3842. Author: Fable. Checked by the Opus deputy. Nish's decisions stan
 ## What we collect and keep
 
 - Public pages, public posts, public ad libraries, public feeds. Screenshots of public pages. No DMs, no private groups, no purchased personal data.
-- Stored bodies on the `0509-snapshots` bucket follow this table. The platform deletes an object when its rule expires. Age expiry is not a cron and not a Worker. Expiry is day-granular, and Cloudflare typically removes an object within 24 hours of the day it expires, so the promise is the period in the table.
+- Stored bodies on the `0509-snapshots` bucket, and on its `0509-snapshots-backup` copy, follow this table. The platform deletes an object when its rule expires. Age expiry is not a cron and not a Worker. Expiry is day-granular, and Cloudflare typically removes an object within 24 hours of the day it expires, so the promise is the period in the table.
+- `0509-snapshots-backup` is the disaster-recovery copy of `0509-snapshots` (`wrangler.jsonc` binds it as `SNAPSHOTS_BACKUP`, and the nightly `snapshot-backup` Workflow fills it). The Workflow lists the source once a night at 05:00 UTC and copies every key the copy does not already hold, so the copy carries the source's object count. The same five per-prefix rules below apply to it, and a copied object's own clock starts at the copy, so it ages out behind the object it copies. Nothing syncs deletes: a takedown or an account deletion removes the source objects, and the copy loses them by aging, not by sync.
 
 | Prefix | What it holds | Kept |
 |---|---|---|
@@ -85,4 +86,4 @@ Privacy and terms pages exist from day one, plain words, matching this document:
 
 ## Proof required
 
-A refused private-handle onboarding (recorded), a completed takedown round-trip on a test subject (row, timestamps, card re-rendered without it), a workspace deletion verified against R2 and D1, and the R2 lifecycle rule visible in the Cloudflare dashboard.
+A refused private-handle onboarding (recorded), a completed takedown round-trip on a test subject (row, timestamps, card re-rendered without it), a workspace deletion verified against R2 and D1, and the R2 lifecycle rules visible in the Cloudflare dashboard on both `0509-snapshots` and `0509-snapshots-backup`.
