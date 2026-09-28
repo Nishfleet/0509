@@ -90,7 +90,7 @@ function namedInboxFailure(status: number): Error | null {
 // missing message (404) from a real failure (500). A caller that maps 404 to
 // "nothing stored" must rethrow the rest: swallowing a 500 would turn an inbox
 // failure into a stale-link timeout.
-class InboxReadError extends Error {
+export class InboxReadError extends Error {
   readonly status: number;
   constructor(status: number, to: string) {
     super(`inbox answered HTTP ${status} for ${to}`);
@@ -120,6 +120,24 @@ export function extractMagicLink(rawMessage: string): string | null {
     if (match) return match[0].replaceAll("&amp;", "&");
   }
   return null;
+}
+
+// The link this recipient already has stored, for waitForMagicLink to skip: the
+// inbox keeps one message per recipient for an hour, so a fixed fixture address
+// still holds the previous run's spent link, and a poll that accepted it would
+// follow a token the app has already burned. Only a 404 (nothing stored) is an
+// empty list — a 403, a 503, a 500 or a network failure is the inbox failing,
+// and reading one as "no message" would both re-offer the spent link and hide a
+// misconfigured secret behind a 120s poll timeout.
+export async function staleLinks(to: string, token: string): Promise<string[]> {
+  const stored = await readRawMessage(to, token).then(
+    (raw) => extractMagicLink(raw),
+    (error: unknown) => {
+      if (error instanceof InboxReadError && error.status === 404) return null;
+      throw error;
+    },
+  );
+  return stored === null ? [] : [stored];
 }
 
 // One probe before polling: expect.poll retries a thrown callback for the
@@ -282,13 +300,20 @@ export function ownDocument404For(pathname: string): (entry: ConsoleEntry) => bo
 // email out of the inbox Worker, follow the link, land signed in. The link's
 // callbackURL is /app (safeReturnTo's default in lib/agent/paths.ts), and
 // requireOnboarded in app-layout.tsx bounces a session whose landing is not
-// null — /onboarding for a fresh user — to that landing. A returning, fully
-// onboarded user's landing is null, so requireOnboarded is a no-op and the
-// session stays on /app. `landing` carries which expectation this sign-in
-// has, and defaults to the fresh-address one J1 asserts.
-// The inbox holds one message per recipient for an hour, so a fixed address
-// can still hold the previous run's used link: it is read before this
-// sign-in can overwrite it and excluded from the wait.
+// null to that landing, so a fresh user lands on /onboarding and a fully
+// onboarded returning one stays on /app. `landing` says which of the two this
+// sign-in expects and defaults to the fresh-address one J1 asserts; it has no
+// call site until the fixed-address specs (#4123, #4124, #4125) use it. Where
+// resumePoint sends an unfinished user is its own business
+// (app/lib/workspace.server.ts) — every branch it can return matches the
+// default.
+// staleLinks is read before the send and excluded from the wait, so a fixed
+// address cannot land on the previous run's spent token; a message that arrives
+// between that read and the send is outside the guarantee, which is the
+// "stored before this sign-in" the issue asked for. Playwright runs a file's
+// tests in parallel (fullyParallel in playwright.config.ts) against one inbox
+// slot per recipient, so two tests sharing one fixed address need serial mode
+// or an address each.
 // Timestamps are logged for the packet's proof line (send and session).
 export async function signInWithMagicLink(
   page: Page,
@@ -299,23 +324,13 @@ export async function signInWithMagicLink(
   await page.goto("/login");
   await page.locator('input[name="email"]').fill(email);
   await settleSignInWidget(page);
+  const stale = await staleLinks(email, token);
   const sentAt = new Date().toISOString();
-  // Reading before the send captures the message already stored for this
-  // address, so the wait does not accept it as this sign-in's link. Only a
-  // 404 (nothing stored) maps to an empty exclusion; a 403, 503 or 500 is the
-  // inbox failing and is rethrown rather than silently read as "no message".
-  const stale = await readRawMessage(email, token).then(
-    (raw) => extractMagicLink(raw),
-    (error: unknown) => {
-      if (error instanceof InboxReadError && error.status === 404) return null;
-      throw error;
-    },
-  );
   await page.locator('button[type="submit"]').click();
   // Sent state replaces the form; asserting the field is gone asserts the swap
   // without pinning copy (smoke.spec.ts's contract-not-copy convention).
   await expect(page.locator('input[name="email"]')).toHaveCount(0);
-  const link = await waitForMagicLink(email, token, stale === null ? [] : [stale]);
+  const link = await waitForMagicLink(email, token, stale);
   const linkReadAt = new Date().toISOString();
   const response = await page.goto(link);
   await expect(page).toHaveURL(landing);
