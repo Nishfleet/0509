@@ -17,6 +17,10 @@ import { createAuthForRequest } from "../lib/auth.server";
 import { readAccountDeleteProgress } from "../lib/account-delete.server";
 import { timezoneCookie } from "../lib/timezone";
 
+type LoginActionData =
+  | { error: string; sent?: never }
+  | { sent: { email: string; at: number }; error?: never };
+
 export function meta() {
   return [{ title: "Sign in · Five to Nine" }];
 }
@@ -53,17 +57,8 @@ export async function action({ request }: Route.ActionArgs) {
   return data({ error: "We couldn't send the link. Try again in a minute." }, { status: 503 });
 }
 
-function magicLinkSent(
-  actionData: ReturnType<typeof useActionData<typeof action>>,
-): actionData is { sent: { email: string; at: number } } {
-  if (typeof actionData !== "object" || actionData === null) return false;
-  const sent: unknown = Reflect.get(actionData, "sent");
-  if (typeof sent !== "object" || sent === null) return false;
-  return typeof Reflect.get(sent, "email") === "string" && typeof Reflect.get(sent, "at") === "number";
-}
-
 export default function Login() {
-  const actionData = useActionData<typeof action>();
+  const actionData = useActionData<LoginActionData>();
   const deleted = useLoaderData<typeof loader>();
   const busy = useNavigation().state !== "idle";
   const navigate = useNavigate();
@@ -92,7 +87,7 @@ export default function Login() {
     setPasskeyState(code === "AUTH_CANCELLED" ? "idle" : "failed");
   }
 
-  if (magicLinkSent(actionData)) {
+  if (actionData?.sent) {
     return <SignInSent key={actionData.sent.at} email={actionData.sent.email} turnstileSiteKey={deleted.turnstileSiteKey} />;
   }
 
