@@ -35,15 +35,19 @@ async function readText(key: string): Promise<string | null> {
   return object === null ? null : object.text();
 }
 
-function homeUrl(domain: string): string | null {
-  return getDomain(domain) === domain ? `https://${domain}/` : null;
+function homeUrl(entity: { domain: string; url: string | null }): string | null {
+  if (entity.url !== null && URL.canParse(entity.url)) {
+    const host = new URL(entity.url).hostname;
+    if (getDomain(host) === entity.domain) return `https://${host}/`;
+  }
+  return getDomain(entity.domain) === entity.domain ? `https://${entity.domain}/` : null;
 }
 
 export async function ensureHomePages(now: string): Promise<void> {
   const entities = await readEntitiesWithoutHomePage();
   await insertPages(
     entities.flatMap((entity) => {
-      const url = homeUrl(entity.domain);
+      const url = homeUrl(entity);
       return url === null
         ? []
         : [{ id: crypto.randomUUID(), entityId: entity.id, url, role: "home" as const, discoveredAt: now }];
@@ -59,7 +63,7 @@ export async function planSiteSweep(now: string): Promise<SiteSweepTarget[]> {
   const unwatched = await readUnwatchedEntities(sourceId);
   await insertWatches(
     unwatched.flatMap((entity) => {
-      const url = homeUrl(entity.domain);
+      const url = homeUrl(entity);
       return url === null
         ? []
         : [{ id: crypto.randomUUID(), entityId: entity.id, sourceId, targetKey: url }];

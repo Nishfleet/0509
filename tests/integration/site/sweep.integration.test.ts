@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   checkSitePage,
+  ensureHomePages,
   planSiteSweep,
   publishSiteChange,
   uncoveredItems,
@@ -33,6 +34,31 @@ const seedEntity = (id: string, role: "self" | "competitor", domain: string, sta
   )
     .bind(id, WS, role, domain, state, NOW)
     .run();
+
+const seedIdentifiedEntity = (
+  id: string,
+  role: "self" | "competitor",
+  domain: string,
+  identityJson: string,
+) =>
+  env.DB.prepare(
+    `INSERT INTO entity (id, workspace_id, role, domain, identity_json, origin, state, created_at)
+     VALUES (?, ?, ?, ?, ?, 'manual', 'on', ?)`,
+  )
+    .bind(id, WS, role, domain, identityJson, NOW)
+    .run();
+
+const homePageUrls = async () => {
+  const rows = await env.DB.prepare("SELECT entity_id, url FROM page WHERE role = 'home' ORDER BY entity_id")
+    .all<{ entity_id: string; url: string }>();
+  return new Map(rows.results.map((row) => [row.entity_id, row.url]));
+};
+
+const watchTargets = async () => {
+  const rows = await env.DB.prepare("SELECT entity_id, target_key FROM watch ORDER BY entity_id")
+    .all<{ entity_id: string; target_key: string }>();
+  return new Map(rows.results.map((row) => [row.entity_id, row.target_key]));
+};
 
 const signals = async () => {
   const rows = await env.DB.prepare(
@@ -278,5 +304,115 @@ describe("uncoveredItems", () => {
 
   it("returns an empty list for an empty plan", async () => {
     expect(await uncoveredItems([], oneMinuteAgo())).toEqual([]);
+  });
+});
+
+const seedHomeEntities = async (
+  rows: readonly {
+    id: string;
+    role: "self" | "competitor";
+    domain: string;
+    identityJson: string;
+  }[],
+) => {
+  await env.DB.exec("DELETE FROM signal");
+  await env.DB.exec("DELETE FROM snapshot");
+  await env.DB.exec("DELETE FROM watch");
+  await env.DB.exec("DELETE FROM page");
+  await env.DB.exec("DELETE FROM entity");
+  await env.DB.exec("DELETE FROM workspace");
+  await env.DB.exec('DELETE FROM "user"');
+
+  await env.DB.prepare(
+    `INSERT INTO "user" (id, name, email, emailVerified, createdAt, updatedAt)
+     VALUES (?, 'Owner', 'site-sweep@0509.io', 1, ?, ?)`,
+  )
+    .bind(USER, NOW, NOW)
+    .run();
+  await env.DB.prepare(
+    `INSERT INTO workspace (id, name, owner_user_id, timezone, brief_weekday, brief_hour, created_at)
+     VALUES (?, 'Sweep', ?, 'UTC', 1, 8, ?)`,
+  )
+    .bind(WS, USER, NOW)
+    .run();
+  for (const row of rows) {
+    await env.DB.prepare(
+      `INSERT INTO entity (id, workspace_id, role, domain, identity_json, origin, state, created_at)
+       VALUES (?, ?, ?, ?, ?, 'manual', 'on', ?)`,
+    )
+      .bind(row.id, WS, row.role, row.domain, row.identityJson, NOW)
+      .run();
+  }
+};
+
+describe("home url resolution", () => {
+  it("uses the entered host when it shares the entity's registrable domain", async () => {
+    await seedHomeEntities([
+      {
+        id: "ent-fixture",
+        role: "self",
+        domain: "0509.in",
+        identityJson: '{"kind":"domain","url":"https://fixture.0509.in/"}',
+      },
+    ]);
+
+    await ensureHomePages(NOW);
+
+    expect((await homePageUrls()).get("ent-fixture")).toBe("https://fixture.0509.in/");
+  });
+
+  it("uses the entered www host when it shares the entity's registrable domain", async () => {
+    await seedHomeEntities([
+      {
+        id: "ent-www",
+        role: "self",
+        domain: "nike.com",
+        identityJson: '{"url":"https://www.nike.com/"}',
+      },
+    ]);
+
+    await ensureHomePages(NOW);
+
+    expect((await homePageUrls()).get("ent-www")).toBe("https://www.nike.com/");
+  });
+
+  it("keeps the registrable domain home when the identity has no url", async () => {
+    await seedHomeEntities([
+      { id: "ent-plain", role: "self", domain: "nike.com", identityJson: "{}" },
+    ]);
+
+    await ensureHomePages(NOW);
+
+    expect((await homePageUrls()).get("ent-plain")).toBe("https://nike.com/");
+  });
+
+  it("creates no home page when the entered url's registrable domain differs", async () => {
+    await seedHomeEntities([
+      {
+        id: "ent-channel",
+        role: "competitor",
+        domain: "mkbhd",
+        identityJson: '{"kind":"channel","url":"https://www.youtube.com/@mkbhd"}',
+      },
+    ]);
+
+    await ensureHomePages(NOW);
+
+    expect((await homePageUrls()).has("ent-channel")).toBe(false);
+  });
+
+  it("watches the entered host for the site.web source", async () => {
+    await seedHomeEntities([
+      {
+        id: "ent-fixture",
+        role: "self",
+        domain: "0509.in",
+        identityJson: '{"kind":"domain","url":"https://fixture.0509.in/"}',
+      },
+    ]);
+
+    await planSiteSweep(NOW);
+
+    expect((await watchTargets()).get("ent-fixture")).toBe("https://fixture.0509.in/");
   });
 });
