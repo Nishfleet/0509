@@ -8,7 +8,11 @@ const RETRY: WorkflowStepConfig = {
   timeout: "5 minutes",
 };
 
-type BackupTotals = { listed: number; copied: number; present: number };
+interface BackupTotals {
+  listed: number;
+  copied: number;
+  present: number;
+}
 
 async function copyPages(step: WorkflowStep, page: number, cursor: string | null, totals: BackupTotals): Promise<BackupTotals> {
   const result = await step.do(`copy page ${String(page)}`, RETRY, () => copyMissingPage(cursor ?? undefined));
