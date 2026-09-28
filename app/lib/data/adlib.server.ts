@@ -1,6 +1,8 @@
 import { env } from "cloudflare:workers";
 import { z } from "zod";
 
+import { insertWatches } from "./watch.server";
+
 export const ADLIB_SOURCE_ID = "src_discovery_meta_adlib";
 
 const SELECT_SELF = `SELECT id, name, domain,
@@ -9,16 +11,7 @@ const SELECT_SELF = `SELECT id, name, domain,
   COALESCE(json_extract(identity_json, '$.market'), json_extract(identity_json, '$.country')) AS market
 FROM entity WHERE workspace_id = ? AND role = 'self'`;
 
-const INSERT_WATCH = `INSERT INTO watch (id, entity_id, source_id, target_key, is_active)
-VALUES (?1, ?2, ?3, ?4, 1)
-ON CONFLICT (entity_id, source_id, target_key) DO NOTHING`;
-
 const SELECT_WATCH = `SELECT id FROM watch WHERE entity_id = ? AND source_id = ? AND target_key = ?`;
-
-const INSERT_SNAPSHOT = `INSERT INTO snapshot
-  (id, watch_id, page_id, fetched_at, payload_r2_key, payload_hash, item_count)
-VALUES (?1, ?2, NULL, ?3, ?4, ?5, ?6)
-ON CONFLICT (id) DO NOTHING`;
 
 const SELECT_SNAPSHOT = `SELECT id, fetched_at, payload_r2_key, item_count FROM snapshot WHERE id = ?`;
 
@@ -85,7 +78,7 @@ export async function readAdlibSelf(workspaceId: string): Promise<AdlibSelf | nu
 
 export async function ensureAdlibWatch(entityId: string, targetKey: string): Promise<string> {
   const id = crypto.randomUUID();
-  await env.DB.prepare(INSERT_WATCH).bind(id, entityId, ADLIB_SOURCE_ID, targetKey).run();
+  await insertWatches([{ id, entityId, sourceId: ADLIB_SOURCE_ID, targetKey }]);
   const row = await env.DB.prepare(SELECT_WATCH).bind(entityId, ADLIB_SOURCE_ID, targetKey).first<{ id: string }>();
   if (row === null) throw new Error("adlib watch missing after insert");
   return row.id;
@@ -107,20 +100,8 @@ export async function readAdlibSnapshot(id: string): Promise<AdlibSnapshotRow | 
   };
 }
 
-export async function insertAdlibSnapshot(row: {
-  id: string;
-  watchId: string;
-  fetchedAt: string;
-  r2Key: string;
-  hash: string;
-  itemCount: number;
-}): Promise<void> {
-  await env.DB.prepare(INSERT_SNAPSHOT)
-    .bind(row.id, row.watchId, row.fetchedAt, row.r2Key, row.hash, row.itemCount)
-    .run();
-}
-
 export async function latestAdlibPayloadKey(workspaceId: string): Promise<string | null> {
   const row = await env.DB.prepare(LATEST_KEY).bind(workspaceId, ADLIB_SOURCE_ID).first<{ payload_r2_key: string | null }>();
-  return row?.payload_r2_key ?? null;
+  if (row === null) return null;
+  return row.payload_r2_key;
 }

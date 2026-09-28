@@ -1,9 +1,5 @@
-import {
-  ensureAdlibWatch,
-  insertAdlibSnapshot,
-  readAdlibSelf,
-  readAdlibSnapshot,
-} from "../data/adlib.server";
+import { ensureAdlibWatch, readAdlibSelf, readAdlibSnapshot } from "../data/adlib.server";
+import { insertBoardSnapshot } from "../data/snapshot.server";
 import { adlibQuery, candidatesFromAdLibrary, parseStoredCandidates, serializeStored } from "./generators/meta-adlib";
 import type { AdlibQuery } from "./generators/meta-adlib";
 import { readAdlibPayload, writeAdlibPayload } from "./meta-adlib-store.server";
@@ -95,7 +91,7 @@ export async function runMetaAdlib(input: {
   });
   await writeAdlibPayload(key, stored);
   if (html.length > 0) await writeAdlibPayload(htmlKey(snapshotId), html);
-  await insertAdlibSnapshot({
+  await insertBoardSnapshot({
     id: snapshotId,
     watchId,
     fetchedAt,
