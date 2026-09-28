@@ -91,10 +91,17 @@
   // Mentions telemetry (#4003 slice 3/6, docs/engines/mentions.md P5.4).
   "analytics_engine_datasets": [{ "binding": "MENTIONS_SOURCES", "dataset": "mentions_sources" }],
 
-  // One binding for the one bucket (#4569 had added a second binding to the
-  // same bucket). snapshot/site/ holds raw site snapshots, text and screenshot
-  // (engine 4), under the one-year snapshot/ rule in docs/REBUILD-GUARDRAILS.md.
-  "r2_buckets": [{ "binding": "SNAPSHOTS", "bucket_name": "0509-snapshots" }],
+  // Two bindings for two buckets (#4569 had added a second binding to the
+  // same bucket; a second bucket is a different thing). snapshot/site/ holds
+  // raw site snapshots, text and screenshot (engine 4), under the one-year
+  // snapshot/ rule in docs/REBUILD-GUARDRAILS.md. 0509-snapshots-backup is the
+  // nightly copy target of the snapshot-backup Workflow below and carries the
+  // same five per-prefix lifecycle rules, so a copied object ages out of the
+  // backup a year behind the source.
+  "r2_buckets": [
+    { "binding": "SNAPSHOTS", "bucket_name": "0509-snapshots" },
+    { "binding": "SNAPSHOTS_BACKUP", "bucket_name": "0509-snapshots-backup" }
+  ],
 
   // Identity probe cache (engine 1, issue #4419): a read-through cache for
   // probe results keyed identity:<registrable>:<probe> with a 24-hour TTL
@@ -218,6 +225,20 @@
       "binding": "SITE_SWEEP",
       "class_name": "SiteSweepWorkflow",
       "schedules": ["0 2 * * *"]
+    },
+    // The nightly snapshot backup (0509#5802): copies every object in
+    // 0509-snapshots that 0509-snapshots-backup does not yet hold, one
+    // retried step per page of up to 200 objects, preserving httpMetadata.
+    // 05:00 UTC: after the 01:00 mentions sweep and the 02:00 site sweep
+    // have written their objects, and clear of the 03:00 standing cron and
+    // the Monday 04:00 refresh. No deletes are propagated — an object deleted
+    // from the source ages out of the backup by the backup's own lifecycle
+    // rules.
+    {
+      "name": "snapshot-backup",
+      "binding": "SNAPSHOT_BACKUP",
+      "class_name": "SnapshotBackupWorkflow",
+      "schedules": ["0 5 * * *"]
     },
     // The own-site watch: every hour, each customer's own homepage is
     // probed once with a plain fetch. A 5xx, 404 or no answer is probed
