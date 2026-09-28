@@ -85,7 +85,7 @@ async function liveIndexColumns(name: string): Promise<string[]> {
   return (columns.results ?? []).map((row) => row.name);
 }
 
-describe("0026_hot_path_indexes.sql", () => {
+describe("0026_hot_path_indexes_and_sweep_run.sql", () => {
   it("gives every hot or scheduled statement an index starting with its columns", async () => {
     for (const statement of HOT_STATEMENTS) {
       expect(

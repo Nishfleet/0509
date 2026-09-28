@@ -1,6 +1,7 @@
 import type { WorkflowEvent, WorkflowStep, WorkflowStepConfig } from "cloudflare:workers";
 import { WorkflowEntrypoint } from "cloudflare:workers";
 
+import { recordSweepRun } from "../../app/lib/data/sweep_run.server";
 import { pingLiveness } from "../../app/lib/liveness-ping.server";
 import {
   CHUNK_SIZE,
@@ -94,6 +95,19 @@ export class SiteSweep extends WorkflowEntrypoint<Env & { SITE_SWEEP_PING_URL?: 
       rechecked: missing.length,
     };
     console.log(JSON.stringify({ event: "site.sweep", ...summary }));
+    await step.do("record", RETRY, async () => {
+      const finishedAt = new Date();
+      await recordSweepRun({
+        id: tick.instanceId,
+        kind: "site",
+        plannedAt: tick.plannedAt,
+        finishedAt: finishedAt.toISOString(),
+        wallMs: finishedAt.getTime() - event.timestamp.getTime(),
+        pages: summary.pages,
+        failed: summary.failed,
+      });
+      return null;
+    });
     await step.do("report", RETRY, async () => {
       await pingLiveness(this.env.SITE_SWEEP_PING_URL);
       return null;
