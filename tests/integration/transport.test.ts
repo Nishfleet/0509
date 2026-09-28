@@ -720,6 +720,28 @@ describe("readUrl", () => {
     }
   });
 
+  it("without a budget callback a timed-out fetch is deferred and the browser is never called", async () => {
+    const stub = stubFetch({
+      "https://slow.example.com/": () => {
+        throw new DOMException("The operation timed out.", "TimeoutError");
+      },
+    });
+    const browser = fakeBrowser({ ok: true, html: SUBSTANTIAL_PAGE });
+    try {
+      install(browser);
+      const result = await readUrl("https://slow.example.com/");
+      expect(result.ok).toBe(false);
+      if (result.ok) return;
+      expect(result.reason).toBe("deferred");
+      expect(result.detail).toBe(
+        "browser budget refused escalation (timeout)",
+      );
+      expect(browser.calls).toEqual([]);
+    } finally {
+      stub.restore();
+    }
+  });
+
   it("fails typed with the unconfigured cause when the browser binding is absent", async () => {
     browserHolder.current = undefined;
     const stub = stubFetch({
