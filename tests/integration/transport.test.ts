@@ -741,6 +741,33 @@ describe("readUrl", () => {
       stub.restore();
     }
   });
+
+  it("an unconfigured browser binding fails the escalation without logging a cost line", async () => {
+    const stub = stubFetch({
+      "https://gated.example.com/": () => new Response("Forbidden", { status: 403 }),
+    });
+    const lines: string[] = [];
+    const spy = vi.spyOn(console, "log").mockImplementation((line) => {
+      lines.push(String(line));
+    });
+    try {
+      browserHolder.current = undefined;
+      const result = await readUrl("https://gated.example.com/", {
+        mayEscalate: async () => true,
+      });
+      expect(result.ok).toBe(false);
+      if (result.ok) return;
+      expect(result.reason).toBe("escalation-failed");
+      expect(result.detail).toContain("browser binding is not configured");
+      // The call never happened, so there is no browser time to price.
+      expect(
+        lines.some((line) => line.includes('"browser-escalation"')),
+      ).toBe(false);
+    } finally {
+      spy.mockRestore();
+      stub.restore();
+    }
+  });
 });
 
 describe("countExtractedChars", () => {
