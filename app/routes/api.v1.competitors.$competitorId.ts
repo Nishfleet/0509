@@ -6,6 +6,6 @@ import { apiResponse } from "../lib/agent/serve.server";
 
 export function loader({ request, params }: Route.LoaderArgs) {
   return apiResponse(request, async (workspaceId) =>
-    competitorResultSchema.parse(await readAgentCompetitor(workspaceId, params.competitorId)),
+    competitorResultSchema.parse(await readAgentCompetitor(workspaceId, params.competitorId, new Date())),
   );
 }
