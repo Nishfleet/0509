@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-import { expectFaceLoaded } from "./fonts";
+import { expectElementFaceLoaded, expectFaceLoaded } from "./fonts";
 
 // The smallest suite that is still an honest answer to "does the thing we are
 // about to ship start and serve". It runs twice: against the built Worker on
@@ -37,22 +37,9 @@ test("the landing page renders its headline and its contact link", async ({ page
 
 test("the rebuild notice renders in the three brand faces", async ({ page }) => {
   await page.goto("/");
-  await expect.poll(() =>
-    page.evaluate(() => {
-      function faceLoaded(selector) {
-        const el = document.querySelector(selector);
-        if (!el) return false;
-        const style = getComputedStyle(el);
-        const family = style.fontFamily.split(",")[0].trim();
-        return document.fonts.check(`${style.fontStyle} ${style.fontWeight} ${style.fontSize} ${family}`);
-      }
-      return {
-        display: faceLoaded("header .font-display"),
-        body: faceLoaded("main p"),
-        mono: faceLoaded("footer"),
-      };
-    }),
-  ).toEqual({ display: true, body: true, mono: true });
+  await expectElementFaceLoaded(page, "header .font-display");
+  await expectElementFaceLoaded(page, "main p");
+  await expectElementFaceLoaded(page, "footer");
 });
 
 test("the landing page does not scroll horizontally", async ({ page }) => {
