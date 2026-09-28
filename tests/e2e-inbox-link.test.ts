@@ -142,10 +142,14 @@ describe("readRawMessage", () => {
     );
   });
 
-  it("carries a non-404 status so a caller can map only 404 to nothing stored", async () => {
+  it("carries a 500 as InboxReadError with its status", async () => {
     vi.stubGlobal("fetch", () => Promise.resolve(new Response("", { status: 500 })));
-    await expect(readRawMessage("e2e+stale@0509.io", "token")).rejects.toBeInstanceOf(InboxReadError);
-    await expect(readRawMessage("e2e+stale@0509.io", "token")).rejects.toMatchObject({ status: 500 });
+    const failure = readRawMessage("e2e+stale@0509.io", "token");
+    await expect(failure).rejects.toBeInstanceOf(InboxReadError);
+    await expect(failure).rejects.toMatchObject({ status: 500 });
+  });
+
+  it("carries 404 so a caller can tell it from a failure", async () => {
     vi.stubGlobal("fetch", () => Promise.resolve(new Response("", { status: 404 })));
     await expect(readRawMessage("e2e+stale@0509.io", "token")).rejects.toMatchObject({ status: 404 });
   });
@@ -168,6 +172,14 @@ describe("staleLinks", () => {
   it("carries the link the address already has stored", async () => {
     vi.stubGlobal("fetch", () => Promise.resolve(new Response(PLAIN, { status: 200 })));
     await expect(staleLinks("e2e+stale@0509.io", "token")).resolves.toEqual([EXPECTED]);
+  });
+
+  it("is empty when the stored message carries no verify link", async () => {
+    vi.stubGlobal(
+      "fetch",
+      () => Promise.resolve(new Response("Subject: hello\n\nno link here", { status: 200 })),
+    );
+    await expect(staleLinks("e2e+stale@0509.io", "token")).resolves.toEqual([]);
   });
 
   it("rethrows a rejected E2E_INBOX_TOKEN instead of reading it as nothing stored", async () => {

@@ -125,10 +125,10 @@ export function extractMagicLink(rawMessage: string): string | null {
 // The link this recipient already has stored, for waitForMagicLink to skip: the
 // inbox keeps one message per recipient for an hour, so a fixed fixture address
 // still holds the previous run's spent link, and a poll that accepted it would
-// follow a token the app has already burned. Only a 404 (nothing stored) is an
-// empty list — a 403, a 503, a 500 or a network failure is the inbox failing,
-// and reading one as "no message" would both re-offer the spent link and hide a
-// misconfigured secret behind a 120s poll timeout.
+// follow a token the app has already burned. At most one link ever comes back,
+// but waitForMagicLink takes an exclude array. Only a 404 (nothing stored) is an
+// empty list; every other answer is the inbox failing, and reading one as "no
+// message" would hand back the spent link as if arriving mail had been seen.
 export async function staleLinks(to: string, token: string): Promise<string[]> {
   const stored = await readRawMessage(to, token).then(
     (raw) => extractMagicLink(raw),
@@ -310,10 +310,12 @@ export function ownDocument404For(pathname: string): (entry: ConsoleEntry) => bo
 // staleLinks is read before the send and excluded from the wait, so a fixed
 // address cannot land on the previous run's spent token; a message that arrives
 // between that read and the send is outside the guarantee, which is the
-// "stored before this sign-in" the issue asked for. Playwright runs a file's
-// tests in parallel (fullyParallel in playwright.config.ts) against one inbox
-// slot per recipient, so two tests sharing one fixed address need serial mode
-// or an address each.
+// "stored before this sign-in" the issue asked for. The read is one-shot by
+// design: it runs ahead of the click, so a failing inbox throws where the
+// browser is still on the form instead of spending the poll's 120s on an answer
+// that cannot change. Playwright runs a file's tests in parallel (fullyParallel
+// in playwright.config.ts) against one inbox slot per recipient, so two tests
+// sharing one fixed address need serial mode or an address each.
 // Timestamps are logged for the packet's proof line (send and session).
 export async function signInWithMagicLink(
   page: Page,
