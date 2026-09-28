@@ -9,6 +9,7 @@ import {
   DISALLOWED_PREFIXES,
   MCP_URL,
   PUBLIC_PATHS,
+  SITEMAP_PATHS,
   llmsTxt,
   robotsTxt,
   sitemapXml,
@@ -56,19 +57,47 @@ describe("public-route manifest", () => {
     expect(body).toContain("Sitemap: https://0509.io/sitemap.xml");
   });
 
-  it("sitemap.xml lists every public path as an absolute url in a sitemaps.org urlset", () => {
-    const body = sitemapXml("https://0509.io", PUBLIC_PATHS);
+  it("sitemap.xml lists every sitemap path as an absolute url in a sitemaps.org urlset", () => {
+    const body = sitemapXml("https://0509.io", SITEMAP_PATHS);
     expect(body).toContain(
       'xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"',
     );
-    for (const p of PUBLIC_PATHS) {
+    for (const p of SITEMAP_PATHS) {
       expect(body).toContain(`<loc>https://0509.io${p}</loc>`);
     }
+    expect(body).toContain("<loc>https://0509.io/llms.txt</loc>");
     for (const entry of topLevel(routes)) {
       const path = "path" in entry ? entry.path : undefined;
       if (path === undefined || path === "*") continue;
-      if (!(PUBLIC_PATHS as readonly string[]).includes(`/${path}`)) continue;
+      if (!(SITEMAP_PATHS as readonly string[]).includes(`/${path}`)) continue;
       expect(body).toContain(`<loc>https://0509.io/${path}</loc>`);
+    }
+  });
+
+  it("keeps every SITEMAP_PATHS member a live, robots-allowed, indexable route", () => {
+    const routesByUrl = new Map<string, RouteConfigEntry>();
+    for (const entry of topLevel(routes)) {
+      if (entry.path !== undefined && entry.path !== "*") {
+        routesByUrl.set(`/${entry.path}`, entry);
+      }
+    }
+    for (const path of SITEMAP_PATHS) {
+      const route = routesByUrl.get(path);
+      expect(
+        route,
+        `sitemap path "${path}" is not a route in app/routes.ts`,
+      ).toBeDefined();
+      expect(
+        DISALLOWED_PREFIXES.some(
+          (prefix) => path === prefix || path.startsWith(`${prefix}/`),
+        ),
+        `sitemap path "${path}" is disallowed by robots.txt`,
+      ).toBe(false);
+      if (route === undefined) continue;
+      expect(
+        readFileSync(join(REPO_ROOT, "app", route.file), "utf8"),
+        `sitemap path "${path}" is served by a noindex document`,
+      ).not.toContain("noindex");
     }
   });
 
@@ -80,7 +109,7 @@ describe("public-route manifest", () => {
     const file = join(REPO_ROOT, "public/index.html");
     const staticHome = existsSync(file) ? readFileSync(file, "utf8") : "";
     const noindex = /<meta\s+name="robots"\s+content="[^"]*noindex/.test(staticHome);
-    expect((PUBLIC_PATHS as readonly string[]).includes("/")).toBe(!noindex);
+    expect((SITEMAP_PATHS as readonly string[]).includes("/")).toBe(!noindex);
   });
 
   it("llms.txt has the spec's title and summary and links every public path", () => {
