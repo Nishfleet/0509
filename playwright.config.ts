@@ -42,6 +42,11 @@ export default defineConfig({
   // setup project is absent and tests run without it.
   projects: [
     ...(process.env.CF_ACCESS_CLIENT_ID ? [{ name: "setup", testMatch: /auth\.setup\.ts/ }] : []),
+    // The lighthouse job's sign-in (0509#5767): a request-only setup that mints
+    // a better-auth session cookie into GITHUB_ENV for lighthouserc.cjs. Gated
+    // on its own env var so the e2e suite never runs it, and request-only so
+    // the job needs no browser install.
+    ...(process.env.LHCI_SESSION ? [{ name: "lhci-session", testMatch: /lhci-session\.setup\.ts/ }] : []),
     {
       name: "desktop-1440",
       use: { ...devices["Desktop Chrome"], viewport: { width: 1440, height: 900 }, ...accessState },
