@@ -85,7 +85,7 @@ function createServer(workspaceId: string): McpServer {
       outputSchema: competitorResultSchema,
       annotations: READ_ONLY,
     },
-    async ({ competitorId }) => result(await readAgentCompetitor(workspaceId, competitorId)),
+    async ({ competitorId }) => result(await readAgentCompetitor(workspaceId, competitorId, new Date())),
   );
 
   server.registerTool(
