@@ -2,12 +2,9 @@ import { z } from "zod";
 
 import { insertSelfEntity, readWorkspaceSelfId } from "../data/entity.server";
 import { insertFieldEdits, type FieldEdit } from "../data/user_decision.server";
-import { readUrl } from "../fetch/transport.server";
 import { readCachedSiteValues, readSiteCard } from "./card.server";
-import { extractIdentity } from "./extract";
 import { readLogo } from "./logo-store.server";
 import { normaliseSubject, type Subject } from "./normalise";
-import { classifyNavPages } from "./page-role.server";
 import { startIdentityTail } from "./tail.server";
 
 const SOCIAL_PREFIX = "social.";
@@ -41,30 +38,6 @@ async function creatorSite(socials: { platform: string; url: string }[]): Promis
   if (!normalised.ok || normalised.subject.kind !== "domain") return null;
   await readSiteCard(normalised.subject);
   return normalised.subject;
-}
-
-async function classifyConfirmedSite(
-  workspaceId: string,
-  subject: Subject,
-  entityId: string,
-  now: Date,
-): Promise<void> {
-  if (subject.kind !== "domain" || subject.url === null) return;
-  try {
-    const page = await readUrl(subject.url);
-    if (!page.ok) {
-      console.log(
-        JSON.stringify({ event: "identity-page-role-skipped", workspaceId, error: page.detail }),
-      );
-      return;
-    }
-    const extract = await extractIdentity(page.html, subject.url);
-    await classifyNavPages(workspaceId, { id: entityId, domain: subject.registrable }, extract.navPages, now.toISOString());
-  } catch (error) {
-    console.log(
-      JSON.stringify({ event: "identity-page-role-skipped", workspaceId, error: String(error) }),
-    );
-  }
 }
 
 export async function confirmCard(workspaceId: string, userId: string, form: FormData): Promise<boolean> {
@@ -127,7 +100,6 @@ export async function confirmCard(workspaceId: string, userId: string, form: For
         })),
     );
   }
-  await classifyConfirmedSite(workspaceId, subject, entityId, now);
   const site = subject.kind === "domain" ? null : await creatorSite(card.socials);
   await startIdentityTail({
     workspaceId,
