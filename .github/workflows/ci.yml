@@ -545,7 +545,9 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           PR: ${{ github.event.pull_request.number }}
         run: |
-          tr -d '\r' < "$RUNNER_TEMP/kimi.txt" | sed -nE '/^Kimi grade: (A\+|A|A-|B\+|B|B-|C\+|C|C-|D|F)$/,$p' > "$RUNNER_TEMP/kimi-graded.txt"
+          tr -d '\r' < "$RUNNER_TEMP/kimi.txt" > "$RUNNER_TEMP/kimi-clean.txt"
+          test "$(grep -cxE 'Kimi grade: (A\+|A|A-|B\+|B|B-|C\+|C|C-|D|F)' "$RUNNER_TEMP/kimi-clean.txt")" = 1
+          sed -nE '/^Kimi grade: (A\+|A|A-|B\+|B|B-|C\+|C|C-|D|F)$/,$p' "$RUNNER_TEMP/kimi-clean.txt" > "$RUNNER_TEMP/kimi-graded.txt"
           grade=$(head -n1 "$RUNNER_TEMP/kimi-graded.txt")
           echo "kimi said: $grade"
           printf '%s\n' "$grade" | grep -qE '^Kimi grade: (A\+|A|A-|B\+|B|B-|C\+|C|C-|D|F)$'

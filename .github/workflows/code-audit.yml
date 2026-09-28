@@ -130,7 +130,9 @@ jobs:
           UMBRELLA: ${{ inputs.umbrella }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
-          tr -d '\r' < "$RUNNER_TEMP/audit.txt" | sed -nE '/^Audit grade: (A\+|A|A-|B\+|B|B-|C\+|C|C-|D|F)$/,$p' > "$RUNNER_TEMP/audit-graded.txt"
+          tr -d '\r' < "$RUNNER_TEMP/audit.txt" > "$RUNNER_TEMP/audit-clean.txt"
+          test "$(grep -cxE 'Audit grade: (A\+|A|A-|B\+|B|B-|C\+|C|C-|D|F)' "$RUNNER_TEMP/audit-clean.txt")" = 1
+          sed -nE '/^Audit grade: (A\+|A|A-|B\+|B|B-|C\+|C|C-|D|F)$/,$p' "$RUNNER_TEMP/audit-clean.txt" > "$RUNNER_TEMP/audit-graded.txt"
           grade=$(head -n1 "$RUNNER_TEMP/audit-graded.txt")
           echo "kimi said: $grade"
           printf '%s\n' "$grade" | grep -qxE 'Audit grade: (A\+|A|A-|B\+|B|B-|C\+|C|C-|D|F)'

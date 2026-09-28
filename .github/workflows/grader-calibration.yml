@@ -130,7 +130,11 @@ jobs:
           MODEL: ${{ inputs.model || 'kimi-k3-max' }}
         run: |
           expect=$(jq -r .expect "$RUNNER_TEMP/case.json")
-          tr -d '\r' < "$RUNNER_TEMP/kimi.txt" 2>/dev/null | sed -nE '/^Kimi grade: (A\+|A|A-|B\+|B|B-|C\+|C|C-|D|F)$/,$p' > "$RUNNER_TEMP/kimi-graded.txt" || true
+          tr -d '\r' < "$RUNNER_TEMP/kimi.txt" > "$RUNNER_TEMP/kimi-clean.txt" 2>/dev/null || : > "$RUNNER_TEMP/kimi-clean.txt"
+          : > "$RUNNER_TEMP/kimi-graded.txt"
+          if [ "$(grep -cxE 'Kimi grade: (A\+|A|A-|B\+|B|B-|C\+|C|C-|D|F)' "$RUNNER_TEMP/kimi-clean.txt")" = 1 ]; then
+            sed -nE '/^Kimi grade: (A\+|A|A-|B\+|B|B-|C\+|C|C-|D|F)$/,$p' "$RUNNER_TEMP/kimi-clean.txt" > "$RUNNER_TEMP/kimi-graded.txt"
+          fi
           line=$(head -n1 "$RUNNER_TEMP/kimi-graded.txt")
           got=$(printf '%s\n' "$line" | sed -nE 's/^Kimi grade: (A\+|A|A-|B\+|B|B-|C\+|C|C-|D|F)$/\1/p')
           case "$expect:${got:-none}" in
