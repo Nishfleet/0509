@@ -864,6 +864,14 @@ Cache `.lycheecache` with `actions/cache@v4`; it is one block of stock YAML, not
 
 `@axe-core/playwright` **^4.13.0** runs Deque's axe-core inside the existing Playwright suite. `new AxeBuilder({ page }).withTags([...]).analyze()` returns an `AxeResults` whose `.violations` is the spec's pass/fail — the same suite, the same browser, the same sign-in path, no new runner. Per the Playwright accessibility doc (<https://playwright.dev/docs/accessibility-testing>), the WCAG tag set lives on `withTags`, so one tag list is the spec and the gate.
 
+### 6.7 actionlint — the workflow files type-check
+
+`rhysd/actionlint` **1.7.12**, run as its published Docker image pinned by digest (`docker://rhysd/actionlint:1.7.12@sha256:b1934ee5f1c509618f2508e6eb47ee0d3520686341fec936f3b79331f9315667`), one step inside the required `codex-node-checks` job. The vendor documents exactly this invocation: <https://github.com/rhysd/actionlint/blob/main/docs/usage.md#use-actionlint-on-github-actions>. It checks expression syntax and types, `needs`/`outputs` wiring, runner labels and shellcheck on every `run:`. fleet-ops already runs the same tool. Rejected: a hand-written YAML schema test, which sees keys but not expressions.
+
+### 6.8 zizmor — the workflow files are audited for security
+
+`zizmorcore/zizmor` **1.30.1**, run as its published image pinned by digest (`docker://ghcr.io/zizmorcore/zizmor:1.30.1@sha256:a2eb396d886c053073405c7a980f2139ba2248ec172243cfa3841e57196e8101`) with `--offline`, so it needs no token and never touches the network (<https://docs.zizmor.sh/usage/#operating-modes>, <https://docs.zizmor.sh/installation/#docker>). It catches template injection, excessive permissions, persisted checkout credentials, unscoped App tokens and unpinned actions (<https://docs.zizmor.sh/audits/>). Exceptions live in `.github/zizmor.yml`, each with its reason. It found the weekend-audit C1 class (0509#5590): a model reading worker text with a write token in its environment. Rejected: CodeQL's Actions queries, a second code-scanning engine beside Semgrep with its own workflow and upload step, where zizmor runs offline inside the existing job; harden-runner, an egress agent on the runner rather than an audit of the files.
+
 ---
 
 ## 7. The API surface — agent-native by default
