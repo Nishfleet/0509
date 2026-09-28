@@ -21,7 +21,7 @@ function entry(overrides: {
 }
 
 function markup(sources: readonly WatchedSource[], now: number = NOW): string {
-  return renderToStaticMarkup(createElement(WhatWeWatch, { shownSources: sources, now }));
+  return renderToStaticMarkup(createElement(WhatWeWatch, { sources, now }));
 }
 
 const LIVE: SourceSnapshot = { fetched_at: "2026-09-26T11:00:00.000Z", item_count: 12 };
