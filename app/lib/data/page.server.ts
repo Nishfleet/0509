@@ -91,7 +91,6 @@ export async function markPageDeferred(pageId: string, at: string): Promise<void
 export interface OwnSitePage {
   workspaceId: string;
   entityId: string;
-  domain: string;
   pageId: string;
   url: string;
 }
@@ -104,7 +103,6 @@ ORDER BY e.id`;
 
 const OWN_SITE_PAGES = `SELECT e.workspace_id AS workspace_id,
        e.id AS entity_id,
-       e.domain AS domain,
        p.id AS page_id,
        p.url AS url
 FROM entity e
@@ -118,7 +116,6 @@ const ownSiteRows = z.array(
   z.object({
     workspace_id: z.string(),
     entity_id: z.string(),
-    domain: z.string(),
     page_id: z.string(),
     url: z.string(),
   }),
@@ -134,7 +131,6 @@ export async function readOwnSitePages(): Promise<OwnSitePage[]> {
   return ownSiteRows.parse(rows.results).map((row) => ({
     workspaceId: row.workspace_id,
     entityId: row.entity_id,
-    domain: row.domain,
     pageId: row.page_id,
     url: row.url,
   }));

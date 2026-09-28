@@ -1,7 +1,15 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
 
-import { requireInboxToken, signInWithMagicLink } from "./inbox";
+import { deleteCreatedAccount, requireInboxToken, signInWithMagicLink } from "./inbox";
+
+let createdEmail = "";
+test.afterEach(async ({ page }, testInfo) => {
+  if (createdEmail === "") return;
+  testInfo.setTimeout(testInfo.timeout + 60_000);
+  await deleteCreatedAccount(page, createdEmail);
+  createdEmail = "";
+});
 
 // Production only, for the reason e2e/onboarding-input.spec.ts gives: the
 // preview lane's wrangler dev has no EMAIL binding and no inbox to read, so a
@@ -15,6 +23,7 @@ test.skip(
 test("the three onboarding screens pass axe at WCAG 2.2 AA in both themes and at both widths (#4149)", async ({ page }, testInfo) => {
   const token = requireInboxToken();
   const email = `e2e+${crypto.randomUUID().replaceAll("-", "").slice(0, 12)}@0509.io`;
+  createdEmail = email;
   await signInWithMagicLink(page, email, token);
 
   async function scan(label: string): Promise<void> {
@@ -74,6 +83,7 @@ test("the three onboarding screens pass axe at WCAG 2.2 AA in both themes and at
 test("screen 1 is operable by keyboard in order (#4149)", async ({ page }, testInfo) => {
   const token = requireInboxToken();
   const email = `e2e+${crypto.randomUUID().replaceAll("-", "").slice(0, 12)}@0509.io`;
+  createdEmail = email;
   await signInWithMagicLink(page, email, token);
 
   await page.emulateMedia({ colorScheme: "light" });
@@ -108,6 +118,7 @@ test("screen 2 is operable by keyboard in order, with one polite live region (#4
 }, testInfo) => {
   const token = requireInboxToken();
   const email = `e2e+${crypto.randomUUID().replaceAll("-", "").slice(0, 12)}@0509.io`;
+  createdEmail = email;
   await signInWithMagicLink(page, email, token);
 
   async function scan(label: string): Promise<void> {
