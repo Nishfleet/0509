@@ -126,7 +126,7 @@ export function channelIdFromIdentity(raw: string): string | null {
 function withDegradedReason(raw: string, reason: string, at: string): string {
 	const read = readWatchConfig(raw);
 	if (read.status !== "ok") throw new Error("watch config_json is unreadable");
-	if (read.degraded !== null && read.degraded.reason === reason) return raw;
+	if (read.degraded !== null) return raw;
 	return JSON.stringify({
 		...read.record,
 		degraded: { state: "degraded", reason, at },

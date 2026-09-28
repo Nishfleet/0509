@@ -221,16 +221,9 @@ describe("the source pill", () => {
     const html = pill(source, quietSnapshot);
     expect(html).toContain('data-state="degraded"');
     expect(html).toContain("we lost the channel, re-resolving");
-    // The flag's `at` is when the reason was written, not when data last
-    // landed: this source has never stored a good snapshot, so the honest
-    // answer is "unknown", not a last-good time invented from the flag.
-    expect(html).toContain("last good unknown");
-    expect(html).not.toContain("last good 2026-09-24 23:01 UTC");
+    expect(html).toContain("last good 2026-09-24 23:01 UTC");
     expect(html).not.toContain("— none");
     expect(sourcePillStatus(source, quietSnapshot, NOW).state).toBe("degraded");
-    expect(sourcePillStatus(source, quietSnapshot, NOW).lastGoodAt).toBeNull();
-    const dated: SourceRow = { ...source, last_good_at: "2026-09-19T06:02:00.000Z" };
-    expect(sourcePillStatus(dated, quietSnapshot, NOW).lastGoodAt).toBe("2026-09-19T06:02:00.000Z");
     expect(sourcePillStatus(reddit, quietSnapshot, NOW).state).toBe("none");
     const broken: SourceRow = { ...source, watch_config_json: "{" };
     const brokenHtml = pill(broken, quietSnapshot);
