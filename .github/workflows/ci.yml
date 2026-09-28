@@ -6,15 +6,18 @@
 # (id 21391031) on 2026-09-21 before this file was written.
 #
 # Every job runs on pull_request and merge_group: the queue evaluates checks on
-# the merge ref, so a job that skips there gives the queue no verdict.
+# the merge ref, and a skipped required check counts as a pass (#4664), so each
+# required job must always start and let its steps decide the verdict.
 name: CI
 
 # `deployment_status` is the third trigger and it is the stock one: Cloudflare
 # Workers Builds emit GitHub deployments, so the production suites fire on the
 # real deploy with no polling. https://playwright.dev/docs/ci#on-deployment
 # The five required jobs run on every event because a skipped required check
-# counts as a pass (0509#5738, #4664); their steps skip `deployment_status`,
-# so the job reports a pass there and has nothing to say about a deploy.
+# counts as a pass (0509#5738, #4664). On `deployment_status` each job still
+# starts — a runner allocates, and semgrep's container initialises — but every
+# step's if: is false, so the job reports a pass with no steps run and a deploy
+# gets a verdict the job actually emitted.
 on:
   pull_request:
   merge_group:
@@ -340,8 +343,10 @@ jobs:
   # when the label write is lost (fleet-ops#8635, 0509#5393).
   # Required by ruleset 21391031, so the job carries no job-level if: — a
   # skipped required check counts as a pass (#4664). The steps below decide
-  # event and author, so a non-worker pull request and a deployment_status
-  # run pass explicitly.
+  # event and author: on a non-worker pull request or a deployment_status run
+  # every step's if: is false and the job reports a pass with no steps run;
+  # on merge_group the check is the explicit `run: "true"` step at the bottom,
+  # the grade verdict having been enforced on the pull_request run.
   # Nish 2026-09-22: "you can't grade your own work. you grade opus." This job
   # grades only PRs opened by the worker app (GLM / DeepSeek packets). PRs by
   # the Opus deputy or by Fable are reviewed by Fable, never by this job.
