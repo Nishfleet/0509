@@ -122,51 +122,6 @@ async function readTarget(env: Env, workspaceId: string): Promise<TargetRow | nu
     .first<TargetRow>();
 }
 
-type TargetMissReason = "no_row" | "channel_disabled" | "unverified";
-
-async function readTargetMissReason(
-  env: Env,
-  workspaceId: string,
-): Promise<TargetMissReason> {
-  const row = await env.DB.prepare(
-    `SELECT st.is_verified, c.is_enabled
-       FROM send_target st
-       JOIN channel c ON c.id = st.channel_id
-      WHERE st.workspace_id = ? AND c.key = ?
-      ORDER BY st.created_at ASC
-      LIMIT 1`,
-  )
-    .bind(workspaceId, EMAIL_CHANNEL_KEY)
-    .first<{ is_verified: number; is_enabled: number }>();
-  if (!row) return "no_row";
-  if (row.is_enabled === 0) return "channel_disabled";
-  if (row.is_verified === 0) return "unverified";
-  throw new Error("send_target row satisfies readTarget's filters but readTarget returned null");
-}
-
-async function logNoTarget(
-  env: Env,
-  workspaceId: string,
-  workItem: Record<string, string>,
-): Promise<void> {
-  let reason: TargetMissReason | "probe_failed";
-  try {
-    reason = await readTargetMissReason(env, workspaceId);
-  } catch (error) {
-    reason = "probe_failed";
-    console.log(
-      JSON.stringify({
-        event: "delivery.no_target_reason_failed",
-        workspace_id: workspaceId,
-        error: error instanceof Error ? error.message : String(error),
-      }),
-    );
-  }
-  console.log(
-    JSON.stringify({ ...workItem, event: "delivery.no_target", reason, workspace_id: workspaceId }),
-  );
-}
-
 async function isSuppressed(env: Env, address: string): Promise<boolean> {
   const row = await env.DB.prepare(
     `SELECT address FROM email_suppression WHERE address = ?`,
@@ -232,7 +187,6 @@ export async function deliver(env: Env, message: DigestMessage): Promise<Deliver
 
   const target = await readTarget(env, digest.workspace_id);
   if (!target) {
-    await logNoTarget(env, digest.workspace_id, { digest_id: digest.id });
     return { outcome: "no_target", attempt_id: null, idempotency_key: null };
   }
 
@@ -287,7 +241,6 @@ export async function deliverIncident(
 
   const target = await readTarget(env, incident.workspace_id);
   if (!target) {
-    await logNoTarget(env, incident.workspace_id, { incident_id: incident.id });
     return { outcome: "no_target", attempt_id: null, idempotency_key: null };
   }
 

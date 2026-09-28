@@ -1,5 +1,5 @@
 import { env } from "cloudflare:test";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 
 import {
   deliverIncident,
@@ -188,10 +188,6 @@ describe("incident lane (0509#4364)", () => {
     )
       .bind(WS, ENTITY, PAGE_A, INCIDENT_A)
       .run();
-  });
-
-  afterEach(() => {
-    vi.restoreAllMocks();
   });
 
   it("(a) sends the open notice and records both rows", async () => {
@@ -429,10 +425,6 @@ describe("incident lane (0509#4364)", () => {
       .bind(TARGET_ID)
       .run();
     const rec = recorder();
-    const lines: string[] = [];
-    vi.spyOn(console, "log").mockImplementation((...args: unknown[]) => {
-      lines.push(args.map((arg) => String(arg)).join(" "));
-    });
 
     const result = await deliverIncident(envWith(bindingFor(rec)), message(INCIDENT_A));
 
@@ -442,13 +434,5 @@ describe("incident lane (0509#4364)", () => {
     expect(rec.sent).toHaveLength(0);
     expect(await readAttempts()).toHaveLength(0);
     expect(await readNotices(PAGE_A)).toHaveLength(0);
-    const logLine = lines.find((l) => l.includes(`"event":"delivery.no_target"`));
-    const parsed = logLine ? (JSON.parse(logLine) as Record<string, unknown>) : {};
-    expect(parsed).toMatchObject({
-      event: "delivery.no_target",
-      reason: "unverified",
-      workspace_id: WS,
-      incident_id: INCIDENT_A,
-    });
   });
 });
