@@ -1,7 +1,21 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
 
-import { requireInboxToken, signInWithMagicLink } from "./inbox";
+import { deleteCreatedAccount, requireInboxToken, signInWithMagicLink } from "./inbox";
+
+let createdEmail = "";
+test.afterEach(async ({ page }, testInfo) => {
+  if (createdEmail === "") return;
+  testInfo.setTimeout(testInfo.timeout + 60_000);
+  // The delete failing is a test failure, not a reason to keep the address:
+  // clearing in finally means the next test in this worker cannot try to
+  // delete an account that is already gone.
+  try {
+    await deleteCreatedAccount(page, createdEmail);
+  } finally {
+    createdEmail = "";
+  }
+});
 
 // The Alerts page measured at each shape the product ships, the same production
 // lane and the same reason as e2e/a11y-competitors.spec.ts and
@@ -9,9 +23,12 @@ import { requireInboxToken, signInWithMagicLink } from "./inbox";
 // inbox to read, so it cannot mint a session, and this spec skips there rather
 // than fake the journey. It runs in the `e2e-production` job after deploy.
 //
-// The spec reads. It clicks no chip and submits no form, because it runs
-// against production and a visit that wrote data would put a row in a real
-// workspace for a mailbox nobody owns.
+// The Alerts journey only reads: it clicks no chip and opens no settings form,
+// because it runs against production and a visit that wrote data would put a
+// row in a real workspace for a mailbox nobody owns. The write that needs
+// cleanup is the sign-in below: signInWithMagicLink submits the login form
+// (e2e/inbox.ts:272) and the link it then visits creates the session and its
+// user row (e2e/inbox.ts:278; e2e/inbox.ts:293-295). The afterEach deletes it.
 test.skip(
   !process.env.PLAYWRIGHT_TEST_BASE_URL,
   "the Alerts page needs a real session; the local preview Worker cannot mint one",
@@ -28,6 +45,7 @@ test("the Alerts page passes axe at WCAG 2.2 AA and is keyboard-operable at 1440
   test.setTimeout(180_000);
   const token = requireInboxToken();
   const email = `e2e+${crypto.randomUUID().replaceAll("-", "").slice(0, 12)}@0509.io`;
+  createdEmail = email;
   await signInWithMagicLink(page, email, token);
 
   for (const viewport of [
