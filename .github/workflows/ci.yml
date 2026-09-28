@@ -380,8 +380,9 @@ jobs:
   # Grader engine follows vars.GRADER (claude | kimi). Nish 2026-09-22: "have
   # opus 5 grade glm and ds4.1 flash"; Nish 2026-09-25: hand that over to
   # Kimi K3 Max while Claude is out. The check below reads the newest Opus or
-  # Kimi grade comment and the blocked-by-judge label, so a D/F cannot pass
-  # when the label write is lost (fleet-ops#8635, 0509#5393).
+  # Kimi grade comment and the blocked-by-judge label, so a grade below A+
+  # cannot pass when the label write is lost (fleet-ops#8635, 0509#5393).
+  # Nish 2026-09-28: "A+" is the bar for this check too, not only the label.
   # Required in ruleset 21391031. It grades only pull requests opened by the
   # worker app (GLM / DeepSeek packets); every other event runs the explicit
   # pass steps below, because a skipped required check counts as passing
@@ -506,7 +507,7 @@ jobs:
             gh pr edit "$PR" --repo "$GITHUB_REPOSITORY" --add-label blocked-by-judge
             while read -r n; do gh issue edit "$n" --repo "$GITHUB_REPOSITORY" --add-label agent-ready --remove-label agent-in-progress; done < "$RUNNER_TEMP/issues.txt"
           fi
-      - name: A D or F grade fails this check (reads the grade comment and label; 0509#5393)
+      - name: A grade below A+ fails this check (reads the grade comment and label; 0509#5393)
         if: github.event_name == 'pull_request' && github.event.pull_request.user.login == 'nishfleet-worker[bot]'
         env:
           GH_TOKEN: ${{ github.token }}
@@ -515,7 +516,7 @@ jobs:
             --jq '[.comments[] | select(.author.login == "github-actions") | select(.body | startswith("Opus grade:") or startswith("Kimi grade:"))][-1].body // empty' > "$RUNNER_TEMP/grade"
           echo "opus-review read: $(head -n1 "$RUNNER_TEMP/grade")"
           test -s "$RUNNER_TEMP/grade" \
-            && ! grep -qE '^(Opus|Kimi) grade: *[DF]' "$RUNNER_TEMP/grade" \
+            && head -n1 "$RUNNER_TEMP/grade" | grep -qE '^(Opus|Kimi) grade: *\**A\+\**( |$)' \
             && gh pr view "${{ github.event.pull_request.number }}" --repo "${{ github.repository }}" --json labels --jq '.labels[].name' > "$RUNNER_TEMP/labels" \
             && ! grep -qx blocked-by-judge "$RUNNER_TEMP/labels"
       - name: merge_group reports the check so the queue can merge (the grade was enforced on the pull request)
