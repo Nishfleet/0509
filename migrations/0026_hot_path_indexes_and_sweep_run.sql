@@ -8,6 +8,12 @@
 --   digest(status, period_end)                — the nightly pending-brief sweep
 -- The class gate the issue asked for found a sixth in the same nightly auth
 -- sweep as the session delete, so verification(expiresAt) is indexed here too.
+-- It also found five FK children with no index on the account-delete cascade:
+-- `DELETE FROM "user"` scans onboarding_run and user_decision, then cascades
+-- through workspace into incident, send_attempt and signal_delivery — all
+-- proven with EXPLAIN QUERY PLAN on the applied chain. The audit named
+-- idx_onboarding_run_user for the first of these. The other twenty unindexed
+-- FK children are tracked as a follow-up; the gate's allowlist names them.
 -- Still scanning on purpose: the sweeper's second read filters
 -- send_attempt(status, attempted_at), not a child column, and belongs to the
 -- pending-sweeper issue (#4008).
@@ -32,6 +38,12 @@ CREATE INDEX idx_send_attempt_digest ON send_attempt(digest_id, attempted_at DES
 CREATE INDEX idx_session_expires ON session(expiresAt);
 CREATE INDEX idx_verification_expires ON verification(expiresAt);
 CREATE INDEX idx_digest_status_period ON digest(status, period_end);
+
+CREATE INDEX idx_onboarding_run_user ON onboarding_run(user_id);
+CREATE INDEX idx_user_decision_user ON user_decision(user_id);
+CREATE INDEX idx_incident_workspace ON incident(workspace_id);
+CREATE INDEX idx_send_attempt_workspace ON send_attempt(workspace_id);
+CREATE INDEX idx_signal_delivery_workspace ON signal_delivery(workspace_id);
 
 CREATE TABLE sweep_run (id TEXT PRIMARY KEY NOT NULL, kind TEXT NOT NULL, planned_at TEXT NOT NULL, finished_at TEXT NOT NULL, wall_ms INTEGER NOT NULL, pages INTEGER NOT NULL, failed INTEGER NOT NULL);
 CREATE INDEX idx_sweep_run_kind_time ON sweep_run(kind, finished_at);

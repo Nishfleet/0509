@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { recordSweepRun, type SweepRun } from "../../app/lib/data/sweep_run.server";
 
 const RUN: SweepRun = {
-  id: "sweep-0509-5303",
+  id: "sweep-0509-5755",
   kind: "site",
   plannedAt: "2026-09-25T09:00:00.000Z",
   finishedAt: "2026-09-25T09:00:04.250Z",
@@ -35,7 +35,7 @@ const countRuns = async (): Promise<number> =>
     await env.DB.prepare("SELECT COUNT(*) AS total FROM sweep_run").first<{ total: number }>()
   )?.total ?? -1;
 
-describe("sweep_run records a finished site sweep (0509#5303)", () => {
+describe("sweep_run records a finished site sweep (0509#5755)", () => {
   beforeEach(async () => {
     await env.DB.prepare("DELETE FROM sweep_run").run();
   });
@@ -44,7 +44,7 @@ describe("sweep_run records a finished site sweep (0509#5303)", () => {
     await recordSweepRun(RUN);
 
     expect(await readRun(RUN.id)).toEqual({
-      id: "sweep-0509-5303",
+      id: "sweep-0509-5755",
       kind: "site",
       planned_at: "2026-09-25T09:00:00.000Z",
       finished_at: "2026-09-25T09:00:04.250Z",
@@ -60,7 +60,7 @@ describe("sweep_run records a finished site sweep (0509#5303)", () => {
 
     expect(await countRuns()).toBe(1);
     expect(await readRun(RUN.id)).toEqual({
-      id: "sweep-0509-5303",
+      id: "sweep-0509-5755",
       kind: "site",
       planned_at: "2026-09-25T09:00:00.000Z",
       finished_at: "2026-09-25T09:00:04.250Z",

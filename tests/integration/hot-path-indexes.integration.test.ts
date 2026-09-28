@@ -5,7 +5,7 @@ import { DELETE_EXPIRED_SESSIONS, DELETE_EXPIRED_VERIFICATIONS } from "../../app
 import { SELECT_HIRING_SIGNAL_STATES } from "../../app/lib/data/signal.server";
 import { SELECT_RUN } from "../../app/lib/workspace.server";
 import { SELECT_LATEST_ATTEMPT_ERROR } from "../../workers/delivery/dlq-consumer";
-import { SELECT_STALE_PENDING_DIGESTS } from "../../workers/delivery/sweeper";
+import { SELECT_STALE_PENDING_ATTEMPTS, SELECT_STALE_PENDING_DIGESTS } from "../../workers/delivery/sweeper";
 
 /**
  * 0509#5755, audit §V26: five hot or scheduled statements full-scanned their
@@ -94,6 +94,10 @@ async function liveIndexColumns(name: string): Promise<string[]> {
  * A column earns its place here only because no hot or scheduled statement
  * filters on it; a new migration that adds an `*_id` column this list does not
  * name fails until the column ships its index.
+ * Most entries are FK children: the parent they point at is never deleted on a
+ * live path today, so nothing scans them. The five that did scan — on the
+ * account-delete cascade from `user` through `workspace` — are indexed by
+ * migration 0026 and are no longer in this list.
  */
 const LEGACY_UNINDEXED_ID_COLUMNS: readonly string[] = [
   "alert.entity_id",
@@ -101,26 +105,21 @@ const LEGACY_UNINDEXED_ID_COLUMNS: readonly string[] = [
   "alert.page_id",
   "alert.signal_id",
   "incident.entity_id",
-  "incident.workspace_id",
   "incident_notice.incident_id",
   "jev_verdict.entity_id",
   "jev_verdict.signal_id",
-  "onboarding_run.user_id",
   "plan.provider_customer_id",
   "plan.provider_subscription_id",
   "send_attempt.send_target_id",
-  "send_attempt.workspace_id",
   "send_target.channel_id",
   "signal.snapshot_id",
   "signal_delivery.channel_id",
   "signal_delivery.send_attempt_id",
-  "signal_delivery.workspace_id",
   "snapshot.page_id",
   "standing.entity_id",
   "suggestion.entity_id",
   "user_decision.entity_id",
   "user_decision.signal_id",
-  "user_decision.user_id",
   "watch.source_id",
 ];
 
@@ -153,6 +152,27 @@ async function unindexedIdColumns(): Promise<string[]> {
   }
   return offenders.sort();
 }
+
+/**
+ * Scheduled or hot statements that are allowed to keep scanning today. Each
+ * row names the issue that owns the covering index; the pin asserts the
+ * statement still scans, so landing that index turns this red and moves the
+ * row into HOT_STATEMENTS. An exported scheduled statement absent from both
+ * lists is the hole this closes: the carve-out is machine-visible, not a
+ * dropped export.
+ */
+const KNOWN_UNCOVERED_STATEMENTS: readonly (HotStatement & { issue: string })[] = [
+  {
+    // #4008 owns the pending sweeper's attempt read: it filters
+    // send_attempt(status, attempted_at), which is not a *_id child column.
+    source: "workers/delivery/sweeper.ts SELECT_STALE_PENDING_ATTEMPTS",
+    sql: SELECT_STALE_PENDING_ATTEMPTS,
+    binds: ["2026-09-28T00:00:00.000Z", "2026-09-21T00:00:00.000Z"],
+    index: "idx_send_attempt_digest",
+    columns: [],
+    issue: "0509#4008",
+  },
+];
 
 describe("0026_hot_path_indexes_and_sweep_run.sql", () => {
   it("gives every hot or scheduled statement an index starting with its columns", async () => {
@@ -187,6 +207,20 @@ describe("0026_hot_path_indexes_and_sweep_run.sql", () => {
       seen.push(`EXPLAIN QUERY PLAN ${statement.source}: ${details.join(" | ")}`);
     }
     console.log(`hot-path-indexes explain utc=${new Date().toISOString()} ${seen.join(" ;; ")}`);
+  });
+
+  it("pins every known-uncovered statement to the issue that owns its index", async () => {
+    for (const statement of KNOWN_UNCOVERED_STATEMENTS) {
+      const result = await env.DB.prepare(`EXPLAIN QUERY PLAN ${statement.sql}`)
+        .bind(...statement.binds)
+        .all<{ detail: string }>();
+      const details = (result.results ?? []).map((row) => row.detail);
+      expect(
+        details.some((detail) => detail.startsWith("SCAN ")),
+        `${statement.source} no longer scans — its index landed, so move it to HOT_STATEMENTS ` +
+          `and drop this row (owned by ${statement.issue}): ${details.join(" | ")}`,
+      ).toBe(true);
+    }
   });
 
   it("fails on any new *_id column with no leading-column index", async () => {

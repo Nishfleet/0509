@@ -233,12 +233,13 @@ describe("nightly site sweep", () => {
     expect(await introspector.getOutput()).toMatchObject({ pages: 2 });
 
     const run = await env.DB.prepare(
-      "SELECT kind, pages, failed, wall_ms FROM sweep_run WHERE id = ?",
+      "SELECT kind, pages, failed, wall_ms, planned_at, finished_at FROM sweep_run WHERE id = ?",
     )
       .bind(id)
-      .first<{ kind: string; pages: number; failed: number; wall_ms: number }>();
+      .first<{ kind: string; pages: number; failed: number; wall_ms: number; planned_at: string; finished_at: string }>();
+    if (run === null) throw new Error("finished sweep wrote no sweep_run row");
     expect(run).toMatchObject({ kind: "site", pages: 2, failed: 0 });
-    expect(run?.wall_ms).toBeGreaterThanOrEqual(0);
+    expect(run.wall_ms).toBe(Date.parse(run.finished_at) - Date.parse(run.planned_at));
   });
 });
 
