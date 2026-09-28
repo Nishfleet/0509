@@ -92,7 +92,7 @@ describe("workflow Sentry cron monitors", () => {
     expect(outcome).toEqual({ pages: 0, opened: 0, closed: 0, failed: 0 });
   });
 
-  it("propagates a step failure through the monitor so the check-in lands failed", async () => {
+  it("rejects out of the monitor callback when a step fails", async () => {
     const failingStep = {
       do: async (label: string, _config: unknown, fn: () => Promise<unknown>) => {
         if (label === "plan") throw new Error("plan down");
@@ -102,6 +102,10 @@ describe("workflow Sentry cron monitors", () => {
     } as unknown as WorkflowStep;
     await expect(makeWorkflow(siteSweep).run(event, failingStep)).rejects.toThrow("plan down");
     expect(monitorMock).toHaveBeenCalledTimes(1);
-    expect(monitorMock).toHaveBeenCalledWith("site-sweep", expect.any(Function), expect.any(Object));
+    expect(monitorMock).toHaveBeenCalledWith("site-sweep", expect.any(Function), {
+      schedule: { type: "crontab", value: "0 2 * * *" },
+      checkinMargin: 60,
+      timezone: "UTC",
+    });
   });
 });
