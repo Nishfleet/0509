@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 
 import { HomePageFrame, HomeStanding } from "../../app/components/home-standing";
 import type { BriefPayload } from "../../app/lib/brief-payload";
+import { WATCHED_NOUNS } from "../../app/lib/coverage";
 import type { BriefSchedule } from "../../app/lib/brief-schedule";
 import type { HowRanked } from "../../app/lib/how-ranked";
 import {
@@ -289,7 +290,7 @@ describe("Home standing", () => {
   it("says when the first standing comes while the first week is still open", () => {
     const html = render({ payload: null });
     expect(html).toContain(
-      "We&#x27;re gathering the first week: website changes and news mentions for 3 brands. The first site snapshots land by Friday 03:00; your first read-this-first comes with the brief on Monday 08:00.",
+      `We&#x27;re gathering the first week: ${WATCHED_NOUNS} for 3 brands. The first site snapshots land by Friday 03:00; your first read-this-first comes with the brief on Monday 08:00.`,
     );
     expect(html).toContain('data-home="first-file"');
     expect(html).toContain("Good morning.</h1>");

@@ -94,7 +94,6 @@ describe("DESIGN.md 7 empty states", () => {
     const html = emptyState(sentence);
     expect(html).toContain("The first mentions land in the nightly sweep");
     expect(html).toContain("first mark comes tomorrow");
-    expect(html).not.toContain("ads");
     expect(html).not.toContain("within the hour");
   });
 
