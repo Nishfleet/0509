@@ -1,6 +1,23 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { defaultFetchText } from "../../../app/lib/discovery/types";
+import { hnGenerator } from "../../../app/lib/discovery/generators/hn";
+import { newsGenerator } from "../../../app/lib/discovery/generators/news";
+import { defaultFetchText, type Subject } from "../../../app/lib/discovery/types";
+
+const SUBJECT: Subject = { name: "Gymshark", domain: "gymshark.com" };
+
+function stubRejectingFetch(): void {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () => {
+      throw new Error("socket hang up");
+    }),
+  );
+}
+
+function loggedEvents(spy: { mock: { calls: unknown[][] } }): string[] {
+  return spy.mock.calls.map((call) => (JSON.parse(String(call[0])) as { event: string }).event);
+}
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -44,14 +61,8 @@ describe("defaultFetchText", () => {
     });
   });
 
-  it("resolves a null-contentType empty-body miss and logs the factory's event when fetch rejects", async () => {
-    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async () => {
-        throw new Error("socket hangup");
-      }),
-    );
+  it("resolves a null-contentType empty-body miss when fetch rejects", async () => {
+    stubRejectingFetch();
 
     const result = await defaultFetchText("discovery.test_event")("https://example.com/down");
 
@@ -61,10 +72,48 @@ describe("defaultFetchText", () => {
       contentType: null,
       body: "",
     });
+  });
+
+  it("logs one JSON line carrying the event the factory was given", async () => {
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    stubRejectingFetch();
+
+    await defaultFetchText("discovery.test_event")("https://example.com/down");
+
     expect(errorSpy).toHaveBeenCalledOnce();
     const line = errorSpy.mock.calls[0]?.[0];
     expect(typeof line).toBe("string");
     const parsed = JSON.parse(String(line)) as { event?: unknown };
     expect(parsed.event).toBe("discovery.test_event");
+  });
+
+  it("bounds the fetch with AbortSignal.timeout(8000)", async () => {
+    const response = new Response("body", { status: 200, headers: { "content-type": "text/plain" } });
+    vi.stubGlobal("fetch", vi.fn(async () => response));
+    const timeoutSpy = vi.spyOn(AbortSignal, "timeout");
+
+    await defaultFetchText("discovery.test_event")("https://example.com/ok");
+
+    expect(timeoutSpy).toHaveBeenCalledWith(8_000);
+  });
+
+  it("logs discovery.hn_fetch_failed from the hn generator's default fetch", async () => {
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    stubRejectingFetch();
+
+    const candidates = await hnGenerator(SUBJECT);
+
+    expect(candidates).toEqual([]);
+    expect(loggedEvents(errorSpy)).toEqual(["discovery.hn_fetch_failed"]);
+  });
+
+  it("logs discovery.news_fetch_failed from the news generator's default fetch", async () => {
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    stubRejectingFetch();
+
+    const candidates = await newsGenerator(SUBJECT);
+
+    expect(candidates).toEqual([]);
+    expect(loggedEvents(errorSpy)).toEqual(["discovery.news_fetch_failed"]);
   });
 });
