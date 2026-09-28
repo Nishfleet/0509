@@ -174,8 +174,10 @@ export function startCard(
   subject: Subject,
   edited: readonly DraftField[],
 ): { site: Promise<SiteFields>; logo: Promise<string | null> } {
-  const mayEscalate = () =>
-    takeBrowserEscalation(workspaceId, subject.registrable, new Date().toISOString().slice(0, 10));
+  const mayEscalate = () => {
+    const day = new Date().toISOString().slice(0, 10);
+    return takeBrowserEscalation(workspaceId, subject.registrable, day);
+  };
   const read = readSiteCard(subject, mayEscalate);
   const site = read.then(async ({ card, reached }): Promise<SiteFields> => {
     const values: CardValues = {

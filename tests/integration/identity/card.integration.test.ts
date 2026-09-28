@@ -48,15 +48,8 @@ interface BrowserStub {
   quickAction(action: "content", options: { url: string }): Promise<Response>;
 }
 
-let browser: BrowserStub | null = null;
-
-function installBrowser(): void {
-  Object.defineProperty(env, "BROWSER", {
-    configurable: true,
-    get() {
-      return browser ?? undefined;
-    },
-  });
+function installBrowser(stub: BrowserStub): void {
+  Object.defineProperty(env, "BROWSER", { configurable: true, value: stub });
 }
 
 function stubBrowser(html: string): BrowserStub {
@@ -129,7 +122,6 @@ afterEach(() => {
   vi.unstubAllGlobals();
   Reflect.deleteProperty(env, "AI");
   Reflect.deleteProperty(env, "BROWSER");
-  browser = null;
 });
 
 describe("startCard", () => {
@@ -277,8 +269,7 @@ describe("startCard", () => {
     stubAi(0.95);
     stubWeb(() => new Response("blocked", { status: 403 }));
     const stub = stubBrowser(BOT_GATED_HTML);
-    browser = stub;
-    installBrowser();
+    installBrowser(stub);
 
     const site = await startCard("ws-1", subject, []).site;
 
@@ -287,6 +278,28 @@ describe("startCard", () => {
     expect(site.unfound).toBe(false);
     expect(site.review).toEqual({ name: "fill", description: "fill", socials: "empty" });
     expect(stub.calls).toEqual(["https://botgatedbudget.com/"]);
+    let left = 0;
+    for (let attempt = 0; attempt < 16; attempt += 1) {
+      if (!(await takeBrowserEscalation("ws-1", subject.registrable, day))) break;
+      left += 1;
+    }
+    expect(left).toBe(3);
+  });
+
+  it("escalates a bot-gated creator profile through the brand's budgeted read", async () => {
+    const subject = subjectFor("https://www.instagram.com/botgatedprofile/");
+    const day = new Date().toISOString().slice(0, 10);
+    stubAi(0.95);
+    stubWeb(() => new Response("blocked", { status: 403 }));
+    const stub = stubBrowser(BOT_GATED_HTML);
+    installBrowser(stub);
+
+    const site = await startCard("ws-1", subject, []).site;
+
+    expect(site.name).toBe("Botgated");
+    expect(site.description).toBe("A description that only the browser could read");
+    expect(site.unfound).toBe(false);
+    expect(stub.calls).toEqual(["https://www.instagram.com/botgatedprofile/"]);
     let left = 0;
     for (let attempt = 0; attempt < 16; attempt += 1) {
       if (!(await takeBrowserEscalation("ws-1", subject.registrable, day))) break;
@@ -306,8 +319,7 @@ describe("startCard", () => {
     expect(drained).toBe(4);
     const calls = stubWeb(() => new Response("blocked", { status: 403 }));
     const stub = stubBrowser(BOT_GATED_HTML);
-    browser = stub;
-    installBrowser();
+    installBrowser(stub);
 
     const card = startCard("ws-1", subject, []);
 
@@ -387,8 +399,7 @@ describe("confirmCard", () => {
     }
     stubWeb(() => new Response("blocked", { status: 403 }));
     const stub = stubBrowser(BOT_GATED_HTML);
-    browser = stub;
-    installBrowser();
+    installBrowser(stub);
 
     expect(
       await confirmCard("ws-1", "u1", form({ subject: domain, name: "Botgated Confirm", description: "" })),
@@ -405,14 +416,52 @@ describe("confirmCard", () => {
     }
     stubWeb(() => new Response("blocked", { status: 403 }));
     const stub = stubBrowser(BOT_GATED_HTML);
-    browser = stub;
-    installBrowser();
+    installBrowser(stub);
 
     expect(
       await confirmCard("ws-1", "u1", form({ subject: domain, name: "Botgated Positive", description: "" })),
     ).toBe(true);
 
     expect(stub.calls).toEqual([`https://${domain}/`]);
+    let left = 0;
+    for (let attempt = 0; attempt < 16; attempt += 1) {
+      if (!(await takeBrowserEscalation("ws-1", domain, day))) break;
+      left += 1;
+    }
+    expect(left).toBe(0);
+  });
+
+  it("keys a creator's social site on the site's brand, not the fresh entity", async () => {
+    const domain = "botgatedsocial.com";
+    const day = new Date().toISOString().slice(0, 10);
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      expect(await takeBrowserEscalation("ws-1", domain, day)).toBe(true);
+    }
+    stubWeb(() => new Response("blocked", { status: 403 }));
+    const stub = stubBrowser(BOT_GATED_HTML);
+    installBrowser(stub);
+
+    expect(
+      await confirmCard(
+        "ws-1",
+        "u1",
+        form({
+          subject: "https://www.instagram.com/botgatedcreator/",
+          name: "Botgated Creator",
+          description: "",
+          "social.site": `https://${domain}/`,
+        }),
+      ),
+    ).toBe(true);
+    await settledTail();
+
+    expect(stub.calls).toEqual([`https://${domain}/`]);
+    let left = 0;
+    for (let attempt = 0; attempt < 16; attempt += 1) {
+      if (!(await takeBrowserEscalation("ws-1", domain, day))) break;
+      left += 1;
+    }
+    expect(left).toBe(0);
   });
 
   it("keeps the confirm and records no role when Jev is down", async () => {

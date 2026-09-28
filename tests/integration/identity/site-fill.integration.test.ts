@@ -163,6 +163,26 @@ describe("site fill", () => {
     expect(await readEntityIdentityJson(workspaceId, entityId)).toBe(before);
   });
 
+  it("escalates a bot-gated homepage through the brand's last budgeted read", async () => {
+    await seed({ description: null, socials: [] });
+    const day = new Date().toISOString().slice(0, 10);
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      expect(await takeBrowserEscalation(workspaceId, "gymshark.com", day)).toBe(true);
+    }
+    vi.stubGlobal("fetch", () => Promise.resolve(new Response("blocked", { status: 403 })));
+    const stub = browserStub(BOT_GATED_HTML);
+    Object.defineProperty(env, "BROWSER", { configurable: true, get: () => stub });
+
+    expect(await attemptSiteFill(workspaceId, entityId, HOMEPAGE)).toBe("filled");
+    expect(await identity()).toEqual({
+      description: "A description that only the browser could read",
+      socials: [],
+      siteFill: "filled",
+    });
+    expect(stub.calls).toEqual([HOMEPAGE]);
+    expect(await takeBrowserEscalation(workspaceId, "gymshark.com", day)).toBe(false);
+  });
+
   it("does not escalate a bot-gated homepage once the brand's day budget is spent", async () => {
     await seed({ description: null, socials: [] });
     const day = new Date().toISOString().slice(0, 10);

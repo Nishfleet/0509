@@ -44,8 +44,10 @@ async function creatorSite(
   const normalised = normaliseSubject(entry.url);
   if (!normalised.ok || normalised.subject.kind !== "domain") return null;
   const { subject } = normalised;
-  const mayEscalate = () =>
-    takeBrowserEscalation(workspaceId, subject.registrable, new Date().toISOString().slice(0, 10));
+  const mayEscalate = () => {
+    const day = new Date().toISOString().slice(0, 10);
+    return takeBrowserEscalation(workspaceId, subject.registrable, day);
+  };
   await readSiteCard(subject, mayEscalate);
   return subject;
 }
@@ -58,9 +60,9 @@ async function classifyConfirmedSite(
 ): Promise<void> {
   if (subject.kind !== "domain" || subject.url === null) return;
   try {
+    const day = now.toISOString().slice(0, 10);
     const page = await readUrl(subject.url, {
-      mayEscalate: () =>
-        takeBrowserEscalation(workspaceId, subject.registrable, now.toISOString().slice(0, 10)),
+      mayEscalate: () => takeBrowserEscalation(workspaceId, subject.registrable, day),
     });
     if (!page.ok) {
       console.log(

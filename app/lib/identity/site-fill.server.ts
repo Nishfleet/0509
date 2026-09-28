@@ -27,8 +27,10 @@ export async function attemptSiteFill(
   const normalised = normaliseSubject(homepageUrl);
   if (!normalised.ok) return "pending";
   const { subject } = normalised;
-  const mayEscalate = () =>
-    takeBrowserEscalation(workspaceId, subject.registrable, new Date().toISOString().slice(0, 10));
+  const mayEscalate = () => {
+    const day = new Date().toISOString().slice(0, 10);
+    return takeBrowserEscalation(workspaceId, subject.registrable, day);
+  };
   const { card, reached } = await readSiteCard(subject, mayEscalate);
   if (!reached) return "pending";
   const edited = await readEditedFields(entityId);
