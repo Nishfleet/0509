@@ -1,5 +1,5 @@
 import { cloudflareTest, readD1Migrations } from "@cloudflare/vitest-plugin";
-import { defineConfig } from "vitest/config";
+import { configDefaults, defineConfig } from "vitest/config";
 
 // Deliberately a separate config from vite.config.ts.
 //
@@ -11,6 +11,15 @@ import { defineConfig } from "vitest/config";
 // cloudflareTest() belongs here.
 export default defineConfig({
   test: {
+    // CI runs `vitest run --changed` on pull requests (0509#5849). These files
+    // reach tests without an import edge — the workers project reads
+    // migrations/ through readD1Migrations and its bindings from the wrangler
+    // configs — so a change to any of them reruns the whole suite.
+    forceRerunTriggers: [
+      ...configDefaults.forceRerunTriggers,
+      "**/migrations/**",
+      "**/wrangler*.jsonc",
+    ],
     projects: [
       {
         // Pure logic: no bindings, no workerd.

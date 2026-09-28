@@ -47,6 +47,9 @@ jobs:
         if: github.event_name != 'deployment_status'
         with:
           persist-credentials: false
+          # Two commits so HEAD^1 (the base side of the PR merge ref) exists
+          # for `vitest --changed` below.
+          fetch-depth: 2
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         if: github.event_name != 'deployment_status'
         with:
@@ -84,8 +87,17 @@ jobs:
         with:
           args: --offline --format plain .github/workflows
 
+      - name: Test only what the pull request can affect
+        # vitest's own --changed: the test files that import a changed file,
+        # through the module graph. A change to package.json or a vitest/vite
+        # config reruns everything (forceRerunTriggers default). The full suite
+        # runs on merge_group below, so nothing merges untested; this only
+        # moves the verdict for unrelated files from the PR to the queue.
+        # 545 s of the 17 min PR run 36432985831 was the full suite (#5849).
+        if: github.event_name == 'pull_request'
+        run: npx vitest run --changed HEAD^1 --passWithNoTests
       - name: Test
-        if: github.event_name != 'deployment_status'
+        if: github.event_name == 'merge_group'
         run: npm test
       - name: Build
         if: github.event_name != 'deployment_status'
@@ -215,7 +227,10 @@ jobs:
         # / is a static asset, so it never enters the Worker. /design/landing does,
         # and the Worker answers 503 until BETTER_AUTH_SECRET is present (run
         # 36060236500). Same --env-file as playwright.config.ts.
-        run: P=$((18000 + $$ % 1000)); npx --yes @lhci/cli@0.15.1 collect --url=http://127.0.0.1:$P/ --url=http://127.0.0.1:$P/design/landing --start-server-command="npx wrangler dev --env-file .dev.vars.example --port $P --local" --start-server-ready-pattern="Ready on" --start-server-ready-timeout=120000 --number-of-runs=3
+        # One run per URL: lighthouse-budget.pr.json asserts resource sizes and
+        # CLS only, which do not vary run to run, so three runs repeated the same
+        # answer for 93 s of run 36432985831 (#5849).
+        run: P=$((18000 + $$ % 1000)); npx --yes @lhci/cli@0.15.1 collect --url=http://127.0.0.1:$P/ --url=http://127.0.0.1:$P/design/landing --start-server-command="npx wrangler dev --env-file .dev.vars.example --port $P --local" --start-server-ready-pattern="Ready on" --start-server-ready-timeout=120000 --number-of-runs=1
 
       - name: Assert the Lighthouse budgets
         if: github.event_name != 'deployment_status' && steps.scope.outputs.skip != 'true'
