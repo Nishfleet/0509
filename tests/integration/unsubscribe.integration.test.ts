@@ -1,6 +1,7 @@
 import { env } from "cloudflare:test";
 import { beforeEach, describe, expect, it } from "vitest";
 
+import { isUnsubscribeTokenKnown } from "../../app/lib/data/email_suppression.server";
 import { unsubscribe } from "../../app/lib/unsubscribe.server";
 import { deliver } from "../../workers/delivery/consumer";
 
@@ -80,7 +81,7 @@ const attemptCount = async (): Promise<number> => {
   return row?.n ?? 0;
 };
 
-describe("one-click unsubscribe (0509#4358, 0509#4593)", () => {
+describe("one-click unsubscribe (0509#4358, 0509#4593, 0509#5761)", () => {
   beforeEach(async () => {
     await env.DB.exec("DELETE FROM send_attempt");
     await env.DB.exec("DELETE FROM email_suppression");
@@ -92,9 +93,10 @@ describe("one-click unsubscribe (0509#4358, 0509#4593)", () => {
     await seed();
   });
 
-  it("(a) suppresses the address behind a valid token", async () => {
-    await unsubscribe(TOKEN);
+  it("(a) reports unsubscribed and suppresses the address behind a valid token", async () => {
+    const outcome = await unsubscribe(TOKEN);
 
+    expect(outcome).toBe("unsubscribed");
     const rows = await suppressionRows();
     expect(rows).toHaveLength(1);
     expect(rows[0].address).toBe(ADDRESS);
@@ -103,19 +105,20 @@ describe("one-click unsubscribe (0509#4358, 0509#4593)", () => {
   });
 
   it("(b) keeps one row and the first created_at on a second click", async () => {
-    await unsubscribe(TOKEN);
+    expect(await unsubscribe(TOKEN)).toBe("unsubscribed");
     const first = await suppressionRows();
 
-    await unsubscribe(TOKEN);
+    expect(await unsubscribe(TOKEN)).toBe("unsubscribed");
     const rows = await suppressionRows();
 
     expect(rows).toHaveLength(1);
     expect(rows[0].created_at).toBe(first[0].created_at);
   });
 
-  it("(c) writes nothing for unknown and missing tokens", async () => {
-    await unsubscribe(UNKNOWN_TOKEN);
-    await unsubscribe(undefined);
+  it("(c) says invalid_token and writes nothing for unknown and missing tokens", async () => {
+    expect(await unsubscribe(UNKNOWN_TOKEN)).toBe("invalid_token");
+    expect(await unsubscribe(undefined)).toBe("invalid_token");
+    expect(await unsubscribe("")).toBe("invalid_token");
 
     expect(await suppressionRows()).toHaveLength(0);
   });
@@ -133,5 +136,22 @@ describe("one-click unsubscribe (0509#4358, 0509#4593)", () => {
     expect(result.attempt_id).toBeNull();
     expect(rec.sent).toHaveLength(0);
     expect(await attemptCount()).toBe(0);
+  });
+
+  it("(e) knows only a token a send_target still holds (0509#5761)", async () => {
+    expect(await isUnsubscribeTokenKnown(TOKEN)).toBe(true);
+    expect(await isUnsubscribeTokenKnown(UNKNOWN_TOKEN)).toBe(false);
+
+    // changeEmailTarget sets unsubscribe_token back to NULL, which is how a
+    // link in an already-delivered brief goes dead. The token then has to read
+    // as invalid, or the route tells a reader they are unsubscribed and mail
+    // keeps arriving.
+    await env.DB.prepare(`UPDATE send_target SET unsubscribe_token = NULL WHERE id = ?`)
+      .bind(TARGET_ID)
+      .run();
+
+    expect(await isUnsubscribeTokenKnown(TOKEN)).toBe(false);
+    expect(await unsubscribe(TOKEN)).toBe("invalid_token");
+    expect(await suppressionRows()).toHaveLength(0);
   });
 });

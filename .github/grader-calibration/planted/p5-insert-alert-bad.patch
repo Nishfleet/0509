@@ -1,0 +1,45 @@
+diff --git a/app/lib/data/alert.server.ts b/app/lib/data/alert.server.ts
+index ce844b46..04b5993a 100644
+--- a/app/lib/data/alert.server.ts
++++ b/app/lib/data/alert.server.ts
+@@ -19,20 +19,26 @@ export interface DeliveryFailedAlert {
+ export async function insertDeliveryFailedAlert(
+   db: D1Database,
+   alert: DeliveryFailedAlert,
+-): Promise<void> {
+-  await db
+-    .prepare(INSERT_DELIVERY_FAILED)
+-    .bind(
+-      alert.id,
+-      alert.workspace_id,
+-      alert.kind,
+-      alert.severity,
+-      alert.title,
+-      alert.body,
+-      alert.status,
+-      alert.created_at,
+-    )
+-    .run();
++): Promise<boolean> {
++  try {
++    const result = await db
++      .prepare(INSERT_DELIVERY_FAILED)
++      .bind(
++        alert.id,
++        alert.workspace_id,
++        alert.kind,
++        alert.severity,
++        alert.title,
++        alert.body,
++        alert.status,
++        alert.created_at,
++      )
++      .run();
++    return result.meta.changes > 0;
++  } catch {
++    // D1 sometimes throws on a conflict race; the row is already there then
++    return false;
++  }
+ }
+ 
+ export interface DeliveryFailureRow {
