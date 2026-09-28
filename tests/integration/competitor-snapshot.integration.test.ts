@@ -219,12 +219,13 @@ describe("readCompetitorSnapshot against real D1", () => {
     });
     await seedVerdict("snap-edge-jev-at-act", ws, "noteworthy_change", "snap-edge-sig-at-act", ACT_AT);
 
+    const justUnderAct = ACT_AT - Number.EPSILON;
     await seedSignal("snap-edge-sig-below", ws, entity, sourceSite, {
       kind: "change",
       aspect: "pricing",
       observedAt: "2026-09-21T10:00:00.000Z",
     });
-    await seedVerdict("snap-edge-jev-below", ws, "noteworthy_change", "snap-edge-sig-below", 0.5);
+    await seedVerdict("snap-edge-jev-below", ws, "noteworthy_change", "snap-edge-sig-below", justUnderAct);
 
     await seedSignal("snap-edge-sig-mention-at-act", ws, entity, sourceSite, {
       kind: "mention",

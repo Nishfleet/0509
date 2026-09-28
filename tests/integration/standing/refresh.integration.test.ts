@@ -212,39 +212,49 @@ describe("refreshWorkspaceScores against real D1", () => {
     }
   });
 
-  it("puts a verdict on the act threshold in the matters bucket and one on the reject threshold in none", async () => {
+  it("buckets a mention on the act threshold as matters and one just over the reject threshold as normal", async () => {
     const seeded = await seed();
     const source = await env.DB.prepare(
-      "SELECT source_id FROM signal WHERE entity_id = ?1 AND kind = 'mention' LIMIT 1",
+      "SELECT source_id, reliability FROM signal s JOIN source src ON src.id = s.source_id WHERE s.entity_id = ?1 AND s.kind = 'mention' LIMIT 1",
     )
       .bind(seeded.entityA)
-      .first<{ source_id: string }>();
+      .first<{ source_id: string; reliability: string }>();
     if (source === null) throw new Error(`no mention source seeded for ${seeded.entityA}`);
 
-    const atAct = `${seeded.workspaceId}-sig-at-act`;
-    const atReject = `${seeded.workspaceId}-sig-at-reject`;
-    await env.DB.batch([
-      env.DB.prepare(
-        "INSERT INTO signal (id, workspace_id, entity_id, source_id, kind, canonical_url, url_hash, dedup_key, observed_at) VALUES (?1, ?2, ?3, ?4, 'mention', ?5, ?6, ?7, ?8)",
-      ).bind(atAct, seeded.workspaceId, seeded.entityA, source.source_id, `https://example.test/at-act`, `hash-at-act`, `dedup-at-act`, "2026-09-18T10:00:00.000Z"),
-      env.DB.prepare(
-        "INSERT INTO jev_verdict (id, workspace_id, question_id, input_hash, signal_id, p, decided_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
-      ).bind(`${seeded.workspaceId}-jev-at-act`, seeded.workspaceId, D6_QUESTION_ID, "ih-at-act", atAct, ACT_AT, SEEDED_AT),
-      env.DB.prepare(
-        "INSERT INTO signal (id, workspace_id, entity_id, source_id, kind, canonical_url, url_hash, dedup_key, observed_at) VALUES (?1, ?2, ?3, ?4, 'mention', ?5, ?6, ?7, ?8)",
-      ).bind(atReject, seeded.workspaceId, seeded.entityA, source.source_id, `https://example.test/at-reject`, `hash-at-reject`, `dedup-at-reject`, "2026-09-18T10:00:00.000Z"),
-      env.DB.prepare(
-        "INSERT INTO jev_verdict (id, workspace_id, question_id, input_hash, signal_id, p, decided_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
-      ).bind(`${seeded.workspaceId}-jev-at-reject`, seeded.workspaceId, D6_QUESTION_ID, "ih-at-reject", atReject, REJECT_AT, SEEDED_AT),
-    ]);
+    const bucketsForSource = async (): Promise<Map<string, number>> => {
+      const result = await env.DB.prepare(COUNT_BUCKETS)
+        .bind(seeded.workspaceId, WINDOW_START, WINDOW_END, D6_QUESTION_ID, D3_QUESTION_ID)
+        .all<{ entity_id: string; bucket: string; reliability: string; n: number }>();
+      const totals = new Map<string, number>();
+      for (const row of result.results ?? []) {
+        if (row.entity_id !== seeded.entityA || row.reliability !== source.reliability) continue;
+        totals.set(row.bucket, (totals.get(row.bucket) ?? 0) + row.n);
+      }
+      return totals;
+    };
 
-    const result = await env.DB.prepare(COUNT_BUCKETS)
-      .bind(seeded.workspaceId, WINDOW_START, WINDOW_END, D6_QUESTION_ID, D3_QUESTION_ID)
-      .all<{ bucket: string; n: number }>();
+    const before = await bucketsForSource();
 
-    const counts = new Map((result.results ?? []).map((row) => [row.bucket, row.n]));
-    expect(counts.get("mention_matters")).toBe(2);
-    expect(counts.get("mention_normal")).toBeUndefined();
+    const signals: readonly [string, number][] = [
+      [`${seeded.workspaceId}-sig-at-act`, ACT_AT],
+      [`${seeded.workspaceId}-sig-at-reject`, REJECT_AT],
+      [`${seeded.workspaceId}-sig-over-reject`, REJECT_AT + 0.01],
+    ];
+    await env.DB.batch(
+      signals.flatMap(([id, p]) => [
+        env.DB.prepare(
+          "INSERT INTO signal (id, workspace_id, entity_id, source_id, kind, canonical_url, url_hash, dedup_key, observed_at) VALUES (?1, ?2, ?3, ?4, 'mention', ?5, ?6, ?7, ?8)",
+        ).bind(id, seeded.workspaceId, seeded.entityA, source.source_id, `https://example.test/${id}`, `hash-${id}`, `dedup-${id}`, "2026-09-18T10:00:00.000Z"),
+        env.DB.prepare(
+          "INSERT INTO jev_verdict (id, workspace_id, question_id, input_hash, signal_id, p, decided_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+        ).bind(`jev-${id}`, seeded.workspaceId, D6_QUESTION_ID, `ih-${id}`, id, p, SEEDED_AT),
+      ]),
+    );
+
+    const after = await bucketsForSource();
+    const gained = (bucket: string): number => (after.get(bucket) ?? 0) - (before.get(bucket) ?? 0);
+    expect(gained("mention_matters")).toBe(1);
+    expect(gained("mention_normal")).toBe(1);
   });
 
   it("uses the signal index rather than scanning signal", async () => {
