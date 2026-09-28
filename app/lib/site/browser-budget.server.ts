@@ -42,7 +42,7 @@ export async function browserScreenshot(
       viewport: { width: 1440, height: 900 },
     });
     if (!res.ok) {
-      return { ok: false, cause: `browser answered ${res.status}` };
+      return { ok: false, cause: `browser answered ${String(res.status)}` };
     }
     return { ok: true, bytes: await res.arrayBuffer() };
   } catch (err) {
