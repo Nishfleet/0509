@@ -31,6 +31,18 @@ const ENTITIES: readonly HomeEntity[] = [
 ];
 
 const SITE_SOURCES = [{ key: "site", kind: "site", platform: "site" }] as const;
+const MENTION_SOURCES = [{ key: "reddit.search_rss", kind: "mentions", platform: "reddit" }] as const;
+
+const GATHERING_INPUT: Parameters<typeof homeStanding>[0] = {
+  payload: null,
+  entities: ENTITIES,
+  schedule: SCHEDULE,
+  history: [],
+  sources: SITE_SOURCES,
+  counts: [],
+  moves: [],
+  now: THURSDAY_MORNING,
+};
 
 function brand(
   entityId: string,
@@ -328,6 +340,26 @@ describe("Home standing", () => {
   it("lands the first site sweep on the next 02:00Z strictly after now", () => {
     expect(nextSiteSweepAt(new Date("2026-09-24T01:00:00Z"))).toEqual(new Date("2026-09-24T02:00:00Z"));
     expect(nextSiteSweepAt(new Date("2026-09-24T02:00:00Z"))).toEqual(new Date("2026-09-25T02:00:00Z"));
+  });
+
+  it("has no first sweep when the sources carry no site kind", () => {
+    const noSiteInputs = [
+      { ...GATHERING_INPUT, sources: [] },
+      { ...GATHERING_INPUT, sources: MENTION_SOURCES },
+    ];
+    for (const input of noSiteInputs) {
+      const standing = homeStanding(input);
+      if (standing.kind !== "gathering") throw new Error("expected a gathering standing");
+      expect(standing.firstSweepAt).toBeNull();
+    }
+  });
+
+  it("gives the view the same first sweep, so Home keeps one answer for it", () => {
+    expect(homeView({ ...GATHERING_INPUT, sources: [] }).standing).toEqual(homeStanding({ ...GATHERING_INPUT, sources: [] }));
+    const standing = homeStanding(GATHERING_INPUT);
+    if (standing.kind !== "gathering") throw new Error("expected a gathering standing");
+    expect(standing.firstSweepAt).toBe("Friday 03:00");
+    expect(homeView(GATHERING_INPUT).standing).toEqual(standing);
   });
 
   it("names the movement the way the brief does", () => {

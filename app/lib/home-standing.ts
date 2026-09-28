@@ -1,7 +1,7 @@
 import type { BriefPayload } from "./brief-payload";
 import type { BriefSchedule } from "./brief-schedule";
 import { nextBriefAt } from "./brief-schedule";
-import { firstSiteSweepAt, nextSiteSweepAt } from "./onboarding/arrival-estimate";
+import { firstSiteSweepAt } from "./onboarding/arrival-estimate";
 import type { SiteChangeView } from "./site-change";
 import { sourceName } from "./source-name";
 export { nextSiteSweepAt, SITE_SWEEP_UTC_HOUR } from "./onboarding/arrival-estimate";
@@ -240,10 +240,11 @@ export function homeStanding(input: {
     return { kind: "unjudged", whyLine: payload.why_line };
   }
   if (payload === null || rank === null || payload.headline_total < 2) {
+    const at = firstSiteSweepAt({ now: input.now, sources: input.sources });
     return {
       kind: "gathering",
       briefAt: dayAndTime(input.schedule.timezone, nextBriefAt(input.schedule, input.now)),
-      firstSweepAt: dayAndTime(input.schedule.timezone, nextSiteSweepAt(input.now)),
+      firstSweepAt: at === null ? null : dayAndTime(input.schedule.timezone, at),
       brands: onBrands,
     };
   }
@@ -292,11 +293,10 @@ export function homeView(input: {
   const briefTime = dayAndTime(input.schedule.timezone, nextBriefAt(input.schedule, input.now));
   const footer = `Checked ${String(onCount)} ${brandWord} this week · brief ${briefTime} · your site re-checked at ${recheckTime}`;
   const standing = homeStanding(input);
-  const at = firstSiteSweepAt({ now: input.now, sources: input.sources });
   return {
     eyebrow: todayEyebrow(input.schedule.timezone, input.now),
     greeting: greetingFor(input.schedule.timezone, input.now),
-    standing: standing.kind === "gathering" ? { ...standing, firstSweepAt: at === null ? null : dayAndTime(input.schedule.timezone, at) } : standing,
+    standing,
     chips: homeChips(input.entities),
     footer,
   };
