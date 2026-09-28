@@ -68,7 +68,7 @@ const signals = async () => {
   return rows.results;
 };
 
-const seedSweep = async () => {
+const resetTenant = async () => {
   await env.DB.exec("DELETE FROM signal");
   await env.DB.exec("DELETE FROM snapshot");
   await env.DB.exec("DELETE FROM watch");
@@ -89,6 +89,10 @@ const seedSweep = async () => {
   )
     .bind(WS, USER, NOW)
     .run();
+};
+
+const seedSweep = async () => {
+  await resetTenant();
   await seedEntity("ent-self", "self", "mybrand.com", "on");
   await seedEntity("ent-rival", "competitor", "rival.com", "on");
   await seedEntity("ent-paused", "competitor", "paused.com", "off");
@@ -302,26 +306,7 @@ const seedHomeEntities = async (
     identityJson: string;
   }[],
 ) => {
-  await env.DB.exec("DELETE FROM signal");
-  await env.DB.exec("DELETE FROM snapshot");
-  await env.DB.exec("DELETE FROM watch");
-  await env.DB.exec("DELETE FROM page");
-  await env.DB.exec("DELETE FROM entity");
-  await env.DB.exec("DELETE FROM workspace");
-  await env.DB.exec('DELETE FROM "user"');
-
-  await env.DB.prepare(
-    `INSERT INTO "user" (id, name, email, emailVerified, createdAt, updatedAt)
-     VALUES (?, 'Owner', 'site-sweep@0509.io', 1, ?, ?)`,
-  )
-    .bind(USER, NOW, NOW)
-    .run();
-  await env.DB.prepare(
-    `INSERT INTO workspace (id, name, owner_user_id, timezone, brief_weekday, brief_hour, created_at)
-     VALUES (?, 'Sweep', ?, 'UTC', 1, 8, ?)`,
-  )
-    .bind(WS, USER, NOW)
-    .run();
+  await resetTenant();
   for (const row of rows) {
     await env.DB.prepare(
       `INSERT INTO entity (id, workspace_id, role, domain, identity_json, origin, state, created_at)
@@ -373,7 +358,7 @@ describe("home url resolution", () => {
     expect((await homePageUrls()).get("ent-plain")).toBe("https://nike.com/");
   });
 
-  it("creates no home page when the entered url's registrable domain differs", async () => {
+  it("creates no home page when the entered url resolves to a social channel", async () => {
     await seedHomeEntities([
       {
         id: "ent-channel",
@@ -386,6 +371,21 @@ describe("home url resolution", () => {
     await ensureHomePages(NOW);
 
     expect((await homePageUrls()).has("ent-channel")).toBe(false);
+  });
+
+  it("falls back to the registrable domain when the entered host is a different site", async () => {
+    await seedHomeEntities([
+      {
+        id: "ent-other",
+        role: "self",
+        domain: "nike.com",
+        identityJson: '{"kind":"domain","url":"https://adidas.com/"}',
+      },
+    ]);
+
+    await ensureHomePages(NOW);
+
+    expect((await homePageUrls()).get("ent-other")).toBe("https://nike.com/");
   });
 
   it("watches the entered host for the site.web source", async () => {
@@ -401,5 +401,27 @@ describe("home url resolution", () => {
     await planSiteSweep(NOW);
 
     expect((await watchTargets()).get("ent-fixture")).toBe("https://fixture.0509.in/");
+  });
+
+  it("keeps the watch on the home page an entity already has, so the row still sweeps", async () => {
+    await seedHomeEntities([
+      {
+        id: "ent-legacy",
+        role: "self",
+        domain: "0509.in",
+        identityJson: '{"kind":"domain","url":"https://fixture.0509.in/"}',
+      },
+    ]);
+    await env.DB.prepare(
+      `INSERT INTO page (id, entity_id, url, role, discovered_at) VALUES (?, ?, ?, 'home', ?)`,
+    )
+      .bind("page-legacy", "ent-legacy", "https://0509.in/", NOW)
+      .run();
+
+    const targets = await planSiteSweep(NOW);
+
+    expect(targets.map((target) => [target.entityId, target.url])).toEqual([
+      ["ent-legacy", "https://0509.in/"],
+    ]);
   });
 });

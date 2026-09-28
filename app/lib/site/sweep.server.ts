@@ -70,12 +70,11 @@ export async function planSiteSweep(now: string): Promise<SiteSweepTarget[]> {
 
   const unwatched = await readUnwatchedEntities(sourceId);
   await insertWatches(
-    unwatched.flatMap((entity) => {
-      const url = homeUrl(entity);
-      return url === null
+    unwatched.flatMap((entity) =>
+      homeUrl(entity) === null
         ? []
-        : [{ id: crypto.randomUUID(), entityId: entity.id, sourceId, targetKey: url }];
-    }),
+        : [{ id: crypto.randomUUID(), entityId: entity.id, sourceId, targetKey: entity.pageUrl }],
+    ),
   );
   return [...(await readSiteSweepTargets(SITE_SOURCE_KEY))];
 }
