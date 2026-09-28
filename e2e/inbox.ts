@@ -71,15 +71,25 @@ export function decodedBodies(raw: string): string[] {
   return bodies;
 }
 
-// The whole stored message exactly as the inbox Worker holds it, headers
-// included. `waitForMagicLink` returns the link it polled for; a spec that
-// asserts the email's own content (its Message-ID, its send time, its HTML
-// part) needs the headers too, and a second poll cannot be trusted to return
-// the same message.
-// The inbox's non-200 answer, carrying the status so a caller can tell a
-// missing message (404) from a real inbox failure (403 secret mismatch, 503
-// token unset, 500). A caller that maps 404 to "nothing stored" must rethrow
-// the rest: swallowing a 403 would turn a bad token into a stale-link timeout.
+// The inbox's named token failures, one source for both readers: the pre-send
+// read and probeInbox each hit the endpoint first depending on the path, and a
+// secret mismatch must name itself at whichever one sees it first (#3927).
+function namedInboxFailure(status: number): Error | null {
+  if (status === 403) {
+    return new Error(
+      "0509-e2e-inbox rejected E2E_INBOX_TOKEN (HTTP 403): the repo secret and the Worker secret disagree",
+    );
+  }
+  if (status === 503) {
+    return new Error("0509-e2e-inbox reports E2E_INBOX_TOKEN is not set on the Worker");
+  }
+  return null;
+}
+
+// The inbox's other non-200 answer, carrying the status so a caller can tell a
+// missing message (404) from a real failure (500). A caller that maps 404 to
+// "nothing stored" must rethrow the rest: swallowing a 500 would turn an inbox
+// failure into a stale-link timeout.
 class InboxReadError extends Error {
   readonly status: number;
   constructor(status: number, to: string) {
@@ -88,12 +98,17 @@ class InboxReadError extends Error {
   }
 }
 
+// The whole stored message exactly as the inbox Worker holds it, headers
+// included. `waitForMagicLink` returns the link it polled for; a spec that
+// asserts the email's own content (its Message-ID, its send time, its HTML
+// part) needs the headers too, and a second poll cannot be trusted to return
+// the same message.
 export async function readRawMessage(to: string, token: string): Promise<string> {
   const response = await fetch(`${INBOX_URL}/message?to=${encodeURIComponent(to)}`, {
     headers: inboxHeaders(token),
   });
   if (response.status !== 200) {
-    throw new InboxReadError(response.status, to);
+    throw namedInboxFailure(response.status) ?? new InboxReadError(response.status, to);
   }
   return response.text();
 }
@@ -112,14 +127,8 @@ export function extractMagicLink(rawMessage: string): string | null {
 // it — a bad or missing secret fails in one round-trip, not in two minutes.
 async function probeInbox(url: string, headers: Record<string, string>): Promise<void> {
   const probe = await fetch(url, { headers });
-  if (probe.status === 403) {
-    throw new Error(
-      "0509-e2e-inbox rejected E2E_INBOX_TOKEN (HTTP 403): the repo secret and the Worker secret disagree",
-    );
-  }
-  if (probe.status === 503) {
-    throw new Error("0509-e2e-inbox reports E2E_INBOX_TOKEN is not set on the Worker");
-  }
+  const named = namedInboxFailure(probe.status);
+  if (named) throw named;
 }
 
 // Poll until the message lands or the deadline passes. The inbox keys on the
@@ -270,12 +279,13 @@ export function ownDocument404For(pathname: string): (entry: ConsoleEntry) => bo
 }
 
 // J1's core: submit the login form for a fresh e2e+ address, read the real
-// email out of the inbox Worker, follow the link, land signed in. A fresh
-// address is bounced to /onboarding by requireOnboarded in app-layout.tsx
-// (the landing workspace.server.ts computes is /onboarding); a returning,
-// onboarded fixture address is not, and app/routes/onboarding.tsx redirects
-// it to /app. `landing` carries which expectation this sign-in has, and
-// defaults to the fresh-address one J1 asserts.
+// email out of the inbox Worker, follow the link, land signed in. The link's
+// callbackURL is /app (safeReturnTo's default in lib/agent/paths.ts), and
+// requireOnboarded in app-layout.tsx bounces a session whose landing is not
+// null — /onboarding for a fresh user — to that landing. A returning, fully
+// onboarded user's landing is null, so requireOnboarded is a no-op and the
+// session stays on /app. `landing` carries which expectation this sign-in
+// has, and defaults to the fresh-address one J1 asserts.
 // The inbox holds one message per recipient for an hour, so a fixed address
 // can still hold the previous run's used link: it is read before this
 // sign-in can overwrite it and excluded from the wait.
@@ -284,7 +294,7 @@ export async function signInWithMagicLink(
   page: Page,
   email: string,
   token: string,
-  landing = /\/onboarding/,
+  landing: string | RegExp = /\/onboarding/,
 ): Promise<{ link: string; status: number }> {
   await page.goto("/login");
   await page.locator('input[name="email"]').fill(email);
