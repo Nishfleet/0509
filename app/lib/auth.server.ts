@@ -43,7 +43,7 @@ export function hasSessionCookie(request: Request) {
   return header.split(";").some((part) => sessionCookieNames.has(part.trim().split("=")[0] ?? ""));
 }
 
-export function createAuth(env: AuthEnv, options?: { captcha?: boolean }) {
+export function createAuth(env: AuthEnv, options?: { captcha?: boolean; validateSchema?: boolean }) {
   const origin = env.BETTER_AUTH_URL === undefined ? undefined : new URL(env.BETTER_AUTH_URL).origin;
   return betterAuth({
     database: env.DB,
@@ -52,6 +52,7 @@ export function createAuth(env: AuthEnv, options?: { captcha?: boolean }) {
     advanced: {
       cookiePrefix: COOKIE_PREFIX,
       ipAddress: { ipAddressHeaders: [CLIENT_IP_HEADER] },
+      database: { validateSchema: options?.validateSchema ?? false },
     },
     session: { freshAge: FRESH_SESSION_SECONDS },
     user: { deleteUser: { enabled: true } },

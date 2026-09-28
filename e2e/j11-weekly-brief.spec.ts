@@ -30,6 +30,7 @@ const OFF = "slack.com";
 const HOUR_MS = 60 * 60 * 1000;
 const BRIEF_WAIT_MS = 120_000;
 const SUPPRESS_WAIT_MS = 90_000;
+const DEADLINE_SLACK_MS = 30_000;
 
 function htmlBodyFrom(raw: string): string {
   for (const body of decodedBodies(raw)) {
@@ -253,7 +254,13 @@ test("the weekly brief arrives from the inbox, in order, and unsubscribe stops t
 
   // A poll that succeeds on the first read cannot prove the next send was
   // skipped. Wait the window the first brief used, then read again.
-  await page.waitForTimeout(SUPPRESS_WAIT_MS);
+  const suppressDeadline = Date.now() + SUPPRESS_WAIT_MS;
+  await expect
+    .poll(() => Date.now(), {
+      timeout: SUPPRESS_WAIT_MS + DEADLINE_SLACK_MS,
+      message: `the ${SUPPRESS_WAIT_MS / 1000}s suppression window to fully elapse`,
+    })
+    .toBeGreaterThanOrEqual(suppressDeadline);
   const later = await readRawMessage(email, token);
   expect(header(later, MESSAGE_ID), "the next brief was not sent").toBe(messageId);
 });
