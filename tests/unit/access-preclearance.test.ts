@@ -129,6 +129,21 @@ describe("accessPrecleared", () => {
     ).resolves.toBe(false);
   });
 
+  it("denies a token that omits exp", async () => {
+    const iss = freshIssuer();
+    const pair = await rsaPair();
+    const jwk = await crypto.subtle.exportKey("jwk", pair.publicKey);
+    jwk.kid = "test-kid";
+    stubJwks(iss, jwk);
+    const claims = serviceClaims(iss);
+    delete claims.exp;
+    const jwt = await mintJwt(pair.privateKey, claims);
+
+    await expect(
+      accessPrecleared(request(jwt), { ACCESS_TEAM_DOMAIN: iss, ACCESS_AUD: AUD }),
+    ).resolves.toBe(false);
+  });
+
   it("denies an expired token", async () => {
     const iss = freshIssuer();
     const pair = await rsaPair();

@@ -42,6 +42,7 @@ async function denialReason(
       issuer: config.iss,
       audience: config.aud,
       algorithms: ["RS256"],
+      requiredClaims: ["exp"],
     });
     payload = verified.payload;
   } catch (error) {
