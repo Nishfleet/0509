@@ -1,4 +1,5 @@
 import js from "@eslint/js";
+import betterTailwindcss from "eslint-plugin-better-tailwindcss";
 import boundaries from "eslint-plugin-boundaries";
 import importX, { createNodeResolver } from "eslint-plugin-import-x";
 import reactHooks from "eslint-plugin-react-hooks";
@@ -292,6 +293,30 @@ const STATIC_HOME_FONT_PRELOAD = {
     };
   },
 };
+
+// DESIGN.md rule 8: "The accent is one colour. Green marker. Red exists only as
+// the strike on a 'before' and the rule on an open incident. Nothing else is
+// coloured, ever." These two restricted-class patterns make a second colour a
+// diff the lint rejects instead of a review comment.
+const TAILWIND_ARBITRARY_COLOUR = {
+  pattern:
+    "^(?:[a-z0-9-]+:)*(?:bg|text|border|fill|stroke|ring|from|via|to|decoration|accent|caret|divide|outline|placeholder|shadow)-(?:\\[(?:#|rgb|hsl|oklch|oklab|lab|lch|color-mix|var\\()|\\(--)",
+  message:
+    "Arbitrary colour values are banned: every colour is a @theme token in app/app.css and the accent is one colour (DESIGN.md rule 8). Source: 0509#5871.",
+};
+
+const TAILWIND_DEFAULT_PALETTE = {
+  pattern:
+    "^(?:[a-z0-9-]+:)*(?:bg|text|border|fill|stroke|ring|from|via|to|decoration|accent|caret|divide|outline|placeholder|shadow)-(?:slate|gray|zinc|neutral|stone|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose)-[0-9]",
+  message:
+    "The Tailwind default palette is banned: every colour is a @theme token in app/app.css (bg-green is the one accent, DESIGN.md rule 8). Source: 0509#5871.",
+};
+
+const SHADCN_STOCK_TOKEN_CLASSES =
+  "(?:^|:)(?:bg|text|border|ring|fill|stroke)-(?:background|foreground|muted|muted-foreground|primary|primary-foreground|secondary|secondary-foreground|destructive|border|input|ring|popover|popover-foreground)(?:/[0-9]+)?$";
+
+const TW_ANIMATE_STOCK_CLASSES =
+  "(?:^|:)(?:animate-in|animate-out|fade-in-0|fade-out-0|zoom-in-95|zoom-out-95|slide-in-from-(?:top|bottom|left|right)-2)$";
 
 const WORKAROUND_TERMS = [
   "todo",
@@ -781,6 +806,41 @@ export default tseslint.config(
     },
     rules: {
       "static-home/no-font-preload": "error",
+    },
+  },
+
+  // The DESIGN.md colour gate (0509#5871). The parent issue says
+  // `no-unregistered-classes`; the rule shipped in 4.7.0 is named
+  // `no-unknown-classes`, so that is the name here. The `ui/` ignore list
+  // covers stock shadcn semantic tokens and tw-animate-css classes that are
+  // dead on main: the tokens are not in `@theme`, and registering them would
+  // start painting, a design change out of scope for this slice. 81 hits were
+  // probed on a74ad41 — 80 in app/components/ui/, one `cf-turnstile` in
+  // app/components/turnstile-widget.tsx, which is Cloudflare's widget class,
+  // never a Tailwind class. The `ui/` override is a later matching block
+  // because flat config replaces a rule's options per matching block: it widens
+  // `no-unknown-classes` only, and the strict block's restricted-classes and
+  // class-order settings stay in force there.
+  {
+    files: ["app/**/*.{ts,tsx}"],
+    plugins: { "better-tailwindcss": betterTailwindcss },
+    settings: { "better-tailwindcss": { entryPoint: "app/app.css" } },
+    rules: {
+      "better-tailwindcss/no-unknown-classes": ["error", { ignore: ["^cf-turnstile$"] }],
+      "better-tailwindcss/no-restricted-classes": [
+        "error",
+        { restrict: [TAILWIND_ARBITRARY_COLOUR, TAILWIND_DEFAULT_PALETTE] },
+      ],
+      "better-tailwindcss/enforce-consistent-class-order": "error",
+    },
+  },
+  {
+    files: ["app/components/ui/**/*.tsx"],
+    rules: {
+      "better-tailwindcss/no-unknown-classes": [
+        "error",
+        { ignore: [SHADCN_STOCK_TOKEN_CLASSES, TW_ANIMATE_STOCK_CLASSES] },
+      ],
     },
   },
 );
