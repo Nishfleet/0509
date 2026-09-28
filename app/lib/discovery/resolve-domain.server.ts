@@ -1,6 +1,7 @@
 import { getDomain } from "tldts";
 import { z } from "zod";
 
+import { CRAWLER_USER_AGENT } from "../fetch/robots.server";
 import { readThrough } from "../identity/probe-cache.server";
 import { readPageNames } from "./page-names";
 
@@ -12,7 +13,6 @@ export interface Resolution {
 const UNRESOLVED: Resolution = { domain: null, via: "unresolved" };
 const CACHE_TTL_SECONDS = 2592000;
 const REQUEST_TIMEOUT_MS = 8000;
-const USER_AGENT = "0509.io/1.0 (https://0509.io)";
 
 const resolutionSchema = z.object({
   domain: z.string().nullable(),
@@ -56,7 +56,7 @@ function logLookupFailure(step: "wikidata" | "slug", url: string, error: unknown
 async function wikidataGet(url: string): Promise<unknown> {
   try {
     const res = await fetch(url, {
-      headers: { "User-Agent": USER_AGENT },
+      headers: { "User-Agent": CRAWLER_USER_AGENT },
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     });
     if (!res.ok) return null;
@@ -98,7 +98,7 @@ async function slugDomain(name: string): Promise<string | null> {
 
   try {
     const res = await fetch(`https://${slug}.com/`, {
-      headers: { "User-Agent": USER_AGENT },
+      headers: { "User-Agent": CRAWLER_USER_AGENT },
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
       redirect: "follow",
     });

@@ -164,9 +164,17 @@ const GOOGLE_FONTS_BAN = {
     "Fonts are self-hosted (DESIGN.md). A Google Fonts link is render-blocking and broke the 1500 ms LCP budget once (fd1457288). Add the font file under public/ and an @font-face instead.",
 };
 
+const CRAWLER_USER_AGENT_BAN = {
+  selector:
+    "Literal[value=/FiveToNineBot\\/\\d|0509\\.io\\/\\d/], TemplateElement[value.raw=/FiveToNineBot\\/\\d|0509\\.io\\/\\d/]",
+  message:
+    "The crawler User-Agent is typed once, in app/lib/fetch/robots.server.ts as CRAWLER_USER_AGENT (built from ROBOTS_AGENT, the token robots.txt is matched against); every module that fetches today imports it. A second literal is a second identity to change and a fetch that silently keeps the old one, which is how five modules came to hold the string in two spellings. The version is matched as /\\d/ so a bump is this edit, not a new literal. Modules that fetch without a User-Agent at all are 0509#5960. Source: 0509#5883.",
+};
+
 const BANNED_SYNTAX = [
   SUPPORT_ADDRESS_BAN,
   GOOGLE_FONTS_BAN,
+  CRAWLER_USER_AGENT_BAN,
   CATCH_RETURNS_NULL,
   XML_PARSER_CONSTRUCTOR,
   DOMAIN_HOSTNAME_BAN,
