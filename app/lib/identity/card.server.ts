@@ -35,8 +35,6 @@ function hasIdentity(card: SiteCard): boolean {
 
 const readSiteCardSchema = siteCardSchema.refine(hasIdentity);
 
-// v2: the icon probe stores the first candidate storeLogo keeps. A v1 entry
-// holds the URL the old cascade's raw fetch won, which storeLogo may refuse.
 const ICON_PROBE_V = 2;
 
 const logoSchema = z.object({ v: z.literal(ICON_PROBE_V), url: z.string().nullable() });
@@ -164,11 +162,7 @@ async function firstStorableLogo(candidates: LogoCandidates): Promise<string | n
   const registrable = candidates.registrableDomain;
   for (const url of logoCandidateUrls(candidates)) {
     const stored = await storeLogo(registrable, url);
-    if (stored !== null) {
-      console.log(JSON.stringify({ event: "identity-logo-stored", subject: registrable, url }));
-      return url;
-    }
-    console.log(JSON.stringify({ event: "identity-logo-refused", subject: registrable, url }));
+    if (stored !== null) return url;
   }
   return null;
 }

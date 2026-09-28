@@ -157,6 +157,49 @@ describe("startCard", () => {
     expect(await env.SNAPSHOTS.get("logo/example.com")).not.toBeNull();
   });
 
+  it("re-probes past a stale icon entry that holds a URL the guarded fetch refuses", async () => {
+    // 0509#5890: the old cascade cached the raw-fetch winner, so a URL
+    // storeLogo then refused left the card with no logo for the probe TTL.
+    // The v2 schema refuses that entry and re-runs the walk. Seed exactly that
+    // v1 shape with no `v` and the unsafe URL the old code would have won.
+    stubAi(0.95);
+    const staleUrl = "http://insecure.example/og.png";
+    const html = `<!doctype html>
+<html>
+  <head>
+    <title>Example</title>
+  </head>
+  <body>
+    <h1>Example</h1>
+    <p>Example makes plain office chairs, desks and lamps for people who work
+    from small rooms. Everything ships flat, assembles with one hex key, and
+    comes in three colours. The catalogue is short on purpose: four chairs,
+    two desks, one lamp, no limited editions and no collaborations.</p>
+  </body>
+</html>`;
+    await env.IDENTITY_CACHE.put(
+      probeKey(subjectFor("example.com"), "icon"),
+      JSON.stringify({ url: staleUrl }),
+    );
+    const duckUrl = "https://icons.duckduckgo.com/ip3/example.com.ico";
+    const calls: string[] = [];
+    vi.stubGlobal("fetch", (input: RequestInfo | URL) => {
+      const url = input instanceof Request ? input.url : String(input);
+      calls.push(url);
+      if (url === duckUrl) {
+        return Promise.resolve(
+          new Response(new Uint8Array([1, 2, 3]), { status: 200, headers: { "content-type": "image/png" } }),
+        );
+      }
+      return Promise.resolve(new Response(html, { status: 200 }));
+    });
+    const card = startCard("ws-1", subjectFor("example.com"), []);
+    await card.site;
+    expect(await card.logo).toBe("data:image/png;base64,AQID");
+    expect(calls).toContain(duckUrl);
+    expect(calls).not.toContain(staleUrl);
+  });
+
   it("stores the first candidate the guarded fetch keeps, and never fetches the rest", async () => {
     stubAi(0.95);
     const ldUrl = "https://images.ctfassets.net/ld.png";
