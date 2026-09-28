@@ -38,9 +38,9 @@ For the individual reads, use these commands verbatim:
 
 ## The exclusion rule
 
-After #5730 production holds only the four fixed journey accounts, listed in `app/lib/fixture-accounts.ts`. Any count of users or workspaces written in code excludes them with `isFixtureAccount` or the same four emails.
+The four fixed journey accounts are the fixture surface, listed in `app/lib/fixture-accounts.ts`; #5730 purged every other fixture row, and the per-run accounts below are deleted by each run's own teardown, so the steady state is the four. Any count of users or workspaces written in code excludes them with `isFixtureAccount` or the same four emails.
 
-The signup journeys mint per-run accounts on other `e2e+` shapes, and each run's own teardown deletes them, so the steady state is the four:
+The signup journeys mint per-run accounts on other `e2e+` shapes:
 
 - [`e2e/j1-magic-link.spec.ts:16`](../e2e/j1-magic-link.spec.ts) — `e2e+<uuid>@0509.io`
 - [`e2e/j2-passkey.spec.ts:20`](../e2e/j2-passkey.spec.ts) — `e2e+<uuid>@0509.io`
