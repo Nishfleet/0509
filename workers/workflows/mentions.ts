@@ -1,6 +1,8 @@
 import type { WorkflowEvent, WorkflowStep, WorkflowStepConfig } from "cloudflare:workers";
 import { WorkflowEntrypoint } from "cloudflare:workers";
 
+import { withMonitor } from "@sentry/cloudflare";
+
 import { readCanarySources } from "../../app/lib/data/source.server";
 import { runCanary } from "../mentions/canary";
 import type { TargetOutcome } from "../mentions/sweep";
@@ -9,6 +11,12 @@ import { planTargets, sweepTarget } from "../mentions/sweep";
 const RETRY: WorkflowStepConfig = {
   retries: { limit: 2, delay: "10 seconds", backoff: "exponential" },
 };
+
+const MONITOR = {
+  schedule: { type: "crontab", value: "0 1 * * *" },
+  checkinMargin: 60,
+  timezone: "UTC",
+} as const;
 
 export interface MentionsOutcome {
   targets: number;
@@ -20,6 +28,13 @@ export interface MentionsOutcome {
 
 export class MentionsSweep extends WorkflowEntrypoint<Env> {
   async run(event: WorkflowEvent<unknown>, step: WorkflowStep): Promise<MentionsOutcome> {
+    return withMonitor("mentions-sweep", () => this.runMentions(event, step), MONITOR);
+  }
+
+  private async runMentions(
+    event: WorkflowEvent<unknown>,
+    step: WorkflowStep,
+  ): Promise<MentionsOutcome> {
     const now = event.timestamp.toISOString();
     const targets = await step.do("plan", RETRY, () => planTargets());
     const canarySources = await step.do("canary plan", RETRY, () => readCanarySources());
