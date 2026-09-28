@@ -306,11 +306,15 @@ jobs:
         uses: treosh/lighthouse-ci-action@3e7e23fb74242897f95c0ba9cabad3d0227b9b18 # v12
         with:
           # / is the noindex rebuild notice until #4834 lands; the landing page
-          # it will replace lives at /design/landing today.
+          # it will replace lives at /design/landing today. The signed-in audit
+          # is /onboarding, not /app: a fresh e2e session's /app redirects there
+          # anyway, and Chrome does not carry the injected Cookie header across
+          # the redirect, so the follow loses the session and ends on the
+          # Access login page. Audited directly it returns 200 signed-in.
           urls: |
             ${{ github.event.deployment_status.environment_url }}/design/landing
             ${{ github.event.deployment_status.environment_url }}/login
-            ${{ github.event.deployment_status.environment_url }}/app
+            ${{ github.event.deployment_status.environment_url }}/onboarding
           budgetPath: ./lighthouse-budget.json
           configPath: ./lighthouserc.cjs
           uploadArtifacts: true
