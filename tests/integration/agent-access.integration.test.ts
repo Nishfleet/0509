@@ -246,7 +246,7 @@ describe("agent access, scoped to one workspace", () => {
   });
 
   it("reads one competitor only inside the caller's workspace", async () => {
-    const own = await readAgentCompetitor(a.workspaceId, "ent_agent_a");
+    const own = await readAgentCompetitor(a.workspaceId, "ent_agent_a", new Date(NOW));
     expect(own.competitor).toMatchObject({
       id: "ent_agent_a",
       name: "Rival A",
@@ -267,7 +267,7 @@ describe("agent access, scoped to one workspace", () => {
         summary: '3 words added, 2 removed. Was: "Plans from $10." Now: "Plans from $12." https://rival-a.example/pricing',
       },
     ]);
-    expect(await readAgentCompetitor(b.workspaceId, "ent_agent_a")).toEqual({ competitor: null });
+    expect(await readAgentCompetitor(b.workspaceId, "ent_agent_a", new Date(NOW))).toEqual({ competitor: null });
 
     const called = await mcpResponse(
       jsonRpc("tools/call", { name: "get_competitor", arguments: { competitorId: "ent_agent_a" } }),
