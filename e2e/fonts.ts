@@ -10,21 +10,18 @@ import { expect, type Page } from "@playwright/test";
 // its own parameter — nothing module-scope crosses over. It returns true on
 // the loaded face or the misses it saw, so a poll timeout prints the observed
 // descriptors instead of a bare false.
-function faceProbe({
-  family,
-  weight,
-  selector,
-}: {
-  family?: string;
-  weight?: number;
-  selector?: string;
-}): true | string {
-  if (selector !== undefined) {
-    const el = document.querySelector(selector);
-    if (el === null) return `no element matches ${selector}`;
+function faceProbe(args: { family: string; weight?: number } | { selector: string }): true | string {
+  let family: string | undefined;
+  let weight: number | undefined;
+  if ("selector" in args) {
+    const el = document.querySelector(args.selector);
+    if (el === null) return `no element matches ${args.selector}`;
     const style = getComputedStyle(el);
     family = style.fontFamily.split(",")[0].trim().replaceAll('"', "");
     weight = Number(style.fontWeight);
+  } else {
+    family = args.family;
+    weight = args.weight;
   }
   if (family === undefined) return "no family asked for";
   const misses: string[] = [];
