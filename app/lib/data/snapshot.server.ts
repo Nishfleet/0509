@@ -1,6 +1,8 @@
 import { env } from "cloudflare:workers";
 import { z } from "zod";
 
+import { recordSourceLatestSnapshot } from "./source.server";
+
 const LATEST_SITE_SNAPSHOT = `SELECT id, payload_hash, payload_r2_key FROM snapshot
 WHERE watch_id = ? AND page_id = ? AND fetched_at < ?
 ORDER BY fetched_at DESC LIMIT 1`;
@@ -34,9 +36,22 @@ export async function insertSnapshot(row: {
   r2Key: string | null;
   hash: string;
 }): Promise<void> {
-  await env.DB.prepare(INSERT_SNAPSHOT)
-    .bind(row.id, row.watchId, row.pageId, row.fetchedAt, row.r2Key, row.hash)
-    .run();
+  await env.DB.batch([
+    env.DB.prepare(INSERT_SNAPSHOT).bind(
+      row.id,
+      row.watchId,
+      row.pageId,
+      row.fetchedAt,
+      row.r2Key,
+      row.hash,
+    ),
+    recordSourceLatestSnapshot({
+      watchId: row.watchId,
+      fetchedAt: row.fetchedAt,
+      itemCount: 1,
+      canaryCount: null,
+    }),
+  ]);
 }
 
 const INSERT_WATCH_SNAPSHOT = `INSERT INTO snapshot
@@ -51,16 +66,24 @@ export function insertWatchSnapshot(row: {
   hash: string;
   itemCount: number;
   canaryCount: number | null;
-}): D1PreparedStatement {
-  return env.DB.prepare(INSERT_WATCH_SNAPSHOT).bind(
-    row.id,
-    row.watchId,
-    row.fetchedAt,
-    row.r2Key,
-    row.hash,
-    row.itemCount,
-    row.canaryCount,
-  );
+}): D1PreparedStatement[] {
+  return [
+    env.DB.prepare(INSERT_WATCH_SNAPSHOT).bind(
+      row.id,
+      row.watchId,
+      row.fetchedAt,
+      row.r2Key,
+      row.hash,
+      row.itemCount,
+      row.canaryCount,
+    ),
+    recordSourceLatestSnapshot({
+      watchId: row.watchId,
+      fetchedAt: row.fetchedAt,
+      itemCount: row.itemCount,
+      canaryCount: row.canaryCount,
+    }),
+  ];
 }
 
 const LATEST_BOARD_SNAPSHOT = `SELECT id, payload_hash, payload_r2_key, item_count FROM snapshot
@@ -109,7 +132,20 @@ export async function insertBoardSnapshot(row: {
   hash: string;
   itemCount: number;
 }): Promise<void> {
-  await env.DB.prepare(INSERT_BOARD_SNAPSHOT)
-    .bind(row.id, row.watchId, row.fetchedAt, row.r2Key, row.hash, row.itemCount)
-    .run();
+  await env.DB.batch([
+    env.DB.prepare(INSERT_BOARD_SNAPSHOT).bind(
+      row.id,
+      row.watchId,
+      row.fetchedAt,
+      row.r2Key,
+      row.hash,
+      row.itemCount,
+    ),
+    recordSourceLatestSnapshot({
+      watchId: row.watchId,
+      fetchedAt: row.fetchedAt,
+      itemCount: row.itemCount,
+      canaryCount: null,
+    }),
+  ]);
 }
