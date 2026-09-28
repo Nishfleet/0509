@@ -43,7 +43,8 @@ export function DeliveryAddress({
         />
         {delivery.verified ? null : (
           <p id="delivery-address-unconfirmed" className="mt-2 max-w-prose leading-[1.55]">
-            This address is unconfirmed. We emailed a link to confirm it.
+            This address is unconfirmed. Open the link in the confirmation email, or save again if
+            it did not arrive.
           </p>
         )}
         {suppressed ? (

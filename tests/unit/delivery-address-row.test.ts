@@ -52,7 +52,7 @@ describe("DeliveryAddress", () => {
       error: null,
       suppressed: false,
     });
-    expect(unconfirmed).toContain("This address is unconfirmed. We emailed a link to confirm it.");
+    expect(unconfirmed).toContain("This address is unconfirmed. Open the link in the confirmation email");
 
     const confirmed = render({
       delivery: { address: "me@brand.com", verified: true },

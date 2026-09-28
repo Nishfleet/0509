@@ -7,12 +7,22 @@ ORDER BY st.created_at ASC
 LIMIT 1`;
 
 const WRITE_VERIFY_TOKEN = `UPDATE send_target SET verify_token = ?
-WHERE workspace_id = ?
-  AND channel_id = (SELECT id FROM channel WHERE key = 'email')`;
+WHERE id = (
+  SELECT st.id FROM send_target st
+  JOIN channel c ON c.id = st.channel_id
+  WHERE st.workspace_id = ? AND c.key = 'email'
+  ORDER BY st.created_at ASC
+  LIMIT 1
+)`;
 
 const MARK_EMAIL_TARGET_VERIFIED = `UPDATE send_target SET is_verified = 1, verify_token = NULL
-WHERE workspace_id = ?
-  AND channel_id = (SELECT id FROM channel WHERE key = 'email')`;
+WHERE id = (
+  SELECT st.id FROM send_target st
+  JOIN channel c ON c.id = st.channel_id
+  WHERE st.workspace_id = ? AND c.key = 'email'
+  ORDER BY st.created_at ASC
+  LIMIT 1
+)`;
 
 const CHANGE_EMAIL_TARGET = `UPDATE send_target
 SET target_value = ?, is_verified = 0, unsubscribe_token = NULL
