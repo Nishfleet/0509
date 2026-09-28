@@ -31,12 +31,12 @@ function scheduleOffsetFromToday(days: number): BriefSchedule {
   return { timezone: "UTC", weekday: (new Date().getUTCDay() + days) % 7, hour: 8 };
 }
 
-async function seedWorkspace(schedule: BriefSchedule, email = `${USER}@example.test`) {
+async function seedWorkspace(schedule: BriefSchedule) {
   const createdAt = new Date(Date.now() - 60 * 24 * hour).toISOString();
   await env.DB.batch([
     env.DB.prepare(
       "INSERT INTO user (id, name, email, emailVerified, createdAt, updatedAt) VALUES (?1, 'Rollover', ?2, 1, ?3, ?3)",
-    ).bind(USER, email, createdAt),
+    ).bind(USER, `${USER}@example.test`, createdAt),
     env.DB.prepare(
       "INSERT INTO workspace (id, name, owner_user_id, timezone, brief_weekday, brief_hour, created_at) VALUES (?1, 'Rollover', ?2, ?3, ?4, ?5, ?6)",
     ).bind(WS, USER, schedule.timezone, schedule.weekday, schedule.hour, createdAt),

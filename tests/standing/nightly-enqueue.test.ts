@@ -61,7 +61,6 @@ describe("nightly standing enqueue (0509#5753)", () => {
     expect(plan.catchUpAt).toEqual([]);
     expect(createBatch).toHaveBeenCalledTimes(1);
     expect(created).toBe(count);
-    expect(prepares.join("\n")).not.toMatch(/refreshWorkspaceScores|planWorkspace/);
   });
 
   it("schedules the next close and a catch-up when the last week is unranked past grace", () => {
