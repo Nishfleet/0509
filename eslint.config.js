@@ -326,6 +326,10 @@ export default tseslint.config(
       "node_modules/**",
       "worker-configuration.d.ts",
       "docs/design-directions/**",
+      // Semgrep --test fixtures live next to their rules and intentionally
+      // contain violating calls; they are in no tsconfig project, so typed
+      // linting cannot see them either. Source: 0509#5661.
+      ".semgrep/**",
       "**/+types/**",
     ],
   },
