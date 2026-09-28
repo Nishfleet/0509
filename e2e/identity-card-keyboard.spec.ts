@@ -6,6 +6,8 @@ import { betterAuth } from "better-auth";
 import { magicLink } from "better-auth/plugins";
 import { expect, test, type Locator, type Page } from "@playwright/test";
 
+import { consoleFailures, watchConsole } from "./inbox";
+
 // Preview-lane proof for #5441: Enter saves and closes the identity card
 // editor, Escape saves and closes, and Base UI returns focus to the trigger.
 // `e2e/onboarding-identity.spec.ts` keeps the production walk on the same
@@ -148,28 +150,6 @@ function watchDraftPosts(page: Page): string[] {
   return posts;
 }
 
-function watchConsole(page: Page): { consoleErrors: { text: string; url: string }[]; pageErrors: string[] } {
-  const consoleErrors: { text: string; url: string }[] = [];
-  const pageErrors: string[] = [];
-  page.on("console", (message) => {
-    if (message.type() === "error") {
-      consoleErrors.push({ text: message.text(), url: message.location().url });
-    }
-  });
-  page.on("pageerror", (error) => pageErrors.push(error.message));
-  return { consoleErrors, pageErrors };
-}
-
-function consoleFailures(page: Page, watched: ReturnType<typeof watchConsole>): string[] {
-  const pageOrigin = new URL(page.url()).origin;
-  return [
-    ...watched.consoleErrors
-      .filter((entry) => !entry.url || new URL(entry.url).origin === pageOrigin)
-      .map((entry) => `${entry.text} @ ${entry.url}`),
-    ...watched.pageErrors,
-  ];
-}
-
 test("the identity card editor saves and closes on Enter, with focus back on the trigger", async ({ page }, testInfo) => {
   test.setTimeout(90_000);
   const watched = watchConsole(page);
@@ -197,7 +177,7 @@ test("the identity card editor saves and closes on Enter, with focus back on the
   await expect(trigger).toBeFocused();
   await expect(trigger).toContainText("Brand One");
   await expect(page.locator('input[type="hidden"][name="name"]')).toHaveValue("Brand One");
-  expect(consoleFailures(page, watched), testInfo.project.name).toEqual([]);
+  expect(await consoleFailures(page, watched, testInfo), testInfo.project.name).toEqual([]);
 });
 
 test("the identity card editor saves and closes on Escape, with focus back on the trigger", async ({ page }, testInfo) => {
@@ -223,5 +203,5 @@ test("the identity card editor saves and closes on Escape, with focus back on th
   await expect(trigger).toBeFocused();
   await expect(trigger).toContainText("one line on what we do");
   await expect(page.locator('input[type="hidden"][name="description"]')).toHaveValue("one line on what we do");
-  expect(consoleFailures(page, watched), testInfo.project.name).toEqual([]);
+  expect(await consoleFailures(page, watched, testInfo), testInfo.project.name).toEqual([]);
 });

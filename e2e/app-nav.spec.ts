@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-import { requireInboxToken, signInWithMagicLink } from "./inbox";
+import { consoleFailures, requireInboxToken, signInWithMagicLink, watchConsole } from "./inbox";
 
 // The signed-in nav walk, production only — exactly like J1: the preview
 // Worker has no EMAIL binding and no inbox to read, so it cannot mint a
@@ -17,12 +17,7 @@ test("a signed-in user reaches the four places by tapping and by Tab+Enter", asy
   // Production lane: the sign-in poll plus the nav walk overruns the 30 s
   // default (0509#5681).
   test.setTimeout(120_000);
-  const errors: { text: string; url: string }[] = [];
-  page.on("console", (message) => {
-    if (message.type() === "error") {
-      errors.push({ text: message.text(), url: message.location().url });
-    }
-  });
+  const watched = watchConsole(page);
 
   const email = `e2e+${crypto.randomUUID().replaceAll("-", "").slice(0, 12)}@0509.io`;
   await signInWithMagicLink(page, email, requireInboxToken());
@@ -80,9 +75,5 @@ test("a signed-in user reaches the four places by tapping and by Tab+Enter", asy
   await page.keyboard.press("Enter");
   await page.waitForURL(/\/onboarding$/);
 
-  const pageOrigin = new URL(page.url()).origin;
-  const failures = errors
-    .filter((entry) => !entry.url || new URL(entry.url).origin === pageOrigin)
-    .map((entry) => `${entry.text} @ ${entry.url}`);
-  expect(failures, testInfo.project.name).toEqual([]);
+  expect(await consoleFailures(page, watched, testInfo), testInfo.project.name).toEqual([]);
 });

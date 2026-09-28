@@ -1,4 +1,4 @@
-import { expect, type Page } from "@playwright/test";
+import { expect, type Page, type TestInfo } from "@playwright/test";
 
 // The J1 mail path, per the amended decision on 0509#3927: Email Routing's
 // e2e@0509.io rule delivers e2e+<run-id>@0509.io (zone subaddressing on, RFC
@@ -181,6 +181,49 @@ export async function turnstileToken(page: Page): Promise<string> {
   // only a failure where the captcha is still enforced.
   if (token.length === 0 && !process.env.CF_ACCESS_CLIENT_ID) throw new Error("Turnstile issued no token");
   return token;
+}
+
+// The console-error gate's collector, shared by every spec that gates on it.
+// Console errors keep the url of the script that logged them so the gate can
+// hold only same-origin messages — the real Turnstile widget on /login logs
+// its NaN noise from challenges.cloudflare.com, cross-origin JS and not app
+// code (0509#5682). Pageerrors carry no location and are always gated.
+export function watchConsole(page: Page): {
+  consoleErrors: { text: string; url: string }[];
+  pageErrors: string[];
+} {
+  const consoleErrors: { text: string; url: string }[] = [];
+  const pageErrors: string[] = [];
+  page.on("console", (message) => {
+    if (message.type() === "error") {
+      consoleErrors.push({ text: message.text(), url: message.location().url });
+    }
+  });
+  page.on("pageerror", (error) => pageErrors.push(error.message));
+  return { consoleErrors, pageErrors };
+}
+
+// Same-origin entries fail the test as "text @ url"; the excluded cross-origin
+// entries are attached to the report so a green run still shows what the gate
+// dropped.
+export async function consoleFailures(
+  page: Page,
+  watched: ReturnType<typeof watchConsole>,
+  testInfo: TestInfo,
+): Promise<string[]> {
+  const pageOrigin = new URL(page.url()).origin;
+  const sameOrigin = (entry: { url: string }) => !entry.url || new URL(entry.url).origin === pageOrigin;
+  const dropped = watched.consoleErrors.filter((entry) => !sameOrigin(entry));
+  if (dropped.length > 0) {
+    await testInfo.attach("cross-origin console errors (excluded from the gate)", {
+      body: dropped.map((entry) => `${entry.text} @ ${entry.url}`).join("\n"),
+      contentType: "text/plain",
+    });
+  }
+  return [
+    ...watched.consoleErrors.filter(sameOrigin).map((entry) => `${entry.text} @ ${entry.url}`),
+    ...watched.pageErrors,
+  ];
 }
 
 // J1's core: submit the login form for a fresh e2e+ address, read the real

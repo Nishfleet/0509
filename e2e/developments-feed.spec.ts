@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 
-import { requireInboxToken, signInWithMagicLink } from "./inbox";
+import { consoleFailures, requireInboxToken, signInWithMagicLink, watchConsole } from "./inbox";
 
 // Filter vocabulary is the feed's own (app/lib/developments.ts FEED_FILTERS);
 // the counts are live and asserted only as numerals — a just-watched
@@ -33,14 +33,7 @@ test("the developments feed filters by kind and keeps its layout across filters"
     "the developments feed needs a real session; the local preview Worker cannot mint one",
   );
   test.setTimeout(150_000);
-  const consoleErrors: { text: string; url: string }[] = [];
-  const pageErrors: string[] = [];
-  page.on("console", (message) => {
-    if (message.type() === "error") {
-      consoleErrors.push({ text: message.text(), url: message.location().url });
-    }
-  });
-  page.on("pageerror", (error) => pageErrors.push(error.message));
+  const watched = watchConsole(page);
 
   const email = `e2e+${crypto.randomUUID().replaceAll("-", "").slice(0, 12)}@0509.io`;
   await signInWithMagicLink(page, email, requireInboxToken());
@@ -118,12 +111,5 @@ test("the developments feed filters by kind and keeps its layout across filters"
   }));
   expect(widths.scrollWidth).toBeLessThanOrEqual(widths.innerWidth);
 
-  const pageOrigin = new URL(page.url()).origin;
-  const failures = [
-    ...consoleErrors
-      .filter((entry) => !entry.url || new URL(entry.url).origin === pageOrigin)
-      .map((entry) => `${entry.text} @ ${entry.url}`),
-    ...pageErrors,
-  ];
-  expect(failures, testInfo.project.name).toEqual([]);
+  expect(await consoleFailures(page, watched, testInfo), testInfo.project.name).toEqual([]);
 });
