@@ -1,0 +1,9 @@
+{
+  "path": ["app", "workers"],
+  "format": ["typescript", "tsx"],
+  "minLines": 8,
+  "minTokens": 70,
+  "threshold": 0.124,
+  "gitignore": true,
+  "reporters": ["console"]
+}
