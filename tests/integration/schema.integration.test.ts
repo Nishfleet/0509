@@ -13,7 +13,7 @@ describe("0001_rebuild.sql", () => {
     const tables = await env.DB.prepare(
       "SELECT count(*) AS n FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name != 'd1_migrations' AND name NOT LIKE '_cf_%'",
     ).first<{ n: number }>();
-    // 35 = 34 at the rebuild plus sweep_run (0026, 0509#5755): every finished
+    // 35 = 34 at the rebuild plus sweep_run (0027, 0509#5755): every finished
     // site sweep records its wall clock, pages and failures.
     expect(tables?.n).toBe(35);
   });
