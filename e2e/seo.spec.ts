@@ -33,6 +33,28 @@ test("GET /sitemap.xml serves the manifest-generated urlset", async ({
   expect(body).toMatch(/<loc>https?:\/\/[^<]+\/llms\.txt<\/loc>/);
 });
 
+test("every sitemap url is served as an indexable 200, not noindex", async ({
+  request,
+}) => {
+  const sitemap = await (await request.get("/sitemap.xml")).text();
+  const locs = [...sitemap.matchAll(/<loc>([^<]+)<\/loc>/g)];
+  expect(locs.length).toBeGreaterThan(0);
+  for (const loc of locs) {
+    const path = new URL(loc[1]).pathname;
+    const response = await request.get(path);
+    expect(response.status(), `${path} is not a 200`).toBe(200);
+    const robotsTag = response.headers()["x-robots-tag"];
+    expect(
+      robotsTag === undefined || !robotsTag.includes("noindex"),
+      `${path} is noindex by header`,
+    ).toBe(true);
+    expect(
+      await response.text(),
+      `${path} is noindex in the served document`,
+    ).not.toContain("noindex");
+  }
+});
+
 test("GET /llms.txt serves the manifest-generated summary", async ({
   request,
 }) => {

@@ -74,13 +74,18 @@ describe("public-route manifest", () => {
     }
   });
 
-  it("keeps every SITEMAP_PATHS member a live, robots-allowed, indexable route", () => {
+  it("keeps every SITEMAP_PATHS member a declared, robots-allowed, non-noindex route", () => {
     const routesByUrl = new Map<string, RouteConfigEntry>();
     for (const entry of topLevel(routes)) {
       if (entry.path !== undefined && entry.path !== "*") {
         routesByUrl.set(`/${entry.path}`, entry);
       }
     }
+    const headerRules = join(REPO_ROOT, "public/_headers");
+    expect(
+      existsSync(headerRules) ? readFileSync(headerRules, "utf8") : "",
+      "public/_headers marks a sitemap path noindex through X-Robots-Tag",
+    ).not.toContain("X-Robots-Tag: noindex");
     for (const path of SITEMAP_PATHS) {
       const route = routesByUrl.get(path);
       expect(
@@ -96,7 +101,7 @@ describe("public-route manifest", () => {
       if (route === undefined) continue;
       expect(
         readFileSync(join(REPO_ROOT, "app", route.file), "utf8"),
-        `sitemap path "${path}" is served by a noindex document`,
+        `the module serving "${path}" declares a robots noindex`,
       ).not.toContain("noindex");
     }
   });
