@@ -181,8 +181,7 @@ jobs:
         with:
           name: playwright-report-preview
           # Retry traces (trace: on-first-retry) land in test-results/, and a
-          # timeout cancels the job — cancelled() keeps the upload, same as
-          # e2e-production below (0509#5676).
+          # timeout kill is a cancellation, not a failure (0509#5676).
           path: |
             playwright-report/
             test-results/
