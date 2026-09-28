@@ -6,7 +6,7 @@ import { betterAuth } from "better-auth";
 import { magicLink } from "better-auth/plugins";
 import { expect, test, type Page } from "@playwright/test";
 
-import { requireInboxToken, signInWithMagicLink } from "./inbox";
+import { consoleFailures, requireInboxToken, signInWithMagicLink, watchConsole } from "./inbox";
 
 // J6 by keyboard alone (0509#4158): a customer can turn a competitor off and
 // back on without a pointer. From whatever app page the session lands on, the
@@ -137,12 +137,9 @@ async function watchOneCompetitor(page: Page): Promise<void> {
   await expect(page).toHaveURL(/\/app$/);
 }
 
-test("the per-brand switch is operable with a keyboard alone", async ({ page }) => {
+test("the per-brand switch is operable with a keyboard alone", async ({ page }, testInfo) => {
   test.setTimeout(150_000);
-  const consoleErrors: string[] = [];
-  page.on("console", (message) => {
-    if (message.type() === "error") consoleErrors.push(message.text());
-  });
+  const watched = watchConsole(page);
 
   if (process.env.PLAYWRIGHT_TEST_BASE_URL) {
     await watchOneCompetitor(page);
@@ -231,5 +228,5 @@ test("the per-brand switch is operable with a keyboard alone", async ({ page }) 
     `switch[width=${String(width)}] aria-checked=false->true, note="${(await note.textContent())?.trim() ?? ""}"`,
   );
 
-  expect(consoleErrors).toEqual([]);
+  expect(await consoleFailures(page, watched, testInfo), testInfo.project.name).toEqual([]);
 });

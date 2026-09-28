@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test";
 
 import { expectFaceLoaded } from "./fonts";
+import { consoleFailures, watchConsole } from "./inbox";
 
 // The homepage, staged at /design/landing behind the staff gate until launch;
 // / keeps the static rebuild notice (Nish, 2026-09-24). What is asserted is the
@@ -33,11 +34,7 @@ test("the landing renders its sections in order under one headline", async ({ pa
 });
 
 test("how it works reads as three ruled steps in order, wide and narrow", async ({ page }, testInfo) => {
-  const consoleErrors: string[] = [];
-  page.on("console", (message) => {
-    if (message.type() === "error") consoleErrors.push(message.text());
-  });
-  page.on("pageerror", (error) => consoleErrors.push(error.message));
+  const watched = watchConsole(page);
 
   await page.goto(PATH);
   await page.waitForLoadState("networkidle");
@@ -49,7 +46,7 @@ test("how it works reads as three ruled steps in order, wide and narrow", async 
   for (const [index, title] of titles.entries()) {
     await expect(steps.nth(index).getByRole("heading", { level: 3, name: title })).toBeVisible();
   }
-  expect(consoleErrors).toEqual([]);
+  expect(await consoleFailures(page, watched, testInfo), testInfo.project.name).toEqual([]);
 
   if (testInfo.project.name === "desktop-1440") {
     const rows = await steps.evaluateAll((items) =>
@@ -79,11 +76,7 @@ test("how it works reads as three ruled steps in order, wide and narrow", async 
 });
 
 test("the agents section hands a visitor's agent the MCP address and the API docs", async ({ page }, testInfo) => {
-  const consoleErrors: string[] = [];
-  page.on("console", (message) => {
-    if (message.type() === "error") consoleErrors.push(message.text());
-  });
-  page.on("pageerror", (error) => consoleErrors.push(error.message));
+  const watched = watchConsole(page);
 
   await page.goto(PATH);
   await page.waitForLoadState("networkidle");
@@ -97,7 +90,7 @@ test("the agents section hands a visitor's agent the MCP address and the API doc
     "href",
     "/api/v1/openapi.json",
   );
-  expect(consoleErrors).toEqual([]);
+  expect(await consoleFailures(page, watched, testInfo), testInfo.project.name).toEqual([]);
 
   await testInfo.attach(`agents-${testInfo.project.name}`, {
     body: await agents.screenshot(),
@@ -115,12 +108,8 @@ test("the landing's action names its price and leads to sign-in", async ({ page 
 });
 
 test("the hero's first viewport holds the outcome and the one priced input", async ({ page }, testInfo) => {
-  const consoleErrors: string[] = [];
+  const watched = watchConsole(page);
   const fullFace: string[] = [];
-  page.on("console", (message) => {
-    if (message.type() === "error") consoleErrors.push(message.text());
-  });
-  page.on("pageerror", (error) => consoleErrors.push(error.message));
   page.on("request", (request) => {
     if (request.url().includes("/fonts/")) fullFace.push(request.url());
   });
@@ -155,7 +144,7 @@ test("the hero's first viewport holds the outcome and the one priced input", asy
     }).length;
   });
   expect(filled).toBe(1);
-  expect(consoleErrors).toEqual([]);
+  expect(await consoleFailures(page, watched, testInfo), testInfo.project.name).toEqual([]);
 
   const headlineBox = await hero.getByRole("heading", { level: 1 }).boundingBox();
   const proofBox = await hero.locator("#hero-proof").boundingBox();

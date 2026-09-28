@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test";
 
 import { expectElementFaceLoaded, expectFaceLoaded } from "./fonts";
+import { consoleFailures, watchConsole } from "./inbox";
 
 // The smallest suite that is still an honest answer to "does the thing we are
 // about to ship start and serve". It runs twice: against the built Worker on
@@ -108,15 +109,11 @@ test("the login page renders the one input that signs you in", async ({ page }) 
   await expect(contact).toHaveAccessibleName(/\S/);
 });
 
-test("the page reaches first paint with no console errors", async ({ page }) => {
-  const errors: string[] = [];
-  page.on("console", (message) => {
-    if (message.type() === "error") errors.push(message.text());
-  });
-  page.on("pageerror", (error) => errors.push(error.message));
+test("the page reaches first paint with no console errors", async ({ page }, testInfo) => {
+  const watched = watchConsole(page);
 
   await page.goto("/");
   await page.waitForLoadState("networkidle");
 
-  expect(errors).toEqual([]);
+  expect(await consoleFailures(page, watched, testInfo), testInfo.project.name).toEqual([]);
 });

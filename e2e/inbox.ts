@@ -185,7 +185,7 @@ export async function turnstileToken(page: Page): Promise<string> {
 
 // The console-error gate's collector, shared by every spec that holds the
 // same-origin gate — j3-onboard-domain keeps its own collector (0509#5680
-// carve) and the remaining own-collector specs are filed as 0509#5706.
+// carve).
 // Console errors keep the url of the script that logged them so the gate can
 // hold only same-origin messages — the real Turnstile widget on /login logs
 // its NaN noise from challenges.cloudflare.com, cross-origin JS and not app
@@ -208,11 +208,14 @@ export function watchConsole(page: Page): {
 
 // Same-origin entries fail the test as "text @ url"; the excluded cross-origin
 // entries are attached to the report so a green run still shows what the gate
-// dropped.
+// dropped. `exclude` drops a same-origin console entry a spec expects — the
+// 404-page specs' own-document line — at entry level, before the line is
+// composed. Pageerrors have no location to scope by and are never excludable.
 export async function consoleFailures(
   page: Page,
   watched: ReturnType<typeof watchConsole>,
   testInfo: TestInfo,
+  exclude: (entry: { text: string; url: string }) => boolean = () => false,
 ): Promise<string[]> {
   const pageOrigin = new URL(page.url()).origin;
   const sameOrigin = (entry: { url: string }) => !entry.url || new URL(entry.url).origin === pageOrigin;
@@ -224,7 +227,9 @@ export async function consoleFailures(
     });
   }
   return [
-    ...watched.consoleErrors.filter(sameOrigin).map((entry) => `${entry.text} @ ${entry.url}`),
+    ...watched.consoleErrors
+      .filter((entry) => sameOrigin(entry) && !exclude(entry))
+      .map((entry) => `${entry.text} @ ${entry.url}`),
     ...watched.pageErrors,
   ];
 }
