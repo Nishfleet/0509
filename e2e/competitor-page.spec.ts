@@ -33,11 +33,13 @@ test("a watched competitor page leads with the switch and its consequence, and t
   );
   test.setTimeout(150_000);
   const consoleErrors: { text: string; url: string }[] = [];
+  const pageErrors: string[] = [];
   page.on("console", (message) => {
     if (message.type() === "error") {
       consoleErrors.push({ text: message.text(), url: message.location().url });
     }
   });
+  page.on("pageerror", (error) => pageErrors.push(error.message));
 
   const email = `e2e+${crypto.randomUUID().replaceAll("-", "").slice(0, 12)}@0509.io`;
   await signInWithMagicLink(page, email, requireInboxToken());
@@ -92,8 +94,11 @@ test("a watched competitor page leads with the switch and its consequence, and t
   });
 
   const pageOrigin = new URL(page.url()).origin;
-  const failures = consoleErrors
-    .filter((entry) => !entry.url || new URL(entry.url).origin === pageOrigin)
-    .map((entry) => `${entry.text} @ ${entry.url}`);
+  const failures = [
+    ...consoleErrors
+      .filter((entry) => !entry.url || new URL(entry.url).origin === pageOrigin)
+      .map((entry) => `${entry.text} @ ${entry.url}`),
+    ...pageErrors,
+  ];
   expect(failures, testInfo.project.name).toEqual([]);
 });
