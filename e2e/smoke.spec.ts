@@ -113,7 +113,7 @@ test("the page reaches first paint with no console errors", async ({ page }, tes
   const watched = watchConsole(page);
 
   await page.goto("/");
-  await page.waitForLoadState("networkidle");
+  await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
 
   expect(await consoleFailures(page, watched, testInfo), testInfo.project.name).toEqual([]);
 });

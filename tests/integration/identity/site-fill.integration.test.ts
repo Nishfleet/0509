@@ -55,7 +55,7 @@ async function seed(identity: Record<string, unknown>): Promise<void> {
 }
 
 async function identity(): Promise<Record<string, unknown>> {
-  const value = await readEntityIdentityJson(entityId);
+  const value = await readEntityIdentityJson(workspaceId, entityId);
   if (value === null) throw new Error("self entity was not stored");
   return JSON.parse(value) as Record<string, unknown>;
 }
@@ -86,7 +86,7 @@ describe("site fill", () => {
     await seed({ description: null, socials: [] });
     await env.IDENTITY_CACHE.put(key(), JSON.stringify(CARD));
 
-    expect(await attemptSiteFill(entityId, HOMEPAGE)).toBe("filled");
+    expect(await attemptSiteFill(workspaceId, entityId, HOMEPAGE)).toBe("filled");
     expect(await identity()).toEqual({
       description: "Gym clothes",
       socials: [SOCIAL],
@@ -99,7 +99,7 @@ describe("site fill", () => {
     await seed({ description: "Mine", socials: [existing] });
     await env.IDENTITY_CACHE.put(key(), JSON.stringify(CARD));
 
-    expect(await attemptSiteFill(entityId, HOMEPAGE)).toBe("filled");
+    expect(await attemptSiteFill(workspaceId, entityId, HOMEPAGE)).toBe("filled");
     expect(await identity()).toEqual({
       description: "Mine",
       socials: [existing],
@@ -120,7 +120,7 @@ describe("site fill", () => {
     ]);
     await env.IDENTITY_CACHE.put(key(), JSON.stringify(CARD));
 
-    expect(await attemptSiteFill(entityId, HOMEPAGE)).toBe("filled");
+    expect(await attemptSiteFill(workspaceId, entityId, HOMEPAGE)).toBe("filled");
     expect(await identity()).toEqual({
       description: null,
       socials: [SOCIAL],
@@ -130,17 +130,17 @@ describe("site fill", () => {
 
   it("leaves the card unchanged when the homepage remains unreachable", async () => {
     await seed({ description: null, socials: [] });
-    const before = await readEntityIdentityJson(entityId);
+    const before = await readEntityIdentityJson(workspaceId, entityId);
     vi.stubGlobal("fetch", () => Promise.reject(new Error("refused")));
 
-    expect(await attemptSiteFill(entityId, HOMEPAGE)).toBe("pending");
-    expect(await readEntityIdentityJson(entityId)).toBe(before);
+    expect(await attemptSiteFill(workspaceId, entityId, HOMEPAGE)).toBe("pending");
+    expect(await readEntityIdentityJson(workspaceId, entityId)).toBe(before);
   });
 
   it("records a terminal fill state without changing card fields", async () => {
     await seed({ description: "Mine", socials: [] });
 
-    await markSiteFill(entityId, "gave_up");
+    await markSiteFill(workspaceId, entityId, "gave_up");
 
     expect(await identity()).toEqual({
       description: "Mine",
