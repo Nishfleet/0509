@@ -42,7 +42,7 @@ export async function saveDeliveryAddress(input: {
   resume: boolean;
   email: SendEmail;
 }): Promise<{ error: string | null; suppressed: boolean }> {
-  const address = input.address.trim();
+  const address = input.address.trim().toLowerCase();
   const at = address.indexOf("@");
   if (at < 1 || at !== address.lastIndexOf("@") || at === address.length - 1) {
     return { error: INVALID, suppressed: false };
@@ -60,7 +60,7 @@ export async function saveDeliveryAddress(input: {
   const target = await readEmailTarget(env.DB, workspaceId);
   await changeEmailTarget(env.DB, { workspaceId, address });
 
-  if (address === input.signInEmail) {
+  if (address === input.signInEmail.toLowerCase()) {
     await markEmailTargetVerified(env.DB, { workspaceId });
     return { error: null, suppressed: false };
   }

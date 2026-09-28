@@ -186,4 +186,18 @@ describe("confirm a changed delivery address (0509#5811)", () => {
       verify_token: null,
     });
   });
+
+  it("(g) the sign-in address in another case still verifies at once", async () => {
+    const workspaceId = firstWorkspaceId(USER_ID);
+    const rec = recorder();
+    const result = await save(rec, " Owner@0509.io ");
+
+    expect(result).toEqual({ error: null, suppressed: false });
+    expect(rec.sent).toHaveLength(0);
+    expect(await onlyTarget(workspaceId)).toMatchObject({
+      target_value: SIGN_IN_EMAIL,
+      is_verified: 1,
+      verify_token: null,
+    });
+  });
 });
