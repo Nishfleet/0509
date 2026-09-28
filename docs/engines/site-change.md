@@ -29,7 +29,7 @@ Every page, every tick, goes through Browser Rendering's `/snapshot` quick actio
 
 ### Candidate B — cheap path first, browser on escalation
 
-Plain `fetch` + `HTMLRewriter` extraction → normalised visible text → hash → compare with the previous `snapshot.payload_hash`. Identical: one snapshot row, done. Changed: escalate to Browser Rendering for the screenshot pair and a re-extraction, word-diff with `diff`, then judge.
+Plain `fetch` + `HTMLRewriter` extraction → normalised visible text → hash → compare with the previous `snapshot.payload_hash`. Identical: the snapshot row and the paired `source` latest-facts update, done. Changed: escalate to Browser Rendering for the screenshot pair and a re-extraction, word-diff with `diff`, then judge.
 
 - The unchanged case — the common case — costs one sub-second fetch and one D1 row.
 - A page that cannot be read by `fetch` is marked `transport='browser'` on its `page` row and takes the browser path from then on.
@@ -136,7 +136,7 @@ A URL regex would have filed `/collections/all-products` as `other` and never sn
 | Own-site break | — | `alert` immediately, plus `send_attempt` through the Email Service binding |
 | User says "I meant to do that" | — | `user_decision`, keyed to the signal — this is the `user_memory` every later judgment reads |
 
-**One snapshot row per watch per tick, always. Signal rows only for changes that survived judgment.** That is the schema's chosen shape and the reason this engine cannot reproduce the 2026-09-17 rows-written bill.
+**One snapshot row per watch per tick, always, paired in the same batch with one `source` latest-facts update. Signal rows only for changes that survived judgment.** That is the schema's chosen shape and the reason this engine cannot reproduce the 2026-09-17 rows-written bill.
 
 ## Workflow / Queue / cron layout
 
@@ -156,7 +156,7 @@ cron "0 * * * *"          self entities only, hourly — home + checkout/pricing
                              degraded, record the measured sweep time and queue depth for Nish
 ```
 
-The consumer, per message: fetch (or render) → extract → normalise → hash → compare. On a hash match it writes the snapshot row and stops. On a mismatch it escalates to a browser for the screenshot pair, word-diffs with `diff` **9.0.0**, calls D3s (self) or D3, and writes.
+The consumer, per message: fetch (or render) → extract → normalise → hash → compare. On a hash match it writes the snapshot row with the paired `source` latest-facts update and stops. On a mismatch it escalates to a browser for the screenshot pair, word-diffs with `diff` **9.0.0**, calls D3s (self) or D3, and writes.
 
 **Budgets, as numbers.** At most **4 browser escalations per brand per day** and **6 Jev judgments per brand per day**, counted in a **Durable Object** keyed by workspace-and-day — not KV, whose 1-write-per-second same-key limit and 10×-read write price make it the wrong store for a counter (`REBUILD-STACK.md` §4.5). Exceeding a budget marks the item `unreviewed` and defers it; it never silently skips.
 
@@ -263,7 +263,7 @@ Per 1,000 page checks, priced from `REBUILD-COST.md` (2026-09-21):
 
 **FORBIDDEN.** `pixelmatch` — rejected above with the measurement behind it; screenshots are evidence, not the detector. `fast-diff` and `diff-match-patch` (character-level, no structured hunks — rejected in the stack doc). Base64ing a screenshot into a D1 row. Returning a diff body from a Workflow step instead of an R2 key (1 MiB step-output cap). Diffing before the hash gate has said something changed.
 
-**PROOF REQUIRED.** One real competitor change end to end: both snapshot row ids, the R2 keys for both texts and both screenshots, and the stored hunks, cited with timestamps. One unchanged tick shown producing **one snapshot row and nothing else** — no screenshot, no diff, no Jev call.
+**PROOF REQUIRED.** One real competitor change end to end: both snapshot row ids, the R2 keys for both texts and both screenshots, and the stored hunks, cited with timestamps. One unchanged tick shown producing **one snapshot row, the paired `source` latest-facts update, and nothing else** — no screenshot, no diff, no Jev call.
 
 **PUSH.** `wip/issue-3879-p3`.
 

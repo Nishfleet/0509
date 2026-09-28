@@ -7,6 +7,7 @@ import {
   insertBoardSnapshot,
   insertWatchSnapshot,
 } from "../../app/lib/data/snapshot.server";
+import { readRegistrySources } from "../../app/lib/data/source.server";
 
 const MIGRATION = "0026_source_latest_snapshot.sql";
 
@@ -284,12 +285,12 @@ describe("source latest snapshot facts (0509#5724)", () => {
   });
 
   it("adds three nullable columns to source, proven with PRAGMA on real D1", async () => {
-    const info = await env.DB.prepare("PRAGMA table_info(source)").all<{
+    const { results } = await env.DB.prepare("PRAGMA table_info(source)").all<{
       name: string;
       type: string;
       notnull: number;
     }>();
-    const columns = new Map((info.results ?? []).map((column) => [column.name, column]));
+    const columns = new Map(results.map((column) => [column.name, column]));
 
     for (const [name, type] of [
       ["latest_fetched_at", "TEXT"],
@@ -301,6 +302,45 @@ describe("source latest snapshot facts (0509#5724)", () => {
       expect(column.type, `${name} must be ${type}`).toBe(type);
       expect(column.notnull, `${name} must be nullable so a code rollback stays safe`).toBe(0);
     }
+  });
+
+  it("the stored facts equal what the registry read recomputes, across watches", async () => {
+    await seedSource(SOURCE, WATCH);
+    await seedWatch(WATCH_TIE, SOURCE, "acme-second");
+    await env.DB.batch([
+      ...insertWatchSnapshot({
+        id: "snap-p-1",
+        watchId: WATCH,
+        fetchedAt: "2026-09-25T07:00:00Z",
+        r2Key: "snapshot/mentions/gdelt/snap-p-1.json",
+        hash: "hash-p-1",
+        itemCount: 11,
+        canaryCount: 1,
+      }),
+      ...insertWatchSnapshot({
+        id: "snap-p-2",
+        watchId: WATCH_TIE,
+        fetchedAt: "2026-09-25T08:00:00Z",
+        r2Key: "snapshot/mentions/gdelt/snap-p-2.json",
+        hash: "hash-p-2",
+        itemCount: 12,
+        canaryCount: 2,
+      }),
+    ]);
+
+    const registry = await readRegistrySources();
+    const entry = registry.find((one) => one.source.key === `test.${SOURCE}`);
+    if (entry === undefined) throw new Error("seeded source missing from the registry read");
+    expect(entry.snapshot).toEqual({
+      fetched_at: "2026-09-25T08:00:00Z",
+      item_count: 12,
+      canary_count: 2,
+    });
+    expect(await latestFacts(SOURCE)).toEqual({
+      latest_fetched_at: "2026-09-25T08:00:00Z",
+      latest_item_count: 12,
+      latest_canary_count: 2,
+    });
   });
 
   it("the migration's backfill statement seeds the facts from stored snapshots", async () => {

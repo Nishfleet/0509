@@ -48,13 +48,15 @@ Daily cadence, 30-day month, 15 browser-seconds per brand-day:
 | 100 | 12.5 | 2.5 h | **$0.22** |
 | 1,000 | 125.0 | 115 h | **$10.35** |
 
-D1 writes under the shipped design — one `snapshot` row per watch per tick, ten sources per brand:
+D1 writes under the shipped design — one `snapshot` row per watch per tick, ten sources per brand, each snapshot paired in one `batch()` with a `source` latest-facts `UPDATE`:
 
-| Brands | Snapshot rows / mo | Against the 50M included |
-|---|---|---|
-| 10 | 3,000 | 0.006% |
-| 100 | 30,000 | 0.06% |
-| 1,000 | 300,000 | 0.6% |
+| Brands | `snapshot` rows / mo | `source` latest-facts rows / mo | D1 rows / mo | Against the 50M included |
+|---|---|---|---|---|
+| 10 | 3,000 | 3,000 | 6,000 | 0.012% |
+| 100 | 30,000 | 30,000 | 60,000 | 0.12% |
+| 1,000 | 300,000 | 300,000 | 600,000 | 1.2% |
+
+The paired update is one write attempt per check, and a check whose snapshot is not the source's newest writes nothing. On a source whose watches are all polled in one run (`workers/workflows/mentions.ts` hands every target the same `now`), the watches tie on `fetched_at` and only the first-committed update moves the row, so the shipped figure sits at or below the upper bound above.
 
 **At every scale we plan for, the Cloudflare bill is dominated by Browser Rendering duration, and it is small.** R2 holds the snapshot bodies and has no egress fee. KV holds counters and cursors, comfortably inside its included tier.
 
@@ -75,7 +77,7 @@ Worker rows are script `0509` only, `isPreview = 0`, usage model `standard`. Tha
 | Workers requests | a Workers request per brand-day, no count | 106,149 requests, 10 errors | none, 0 ON brands | 454,924 requests, inside 10 million, $0 |
 | Workers CPU | no CPU figure | 33,980,390,340 µs in `cpuTimeUs`, which is 33,980,390 ms. Average 320 ms CPU per request | none, 0 ON brands | 145,630,244 ms. 115,630,244 ms past the included 30 million, at $0.02 per million, **$2.31** |
 | D1 rows read | "a few D1 rows" per brand-day | 107,559,825 | none, 0 ON brands | 460,970,679 rows, inside 25 billion, $0 |
-| D1 rows written | 10 snapshot rows per brand-day. One `snapshot` row per watch per tick, ten sources, each paired in one `batch()` with a `source` latest-facts `UPDATE`, so 10 further row writes a brand-day. At 0 brands that estimate is 0 snapshot rows | 223,287 rows written. The `snapshot` table has 0 rows, so these writes are the rest of the app | none, 0 ON brands | 956,944 rows, inside 50 million, $0 |
+| D1 rows written | 20 rows per brand-day: one `snapshot` row per watch per tick, ten sources, each paired in one `batch()` with a `source` latest-facts `UPDATE`. At 0 brands that estimate is 0 rows | 223,287 rows written. The `snapshot` table has 0 rows, so these writes are the rest of the app | none, 0 ON brands | 956,944 rows, inside 50 million, $0 |
 | R2 `0509-snapshots` | snapshot bodies, inside the included tier | Class A: `PutBucket` 1. Class B: 0. Payload 0 bytes, 0 objects, max on 2026-09-21 | snapshot engine has not shipped. `wrangler.jsonc` has no `r2_buckets` binding, and the snapshot table is empty | $0 |
 | R2 `0509-landing-page-artifacts` | not a per-brand line in this model. The README calls this bucket an enhancement path | Class A 581: `PutObject` 548, `ListObjects` 30, `PutBucketLifecycleConfiguration` 3. Class B 1,972: `GetObject` 1650, `HeadBucket` 215, `GetBucketLifecycleConfiguration` 59, `HeadObject` 48. `DeleteObject` 65, free. Highest daily payload in the week: 53,057,656,626 bytes plus metadata 468,369 bytes, 5,592 objects, on 2026-09-17. 2026-09-21 was 52,017,118,378 bytes plus metadata 75,591 bytes, 1,717 objects | none. This bucket is not the snapshot engine | operations inside the included 1 million Class A and 10 million Class B. 53.06 GB decimal on the high day rounds up to 54 GB, then 44 GB past the included 10, times $0.015, **$0.66**. One day's storage is not a measured GB-month |
 | R2 `0509-support-inbox` | not a per-brand line in this model | Class A 699: `ListObjects` 674, `PutObject` 25. Class B 816: `GetObject` 742, `HeadObject` 72, `HeadBucket` 1, `GetBucketLifecycleConfiguration` 1. Payload 5,668 bytes, 35 objects | none | inside included, $0 |

@@ -97,7 +97,7 @@ This replaces #3891's stated order (Meta, then Google, then "one adapter per rem
 | Dedup | existing `signal` rows for the entity | `jev_verdict` (D8) only for the cross-platform / re-upload case |
 | Materiality | `signal` history | `jev_verdict` (D6-style), and `alert` only when the verdict passes |
 
-**The two rules this table exists to enforce** (`REBUILD-COST.md`): one `snapshot` row per watch per tick, and never a row per observed element. A brand running 400 live creatives writes **one** snapshot row on an unchanged tick, and on a changed tick writes only the creatives that are new. The $105 rows-written bill of 2026-09-17 was the other shape.
+**The two rules this table exists to enforce** (`REBUILD-COST.md`): one `snapshot` row per watch per tick (paired in the same batch with one `source` latest-facts update), and never a row per observed element. A brand running 400 live creatives writes **one** snapshot row on an unchanged tick, and on a changed tick writes only the creatives that are new. The $105 rows-written bill of 2026-09-17 was the other shape.
 
 ## Workflow / Queue / cron layout
 
@@ -232,7 +232,7 @@ Per 1,000 ad pulls, priced from `REBUILD-COST.md` (2026-09-21):
 
 **FORBIDDEN.** A row per observed element — the $105 anti-pattern, named here so it cannot be claimed it was not known. Base64ing an image into a D1 row. Calling D8 for exact `(platform, ad_archive_id)` matches — that is arithmetic. Awaiting prepared statements in a loop instead of `batch()`. Any hand-rolled fuzzy matching beyond the stored normalised hashes that feed D8.
 
-**PROOF REQUIRED.** A real brand's pull shown writing exactly one snapshot row plus N signal rows where N is the count of genuinely new creatives, with the row ids and the D1 rows-written figure for the run. One D8 verdict on a real near-duplicate with its probability, and one exact-id duplicate shown collapsing **without** a Jev call.
+**PROOF REQUIRED.** A real brand's pull shown writing exactly one snapshot row, its paired `source` latest-facts row, plus N signal rows where N is the count of genuinely new creatives, with the row ids and the D1 rows-written figure for the run. One D8 verdict on a real near-duplicate with its probability, and one exact-id duplicate shown collapsing **without** a Jev call.
 
 **PUSH.** `wip/issue-3891-p4`.
 
