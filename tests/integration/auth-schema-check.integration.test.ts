@@ -7,11 +7,10 @@ const ORIGIN = "http://localhost:8787";
 const INTROSPECTION = /pragma_table_info|sqlite_master/i;
 
 // 0509#5721: better-auth re-reads sqlite_master and pragma_table_info once per
-// auth instance unless advanced.database.validateSchema is false (38 queries
-// measured on the migrated local D1). createAuth builds an instance per
-// request, so the check was costing ~6.5M D1 rows a day. The schema itself is
-// pinned by migrations/ and schema.integration.test.ts; the runtime check
-// stays off in production.
+// auth instance unless advanced.database.validateSchema is false. createAuth
+// builds an instance per request, so the check was costing ~6.5M D1 rows a
+// day (issue evidence). The schema itself is pinned by migrations/ and
+// schema.integration.test.ts; the runtime check stays off in production.
 const AUTH_ENV = {
   DB: env.DB,
   EMAIL: {
@@ -29,33 +28,13 @@ function getSession() {
 }
 
 describe("auth schema validation", () => {
-  it("issues no schema introspection queries when building the auth instance", async () => {
+  it("the per-request auth instance adds no schema introspection queries", async () => {
     const prepare = vi.spyOn(env.DB, "prepare");
     const introspected = () =>
       prepare.mock.calls.map(([query]) => String(query)).filter((query) => INTROSPECTION.test(query));
-    try {
-      // Control arm: the same createAuth with the check explicitly on. Its
-      // burst proves the spy intercepts the introspection path, so a zero
-      // below is a real zero rather than a detection failure. Its 200 also
-      // keeps the removed runtime check's job alive in CI at zero production
-      // cost: runWithTransaction awaits the schema check on every adapter
-      // call, so a drift between migrations/ and the plugins' expected schema
-      // fails this request instead of passing silently.
-      const checking = createAuth(AUTH_ENV, { captcha: false, validateSchema: true });
-      const checked = await checking.handler(getSession());
-      expect(checked.status).toBe(200);
-      await vi.waitFor(() => expect(introspected().length).toBeGreaterThan(0), {
-        timeout: 5_000,
-        interval: 50,
-      });
-      const baseline = introspected().length;
-
-      const auth = createAuth(AUTH_ENV, { captcha: false });
-      const response = await auth.handler(getSession());
-      expect(response.status).toBe(200);
-
-      // checkSchema runs detached, so give any stray emission room to land:
-      // settle only after two consecutive polls see no growth.
+    // checkSchema also fires detached at init, so settle after each arm: two
+    // consecutive polls with no growth.
+    const settle = async () => {
       let previous = -1;
       await vi.waitFor(
         () => {
@@ -67,7 +46,31 @@ describe("auth schema validation", () => {
         },
         { timeout: 5_000, interval: 50 },
       );
-      expect(introspected().length).toBe(baseline);
+    };
+    try {
+      // Control arm: the same createAuth with the check explicitly on. Its
+      // burst proves the spy intercepts the introspection path, so a zero
+      // delta below is a real zero rather than a detection failure. The arm
+      // also keeps the removed runtime check's job alive in CI at zero
+      // production cost: better-auth's router awaits the check in onRequest
+      // before any endpoint logic (better-auth/dist/api/index.mjs:168), so a
+      // drift between migrations/ and the plugins' expected schema throws
+      // SchemaMismatchError out of auth.handler here.
+      const checking = createAuth(AUTH_ENV, { captcha: false, validateSchema: true });
+      const checked = await checking.handler(getSession());
+      expect(checked.status).toBe(200);
+      await settle();
+      const baseline = introspected().length;
+      expect(baseline).toBeGreaterThan(0);
+
+      // Both production shapes: the options-less call used by the session
+      // read paths, and the captcha toggle used after Access preclearance.
+      for (const auth of [createAuth(AUTH_ENV), createAuth(AUTH_ENV, { captcha: false })]) {
+        const response = await auth.handler(getSession());
+        expect(response.status).toBe(200);
+      }
+      await settle();
+      expect(introspected().length - baseline).toBe(0);
     } finally {
       prepare.mockRestore();
     }

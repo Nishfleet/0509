@@ -5,10 +5,12 @@ import { createAuth } from "../../app/lib/auth.server";
 
 /**
  * P8.1's named risk: a drift between migrations/ and what the apiKey plugin
- * writes fails in production. better-auth's own runtime schema check is off
- * (0509#5721: it cost ~6.5M D1 rows a day), so this drives the plugin through
- * createAuth against real D1 with the real migrations applied — a drift fails
- * here, in CI.
+ * writes surfaces in production as the first query touching the drifted
+ * table. better-auth's runtime schema check is off (0509#5721: it cost ~6.5M
+ * D1 rows a day), so this drives the plugin through createAuth against real
+ * D1 with the real migrations applied — a drift fails here, in CI, and the
+ * control arm in auth-schema-check.integration.test.ts still runs the check
+ * itself once per CI run.
  */
 const auth = createAuth({
   DB: env.DB,
