@@ -99,7 +99,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       # `semgrep ci` is the hosted mode and needs SEMGREP_APP_TOKEN, exiting 2
       # without one. `semgrep scan` is the local mode and needs nothing.
-      - run: semgrep scan --config p/typescript --config p/security-audit --error
+      - run: semgrep scan --config p/typescript --config p/security-audit --config .semgrep/rollover-catch-up.yml --error
 
   preview-assert:
     name: preview-assert

@@ -1,0 +1,15 @@
+rules:
+  - id: rollover-catch-up-call-site
+    languages: [typescript]
+    severity: ERROR
+    message: >-
+      0509#5661: rolloverInstance(..., "catch-up") may only be created by the
+      nightly reconciliation (workers/standing/nightly.ts) or the save-time
+      reschedule (app/lib/standing/reschedule.ts). A third call site is a
+      second send path with no test covering it.
+    pattern: rolloverInstance($W, $C, "catch-up")
+    paths:
+      exclude:
+        - tests/**
+        - workers/standing/nightly.ts
+        - app/lib/standing/reschedule.ts
