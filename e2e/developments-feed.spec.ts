@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 
-import { requireInboxToken, signInWithMagicLink } from "./inbox";
+import { consoleFailures, requireInboxToken, signInWithMagicLink, watchConsole } from "./inbox";
 
 // Filter vocabulary is the feed's own (app/lib/developments.ts FEED_FILTERS);
 // the counts are live and asserted only as numerals — a just-watched
@@ -27,17 +27,13 @@ function list(page: Page) {
 // chip on /app/competitors opens a real /app/competitors/:entityId page.
 test("the developments feed filters by kind and keeps its layout across filters", async ({
   page,
-}) => {
+}, testInfo) => {
   test.skip(
     !process.env.PLAYWRIGHT_TEST_BASE_URL,
     "the developments feed needs a real session; the local preview Worker cannot mint one",
   );
   test.setTimeout(150_000);
-  const consoleErrors: string[] = [];
-  page.on("console", (message) => {
-    if (message.type() === "error") consoleErrors.push(message.text());
-  });
-  page.on("pageerror", (error) => consoleErrors.push(error.message));
+  const watched = watchConsole(page);
 
   const email = `e2e+${crypto.randomUUID().replaceAll("-", "").slice(0, 12)}@0509.io`;
   await signInWithMagicLink(page, email, requireInboxToken());
@@ -115,5 +111,5 @@ test("the developments feed filters by kind and keeps its layout across filters"
   }));
   expect(widths.scrollWidth).toBeLessThanOrEqual(widths.innerWidth);
 
-  expect(consoleErrors).toEqual([]);
+  expect(await consoleFailures(page, watched, testInfo), testInfo.project.name).toEqual([]);
 });

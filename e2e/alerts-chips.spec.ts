@@ -6,6 +6,8 @@ import { betterAuth } from "better-auth";
 import { magicLink } from "better-auth/plugins";
 import { expect, test, type Page } from "@playwright/test";
 
+import { consoleFailures, watchConsole } from "./inbox";
+
 test.skip(
   Boolean(process.env.PLAYWRIGHT_TEST_BASE_URL),
   "the three treatments are rows in the local preview database; production signs in through the magic-link inbox and has no fixture workspace",
@@ -318,11 +320,7 @@ function sqlCounts(workspaceId: string): { ads: number; mentions: number } {
 
 test("alert type chips filter one feed with honest counts", async ({ page }, testInfo) => {
   test.setTimeout(90_000);
-  const consoleErrors: string[] = [];
-  page.on("console", (message) => {
-    if (message.type() === "error") consoleErrors.push(message.text());
-  });
-  page.on("pageerror", (error) => consoleErrors.push(error.message));
+  const watched = watchConsole(page);
 
   const { cookie, workspaceId } = await seedSession();
   const counts = sqlCounts(workspaceId);
@@ -363,5 +361,5 @@ test("alert type chips filter one feed with honest counts", async ({ page }, tes
     expect(widths.scrollWidth, JSON.stringify(widths)).toBe(widths.clientWidth);
   }
 
-  expect(consoleErrors).toEqual([]);
+  expect(await consoleFailures(page, watched, testInfo), testInfo.project.name).toEqual([]);
 });

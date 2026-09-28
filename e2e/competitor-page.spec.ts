@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-import { requireInboxToken, signInWithMagicLink } from "./inbox";
+import { consoleFailures, requireInboxToken, signInWithMagicLink, watchConsole } from "./inbox";
 
 test("a competitor page sends a signed-out visitor to the login page", async ({ request }) => {
   const response = await request.get("/app/competitors/ent-anything", { maxRedirects: 0 });
@@ -32,10 +32,7 @@ test("a watched competitor page leads with the switch and its consequence, and t
     "the competitor page needs a real session; the local preview Worker cannot mint one",
   );
   test.setTimeout(150_000);
-  const consoleErrors: string[] = [];
-  page.on("console", (message) => {
-    if (message.type() === "error") consoleErrors.push(message.text());
-  });
+  const watched = watchConsole(page);
 
   const email = `e2e+${crypto.randomUUID().replaceAll("-", "").slice(0, 12)}@0509.io`;
   await signInWithMagicLink(page, email, requireInboxToken());
@@ -89,5 +86,5 @@ test("a watched competitor page leads with the switch and its consequence, and t
     contentType: "image/png",
   });
 
-  expect(consoleErrors).toEqual([]);
+  expect(await consoleFailures(page, watched, testInfo), testInfo.project.name).toEqual([]);
 });
