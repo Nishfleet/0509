@@ -45,16 +45,20 @@ test("the landing route data and document carry no disabled source's internal no
   // the filter has to bite; app/root.tsx:34 omits <Scripts /> for the landing,
   // so the document carries no loader data — its negatives below are a guard
   // for the day hydration comes back, and the two positives are the evidence
-  // the route still has sources. A preview has no snapshot row for any source,
-  // so every visible source is degraded and 0509#5987's gate renders the one
-  // rebuilding line in place of the pill row; against production, where a
-  // source has answered, the document carries the pill instead.
+  // the route still has sources. The document renders one of two states and
+  // the test below pins which: the pill row, or — 0509#5987 — the one
+  // rebuilding line that replaces it when no visible source has fresh data,
+  // the state a preview DB renders in because it seeds no snapshot row.
   const data = await request.get(`${PATH}.data`);
   expect(data.status()).toBe(200);
   const payload = await data.text();
   const document = await page.content();
 
-  expect(document).toMatch(/site\.page|We're rebuilding coverage of news mentions/);
+  if (document.includes("We're rebuilding coverage of news mentions")) {
+    expect(document).not.toContain("site.page");
+  } else {
+    expect(document).toContain("site.page");
+  }
   expect(payload).toContain("site.page");
   for (const body of [document, payload]) {
     expect(body).not.toContain("x.search");

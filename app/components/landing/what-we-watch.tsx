@@ -25,7 +25,7 @@ export function WhatWeWatch({
   }));
   const shown = statuses.filter(({ status }) => status.state !== "disabled");
   const allDegraded = shown.length > 0 && shown.every(({ status }) => status.state === "degraded");
-  const nouns = [...new Set(shown.map(({ entry }) => sourceKindNoun(entry.kind)))];
+  const nouns = [...new Set(statuses.map(({ entry }) => sourceKindNoun(entry.kind)))];
   const lead = `We read ${nouns.length === 0 ? "public sources" : joinList(nouns)}. A source that stops answering shows here dimmed, with the reason — we never quietly drop it. Last good unknown means we haven't yet checked this kind of source. The first check lands in the daily sweep.`;
   return (
     <Section id="what-we-watch" kicker="Public sources only" title="What we watch" lead={lead}>

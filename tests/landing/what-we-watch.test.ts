@@ -24,6 +24,12 @@ function markup(sources: readonly WatchedSource[], now: number = NOW): string {
   return renderToStaticMarkup(createElement(WhatWeWatch, { sources, now }));
 }
 
+// React serializes the apostrophe in a text node as an entity; decode it so an
+// assertion is against the copy as written, not React's escaping.
+function decoded(html: string): string {
+  return html.replaceAll("&#x27;", "'");
+}
+
 const LIVE: SourceSnapshot = { fetched_at: "2026-09-26T11:00:00.000Z", item_count: 12 };
 
 describe("landing what we watch", () => {
@@ -105,12 +111,13 @@ describe("landing what we watch", () => {
       }),
       entry({ source: { key: "site.web", name: "site.page", platform: "web", is_enabled: 1 }, snapshot: null }),
     ]);
-    const text = html.replaceAll("&#x27;", "'");
+    const text = decoded(html);
     expect(text).toContain(
       "We're rebuilding coverage of news mentions. Briefs and standing still arrive from site changes; mentions resume as their sources come back.",
     );
     expect(html).not.toContain("data-state=");
     expect(html).not.toContain("last good");
+    expect(html).not.toContain("· last good");
   });
 
   it("keeps the degraded pills, with their reasons, when a live source is visible too", () => {
@@ -125,7 +132,7 @@ describe("landing what we watch", () => {
       }),
       entry({ source: { key: "hn.algolia", name: "hn.algolia", platform: "hn", is_enabled: 1 }, snapshot: LIVE }),
     ]);
-    const text = html.replaceAll("&#x27;", "'");
+    const text = decoded(html);
     expect(text).not.toContain("We're rebuilding coverage of news mentions");
     expect(html).toContain("degraded: not answering");
     expect(html).toContain("degraded: rate limited");
@@ -144,7 +151,7 @@ describe("landing what we watch", () => {
         snapshot: { fetched_at: "2026-09-26T11:00:00.000Z", item_count: 0 },
       }),
     ]);
-    const text = html.replaceAll("&#x27;", "'");
+    const text = decoded(html);
     expect(text).not.toContain("We're rebuilding coverage of news mentions");
     expect(html).toContain('data-state="degraded"');
     expect(html).toContain('data-state="none"');
@@ -158,7 +165,7 @@ describe("landing what we watch", () => {
         snapshot: null,
       }),
     ]);
-    const text = html.replaceAll("&#x27;", "'");
+    const text = decoded(html);
     expect(text).not.toContain("We're rebuilding coverage of news mentions");
     expect(html).not.toContain("data-state=");
   });
@@ -179,9 +186,7 @@ describe("landing what we watch", () => {
     ]);
     const sentence =
       "Last good unknown means we haven't yet checked this kind of source. The first check lands in the daily sweep.";
-    // React serializes the apostrophe in a text node as an entity; decode it so
-    // the assertion is against the copy as written, not React's escaping.
-    const text = html.replaceAll("&#x27;", "'");
+    const text = decoded(html);
     expect(text.indexOf(sentence)).toBeGreaterThanOrEqual(0);
     expect(text.indexOf(sentence)).toBeLessThan(text.indexOf("<ul"));
   });
