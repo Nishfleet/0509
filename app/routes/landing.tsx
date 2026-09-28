@@ -85,7 +85,7 @@ export default function Landing({ loaderData }: Route.ComponentProps) {
         <Hero />
         <TheMark />
         <HowItWorks />
-        <WhatWeWatch sources={loaderData.sources} now={loaderData.now} />
+        <WhatWeWatch shownSources={loaderData.sources} now={loaderData.now} />
         <Agents />
         <Price />
         <Faq />

@@ -36,20 +36,28 @@ test("the landing renders its sections in order under one headline", async ({ pa
 test("the landing never serializes a disabled source's internal notes", async ({ page, request }) => {
   const response = await page.goto(PATH);
   expect(response?.status()).toBe(200);
-  if (response === null) throw new Error("the landing document returned no response");
 
   // Migration 0007 seeds `x.search` disabled with `disabled_reason` and
-  // `cheapest_route` in config_json; the loader must filter it before the
-  // route serializes anything (0509#5828). The `.data` payload is the route's
-  // own client-navigation serialization: the staged landing ships no module
-  // graph, so `page.content()` alone never sees it and passes even while the
-  // loader leaks.
+  // `cheapest_route` in config_json; migration 0002 seeds the five parked
+  // `ads.*_parked` rows with their probe evidence. The loader must drop both
+  // classes before the route serializes anything (0509#5828). The `.data`
+  // payload is the route's own client-navigation serialization and carries the
+  // leak: app/root.tsx omits <Scripts /> for the landing, so the document
+  // cannot contain loader data at all and the positives below are the only
+  // evidence the route still has sources.
   const data = await request.get(`${PATH}.data`);
   expect(data.status()).toBe(200);
+  const payload = await data.text();
+  const document = await page.content();
 
-  for (const body of [await response.text(), await data.text(), await page.content()]) {
+  expect(document).toContain("site.page");
+  expect(payload).toContain("site.page");
+  for (const body of [document, payload]) {
+    expect(body).not.toContain("x.search");
     expect(body).not.toContain("cheapest_route");
     expect(body).not.toContain("disabled_reason");
+    expect(body).not.toContain("ads.snap_parked");
+    expect(body).not.toContain("ad-transparency search surface");
   }
 });
 
