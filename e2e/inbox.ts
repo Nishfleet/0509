@@ -187,7 +187,8 @@ export async function turnstileToken(page: Page): Promise<string> {
 // Console errors keep the url of the script that logged them so the gate can
 // hold only same-origin messages — the real Turnstile widget on /login logs
 // its NaN noise from challenges.cloudflare.com, cross-origin JS and not app
-// code (0509#5682). Pageerrors carry no location and are always gated.
+// code (0509#5682). Pageerrors carry no location to scope by, so they are
+// always gated — a cross-origin script's uncaught exception still fails.
 export function watchConsole(page: Page): {
   consoleErrors: { text: string; url: string }[];
   pageErrors: string[];
