@@ -160,7 +160,7 @@ describe("startCard", () => {
     const card = startCard("ws-1", subjectFor("example.com"), []);
     await card.site;
     expect(await card.logo).toBe("data:image/png;base64,AQID");
-    expect(calls).toContain(duckUrl);
+    expect(calls.filter((url) => url === duckUrl)).toHaveLength(1);
     expect(calls).not.toContain("http://insecure.example/og.png");
     expect(await env.SNAPSHOTS.get("logo/example.com")).not.toBeNull();
   });
@@ -204,8 +204,8 @@ describe("startCard", () => {
     const card = startCard("ws-1", subjectFor("example.com"), []);
     await card.site;
     expect(await card.logo).toBe("data:image/png;base64,BAUG");
+    expect(calls.filter((url) => url === ogUrl)).toHaveLength(1);
     expect(calls).toContain(ldUrl);
-    expect(calls).toContain(ogUrl);
     expect(calls).not.toContain("https://icons.duckduckgo.com/ip3/example.com.ico");
     expect(await env.SNAPSHOTS.get("logo/example.com")).not.toBeNull();
   });
@@ -226,7 +226,6 @@ describe("startCard", () => {
     expect(calls).toContain(duckUrl);
     expect(await env.IDENTITY_CACHE.get(probeKey(subject, "icon"), "json")).toEqual({ v: 2, url: null });
   });
-
 
   it("reads the homepage once a day, not once per visit", async () => {
     stubAi(0.95);
