@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 
+import { expectElementFaceLoaded, expectFaceLoaded } from "./fonts";
 import { consoleFailures, watchConsole } from "./inbox";
 
 // The smallest suite that is still an honest answer to "does the thing we are
@@ -37,22 +38,9 @@ test("the landing page renders its headline and its contact link", async ({ page
 
 test("the rebuild notice renders in the three brand faces", async ({ page }) => {
   await page.goto("/");
-  await expect.poll(() =>
-    page.evaluate(() => {
-      function faceLoaded(selector) {
-        const el = document.querySelector(selector);
-        if (!el) return false;
-        const style = getComputedStyle(el);
-        const family = style.fontFamily.split(",")[0].trim();
-        return document.fonts.check(`${style.fontStyle} ${style.fontWeight} ${style.fontSize} ${family}`);
-      }
-      return {
-        display: faceLoaded("header .font-display"),
-        body: faceLoaded("main p"),
-        mono: faceLoaded("footer"),
-      };
-    }),
-  ).toEqual({ display: true, body: true, mono: true });
+  await expectElementFaceLoaded(page, "header .font-display");
+  await expectElementFaceLoaded(page, "main p");
+  await expectElementFaceLoaded(page, "footer");
 });
 
 test("the landing page does not scroll horizontally", async ({ page }) => {
@@ -65,7 +53,6 @@ test("the landing page does not scroll horizontally", async ({ page }) => {
 
 test("the landing headline is the largest paint and uses the brand display face", async ({ page }) => {
   await page.goto("/");
-  await page.evaluate(() => document.fonts.ready.then(() => undefined));
 
   const lcpTag = await page.evaluate(
     () =>
@@ -81,15 +68,7 @@ test("the landing headline is the largest paint and uses the brand display face"
   );
   expect(lcpTag).toBe("H1");
 
-  await expect.poll(() =>
-    page.evaluate(
-      () =>
-        Array.from(document.fonts).some(
-          (face) =>
-            face.family.replaceAll('"', "") === "Bricolage Grotesque" && face.status === "loaded",
-        ),
-    ),
-  ).toBe(true);
+  await expectFaceLoaded(page, "Bricolage Grotesque");
 
   const headlineFamily = await page
     .getByRole("heading", { level: 1 })
