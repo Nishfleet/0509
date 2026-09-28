@@ -37,21 +37,19 @@ async function readText(key: string): Promise<string | null> {
 }
 
 function homeUrl(entity: { id: string; domain: string; url: string | null }): string | null {
-  if (entity.url !== null) {
-    const entered = normaliseSubject(entity.url);
-    if (
-      entered.ok &&
-      entered.subject.kind === "domain" &&
-      entered.subject.registrable === entity.domain &&
-      entered.subject.url !== null
-    ) {
-      return entered.subject.url;
-    }
+  const entered = entity.url === null ? null : normaliseSubject(entity.url);
+  if (
+    entered !== null &&
+    entered.ok &&
+    entered.subject.kind === "domain" &&
+    entered.subject.registrable === entity.domain
+  ) {
+    return entered.subject.url;
   }
   const fallback = getDomain(entity.domain) === entity.domain ? `https://${entity.domain}/` : null;
   if (fallback !== null && entity.url !== null) {
     console.log(JSON.stringify({
-      event: "site.home_url_ignored_identity",
+      event: "site.identity_url_ignored",
       entityId: entity.id,
       domain: entity.domain,
       url: entity.url,
@@ -79,11 +77,12 @@ export async function planSiteSweep(now: string): Promise<SiteSweepTarget[]> {
 
   const unwatched = await readUnwatchedEntities(sourceId);
   await insertWatches(
-    unwatched.flatMap((entity) =>
-      homeUrl(entity) === null
-        ? []
-        : [{ id: crypto.randomUUID(), entityId: entity.id, sourceId, targetKey: entity.pageUrl }],
-    ),
+    unwatched.map((entity) => ({
+      id: crypto.randomUUID(),
+      entityId: entity.id,
+      sourceId,
+      targetKey: entity.pageUrl,
+    })),
   );
   return [...(await readSiteSweepTargets(SITE_SOURCE_KEY))];
 }

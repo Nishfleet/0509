@@ -25,7 +25,7 @@ const INSERT_WATCH = `INSERT INTO watch (id, entity_id, source_id, target_key)
 VALUES (?1, ?2, ?3, ?4)
 ON CONFLICT (entity_id, source_id, target_key) DO NOTHING`;
 
-const UNWATCHED_ENTITIES = `SELECT e.id AS id, e.domain AS domain, json_extract(e.identity_json, '$.url') AS identity_url, p.url AS page_url
+const UNWATCHED_ENTITIES = `SELECT e.id AS id, e.domain AS domain, p.url AS page_url
 FROM entity e
 JOIN page p ON p.entity_id = e.id AND p.role = 'home'
 WHERE e.state = 'on'
@@ -55,9 +55,7 @@ const entityRow = z.object({ id: z.string(), domain: z.string() });
 
 const entityRows = z.array(entityRow);
 
-const unwatchedEntityRows = z.array(
-  entityRow.extend({ identity_url: z.string().nullable(), page_url: z.string() }),
-);
+const unwatchedEntityRows = z.array(entityRow.extend({ page_url: z.string() }));
 
 const targetRows = z.array(
   z.object({
@@ -117,12 +115,11 @@ export async function readEntityWatches(entityId: string): Promise<EntityWatch[]
 
 export async function readUnwatchedEntities(
   sourceId: string,
-): Promise<readonly { id: string; domain: string; url: string | null; pageUrl: string }[]> {
+): Promise<readonly { id: string; domain: string; pageUrl: string }[]> {
   const rows = await env.DB.prepare(UNWATCHED_ENTITIES).bind(sourceId).all();
   return unwatchedEntityRows.parse(rows.results).map((row) => ({
     id: row.id,
     domain: row.domain,
-    url: row.identity_url,
     pageUrl: row.page_url,
   }));
 }

@@ -42,7 +42,8 @@ async function fetchStatus(url: string): Promise<Response | Error> {
 
 function wwwVariant(url: string): string {
   const parsed = new URL(url);
-  return `${parsed.protocol}//www.${parsed.hostname}${parsed.pathname}`;
+  const host = parsed.hostname.startsWith("www.") ? parsed.hostname.slice(4) : `www.${parsed.hostname}`;
+  return `${parsed.protocol}//${host}${parsed.pathname}`;
 }
 
 export async function probeOwnSite(url: string): Promise<OwnSiteHealth> {

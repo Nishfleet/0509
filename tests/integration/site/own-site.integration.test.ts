@@ -15,9 +15,10 @@ const BEFORE_TEXT =
 const PRICED_HTML = `<!doctype html><html><body><h1>My brand</h1><p>Every plan includes unlimited projects, priority support, single sign-on, audit logs, and a named account manager who answers within one business day, with onboarding help for your whole team.</p><p>Plans start at ₹499 a month for the starter tier and ₹1,299 a month for the growth tier, both billed yearly or monthly, with every seat covered by the same uptime promise.</p></body></html>`;
 const SOFT_BROKEN_HTML = `<!doctype html><html><body><h1>My brand</h1><p>Every plan includes unlimited projects, priority support, single sign-on, audit logs, and a named account manager who answers within one business day, with onboarding help for your whole team.</p></body></html>`;
 
-const site: { status: number; apexDown: boolean; challenge: boolean; robots: string | null; html: string | null } = {
+const site: { status: number; apexDown: boolean; wwwDown: boolean; challenge: boolean; robots: string | null; html: string | null } = {
   status: 200,
   apexDown: false,
+  wwwDown: false,
   challenge: false,
   robots: null,
   html: null,
@@ -29,6 +30,8 @@ const respond = (input: RequestInfo | URL): Promise<Response> => {
   const requestUrl = new URL(input instanceof Request ? input.url : String(input));
   fetched.push(requestUrl.toString());
   if (site.apexDown && !requestUrl.hostname.startsWith("www."))
+    return Promise.reject(new Error("DNS lookup failed"));
+  if (site.wwwDown && requestUrl.hostname.startsWith("www."))
     return Promise.reject(new Error("DNS lookup failed"));
   if (requestUrl.pathname === "/robots.txt") {
     return Promise.resolve(new Response(site.robots ?? "", { status: site.robots === null ? 404 : 200 }));
@@ -104,6 +107,7 @@ describe("own-site check", () => {
     await seedEntity("ent-rival", "competitor", "rival.com");
     site.status = 200;
     site.apexDown = false;
+    site.wwwDown = false;
     site.challenge = false;
     site.robots = null;
     site.html = null;
@@ -121,6 +125,18 @@ describe("own-site check", () => {
     expect(await runCheck("own-healthy")).toEqual({ pages: 1, opened: 0, closed: 0, failed: 0 });
     expect(await incidents()).toEqual([]);
     expect(await alerts()).toEqual([]);
+  });
+
+  it("retries the apex when the home page is the www host", async () => {
+    await env.DB.prepare("UPDATE entity SET identity_json = ? WHERE id = 'ent-self'")
+      .bind('{"kind":"domain","url":"https://www.mybrand.com/"}')
+      .run();
+    site.wwwDown = true;
+
+    expect(await runCheck("own-www-home")).toEqual({ pages: 1, opened: 0, closed: 0, failed: 0 });
+    expect(await incidents()).toEqual([]);
+    expect(fetched).toContain("https://mybrand.com/");
+    expect(fetched).not.toContain("https://www.www.mybrand.com/");
   });
 
   it("opens one incident with a pinned alert when the site still fails on the confirming read, and closes it on the next clean hour", async () => {
