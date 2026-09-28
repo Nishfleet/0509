@@ -261,8 +261,8 @@ async function requireWatchConfigJson(watchId: string): Promise<string> {
   return raw;
 }
 
-async function requireEntityIdentityJson(entityId: string): Promise<string> {
-  const raw = await readEntityIdentityJson(entityId);
+async function requireEntityIdentityJson(workspaceId: string, entityId: string): Promise<string> {
+  const raw = await readEntityIdentityJson(workspaceId, entityId);
   if (raw === null) throw new Error(`entity ${entityId} is missing`);
   return raw;
 }
@@ -341,7 +341,9 @@ async function sweepOneYoutube(
 
   let channelId = config.channelId;
   if (channelId === null) {
-    const lookup = await lookupYoutubeChannel(await requireEntityIdentityJson(watch.entity_id));
+    const lookup = await lookupYoutubeChannel(
+      await requireEntityIdentityJson(watch.workspace_id, watch.entity_id),
+    );
     if (lookup.status !== "id") {
       if (lookup.status === "unresolved") await flagLostChannel(watch.watch_id, now);
       await markWatchPolled(watch.watch_id, now);
@@ -353,7 +355,9 @@ async function sweepOneYoutube(
   const first = await youtubeAdapter({ query: channelId }, null);
   if (first.feedState === "stale") {
     await flagLostChannel(watch.watch_id, now);
-    const lookup = await lookupYoutubeChannel(await requireEntityIdentityJson(watch.entity_id));
+    const lookup = await lookupYoutubeChannel(
+      await requireEntityIdentityJson(watch.workspace_id, watch.entity_id),
+    );
     if (lookup.status === "id" && lookup.channelId !== channelId) {
       const raw = await requireWatchConfigJson(watch.watch_id);
       await writeWatchConfigJson(watch.watch_id, withPendingChannel(raw, lookup.channelId));
