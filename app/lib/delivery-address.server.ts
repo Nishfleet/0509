@@ -91,7 +91,7 @@ export async function saveDeliveryAddress(input: {
     return { error: null, suppressed: false };
   }
 
-  if (target !== null && target.target_value === address && target.is_verified === 1) {
+  if (target !== null && target.target_value.toLowerCase() === address && target.is_verified === 1) {
     return { error: null, suppressed: false };
   }
 

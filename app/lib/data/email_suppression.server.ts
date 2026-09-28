@@ -12,11 +12,11 @@ SELECT target_value, 'workspace_deleted', ?
  WHERE workspace_id = ?
 ON CONFLICT(address) DO NOTHING`;
 
-const SELECT_SUPPRESSION = `SELECT address FROM email_suppression WHERE address = ?`;
+const SELECT_SUPPRESSION = `SELECT address FROM email_suppression WHERE address = ? COLLATE NOCASE`;
 
 const SELECT_UNSUBSCRIBE_TOKEN = `SELECT 1 AS present FROM send_target WHERE unsubscribe_token = ?`;
 
-const DELETE_SUPPRESSION = `DELETE FROM email_suppression WHERE address = ?`;
+const DELETE_SUPPRESSION = `DELETE FROM email_suppression WHERE address = ? COLLATE NOCASE`;
 
 export async function suppressByUnsubscribeToken(token: string): Promise<void> {
   await env.DB.prepare(SUPPRESS_BY_UNSUBSCRIBE_TOKEN)
