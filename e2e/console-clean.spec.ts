@@ -31,6 +31,8 @@ for (const target of targets) {
 
     const status = response?.status() ?? 0;
     const pagePath = new URL(page.url()).pathname;
+    // The empty-url guard is load-bearing: a console error with no location
+    // would make `new URL("")` throw inside the predicate.
     const ownDocument404 = (entry: { text: string; url: string }) =>
       status === 404 &&
       /status of 404\b/.test(entry.text) &&
