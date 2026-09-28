@@ -23,10 +23,11 @@ test.afterEach(async ({ page }, testInfo) => {
 // inbox to read, so it cannot mint a session, and this spec skips there rather
 // than fake the journey. It runs in the `e2e-production` job after deploy.
 //
-// The spec body only reads: it clicks no chip and submits no form, because it
-// runs against production and a visit that wrote data would put a row in a
-// real workspace for a mailbox nobody owns. The afterEach above is the one
-// write — it deletes the user row this test's sign-in created.
+// The Alerts journey only reads: it clicks no chip and submits no form, because
+// it runs against production and a visit that wrote data would put a row in a
+// real workspace for a mailbox nobody owns. The write that needs cleanup is the
+// magic-link sign-in below: it submits the login form (e2e/inbox.ts:272) and the
+// verification inserts the user row (e2e/inbox.ts:293-295) the afterEach deletes.
 test.skip(
   !process.env.PLAYWRIGHT_TEST_BASE_URL,
   "the Alerts page needs a real session; the local preview Worker cannot mint one",
