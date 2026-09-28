@@ -112,11 +112,13 @@ describe("landing what we watch", () => {
     expect(html).toContain("degraded: not answering");
   });
 
-  it("says what we watch from the registry kinds, not a list written into the component", () => {
+  it("says what we watch from the registry kinds it is given, not a list written into the component", () => {
+    // The loader drops disabled and parked rows before the component sees them
+    // (0509#5828); this pins that nouns come from the given kinds, not a list
+    // hardcoded here.
     const html = markup([
       entry({ source: { key: "hn.algolia", name: "hn.algolia", platform: "hn", is_enabled: 1 }, snapshot: LIVE }),
       entry({ kind: "site", source: { key: "site.web", name: "site.page", platform: "web", is_enabled: 1 }, snapshot: LIVE }),
-      entry({ kind: "hiring", source: { key: "hiring.lever", name: "hiring.board", platform: "lever", is_enabled: 0 } }),
     ]);
     expect(html).toContain("We read mentions and site checks.");
     expect(html).not.toContain("job posts");

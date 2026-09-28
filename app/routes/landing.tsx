@@ -62,9 +62,6 @@ export function meta(_: Route.MetaArgs) {
 export async function loader(_: Route.LoaderArgs) {
   const now = Date.now();
   const registry = await readRegistrySources();
-  // Disabled and parked sources carry internal decision notes, the cost route
-  // and probe evidence in config_json. Drop them before the loader serializes
-  // anything into the page (0509#5828).
   const sources = registry.filter(
     (entry) => sourcePillStatus(entry.source, entry.snapshot, now).state !== "disabled",
   );

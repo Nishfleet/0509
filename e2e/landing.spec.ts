@@ -33,16 +33,24 @@ test("the landing renders its sections in order under one headline", async ({ pa
   expect(order).toEqual(["hero", "mark", "how-it-works", "what-we-watch", "agents", "price", "faq"]);
 });
 
-test("the landing never serializes a disabled source's internal notes", async ({ page }) => {
+test("the landing never serializes a disabled source's internal notes", async ({ page, request }) => {
   const response = await page.goto(PATH);
   expect(response?.status()).toBe(200);
+  if (response === null) throw new Error("the landing document returned no response");
 
   // Migration 0007 seeds `x.search` disabled with `disabled_reason` and
   // `cheapest_route` in config_json; the loader must filter it before the
-  // page is serialized, so neither key reaches the document (0509#5828).
-  const content = await page.content();
-  expect(content).not.toContain("cheapest_route");
-  expect(content).not.toContain("disabled_reason");
+  // route serializes anything (0509#5828). The `.data` payload is the route's
+  // own client-navigation serialization: the staged landing ships no module
+  // graph, so `page.content()` alone never sees it and passes even while the
+  // loader leaks.
+  const data = await request.get(`${PATH}.data`);
+  expect(data.status()).toBe(200);
+
+  for (const body of [await response.text(), await data.text(), await page.content()]) {
+    expect(body).not.toContain("cheapest_route");
+    expect(body).not.toContain("disabled_reason");
+  }
 });
 
 test("how it works reads as three ruled steps in order, wide and narrow", async ({ page }, testInfo) => {
