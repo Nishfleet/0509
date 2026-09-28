@@ -84,7 +84,7 @@ export async function openOwnSiteIncident(page: OwnSitePage, kind: string): Prom
     signalId: null,
     incidentId,
     severity: "high",
-    title: `${page.domain} looks broken: ${kind}`,
+    title: `${new URL(page.url).hostname} looks broken: ${kind}`,
     body: null,
     createdAt: openedAt,
   }).run();

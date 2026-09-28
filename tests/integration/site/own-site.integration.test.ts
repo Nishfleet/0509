@@ -120,6 +120,11 @@ describe("own-site check", () => {
       severity: "high",
       title: `mybrand.com looks broken: ${open?.kind ?? ""}`,
     });
+    const page = await env.DB.prepare(`SELECT url FROM page WHERE entity_id = 'ent-self' LIMIT 1`).first<{
+      url: string;
+    }>();
+    if (page === null) throw new Error("ent-self has no home page");
+    expect(alert?.title.startsWith(new URL(page.url).hostname)).toBe(true);
 
     expect(await runCheck("own-still-broken")).toEqual({ pages: 1, opened: 0, closed: 0, failed: 0 });
     expect(await incidents()).toHaveLength(1);
