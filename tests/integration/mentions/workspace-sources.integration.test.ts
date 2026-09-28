@@ -170,6 +170,37 @@ describe("alerts mentions source pills (#4003 4/6)", () => {
     }
   });
 
+  it("prefers the flagged watch's config over a healthier watch polled more recently (#5827)", async () => {
+    await seedOwner(USER, WS, COMP);
+    await seedWatch(
+      `watch-${COMP}-yt-flag`,
+      COMP,
+      YOUTUBE_SRC,
+      1,
+      JSON.stringify({
+        degraded: { state: "degraded", reason: NO_CHANNEL_REASON, at: NOW },
+      }),
+    );
+    await seedWatch(`watch-${COMP}-yt-ok`, COMP, YOUTUBE_SRC, 1);
+    await env.DB.prepare("UPDATE watch SET last_polled_at = ? WHERE id = ?")
+      .bind("2026-09-25T09:00:00.000Z", `watch-${COMP}-yt-flag`)
+      .run();
+    await env.DB.prepare("UPDATE watch SET last_polled_at = ? WHERE id = ?")
+      .bind(NOW, `watch-${COMP}-yt-ok`)
+      .run();
+
+    try {
+      const entries = await readWorkspaceMentionSources(WS);
+      const youtube = entries.find((entry) => entry.source.key === "youtube.channel_rss");
+      if (!youtube) throw new Error("the watched YouTube mentions source must be read");
+      expect(JSON.parse(youtube.source.watch_config_json ?? "{}")).toEqual({
+        degraded: { state: "degraded", reason: NO_CHANNEL_REASON, at: NOW },
+      });
+    } finally {
+      await clearOwner(USER, WS, COMP);
+    }
+  });
+
   it("keeps a canary-zero snapshot readable so the pill can say why", async () => {
     await seedOwner(USER, WS, COMP);
     await seedWatch(`watch-${COMP}-hn`, COMP, HN_SRC, 1);
