@@ -428,7 +428,8 @@ export default tseslint.config(
     // for a purpose that is not domain normalisation, so the shared selector is
     // restated without `DOMAIN_HOSTNAME_BAN`: the identity engine itself, a
     // public-host guard in the transport layer, the job-board host match, the www
-    // variant for this site, and the support worker's site-host allow. Every
+    // variant and the incident lane's page-host display for this site, and the
+    // support worker's site-host allow. Every
     // other `.hostname` read in app/ or workers/ keeps the ban. This block
     // restates the list because a later matching block's no-restricted-syntax
     // entry replaces the earlier one wholesale (flat config never merges a rule's
