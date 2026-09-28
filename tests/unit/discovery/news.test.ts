@@ -90,6 +90,30 @@ describe("newsGenerator", () => {
     }
   });
 
+  it("still yields the co-mentioned rival when one article carries an empty title", async () => {
+    const body = JSON.stringify({
+      articles: [
+        {
+          url: "https://empty.example/untitled",
+          title: "",
+          seendate: "20260920T070000Z",
+          domain: "empty.example",
+        },
+        {
+          url: "https://hypebae.com/gymshark-adanola",
+          title: "Gymshark and Adanola launch activewear capsule",
+          seendate: "20260921T070000Z",
+          domain: "hypebae.com",
+        },
+      ],
+    });
+
+    const candidates = await newsGenerator(SUBJECT, fetchTextWith(body));
+
+    expect(candidates.map((candidate) => candidate.name)).toEqual(["Adanola"]);
+    expect(candidates[0]?.evidence[0]?.sourceUrl).toBe("hypebae.com");
+  });
+
   it("drops an article that is not an http or https url", async () => {
     const body = JSON.stringify({
       articles: [
