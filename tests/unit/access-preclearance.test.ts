@@ -1,6 +1,13 @@
+import { createRemoteJWKSet } from "jose";
+import type * as jose from "jose";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { accessPrecleared } from "../../app/lib/auth/access-preclearance.server";
+
+vi.mock("jose", async (importOriginal) => {
+  const mod = await importOriginal<typeof jose>();
+  return { ...mod, createRemoteJWKSet: vi.fn(mod.createRemoteJWKSet) };
+});
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -87,6 +94,21 @@ describe("accessPrecleared", () => {
     await expect(
       accessPrecleared(request(jwt), { ACCESS_TEAM_DOMAIN: iss, ACCESS_AUD: AUD }),
     ).resolves.toBe(true);
+  });
+
+  it("passes an 8-second timeout to the JWKS client", async () => {
+    vi.mocked(createRemoteJWKSet).mockClear();
+    const iss = freshIssuer();
+    const pair = await rsaPair();
+    const jwk = await crypto.subtle.exportKey("jwk", pair.publicKey);
+    jwk.kid = "test-kid";
+    stubJwks(iss, jwk);
+    const jwt = await mintJwt(pair.privateKey, serviceClaims(iss));
+
+    await expect(
+      accessPrecleared(request(jwt), { ACCESS_TEAM_DOMAIN: iss, ACCESS_AUD: AUD }),
+    ).resolves.toBe(true);
+    expect(createRemoteJWKSet).toHaveBeenCalledWith(expect.any(URL), { timeoutDuration: 8000 });
   });
 
   it("denies a JWT signed by a key the issuer does not publish", async () => {

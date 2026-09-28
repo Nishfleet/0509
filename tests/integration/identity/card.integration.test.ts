@@ -298,6 +298,39 @@ describe("startCard", () => {
     expect((await env.IDENTITY_CACHE.list()).keys).toEqual([]);
   });
 
+  it("does not keep a read that found no name, description or socials", async () => {
+    stubAi(0.95);
+    const calls = stubWeb((url) =>
+      url.startsWith("https://www.wikidata.org/")
+        ? Response.json({ search: [] })
+        : new Response(`<html><body>${"<p>stock text</p>".repeat(40)}</body></html>`, { status: 200 }),
+    );
+    const card = await startCard("ws-1", subjectFor("gymshark.com"), []).site;
+    expect(card.unfound).toBe(true);
+    expect((await env.IDENTITY_CACHE.list()).keys).toEqual([]);
+    await startCard("ws-1", subjectFor("gymshark.com"), []).site;
+    expect(calls.filter((url) => url === "https://gymshark.com/")).toHaveLength(2);
+  });
+
+  it("reads the site again when the kept card is empty", async () => {
+    stubAi(0.95);
+    await env.IDENTITY_CACHE.put(
+      probeKey(subjectFor("gymshark.com"), "homepage"),
+      JSON.stringify({
+        name: null,
+        description: null,
+        socials: [],
+        logoCandidates: { ldOrganizationLogo: null, ogImage: null, appleTouchIcon: null },
+        adLibraryHints: [],
+        navLinks: [],
+      }),
+    );
+    stubWeb(() => new Response(gym, { status: 200 }));
+    const site = await startCard("ws-1", subjectFor("gymshark.com"), []).site;
+    expect(site.name).toBe("Gymshark");
+    expect(site.unfound).toBe(false);
+  });
+
   it("starts a creator's card from the handle, without reading any site", async () => {
     stubAi(0.95);
     const calls = stubWeb(() => new Response(gym, { status: 200 }));
