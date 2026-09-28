@@ -79,6 +79,11 @@ export async function saveDeliveryAddress(input: {
     text: message.text,
     html: message.html,
   });
-  if (outcome.outcome === "failed") return { error: SEND_FAILED, suppressed: false };
+  if (outcome.outcome === "failed") {
+    console.error(
+      JSON.stringify({ event: "delivery.address_verify_send_failed", error: outcome.error }),
+    );
+    return { error: SEND_FAILED, suppressed: false };
+  }
   return { error: null, suppressed: false };
 }
