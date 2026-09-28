@@ -168,20 +168,28 @@ const USER_DATA_NAME = "^(email|emails|userId|ip|input|raw|prompt|password|token
 const LOG_OR_CAPTURE_CALL =
   "CallExpression:matches([callee.object.name='console'], [callee.name=/^capture(Exception|Message)$/], [callee.property.name=/^capture(Exception|Message)$/])";
 const NO_USER_DATA_IN_LOGS_MESSAGE =
-  "Logs and Sentry never carry customer data or prompt input: no email, user id, IP, raw input, prompt, subject, password or token, as a key, a value or a property read. Log the ids an operator needs (event, workspaceId) and an error message capped with .slice(0, 300). Privacy first (CLAUDE.md; docs/REBUILD-GUARDRAILS.md). Source: 0509#5776.";
+  "Logs and Sentry never carry customer data or prompt input: no email, user id, IP, raw input, prompt, subject, password or token, as a key, a value or a property read. Log the ids an operator needs (event, workspaceId) and an error message capped with .slice(0, 300). Privacy first (CLAUDE.md; workers/sentry.ts sendDefaultPii: false). Source: 0509#5776.";
 const NO_USER_DATA_IN_LOGS = [
   {
     selector: `${LOG_OR_CAPTURE_CALL} :matches(Property[key.name=/${USER_DATA_NAME}/], Property[value.name=/${USER_DATA_NAME}/], MemberExpression[property.name=/${USER_DATA_NAME}/])`,
     message: NO_USER_DATA_IN_LOGS_MESSAGE,
   },
   { selector: `${LOG_OR_CAPTURE_CALL} > Identifier.arguments[name=/${USER_DATA_NAME}/]`, message: NO_USER_DATA_IN_LOGS_MESSAGE },
-  // The first two cover a named key and a named value. These three close the
+  // The first two cover a named key and a named value. These four close the
   // shapes the message promises but a name-only match misses: the `email` in
   // `console.log(`user ${email}`)`, the `subject` in `JSON.stringify(subject)`,
-  // and the `subject` in `{ ...subject }`. 0509#5786.
+  // the `subject` in `{ ...subject }`, and the `subject` in
+  // `console.log(subject.registrable)`. 0509#5786.
   { selector: `${LOG_OR_CAPTURE_CALL} TemplateLiteral > Identifier[name=/${USER_DATA_NAME}/]`, message: NO_USER_DATA_IN_LOGS_MESSAGE },
   { selector: `${LOG_OR_CAPTURE_CALL} CallExpression > Identifier[name=/${USER_DATA_NAME}/]`, message: NO_USER_DATA_IN_LOGS_MESSAGE },
   { selector: `${LOG_OR_CAPTURE_CALL} SpreadElement > Identifier[name=/${USER_DATA_NAME}/]`, message: NO_USER_DATA_IN_LOGS_MESSAGE },
+  {
+    // A read off a binding named like user data. `workspaceId` is the one
+    // operator id the message allows, so `input.workspaceId` stays clean while
+    // `subject.registrable` and `email.trim()` do not (0509#5786).
+    selector: `${LOG_OR_CAPTURE_CALL} MemberExpression[object.name=/${USER_DATA_NAME}/][property.name!='workspaceId']`,
+    message: NO_USER_DATA_IN_LOGS_MESSAGE,
+  },
 ];
 
 const BANNED_SYNTAX = [

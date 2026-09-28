@@ -23,6 +23,7 @@ const PROBE = "app/lib/probe-user-data-logs-tmp.ts";
 const HEADER = `declare const email: string;
 declare const subject: { registrable: string };
 declare const prompt: string;
+declare const input: { workspaceId: string };
 declare const workspaceId: string;
 declare const error: Error;
 `;
@@ -33,6 +34,7 @@ async function lintProbe(code: string): Promise<string[]> {
   await writeFile(file, `${HEADER}${code}`);
   try {
     const eslint = new ESLint({ cwd: REPO_ROOT });
+    if (await eslint.isPathIgnored(file)) throw new Error(`${PROBE} is ignored; the rule would never run`);
     const results = await eslint.lintFiles([file]);
     return results.flatMap((result) => result.messages.map((message) => message.message));
   } finally {
@@ -70,6 +72,14 @@ describe("eslint no-user-data-in-logs rule (#5786)", () => {
     expect(flagged(await lintProbe(`console.log(JSON.stringify(subject));\n`))).toBe(true);
   });
 
+  it("flags a member read off a user-data binding", { timeout: 60_000 }, async () => {
+    // The shape this rule exists for: the log line dropped the `subject` key,
+    // so a renamed key or a bare read is how the domain would get back in.
+    expect(flagged(await lintProbe(`console.log(subject.registrable);\n`))).toBe(true);
+    expect(flagged(await lintProbe(`console.log({ registrable: subject.registrable });\n`))).toBe(true);
+    expect(flagged(await lintProbe(`console.log(email.trim());\n`))).toBe(true);
+  });
+
   it("flags a spread of a user-data value", { timeout: 60_000 }, async () => {
     expect(flagged(await lintProbe(`console.log({ ...subject });\n`))).toBe(true);
   });
@@ -83,6 +93,10 @@ describe("eslint no-user-data-in-logs rule (#5786)", () => {
       `console.log(JSON.stringify({ event: "probe", workspaceId, error: error.message.slice(0, 300) }));\n`,
     );
     expect(flagged(messages)).toBe(false);
+  });
+
+  it("leaves the workspaceId read off a user-data-named binding alone", { timeout: 60_000 }, async () => {
+    expect(flagged(await lintProbe(`console.log(JSON.stringify({ event: "probe", workspaceId: input.workspaceId }));\n`))).toBe(false);
   });
 
   it("leaves a non-user-data name alone", { timeout: 60_000 }, async () => {
