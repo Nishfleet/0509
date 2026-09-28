@@ -27,7 +27,7 @@ export async function attemptSiteFill(
   if (!normalised.ok) return "pending";
   const { card, reached } = await readSiteCard(normalised.subject);
   if (!reached) return "pending";
-  const edited = await readEditedFields(entityId);
+  const edited = await readEditedFields(workspaceId, entityId);
   const filled = await fillSelfSiteFields({
     workspaceId,
     entityId,
