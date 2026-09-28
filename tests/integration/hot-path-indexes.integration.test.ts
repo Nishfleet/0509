@@ -98,13 +98,17 @@ async function liveIndexColumns(name: string): Promise<string[]> {
 /**
  * `*_id` columns the applied chain already had without a leading-column index
  * when this gate landed (0509#5755, audit §V26 named only the five hot reads).
- * A column earns its place here only because no hot or scheduled statement
- * filters on it; a new migration that adds an `*_id` column this list does not
- * name fails until the column ships its index.
- * Most entries are FK children whose parent is never deleted on a live path,
- * so nothing scans them; 0509#5938 owns indexing them. The five that did scan
- * — on the account-delete cascade from `user` through `workspace` — are
- * indexed by migration 0027 and are no longer in this list.
+ * A new migration that adds an `*_id` column this list does not name fails
+ * until the column ships its index.
+ * These are FK children whose parents DO get deleted on live paths — account
+ * delete cascades through `workspace`, and competitor forget
+ * (`app/lib/data/entity.server.ts` deleteCompetitor) deletes `entity` — so
+ * deleting a parent still scans them. They are allowlisted, not excused:
+ * 0509#5938 owns indexing them. The five account-delete children that scanned
+ * are indexed by migration 0027 and are no longer in this list, and
+ * `incident.page_id` ships its index in the same migration — a partial index
+ * (`idx_incident_one_open_per_page`, `WHERE closed_at IS NULL`) was masking it,
+ * which is why the gate counts only `partial = 0` indexes as covering.
  */
 const LEGACY_UNINDEXED_ID_COLUMNS: readonly string[] = [
   "alert.entity_id",
@@ -140,7 +144,7 @@ async function unindexedIdColumns(): Promise<string[]> {
       .bind(table.name)
       .all<{ name: string }>();
     const indexed = new Set<string>();
-    const indexes = await env.DB.prepare("SELECT name FROM pragma_index_list(?1)")
+    const indexes = await env.DB.prepare("SELECT name FROM pragma_index_list(?1) WHERE partial = 0")
       .bind(table.name)
       .all<{ name: string }>();
     for (const index of indexes.results ?? []) {
@@ -171,7 +175,6 @@ describe("0027_hot_path_indexes_and_sweep_run.sql", () => {
   });
 
   it("searches instead of scanning every hot or scheduled statement", async () => {
-    const seen: string[] = [];
     for (const statement of HOT_STATEMENTS) {
       const result = await env.DB.prepare(`EXPLAIN QUERY PLAN ${statement.sql}`)
         .bind(...statement.binds)
@@ -190,9 +193,7 @@ describe("0027_hot_path_indexes_and_sweep_run.sql", () => {
         details.filter((detail) => detail.includes("USE TEMP B-TREE")),
         `${statement.source} sorts through a temp B-tree: ${details.join(" | ")}`,
       ).toEqual([]);
-      seen.push(`EXPLAIN QUERY PLAN ${statement.source}: ${details.join(" | ")}`);
     }
-    console.log(`hot-path-indexes explain utc=${new Date().toISOString()} ${seen.join(" ;; ")}`);
   });
 
   it("fails on any new *_id column with no leading-column index", async () => {

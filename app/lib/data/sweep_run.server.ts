@@ -3,7 +3,12 @@ import { env } from "cloudflare:workers";
 const INSERT_SWEEP_RUN = `INSERT INTO sweep_run
   (id, kind, planned_at, finished_at, wall_ms, pages, failed)
 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
-ON CONFLICT (id) DO NOTHING`;
+ON CONFLICT (id) DO UPDATE SET
+  planned_at = excluded.planned_at,
+  finished_at = excluded.finished_at,
+  wall_ms = excluded.wall_ms,
+  pages = excluded.pages,
+  failed = excluded.failed`;
 
 export interface SweepRun {
   id: string;

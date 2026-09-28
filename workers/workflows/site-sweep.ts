@@ -120,7 +120,7 @@ export class SiteSweep extends WorkflowEntrypoint<Env & { SITE_SWEEP_PING_URL?: 
             kind: "site",
             plannedAt: tick.plannedAt,
             finishedAt: finishedAt.toISOString(),
-            wallMs: finishedAt.getTime() - event.timestamp.getTime(),
+            wallMs: finishedAt.getTime() - Date.parse(tick.plannedAt),
             pages,
             failed,
           });

@@ -54,7 +54,7 @@ describe("sweep_run records a finished site sweep (0509#5755)", () => {
     });
   });
 
-  it("keeps the first row when the same sweep id is recorded twice", async () => {
+  it("refreshes the row when the same sweep id is recorded twice, so a retried record step stores the last confirmed write", async () => {
     await recordSweepRun(RUN);
     await recordSweepRun({ ...RUN, finishedAt: "2026-09-25T09:05:00.000Z", wallMs: 99_999, pages: 40, failed: 40 });
 
@@ -63,10 +63,10 @@ describe("sweep_run records a finished site sweep (0509#5755)", () => {
       id: "sweep-0509-5755",
       kind: "site",
       planned_at: "2026-09-25T09:00:00.000Z",
-      finished_at: "2026-09-25T09:00:04.250Z",
-      wall_ms: 4250,
-      pages: 6,
-      failed: 1,
+      finished_at: "2026-09-25T09:05:00.000Z",
+      wall_ms: 99_999,
+      pages: 40,
+      failed: 40,
     });
   });
 });
