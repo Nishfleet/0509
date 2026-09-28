@@ -40,7 +40,7 @@ describe("preview-assert docs/tests skip guard", () => {
     expect(postScope.length).toBeGreaterThan(0);
     for (const step of postScope) {
       const guarded =
-        step.includes("if: steps.scope.outputs.skip != 'true'") ||
+        step.includes("steps.scope.outputs.skip != 'true'") ||
         // The failure-artifact upload must still run on a red non-skipped run.
         step.includes("if: failure()");
       expect(guarded, `unguarded step: ${step.split("\n", 1)[0].trim()}`).toBe(true);
