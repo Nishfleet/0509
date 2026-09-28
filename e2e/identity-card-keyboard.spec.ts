@@ -22,13 +22,13 @@ import { consoleFailures, watchConsole } from "./inbox";
 // returns the unfound card — empty fields, every `EditRow` openable — and the
 // keyboard paths the packet specifies are reachable without any network.
 //
-// The 390 lane runs and is marked expected-to-fail rather than skipped. On an
+// The 390 lane runs and is marked expected-to-fail rather than skipped: on an
 // unread card, `Row` puts the fixed `w-20 shrink-0` label and the "we'll fill
-// this on the first crawl" line beside the `flex-1` trigger, and at 390 the row
-// is 316px: the label's 80px, the empty-line span's 204px and the two `gap-4`
-// leave the trigger 0px wide, so Playwright never sees it. That squeeze is on
-// `origin/main` and is filed as its own issue (0509#5557), whose fix deletes
-// this file's expected failure rather than this packet's slice.
+// this on the first crawl" line beside the `min-w-0 flex-1` trigger, and the
+// trigger measures 0px wide at 390, so Playwright never sees it. 0509#5557
+// probed that row — 316px across, the 80px label, the 204px empty line and the
+// two `gap-4` taking the 32px — and owns the fix, which deletes this file's
+// expected failure rather than this packet's slice.
 test.skip(
   Boolean(process.env.PLAYWRIGHT_TEST_BASE_URL),
   "production signs in through the magic-link inbox; the local preview D1 carries the seed",
