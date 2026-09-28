@@ -21,6 +21,14 @@ import { consoleFailures, watchConsole } from "./inbox";
 // without a Jev call. The probed host does not resolve, so `readSiteCard`
 // returns the unfound card — empty fields, every `EditRow` openable — and the
 // keyboard paths the packet specifies are reachable without any network.
+//
+// The 390 lane runs and is marked expected-to-fail rather than skipped. On an
+// unread card, `Row` puts the fixed `w-20 shrink-0` label and the "we'll fill
+// this on the first crawl" line beside the `flex-1` trigger, and at 390 the row
+// is 316px: the label's 80px, the empty-line span's 204px and the two `gap-4`
+// leave the trigger 0px wide, so Playwright never sees it. That squeeze is on
+// `origin/main` and is filed as its own issue (0509#5557), whose fix deletes
+// this file's expected failure rather than this packet's slice.
 test.skip(
   Boolean(process.env.PLAYWRIGHT_TEST_BASE_URL),
   "production signs in through the magic-link inbox; the local preview D1 carries the seed",
@@ -121,6 +129,9 @@ const TRIGGERS: Record<"name" | "about", RegExp> = {
   about: /^edit about\b/,
 };
 
+const PHONE_390_DEFECT =
+  "the unfound card's 0px trigger at 390 is filed separately; the keyboard contract does not vary by viewport, 0509#5557";
+
 async function openEditor(page: Page, field: "name" | "about"): Promise<Locator> {
   const trigger = page.getByRole("button", { name: TRIGGERS[field] });
   await expect(trigger).toBeVisible({ timeout: 30_000 });
@@ -141,11 +152,8 @@ function watchDraftPosts(page: Page): string[] {
 }
 
 test("the identity card editor saves and closes on Enter, with focus back on the trigger", async ({ page }, testInfo) => {
-  test.fail(
-    testInfo.project.name === "phone-390",
-    "the unfound card's 0px trigger at 390 is filed separately; the keyboard contract does not vary by viewport, 0509#5557",
-  );
   test.setTimeout(90_000);
+  test.fail(testInfo.project.name === "phone-390", PHONE_390_DEFECT);
   const watched = watchConsole(page);
   const draftPosts = watchDraftPosts(page);
   const subject = "nope-card-keyboard-enter.example.com";
@@ -175,11 +183,8 @@ test("the identity card editor saves and closes on Enter, with focus back on the
 });
 
 test("the identity card editor saves and closes on Escape, with focus back on the trigger", async ({ page }, testInfo) => {
-  test.fail(
-    testInfo.project.name === "phone-390",
-    "the unfound card's 0px trigger at 390 is filed separately; the keyboard contract does not vary by viewport, 0509#5557",
-  );
   test.setTimeout(90_000);
+  test.fail(testInfo.project.name === "phone-390", PHONE_390_DEFECT);
   const watched = watchConsole(page);
   const draftPosts = watchDraftPosts(page);
   const subject = "nope-card-keyboard-escape.example.com";
