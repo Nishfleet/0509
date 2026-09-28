@@ -4,7 +4,7 @@ import { FAQ } from "./faq";
 import { SITE_URL } from "./structured-data";
 
 export const PUBLIC_PATHS = ["/privacy", "/terms"] as const;
-export const SITEMAP_PATHS = [...PUBLIC_PATHS, "/llms.txt"] as const;
+export const SITEMAP_PATHS = ["/privacy", "/terms", "/llms.txt"] as const;
 export const DISALLOWED_PREFIXES = ["/app", "/api", "/mcp", "/u", "/login", "/onboarding", "/oauth", "/design"] as const;
 export const MCP_URL = `${SITE_URL}/mcp`;
 

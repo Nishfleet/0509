@@ -41,17 +41,22 @@ test("GET /sitemap.xml serves the manifest-generated urlset", async ({
     SITEMAP_PATHS.length,
   );
   for (const path of SITEMAP_PATHS) {
-    expect(locs).toContain(`${[...origins][0]}${path}`);
+    expect(
+      locs,
+      `the sitemap does not name the public page ${path}`,
+    ).toContain(`${[...origins][0]}${path}`);
   }
-  // The sitemap is published from https://0509.io. `e2e-production` sets
-  // PLAYWRIGHT_TEST_BASE_URL=https://0509.io and is the run that pins the
-  // absolute form the issue asks for; local preview serves http://0509.io.
+  // The sitemap is published from https://0509.io. A local preview serves the
+  // configured route as http://0509.io, so the absolute https:// form is
+  // asserted exactly when the suite runs against the production origin.
   if (process.env.PLAYWRIGHT_TEST_BASE_URL === "https://0509.io") {
     expect(locs).toContain("https://0509.io/llms.txt");
   }
 });
 
 test("every sitemap url is served as an indexable 200, not noindex", async ({
+  baseURL,
+  playwright,
   request,
 }) => {
   const sitemap = await (await request.get("/sitemap.xml")).text();
@@ -60,11 +65,18 @@ test("every sitemap url is served as an indexable 200, not noindex", async ({
     locs.length,
     "sitemap row count differs from SITEMAP_PATHS",
   ).toBe(SITEMAP_PATHS.length);
+  // A request context built from the config's own baseURL carries no session:
+  // it is the crawler that reaches /privacy and /llms.txt with no cookie, and
+  // the production run's `request` fixture is not (it presents the Access
+  // service token), so this is the only fixture that can see the gate.
+  const anonymous = await playwright.request.newContext({ baseURL });
   await Promise.all(
     locs.map(async (loc) => {
       const path = new URL(loc[1]).pathname;
-      const response = await request.get(path);
-      expect(response.status(), `${path} is not a 200`).toBe(200);
+      const response = await anonymous.get(path);
+      expect(response.status(), `${path} is not a 200 for a stranger`).toBe(
+        200,
+      );
       expect(
         (response.headers()["x-robots-tag"] ?? "").toLowerCase(),
         `${path} is noindex by header`,
@@ -80,6 +92,7 @@ test("every sitemap url is served as an indexable 200, not noindex", async ({
       }
     }),
   );
+  await anonymous.dispose();
 });
 
 test("GET /llms.txt serves the manifest-generated summary", async ({
