@@ -25,12 +25,6 @@ test.skip(
   Boolean(process.env.PLAYWRIGHT_TEST_BASE_URL),
   "production signs in through the magic-link inbox; the local preview D1 carries the seed",
 );
-// The keyboard paths are viewport-independent, so one lane proves them. The
-// 390 lane cannot: on a card whose site is unread, `Row` puts the fixed
-// `w-20 shrink-0` label and the "we'll fill this on the first crawl" line
-// beside the `flex-1` trigger, and at 390 the trigger measures 0px wide, so
-// Playwright never sees it. That squeeze is on `origin/main` and is filed as
-// its own issue (0509#5557), not this packet's slice.
 
 function authSecret(): string {
   const line = readFileSync(".dev.vars.example", "utf8")
