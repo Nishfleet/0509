@@ -345,6 +345,11 @@ describe("agent access, scoped to one workspace", () => {
     expect(own.status).toBe(200);
   });
 
+  // #5757: no test in this file runs without a cf-connecting-ip header after
+  // this one — the loop drains the shared unidentified bucket (AGENT_LIMIT,
+  // 120/min), so anything after it sending no IP would 429 with no visible
+  // cause. Tests that want their own budget send a per-IP key like
+  // "203.0.113.<unique>".
   it("limits a request that carries no client IP, never waving it through", async () => {
     const bare = new Request("http://localhost/api/v1/brief");
     expect(clientIp(bare)).toBeNull();
@@ -366,9 +371,9 @@ describe("agent access, scoped to one workspace", () => {
     expect(first).toBeLessThan(maxAttempts);
     expect(statuses.slice(0, first).every((status) => status === 401)).toBe(true);
     expect(await withinLimit(env.AGENT_LIMIT, null)).toBe(false);
-  });
 
-  it("keeps a real client's per-IP bucket separate from the unidentified one", async () => {
+    // A caller the edge did identify spends its own bucket, not the one the
+    // flood above emptied.
     expect(await withinLimit(env.AGENT_LIMIT, "203.0.113.210")).toBe(true);
   });
 });

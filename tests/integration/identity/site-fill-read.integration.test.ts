@@ -8,8 +8,26 @@ import {
   readEntityIdentityJson,
   readSelfSiteFill,
 } from "../../../app/lib/data/entity.server";
+import { normaliseSubject } from "../../../app/lib/identity/normalise";
+import { probeKey } from "../../../app/lib/identity/probe-cache.server";
+import { attemptSiteFill, markSiteFill } from "../../../app/lib/identity/site-fill.server";
 
 const NOW = "2026-09-25T08:00:00Z";
+const HOMEPAGE = "https://gymshark.com/";
+const CARD = {
+  name: "Gymshark",
+  description: "Gym clothes",
+  socials: [],
+  logoCandidates: { ldOrganizationLogo: null, ogImage: null, appleTouchIcon: null },
+  adLibraryHints: [],
+  navLinks: [],
+};
+
+function key(): string {
+  const normalised = normaliseSubject("gymshark.com");
+  if (!normalised.ok) throw new Error("gymshark.com must normalise");
+  return probeKey(normalised.subject, "homepage");
+}
 
 let selfId = "";
 let otherId = "";
@@ -66,6 +84,7 @@ beforeEach(() => {
 });
 
 afterEach(async () => {
+  await env.IDENTITY_CACHE.delete(key());
   await env.DB.prepare('DELETE FROM "user" WHERE id = ?1 OR id = ?2').bind(userId, `${userId}-b`).run();
 });
 
@@ -74,10 +93,10 @@ describe("readSelfSiteFill", () => {
     await seed();
     expect(await readSelfSiteFill(workspaceId)).toBe(null);
 
-    await markSelfSiteFill(workspaceId, selfId, "pending");
+    expect(await markSelfSiteFill(workspaceId, selfId, "pending")).toBe(true);
     expect(await readSelfSiteFill(workspaceId)).toBe("pending");
 
-    await markSelfSiteFill(workspaceId, selfId, "gave_up");
+    expect(await markSelfSiteFill(workspaceId, selfId, "gave_up")).toBe(true);
     expect(await readSelfSiteFill(workspaceId)).toBe("gave_up");
   });
 
@@ -92,17 +111,34 @@ describe("readSelfSiteFill", () => {
     expect(await readEntityIdentityJson(workspaceId, otherId)).toBeNull();
     expect(await readEntityIdentityJson(otherWorkspaceId, selfId)).toBeNull();
 
-    await fillSelfSiteFields({
-      workspaceId,
-      entityId: otherId,
-      description: "Leaked",
-      socialsJson: "[]",
-    });
+    expect(
+      await fillSelfSiteFields({
+        workspaceId,
+        entityId: otherId,
+        description: "Leaked",
+        socialsJson: "[]",
+      }),
+    ).toBe(false);
+    expect(await markSelfSiteFill(workspaceId, otherId, "gave_up")).toBe(false);
     expect(await readEntityIdentityJson(otherWorkspaceId, otherId)).toBe(theirs);
-
-    await markSelfSiteFill(workspaceId, otherId, "gave_up");
     expect(await readSelfSiteFill(otherWorkspaceId)).toBe(null);
-    expect(await readEntityIdentityJson(otherWorkspaceId, otherId)).toBe(theirs);
+    expect(await readEntityIdentityJson(workspaceId, selfId)).toBe(
+      JSON.stringify({ description: null, socials: [] }),
+    );
+  });
+
+  it("tells a caller that paired the wrong workspace, instead of doing nothing quietly", async () => {
+    await seed();
+    await env.IDENTITY_CACHE.put(key(), JSON.stringify(CARD));
+    await expect(attemptSiteFill(workspaceId, otherId, HOMEPAGE)).rejects.toThrow(
+      new RegExp(`self entity ${otherId} is not in workspace ${workspaceId}`),
+    );
+    await expect(markSiteFill(workspaceId, otherId, "gave_up")).rejects.toThrow(
+      new RegExp(`self entity ${otherId} is not in workspace ${workspaceId}`),
+    );
+    expect(await readEntityIdentityJson(otherWorkspaceId, otherId)).toBe(
+      JSON.stringify({ description: "Theirs", socials: [] }),
+    );
     expect(await readEntityIdentityJson(workspaceId, selfId)).toBe(
       JSON.stringify({ description: null, socials: [] }),
     );

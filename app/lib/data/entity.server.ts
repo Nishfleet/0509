@@ -433,10 +433,11 @@ export async function fillSelfSiteFields(input: {
   entityId: string;
   description: string | null;
   socialsJson: string;
-}): Promise<void> {
-  await env.DB.prepare(FILL_SELF_SITE_FIELDS)
+}): Promise<boolean> {
+  const result = await env.DB.prepare(FILL_SELF_SITE_FIELDS)
     .bind(input.entityId, input.description, input.socialsJson, input.workspaceId)
     .run();
+  return result.meta.changes === 1;
 }
 
 const MARK_SELF_SITE_FILL =
@@ -446,8 +447,9 @@ export async function markSelfSiteFill(
   workspaceId: string,
   entityId: string,
   state: SiteFillState,
-): Promise<void> {
-  await env.DB.prepare(MARK_SELF_SITE_FILL).bind(entityId, state, workspaceId).run();
+): Promise<boolean> {
+  const result = await env.DB.prepare(MARK_SELF_SITE_FILL).bind(entityId, state, workspaceId).run();
+  return result.meta.changes === 1;
 }
 
 const READ_SELF_SITE_FILL =
