@@ -166,4 +166,24 @@ describe("confirm a changed delivery address (0509#5811)", () => {
     });
     expect((await onlyTarget(workspaceId)).verify_token).toMatch(/^[0-9a-f]{64}$/);
   });
+
+  it("(f) an unchanged, already verified address stays verified and sends nothing", async () => {
+    const workspaceId = firstWorkspaceId(USER_ID);
+    await env.DB.prepare(
+      `UPDATE send_target SET target_value = ?, is_verified = 1, verify_token = NULL WHERE workspace_id = ?`,
+    )
+      .bind(NEW_ADDRESS, workspaceId)
+      .run();
+
+    const rec = recorder();
+    const result = await save(rec, NEW_ADDRESS);
+
+    expect(result).toEqual({ error: null, suppressed: false });
+    expect(rec.sent).toHaveLength(0);
+    expect(await onlyTarget(workspaceId)).toMatchObject({
+      target_value: NEW_ADDRESS,
+      is_verified: 1,
+      verify_token: null,
+    });
+  });
 });

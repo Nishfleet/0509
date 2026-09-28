@@ -13,6 +13,10 @@ export function DeliveryAddress({
   suppressed: boolean;
 }) {
   const hasError = error !== null;
+  const describedBy = [
+    hasError ? "delivery-address-error" : null,
+    delivery.verified ? null : "delivery-address-unconfirmed",
+  ].filter((id) => id !== null);
   return (
     <section aria-labelledby="delivery-address" className="border-line mt-10 border-t pt-6">
       <h2 id="delivery-address" className={BLOCK_HEADING}>
@@ -35,12 +39,11 @@ export function DeliveryAddress({
           defaultValue={delivery.address}
           className="border-line h-11 border px-3"
           aria-invalid={hasError ? true : undefined}
-          aria-describedby={hasError ? "delivery-address-error" : undefined}
+          aria-describedby={describedBy.length === 0 ? undefined : describedBy.join(" ")}
         />
         {delivery.verified ? null : (
-          <p className="mt-2 max-w-prose leading-[1.55]">
-            This address is unconfirmed. We emailed a confirmation link — use it to confirm this
-            address.
+          <p id="delivery-address-unconfirmed" className="mt-2 max-w-prose leading-[1.55]">
+            This address is unconfirmed. We emailed a link to confirm it.
           </p>
         )}
         {suppressed ? (
