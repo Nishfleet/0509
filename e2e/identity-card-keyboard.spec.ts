@@ -170,10 +170,10 @@ test("the identity card editor saves and closes on Enter, with focus back on the
   await name.press("Enter");
 
   // The controlled `open` prop closing does not fire Popover's onOpenChange, so
-  // Enter reaches onSave through exactly one path. The wait attaches before the
-  // keypress: a duplicate submit from that same keypress is dispatched
-  // synchronously, so `watchDraftPosts` observes it before this response returns
-  // and the `toHaveLength(1)` read below is exact for the same-keypress case.
+  // Enter reaches onSave through exactly one path. onSave runs inside the
+  // keydown handler, so a second submit added to that same keypress would be
+  // dispatched before this response returns and `watchDraftPosts` would count it
+  // ahead of the read below.
   await saveResponse;
   expect(draftPosts).toHaveLength(1);
   await expect(name).toHaveCount(0);
