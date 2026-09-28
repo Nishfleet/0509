@@ -27,6 +27,9 @@ const auth = createAuth({
 });
 
 const NOW = "2026-09-21T12:00:00.000Z";
+// Always inside the trailing-week window readCompetitorPage measures against
+// Date.now(); a fixed date goes stale the way NOW did on 2026-09-28.
+const CHANGE_SEEN_AT = new Date().toISOString();
 
 const PAYLOAD = {
   workspace_id: "ws_agent_a",
@@ -120,7 +123,7 @@ async function seedCompetitorChange(workspaceId: string) {
       `INSERT INTO signal (id, workspace_id, entity_id, source_id, watch_id, snapshot_id, kind, aspect, url, evidence_url,
          payload_json, dedup_key, observed_at, last_seen_at)
        VALUES (?1, ?2, 'ent_agent_a', 'src_site_web', ?3, ?4, 'change', 'pricing', ?5, ?5, ?6, ?4, ?7, ?7)`,
-    ).bind(SITE_CHANGE_ID, workspaceId, watchId, afterSnapshotId, SITE_CHANGE_URL, JSON.stringify(payload), NOW),
+    ).bind(SITE_CHANGE_ID, workspaceId, watchId, afterSnapshotId, SITE_CHANGE_URL, JSON.stringify(payload), CHANGE_SEEN_AT),
   ]);
   await env.SNAPSHOTS.put(
     SITE_CHANGE_DIFF_KEY,
@@ -264,7 +267,7 @@ describe("agent access, scoped to one workspace", () => {
         headline: "Rival A changed its pricing page",
         page: "pricing page",
         url: SITE_CHANGE_URL,
-        observedAt: NOW,
+        observedAt: CHANGE_SEEN_AT,
         summary: '3 words added, 2 removed. Was: "Plans from $10." Now: "Plans from $12." https://rival-a.example/pricing',
       },
     ]);
