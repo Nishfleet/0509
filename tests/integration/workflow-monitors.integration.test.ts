@@ -2,6 +2,10 @@ import { createExecutionContext, env } from "cloudflare:test";
 import type { WorkflowEvent, WorkflowStep } from "cloudflare:workers";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
+import type { MentionsSweep } from "../../workers/workflows/mentions";
+import type { OwnSiteCheck } from "../../workers/workflows/own-site-check";
+import type { SiteSweep } from "../../workers/workflows/site-sweep";
+
 vi.mock("@sentry/cloudflare", () => ({
   withMonitor: vi.fn((_slug: string, cb: () => unknown) => cb()),
 }));
@@ -10,9 +14,9 @@ vi.mock("@sentry/cloudflare", () => ({
 // to the main Worker's graph) before this file's mocks register, so a static
 // import binds the real @sentry/cloudflare. Resetting the registry and
 // re-importing inside beforeAll returns copies bound to the mock.
-let SiteSweep: (typeof import("../../workers/workflows/site-sweep"))["SiteSweep"];
-let MentionsSweep: (typeof import("../../workers/workflows/mentions"))["MentionsSweep"];
-let OwnSiteCheck: (typeof import("../../workers/workflows/own-site-check"))["OwnSiteCheck"];
+let siteSweep: { prototype: SiteSweep };
+let mentionsSweep: { prototype: MentionsSweep };
+let ownSiteCheck: { prototype: OwnSiteCheck };
 let monitorMock: ReturnType<typeof vi.fn>;
 
 beforeAll(async () => {
@@ -23,9 +27,9 @@ beforeAll(async () => {
     import("../../workers/workflows/own-site-check"),
     import("@sentry/cloudflare"),
   ]);
-  SiteSweep = site.SiteSweep;
-  MentionsSweep = mentions.MentionsSweep;
-  OwnSiteCheck = ownSite.OwnSiteCheck;
+  siteSweep = site.SiteSweep;
+  mentionsSweep = mentions.MentionsSweep;
+  ownSiteCheck = ownSite.OwnSiteCheck;
   monitorMock = sentry.withMonitor as ReturnType<typeof vi.fn>;
 });
 
@@ -57,7 +61,7 @@ const makeWorkflow = <T extends object>(workflow: { prototype: T }): T => {
 
 describe("workflow Sentry cron monitors", () => {
   it("checks site-sweep in on its 02:00 UTC monitor and returns the zeroed sweep", async () => {
-    const outcome = await makeWorkflow(SiteSweep).run(event, immediateStep);
+    const outcome = await makeWorkflow(siteSweep).run(event, immediateStep);
     expect(monitorMock).toHaveBeenCalledTimes(1);
     expect(monitorMock).toHaveBeenCalledWith("site-sweep", expect.any(Function), {
       schedule: { type: "crontab", value: "0 2 * * *" },
@@ -78,7 +82,7 @@ describe("workflow Sentry cron monitors", () => {
     // Migration 0018 seeds canary_query on the gdelt/hn sources; clearing it
     // keeps this run to plan + canary-plan only, with no upstream calls.
     await env.DB.exec("UPDATE source SET canary_query = NULL");
-    const outcome = await makeWorkflow(MentionsSweep).run(event, immediateStep);
+    const outcome = await makeWorkflow(mentionsSweep).run(event, immediateStep);
     expect(monitorMock).toHaveBeenCalledTimes(1);
     expect(monitorMock).toHaveBeenCalledWith("mentions-sweep", expect.any(Function), {
       schedule: { type: "crontab", value: "0 1 * * *" },
@@ -89,7 +93,7 @@ describe("workflow Sentry cron monitors", () => {
   });
 
   it("checks own-site-check in on its hourly monitor and returns the zeroed check", async () => {
-    const outcome = await makeWorkflow(OwnSiteCheck).run(event, immediateStep);
+    const outcome = await makeWorkflow(ownSiteCheck).run(event, immediateStep);
     expect(monitorMock).toHaveBeenCalledTimes(1);
     expect(monitorMock).toHaveBeenCalledWith("own-site-check", expect.any(Function), {
       schedule: { type: "crontab", value: "0 * * * *" },
@@ -107,7 +111,7 @@ describe("workflow Sentry cron monitors", () => {
       },
       sleep: async () => undefined,
     } as unknown as WorkflowStep;
-    await expect(makeWorkflow(SiteSweep).run(event, failingStep)).rejects.toThrow("plan down");
+    await expect(makeWorkflow(siteSweep).run(event, failingStep)).rejects.toThrow("plan down");
     expect(monitorMock).toHaveBeenCalledTimes(1);
     expect(monitorMock).toHaveBeenCalledWith("site-sweep", expect.any(Function), expect.any(Object));
   });
