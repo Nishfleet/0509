@@ -258,7 +258,8 @@ jobs:
       - run: npm ci
       - run: npx playwright install --with-deps chromium
       - name: Run the same suite against what was just deployed
-        run: npm run e2e -- --reporter=github,json
+        # @scheduled journeys (J8, J12) run from e2e-scheduled.yml on their own clock (0509#4124, 0509#4128).
+        run: npm run e2e -- --reporter=github,json --grep-invert @scheduled
         env:
           # Setting this switches playwright.config.ts out of webServer mode.
           PLAYWRIGHT_TEST_BASE_URL: ${{ github.event.deployment_status.environment_url }}
