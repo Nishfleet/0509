@@ -1,95 +1,58 @@
+import { createRemoteJWKSet, errors, jwtVerify, type JWTPayload } from "jose";
+
 const ASSERTION_HEADER = "cf-access-jwt-assertion";
 const ASSERTION_COOKIE = "CF_Authorization";
 const SERVICE_TOKEN_SUFFIX = ".access";
-const JWKS_TTL_MS = 60 * 60 * 1000;
 
 export interface AccessPreclearanceEnv {
   ACCESS_TEAM_DOMAIN?: string;
   ACCESS_AUD?: string;
 }
 
-interface AccessJwk {
-  kty: string;
-  kid: string;
-  alg?: string;
-  use?: string;
-  n: string;
-  e: string;
+const jwksByIssuer = new Map<string, ReturnType<typeof createRemoteJWKSet>>();
+
+function jwksFor(iss: string) {
+  const cached = jwksByIssuer.get(iss);
+  if (cached) return cached;
+  const jwks = createRemoteJWKSet(new URL(`${iss}/cdn-cgi/access/certs`), { timeoutDuration: 8000 });
+  jwksByIssuer.set(iss, jwks);
+  return jwks;
 }
 
-let cachedJwks: { iss: string; at: number; keys: Map<string, AccessJwk> } | undefined;
-
-async function accessJwks(iss: string, fresh: boolean): Promise<Map<string, AccessJwk>> {
-  if (!fresh && cachedJwks?.iss === iss && Date.now() - cachedJwks.at < JWKS_TTL_MS) {
-    return cachedJwks.keys;
+function verifyDenial(error: unknown): string {
+  if (error instanceof errors.JWTExpired) return "expired";
+  if (error instanceof errors.JWTClaimValidationFailed) {
+    if (error.claim === "iss") return "issuer-mismatch";
+    if (error.claim === "aud") return "audience-mismatch";
+    return `claim-failed: ${error.claim}`;
   }
-  const response = await fetch(`${iss}/cdn-cgi/access/certs`);
-  if (!response.ok) throw new Error(`Access JWKS at ${iss} answered HTTP ${String(response.status)}`);
-  const body: { keys?: AccessJwk[] } = await response.json();
-  const keys = new Map<string, AccessJwk>();
-  for (const key of body.keys ?? []) keys.set(key.kid, key);
-  cachedJwks = { iss, at: Date.now(), keys };
-  return keys;
-}
-
-function decodeBase64url(input: string): Uint8Array<ArrayBuffer> {
-  let base64 = input.replaceAll("-", "+").replaceAll("_", "/");
-  while (base64.length % 4 !== 0) base64 += "=";
-  const binary = atob(base64);
-  const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-  return bytes;
-}
-
-interface AccessClaims {
-  iss?: string;
-  aud?: string | string[];
-  exp?: number;
-  sub?: string;
-  common_name?: string;
+  if (error instanceof errors.JWSSignatureVerificationFailed) return "bad-signature";
+  if (error instanceof errors.JWKSNoMatchingKey) return "unknown-kid";
+  if (error instanceof errors.JOSEError) return `jose: ${error.code}`;
+  return `verify-error: ${error instanceof Error ? error.message : String(error)}`;
 }
 
 async function denialReason(
   assertion: string,
   config: { iss: string; aud: string },
 ): Promise<string | null> {
-  const parts = assertion.split(".");
-  if (parts.length !== 3) return "malformed-jwt";
-  const [head, payload, signature] = parts;
-  let claims: AccessClaims;
-  let kid: string;
+  let payload: JWTPayload;
   try {
-    const header = JSON.parse(new TextDecoder().decode(decodeBase64url(head))) as { alg?: string; kid?: string };
-    if (header.alg !== "RS256" || typeof header.kid !== "string") return "unsupported-header";
-    kid = header.kid;
-    claims = JSON.parse(new TextDecoder().decode(decodeBase64url(payload))) as AccessClaims;
+    const verified = await jwtVerify(assertion, jwksFor(config.iss), {
+      issuer: config.iss,
+      audience: config.aud,
+      algorithms: ["RS256"],
+      requiredClaims: ["exp"],
+    });
+    payload = verified.payload;
   } catch (error) {
-    return `unparseable-jwt: ${error instanceof Error ? error.message : String(error)}`;
+    return verifyDenial(error);
   }
-  if (claims.iss !== config.iss) return "issuer-mismatch";
-  const audiences = Array.isArray(claims.aud) ? claims.aud : [claims.aud];
-  if (!audiences.includes(config.aud)) return "audience-mismatch";
-  if (typeof claims.exp !== "number" || claims.exp * 1000 <= Date.now()) return "expired";
-  if (claims.sub !== "" || typeof claims.common_name !== "string" || !claims.common_name.endsWith(SERVICE_TOKEN_SUFFIX)) {
+  const commonName = payload.common_name;
+  if (payload.sub !== "" || typeof commonName !== "string" || !commonName.endsWith(SERVICE_TOKEN_SUFFIX)) {
     return "not-a-service-token";
   }
-  let jwk = (await accessJwks(config.iss, false)).get(kid);
-  jwk ??= (await accessJwks(config.iss, true)).get(kid);
-  if (jwk === undefined) return "unknown-kid";
-  const key = await crypto.subtle.importKey(
-    "jwk",
-    { kty: jwk.kty, n: jwk.n, e: jwk.e, alg: "RS256", ext: false },
-    { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" },
-    false,
-    ["verify"],
-  );
-  const valid = await crypto.subtle.verify(
-    "RSASSA-PKCS1-v1_5",
-    key,
-    decodeBase64url(signature),
-    new TextEncoder().encode(`${head}.${payload}`),
-  );
-  return valid ? null : "bad-signature";
+  return null;
 }
 
 function assertionFromCookie(header: string | null): string | null {

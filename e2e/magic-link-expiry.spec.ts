@@ -1,7 +1,15 @@
 import { expect, test, type Browser, type BrowserContext, type Page } from "@playwright/test";
 
 import { accessStatePath } from "../playwright.config";
-import { requireInboxToken, signInWithMagicLink, turnstileToken, waitForMagicLink } from "./inbox";
+import { deleteCreatedAccount, requireInboxToken, signInWithMagicLink, turnstileToken, waitForMagicLink } from "./inbox";
+
+let createdEmail = "";
+test.afterEach(async ({ page }, testInfo) => {
+  if (createdEmail === "") return;
+  testInfo.setTimeout(testInfo.timeout + 60_000);
+  await deleteCreatedAccount(page, createdEmail);
+  createdEmail = "";
+});
 
 // The sign-in link's real contract, proven on production every deploy: one use,
 // a TTL it cannot outlive, and a request path that stays silent about whether
@@ -21,6 +29,7 @@ test.skip(
 test.describe.configure({ retries: 1 });
 
 const TOKEN_TTL_MS = 305_000;
+const DEADLINE_SLACK_MS = 30_000;
 const SESSION_COOKIE = /better-auth\.session_token/;
 const VERIFY_ERROR = "error=INVALID_TOKEN";
 
@@ -99,6 +108,7 @@ test("the sign-in link works once, survives a newer request, dies on its own clo
   const token = requireInboxToken();
   if (!baseURL) throw new Error("PLAYWRIGHT_TEST_BASE_URL resolved to no baseURL");
   const email = freshAddress("expiry");
+  createdEmail = email;
   const stranger = freshAddress("stranger");
 
   // First follow: the full J1 journey — real form, real email, real link.
@@ -163,8 +173,13 @@ test("the sign-in link works once, survives a newer request, dies on its own clo
   await newerContext.close();
 
   // Expiry: the fourth link is never followed until its TTL has fully elapsed.
-  const remaining = expiresAfter - Date.now();
-  if (remaining > 0) await page.waitForTimeout(remaining);
+  const remaining = Math.max(expiresAfter - Date.now(), 0);
+  await expect
+    .poll(() => Date.now(), {
+      timeout: remaining + DEADLINE_SLACK_MS,
+      message: `the sign-in link's remaining ${Math.round(remaining / 1000)}s TTL to elapse`,
+    })
+    .toBeGreaterThanOrEqual(expiresAfter);
   const expiredContext = await freshContext(browser);
   const expiredFollow = await followOnce(expiredContext, fourthLink);
   expect(expiredFollow.status).toBe(302);

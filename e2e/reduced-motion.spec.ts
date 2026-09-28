@@ -2,7 +2,15 @@ import { expect, test, type Page, type TestInfo } from "@playwright/test";
 import type { RouteConfigEntry } from "@react-router/dev/routes";
 import routes from "../app/routes";
 
-import { requireInboxToken, signInWithMagicLink } from "./inbox";
+import { deleteCreatedAccount, requireInboxToken, signInWithMagicLink } from "./inbox";
+
+let createdEmail = "";
+test.afterEach(async ({ page }, testInfo) => {
+  if (createdEmail === "") return;
+  testInfo.setTimeout(testInfo.timeout + 60_000);
+  await deleteCreatedAccount(page, createdEmail);
+  createdEmail = "";
+});
 
 interface MotionFinding {
   selector: string;
@@ -66,6 +74,7 @@ const targets = ["/", ...screenPaths(routes, "").map(visitPath)];
 // need beyond the open page: the detail page carries exactly one switch.
 async function openWatchedCompetitor(page: Page): Promise<void> {
   const email = `e2e+${crypto.randomUUID().replaceAll("-", "").slice(0, 12)}@0509.io`;
+  createdEmail = email;
   await signInWithMagicLink(page, email, requireInboxToken());
 
   await page.goto("/onboarding");
@@ -194,10 +203,12 @@ for (const target of targets) {
       throw new Error(`${target} returned ${status}; motion assertions skipped on a broken page`);
     }
 
-    // networkidle is what the rest of the e2e/ suite uses; animations that
-    // start after networkidle would still be in `getAnimations()`. This
-    // gives us one steady-state sample.
-    await page.waitForLoadState("networkidle");
+    // The sample is taken once `main` is visible, so the route has painted.
+    // The computed-style scan below is what proves the cascade: a route that
+    // forgot the `prefers-reduced-motion` reset still carries a non-zero
+    // duration at first paint. Motion a script starts after first paint is
+    // outside this assertion, which is exactly what the test name scopes.
+    await expect(page.locator("main")).toBeVisible();
 
     const findings = await inspectMotion(page);
 

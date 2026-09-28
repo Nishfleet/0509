@@ -1,6 +1,13 @@
+import { createRemoteJWKSet } from "jose";
+import type * as jose from "jose";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { accessPrecleared } from "../../app/lib/auth/access-preclearance.server";
+
+vi.mock("jose", async (importOriginal) => {
+  const mod = await importOriginal<typeof jose>();
+  return { ...mod, createRemoteJWKSet: vi.fn(mod.createRemoteJWKSet) };
+});
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -89,6 +96,21 @@ describe("accessPrecleared", () => {
     ).resolves.toBe(true);
   });
 
+  it("passes an 8-second timeout to the JWKS client", async () => {
+    vi.mocked(createRemoteJWKSet).mockClear();
+    const iss = freshIssuer();
+    const pair = await rsaPair();
+    const jwk = await crypto.subtle.exportKey("jwk", pair.publicKey);
+    jwk.kid = "test-kid";
+    stubJwks(iss, jwk);
+    const jwt = await mintJwt(pair.privateKey, serviceClaims(iss));
+
+    await expect(
+      accessPrecleared(request(jwt), { ACCESS_TEAM_DOMAIN: iss, ACCESS_AUD: AUD }),
+    ).resolves.toBe(true);
+    expect(createRemoteJWKSet).toHaveBeenCalledWith(expect.any(URL), { timeoutDuration: 8000 });
+  });
+
   it("denies a JWT signed by a key the issuer does not publish", async () => {
     const iss = freshIssuer();
     const published = await rsaPair();
@@ -123,6 +145,21 @@ describe("accessPrecleared", () => {
     jwk.kid = "test-kid";
     stubJwks(iss, jwk);
     const jwt = await mintJwt(pair.privateKey, serviceClaims("https://other.cloudflareaccess.com"));
+
+    await expect(
+      accessPrecleared(request(jwt), { ACCESS_TEAM_DOMAIN: iss, ACCESS_AUD: AUD }),
+    ).resolves.toBe(false);
+  });
+
+  it("denies a token that omits exp", async () => {
+    const iss = freshIssuer();
+    const pair = await rsaPair();
+    const jwk = await crypto.subtle.exportKey("jwk", pair.publicKey);
+    jwk.kid = "test-kid";
+    stubJwks(iss, jwk);
+    const claims = serviceClaims(iss);
+    delete claims.exp;
+    const jwt = await mintJwt(pair.privateKey, claims);
 
     await expect(
       accessPrecleared(request(jwt), { ACCESS_TEAM_DOMAIN: iss, ACCESS_AUD: AUD }),
@@ -195,5 +232,18 @@ describe("accessPrecleared", () => {
     await expect(
       accessPrecleared(request(jwt), { ACCESS_TEAM_DOMAIN: iss, ACCESS_AUD: AUD }),
     ).resolves.toBe(false);
+  });
+
+  it("fetches JWKS at most once for five forged tokens with unknown kids", async () => {
+    const iss = freshIssuer();
+    const pair = await rsaPair();
+    const fetchSpy = vi.fn(async () => new Response(JSON.stringify({ keys: [] }), { status: 200 }));
+    vi.stubGlobal("fetch", fetchSpy);
+    const env = { ACCESS_TEAM_DOMAIN: iss, ACCESS_AUD: AUD };
+    for (let i = 0; i < 5; i += 1) {
+      const jwt = await mintJwt(pair.privateKey, serviceClaims(iss), `unknown-kid-${String(i)}`);
+      await expect(accessPrecleared(request(jwt), env)).resolves.toBe(false);
+    }
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
   });
 });
