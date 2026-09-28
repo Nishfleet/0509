@@ -146,6 +146,7 @@ describe("confirm a changed delivery address (0509#5811)", () => {
     expect(result.error).not.toBeNull();
     expect(result.suppressed).toBe(false);
     const row = await onlyTarget(workspaceId);
+    // The token write deliberately precedes the send: a retry after a failed send writes a fresh token.
     expect(row).toMatchObject({ target_value: NEW_ADDRESS, is_verified: 0 });
     expect(row.verify_token).toMatch(/^[0-9a-f]{64}$/);
     expect(rec.sent).toHaveLength(0);

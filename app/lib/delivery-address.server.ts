@@ -83,7 +83,6 @@ export async function saveDeliveryAddress(input: {
   }
 
   await ensureOwnerEmailTarget(env.DB, { workspaceId, now: new Date().toISOString() });
-  const target = await readEmailTarget(env.DB, workspaceId);
   await changeEmailTarget(env.DB, { workspaceId, address });
 
   if (address === input.signInEmail.toLowerCase()) {
@@ -91,7 +90,8 @@ export async function saveDeliveryAddress(input: {
     return { error: null, suppressed: false };
   }
 
-  if (target !== null && target.target_value.toLowerCase() === address && target.is_verified === 1) {
+  const target = await readEmailTarget(env.DB, workspaceId);
+  if (target !== null && target.is_verified === 1) {
     return { error: null, suppressed: false };
   }
 
