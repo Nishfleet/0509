@@ -278,6 +278,14 @@ Core (<https://www.better-auth.com/docs/concepts/database>, field lists read fro
 
 Total for our set: **five tables**, four core plus `passkey`.
 
+### 2.6 Access JWT verification is `jose`, not a hand-rolled verifier
+
+Cloudflare's own "Validate JWTs" guide uses `jose` (`createRemoteJWKSet` + `jwtVerify`): <https://developers.cloudflare.com/cloudflare-one/identity/authorization-cookie/validating-json/> (301 to <https://developers.cloudflare.com/cloudflare-one/access-controls/applications/http-apps/authorization-cookie/validating-json/>, read 2026-09-28). The page names the `jose` NPM package and the JWKS URL `${teamdomain}/cdn-cgi/access/certs`.
+
+**Rejected:** the hand-rolled RS256 verifier in `app/lib/auth/access-preclearance.server.ts` (#5638, #5641) — `crypto.subtle`, a module-level JWKS map, and unsigned `iss`/`aud`/`exp` checks before the signature. An unknown `kid` forced a fresh JWKS fetch with no cooldown, so a forged token with a random `kid` cost one subrequest per request.
+
+`jose` **6.2.12**, exact pin (`npm install --save-exact jose@6.2.12`). Already a transitive of `better-auth`; the Access path imports the direct pin. `createRemoteJWKSet` refetches an unknown `kid` only after `cooldownDuration` (default 30s).
+
 ---
 
 ## 3. Tailwind 4 + shadcn/ui on React Router 8
@@ -1045,6 +1053,7 @@ Every capability the rebuild needs → the one thing that provides it → the ve
 | Worker runtime, deploy, types | `wrangler` (`wrangler types`) | 4.135.0 |
 | Scaffold | `create-cloudflare --framework=react-router` | 2.72.9 |
 | Auth (sessions, magic link) | `better-auth` | 1.7.5 |
+| Access service-token JWT | `jose` (`createRemoteJWKSet` + `jwtVerify`) | 6.2.12 |
 | Auth ↔ D1 | better-auth's built-in D1 Kysely dialect — binding passed directly | bundled in 1.7.5 |
 | Passkeys | `@better-auth/passkey` (SimpleWebAuthn) | 1.7.5 |
 | Auth schema generation | `npx auth@1.7.5 generate` against an empty local SQLite (§2.4) | `auth` 1.7.5, pinned |
@@ -1083,7 +1092,7 @@ Every capability the rebuild needs → the one thing that provides it → the ve
 | OpenAPI document | `zod-openapi` (samchungy) | 6.0.2 |
 | Agent-readable docs | `/llms.txt` + `Accept: text/markdown` + `rel="alternate"` | spec v2 (2026-08-10) |
 
-**Installed beyond the scaffold:** `better-auth` ^1.7.5, `@better-auth/passkey` ^1.7.5, `@better-auth/api-key` ^1.7.5, `zod` ^4.6.5 (also a better-auth peer), `@cloudflare/puppeteer` ^1.4.0, `@base-ui/react` 1.8.0, `clsx` ^2.1.1, `tailwind-merge` ^3.7.0, `class-variance-authority` ^0.7.1, `sonner` ^2.0.8, `diff` 9.0.0, `lucide-react` 1.47.0, `date-fns` 4.4.0, `@date-fns/tz` 1.5.0, `uplot` 1.6.32, `uplot-react` 1.2.4. **Not yet installed**, because the engine that needs it has not shipped: `@extractus/feed-extractor` 8.0.3 (`fast-xml-parser` 5.11.1 comes with it). Do not delete that row. `@modelcontextprotocol/server` 2.1.0, `@cloudflare/workers-oauth-provider` 0.10.4 and `zod-openapi` 6.0.2 shipped with the agent surface (2026-09-24); `uplot` 1.6.32 and `uplot-react` 1.2.4 shipped with the Home four-week chart (#4055). `agents` is rejected in §7.1. Platform rows have no package. `create-cloudflare`, `shadcn`, and `auth@1.7.5` are npx-only and are not missing dependencies.
+**Installed beyond the scaffold:** `better-auth` ^1.7.5, `@better-auth/passkey` ^1.7.5, `@better-auth/api-key` ^1.7.5, `jose` 6.2.12 (Access JWT; already a better-auth transitive), `zod` ^4.6.5 (also a better-auth peer), `@cloudflare/puppeteer` ^1.4.0, `@base-ui/react` 1.8.0, `clsx` ^2.1.1, `tailwind-merge` ^3.7.0, `class-variance-authority` ^0.7.1, `sonner` ^2.0.8, `diff` 9.0.0, `lucide-react` 1.47.0, `date-fns` 4.4.0, `@date-fns/tz` 1.5.0, `uplot` 1.6.32, `uplot-react` 1.2.4. **Not yet installed**, because the engine that needs it has not shipped: `@extractus/feed-extractor` 8.0.3 (`fast-xml-parser` 5.11.1 comes with it). Do not delete that row. `@modelcontextprotocol/server` 2.1.0, `@cloudflare/workers-oauth-provider` 0.10.4 and `zod-openapi` 6.0.2 shipped with the agent surface (2026-09-24); `uplot` 1.6.32 and `uplot-react` 1.2.4 shipped with the Home four-week chart (#4055). `agents` is rejected in §7.1. Platform rows have no package. `create-cloudflare`, `shadcn`, and `auth@1.7.5` are npx-only and are not missing dependencies.
 
 ---
 
@@ -1105,6 +1114,7 @@ The version in this table is the `package.json` specifier. An earlier section of
 | `class-variance-authority` | ^0.7.1 | §3.2 | Variant map the badge component imports | A hand-written variant map | 0.7.1 |
 | `clsx` | ^2.1.1 | §3.2 | `cn()` in `app/lib/utils.ts` | String concatenation | 2.1.1 |
 | `isbot` | ^5.1.36 | §9 | React Router's server runtime uses it to tell a bot request from a browser request. `react-router typegen` writes `isbot` back into `package.json` if the direct dependency is missing | Dropping it. Typegen then inserts `isbot@^5`, a looser pin, and `@react-router/dev` already depends on a copy of its own | 5.2.2 |
+| `jose` | 6.2.12 | §2.6, #5830 | Access JWT via `createRemoteJWKSet` + `jwtVerify`. Cloudflare's Validate JWTs guide: <https://developers.cloudflare.com/cloudflare-one/identity/authorization-cookie/validating-json/> | The hand-rolled RS256 verifier (`crypto.subtle`, unsigned claims before the signature, unknown `kid` refetch with no cooldown) | 6.2.12 |
 | `react` | ^19.2.8 | §1.1 | UI runtime the scaffold emits | Preact. React Router 8's types are React | 19.3.0 |
 | `react-dom` | ^19.2.8 | §1.1 | Client renderer. Unit tests call `react-dom/server` | A second renderer | 19.3.0 |
 | `react-router` | ^8.4.0 | §1, §8 | Framework mode, SSR, routing | `@react-router/node` and `@react-router/serve`. C3 deletes both | 8.4.0 |

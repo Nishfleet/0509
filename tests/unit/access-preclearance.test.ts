@@ -196,4 +196,17 @@ describe("accessPrecleared", () => {
       accessPrecleared(request(jwt), { ACCESS_TEAM_DOMAIN: iss, ACCESS_AUD: AUD }),
     ).resolves.toBe(false);
   });
+
+  it("fetches JWKS at most once for five forged tokens with unknown kids", async () => {
+    const iss = freshIssuer();
+    const pair = await rsaPair();
+    const fetchSpy = vi.fn(async () => new Response(JSON.stringify({ keys: [] }), { status: 200 }));
+    vi.stubGlobal("fetch", fetchSpy);
+    const env = { ACCESS_TEAM_DOMAIN: iss, ACCESS_AUD: AUD };
+    for (let i = 0; i < 5; i += 1) {
+      const jwt = await mintJwt(pair.privateKey, serviceClaims(iss), `unknown-kid-${String(i)}`);
+      await expect(accessPrecleared(request(jwt), env)).resolves.toBe(false);
+    }
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+  });
 });
