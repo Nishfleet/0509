@@ -49,7 +49,7 @@ export function Hero() {
             />
           </div>
           <p className="font-mono text-meta text-ink-soft mt-4 max-w-[38rem]">
-            One input. Sixty seconds to your first standing.
+            One input. Sixty seconds to who’s gaining on you.
           </p>
         </div>
         <aside aria-labelledby="hero-proof" className="min-w-0">
