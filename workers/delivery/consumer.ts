@@ -114,7 +114,7 @@ async function readTarget(env: Env, workspaceId: string): Promise<TargetRow | nu
     `SELECT st.id, st.workspace_id, st.channel_id, st.target_value, st.unsubscribe_token
        FROM send_target st
        JOIN channel c ON c.id = st.channel_id
-      WHERE st.workspace_id = ? AND c.key = ? AND c.is_enabled = 1
+      WHERE st.workspace_id = ? AND c.key = ? AND c.is_enabled = 1 AND st.is_verified = 1
       ORDER BY st.created_at ASC
       LIMIT 1`,
   )
@@ -187,6 +187,7 @@ export async function deliver(env: Env, message: DigestMessage): Promise<Deliver
 
   const target = await readTarget(env, digest.workspace_id);
   if (!target) {
+    console.log(JSON.stringify({ event: "delivery.no_verified_target", workspace_id: digest.workspace_id }));
     return { outcome: "no_target", attempt_id: null, idempotency_key: null };
   }
 
@@ -241,6 +242,9 @@ export async function deliverIncident(
 
   const target = await readTarget(env, incident.workspace_id);
   if (!target) {
+    console.log(
+      JSON.stringify({ event: "delivery.no_verified_target", workspace_id: incident.workspace_id }),
+    );
     return { outcome: "no_target", attempt_id: null, idempotency_key: null };
   }
 

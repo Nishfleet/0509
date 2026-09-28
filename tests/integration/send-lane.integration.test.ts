@@ -1,5 +1,5 @@
 import { env } from "cloudflare:test";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { deliver, handleBatch, type DeliveryMessage } from "../../workers/delivery/consumer";
 import { sendOrThrow } from "../../workers/delivery/send";
@@ -402,6 +402,34 @@ describe("send lane (0509#3979)", () => {
     expect(result.outcome).toBe("no_target");
     expect(rec.sent).toHaveLength(0);
     expect(await readAttempts()).toHaveLength(0);
+  });
+
+  it("reports no_target when the only email target is unverified", async () => {
+    const rec = recorder();
+    await env.DB.prepare(`UPDATE send_target SET is_verified = 0 WHERE id = ?`)
+      .bind(TARGET_ID)
+      .run();
+    const digestId = await seedDigest("pending");
+    const lines: string[] = [];
+    const log = vi.spyOn(console, "log").mockImplementation((...args: unknown[]) => {
+      lines.push(args.map((arg) => String(arg)).join(" "));
+    });
+    let outcome: string;
+    try {
+      const result = await deliver(envWith(bindingFor(rec)), message(digestId));
+      outcome = result.outcome;
+      expect(result.attempt_id).toBeNull();
+      expect(result.idempotency_key).toBeNull();
+    } finally {
+      log.mockRestore();
+    }
+
+    expect(outcome).toBe("no_target");
+    expect(rec.sent).toHaveLength(0);
+    expect(await readAttempts()).toHaveLength(0);
+    expect((await digestStatus(digestId))?.status).toBe("pending");
+    expect(lines.join("\n")).toContain(`"event":"delivery.no_verified_target"`);
+    expect(lines.join("\n")).toContain(`"workspace_id":"${WS}"`);
   });
 
   it("acks a duplicate and retries a failed send from the batch", async () => {
