@@ -7,6 +7,7 @@ import { extractIdentity } from "./extract";
 import { reviewFields } from "./field-confidence.server";
 import { readLogo, storeLogo } from "./logo-store.server";
 import { logoCandidateUrls } from "./logo-cascade";
+import type { LogoCandidates } from "./logo-cascade";
 import { resolveBrandName } from "./name-cascade";
 import type { Subject } from "./normalise";
 import { cachedProbe, probeKey } from "./probe-cache.server";
@@ -146,6 +147,18 @@ function applyReview(fields: CardValues, review: CardReview): Omit<SiteFields, "
   };
 }
 
+async function firstStorableLogo(registrable: string, candidates: LogoCandidates): Promise<string | null> {
+  for (const url of logoCandidateUrls(candidates)) {
+    const stored = await storeLogo(registrable, url);
+    if (stored !== null) {
+      console.log(JSON.stringify({ event: "identity-logo-stored", subject: registrable, url }));
+      return url;
+    }
+    console.log(JSON.stringify({ event: "identity-logo-refused", subject: registrable, url }));
+  }
+  return null;
+}
+
 export function startCard(
   workspaceId: string,
   subject: Subject,
@@ -171,15 +184,8 @@ export function startCard(
   const logo = read.then(async ({ card, reached }) => {
     if (!reached) return null;
     const cached = await cachedProbe(subject, "icon", logoSchema, async () => {
-      for (const url of logoCandidateUrls({ ...card.logoCandidates, registrableDomain: subject.registrable })) {
-        const stored = await storeLogo(subject.registrable, url);
-        if (stored !== null) {
-          console.log(JSON.stringify({ event: "identity-logo-stored", subject: subject.registrable, url }));
-          return { v: 2, url };
-        }
-        console.log(JSON.stringify({ event: "identity-logo-refused", subject: subject.registrable, url }));
-      }
-      return { v: 2, url: null };
+      const url = await firstStorableLogo(subject.registrable, { ...card.logoCandidates, registrableDomain: subject.registrable });
+      return { v: 2, url };
     });
     const url = cached.url;
     if (url === null) return null;
