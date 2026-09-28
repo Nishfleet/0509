@@ -186,14 +186,14 @@ interface SendAttemptHandles {
   onSent?: () => Promise<void>;
 }
 
-interface SendAttemptId {
+interface SendAttemptRef {
   claimId: string;
   idempotencyKey: string;
 }
 
 async function sendAndResolve(
   env: Env,
-  attempt: SendAttemptId,
+  attempt: SendAttemptRef,
   handles: SendAttemptHandles,
 ): Promise<DeliveryResult> {
   const { claimId, idempotencyKey } = attempt;
@@ -301,36 +301,40 @@ export async function deliverIncident(
     return { outcome: "duplicate", attempt_id: null, idempotency_key: idempotencyKey };
   }
 
-  return sendAndResolve(env, { claimId: claim.id, idempotencyKey }, {
-    send: () => {
-      const site = pageHost(incident.page_url);
-      const rendered =
-        incident.closed_at === null
-          ? renderIncidentOpen({
-              site,
-              kind: incident.kind,
-              opened_at: incident.opened_at,
-              recheck_at: new Date(Date.parse(incident.opened_at) + RECHECK_AFTER_MS).toISOString(),
-              mark: incident.mark,
-              link: INCIDENT_LINK,
-              timezone: incident.timezone,
-            })
-          : renderIncidentFixed({
-              site,
-              kind: incident.kind,
-              closed_at: incident.closed_at,
-              link: INCIDENT_LINK,
-              timezone: incident.timezone,
-            });
-      return sendMessage(env.EMAIL, {
-        to: target.target_value,
-        from: "brief@0509.io",
-        subject: rendered.subject,
-        html: rendered.html,
-        text: rendered.text,
-      });
+  return sendAndResolve(
+    env,
+    { claimId: claim.id, idempotencyKey },
+    {
+      send: () => {
+        const site = pageHost(incident.page_url);
+        const rendered =
+          incident.closed_at === null
+            ? renderIncidentOpen({
+                site,
+                kind: incident.kind,
+                opened_at: incident.opened_at,
+                recheck_at: new Date(Date.parse(incident.opened_at) + RECHECK_AFTER_MS).toISOString(),
+                mark: incident.mark,
+                link: INCIDENT_LINK,
+                timezone: incident.timezone,
+              })
+            : renderIncidentFixed({
+                site,
+                kind: incident.kind,
+                closed_at: incident.closed_at,
+                link: INCIDENT_LINK,
+                timezone: incident.timezone,
+              });
+        return sendMessage(env.EMAIL, {
+          to: target.target_value,
+          from: "brief@0509.io",
+          subject: rendered.subject,
+          html: rendered.html,
+          text: rendered.text,
+        });
+      },
     },
-  });
+  );
 }
 
 export async function handleBatch(
