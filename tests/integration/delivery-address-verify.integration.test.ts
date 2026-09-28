@@ -42,6 +42,12 @@ const target = async (workspaceId: string): Promise<TargetRow | null> =>
     .bind(workspaceId)
     .first<TargetRow>();
 
+const onlyTarget = async (workspaceId: string): Promise<TargetRow> => {
+  const row = await target(workspaceId);
+  if (row === null) throw new Error("the workspace has no email target");
+  return row;
+};
+
 const save = (rec: Recorder, address: string) =>
   saveDeliveryAddress({
     userId: USER_ID,
@@ -82,17 +88,18 @@ describe("confirm a changed delivery address (0509#5811)", () => {
     const result = await save(rec, NEW_ADDRESS);
     expect(result).toEqual({ error: null, suppressed: false });
 
-    const row = await target(workspaceId);
+    const row = await onlyTarget(workspaceId);
     expect(row).toMatchObject({ target_value: NEW_ADDRESS, is_verified: 0, unsubscribe_token: null });
-    expect(row?.verify_token).toMatch(/^[0-9a-f]{64}$/);
+    const token = row.verify_token;
+    expect(token).toMatch(/^[0-9a-f]{64}$/);
 
     expect(rec.sent).toHaveLength(1);
     expect(rec.sent[0].to).toBe(NEW_ADDRESS);
     expect(rec.sent[0].from).toEqual({ email: "hello@0509.io", name: "Five to Nine" });
     expect(rec.sent[0].subject).toBe("Confirm your delivery email for Five to Nine");
     expect(rec.sent[0].text).toContain(`We sent this to ${NEW_ADDRESS}.`);
-    expect(rec.sent[0].text).toContain(`https://0509.io/v/${String(row?.verify_token)}`);
-    expect(rec.sent[0].html).toContain(`https://0509.io/v/${String(row?.verify_token)}`);
+    expect(rec.sent[0].text).toContain(`https://0509.io/v/${String(token)}`);
+    expect(rec.sent[0].html).toContain(`https://0509.io/v/${String(token)}`);
   });
 
   it("(b) saving the same unverified address again writes a fresh token and sends again", async () => {
@@ -100,14 +107,14 @@ describe("confirm a changed delivery address (0509#5811)", () => {
     const first = recorder();
 
     await save(first, NEW_ADDRESS);
-    const firstToken = (await target(workspaceId))?.verify_token;
+    const firstToken = (await onlyTarget(workspaceId)).verify_token;
     expect(first.sent).toHaveLength(1);
 
     const resend = recorder();
     const result = await save(resend, NEW_ADDRESS);
 
     expect(result).toEqual({ error: null, suppressed: false });
-    const secondToken = (await target(workspaceId))?.verify_token;
+    const secondToken = (await onlyTarget(workspaceId)).verify_token;
     expect(secondToken).toMatch(/^[0-9a-f]{64}$/);
     expect(secondToken).not.toBe(firstToken);
     expect(resend.sent).toHaveLength(1);
@@ -125,7 +132,7 @@ describe("confirm a changed delivery address (0509#5811)", () => {
 
     expect(result).toEqual({ error: null, suppressed: false });
     expect(back.sent).toHaveLength(0);
-    const row = await target(workspaceId);
+    const row = await onlyTarget(workspaceId);
     expect(row).toMatchObject({ target_value: SIGN_IN_EMAIL, is_verified: 1, verify_token: null });
   });
 
@@ -138,9 +145,9 @@ describe("confirm a changed delivery address (0509#5811)", () => {
 
     expect(result.error).not.toBeNull();
     expect(result.suppressed).toBe(false);
-    const row = await target(workspaceId);
+    const row = await onlyTarget(workspaceId);
     expect(row).toMatchObject({ target_value: NEW_ADDRESS, is_verified: 0 });
-    expect(row?.verify_token).toMatch(/^[0-9a-f]{64}$/);
+    expect(row.verify_token).toMatch(/^[0-9a-f]{64}$/);
     expect(rec.sent).toHaveLength(0);
   });
 
@@ -157,6 +164,6 @@ describe("confirm a changed delivery address (0509#5811)", () => {
       address: NEW_ADDRESS,
       verified: false,
     });
-    expect((await target(workspaceId))?.verify_token).toMatch(/^[0-9a-f]{64}$/);
+    expect((await onlyTarget(workspaceId)).verify_token).toMatch(/^[0-9a-f]{64}$/);
   });
 });
