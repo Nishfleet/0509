@@ -12,13 +12,20 @@ import { configDefaults, defineConfig } from "vitest/config";
 export default defineConfig({
   test: {
     // CI runs `vitest run --changed` on pull requests (0509#5849). These files
-    // reach tests without an import edge — the workers project reads
-    // migrations/ through readD1Migrations and its bindings from the wrangler
-    // configs — so a change to any of them reruns the whole suite.
+    // reach tests without an import edge, so a change to any of them reruns
+    // the whole suite. The stock default "**/{vitest,vite}.config.*/**" does
+    // not match vitest.config.ts itself (PR #5874 ran zero tests), hence the
+    // explicit config globs. migrations/ is read through readD1Migrations,
+    // the wrangler configs hold the bindings, apply-migrations.ts is a
+    // project setupFile.
     forceRerunTriggers: [
       ...configDefaults.forceRerunTriggers,
+      "**/vitest.config.*",
+      "**/vite.config.*",
+      "**/package-lock.json",
       "**/migrations/**",
       "**/wrangler*.jsonc",
+      "**/tests/integration/apply-migrations.ts",
     ],
     projects: [
       {
