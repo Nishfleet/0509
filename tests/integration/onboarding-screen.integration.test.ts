@@ -288,6 +288,38 @@ describe("screenOnboardingSubject", () => {
     expect(await decisionCount(workspaceId, "public_subject:refused")).toBe(0);
   });
 
+  it("logs the gateway error once, and the raw subject in no line, when Jev is unavailable", async () => {
+    const { userId, workspaceId } = await seedWorkspace();
+    const run = vi.fn(() => Promise.reject(new Error("2021: Insufficient credits")));
+    Reflect.set(env, "AI", { run });
+    const raw = `credits-${String(runs)}.example`;
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+
+    try {
+      const result = await screenOnboardingSubject({
+        workspaceId,
+        userId,
+        subject: domainSubject(raw),
+        raw,
+        answer: null,
+        now: NOW,
+      });
+
+      expect(result).toEqual({ kind: "ask", subject: raw });
+      const lines = logSpy.mock.calls
+        .map((call) => call[0])
+        .filter((line): line is string => typeof line === "string")
+        .map((line) => JSON.parse(line) as { event?: string; error?: string });
+      const unavailable = lines.filter((line) => line.event === "public_subject.jev_unavailable");
+      expect(unavailable.map((line) => line.error)).toEqual([
+        expect.stringContaining("2021: Insufficient credits"),
+      ]);
+      expect(logSpy.mock.calls.flat().join(" ")).not.toContain(raw);
+    } finally {
+      logSpy.mockRestore();
+    }
+  });
+
   it("records a business answer when Jev cannot be reached", async () => {
     const { userId, workspaceId } = await seedWorkspace();
     const run = vi.fn(() => Promise.reject(new Error("Jev unavailable")));

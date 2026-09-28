@@ -62,6 +62,18 @@ export class JevUnavailableError extends Error {
   }
 }
 
+function answerShape(
+  raw: unknown,
+  issues: readonly { readonly path: readonly PropertyKey[]; readonly code: string | undefined }[] | null,
+): string {
+  const keys = typeof raw === "object" && raw !== null ? Object.keys(raw).slice(0, 20).join(",") : typeof raw;
+  const issueList =
+    issues === null
+      ? ""
+      : issues.slice(0, 5).map((issue) => `${issue.path.join(".")}:${issue.code}`).join(" ");
+  return `keys=${keys}; issues=${issueList}`;
+}
+
 async function sha256Hex(text: string): Promise<string> {
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
   return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
@@ -100,7 +112,11 @@ async function run(question: NoulQuestion, state: unknown): Promise<number> {
   }
   const parsed = answerSchema.safeParse(raw);
   const answer = parsed.success ? parsed.data.answers[question.id] : undefined;
-  if (answer === undefined) throw new JevUnavailableError(new Error("answer missing its noul"));
+  if (answer === undefined) {
+    throw new JevUnavailableError(
+      new Error(`answer missing its noul; ${answerShape(raw, parsed.success ? null : parsed.error.issues)}`),
+    );
+  }
   return answer.noul;
 }
 
@@ -126,6 +142,7 @@ export async function askNouls(
   );
   const pending = entries.filter((entry) => entry.cached === null);
   let answers: NoulAnswers = {};
+  let shape = answerShape(undefined, null);
   if (pending.length > 0) {
     const asked = Object.fromEntries(pending.map((entry) => [entry.question.id, noulAsk(entry.question)]));
     let raw: unknown;
@@ -142,6 +159,7 @@ export async function askNouls(
       throw new JevUnavailableError(error);
     }
     const parsed = answerSchema.safeParse(raw);
+    shape = answerShape(raw, parsed.success ? null : parsed.error.issues);
     if (parsed.success) answers = parsed.data.answers;
   }
   return entries.map((entry) => {
@@ -149,7 +167,7 @@ export async function askNouls(
       return { questionId: entry.question.id, inputHash: entry.hash, p: entry.cached, cached: true };
     }
     const fresh = answers[entry.question.id]?.noul;
-    if (fresh === undefined) throw new JevUnavailableError(new Error("answer missing its noul"));
+    if (fresh === undefined) throw new JevUnavailableError(new Error(`answer missing its noul; ${shape}`));
     return { questionId: entry.question.id, inputHash: entry.hash, p: fresh, cached: false };
   });
 }
@@ -177,7 +195,9 @@ async function runChoice(question: ChoiceQuestion, state: unknown): Promise<stri
   const parsed = choiceAnswerSchema.safeParse(raw);
   const answer = parsed.success ? parsed.data.answers[question.id] : undefined;
   if (answer === undefined || !Object.keys(question.options).includes(answer.choice)) {
-    throw new JevUnavailableError(new Error("answer missing its choice"));
+    throw new JevUnavailableError(
+      new Error(`answer missing its choice; ${answerShape(raw, parsed.success ? null : parsed.error.issues)}`),
+    );
   }
   return answer.choice;
 }

@@ -185,4 +185,18 @@ describe("askNouls", () => {
 
     await expect(askNouls(workspaceId, questions, state)).rejects.toThrow(JevUnavailableError);
   });
+
+  it("names the shape that came back, and no value, when the answer is not the agreed shape", async () => {
+    const workspaceId = await seedWorkspace();
+    const run = vi.fn(() => Promise.resolve({ response: "x" }));
+    Reflect.set(env, "AI", { run });
+
+    const thrown: unknown = await askNouls(workspaceId, questions, state).catch((error: unknown) => error);
+    if (!(thrown instanceof JevUnavailableError)) throw new Error(`expected JevUnavailableError, got ${String(thrown)}`);
+
+    expect(thrown.message).toContain("answer missing its noul; keys=response;");
+    expect(thrown.message).toContain("issues=");
+    expect(thrown.message).not.toContain("x");
+    expect(thrown.message).not.toContain("Gymshark");
+  });
 });
