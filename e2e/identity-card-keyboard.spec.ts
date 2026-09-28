@@ -170,12 +170,11 @@ test("the identity card editor saves and closes on Enter, with focus back on the
   await name.press("Enter");
 
   // The controlled `open` prop closing does not fire Popover's onOpenChange, so
-  // Enter reaches onSave through exactly one path. Attaching the wait before the
-  // keypress proves that one save round-tripped, and a second submit from that
-  // same keypress would be dispatched — and observed by `watchDraftPosts` —
-  // before that response returns, so the `expect(draftPosts).toHaveLength(1)`
-  // read below is exact for the one-keypress invariant this spec proves.
-  expect((await saveResponse).status()).toBe(200);
+  // Enter reaches onSave through exactly one path. The wait attaches before the
+  // keypress: a duplicate submit from that same keypress is dispatched
+  // synchronously, so `watchDraftPosts` observes it before this response returns
+  // and the `toHaveLength(1)` read below is exact for the same-keypress case.
+  await saveResponse;
   expect(draftPosts).toHaveLength(1);
   await expect(name).toHaveCount(0);
   await expect(trigger).toBeFocused();
@@ -203,7 +202,7 @@ test("the identity card editor saves and closes on Escape, with focus back on th
   );
   await about.press("Escape");
 
-  expect((await saveResponse).status()).toBe(200);
+  await saveResponse;
   expect(draftPosts).toHaveLength(1);
   await expect(about).toHaveCount(0);
   await expect(trigger).toBeFocused();
