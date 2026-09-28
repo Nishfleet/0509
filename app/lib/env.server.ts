@@ -104,7 +104,7 @@ function blank(value: unknown): unknown {
 }
 
 function globalUrl(name: "LIVENESS_PING_URL" | "SITE_SWEEP_PING_URL"): unknown {
-  return blank(Reflect.get(globalThis, name));
+  return blank(Reflect.get(env, name));
 }
 
 function snapshot(): Snapshot {

@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import {
   ENTITLEMENT_KEYS,
@@ -66,8 +66,20 @@ describe("resolveEntitlements", () => {
     ).toEqual(SCOUT);
   });
 
-  it("falls back to the tier defaults when limitsJson is not JSON", () => {
-    expect(resolveEntitlements("starter", "not json")).toEqual(STARTER);
+  it("falls back to the tier defaults and logs when limitsJson is not JSON", () => {
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    try {
+      expect(resolveEntitlements("starter", "not json")).toEqual(STARTER);
+      expect(errorSpy).toHaveBeenCalledOnce();
+      const logged = JSON.parse(String(errorSpy.mock.calls[0]?.[0])) as {
+        event: string;
+        message: string;
+      };
+      expect(logged.event).toBe("billing.limits_json_invalid");
+      expect(logged.message.length).toBeGreaterThan(0);
+    } finally {
+      errorSpy.mockRestore();
+    }
   });
 
   it("drops override keys that are not in ENTITLEMENT_KEYS", () => {
