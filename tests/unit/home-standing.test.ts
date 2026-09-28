@@ -5,8 +5,8 @@ import { describe, expect, it } from "vitest";
 
 import { HomePageFrame, HomeStanding } from "../../app/components/home-standing";
 import type { BriefPayload } from "../../app/lib/brief-payload";
-import { WATCHED_NOUNS } from "../../app/lib/coverage";
 import type { BriefSchedule } from "../../app/lib/brief-schedule";
+import { WATCHED_NOUNS } from "../../app/lib/coverage";
 import type { HowRanked } from "../../app/lib/how-ranked";
 import {
   greetingFor,
