@@ -1,6 +1,20 @@
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import { MemoryRouter } from "react-router";
 import { describe, expect, it } from "vitest";
 
+import { CompetitorHeader } from "../../../app/components/competitor-header";
 import { adLibraryLinks } from "../../../app/lib/competitor/ad-library-links";
+
+function renderHeader(name: string, domain: string): string {
+  return renderToStaticMarkup(
+    createElement(
+      MemoryRouter,
+      null,
+      createElement(CompetitorHeader, { name, domain, state: "on", stateChangedAt: null }),
+    ),
+  );
+}
 
 function metaQ(name: string): string | null {
   return new URL(adLibraryLinks({ name, domain: "example.com" }).meta).searchParams.get("q");
@@ -45,5 +59,17 @@ describe("the live ad-library links on a competitor header", () => {
     expect(google).toContain("domain=a%26b.example");
     expect(new URL(meta).searchParams.get("q")).toBe('"A&B"');
     expect(new URL(google).searchParams.get("domain")).toBe("a&b.example");
+  });
+
+  it("renders both quiet links in the header, each opening in a new tab", () => {
+    const html = renderHeader("Bramble & Co", "shop.example.com");
+    expect(html).toContain(">Their ads on Meta</a>");
+    expect(html).toContain(">Their ads on Google</a>");
+    expect(html).toContain('aria-label="Bramble &amp; Co&#x27;s ads on Meta (opens in a new tab)"');
+    expect(html).toContain('aria-label="Bramble &amp; Co&#x27;s ads on Google (opens in a new tab)"');
+    expect(html).toContain('target="_blank"');
+    expect(html).toContain('rel="noopener noreferrer"');
+    expect(html).toContain("q=%22Bramble+%26+Co%22");
+    expect(html).toContain("domain=shop.example.com");
   });
 });
