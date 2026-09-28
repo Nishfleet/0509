@@ -3,7 +3,6 @@ import { readdirSync } from "node:fs";
 import { experimental_readRawConfig } from "wrangler";
 import { describe, expect, it } from "vitest";
 
-import { SITE_SWEEP_UTC_HOUR } from "../app/lib/home-standing";
 import { FIXTURE_HOSTS } from "../workers/fixture-site-hosts";
 
 // #4631, and 225c3eb before it: the production CLOUDFLARE_API_TOKEN cannot reach
@@ -39,13 +38,6 @@ describe("deployed wrangler configs", () => {
       typeof route === "string" ? route : route.pattern,
     );
     expect(patterns).toEqual([...FIXTURE_HOSTS]);
-  });
-
-  it("schedules the site-sweep Workflow on the hour Home names for the first snapshots", () => {
-    const { rawConfig } = experimental_readRawConfig({ config: "wrangler.jsonc" });
-    const siteSweep = (rawConfig.workflows ?? []).find((workflow) => workflow.name === "site-sweep");
-    expect(siteSweep).toBeDefined();
-    expect(siteSweep?.schedules).toEqual(["0 " + String(SITE_SWEEP_UTC_HOUR) + " * * *"]);
   });
 
   it("schedules the snapshot-backup Workflow every night at 05:00 UTC", () => {

@@ -1,4 +1,4 @@
-export const NIGHTLY_CRON = "0 3 * * *";
+export { NIGHTLY_CRON } from "../../app/lib/cadence";
 
 export interface SweepResult {
   digests: number;
