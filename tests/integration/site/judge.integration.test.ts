@@ -153,6 +153,10 @@ describe("judgeChange", () => {
       "SELECT COUNT(*) AS n FROM jev_verdict WHERE reason LIKE '%p=%'",
     ).first<{ n: number }>();
     expect(leaked).toMatchObject({ n: 0 });
+    const anyReason = await env.DB.prepare(
+      "SELECT COUNT(*) AS n FROM jev_verdict WHERE reason IS NOT NULL",
+    ).first<{ n: number }>();
+    expect(anyReason).toMatchObject({ n: 0 });
   });
 
   it("case b: a competitor change at 0.5 stays uncertain", async () => {
@@ -205,6 +209,10 @@ describe("judgeChange", () => {
       "SELECT COUNT(*) AS n FROM jev_verdict WHERE reason LIKE '%p=%'",
     ).first<{ n: number }>();
     expect(leaked).toMatchObject({ n: 0 });
+    const anyReason = await env.DB.prepare(
+      "SELECT COUNT(*) AS n FROM jev_verdict WHERE reason IS NOT NULL",
+    ).first<{ n: number }>();
+    expect(anyReason).toMatchObject({ n: 0 });
   });
 
   it("case d2: a self change rated clear runs D3 too", async () => {
