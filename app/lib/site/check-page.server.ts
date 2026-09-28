@@ -2,6 +2,7 @@ import { env } from "cloudflare:workers";
 
 import { insertSnapshot, latestSiteSnapshot } from "../data/snapshot.server";
 import { readUrl, type ReadUrlResult } from "../fetch/transport.server";
+import { browserScreenshot } from "./browser-budget.server";
 import { extractPageText } from "./extract-text";
 
 export type CheckPageResult =
@@ -32,28 +33,33 @@ function logScreenshotMiss(url: string, cause: string): void {
   }));
 }
 
-async function captureScreenshot(url: string, key: string): Promise<string | null> {
-  if (!env.BROWSER) {
-    logScreenshotMiss(url, "browser binding is not configured");
+async function captureScreenshot(
+  url: string,
+  key: string,
+  mayScreenshot: (() => Promise<boolean>) | undefined,
+): Promise<string | null> {
+  if (mayScreenshot === undefined) {
+    logScreenshotMiss(url, "no screenshot budget granted");
+    return null;
+  }
+  if (!(await mayScreenshot())) {
+    logScreenshotMiss(url, "browser budget exhausted");
+    return null;
+  }
+  const shot = await browserScreenshot(url);
+  if (!shot.ok) {
+    logScreenshotMiss(url, shot.cause);
     return null;
   }
   try {
-    const res = await env.BROWSER.quickAction("screenshot", {
-      url,
-      viewport: { width: 1440, height: 900 },
-    });
-    if (!res.ok) {
-      logScreenshotMiss(url, `browser answered ${String(res.status)}`);
-      return null;
-    }
-    await env.SNAPSHOTS.put(key, await res.arrayBuffer(), {
+    await env.SNAPSHOTS.put(key, shot.bytes, {
       httpMetadata: { contentType: "image/png" },
     });
-    return key;
   } catch (err) {
     logScreenshotMiss(url, err instanceof Error ? err.message : String(err));
     return null;
   }
+  return key;
 }
 
 async function storedKey(key: string): Promise<string | null> {
@@ -67,6 +73,7 @@ export async function checkPage(input: {
   snapshotId?: string;
   before?: string;
   read?: ReadUrlResult;
+  mayScreenshot?: () => Promise<boolean>;
 }): Promise<CheckPageResult> {
   const read = input.read ?? (await readUrl(input.url));
   if (!read.ok) {
@@ -95,6 +102,7 @@ export async function checkPage(input: {
   const screenshotKey = await captureScreenshot(
     input.url,
     `snapshot/site/${input.watchId}/${id}.png`,
+    input.mayScreenshot,
   );
   await insertSnapshot({
     id,
