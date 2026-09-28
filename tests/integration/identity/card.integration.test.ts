@@ -270,7 +270,7 @@ describe("startCard", () => {
       if (!(await takeBrowserEscalation("ws-1", subject.registrable, day))) break;
       drained += 1;
     }
-    expect(drained).toBeGreaterThan(0);
+    expect(drained).toBe(4);
     const calls = stubWeb(() => new Response("blocked", { status: 403 }));
     const stub = stubBrowser(BOT_GATED_HTML);
     browser = stub;
@@ -362,6 +362,24 @@ describe("confirmCard", () => {
     ).toBe(true);
 
     expect(stub.calls).toEqual([]);
+  });
+
+  it("escalates a bot-gated confirm through the brand's last budgeted read", async () => {
+    const domain = "botgatedconfirmpositive.com";
+    const day = new Date().toISOString().slice(0, 10);
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      expect(await takeBrowserEscalation("ws-1", domain, day)).toBe(true);
+    }
+    stubWeb(() => new Response("blocked", { status: 403 }));
+    const stub = stubBrowser(BOT_GATED_HTML);
+    browser = stub;
+    installBrowser();
+
+    expect(
+      await confirmCard("ws-1", "u1", form({ subject: domain, name: "Botgated Positive", description: "" })),
+    ).toBe(true);
+
+    expect(stub.calls).toEqual([`https://${domain}/`]);
   });
 
   it("keeps the confirm and records no role when Jev is down", async () => {
