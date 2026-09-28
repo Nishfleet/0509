@@ -10,7 +10,7 @@ export interface WorkspaceSchedule {
 }
 
 export const CATCH_UP_GRACE_MS = 60 * 60 * 1000;
-export const UNRANKED_LOOKBACK_MS = 16 * 24 * 60 * 60 * 1000;
+const UNRANKED_LOOKBACK_MS = 16 * 24 * 60 * 60 * 1000;
 
 const WORKSPACE_SCHEDULES = `SELECT DISTINCT w.id, w.timezone, w.brief_weekday, w.brief_hour, w.brief_paused_at
 FROM entity e
@@ -58,7 +58,7 @@ export function unrankedWeekKey(workspaceId: string, weekStartAt: string): strin
   return `${workspaceId}\t${weekStartAt}`;
 }
 
-export async function readWorkspaceSchedules(db: D1Database): Promise<readonly WorkspaceSchedule[]> {
+async function readWorkspaceSchedules(db: D1Database): Promise<readonly WorkspaceSchedule[]> {
   const rows = await db.prepare(WORKSPACE_SCHEDULES).all();
   return toSchedules(rows.results);
 }
@@ -71,7 +71,7 @@ export async function readWorkspaceSchedule(
   return toSchedules(rows.results)[0] ?? null;
 }
 
-export async function readUnrankedWeeks(db: D1Database, now: Date): Promise<ReadonlySet<string>> {
+async function readUnrankedWeeks(db: D1Database, now: Date): Promise<ReadonlySet<string>> {
   const since = new Date(now.getTime() - UNRANKED_LOOKBACK_MS).toISOString();
   const rows = await db.prepare(UNRANKED_WEEKS).bind(since).all();
   return new Set(
