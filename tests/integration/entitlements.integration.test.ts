@@ -1,5 +1,5 @@
 import { env } from "cloudflare:test";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { readEntitlements } from "../../app/lib/data/plan.server";
 
@@ -49,7 +49,7 @@ describe("readEntitlements (0509#5293)", () => {
     expect(after.site_pages_scope).toBe("all");
   });
 
-  it("returns scout defaults for a workspace with no plan row", async () => {
+  it("returns scout defaults, and logs nothing, for a workspace with no plan row", async () => {
     seededRuns += 1;
     const n = String(seededRuns);
     const userId = `user-ent-none-${n}`;
@@ -57,8 +57,14 @@ describe("readEntitlements (0509#5293)", () => {
     await seedUser(userId, `ent-none-${n}@example.com`);
     await seedWorkspace(workspaceId, userId, "Ent None");
 
-    const entitlements = await readEntitlements(workspaceId);
-    expect(entitlements.competitors).toBe(5);
-    expect(entitlements.site_pages_scope).toBe("home_pricing");
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    try {
+      const entitlements = await readEntitlements(workspaceId);
+      expect(entitlements.competitors).toBe(5);
+      expect(entitlements.site_pages_scope).toBe("home_pricing");
+      expect(errorSpy).not.toHaveBeenCalled();
+    } finally {
+      errorSpy.mockRestore();
+    }
   });
 });
