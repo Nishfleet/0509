@@ -4,11 +4,12 @@ name: grader-calibration
 # Grades a fixed labeled set (.github/grader-calibration/cases.json) with the
 # exact opus-review grading steps: the scripts and the prompt are read out of
 # ci.yml at run time, so a grader change is measured as it will run. Results
-# and the catch rate go on 0509#5872. Not a required check.
+# and the catch rate go on 0509#5872. Not a required check. A pull request
+# runs it only when the set or this file changes; a ci.yml change is measured
+# once, when it lands on main, not on every ci.yml pull request (18 grades).
 on:
   pull_request:
     paths:
-      - .github/workflows/ci.yml
       - .github/workflows/grader-calibration.yml
       - .github/grader-calibration/**
   push:
@@ -72,15 +73,20 @@ jobs:
       - name: Load the grader exactly as opus-review runs it
         run: |
           job='.jobs["opus-review"]'
-          for id in kimi-files-pr kimi-files-tree kimi-grade; do
-            yq "$job.steps[] | select(.id == \"$id\") | .run" .github/workflows/ci.yml > "$RUNNER_TEMP/$id.sh"
+          for id in kimi-files-tree kimi-grade; do
+            yq -e "$job.steps[] | select(.id == \"$id\") | .run" .github/workflows/ci.yml > "$RUNNER_TEMP/$id.sh"
             test -s "$RUNNER_TEMP/$id.sh"
           done
-          yq "$job.steps[] | select(.name == \"Install the Cursor CLI\") | .run" .github/workflows/ci.yml > "$RUNNER_TEMP/cursor-install.sh.run"
+          yq -e "$job.steps[] | select(.name == \"Install the Cursor CLI\") | .run" .github/workflows/ci.yml > "$RUNNER_TEMP/cursor-install.sh.run"
+          test -s "$RUNNER_TEMP/cursor-install.sh.run"
           delim="grader_$(openssl rand -hex 12)"
           for var in GRADE_RUBRIC KIMI_FILES_NOTE; do
+            yq -e "$job.env.$var" .github/workflows/ci.yml > "$RUNNER_TEMP/$var.txt"
+            test -s "$RUNNER_TEMP/$var.txt"
+          done
+          for var in GRADE_RUBRIC KIMI_FILES_NOTE; do
             printf '%s<<%s\n' "$var" "$delim"
-            yq "$job.env.$var" .github/workflows/ci.yml
+            cat "$RUNNER_TEMP/$var.txt"
             printf '%s\n' "$delim"
           done >> "$GITHUB_ENV"
       - name: Hand the grader this case
@@ -91,15 +97,11 @@ jobs:
           jq -e --arg id "$CASE" '.cases[] | select(.id == $id)' "$cases" > "$RUNNER_TEMP/case.json"
           mkdir -p "$RUNNER_TEMP/grade-files"
           cd "$RUNNER_TEMP/grade-files"
-          pr=$(jq -r '.pr_number // empty' "$RUNNER_TEMP/case.json")
-          if [ -n "$pr" ]; then
-            PR=$pr bash -eo pipefail "$RUNNER_TEMP/kimi-files-pr.sh"
-          else
-            jq '.pr' "$RUNNER_TEMP/case.json" > pr.json
-            jq -c '.issues[]' "$RUNNER_TEMP/case.json" > issues.json
-          fi
-          BASE_SHA=$(jq -r .base "$RUNNER_TEMP/case.json") HEAD_SHA=$(jq -r .head "$RUNNER_TEMP/case.json") \
+          jq -e '.pr' "$RUNNER_TEMP/case.json" > pr.json
+          jq -c '.issues[]' "$RUNNER_TEMP/case.json" > issues.json
+          BASE_REF=main BASE_SHA=$(jq -r .base "$RUNNER_TEMP/case.json") HEAD_SHA=$(jq -r .head "$RUNNER_TEMP/case.json") \
             bash -eo pipefail "$RUNNER_TEMP/kimi-files-tree.sh"
+          rm -rf base/.github/grader-calibration base/.github/workflows/grader-calibration.yml
           patch=$(jq -r '.patch // empty' "$RUNNER_TEMP/case.json")
           if [ -n "$patch" ]; then
             cp "$GITHUB_WORKSPACE/.github/grader-calibration/$patch" pr.diff

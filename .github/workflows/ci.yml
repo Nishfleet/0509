@@ -473,18 +473,21 @@ jobs:
           done < "$RUNNER_TEMP/issues.txt"
       - name: Hand the Kimi grader the codebase before and after the change
         # Nish 2026-09-28: "k3 max also needs full context". base/ is the base
-        # commit (trusted main) fetched without credentials; head/ is each
-        # changed file's new content written from its blob as a plain file, so
-        # no committed symlink is followed. Rule files are left out of both, so
-        # nothing in the tree configures the grader. grader-calibration.yml runs
-        # this step's script as is.
+        # commit, fetched without credentials; the step fails unless the base
+        # branch is main, so base/ is trusted code. head/ is each changed
+        # file's new content written from its blob as a plain file, so no
+        # committed symlink is followed. Rule files are left out of both, so
+        # nothing in the tree configures the grader. grader-calibration.yml
+        # runs this step's script as is.
         id: kimi-files-tree
         if: github.event_name == 'pull_request' && github.event.pull_request.user.login == 'nishfleet-worker[bot]' && vars.GRADER == 'kimi'
         env:
           GH_TOKEN: ${{ github.token }}
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
+          test "$BASE_REF" = main
           cd "$RUNNER_TEMP/grade-files"
           rm -rf base head "$RUNNER_TEMP/base-src"
           mkdir base head
@@ -492,13 +495,13 @@ jobs:
           git -C "$RUNNER_TEMP/base-src" fetch -q --depth 1 "https://github.com/$GITHUB_REPOSITORY" "$BASE_SHA"
           git -C "$RUNNER_TEMP/base-src" archive FETCH_HEAD | tar -x -C base
           find base -type l -delete
-          find base \( -name .cursor -o -name .cursorrules \) -prune -exec rm -rf {} +
+          find base \( -name .cursor -o -name .cursorrules -o -name .cursorignore -o -name .cursorindexingignore \) -prune -exec rm -rf {} +
           gh api -H "Accept: application/vnd.github.diff" "repos/$GITHUB_REPOSITORY/compare/$BASE_SHA...$HEAD_SHA" > pr.diff
           gh api --paginate "repos/$GITHUB_REPOSITORY/compare/$BASE_SHA...$HEAD_SHA?per_page=100" \
             --jq '.files[] | select(.status != "removed") | [.sha, .filename] | @tsv' > "$RUNNER_TEMP/changed.tsv"
           while IFS=$'\t' read -r sha path; do
-            case "/$path/" in */../*|*/.cursor/*|*/.cursorrules/*|*/AGENTS.md/*|*/CLAUDE.md/*) continue ;; esac
-            mkdir -p "head/$(dirname "$path")"
+            case "/$path/" in */../*|*/.cursor/*|*/.cursorrules/*|*/.cursorignore/*|*/.cursorindexingignore/*|*/AGENTS.md/*|*/CLAUDE.md/*) continue ;; esac
+            mkdir -p "head/$(dirname -- "$path")"
             gh api "repos/$GITHUB_REPOSITORY/git/blobs/$sha" --jq .content | base64 -d > "head/$path"
           done < "$RUNNER_TEMP/changed.tsv"
           find base -type f | wc -l
