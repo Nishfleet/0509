@@ -34,7 +34,7 @@ for (const target of targets) {
   test(`${target} has no horizontal scroll at 390`, async ({ page }, testInfo) => {
     test.skip(testInfo.project.name !== "phone-390", "measured at 390 only");
     await page.goto(target);
-    await page.waitForLoadState("networkidle");
+    await expect(page.locator("main")).toBeVisible();
     const m = await measure(page);
     expect(m.scrollWidth, JSON.stringify(m)).toBe(m.clientWidth);
   });
@@ -51,7 +51,7 @@ test("every signed-in screen has no horizontal scroll at 390", async ({ page }, 
   let rows: { target: string; landed: string; scrollWidth: number; clientWidth: number }[] = [];
   for (const t of signedInTargets) {
     await page.goto(t);
-    await page.waitForLoadState("networkidle");
+    await expect(page.locator("main")).toBeVisible();
     const m = await measure(page);
     rows = [...rows, { target: t, landed: new URL(page.url()).pathname, ...m }];
   }
