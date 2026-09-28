@@ -17,5 +17,10 @@ setup.setTimeout(180_000);
 setup("sign in once and save the shared session", async ({ page }) => {
   const email = `e2e+${crypto.randomUUID().replaceAll("-", "").slice(0, 12)}@0509.io`;
   await signInWithMagicLink(page, email, requireInboxToken());
-  await page.context().storageState({ path: sessionStatePath });
+  const state = await page.context().storageState({ path: sessionStatePath });
+  // Prove the session itself is in the jar, not just the Access cookie —
+  // lhci-session.setup.ts makes the same check before recording its cookie.
+  if (!state.cookies.some((cookie) => cookie.name.endsWith("better-auth.session_token"))) {
+    throw new Error(`magic-link sign-in saved no session cookie for ${email}`);
+  }
 });

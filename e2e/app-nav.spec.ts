@@ -3,18 +3,22 @@ import { expect, test } from "@playwright/test";
 import { sessionStatePath } from "../playwright.config";
 import { consoleFailures, watchConsole } from "./inbox";
 
-test.use({ storageState: process.env.PLAYWRIGHT_TEST_BASE_URL ? sessionStatePath : undefined });
+// The session exists only in the production lane — the `session` project is
+// gated on the same pair in playwright.config.ts, so both conditions are
+// needed or the storageState read fails instead of the test skipping.
+const productionLane = Boolean(process.env.PLAYWRIGHT_TEST_BASE_URL && process.env.CF_ACCESS_CLIENT_ID);
+test.use({ storageState: productionLane ? sessionStatePath : undefined });
 
 // The signed-in nav walk, production only: the session comes from the session
 // setup project's shared storageState — one magic-link sign-in per run — and
 // the preview Worker has no EMAIL binding and no inbox to read, so that setup
 // cannot mint a session locally and this spec skips there rather than fake
-// the journey. It runs in the `e2e-production` job after deploy; the shared
+// the journey. It runs in the `e2e-scheduled` production lane; the shared
 // account's teardown deletes the address. A fresh address has no self entity,
 // so Home (`/app`) redirects to `/onboarding`; Home is therefore the last step
 // of each walk and asserts `/onboarding`, not `/app`.
 test.skip(
-  !process.env.PLAYWRIGHT_TEST_BASE_URL,
+  !productionLane,
   "the nav walk needs a real session; the local preview Worker can neither send nor receive email",
 );
 
