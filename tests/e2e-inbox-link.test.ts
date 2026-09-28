@@ -120,6 +120,32 @@ describe("extractMagicLink", () => {
   });
 });
 
+// The link is only the one this run asked for. In the merge-queue lane the
+// Preview mails on its own workers.dev origin, so the extractor takes that
+// origin and a 0509.io link read there is a link this run never sent.
+describe("on a preview lane", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it("takes the verify URL the Preview mailed on its own origin", () => {
+    vi.stubEnv("PLAYWRIGHT_TEST_BASE_URL", "https://mq-1-0509-preview.example.workers.dev");
+    const body = [
+      "Sign in to Five to Nine:",
+      "",
+      "https://mq-1-0509-preview.example.workers.dev/api/auth/magic-link/verify?token=abc123&callbackURL=%2Fapp",
+    ].join("\n");
+    expect(extractMagicLink(body)).toBe(
+      "https://mq-1-0509-preview.example.workers.dev/api/auth/magic-link/verify?token=abc123&callbackURL=%2Fapp",
+    );
+  });
+
+  it("refuses a link on another origin", () => {
+    vi.stubEnv("PLAYWRIGHT_TEST_BASE_URL", "https://mq-1-0509-preview.example.workers.dev");
+    expect(extractMagicLink(PLAIN)).toBeNull();
+  });
+});
+
 // The pre-send read on the sign-in path (0509#5839) must tell a missing
 // message (404) from the inbox failing, so a 500 is never read as "nothing
 // stored".

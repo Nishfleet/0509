@@ -10,6 +10,15 @@ const INBOX_URL = "https://e2e-inbox.0509.io";
 const POLL_LIMIT_MS = 120_000;
 const POLL_INTERVAL_MS = 3_000;
 
+// The origin the run's links must carry. In the merge-queue lane the Preview's
+// BETTER_AUTH_URL is its own workers.dev URL, so a link mailed on 0509.io is
+// not the link this run asked for.
+const PRODUCTION_ORIGIN = "https://0509.io";
+
+function laneOrigin(): string {
+  return new URL(process.env.PLAYWRIGHT_TEST_BASE_URL ?? PRODUCTION_ORIGIN).origin;
+}
+
 // Fail loudly, never skip: the amended decision on #3927 requires a missing
 // secret or routing rule to name itself in the failure. In the production lane
 // an absent env var means the repo secret is not wired into the job.
@@ -17,7 +26,7 @@ export function requireInboxToken(): string {
   const token = process.env.E2E_INBOX_TOKEN;
   if (!token) {
     throw new Error(
-      "E2E_INBOX_TOKEN is empty: the repo secret is not wired into the e2e-production job env in .github/workflows/ci.yml",
+      "E2E_INBOX_TOKEN is empty: the repo secret is not wired into the e2e job env in .github/workflows/ci.yml (e2e-production, merge-e2e)",
     );
   }
   return token;
@@ -99,10 +108,15 @@ export async function readRawMessage(to: string, token: string): Promise<string>
   return response.text();
 }
 
+// Only the lane's own origin counts: the verify link is built from the
+// sending Worker's BETTER_AUTH_URL, so accepting another origin's link would
+// follow a token this run never asked for.
 export function extractMagicLink(rawMessage: string): string | null {
-  const verifyUrl = /https:\/\/0509\.io\/api\/auth\/magic-link\/verify\?[^\s"'<>]+/;
+  const prefix = `${laneOrigin()}/api/auth/magic-link/verify?`;
   for (const body of decodedBodies(rawMessage)) {
-    const match = verifyUrl.exec(body);
+    const start = body.indexOf(prefix);
+    if (start === -1) continue;
+    const match = /^[^\s"'<>]+/.exec(body.slice(start));
     if (match) return match[0].replaceAll("&amp;", "&");
   }
   return null;
