@@ -1,3 +1,5 @@
+import { captureException } from "@sentry/cloudflare";
+
 import { isLoginWall, type Subject } from "./identity/normalise";
 import { readSubjectDecision, insertSubjectDecision } from "./data/user_decision.server";
 import { JevUnavailableError } from "./jev/client.server";
@@ -17,8 +19,16 @@ const runJevOutcome = (input: {
   now: string;
 }): Promise<{ outcome: "proceed" | "ask" | "refuse" } | null> =>
   screenPublicSubject(input.workspaceId, input.subject, input.raw, input.now).catch((error: unknown) => {
-    if (error instanceof JevUnavailableError) return null;
-    throw error;
+    if (!(error instanceof JevUnavailableError)) throw error;
+    console.log(
+      JSON.stringify({
+        event: "public_subject.jev_unavailable",
+        workspaceId: input.workspaceId,
+        error: error.message.slice(0, 300),
+      }),
+    );
+    captureException(error, { tags: { jev: "public_subject" } });
+    return null;
   });
 
 export async function screenOnboardingSubject(input: {
@@ -47,9 +57,6 @@ export async function screenOnboardingSubject(input: {
   }
 
   const screened = await runJevOutcome(input);
-  if (screened === null) {
-    console.log(JSON.stringify({ event: "public_subject.jev_unavailable", workspaceId: input.workspaceId }));
-  }
   const outcome = screened === null ? "ask" : screened.outcome;
   if (outcome === "proceed") return { kind: "proceed" };
 
