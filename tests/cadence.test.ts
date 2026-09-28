@@ -13,7 +13,8 @@ import { SITE_SWEEP_UTC_HOUR } from "../app/lib/onboarding/arrival-estimate";
 
 // 0509#5823: the schedule constants live in app/lib/cadence.ts. The three
 // Workflow schedules and the two trigger crons below are asserted against the
-// constants, never against a literal, so changing one place changes both.
+// constants, never against a literal, so the gate reddens the day one of them
+// diverges from the constant it names.
 describe("cadence", () => {
   it("schedules the site-sweep Workflow on SITE_SWEEP_CRON", () => {
     const { rawConfig } = experimental_readRawConfig({ config: "wrangler.jsonc" });
