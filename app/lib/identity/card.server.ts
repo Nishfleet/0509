@@ -6,7 +6,7 @@ import type { CardReview, CardValues, DraftField, SiteFields } from "./card-fiel
 import { extractIdentity } from "./extract";
 import { reviewFields } from "./field-confidence.server";
 import { readLogo, storeLogo } from "./logo-store.server";
-import { resolveLogo } from "./logo-cascade";
+import { logoCandidateUrls } from "./logo-cascade";
 import { resolveBrandName } from "./name-cascade";
 import type { Subject } from "./normalise";
 import { cachedProbe, probeKey } from "./probe-cache.server";
@@ -171,8 +171,11 @@ export function startCard(
   const logo = read.then(async ({ card, reached }) => {
     if (!reached) return null;
     const cached = await cachedProbe(subject, "icon", logoSchema, async () => {
-      const result = await resolveLogo({ ...card.logoCandidates, registrableDomain: subject.registrable });
-      return { url: result.ok ? result.url : null };
+      for (const url of logoCandidateUrls({ ...card.logoCandidates, registrableDomain: subject.registrable })) {
+        const stored = await storeLogo(subject.registrable, url);
+        if (stored !== null) return { url };
+      }
+      return { url: null };
     });
     const url = cached.url;
     if (url === null) return null;

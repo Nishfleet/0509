@@ -118,6 +118,36 @@ describe("startCard", () => {
     expect(await env.SNAPSHOTS.get("logo/gymshark.com")).not.toBeNull();
   });
 
+  it("skips an unsafe http og:image without fetching it and stores the DuckDuckGo icon", async () => {
+    stubAi(0.95);
+    const html = `<!doctype html>
+<html>
+  <head>
+    <title>Example</title>
+    <meta property="og:image" content="http://insecure.example/og.png">
+  </head>
+  <body>
+    <h1>Example</h1>
+    <p>Example makes plain office chairs, desks and lamps for people who work
+    from small rooms. Everything ships flat, assembles with one hex key, and
+    comes in three colours. The catalogue is short on purpose: four chairs,
+    two desks, one lamp, no limited editions and no collaborations.</p>
+  </body>
+</html>`;
+    const duckUrl = "https://icons.duckduckgo.com/ip3/example.com.ico";
+    const calls = stubWeb((url) =>
+      url === duckUrl
+        ? new Response(new Uint8Array([1, 2, 3]), { status: 200, headers: { "content-type": "image/png" } })
+        : new Response(html, { status: 200 }),
+    );
+    const card = startCard("ws-1", subjectFor("example.com"), []);
+    await card.site;
+    expect(await card.logo).toBe("data:image/png;base64,AQID");
+    expect(calls).toContain(duckUrl);
+    expect(calls).not.toContain("http://insecure.example/og.png");
+    expect(await env.SNAPSHOTS.get("logo/example.com")).not.toBeNull();
+  });
+
   it("reads the homepage once a day, not once per visit", async () => {
     stubAi(0.95);
     const calls = stubWeb(() => new Response(gym, { status: 200 }));
