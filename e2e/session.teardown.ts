@@ -14,13 +14,20 @@ import { sessionStatePath } from "../playwright.config";
 teardown.use({ storageState: existsSync(sessionStatePath) ? sessionStatePath : undefined });
 
 teardown("delete the shared session account", async ({ context, baseURL }) => {
+  // The file is absent when the setup failed before saving — and without it
+  // this jar holds no session to delete with.
+  if (!existsSync(sessionStatePath)) return;
   if (!baseURL) throw new Error("PLAYWRIGHT_TEST_BASE_URL resolved to no baseURL");
   // The session authority's own answer: /api/auth/get-session returns the
-  // session's user when the jar holds one and null when it does not.
-  const session = await context.request.get(`${baseURL}/api/auth/get-session`);
+  // session's user when the jar holds one and null when it does not. Stopped
+  // before redirects: an empty jar is answered by the Access gate's own bounce
+  // or a JSON null, and both mean the setup never minted — nothing to delete.
+  const session = await context.request.get(`${baseURL}/api/auth/get-session`, { maxRedirects: 0 });
+  if (session.status() >= 300 && session.status() < 400) return;
   if (session.status() !== 200) {
     throw new Error(`GET /api/auth/get-session answered HTTP ${session.status()} (expected 200)`);
   }
+  if (!(session.headers()["content-type"] ?? "").includes("application/json")) return;
   const body: unknown = await session.json();
   const email =
     body && typeof body === "object" && "user" in body

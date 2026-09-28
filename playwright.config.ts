@@ -64,8 +64,10 @@ export default defineConfig({
     // its context starts from accessStatePath, and its teardown runs last.
     ...(productionLane
       ? [
-          { name: "session", testMatch: /session\.setup\.ts/, dependencies: ["setup"], teardown: "session-teardown" },
-          { name: "session-teardown", testMatch: /session\.teardown\.ts/ },
+          // Anchored to the basename: a bare /session\.setup\.ts/ would also
+          // collect lhci-session.setup.ts into this project.
+          { name: "session", testMatch: /[/\\]session\.setup\.ts$/, dependencies: ["setup"], teardown: "session-teardown" },
+          { name: "session-teardown", testMatch: /[/\\]session\.teardown\.ts$/ },
         ]
       : []),
     {
