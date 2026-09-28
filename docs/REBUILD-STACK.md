@@ -167,7 +167,7 @@ npx auth@1.7.5 generate     # emit the schema
 npx auth@1.7.5 migrate      # apply it (Kysely adapters only)
 ```
 
-**Pin the CLI version; never `@latest`.** better-auth validates the schema against the live database **in production** (§2.3, point 3), so the generator and the library have to agree by construction. `@latest` silently drifts ahead of the installed `better-auth` on some future run, emits a schema the running library does not expect, and the first request after deploy fails that validation check. `auth@1.7.5` matches `better-auth` 1.7.5 exactly and moves only when that does.
+**Pin the CLI version; never `@latest`.** `@latest` silently drifts ahead of the installed `better-auth` on some future run and emits a schema the running library does not expect — and with runtime schema validation off in production (§2.3, point 3), that drift no longer fails loudly on the first request; it surfaces as the first touched query failing. `auth@1.7.5` matches `better-auth` 1.7.5 exactly and moves only when that does.
 
 Cited: <https://www.better-auth.com/docs/concepts/cli>, <https://www.better-auth.com/docs/adapters/sqlite> (both read 2026-09-21). `generate` flags: `-c/--cwd`, `--output`, `--config`, `-y/--yes`, `--adapter` (`prisma|drizzle|kysely`), `--dialect`. Other commands: `create-admin`, `init`, `upgrade`, `info`, `secret`.
 

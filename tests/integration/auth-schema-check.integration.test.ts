@@ -53,7 +53,7 @@ describe("auth schema validation", () => {
       // delta below is a real zero rather than a detection failure. The arm
       // also keeps the removed runtime check's job alive in CI at zero
       // production cost: better-auth's router awaits the check in onRequest
-      // before any endpoint logic (better-auth/dist/api/index.mjs:168), so a
+      // before any endpoint logic (better-auth/dist/api/index.mjs:169-170), so a
       // drift between migrations/ and the plugins' expected schema throws
       // SchemaMismatchError out of auth.handler here.
       const checking = createAuth(AUTH_ENV, { captcha: false, validateSchema: true });
