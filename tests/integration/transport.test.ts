@@ -721,6 +721,7 @@ describe("readUrl", () => {
   });
 
   it("fails typed with the unconfigured cause when the browser binding is absent", async () => {
+    browserHolder.current = undefined;
     const stub = stubFetch({
       "https://gated.example.com/": () => new Response("Forbidden", { status: 403 }),
     });
