@@ -1,5 +1,5 @@
 import { env } from "cloudflare:test";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { deliver, handleBatch, type DeliveryMessage } from "../../workers/delivery/consumer";
 import { sendOrThrow } from "../../workers/delivery/send";
@@ -163,6 +163,10 @@ describe("send lane (0509#3979)", () => {
     await env.DB.exec('DELETE FROM "user"');
     await seedWorkspace();
     await seedChannel();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
   });
 
   it("(a) sends a normal message and resolves the attempt to 'sent'", async () => {
@@ -411,24 +415,20 @@ describe("send lane (0509#3979)", () => {
       .run();
     const digestId = await seedDigest("pending");
     const lines: string[] = [];
-    const log = vi.spyOn(console, "log").mockImplementation((...args: unknown[]) => {
+    vi.spyOn(console, "log").mockImplementation((...args: unknown[]) => {
       lines.push(args.map((arg) => String(arg)).join(" "));
     });
-    let outcome: string;
-    try {
-      const result = await deliver(envWith(bindingFor(rec)), message(digestId));
-      outcome = result.outcome;
-      expect(result.attempt_id).toBeNull();
-      expect(result.idempotency_key).toBeNull();
-    } finally {
-      log.mockRestore();
-    }
 
-    expect(outcome).toBe("no_target");
+    const result = await deliver(envWith(bindingFor(rec)), message(digestId));
+
+    expect(result.outcome).toBe("no_target");
+    expect(result.attempt_id).toBeNull();
+    expect(result.idempotency_key).toBeNull();
     expect(rec.sent).toHaveLength(0);
     expect(await readAttempts()).toHaveLength(0);
     expect((await digestStatus(digestId))?.status).toBe("pending");
-    expect(lines.join("\n")).toContain(`"event":"delivery.no_verified_target"`);
+    expect(lines.join("\n")).toContain(`"event":"delivery.no_target"`);
+    expect(lines.join("\n")).toContain(`"reason":"unverified"`);
     expect(lines.join("\n")).toContain(`"workspace_id":"${WS}"`);
   });
 

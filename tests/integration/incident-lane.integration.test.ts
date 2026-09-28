@@ -1,5 +1,5 @@
 import { env } from "cloudflare:test";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   deliverIncident,
@@ -188,6 +188,10 @@ describe("incident lane (0509#4364)", () => {
     )
       .bind(WS, ENTITY, PAGE_A, INCIDENT_A)
       .run();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
   });
 
   it("(a) sends the open notice and records both rows", async () => {
@@ -426,23 +430,20 @@ describe("incident lane (0509#4364)", () => {
       .run();
     const rec = recorder();
     const lines: string[] = [];
-    const log = vi.spyOn(console, "log").mockImplementation((...args: unknown[]) => {
+    vi.spyOn(console, "log").mockImplementation((...args: unknown[]) => {
       lines.push(args.map((arg) => String(arg)).join(" "));
     });
-    let outcome: string;
-    try {
-      const result = await deliverIncident(envWith(bindingFor(rec)), message(INCIDENT_A));
-      outcome = result.outcome;
-      expect(result.attempt_id).toBeNull();
-      expect(result.idempotency_key).toBeNull();
-    } finally {
-      log.mockRestore();
-    }
 
-    expect(outcome).toBe("no_target");
+    const result = await deliverIncident(envWith(bindingFor(rec)), message(INCIDENT_A));
+
+    expect(result.outcome).toBe("no_target");
+    expect(result.attempt_id).toBeNull();
+    expect(result.idempotency_key).toBeNull();
     expect(rec.sent).toHaveLength(0);
     expect(await readAttempts()).toHaveLength(0);
     expect(await readNotices(PAGE_A)).toHaveLength(0);
-    expect(lines.join("\n")).toContain(`"event":"delivery.no_verified_target"`);
+    expect(lines.join("\n")).toContain(`"event":"delivery.no_target"`);
+    expect(lines.join("\n")).toContain(`"reason":"unverified"`);
+    expect(lines.join("\n")).toContain(`"workspace_id":"${WS}"`);
   });
 });
