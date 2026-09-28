@@ -353,7 +353,7 @@ describe("YouTube sweep stale channel", () => {
 
   it("fails when the watch or entity row is missing instead of pretending the config is empty", async () => {
     expect(await readWatchConfigJson("watch-missing")).toBeNull();
-    expect(await readEntityIdentityJson("entity-missing")).toBeNull();
+    expect(await readEntityIdentityJson("ws-yt-missing", "entity-missing")).toBeNull();
     await expect(writeWatchConfigJson("watch-missing", "{}")).rejects.toThrow(/watch-missing was not updated/);
 
     const { watch } = await seed('{"description":"no socials"}', "{}");
