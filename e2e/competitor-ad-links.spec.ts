@@ -188,10 +188,11 @@ test("the competitor header's two ad-library links open that brand's live ads", 
   await expect(meta).toHaveText("Their ads on Meta");
   await expect(google).toHaveText("Their ads on Google");
 
-  // No reverse tabnabbing, and the browser is told the tab is new.
+  // No reverse tabnabbing, and the browser is told the tab is new. Both
+  // attributes exactly, so a dropped noreferrer fails here.
   for (const link of [meta, google]) {
     await expect(link).toHaveAttribute("target", "_blank");
-    await expect(link).toHaveAttribute("rel", /noopener/);
+    await expect(link).toHaveAttribute("rel", "noopener noreferrer");
   }
 
   const metaUrl = new URL((await meta.getAttribute("href")) ?? "");

@@ -18,7 +18,7 @@ export function competitorPausedLine(
 }
 
 const AD_LIBRARY_LINK =
-  "text-ink-soft hover:text-ink underline decoration-1 underline-offset-4 transition-colors duration-150";
+  "text-ink-soft hover:text-ink inline-flex min-h-11 items-center underline decoration-1 underline-offset-4 transition-colors duration-150";
 
 function AdLibraryLinks({ name, domain }: { name: string; domain: string }): ReactElement {
   const links = adLibraryLinks({ name, domain });
@@ -78,7 +78,12 @@ export function CompetitorHeader({
       >
         <div className="min-w-0">
           <h1 className="font-display text-display-2 font-extrabold break-words uppercase">{name}</h1>
-          <p data-slot="competitor-domain" className="text-body-sm text-ink-soft [overflow-wrap:anywhere]">{domain}</p>
+          <p
+            data-slot="competitor-domain"
+            className="text-body-sm text-ink-soft [overflow-wrap:anywhere]"
+          >
+            {domain}
+          </p>
           <AdLibraryLinks name={name} domain={domain} />
           {state === "off" ? (
             <p data-slot="competitor-paused" className="text-meta text-ink-soft font-mono uppercase">
