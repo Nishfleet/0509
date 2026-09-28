@@ -80,18 +80,19 @@ function homePageRows(entities: readonly EntityWithoutHomePage[], now: string): 
   });
 }
 
-export async function ensureHomePages(now: string): Promise<void> {
-  await insertPages(homePageRows(await readEntitiesWithoutHomePage(), now));
-}
-
-export async function planSiteSweep(now: string): Promise<SiteSweepTarget[]> {
-  const sourceId = await readEnabledSourceId(SITE_SOURCE_KEY);
-  if (sourceId === null) return [];
-
+export async function ensureHomePages(now: string): Promise<readonly NewPage[]> {
   const taken = await insertPages(homePageRows(await readEntitiesWithoutHomePage(), now));
   for (const row of taken) {
     console.log(JSON.stringify({ event: "site.home_page_role_taken", entityId: row.entityId, url: row.url }));
   }
+  return taken;
+}
+
+export async function planSiteSweep(now: string): Promise<SiteSweepTarget[]> {
+  const taken = await ensureHomePages(now);
+  const sourceId = await readEnabledSourceId(SITE_SOURCE_KEY);
+  if (sourceId === null) return [];
+
   await insertWatches([
     ...(await readUnwatchedEntities(sourceId)).map((entity) => ({
       id: crypto.randomUUID(),
