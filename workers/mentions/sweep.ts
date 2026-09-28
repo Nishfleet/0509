@@ -22,6 +22,7 @@ import {
   withResolvedChannel,
   withoutPendingChannel,
 } from "../../app/lib/mentions/youtube-channel";
+import { sha256Hex } from "../../app/lib/sha256";
 import { storedDedupKey, toSignalRow, type MentionItem } from "./map";
 import { writeSourcePoint } from "./canary";
 import { adapterFor } from "../sources/registry";
@@ -76,11 +77,6 @@ export async function planTargets(): Promise<MentionTarget[]> {
     });
   }
   return [...byTarget.values()];
-}
-
-async function sha256Hex(text: string): Promise<string> {
-  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
-  return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
 function subjectOf(watch: WatchRow) {
