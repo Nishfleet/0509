@@ -226,6 +226,8 @@ describe("delete my account", () => {
       revokeGrant: async () => undefined,
     };
 
+    // The fixture mints over http://localhost; the worker's own env reads the
+    // __Secure- name its https baseURL implies, same as production.
     const secureCookie = cookie.replace("better-auth.session_token=", "__Secure-better-auth.session_token=");
     const deleted = await deleteAccount(helpers as never, settingsRequest(secureCookie), userId);
 
@@ -242,6 +244,6 @@ describe("delete my account", () => {
     const page = `${ORIGIN}/login?deleted=${deleted.instanceId}`;
     const shown = await loginLoader({ request: new Request(page, { headers: { cookie: pair } }) } as never);
     expect(shown.id).toBe(deleted.instanceId);
-    expect(shown.progress).not.toBeNull();
+    expect(shown.progress).toMatchObject({ rows: "removed" });
   });
 });

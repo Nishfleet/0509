@@ -35,12 +35,14 @@ export async function deleteAccount(
 }
 
 function deleteInstanceCookie() {
+  const secret = env.BETTER_AUTH_SECRET;
+  if (!secret) throw new Error("BETTER_AUTH_SECRET is not configured");
   return createCookie(DELETE_INSTANCE_COOKIE, {
     httpOnly: true,
     maxAge: 60 * 60 * 24,
     path: "/login",
     sameSite: "lax",
-    secrets: [env.BETTER_AUTH_SECRET],
+    secrets: [secret],
   });
 }
 
