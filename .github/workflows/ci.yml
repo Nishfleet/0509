@@ -5,9 +5,11 @@
 # merge, including the PR that renamed it. Verified against the live ruleset
 # (id 21391031) on 2026-09-21 before this file was written.
 #
-# Every job runs on pull_request and merge_group: the queue evaluates checks on
-# the merge ref, and a skipped required check counts as a pass (#4664), so each
-# required job must always start and let its steps decide the verdict.
+# The five required jobs run on pull_request and merge_group — and on
+# deployment_status too, because a skipped required check counts as a pass
+# (#4664): each job must always start and let its steps decide the verdict. A
+# required check whose job never runs is the different case — no check run
+# means Pending, and Pending blocks.
 name: CI
 
 # `deployment_status` is the third trigger and it is the stock one: Cloudflare
@@ -16,8 +18,8 @@ name: CI
 # The five required jobs run on every event because a skipped required check
 # counts as a pass (0509#5738, #4664). On `deployment_status` each job still
 # starts — a runner allocates, and semgrep's container initialises — but every
-# step's if: is false, so the job reports a pass with no steps run and a deploy
-# gets a verdict the job actually emitted.
+# step's if: is false, so the job reports a pass with no steps run: success is
+# the only non-blocking verdict a required check can give a deploy.
 on:
   pull_request:
   merge_group:
@@ -343,10 +345,11 @@ jobs:
   # when the label write is lost (fleet-ops#8635, 0509#5393).
   # Required by ruleset 21391031, so the job carries no job-level if: — a
   # skipped required check counts as a pass (#4664). The steps below decide
-  # event and author: on a non-worker pull request or a deployment_status run
-  # every step's if: is false and the job reports a pass with no steps run;
-  # on merge_group the check is the explicit `run: "true"` step at the bottom,
-  # the grade verdict having been enforced on the pull_request run.
+  # event and author: on merge_group the check is the explicit `run: "true"`
+  # step, the grade verdict having been enforced on the pull_request run; on a
+  # non-worker pull request or a deployment_status run the reporter step below
+  # prints that no grade applies, so the pass is legible in the log instead of
+  # indistinguishable from a real grade.
   # Nish 2026-09-22: "you can't grade your own work. you grade opus." This job
   # grades only PRs opened by the worker app (GLM / DeepSeek packets). PRs by
   # the Opus deputy or by Fable are reviewed by Fable, never by this job.
@@ -510,3 +513,6 @@ jobs:
       - name: merge_group reports the check so the queue can merge (the grade was enforced on the pull request)
         if: github.event_name == 'merge_group'
         run: "true"
+      - name: Nothing to grade here — the pass is intentional, not a grade
+        if: github.event_name == 'deployment_status' || (github.event_name == 'pull_request' && github.event.pull_request.user.login != 'nishfleet-worker[bot]')
+        run: echo "opus-review — no grade applies on this event or author; reporting pass (0509#5741)"
