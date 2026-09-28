@@ -176,8 +176,8 @@ test("the identity card editor saves and closes on Enter, with focus back on the
   // inside the keydown handler. Awaiting that save's response proves the one POST
   // round-tripped, so the `toHaveLength(1)` count below is the post-save count, not
   // a zero read taken before the request went out; a second `onSave` from that
-  // same keydown task is dispatched, and observed by `watchDraftPosts`, before
-  // this response returns.
+  // same keydown task would be dispatched, and observed by `watchDraftPosts`,
+  // before this response returns.
   await saveResponse;
   expect(draftPosts).toHaveLength(1);
   await expect(name).toHaveCount(0);
