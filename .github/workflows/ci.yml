@@ -289,7 +289,7 @@ jobs:
           uploadArtifacts: true
           temporaryPublicStorage: true
       - name: Open or update the issue that dispatches the fix
-        if: failure()
+        if: failure() || cancelled()
         id: red
         uses: JasonEtco/create-an-issue@1b14a70e4d8dc185e5cc76d3bec9eab20257b2c5 # v2.9.2
         env:
@@ -304,7 +304,7 @@ jobs:
       - name: Hand the issue to a worker
         # A GITHUB_TOKEN label fires no workflow, so dispatch by number;
         # agent.yml's Gate sizes it. needs-split alone left #4620 unworked.
-        if: failure() && steps.red.outputs.number
+        if: (failure() || cancelled()) && steps.red.outputs.number
         env:
           GH_TOKEN: ${{ github.token }}
           N: ${{ steps.red.outputs.number }}
