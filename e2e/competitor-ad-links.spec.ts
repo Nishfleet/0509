@@ -6,10 +6,11 @@ import { betterAuth } from "better-auth";
 import { magicLink } from "better-auth/plugins";
 import { expect, test, type Page } from "@playwright/test";
 
-import { consoleFailures, requireInboxToken, signInWithMagicLink, watchConsole } from "./inbox";
+import { consoleFailures, deleteCreatedAccount, requireInboxToken, signInWithMagicLink, watchConsole } from "./inbox";
 
 // The competitor header's two outbound ad-library links, 0509#5845. Both open
-// in a new tab, both name the brand in their accessible name, and neither
+// in a new tab, each name leads with the visible text and appends the brand,
+// and neither
 // costs a request of ours: the hrefs are built by app/lib/competitor/
 // ad-library-links.ts and nothing is fetched on click.
 //
@@ -24,7 +25,11 @@ import { consoleFailures, requireInboxToken, signInWithMagicLink, watchConsole }
 // The links are never clicked through to Meta or Google: the contract is the
 // href, the accessible name, target and rel, all of which are ours.
 
-const SEEDED_BRAND = "Zephyrwear";
+const SEEDED_BRAND = "Boots & Belle";
+const SEEDED_DOMAIN_PREFIX = "shop";
+
+// The address the production lane created, so the afterEach can delete it.
+const createdEmail = { current: "" };
 
 function authSecret(): string {
   const line = readFileSync(".dev.vars.example", "utf8")
@@ -98,7 +103,7 @@ async function seedSession(): Promise<string> {
     ).run(`ent-self-${suffix}`, `ws-${suffix}`, `self-${suffix}.example`, stamp);
     db.prepare(
       "INSERT INTO entity (id, workspace_id, role, domain, name, created_at) VALUES (?, ?, 'competitor', ?, ?, ?)",
-    ).run(`ent-${suffix}`, `ws-${suffix}`, `zephyr-${suffix}.example`, SEEDED_BRAND, stamp);
+    ).run(`ent-${suffix}`, `ws-${suffix}`, `${SEEDED_DOMAIN_PREFIX}.boots-${suffix}.example`, SEEDED_BRAND, stamp);
     db.exec("PRAGMA wal_checkpoint(PASSIVE)");
     return cookie;
   } finally {
@@ -108,6 +113,7 @@ async function seedSession(): Promise<string> {
 
 async function watchOneCompetitor(page: Page): Promise<void> {
   const email = `e2e+${crypto.randomUUID().replaceAll("-", "").slice(0, 12)}@0509.io`;
+  createdEmail.current = email;
   await signInWithMagicLink(page, email, requireInboxToken());
 
   await page.goto("/onboarding");
@@ -130,6 +136,18 @@ async function watchOneCompetitor(page: Page): Promise<void> {
   await page.getByRole("button", { name: "Start watching" }).click();
   await expect(page).toHaveURL(/\/app$/);
 }
+
+test.afterEach(async ({ page }, testInfo) => {
+  if (createdEmail.current === "") return;
+  testInfo.setTimeout(testInfo.timeout + 60_000);
+  // The delete failing is a test failure, not a reason to keep the address:
+  // clearing in finally means a later run cannot try to delete a gone account.
+  try {
+    await deleteCreatedAccount(page, createdEmail.current);
+  } finally {
+    createdEmail.current = "";
+  }
+});
 
 test("the competitor header's two ad-library links open that brand's live ads", async ({ page }, testInfo) => {
   test.setTimeout(150_000);
@@ -157,14 +175,15 @@ test("the competitor header's two ad-library links open that brand's live ads", 
 
   const header = page.locator("[data-slot='competitor-header']");
   const brand = ((await header.locator("h1").textContent()) ?? "").trim();
-  const domain = ((await page.locator("[data-slot='competitor-identity'] p").first().textContent()) ?? "").trim();
+  const domain = ((await page.locator("[data-slot='competitor-domain']").textContent()) ?? "").trim();
   expect(brand).not.toBe("");
   expect(domain).not.toBe("");
 
-  // The accessible names carry the brand and the new tab, the visible text
-  // stays short and shared by both links.
-  const meta = page.getByRole("link", { name: `${brand}'s ads on Meta (opens in a new tab)` });
-  const google = page.getByRole("link", { name: `${brand}'s ads on Google (opens in a new tab)` });
+  // The accessible name leads with the visible text so a voice-control user
+  // matches the label (WCAG 2.2 SC 2.5.3), then names the brand and the new
+  // tab. Exact matches, in a real browser, on a brand with an `&`.
+  const meta = page.getByRole("link", { name: `Their ads on Meta, ${brand} (opens in a new tab)` });
+  const google = page.getByRole("link", { name: `Their ads on Google, ${brand} (opens in a new tab)` });
   await expect(meta).toBeVisible();
   await expect(google).toBeVisible();
   await expect(meta).toHaveText("Their ads on Meta");
@@ -187,17 +206,22 @@ test("the competitor header's two ad-library links open that brand's live ads", 
   expect(googleUrl.searchParams.get("region")).toBe("anywhere");
   expect(googleUrl.searchParams.get("domain")).toBe(domain);
 
-  // 390: the pair wraps onto two lines rather than pushing the page sideways.
-  // The measurement is the document's, the same one no-horizontal-scroll
-  // .spec.ts takes, so a real overflow fails here too.
+  // 390: the pair wraps rather than pushing the page sideways. The measurement
+  // is no-horizontal-scroll.spec.ts's idiom, and it is that file's because the
+  // stylesheet sets `html, body { overflow-x: hidden }` (app/app.css), which
+  // has to be lifted before documentElement.scrollWidth can report an overflow.
   await page.setViewportSize({ width: 390, height: 844 });
+  await page.addStyleTag({ content: "html, body { overflow-x: visible !important; }" });
   const widths = await page.evaluate(() => ({
     scrollWidth: document.documentElement.scrollWidth,
     clientWidth: document.documentElement.clientWidth,
   }));
-  expect(widths.scrollWidth, JSON.stringify(widths)).toBeLessThanOrEqual(widths.clientWidth);
+  expect(widths.scrollWidth, JSON.stringify(widths)).toBe(widths.clientWidth);
   const links = page.locator("[data-slot='competitor-ad-links']");
   await expect(links).toBeVisible();
+  console.log(
+    `ad-links[brand=${brand}] meta.host=${metaUrl.hostname} meta.q=${String(metaUrl.searchParams.get("q"))} google.host=${googleUrl.hostname} google.domain=${String(googleUrl.searchParams.get("domain"))}`,
+  );
   console.log(
     `ad-links[width=390 brand=${brand}] scrollWidth=${String(widths.scrollWidth)} clientWidth=${String(widths.clientWidth)}`,
   );

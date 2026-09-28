@@ -78,7 +78,10 @@ describe("the live ad-library links on a competitor header", () => {
   });
 
   it("renders both quiet links in the header, each opening in a new tab", () => {
-    const name = "Bramble & Co";
+    // A plain name and domain on purpose: the escaped entities React writes for
+    // an `&` or an apostrophe are asserted against a real browser in the e2e
+    // spec, so this test does not pin the escaper.
+    const name = "Zephyrwear";
     const domain = "shop.example.com";
     const links = adLibraryLinks({ name, domain });
     const html = renderHeader(name, domain);
@@ -86,8 +89,11 @@ describe("the live ad-library links on a competitor header", () => {
     expect(html).toContain(hrefAsMarkup(links.google));
     expect(html).toContain(">Their ads on Meta</a>");
     expect(html).toContain(">Their ads on Google</a>");
-    expect(html).toContain('aria-label="Bramble &amp; Co&#x27;s ads on Meta (opens in a new tab)"');
-    expect(html).toContain('aria-label="Bramble &amp; Co&#x27;s ads on Google (opens in a new tab)"');
+    // The accessible name leads with the visible text, so a voice-control user
+    // saying the label matches the link (WCAG 2.2 SC 2.5.3); the brand and the
+    // new tab are appended, the way "Stop tracking <name>" is written.
+    expect(html).toContain('aria-label="Their ads on Meta, Zephyrwear (opens in a new tab)"');
+    expect(html).toContain('aria-label="Their ads on Google, Zephyrwear (opens in a new tab)"');
     expect(html).toContain('target="_blank"');
     expect(html).toContain('rel="noopener noreferrer"');
   });

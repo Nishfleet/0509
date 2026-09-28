@@ -28,7 +28,7 @@ function AdLibraryLinks({ name, domain }: { name: string; domain: string }): Rea
         href={links.meta}
         target="_blank"
         rel="noopener noreferrer"
-        aria-label={`${name}'s ads on Meta (opens in a new tab)`}
+        aria-label={`Their ads on Meta, ${name} (opens in a new tab)`}
         className={AD_LIBRARY_LINK}
       >
         Their ads on Meta
@@ -37,7 +37,7 @@ function AdLibraryLinks({ name, domain }: { name: string; domain: string }): Rea
         href={links.google}
         target="_blank"
         rel="noopener noreferrer"
-        aria-label={`${name}'s ads on Google (opens in a new tab)`}
+        aria-label={`Their ads on Google, ${name} (opens in a new tab)`}
         className={AD_LIBRARY_LINK}
       >
         Their ads on Google
@@ -78,7 +78,7 @@ export function CompetitorHeader({
       >
         <div className="min-w-0">
           <h1 className="font-display text-display-2 font-extrabold break-words uppercase">{name}</h1>
-          <p className="text-body-sm text-ink-soft [overflow-wrap:anywhere]">{domain}</p>
+          <p data-slot="competitor-domain" className="text-body-sm text-ink-soft [overflow-wrap:anywhere]">{domain}</p>
           <AdLibraryLinks name={name} domain={domain} />
           {state === "off" ? (
             <p data-slot="competitor-paused" className="text-meta text-ink-soft font-mono uppercase">
