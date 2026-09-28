@@ -71,22 +71,7 @@ export function decodedBodies(raw: string): string[] {
   return bodies;
 }
 
-// The inbox's named token failures, one source for both readers: the pre-send
-// read and probeInbox each hit the endpoint first depending on the path, and a
-// secret mismatch must name itself at whichever one sees it first (#3927).
-function namedInboxFailure(status: number): Error | null {
-  if (status === 403) {
-    return new Error(
-      "0509-e2e-inbox rejected E2E_INBOX_TOKEN (HTTP 403): the repo secret and the Worker secret disagree",
-    );
-  }
-  if (status === 503) {
-    return new Error("0509-e2e-inbox reports E2E_INBOX_TOKEN is not set on the Worker");
-  }
-  return null;
-}
-
-// The inbox's other non-200 answer, carrying the status so a caller can tell a
+// The inbox's non-200 answer, carrying the status so a caller can tell a
 // missing message (404) from a real failure (500). A caller that maps 404 to
 // "nothing stored" must rethrow the rest: swallowing a 500 would turn an inbox
 // failure into a stale-link timeout.
@@ -108,7 +93,7 @@ export async function readRawMessage(to: string, token: string): Promise<string>
     headers: inboxHeaders(token),
   });
   if (response.status !== 200) {
-    throw namedInboxFailure(response.status) ?? new InboxReadError(response.status, to);
+    throw new InboxReadError(response.status, to);
   }
   return response.text();
 }
@@ -145,8 +130,14 @@ export async function staleLinks(to: string, token: string): Promise<string[]> {
 // it — a bad or missing secret fails in one round-trip, not in two minutes.
 async function probeInbox(url: string, headers: Record<string, string>): Promise<void> {
   const probe = await fetch(url, { headers });
-  const named = namedInboxFailure(probe.status);
-  if (named) throw named;
+  if (probe.status === 403) {
+    throw new Error(
+      "0509-e2e-inbox rejected E2E_INBOX_TOKEN (HTTP 403): the repo secret and the Worker secret disagree",
+    );
+  }
+  if (probe.status === 503) {
+    throw new Error("0509-e2e-inbox reports E2E_INBOX_TOKEN is not set on the Worker");
+  }
 }
 
 // Poll until the message lands or the deadline passes. The inbox keys on the

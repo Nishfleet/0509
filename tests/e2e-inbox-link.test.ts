@@ -121,32 +121,24 @@ describe("extractMagicLink", () => {
 });
 
 // The pre-send read on the sign-in path (0509#5839) must tell a missing
-// message (404) from the inbox failing, so a secret mismatch still names
-// itself and a 500 is never read as "nothing stored".
+// message (404) from the inbox failing, so a 500 is never read as "nothing
+// stored".
 describe("readRawMessage", () => {
   afterEach(() => {
     vi.unstubAllGlobals();
   });
 
-  it("names a rejected E2E_INBOX_TOKEN", async () => {
-    vi.stubGlobal("fetch", () => Promise.resolve(new Response("", { status: 403 })));
-    await expect(readRawMessage("e2e+stale@0509.io", "token")).rejects.toThrow(
-      /rejected E2E_INBOX_TOKEN \(HTTP 403\)/,
-    );
-  });
-
-  it("names an unset E2E_INBOX_TOKEN", async () => {
-    vi.stubGlobal("fetch", () => Promise.resolve(new Response("", { status: 503 })));
-    await expect(readRawMessage("e2e+stale@0509.io", "token")).rejects.toThrow(
-      /E2E_INBOX_TOKEN is not set on the Worker/,
-    );
-  });
-
-  it("carries a 500 as InboxReadError with its status", async () => {
+  it("carries a non-200 answer as InboxReadError with its status", async () => {
     vi.stubGlobal("fetch", () => Promise.resolve(new Response("", { status: 500 })));
     const failure = readRawMessage("e2e+stale@0509.io", "token");
     await expect(failure).rejects.toBeInstanceOf(InboxReadError);
     await expect(failure).rejects.toMatchObject({ status: 500 });
+    await expect(failure).rejects.toThrow("inbox answered HTTP 500 for e2e+stale@0509.io");
+  });
+
+  it("carries 403 the same way, status included", async () => {
+    vi.stubGlobal("fetch", () => Promise.resolve(new Response("", { status: 403 })));
+    await expect(readRawMessage("e2e+stale@0509.io", "token")).rejects.toMatchObject({ status: 403 });
   });
 
   it("carries 404 so a caller can tell it from a failure", async () => {
@@ -182,11 +174,11 @@ describe("staleLinks", () => {
     await expect(staleLinks("e2e+stale@0509.io", "token")).resolves.toEqual([]);
   });
 
-  it("rethrows a rejected E2E_INBOX_TOKEN instead of reading it as nothing stored", async () => {
+  it("rethrows a non-404 answer instead of reading it as nothing stored", async () => {
     vi.stubGlobal("fetch", () => Promise.resolve(new Response("", { status: 403 })));
-    await expect(staleLinks("e2e+stale@0509.io", "token")).rejects.toThrow(
-      /rejected E2E_INBOX_TOKEN \(HTTP 403\)/,
-    );
+    const failure = staleLinks("e2e+stale@0509.io", "token");
+    await expect(failure).rejects.toBeInstanceOf(InboxReadError);
+    await expect(failure).rejects.toMatchObject({ status: 403 });
   });
 
   it("rethrows an inbox failure carrying its status", async () => {
