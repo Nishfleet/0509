@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 
 import { expectFaceLoaded } from "./fonts";
 import { consoleFailures, watchConsole } from "./inbox";
@@ -9,6 +9,32 @@ import { consoleFailures, watchConsole } from "./inbox";
 // the structured data matching the visible page. Copy stays unpinned.
 
 const PATH = "/design/landing";
+
+// Every brand face the landing renders, in the weights it actually uses. The
+// landing has no <img>, so a deferred face swap is the only late layout shift
+// on the page, and each weight is a separate file (app/app.css:141-193) that
+// loads on its own — polling one weight of a family answers while the other's
+// is still in flight, so the mono weight that `eyebrow` renders above the fold
+// (hero.tsx:31,56, ticker.tsx, pill.tsx:7, start-button.tsx:10) is named here
+// too. One call per face: expectFaceLoaded passes on the first loaded face
+// covering the asked weight, so the waits are in series and the last one to
+// return is the page's last swap.
+const BRAND_FACES: [string, number][] = [
+  ["Bricolage Grotesque", 800],
+  ["Instrument Sans", 400],
+  ["IBM Plex Mono", 400],
+  ["IBM Plex Mono", 500],
+];
+
+// The face polls are a resource gate, not a paint gate: a face reports loaded
+// when the file arrives, and the reflow it causes lands on a later rendering
+// update. Two frames is the boundary after that reflow, with no fixed wait.
+async function expectBrandFacesLoaded(page: Page): Promise<void> {
+  for (const [family, weight] of BRAND_FACES) await expectFaceLoaded(page, family, weight);
+  await page.evaluate(
+    () => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))),
+  );
+}
 
 test("the landing document paints without a module graph", async ({ page }) => {
   const response = await page.goto(PATH);
@@ -37,6 +63,11 @@ test("how it works reads as three ruled steps in order, wide and narrow", async 
   const watched = watchConsole(page);
 
   await page.goto(PATH);
+  // The console read below is gated on the page's own network, not on the
+  // section's DOM: toHaveCount(3) is true before Instrument Sans lands, and a
+  // failed font fetch logs after it. e2e/console-clean.spec.ts holds the same
+  // route's console gate at full strength; this keeps the in-test read honest.
+  await expectBrandFacesLoaded(page);
 
   const section = page.locator("#how-it-works");
   const steps = section.locator("ol > li");
@@ -78,6 +109,9 @@ test("the agents section hands a visitor's agent the MCP address and the API doc
   const watched = watchConsole(page);
 
   await page.goto(PATH);
+  // As above: the console read waits on the page's own network, not on the
+  // section's first paint.
+  await expectBrandFacesLoaded(page);
 
   const agents = page.locator("#agents");
   await expect(agents.getByText("https://0509.io/mcp")).toBeVisible();
@@ -113,9 +147,9 @@ test("the hero's first viewport holds the outcome and the one priced input", asy
   });
 
   await page.goto(PATH);
-  await expectFaceLoaded(page, "Bricolage Grotesque", 800);
-  await expectFaceLoaded(page, "Instrument Sans", 400);
-  await expectFaceLoaded(page, "IBM Plex Mono", 400);
+  // The fullFace log below is read after the hero assertions, so the polls
+  // here are what makes that read complete.
+  await expectBrandFacesLoaded(page);
 
   const hero = page.locator("#hero");
   const pieces = [
@@ -271,17 +305,13 @@ test("the ticker never scrolls the page sideways", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto(PATH);
   await expect(page.locator("#ticker")).toBeVisible();
-  await expectFaceLoaded(page, "Bricolage Grotesque", 800);
-  await expectFaceLoaded(page, "Instrument Sans", 400);
-  await expectFaceLoaded(page, "IBM Plex Mono", 400);
+  await expectBrandFacesLoaded(page);
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
 
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto(PATH);
   await expect(page.locator("#ticker")).toBeVisible();
-  await expectFaceLoaded(page, "Bricolage Grotesque", 800);
-  await expectFaceLoaded(page, "Instrument Sans", 400);
-  await expectFaceLoaded(page, "IBM Plex Mono", 400);
+  await expectBrandFacesLoaded(page);
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(1440);
 });
 
@@ -298,9 +328,9 @@ test("the ticker causes no layout shift", async ({ page }) => {
   });
 
   await page.goto(PATH);
-  await expectFaceLoaded(page, "Bricolage Grotesque", 800);
-  await expectFaceLoaded(page, "Instrument Sans", 400);
-  await expectFaceLoaded(page, "IBM Plex Mono", 400);
+  // Every late swap has landed and had its reflow before __cls is read: the
+  // faces carry the shift window, and the frames carry the reflow.
+  await expectBrandFacesLoaded(page);
   expect(await page.evaluate(() => Reflect.get(window, "__cls"))).toBeLessThan(0.05);
 });
 
