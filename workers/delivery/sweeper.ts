@@ -2,7 +2,7 @@ export const NIGHTLY_CRON = "0 3 * * *";
 
 export const SELECT_STALE_PENDING_DIGESTS = `SELECT id FROM digest WHERE status = 'pending' AND period_end < ? AND period_end >= ?`;
 
-export const SELECT_STALE_PENDING_ATTEMPTS = `SELECT DISTINCT a.digest_id FROM send_attempt a
+const SELECT_STALE_PENDING_ATTEMPTS = `SELECT DISTINCT a.digest_id FROM send_attempt a
      JOIN digest d ON d.id = a.digest_id
      WHERE a.status = 'pending' AND a.attempted_at < ? AND d.status <> 'failed' AND d.period_end >= ?`;
 
