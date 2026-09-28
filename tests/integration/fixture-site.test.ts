@@ -21,14 +21,26 @@ import worker from "../../workers/fixture-site";
  */
 const TOKEN = "integration-token";
 
-const state = () => env.STATE.getByName("fixture");
+// The two hostnames the production Worker serves (0509#4124). Every flag lives in
+// the Durable Object named for the request's host, so `fixture.0509.in` (J5/J7)
+// and `j8.fixture.0509.in` (J8) never see each other's state. Existing cases keep
+// their requests on the fixture host.
+const FIXTURE_HOST = "fixture.0509.in";
+const J8_HOST = "j8.fixture.0509.in";
 
-const get = () =>
-  worker.fetch(new Request("https://fixture.0509.in/"), env, createExecutionContext());
+const state = (host = FIXTURE_HOST) => env.STATE.getByName(host);
 
-const flip = (mode: string, token: string | null = TOKEN, method = "POST") =>
+const get = (host = FIXTURE_HOST) =>
+  worker.fetch(new Request(`https://${host}/`), env, createExecutionContext());
+
+const flip = (
+  mode: string,
+  token: string | null = TOKEN,
+  method = "POST",
+  host = FIXTURE_HOST,
+) =>
   worker.fetch(
-    new Request(`https://fixture.0509.in/__break?mode=${mode}`, {
+    new Request(`https://${host}/__break?mode=${mode}`, {
       method,
       headers: token === null ? {} : { authorization: `Bearer ${token}` },
     }),
@@ -36,9 +48,14 @@ const flip = (mode: string, token: string | null = TOKEN, method = "POST") =>
     createExecutionContext(),
   );
 
-const setPrice = (variant: string, token: string | null = TOKEN, method = "POST") =>
+const setPrice = (
+  variant: string,
+  token: string | null = TOKEN,
+  method = "POST",
+  host = FIXTURE_HOST,
+) =>
   worker.fetch(
-    new Request(`https://fixture.0509.in/__price?variant=${variant}`, {
+    new Request(`https://${host}/__price?variant=${variant}`, {
       method,
       headers: token === null ? {} : { authorization: `Bearer ${token}` },
     }),
@@ -46,9 +63,14 @@ const setPrice = (variant: string, token: string | null = TOKEN, method = "POST"
     createExecutionContext(),
   );
 
-const setWall = (state: string, token: string | null = TOKEN, method = "POST") =>
+const setWall = (
+  wallState: string,
+  token: string | null = TOKEN,
+  method = "POST",
+  host = FIXTURE_HOST,
+) =>
   worker.fetch(
-    new Request(`https://fixture.0509.in/__wall?state=${state}`, {
+    new Request(`https://${host}/__wall?state=${wallState}`, {
       method,
       headers: token === null ? {} : { authorization: `Bearer ${token}` },
     }),
@@ -326,5 +348,70 @@ describe("bot wall", () => {
     expect(await state().get("bot-wall")).toBe("off");
     await flip("off");
     expect(readPricing(await (await get()).text())).not.toBeNull();
+  });
+});
+
+describe("per-hostname state", () => {
+  // Each hostname gets its own Durable Object, named for the request's host
+  // (0509#4124), so J8 on its own subdomain cannot disturb J5/J7 on the fixture
+  // host. Reset both hosts: a flip in one case must not leak into the next.
+  beforeEach(async () => {
+    for (const host of [FIXTURE_HOST, J8_HOST]) {
+      await state(host).put("break-mode", "off");
+      await state(host).put("bot-wall", "off");
+      await state(host).put("price-variant", "base");
+      await state(host).delete("price-flipped-at");
+    }
+  });
+
+  it("keeps j8's hard break off the fixture host", async () => {
+    const breakCtx = createExecutionContext();
+    await worker.fetch(
+      new Request(`https://${J8_HOST}/__break?mode=hard`, {
+        method: "POST",
+        headers: { authorization: `Bearer ${TOKEN}` },
+      }),
+      env,
+      breakCtx,
+    );
+    await waitOnExecutionContext(breakCtx);
+
+    const j8 = await get(J8_HOST);
+    expect(j8.status).toBe(500);
+    expect(await state(J8_HOST).get("break-mode")).toBe("hard");
+
+    const fixture = await get();
+    expect(fixture.status).toBe(200);
+    expect(await fixture.text()).toContain('data-mode="off"');
+    expect(await state().get("break-mode")).toBe("off");
+  });
+
+  it("keeps a fixture-host price flip off j8's page", async () => {
+    const priceCtx = createExecutionContext();
+    await worker.fetch(
+      new Request(`https://${FIXTURE_HOST}/__price?variant=raised`, {
+        method: "POST",
+        headers: { authorization: `Bearer ${TOKEN}` },
+      }),
+      env,
+      priceCtx,
+    );
+    await waitOnExecutionContext(priceCtx);
+
+    expect(await state().get("price-variant")).toBe("raised");
+
+    const j8 = await get(J8_HOST);
+    expect(j8.status).toBe(200);
+    expect(await j8.text()).toContain('data-variant="base"');
+    expect(await state(J8_HOST).get("price-variant")).toBe("base");
+  });
+
+  it("keeps a j8 wall flip off the fixture host", async () => {
+    expect((await setWall("on", TOKEN, "POST", J8_HOST)).status).toBe(200);
+    const j8 = await get(J8_HOST);
+    expect(j8.status).toBe(403);
+    const fixture = await get();
+    expect(fixture.status).toBe(200);
+    expect(await state().get("bot-wall")).toBe("off");
   });
 });

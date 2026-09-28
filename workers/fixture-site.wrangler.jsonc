@@ -7,8 +7,10 @@
 // docs/engines/delivery.md P7.5 requires the incident round-trip to run against
 // this fixture and no other host.
 //
-// The break and price state live in one SQLite Durable Object (0509#4305).
-// Workers KV could serve a stale break-mode for up to 60s at a POP, so a flip
+// The break and price state live in one SQLite Durable Object per hostname
+// (0509#4305). State is per hostname (0509#4124), so J8 on j8.fixture.0509.in
+// never disturbs J5/J7 on fixture.0509.in. Workers KV could serve a stale
+// break-mode for up to 60s at a POP, so a flip
 // could read healthy to the round-trip that just made it. Tag v1 creates the
 // class; wrangler applies it on deploy. There is no KV binding.
 //
@@ -32,5 +34,8 @@
     "bindings": [{ "name": "STATE", "class_name": "FixtureState" }]
   },
   "migrations": [{ "tag": "v1", "new_sqlite_classes": ["FixtureState"] }],
-  "routes": [{ "pattern": "fixture.0509.in", "custom_domain": true }]
+  "routes": [
+    { "pattern": "fixture.0509.in", "custom_domain": true },
+    { "pattern": "j8.fixture.0509.in", "custom_domain": true }
+  ]
 }
