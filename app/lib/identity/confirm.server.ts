@@ -3,6 +3,7 @@ import { z } from "zod";
 import { insertSelfEntity, readWorkspaceSelfId } from "../data/entity.server";
 import { insertFieldEdits, type FieldEdit } from "../data/user_decision.server";
 import { readUrl } from "../fetch/transport.server";
+import { takeBrowserEscalation } from "../site/browser-budget.server";
 import { readCachedSiteValues, readSiteCard } from "./card.server";
 import { extractIdentity } from "./extract";
 import { readLogo } from "./logo-store.server";
@@ -34,13 +35,19 @@ function field(form: FormData, name: string): string {
   return typeof value === "string" ? value : "";
 }
 
-async function creatorSite(socials: { platform: string; url: string }[]): Promise<Subject | null> {
+async function creatorSite(
+  socials: { platform: string; url: string }[],
+  workspaceId: string,
+): Promise<Subject | null> {
   const entry = socials.find((social) => social.platform === "site");
   if (entry === undefined) return null;
   const normalised = normaliseSubject(entry.url);
   if (!normalised.ok || normalised.subject.kind !== "domain") return null;
-  await readSiteCard(normalised.subject);
-  return normalised.subject;
+  const { subject } = normalised;
+  await readSiteCard(subject, () =>
+    takeBrowserEscalation(workspaceId, subject.registrable, new Date().toISOString().slice(0, 10)),
+  );
+  return subject;
 }
 
 async function classifyConfirmedSite(
@@ -51,7 +58,9 @@ async function classifyConfirmedSite(
 ): Promise<void> {
   if (subject.kind !== "domain" || subject.url === null) return;
   try {
-    const page = await readUrl(subject.url);
+    const page = await readUrl(subject.url, {
+      mayEscalate: () => takeBrowserEscalation(workspaceId, entityId, now.toISOString().slice(0, 10)),
+    });
     if (!page.ok) {
       console.log(
         JSON.stringify({ event: "identity-page-role-skipped", subject: subject.registrable, error: page.detail }),
@@ -128,7 +137,7 @@ export async function confirmCard(workspaceId: string, userId: string, form: For
     );
   }
   await classifyConfirmedSite(workspaceId, subject, entityId, now);
-  const site = subject.kind === "domain" ? null : await creatorSite(card.socials);
+  const site = subject.kind === "domain" ? null : await creatorSite(card.socials, workspaceId);
   await startIdentityTail({
     workspaceId,
     entityId,

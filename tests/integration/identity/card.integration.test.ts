@@ -7,10 +7,20 @@ import { extractIdentity } from "../../../app/lib/identity/extract";
 import { normaliseSubject } from "../../../app/lib/identity/normalise";
 import { probeKey } from "../../../app/lib/identity/probe-cache.server";
 import { identityTailInstanceId } from "../../../app/lib/identity/tail.server";
+import { takeBrowserEscalation } from "../../../app/lib/site/browser-budget.server";
 import gym from "../../fixtures/gymshark-2026-09-22-a.html?raw";
 
 const NOW = "2026-09-24T00:00:00Z";
 const LOGO_HOST = "images.ctfassets.net";
+
+const BOT_GATED_HTML = `<!doctype html>
+<html>
+  <head>
+    <title>Botgated</title>
+    <meta property="og:description" content="A description that only the browser could read">
+  </head>
+  <body><h1>Botgated</h1></body>
+</html>`;
 
 function isLogo(url: string): boolean {
   return new URL(url).hostname === LOGO_HOST;
@@ -31,6 +41,38 @@ function stubWeb(homepage: (url: string) => Response) {
     return Promise.resolve(homepage(url));
   });
   return calls;
+}
+
+interface BrowserStub {
+  calls: string[];
+  quickAction(action: "content", options: { url: string }): Promise<Response>;
+}
+
+let browser: BrowserStub | null = null;
+
+function installBrowser(): void {
+  Object.defineProperty(env, "BROWSER", {
+    configurable: true,
+    get() {
+      return browser ?? undefined;
+    },
+  });
+}
+
+function stubBrowser(html: string): BrowserStub {
+  const calls: string[] = [];
+  return {
+    calls,
+    quickAction(_action: "content", options: { url: string }): Promise<Response> {
+      calls.push(options.url);
+      return Promise.resolve(
+        new Response(JSON.stringify({ success: true, result: html, meta: { status: 200 } }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+      );
+    },
+  };
 }
 
 async function settledTail(): Promise<void> {
@@ -86,6 +128,7 @@ beforeEach(async () => {
 afterEach(() => {
   vi.unstubAllGlobals();
   Reflect.deleteProperty(env, "AI");
+  browser = null;
 });
 
 describe("startCard", () => {
@@ -192,6 +235,48 @@ describe("startCard", () => {
     expect(site.description).toBeNull();
     expect(site.unfound).toBe(false);
     expect(await card.logo).toBeNull();
+  });
+
+  it("fills a bot-gated homepage through exactly one budgeted browser escalation", async () => {
+    stubAi(0.95);
+    stubWeb(() => new Response("blocked", { status: 403 }));
+    const stub = stubBrowser(BOT_GATED_HTML);
+    browser = stub;
+    installBrowser();
+
+    const site = await startCard("ws-1", subjectFor("botgatedbudget.com"), []).site;
+
+    expect(site.name).toBe("Botgated");
+    expect(site.description).toBe("A description that only the browser could read");
+    expect(site.unfound).toBe(false);
+    expect(site.review).toEqual({ name: "fill", description: "fill", socials: "empty" });
+    expect(stub.calls).toEqual(["https://botgatedbudget.com/"]);
+  });
+
+  it("returns the unreached card without a browser call when the day's budget is spent", async () => {
+    const subject = subjectFor("botgatedspent.com");
+    const day = new Date().toISOString().slice(0, 10);
+    for (let attempt = 0; attempt < 4; attempt += 1) {
+      expect(await takeBrowserEscalation("ws-1", subject.registrable, day)).toBe(true);
+    }
+    const calls = stubWeb(() => new Response("blocked", { status: 403 }));
+    const stub = stubBrowser(BOT_GATED_HTML);
+    browser = stub;
+    installBrowser();
+
+    const card = startCard("ws-1", subject, []);
+
+    expect(await card.site).toEqual({
+      name: null,
+      description: null,
+      socials: [],
+      review: { name: "empty", description: "empty", socials: "empty" },
+      unfound: true,
+    });
+    expect(await card.logo).toBeNull();
+    expect(stub.calls).toEqual([]);
+    expect(calls).toEqual(["https://botgatedspent.com/"]);
+    expect((await env.IDENTITY_CACHE.list()).keys).toEqual([]);
   });
 });
 
