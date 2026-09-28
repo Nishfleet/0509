@@ -66,6 +66,7 @@ describe("workflow Sentry cron monitors", () => {
       unchanged: 0,
       changed: 0,
       rechecked: 0,
+      recorded: true,
     });
   });
 

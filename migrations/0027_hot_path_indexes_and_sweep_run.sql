@@ -20,12 +20,14 @@
 -- `DELETE FROM "user"` scans onboarding_run and user_decision, and deleting
 -- the cascaded workspace row scans incident, send_attempt and signal_delivery
 -- (`DELETE FROM workspace` shows the three). The audit named
--- idx_onboarding_run_user for the first of these. A sixth is incident.page_id:
--- its only index is the partial `idx_incident_one_open_per_page`
--- (WHERE closed_at IS NULL), which cannot serve a cascade delete, so the gate
--- counts partial indexes as not covering. The remaining unindexed FK children
--- stay allowlisted in the gate; their parents are deleted on live paths too
--- (competitor forget deletes entity), and #5938 owns indexing them.
+-- idx_onboarding_run_user for the first of these. A sixth is incident.page_id,
+-- hit by the page-delete cascade inside the same account delete: its only
+-- index is the partial `idx_incident_one_open_per_page` (WHERE closed_at IS
+-- NULL), which cannot serve a cascade delete, so the gate counts partial
+-- indexes as not covering. That closes this migration's scope — the
+-- account-delete and page-delete chains. The entity cascade (competitor
+-- forget deletes entity, scanning user_decision and suggestion) and every
+-- other unindexed FK child stay allowlisted in the gate; #5938 owns them.
 --
 -- Same migration, audit §V8: PR #5326 added sweep_run and was closed unmerged
 -- over a migration-number collision, so the table never landed while #5304,
