@@ -184,7 +184,10 @@ export function startCard(
   const logo = read.then(async ({ card, reached }) => {
     if (!reached) return null;
     const cached = await cachedProbe(subject, "icon", logoSchema, async () => {
-      const url = await firstStorableLogo(subject.registrable, { ...card.logoCandidates, registrableDomain: subject.registrable });
+      const url = await firstStorableLogo(subject.registrable, {
+        ...card.logoCandidates,
+        registrableDomain: subject.registrable,
+      });
       return { v: 2, url };
     });
     const url = cached.url;
