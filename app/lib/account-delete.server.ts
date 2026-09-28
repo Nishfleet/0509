@@ -37,7 +37,7 @@ export async function deleteAccount(
 function deleteInstanceCookie() {
   return createCookie(DELETE_INSTANCE_COOKIE, {
     httpOnly: true,
-    maxAge: 60 * 60,
+    maxAge: 60 * 60 * 24,
     path: "/login",
     sameSite: "lax",
     secrets: [env.BETTER_AUTH_SECRET],
@@ -51,9 +51,7 @@ export async function sealAccountDeleteInstanceId(instanceId: string, request: R
 }
 
 export async function readAccountDeleteInstanceId(request: Request): Promise<string | null> {
-  const parsed: unknown = await deleteInstanceCookie()
-    .parse(request.headers.get("cookie"))
-    .catch(() => null);
+  const parsed: unknown = await deleteInstanceCookie().parse(request.headers.get("cookie"));
   return typeof parsed === "string" && parsed.length > 0 ? parsed : null;
 }
 

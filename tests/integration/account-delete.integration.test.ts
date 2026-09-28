@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { createAuth, deleteSignedInUser } from "../../app/lib/auth.server";
 import { firstWorkspaceId } from "../../app/lib/workspace.server";
 import {
+  deleteAccount,
   readAccountDeleteProgress,
   sealAccountDeleteInstanceId,
 } from "../../app/lib/account-delete.server";
@@ -216,5 +217,31 @@ describe("delete my account", () => {
     } as never);
     expect(owned.id).toBe(id);
     expect(owned.progress).toEqual({ rows: "removed", files: "removed", deleted: 1 });
+  });
+
+  it("seals the Workflow instance id on the headers the deleting browser leaves with", async () => {
+    const { cookie, userId } = await signIn();
+    const helpers = {
+      listUserGrants: async () => ({ items: [] }),
+      revokeGrant: async () => undefined,
+    };
+
+    const secureCookie = cookie.replace("better-auth.session_token=", "__Secure-better-auth.session_token=");
+    const deleted = await deleteAccount(helpers as never, settingsRequest(secureCookie), userId);
+
+    if (deleted === null) throw new Error("deleteAccount refused a fresh session");
+    const baked = deleted.headers.getSetCookie().find((header) => header.startsWith("account-delete="));
+    if (baked === undefined) throw new Error("no account-delete cookie on the delete headers");
+    expect(baked).toContain("HttpOnly");
+    expect(baked).toContain("Max-Age=86400");
+    expect(baked).toContain("Path=/login");
+    expect(baked).toContain("SameSite=Lax");
+
+    const pair = baked.split(";")[0];
+    if (!pair) throw new Error("the account-delete cookie carried no pair");
+    const page = `${ORIGIN}/login?deleted=${deleted.instanceId}`;
+    const shown = await loginLoader({ request: new Request(page, { headers: { cookie: pair } }) } as never);
+    expect(shown.id).toBe(deleted.instanceId);
+    expect(shown.progress).not.toBeNull();
   });
 });
