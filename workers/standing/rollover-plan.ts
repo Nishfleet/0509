@@ -15,8 +15,7 @@ export const UNRANKED_LOOKBACK_MS = 16 * 24 * 60 * 60 * 1000;
 const WORKSPACE_SCHEDULES = `SELECT DISTINCT w.id, w.timezone, w.brief_weekday, w.brief_hour, w.brief_paused_at
 FROM entity e
 INNER JOIN workspace w ON w.id = e.workspace_id
-INNER JOIN "user" u ON u.id = w.owner_user_id
-WHERE e.role = 'self' AND e.state = 'on' AND (u.email IS NULL OR u.email NOT LIKE 'e2e+%')
+WHERE e.role = 'self' AND e.state = 'on'
 ORDER BY w.id`;
 
 const WORKSPACE_SCHEDULE = `SELECT id, timezone, brief_weekday, brief_hour, brief_paused_at FROM workspace WHERE id = ?1`;
@@ -24,9 +23,7 @@ const WORKSPACE_SCHEDULE = `SELECT id, timezone, brief_weekday, brief_hour, brie
 const UNRANKED_WEEKS = `SELECT s.workspace_id AS workspace_id, s.week_start_at AS week_start_at
 FROM standing s
 INNER JOIN entity e ON e.workspace_id = s.workspace_id AND e.role = 'self' AND e.state = 'on'
-INNER JOIN workspace w ON w.id = s.workspace_id
-INNER JOIN "user" u ON u.id = w.owner_user_id
-WHERE (u.email IS NULL OR u.email NOT LIKE 'e2e+%') AND s.week_start_at >= ?1
+WHERE s.week_start_at >= ?1
 GROUP BY s.workspace_id, s.week_start_at
 HAVING COUNT(s.rank) = 0`;
 
@@ -82,11 +79,25 @@ export async function readUnrankedWeeks(db: D1Database, now: Date): Promise<Read
   );
 }
 
+export interface CatchUp {
+  workspaceId: string;
+  closesAt: Date;
+}
+
+export async function loadNightlyPlan(
+  db: D1Database,
+  now: Date,
+): Promise<{ workspaces: number; scheduled: RolloverInstance[]; catchUpAt: CatchUp[] }> {
+  const [workspaces, unranked] = await Promise.all([readWorkspaceSchedules(db), readUnrankedWeeks(db, now)]);
+  const { scheduled, catchUpAt } = planRollovers(workspaces, unranked, now);
+  return { workspaces: workspaces.length, scheduled, catchUpAt };
+}
+
 export function planRollovers(
   workspaces: readonly WorkspaceSchedule[],
   unrankedWeekStarts: ReadonlySet<string>,
   now: Date,
-): { scheduled: RolloverInstance[]; catchUpAt: { workspaceId: string; closesAt: Date }[] } {
+): { scheduled: RolloverInstance[]; catchUpAt: CatchUp[] } {
   const scheduled: RolloverInstance[] = [];
   const catchUpAt: { workspaceId: string; closesAt: Date }[] = [];
   for (const workspace of workspaces) {

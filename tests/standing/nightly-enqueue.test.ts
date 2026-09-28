@@ -1,18 +1,15 @@
-import { readFile } from "node:fs/promises";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
-
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { openWeek, previousBriefAt, rolloverInstance, type BriefSchedule } from "../../app/lib/brief-schedule";
 import {
   CATCH_UP_GRACE_MS,
+  createRollovers,
+  loadNightlyPlan,
   planRollovers,
   unrankedWeekKey,
   type WorkspaceSchedule,
 } from "../../workers/standing/rollover-plan";
 
-const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const UTC_MONDAY: BriefSchedule = { timezone: "UTC", weekday: 1, hour: 8 };
 const NOW = new Date("2026-09-24T03:00:00.000Z");
 const WS = "ws_due";
@@ -21,20 +18,50 @@ function workspace(id: string): WorkspaceSchedule {
   return { workspaceId: id, schedule: UTC_MONDAY, briefPausedAt: null };
 }
 
+function scheduleRow(id: string) {
+  return {
+    id,
+    timezone: UTC_MONDAY.timezone,
+    brief_weekday: UTC_MONDAY.weekday,
+    brief_hour: UTC_MONDAY.hour,
+    brief_paused_at: null,
+  };
+}
+
+function fakeDb(schedules: ReturnType<typeof scheduleRow>[], unranked: { workspace_id: string; week_start_at: string }[]) {
+  const prepares: string[] = [];
+  return {
+    prepares,
+    db: {
+      prepare(sql: string) {
+        prepares.push(sql);
+        const results = sql.includes("FROM standing") ? unranked : schedules;
+        const stmt = {
+          bind: () => stmt,
+          all: async () => ({ results }),
+        };
+        return stmt;
+      },
+    } as unknown as D1Database,
+  };
+}
+
 describe("nightly standing enqueue (0509#5753)", () => {
-  it("fails if the nightly cron awaits per-workspace work instead of enqueueing", async () => {
-    const source = await readFile(path.join(REPO_ROOT, "workers/standing/nightly.ts"), "utf8");
-    const plan = await readFile(path.join(REPO_ROOT, "workers/standing/rollover-plan.ts"), "utf8");
-    expect(source).toContain("createRollovers");
-    expect(plan).toMatch(/week_start_at >= \?1/);
-    expect(plan).toContain("UNRANKED_LOOKBACK_MS");
-    expect(source).toMatch(/rolloverInstance\([\s\S]*"catch-up"/);
-    expect(source).not.toContain("refreshWorkspaceScores");
-    expect(source).not.toContain("planWorkspace");
-    expect(source).not.toMatch(/reduce\s*(?:<[^>]*>)?\s*\(\s*async/);
-    expect(source).not.toMatch(/for await\s*\(/);
-    expect(source).not.toMatch(/Promise\.all\(\s*\w+\.map\(\s*async/);
-    expect(source).not.toMatch(/for\s*\([^)]*\sof\s[^)]+\)\s*\{[^}]*\bawait\b/);
+  it("loads every due workspace with two queries and one createBatch, never per-workspace scoring", async () => {
+    const count = 50;
+    const rows = Array.from({ length: count }, (_, index) => scheduleRow(`ws_${String(index)}`));
+    const { prepares, db } = fakeDb(rows, []);
+    const createBatch = vi.fn(async (batch: unknown[]) => batch);
+    const plan = await loadNightlyPlan(db, NOW);
+    const created = await createRollovers({ createBatch } as never, plan.scheduled);
+
+    expect(prepares).toHaveLength(2);
+    expect(plan.workspaces).toBe(count);
+    expect(plan.scheduled).toHaveLength(count);
+    expect(plan.catchUpAt).toEqual([]);
+    expect(createBatch).toHaveBeenCalledTimes(1);
+    expect(created).toBe(count);
+    expect(prepares.join("\n")).not.toMatch(/refreshWorkspaceScores|planWorkspace/);
   });
 
   it("schedules the next close and a catch-up when the last week is unranked past grace", () => {

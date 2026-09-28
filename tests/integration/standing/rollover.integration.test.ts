@@ -470,18 +470,6 @@ describe("the nightly standing cron (0509#3978)", () => {
     expect(again).toMatchObject({ catchUps: 0 });
   });
 
-  it("does not enqueue a rollover for an e2e fixture workspace", async () => {
-    const schedule = scheduleOffsetFromToday(3);
-    await seedWorkspace(schedule, `e2e+nightly-${String(runs)}@0509.io`);
-    const now = new Date();
-    const week = openWeek(schedule, now);
-    const scheduled = rolloverInstance(WS, week.closesAt, "scheduled");
-    const catchUp = rolloverInstance(WS, week.startsAt, "catch-up");
-    await runNightlyStanding(env, now);
-    await expect(env.STANDING_ROLLOVER.get(scheduled.id)).rejects.toThrow();
-    await expect(env.STANDING_ROLLOVER.get(catchUp.id)).rejects.toThrow();
-  });
-
   it("does not enqueue a workspace with no self entity", async () => {
     const schedule = scheduleOffsetFromToday(3);
     const createdAt = new Date(Date.now() - 60 * 24 * hour).toISOString();
