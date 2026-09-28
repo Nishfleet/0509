@@ -45,7 +45,7 @@ function wikidataTerm(subject: Subject): string {
   return subject.registrable.split(".")[0] ?? subject.registrable;
 }
 
-async function probeSite(subject: Subject, mayEscalate?: ReadUrlOptions["mayEscalate"]): Promise<SiteCard> {
+async function probeSite(subject: Subject, mayEscalate: ReadUrlOptions["mayEscalate"]): Promise<SiteCard> {
   if (subject.url === null) throw new Error("no site to read");
   const page = await readUrl(subject.url, { mayEscalate });
   if (!page.ok) throw new Error(page.detail);
@@ -65,7 +65,7 @@ async function probeSite(subject: Subject, mayEscalate?: ReadUrlOptions["mayEsca
   };
 }
 
-async function probeProfile(subject: Subject, mayEscalate?: ReadUrlOptions["mayEscalate"]): Promise<SiteCard> {
+async function probeProfile(subject: Subject, mayEscalate: ReadUrlOptions["mayEscalate"]): Promise<SiteCard> {
   if (subject.url === null) throw new Error("no profile to read");
   const page = await readUrl(subject.url, { mayEscalate });
   if (!page.ok) throw new Error(page.detail);
@@ -97,7 +97,7 @@ function filledProfileFields(card: SiteCard): string[] {
 
 export async function readSiteCard(
   subject: Subject,
-  mayEscalate?: ReadUrlOptions["mayEscalate"],
+  mayEscalate: ReadUrlOptions["mayEscalate"],
 ): Promise<{ card: SiteCard; reached: boolean }> {
   if (subject.kind !== "domain") {
     const probe = profileProbe(subject);

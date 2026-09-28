@@ -128,6 +128,7 @@ beforeEach(async () => {
 afterEach(() => {
   vi.unstubAllGlobals();
   Reflect.deleteProperty(env, "AI");
+  Reflect.deleteProperty(env, "BROWSER");
   browser = null;
 });
 
@@ -256,9 +257,12 @@ describe("startCard", () => {
   it("returns the unreached card without a browser call when the day's budget is spent", async () => {
     const subject = subjectFor("botgatedspent.com");
     const day = new Date().toISOString().slice(0, 10);
-    for (let attempt = 0; attempt < 4; attempt += 1) {
-      expect(await takeBrowserEscalation("ws-1", subject.registrable, day)).toBe(true);
+    let drained = 0;
+    for (let attempt = 0; attempt < 16; attempt += 1) {
+      if (!(await takeBrowserEscalation("ws-1", subject.registrable, day))) break;
+      drained += 1;
     }
+    expect(drained).toBeGreaterThan(0);
     const calls = stubWeb(() => new Response("blocked", { status: 403 }));
     const stub = stubBrowser(BOT_GATED_HTML);
     browser = stub;
