@@ -155,6 +155,8 @@ check that cannot report blocks the queue forever.
 
 - Nothing merges on its own author's say-so. An independent reviewer or Nish,
   never the author reviewing itself.
+- A feature's finish line names a production artifact — a real row, run or
+  instance id — not only a green test (0509#5736).
 - Production state stays gated: secrets and provider mutations need Nish's
   explicit authorization. Merging a reviewed green PR is ordinary work.
 - Migrations (Nish 2026-09-24: "this is allowed too, use your best
