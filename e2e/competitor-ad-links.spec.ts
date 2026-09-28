@@ -10,9 +10,8 @@ import { consoleFailures, deleteCreatedAccount, requireInboxToken, signInWithMag
 
 // The competitor header's two outbound ad-library links, 0509#5845. Both open
 // in a new tab, each name leads with the visible text and appends the brand,
-// and neither
-// costs a request of ours: the hrefs are built by app/lib/competitor/
-// ad-library-links.ts and nothing is fetched on click.
+// and neither costs a request of ours: the hrefs are built by
+// app/lib/competitor/ad-library-links.ts and nothing is fetched on click.
 //
 // Two lanes, one contract, the split j6-keyboard.spec.ts uses:
 // - preview (PLAYWRIGHT_TEST_BASE_URL unset, the PR's own e2e run): the local
