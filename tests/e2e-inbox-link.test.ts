@@ -1,6 +1,6 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { extractMagicLink } from "../e2e/inbox";
+import { extractMagicLink, InboxReadError, readRawMessage, staleLinks, waitForMagicLink } from "../e2e/inbox";
 
 // J1's link extraction, pinned in a merge gate so a mail-format change fails
 // here rather than as a 120s production poll timeout (0509#3927). The app
@@ -118,4 +118,86 @@ describe("extractMagicLink", () => {
   it("unescapes &amp; in an HTML-only href", () => {
     expect(extractMagicLink(HTML_ONLY)).toBe(EXPECTED);
   });
+});
+
+// The pre-send read on the sign-in path (0509#5839) must tell a missing
+// message (404) from the inbox failing, so a 500 is never read as "nothing
+// stored".
+describe("readRawMessage", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("carries a non-200 answer as InboxReadError with its status", async () => {
+    vi.stubGlobal("fetch", () => Promise.resolve(new Response("", { status: 500 })));
+    const failure = readRawMessage("e2e+stale@0509.io", "token");
+    await expect(failure).rejects.toBeInstanceOf(InboxReadError);
+    await expect(failure).rejects.toMatchObject({ status: 500 });
+    await expect(failure).rejects.toThrow("inbox answered HTTP 500 for e2e+stale@0509.io");
+  });
+
+  it("carries 403 the same way, status included", async () => {
+    vi.stubGlobal("fetch", () => Promise.resolve(new Response("", { status: 403 })));
+    await expect(readRawMessage("e2e+stale@0509.io", "token")).rejects.toMatchObject({ status: 403 });
+  });
+
+  it("carries 404 so a caller can tell it from a failure", async () => {
+    vi.stubGlobal("fetch", () => Promise.resolve(new Response("", { status: 404 })));
+    await expect(readRawMessage("e2e+stale@0509.io", "token")).rejects.toMatchObject({ status: 404 });
+  });
+});
+
+// The pre-send read on the sign-in path (0509#5839): a fixed fixture address
+// still holds the previous run's spent link, so staleLinks is what the wait
+// skips. Only a 404 is nothing stored; every other inbox answer is a failure
+// that must name itself rather than hand back the spent link.
+describe("staleLinks", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("is empty when the inbox holds nothing for the address", async () => {
+    vi.stubGlobal("fetch", () => Promise.resolve(new Response("", { status: 404 })));
+    await expect(staleLinks("e2e+stale@0509.io", "token")).resolves.toEqual([]);
+  });
+
+  it("carries the link the address already has stored", async () => {
+    vi.stubGlobal("fetch", () => Promise.resolve(new Response(PLAIN, { status: 200 })));
+    await expect(staleLinks("e2e+stale@0509.io", "token")).resolves.toEqual([EXPECTED]);
+  });
+
+  it("is empty when the stored message carries no verify link", async () => {
+    vi.stubGlobal(
+      "fetch",
+      () => Promise.resolve(new Response("Subject: hello\n\nno link here", { status: 200 })),
+    );
+    await expect(staleLinks("e2e+stale@0509.io", "token")).resolves.toEqual([]);
+  });
+
+  it("rethrows a non-404 answer instead of reading it as nothing stored", async () => {
+    vi.stubGlobal("fetch", () => Promise.resolve(new Response("", { status: 403 })));
+    const failure = staleLinks("e2e+stale@0509.io", "token");
+    await expect(failure).rejects.toBeInstanceOf(InboxReadError);
+    await expect(failure).rejects.toMatchObject({ status: 403 });
+  });
+
+  it("rethrows an inbox failure carrying its status", async () => {
+    vi.stubGlobal("fetch", () => Promise.resolve(new Response("", { status: 500 })));
+    await expect(staleLinks("e2e+stale@0509.io", "token")).rejects.toBeInstanceOf(InboxReadError);
+  });
+
+  // The seam itself: what the pre-read found is what the poll skips, so a fixed
+  // address lands on the newer message and not on the stored, spent one.
+  it("keeps the poll off the link the pre-read found", async () => {
+    const stale = "https://0509.io/api/auth/magic-link/verify?token=stale&callbackURL=%2Fapp";
+    const fresh = "https://0509.io/api/auth/magic-link/verify?token=fresh&callbackURL=%2Fapp";
+    let stored = `Sign in to Five to Nine:\n\n${stale}`;
+    vi.stubGlobal("fetch", () => Promise.resolve(new Response(stored, { status: 200 })));
+    const exclude = await staleLinks("e2e+stale@0509.io", "token");
+    const pending = waitForMagicLink("e2e+stale@0509.io", "token", exclude);
+    setTimeout(() => {
+      stored = `Sign in to Five to Nine:\n\n${fresh}`;
+    }, 100);
+    await expect(pending).resolves.toBe(fresh);
+  }, 20_000);
 });
