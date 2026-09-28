@@ -45,12 +45,7 @@ export async function insertSnapshot(row: {
       row.r2Key,
       row.hash,
     ),
-    recordSourceLatestSnapshot({
-      watchId: row.watchId,
-      fetchedAt: row.fetchedAt,
-      itemCount: 1,
-      canaryCount: null,
-    }),
+    recordSourceLatestSnapshot(row.id),
   ]);
 }
 
@@ -77,12 +72,7 @@ export function insertWatchSnapshot(row: {
       row.itemCount,
       row.canaryCount,
     ),
-    recordSourceLatestSnapshot({
-      watchId: row.watchId,
-      fetchedAt: row.fetchedAt,
-      itemCount: row.itemCount,
-      canaryCount: row.canaryCount,
-    }),
+    recordSourceLatestSnapshot(row.id),
   ];
 }
 
@@ -141,11 +131,6 @@ export async function insertBoardSnapshot(row: {
       row.hash,
       row.itemCount,
     ),
-    recordSourceLatestSnapshot({
-      watchId: row.watchId,
-      fetchedAt: row.fetchedAt,
-      itemCount: row.itemCount,
-      canaryCount: null,
-    }),
+    recordSourceLatestSnapshot(row.id),
   ]);
 }

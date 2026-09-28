@@ -1,3 +1,4 @@
+import type { D1Migration } from "cloudflare:test";
 import { env } from "cloudflare:test";
 import { beforeEach, describe, expect, it } from "vitest";
 
@@ -6,7 +7,6 @@ import {
   insertBoardSnapshot,
   insertWatchSnapshot,
 } from "../../app/lib/data/snapshot.server";
-import type { D1Migration } from "cloudflare:test";
 
 const MIGRATION = "0026_source_latest_snapshot.sql";
 
@@ -16,6 +16,7 @@ const ENTITY = "ent-src-latest";
 const SOURCE = "src-latest-mentions";
 const SOURCE_BACKFILL = "src-latest-backfill";
 const WATCH = "watch-src-latest";
+const WATCH_TIE = "watch-src-latest-tie";
 const WATCH_BACKFILL = "watch-src-latest-backfill";
 const PAGE = "page-src-latest";
 const SEEDED_AT = "2026-09-24T00:00:00Z";
@@ -36,17 +37,21 @@ const latestFacts = async (sourceId: string): Promise<LatestFacts> => {
   return row;
 };
 
+const seedWatch = async (watchId: string, sourceId: string, targetKey = "acme"): Promise<void> => {
+  await env.DB.prepare(
+    "INSERT INTO watch (id, entity_id, source_id, target_key, is_active) VALUES (?1, ?2, ?3, ?4, 1)",
+  )
+    .bind(watchId, ENTITY, sourceId, targetKey)
+    .run();
+};
+
 const seedSource = async (sourceId: string, watchId: string): Promise<void> => {
   await env.DB.prepare(
     "INSERT INTO source (id, key, kind, platform, plugin_key) VALUES (?1, ?2, 'mentions', 'gdelt', ?3)",
   )
     .bind(sourceId, `test.${sourceId}`, sourceId)
     .run();
-  await env.DB.prepare(
-    "INSERT INTO watch (id, entity_id, source_id, target_key, is_active) VALUES (?1, ?2, ?3, 'acme', 1)",
-  )
-    .bind(watchId, ENTITY, sourceId)
-    .run();
+  await seedWatch(watchId, sourceId);
 };
 
 const seedBase = async (): Promise<void> => {
@@ -218,6 +223,65 @@ describe("source latest snapshot facts (0509#5724)", () => {
     });
   });
 
+  it("a deduplicated snapshot id does not move the facts", async () => {
+    await seedSource(SOURCE, WATCH);
+    await insertSnapshot({
+      id: "snap-site-retry",
+      watchId: WATCH,
+      pageId: PAGE,
+      fetchedAt: "2026-09-25T05:00:00Z",
+      r2Key: "snapshot/site/watch-src-latest/snap-site-retry.txt",
+      hash: "hash-site-retry",
+    });
+    await insertSnapshot({
+      id: "snap-site-retry",
+      watchId: WATCH,
+      pageId: PAGE,
+      fetchedAt: "2026-09-25T05:10:00Z",
+      r2Key: "snapshot/site/watch-src-latest/snap-site-retry.txt",
+      hash: "hash-site-retry",
+    });
+
+    expect(await latestFacts(SOURCE)).toEqual({
+      latest_fetched_at: "2026-09-25T05:00:00Z",
+      latest_item_count: 1,
+      latest_canary_count: null,
+    });
+  });
+
+  it("one source, two watches in the same tick: the first committed wins the tie", async () => {
+    await seedSource(SOURCE, WATCH);
+    await seedWatch(WATCH_TIE, SOURCE, "acme-campaign");
+    await env.DB.batch(
+      insertWatchSnapshot({
+        id: "snap-tie-a",
+        watchId: WATCH,
+        fetchedAt: "2026-09-25T06:00:00Z",
+        r2Key: "snapshot/mentions/gdelt/snap-tie-a.json",
+        hash: "hash-tie-a",
+        itemCount: 4,
+        canaryCount: 1,
+      }),
+    );
+    await env.DB.batch(
+      insertWatchSnapshot({
+        id: "snap-tie-b",
+        watchId: WATCH_TIE,
+        fetchedAt: "2026-09-25T06:00:00Z",
+        r2Key: "snapshot/mentions/gdelt/snap-tie-b.json",
+        hash: "hash-tie-b",
+        itemCount: 9,
+        canaryCount: 7,
+      }),
+    );
+
+    expect(await latestFacts(SOURCE)).toEqual({
+      latest_fetched_at: "2026-09-25T06:00:00Z",
+      latest_item_count: 4,
+      latest_canary_count: 1,
+    });
+  });
+
   it("backfill: the migration's own UPDATE seeds the facts from stored snapshots", async () => {
     await seedSource(SOURCE, WATCH);
     await seedSource(SOURCE_BACKFILL, WATCH_BACKFILL);
@@ -232,7 +296,9 @@ describe("source latest snapshot facts (0509#5724)", () => {
       .flatMap((one) => one.queries)
       .filter((query) => query.startsWith("UPDATE source"));
     expect(backfill).toHaveLength(1);
-    await env.DB.prepare(backfill[0] as string).run();
+    const statement = backfill.at(0);
+    if (statement === undefined) throw new Error("0026 backfill statement missing");
+    await env.DB.prepare(statement).run();
 
     expect(await latestFacts(SOURCE_BACKFILL)).toEqual({
       latest_fetched_at: "2026-09-25T02:00:00Z",

@@ -185,7 +185,7 @@ Per 1,000 page checks, priced from `REBUILD-COST.md` (2026-09-21):
 |---|---|---|
 | Unchanged page (fetch + extract + hash) — the common case | 1 subrequest, ~1.1 s wall, negligible CPU | free |
 | Changed page (escalation: 1 render + 1 screenshot ≈ 8 browser-seconds) | browser-seconds | at a 10% change rate: 100 × 8 s = **0.22 browser-hours** → **$0.02** |
-| D1 | 1 snapshot row per check + 1 signal row per published change | 1,000 + ~50 = **1,050 rows written** — 0.002% of the 50M included |
+| D1 | 1 snapshot row per check + 1 `source` latest-facts row per check + 1 signal row per published change | 2,000 + ~50 = **2,050 rows written** — 0.004% of the 50M included |
 | R2 | 1 text PUT per check + 2 screenshot PUTs per change | 1,200 Class A (**$0.005**), ~1 GB-mo (**$0.015**) |
 | Queue | 3 ops per check | 3,000 — **$0.0012** |
 | Jev | ~100 calls (changes only) | $0 on the seat, **$0.0016** at the measured market rate |
@@ -194,7 +194,7 @@ Per 1,000 page checks, priced from `REBUILD-COST.md` (2026-09-21):
 
 - Checks: 100 × 4 × 30 = 12,000 competitor + 100 × 24 × 30 = 72,000 self = **84,000 checks**.
 - Browser, at a 10% change rate and the 4-per-brand-per-day cap: ~8,400 escalations × 8 s = **18.7 browser-hours** → 8.7 h beyond the allotment → **$0.78/month**.
-- D1: **84,000 snapshot rows** + ~4,200 signal rows = 88,200 rows written — **0.18% of the 50M included** → **$0.00**.
+- D1: 84,000 snapshot + 84,000 `source` latest-facts + ~4,200 signal = **172,200 rows written** — **0.34% of the 50M included** → **$0.00**.
 - R2: ~101,000 Class A ops → **$0.45**; ~20 GB under the 1-year retention guardrail → **$0.30/month**, falling to the marks-only figure after the lifecycle rule expires the raw bodies.
 - Queues: 252,000 ops → **$0.10**.
 - Jev: ~8,400 calls → **$0 on the seat**, $0.13 at market.

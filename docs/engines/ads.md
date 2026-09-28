@@ -145,13 +145,13 @@ Per 1,000 ad pulls, priced from `REBUILD-COST.md` (2026-09-21):
 | Fetch pull (Reddit, TikTok API once approved) | subrequests | 1,000 — free |
 | Queue | 1 message × 3 ops, plus retries | 3,000 ops — **$0.0012** |
 | R2 | 1 payload PUT + ~2 creative image PUTs on a changed tick | ~3,000 Class A (**$0.0135**), ~0.5 GB-mo (**$0.008**) |
-| D1 | 1 snapshot row always + ~2 signal rows on a changed tick (~30% of ticks) | ~1,600 rows — **0.003% of the 50M included** |
+| D1 | 1 snapshot row always + 1 `source` latest-facts row + ~2 signal rows on a changed tick (~30% of ticks) | ~2,600 rows — **0.005% of the 50M included** |
 | Jev | ≤2 calls per changed pull ≈ 600 | $0 on the seat, **$0.0096** at the measured market rate |
 
 **Monthly at 100 brands**, daily cadence, Meta + Google browser plus Reddit fetch:
 
 - Browser: 100 × 2 × 6.97 s × 30 = **11.6 browser-hours** → 1.6 h beyond the allotment → **$0.15/month**.
-- D1: 100 × 3 × 30 = 9,000 snapshot rows + ~1,800 signal rows = **10,800 rows written**, 0.02% of the 50M included → **$0.00**.
+- D1: 100 × 3 × 30 = 9,000 snapshot + 9,000 `source` latest-facts + ~1,800 signal rows = **19,800 rows written**, 0.04% of the 50M included → **$0.00**.
 - R2: ~27,000 Class A ops → **$0.12**; ~4 GB stored under the 1-year guardrail retention → **$0.06**.
 - Queues: 27,000 ops → **$0.01**.
 - Jev: ~1,800 calls → **$0 on the seat**, $0.03 at market.
@@ -236,7 +236,7 @@ Per 1,000 ad pulls, priced from `REBUILD-COST.md` (2026-09-21):
 
 **PUSH.** `wip/issue-3891-p4`.
 
-**COST.** State D1 rows written per pull and the monthly total at 100 brands. It must not exceed 1 snapshot row + new creatives.
+**COST.** State D1 rows written per pull and the monthly total at 100 brands. It must not exceed 1 snapshot row + 1 `source` latest-facts row + new creatives.
 
 ### P5 — Reddit (fetch) and Google (browser) as rows
 

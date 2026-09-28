@@ -30,7 +30,7 @@ Every observed item becomes a `signal` row. Polls insert what they find; `tombst
 
 ### Candidate B — raw in R2, curated in D1
 
-A poll writes **one** `snapshot` row per watch per tick — `payload_r2_key`, `payload_hash`, `item_count` — with the body in R2. The same batch also updates the `source` row's `latest_fetched_at` / `latest_item_count` / `latest_canary_count` facts. An item becomes a `signal` row only once it has passed the judgments that decide it is worth showing: D5 for mentions, D3 or D6 for everything else.
+A poll writes **one** `snapshot` row per watch per tick — `payload_r2_key`, `payload_hash`, `item_count` — with the body in R2, and the same batch updates the `source` row's `latest_fetched_at` / `latest_item_count` / `latest_canary_count` facts, so that write is a second row written per check. An item becomes a `signal` row only once it has passed the judgments that decide it is worth showing: D5 for mentions, D3 or D6 for everything else.
 
 - `signal` is the curated set, and its size is bounded by what is worth telling the user, not by what was observed.
 - The hash gate is free: an unchanged page is a hash comparison, not a write and not a screenshot.
@@ -76,7 +76,7 @@ This is precisely the shape that produced the $105 rows-written bill: a row per 
 
 **`discovery_backlog`** — candidates below the discovery shortlist, keyed by normalised name, with their accumulated evidence. Never deleted; `promoted_at` records the run whose counts put it on the shortlist (docs/engines/competitor-discovery.md graft 2).
 
-**`source`** — the global registry. No workspace column by design: that is what makes a new source a row plus a plugin. Carries **`reliability`** (`official_api` / `rss` / `scraped_page` / `best_effort`) per the Jev contract, plus **`kind`** and **`platform`** per #3891, plus the denormalised **`latest_fetched_at`**, **`latest_item_count`** and **`latest_canary_count`** facts that the snapshot writer maintains in the same batch as every snapshot insert.
+**`source`** — the global registry. No workspace column by design: that is what makes a new source a row plus a plugin. Carries **`reliability`** (`official_api` / `rss` / `scraped_page` / `best_effort`) per the Jev contract, plus **`kind`** and **`platform`** per #3891, plus the denormalised **`latest_fetched_at`**, **`latest_item_count`** and **`latest_canary_count`** facts that the snapshot writer maintains in the same batch as every snapshot insert. They are written from the stored snapshot row rather than from the caller's arguments, so a deduplicated insert (`ON CONFLICT (id) DO NOTHING`) cannot move them, and they are historical: the snapshots they summarise cascade away with a deleted entity, and nothing recomputes them.
 
 The asymmetry between those last two is deliberate. `kind` is CHECKed to `ads` / `mentions` / `site` / `hiring`, because every view and every Jev question branches on it and a free-text value would leak into query logic as string matching. `platform` — meta, google, tiktok, linkedin, snap, x, pinterest, reddit, apple, amazon, greenhouse, gdelt, hn — carries **no** CHECK, because constraining it would put the platform roster inside a migration, which is exactly the rule the column exists to protect. `UNIQUE (platform, kind, plugin_key)` lets one platform serve several kinds: Meta ads and Meta mentions are two rows, not one.
 

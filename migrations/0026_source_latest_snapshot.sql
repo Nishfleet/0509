@@ -9,6 +9,10 @@
 -- the previous Worker version (which does not read these columns yet) keeps
 -- reading this schema unchanged. No DROP, no rename, no NOT NULL — a code
 -- rollback stays safe.
+--
+-- Historical facts, not a mirror: the rows they summarise cascade away with a
+-- deleted entity (0001_rebuild.sql) and are never restored, so these three
+-- columns keep reporting the last fetch a source made.
 
 ALTER TABLE source ADD COLUMN latest_fetched_at TEXT;
 ALTER TABLE source ADD COLUMN latest_item_count INTEGER;
