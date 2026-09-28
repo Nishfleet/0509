@@ -20,6 +20,7 @@ const auth = createAuth({
   EMAIL: { send: async () => ({ ok: true }) },
   SIGN_IN_EMAIL_LIMIT: env.SIGN_IN_EMAIL_LIMIT,
   SIGN_IN_IP_LIMIT: env.SIGN_IN_IP_LIMIT,
+  TURNSTILE_SECRET_KEY: "1x0000000000000000000000000000000AA",
   BETTER_AUTH_SECRET: "integration-test-secret",
   BETTER_AUTH_URL: "http://localhost:8787",
 });

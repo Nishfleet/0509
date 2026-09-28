@@ -5,7 +5,6 @@ export const PLANS = [
     id: "scout",
     name: "Scout",
     monthlyPriceEur: 10,
-    competitors: 5,
     limits: {
       competitors: 5,
       site_pages_scope: "home_pricing",
@@ -21,7 +20,6 @@ export const PLANS = [
     id: "starter",
     name: "Starter",
     monthlyPriceEur: 46,
-    competitors: 15,
     limits: {
       competitors: 15,
       site_pages_scope: "all",
@@ -37,7 +35,6 @@ export const PLANS = [
     id: "agency",
     name: "Agency",
     monthlyPriceEur: 136,
-    competitors: 50,
     limits: {
       competitors: 50,
       site_pages_scope: "all",

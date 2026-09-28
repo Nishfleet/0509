@@ -255,9 +255,11 @@ const STATIC_HOME_FONT_PRELOAD = {
       preload:
         "The static home must not preload a font. A preload holds the headline paint until the face arrives, so simulated LCP misses lighthouse-budget.json. The three faces stay on the @font-face rules with font-display: swap. Source: 0509#5580.",
       fontFace:
-        "The static home must not declare @font-face in the document. A face that finishes before the headline is a simulated-LCP dependency and misses lighthouse-budget.json. The three faces live in /home-faces.css, linked after </main>. Source: 0509#5598.",
-      facesLink:
-        "The static home must link /home-faces.css after </main>, so the headline paints before those faces are requested. Source: 0509#5598.",
+        "The static home must not declare @font-face in the document. A face that finishes before the headline is a simulated-LCP dependency and misses lighthouse-budget.json. The three faces live in /home-faces.css. Source: 0509#5598.",
+      scannerLink:
+        "The static home must not include a link element. The preload scanner fetches it before the headline paints, which puts /home-faces.css on the simulated LCP chain. Source: 0509#5630.",
+      lateFaces:
+        "The static home must append /home-faces.css from a load listener placed after </main>, so the brand faces are requested after the headline paints. Source: 0509#5630.",
     },
   },
   create(context) {
@@ -273,10 +275,18 @@ const STATIC_HOME_FONT_PRELOAD = {
         if (text.includes("@font-face")) {
           context.report({ node, messageId: "fontFace" });
         }
+        if (/<link\b/i.test(text)) {
+          context.report({ node, messageId: "scannerLink" });
+        }
         const mainEnd = text.lastIndexOf("</main>");
-        const facesLink = text.indexOf('href="/home-faces.css"');
-        if (mainEnd < 0 || facesLink < mainEnd) {
-          context.report({ node, messageId: "facesLink" });
+        const scriptAt = text.indexOf("<script>");
+        const scriptEnd = scriptAt < 0 ? -1 : text.indexOf("</script>", scriptAt);
+        const script = scriptAt >= 0 && scriptEnd > scriptAt ? text.slice(scriptAt, scriptEnd) : "";
+        const asksAfterLoad =
+          script.includes('addEventListener("load"') &&
+          script.includes('faces.href = "/home-faces.css"');
+        if (mainEnd < 0 || scriptAt < mainEnd || !asksAfterLoad) {
+          context.report({ node, messageId: "lateFaces" });
         }
       },
     };

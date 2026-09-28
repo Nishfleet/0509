@@ -1,3 +1,4 @@
+import { shortUtc } from "../short-utc";
 import { sourceName } from "../source-name";
 
 export const BLIND_REASON = "captured nothing for two ticks";
@@ -67,4 +68,15 @@ export function blindSources(
   }
 
   return blind.sort((a, b) => a.sourceKey.localeCompare(b.sourceKey));
+}
+
+export function blindAlertId(sourceId: string, workspaceId: string, now: Date): string {
+  return `source-blind-${sourceId}-${workspaceId}-${now.toISOString().slice(0, 10)}`;
+}
+
+export function blindAlertText(source: BlindSource): { title: string; body: string } {
+  return {
+    title: `${source.name} captured nothing for two ticks`,
+    body: `Last capture with items: ${source.lastGoodAt === null ? "never" : shortUtc(source.lastGoodAt)}. Nothing was removed from your brief.`,
+  };
 }

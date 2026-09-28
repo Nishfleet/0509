@@ -12,12 +12,15 @@ const MAX_MARKS = 3;
 
 export function ReadThisFirst({
   marks,
+  headingLevel = 3,
 }: {
   marks: BriefPayload["read_this_first"];
+  headingLevel?: 2 | 3;
 }): ReactElement {
+  const HeadingTag = headingLevel === 2 ? "h2" : "h3";
   return (
     <section data-brief-block="read-this-first" className={SECTION}>
-      <h3 className={HEAD}>Read this first</h3>
+      <HeadingTag className={HEAD}>Read this first</HeadingTag>
       {marks.length === 0 ? (
         <p className={BODY}>Nothing this week needed reading first.</p>
       ) : (
