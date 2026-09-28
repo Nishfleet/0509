@@ -248,17 +248,35 @@ jobs:
             test-results/
           retention-days: 7
 
-  e2e-production:
-    name: e2e-production
+  e2e-production-shard:
+    name: e2e-production shard ${{ matrix.shard }}
     # Not a required check, on purpose: it cannot run on a pull request, and a
     # required check that never reports blocks the merge queue forever.
-    if: github.event_name == 'deployment_status' && github.event.deployment_status.state == 'success'
+    if: >-
+      github.event_name == 'deployment_status' && github.event.deployment_status.state == 'success' &&
+      github.event.deployment_status.environment == 'production'
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    # The step below stops at 25 minutes and fails, so a run that is too slow is
+    # red. The job cap is only the backstop: hitting it reads as "cancelled",
+    # which is what a superseded deploy also reads as.
+    timeout-minutes: 35
+    # One suite in one job outran the 30 minute cap on every deploy and never
+    # gave a verdict (run 36468302758). Four shards each fit under it. No trace
+    # is uploaded: the repo is public and a trace can hold the Access cookie
+    # (0509#5999), so a failure is read from the job log. A newer
+    # deploy cancels the older one's shard: only the latest deploy needs a
+    # verdict, and merges 90 s apart already cancelled every run when the
+    # workflow-level group did it (35754511999, 35754574851); at job level only
+    # the superseded shard stops and the newest deploy still reports.
+    concurrency:
+      group: e2e-production-${{ matrix.shard }}
+      cancel-in-progress: true
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
     permissions:
       contents: read
-      issues: write
-      actions: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -269,9 +287,11 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npx playwright install --with-deps chromium
-      - name: Run the same suite against what was just deployed
+      - name: Run this shard of the suite against what was just deployed
         # @scheduled journeys run from e2e-scheduled.yml on their own clock: J12 now, J8 with its spec (0509#4124, 0509#4128).
-        run: npm run e2e -- --reporter=github,json --grep-invert @scheduled
+        # https://playwright.dev/docs/test-sharding
+        timeout-minutes: 25
+        run: npm run e2e -- --shard=${{ matrix.shard }}/4 --reporter=github,json --grep-invert @scheduled
         env:
           # Setting this switches playwright.config.ts out of webServer mode.
           PLAYWRIGHT_TEST_BASE_URL: ${{ github.event.deployment_status.environment_url }}
@@ -285,15 +305,36 @@ jobs:
           # J5 raises and lowers the fixture bot wall with this token (0509#4121).
           FIXTURE_SITE_TOKEN: ${{ secrets.FIXTURE_SITE_TOKEN }}
 
-      - name: Keep the trace when it fails
-        if: failure() || cancelled()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+  e2e-production:
+    name: e2e-production
+    needs: e2e-production-shard
+    # Always runs after the shards and is red unless every shard passed, so a
+    # cancelled or skipped shard never reads as green. The red issue is opened
+    # only for a real shard failure on the deploy that is still current, so a
+    # superseded deploy files nothing.
+    if: >-
+      always() && github.event_name == 'deployment_status' && github.event.deployment_status.state == 'success' &&
+      github.event.deployment_status.environment == 'production'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      issues: write
+      actions: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      SHARDS: ${{ needs.e2e-production-shard.result }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          name: playwright-report-production
-          path: playwright-report/
-          retention-days: 7
+          persist-credentials: false
+      - name: Is this still the current production deploy
+        id: current
+        run: echo "yes=$([ "$(gh api "repos/$GITHUB_REPOSITORY/deployments?environment=production&per_page=1" --jq '.[0].sha')" = "$DEPLOY_SHA" ] && echo true)" >> "$GITHUB_OUTPUT"
+        env:
+          DEPLOY_SHA: ${{ github.event.deployment.sha }}
       - name: Open or update the issue that dispatches the fix
-        if: failure() || cancelled()
+        if: env.SHARDS == 'failure' && steps.current.outputs.yes == 'true'
         id: red
         uses: JasonEtco/create-an-issue@1b14a70e4d8dc185e5cc76d3bec9eab20257b2c5 # v2.9.2
         env:
@@ -307,19 +348,19 @@ jobs:
       - name: Hand the issue to a worker
         # A GITHUB_TOKEN label fires no workflow, so dispatch by number;
         # agent.yml's Gate sizes it. needs-split alone left #4620 unworked.
-        if: (failure() || cancelled()) && steps.red.outputs.number
+        if: steps.red.outputs.number
         env:
-          GH_TOKEN: ${{ github.token }}
           N: ${{ steps.red.outputs.number }}
         run: gh workflow run agent-dispatch.yml --repo "$GITHUB_REPOSITORY" -f issue="$N"
       - name: Close the issue once this check is green again
-        if: success()
+        if: env.SHARDS == 'success'
         env:
-          GH_TOKEN: ${{ github.token }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           N=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search '"e2e-production red on main" in:title' --json number --jq '.[0].number // empty')
           [ -z "$N" ] || gh issue close "$N" --repo "$GITHUB_REPOSITORY" --reason completed --comment "Green again on $RUN_URL."
+      - name: Red unless every shard passed
+        run: test "$SHARDS" = success
 
   lighthouse:
     name: lighthouse
@@ -349,16 +390,55 @@ jobs:
           CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
           CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
           ENVIRONMENT_URL: ${{ github.event.deployment_status.environment_url }}
-      - name: Audit the deployed URL against the budgets
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Sign in a fresh e2e address and record the session cookie
+        # /app needs a better-auth session on top of CF_Authorization or the
+        # audit measures its redirect to /login (0509#5767). The lhci-session
+        # project is J1's magic-link sign-in over the request fixture — no
+        # browser, so no playwright install — and it leaves
+        # BETTER_AUTH_SESSION_COOKIE in the env for lighthouserc.cjs.
+        run: npx playwright test --project=lhci-session
+        env:
+          LHCI_SESSION: "1"
+          PLAYWRIGHT_TEST_BASE_URL: ${{ github.event.deployment_status.environment_url }}
+          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+          E2E_INBOX_TOKEN: ${{ secrets.E2E_INBOX_TOKEN }}
+      - name: Audit the deployed URLs against the budgets
         id: lhci
         uses: treosh/lighthouse-ci-action@3e7e23fb74242897f95c0ba9cabad3d0227b9b18 # v12
         with:
+          # / is the noindex rebuild notice until #4834 lands; the landing page
+          # it will replace lives at /design/landing today. The signed-in audit
+          # is /onboarding, not /app: a fresh e2e session's /app redirects there
+          # anyway, and Chrome does not carry the injected Cookie header across
+          # the redirect, so the follow loses the session and ends on the
+          # Access login page. Audited directly it returns 200 signed-in.
           urls: |
-            ${{ github.event.deployment_status.environment_url }}
+            ${{ github.event.deployment_status.environment_url }}/design/landing
+            ${{ github.event.deployment_status.environment_url }}/login
+            ${{ github.event.deployment_status.environment_url }}/onboarding
           budgetPath: ./lighthouse-budget.json
           configPath: ./lighthouserc.cjs
           uploadArtifacts: true
           temporaryPublicStorage: true
+      - name: Delete the signed-in e2e address
+        # The sign-in mints a real user+workspace+send_target row set on every
+        # deploy and nothing removed it (#5723's deleteCreatedAccount
+        # convention, request-only so the job still needs no browser).
+        # BETTER_AUTH_SESSION_COOKIE and LHCI_EMAIL arrive from GITHUB_ENV;
+        # always() so a failed audit does not leak the address either.
+        if: always()
+        run: npx playwright test --project=lhci-teardown
+        env:
+          LHCI_TEARDOWN: "1"
+          PLAYWRIGHT_TEST_BASE_URL: ${{ github.event.deployment_status.environment_url }}
+          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
       - name: Open or update the issue that dispatches the fix
         if: failure() || cancelled()
         id: red

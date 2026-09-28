@@ -24,6 +24,8 @@ const KEYS = [
   "SIGN_IN_IP_LIMIT",
   "AGENT_REGISTER_LIMIT",
   "PROBE_LIMIT",
+  "LIVENESS_PING_URL",
+  "SITE_SWEEP_PING_URL",
 ] as const;
 
 function configured() {
@@ -63,8 +65,6 @@ function namesOf(check: () => void) {
 
 describe("worker env", () => {
   beforeEach(() => {
-    Reflect.deleteProperty(globalThis, "LIVENESS_PING_URL");
-    Reflect.deleteProperty(globalThis, "SITE_SWEEP_PING_URL");
     useEnv({});
   });
 
@@ -87,14 +87,29 @@ describe("worker env", () => {
   });
 
   it("names a malformed URL without echoing it", () => {
-    useEnv({ ...configured(), BETTER_AUTH_URL: "not-a-url" });
-    Reflect.set(globalThis, "LIVENESS_PING_URL", "also-not-a-url");
-    Reflect.set(globalThis, "SITE_SWEEP_PING_URL", "sweep-not-a-url");
+    useEnv({
+      ...configured(),
+      BETTER_AUTH_URL: "not-a-url",
+      LIVENESS_PING_URL: "also-not-a-url",
+      SITE_SWEEP_PING_URL: "sweep-not-a-url",
+    });
     const error = namesOf(createWorkerEnvCheck());
     expect(error.names).toEqual(["BETTER_AUTH_URL", "LIVENESS_PING_URL", "SITE_SWEEP_PING_URL"]);
     expect(error.message).not.toContain("not-a-url");
     expect(error.message).not.toContain("also-not-a-url");
     expect(error.message).not.toContain("sweep-not-a-url");
+  });
+
+  it("reads the ping URLs off the Worker env, not globalThis", () => {
+    useEnv(configured());
+    Reflect.set(globalThis, "LIVENESS_PING_URL", "also-not-a-url");
+    Reflect.set(globalThis, "SITE_SWEEP_PING_URL", "sweep-not-a-url");
+    try {
+      expect(() => createWorkerEnvCheck()()).not.toThrow();
+    } finally {
+      Reflect.deleteProperty(globalThis, "LIVENESS_PING_URL");
+      Reflect.deleteProperty(globalThis, "SITE_SWEEP_PING_URL");
+    }
   });
 
   it("treats a blank secret as missing and does not invent one", () => {
