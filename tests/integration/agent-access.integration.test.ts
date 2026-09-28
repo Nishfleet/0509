@@ -2,6 +2,7 @@ import type { OAuthHelpers } from "@cloudflare/workers-oauth-provider";
 import { createExecutionContext, env } from "cloudflare:test";
 import { beforeAll, describe, expect, it } from "vitest";
 
+import { clientIp, withinLimit } from "../../app/lib/agent/client-limit.server";
 import { propsForApiKey } from "../../app/lib/agent/keys.server";
 import { createOAuthProvider } from "../../app/lib/agent/oauth.server";
 import { toolResult } from "../../app/lib/agent/mcp.server";
@@ -342,5 +343,32 @@ describe("agent access, scoped to one workspace", () => {
     expect(foreign.status).toBe(403);
     const own = await mcpResponse(from(new URL(env.BETTER_AUTH_URL).origin), { userId: a.userId, clientId: "test" });
     expect(own.status).toBe(200);
+  });
+
+  it("limits a request that carries no client IP, never waving it through", async () => {
+    const bare = new Request("http://localhost/api/v1/brief");
+    expect(clientIp(bare)).toBeNull();
+
+    const statuses: number[] = [];
+    const maxAttempts = 240;
+    for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+      const response = await apiResponse(
+        new Request("http://localhost/api/v1/brief", {
+          headers: { authorization: "Bearer 0509_not-a-real-key" },
+        }),
+        readAgentBrief,
+      );
+      statuses.push(response.status);
+      if (response.status === 429) break;
+    }
+    const first = statuses.indexOf(429);
+    expect(first).toBeGreaterThanOrEqual(0);
+    expect(first).toBeLessThan(maxAttempts);
+    expect(statuses.slice(0, first).every((status) => status === 401)).toBe(true);
+    expect(await withinLimit(env.AGENT_LIMIT, null)).toBe(false);
+  });
+
+  it("keeps a real client's per-IP bucket separate from the unidentified one", async () => {
+    expect(await withinLimit(env.AGENT_LIMIT, "203.0.113.210")).toBe(true);
   });
 });
