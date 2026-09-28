@@ -277,7 +277,7 @@ async function escalate(
 ): Promise<{ result: ReadUrlSuccess | null; cause: string }> {
   const content = await browserContent(url);
   if (!content.ok) {
-    if (content.cause.startsWith("browser call threw")) {
+    if (content.cause !== "browser binding is not configured") {
       logEscalation(url, null, reason);
     }
     return { result: null, cause: content.cause };

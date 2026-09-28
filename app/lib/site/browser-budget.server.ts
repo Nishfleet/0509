@@ -9,7 +9,10 @@ export async function takeBrowserEscalation(workspaceId: string, entityId: strin
 
 export async function browserContent(
   url: string,
-): Promise<{ ok: true; res: Response } | { ok: false; cause: string }> {
+): Promise<
+  | { ok: true; res: Response }
+  | { ok: false; cause: "browser binding is not configured" | `browser call threw (${string})` }
+> {
   if (!env.BROWSER || typeof env.BROWSER.quickAction !== "function") {
     return { ok: false, cause: "browser binding is not configured" };
   }
