@@ -174,6 +174,36 @@ describe("alerts mentions source pills (#4003 4/6)", () => {
     }
   });
 
+  it("degrades a malformed watch config instead of failing the read (#5827)", async () => {
+    await seedOwner(USER, WS, COMP);
+    // config_json is a free-form column, so a row written by an older version
+    // can be malformed. The degraded-preferring ordering must not turn that
+    // into a 500 on a page anonymous visitors read; the pill has to say so.
+    await seedWatch(`watch-${COMP}-youtube`, COMP, YOUTUBE_SRC, 1, "{");
+
+    try {
+      const entries = await readWorkspaceMentionSources(WS);
+      const youtube = entries.find((entry) => entry.source.key === "youtube.channel_rss");
+      if (!youtube) throw new Error("the watched YouTube mentions source must be read");
+      expect(sourcePillStatus(youtube.source, youtube.snapshot, NOW_MS)).toEqual({
+        state: "degraded",
+        reason: "watch config is unreadable",
+        lastGoodAt: null,
+      });
+
+      const registry = (await readRegistrySources()).filter((item) => item.source.key === "youtube.channel_rss");
+      const registryYoutube = registry[0];
+      if (!registryYoutube) throw new Error("the enabled YouTube source must be in the registry");
+      expect(sourcePillStatus(registryYoutube.source, registryYoutube.snapshot, NOW_MS)).toEqual({
+        state: "degraded",
+        reason: "watch config is unreadable",
+        lastGoodAt: null,
+      });
+    } finally {
+      await clearOwner(USER, WS, COMP);
+    }
+  });
+
   it("keeps a canary-zero snapshot readable so the pill can say why", async () => {
     await seedOwner(USER, WS, COMP);
     await seedWatch(`watch-${COMP}-hn`, COMP, HN_SRC, 1);

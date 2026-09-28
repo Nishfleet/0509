@@ -352,8 +352,20 @@ async function sweepOneYoutube(
       await requireEntityIdentityJson(watch.workspace_id, watch.entity_id),
     );
     if (lookup.status !== "id") {
-      if (lookup.status === "no-url") await flagNoChannel(watch.watch_id, now);
-      if (lookup.status === "unresolved") await flagLostChannel(watch.watch_id, now);
+      switch (lookup.status) {
+        case "no-url":
+          await flagNoChannel(watch.watch_id, now);
+          break;
+        case "unresolved":
+          await flagLostChannel(watch.watch_id, now);
+          break;
+        default: {
+          // Exhaustiveness, not a runtime branch: a fourth lookup status has to
+          // decide which flag it writes, or it writes none and the pill lies.
+          const unhandled: never = lookup;
+          throw new Error(`unhandled YouTube channel lookup: ${JSON.stringify(unhandled)}`);
+        }
+      }
       await markWatchPolled(watch.watch_id, now);
       return { items: 0, stored: 0, unjudged: 0 };
     }

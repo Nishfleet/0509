@@ -126,6 +126,25 @@ describe("stale YouTube channel", () => {
 		if (resolvedRead.status === "ok") expect(resolvedRead.degraded).toBeNull();
 	});
 
+	it("replaces a stale reason with the one that is true now", () => {
+		const first = "2026-09-24T23:01:56.000Z";
+		const second = "2026-09-25T00:00:00.000Z";
+		const noChannel = withNoChannel('{"kept":true}', first);
+		// The card gained a YouTube URL but the page never resolved: the watch's
+		// stored reason has to follow the card, not the first writer.
+		const lost = withLostChannel(noChannel, second);
+		expect(JSON.parse(lost)).toEqual({
+			kept: true,
+			degraded: { state: "degraded", reason: LOST_CHANNEL_REASON, at: second },
+		});
+		// And back, so neither direction is sticky.
+		const back = withNoChannel(lost, first);
+		expect(JSON.parse(back)).toEqual({
+			kept: true,
+			degraded: { state: "degraded", reason: NO_CHANNEL_REASON, at: first },
+		});
+	});
+
 	it("marks a watch degraded once, then clears that flag when a channel id is saved", () => {
 		const at = "2026-09-24T23:01:56.000Z";
 		const flagged = withLostChannel('{"kept":true}', at);

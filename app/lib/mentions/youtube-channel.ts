@@ -123,24 +123,28 @@ export function channelIdFromIdentity(raw: string): string | null {
 	return channelIdFromUrl(url);
 }
 
-export function withLostChannel(raw: string, at: string): string {
+// One flag slot, one truthful reason. A watch carries at most one degraded
+// reason, so the writer is keyed on the reason: the same reason twice is a
+// no-op, and a different reason replaces the stale one instead of leaving the
+// card describing what is no longer true (a "no channel" flag left standing
+// after the card gains a YouTube URL, or a "lost channel" flag after the card
+// loses its last one).
+function withDegradedReason(raw: string, reason: string, at: string): string {
 	const read = readWatchConfig(raw);
 	if (read.status !== "ok") throw new Error("watch config_json is unreadable");
-	if (read.degraded !== null) return raw;
+	if (read.degraded !== null && read.degraded.reason === reason) return raw;
 	return JSON.stringify({
 		...read.record,
-		degraded: { state: "degraded", reason: LOST_CHANNEL_REASON, at },
+		degraded: { state: "degraded", reason, at },
 	});
 }
 
+export function withLostChannel(raw: string, at: string): string {
+	return withDegradedReason(raw, LOST_CHANNEL_REASON, at);
+}
+
 export function withNoChannel(raw: string, at: string): string {
-	const read = readWatchConfig(raw);
-	if (read.status !== "ok") throw new Error("watch config_json is unreadable");
-	if (read.degraded !== null) return raw;
-	return JSON.stringify({
-		...read.record,
-		degraded: { state: "degraded", reason: NO_CHANNEL_REASON, at },
-	});
+	return withDegradedReason(raw, NO_CHANNEL_REASON, at);
 }
 
 export function withResolvedChannel(raw: string, channelId: string): string {
