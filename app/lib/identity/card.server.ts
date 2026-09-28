@@ -102,7 +102,6 @@ export async function readSiteCard(subject: Subject): Promise<{ card: SiteCard; 
       console.log(
         JSON.stringify({
           event: "identity-creator-card",
-          subject: subject.registrable,
           probe,
           filled: filledProfileFields(card),
         }),
@@ -110,7 +109,7 @@ export async function readSiteCard(subject: Subject): Promise<{ card: SiteCard; 
       return { card, reached: true };
     } catch (error) {
       console.log(
-        JSON.stringify({ event: "identity-creator-unreached", subject: subject.registrable, error: String(error) }),
+        JSON.stringify({ event: "identity-creator-unreached", error: String(error) }),
       );
       return { card: UNREACHED, reached: false };
     }
@@ -118,7 +117,7 @@ export async function readSiteCard(subject: Subject): Promise<{ card: SiteCard; 
   try {
     return { card: await cachedProbe(subject, "homepage", siteCardSchema, () => probeSite(subject)), reached: true };
   } catch (error) {
-    console.log(JSON.stringify({ event: "identity-site-unreached", subject: subject.registrable, error: String(error) }));
+    console.log(JSON.stringify({ event: "identity-site-unreached", error: String(error) }));
     return { card: UNREACHED, reached: false };
   }
 }
@@ -186,7 +185,7 @@ export function startCard(
     if (stored === null) return null;
     return toDataUrl(stored.contentType, stored.bytes);
   }).catch((error: unknown) => {
-    console.log(JSON.stringify({ event: "identity-logo-failed", subject: subject.registrable, error: String(error) }));
+    console.log(JSON.stringify({ event: "identity-logo-failed", workspaceId, error: String(error) }));
     return null;
   });
   return { site, logo };

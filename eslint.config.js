@@ -164,6 +164,19 @@ const GOOGLE_FONTS_BAN = {
     "Fonts are self-hosted (DESIGN.md). A Google Fonts link is render-blocking and broke the 1500 ms LCP budget once (fd1457288). Add the font file under public/ and an @font-face instead.",
 };
 
+const USER_DATA_NAME = "^(email|emails|userId|ip|input|raw|prompt|password|token|subject)$";
+const LOG_OR_CAPTURE_CALL =
+  "CallExpression:matches([callee.object.name='console'], [callee.name=/^capture(Exception|Message)$/], [callee.property.name=/^capture(Exception|Message)$/])";
+const NO_USER_DATA_IN_LOGS_MESSAGE =
+  "Logs and Sentry never carry customer data or prompt input: no email, user id, IP, raw input, prompt, subject, password or token, as a key, a value or a property read. Log the ids an operator needs (event, workspaceId) and an error message capped with .slice(0, 300). Privacy first (CLAUDE.md; docs/REBUILD-GUARDRAILS.md). Source: 0509#5776.";
+const NO_USER_DATA_IN_LOGS = [
+  {
+    selector: `${LOG_OR_CAPTURE_CALL} :matches(Property[key.name=/${USER_DATA_NAME}/], Property[value.name=/${USER_DATA_NAME}/], MemberExpression[property.name=/${USER_DATA_NAME}/])`,
+    message: NO_USER_DATA_IN_LOGS_MESSAGE,
+  },
+  { selector: `${LOG_OR_CAPTURE_CALL} > Identifier.arguments[name=/${USER_DATA_NAME}/]`, message: NO_USER_DATA_IN_LOGS_MESSAGE },
+];
+
 const BANNED_SYNTAX = [
   SUPPORT_ADDRESS_BAN,
   GOOGLE_FONTS_BAN,
@@ -384,7 +397,7 @@ export default tseslint.config(
         "error",
         { terms: WORKAROUND_TERMS, location: "anywhere" },
       ],
-      "no-restricted-syntax": ["error", ...BANNED_SYNTAX, FEED_STATE_LITERAL],
+      "no-restricted-syntax": ["error", ...BANNED_SYNTAX, ...NO_USER_DATA_IN_LOGS, FEED_STATE_LITERAL],
     },
   },
 
@@ -405,7 +418,7 @@ export default tseslint.config(
     files: ["app/**/*.{ts,tsx}", "workers/**/*.ts"],
     ignores: ["app/lib/data/**", "workers/e2e-inbox.ts", "workers/fixture-site.ts"],
     rules: {
-      "no-restricted-syntax": ["error", ...BANNED_SYNTAX, RAW_DML_WRITER, FEED_STATE_LITERAL],
+      "no-restricted-syntax": ["error", ...BANNED_SYNTAX, ...NO_USER_DATA_IN_LOGS, RAW_DML_WRITER, FEED_STATE_LITERAL],
     },
   },
 
@@ -417,6 +430,7 @@ export default tseslint.config(
       "no-restricted-syntax": [
         "error",
         ...BANNED_SYNTAX.filter((rule) => rule !== SUPPORT_ADDRESS_BAN),
+        ...NO_USER_DATA_IN_LOGS,
         RAW_DML_WRITER,
         FEED_STATE_LITERAL,
       ],
@@ -444,6 +458,7 @@ export default tseslint.config(
       "no-restricted-syntax": [
         "error",
         ...BANNED_SYNTAX.filter((rule) => rule !== DOMAIN_HOSTNAME_BAN),
+        ...NO_USER_DATA_IN_LOGS,
         RAW_DML_WRITER,
         FEED_STATE_LITERAL,
       ],
@@ -724,6 +739,7 @@ export default tseslint.config(
       "no-restricted-syntax": [
         "error",
         ...BANNED_SYNTAX,
+        ...NO_USER_DATA_IN_LOGS,
         RAW_DML_WRITER,
         ENV_DB_IN_ROUTES,
         FEED_STATE_LITERAL,
@@ -734,7 +750,7 @@ export default tseslint.config(
   {
     files: ["workers/sources/mentions/youtube.ts"],
     rules: {
-      "no-restricted-syntax": ["error", ...BANNED_SYNTAX, RAW_DML_WRITER],
+      "no-restricted-syntax": ["error", ...BANNED_SYNTAX, ...NO_USER_DATA_IN_LOGS, RAW_DML_WRITER],
     },
   },
 
