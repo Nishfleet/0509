@@ -1,0 +1,52 @@
+name: e2e-scheduled
+
+# Journeys that need calendar time or break the fixture for hours run here on
+# their own clock, never per deploy: ci.yml e2e-production inverts @scheduled
+# (0509#4124, 0509#4128). Not a required check.
+on:
+  schedule:
+    - cron: "5 10 * * 3"
+  workflow_dispatch:
+    inputs:
+      journey:
+        description: Journey to run now
+        type: choice
+        options: [j12]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: e2e-scheduled-${{ inputs.journey || 'j12' }}
+  cancel-in-progress: false
+
+jobs:
+  j12:
+    name: j12
+    if: github.event.schedule == '5 10 * * 3' || inputs.journey == 'j12'
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - name: Run J12 against production
+        run: npm run e2e -- e2e/j12-rollovers.spec.ts --project=desktop-1440 --retries=0 --reporter=github,list
+        env:
+          PLAYWRIGHT_TEST_BASE_URL: https://0509.io
+          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+          E2E_INBOX_TOKEN: ${{ secrets.E2E_INBOX_TOKEN }}
+      - name: Keep the trace when it fails
+        if: failure() || cancelled()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: playwright-report-j12
+          path: playwright-report/
+          retention-days: 7
