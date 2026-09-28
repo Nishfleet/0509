@@ -203,6 +203,32 @@ describe("checkPage (0509#4433)", () => {
     expect(browserHolder.current.calls).toEqual([`screenshot ${URL}`]);
   });
 
+  it("returns the already-stored screenshot on a retried check without spending budget (0509#5816)", async () => {
+    browserHolder.current = browserStub();
+    const first = await checkPage({ watchId: WATCH, pageId: PAGE, url: URL });
+    if (first.outcome !== "first") throw new Error("expected first");
+
+    const snapshotId = "retry-check";
+    const pngKey = `snapshot/site/${WATCH}/${snapshotId}.png`;
+    await env.SNAPSHOTS.put(pngKey, new Uint8Array([137, 80, 78, 71]));
+    readHolder.current = { ok: true, html: CHANGED_HTML, status: 200 };
+    let granted = 0;
+    const changed = await checkPage({
+      watchId: WATCH,
+      pageId: PAGE,
+      url: URL,
+      snapshotId,
+      mayScreenshot: async () => {
+        granted += 1;
+        return false;
+      },
+    });
+    if (changed.outcome !== "changed") throw new Error("expected changed");
+    expect(changed.screenshotKey).toBe(pngKey);
+    expect(granted).toBe(0);
+    expect(browserHolder.current.calls).toEqual([]);
+  });
+
   it("still stores the change with a null screenshotKey when the budget refuses (0509#5816)", async () => {
     browserHolder.current = browserStub();
     const first = await checkPage({ watchId: WATCH, pageId: PAGE, url: URL });

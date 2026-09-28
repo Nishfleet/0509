@@ -38,6 +38,8 @@ async function captureScreenshot(
   key: string,
   mayScreenshot: (() => Promise<boolean>) | undefined,
 ): Promise<string | null> {
+  const existing = await storedKey(key);
+  if (existing !== null) return existing;
   if (mayScreenshot === undefined) {
     logScreenshotMiss(url, "no screenshot budget granted");
     return null;
