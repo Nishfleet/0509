@@ -425,11 +425,11 @@ action that fills it.
 
 | Where | Copy |
 |---|---|
-| Home, second zero | "We're gathering the first week. Your first read-this-first lands by 14:20 today; the brief comes Monday 08:00." (a real Workflow time, never "soon") |
+| Home, second zero | "We're gathering the first week. Your first read-this-first comes with the brief on Monday 08:00." (a real Workflow time, never "soon") |
 | Read this first, quiet week | "Quiet week. 61 mentions, 2 site changes and no new ads checked — nothing crossed the bar." with the counts tappable |
 | Fewer than two ON brands | "Add a competitor to see where you stand." with the one input inline |
 | A row's evidence tab with nothing | "No site changes this week. We checked /pricing and /home daily — last at 06:02." |
-| Competitor page, just added | "Watching from today. The first ads and mentions land within the hour; site changes need a second snapshot, so the first mark comes tomorrow." |
+| Competitor page, just added | "Watching from today. The first mentions land in the nightly sweep; site changes need a second snapshot, so the first mark comes tomorrow." |
 | Alerts, nothing yet | "Nothing has interrupted you. When your own site breaks you'll get an email; everything else waits here." |
 | A degraded source | "X has been rate-limiting us since Friday. We show it as degraded rather than pretend the count is complete." |
 

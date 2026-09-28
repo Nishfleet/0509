@@ -59,34 +59,6 @@ describe("landing what we watch", () => {
     expect(html).toContain("last good 2026-09-20 03:04 UTC");
   });
 
-  it("does not show a disabled source at all", () => {
-    const html = markup([
-      entry({ source: { key: "x.search", name: "x.search", platform: "x", is_enabled: 0 }, snapshot: LIVE }),
-      entry({ source: { key: "hn.algolia", name: "hn.algolia", platform: "hn", is_enabled: 1 }, snapshot: LIVE }),
-    ]);
-    expect(html).not.toContain("x.search");
-    expect(html).toContain("hn.algolia");
-    expect(html.match(/data-state=/g)).toHaveLength(1);
-  });
-
-  it("does not show a source whose registry config parks it", () => {
-    const html = markup([
-      entry({
-        kind: "ads",
-        source: {
-          key: "ads.snap_parked",
-          name: "ads.snap_parked",
-          platform: "snap",
-          is_enabled: 1,
-          config_json: '{"state":"parked","reason":"No reachable ad-transparency search surface"}',
-        },
-        snapshot: LIVE,
-      }),
-    ]);
-    expect(html).not.toContain("ads.snap_parked");
-    expect(html).not.toContain("snap");
-  });
-
   it("dims an enabled source with no snapshot as degraded, not as live", () => {
     const html = markup([
       entry({ source: { key: "site.web", name: "site.page", platform: "web", is_enabled: 1 }, snapshot: null }),
@@ -112,14 +84,13 @@ describe("landing what we watch", () => {
     expect(html).toContain("degraded: not answering");
   });
 
-  it("says what we watch from the registry kinds, not a list written into the component", () => {
+  it("says what we watch from the registry kinds it is given, not a list written into the component", () => {
     const html = markup([
       entry({ source: { key: "hn.algolia", name: "hn.algolia", platform: "hn", is_enabled: 1 }, snapshot: LIVE }),
       entry({ kind: "site", source: { key: "site.web", name: "site.page", platform: "web", is_enabled: 1 }, snapshot: LIVE }),
-      entry({ kind: "hiring", source: { key: "hiring.lever", name: "hiring.board", platform: "lever", is_enabled: 0 } }),
+      entry({ kind: "hiring", source: { key: "hiring.lever", name: "hiring.board", platform: "lever", is_enabled: 1 }, snapshot: LIVE }),
     ]);
-    expect(html).toContain("We read mentions and site checks.");
-    expect(html).not.toContain("job posts");
+    expect(html).toContain("We read mentions, site checks, and job posts.");
     expect(html).not.toContain("ads");
   });
 

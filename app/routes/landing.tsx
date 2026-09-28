@@ -13,6 +13,7 @@ import { pageWidth } from "../components/landing/section";
 import { TheMark } from "../components/landing/the-mark";
 import { Ticker } from "../components/landing/ticker";
 import { WhatWeWatch } from "../components/landing/what-we-watch";
+import { sourcePillStatus } from "../components/source-pill";
 import { WATCHED_NOUNS } from "../lib/coverage";
 import { readSiteChanges } from "../lib/data/signal.server";
 import { readRegistrySources } from "../lib/data/source.server";
@@ -59,8 +60,11 @@ export function meta(_: Route.MetaArgs) {
 }
 
 export async function loader(_: Route.LoaderArgs) {
-  const sources = await readRegistrySources();
   const now = Date.now();
+  const registry = await readRegistrySources();
+  const sources = registry.filter(
+    (entry) => sourcePillStatus(entry.source, entry.snapshot, now).state !== "disabled",
+  );
   const id: unknown = env.LANDING_WORKSPACE_ID;
   if (typeof id !== "string" || id.trim() === "") return { ticker: [], sources, now };
   const rows = await readSiteChanges({
