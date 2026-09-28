@@ -230,7 +230,7 @@ describe("nightly site sweep", () => {
     await introspector.waitForStatus("complete");
 
     expect(calls.filter((call) => call === "POST https://hc-ping.example/site-sweep")).toHaveLength(1);
-    expect(await introspector.getOutput()).toMatchObject({ pages: 2 });
+    expect(await introspector.getOutput()).toMatchObject({ pages: 2, recorded: true });
 
     const run = await env.DB.prepare(
       "SELECT kind, pages, failed, wall_ms, planned_at, finished_at FROM sweep_run WHERE id = ?",

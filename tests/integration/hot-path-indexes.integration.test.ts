@@ -73,6 +73,13 @@ const HOT_STATEMENTS: readonly HotStatement[] = [
     index: "idx_digest_status_period",
     columns: ["status", "period_end"],
   },
+  {
+    source: "workers/delivery/sweeper.ts SELECT_STALE_PENDING_ATTEMPTS",
+    sql: SELECT_STALE_PENDING_ATTEMPTS,
+    binds: ["2026-09-28T00:00:00.000Z", "2026-09-21T00:00:00.000Z"],
+    index: "idx_send_attempt_status_digest",
+    columns: ["status", "digest_id"],
+  },
 ];
 
 async function liveIndexColumns(name: string): Promise<string[]> {
@@ -94,10 +101,10 @@ async function liveIndexColumns(name: string): Promise<string[]> {
  * A column earns its place here only because no hot or scheduled statement
  * filters on it; a new migration that adds an `*_id` column this list does not
  * name fails until the column ships its index.
- * Most entries are FK children: the parent they point at is never deleted on a
- * live path today, so nothing scans them. The five that did scan — on the
- * account-delete cascade from `user` through `workspace` — are indexed by
- * migration 0026 and are no longer in this list.
+ * Most entries are FK children whose parent is never deleted on a live path,
+ * so nothing scans them; 0509#5938 owns indexing them. The five that did scan
+ * — on the account-delete cascade from `user` through `workspace` — are
+ * indexed by migration 0026 and are no longer in this list.
  */
 const LEGACY_UNINDEXED_ID_COLUMNS: readonly string[] = [
   "alert.entity_id",
@@ -153,27 +160,6 @@ async function unindexedIdColumns(): Promise<string[]> {
   return offenders.sort();
 }
 
-/**
- * Scheduled or hot statements that are allowed to keep scanning today. Each
- * row names the issue that owns the covering index; the pin asserts the
- * statement still scans, so landing that index turns this red and moves the
- * row into HOT_STATEMENTS. An exported scheduled statement absent from both
- * lists is the hole this closes: the carve-out is machine-visible, not a
- * dropped export.
- */
-const KNOWN_UNCOVERED_STATEMENTS: readonly (HotStatement & { issue: string })[] = [
-  {
-    // #4008 owns the pending sweeper's attempt read: it filters
-    // send_attempt(status, attempted_at), which is not a *_id child column.
-    source: "workers/delivery/sweeper.ts SELECT_STALE_PENDING_ATTEMPTS",
-    sql: SELECT_STALE_PENDING_ATTEMPTS,
-    binds: ["2026-09-28T00:00:00.000Z", "2026-09-21T00:00:00.000Z"],
-    index: "idx_send_attempt_digest",
-    columns: [],
-    issue: "0509#4008",
-  },
-];
-
 describe("0026_hot_path_indexes_and_sweep_run.sql", () => {
   it("gives every hot or scheduled statement an index starting with its columns", async () => {
     for (const statement of HOT_STATEMENTS) {
@@ -207,20 +193,6 @@ describe("0026_hot_path_indexes_and_sweep_run.sql", () => {
       seen.push(`EXPLAIN QUERY PLAN ${statement.source}: ${details.join(" | ")}`);
     }
     console.log(`hot-path-indexes explain utc=${new Date().toISOString()} ${seen.join(" ;; ")}`);
-  });
-
-  it("pins every known-uncovered statement to the issue that owns its index", async () => {
-    for (const statement of KNOWN_UNCOVERED_STATEMENTS) {
-      const result = await env.DB.prepare(`EXPLAIN QUERY PLAN ${statement.sql}`)
-        .bind(...statement.binds)
-        .all<{ detail: string }>();
-      const details = (result.results ?? []).map((row) => row.detail);
-      expect(
-        details.some((detail) => detail.startsWith("SCAN ")),
-        `${statement.source} no longer scans — its index landed, so move it to HOT_STATEMENTS ` +
-          `and drop this row (owned by ${statement.issue}): ${details.join(" | ")}`,
-      ).toBe(true);
-    }
   });
 
   it("fails on any new *_id column with no leading-column index", async () => {

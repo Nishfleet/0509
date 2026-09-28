@@ -5,18 +5,24 @@
 --   onboarding_run(workspace_id, started_at) — the /app landing read
 --   signal(watch_id, kind)                    — the hiring read, the watch cascade
 --   send_attempt(digest_id, attempted_at)     — the dead-letter reader
+--   session(expiresAt)                        — the nightly auth-expiry sweep
 --   digest(status, period_end)                — the nightly pending-brief sweep
--- The class gate the issue asked for found a sixth in the same nightly auth
--- sweep as the session delete, so verification(expiresAt) is indexed here too.
--- It also found five FK children with no index on the account-delete cascade:
--- `DELETE FROM "user"` scans onboarding_run and user_decision, then cascades
--- through workspace into incident, send_attempt and signal_delivery — all
--- proven with EXPLAIN QUERY PLAN on the applied chain. The audit named
--- idx_onboarding_run_user for the first of these. The other twenty unindexed
--- FK children are tracked as a follow-up; the gate's allowlist names them.
--- Still scanning on purpose: the sweeper's second read filters
--- send_attempt(status, attempted_at), not a child column, and belongs to the
--- pending-sweeper issue (#4008).
+-- The class gate the issue asked for found two more in the same nightly
+-- sweeps: verification(expiresAt) sits next to the session delete, and the
+-- sweeper's second read filters send_attempt(status, attempted_at) — not a
+-- child column, so it was left to the pending-sweeper epic #4008, but #4008's
+-- implementation children are closed and nobody owned the index. It is here
+-- as send_attempt(status, digest_id): with the DISTINCT on digest_id the index
+-- covers the whole statement — SEARCH with no temp B-tree; the narrower
+-- (status, attempted_at) shape reintroduces one.
+-- The gate's allowlist audit also found five FK children with no index on the
+-- account-delete cascade, proven with EXPLAIN QUERY PLAN on the applied chain:
+-- `DELETE FROM "user"` scans onboarding_run and user_decision, and deleting
+-- the cascaded workspace row scans incident, send_attempt and signal_delivery
+-- (`DELETE FROM workspace` shows the three). The audit named
+-- idx_onboarding_run_user for the first of these. The nineteen FK children
+-- whose parent is never deleted on a live path stay allowlisted in the gate;
+-- they are tracked by #5938.
 --
 -- Same migration, audit §V8: PR #5326 added sweep_run and was closed unmerged
 -- over a migration-number collision, so the table never landed while #5304,
@@ -44,6 +50,7 @@ CREATE INDEX idx_user_decision_user ON user_decision(user_id);
 CREATE INDEX idx_incident_workspace ON incident(workspace_id);
 CREATE INDEX idx_send_attempt_workspace ON send_attempt(workspace_id);
 CREATE INDEX idx_signal_delivery_workspace ON signal_delivery(workspace_id);
+CREATE INDEX idx_send_attempt_status_digest ON send_attempt(status, digest_id);
 
 CREATE TABLE sweep_run (id TEXT PRIMARY KEY NOT NULL, kind TEXT NOT NULL, planned_at TEXT NOT NULL, finished_at TEXT NOT NULL, wall_ms INTEGER NOT NULL, pages INTEGER NOT NULL, failed INTEGER NOT NULL);
 CREATE INDEX idx_sweep_run_kind_time ON sweep_run(kind, finished_at);

@@ -18,7 +18,11 @@ const RETRY: WorkflowStepConfig = {
 
 type PageOutcome = "failed" | "first" | "unchanged" | "changed";
 
-export type SiteSweepOutcome = Record<PageOutcome, number> & { pages: number; rechecked: number };
+export type SiteSweepOutcome = Record<PageOutcome, number> & {
+  pages: number;
+  rechecked: number;
+  recorded: boolean;
+};
 
 async function settle<T>(label: string, run: () => Promise<T>): Promise<T | null> {
   try {
@@ -86,30 +90,34 @@ export class SiteSweep extends WorkflowEntrypoint<Env & { SITE_SWEEP_PING_URL?: 
     );
 
     const count = (outcome: PageOutcome) => finalOutcomes.filter((o) => o === outcome).length;
+    const pages = finalOutcomes.length;
+    const failed = count("failed");
+    const recorded =
+      (await settle("record", () =>
+        step.do("record", RETRY, async () => {
+          const finishedAt = new Date();
+          await recordSweepRun({
+            id: tick.instanceId,
+            kind: "site",
+            plannedAt: tick.plannedAt,
+            finishedAt: finishedAt.toISOString(),
+            wallMs: finishedAt.getTime() - event.timestamp.getTime(),
+            pages,
+            failed,
+          });
+          return true;
+        }),
+      )) === true;
     const summary: SiteSweepOutcome = {
-      pages: finalOutcomes.length,
-      failed: count("failed"),
+      pages,
+      failed,
       first: count("first"),
       unchanged: count("unchanged"),
       changed: count("changed"),
       rechecked: missing.length,
+      recorded,
     };
     console.log(JSON.stringify({ event: "site.sweep", ...summary }));
-    await settle("record", () =>
-      step.do("record", RETRY, async () => {
-        const finishedAt = new Date();
-        await recordSweepRun({
-          id: tick.instanceId,
-          kind: "site",
-          plannedAt: tick.plannedAt,
-          finishedAt: finishedAt.toISOString(),
-          wallMs: finishedAt.getTime() - event.timestamp.getTime(),
-          pages: summary.pages,
-          failed: summary.failed,
-        });
-        return null;
-      }),
-    );
     await step.do("report", RETRY, async () => {
       await pingLiveness(this.env.SITE_SWEEP_PING_URL);
       return null;
