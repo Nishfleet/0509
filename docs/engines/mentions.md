@@ -64,7 +64,7 @@ workers/mentions/map.ts                            # toSignalRow: adapter item -
 workers/workflows/mentions.ts                      # MentionsSweep Workflow class (one step per target)
 workers/app.ts                                     # exports the Workflow class bound to wrangler.jsonc MENTIONS
 workers/sources/registry.ts                        # adapter dispatch by plugin_key
-workers/sources/mentions/types.ts                  # mentionsResultSchema, fetchUpstream (8 s AbortSignal)
+workers/sources/mentions/types.ts                  # mentionsResultSchema, fetchUpstream (default 8 s AbortSignal; GDELT 30 s)
 workers/sources/mentions/feed.ts                   # @extractus/feed-extractor wrapper used by youtube / medium
 workers/sources/mentions/gdelt.ts                  # gdelt.doc adapter
 workers/sources/mentions/hn.ts                     # hn.algolia adapter
