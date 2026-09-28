@@ -473,6 +473,8 @@ describe("publishChange (0509#4435)", () => {
         },
       ),
     );
+    expect(result.signalId).toEqual(expect.any(String));
+    expect(result.alertId).toEqual(expect.any(String));
     const signal = await env.DB.prepare("SELECT summary FROM signal WHERE id = ?")
       .bind(result.signalId)
       .first<{ summary: string | null }>();
