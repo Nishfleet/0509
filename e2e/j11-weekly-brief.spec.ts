@@ -16,8 +16,6 @@ const OFF = "slack.com";
 const HOUR_MS = 60 * 60 * 1000;
 const BRIEF_WAIT_MS = 120_000;
 const SUPPRESS_WAIT_MS = 90_000;
-// Headroom over the window so a starved event loop cannot time the poll out
-// before the deadline it is watching for.
 const DEADLINE_SLACK_MS = 30_000;
 
 function htmlBodyFrom(raw: string): string {

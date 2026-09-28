@@ -21,8 +21,6 @@ test.skip(
 test.describe.configure({ retries: 1 });
 
 const TOKEN_TTL_MS = 305_000;
-// Headroom over the TTL so a starved event loop cannot time the poll out
-// before the deadline it is watching for.
 const DEADLINE_SLACK_MS = 30_000;
 const SESSION_COOKIE = /better-auth\.session_token/;
 const VERIFY_ERROR = "error=INVALID_TOKEN";
