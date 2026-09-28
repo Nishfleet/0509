@@ -34,21 +34,11 @@ function headerValue(block: string, name: string): string | undefined {
 describe("static home analytics", () => {
   it("sets no-transform on / so the edge cannot inject the analytics module", () => {
     const html = readFileSync(join(REPO_ROOT, "public/index.html"), "utf8");
-    const headers = readFileSync(join(REPO_ROOT, "public/_headers"), "utf8");
-    const lines = headers.split("\n");
-    const home = lines.findIndex((line) => line === "/");
-    if (home < 0) {
-      throw new Error("public/_headers has no / block");
-    }
-    const cacheControl = lines
-      .slice(home + 1)
-      .map((line) => line.trim())
-      .find((line) => line.startsWith("Cache-Control:"));
+    const cacheControl = headerValue(headersBlock("/"), "Cache-Control");
     if (cacheControl === undefined) {
       throw new Error("public/_headers / block has no Cache-Control");
     }
     const directives = cacheControl
-      .slice("Cache-Control:".length)
       .split(",")
       .map((part) => part.trim())
       .filter((part) => part.length > 0);
