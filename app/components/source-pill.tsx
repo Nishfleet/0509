@@ -63,7 +63,7 @@ export function sourcePillStatus(
     return { state: "degraded", reason: "watch config is unreadable", lastGoodAt: null };
   }
   if (watchConfig.degraded !== null) {
-    return { state: "degraded", reason: watchConfig.degraded.reason, lastGoodAt: watchConfig.degraded.at };
+    return { state: "degraded", reason: watchConfig.degraded.reason, lastGoodAt };
   }
   const fetchedAt = snapshot === null ? null : blankToNull(snapshot.fetched_at);
   const fetchedMs = fetchedAt === null ? Number.NaN : Date.parse(fetchedAt);
