@@ -129,6 +129,21 @@ describe("accessPrecleared", () => {
     ).resolves.toBe(false);
   });
 
+  it("denies a token that omits exp", async () => {
+    const iss = freshIssuer();
+    const pair = await rsaPair();
+    const jwk = await crypto.subtle.exportKey("jwk", pair.publicKey);
+    jwk.kid = "test-kid";
+    stubJwks(iss, jwk);
+    const claims = serviceClaims(iss);
+    delete claims.exp;
+    const jwt = await mintJwt(pair.privateKey, claims);
+
+    await expect(
+      accessPrecleared(request(jwt), { ACCESS_TEAM_DOMAIN: iss, ACCESS_AUD: AUD }),
+    ).resolves.toBe(false);
+  });
+
   it("denies an expired token", async () => {
     const iss = freshIssuer();
     const pair = await rsaPair();
@@ -195,5 +210,18 @@ describe("accessPrecleared", () => {
     await expect(
       accessPrecleared(request(jwt), { ACCESS_TEAM_DOMAIN: iss, ACCESS_AUD: AUD }),
     ).resolves.toBe(false);
+  });
+
+  it("fetches JWKS at most once for five forged tokens with unknown kids", async () => {
+    const iss = freshIssuer();
+    const pair = await rsaPair();
+    const fetchSpy = vi.fn(async () => new Response(JSON.stringify({ keys: [] }), { status: 200 }));
+    vi.stubGlobal("fetch", fetchSpy);
+    const env = { ACCESS_TEAM_DOMAIN: iss, ACCESS_AUD: AUD };
+    for (let i = 0; i < 5; i += 1) {
+      const jwt = await mintJwt(pair.privateKey, serviceClaims(iss), `unknown-kid-${String(i)}`);
+      await expect(accessPrecleared(request(jwt), env)).resolves.toBe(false);
+    }
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
   });
 });

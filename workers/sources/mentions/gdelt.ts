@@ -14,8 +14,13 @@ function parseBody(rawBody: string): unknown {
   }
 }
 
+const GDELT_TIMEOUT_MS = 30_000;
+
 export const gdelt: MentionsAdapter = async (target, _cursor) => {
-  const response = await fetchUpstream(GDELT_SEARCH_URL + encodeURIComponent(`"${target.query}"`));
+  const response = await fetchUpstream(
+    GDELT_SEARCH_URL + encodeURIComponent(`"${target.query}"`),
+    GDELT_TIMEOUT_MS,
+  );
   if (!response.ok) throw new Error(`gdelt answered ${String(response.status)}`);
   const rawBody = await response.text();
   const parsed = gdeltResponseSchema.parse(parseBody(rawBody));

@@ -29,7 +29,21 @@ const CLOSE_INCIDENT = `UPDATE incident SET closed_at = ?2 WHERE id = ?1 AND clo
 const CLOSE_UNWATCHED = `UPDATE incident SET closed_at = ?2
 WHERE closed_at IS NULL AND page_id NOT IN (SELECT value FROM json_each(?1))`;
 
+const OPEN_BREAKAGE_BASELINES = `SELECT i.page_id AS page_id,
+  (SELECT json_extract(s.payload_json, '$.before.textKey')
+   FROM alert a
+   JOIN signal s ON s.id = a.signal_id
+   WHERE a.incident_id = i.id
+   ORDER BY a.created_at ASC
+   LIMIT 1) AS before_key
+FROM incident i
+WHERE i.closed_at IS NULL AND i.kind = 'breakage'`;
+
 const openRows = z.array(z.object({ id: z.string(), page_id: z.string() }));
+
+const breakageRows = z.array(
+  z.object({ page_id: z.string(), before_key: z.string().nullable() }),
+);
 
 export async function openIncident(row: NewIncident): Promise<string | null> {
   await openIncidentStatement(row).run();
@@ -40,6 +54,13 @@ export async function openIncident(row: NewIncident): Promise<string | null> {
 export async function readOpenIncidents(): Promise<Record<string, string>> {
   const rows = await env.DB.prepare(OPEN_INCIDENTS).all();
   return Object.fromEntries(openRows.parse(rows.results).map((row) => [row.page_id, row.id]));
+}
+
+export async function readOpenBreakageBaselines(): Promise<Record<string, string | null>> {
+  const rows = await env.DB.prepare(OPEN_BREAKAGE_BASELINES).all();
+  return Object.fromEntries(
+    breakageRows.parse(rows.results).map((row) => [row.page_id, row.before_key]),
+  );
 }
 
 export async function closeIncident(id: string, closedAt: string): Promise<void> {
