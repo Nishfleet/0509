@@ -55,7 +55,7 @@ function parseLimits(limitsJson: string): unknown {
   try {
     return JSON.parse(limitsJson);
   } catch (error) {
-    console.error(JSON.stringify({ event: "billing.limits_json_invalid", message: String(error) }));
+    console.error(JSON.stringify({ event: "billing.limits_json_parse_failed", error: String(error) }));
     return {};
   }
 }

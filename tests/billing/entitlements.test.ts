@@ -73,10 +73,10 @@ describe("resolveEntitlements", () => {
       expect(errorSpy).toHaveBeenCalledOnce();
       const logged = JSON.parse(String(errorSpy.mock.calls[0]?.[0])) as {
         event: string;
-        message: string;
+        error: string;
       };
-      expect(logged.event).toBe("billing.limits_json_invalid");
-      expect(logged.message.length).toBeGreaterThan(0);
+      expect(logged.event).toBe("billing.limits_json_parse_failed");
+      expect(logged.error.length).toBeGreaterThan(0);
     } finally {
       errorSpy.mockRestore();
     }

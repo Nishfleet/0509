@@ -103,7 +103,7 @@ function blank(value: unknown): unknown {
   return trimmed.length === 0 ? undefined : trimmed;
 }
 
-function globalUrl(name: "LIVENESS_PING_URL" | "SITE_SWEEP_PING_URL"): unknown {
+function pingUrl(name: "LIVENESS_PING_URL" | "SITE_SWEEP_PING_URL"): unknown {
   return blank(Reflect.get(env, name));
 }
 
@@ -124,8 +124,8 @@ function snapshot(): Snapshot {
     SIGN_IN_IP_LIMIT: env.SIGN_IN_IP_LIMIT,
     AGENT_REGISTER_LIMIT: env.AGENT_REGISTER_LIMIT,
     PROBE_LIMIT: env.PROBE_LIMIT,
-    LIVENESS_PING_URL: globalUrl("LIVENESS_PING_URL"),
-    SITE_SWEEP_PING_URL: globalUrl("SITE_SWEEP_PING_URL"),
+    LIVENESS_PING_URL: pingUrl("LIVENESS_PING_URL"),
+    SITE_SWEEP_PING_URL: pingUrl("SITE_SWEEP_PING_URL"),
   };
 }
 
