@@ -34,7 +34,7 @@ export default defineConfig({
     baseURL,
     trace: "on-first-retry",
   },
-  // Production sits behind Cloudflare Access; only / and /api/health are
+  // Production sits behind Cloudflare Access; only /, /privacy, /terms and /api/health are
   // public. The setup project presents the agents' service token once and
   // saves the CF_Authorization cookie Access issues; the browser then sends
   // that cookie to 0509.io only, so third-party origins (fonts, the beacon)
