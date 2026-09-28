@@ -209,10 +209,12 @@ for (const target of targets) {
       throw new Error(`${target} returned ${status}; motion assertions skipped on a broken page`);
     }
 
-    // networkidle is what the rest of the e2e/ suite uses; animations that
-    // start after networkidle would still be in `getAnimations()`. This
-    // gives us one steady-state sample.
-    await page.waitForLoadState("networkidle");
+    // The sample is taken once `main` is visible, so the route has painted.
+    // The computed-style scan below is what proves the cascade: a route that
+    // forgot the `prefers-reduced-motion` reset still carries a non-zero
+    // duration at first paint. Motion a script starts after first paint is
+    // outside this assertion, which is exactly what the test name scopes.
+    await expect(page.locator("main")).toBeVisible();
 
     const findings = await inspectMotion(page);
 
