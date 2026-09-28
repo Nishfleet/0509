@@ -383,10 +383,15 @@ export function retireCompetitorByJev(input: {
     .bind(input.reason, input.now, input.entityId, input.workspaceId);
 }
 
-const READ_IDENTITY_JSON = "SELECT identity_json FROM entity WHERE id = ?1";
+const READ_IDENTITY_JSON = "SELECT identity_json FROM entity WHERE id = ?1 AND workspace_id = ?2";
 
-export async function readEntityIdentityJson(entityId: string): Promise<string | null> {
-  const row = await env.DB.prepare(READ_IDENTITY_JSON).bind(entityId).first<{ identity_json: string }>();
+export async function readEntityIdentityJson(
+  workspaceId: string,
+  entityId: string,
+): Promise<string | null> {
+  const row = await env.DB.prepare(READ_IDENTITY_JSON).bind(entityId, workspaceId).first<{
+    identity_json: string;
+  }>();
   return row === null ? null : row.identity_json;
 }
 
@@ -421,21 +426,30 @@ export async function readCompetitors(
 export type SiteFillState = "pending" | "filled" | "gave_up";
 
 const FILL_SELF_SITE_FIELDS =
-  "UPDATE entity SET identity_json = json_set(identity_json, '$.description', coalesce(json_extract(identity_json, '$.description'), ?2), '$.socials', CASE WHEN json_array_length(identity_json, '$.socials') > 0 THEN json(json_extract(identity_json, '$.socials')) ELSE json(?3) END, '$.siteFill', 'filled') WHERE id = ?1 AND role = 'self'";
+  "UPDATE entity SET identity_json = json_set(identity_json, '$.description', coalesce(json_extract(identity_json, '$.description'), ?2), '$.socials', CASE WHEN json_array_length(identity_json, '$.socials') > 0 THEN json(json_extract(identity_json, '$.socials')) ELSE json(?3) END, '$.siteFill', 'filled') WHERE id = ?1 AND workspace_id = ?4 AND role = 'self'";
 
 export async function fillSelfSiteFields(input: {
+  workspaceId: string;
   entityId: string;
   description: string | null;
   socialsJson: string;
-}): Promise<void> {
-  await env.DB.prepare(FILL_SELF_SITE_FIELDS).bind(input.entityId, input.description, input.socialsJson).run();
+}): Promise<boolean> {
+  const result = await env.DB.prepare(FILL_SELF_SITE_FIELDS)
+    .bind(input.entityId, input.description, input.socialsJson, input.workspaceId)
+    .run();
+  return result.meta.changes === 1;
 }
 
 const MARK_SELF_SITE_FILL =
-  "UPDATE entity SET identity_json = json_set(identity_json, '$.siteFill', ?2) WHERE id = ?1 AND role = 'self'";
+  "UPDATE entity SET identity_json = json_set(identity_json, '$.siteFill', ?2) WHERE id = ?1 AND workspace_id = ?3 AND role = 'self'";
 
-export async function markSelfSiteFill(entityId: string, state: SiteFillState): Promise<void> {
-  await env.DB.prepare(MARK_SELF_SITE_FILL).bind(entityId, state).run();
+export async function markSelfSiteFill(
+  workspaceId: string,
+  entityId: string,
+  state: SiteFillState,
+): Promise<boolean> {
+  const result = await env.DB.prepare(MARK_SELF_SITE_FILL).bind(entityId, state, workspaceId).run();
+  return result.meta.changes === 1;
 }
 
 const READ_SELF_SITE_FILL =
