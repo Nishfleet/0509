@@ -2,6 +2,7 @@ import { createExecutionContext, env, waitOnExecutionContext } from "cloudflare:
 import { beforeEach, describe, expect, it } from "vitest";
 
 import worker from "../../workers/fixture-site";
+import { FIXTURE_HOSTS } from "../../workers/fixture-site-hosts";
 
 /**
  * The J8 fixture's whole reason to exist, pinned in a merge gate: the healthy
@@ -21,12 +22,12 @@ import worker from "../../workers/fixture-site";
  */
 const TOKEN = "integration-token";
 
-// The two hostnames the production Worker serves (0509#4124). Every flag lives in
-// the Durable Object named for the request's host, so `fixture.0509.in` (J5/J7)
-// and `j8.fixture.0509.in` (J8) never see each other's state. Existing cases keep
-// their requests on the fixture host.
-const FIXTURE_HOST = "fixture.0509.in";
-const J8_HOST = "j8.fixture.0509.in";
+// The two hostnames the production Worker serves (0509#4124), imported from the
+// single list the Worker's host gate and the wrangler routes both come from.
+// Every flag lives in the Durable Object named for the request's host, so
+// `fixture.0509.in` (J5/J7) and `j8.fixture.0509.in` (J8) never see each other's
+// state. Existing cases keep their requests on the fixture host.
+const [FIXTURE_HOST, J8_HOST] = FIXTURE_HOSTS;
 
 const state = (host = FIXTURE_HOST) => env.STATE.getByName(host);
 
