@@ -63,7 +63,6 @@ test("the landing page does not scroll horizontally", async ({ page }) => {
 
 test("the landing headline is the largest paint and uses the brand display face", async ({ page }) => {
   await page.goto("/");
-  await page.evaluate(() => document.fonts.ready.then(() => undefined));
 
   const lcpTag = await page.evaluate(
     () =>

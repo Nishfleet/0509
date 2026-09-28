@@ -186,15 +186,26 @@ test("the hero's first viewport holds the outcome and the one priced input", asy
   expect(requested).toContain("instrument-sans-latin.woff2");
   expect(requested).toContain("ibm-plex-mono");
   expect(requested).not.toContain("bricolage-grotesque-latin");
-  const loaded = await page.evaluate(async () => {
-    await document.fonts.ready;
-    return {
-      display: document.fonts.check('800 16px "Bricolage Grotesque"'),
-      sans: document.fonts.check('400 16px "Instrument Sans"'),
-      mono: document.fonts.check('400 16px "IBM Plex Mono"'),
-    };
-  });
-  expect(loaded).toEqual({ display: true, sans: true, mono: true });
+  await expect
+    .poll(() =>
+      page.evaluate(() => {
+        function faceLoaded(family: string, weight: number): boolean {
+          return Array.from(document.fonts).some((face) => {
+            if (face.family.replaceAll('"', "") !== family || face.status !== "loaded") {
+              return false;
+            }
+            const [low, high] = face.weight.split(" ").map(Number);
+            return weight >= low && weight <= (high ?? low);
+          });
+        }
+        return {
+          display: faceLoaded("Bricolage Grotesque", 800),
+          sans: faceLoaded("Instrument Sans", 400),
+          mono: faceLoaded("IBM Plex Mono", 400),
+        };
+      }),
+    )
+    .toEqual({ display: true, sans: true, mono: true });
   await expect(page.locator('link[rel="preload"][href="/fonts/bricolage-hero.woff2"]')).toHaveCount(1);
   await expect(page.locator('link[rel="modulepreload"]')).toHaveCount(0);
 
