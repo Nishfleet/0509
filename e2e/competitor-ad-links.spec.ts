@@ -29,7 +29,7 @@ const SEEDED_BRAND = "Boots & Belle";
 const SEEDED_DOMAIN_PREFIX = "shop";
 
 // The address the production lane created, so the afterEach can delete it.
-const createdEmail = { current: "" };
+let createdEmail = "";
 
 function authSecret(): string {
   const line = readFileSync(".dev.vars.example", "utf8")
@@ -113,7 +113,7 @@ async function seedSession(): Promise<string> {
 
 async function watchOneCompetitor(page: Page): Promise<void> {
   const email = `e2e+${crypto.randomUUID().replaceAll("-", "").slice(0, 12)}@0509.io`;
-  createdEmail.current = email;
+  createdEmail = email;
   await signInWithMagicLink(page, email, requireInboxToken());
 
   await page.goto("/onboarding");
@@ -138,14 +138,14 @@ async function watchOneCompetitor(page: Page): Promise<void> {
 }
 
 test.afterEach(async ({ page }, testInfo) => {
-  if (createdEmail.current === "") return;
+  if (createdEmail === "") return;
   testInfo.setTimeout(testInfo.timeout + 60_000);
   // The delete failing is a test failure, not a reason to keep the address:
   // clearing in finally means a later run cannot try to delete a gone account.
   try {
-    await deleteCreatedAccount(page, createdEmail.current);
+    await deleteCreatedAccount(page, createdEmail);
   } finally {
-    createdEmail.current = "";
+    createdEmail = "";
   }
 });
 
@@ -182,8 +182,8 @@ test("the competitor header's two ad-library links open that brand's live ads", 
   // The accessible name leads with the visible text so a voice-control user
   // matches the label (WCAG 2.2 SC 2.5.3), then names the brand and the new
   // tab. Exact matches, in a real browser, on a brand with an `&`.
-  const meta = page.getByRole("link", { name: `Their ads on Meta, ${brand} (opens in a new tab)` });
-  const google = page.getByRole("link", { name: `Their ads on Google, ${brand} (opens in a new tab)` });
+  const meta = page.getByRole("link", { name: `Their ads on Meta, ${brand} (opens in a new tab)`, exact: true });
+  const google = page.getByRole("link", { name: `Their ads on Google, ${brand} (opens in a new tab)`, exact: true });
   await expect(meta).toBeVisible();
   await expect(google).toBeVisible();
   await expect(meta).toHaveText("Their ads on Meta");

@@ -154,7 +154,8 @@ developments feed (with type chips) → peers rail → facts → sources → "st
 **First viewport:** the name, the tracking switch with its consequence spelled out
 beside it, the snapshot row, and the top of the biggest-move slab.
 
-- The switch is the first interactive thing on the page and it is never a menu item.
+- The switch is the first control on the page — only the breadcrumb and the brand's
+  ad-library links precede it — and it is never a menu item.
   Next to it, always: "Off stops the watching and the alerts. The history stays, and
   turning it back on picks up where it left off."
 - Developments are chronological and mixed by default, filtered by the type chips
