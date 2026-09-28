@@ -50,8 +50,8 @@ describe("DESIGN.md 7 empty states", () => {
   it("Home's second zero carries a real Workflow arrival time, never 'soon'", () => {
     const { sentence, action } = homeSecondZero(NOW);
     const html = emptyState(sentence, action);
-    expect(html).toContain(clock(shift(1)));
     expect(html).toContain(`${DAY_NAME.format(shift(6))} ${clock(shift(6))}`);
+    expect(html).not.toContain("today");
     expect(html).not.toContain("soon");
   });
 
@@ -92,8 +92,10 @@ describe("DESIGN.md 7 empty states", () => {
   it("a just-added competitor says when the first marks land", () => {
     const { sentence } = competitorJustAdded();
     const html = emptyState(sentence);
-    expect(html).toContain("first ads and mentions land within the hour");
+    expect(html).toContain("The first mentions land in the nightly sweep");
     expect(html).toContain("first mark comes tomorrow");
+    expect(html).not.toContain("ads");
+    expect(html).not.toContain("within the hour");
   });
 
   it("Alerts with nothing yet still says what would interrupt", () => {
