@@ -43,6 +43,7 @@ async function remaining(sql: string): Promise<string[]> {
 
 describe("the fixture-account purge migration", () => {
   it("deletes test accounts with their workspaces and keys, and keeps only the four fixed spec accounts", async () => {
+    expect(KEPT).toHaveLength(4);
     const emails = [...PURGED, ...KEPT];
     await Promise.all(emails.map((email, index) => seed(email, index)));
 

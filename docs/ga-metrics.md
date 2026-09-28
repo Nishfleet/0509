@@ -38,15 +38,15 @@ For the individual reads, use these commands verbatim:
 
 ## The exclusion rule
 
-The four fixed journey accounts are the fixture surface, listed in `app/lib/fixture-accounts.ts`; #5730 purged every other fixture row, and the per-run accounts below are deleted by each run's own teardown, so the steady state is the four. Any count of users or workspaces written in code excludes them with `isFixtureAccount` or the same four emails.
+The four fixed journey accounts are the fixture surface, listed in `app/lib/fixture-accounts.ts`; #5730 purged every other fixture row, so the steady state is the four. A count of users or workspaces written in code excludes them via `isFixtureAccount`, or in SQL via the same four emails.
 
-The signup journeys mint per-run accounts on other `e2e+` shapes:
+The signup journeys and other e2e setup paths mint per-run accounts on other `e2e+` shapes:
 
 - [`e2e/j1-magic-link.spec.ts:16`](../e2e/j1-magic-link.spec.ts) — `e2e+<uuid>@0509.io`
 - [`e2e/j2-passkey.spec.ts:20`](../e2e/j2-passkey.spec.ts) — `e2e+<uuid>@0509.io`
 - [`e2e/magic-link-expiry.spec.ts:27`](../e2e/magic-link-expiry.spec.ts) — `e2e+<tag>-<uuid>@0509.io`
 
-A real reader signs up on the production login flow; no product surface mints `e2e+` addresses. If a new fixed fixture account ever lands, it is a new read defect: add it to `app/lib/fixture-accounts.ts` and amend the exclusion here in the same PR.
+Each run's own teardown deletes its minted account. A teardown gap — the J2 mid-ceremony leak is [0509#5733](https://github.com/Nishfleet/0509/issues/5733) — leaves a row this read counts as a real signup; the trade-off and the detector question live in [0509#6056](https://github.com/Nishfleet/0509/issues/6056). A real reader signs up on the production login flow; no product surface mints `e2e+` addresses. If a new fixed fixture account ever lands, it is a new read defect: add it to `app/lib/fixture-accounts.ts` and amend the exclusion here in the same PR.
 
 ## Metric definition
 
@@ -57,4 +57,4 @@ The recorded live read above returned `signups_7d = 2`, `signups_30d = 2`, total
 
 ## Boundary
 
-**No fixture-row cleanup in this PR.** Row cleanup of the 308 fixture rows in production D1 is destructive-adjacent; the conference owns its shape. This doc lands measurement only.
+This doc is measurement only. The fixture-row cleanup shipped separately as migration `0026_purge_e2e_fixture_users.sql` (#5730): every `user` row outside the four-account keep-list was deleted.
