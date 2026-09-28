@@ -93,3 +93,6 @@ worker-configuration.d.ts
 !.dev.vars.example
 !.env.example
 e2e/.auth/
+
+# @lhci/cli collect/assert working dir (lighthouse audits)
+/.lighthouseci/
