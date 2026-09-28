@@ -35,13 +35,11 @@ WHERE s.workspace_id = ?1 AND s.observed_at >= ?2 AND s.observed_at < ?3 AND s.i
 
 export async function countUnjudgedInputs(
   db: D1Database,
-  workspaceId: string,
-  windowStartAt: string,
-  windowEndAt: string,
+  input: { workspaceId: string; windowStartAt: string; windowEndAt: string },
 ): Promise<number> {
   const row = await db
     .prepare(COUNT_UNJUDGED_INPUTS)
-    .bind(workspaceId, windowStartAt, windowEndAt, D6_QUESTION_ID, D3_QUESTION_ID)
+    .bind(input.workspaceId, input.windowStartAt, input.windowEndAt, D6_QUESTION_ID, D3_QUESTION_ID)
     .first<{ n: number }>();
   if (row === null) {
     throw new Error("countUnjudgedInputs returned no row");

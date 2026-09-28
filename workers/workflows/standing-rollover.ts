@@ -65,7 +65,11 @@ export class StandingRollover extends WorkflowEntrypoint<Env, RolloverParams> {
     const schedule = { timezone: closing.timezone, weekday: closing.weekday, hour: closing.hour };
 
     const rankedCount = await step.do("freeze-rank", RETRY, async () => {
-      const ranked = await freezeWeek(this.env.DB, workspaceId, closing.startsAt, closesAt.toISOString());
+      const ranked = await freezeWeek(this.env.DB, {
+        workspaceId,
+        weekStartAt: closing.startsAt,
+        weekEndAt: closesAt.toISOString(),
+      });
       return ranked.length;
     });
 

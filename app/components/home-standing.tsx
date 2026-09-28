@@ -113,6 +113,22 @@ function body(
       </>
     );
   }
+  return rankedBody({ standing, howRanked, onSwitch, openId, evidence });
+}
+
+function rankedBody({
+  standing,
+  howRanked,
+  onSwitch,
+  openId,
+  evidence,
+}: {
+  standing: Extract<HomeView["standing"], { kind: "ranked" }>;
+  howRanked: HowRanked | null | undefined;
+  onSwitch: ((entityId: string, checked: boolean) => void) | undefined;
+  openId: string | null;
+  evidence: readonly WeekEvidence[] | null;
+}): ReactElement {
   return (
     <>
       <p className="mt-3 max-w-prose leading-[1.55]">{standing.whyLine}</p>

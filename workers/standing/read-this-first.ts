@@ -117,7 +117,11 @@ export async function judgeWeek(db: D1Database, input: JudgeWeekInput): Promise<
   ]);
   const items = weekItemRows.parse(weekItemResult.results);
   const entities = entityRows.parse(entityResult.results);
-  const unjudgedInputs = await countUnjudgedInputs(db, input.workspaceId, input.startsAt, input.closesAt);
+  const unjudgedInputs = await countUnjudgedInputs(db, {
+    workspaceId: input.workspaceId,
+    windowStartAt: input.startsAt,
+    windowEndAt: input.closesAt,
+  });
   if (items.length === 0) {
     return { picks: [], judged: 0, unjudged: unjudgedInputs > 0 };
   }

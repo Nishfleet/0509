@@ -115,18 +115,24 @@ export async function checkSitePage(target: SiteSweepTarget, tick: SweepTick): P
   return result;
 }
 
+function pageTextDiff(
+  before: string | null,
+  after: string | null,
+  changed: ChangedPage,
+): ReturnType<typeof diffPageText> | null {
+  if (before === null || after === null) return null;
+  return diffPageText(
+    { text: before, hash: changed.previousHash, charCount: before.length },
+    { text: after, hash: changed.hash, charCount: after.length },
+  );
+}
+
 export async function publishSiteChange(target: SiteSweepTarget, changed: ChangedPage): Promise<string> {
   const [before, after] = await Promise.all([
     readText(changed.previousTextKey),
     readText(changed.textKey),
   ]);
-  const diff =
-    before === null || after === null
-      ? null
-      : diffPageText(
-          { text: before, hash: changed.previousHash, charCount: before.length },
-          { text: after, hash: changed.hash, charCount: after.length },
-        );
+  const diff = pageTextDiff(before, after, changed);
 
   const diffKey = `snapshot/site/${target.watchId}/${changed.snapshotId}.diff.json`;
   if (diff !== null) {

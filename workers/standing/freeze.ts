@@ -23,17 +23,19 @@ const previousRankRows = z.array(z.object({ entity_id: z.string(), rank: z.numbe
 
 export async function freezeWeek(
   db: D1Database,
-  workspaceId: string,
-  weekStartAt: string,
-  weekEndAt: string,
+  input: { workspaceId: string; weekStartAt: string; weekEndAt: string },
 ): Promise<readonly RankedEntity[]> {
-  const unjudged = await countUnjudgedInputs(db, workspaceId, weekStartAt, weekEndAt);
+  const unjudged = await countUnjudgedInputs(db, {
+    workspaceId: input.workspaceId,
+    windowStartAt: input.weekStartAt,
+    windowEndAt: input.weekEndAt,
+  });
   if (unjudged > 0) {
     return [];
   }
   const [scores, previous] = await db.batch([
-    db.prepare(WEEK_SCORES).bind(workspaceId, weekStartAt),
-    db.prepare(PREVIOUS_RANKS).bind(workspaceId, weekStartAt),
+    db.prepare(WEEK_SCORES).bind(input.workspaceId, input.weekStartAt),
+    db.prepare(PREVIOUS_RANKS).bind(input.workspaceId, input.weekStartAt),
   ]);
   const previousRanks = new Map(
     previousRankRows.parse(previous.results).map((row) => [row.entity_id, row.rank]),
@@ -42,9 +44,9 @@ export async function freezeWeek(
   await freezeStandingRanks(
     db,
     ranked.map((row) => ({
-      workspace_id: workspaceId,
+      workspace_id: input.workspaceId,
       entity_id: row.entity_id,
-      week_start_at: weekStartAt,
+      week_start_at: input.weekStartAt,
       rank: row.rank,
       movement: row.movement,
     })),
