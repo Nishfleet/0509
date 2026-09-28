@@ -23,11 +23,12 @@ test.afterEach(async ({ page }, testInfo) => {
 // inbox to read, so it cannot mint a session, and this spec skips there rather
 // than fake the journey. It runs in the `e2e-production` job after deploy.
 //
-// The Alerts journey only reads: it clicks no chip and submits no form, because
-// it runs against production and a visit that wrote data would put a row in a
-// real workspace for a mailbox nobody owns. The write that needs cleanup is the
-// magic-link sign-in below: it submits the login form (e2e/inbox.ts:272) and the
-// verification inserts the user row (e2e/inbox.ts:293-295) the afterEach deletes.
+// The Alerts journey only reads: it clicks no chip and opens no settings form,
+// because it runs against production and a visit that wrote data would put a
+// row in a real workspace for a mailbox nobody owns. The write that needs
+// cleanup is the sign-in below: signInWithMagicLink submits the login form
+// (e2e/inbox.ts:272) and the link it then visits creates the session and its
+// user row (e2e/inbox.ts:278; e2e/inbox.ts:293-295). The afterEach deletes it.
 test.skip(
   !process.env.PLAYWRIGHT_TEST_BASE_URL,
   "the Alerts page needs a real session; the local preview Worker cannot mint one",
