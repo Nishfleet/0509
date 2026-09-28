@@ -13,11 +13,14 @@ import { SELECT_STALE_PENDING_DIGESTS } from "../../workers/delivery/sweeper";
  * applies migrations/ to this D1, so what is checked here is the chain the
  * deploy ships, not a fixture.
  *
- * This is the class gate. Every statement below is imported from the module
- * that runs it, so a rewrite that drops an indexed predicate turns the row red
- * here; a migration that drops or never writes the index turns it red too. A
- * new scheduled or request-path statement gets a row naming the covering index
- * it must read through.
+ * This is the class gate, in its two halves. Every statement below is imported
+ * from the module that runs it, so a rewrite that drops an indexed predicate
+ * turns the row red here; a migration that drops or never writes the index
+ * turns it red too. A new scheduled or request-path statement gets a row naming
+ * the covering index it must read through. The schema half is generic: any
+ * `*_id` column in the applied chain with no leading-column index fails unless
+ * LEGACY_UNINDEXED_ID_COLUMNS names it, so the next unindexed child column is
+ * caught at write time, not at the next audit.
  */
 interface HotStatement {
   readonly source: string;
@@ -85,6 +88,72 @@ async function liveIndexColumns(name: string): Promise<string[]> {
   return (columns.results ?? []).map((row) => row.name);
 }
 
+/**
+ * `*_id` columns the applied chain already had without a leading-column index
+ * when this gate landed (0509#5755, audit §V26 named only the five hot reads).
+ * A column earns its place here only because no hot or scheduled statement
+ * filters on it; a new migration that adds an `*_id` column this list does not
+ * name fails until the column ships its index.
+ */
+const LEGACY_UNINDEXED_ID_COLUMNS: readonly string[] = [
+  "alert.entity_id",
+  "alert.incident_id",
+  "alert.page_id",
+  "alert.signal_id",
+  "incident.entity_id",
+  "incident.workspace_id",
+  "incident_notice.incident_id",
+  "jev_verdict.entity_id",
+  "jev_verdict.signal_id",
+  "onboarding_run.user_id",
+  "plan.provider_customer_id",
+  "plan.provider_subscription_id",
+  "send_attempt.send_target_id",
+  "send_attempt.workspace_id",
+  "send_target.channel_id",
+  "signal.snapshot_id",
+  "signal_delivery.channel_id",
+  "signal_delivery.send_attempt_id",
+  "signal_delivery.workspace_id",
+  "snapshot.page_id",
+  "standing.entity_id",
+  "suggestion.entity_id",
+  "user_decision.entity_id",
+  "user_decision.signal_id",
+  "user_decision.user_id",
+  "watch.source_id",
+];
+
+async function unindexedIdColumns(): Promise<string[]> {
+  const tables = await env.DB.prepare(
+    "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' AND name != 'd1_migrations' AND name NOT LIKE '_cf_%'",
+  ).all<{ name: string }>();
+  const offenders: string[] = [];
+  for (const table of tables.results ?? []) {
+    const columns = await env.DB.prepare("SELECT name FROM pragma_table_info(?1)")
+      .bind(table.name)
+      .all<{ name: string }>();
+    const indexed = new Set<string>();
+    const indexes = await env.DB.prepare("SELECT name FROM pragma_index_list(?1)")
+      .bind(table.name)
+      .all<{ name: string }>();
+    for (const index of indexes.results ?? []) {
+      const leading = await env.DB.prepare(
+        "SELECT name FROM pragma_index_info(?1) ORDER BY seqno LIMIT 1",
+      )
+        .bind(index.name)
+        .first<{ name: string }>();
+      if (leading !== null) indexed.add(leading.name);
+    }
+    for (const column of columns.results ?? []) {
+      if (column.name.endsWith("_id") && !indexed.has(column.name)) {
+        offenders.push(`${table.name}.${column.name}`);
+      }
+    }
+  }
+  return offenders.sort();
+}
+
 describe("0026_hot_path_indexes_and_sweep_run.sql", () => {
   it("gives every hot or scheduled statement an index starting with its columns", async () => {
     for (const statement of HOT_STATEMENTS) {
@@ -118,5 +187,22 @@ describe("0026_hot_path_indexes_and_sweep_run.sql", () => {
       seen.push(`EXPLAIN QUERY PLAN ${statement.source}: ${details.join(" | ")}`);
     }
     console.log(`hot-path-indexes explain utc=${new Date().toISOString()} ${seen.join(" ;; ")}`);
+  });
+
+  it("fails on any new *_id column with no leading-column index", async () => {
+    const offenders = await unindexedIdColumns();
+    expect(
+      offenders.filter((column) => !LEGACY_UNINDEXED_ID_COLUMNS.includes(column)),
+      `new *_id columns with no leading-column index: ${offenders.join(", ")}`,
+    ).toEqual([]);
+  });
+
+  it("flags a deliberately unindexed *_id column", async () => {
+    await env.DB.exec("CREATE TABLE gate_probe (id TEXT PRIMARY KEY, probe_id TEXT)");
+    try {
+      expect(await unindexedIdColumns()).toContain("gate_probe.probe_id");
+    } finally {
+      await env.DB.exec("DROP TABLE gate_probe");
+    }
   });
 });

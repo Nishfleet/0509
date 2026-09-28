@@ -95,19 +95,21 @@ export class SiteSweep extends WorkflowEntrypoint<Env & { SITE_SWEEP_PING_URL?: 
       rechecked: missing.length,
     };
     console.log(JSON.stringify({ event: "site.sweep", ...summary }));
-    await step.do("record", RETRY, async () => {
-      const finishedAt = new Date();
-      await recordSweepRun({
-        id: tick.instanceId,
-        kind: "site",
-        plannedAt: tick.plannedAt,
-        finishedAt: finishedAt.toISOString(),
-        wallMs: finishedAt.getTime() - event.timestamp.getTime(),
-        pages: summary.pages,
-        failed: summary.failed,
-      });
-      return null;
-    });
+    await settle("record", () =>
+      step.do("record", RETRY, async () => {
+        const finishedAt = new Date();
+        await recordSweepRun({
+          id: tick.instanceId,
+          kind: "site",
+          plannedAt: tick.plannedAt,
+          finishedAt: finishedAt.toISOString(),
+          wallMs: finishedAt.getTime() - event.timestamp.getTime(),
+          pages: summary.pages,
+          failed: summary.failed,
+        });
+        return null;
+      }),
+    );
     await step.do("report", RETRY, async () => {
       await pingLiveness(this.env.SITE_SWEEP_PING_URL);
       return null;

@@ -15,14 +15,16 @@
 -- Same migration, audit §V8: PR #5326 added sweep_run and was closed unmerged
 -- over a migration-number collision, so the table never landed while #5304,
 -- #4118 and #4042 build on it. Every finished site sweep writes one row —
--- planned time, finish time, measured wall clock in ms, page count and failed
--- count — so a cap decision starts with arithmetic. app/lib/data/sweep_run.server.ts
--- writes the row from workers/workflows/site-sweep.ts.
+-- planned time, finish time, wall clock in ms, page count and failed count —
+-- so a cap decision starts with arithmetic. wall_ms runs from workflow-instance
+-- create to finish, so it holds queue wait and step retries too, not just the
+-- sweep's own compute. app/lib/data/sweep_run.server.ts writes the row from
+-- workers/workflows/site-sweep.ts.
 --
 -- Expand-only: CREATE INDEX and CREATE TABLE only, no DROP, no ALTER, no
--- rename, no NOT NULL without DEFAULT, so the previous Worker version (which
--- never reads sweep_run) keeps working unchanged and a rollback is a code
--- rollback.
+-- rename, no NOT NULL added to an existing table, so the previous Worker
+-- version (which never reads sweep_run) keeps working unchanged and a rollback
+-- is a code rollback.
 
 CREATE INDEX idx_onboarding_run_workspace ON onboarding_run(workspace_id, started_at);
 CREATE INDEX idx_signal_watch_kind ON signal(watch_id, kind);

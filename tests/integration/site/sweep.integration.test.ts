@@ -56,6 +56,7 @@ const signals = async () => {
 };
 
 const seedSweep = async () => {
+  await env.DB.exec("DELETE FROM sweep_run");
   await env.DB.exec("DELETE FROM signal");
   await env.DB.exec("DELETE FROM snapshot");
   await env.DB.exec("DELETE FROM watch");
@@ -230,6 +231,14 @@ describe("nightly site sweep", () => {
 
     expect(calls.filter((call) => call === "POST https://hc-ping.example/site-sweep")).toHaveLength(1);
     expect(await introspector.getOutput()).toMatchObject({ pages: 2 });
+
+    const run = await env.DB.prepare(
+      "SELECT kind, pages, failed, wall_ms FROM sweep_run WHERE id = ?",
+    )
+      .bind(id)
+      .first<{ kind: string; pages: number; failed: number; wall_ms: number }>();
+    expect(run).toMatchObject({ kind: "site", pages: 2, failed: 0 });
+    expect(run?.wall_ms).toBeGreaterThanOrEqual(0);
   });
 });
 
