@@ -104,8 +104,8 @@ function changeBody(change: SiteChangeView): string {
   return [change.sentence, detail, change.url].filter((line) => line !== "").join(" ");
 }
 
-export async function readAgentCompetitor(workspaceId: string, competitorId: string): Promise<CompetitorResult> {
-  const page = await readCompetitorPage(workspaceId, competitorId, new Date());
+export async function readAgentCompetitor(workspaceId: string, competitorId: string, now: Date): Promise<CompetitorResult> {
+  const page = await readCompetitorPage(workspaceId, competitorId, now);
   if (page === null) return { competitor: null };
   return {
     competitor: {
