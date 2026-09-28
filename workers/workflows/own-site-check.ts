@@ -6,6 +6,7 @@ import { withMonitor } from "@sentry/cloudflare";
 import type { OwnSitePage } from "../../app/lib/data/page.server";
 import type { OwnSiteHealth } from "../../app/lib/site/own-site.server";
 import {
+  breakageRepaired,
   closeOwnSiteIncident,
   openOwnSiteIncident,
   planOwnSiteCheck,
@@ -69,10 +70,22 @@ export class OwnSiteCheck extends WorkflowEntrypoint<Env> {
       return [...previous, { page, health }];
     }, Promise.resolve([]));
 
-    const recovered = probed.flatMap(({ page, health }) => {
-      const incidentId = plan.openIncidents[page.pageId];
-      return health?.state === "healthy" && incidentId !== undefined ? [incidentId] : [];
-    });
+    const recovered = await probed.reduce<Promise<readonly string[]>>(
+      async (done, { page, health }) => {
+        const previous = await done;
+        const incidentId = plan.openIncidents[page.pageId];
+        if (health?.state !== "healthy" || incidentId === undefined) return previous;
+        if (!Object.hasOwn(plan.breakage, page.pageId)) return [...previous, incidentId];
+        const label = `verify ${incidentId}`;
+        const repaired = await settle(label, () =>
+          step.do(label, RETRY, () =>
+            breakageRepaired(page.url, plan.breakage[page.pageId] ?? null),
+          ),
+        );
+        return repaired === true ? [...previous, incidentId] : previous;
+      },
+      Promise.resolve([]),
+    );
     const closed = await recovered.reduce<Promise<number>>(async (done, incidentId) => {
       const count = await done;
       const label = `close ${incidentId}`;
