@@ -365,16 +365,9 @@ describe("per-hostname state", () => {
   });
 
   it("keeps j8's hard break off the fixture host", async () => {
-    const breakCtx = createExecutionContext();
-    await worker.fetch(
-      new Request(`https://${J8_HOST}/__break?mode=hard`, {
-        method: "POST",
-        headers: { authorization: `Bearer ${TOKEN}` },
-      }),
-      env,
-      breakCtx,
-    );
-    await waitOnExecutionContext(breakCtx);
+    // The same helper the other break cases use, aimed at J8's host: the `host`
+    // parameter is the thing under test, not a second way to build a request.
+    expect((await flip("hard", TOKEN, "POST", J8_HOST)).status).toBe(200);
 
     const j8 = await get(J8_HOST);
     expect(j8.status).toBe(500);
@@ -387,23 +380,18 @@ describe("per-hostname state", () => {
   });
 
   it("keeps a fixture-host price flip off j8's page", async () => {
-    const priceCtx = createExecutionContext();
-    await worker.fetch(
-      new Request(`https://${FIXTURE_HOST}/__price?variant=raised`, {
-        method: "POST",
-        headers: { authorization: `Bearer ${TOKEN}` },
-      }),
-      env,
-      priceCtx,
-    );
-    await waitOnExecutionContext(priceCtx);
-
+    expect((await setPrice("raised", TOKEN, "POST", FIXTURE_HOST)).status).toBe(200);
     expect(await state().get("price-variant")).toBe("raised");
 
     const j8 = await get(J8_HOST);
     expect(j8.status).toBe(200);
-    expect(await j8.text()).toContain('data-variant="base"');
+    const html = await j8.text();
+    expect(html).toContain('data-variant="base"');
+    // The flip time travels with the variant; if only the variant leaked, the
+    // page would still carry the fixture host's fresh stamp.
+    expect(html).toContain('data-flipped-at=""');
     expect(await state(J8_HOST).get("price-variant")).toBe("base");
+    expect(await state(J8_HOST).get("price-flipped-at")).toBeNull();
   });
 
   it("keeps a j8 wall flip off the fixture host", async () => {
