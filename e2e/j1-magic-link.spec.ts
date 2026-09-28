@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-import { deleteCreatedAccount, requireInboxToken, signInWithMagicLink } from "./inbox";
+import { deleteCreatedAccount, MAGIC_LINK_SEND_FAILED, requireInboxToken, signInWithMagicLink } from "./inbox";
 
 let createdEmail = "";
 test.afterEach(async ({ page }, testInfo) => {
@@ -31,6 +31,8 @@ test("a fresh address signs in with the magic link that was emailed to it", asyn
   createdEmail = email;
 
   await signInWithMagicLink(page, email, token);
+
+  await expect(page.getByRole("alert").filter({ hasText: MAGIC_LINK_SEND_FAILED })).toHaveCount(0);
 
   // Home renders the session's address: the session is real, not just a 200.
   await expect(page.getByText(email)).toBeVisible();

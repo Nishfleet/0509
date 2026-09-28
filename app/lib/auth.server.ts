@@ -10,7 +10,7 @@ import { accessPrecleared } from "./auth/access-preclearance.server";
 import { MAGIC_LINK_TTL_SECONDS, magicLinkEmail } from "./auth/magic-link-email";
 import { MAGIC_LINK_PATH } from "./auth/magic-link-path";
 import { signInLinkAllowed } from "./auth/sign-in-limit";
-import { sendOrThrow } from "../../workers/delivery/send";
+import { errorText, sendOrThrow } from "../../workers/delivery/send";
 
 interface AuthEnv {
   DB: D1Database;
@@ -94,13 +94,17 @@ export function createAuth(env: AuthEnv, options?: { captcha?: boolean; validate
         storeToken: "hashed",
         sendMagicLink: async ({ email, url }) => {
           const message = magicLinkEmail({ email, url });
-          await sendOrThrow(env.EMAIL, {
-            to: email,
-            from: { email: "hello@0509.io", name: "Five to Nine" },
-            subject: message.subject,
-            text: message.text,
-            html: message.html,
-          });
+          try {
+            await sendOrThrow(env.EMAIL, {
+              to: email,
+              from: { email: "hello@0509.io", name: "Five to Nine" },
+              subject: message.subject,
+              text: message.text,
+              html: message.html,
+            });
+          } catch (end) {
+            throw new APIError("INTERNAL_SERVER_ERROR", { message: errorText(end) });
+          }
         },
       }),
       passkey({ rpName: "Five to Nine", origin }),

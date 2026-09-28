@@ -1,3 +1,4 @@
+import { data } from "react-router";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const { handler } = vi.hoisted(() => ({
@@ -66,10 +67,21 @@ describe("login magic-link action", () => {
   });
 
   it("does not say the link was sent when the handler fails", async () => {
-    handler.mockResolvedValue(new Response("send failed", { status: 500 }));
-    const result = await action({ request: formRequest({ email: "person@0509.io", "cf-turnstile-response": "token-1" }) });
-    expect(result).toEqual({ error: "We couldn't send the link. Try again in a minute." });
-    expect(result).not.toHaveProperty("sent");
+    const logged = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    try {
+      handler.mockResolvedValue(new Response("account daily sending quota exceeded", { status: 500 }));
+      const result = await action({ request: formRequest({ email: "person@0509.io", "cf-turnstile-response": "token-1" }) });
+      expect(result).toEqual(
+        data({ error: "We couldn't send the link. Try again in a minute." }, { status: 503 }),
+      );
+      expect(result).not.toHaveProperty("sent");
+      expect(logged.mock.calls.map((call) => String(call[0])).join("\n")).toContain(
+        "account daily sending quota exceeded",
+      );
+      expect(logged.mock.calls.map((call) => String(call[0])).join("\n")).toContain("login.magic_link_send_failed");
+    } finally {
+      logged.mockRestore();
+    }
   });
 
   it("does not call a bad email a failed captcha", async () => {
