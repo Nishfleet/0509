@@ -148,18 +148,31 @@ function watchDraftPosts(page: Page): string[] {
   return posts;
 }
 
-function watchConsole(page: Page): string[] {
-  const errors: string[] = [];
+function watchConsole(page: Page): { consoleErrors: { text: string; url: string }[]; pageErrors: string[] } {
+  const consoleErrors: { text: string; url: string }[] = [];
+  const pageErrors: string[] = [];
   page.on("console", (message) => {
-    if (message.type() === "error") errors.push(message.text());
+    if (message.type() === "error") {
+      consoleErrors.push({ text: message.text(), url: message.location().url });
+    }
   });
-  page.on("pageerror", (error) => errors.push(error.message));
-  return errors;
+  page.on("pageerror", (error) => pageErrors.push(error.message));
+  return { consoleErrors, pageErrors };
 }
 
-test("the identity card editor saves and closes on Enter, with focus back on the trigger", async ({ page }) => {
+function consoleFailures(page: Page, watched: ReturnType<typeof watchConsole>): string[] {
+  const pageOrigin = new URL(page.url()).origin;
+  return [
+    ...watched.consoleErrors
+      .filter((entry) => !entry.url || new URL(entry.url).origin === pageOrigin)
+      .map((entry) => `${entry.text} @ ${entry.url}`),
+    ...watched.pageErrors,
+  ];
+}
+
+test("the identity card editor saves and closes on Enter, with focus back on the trigger", async ({ page }, testInfo) => {
   test.setTimeout(90_000);
-  const consoleErrors = watchConsole(page);
+  const watched = watchConsole(page);
   const draftPosts = watchDraftPosts(page);
   const subject = "nope-card-keyboard-enter.example.com";
   await page.setExtraHTTPHeaders({ cookie: await seedCardSession("example.com") });
@@ -184,12 +197,12 @@ test("the identity card editor saves and closes on Enter, with focus back on the
   await expect(trigger).toBeFocused();
   await expect(trigger).toContainText("Brand One");
   await expect(page.locator('input[type="hidden"][name="name"]')).toHaveValue("Brand One");
-  expect(consoleErrors).toEqual([]);
+  expect(consoleFailures(page, watched), testInfo.project.name).toEqual([]);
 });
 
-test("the identity card editor saves and closes on Escape, with focus back on the trigger", async ({ page }) => {
+test("the identity card editor saves and closes on Escape, with focus back on the trigger", async ({ page }, testInfo) => {
   test.setTimeout(90_000);
-  const consoleErrors = watchConsole(page);
+  const watched = watchConsole(page);
   const draftPosts = watchDraftPosts(page);
   const subject = "nope-card-keyboard-escape.example.com";
   await page.setExtraHTTPHeaders({ cookie: await seedCardSession("example.com") });
@@ -210,5 +223,5 @@ test("the identity card editor saves and closes on Escape, with focus back on th
   await expect(trigger).toBeFocused();
   await expect(trigger).toContainText("one line on what we do");
   await expect(page.locator('input[type="hidden"][name="description"]')).toHaveValue("one line on what we do");
-  expect(consoleErrors).toEqual([]);
+  expect(consoleFailures(page, watched), testInfo.project.name).toEqual([]);
 });

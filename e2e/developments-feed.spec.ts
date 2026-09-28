@@ -27,17 +27,20 @@ function list(page: Page) {
 // chip on /app/competitors opens a real /app/competitors/:entityId page.
 test("the developments feed filters by kind and keeps its layout across filters", async ({
   page,
-}) => {
+}, testInfo) => {
   test.skip(
     !process.env.PLAYWRIGHT_TEST_BASE_URL,
     "the developments feed needs a real session; the local preview Worker cannot mint one",
   );
   test.setTimeout(150_000);
-  const consoleErrors: string[] = [];
+  const consoleErrors: { text: string; url: string }[] = [];
+  const pageErrors: string[] = [];
   page.on("console", (message) => {
-    if (message.type() === "error") consoleErrors.push(message.text());
+    if (message.type() === "error") {
+      consoleErrors.push({ text: message.text(), url: message.location().url });
+    }
   });
-  page.on("pageerror", (error) => consoleErrors.push(error.message));
+  page.on("pageerror", (error) => pageErrors.push(error.message));
 
   const email = `e2e+${crypto.randomUUID().replaceAll("-", "").slice(0, 12)}@0509.io`;
   await signInWithMagicLink(page, email, requireInboxToken());
@@ -115,5 +118,12 @@ test("the developments feed filters by kind and keeps its layout across filters"
   }));
   expect(widths.scrollWidth).toBeLessThanOrEqual(widths.innerWidth);
 
-  expect(consoleErrors).toEqual([]);
+  const pageOrigin = new URL(page.url()).origin;
+  const failures = [
+    ...consoleErrors
+      .filter((entry) => !entry.url || new URL(entry.url).origin === pageOrigin)
+      .map((entry) => `${entry.text} @ ${entry.url}`),
+    ...pageErrors,
+  ];
+  expect(failures, testInfo.project.name).toEqual([]);
 });

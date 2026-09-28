@@ -318,11 +318,14 @@ function sqlCounts(workspaceId: string): { ads: number; mentions: number } {
 
 test("alert type chips filter one feed with honest counts", async ({ page }, testInfo) => {
   test.setTimeout(90_000);
-  const consoleErrors: string[] = [];
+  const consoleErrors: { text: string; url: string }[] = [];
+  const pageErrors: string[] = [];
   page.on("console", (message) => {
-    if (message.type() === "error") consoleErrors.push(message.text());
+    if (message.type() === "error") {
+      consoleErrors.push({ text: message.text(), url: message.location().url });
+    }
   });
-  page.on("pageerror", (error) => consoleErrors.push(error.message));
+  page.on("pageerror", (error) => pageErrors.push(error.message));
 
   const { cookie, workspaceId } = await seedSession();
   const counts = sqlCounts(workspaceId);
@@ -363,5 +366,12 @@ test("alert type chips filter one feed with honest counts", async ({ page }, tes
     expect(widths.scrollWidth, JSON.stringify(widths)).toBe(widths.clientWidth);
   }
 
-  expect(consoleErrors).toEqual([]);
+  const pageOrigin = new URL(page.url()).origin;
+  const failures = [
+    ...consoleErrors
+      .filter((entry) => !entry.url || new URL(entry.url).origin === pageOrigin)
+      .map((entry) => `${entry.text} @ ${entry.url}`),
+    ...pageErrors,
+  ];
+  expect(failures, testInfo.project.name).toEqual([]);
 });

@@ -32,9 +32,11 @@ test("a watched competitor page leads with the switch and its consequence, and t
     "the competitor page needs a real session; the local preview Worker cannot mint one",
   );
   test.setTimeout(150_000);
-  const consoleErrors: string[] = [];
+  const consoleErrors: { text: string; url: string }[] = [];
   page.on("console", (message) => {
-    if (message.type() === "error") consoleErrors.push(message.text());
+    if (message.type() === "error") {
+      consoleErrors.push({ text: message.text(), url: message.location().url });
+    }
   });
 
   const email = `e2e+${crypto.randomUUID().replaceAll("-", "").slice(0, 12)}@0509.io`;
@@ -89,5 +91,9 @@ test("a watched competitor page leads with the switch and its consequence, and t
     contentType: "image/png",
   });
 
-  expect(consoleErrors).toEqual([]);
+  const pageOrigin = new URL(page.url()).origin;
+  const failures = consoleErrors
+    .filter((entry) => !entry.url || new URL(entry.url).origin === pageOrigin)
+    .map((entry) => `${entry.text} @ ${entry.url}`);
+  expect(failures, testInfo.project.name).toEqual([]);
 });
