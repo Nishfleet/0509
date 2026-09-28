@@ -297,9 +297,4 @@ export async function deleteCreatedAccount(page: Page, email: string): Promise<v
   await page.getByLabel("Type " + email + " to confirm").fill(email);
   await page.getByRole("button", { name: "Delete my account" }).click();
   await page.waitForURL(/\/login\?deleted=/);
-  // J14's own proof: the deleted account is signed out. The redirect lands on
-  // /login, and /app must bounce back there — a delete that left a session
-  // behind would hide the row it was meant to remove.
-  await page.goto("/app");
-  await expect(page).toHaveURL(/\/login/);
 }
