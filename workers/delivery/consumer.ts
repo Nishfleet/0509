@@ -4,6 +4,7 @@ import { claimSendAttempt, resolveSendAttempt } from "../../app/lib/data/send_at
 import { writeUnsubscribeToken } from "../../app/lib/data/send_target.server";
 import type { BriefPayload } from "../../app/lib/brief-payload";
 import { parseBriefPayload } from "../../app/lib/brief-payload";
+import { pageHost } from "../../app/lib/site/own-site.server";
 
 import { renderBrief } from "./brief-template";
 import { renderIncidentFixed, renderIncidentOpen } from "./incident-template";
@@ -274,10 +275,11 @@ export async function deliverIncident(
 
   let sent = false;
   try {
+    const site = pageHost(incident.page_url);
     const rendered =
       incident.closed_at === null
         ? renderIncidentOpen({
-            site: new URL(incident.page_url).hostname,
+            site,
             kind: incident.kind,
             opened_at: incident.opened_at,
             recheck_at: new Date(Date.parse(incident.opened_at) + RECHECK_AFTER_MS).toISOString(),
@@ -286,7 +288,7 @@ export async function deliverIncident(
             timezone: incident.timezone,
           })
         : renderIncidentFixed({
-            site: new URL(incident.page_url).hostname,
+            site,
             kind: incident.kind,
             closed_at: incident.closed_at,
             link: INCIDENT_LINK,
