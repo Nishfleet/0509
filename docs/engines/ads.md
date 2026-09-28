@@ -151,7 +151,7 @@ Per 1,000 ad pulls, priced from `REBUILD-COST.md` (2026-09-21):
 **Monthly at 100 brands**, daily cadence, Meta + Google browser plus Reddit fetch:
 
 - Browser: 100 × 2 × 6.97 s × 30 = **11.6 browser-hours** → 1.6 h beyond the allotment → **$0.15/month**.
-- D1: 100 × 3 × 30 = 9,000 snapshot + 9,000 `source` latest-facts + ~1,800 signal rows = **19,800 rows written**, 0.04% of the 50M included → **$0.00**.
+- D1: 100 × 3 × 30 = 9,000 snapshot + 9,000 `source` latest-facts rows (planned — no ads snapshot writer on main yet) + ~1,800 signal rows = **19,800 rows written**, 0.04% of the 50M included → **$0.00**.
 - R2: ~27,000 Class A ops → **$0.12**; ~4 GB stored under the 1-year guardrail retention → **$0.06**.
 - Queues: 27,000 ops → **$0.01**.
 - Jev: ~1,800 calls → **$0 on the seat**, $0.03 at market.

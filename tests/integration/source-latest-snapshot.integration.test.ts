@@ -8,7 +8,7 @@ import {
 } from "../../app/lib/data/snapshot.server";
 import { readRegistrySources } from "../../app/lib/data/source.server";
 
-const MIGRATION = "0026_source_latest_snapshot.sql";
+const MIGRATION = "0027_source_latest_snapshot.sql";
 
 const OWNER = "user-src-latest";
 const WS = "ws-src-latest";
@@ -224,24 +224,18 @@ describe("source latest snapshot facts (0509#5724)", () => {
     });
   });
 
-  it("a deduplicated snapshot id does not move the facts", async () => {
+  it("a replayed snapshot write is a no-op for the source facts", async () => {
     await seedSource(SOURCE, WATCH);
-    await insertSnapshot({
+    const row = {
       id: "snap-site-retry",
       watchId: WATCH,
       pageId: PAGE,
       fetchedAt: "2026-09-25T05:00:00Z",
       r2Key: "snapshot/site/watch-src-latest/snap-site-retry.txt",
       hash: "hash-site-retry",
-    });
-    await insertSnapshot({
-      id: "snap-site-retry",
-      watchId: WATCH,
-      pageId: PAGE,
-      fetchedAt: "2026-09-25T05:10:00Z",
-      r2Key: "snapshot/site/watch-src-latest/snap-site-retry.txt",
-      hash: "hash-site-retry",
-    });
+    };
+    await insertSnapshot(row);
+    await insertSnapshot(row);
 
     expect(await latestFacts(SOURCE)).toEqual({
       latest_fetched_at: "2026-09-25T05:00:00Z",
@@ -359,7 +353,7 @@ describe("source latest snapshot facts (0509#5724)", () => {
       .filter((query) => query.startsWith("UPDATE source"));
     expect(backfill).toHaveLength(1);
     const statement = backfill.at(0);
-    if (statement === undefined) throw new Error("0026 backfill statement missing");
+    if (statement === undefined) throw new Error("0027 backfill statement missing");
     await env.DB.prepare(statement).run();
 
     expect(await latestFacts(SOURCE_BACKFILL)).toEqual({

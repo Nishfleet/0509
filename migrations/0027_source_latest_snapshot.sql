@@ -1,4 +1,4 @@
--- 0026_source_latest_snapshot.sql — per-source latest snapshot facts (parent #5722, slice 1).
+-- 0027_source_latest_snapshot.sql — per-source latest snapshot facts (parent #5722, slice 1).
 --
 -- The source registry read must not recompute the latest fetched_at, item_count
 -- and canary_count with a correlated subquery on every request. This slice adds

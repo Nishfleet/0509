@@ -104,18 +104,15 @@ const MARK_CANARY_BAD = `UPDATE source SET degraded_reason = 'not answering' WHE
 
 const MARK_SOURCE_BLOCKED = "UPDATE source SET degraded_reason = ?2 WHERE id = ?1";
 
-const RECORD_SOURCE_LATEST_SNAPSHOT = `UPDATE source SET
-  latest_fetched_at = (SELECT sn.fetched_at FROM snapshot sn WHERE sn.id = ?1),
-  latest_item_count = (SELECT sn.item_count FROM snapshot sn WHERE sn.id = ?1),
-  latest_canary_count = (SELECT sn.canary_count FROM snapshot sn WHERE sn.id = ?1)
-WHERE id = (SELECT w.source_id FROM snapshot sn JOIN watch w ON w.id = sn.watch_id WHERE sn.id = ?1)
-  AND (latest_fetched_at IS NULL OR latest_fetched_at < (SELECT sn.fetched_at FROM snapshot sn WHERE sn.id = ?1))`;
+const RECORD_SOURCE_LATEST_SNAPSHOT = `UPDATE source SET latest_fetched_at = ?2, latest_item_count = ?3, latest_canary_count = ?4 WHERE id = (SELECT w.source_id FROM watch w WHERE w.id = ?1) AND (latest_fetched_at IS NULL OR latest_fetched_at < ?2)`;
 
-export function withSourceLatestFacts(
-  insert: D1PreparedStatement,
-  snapshotId: string,
-): D1PreparedStatement[] {
-  return [insert, env.DB.prepare(RECORD_SOURCE_LATEST_SNAPSHOT).bind(snapshotId)];
+export function recordSourceLatestSnapshot(row: {
+  watchId: string;
+  fetchedAt: string;
+  itemCount: number;
+  canaryCount: number | null;
+}): D1PreparedStatement {
+  return env.DB.prepare(RECORD_SOURCE_LATEST_SNAPSHOT).bind(row.watchId, row.fetchedAt, row.itemCount, row.canaryCount);
 }
 
 export interface CanarySource {
