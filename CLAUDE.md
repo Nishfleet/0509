@@ -62,6 +62,7 @@ not so you can follow them from memory — lint will tell you.
   (`todo`, `hack`, `for now`, `revisit`, …); the rest is the reviewer's job.
   Put the reason in the commit message, where it is read at the moment it
   matters. Config files and tests are exempt.
+- **No user data in logs or Sentry.** `no-restricted-syntax` (NO_USER_DATA_IN_LOGS). Source: 0509#5776.
 - **Immutability.** New objects, never mutation.
 
 ## Commands

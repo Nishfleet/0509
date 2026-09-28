@@ -64,15 +64,18 @@ describe("mentions adapter contract", () => {
 	it("fetchUpstream calls fetch exactly once with the URL and an abort signal", async () => {
 		const fetchMock = vi.fn(async () => new Response("ok"));
 		vi.stubGlobal("fetch", fetchMock);
+		const timeoutSpy = vi.spyOn(AbortSignal, "timeout");
 		try {
 			await fetchUpstream("https://example.com/feed");
+			expect(fetchMock).toHaveBeenCalledTimes(1);
+			expect(fetchMock).toHaveBeenCalledWith("https://example.com/feed", {
+				signal: expect.any(AbortSignal),
+			});
+			expect(timeoutSpy).toHaveBeenCalledWith(8000);
 		} finally {
 			vi.unstubAllGlobals();
+			vi.restoreAllMocks();
 		}
-		expect(fetchMock).toHaveBeenCalledTimes(1);
-		expect(fetchMock).toHaveBeenCalledWith("https://example.com/feed", {
-			signal: expect.any(AbortSignal),
-		});
 	});
 
 	it("parseFeedEntries reads RSS 2.0 and Atom entries", () => {

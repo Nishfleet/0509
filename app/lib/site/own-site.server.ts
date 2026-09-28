@@ -45,6 +45,10 @@ function wwwVariant(url: string): string {
   return `${parsed.protocol}//www.${parsed.hostname}${parsed.pathname}`;
 }
 
+export function pageHost(url: string): string {
+  return new URL(url).hostname;
+}
+
 export async function probeOwnSite(url: string): Promise<OwnSiteHealth> {
   if (!(await robotsAllows(url))) return { state: "unknown", reason: "robots" };
   const first = await fetchStatus(url);
@@ -118,7 +122,7 @@ export async function openOwnSiteIncident(page: OwnSitePage, kind: string): Prom
     signalId: null,
     incidentId,
     severity: "high",
-    title: `${page.domain} looks broken: ${kind}`,
+    title: `${pageHost(page.url)} looks broken: ${kind}`,
     body: null,
     createdAt: openedAt,
   }).run();

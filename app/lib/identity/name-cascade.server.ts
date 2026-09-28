@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { CRAWLER_USER_AGENT } from "../fetch/robots.server";
+
 export interface NameSources {
 	ldOrganizationName: string | null;
 	ogSiteName: string | null;
@@ -39,9 +41,16 @@ export async function resolveBrandName(
 		const res = await fetch(
 			"https://www.wikidata.org/w/api.php?action=wbsearchentities&format=json&language=en&limit=1&search=" +
 				encodeURIComponent(term),
-			{ method: "GET", signal: AbortSignal.timeout(8000) },
+			{
+				method: "GET",
+				headers: { "user-agent": CRAWLER_USER_AGENT },
+				signal: AbortSignal.timeout(8000),
+			},
 		);
-		if (!res.ok) return null;
+		if (!res.ok) {
+			console.error(JSON.stringify({ event: "identity.wikidata_failed", term, error: `status ${String(res.status)}` }));
+			return null;
+		}
 		const parsed = wikidataSearchSchema.safeParse(await res.json());
 		if (!parsed.success) return null;
 		const label = parsed.data.search[0]?.label.trim();
