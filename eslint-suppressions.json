@@ -1,0 +1,460 @@
+{
+  "app/components/agent-settings.tsx": {
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "app/components/alert-row.tsx": {
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "app/components/brand-chip.tsx": {
+    "complexity": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "app/components/brief-schedule-settings.tsx": {
+    "complexity": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "app/components/competitor-frame.tsx": {
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "app/components/delivery-address.tsx": {
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "app/components/developments-feed.tsx": {
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "app/components/four-week-line.tsx": {
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "app/components/home-standing.tsx": {
+    "max-params": {
+      "count": 1
+    }
+  },
+  "app/components/identity-card.tsx": {
+    "complexity": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 3
+    }
+  },
+  "app/components/incident-block.tsx": {
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "app/components/landing/hero.tsx": {
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "app/components/mark.tsx": {
+    "complexity": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "app/components/ranked-row.tsx": {
+    "complexity": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "app/components/retire-questions.tsx": {
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "app/components/row-evidence.tsx": {
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "app/components/source-pill.tsx": {
+    "complexity": {
+      "count": 2
+    }
+  },
+  "app/entry.server.tsx": {
+    "max-params": {
+      "count": 1
+    }
+  },
+  "app/lib/ads/descriptor.ts": {
+    "complexity": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "app/lib/ads/transport-api.ts": {
+    "complexity": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "app/lib/ads/transport-browser.ts": {
+    "complexity": {
+      "count": 1
+    },
+    "max-depth": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "app/lib/agent/mcp.server.ts": {
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "app/lib/agent/read.server.ts": {
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "app/lib/agent/serve.server.ts": {
+    "max-params": {
+      "count": 1
+    }
+  },
+  "app/lib/alerts-page.server.ts": {
+    "complexity": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "app/lib/auth.server.ts": {
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "app/lib/auth/login-magic-link.server.ts": {
+    "max-params": {
+      "count": 1
+    }
+  },
+  "app/lib/competitors.server.ts": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "app/lib/data/alert.server.ts": {
+    "max-params": {
+      "count": 1
+    }
+  },
+  "app/lib/data/discovery_backlog.server.ts": {
+    "max-params": {
+      "count": 1
+    }
+  },
+  "app/lib/data/entity.server.ts": {
+    "max-params": {
+      "count": 1
+    }
+  },
+  "app/lib/data/send_attempt.server.ts": {
+    "max-params": {
+      "count": 1
+    }
+  },
+  "app/lib/discovery/co-mentions.ts": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "app/lib/discovery/refresh.server.ts": {
+    "max-depth": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
+    },
+    "max-params": {
+      "count": 1
+    }
+  },
+  "app/lib/discovery/run.server.ts": {
+    "max-depth": {
+      "count": 1
+    }
+  },
+  "app/lib/fetch/transport.server.ts": {
+    "complexity": {
+      "count": 2
+    },
+    "max-lines-per-function": {
+      "count": 2
+    }
+  },
+  "app/lib/hiring/discover-board.ts": {
+    "complexity": {
+      "count": 1
+    },
+    "max-params": {
+      "count": 1
+    }
+  },
+  "app/lib/hiring/listing.ts": {
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "app/lib/home-standing.ts": {
+    "max-params": {
+      "count": 2
+    }
+  },
+  "app/lib/how-ranked.server.ts": {
+    "max-params": {
+      "count": 1
+    }
+  },
+  "app/lib/how-ranked.ts": {
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "app/lib/identity/card-draft.server.ts": {
+    "max-params": {
+      "count": 1
+    }
+  },
+  "app/lib/identity/confirm.server.ts": {
+    "complexity": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
+    },
+    "max-params": {
+      "count": 1
+    }
+  },
+  "app/lib/identity/extract.ts": {
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "app/lib/identity/field-confidence.server.ts": {
+    "max-lines-per-function": {
+      "count": 1
+    },
+    "max-params": {
+      "count": 1
+    }
+  },
+  "app/lib/identity/logo-store.server.ts": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "app/lib/identity/name-cascade.ts": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "app/lib/identity/normalise.ts": {
+    "complexity": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "app/lib/identity/page-role.server.ts": {
+    "max-params": {
+      "count": 1
+    }
+  },
+  "app/lib/identity/probe-cache.server.ts": {
+    "max-params": {
+      "count": 2
+    }
+  },
+  "app/lib/identity/tail.server.ts": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "app/lib/jev/public-subject.server.ts": {
+    "max-params": {
+      "count": 1
+    }
+  },
+  "app/lib/onboarding-screen.server.ts": {
+    "complexity": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "app/lib/onboarding/timings.ts": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "app/lib/site-changes.server.ts": {
+    "max-params": {
+      "count": 1
+    }
+  },
+  "app/lib/site/check-page.server.ts": {
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "app/lib/site/judge.server.ts": {
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "app/lib/site/publish.server.ts": {
+    "complexity": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "app/lib/site/sweep.server.ts": {
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "app/routes/app.alerts.tsx": {
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "app/routes/app.home.tsx": {
+    "complexity": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "app/routes/app.settings.tsx": {
+    "complexity": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "app/routes/login.tsx": {
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "app/routes/onboarding.competitors.tsx": {
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "app/routes/onboarding.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "workers/delivery/brief-template.ts": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "workers/delivery/consumer.ts": {
+    "complexity": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "workers/identity-tail-workflow.ts": {
+    "max-params": {
+      "count": 1
+    }
+  },
+  "workers/mentions/sweep.ts": {
+    "complexity": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
+    },
+    "max-params": {
+      "count": 3
+    }
+  },
+  "workers/sources/mentions/feed.ts": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "workers/standing/compose-brief.ts": {
+    "complexity": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "workers/standing/read-this-first.ts": {
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "workers/support-inbox.ts": {
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "workers/workflows/account-delete.ts": {
+    "max-params": {
+      "count": 1
+    }
+  },
+  "workers/workflows/site-sweep.ts": {
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "workers/workflows/standing-rollover.ts": {
+    "max-lines-per-function": {
+      "count": 1
+    }
+  }
+}
