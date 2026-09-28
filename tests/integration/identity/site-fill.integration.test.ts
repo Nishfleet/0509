@@ -26,6 +26,8 @@ const CARD = {
 let entityId = "";
 let userId = "";
 let workspaceId = "";
+let otherWorkspaceId = "";
+let otherUserId = "";
 
 function key(): string {
   const normalised = normaliseSubject("gymshark.com");
@@ -65,11 +67,19 @@ beforeEach(() => {
   entityId = `entity-site-fill-${suffix}`;
   userId = `user-site-fill-${suffix}`;
   workspaceId = `ws-site-fill-${suffix}`;
+  otherWorkspaceId = "";
+  otherUserId = "";
 });
 
 afterEach(async () => {
   vi.unstubAllGlobals();
   await env.IDENTITY_CACHE.delete(key());
+  if (otherWorkspaceId !== "") {
+    await env.DB.prepare("DELETE FROM workspace WHERE id = ?1").bind(otherWorkspaceId).run();
+  }
+  if (otherUserId !== "") {
+    await env.DB.prepare('DELETE FROM "user" WHERE id = ?1').bind(otherUserId).run();
+  }
   await env.DB.prepare('DELETE FROM "user" WHERE id = ?1').bind(userId).run();
 });
 
@@ -123,6 +133,39 @@ describe("site fill", () => {
     expect(await attemptSiteFill(workspaceId, entityId, HOMEPAGE)).toBe("filled");
     expect(await identity()).toEqual({
       description: null,
+      socials: [SOCIAL],
+      siteFill: "filled",
+    });
+  });
+
+  it("ignores a field edit recorded in another workspace", async () => {
+    await seed({ description: null, socials: [] });
+    otherWorkspaceId = `ws-site-fill-other-${crypto.randomUUID()}`;
+    otherUserId = `user-site-fill-other-${crypto.randomUUID()}`;
+    await env.DB.prepare(
+      `INSERT INTO "user" (id, name, email, emailVerified, createdAt, updatedAt) VALUES (?1, 'Other', ?2, 0, ?3, ?3)`,
+    )
+      .bind(otherUserId, `${otherUserId}@0509.io`, NOW)
+      .run();
+    await env.DB.prepare(
+      `INSERT INTO workspace (id, name, owner_user_id, created_at) VALUES (?1, 'Other', ?2, ?3)`,
+    )
+      .bind(otherWorkspaceId, otherUserId, NOW)
+      .run();
+    await insertFieldEdits([
+      {
+        workspaceId: otherWorkspaceId,
+        userId: otherUserId,
+        entityId,
+        edit: { field: "description", from: "Gym clothes", to: "" },
+        decidedAt: NOW,
+      },
+    ]);
+    await env.IDENTITY_CACHE.put(key(), JSON.stringify(CARD));
+
+    expect(await attemptSiteFill(workspaceId, entityId, HOMEPAGE)).toBe("filled");
+    expect(await identity()).toEqual({
+      description: "Gym clothes",
       socials: [SOCIAL],
       siteFill: "filled",
     });
