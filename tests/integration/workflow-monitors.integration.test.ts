@@ -70,8 +70,6 @@ describe("workflow Sentry cron monitors", () => {
   });
 
   it("checks mentions-sweep in on its 01:00 UTC monitor and returns the zeroed sweep", async () => {
-    // migrations/0018_source_canary.sql:20 seeds canary_query on gdelt.doc and
-    // hn.algolia, so an uncleared canary plan calls the real GDELT and HN APIs.
     await env.DB.exec("UPDATE source SET canary_query = NULL");
     const outcome = await makeWorkflow(mentionsSweep).run(event, immediateStep);
     expect(monitorMock).toHaveBeenCalledTimes(1);
