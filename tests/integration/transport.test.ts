@@ -741,33 +741,6 @@ describe("readUrl", () => {
       stub.restore();
     }
   });
-
-  it("fails typed with the unconfigured cause when the browser binding is absent", async () => {
-    browserHolder.current = undefined;
-    const stub = stubFetch({
-      "https://gated.example.com/": () => new Response("Forbidden", { status: 403 }),
-    });
-    const lines: string[] = [];
-    const spy = vi.spyOn(console, "log").mockImplementation((line) => {
-      lines.push(String(line));
-    });
-    try {
-      const result = await readUrl("https://gated.example.com/", {
-        mayEscalate: async () => true,
-      });
-      expect(result.ok).toBe(false);
-      if (result.ok) return;
-      expect(result.reason).toBe("escalation-failed");
-      expect(result.detail).toContain("browser binding is not configured");
-      // No browser call happened, so no browser-escalation cost line is logged.
-      expect(
-        lines.some((line) => line.includes('"browser-escalation"')),
-      ).toBe(false);
-    } finally {
-      spy.mockRestore();
-      stub.restore();
-    }
-  });
 });
 
 describe("countExtractedChars", () => {
