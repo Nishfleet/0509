@@ -148,7 +148,7 @@ test.afterEach(async ({ page }, testInfo) => {
   }
 });
 
-test("the competitor header's two ad-library links open that brand's live ads", async ({ page }, testInfo) => {
+test("the competitor header's two ad-library links carry that brand's ad-library search", async ({ page }, testInfo) => {
   test.setTimeout(150_000);
   const watched = watchConsole(page);
 
@@ -219,6 +219,22 @@ test("the competitor header's two ad-library links open that brand's live ads", 
   expect(widths.scrollWidth, JSON.stringify(widths)).toBe(widths.clientWidth);
   const links = page.locator("[data-slot='competitor-ad-links']");
   await expect(links).toBeVisible();
+  // The design skill's proof (.agents/skills/design/SKILL.md): the screen at
+  // 1440 and 390 with both shots attached. At 1440 this is the first viewport,
+  // and DESIGN.md 2.5's claim is that the name, the switch and the snapshot row
+  // are all in it — so the snapshot row is asserted to be, not left to the
+  // reader of the attachment.
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await expect(page.locator("[data-section='snapshot']")).toBeInViewport();
+  await testInfo.attach("competitor-ad-links-1440", {
+    body: await page.screenshot(),
+    contentType: "image/png",
+  });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await testInfo.attach("competitor-ad-links-390", {
+    body: await page.screenshot(),
+    contentType: "image/png",
+  });
   console.log(
     `ad-links[brand=${brand}] meta.host=${metaUrl.hostname} meta.q=${String(metaUrl.searchParams.get("q"))} google.host=${googleUrl.hostname} google.domain=${String(googleUrl.searchParams.get("domain"))}`,
   );
