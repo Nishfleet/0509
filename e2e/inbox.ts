@@ -259,24 +259,37 @@ export function ownDocument404For(pathname: string): (entry: ConsoleEntry) => bo
 
 // J1's core: submit the login form for a fresh e2e+ address, read the real
 // email out of the inbox Worker, follow the link, land signed in on /onboarding.
+// A returning, onboarded fixture address lands on /app instead (the redirect
+// in app/routes/onboarding.tsx), so `landing` carries the expectation. The
+// inbox holds one message per recipient for an hour, so a fixed address can
+// still hold the previous run's used link: it is read before this sign-in can
+// overwrite it and excluded from the wait.
 // Timestamps are logged for the packet's proof line (send and session).
 export async function signInWithMagicLink(
   page: Page,
   email: string,
   token: string,
+  landing = /\/onboarding/,
 ): Promise<{ link: string; status: number }> {
   await page.goto("/login");
   await page.locator('input[name="email"]').fill(email);
   await settleSignInWidget(page);
   const sentAt = new Date().toISOString();
+  // Reading before the send captures the message already stored for this
+  // address, so the wait does not accept it as this sign-in's link.
+  // readRawMessage throws on 404 when nothing is stored, and that maps to [].
+  const stale = await readRawMessage(email, token).then(
+    (raw) => extractMagicLink(raw),
+    () => null,
+  );
   await page.locator('button[type="submit"]').click();
   // Sent state replaces the form; asserting the field is gone asserts the swap
   // without pinning copy (smoke.spec.ts's contract-not-copy convention).
   await expect(page.locator('input[name="email"]')).toHaveCount(0);
-  const link = await waitForMagicLink(email, token);
+  const link = await waitForMagicLink(email, token, stale === null ? [] : [stale]);
   const linkReadAt = new Date().toISOString();
   const response = await page.goto(link);
-  await expect(page).toHaveURL(/\/onboarding/);
+  await expect(page).toHaveURL(landing);
   console.log(
     `magic-link sign-in email=${email} sentAt=${sentAt} linkReadAt=${linkReadAt} sessionAt=${new Date().toISOString()}`,
   );
