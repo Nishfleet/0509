@@ -272,13 +272,16 @@ jobs:
         id: lhci
         uses: treosh/lighthouse-ci-action@3e7e23fb74242897f95c0ba9cabad3d0227b9b18 # v12
         with:
-          # The three public pages: no Access, no session, so a deploy sends no
-          # email and needs no secret. The signed-in pages are measured by the
+          # The public pages: no Access, no session, so a deploy sends no
+          # email and needs no secret. /design/landing is the staged homepage
+          # (the landing LCP bar in docs/REBUILD-DONE.md B) and is public until
+          # 0509#4834 moves it to /. The signed-in pages are measured by the
           # scheduled suite once 0509#6034 lands.
           urls: |
             ${{ github.event.deployment_status.environment_url }}/
             ${{ github.event.deployment_status.environment_url }}/privacy
             ${{ github.event.deployment_status.environment_url }}/terms
+            ${{ github.event.deployment_status.environment_url }}/design/landing
           budgetPath: ./lighthouse-budget.json
           configPath: ./lighthouserc.cjs
           uploadArtifacts: false
