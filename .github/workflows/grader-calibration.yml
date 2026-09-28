@@ -130,7 +130,8 @@ jobs:
           MODEL: ${{ inputs.model || 'kimi-k3-max' }}
         run: |
           expect=$(jq -r .expect "$RUNNER_TEMP/case.json")
-          line=$(head -n1 "$RUNNER_TEMP/kimi.txt" 2>/dev/null | tr -d '\r') || line=
+          tr -d '\r' < "$RUNNER_TEMP/kimi.txt" 2>/dev/null | sed -nE '/^Kimi grade: (A\+|A|A-|B\+|B|B-|C\+|C|C-|D|F)$/,$p' > "$RUNNER_TEMP/kimi-graded.txt" || true
+          line=$(head -n1 "$RUNNER_TEMP/kimi-graded.txt")
           got=$(printf '%s\n' "$line" | sed -nE 's/^Kimi grade: (A\+|A|A-|B\+|B|B-|C\+|C|C-|D|F)$/\1/p')
           case "$expect:${got:-none}" in
             *:none) result=no-grade ;;
@@ -142,7 +143,7 @@ jobs:
           {
             printf 'calibration run %s case %s model %s expect=%s got=%s result=%s\n\n' "$GITHUB_RUN_ID" "$CASE" "$MODEL" "$expect" "${got:-none}" "$result"
             printf 'Why this case: %s\n\n~~~text\n' "$(jq -r .why "$RUNNER_TEMP/case.json")"
-            head -n 12 "$RUNNER_TEMP/kimi.txt" 2>/dev/null | head -c 8000 | tr -d '\r~'
+            head -n 12 "$RUNNER_TEMP/kimi-graded.txt" | head -c 8000 | tr -d '~'
             printf '~~~\n'
           } > "$RUNNER_TEMP/result.md"
           gh issue comment "$RESULTS_ISSUE" --repo "$GITHUB_REPOSITORY" --body-file "$RUNNER_TEMP/result.md"
