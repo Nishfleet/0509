@@ -47,7 +47,7 @@ for stored screenshots; production serves real R2 captures.
   Visitors "Fast, private, realtime web analytics", StackAI "From process to AI agent, in
   minutes". Ours: **"Know where you stand. And who's gaining on you."** Sub says what we
   watch and that we name the rivals; CTA microcopy follows Canny's "No credit card
-  required" shape with **"One input. Sixty seconds to your first standing."**
+  required" shape with **"One input. Sixty seconds to who’s gaining on you."**
 - **Alerts rows** — Deel / Qatalog / Fireflies: bold first line is who did what, one plain
   sentence, source pill, relative time, grouped New / Yesterday / Earlier.
 - **Agent row** — Bloom's "Connect MCP": the server URL, what it works with, one link out.
