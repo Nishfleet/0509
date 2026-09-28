@@ -29,7 +29,9 @@ const siteCardSchema = z.object({
 
 type SiteCard = z.infer<typeof siteCardSchema>;
 
-const logoSchema = z.object({ v: z.literal(2), url: z.string().nullable() });
+const ICON_PROBE_V = 2;
+
+const logoSchema = z.object({ v: z.literal(ICON_PROBE_V), url: z.string().nullable() });
 
 const UNREACHED: SiteCard = {
   name: null,
@@ -147,7 +149,8 @@ function applyReview(fields: CardValues, review: CardReview): Omit<SiteFields, "
   };
 }
 
-async function firstStorableLogo(registrable: string, candidates: LogoCandidates): Promise<string | null> {
+async function firstStorableLogo(candidates: LogoCandidates): Promise<string | null> {
+  const registrable = candidates.registrableDomain;
   for (const url of logoCandidateUrls(candidates)) {
     const stored = await storeLogo(registrable, url);
     if (stored !== null) {
@@ -184,11 +187,11 @@ export function startCard(
   const logo = read.then(async ({ card, reached }) => {
     if (!reached) return null;
     const cached = await cachedProbe(subject, "icon", logoSchema, async () => {
-      const url = await firstStorableLogo(subject.registrable, {
+      const url = await firstStorableLogo({
         ...card.logoCandidates,
         registrableDomain: subject.registrable,
       });
-      return { v: 2, url };
+      return { v: ICON_PROBE_V, url };
     });
     const url = cached.url;
     if (url === null) return null;

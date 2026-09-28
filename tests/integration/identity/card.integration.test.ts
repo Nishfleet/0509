@@ -201,6 +201,43 @@ describe("startCard", () => {
     expect(await env.SNAPSHOTS.get("logo/example.com")).not.toBeNull();
   });
 
+  it("falls through a candidate whose fetch rejects to the next one", async () => {
+    stubAi(0.95);
+    const ldUrl = "https://images.ctfassets.net/ld.png";
+    const ogUrl = "https://images.ctfassets.net/og.png";
+    const html = `<!doctype html>
+<html>
+  <head>
+    <title>Example</title>
+    <meta property="og:image" content="${ogUrl}">
+    <script type="application/ld+json">{"@context":"https://schema.org","@type":"Organization","name":"Example","logo":"${ldUrl}"}</script>
+  </head>
+  <body>
+    <h1>Example</h1>
+    <p>Example makes plain office chairs, desks and lamps for people who work
+    from small rooms. Everything ships flat, assembles with one hex key, and
+    comes in three colours. The catalogue is short on purpose: four chairs,
+    two desks, one lamp, no limited editions and no collaborations.</p>
+  </body>
+</html>`;
+    vi.stubGlobal("fetch", (input: RequestInfo | URL) => {
+      const url = input instanceof Request ? input.url : String(input);
+      if (url === ldUrl) {
+        return Promise.reject(new Error("dns"));
+      }
+      if (url === ogUrl) {
+        return Promise.resolve(
+          new Response(new Uint8Array([4, 5, 6]), { status: 200, headers: { "content-type": "image/png" } }),
+        );
+      }
+      return Promise.resolve(new Response(html, { status: 200 }));
+    });
+    const card = startCard("ws-1", subjectFor("example.com"), []);
+    await card.site;
+    expect(await card.logo).toBe("data:image/png;base64,BAUG");
+    expect(await env.SNAPSHOTS.get("logo/example.com")).not.toBeNull();
+  });
+
   it("falls through a candidate the guarded fetch refuses to the next one", async () => {
     stubAi(0.95);
     const ldUrl = "https://images.ctfassets.net/ld.png";
