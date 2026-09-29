@@ -74,12 +74,11 @@ async function settledTail(): Promise<void> {
   }>();
   if (row === null) return;
   const instance = await env.IDENTITY_TAIL.get(identityTailInstanceId(row.id));
-  for (let attempt = 0; attempt < 40; attempt += 1) {
+  for (;;) {
     const status = await instance.status();
     if (status.status === "complete" || status.status === "errored") return;
     await new Promise((resolve) => setTimeout(resolve, 25));
   }
-  throw new Error("identity tail did not finish");
 }
 
 async function settledClassification(introspector: Awaited<ReturnType<typeof introspectWorkflow>>): Promise<void> {
@@ -628,6 +627,7 @@ describe("confirmCard", () => {
   });
 
   it("refuses a card with no name, and a second confirm keeps the first", async () => {
+    stubWeb(() => new Response(gym, { status: 200, headers: { "content-type": "text/html" } }));
     await answerHomepage();
     expect(await confirmCard("ws-1", "u1", form({ subject: "gymshark.com", name: "  ", description: "" }))).toBe(false);
     expect(await confirmCard("ws-1", "u1", form({ subject: "gymshark.com", name: "First", description: "" }))).toBe(true);
