@@ -94,6 +94,19 @@ describe("landing what we watch", () => {
     expect(html).not.toContain("ads");
   });
 
+  it("explains last good unknown in the lead, above the pill row", () => {
+    const html = markup([
+      entry({ source: { key: "hn.algolia", name: "hn.algolia", platform: "hn", is_enabled: 1 }, snapshot: LIVE }),
+    ]);
+    const sentence =
+      "Last good unknown means we haven't yet checked this kind of source. The first check lands in the daily sweep.";
+    // React serializes the apostrophe in a text node as an entity; decode it so
+    // the assertion is against the copy as written, not React's escaping.
+    const text = html.replaceAll("&#x27;", "'");
+    expect(text.indexOf(sentence)).toBeGreaterThanOrEqual(0);
+    expect(text.indexOf(sentence)).toBeLessThan(text.indexOf("<ul"));
+  });
+
   it("is a wrapped pill row: no card grid, no icons", () => {
     const html = markup([
       entry({ source: { key: "hn.algolia", name: "hn.algolia", platform: "hn", is_enabled: 1 }, snapshot: LIVE }),

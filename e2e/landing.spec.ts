@@ -3,7 +3,7 @@ import { expect, test } from "@playwright/test";
 import { expectFaceLoaded } from "./fonts";
 import { consoleFailures, watchConsole } from "./inbox";
 
-// The homepage, staged at /design/landing behind the staff gate until launch;
+// The homepage, staged at /design/landing, publicly reachable until launch;
 // / keeps the static rebuild notice (Nish, 2026-09-24). What is asserted is the
 // contract: section order, one headline, the priced action and where it goes,
 // the structured data matching the visible page. Copy stays unpinned.
