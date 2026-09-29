@@ -1,0 +1,55 @@
+import { describe, expect, it } from "vitest";
+
+import { registeredToolDescriptors } from "../../app/lib/agent/mcp-tools";
+import { llmsTxt, type LlmsTxtSource } from "../../app/lib/public-routes";
+
+const NOW = Date.parse("2026-09-28T12:00:00.000Z");
+const FRESH = { item_count: 4, fetched_at: "2026-09-28T11:00:00.000Z", canary_count: 1 } as const;
+
+function registryEntry(key: string, platform: string): LlmsTxtSource {
+  return {
+    source: { key, platform, is_enabled: 1, degraded_reason: null, last_good_at: null, config_json: null },
+    snapshot: FRESH,
+  };
+}
+
+const MANIFEST_TOOL_LINE = /^ {2}- ([a-z_]+): (.+)$/gm;
+
+function manifestTools(body: string): Map<string, string> {
+  const agents = body.slice(body.indexOf("## Agents"));
+  const tools = new Map<string, string>();
+  for (const match of agents.matchAll(MANIFEST_TOOL_LINE)) {
+    tools.set(match[1] ?? "", match[2] ?? "");
+  }
+  return tools;
+}
+
+describe("llms.txt MCP tool manifest", () => {
+  it("names every tool registered by mcp.server.ts, derived from the registry", () => {
+    const body = llmsTxt(
+      "https://0509.io",
+      [
+        registryEntry("site.web", "web"),
+        registryEntry("hn.algolia", "hn"),
+        registryEntry("gdelt.doc", "gdelt"),
+        registryEntry("youtube.channel_rss", "youtube"),
+      ],
+      NOW,
+    );
+    expect([...manifestTools(body).keys()].sort()).toEqual(Object.keys(registeredToolDescriptors).sort());
+  });
+
+  it("shows the registry title after each tool name, never its own prose", () => {
+    const body = llmsTxt("https://0509.io", [], NOW);
+    const tools = manifestTools(body);
+    expect(tools.size).toBeGreaterThan(0);
+    for (const [name, tool] of Object.entries(registeredToolDescriptors)) {
+      expect(tools.get(name)).toBe(tool.title);
+    }
+  });
+
+  it("keeps the hand-written three-tool comma list out of the manifest", () => {
+    const body = llmsTxt("https://0509.io", [], NOW);
+    expect(body).not.toContain("get_brief, list_competitors and list_alerts");
+  });
+});

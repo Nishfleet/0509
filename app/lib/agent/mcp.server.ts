@@ -5,6 +5,7 @@ import { readRegistrySources } from "../data/source.server";
 import { joinList } from "../../lib/coverage";
 import type { FreshnessSource } from "../../lib/freshness.server";
 import { sourceKindNoun } from "../../lib/source-name";
+import { registeredToolDescriptors } from "./mcp-tools";
 import {
   readAgentAlerts,
   readAgentBrief,
@@ -60,7 +61,7 @@ async function createServer(workspaceId: string): Promise<McpServer> {
   server.registerTool(
     "get_standing",
     {
-      title: "This week's standing",
+      title: registeredToolDescriptors.get_standing.title,
       description: "Where the user ranks against their tracked competitors this week, the movement since last week, the one-line why, and one line per competitor. Paused competitors are left out.",
       outputSchema: standingResultSchema,
       annotations: READ_ONLY,
@@ -71,7 +72,7 @@ async function createServer(workspaceId: string): Promise<McpServer> {
   server.registerTool(
     "get_brief",
     {
-      title: "This week's brief",
+      title: registeredToolDescriptors.get_brief.title,
       description:
         "The latest weekly brief: where the user ranks against their competitors, the changes worth reading first and why each matters, per-competitor standing, and whether the user's own site had problems.",
       outputSchema: briefResultSchema,
@@ -83,7 +84,7 @@ async function createServer(workspaceId: string): Promise<McpServer> {
   server.registerTool(
     "list_competitors",
     {
-      title: "Competitors",
+      title: registeredToolDescriptors.list_competitors.title,
       description: "The competitors the user tracks, plus the brands suggested as competitors that are waiting for the user's yes.",
       outputSchema: competitorsResultSchema,
       annotations: READ_ONLY,
@@ -94,7 +95,7 @@ async function createServer(workspaceId: string): Promise<McpServer> {
   server.registerTool(
     "get_competitor",
     {
-      title: "One competitor",
+      title: registeredToolDescriptors.get_competitor.title,
       description:
         "One tracked competitor: its state (on, or paused), how many of its pages are watched and when they were last checked, and its website changes from the last 90 days. Returns null for an id that is not one of the user's competitors.",
       inputSchema: competitorArgsSchema,
@@ -107,7 +108,7 @@ async function createServer(workspaceId: string): Promise<McpServer> {
   server.registerTool(
     "list_alerts",
     {
-      title: "Alerts",
+      title: registeredToolDescriptors.list_alerts.title,
       description: "Recent alerts for the user: weekly briefs that could not be delivered, and takedown notices.",
       outputSchema: alertsResultSchema,
       annotations: READ_ONLY,
