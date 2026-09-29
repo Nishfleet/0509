@@ -1,7 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { hnGenerator } from "../../../app/lib/discovery/generators/hn";
-import { defaultFetchText, type Subject } from "../../../app/lib/discovery/types";
+import { hnGenerator } from "../../../app/lib/discovery/generators/hn.server";
+import { defaultFetchText } from "../../../app/lib/discovery/fetch-text.server";
+import type { Subject } from "../../../app/lib/discovery/types";
 
 const SUBJECT: Subject = { name: "Gymshark", domain: "gymshark.com" };
 

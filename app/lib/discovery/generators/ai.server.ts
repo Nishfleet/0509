@@ -5,8 +5,8 @@ import { z } from "zod";
 import { fetchOutbound } from "../../fetch/outbound.server";
 import { CRAWLER_USER_AGENT } from "../../fetch/robots.server";
 import { GATEWAY_ID } from "../../jev/client.server";
+import { defaultFetchText } from "../fetch-text.server";
 import {
-  defaultFetchText,
   type Candidate,
   type FetchText,
   type Generator,

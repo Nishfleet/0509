@@ -13,7 +13,7 @@ vi.mock("../../app/lib/discovery/resolve-domain.server", () => ({
 vi.mock("../../app/lib/discovery/generators/ai.server", () => ({ aiGenerator: () => Promise.resolve([]) }));
 const hn = vi.hoisted(() => ({ run: vi.fn() }));
 
-vi.mock("../../app/lib/discovery/generators/hn", () => ({ hnGenerator: hn.run }));
+vi.mock("../../app/lib/discovery/generators/hn.server", () => ({ hnGenerator: hn.run }));
 
 const SELF = { workspaceId: "ws-generate", name: "Gymshark", domain: "gymshark.com", description: null, kind: "domain" as const };
 
