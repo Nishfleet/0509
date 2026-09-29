@@ -190,6 +190,22 @@ describe("extractMagicLink on a named lane", () => {
     vi.stubEnv("PLAYWRIGHT_LOCAL_PORT", "8791");
     expect(extractMagicLink(PLAIN)).toBeNull();
   });
+
+  // playwright.config.ts hands wrangler Number(PLAYWRIGHT_LOCAL_PORT), so the
+  // matcher has to normalize the port the same way or a padded value matches
+  // an origin the app never mailed.
+  it("normalizes a padded local port to the origin wrangler was given", () => {
+    vi.stubEnv("PLAYWRIGHT_TEST_BASE_URL", "");
+    vi.stubEnv("PLAYWRIGHT_LOCAL_PORT", "08791");
+    const link = "http://127.0.0.1:8791/api/auth/magic-link/verify?token=abc123&callbackURL=%2Fapp";
+    expect(extractMagicLink(`Sign in to Five to Nine\n\n${link}`)).toBe(link);
+  });
+
+  it("names a local port Number() cannot read instead of matching another origin", () => {
+    vi.stubEnv("PLAYWRIGHT_TEST_BASE_URL", "");
+    vi.stubEnv("PLAYWRIGHT_LOCAL_PORT", "8791;rm");
+    expect(() => extractMagicLink(PLAIN)).toThrow('PLAYWRIGHT_LOCAL_PORT is "8791;rm"');
+  });
 });
 
 // The pre-send read on the sign-in path (0509#5839) must tell a missing
@@ -261,6 +277,14 @@ describe("staleLinks", () => {
   it("rethrows an inbox failure carrying its status", async () => {
     vi.stubGlobal("fetch", () => Promise.resolve(new Response("", { status: 500 })));
     await expect(staleLinks("e2e+stale@0509.io", "token")).rejects.toBeInstanceOf(InboxReadError);
+  });
+
+  // The local lane's null marker must never reach a remote read: overloading
+  // it into a token re-read would hide the caller bug behind the environment.
+  it("names the null local-lane marker instead of re-resolving the token", async () => {
+    await expect(staleLinks("e2e+stale@0509.io", null)).rejects.toThrow(
+      "an inbox read on a remote lane needs the E2E_INBOX_TOKEN the caller resolved",
+    );
   });
 
   // The seam itself: what the pre-read found is what the poll skips, so a fixed

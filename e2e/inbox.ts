@@ -41,9 +41,18 @@ export function isLocalLane(): boolean {
 export function laneOrigin(): string {
   const baseUrl = process.env.PLAYWRIGHT_TEST_BASE_URL;
   if (baseUrl) return new URL(baseUrl).origin;
-  return process.env.PLAYWRIGHT_LOCAL_PORT
-    ? `http://127.0.0.1:${process.env.PLAYWRIGHT_LOCAL_PORT}`
-    : PRODUCTION_ORIGIN;
+  const pinned = process.env.PLAYWRIGHT_LOCAL_PORT;
+  if (!pinned) return PRODUCTION_ORIGIN;
+  // The same Number() playwright.config.ts hands wrangler's --port and --var:
+  // a padded value ("08000") normalizes here exactly as it does there, so the
+  // matcher's prefix can never diverge from the link the app mails. A value
+  // Number() cannot read names itself instead of silently matching another
+  // origin's links.
+  const port = Number(pinned);
+  if (!Number.isInteger(port) || port <= 0) {
+    throw new Error(`PLAYWRIGHT_LOCAL_PORT is "${pinned}", not a port playwright.config.ts pinned`);
+  }
+  return `http://127.0.0.1:${port}`;
 }
 
 // Fail loudly, never skip: the amended decision on #3927 requires a missing
