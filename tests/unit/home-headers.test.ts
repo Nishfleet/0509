@@ -78,7 +78,9 @@ describe("static home analytics", () => {
   // cannot drift: edit the script and this goes red until the hash is updated.
   it("pins the inline script by hash in the static CSP", () => {
     const html = readFileSync(join(REPO_ROOT, "public/index.html"), "utf8");
-    const script = html.match(/<script>([\s\S]*?)<\/script>/)?.[1];
+    // Case-insensitive and attribute-tolerant so a `<SCRIPT>` tag or one with
+    // attributes still matches rather than silently yielding undefined.
+    const script = html.match(/<script\b[^>]*>([\s\S]*?)<\/script\s*>/i)?.[1];
     if (script === undefined) {
       throw new Error("public/index.html has no inline <script>");
     }
