@@ -166,7 +166,7 @@ describe("alerts mentions source pills (#4003 4/6)", () => {
       expect(registryYoutube.source.watch_config_json).toBeNull();
       const registryStatus = sourcePillStatus(registryYoutube.source, registryYoutube.snapshot, NOW_MS);
       expect(registryStatus.state).toBe("degraded");
-      expect(registryStatus.reason).not.toBe(NO_CHANNEL_REASON);
+      expect(registryStatus.reason).toBe("no fresh data");
     } finally {
       await clearOwner(USER, WS, COMP);
     }
@@ -192,7 +192,7 @@ describe("alerts mentions source pills (#4003 4/6)", () => {
       }
       const youtube = sources.find((entry) => entry.source.key === "youtube.channel_rss");
       if (!youtube) throw new Error("the enabled YouTube source must reach the landing loader");
-      expect(sourcePillStatus(youtube.source, youtube.snapshot, NOW_MS).reason).not.toBe(NO_CHANNEL_REASON);
+      expect(sourcePillStatus(youtube.source, youtube.snapshot, NOW_MS).reason).toBe("no fresh data");
     } finally {
       await clearOwner(USER, WS, COMP);
     }
