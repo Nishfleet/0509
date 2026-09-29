@@ -2,7 +2,7 @@ name: code-audit
 
 # Nish 2026-09-28: "everything in the past needs to be A+ as well, as
 # individual pcs and also as a whole". Grades the code on main one area at a
-# time, and the codebase as a whole, against the opus-review A+ bar, and posts
+# time, and the codebase as a whole, against the fleet A+ bar (fleet-ops docs/quality-bar.md), and posts
 # the findings on the umbrella issue (0509#5867). Kimi K3 Max grades, so it
 # spends no Claude allowance (Nish 2026-09-28 13:58Z). Dispatch only.
 on:
@@ -73,7 +73,7 @@ jobs:
           fetch-depth: 1
       - name: Copy the area into an empty directory
         # The grader sees regular files only: no .git, no symlink, no project
-        # .cursor config, the same isolation as the opus-review Kimi grader.
+        # .cursor config, the same isolation the Kimi grader had.
         run: |
           case "$AREA" in
             routes) set -- app/routes app/routes.ts ;;
