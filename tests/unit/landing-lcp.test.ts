@@ -41,6 +41,16 @@ describe("landing LCP critical path", () => {
     expect(html).not.toContain("modulepreload");
   });
 
+  it("leaves the module graph off the legal documents", () => {
+    for (const id of ["routes/privacy", "routes/terms"]) {
+      const html = renderDocument(id);
+      expect(html).not.toContain('type="module"');
+      expect(html).not.toContain("modulepreload");
+      expect(html).toContain("/fonts/instrument-sans-latin.woff2");
+      expect(html).toContain("/fonts/bricolage-hero.woff2");
+    }
+  });
+
   it("still ships the module script and the body face on every other document", () => {
     const html = renderDocument("routes/login");
     expect(html).toContain("<script");

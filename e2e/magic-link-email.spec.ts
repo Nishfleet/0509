@@ -30,7 +30,7 @@ function htmlBodyFrom(raw: string): string {
 // module rather than against the inbox's rendering: the copy has to survive a
 // mail client that shows the HTML part at 600 px in either colour scheme.
 test(
-  "the sign-in email names the address, the expiry and the ignore line, and renders at 600 px in light and dark",
+  "the sign-in email names the address, the expiry and the ignore line, and renders at 600 px in light and dark @own-signin",
   async ({ page }, testInfo) => {
     test.setTimeout(180_000);
     const token = requireInboxToken();

@@ -107,7 +107,7 @@ test("the API reference is public OpenAPI 3.1", async ({ request }) => {
 test.describe("a signed-in customer's key", () => {
   test.skip(!process.env.PLAYWRIGHT_TEST_BASE_URL, "needs the production mail path to sign in");
 
-  test("reads only its owner's workspace over MCP and REST, and stops working once deleted", async ({ page }) => {
+  test("reads only its owner's workspace over MCP and REST, and stops working once deleted @own-signin", async ({ page }) => {
     const email = `e2e+${crypto.randomUUID().replaceAll("-", "").slice(0, 12)}@0509.io`;
     createdEmail = email;
     await signInWithMagicLink(page, email, requireInboxToken());
