@@ -12,6 +12,7 @@ export interface SiteSweepTarget {
   workspaceId: string;
   entityId: string;
   entityRole: string;
+  domain: string;
   sourceId: string;
   watchId: string;
   pageId: string;
@@ -36,6 +37,7 @@ const MARK_POLLED = `UPDATE watch SET last_polled_at = ?2 WHERE id = ?1`;
 const SITE_SWEEP_TARGETS = `SELECT e.workspace_id AS workspace_id,
        e.id AS entity_id,
        e.role AS entity_role,
+       e.domain AS domain,
        w.source_id AS source_id,
        w.id AS watch_id,
        p.id AS page_id,
@@ -63,6 +65,7 @@ const targetRows = z.array(
     workspace_id: z.string(),
     entity_id: z.string(),
     entity_role: z.string(),
+    domain: z.string(),
     source_id: z.string(),
     watch_id: z.string(),
     page_id: z.string(),
@@ -144,6 +147,7 @@ export async function readSiteSweepTargets(sourceKey: string): Promise<readonly 
     workspaceId: row.workspace_id,
     entityId: row.entity_id,
     entityRole: row.entity_role,
+    domain: row.domain,
     sourceId: row.source_id,
     watchId: row.watch_id,
     pageId: row.page_id,

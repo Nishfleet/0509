@@ -2,6 +2,7 @@ import { env } from "cloudflare:workers";
 import { getDomain } from "tldts";
 
 import { insertPages, readEntitiesWithoutHomePage } from "../data/page.server";
+import { linkVerdictsStatement } from "../data/jev_verdict.server";
 import { insertChangeSignalStatement } from "../data/signal.server";
 import { readCoveredPagePairs } from "../data/snapshot.server";
 import { readEnabledSourceId } from "../data/source.server";
@@ -15,9 +16,11 @@ import {
 import { robotsAllows } from "../fetch/robots.server";
 import { normaliseSubject } from "../identity/normalise";
 import { takeBrowserScreenshot } from "./browser-budget.server";
+import { computeBreakageEvidence } from "./breakage-evidence";
 import type { CheckPageResult } from "./check-page.server";
 import { checkPage } from "./check-page.server";
 import { diffPageText } from "./diff";
+import type { ChangeJudgment } from "./judge.server";
 import { readPage } from "./read-page.server";
 
 const SITE_SOURCE_KEY = "site.web";
@@ -133,7 +136,110 @@ export async function checkSitePage(target: SiteSweepTarget, tick: SweepTick): P
   return result;
 }
 
+interface SiteChangeInput {
+  target: SiteSweepTarget;
+  changed: ChangedPage;
+  diff: ReturnType<typeof diffPageText> | null;
+  before: string | null;
+  after: string | null;
+}
+
+function changeSignalPayload(input: {
+  target: SiteSweepTarget;
+  changed: ChangedPage;
+  diff: ReturnType<typeof diffPageText> | null;
+  diffKey: string;
+}): object {
+  const words = input.diff?.words ?? [];
+  return {
+    page: { role: input.target.pageRole, url: input.target.url },
+    before: {
+      snapshotId: input.changed.previousSnapshotId,
+      textKey: input.changed.previousTextKey,
+      screenshotKey: input.changed.previousScreenshotKey,
+    },
+    after: {
+      snapshotId: input.changed.snapshotId,
+      textKey: input.changed.textKey,
+      screenshotKey: input.changed.screenshotKey,
+    },
+    diffKey: input.diff === null ? null : input.diffKey,
+    wordsAdded: words.filter((c) => c.added).reduce((n, c) => n + wordCount(c.value), 0),
+    wordsRemoved: words.filter((c) => c.removed).reduce((n, c) => n + wordCount(c.value), 0),
+    status: input.changed.status,
+    transport: input.changed.transport,
+  };
+}
+
+async function judgeCompetitorChange(change: SiteChangeInput): Promise<ChangeJudgment | null> {
+  if (change.target.entityRole !== "competitor" || change.diff === null) return null;
+  const { judgeChange } = await import("./judge.server");
+  return judgeChange({
+    workspaceId: change.target.workspaceId,
+    entityId: change.target.entityId,
+    isSelf: false,
+    subject: { name: null, domain: change.target.domain },
+    pageUrl: change.target.url,
+    pageRole: change.target.pageRole,
+    hunks: change.diff.hunks,
+    evidence: computeBreakageEvidence({
+      status: change.changed.status,
+      beforeText: change.before ?? "",
+      afterText: change.after ?? "",
+    }),
+  });
+}
+
+async function fileChangeSignal(
+  change: SiteChangeInput & { payloadJson: string; judgment: ChangeJudgment | null; judgedFrom: string },
+): Promise<void> {
+  const { target, changed, payloadJson, judgment, judgedFrom } = change;
+  const noteworthy = judgment?.noteworthy ?? null;
+  if (noteworthy?.band === "discard") {
+    console.log(JSON.stringify({
+      event: "site.change_discarded",
+      url: target.url,
+      kind: noteworthy.kind,
+    }));
+    return;
+  }
+
+  const signalId = crypto.randomUUID();
+  const insert = insertChangeSignalStatement({
+    id: signalId,
+    workspaceId: target.workspaceId,
+    entityId: target.entityId,
+    sourceId: target.sourceId,
+    watchId: target.watchId,
+    snapshotId: changed.snapshotId,
+    title: null,
+    summary: null,
+    aspect: noteworthy?.kind ?? target.pageRole,
+    url: target.url,
+    payloadJson,
+    observedAt: new Date().toISOString(),
+  });
+
+  if (noteworthy === null) {
+    await insert.run();
+    return;
+  }
+
+  const { D3_CHANGE_QUESTION_IDS } = await import("./judge.server");
+  await env.DB.batch([
+    insert,
+    linkVerdictsStatement({
+      signalId,
+      workspaceId: target.workspaceId,
+      entityId: target.entityId,
+      since: judgedFrom,
+      questionIds: D3_CHANGE_QUESTION_IDS,
+    }),
+  ]);
+}
+
 export async function publishSiteChange(target: SiteSweepTarget, changed: ChangedPage): Promise<string> {
+  const judgedFrom = new Date().toISOString();
   const [before, after] = await Promise.all([
     readText(changed.previousTextKey),
     readText(changed.textKey),
@@ -153,39 +259,12 @@ export async function publishSiteChange(target: SiteSweepTarget, changed: Change
     });
   }
 
-  const words = diff?.words ?? [];
-  const payload = {
-    page: { role: target.pageRole, url: target.url },
-    before: {
-      snapshotId: changed.previousSnapshotId,
-      textKey: changed.previousTextKey,
-      screenshotKey: changed.previousScreenshotKey,
-    },
-    after: {
-      snapshotId: changed.snapshotId,
-      textKey: changed.textKey,
-      screenshotKey: changed.screenshotKey,
-    },
-    diffKey: diff === null ? null : diffKey,
-    wordsAdded: words.filter((c) => c.added).reduce((n, c) => n + wordCount(c.value), 0),
-    wordsRemoved: words.filter((c) => c.removed).reduce((n, c) => n + wordCount(c.value), 0),
-    status: changed.status,
-    transport: changed.transport,
-  };
-
-  await insertChangeSignalStatement({
-    id: crypto.randomUUID(),
-    workspaceId: target.workspaceId,
-    entityId: target.entityId,
-    sourceId: target.sourceId,
-    watchId: target.watchId,
-    snapshotId: changed.snapshotId,
-    title: null,
-    summary: null,
-    aspect: target.pageRole,
-    url: target.url,
-    payloadJson: JSON.stringify(payload),
-    observedAt: new Date().toISOString(),
-  }).run();
+  const change: SiteChangeInput = { target, changed, diff, before, after };
+  await fileChangeSignal({
+    ...change,
+    payloadJson: JSON.stringify(changeSignalPayload({ target, changed, diff, diffKey })),
+    judgment: await judgeCompetitorChange(change),
+    judgedFrom,
+  });
   return changed.snapshotId;
 }

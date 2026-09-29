@@ -13,6 +13,11 @@ const SELECT_LAST_STILL_COMPETITOR =
 const INSERT_VERDICT =
   "INSERT INTO jev_verdict (id, workspace_id, question_id, input_hash, signal_id, entity_id, p, choice, reason, decided_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10) ON CONFLICT (question_id, input_hash) DO NOTHING";
 
+const LINK_VERDICTS = `UPDATE jev_verdict SET signal_id = ?1
+WHERE workspace_id = ?2 AND entity_id = ?3 AND signal_id IS NULL AND decided_at >= ?4
+  AND question_id IN (SELECT value FROM json_each(?5))
+  AND EXISTS (SELECT 1 FROM signal WHERE id = ?1)`;
+
 export interface StillCompetitorVerdict {
   choice: string;
   decidedAt: string;
@@ -80,5 +85,21 @@ export function insertVerdict(row: VerdictRow): D1PreparedStatement {
     row.choice,
     row.reason,
     row.decidedAt,
+  );
+}
+
+export function linkVerdictsStatement(input: {
+  signalId: string;
+  workspaceId: string;
+  entityId: string;
+  since: string;
+  questionIds: readonly string[];
+}): D1PreparedStatement {
+  return env.DB.prepare(LINK_VERDICTS).bind(
+    input.signalId,
+    input.workspaceId,
+    input.entityId,
+    input.since,
+    JSON.stringify(input.questionIds),
   );
 }

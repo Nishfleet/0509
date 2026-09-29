@@ -25,6 +25,8 @@ const D3_NOTEWORTHY_QID = "noteworthy_change";
 
 const D3_KIND_QID = "change_kind";
 
+export const D3_CHANGE_QUESTION_IDS = [D3_NOTEWORTHY_QID, D3_KIND_QID] as const;
+
 const D3S_BREAKAGE: NoulQuestion = {
   id: D3S_BREAKAGE_QID,
   instructions: "Does this change make the brand own website look broken or unintentionally degraded for a visitor?",
