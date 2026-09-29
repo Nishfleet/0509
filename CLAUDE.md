@@ -141,7 +141,7 @@ Five required checks on the `main-merge-queue` ruleset (id 21391031), **empty
 bypass list**:
 
 ```
-Gitleaks   codex-node-checks   semgrep   preview-assert   grade / grade
+Gitleaks   codex-node-checks   semgrep   preview-assert   grade
 ```
 
 Renaming one of these is not cosmetic. A required check that never reports fails

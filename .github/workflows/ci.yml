@@ -1,7 +1,9 @@
 # The checks the main-merge-queue ruleset requires, by exactly these names:
-#   Gitleaks   codex-node-checks   semgrep   preview-assert   grade / grade
-# `grade / grade` is the shared A+ grader (Nishfleet/fleet-ops grade.yml@main),
-# called by the `grade` job below. Bypass actors on that ruleset is empty, so a
+#   Gitleaks   codex-node-checks   semgrep   preview-assert   grade
+# `grade` is a real job that reports the result of `grade-run`, the shared A+
+# grader (Nishfleet/fleet-ops grade.yml@main): a reusable-workflow call reports
+# "<job> / <job>", and the ruleset's check picker offers only the plain name.
+# Bypass actors on that ruleset is empty, so a
 # renamed job is not a cosmetic change — a required check that never reports
 # fails closed and nothing can merge, including the PR that renamed it.
 # Verified against the live ruleset (id 21391031) before this file was written.
@@ -10,8 +12,9 @@
 # the queue evaluates checks on the merge ref, so a job that skips there gives
 # the queue no verdict, and on GitHub a skipped required check counts as
 # passing (#4664): no required job may carry a job-level `if:` that can skip
-# it, except `grade`, which runs only on pull_request and merge_group;
-# tests/required-checks-never-skip.test.ts pins it. On an event where a job has
+# it, except `grade-run` and `grade`, which run only on pull_request and
+# merge_group (`grade` also `always()`, so a failed or cancelled grade-run fails
+# it instead of skipping it); tests/required-checks-never-skip.test.ts pins both. On an event where a job has
 # nothing to do it runs one explicit pass step.
 name: CI
 
@@ -347,11 +350,11 @@ jobs:
           N=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search '"lighthouse red on main" in:title' --json number --jq '.[0].number // empty')
           [ -z "$N" ] || gh issue close "$N" --repo "$GITHUB_REPOSITORY" --reason completed --comment "Green again on $RUN_URL."
 
-  # The shared A+ grader (fleet-ops#8655, fleet-ops#8922), the check `grade / grade`.
-  # It grades every pull request from a branch of this repo with the rubric on
-  # fleet-ops@main and this repo's trust doc. It replaced opus-review, whose
-  # Kimi grader is out of usage until 2026-10-25.
-  grade:
+  # The shared A+ grader (fleet-ops#8655, fleet-ops#8922), reported as
+  # `grade-run / grade`. It grades every pull request from a branch of this
+  # repo with the rubric on fleet-ops@main and this repo's trust doc. It
+  # replaced opus-review, whose Kimi grader is out of usage until 2026-10-25.
+  grade-run:
     if: github.event_name == 'pull_request' || github.event_name == 'merge_group'
     uses: Nishfleet/fleet-ops/.github/workflows/grade.yml@main
     with:
@@ -362,3 +365,18 @@ jobs:
       issues: write
     secrets:
       CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+
+  # The required check, named exactly `grade` (the ruleset's picker offers no
+  # "grade / grade"). always() keeps it running, and failing, when grade-run
+  # fails or is cancelled: a skipped required check counts as passing.
+  grade:
+    if: always() && (github.event_name == 'pull_request' || github.event_name == 'merge_group')
+    needs: grade-run
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    permissions: {}
+    steps:
+      - name: The grade-run result must be success
+        env:
+          RESULT: ${{ needs.grade-run.result }}
+        run: test "$RESULT" = success
