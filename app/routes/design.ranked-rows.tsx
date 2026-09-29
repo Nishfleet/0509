@@ -94,6 +94,7 @@ const VIEW: HomeView = {
     rank: 2,
     total: 3,
     whyLine: "Kindred is the mover: 3 new ads",
+    unjudged: false,
     readThisFirst: [],
     rows: ROWS,
     chart: {

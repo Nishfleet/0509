@@ -33,8 +33,9 @@ export interface ResolvedCandidate {
 const IS_COMPETITOR: NoulQuestion = {
   id: "is_competitor",
   instructions:
-    "Is `item` a real competitor of `self`: a company or brand that sells a substitute to the same kind of customer, so the owner of `self` would want to watch what it does? `item.evidence` is where the two were named together.",
-  whenTrue: "It sells a substitute product or service to the same kind of customer as `self`.",
+    "Is `item` a real competitor of `self`: a company or brand that sells a substitute to the same kind of customer, so the owner of `self` would want to watch what it does? `item.evidence` is where the two were named together. Judge the business relationship the evidence shows. If `item` sells, stocks, lists, supplies, funds, owns, reports on or partners with `self`, it is not a competitor, even when it is in the same industry.",
+  whenTrue:
+    "It sells a substitute product or service to the same kind of customer as `self`: a customer of `self` could switch to it. Its size, age, price or business model (free, open-source, enterprise, startup, incumbent) does not matter.",
   whenFalse:
     "It is a publisher, retailer, marketplace, supplier, partner, investor, a product line of `self`, `self` itself, or an unrelated company that only shares a headline.",
 };
