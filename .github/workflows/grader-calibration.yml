@@ -4,19 +4,8 @@ name: grader-calibration
 # Grades a fixed labeled set (.github/grader-calibration/cases.json) with the
 # exact opus-review grading steps: the scripts and the prompt are read out of
 # ci.yml at run time, so a grader change is measured as it will run. Results
-# and the catch rate go on 0509#5872. Not a required check. A pull request
-# runs it only when the set or this file changes; a ci.yml change is measured
-# once, when it lands on main, not on every ci.yml pull request (18 grades).
+# and the catch rate go on 0509#5872. Not a required check. Dispatch only.
 on:
-  pull_request:
-    paths:
-      - .github/workflows/grader-calibration.yml
-      - .github/grader-calibration/**
-  push:
-    branches: [main]
-    paths:
-      - .github/workflows/grader-calibration.yml
-      - .github/grader-calibration/**
   workflow_dispatch:
     inputs:
       model:
