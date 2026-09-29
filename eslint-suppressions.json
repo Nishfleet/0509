@@ -343,11 +343,6 @@
       "count": 1
     }
   },
-  "app/lib/site/sweep.server.ts": {
-    "max-lines-per-function": {
-      "count": 1
-    }
-  },
   "app/routes/app.alerts.tsx": {
     "max-lines-per-function": {
       "count": 1
