@@ -49,11 +49,12 @@ async function seed(): Promise<string> {
     url: string,
     publishedAt: string | null,
     observedAt: string,
+    state: string | null = null,
   ) =>
     env.DB.prepare(
-      `INSERT INTO signal (id, workspace_id, entity_id, source_id, kind, title, url, canonical_url, url_hash, payload_json, dedup_key, published_at, observed_at)
-       VALUES (?1, ?2, ?3, ?4, 'mention', ?5, ?6, ?6, ?7, '{}', ?8, ?9, ?10)`,
-    ).bind(id, workspaceId, entityId, source, title, url, `hash-${id}`, `dedup-${id}`, publishedAt, observedAt);
+      `INSERT INTO signal (id, workspace_id, entity_id, source_id, kind, title, url, canonical_url, url_hash, payload_json, dedup_key, published_at, observed_at, state)
+       VALUES (?1, ?2, ?3, ?4, 'mention', ?5, ?6, ?6, ?7, '{}', ?8, ?9, ?10, ?11)`,
+    ).bind(id, workspaceId, entityId, source, title, url, `hash-${id}`, `dedup-${id}`, publishedAt, observedAt, state);
   const verdict = (id: string, signalId: string, entityId: string, p: number, reason: string, decidedAt: string) =>
     env.DB.prepare(
       `INSERT INTO jev_verdict (id, workspace_id, question_id, input_hash, signal_id, entity_id, p, reason, decided_at)
@@ -68,6 +69,16 @@ async function seed(): Promise<string> {
       "https://news.example/hiring",
       "2026-09-25T07:00:00.000Z",
       "2026-09-25T10:00:00.000Z",
+    ),
+    mention(
+      `sig-pending-${suffix}`,
+      onId,
+      "src_mentions_gdelt",
+      "Zephyrwear is quoted on a podcast",
+      "https://news.example/podcast",
+      "2026-09-25T07:30:00.000Z",
+      "2026-09-25T09:30:00.000Z",
+      "unjudged",
     ),
     mention(
       `sig-news-${suffix}`,
@@ -182,6 +193,7 @@ describe("mention feed read", () => {
     const mentions = await readMentionFeed(workspaceId, NOW);
     expect(mentions.map((mention) => mention.title)).toEqual([
       "Zephyrwear posts a hiring page",
+      "Zephyrwear is quoted on a podcast",
       "Zephyrwear opens a London flagship",
       "Zephyrwear thread on Hacker News",
       "Zephyrwear shows up in a roundup",
@@ -189,6 +201,7 @@ describe("mention feed read", () => {
     ]);
     expect(mentions.map((mention) => mention.treatment)).toEqual([
       "unreviewed",
+      "pending",
       "shown",
       "shown",
       "possibly",
@@ -197,12 +210,14 @@ describe("mention feed read", () => {
     expect(mentions.map((mention) => mention.sourceName)).toEqual([
       "News mentions",
       "News mentions",
+      "News mentions",
       "Hacker News mentions",
       "Medium mentions",
       "News mentions",
     ]);
-    expect(mentions[3]?.when).toBe("found today");
+    expect(mentions[4]?.when).toBe("found today");
     expect(mentions.map((mention) => mention.why)).toEqual([
+      null,
       null,
       "A London flagship is a move worth knowing.",
       "A public thread about the brand is worth a look.",
