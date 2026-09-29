@@ -31,7 +31,7 @@ async function measure(page: Page) {
 }
 
 for (const target of targets) {
-  test(`${target} has no horizontal scroll at 390`, async ({ page }, testInfo) => {
+  test(`${target} has no horizontal scroll at 390 @smoke`, async ({ page }, testInfo) => {
     test.skip(testInfo.project.name !== "phone-390", "measured at 390 only");
     await page.goto(target);
     await expect(page.locator("main")).toBeVisible();
@@ -60,7 +60,7 @@ test.describe("signed in", () => {
   });
 });
 
-test.fail("a deliberately overflowing element fails the check", async ({ page }, testInfo) => {
+test.fail("a deliberately overflowing element fails the check @smoke", async ({ page }, testInfo) => {
   test.skip(testInfo.project.name !== "phone-390", "measured at 390 only");
   await page.goto("/");
   await page.evaluate(() => {
