@@ -93,6 +93,7 @@ jobs:
           LEAKED: ${{ steps.devin.outputs.leaked }}
         run: |
           expect=$(jq -r .expect "$RUNNER_TEMP/case.json")
+          case "$expect" in block|pass) ;; *) echo "::error::case $CASE has expect '$expect', not block or pass" >&2; exit 1 ;; esac
           graded="$RUNNER_TEMP/devin-graded.txt"
           : > "$graded"
           if [ "$LEAKED" != false ]; then
