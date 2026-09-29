@@ -21,7 +21,7 @@ function Row({
 }) {
   return (
     <div
-      className={`flex items-baseline gap-4 border-b border-line py-3${
+      className={`flex items-baseline gap-4 border-b border-line py-3 max-sm:flex-wrap${
         check === true ? " bg-green-wash px-2 text-green-ink" : ""
       }`}
     >
@@ -139,7 +139,9 @@ function EditRow({
         </span>
       ) : null}
       <input type="hidden" name={name} value={value} />
-      {empty === true ? <span className="text-[0.88rem] text-ink-soft">{emptyLine}</span> : null}
+      {empty === true ? (
+        <span className="text-[0.88rem] text-ink-soft max-sm:basis-full">{emptyLine}</span>
+      ) : null}
     </Row>
   );
 }
