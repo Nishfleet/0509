@@ -62,6 +62,13 @@ describe("eslint one-outbound-fetch rule (#4951)", () => {
     expect(result.messages.some((m) => m.includes(FETCH_MESSAGE))).toBe(true);
   });
 
+  it("rejects a bare fetch( in a file that was grandfathered before the migration", { timeout: 60_000 }, async () => {
+    for (const file of ["app/lib/discovery/probe-fetch-tmp.server.ts", "app/lib/hiring/probe-fetch-tmp.server.ts", "workers/sources/mentions/probe-fetch-tmp.ts"]) {
+      const result = await lintProbe(file, BARE_FETCH_CALL);
+      expect(result.messages.some((m) => m.includes(FETCH_MESSAGE))).toBe(true);
+    }
+  });
+
   it("rejects a bare fetch( in workers/", { timeout: 60_000 }, async () => {
     const result = await lintProbe("workers/probe-fetch-tmp.ts", BARE_FETCH_CALL);
     expect(result.ignored).toBe(false);
@@ -75,12 +82,7 @@ describe("eslint one-outbound-fetch rule (#4951)", () => {
   });
 
   it("leaves a grandfathered call site alone", { timeout: 60_000 }, async () => {
-    const messages = await lintExisting("app/lib/discovery/types.ts");
-    expect(messages.some((m) => m.includes(FETCH_MESSAGE))).toBe(false);
-  });
-
-  it("leaves a hostname-exempt grandfather alone", { timeout: 60_000 }, async () => {
-    const messages = await lintExisting("app/lib/identity/youtube-channel.server.ts");
+    const messages = await lintExisting("app/components/share-button.tsx");
     expect(messages.some((m) => m.includes(FETCH_MESSAGE))).toBe(false);
   });
 });

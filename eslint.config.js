@@ -592,18 +592,12 @@ export default tseslint.config(
   },
 
   {
-    // BARE_FETCH grandfathers: these files called fetch before the rule
-    // existed (0509#4951). They keep every other ban — the array restates the
+    // BARE_FETCH grandfather: the one file left that called fetch before the rule
+    // existed (0509#4951), client code that cannot import a server module. It keeps every other ban — the array restates the
     // shared list because a later matching block's no-restricted-syntax entry
     // replaces the earlier one wholesale. New outbound fetch belongs in
     // app/lib/fetch/, not on this list.
-    files: [
-      "app/lib/liveness-ping.server.ts",
-      "app/lib/discovery/types.ts",
-      "app/lib/observability/cost-analytics.server.ts",
-      "app/components/share-button.tsx",
-      "workers/sources/mentions/types.ts",
-    ],
+    files: ["app/components/share-button.tsx"],
     rules: {
       "no-restricted-syntax": [
         "error",
@@ -616,16 +610,9 @@ export default tseslint.config(
   },
 
   {
-    // The same grandfather for files that also sit in the hostname exemption
-    // above (their .hostname reads stay allowed) — plus the whole fetch paved
-    // path itself, where the guard's host check and the wrapped call live by
-    // definition. app/lib/identity/** stays listed file by file here so a NEW
-    // fetch caller there (the second wrapper this rule exists to stop) still
-    // fires: only the two callers that predate the rule are exempted.
-    files: [
-      "app/lib/fetch/**",
-      "workers/support-inbox.ts",
-    ],
+    // The fetch paved path itself, where the guard's host check and the
+    // wrapped call live by definition; its .hostname reads stay allowed too.
+    files: ["app/lib/fetch/**"],
     rules: {
       "no-restricted-syntax": [
         "error",
