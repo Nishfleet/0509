@@ -30,7 +30,7 @@ export interface SourcePillStatus {
 
 const MONO = 'var(--mono, var(--font-mono, "IBM Plex Mono", ui-monospace, monospace))';
 const INK_SOFT = "var(--ink-soft, var(--color-ink-soft))";
-const LINE = "var(--line, var(--color-line))";
+const LINE_FALLBACK = "var(--line, var(--color-line))";
 const ACCENT = "var(--green, var(--color-green))";
 const ACCENT_INK = "var(--green-ink, var(--color-green-ink))";
 const ACCENT_WASH = "var(--green-wash, var(--color-green-wash))";
@@ -100,7 +100,7 @@ export function SourcePill({
     margin: 0,
     padding: "0.14em 0.55em",
     border: "1px solid",
-    borderColor: live ? ACCENT : LINE,
+    borderColor: live ? ACCENT : LINE_FALLBACK,
     backgroundColor: live ? ACCENT_WASH : "transparent",
     color: live ? ACCENT_INK : INK_SOFT,
     fontFamily: MONO,

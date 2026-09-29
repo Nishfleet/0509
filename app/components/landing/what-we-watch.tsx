@@ -1,6 +1,6 @@
 import { joinList } from "../../lib/coverage";
 import { sourceKindNoun } from "../../lib/source-name";
-import { SourcePill, type SourceRow, type SourceSnapshot } from "../source-pill";
+import { SourcePill, sourcePillStatus, type SourceRow, type SourceSnapshot } from "../source-pill";
 import { Section } from "./section";
 
 export interface WatchedSource {
@@ -9,6 +9,9 @@ export interface WatchedSource {
   snapshot: SourceSnapshot | null;
 }
 
+const REBUILDING =
+  "We're rebuilding coverage of news mentions. Briefs and standing still arrive from site changes; mentions resume as their sources come back.";
+
 export function WhatWeWatch({
   sources,
   now,
@@ -16,17 +19,27 @@ export function WhatWeWatch({
   sources: readonly WatchedSource[];
   now?: number;
 }) {
-  const nouns = [...new Set(sources.map((entry) => sourceKindNoun(entry.kind)))];
+  const statuses = sources.map((entry) => ({
+    entry,
+    status: sourcePillStatus(entry.source, entry.snapshot, now),
+  }));
+  const shown = statuses.filter(({ status }) => status.state !== "disabled");
+  const allDegraded = shown.length > 0 && shown.every(({ status }) => status.state === "degraded");
+  const nouns = [...new Set(statuses.map(({ entry }) => sourceKindNoun(entry.kind)))];
   const lead = `We read ${nouns.length === 0 ? "public sources" : joinList(nouns)}. A source that stops answering shows here dimmed, with the reason — we never quietly drop it. Last good unknown means we haven't yet checked this kind of source. The first check lands in the daily sweep.`;
   return (
     <Section id="what-we-watch" kicker="Public sources only" title="What we watch" lead={lead}>
-      <ul className="flex flex-wrap gap-2">
-        {sources.map((entry) => (
-          <li key={entry.source.key}>
-            <SourcePill source={entry.source} snapshot={entry.snapshot} now={now} />
-          </li>
-        ))}
-      </ul>
+      {allDegraded ? (
+        <p className="max-w-[42rem] text-[1.05rem] leading-[1.6] text-ink-soft">{REBUILDING}</p>
+      ) : (
+        <ul className="flex flex-wrap gap-2">
+          {shown.map(({ entry }) => (
+            <li key={entry.source.key}>
+              <SourcePill source={entry.source} snapshot={entry.snapshot} now={now} />
+            </li>
+          ))}
+        </ul>
+      )}
     </Section>
   );
 }

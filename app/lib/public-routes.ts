@@ -1,7 +1,13 @@
+import { sourcePillStatus, type SourcePillStatus, type SourceRow, type SourceSnapshot } from "../components/source-pill";
 import { PLANS, TRIAL_TERMS } from "./billing/plans";
 import { LIVE_COVERAGE, PLAN_NOTE, WATCHED_NOUNS } from "./coverage";
 import { FAQ } from "./faq";
 import { SITE_URL } from "./structured-data";
+
+export interface LlmsTxtSource {
+  source: SourceRow;
+  snapshot: SourceSnapshot | null;
+}
 
 export const PUBLIC_PATHS = ["/privacy", "/terms"] as const;
 export const SITEMAP_PATHS = ["/privacy", "/terms", "/llms.txt"] as const;
@@ -44,13 +50,8 @@ export function robotsTxt(origin: string): string {
   );
 }
 
-export function llmsTxt(origin: string): string {
+export function llmsTxt(origin: string, sources: readonly LlmsTxtSource[], now: number = Date.now()): string {
   const prices = PLANS.map((plan) => `${plan.name} €${String(plan.monthlyPriceEur)}/month`).join(", ");
-  const watched = LIVE_COVERAGE.flatMap((group) =>
-    group.sources.map(
-      (source) => `- ${group.kind}: ${source.label}${source.plan === undefined ? "" : ` (${PLAN_NOTE[source.plan]})`}`,
-    ),
-  );
   return (
     [
       "# Five to Nine",
@@ -60,9 +61,7 @@ export function llmsTxt(origin: string): string {
       `- Plans: ${prices}. ${TRIAL_TERMS}`,
       `- Agents: every plan includes a read-only API and an MCP server at ${MCP_URL}.`,
       "",
-      "What it watches today:",
-      "",
-      ...watched,
+      ...llmsWatchesBlock(sources, now),
       "",
       ...FAQ.flatMap((entry) => [`**${entry.question}** ${entry.answer}`, ""]),
       "## Agents",
@@ -75,4 +74,72 @@ export function llmsTxt(origin: string): string {
       ...PUBLIC_PATHS.map((path) => `- [${PAGE_SUMMARIES[path].title}](${origin}${path}): ${PAGE_SUMMARIES[path].summary}`),
     ].join("\n") + "\n"
   );
+}
+
+function llmsWatchStatus(
+  source: { sourceKey?: string },
+  ctx: { readonly byKey: ReadonlyMap<string, LlmsTxtSource>; readonly now: number },
+): SourcePillStatus {
+  const key = source.sourceKey;
+  if (key === undefined) {
+    return { state: "live", reason: null, lastGoodAt: null };
+  }
+  const row = ctx.byKey.get(key);
+  if (row === undefined) {
+    return { state: "disabled", reason: null, lastGoodAt: null };
+  }
+  return sourcePillStatus(row.source, row.snapshot, ctx.now);
+}
+
+function llmsWatchQualifier(status: SourcePillStatus): string {
+  if (status.state !== "degraded") return "";
+  if (status.lastGoodAt === null && status.reason === "no fresh data") {
+    return " (no data yet)";
+  }
+  if (status.reason === null) {
+    return " (degraded — not answering today)";
+  }
+  return ` (degraded: ${status.reason} — not answering today)`;
+}
+
+function llmsWatchLine(
+  group: { readonly kind: string },
+  source: { label: string; sourceKey?: string; plan?: "starter" | "agency" },
+  ctx: { readonly byKey: ReadonlyMap<string, LlmsTxtSource>; readonly now: number },
+): { text: string; degraded: boolean } | null {
+  const status = llmsWatchStatus(source, ctx);
+  if (status.state === "disabled") return null;
+  const plan = source.plan === undefined ? "" : ` (${PLAN_NOTE[source.plan]})`;
+  return {
+    text: `- ${group.kind}: ${source.label}${plan}${llmsWatchQualifier(status)}`,
+    degraded: status.state === "degraded",
+  };
+}
+
+function llmsWatchesBlock(sources: readonly LlmsTxtSource[], now: number): readonly string[] {
+  const byKey = new Map<string, LlmsTxtSource>();
+  for (const entry of sources) {
+    byKey.set(entry.source.key, entry);
+  }
+  const ctx = { byKey, now };
+  const lines: string[] = [];
+  let degraded = false;
+  for (const group of LIVE_COVERAGE) {
+    for (const source of group.sources) {
+      const line = llmsWatchLine(group, source, ctx);
+      if (line === null) continue;
+      if (line.degraded) degraded = true;
+      lines.push(line.text);
+    }
+  }
+  if (!degraded) {
+    return ["What it watches today:", "", ...lines];
+  }
+  return [
+    "What it watches today:",
+    "",
+    "Some sources are not answering today; those lines say so.",
+    "",
+    ...lines,
+  ];
 }

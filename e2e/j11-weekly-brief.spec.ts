@@ -1,7 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 
 import { previousBriefAt } from "../app/lib/brief-schedule";
-import { decodedBodies, deleteCreatedAccount, readRawMessage, requireInboxToken, signInWithMagicLink } from "./inbox";
+import { decodedBodies, deleteCreatedAccount, laneOrigin, readRawMessage, requireInboxToken, signInWithMagicLink } from "./inbox";
 
 let createdEmail = "";
 test.afterEach(async ({ page }, testInfo) => {
@@ -11,12 +11,13 @@ test.afterEach(async ({ page }, testInfo) => {
   createdEmail = "";
 });
 
-// J11 from docs/REBUILD-DONE.md §A. Production only: the preview Worker has
-// no EMAIL binding and no inbox. One project — the phone project would send a
-// second brief, and the check the contract asks for is the HTML at 600 px.
+// J11 from docs/REBUILD-DONE.md §A. Of the three lanes — local, merge-queue
+// Preview and production — J11 runs in production only. One project — the
+// phone project would send a second brief, and the check the contract asks
+// for is the HTML at 600 px.
 test.skip(
-  !process.env.PLAYWRIGHT_TEST_BASE_URL,
-  "J11 proves the production mail path; the local preview Worker can neither send nor receive email",
+  !process.env.PLAYWRIGHT_TEST_BASE_URL || laneOrigin() !== "https://0509.io",
+  "J11 proves the production mail path: the brief is sent by the send-email queue consumer on the production Worker. The local Worker cannot mail, and a merge-queue Preview cannot consume queues (https://developers.cloudflare.com/workers/previews/resources/#queue-consumers)",
 );
 
 const ON = ["linear.app", "notion.so", "figma.com"] as const;
@@ -136,7 +137,7 @@ function assertOrder(text: string, markers: readonly string[]): void {
   }
 }
 
-test("the weekly brief arrives from the inbox, in order, and unsubscribe stops the next one", async ({ page }, testInfo) => {
+test("the weekly brief arrives from the inbox, in order, and unsubscribe stops the next one @own-signin", async ({ page }, testInfo) => {
   test.setTimeout(480_000);
   test.skip(testInfo.project.name === "phone-390", "one production brief; the HTML is checked at 600 px");
 

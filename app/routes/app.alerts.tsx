@@ -19,7 +19,7 @@ export function meta() {
   return [{ title: "Alerts · Five to Nine" }];
 }
 
-const WHEN_CLASS = "text-ink-soft mt-2 block font-mono text-meta uppercase";
+const WHEN_CLASS = "mt-2 block font-mono text-meta text-ink-soft uppercase";
 
 export async function loader({ request }: Route.LoaderArgs) {
   const session = await requireSession(request);
@@ -43,7 +43,7 @@ export default function Page({ loaderData }: Route.ComponentProps) {
   return (
     <main className={PAGE}>
       <PageHeading title="Alerts" />
-      <p data-testid="alerts-contract" className="text-ink-soft mt-2 leading-[1.65]">
+      <p data-testid="alerts-contract" className="mt-2 leading-[1.65] text-ink-soft">
         One thing here interrupted you by email: your own site.
       </p>
       {loaderData.failedBrief === null ? null : (
@@ -73,7 +73,7 @@ export default function Page({ loaderData }: Route.ComponentProps) {
           key={incident.id}
           id={incident.id}
           data-testid="own-site-incident"
-          className="border-line mt-8 border-t pt-6"
+          className="mt-8 border-t border-line pt-6"
         >
           <h2 className="font-display text-row-name font-bold [overflow-wrap:anywhere]">
             {incident.title}
@@ -98,7 +98,7 @@ export default function Page({ loaderData }: Route.ComponentProps) {
       {loaderData.offLine === null ? null : (
         <p
           data-testid="alerts-off-footer"
-          className="text-ink-soft border-line mt-10 border-t pt-6 leading-[1.65]"
+          className="mt-10 border-t border-line pt-6 leading-[1.65] text-ink-soft"
         >
           {loaderData.offLine}
         </p>
