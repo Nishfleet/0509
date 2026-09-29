@@ -1,10 +1,8 @@
 import { z } from "zod";
 
 import { coMentions } from "../co-mentions";
-import type { Candidate, Evidence, FetchText, Generator, Subject } from "../types";
+import { defaultFetchText, type Candidate, type Evidence, type FetchText, type Generator, type Subject } from "../types";
 import { GDELT_SEARCH_URL, gdeltResponseSchema, gdeltWebUrlSchema } from "../gdelt";
-
-const TIMEOUT_MS = 8_000;
 
 const NEWS_ARTICLE_SCHEMA = z.object({
   title: z.string().min(1),
@@ -45,23 +43,8 @@ function addCandidate(merged: Merge, name: string, evidence: Evidence): void {
   });
 }
 
-const defaultFetchText: FetchText = async (url) => {
-  try {
-    const response = await fetch(url, { signal: AbortSignal.timeout(TIMEOUT_MS) });
-    return {
-      ok: response.ok,
-      url: response.url,
-      contentType: response.headers.get("content-type"),
-      body: await response.text(),
-    };
-  } catch (error) {
-    console.error(JSON.stringify({ event: "discovery.news_fetch_failed", error: String(error) }));
-    return { ok: false, url, contentType: null, body: "" };
-  }
-};
-
 export const newsGenerator: Generator = async (subject: Subject, fetchText?: FetchText) => {
-  const fetchFn = fetchText ?? defaultFetchText;
+  const fetchFn = fetchText ?? defaultFetchText("discovery.news_fetch_failed");
   const page = await fetchFn(GDELT_SEARCH_URL + encodeURIComponent(`"${subject.name}"`));
   if (!page.ok) return [];
 

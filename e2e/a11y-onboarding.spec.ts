@@ -20,7 +20,7 @@ test.skip(
   "the onboarding screens need a signed-in session; the preview lane cannot read the magic-link inbox",
 );
 
-test("the three onboarding screens pass axe at WCAG 2.2 AA in both themes and at both widths (#4149)", async ({ page }, testInfo) => {
+test("the three onboarding screens pass axe at WCAG 2.2 AA in both themes and at both widths (#4149) @own-signin", async ({ page }, testInfo) => {
   const token = requireInboxToken();
   const email = `e2e+${crypto.randomUUID().replaceAll("-", "").slice(0, 12)}@0509.io`;
   createdEmail = email;
@@ -80,7 +80,7 @@ test("the three onboarding screens pass axe at WCAG 2.2 AA in both themes and at
   }
 });
 
-test("screen 1 is operable by keyboard in order (#4149)", async ({ page }, testInfo) => {
+test("screen 1 is operable by keyboard in order (#4149) @own-signin", async ({ page }, testInfo) => {
   const token = requireInboxToken();
   const email = `e2e+${crypto.randomUUID().replaceAll("-", "").slice(0, 12)}@0509.io`;
   createdEmail = email;
@@ -113,7 +113,7 @@ test("screen 1 is operable by keyboard in order (#4149)", async ({ page }, testI
   });
 });
 
-test("screen 2 is operable by keyboard in order, with one polite live region (#4149)", async ({
+test("screen 2 is operable by keyboard in order, with one polite live region (#4149) @own-signin", async ({
   page,
 }, testInfo) => {
   const token = requireInboxToken();
