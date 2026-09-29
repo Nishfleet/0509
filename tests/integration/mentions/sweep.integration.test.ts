@@ -171,6 +171,11 @@ describe("nightly mentions sweep", () => {
       ["Zephyr winds expected this weekend", "unjudged", 0],
       ["Zephyrwear opens a London flagship", "unjudged", 0],
     ]);
+    const view = await env.DB.prepare("SELECT state FROM mention WHERE entity_id = ?")
+      .bind(competitorId)
+      .all<{ state: string | null }>();
+    expect(view.results.map((row) => row.state)).toEqual(["unjudged", "unjudged", "unjudged"]);
+
     const verdicts = await env.DB.prepare(
       "SELECT COUNT(*) AS n FROM jev_verdict WHERE workspace_id = ?",
     )

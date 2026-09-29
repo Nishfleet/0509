@@ -1,4 +1,4 @@
--- 0027_signal_state.sql — 0509#6076 (part 1 of #5368): a mention whose Jev
+-- 0028_signal_state.sql — 0509#6076 (part 1 of #5368): a mention whose Jev
 -- judgment never ran is stored, not dropped. `state` is NULL on every row
 -- written before this file; new mention rows carry 'judged' or 'unjudged'.
 -- Expand-only: an additive nullable ALTER, no DROP of a table or column, no
