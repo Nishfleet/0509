@@ -145,19 +145,22 @@ rejection**, not a review comment.
 
 ## What gates a merge
 
-Five required checks on the `main-merge-queue` ruleset (id 21391031), **empty
+Four required checks on the `main-merge-queue` ruleset (id 21391031), **empty
 bypass list**:
 
 ```
-Gitleaks   codex-node-checks   semgrep   preview-assert   grade
+Gitleaks   codex-node-checks   semgrep   preview-assert
 ```
 
 Renaming one of these is not cosmetic. A required check that never reports fails
 closed and nothing can merge again, including the PR that renamed it. A
-*skipped* required check counts as passing, so none of these five carries a
+*skipped* required check counts as passing, so none of these four carries a
 job-level `if:` that can skip it: they report on every event, and on an event
 with nothing to do they pass through one explicit step. The merge queue tests
-the merge result, so a PR that would redden `main` never lands.
+the merge result, so a PR that would redden `main` never lands. There is no
+AI grader: CI is the gate, and a PR that touches `.github/`, `migrations/`,
+`app/lib/auth*` or `app/lib/data/` is labelled `needs-coordinator` and the
+coordinator reviews it before it merges.
 
 `lighthouse` runs on `deployment_status` and `e2e-production` (the sharded full
 suite in `e2e-scheduled.yml`, dispatched with `journey=suite`) runs on demand.
