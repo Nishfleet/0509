@@ -371,12 +371,14 @@ describe("confirmCard", () => {
 
   it("classifies the homepage's nav pages and writes them as judged page rows", async () => {
     stubWeb(() => new Response(gym, { status: 200, headers: { "content-type": "text/html" } }));
+    await answerHomepage();
     const run = vi.fn(() => Promise.resolve({ answers: { page_role: { type: "choice", choice: "pricing" } } }));
     Reflect.set(env, "AI", { run });
 
     expect(
       await confirmCard("ws-1", "u1", form({ subject: "https://www.gymshark.com/", name: "Gymshark", description: "" })),
     ).toBe(true);
+    await settledTail();
 
     const entity = await env.DB.prepare("SELECT id FROM entity WHERE role = 'self'").first<{ id: string }>();
     const expected = (await extractIdentity(gym, "https://www.gymshark.com/")).navPages.length;
@@ -393,12 +395,14 @@ describe("confirmCard", () => {
 
   it("keeps the confirm and records no role when Jev is down", async () => {
     stubWeb(() => new Response(gym, { status: 200, headers: { "content-type": "text/html" } }));
+    await answerHomepage();
     const run = vi.fn(() => Promise.reject(new Error("down")));
     Reflect.set(env, "AI", { run });
 
     expect(
       await confirmCard("ws-1", "u1", form({ subject: "https://www.gymshark.com/", name: "Gymshark", description: "" })),
     ).toBe(true);
+    await settledTail();
 
     const entity = await env.DB.prepare("SELECT id FROM entity WHERE role = 'self'").first<{ id: string }>();
     expect(entity).not.toBeNull();

@@ -29,3 +29,20 @@ type FetchText = (url: string) => Promise<FetchedText>;
 type Generator = (subject: Subject, fetchText?: FetchText) => Promise<Candidate[]>;
 
 export type { Candidate, Evidence, FetchText, FetchedText, Generator, Subject };
+
+export function defaultFetchText(event: string): FetchText {
+  return async (url) => {
+    try {
+      const response = await fetch(url, { signal: AbortSignal.timeout(8_000) });
+      return {
+        ok: response.ok,
+        url: response.url,
+        contentType: response.headers.get("content-type"),
+        body: await response.text(),
+      };
+    } catch (error) {
+      console.error(JSON.stringify({ event, error: String(error) }));
+      return { ok: false, url, contentType: null, body: "" };
+    }
+  };
+}

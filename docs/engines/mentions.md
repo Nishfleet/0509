@@ -37,7 +37,7 @@ A target that throws is logged as `mentions.target_failed` and counted as `faile
   5. Writes the body to **R2** at `snapshot/mentions/<plugin_key>/<hash>` via `env.SNAPSHOTS.put` (unconditional; a re-poll with an unchanged body re-PUTs the same key).
   6. For each watch on this target, reads `readDiscoveryContext(workspace_id)` once per workspace and calls `statementsForWatch(...)`.
 - `statementsForWatch(...)`:
-  - Inserts exactly one `snapshot` row per watch per tick (`app/lib/data/snapshot.server.ts` `insertWatchSnapshot`).
+  - Inserts exactly one `snapshot` row per watch per tick (`app/lib/data/snapshot.server.ts` `insertWatchSnapshot`), and stages the source row's `latest_*` facts in the same batch.
   - Reads `readSeenDedupKeys(source_id, dedup_keys)` against `signal(source_id, dedup_key)` and drops known keys from the batch.
   - Caps the batch at **12** fresh items per watch per tick (`JUDGED_PER_WATCH = 12`).
   - For each fresh item calls `judge(...)` which runs Jev (below), then stages `signal`, `jev_verdict` and optionally `alert` statements.
@@ -104,6 +104,7 @@ Per 1,000 polls (one source × one watch × one tick):
 |---|---|---|
 | Workers requests | 1,000 | included |
 | D1 rows written (`snapshot`) | 1,000 | included |
+| D1 rows written (`source` latest facts — one paired update per poll; the guard caps it at one per source per tick) | up to 1,000 | included |
 | D1 rows written (`signal`) | up to ~12 × fraction surviving D5 | included |
 | D1 rows written (`alert` on D6 act) | up to ~12 × fraction with `p >= 0.9` | included |
 | R2 Class A (PUT body) | 1,000 | included |

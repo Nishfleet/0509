@@ -481,6 +481,8 @@ export function ownDocument404For(pathname: string): (entry: ConsoleEntry) => bo
 // in playwright.config.ts) against one inbox slot per recipient, so two tests
 // sharing one fixed address need serial mode or an address each.
 // Timestamps are logged for the packet's proof line (send and session).
+const MAGIC_LINK_SEND_FAILED = "We couldn't send the link. Try again in a minute.";
+
 export async function signInWithMagicLink(
   page: Page,
   email: string,
@@ -492,10 +494,15 @@ export async function signInWithMagicLink(
   await settleSignInWidget(page);
   const stale = await staleLinks(email, token);
   const sentAt = new Date().toISOString();
+  const failed = page.getByRole("alert").filter({ hasText: MAGIC_LINK_SEND_FAILED });
+  const sent = page.getByRole("heading", { level: 1, name: "Check your email" });
   await page.locator('button[type="submit"]').click();
-  // Sent state replaces the form; asserting the field is gone asserts the swap
-  // without pinning copy (smoke.spec.ts's contract-not-copy convention).
-  await expect(page.locator('input[name="email"]')).toHaveCount(0);
+  const outcome = await Promise.race([
+    sent.waitFor({ state: "visible" }).then(() => "sent" as const),
+    failed.waitFor({ state: "visible" }).then(() => "failed" as const),
+  ]);
+  if (outcome === "failed") throw new Error(MAGIC_LINK_SEND_FAILED);
+  await expect(failed).toHaveCount(0);
   const link = await waitForMagicLink(email, token, stale);
   const linkReadAt = new Date().toISOString();
   const response = await page.goto(link);
@@ -509,7 +516,8 @@ export async function signInWithMagicLink(
 // Every production sign-in above creates a real row in the user table, and
 // until 0509#5723 the suite never removed it. This is the product's own
 // delete path — the settings flow J14 proves end to end — called from each
-// spec's afterEach so a failed test still cleans up. deleteAccount removes
+// `@own-signin` spec's `afterEach` and from `e2e/session.teardown.ts`, so a
+// failed test still cleans up. deleteAccount removes
 // the user row synchronously before it redirects here, so the redirect is
 // the proof the row is gone. The KEPT_JOURNEY_ACCOUNTS guard below runs
 // first: the four fixed journey accounts return untouched, matched as exact
