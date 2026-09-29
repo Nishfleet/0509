@@ -25,7 +25,7 @@ test.skip(
   "J1 proves the production mail path; the local preview Worker can neither send nor receive email",
 );
 
-test("a fresh address signs in with the magic link that was emailed to it", async ({ page }) => {
+test("a fresh address signs in with the magic link that was emailed to it @own-signin", async ({ page }) => {
   const token = requireInboxToken();
   const email = `e2e+${crypto.randomUUID().replaceAll("-", "").slice(0, 12)}@0509.io`;
   createdEmail = email;

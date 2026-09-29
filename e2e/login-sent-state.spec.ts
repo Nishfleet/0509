@@ -3,7 +3,7 @@ import { expect, test } from "@playwright/test";
 import { consoleFailures, settleSignInWidget, watchConsole } from "./inbox";
 
 // #4015, DESIGN.md §2.2: the sent state lands in place and the resend counts down for 30 s.
-test("the sent state lands in place and the resend waits 30 seconds with a visible count", async ({ page }, testInfo) => {
+test("the sent state lands in place and the resend waits 30 seconds with a visible count @own-signin", async ({ page }, testInfo) => {
   const watched = watchConsole(page);
 
   await page.clock.install();
