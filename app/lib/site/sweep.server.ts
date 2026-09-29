@@ -20,7 +20,8 @@ import { computeBreakageEvidence } from "./breakage-evidence";
 import type { CheckPageResult } from "./check-page.server";
 import { checkPage } from "./check-page.server";
 import { diffPageText } from "./diff";
-import type { ChangeJudgment } from "./judge.server";
+import type { JudgedChange, JudgeInput } from "./judge.server";
+import { judgeChange } from "./judge.server";
 import { readPage } from "./read-page.server";
 
 const SITE_SOURCE_KEY = "site.web";
@@ -136,12 +137,24 @@ export async function checkSitePage(target: SiteSweepTarget, tick: SweepTick): P
   return result;
 }
 
+function pageTextDiff(
+  before: string | null,
+  after: string | null,
+  changed: ChangedPage,
+): ReturnType<typeof diffPageText> | null {
+  if (before === null || after === null) return null;
+  return diffPageText(
+    { text: before, hash: changed.previousHash, charCount: before.length },
+    { text: after, hash: changed.hash, charCount: after.length },
+  );
+}
+
 interface SiteChangeInput {
   target: SiteSweepTarget;
   changed: ChangedPage;
   diff: ReturnType<typeof diffPageText> | null;
-  before: string | null;
-  after: string | null;
+  subject: { name: string | null; domain: string };
+  evidence: ReturnType<typeof computeBreakageEvidence>;
 }
 
 function changeSignalPayload(input: {
@@ -149,61 +162,60 @@ function changeSignalPayload(input: {
   changed: ChangedPage;
   diff: ReturnType<typeof diffPageText> | null;
   diffKey: string;
-}): object {
-  const words = input.diff?.words ?? [];
-  return {
-    page: { role: input.target.pageRole, url: input.target.url },
+}): string {
+  const { target, changed, diff, diffKey } = input;
+  const words = diff?.words ?? [];
+  return JSON.stringify({
+    page: { role: target.pageRole, url: target.url },
     before: {
-      snapshotId: input.changed.previousSnapshotId,
-      textKey: input.changed.previousTextKey,
-      screenshotKey: input.changed.previousScreenshotKey,
+      snapshotId: changed.previousSnapshotId,
+      textKey: changed.previousTextKey,
+      screenshotKey: changed.previousScreenshotKey,
     },
     after: {
-      snapshotId: input.changed.snapshotId,
-      textKey: input.changed.textKey,
-      screenshotKey: input.changed.screenshotKey,
+      snapshotId: changed.snapshotId,
+      textKey: changed.textKey,
+      screenshotKey: changed.screenshotKey,
     },
-    diffKey: input.diff === null ? null : input.diffKey,
+    diffKey: diff === null ? null : diffKey,
     wordsAdded: words.filter((c) => c.added).reduce((n, c) => n + wordCount(c.value), 0),
     wordsRemoved: words.filter((c) => c.removed).reduce((n, c) => n + wordCount(c.value), 0),
-    status: input.changed.status,
-    transport: input.changed.transport,
-  };
-}
-
-async function judgeCompetitorChange(change: SiteChangeInput): Promise<ChangeJudgment | null> {
-  if (change.target.entityRole !== "competitor" || change.diff === null) return null;
-  const { judgeChange } = await import("./judge.server");
-  return judgeChange({
-    workspaceId: change.target.workspaceId,
-    entityId: change.target.entityId,
-    isSelf: false,
-    subject: { name: null, domain: change.target.domain },
-    pageUrl: change.target.url,
-    pageRole: change.target.pageRole,
-    hunks: change.diff.hunks,
-    evidence: computeBreakageEvidence({
-      status: change.changed.status,
-      beforeText: change.before ?? "",
-      afterText: change.after ?? "",
-    }),
+    status: changed.status,
+    transport: changed.transport,
   });
 }
 
-async function fileChangeSignal(
-  change: SiteChangeInput & { payloadJson: string; judgment: ChangeJudgment | null; judgedFrom: string },
-): Promise<void> {
-  const { target, changed, payloadJson, judgment, judgedFrom } = change;
-  const noteworthy = judgment?.noteworthy ?? null;
-  if (noteworthy?.band === "discard") {
-    console.log(JSON.stringify({
-      event: "site.change_discarded",
-      url: target.url,
-      kind: noteworthy.kind,
-    }));
-    return;
-  }
+function judgeInputFor(change: SiteChangeInput, signalId: string | null): JudgeInput {
+  return {
+    workspaceId: change.target.workspaceId,
+    entityId: change.target.entityId,
+    signalId,
+    isSelf: change.target.entityRole === "self",
+    subject: change.subject,
+    pageUrl: change.target.url,
+    pageRole: change.target.pageRole,
+    hunks: change.diff === null ? [] : change.diff.hunks,
+    evidence: change.evidence,
+  };
+}
 
+async function judgeCompetitorChange(change: SiteChangeInput): Promise<JudgedChange | null> {
+  if (change.target.entityRole !== "competitor" || change.diff === null) return null;
+  try {
+    return await judgeChange(judgeInputFor(change, null));
+  } catch (error) {
+    console.log(JSON.stringify({
+      event: "site.change_judge_failed",
+      url: change.target.url,
+      error: error instanceof Error ? error.name : "unknown",
+    }));
+    return null;
+  }
+}
+
+async function fileChangeSignal(change: SiteChangeInput, payloadJson: string, judgment: JudgedChange | null): Promise<string> {
+  const { target, changed } = change;
+  const noteworthy = judgment?.noteworthy ?? null;
   const signalId = crypto.randomUUID();
   const insert = insertChangeSignalStatement({
     id: signalId,
@@ -219,38 +231,29 @@ async function fileChangeSignal(
     payloadJson,
     observedAt: new Date().toISOString(),
   });
-
-  if (noteworthy === null) {
-    await insert.run();
-    return;
+  await insert.run();
+  const filed = await env.DB.prepare("SELECT id FROM signal WHERE source_id = ?1 AND dedup_key = ?2")
+    .bind(target.sourceId, changed.snapshotId)
+    .first<{ id: string }>();
+  if (filed === null) {
+    throw new Error(`missing change signal for snapshot ${changed.snapshotId}`);
   }
-
-  const { D3_CHANGE_QUESTION_IDS } = await import("./judge.server");
-  await env.DB.batch([
-    insert,
-    linkVerdictsStatement({
-      signalId,
+  if (judgment !== null && judgment.verdictIds.length > 0) {
+    await linkVerdictsStatement({
+      signalId: filed.id,
       workspaceId: target.workspaceId,
-      entityId: target.entityId,
-      since: judgedFrom,
-      questionIds: D3_CHANGE_QUESTION_IDS,
-    }),
-  ]);
+      verdictIds: judgment.verdictIds,
+    }).run();
+  }
+  return filed.id;
 }
 
 export async function publishSiteChange(target: SiteSweepTarget, changed: ChangedPage): Promise<string> {
-  const judgedFrom = new Date().toISOString();
   const [before, after] = await Promise.all([
     readText(changed.previousTextKey),
     readText(changed.textKey),
   ]);
-  const diff =
-    before === null || after === null
-      ? null
-      : diffPageText(
-          { text: before, hash: changed.previousHash, charCount: before.length },
-          { text: after, hash: changed.hash, charCount: after.length },
-        );
+  const diff = pageTextDiff(before, after, changed);
 
   const diffKey = `snapshot/site/${target.watchId}/${changed.snapshotId}.diff.json`;
   if (diff !== null) {
@@ -259,12 +262,29 @@ export async function publishSiteChange(target: SiteSweepTarget, changed: Change
     });
   }
 
-  const change: SiteChangeInput = { target, changed, diff, before, after };
-  await fileChangeSignal({
-    ...change,
-    payloadJson: JSON.stringify(changeSignalPayload({ target, changed, diff, diffKey })),
-    judgment: await judgeCompetitorChange(change),
-    judgedFrom,
-  });
+  const subject = await env.DB.prepare("SELECT name, domain FROM entity WHERE id = ?1 AND workspace_id = ?2")
+    .bind(target.entityId, target.workspaceId)
+    .first<{ name: string | null; domain: string }>();
+  if (subject === null) {
+    throw new Error(`missing entity ${target.entityId}`);
+  }
+  const change: SiteChangeInput = {
+    target,
+    changed,
+    diff,
+    subject,
+    evidence: computeBreakageEvidence({ status: changed.status, beforeText: before ?? "", afterText: after ?? "" }),
+  };
+
+  const judgment = await judgeCompetitorChange(change);
+  if (judgment?.noteworthy?.band === "discard") {
+    console.log(JSON.stringify({ event: "site.change_discarded", url: target.url, kind: judgment.noteworthy.kind }));
+    return changed.snapshotId;
+  }
+
+  const signalId = await fileChangeSignal(change, changeSignalPayload({ target, changed, diff, diffKey }), judgment);
+  if (target.entityRole === "self") {
+    await judgeChange(judgeInputFor(change, signalId));
+  }
   return changed.snapshotId;
 }

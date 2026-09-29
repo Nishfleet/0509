@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 import { coMentions } from "../co-mentions";
-import { defaultFetchText, type Candidate, type Evidence, type FetchText, type Generator, type Subject } from "../types";
+import { assertFetched, defaultFetchText, logIfEmpty, type Candidate, type Evidence, type FetchText, type Generator, type Subject } from "../types";
 
 const SEARCH_URL = "https://hn.algolia.com/api/v1/search?query=";
 
@@ -42,15 +42,17 @@ function headlineOf(hit: Hit): string | null {
 export const hnGenerator: Generator = async (subject: Subject, fetchText?: FetchText) => {
   const fetchFn = fetchText ?? defaultFetchText("discovery.hn_fetch_failed");
   const page = await fetchFn(SEARCH_URL + encodeURIComponent(subject.name) + SEARCH_PARAMS);
-  if (!page.ok) return [];
+  assertFetched("hn", page);
 
   const hits = parseHits(page.body);
   if (hits === null) return [];
 
   const merged = new Map<string, { name: string; evidence: Evidence[] }>();
+  let headlines = 0;
   for (const hit of hits) {
     const headline = headlineOf(hit);
     if (headline === null) continue;
+    headlines += 1;
 
     for (const name of coMentions(headline, subject.name)) {
       const key = name.toLowerCase();
@@ -71,5 +73,6 @@ export const hnGenerator: Generator = async (subject: Subject, fetchText?: Fetch
     name: entry.name,
     evidence: entry.evidence,
   }));
+  logIfEmpty("hn", headlines, candidates);
   return candidates;
 };

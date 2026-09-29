@@ -48,7 +48,7 @@ describe("AgentKeys", () => {
     expect(html.match(/up to 120 requests a minute/g)).toHaveLength(1);
     expect(html.match(/42 requests left/g)).toHaveLength(1);
     const openRow = html.match(/<li[^>]*data-testid="api-key"[^>]*>[\s\S]*?<\/li>/g)?.[1] ?? "";
-    const openDetails = openRow.match(/<span class="text-ink-soft block text-body-sm">([^<]*)<\/span>/)?.[1];
+    const openDetails = openRow.match(/<span class="block text-body-sm text-ink-soft">([^<]*)<\/span>/)?.[1];
     expect(openDetails).toBe("Made 1 Sept 2026 · never used");
     expect(openRow).not.toContain("requests");
   });

@@ -14,9 +14,14 @@ const INSERT_VERDICT =
   "INSERT INTO jev_verdict (id, workspace_id, question_id, input_hash, signal_id, entity_id, p, choice, reason, decided_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10) ON CONFLICT (question_id, input_hash) DO NOTHING";
 
 const LINK_VERDICTS = `UPDATE jev_verdict SET signal_id = ?1
-WHERE workspace_id = ?2 AND entity_id = ?3 AND signal_id IS NULL AND decided_at >= ?4
-  AND question_id IN (SELECT value FROM json_each(?5))
+WHERE workspace_id = ?2 AND signal_id IS NULL
+  AND id IN (SELECT value FROM json_each(?3))
   AND EXISTS (SELECT 1 FROM signal WHERE id = ?1)`;
+
+const SELECT_VERDICT_IDS = `SELECT id FROM jev_verdict
+WHERE workspace_id = ?1
+  AND (question_id, input_hash) IN (
+    SELECT json_extract(value, '$.questionId'), json_extract(value, '$.inputHash') FROM json_each(?2))`;
 
 export interface StillCompetitorVerdict {
   choice: string;
@@ -88,18 +93,20 @@ export function insertVerdict(row: VerdictRow): D1PreparedStatement {
   );
 }
 
+export async function readVerdictIds(rows: readonly VerdictRow[]): Promise<readonly string[]> {
+  const [first] = rows;
+  if (first === undefined) return [];
+  const keys = rows.map((row) => ({ questionId: row.questionId, inputHash: row.inputHash }));
+  const result = await env.DB.prepare(SELECT_VERDICT_IDS)
+    .bind(first.workspaceId, JSON.stringify(keys))
+    .all<{ id: string }>();
+  return result.results.map((row) => row.id);
+}
+
 export function linkVerdictsStatement(input: {
   signalId: string;
   workspaceId: string;
-  entityId: string;
-  since: string;
-  questionIds: readonly string[];
+  verdictIds: readonly string[];
 }): D1PreparedStatement {
-  return env.DB.prepare(LINK_VERDICTS).bind(
-    input.signalId,
-    input.workspaceId,
-    input.entityId,
-    input.since,
-    JSON.stringify(input.questionIds),
-  );
+  return env.DB.prepare(LINK_VERDICTS).bind(input.signalId, input.workspaceId, JSON.stringify(input.verdictIds));
 }

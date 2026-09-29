@@ -2,6 +2,7 @@ import type { DatabaseSync } from "node:sqlite";
 
 import { expect, test } from "@playwright/test";
 
+import { FIXTURE_ACCOUNTS } from "../app/lib/fixture-accounts";
 import { consoleFailures, isLocalLane, watchConsole } from "./inbox";
 import { run, seedPreviewSession } from "./preview-session";
 
@@ -122,7 +123,23 @@ test("J9: news, Hacker News and YouTube mentions are listed and the homonym is n
   test.setTimeout(90_000);
   const watched = watchConsole(page);
 
-  await page.setExtraHTTPHeaders({ cookie: await seedSession() });
+  const cookie = await seedSession();
+  await page.setExtraHTTPHeaders({ cookie });
+
+  // The bound is read on its own page, so closing it cannot abort a fetch of
+  // the page whose console the journey watches.
+  const competitorsPage = await page.context().newPage();
+  await competitorsPage.setExtraHTTPHeaders({ cookie });
+  await competitorsPage.goto("/app/competitors");
+  const items = competitorsPage
+    .getByRole("list", { name: "Competitors" })
+    .getByRole("listitem");
+  expect(
+    await items.count(),
+    "the j9-mentions account holds more competitors than its journey needs",
+  ).toBeLessThanOrEqual(FIXTURE_ACCOUNTS.j9Mentions.maxCompetitors);
+  await competitorsPage.close();
+
   const response = await page.goto("/app/alerts");
   expect(response?.status()).toBe(200);
   await expect(page.getByTestId("alerts-contract")).toBeVisible();

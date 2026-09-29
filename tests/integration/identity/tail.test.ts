@@ -303,6 +303,47 @@ describe("IdentityTailWorkflow", () => {
     expect(seeded.map((watch) => watch.targetKey)).not.toContain(PRICING);
   });
 
+  it("keeps going when the cached homepage card is bad", async () => {
+    await seed();
+    await env.IDENTITY_CACHE.put(probeKey(subject(), "homepage"), JSON.stringify({ bad: true }));
+    const entityId = `entity-bad-card-${String(runs)}`;
+    await insertSelfEntity({
+      id: entityId,
+      workspaceId,
+      domain: DOMAIN,
+      name: "Gymshark",
+      identityJson: "{}",
+      now: "2026-09-25T08:00:00Z",
+    });
+    await upsertJudgedPages([
+      {
+        id: crypto.randomUUID(),
+        entityId,
+        url: "https://www.gymshark.com/plans",
+        title: "Plans",
+        role: "pricing",
+        roleDecidedForHash: "h",
+        discoveredAt: "2026-09-25T08:00:00Z",
+      },
+    ]);
+
+    const seeded = await seedTailWatches(
+      {
+        workspaceId,
+        entityId,
+        name: "Gymshark",
+        domain: DOMAIN,
+        homepageUrl: "https://gymshark.com/",
+      },
+      "2026-09-25T08:00:00Z",
+    );
+
+    expect(seeded.map((watch) => watch.targetKey)).toContain("https://www.gymshark.com/plans");
+    expect(seeded.map((watch) => watch.sourceKey)).toContain("site.web");
+    expect(seeded.map((watch) => watch.sourceKey)).not.toContain("ads.meta");
+    expect(seeded.map((watch) => watch.sourceKey)).not.toContain("hiring.greenhouse");
+  });
+
   it("seeds a creator's handle mentions and its named website", async () => {
     await seed();
     await using introspector = await introspectWorkflow(env.IDENTITY_TAIL);

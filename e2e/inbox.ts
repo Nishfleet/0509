@@ -516,7 +516,8 @@ export async function signInWithMagicLink(
 // Every production sign-in above creates a real row in the user table, and
 // until 0509#5723 the suite never removed it. This is the product's own
 // delete path — the settings flow J14 proves end to end — called from each
-// spec's afterEach so a failed test still cleans up. deleteAccount removes
+// `@own-signin` spec's `afterEach` and from `e2e/session.teardown.ts`, so a
+// failed test still cleans up. deleteAccount removes
 // the user row synchronously before it redirects here, so the redirect is
 // the proof the row is gone. The KEPT_JOURNEY_ACCOUNTS guard below runs
 // first: the four fixed journey accounts return untouched, matched as exact

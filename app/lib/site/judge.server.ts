@@ -1,6 +1,6 @@
 import { env } from "cloudflare:workers";
 
-import { countVerdictsSince, insertVerdicts, type VerdictRow } from "../data/jev_verdict.server";
+import { countVerdictsSince, insertVerdicts, readVerdictIds, type VerdictRow } from "../data/jev_verdict.server";
 import { askChoice, askNoul, JevUnavailableError, type ChoiceQuestion, type ChoiceVerdict, type NoulQuestion, type NoulVerdict } from "../jev/client.server";
 import type { BreakageEvidence } from "./breakage-evidence";
 
@@ -24,8 +24,6 @@ const D3S_BREAKAGE_QID = "own_site_breakage";
 const D3_NOTEWORTHY_QID = "noteworthy_change";
 
 const D3_KIND_QID = "change_kind";
-
-export const D3_CHANGE_QUESTION_IDS = [D3_NOTEWORTHY_QID, D3_KIND_QID] as const;
 
 const D3S_BREAKAGE: NoulQuestion = {
   id: D3S_BREAKAGE_QID,
@@ -73,9 +71,14 @@ export interface ChangeJudgment {
   noteworthy: NoteworthyBand | null;
 }
 
+export interface JudgedChange extends ChangeJudgment {
+  verdictIds: readonly string[];
+}
+
 export interface JudgeInput {
   workspaceId: string;
   entityId: string;
+  signalId: string | null;
   isSelf: boolean;
   subject: { name: string | null; domain: string };
   pageUrl: string;
@@ -112,6 +115,7 @@ function daysBeforeIso(now: Date, days: number): string {
 function verdictRow(input: {
   workspaceId: string;
   entityId: string;
+  signalId: string | null;
   questionId: string;
   inputHash: string;
   p: number | null;
@@ -122,7 +126,7 @@ function verdictRow(input: {
     workspaceId: input.workspaceId,
     questionId: input.questionId,
     inputHash: input.inputHash,
-    signalId: null,
+    signalId: input.signalId,
     entityId: input.entityId,
     p: input.p,
     choice: input.choice,
@@ -136,13 +140,18 @@ async function readHistory30d(entityId: string, sinceIso: string): Promise<(stri
   return result.results.map((row) => row.summary);
 }
 
-export async function judgeChange(input: JudgeInput): Promise<ChangeJudgment> {
+async function storeVerdicts(rows: readonly VerdictRow[]): Promise<readonly string[]> {
+  await insertVerdicts(rows);
+  return readVerdictIds(rows);
+}
+
+export async function judgeChange(input: JudgeInput): Promise<JudgedChange> {
   const now = new Date();
   const decidedAt = now.toISOString();
 
   const usedToday = await countVerdictsSince(input.entityId, todayStartIso(now));
   if (usedToday >= JEV_JUDGMENTS_PER_BRAND_PER_DAY) {
-    return { deferred: true, selfBreakage: null, noteworthy: null };
+    return { deferred: true, selfBreakage: null, noteworthy: null, verdictIds: [] };
   }
 
   const history30d = await readHistory30d(input.entityId, daysBeforeIso(now, HISTORY_DAYS));
@@ -163,7 +172,7 @@ export async function judgeChange(input: JudgeInput): Promise<ChangeJudgment> {
       breakage = await askNoul(input.workspaceId, D3S_BREAKAGE, state);
     } catch (error) {
       if (error instanceof JevUnavailableError) {
-        return { deferred: true, selfBreakage: null, noteworthy: null };
+        return { deferred: true, selfBreakage: null, noteworthy: null, verdictIds: [] };
       }
       throw error;
     }
@@ -172,6 +181,7 @@ export async function judgeChange(input: JudgeInput): Promise<ChangeJudgment> {
     rows.push(verdictRow({
       workspaceId: input.workspaceId,
       entityId: input.entityId,
+      signalId: input.signalId,
       questionId: D3S_BREAKAGE_QID,
       inputHash: breakage.inputHash,
       p,
@@ -180,8 +190,7 @@ export async function judgeChange(input: JudgeInput): Promise<ChangeJudgment> {
     }));
     selfBreakage = { p, band };
     if (band !== "clear") {
-      await insertVerdicts(rows);
-      return { deferred: false, selfBreakage, noteworthy: null };
+      return { deferred: false, selfBreakage, noteworthy: null, verdictIds: await storeVerdicts(rows) };
     }
   }
 
@@ -194,7 +203,7 @@ export async function judgeChange(input: JudgeInput): Promise<ChangeJudgment> {
     ]);
   } catch (error) {
     if (error instanceof JevUnavailableError) {
-      return { deferred: true, selfBreakage, noteworthy: null };
+      return { deferred: true, selfBreakage, noteworthy: null, verdictIds: [] };
     }
     throw error;
   }
@@ -205,6 +214,7 @@ export async function judgeChange(input: JudgeInput): Promise<ChangeJudgment> {
   rows.push(verdictRow({
     workspaceId: input.workspaceId,
     entityId: input.entityId,
+    signalId: input.signalId,
     questionId: D3_NOTEWORTHY_QID,
     inputHash: noul.inputHash,
     p,
@@ -214,13 +224,13 @@ export async function judgeChange(input: JudgeInput): Promise<ChangeJudgment> {
   rows.push(verdictRow({
     workspaceId: input.workspaceId,
     entityId: input.entityId,
+    signalId: input.signalId,
     questionId: D3_KIND_QID,
     inputHash: choice.inputHash,
     p: null,
     choice: kind,
     decidedAt,
   }));
-  await insertVerdicts(rows);
 
-  return { deferred: false, selfBreakage, noteworthy: { p, kind, band } };
+  return { deferred: false, selfBreakage, noteworthy: { p, kind, band }, verdictIds: await storeVerdicts(rows) };
 }
