@@ -72,6 +72,7 @@ not so you can follow them from memory — lint will tell you.
   `test.fail()` stay allowed. The full enforced set is the two test-lint blocks
   in `eslint.config.js`. Source: 0509#5785.
 - **Immutability.** New objects, never mutation.
+- **Formatting is Prettier.** `npm run lint` runs `prettier --check .`; run `npm run format` before committing.
 
 ## Commands
 
@@ -79,7 +80,8 @@ not so you can follow them from memory — lint will tell you.
 npm run dev        # react-router dev
 npm run build      # react-router build
 npm run typecheck  # wrangler types && react-router typegen && tsc -b
-npm run lint       # eslint . && knip
+npm run lint       # eslint . && knip && jscpd && prettier --check .
+npm run format     # prettier --write .
 npm test           # vitest run
 npm run e2e        # playwright test
 npm run deploy     # wrangler deploy
