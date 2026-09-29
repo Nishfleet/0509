@@ -59,7 +59,7 @@ describe("static home analytics", () => {
   // addition to the more specific Cache-Control blocks ("an incoming request
   // which matches multiple rules' URL patterns will inherit all rules'
   // headers").
-  it("sends the four security headers on every static asset", () => {
+  it("sends the four audit headers on every static asset", () => {
     const all = headersBlock("/*");
     expect(headerValue(all, "Content-Security-Policy")).toBeDefined();
     expect(headerValue(all, "Strict-Transport-Security")).toContain("max-age=31536000");
@@ -76,16 +76,23 @@ describe("static home analytics", () => {
   // edited, the CSP hash goes stale and the browser blocks the font load — a
   // silent failure. This test recomputes the hash from the HTML, so the two
   // cannot drift: edit the script and this goes red until the hash is updated.
-  it("pins the inline script by hash in the static CSP", () => {
+  it("pins every inline script by hash in the static CSP", () => {
     const html = readFileSync(join(REPO_ROOT, "public/index.html"), "utf8");
-    // Case-insensitive and attribute-tolerant so a `<SCRIPT>` tag or one with
-    // attributes still matches rather than silently yielding undefined.
-    const script = html.match(/<script\b[^>]*>([\s\S]*?)<\/script\s*>/i)?.[1];
-    if (script === undefined) {
+    // Only inline scripts carry a hash in the CSP: a `<script src=...>` is
+    // covered by `script-src 'self'` and never appears as a digest. The
+    // negative lookahead keeps that distinction, and the flags keep a
+    // `<SCRIPT>` tag or one with attributes matching rather than silently
+    // yielding no script.
+    const inline = [...html.matchAll(/<script(?![^>]*\bsrc\b)[^>]*>([\s\S]*?)<\/script\s*>/gi)].map(
+      (match) => match[1] ?? "",
+    );
+    if (inline.length === 0) {
       throw new Error("public/index.html has no inline <script>");
     }
-    const digest = createHash("sha256").update(Buffer.from(script, "utf8")).digest("base64");
     const csp = headerValue(headersBlock("/*"), "Content-Security-Policy");
-    expect(csp).toContain(`'sha256-${digest}'`);
+    for (const script of inline) {
+      const digest = createHash("sha256").update(Buffer.from(script, "utf8")).digest("base64");
+      expect(csp).toContain(`'sha256-${digest}'`);
+    }
   });
 });

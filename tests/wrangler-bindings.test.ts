@@ -36,16 +36,23 @@ describe("deployed wrangler configs", () => {
   // 0509 over 2026-09-21T00:00Z..2026-09-28T12:00Z (238,690 invocations,
   // cpuTime p50 11.4 ms, p99 86.5 ms, p99.9 1,075.6 ms, and a 3,637 ms
   // slowest invocation). Asserted, not just declared: a rename or a deletion of
-  // the block turns this red.
+  // the block turns this red, and the floor is the slowest observation, so a
+  // cap below any invocation seen here cannot pass.
   it("caps CPU and subrequests below the paid defaults (0509#5758)", () => {
     const { rawConfig } = experimental_readRawConfig({ config: "wrangler.jsonc" });
     const limits = rawConfig.limits;
     expect(limits).toBeDefined();
-    // Above the measured p99.9 so the tail stays watchable
-    // rather than becoming a 5xx, and below the 30,000 ms paid default.
+    // Above the measured p99.9 and above the slowest invocation in the window
+    // (3,637 ms), so the observed tail stays inside the cap while the paid
+    // default of 30,000 ms does not apply. Both constants come from the
+    // `workersInvocationsAdaptive` read quoted in wrangler.jsonc: pinning the
+    // slowest one keeps an edit to `cpu_ms: 2000` red, where a p99.9-only floor
+    // would let it through.
+    const MEASURED_CPU_SLOWEST_MS = 3_637;
     const MEASURED_CPU_P99_9_MS = 1_076;
     const PAID_DEFAULT_CPU_MS = 30_000;
     expect(limits?.cpu_ms).toBeGreaterThan(MEASURED_CPU_P99_9_MS);
+    expect(limits?.cpu_ms).toBeGreaterThan(MEASURED_CPU_SLOWEST_MS);
     expect(limits?.cpu_ms).toBeLessThan(PAID_DEFAULT_CPU_MS);
     expect(limits?.subrequests).toBe(10_000);
   });

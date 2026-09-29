@@ -57,10 +57,12 @@
   //   cpuTime  p50 11.4 ms, p90 37.9 ms, p99 86.5 ms, p99.9 1,075.6 ms
   // The slowest invocation in that window is 3,637 ms (an `internalError`), so
   // the cap sits above every invocation ever observed here while the paid
-  // default is 30,000 ms. `cpu_ms` is one cap per invocation, so it also
-  // replaces the 15-minute default the docs give a >= 1 hour cron: the four
-  // 03:00 crons in the window are exactly those internalErrors (3,060, 3,098,
-  // 3,180 and 3,637 ms), and 5,000 ms stays above all four. #5753 owns the
+  // default is 30,000 ms. The docs give a Cron Trigger on a >= 1 hour interval
+  // a 15-minute *CPU* default, separate from the 15-minute wall-clock duration
+  // limit; `cpu_ms` is the per-invocation CPU cap and so does replace that
+  // 900,000 ms CPU default: the four 03:00 crons in the window are exactly
+  // those internalErrors (3,060, 3,098, 3,180 and 3,637 ms), and 5,000 ms stays
+  // above all four. The wall-clock duration limit is untouched. #5753 owns the
   // cron's real failure.
   "limits": {
     "cpu_ms": 5000,
