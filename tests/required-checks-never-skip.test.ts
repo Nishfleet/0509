@@ -8,8 +8,11 @@ import { describe, expect, it } from "vitest";
 // with a required grade check SKIPPED). So no required job may carry a job-level
 // `if:`; its steps decide instead and the job always reports. The names below
 // are the required_status_checks of ruleset 21391031 that are jobs in this repo;
-// `grade / grade` is a reusable workflow in fleet-ops and is not listed. A
-// rename fails the first test instead of silently checking nothing.
+// `grade / grade` is a reusable workflow in fleet-ops and is not listed: it
+// reports as "grade / grade", which this indentation reader cannot see as a job
+// name, so its own test below pins the one `if:` it may carry (pull request and
+// merge group, the two events a ruleset evaluates). A rename fails the first
+// test instead of silently checking nothing.
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const WORKFLOWS = path.join(REPO_ROOT, ".github/workflows");
@@ -61,6 +64,14 @@ describe("required checks always report (0509#5738)", () => {
       .filter((job) => job.body.some((l) => /^ {4}if:/.test(l)))
       .map((job) => `${job.file}: ${job.key}`);
     expect(offenders).toEqual([]);
+  });
+
+  it("runs the shared grade job on every event the ruleset evaluates", async () => {
+    const grade = (await allJobs()).find((job) => job.file === "ci.yml" && job.key === "grade");
+    const condition = grade?.body.find((l) => /^ {4}if:/.test(l)) ?? "";
+    expect(grade?.body.some((l) => /^ {4}uses: Nishfleet\/fleet-ops\/\.github\/workflows\/grade\.yml@main$/.test(l))).toBe(true);
+    expect(condition).toContain("github.event_name == 'pull_request'");
+    expect(condition).toContain("github.event_name == 'merge_group'");
   });
 
   it("reads a job-level if: when one is there", () => {
