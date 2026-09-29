@@ -576,7 +576,7 @@ export default tseslint.config(
     files: [
       "app/lib/identity/**/*.{ts,tsx}",
       "app/lib/fetch/transport.server.ts",
-      "app/lib/hiring/discover-board.ts",
+      "app/lib/hiring/discover-board.server.ts",
       "app/lib/site/own-site.server.ts",
       "workers/support-inbox.ts",
     ],
@@ -624,7 +624,6 @@ export default tseslint.config(
     // fires: only the two callers that predate the rule are exempted.
     files: [
       "app/lib/fetch/**",
-      "app/lib/hiring/discover-board.ts",
       "workers/support-inbox.ts",
     ],
     rules: {
