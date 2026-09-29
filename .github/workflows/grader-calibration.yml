@@ -18,9 +18,6 @@ on:
 permissions:
   contents: read
 
-env:
-  MODEL: swe-2-max
-
 concurrency:
   group: grader-calibration-${{ github.ref }}
   cancel-in-progress: false
@@ -105,8 +102,8 @@ jobs:
           expect=$(jq -r .expect "$RUNNER_TEMP/case.json")
           graded="$RUNNER_TEMP/devin-graded.txt"
           : > "$graded"
-          if [ "$LEAKED" = true ]; then
-            printf 'calibration run %s case %s model %s expect=%s got=none result=leak-blocked\n' "$GITHUB_RUN_ID" "$CASE" "$MODEL" "$expect" > "$RUNNER_TEMP/result.md"
+          if [ "$LEAKED" != false ]; then
+            printf 'calibration run %s case %s expect=%s got=none result=leak-blocked\n' "$GITHUB_RUN_ID" "$CASE" "$expect" > "$RUNNER_TEMP/result.md"
             gh issue comment "$RESULTS_ISSUE" --repo "$GITHUB_REPOSITORY" --body-file "$RUNNER_TEMP/result.md"
             exit 0
           fi
@@ -124,7 +121,7 @@ jobs:
             pass:*) result=false-block ;;
           esac
           {
-            printf 'calibration run %s case %s model %s expect=%s got=%s result=%s\n\n' "$GITHUB_RUN_ID" "$CASE" "$MODEL" "$expect" "${got:-none}" "$result"
+            printf 'calibration run %s case %s expect=%s got=%s result=%s\n\n' "$GITHUB_RUN_ID" "$CASE" "$expect" "${got:-none}" "$result"
             printf 'Why this case: %s\n\n~~~text\n' "$(jq -r .why "$RUNNER_TEMP/case.json")"
             head -n 12 "$graded" | head -c 8000 | tr -d '~'
             printf '~~~\n'
@@ -155,7 +152,7 @@ jobs:
           count() { grep -c "result=$1\$" "$RUNNER_TEMP/lines.txt" || true; }
           caught=$(count caught); falsepass=$(count false-A+); passed=$(count passed); falseblock=$(count false-block); nograde=$(count no-grade); leaks=$(count leak-blocked)
           {
-            printf 'calibration summary run %s model %s (%s)\n\n' "$GITHUB_RUN_ID" "$MODEL" "$GITHUB_SHA"
+            printf 'calibration summary run %s (%s)\n\n' "$GITHUB_RUN_ID" "$GITHUB_SHA"
             printf -- '- Known-bad caught: %s of %s\n' "$caught" "$((caught + falsepass))"
             printf -- '- Known-bad given A+ (false A+): %s\n' "$falsepass"
             printf -- '- Known-good given A+: %s of %s\n' "$passed" "$((passed + falseblock))"
