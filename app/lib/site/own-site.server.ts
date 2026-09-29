@@ -8,6 +8,7 @@ import { CRAWLER_USER_AGENT, robotsAllows } from "../fetch/robots.server";
 import { computeBreakageEvidence } from "./breakage-evidence";
 import { extractPageText } from "./extract-text";
 import { ensureHomePages } from "./sweep.server";
+import { BlockedRedirectError, fetchGuarded } from "../fetch/guarded-fetch.server";
 
 export type OwnSiteHealth =
   | { state: "healthy" }
@@ -29,7 +30,7 @@ const PROBE_HEADERS = {
 
 async function fetchStatus(url: string): Promise<Response | Error> {
   try {
-    const response = await fetch(url, {
+    const response = await fetchGuarded(url, {
       headers: PROBE_HEADERS,
       signal: AbortSignal.timeout(PROBE_TIMEOUT_MS),
     });
@@ -52,6 +53,7 @@ export function pageHost(url: string): string {
 export async function probeOwnSite(url: string): Promise<OwnSiteHealth> {
   if (!(await robotsAllows(url))) return { state: "unknown", reason: "robots" };
   const first = await fetchStatus(url);
+  if (first instanceof BlockedRedirectError) return { state: "unknown", reason: "redirect refused" };
   const response = first instanceof Error ? await fetchStatus(wwwVariant(url)) : first;
   if (response instanceof Error) return { state: "broken", kind: "not loading" };
   if (response.headers.get("cf-mitigated") === "challenge") return { state: "unknown", reason: "challenge" };
@@ -66,7 +68,7 @@ export async function breakageRepaired(url: string, beforeKey: string | null): P
   if (beforeKey === null) return false;
   let response: Response;
   try {
-    response = await fetch(url, {
+    response = await fetchGuarded(url, {
       headers: PROBE_HEADERS,
       signal: AbortSignal.timeout(PROBE_TIMEOUT_MS),
     });

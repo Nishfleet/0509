@@ -560,6 +560,7 @@ export default tseslint.config(
     files: [
       "app/lib/identity/**/*.{ts,tsx}",
       "app/lib/fetch/transport.server.ts",
+      "app/lib/fetch/guarded-fetch.server.ts",
       "app/lib/hiring/discover-board.ts",
       "app/lib/site/own-site.server.ts",
       "workers/support-inbox.ts",
