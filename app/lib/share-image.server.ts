@@ -1,9 +1,9 @@
-import { env } from "cloudflare:workers";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
 import stylesheet from "../app.css?url";
 import { SHARE_IMAGE_SIZE, ShareImage } from "../components/share-image";
+import { browserHtmlScreenshot } from "./site/browser-budget.server";
 import type { ShareCard } from "./share-card";
 
 export function shareDocument(card: ShareCard, origin: string, cssHref: string = stylesheet): string {
@@ -16,21 +16,19 @@ function logShareMiss(cause: string): void {
   console.log(JSON.stringify({ event: "share-image-miss", cause }));
 }
 
-export async function renderShareImage(html: string): Promise<ArrayBuffer | null> {
-  try {
-    const response = await env.BROWSER.quickAction("screenshot", {
-      html,
-      viewport: { width: SHARE_IMAGE_SIZE, height: SHARE_IMAGE_SIZE },
-      gotoOptions: { waitUntil: "networkidle0" },
-      screenshotOptions: { type: "png" },
-    });
-    if (!response.ok) {
-      logShareMiss(`browser answered ${String(response.status)}`);
-      return null;
-    }
-    return await response.arrayBuffer();
-  } catch (err) {
-    logShareMiss(err instanceof Error ? err.message : String(err));
+export async function renderShareImage(html: string, mayRender?: () => Promise<boolean>): Promise<ArrayBuffer | null> {
+  if (mayRender === undefined) {
+    logShareMiss("no browser budget granted");
     return null;
   }
+  if (!(await mayRender())) {
+    logShareMiss("browser budget exhausted");
+    return null;
+  }
+  const shot = await browserHtmlScreenshot(html, SHARE_IMAGE_SIZE);
+  if (!shot.ok) {
+    logShareMiss(shot.cause);
+    return null;
+  }
+  return shot.bytes;
 }

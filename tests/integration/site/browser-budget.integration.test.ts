@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   takeBrowserEscalation,
   takeBrowserScreenshot,
+  takeBrowserShareImage,
 } from "../../../app/lib/site/browser-budget.server";
 
 describe("BrowserBudget (0509#5294)", () => {
@@ -50,5 +51,13 @@ describe("BrowserBudget (0509#5294)", () => {
     expect(escFourth).toBe(true);
     const escFifth = await takeBrowserEscalation("ws-shot", "ent-shot", "2026-09-25");
     expect(escFifth).toBe(false);
+  });
+
+  it("allows ten share-image renders per workspace per day, refuses the eleventh, and allows again the next day (0509#5818)", async () => {
+    for (let take = 1; take <= 10; take++) {
+      expect(await takeBrowserShareImage("ws-share", "2026-09-25")).toBe(true);
+    }
+    expect(await takeBrowserShareImage("ws-share", "2026-09-25")).toBe(false);
+    expect(await takeBrowserShareImage("ws-share", "2026-09-26")).toBe(true);
   });
 });
