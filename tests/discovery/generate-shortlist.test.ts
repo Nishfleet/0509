@@ -10,6 +10,7 @@ vi.mock("../../app/lib/jev/client.server", () => ({
 vi.mock("../../app/lib/discovery/resolve-domain.server", () => ({
   resolveDomain: () => Promise.resolve({ domain: null }),
 }));
+vi.mock("../../app/lib/discovery/generators/ai.server", () => ({ aiGenerator: () => Promise.resolve([]) }));
 const hn = vi.hoisted(() => ({ run: vi.fn() }));
 
 vi.mock("../../app/lib/discovery/generators/hn", () => ({ hnGenerator: hn.run }));

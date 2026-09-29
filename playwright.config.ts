@@ -32,7 +32,7 @@ export default defineConfig({
   forbidOnly: Boolean(process.env.CI),
   retries: process.env.CI ? 2 : 0,
   // https://playwright.dev/docs/ci#workers
-  workers: process.env.CI ? (process.env.PLAYWRIGHT_TEST_BASE_URL ? 4 : 1) : undefined,
+  workers: process.env.PLAYWRIGHT_TEST_BASE_URL ? (process.env.CI ? 4 : undefined) : 1,
   reporter: process.env.CI ? "github" : "list",
   use: {
     baseURL,

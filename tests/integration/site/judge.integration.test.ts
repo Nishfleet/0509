@@ -257,7 +257,7 @@ describe("judgeChange", () => {
 
     const judgment = await judgeChange(judgeInput({ entity: "over", isSelf: false, ws: "ws-history" }));
 
-    expect(judgment).toEqual({ deferred: true, selfBreakage: null, noteworthy: null });
+    expect(judgment).toEqual({ deferred: true, selfBreakage: null, noteworthy: null, verdictIds: [] });
     expect(jevAnswers.calls).toBe(0);
   });
 
@@ -320,7 +320,7 @@ describe("judgeChange", () => {
 
     const judgment = await judgeChange(judgeInput({ entity: "mine", isSelf: true }));
 
-    expect(judgment).toEqual({ deferred: true, selfBreakage: null, noteworthy: null });
+    expect(judgment).toEqual({ deferred: true, selfBreakage: null, noteworthy: null, verdictIds: [] });
     expect(await rowsFor("mine")).toEqual([]);
   });
 
