@@ -282,7 +282,7 @@ export async function readRefreshTargets(workspaceId: string): Promise<RefreshTa
 }
 
 const INSERT_MANUAL_COMPETITOR =
-  "INSERT INTO entity (id, workspace_id, role, domain, name, origin, confirmed_at, state, state_changed_at, state_changed_by, created_at) SELECT ?1, ?2, 'competitor', ?3, ?4, 'manual', ?5, 'on', ?5, 'user', ?5 WHERE (SELECT count(*) FROM entity WHERE workspace_id = ?2 AND role = 'competitor' AND state = 'on' AND domain <> ?3) < ?6 ON CONFLICT (workspace_id, domain) DO UPDATE SET state = 'on', state_changed_at = excluded.state_changed_at, state_changed_by = 'user', state_reason = NULL WHERE entity.role = 'competitor'";
+  "INSERT INTO entity (id, workspace_id, role, domain, name, origin, confirmed_at, state, state_changed_at, state_changed_by, created_at, identity_json) SELECT ?1, ?2, 'competitor', ?3, ?4, 'manual', ?5, 'on', ?5, 'user', ?5, CASE WHEN ?7 IS NULL THEN '{}' ELSE json_object('url', ?7) END WHERE (SELECT count(*) FROM entity WHERE workspace_id = ?2 AND role = 'competitor' AND state = 'on' AND domain <> ?3) < ?6 ON CONFLICT (workspace_id, domain) DO UPDATE SET state = 'on', state_changed_at = excluded.state_changed_at, state_changed_by = 'user', state_reason = NULL, identity_json = CASE WHEN ?7 IS NULL THEN entity.identity_json ELSE json_set(entity.identity_json, '$.url', ?7) END WHERE entity.role = 'competitor'";
 
 const COUNT_OTHER_ON =
   "SELECT count(*) AS n FROM entity WHERE workspace_id = ? AND role = 'competitor' AND state = 'on' AND domain <> ?";
@@ -291,11 +291,20 @@ export async function addManualCompetitor(input: {
   workspaceId: string;
   domain: string;
   name: string | null;
+  url: string | null;
   now: string;
   cap: number;
 }): Promise<"added" | "at_cap"> {
   const result = await env.DB.prepare(INSERT_MANUAL_COMPETITOR)
-    .bind(crypto.randomUUID(), input.workspaceId, input.domain, input.name, input.now, input.cap)
+    .bind(
+      crypto.randomUUID(),
+      input.workspaceId,
+      input.domain,
+      input.name,
+      input.now,
+      input.cap,
+      input.url,
+    )
     .run();
   if (result.meta.changes === 1) return "added";
   const count = await env.DB.prepare(COUNT_OTHER_ON)

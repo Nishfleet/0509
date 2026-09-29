@@ -179,4 +179,60 @@ describe("addManualCompetitor cap (0509#4891)", () => {
     expect(third.message).toContain("2 competitors");
     expect(await domainCount(workspaceId, "b3.com")).toBe(0);
   });
+
+  it("stores identity_json.url for subdomain entries and updates on re-add", async () => {
+    seededRuns += 1;
+    const n = String(seededRuns);
+    const userId = `user-identity-${n}`;
+    const workspaceId = `ws-identity-${n}`;
+    await seedUser(userId, `identity-${n}@example.com`);
+    await seedWorkspace(workspaceId, userId, "Identity");
+
+    const fixtureResult = await handleCompetitorIntent(
+      workspaceId,
+      intentForm({ intent: "add", competitor: "fixture.0509.in" }),
+    );
+    expect(fixtureResult.message).toBeNull();
+    const fixtureRow = await env.DB.prepare(
+      "SELECT domain, identity_json FROM entity WHERE workspace_id = ? AND domain = ?",
+    )
+      .bind(workspaceId, "0509.in")
+      .first<{ domain: string; identity_json: string }>();
+    expect(fixtureRow).not.toBeNull();
+    expect(fixtureRow!.domain).toBe("0509.in");
+    expect(JSON.parse(fixtureRow!.identity_json).url).toBe("https://fixture.0509.in/");
+
+    const nikeResult = await handleCompetitorIntent(
+      workspaceId,
+      intentForm({ intent: "add", competitor: "nike.com" }),
+    );
+    expect(nikeResult.message).toBeNull();
+    const nikeRow = await env.DB.prepare(
+      "SELECT domain, identity_json FROM entity WHERE workspace_id = ? AND domain = ?",
+    )
+      .bind(workspaceId, "nike.com")
+      .first<{ domain: string; identity_json: string }>();
+    expect(nikeRow).not.toBeNull();
+    expect(JSON.parse(nikeRow!.identity_json).url).toBe("https://nike.com/");
+
+    await env.DB.prepare(
+      "UPDATE entity SET state = 'off', state_changed_at = ?, state_changed_by = 'user' WHERE workspace_id = ? AND domain = ?",
+    )
+      .bind("2026-09-23T13:00:00.000Z", workspaceId, "nike.com")
+      .run();
+
+    const reAddResult = await handleCompetitorIntent(
+      workspaceId,
+      intentForm({ intent: "add", competitor: "www.nike.com" }),
+    );
+    expect(reAddResult.message).toBeNull();
+    const reAddRow = await env.DB.prepare(
+      "SELECT domain, identity_json FROM entity WHERE workspace_id = ? AND domain = ?",
+    )
+      .bind(workspaceId, "nike.com")
+      .first<{ domain: string; identity_json: string }>();
+    expect(reAddRow).not.toBeNull();
+    expect(JSON.parse(reAddRow!.identity_json).url).toBe("https://www.nike.com/");
+    expect(await domainCount(workspaceId, "nike.com")).toBe(1);
+  });
 });
