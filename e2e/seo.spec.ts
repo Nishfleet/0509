@@ -52,10 +52,12 @@ test("the sitemap leaves out the noindex rebuild notice at /", async ({
   expect(body).not.toMatch(/<loc>https?:\/\/[^<]+\/<\/loc>/);
 });
 
-test("GET /privacy serves robots index, follow", async ({ page }) => {
-  await page.goto("/privacy");
-  await expect(page.locator('meta[name="robots"]')).toHaveAttribute(
-    "content",
-    "index, follow",
-  );
+test("both legal routes carry the one robots policy", async ({ page }) => {
+  for (const path of ["/privacy", "/terms"]) {
+    await page.goto(path);
+    await expect(page.locator('meta[name="robots"]')).toHaveAttribute(
+      "content",
+      "index, follow",
+    );
+  }
 });
