@@ -20,7 +20,7 @@ const bindingFor = (rec: Recorder): SendEmail => ({
   send(message: EmailMessageBuilder) {
     if (rec.fail) throw rec.fail;
     rec.sent.push(message);
-    return Promise.resolve({} as EmailSendResult);
+    return Promise.resolve({ messageId: "test-message" });
   },
 });
 
