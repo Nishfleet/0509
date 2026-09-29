@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { hnGenerator } from "../../../app/lib/discovery/generators/hn";
 import type { FetchedText, Subject } from "../../../app/lib/discovery/types";
@@ -18,11 +18,16 @@ function fetchTextWith(body: string, ok = true): (url: string) => Promise<Fetche
   return (url) =>
     Promise.resolve({
       ok,
+      status: ok ? 200 : 503,
       url,
       contentType: ok ? "application/json" : null,
       body,
     });
 }
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
 
 describe("hnGenerator", () => {
   it("reads the live Gymshark fixture into candidates that each carry HN evidence", async () => {
@@ -107,13 +112,30 @@ describe("hnGenerator", () => {
     ]);
   });
 
-  it("returns nothing when the search did not succeed", async () => {
-    const candidates = await hnGenerator(SUBJECT, fetchTextWith("", false));
-    expect(candidates).toEqual([]);
+  it("throws naming the generator and status when the search did not succeed", async () => {
+    await expect(hnGenerator(SUBJECT, fetchTextWith("", false))).rejects.toThrow(
+      "hn generator fetch failed with status 503",
+    );
   });
 
   it("returns nothing when the body is not JSON", async () => {
-    const candidates = await hnGenerator(SUBJECT, fetchTextWith("not json"));
-    expect(candidates).toEqual([]);
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    expect(await hnGenerator(SUBJECT, fetchTextWith("not json"))).toEqual([]);
+  });
+
+  it("logs generator_empty with the headline count when no rival is co-mentioned", async () => {
+    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    const body = JSON.stringify({
+      hits: [
+        { objectID: "1", title: "Gymshark opens a store", story_title: null },
+        { objectID: "2", title: null, story_title: null },
+      ],
+    });
+
+    expect(await hnGenerator(SUBJECT, fetchTextWith(body))).toEqual([]);
+
+    expect(log).toHaveBeenCalledWith(
+      JSON.stringify({ event: "discovery.generator_empty", generator: "hn", articles: 1 }),
+    );
   });
 });

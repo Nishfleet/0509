@@ -37,6 +37,7 @@ describe("defaultFetchText", () => {
 
     expect(result).toEqual({
       ok: true,
+      status: 200,
       url: response.url,
       contentType: "text/plain",
       body: "hello body",
@@ -55,6 +56,7 @@ describe("defaultFetchText", () => {
 
     expect(result).toEqual({
       ok: false,
+      status: 500,
       url: "https://example.com/fail",
       contentType: "text/html",
       body: "server exploded",
@@ -68,6 +70,7 @@ describe("defaultFetchText", () => {
 
     expect(result).toEqual({
       ok: false,
+      status: 0,
       url: "https://example.com/down",
       contentType: null,
       body: "",
@@ -101,9 +104,7 @@ describe("defaultFetchText", () => {
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
     stubRejectingFetch();
 
-    const candidates = await hnGenerator(SUBJECT);
-
-    expect(candidates).toEqual([]);
+    await expect(hnGenerator(SUBJECT)).rejects.toThrow("hn generator fetch failed with status 0");
     expect(loggedEvents(errorSpy)).toEqual(["discovery.hn_fetch_failed"]);
   });
 
@@ -111,9 +112,7 @@ describe("defaultFetchText", () => {
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
     stubRejectingFetch();
 
-    const candidates = await newsGenerator(SUBJECT);
-
-    expect(candidates).toEqual([]);
+    await expect(newsGenerator(SUBJECT)).rejects.toThrow("news generator fetch failed with status 0");
     expect(loggedEvents(errorSpy)).toEqual(["discovery.news_fetch_failed"]);
   });
 });
