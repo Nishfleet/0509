@@ -1,6 +1,6 @@
 import robotsParser from "robots-parser";
 
-import { fetchGuarded } from "./guarded-fetch.server";
+import { fetchOutbound } from "./outbound.server";
 
 const ROBOTS_TIMEOUT_MS = 5_000;
 
@@ -13,7 +13,7 @@ const ROBOTS_HEADERS = { "user-agent": CRAWLER_USER_AGENT };
 export async function robotsAllows(url: string): Promise<boolean> {
   const robotsUrl = new URL("/robots.txt", url).toString();
   try {
-    const response = await fetchGuarded(robotsUrl, {
+    const response = await fetchOutbound(robotsUrl, {
       headers: ROBOTS_HEADERS,
       signal: AbortSignal.timeout(ROBOTS_TIMEOUT_MS),
     });

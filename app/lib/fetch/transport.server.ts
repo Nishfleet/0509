@@ -1,8 +1,6 @@
 import { browserContent } from "../site/browser-budget.server";
+import { BlockedRedirectError, cappedBody, fetchOutbound, targetRefusal } from "./outbound.server";
 import { CRAWLER_USER_AGENT } from "./robots.server";
-import { BlockedRedirectError, fetchGuarded, targetRefusal } from "./guarded-fetch.server";
-
-const FETCH_TIMEOUT_MS = 8_000;
 
 const MIN_EXTRACTED_CHARS = 200;
 
@@ -155,26 +153,9 @@ class BodyTooLargeError extends Error {
 }
 
 async function cappedText(res: Response): Promise<string> {
-  const declared = Number(res.headers.get("content-length"));
-  if (Number.isFinite(declared) && declared > MAX_BODY_BYTES) {
-    await res.body?.cancel();
-    throw new BodyTooLargeError();
-  }
-  if (res.body === null) return "";
-  let seen = 0;
-  const capped = res.body.pipeThrough(
-    new TransformStream<Uint8Array, Uint8Array>({
-      transform(chunk, controller) {
-        seen += chunk.byteLength;
-        if (seen > MAX_BODY_BYTES) {
-          controller.error(new BodyTooLargeError());
-          return;
-        }
-        controller.enqueue(chunk);
-      },
-    }),
-  );
-  return new Response(capped).text();
+  const bytes = await cappedBody(res, MAX_BODY_BYTES);
+  if (bytes === null) throw new BodyTooLargeError();
+  return new TextDecoder().decode(bytes);
 }
 
 export async function readUrl(
@@ -210,10 +191,7 @@ export async function readUrl(
   let fetchStatus: number;
   let fetchHtml: string;
   try {
-    const res = await fetchGuarded(url, {
-      headers: FETCH_HEADERS,
-      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
-    });
+    const res = await fetchOutbound(url, { headers: FETCH_HEADERS });
     fetchStatus = res.status;
     fetchHtml = await cappedText(res);
   } catch (err) {

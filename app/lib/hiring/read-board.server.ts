@@ -6,6 +6,7 @@ import { insertBoardSnapshot, latestBoardSnapshot } from "../data/snapshot.serve
 import { insertHiringSignals } from "../data/signal.server";
 import type { readHiringTargets } from "../data/watch.server";
 import { deactivateWatch, markWatchPolled } from "../data/watch.server";
+import { fetchOutbound } from "../fetch/outbound.server";
 import type { SweepTick } from "../site/sweep.server";
 import type { BoardPlatform } from "./discover-board";
 import { listingForBoard } from "./discover-board";
@@ -26,7 +27,7 @@ async function fetchListingPages(
   boardUrl: string,
   url: string,
 ): Promise<OpenRole[] | "gone"> {
-  const response = await fetch(url, { signal: AbortSignal.timeout(8_000) });
+  const response = await fetchOutbound(url, { headers: {} });
   if (response.status === 404 || response.status === 410) return "gone";
   if (!response.ok) {
     throw new Error(`hiring.listing_status ${String(response.status)} for ${url}`);

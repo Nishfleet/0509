@@ -159,6 +159,21 @@ const DOMAIN_HOSTNAME_BAN = {
     "URL-to-domain extraction is owned by the identity engine in app/lib/identity/ — `normaliseSubject` in app/lib/identity/normalise.ts. Reading `.hostname` anywhere else is a second domain normaliser that will drift from the engine's rules; the same shape on any URL argument, any binding name. Reuse the engine (or, for a non-identity host read, get the file added to the exemption block below). Source: 0509#4371.",
 };
 
+// The one outbound-fetch path. app/lib/fetch/outbound.server.ts owns the
+// public-host check (targetRefusal, URL + scheme policy), the redirect walk
+// that re-checks every hop, the 8 s deadline (fetchOutbound) and the capped
+// body reader (cappedBody); the crawler User-Agent is CRAWLER_USER_AGENT in
+// robots.server.ts. A bare fetch( outside it is a second transport: the logo
+// store's copy was the instance that raised this (its https-only rule and
+// byte cap had already drifted from readUrl's). Call sites that predate the
+// rule sit in the exemption blocks below, the same shape as
+// DOMAIN_HOSTNAME_BAN's grandfather list.
+const BARE_FETCH = {
+  selector: "CallExpression[callee.name='fetch']",
+  message:
+    "Outbound fetch is owned by app/lib/fetch/: fetchOutbound refuses non-public hosts and re-checks every redirect hop under an 8 s deadline, and cappedBody bounds the body. A bare fetch( anywhere else is a second transport that drifts from all three. Source: 0509#4951.",
+};
+
 // DESIGN.md: fonts are self-hosted. A Google Fonts <link> put LCP at 2021 ms against the
 // 1500 ms budget (CI run 35635617508, main 5166ebb81; fixed in fd1457288).
 const GOOGLE_FONTS_BAN = {
@@ -221,6 +236,7 @@ const BANNED_SYNTAX = [
   CATCH_RETURNS_NULL,
   XML_PARSER_CONSTRUCTOR,
   DOMAIN_HOSTNAME_BAN,
+  BARE_FETCH,
   {
     selector: "NewExpression[callee.name='RegExp'] > Literal.arguments, NewExpression[callee.name='RegExp'] > TemplateLiteral",
     message:
@@ -560,7 +576,6 @@ export default tseslint.config(
     files: [
       "app/lib/identity/**/*.{ts,tsx}",
       "app/lib/fetch/transport.server.ts",
-      "app/lib/fetch/guarded-fetch.server.ts",
       "app/lib/hiring/discover-board.ts",
       "app/lib/site/own-site.server.ts",
       "workers/support-inbox.ts",
@@ -569,6 +584,58 @@ export default tseslint.config(
       "no-restricted-syntax": [
         "error",
         ...BANNED_SYNTAX.filter((rule) => rule !== DOMAIN_HOSTNAME_BAN),
+        ...NO_USER_DATA_IN_LOGS,
+        RAW_DML_WRITER,
+        FEED_STATE_LITERAL,
+      ],
+    },
+  },
+
+  {
+    // BARE_FETCH grandfathers: these files called fetch before the rule
+    // existed (0509#4951). They keep every other ban — the array restates the
+    // shared list because a later matching block's no-restricted-syntax entry
+    // replaces the earlier one wholesale. New outbound fetch belongs in
+    // app/lib/fetch/, not on this list.
+    files: [
+      "app/lib/liveness-ping.server.ts",
+      "app/lib/discovery/generators/ai.server.ts",
+      "app/lib/discovery/resolve-domain.server.ts",
+      "app/lib/discovery/types.ts",
+      "app/lib/observability/cost-analytics.server.ts",
+      "app/components/share-button.tsx",
+      "workers/sources/mentions/types.ts",
+    ],
+    rules: {
+      "no-restricted-syntax": [
+        "error",
+        ...BANNED_SYNTAX.filter((rule) => rule !== BARE_FETCH),
+        ...NO_USER_DATA_IN_LOGS,
+        RAW_DML_WRITER,
+        FEED_STATE_LITERAL,
+      ],
+    },
+  },
+
+  {
+    // The same grandfather for files that also sit in the hostname exemption
+    // above (their .hostname reads stay allowed) — plus the whole fetch paved
+    // path itself, where the guard's host check and the wrapped call live by
+    // definition. app/lib/identity/** stays listed file by file here so a NEW
+    // fetch caller there (the second wrapper this rule exists to stop) still
+    // fires: only the two callers that predate the rule are exempted.
+    files: [
+      "app/lib/fetch/**",
+      "app/lib/identity/youtube-channel.server.ts",
+      "app/lib/hiring/discover-board.ts",
+      "workers/support-inbox.ts",
+    ],
+    rules: {
+      "no-restricted-syntax": [
+        "error",
+        ...BANNED_SYNTAX.filter(
+          (rule) => rule !== BARE_FETCH && rule !== DOMAIN_HOSTNAME_BAN,
+        ),
         ...NO_USER_DATA_IN_LOGS,
         RAW_DML_WRITER,
         FEED_STATE_LITERAL,

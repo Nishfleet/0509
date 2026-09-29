@@ -4,11 +4,11 @@ import { insertIncidentAlertStatement } from "../data/alert.server";
 import { closeIncident, closeIncidentsOutside, openIncident, readOpenBreakageBaselines, readOpenIncidents } from "../data/incident.server";
 import type { OwnSitePage } from "../data/page.server";
 import { readOwnSitePages } from "../data/page.server";
+import { BlockedRedirectError, fetchOutbound } from "../fetch/outbound.server";
 import { CRAWLER_USER_AGENT, robotsAllows } from "../fetch/robots.server";
 import { computeBreakageEvidence } from "./breakage-evidence";
 import { extractPageText } from "./extract-text";
 import { ensureHomePages } from "./sweep.server";
-import { BlockedRedirectError, fetchGuarded } from "../fetch/guarded-fetch.server";
 
 export type OwnSiteHealth =
   | { state: "healthy" }
@@ -30,7 +30,7 @@ const PROBE_HEADERS = {
 
 async function fetchStatus(url: string): Promise<Response | Error> {
   try {
-    const response = await fetchGuarded(url, {
+    const response = await fetchOutbound(url, {
       headers: PROBE_HEADERS,
       signal: AbortSignal.timeout(PROBE_TIMEOUT_MS),
     });
@@ -68,7 +68,7 @@ export async function breakageRepaired(url: string, beforeKey: string | null): P
   if (beforeKey === null) return false;
   let response: Response;
   try {
-    response = await fetchGuarded(url, {
+    response = await fetchOutbound(url, {
       headers: PROBE_HEADERS,
       signal: AbortSignal.timeout(PROBE_TIMEOUT_MS),
     });
