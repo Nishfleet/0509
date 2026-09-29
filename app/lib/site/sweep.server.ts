@@ -13,6 +13,7 @@ import {
   readUnwatchedEntities,
 } from "../data/watch.server";
 import { robotsAllows } from "../fetch/robots.server";
+import { normaliseSubject } from "../identity/normalise";
 import type { CheckPageResult } from "./check-page.server";
 import { checkPage } from "./check-page.server";
 import { diffPageText } from "./diff";
@@ -36,9 +37,16 @@ async function readText(key: string): Promise<string | null> {
 }
 
 function homeUrl(entity: { domain: string; url: string | null }): string | null {
-  if (typeof entity.url === "string" && URL.canParse(entity.url)) {
-    const host = new URL(entity.url).hostname;
-    if (getDomain(host) === entity.domain) return `https://${host}/`;
+  if (entity.url !== null) {
+    const entered = normaliseSubject(entity.url);
+    if (
+      entered.ok &&
+      entered.subject.kind === "domain" &&
+      entered.subject.registrable === entity.domain &&
+      entered.subject.url !== null
+    ) {
+      return entered.subject.url;
+    }
   }
   return getDomain(entity.domain) === entity.domain ? `https://${entity.domain}/` : null;
 }
