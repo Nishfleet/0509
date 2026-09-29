@@ -1,6 +1,8 @@
 import { env } from "cloudflare:workers";
 import { describe, expect, it } from "vitest";
 
+import { RouterContextProvider } from "react-router";
+
 import { loader as landingLoader } from "../../../app/routes/landing";
 import { readRegistrySources, readWorkspaceMentionSources } from "../../../app/lib/data/source.server";
 import { sourcePillStatus } from "../../../app/components/source-pill";
@@ -156,9 +158,6 @@ describe("alerts mentions source pills (#4003 4/6)", () => {
       expect(status.state).toBe("degraded");
       expect(status.reason).toBe(NO_CHANNEL_REASON);
 
-      // The registry read has no workspace scope and feeds the unauthenticated
-      // landing page, so it carries no watch config at all: one tenant's
-      // degraded watch must never reach an anonymous visitor's pill.
       const registry = (await readRegistrySources()).filter((item) => item.source.key === "youtube.channel_rss");
       const registryYoutube = registry[0];
       if (!registryYoutube) throw new Error("the enabled YouTube source must be in the registry");
@@ -185,7 +184,13 @@ describe("alerts mentions source pills (#4003 4/6)", () => {
     );
 
     try {
-      const { sources } = await landingLoader({} as Parameters<typeof landingLoader>[0]);
+      const { sources } = await landingLoader({
+        request: new Request("https://fivetonine.test/"),
+        url: new URL("https://fivetonine.test/"),
+        params: {},
+        pattern: "/",
+        context: new RouterContextProvider(),
+      });
       expect(sources.length).toBeGreaterThan(0);
       for (const entry of sources) {
         expect(entry.source.watch_config_json).toBeNull();
