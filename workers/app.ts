@@ -26,6 +26,7 @@ import { NIGHTLY_CRON, sweepPending } from "./delivery/sweeper";
 import { sentryOptions } from "./sentry";
 import { runNightlyStanding } from "./standing/nightly";
 import { IdentityTail } from "./identity-tail-workflow";
+import { FETCH_SWEEP_QUEUE, handleFetchSweepBatch } from "./sources/fetch-sweep-consumer";
 import { AccountDelete } from "./workflows/account-delete";
 import { Discovery } from "./workflows/discovery";
 import { OwnSiteCheck } from "./workflows/own-site-check";
@@ -103,6 +104,10 @@ const handler = {
     setTag("queue", batch.queue);
     if (batch.queue === "send-email-dlq") {
       await handleDlqBatch(env, batch);
+      return;
+    }
+    if (batch.queue === FETCH_SWEEP_QUEUE) {
+      await handleFetchSweepBatch(batch);
       return;
     }
     await handleBatch(env, batch);
