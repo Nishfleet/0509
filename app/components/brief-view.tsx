@@ -3,7 +3,7 @@ import { Fragment, type ReactElement } from "react";
 import { ReadThisFirst } from "./read-this-first";
 import type { BriefPayload } from "../lib/brief-payload";
 
-const SECTION = "border-line mt-5 border-t pt-4";
+const SECTION = "mt-5 border-t border-line pt-4";
 const HEAD = "font-mono text-eyebrow text-ink-soft uppercase";
 const BODY = "mt-2 text-[0.95rem] leading-[1.6]";
 const LINE = "mt-2 text-[0.92rem] leading-[1.6]";
@@ -12,7 +12,7 @@ export function BriefView({ payload }: { payload: BriefPayload }) {
   return (
     <article
       data-brief="view"
-      className="border-line min-w-0 border break-words p-4"
+      className="min-w-0 border border-line p-4 break-words"
     >
       {headlineBlock(payload)}
       <ReadThisFirst marks={payload.read_this_first} unjudged={payload.is_unjudged} />
@@ -85,7 +85,7 @@ function checkedBlock(payload: BriefPayload): ReactElement {
   return (
     <section data-brief-block="checked" className={SECTION}>
       <h3 className={HEAD}>What was checked</h3>
-      <p className="text-ink-soft mt-2 font-mono text-[0.75rem] tracking-[0.04em]">
+      <p className="mt-2 font-mono text-[0.75rem] tracking-[0.04em] text-ink-soft">
         {payload.checked.mention_count} mentions · {payload.checked.site_change_count} site changes ·{" "}
         {payload.checked.new_ad_count} new ads
       </p>

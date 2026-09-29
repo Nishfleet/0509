@@ -15,8 +15,8 @@ import type { HowRanked } from "../lib/how-ranked";
 import { cn } from "../lib/utils";
 
 const EYEBROW = "font-mono text-eyebrow text-ink-soft uppercase";
-const GREETING = "font-display text-display-2 mt-2 font-extrabold uppercase";
-const MARKER = "bg-green text-on-green px-[0.14em] [box-decoration-break:clone]";
+const GREETING = "mt-2 font-display text-display-2 font-extrabold uppercase";
+const MARKER = "bg-green [box-decoration-break:clone] px-[0.14em] text-on-green";
 
 export function HomePageFrame({
   eyebrow,
@@ -33,7 +33,7 @@ export function HomePageFrame({
         <p className={EYEBROW}>{eyebrow}</p>
       </header>
       <main>{children}</main>
-      <footer className="border-line mt-14 border-t pt-7">{footer}</footer>
+      <footer className="mt-14 border-t border-line pt-7">{footer}</footer>
     </div>
   );
 }
@@ -138,11 +138,11 @@ function rankedBody({
         </div>
       ) : null}
       <ReadThisFirst marks={standing.readThisFirst} unjudged={standing.unjudged} headingLevel={2} />
-      <h2 className={cn(EYEBROW, "border-line mt-8 border-t pt-4")}>Four weeks</h2>
+      <h2 className={cn(EYEBROW, "mt-8 border-t border-line pt-4")}>Four weeks</h2>
       <div className="mt-2">
         <FourWeekLine chart={standing.chart} />
       </div>
-      <h2 className={cn(EYEBROW, "border-line mt-8 border-t pt-4")}>This week's standing</h2>
+      <h2 className={cn(EYEBROW, "mt-8 border-t border-line pt-4")}>This week's standing</h2>
       <ol className="mt-2">
         {standing.rows.map((row) => (
           <RankedRow key={row.entityId} row={row} onSwitch={onSwitch} openId={openId} evidence={evidence} />

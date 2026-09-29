@@ -16,8 +16,8 @@ import { describe, expect, it } from "vitest";
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const PRIVACY = path.join(REPO_ROOT, "app/components/legal-page.tsx");
-const WORDMARK = 'className="bg-green text-on-green px-[5px]"';
-const RETIRED_WORDMARK = 'className="bg-accent text-on-accent px-[5px]"';
+const WORDMARK = 'className="bg-green px-[5px] text-on-green"';
+const RETIRED_WORDMARK = 'className="bg-accent px-[5px] text-on-accent"';
 
 const COLOUR_OR_TYPE = /^(?:bg|text|font|leading|tracking)-/;
 

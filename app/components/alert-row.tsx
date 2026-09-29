@@ -7,9 +7,9 @@ import { MentionRow } from "./mention-row";
 import { SiteChangeItem, type SiteChangeItemData } from "./site-change-item";
 import { buttonVariants } from "./ui/button";
 
-const WHEN_CLASS = "text-ink-soft mt-2 block font-mono text-meta uppercase";
+const WHEN_CLASS = "mt-2 block font-mono text-meta text-ink-soft uppercase";
 
-const CARD = "border-line mt-8 border-t pt-6";
+const CARD = "mt-8 border-t border-line pt-6";
 const TITLE = "font-display text-row-name font-bold [overflow-wrap:anywhere]";
 const BODY = "mt-2 leading-[1.65]";
 const DETAILS = "mt-4";

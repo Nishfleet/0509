@@ -13,7 +13,7 @@ export function SupportLink() {
 
 export function Footer() {
   return (
-    <footer className="border-line mt-14 flex flex-wrap gap-x-6 gap-y-3 border-t pt-7 font-mono text-[0.72rem] tracking-[0.06em]">
+    <footer className="mt-14 flex flex-wrap gap-x-6 gap-y-3 border-t border-line pt-7 font-mono text-[0.72rem] tracking-[0.06em]">
       <SupportLink />
       <a className={linkClass} href="/privacy">
         Privacy

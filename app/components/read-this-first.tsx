@@ -5,7 +5,7 @@ import type { BriefPayload } from "../lib/brief-payload";
 import { httpUrl } from "../lib/http-url";
 import { UNJUDGED_WEEK_LINE } from "../lib/read-this-first";
 
-const SECTION = "border-line mt-5 border-t pt-4";
+const SECTION = "mt-5 border-t border-line pt-4";
 const HEAD = "font-mono text-eyebrow text-ink-soft uppercase";
 const BODY = "mt-2 text-[0.95rem] leading-[1.6]";
 
@@ -36,7 +36,7 @@ function markBlock(mark: BriefPayload["read_this_first"][number]): ReactElement 
   return (
     <Fragment key={mark.signal_id}>
       {title}
-      <p className="text-ink-soft mt-2 text-[0.88rem] leading-[1.6]">
+      <p className="mt-2 text-[0.88rem] leading-[1.6] text-ink-soft">
         {mark.entity_name}: {mark.jev_reason}
       </p>
     </Fragment>
