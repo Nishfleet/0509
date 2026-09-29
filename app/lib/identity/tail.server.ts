@@ -89,7 +89,7 @@ export async function classifyTailPages(params: IdentityTailParams, now: string)
 export async function warmTailSiteCard(params: IdentityTailParams): Promise<void> {
   if (params.handle === undefined) return;
   const subject = subjectFor(params);
-  if (subject === null || subject.kind !== "domain") return;
+  if (subject?.kind !== "domain") return;
   await readSiteCard(subject);
 }
 
