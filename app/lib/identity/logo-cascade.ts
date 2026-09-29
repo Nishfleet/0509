@@ -5,7 +5,7 @@ export interface LogoCandidates {
 	registrableDomain: string;
 }
 
-export function logoCandidateUrls(candidates: LogoCandidates): readonly string[] {
+export function logoCandidateUrls(candidates: LogoCandidates): string[] {
 	const urls: string[] = [];
 	if (candidates.ldOrganizationLogo !== null) urls.push(candidates.ldOrganizationLogo);
 	if (candidates.ogImage !== null) urls.push(candidates.ogImage);
