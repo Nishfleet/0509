@@ -38,7 +38,7 @@ test("a change's screenshot is never served to a signed-out visitor", async ({ r
 // session, and this test skips there rather than fake the journey. The journey
 // is J3's — gymshark.com onboarded through "Start watching" — because a real
 // /app/competitors/:entityId page only exists once a competitor is watched.
-test("a watched competitor page leads with the switch and its consequence, and turns off without a dialog", async ({
+test("a watched competitor page leads with the switch and its consequence, and turns off without a dialog @own-signin", async ({
   page,
 }, testInfo) => {
   test.skip(
