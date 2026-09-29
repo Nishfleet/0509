@@ -10,7 +10,7 @@ import { expect, type Page, type TestInfo } from "@playwright/test";
 // E2E_INBOX_TOKEN secret. Nothing here reads D1 and nothing shortens the
 // auth path — the link the test clicks is the link the app really sent.
 //
-// Preview lane (PLAYWRIGHT_TEST_BASE_URL unset, 0509#6092): `wrangler dev`
+// Local lane (PLAYWRIGHT_TEST_BASE_URL unset, 0509#6092): `wrangler dev`
 // simulates the send_email binding — nothing is sent, and each part of the
 // message lands as a file under .wrangler/tmp/email/, which this module reads
 // instead of the inbox Worker. The secret belongs to the production job only,
@@ -21,13 +21,21 @@ const POLL_INTERVAL_MS = 3_000;
 
 const PRODUCTION_ORIGIN = "https://0509.io";
 
+// The one lane predicate every mailbox read switches on: unset base URL means
+// the local wrangler dev sink under .wrangler/tmp/email/, set means the inbox
+// Worker (production and the merge-queue previews alike are remote lanes).
+function isLocalLane(): boolean {
+  return !process.env.PLAYWRIGHT_TEST_BASE_URL;
+}
+
 // The lane's origin is the only one a verify link may carry (0509#5841):
-// production and the merge-queue previews mail their own baseURL, and local
-// `wrangler dev` mails the --var BETTER_AUTH_URL playwright.config.ts gives
-// it — the local port, pinned in the environment there so test workers see
-// the port webServer started on. A link on any other origin belongs to a
-// different run. Under vitest neither variable is set and the fixtures carry
-// the production origin.
+// production and the merge-queue previews mail their own baseURL, and the
+// local lane's `wrangler dev` mails the --var BETTER_AUTH_URL
+// playwright.config.ts gives it — the local port, pinned in the environment
+// there so test workers see the port webServer started on. A link on any
+// other origin belongs to a different run. Callers outside Playwright
+// (vitest) set neither variable, and their fixtures carry the production
+// origin.
 function laneOrigin(): string {
   const baseUrl = process.env.PLAYWRIGHT_TEST_BASE_URL;
   if (baseUrl) return new URL(baseUrl).origin;
@@ -154,6 +162,8 @@ function isNotFound(error: unknown): boolean {
 
 // The message files on disk, newest first: a second send to the same address
 // wins over the earlier file, the same as the inbox's overwrite-per-recipient.
+// A file can vanish between the listing and the stat or read when wrangler
+// prunes .wrangler/tmp — gone is "not this one", never a failure.
 async function localEmailFiles(): Promise<string[]> {
   const root = join(process.cwd(), ".wrangler", "tmp", "email");
   let sessions: string[];
@@ -176,7 +186,11 @@ async function localEmailFiles(): Promise<string[]> {
       }
       for (const name of names) {
         const file = join(dir, name);
-        files.push({ file, mtimeMs: (await stat(file)).mtimeMs });
+        try {
+          files.push({ file, mtimeMs: (await stat(file)).mtimeMs });
+        } catch (error) {
+          if (!isNotFound(error)) throw error;
+        }
       }
     }
   }
@@ -188,7 +202,13 @@ async function localEmailFiles(): Promise<string[]> {
 async function localLinks(to: string): Promise<string[]> {
   const links: string[] = [];
   for (const file of await localEmailFiles()) {
-    const body = await readFile(file, "utf8");
+    let body: string;
+    try {
+      body = await readFile(file, "utf8");
+    } catch (error) {
+      if (isNotFound(error)) continue;
+      throw error;
+    }
     if (!body.includes(to)) continue;
     const link = extractMagicLink(body);
     if (link !== null && !links.includes(link)) links.push(link);
@@ -204,9 +224,9 @@ async function localLinks(to: string): Promise<string[]> {
 // empty list; every other answer is the inbox failing, and reading one as "no
 // message" would hand back the spent link as if arriving mail had been seen.
 export async function staleLinks(to: string, token: string | null): Promise<string[]> {
-  // Preview lane: the local sink keeps one file per message, and the files
+  // Local lane: the disk sink keeps one file per message, and the files
   // already on disk for this address are the spent links to skip.
-  if (!process.env.PLAYWRIGHT_TEST_BASE_URL) return localLinks(to);
+  if (isLocalLane()) return localLinks(to);
   const stored = await readRawMessage(to, token ?? requireInboxToken()).then(
     (raw) => extractMagicLink(raw),
     (error: unknown) => {
@@ -237,10 +257,10 @@ async function probeInbox(url: string, headers: Record<string, string>): Promise
 // first: `exclude` carries links already read for this recipient, and the poll
 // keeps waiting while the stored message still points at one of them.
 export async function waitForMagicLink(to: string, token: string | null, exclude: string[] = []): Promise<string> {
-  // Preview lane: poll the files wrangler's simulated send_email wrote instead
+  // Local lane: poll the files wrangler's simulated send_email wrote instead
   // of the inbox endpoint. The write rides on ctx.waitUntil after the sign-in
   // response, so the file lands a beat after the form's sent state.
-  if (!process.env.PLAYWRIGHT_TEST_BASE_URL) {
+  if (isLocalLane()) {
     let fresh: string[] = [];
     try {
       await expect
@@ -259,7 +279,7 @@ export async function waitForMagicLink(to: string, token: string | null, exclude
     if (fresh.length > 0) return fresh[0];
     throw new Error(
       `No magic-link email for ${to} within ${POLL_LIMIT_MS / 1000}s. ` +
-        `The preview lane reads wrangler's simulated send_email output under .wrangler/tmp/email/<session>/email-{text,html}/: ` +
+        `The local lane reads wrangler's simulated send_email output under .wrangler/tmp/email/<session>/email-{text,html}/: ` +
         `no file for this address carried a ${laneOrigin()} verify link.`,
     );
   }

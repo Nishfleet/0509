@@ -1,3 +1,7 @@
+import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { extractMagicLink, InboxReadError, readRawMessage, staleLinks, waitForMagicLink } from "../e2e/inbox";
@@ -140,7 +144,7 @@ describe("extractMagicLink on a named lane", () => {
     expect(extractMagicLink(PLAIN)).toBeNull();
   });
 
-  // 0509#6092: the preview lane's wrangler dev mails the --var BETTER_AUTH_URL
+  // 0509#6092: the local lane's wrangler dev mails the --var BETTER_AUTH_URL
   // playwright.config.ts gives it, so the local link is on the pinned port.
   // PLAYWRIGHT_TEST_BASE_URL is stubbed empty so a caller's environment cannot
   // pull these cases onto the remote lane.
@@ -250,6 +254,63 @@ describe("staleLinks", () => {
     const pending = waitForMagicLink("e2e+stale@0509.io", "token", exclude);
     setTimeout(() => {
       stored = `Sign in to Five to Nine:\n\n${fresh}`;
+    }, 100);
+    await expect(pending).resolves.toBe(fresh);
+  }, 20_000);
+});
+
+// 0509#6092: the local lane reads wrangler's simulated send_email output —
+// one file per part under .wrangler/tmp/email/<session>/email-{text,html}/.
+// These cases point the reader at a temp cwd carrying the same layout.
+describe("the local lane disk sink", () => {
+  const TO = "e2e+local@0509.io";
+  const LOCAL_LINK = "http://127.0.0.1:8791/api/auth/magic-link/verify?token=abc123&callbackURL=%2Fapp";
+  let dir: string;
+
+  async function writeEmail(to: string, link: string): Promise<void> {
+    const partDir = join(dir, ".wrangler", "tmp", "email", "session-1", "email-text");
+    await mkdir(partDir, { recursive: true });
+    await writeFile(
+      join(partDir, `${crypto.randomUUID()}@0509.io.txt`),
+      `Sign in to Five to Nine\n\nWe sent this link to ${to}.\n\n${link}`,
+    );
+  }
+
+  beforeEach(async () => {
+    vi.stubEnv("PLAYWRIGHT_TEST_BASE_URL", "");
+    vi.stubEnv("PLAYWRIGHT_LOCAL_PORT", "8791");
+    dir = await mkdtemp(join(tmpdir(), "e2e-inbox-"));
+    vi.spyOn(process, "cwd").mockReturnValue(dir);
+  });
+  afterEach(async () => {
+    vi.unstubAllEnvs();
+    vi.restoreAllMocks();
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  it("carries the link a file for the recipient holds", async () => {
+    await writeEmail(TO, LOCAL_LINK);
+    await expect(staleLinks(TO, null)).resolves.toEqual([LOCAL_LINK]);
+  });
+
+  it("is empty when nothing was written", async () => {
+    await expect(staleLinks(TO, null)).resolves.toEqual([]);
+  });
+
+  it("ignores a file addressed to another recipient", async () => {
+    await writeEmail(
+      "e2e+other@0509.io",
+      "http://127.0.0.1:8791/api/auth/magic-link/verify?token=other&callbackURL=%2Fapp",
+    );
+    await expect(staleLinks(TO, null)).resolves.toEqual([]);
+  });
+
+  it("keeps the wait off an excluded link until the fresh one lands", async () => {
+    const fresh = "http://127.0.0.1:8791/api/auth/magic-link/verify?token=fresh&callbackURL=%2Fapp";
+    await writeEmail(TO, LOCAL_LINK);
+    const pending = waitForMagicLink(TO, null, [LOCAL_LINK]);
+    setTimeout(() => {
+      void writeEmail(TO, fresh);
     }, 100);
     await expect(pending).resolves.toBe(fresh);
   }, 20_000);
