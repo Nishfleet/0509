@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { fetchOutbound } from "../../../app/lib/fetch/outbound.server";
+
 export const mentionItemSchema = z.object({
 	dedupKey: z.string().min(1),
 	url: z.url({ protocol: /^https?$/ }),
@@ -58,7 +60,7 @@ export async function fetchUpstream(
 ): Promise<Response> {
 	for (let attempt = 0; ; attempt += 1) {
 		try {
-			const response = await fetch(url, { signal: AbortSignal.timeout(timeoutMs) });
+			const response = await fetchOutbound(url, { headers: {}, signal: AbortSignal.timeout(timeoutMs) });
 			if (BLOCKING_STATUSES.has(response.status)) throw new UpstreamBlockedError(response.status);
 			return response;
 		} catch (error) {

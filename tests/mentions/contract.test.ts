@@ -69,9 +69,10 @@ describe("mentions adapter contract", () => {
 		try {
 			await fetchUpstream("https://example.com/feed");
 			expect(fetchMock).toHaveBeenCalledTimes(1);
-			expect(fetchMock).toHaveBeenCalledWith("https://example.com/feed", {
-				signal: expect.any(AbortSignal),
-			});
+			expect(fetchMock).toHaveBeenCalledWith(
+				"https://example.com/feed",
+				expect.objectContaining({ redirect: "manual", signal: expect.any(AbortSignal) }),
+			);
 			expect(timeoutSpy).toHaveBeenCalledWith(8000);
 		} finally {
 			vi.unstubAllGlobals();
