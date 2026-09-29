@@ -6,7 +6,24 @@ import { takeBrowserEscalation } from "./browser-budget.server";
 
 const RETEST_MS = 7 * 24 * 60 * 60 * 1000;
 
-export async function readPage(target: SiteSweepTarget, now: string): Promise<ReadUrlResult> {
+export interface ReadPageOptions {
+  browser?: boolean;
+}
+
+function escalation(
+  options: ReadPageOptions,
+  target: SiteSweepTarget,
+  day: string,
+): (() => Promise<boolean>) | undefined {
+  if (options.browser === false) return undefined;
+  return () => takeBrowserEscalation(target.workspaceId, target.entityId, day);
+}
+
+export async function readPage(
+  target: SiteSweepTarget,
+  now: string,
+  options: ReadPageOptions = {},
+): Promise<ReadUrlResult> {
   const learnedBrowser =
     target.transport === "browser" &&
     target.transportTestedAt !== null &&
@@ -14,7 +31,7 @@ export async function readPage(target: SiteSweepTarget, now: string): Promise<Re
   const day = now.slice(0, 10);
   const read = await readUrl(target.url, {
     startWith: learnedBrowser ? "browser" : "fetch",
-    mayEscalate: () => takeBrowserEscalation(target.workspaceId, target.entityId, day),
+    mayEscalate: escalation(options, target, day),
   });
   if (!read.ok) {
     if (read.reason === "deferred") await markPageDeferred(target.pageId, now);
