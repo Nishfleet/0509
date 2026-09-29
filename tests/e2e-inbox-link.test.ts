@@ -133,6 +133,14 @@ describe("extractMagicLink", () => {
   it("unescapes &amp; in an HTML-only href", () => {
     expect(extractMagicLink(HTML_ONLY)).toBe(EXPECTED);
   });
+
+  // A bare verify prefix (a truncated mention, a quoted example) is not a
+  // link; scanning must continue to a full one later in the same body.
+  it("skips a bare verify prefix and returns a later full link", () => {
+    expect(
+      extractMagicLink(`the prefix https://0509.io/api/auth/magic-link/verify?" alone, then\n${EXPECTED}`),
+    ).toBe(EXPECTED);
+  });
 });
 
 // 0509#5841: a verify link is only the lane's own origin. The production and
@@ -278,13 +286,14 @@ describe("the local lane disk sink", () => {
   const LOCAL_LINK = "http://127.0.0.1:8791/api/auth/magic-link/verify?token=abc123&callbackURL=%2Fapp";
   let dir: string;
 
-  async function writeEmail(to: string, link: string): Promise<void> {
-    const partDir = join(dir, ".wrangler", "tmp", "email", "session-1", "email-text");
+  async function writeEmail(to: string, link: string, part: "email-text" | "email-html" = "email-text"): Promise<void> {
+    const partDir = join(dir, ".wrangler", "tmp", "email", "session-1", part);
     await mkdir(partDir, { recursive: true });
-    await writeFile(
-      join(partDir, `${crypto.randomUUID()}@0509.io.txt`),
-      `Sign in to Five to Nine\n\nWe sent this link to ${to}.\n\n${link}`,
-    );
+    const body =
+      part === "email-html"
+        ? `<p>We sent this link to ${to}.</p><a href="${link.replaceAll("&", "&amp;")}">Sign in</a>`
+        : `Sign in to Five to Nine\n\nWe sent this link to ${to}.\n\n${link}`;
+    await writeFile(join(partDir, `${crypto.randomUUID()}@0509.io.${part === "email-html" ? "html" : "txt"}`), body);
   }
 
   beforeEach(async () => {
@@ -301,6 +310,11 @@ describe("the local lane disk sink", () => {
 
   it("carries the link a file for the recipient holds", async () => {
     await writeEmail(TO, LOCAL_LINK);
+    await expect(staleLinks(TO, null)).resolves.toEqual([LOCAL_LINK]);
+  });
+
+  it("carries the link the html part holds, unescaped", async () => {
+    await writeEmail(TO, LOCAL_LINK, "email-html");
     await expect(staleLinks(TO, null)).resolves.toEqual([LOCAL_LINK]);
   });
 

@@ -137,10 +137,12 @@ export async function readRawMessage(to: string, token: string): Promise<string>
 export function extractMagicLink(rawMessage: string): string | null {
   const prefix = `${laneOrigin()}/api/auth/magic-link/verify?`;
   for (const body of decodedBodies(rawMessage)) {
-    const start = body.indexOf(prefix);
-    if (start === -1) continue;
-    const match = /^[^\s"'<>]+/.exec(body.slice(start));
-    if (match) return match[0].replaceAll("&amp;", "&");
+    // A bare prefix with no token behind it is not a link — keep scanning so a
+    // truncated mention cannot hide a full link later in the same body.
+    for (let start = body.indexOf(prefix); start !== -1; start = body.indexOf(prefix, start + prefix.length)) {
+      const match = /^[^\s"'<>]+/.exec(body.slice(start + prefix.length));
+      if (match) return `${prefix}${match[0]}`.replaceAll("&amp;", "&");
+    }
   }
   return null;
 }
