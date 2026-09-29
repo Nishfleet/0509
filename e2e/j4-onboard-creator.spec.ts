@@ -39,6 +39,8 @@ test.describe("J4 onboard a creator handle", () => {
       await input.fill(SUBJECT);
       const started = Date.now();
       await input.press("Enter");
+      // Preview has no AI binding, so the public-subject screen falls back to asking (onboarding-screen.server.ts).
+      if (isLocalLane()) await page.getByRole("button", { name: "Yes, a business or creator" }).click();
 
       await expect(
         page.getByRole("heading", { name: "This is you. Fix anything we got wrong." }),

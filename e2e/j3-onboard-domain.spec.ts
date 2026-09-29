@@ -47,6 +47,8 @@ for (const { width, height } of [
     await input.fill("gymshark.com");
     const started = Date.now();
     await input.press("Enter");
+    // Preview has no AI binding, so the public-subject screen falls back to asking (onboarding-screen.server.ts).
+    if (isLocalLane()) await page.getByRole("button", { name: "Yes, a business or creator" }).click();
 
     const editName = page.getByRole("button", { name: "edit name" });
     await expect(editName).toBeVisible({ timeout: 30_000 });
