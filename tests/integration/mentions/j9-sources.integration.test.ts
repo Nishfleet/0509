@@ -66,10 +66,10 @@ function stubUpstreams() {
   vi.stubGlobal(
     "fetch",
     vi.fn((input: RequestInfo | URL) => {
-      const url = String(input);
-      if (url.includes("api.gdeltproject.org")) return Promise.resolve(new Response(JSON.stringify(GDELT)));
-      if (url.includes("hn.algolia.com")) return Promise.resolve(new Response(JSON.stringify(HN)));
-      if (url.includes("youtube.com/feeds/videos.xml")) {
+      const url = new URL(String(input));
+      if (url.hostname === "api.gdeltproject.org") return Promise.resolve(new Response(JSON.stringify(GDELT)));
+      if (url.hostname === "hn.algolia.com") return Promise.resolve(new Response(JSON.stringify(HN)));
+      if (url.hostname === "www.youtube.com" && url.pathname === "/feeds/videos.xml") {
         return Promise.resolve(new Response(ATOM, { status: 200, headers: { "content-type": "text/xml" } }));
       }
       return Promise.resolve(new Response("unexpected", { status: 500 }));
