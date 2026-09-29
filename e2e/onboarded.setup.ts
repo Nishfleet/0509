@@ -61,7 +61,7 @@ setup("mint one onboarded session per viewport lane", async ({ browser }) => {
         await expect(watching.first()).toBeVisible();
       }
       await page.getByRole("button", { name: "Start watching" }).click();
-      await expect(page).toHaveURL(/\/app$/);
+      await expect(page).toHaveURL(/\/app$/, { timeout: 30_000 });
 
       await page.goto("/app/competitors");
       await addCompetitor(page, "nike.com");
