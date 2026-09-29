@@ -20,6 +20,8 @@ process.env.PLAYWRIGHT_LOCAL_PORT ??= String(8000 + (process.pid % 1000));
 const localPort = process.env.PLAYWRIGHT_LOCAL_PORT;
 const baseURL = process.env.PLAYWRIGHT_TEST_BASE_URL ?? `http://127.0.0.1:${localPort}`;
 export const accessStatePath = "e2e/.auth/access.json";
+export const onboardedStatePath = (lane: "desktop" | "phone"): string => `e2e/.auth/onboarded-${lane}.json`;
+export const onboardedEmailPath = (lane: "desktop" | "phone"): string => `e2e/.auth/onboarded-${lane}.email`;
 export const sessionStatePath = "e2e/.auth/session.json";
 const accessState = process.env.CF_ACCESS_CLIENT_ID ? { storageState: accessStatePath } : {};
 const productionLane = Boolean(process.env.PLAYWRIGHT_TEST_BASE_URL && process.env.CF_ACCESS_CLIENT_ID);
@@ -66,15 +68,31 @@ export default defineConfig({
     // the sign-in minted, via the product's own settings delete path. Gated on
     // its own env var so the e2e suite never runs it.
     ...(process.env.LHCI_TEARDOWN ? [{ name: "lhci-teardown", testMatch: /lhci-teardown\.setup\.ts/ }] : []),
+    ...(process.env.CF_ACCESS_CLIENT_ID
+      ? [
+          { name: "onboarded-setup", testMatch: /onboarded\.setup\.ts/, dependencies: ["setup"], teardown: "onboarded-teardown" },
+          { name: "onboarded-teardown", testMatch: /onboarded-teardown\.setup\.ts/ },
+        ]
+      : []),
     {
       name: "desktop-1440",
       use: { ...devices["Desktop Chrome"], viewport: { width: 1440, height: 900 }, ...accessState },
-      dependencies: productionLane ? ["setup", "session"] : process.env.CF_ACCESS_CLIENT_ID ? ["setup"] : [],
+      dependencies: productionLane
+        ? ["setup", "session", "onboarded-setup"]
+        : process.env.CF_ACCESS_CLIENT_ID
+          ? ["setup", "onboarded-setup"]
+          : [],
+      testIgnore: /onboarded.*\.setup\.ts/,
     },
     {
       name: "phone-390",
       use: { ...devices["Desktop Chrome"], viewport: { width: 390, height: 844 }, ...accessState },
-      dependencies: productionLane ? ["setup", "session"] : process.env.CF_ACCESS_CLIENT_ID ? ["setup"] : [],
+      dependencies: productionLane
+        ? ["setup", "session", "onboarded-setup"]
+        : process.env.CF_ACCESS_CLIENT_ID
+          ? ["setup", "onboarded-setup"]
+          : [],
+      testIgnore: /onboarded.*\.setup\.ts/,
     },
   ],
   webServer: process.env.PLAYWRIGHT_TEST_BASE_URL
