@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { resolveBrandName, type NameSources } from "../../../app/lib/identity/name-cascade";
+import { CRAWLER_USER_AGENT } from "../../../app/lib/fetch/robots.server";
+import { resolveBrandName, type NameSources } from "../../../app/lib/identity/name-cascade.server";
 
 afterEach(() => {
 	vi.unstubAllGlobals();
@@ -77,7 +78,7 @@ describe("resolveBrandName", () => {
 
 	it("names itself to Wikidata, which refuses requests with no user agent", async () => {
 		const fetchMock = vi.fn(async (_url: string, init?: RequestInit) =>
-			new Headers(init?.headers).get("user-agent")?.startsWith("FiveToNineBot/")
+			new Headers(init?.headers).get("user-agent") === CRAWLER_USER_AGENT
 				? Response.json({ search: [{ id: "Q56246099", label: "Gymshark" }] })
 				: new Response("Please set a user-agent", { status: 403 }),
 		);

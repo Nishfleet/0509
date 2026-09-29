@@ -189,11 +189,6 @@
       "count": 1
     }
   },
-  "app/lib/discovery/co-mentions.ts": {
-    "complexity": {
-      "count": 1
-    }
-  },
   "app/lib/discovery/refresh.server.ts": {
     "max-depth": {
       "count": 1
@@ -277,7 +272,7 @@
       "count": 1
     }
   },
-  "app/lib/identity/name-cascade.ts": {
+  "app/lib/identity/name-cascade.server.ts": {
     "complexity": {
       "count": 1
     }
@@ -343,11 +338,6 @@
       "count": 1
     }
   },
-  "app/lib/site/sweep.server.ts": {
-    "max-lines-per-function": {
-      "count": 1
-    }
-  },
   "app/routes/app.alerts.tsx": {
     "max-lines-per-function": {
       "count": 1
@@ -370,11 +360,6 @@
     }
   },
   "app/routes/login.tsx": {
-    "max-lines-per-function": {
-      "count": 1
-    }
-  },
-  "app/routes/onboarding.competitors.tsx": {
     "max-lines-per-function": {
       "count": 1
     }

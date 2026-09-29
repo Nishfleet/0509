@@ -2,6 +2,7 @@ import { Suspense, useId, useState, type KeyboardEvent, type ReactNode } from "r
 import { Await, Form, useFetcher } from "react-router";
 
 import type { CardDraft, CreatorRows, DraftField, SiteFields } from "../lib/identity/card-fields";
+import { cn } from "../lib/utils";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
@@ -12,18 +13,22 @@ function Row({
   label,
   check,
   checkId,
+  wrap,
   children,
 }: {
   label: string;
   check?: boolean;
   checkId?: string;
+  wrap?: boolean;
   children: ReactNode;
 }) {
   return (
     <div
-      className={`flex items-baseline gap-4 border-b border-line py-3${
-        check === true ? " bg-green-wash px-2 text-green-ink" : ""
-      }`}
+      className={cn(
+        "flex items-baseline gap-4 border-b border-line py-3",
+        wrap === true && "max-sm:flex-wrap",
+        check === true && "bg-green-wash px-2 text-green-ink",
+      )}
     >
       <span className="w-20 shrink-0 font-mono text-[0.75rem] text-ink-soft uppercase">{label}</span>
       {children}
@@ -105,7 +110,7 @@ function EditRow({
       />
     );
   return (
-    <Row label={label} check={check} checkId={checkId}>
+    <Row label={label} check={check} checkId={checkId} wrap={empty === true}>
       <Popover
         open={open}
         onOpenChange={(next) => {
@@ -139,7 +144,9 @@ function EditRow({
         </span>
       ) : null}
       <input type="hidden" name={name} value={value} />
-      {empty === true ? <span className="text-[0.88rem] text-ink-soft">{emptyLine}</span> : null}
+      {empty === true ? (
+        <span className="text-[0.88rem] text-ink-soft max-sm:basis-full">{emptyLine}</span>
+      ) : null}
     </Row>
   );
 }

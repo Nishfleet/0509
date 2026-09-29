@@ -56,6 +56,7 @@ export function Hero() {
           <p id="hero-proof" className={`${eyebrow} text-green-ink`}>
             How a change reads
           </p>
+          <p className="mt-2 font-mono text-meta text-ink-soft">Worked examples, not live marks.</p>
           <ul className="mt-4 grid gap-3">
             {SHOWN.map((example) => (
               <li

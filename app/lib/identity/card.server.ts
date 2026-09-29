@@ -10,7 +10,7 @@ import { reviewFields } from "./field-confidence.server";
 import { readLogo, storeLogo } from "./logo-store.server";
 import { logoCandidateUrls } from "./logo-cascade";
 import type { LogoCandidates } from "./logo-cascade";
-import { resolveBrandName } from "./name-cascade";
+import { resolveBrandName } from "./name-cascade.server";
 import type { Subject } from "./normalise";
 import { cachedProbe, probeKey } from "./probe-cache.server";
 

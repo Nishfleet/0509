@@ -2,6 +2,7 @@ import { env } from "cloudflare:workers";
 import { parse } from "tldts";
 
 import { readEntityDomain } from "../data/entity.server";
+import { CRAWLER_USER_AGENT } from "../fetch/robots.server";
 
 const MAX_LOGO_BYTES = 1_000_000;
 
@@ -79,7 +80,7 @@ export async function storeLogo(
       signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
       headers: {
         accept: "image/*",
-        "user-agent": "FiveToNineBot/1.0 (+https://0509.io)",
+        "user-agent": CRAWLER_USER_AGENT,
       },
     });
 

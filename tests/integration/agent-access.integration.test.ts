@@ -6,6 +6,7 @@ import { clientIp, withinLimit } from "../../app/lib/agent/client-limit.server";
 import { propsForApiKey } from "../../app/lib/agent/keys.server";
 import { createOAuthProvider } from "../../app/lib/agent/oauth.server";
 import { toolResult } from "../../app/lib/agent/mcp.server";
+import { registeredToolDescriptors } from "../../app/lib/agent/mcp-tools";
 import {
   readAgentAlerts,
   readAgentBrief,
@@ -232,14 +233,12 @@ describe("agent access, scoped to one workspace", () => {
   it("serves the MCP tools as read-only, and a call reads only the caller's workspace", async () => {
     const listed = await mcpResponse(jsonRpc("tools/list"), { userId: a.userId, clientId: "test" });
     expect(listed.status).toBe(200);
-    const list = await rpcResult<{ tools: { name: string; annotations: { readOnlyHint: boolean } }[] }>(listed);
-    expect(list.tools.map((tool) => tool.name).sort()).toEqual([
-      "get_brief",
-      "get_competitor",
-      "get_standing",
-      "list_alerts",
-      "list_competitors",
-    ]);
+    const list = await rpcResult<{ tools: { name: string; title?: string; annotations: { readOnlyHint: boolean } }[] }>(listed);
+    expect(list.tools.map((tool) => [tool.name, tool.title]).sort()).toEqual(
+      Object.entries(registeredToolDescriptors)
+        .map(([name, tool]) => [name, tool.title])
+        .sort(),
+    );
     expect(list.tools.every((tool) => tool.annotations.readOnlyHint)).toBe(true);
 
     const called = await mcpResponse(jsonRpc("tools/call", { name: "list_competitors", arguments: {} }), {
