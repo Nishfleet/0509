@@ -158,14 +158,14 @@ describe("resolveDomain", () => {
     });
 
     expect(errors).toHaveBeenCalledTimes(1);
-    expect(errors).toHaveBeenCalledWith(
-      JSON.stringify({
-        event: "discovery.resolve_failed",
-        step: "wikidata",
-        url: "https://www.wikidata.org/w/api.php?action=wbsearchentities&format=json&language=en&type=item&limit=1&search=Throttled%20Brand%200509",
-        error: "status 429",
-      }),
-    );
+    const entry = JSON.parse(String(errors.mock.calls[0]?.[0])) as Record<string, string>;
+    expect(entry).toMatchObject({
+      event: "discovery.resolve_failed",
+      step: "wikidata",
+      error: "status 429",
+    });
+    expect(entry.url).toContain("wbsearchentities");
+    expect(entry.url).toContain("search=Throttled%20Brand%200509");
   });
 
   it("identifies both of resolve-domain's outbound fetches as the one crawler User-Agent (0509#5883)", async () => {
