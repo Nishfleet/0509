@@ -9,6 +9,7 @@ import { expect, test, type Page } from "@playwright/test";
 import {
   consoleFailures,
   deleteCreatedAccount,
+  isLocalLane,
   laneOrigin,
   requireInboxToken,
   signInWithMagicLink,
@@ -160,7 +161,7 @@ test("the per-brand switch is operable with a keyboard alone", async ({ page }, 
   test.setTimeout(150_000);
   const watched = watchConsole(page);
 
-  if (process.env.PLAYWRIGHT_TEST_BASE_URL) {
+  if (!isLocalLane()) {
     await watchOneCompetitor(page);
   } else {
     await page.setExtraHTTPHeaders({ cookie: await seedSession() });

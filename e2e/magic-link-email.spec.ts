@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-import { decodedBodies, readRawMessage, requireInboxToken, settleSignInWidget, waitForMagicLink } from "./inbox";
+import { decodedBodies, isLocalLane, readRawMessage, requireInboxToken, settleSignInWidget, waitForMagicLink } from "./inbox";
 
 // Remote lanes only: this spec reads the raw MIME message back from the inbox
 // Worker, which has no local-lane counterpart — wrangler's simulated send_email
@@ -8,7 +8,7 @@ import { decodedBodies, readRawMessage, requireInboxToken, settleSignInWidget, w
 // message, so nothing here can run against the preview Worker. Skipping beats
 // faking the copy.
 test.skip(
-  !process.env.PLAYWRIGHT_TEST_BASE_URL,
+  isLocalLane(),
   "the sign-in email only exists on the production mail path",
 );
 

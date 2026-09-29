@@ -219,6 +219,17 @@ async function localLinks(to: string): Promise<string[]> {
   return links;
 }
 
+// Callers pass null only on the local lane, whose branch returns before the
+// inbox reads below; a null reaching a remote read is the caller shipping the
+// local marker to a lane that needs the real secret. Name that rather than
+// re-resolve the token from the environment behind the caller's back.
+function remoteToken(token: string | null): string {
+  if (token === null) {
+    throw new Error("an inbox read on a remote lane needs the E2E_INBOX_TOKEN the caller resolved; null is the local lane's marker");
+  }
+  return token;
+}
+
 // The link this recipient already has stored, for waitForMagicLink to skip: the
 // inbox keeps one message per recipient for an hour, so a fixed fixture address
 // still holds the previous run's spent link, and a poll that accepted it would
@@ -230,7 +241,7 @@ export async function staleLinks(to: string, token: string | null): Promise<stri
   // Local lane: the disk sink keeps one file per message, and the files
   // already on disk for this address are the spent links to skip.
   if (isLocalLane()) return localLinks(to);
-  const stored = await readRawMessage(to, token || requireInboxToken()).then(
+  const stored = await readRawMessage(to, remoteToken(token)).then(
     (raw) => extractMagicLink(raw),
     (error: unknown) => {
       if (error instanceof InboxReadError && error.status === 404) return null;
@@ -306,7 +317,7 @@ export async function waitForMagicLink(to: string, token: string | null, exclude
     }
     return fresh[0];
   }
-  const resolved = token || requireInboxToken();
+  const resolved = remoteToken(token);
   const url = `${INBOX_URL}/message?to=${encodeURIComponent(to)}`;
   const headers = inboxHeaders(resolved);
   await probeInbox(url, headers);
