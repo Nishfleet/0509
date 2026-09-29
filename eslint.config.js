@@ -122,7 +122,7 @@ const SUPPORT_ADDRESS_BAN = {
 // `.catch(() => null)` callback. The named clause in
 // app/lib/identity/name-cascade.ts is grandfathered by name (see the
 // exemption block) until the cascade grows a logged failure path. Source:
-// 0509#4462 (REBUILD-TRUST.md C1 Q1 — the D grade on PR #4457).
+// 0509#4462 (REBUILD-TRUST.md C1 Q1 — found in review of PR #4457).
 const CATCH_RETURNS_NULL = {
   selector:
     "CatchClause > BlockStatement[body.length=1] > ReturnStatement[argument.value=null]",
