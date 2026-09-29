@@ -57,7 +57,7 @@ function readJson(body: string): unknown {
   }
 }
 
-export async function collectWatch(
+async function collectWatch(
   message: FetchSweepMessage,
   tick: SweepTick,
 ): Promise<FetchSweepOutcome> {

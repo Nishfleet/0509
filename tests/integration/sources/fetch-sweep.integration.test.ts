@@ -260,7 +260,7 @@ describe("fetch-sweep consumer (0509#5261)", () => {
       if (signal === undefined) throw new Error("expected the change signal");
       expect(signal).toMatchObject({
         kind: "change",
-        aspect: "home",
+        aspect: "pricing",
         url: URL,
         snapshot_id: `msg-0-${PAGE}`,
       });
