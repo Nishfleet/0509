@@ -730,6 +730,19 @@ Dodo's subscription statuses, read from the shipped types (`SubscriptionStatus`)
 | Dodo's `@dodopayments/nextjs`, `@dodopayments/express` and other framework adapters | Each is a route handler for a framework this app does not run. The core SDK is the layer they wrap. |
 | Dodo's hosted overlay checkout script | A browser-side script from a second origin, which the app's CSP would have to admit. The server-created `checkout_url` needs none. |
 
+### 5.12 Billing — Standard Webhooks
+
+**Installed: `standardwebhooks` 1.1.1**, exact pin (npm `latest`, the same version `dodopayments` 2.52.0 depends on, so the lockfile holds one copy). Spec and library: <https://github.com/standard-webhooks/standard-webhooks/tree/main/libraries/javascript> (read 2026-09-29). Dodo signs its webhooks to this spec and the Dodo SDK's own `webhooks.unwrap` calls this library; Dodo's webhook guide: <https://docs.dodopayments.com/developer-resources/webhooks> (read 2026-09-29).
+
+`new Webhook(secret).verify(rawBody, { "webhook-id", "webhook-timestamp", "webhook-signature" })` checks the HMAC-SHA256 signature over `id.timestamp.body`, compares in constant time, accepts a `whsec_`-prefixed secret and rejects a timestamp more than five minutes from now, so a captured request cannot be replayed later. It throws `WebhookVerificationError` on any failure, which the handler turns into a 400 that Dodo retries. Its two dependencies (`fast-sha256`, `@stablelib/base64`) are plain JavaScript, so it runs in workerd without a Node crypto shim. Probed 2026-09-29 in the workers vitest project: the tests sign bodies with `Webhook.sign` and the route verifies them.
+
+The `webhook-id` header is the idempotency key, stored as `dodo_webhook_event.id` (the table exists in `migrations/0001_rebuild.sql`), which is what Dodo's webhook guide recommends for its automatic retries.
+
+| Rejected | Why |
+|---|---|
+| A hand-rolled HMAC over `crypto.subtle` | Charter #3842 rejects hand-rolled auth and billing; timestamp tolerance, multi-signature headers and constant-time comparison are the parts a hand-rolled check gets wrong. |
+| `client.webhooks.unwrap` from the Dodo SDK | It needs a constructed API client and parses into the SDK's event union. The handler needs the verification only and reads five fields with `zod`. |
+
 ---
 
 ## 6. Testing — and what not to build
@@ -1148,6 +1161,7 @@ The version in this table is the `package.json` specifier. An earlier section of
 | `lucide-react` | 1.47.0 | §3.2 | Icons the shadcn/ui components import (`app/components/ui/dialog.tsx`) | A second icon set, inline SVG copies | 1.47.0 |
 | `robots-parser` | 3.0.1 | #4741, REBUILD-GUARDRAILS robots line | robots.txt matching (groups, wildcards, Allow/Disallow precedence) for plain fetches of the customer's own site. Zero dependencies. Doc: <https://github.com/samclarke/robots-parser> | A hand-written robots.txt parser (charter #3842 forbids it), `robotstxt` ports of Google's C++ parser | 3.0.1 |
 | `sonner` | ^2.0.8 | §5.10 | The one toast surface: "saved" and "undo" per DESIGN.md §11 | A hand-rolled live region (Base UI ships no toast primitive), `react-hot-toast` | 2.0.8 |
+| `standardwebhooks` | 1.1.1 | §5.12, J13 | Verifies Dodo's webhook signature, timestamp tolerance and replay window. Doc: <https://github.com/standard-webhooks/standard-webhooks/tree/main/libraries/javascript> | A hand-rolled HMAC check, `client.webhooks.unwrap` from the Dodo SDK | 1.1.1 |
 | `tailwind-merge` | ^3.7.0 | §3.2 | Class conflict resolution inside `cn()` | A hand-written Tailwind merger | 3.7.0 |
 | `tldts` | ^7.4.13 | `docs/engines/identity-card.md` P1 | Registrable domain and public-suffix handling for identity input normalisation. No dependencies, ships a Workers-clean ESM build | A hand-written public-suffix list, `split('.')`, `psl` (unmaintained) | 7.4.13 |
 | `uplot` | 1.6.32 | §5.7, #4055 | The Home four-week standing line: a line-chart library, not a chart framework, at 22 KB gzip. Canvas-based, so the wrapper paints on mount and the server renders only the frame | `recharts` (over the 30 KB budget even tree-shaken), `frappe-charts` (unmaintained since 2021), hand-rolled inline SVG (glue) | 1.6.32 |
