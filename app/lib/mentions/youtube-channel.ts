@@ -26,6 +26,8 @@ const jsonObject = z.record(z.string(), z.unknown());
 
 export const LOST_CHANNEL_REASON = "we lost the channel, re-resolving";
 
+export const NO_CHANNEL_REASON = "no YouTube channel on the confirmed card";
+
 interface LostChannelFlag {
 	reason: string;
 	at: string;
@@ -121,14 +123,22 @@ export function channelIdFromIdentity(raw: string): string | null {
 	return channelIdFromUrl(url);
 }
 
-export function withLostChannel(raw: string, at: string): string {
+function withDegradedReason(raw: string, reason: string, at: string): string {
 	const read = readWatchConfig(raw);
 	if (read.status !== "ok") throw new Error("watch config_json is unreadable");
 	if (read.degraded !== null) return raw;
 	return JSON.stringify({
 		...read.record,
-		degraded: { state: "degraded", reason: LOST_CHANNEL_REASON, at },
+		degraded: { state: "degraded", reason, at },
 	});
+}
+
+export function withLostChannel(raw: string, at: string): string {
+	return withDegradedReason(raw, LOST_CHANNEL_REASON, at);
+}
+
+export function withNoChannel(raw: string, at: string): string {
+	return withDegradedReason(raw, NO_CHANNEL_REASON, at);
 }
 
 export function withResolvedChannel(raw: string, channelId: string): string {

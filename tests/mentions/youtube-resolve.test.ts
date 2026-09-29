@@ -6,11 +6,13 @@ import { describe, expect, it, vi } from "vitest";
 
 import {
 	LOST_CHANNEL_REASON,
+	NO_CHANNEL_REASON,
 	channelIdFromHtml,
 	channelIdFromIdentity,
 	channelIdFromUrl,
 	readWatchConfig,
 	withLostChannel,
+	withNoChannel,
 	withPendingChannel,
 	withResolvedChannel,
 	withoutPendingChannel,
@@ -103,6 +105,25 @@ describe("stale YouTube channel", () => {
 		expect(readWatchConfig("[1,2]").status).toBe("unreadable");
 		expect(readWatchConfig('{"channelId":"not-a-channel"}').status).toBe("unreadable");
 		expect(() => withLostChannel("{", "2026-09-24T23:01:56.000Z")).toThrow(/unreadable/);
+	});
+
+	it("marks a watch no-channel once, throws on an unreadable config, and clears it when a channel id is saved", () => {
+		const at = "2026-09-24T23:01:56.000Z";
+		const flagged = withNoChannel('{"kept":true}', at);
+		expect(JSON.parse(flagged)).toEqual({
+			kept: true,
+			degraded: { state: "degraded", reason: NO_CHANNEL_REASON, at },
+		});
+		expect(withNoChannel(flagged, "2026-09-25T00:00:00.000Z")).toBe(flagged);
+		const flaggedRead = readWatchConfig(flagged);
+		expect(flaggedRead.status).toBe("ok");
+		if (flaggedRead.status === "ok") expect(flaggedRead.degraded?.reason).toBe(NO_CHANNEL_REASON);
+		expect(() => withNoChannel("{", at)).toThrow(/unreadable/);
+		const resolved = withResolvedChannel(flagged, CHANNEL_ID);
+		expect(JSON.parse(resolved)).toEqual({ kept: true, channelId: CHANNEL_ID });
+		const resolvedRead = readWatchConfig(resolved);
+		expect(resolvedRead.status).toBe("ok");
+		if (resolvedRead.status === "ok") expect(resolvedRead.degraded).toBeNull();
 	});
 
 	it("marks a watch degraded once, then clears that flag when a channel id is saved", () => {
