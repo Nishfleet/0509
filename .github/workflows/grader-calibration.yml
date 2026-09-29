@@ -25,7 +25,7 @@ concurrency:
 jobs:
   cases:
     name: cases
-    if: github.ref == 'refs/heads/claude/calibrate-devin'
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
@@ -40,7 +40,7 @@ jobs:
   grade:
     name: grade
     needs: cases
-    if: github.ref == 'refs/heads/claude/calibrate-devin'
+    if: github.ref == 'refs/heads/main'
     runs-on: [self-hosted, fleet-ci]
     timeout-minutes: 40
     permissions:
@@ -128,7 +128,7 @@ jobs:
   summary:
     name: summary
     needs: grade
-    if: ${{ !cancelled() && github.ref == 'refs/heads/claude/calibrate-devin' }}
+    if: ${{ !cancelled() && github.ref == 'refs/heads/main' }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
