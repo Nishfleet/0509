@@ -20,7 +20,11 @@ process.env.PLAYWRIGHT_LOCAL_PORT ??= String(8000 + (process.pid % 1000));
 const localPort = process.env.PLAYWRIGHT_LOCAL_PORT;
 const baseURL = process.env.PLAYWRIGHT_TEST_BASE_URL ?? `http://127.0.0.1:${localPort}`;
 export const accessStatePath = "e2e/.auth/access.json";
+export const onboardedStatePath = (lane: "desktop" | "phone"): string => `e2e/.auth/onboarded-${lane}.json`;
+export const onboardedEmailPath = (lane: "desktop" | "phone"): string => `e2e/.auth/onboarded-${lane}.email`;
+export const sessionStatePath = "e2e/.auth/session.json";
 const accessState = process.env.CF_ACCESS_CLIENT_ID ? { storageState: accessStatePath } : {};
+const productionLane = Boolean(process.env.PLAYWRIGHT_TEST_BASE_URL && process.env.CF_ACCESS_CLIENT_ID);
 
 export default defineConfig({
   testDir: "./e2e",
@@ -39,9 +43,22 @@ export default defineConfig({
   // saves the CF_Authorization cookie Access issues; the browser then sends
   // that cookie to 0509.io only, so third-party origins (fonts, the beacon)
   // never see an Access header and CORS stays quiet. Locally (no token) the
-  // setup project is absent and tests run without it.
+  // setup project is absent and tests run without it. The session project
+  // mints the shared better-auth session in the production lane and the
+  // teardown deletes its account.
   projects: [
     ...(process.env.CF_ACCESS_CLIENT_ID ? [{ name: "setup", testMatch: /auth\.setup\.ts/ }] : []),
+    ...(productionLane
+      ? [
+          {
+            name: "session",
+            testMatch: /(?:^|\/)session\.setup\.ts$/,
+            dependencies: process.env.CF_ACCESS_CLIENT_ID ? ["setup"] : [],
+            teardown: "session-teardown",
+          },
+          { name: "session-teardown", testMatch: /(?:^|\/)session\.teardown\.ts$/ },
+        ]
+      : []),
     // The lighthouse job's sign-in (0509#5767): a request-only setup that mints
     // a better-auth session cookie into GITHUB_ENV for lighthouserc.cjs. Gated
     // on its own env var so the e2e suite never runs it, and request-only so
@@ -51,15 +68,31 @@ export default defineConfig({
     // the sign-in minted, via the product's own settings delete path. Gated on
     // its own env var so the e2e suite never runs it.
     ...(process.env.LHCI_TEARDOWN ? [{ name: "lhci-teardown", testMatch: /lhci-teardown\.setup\.ts/ }] : []),
+    ...(process.env.CF_ACCESS_CLIENT_ID
+      ? [
+          { name: "onboarded-setup", testMatch: /onboarded\.setup\.ts/, dependencies: ["setup"], teardown: "onboarded-teardown" },
+          { name: "onboarded-teardown", testMatch: /onboarded-teardown\.setup\.ts/ },
+        ]
+      : []),
     {
       name: "desktop-1440",
       use: { ...devices["Desktop Chrome"], viewport: { width: 1440, height: 900 }, ...accessState },
-      dependencies: process.env.CF_ACCESS_CLIENT_ID ? ["setup"] : [],
+      dependencies: productionLane
+        ? ["setup", "session", "onboarded-setup"]
+        : process.env.CF_ACCESS_CLIENT_ID
+          ? ["setup", "onboarded-setup"]
+          : [],
+      testIgnore: /onboarded.*\.setup\.ts/,
     },
     {
       name: "phone-390",
       use: { ...devices["Desktop Chrome"], viewport: { width: 390, height: 844 }, ...accessState },
-      dependencies: process.env.CF_ACCESS_CLIENT_ID ? ["setup"] : [],
+      dependencies: productionLane
+        ? ["setup", "session", "onboarded-setup"]
+        : process.env.CF_ACCESS_CLIENT_ID
+          ? ["setup", "onboarded-setup"]
+          : [],
+      testIgnore: /onboarded.*\.setup\.ts/,
     },
   ],
   webServer: process.env.PLAYWRIGHT_TEST_BASE_URL
