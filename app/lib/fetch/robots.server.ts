@@ -4,7 +4,9 @@ const ROBOTS_TIMEOUT_MS = 5_000;
 
 const ROBOTS_AGENT = "FiveToNineBot";
 
-const ROBOTS_HEADERS = { "user-agent": "FiveToNineBot/1.0 (+https://0509.io)" };
+export const CRAWLER_USER_AGENT = `${ROBOTS_AGENT}/1.0 (+https://0509.io)`;
+
+const ROBOTS_HEADERS = { "user-agent": CRAWLER_USER_AGENT };
 
 export async function robotsAllows(url: string): Promise<boolean> {
   const robotsUrl = new URL("/robots.txt", url).toString();

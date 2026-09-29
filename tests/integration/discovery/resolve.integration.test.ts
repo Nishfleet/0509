@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { env } from "cloudflare:test";
 
 import { resolveDomain, resolveKey } from "../../../app/lib/discovery/resolve-domain.server";
+import { CRAWLER_USER_AGENT } from "../../../app/lib/fetch/robots.server";
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -141,5 +142,17 @@ describe("resolveDomain", () => {
       via: "slug",
     });
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("identifies both of resolve-domain's outbound fetches as the one crawler User-Agent (0509#5883)", async () => {
+    const fetchMock = vi.fn(() => Promise.resolve(Response.json({ search: [] })));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await resolveDomain("Fresh Identity 0509");
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    for (const call of fetchMock.mock.calls) {
+      expect(new Headers(call[1]?.headers).get("User-Agent")).toBe(CRAWLER_USER_AGENT);
+    }
   });
 });
