@@ -3,6 +3,8 @@ import boundaries from "eslint-plugin-boundaries";
 import importX, { createNodeResolver } from "eslint-plugin-import-x";
 import reactHooks from "eslint-plugin-react-hooks";
 import noComments from "eslint-plugin-no-comments";
+import playwright from "eslint-plugin-playwright";
+import vitest from "@vitest/eslint-plugin";
 import globals from "globals";
 import tseslint from "typescript-eslint";
 
@@ -797,6 +799,50 @@ export default tseslint.config(
     files: ["workers/sources/mentions/youtube.ts"],
     rules: {
       "no-restricted-syntax": ["error", ...BANNED_SYNTAX, ...NO_USER_DATA_IN_LOGS, RAW_DML_WRITER],
+    },
+  },
+
+  // 0509#5785: never skip, disable or quarantine a test to get green. A
+  // focused test (`.only`) silently drops the rest of the suite; a disabled
+  // test stops testing the thing it names; identical titles make a failure
+  // ambiguous. The rules carry their own messages and their schemas reject a
+  // `message`, so this comment is the provenance for every entry below.
+  // Source: 0509#5808 (child of #5785).
+  {
+    files: ["tests/**/*.ts"],
+    plugins: { vitest },
+    rules: {
+      "vitest/no-focused-tests": "error",
+      "vitest/no-disabled-tests": "error",
+      "vitest/no-identical-title": "error",
+      "vitest/expect-expect": "error",
+      // maxArgs 2 is a sizing decision, not a weakening: vitest's expect takes
+      // a failure message as its second argument and the suite uses it
+      // (tests/ads/parked-sources.migration.test.ts:52,
+      // tests/integration/entity-workspace-fk.integration.test.ts:265). The
+      // rule keeps its teeth: a missing matcher or an unawaited async expect.
+      // Source: 0509#5808.
+      "vitest/valid-expect": ["error", { maxArgs: 2 }],
+    },
+  },
+
+  // 0509#5785: never skip, disable or quarantine a test to get green, and an
+  // e2e spec never waits on wall-clock time or the network going idle. A
+  // conditional `test.skip(condition, reason)` stays allowed for project and
+  // environment gating, and `test.fail()` stays allowed for report specs
+  // (CLAUDE.md "Reproducing a user report") — neither rule touches it.
+  // Source: 0509#5808 (child of #5785).
+  {
+    files: ["e2e/**/*.ts"],
+    plugins: { playwright },
+    rules: {
+      "playwright/no-focused-test": "error",
+      "playwright/no-skipped-test": ["error", { allowConditional: true }],
+      "playwright/no-wait-for-timeout": "error",
+      "playwright/no-page-pause": "error",
+      "playwright/missing-playwright-await": "error",
+      "playwright/no-networkidle": "error",
+      "playwright/valid-expect": "error",
     },
   },
 
