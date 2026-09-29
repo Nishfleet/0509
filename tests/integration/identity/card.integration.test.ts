@@ -118,6 +118,115 @@ describe("startCard", () => {
     expect(await env.SNAPSHOTS.get("logo/gymshark.com")).not.toBeNull();
   });
 
+  function exampleHtml(head: string): string {
+    return `<!doctype html>
+<html>
+  <head>
+    <title>Example</title>
+    ${head}
+  </head>
+  <body>
+    <h1>Example</h1>
+    <p>Example makes plain office chairs, desks and lamps for people who work
+    from small rooms. Everything ships flat, assembles with one hex key, and
+    comes in three colours. The catalogue is short on purpose: four chairs,
+    two desks, one lamp, no limited editions and no collaborations.</p>
+  </body>
+</html>`;
+  }
+
+  function stubLogoFetch(homepageHtml: string, logos: Record<string, () => Response>) {
+    const calls: string[] = [];
+    vi.stubGlobal("fetch", (input: RequestInfo | URL) => {
+      const url = input instanceof Request ? input.url : String(input);
+      calls.push(url);
+      const respond = logos[url];
+      if (respond !== undefined) return Promise.resolve(respond());
+      return Promise.resolve(new Response(homepageHtml, { status: 200 }));
+    });
+    return calls;
+  }
+
+  it("skips an unsafe http og:image without fetching it and stores the DuckDuckGo icon", async () => {
+    stubAi(0.95);
+    const duckUrl = "https://icons.duckduckgo.com/ip3/example.com.ico";
+    const calls = stubLogoFetch(
+      exampleHtml('<meta property="og:image" content="http://insecure.example/og.png">'),
+      {
+        [duckUrl]: () =>
+          new Response(new Uint8Array([1, 2, 3]), { status: 200, headers: { "content-type": "image/png" } }),
+      },
+    );
+    const card = startCard("ws-1", subjectFor("example.com"), []);
+    await card.site;
+    expect(await card.logo).toBe("data:image/png;base64,AQID");
+    expect(calls.filter((url) => url === duckUrl)).toHaveLength(1);
+    expect(calls).not.toContain("http://insecure.example/og.png");
+    expect(await env.SNAPSHOTS.get("logo/example.com")).not.toBeNull();
+  });
+
+  it("re-probes past a stale icon entry that holds a URL the guarded fetch refuses", async () => {
+    stubAi(0.95);
+    // 0509#5890: a v1 entry cached the raw-fetch winner, so a URL storeLogo
+    // refuses pinned a logo-less card for the probe TTL. v2 must not parse it.
+    const staleUrl = "http://insecure.example/og.png";
+    await env.IDENTITY_CACHE.put(
+      probeKey(subjectFor("example.com"), "icon"),
+      JSON.stringify({ url: staleUrl }),
+    );
+    const duckUrl = "https://icons.duckduckgo.com/ip3/example.com.ico";
+    const calls = stubLogoFetch(exampleHtml(""), {
+      [duckUrl]: () =>
+        new Response(new Uint8Array([1, 2, 3]), { status: 200, headers: { "content-type": "image/png" } }),
+    });
+    const card = startCard("ws-1", subjectFor("example.com"), []);
+    await card.site;
+    expect(await card.logo).toBe("data:image/png;base64,AQID");
+    expect(calls).toContain(duckUrl);
+    expect(calls).not.toContain(staleUrl);
+  });
+
+  it("stores the first candidate the guarded fetch keeps, and never fetches the rest", async () => {
+    stubAi(0.95);
+    const ldUrl = `https://${LOGO_HOST}/ld.png`;
+    const ogUrl = `https://${LOGO_HOST}/og.png`;
+    const calls = stubLogoFetch(
+      exampleHtml(
+        `<meta property="og:image" content="${ogUrl}">
+    <script type="application/ld+json">{"@context":"https://schema.org","@type":"Organization","name":"Example","logo":"${ldUrl}"}</script>`,
+      ),
+      {
+        [ldUrl]: () => new Response("<html></html>", { status: 200, headers: { "content-type": "text/html" } }),
+        [ogUrl]: () =>
+          new Response(new Uint8Array([4, 5, 6]), { status: 200, headers: { "content-type": "image/png" } }),
+      },
+    );
+    const card = startCard("ws-1", subjectFor("example.com"), []);
+    await card.site;
+    expect(await card.logo).toBe("data:image/png;base64,BAUG");
+    expect(calls.filter((url) => url === ogUrl)).toHaveLength(1);
+    expect(calls).toContain(ldUrl);
+    expect(calls).not.toContain("https://icons.duckduckgo.com/ip3/example.com.ico");
+    expect(await env.SNAPSHOTS.get("logo/example.com")).not.toBeNull();
+  });
+
+  it("caches a versioned miss when every candidate fails the guarded fetch", async () => {
+    stubAi(0.95);
+    const subject = subjectFor("example.com");
+    const ogUrl = `https://${LOGO_HOST}/og.png`;
+    const duckUrl = "https://icons.duckduckgo.com/ip3/example.com.ico";
+    const calls = stubLogoFetch(exampleHtml(`<meta property="og:image" content="${ogUrl}">`), {
+      [ogUrl]: () => new Response(null, { status: 404 }),
+      [duckUrl]: () => new Response(null, { status: 404 }),
+    });
+    const card = startCard("ws-1", subject, []);
+    await card.site;
+    expect(await card.logo).toBeNull();
+    expect(calls).toContain(ogUrl);
+    expect(calls).toContain(duckUrl);
+    expect(await env.IDENTITY_CACHE.get(probeKey(subject, "icon"), "json")).toEqual({ v: 2, url: null });
+  });
+
   it("reads the homepage once a day, not once per visit", async () => {
     stubAi(0.95);
     const calls = stubWeb(() => new Response(gym, { status: 200 }));
@@ -262,12 +371,14 @@ describe("confirmCard", () => {
 
   it("classifies the homepage's nav pages and writes them as judged page rows", async () => {
     stubWeb(() => new Response(gym, { status: 200, headers: { "content-type": "text/html" } }));
+    await answerHomepage();
     const run = vi.fn(() => Promise.resolve({ answers: { page_role: { type: "choice", choice: "pricing" } } }));
     Reflect.set(env, "AI", { run });
 
     expect(
       await confirmCard("ws-1", "u1", form({ subject: "https://www.gymshark.com/", name: "Gymshark", description: "" })),
     ).toBe(true);
+    await settledTail();
 
     const entity = await env.DB.prepare("SELECT id FROM entity WHERE role = 'self'").first<{ id: string }>();
     const expected = (await extractIdentity(gym, "https://www.gymshark.com/")).navPages.length;
@@ -284,12 +395,14 @@ describe("confirmCard", () => {
 
   it("keeps the confirm and records no role when Jev is down", async () => {
     stubWeb(() => new Response(gym, { status: 200, headers: { "content-type": "text/html" } }));
+    await answerHomepage();
     const run = vi.fn(() => Promise.reject(new Error("down")));
     Reflect.set(env, "AI", { run });
 
     expect(
       await confirmCard("ws-1", "u1", form({ subject: "https://www.gymshark.com/", name: "Gymshark", description: "" })),
     ).toBe(true);
+    await settledTail();
 
     const entity = await env.DB.prepare("SELECT id FROM entity WHERE role = 'self'").first<{ id: string }>();
     expect(entity).not.toBeNull();

@@ -1,15 +1,13 @@
 import { z } from "zod";
 
 import { coMentions } from "../co-mentions";
-import type { Candidate, Evidence, FetchText, Generator, Subject } from "../types";
+import { defaultFetchText, type Candidate, type Evidence, type FetchText, type Generator, type Subject } from "../types";
 
 const SEARCH_URL = "https://hn.algolia.com/api/v1/search?query=";
 
 const SEARCH_PARAMS = "&tags=(story,comment)&hitsPerPage=100";
 
 const EVIDENCE_URL = "https://news.ycombinator.com/item?id=";
-
-const TIMEOUT_MS = 8_000;
 
 const HIT_SCHEMA = z.object({
   objectID: z.string(),
@@ -41,23 +39,8 @@ function headlineOf(hit: Hit): string | null {
   return headline;
 }
 
-const defaultFetchText: FetchText = async (url) => {
-  try {
-    const response = await fetch(url, { signal: AbortSignal.timeout(TIMEOUT_MS) });
-    return {
-      ok: response.ok,
-      url: response.url,
-      contentType: response.headers.get("content-type"),
-      body: await response.text(),
-    };
-  } catch (error) {
-    console.error(JSON.stringify({ event: "discovery.hn_fetch_failed", error: String(error) }));
-    return { ok: false, url, contentType: null, body: "" };
-  }
-};
-
 export const hnGenerator: Generator = async (subject: Subject, fetchText?: FetchText) => {
-  const fetchFn = fetchText ?? defaultFetchText;
+  const fetchFn = fetchText ?? defaultFetchText("discovery.hn_fetch_failed");
   const page = await fetchFn(SEARCH_URL + encodeURIComponent(subject.name) + SEARCH_PARAMS);
   if (!page.ok) return [];
 

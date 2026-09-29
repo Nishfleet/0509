@@ -24,7 +24,55 @@
     // p95 request duration per route comes from here, which is how
     // docs/REBUILD-DONE.md's performance gate gets measured without a load
     // generator pointed at production.
-    "enabled": true
+    "enabled": true,
+    // Stated rather than left at the platform default (0509#5758, audit V31).
+    // The documented location for the logging sampling rate is the top level of
+    // `observability` (Workers Logs docs, "Head-based sampling"); wrangler's
+    // own normalisation fills `logs.head_sampling_rate` from the same default.
+    // Declaring both makes the whole policy explicit. Workers Logs is 20M
+    // events included per month, then $0.60 per additional million.
+    "head_sampling_rate": 1,
+    "logs": {
+      // Every request emits one invocation log, so at 1.0 this Worker writes
+      // an event per request (~450k/day at the measured 09-21..09-28 volume,
+      // ~13.5M/month) against a 20M/month included allowance: the allowance is
+      // the constraint at relaunch scale, and 1.0 is also the platform default,
+      // so a deliberate 1.0 changes no behaviour while making the whole bill
+      // the p95-per-route gate is measured from an explicit choice.
+      "head_sampling_rate": 1,
+      // The invocation log carries the request URL, which is what the p95
+      // per-route measurement reads. Turning it off would make that gate
+      // unmeasurable; the app's own console JSON is what the per-route queries
+      // filter, and it is not affected by this key.
+      "invocation_logs": true,
+      // Persisted logs are what docs/REBUILD-DONE.md's performance gate is
+      // measured from; a non-persisted log cannot be queried a day later.
+      "persist": true
+    }
+  },
+  // Runtime caps, so a runaway path costs a per-invocation error instead of a
+  // core-second (0509#5758, audit V30). `workersInvocationsAdaptive`, script
+  // 0509, 2026-09-21T00:00Z..2026-09-28T12:00Z, read 2026-09-28:
+  //   238,690 invocations, 35,230 subrequests (0.15 per invocation)
+  //   cpuTime  p50 11.4 ms, p90 37.9 ms, p99 86.5 ms, p99.9 1,075.6 ms
+  // The slowest invocation in that window is 3,637 ms (an `internalError`), so
+  // the cap sits above every invocation ever observed here while the paid
+  // default is 30,000 ms. The docs give a Cron Trigger on a >= 1 hour interval
+  // a 15-minute *CPU* default, separate from the 15-minute wall-clock duration
+  // limit; `cpu_ms` is the per-invocation CPU cap and so does replace that
+  // 900,000 ms CPU default: the four 03:00 crons in the window are exactly
+  // those internalErrors (3,060, 3,098, 3,180 and 3,637 ms), and 5,000 ms stays
+  // above all four. The wall-clock duration limit is untouched. #5753 owns the
+  // cron's real failure.
+  "limits": {
+    "cpu_ms": 5000,
+    // Declared at the paid default (10,000) rather than left implicit. The
+    // widest fan-out today is the nightly cron's serial walk of every workspace
+    // (workers/standing/nightly.ts:67-77, 3 D1 reads each); #5753 re-shapes
+    // that path. Keeping the number at the paid default leaves today's
+    // allowance unchanged while making it explicit; lowering it before #5753
+    // lands would cap a walk that is already dying.
+    "subrequests": 10000
   },
   "upload_source_maps": true,
   "assets": { "run_worker_first": ["/mcp"] },
@@ -73,11 +121,22 @@
   "vars": {
     "BETTER_AUTH_URL": "https://0509.io",
     "LANDING_WORKSPACE_ID": "",
+    // Dodo Payments (docs/REBUILD-STACK.md, J13). DODO_ENVIRONMENT selects the SDK's
+    // base URL: test_mode is https://test.dodopayments.com, live_mode is
+    // https://live.dodopayments.com. The three product ids are the recurring
+    // products in the Dodo dashboard, one per plan in app/lib/billing/plans.ts.
+    // Empty would mean checkout for that plan answers "not available" instead of
+    // calling Dodo. DODO_PAYMENTS_API_KEY and DODO_WEBHOOK_SECRET are Worker
+    // secrets and are not declared here.
+    "DODO_ENVIRONMENT": "live_mode",
+    "DODO_PRODUCT_SCOUT": "pdt_0NoeiCehl28XydokfKsmk",
+    "DODO_PRODUCT_STARTER": "pdt_0NoeiCjBmCJTfOHquf26O",
+    "DODO_PRODUCT_AGENCY": "pdt_0NoeiCmf66xTM4sWXDrAj",
     "ACCESS_TEAM_DOMAIN": "https://nish345.cloudflareaccess.com",
     "ACCESS_AUD": "b4fa400a1848c913b92c3212dc0714fcdbd1b1b66eb24659e4a7cc01c790575d"
   },
   "secrets": {
-    "required": ["BETTER_AUTH_SECRET", "TURNSTILE_SECRET_KEY", "TURNSTILE_SITE_KEY"]
+    "required": ["BETTER_AUTH_SECRET", "TURNSTILE_SECRET_KEY", "TURNSTILE_SITE_KEY", "DODO_PAYMENTS_API_KEY"]
   },
 
   "d1_databases": [
