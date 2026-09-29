@@ -13,9 +13,10 @@ export function DeliveryAddress({
   suppressed: boolean;
 }) {
   const hasError = error !== null;
+  const showUnconfirmed = !delivery.verified && !hasError;
   const describedBy = [
     hasError ? "delivery-address-error" : null,
-    delivery.verified ? null : "delivery-address-unconfirmed",
+    showUnconfirmed ? "delivery-address-unconfirmed" : null,
   ].filter((id) => id !== null);
   return (
     <section aria-labelledby="delivery-address" className="border-line mt-10 border-t pt-6">
@@ -41,12 +42,12 @@ export function DeliveryAddress({
           aria-invalid={hasError ? true : undefined}
           aria-describedby={describedBy.length === 0 ? undefined : describedBy.join(" ")}
         />
-        {delivery.verified ? null : (
+        {showUnconfirmed ? (
           <p id="delivery-address-unconfirmed" className="mt-2 max-w-prose leading-[1.55]">
             This address is unconfirmed. We emailed a confirmation link — the brief doesn't go out
             until you confirm.
           </p>
-        )}
+        ) : null}
         {suppressed ? (
           <label className="leading-[1.55]">
             <input type="checkbox" name="resume" value="yes" className="mr-2" />

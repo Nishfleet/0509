@@ -60,5 +60,12 @@ describe("DeliveryAddress", () => {
       suppressed: false,
     });
     expect(confirmed).not.toContain("This address is unconfirmed.");
+
+    const failedSend = render({
+      delivery: { address: "me@brand.com", verified: false },
+      error: "We could not send the confirmation email. Save again to retry.",
+      suppressed: false,
+    });
+    expect(failedSend).not.toContain("This address is unconfirmed.");
   });
 });
