@@ -802,12 +802,12 @@ export default tseslint.config(
     },
   },
 
-  // 0509#5785: never skip, disable or quarantine a test to get green. A
-  // focused test (`.only`) silently drops the rest of the suite; a disabled
-  // test stops testing the thing it names; identical titles make a failure
-  // ambiguous. The rules carry their own messages and their schemas reject a
-  // `message`, so this comment is the provenance for every entry below.
-  // Source: 0509#5808 (child of #5785).
+  // 0509#5785 (shipped by #5808): never skip, disable or quarantine a test to
+  // get green. A focused test (`.only`) silently drops the rest of the suite; a
+  // disabled test stops testing the thing it names; identical titles make a
+  // failure ambiguous. The rules carry their own messages and their schemas
+  // reject a `message`, so this comment is the provenance for every entry
+  // below.
   {
     files: ["tests/**/*.ts"],
     plugins: { vitest },
@@ -817,21 +817,21 @@ export default tseslint.config(
       "vitest/no-identical-title": "error",
       "vitest/expect-expect": "error",
       // maxArgs 2 is a sizing decision, not a weakening: vitest's expect takes
-      // a failure message as its second argument and the suite uses it
-      // (tests/ads/parked-sources.migration.test.ts:52,
-      // tests/integration/entity-workspace-fk.integration.test.ts:265). The
-      // rule keeps its teeth: a missing matcher or an unawaited async expect.
-      // Source: 0509#5808.
+      // a failure message as its second argument and the suite uses it (the
+      // `parked-sources.migration` and `entity-workspace-fk.integration` specs
+      // pass the seeding count and the table name as that message). The rule
+      // keeps its teeth: a missing matcher or an unawaited async expect. It
+      // matches `playwright/valid-expect`, which permits the same two-arg shape
+      // on the e2e side. Source: 0509#5808.
       "vitest/valid-expect": ["error", { maxArgs: 2 }],
     },
   },
 
-  // 0509#5785: never skip, disable or quarantine a test to get green, and an
-  // e2e spec never waits on wall-clock time or the network going idle. A
-  // conditional `test.skip(condition, reason)` stays allowed for project and
-  // environment gating, and `test.fail()` stays allowed for report specs
-  // (CLAUDE.md "Reproducing a user report") — neither rule touches it.
-  // Source: 0509#5808 (child of #5785).
+  // 0509#5785 (shipped by #5808): never skip, disable or quarantine a test to
+  // get green, and an e2e spec never waits on wall-clock time or the network
+  // going idle. A conditional `test.skip(condition, reason)` stays allowed for
+  // project and environment gating, and `test.fail()` stays allowed for report
+  // specs (CLAUDE.md "Reproducing a user report") — neither rule touches it.
   {
     files: ["e2e/**/*.ts"],
     plugins: { playwright },

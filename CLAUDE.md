@@ -69,7 +69,8 @@ not so you can follow them from memory — lint will tell you.
   waits for `networkidle` (`playwright/no-focused-test`,
   `playwright/no-skipped-test`, `playwright/no-wait-for-timeout`,
   `playwright/no-networkidle`). Conditional `test.skip(condition, reason)` and
-  `test.fail()` stay allowed. Source: 0509#5785.
+  `test.fail()` stay allowed. The full enforced set is the two test-lint blocks
+  in `eslint.config.js`. Source: 0509#5785.
 - **Immutability.** New objects, never mutation.
 
 ## Commands
