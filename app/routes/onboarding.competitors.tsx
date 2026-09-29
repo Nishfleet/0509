@@ -12,8 +12,7 @@ import { readOnboardingCompetitors } from "../lib/data/entity.server";
 import { markCompetitorsReady, markWatchingStarted } from "../lib/data/onboarding_run.server";
 import { readWorkspaceIdForOwner } from "../lib/data/workspace.server";
 import { readDiscoveryState } from "../lib/discovery/start.server";
-import { discoveryNotice } from "../lib/discovery/state";
-import type { DiscoveryState } from "../lib/discovery/state";
+import { discoveryNotice, type DiscoveryState } from "../lib/discovery/state";
 import { requireSession } from "../lib/require-session.server";
 import { ONBOARDING_COMPETITORS, workspaceLandingForRequest } from "../lib/workspace.server";
 
