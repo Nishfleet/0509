@@ -24,7 +24,8 @@ const PRODUCTION_ORIGIN = "https://0509.io";
 // The one lane predicate every mailbox read switches on: unset base URL means
 // the local wrangler dev sink under .wrangler/tmp/email/, set means the inbox
 // Worker (production and the merge-queue previews alike are remote lanes).
-function isLocalLane(): boolean {
+// Specs take the same branch off this rather than re-testing the variable.
+export function isLocalLane(): boolean {
   return !process.env.PLAYWRIGHT_TEST_BASE_URL;
 }
 
@@ -151,6 +152,7 @@ export function extractMagicLink(rawMessage: string): string | null {
 // file name — the address only appears in the body the app wrote ("We sent
 // this link to …"), so a file is this recipient's when its contents name the
 // address.
+const LOCAL_EMAIL_SINK = join(".wrangler", "tmp", "email");
 const LOCAL_EMAIL_PARTS = ["email-text", "email-html"];
 
 // ENOENT is the honest "nothing sent yet" (the directory appears on the first
@@ -165,7 +167,7 @@ function isNotFound(error: unknown): boolean {
 // A file can vanish between the listing and the stat or read when wrangler
 // prunes .wrangler/tmp — gone is "not this one", never a failure.
 async function localEmailFiles(): Promise<string[]> {
-  const root = join(process.cwd(), ".wrangler", "tmp", "email");
+  const root = join(process.cwd(), LOCAL_EMAIL_SINK);
   let sessions: string[];
   try {
     sessions = await readdir(root);
@@ -272,16 +274,25 @@ export async function waitForMagicLink(to: string, token: string | null, exclude
           { timeout: POLL_LIMIT_MS, intervals: [POLL_INTERVAL_MS] },
         )
         .toBe(true);
-    } catch {
-      // The named error below carries the detail; the poll's own timeout text
-      // would not.
+    } catch (cause) {
+      // The poll's own timeout text cannot tell a dead sink from an empty
+      // one, and a poll-callback error would read as "no email" — the thrown
+      // error names the sink's state and carries the poll failure as cause.
+      const sinkMissing = await stat(join(process.cwd(), LOCAL_EMAIL_SINK)).then(
+        () => false,
+        (error: unknown) => isNotFound(error),
+      );
+      if (fresh.length > 0) return fresh[0];
+      throw new Error(
+        `No magic-link email for ${to} within ${POLL_LIMIT_MS / 1000}s. ` +
+          `The local lane reads wrangler's simulated send_email output under .wrangler/tmp/email/<session>/email-{text,html}/: ` +
+          (sinkMissing
+            ? "the sink directory never appeared — the dev server died or wrangler's simulated-send layout moved."
+            : `no file for this address carried a ${laneOrigin()} verify link.`),
+        { cause },
+      );
     }
-    if (fresh.length > 0) return fresh[0];
-    throw new Error(
-      `No magic-link email for ${to} within ${POLL_LIMIT_MS / 1000}s. ` +
-        `The local lane reads wrangler's simulated send_email output under .wrangler/tmp/email/<session>/email-{text,html}/: ` +
-        `no file for this address carried a ${laneOrigin()} verify link.`,
-    );
+    return fresh[0];
   }
   const resolved = token ?? requireInboxToken();
   const url = `${INBOX_URL}/message?to=${encodeURIComponent(to)}`;

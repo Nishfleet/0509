@@ -84,6 +84,17 @@ const HTML_ONLY = [
   '<a href="https://0509.io/api/auth/magic-link/verify?token=abc123&amp;callbackURL=%2Fapp">Sign in</a>',
 ].join("\r\n");
 
+// The fixtures' links ride the production origin, so the default lane is the
+// one these cases need: pin both lane variables unset rather than trusting
+// the ambient environment, and let a describe's own stubs override per test.
+beforeEach(() => {
+  vi.stubEnv("PLAYWRIGHT_TEST_BASE_URL", "");
+  vi.stubEnv("PLAYWRIGHT_LOCAL_PORT", "");
+});
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
+
 describe("extractMagicLink", () => {
   it("finds the verify URL in a plain body", () => {
     expect(extractMagicLink(PLAIN)).toBe(EXPECTED);

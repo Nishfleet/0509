@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-import { deleteCreatedAccount, requireInboxToken, signInWithMagicLink } from "./inbox";
+import { deleteCreatedAccount, isLocalLane, requireInboxToken, signInWithMagicLink } from "./inbox";
 
 let createdEmail = "";
 test.afterEach(async ({ page }, testInfo) => {
@@ -24,7 +24,7 @@ test.afterEach(async ({ page }, testInfo) => {
 test("a fresh address signs in with the magic link that was emailed to it", async ({ page }) => {
   // The inbox secret exists only in the production job env; the local lane
   // reads wrangler's simulated-send files and has no token to require.
-  const token = process.env.PLAYWRIGHT_TEST_BASE_URL ? requireInboxToken() : null;
+  const token = isLocalLane() ? null : requireInboxToken();
   const email = `e2e+${crypto.randomUUID().replaceAll("-", "").slice(0, 12)}@0509.io`;
   createdEmail = email;
 
