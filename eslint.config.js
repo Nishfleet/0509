@@ -884,6 +884,18 @@ export default tseslint.config(
     files: ["tests/**/*.ts"],
     plugins: { vitest },
     rules: {
+      // docs/REBUILD-DONE.md D: no test is about docs, and no bespoke test reads
+      // the feature map or the route table. 0509#6137 added one that read
+      // feature-map.md and wrote itself an exception into the charter; 0509#6166
+      // deleted it. A string ending in ".md" in a test is how a test reads a doc.
+      "no-restricted-syntax": [
+        "error",
+        {
+          selector: "Literal[value=/\\.md$/]",
+          message:
+            "A test may not read a doc (docs/REBUILD-DONE.md D, 0509#6166). Test the product through its public surface; the grader checks docs against code.",
+        },
+      ],
       "vitest/no-focused-tests": "error",
       "vitest/no-disabled-tests": "error",
       "vitest/no-identical-title": "error",
@@ -897,6 +909,14 @@ export default tseslint.config(
   // test. `allowConditional` is the one non-default value: the suite gates on
   // the project and the environment (`test.skip(condition, reason)`), and report
   // specs use `test.fail()` (CLAUDE.md "Reproducing a user report").
+  // tests/unit/theme.test.ts reads DESIGN.md's colour and type tables to check
+  // the compiled CSS (#3984). It predates the rule above; whether it stays is
+  // Nish's call, so it is the one named exception until he makes it.
+  {
+    files: ["tests/unit/theme.test.ts"],
+    rules: { "no-restricted-syntax": "off" },
+  },
+
   {
     files: ["e2e/**/*.ts"],
     plugins: { playwright },
