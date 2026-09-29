@@ -352,7 +352,10 @@ jobs:
   # `grade-run / grade`. It grades every pull request from a branch of this
   # repo with the rubric on fleet-ops@main and this repo's trust doc. It
   # replaced opus-review, whose Kimi grader is out of usage until 2026-10-25.
+  # It waits for the four deterministic required checks, so a red head never
+  # spends a call on the shared free Devin login (fleet-ops#8934).
   grade-run:
+    needs: [Gitleaks, codex-node-checks, semgrep, preview-assert]
     if: github.event_name == 'pull_request' || github.event_name == 'merge_group'
     uses: Nishfleet/fleet-ops/.github/workflows/grade.yml@main
     with:
