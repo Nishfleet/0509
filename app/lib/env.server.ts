@@ -5,6 +5,8 @@ const BINDING_NAMES = [
   "DB",
   "BETTER_AUTH_URL",
   "BETTER_AUTH_SECRET",
+  "TURNSTILE_SECRET_KEY",
+  "TURNSTILE_SITE_KEY",
   "EMAIL",
   "SEND_EMAIL",
   "SNAPSHOTS",
@@ -21,6 +23,8 @@ const NOTES = {
   DB: "every read and write fails",
   BETTER_AUTH_URL: "magic links have no canonical origin",
   BETTER_AUTH_SECRET: "sign-in cannot be trusted",
+  TURNSTILE_SECRET_KEY: "a botnet can spray sign-in links",
+  TURNSTILE_SITE_KEY: "the sign-in form has no Turnstile widget",
   EMAIL: "magic links and briefs cannot send",
   SEND_EMAIL: "briefs sit unsent",
   SNAPSHOTS: "site snapshots cannot be read or stored",
@@ -63,6 +67,8 @@ const workerEnvSchema = z.object({
   DB: binding("prepare"),
   BETTER_AUTH_URL: httpUrl,
   BETTER_AUTH_SECRET: z.string().min(1),
+  TURNSTILE_SECRET_KEY: z.string().min(1),
+  TURNSTILE_SITE_KEY: z.string().min(1),
   EMAIL: binding(),
   SEND_EMAIL: binding("sendBatch"),
   SNAPSHOTS: binding("get"),
@@ -97,8 +103,8 @@ function blank(value: unknown): unknown {
   return trimmed.length === 0 ? undefined : trimmed;
 }
 
-function globalUrl(name: "LIVENESS_PING_URL" | "SITE_SWEEP_PING_URL"): unknown {
-  return blank(Reflect.get(globalThis, name));
+function pingUrl(name: "LIVENESS_PING_URL" | "SITE_SWEEP_PING_URL"): unknown {
+  return blank(Reflect.get(env, name));
 }
 
 function snapshot(): Snapshot {
@@ -106,6 +112,8 @@ function snapshot(): Snapshot {
     DB: env.DB,
     BETTER_AUTH_URL: blank(env.BETTER_AUTH_URL),
     BETTER_AUTH_SECRET: blank(env.BETTER_AUTH_SECRET),
+    TURNSTILE_SECRET_KEY: blank(env.TURNSTILE_SECRET_KEY),
+    TURNSTILE_SITE_KEY: blank(env.TURNSTILE_SITE_KEY),
     EMAIL: env.EMAIL,
     SEND_EMAIL: env.SEND_EMAIL,
     SNAPSHOTS: env.SNAPSHOTS,
@@ -116,8 +124,8 @@ function snapshot(): Snapshot {
     SIGN_IN_IP_LIMIT: env.SIGN_IN_IP_LIMIT,
     AGENT_REGISTER_LIMIT: env.AGENT_REGISTER_LIMIT,
     PROBE_LIMIT: env.PROBE_LIMIT,
-    LIVENESS_PING_URL: globalUrl("LIVENESS_PING_URL"),
-    SITE_SWEEP_PING_URL: globalUrl("SITE_SWEEP_PING_URL"),
+    LIVENESS_PING_URL: pingUrl("LIVENESS_PING_URL"),
+    SITE_SWEEP_PING_URL: pingUrl("SITE_SWEEP_PING_URL"),
   };
 }
 

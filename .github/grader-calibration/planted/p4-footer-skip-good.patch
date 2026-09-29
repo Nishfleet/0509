@@ -1,0 +1,14 @@
+diff --git a/e2e/footer.spec.ts b/e2e/footer.spec.ts
+index 152c7392..cb7523b3 100644
+--- a/e2e/footer.spec.ts
++++ b/e2e/footer.spec.ts
+@@ -48,3 +48,9 @@ for (const route of PUBLIC_ROUTES) {
+     expect(termsIndex).toBeGreaterThan(privacyIndex);
+   });
+ }
++
++test("the footer terms link stays tappable on a phone", async ({ page }, testInfo) => {
++  test.fail(testInfo.project.name === "phone-390", "the terms link is covered by the cookie bar at 390 (0509#9004)");
++  await page.goto("/terms");
++  await expect(page.locator("footer").last().locator(TERMS_HREF)).toBeInViewport({ ratio: 1 });
++});

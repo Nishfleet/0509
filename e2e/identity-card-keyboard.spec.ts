@@ -6,6 +6,8 @@ import { betterAuth } from "better-auth";
 import { magicLink } from "better-auth/plugins";
 import { expect, test, type Locator, type Page } from "@playwright/test";
 
+import { consoleFailures, watchConsole } from "./inbox";
+
 // Preview-lane proof for #5441: Enter saves and closes the identity card
 // editor, Escape saves and closes, and Base UI returns focus to the trigger.
 // `e2e/onboarding-identity.spec.ts` keeps the production walk on the same
@@ -19,19 +21,17 @@ import { expect, test, type Locator, type Page } from "@playwright/test";
 // without a Jev call. The probed host does not resolve, so `readSiteCard`
 // returns the unfound card — empty fields, every `EditRow` openable — and the
 // keyboard paths the packet specifies are reachable without any network.
+//
+// The 390 lane runs and is marked expected-to-fail rather than skipped: on an
+// unread card, `Row` puts the fixed `w-20 shrink-0` label and the "we'll fill
+// this on the first crawl" line beside the `min-w-0 flex-1` trigger, and the
+// trigger measures 0px wide at 390, so Playwright never sees it. 0509#5557
+// probed that row — 316px across, the 80px label, the 204px empty line and the
+// two `gap-4` taking the 32px — and owns the fix, which deletes this file's
+// expected failure rather than this packet's slice.
 test.skip(
   Boolean(process.env.PLAYWRIGHT_TEST_BASE_URL),
   "production signs in through the magic-link inbox; the local preview D1 carries the seed",
-);
-// The keyboard paths are viewport-independent, so one lane proves them. The
-// 390 lane cannot: on a card whose site is unread, `Row` puts the fixed
-// `w-20 shrink-0` label and the "we'll fill this on the first crawl" line
-// beside the `flex-1` trigger, and at 390 the trigger measures 0px wide, so
-// Playwright never sees it. That squeeze is on `origin/main` and is filed as
-// its own issue, not this packet's slice.
-test.skip(
-  ({ viewport }) => viewport?.width !== 1440,
-  "the unfound card's 0px trigger at 390 is filed separately; the keyboard contract does not vary by viewport",
 );
 
 function authSecret(): string {
@@ -129,6 +129,9 @@ const TRIGGERS: Record<"name" | "about", RegExp> = {
   about: /^edit about\b/,
 };
 
+const PHONE_390_DEFECT =
+  "the unfound card's 0px trigger at 390 is filed separately; the keyboard contract does not vary by viewport, 0509#5557";
+
 async function openEditor(page: Page, field: "name" | "about"): Promise<Locator> {
   const trigger = page.getByRole("button", { name: TRIGGERS[field] });
   await expect(trigger).toBeVisible({ timeout: 30_000 });
@@ -148,18 +151,10 @@ function watchDraftPosts(page: Page): string[] {
   return posts;
 }
 
-function watchConsole(page: Page): string[] {
-  const errors: string[] = [];
-  page.on("console", (message) => {
-    if (message.type() === "error") errors.push(message.text());
-  });
-  page.on("pageerror", (error) => errors.push(error.message));
-  return errors;
-}
-
-test("the identity card editor saves and closes on Enter, with focus back on the trigger", async ({ page }) => {
+test("the identity card editor saves and closes on Enter, with focus back on the trigger", async ({ page }, testInfo) => {
   test.setTimeout(90_000);
-  const consoleErrors = watchConsole(page);
+  test.fail(testInfo.project.name === "phone-390", PHONE_390_DEFECT);
+  const watched = watchConsole(page);
   const draftPosts = watchDraftPosts(page);
   const subject = "nope-card-keyboard-enter.example.com";
   await page.setExtraHTTPHeaders({ cookie: await seedCardSession("example.com") });
@@ -184,12 +179,13 @@ test("the identity card editor saves and closes on Enter, with focus back on the
   await expect(trigger).toBeFocused();
   await expect(trigger).toContainText("Brand One");
   await expect(page.locator('input[type="hidden"][name="name"]')).toHaveValue("Brand One");
-  expect(consoleErrors).toEqual([]);
+  expect(await consoleFailures(page, watched, testInfo), testInfo.project.name).toEqual([]);
 });
 
-test("the identity card editor saves and closes on Escape, with focus back on the trigger", async ({ page }) => {
+test("the identity card editor saves and closes on Escape, with focus back on the trigger", async ({ page }, testInfo) => {
   test.setTimeout(90_000);
-  const consoleErrors = watchConsole(page);
+  test.fail(testInfo.project.name === "phone-390", PHONE_390_DEFECT);
+  const watched = watchConsole(page);
   const draftPosts = watchDraftPosts(page);
   const subject = "nope-card-keyboard-escape.example.com";
   await page.setExtraHTTPHeaders({ cookie: await seedCardSession("example.com") });
@@ -210,5 +206,5 @@ test("the identity card editor saves and closes on Escape, with focus back on th
   await expect(trigger).toBeFocused();
   await expect(trigger).toContainText("one line on what we do");
   await expect(page.locator('input[type="hidden"][name="description"]')).toHaveValue("one line on what we do");
-  expect(consoleErrors).toEqual([]);
+  expect(await consoleFailures(page, watched, testInfo), testInfo.project.name).toEqual([]);
 });

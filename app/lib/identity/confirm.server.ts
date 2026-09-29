@@ -1,8 +1,9 @@
 import { z } from "zod";
 
 import { insertSelfEntity, readWorkspaceSelfId } from "../data/entity.server";
+import { insertFieldEdits, type FieldEdit } from "../data/user_decision.server";
 import { readUrl } from "../fetch/transport.server";
-import { readSiteCard } from "./card.server";
+import { readCachedSiteValues, readSiteCard } from "./card.server";
 import { extractIdentity } from "./extract";
 import { readLogo } from "./logo-store.server";
 import { normaliseSubject, type Subject } from "./normalise";
@@ -53,7 +54,7 @@ async function classifyConfirmedSite(
     const page = await readUrl(subject.url);
     if (!page.ok) {
       console.log(
-        JSON.stringify({ event: "identity-page-role-skipped", subject: subject.registrable, error: page.detail }),
+        JSON.stringify({ event: "identity-page-role-skipped", workspaceId, error: page.detail }),
       );
       return;
     }
@@ -61,12 +62,12 @@ async function classifyConfirmedSite(
     await classifyNavPages(workspaceId, { id: entityId, domain: subject.registrable }, extract.navPages, now.toISOString());
   } catch (error) {
     console.log(
-      JSON.stringify({ event: "identity-page-role-skipped", subject: subject.registrable, error: String(error) }),
+      JSON.stringify({ event: "identity-page-role-skipped", workspaceId, error: String(error) }),
     );
   }
 }
 
-export async function confirmCard(workspaceId: string, form: FormData): Promise<boolean> {
+export async function confirmCard(workspaceId: string, userId: string, form: FormData): Promise<boolean> {
   const parsed = confirmSchema.safeParse({
     subject: field(form, "subject"),
     name: field(form, "name"),
@@ -98,6 +99,34 @@ export async function confirmCard(workspaceId: string, form: FormData): Promise<
   });
   const entityId = await readWorkspaceSelfId(workspaceId);
   if (entityId === null) return false;
+  const cached = await readCachedSiteValues(subject);
+  if (cached !== null) {
+    const candidates: { edit: FieldEdit; changed: boolean }[] = [
+      {
+        edit: { field: "name", from: cached.name, to: card.name },
+        changed: card.name !== cached.name,
+      },
+      {
+        edit: {
+          field: "description",
+          from: cached.description,
+          to: card.description,
+        },
+        changed: (card.description === "" ? null : card.description) !== cached.description,
+      },
+    ];
+    await insertFieldEdits(
+      candidates
+        .filter((candidate) => candidate.changed)
+        .map((candidate) => ({
+          workspaceId,
+          userId,
+          entityId,
+          edit: candidate.edit,
+          decidedAt: now.toISOString(),
+        })),
+    );
+  }
   await classifyConfirmedSite(workspaceId, subject, entityId, now);
   const site = subject.kind === "domain" ? null : await creatorSite(card.socials);
   await startIdentityTail({

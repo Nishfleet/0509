@@ -1,6 +1,20 @@
 import { expect, test } from "@playwright/test";
 
-import { requireInboxToken, signInWithMagicLink } from "./inbox";
+import { consoleFailures, deleteCreatedAccount, requireInboxToken, signInWithMagicLink, watchConsole } from "./inbox";
+
+let createdEmail = "";
+test.afterEach(async ({ page }, testInfo) => {
+  if (createdEmail === "") return;
+  testInfo.setTimeout(testInfo.timeout + 60_000);
+  // The delete failing is a test failure, not a reason to keep the address:
+  // clearing in finally means the next test in this worker cannot try to
+  // delete an account that is already gone.
+  try {
+    await deleteCreatedAccount(page, createdEmail);
+  } finally {
+    createdEmail = "";
+  }
+});
 
 function fixtureToken(): string {
   const token = process.env.FIXTURE_SITE_TOKEN;
@@ -35,14 +49,12 @@ test.describe("J5", () => {
 
   test("J5: a bot-blocking site still gets a card whose empty fields say when they fill", async ({
     page,
-  }) => {
+  }, testInfo) => {
     const email = `e2e+${crypto.randomUUID().replaceAll("-", "").slice(0, 12)}@0509.io`;
+    createdEmail = email;
     await signInWithMagicLink(page, email, requireInboxToken());
 
-    const consoleErrors: string[] = [];
-    page.on("console", (message) => {
-      if (message.type() === "error") consoleErrors.push(message.text());
-    });
+    const watched = watchConsole(page);
 
     await page.goto("/onboarding");
     const input = page.getByRole("textbox", { name: "your website, or a handle" });
@@ -67,6 +79,6 @@ test.describe("J5", () => {
     await page.getByRole("button", { name: "That's me" }).click();
 
     await expect(page).toHaveURL(/\/onboarding\/competitors$/);
-    expect(consoleErrors).toEqual([]);
+    expect(await consoleFailures(page, watched, testInfo), testInfo.project.name).toEqual([]);
   });
 });

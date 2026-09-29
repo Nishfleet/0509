@@ -5,6 +5,7 @@ const jevAnswers = vi.hoisted(() => ({
   noul: new Map<string, number>(),
   choice: new Map<string, string>(),
   calls: 0,
+  states: [] as unknown[],
 }));
 
 const jevFailures = vi.hoisted(() => ({ next: 0 }));
@@ -18,7 +19,8 @@ vi.mock("../../../app/lib/jev/client.server", () => {
   }
   return {
     JevUnavailableError,
-    askNoul: async (workspaceId: string, question: { id: string }) => {
+    askNoul: async (workspaceId: string, question: { id: string }, state: unknown) => {
+      jevAnswers.states.push(state);
       jevAnswers.calls += 1;
       if (jevFailures.next > 0) {
         jevFailures.next -= 1;
@@ -28,7 +30,8 @@ vi.mock("../../../app/lib/jev/client.server", () => {
       if (p === undefined) throw new JevUnavailableError(new Error(`no answer for ${question.id}`));
       return { questionId: question.id, inputHash: `noul-${workspaceId}-${question.id}`, p, cached: false };
     },
-    askChoice: async (workspaceId: string, question: { id: string }) => {
+    askChoice: async (workspaceId: string, question: { id: string }, state: unknown) => {
+      jevAnswers.states.push(state);
       jevAnswers.calls += 1;
       const choice = jevAnswers.choice.get(question.id);
       if (choice === undefined) throw new JevUnavailableError(new Error(`no answer for ${question.id}`));
@@ -60,10 +63,18 @@ async function seedWorkspace(ws: string): Promise<void> {
 async function seedHistory(entity: string, count: number): Promise<void> {
   for (let index = 0; index < count; index += 1) {
     await env.DB.prepare(
-      `INSERT INTO signal (id, workspace_id, entity_id, source_id, kind, aspect, url, dedup_key, observed_at, last_seen_at)
-       VALUES (?, 'ws-mine', ?, 'src_site_web', 'change', 'home', ?, ?, ?, ?)`,
+      `INSERT INTO signal (id, workspace_id, entity_id, source_id, kind, summary, aspect, url, dedup_key, observed_at, last_seen_at)
+       VALUES (?, 'ws-mine', ?, 'src_site_web', 'change', ?, 'home', ?, ?, ?, ?)`,
     )
-      .bind(`sig-${entity}-${index}`, entity, `https://${entity}.example/`, `dedup-${entity}-${index}`, NOW, NOW)
+      .bind(
+        `sig-${entity}-${index}`,
+        entity,
+        `change ${index}`,
+        `https://${entity}.example/`,
+        `dedup-${entity}-${index}`,
+        NOW,
+        NOW,
+      )
       .run();
   }
 }
@@ -99,6 +110,7 @@ describe("judgeChange", () => {
     jevAnswers.noul.clear();
     jevAnswers.choice.clear();
     jevAnswers.calls = 0;
+    jevAnswers.states.length = 0;
     jevFailures.next = 0;
     await seedWorkspace("ws-mine");
     await seedWorkspace("ws-history");
@@ -132,11 +144,19 @@ describe("judgeChange", () => {
 
     expect(judgment.deferred).toBe(false);
     expect(judgment.selfBreakage).toBeNull();
-    expect(judgment.noteworthy).toEqual({ p: 0.95, kind: "pricing", band: "publish", reason: "publish at p=0.95" });
+    expect(judgment.noteworthy).toEqual({ p: 0.95, kind: "pricing", band: "publish" });
     expect(await rowsFor("rival")).toEqual([
-      { question_id: "change_kind", p: null, choice: "pricing", entity_id: "rival", reason: "publish at p=0.95" },
-      { question_id: "noteworthy_change", p: 0.95, choice: null, entity_id: "rival", reason: "publish at p=0.95" },
+      { question_id: "change_kind", p: null, choice: "pricing", entity_id: "rival", reason: null },
+      { question_id: "noteworthy_change", p: 0.95, choice: null, entity_id: "rival", reason: null },
     ]);
+    const leaked = await env.DB.prepare(
+      "SELECT COUNT(*) AS n FROM jev_verdict WHERE reason LIKE '%p=%'",
+    ).first<{ n: number }>();
+    expect(leaked).toMatchObject({ n: 0 });
+    const anyReason = await env.DB.prepare(
+      "SELECT COUNT(*) AS n FROM jev_verdict WHERE reason IS NOT NULL",
+    ).first<{ n: number }>();
+    expect(anyReason).toMatchObject({ n: 0 });
   });
 
   it("case b: a competitor change at 0.5 stays uncertain", async () => {
@@ -145,7 +165,7 @@ describe("judgeChange", () => {
 
     const judgment = await judgeChange(judgeInput({ entity: "rival", isSelf: false }));
 
-    expect(judgment.noteworthy).toEqual({ p: 0.5, kind: "copy", band: "uncertain", reason: "uncertain at p=0.5" });
+    expect(judgment.noteworthy).toEqual({ p: 0.5, kind: "copy", band: "uncertain" });
     expect(await rowsFor("rival")).toHaveLength(2);
   });
 
@@ -155,10 +175,10 @@ describe("judgeChange", () => {
 
     const judgment = await judgeChange(judgeInput({ entity: "rival", isSelf: false }));
 
-    expect(judgment.noteworthy).toEqual({ p: 0.05, kind: "copy", band: "discard", reason: "discard at p=0.05" });
+    expect(judgment.noteworthy).toEqual({ p: 0.05, kind: "copy", band: "discard" });
     expect(await rowsFor("rival")).toEqual([
-      { question_id: "change_kind", p: null, choice: "copy", entity_id: "rival", reason: "discard at p=0.05" },
-      { question_id: "noteworthy_change", p: 0.05, choice: null, entity_id: "rival", reason: "discard at p=0.05" },
+      { question_id: "change_kind", p: null, choice: "copy", entity_id: "rival", reason: null },
+      { question_id: "noteworthy_change", p: 0.05, choice: null, entity_id: "rival", reason: null },
     ]);
   });
 
@@ -179,10 +199,20 @@ describe("judgeChange", () => {
     const judgment = await judgeChange(judgeInput({ entity: "mine", isSelf: true }));
 
     expect(judgment.deferred).toBe(false);
-    expect(judgment.selfBreakage).toEqual({ p: 0.7, band: "alert", reason: "alert at p=0.7" });
+    expect(judgment.selfBreakage).toEqual({ p: 0.7, band: "alert" });
     expect(judgment.noteworthy).toBeNull();
     expect(jevAnswers.calls).toBe(1);
-    expect((await rowsFor("mine")).map((row) => row.question_id)).toEqual(["own_site_breakage"]);
+    expect(await rowsFor("mine")).toEqual([
+      { question_id: "own_site_breakage", p: 0.7, choice: null, entity_id: "mine", reason: null },
+    ]);
+    const leaked = await env.DB.prepare(
+      "SELECT COUNT(*) AS n FROM jev_verdict WHERE reason LIKE '%p=%'",
+    ).first<{ n: number }>();
+    expect(leaked).toMatchObject({ n: 0 });
+    const anyReason = await env.DB.prepare(
+      "SELECT COUNT(*) AS n FROM jev_verdict WHERE reason IS NOT NULL",
+    ).first<{ n: number }>();
+    expect(anyReason).toMatchObject({ n: 0 });
   });
 
   it("case d2: a self change rated clear runs D3 too", async () => {
@@ -252,23 +282,22 @@ describe("judgeChange", () => {
     expect(judgment.noteworthy?.band).toBe("publish");
   });
 
-  it("case g: over-budget deferral writes no verdicts", async () => {
-    for (let index = 0; index < 6; index += 1) {
-      await insertVerdict({
-        workspaceId: "ws-history",
-        questionId: `filled-${index}`,
-        inputHash: `filled-${index}`,
-        signalId: null,
-        entityId: "over",
-        p: 0.9,
-        choice: null,
-        reason: null,
-        decidedAt: NOW,
-      }).run();
-    }
+  it("case g: history_30d sends the recent change summaries of the entity to Jev", async () => {
+    jevAnswers.noul.set("noteworthy_change", 0.95);
+    jevAnswers.choice.set("change_kind", "pricing");
+    await seedHistory("rival", 3);
+    const oldSeenAt = new Date(Date.now() - 40 * 24 * 3_600_000).toISOString();
+    await env.DB.prepare(
+      `INSERT INTO signal (id, workspace_id, entity_id, source_id, kind, summary, aspect, url, dedup_key, observed_at, last_seen_at)
+       VALUES ('sig-rival-old', 'ws-mine', 'rival', 'src_site_web', 'change', 'old change', 'home', 'https://rival.example/', 'dedup-rival-old', ?, ?)`,
+    )
+      .bind(oldSeenAt, oldSeenAt)
+      .run();
 
-    expect(await judgeChange(judgeInput({ entity: "over", isSelf: false, ws: "ws-history" }))).toMatchObject({ deferred: true });
-    expect(await rowsFor("over")).toHaveLength(6);
+    await judgeChange(judgeInput({ entity: "rival", isSelf: false }));
+
+    const sent = jevAnswers.states[0] as { history_30d: (string | null)[] };
+    expect([...sent.history_30d].sort()).toEqual(["change 0", "change 1", "change 2"]);
   });
 
   it("case h: Jev unavailable defers without writing verdicts", async () => {
@@ -299,7 +328,7 @@ describe("judgeChange", () => {
 
     const judgment = await judgeChange(judgeInput({ entity: "rival", isSelf: false }));
 
-    expect(judgment.noteworthy).toEqual({ p: 0.89, kind: "launch", band: "uncertain", reason: "uncertain at p=0.89" });
+    expect(judgment.noteworthy).toEqual({ p: 0.89, kind: "launch", band: "uncertain" });
     const rows = await env.DB.prepare(
       "SELECT question_id, input_hash FROM jev_verdict WHERE entity_id = ? ORDER BY question_id",
     )

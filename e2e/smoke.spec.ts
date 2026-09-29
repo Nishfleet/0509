@@ -1,5 +1,8 @@
 import { expect, test } from "@playwright/test";
 
+import { expectElementFaceLoaded, expectFaceLoaded } from "./fonts";
+import { consoleFailures, watchConsole } from "./inbox";
+
 // The smallest suite that is still an honest answer to "does the thing we are
 // about to ship start and serve". It runs twice: against the built Worker on
 // every PR, and against production on every successful deployment.
@@ -35,22 +38,9 @@ test("the landing page renders its headline and its contact link", async ({ page
 
 test("the rebuild notice renders in the three brand faces", async ({ page }) => {
   await page.goto("/");
-  await page.evaluate(() => document.fonts.ready);
-  const loaded = await page.evaluate(() => {
-    function faceLoaded(selector) {
-      const el = document.querySelector(selector);
-      if (!el) return false;
-      const style = getComputedStyle(el);
-      const family = style.fontFamily.split(",")[0].trim();
-      return document.fonts.check(`${style.fontStyle} ${style.fontWeight} ${style.fontSize} ${family}`);
-    }
-    return {
-      display: faceLoaded("header .font-display"),
-      body: faceLoaded("main p"),
-      mono: faceLoaded("footer"),
-    };
-  });
-  expect(loaded).toEqual({ display: true, body: true, mono: true });
+  await expectElementFaceLoaded(page, "header .font-display");
+  await expectElementFaceLoaded(page, "main p");
+  await expectElementFaceLoaded(page, "footer");
 });
 
 test("the landing page does not scroll horizontally", async ({ page }) => {
@@ -59,6 +49,31 @@ test("the landing page does not scroll horizontally", async ({ page }) => {
     () => document.documentElement.scrollWidth > document.documentElement.clientWidth,
   );
   expect(overflow).toBe(false);
+});
+
+test("the landing headline is the largest paint and uses the brand display face", async ({ page }) => {
+  await page.goto("/");
+
+  const lcpTag = await page.evaluate(
+    () =>
+      new Promise<string>((resolve) => {
+        new PerformanceObserver((list) => {
+          const last = list
+            .getEntries()
+            .filter((entry) => entry instanceof LargestContentfulPaint)
+            .at(-1);
+          resolve(last?.element?.tagName ?? "");
+        }).observe({ type: "largest-contentful-paint", buffered: true });
+      }),
+  );
+  expect(lcpTag).toBe("H1");
+
+  await expectFaceLoaded(page, "Bricolage Grotesque");
+
+  const headlineFamily = await page
+    .getByRole("heading", { level: 1 })
+    .evaluate((node) => getComputedStyle(node).fontFamily);
+  expect(headlineFamily).toContain("Bricolage Grotesque");
 });
 
 test("/api/health answers ok", async ({ request }) => {
@@ -94,15 +109,11 @@ test("the login page renders the one input that signs you in", async ({ page }) 
   await expect(contact).toHaveAccessibleName(/\S/);
 });
 
-test("the page reaches first paint with no console errors", async ({ page }) => {
-  const errors: string[] = [];
-  page.on("console", (message) => {
-    if (message.type() === "error") errors.push(message.text());
-  });
-  page.on("pageerror", (error) => errors.push(error.message));
+test("the page reaches first paint with no console errors", async ({ page }, testInfo) => {
+  const watched = watchConsole(page);
 
   await page.goto("/");
-  await page.waitForLoadState("networkidle");
+  await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
 
-  expect(errors).toEqual([]);
+  expect(await consoleFailures(page, watched, testInfo), testInfo.project.name).toEqual([]);
 });

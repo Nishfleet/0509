@@ -60,8 +60,25 @@
   // forwarded header: auth origin trust and the magic-link URL both come from
   // it, and a client-supplied value would let a link point anywhere.
   // BETTER_AUTH_SECRET stays a Worker secret.
+  // TURNSTILE_SECRET_KEY and TURNSTILE_SITE_KEY are Worker secrets too. Listing
+  // them under secrets.required makes deploy inherit the values already on the
+  // Worker instead of replacing them with a plaintext var.
   // LANDING_WORKSPACE_ID: the public workspace we run ourselves whose changes the landing ticker shows (#4083). Empty renders an empty strip, never filler.
-  "vars": { "BETTER_AUTH_URL": "https://0509.io", "LANDING_WORKSPACE_ID": "" },
+  // ACCESS_TEAM_DOMAIN / ACCESS_AUD pin the Access application that fronts
+  // 0509.io. They are public identifiers — the AUD appears in Access's own
+  // login redirect — not secrets. access-preclearance.server.ts uses them to
+  // verify the `cf-access-jwt-assertion` JWT Access forwards on every
+  // authenticated request; a verified service-token assertion pre-clears the
+  // magic-link captcha (#4702's accepted path for the e2e lane, #5631).
+  "vars": {
+    "BETTER_AUTH_URL": "https://0509.io",
+    "LANDING_WORKSPACE_ID": "",
+    "ACCESS_TEAM_DOMAIN": "https://nish345.cloudflareaccess.com",
+    "ACCESS_AUD": "b4fa400a1848c913b92c3212dc0714fcdbd1b1b66eb24659e4a7cc01c790575d"
+  },
+  "secrets": {
+    "required": ["BETTER_AUTH_SECRET", "TURNSTILE_SECRET_KEY", "TURNSTILE_SITE_KEY"]
+  },
 
   "d1_databases": [
     {
@@ -74,10 +91,17 @@
   // Mentions telemetry (#4003 slice 3/6, docs/engines/mentions.md P5.4).
   "analytics_engine_datasets": [{ "binding": "MENTIONS_SOURCES", "dataset": "mentions_sources" }],
 
-  // One binding for the one bucket (#4569 had added a second binding to the
-  // same bucket). snapshot/site/ holds raw site snapshots, text and screenshot
-  // (engine 4), under the one-year snapshot/ rule in docs/REBUILD-GUARDRAILS.md.
-  "r2_buckets": [{ "binding": "SNAPSHOTS", "bucket_name": "0509-snapshots" }],
+  // Two bindings for two buckets (#4569 had added a second binding to the
+  // same bucket; a second bucket is a different thing). snapshot/site/ holds
+  // raw site snapshots, text and screenshot (engine 4), under the one-year
+  // snapshot/ rule in docs/REBUILD-GUARDRAILS.md. 0509-snapshots-backup is the
+  // nightly copy target of the snapshot-backup Workflow below and carries the
+  // same five per-prefix lifecycle rules, so a copied object ages out of the
+  // backup a year behind the source.
+  "r2_buckets": [
+    { "binding": "SNAPSHOTS", "bucket_name": "0509-snapshots" },
+    { "binding": "SNAPSHOTS_BACKUP", "bucket_name": "0509-snapshots-backup" }
+  ],
 
   // Identity probe cache (engine 1, issue #4419): a read-through cache for
   // probe results keyed identity:<registrable>:<probe> with a 24-hour TTL
@@ -201,6 +225,20 @@
       "binding": "SITE_SWEEP",
       "class_name": "SiteSweepWorkflow",
       "schedules": ["0 2 * * *"]
+    },
+    // The nightly snapshot backup (0509#5802): copies every object in
+    // 0509-snapshots that 0509-snapshots-backup does not yet hold, one
+    // retried step per page of up to 200 objects, preserving httpMetadata.
+    // 05:00 UTC: after the 01:00 mentions sweep and the 02:00 site sweep
+    // have written their objects, and clear of the 03:00 standing cron and
+    // the Monday 04:00 refresh. No deletes are propagated — an object deleted
+    // from the source ages out of the backup by the backup's own lifecycle
+    // rules.
+    {
+      "name": "snapshot-backup",
+      "binding": "SNAPSHOT_BACKUP",
+      "class_name": "SnapshotBackupWorkflow",
+      "schedules": ["0 5 * * *"]
     },
     // The own-site watch: every hour, each customer's own homepage is
     // probed once with a plain fetch. A 5xx, 404 or no answer is probed

@@ -28,6 +28,11 @@ export function Agents() {
           <p className="font-mono mt-2 text-[0.9rem] [overflow-wrap:anywhere]">{MCP_URL}</p>
           <p className={`${eyebrow} text-ink-soft mt-6`}>Ask it</p>
           <p className="font-mono text-ink-soft mt-2 text-[0.9rem]">“Where do I stand this week, and what changed?”</p>
+          <p className="mt-6">
+            <a className="text-ink underline decoration-1 underline-offset-4" href="/api/v1/openapi.json">
+              Read the API docs
+            </a>
+          </p>
         </div>
       </div>
     </Section>

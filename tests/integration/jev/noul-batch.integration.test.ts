@@ -49,12 +49,12 @@ const questions: readonly NoulQuestion[] = [NAME_QUESTION, CATEGORY_QUESTION, CO
 
 const state = { subject: { name: "Gymshark", domain: "gymshark.com" } };
 
-function allFreshAnswers(): { answers: Record<string, { type: "boolean"; probability: number }> } {
+function allFreshAnswers(): { answers: Record<string, { type: "noul"; noul: number }> } {
   return {
     answers: {
-      identity_name: { type: "boolean", probability: 0.93 },
-      identity_category: { type: "boolean", probability: 0.42 },
-      identity_country: { type: "boolean", probability: 0.05 },
+      identity_name: { type: "noul", noul: 0.93 },
+      identity_category: { type: "noul", noul: 0.42 },
+      identity_country: { type: "noul", noul: 0.05 },
     },
   };
 }
@@ -87,12 +87,12 @@ describe("askNouls", () => {
     };
     expect(Object.keys(request.questions)).toEqual(["identity_name", "identity_category", "identity_country"]);
     expect(request.questions.identity_name).toEqual({
-      type: "boolean",
+      type: "noul",
       instructions: questions[0]?.instructions,
       criteria: { true: questions[0]?.whenTrue, false: questions[0]?.whenFalse },
     });
-    expect(request.questions.identity_category?.type).toBe("boolean");
-    expect(request.questions.identity_country?.type).toBe("boolean");
+    expect(request.questions.identity_category?.type).toBe("noul");
+    expect(request.questions.identity_country?.type).toBe("noul");
   });
 
   it("reuses a cached verdict and asks Jev only about the uncached questions", async () => {
@@ -118,8 +118,8 @@ describe("askNouls", () => {
     run.mockImplementation(() =>
       Promise.resolve({
         answers: {
-          identity_name: { type: "boolean", probability: 0.93 },
-          identity_country: { type: "boolean", probability: 0.05 },
+          identity_name: { type: "noul", noul: 0.93 },
+          identity_country: { type: "noul", noul: 0.05 },
         },
       }),
     );
@@ -176,13 +176,58 @@ describe("askNouls", () => {
     const run = vi.fn(() =>
       Promise.resolve({
         answers: {
-          identity_name: { type: "boolean", probability: 0.93 },
-          identity_country: { type: "boolean", probability: 0.05 },
+          identity_name: { type: "noul", noul: 0.93 },
+          identity_country: { type: "noul", noul: 0.05 },
         },
       }),
     );
     Reflect.set(env, "AI", { run });
 
     await expect(askNouls(workspaceId, questions, state)).rejects.toThrow(JevUnavailableError);
+  });
+});
+
+describe("the answer body the AI binding returns", () => {
+  const documented = {
+    model: "typesafe/jev",
+    answers: { identity_name: { type: "noul", noul: 0.71 } },
+    usage: { prompt_tokens: 1, completion_tokens: 1 },
+  };
+
+  it.each([
+    ["the documented body", documented],
+    ["a response string", { response: JSON.stringify(documented) }],
+    ["a response object", { response: documented }],
+    ["a result object", { result: documented }],
+  ])("reads the noul from %s", async (_label, body) => {
+    const workspaceId = await seedWorkspace();
+    Reflect.set(env, "AI", { run: vi.fn(() => Promise.resolve(body)) });
+
+    const verdict = await askNoul(workspaceId, NAME_QUESTION, state);
+
+    expect(verdict.p).toBe(0.71);
+  });
+
+  it("says which keys came back, and no value, when a response string is not json", async () => {
+    const workspaceId = await seedWorkspace();
+    Reflect.set(env, "AI", { run: vi.fn(() => Promise.resolve({ response: "not json" })) });
+
+    const thrown = await askNoul(workspaceId, NAME_QUESTION, state).catch((error: unknown) => error);
+
+    expect(thrown).toBeInstanceOf(JevUnavailableError);
+    expect(String(thrown)).toContain("keys=response");
+    expect(String(thrown)).not.toContain("not json");
+  });
+
+  it("says which keys and issue paths came back, and no value, when the batch answer does not parse", async () => {
+    const workspaceId = await seedWorkspace();
+    Reflect.set(env, "AI", { run: vi.fn(() => Promise.resolve({ response: "x" })) });
+
+    const thrown = await askNouls(workspaceId, questions, state).catch((error: unknown) => error);
+
+    expect(thrown).toBeInstanceOf(JevUnavailableError);
+    expect(String(thrown)).toContain("keys=response");
+    expect(String(thrown)).toContain("issues=answers:invalid_type");
+    expect(String(thrown)).not.toContain('"x"');
   });
 });
