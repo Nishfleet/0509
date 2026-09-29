@@ -70,7 +70,14 @@ export default defineConfig({
         // session gate production does. Apply the same migrations
         // deploy-production.yml applies --remote, then start the Worker. This
         // is the stock `wrangler d1 migrations apply`; no wrapper.
-        command: `npx wrangler d1 migrations apply 0509 --local </dev/null && npx wrangler dev --env-file .dev.vars.example --port ${localPort} --local`,
+        //
+        // wrangler.jsonc's vars pin BETTER_AUTH_URL to the production origin,
+        // which would put the emailed magic link on https://0509.io — a link
+        // the local Worker cannot verify. The stock --var override points the
+        // link at this origin so the preview lane can follow it, and wrangler's
+        // simulated send_email writes the message under .wrangler/tmp/email/
+        // for e2e/inbox.ts to read instead of the inbox Worker (0509#6092).
+        command: `npx wrangler d1 migrations apply 0509 --local </dev/null && npx wrangler dev --env-file .dev.vars.example --port ${localPort} --local --var "BETTER_AUTH_URL:http://127.0.0.1:${localPort}"`,
         url: `http://127.0.0.1:${localPort}/api/health`,
         reuseExistingServer: false,
         timeout: 120_000,

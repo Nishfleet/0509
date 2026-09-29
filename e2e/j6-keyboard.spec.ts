@@ -6,7 +6,15 @@ import { betterAuth } from "better-auth";
 import { magicLink } from "better-auth/plugins";
 import { expect, test, type Page } from "@playwright/test";
 
-import { consoleFailures, deleteCreatedAccount, requireInboxToken, signInWithMagicLink, watchConsole } from "./inbox";
+import {
+  consoleFailures,
+  deleteCreatedAccount,
+  isLocalLane,
+  laneOrigin,
+  requireInboxToken,
+  signInWithMagicLink,
+  watchConsole,
+} from "./inbox";
 
 let createdEmail = "";
 test.afterEach(async ({ page }, testInfo) => {
@@ -76,7 +84,10 @@ async function seedSession(): Promise<string> {
   const auth = betterAuth({
     database: db,
     secret: authSecret(),
-    baseURL: "https://0509.io",
+    // The app runs --var BETTER_AUTH_URL on this lane's http origin, and
+    // better-auth prefixes the session cookie __Secure- only for https:
+    // seeding on the same origin mints the cookie name the app reads.
+    baseURL: laneOrigin(),
     advanced: { cookiePrefix: "better-auth" },
     plugins: [
       magicLink({
@@ -150,7 +161,7 @@ test("the per-brand switch is operable with a keyboard alone @own-signin", async
   test.setTimeout(150_000);
   const watched = watchConsole(page);
 
-  if (process.env.PLAYWRIGHT_TEST_BASE_URL) {
+  if (!isLocalLane()) {
     await watchOneCompetitor(page);
   } else {
     await page.setExtraHTTPHeaders({ cookie: await seedSession() });
