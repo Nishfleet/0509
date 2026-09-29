@@ -57,7 +57,7 @@ describe("mentions feed", () => {
     expect(mentionWhen("2026-09-23T00:00:00.000Z", NOW)).toBe("2 days ago");
   });
 
-  it("keeps unjudged rows as unreviewed, drops empty titles, and keeps the stored reason instead of the score", () => {
+  it("keeps unstated rows as unreviewed, drops empty titles, and keeps the stored reason instead of the score", () => {
     const mentions = mentionsFromRows(
       [
         row({ id: "high", p: 0.95, platform: "gdelt" }),
