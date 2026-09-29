@@ -3,7 +3,7 @@ import { z } from "zod";
 import type { BriefPayload } from "../../app/lib/brief-payload";
 import type { BriefSchedule, BriefWeek } from "../../app/lib/brief-schedule";
 import { nextBriefAt } from "../../app/lib/brief-schedule";
-import { readThisFirstLine } from "../../app/lib/read-this-first";
+import { UNJUDGED_WEEK_LINE, readThisFirstLine } from "../../app/lib/read-this-first";
 import { sourceName } from "../../app/lib/source-name";
 import { countPhrase } from "../delivery/brief-template";
 import type { JudgedWeek } from "./read-this-first";
@@ -15,7 +15,7 @@ const RANKED_BRANDS = `SELECT s.entity_id AS entity_id,
        s.movement AS movement
 FROM standing s
 JOIN entity e ON e.id = s.entity_id AND e.workspace_id = s.workspace_id AND e.state = 'on'
-WHERE s.workspace_id = ?1 AND s.week_start_at = ?2 AND s.rank IS NOT NULL
+WHERE s.workspace_id = ?1 AND s.week_start_at = ?2
 ORDER BY s.rank ASC, s.entity_id ASC`;
 
 const PREVIOUS_FROZEN_WEEKS = `SELECT COUNT(*) AS weeks
@@ -71,7 +71,7 @@ const rankedBrandRows = z.array(
     entity_id: z.string(),
     name: z.string(),
     role: z.enum(["self", "competitor"]),
-    rank: z.number().int(),
+    rank: z.number().int().nullable(),
     movement: z.number().int().nullable(),
   }),
 );
@@ -209,7 +209,11 @@ export async function composeBrief(db: D1Database, input: ComposeInput): Promise
   const pausedLine = pausedSentence(pausedNames);
   const countsLine = quietWeekLine(mentionCount, siteChangeCount, newAdCount);
   const lead = marks[0];
-  const headLine = lead === undefined ? countsLine : readThisFirstLine(marks.length, readThisFirst.judged, lead.entity_name);
+  const headLine = input.readThisFirst.unjudged
+    ? UNJUDGED_WEEK_LINE
+    : lead === undefined
+      ? countsLine
+      : readThisFirstLine(marks.length, readThisFirst.judged, lead.entity_name);
 
   return {
     workspace_id: input.workspaceId,
@@ -221,7 +225,8 @@ export async function composeBrief(db: D1Database, input: ComposeInput): Promise
     headline_movement: self?.movement ?? null,
     headline_is_new: self?.is_new ?? false,
     why_line: pausedLine === null ? headLine : `${headLine} ${pausedLine}`,
-    is_quiet_week: marks.length === 0,
+    is_quiet_week: marks.length === 0 && !input.readThisFirst.unjudged,
+    is_unjudged: input.readThisFirst.unjudged,
     read_this_first: marks,
     brands: lines,
     own_site: {
