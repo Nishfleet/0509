@@ -268,6 +268,29 @@ describe("nightly site sweep", () => {
     expect(verdicts?.n).toBe(0);
   });
 
+  it("files the customer's own change unjudged when judging throws, and the sweep carries on to the next page", async () => {
+    await env.DB.exec("DELETE FROM jev_verdict");
+    const targets = await planSiteSweep(NOW);
+    const self = targets.find((target) => target.entityId === "ent-self");
+    const rival = targets.find((target) => target.entityId === "ent-rival");
+    if (self === undefined || rival === undefined) throw new Error("expected the self and rival homepages");
+    await checkSitePage(self, await nextTick("self-fault-1"));
+    await checkSitePage(rival, await nextTick("self-fault-1"));
+    readHolder.html = AFTER_HTML;
+    const selfChanged = await checkSitePage(self, await nextTick("self-fault-2"));
+    const rivalChanged = await checkSitePage(rival, await nextTick("self-fault-2"));
+    if (selfChanged.outcome !== "changed" || rivalChanged.outcome !== "changed") throw new Error("expected a change");
+    judgeFault.next = true;
+
+    expect(await publishSiteChange(self, selfChanged)).toBe(selfChanged.snapshotId);
+    expect(await publishSiteChange(rival, rivalChanged)).toBe(rivalChanged.snapshotId);
+
+    const filed = await signals();
+    expect(filed.map((row) => row.entity_id).sort()).toEqual(["ent-rival", "ent-self"]);
+    const verdicts = await env.DB.prepare("SELECT COUNT(*) AS n FROM jev_verdict WHERE entity_id = 'ent-self'").first<{ n: number }>();
+    expect(verdicts?.n).toBe(0);
+  });
+
   it("links each same-entity page's verdicts to its own signal when two pages are judged at once", async () => {
     Reflect.set(env, "AI", {
       async run(_model: string, request: {

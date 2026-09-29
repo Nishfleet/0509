@@ -157,12 +157,7 @@ interface SiteChangeInput {
   evidence: ReturnType<typeof computeBreakageEvidence>;
 }
 
-function changeSignalPayload(input: {
-  target: SiteSweepTarget;
-  changed: ChangedPage;
-  diff: ReturnType<typeof diffPageText> | null;
-  diffKey: string;
-}): string {
+function changeSignalPayload(input: Pick<SiteChangeInput, "target" | "changed" | "diff"> & { diffKey: string }): string {
   const { target, changed, diff, diffKey } = input;
   const words = diff?.words ?? [];
   return JSON.stringify({
@@ -199,10 +194,9 @@ function judgeInputFor(change: SiteChangeInput, signalId: string | null): JudgeI
   };
 }
 
-async function judgeCompetitorChange(change: SiteChangeInput): Promise<JudgedChange | null> {
-  if (change.target.entityRole !== "competitor" || change.diff === null) return null;
+async function judgeUnlessFailed(change: SiteChangeInput, signalId: string | null): Promise<JudgedChange | null> {
   try {
-    return await judgeChange(judgeInputFor(change, null));
+    return await judgeChange(judgeInputFor(change, signalId));
   } catch (error) {
     console.log(JSON.stringify({
       event: "site.change_judge_failed",
@@ -211,6 +205,11 @@ async function judgeCompetitorChange(change: SiteChangeInput): Promise<JudgedCha
     }));
     return null;
   }
+}
+
+async function judgeCompetitorChange(change: SiteChangeInput): Promise<JudgedChange | null> {
+  if (change.target.entityRole !== "competitor" || change.diff === null) return null;
+  return judgeUnlessFailed(change, null);
 }
 
 async function fileChangeSignal(change: SiteChangeInput, payloadJson: string, judgment: JudgedChange | null): Promise<string> {
@@ -284,7 +283,7 @@ export async function publishSiteChange(target: SiteSweepTarget, changed: Change
 
   const signalId = await fileChangeSignal(change, changeSignalPayload({ target, changed, diff, diffKey }), judgment);
   if (target.entityRole === "self") {
-    await judgeChange(judgeInputFor(change, signalId));
+    await judgeUnlessFailed(change, signalId);
   }
   return changed.snapshotId;
 }
