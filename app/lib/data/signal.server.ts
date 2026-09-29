@@ -205,6 +205,48 @@ export function insertMention(signal: MentionSignal): D1PreparedStatement {
   );
 }
 
+const SELECT_UNJUDGED_MENTIONS = `SELECT id, title, canonical_url, published_at, payload_json FROM signal
+WHERE watch_id = ?1 AND kind = 'mention' AND state = 'unjudged'
+ORDER BY observed_at, id LIMIT ?2`;
+
+const RESOLVE_UNJUDGED_MENTION = `UPDATE signal SET state = 'judged', is_tombstoned = ?2
+WHERE id = ?1 AND kind = 'mention' AND state = 'unjudged'`;
+
+const unjudgedMentionRows = z.array(
+  z.object({
+    id: z.string(),
+    title: z.string(),
+    canonical_url: z.string(),
+    published_at: z.string().nullable(),
+    payload_json: z.string(),
+  }),
+);
+
+const mentionPayload = z.object({ publisher: z.string().optional() });
+
+export interface UnjudgedMention {
+  id: string;
+  title: string;
+  url: string;
+  publishedAt: string | null;
+  publisher: string | null;
+}
+
+export async function readUnjudgedMentions(watchId: string, limit: number): Promise<UnjudgedMention[]> {
+  const rows = await env.DB.prepare(SELECT_UNJUDGED_MENTIONS).bind(watchId, limit).all();
+  return unjudgedMentionRows.parse(rows.results).map((row) => ({
+    id: row.id,
+    title: row.title,
+    url: row.canonical_url,
+    publishedAt: row.published_at,
+    publisher: mentionPayload.parse(JSON.parse(row.payload_json)).publisher ?? null,
+  }));
+}
+
+export function resolveUnjudgedMention(id: string, tombstoned: boolean): D1PreparedStatement {
+  return env.DB.prepare(RESOLVE_UNJUDGED_MENTION).bind(id, tombstoned ? 1 : 0);
+}
+
 export interface RecentSignal {
   kind: string;
   title: string | null;
