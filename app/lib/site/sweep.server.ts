@@ -1,7 +1,7 @@
 import { env } from "cloudflare:workers";
 import { getDomain } from "tldts";
 
-import { insertPages, readEntitiesWithoutHomePage, type EntityWithoutHomePage, type NewPage, type PageInsertResult } from "../data/page.server";
+import { insertPages, readEntitiesWithoutHomePage } from "../data/page.server";
 import { insertChangeSignalStatement } from "../data/signal.server";
 import { readCoveredPagePairs } from "../data/snapshot.server";
 import { readEnabledSourceId } from "../data/source.server";
@@ -13,7 +13,6 @@ import {
   readUnwatchedEntities,
 } from "../data/watch.server";
 import { robotsAllows } from "../fetch/robots.server";
-import { normaliseSubject } from "../identity/normalise";
 import type { CheckPageResult } from "./check-page.server";
 import { checkPage } from "./check-page.server";
 import { diffPageText } from "./diff";
@@ -36,68 +35,40 @@ async function readText(key: string): Promise<string | null> {
   return object === null ? null : object.text();
 }
 
-function enteredHomeUrl(entity: EntityWithoutHomePage): string | null {
-  if (entity.url === null) return null;
-  const entered = normaliseSubject(entity.url);
-  if (
-    !entered.ok ||
-    entered.subject.kind !== "domain" ||
-    entered.subject.url === null ||
-    entered.subject.registrable !== entity.domain
-  ) {
-    return null;
+function homeUrl(entity: { domain: string; url: string | null }): string | null {
+  if (typeof entity.url === "string" && URL.canParse(entity.url)) {
+    const host = new URL(entity.url).hostname;
+    if (getDomain(host) === entity.domain) return `https://${host}/`;
   }
-  return entered.subject.url;
+  return getDomain(entity.domain) === entity.domain ? `https://${entity.domain}/` : null;
 }
 
-function homePageFor(entity: EntityWithoutHomePage, now: string): NewPage | null {
-  const entered = enteredHomeUrl(entity);
-  if (entered !== null) {
-    return { id: crypto.randomUUID(), entityId: entity.id, url: entered, role: "home", discoveredAt: now };
-  }
-  if (getDomain(entity.domain) !== entity.domain) return null;
-  const url = `https://${entity.domain}/`;
-  if (entity.url !== null) {
-    console.log(JSON.stringify({
-      event: "site.identity_url_ignored",
-      entityId: entity.id,
-      domain: entity.domain,
-      enteredUrl: entity.url,
-      homeUrl: url,
-    }));
-  }
-  return { id: crypto.randomUUID(), entityId: entity.id, url, role: "home", discoveredAt: now };
-}
-
-function homePageRows(entities: readonly EntityWithoutHomePage[], now: string): NewPage[] {
-  return entities.flatMap((entity) => {
-    const row = homePageFor(entity, now);
-    return row === null ? [] : [row];
-  });
-}
-
-export async function ensureHomePages(now: string): Promise<PageInsertResult> {
-  const outcome = await insertPages(homePageRows(await readEntitiesWithoutHomePage(), now));
-  for (const row of outcome.existing) {
-    console.log(JSON.stringify({ event: "site.home_page_role_occupied", entityId: row.entityId, url: row.url }));
-  }
-  return outcome;
+export async function ensureHomePages(now: string): Promise<void> {
+  const entities = await readEntitiesWithoutHomePage();
+  await insertPages(
+    entities.flatMap((entity) => {
+      const url = homeUrl(entity);
+      return url === null
+        ? []
+        : [{ id: crypto.randomUUID(), entityId: entity.id, url, role: "home" as const, discoveredAt: now }];
+    }),
+  );
 }
 
 export async function planSiteSweep(now: string): Promise<SiteSweepTarget[]> {
-  const { existing } = await ensureHomePages(now);
+  await ensureHomePages(now);
   const sourceId = await readEnabledSourceId(SITE_SOURCE_KEY);
   if (sourceId === null) return [];
 
-  await insertWatches([
-    ...(await readUnwatchedEntities(sourceId)).map((entity) => ({
-      id: crypto.randomUUID(),
-      entityId: entity.id,
-      sourceId,
-      targetKey: entity.pageUrl,
-    })),
-    ...existing.map((row) => ({ id: crypto.randomUUID(), entityId: row.entityId, sourceId, targetKey: row.url })),
-  ]);
+  const unwatched = await readUnwatchedEntities(sourceId);
+  await insertWatches(
+    unwatched.flatMap((entity) => {
+      const url = homeUrl(entity);
+      return url === null
+        ? []
+        : [{ id: crypto.randomUUID(), entityId: entity.id, sourceId, targetKey: url }];
+    }),
+  );
   return [...(await readSiteSweepTargets(SITE_SOURCE_KEY))];
 }
 

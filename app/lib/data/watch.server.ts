@@ -25,14 +25,8 @@ const INSERT_WATCH = `INSERT INTO watch (id, entity_id, source_id, target_key)
 VALUES (?1, ?2, ?3, ?4)
 ON CONFLICT (entity_id, source_id, target_key) DO NOTHING`;
 
-const UNWATCHED_ENTITIES = `SELECT e.id AS id, p.url AS page_url
+const UNWATCHED_ENTITIES = `SELECT e.id AS id, e.domain AS domain, json_extract(e.identity_json, '$.url') AS url
 FROM entity e
-JOIN page p ON p.id = (
-  SELECT p0.id FROM page p0
-  WHERE p0.entity_id = e.id AND p0.role = 'home'
-  ORDER BY p0.discovered_at, p0.id
-  LIMIT 1
-)
 WHERE e.state = 'on'
   AND NOT EXISTS (SELECT 1 FROM watch w WHERE w.entity_id = e.id AND w.source_id = ?1)
 ORDER BY e.id`;
@@ -58,7 +52,9 @@ ORDER BY e.workspace_id, e.id, p.url`;
 
 const entityRows = z.array(z.object({ id: z.string(), domain: z.string() }));
 
-const unwatchedEntityRows = z.array(z.object({ id: z.string(), page_url: z.string() }));
+const unwatchedEntityRows = z.array(
+  z.object({ id: z.string(), domain: z.string(), url: z.string().nullable() }),
+);
 
 const targetRows = z.array(
   z.object({
@@ -118,12 +114,9 @@ export async function readEntityWatches(entityId: string): Promise<EntityWatch[]
 
 export async function readUnwatchedEntities(
   sourceId: string,
-): Promise<readonly { id: string; pageUrl: string }[]> {
+): Promise<readonly { id: string; domain: string; url: string | null }[]> {
   const rows = await env.DB.prepare(UNWATCHED_ENTITIES).bind(sourceId).all();
-  return unwatchedEntityRows.parse(rows.results).map((row) => ({
-    id: row.id,
-    pageUrl: row.page_url,
-  }));
+  return unwatchedEntityRows.parse(rows.results);
 }
 
 export async function markWatchPolled(watchId: string, polledAt: string): Promise<void> {

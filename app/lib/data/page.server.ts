@@ -35,18 +35,13 @@ const SELECT_JUDGED_HASHES =
 
 const pageHashes = z.array(z.object({ url: z.string(), role_decided_for_hash: z.string() }));
 
-export interface PageInsertResult {
-  readonly existing: readonly NewPage[];
-}
-
-export async function insertPages(rows: readonly NewPage[]): Promise<PageInsertResult> {
-  if (rows.length === 0) return { existing: [] };
-  const results = await env.DB.batch(
+export async function insertPages(rows: readonly NewPage[]): Promise<void> {
+  if (rows.length === 0) return;
+  await env.DB.batch(
     rows.map((row) =>
       env.DB.prepare(INSERT_PAGE).bind(row.id, row.entityId, row.url, row.role, row.discoveredAt),
     ),
   );
-  return { existing: rows.filter((row, index) => results[index].meta.changes === 0) };
 }
 
 export async function upsertJudgedPages(rows: readonly JudgedPage[]): Promise<void> {
