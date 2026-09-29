@@ -10,7 +10,7 @@ import { accessPrecleared } from "./auth/access-preclearance.server";
 import { MAGIC_LINK_TTL_SECONDS, magicLinkEmail } from "./auth/magic-link-email";
 import { MAGIC_LINK_PATH } from "./auth/magic-link-path";
 import { signInLinkAllowed } from "./auth/sign-in-limit";
-import { errorText, sendOrThrow } from "../../workers/delivery/send";
+import { errorText, redactEmailShaped, sendOrThrow } from "../../workers/delivery/send";
 
 interface AuthEnv {
   DB: D1Database;
@@ -102,8 +102,12 @@ export function createAuth(env: AuthEnv, options?: { captcha?: boolean; validate
               text: message.text,
               html: message.html,
             });
-          } catch (end) {
-            throw new APIError("INTERNAL_SERVER_ERROR", { message: errorText(end) });
+          } catch (failed) {
+            const detail = redactEmailShaped(errorText(failed)).slice(0, 200);
+            console.error(JSON.stringify({ event: "login.magic_link_send_failed", error: detail }));
+            throw new APIError("INTERNAL_SERVER_ERROR", {
+              message: "We couldn't send the link. Try again in a minute.",
+            });
           }
         },
       }),

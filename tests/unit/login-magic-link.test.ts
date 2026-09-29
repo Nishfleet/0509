@@ -84,6 +84,24 @@ describe("login magic-link action", () => {
     }
   });
 
+  it("logs a provider message without the address that was in it", async () => {
+    const logged = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    try {
+      handler.mockResolvedValue(
+        new Response("account daily sending quota exceeded for victim@example.com", { status: 500 }),
+      );
+      await action({ request: formRequest({ email: "person@0509.io", "cf-turnstile-response": "token-1" }) });
+      const text = logged.mock.calls.map((call) => String(call[0])).join("\n");
+      expect(text).toContain("login.magic_link_send_failed");
+      expect(text).toContain("account daily sending quota exceeded");
+      expect(text).toContain("[redacted]");
+      expect(text).not.toContain("victim@example.com");
+      expect(text).not.toContain("person@0509.io");
+    } finally {
+      logged.mockRestore();
+    }
+  });
+
   it("does not call a bad email a failed captcha", async () => {
     handler.mockResolvedValue(new Response('{"message":"Invalid email"}', { status: 400 }));
     const result = await action({

@@ -14,6 +14,7 @@ import { safeReturnTo } from "../lib/agent/paths";
 import { authClient } from "../lib/auth-client";
 import { formMagicLinkRequest } from "../lib/auth/login-magic-link.server";
 import { createAuthForRequest } from "../lib/auth.server";
+import { redactEmailShaped } from "../../workers/delivery/send";
 import { readAccountDeleteProgress } from "../lib/account-delete.server";
 import { timezoneCookie } from "../lib/timezone";
 
@@ -52,7 +53,11 @@ export async function action({ request }: Route.ActionArgs) {
   }
   if (response.status === 400) return { error: "Enter an email address we can send the link to." };
   console.error(
-    JSON.stringify({ event: "login.magic_link_send_failed", status: response.status, error: detail.slice(0, 200) }),
+    JSON.stringify({
+      event: "login.magic_link_send_failed",
+      status: response.status,
+      error: redactEmailShaped(detail).slice(0, 200),
+    }),
   );
   return data({ error: "We couldn't send the link. Try again in a minute." }, { status: 503 });
 }
