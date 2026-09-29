@@ -7,6 +7,33 @@ type HeldRead = { ok: true; html: string; status: number } | { ok: false };
 
 const readHolder: { current: HeldRead } = { current: { ok: true, html: "", status: 200 } };
 
+interface BrowserStub {
+  calls: string[];
+  quickAction(action: "content" | "screenshot", options: { url: string }): Promise<Response>;
+}
+
+const browserHolder = vi.hoisted(() => ({ current: undefined as BrowserStub | undefined }));
+
+function installBrowser(): void {
+  Object.defineProperty(env, "BROWSER", {
+    configurable: true,
+    get() {
+      return browserHolder.current;
+    },
+  });
+}
+
+function browserStub(): BrowserStub {
+  const calls: string[] = [];
+  return {
+    calls,
+    async quickAction(action, options) {
+      calls.push(`${action} ${options.url}`);
+      return new Response("png-bytes", { status: 200 });
+    },
+  };
+}
+
 const PAD =
   "Every plan includes unlimited projects, priority support, single sign-on, audit logs, and a named account manager who answers within one business day, with onboarding help for your whole team.";
 
@@ -97,6 +124,7 @@ describe("checkPage (0509#4433)", () => {
     for (const object of listed.objects) await env.SNAPSHOTS.delete(object.key);
     await seed();
     readHolder.current = { ok: true, html: FIRST_HTML, status: 200 };
+    installBrowser();
     vi.stubGlobal("fetch", () =>
       Promise.resolve(
         readHolder.current.ok
@@ -107,6 +135,7 @@ describe("checkPage (0509#4433)", () => {
   });
 
   afterEach(() => {
+    browserHolder.current = undefined;
     vi.unstubAllGlobals();
   });
 
@@ -152,5 +181,70 @@ describe("checkPage (0509#4433)", () => {
     const failed = await checkPage({ watchId: WATCH, pageId: PAGE, url: URL });
     expect(failed).toMatchObject({ outcome: "failed", reason: "deferred" });
     expect(await snapshotCount()).toBe(4);
+  });
+
+  it("stores the screenshot under snapshot/site/<watch>/<id>.png when the budget grants it (0509#5816)", async () => {
+    browserHolder.current = browserStub();
+    const first = await checkPage({ watchId: WATCH, pageId: PAGE, url: URL });
+    if (first.outcome !== "first") throw new Error("expected first");
+
+    readHolder.current = { ok: true, html: CHANGED_HTML, status: 200 };
+    const changed = await checkPage({
+      watchId: WATCH,
+      pageId: PAGE,
+      url: URL,
+      mayScreenshot: async () => true,
+    });
+    if (changed.outcome !== "changed") throw new Error("expected changed");
+    const screenshotKey = `snapshot/site/${WATCH}/${changed.snapshotId}.png`;
+    expect(changed.screenshotKey).toBe(screenshotKey);
+    const stored = await env.SNAPSHOTS.get(screenshotKey);
+    expect(await stored?.text()).toBe("png-bytes");
+    expect(browserHolder.current.calls).toEqual([`screenshot ${URL}`]);
+  });
+
+  it("returns the already-stored screenshot on a retried check without spending budget (0509#5816)", async () => {
+    browserHolder.current = browserStub();
+    const first = await checkPage({ watchId: WATCH, pageId: PAGE, url: URL });
+    if (first.outcome !== "first") throw new Error("expected first");
+
+    const snapshotId = "retry-check";
+    const pngKey = `snapshot/site/${WATCH}/${snapshotId}.png`;
+    await env.SNAPSHOTS.put(pngKey, new Uint8Array([137, 80, 78, 71]));
+    readHolder.current = { ok: true, html: CHANGED_HTML, status: 200 };
+    let granted = 0;
+    const changed = await checkPage({
+      watchId: WATCH,
+      pageId: PAGE,
+      url: URL,
+      snapshotId,
+      mayScreenshot: async () => {
+        granted += 1;
+        return false;
+      },
+    });
+    if (changed.outcome !== "changed") throw new Error("expected changed");
+    expect(changed.screenshotKey).toBe(pngKey);
+    expect(granted).toBe(0);
+    expect(browserHolder.current.calls).toEqual([]);
+  });
+
+  it("still stores the change with a null screenshotKey when the budget refuses (0509#5816)", async () => {
+    browserHolder.current = browserStub();
+    const first = await checkPage({ watchId: WATCH, pageId: PAGE, url: URL });
+    if (first.outcome !== "first") throw new Error("expected first");
+
+    readHolder.current = { ok: true, html: CHANGED_HTML, status: 200 };
+    const changed = await checkPage({
+      watchId: WATCH,
+      pageId: PAGE,
+      url: URL,
+      mayScreenshot: async () => false,
+    });
+    if (changed.outcome !== "changed") throw new Error("expected changed");
+    expect(changed.screenshotKey).toBeNull();
+    const stored = await env.SNAPSHOTS.get(changed.textKey);
+    expect(await stored?.text()).toBe(`Pricing Plan costs twenty dollars. ${PAD}`);
+    expect(browserHolder.current.calls).toEqual([]);
   });
 });

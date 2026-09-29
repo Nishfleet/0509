@@ -98,7 +98,7 @@ async function sessionEmail(context: BrowserContext, baseURL: string): Promise<s
   return null;
 }
 
-test("the sign-in link works once, survives a newer request, dies on its own clock, and never says who exists", async ({
+test("the sign-in link works once, survives a newer request, dies on its own clock, and never says who exists @own-signin", async ({
   page,
   browser,
   baseURL,
