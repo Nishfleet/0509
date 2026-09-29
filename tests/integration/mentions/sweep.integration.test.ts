@@ -240,7 +240,7 @@ describe("nightly mentions sweep", () => {
     expect(view.results.map((row) => row.state)).toEqual(["unjudged", "unjudged", "unjudged"]);
 
     const feed = await readMentionFeed(workspaceId, new Date(NOW));
-    expect(feed.map((row) => row.treatment)).toEqual(["unreviewed", "unreviewed", "unreviewed"]);
+    expect(feed.map((row) => row.treatment)).toEqual(["pending", "pending", "pending"]);
 
     const verdicts = await env.DB.prepare(
       "SELECT COUNT(*) AS n FROM jev_verdict WHERE workspace_id = ?",

@@ -3,7 +3,7 @@ import { env } from "cloudflare:workers";
 import { D6_QUESTION_ID } from "../standing-score";
 import { mentionsFromRows, type MentionReadRow, type MentionRowModel } from "../mention-feed";
 
-const MENTION_FEED_SQL = `SELECT m.id, m.title, m.canonical_url AS url, m.published_at, m.observed_at,
+const MENTION_FEED_SQL = `SELECT m.id, m.title, m.canonical_url AS url, m.published_at, m.observed_at, m.state,
   s.platform, s.kind, v.p, v.reason, v.id AS verdict_id, v.decided_at AS verdict_decided_at
 FROM mention m
 JOIN entity e ON e.id = m.entity_id AND e.workspace_id = m.workspace_id AND e.state = 'on'
@@ -24,6 +24,7 @@ interface MentionFeedSqlRow {
   url: string;
   published_at: string | null;
   observed_at: string;
+  state: "judged" | "unjudged" | null;
   platform: string;
   kind: string;
   p: number | null;
@@ -45,6 +46,7 @@ function toReadRow(row: MentionFeedSqlRow): MentionReadRow {
     reason: row.reason,
     verdictId: row.verdict_id,
     verdictDecidedAt: row.verdict_decided_at,
+    state: row.state,
   };
 }
 

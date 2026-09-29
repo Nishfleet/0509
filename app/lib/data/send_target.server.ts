@@ -43,6 +43,11 @@ SELECT 'st-email-' || w.id, w.id, c.id, u.email, u.emailVerified, ?
      SELECT 1 FROM send_target st WHERE st.workspace_id = w.id AND st.channel_id = c.id
    )`;
 
+async function sha256Hex(value: string): Promise<string> {
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
+  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
 interface TargetDb {
   prepare(query: string): {
     bind(...values: unknown[]): {
@@ -81,7 +86,8 @@ export async function writeVerifyToken(
   db: TargetDb,
   input: { workspaceId: string; token: string; expiresAt: string },
 ): Promise<void> {
-  await db.prepare(WRITE_VERIFY_TOKEN).bind(input.token, input.expiresAt, input.workspaceId).run();
+  const tokenHash = await sha256Hex(input.token);
+  await db.prepare(WRITE_VERIFY_TOKEN).bind(tokenHash, input.expiresAt, input.workspaceId).run();
 }
 
 export async function markEmailTargetVerified(
@@ -105,5 +111,6 @@ export async function confirmEmailTargetByToken(
   db: TargetDb,
   input: { token: string; now: string },
 ): Promise<void> {
-  await db.prepare(CONFIRM_EMAIL_TARGET_BY_TOKEN).bind(input.token, input.now).run();
+  const tokenHash = await sha256Hex(input.token);
+  await db.prepare(CONFIRM_EMAIL_TARGET_BY_TOKEN).bind(tokenHash, input.now).run();
 }
