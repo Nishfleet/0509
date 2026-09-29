@@ -227,6 +227,48 @@ describe("fetch-sweep consumer (0509#5261)", () => {
     expect(second).toEqual(["unchanged"]);
   });
 
+  it("files the change when a redelivered message finds a page that moved", async () => {
+    const judge = {
+      async run(_model: string, request: { questions: Record<string, { type: string }> }) {
+        const answers: Record<string, { type: "noul"; noul: number } | { type: "choice"; choice: string }> = {};
+        for (const [id, question] of Object.entries(request.questions)) {
+          answers[id] = question.type === "noul" ? { type: "noul", noul: 0.95 } : { type: "choice", choice: "pricing" };
+        }
+        return { answers };
+      },
+    };
+    Reflect.set(env, "AI", judge);
+    try {
+      const first = await handleFetchSweepBatch(batchFor([message()]).batch);
+      expect(first).toEqual(["first"]);
+      const baseline = await snapshots();
+      expect(baseline).toHaveLength(1);
+
+      const changedHtml = HOME_HTML.replace("ten dollars", "twelve dollars. New: team seats.");
+      vi.stubGlobal("fetch", () => Promise.resolve(new Response(changedHtml, { status: 200 })));
+
+      const changed = await handleFetchSweepBatch(batchFor([message()]).batch);
+      expect(changed).toEqual(["changed"]);
+
+      const filed = await env.DB.prepare(
+        "SELECT kind, aspect, url, snapshot_id FROM signal WHERE workspace_id = ?",
+      )
+        .bind(WS)
+        .all<{ kind: string; aspect: string; url: string; snapshot_id: string }>();
+      expect(filed.results).toHaveLength(1);
+      const [signal] = filed.results;
+      if (signal === undefined) throw new Error("expected the change signal");
+      expect(signal).toMatchObject({
+        kind: "change",
+        aspect: "home",
+        url: URL,
+        snapshot_id: `msg-0-${PAGE}`,
+      });
+    } finally {
+      Reflect.deleteProperty(env, "AI");
+    }
+  });
+
   it("retries a fetch that never answers, so the message reaches the DLQ instead of vanishing", async () => {
     vi.stubGlobal("fetch", () => Promise.reject(new DOMException("boom", "TimeoutError")));
 

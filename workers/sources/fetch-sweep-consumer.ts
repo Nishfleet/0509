@@ -2,7 +2,11 @@ import { captureException } from "@sentry/cloudflare";
 import { z } from "zod";
 
 import { readSiteSweepTarget } from "../../app/lib/data/watch.server";
-import { checkSitePage, type SweepTick } from "../../app/lib/site/sweep.server";
+import {
+  checkSitePage,
+  publishSiteChange,
+  type SweepTick,
+} from "../../app/lib/site/sweep.server";
 
 export const FETCH_SWEEP_QUEUE = "fetch-sweep";
 
@@ -73,6 +77,9 @@ export async function collectWatch(
   }
 
   const result = await checkSitePage(target, tick, { browser: false });
+  if (result.outcome === "changed") {
+    await publishSiteChange(target, result);
+  }
   if (result.outcome !== "failed") return result.outcome;
 
   captureException(
