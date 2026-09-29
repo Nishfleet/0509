@@ -21,7 +21,7 @@ test.describe("signed in", () => {
     "the card needs a signed-in session; the preview lane cannot read the magic-link inbox",
   );
 
-  test("one input becomes a card the user can fix and confirm", async ({ page }, testInfo) => {
+  test("one input becomes a card the user can fix and confirm @own-signin", async ({ page }, testInfo) => {
     const token = requireInboxToken();
     const email = `e2e+${crypto.randomUUID().replaceAll("-", "").slice(0, 12)}@0509.io`;
     createdEmail = email;
@@ -62,7 +62,7 @@ test.describe("signed in", () => {
     { width: 1440, height: 900 },
     { width: 390, height: 844 },
   ]) {
-    test(`the card fills within 30 s at ${width}`, async ({ page }, testInfo) => {
+    test(`the card fills within 30 s at ${width} @own-signin`, async ({ page }, testInfo) => {
       const token = requireInboxToken();
       const email = `e2e+${crypto.randomUUID().replaceAll("-", "").slice(0, 12)}@0509.io`;
       createdEmail = email;

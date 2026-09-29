@@ -2,6 +2,8 @@ import { env } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
 
 import { COVERAGE } from "../../app/lib/coverage";
+import { readRegistrySources } from "../../app/lib/data/source.server";
+import { llmsTxt } from "../../app/lib/public-routes";
 
 // "Live" in app/lib/coverage.ts is what the homepage, FAQ, /llms.txt and the
 // JSON-LD claim to customers and to search and AI answer engines. It has to
@@ -29,6 +31,25 @@ describe("coverage matches the enabled sources", () => {
         claimed.has(key),
         `source "${key}" is enabled but no live entry in app/lib/coverage.ts names it as its sourceKey`,
       ).toBe(true);
+    }
+  });
+
+  it("reflects a live claim's degraded_reason in the llms.txt render", async () => {
+    const news = COVERAGE.flatMap((group) => group.sources).find((source) => source.id === "mentions.news");
+    if (news === undefined || !("sourceKey" in news)) {
+      throw new Error("mentions.news must name a sourceKey");
+    }
+    await env.DB.prepare("UPDATE source SET degraded_reason = ? WHERE key = ?")
+      .bind("timed out", news.sourceKey)
+      .run();
+    try {
+      const body = llmsTxt("https://0509.io", await readRegistrySources(), Date.parse("2026-09-28T12:00:00.000Z"));
+      expect(body).toContain("- Mentions: News (degraded: timed out — not answering today)");
+      expect(body).toContain("Some sources are not answering today; those lines say so.");
+    } finally {
+      await env.DB.prepare("UPDATE source SET degraded_reason = NULL WHERE key = ?")
+        .bind(news.sourceKey)
+        .run();
     }
   });
 });
