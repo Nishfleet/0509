@@ -8,6 +8,8 @@ const MIN_EXTRACTED_CHARS = 200;
 
 const MAX_BODY_BYTES = 5_000_000;
 
+const MAX_REDIRECTS = 5;
+
 export type Transport = "fetch" | "browser";
 
 export type EscalationReason =
@@ -177,6 +179,44 @@ async function cappedText(res: Response): Promise<string> {
   return new Response(capped).text();
 }
 
+class BlockedRedirectError extends Error {
+  constructor(detail: string) {
+    super(detail);
+    this.name = "BlockedRedirectError";
+  }
+}
+
+function targetRefusal(target: URL): string | null {
+  if (target.protocol !== "http:" && target.protocol !== "https:") {
+    return `unsupported scheme: ${target.protocol}`;
+  }
+  const host = parse(target.hostname);
+  if (host.isIp === true || host.isIcann !== true) {
+    return `not a public internet host: ${target.hostname}`;
+  }
+  return null;
+}
+
+async function fetchGuarded(url: string, signal: AbortSignal): Promise<Response> {
+  let current = url;
+  for (let hop = 0; hop <= MAX_REDIRECTS; hop += 1) {
+    const res = await fetch(current, { headers: FETCH_HEADERS, redirect: "manual", signal });
+    const location = res.headers.get("location");
+    if (res.status < 300 || res.status > 399 || location === null) return res;
+    await res.body?.cancel();
+    let next: URL;
+    try {
+      next = new URL(location, current);
+    } catch {
+      throw new BlockedRedirectError(`redirect to an unparseable location from ${current}`);
+    }
+    const refusal = targetRefusal(next);
+    if (refusal !== null) throw new BlockedRedirectError(`redirect refused: ${refusal}`);
+    current = next.href;
+  }
+  throw new BlockedRedirectError(`more than ${String(MAX_REDIRECTS)} redirects`);
+}
+
 export async function readUrl(
   url: string,
   options: ReadUrlOptions = {},
@@ -190,20 +230,9 @@ export async function readUrl(
     console.error(JSON.stringify({ event: "fetch.url_parse_failed", error: String(error) }));
     return { ok: false, reason: "invalid-url", detail: `not a URL: ${url}` };
   }
-  if (target.protocol !== "http:" && target.protocol !== "https:") {
-    return {
-      ok: false,
-      reason: "invalid-url",
-      detail: `unsupported scheme: ${target.protocol}`,
-    };
-  }
-  const host = parse(target.hostname);
-  if (host.isIp === true || host.isIcann !== true) {
-    return {
-      ok: false,
-      reason: "invalid-url",
-      detail: `not a public internet host: ${target.hostname}`,
-    };
+  const refusal = targetRefusal(target);
+  if (refusal !== null) {
+    return { ok: false, reason: "invalid-url", detail: refusal };
   }
 
   if (options.startWith === "browser") {
@@ -221,15 +250,15 @@ export async function readUrl(
   let fetchStatus: number;
   let fetchHtml: string;
   try {
-    const res = await fetch(url, {
-      headers: FETCH_HEADERS,
-      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
-    });
+    const res = await fetchGuarded(url, AbortSignal.timeout(FETCH_TIMEOUT_MS));
     fetchStatus = res.status;
     fetchHtml = await cappedText(res);
   } catch (err) {
     if (err instanceof BodyTooLargeError) {
       return { ok: false, reason: "too-large", detail: err.message };
+    }
+    if (err instanceof BlockedRedirectError) {
+      return { ok: false, reason: "invalid-url", detail: err.message };
     }
     const detail = `fetch threw (${err instanceof Error ? err.message : String(err)})`;
     if (!(err instanceof Error && err.name === "TimeoutError")) {
