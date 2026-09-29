@@ -157,7 +157,7 @@ async function watchOneCompetitor(page: Page): Promise<void> {
   await expect(page).toHaveURL(/\/app$/);
 }
 
-test("the per-brand switch is operable with a keyboard alone", async ({ page }, testInfo) => {
+test("the per-brand switch is operable with a keyboard alone @own-signin", async ({ page }, testInfo) => {
   test.setTimeout(150_000);
   const watched = watchConsole(page);
 

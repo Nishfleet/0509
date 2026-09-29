@@ -21,7 +21,8 @@ test.afterEach(async ({ page }, testInfo) => {
 // Production sends through Email Routing to the inbox Worker; the local
 // lane's wrangler dev simulates send_email and writes the message under
 // .wrangler/tmp/email/, which inbox.ts reads instead — no real sends there.
-test("a fresh address signs in with the magic link that was emailed to it", async ({ page }) => {
+// @own-signin (0509#6042): this title mints its own session.
+test("a fresh address signs in with the magic link that was emailed to it @own-signin", async ({ page }) => {
   // The inbox secret exists only in the production job env; the local lane
   // reads wrangler's simulated-send files and has no token to require.
   const token = isLocalLane() ? null : requireInboxToken();

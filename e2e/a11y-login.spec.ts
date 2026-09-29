@@ -21,7 +21,7 @@ for (const scheme of ["light", "dark"] as const) {
     expect(results.violations).toEqual([]);
   });
 
-  test(`/login sent state has zero WCAG 2.2 AA violations in ${scheme} (#4148)`, async ({ page }) => {
+  test(`/login sent state has zero WCAG 2.2 AA violations in ${scheme} (#4148) @own-signin`, async ({ page }) => {
     await page.clock.install();
     await page.emulateMedia({ colorScheme: scheme });
     await page.goto("/login");
