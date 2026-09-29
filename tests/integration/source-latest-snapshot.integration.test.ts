@@ -8,7 +8,7 @@ import {
 } from "../../app/lib/data/snapshot.server";
 import { readRegistrySources } from "../../app/lib/data/source.server";
 
-const MIGRATION = "0027_source_latest_snapshot.sql";
+const MIGRATION = "0028_source_latest_snapshot.sql";
 
 const OWNER = "user-src-latest";
 const WS = "ws-src-latest";
@@ -353,7 +353,7 @@ describe("source latest snapshot facts (0509#5724)", () => {
       .filter((query) => query.startsWith("UPDATE source"));
     expect(backfill).toHaveLength(1);
     const statement = backfill.at(0);
-    if (statement === undefined) throw new Error("0027 backfill statement missing");
+    if (statement === undefined) throw new Error("0028 backfill statement missing");
     await env.DB.prepare(statement).run();
 
     expect(await latestFacts(SOURCE_BACKFILL)).toEqual({

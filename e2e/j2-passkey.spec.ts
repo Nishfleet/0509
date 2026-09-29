@@ -29,7 +29,7 @@ test.skip(
   "J2 proves the production mail path for its first sign-in; the local preview Worker can neither send nor receive email",
 );
 
-test("a passkey registered on first sign-in signs in on its own", async ({ page, context }, testInfo) => {
+test("a passkey registered on first sign-in signs in on its own @own-signin", async ({ page, context }, testInfo) => {
   const token = requireInboxToken();
   const email = `e2e+${crypto.randomUUID().replaceAll("-", "").slice(0, 12)}@0509.io`;
   createdEmail = email;

@@ -34,7 +34,9 @@ competitor, alerts — rendered at 1440 and 390).
    alert, email — same object, different size.
 7. **Honesty is a design element.** A degraded source says so on the row. A low-confidence
    judgment sits low and says "possibly". A paused brand shows the date it was paused.
-   We never round a gap up into a clean number.
+   We never round a gap up into a clean number. The one place a degraded row is replaced
+   rather than shown is the landing's all-degraded gate (§2.1), and there it is replaced
+   by a line that says coverage is rebuilding and what still arrives — never by silence.
 8. **The accent is one colour.** Green marker. Red exists only as the strike on a
    "before" and the rule on an open incident. Nothing else is coloured, ever.
 
@@ -75,7 +77,10 @@ who’s gaining on you."**). No exclamation marks anywhere on the page.
 - The proof column is live data from a public workspace we run ourselves, re-rendered
   weekly (the share image, §2.8). It is never sample data and never says "sample".
 - "What we watch" is a wrapped pill row, not a card grid. Sources we cannot currently
-  reach are shown dimmed with the reason, on the landing as in the app.
+  reach are shown dimmed with the reason, on the landing as in the app. The one exception
+  is the prospect: when every visible source is degraded, the landing replaces the whole
+  row with a single rebuilding line, because a page that leads with unknowns sells
+  nothing (0509#5674, #5987).
 - Exactly one filled button per viewport. The section CTA repeats the hero's.
 
 ### 2.2 Sign in (`/login`)
@@ -424,11 +429,11 @@ action that fills it.
 
 | Where | Copy |
 |---|---|
-| Home, second zero | "We're gathering the first week. Your first read-this-first lands by 14:20 today; the brief comes Monday 08:00." (a real Workflow time, never "soon") |
+| Home, second zero | "We're gathering the first week. Your first read-this-first comes with the brief on Monday 08:00." (a real Workflow time, never "soon") |
 | Read this first, quiet week | "Quiet week. 61 mentions, 2 site changes and no new ads checked — nothing crossed the bar." with the counts tappable |
 | Fewer than two ON brands | "Add a competitor to see where you stand." with the one input inline |
 | A row's evidence tab with nothing | "No site changes this week. We checked /pricing and /home daily — last at 06:02." |
-| Competitor page, just added | "Watching from today. The first ads and mentions land within the hour; site changes need a second snapshot, so the first mark comes tomorrow." |
+| Competitor page, just added | "Watching from today. The first mentions land in the nightly sweep; site changes need a second snapshot, so the first mark comes tomorrow." |
 | Alerts, nothing yet | "Nothing has interrupted you. When your own site breaks you'll get an email; everything else waits here." |
 | A degraded source | "X has been rate-limiting us since Friday. We show it as degraded rather than pretend the count is complete." |
 
@@ -438,6 +443,10 @@ of: a surface that has *some* truth shows that truth at whatever size it is, bec
 hiding it teaches the user the product is not running. Applies to the standing chart on
 Home and in the share image.
 | Identity card, field pending | "logo: looking on your site" / "we'll fill this on the first crawl, within the hour" |
+
+The landing's all-degraded gate is the one exception (§2.1): with no session to show a
+source's history and every visible source degraded, the public page replaces the pill row
+with the one rebuilding line. Every signed-in surface keeps the degraded row and its reason.
 
 ---
 

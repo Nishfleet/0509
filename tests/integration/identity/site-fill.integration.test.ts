@@ -86,6 +86,14 @@ afterEach(async () => {
 });
 
 describe("site fill", () => {
+  it("treats an unparseable homepage as not reached", async () => {
+    expect(await siteWasReached("::::")).toBe(false);
+  });
+
+  it("treats a homepage with no registrable domain as not reached", async () => {
+    expect(await siteWasReached("http://")).toBe(false);
+  });
+
   it("reports whether the homepage probe is cached", async () => {
     await seed({ description: null, socials: [] });
 
