@@ -4,17 +4,22 @@ import { BLOCK_HEADING } from "./page-heading";
 import { Button } from "./ui/button";
 
 export function DeliveryAddress({
-  address,
+  delivery,
   error,
   suppressed,
 }: {
-  address: string;
+  delivery: { address: string; verified: boolean };
   error: string | null;
   suppressed: boolean;
 }) {
   const hasError = error !== null;
+  const showUnconfirmed = !delivery.verified && !hasError;
+  const describedBy = [
+    hasError ? "delivery-address-error" : null,
+    showUnconfirmed ? "delivery-address-unconfirmed" : null,
+  ].filter((id) => id !== null);
   return (
-    <section aria-labelledby="delivery-address" className="border-line mt-10 border-t pt-6">
+    <section aria-labelledby="delivery-address" className="mt-10 border-t border-line pt-6">
       <h2 id="delivery-address" className={BLOCK_HEADING}>
         Delivery email
       </h2>
@@ -32,11 +37,17 @@ export function DeliveryAddress({
           type="email"
           autoComplete="email"
           required
-          defaultValue={address}
-          className="border-line h-11 border px-3"
+          defaultValue={delivery.address}
+          className="h-11 border border-line px-3"
           aria-invalid={hasError ? true : undefined}
-          aria-describedby={hasError ? "delivery-address-error" : undefined}
+          aria-describedby={describedBy.length === 0 ? undefined : describedBy.join(" ")}
         />
+        {showUnconfirmed ? (
+          <p id="delivery-address-unconfirmed" className="mt-2 max-w-prose leading-[1.55]">
+            This address is unconfirmed. We emailed a confirmation link — the brief doesn't go out
+            until you confirm.
+          </p>
+        ) : null}
         {suppressed ? (
           <label className="leading-[1.55]">
             <input type="checkbox" name="resume" value="yes" className="mr-2" />

@@ -18,7 +18,7 @@ const TERMS_HREF = 'a[href="/terms"]';
 const SUPPORT_HREF = 'a[href="mailto:support@0509.io"]';
 
 for (const route of PUBLIC_ROUTES) {
-  test(`${route} footer carries privacy, terms and the takedown address`, async ({ page }) => {
+  test(`${route} footer carries privacy, terms and the takedown address @smoke`, async ({ page }) => {
     const response = await page.goto(route);
     expect(response?.status()).toBe(200);
 

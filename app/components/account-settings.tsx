@@ -17,7 +17,7 @@ export function SignOut() {
 
 export function DeleteAccount({ email, error }: { email: string; error: string | null }) {
   return (
-    <section aria-labelledby="delete-account" className="border-line mt-10 border-t pt-4">
+    <section aria-labelledby="delete-account" className="mt-10 border-t border-line pt-4">
       <h2 id="delete-account" className={BLOCK_HEADING}>
         Delete your account
       </h2>
@@ -54,7 +54,7 @@ export function DeleteAccount({ email, error }: { email: string; error: string |
             {error}
           </p>
         )}
-        <Button type="submit" variant="secondary" size="lg" className="border-red self-start">
+        <Button type="submit" variant="secondary" size="lg" className="self-start border-red">
           Delete my account
         </Button>
       </Form>

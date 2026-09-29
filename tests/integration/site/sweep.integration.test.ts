@@ -1,6 +1,24 @@
 import { env, introspectWorkflowInstance } from "cloudflare:test";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import type * as JudgeModule from "../../../app/lib/site/judge.server";
+
+const judgeFault = vi.hoisted(() => ({ next: false }));
+
+vi.mock("../../../app/lib/site/judge.server", async (importOriginal) => {
+  const original = await importOriginal<JudgeModule>();
+  return {
+    ...original,
+    judgeChange: async (input: Parameters<typeof original.judgeChange>[0]) => {
+      if (judgeFault.next) {
+        judgeFault.next = false;
+        throw new Error("judge blew up");
+      }
+      return original.judgeChange(input);
+    },
+  };
+});
+
 import {
   checkSitePage,
   ensureHomePages,
@@ -74,6 +92,7 @@ const signals = async () => {
 };
 
 const resetTenant = async () => {
+  await env.DB.exec("DELETE FROM sweep_run");
   await env.DB.exec("DELETE FROM signal");
   await env.DB.exec("DELETE FROM snapshot");
   await env.DB.exec("DELETE FROM watch");
@@ -198,6 +217,135 @@ describe("nightly site sweep", () => {
     expect(polled?.last_polled_at).not.toBeNull();
   });
 
+  it("judges the filed change signal, and a retried publish judges the same signal", async () => {
+    Reflect.set(env, "AI", {
+      async run(_model: string, request: { questions: Record<string, { type: string }> }) {
+        const answers: Record<string, { type: "noul"; noul: number } | { type: "choice"; choice: string }> = {};
+        for (const [id, question] of Object.entries(request.questions)) {
+          answers[id] = question.type === "noul" ? { type: "noul", noul: 0.95 } : { type: "choice", choice: "pricing" };
+        }
+        return { answers };
+      },
+    });
+    try {
+      await env.DB.exec("DELETE FROM jev_verdict");
+      const [rival] = (await planSiteSweep(NOW)).filter((t) => t.entityId === "ent-rival");
+      if (rival === undefined) throw new Error("expected the rival's homepage");
+      await checkSitePage(rival, await nextTick("night-1"));
+      readHolder.html = AFTER_HTML;
+      const changed = await checkSitePage(rival, await nextTick("night-2"));
+      if (changed.outcome !== "changed") throw new Error("expected a change");
+      await publishSiteChange(rival, changed);
+      await publishSiteChange(rival, changed);
+
+      const [signal] = await signals();
+      const filedId = await env.DB.prepare("SELECT id FROM signal WHERE workspace_id = ?").bind(WS).first<{ id: string }>();
+      const verdicts = await env.DB.prepare("SELECT DISTINCT signal_id FROM jev_verdict WHERE entity_id = 'ent-rival'").all<{
+        signal_id: string | null;
+      }>();
+      expect(signal).toBeDefined();
+      expect(verdicts.results).toEqual([{ signal_id: filedId?.id }]);
+    } finally {
+      Reflect.deleteProperty(env, "AI");
+    }
+  });
+
+  it("files the change unjudged when judging throws, and never fails the sweep", async () => {
+    await env.DB.exec("DELETE FROM jev_verdict");
+    judgeFault.next = true;
+    const [rival] = (await planSiteSweep(NOW)).filter((t) => t.entityId === "ent-rival");
+    if (rival === undefined) throw new Error("expected the rival's homepage");
+    await checkSitePage(rival, await nextTick("fault-1"));
+    readHolder.html = AFTER_HTML;
+    const changed = await checkSitePage(rival, await nextTick("fault-2"));
+    if (changed.outcome !== "changed") throw new Error("expected a change");
+
+    expect(await publishSiteChange(rival, changed)).toBe(changed.snapshotId);
+
+    const filed = await signals();
+    expect(filed).toHaveLength(1);
+    expect(filed[0]?.aspect).toBe("home");
+    const verdicts = await env.DB.prepare("SELECT COUNT(*) AS n FROM jev_verdict WHERE entity_id = 'ent-rival'").first<{ n: number }>();
+    expect(verdicts?.n).toBe(0);
+  });
+
+  it("files the customer's own change unjudged when judging throws, and the sweep carries on to the next page", async () => {
+    await env.DB.exec("DELETE FROM jev_verdict");
+    const targets = await planSiteSweep(NOW);
+    const self = targets.find((target) => target.entityId === "ent-self");
+    const rival = targets.find((target) => target.entityId === "ent-rival");
+    if (self === undefined || rival === undefined) throw new Error("expected the self and rival homepages");
+    await checkSitePage(self, await nextTick("self-fault-1"));
+    await checkSitePage(rival, await nextTick("self-fault-1"));
+    readHolder.html = AFTER_HTML;
+    const selfChanged = await checkSitePage(self, await nextTick("self-fault-2"));
+    const rivalChanged = await checkSitePage(rival, await nextTick("self-fault-2"));
+    if (selfChanged.outcome !== "changed" || rivalChanged.outcome !== "changed") throw new Error("expected a change");
+    judgeFault.next = true;
+
+    expect(await publishSiteChange(self, selfChanged)).toBe(selfChanged.snapshotId);
+    expect(await publishSiteChange(rival, rivalChanged)).toBe(rivalChanged.snapshotId);
+
+    const filed = await signals();
+    expect(filed.map((row) => row.entity_id).sort()).toEqual(["ent-rival", "ent-self"]);
+    const verdicts = await env.DB.prepare("SELECT COUNT(*) AS n FROM jev_verdict WHERE entity_id = 'ent-self'").first<{ n: number }>();
+    expect(verdicts?.n).toBe(0);
+  });
+
+  it("links each same-entity page's verdicts to its own signal when two pages are judged at once", async () => {
+    Reflect.set(env, "AI", {
+      async run(_model: string, request: {
+        state: { page: { url: string } };
+        questions: Record<string, { type: string }>;
+      }) {
+        const kind = request.state.page.url.endsWith("/pricing") ? "launch" : "copy";
+        const answers: Record<string, { type: "noul"; noul: number } | { type: "choice"; choice: string }> = {};
+        for (const [id, question] of Object.entries(request.questions)) {
+          answers[id] = question.type === "noul" ? { type: "noul", noul: 0.95 } : { type: "choice", choice: kind };
+        }
+        return { answers };
+      },
+    });
+    try {
+      await env.DB.exec("DELETE FROM jev_verdict");
+      await planSiteSweep(NOW);
+      await env.DB.batch([
+        env.DB.prepare("INSERT INTO page (id, entity_id, url, role, discovered_at) VALUES ('page-rival-pricing', 'ent-rival', 'https://rival.com/pricing', 'pricing', ?)").bind(NOW),
+        env.DB.prepare("INSERT INTO watch (id, entity_id, source_id, target_key) VALUES ('watch-rival-pricing', 'ent-rival', 'src_site_web', 'https://rival.com/pricing')"),
+      ]);
+      const targets = (await planSiteSweep(NOW)).filter((t) => t.entityId === "ent-rival");
+      expect(targets.map((t) => t.url)).toEqual(["https://rival.com/", "https://rival.com/pricing"]);
+      const firsts = await Promise.all(targets.map(async (t, i) => checkSitePage(t, await nextTick(`pair-1-${i}`))));
+      expect(firsts.map((r) => r.outcome)).toEqual(["first", "first"]);
+      readHolder.html = AFTER_HTML;
+      const changes = await Promise.all(targets.map(async (t, i) => checkSitePage(t, await nextTick(`pair-2-${i}`))));
+      const pairs = targets.map((target, i) => {
+        const changed = changes[i];
+        if (changed === undefined || changed.outcome !== "changed") throw new Error("expected a change");
+        return { target, changed };
+      });
+      await Promise.all(pairs.map(({ target, changed }) => publishSiteChange(target, changed)));
+
+      const rows = await env.DB.prepare(
+        `SELECT s.url AS url, s.aspect AS aspect, v.question_id AS question_id, v.choice AS choice
+         FROM signal s JOIN jev_verdict v ON v.signal_id = s.id
+         WHERE s.workspace_id = ? ORDER BY s.url, v.question_id`,
+      )
+        .bind(WS)
+        .all<{ url: string; aspect: string; question_id: string; choice: string | null }>();
+      expect(rows.results).toEqual([
+        { url: "https://rival.com/", aspect: "copy", question_id: "change_kind", choice: "copy" },
+        { url: "https://rival.com/", aspect: "copy", question_id: "noteworthy_change", choice: null },
+        { url: "https://rival.com/pricing", aspect: "launch", question_id: "change_kind", choice: "launch" },
+        { url: "https://rival.com/pricing", aspect: "launch", question_id: "noteworthy_change", choice: null },
+      ]);
+      const unlinked = await env.DB.prepare("SELECT COUNT(*) AS n FROM jev_verdict WHERE signal_id IS NULL").first<{ n: number }>();
+      expect(unlinked?.n).toBe(0);
+    } finally {
+      Reflect.deleteProperty(env, "AI");
+    }
+  });
+
   it("counts one snapshot per page per night even when the check step is retried", async () => {
     const [rival] = (await planSiteSweep(NOW)).filter((t) => t.entityId === "ent-rival");
     if (rival === undefined) throw new Error("expected the rival's homepage");
@@ -249,7 +397,16 @@ describe("nightly site sweep", () => {
     await introspector.waitForStatus("complete");
 
     expect(calls.filter((call) => call === "POST https://hc-ping.example/site-sweep")).toHaveLength(1);
-    expect(await introspector.getOutput()).toMatchObject({ pages: 2 });
+    expect(await introspector.getOutput()).toMatchObject({ pages: 2, recorded: true });
+
+    const run = await env.DB.prepare(
+      "SELECT kind, pages, failed, wall_ms, planned_at, finished_at FROM sweep_run WHERE id = ?",
+    )
+      .bind(id)
+      .first<{ kind: string; pages: number; failed: number; wall_ms: number; planned_at: string; finished_at: string }>();
+    if (run === null) throw new Error("finished sweep wrote no sweep_run row");
+    expect(run).toMatchObject({ kind: "site", pages: 2, failed: 0 });
+    expect(run.wall_ms).toBe(Date.parse(run.finished_at) - Date.parse(run.planned_at));
   });
 });
 

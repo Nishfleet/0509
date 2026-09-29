@@ -198,4 +198,22 @@ describe("shortlist", () => {
     };
     expect(evidenceLine(entry)).toBe("advertises in the same category");
   });
+
+  it("ranks corroborated candidates above ai-only suggestions and keeps the ai-only one via its guaranteed slot", () => {
+    const corroborated = Array.from({ length: SHORTLIST_TOP }, (_, index) => dual(`Corroborated ${String(index)}`, index));
+    const suggested = candidate("Suggested Co", "ai", "https://gymshark.com/", "suggested.com");
+    const result = partitionShortlist([suggested, ...corroborated]);
+    expect(result.entries).toHaveLength(SHORTLIST_TOP + 1);
+    expect(result.entries[SHORTLIST_TOP]).toMatchObject({ name: "Suggested Co", slot: "guaranteed", generators: ["ai"] });
+    expect(result.entries.slice(0, SHORTLIST_TOP).every((entry) => entry.generators.length === 2)).toBe(true);
+  });
+
+  it("ranks an ai-only suggestion below a single-source candidate and an ai-agreed one above it", () => {
+    const order = shortlist([
+      candidate("Ai Only", "ai", "https://gymshark.com/"),
+      candidate("Hn Only", "hn", "https://news.ycombinator.com/item?id=1"),
+      { name: "Both", evidence: [ev("https://news.ycombinator.com/item?id=2", "hn"), ev("https://gymshark.com/", "ai")] },
+    ]).map((entry) => entry.name);
+    expect(order).toEqual(["Both", "Hn Only", "Ai Only"]);
+  });
 });

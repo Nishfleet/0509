@@ -30,7 +30,7 @@ export function WhatWeWatch({
   return (
     <Section id="what-we-watch" kicker="Public sources only" title="What we watch" lead={lead}>
       {allDegraded ? (
-        <p className="text-ink-soft max-w-[42rem] text-[1.05rem] leading-[1.6]">{REBUILDING}</p>
+        <p className="max-w-[42rem] text-[1.05rem] leading-[1.6] text-ink-soft">{REBUILDING}</p>
       ) : (
         <ul className="flex flex-wrap gap-2">
           {shown.map(({ entry }) => (

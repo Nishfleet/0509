@@ -1,7 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { hnGenerator } from "../../../app/lib/discovery/generators/hn";
-import { newsGenerator } from "../../../app/lib/discovery/generators/news";
 import { defaultFetchText, type Subject } from "../../../app/lib/discovery/types";
 
 const SUBJECT: Subject = { name: "Gymshark", domain: "gymshark.com" };
@@ -37,6 +36,7 @@ describe("defaultFetchText", () => {
 
     expect(result).toEqual({
       ok: true,
+      status: 200,
       url: response.url,
       contentType: "text/plain",
       body: "hello body",
@@ -55,6 +55,7 @@ describe("defaultFetchText", () => {
 
     expect(result).toEqual({
       ok: false,
+      status: 500,
       url: "https://example.com/fail",
       contentType: "text/html",
       body: "server exploded",
@@ -68,6 +69,7 @@ describe("defaultFetchText", () => {
 
     expect(result).toEqual({
       ok: false,
+      status: 0,
       url: "https://example.com/down",
       contentType: null,
       body: "",
@@ -101,19 +103,17 @@ describe("defaultFetchText", () => {
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
     stubRejectingFetch();
 
-    const candidates = await hnGenerator(SUBJECT);
-
-    expect(candidates).toEqual([]);
+    await expect(hnGenerator(SUBJECT)).rejects.toThrow("hn generator fetch failed with status 0");
     expect(loggedEvents(errorSpy)).toEqual(["discovery.hn_fetch_failed"]);
   });
 
-  it("logs discovery.news_fetch_failed from the news generator's default fetch", async () => {
-    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
-    stubRejectingFetch();
+  it("gives the hn generator's default fetch a five second timeout", async () => {
+    const response = new Response("{}", { status: 200 });
+    vi.stubGlobal("fetch", vi.fn(async () => response));
+    const timeoutSpy = vi.spyOn(AbortSignal, "timeout");
 
-    const candidates = await newsGenerator(SUBJECT);
+    await hnGenerator(SUBJECT);
 
-    expect(candidates).toEqual([]);
-    expect(loggedEvents(errorSpy)).toEqual(["discovery.news_fetch_failed"]);
+    expect(timeoutSpy).toHaveBeenCalledWith(5_000);
   });
 });

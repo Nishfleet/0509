@@ -1,6 +1,6 @@
-const DELETE_EXPIRED_SESSIONS = `DELETE FROM "session" WHERE "expiresAt" < ?`;
+export const DELETE_EXPIRED_SESSIONS = `DELETE FROM "session" WHERE "expiresAt" < ?`;
 
-const DELETE_EXPIRED_VERIFICATIONS = `DELETE FROM "verification" WHERE "expiresAt" < ?`;
+export const DELETE_EXPIRED_VERIFICATIONS = `DELETE FROM "verification" WHERE "expiresAt" < ?`;
 
 export interface AuthExpirySweep {
   sessions: number;

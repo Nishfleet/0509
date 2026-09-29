@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-test("the brief page sends a signed-out visitor to the login page", async ({ request }) => {
+test("the brief page sends a signed-out visitor to the login page @smoke", async ({ request }) => {
   for (const path of ["/app/brief", "/app/brief/dg-missing"]) {
     const response = await request.get(path, { maxRedirects: 0 });
     expect(response.status()).toBeGreaterThanOrEqual(300);

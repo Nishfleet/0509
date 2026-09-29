@@ -65,7 +65,7 @@ export function DevelopmentsFeed({
                 {change === undefined ? (
                   <article
                     data-testid="development"
-                    className="border-line mt-8 min-w-0 border-t pt-6"
+                    className="mt-8 min-w-0 border-t border-line pt-6"
                   >
                     <h3 className="font-display text-row-name font-bold [overflow-wrap:anywhere]">
                       {heading}

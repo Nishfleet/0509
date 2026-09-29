@@ -48,13 +48,15 @@ Daily cadence, 30-day month, 15 browser-seconds per brand-day:
 | 100 | 12.5 | 2.5 h | **$0.22** |
 | 1,000 | 125.0 | 115 h | **$10.35** |
 
-D1 writes under the shipped design — one `snapshot` row per watch per tick, ten sources per brand:
+D1 writes under the shipped design — one `snapshot` row per watch per tick, ten sources per brand, each snapshot paired in one `batch()` with a `source` latest-facts `UPDATE`:
 
-| Brands | Snapshot rows / mo | Against the 50M included |
-|---|---|---|
-| 10 | 3,000 | 0.006% |
-| 100 | 30,000 | 0.06% |
-| 1,000 | 300,000 | 0.6% |
+| Brands | `snapshot` rows / mo | `source` latest-facts rows / mo | D1 rows / mo | Against the 50M included |
+|---|---|---|---|---|
+| 10 | 3,000 | 3,000 | 6,000 | 0.012% |
+| 100 | 30,000 | 30,000 | 60,000 | 0.12% |
+| 1,000 | 300,000 | 300,000 | 600,000 | 1.2% |
+
+The paired update is one write attempt per check, and a check whose snapshot is not the source's newest writes nothing. On a source whose watches are all polled in one run (`workers/workflows/mentions.ts` hands every target the same `now`), the watches tie on `fetched_at` and only the first-committed update moves the row, so the shipped figure sits at or below the upper bound above.
 
 **At every scale we plan for, the Cloudflare bill is dominated by Browser Rendering duration, and it is small.** R2 holds the snapshot bodies and has no egress fee. KV holds counters and cursors, comfortably inside its included tier.
 
@@ -75,7 +77,7 @@ Worker rows are script `0509` only, `isPreview = 0`, usage model `standard`. Tha
 | Workers requests | a Workers request per brand-day, no count | 106,149 requests, 10 errors | none, 0 ON brands | 454,924 requests, inside 10 million, $0 |
 | Workers CPU | no CPU figure | 33,980,390,340 µs in `cpuTimeUs`, which is 33,980,390 ms. Average 320 ms CPU per request | none, 0 ON brands | 145,630,244 ms. 115,630,244 ms past the included 30 million, at $0.02 per million, **$2.31** |
 | D1 rows read | "a few D1 rows" per brand-day | 107,559,825 | none, 0 ON brands | 460,970,679 rows, inside 25 billion, $0 |
-| D1 rows written | 10 snapshot rows per brand-day. One `snapshot` row per watch per tick, ten sources. At 0 brands that estimate is 0 snapshot rows | 223,287 rows written. The `snapshot` table has 0 rows, so these writes are the rest of the app | none, 0 ON brands | 956,944 rows, inside 50 million, $0 |
+| D1 rows written | 20 rows per brand-day: one `snapshot` row per watch per tick, ten sources, each paired in one `batch()` with a `source` latest-facts `UPDATE`. At 0 brands that estimate is 0 rows | 223,287 rows written. The `snapshot` table has 0 rows, so these writes are the rest of the app | none, 0 ON brands | 956,944 rows, inside 50 million, $0 |
 | R2 `0509-snapshots`, plus `0509-snapshots-backup` from 2026-09-28 | snapshot bodies and their disaster-recovery copy, inside the included tier | This window's counts are `0509-snapshots` alone: Class A `PutBucket` 1, Class B 0, payload 0 bytes, 0 objects, max on 2026-09-21. `0509-snapshots-backup` was created outside the window, on 2026-09-28 at 17:07:24Z: the account's R2 operations for that day show one `PutBucket` on it and no `PutBucketLifecycleConfiguration`, and the 2026-09-28 lifecycle read made with the read credential, pasted on #5950, shows the source's five rules and on the copy only the `Default Multipart Abort Rule` | none, 0 ON brands | $0 in this window. The copy's first run was 2026-09-28: it listed 407 source objects and copied all 407, so from that day the pair stores roughly double the source's bytes, and the copy's own bytes never age out because it has no delete rule (#5950) |
 | R2 `0509-landing-page-artifacts` | not a per-brand line in this model. The README calls this bucket an enhancement path | Class A 581: `PutObject` 548, `ListObjects` 30, `PutBucketLifecycleConfiguration` 3. Class B 1,972: `GetObject` 1650, `HeadBucket` 215, `GetBucketLifecycleConfiguration` 59, `HeadObject` 48. `DeleteObject` 65, free. Highest daily payload in the week: 53,057,656,626 bytes plus metadata 468,369 bytes, 5,592 objects, on 2026-09-17. 2026-09-21 was 52,017,118,378 bytes plus metadata 75,591 bytes, 1,717 objects | none. This bucket is not the snapshot engine | operations inside the included 1 million Class A and 10 million Class B. 53.06 GB decimal on the high day rounds up to 54 GB, then 44 GB past the included 10, times $0.015, **$0.66**. One day's storage is not a measured GB-month |
 | R2 `0509-support-inbox` | not a per-brand line in this model | Class A 699: `ListObjects` 674, `PutObject` 25. Class B 816: `GetObject` 742, `HeadObject` 72, `HeadBucket` 1, `GetBucketLifecycleConfiguration` 1. Payload 5,668 bytes, 35 objects | none | inside included, $0 |
@@ -122,12 +124,20 @@ The design choice still stands, for reasons that survive the correction: it boun
 
 On 2026-09-17 this account's D1 rows-written reached roughly **$105**. At $1.00 per million rows beyond the included 50 million, that is about **155 million rows written in a month** — some 5 million a day.
 
-No design in this document approaches that: the largest here is 300,000 rows a month at 1,000 brands. Reaching 155M means writing per *observed element* rather than per item — a row per ad impression, per page element, per poll result — which is the pattern the batching rule exists to forbid. The lesson priced: **the gap between "a row per item" and "a row per element" is the gap between $0 and $105.**
+No design in this document approaches that: the largest here is 600,000 D1 rows a month at 1,000 brands. Reaching 155M means writing per *observed element* rather than per item — a row per ad impression, per page element, per poll result — which is the pattern the batching rule exists to forbid. The lesson priced: **the gap between "a row per item" and "a row per element" is the gap between $0 and $105.**
 
 ## Guardrails, as numbers
 
 - Browser Rendering: **≤ 10 concurrent browsers**, a config value. Raising it costs $2 per extra concurrent browser per month and needs Nish's deliberate yes, recorded in the PR with the cost. No agent leaves it hanging while customers wait: if a sweep cannot finish in its window at the cap, escalate to Nish the same day with the measured number and a proposed cap, and meanwhile prioritise ON brands' home and pricing pages over long-tail pages. Never drop brands silently. Duration budget ≤ 20 browser-seconds per brand per day.
-- D1: no write per observed element. Snapshots are one row per watch per tick; signals are one row per item that survived judgment.
+- D1: no write per observed element. Snapshots are one row per watch per tick, paired in the same `batch()` with the `source` row's latest-facts update; signals are one row per item that survived judgment.
 - Blobs — screenshots, raw payloads, HTML — in **R2**, never base64 into a D1 row.
 - Hot counters (poll cursors, budgets, tallies) in **KV or a Durable Object**, never a D1 write per increment.
 - Billing notifications set at **$10 and $25**, so the first surprise arrives as an email rather than as an invoice.
+
+## What the nightly cost guard measures, and what it refuses to
+
+The guard (`app/lib/observability/cost-guard.ts`, called by `runCostGuard`) divides the day's usage by the count of ON **competitor** brands — `role = 'competitor' AND state = 'on'`. The workspace's own `self` entity row is not a brand in the divisor: the schema CHECK (`role = 'competitor' OR state = 'on'`) forces every `self` row to `on`, so counting `state = 'on'` alone made the divisor `competitors_on + workspaces_self` and diluted both `measured_per_brand` and the alert's `on_brands` (0509#6086).
+
+The guard does **not** evaluate `browser_ms`, and that is a declared gap, not an oversight. The only Browser Rendering duration dataset (`browserRenderingBrowserTimeUsageAdaptiveGroups`) carries no script dimension, so its daily total is the whole account's, not worker `0509`'s alone — dividing an account-wide total by 0509's brand count and comparing it to the 15 browser-seconds per-brand figure would report a 0509 breach caused by another worker's browser use. The 15 browser-seconds per-brand figure remains the design budget in this document, but the guard only alerts on the two lines that are attributable to 0509 (`d1_rows_written`, `r2_class_a_ops`).
+
+**mechanism-partial (0509#6086):** no in-repo alert covers browser spend. The mechanism that does cover it is the Cloudflare billing notification at $10 and $25 named in the guardrails above, and that is an account setting outside this repo — it is not asserted by any test here, so this document is the only record that the replacement exists. A repository-visible account-level browser check needs a Cloudflare dataset that carries a script dimension; the duration dataset has none, so the alert is deferred until one exists or a spend ceiling is enforced in the Worker. The integration test `does not alert on browser_ms` pins the exclusion itself, so re-adding the line to `LINES` fails that test.

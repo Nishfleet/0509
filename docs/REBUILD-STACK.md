@@ -452,7 +452,7 @@ Pricing: 10M reads/mo then $0.50/M; 1M writes then **$5.00/M** — writes cost 1
 
 `batch()` "Sends multiple SQL statements inside a single call to the database" and returns results positionally (<https://developers.cloudflare.com/d1/worker-api/d1-database/>). Limits: **10 GB max database** on Paid, 30 s per query, 100 bound parameters, 100 KB statement, 2 MB row. Billing: rows read $0.001/M past 25B; rows written **$1.00/M** past 50M — written is 1,000× read.
 
-**Anti-pattern:** awaiting prepared statements in a loop instead of `batch()`. And the one that produced the $105 bill on this account on 2026-09-17: **a row per observed event**. Billing is on rows *scanned*, not returned, so an unindexed `WHERE` bills every row it touched. `REBUILD-SCHEMA.md` is the structural answer — snapshots to R2, one `snapshot` row per watch per tick, `signal` rows only after judgment.
+**Anti-pattern:** awaiting prepared statements in a loop instead of `batch()`. And the one that produced the $105 bill on this account on 2026-09-17: **a row per observed event**. Billing is on rows *scanned*, not returned, so an unindexed `WHERE` bills every row it touched. `REBUILD-SCHEMA.md` is the structural answer — snapshots to R2, one `snapshot` row per watch per tick paired in the same `batch()` with the `source` row's latest-facts update, `signal` rows only after judgment.
 
 ### 4.7 Email Service — transactional and one-click unsubscribe
 
@@ -729,6 +729,19 @@ Dodo's subscription statuses, read from the shipped types (`SubscriptionStatus`)
 | A hand-written `fetch` client for `/checkouts` | Charter #3842: hand-rolled billing is rejected. The SDK types the request and the response and owns retries and timeouts. |
 | Dodo's `@dodopayments/nextjs`, `@dodopayments/express` and other framework adapters | Each is a route handler for a framework this app does not run. The core SDK is the layer they wrap. |
 | Dodo's hosted overlay checkout script | A browser-side script from a second origin, which the app's CSP would have to admit. The server-created `checkout_url` needs none. |
+
+### 5.12 Billing — Standard Webhooks
+
+**Installed: `standardwebhooks` 1.1.1**, exact pin (npm `latest`, the same version `dodopayments` 2.52.0 depends on, so the lockfile holds one copy). Spec and library: <https://github.com/standard-webhooks/standard-webhooks/tree/main/libraries/javascript> (read 2026-09-29). Dodo signs its webhooks to this spec and the Dodo SDK's own `webhooks.unwrap` calls this library; Dodo's webhook guide: <https://docs.dodopayments.com/developer-resources/webhooks> (read 2026-09-29).
+
+`new Webhook(secret).verify(rawBody, { "webhook-id", "webhook-timestamp", "webhook-signature" })` checks the HMAC-SHA256 signature over `id.timestamp.body`, compares in constant time, accepts a `whsec_`-prefixed secret and rejects a timestamp more than five minutes from now, so a captured request cannot be replayed later. It throws `WebhookVerificationError` on any failure, which the handler turns into a 400 that Dodo retries. Its two dependencies (`fast-sha256`, `@stablelib/base64`) are plain JavaScript, so it runs in workerd without a Node crypto shim. Probed 2026-09-29 in the workers vitest project: the tests sign bodies with `Webhook.sign` and the route verifies them.
+
+The `webhook-id` header is the idempotency key, stored as `dodo_webhook_event.id` (the table exists in `migrations/0001_rebuild.sql`), which is what Dodo's webhook guide recommends for its automatic retries.
+
+| Rejected | Why |
+|---|---|
+| A hand-rolled HMAC over `crypto.subtle` | Charter #3842 rejects hand-rolled auth and billing; timestamp tolerance, multi-signature headers and constant-time comparison are the parts a hand-rolled check gets wrong. |
+| `client.webhooks.unwrap` from the Dodo SDK | It needs a constructed API client and parses into the SDK's event union. The handler needs the verification only and reads five fields with `zod`. |
 
 ---
 
@@ -1148,6 +1161,7 @@ The version in this table is the `package.json` specifier. An earlier section of
 | `lucide-react` | 1.47.0 | §3.2 | Icons the shadcn/ui components import (`app/components/ui/dialog.tsx`) | A second icon set, inline SVG copies | 1.47.0 |
 | `robots-parser` | 3.0.1 | #4741, REBUILD-GUARDRAILS robots line | robots.txt matching (groups, wildcards, Allow/Disallow precedence) for plain fetches of the customer's own site. Zero dependencies. Doc: <https://github.com/samclarke/robots-parser> | A hand-written robots.txt parser (charter #3842 forbids it), `robotstxt` ports of Google's C++ parser | 3.0.1 |
 | `sonner` | ^2.0.8 | §5.10 | The one toast surface: "saved" and "undo" per DESIGN.md §11 | A hand-rolled live region (Base UI ships no toast primitive), `react-hot-toast` | 2.0.8 |
+| `standardwebhooks` | 1.1.1 | §5.12, J13 | Verifies Dodo's webhook signature, timestamp tolerance and replay window. Doc: <https://github.com/standard-webhooks/standard-webhooks/tree/main/libraries/javascript> | A hand-rolled HMAC check, `client.webhooks.unwrap` from the Dodo SDK | 1.1.1 |
 | `tailwind-merge` | ^3.7.0 | §3.2 | Class conflict resolution inside `cn()` | A hand-written Tailwind merger | 3.7.0 |
 | `tldts` | ^7.4.13 | `docs/engines/identity-card.md` P1 | Registrable domain and public-suffix handling for identity input normalisation. No dependencies, ships a Workers-clean ESM build | A hand-written public-suffix list, `split('.')`, `psl` (unmaintained) | 7.4.13 |
 | `uplot` | 1.6.32 | §5.7, #4055 | The Home four-week standing line: a line-chart library, not a chart framework, at 22 KB gzip. Canvas-based, so the wrapper paints on mount and the server renders only the frame | `recharts` (over the 30 KB budget even tree-shaken), `frappe-charts` (unmaintained since 2021), hand-rolled inline SVG (glue) | 1.6.32 |
@@ -1165,6 +1179,7 @@ The version in this table is the `package.json` specifier. An earlier section of
 | `@types/react-dom` | ^19.2.7 | §9 | Types for `react-dom/server` in unit tests | An untyped `renderToStaticMarkup` | 19.3.0 |
 | `@vitest/eslint-plugin` | 1.6.27 | §9, #5785, #5808 | vitest rules in `eslint.config.js`: no focused or disabled tests, no identical titles, valid and present expects. Doc: <https://github.com/vitest-dev/eslint-plugin-vitest> | eslint-plugin-jest (jest-only), hand-written no-restricted-syntax selectors | 1.6.27 |
 | `eslint` | ^10.11.0 | §9 | `npm run lint` is `eslint . && knip` | oxlint or biome. Neither loads this type-checked config or its AST bans | 10.11.0 |
+| `eslint-plugin-better-tailwindcss` | ^4.7.0 | §9, DESIGN.md rule 8, 0509#5871 | no-unknown-classes, no-restricted-classes and enforce-consistent-class-order on app/**; reads the Tailwind 4 tokens from the app/app.css entry point | eslint-plugin-tailwindcss 4.4.0 (no regex-pattern class ban; its no-arbitrary-value is all-or-nothing and would ban the deliberate non-colour arbitrary values on main, e.g. text-[48px] in app/components/share-image.tsx) | 4.7.0 |
 | `eslint-plugin-boundaries` | ^7.2.0 | §9, REBUILD-TRUST §B4 | Declares element types and which of them may import which. Replaces the `**/*.server` glob | dependency-cruiser (a second tool, CI-only feedback), Sheriff (cannot add the other rules this config already runs), Feature-Sliced Design with steiger (a full restructure during the rebuild) | 7.2.0 |
 | `eslint-plugin-import-x` | ^4.17.1 | §9, REBUILD-TRUST §B4 | `import-x/no-cycle` on `app/**` and `workers/**`, and `import-x/no-default-export` except where the framework requires a default export | `eslint-plugin-import` (unmaintained). dependency-cruiser's cycle check, for the same second-tool reason as boundaries | 4.17.1 |
 | `eslint-plugin-no-comments` | ^1.2.1 | §9, CLAUDE.md "Comments are banned in app code" | `no-comments/disallowComments` makes any comment in `app/` and `workers/` red (0509#4225, [npm](https://www.npmjs.com/package/eslint-plugin-no-comments)) | Stock `no-inline-comments` alone, which misses whole-line comments. A reviewer | 1.2.1 |

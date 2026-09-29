@@ -23,7 +23,7 @@ function visitPath(path: string): string {
 const targets = ["/", ...screenPaths(routes, "").map(visitPath)];
 
 for (const target of targets) {
-  test(`${target} logs no console errors`, async ({ page }, testInfo) => {
+  test(`${target} logs no console errors @smoke`, async ({ page }, testInfo) => {
     const watched = watchConsole(page);
 
     const response = await page.goto(target);
@@ -51,7 +51,7 @@ for (const target of targets) {
   });
 }
 
-test.fail("the collector catches a deliberate console error", async ({ page }, testInfo) => {
+test.fail("the collector catches a deliberate console error @smoke", async ({ page }, testInfo) => {
   const watched = watchConsole(page);
 
   await page.goto("/");
@@ -61,7 +61,7 @@ test.fail("the collector catches a deliberate console error", async ({ page }, t
   expect(await consoleFailures(page, watched, testInfo)).toEqual([]);
 });
 
-test.fail("the collector catches a deliberate page error", async ({ page }, testInfo) => {
+test.fail("the collector catches a deliberate page error @smoke", async ({ page }, testInfo) => {
   const watched = watchConsole(page);
 
   await page.goto("/");
