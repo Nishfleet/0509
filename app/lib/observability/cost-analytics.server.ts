@@ -26,6 +26,8 @@ export const R2_CLASS_A_ACTIONS: readonly string[] = [
 
 const GRAPHQL_URL = "https://api.cloudflare.com/client/v4/graphql";
 
+const GROUP_LIMIT = 10000;
+
 export const USAGE_QUERY = `query ($accountTag: string!, $databaseId: string!, $bucket: string!, $date: Date!, $actions: [string!]!) {
   viewer {
     accounts(filter: { accountTag: $accountTag }) {
@@ -78,6 +80,7 @@ function firstAccount(body: unknown): Record<string, unknown> | null {
 
 function sumRows(rows: unknown, alias: string, field: string): number {
   if (!isUnknownArray(rows)) throw new Error("cloudflare graphql: " + alias + " is not an array");
+  if (rows.length >= GROUP_LIMIT) throw new Error("cloudflare graphql: " + alias + " hit group limit");
   let total = 0;
   for (const row of rows) {
     if (!isRecord(row) || !isRecord(row.sum)) {
@@ -121,8 +124,12 @@ export async function fetchDailyUsage(day: string, apiToken: string): Promise<Da
         actions: R2_CLASS_A_ACTIONS,
       },
     }),
+    signal: AbortSignal.timeout(10_000),
   });
-  if (!res.ok) throw new Error("cloudflare graphql: HTTP " + String(res.status));
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error("cloudflare graphql: HTTP " + String(res.status) + ": " + text);
+  }
   const payload: unknown = await res.json();
   return parseUsageResponse(day, payload);
 }
