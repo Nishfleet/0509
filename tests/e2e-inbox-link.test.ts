@@ -163,6 +163,15 @@ describe("extractMagicLink on a named lane", () => {
     expect(extractMagicLink(PLAIN)).toBeNull();
   });
 
+  it("rejects a local link when the lane is a preview", () => {
+    vi.stubEnv("PLAYWRIGHT_TEST_BASE_URL", "https://mq-1-0509-preview.example.workers.dev");
+    expect(
+      extractMagicLink(
+        "Sign in to Five to Nine\n\nhttp://127.0.0.1:8791/api/auth/magic-link/verify?token=abc123&callbackURL=%2Fapp",
+      ),
+    ).toBeNull();
+  });
+
   // 0509#6092: the local lane's wrangler dev mails the --var BETTER_AUTH_URL
   // playwright.config.ts gives it, so the local link is on the pinned port.
   // PLAYWRIGHT_TEST_BASE_URL is stubbed empty so a caller's environment cannot

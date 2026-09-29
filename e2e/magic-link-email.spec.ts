@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 
 import { decodedBodies, readRawMessage, requireInboxToken, settleSignInWidget, waitForMagicLink } from "./inbox";
 
-// Production only: this spec reads the raw MIME message back from the inbox
+// Remote lanes only: this spec reads the raw MIME message back from the inbox
 // Worker, which has no local-lane counterpart — wrangler's simulated send_email
 // (0509#6092) writes text/html part files under .wrangler/tmp/email/, not a raw
 // message, so nothing here can run against the preview Worker. Skipping beats

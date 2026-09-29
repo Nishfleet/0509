@@ -231,7 +231,7 @@ export async function staleLinks(to: string, token: string | null): Promise<stri
   // Local lane: the disk sink keeps one file per message, and the files
   // already on disk for this address are the spent links to skip.
   if (isLocalLane()) return localLinks(to);
-  const stored = await readRawMessage(to, token ?? requireInboxToken()).then(
+  const stored = await readRawMessage(to, token || requireInboxToken()).then(
     (raw) => extractMagicLink(raw),
     (error: unknown) => {
       if (error instanceof InboxReadError && error.status === 404) return null;
@@ -266,11 +266,17 @@ export async function waitForMagicLink(to: string, token: string | null, exclude
   // response, so the file lands a beat after the form's sent state.
   if (isLocalLane()) {
     let fresh: string[] = [];
+    let pollError: unknown;
     try {
       await expect
         .poll(
           async () => {
-            fresh = (await localLinks(to)).filter((link) => !exclude.includes(link));
+            try {
+              fresh = (await localLinks(to)).filter((link) => !exclude.includes(link));
+            } catch (error) {
+              pollError = error;
+              throw error;
+            }
             return fresh.length > 0;
           },
           { timeout: POLL_LIMIT_MS, intervals: [POLL_INTERVAL_MS] },
@@ -280,6 +286,9 @@ export async function waitForMagicLink(to: string, token: string | null, exclude
       // The poll's own timeout text cannot tell a dead sink from an empty
       // one, and a poll-callback error would read as "no email" — the thrown
       // error names the sink's state and carries the poll failure as cause.
+      if (pollError !== undefined) {
+        throw new Error(`Reading the local email sink failed while waiting for ${to}: ${pollError}`, { cause });
+      }
       const sinkMissing = await stat(join(process.cwd(), LOCAL_EMAIL_SINK)).then(
         () => false,
         (error: unknown) => isNotFound(error),
@@ -296,7 +305,7 @@ export async function waitForMagicLink(to: string, token: string | null, exclude
     }
     return fresh[0];
   }
-  const resolved = token ?? requireInboxToken();
+  const resolved = token || requireInboxToken();
   const url = `${INBOX_URL}/message?to=${encodeURIComponent(to)}`;
   const headers = inboxHeaders(resolved);
   await probeInbox(url, headers);
