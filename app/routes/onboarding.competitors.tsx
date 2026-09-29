@@ -1,7 +1,7 @@
 import type { Route } from "./+types/onboarding.competitors";
 
-import { useEffect } from "react";
-import { Form, redirect, useRevalidator } from "react-router";
+import { useEffect, useState } from "react";
+import { Form, redirect, useNavigation, useRevalidator } from "react-router";
 
 import { AddCompetitor, CompetitorMaybes } from "../components/competitor-maybes";
 import { Monogram } from "../components/monogram";
@@ -12,11 +12,12 @@ import { readOnboardingCompetitors } from "../lib/data/entity.server";
 import { markCompetitorsReady, markWatchingStarted } from "../lib/data/onboarding_run.server";
 import { readWorkspaceIdForOwner } from "../lib/data/workspace.server";
 import { readDiscoveryState } from "../lib/discovery/start.server";
-import { discoveryNotice } from "../lib/discovery/state";
+import { discoveryNotice, type DiscoveryState } from "../lib/discovery/state";
 import { requireSession } from "../lib/require-session.server";
 import { ONBOARDING_COMPETITORS, workspaceLandingForRequest } from "../lib/workspace.server";
 
 const POLL_MS = 3000;
+const MAX_POLLS = 60;
 
 async function workspaceFor(request: Request): Promise<string> {
   const session = await requireSession(request);
@@ -49,21 +50,30 @@ export async function action({ request }: Route.ActionArgs) {
   return handleCompetitorIntent(workspaceId, form);
 }
 
-export default function Page({ loaderData, actionData }: Route.ComponentProps) {
-  const { on, maybes, discovery } = loaderData;
-  const searching = discovery === "looking";
-  const notice = discoveryNotice(discovery, on.length + maybes.length);
+function useDiscoveryPolling(discovery: DiscoveryState): DiscoveryState {
+  const [polls, setPolls] = useState(0);
+  const stalled = polls >= MAX_POLLS;
+  const searching = discovery === "looking" && !stalled;
   const revalidator = useRevalidator();
+  const navigation = useNavigation();
 
   useEffect(() => {
     if (!searching) return;
     const id = setInterval(() => {
-      if (revalidator.state === "idle") void revalidator.revalidate();
+      setPolls((count) => count + 1);
+      if (revalidator.state === "idle" && navigation.state === "idle") void revalidator.revalidate();
     }, POLL_MS);
     return () => {
       clearInterval(id);
     };
-  }, [revalidator, searching]);
+  }, [navigation, revalidator, searching]);
+
+  return stalled && discovery === "looking" ? "unavailable" : discovery;
+}
+
+export default function Page({ loaderData, actionData }: Route.ComponentProps) {
+  const { on, maybes, discovery } = loaderData;
+  const notice = discoveryNotice(useDiscoveryPolling(discovery), on.length + maybes.length);
 
   return (
     <OnboardingFrame step={3} heading="Who you're up against">

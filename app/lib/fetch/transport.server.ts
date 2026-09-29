@@ -1,8 +1,6 @@
-import { parse } from "tldts";
-
 import { browserContent } from "../site/browser-budget.server";
-
-const FETCH_TIMEOUT_MS = 8_000;
+import { BlockedRedirectError, cappedBody, fetchOutbound, targetRefusal } from "./outbound.server";
+import { CRAWLER_USER_AGENT } from "./robots.server";
 
 const MIN_EXTRACTED_CHARS = 200;
 
@@ -58,7 +56,7 @@ const CHALLENGE_MARKERS = [
 
 const FETCH_HEADERS = {
   accept: "text/html,application/xhtml+xml",
-  "user-agent": "FiveToNineBot/1.0 (+https://0509.io)",
+  "user-agent": CRAWLER_USER_AGENT,
 } as const;
 
 export async function countExtractedChars(html: string): Promise<number> {
@@ -155,26 +153,9 @@ class BodyTooLargeError extends Error {
 }
 
 async function cappedText(res: Response): Promise<string> {
-  const declared = Number(res.headers.get("content-length"));
-  if (Number.isFinite(declared) && declared > MAX_BODY_BYTES) {
-    await res.body?.cancel();
-    throw new BodyTooLargeError();
-  }
-  if (res.body === null) return "";
-  let seen = 0;
-  const capped = res.body.pipeThrough(
-    new TransformStream<Uint8Array, Uint8Array>({
-      transform(chunk, controller) {
-        seen += chunk.byteLength;
-        if (seen > MAX_BODY_BYTES) {
-          controller.error(new BodyTooLargeError());
-          return;
-        }
-        controller.enqueue(chunk);
-      },
-    }),
-  );
-  return new Response(capped).text();
+  const bytes = await cappedBody(res, MAX_BODY_BYTES);
+  if (bytes === null) throw new BodyTooLargeError();
+  return new TextDecoder().decode(bytes);
 }
 
 export async function readUrl(
@@ -190,20 +171,9 @@ export async function readUrl(
     console.error(JSON.stringify({ event: "fetch.url_parse_failed", error: String(error) }));
     return { ok: false, reason: "invalid-url", detail: `not a URL: ${url}` };
   }
-  if (target.protocol !== "http:" && target.protocol !== "https:") {
-    return {
-      ok: false,
-      reason: "invalid-url",
-      detail: `unsupported scheme: ${target.protocol}`,
-    };
-  }
-  const host = parse(target.hostname);
-  if (host.isIp === true || host.isIcann !== true) {
-    return {
-      ok: false,
-      reason: "invalid-url",
-      detail: `not a public internet host: ${target.hostname}`,
-    };
+  const refusal = targetRefusal(target);
+  if (refusal !== null) {
+    return { ok: false, reason: "invalid-url", detail: refusal };
   }
 
   if (options.startWith === "browser") {
@@ -221,15 +191,15 @@ export async function readUrl(
   let fetchStatus: number;
   let fetchHtml: string;
   try {
-    const res = await fetch(url, {
-      headers: FETCH_HEADERS,
-      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
-    });
+    const res = await fetchOutbound(url, { headers: FETCH_HEADERS });
     fetchStatus = res.status;
     fetchHtml = await cappedText(res);
   } catch (err) {
     if (err instanceof BodyTooLargeError) {
       return { ok: false, reason: "too-large", detail: err.message };
+    }
+    if (err instanceof BlockedRedirectError) {
+      return { ok: false, reason: "invalid-url", detail: err.message };
     }
     const detail = `fetch threw (${err instanceof Error ? err.message : String(err)})`;
     if (!(err instanceof Error && err.name === "TimeoutError")) {

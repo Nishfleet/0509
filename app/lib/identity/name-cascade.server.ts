@@ -1,5 +1,8 @@
 import { z } from "zod";
 
+import { fetchOutbound } from "../fetch/outbound.server";
+import { CRAWLER_USER_AGENT } from "../fetch/robots.server";
+
 export interface NameSources {
 	ldOrganizationName: string | null;
 	ogSiteName: string | null;
@@ -36,14 +39,10 @@ export async function resolveBrandName(
 	if (!term) return null;
 
 	try {
-		const res = await fetch(
+		const res = await fetchOutbound(
 			"https://www.wikidata.org/w/api.php?action=wbsearchentities&format=json&language=en&limit=1&search=" +
 				encodeURIComponent(term),
-			{
-				method: "GET",
-				headers: { "user-agent": "FiveToNineBot/1.0 (+https://0509.io)" },
-				signal: AbortSignal.timeout(8000),
-			},
+			{ headers: { "user-agent": CRAWLER_USER_AGENT }, schemes: ["https:"] },
 		);
 		if (!res.ok) {
 			console.error(JSON.stringify({ event: "identity.wikidata_failed", term, error: `status ${String(res.status)}` }));

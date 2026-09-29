@@ -120,10 +120,10 @@ const SUPPORT_ADDRESS_BAN = {
 // A catch whose only statement is `return null` swallows the error: a thrown
 // fetch, a bug, and a genuine "not found" all reach the caller as the same
 // null, so the failure leaves no trace. Match the block shape, not a promise
-// `.catch(() => null)` callback. The named clause in
-// app/lib/identity/name-cascade.ts is grandfathered by name (see the
-// exemption block) until the cascade grows a logged failure path. Source:
-// 0509#4462 (REBUILD-TRUST.md C1 Q1 — found in review of PR #4457).
+// `.catch(() => null)` callback. The clause in
+// app/lib/identity/name-cascade.server.ts logs via console.error before its
+// `return null`, so it holds two statements and does not match this shape.
+// Source: 0509#4462 (REBUILD-TRUST.md C1 Q1 — the D grade on PR #4457).
 const CATCH_RETURNS_NULL = {
   selector:
     "CatchClause > BlockStatement[body.length=1] > ReturnStatement[argument.value=null]",
@@ -159,12 +159,34 @@ const DOMAIN_HOSTNAME_BAN = {
     "URL-to-domain extraction is owned by the identity engine in app/lib/identity/ — `normaliseSubject` in app/lib/identity/normalise.ts. Reading `.hostname` anywhere else is a second domain normaliser that will drift from the engine's rules; the same shape on any URL argument, any binding name. Reuse the engine (or, for a non-identity host read, get the file added to the exemption block below). Source: 0509#4371.",
 };
 
+// The one outbound-fetch path. app/lib/fetch/outbound.server.ts owns the
+// public-host check (targetRefusal, URL + scheme policy), the redirect walk
+// that re-checks every hop, the 8 s deadline (fetchOutbound) and the capped
+// body reader (cappedBody); the crawler User-Agent is CRAWLER_USER_AGENT in
+// robots.server.ts. A bare fetch( outside it is a second transport: the logo
+// store's copy was the instance that raised this (its https-only rule and
+// byte cap had already drifted from readUrl's). Call sites that predate the
+// rule sit in the exemption blocks below, the same shape as
+// DOMAIN_HOSTNAME_BAN's grandfather list.
+const BARE_FETCH = {
+  selector: "CallExpression[callee.name='fetch']",
+  message:
+    "Outbound fetch is owned by app/lib/fetch/: fetchOutbound refuses non-public hosts and re-checks every redirect hop under an 8 s deadline, and cappedBody bounds the body. A bare fetch( anywhere else is a second transport that drifts from all three. Source: 0509#4951.",
+};
+
 // DESIGN.md: fonts are self-hosted. A Google Fonts <link> put LCP at 2021 ms against the
 // 1500 ms budget (CI run 35635617508, main 5166ebb81; fixed in fd1457288).
 const GOOGLE_FONTS_BAN = {
   selector: "Literal[value=/fonts\\.(googleapis|gstatic)\\.com/], TemplateElement[value.raw=/fonts\\.(googleapis|gstatic)\\.com/]",
   message:
     "Fonts are self-hosted (DESIGN.md). A Google Fonts link is render-blocking and broke the 1500 ms LCP budget once (fd1457288). Add the font file under public/ and an @font-face instead.",
+};
+
+const CRAWLER_USER_AGENT_BAN = {
+  selector:
+    "Literal[value=/FiveToNineBot\\/\\d|0509\\.io\\/\\d/], TemplateElement[value.raw=/FiveToNineBot\\/\\d|0509\\.io\\/\\d/]",
+  message:
+    "The crawler User-Agent is typed once, in app/lib/fetch/robots.server.ts as CRAWLER_USER_AGENT (built from ROBOTS_AGENT, the token robots.txt is matched against); every module that fetches today imports it. A second literal is a second identity to change and a fetch that silently keeps the old one, which is how the same identity came to be typed in more than one place. The version is matched as /\\d/ so a bump is this edit, not a new literal. Modules that fetch without a User-Agent at all are 0509#5960. Source: 0509#5883.",
 };
 
 const USER_DATA_NAME = "^(email|emails|userId|ip|input|raw|prompt|password|token|subject)$";
@@ -210,9 +232,11 @@ const NO_USER_DATA_IN_LOGS = [
 const BANNED_SYNTAX = [
   SUPPORT_ADDRESS_BAN,
   GOOGLE_FONTS_BAN,
+  CRAWLER_USER_AGENT_BAN,
   CATCH_RETURNS_NULL,
   XML_PARSER_CONSTRUCTOR,
   DOMAIN_HOSTNAME_BAN,
+  BARE_FETCH,
   {
     selector: "NewExpression[callee.name='RegExp'] > Literal.arguments, NewExpression[callee.name='RegExp'] > TemplateLiteral",
     message:
@@ -567,6 +591,58 @@ export default tseslint.config(
     },
   },
 
+  {
+    // BARE_FETCH grandfathers: these files called fetch before the rule
+    // existed (0509#4951). They keep every other ban — the array restates the
+    // shared list because a later matching block's no-restricted-syntax entry
+    // replaces the earlier one wholesale. New outbound fetch belongs in
+    // app/lib/fetch/, not on this list.
+    files: [
+      "app/lib/liveness-ping.server.ts",
+      "app/lib/discovery/generators/ai.server.ts",
+      "app/lib/discovery/resolve-domain.server.ts",
+      "app/lib/discovery/types.ts",
+      "app/lib/observability/cost-analytics.server.ts",
+      "app/components/share-button.tsx",
+      "workers/sources/mentions/types.ts",
+    ],
+    rules: {
+      "no-restricted-syntax": [
+        "error",
+        ...BANNED_SYNTAX.filter((rule) => rule !== BARE_FETCH),
+        ...NO_USER_DATA_IN_LOGS,
+        RAW_DML_WRITER,
+        FEED_STATE_LITERAL,
+      ],
+    },
+  },
+
+  {
+    // The same grandfather for files that also sit in the hostname exemption
+    // above (their .hostname reads stay allowed) — plus the whole fetch paved
+    // path itself, where the guard's host check and the wrapped call live by
+    // definition. app/lib/identity/** stays listed file by file here so a NEW
+    // fetch caller there (the second wrapper this rule exists to stop) still
+    // fires: only the two callers that predate the rule are exempted.
+    files: [
+      "app/lib/fetch/**",
+      "app/lib/identity/youtube-channel.server.ts",
+      "app/lib/hiring/discover-board.ts",
+      "workers/support-inbox.ts",
+    ],
+    rules: {
+      "no-restricted-syntax": [
+        "error",
+        ...BANNED_SYNTAX.filter(
+          (rule) => rule !== BARE_FETCH && rule !== DOMAIN_HOSTNAME_BAN,
+        ),
+        ...NO_USER_DATA_IN_LOGS,
+        RAW_DML_WRITER,
+        FEED_STATE_LITERAL,
+      ],
+    },
+  },
+
   // Lean code is a lint, not a review note: Nish 2026-09-28 16:47Z, "all work
   // anywhere by any agent should be done as a pro dev team would. lean and
   // mean", and "make this non negotiable as lints and hard blocks" (0509#5783).
@@ -822,6 +898,12 @@ export default tseslint.config(
             {
               from: { element: { type: "worker" } },
               allow: { to: { file: { categories: "server-module" } } },
+            },
+            {
+              from: { file: { path: "app/lib/delivery-address.server.ts" } },
+              allow: { to: { file: { path: "workers/delivery/send.ts" } } },
+              message:
+                "The delivery-address save is the second app-side sender after app/lib/auth.server.ts, and it goes through the one paved path (workers/delivery/send.ts) instead of calling env.EMAIL.send a second time. Only that one file reaches the worker; every other server leaf keeps the boundary. Source: 0509#5811.",
             },
           ],
         },

@@ -18,10 +18,22 @@ vi.mock("../../app/lib/auth.server", () => ({
 
 import { action } from "../../app/routes/login";
 
-function formRequest(fields: Record<string, string>, headers?: HeadersInit): Request {
+function formRequest(
+  fields: Record<string, string>,
+  headers?: HeadersInit,
+  url = "https://0509.io/login",
+): Request {
   const form = new FormData();
   for (const [key, value] of Object.entries(fields)) form.set(key, value);
-  return new Request("https://0509.io/login", { method: "POST", headers, body: form });
+  return new Request(url, { method: "POST", headers, body: form });
+}
+
+async function sentCallbackURL(): Promise<unknown> {
+  const call = handler.mock.calls[0];
+  if (call === undefined) throw new Error("sign-in handler was not called");
+  const forwarded = call[0];
+  if (!(forwarded instanceof Request)) throw new Error("sign-in handler was not given a request");
+  return (await forwarded.json()) as unknown;
 }
 
 describe("login magic-link action", () => {
@@ -50,6 +62,51 @@ describe("login magic-link action", () => {
     expect(forwarded.headers.get("x-captcha-response")).toBe("token-1");
     expect(forwarded.headers.get("origin")).toBe("https://0509.io");
     expect(await forwarded.json()).toEqual({ email: "person@0509.io", callbackURL: "/app" });
+  });
+
+  it("carries the hero subject into the link's return address", async () => {
+    await action({
+      request: formRequest({ email: "person@0509.io" }, undefined, "https://0509.io/login?subject=gymshark.com"),
+    });
+    expect(await sentCallbackURL()).toEqual({
+      email: "person@0509.io",
+      callbackURL: "/onboarding/identity?subject=gymshark.com",
+    });
+  });
+
+  it("keeps the return address inside the app when the subject is hostile", async () => {
+    await action({
+      request: formRequest(
+        { email: "person@0509.io" },
+        undefined,
+        "https://0509.io/login?subject=https%3A%2F%2Fevil.example",
+      ),
+    });
+    expect(await sentCallbackURL()).toEqual({
+      email: "person@0509.io",
+      callbackURL: "/onboarding/identity?subject=https%3A%2F%2Fevil.example",
+    });
+  });
+
+  it("lets an explicit next win over a hero subject", async () => {
+    await action({
+      request: formRequest(
+        { email: "person@0509.io" },
+        undefined,
+        "https://0509.io/login?next=/oauth/authorize%3Fclient_id%3Dx&subject=gymshark.com",
+      ),
+    });
+    expect(await sentCallbackURL()).toEqual({
+      email: "person@0509.io",
+      callbackURL: "/oauth/authorize?client_id=x",
+    });
+  });
+
+  it("treats a blank subject as no subject", async () => {
+    await action({
+      request: formRequest({ email: "person@0509.io" }, undefined, "https://0509.io/login?subject="),
+    });
+    expect(await sentCallbackURL()).toEqual({ email: "person@0509.io", callbackURL: "/app" });
   });
 
   it("forwards the client ip and does not invent a captcha header", async () => {

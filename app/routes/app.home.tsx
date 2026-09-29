@@ -26,27 +26,25 @@ export function meta() {
 
 export async function loader({ request }: Route.LoaderArgs) {
   const session = await requireSession(request);
-  const inputs = await readHomeStandingInputs(env.DB, session.user.id);
+  const [inputs, workspaceId] = await Promise.all([
+    readHomeStandingInputs(env.DB, session.user.id),
+    readWorkspaceIdForOwner(session.user.id),
+  ]);
   if (inputs === null) throw redirect("/onboarding");
-  const workspaceId = await readWorkspaceIdForOwner(session.user.id);
-  const sources = workspaceId === null ? [] : await readWorkspaceMentionSources(workspaceId);
-  const siteFill = workspaceId === null ? null : await readSelfSiteFill(workspaceId);
-  const howRanked = await readHowRanked(env.DB, inputs.payload);
-  const moves =
-    inputs.payload === null || workspaceId === null
-      ? []
-      : await readBiggestSiteChanges(workspaceId, inputs.payload.period_start);
-  const times = workspaceId === null ? null : await readOnboardingTimes(workspaceId);
-  const open = new URL(request.url).searchParams.get("open");
   const payload = inputs.payload;
+  const open = new URL(request.url).searchParams.get("open");
   const openId =
-    open !== null && payload !== null && inputs.entities.some((entity) => entity.id === open)
-      ? open
-      : null;
-  const evidence =
+    open !== null && payload !== null && inputs.entities.some((entity) => entity.id === open) ? open : null;
+  const [sources, siteFill, howRanked, moves, times, evidence] = await Promise.all([
+    workspaceId === null ? [] : readWorkspaceMentionSources(workspaceId),
+    workspaceId === null ? null : readSelfSiteFill(workspaceId),
+    readHowRanked(env.DB, payload),
+    payload === null || workspaceId === null ? [] : readBiggestSiteChanges(workspaceId, payload.period_start),
+    workspaceId === null ? null : readOnboardingTimes(workspaceId),
     openId !== null && payload !== null && workspaceId !== null
-      ? await readWeekEvidence({ workspaceId, entityId: openId, since: payload.period_start })
-      : null;
+      ? readWeekEvidence({ workspaceId, entityId: openId, since: payload.period_start })
+      : null,
+  ]);
   return {
     view: homeView({ ...inputs, moves, now: new Date() }),
     open: openId,

@@ -2,7 +2,7 @@ import type { CloudflareOptions } from "@sentry/cloudflare";
 
 type SentryEnv = Env & { SENTRY_DSN?: string };
 
-const UNSUBSCRIBE_PREFIX = "/u/";
+const TOKEN_PATH_PREFIXES = ["/u/", "/v/"] as const;
 const REDACTED = "[redacted]";
 
 export const sentryOptions = (env: SentryEnv): CloudflareOptions => ({
@@ -29,7 +29,9 @@ function scrubRequestUrl(url: string | undefined): string | undefined {
 }
 
 function scrubTokenPath(value: string): string {
-  const start = value.indexOf(UNSUBSCRIBE_PREFIX);
-  if (start === -1) return value;
-  return `${value.slice(0, start)}${UNSUBSCRIBE_PREFIX}${REDACTED}`;
+  for (const prefix of TOKEN_PATH_PREFIXES) {
+    const start = value.indexOf(prefix);
+    if (start !== -1) return `${value.slice(0, start)}${prefix}${REDACTED}`;
+  }
+  return value;
 }

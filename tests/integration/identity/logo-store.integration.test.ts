@@ -124,14 +124,29 @@ describe("storeLogo and readLogo", () => {
     expect(await logoKeys()).toEqual([]);
   });
 
-  it("returns null when a followed redirect lands on a host that is not public https", async () => {
-    const redirected = png();
-    Object.defineProperty(redirected, "url", { value: "https://127.0.0.1/logo.png", configurable: true });
-    vi.stubGlobal("fetch", vi.fn(async () => redirected));
+  it.each([
+    "https://127.0.0.1/logo.png",
+    "http://cdn.gymshark.com/logo.png",
+    "https://metadata.google.internal/logo.png",
+  ])("refuses a redirect to %s without fetching it", async (location) => {
+    const fetchMock = vi.fn(async () => new Response(null, { status: 302, headers: { location } }));
+    vi.stubGlobal("fetch", fetchMock);
 
     expect(await storeLogo("gymshark.com", "https://gymshark.com/logo.png")).toBeNull();
+    expect(fetchMock).toHaveBeenCalledOnce();
     expect(await readLogo("gymshark.com")).toBeNull();
     expect(await logoKeys()).toEqual([]);
+  });
+
+  it("follows a redirect to another public https host", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(new Response(null, { status: 301, headers: { location: "https://cdn.gymshark.com/logo.png" } }))
+      .mockResolvedValueOnce(png());
+    vi.stubGlobal("fetch", fetchMock);
+
+    expect(await storeLogo("gymshark.com", "https://gymshark.com/logo.png")).toEqual({ contentType: "image/png", bytes: PNG_BYTES });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
   it("returns null on a 404 and stores nothing", async () => {
