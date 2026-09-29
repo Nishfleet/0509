@@ -90,6 +90,15 @@ describe("parseUsageResponse", () => {
       /cloudflare graphql: missing error message/,
     );
   });
+
+  it("throws when an alias hits the group limit", () => {
+    const rows = Array.from({ length: 10000 }, () => ({ sum: { rowsWritten: 0 } }));
+    expect(() =>
+      parseUsageResponse("2026-09-22", {
+        data: { viewer: { accounts: [{ d1: rows, r2: [], browser: [] }] } },
+      }),
+    ).toThrow(/cloudflare graphql: d1 hit group limit/);
+  });
 });
 
 describe("fetchDailyUsage", () => {
@@ -127,5 +136,18 @@ describe("fetchDailyUsage", () => {
         actions: [...R2_CLASS_A_ACTIONS],
       },
     });
+  });
+
+  it("throws with the response body on a non-2xx reply", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() =>
+        Promise.resolve(new Response("Invalid access token", { status: 400 })),
+      ),
+    );
+
+    await expect(fetchDailyUsage("2026-09-22", "test-token")).rejects.toThrow(
+      /cloudflare graphql: HTTP 400: Invalid access token/,
+    );
   });
 });

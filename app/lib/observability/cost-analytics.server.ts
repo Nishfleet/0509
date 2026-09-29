@@ -31,13 +31,13 @@ const GROUP_LIMIT = 10000;
 export const USAGE_QUERY = `query ($accountTag: string!, $databaseId: string!, $bucket: string!, $date: Date!, $actions: [string!]!) {
   viewer {
     accounts(filter: { accountTag: $accountTag }) {
-      d1: d1AnalyticsAdaptiveGroups(limit: 10000, filter: { date: $date, databaseId: $databaseId }) {
+      d1: d1AnalyticsAdaptiveGroups(limit: ${String(GROUP_LIMIT)}, filter: { date: $date, databaseId: $databaseId }) {
         sum { rowsWritten }
       }
-      r2: r2OperationsAdaptiveGroups(limit: 10000, filter: { date: $date, bucketName: $bucket, actionType_in: $actions }) {
+      r2: r2OperationsAdaptiveGroups(limit: ${String(GROUP_LIMIT)}, filter: { date: $date, bucketName: $bucket, actionType_in: $actions }) {
         sum { requests }
       }
-      browser: browserRenderingBrowserTimeUsageAdaptiveGroups(limit: 10000, filter: { date: $date }) {
+      browser: browserRenderingBrowserTimeUsageAdaptiveGroups(limit: ${String(GROUP_LIMIT)}, filter: { date: $date }) {
         sum { totalSessionDurationMs }
       }
     }
