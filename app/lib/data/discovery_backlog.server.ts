@@ -24,7 +24,7 @@ const backlogRows = z.array(
 const evidenceSchema = z.object({
   sourceUrl: z.string(),
   excerpt: z.string(),
-  generator: z.enum(["news", "hn", "ads"] satisfies GeneratorKey[]),
+  generator: z.enum(["news", "hn", "ads", "ai"] satisfies GeneratorKey[]),
 });
 
 const evidenceEnvelopeSchema = z.object({ evidence: z.array(evidenceSchema) });

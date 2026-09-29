@@ -1,4 +1,4 @@
-export type GeneratorKey = "news" | "hn" | "ads";
+export type GeneratorKey = "news" | "hn" | "ads" | "ai";
 
 interface Evidence {
   sourceUrl: string;
@@ -15,6 +15,7 @@ interface Candidate {
 interface Subject {
   name: string;
   domain: string;
+  description?: string | null;
 }
 
 interface FetchedText {

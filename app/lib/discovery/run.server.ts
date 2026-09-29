@@ -7,6 +7,7 @@ import { takenDownAmong } from "../data/takedown.server";
 import type { NoulQuestion, NoulVerdict } from "../jev/client.server";
 import { askNoul, JevUnavailableError } from "../jev/client.server";
 import { evidenceLine } from "./evidence-line";
+import { aiGenerator } from "./generators/ai.server";
 import { hnGenerator } from "./generators/hn";
 import { newsGenerator } from "./generators/news";
 import { resolveDomain } from "./resolve-domain.server";
@@ -53,10 +54,11 @@ const IS_CREATOR_RIVAL: NoulQuestion = {
 const GENERATORS = [
   { name: "news", run: newsGenerator },
   { name: "hn", run: hnGenerator },
+  { name: "ai", run: aiGenerator },
 ] as const;
 
 async function settledCandidates(self: DiscoverySelf): Promise<Candidate[]> {
-  const subject = { name: self.name, domain: self.domain };
+  const subject = { name: self.name, domain: self.domain, description: self.description };
   const runs = await Promise.allSettled(GENERATORS.map((generator) => generator.run(subject)));
   return runs.flatMap((run, index) => {
     if (run.status === "fulfilled") return run.value;
