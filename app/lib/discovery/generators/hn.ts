@@ -44,15 +44,16 @@ function parseHits(body: string): Hit[] | null {
   return result.success ? result.data.hits : null;
 }
 
-function sentencesOf(hit: Hit): string[] {
+async function sentencesOf(hit: Hit): Promise<string[]> {
   const fields = [hit.title, hit.story_title, hit.story_text, hit.comment_text];
-  return fields.flatMap((field) =>
-    field === undefined || field === null
-      ? []
-      : htmlToText(field)
-          .split(SENTENCE_SPLIT)
-          .map((sentence) => sentence.trim())
-          .filter((sentence) => sentence.length > 0),
+  const texts = await Promise.all(
+    fields.map(async (field) => (field === undefined || field === null ? "" : htmlToText(field))),
+  );
+  return texts.flatMap((text) =>
+    text
+      .split(SENTENCE_SPLIT)
+      .map((sentence) => sentence.trim())
+      .filter((sentence) => sentence.length > 0),
   );
 }
 
@@ -67,11 +68,11 @@ function addEvidence(merged: Merge, name: string, evidence: Evidence): void {
   merged.set(key, { name: existing.name, evidence: [...existing.evidence, evidence] });
 }
 
-function collect(hits: readonly Hit[], brand: string): { merged: Merge; texts: number } {
+async function collect(hits: readonly Hit[], brand: string): Promise<{ merged: Merge; texts: number }> {
   const merged: Merge = new Map();
   let texts = 0;
   for (const hit of hits) {
-    const sentences = sentencesOf(hit);
+    const sentences = await sentencesOf(hit);
     if (sentences.length > 0) texts += 1;
     for (const sentence of sentences) {
       for (const name of coMentions(sentence, brand)) {
@@ -94,7 +95,7 @@ export const hnGenerator: Generator = async (subject: Subject, fetchText?: Fetch
   const hits = parseHits(page.body);
   if (hits === null) return [];
 
-  const { merged, texts } = collect(hits, subject.name);
+  const { merged, texts } = await collect(hits, subject.name);
   const candidates: Candidate[] = [...merged.values()].map((entry) => ({
     name: entry.name,
     evidence: entry.evidence,

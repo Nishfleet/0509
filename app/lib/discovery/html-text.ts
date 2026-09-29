@@ -1,7 +1,3 @@
-const BLOCK_BREAK = /<\s*(?:p|br)\b[^>]*>/gi;
-
-const TAG = /<[^>]*>/g;
-
 const ENTITY = /&(#x[0-9a-f]+|#\d+|[a-z]+);/gi;
 
 const NAMED_ENTITIES: Readonly<Record<string, string>> = {
@@ -26,6 +22,19 @@ function decodeEntity(match: string, body: string): string {
   return code > 0 && code <= 0x10ffff ? String.fromCodePoint(code) : match;
 }
 
-export function htmlToText(html: string): string {
-  return html.replace(BLOCK_BREAK, "\n").replace(TAG, "").replace(ENTITY, decodeEntity).trim();
+export async function htmlToText(html: string): Promise<string> {
+  const parts: string[] = [];
+  const rewriter = new HTMLRewriter()
+    .on("p, br", {
+      element() {
+        parts.push("\n");
+      },
+    })
+    .on("*", {
+      text(chunk) {
+        parts.push(chunk.text);
+      },
+    });
+  await rewriter.transform(new Response(`<div>${html}</div>`)).text();
+  return parts.join("").replace(ENTITY, decodeEntity).trim();
 }

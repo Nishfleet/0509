@@ -1,19 +1,12 @@
-import { readFileSync } from "node:fs";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
-
 import { getDomain } from "tldts";
 import { describe, expect, it } from "vitest";
 
-import { hnGenerator } from "../../../app/lib/discovery/generators/hn";
-import { evidenceLine, shortlist } from "../../../app/lib/discovery/shortlist";
-import type { Candidate, FetchedText, Subject } from "../../../app/lib/discovery/types";
+import HN_FIXTURE from "../../../fixtures/hn-gymshark.json?raw";
+import { hnGenerator } from "../../../../app/lib/discovery/generators/hn";
+import { evidenceLine, shortlist } from "../../../../app/lib/discovery/shortlist";
+import type { Candidate, FetchedText, Subject } from "../../../../app/lib/discovery/types";
 
 const SUBJECT: Subject = { name: "Gymshark", domain: "gymshark.com" };
-
-const FIXTURES_DIR = join(dirname(fileURLToPath(import.meta.url)), "../../fixtures");
-
-const HN_FIXTURE = readFileSync(join(FIXTURES_DIR, "hn-gymshark.json"), "utf8");
 
 function fetchTextWith(body: string): (url: string) => Promise<FetchedText> {
   return (url) => Promise.resolve({ ok: true, status: 200, url, contentType: null, body });
