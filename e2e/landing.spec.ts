@@ -1,6 +1,9 @@
 import { expect, test } from "@playwright/test";
 
-// The homepage, staged at /design/landing behind the staff gate until launch;
+import { expectFaceLoaded } from "./fonts";
+import { consoleFailures, watchConsole } from "./inbox";
+
+// The homepage, staged at /design/landing, publicly reachable until launch;
 // / keeps the static rebuild notice (Nish, 2026-09-24). What is asserted is the
 // contract: section order, one headline, the priced action and where it goes,
 // the structured data matching the visible page. Copy stays unpinned.
@@ -30,6 +33,98 @@ test("the landing renders its sections in order under one headline", async ({ pa
   expect(order).toEqual(["hero", "mark", "how-it-works", "what-we-watch", "agents", "price", "faq"]);
 });
 
+test("the landing route data and document carry no disabled source's internal notes", async ({ page, request }) => {
+  const response = await page.goto(PATH);
+  expect(response?.status()).toBe(200);
+
+  // Migration 0007 seeds `x.search` disabled with `disabled_reason` and
+  // `cheapest_route` in config_json; migration 0002 seeds the five parked
+  // `ads.*_parked` rows with their probe evidence. The loader must drop both
+  // classes before the route serializes anything (0509#5828). The `.data`
+  // payload is the route's own client-navigation serialization and is where
+  // the filter has to bite; app/root.tsx:34 omits <Scripts /> for the landing,
+  // so the document carries no loader data — its negatives below are a guard
+  // for the day hydration comes back, and the two positives are the evidence
+  // the route still has sources.
+  const data = await request.get(`${PATH}.data`);
+  expect(data.status()).toBe(200);
+  const payload = await data.text();
+  const document = await page.content();
+
+  expect(document).toContain("site.page");
+  expect(payload).toContain("site.page");
+  for (const body of [document, payload]) {
+    expect(body).not.toContain("x.search");
+    expect(body).not.toContain("cheapest_route");
+    expect(body).not.toContain("disabled_reason");
+    expect(body).not.toContain("ads.snap_parked");
+    expect(body).not.toContain("ad-transparency search surface");
+  }
+});
+
+test("how it works reads as three ruled steps in order, wide and narrow", async ({ page }, testInfo) => {
+  const watched = watchConsole(page);
+
+  await page.goto(PATH);
+
+  const section = page.locator("#how-it-works");
+  const steps = section.locator("ol > li");
+  await expect(steps).toHaveCount(3);
+  const titles = ["Paste your site or handle", "Meet who you’re up against", "Read one email on Monday"];
+  for (const [index, title] of titles.entries()) {
+    await expect(steps.nth(index).getByRole("heading", { level: 3, name: title })).toBeVisible();
+  }
+  expect(await consoleFailures(page, watched, testInfo), testInfo.project.name).toEqual([]);
+
+  if (testInfo.project.name === "desktop-1440") {
+    const rows = await steps.evaluateAll((items) =>
+      items.map((item) => {
+        const rect = item.getBoundingClientRect();
+        return { top: rect.top, bottom: rect.bottom };
+      }),
+    );
+    for (const [index, row] of rows.entries()) {
+      if (index === 0) continue;
+      const previous = rows.at(index - 1);
+      if (previous === undefined) throw new Error(`step ${index + 1} has no previous step`);
+      expect(row.top).toBeGreaterThanOrEqual(previous.bottom - 1);
+    }
+  }
+  if (testInfo.project.name === "phone-390") {
+    const overflow = await page.evaluate(
+      () => document.documentElement.scrollWidth > document.documentElement.clientWidth,
+    );
+    expect(overflow).toBe(false);
+  }
+
+  await testInfo.attach(`how-it-works-${testInfo.project.name}`, {
+    body: await section.screenshot(),
+    contentType: "image/png",
+  });
+});
+
+test("the agents section hands a visitor's agent the MCP address and the API docs", async ({ page }, testInfo) => {
+  const watched = watchConsole(page);
+
+  await page.goto(PATH);
+
+  const agents = page.locator("#agents");
+  await expect(agents.getByText("https://0509.io/mcp")).toBeVisible();
+  for (const name of ["Claude", "Cursor", "ChatGPT"]) {
+    await expect(agents.getByText(name, { exact: true })).toBeVisible();
+  }
+  await expect(agents.getByRole("link", { name: "Read the API docs" })).toHaveAttribute(
+    "href",
+    "/api/v1/openapi.json",
+  );
+  expect(await consoleFailures(page, watched, testInfo), testInfo.project.name).toEqual([]);
+
+  await testInfo.attach(`agents-${testInfo.project.name}`, {
+    body: await agents.screenshot(),
+    contentType: "image/png",
+  });
+});
+
 test("the landing's action names its price and leads to sign-in", async ({ page }) => {
   await page.goto(PATH);
   const hero = page.locator("#hero");
@@ -40,18 +135,16 @@ test("the landing's action names its price and leads to sign-in", async ({ page 
 });
 
 test("the hero's first viewport holds the outcome and the one priced input", async ({ page }, testInfo) => {
-  const consoleErrors: string[] = [];
+  const watched = watchConsole(page);
   const fullFace: string[] = [];
-  page.on("console", (message) => {
-    if (message.type() === "error") consoleErrors.push(message.text());
-  });
-  page.on("pageerror", (error) => consoleErrors.push(error.message));
   page.on("request", (request) => {
     if (request.url().includes("/fonts/")) fullFace.push(request.url());
   });
 
   await page.goto(PATH);
-  await page.waitForLoadState("networkidle");
+  await expectFaceLoaded(page, "Bricolage Grotesque", 800);
+  await expectFaceLoaded(page, "Instrument Sans", 400);
+  await expectFaceLoaded(page, "IBM Plex Mono", 400);
 
   const hero = page.locator("#hero");
   const pieces = [
@@ -60,7 +153,7 @@ test("the hero's first viewport holds the outcome and the one priced input", asy
     hero.getByText(/we name the rivals for you, so you do not have to know them/i),
     hero.getByRole("textbox", { name: "your website, or a handle" }),
     hero.getByRole("button", { name: /€\d+\/mo/ }),
-    hero.getByText("One input. Sixty seconds to your first standing."),
+    hero.getByText("One input. Sixty seconds to who’s gaining on you."),
   ];
   for (const piece of pieces) {
     await expect(piece).toBeVisible();
@@ -80,7 +173,7 @@ test("the hero's first viewport holds the outcome and the one priced input", asy
     }).length;
   });
   expect(filled).toBe(1);
-  expect(consoleErrors).toEqual([]);
+  expect(await consoleFailures(page, watched, testInfo), testInfo.project.name).toEqual([]);
 
   const headlineBox = await hero.getByRole("heading", { level: 1 }).boundingBox();
   const proofBox = await hero.locator("#hero-proof").boundingBox();
@@ -113,15 +206,9 @@ test("the hero's first viewport holds the outcome and the one priced input", asy
   expect(requested).toContain("instrument-sans-latin.woff2");
   expect(requested).toContain("ibm-plex-mono");
   expect(requested).not.toContain("bricolage-grotesque-latin");
-  const loaded = await page.evaluate(async () => {
-    await document.fonts.ready;
-    return {
-      display: document.fonts.check('800 16px "Bricolage Grotesque"'),
-      sans: document.fonts.check('400 16px "Instrument Sans"'),
-      mono: document.fonts.check('400 16px "IBM Plex Mono"'),
-    };
-  });
-  expect(loaded).toEqual({ display: true, sans: true, mono: true });
+  await expectFaceLoaded(page, "Bricolage Grotesque", 800);
+  await expectFaceLoaded(page, "Instrument Sans", 400);
+  await expectFaceLoaded(page, "IBM Plex Mono", 400);
   await expect(page.locator('link[rel="preload"][href="/fonts/bricolage-hero.woff2"]')).toHaveCount(1);
   await expect(page.locator('link[rel="modulepreload"]')).toHaveCount(0);
 
@@ -212,12 +299,18 @@ test("the ticker sits above the page and reserves its height", async ({ page }) 
 test("the ticker never scrolls the page sideways", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto(PATH);
-  await page.waitForLoadState("networkidle");
+  await expect(page.locator("#ticker")).toBeVisible();
+  await expectFaceLoaded(page, "Bricolage Grotesque", 800);
+  await expectFaceLoaded(page, "Instrument Sans", 400);
+  await expectFaceLoaded(page, "IBM Plex Mono", 400);
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
 
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto(PATH);
-  await page.waitForLoadState("networkidle");
+  await expect(page.locator("#ticker")).toBeVisible();
+  await expectFaceLoaded(page, "Bricolage Grotesque", 800);
+  await expectFaceLoaded(page, "Instrument Sans", 400);
+  await expectFaceLoaded(page, "IBM Plex Mono", 400);
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(1440);
 });
 
@@ -234,8 +327,9 @@ test("the ticker causes no layout shift", async ({ page }) => {
   });
 
   await page.goto(PATH);
-  await page.waitForLoadState("networkidle");
-  await page.waitForTimeout(1000);
+  await expectFaceLoaded(page, "Bricolage Grotesque", 800);
+  await expectFaceLoaded(page, "Instrument Sans", 400);
+  await expectFaceLoaded(page, "IBM Plex Mono", 400);
   expect(await page.evaluate(() => Reflect.get(window, "__cls"))).toBeLessThan(0.05);
 });
 

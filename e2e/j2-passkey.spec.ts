@@ -1,6 +1,20 @@
 import { expect, test } from "@playwright/test";
 
-import { requireInboxToken, signInWithMagicLink } from "./inbox";
+import { consoleFailures, deleteCreatedAccount, requireInboxToken, signInWithMagicLink, watchConsole } from "./inbox";
+
+let createdEmail = "";
+test.afterEach(async ({ page }, testInfo) => {
+  if (createdEmail === "") return;
+  testInfo.setTimeout(testInfo.timeout + 60_000);
+  // The delete failing is a test failure, not a reason to keep the address:
+  // clearing in finally means the next test in this worker cannot try to
+  // delete an account that is already gone.
+  try {
+    await deleteCreatedAccount(page, createdEmail);
+  } finally {
+    createdEmail = "";
+  }
+});
 
 // J2 from docs/REBUILD-DONE.md §A: register a passkey on first sign-in, sign
 // out, sign in with the passkey alone. The amended decision on 0509#3927
@@ -15,16 +29,14 @@ test.skip(
   "J2 proves the production mail path for its first sign-in; the local preview Worker can neither send nor receive email",
 );
 
-test("a passkey registered on first sign-in signs in on its own", async ({ page, context }) => {
+test("a passkey registered on first sign-in signs in on its own", async ({ page, context }, testInfo) => {
   const token = requireInboxToken();
   const email = `e2e+${crypto.randomUUID().replaceAll("-", "").slice(0, 12)}@0509.io`;
+  createdEmail = email;
 
   await signInWithMagicLink(page, email, token);
 
-  const errors: string[] = [];
-  page.on("console", (message) => {
-    if (message.type() === "error") errors.push(message.text());
-  });
+  const watched = watchConsole(page);
 
   const cdp = await context.newCDPSession(page);
   await cdp.send("WebAuthn.enable");
@@ -69,7 +81,7 @@ test("a passkey registered on first sign-in signs in on its own", async ({ page,
     expect((await sessionReady).status()).toBe(200);
     await expect(page).toHaveURL(/\/onboarding/);
     await expect(page.getByText(email)).toBeVisible();
-    expect(errors).toEqual([]);
+    expect(await consoleFailures(page, watched, testInfo), testInfo.project.name).toEqual([]);
     console.log(`passkey sign-in email=${email} sessionAt=${new Date().toISOString()}`);
   } finally {
     // A teardown rejection must not mask the ceremony's own failure.

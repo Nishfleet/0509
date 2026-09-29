@@ -255,6 +255,9 @@ describe("a ranked row expands in place to the week's evidence", () => {
     expect(html.match(/data-slot="row-evidence"/g)).toHaveLength(1);
     expect(html.match(/aria-expanded="true"/g)).toHaveLength(1);
     expect(html.match(/aria-expanded="false"/g)).toHaveLength(2);
+    expect(html).toContain("Kindred expanded");
+    expect(html).toContain("Own Brand collapsed");
+    expect(html).toContain("Casetta collapsed");
     expect(html).toContain("Site changes 2");
     expect(html).toContain("Mentions 1");
     expect(html).toContain("Ads 0");

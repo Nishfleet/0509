@@ -1,5 +1,7 @@
 import { expect, test } from "@playwright/test";
 
+import { consoleFailures, watchConsole } from "./inbox";
+
 // The /terms contract. Every assertion here is reachable from the /terms row in
 // .agents/skills/verify/feature-map.md.
 //
@@ -79,17 +81,13 @@ test("the terms page does not scroll horizontally", async ({ page }) => {
   expect(overflow).toBe(false);
 });
 
-test("the terms page reaches first paint with no console errors", async ({ page }) => {
-  const errors: string[] = [];
-  page.on("console", (message) => {
-    if (message.type() === "error") errors.push(message.text());
-  });
-  page.on("pageerror", (error) => errors.push(error.message));
+test("the terms page reaches first paint with no console errors", async ({ page }, testInfo) => {
+  const watched = watchConsole(page);
 
   await page.goto("/terms");
-  await page.waitForLoadState("networkidle");
+  await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
 
-  expect(errors).toEqual([]);
+  expect(await consoleFailures(page, watched, testInfo), testInfo.project.name).toEqual([]);
 });
 
 test("the terms page serves one ld+json graph naming the organization and breadcrumbs", async ({

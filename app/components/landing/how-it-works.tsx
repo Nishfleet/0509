@@ -18,12 +18,19 @@ const STEPS = [
 export function HowItWorks() {
   return (
     <Section id="how-it-works" kicker="Three steps, no chores" title="How it works">
-      <ol className="grid gap-10 md:grid-cols-3 md:gap-8">
+      <ol className="border-line border-t">
         {STEPS.map((step, index) => (
-          <li key={step.title} className="border-ink min-w-0 border-t-[1.5px] pt-5">
-            <span className="font-mono text-meta text-ink-soft">{String(index + 1).padStart(2, "0")}</span>
-            <h3 className="font-display text-title mt-3 font-extrabold uppercase">{step.title}</h3>
-            <p className="text-ink-soft mt-3 leading-[1.6]">{step.body}</p>
+          <li
+            key={step.title}
+            className="border-line grid grid-cols-[52px_minmax(0,1fr)] items-start gap-3.5 border-b py-5.5 sm:grid-cols-[74px_minmax(0,1fr)] sm:gap-4.5"
+          >
+            <span className="font-display text-[1.6rem] leading-none font-extrabold tracking-[-0.04em] text-ink-faint sm:text-[2.1rem]">
+              {String(index + 1).padStart(2, "0")}
+            </span>
+            <div className="min-w-0">
+              <h3 className="font-display text-title font-extrabold uppercase">{step.title}</h3>
+              <p className="text-ink-soft mt-2 max-w-[60ch] leading-[1.6]">{step.body}</p>
+            </div>
           </li>
         ))}
       </ol>

@@ -2,7 +2,7 @@ import { env } from "cloudflare:test";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { Subject } from "../../app/lib/identity/normalise";
-import { REFUSAL, UNAVAILABLE, screenOnboardingSubject } from "../../app/lib/onboarding-screen.server";
+import { REFUSAL, screenOnboardingSubject } from "../../app/lib/onboarding-screen.server";
 
 const NOW = "2026-09-24T06:00:00.000Z";
 
@@ -28,7 +28,7 @@ function domainSubject(registrable: string): Subject {
 }
 
 function stubRun(p: number) {
-  const run = vi.fn(() => Promise.resolve({ answers: { public_subject: { type: "boolean", probability: p } } }));
+  const run = vi.fn(() => Promise.resolve({ answers: { public_subject: { type: "noul", noul: p } } }));
   Reflect.set(env, "AI", { run });
   return run;
 }
@@ -268,7 +268,7 @@ describe("screenOnboardingSubject", () => {
     expect(await decisionCount(workspaceId, "public_subject:refused")).toBe(1);
   });
 
-  it("returns unavailable when Jev cannot be reached", async () => {
+  it("asks the user when Jev cannot be reached and no answer is recorded", async () => {
     const { userId, workspaceId } = await seedWorkspace();
     const run = vi.fn(() => Promise.reject(new Error("Jev unavailable")));
     Reflect.set(env, "AI", { run });
@@ -283,8 +283,78 @@ describe("screenOnboardingSubject", () => {
       now: NOW,
     });
 
-    expect(result).toEqual({ kind: "unavailable", message: UNAVAILABLE });
+    expect(result).toEqual({ kind: "ask", subject });
+    expect(await decisionCount(workspaceId, "public_subject:confirmed")).toBe(0);
     expect(await decisionCount(workspaceId, "public_subject:refused")).toBe(0);
+  });
+
+  it("logs the gateway error once, without the subject, when Jev cannot be reached", async () => {
+    const { userId, workspaceId } = await seedWorkspace();
+    Reflect.set(env, "AI", { run: vi.fn(() => Promise.reject(new Error("2021: Insufficient credits"))) });
+    const subject = `credits-${String(runs)}.example`;
+    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
+
+    try {
+      const result = await screenOnboardingSubject({
+        workspaceId,
+        userId,
+        subject: domainSubject(subject),
+        raw: subject,
+        answer: null,
+        now: NOW,
+      });
+
+      expect(result).toEqual({ kind: "ask", subject });
+      const lines = log.mock.calls
+        .map((call) => String(call[0]))
+        .filter((line) => line.includes("public_subject.jev_unavailable"));
+      expect(lines).toHaveLength(1);
+      const line = lines[0] ?? "";
+      expect((JSON.parse(line) as { error: string }).error).toContain("2021: Insufficient credits");
+      expect(line).not.toContain(subject);
+    } finally {
+      log.mockRestore();
+    }
+  });
+
+  it("records a business answer when Jev cannot be reached", async () => {
+    const { userId, workspaceId } = await seedWorkspace();
+    const run = vi.fn(() => Promise.reject(new Error("Jev unavailable")));
+    Reflect.set(env, "AI", { run });
+    const subject = `unavailable-business-${String(runs)}.example`;
+
+    const result = await screenOnboardingSubject({
+      workspaceId,
+      userId,
+      subject: domainSubject(subject),
+      raw: subject,
+      answer: "business",
+      now: NOW,
+    });
+
+    expect(result).toEqual({ kind: "proceed" });
+    expect(await decisionCount(workspaceId, "public_subject:confirmed")).toBe(1);
+    expect(await decisionCount(workspaceId, "public_subject:refused")).toBe(0);
+  });
+
+  it("records a person answer when Jev cannot be reached", async () => {
+    const { userId, workspaceId } = await seedWorkspace();
+    const run = vi.fn(() => Promise.reject(new Error("Jev unavailable")));
+    Reflect.set(env, "AI", { run });
+    const subject = `unavailable-person-${String(runs)}.example`;
+
+    const result = await screenOnboardingSubject({
+      workspaceId,
+      userId,
+      subject: domainSubject(subject),
+      raw: subject,
+      answer: "person",
+      now: NOW,
+    });
+
+    expect(result).toEqual({ kind: "refuse", message: REFUSAL });
+    expect(await decisionCount(workspaceId, "public_subject:refused")).toBe(1);
+    expect(await decisionCount(workspaceId, "public_subject:confirmed")).toBe(0);
   });
 
   it("refuses a login address in code, asks neither Jev nor the network, and stores no entity or watch", async () => {

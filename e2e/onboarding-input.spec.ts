@@ -1,6 +1,20 @@
 import { expect, test } from "@playwright/test";
 
-import { requireInboxToken, signInWithMagicLink } from "./inbox";
+import { consoleFailures, deleteCreatedAccount, requireInboxToken, signInWithMagicLink, watchConsole } from "./inbox";
+
+let createdEmail = "";
+test.afterEach(async ({ page }, testInfo) => {
+  if (createdEmail === "") return;
+  testInfo.setTimeout(testInfo.timeout + 60_000);
+  // The delete failing is a test failure, not a reason to keep the address:
+  // clearing in finally means the next test in this worker cannot try to
+  // delete an account that is already gone.
+  try {
+    await deleteCreatedAccount(page, createdEmail);
+  } finally {
+    createdEmail = "";
+  }
+});
 
 // Screen 1 of the onboarding flow (parent #3996, slice #4417): the mono step
 // bar and the one input, and the input is the only way into the card. Any
@@ -13,9 +27,10 @@ test.skip(
   "screen 1 needs a signed-in session; the preview lane cannot read the magic-link inbox",
 );
 
-test("the one input posts and redirects every non-empty value to the card", async ({ page }) => {
+test("the one input posts and redirects every non-empty value to the card", async ({ page }, testInfo) => {
   const token = requireInboxToken();
   const email = `e2e+${crypto.randomUUID().replaceAll("-", "").slice(0, 12)}@0509.io`;
+  createdEmail = email;
 
   await signInWithMagicLink(page, email, token);
 
@@ -24,10 +39,7 @@ test("the one input posts and redirects every non-empty value to the card", asyn
   for (const width of [1440, 390]) {
     await page.setViewportSize({ width, height: 900 });
     await page.goto("/onboarding");
-    const consoleErrors: string[] = [];
-    page.on("console", (message) => {
-      if (message.type() === "error") consoleErrors.push(message.text());
-    });
+    const watched = watchConsole(page);
 
     await expect(page.getByRole("navigation", { name: "Onboarding progress" })).toBeVisible();
     await expect(input).toBeFocused();
@@ -44,10 +56,11 @@ test("the one input posts and redirects every non-empty value to the card", asyn
     );
     await expect(input).toBeFocused();
 
-    // `/onboarding/identity` is a 404 until #3993 lands, so its noise would
-    // land in this array; the emptiness proof is taken before the redirects.
-    expect(consoleErrors).toEqual([]);
+    // The redirects' noise would land in this array; the emptiness proof is
+    // taken before them.
+    expect(await consoleFailures(page, watched, testInfo), testInfo.project.name).toEqual([]);
     page.removeAllListeners("console");
+    page.removeAllListeners("pageerror");
 
     for (const value of ["nike.com", "@nike", "qzxv wplk 9981"]) {
       await page.goto("/onboarding");

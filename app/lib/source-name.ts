@@ -32,3 +32,7 @@ export function sourceName(kind: string, platform: string): string {
   const brand = PLATFORM_NAMES[platform];
   return brand === undefined ? `Your ${noun} source` : `${brand} ${noun}`;
 }
+
+export function sourceKindNoun(kind: string): string {
+  return KIND_NOUNS[kind] ?? kind;
+}

@@ -22,7 +22,7 @@ jobs:
     name: deploy
     runs-on: ubuntu-latest
     # A job with an environment gets a GitHub Deployment and deployment_status
-    # events for free; ci.yml's e2e-production and lighthouse jobs key off that
+    # events for free; ci.yml's lighthouse job keys off that
     # event and read the url below as PLAYWRIGHT_TEST_BASE_URL. Without this
     # block those jobs never fire (no deployment was created since C4).
     environment:
@@ -31,6 +31,8 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 22
@@ -72,7 +74,7 @@ jobs:
         # deploy job — no bespoke deploy path.
         #
         # continue-on-error, because this job carries `environment: production`
-        # and its status gates ci.yml's e2e-production and lighthouse jobs. A
+        # and its status gates ci.yml's lighthouse job. A
         # failure here — the likeliest being the first-ever custom domain created
         # on the 0509.in zone — would otherwise skip the app's own production
         # verification, which is exactly the inverting this comment needs to keep
@@ -105,7 +107,7 @@ jobs:
         # never stand between a good app deploy and its verification.
         # continue-on-error for the same reason as the fixture-site step: this
         # job carries `environment: production` and its status gates ci.yml's
-        # e2e-production and lighthouse jobs. Its D1 table (`support_report`)
+        # lighthouse job. Its D1 table (`support_report`)
         # comes from the `Apply D1 migrations` step earlier in this job.
         continue-on-error: true
         run: npx wrangler deploy --config workers/support-inbox.wrangler.jsonc

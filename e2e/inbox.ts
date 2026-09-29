@@ -1,4 +1,4 @@
-import { expect, type Page } from "@playwright/test";
+import { expect, type Page, type TestInfo } from "@playwright/test";
 
 // The J1 mail path, per the amended decision on 0509#3927: Email Routing's
 // e2e@0509.io rule delivers e2e+<run-id>@0509.io (zone subaddressing on, RFC
@@ -71,6 +71,19 @@ export function decodedBodies(raw: string): string[] {
   return bodies;
 }
 
+// The inbox's non-200 answer, carrying the status so a caller can tell a
+// missing message (404) from a real failure (500). A caller that maps 404 to
+// "nothing stored" must rethrow the rest: swallowing a 500 would turn an inbox
+// failure into a stale-link timeout.
+export class InboxReadError extends Error {
+  readonly status: number;
+  constructor(status: number, to: string) {
+    super(`inbox answered HTTP ${status} for ${to}`);
+    this.name = "InboxReadError";
+    this.status = status;
+  }
+}
+
 // The whole stored message exactly as the inbox Worker holds it, headers
 // included. `waitForMagicLink` returns the link it polled for; a spec that
 // asserts the email's own content (its Message-ID, its send time, its HTML
@@ -81,7 +94,7 @@ export async function readRawMessage(to: string, token: string): Promise<string>
     headers: inboxHeaders(token),
   });
   if (response.status !== 200) {
-    throw new Error(`inbox answered HTTP ${response.status} for ${to}`);
+    throw new InboxReadError(response.status, to);
   }
   return response.text();
 }
@@ -93,6 +106,24 @@ export function extractMagicLink(rawMessage: string): string | null {
     if (match) return match[0].replaceAll("&amp;", "&");
   }
   return null;
+}
+
+// The link this recipient already has stored, for waitForMagicLink to skip: the
+// inbox keeps one message per recipient for an hour, so a fixed fixture address
+// still holds the previous run's spent link, and a poll that accepted it would
+// follow a token the app has already burned. At most one link ever comes back,
+// but waitForMagicLink takes an exclude array. Only a 404 (nothing stored) is an
+// empty list; every other answer is the inbox failing, and reading one as "no
+// message" would hand back the spent link as if arriving mail had been seen.
+export async function staleLinks(to: string, token: string): Promise<string[]> {
+  const stored = await readRawMessage(to, token).then(
+    (raw) => extractMagicLink(raw),
+    (error: unknown) => {
+      if (error instanceof InboxReadError && error.status === 404) return null;
+      throw error;
+    },
+  );
+  return stored === null ? [] : [stored];
 }
 
 // One probe before polling: expect.poll retries a thrown callback for the
@@ -156,27 +187,172 @@ export async function waitForMagicLink(to: string, token: string, exclude: strin
   );
 }
 
+export async function settleSignInWidget(page: Page): Promise<void> {
+  await expect(page.locator("[data-sitekey]")).toHaveCount(1);
+  await page.locator("#email").focus();
+  const field = page.locator('input[name="cf-turnstile-response"]');
+  // Production lane: the Access service token pre-clears the captcha server
+  // side, and managed-mode Turnstile correctly never mints a token for an
+  // automated browser (#5631). The regression guard that still holds is the
+  // widget rendering its response field at all — absent means the widget
+  // never mounted. The local lane has no pre-clearance, so there the field
+  // must carry the always-pass test token.
+  if (process.env.CF_ACCESS_CLIENT_ID) {
+    await expect(field).toHaveCount(1);
+    return;
+  }
+  await expect(field).toHaveValue(/\S/);
+}
+
+export async function turnstileToken(page: Page): Promise<string> {
+  await page.goto("/login");
+  await settleSignInWidget(page);
+  const token = (await page.locator('input[name="cf-turnstile-response"]').inputValue()).trim();
+  // Pre-cleared callers send the request without a token; an empty return is
+  // only a failure where the captcha is still enforced.
+  if (token.length === 0 && !process.env.CF_ACCESS_CLIENT_ID) throw new Error("Turnstile issued no token");
+  return token;
+}
+
+// One collected console error: the text and the url of the script that
+// logged it. watchConsole's array, the same-origin filter and every spec's
+// exclude predicate all state this one shape.
+export interface ConsoleEntry {
+  text: string;
+  url: string;
+}
+
+// The console-error gate's collector, shared by every spec that holds the
+// same-origin gate — j3-onboard-domain keeps its own collector (0509#5680
+// carve).
+// Console errors keep the url of the script that logged them so the gate can
+// hold only same-origin messages — the real Turnstile widget on /login logs
+// its NaN noise from challenges.cloudflare.com, cross-origin JS and not app
+// code (0509#5682). Pageerrors carry no location to scope by, so they are
+// always gated — a cross-origin script's uncaught exception still fails.
+export function watchConsole(page: Page): {
+  consoleErrors: ConsoleEntry[];
+  pageErrors: string[];
+} {
+  const consoleErrors: ConsoleEntry[] = [];
+  const pageErrors: string[] = [];
+  page.on("console", (message) => {
+    if (message.type() === "error") {
+      consoleErrors.push({ text: message.text(), url: message.location().url });
+    }
+  });
+  page.on("pageerror", (error) => pageErrors.push(error.message));
+  return { consoleErrors, pageErrors };
+}
+
+// Same-origin entries fail the test as "text @ url"; the excluded cross-origin
+// entries are attached to the report so a green run still shows what the gate
+// dropped. `exclude` drops a same-origin console entry a spec expects — the
+// 404-page specs' own-document line — at entry level, before the line is
+// composed. Pageerrors have no location to scope by and are never excludable.
+export async function consoleFailures(
+  page: Page,
+  watched: ReturnType<typeof watchConsole>,
+  testInfo: TestInfo,
+  exclude: (entry: ConsoleEntry) => boolean = () => false,
+): Promise<string[]> {
+  const pageOrigin = new URL(page.url()).origin;
+  // `!entry.url` is load-bearing: a console error with no location would make
+  // `new URL("")` throw inside the predicate.
+  const sameOrigin = (entry: ConsoleEntry) => !entry.url || new URL(entry.url).origin === pageOrigin;
+  const dropped = watched.consoleErrors.filter((entry) => !sameOrigin(entry));
+  if (dropped.length > 0) {
+    await testInfo.attach("cross-origin console errors (excluded from the gate)", {
+      body: dropped.map((entry) => `${entry.text} @ ${entry.url}`).join("\n"),
+      contentType: "text/plain",
+    });
+  }
+  return [
+    ...watched.consoleErrors
+      .filter((entry) => sameOrigin(entry) && !exclude(entry))
+      .map((entry) => `${entry.text} @ ${entry.url}`),
+    ...watched.pageErrors,
+  ];
+}
+
+// The 404 specs' shared exclusion: a document 404 surfaces as a console error
+// on the page's own URL — expected, and a 404 for any other URL still fails.
+// Pathname equality, not a suffix match: a different path ending the same way
+// still fails. `status of 404` is the phrase Chromium emits over HTTP/1.1 and
+// HTTP/2 alike — never the reason phrase, which HTTP/2 drops (0509#4244). The
+// empty-url guard keeps `new URL("")` from throwing on a location-less error.
+export function ownDocument404For(pathname: string): (entry: ConsoleEntry) => boolean {
+  return (entry) =>
+    /status of 404\b/.test(entry.text) &&
+    entry.url.length > 0 &&
+    new URL(entry.url).pathname === pathname;
+}
+
 // J1's core: submit the login form for a fresh e2e+ address, read the real
-// email out of the inbox Worker, follow the link, land signed in on /onboarding.
+// email out of the inbox Worker, follow the link, land signed in. The link's
+// callbackURL is /app (safeReturnTo's default in lib/agent/paths.ts), and
+// requireOnboarded in app-layout.tsx bounces a session whose landing is not
+// null to that landing, so a fresh user lands on /onboarding and a fully
+// onboarded returning one stays on /app. `landing` says which of the two this
+// sign-in expects and defaults to the fresh-address one J1 asserts; it has no
+// call site until the fixed-address specs (#4123, #4124, #4125) use it. Where
+// resumePoint sends an unfinished user is its own business
+// (app/lib/workspace.server.ts) — every branch it can return matches the
+// default.
+// staleLinks is read before the send and excluded from the wait, so a fixed
+// address cannot land on the previous run's spent token; a message that arrives
+// between that read and the send is outside the guarantee, which is the
+// "stored before this sign-in" the issue asked for. The read is one-shot by
+// design: it runs ahead of the click, so a failing inbox throws where the
+// browser is still on the form instead of spending the poll's 120s on an answer
+// that cannot change; the read has no timeout of its own, so a stalled answer
+// rides on the spec's own deadline. Playwright runs a file's tests in parallel
+// (fullyParallel
+// in playwright.config.ts) against one inbox slot per recipient, so two tests
+// sharing one fixed address need serial mode or an address each.
 // Timestamps are logged for the packet's proof line (send and session).
 export async function signInWithMagicLink(
   page: Page,
   email: string,
   token: string,
+  landing = /\/onboarding/,
 ): Promise<{ link: string; status: number }> {
   await page.goto("/login");
   await page.locator('input[name="email"]').fill(email);
+  await settleSignInWidget(page);
+  const stale = await staleLinks(email, token);
   const sentAt = new Date().toISOString();
   await page.locator('button[type="submit"]').click();
   // Sent state replaces the form; asserting the field is gone asserts the swap
   // without pinning copy (smoke.spec.ts's contract-not-copy convention).
   await expect(page.locator('input[name="email"]')).toHaveCount(0);
-  const link = await waitForMagicLink(email, token);
+  const link = await waitForMagicLink(email, token, stale);
   const linkReadAt = new Date().toISOString();
   const response = await page.goto(link);
-  await expect(page).toHaveURL(/\/onboarding/);
+  await expect(page).toHaveURL(landing);
   console.log(
     `magic-link sign-in email=${email} sentAt=${sentAt} linkReadAt=${linkReadAt} sessionAt=${new Date().toISOString()}`,
   );
   return { link, status: response?.status() ?? 0 };
+}
+
+// Every production sign-in above creates a real row in the user table, and
+// until 0509#5723 the suite never removed it. This is the product's own
+// delete path — the settings flow J14 proves end to end — called from each
+// spec's afterEach so a failed test still cleans up. deleteAccount removes
+// the user row synchronously before it redirects here, so the redirect is
+// the proof the row is gone.
+//
+// The /login short-circuit is the no-session case: better-auth inserts the
+// user row when the magic link is verified, inside signInWithMagicLink, so a
+// test that never got past that link has no session and no row. It is also
+// the shape a J2 failure mid-ceremony leaves behind — signed out, row still
+// there — and this helper cannot tell the two apart, so that leak is a named
+// gap (#5733), not a solved case.
+export async function deleteCreatedAccount(page: Page, email: string): Promise<void> {
+  await page.goto("/app/settings");
+  if (page.url().includes("/login")) return;
+  await page.getByLabel("Type " + email + " to confirm").fill(email);
+  await page.getByRole("button", { name: "Delete my account" }).click();
+  await page.waitForURL(/\/login\?deleted=/);
 }

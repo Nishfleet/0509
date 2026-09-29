@@ -4,16 +4,20 @@ import { describe, expect, it } from "vitest";
 import { createAuth } from "../../app/lib/auth.server";
 
 /**
- * P8.1's named risk: better-auth validates its schema at runtime, so a drift
- * between migrations/ and what the apiKey plugin writes is a 500 on first
- * request in production. This drives the plugin through createAuth against
- * real D1 with the real migrations applied — a drift fails here, in CI.
+ * P8.1's named risk: a drift between migrations/ and what the apiKey plugin
+ * writes surfaces in production as the first query touching the drifted
+ * table. better-auth's runtime schema check is off (0509#5721: it cost ~6.5M
+ * D1 rows a day), so this drives the plugin through createAuth against real
+ * D1 with the real migrations applied — a drift fails here, in CI, and the
+ * control arm in auth-schema-check.integration.test.ts still runs the check
+ * itself once per CI run.
  */
 const auth = createAuth({
   DB: env.DB,
   EMAIL: { send: async () => ({ ok: true }) },
   SIGN_IN_EMAIL_LIMIT: env.SIGN_IN_EMAIL_LIMIT,
   SIGN_IN_IP_LIMIT: env.SIGN_IN_IP_LIMIT,
+  TURNSTILE_SECRET_KEY: "1x0000000000000000000000000000000AA",
   BETTER_AUTH_SECRET: "integration-test-secret",
   BETTER_AUTH_URL: "http://localhost:8787",
 });

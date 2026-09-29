@@ -3,7 +3,7 @@ import type { Route } from "./+types/onboarding";
 import { Form, redirect } from "react-router";
 
 import { requireSession } from "../lib/require-session.server";
-import { workspaceLandingForRequest } from "../lib/workspace.server";
+import { ONBOARDING_COMPETITORS, workspaceLandingForRequest } from "../lib/workspace.server";
 import { OneInput } from "../components/one-input";
 import { AddPasskey } from "../components/passkey-button";
 import { OnboardingFrame } from "../components/onboarding-frame";
@@ -22,7 +22,7 @@ export function meta() {
 export async function loader({ request }: Route.LoaderArgs) {
   const session = await requireSession(request);
   const landing = await workspaceLandingForRequest(request, session.user.id);
-  if (!landing) throw redirect("/app");
+  if (landing === null || landing === ONBOARDING_COMPETITORS) throw redirect(landing ?? "/app");
   return { email: session.user.email };
 }
 
@@ -48,7 +48,7 @@ export async function action({ request }: Route.ActionArgs) {
       answer: typeof answer === "string" ? answer : null,
       now,
     });
-    if (result.kind === "refuse" || result.kind === "unavailable") return { message: result.message, confirm: null };
+    if (result.kind === "refuse") return { message: result.message, confirm: null };
     if (result.kind === "ask") return { message: null, confirm: { subject: result.subject, raw: rawSubject } };
     await startOnboardingRun({ workspaceId, userId: session.user.id, inputRaw: rawSubject, startedAt: now });
   }

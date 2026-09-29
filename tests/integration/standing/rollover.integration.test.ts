@@ -340,8 +340,8 @@ describe("the weekly rollover Workflow (0509#4004)", () => {
     const first = await seedTitledNotable("d4a", RIVAL_A, D4_TITLE_A, during);
     const second = await seedTitledNotable("d4b", RIVAL_B, D4_TITLE_B, new Date(during.getTime() + 1000));
     const run = vi.fn(async (_model: string, request: StubRequest) => {
-      const probability = request.state.item.title === D4_TITLE_A ? 0.8 : 0.6;
-      return { answers: { read_this_first: { type: "boolean", probability } } };
+      const noul = request.state.item.title === D4_TITLE_A ? 0.8 : 0.6;
+      return { answers: { read_this_first: { type: "noul", noul } } };
     });
     Reflect.set(env, "AI", { run });
 
@@ -428,7 +428,7 @@ describe("the weekly rollover Workflow (0509#4004)", () => {
 });
 
 describe("the nightly standing cron (0509#3978)", () => {
-  it("refreshes the open week unranked, schedules the next rollover, and catches up a missed one", async () => {
+  it("enqueues the next rollover and a catch-up without scoring workspaces inline", async () => {
     const schedule = scheduleOffsetFromToday(3);
     await seedWorkspace(schedule);
     const now = new Date();
@@ -446,13 +446,8 @@ describe("the nightly standing cron (0509#3978)", () => {
     await using introspector = await introspectWorkflow(env.STANDING_ROLLOVER);
     const result = await runNightlyStanding(env, now);
 
-    expect(result).toMatchObject({ failed: 0, catchUps: 1 });
-    expect((await standingFor(week.startsAt.toISOString())).map((row) => [row.entity_id, row.rank])).toEqual([
-      [RIVAL_A, null],
-      [RIVAL_B, null],
-      [RIVAL_C, null],
-      [SELF, null],
-    ]);
+    expect(result).toMatchObject({ catchUps: 1 });
+    expect(await standingFor(week.startsAt.toISOString())).toEqual([]);
 
     const scheduled = rolloverInstance(WS, week.closesAt, "scheduled");
     const catchUp = rolloverInstance(WS, week.startsAt, "catch-up");
@@ -472,6 +467,23 @@ describe("the nightly standing cron (0509#3978)", () => {
     ]);
 
     const again = await runNightlyStanding(env, now);
-    expect(again).toMatchObject({ failed: 0, catchUps: 0 });
+    expect(again).toMatchObject({ catchUps: 0 });
+  });
+
+  it("does not enqueue a workspace with no self entity", async () => {
+    const schedule = scheduleOffsetFromToday(3);
+    const createdAt = new Date(Date.now() - 60 * 24 * hour).toISOString();
+    await env.DB.batch([
+      env.DB.prepare(
+        "INSERT INTO user (id, name, email, emailVerified, createdAt, updatedAt) VALUES (?1, 'Rollover', ?2, 1, ?3, ?3)",
+      ).bind(USER, `${USER}@example.test`, createdAt),
+      env.DB.prepare(
+        "INSERT INTO workspace (id, name, owner_user_id, timezone, brief_weekday, brief_hour, created_at) VALUES (?1, 'Rollover', ?2, ?3, ?4, ?5, ?6)",
+      ).bind(WS, USER, schedule.timezone, schedule.weekday, schedule.hour, createdAt),
+    ]);
+    const now = new Date();
+    const scheduled = rolloverInstance(WS, openWeek(schedule, now).closesAt, "scheduled");
+    await runNightlyStanding(env, now);
+    await expect(env.STANDING_ROLLOVER.get(scheduled.id)).rejects.toThrow();
   });
 });

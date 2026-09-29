@@ -1,6 +1,14 @@
 import { expect, test } from "@playwright/test";
 
-import { requireInboxToken, signInWithMagicLink } from "./inbox";
+import { consoleFailures, deleteCreatedAccount, requireInboxToken, signInWithMagicLink, watchConsole } from "./inbox";
+
+let createdEmail = "";
+test.afterEach(async ({ page }, testInfo) => {
+  if (createdEmail === "") return;
+  testInfo.setTimeout(testInfo.timeout + 60_000);
+  await deleteCreatedAccount(page, createdEmail);
+  createdEmail = "";
+});
 
 test("the card screen sends a signed-out visitor to the login page", async ({ page }) => {
   await page.goto("/onboarding/identity?subject=gymshark.com");
@@ -13,15 +21,13 @@ test.describe("signed in", () => {
     "the card needs a signed-in session; the preview lane cannot read the magic-link inbox",
   );
 
-  test("one input becomes a card the user can fix and confirm", async ({ page }) => {
+  test("one input becomes a card the user can fix and confirm", async ({ page }, testInfo) => {
     const token = requireInboxToken();
     const email = `e2e+${crypto.randomUUID().replaceAll("-", "").slice(0, 12)}@0509.io`;
+    createdEmail = email;
     await signInWithMagicLink(page, email, token);
 
-    const consoleErrors: string[] = [];
-    page.on("console", (message) => {
-      if (message.type() === "error") consoleErrors.push(message.text());
-    });
+    const watched = watchConsole(page);
 
     await page.goto("/onboarding");
     const input = page.getByRole("textbox", { name: "your website, or a handle" });
@@ -49,16 +55,17 @@ test.describe("signed in", () => {
     await expect(page).toHaveURL(/\/onboarding\/competitors$/);
     await page.goto("/onboarding");
     await expect(page).toHaveURL(/\/app$/);
-    expect(consoleErrors).toEqual([]);
+    expect(await consoleFailures(page, watched, testInfo), testInfo.project.name).toEqual([]);
   });
 
   for (const { width, height } of [
     { width: 1440, height: 900 },
     { width: 390, height: 844 },
   ]) {
-    test(`the card fills within 30 s at ${width}`, async ({ page }) => {
+    test(`the card fills within 30 s at ${width}`, async ({ page }, testInfo) => {
       const token = requireInboxToken();
       const email = `e2e+${crypto.randomUUID().replaceAll("-", "").slice(0, 12)}@0509.io`;
+      createdEmail = email;
 
       await page.setViewportSize({ width, height });
       await signInWithMagicLink(page, email, token);
@@ -66,10 +73,7 @@ test.describe("signed in", () => {
       // Same listener the test above uses, and the same placement: the empty
       // list is a claim about the card screen, so it starts once the signed-in
       // session is established.
-      const consoleErrors: string[] = [];
-      page.on("console", (message) => {
-        if (message.type() === "error") consoleErrors.push(message.text());
-      });
+      const watched = watchConsole(page);
 
       await page.goto("/onboarding");
       const input = page.getByRole("textbox", { name: "your website, or a handle" });
@@ -106,7 +110,7 @@ test.describe("signed in", () => {
         () => document.documentElement.scrollWidth <= document.documentElement.clientWidth,
       );
       expect(noHorizontalScroll).toBe(true);
-      expect(consoleErrors).toEqual([]);
+      expect(await consoleFailures(page, watched, testInfo), testInfo.project.name).toEqual([]);
       await test.info().attach(`card-${width}`, {
         body: await page.screenshot(),
         contentType: "image/png",
