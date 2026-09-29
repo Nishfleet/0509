@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 // 0509#5738: on GitHub a SKIPPED required check counts as a pass (#4664 merged
-// with a required grade check SKIPPED). So no required job may carry a job-level
+// with a required check SKIPPED). So no required job may carry a job-level
 // `if:`; its steps decide instead and the job always reports. The names below
 // are the required_status_checks of ruleset 21391031 that are jobs in this repo.
 // A rename fails the first test instead of silently checking nothing.

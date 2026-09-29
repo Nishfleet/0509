@@ -427,7 +427,7 @@ messages, not deleted.
 `eslint-plugin-no-comments` (`no-comments/disallowComments`, allow list
 `eslint` and `global` only) runs on `app/**` and `workers/**` in the same block
 as the other two comment rules. On the day it landed it found 59 comments in
-`workers/` that the grader had flagged on #4176 and the merge had kept, which
+`workers/` that review had flagged on #4176 and the merge had kept, which
 is the exact hole B5 predicted. Their text is preserved in that PR's commit
 message; anything a future reader needs from it belongs in `docs/`, not in the
 file.
@@ -463,7 +463,7 @@ teaches one agent once; a rule teaches every agent forever.
 The `opus-review` job that asked all three questions (PR #4255, removed by #6091)
 and the shared grader that followed it are gone; the reviewer asks them. The fourth question (Nish 2026-09-22,
 a pasted `## Verification` section) was removed by #4523: proof at the prose
-rung failed 37 of 39 graded PRs. The running app is proven by `preview-assert`,
+rung failed 37 of 39 PRs. The running app is proven by `preview-assert`,
 a required check that builds the Worker and runs the e2e suite at the PR head.
 
 Reviewers also check the two things no test checks: that
