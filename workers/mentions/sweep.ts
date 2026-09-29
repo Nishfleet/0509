@@ -113,6 +113,20 @@ async function judge(
   return { about, matters };
 }
 
+async function judgeOrNull(
+  watch: WatchRow,
+  context: DiscoveryContext,
+  item: MentionItem,
+): Promise<{ about: NoulVerdict; matters: NoulVerdict | null } | null> {
+  try {
+    return await judge(watch, context, item);
+  } catch (error) {
+    if (!(error instanceof JevUnavailableError)) throw error;
+    console.error(JSON.stringify({ event: "mentions.jev_unavailable", message: error.message }));
+    return null;
+  }
+}
+
 async function statementsForWatch(input: {
   watch: WatchRow;
   context: DiscoveryContext;
@@ -145,16 +159,9 @@ async function statementsForWatch(input: {
   ];
   let stored = 0;
   let unjudged = 0;
-  for (const [index, { item }] of fresh.entries()) {
-    let verdicts: Awaited<ReturnType<typeof judge>>;
-    try {
-      verdicts = await judge(watch, context, item);
-    } catch (error) {
-      if (!(error instanceof JevUnavailableError)) throw error;
-      unjudged = fresh.length - index;
-      console.error(JSON.stringify({ event: "mentions.jev_unavailable", message: error.message }));
-      break;
-    }
+  let jevDown = false;
+  for (const { item } of fresh) {
+    const verdicts = jevDown ? null : await judgeOrNull(watch, context, item);
     const mapped = await toSignalRow(item, {
       workspaceId: watch.workspace_id,
       entityId: watch.entity_id,
@@ -165,7 +172,7 @@ async function statementsForWatch(input: {
     });
     const dedupKey = storedDedupKey(watch.entity_id, mapped.dedup_key);
     const signalId = `sig-${(await sha256Hex(`${watch.source_id}:${dedupKey}`)).slice(0, 32)}`;
-    const rejected = noulAction(verdicts.about.p) === "reject";
+    const rejected = verdicts !== null && noulAction(verdicts.about.p) === "reject";
     const verdictRow = (verdict: NoulVerdict) =>
       insertVerdict({
         workspaceId: watch.workspace_id,
@@ -196,23 +203,31 @@ async function statementsForWatch(input: {
         publishedAt: mapped.published_at,
         observedAt: mapped.observed_at,
         isNotAboutBrand: rejected,
+        state: verdicts === null ? "unjudged" : "judged",
       }),
-      verdictRow(verdicts.about),
     );
+    if (verdicts === null) {
+      jevDown = true;
+      unjudged += 1;
+      continue;
+    }
+    statements.push(verdictRow(verdicts.about));
     if (rejected) continue;
-    if (verdicts.matters !== null) statements.push(verdictRow(verdicts.matters));
-    if (verdicts.matters !== null && noulAction(verdicts.matters.p) === "act") {
-      statements.push(
-        insertSignalAlert(env.DB, {
-          workspaceId: watch.workspace_id,
-          entityId: watch.entity_id,
-          signalId,
-          kind: "mention",
-          title: `${watch.name}: ${item.title}`,
-          body: item.publisher ?? null,
-          createdAt: now,
-        }),
-      );
+    if (verdicts.matters !== null) {
+      statements.push(verdictRow(verdicts.matters));
+      if (noulAction(verdicts.matters.p) === "act") {
+        statements.push(
+          insertSignalAlert(env.DB, {
+            workspaceId: watch.workspace_id,
+            entityId: watch.entity_id,
+            signalId,
+            kind: "mention",
+            title: `${watch.name}: ${item.title}`,
+            body: item.publisher ?? null,
+            createdAt: now,
+          }),
+        );
+      }
     }
     stored += 1;
   }
