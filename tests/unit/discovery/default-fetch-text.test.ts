@@ -1,7 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { hnGenerator } from "../../../app/lib/discovery/generators/hn";
-import { newsGenerator } from "../../../app/lib/discovery/generators/news";
 import { defaultFetchText, type Subject } from "../../../app/lib/discovery/types";
 
 const SUBJECT: Subject = { name: "Gymshark", domain: "gymshark.com" };
@@ -108,11 +107,13 @@ describe("defaultFetchText", () => {
     expect(loggedEvents(errorSpy)).toEqual(["discovery.hn_fetch_failed"]);
   });
 
-  it("logs discovery.news_fetch_failed from the news generator's default fetch", async () => {
-    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
-    stubRejectingFetch();
+  it("gives the hn generator's default fetch a five second timeout", async () => {
+    const response = new Response("{}", { status: 200 });
+    vi.stubGlobal("fetch", vi.fn(async () => response));
+    const timeoutSpy = vi.spyOn(AbortSignal, "timeout");
 
-    await expect(newsGenerator(SUBJECT)).rejects.toThrow("news generator fetch failed with status 0");
-    expect(loggedEvents(errorSpy)).toEqual(["discovery.news_fetch_failed"]);
+    await hnGenerator(SUBJECT);
+
+    expect(timeoutSpy).toHaveBeenCalledWith(5_000);
   });
 });

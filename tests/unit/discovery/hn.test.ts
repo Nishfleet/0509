@@ -138,4 +138,78 @@ describe("hnGenerator", () => {
       JSON.stringify({ event: "discovery.generator_empty", generator: "hn", articles: 1 }),
     );
   });
+
+  it("reads rivals out of comment text, decoding HTML and entities", async () => {
+    const body = JSON.stringify({
+      hits: [
+        {
+          objectID: "5001",
+          title: null,
+          story_title: "Ask HN: Activewear brands?",
+          comment_text:
+            "Looking for alternatives to Gymshark like Alo, Vuori and Fabletics.<p>I&#x27;d avoid fast fashion &amp; the rest.",
+        },
+      ],
+    });
+
+    const candidates = await hnGenerator(SUBJECT, fetchTextWith(body));
+
+    expect(candidates.map((candidate) => candidate.name)).toEqual(["Alo", "Vuori", "Fabletics"]);
+    for (const candidate of candidates) {
+      expect(candidate.evidence).toEqual([
+        {
+          sourceUrl: "https://news.ycombinator.com/item?id=5001",
+          excerpt: "Looking for alternatives to Gymshark like Alo, Vuori and Fabletics.",
+          generator: "hn",
+        },
+      ]);
+    }
+  });
+
+  it("reads a versus line from story text and keeps one evidence item per hit", async () => {
+    const body = JSON.stringify({
+      hits: [
+        {
+          objectID: "5002",
+          title: null,
+          story_title: null,
+          story_text: "<p>Gymshark vs Alo. Gymshark or Alo, honestly?",
+          comment_text: null,
+        },
+      ],
+    });
+
+    const candidates = await hnGenerator(SUBJECT, fetchTextWith(body));
+
+    expect(candidates).toHaveLength(1);
+    expect(candidates[0]?.name).toBe("Alo");
+    expect(candidates[0]?.evidence).toHaveLength(1);
+  });
+
+  it("returns nothing for text that never names a rival beside the brand", async () => {
+    vi.spyOn(console, "log").mockImplementation(() => undefined);
+    const body = JSON.stringify({
+      hits: [
+        {
+          objectID: "5003",
+          title: null,
+          story_title: null,
+          comment_text: "My weather app shows the forecast. Nothing about apparel here.",
+        },
+        {
+          objectID: "5004",
+          title: null,
+          story_title: null,
+          comment_text: "I bought Gymshark leggings last year and they still fit.",
+        },
+      ],
+    });
+
+    expect(await hnGenerator(SUBJECT, fetchTextWith(body))).toEqual([]);
+  });
+
+  it("returns nothing when the body has the wrong shape", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    expect(await hnGenerator(SUBJECT, fetchTextWith(JSON.stringify({ hits: "none" })))).toEqual([]);
+  });
 });
