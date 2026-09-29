@@ -341,17 +341,40 @@ export async function signInWithMagicLink(
 // delete path — the settings flow J14 proves end to end — called from each
 // spec's afterEach so a failed test still cleans up. deleteAccount removes
 // the user row synchronously before it redirects here, so the redirect is
-// the proof the row is gone.
+// the proof the row is gone. The KEPT_JOURNEY_ACCOUNTS guard below runs
+// first: the four fixed journey accounts return untouched, matched as exact
+// addresses, never a pattern.
 //
 // The /login short-circuit is the no-session case: better-auth inserts the
 // user row when the magic link is verified, inside signInWithMagicLink, so a
-// test that never got past that link has no session and no row. It is also
-// the shape a J2 failure mid-ceremony leaves behind — signed out, row still
-// there — and this helper cannot tell the two apart, so that leak is a named
-// gap (#5733), not a solved case.
+// test that never got past that link has no session and no row; the skip
+// logs "deleteCreatedAccount: no session for <email>; nothing to delete"
+// before it returns. It is also the shape a J2 failure mid-ceremony leaves
+// behind — signed out, row still there — and this helper cannot tell the
+// two apart, so that leak is a named gap (#5733), not a solved case.
+
+// 0509#5688 (fleet-manager): the journey specs keep these four accounts on
+// purpose; the recurring teardown must never delete them. Match these exact
+// addresses, never a pattern. The one-time purge (0509#5730) kept the same
+// four; a later purge may still take them — once the kept-account journey
+// specs land (0509#4123, #4124, #4125, #4128) they create them again.
+const KEPT_JOURNEY_ACCOUNTS: readonly string[] = [
+  "e2e+j7@0509.io",
+  "e2e+j8-soft@0509.io",
+  "e2e+j9-mentions@0509.io",
+  "e2e+j12-rollovers@0509.io",
+];
+
 export async function deleteCreatedAccount(page: Page, email: string): Promise<void> {
+  if (KEPT_JOURNEY_ACCOUNTS.includes(email)) {
+    console.log(`deleteCreatedAccount: ${email} is a kept journey account; skipping`);
+    return;
+  }
   await page.goto("/app/settings");
-  if (page.url().includes("/login")) return;
+  if (page.url().includes("/login")) {
+    console.log(`deleteCreatedAccount: no session for ${email}; nothing to delete`);
+    return;
+  }
   await page.getByLabel("Type " + email + " to confirm").fill(email);
   await page.getByRole("button", { name: "Delete my account" }).click();
   await page.waitForURL(/\/login\?deleted=/);

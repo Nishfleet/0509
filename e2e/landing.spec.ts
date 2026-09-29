@@ -44,14 +44,13 @@ test("the landing route data and document carry no disabled source's internal no
   // payload is the route's own client-navigation serialization and is where
   // the filter has to bite; app/root.tsx:34 omits <Scripts /> for the landing,
   // so the document carries no loader data — its negatives below are a guard
-  // for the day hydration comes back, and the two positives are the evidence
+  // for the day hydration comes back, and the payload positive is the evidence
   // the route still has sources.
   const data = await request.get(`${PATH}.data`);
   expect(data.status()).toBe(200);
   const payload = await data.text();
   const document = await page.content();
 
-  expect(document).toContain("site.page");
   expect(payload).toContain("site.page");
   for (const body of [document, payload]) {
     expect(body).not.toContain("x.search");
@@ -59,6 +58,30 @@ test("the landing route data and document carry no disabled source's internal no
     expect(body).not.toContain("disabled_reason");
     expect(body).not.toContain("ads.snap_parked");
     expect(body).not.toContain("ad-transparency search surface");
+  }
+});
+
+test("the landing never leads with a full row of dimmed sources", async ({ page }) => {
+  const response = await page.goto(PATH);
+  expect(response?.status()).toBe(200);
+
+  // #5674 at the real HTTP surface: the What we watch section holds the pill
+  // row with at least one pill not degraded, or the all-degraded gate has
+  // replaced the row with the one rebuilding line and left no row behind. The
+  // local preview is always the gated state — no migration seeds a `snapshot`
+  // row, so every enabled source reads degraded — and the production lane
+  // carries whichever state its sources are in; both are correct here, an
+  // all-degraded pill row is not.
+  const watch = page.locator("#what-we-watch");
+  const pills = await watch.locator("[data-state]").count();
+  const degraded = await watch.locator('[data-state="degraded"]').count();
+  const row = await watch.locator("ul").count();
+  expect(pills > 0).toBe(row > 0);
+  expect(degraded === pills && pills > 0).toBe(false);
+  if (row === 0) {
+    // The gate leaves the one rebuilding line where the row was; a bare section
+    // with neither row nor line is the regression this guards.
+    expect(await watch.textContent()).toContain("We're rebuilding coverage of news mentions");
   }
 });
 
