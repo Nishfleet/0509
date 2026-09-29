@@ -147,6 +147,7 @@ describe("publishChange (0509#4435)", () => {
     await seedSnapshot("snap-publish-f-2", SELF_WATCH, SELF_PAGE, "snapshot/site/self-watch/snap-publish-f-2.txt");
     await seedSnapshot("snap-publish-g", SELF_WATCH, SELF_PAGE, "snapshot/site/self-watch/snap-publish-g.txt");
     await seedSnapshot("snap-publish-h", SELF_WATCH, SELF_PAGE, "snapshot/site/self-watch/snap-publish-h.txt");
+    await seedSnapshot("snap-publish-i", SELF_WATCH, SELF_PAGE, "snapshot/site/self-watch/snap-publish-i.txt");
   });
 
   it("(a) competitor noteworthy publish kind pricing → one change signal with aspect pricing and the four keys in payload_json", async () => {
@@ -156,7 +157,7 @@ describe("publishChange (0509#4435)", () => {
         {
           deferred: false,
           selfBreakage: null,
-          noteworthy: { p: 0.92, kind: "pricing", band: "publish", reason: "big plans moved" },
+          noteworthy: { p: 0.92, kind: "pricing", band: "publish" },
         },
         {
           workspaceId: COMP_WS,
@@ -170,13 +171,14 @@ describe("publishChange (0509#4435)", () => {
     );
     expect(result).toEqual({ signalId: expect.any(String), incidentId: null, alertId: null });
     const signals = await env.DB.prepare(
-      "SELECT id, kind, aspect, payload_json, dedup_key FROM signal",
-    ).all<{ id: string; kind: string; aspect: string; payload_json: string; dedup_key: string }>();
+      "SELECT id, kind, aspect, summary, payload_json, dedup_key FROM signal",
+    ).all<{ id: string; kind: string; aspect: string; summary: string | null; payload_json: string; dedup_key: string }>();
     expect(signals.results).toEqual([
       {
         id: result.signalId,
         kind: "change",
         aspect: "pricing",
+        summary: null,
         payload_json: expect.stringMatching(/"textKey":".+\/new\.txt"/),
         dedup_key: snapshotId,
       },
@@ -199,7 +201,7 @@ describe("publishChange (0509#4435)", () => {
         {
           deferred: false,
           selfBreakage: null,
-          noteworthy: { p: 0.4, kind: "copy", band: "uncertain", reason: "headline softened" },
+          noteworthy: { p: 0.4, kind: "copy", band: "uncertain" },
         },
         {
           workspaceId: COMP_WS,
@@ -226,7 +228,7 @@ describe("publishChange (0509#4435)", () => {
         {
           deferred: false,
           selfBreakage: null,
-          noteworthy: { p: 0.05, kind: "noise", band: "discard", reason: "css jitter" },
+          noteworthy: { p: 0.05, kind: "noise", band: "discard" },
         },
         {
           workspaceId: COMP_WS,
@@ -274,7 +276,7 @@ describe("publishChange (0509#4435)", () => {
       baseInput(
         {
           deferred: false,
-          selfBreakage: { p: 0.81, band: "alert", reason: "checkout button gone" },
+          selfBreakage: { p: 0.81, band: "alert" },
           noteworthy: null,
         },
         {
@@ -343,7 +345,7 @@ describe("publishChange (0509#4435)", () => {
       baseInput(
         {
           deferred: false,
-          selfBreakage: { p: 0.81, band: "alert", reason: "checkout button gone" },
+          selfBreakage: { p: 0.81, band: "alert" },
           noteworthy: null,
         },
         {
@@ -360,7 +362,7 @@ describe("publishChange (0509#4435)", () => {
       baseInput(
         {
           deferred: false,
-          selfBreakage: { p: 0.71, band: "alert", reason: "still down" },
+          selfBreakage: { p: 0.71, band: "alert" },
           noteworthy: null,
         },
         {
@@ -394,7 +396,7 @@ describe("publishChange (0509#4435)", () => {
       baseInput(
         {
           deferred: false,
-          selfBreakage: { p: 0.3, band: "check", reason: "nav shifted" },
+          selfBreakage: { p: 0.3, band: "check" },
           noteworthy: null,
         },
         {
@@ -429,7 +431,7 @@ describe("publishChange (0509#4435)", () => {
       baseInput(
         {
           deferred: false,
-          selfBreakage: { p: 0.81, band: "alert", reason: "checkout button gone" },
+          selfBreakage: { p: 0.81, band: "alert" },
           noteworthy: null,
         },
         {
@@ -451,5 +453,35 @@ describe("publishChange (0509#4435)", () => {
       .bind(alertId)
       .first<{ status: string }>();
     expect(acknowledged?.status).toBe("acknowledged");
+  });
+
+  it("(i) an alert publish leaves the signal summary and the alert body NULL", async () => {
+    const result = await publishChange(
+      baseInput(
+        {
+          deferred: false,
+          selfBreakage: { p: 0.81, band: "alert" },
+          noteworthy: null,
+        },
+        {
+          workspaceId: SELF_WS,
+          entityId: SELF_ENTITY,
+          watchId: SELF_WATCH,
+          pageId: SELF_PAGE,
+          url: SELF_URL,
+          snapshotId: "snap-publish-i",
+        },
+      ),
+    );
+    expect(result.signalId).toEqual(expect.any(String));
+    expect(result.alertId).toEqual(expect.any(String));
+    const signal = await env.DB.prepare("SELECT summary FROM signal WHERE id = ?")
+      .bind(result.signalId)
+      .first<{ summary: string | null }>();
+    expect(signal).toEqual({ summary: null });
+    const alert = await env.DB.prepare("SELECT body FROM alert WHERE id = ?")
+      .bind(result.alertId)
+      .first<{ body: string | null }>();
+    expect(alert).toEqual({ body: null });
   });
 });
