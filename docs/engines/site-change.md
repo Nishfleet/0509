@@ -29,7 +29,7 @@ Every page, every tick, goes through Browser Rendering's `/snapshot` quick actio
 
 ### Candidate B — cheap path first, browser on escalation
 
-Plain `fetch` + `HTMLRewriter` extraction → normalised visible text → hash → compare with the previous `snapshot.payload_hash`. Identical: one snapshot row, done. Changed: escalate to Browser Rendering for the screenshot pair and a re-extraction, word-diff with `diff`, then judge.
+Plain `fetch` + `HTMLRewriter` extraction → normalised visible text → hash → compare with the previous `snapshot.payload_hash`. Identical: the snapshot row and the paired `source` latest-facts update, done. Changed: escalate to Browser Rendering for the screenshot pair and a re-extraction, word-diff with `diff`, then judge.
 
 - The unchanged case — the common case — costs one sub-second fetch and one D1 row.
 - A page that cannot be read by `fetch` is marked `transport='browser'` on its `page` row and takes the browser path from then on.
@@ -128,15 +128,15 @@ A URL regex would have filed `/collections/all-products` as `other` and never sn
 | Select | `watch JOIN entity WHERE entity.state='on' AND source.kind='site'`, `page` (role, transport) | — |
 | Fetch | `page.transport` | — |
 | Extract + hash | — | — |
-| Unchanged | previous `snapshot.payload_hash` | **one `snapshot` row**: `payload_r2_key`, `payload_hash`, `item_count`, `fetched_at`. Nothing else. No screenshot, no Jev, no signal |
-| Changed | the previous snapshot's R2 body | R2: new text body + **screenshot pair**; one `snapshot` row |
+| Unchanged | previous `snapshot.payload_hash` | **one `snapshot` row** plus its paired `source` latest-facts update in the same `batch()`: `payload_r2_key`, `payload_hash`, `item_count`, `fetched_at`. Nothing else. No screenshot, no Jev, no signal |
+| Changed | the previous snapshot's R2 body | R2: new text body + **screenshot pair**; one `snapshot` row plus its paired `source` latest-facts update |
 | Diff | both bodies | the diff hunks stored in R2 alongside, referenced by key |
 | Judge | `entity`, `signal` history, `user_decision` | `jev_verdict` (D3s first for self, then D3) |
 | Publish | — | `signal`, `kind='change'` — the conditional CHECK requires `aspect`; the `change` view reads it |
 | Own-site break | — | `alert` immediately, plus `send_attempt` through the Email Service binding |
 | User says "I meant to do that" | — | `user_decision`, keyed to the signal — this is the `user_memory` every later judgment reads |
 
-**One snapshot row per watch per tick, always. Signal rows only for changes that survived judgment.** That is the schema's chosen shape and the reason this engine cannot reproduce the 2026-09-17 rows-written bill.
+**One snapshot row per watch per tick, always, paired in the same batch with one `source` latest-facts update. Signal rows only for changes that survived judgment.** That is the schema's chosen shape and the reason this engine cannot reproduce the 2026-09-17 rows-written bill.
 
 ## Workflow / Queue / cron layout
 
@@ -156,7 +156,7 @@ cron "0 * * * *"          self entities only, hourly — home + checkout/pricing
                              degraded, record the measured sweep time and queue depth for Nish
 ```
 
-The consumer, per message: fetch (or render) → extract → normalise → hash → compare. On a hash match it writes the snapshot row and stops. On a mismatch it escalates to a browser for the screenshot pair, word-diffs with `diff` **9.0.0**, calls D3s (self) or D3, and writes.
+The consumer, per message: fetch (or render) → extract → normalise → hash → compare. On a hash match it writes the snapshot row with the paired `source` latest-facts update and stops. On a mismatch it escalates to a browser for the screenshot pair, word-diffs with `diff` **9.0.0**, calls D3s (self) or D3, and writes.
 
 **Budgets, as numbers.** At most **4 browser escalations per brand per day** and **6 Jev judgments per brand per day**, counted in a **Durable Object** keyed by workspace-and-day — not KV, whose 1-write-per-second same-key limit and 10×-read write price make it the wrong store for a counter (`REBUILD-STACK.md` §4.5). Exceeding a budget marks the item `unreviewed` and defers it; it never silently skips.
 
@@ -185,7 +185,7 @@ Per 1,000 page checks, priced from `REBUILD-COST.md` (2026-09-21):
 |---|---|---|
 | Unchanged page (fetch + extract + hash) — the common case | 1 subrequest, ~1.1 s wall, negligible CPU | free |
 | Changed page (escalation: 1 render + 1 screenshot ≈ 8 browser-seconds) | browser-seconds | at a 10% change rate: 100 × 8 s = **0.22 browser-hours** → **$0.02** |
-| D1 | 1 snapshot row per check + 1 signal row per published change | 1,000 + ~50 = **1,050 rows written** — 0.002% of the 50M included |
+| D1 | 1 snapshot row per check + up to 1 `source` latest-facts row per check + 1 signal row per published change | 2,000 + ~50 = **2,050 rows written** — 0.004% of the 50M included |
 | R2 | 1 text PUT per check + 2 screenshot PUTs per change | 1,200 Class A (**$0.005**), ~1 GB-mo (**$0.015**) |
 | Queue | 3 ops per check | 3,000 — **$0.0012** |
 | Jev | ~100 calls (changes only) | $0 on the seat, **$0.0016** at the measured market rate |
@@ -194,7 +194,7 @@ Per 1,000 page checks, priced from `REBUILD-COST.md` (2026-09-21):
 
 - Checks: 100 × 4 × 30 = 12,000 competitor + 100 × 24 × 30 = 72,000 self = **84,000 checks**.
 - Browser, at a 10% change rate and the 4-per-brand-per-day cap: ~8,400 escalations × 8 s = **18.7 browser-hours** → 8.7 h beyond the allotment → **$0.78/month**.
-- D1: **84,000 snapshot rows** + ~4,200 signal rows = 88,200 rows written — **0.18% of the 50M included** → **$0.00**.
+- D1: 84,000 snapshot + 84,000 `source` latest-facts + ~4,200 signal = **172,200 rows written** — **0.34% of the 50M included** → **$0.00**.
 - R2: ~101,000 Class A ops → **$0.45**; ~20 GB under the 1-year retention guardrail → **$0.30/month**, falling to the marks-only figure after the lifecycle rule expires the raw bodies.
 - Queues: 252,000 ops → **$0.10**.
 - Jev: ~8,400 calls → **$0 on the seat**, $0.13 at market.
@@ -263,7 +263,7 @@ Per 1,000 page checks, priced from `REBUILD-COST.md` (2026-09-21):
 
 **FORBIDDEN.** `pixelmatch` — rejected above with the measurement behind it; screenshots are evidence, not the detector. `fast-diff` and `diff-match-patch` (character-level, no structured hunks — rejected in the stack doc). Base64ing a screenshot into a D1 row. Returning a diff body from a Workflow step instead of an R2 key (1 MiB step-output cap). Diffing before the hash gate has said something changed.
 
-**PROOF REQUIRED.** One real competitor change end to end: both snapshot row ids, the R2 keys for both texts and both screenshots, and the stored hunks, cited with timestamps. One unchanged tick shown producing **one snapshot row and nothing else** — no screenshot, no diff, no Jev call.
+**PROOF REQUIRED.** One real competitor change end to end: both snapshot row ids, the R2 keys for both texts and both screenshots, and the stored hunks, cited with timestamps. One unchanged tick shown producing **one snapshot row, the paired `source` latest-facts update, and nothing else** — no screenshot, no diff, no Jev call.
 
 **PUSH.** `wip/issue-3879-p3`.
 
