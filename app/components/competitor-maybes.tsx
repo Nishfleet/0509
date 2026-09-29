@@ -62,7 +62,7 @@ export function AddCompetitor({
   upgradePlanId,
 }: {
   message: string | null | undefined;
-  upgradePlanId: PlanId | null | undefined;
+  upgradePlanId?: PlanId | null | undefined;
 }): ReactElement {
   const navigation = useNavigation();
   const adding = navigation.state !== "idle" && navigation.formData?.get("intent") === "add";
