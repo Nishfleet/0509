@@ -20,7 +20,7 @@ export function PlanGate({ planId }: { planId: PlanId }) {
           {monthlyPrice(plan.monthlyPriceEur)}
         </span>
       </Button>
-      <p className="text-body-sm text-ink-soft mt-2">{TRIAL_TERMS}</p>
+      <p className="mt-2 text-body-sm text-ink-soft">{TRIAL_TERMS}</p>
       {fetcher.data?.message ? (
         <p role="status" className="mt-2 text-[0.95rem]">
           {fetcher.data.message}
