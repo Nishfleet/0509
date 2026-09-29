@@ -8,7 +8,7 @@ import type { NoulQuestion, NoulVerdict } from "../jev/client.server";
 import { askNoul, JevUnavailableError } from "../jev/client.server";
 import { evidenceLine } from "./evidence-line";
 import { aiGenerator } from "./generators/ai.server";
-import { hnGenerator } from "./generators/hn";
+import { hnGenerator } from "./generators/hn.server";
 import { resolveDomain } from "./resolve-domain.server";
 import { nameKey, partitionShortlist } from "./shortlist";
 import type { ShortlistEntry } from "./shortlist";

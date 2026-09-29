@@ -92,15 +92,28 @@ describe("aiGenerator", () => {
     expect(JSON.stringify(run.mock.calls[0])).toContain("Fitness apparel");
   });
 
-  it("drops a domain that redirects to an internal host, and does not follow redirects", async () => {
-    proposes({ competitors: [{ name: "Evil", domain: "evil.com" }, { name: "Fine", domain: "fine.com" }] });
+  it.each([
+    ["loopback", "http://127.0.0.1/admin"],
+    ["metadata IP", "http://169.254.169.254/latest/meta-data"],
+    ["an .internal host", "http://metadata.internal/latest"],
+  ])("drops a domain that redirects to %s and never fetches the target", async (_label, target) => {
+    proposes({ competitors: [{ name: "Evil", domain: "evil.com" }] });
+    const spy = answering({ "evil.com": new Response(null, { status: 302, headers: { location: target } }) });
+    await expect(aiGenerator(SUBJECT, home())).resolves.toEqual([]);
+    const fetched = spy.mock.calls.map((call) => new URL(String(call[0])).hostname);
+    expect(fetched).toEqual(["evil.com"]);
+    expect(spy.mock.calls.every((call) => (call[1] as RequestInit).redirect === "manual")).toBe(true);
+  });
+
+  it("follows a redirect to a public host through the shared path", async () => {
+    proposes({ competitors: [{ name: "Fine", domain: "fine.com" }] });
     const spy = answering({
-      "evil.com": new Response(null, { status: 302, headers: { location: "http://metadata.internal/latest" } }),
       "fine.com": new Response(null, { status: 301, headers: { location: "https://www.fine.com/" } }),
+      "www.fine.com": new Response(null, { status: 200 }),
     });
     const candidates = await aiGenerator(SUBJECT, home());
     expect(candidates.map((candidate) => candidate.name)).toEqual(["Fine"]);
-    expect(spy.mock.calls.every((call) => (call[1] as RequestInit).redirect === "manual")).toBe(true);
+    expect(spy.mock.calls.map((call) => (call[1] as RequestInit).method)).toEqual(["HEAD", "HEAD"]);
   });
 
   it("drops domains answering 404 or 5xx", async () => {

@@ -8,7 +8,7 @@ import { readEnabledSourceId, readEnabledSources } from "../data/source.server";
 import { insertWatches, readEntityWatches } from "../data/watch.server";
 import type { EntityWatch, NewWatch } from "../data/watch.server";
 import { readUrl } from "../fetch/transport.server";
-import { discoverBoard } from "../hiring/discover-board";
+import { discoverBoard } from "../hiring/discover-board.server";
 import { brandBudget, readCachedSiteProof, readSiteCard } from "./card.server";
 import { extractIdentity } from "./extract";
 import { normaliseSubject, type Subject } from "./normalise";

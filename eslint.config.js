@@ -171,7 +171,7 @@ const DOMAIN_HOSTNAME_BAN = {
 const BARE_FETCH = {
   selector: "CallExpression[callee.name='fetch']",
   message:
-    "Outbound fetch is owned by app/lib/fetch/: fetchOutbound refuses non-public hosts and re-checks every redirect hop under an 8 s deadline, and cappedBody bounds the body. A bare fetch( anywhere else is a second transport that drifts from all three. Source: 0509#4951.",
+    "Outbound fetch is owned by app/lib/fetch/: fetchOutbound refuses non-public hosts and re-checks every redirect hop under an 8 s deadline, and cappedBody bounds the body. A bare fetch( anywhere else in server code is a second transport that drifts from all three. Client code is exempt: a browser fetch goes to our own origin and SSRF is a server-side risk. Source: 0509#4951, 0509#6212.",
 };
 
 // DESIGN.md: fonts are self-hosted. A Google Fonts <link> put LCP at 2021 ms against the
@@ -576,7 +576,7 @@ export default tseslint.config(
     files: [
       "app/lib/identity/**/*.{ts,tsx}",
       "app/lib/fetch/transport.server.ts",
-      "app/lib/hiring/discover-board.ts",
+      "app/lib/hiring/discover-board.server.ts",
       "app/lib/site/own-site.server.ts",
       "workers/support-inbox.ts",
     ],
@@ -592,20 +592,14 @@ export default tseslint.config(
   },
 
   {
-    // BARE_FETCH grandfathers: these files called fetch before the rule
-    // existed (0509#4951). They keep every other ban — the array restates the
-    // shared list because a later matching block's no-restricted-syntax entry
-    // replaces the earlier one wholesale. New outbound fetch belongs in
-    // app/lib/fetch/, not on this list.
-    files: [
-      "app/lib/liveness-ping.server.ts",
-      "app/lib/discovery/generators/ai.server.ts",
-      "app/lib/discovery/resolve-domain.server.ts",
-      "app/lib/discovery/types.ts",
-      "app/lib/observability/cost-analytics.server.ts",
-      "app/components/share-button.tsx",
-      "workers/sources/mentions/types.ts",
-    ],
+    // BARE_FETCH is a server-side rule: a browser fetch goes to our own origin,
+    // and SSRF needs a server making the request. Server code is app/lib/**,
+    // app/routes/** (loaders and actions), *.server.ts and workers/**; the rest of
+    // app/ (components, root, entries) is client and exempt. The array restates
+    // the shared list because a later matching block's no-restricted-syntax entry
+    // replaces the earlier one wholesale. 0509#4951, 0509#6212.
+    ignores: ["app/lib/**", "app/routes/**", "app/**/*.server.ts", "app/components/footer.tsx"],
+    files: ["app/**/*.{ts,tsx}"],
     rules: {
       "no-restricted-syntax": [
         "error",
@@ -618,18 +612,9 @@ export default tseslint.config(
   },
 
   {
-    // The same grandfather for files that also sit in the hostname exemption
-    // above (their .hostname reads stay allowed) — plus the whole fetch paved
-    // path itself, where the guard's host check and the wrapped call live by
-    // definition. app/lib/identity/** stays listed file by file here so a NEW
-    // fetch caller there (the second wrapper this rule exists to stop) still
-    // fires: only the two callers that predate the rule are exempted.
-    files: [
-      "app/lib/fetch/**",
-      "app/lib/identity/youtube-channel.server.ts",
-      "app/lib/hiring/discover-board.ts",
-      "workers/support-inbox.ts",
-    ],
+    // The fetch paved path itself, where the guard's host check and the
+    // wrapped call live by definition; its .hostname reads stay allowed too.
+    files: ["app/lib/fetch/**"],
     rules: {
       "no-restricted-syntax": [
         "error",

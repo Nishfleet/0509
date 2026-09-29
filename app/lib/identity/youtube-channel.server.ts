@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import { BlockedRedirectError, fetchOutbound } from "../fetch/outbound.server";
 import {
 	channelIdFromHtml,
 	channelIdFromUrl,
@@ -28,9 +29,16 @@ class YoutubePageMiss extends Error {
 async function readYoutubeChannelPage(pageUrl: string): Promise<{ channelId: string }> {
 	let response: Response;
 	try {
-		response = await fetch(pageUrl, { signal: AbortSignal.timeout(8_000) });
+		response = await fetchOutbound(pageUrl, {
+			headers: {},
+			signal: AbortSignal.timeout(8_000),
+		});
 	} catch (error) {
-		if (error instanceof TypeError || (error instanceof Error && error.name === "TimeoutError")) {
+		if (
+			error instanceof BlockedRedirectError ||
+			error instanceof TypeError ||
+			(error instanceof Error && error.name === "TimeoutError")
+		) {
 			throw new YoutubePageMiss(error.message);
 		}
 		throw error;

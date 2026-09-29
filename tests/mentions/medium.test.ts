@@ -33,7 +33,7 @@ describe("mediumAdapter", () => {
 
 		expect(fetchMock).toHaveBeenCalledTimes(1);
 		expect(fetchMock.mock.calls[0]?.[0]).toBe("https://medium.com/feed/tag/gymshark");
-		expect(fetchMock.mock.calls[0]?.[1]).toEqual({ signal: expect.any(AbortSignal) });
+		expect(fetchMock.mock.calls[0]?.[1]).toMatchObject({ redirect: "manual", signal: expect.any(AbortSignal) });
 	});
 
 	it("returns one mention per <item>, every url is the guid and never the tracking link", async () => {

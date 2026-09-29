@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import FIXTURE from "../../../fixtures/hn-gymshark.json?raw";
-import { hnGenerator } from "../../../../app/lib/discovery/generators/hn";
+import { hnGenerator } from "../../../../app/lib/discovery/generators/hn.server";
 import type { FetchedText, Subject } from "../../../../app/lib/discovery/types";
 
 const SUBJECT: Subject = { name: "Gymshark", domain: "gymshark.com" };

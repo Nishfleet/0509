@@ -213,7 +213,7 @@
       "count": 1
     }
   },
-  "app/lib/hiring/discover-board.ts": {
+  "app/lib/hiring/discover-board.server.ts": {
     "complexity": {
       "count": 1
     },

@@ -3,6 +3,7 @@ import {
   deleteExpiredSupportReports,
   insertSupportReport,
 } from "../app/lib/data/support_report.server";
+import { fetchOutbound } from "../app/lib/fetch/outbound.server";
 import { sha256Hex } from "../app/lib/sha256";
 
 const FORWARD_TO = "nishant345@gmail.com";
@@ -74,7 +75,7 @@ export default {
       `paths: ${paths.length > 0 ? paths.join(", ") : "none"}`,
       `user agent: ${userAgent}`,
     ].join("\n");
-    const response = await fetch(ISSUES_URL, {
+    const response = await fetchOutbound(ISSUES_URL, {
       method: "POST",
       headers: {
         authorization: `Bearer ${token}`,

@@ -1,5 +1,14 @@
-import type { BoardPlatform } from "./discover-board";
 import { z } from "zod";
+
+export const BOARD_PLATFORMS = [
+  "greenhouse",
+  "lever",
+  "ashby",
+  "workable",
+  "smartrecruiters",
+] as const;
+
+export type BoardPlatform = (typeof BOARD_PLATFORMS)[number];
 
 export interface OpenRole {
   id: string;

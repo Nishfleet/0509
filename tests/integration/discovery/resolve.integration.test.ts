@@ -179,4 +179,59 @@ describe("resolveDomain", () => {
       expect(new Headers(call[1]?.headers).get("User-Agent")).toBe(CRAWLER_USER_AGENT);
     }
   });
+
+  it.each([
+    ["loopback", "http://127.0.0.1/admin", "loopbackbrand"],
+    ["the metadata IP", "http://169.254.169.254/latest/meta-data", "metadatabrand"],
+    ["an .internal host", "http://metadata.internal/latest", "internalbrand"],
+  ])("refuses a slug guess that redirects to %s and never fetches the target", async (_label, target, name) => {
+    const fetchMock = vi.fn((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("wbsearchentities")) return Promise.resolve(Response.json({ search: [] }));
+      return Promise.resolve(new Response(null, { status: 302, headers: { location: target } }));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+    await expect(resolveDomain(name)).resolves.toEqual({ domain: null, via: "unresolved" });
+
+    const hosts = fetchMock.mock.calls.map((call) => new URL(String(call[0])).hostname);
+    expect(hosts).toEqual(["www.wikidata.org", `${name}.com`]);
+    for (const call of fetchMock.mock.calls) {
+      expect(call[1]).toMatchObject({ redirect: "manual" });
+    }
+  });
+
+  it("refuses a Wikidata answer that redirects to an internal host", async () => {
+    const fetchMock = vi.fn((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (new URL(url).hostname === "www.wikidata.org") {
+        return Promise.resolve(new Response(null, { status: 302, headers: { location: "http://169.254.169.254/" } }));
+      }
+      return NOT_FOUND();
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+    await expect(resolveDomain("Wiki Redirect 0509")).resolves.toEqual({ domain: null, via: "unresolved" });
+
+    const hosts = fetchMock.mock.calls.map((call) => new URL(String(call[0])).hostname);
+    expect(hosts).not.toContain("169.254.169.254");
+  });
+
+  it("follows a slug guess that redirects to a public host", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url.includes("wbsearchentities")) return Promise.resolve(Response.json({ search: [] }));
+        if (new URL(url).hostname === "www.publicbrand0509.com") {
+          return Promise.resolve(new Response('<meta property="og:site_name" content="Publicbrand0509">', { status: 200, headers: { "content-type": "text/html" } }));
+        }
+        return Promise.resolve(new Response(null, { status: 301, headers: { location: "https://www.publicbrand0509.com/" } }));
+      }),
+    );
+
+    await expect(resolveDomain("Publicbrand0509")).resolves.toEqual({ domain: "publicbrand0509.com", via: "slug" });
+  });
 });

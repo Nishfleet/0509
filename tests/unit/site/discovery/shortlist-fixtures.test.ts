@@ -2,7 +2,7 @@ import { getDomain } from "tldts";
 import { describe, expect, it } from "vitest";
 
 import HN_FIXTURE from "../../../fixtures/hn-gymshark.json?raw";
-import { hnGenerator } from "../../../../app/lib/discovery/generators/hn";
+import { hnGenerator } from "../../../../app/lib/discovery/generators/hn.server";
 import { evidenceLine, shortlist } from "../../../../app/lib/discovery/shortlist";
 import type { Candidate, FetchedText, Subject } from "../../../../app/lib/discovery/types";
 

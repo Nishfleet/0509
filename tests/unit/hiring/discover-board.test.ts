@@ -1,13 +1,12 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  BOARD_PLATFORMS,
   discoverBoard,
   listingForBoard,
-  type BoardPlatform,
   type Probe,
   type ProbeResponse,
-} from "../../../app/lib/hiring/discover-board";
+} from "../../../app/lib/hiring/discover-board.server";
+import { BOARD_PLATFORMS, type BoardPlatform } from "../../../app/lib/hiring/listing";
 
 const KNOWN_PLATFORMS: readonly BoardPlatform[] = BOARD_PLATFORMS;
 

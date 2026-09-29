@@ -8,8 +8,8 @@ import type { readHiringTargets } from "../data/watch.server";
 import { deactivateWatch, markWatchPolled } from "../data/watch.server";
 import { fetchOutbound } from "../fetch/outbound.server";
 import type { SweepTick } from "../site/sweep.server";
-import type { BoardPlatform } from "./discover-board";
-import { listingForBoard } from "./discover-board";
+import { listingForBoard } from "./discover-board.server";
+import type { BoardPlatform } from "./listing";
 import type { OpenRole } from "./listing";
 import { nextListingUrl, parseListing } from "./listing";
 
