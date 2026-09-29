@@ -21,7 +21,7 @@ import worker from "../../workers/fixture-site";
  */
 const TOKEN = "integration-token";
 
-const state = () => env.STATE.getByName("fixture");
+const state = () => env.STATE.getByName("fixture.0509.in");
 
 const get = () =>
   worker.fetch(new Request("https://fixture.0509.in/"), env, createExecutionContext());
@@ -326,5 +326,41 @@ describe("bot wall", () => {
     expect(await state().get("bot-wall")).toBe("off");
     await flip("off");
     expect(readPricing(await (await get()).text())).not.toBeNull();
+  });
+});
+
+describe("per-hostname state", () => {
+  const J8 = "j8.fixture.0509.in";
+
+  const onJ8 = (path: string, method = "GET") =>
+    worker.fetch(
+      new Request(`https://${J8}${path}`, {
+        method,
+        headers: { authorization: `Bearer ${TOKEN}` },
+      }),
+      env,
+      createExecutionContext(),
+    );
+
+  beforeEach(async () => {
+    await state().put("break-mode", "off");
+    await state().put("bot-wall", "off");
+    await state().put("price-variant", "base");
+    await env.STATE.getByName(J8).put("break-mode", "off");
+    await env.STATE.getByName(J8).put("price-variant", "base");
+  });
+
+  it("keeps a hard break on j8.fixture.0509.in off fixture.0509.in", async () => {
+    expect((await onJ8("/__break?mode=hard", "POST")).status).toBe(200);
+    expect((await onJ8("/")).status).toBe(500);
+    const res = await get();
+    expect(res.status).toBe(200);
+    expect(await res.text()).toContain('data-mode="off"');
+  });
+
+  it("keeps a price flip on fixture.0509.in off j8.fixture.0509.in", async () => {
+    expect((await setPrice("raised")).status).toBe(200);
+    const html = await (await onJ8("/")).text();
+    expect(html).toContain('data-variant="base"');
   });
 });
