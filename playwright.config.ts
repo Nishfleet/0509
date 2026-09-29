@@ -17,10 +17,7 @@ import { defineConfig, devices } from "@playwright/test";
 // is pinned in the environment so Playwright worker processes, which reload this
 // file, see the same port the runner started the server on.
 process.env.PLAYWRIGHT_LOCAL_PORT ??= String(8000 + (process.pid % 1000));
-// Numeric so a hostile or padded env value cannot smuggle shell text into the
-// webServer command below; e2e/inbox.ts's laneOrigin() normalizes the same
-// Number(), so the link origin it matches and this port are one value.
-const localPort = Number(process.env.PLAYWRIGHT_LOCAL_PORT);
+const localPort = process.env.PLAYWRIGHT_LOCAL_PORT;
 const baseURL = process.env.PLAYWRIGHT_TEST_BASE_URL ?? `http://127.0.0.1:${localPort}`;
 export const accessStatePath = "e2e/.auth/access.json";
 const accessState = process.env.CF_ACCESS_CLIENT_ID ? { storageState: accessStatePath } : {};
