@@ -6,7 +6,11 @@ import { markWebhookEventProcessed, recordWebhookEvent } from "../data/dodo_webh
 import { readWorkspaceIdBySubscription, upsertSubscriptionPlan } from "../data/plan.server";
 import { planIdForProduct } from "./products.server";
 
-const envelope = z.object({ type: z.string(), timestamp: z.string() });
+const envelope = z.object({
+  type: z.string(),
+  timestamp: z.string(),
+  data: z.object({ subscription_id: z.string().optional() }).optional(),
+});
 
 const subscriptionData = z.object({
   subscription_id: z.string(),
@@ -54,26 +58,48 @@ async function applySubscription(body: unknown, type: string, timestamp: string)
   });
 }
 
+function readJson(body: string): unknown {
+  try {
+    return JSON.parse(body);
+  } catch (error) {
+    log("billing.webhook_not_json", { reason: String(error) });
+    return undefined;
+  }
+}
+
 export async function handleDodoWebhook(request: Request): Promise<Response> {
   const body = await request.text();
   const id = request.headers.get("webhook-id") ?? "";
   try {
-    new Webhook(env.DODO_WEBHOOK_SECRET).verify(body, {
-      "webhook-id": id,
-      "webhook-timestamp": request.headers.get("webhook-timestamp") ?? "",
-      "webhook-signature": request.headers.get("webhook-signature") ?? "",
-    });
+    new Webhook(env.DODO_WEBHOOK_SECRET).verify(
+      body,
+      {
+        "webhook-id": id,
+        "webhook-timestamp": request.headers.get("webhook-timestamp") ?? "",
+        "webhook-signature": request.headers.get("webhook-signature") ?? "",
+      },
+      { jsonParse: false },
+    );
   } catch (error) {
     log("billing.webhook_rejected", { reason: String(error) });
     return new Response(null, { status: 400 });
   }
-  const parsed = envelope.parse(JSON.parse(body));
-  const now = new Date().toISOString();
-  const state = await recordWebhookEvent({ id, eventType: parsed.type, payloadJson: body, receivedAt: now });
-  if (state === "processed") return new Response(null, OK);
-  if (parsed.type.startsWith("subscription.")) {
-    await applySubscription(JSON.parse(body), parsed.type, parsed.timestamp);
+  const json = readJson(body);
+  const event = envelope.safeParse(json);
+  if (!event.success) {
+    log("billing.webhook_ignored", { reason: "unexpected_payload" });
+    return new Response(null, OK);
   }
+  const { type, timestamp, data } = event.data;
+  const now = new Date().toISOString();
+  const state = await recordWebhookEvent({
+    id,
+    eventType: type,
+    payloadJson: JSON.stringify({ subscription_id: data?.subscription_id ?? null, timestamp }),
+    receivedAt: now,
+  });
+  if (state === "processed") return new Response(null, OK);
+  if (type.startsWith("subscription.")) await applySubscription(json, type, timestamp);
   await markWebhookEventProcessed(id, now);
   return new Response(null, OK);
 }
