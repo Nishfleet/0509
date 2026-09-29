@@ -63,6 +63,7 @@ const BRIEF: BriefPayload = {
   headline_is_new: false,
   why_line: "Nothing crossed the bar this week.",
   is_quiet_week: true,
+  is_unjudged: false,
   read_this_first: [],
   brands: [],
   own_site: { status: "ok", incidents: [] },

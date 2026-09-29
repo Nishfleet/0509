@@ -60,6 +60,7 @@ const PAYLOAD: BriefPayload = {
   headline_is_new: false,
   why_line: "Kindred is the mover: 3 new ads",
   is_quiet_week: false,
+  is_unjudged: false,
   read_this_first: [],
   brands: [
     brand("ent_self", "Own Brand", 2, null),
