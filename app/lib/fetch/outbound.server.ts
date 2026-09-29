@@ -8,6 +8,8 @@ export type OutboundScheme = "http:" | "https:";
 
 export interface OutboundInit {
   headers: HeadersInit;
+  method?: string;
+  body?: BodyInit;
   signal?: AbortSignal;
   schemes?: readonly OutboundScheme[];
 }
@@ -33,26 +35,60 @@ export function targetRefusal(
   return null;
 }
 
+interface OutboundRequest {
+  url: string;
+  method: string;
+  headers: HeadersInit;
+  body: BodyInit | undefined;
+}
+
+function isBodyDowngrade(status: number, method: string): boolean {
+  return status === 303 || ((status === 301 || status === 302) && method === "POST");
+}
+
+function afterRedirect(from: OutboundRequest, next: URL, status: number): OutboundRequest {
+  let headers = from.headers;
+  if (next.origin !== new URL(from.url).origin) {
+    const stripped = new Headers(headers);
+    stripped.delete("authorization");
+    headers = stripped;
+  }
+  if (isBodyDowngrade(status, from.method)) {
+    return { url: next.href, method: from.method === "HEAD" ? "HEAD" : "GET", headers, body: undefined };
+  }
+  return { ...from, url: next.href, headers };
+}
+
+function redirectTarget(location: string, base: string, schemes: readonly OutboundScheme[] | undefined): URL {
+  let next: URL;
+  try {
+    next = new URL(location, base);
+  } catch {
+    throw new BlockedRedirectError(`redirect to an unparseable location from ${base}`);
+  }
+  const refusal = targetRefusal(next, schemes);
+  if (refusal !== null) throw new BlockedRedirectError(`redirect refused: ${refusal}`);
+  return next;
+}
+
 export async function fetchOutbound(
   url: string,
   init: OutboundInit,
 ): Promise<Response> {
   const signal = init.signal ?? AbortSignal.timeout(FETCH_TIMEOUT_MS);
-  let current = url;
+  let request: OutboundRequest = { url, method: init.method ?? "GET", headers: init.headers, body: init.body };
   for (let hop = 0; hop <= MAX_REDIRECTS; hop += 1) {
-    const res = await fetch(current, { headers: init.headers, redirect: "manual", signal });
+    const res = await fetch(request.url, {
+      method: request.method,
+      headers: request.headers,
+      body: request.body,
+      redirect: "manual",
+      signal,
+    });
     const location = res.headers.get("location");
     if (res.status < 300 || res.status > 399 || location === null) return res;
     await res.body?.cancel();
-    let next: URL;
-    try {
-      next = new URL(location, current);
-    } catch {
-      throw new BlockedRedirectError(`redirect to an unparseable location from ${current}`);
-    }
-    const refusal = targetRefusal(next, init.schemes);
-    if (refusal !== null) throw new BlockedRedirectError(`redirect refused: ${refusal}`);
-    current = next.href;
+    request = afterRedirect(request, redirectTarget(location, request.url, init.schemes), res.status);
   }
   throw new BlockedRedirectError(`more than ${String(MAX_REDIRECTS)} redirects`);
 }

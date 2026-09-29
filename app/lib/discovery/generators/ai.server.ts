@@ -2,6 +2,8 @@ import { env } from "cloudflare:workers";
 import { parse } from "tldts";
 import { z } from "zod";
 
+import { fetchOutbound } from "../../fetch/outbound.server";
+import { CRAWLER_USER_AGENT } from "../../fetch/robots.server";
 import { GATEWAY_ID } from "../../jev/client.server";
 import {
   defaultFetchText,
@@ -130,22 +132,15 @@ function publicDomain(value: string): string | null {
   return host.domain;
 }
 
-function redirectsInternally(response: Response, from: string): boolean {
-  if (response.status < 300) return false;
-  const location = response.headers.get("location");
-  if (location === null) return true;
-  try {
-    return publicDomain(new URL(location, from).href) === null;
-  } catch {
-    return true;
-  }
-}
-
 async function isLive(domain: string): Promise<boolean> {
-  const url = `https://${domain}/`;
   try {
-    const response = await fetch(url, { method: "HEAD", redirect: "manual", signal: AbortSignal.timeout(DOMAIN_TIMEOUT_MS) });
-    return response.status < 400 && !redirectsInternally(response, url);
+    const response = await fetchOutbound(`https://${domain}/`, {
+      method: "HEAD",
+      headers: { "User-Agent": CRAWLER_USER_AGENT },
+      signal: AbortSignal.timeout(DOMAIN_TIMEOUT_MS),
+    });
+    await response.body?.cancel();
+    return response.status < 300;
   } catch {
     return false;
   }
