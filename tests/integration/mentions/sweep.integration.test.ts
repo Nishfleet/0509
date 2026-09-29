@@ -218,6 +218,12 @@ describe("nightly mentions sweep", () => {
       ["Zephyr winds expected this weekend", "unjudged", 0],
       ["Zephyrwear opens a London flagship", "judged", 0],
     ]);
+    const verdicts = await env.DB.prepare(
+      "SELECT COUNT(*) AS n FROM jev_verdict WHERE workspace_id = ?",
+    )
+      .bind(workspaceId)
+      .first<{ n: number }>();
+    expect(verdicts?.n).toBe(2);
     expect((await readSignalAlerts(env.DB, workspaceId)).map((alert) => alert.title)).toEqual([
       `${brand}: Zephyrwear opens a London flagship`,
     ]);
