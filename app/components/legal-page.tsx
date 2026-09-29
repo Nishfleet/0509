@@ -22,10 +22,7 @@ function Paragraphs({ items }: { items: readonly string[] | undefined }) {
 function Section({ section }: { section: LegalSection }) {
   return (
     <section aria-labelledby={section.id} className="mt-14 scroll-mt-6">
-      <h2
-        className="font-display text-[1.15rem] leading-[1.1] font-semibold tracking-[-0.02em]"
-        id={section.id}
-      >
+      <h2 className="font-display text-[1.15rem] leading-[1.1] font-semibold tracking-[-0.02em]" id={section.id}>
         {section.heading}
       </h2>
       <Paragraphs items={section.paragraphs} />

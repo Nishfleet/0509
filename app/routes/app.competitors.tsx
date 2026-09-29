@@ -45,9 +45,7 @@ function CompetitorItem({ competitor }: { competitor: CompetitorRow }) {
         <BrandChip name={competitor.name} href={`/app/competitors/${competitor.entityId}`} off={off} />
         <div className="min-w-0">
           <p className="truncate text-body-sm text-ink-soft">{competitor.domain}</p>
-          {competitor.reason === null ? null : (
-            <p className="mt-1 text-body-sm text-ink-soft">{competitor.reason}</p>
-          )}
+          {competitor.reason === null ? null : <p className="mt-1 text-body-sm text-ink-soft">{competitor.reason}</p>}
         </div>
       </div>
       <BrandSwitchField

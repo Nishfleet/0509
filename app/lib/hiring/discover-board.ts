@@ -1,12 +1,6 @@
 import { getDomain, getSubdomain } from "tldts";
 
-export const BOARD_PLATFORMS = [
-  "greenhouse",
-  "lever",
-  "ashby",
-  "workable",
-  "smartrecruiters",
-] as const;
+export const BOARD_PLATFORMS = ["greenhouse", "lever", "ashby", "workable", "smartrecruiters"] as const;
 
 export type BoardPlatform = (typeof BOARD_PLATFORMS)[number];
 
@@ -170,7 +164,12 @@ export function listingForBoard(boardUrl: string): BoardListing | null {
   return { platform: documented.platform, slug, listingUrl: documented.listingUrl(slug, host) };
 }
 
-function boardCandidate(host: DocumentedHost, matchedAlias: string, slug: string, via: "nav" | "careers-page"): BoardCandidate {
+function boardCandidate(
+  host: DocumentedHost,
+  matchedAlias: string,
+  slug: string,
+  via: "nav" | "careers-page",
+): BoardCandidate {
   return {
     via,
     platform: host.platform,

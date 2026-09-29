@@ -79,11 +79,7 @@ function b64u(input: string | Uint8Array): string {
 async function mintAccessJwt(key: CryptoKey, claims: Record<string, unknown>, kid = "test-kid"): Promise<string> {
   const head = b64u(JSON.stringify({ alg: "RS256", kid, typ: "JWT" }));
   const body = b64u(JSON.stringify(claims));
-  const signature = await crypto.subtle.sign(
-    "RSASSA-PKCS1-v1_5",
-    key,
-    new TextEncoder().encode(`${head}.${body}`),
-  );
+  const signature = await crypto.subtle.sign("RSASSA-PKCS1-v1_5", key, new TextEncoder().encode(`${head}.${body}`));
   return `${head}.${body}.${b64u(new Uint8Array(signature))}`;
 }
 
@@ -226,15 +222,19 @@ describe("login form action access pre-clearance", () => {
     stubAccessJwks(iss, jwk);
     return {
       iss,
-      assertion: await mintAccessJwt(pair.privateKey, {
-        type: "app",
-        iss,
-        aud: ACCESS_AUD,
-        sub: "",
-        common_name: "19148d8d2392dad85a35d1d02591c769.access",
-        iat: Math.floor(Date.now() / 1000),
-        exp: Math.floor(Date.now() / 1000) + 3600,
-      }, kid),
+      assertion: await mintAccessJwt(
+        pair.privateKey,
+        {
+          type: "app",
+          iss,
+          aud: ACCESS_AUD,
+          sub: "",
+          common_name: "19148d8d2392dad85a35d1d02591c769.access",
+          iat: Math.floor(Date.now() / 1000),
+          exp: Math.floor(Date.now() / 1000) + 3600,
+        },
+        kid,
+      ),
     };
   }
 
@@ -272,15 +272,19 @@ describe("login form action access pre-clearance", () => {
       true,
       ["sign", "verify"],
     );
-    const assertion = await mintAccessJwt(attacker.privateKey, {
-      type: "app",
-      iss,
-      aud: ACCESS_AUD,
-      sub: "",
-      common_name: "19148d8d2392dad85a35d1d02591c769.access",
-      iat: Math.floor(Date.now() / 1000),
-      exp: Math.floor(Date.now() / 1000) + 3600,
-    }, kid);
+    const assertion = await mintAccessJwt(
+      attacker.privateKey,
+      {
+        type: "app",
+        iss,
+        aud: ACCESS_AUD,
+        sub: "",
+        common_name: "19148d8d2392dad85a35d1d02591c769.access",
+        iat: Math.floor(Date.now() / 1000),
+        exp: Math.floor(Date.now() / 1000) + 3600,
+      },
+      kid,
+    );
 
     const sent: string[] = [];
     actionEnv(sent, iss);
@@ -300,15 +304,19 @@ describe("login form action access pre-clearance", () => {
     const kid = `kid-${crypto.randomUUID()}`;
     jwk.kid = kid;
     stubAccessJwks(iss, jwk);
-    const assertion = await mintAccessJwt(pair.privateKey, {
-      type: "app",
-      iss,
-      aud: ACCESS_AUD,
-      sub: "3f5a6c1e-0000-4a0b-9c1d-useruuid",
-      email: "person@0509.io",
-      iat: Math.floor(Date.now() / 1000),
-      exp: Math.floor(Date.now() / 1000) + 3600,
-    }, kid);
+    const assertion = await mintAccessJwt(
+      pair.privateKey,
+      {
+        type: "app",
+        iss,
+        aud: ACCESS_AUD,
+        sub: "3f5a6c1e-0000-4a0b-9c1d-useruuid",
+        email: "person@0509.io",
+        iat: Math.floor(Date.now() / 1000),
+        exp: Math.floor(Date.now() / 1000) + 3600,
+      },
+      kid,
+    );
 
     const sent: string[] = [];
     actionEnv(sent, iss);

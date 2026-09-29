@@ -21,9 +21,7 @@ export async function latestSiteSnapshot(
   pageId: string,
   before: string,
 ): Promise<SiteSnapshotRow | null> {
-  return env.DB.prepare(LATEST_SITE_SNAPSHOT)
-    .bind(watchId, pageId, before)
-    .first<SiteSnapshotRow>();
+  return env.DB.prepare(LATEST_SITE_SNAPSHOT).bind(watchId, pageId, before).first<SiteSnapshotRow>();
 }
 
 export async function insertSnapshot(row: {
@@ -34,9 +32,7 @@ export async function insertSnapshot(row: {
   r2Key: string | null;
   hash: string;
 }): Promise<void> {
-  await env.DB.prepare(INSERT_SNAPSHOT)
-    .bind(row.id, row.watchId, row.pageId, row.fetchedAt, row.r2Key, row.hash)
-    .run();
+  await env.DB.prepare(INSERT_SNAPSHOT).bind(row.id, row.watchId, row.pageId, row.fetchedAt, row.r2Key, row.hash).run();
 }
 
 const INSERT_WATCH_SNAPSHOT = `INSERT INTO snapshot
@@ -86,10 +82,7 @@ export interface BoardSnapshot {
   itemCount: number;
 }
 
-export async function latestBoardSnapshot(
-  watchId: string,
-  before: string,
-): Promise<BoardSnapshot | null> {
+export async function latestBoardSnapshot(watchId: string, before: string): Promise<BoardSnapshot | null> {
   const row = await env.DB.prepare(LATEST_BOARD_SNAPSHOT).bind(watchId, before).first();
   if (row === null) return null;
   const parsed = boardSnapshotRow.parse(row);

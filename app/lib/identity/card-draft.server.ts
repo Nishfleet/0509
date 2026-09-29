@@ -40,11 +40,7 @@ export async function saveDraftField(
   });
 }
 
-export async function clearDraftField(
-  workspaceId: string,
-  registrable: string,
-  field: DraftField,
-): Promise<void> {
+export async function clearDraftField(workspaceId: string, registrable: string, field: DraftField): Promise<void> {
   const current = await readDraft(workspaceId, registrable);
   const next: CardDraft = DRAFT_SCHEMA.parse(
     Object.fromEntries(Object.entries(current).filter(([key]) => key !== field)),

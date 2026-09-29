@@ -39,9 +39,7 @@ const seed = async () => {
   )
     .bind(WS, USER)
     .run();
-  await env.DB.prepare(
-    `INSERT INTO channel (id, key, is_enabled, config_json) VALUES (?, 'email', 1, '{}')`,
-  )
+  await env.DB.prepare(`INSERT INTO channel (id, key, is_enabled, config_json) VALUES (?, 'email', 1, '{}')`)
     .bind(CHANNEL)
     .run();
   await env.DB.prepare(
@@ -146,9 +144,7 @@ describe("one-click unsubscribe (0509#4358, 0509#4593, 0509#5761)", () => {
     // link in an already-delivered brief goes dead. The token then has to read
     // as invalid, or the route tells a reader they are unsubscribed and mail
     // keeps arriving.
-    await env.DB.prepare(`UPDATE send_target SET unsubscribe_token = NULL WHERE id = ?`)
-      .bind(TARGET_ID)
-      .run();
+    await env.DB.prepare(`UPDATE send_target SET unsubscribe_token = NULL WHERE id = ?`).bind(TARGET_ID).run();
 
     expect(await isUnsubscribeTokenKnown(TOKEN)).toBe(false);
     expect(await unsubscribe(TOKEN)).toBe("invalid_token");

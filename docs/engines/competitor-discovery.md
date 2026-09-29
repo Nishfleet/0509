@@ -50,18 +50,18 @@ Candidate B's ordering is a count of independent corroboration, which is stable,
 
 ## Live probes — one per generator, on Gymshark
 
-| # | Generator | Call | Result |
-|---|---|---|---|
-| 1 | Google News RSS, roundup harvest | `news.google.com/rss/search?q=%22Gymshark%22%20alternatives` | **200**, 51,692 B, **0.47 s**, **44 items**, at **12:12:51Z** |
-| 2 | Google News RSS, plain brand | `…?q=%22Gymshark%22` | **200**, 125,881 B, **0.56 s**, at **12:12:52Z** |
-| 3 | HN Algolia co-mentions | `hn.algolia.com/api/v1/search?query=gymshark&tags=(story,comment)` | **200**, 42,243 B, **0.39 s**, **nbHits 146**, at **12:12:53Z** |
-| 4 | Wikidata name → entity | `wbsearchentities?search=Gymshark` | **200**, → `Q56246099`, at **12:14:13Z** |
-| 5 | Wikidata entity → website | `wbgetentities?ids=Q56246099&props=claims` | **200**, `P856 = https://www.gymshark.com/`, at **12:22:33Z** |
-| 6 | Wikidata same-industry peers (SPARQL) | `query.wikidata.org/sparql`, `wdt:P452` join | **200, 0 rows**, at **12:21:53Z** — see finding 2 |
-| 7 | SERP route (DuckDuckGo HTML) | `html.duckduckgo.com/html/?q=gymshark+alternatives` | **202**, 14,228 B — a challenge, not results, at **12:14:12Z** |
-| 8 | Reddit search | `reddit.com/search.json?q=gymshark` | **403**, 189,908 B block page, at **12:15:41Z** |
-| 9 | Meta Ad Library, keyword → advertisers | via the deployed Worker's browser leg | **200** with real advertiser results, **12:13:25Z** — see the ads engine doc |
-| 10 | Jev D1 | `POST 127.0.0.1:4000/jev` | **200**, **p = 0.9**, **0.78 s**, at **12:18:48Z** |
+| #   | Generator                              | Call                                                               | Result                                                                       |
+| --- | -------------------------------------- | ------------------------------------------------------------------ | ---------------------------------------------------------------------------- |
+| 1   | Google News RSS, roundup harvest       | `news.google.com/rss/search?q=%22Gymshark%22%20alternatives`       | **200**, 51,692 B, **0.47 s**, **44 items**, at **12:12:51Z**                |
+| 2   | Google News RSS, plain brand           | `…?q=%22Gymshark%22`                                               | **200**, 125,881 B, **0.56 s**, at **12:12:52Z**                             |
+| 3   | HN Algolia co-mentions                 | `hn.algolia.com/api/v1/search?query=gymshark&tags=(story,comment)` | **200**, 42,243 B, **0.39 s**, **nbHits 146**, at **12:12:53Z**              |
+| 4   | Wikidata name → entity                 | `wbsearchentities?search=Gymshark`                                 | **200**, → `Q56246099`, at **12:14:13Z**                                     |
+| 5   | Wikidata entity → website              | `wbgetentities?ids=Q56246099&props=claims`                         | **200**, `P856 = https://www.gymshark.com/`, at **12:22:33Z**                |
+| 6   | Wikidata same-industry peers (SPARQL)  | `query.wikidata.org/sparql`, `wdt:P452` join                       | **200, 0 rows**, at **12:21:53Z** — see finding 2                            |
+| 7   | SERP route (DuckDuckGo HTML)           | `html.duckduckgo.com/html/?q=gymshark+alternatives`                | **202**, 14,228 B — a challenge, not results, at **12:14:12Z**               |
+| 8   | Reddit search                          | `reddit.com/search.json?q=gymshark`                                | **403**, 189,908 B block page, at **12:15:41Z**                              |
+| 9   | Meta Ad Library, keyword → advertisers | via the deployed Worker's browser leg                              | **200** with real advertiser results, **12:13:25Z** — see the ads engine doc |
+| 10  | Jev D1                                 | `POST 127.0.0.1:4000/jev`                                          | **200**, **p = 0.9**, **0.78 s**, at **12:18:48Z**                           |
 
 **Probe 1, excerpt** — the three highest-ranked items, verbatim titles:
 
@@ -87,16 +87,16 @@ Each `<item>` carries `<title>`, `<link>`, `<pubDate>` and `<source url="…">`.
 
 ## Data flow against the schema
 
-| Step | Reads | Writes |
-|---|---|---|
-| Generators | `entity` (the self card), `source` (registry rows, for rate limits and `reliability`) | R2: one raw payload per generator run; `snapshot`: **one row per generator run**, with `item_count` and `payload_hash` — the cost boundary, one row per watch per tick |
-| Evidence count | those snapshot payloads | nothing |
-| Resolve name → domain | — | KV `resolve:<name>` 30-day TTL |
-| Jev D1 | `entity`, `suggestion` (dismissal memory), `user_decision` | `jev_verdict`, one row per judged candidate |
-| Accept | — | `entity` (`role='competitor'`, `origin='auto'`, `state='on'`), `watch` rows per serveable source, all in one `batch()` |
-| Maybe | — | `suggestion` (`status='maybe'`, carrying the D1 verdict and the evidence line) |
-| Drop | — | `suggestion` (`status='rejected'`) — `UNIQUE(workspace_id, candidate_domain)` is what makes "dismissed is never re-suggested" true |
-| Refresh (D2) | `entity`, `signal` (last 30 days) | `jev_verdict`, `entity.state` / `state_reason` / `state_changed_by='jev'` |
+| Step                  | Reads                                                                                 | Writes                                                                                                                                                                 |
+| --------------------- | ------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Generators            | `entity` (the self card), `source` (registry rows, for rate limits and `reliability`) | R2: one raw payload per generator run; `snapshot`: **one row per generator run**, with `item_count` and `payload_hash` — the cost boundary, one row per watch per tick |
+| Evidence count        | those snapshot payloads                                                               | nothing                                                                                                                                                                |
+| Resolve name → domain | —                                                                                     | KV `resolve:<name>` 30-day TTL                                                                                                                                         |
+| Jev D1                | `entity`, `suggestion` (dismissal memory), `user_decision`                            | `jev_verdict`, one row per judged candidate                                                                                                                            |
+| Accept                | —                                                                                     | `entity` (`role='competitor'`, `origin='auto'`, `state='on'`), `watch` rows per serveable source, all in one `batch()`                                                 |
+| Maybe                 | —                                                                                     | `suggestion` (`status='maybe'`, carrying the D1 verdict and the evidence line)                                                                                         |
+| Drop                  | —                                                                                     | `suggestion` (`status='rejected'`) — `UNIQUE(workspace_id, candidate_domain)` is what makes "dismissed is never re-suggested" true                                     |
+| Refresh (D2)          | `entity`, `signal` (last 30 days)                                                     | `jev_verdict`, `entity.state` / `state_reason` / `state_changed_by='jev'`                                                                                              |
 
 **Never written per candidate:** a `signal` row. A competitor is an `entity`, a suggestion is a `suggestion`; the curated spine stays for things the user reads.
 
@@ -124,10 +124,10 @@ DiscoveryWorkflow(mode: 'create' | 'refresh', workspaceId, entityId)
 
 ## Jev decisions used
 
-| Id | Primitive | Where | Context pack fields |
-|---|---|---|---|
-| **D1** `is_competitor` | Noul | one per shortlisted candidate | `self` (the full card), `subject` = the candidate with its evidence, `competitor_set` (so Jev knows the field already covered), `item` (the evidence excerpts and their source URLs), `user_memory` (dismissed domains, brands turned off), `reliability` (per generator: `rss` for News, `best_effort` for HN, `scraped_page` for the ad library) |
-| **D2** `still_competitor` | Noul + Choice `reason` | refresh mode, one per tracked competitor | the same, plus `history_30d` — the subject's last 30 days of signals |
+| Id                        | Primitive              | Where                                    | Context pack fields                                                                                                                                                                                                                                                                                                                                |
+| ------------------------- | ---------------------- | ---------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **D1** `is_competitor`    | Noul                   | one per shortlisted candidate            | `self` (the full card), `subject` = the candidate with its evidence, `competitor_set` (so Jev knows the field already covered), `item` (the evidence excerpts and their source URLs), `user_memory` (dismissed domains, brands turned off), `reliability` (per generator: `rss` for News, `best_effort` for HN, `scraped_page` for the ad library) |
+| **D2** `still_competitor` | Noul + Choice `reason` | refresh mode, one per tracked competitor | the same, plus `history_30d` — the subject's last 30 days of signals                                                                                                                                                                                                                                                                               |
 
 Thresholds, applied exactly as `REBUILD-JEV.md` states: D1 at **p ≥ 0.9** adds the brand with tracking ON; **p ≤ 0.1** drops it and remembers the rejection; between is a "maybe" with Jev's one-line reason. The live probe returned **0.90** — the boundary case — and the packet must show that boundary handled as "add", not as "maybe".
 
@@ -137,15 +137,15 @@ D2 auto-retires **only** at p ≤ 0.1 **and** `reason ∈ {acquired, shut down}`
 
 Per discovery run (one brand), priced from `REBUILD-COST.md` (2026-09-21):
 
-| Leg | Units | Per 1,000 runs |
-|---|---|---|
-| 4 generator fetches + ~5 article fetches | 9 subrequests, all sub-second | 9,000 subrequests — inside 10M included |
-| Meta Ad Library keyword leg (browser, async) | ~7 browser-seconds | **1.94 browser-hours** |
-| Queue | ~10 messages × 3 operations | 30,000 ops — **$0.012** |
-| Jev | ~26 calls (20 shortlist + 6 guaranteed) | 26,000 calls; $0 on the seat, **$0.41** at the measured market rate |
-| D1 | 4 snapshot rows + ~12 entity/watch/suggestion rows + 26 verdict rows ≈ 42, one `batch()` | 42,000 rows — **0.08% of the 50M included** |
-| R2 | 4 PUTs, ~150 KB total | 4,000 Class A — **$0.018** |
-| Workflow | 6 steps | 6,000 steps — inside 500,000 included |
+| Leg                                          | Units                                                                                    | Per 1,000 runs                                                      |
+| -------------------------------------------- | ---------------------------------------------------------------------------------------- | ------------------------------------------------------------------- |
+| 4 generator fetches + ~5 article fetches     | 9 subrequests, all sub-second                                                            | 9,000 subrequests — inside 10M included                             |
+| Meta Ad Library keyword leg (browser, async) | ~7 browser-seconds                                                                       | **1.94 browser-hours**                                              |
+| Queue                                        | ~10 messages × 3 operations                                                              | 30,000 ops — **$0.012**                                             |
+| Jev                                          | ~26 calls (20 shortlist + 6 guaranteed)                                                  | 26,000 calls; $0 on the seat, **$0.41** at the measured market rate |
+| D1                                           | 4 snapshot rows + ~12 entity/watch/suggestion rows + 26 verdict rows ≈ 42, one `batch()` | 42,000 rows — **0.08% of the 50M included**                         |
+| R2                                           | 4 PUTs, ~150 KB total                                                                    | 4,000 Class A — **$0.018**                                          |
+| Workflow                                     | 6 steps                                                                                  | 6,000 steps — inside 500,000 included                               |
 
 **Monthly at 100 brands:** one create per brand plus four refreshes each = 500 runs → **0.97 browser-hours** (inside the 10 h allotment), **21,000 D1 rows written** (0.04% of included), **15,000 queue operations**, **13,000 Jev calls** ($0 on the seat, **$0.21** at market). **Cloudflare cost: $0.00.**
 
@@ -153,15 +153,15 @@ The number to watch is not money, it is the browser leg: if the ad-library gener
 
 ## Failure modes and the degraded state the UI shows
 
-| Failure | Detection | What the user sees |
-|---|---|---|
-| Every generator is empty or slow | zero candidates at the end of `count` | "we're still looking, add one you know and we'll keep going" — the input stays, the Competitors page fills as results land (`REBUILD-ONBOARDING.md` step 4) |
+| Failure                                                | Detection                                        | What the user sees                                                                                                                                                                                           |
+| ------------------------------------------------------ | ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Every generator is empty or slow                       | zero candidates at the end of `count`            | "we're still looking, add one you know and we'll keep going" — the input stays, the Competitors page fills as results land (`REBUILD-ONBOARDING.md` step 4)                                                  |
 | One generator down (GDELT-style 429, crt.sh-style 502) | non-2xx or empty, recorded on its `snapshot` row | that source shows **degraded** on the Competitors page with the date it last returned; never retried harder — the rate limit lives on the `source` row and the Workflow honours it (`REBUILD-GUARDRAILS.md`) |
-| Name cannot be resolved to a domain | resolver cascade exhausted | the candidate appears in "maybe" as a name with its evidence line; tapping it runs the identity engine |
-| Jev unreachable | HTTP error after the step's retries | candidates are stored `unjudged`, the list shows what the counts alone support with a "still checking these" line, and the next tick judges them. Nothing is dropped (`REBUILD-JEV.md` principle 4) |
-| Jev in the uncertain band | 0.1 < p < 0.9 | the "maybe" list, low, with Jev's one-line reason. Never auto-added |
-| A takedown subject appears as a candidate | `takedown` lookup before the shortlist | silently excluded, and dropped from any workspace already tracking it at the next tick with a one-line note to the owner |
-| The same brand is suggested twice | `UNIQUE(workspace_id, candidate_domain)` | it cannot be. A dismissed suggestion is never re-suggested — that constraint is the mechanism |
+| Name cannot be resolved to a domain                    | resolver cascade exhausted                       | the candidate appears in "maybe" as a name with its evidence line; tapping it runs the identity engine                                                                                                       |
+| Jev unreachable                                        | HTTP error after the step's retries              | candidates are stored `unjudged`, the list shows what the counts alone support with a "still checking these" line, and the next tick judges them. Nothing is dropped (`REBUILD-JEV.md` principle 4)          |
+| Jev in the uncertain band                              | 0.1 < p < 0.9                                    | the "maybe" list, low, with Jev's one-line reason. Never auto-added                                                                                                                                          |
+| A takedown subject appears as a candidate              | `takedown` lookup before the shortlist           | silently excluded, and dropped from any workspace already tracking it at the next tick with a one-line note to the owner                                                                                     |
+| The same brand is suggested twice                      | `UNIQUE(workspace_id, candidate_domain)`         | it cannot be. A dismissed suggestion is never re-suggested — that constraint is the mechanism                                                                                                                |
 
 ---
 

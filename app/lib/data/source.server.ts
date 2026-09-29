@@ -126,11 +126,7 @@ export async function readCanarySources(): Promise<CanarySource[]> {
   }));
 }
 
-export async function recordSourceCanary(
-  sourceId: string,
-  canaryCount: number,
-  now: string,
-): Promise<void> {
+export async function recordSourceCanary(sourceId: string, canaryCount: number, now: string): Promise<void> {
   if (canaryCount > 0) {
     await env.DB.prepare(MARK_CANARY_GOOD).bind(sourceId, now).run();
     return;
@@ -176,22 +172,15 @@ export async function markSourceBlind(sourceId: string): Promise<void> {
 }
 
 export async function clearSourceBlind(blindIds: readonly string[]): Promise<void> {
-  await env.DB.prepare(CLEAR_SOURCE_BLIND)
-    .bind(BLIND_REASON, JSON.stringify(blindIds))
-    .run();
+  await env.DB.prepare(CLEAR_SOURCE_BLIND).bind(BLIND_REASON, JSON.stringify(blindIds)).run();
 }
 
 export async function markSourceTimedOut(sourceId: string): Promise<void> {
   await env.DB.prepare(MARK_SOURCE_BLOCKED).bind(sourceId, "timed out").run();
 }
 
-export async function readEntitySources(
-  workspaceId: string,
-  entityId: string,
-): Promise<readonly EntitySource[]> {
-  const { results } = await env.DB.prepare(SELECT_ENTITY_SOURCES)
-    .bind(workspaceId, entityId)
-    .all<EntitySourceRow>();
+export async function readEntitySources(workspaceId: string, entityId: string): Promise<readonly EntitySource[]> {
+  const { results } = await env.DB.prepare(SELECT_ENTITY_SOURCES).bind(workspaceId, entityId).all<EntitySourceRow>();
   return results.map((row) => ({
     source: {
       key: row.key,
@@ -201,16 +190,11 @@ export async function readEntitySources(
       config_json: row.config_json,
       watch_config_json: row.watch_config_json,
     },
-    snapshot:
-      row.fetched_at === null
-        ? null
-        : { item_count: row.item_count ?? 0, fetched_at: row.fetched_at },
+    snapshot: row.fetched_at === null ? null : { item_count: row.item_count ?? 0, fetched_at: row.fetched_at },
   }));
 }
 
-export async function readWorkspaceMentionSources(
-  workspaceId: string,
-): Promise<readonly FreshnessSource[]> {
+export async function readWorkspaceMentionSources(workspaceId: string): Promise<readonly FreshnessSource[]> {
   const { results } = await env.DB.prepare(SELECT_WORKSPACE_MENTION_SOURCES)
     .bind(workspaceId)
     .all<WorkspaceMentionSourceRow>();

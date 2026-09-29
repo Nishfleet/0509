@@ -18,9 +18,7 @@ const at = (iso: string) => new Date(iso);
 
 describe("the brief schedule (0509#4004)", () => {
   it("finds the next Monday 08:00 in the workspace's zone", () => {
-    expect(nextBriefAt(MONDAY_8_UTC, at("2026-09-24T03:00:00.000Z")).toISOString()).toBe(
-      "2026-09-28T08:00:00.000Z",
-    );
+    expect(nextBriefAt(MONDAY_8_UTC, at("2026-09-24T03:00:00.000Z")).toISOString()).toBe("2026-09-28T08:00:00.000Z");
     expect(nextBriefAt(MONDAY_8_NEW_YORK, at("2026-09-24T03:00:00.000Z")).toISOString()).toBe(
       "2026-09-28T12:00:00.000Z",
     );

@@ -31,34 +31,19 @@ interface TargetDb {
   };
 }
 
-export async function writeUnsubscribeToken(
-  db: D1Database,
-  input: { targetId: string; token: string },
-): Promise<void> {
+export async function writeUnsubscribeToken(db: D1Database, input: { targetId: string; token: string }): Promise<void> {
   await db.prepare(WRITE_UNSUBSCRIBE_TOKEN).bind(input.token, input.targetId).run();
 }
 
-export async function ensureOwnerEmailTarget(
-  db: TargetDb,
-  input: { workspaceId: string; now: string },
-): Promise<void> {
+export async function ensureOwnerEmailTarget(db: TargetDb, input: { workspaceId: string; now: string }): Promise<void> {
   await db.prepare(INSERT_OWNER_EMAIL_TARGET).bind(input.now, input.workspaceId).run();
 }
 
 export async function readEmailTarget(db: TargetDb, workspaceId: string): Promise<string | null> {
-  const row = await db
-    .prepare(SELECT_EMAIL_TARGET)
-    .bind(workspaceId)
-    .first<{ target_value: string }>();
+  const row = await db.prepare(SELECT_EMAIL_TARGET).bind(workspaceId).first<{ target_value: string }>();
   return row?.target_value ?? null;
 }
 
-export async function changeEmailTarget(
-  db: TargetDb,
-  input: { workspaceId: string; address: string },
-): Promise<void> {
-  await db
-    .prepare(CHANGE_EMAIL_TARGET)
-    .bind(input.address, input.workspaceId, input.address)
-    .run();
+export async function changeEmailTarget(db: TargetDb, input: { workspaceId: string; address: string }): Promise<void> {
+  await db.prepare(CHANGE_EMAIL_TARGET).bind(input.address, input.workspaceId, input.address).run();
 }

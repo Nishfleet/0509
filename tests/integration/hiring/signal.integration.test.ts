@@ -1,10 +1,7 @@
 import { env } from "cloudflare:test";
 import { beforeEach, describe, expect, it } from "vitest";
 
-import {
-  insertHiringSignals,
-  type NewHiringSignal,
-} from "../../../app/lib/data/signal.server";
+import { insertHiringSignals, type NewHiringSignal } from "../../../app/lib/data/signal.server";
 
 const NOW = "2026-09-24T12:00:00.000Z";
 const USER = "user-hiring-signal";
@@ -99,12 +96,14 @@ describe("hiring signals", () => {
       .bind(SOURCE_ID, SOURCE_ID)
       .run();
     await env.DB.batch([
-      env.DB.prepare(
-        "INSERT INTO watch (id, entity_id, source_id, target_key) VALUES ('w-1', 'ent-1', ?, ?)",
-      ).bind(SOURCE_ID, TARGET_KEY),
-      env.DB.prepare(
-        "INSERT INTO watch (id, entity_id, source_id, target_key) VALUES ('w-2', 'ent-2', ?, ?)",
-      ).bind(SOURCE_ID, TARGET_KEY),
+      env.DB.prepare("INSERT INTO watch (id, entity_id, source_id, target_key) VALUES ('w-1', 'ent-1', ?, ?)").bind(
+        SOURCE_ID,
+        TARGET_KEY,
+      ),
+      env.DB.prepare("INSERT INTO watch (id, entity_id, source_id, target_key) VALUES ('w-2', 'ent-2', ?, ?)").bind(
+        SOURCE_ID,
+        TARGET_KEY,
+      ),
     ]);
   });
 
@@ -160,9 +159,7 @@ describe("hiring signals", () => {
       }),
     ]);
 
-    const summaries = new Map(
-      (await readHiringSignals()).map((row) => [row.dedup_key, row.summary]),
-    );
+    const summaries = new Map((await readHiringSignals()).map((row) => [row.dedup_key, row.summary]));
     expect(summaries).toEqual(
       new Map([
         ["w-1:role-both", "Berlin · Platform"],
@@ -202,9 +199,7 @@ describe("hiring signals", () => {
 
     await insertHiringSignals(rows);
 
-    const count = await env.DB.prepare(
-      "SELECT COUNT(*) AS n FROM signal WHERE kind = 'hiring'",
-    ).first<{ n: number }>();
+    const count = await env.DB.prepare("SELECT COUNT(*) AS n FROM signal WHERE kind = 'hiring'").first<{ n: number }>();
     expect(count?.n).toBe(120);
   });
 });

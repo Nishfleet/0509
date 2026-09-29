@@ -1,7 +1,15 @@
 import { env } from "cloudflare:workers";
 
 import { countVerdictsSince, insertVerdicts, type VerdictRow } from "../data/jev_verdict.server";
-import { askChoice, askNoul, JevUnavailableError, type ChoiceQuestion, type ChoiceVerdict, type NoulQuestion, type NoulVerdict } from "../jev/client.server";
+import {
+  askChoice,
+  askNoul,
+  JevUnavailableError,
+  type ChoiceQuestion,
+  type ChoiceVerdict,
+  type NoulQuestion,
+  type NoulVerdict,
+} from "../jev/client.server";
 import type { BreakageEvidence } from "./breakage-evidence";
 
 const JEV_JUDGMENTS_PER_BRAND_PER_DAY = 6;
@@ -167,15 +175,17 @@ export async function judgeChange(input: JudgeInput): Promise<ChangeJudgment> {
     }
     const p = breakage.p;
     const band = breakageBandOf(p);
-    rows.push(verdictRow({
-      workspaceId: input.workspaceId,
-      entityId: input.entityId,
-      questionId: D3S_BREAKAGE_QID,
-      inputHash: breakage.inputHash,
-      p,
-      choice: null,
-      decidedAt,
-    }));
+    rows.push(
+      verdictRow({
+        workspaceId: input.workspaceId,
+        entityId: input.entityId,
+        questionId: D3S_BREAKAGE_QID,
+        inputHash: breakage.inputHash,
+        p,
+        choice: null,
+        decidedAt,
+      }),
+    );
     selfBreakage = { p, band };
     if (band !== "clear") {
       await insertVerdicts(rows);
@@ -200,24 +210,28 @@ export async function judgeChange(input: JudgeInput): Promise<ChangeJudgment> {
   const kind = choice.choice;
 
   const band = noteworthyBandOf(p, kind);
-  rows.push(verdictRow({
-    workspaceId: input.workspaceId,
-    entityId: input.entityId,
-    questionId: D3_NOTEWORTHY_QID,
-    inputHash: noul.inputHash,
-    p,
-    choice: null,
-    decidedAt,
-  }));
-  rows.push(verdictRow({
-    workspaceId: input.workspaceId,
-    entityId: input.entityId,
-    questionId: D3_KIND_QID,
-    inputHash: choice.inputHash,
-    p: null,
-    choice: kind,
-    decidedAt,
-  }));
+  rows.push(
+    verdictRow({
+      workspaceId: input.workspaceId,
+      entityId: input.entityId,
+      questionId: D3_NOTEWORTHY_QID,
+      inputHash: noul.inputHash,
+      p,
+      choice: null,
+      decidedAt,
+    }),
+  );
+  rows.push(
+    verdictRow({
+      workspaceId: input.workspaceId,
+      entityId: input.entityId,
+      questionId: D3_KIND_QID,
+      inputHash: choice.inputHash,
+      p: null,
+      choice: kind,
+      decidedAt,
+    }),
+  );
   await insertVerdicts(rows);
 
   return { deferred: false, selfBreakage, noteworthy: { p, kind, band } };

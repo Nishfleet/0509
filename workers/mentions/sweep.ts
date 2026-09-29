@@ -9,7 +9,12 @@ import { insertMention, readSeenDedupKeys } from "../../app/lib/data/signal.serv
 import { insertWatchSnapshot } from "../../app/lib/data/snapshot.server";
 import { markSourceBlocked, markSourceTimedOut } from "../../app/lib/data/source.server";
 import type { WatchRow } from "../../app/lib/data/watch.server";
-import { markWatchPolled, readActiveWatches, readWatchConfigJson, writeWatchConfigJson } from "../../app/lib/data/watch.server";
+import {
+  markWatchPolled,
+  readActiveWatches,
+  readWatchConfigJson,
+  writeWatchConfigJson,
+} from "../../app/lib/data/watch.server";
 import type { NoulQuestion, NoulVerdict } from "../../app/lib/jev/client.server";
 import { askNoul, JevUnavailableError } from "../../app/lib/jev/client.server";
 import { lookupYoutubeChannel } from "../../app/lib/identity/youtube-channel.server";
@@ -219,10 +224,7 @@ async function statementsForWatch(input: {
   return { statements, stored, unjudged };
 }
 
-async function putMentionBody(
-  pluginKey: string,
-  rawBody: string,
-): Promise<{ r2Key: string; hash: string }> {
+async function putMentionBody(pluginKey: string, rawBody: string): Promise<{ r2Key: string; hash: string }> {
   const hash = await sha256Hex(rawBody);
   const r2Key = `snapshot/mentions/${pluginKey}/${hash}`;
   await env.SNAPSHOTS.put(r2Key, rawBody, { httpMetadata: { contentType: "application/octet-stream" } });
@@ -338,9 +340,7 @@ async function sweepOneYoutube(
 
   let channelId = config.channelId;
   if (channelId === null) {
-    const lookup = await lookupYoutubeChannel(
-      await requireEntityIdentityJson(watch.workspace_id, watch.entity_id),
-    );
+    const lookup = await lookupYoutubeChannel(await requireEntityIdentityJson(watch.workspace_id, watch.entity_id));
     if (lookup.status !== "id") {
       if (lookup.status === "unresolved") await flagLostChannel(watch.watch_id, now);
       await markWatchPolled(watch.watch_id, now);
@@ -352,9 +352,7 @@ async function sweepOneYoutube(
   const first = await youtubeAdapter({ query: channelId }, null);
   if (first.feedState === "stale") {
     await flagLostChannel(watch.watch_id, now);
-    const lookup = await lookupYoutubeChannel(
-      await requireEntityIdentityJson(watch.workspace_id, watch.entity_id),
-    );
+    const lookup = await lookupYoutubeChannel(await requireEntityIdentityJson(watch.workspace_id, watch.entity_id));
     if (lookup.status === "id" && lookup.channelId !== channelId) {
       const raw = await requireWatchConfigJson(watch.watch_id);
       await writeWatchConfigJson(watch.watch_id, withPendingChannel(raw, lookup.channelId));

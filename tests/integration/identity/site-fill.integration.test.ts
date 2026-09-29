@@ -5,11 +5,7 @@ import { insertSelfEntity, readEntityIdentityJson } from "../../../app/lib/data/
 import { insertFieldEdits } from "../../../app/lib/data/user_decision.server";
 import { normaliseSubject } from "../../../app/lib/identity/normalise";
 import { probeKey } from "../../../app/lib/identity/probe-cache.server";
-import {
-  attemptSiteFill,
-  markSiteFill,
-  siteWasReached,
-} from "../../../app/lib/identity/site-fill.server";
+import { attemptSiteFill, markSiteFill, siteWasReached } from "../../../app/lib/identity/site-fill.server";
 
 const NOW = "2026-09-25T08:00:00Z";
 const HOMEPAGE = "https://gymshark.com/";
@@ -40,9 +36,7 @@ async function seed(identity: Record<string, unknown>): Promise<void> {
   )
     .bind(userId, `${userId}@0509.io`, NOW)
     .run();
-  await env.DB.prepare(
-    `INSERT INTO workspace (id, name, owner_user_id, created_at) VALUES (?1, 'Owner', ?2, ?3)`,
-  )
+  await env.DB.prepare(`INSERT INTO workspace (id, name, owner_user_id, created_at) VALUES (?1, 'Owner', ?2, ?3)`)
     .bind(workspaceId, userId, NOW)
     .run();
   await insertSelfEntity({
@@ -58,9 +52,7 @@ async function seed(identity: Record<string, unknown>): Promise<void> {
   )
     .bind(`${userId}-b`, `${userId}-b@0509.io`, NOW)
     .run();
-  await env.DB.prepare(
-    `INSERT INTO workspace (id, name, owner_user_id, created_at) VALUES (?1, 'Owner', ?2, ?3)`,
-  )
+  await env.DB.prepare(`INSERT INTO workspace (id, name, owner_user_id, created_at) VALUES (?1, 'Owner', ?2, ?3)`)
     .bind(otherWorkspaceId, `${userId}-b`, NOW)
     .run();
 }

@@ -113,7 +113,9 @@ describe("share image render", () => {
     try {
       const bytes = await renderShareImage("<p>hi</p>");
       expect(bytes).toBeNull();
-      expect(log).toHaveBeenCalledWith(JSON.stringify({ event: "share-image-miss", cause: "no browser budget granted" }));
+      expect(log).toHaveBeenCalledWith(
+        JSON.stringify({ event: "share-image-miss", cause: "no browser budget granted" }),
+      );
     } finally {
       log.mockRestore();
     }
@@ -124,7 +126,9 @@ describe("share image render", () => {
     try {
       const bytes = await renderShareImage("<p>hi</p>", async () => false);
       expect(bytes).toBeNull();
-      expect(log).toHaveBeenCalledWith(JSON.stringify({ event: "share-image-miss", cause: "browser budget exhausted" }));
+      expect(log).toHaveBeenCalledWith(
+        JSON.stringify({ event: "share-image-miss", cause: "browser budget exhausted" }),
+      );
     } finally {
       log.mockRestore();
     }

@@ -36,16 +36,12 @@ export class Discovery extends WorkflowEntrypoint<Env, DiscoveryParams> {
     if (event.payload.mode === "refresh") {
       const now = event.timestamp.toISOString();
       const targets = await step.do("refresh-targets", RETRY, () => readRefreshTargets(workspaceId));
-      const results = await step.do("refresh-judge", RETRY, () =>
-        judgeStillCompetitors(context, targets, now),
-      );
+      const results = await step.do("refresh-judge", RETRY, () => judgeStillCompetitors(context, targets, now));
       await step.do("refresh-write", RETRY, () => writeStillCompetitorResults(workspaceId, results, now));
       const judged = results.filter((result) => result.verdict !== null).length;
       const retired = results.filter((result) => stillCompetitorAction(result) === "retire").length;
       const asked = results.filter((result) => stillCompetitorAction(result) === "ask").length;
-      console.log(
-        JSON.stringify({ event: "discovery.refresh", workspaceId, judged, retired, asked }),
-      );
+      console.log(JSON.stringify({ event: "discovery.refresh", workspaceId, judged, retired, asked }));
       return { workspaceId, shortlisted: 0, queued: 0, promoted: 0, written: 0, judged };
     }
 
@@ -54,9 +50,7 @@ export class Discovery extends WorkflowEntrypoint<Env, DiscoveryParams> {
     const shortlisted = generated.shortlisted;
     const resolved = await step.do("resolve", RETRY, () => resolveShortlist(context, shortlisted));
     const results = await step.do("judge", RETRY, () => judgeCandidates(context, resolved));
-    await step.do("write", RETRY, () =>
-      writeDiscoveryResults(workspaceId, results, new Date().toISOString()),
-    );
+    await step.do("write", RETRY, () => writeDiscoveryResults(workspaceId, results, new Date().toISOString()));
     await step.do("queue", RETRY, () =>
       writeBacklog(workspaceId, generated.rest, generated.promoted, new Date().toISOString()),
     );

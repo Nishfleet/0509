@@ -3,11 +3,7 @@ import { useState, type ReactElement } from "react";
 import { showInFeed } from "../lib/mention-feed";
 import { AlertFeedRow, type AlertFeedItem } from "./alert-row";
 
-export function AlertFeed({
-  groups,
-}: {
-  groups: { group: string; items: AlertFeedItem[] }[];
-}): ReactElement {
+export function AlertFeed({ groups }: { groups: { group: string; items: AlertFeedItem[] }[] }): ReactElement {
   const [showAll, setShowAll] = useState(false);
   const held = groups.some((group) => group.items.some((item) => !showInFeed(item, false)));
   const visible = groups

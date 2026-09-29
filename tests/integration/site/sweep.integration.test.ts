@@ -1,12 +1,7 @@
 import { env, introspectWorkflowInstance } from "cloudflare:test";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import {
-  checkSitePage,
-  planSiteSweep,
-  publishSiteChange,
-  uncoveredItems,
-} from "../../../app/lib/site/sweep.server";
+import { checkSitePage, planSiteSweep, publishSiteChange, uncoveredItems } from "../../../app/lib/site/sweep.server";
 
 const readHolder = { html: "" };
 const calls: string[] = [];
@@ -136,7 +131,8 @@ describe("nightly site sweep", () => {
     const changed = await checkSitePage(rival, night3);
     const retried = await checkSitePage(rival, night3);
     expect(retried).toEqual(changed);
-    if (changed.outcome !== "changed" || first.outcome !== "first" || same.outcome !== "unchanged") throw new Error("expected a change");
+    if (changed.outcome !== "changed" || first.outcome !== "first" || same.outcome !== "unchanged")
+      throw new Error("expected a change");
     await publishSiteChange(rival, changed);
     await publishSiteChange(rival, changed);
 

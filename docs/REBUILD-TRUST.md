@@ -2,14 +2,14 @@
 
 Umbrella #3842, Track A. Written by the Opus deputy, **2026-09-21 IST**.
 
-The source is Lauren Tan's *What I learned from reviewing 2,500 agent PRs*
+The source is Lauren Tan's _What I learned from reviewing 2,500 agent PRs_
 (transcript in the vault at
 `00 Inbox/agent-drop/claude/vps/2026-09-21-poteto-2500-prs-talk-transcript.md`;
 every timestamp below is hers). Her claim is that trust in agents is produced,
 not granted, by three things: **verification the agent can run itself**, **a
 correction ladder that lands every fix at the highest rung it fits**, and **a
-gardener who kills a pattern before it spreads**. Nish, 2026-09-21: *"lets do
-all of the things she mentions."*
+gardener who kills a pattern before it spreads**. Nish, 2026-09-21: _"lets do
+all of the things she mentions."_
 
 Two conventions, the same ones `docs/REBUILD-STACK.md` uses:
 
@@ -26,18 +26,18 @@ rather than filling the gap with glue.
 
 Run in `~/workspaces/products/0509` on 2026-09-21:
 
-| Command | Output |
-|---|---|
-| `npx eslint --version` | `v10.11.0` |
-| `npx knip --version` | `6.37.0` |
-| `node -p "require('typescript-eslint/package.json').version"` | `8.70.0` |
-| `node -p "require('eslint-plugin-react-hooks/package.json').version"` | `7.1.1` |
-| `npx playwright --version` | `Version 1.63.0` |
-| `ls ~/.cache/ms-playwright` | `chromium-1243  chromium_headless_shell-1243  ffmpeg-1011  firefox-1538` |
-| `npm run lint` | `rc=0` |
-| `npm run typecheck` | `rc=0` |
-| `npm test` | `Test Files 3 passed (3) · Tests 7 passed (7)` |
-| `npm run e2e` | `10 passed (4.9s)` — 5 tests × 2 viewports, `wrangler dev` started and torn down by `playwright.config.ts` |
+| Command                                                               | Output                                                                                                     |
+| --------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| `npx eslint --version`                                                | `v10.11.0`                                                                                                 |
+| `npx knip --version`                                                  | `6.37.0`                                                                                                   |
+| `node -p "require('typescript-eslint/package.json').version"`         | `8.70.0`                                                                                                   |
+| `node -p "require('eslint-plugin-react-hooks/package.json').version"` | `7.1.1`                                                                                                    |
+| `npx playwright --version`                                            | `Version 1.63.0`                                                                                           |
+| `ls ~/.cache/ms-playwright`                                           | `chromium-1243  chromium_headless_shell-1243  ffmpeg-1011  firefox-1538`                                   |
+| `npm run lint`                                                        | `rc=0`                                                                                                     |
+| `npm run typecheck`                                                   | `rc=0`                                                                                                     |
+| `npm test`                                                            | `Test Files 3 passed (3) · Tests 7 passed (7)`                                                             |
+| `npm run e2e`                                                         | `10 passed (4.9s)` — 5 tests × 2 viewports, `wrangler dev` started and torn down by `playwright.config.ts` |
 
 **Deviation from the packet: ESLint 10, not 9.** npm `latest` for `eslint` is
 `10.11.0`. Flat config is the only config format in v10, so the packet's
@@ -65,7 +65,7 @@ Her verification skill has two halves: a **reproducible way to drive the real
 application**, and a **feature map** that tells the agent what the application
 even is. We need both. **Decision, 2026-09-22 (#4251):** both halves ship as a
 skill — `.agents/skills/verify/SKILL.md`, landed via #4341 — on Nish's word:
-*"make it exactly as described."* The driver is Google's stock
+_"make it exactly as described."_ The driver is Google's stock
 `chrome-devtools` CLI from the `chrome-devtools-mcp` package, not code we
 wrote, so scripts-to-zero still holds.
 
@@ -81,10 +81,10 @@ so every agent session drives the app the same way.
 
 `playwright.config.ts`. The entire switch is one environment variable:
 
-| `PLAYWRIGHT_TEST_BASE_URL` | `webServer` | What runs | Where |
-|---|---|---|---|
-| unset | starts `npx wrangler dev --local` on a per-process port (8000 + pid % 1000), waits on `/api/health` | the built Worker | `preview-assert`, every PR, and `npm run e2e` on a laptop |
-| set | `undefined` | that URL | `e2e-scheduled.yml` (production suite, on demand) |
+| `PLAYWRIGHT_TEST_BASE_URL` | `webServer`                                                                                         | What runs        | Where                                                     |
+| -------------------------- | --------------------------------------------------------------------------------------------------- | ---------------- | --------------------------------------------------------- |
+| unset                      | starts `npx wrangler dev --local` on a per-process port (8000 + pid % 1000), waits on `/api/health` | the built Worker | `preview-assert`, every PR, and `npm run e2e` on a laptop |
+| set                        | `undefined`                                                                                         | that URL         | `e2e-scheduled.yml` (production suite, on demand)         |
 
 This is the vendor's own division. `webServer`'s doc says it is for "when you
 don't have a staging or production url to test against"
@@ -130,7 +130,7 @@ child issues, listed in §E.
 
 `.agents/skills/verify/feature-map.md`. Her framing, 11:02: a Slack report arrives as a vague
 screenshot and three question marks, and an agent that can drive the app still
-has no idea what the user meant. The map is *materialised memory* — what exists,
+has no idea what the user meant. The map is _materialised memory_ — what exists,
 how a user reaches it (route, element, keyboard), what it does.
 
 Ours is seeded from `app/routes.ts`, which is the only registry: a route not
@@ -162,13 +162,13 @@ LCP 1500 ms, TTI 3000 ms, CLS 0.1, script 150 KB, total 500 KB.
 
 The load-bearing detail, from §6.3: **the action has no `fail:` input.** It runs
 `lhci assert`, reads `assertion-results.json`, and calls `core.setFailed()` only
-for assertions at `level: "error"`. Budgets default to error. *A budget written
-at warn is green and useless.*
+for assertions at `level: "error"`. Budgets default to error. _A budget written
+at warn is green and useless._
 
-| Rejected | Why |
-|---|---|
+| Rejected                                                                                                              | Why                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| --------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Collecting Web Vitals inside the Playwright run (`web-vitals` in an `addInitScript`, thresholds asserted in the spec) | It is a perf-budget script with extra steps: a new runtime dependency, hand-written thresholds, hand-written percentile logic, and a lab measurement taken on a CI runner with no throttling profile. `docs/REBUILD-STACK.md` §6.5 names "a perf-budget script or Lighthouse-score parser" as a thing not to build. Lighthouse's simulated 4G throttling is the thing §B's "on simulated 4G" clause actually refers to. |
-| Cloudflare Workers Observability p95 as the gate | It is already on (`wrangler.jsonc` `observability.enabled`) and it is the right tool for *server* time, which is a different number. It cannot see LCP, CLS or bundle size, because those happen in a browser it never meets. Kept as telemetry, not promoted to a gate. |
+| Cloudflare Workers Observability p95 as the gate                                                                      | It is already on (`wrangler.jsonc` `observability.enabled`) and it is the right tool for _server_ time, which is a different number. It cannot see LCP, CLS or bundle size, because those happen in a browser it never meets. Kept as telemetry, not promoted to a gate.                                                                                                                                                |
 
 ### A5. Error tracking — the outer loop's input
 
@@ -178,15 +178,15 @@ at warn is green and useless.*
 The rebuilt app has no error tracking. The two stock candidates, judged
 zero-spend-first per Nish's standing no-spend rule:
 
-| Option | Spend | Path from an error to a labelled GitHub issue |
-|---|---|---|
-| **Cloudflare Workers Logs + Notifications webhook** | $0, already enabled | Notifications post a Cloudflare-shaped JSON body to a URL. GitHub's issue API wants a different body. Closing that gap is an adapter — a Worker, a webhook relay or an Action that reshapes a payload. **That is glue, and it is forbidden.** |
-| **`@sentry/cloudflare` + Sentry's native GitHub integration** | $0 on the Developer plan | Sentry's own GitHub integration creates the issue. No payload reshaping, no relay, no code we own between the error and the issue. |
+| Option                                                        | Spend                    | Path from an error to a labelled GitHub issue                                                                                                                                                                                                 |
+| ------------------------------------------------------------- | ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Cloudflare Workers Logs + Notifications webhook**           | $0, already enabled      | Notifications post a Cloudflare-shaped JSON body to a URL. GitHub's issue API wants a different body. Closing that gap is an adapter — a Worker, a webhook relay or an Action that reshapes a payload. **That is glue, and it is forbidden.** |
+| **`@sentry/cloudflare` + Sentry's native GitHub integration** | $0 on the Developer plan | Sentry's own GitHub integration creates the issue. No payload reshaping, no relay, no code we own between the error and the issue.                                                                                                            |
 
-**Chosen: both, with different jobs.** Workers Logs stays on as the *retention
-and p95* layer — it is one config line already in `wrangler.jsonc` and it costs
+**Chosen: both, with different jobs.** Workers Logs stays on as the _retention
+and p95_ layer — it is one config line already in `wrangler.jsonc` and it costs
 nothing. `@sentry/cloudflare` (10.75.1, probed via `npm view`) becomes the
-*trigger*: `withSentry()` wraps the Worker's default export, and a Sentry issue
+_trigger_: `withSentry()` wraps the Worker's default export, and a Sentry issue
 alert with the GitHub action opens a repo issue on a new error. The fleet's
 existing rail picks it up from the label — no new organ, which is the whole
 test.
@@ -210,7 +210,7 @@ codebase / architecture  >  static analysis  >  rules  >  skills  >  style guide
 
 `CLAUDE.md` now opens with this ladder and the instruction that follows from
 it: **land the fix at the highest rung possible; a lint rule or a type before a
-doc line.** The old `CLAUDE.md` described the *old* app — React Router v7,
+doc line.** The old `CLAUDE.md` described the _old_ app — React Router v7,
 Codex-owned Gate-B, `app/lib/delivery.server.ts`, Dodo billing "live", a
 Paperclip section, 40 lines of key-file inventory for files that no longer
 exist. It was rewritten whole, not patched: a stale rule gets argued with
@@ -218,8 +218,8 @@ instead of followed.
 
 ### B1. Rung 1, the codebase — what was made impossible
 
-`ce5fed17d` is the model. The fix was not a rule; it was *deleting a
-hand-written type annotation* so the framework's generated types could do their
+`ce5fed17d` is the model. The fix was not a rule; it was _deleting a
+hand-written type annotation_ so the framework's generated types could do their
 job. After it, this is a compile error:
 
 ```
@@ -244,19 +244,19 @@ and `eslint-plugin-import-x` 4.17.1 for cycles and named exports.
 Every boundary rule carries its provenance **in its own message**, so an agent
 that trips it reads the reason at the moment it matters:
 
-| Rule | Encodes | Receipt |
-|---|---|---|
-| `no-restricted-syntax` on `MemberExpression[object.name='context'][property.name='cloudflare']` | bindings come from `cloudflare:workers` | 7727bf787 / #3918 — /api/auth, /app and the magic-link POST all 500'd in production |
-| `no-restricted-syntax` on an inline `TSTypeLiteral` in a `loader`/`action`/`meta`/`headers`/`links` parameter | use the framework's `Route` types | ce5fed17d — "a hand-written type annotation over a framework value is an assertion that it is shaped that way" |
-| `boundaries/dependencies`: a client file may not import `server-leaf`, `data-writer`, `db`, or `auth` | the server boundary. The old `**/*.server` glob is gone. A later `no-restricted-imports` block replaces an earlier one, so that glob never fired | Dune's renderer/main split, 27:44; the error text is the old glob's receipt |
-| `import-x/no-cycle` on `app/**` and `workers/**` | no import cycles | closes the gap §B4 used to record |
-| `import-x/no-default-export` | named exports, so a module can be found by grep | off for route modules, config files, and the three workerd entries |
-| `no-restricted-imports` `cloudflare:workers` in client modules | same boundary, the other direction | 7727bf787 |
-| `no-restricted-imports` `better-auth` and its plugins outside `app/lib/auth.server.ts` | one paved path per blessed pattern | 25:26 |
-| `no-restricted-syntax` on DML write text — `INSERT [OR …] INTO`, `REPLACE INTO`, `UPDATE … SET`, `DELETE FROM`, `WITH …` writes — in `app/**` and `workers/**` outside `app/lib/data/**` | one writer per table | 25:26; #4313 — the kysely selectors matched nothing after the raw-D1 rebuild, so the rule fires on the SQL text itself |
-| `no-restricted-syntax` on `env.DB` in `app/routes/**` | one data layer | 25:26 |
-| `max-lines: 150` on `app/routes/**` | routes stay thin | house rule, `coding-style.md` |
-| `no-inline-comments` + `no-warning-comments` on `app/**`, `workers/**` | comments banned in app code | 23:02, Nish 2026-09-21 |
+| Rule                                                                                                                                                                                     | Encodes                                                                                                                                          | Receipt                                                                                                                |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------- |
+| `no-restricted-syntax` on `MemberExpression[object.name='context'][property.name='cloudflare']`                                                                                          | bindings come from `cloudflare:workers`                                                                                                          | 7727bf787 / #3918 — /api/auth, /app and the magic-link POST all 500'd in production                                    |
+| `no-restricted-syntax` on an inline `TSTypeLiteral` in a `loader`/`action`/`meta`/`headers`/`links` parameter                                                                            | use the framework's `Route` types                                                                                                                | ce5fed17d — "a hand-written type annotation over a framework value is an assertion that it is shaped that way"         |
+| `boundaries/dependencies`: a client file may not import `server-leaf`, `data-writer`, `db`, or `auth`                                                                                    | the server boundary. The old `**/*.server` glob is gone. A later `no-restricted-imports` block replaces an earlier one, so that glob never fired | Dune's renderer/main split, 27:44; the error text is the old glob's receipt                                            |
+| `import-x/no-cycle` on `app/**` and `workers/**`                                                                                                                                         | no import cycles                                                                                                                                 | closes the gap §B4 used to record                                                                                      |
+| `import-x/no-default-export`                                                                                                                                                             | named exports, so a module can be found by grep                                                                                                  | off for route modules, config files, and the three workerd entries                                                     |
+| `no-restricted-imports` `cloudflare:workers` in client modules                                                                                                                           | same boundary, the other direction                                                                                                               | 7727bf787                                                                                                              |
+| `no-restricted-imports` `better-auth` and its plugins outside `app/lib/auth.server.ts`                                                                                                   | one paved path per blessed pattern                                                                                                               | 25:26                                                                                                                  |
+| `no-restricted-syntax` on DML write text — `INSERT [OR …] INTO`, `REPLACE INTO`, `UPDATE … SET`, `DELETE FROM`, `WITH …` writes — in `app/**` and `workers/**` outside `app/lib/data/**` | one writer per table                                                                                                                             | 25:26; #4313 — the kysely selectors matched nothing after the raw-D1 rebuild, so the rule fires on the SQL text itself |
+| `no-restricted-syntax` on `env.DB` in `app/routes/**`                                                                                                                                    | one data layer                                                                                                                                   | 25:26                                                                                                                  |
+| `max-lines: 150` on `app/routes/**`                                                                                                                                                      | routes stay thin                                                                                                                                 | house rule, `coding-style.md`                                                                                          |
+| `no-inline-comments` + `no-warning-comments` on `app/**`, `workers/**`                                                                                                                   | comments banned in app code                                                                                                                      | 23:02, Nish 2026-09-21                                                                                                 |
 
 ### B3. What the ladder caught on its first run
 
@@ -273,11 +273,11 @@ were real:
    `createAuth(env as never)` in `require-session.server.ts` and both handlers in
    `api.auth.$.ts`. `no-unnecessary-type-assertion` proved the generated `Env`
    already satisfies `AuthEnv` — the escape hatch was pure superstition,
-   inherited from the shape the code had *before* 7727bf787 fixed it. Auto-fixed.
+   inherited from the shape the code had _before_ 7727bf787 fixed it. Auto-fixed.
 3. **`kysely` was a declared dependency nothing imported**, and `type Auth` an
    export nothing read. Both found by knip, both deleted. The data-layer packet
-   re-adds `kysely` when a module actually calls it. (*"delete tech debt that we
-   already have"* — 25:19.)
+   re-adds `kysely` when a module actually calls it. (_"delete tech debt that we
+   already have"_ — 25:19.)
 4. **`scheduled` was `async` with nothing to await.**
 
 The first finding is the one that matters. It was in a file two agents had
@@ -303,14 +303,14 @@ classifies one file, and one file can carry more than one. `server-leaf` is
 the category on every `app/lib/**/*.server.ts`. `auth` and
 `data-writer` are extra categories on the files the table names.
 
-| Type | Files |
-|---|---|
-| `route` | `app/routes/**`, `app/root.tsx` |
+| Type          | Files                                                  |
+| ------------- | ------------------------------------------------------ |
+| `route`       | `app/routes/**`, `app/root.tsx`                        |
 | `server-leaf` | `app/lib/**/*.server.ts`, including the two rows below |
-| `data-writer` | `app/lib/data/**/*.server.ts` |
-| `auth` | `app/lib/auth.server.ts` |
-| `component` | `app/components/**` |
-| `worker` | `workers/**` |
+| `data-writer` | `app/lib/data/**/*.server.ts`                          |
+| `auth`        | `app/lib/auth.server.ts`                               |
+| `component`   | `app/components/**`                                    |
+| `worker`      | `workers/**`                                           |
 
 A route may import a component or any server element. A server-leaf may
 import a server-leaf, a data-writer, or `auth`. A data-writer may
@@ -363,12 +363,12 @@ report, not an editor squiggle.
 
 **Chosen: A. Rejection recorded: dependency-cruiser.** Three reasons, in order.
 (1) `npm run lint` already has to exist for the commit-derived rules — B adds a
-gate that A gets for free. (2) The message *is* the documentation; splitting
+gate that A gets for free. (2) The message _is_ the documentation; splitting
 boundaries across two configs splits the provenance too, and a rule whose reason
 is lost gets deleted by the next person who trips on it. (3) B's real advantage
 — transitive reach — **closes by construction for our one boundary that
 matters.** The `.server` ban applies to every client module, so a client module
-cannot reach a `.server` module in one hop *or* in three: every hop in the chain
+cannot reach a `.server` module in one hop _or_ in three: every hop in the chain
 is itself a client module and every one of them is covered. Transitive detection
 buys nothing where the direct rule is total.
 
@@ -422,7 +422,6 @@ messages, not deleted.
 
 ---
 
-
 **2026-09-22, moved to rung 2 (#4225).** The reviewer half above is gone:
 `eslint-plugin-no-comments` (`no-comments/disallowComments`, allow list
 `eslint` and `global` only) runs on `app/**` and `workers/**` in the same block
@@ -431,6 +430,7 @@ as the other two comment rules. On the day it landed it found 59 comments in
 is the exact hole B5 predicted. Their text is preserved in that PR's commit
 message; anything a future reader needs from it belongs in `docs/`, not in the
 file.
+
 ## C. The gardener
 
 > "every team really needs … a role that I'm calling a gardener … you want to
@@ -446,7 +446,7 @@ Three questions, asked of the diff and nothing else:
 1. **Does this diff add a workaround?** A retry around a thing that should not
    fail, a fallback that hides a missing case, a cast that silences a type, a
    `catch {}` that swallows.
-2. **Does it add a comment that justifies one?** Per §B5 — the comment *is* the
+2. **Does it add a comment that justifies one?** Per §B5 — the comment _is_ the
    tell. If removing the comment would make the code look wrong, the code is
    wrong.
 3. **Does it add a second way to do something that already has one paved path?**
@@ -455,9 +455,9 @@ Three questions, asked of the diff and nothing else:
 
 **The verdict is not a review comment.** A "yes" to any of the three means the
 PR carries **either the lint rule that makes it impossible, or a filed issue for
-that rule**, before it merges. 26:01: *"whenever you see tech debt or bad
+that rule**, before it merges. 26:01: _"whenever you see tech debt or bad
 patterns, your instinct should be, I need to write a lint rule against it … you
-can at least stop the bleeding."* A review comment that only asks for a change
+can at least stop the bleeding."_ A review comment that only asks for a change
 teaches one agent once; a rule teaches every agent forever.
 
 The `opus-review` job that asked all three questions (PR #4255, removed by #6091)
@@ -493,6 +493,7 @@ re-enabling is a config change and not a design session.
 >
 > **3. Duplicate-pattern hunt.** Pick the paved paths from `CLAUDE.md` and check
 > each for a second implementation:
+>
 > - who writes DML (`INSERT`, `UPDATE`, `DELETE`) outside `app/lib/data/`
 > - who calls `betterAuth(` other than `app/lib/auth.server.ts`
 > - how many distinct date/number formatters exist under `app/`
@@ -529,19 +530,19 @@ re-enabling is a config change and not a design session.
 ## D. Dune-equivalent conventions
 
 Her Dune is an Electron client framework; the transferable part is not its
-shape but its principle (29:22: *"it's not about Dune, but the idea that an
-agent-friendly framework of your own is actually very, very powerful"*). Ours is
+shape but its principle (29:22: _"it's not about Dune, but the idea that an
+agent-friendly framework of your own is actually very, very powerful"_). Ours is
 a React Router 8 app on one Worker, and the equivalent conventions are these —
 **every one enforced by lint or by types, none by prose alone**:
 
-| Dune convention | Ours | Enforced by |
-|---|---|---|
-| Features co-located in one folder | A feature is its route module plus its `app/lib/<feature>*.server.ts` leaf plus its `app/lib/data/<table>.server.ts` writer — not split by file type | `max-lines` on routes pushes logic to the leaf; the paved-path import rules keep it from going anywhere else |
-| Main process vs renderer thread | `*.server` modules vs client modules | `boundaries/dependencies` |
-| One blessed way per pattern | one data layer (`app/lib/data/<table>.server.ts`), one session authority (`app/lib/auth.server.ts`) | `no-restricted-syntax` on DML text outside `app/lib/data/**`; `no-restricted-imports` on `better-auth` and its plugins |
-| Thin entry points | routes are 150 lines and do not query | `max-lines`, plus `no-restricted-syntax` on `env.DB` in routes |
-| — | one writer per table | `no-restricted-syntax` on DML statement text in `app/**` + `workers/**` outside `app/lib/data/**` |
-| Comments banned | comments banned in app code | `no-inline-comments`, `no-warning-comments`, §B5 |
+| Dune convention                   | Ours                                                                                                                                                 | Enforced by                                                                                                            |
+| --------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| Features co-located in one folder | A feature is its route module plus its `app/lib/<feature>*.server.ts` leaf plus its `app/lib/data/<table>.server.ts` writer — not split by file type | `max-lines` on routes pushes logic to the leaf; the paved-path import rules keep it from going anywhere else           |
+| Main process vs renderer thread   | `*.server` modules vs client modules                                                                                                                 | `boundaries/dependencies`                                                                                              |
+| One blessed way per pattern       | one data layer (`app/lib/data/<table>.server.ts`), one session authority (`app/lib/auth.server.ts`)                                                  | `no-restricted-syntax` on DML text outside `app/lib/data/**`; `no-restricted-imports` on `better-auth` and its plugins |
+| Thin entry points                 | routes are 150 lines and do not query                                                                                                                | `max-lines`, plus `no-restricted-syntax` on `env.DB` in routes                                                         |
+| —                                 | one writer per table                                                                                                                                 | `no-restricted-syntax` on DML statement text in `app/**` + `workers/**` outside `app/lib/data/**`                      |
+| Comments banned                   | comments banned in app code                                                                                                                          | `no-inline-comments`, `no-warning-comments`, §B5                                                                       |
 
 When this table was written, `app/lib/data/` did not exist yet. That was
 deliberate. **The rule is written before the first
@@ -572,7 +573,7 @@ umbrella.
 
 - **A Sentry organisation on the Developer plan.** Zero spend, so account
   creation is inside standing authorization and the worker does it — but the
-  *first* paid-tier prompt is a hard stop, and Nish should know the account
+  _first_ paid-tier prompt is a hard stop, and Nish should know the account
   exists in his name before it starts receiving production stack traces.
 
 Nothing else. No money, no security action, and no taste call this doc could not

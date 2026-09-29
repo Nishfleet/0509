@@ -1,7 +1,14 @@
 import { expect, test, type Page } from "@playwright/test";
 
 import { previousBriefAt } from "../app/lib/brief-schedule";
-import { decodedBodies, deleteCreatedAccount, laneOrigin, readRawMessage, requireInboxToken, signInWithMagicLink } from "./inbox";
+import {
+  decodedBodies,
+  deleteCreatedAccount,
+  laneOrigin,
+  readRawMessage,
+  requireInboxToken,
+  signInWithMagicLink,
+} from "./inbox";
 
 let createdEmail = "";
 test.afterEach(async ({ page }, testInfo) => {
@@ -77,10 +84,7 @@ function openingSlot(now: Date): { weekday: number; hour: number; timezone: stri
   return utc;
 }
 
-async function saveSchedule(
-  page: Page,
-  schedule: { weekday: number; hour: number; timezone: string },
-): Promise<void> {
+async function saveSchedule(page: Page, schedule: { weekday: number; hour: number; timezone: string }): Promise<void> {
   const response = await page.request.post("/app/settings", {
     form: { weekday: String(schedule.weekday), hour: String(schedule.hour), timezone: schedule.timezone },
   });
@@ -137,7 +141,9 @@ function assertOrder(text: string, markers: readonly string[]): void {
   }
 }
 
-test("the weekly brief arrives from the inbox, in order, and unsubscribe stops the next one @own-signin", async ({ page }, testInfo) => {
+test("the weekly brief arrives from the inbox, in order, and unsubscribe stops the next one @own-signin", async ({
+  page,
+}, testInfo) => {
   test.setTimeout(480_000);
   test.skip(testInfo.project.name === "phone-390", "one production brief; the HTML is checked at 600 px");
 
@@ -199,7 +205,14 @@ test("the weekly brief arrives from the inbox, in order, and unsubscribe stops t
     "Read this first",
   );
 
-  const markers = ["You're #", "Your tracked brands", "Your site looks", "What was checked", "Next brief", "Unsubscribe"];
+  const markers = [
+    "You're #",
+    "Your tracked brands",
+    "Your site looks",
+    "What was checked",
+    "Next brief",
+    "Unsubscribe",
+  ];
   assertOrder(text, markers);
   const brands = text.slice(text.indexOf("Your tracked brands"), text.indexOf("Your site looks"));
   expect(brands).toContain(selfName);
@@ -207,9 +220,7 @@ test("the weekly brief arrives from the inbox, in order, and unsubscribe stops t
   expect(brands, "an off brand is absent, not a zeroed line").not.toContain(OFF);
   expect(text).not.toContain(OFF);
 
-  const fits = await page.evaluate(
-    () => document.documentElement.scrollWidth <= document.documentElement.clientWidth,
-  );
+  const fits = await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth);
   expect(fits, "rendered HTML at 600 px").toBe(true);
   await testInfo.attach("j11-brief-600", {
     body: await page.screenshot({ fullPage: true }),

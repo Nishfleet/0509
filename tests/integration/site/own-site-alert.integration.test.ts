@@ -234,9 +234,7 @@ describe("own-site alert in one sweep pass", () => {
     const broken = await sweepOnePage(self, await tick("broken-self"));
     expect(broken.outcome).toBe("changed");
 
-    const verdicts = await env.DB.prepare(
-      "SELECT question_id, p, entity_id FROM jev_verdict WHERE workspace_id = ?",
-    )
+    const verdicts = await env.DB.prepare("SELECT question_id, p, entity_id FROM jev_verdict WHERE workspace_id = ?")
       .bind(WS)
       .all<{ question_id: string; p: number | null; entity_id: string }>();
     expect(verdicts.results).toEqual([{ question_id: "own_site_breakage", p: 0.8, entity_id: SELF }]);
@@ -252,9 +250,7 @@ describe("own-site alert in one sweep pass", () => {
     const incident = incidents.results[0];
     if (incident === undefined) throw new Error("expected one open incident");
 
-    const alerts = await env.DB.prepare(
-      "SELECT incident_id, kind, severity FROM alert WHERE workspace_id = ?",
-    )
+    const alerts = await env.DB.prepare("SELECT incident_id, kind, severity FROM alert WHERE workspace_id = ?")
       .bind(WS)
       .all<{ incident_id: string | null; kind: string; severity: string }>();
     expect(alerts.results).toEqual([{ incident_id: incident.id, kind: "own_site_broken", severity: "high" }]);

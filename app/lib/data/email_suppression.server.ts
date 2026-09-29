@@ -19,28 +19,20 @@ const SELECT_UNSUBSCRIBE_TOKEN = `SELECT 1 AS present FROM send_target WHERE uns
 const DELETE_SUPPRESSION = `DELETE FROM email_suppression WHERE address = ?`;
 
 export async function suppressByUnsubscribeToken(token: string): Promise<void> {
-  await env.DB.prepare(SUPPRESS_BY_UNSUBSCRIBE_TOKEN)
-    .bind(new Date().toISOString(), token)
-    .run();
+  await env.DB.prepare(SUPPRESS_BY_UNSUBSCRIBE_TOKEN).bind(new Date().toISOString(), token).run();
 }
 
 export async function isUnsubscribeTokenKnown(token: string): Promise<boolean> {
-  const row = await env.DB.prepare(SELECT_UNSUBSCRIBE_TOKEN)
-    .bind(token)
-    .first<{ present: number }>();
+  const row = await env.DB.prepare(SELECT_UNSUBSCRIBE_TOKEN).bind(token).first<{ present: number }>();
   return row !== null;
 }
 
 export async function suppressWorkspaceTargets(workspaceId: string): Promise<void> {
-  await env.DB.prepare(SUPPRESS_WORKSPACE_TARGETS)
-    .bind(new Date().toISOString(), workspaceId)
-    .run();
+  await env.DB.prepare(SUPPRESS_WORKSPACE_TARGETS).bind(new Date().toISOString(), workspaceId).run();
 }
 
 export async function isAddressSuppressed(address: string): Promise<boolean> {
-  const row = await env.DB.prepare(SELECT_SUPPRESSION)
-    .bind(address)
-    .first<{ address: string }>();
+  const row = await env.DB.prepare(SELECT_SUPPRESSION).bind(address).first<{ address: string }>();
   return row !== null;
 }
 

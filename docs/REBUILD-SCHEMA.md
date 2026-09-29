@@ -42,7 +42,7 @@ A poll writes **one** `snapshot` row per watch per tick — `payload_r2_key`, `p
 
 This is precisely the shape that produced the $105 rows-written bill: a row per observed event. Choosing A would be choosing it again with full knowledge.
 
-**Where A is genuinely better.** Debuggability. In A, "why did we not show this" is answerable from D1 alone; in B, the raw body is in R2 and you need the snapshot key to go look. B pays for this with a `snapshot` row that records `item_count` and the hash, so the *fact* of an observation is always in D1 even when its body is not.
+**Where A is genuinely better.** Debuggability. In A, "why did we not show this" is answerable from D1 alone; in B, the raw body is in R2 and you need the snapshot key to go look. B pays for this with a `snapshot` row that records `item_count` and the hash, so the _fact_ of an observation is always in D1 even when its body is not.
 
 **Where both are equal.** Adding a source is a row in `source` plus a plugin in either candidate. Both pass the stated bar. The old schema failed it for a specific reason worth recording: `source_snapshot.source_id` carried a `CHECK (source_id IN (…))`, so every new source shipped a migration. A registry table removes that by construction.
 

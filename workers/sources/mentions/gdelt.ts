@@ -1,10 +1,6 @@
 import type { MentionsAdapter } from "./types";
 import { fetchUpstream, mentionItemSchema, SOURCE_SETTINGS } from "./types";
-import {
-  GDELT_SEARCH_URL,
-  gdeltResponseSchema,
-  gdeltSeendateToIso,
-} from "../../../app/lib/discovery/gdelt";
+import { GDELT_SEARCH_URL, gdeltResponseSchema, gdeltSeendateToIso } from "../../../app/lib/discovery/gdelt";
 
 function parseBody(rawBody: string): unknown {
   try {
@@ -16,11 +12,10 @@ function parseBody(rawBody: string): unknown {
 
 export const gdelt: MentionsAdapter = async (target, _cursor) => {
   const { timeoutMs, timeoutRetries, retryBackoffMs } = SOURCE_SETTINGS["gdelt.doc"];
-  const response = await fetchUpstream(
-    GDELT_SEARCH_URL + encodeURIComponent(`"${target.query}"`),
-    timeoutMs,
-    { retries: timeoutRetries, backoffMs: retryBackoffMs },
-  );
+  const response = await fetchUpstream(GDELT_SEARCH_URL + encodeURIComponent(`"${target.query}"`), timeoutMs, {
+    retries: timeoutRetries,
+    backoffMs: retryBackoffMs,
+  });
   if (!response.ok) throw new Error(`gdelt answered ${String(response.status)}`);
   const rawBody = await response.text();
   const parsed = gdeltResponseSchema.parse(parseBody(rawBody));

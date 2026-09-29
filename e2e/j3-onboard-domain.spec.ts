@@ -78,7 +78,10 @@ for (const { width, height } of [
 
     const watching = page.getByRole("list", { name: "Watching" }).getByRole("listitem");
     if ((await watching.count()) === 0) {
-      await page.getByRole("button", { name: /^Watch / }).first().click();
+      await page
+        .getByRole("button", { name: /^Watch / })
+        .first()
+        .click();
       await expect(watching.first()).toBeVisible();
     }
     await page.getByRole("button", { name: "Start watching" }).click();

@@ -44,22 +44,26 @@ export class StandingRollover extends WorkflowEntrypoint<Env, RolloverParams> {
       await step.sleepUntil("until-brief", closesAt);
     }
 
-    const closing = await step.do("final-score", RETRY, async (): Promise<ClosingWeek | "workspace_gone" | "schedule_moved"> => {
-      const workspace = await readWorkspaceSchedule(this.env.DB, workspaceId);
-      if (workspace === null) return "workspace_gone";
-      const due = nextBriefAt(workspace.schedule, new Date(closesAt.getTime() - 1));
-      if (due.getTime() !== closesAt.getTime()) return "schedule_moved";
-      const week = weekClosingAt(workspace.schedule, closesAt);
-      const startsAt = week.startsAt.toISOString();
-      await refreshWorkspaceScores(this.env.DB, {
-        workspaceId,
-        weekStartAt: startsAt,
-        windowStartAt: startsAt,
-        windowEndAt: closesAt.toISOString(),
-        computedAt: new Date().toISOString(),
-      });
-      return { ...workspace.schedule, startsAt, paused: workspace.briefPausedAt !== null };
-    });
+    const closing = await step.do(
+      "final-score",
+      RETRY,
+      async (): Promise<ClosingWeek | "workspace_gone" | "schedule_moved"> => {
+        const workspace = await readWorkspaceSchedule(this.env.DB, workspaceId);
+        if (workspace === null) return "workspace_gone";
+        const due = nextBriefAt(workspace.schedule, new Date(closesAt.getTime() - 1));
+        if (due.getTime() !== closesAt.getTime()) return "schedule_moved";
+        const week = weekClosingAt(workspace.schedule, closesAt);
+        const startsAt = week.startsAt.toISOString();
+        await refreshWorkspaceScores(this.env.DB, {
+          workspaceId,
+          weekStartAt: startsAt,
+          windowStartAt: startsAt,
+          windowEndAt: closesAt.toISOString(),
+          computedAt: new Date().toISOString(),
+        });
+        return { ...workspace.schedule, startsAt, paused: workspace.briefPausedAt !== null };
+      },
+    );
     if (closing === "workspace_gone" || closing === "schedule_moved") return outcome(null, closing);
 
     const schedule = { timezone: closing.timezone, weekday: closing.weekday, hour: closing.hour };

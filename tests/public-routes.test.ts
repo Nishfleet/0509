@@ -17,9 +17,7 @@ import {
 } from "../app/lib/public-routes";
 
 function topLevel(entries: RouteConfigEntry[]): RouteConfigEntry[] {
-  return entries.flatMap((entry) =>
-    entry.path === undefined && entry.children ? topLevel(entry.children) : [entry],
-  );
+  return entries.flatMap((entry) => (entry.path === undefined && entry.children ? topLevel(entry.children) : [entry]));
 }
 
 const REPO_ROOT = dirname(dirname(fileURLToPath(import.meta.url)));
@@ -40,13 +38,8 @@ describe("public-route manifest", () => {
       const urlPath = `/${path}`;
       const classified =
         (PUBLIC_PATHS as readonly string[]).includes(urlPath) ||
-        DISALLOWED_PREFIXES.some(
-          (prefix) => urlPath === prefix || urlPath.startsWith(`${prefix}/`),
-        );
-      expect(
-        classified,
-        `route "${path}" is not classified in app/lib/public-routes.ts`,
-      ).toBe(true);
+        DISALLOWED_PREFIXES.some((prefix) => urlPath === prefix || urlPath.startsWith(`${prefix}/`));
+      expect(classified, `route "${path}" is not classified in app/lib/public-routes.ts`).toBe(true);
     }
   });
 
@@ -60,9 +53,7 @@ describe("public-route manifest", () => {
 
   it("sitemap.xml lists every public path as an absolute url in a sitemaps.org urlset", () => {
     const body = sitemapXml("https://0509.io", PUBLIC_PATHS);
-    expect(body).toContain(
-      'xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"',
-    );
+    expect(body).toContain('xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"');
     for (const p of PUBLIC_PATHS) {
       expect(body).toContain(`<loc>https://0509.io${p}</loc>`);
     }

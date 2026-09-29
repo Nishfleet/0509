@@ -6,14 +6,14 @@ The direction metric `signups/week` is defined by source [0509#4518](https://git
 
 A live read of production D1 (database `0509`, binding `DB`, database id `746c6e3d-782e-443a-82d6-28ca93a16294`) on **2026-09-23T19:06Z and 2026-09-23T19:12Z** returned:
 
-| Read | Result |
-|---|---|
-| `SELECT COUNT(*) FROM "user"` | **310** (308 at 19:06Z, 310 at 19:12Z — e2e runs mint rows while the read runs) |
-| trailing 7d on `createdAt` | 310 (every row is inside 30 days) |
-| trailing 30d on `createdAt` | 310 |
-| `email LIKE 'e2e+%'` | **308** |
-| real signups (`email NOT LIKE 'e2e+%'`), trailing 7d | **2** |
-| real signups (`email NOT LIKE 'e2e+%'`), trailing 30d | **2** |
+| Read                                                  | Result                                                                          |
+| ----------------------------------------------------- | ------------------------------------------------------------------------------- |
+| `SELECT COUNT(*) FROM "user"`                         | **310** (308 at 19:06Z, 310 at 19:12Z — e2e runs mint rows while the read runs) |
+| trailing 7d on `createdAt`                            | 310 (every row is inside 30 days)                                               |
+| trailing 30d on `createdAt`                           | 310                                                                             |
+| `email LIKE 'e2e+%'`                                  | **308**                                                                         |
+| real signups (`email NOT LIKE 'e2e+%'`), trailing 7d  | **2**                                                                           |
+| real signups (`email NOT LIKE 'e2e+%'`), trailing 30d | **2**                                                                           |
 
 `PRAGMA table_info("user")` shows the better-auth column is **`createdAt`** (camelCase). The A.8 shorthand `created_at` fails live with `no such column: created_at at offset 40: SQLITE_ERROR [code: 7500]`. Use `createdAt`.
 
@@ -29,12 +29,12 @@ npx wrangler d1 execute 0509 --remote --json --command "SELECT (SELECT COUNT(*) 
 
 For the individual reads, use these commands verbatim:
 
-| Read | Command |
-|---|---|
-| total | `npx wrangler d1 execute 0509 --remote --json --command "SELECT COUNT(*) AS total FROM \"user\""` |
-| trailing 7d, fixtures excluded | `npx wrangler d1 execute 0509 --remote --json --command "SELECT COUNT(*) AS signups_7d FROM \"user\" WHERE email NOT IN ('e2e+j7@0509.io', 'e2e+j8-soft@0509.io', 'e2e+j9-mentions@0509.io', 'e2e+j12-rollovers@0509.io') AND \"createdAt\" >= datetime('now', '-7 days')"` |
+| Read                            | Command                                                                                                                                                                                                                                                                       |
+| ------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| total                           | `npx wrangler d1 execute 0509 --remote --json --command "SELECT COUNT(*) AS total FROM \"user\""`                                                                                                                                                                             |
+| trailing 7d, fixtures excluded  | `npx wrangler d1 execute 0509 --remote --json --command "SELECT COUNT(*) AS signups_7d FROM \"user\" WHERE email NOT IN ('e2e+j7@0509.io', 'e2e+j8-soft@0509.io', 'e2e+j9-mentions@0509.io', 'e2e+j12-rollovers@0509.io') AND \"createdAt\" >= datetime('now', '-7 days')"`   |
 | trailing 30d, fixtures excluded | `npx wrangler d1 execute 0509 --remote --json --command "SELECT COUNT(*) AS signups_30d FROM \"user\" WHERE email NOT IN ('e2e+j7@0509.io', 'e2e+j8-soft@0509.io', 'e2e+j9-mentions@0509.io', 'e2e+j12-rollovers@0509.io') AND \"createdAt\" >= datetime('now', '-30 days')"` |
-| fixture rows | `npx wrangler d1 execute 0509 --remote --json --command "SELECT COUNT(*) AS fixture_rows FROM \"user\" WHERE email IN ('e2e+j7@0509.io', 'e2e+j8-soft@0509.io', 'e2e+j9-mentions@0509.io', 'e2e+j12-rollovers@0509.io')"` |
+| fixture rows                    | `npx wrangler d1 execute 0509 --remote --json --command "SELECT COUNT(*) AS fixture_rows FROM \"user\" WHERE email IN ('e2e+j7@0509.io', 'e2e+j8-soft@0509.io', 'e2e+j9-mentions@0509.io', 'e2e+j12-rollovers@0509.io')"`                                                     |
 
 ## The exclusion rule
 

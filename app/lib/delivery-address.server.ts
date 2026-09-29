@@ -5,8 +5,7 @@ import { changeEmailTarget, ensureOwnerEmailTarget, readEmailTarget } from "./da
 import { readWorkspaceIdForOwner } from "./data/workspace.server";
 
 const INVALID = "Enter an email address, like you@company.com.";
-const SUPPRESSED =
-  'This address unsubscribed from the brief. Tick "Send to it again" and save to resume.';
+const SUPPRESSED = 'This address unsubscribed from the brief. Tick "Send to it again" and save to resume.';
 const NO_WORKSPACE = "Finish setting up first, then choose where the brief goes.";
 
 export async function readDeliveryAddress(userId: string, signInEmail: string): Promise<string> {

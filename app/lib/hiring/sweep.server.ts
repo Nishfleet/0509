@@ -2,11 +2,7 @@ import { getDomain } from "tldts";
 import { z } from "zod";
 
 import type { HiringTarget } from "../data/watch.server";
-import {
-  insertWatches,
-  readEntitiesWithoutHiringWatch,
-  readHiringTargets,
-} from "../data/watch.server";
+import { insertWatches, readEntitiesWithoutHiringWatch, readHiringTargets } from "../data/watch.server";
 import { readEnabledSourceId } from "../data/source.server";
 import { readThrough } from "../identity/probe-cache.server";
 import { readUrl } from "../fetch/transport.server";
@@ -62,11 +58,7 @@ export async function findBoard(entity: { id: string; domain: string }): Promise
   }
 
   const homepage = `https://${entity.domain}/`;
-  const board = await readThrough(
-    `hiring:${registrable}:board`,
-    BOARD_SCHEMA,
-    BOARD_TTL_SECONDS,
-    async () => {
+  const board = await readThrough(`hiring:${registrable}:board`, BOARD_SCHEMA, BOARD_TTL_SECONDS, async () => {
     const page = await readUrl(homepage);
     if (!page.ok) throw new Error(`hiring.homepage_unreadable ${entity.domain}: ${page.reason}`);
     const found = await discoverBoard(await homepageLinks(page.html, homepage), entity.domain);
@@ -80,8 +72,6 @@ export async function findBoard(entity: { id: string; domain: string }): Promise
   const sourceId = await readEnabledSourceId(`hiring.${board.platform}`);
   if (sourceId === null) return { ...base, watched: false };
 
-  await insertWatches([
-    { id: crypto.randomUUID(), entityId: entity.id, sourceId, targetKey: board.boardUrl },
-  ]);
+  await insertWatches([{ id: crypto.randomUUID(), entityId: entity.id, sourceId, targetKey: board.boardUrl }]);
   return { ...base, watched: true };
 }

@@ -19,19 +19,19 @@ wrangler r2 bucket lifecycle set    <bucket>          # from a JSON file
 
 `add` options, verbatim: `--expire-days`, `--expire-date`, `--ia-transition-days`, `--ia-transition-date`, `--abort-multipart-days`, `-J/--jurisdiction`, `-y/--force`.
 
-**So retention is `wrangler` configuration with a prefix — one command per rule, no code.** That is the whole implementation of #3899's *"the R2 lifecycle rule does this, nothing hand-rolled"*, and it is confirmed present in the pinned wrangler rather than assumed from docs.
+**So retention is `wrangler` configuration with a prefix — one command per rule, no code.** That is the whole implementation of #3899's _"the R2 lifecycle rule does this, nothing hand-rolled"_, and it is confirmed present in the pinned wrangler rather than assumed from docs.
 
 **Schema, from `migrations/0001_rebuild.sql`:** the tables are `account alert change channel digest dodo_webhook_event email_suppression entity incident incident_notice jev_verdict mention onboarding_run page plan rate_limit_events scoring_weight send_attempt send_target session signal signal_delivery snapshot source standing suggestion user user_decision verification watch workspace`.
 
-**There is no `takedown` table.** #3899 requires one (*"recorded on a `takedown` row"*). P10.2 adds it. Also absent and owned by engine 8: `apikey`, `passkey`.
+**There is no `takedown` table.** #3899 requires one (_"recorded on a `takedown` row"_). P10.2 adds it. Also absent and owned by engine 8: `apikey`, `passkey`.
 
 ---
 
 ## 1. The private-subject refusal is a new decision, not a field on D7
 
-#3899 says: *"Jev D7 (identity) carries a `public_subject` field; below 0.1 the input is refused."* Fable's brief corrects this to a Noul of its own, and the brief is right. The reasoning is worth recording because it is the difference between a check that works and one that is structurally unable to.
+#3899 says: _"Jev D7 (identity) carries a `public_subject` field; below 0.1 the input is refused."_ Fable's brief corrects this to a Noul of its own, and the brief is right. The reasoning is worth recording because it is the difference between a check that works and one that is structurally unable to.
 
-`docs/REBUILD-JEV.md` defines **D7 `identity_field_confidence`** as: *"Is this extracted value right for this brand's `field`?"* — a per-field Noul over `name`, `logo`, `description`, `category`, `country`, `socials`, `pricing page`. Its automatic action at `p <= 0.1` is *"leave empty and say what fills it"*.
+`docs/REBUILD-JEV.md` defines **D7 `identity_field_confidence`** as: _"Is this extracted value right for this brand's `field`?"_ — a per-field Noul over `name`, `logo`, `description`, `category`, `country`, `socials`, `pricing page`. Its automatic action at `p <= 0.1` is _"leave empty and say what fills it"_.
 
 "Is this subject a public commercial or audience presence?" is not that question in three separate ways:
 
@@ -39,11 +39,11 @@ wrangler r2 bucket lifecycle set    <bucket>          # from a JSON file
 2. **Its low-confidence action is opposite.** D7 below 0.1 leaves a field empty and carries on. A private subject below 0.1 must **refuse the whole input**. Sharing a threshold with a decision whose failure mode is "leave a blank" is how a refusal quietly becomes a blank.
 3. **It runs at a different time.** D7 runs per field during card construction. The eligibility check must run **before** we crawl anything, because the harm in tracking a private individual is the crawling, not the displaying.
 
-So: **D10 `public_subject`** — *"Does this subject present itself to the public for commercial or audience reasons?"* Noul. This is an addition to `docs/REBUILD-JEV.md`'s table of nine and should be absorbed there in the same PR series rather than living only here.
+So: **D10 `public_subject`** — _"Does this subject present itself to the public for commercial or audience reasons?"_ Noul. This is an addition to `docs/REBUILD-JEV.md`'s table of nine and should be absorbed there in the same PR series rather than living only here.
 
-| Id | Question | Primitive | Automatic action | Otherwise |
-|---|---|---|---|---|
-| **D10** `public_subject` | Does `item` (a domain, handle or channel) present itself to the public for commercial or audience reasons? | Noul | `p >= 0.9`: proceed. **`p <= 0.1`: refuse**, with the one line "we track brands and creators, not people", and record the refusal | **ask the user** to confirm the subject is a business or public creator, and record their answer in `user_decision` |
+| Id                       | Question                                                                                                   | Primitive | Automatic action                                                                                                                  | Otherwise                                                                                                           |
+| ------------------------ | ---------------------------------------------------------------------------------------------------------- | --------- | --------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| **D10** `public_subject` | Does `item` (a domain, handle or channel) present itself to the public for commercial or audience reasons? | Noul      | `p >= 0.9`: proceed. **`p <= 0.1`: refuse**, with the one line "we track brands and creators, not people", and record the refusal | **ask the user** to confirm the subject is a business or public creator, and record their answer in `user_decision` |
 
 **Thresholds are deliberately asymmetric from D3s and it is the same reasoning inverted.** D3s alerts at `p >= 0.5` because a false alarm costs ten seconds and silence costs the customer. Here a false refusal costs one clarifying question and a false acceptance means we crawl a private person. So the middle band **asks** rather than proceeding — this is the one decision in the product where the ambiguous case is not resolved by defaulting forward.
 
@@ -70,7 +70,7 @@ Every read path joins or filters against `takedown`: Home, Competitors, Alerts, 
 
 A takedown writes a row to a global `takedown` table, then a Workflow fans out: for every workspace holding that subject, set `entity.state = 'dismissed'` with `state_reason = 'takedown'` and `state_changed_by = 'auto'`, and run the "remove and forget" path (delete that entity's `signal` rows and its R2 objects for that workspace). The global table is then checked at only **three** entry points: onboarding/identity, discovery's D1 suggestion, and the public card's serve path.
 
-- **It reuses semantics the product already enforces absolutely.** `docs/REBUILD-DELIVERY.md` rule 4: an `off` brand *"produces no alerts, no brief lines, no counts"*. `docs/REBUILD-SCHEMA.md`: `dismissed` is *"never re-suggested"*, enforced by `UNIQUE(workspace_id, candidate_domain)` on `suggestion`. So a taken-down subject is correctly absent from Home, Competitors, Alerts, the brief, the API, the MCP tools and the standing score **without a single new check**, because those surfaces already filter on `entity.state`.
+- **It reuses semantics the product already enforces absolutely.** `docs/REBUILD-DELIVERY.md` rule 4: an `off` brand _"produces no alerts, no brief lines, no counts"_. `docs/REBUILD-SCHEMA.md`: `dismissed` is _"never re-suggested"_, enforced by `UNIQUE(workspace_id, candidate_domain)` on `suggestion`. So a taken-down subject is correctly absent from Home, Competitors, Alerts, the brief, the API, the MCP tools and the standing score **without a single new check**, because those surfaces already filter on `entity.state`.
 - New surfaces inherit the guarantee automatically — any surface that respects OFF respects takedown, and respecting OFF is already a hard product rule with tests.
 - No global-table join on any hot path.
 - **Weakness: it is eventually consistent.** Between the takedown row and the fan-out completing, a workspace still holds the subject. The window is one Workflow run, but it is not zero.
@@ -86,9 +86,9 @@ A takedown writes a row to a global `takedown` table, then a Workflow fans out: 
 2. **Onboarding and discovery check `takedown` before anything is crawled.** These are the two places a subject enters the product, and B's fan-out cannot reach a workspace that does not exist yet.
 3. **The fan-out is a Workflow with retries**, not a best-effort loop, and the nightly cron reconciles any `takedown` row whose `fanned_out_at` is null — the same watchdog shape engines 6 and 7 use, for the same reason.
 
-**Rejected from A, recorded:** a `takedown` join on the collection tick and on Home. The number to beat is one — one missed surface is a breach — and A's answer to that is vigilance, while B's is a state machine that is already tested. If a future surface is added that does *not* filter on `entity.state`, that surface is the bug.
+**Rejected from A, recorded:** a `takedown` join on the collection tick and on Home. The number to beat is one — one missed surface is a breach — and A's answer to that is vigilance, while B's is a state machine that is already tested. If a future surface is added that does _not_ filter on `entity.state`, that surface is the bug.
 
-**The 72-hour commitment is a human one.** #3899 puts takedowns at *"within 72 hours by hand (Nish or the deputy)"*. Nothing here automates the decision; the machinery exists so that once a human decides, the removal is complete and provable rather than partial and hopeful.
+**The 72-hour commitment is a human one.** #3899 puts takedowns at _"within 72 hours by hand (Nish or the deputy)"_. Nothing here automates the decision; the machinery exists so that once a human decides, the removal is complete and provable rather than partial and hopeful.
 
 ---
 
@@ -96,19 +96,19 @@ A takedown writes a row to a global `takedown` table, then a Workflow fans out: 
 
 Per #3899: raw snapshots and screenshots kept **1 year**, then only the marks and summaries. Configured with the probed commands (§0), one rule per prefix, **no code**:
 
-| Prefix | Rule | Why that number |
-|---|---|---|
-| `mentions/` | `--expire-days 30` | engine 5's steady state. Feed bodies exist for the diff and the proof trail; after a month the `signal` row is the record. |
-| `snapshot/` | `--expire-days 365` | #3899's one year for raw page snapshots. |
-| `shot/` | `--expire-days 365` | before-and-after screenshots, same rule, same reason. |
-| `card/` | `--expire-days 90` | engine 9's weekly artifacts; older weeks are not served. |
-| *(all prefixes)* | `--abort-multipart-days 7` | the stack doc's named anti-pattern: incomplete multipart uploads accrue storage for parts nothing will ever complete. |
+| Prefix           | Rule                       | Why that number                                                                                                            |
+| ---------------- | -------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `mentions/`      | `--expire-days 30`         | engine 5's steady state. Feed bodies exist for the diff and the proof trail; after a month the `signal` row is the record. |
+| `snapshot/`      | `--expire-days 365`        | #3899's one year for raw page snapshots.                                                                                   |
+| `shot/`          | `--expire-days 365`        | before-and-after screenshots, same rule, same reason.                                                                      |
+| `card/`          | `--expire-days 90`         | engine 9's weekly artifacts; older weeks are not served.                                                                   |
+| _(all prefixes)_ | `--abort-multipart-days 7` | the stack doc's named anti-pattern: incomplete multipart uploads accrue storage for parts nothing will ever complete.      |
 
-**Infrequent Access is rejected, and the reasons are arithmetic.** IA saves 33% on storage but costs **2× Class A**, **2.5× Class B**, adds retrieval fees, bills a **30-day minimum** regardless of actual lifetime, and is **one-way** — *"Once an object is stored in Infrequent Access, it cannot be transitioned to Standard Access using lifecycle policies."* Our snapshots are small, short-lived and read on every diff, which is the exact profile IA punishes. `--ia-transition-days` appears in `wrangler`'s help and must not appear in our configuration.
+**Infrequent Access is rejected, and the reasons are arithmetic.** IA saves 33% on storage but costs **2× Class A**, **2.5× Class B**, adds retrieval fees, bills a **30-day minimum** regardless of actual lifetime, and is **one-way** — _"Once an object is stored in Infrequent Access, it cannot be transitioned to Standard Access using lifecycle policies."_ Our snapshots are small, short-lived and read on every diff, which is the exact profile IA punishes. `--ia-transition-days` appears in `wrangler`'s help and must not appear in our configuration.
 
-*(Fleet note, carried so it is not re-derived: R2 age-expiry lifecycle rules corrupt a restic repository. Not applicable to 0509's buckets — no restic here — recorded because the rule is easy to over-generalise.)*
+_(Fleet note, carried so it is not re-derived: R2 age-expiry lifecycle rules corrupt a restic repository. Not applicable to 0509's buckets — no restic here — recorded because the rule is easy to over-generalise.)_
 
-Granularity is **days**, up to 1,000 rules per bucket, and objects are *"typically removed within 24 hours"* of expiry — so a retention promise in the privacy page reads "one year", never "exactly 365 days".
+Granularity is **days**, up to 1,000 rules per bucket, and objects are _"typically removed within 24 hours"_ of expiry — so a retention promise in the privacy page reads "one year", never "exactly 365 days".
 
 ---
 
@@ -120,7 +120,7 @@ Granularity is **days**, up to 1,000 rules per bucket, and objects are *"typical
 
 **R2 is not free, and this is where the packet will go wrong if the design does not say so.** R2 has no delete-by-prefix. Deletion is `list` with a prefix and a cursor, then `delete` in batches, paginating until the listing is exhausted. That is a loop over an external API with an unbounded page count, which is exactly what a Workflow is for: one `step.do` per page, with the cursor as the step's return value so a resumed instance picks up where it stopped. A `while` loop inside a single step would blow the 15-minute wall clock on a large workspace and lose its position.
 
-**Email stops first, not last.** The order is: suppress the address and cancel pending `digest` rows, *then* delete. Deleting first leaves an in-flight queue message that renders from rows that no longer exist and either errors or, worse, sends something malformed to someone who just asked to be forgotten.
+**Email stops first, not last.** The order is: suppress the address and cancel pending `digest` rows, _then_ delete. Deleting first leaves an in-flight queue message that renders from rows that no longer exist and either errors or, worse, sends something malformed to someone who just asked to be forgotten.
 
 **"Remove and forget"** (a user removing a competitor and choosing to purge) is the same code path scoped to one entity: delete that entity's `signal` rows for that workspace and its R2 objects, keep the workspace. A plain removal keeps history, per the product rule — the two are different actions and the UI must not collapse them into one button.
 
@@ -150,12 +150,12 @@ takedown   id, subject_kind ('domain' | 'handle'), subject_value, reason,
 
 ## 6. Workflow / Queue / cron layout, with the numbers
 
-| Job | Mechanism | Concurrency | Why |
-|---|---|---|---|
-| Takedown fan-out | `TakedownWorkflow`, one instance per `takedown` row | 1 | rare by nature; correctness over speed. `step.do` retries; one step per workspace touched. |
-| Workspace deletion | `WorkspaceDeleteWorkflow` | 1 per deletion | one `step.do` per R2 listing page, the cursor returned as step output so a resume continues rather than restarts. |
-| Retention | **R2 lifecycle rules** | n/a | **not a job.** Configuration, applied once with `wrangler`, enforced by the platform. |
-| Reconciliation | engine 6's `0 3 * * *` cron | serial | re-runs any fan-out with `fanned_out_at IS NULL`. |
+| Job                | Mechanism                                           | Concurrency    | Why                                                                                                               |
+| ------------------ | --------------------------------------------------- | -------------- | ----------------------------------------------------------------------------------------------------------------- |
+| Takedown fan-out   | `TakedownWorkflow`, one instance per `takedown` row | 1              | rare by nature; correctness over speed. `step.do` retries; one step per workspace touched.                        |
+| Workspace deletion | `WorkspaceDeleteWorkflow`                           | 1 per deletion | one `step.do` per R2 listing page, the cursor returned as step output so a resume continues rather than restarts. |
+| Retention          | **R2 lifecycle rules**                              | n/a            | **not a job.** Configuration, applied once with `wrangler`, enforced by the platform.                             |
+| Reconciliation     | engine 6's `0 3 * * *` cron                         | serial         | re-runs any fan-out with `fanned_out_at IS NULL`.                                                                 |
 
 - **No new cron.** Retention needs none (the platform does it), and the reconciliation rides the one cron this product has. A guardrails cron would be a second scheduler for a job that runs a handful of times a year.
 - **No queue.** Both Workflows are rare, ordered and must not be dropped; a Workflow's durability is the right tool and a DLQ would be a place for a forgotten takedown to sit.
@@ -169,43 +169,43 @@ takedown   id, subject_kind ('domain' | 'handle'), subject_value, reason,
 
 ### Per 1,000 operations
 
-| Resource | Takedown fan-out (×1,000) | Workspace deletion (×1,000) |
-|---|---|---|
-| Workflow steps | ~5,000 (≤5 workspaces each) | ~50,000 (1 per R2 page) |
-| D1 rows written | ~10,000 | ~1,000 `DELETE`s cascading |
-| D1 rows read | ~50,000 | ~10,000 |
-| R2 Class A (deletes) | ~10,000 | ~50,000,000 objects worst case |
-| R2 Class B (lists) | ~1,000 | ~50,000 |
-| **Browser Rendering** | **0** | **0** |
-| **Cost** | **$0.00** | **$0.00** at any plausible volume |
+| Resource              | Takedown fan-out (×1,000)   | Workspace deletion (×1,000)       |
+| --------------------- | --------------------------- | --------------------------------- |
+| Workflow steps        | ~5,000 (≤5 workspaces each) | ~50,000 (1 per R2 page)           |
+| D1 rows written       | ~10,000                     | ~1,000 `DELETE`s cascading        |
+| D1 rows read          | ~50,000                     | ~10,000                           |
+| R2 Class A (deletes)  | ~10,000                     | ~50,000,000 objects worst case    |
+| R2 Class B (lists)    | ~1,000                      | ~50,000                           |
+| **Browser Rendering** | **0**                       | **0**                             |
+| **Cost**              | **$0.00**                   | **$0.00** at any plausible volume |
 
 ### Monthly at 100 brands
 
-| Item | Volume | Cost |
-|---|---|---|
-| Takedowns | a handful a year, generously **2/month** | $0.00 |
-| Workspace deletions | **~1/month** at 25 workspaces | $0.00 |
-| D10 `public_subject` calls | **one per onboarding attempt**, ~30/month, cached by input hash | Jev seat cost |
-| **R2 lifecycle enforcement** | **0 units — the platform does it** | **$0.00** |
-| **Cloudflare total** | | **$0.00** |
+| Item                         | Volume                                                          | Cost          |
+| ---------------------------- | --------------------------------------------------------------- | ------------- |
+| Takedowns                    | a handful a year, generously **2/month**                        | $0.00         |
+| Workspace deletions          | **~1/month** at 25 workspaces                                   | $0.00         |
+| D10 `public_subject` calls   | **one per onboarding attempt**, ~30/month, cached by input hash | Jev seat cost |
+| **R2 lifecycle enforcement** | **0 units — the platform does it**                              | **$0.00**     |
+| **Cloudflare total**         |                                                                 | **$0.00**     |
 
-**The cost story for this engine is the one it prevents, not the one it incurs.** The lifecycle rules are what stop R2 storage growing without bound: without `mentions/ --expire-days 30`, engine 5's ~750 MB steady state becomes ~750 MB *per month, cumulative*, crossing the 10 GB included tier in about thirteen months and then billing $0.015/GB-mo forever. The rule costs nothing and is the difference between a flat line and a ramp. That is the same class of mistake as the 2026-09-17 rows-written bill, caught at design time by configuration rather than by an invoice.
+**The cost story for this engine is the one it prevents, not the one it incurs.** The lifecycle rules are what stop R2 storage growing without bound: without `mentions/ --expire-days 30`, engine 5's ~750 MB steady state becomes ~750 MB _per month, cumulative_, crossing the 10 GB included tier in about thirteen months and then billing $0.015/GB-mo forever. The rule costs nothing and is the difference between a flat line and a ramp. That is the same class of mistake as the 2026-09-17 rows-written bill, caught at design time by configuration rather than by an invoice.
 
 ---
 
 ## 8. Failure modes and the degraded state
 
-| Failure | Detection | State |
-|---|---|---|
-| **A taken-down subject still visible** | the fan-out test, and the serve-time check on the card | **a breach, not a degradation.** The card's serve-time check is the backstop that makes the eventual-consistency window survivable; that is why it is not optional. |
-| Fan-out fails halfway | `takedown.fanned_out_at IS NULL` | nightly reconciliation re-runs it. Idempotent: setting `state='dismissed'` twice is the same as once. |
-| **A private individual accepted** | D10 returned above 0.1 wrongly | the ambiguous band **asks** rather than proceeding, so this requires a confident wrong answer plus a user confirming. Both are logged (`jev_verdict` and `user_decision`), so it is reconstructible. Discovery of one is a takedown, and the refusal list learns. |
+| Failure                                            | Detection                                                                            | State                                                                                                                                                                                                                                                                                                                                                     |
+| -------------------------------------------------- | ------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **A taken-down subject still visible**             | the fan-out test, and the serve-time check on the card                               | **a breach, not a degradation.** The card's serve-time check is the backstop that makes the eventual-consistency window survivable; that is why it is not optional.                                                                                                                                                                                       |
+| Fan-out fails halfway                              | `takedown.fanned_out_at IS NULL`                                                     | nightly reconciliation re-runs it. Idempotent: setting `state='dismissed'` twice is the same as once.                                                                                                                                                                                                                                                     |
+| **A private individual accepted**                  | D10 returned above 0.1 wrongly                                                       | the ambiguous band **asks** rather than proceeding, so this requires a confident wrong answer plus a user confirming. Both are logged (`jev_verdict` and `user_decision`), so it is reconstructible. Discovery of one is a takedown, and the refusal list learns.                                                                                         |
 | **D10 unavailable** (Jev down or budget exhausted) | no verdict; a `public_subject.jev_unavailable` structured log line on every fallback | **onboarding asks the user** — the same business-or-creator question the ambiguous band uses — and records that answer. Proceeding without any eligibility check means crawling first and judging afterwards, which is the harm itself, so nothing proceeds on silence. Every other engine degrades to `unreviewed`; this one degrades to a human answer. |
-| Workspace deletion incomplete | J14's verification | the Workflow resumes from its stored cursor. The deletion is not reported complete until a final listing under the prefix returns empty — proven, not assumed. |
-| An email sent after deletion | suppression written before deletion begins | ordering is the fix; a test pins it. |
-| Lifecycle rule missing or wrong prefix | `wrangler r2 bucket lifecycle list` in the PR | silent until the bill. The proof for P10.4 is the `list` output, not the `add` command's exit code. |
-| `PRAGMA foreign_keys` off | the cascade test | orphaned rows survive a workspace deletion, invisibly. A test asserts the pragma and a real cascade, because this failure looks exactly like success. |
-| Robots.txt handling wrong | review | own-site fetches and blog/RSS discovery honour it; competitor public pages are Nish's recorded decision (2026-09-21): *"we fetch what a browser would show a logged-out visitor, through Browser Rendering, at the registry's rate."* The distinction is per-source and lives on the registry row, not in an adapter. |
+| Workspace deletion incomplete                      | J14's verification                                                                   | the Workflow resumes from its stored cursor. The deletion is not reported complete until a final listing under the prefix returns empty — proven, not assumed.                                                                                                                                                                                            |
+| An email sent after deletion                       | suppression written before deletion begins                                           | ordering is the fix; a test pins it.                                                                                                                                                                                                                                                                                                                      |
+| Lifecycle rule missing or wrong prefix             | `wrangler r2 bucket lifecycle list` in the PR                                        | silent until the bill. The proof for P10.4 is the `list` output, not the `add` command's exit code.                                                                                                                                                                                                                                                       |
+| `PRAGMA foreign_keys` off                          | the cascade test                                                                     | orphaned rows survive a workspace deletion, invisibly. A test asserts the pragma and a real cascade, because this failure looks exactly like success.                                                                                                                                                                                                     |
+| Robots.txt handling wrong                          | review                                                                               | own-site fetches and blog/RSS discovery honour it; competitor public pages are Nish's recorded decision (2026-09-21): _"we fetch what a browser would show a logged-out visitor, through Browser Rendering, at the registry's rate."_ The distinction is per-source and lives on the registry row, not in an adapter.                                     |
 
 ---
 
@@ -215,7 +215,7 @@ takedown   id, subject_kind ('domain' | 'handle'), subject_value, reason,
 
 ### P10.1 — D10 `public_subject`, and the refusal at onboarding
 
-**GOAL.** Add **D10 `public_subject`** as its own Noul — *"Does this subject present itself to the public for commercial or audience reasons?"* — run at onboarding **before anything is crawled**. `p >= 0.9` proceeds; `p <= 0.1` refuses with the one line "we track brands and creators, not people"; the middle band **asks** the user to confirm the subject is a business or public creator and records the answer in `user_decision`. Minors, accounts marked private, and anything behind a login are refused **in code**, not by Jev. Amend `docs/REBUILD-JEV.md`'s decision table in the same PR.
+**GOAL.** Add **D10 `public_subject`** as its own Noul — _"Does this subject present itself to the public for commercial or audience reasons?"_ — run at onboarding **before anything is crawled**. `p >= 0.9` proceeds; `p <= 0.1` refuses with the one line "we track brands and creators, not people"; the middle band **asks** the user to confirm the subject is a business or public creator and records the answer in `user_decision`. Minors, accounts marked private, and anything behind a login are refused **in code**, not by Jev. Amend `docs/REBUILD-JEV.md`'s decision table in the same PR.
 
 **STOCK FEATURE OR LIBRARY.** The shipped TypeSafe SDK/plugin (Noul), as a Worker secret. `jev_verdict` UNIQUE `(question_id, input_hash)` as the call cache. The existing `user_decision` table.
 
@@ -277,13 +277,13 @@ takedown   id, subject_kind ('domain' | 'handle'), subject_value, reason,
 
 **FILES IN SCOPE.** `docs/` (the retention table and the privacy page copy). **No application code** — this packet's deliverable is configuration plus its proof.
 
-**FORBIDDEN.** **`--ia-transition-days` / `--ia-transition-date`** — Infrequent Access costs 2× Class A and 2.5× Class B, adds retrieval fees, bills a 30-day minimum regardless of lifetime, and is **one-way**; our snapshots are small, short-lived and read on every diff, which is the profile IA punishes. A cron or a Worker that deletes old objects — the platform does this and #3899 says "nothing hand-rolled". Omitting the multipart-abort rule (parts nothing will complete accrue storage forever). A retention claim on the privacy page that any rule does not back. Promising "exactly 365 days" — expiry is day-granular and objects are *"typically removed within 24 hours"*.
+**FORBIDDEN.** **`--ia-transition-days` / `--ia-transition-date`** — Infrequent Access costs 2× Class A and 2.5× Class B, adds retrieval fees, bills a 30-day minimum regardless of lifetime, and is **one-way**; our snapshots are small, short-lived and read on every diff, which is the profile IA punishes. A cron or a Worker that deletes old objects — the platform does this and #3899 says "nothing hand-rolled". Omitting the multipart-abort rule (parts nothing will complete accrue storage forever). A retention claim on the privacy page that any rule does not back. Promising "exactly 365 days" — expiry is day-granular and objects are _"typically removed within 24 hours"_.
 
 **PROOF REQUIRED.** `wrangler r2 bucket lifecycle list <bucket>` output pasted **after** applying, showing all five rules with their prefixes and day counts, with the UTC timestamp. Plus a screenshot of the rules in the Cloudflare dashboard (#3899 requires the rule be visible there). Plus the privacy page copy diffed against the table, line for line.
 
 **PUSH.** Branch `engine/r2-lifecycle`.
 
-**COST.** Zero units to run — the platform enforces it. It *prevents* unbounded R2 growth: without the `mentions/` rule, engine 5's ~750 MB steady state becomes cumulative and crosses the 10 GB included tier in roughly thirteen months. $0.00.
+**COST.** Zero units to run — the platform enforces it. It _prevents_ unbounded R2 growth: without the `mentions/` rule, engine 5's ~750 MB steady state becomes cumulative and crosses the 10 GB included tier in roughly thirteen months. $0.00.
 
 ---
 

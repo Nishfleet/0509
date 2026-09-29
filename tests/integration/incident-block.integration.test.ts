@@ -158,14 +158,7 @@ describe("open incident block (0509#5142)", () => {
 
   it("(d) returns null for another workspace's open incident", async () => {
     await seedIncident(OTHER_INCIDENT, OTHER_WS, OTHER_ENTITY, OTHER_PAGE, OTHER_OPENED_AT, null);
-    await seedIncidentAlert(
-      OTHER_INCIDENT,
-      OTHER_WS,
-      OTHER_ENTITY,
-      OTHER_PAGE,
-      "Pricing 500",
-      OTHER_OPENED_AT,
-    );
+    await seedIncidentAlert(OTHER_INCIDENT, OTHER_WS, OTHER_ENTITY, OTHER_PAGE, "Pricing 500", OTHER_OPENED_AT);
 
     expect(await readOpenIncidentBlock(env.DB, WS)).toBeNull();
     expect(await readOpenIncidentBlock(env.DB, OTHER_WS)).toEqual({
@@ -221,9 +214,7 @@ describe("open incident block (0509#5142)", () => {
     await seedIncidentAlert(OPEN_INCIDENT, WS, ENTITY, PAGE, "Checkout 500", OPENED_AT);
     await seedIncidentAlert(OPEN_INCIDENT, WS, ENTITY, PAGE, "Checkout 500", OPENED_AT);
 
-    const rows = await env.DB.prepare(
-      `SELECT id, signal_id, incident_id, kind FROM alert WHERE incident_id = ?`,
-    )
+    const rows = await env.DB.prepare(`SELECT id, signal_id, incident_id, kind FROM alert WHERE incident_id = ?`)
       .bind(OPEN_INCIDENT)
       .all<{ id: string; signal_id: string | null; incident_id: string; kind: string }>();
 

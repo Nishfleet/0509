@@ -73,9 +73,7 @@ describe("hiring board watches", () => {
   });
 
   it("withdraws a watched entity and restores it when the watch is deactivated", async () => {
-    await insertWatches([
-      { id: "w-a", entityId: "ent-a", sourceId: ON_SOURCE, targetKey: GREENHOUSE_BOARD },
-    ]);
+    await insertWatches([{ id: "w-a", entityId: "ent-a", sourceId: ON_SOURCE, targetKey: GREENHOUSE_BOARD }]);
 
     expect(await eligibleIds()).toEqual(["ent-b"]);
 
@@ -85,18 +83,14 @@ describe("hiring board watches", () => {
   });
 
   it("ignores a watch whose hiring source is disabled", async () => {
-    await insertWatches([
-      { id: "w-b", entityId: "ent-b", sourceId: OFF_SOURCE, targetKey: LEVER_BOARD },
-    ]);
+    await insertWatches([{ id: "w-b", entityId: "ent-b", sourceId: OFF_SOURCE, targetKey: LEVER_BOARD }]);
 
     expect(await eligibleIds()).toEqual(["ent-a", "ent-b"]);
     expect(await readHiringTargets()).toEqual([]);
   });
 
   it("reads the active target with its platform while the watch is active", async () => {
-    await insertWatches([
-      { id: "w-a", entityId: "ent-a", sourceId: ON_SOURCE, targetKey: GREENHOUSE_BOARD },
-    ]);
+    await insertWatches([{ id: "w-a", entityId: "ent-a", sourceId: ON_SOURCE, targetKey: GREENHOUSE_BOARD }]);
 
     expect(await readHiringTargets()).toEqual([
       {

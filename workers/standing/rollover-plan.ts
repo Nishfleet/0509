@@ -63,10 +63,7 @@ async function readWorkspaceSchedules(db: D1Database): Promise<readonly Workspac
   return toSchedules(rows.results);
 }
 
-export async function readWorkspaceSchedule(
-  db: D1Database,
-  workspaceId: string,
-): Promise<WorkspaceSchedule | null> {
+export async function readWorkspaceSchedule(db: D1Database, workspaceId: string): Promise<WorkspaceSchedule | null> {
   const rows = await db.prepare(WORKSPACE_SCHEDULE).bind(workspaceId).all();
   return toSchedules(rows.results)[0] ?? null;
 }
@@ -74,9 +71,7 @@ export async function readWorkspaceSchedule(
 async function readUnrankedWeeks(db: D1Database, now: Date): Promise<ReadonlySet<string>> {
   const since = new Date(now.getTime() - UNRANKED_LOOKBACK_MS).toISOString();
   const rows = await db.prepare(UNRANKED_WEEKS).bind(since).all();
-  return new Set(
-    unrankedRows.parse(rows.results).map((row) => unrankedWeekKey(row.workspace_id, row.week_start_at)),
-  );
+  return new Set(unrankedRows.parse(rows.results).map((row) => unrankedWeekKey(row.workspace_id, row.week_start_at)));
 }
 
 export interface CatchUp {
@@ -119,9 +114,8 @@ export async function createRollovers(
   workflow: Workflow<RolloverParams>,
   instances: readonly RolloverInstance[],
 ): Promise<number> {
-  const chunks = Array.from(
-    { length: Math.ceil(instances.length / CREATE_BATCH_LIMIT) },
-    (_, index) => instances.slice(index * CREATE_BATCH_LIMIT, (index + 1) * CREATE_BATCH_LIMIT),
+  const chunks = Array.from({ length: Math.ceil(instances.length / CREATE_BATCH_LIMIT) }, (_, index) =>
+    instances.slice(index * CREATE_BATCH_LIMIT, (index + 1) * CREATE_BATCH_LIMIT),
   );
   const created = await Promise.all(chunks.map((chunk) => workflow.createBatch([...chunk])));
   return created.reduce((total, batch) => total + batch.length, 0);

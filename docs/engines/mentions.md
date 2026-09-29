@@ -10,7 +10,7 @@ The decision that still matters from the pre-#4692 design is preserved below und
 
 ### Live sources
 
-- **GDELT DOC 2.0** (`gdelt.doc`), `official_api` reliability. The Google News RSS feed was the pre-#4692 source and is gone for two independent reasons: its `<copyright>` element limits use to *"personal, non-commercial use"*, which a paid product is not, and §0.1 below proves a Worker cannot obtain the publisher URL behind its link without a browser. The adapter was removed from `main` in **#5067**, so the shipped sources are GDELT and HN Algolia.
+- **GDELT DOC 2.0** (`gdelt.doc`), `official_api` reliability. The Google News RSS feed was the pre-#4692 source and is gone for two independent reasons: its `<copyright>` element limits use to _"personal, non-commercial use"_, which a paid product is not, and §0.1 below proves a Worker cannot obtain the publisher URL behind its link without a browser. The adapter was removed from `main` in **#5067**, so the shipped sources are GDELT and HN Algolia.
 - **Hacker News Algolia** (`hn.algolia`), `official_api` reliability. The HN `objectID` is the dedup key (`workers/sources/mentions/hn.ts`).
 - **YouTube** (`youtube.channel_rss`) and **Medium** (`medium.tag_rss`) adapters are registered in `workers/sources/registry.ts` and tested (`tests/mentions/youtube.test.ts`, `tests/mentions/medium.test.ts`). No `source` row carries these `plugin_key`s yet; the eligibility join (`source.is_enabled = 1`) hides them.
 
@@ -100,17 +100,17 @@ tests/integration/mentions/x-disabled-source.integration.test.ts   # disabled x.
 
 Per 1,000 polls (one source × one watch × one tick):
 
-| Resource | Units | Cloudflare cost |
-|---|---|---|
-| Workers requests | 1,000 | included |
-| D1 rows written (`snapshot`) | 1,000 | included |
-| D1 rows written (`signal`) | up to ~12 × fraction surviving D5 | included |
-| D1 rows written (`alert` on D6 act) | up to ~12 × fraction with `p >= 0.9` | included |
-| R2 Class A (PUT body) | 1,000 | included |
-| R2 storage (~50 KB / body, one-year snapshot/ rule) | ~50 MB | included |
-| Workflow steps | 1 plan step + 1 step per target | included |
-| Browser Rendering | **0** | **$0** |
-| Jev | 1 D5 + 0–1 D6 per fresh item, capped 12 / watch | seat cost |
+| Resource                                            | Units                                           | Cloudflare cost |
+| --------------------------------------------------- | ----------------------------------------------- | --------------- |
+| Workers requests                                    | 1,000                                           | included        |
+| D1 rows written (`snapshot`)                        | 1,000                                           | included        |
+| D1 rows written (`signal`)                          | up to ~12 × fraction surviving D5               | included        |
+| D1 rows written (`alert` on D6 act)                 | up to ~12 × fraction with `p >= 0.9`            | included        |
+| R2 Class A (PUT body)                               | 1,000                                           | included        |
+| R2 storage (~50 KB / body, one-year snapshot/ rule) | ~50 MB                                          | included        |
+| Workflow steps                                      | 1 plan step + 1 step per target                 | included        |
+| Browser Rendering                                   | **0**                                           | **$0**          |
+| Jev                                                 | 1 D5 + 0–1 D6 per fresh item, capped 12 / watch | seat cost       |
 
 Monthly at 100 brands × 2 live sources × 1 tick × 30 days = **6,000 polls/month**. All inside included tiers, **$0.00 Cloudflare**. Jev is the only real cost.
 
@@ -130,14 +130,14 @@ Monthly at 100 brands × 2 live sources × 1 tick × 30 days = **6,000 polls/mon
 
 ### 0.1 Google News links cannot be resolved server-side. The contract's stated method does not work.
 
-`docs/REBUILD-MENTIONS.md` §3 says: *"That is a `fetch(link, { redirect: "manual" })` and reading `Location` — one extra request per new item."* It is not. Four probes:
+`docs/REBUILD-MENTIONS.md` §3 says: _"That is a `fetch(link, { redirect: "manual" })` and reading `Location` — one extra request per new item."_ It is not. Four probes:
 
-| Probe | Result |
-|---|---|
-| `GET <rss article link>`, no follow | **302 → `https://consent.google.com/m?continue=…&gl=DE&…`** |
-| same, with `Cookie: CONSENT=YES+cb.20220301-11-p0.en+FX+111` | **302 → consent.google.com**, unchanged |
-| same, `&ucbcb=1` appended | **302 → back to `news.google.com/rss/articles/…`** — consent cleared, still no article |
-| `curl -sL --max-redirs 8 "<link>&ucbcb=1"` | **200, 582,999 B**, final URL still `news.google.com/rss/articles/…` |
+| Probe                                                        | Result                                                                                 |
+| ------------------------------------------------------------ | -------------------------------------------------------------------------------------- |
+| `GET <rss article link>`, no follow                          | **302 → `https://consent.google.com/m?continue=…&gl=DE&…`**                            |
+| same, with `Cookie: CONSENT=YES+cb.20220301-11-p0.en+FX+111` | **302 → consent.google.com**, unchanged                                                |
+| same, `&ucbcb=1` appended                                    | **302 → back to `news.google.com/rss/articles/…`** — consent cleared, still no article |
+| `curl -sL --max-redirs 8 "<link>&ucbcb=1"`                   | **200, 582,999 B**, final URL still `news.google.com/rss/articles/…`                   |
 
 That 583 KB terminal document is an **Angular application shell**. `data-n-au` **absent**, `http-equiv="refresh"` **absent**, the publisher string `advertisinglaw` / `fkks` **absent**. There is no `Location` and no article URL in the markup; the hop is performed by JavaScript.
 
@@ -145,7 +145,7 @@ Decoding the `guid` directly gives 256 base64 characters decoding to 192 bytes o
 
 **Consequence, and why Google News is gone from the shipped engine:** a Worker cannot obtain a Google News item's real article URL without either running a browser or reverse-engineering Google's `batchexecute` endpoint. The second is forbidden (no glue); the first was Browser Run candidate A in the pre-#4692 screening, measured at **5.0 browser-hours/month at 100 brands** for zero new signal, and it was rejected in favour of dropping the source. The adapter was then removed from `main` in **#5067**. Combined with the feed's `<copyright>` limiting use to personal, non-commercial use, the source was dropped rather than resolved.
 
-**The text below documents what was rejected or replaced; none of it is the current design.** No path in the lines below is code; the *only* paths named in the current design are listed above under `Files in this engine`. The full pre-#4692 probe table, design-it-twice screening, cost arithmetic and failure-mode table are in this file's git history, not in the text below.
+**The text below documents what was rejected or replaced; none of it is the current design.** No path in the lines below is code; the _only_ paths named in the current design are listed above under `Files in this engine`. The full pre-#4692 probe table, design-it-twice screening, cost arithmetic and failure-mode table are in this file's git history, not in the text below.
 
 The pre-#4692 design proposed a producer triggered at `17 2 * * *` (off-the-hour from the other engines' schedules) that enqueued one message per eligible watch onto two rate-classed Queues: one concurrency-10 lane for the sub-second sources and one concurrency-1 lane for the rate-limited / headless sources (Reddit was assumed in the set, with an 18-second 429 measured on the second request). Each consumer was meant to write one `snapshot` row per watch per tick with the body in R2, and a downstream `MentionsJudgeWorkflow` was meant to consume those snapshots and run **D5 → D8 → D6** in that order. D8 (`duplicate_signal`) was supposed to be the cross-source fan-in, replacing the string-equal `url_hash` matching that the schema's `UNIQUE (source_id, dedup_key)` actually ships with. The MVP source set under that design was five sources (Google News, Reddit, HN Algolia, YouTube, Medium) plus DuckDuckGo as a disabled row. Resolving Google News's 583 KB Angular shell hop was **Browser Run candidate A**, priced at 5.0 browser-hours/month at 100 brands and rejected on cost; candidate B stored the Google URL and moved dedup to D8, and #4692 took neither candidate as written. The probes that drove the rewrite recorded three load-bearing findings: Google News links cannot be resolved server-side (no `Location` header, encrypted `guid`, no Angular markup), DuckDuckGo 202-challenges every request from a shared datacenter IP after a handful of probes, and Hacker News's first result for `"gymshark"` on 2026-09-21 was a `GameShark` retro-console cheat code story.
 

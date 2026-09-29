@@ -121,14 +121,15 @@ export async function readSiteCard(subject: Subject): Promise<{ card: SiteCard; 
       );
       return { card, reached: true };
     } catch (error) {
-      console.log(
-        JSON.stringify({ event: "identity-creator-unreached", error: String(error) }),
-      );
+      console.log(JSON.stringify({ event: "identity-creator-unreached", error: String(error) }));
       return { card: UNREACHED, reached: false };
     }
   }
   try {
-    return { card: await cachedProbe(subject, "homepage", readSiteCardSchema, () => probeSite(subject)), reached: true };
+    return {
+      card: await cachedProbe(subject, "homepage", readSiteCardSchema, () => probeSite(subject)),
+      reached: true,
+    };
   } catch (error) {
     console.log(JSON.stringify({ event: "identity-site-unreached", error: String(error) }));
     return { card: UNREACHED, reached: false };
@@ -177,48 +178,49 @@ export function startCard(
     const values: CardValues = {
       name: card.name ?? (subject.kind === "domain" ? null : `@${subject.registrable}`),
       description: card.description,
-      socials: subject.url !== null && subject.kind !== "domain"
-        ? [
-            { platform: subject.platform ?? "site", url: subject.url },
-            ...card.socials.filter((social) => social.platform !== subject.platform),
-          ]
-        : card.socials,
+      socials:
+        subject.url !== null && subject.kind !== "domain"
+          ? [
+              { platform: subject.platform ?? "site", url: subject.url },
+              ...card.socials.filter((social) => social.platform !== subject.platform),
+            ]
+          : card.socials,
     };
     const review: CardReview = reached
       ? await reviewFields(workspaceId, subject, values, edited, new Date().toISOString())
       : fillReview(values);
     return { ...applyReview(values, review), unfound: subject.kind === "domain" && !reached };
   });
-  const logo = read.then(async ({ card, reached }) => {
-    if (!reached) return null;
-    const cached = await cachedProbe(subject, "icon", logoSchema, async () => {
-      const url = await firstStorableLogoUrl({
-        ...card.logoCandidates,
-        registrableDomain: subject.registrable,
+  const logo = read
+    .then(async ({ card, reached }) => {
+      if (!reached) return null;
+      const cached = await cachedProbe(subject, "icon", logoSchema, async () => {
+        const url = await firstStorableLogoUrl({
+          ...card.logoCandidates,
+          registrableDomain: subject.registrable,
+        });
+        return { v: ICON_PROBE_V, url };
       });
-      return { v: ICON_PROBE_V, url };
+      const url = cached.url;
+      if (url === null) return null;
+      const kept = await readLogo(subject.registrable);
+      if (kept !== null) {
+        const contentType = kept.httpMetadata?.contentType ?? "image/png";
+        const bytes = new Uint8Array(await kept.arrayBuffer());
+        return toDataUrl(contentType, bytes);
+      }
+      const stored = await storeLogo(subject.registrable, url);
+      if (stored === null) return null;
+      return toDataUrl(stored.contentType, stored.bytes);
+    })
+    .catch((error: unknown) => {
+      console.log(JSON.stringify({ event: "identity-logo-failed", workspaceId, error: String(error) }));
+      return null;
     });
-    const url = cached.url;
-    if (url === null) return null;
-    const kept = await readLogo(subject.registrable);
-    if (kept !== null) {
-      const contentType = kept.httpMetadata?.contentType ?? "image/png";
-      const bytes = new Uint8Array(await kept.arrayBuffer());
-      return toDataUrl(contentType, bytes);
-    }
-    const stored = await storeLogo(subject.registrable, url);
-    if (stored === null) return null;
-    return toDataUrl(stored.contentType, stored.bytes);
-  }).catch((error: unknown) => {
-    console.log(JSON.stringify({ event: "identity-logo-failed", workspaceId, error: String(error) }));
-    return null;
-  });
   return { site, logo };
 }
 
-export async function readCachedSiteProof(
-  subject: Subject,
-): Promise<{ adLibraryHints: string[]; navLinks: string[] }> {
+export async function readCachedSiteProof(subject: Subject): Promise<{ adLibraryHints: string[]; navLinks: string[] }> {
   const hit = await env.IDENTITY_CACHE.get(probeKey(subject, "homepage"), "json");
   if (hit === null) return { adLibraryHints: [], navLinks: [] };
   const parsed = siteCardSchema.parse(hit);

@@ -68,9 +68,7 @@ export function RowEvidence({ evidence }: { evidence: readonly WeekEvidence[] })
                   )}
                   <span className="min-w-0">
                     <span className="block truncate">{item.title ?? item.summary ?? "Untitled"}</span>
-                    <span className="text-ink-soft block font-mono text-eyebrow">
-                      {shortUtc(item.observedAt)}
-                    </span>
+                    <span className="text-ink-soft block font-mono text-eyebrow">{shortUtc(item.observedAt)}</span>
                     {href === null ? null : (
                       <a href={href} target="_blank" rel="noreferrer" className="text-[0.88rem] underline">
                         Source

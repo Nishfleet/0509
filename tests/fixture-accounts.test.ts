@@ -4,12 +4,7 @@ import { FIXTURE_ACCOUNTS, isFixtureAccount } from "../app/lib/fixture-accounts"
 
 // 0509#6020: the four fixed journey accounts are literals here so a typo in
 // the module fails this test instead of passing through it.
-const FOUR = [
-  "e2e+j7@0509.io",
-  "e2e+j8-soft@0509.io",
-  "e2e+j9-mentions@0509.io",
-  "e2e+j12-rollovers@0509.io",
-];
+const FOUR = ["e2e+j7@0509.io", "e2e+j8-soft@0509.io", "e2e+j9-mentions@0509.io", "e2e+j12-rollovers@0509.io"];
 
 describe("fixture accounts", () => {
   it("recognizes each of the four fixed journey accounts", () => {

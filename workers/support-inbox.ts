@@ -24,10 +24,7 @@ function sitePaths(text: string): string[] {
     if (!token.startsWith("http")) continue;
     try {
       const url = new URL(token);
-      if (
-        SITE_HOSTS.has(url.hostname) &&
-        !TOKEN_PATH_PREFIXES.some((prefix) => url.pathname.startsWith(prefix))
-      ) {
+      if (SITE_HOSTS.has(url.hostname) && !TOKEN_PATH_PREFIXES.some((prefix) => url.pathname.startsWith(prefix))) {
         paths.add(url.pathname);
       }
     } catch (error) {
@@ -62,11 +59,7 @@ export default {
       console.error("support-inbox: issue cap reached", id);
       return;
     }
-    const userAgent = (
-      message.headers.get("user-agent") ??
-      message.headers.get("x-mailer") ??
-      "none"
-    ).slice(0, MAX_UA);
+    const userAgent = (message.headers.get("user-agent") ?? message.headers.get("x-mailer") ?? "none").slice(0, MAX_UA);
     const paths = sitePaths(raw);
     const body = [
       `report: ${id}`,

@@ -49,13 +49,10 @@ export function sourcePillStatus(
   }
   const columnReason = blankToNull(source.degraded_reason);
   const configReason = configString(config, "reason");
-  const lastGoodAt =
-    blankToNull(source.last_good_at) ?? configString(config, "last_good_at");
+  const lastGoodAt = blankToNull(source.last_good_at) ?? configString(config, "last_good_at");
   if (columnReason !== null || configState === "degraded" || snapshot?.canary_count === 0) {
     const reason =
-      columnReason ??
-      configReason ??
-      (snapshot?.canary_count === 0 ? "not answering" : "no reason recorded");
+      columnReason ?? configReason ?? (snapshot?.canary_count === 0 ? "not answering" : "no reason recorded");
     return { state: "degraded", reason, lastGoodAt };
   }
   const watchConfig = readWatchConfig(source.watch_config_json);
@@ -116,8 +113,7 @@ export function SourcePill({
       {status.state === "none" ? <span>— none</span> : null}
       {status.state === "degraded" ? (
         <span>
-          — degraded{status.reason === null ? "" : `: ${status.reason}`} · last good{" "}
-          {lastGood ?? "unknown"}
+          — degraded{status.reason === null ? "" : `: ${status.reason}`} · last good {lastGood ?? "unknown"}
         </span>
       ) : null}
     </span>

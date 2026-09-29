@@ -6,12 +6,7 @@ import { insertChangeSignalStatement } from "../data/signal.server";
 import { readCoveredPagePairs } from "../data/snapshot.server";
 import { readEnabledSourceId } from "../data/source.server";
 import type { SiteSweepTarget } from "../data/watch.server";
-import {
-  insertWatches,
-  markWatchPolled,
-  readSiteSweepTargets,
-  readUnwatchedEntities,
-} from "../data/watch.server";
+import { insertWatches, markWatchPolled, readSiteSweepTargets, readUnwatchedEntities } from "../data/watch.server";
 import { robotsAllows } from "../fetch/robots.server";
 import { takeBrowserScreenshot } from "./browser-budget.server";
 import type { CheckPageResult } from "./check-page.server";
@@ -61,23 +56,21 @@ export async function planSiteSweep(now: string): Promise<SiteSweepTarget[]> {
   await insertWatches(
     unwatched.flatMap((entity) => {
       const url = homeUrl(entity.domain);
-      return url === null
-        ? []
-        : [{ id: crypto.randomUUID(), entityId: entity.id, sourceId, targetKey: url }];
+      return url === null ? [] : [{ id: crypto.randomUUID(), entityId: entity.id, sourceId, targetKey: url }];
     }),
   );
   return [...(await readSiteSweepTargets(SITE_SOURCE_KEY))];
 }
 
-export async function uncoveredItems(
-  items: readonly SiteSweepTarget[],
-  sinceIso: string,
-): Promise<SiteSweepTarget[]> {
+export async function uncoveredItems(items: readonly SiteSweepTarget[], sinceIso: string): Promise<SiteSweepTarget[]> {
   if (items.length === 0) return [];
   const covered = new Set(
-    (await readCoveredPagePairs(sinceIso, items.map((item) => item.watchId))).map(
-      (row) => `${row.watchId}|${row.pageId}`,
-    ),
+    (
+      await readCoveredPagePairs(
+        sinceIso,
+        items.map((item) => item.watchId),
+      )
+    ).map((row) => `${row.watchId}|${row.pageId}`),
   );
   return items.filter((item) => !covered.has(`${item.watchId}|${item.pageId}`));
 }
@@ -89,7 +82,14 @@ export interface SweepTick {
 
 export async function checkSitePage(target: SiteSweepTarget, tick: SweepTick): Promise<CheckPageResult> {
   if (target.entityRole === "self" && !(await robotsAllows(target.url))) {
-    console.log(JSON.stringify({ event: "site.check_failed", url: target.url, reason: "robots", detail: "disallowed by robots.txt" }));
+    console.log(
+      JSON.stringify({
+        event: "site.check_failed",
+        url: target.url,
+        reason: "robots",
+        detail: "disallowed by robots.txt",
+      }),
+    );
     return { outcome: "failed", reason: "robots", detail: "disallowed by robots.txt" };
   }
   const read = await readPage(target, tick.plannedAt);
@@ -100,16 +100,17 @@ export async function checkSitePage(target: SiteSweepTarget, tick: SweepTick): P
     snapshotId: `${tick.instanceId}-${target.pageId}`,
     before: tick.plannedAt,
     read,
-    mayScreenshot: () =>
-      takeBrowserScreenshot(target.workspaceId, target.entityId, tick.plannedAt.slice(0, 10)),
+    mayScreenshot: () => takeBrowserScreenshot(target.workspaceId, target.entityId, tick.plannedAt.slice(0, 10)),
   });
   if (result.outcome === "failed") {
-    console.log(JSON.stringify({
-      event: "site.check_failed",
-      url: target.url,
-      reason: result.reason,
-      detail: result.detail,
-    }));
+    console.log(
+      JSON.stringify({
+        event: "site.check_failed",
+        url: target.url,
+        reason: result.reason,
+        detail: result.detail,
+      }),
+    );
     return result;
   }
   await markWatchPolled(target.watchId, new Date().toISOString());
@@ -117,10 +118,7 @@ export async function checkSitePage(target: SiteSweepTarget, tick: SweepTick): P
 }
 
 export async function publishSiteChange(target: SiteSweepTarget, changed: ChangedPage): Promise<string> {
-  const [before, after] = await Promise.all([
-    readText(changed.previousTextKey),
-    readText(changed.textKey),
-  ]);
+  const [before, after] = await Promise.all([readText(changed.previousTextKey), readText(changed.textKey)]);
   const diff =
     before === null || after === null
       ? null

@@ -241,7 +241,14 @@ async function seedSession(): Promise<{ cookie: string; workspaceId: string }> {
       "A roundup mention, not a move of its own.",
       "2026-09-25T07:00:00.000Z",
     );
-    verdict(`jev-held-${suffix}`, `sig-held-${suffix}`, onId, 0.05, "A ticker line, not a move.", "2026-09-25T06:00:00.000Z");
+    verdict(
+      `jev-held-${suffix}`,
+      `sig-held-${suffix}`,
+      onId,
+      0.05,
+      "A ticker line, not a move.",
+      "2026-09-25T06:00:00.000Z",
+    );
     verdict(`jev-off-${suffix}`, `sig-off-${suffix}`, offId, 0.99, "Paused brand reason.", "2026-09-25T06:00:00.000Z");
     run(
       db,

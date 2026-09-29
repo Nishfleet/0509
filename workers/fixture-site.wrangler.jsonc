@@ -26,11 +26,11 @@
   "main": "./fixture-site.ts",
   "compatibility_date": "2026-09-16",
   "observability": {
-    "enabled": true
+    "enabled": true,
   },
   "durable_objects": {
-    "bindings": [{ "name": "STATE", "class_name": "FixtureState" }]
+    "bindings": [{ "name": "STATE", "class_name": "FixtureState" }],
   },
   "migrations": [{ "tag": "v1", "new_sqlite_classes": ["FixtureState"] }],
-  "routes": [{ "pattern": "fixture.0509.in", "custom_domain": true }]
+  "routes": [{ "pattern": "fixture.0509.in", "custom_domain": true }],
 }

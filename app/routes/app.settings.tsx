@@ -39,7 +39,10 @@ export async function loader({ request }: Route.LoaderArgs) {
   const schedule =
     owned === null
       ? null
-      : { ...owned.schedule, nextLine: formatBriefAt(nextBriefAt(owned.schedule, new Date()), owned.schedule.timezone) };
+      : {
+          ...owned.schedule,
+          nextLine: formatBriefAt(nextBriefAt(owned.schedule, new Date()), owned.schedule.timezone),
+        };
   const workspaceId = await readWorkspaceIdForOwner(session.user.id);
   const ownSiteAlerts = workspaceId === null ? true : await readOwnSiteAlerts(workspaceId);
   const dismissed = workspaceId === null ? [] : await readUserDismissed(workspaceId);
@@ -55,7 +58,8 @@ export async function action({ request, context }: Route.ActionArgs) {
   if (intent === "own-site-alerts") {
     const workspaceId = await readWorkspaceIdForOwner(session.user.id);
     const next = form.get("value") === "on" ? true : form.get("value") === "off" ? false : null;
-    if (workspaceId === null || next === null) return { saved: false, deleteError: null, deliveryError: null, deliverySuppressed: false };
+    if (workspaceId === null || next === null)
+      return { saved: false, deleteError: null, deliveryError: null, deliverySuppressed: false };
     await setOwnSiteAlerts(workspaceId, next);
     return { saved: true, deleteError: null, deliveryError: null, deliverySuppressed: false };
   }
@@ -75,9 +79,11 @@ export async function action({ request, context }: Route.ActionArgs) {
   if (intent === "delete-account") {
     const confirm = form.get("confirm");
     const typed = typeof confirm === "string" ? confirm.trim().toLowerCase() : "";
-    if (typed !== session.user.email.toLowerCase()) return { saved: null, deleteError: MISMATCH, deliveryError: null, deliverySuppressed: false };
+    if (typed !== session.user.email.toLowerCase())
+      return { saved: null, deleteError: MISMATCH, deliveryError: null, deliverySuppressed: false };
     const deleted = await deleteAccount(context.get(oauthHelpersContext), request, session.user.id);
-    if (deleted === null) return { saved: null, deleteError: SIGN_IN_AGAIN, deliveryError: null, deliverySuppressed: false };
+    if (deleted === null)
+      return { saved: null, deleteError: SIGN_IN_AGAIN, deliveryError: null, deliverySuppressed: false };
     throw redirect(`/login?deleted=${encodeURIComponent(deleted.instanceId)}`, { headers: deleted.headers });
   }
   if (intent === "restore-suggestion") {
@@ -88,8 +94,13 @@ export async function action({ request, context }: Route.ActionArgs) {
     return { saved: null, deleteError: null, deliveryError: null, deliverySuppressed: false };
   }
   const owned = await readBriefScheduleForOwner(session.user.id);
-  const schedule = parseBriefSchedule({ weekday: form.get("weekday"), hour: form.get("hour"), timezone: form.get("timezone") });
-  if (owned === null || schedule === null) return { saved: false, deleteError: null, deliveryError: null, deliverySuppressed: false };
+  const schedule = parseBriefSchedule({
+    weekday: form.get("weekday"),
+    hour: form.get("hour"),
+    timezone: form.get("timezone"),
+  });
+  if (owned === null || schedule === null)
+    return { saved: false, deleteError: null, deliveryError: null, deliverySuppressed: false };
   await saveBriefSchedule(owned.workspaceId, owned.schedule, schedule);
   return { saved: true, deleteError: null, deliveryError: null, deliverySuppressed: false };
 }

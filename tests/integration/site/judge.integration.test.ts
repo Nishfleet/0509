@@ -79,7 +79,12 @@ async function seedHistory(entity: string, count: number): Promise<void> {
   }
 }
 
-function judgeInput(input: { entity: string; isSelf: boolean; ws?: string; subjectName?: string }): Parameters<typeof judgeChange>[0] {
+function judgeInput(input: {
+  entity: string;
+  isSelf: boolean;
+  ws?: string;
+  subjectName?: string;
+}): Parameters<typeof judgeChange>[0] {
   return {
     workspaceId: input.ws ?? "ws-mine",
     entityId: input.entity,
@@ -92,12 +97,22 @@ function judgeInput(input: { entity: string; isSelf: boolean; ws?: string; subje
   };
 }
 
-async function rowsFor(entity: string): Promise<{ question_id: string; p: number | null; choice: string | null; entity_id: string | null; reason: string | null }[]> {
+async function rowsFor(
+  entity: string,
+): Promise<
+  { question_id: string; p: number | null; choice: string | null; entity_id: string | null; reason: string | null }[]
+> {
   const result = await env.DB.prepare(
     "SELECT question_id, p, choice, entity_id, reason FROM jev_verdict WHERE entity_id = ? ORDER BY question_id",
   )
     .bind(entity)
-    .all<{ question_id: string; p: number | null; choice: string | null; entity_id: string | null; reason: string | null }>();
+    .all<{
+      question_id: string;
+      p: number | null;
+      choice: string | null;
+      entity_id: string | null;
+      reason: string | null;
+    }>();
   return result.results;
 }
 
@@ -149,13 +164,13 @@ describe("judgeChange", () => {
       { question_id: "change_kind", p: null, choice: "pricing", entity_id: "rival", reason: null },
       { question_id: "noteworthy_change", p: 0.95, choice: null, entity_id: "rival", reason: null },
     ]);
-    const leaked = await env.DB.prepare(
-      "SELECT COUNT(*) AS n FROM jev_verdict WHERE reason LIKE '%p=%'",
-    ).first<{ n: number }>();
+    const leaked = await env.DB.prepare("SELECT COUNT(*) AS n FROM jev_verdict WHERE reason LIKE '%p=%'").first<{
+      n: number;
+    }>();
     expect(leaked).toMatchObject({ n: 0 });
-    const anyReason = await env.DB.prepare(
-      "SELECT COUNT(*) AS n FROM jev_verdict WHERE reason IS NOT NULL",
-    ).first<{ n: number }>();
+    const anyReason = await env.DB.prepare("SELECT COUNT(*) AS n FROM jev_verdict WHERE reason IS NOT NULL").first<{
+      n: number;
+    }>();
     expect(anyReason).toMatchObject({ n: 0 });
   });
 
@@ -205,13 +220,13 @@ describe("judgeChange", () => {
     expect(await rowsFor("mine")).toEqual([
       { question_id: "own_site_breakage", p: 0.7, choice: null, entity_id: "mine", reason: null },
     ]);
-    const leaked = await env.DB.prepare(
-      "SELECT COUNT(*) AS n FROM jev_verdict WHERE reason LIKE '%p=%'",
-    ).first<{ n: number }>();
+    const leaked = await env.DB.prepare("SELECT COUNT(*) AS n FROM jev_verdict WHERE reason LIKE '%p=%'").first<{
+      n: number;
+    }>();
     expect(leaked).toMatchObject({ n: 0 });
-    const anyReason = await env.DB.prepare(
-      "SELECT COUNT(*) AS n FROM jev_verdict WHERE reason IS NOT NULL",
-    ).first<{ n: number }>();
+    const anyReason = await env.DB.prepare("SELECT COUNT(*) AS n FROM jev_verdict WHERE reason IS NOT NULL").first<{
+      n: number;
+    }>();
     expect(anyReason).toMatchObject({ n: 0 });
   });
 
@@ -232,7 +247,11 @@ describe("judgeChange", () => {
     jevAnswers.choice.set("change_kind", "pricing");
 
     await judgeChange(judgeInput({ entity: "rival", isSelf: false }));
-    await judgeChange({ ...judgeInput({ entity: "rival", isSelf: false }), workspaceId: "ws-history", entityId: "dated" });
+    await judgeChange({
+      ...judgeInput({ entity: "rival", isSelf: false }),
+      workspaceId: "ws-history",
+      entityId: "dated",
+    });
 
     expect(await rowsFor("rival")).toHaveLength(2);
     expect(await rowsFor("dated")).toHaveLength(2);

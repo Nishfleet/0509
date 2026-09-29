@@ -1,6 +1,6 @@
 # User reports: one door, designed twice
 
-Decision record for #4226. Source claim: Lauren Tan, *2,500 PRs*, 10:33 (a vague
+Decision record for #4226. Source claim: Lauren Tan, _2,500 PRs_, 10:33 (a vague
 report arrives, the agent reads the feature map and drives the app) and 34:41
 (routines subscribe to Slack and Sentry and reproduce automatically).
 
@@ -35,15 +35,15 @@ Sentry's door.
 
 ## Comparison
 
-| | A: email first | B: Sentry first |
-|---|---|---|
-| Depends on Nish | no | yes, the org (#4099) |
-| First real report end to end | days | after the org exists and #3991 merges |
-| Public-repo privacy | raw text stays in D1; issue carries an id | Sentry holds it; issue carries Sentry's summary, which quotes messages |
-| Covers reports with no stack trace | yes, that is most of them | poorly; feedback is a Sentry add-on |
-| Covers crashes nobody reports | no | yes |
-| New machinery | one Worker, one table, one migration | none in the repo; two vendor integrations |
-| Failure mode | mail lost if the Worker throws; Email Routing retries | silent if the integration token expires |
+|                                    | A: email first                                        | B: Sentry first                                                        |
+| ---------------------------------- | ----------------------------------------------------- | ---------------------------------------------------------------------- |
+| Depends on Nish                    | no                                                    | yes, the org (#4099)                                                   |
+| First real report end to end       | days                                                  | after the org exists and #3991 merges                                  |
+| Public-repo privacy                | raw text stays in D1; issue carries an id             | Sentry holds it; issue carries Sentry's summary, which quotes messages |
+| Covers reports with no stack trace | yes, that is most of them                             | poorly; feedback is a Sentry add-on                                    |
+| Covers crashes nobody reports      | no                                                    | yes                                                                    |
+| New machinery                      | one Worker, one table, one migration                  | none in the repo; two vendor integrations                              |
+| Failure mode                       | mail lost if the Worker throws; Email Routing retries | silent if the integration token expires                                |
 
 ## Decision
 

@@ -34,7 +34,10 @@ export async function action({ request }: Route.ActionArgs) {
   const answer = formData.get("answer");
   const normalised = rawSubject === null ? null : normaliseSubject(rawSubject);
   if (normalised?.ok && (await isTakenDown(normalised.subject.registrable))) {
-    return { message: "This brand asked not to be tracked, so we can't set it up. Try your own website.", confirm: null };
+    return {
+      message: "This brand asked not to be tracked, so we can't set it up. Try your own website.",
+      confirm: null,
+    };
   }
   if (normalised?.ok && rawSubject !== null) {
     const workspaceId = await readWorkspaceIdForOwner(session.user.id);

@@ -6,12 +6,8 @@ import { BrandSwitch, DAY_MONTH } from "./brand-switch";
 
 export { DAY_MONTH };
 
-export function competitorPausedLine(
-  stateChangedAt: string | null,
-  stateReason: string | null = null,
-): string {
-  const base =
-    stateChangedAt === null ? "Paused" : `Paused ${DAY_MONTH.format(new Date(stateChangedAt))}`;
+export function competitorPausedLine(stateChangedAt: string | null, stateReason: string | null = null): string {
+  const base = stateChangedAt === null ? "Paused" : `Paused ${DAY_MONTH.format(new Date(stateChangedAt))}`;
   const why = pausedReasonLine(stateReason);
   return why === undefined ? base : `${base} · ${why}`;
 }
@@ -42,10 +38,7 @@ export function CompetitorHeader({
         <span aria-hidden="true"> / </span>
         <span aria-current="page">{name}</span>
       </nav>
-      <div
-        data-slot="competitor-identity"
-        className="flex min-w-0 flex-wrap items-center gap-x-6 gap-y-3"
-      >
+      <div data-slot="competitor-identity" className="flex min-w-0 flex-wrap items-center gap-x-6 gap-y-3">
         <div className="min-w-0">
           <h1 className="font-display text-display-2 font-extrabold break-words uppercase">{name}</h1>
           <p className="text-body-sm text-ink-soft [overflow-wrap:anywhere]">{domain}</p>

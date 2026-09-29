@@ -61,10 +61,10 @@ describe("resolveDomain", () => {
         }
         if (url.includes("alphaleteathletics.com")) {
           return Promise.resolve(
-            new Response(
-              '<meta property="og:site_name" content="Alphalete Athletics">',
-              { status: 200, headers: { "content-type": "text/html" } },
-            ),
+            new Response('<meta property="og:site_name" content="Alphalete Athletics">', {
+              status: 200,
+              headers: { "content-type": "text/html" },
+            }),
           );
         }
         return NOT_FOUND();

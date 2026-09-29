@@ -34,11 +34,9 @@ export interface MentionRowModel {
 
 const FOUND_TODAY = "found today";
 
-export const POSSIBLY_LINE =
-  "Possibly. We were not sure this mattered, so it sits here rather than in your brief.";
+export const POSSIBLY_LINE = "Possibly. We were not sure this mattered, so it sits here rather than in your brief.";
 
-export const UNREVIEWED_LINE =
-  "Unreviewed. We have not reviewed this yet, so it sits here rather than in your brief.";
+export const UNREVIEWED_LINE = "Unreviewed. We have not reviewed this yet, so it sits here rather than in your brief.";
 
 export function mentionTreatment(p: number): MentionTreatment {
   const action = noulAction(p);

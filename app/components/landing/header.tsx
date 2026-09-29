@@ -25,7 +25,10 @@ export function Header() {
             ))}
           </ul>
         </nav>
-        <a className={`${eyebrow} text-ink flex min-h-11 items-center underline decoration-1 underline-offset-4`} href="/login">
+        <a
+          className={`${eyebrow} text-ink flex min-h-11 items-center underline decoration-1 underline-offset-4`}
+          href="/login"
+        >
           Sign in
         </a>
       </div>

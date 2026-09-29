@@ -88,7 +88,8 @@ export default function Page({ loaderData, actionData }: Route.ComponentProps) {
     ? "That's a lot of lookups in a minute. Wait a minute, then try again."
     : "We couldn't find anything for that, try the main website.";
   return (
-    <OnboardingFrame step={2}
+    <OnboardingFrame
+      step={2}
       heading={card === null ? "Start with your website or a handle" : "This is you. Fix anything we got wrong."}
       hideHeading={card === null}
     >

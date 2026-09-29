@@ -11,15 +11,11 @@ import {
 } from "../../app/components/brand-switch";
 
 function render(state: BrandSwitchState): string {
-  return renderToStaticMarkup(
-    createElement(BrandSwitch, { state, brandName: "Loopwell" }),
-  );
+  return renderToStaticMarkup(createElement(BrandSwitch, { state, brandName: "Loopwell" }));
 }
 
 function renderField(state: BrandSwitchState, pausedOn: Date | null): string {
-  return renderToStaticMarkup(
-    createElement(BrandSwitchField, { state, brandName: "Loopwell", pausedOn }),
-  );
+  return renderToStaticMarkup(createElement(BrandSwitchField, { state, brandName: "Loopwell", pausedOn }));
 }
 
 describe("the brand switch", () => {
@@ -65,7 +61,9 @@ describe("the brand switch", () => {
 
 describe("the brand switch note", () => {
   it("prints the consequence for on: off pauses tracking, history kept", () => {
-    expect(brandSwitchNote("on", null)).toBe("Off stops the watching and the alerts. The history stays, and turning it back on picks up where it left off.");
+    expect(brandSwitchNote("on", null)).toBe(
+      "Off stops the watching and the alerts. The history stays, and turning it back on picks up where it left off.",
+    );
   });
 
   it("prints the paused date for off from the UTC instant", () => {

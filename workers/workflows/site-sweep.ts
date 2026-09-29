@@ -32,11 +32,13 @@ async function settle<T>(label: string, run: () => Promise<T>): Promise<T | null
   try {
     return await run();
   } catch (error) {
-    console.error(JSON.stringify({
-      event: "site.sweep_step_failed",
-      step: label,
-      error: error instanceof Error ? error.message : String(error),
-    }));
+    console.error(
+      JSON.stringify({
+        event: "site.sweep_step_failed",
+        step: label,
+        error: error instanceof Error ? error.message : String(error),
+      }),
+    );
     return null;
   }
 }
@@ -46,10 +48,7 @@ export class SiteSweep extends WorkflowEntrypoint<Env & { SITE_SWEEP_PING_URL?: 
     return withMonitor("site-sweep", () => this.runSweep(event, step), MONITOR);
   }
 
-  private async runSweep(
-    event: WorkflowEvent<unknown>,
-    step: WorkflowStep,
-  ): Promise<SiteSweepOutcome> {
+  private async runSweep(event: WorkflowEvent<unknown>, step: WorkflowStep): Promise<SiteSweepOutcome> {
     const tick = {
       instanceId: event.instanceId,
       plannedAt: plannedAt(event.timestamp, event.schedule?.scheduledTime),
@@ -59,9 +58,7 @@ export class SiteSweep extends WorkflowEntrypoint<Env & { SITE_SWEEP_PING_URL?: 
     const outcomes = await targets.reduce<Promise<readonly PageOutcome[]>>(async (done, target) => {
       const previous = await done;
       const checkLabel = `check ${target.pageId}`;
-      const checked = await settle(checkLabel, () =>
-        step.do(checkLabel, RETRY, () => checkSitePage(target, tick)),
-      );
+      const checked = await settle(checkLabel, () => step.do(checkLabel, RETRY, () => checkSitePage(target, tick)));
       if (checked === null) return [...previous, "failed"];
       if (checked.outcome !== "changed") return [...previous, checked.outcome];
       const publishLabel = `publish ${target.pageId}`;
@@ -71,37 +68,27 @@ export class SiteSweep extends WorkflowEntrypoint<Env & { SITE_SWEEP_PING_URL?: 
       return [...previous, published === null ? "failed" : "changed"];
     }, Promise.resolve([]));
 
-    const missing = await step.do("find missing", RETRY, () =>
-      uncoveredItems(targets, tick.plannedAt),
+    const missing = await step.do("find missing", RETRY, () => uncoveredItems(targets, tick.plannedAt));
+    const recheckChunks = Array.from({ length: Math.ceil(missing.length / CHUNK_SIZE) }, (_, index) =>
+      missing.slice(index * CHUNK_SIZE, (index + 1) * CHUNK_SIZE),
     );
-    const recheckChunks = Array.from(
-      { length: Math.ceil(missing.length / CHUNK_SIZE) },
-      (_, index) => missing.slice(index * CHUNK_SIZE, (index + 1) * CHUNK_SIZE),
-    );
-    const recheckOutcomes = await recheckChunks.reduce<Promise<readonly PageOutcome[]>>(
-      async (done, chunk, index) => {
-        const previous = await done;
-        const recheckLabel = `recheck ${String(index)}`;
-        const settled = await settle(recheckLabel, () =>
-          step.do(recheckLabel, RETRY, () =>
-            chunk.reduce<Promise<readonly PageOutcome[]>>(async (pending, target) => {
-              const earlier = await pending;
-              const checked = await checkSitePage(target, tick);
-              if (checked.outcome === "changed") await publishSiteChange(target, checked);
-              return [...earlier, checked.outcome];
-            }, Promise.resolve([])),
-          ),
-        );
-        return [...previous, ...(settled ?? chunk.map(() => "failed" as const))];
-      },
-      Promise.resolve([]),
-    );
-    const recheckByPage = new Map(
-      missing.map((target, index) => [target.pageId, recheckOutcomes[index]] as const),
-    );
-    const finalOutcomes = targets.map(
-      (target, index) => recheckByPage.get(target.pageId) ?? outcomes[index],
-    );
+    const recheckOutcomes = await recheckChunks.reduce<Promise<readonly PageOutcome[]>>(async (done, chunk, index) => {
+      const previous = await done;
+      const recheckLabel = `recheck ${String(index)}`;
+      const settled = await settle(recheckLabel, () =>
+        step.do(recheckLabel, RETRY, () =>
+          chunk.reduce<Promise<readonly PageOutcome[]>>(async (pending, target) => {
+            const earlier = await pending;
+            const checked = await checkSitePage(target, tick);
+            if (checked.outcome === "changed") await publishSiteChange(target, checked);
+            return [...earlier, checked.outcome];
+          }, Promise.resolve([])),
+        ),
+      );
+      return [...previous, ...(settled ?? chunk.map(() => "failed" as const))];
+    }, Promise.resolve([]));
+    const recheckByPage = new Map(missing.map((target, index) => [target.pageId, recheckOutcomes[index]] as const));
+    const finalOutcomes = targets.map((target, index) => recheckByPage.get(target.pageId) ?? outcomes[index]);
 
     const count = (outcome: PageOutcome) => finalOutcomes.filter((o) => o === outcome).length;
     const summary: SiteSweepOutcome = {

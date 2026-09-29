@@ -26,11 +26,13 @@ export type CheckPageResult =
 const NO_CUTOFF = "9999-12-31T23:59:59.999Z";
 
 function logScreenshotMiss(url: string, cause: string): void {
-  console.log(JSON.stringify({
-    event: "screenshot-miss",
-    url,
-    cause,
-  }));
+  console.log(
+    JSON.stringify({
+      event: "screenshot-miss",
+      url,
+      cause,
+    }),
+  );
 }
 
 async function captureScreenshot(

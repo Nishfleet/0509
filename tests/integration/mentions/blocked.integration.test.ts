@@ -185,11 +185,17 @@ describe("a blocking upstream degrades the source and ends the step (0509#5159)"
     const source: CanarySource = { id: sourceId, pluginKey: "gdelt.doc", canaryQuery: "google" };
 
     try {
-      vi.stubGlobal("fetch", vi.fn(async () => new Response("", { status: 403 })));
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async () => new Response("", { status: 403 })),
+      );
       expect(await runCanary(source, NOW)).toBe(0);
       expect(await readReason(sourceId)).toBe("blocked: HTTP 403");
 
-      vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify(ONE_ARTICLE))));
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async () => new Response(JSON.stringify(ONE_ARTICLE))),
+      );
       expect(await runCanary(source, NOW)).toBe(1);
       expect(await readReason(sourceId)).toBeNull();
     } finally {

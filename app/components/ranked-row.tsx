@@ -98,11 +98,7 @@ export function RankedRow({
         ))}
       </ul>
       {isOpen ? (
-        <div
-          id={`evidence-${row.entityId}`}
-          data-slot="row-evidence"
-          className="col-span-full max-[859px]:hidden"
-        >
+        <div id={`evidence-${row.entityId}`} data-slot="row-evidence" className="col-span-full max-[859px]:hidden">
           {evidence === null ? null : <RowEvidence evidence={evidence} />}
         </div>
       ) : null}

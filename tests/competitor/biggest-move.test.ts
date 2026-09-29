@@ -98,9 +98,9 @@ describe("pickBiggestMove", () => {
     const rows = V1_ROWS.filter((row) => row.key !== "hiring_new_role");
     const weights = weightsAsOf(rows, WEEK);
 
-    expect(() =>
-      pickBiggestMove([signal({ id: "sig-hire", bucket: "hiring_new_role" })], weights),
-    ).toThrow(/scoring_weight has no row/);
+    expect(() => pickBiggestMove([signal({ id: "sig-hire", bucket: "hiring_new_role" })], weights)).toThrow(
+      /scoring_weight has no row/,
+    );
   });
 });
 
@@ -137,12 +137,7 @@ describe("biggestMoveView", () => {
 
   it("falls back to the summary, then to the source label, for the title", () => {
     expect(biggestMoveView(move, now).title).toBe("Fresh copy on the winter sale");
-    expect(
-      biggestMoveView(
-        { ...move, signal: { ...move.signal, summary: null } },
-        now,
-      ).title,
-    ).toBe("Ad library");
+    expect(biggestMoveView({ ...move, signal: { ...move.signal, summary: null } }, now).title).toBe("Ad library");
   });
 });
 

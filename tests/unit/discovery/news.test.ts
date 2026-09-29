@@ -62,9 +62,7 @@ describe("newsGenerator", () => {
     expect(candidates.map((candidate) => candidate.name)).toEqual(["Vestiaire", "Bratz"]);
     for (const candidate of candidates) {
       expect(candidate.evidence[0]?.sourceUrl).toBe("glamourmagazine.co.uk");
-      expect(candidate.evidence[0]?.excerpt).toBe(
-        "Gymshark, Vestiaire and Bratz lead activewear",
-      );
+      expect(candidate.evidence[0]?.excerpt).toBe("Gymshark, Vestiaire and Bratz lead activewear");
       expect(candidate.evidence[0]?.generator).toBe("news");
     }
   });
@@ -170,10 +168,7 @@ describe("newsGenerator", () => {
 
     expect(candidates).toHaveLength(2);
     const adanola = candidates.find((candidate) => candidate.name === "Adanola");
-    expect(adanola?.evidence.map((evidence) => evidence.sourceUrl)).toEqual([
-      "glamourmagazine.co.uk",
-      "hypebae.com",
-    ]);
+    expect(adanola?.evidence.map((evidence) => evidence.sourceUrl)).toEqual(["glamourmagazine.co.uk", "hypebae.com"]);
   });
 
   it("requests one GDELT article list with the quoted subject and a 7d window", async () => {

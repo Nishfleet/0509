@@ -45,7 +45,13 @@ async function seedEntity(id: string, workspaceId: string, role: "self" | "compe
     .run();
 }
 
-async function seedSource(id: string, key: string, kind: "ads" | "mentions" | "site" | "hiring", platform: string, configJson = "{}"): Promise<void> {
+async function seedSource(
+  id: string,
+  key: string,
+  kind: "ads" | "mentions" | "site" | "hiring",
+  platform: string,
+  configJson = "{}",
+): Promise<void> {
   await env.DB.prepare(
     `INSERT INTO source (id, key, kind, platform, plugin_key, reliability, is_enabled, config_json)
      VALUES (?, ?, ?, ?, ?, 'official_api', 1, ?)`,

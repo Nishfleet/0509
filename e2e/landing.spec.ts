@@ -136,10 +136,7 @@ test("the agents section hands a visitor's agent the MCP address and the API doc
   for (const name of ["Claude", "Cursor", "ChatGPT"]) {
     await expect(agents.getByText(name, { exact: true })).toBeVisible();
   }
-  await expect(agents.getByRole("link", { name: "Read the API docs" })).toHaveAttribute(
-    "href",
-    "/api/v1/openapi.json",
-  );
+  await expect(agents.getByRole("link", { name: "Read the API docs" })).toHaveAttribute("href", "/api/v1/openapi.json");
   expect(await consoleFailures(page, watched, testInfo), testInfo.project.name).toEqual([]);
 
   await testInfo.attach(`agents-${testInfo.project.name}`, {
@@ -246,7 +243,10 @@ test("the hero's first viewport holds the outcome and the one priced input", asy
 test("the hero input carries what you typed to sign-in", async ({ page }) => {
   await page.goto(PATH);
   await page.locator("#hero").getByRole("textbox", { name: "your website, or a handle" }).fill("example.com");
-  await page.locator("#hero").getByRole("button", { name: /€\d+\/mo/ }).click();
+  await page
+    .locator("#hero")
+    .getByRole("button", { name: /€\d+\/mo/ })
+    .click();
   await expect(page).toHaveURL(/\/login\?subject=example\.com$/);
 });
 

@@ -157,9 +157,7 @@ export async function composeBrief(db: D1Database, input: ComposeInput): Promise
 
   const brands = rankedBrandRows.parse(ranked.results);
   const hadPreviousWeek = frozenWeekRows.parse(frozen.results).some((row) => row.weeks > 0);
-  const countsByEntity = new Map(
-    signalCountRows.parse(counts.results).map((row) => [row.entity_id, row]),
-  );
+  const countsByEntity = new Map(signalCountRows.parse(counts.results).map((row) => [row.entity_id, row]));
   const sources = sourceCoverageRows.parse(coverage.results);
   const ownSite = incidentRows.parse(incidents.results);
   const pausedNames = pausedCompetitorRows.parse(pausedRows.results).map((row) => row.name);
@@ -209,7 +207,8 @@ export async function composeBrief(db: D1Database, input: ComposeInput): Promise
   const pausedLine = pausedSentence(pausedNames);
   const countsLine = quietWeekLine(mentionCount, siteChangeCount, newAdCount);
   const lead = marks[0];
-  const headLine = lead === undefined ? countsLine : readThisFirstLine(marks.length, readThisFirst.judged, lead.entity_name);
+  const headLine =
+    lead === undefined ? countsLine : readThisFirstLine(marks.length, readThisFirst.judged, lead.entity_name);
 
   return {
     workspace_id: input.workspaceId,

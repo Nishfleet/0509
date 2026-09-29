@@ -78,9 +78,6 @@ describe("privacy colour and type utilities (#4309)", () => {
     const source = await readFile(PRIVACY, "utf8");
     const retired = source.replace(WORDMARK, RETIRED_WORDMARK);
     expect(retired).not.toBe(source);
-    expect(await classesWithNoRule(colourAndTypeClasses(retired))).toEqual([
-      "bg-accent",
-      "text-on-accent",
-    ]);
+    expect(await classesWithNoRule(colourAndTypeClasses(retired))).toEqual(["bg-accent", "text-on-accent"]);
   });
 });

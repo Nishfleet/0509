@@ -212,16 +212,20 @@ test("two weekly rollovers: the stored standing matches Home and the brief, and 
 
     for (const row of ranked) {
       const expected = movementWord(priorRanks.get(row.name), row.position ?? 0);
-      expect(row.movement, `${row.name} movement from ${String(priorRanks.get(row.name))} to ${String(row.position)}`).toBe(
-        expected,
-      );
+      expect(
+        row.movement,
+        `${row.name} movement from ${String(priorRanks.get(row.name))} to ${String(row.position)}`,
+      ).toBe(expected);
     }
 
     const wentOff = [...home.paused].filter(
       (name) => lastRanks.get(name) === null && typeof priorRanks.get(name) === "number",
     );
     for (const name of wentOff) {
-      expect(home.rows.map((row) => row.name), `${name} went off, so it is not ranked`).not.toContain(name);
+      expect(
+        home.rows.map((row) => row.name),
+        `${name} went off, so it is not ranked`,
+      ).not.toContain(name);
       expect(home.whyLine, `${name} went off, so the why-line says so`).toContain(`${name} paused`);
     }
 
@@ -230,7 +234,9 @@ test("two weekly rollovers: the stored standing matches Home and the brief, and 
       ["newest", lastWeek, newest],
     ] as const) {
       for (const [name, rank] of week.ranks) {
-        console.log(`j12 standing week=${week.week} which=${label} brand=${name} rank=${String(rank)} of=${String(read.headline.total)}`);
+        console.log(
+          `j12 standing week=${week.week} which=${label} brand=${name} rank=${String(rank)} of=${String(read.headline.total)}`,
+        );
       }
     }
     for (const row of home.rows) {
@@ -243,5 +249,8 @@ test("two weekly rollovers: the stored standing matches Home and the brief, and 
   console.log(`j12 rotated ${ROTATING} ${now} at=${new Date().toISOString()}`);
   testInfo.annotations.push({ type: "rotating", description: `${ROTATING} ${now}` });
 
-  test.skip(!proven, "fewer than two weekly briefs exist yet; this run only tended the account, the next Monday rollover adds the week");
+  test.skip(
+    !proven,
+    "fewer than two weekly briefs exist yet; this run only tended the account, the next Monday rollover adds the week",
+  );
 });

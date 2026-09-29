@@ -42,11 +42,7 @@ function b64u(input: string | Uint8Array): string {
 async function mintJwt(key: CryptoKey, claims: Record<string, unknown>, kid = "test-kid"): Promise<string> {
   const head = b64u(JSON.stringify({ alg: "RS256", kid, typ: "JWT" }));
   const body = b64u(JSON.stringify(claims));
-  const signature = await crypto.subtle.sign(
-    "RSASSA-PKCS1-v1_5",
-    key,
-    new TextEncoder().encode(`${head}.${body}`),
-  );
+  const signature = await crypto.subtle.sign("RSASSA-PKCS1-v1_5", key, new TextEncoder().encode(`${head}.${body}`));
   return `${head}.${body}.${b64u(new Uint8Array(signature))}`;
 }
 
@@ -91,9 +87,7 @@ describe("accessPrecleared", () => {
     stubJwks(iss, jwk);
     const jwt = await mintJwt(pair.privateKey, serviceClaims(iss));
 
-    await expect(
-      accessPrecleared(request(jwt), { ACCESS_TEAM_DOMAIN: iss, ACCESS_AUD: AUD }),
-    ).resolves.toBe(true);
+    await expect(accessPrecleared(request(jwt), { ACCESS_TEAM_DOMAIN: iss, ACCESS_AUD: AUD })).resolves.toBe(true);
   });
 
   it("passes an 8-second timeout to the JWKS client", async () => {
@@ -105,9 +99,7 @@ describe("accessPrecleared", () => {
     stubJwks(iss, jwk);
     const jwt = await mintJwt(pair.privateKey, serviceClaims(iss));
 
-    await expect(
-      accessPrecleared(request(jwt), { ACCESS_TEAM_DOMAIN: iss, ACCESS_AUD: AUD }),
-    ).resolves.toBe(true);
+    await expect(accessPrecleared(request(jwt), { ACCESS_TEAM_DOMAIN: iss, ACCESS_AUD: AUD })).resolves.toBe(true);
     expect(createRemoteJWKSet).toHaveBeenCalledWith(expect.any(URL), { timeoutDuration: 8000 });
   });
 
@@ -120,9 +112,7 @@ describe("accessPrecleared", () => {
     stubJwks(iss, jwk);
     const jwt = await mintJwt(attacker.privateKey, serviceClaims(iss));
 
-    await expect(
-      accessPrecleared(request(jwt), { ACCESS_TEAM_DOMAIN: iss, ACCESS_AUD: AUD }),
-    ).resolves.toBe(false);
+    await expect(accessPrecleared(request(jwt), { ACCESS_TEAM_DOMAIN: iss, ACCESS_AUD: AUD })).resolves.toBe(false);
   });
 
   it("denies a token for a different audience", async () => {
@@ -133,9 +123,7 @@ describe("accessPrecleared", () => {
     stubJwks(iss, jwk);
     const jwt = await mintJwt(pair.privateKey, serviceClaims(iss, { aud: "other-app-aud" }));
 
-    await expect(
-      accessPrecleared(request(jwt), { ACCESS_TEAM_DOMAIN: iss, ACCESS_AUD: AUD }),
-    ).resolves.toBe(false);
+    await expect(accessPrecleared(request(jwt), { ACCESS_TEAM_DOMAIN: iss, ACCESS_AUD: AUD })).resolves.toBe(false);
   });
 
   it("denies a token issued by a different team domain", async () => {
@@ -146,9 +134,7 @@ describe("accessPrecleared", () => {
     stubJwks(iss, jwk);
     const jwt = await mintJwt(pair.privateKey, serviceClaims("https://other.cloudflareaccess.com"));
 
-    await expect(
-      accessPrecleared(request(jwt), { ACCESS_TEAM_DOMAIN: iss, ACCESS_AUD: AUD }),
-    ).resolves.toBe(false);
+    await expect(accessPrecleared(request(jwt), { ACCESS_TEAM_DOMAIN: iss, ACCESS_AUD: AUD })).resolves.toBe(false);
   });
 
   it("denies a token that omits exp", async () => {
@@ -161,9 +147,7 @@ describe("accessPrecleared", () => {
     delete claims.exp;
     const jwt = await mintJwt(pair.privateKey, claims);
 
-    await expect(
-      accessPrecleared(request(jwt), { ACCESS_TEAM_DOMAIN: iss, ACCESS_AUD: AUD }),
-    ).resolves.toBe(false);
+    await expect(accessPrecleared(request(jwt), { ACCESS_TEAM_DOMAIN: iss, ACCESS_AUD: AUD })).resolves.toBe(false);
   });
 
   it("denies an expired token", async () => {
@@ -172,14 +156,9 @@ describe("accessPrecleared", () => {
     const jwk = await crypto.subtle.exportKey("jwk", pair.publicKey);
     jwk.kid = "test-kid";
     stubJwks(iss, jwk);
-    const jwt = await mintJwt(
-      pair.privateKey,
-      serviceClaims(iss, { exp: Math.floor(Date.now() / 1000) - 60 }),
-    );
+    const jwt = await mintJwt(pair.privateKey, serviceClaims(iss, { exp: Math.floor(Date.now() / 1000) - 60 }));
 
-    await expect(
-      accessPrecleared(request(jwt), { ACCESS_TEAM_DOMAIN: iss, ACCESS_AUD: AUD }),
-    ).resolves.toBe(false);
+    await expect(accessPrecleared(request(jwt), { ACCESS_TEAM_DOMAIN: iss, ACCESS_AUD: AUD })).resolves.toBe(false);
   });
 
   it("denies a user-session assertion, which is not a service token", async () => {
@@ -193,9 +172,7 @@ describe("accessPrecleared", () => {
       serviceClaims(iss, { sub: "3f5a6c1e-0000-4a0b-9c1d-useruuid", common_name: undefined, email: "person@0509.io" }),
     );
 
-    await expect(
-      accessPrecleared(request(jwt), { ACCESS_TEAM_DOMAIN: iss, ACCESS_AUD: AUD }),
-    ).resolves.toBe(false);
+    await expect(accessPrecleared(request(jwt), { ACCESS_TEAM_DOMAIN: iss, ACCESS_AUD: AUD })).resolves.toBe(false);
   });
 
   it("denies a garbage assertion without fetching keys", async () => {
@@ -203,16 +180,16 @@ describe("accessPrecleared", () => {
     const fetchSpy = vi.fn();
     vi.stubGlobal("fetch", fetchSpy);
 
-    await expect(
-      accessPrecleared(request("not-a-jwt"), { ACCESS_TEAM_DOMAIN: iss, ACCESS_AUD: AUD }),
-    ).resolves.toBe(false);
+    await expect(accessPrecleared(request("not-a-jwt"), { ACCESS_TEAM_DOMAIN: iss, ACCESS_AUD: AUD })).resolves.toBe(
+      false,
+    );
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 
   it("denies when no assertion header is present", async () => {
-    await expect(
-      accessPrecleared(request(), { ACCESS_TEAM_DOMAIN: freshIssuer(), ACCESS_AUD: AUD }),
-    ).resolves.toBe(false);
+    await expect(accessPrecleared(request(), { ACCESS_TEAM_DOMAIN: freshIssuer(), ACCESS_AUD: AUD })).resolves.toBe(
+      false,
+    );
   });
 
   it("denies when the Access configuration is absent", async () => {
@@ -229,9 +206,7 @@ describe("accessPrecleared", () => {
     );
     const jwt = await mintJwt(pair.privateKey, serviceClaims(iss));
 
-    await expect(
-      accessPrecleared(request(jwt), { ACCESS_TEAM_DOMAIN: iss, ACCESS_AUD: AUD }),
-    ).resolves.toBe(false);
+    await expect(accessPrecleared(request(jwt), { ACCESS_TEAM_DOMAIN: iss, ACCESS_AUD: AUD })).resolves.toBe(false);
   });
 
   it("fetches JWKS at most once for five forged tokens with unknown kids", async () => {

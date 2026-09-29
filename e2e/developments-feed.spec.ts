@@ -64,11 +64,14 @@ test("the developments feed filters by kind and keeps its layout across filters 
   await expect(page).toHaveURL(/\/onboarding\/competitors$/, { timeout: 30_000 });
 
   const watching = page.getByRole("list", { name: "Watching" }).getByRole("listitem");
-  await expect(
-    watching.first().or(page.getByRole("button", { name: /^Watch / }).first()),
-  ).toBeVisible({ timeout: 60_000 });
+  await expect(watching.first().or(page.getByRole("button", { name: /^Watch / }).first())).toBeVisible({
+    timeout: 60_000,
+  });
   if ((await watching.count()) === 0) {
-    await page.getByRole("button", { name: /^Watch / }).first().click();
+    await page
+      .getByRole("button", { name: /^Watch / })
+      .first()
+      .click();
     await expect(watching.first()).toBeVisible();
   }
   await page.getByRole("button", { name: "Start watching" }).click();
@@ -99,9 +102,7 @@ test("the developments feed filters by kind and keeps its layout across filters 
         await expect(page).toHaveURL(new RegExp(`[?&]kind=${filter.kind}`));
         // Every rendered row is of the chosen kind; a kind with no live rows
         // shows the feed's own empty li, which carries no data-kind.
-        await expect(
-          list(page).locator(`:scope > li[data-kind]:not([data-kind='${filter.kind}'])`),
-        ).toHaveCount(0);
+        await expect(list(page).locator(`:scope > li[data-kind]:not([data-kind='${filter.kind}'])`)).toHaveCount(0);
       }
       const filteredBox = await list(page).boundingBox();
       expect(filteredBox?.x).toBe(allBox?.x);
@@ -114,9 +115,7 @@ test("the developments feed filters by kind and keeps its layout across filters 
     await expect(list(page).locator(":scope > li[data-kind]:not([data-kind='hiring'])")).toHaveCount(0);
   } else {
     await expect(
-      page.getByText(
-        /Watching from today\.|No changes to the homepage since we started watching\./,
-      ),
+      page.getByText(/Watching from today\.|No changes to the homepage since we started watching\./),
     ).toBeVisible();
   }
 

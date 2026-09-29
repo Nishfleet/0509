@@ -67,7 +67,9 @@ describe("login magic-link action", () => {
 
   it("does not say the link was sent when the handler fails", async () => {
     handler.mockResolvedValue(new Response("send failed", { status: 500 }));
-    const result = await action({ request: formRequest({ email: "person@0509.io", "cf-turnstile-response": "token-1" }) });
+    const result = await action({
+      request: formRequest({ email: "person@0509.io", "cf-turnstile-response": "token-1" }),
+    });
     expect(result).toEqual({ error: "We couldn't send the link. Try again in a minute." });
     expect(result).not.toHaveProperty("sent");
   });
@@ -82,7 +84,9 @@ describe("login magic-link action", () => {
 
   it("names the rate limit when the handler is too busy", async () => {
     handler.mockResolvedValue(new Response("Too many sign-in links. Wait a minute and try again.", { status: 429 }));
-    const result = await action({ request: formRequest({ email: "person@0509.io", "cf-turnstile-response": "token-1" }) });
+    const result = await action({
+      request: formRequest({ email: "person@0509.io", "cf-turnstile-response": "token-1" }),
+    });
     expect(result).toEqual({ error: "Too many sign-in links. Wait a minute and try again." });
   });
 });

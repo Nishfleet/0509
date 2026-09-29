@@ -45,7 +45,11 @@ const settingsRequest = (cookie: string) =>
   new Request(`${ORIGIN}/app/settings`, { method: "POST", headers: { cookie, origin: ORIGIN } });
 
 const count = async (sql: string, ...values: unknown[]) =>
-  (await env.DB.prepare(sql).bind(...values).first<{ n: number }>())?.n ?? -1;
+  (
+    await env.DB.prepare(sql)
+      .bind(...values)
+      .first<{ n: number }>()
+  )?.n ?? -1;
 
 describe("delete my account", () => {
   beforeEach(async () => {
@@ -126,10 +130,7 @@ describe("delete my account", () => {
     const id = "account-delete-removing";
     await using introspector = await introspectWorkflowInstance(env.ACCOUNT_DELETE, id);
     await introspector.modify(async (modifier) => {
-      await modifier.mockStepError(
-        { name: "delete card/ws-leaving/ page 0" },
-        new Error("R2 is slow"),
-      );
+      await modifier.mockStepError({ name: "delete card/ws-leaving/ page 0" }, new Error("R2 is slow"));
     });
     await env.ACCOUNT_DELETE.create({
       id,
@@ -145,10 +146,7 @@ describe("delete my account", () => {
     await using introspector = await introspectWorkflowInstance(env.ACCOUNT_DELETE, id);
     await introspector.modify(async (modifier) => {
       await modifier.disableRetryDelays();
-      await modifier.mockStepError(
-        { name: "delete card/ws-leaving/ page 0" },
-        new Error("R2 blew up"),
-      );
+      await modifier.mockStepError({ name: "delete card/ws-leaving/ page 0" }, new Error("R2 blew up"));
     });
     await env.ACCOUNT_DELETE.create({
       id,
@@ -163,10 +161,7 @@ describe("delete my account", () => {
     const id = "account-delete-terminated";
     await using introspector = await introspectWorkflowInstance(env.ACCOUNT_DELETE, id);
     await introspector.modify(async (modifier) => {
-      await modifier.mockStepError(
-        { name: "delete card/ws-leaving/ page 0" },
-        new Error("R2 is slow"),
-      );
+      await modifier.mockStepError({ name: "delete card/ws-leaving/ page 0" }, new Error("R2 is slow"));
     });
     await env.ACCOUNT_DELETE.create({
       id,

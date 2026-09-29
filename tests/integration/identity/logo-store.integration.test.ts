@@ -32,7 +32,10 @@ describe("storeLogo and readLogo", () => {
   });
 
   it("stores a served png at logo/<registrable> and reads back the same bytes", async () => {
-    vi.stubGlobal("fetch", vi.fn(async () => png()));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => png()),
+    );
 
     const stored = await storeLogo("gymshark.com", "https://gymshark.com/logo.png");
 
@@ -56,10 +59,16 @@ describe("storeLogo and readLogo", () => {
   });
 
   it("returns null and stores nothing when the served type is not an image", async () => {
-    vi.stubGlobal("fetch", vi.fn(async () => new Response("<html></html>", {
-      status: 200,
-      headers: { "content-type": "text/html" },
-    })));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response("<html></html>", {
+            status: 200,
+            headers: { "content-type": "text/html" },
+          }),
+      ),
+    );
 
     expect(await storeLogo("gymshark.com", "https://gymshark.com/")).toBeNull();
     expect(await readLogo("gymshark.com")).toBeNull();
@@ -67,10 +76,16 @@ describe("storeLogo and readLogo", () => {
   });
 
   it("returns null when the served type is an svg", async () => {
-    vi.stubGlobal("fetch", vi.fn(async () => new Response("<svg/>", {
-      status: 200,
-      headers: { "content-type": "image/svg+xml" },
-    })));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response("<svg/>", {
+            status: 200,
+            headers: { "content-type": "image/svg+xml" },
+          }),
+      ),
+    );
 
     expect(await storeLogo("gymshark.com", "https://gymshark.com/logo.svg")).toBeNull();
     expect(await readLogo("gymshark.com")).toBeNull();
@@ -90,18 +105,29 @@ describe("storeLogo and readLogo", () => {
       headers: { "content-type": "image/png", "content-length": "2000000" },
     });
     expect(declared.headers.get("content-length")).toBe("2000000");
-    vi.stubGlobal("fetch", vi.fn(async () => declared));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => declared),
+    );
 
     expect(await storeLogo("gymshark.com", "https://gymshark.com/big.png")).toBeNull();
     expect(await logoKeys()).toEqual([]);
 
-    vi.stubGlobal("fetch", vi.fn(async () => new Response(underCap(), {
-      status: 200,
-      headers: { "content-type": "image/png" },
-    })));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response(underCap(), {
+            status: 200,
+            headers: { "content-type": "image/png" },
+          }),
+      ),
+    );
 
-    expect(await storeLogo("gymshark.com", "https://gymshark.com/small.png"))
-      .toEqual({ contentType: "image/png", bytes: PNG_BYTES });
+    expect(await storeLogo("gymshark.com", "https://gymshark.com/small.png")).toEqual({
+      contentType: "image/png",
+      bytes: PNG_BYTES,
+    });
   });
 
   it("stops a streamed body once it passes the cap", async () => {
@@ -117,7 +143,10 @@ describe("storeLogo and readLogo", () => {
       headers: { "content-type": "image/png" },
     });
     expect(streaming.headers.get("content-length")).toBeNull();
-    vi.stubGlobal("fetch", vi.fn(async () => streaming));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => streaming),
+    );
 
     expect(await storeLogo("gymshark.com", "https://gymshark.com/endless.png")).toBeNull();
     expect(await readLogo("gymshark.com")).toBeNull();
@@ -127,7 +156,10 @@ describe("storeLogo and readLogo", () => {
   it("returns null when a followed redirect lands on a host that is not public https", async () => {
     const redirected = png();
     Object.defineProperty(redirected, "url", { value: "https://127.0.0.1/logo.png", configurable: true });
-    vi.stubGlobal("fetch", vi.fn(async () => redirected));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => redirected),
+    );
 
     expect(await storeLogo("gymshark.com", "https://gymshark.com/logo.png")).toBeNull();
     expect(await readLogo("gymshark.com")).toBeNull();
@@ -135,10 +167,16 @@ describe("storeLogo and readLogo", () => {
   });
 
   it("returns null on a 404 and stores nothing", async () => {
-    vi.stubGlobal("fetch", vi.fn(async () => new Response("not found", {
-      status: 404,
-      headers: { "content-type": "image/png" },
-    })));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response("not found", {
+            status: 404,
+            headers: { "content-type": "image/png" },
+          }),
+      ),
+    );
 
     expect(await storeLogo("gymshark.com", "https://gymshark.com/missing.png")).toBeNull();
     expect(await readLogo("gymshark.com")).toBeNull();

@@ -9,10 +9,7 @@ import type { FetchedText, Subject } from "../../../app/lib/discovery/types";
 
 const SUBJECT: Subject = { name: "Gymshark", domain: "gymshark.com" };
 
-const FIXTURE = readFileSync(
-  join(dirname(fileURLToPath(import.meta.url)), "../../fixtures/hn-gymshark.json"),
-  "utf8",
-);
+const FIXTURE = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "../../fixtures/hn-gymshark.json"), "utf8");
 
 function fetchTextWith(body: string, ok = true): (url: string) => Promise<FetchedText> {
   return (url) =>

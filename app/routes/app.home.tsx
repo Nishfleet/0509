@@ -40,9 +40,7 @@ export async function loader({ request }: Route.LoaderArgs) {
   const open = new URL(request.url).searchParams.get("open");
   const payload = inputs.payload;
   const openId =
-    open !== null && payload !== null && inputs.entities.some((entity) => entity.id === open)
-      ? open
-      : null;
+    open !== null && payload !== null && inputs.entities.some((entity) => entity.id === open) ? open : null;
   const evidence =
     openId !== null && payload !== null && workspaceId !== null
       ? await readWeekEvidence({ workspaceId, entityId: openId, since: payload.period_start })

@@ -29,7 +29,11 @@ function useWidth(element: HTMLElement | null): number {
     },
     [element],
   );
-  return useSyncExternalStore(subscribe, () => element?.clientWidth ?? 0, () => 0);
+  return useSyncExternalStore(
+    subscribe,
+    () => element?.clientWidth ?? 0,
+    () => 0,
+  );
 }
 
 export function FourWeekLine({ chart }: { chart: FourWeekChart }): ReactElement {
@@ -82,9 +86,7 @@ export function FourWeekLine({ chart }: { chart: FourWeekChart }): ReactElement 
           <li key={`${week}-${String(index)}`}>{week}</li>
         ))}
       </ol>
-      {chart.weeks.length === 1 ? (
-        <p className="font-mono text-eyebrow text-ink-soft uppercase">first week</p>
-      ) : null}
+      {chart.weeks.length === 1 ? <p className="font-mono text-eyebrow text-ink-soft uppercase">first week</p> : null}
     </>
   );
 }

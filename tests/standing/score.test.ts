@@ -111,12 +111,7 @@ describe("public contract", () => {
       "ad_copy_change",
       "hiring_new_role",
     ];
-    const reliabilities: readonly Reliability[] = [
-      "official_api",
-      "rss",
-      "scraped_page",
-      "best_effort",
-    ];
+    const reliabilities: readonly Reliability[] = ["official_api", "rss", "scraped_page", "best_effort"];
     const counts: readonly BucketCount[] = buckets.map((bucket, index) => ({
       entity_id: "a",
       bucket,

@@ -12,13 +12,7 @@ export interface WatchedSource {
 const REBUILDING =
   "We're rebuilding coverage of news mentions. Briefs and standing still arrive from site changes; mentions resume as their sources come back.";
 
-export function WhatWeWatch({
-  sources,
-  now,
-}: {
-  sources: readonly WatchedSource[];
-  now?: number;
-}) {
+export function WhatWeWatch({ sources, now }: { sources: readonly WatchedSource[]; now?: number }) {
   const statuses = sources.map((entry) => ({
     entry,
     status: sourcePillStatus(entry.source, entry.snapshot, now),

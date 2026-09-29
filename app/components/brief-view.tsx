@@ -10,10 +10,7 @@ const LINE = "mt-2 text-[0.92rem] leading-[1.6]";
 
 export function BriefView({ payload }: { payload: BriefPayload }) {
   return (
-    <article
-      data-brief="view"
-      className="border-line min-w-0 border break-words p-4"
-    >
+    <article data-brief="view" className="border-line min-w-0 border break-words p-4">
       {headlineBlock(payload)}
       <ReadThisFirst marks={payload.read_this_first} />
       {brandsBlock(payload)}
@@ -64,10 +61,7 @@ function ownSiteBlock(payload: BriefPayload): ReactElement {
         <Fragment>
           <p className={BODY}>Your site looks broken</p>
           {payload.own_site.incidents.map((incident) => (
-            <p
-              key={`${incident.page_url} ${incident.observed_at} ${String(incident.is_open)}`}
-              className={LINE}
-            >
+            <p key={`${incident.page_url} ${incident.observed_at} ${String(incident.is_open)}`} className={LINE}>
               {incident.kind === ""
                 ? incident.page_url
                 : `${incident.kind} on ${incident.page_url} — ${incident.is_open ? "still broken" : "fixed"}`}

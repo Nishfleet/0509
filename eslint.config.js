@@ -20,7 +20,7 @@ const CLOUDFLARE_WORKERS_IMPORT = {
 const FULL_ZOD_IMPORT = {
   name: "zod",
   message:
-    "app/components/ ships to the browser; full zod costs about 13 KB gzipped per object schema there. Import from \"zod/mini\" instead (docs/REBUILD-STACK.md, zod). Source: 0509#4134.",
+    'app/components/ ships to the browser; full zod costs about 13 KB gzipped per object schema there. Import from "zod/mini" instead (docs/REBUILD-STACK.md, zod). Source: 0509#4134.',
 };
 
 const PAVED_PATH_PATTERNS = [
@@ -124,15 +124,13 @@ const SUPPORT_ADDRESS_BAN = {
 // exemption block) until the cascade grows a logged failure path. Source:
 // 0509#4462 (REBUILD-TRUST.md C1 Q1 — found in review of PR #4457).
 const CATCH_RETURNS_NULL = {
-  selector:
-    "CatchClause > BlockStatement[body.length=1] > ReturnStatement[argument.value=null]",
+  selector: "CatchClause > BlockStatement[body.length=1] > ReturnStatement[argument.value=null]",
   message:
     "A catch whose only statement is `return null` swallows the error, so a thrown fetch or a bug fails as silently as a real 'not found'. Give the clause an error binding and a logged failure path (or rethrow). Source: 0509#4462.",
 };
 
 const FEED_STATE_LITERAL = {
-  selector:
-    "ObjectExpression > Property[key.name='feedState'][value.value=/^(ok|stale|error)$/]",
+  selector: "ObjectExpression > Property[key.name='feedState'][value.value=/^(ok|stale|error)$/]",
   message:
     "Only workers/sources/mentions/youtube.ts may build a YouTube feedState. commitYoutubeFeed accepts OkYoutubeFeed alone, so a stale or error feed cannot be stored as zero videos. Source: 0509#4051.",
 };
@@ -161,7 +159,8 @@ const DOMAIN_HOSTNAME_BAN = {
 // DESIGN.md: fonts are self-hosted. A Google Fonts <link> put LCP at 2021 ms against the
 // 1500 ms budget (CI run 35635617508, main 5166ebb81; fixed in fd1457288).
 const GOOGLE_FONTS_BAN = {
-  selector: "Literal[value=/fonts\\.(googleapis|gstatic)\\.com/], TemplateElement[value.raw=/fonts\\.(googleapis|gstatic)\\.com/]",
+  selector:
+    "Literal[value=/fonts\\.(googleapis|gstatic)\\.com/], TemplateElement[value.raw=/fonts\\.(googleapis|gstatic)\\.com/]",
   message:
     "Fonts are self-hosted (DESIGN.md). A Google Fonts link is render-blocking and broke the 1500 ms LCP budget once (fd1457288). Add the font file under public/ and an @font-face instead.",
 };
@@ -179,15 +178,27 @@ const NO_USER_DATA_IN_LOGS = [
     selector: `${LOG_OR_CAPTURE_CALL} :matches(Property[key.name=/${USER_DATA_NAME}/], Property[value.name=/${USER_DATA_NAME}/], MemberExpression[property.name=/${USER_DATA_NAME}/])`,
     message: NO_USER_DATA_IN_LOGS_MESSAGE,
   },
-  { selector: `${LOG_OR_CAPTURE_CALL} > Identifier.arguments[name=/${USER_DATA_NAME}/]`, message: NO_USER_DATA_IN_LOGS_MESSAGE },
+  {
+    selector: `${LOG_OR_CAPTURE_CALL} > Identifier.arguments[name=/${USER_DATA_NAME}/]`,
+    message: NO_USER_DATA_IN_LOGS_MESSAGE,
+  },
   // The first two cover a named key and a named value. These four close the
   // shapes the message promises but a name-only match misses: the `email` in
   // `console.log(`user ${email}`)`, the `subject` in `JSON.stringify(subject)`,
   // the `subject` in `{ ...subject }`, and the `subject` in
   // `console.log(subject.registrable)`. 0509#5786.
-  { selector: `${LOG_OR_CAPTURE_CALL} TemplateLiteral > Identifier[name=/${USER_DATA_NAME}/]`, message: NO_USER_DATA_IN_LOGS_MESSAGE },
-  { selector: `${LOG_OR_CAPTURE_CALL} CallExpression > Identifier[name=/${USER_DATA_NAME}/]`, message: NO_USER_DATA_IN_LOGS_MESSAGE },
-  { selector: `${LOG_OR_CAPTURE_CALL} SpreadElement > Identifier[name=/${USER_DATA_NAME}/]`, message: NO_USER_DATA_IN_LOGS_MESSAGE },
+  {
+    selector: `${LOG_OR_CAPTURE_CALL} TemplateLiteral > Identifier[name=/${USER_DATA_NAME}/]`,
+    message: NO_USER_DATA_IN_LOGS_MESSAGE,
+  },
+  {
+    selector: `${LOG_OR_CAPTURE_CALL} CallExpression > Identifier[name=/${USER_DATA_NAME}/]`,
+    message: NO_USER_DATA_IN_LOGS_MESSAGE,
+  },
+  {
+    selector: `${LOG_OR_CAPTURE_CALL} SpreadElement > Identifier[name=/${USER_DATA_NAME}/]`,
+    message: NO_USER_DATA_IN_LOGS_MESSAGE,
+  },
   // The identifier wrapped in one expression: `"ip " + ip`, `[email]`,
   // `email ?? ""`, `flag ? email : "x"`. 0509#5786.
   {
@@ -213,13 +224,13 @@ const BANNED_SYNTAX = [
   XML_PARSER_CONSTRUCTOR,
   DOMAIN_HOSTNAME_BAN,
   {
-    selector: "NewExpression[callee.name='RegExp'] > Literal.arguments, NewExpression[callee.name='RegExp'] > TemplateLiteral",
+    selector:
+      "NewExpression[callee.name='RegExp'] > Literal.arguments, NewExpression[callee.name='RegExp'] > TemplateLiteral",
     message:
       "A regex built from a string cannot be shown to escape that string's metacharacters, so a '.' matches any host and an unexpected '\\' breaks the pattern. Two live alerts on 0509#4172 came from exactly this shape (CodeQL js/incomplete-hostname-regexp, 8 high alerts) plus a fan-out that probed once per match instead of once per board. Extract the candidate out of the text and parse it with `new URL()`, then match the hostname against a table with an exact comparison. Source: 0509#4172, commit sequence ending bdca157.",
   },
   {
-    selector:
-      "MemberExpression[object.name='context'][property.name='cloudflare']",
+    selector: "MemberExpression[object.name='context'][property.name='cloudflare']",
     message:
       "context.cloudflare is the React Router 7 shape and does not exist here; this app provides no getLoadContext, so reading it throws and the route 500s. Bindings come from `import { env } from 'cloudflare:workers'`. Source: commit 7727bf787 / #3918 (production regression: /api/auth, /app and the magic-link POST all 500d).",
   },
@@ -240,7 +251,7 @@ const BANNED_SYNTAX = [
 // Full DML write shapes, strict enough to run unanchored: UPDATE needs the
 // `SET col =` tail so prose like "the update was set" cannot match.
 const DML_WRITE_SHAPE =
-  "INSERT(\\s+OR\\s+\\w+)?\\s+INTO|REPLACE\\s+INTO|UPDATE\\s+[\\w\".]+\\s+SET\\s+[\\w\".]+\\s*=|DELETE\\s+FROM";
+  'INSERT(\\s+OR\\s+\\w+)?\\s+INTO|REPLACE\\s+INTO|UPDATE\\s+[\\w".]+\\s+SET\\s+[\\w".]+\\s*=|DELETE\\s+FROM';
 
 // The same shapes anchored at statement start, plus `WITH`-led writes (a CTE
 // can head INSERT/UPDATE/DELETE; a `WITH … SELECT` read stays allowed because
@@ -265,8 +276,7 @@ const RAW_DML_WRITER = {
 
 const ENV_DB_IN_ROUTES = {
   selector: "CallExpression[callee.object.name='env'][callee.property.name='DB']",
-  message:
-    "Routes do not touch env.DB. Go through the one data layer in app/lib/data/. docs/REBUILD-TRUST.md C4.",
+  message: "Routes do not touch env.DB. Go through the one data layer in app/lib/data/. docs/REBUILD-TRUST.md C4.",
 };
 
 const STATIC_HOME_HTML_PARSER = {
@@ -325,8 +335,7 @@ const STATIC_HOME_FONT_PRELOAD = {
         const scriptEnd = scriptAt < 0 ? -1 : text.indexOf("</script>", scriptAt);
         const script = scriptAt >= 0 && scriptEnd > scriptAt ? text.slice(scriptAt, scriptEnd) : "";
         const asksAfterLoad =
-          script.includes('addEventListener("load"') &&
-          script.includes('faces.href = "/home-faces.css"');
+          script.includes('addEventListener("load"') && script.includes('faces.href = "/home-faces.css"');
         if (mainEnd < 0 || scriptAt < mainEnd || !asksAfterLoad) {
           context.report({ node, messageId: "lateFaces" });
         }
@@ -396,19 +405,13 @@ export default tseslint.config(
   {
     files: ["**/*.{ts,tsx}"],
     rules: {
-      "@typescript-eslint/consistent-type-imports": [
-        "error",
-        { fixStyle: "separate-type-imports" },
-      ],
+      "@typescript-eslint/consistent-type-imports": ["error", { fixStyle: "separate-type-imports" }],
       "@typescript-eslint/no-unnecessary-condition": "off",
       "@typescript-eslint/no-unused-vars": [
         "error",
         { argsIgnorePattern: "^_", varsIgnorePattern: "^_", caughtErrorsIgnorePattern: "^_" },
       ],
-      "@typescript-eslint/only-throw-error": [
-        "error",
-        { allow: [{ from: "lib", name: "Response" }] },
-      ],
+      "@typescript-eslint/only-throw-error": ["error", { allow: [{ from: "lib", name: "Response" }] }],
     },
   },
 
@@ -417,15 +420,9 @@ export default tseslint.config(
     plugins: { "react-hooks": reactHooks, "no-comments": noComments },
     rules: {
       ...reactHooks.configs.recommended.rules,
-      "no-comments/disallowComments": [
-        "error",
-        { allow: ["eslint", "global"] },
-      ],
+      "no-comments/disallowComments": ["error", { allow: ["eslint", "global"] }],
       "no-inline-comments": "error",
-      "no-warning-comments": [
-        "error",
-        { terms: WORKAROUND_TERMS, location: "anywhere" },
-      ],
+      "no-warning-comments": ["error", { terms: WORKAROUND_TERMS, location: "anywhere" }],
       "no-restricted-syntax": ["error", ...BANNED_SYNTAX, ...NO_USER_DATA_IN_LOGS, FEED_STATE_LITERAL],
     },
   },
@@ -515,16 +512,9 @@ export default tseslint.config(
 
   {
     files: ["app/**/*.{ts,tsx}", "workers/**/*.ts"],
-    ignores: [
-      "app/lib/auth.server.ts",
-      "app/lib/auth-client.ts",
-      "app/components/toaster.tsx",
-    ],
+    ignores: ["app/lib/auth.server.ts", "app/lib/auth-client.ts", "app/components/toaster.tsx"],
     rules: {
-      "no-restricted-imports": [
-        "error",
-        { paths: ONE_PAVED_PATH_IMPORTS, patterns: PAVED_PATH_PATTERNS },
-      ],
+      "no-restricted-imports": ["error", { paths: ONE_PAVED_PATH_IMPORTS, patterns: PAVED_PATH_PATTERNS }],
     },
   },
 
@@ -704,10 +694,7 @@ export default tseslint.config(
             {
               from: { file: { categories: "entry" } },
               allow: {
-                to: [
-                  { element: { type: "component" } },
-                  { file: { categories: "server-module" } },
-                ],
+                to: [{ element: { type: "component" } }, { file: { categories: "server-module" } }],
               },
             },
             {

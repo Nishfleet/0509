@@ -6,7 +6,7 @@
 // auto-detected on every lhci call, so the console-errors assertion is
 // exported only when assert runs without a budgets file — the step that
 // enforces it calls `lhci assert --config=lighthouserc.cjs`.
-const assertions = process.argv.some(arg => /^--budgets-?file/i.test(arg))
+const assertions = process.argv.some((arg) => /^--budgets-?file/i.test(arg))
   ? undefined
   : { "errors-in-console": ["error", { maxLength: 0 }] };
 

@@ -5,9 +5,7 @@ import { expect, test } from "@playwright/test";
 // contract — the disallow rows and the sitemap line — never the full file
 // verbatim.
 
-test("GET /robots.txt serves the manifest-generated file", async ({
-  request,
-}) => {
+test("GET /robots.txt serves the manifest-generated file", async ({ request }) => {
   const response = await request.get("/robots.txt");
   expect(response.status()).toBe(200);
   expect(response.headers()["content-type"]).toMatch(/^text\/plain/);
@@ -17,24 +15,18 @@ test("GET /robots.txt serves the manifest-generated file", async ({
   expect(body).toMatch(/^Sitemap: https?:\/\/\S+\/sitemap\.xml$/m);
 });
 
-test("GET /sitemap.xml serves the manifest-generated urlset", async ({
-  request,
-}) => {
+test("GET /sitemap.xml serves the manifest-generated urlset", async ({ request }) => {
   const response = await request.get("/sitemap.xml");
   expect(response.status()).toBe(200);
   expect(response.headers()["content-type"]).toMatch(/^application\/xml/);
 
   const body = await response.text();
-  expect(body).toContain(
-    '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
-  );
+  expect(body).toContain('<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">');
   expect(body).toMatch(/<loc>https?:\/\/[^<]+\/privacy<\/loc>/);
   expect(body).toMatch(/<loc>https?:\/\/[^<]+\/terms<\/loc>/);
 });
 
-test("GET /llms.txt serves the manifest-generated summary", async ({
-  request,
-}) => {
+test("GET /llms.txt serves the manifest-generated summary", async ({ request }) => {
   const response = await request.get("/llms.txt");
   expect(response.status()).toBe(200);
   expect(response.headers()["content-type"]).toMatch(/^text\/plain/);
@@ -45,9 +37,7 @@ test("GET /llms.txt serves the manifest-generated summary", async ({
   expect(body).toMatch(/^- \[[^\]]+\]\(https?:\/\/[^)]+\/privacy\): \S/m);
 });
 
-test("the sitemap leaves out the noindex rebuild notice at /", async ({
-  request,
-}) => {
+test("the sitemap leaves out the noindex rebuild notice at /", async ({ request }) => {
   const body = await (await request.get("/sitemap.xml")).text();
   expect(body).not.toMatch(/<loc>https?:\/\/[^<]+\/<\/loc>/);
 });
@@ -55,9 +45,6 @@ test("the sitemap leaves out the noindex rebuild notice at /", async ({
 test("both legal routes carry the one robots policy", async ({ page }) => {
   for (const path of ["/privacy", "/terms"]) {
     await page.goto(path);
-    await expect(page.locator('meta[name="robots"]')).toHaveAttribute(
-      "content",
-      "index, follow",
-    );
+    await expect(page.locator('meta[name="robots"]')).toHaveAttribute("content", "index, follow");
   }
 });

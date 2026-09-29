@@ -155,7 +155,14 @@ async function seed(): Promise<string> {
       "A roundup mention, not a move of its own.",
       "2026-09-25T07:00:00.000Z",
     ),
-    verdict(`jev-held-${suffix}`, `sig-held-${suffix}`, onId, 0.05, "A ticker line, not a move.", "2026-09-25T06:00:00.000Z"),
+    verdict(
+      `jev-held-${suffix}`,
+      `sig-held-${suffix}`,
+      onId,
+      0.05,
+      "A ticker line, not a move.",
+      "2026-09-25T06:00:00.000Z",
+    ),
     verdict(`jev-off-${suffix}`, `sig-off-${suffix}`, offId, 0.99, "Paused brand reason.", "2026-09-25T06:00:00.000Z"),
     verdict(
       `jev-dismissed-${suffix}`,
@@ -187,13 +194,7 @@ describe("mention feed read", () => {
       "Zephyrwear shows up in a roundup",
       "Zephyrwear ticker line",
     ]);
-    expect(mentions.map((mention) => mention.treatment)).toEqual([
-      "unreviewed",
-      "shown",
-      "shown",
-      "possibly",
-      "held",
-    ]);
+    expect(mentions.map((mention) => mention.treatment)).toEqual(["unreviewed", "shown", "shown", "possibly", "held"]);
     expect(mentions.map((mention) => mention.sourceName)).toEqual([
       "News mentions",
       "News mentions",

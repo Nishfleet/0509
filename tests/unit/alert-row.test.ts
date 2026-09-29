@@ -123,9 +123,7 @@ describe("an alert feed row", () => {
   it("renders a delivery failure title in the house row-name type and omits a missing brief", () => {
     const html = render(FAILURE_ITEM);
     expect(html).toContain('data-testid="delivery-failure"');
-    expect(html).toContain(
-      `${ROW_NAME_TITLE}We stopped trying to send your brief</h3>`,
-    );
+    expect(html).toContain(`${ROW_NAME_TITLE}We stopped trying to send your brief</h3>`);
     expect(html).toContain("The brief did not go out. We will not try again.");
     expect(html).toContain("4 days ago");
     expect(html).not.toContain("Read the brief");

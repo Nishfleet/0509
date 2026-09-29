@@ -82,16 +82,16 @@ That kills the framing that Candidate A is the simpler shape. **Any hash over ra
 
 ## Live probes
 
-| # | Upstream | Call | Result |
-|---|---|---|---|
-| 1 | Competitor homepage | `GET https://www.gymshark.com/` | **200**, 1,608,007 B, **1.07 s**, at **12:12:39Z**; 14,814 characters of extracted visible text |
-| 2 | Same page, second fetch 5 s later | `GET https://www.gymshark.com/` | **200**, same length, **different raw hash, identical text hash** — the churn measurement above, at **12:15:40Z** |
-| 3 | Competitor pricing-role page | `GET https://www.gymshark.com/collections/all-products` | **200**, 1,836,099 B, **0.84 s**, at **12:13:27Z** |
-| 4 | **Own site** | `GET https://0509.io/` | **200**, 84,209 B, **1.10 s**, at **12:13:26Z**; raw hash differs between two immediate fetches |
-| 5 | Own site health | `GET https://0509.io/api/health` | **200** `{"status":"ok","app":"0509"}` (per `REBUILD-KEEPLIST.md`, re-checked live) |
-| 6 | Browser Rendering REST | `POST /accounts/<id>/browser-rendering/markdown` | **401 Authentication error** at **12:15:10Z** and **12:15:20Z** — both host tokens lack the scope; the `/user/tokens/verify` call on the same token returned **200** (`id 1bfdb479e69ca9e9393c43111f75ca51`), so the token is live and simply not permitted |
-| 7 | Browser Rendering **in production** | `GET https://0509.io/search?website=gymshark.com` | **200**, 134,877 B, **15.55 s**, `data-f9-result-source="meta_library_browser"`, at **12:13:25Z** — the deployed Worker's browser leg reaching a host that returns **403** to this VPS's own fetch |
-| 8 | Jev, D9 shape | `POST 127.0.0.1:4000/jev` | **200**, **0.33 s**, at **12:19:10Z** |
+| #   | Upstream                            | Call                                                    | Result                                                                                                                                                                                                                                                      |
+| --- | ----------------------------------- | ------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | Competitor homepage                 | `GET https://www.gymshark.com/`                         | **200**, 1,608,007 B, **1.07 s**, at **12:12:39Z**; 14,814 characters of extracted visible text                                                                                                                                                             |
+| 2   | Same page, second fetch 5 s later   | `GET https://www.gymshark.com/`                         | **200**, same length, **different raw hash, identical text hash** — the churn measurement above, at **12:15:40Z**                                                                                                                                           |
+| 3   | Competitor pricing-role page        | `GET https://www.gymshark.com/collections/all-products` | **200**, 1,836,099 B, **0.84 s**, at **12:13:27Z**                                                                                                                                                                                                          |
+| 4   | **Own site**                        | `GET https://0509.io/`                                  | **200**, 84,209 B, **1.10 s**, at **12:13:26Z**; raw hash differs between two immediate fetches                                                                                                                                                             |
+| 5   | Own site health                     | `GET https://0509.io/api/health`                        | **200** `{"status":"ok","app":"0509"}` (per `REBUILD-KEEPLIST.md`, re-checked live)                                                                                                                                                                         |
+| 6   | Browser Rendering REST              | `POST /accounts/<id>/browser-rendering/markdown`        | **401 Authentication error** at **12:15:10Z** and **12:15:20Z** — both host tokens lack the scope; the `/user/tokens/verify` call on the same token returned **200** (`id 1bfdb479e69ca9e9393c43111f75ca51`), so the token is live and simply not permitted |
+| 7   | Browser Rendering **in production** | `GET https://0509.io/search?website=gymshark.com`       | **200**, 134,877 B, **15.55 s**, `data-f9-result-source="meta_library_browser"`, at **12:13:25Z** — the deployed Worker's browser leg reaching a host that returns **403** to this VPS's own fetch                                                          |
+| 8   | Jev, D9 shape                       | `POST 127.0.0.1:4000/jev`                               | **200**, **0.33 s**, at **12:19:10Z**                                                                                                                                                                                                                       |
 
 **Probe 8, verbatim** — the page-role judgment this engine's schedule depends on:
 
@@ -123,18 +123,18 @@ A URL regex would have filed `/collections/all-products` as `other` and never sn
 
 ## Data flow against the schema
 
-| Step | Reads | Writes |
-|---|---|---|
-| Select | `watch JOIN entity WHERE entity.state='on' AND source.kind='site'`, `page` (role, transport) | — |
-| Fetch | `page.transport` | — |
-| Extract + hash | — | — |
-| Unchanged | previous `snapshot.payload_hash` | **one `snapshot` row**: `payload_r2_key`, `payload_hash`, `item_count`, `fetched_at`. Nothing else. No screenshot, no Jev, no signal |
-| Changed | the previous snapshot's R2 body | R2: new text body + **screenshot pair**; one `snapshot` row |
-| Diff | both bodies | the diff hunks stored in R2 alongside, referenced by key |
-| Judge | `entity`, `signal` history, `user_decision` | `jev_verdict` (D3s first for self, then D3) |
-| Publish | — | `signal`, `kind='change'` — the conditional CHECK requires `aspect`; the `change` view reads it |
-| Own-site break | — | `alert` immediately, plus `send_attempt` through the Email Service binding |
-| User says "I meant to do that" | — | `user_decision`, keyed to the signal — this is the `user_memory` every later judgment reads |
+| Step                           | Reads                                                                                        | Writes                                                                                                                               |
+| ------------------------------ | -------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| Select                         | `watch JOIN entity WHERE entity.state='on' AND source.kind='site'`, `page` (role, transport) | —                                                                                                                                    |
+| Fetch                          | `page.transport`                                                                             | —                                                                                                                                    |
+| Extract + hash                 | —                                                                                            | —                                                                                                                                    |
+| Unchanged                      | previous `snapshot.payload_hash`                                                             | **one `snapshot` row**: `payload_r2_key`, `payload_hash`, `item_count`, `fetched_at`. Nothing else. No screenshot, no Jev, no signal |
+| Changed                        | the previous snapshot's R2 body                                                              | R2: new text body + **screenshot pair**; one `snapshot` row                                                                          |
+| Diff                           | both bodies                                                                                  | the diff hunks stored in R2 alongside, referenced by key                                                                             |
+| Judge                          | `entity`, `signal` history, `user_decision`                                                  | `jev_verdict` (D3s first for self, then D3)                                                                                          |
+| Publish                        | —                                                                                            | `signal`, `kind='change'` — the conditional CHECK requires `aspect`; the `change` view reads it                                      |
+| Own-site break                 | —                                                                                            | `alert` immediately, plus `send_attempt` through the Email Service binding                                                           |
+| User says "I meant to do that" | —                                                                                            | `user_decision`, keyed to the signal — this is the `user_memory` every later judgment reads                                          |
 
 **One snapshot row per watch per tick, always. Signal rows only for changes that survived judgment.** That is the schema's chosen shape and the reason this engine cannot reproduce the 2026-09-17 rows-written bill.
 
@@ -166,12 +166,12 @@ Steps: 5 per instance; 1 competitor instance a day plus 24 self instances = **12
 
 ## Jev decisions used
 
-| Id | Primitive | When | Context pack fields |
-|---|---|---|---|
-| **D9** `page_role` | Choice | once per discovered page, again only when the title hash changes; cached on `page.role_decided_for_hash` | `subject`, `item` = URL + title. Proven live above |
-| **D3s** `own_site_breakage` | Noul | **every** own-site diff, before D3 | `self`, `subject` (= self), `item` = the diff hunks plus the code-computed evidence (HTTP status, text-length delta, sections present yesterday and missing today, price tokens vanished, checkout link resolving), `history_30d`, `user_memory` = the user's "I meant to do that" marks |
-| **D3** `noteworthy_change` | Noul + Choice `kind` (offer / pricing / copy / launch / removal / breakage / unintended / noise) | every competitor diff, and own-site diffs that D3s cleared | `self`, `subject`, `item` = the diff hunks and the page role — **never full pages**, `history_30d` = the previous snapshot summary and the last 30 days of changes, `user_memory`, `reliability` |
-| **D4** `read_this_first` | Noul + Score | weekly, over items that passed D3 | as the contract defines |
+| Id                          | Primitive                                                                                        | When                                                                                                     | Context pack fields                                                                                                                                                                                                                                                                      |
+| --------------------------- | ------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **D9** `page_role`          | Choice                                                                                           | once per discovered page, again only when the title hash changes; cached on `page.role_decided_for_hash` | `subject`, `item` = URL + title. Proven live above                                                                                                                                                                                                                                       |
+| **D3s** `own_site_breakage` | Noul                                                                                             | **every** own-site diff, before D3                                                                       | `self`, `subject` (= self), `item` = the diff hunks plus the code-computed evidence (HTTP status, text-length delta, sections present yesterday and missing today, price tokens vanished, checkout link resolving), `history_30d`, `user_memory` = the user's "I meant to do that" marks |
+| **D3** `noteworthy_change`  | Noul + Choice `kind` (offer / pricing / copy / launch / removal / breakage / unintended / noise) | every competitor diff, and own-site diffs that D3s cleared                                               | `self`, `subject`, `item` = the diff hunks and the page role — **never full pages**, `history_30d` = the previous snapshot summary and the last 30 days of changes, `user_memory`, `reliability`                                                                                         |
+| **D4** `read_this_first`    | Noul + Score                                                                                     | weekly, over items that passed D3                                                                        | as the contract defines                                                                                                                                                                                                                                                                  |
 
 Thresholds, exactly as `REBUILD-JEV.md` fixes them: D3 publishes at p ≥ 0.9, discards and logs at p ≤ 0.1, publishes low and marked "possibly" between. **D3s is the one decision with a different bar — p ≥ 0.5 alerts immediately**, because a false alarm costs ten seconds and silence on a broken site costs the customer; below 0.1 it is treated as deliberate and handed to D3; between, the alert says "check this".
 
@@ -181,14 +181,14 @@ Thresholds, exactly as `REBUILD-JEV.md` fixes them: D3 publishes at p ≥ 0.9, d
 
 Per 1,000 page checks, priced from `REBUILD-COST.md` (2026-09-21):
 
-| Leg | Units | Per 1,000 checks |
-|---|---|---|
-| Unchanged page (fetch + extract + hash) — the common case | 1 subrequest, ~1.1 s wall, negligible CPU | free |
-| Changed page (escalation: 1 render + 1 screenshot ≈ 8 browser-seconds) | browser-seconds | at a 10% change rate: 100 × 8 s = **0.22 browser-hours** → **$0.02** |
-| D1 | 1 snapshot row per check + 1 signal row per published change | 1,000 + ~50 = **1,050 rows written** — 0.002% of the 50M included |
-| R2 | 1 text PUT per check + 2 screenshot PUTs per change | 1,200 Class A (**$0.005**), ~1 GB-mo (**$0.015**) |
-| Queue | 3 ops per check | 3,000 — **$0.0012** |
-| Jev | ~100 calls (changes only) | $0 on the seat, **$0.0016** at the measured market rate |
+| Leg                                                                    | Units                                                        | Per 1,000 checks                                                     |
+| ---------------------------------------------------------------------- | ------------------------------------------------------------ | -------------------------------------------------------------------- |
+| Unchanged page (fetch + extract + hash) — the common case              | 1 subrequest, ~1.1 s wall, negligible CPU                    | free                                                                 |
+| Changed page (escalation: 1 render + 1 screenshot ≈ 8 browser-seconds) | browser-seconds                                              | at a 10% change rate: 100 × 8 s = **0.22 browser-hours** → **$0.02** |
+| D1                                                                     | 1 snapshot row per check + 1 signal row per published change | 1,000 + ~50 = **1,050 rows written** — 0.002% of the 50M included    |
+| R2                                                                     | 1 text PUT per check + 2 screenshot PUTs per change          | 1,200 Class A (**$0.005**), ~1 GB-mo (**$0.015**)                    |
+| Queue                                                                  | 3 ops per check                                              | 3,000 — **$0.0012**                                                  |
+| Jev                                                                    | ~100 calls (changes only)                                    | $0 on the seat, **$0.0016** at the measured market rate              |
 
 **Monthly at 100 brands**, 4 pages each daily plus one hourly self page per workspace:
 
@@ -205,17 +205,17 @@ Per 1,000 page checks, priced from `REBUILD-COST.md` (2026-09-21):
 
 ## Failure modes and the degraded state the UI shows
 
-| Failure | Detection | What the user sees |
-|---|---|---|
-| Page renders copy only in JS | extracted text under 200 chars | the `page` row flips to `transport='browser'` and the next tick renders it. Until then the page shows "we're still reading this page" — never a false "no changes" |
-| Site blocks us entirely, both transports | non-2xx or challenge on both | that brand's site tracking shows **degraded** with the date it last succeeded. Rate limits come from the `source` row; we never retry harder (`REBUILD-GUARDRAILS.md`) |
-| Change is real but noise | D3 `kind='noise'` or p ≤ 0.1 | nothing in the feed; the verdict is still logged, so "why didn't you show me this" is answerable |
-| Change is ambiguous | 0.1 < p < 0.9 | published low, marked "possibly", with Jev's one-line reason |
-| **Own site looks broken** | D3s p ≥ 0.5 | an Alerts entry within one Workflow tick — at most an hour old — plus an email through the Email Service binding, with the before-and-after screenshots and the specific evidence (status code, missing section, vanished price) |
-| Own site changed on purpose | the user taps "I meant to do that" | a `user_decision` row; the same change never alerts again, and the mark feeds `user_memory` on every later judgment |
-| Browser budget exhausted for a brand | the DO counter | changed pages are queued for the next tick and the page shows "checking this next" with the real next-tick time. Never dropped, never silently skipped |
-| Sweep overruns its window at the cap | the `assert` step's coverage count | ON brands' home and pricing pages stay current; long-tail pages show their real last-checked time. Nish gets the measured wall clock and a proposed cap the same day |
-| Screenshot missing for a published change | R2 key absent | the mark shows with the text diff and a "screenshot unavailable" line — a mark is never suppressed because its picture failed |
+| Failure                                   | Detection                          | What the user sees                                                                                                                                                                                                               |
+| ----------------------------------------- | ---------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Page renders copy only in JS              | extracted text under 200 chars     | the `page` row flips to `transport='browser'` and the next tick renders it. Until then the page shows "we're still reading this page" — never a false "no changes"                                                               |
+| Site blocks us entirely, both transports  | non-2xx or challenge on both       | that brand's site tracking shows **degraded** with the date it last succeeded. Rate limits come from the `source` row; we never retry harder (`REBUILD-GUARDRAILS.md`)                                                           |
+| Change is real but noise                  | D3 `kind='noise'` or p ≤ 0.1       | nothing in the feed; the verdict is still logged, so "why didn't you show me this" is answerable                                                                                                                                 |
+| Change is ambiguous                       | 0.1 < p < 0.9                      | published low, marked "possibly", with Jev's one-line reason                                                                                                                                                                     |
+| **Own site looks broken**                 | D3s p ≥ 0.5                        | an Alerts entry within one Workflow tick — at most an hour old — plus an email through the Email Service binding, with the before-and-after screenshots and the specific evidence (status code, missing section, vanished price) |
+| Own site changed on purpose               | the user taps "I meant to do that" | a `user_decision` row; the same change never alerts again, and the mark feeds `user_memory` on every later judgment                                                                                                              |
+| Browser budget exhausted for a brand      | the DO counter                     | changed pages are queued for the next tick and the page shows "checking this next" with the real next-tick time. Never dropped, never silently skipped                                                                           |
+| Sweep overruns its window at the cap      | the `assert` step's coverage count | ON brands' home and pricing pages stay current; long-tail pages show their real last-checked time. Nish gets the measured wall clock and a proposed cap the same day                                                             |
+| Screenshot missing for a published change | R2 key absent                      | the mark shows with the text diff and a "screenshot unavailable" line — a mark is never suppressed because its picture failed                                                                                                    |
 
 ---
 

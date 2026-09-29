@@ -29,10 +29,7 @@ import { consoleFailures, isLocalLane, laneOrigin, watchConsole } from "./inbox"
 // probed that row — 316px across, the 80px label, the 204px empty line and the
 // two `gap-4` taking the 32px — and owns the fix, which deletes this file's
 // expected failure rather than this packet's slice.
-test.skip(
-  !isLocalLane(),
-  "production signs in through the magic-link inbox; the local preview D1 carries the seed",
-);
+test.skip(!isLocalLane(), "production signs in through the magic-link inbox; the local preview D1 carries the seed");
 
 function authSecret(): string {
   const line = readFileSync(".dev.vars.example", "utf8")
@@ -154,7 +151,9 @@ function watchDraftPosts(page: Page): string[] {
   return posts;
 }
 
-test("the identity card editor saves and closes on Enter, with focus back on the trigger", async ({ page }, testInfo) => {
+test("the identity card editor saves and closes on Enter, with focus back on the trigger", async ({
+  page,
+}, testInfo) => {
   test.setTimeout(90_000);
   test.fail(testInfo.project.name === "phone-390", PHONE_390_DEFECT);
   const watched = watchConsole(page);
@@ -170,7 +169,8 @@ test("the identity card editor saves and closes on Enter, with focus back on the
   const name = await openEditor(page, "name");
   await name.fill("Brand One");
   const saveResponse = page.waitForResponse(
-    (response) => response.request().method() === "POST" && new URL(response.url()).pathname === "/onboarding/identity.data",
+    (response) =>
+      response.request().method() === "POST" && new URL(response.url()).pathname === "/onboarding/identity.data",
   );
   await name.press("Enter");
 
@@ -190,7 +190,9 @@ test("the identity card editor saves and closes on Enter, with focus back on the
   expect(await consoleFailures(page, watched, testInfo), testInfo.project.name).toEqual([]);
 });
 
-test("the identity card editor saves and closes on Escape, with focus back on the trigger", async ({ page }, testInfo) => {
+test("the identity card editor saves and closes on Escape, with focus back on the trigger", async ({
+  page,
+}, testInfo) => {
   test.setTimeout(90_000);
   test.fail(testInfo.project.name === "phone-390", PHONE_390_DEFECT);
   const watched = watchConsole(page);
@@ -206,7 +208,8 @@ test("the identity card editor saves and closes on Escape, with focus back on th
   const about = await openEditor(page, "about");
   await about.fill("one line on what we do");
   const saveResponse = page.waitForResponse(
-    (response) => response.request().method() === "POST" && new URL(response.url()).pathname === "/onboarding/identity.data",
+    (response) =>
+      response.request().method() === "POST" && new URL(response.url()).pathname === "/onboarding/identity.data",
   );
   await about.press("Escape");
 

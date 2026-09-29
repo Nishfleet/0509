@@ -70,9 +70,7 @@ const targetRows = z.array(
 export async function insertWatches(rows: readonly NewWatch[]): Promise<void> {
   if (rows.length === 0) return;
   await env.DB.batch(
-    rows.map((row) =>
-      env.DB.prepare(INSERT_WATCH).bind(row.id, row.entityId, row.sourceId, row.targetKey),
-    ),
+    rows.map((row) => env.DB.prepare(INSERT_WATCH).bind(row.id, row.entityId, row.sourceId, row.targetKey)),
   );
 }
 
@@ -108,9 +106,7 @@ export async function readEntityWatches(entityId: string): Promise<EntityWatch[]
   }));
 }
 
-export async function readUnwatchedEntities(
-  sourceId: string,
-): Promise<readonly { id: string; domain: string }[]> {
+export async function readUnwatchedEntities(sourceId: string): Promise<readonly { id: string; domain: string }[]> {
   const rows = await env.DB.prepare(UNWATCHED_ENTITIES).bind(sourceId).all();
   return entityRows.parse(rows.results);
 }
@@ -224,9 +220,7 @@ export interface HiringTarget {
   boardUrl: string;
 }
 
-export async function readEntitiesWithoutHiringWatch(): Promise<
-  readonly { id: string; domain: string }[]
-> {
+export async function readEntitiesWithoutHiringWatch(): Promise<readonly { id: string; domain: string }[]> {
   const rows = await env.DB.prepare(ENTITIES_WITHOUT_HIRING_WATCH).all();
   return entityRows.parse(rows.results);
 }
@@ -272,8 +266,6 @@ WHERE e.id = ?2 AND e.workspace_id = ?1 AND e.role = 'competitor'
 ORDER BY w.id`;
 
 export async function readEntityR2Prefixes(workspaceId: string, entityId: string): Promise<string[]> {
-  const { results } = await env.DB.prepare(ENTITY_R2_PREFIXES)
-    .bind(workspaceId, entityId)
-    .all<{ id: string }>();
+  const { results } = await env.DB.prepare(ENTITY_R2_PREFIXES).bind(workspaceId, entityId).all<{ id: string }>();
   return results.map((row) => `snapshot/site/${row.id}/`);
 }

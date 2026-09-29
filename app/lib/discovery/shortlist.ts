@@ -66,8 +66,7 @@ function buildGroups(candidates: readonly Candidate[]): Group[] {
     if (key === "") continue;
     const domainKey = candidate.domain === undefined ? null : hostKey(candidate.domain);
     const matchIndex = groups.findIndex((group) => {
-      const byDomain =
-        domainKey !== null && group.domain !== undefined && hostKey(group.domain) === domainKey;
+      const byDomain = domainKey !== null && group.domain !== undefined && hostKey(group.domain) === domainKey;
       return byDomain || group.nameKeys.has(key);
     });
     const existing = matchIndex >= 0 ? groups[matchIndex] : undefined;
@@ -124,9 +123,7 @@ export function evidenceLine(entry: ShortlistEntry): string {
       return [`named by ${String(count)} news publisher${count !== 1 ? "s" : ""}`];
     }
     if (key === "hn") {
-      const urls = new Set(
-        entry.evidence.flatMap((item) => (item.generator === "hn" ? [item.sourceUrl] : [])),
-      );
+      const urls = new Set(entry.evidence.flatMap((item) => (item.generator === "hn" ? [item.sourceUrl] : [])));
       return [`mentioned in ${String(urls.size)} Hacker News thread${urls.size !== 1 ? "s" : ""}`];
     }
     return ["advertises in the same category"];

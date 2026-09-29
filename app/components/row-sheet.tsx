@@ -24,13 +24,7 @@ function notNarrowOnServer(): boolean {
   return false;
 }
 
-export function RowSheet({
-  title,
-  evidence,
-}: {
-  title: string;
-  evidence: readonly WeekEvidence[];
-}): ReactElement {
+export function RowSheet({ title, evidence }: { title: string; evidence: readonly WeekEvidence[] }): ReactElement {
   const narrow = useSyncExternalStore(subscribeToNarrow, narrowInBrowser, notNarrowOnServer);
   const [, setSearchParams] = useSearchParams();
 

@@ -25,7 +25,9 @@ describe("coverage matches the enabled sources", () => {
       ).toBe(source.live);
     }
 
-    const claimed = new Set(sources.flatMap((source) => ("sourceKey" in source && source.live ? [source.sourceKey] : [])));
+    const claimed = new Set(
+      sources.flatMap((source) => ("sourceKey" in source && source.live ? [source.sourceKey] : [])),
+    );
     for (const key of enabled) {
       expect(
         claimed.has(key),
@@ -39,17 +41,13 @@ describe("coverage matches the enabled sources", () => {
     if (news === undefined || !("sourceKey" in news)) {
       throw new Error("mentions.news must name a sourceKey");
     }
-    await env.DB.prepare("UPDATE source SET degraded_reason = ? WHERE key = ?")
-      .bind("timed out", news.sourceKey)
-      .run();
+    await env.DB.prepare("UPDATE source SET degraded_reason = ? WHERE key = ?").bind("timed out", news.sourceKey).run();
     try {
       const body = llmsTxt("https://0509.io", await readRegistrySources(), Date.parse("2026-09-28T12:00:00.000Z"));
       expect(body).toContain("- Mentions: News (degraded: timed out — not answering today)");
       expect(body).toContain("Some sources are not answering today; those lines say so.");
     } finally {
-      await env.DB.prepare("UPDATE source SET degraded_reason = NULL WHERE key = ?")
-        .bind(news.sourceKey)
-        .run();
+      await env.DB.prepare("UPDATE source SET degraded_reason = NULL WHERE key = ?").bind(news.sourceKey).run();
     }
   });
 });

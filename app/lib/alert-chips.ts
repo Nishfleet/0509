@@ -34,10 +34,7 @@ export function itemInChip(kind: AlertItemKind, chip: AlertChipKey): boolean {
   return chipOfKind(kind) === chip;
 }
 
-export function countAlertChips(
-  kinds: readonly AlertItemKind[],
-  incidentCount: number,
-): Record<AlertChipKey, number> {
+export function countAlertChips(kinds: readonly AlertItemKind[], incidentCount: number): Record<AlertChipKey, number> {
   let siteChanges = 0;
   let ads = 0;
   let mentions = 0;

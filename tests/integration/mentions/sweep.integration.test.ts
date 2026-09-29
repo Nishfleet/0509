@@ -66,10 +66,7 @@ function stubSlowGdelt(delayMs: number) {
     vi.fn(
       (_input: unknown, init?: RequestInit) =>
         new Promise<Response>((resolve, reject) => {
-          const timer = setTimeout(
-            () => resolve(new Response(JSON.stringify({ articles: ARTICLES }))),
-            delayMs,
-          );
+          const timer = setTimeout(() => resolve(new Response(JSON.stringify({ articles: ARTICLES }))), delayMs);
           init?.signal?.addEventListener("abort", () => {
             clearTimeout(timer);
             reject(new DOMException("The operation was aborted due to timeout", "TimeoutError"));
@@ -116,11 +113,7 @@ describe("nightly mentions sweep", () => {
     // PR, alongside the homepage / llms / JSON-LD feature surface.
     const { brand } = await seedWorkspace();
     const targets = (await planTargets()).filter((entry) => entry.query === brand);
-    expect(targets.map((entry) => entry.pluginKey).sort()).toEqual([
-      "gdelt.doc",
-      "hn.algolia",
-      "youtube.channel_rss",
-    ]);
+    expect(targets.map((entry) => entry.pluginKey).sort()).toEqual(["gdelt.doc", "hn.algolia", "youtube.channel_rss"]);
   });
 
   it("alerts only on news that matters, hides look-alike names and keeps the proof", async () => {
@@ -134,9 +127,7 @@ describe("nightly mentions sweep", () => {
     const alerts = await readSignalAlerts(env.DB, workspaceId);
     expect(alerts.map((alert) => alert.title)).toEqual([`${brand}: Zephyrwear opens a London flagship`]);
 
-    const signals = await env.DB.prepare(
-      "SELECT title, is_tombstoned FROM signal WHERE entity_id = ? ORDER BY title",
-    )
+    const signals = await env.DB.prepare("SELECT title, is_tombstoned FROM signal WHERE entity_id = ? ORDER BY title")
       .bind(competitorId)
       .all<{ title: string; is_tombstoned: number }>();
     expect(signals.results.map((row) => [row.title, row.is_tombstoned])).toEqual([
@@ -203,11 +194,7 @@ describe("nightly mentions sweep", () => {
 
     await sweepTarget(await gdeltTargetFor(brand), NOW, null);
     const callsAfterFirst = run.mock.calls.length;
-    const second = await sweepTarget(
-      await gdeltTargetFor(brand),
-      "2026-09-25T03:00:00.000Z",
-      null,
-    );
+    const second = await sweepTarget(await gdeltTargetFor(brand), "2026-09-25T03:00:00.000Z", null);
 
     expect(run.mock.calls.length).toBe(callsAfterFirst);
     expect(second).toEqual({ items: 3, stored: 0, unjudged: 0, skipped: 0 });

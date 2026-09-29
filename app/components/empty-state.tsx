@@ -6,8 +6,7 @@ const DAY_NAME = new Intl.DateTimeFormat("en-GB", { weekday: "long" });
 const BARE_SENTENCES = new Set(["no data", "nothing here"]);
 
 export type EmptyStateAction =
-  | { kind: "link"; label: string; href: string }
-  | { kind: "input"; label: string; placeholder: string; name: string };
+  { kind: "link"; label: string; href: string } | { kind: "input"; label: string; placeholder: string; name: string };
 
 export interface EmptyStateProps {
   sentence: string;
@@ -119,8 +118,7 @@ export function competitorJustAdded(): { sentence: string } {
 
 export function alertsEmpty(): { sentence: string } {
   return {
-    sentence:
-      "Nothing has interrupted you. When your own site breaks you'll get an email; everything else waits here.",
+    sentence: "Nothing has interrupted you. When your own site breaks you'll get an email; everything else waits here.",
   };
 }
 

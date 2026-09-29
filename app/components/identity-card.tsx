@@ -125,11 +125,7 @@ function EditRow({
       {edited ? (
         <>
           <span className="text-ink-soft font-mono text-[0.7rem] uppercase">edited by you</span>
-          <button
-            type="button"
-            className="text-ink-soft text-[0.88rem] underline"
-            onClick={onRevert}
-          >
+          <button type="button" className="text-ink-soft text-[0.88rem] underline" onClick={onRevert}>
             use what we found
           </button>
         </>
@@ -200,10 +196,7 @@ export function Fields({
         }}
         onSave={(value) => {
           setReverted(null);
-          void fetcher.submit(
-            { intent: "draft", subject, field: "name", value },
-            { method: "post" },
-          );
+          void fetcher.submit({ intent: "draft", subject, field: "name", value }, { method: "post" });
         }}
       />
       {site.unfound ? (
@@ -227,17 +220,11 @@ export function Fields({
         reverted={reverted === "description"}
         onRevert={() => {
           setReverted("description");
-          void fetcher.submit(
-            { intent: "revert", subject, field: "description" },
-            { method: "post" },
-          );
+          void fetcher.submit({ intent: "revert", subject, field: "description" }, { method: "post" });
         }}
         onSave={(value) => {
           setReverted(null);
-          void fetcher.submit(
-            { intent: "draft", subject, field: "description", value },
-            { method: "post" },
-          );
+          void fetcher.submit({ intent: "draft", subject, field: "description", value }, { method: "post" });
         }}
       />
       <Row label="socials" check={site.review.socials === "check"}>
@@ -345,7 +332,11 @@ export function IdentityCard({
           {(fields) => (
             <>
               <Fields subject={subject} site={fields} logo={logo} draft={draft} />
-              {message ? <p role="alert" className="pt-3 text-[0.88rem]">{message}</p> : null}
+              {message ? (
+                <p role="alert" className="pt-3 text-[0.88rem]">
+                  {message}
+                </p>
+              ) : null}
               <Button type="submit" size="lg" className="my-5">
                 That&apos;s me
               </Button>

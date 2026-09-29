@@ -29,7 +29,7 @@ async function seed(email: string, index: number): Promise<void> {
       "INSERT INTO workspace (id, name, owner_user_id, timezone, brief_weekday, brief_hour, created_at) VALUES (?1, 'Acme', ?2, 'UTC', 1, 8, ?3)",
     ).bind(`ws-purge-${String(index)}`, userId, NOW),
     env.DB.prepare(
-      'INSERT INTO apikey (id, configId, referenceId, "key", createdAt, updatedAt) VALUES (?1, \'default\', ?2, ?1, ?3, ?3)',
+      "INSERT INTO apikey (id, configId, referenceId, \"key\", createdAt, updatedAt) VALUES (?1, 'default', ?2, ?1, ?3, ?3)",
     ).bind(`key-purge-${String(index)}`, userId, NOW),
   ]);
 }

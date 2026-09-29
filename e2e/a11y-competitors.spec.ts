@@ -63,9 +63,9 @@ test("the Competitors page is landmarked, ordered and keyboard-operable at 1440 
       // Nothing wider than the viewport, at both shapes: the nav is a fixed
       // bottom bar below 860px and a rail above it, and the add-control column
       // stacks below the same point.
-      expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBe(
-        0,
-      );
+      expect(
+        await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth),
+      ).toBe(0);
 
       // Focus order from a fresh load: a reload pins the count from the top of
       // the document, so the four Places follow each other before any content

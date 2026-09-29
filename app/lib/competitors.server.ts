@@ -1,6 +1,11 @@
 import { addManualCompetitor, setCompetitorState } from "./data/entity.server";
 import { readEntitlements } from "./data/plan.server";
-import { acceptSuggestion, confirmRetireSuggestion, dismissSuggestion, keepFromRetireSuggestion } from "./data/suggestion.server";
+import {
+  acceptSuggestion,
+  confirmRetireSuggestion,
+  dismissSuggestion,
+  keepFromRetireSuggestion,
+} from "./data/suggestion.server";
 import { isTakenDown } from "./data/takedown.server";
 import { resolveDomain } from "./discovery/resolve-domain.server";
 import { normaliseSubject } from "./identity/normalise";

@@ -31,7 +31,10 @@ describe("defaultFetchText", () => {
       headers: { "content-type": "text/plain" },
     });
     Object.defineProperty(response, "url", { value: "https://example.com/ok" });
-    vi.stubGlobal("fetch", vi.fn(async () => response));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => response),
+    );
 
     const result = await defaultFetchText("discovery.test_event")("https://example.com/ok");
 
@@ -49,7 +52,10 @@ describe("defaultFetchText", () => {
       headers: { "content-type": "text/html" },
     });
     Object.defineProperty(response, "url", { value: "https://example.com/fail" });
-    vi.stubGlobal("fetch", vi.fn(async () => response));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => response),
+    );
 
     const result = await defaultFetchText("discovery.test_event")("https://example.com/fail");
 
@@ -89,7 +95,10 @@ describe("defaultFetchText", () => {
 
   it("bounds the fetch with AbortSignal.timeout(8000)", async () => {
     const response = new Response("body", { status: 200, headers: { "content-type": "text/plain" } });
-    vi.stubGlobal("fetch", vi.fn(async () => response));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => response),
+    );
     const timeoutSpy = vi.spyOn(AbortSignal, "timeout");
 
     await defaultFetchText("discovery.test_event")("https://example.com/ok");

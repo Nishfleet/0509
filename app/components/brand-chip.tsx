@@ -57,13 +57,7 @@ function chipLink(href: string): ReactElement {
   return <a href={href} rel="noreferrer" />;
 }
 
-export function BrandChip({
-  name,
-  href,
-  logoUrl,
-  self = false,
-  off = false,
-}: BrandChipBrand): ReactElement | null {
+export function BrandChip({ name, href, logoUrl, self = false, off = false }: BrandChipBrand): ReactElement | null {
   const trimmed = name.trim();
   const monogram = brandMonogram(trimmed);
   const to = safeHref(href);

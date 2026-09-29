@@ -30,9 +30,7 @@ export function SiteChangeItem({
   size?: Exclude<MarkSize, "email">;
   eager?: boolean;
 }): ReactElement {
-  const plate = (
-    <CapturePlate label={change.headline} before={change.before} after={change.after} eager={eager} />
-  );
+  const plate = <CapturePlate label={change.headline} before={change.before} after={change.after} eager={eager} />;
   const removed = change.mark?.removed ?? null;
   const added = change.mark?.added ?? null;
   return (

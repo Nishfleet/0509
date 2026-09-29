@@ -19,18 +19,12 @@ function authSecret(): string {
 
 function previewDatabasePath(): string {
   const root = ".wrangler/state";
-  const files = readdirSync(root, { recursive: true, encoding: "utf8" }).filter(
-    (name) => name.endsWith(".sqlite"),
-  );
+  const files = readdirSync(root, { recursive: true, encoding: "utf8" }).filter((name) => name.endsWith(".sqlite"));
   for (const name of files) {
     const file = join(root, name);
     const probe = new DatabaseSync(file, { readOnly: true, timeout: 15_000 });
     try {
-      const row = probe
-        .prepare(
-          "SELECT 1 AS ok FROM sqlite_master WHERE type = 'table' AND name = 'signal'",
-        )
-        .get();
+      const row = probe.prepare("SELECT 1 AS ok FROM sqlite_master WHERE type = 'table' AND name = 'signal'").get();
       if (row !== undefined) return file;
     } finally {
       probe.close();
@@ -39,11 +33,7 @@ function previewDatabasePath(): string {
   throw new Error("local preview D1 has no signal table");
 }
 
-export function run(
-  db: DatabaseSync,
-  sql: string,
-  ...values: (string | number | null)[]
-): void {
+export function run(db: DatabaseSync, sql: string, ...values: (string | number | null)[]): void {
   db.prepare(sql).run(...values);
 }
 
@@ -76,17 +66,13 @@ export async function seedPreviewSession(
     await auth.api.signInMagicLink({ body: { email }, headers: new Headers() });
     const link = links.at(-1);
     if (link === undefined) throw new Error("magic link was not issued");
-    const response = await auth.handler(
-      new Request(link, { redirect: "manual" }),
-    );
+    const response = await auth.handler(new Request(link, { redirect: "manual" }));
     const cookie = response.headers
       .getSetCookie()
       .map((header) => header.split(";")[0])
       .join("; ");
     if (cookie === "") throw new Error("magic link created no session cookie");
-    const user = db
-      .prepare('SELECT id FROM "user" WHERE email = ?')
-      .get(email) as { id: string } | undefined;
+    const user = db.prepare('SELECT id FROM "user" WHERE email = ?').get(email) as { id: string } | undefined;
     if (user === undefined) throw new Error("magic link created no user");
     seed({ db, suffix, userId: user.id });
     db.exec("PRAGMA wal_checkpoint(PASSIVE)");

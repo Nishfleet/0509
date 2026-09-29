@@ -20,7 +20,9 @@ test.skip(
   "the onboarding screens need a signed-in session; the preview lane cannot read the magic-link inbox",
 );
 
-test("the three onboarding screens pass axe at WCAG 2.2 AA in both themes and at both widths (#4149) @own-signin", async ({ page }, testInfo) => {
+test("the three onboarding screens pass axe at WCAG 2.2 AA in both themes and at both widths (#4149) @own-signin", async ({
+  page,
+}, testInfo) => {
   const token = requireInboxToken();
   const email = `e2e+${crypto.randomUUID().replaceAll("-", "").slice(0, 12)}@0509.io`;
   createdEmail = email;

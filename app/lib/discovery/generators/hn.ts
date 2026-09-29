@@ -1,7 +1,14 @@
 import { z } from "zod";
 
 import { coMentions } from "../co-mentions";
-import { defaultFetchText, type Candidate, type Evidence, type FetchText, type Generator, type Subject } from "../types";
+import {
+  defaultFetchText,
+  type Candidate,
+  type Evidence,
+  type FetchText,
+  type Generator,
+  type Subject,
+} from "../types";
 
 const SEARCH_URL = "https://hn.algolia.com/api/v1/search?query=";
 

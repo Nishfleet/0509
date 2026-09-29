@@ -20,9 +20,7 @@ describe("extractIdentity", () => {
     expect(card.ogImage).toBe(
       "http://cdn.shopify.com/s/files/1/0098/8822/files/gymshark_social_banner_1200x1200.jpg?v=1549554764",
     );
-    expect(card.ldOrganizationLogo).toContain(
-      "images.ctfassets.net/wl6q2in9o7k3/QN3GChnXFjOolrl6zNQBp/",
-    );
+    expect(card.ldOrganizationLogo).toContain("images.ctfassets.net/wl6q2in9o7k3/QN3GChnXFjOolrl6zNQBp/");
     expect(card.ldOrganizationLogo).toContain("Gymshark_Combi_Logo_Black.png");
     expect(card.socials.map((s) => s.platform).sort()).toEqual([
       "facebook",
@@ -39,9 +37,7 @@ describe("extractIdentity", () => {
       { platform: "tiktok", url: "https://www.tiktok.com/@gymshark" },
     ]);
     expect(card.navLinks).toContain("https://www.gymshark.com/blog");
-    expect(
-      card.navLinks.every((link) => link.startsWith("https://www.gymshark.com/")),
-    ).toBe(true);
+    expect(card.navLinks.every((link) => link.startsWith("https://www.gymshark.com/"))).toBe(true);
     expect(card.adLibraryHints).toEqual([]);
     expect(card.manifestUrl).toBe("https://www.gymshark.com/site.webmanifest");
     expect(card.appleTouchIcon).toBe("https://www.gymshark.com/apple-touch-icon.png");
@@ -55,19 +51,13 @@ describe("extractIdentity", () => {
   });
 
   it("skips an ld+json block that is not JSON", async () => {
-    const card = await extractIdentity(
-      '<script type="application/ld+json">{not json</script>',
-      pageUrl,
-    );
+    const card = await extractIdentity('<script type="application/ld+json">{not json</script>', pageUrl);
 
     expect(card.nameSources.ldOrganizationName).toBeNull();
   });
 
   it("falls back to the meta description when og:description is absent", async () => {
-    const card = await extractIdentity(
-      '<meta name="description" content="meta description only">',
-      pageUrl,
-    );
+    const card = await extractIdentity('<meta name="description" content="meta description only">', pageUrl);
 
     expect(card.description).toBe("meta description only");
   });
@@ -117,10 +107,7 @@ describe("extractIdentity", () => {
   });
 
   it("skips in-page fragment links in the nav", async () => {
-    const card = await extractIdentity(
-      '<nav><a href="#top">Top</a><a href="/men">Men</a></nav>',
-      pageUrl,
-    );
+    const card = await extractIdentity('<nav><a href="#top">Top</a><a href="/men">Men</a></nav>', pageUrl);
 
     expect(card.navLinks).toEqual(["https://www.gymshark.com/men"]);
     expect(card.navPages).toEqual([{ url: "https://www.gymshark.com/men", title: "Men" }]);

@@ -1,7 +1,14 @@
 import { z } from "zod";
 
 import { coMentions } from "../co-mentions";
-import { defaultFetchText, type Candidate, type Evidence, type FetchText, type Generator, type Subject } from "../types";
+import {
+  defaultFetchText,
+  type Candidate,
+  type Evidence,
+  type FetchText,
+  type Generator,
+  type Subject,
+} from "../types";
 import { GDELT_SEARCH_URL, gdeltResponseSchema, gdeltWebUrlSchema } from "../gdelt";
 
 const NEWS_ARTICLE_SCHEMA = z.object({

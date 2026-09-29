@@ -60,11 +60,7 @@ export function withBacklog(
 ): { entries: ShortlistEntry[]; rest: BacklogRow[]; promoted: string[] } {
   const { entries, rest } = partitionShortlist([...backlog, ...fresh]);
   const placed = new Set(entries.flatMap((entry) => entry.nameKeys));
-  const promoted = [
-    ...new Set(
-      backlog.map((candidate) => nameKey(candidate.name)).filter((key) => placed.has(key)),
-    ),
-  ];
+  const promoted = [...new Set(backlog.map((candidate) => nameKey(candidate.name)).filter((key) => placed.has(key)))];
   return {
     entries,
     rest: rest.map((candidate) => ({
