@@ -140,7 +140,7 @@ describe("a blocking upstream degrades the source and ends the step (0509#5159)"
     }
   });
 
-  it("case E: an upstream timeout degrades the source and the sweep step rejects without retrying (0509#5106)", async () => {
+  it("case E: an upstream timeout retries the request once, degrades the source and the sweep step rejects without retrying (0509#5106, 0509#6079)", async () => {
     const { sourceId, brand } = await seedBlockedSource("e", { enabled: true });
     const timeoutError = new DOMException("The operation was aborted due to timeout", "TimeoutError");
     const fetchMock = vi.fn(async () => {
@@ -154,7 +154,7 @@ describe("a blocking upstream degrades the source and ends the step (0509#5159)"
       await expect(sweepTarget(target, NOW, null)).rejects.toThrow(NonRetryableError);
 
       expect(await readReason(sourceId)).toBe("timed out");
-      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(fetchMock).toHaveBeenCalledTimes(2);
     } finally {
       await env.DB.prepare("DELETE FROM source WHERE id = ?").bind(sourceId).run();
     }

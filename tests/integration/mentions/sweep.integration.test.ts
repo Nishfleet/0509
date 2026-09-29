@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { readSignalAlerts } from "../../../app/lib/data/alert.server";
 import { planTargets, sweepTarget } from "../../../workers/mentions/sweep";
+import { SOURCE_SETTINGS } from "../../../workers/sources/mentions/types";
 
 const NOW = "2026-09-24T03:00:00.000Z";
 
@@ -56,6 +57,25 @@ function stubGdelt() {
   vi.stubGlobal(
     "fetch",
     vi.fn(async () => new Response(JSON.stringify({ articles: ARTICLES }))),
+  );
+}
+
+function stubSlowGdelt(delayMs: number) {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(
+      (_input: unknown, init?: RequestInit) =>
+        new Promise<Response>((resolve, reject) => {
+          const timer = setTimeout(
+            () => resolve(new Response(JSON.stringify({ articles: ARTICLES }))),
+            delayMs,
+          );
+          init?.signal?.addEventListener("abort", () => {
+            clearTimeout(timer);
+            reject(new DOMException("The operation was aborted due to timeout", "TimeoutError"));
+          });
+        }),
+    ),
   );
 }
 
@@ -132,6 +152,47 @@ describe("nightly mentions sweep", () => {
       .first<{ r2_key: string }>();
     const stored = await env.SNAPSHOTS.get(snapshot?.r2_key ?? "");
     expect(JSON.parse((await stored?.text()) ?? "{}")).toEqual({ articles: ARTICLES });
+  });
+
+  it("stores a snapshot when GDELT answers slowly but inside its timeout (0509#6079)", async () => {
+    const { competitorId, brand } = await seedWorkspace();
+    const { timeoutMs } = SOURCE_SETTINGS["gdelt.doc"];
+    stubSlowGdelt(Math.min(timeoutMs - 1_000, 9_000));
+    Reflect.set(env, "AI", { run: jevAnswering() });
+    const timeoutSpy = vi.spyOn(AbortSignal, "timeout");
+
+    const outcome = await sweepTarget(await gdeltTargetFor(brand), NOW, null);
+    expect(outcome.items).toBe(3);
+    expect(timeoutSpy).toHaveBeenCalledWith(timeoutMs);
+
+    const snapshot = await env.DB.prepare(
+      "SELECT sn.item_count AS item_count FROM snapshot sn JOIN watch w ON w.id = sn.watch_id WHERE w.entity_id = ?",
+    )
+      .bind(competitorId)
+      .first<{ item_count: number }>();
+    expect(snapshot?.item_count).toBeGreaterThan(0);
+  });
+
+  it("stores a snapshot when the first GDELT request times out and the retry answers (0509#6079)", async () => {
+    const { competitorId, brand } = await seedWorkspace();
+    const timeoutError = new DOMException("The operation was aborted due to timeout", "TimeoutError");
+    const fetchMock = vi
+      .fn()
+      .mockRejectedValueOnce(timeoutError)
+      .mockResolvedValue(new Response(JSON.stringify({ articles: ARTICLES })));
+    vi.stubGlobal("fetch", fetchMock);
+    Reflect.set(env, "AI", { run: jevAnswering() });
+
+    const outcome = await sweepTarget(await gdeltTargetFor(brand), NOW, null);
+    expect(outcome.items).toBe(3);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+
+    const snapshot = await env.DB.prepare(
+      "SELECT sn.item_count AS item_count FROM snapshot sn JOIN watch w ON w.id = sn.watch_id WHERE w.entity_id = ?",
+    )
+      .bind(competitorId)
+      .first<{ item_count: number }>();
+    expect(snapshot?.item_count).toBeGreaterThan(0);
   });
 
   it("does not judge or alert the same article twice", async () => {
