@@ -79,7 +79,7 @@ describe("workflow Sentry cron monitors", () => {
       checkinMargin: 60,
       timezone: "UTC",
     });
-    expect(outcome).toEqual({ targets: 0, swept: 0, failed: 0, stored: 0, unjudged: 0 });
+    expect(outcome).toEqual({ targets: 0, swept: 0, failed: 0, stored: 0, unjudged: 0, skipped: 0 });
   });
 
   it("checks own-site-check in on its hourly monitor and returns the zeroed check", async () => {

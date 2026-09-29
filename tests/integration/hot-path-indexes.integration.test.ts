@@ -105,7 +105,7 @@ async function liveIndexColumns(name: string): Promise<string[]> {
  * (`app/lib/data/entity.server.ts` deleteCompetitor) deletes `entity` — so
  * deleting a parent still scans them. They are allowlisted, not excused:
  * 0509#5938 owns indexing them. The five account-delete children that scanned
- * are indexed by migration 0027 and are no longer in this list, and
+ * are indexed by migration 0029 and are no longer in this list, and
  * `incident.page_id` ships its index in the same migration — a partial index
  * (`idx_incident_one_open_per_page`, `WHERE closed_at IS NULL`) was masking it,
  * which is why the gate counts only `partial = 0` indexes as covering.
@@ -164,7 +164,7 @@ async function unindexedIdColumns(): Promise<string[]> {
   return offenders.sort();
 }
 
-describe("0027_hot_path_indexes_and_sweep_run.sql", () => {
+describe("0029_hot_path_indexes_and_sweep_run.sql", () => {
   it("gives every hot or scheduled statement an index starting with its columns", async () => {
     for (const statement of HOT_STATEMENTS) {
       expect(
