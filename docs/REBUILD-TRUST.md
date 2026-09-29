@@ -429,7 +429,7 @@ messages, not deleted.
 `eslint-plugin-no-comments` (`no-comments/disallowComments`, allow list
 `eslint` and `global` only) runs on `app/**` and `workers/**` in the same block
 as the other two comment rules. On the day it landed it found 59 comments in
-`workers/` that the grader had flagged on #4176 and the merge had kept, which
+`workers/` that review had flagged on #4176 and the merge had kept, which
 is the exact hole B5 predicted. Their text is preserved in that PR's commit
 message; anything a future reader needs from it belongs in `docs/`, not in the
 file.
@@ -462,15 +462,10 @@ patterns, your instinct should be, I need to write a lint rule against it … yo
 can at least stop the bleeding."* A review comment that only asks for a change
 teaches one agent once; a rule teaches every agent forever.
 
-Implemented in the `opus-review` job's `prompt:` (`.github/workflows/ci.yml`) by
-PR #4255, which asked all three questions above word for word and stated the
-verdict rule in its grade-capping form; that job is removed (#6091). The shared
-grader (`Nishfleet/fleet-ops` `grade.yml`) grades against the fleet bar, whose
-points 3, 5 and 2 are these three questions in its own words, and reads this
-file as the trust doc; the bar does not carry the "lint rule or a filed issue"
-verdict. The fourth question (Nish 2026-09-22,
+The `opus-review` job that asked all three questions (PR #4255, removed by #6091)
+and the shared grader that followed it are gone; the reviewer asks them. The fourth question (Nish 2026-09-22,
 a pasted `## Verification` section) was removed by #4523: proof at the prose
-rung failed 37 of 39 graded PRs. The running app is proven by `preview-assert`,
+rung failed 37 of 39 PRs. The running app is proven by `preview-assert`,
 a required check that builds the Worker and runs the e2e suite at the PR head.
 
 Reviewers also check the two things no test checks: that

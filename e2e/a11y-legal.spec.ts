@@ -9,7 +9,7 @@ import { expect, test } from "@playwright/test";
 // `--ink` / `--ink-soft` so neither route paints meaningful text in
 // `--ink-faint`.
 for (const path of ["/privacy", "/terms"]) {
-  test(`${path} passes axe at WCAG 2.2 AA and is keyboard-operable at 1440 and 390 in light and dark (#4156)`, async ({
+  test(`${path} passes axe at WCAG 2.2 AA and is keyboard-operable at 1440 and 390 in light and dark (#4156) @smoke`, async ({
     page,
   }, testInfo) => {
     for (const colorScheme of ["light", "dark"] as const) {

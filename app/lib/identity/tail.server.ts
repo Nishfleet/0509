@@ -7,9 +7,12 @@ import type { NewPage } from "../data/page.server";
 import { readEnabledSourceId, readEnabledSources } from "../data/source.server";
 import { insertWatches, readEntityWatches } from "../data/watch.server";
 import type { EntityWatch, NewWatch } from "../data/watch.server";
+import { readUrl } from "../fetch/transport.server";
 import { discoverBoard } from "../hiring/discover-board";
-import { readCachedSiteProof } from "./card.server";
+import { readCachedSiteProof, readSiteCard } from "./card.server";
+import { extractIdentity } from "./extract";
 import { normaliseSubject, type Subject } from "./normalise";
+import { classifyNavPages } from "./page-role.server";
 
 export interface IdentityTailParams {
   workspaceId: string;
@@ -57,6 +60,37 @@ export async function persistTail(params: IdentityTailParams): Promise<{ entityI
     );
   }
   return { entityId };
+}
+
+export async function classifyTailPages(params: IdentityTailParams, now: string): Promise<void> {
+  if (params.handle !== undefined || params.homepageUrl === null) return;
+  try {
+    const page = await readUrl(params.homepageUrl);
+    if (!page.ok) {
+      console.log(
+        JSON.stringify({ event: "identity-page-role-skipped", workspaceId: params.workspaceId, error: page.detail }),
+      );
+      return;
+    }
+    const extract = await extractIdentity(page.html, params.homepageUrl);
+    await classifyNavPages(
+      params.workspaceId,
+      { id: params.entityId, domain: params.domain },
+      extract.navPages,
+      now,
+    );
+  } catch (error) {
+    console.log(
+      JSON.stringify({ event: "identity-page-role-skipped", workspaceId: params.workspaceId, error: String(error) }),
+    );
+  }
+}
+
+export async function warmTailSiteCard(params: IdentityTailParams): Promise<void> {
+  if (params.handle === undefined) return;
+  const subject = subjectFor(params);
+  if (subject?.kind !== "domain") return;
+  await readSiteCard(subject);
 }
 
 export async function seedTailWatches(params: IdentityTailParams, discoveredAt: string): Promise<EntityWatch[]> {

@@ -257,9 +257,6 @@
     },
     "max-lines-per-function": {
       "count": 1
-    },
-    "max-params": {
-      "count": 1
     }
   },
   "app/lib/identity/extract.ts": {
@@ -393,9 +390,6 @@
     }
   },
   "workers/delivery/consumer.ts": {
-    "complexity": {
-      "count": 1
-    },
     "max-lines-per-function": {
       "count": 1
     }
@@ -406,9 +400,6 @@
     }
   },
   "workers/mentions/sweep.ts": {
-    "complexity": {
-      "count": 1
-    },
     "max-lines-per-function": {
       "count": 1
     },

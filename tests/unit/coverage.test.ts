@@ -51,7 +51,7 @@ describe("coverage", () => {
   it("claims no kind that has no live source, in the FAQ, llms.txt or JSON-LD", () => {
     const copy = [
       ...FAQ.flatMap((entry) => [entry.question, entry.answer]),
-      llmsTxt("https://0509.io"),
+      llmsTxt("https://0509.io", []),
       JSON.stringify(softwareApplicationJsonLd()),
     ].join("\n");
     for (const group of notLive) {

@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { readSignalAlerts } from "../../../app/lib/data/alert.server";
 import { planTargets, sweepTarget } from "../../../workers/mentions/sweep";
+import { SOURCE_SETTINGS } from "../../../workers/sources/mentions/types";
 
 const NOW = "2026-09-24T03:00:00.000Z";
 
@@ -59,6 +60,25 @@ function stubGdelt() {
   );
 }
 
+function stubSlowGdelt(delayMs: number) {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(
+      (_input: unknown, init?: RequestInit) =>
+        new Promise<Response>((resolve, reject) => {
+          const timer = setTimeout(
+            () => resolve(new Response(JSON.stringify({ articles: ARTICLES }))),
+            delayMs,
+          );
+          init?.signal?.addEventListener("abort", () => {
+            clearTimeout(timer);
+            reject(new DOMException("The operation was aborted due to timeout", "TimeoutError"));
+          });
+        }),
+    ),
+  );
+}
+
 function jevAnswering() {
   return vi.fn((_model: string, input: { state: { item: { title: string } }; questions: Record<string, unknown> }) => {
     const [questionId] = Object.keys(input.questions);
@@ -109,7 +129,7 @@ describe("nightly mentions sweep", () => {
     Reflect.set(env, "AI", { run: jevAnswering() });
 
     const outcome = await sweepTarget(await gdeltTargetFor(brand), NOW, null);
-    expect(outcome).toEqual({ items: 3, stored: 2, unjudged: 0 });
+    expect(outcome).toEqual({ items: 3, stored: 2, unjudged: 0, skipped: 0 });
 
     const alerts = await readSignalAlerts(env.DB, workspaceId);
     expect(alerts.map((alert) => alert.title)).toEqual([`${brand}: Zephyrwear opens a London flagship`]);
@@ -134,6 +154,47 @@ describe("nightly mentions sweep", () => {
     expect(JSON.parse((await stored?.text()) ?? "{}")).toEqual({ articles: ARTICLES });
   });
 
+  it("stores a snapshot when GDELT answers slowly but inside its timeout (0509#6079)", async () => {
+    const { competitorId, brand } = await seedWorkspace();
+    const { timeoutMs } = SOURCE_SETTINGS["gdelt.doc"];
+    stubSlowGdelt(Math.min(timeoutMs - 1_000, 9_000));
+    Reflect.set(env, "AI", { run: jevAnswering() });
+    const timeoutSpy = vi.spyOn(AbortSignal, "timeout");
+
+    const outcome = await sweepTarget(await gdeltTargetFor(brand), NOW, null);
+    expect(outcome.items).toBe(3);
+    expect(timeoutSpy).toHaveBeenCalledWith(timeoutMs);
+
+    const snapshot = await env.DB.prepare(
+      "SELECT sn.item_count AS item_count FROM snapshot sn JOIN watch w ON w.id = sn.watch_id WHERE w.entity_id = ?",
+    )
+      .bind(competitorId)
+      .first<{ item_count: number }>();
+    expect(snapshot?.item_count).toBeGreaterThan(0);
+  });
+
+  it("stores a snapshot when the first GDELT request times out and the retry answers (0509#6079)", async () => {
+    const { competitorId, brand } = await seedWorkspace();
+    const timeoutError = new DOMException("The operation was aborted due to timeout", "TimeoutError");
+    const fetchMock = vi
+      .fn()
+      .mockRejectedValueOnce(timeoutError)
+      .mockResolvedValue(new Response(JSON.stringify({ articles: ARTICLES })));
+    vi.stubGlobal("fetch", fetchMock);
+    Reflect.set(env, "AI", { run: jevAnswering() });
+
+    const outcome = await sweepTarget(await gdeltTargetFor(brand), NOW, null);
+    expect(outcome.items).toBe(3);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+
+    const snapshot = await env.DB.prepare(
+      "SELECT sn.item_count AS item_count FROM snapshot sn JOIN watch w ON w.id = sn.watch_id WHERE w.entity_id = ?",
+    )
+      .bind(competitorId)
+      .first<{ item_count: number }>();
+    expect(snapshot?.item_count).toBeGreaterThan(0);
+  });
+
   it("does not judge or alert the same article twice", async () => {
     const { workspaceId, brand } = await seedWorkspace();
     stubGdelt();
@@ -149,7 +210,7 @@ describe("nightly mentions sweep", () => {
     );
 
     expect(run.mock.calls.length).toBe(callsAfterFirst);
-    expect(second).toEqual({ items: 3, stored: 0, unjudged: 0 });
+    expect(second).toEqual({ items: 3, stored: 0, unjudged: 0, skipped: 0 });
     expect(await readSignalAlerts(env.DB, workspaceId)).toHaveLength(1);
   });
 
@@ -159,7 +220,7 @@ describe("nightly mentions sweep", () => {
     Reflect.set(env, "AI", { run: vi.fn(() => Promise.reject(new Error("Insufficient balance"))) });
 
     const outcome = await sweepTarget(await gdeltTargetFor(brand), NOW, null);
-    expect(outcome).toEqual({ items: 3, stored: 0, unjudged: 3 });
+    expect(outcome).toEqual({ items: 3, stored: 0, unjudged: 3, skipped: 0 });
 
     const signals = await env.DB.prepare("SELECT COUNT(*) AS n FROM signal WHERE entity_id = ?")
       .bind(competitorId)

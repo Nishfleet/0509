@@ -4,6 +4,8 @@ import boundaries from "eslint-plugin-boundaries";
 import importX, { createNodeResolver } from "eslint-plugin-import-x";
 import reactHooks from "eslint-plugin-react-hooks";
 import noComments from "eslint-plugin-no-comments";
+import playwright from "eslint-plugin-playwright";
+import vitest from "@vitest/eslint-plugin";
 import globals from "globals";
 import tseslint from "typescript-eslint";
 
@@ -121,7 +123,7 @@ const SUPPORT_ADDRESS_BAN = {
 // `.catch(() => null)` callback. The named clause in
 // app/lib/identity/name-cascade.ts is grandfathered by name (see the
 // exemption block) until the cascade grows a logged failure path. Source:
-// 0509#4462 (REBUILD-TRUST.md C1 Q1 — the D grade on PR #4457).
+// 0509#4462 (REBUILD-TRUST.md C1 Q1 — found in review of PR #4457).
 const CATCH_RETURNS_NULL = {
   selector:
     "CatchClause > BlockStatement[body.length=1] > ReturnStatement[argument.value=null]",
@@ -869,6 +871,43 @@ export default tseslint.config(
     files: ["workers/sources/mentions/youtube.ts"],
     rules: {
       "no-restricted-syntax": ["error", ...BANNED_SYNTAX, ...NO_USER_DATA_IN_LOGS, RAW_DML_WRITER],
+    },
+  },
+
+  // 0509#5785, shipped by 0509#5808. Never skip, disable or quarantine a test
+  // to get green: a focused test silently drops the rest of the suite, and a
+  // disabled test stops testing the thing it names. Every rule below is stock
+  // and carries its own message; `maxArgs: 2` is the one non-default value,
+  // because the node suite passes a failure message as `expect`'s second
+  // argument.
+  {
+    files: ["tests/**/*.ts"],
+    plugins: { vitest },
+    rules: {
+      "vitest/no-focused-tests": "error",
+      "vitest/no-disabled-tests": "error",
+      "vitest/no-identical-title": "error",
+      "vitest/expect-expect": "error",
+      "vitest/valid-expect": ["error", { maxArgs: 2 }],
+    },
+  },
+
+  // 0509#5785, shipped by 0509#5808. An e2e spec never waits on wall-clock time
+  // or for the network to go idle, and never focuses or unconditionally skips a
+  // test. `allowConditional` is the one non-default value: the suite gates on
+  // the project and the environment (`test.skip(condition, reason)`), and report
+  // specs use `test.fail()` (CLAUDE.md "Reproducing a user report").
+  {
+    files: ["e2e/**/*.ts"],
+    plugins: { playwright },
+    rules: {
+      "playwright/no-focused-test": "error",
+      "playwright/no-skipped-test": ["error", { allowConditional: true }],
+      "playwright/no-wait-for-timeout": "error",
+      "playwright/no-page-pause": "error",
+      "playwright/missing-playwright-await": "error",
+      "playwright/no-networkidle": "error",
+      "playwright/valid-expect": "error",
     },
   },
 
