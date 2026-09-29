@@ -1,4 +1,5 @@
 import { sourcePillStatus, type SourcePillStatus, type SourceRow, type SourceSnapshot } from "../components/source-pill";
+import { registeredToolDescriptors } from "./agent/mcp-tools";
 import { PLANS, TRIAL_TERMS } from "./billing/plans";
 import { LIVE_COVERAGE, PLAN_NOTE, WATCHED_NOUNS } from "./coverage";
 import { FAQ } from "./faq";
@@ -10,6 +11,7 @@ export interface LlmsTxtSource {
 }
 
 export const PUBLIC_PATHS = ["/privacy", "/terms"] as const;
+export const SITEMAP_PATHS = ["/privacy", "/terms", "/llms.txt"] as const;
 export const DISALLOWED_PREFIXES = ["/app", "/api", "/mcp", "/u", "/login", "/onboarding", "/oauth", "/design"] as const;
 export const MCP_URL = `${SITE_URL}/mcp`;
 
@@ -65,7 +67,8 @@ export function llmsTxt(origin: string, sources: readonly LlmsTxtSource[], now: 
       ...FAQ.flatMap((entry) => [`**${entry.question}** ${entry.answer}`, ""]),
       "## Agents",
       "",
-      `- [MCP server](${MCP_URL}): add it as a connector in Claude, ChatGPT or Cursor and sign in; read-only tools get_brief, list_competitors and list_alerts, limited to your own workspace`,
+      `- [MCP server](${MCP_URL}): add it as a connector in Claude, ChatGPT or Cursor and sign in; read-only, limited to your own workspace`,
+      ...Object.entries(registeredToolDescriptors).map(([name, tool]) => `- ${name}: ${tool.title}`),
       `- [API reference](${origin}/api/v1/openapi.json): OpenAPI 3.1 for the read-only REST API; send an API key from Settings as a Bearer token`,
       "",
       "## Pages",

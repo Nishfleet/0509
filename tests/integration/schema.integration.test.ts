@@ -13,7 +13,9 @@ describe("0001_rebuild.sql", () => {
     const tables = await env.DB.prepare(
       "SELECT count(*) AS n FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name != 'd1_migrations' AND name NOT LIKE '_cf_%'",
     ).first<{ n: number }>();
-    expect(tables?.n).toBe(35);
+    // 36 = 35 on main plus sweep_run (0029, 0509#5755): every finished
+    // site sweep records its wall clock, pages and failures.
+    expect(tables?.n).toBe(36);
   });
 
   it("carries better-auth's six generated tables", async () => {

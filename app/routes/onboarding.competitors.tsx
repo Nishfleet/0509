@@ -11,7 +11,8 @@ import { handleCompetitorIntent } from "../lib/competitors.server";
 import { readOnboardingCompetitors } from "../lib/data/entity.server";
 import { markCompetitorsReady, markWatchingStarted } from "../lib/data/onboarding_run.server";
 import { readWorkspaceIdForOwner } from "../lib/data/workspace.server";
-import { isDiscoveryActive } from "../lib/discovery/start.server";
+import { readDiscoveryState } from "../lib/discovery/start.server";
+import { discoveryNotice } from "../lib/discovery/state";
 import { requireSession } from "../lib/require-session.server";
 import { ONBOARDING_COMPETITORS, workspaceLandingForRequest } from "../lib/workspace.server";
 
@@ -28,14 +29,14 @@ async function workspaceFor(request: Request): Promise<string> {
 
 export async function loader({ request }: Route.LoaderArgs) {
   const workspaceId = await workspaceFor(request);
-  const [competitors, searching] = await Promise.all([
+  const [competitors, discovery] = await Promise.all([
     readOnboardingCompetitors(workspaceId),
-    isDiscoveryActive(workspaceId, new Date()),
+    readDiscoveryState(workspaceId, new Date()),
   ]);
   if (competitors.on.length + competitors.maybes.length > 0) {
     await markCompetitorsReady(workspaceId, new Date().toISOString());
   }
-  return { ...competitors, searching };
+  return { ...competitors, discovery };
 }
 
 export async function action({ request }: Route.ActionArgs) {
@@ -49,7 +50,9 @@ export async function action({ request }: Route.ActionArgs) {
 }
 
 export default function Page({ loaderData, actionData }: Route.ComponentProps) {
-  const { on, maybes, searching } = loaderData;
+  const { on, maybes, discovery } = loaderData;
+  const searching = discovery === "looking";
+  const notice = discoveryNotice(discovery, on.length + maybes.length);
   const revalidator = useRevalidator();
 
   useEffect(() => {
@@ -64,16 +67,11 @@ export default function Page({ loaderData, actionData }: Route.ComponentProps) {
 
   return (
     <OnboardingFrame step={3} heading="Who you're up against">
-      {searching ? (
+      {notice === null ? null : (
         <p role="status" className="mt-3 max-w-prose leading-[1.55] text-ink-soft">
-          We're reading the news for brands named alongside you. They appear here as we find them.
+          {notice}
         </p>
-      ) : null}
-      {!searching && on.length === 0 && maybes.length === 0 ? (
-        <p role="status" className="mt-3 max-w-prose leading-[1.55] text-ink-soft">
-          We didn't find anyone named alongside you yet. Add one you know and we'll keep looking every night.
-        </p>
-      ) : null}
+      )}
       {on.length === 0 ? null : (
         <ul aria-label="Watching" aria-live="polite" aria-relevant="additions" className="mt-8 border-b border-line">
           {on.map((competitor) => (
