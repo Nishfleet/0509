@@ -74,6 +74,7 @@ export interface ChangeJudgment {
 export interface JudgeInput {
   workspaceId: string;
   entityId: string;
+  signalId: string | null;
   isSelf: boolean;
   subject: { name: string | null; domain: string };
   pageUrl: string;
@@ -110,6 +111,7 @@ function daysBeforeIso(now: Date, days: number): string {
 function verdictRow(input: {
   workspaceId: string;
   entityId: string;
+  signalId: string | null;
   questionId: string;
   inputHash: string;
   p: number | null;
@@ -120,7 +122,7 @@ function verdictRow(input: {
     workspaceId: input.workspaceId,
     questionId: input.questionId,
     inputHash: input.inputHash,
-    signalId: null,
+    signalId: input.signalId,
     entityId: input.entityId,
     p: input.p,
     choice: input.choice,
@@ -170,6 +172,7 @@ export async function judgeChange(input: JudgeInput): Promise<ChangeJudgment> {
     rows.push(verdictRow({
       workspaceId: input.workspaceId,
       entityId: input.entityId,
+      signalId: input.signalId,
       questionId: D3S_BREAKAGE_QID,
       inputHash: breakage.inputHash,
       p,
@@ -203,6 +206,7 @@ export async function judgeChange(input: JudgeInput): Promise<ChangeJudgment> {
   rows.push(verdictRow({
     workspaceId: input.workspaceId,
     entityId: input.entityId,
+    signalId: input.signalId,
     questionId: D3_NOTEWORTHY_QID,
     inputHash: noul.inputHash,
     p,
@@ -212,6 +216,7 @@ export async function judgeChange(input: JudgeInput): Promise<ChangeJudgment> {
   rows.push(verdictRow({
     workspaceId: input.workspaceId,
     entityId: input.entityId,
+    signalId: input.signalId,
     questionId: D3_KIND_QID,
     inputHash: choice.inputHash,
     p: null,

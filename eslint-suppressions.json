@@ -212,10 +212,10 @@
   },
   "app/lib/fetch/transport.server.ts": {
     "complexity": {
-      "count": 2
+      "count": 1
     },
     "max-lines-per-function": {
-      "count": 2
+      "count": 1
     }
   },
   "app/lib/hiring/discover-board.ts": {
@@ -256,9 +256,6 @@
       "count": 1
     },
     "max-lines-per-function": {
-      "count": 1
-    },
-    "max-params": {
       "count": 1
     }
   },
@@ -393,9 +390,6 @@
     }
   },
   "workers/delivery/consumer.ts": {
-    "complexity": {
-      "count": 1
-    },
     "max-lines-per-function": {
       "count": 1
     }
@@ -406,9 +400,6 @@
     }
   },
   "workers/mentions/sweep.ts": {
-    "complexity": {
-      "count": 1
-    },
     "max-lines-per-function": {
       "count": 1
     },

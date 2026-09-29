@@ -30,7 +30,7 @@ for (const { width, height } of [
   { width: 1440, height: 900 },
   { width: 390, height: 844 },
 ]) {
-  test(`J3 onboards gymshark.com inside its budgets at ${width}`, async ({ page }) => {
+  test(`J3 onboards gymshark.com inside its budgets at ${width} @own-signin`, async ({ page }) => {
     // The journey's own budget reaches 60 s from the input, after the
     // magic-link sign-in, so the test timeout has to clear that ceiling.
     test.setTimeout(150_000);

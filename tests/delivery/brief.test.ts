@@ -31,6 +31,7 @@ function payload(overrides: Partial<BriefPayload> = {}): BriefPayload {
     headline_is_new: false,
     why_line: "Kindred is the mover: 3 new ads and the loudest mention spike",
     is_quiet_week: false,
+    is_unjudged: false,
     read_this_first: [
       {
         signal_id: "sig_1",

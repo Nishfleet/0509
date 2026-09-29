@@ -18,7 +18,7 @@ const HN_FIXTURE = readFileSync(join(FIXTURES_DIR, "hn-gymshark.json"), "utf8");
 const NEWS_FIXTURE = readFileSync(join(FIXTURES_DIR, "gdelt-gymshark.json"), "utf8");
 
 function fetchTextWith(body: string): (url: string) => Promise<FetchedText> {
-  return (url) => Promise.resolve({ ok: true, url, contentType: null, body });
+  return (url) => Promise.resolve({ ok: true, status: 200, url, contentType: null, body });
 }
 
 interface Grouped {

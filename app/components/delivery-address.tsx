@@ -14,7 +14,7 @@ export function DeliveryAddress({
 }) {
   const hasError = error !== null;
   return (
-    <section aria-labelledby="delivery-address" className="border-line mt-10 border-t pt-6">
+    <section aria-labelledby="delivery-address" className="mt-10 border-t border-line pt-6">
       <h2 id="delivery-address" className={BLOCK_HEADING}>
         Delivery email
       </h2>
@@ -33,7 +33,7 @@ export function DeliveryAddress({
           autoComplete="email"
           required
           defaultValue={address}
-          className="border-line h-11 border px-3"
+          className="h-11 border border-line px-3"
           aria-invalid={hasError ? true : undefined}
           aria-describedby={hasError ? "delivery-address-error" : undefined}
         />

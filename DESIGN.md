@@ -34,7 +34,9 @@ competitor, alerts — rendered at 1440 and 390).
    alert, email — same object, different size.
 7. **Honesty is a design element.** A degraded source says so on the row. A low-confidence
    judgment sits low and says "possibly". A paused brand shows the date it was paused.
-   We never round a gap up into a clean number.
+   We never round a gap up into a clean number. The one place a degraded row is replaced
+   rather than shown is the landing's all-degraded gate (§2.1), and there it is replaced
+   by a line that says coverage is rebuilding and what still arrives — never by silence.
 8. **The accent is one colour.** Green marker. Red exists only as the strike on a
    "before" and the rule on an open incident. Nothing else is coloured, ever.
 
@@ -75,7 +77,10 @@ who’s gaining on you."**). No exclamation marks anywhere on the page.
 - The proof column is live data from a public workspace we run ourselves, re-rendered
   weekly (the share image, §2.8). It is never sample data and never says "sample".
 - "What we watch" is a wrapped pill row, not a card grid. Sources we cannot currently
-  reach are shown dimmed with the reason, on the landing as in the app.
+  reach are shown dimmed with the reason, on the landing as in the app. The one exception
+  is the prospect: when every visible source is degraded, the landing replaces the whole
+  row with a single rebuilding line, because a page that leads with unknowns sells
+  nothing (0509#5674, #5987).
 - Exactly one filled button per viewport. The section CTA repeats the hero's.
 
 ### 2.2 Sign in (`/login`)
@@ -154,8 +159,7 @@ developments feed (with type chips) → peers rail → facts → sources → "st
 **First viewport:** the name, the tracking switch with its consequence spelled out
 beside it, the snapshot row, and the top of the biggest-move slab.
 
-- The switch is the first control on the page: the breadcrumb and the brand's two
-  ad-library links are the only links before it, and it is never a menu item.
+- The switch is the first interactive thing on the page and it is never a menu item.
   Next to it, always: "Off stops the watching and the alerts. The history stays, and
   turning it back on picks up where it left off."
 - Developments are chronological and mixed by default, filtered by the type chips
@@ -439,6 +443,10 @@ of: a surface that has *some* truth shows that truth at whatever size it is, bec
 hiding it teaches the user the product is not running. Applies to the standing chart on
 Home and in the share image.
 | Identity card, field pending | "logo: looking on your site" / "we'll fill this on the first crawl, within the hour" |
+
+The landing's all-degraded gate is the one exception (§2.1): with no session to show a
+source's history and every visible source degraded, the public page replaces the pill row
+with the one rebuilding line. Every signed-in surface keeps the degraded row and its reason.
 
 ---
 

@@ -125,7 +125,7 @@ describe("judgeWeek", () => {
 
     const result = await judgeWeek(env.DB, inputFor(seeded.workspaceId));
 
-    expect(result).toEqual({ picks: [seeded.signalA, seeded.signalB], judged: 2 });
+    expect(result).toEqual({ picks: [seeded.signalA, seeded.signalB], judged: 2, unjudged: true });
     expect(run).toHaveBeenCalledTimes(2);
     expect(askedTitles(run)).not.toContain(seeded.titleC);
     const written = await env.DB.prepare(
@@ -158,7 +158,7 @@ describe("judgeWeek", () => {
 
     const result = await judgeWeek(env.DB, inputFor(seeded.workspaceId));
 
-    expect(result).toEqual({ picks: [], judged: 0 });
+    expect(result).toEqual({ picks: [], judged: 0, unjudged: true });
   });
 
   it("never sends a tombstoned signal even with a 0.95 verdict", async () => {
