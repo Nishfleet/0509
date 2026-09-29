@@ -8,9 +8,9 @@ import { Faq } from "../components/landing/faq";
 import { Header } from "../components/landing/header";
 import { Hero } from "../components/landing/hero";
 import { HowItWorks } from "../components/landing/how-it-works";
+import { Marks } from "../components/landing/marks";
 import { Price } from "../components/landing/price";
 import { pageWidth } from "../components/landing/section";
-import { TheMark } from "../components/landing/the-mark";
 import { Ticker } from "../components/landing/ticker";
 import { WhatWeWatch } from "../components/landing/what-we-watch";
 import { sourcePillStatus } from "../components/source-pill";
@@ -18,7 +18,7 @@ import { WATCHED_NOUNS } from "../lib/coverage";
 import { readSiteChanges } from "../lib/data/signal.server";
 import { readRegistrySources } from "../lib/data/source.server";
 import { FAQ } from "../lib/faq";
-import { daysBefore } from "../lib/site-changes.server";
+import { daysBefore, readLandingMarks } from "../lib/site-changes.server";
 import {
   SITE_URL,
   faqPageJsonLd,
@@ -65,15 +65,16 @@ export async function loader(_: Route.LoaderArgs) {
   const sources = registry.filter(
     (entry) => sourcePillStatus(entry.source, entry.snapshot, now).state !== "disabled",
   );
+  const marks = await readLandingMarks(new Date(now));
   const id: unknown = env.LANDING_WORKSPACE_ID;
-  if (typeof id !== "string" || id.trim() === "") return { ticker: [], sources, now };
+  if (typeof id !== "string" || id.trim() === "") return { ticker: [], marks, sources, now };
   const rows = await readSiteChanges({
     workspaceId: id.trim(),
     entityId: null,
     since: daysBefore(new Date(now), 7),
     limit: 24,
   });
-  return { ticker: tickerItems(rows, new Date(now)), sources, now };
+  return { ticker: tickerItems(rows, new Date(now)), marks, sources, now };
 }
 
 export default function Landing({ loaderData }: Route.ComponentProps) {
@@ -83,7 +84,7 @@ export default function Landing({ loaderData }: Route.ComponentProps) {
       <Header />
       <main>
         <Hero />
-        <TheMark />
+        <Marks marks={loaderData.marks} now={loaderData.now} />
         <HowItWorks />
         <WhatWeWatch sources={loaderData.sources} now={loaderData.now} />
         <Agents />

@@ -111,7 +111,7 @@
   // TURNSTILE_SECRET_KEY and TURNSTILE_SITE_KEY are Worker secrets too. Listing
   // them under secrets.required makes deploy inherit the values already on the
   // Worker instead of replacing them with a plaintext var.
-  // LANDING_WORKSPACE_ID: the public workspace we run ourselves whose changes the landing ticker shows (#4083). Empty renders an empty strip, never filler.
+  // LANDING_WORKSPACE_ID: the public workspace we run ourselves whose changes the landing ticker and mark section show (#4083, #4084). Empty draws no strip and no marks, never filler.
   // ACCESS_TEAM_DOMAIN / ACCESS_AUD pin the Access application that fronts
   // 0509.io. They are public identifiers — the AUD appears in Access's own
   // login redirect — not secrets. access-preclearance.server.ts uses them to
