@@ -4,11 +4,6 @@ export interface SendResult {
 }
 
 const MAX_ERROR_CHARS = 2_000;
-const EMAIL_SHAPED = /[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+/g;
-
-export function redactEmailShaped(text: string): string {
-  return text.replace(EMAIL_SHAPED, "[redacted]");
-}
 
 function errorText(end: unknown): string {
   if (end instanceof Error) {

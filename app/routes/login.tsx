@@ -13,8 +13,8 @@ import { Footer } from "../components/footer";
 import { safeReturnTo } from "../lib/agent/paths";
 import { authClient } from "../lib/auth-client";
 import { formMagicLinkRequest } from "../lib/auth/login-magic-link.server";
+import { redactEmailShaped } from "../lib/auth/redact-email-shaped";
 import { createAuthForRequest } from "../lib/auth.server";
-import { redactEmailShaped } from "../../workers/delivery/send";
 import { readAccountDeleteProgress } from "../lib/account-delete.server";
 import { timezoneCookie } from "../lib/timezone";
 
