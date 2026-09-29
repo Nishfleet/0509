@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 
-import { takeBrowserEscalation } from "../../../app/lib/site/browser-budget.server";
+import {
+  takeBrowserEscalation,
+  takeBrowserScreenshot,
+} from "../../../app/lib/site/browser-budget.server";
 
 describe("BrowserBudget (0509#5294)", () => {
   it("allows four browser escalations per workspace per brand per UTC day and refuses the fifth", async () => {
@@ -20,5 +23,32 @@ describe("BrowserBudget (0509#5294)", () => {
 
     const otherBrand = await takeBrowserEscalation("ws-budget", "ent-budget-2", "2026-09-25");
     expect(otherBrand).toBe(true);
+  });
+
+  it("allows four screenshots per brand per day, refuses the fifth, allows the next day, and draws from a counter independent of escalations (0509#5816)", async () => {
+    const first = await takeBrowserScreenshot("ws-shot", "ent-shot", "2026-09-25");
+    expect(first).toBe(true);
+    const second = await takeBrowserScreenshot("ws-shot", "ent-shot", "2026-09-25");
+    expect(second).toBe(true);
+    const third = await takeBrowserScreenshot("ws-shot", "ent-shot", "2026-09-25");
+    expect(third).toBe(true);
+    const fourth = await takeBrowserScreenshot("ws-shot", "ent-shot", "2026-09-25");
+    expect(fourth).toBe(true);
+    const fifth = await takeBrowserScreenshot("ws-shot", "ent-shot", "2026-09-25");
+    expect(fifth).toBe(false);
+
+    const nextDay = await takeBrowserScreenshot("ws-shot", "ent-shot", "2026-09-26");
+    expect(nextDay).toBe(true);
+
+    const escFirst = await takeBrowserEscalation("ws-shot", "ent-shot", "2026-09-25");
+    expect(escFirst).toBe(true);
+    const escSecond = await takeBrowserEscalation("ws-shot", "ent-shot", "2026-09-25");
+    expect(escSecond).toBe(true);
+    const escThird = await takeBrowserEscalation("ws-shot", "ent-shot", "2026-09-25");
+    expect(escThird).toBe(true);
+    const escFourth = await takeBrowserEscalation("ws-shot", "ent-shot", "2026-09-25");
+    expect(escFourth).toBe(true);
+    const escFifth = await takeBrowserEscalation("ws-shot", "ent-shot", "2026-09-25");
+    expect(escFifth).toBe(false);
   });
 });
