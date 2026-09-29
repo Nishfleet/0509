@@ -133,10 +133,10 @@ async function openEditor(page: Page, field: "name" | "about"): Promise<Locator>
   await expect(trigger).toBeVisible({ timeout: 30_000 });
   const box = await trigger.boundingBox();
   if (box === null) throw new Error(`the edit ${field} trigger has no bounding box`);
-  // 0509#5557: the unread card's empty-line span used to consume the row and
-  // leave this `flex-1` trigger 0px wide; the box check keeps that from
-  // returning silently on the 390 lane.
-  expect(box.width, `edit ${field} trigger width on the unread card`).toBeGreaterThan(0);
+  // 0509#5557: an empty-line span beside the `min-w-0 flex-1` trigger used to
+  // starve it to 0px wide on the unread card at 390; this keeps that from
+  // returning silently.
+  expect(box.width, `edit ${field} trigger has zero width`).toBeGreaterThan(0);
   await trigger.click();
   const editor = page.getByRole("textbox", { name: field });
   await expect(editor).toBeVisible({ timeout: 5_000 });
