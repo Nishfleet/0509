@@ -15,11 +15,11 @@ function parseBody(rawBody: string): unknown {
 }
 
 export const gdelt: MentionsAdapter = async (target, _cursor) => {
-  const { timeoutMs, timeoutRetries } = SOURCE_SETTINGS["gdelt.doc"];
+  const { timeoutMs, timeoutRetries, retryBackoffMs } = SOURCE_SETTINGS["gdelt.doc"];
   const response = await fetchUpstream(
     GDELT_SEARCH_URL + encodeURIComponent(`"${target.query}"`),
     timeoutMs,
-    timeoutRetries,
+    { retries: timeoutRetries, backoffMs: retryBackoffMs },
   );
   if (!response.ok) throw new Error(`gdelt answered ${String(response.status)}`);
   const rawBody = await response.text();

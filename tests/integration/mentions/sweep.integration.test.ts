@@ -157,7 +157,7 @@ describe("nightly mentions sweep", () => {
   it("stores a snapshot when GDELT answers slowly but inside its timeout (0509#6079)", async () => {
     const { competitorId, brand } = await seedWorkspace();
     const { timeoutMs } = SOURCE_SETTINGS["gdelt.doc"];
-    stubSlowGdelt(Math.min(timeoutMs - 1_000, 12_000));
+    stubSlowGdelt(Math.min(timeoutMs - 1_000, 9_000));
     Reflect.set(env, "AI", { run: jevAnswering() });
     const timeoutSpy = vi.spyOn(AbortSignal, "timeout");
 
