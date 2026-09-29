@@ -25,7 +25,7 @@ WHERE id = (
 )`;
 
 const CHANGE_EMAIL_TARGET = `UPDATE send_target
-SET target_value = ?, is_verified = 0, unsubscribe_token = NULL
+SET target_value = ?, is_verified = 0, unsubscribe_token = NULL, verify_token = NULL
 WHERE workspace_id = ?
   AND channel_id = (SELECT id FROM channel WHERE key = 'email')
   AND target_value <> ?`;

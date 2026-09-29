@@ -122,6 +122,21 @@ describe("confirm a changed delivery address (0509#5811)", () => {
     expect(resend.sent[0].text).toContain(`https://0509.io/v/${String(secondToken)}`);
   });
 
+  it("a rotated token no longer confirms the row", async () => {
+    const workspaceId = firstWorkspaceId(USER_ID);
+    await save(recorder(), NEW_ADDRESS);
+    const firstToken = (await onlyTarget(workspaceId)).verify_token;
+    if (firstToken === null) throw new Error("expected a verify token");
+
+    await save(recorder(), "other@0509.io");
+    await confirmDeliveryAddress(firstToken);
+
+    expect(await onlyTarget(workspaceId)).toMatchObject({
+      target_value: "other@0509.io",
+      is_verified: 0,
+    });
+  });
+
   it("(c) saving the sign-in address verifies at once and sends nothing", async () => {
     const workspaceId = firstWorkspaceId(USER_ID);
     const changed = recorder();
