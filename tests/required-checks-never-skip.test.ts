@@ -5,14 +5,15 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 // 0509#5738: on GitHub a SKIPPED required check counts as a pass (#4664 merged
-// with opus-review=SKIPPED). So no required job may carry a job-level `if:`;
-// its steps decide instead and the job always reports. The names below are the
-// required_status_checks of ruleset 21391031, verified 2026-09-28. A rename
-// fails the first test instead of silently checking nothing.
+// with a required grade check SKIPPED). So no required job may carry a job-level
+// `if:`; its steps decide instead and the job always reports. The names below
+// are the required_status_checks of ruleset 21391031 that are jobs in this repo;
+// `grade / grade` is a reusable workflow in fleet-ops and is not listed. A
+// rename fails the first test instead of silently checking nothing.
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const WORKFLOWS = path.join(REPO_ROOT, ".github/workflows");
-const REQUIRED = ["Gitleaks", "codex-node-checks", "semgrep", "preview-assert", "opus-review"];
+const REQUIRED = ["Gitleaks", "codex-node-checks", "semgrep", "preview-assert"];
 
 interface Job {
   file: string;
@@ -22,7 +23,7 @@ interface Job {
 }
 
 // No YAML parser is in the stack (docs/REBUILD-STACK.md), so jobs are read by
-// indentation, the same way tests/opus-review-job.test.ts reads one job.
+// indentation, by reading each job block in turn.
 function readJobs(file: string, yaml: string): Job[] {
   const lines = yaml.split("\n");
   const jobsAt = lines.indexOf("jobs:");
