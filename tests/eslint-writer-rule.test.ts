@@ -34,7 +34,7 @@ const INLINE_DML = `export async function runProbe(
 }
 `;
 
-// The D grade on #4336: a leading anchor alone let these through. Each one is
+// Found in review of #4336: a leading anchor alone let these through. Each one is
 // a write the gate must still see.
 const WRITE_VARIANTS: { name: string; code: string }[] = [
   {

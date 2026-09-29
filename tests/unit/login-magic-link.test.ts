@@ -1,3 +1,4 @@
+import { data } from "react-router";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const { handler } = vi.hoisted(() => ({
@@ -66,10 +67,38 @@ describe("login magic-link action", () => {
   });
 
   it("does not say the link was sent when the handler fails", async () => {
-    handler.mockResolvedValue(new Response("send failed", { status: 500 }));
-    const result = await action({ request: formRequest({ email: "person@0509.io", "cf-turnstile-response": "token-1" }) });
-    expect(result).toEqual({ error: "We couldn't send the link. Try again in a minute." });
-    expect(result).not.toHaveProperty("sent");
+    const logged = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    try {
+      handler.mockResolvedValue(new Response("account daily sending quota exceeded", { status: 500 }));
+      const result = await action({ request: formRequest({ email: "person@0509.io", "cf-turnstile-response": "token-1" }) });
+      expect(result).toEqual(
+        data({ error: "We couldn't send the link. Try again in a minute." }, { status: 503 }),
+      );
+      expect(result).not.toHaveProperty("sent");
+      const text = logged.mock.calls.map((call) => String(call[0])).join("\n");
+      expect(text).toContain("login.magic_link_send_failed");
+      expect(text).toContain('"status":500');
+      expect(text).not.toContain("account daily sending quota exceeded");
+    } finally {
+      logged.mockRestore();
+    }
+  });
+
+  it("logs a provider message without the address that was in it", async () => {
+    const logged = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    try {
+      handler.mockResolvedValue(
+        new Response("account daily sending quota exceeded for victim@example.com", { status: 500 }),
+      );
+      await action({ request: formRequest({ email: "person@0509.io", "cf-turnstile-response": "token-1" }) });
+      const text = logged.mock.calls.map((call) => String(call[0])).join("\n");
+      expect(text).toContain("login.magic_link_send_failed");
+      expect(text).toContain('"status":500');
+      expect(text).not.toContain("victim@example.com");
+      expect(text).not.toContain("person@0509.io");
+    } finally {
+      logged.mockRestore();
+    }
   });
 
   it("does not call a bad email a failed captcha", async () => {
