@@ -2,6 +2,7 @@ import { env } from "cloudflare:test";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { readSignalAlerts } from "../../../app/lib/data/alert.server";
+import { readMentionFeed } from "../../../app/lib/data/mention.server";
 import { planTargets, sweepTarget } from "../../../workers/mentions/sweep";
 
 const NOW = "2026-09-24T03:00:00.000Z";
@@ -175,6 +176,9 @@ describe("nightly mentions sweep", () => {
       .bind(competitorId)
       .all<{ state: string | null }>();
     expect(view.results.map((row) => row.state)).toEqual(["unjudged", "unjudged", "unjudged"]);
+
+    const feed = await readMentionFeed(workspaceId, new Date(NOW));
+    expect(feed.map((row) => row.treatment)).toEqual(["unreviewed", "unreviewed", "unreviewed"]);
 
     const verdicts = await env.DB.prepare(
       "SELECT COUNT(*) AS n FROM jev_verdict WHERE workspace_id = ?",
