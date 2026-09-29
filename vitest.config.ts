@@ -60,6 +60,8 @@ export default defineConfig({
             "tests/integration/migration-rollback.test.ts",
             // #3994's acceptance names this file verbatim.
             "tests/integration/identity/tail.test.ts",
+            // #4047's acceptance names this file verbatim.
+            "tests/integration/site/recheck.test.ts",
             "tests/unit/site/**/*.test.ts",
             "tests/perf/**/*.test.ts",
           ],

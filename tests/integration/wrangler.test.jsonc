@@ -2,12 +2,15 @@
   "name": "0509-test",
   "compatibility_date": "2026-09-16",
   "compatibility_flags": ["global_fetch_strictly_public"],
-  "vars": { "SITE_SWEEP_PING_URL": "https://hc-ping.example/site-sweep", "BETTER_AUTH_URL": "https://0509.io", "BETTER_AUTH_SECRET": "integration-test-secret", "TURNSTILE_SITE_KEY": "1x00000000000000000000BB", "TURNSTILE_SECRET_KEY": "1x0000000000000000000000000000000AA", "DODO_ENVIRONMENT": "test_mode", "DODO_PAYMENTS_API_KEY": "test-key-not-a-dodo-key", "DODO_WEBHOOK_SECRET": "whsec_dGVzdC13ZWJob29rLXNlY3JldC1ub3QtcmVhbA==", "DODO_PRODUCT_SCOUT": "pdt_test_scout", "DODO_PRODUCT_STARTER": "pdt_test_starter", "DODO_PRODUCT_AGENCY": "pdt_test_agency" },
+  "vars": { "SITE_SWEEP_PING_URL": "https://hc-ping.example/site-sweep", "BETTER_AUTH_URL": "https://0509.io", "BETTER_AUTH_SECRET": "integration-test-secret", "TURNSTILE_SITE_KEY": "1x00000000000000000000BB", "TURNSTILE_SECRET_KEY": "1x0000000000000000000000000000000AA", "DODO_ENVIRONMENT": "test_mode", "DODO_PAYMENTS_API_KEY": "test-key-not-a-dodo-key", "DODO_WEBHOOK_SECRET": "whsec_dGVzdC13ZWJob29rLXNlY3JldC1ub3QtcmVhbA==", "DODO_PRODUCT_SCOUT": "pdt_test_scout", "DODO_PRODUCT_STARTER": "pdt_test_starter", "DODO_PRODUCT_AGENCY": "pdt_test_agency", "FIXTURE_SITE_TOKEN": "integration-token" },
   "main": "../../workers/app.ts",
   "durable_objects": {
-    "bindings": [{ "name": "BROWSER_BUDGET", "class_name": "BrowserBudget" }]
+    "bindings": [
+      { "name": "BROWSER_BUDGET", "class_name": "BrowserBudget" },
+      { "name": "STATE", "class_name": "FixtureState" }
+    ]
   },
-  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["BrowserBudget"] }],
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["BrowserBudget", "FixtureState"] }],
   "d1_databases": [{ "binding": "DB", "database_name": "0509-test", "database_id": "test" }],
   "analytics_engine_datasets": [{ "binding": "MENTIONS_SOURCES", "dataset": "mentions_sources-test" }],
   "r2_buckets": [

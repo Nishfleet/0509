@@ -126,6 +126,8 @@ const handler = {
 
 export { BrowserBudget } from "./budget-counter";
 
+export { FixtureState } from "./fixture-site";
+
 export class StandingRolloverWorkflow extends instrumentWorkflowWithSentry(sentryOptions, StandingRollover) {}
 
 export class AccountDeleteWorkflow extends instrumentWorkflowWithSentry(sentryOptions, AccountDelete) {}
