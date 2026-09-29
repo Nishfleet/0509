@@ -32,6 +32,10 @@ export type MentionsAdapter = (
 
 export const BLOCKING_STATUSES: ReadonlySet<number> = new Set([202, 403, 429]);
 
+export const SOURCE_TIMEOUT_MS: Readonly<{ "gdelt.doc": number }> = {
+	"gdelt.doc": 25_000,
+};
+
 export class UpstreamBlockedError extends Error {
 	constructor(readonly status: number) {
 		super(`upstream blocked: HTTP ${String(status)}`);
@@ -39,8 +43,19 @@ export class UpstreamBlockedError extends Error {
 	}
 }
 
-export async function fetchUpstream(url: string, timeoutMs = 8000): Promise<Response> {
-	const response = await fetch(url, { signal: AbortSignal.timeout(timeoutMs) });
-	if (BLOCKING_STATUSES.has(response.status)) throw new UpstreamBlockedError(response.status);
-	return response;
+export async function fetchUpstream(
+	url: string,
+	timeoutMs = 8000,
+	timeoutRetries = 0,
+): Promise<Response> {
+	for (let attempt = 0; ; attempt += 1) {
+		try {
+			const response = await fetch(url, { signal: AbortSignal.timeout(timeoutMs) });
+			if (BLOCKING_STATUSES.has(response.status)) throw new UpstreamBlockedError(response.status);
+			return response;
+		} catch (error) {
+			const timedOut = error instanceof DOMException && error.name === "TimeoutError";
+			if (!timedOut || attempt >= timeoutRetries) throw error;
+		}
+	}
 }
