@@ -6,6 +6,7 @@ import { CRAWLER_USER_AGENT } from "../../../app/lib/fetch/robots.server";
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  vi.restoreAllMocks();
 });
 
 const NOT_FOUND = () => Promise.resolve(new Response("not found", { status: 404 }));
@@ -142,6 +143,29 @@ describe("resolveDomain", () => {
       via: "slug",
     });
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("logs a non-OK Wikidata answer as discovery.resolve_failed (0509#5884)", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() => Promise.resolve(new Response("rate limited", { status: 429 }))),
+    );
+    const errors = vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+    await expect(resolveDomain("Throttled Brand 0509")).resolves.toEqual({
+      domain: null,
+      via: "unresolved",
+    });
+
+    expect(errors).toHaveBeenCalledTimes(1);
+    expect(errors).toHaveBeenCalledWith(
+      JSON.stringify({
+        event: "discovery.resolve_failed",
+        step: "wikidata",
+        url: "https://www.wikidata.org/w/api.php?action=wbsearchentities&format=json&language=en&type=item&limit=1&search=Throttled%20Brand%200509",
+        error: "status 429",
+      }),
+    );
   });
 
   it("identifies both of resolve-domain's outbound fetches as the one crawler User-Agent (0509#5883)", async () => {
