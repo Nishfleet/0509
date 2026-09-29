@@ -4,7 +4,7 @@ import { WorkflowEntrypoint } from "cloudflare:workers";
 import { readBacklog, writeBacklog } from "../../app/lib/data/discovery_backlog.server";
 import { readDiscoveryContext, readRefreshTargets } from "../../app/lib/data/entity.server";
 import { writeDiscoveryResults } from "../../app/lib/data/suggestion.server";
-import { generateShortlist, judgeCandidates, resolveShortlist } from "../../app/lib/discovery/run.server";
+import { generateShortlist, judgeBatches, judgeCandidates, resolveShortlist } from "../../app/lib/discovery/run.server";
 import {
   judgeStillCompetitors,
   stillCompetitorAction,
@@ -53,10 +53,18 @@ export class Discovery extends WorkflowEntrypoint<Env, DiscoveryParams> {
     const generated = await step.do("generate", RETRY, () => generateShortlist(context.self, backlog));
     const shortlisted = generated.shortlisted;
     const resolved = await step.do("resolve", RETRY, () => resolveShortlist(context, shortlisted));
-    const results = await step.do("judge", RETRY, () => judgeCandidates(context, resolved));
-    await step.do("write", RETRY, () =>
-      writeDiscoveryResults(workspaceId, results, new Date().toISOString()),
+    const batches = await Promise.all(
+      judgeBatches(resolved).map(async (batch, index) => {
+        const judgedBatch = await step.do(`judge-${String(index)}`, RETRY, () =>
+          judgeCandidates(context, batch),
+        );
+        await step.do(`write-${String(index)}`, RETRY, () =>
+          writeDiscoveryResults(workspaceId, judgedBatch, new Date().toISOString()),
+        );
+        return judgedBatch;
+      }),
     );
+    const results = batches.flat();
     await step.do("queue", RETRY, () =>
       writeBacklog(workspaceId, generated.rest, generated.promoted, new Date().toISOString()),
     );
