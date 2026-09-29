@@ -252,6 +252,30 @@
         "max_batch_size": 1,
         "max_batch_timeout": 30,
         "max_retries": 3
+      },
+      // 0509#5261: the first collection the identity tail queues
+      // (app/lib/identity/tail.server.ts `enqueueFirstSweep`). The numbers are
+      // docs/engines/README.md "What the four share": max_concurrency 20 and
+      // max_retries 3, and the lane never opens a browser — a page that needs
+      // one belongs on page-sweep, so the consumer reads with a plain fetch and
+      // takes a refusal as a retry, not as an escalation. The dead letter queue
+      // is mandatory for the same reason as send-email's: a message that reaches
+      // the retry limit is deleted permanently otherwise, and a dropped first
+      // collection is a brand whose Home page stays empty until the nightly
+      // sweep.
+      {
+        "queue": "fetch-sweep",
+        "max_batch_size": 5,
+        "max_batch_timeout": 30,
+        "max_retries": 3,
+        "max_concurrency": 20,
+        "dead_letter_queue": "fetch-sweep-dlq"
+      },
+      {
+        "queue": "fetch-sweep-dlq",
+        "max_batch_size": 5,
+        "max_batch_timeout": 30,
+        "max_retries": 3
       }
     ]
   },
@@ -284,6 +308,17 @@
       "binding": "SITE_SWEEP",
       "class_name": "SiteSweepWorkflow",
       "schedules": ["0 2 * * *"]
+    },
+    // The nightly hiring sweep (docs/engines/hiring.md): finds each tracked
+    // brand's job board, then reads every watched board. 02:30 UTC — after
+    // the 02:00 site sweep and before the 03:00 standing refresh counts its
+    // new-role signals. One retried step per entity and per board; a step
+    // that cannot be read fails alone.
+    {
+      "name": "hiring-sweep",
+      "binding": "HIRING_SWEEP",
+      "class_name": "HiringSweepWorkflow",
+      "schedules": ["30 2 * * *"]
     },
     // The nightly snapshot backup (0509#5802): copies every object in
     // 0509-snapshots that 0509-snapshots-backup does not yet hold, one
@@ -330,9 +365,8 @@
       "schedules": ["0 1 * * *"]
     },
     // The durable tail of a confirmed identity card: persist, seed watches,
-    // start discovery, enqueue the first collection. Producer only — the
-    // consumer that drains fetch-sweep is a later engine, and this Worker's
-    // queue() handler is the email lane.
+    // start discovery, enqueue the first collection. That collection is
+    // drained by the fetch-sweep consumer above (0509#5261).
     {
       "name": "identity-tail",
       "binding": "IDENTITY_TAIL",

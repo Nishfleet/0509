@@ -37,6 +37,11 @@
       "class_name": "SiteSweepWorkflow"
     },
     {
+      "name": "hiring-sweep-test",
+      "binding": "HIRING_SWEEP",
+      "class_name": "HiringSweepWorkflow"
+    },
+    {
       "name": "snapshot-backup-test",
       "binding": "SNAPSHOT_BACKUP",
       "class_name": "SnapshotBackupWorkflow"

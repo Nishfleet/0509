@@ -108,12 +108,20 @@ export interface SweepTick {
   plannedAt: string;
 }
 
-export async function checkSitePage(target: SiteSweepTarget, tick: SweepTick): Promise<CheckPageResult> {
+export interface CheckSitePageOptions {
+  browser?: boolean;
+}
+
+export async function checkSitePage(
+  target: SiteSweepTarget,
+  tick: SweepTick,
+  options: CheckSitePageOptions = {},
+): Promise<CheckPageResult> {
   if (target.entityRole === "self" && !(await robotsAllows(target.url))) {
     console.log(JSON.stringify({ event: "site.check_failed", url: target.url, reason: "robots", detail: "disallowed by robots.txt" }));
     return { outcome: "failed", reason: "robots", detail: "disallowed by robots.txt" };
   }
-  const read = await readPage(target, tick.plannedAt);
+  const read = await readPage(target, tick.plannedAt, { browser: options.browser ?? true });
   const result = await checkPage({
     watchId: target.watchId,
     pageId: target.pageId,
@@ -121,8 +129,11 @@ export async function checkSitePage(target: SiteSweepTarget, tick: SweepTick): P
     snapshotId: `${tick.instanceId}-${target.pageId}`,
     before: tick.plannedAt,
     read,
-    mayScreenshot: () =>
-      takeBrowserScreenshot(target.workspaceId, target.entityId, tick.plannedAt.slice(0, 10)),
+    mayScreenshot:
+      options.browser === false
+        ? undefined
+        : () =>
+            takeBrowserScreenshot(target.workspaceId, target.entityId, tick.plannedAt.slice(0, 10)),
   });
   if (result.outcome === "failed") {
     console.log(JSON.stringify({
