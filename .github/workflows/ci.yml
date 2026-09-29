@@ -10,7 +10,9 @@
 # the queue evaluates checks on the merge ref, so a job that skips there gives
 # the queue no verdict, and on GitHub a skipped required check counts as
 # passing (#4664): no required job may carry a job-level `if:` that can skip
-# it. On an event where it has nothing to do it runs one explicit pass step.
+# it, except `grade`, which runs only on pull_request and merge_group;
+# tests/required-checks-never-skip.test.ts pins it. On an event where a job has
+# nothing to do it runs one explicit pass step.
 name: CI
 
 # `deployment_status` is the third trigger and it is the stock one: Cloudflare

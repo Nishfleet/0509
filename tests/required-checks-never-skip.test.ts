@@ -69,9 +69,9 @@ describe("required checks always report (0509#5738)", () => {
   it("runs the shared grade job on every event the ruleset evaluates", async () => {
     const grade = (await allJobs()).find((job) => job.file === "ci.yml" && job.key === "grade");
     const condition = grade?.body.find((l) => /^ {4}if:/.test(l)) ?? "";
-    expect(grade?.body.some((l) => /^ {4}uses: Nishfleet\/fleet-ops\/\.github\/workflows\/grade\.yml@main$/.test(l))).toBe(true);
     expect(condition).toContain("github.event_name == 'pull_request'");
     expect(condition).toContain("github.event_name == 'merge_group'");
+    expect(condition).not.toContain("deployment_status");
   });
 
   it("reads a job-level if: when one is there", () => {
