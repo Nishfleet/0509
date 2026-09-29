@@ -4,6 +4,7 @@ import {
 	fetchUpstream,
 	mentionItemSchema,
 	mentionsResultSchema,
+	UpstreamBlockedError,
 	type MentionsAdapter,
 	type MentionsCursor,
 	type MentionsResult,
@@ -75,6 +76,68 @@ describe("mentions adapter contract", () => {
 		} finally {
 			vi.unstubAllGlobals();
 			vi.restoreAllMocks();
+		}
+	});
+
+	it("fetchUpstream retries a real AbortSignal.timeout rejection when asked (0509#6079)", async () => {
+		const fetchMock = vi.fn(
+			(_input: unknown, init?: RequestInit) =>
+				new Promise<Response>((_resolve, reject) => {
+					init?.signal?.addEventListener("abort", () => {
+						reject(init.signal.reason);
+					});
+				}),
+		);
+		vi.stubGlobal("fetch", fetchMock);
+		try {
+			await expect(
+				fetchUpstream("https://example.com/feed", 5, { retries: 1 }),
+			).rejects.toMatchObject({
+				name: "TimeoutError",
+			});
+			expect(fetchMock).toHaveBeenCalledTimes(2);
+		} finally {
+			vi.unstubAllGlobals();
+		}
+	});
+
+	it("fetchUpstream does not retry by default, on a blocking status, or on a non-timeout failure (0509#6079)", async () => {
+		const timeoutError = new DOMException("t", "TimeoutError");
+		const defaultMock = vi.fn(async () => {
+			throw timeoutError;
+		});
+		vi.stubGlobal("fetch", defaultMock);
+		try {
+			await expect(fetchUpstream("https://example.com/feed")).rejects.toMatchObject({
+				name: "TimeoutError",
+			});
+			expect(defaultMock).toHaveBeenCalledTimes(1);
+		} finally {
+			vi.unstubAllGlobals();
+		}
+
+		const blockedMock = vi.fn(async () => new Response("", { status: 429 }));
+		vi.stubGlobal("fetch", blockedMock);
+		try {
+			await expect(
+				fetchUpstream("https://example.com/feed", 8000, { retries: 3 }),
+			).rejects.toThrow(UpstreamBlockedError);
+			expect(blockedMock).toHaveBeenCalledTimes(1);
+		} finally {
+			vi.unstubAllGlobals();
+		}
+
+		const failedMock = vi.fn(async () => {
+			throw new TypeError("fetch failed");
+		});
+		vi.stubGlobal("fetch", failedMock);
+		try {
+			await expect(
+				fetchUpstream("https://example.com/feed", 8000, { retries: 3 }),
+			).rejects.toThrow("fetch failed");
+			expect(failedMock).toHaveBeenCalledTimes(1);
+		} finally {
+			vi.unstubAllGlobals();
 		}
 	});
 
