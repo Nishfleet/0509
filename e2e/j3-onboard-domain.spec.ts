@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-import { deleteCreatedAccount, requireInboxToken, signInWithMagicLink } from "./inbox";
+import { deleteCreatedAccount, isLocalLane, requireInboxToken, signInWithMagicLink } from "./inbox";
 
 let createdEmail = "";
 test.afterEach(async ({ page }, testInfo) => {
@@ -19,12 +19,8 @@ test.afterEach(async ({ page }, testInfo) => {
 // J3 from docs/REBUILD-DONE.md §A: one input becomes a confirmed brand card
 // in under 30 s, a competitor list in under 60 s, and Home's first-file
 // panel names a real arrival time. Timings come from the test's own clock.
-// Production only: the preview lane's wrangler dev has no EMAIL binding and
-// no inbox to read, so the whole spec skips there rather than fake the journey.
-test.skip(
-  !process.env.PLAYWRIGHT_TEST_BASE_URL,
-  "J3 needs a signed-in session; the preview lane cannot read the magic-link inbox",
-);
+// Two lanes: production mails through the inbox Worker; the preview lane's
+// wrangler dev simulates send_email and inbox.ts reads the link from its sink.
 
 for (const { width, height } of [
   { width: 1440, height: 900 },
@@ -34,7 +30,7 @@ for (const { width, height } of [
     // The journey's own budget reaches 60 s from the input, after the
     // magic-link sign-in, so the test timeout has to clear that ceiling.
     test.setTimeout(150_000);
-    const token = requireInboxToken();
+    const token = isLocalLane() ? null : requireInboxToken();
     const email = `e2e+${crypto.randomUUID().replaceAll("-", "").slice(0, 12)}@0509.io`;
     createdEmail = email;
 

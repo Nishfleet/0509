@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-import { consoleFailures, deleteCreatedAccount, requireInboxToken, signInWithMagicLink, watchConsole } from "./inbox";
+import { consoleFailures, deleteCreatedAccount, isLocalLane, requireInboxToken, signInWithMagicLink, watchConsole } from "./inbox";
 
 let createdEmail = "";
 test.afterEach(async ({ page }, testInfo) => {
@@ -19,18 +19,13 @@ test.afterEach(async ({ page }, testInfo) => {
 const SUBJECT = "https://www.youtube.com/@veritasium";
 
 test.describe("J4 onboard a creator handle", () => {
-  test.skip(
-    !process.env.PLAYWRIGHT_TEST_BASE_URL,
-    "the card needs a signed-in session; the preview lane cannot read the magic-link inbox",
-  );
-
   for (const { width, height } of [
     { width: 1440, height: 900 },
     { width: 390, height: 844 },
   ]) {
     test(`J4 a creator handle onboards at ${width} @own-signin`, async ({ page }, testInfo) => {
       test.setTimeout(240_000);
-      const token = requireInboxToken();
+      const token = isLocalLane() ? null : requireInboxToken();
       const email = `e2e+${crypto.randomUUID().replaceAll("-", "").slice(0, 12)}@0509.io`;
       createdEmail = email;
 
