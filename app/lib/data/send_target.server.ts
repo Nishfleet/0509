@@ -30,6 +30,8 @@ WHERE workspace_id = ?
   AND channel_id = (SELECT id FROM channel WHERE key = 'email')
   AND target_value <> ?`;
 
+const CONFIRM_EMAIL_TARGET_BY_TOKEN = `UPDATE send_target SET is_verified = 1, verify_token = NULL WHERE verify_token = ?`;
+
 const INSERT_OWNER_EMAIL_TARGET = `INSERT INTO send_target (id, workspace_id, channel_id, target_value, is_verified, created_at)
 SELECT 'st-email-' || w.id, w.id, c.id, u.email, u.emailVerified, ?
   FROM workspace w
@@ -96,4 +98,8 @@ export async function changeEmailTarget(
     .prepare(CHANGE_EMAIL_TARGET)
     .bind(input.address, input.workspaceId, input.address)
     .run();
+}
+
+export async function confirmEmailTargetByToken(db: TargetDb, token: string): Promise<void> {
+  await db.prepare(CONFIRM_EMAIL_TARGET_BY_TOKEN).bind(token).run();
 }

@@ -28,7 +28,6 @@ import { saveBriefSchedule } from "../lib/standing/reschedule.server";
 
 const MISMATCH = "That doesn't match your email. Type it exactly to delete your account.";
 const SIGN_IN_AGAIN = "For your safety, sign out and sign back in, then delete your account.";
-
 export function meta() {
   return [{ title: "Settings · Five to Nine" }];
 }
@@ -66,7 +65,8 @@ export async function action({ request, context }: Route.ActionArgs) {
     const address = form.get("address");
     const saved = await saveDeliveryAddress({
       userId: session.user.id,
-      signInEmail: session.user.email, email: env.EMAIL,
+      signInEmail: session.user.email,
+      email: env.EMAIL,
       address: typeof address === "string" ? address : "",
       resume: form.get("resume") === "yes",
     });

@@ -2,6 +2,7 @@ import { env } from "cloudflare:test";
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { readDeliveryAddress, saveDeliveryAddress } from "../../app/lib/delivery-address.server";
+import { confirmDeliveryAddress } from "../../app/lib/verify-delivery-address.server";
 import { ensureWorkspaceForSignIn, firstWorkspaceId } from "../../app/lib/workspace.server";
 
 const USER_ID = "user-dav";
@@ -166,5 +167,38 @@ describe("confirm a changed delivery address (0509#5811)", () => {
       verified: false,
     });
     expect((await onlyTarget(workspaceId)).verify_token).toMatch(/^[0-9a-f]{64}$/);
+  });
+
+  it("confirmDeliveryAddress verifies the row; a second confirm with the same token is a no-op", async () => {
+    const workspaceId = firstWorkspaceId(USER_ID);
+    await save(recorder(), NEW_ADDRESS);
+    const token = (await onlyTarget(workspaceId)).verify_token;
+    if (token === null) throw new Error("expected a verify token");
+
+    await confirmDeliveryAddress(token);
+    expect(await onlyTarget(workspaceId)).toMatchObject({
+      target_value: NEW_ADDRESS,
+      is_verified: 1,
+      verify_token: null,
+    });
+
+    await confirmDeliveryAddress(token);
+    expect(await onlyTarget(workspaceId)).toMatchObject({
+      target_value: NEW_ADDRESS,
+      is_verified: 1,
+      verify_token: null,
+    });
+  });
+
+  it("confirmDeliveryAddress writes nothing for an unknown, empty, or missing token", async () => {
+    const workspaceId = firstWorkspaceId(USER_ID);
+    await save(recorder(), NEW_ADDRESS);
+    const before = await onlyTarget(workspaceId);
+
+    await confirmDeliveryAddress("f".repeat(64));
+    await confirmDeliveryAddress("");
+    await confirmDeliveryAddress(undefined);
+
+    expect(await onlyTarget(workspaceId)).toEqual(before);
   });
 });
