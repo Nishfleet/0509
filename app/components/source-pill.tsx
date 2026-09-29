@@ -1,5 +1,6 @@
 import type { CSSProperties, ReactElement } from "react";
 
+import { readWatchConfig } from "../lib/mentions/youtube-channel";
 import { shortUtc } from "../lib/short-utc";
 
 export interface SourceRow {
@@ -10,6 +11,7 @@ export interface SourceRow {
   degraded_reason?: string | null;
   last_good_at?: string | null;
   config_json?: string | null;
+  watch_config_json?: string | null;
 }
 
 export interface SourceSnapshot {
@@ -28,7 +30,7 @@ export interface SourcePillStatus {
 
 const MONO = 'var(--mono, var(--font-mono, "IBM Plex Mono", ui-monospace, monospace))';
 const INK_SOFT = "var(--ink-soft, var(--color-ink-soft))";
-const LINE = "var(--line, var(--color-line))";
+const LINE_FALLBACK = "var(--line, var(--color-line))";
 const ACCENT = "var(--green, var(--color-green))";
 const ACCENT_INK = "var(--green-ink, var(--color-green-ink))";
 const ACCENT_WASH = "var(--green-wash, var(--color-green-wash))";
@@ -55,6 +57,13 @@ export function sourcePillStatus(
       configReason ??
       (snapshot?.canary_count === 0 ? "not answering" : "no reason recorded");
     return { state: "degraded", reason, lastGoodAt };
+  }
+  const watchConfig = readWatchConfig(source.watch_config_json);
+  if (watchConfig.status === "unreadable") {
+    return { state: "degraded", reason: "watch config is unreadable", lastGoodAt: null };
+  }
+  if (watchConfig.degraded !== null) {
+    return { state: "degraded", reason: watchConfig.degraded.reason, lastGoodAt: watchConfig.degraded.at };
   }
   const fetchedAt = snapshot === null ? null : blankToNull(snapshot.fetched_at);
   const fetchedMs = fetchedAt === null ? Number.NaN : Date.parse(fetchedAt);
@@ -91,7 +100,7 @@ export function SourcePill({
     margin: 0,
     padding: "0.14em 0.55em",
     border: "1px solid",
-    borderColor: live ? ACCENT : LINE,
+    borderColor: live ? ACCENT : LINE_FALLBACK,
     backgroundColor: live ? ACCENT_WASH : "transparent",
     color: live ? ACCENT_INK : INK_SOFT,
     fontFamily: MONO,
@@ -131,7 +140,8 @@ function sourceConfig(raw: string | null | undefined): Record<string, unknown> {
   let parsed: unknown;
   try {
     parsed = JSON.parse(text);
-  } catch {
+  } catch (error) {
+    console.error(JSON.stringify({ event: "source_pill.json_parse_failed", error: String(error) }));
     return {};
   }
   if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) return {};

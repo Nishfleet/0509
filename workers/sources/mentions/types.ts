@@ -12,9 +12,12 @@ export const mentionsResultSchema = z.object({
 	items: z.array(mentionItemSchema),
 	canaryCount: z.number().int().nonnegative(),
 	rawBody: z.string(),
+	feedState: z.enum(["ok", "stale", "error"]).optional(),
 });
 
 export type MentionsResult = z.infer<typeof mentionsResultSchema>;
+
+export type MentionItem = z.infer<typeof mentionItemSchema>;
 
 export interface MentionsTarget {
 	readonly query: string;
@@ -27,6 +30,40 @@ export type MentionsAdapter = (
 	cursor: MentionsCursor,
 ) => Promise<MentionsResult>;
 
-export function fetchUpstream(url: string): Promise<Response> {
-	return fetch(url, { signal: AbortSignal.timeout(8000) });
+export const BLOCKING_STATUSES: ReadonlySet<number> = new Set([202, 403, 429]);
+
+export const SOURCE_SETTINGS = {
+	"gdelt.doc": { timeoutMs: 24_000, timeoutRetries: 1, retryBackoffMs: 1_000 },
+} as const;
+
+export class UpstreamBlockedError extends Error {
+	constructor(readonly status: number) {
+		super(`upstream blocked: HTTP ${String(status)}`);
+		this.name = "UpstreamBlockedError";
+	}
+}
+
+export function isUpstreamTimeout(error: unknown): boolean {
+	return (
+		typeof error === "object" &&
+		error !== null &&
+		(error as { name: unknown }).name === "TimeoutError"
+	);
+}
+
+export async function fetchUpstream(
+	url: string,
+	timeoutMs = 8000,
+	{ retries = 0, backoffMs = 0 }: { retries?: number; backoffMs?: number } = {},
+): Promise<Response> {
+	for (let attempt = 0; ; attempt += 1) {
+		try {
+			const response = await fetch(url, { signal: AbortSignal.timeout(timeoutMs) });
+			if (BLOCKING_STATUSES.has(response.status)) throw new UpstreamBlockedError(response.status);
+			return response;
+		} catch (error) {
+			if (!isUpstreamTimeout(error) || attempt >= retries) throw error;
+			await new Promise((resolve) => setTimeout(resolve, backoffMs));
+		}
+	}
 }

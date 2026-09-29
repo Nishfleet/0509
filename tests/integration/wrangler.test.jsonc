@@ -2,13 +2,24 @@
   "name": "0509-test",
   "compatibility_date": "2026-09-16",
   "compatibility_flags": ["global_fetch_strictly_public"],
-  "vars": { "SITE_SWEEP_PING_URL": "https://hc-ping.example/site-sweep", "BETTER_AUTH_URL": "https://0509.io" },
+  "vars": { "SITE_SWEEP_PING_URL": "https://hc-ping.example/site-sweep", "BETTER_AUTH_URL": "https://0509.io", "BETTER_AUTH_SECRET": "integration-test-secret", "TURNSTILE_SITE_KEY": "1x00000000000000000000BB", "TURNSTILE_SECRET_KEY": "1x0000000000000000000000000000000AA", "DODO_ENVIRONMENT": "test_mode", "DODO_PAYMENTS_API_KEY": "test-key-not-a-dodo-key", "DODO_WEBHOOK_SECRET": "whsec_dGVzdC13ZWJob29rLXNlY3JldC1ub3QtcmVhbA==", "DODO_PRODUCT_SCOUT": "pdt_test_scout", "DODO_PRODUCT_STARTER": "pdt_test_starter", "DODO_PRODUCT_AGENCY": "pdt_test_agency" },
   "main": "../../workers/app.ts",
+  "durable_objects": {
+    "bindings": [{ "name": "BROWSER_BUDGET", "class_name": "BrowserBudget" }]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["BrowserBudget"] }],
   "d1_databases": [{ "binding": "DB", "database_name": "0509-test", "database_id": "test" }],
+  "analytics_engine_datasets": [{ "binding": "MENTIONS_SOURCES", "dataset": "mentions_sources-test" }],
   "r2_buckets": [
-    { "binding": "SNAPSHOTS", "bucket_name": "0509-snapshots-test" }
+    { "binding": "SNAPSHOTS", "bucket_name": "0509-snapshots-test" },
+    { "binding": "SNAPSHOTS_BACKUP", "bucket_name": "0509-snapshots-backup-test" }
   ],
-  "queues": { "producers": [{ "queue": "send-email", "binding": "SEND_EMAIL" }] },
+  "queues": {
+    "producers": [
+      { "queue": "send-email", "binding": "SEND_EMAIL" },
+      { "queue": "fetch-sweep", "binding": "FETCH_SWEEP" }
+    ]
+  },
   "workflows": [
     {
       "name": "standing-rollover-test",
@@ -26,6 +37,11 @@
       "class_name": "SiteSweepWorkflow"
     },
     {
+      "name": "snapshot-backup-test",
+      "binding": "SNAPSHOT_BACKUP",
+      "class_name": "SnapshotBackupWorkflow"
+    },
+    {
       "name": "account-delete-test",
       "binding": "ACCOUNT_DELETE",
       "class_name": "AccountDeleteWorkflow"
@@ -34,6 +50,16 @@
       "name": "own-site-check-test",
       "binding": "OWN_SITE_CHECK",
       "class_name": "OwnSiteCheckWorkflow"
+    },
+    {
+      "name": "mentions-sweep-test",
+      "binding": "MENTIONS",
+      "class_name": "MentionsWorkflow"
+    },
+    {
+      "name": "identity-tail-test",
+      "binding": "IDENTITY_TAIL",
+      "class_name": "IdentityTailWorkflow"
     }
   ],
   "kv_namespaces": [

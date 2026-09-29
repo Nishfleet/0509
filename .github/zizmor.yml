@@ -1,0 +1,18 @@
+# zizmor policy for this repo's workflows, run by codex-node-checks.
+# https://docs.zizmor.sh/configuration/
+rules:
+  unpinned-uses:
+    config:
+      policies:
+        # The fleet stubs call fleet-ops reusable workflows at @main on purpose:
+        # runner group 3 allows only agent.yml@refs/heads/main, and a SHA pin
+        # strands every job (0509#5231, fleet-ops#8617).
+        Nishfleet/fleet-ops/*: ref-pin
+        "*": hash-pin
+  dangerous-triggers:
+    ignore:
+      # The stub only forwards the event to fleet-ops agent-dispatch.yml and
+      # checks out no pull request code. pull_request_target carries the
+      # dequeued/auto_merge_disabled signals and workflow_run carries CI
+      # results (fleet-ops#8608).
+      - agent-dispatch.yml

@@ -1,22 +1,37 @@
 import type { OAuthHelpers } from "@cloudflare/workers-oauth-provider";
-import type { CloudflareOptions } from "@sentry/cloudflare";
-import { instrumentWorkflowWithSentry, withSentry } from "@sentry/cloudflare";
+import {
+  captureException,
+  instrumentWorkflowWithSentry,
+  setTag,
+  withMonitor,
+  withSentry,
+} from "@sentry/cloudflare";
 import { createRequestHandler } from "react-router";
 
 import { requestContext } from "../app/lib/agent/context.server";
 import { createOAuthProvider } from "../app/lib/agent/oauth.server";
 import { deleteExpiredAuthRows } from "../app/lib/data/auth_expiry.server";
-import { startNightlyDiscovery } from "../app/lib/discovery/start.server";
+import { stampFirstSignals } from "../app/lib/data/onboarding_run.server";
+import {
+  startNightlyDiscovery,
+  startWeeklyRefresh,
+  WEEKLY_REFRESH_CRON,
+} from "../app/lib/discovery/start.server";
 import { assertWorkerEnv, WorkerEnvError, workerEnvFailureResponse } from "../app/lib/env.server";
 import { pingLiveness } from "../app/lib/liveness-ping.server";
+import { cronMonitor } from "./cron-monitors";
 import { handleBatch } from "./delivery/consumer";
 import { handleDlqBatch } from "./delivery/dlq-consumer";
 import { NIGHTLY_CRON, sweepPending } from "./delivery/sweeper";
+import { sentryOptions } from "./sentry";
 import { runNightlyStanding } from "./standing/nightly";
+import { IdentityTail } from "./identity-tail-workflow";
 import { AccountDelete } from "./workflows/account-delete";
 import { Discovery } from "./workflows/discovery";
 import { OwnSiteCheck } from "./workflows/own-site-check";
 import { SiteSweep } from "./workflows/site-sweep";
+import { SnapshotBackup } from "./workflows/snapshot-backup";
+import { MentionsSweep } from "./workflows/mentions";
 import { StandingRollover } from "./workflows/standing-rollover";
 
 type WorkerEnv = Env & { SENTRY_DSN?: string; LIVENESS_PING_URL?: string };
@@ -47,20 +62,45 @@ const handler = {
     return oauth.fetch(request, env, ctx);
   },
 
-  scheduled(controller, env, ctx) {
-    if (controller.cron === NIGHTLY_CRON) {
-      const now = new Date(controller.scheduledTime);
-      ctx.waitUntil(runNightlyStanding(env, now));
-      ctx.waitUntil(sweepPending(env, now));
-      ctx.waitUntil(startNightlyDiscovery(now));
-      ctx.waitUntil(deleteExpiredAuthRows(env.DB, now));
+  async scheduled(controller, env, ctx) {
+    setTag("cron", controller.cron);
+    const run = async () => {
+      if (controller.cron === NIGHTLY_CRON) {
+        const now = new Date(controller.scheduledTime);
+        const results = await Promise.allSettled([
+          runNightlyStanding(env, now),
+          sweepPending(env, now),
+          startNightlyDiscovery(now),
+          deleteExpiredAuthRows(env.DB, now),
+          stampFirstSignals(),
+        ]);
+        results.forEach((result) => {
+          if (result.status === "rejected") captureException(result.reason);
+        });
+        return;
+      }
+      if (controller.cron === WEEKLY_REFRESH_CRON) {
+        await startWeeklyRefresh(new Date(controller.scheduledTime));
+        return;
+      }
+      const ping = pingLiveness(env.LIVENESS_PING_URL);
+      if (ping) ctx.waitUntil(ping);
+    };
+    const monitor = cronMonitor(controller.cron);
+    if (!monitor) {
+      await run();
       return;
     }
-    const ping = pingLiveness(env.LIVENESS_PING_URL);
-    if (ping) ctx.waitUntil(ping);
+    await withMonitor(monitor.slug, run, {
+      schedule: { type: "crontab", value: monitor.schedule },
+      checkinMargin: monitor.checkinMargin,
+      maxRuntime: monitor.maxRuntime,
+      timezone: "UTC",
+    });
   },
 
   async queue(batch: MessageBatch, env: Env) {
+    setTag("queue", batch.queue);
     if (batch.queue === "send-email-dlq") {
       await handleDlqBatch(env, batch);
       return;
@@ -69,18 +109,7 @@ const handler = {
   },
 } satisfies ExportedHandler<WorkerEnv>;
 
-const sentryOptions = (env: WorkerEnv): CloudflareOptions => ({
-  dsn: env.SENTRY_DSN,
-  sendDefaultPii: false,
-  beforeBreadcrumb: () => null,
-  beforeSend: (event) => ({
-    ...event,
-    request: event.request && {
-      method: event.request.method,
-      url: event.request.url?.split("?")[0],
-    },
-  }),
-});
+export { BrowserBudget } from "./budget-counter";
 
 export class StandingRolloverWorkflow extends instrumentWorkflowWithSentry(sentryOptions, StandingRollover) {}
 
@@ -88,8 +117,14 @@ export class AccountDeleteWorkflow extends instrumentWorkflowWithSentry(sentryOp
 
 export class DiscoveryWorkflow extends instrumentWorkflowWithSentry(sentryOptions, Discovery) {}
 
+export class IdentityTailWorkflow extends instrumentWorkflowWithSentry(sentryOptions, IdentityTail) {}
+
 export class SiteSweepWorkflow extends instrumentWorkflowWithSentry(sentryOptions, SiteSweep) {}
 
+export class SnapshotBackupWorkflow extends instrumentWorkflowWithSentry(sentryOptions, SnapshotBackup) {}
+
 export class OwnSiteCheckWorkflow extends instrumentWorkflowWithSentry(sentryOptions, OwnSiteCheck) {}
+
+export class MentionsWorkflow extends instrumentWorkflowWithSentry(sentryOptions, MentionsSweep) {}
 
 export default withSentry(sentryOptions, handler);

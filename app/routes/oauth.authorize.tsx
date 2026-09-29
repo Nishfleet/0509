@@ -42,8 +42,8 @@ export default function Page({ loaderData, actionData }: Route.ComponentProps) {
     return (
       <main className="mx-auto max-w-lg px-4 py-16">
         <h1 className="font-display text-2xl font-semibold tracking-[-0.02em]">This connection link doesn't work</h1>
-        <p className="text-ink-soft mt-4 leading-[1.65]">{view.message}</p>
-        <p className="text-ink-soft mt-4 leading-[1.65]">Go back to the app you came from and try connecting again.</p>
+        <p className="mt-4 leading-[1.65] text-ink-soft">{view.message}</p>
+        <p className="mt-4 leading-[1.65] text-ink-soft">Go back to the app you came from and try connecting again.</p>
       </main>
     );
   }
@@ -62,7 +62,7 @@ export default function Page({ loaderData, actionData }: Route.ComponentProps) {
       <p className="mt-4 leading-[1.65]">
         It can't change anything, and it only sees your own workspace. You can disconnect it any time in Settings.
       </p>
-      <p className="text-ink-soft mt-4 leading-[1.65]">
+      <p className="mt-4 leading-[1.65] text-ink-soft">
         After you answer, you go back to <strong className="font-mono text-[0.9rem]">{view.returnsTo}</strong>. If you
         don't recognise that, cancel.
       </p>

@@ -2,19 +2,20 @@ import { describe, expect, it, vi } from "vitest";
 
 vi.mock("cloudflare:workers", () => ({ env: {} }));
 
+import { env } from "cloudflare:workers";
 import type { BriefPayload } from "../../app/lib/brief-payload";
 import type { BriefSchedule } from "../../app/lib/brief-schedule";
 import type { HomeEntity } from "../../app/lib/home-standing";
 import { shareCard } from "../../app/lib/share-card";
-import { shareDocument } from "../../app/lib/share-image.server";
+import { renderShareImage, shareDocument } from "../../app/lib/share-image.server";
 
 const SCHEDULE: BriefSchedule = { timezone: "Europe/London", weekday: 1, hour: 8 };
 const NOW = new Date("2026-09-24T06:30:00.000Z");
 
 const ENTITIES: readonly HomeEntity[] = [
-  { id: "ent_self", role: "self", domain: "own.example", state: "on" },
-  { id: "ent_kindred", role: "competitor", domain: "kindred.example", state: "on" },
-  { id: "ent_casetta", role: "competitor", domain: "casetta.example", state: "on" },
+  { id: "ent_self", role: "self", domain: "own.example", name: "Own Brand", state: "on" },
+  { id: "ent_kindred", role: "competitor", domain: "kindred.example", name: "Kindred", state: "on" },
+  { id: "ent_casetta", role: "competitor", domain: "casetta.example", name: "Casetta", state: "on" },
 ];
 
 function brand(entityId: string, name: string, rank: number | null) {
@@ -44,6 +45,7 @@ function payload(overrides: Partial<BriefPayload> = {}): BriefPayload {
     headline_is_new: false,
     why_line: "Kindred is the mover: 3 new ads and the loudest mention spike",
     is_quiet_week: false,
+    is_unjudged: false,
     read_this_first: [],
     brands: [brand("ent_casetta", "Casetta", 3), brand("ent_self", "Own Brand", 2), brand("ent_kindred", "Kindred", 1)],
     own_site: { status: "ok", incidents: [] },
@@ -61,7 +63,7 @@ function payload(overrides: Partial<BriefPayload> = {}): BriefPayload {
 }
 
 function card(overrides: Partial<BriefPayload> = {}) {
-  return shareCard({ payload: payload(overrides), entities: ENTITIES, schedule: SCHEDULE, now: NOW });
+  return shareCard({ payload: payload(overrides), entities: ENTITIES, schedule: SCHEDULE, history: [], now: NOW });
 }
 
 describe("share card", () => {
@@ -70,9 +72,11 @@ describe("share card", () => {
   });
 
   it("has nothing to share until there is a ranking", () => {
-    expect(shareCard({ payload: null, entities: ENTITIES, schedule: SCHEDULE, now: NOW })).toBeNull();
+    expect(shareCard({ payload: null, entities: ENTITIES, schedule: SCHEDULE, history: [], now: NOW })).toBeNull();
     expect(card({ headline_rank: null })).toBeNull();
-    expect(shareCard({ payload: payload(), entities: ENTITIES.slice(0, 1), schedule: SCHEDULE, now: NOW })).toBeNull();
+    expect(
+      shareCard({ payload: payload(), entities: ENTITIES.slice(0, 1), schedule: SCHEDULE, history: [], now: NOW }),
+    ).toBeNull();
   });
 });
 
@@ -101,5 +105,42 @@ describe("share document", () => {
     const html = shareDocument({ ...ready, brand: "<script>x</script>" }, "https://0509.io", "/a.css");
     expect(html).not.toContain("<script>x</script>");
     expect(html).toContain("&lt;script&gt;");
+  });
+});
+
+describe("share image render", () => {
+  it("returns null without a budget callback and logs the miss (0509#5818)", async () => {
+    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    try {
+      const bytes = await renderShareImage("<p>hi</p>");
+      expect(bytes).toBeNull();
+      expect(log).toHaveBeenCalledWith(JSON.stringify({ event: "share-image-miss", cause: "no browser budget granted" }));
+    } finally {
+      log.mockRestore();
+    }
+  });
+
+  it("returns null when the budget refuses and logs the miss (0509#5818)", async () => {
+    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    try {
+      const bytes = await renderShareImage("<p>hi</p>", async () => false);
+      expect(bytes).toBeNull();
+      expect(log).toHaveBeenCalledWith(JSON.stringify({ event: "share-image-miss", cause: "browser budget exhausted" }));
+    } finally {
+      log.mockRestore();
+    }
+  });
+
+  it("renders the bytes when the budget allows (0509#5818)", async () => {
+    const quickAction = vi.fn(async () => new Response("png", { status: 200 }));
+    env.BROWSER = { quickAction };
+    try {
+      const bytes = await renderShareImage("<p>hi</p>", async () => true);
+      expect(bytes).not.toBeNull();
+      expect(new TextDecoder().decode(bytes as ArrayBuffer)).toBe("png");
+      expect(quickAction).toHaveBeenCalledWith("screenshot", expect.objectContaining({ html: "<p>hi</p>" }));
+    } finally {
+      delete env.BROWSER;
+    }
   });
 });

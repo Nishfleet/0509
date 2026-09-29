@@ -1,4 +1,6 @@
 import type { z } from "zod";
+
+import { sha256Hex } from "../../app/lib/sha256";
 import type { mentionItemSchema } from "../sources/mentions/types";
 
 export type MentionItem = z.infer<typeof mentionItemSchema> & {
@@ -35,12 +37,8 @@ export interface SignalRow {
 	payload_json: string;
 }
 
-async function sha256Hex(input: string): Promise<string> {
-	const bytes = new TextEncoder().encode(input);
-	const digest = await crypto.subtle.digest("SHA-256", bytes);
-	return Array.from(new Uint8Array(digest))
-		.map((byte) => byte.toString(16).padStart(2, "0"))
-		.join("");
+export function storedDedupKey(entityId: string, adapterDedupKey: string): string {
+	return `${entityId}:${adapterDedupKey}`;
 }
 
 export async function toSignalRow(

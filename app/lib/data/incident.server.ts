@@ -10,9 +10,15 @@ export interface NewIncident {
   openedAt: string;
 }
 
-const INSERT_INCIDENT = `INSERT INTO incident (id, workspace_id, entity_id, page_id, kind, opened_at)
+const INSERT_OPEN_INCIDENT_ON_CONFLICT = `INSERT INTO incident (id, workspace_id, entity_id, page_id, kind, opened_at)
 VALUES (?1, ?2, ?3, ?4, ?5, ?6)
-ON CONFLICT DO NOTHING`;
+ON CONFLICT (page_id) WHERE closed_at IS NULL DO NOTHING`;
+
+export function openIncidentStatement(row: NewIncident): D1PreparedStatement {
+  return env.DB
+    .prepare(INSERT_OPEN_INCIDENT_ON_CONFLICT)
+    .bind(row.id, row.workspaceId, row.entityId, row.pageId, row.kind, row.openedAt);
+}
 
 const OPEN_INCIDENT_FOR_PAGE = `SELECT id FROM incident WHERE page_id = ?1 AND closed_at IS NULL`;
 
@@ -23,12 +29,24 @@ const CLOSE_INCIDENT = `UPDATE incident SET closed_at = ?2 WHERE id = ?1 AND clo
 const CLOSE_UNWATCHED = `UPDATE incident SET closed_at = ?2
 WHERE closed_at IS NULL AND page_id NOT IN (SELECT value FROM json_each(?1))`;
 
+const OPEN_BREAKAGE_BASELINES = `SELECT i.page_id AS page_id,
+  (SELECT json_extract(s.payload_json, '$.before.textKey')
+   FROM alert a
+   JOIN signal s ON s.id = a.signal_id
+   WHERE a.incident_id = i.id
+   ORDER BY a.created_at ASC
+   LIMIT 1) AS before_key
+FROM incident i
+WHERE i.closed_at IS NULL AND i.kind = 'breakage'`;
+
 const openRows = z.array(z.object({ id: z.string(), page_id: z.string() }));
 
+const breakageRows = z.array(
+  z.object({ page_id: z.string(), before_key: z.string().nullable() }),
+);
+
 export async function openIncident(row: NewIncident): Promise<string | null> {
-  await env.DB.prepare(INSERT_INCIDENT)
-    .bind(row.id, row.workspaceId, row.entityId, row.pageId, row.kind, row.openedAt)
-    .run();
+  await openIncidentStatement(row).run();
   const open = await env.DB.prepare(OPEN_INCIDENT_FOR_PAGE).bind(row.pageId).first<{ id: string }>();
   return open?.id ?? null;
 }
@@ -36,6 +54,13 @@ export async function openIncident(row: NewIncident): Promise<string | null> {
 export async function readOpenIncidents(): Promise<Record<string, string>> {
   const rows = await env.DB.prepare(OPEN_INCIDENTS).all();
   return Object.fromEntries(openRows.parse(rows.results).map((row) => [row.page_id, row.id]));
+}
+
+export async function readOpenBreakageBaselines(): Promise<Record<string, string | null>> {
+  const rows = await env.DB.prepare(OPEN_BREAKAGE_BASELINES).all();
+  return Object.fromEntries(
+    breakageRows.parse(rows.results).map((row) => [row.page_id, row.before_key]),
+  );
 }
 
 export async function closeIncident(id: string, closedAt: string): Promise<void> {

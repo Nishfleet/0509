@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   BOARD_PLATFORMS,
   discoverBoard,
+  listingForBoard,
   type BoardPlatform,
   type Probe,
   type ProbeResponse,
@@ -175,7 +176,7 @@ describe("discoverBoard", () => {
 
   it("reads a smartrecruiters company slug and requires the content field", async () => {
     const { probe } = recordingProbe({
-      "https://api.smartrecruiters.com/v1/companies/Visa/postings": jsonResponse(
+      "https://api.smartrecruiters.com/v1/companies/Visa/postings?limit=100&offset=0": jsonResponse(
         JSON.stringify({ offset: 0, limit: 100, totalFound: 0, content: [] }),
       ),
     });
@@ -469,5 +470,61 @@ describe("discoverBoard", () => {
     );
 
     expect(board.platform).toBe("lever");
+  });
+});
+
+describe("listingForBoard", () => {
+  it("resolves a greenhouse board URL to its platform, slug and listing URL", () => {
+    expect(listingForBoard("https://job-boards.greenhouse.io/gitlab")).toEqual({
+      platform: "greenhouse",
+      slug: "gitlab",
+      listingUrl: "https://boards-api.greenhouse.io/v1/boards/gitlab/jobs",
+    });
+  });
+
+  it("resolves a lever board URL to its platform, slug and listing URL", () => {
+    expect(listingForBoard("https://jobs.lever.co/palantir")).toEqual({
+      platform: "lever",
+      slug: "palantir",
+      listingUrl: "https://api.lever.co/v0/postings/palantir?mode=json",
+    });
+  });
+
+  it("resolves an EU lever board URL to the EU listing host", () => {
+    expect(listingForBoard("https://jobs.eu.lever.co/palantir")).toEqual({
+      platform: "lever",
+      slug: "palantir",
+      listingUrl: "https://api.eu.lever.co/v0/postings/palantir?mode=json",
+    });
+  });
+
+  it("resolves an ashby board URL to its platform, slug and listing URL", () => {
+    expect(listingForBoard("https://jobs.ashbyhq.com/linear")).toEqual({
+      platform: "ashby",
+      slug: "linear",
+      listingUrl: "https://api.ashbyhq.com/posting-api/job-board/linear",
+    });
+  });
+
+  it("resolves a workable board URL to its platform, slug and listing URL", () => {
+    expect(listingForBoard("https://apply.workable.com/huggingface")).toEqual({
+      platform: "workable",
+      slug: "huggingface",
+      listingUrl: "https://apply.workable.com/api/v1/widget/accounts/huggingface",
+    });
+  });
+
+  it("resolves a smartrecruiters board URL to the paginated listing URL", () => {
+    expect(listingForBoard("https://jobs.smartrecruiters.com/Visa")).toEqual({
+      platform: "smartrecruiters",
+      slug: "Visa",
+      listingUrl: "https://api.smartrecruiters.com/v1/companies/Visa/postings?limit=100&offset=0",
+    });
+  });
+
+  it("returns null for an undocumented host, a non-https URL and an unparseable string", () => {
+    expect(listingForBoard("https://example.com/careers")).toEqual(null);
+    expect(listingForBoard("http://jobs.lever.co/x")).toEqual(null);
+    expect(listingForBoard("not a url")).toEqual(null);
   });
 });

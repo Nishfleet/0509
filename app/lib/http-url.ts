@@ -4,7 +4,8 @@ export function httpUrl(value: string): string | null {
   let href: string | null;
   try {
     href = new URL(trimmed).href;
-  } catch {
+  } catch (error) {
+    console.error(JSON.stringify({ event: "http_url.parse_failed", error: String(error) }));
     href = null;
   }
   if (href === null) return null;

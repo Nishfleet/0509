@@ -22,4 +22,23 @@ describe("DeleteAccount", () => {
     expect(button).toContain("text-ink");
     expect(button).not.toContain("text-red");
   });
+
+  it("lists exactly what deletion removes, in order", () => {
+    const html = render();
+    const list = html.slice(
+      html.indexOf('data-delete="removes"'),
+      html.indexOf("</ul>", html.indexOf('data-delete="removes"')),
+    );
+    const items = [...list.matchAll(/<li>(.*?)<\/li>/g)].map((match) => match[1]);
+    expect(items).toEqual([
+      "Every brand you track, yours included",
+      "Every signal: site changes, ads, mentions and roles",
+      "Every site snapshot",
+      "Every screenshot",
+      "Your published standing card",
+      "Your send history and every brief",
+      "Your account, its API keys and connected AI apps",
+    ]);
+    expect(html).toContain("The emails stop. This can&#x27;t be undone.");
+  });
 });

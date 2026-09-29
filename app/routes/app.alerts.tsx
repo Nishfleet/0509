@@ -1,80 +1,83 @@
 import type { Route } from "./+types/app.alerts";
+
 import { env } from "cloudflare:workers";
+import { Link } from "react-router";
 
-import { readDeliveryFailures, readOwnSiteIncidents, readTakedownNotes } from "../lib/data/alert.server";
-import { readCompetitors } from "../lib/data/entity.server";
-import { readWorkspaceIdForOwner, readWorkspaceTimezone } from "../lib/data/workspace.server";
-import { daysAgoLabel } from "../lib/delivery-alert";
-import { offBrandsSentence } from "../lib/off-brands";
-import { requireSession } from "../lib/require-session.server";
-import { daysBefore, readSiteChangeViews } from "../lib/site-changes.server";
-import { groupByDay } from "../lib/alert-day";
-import { AlertFeedRow, type AlertFeedItem, type DeliveryFailureItem, type TakedownNoteItem } from "../components/alert-row";
+import { AlertChips } from "../components/alert-chips";
+import { AlertFeed } from "../components/alert-feed";
+import { IncidentSlot } from "../components/incident-block";
 import { PAGE, PageHeading } from "../components/page-heading";
+import { SourcePill } from "../components/source-pill";
+import { acknowledgeOwnSiteIncident, loadAlertsPage } from "../lib/alerts-page.server";
+import { parseAlertChip } from "../lib/alert-chips";
+import { briefSendLine } from "../lib/brief-state";
+import { listBriefs } from "../lib/data/digest.server";
+import { readWorkspaceIdForOwner } from "../lib/data/workspace.server";
+import { requireSession } from "../lib/require-session.server";
 
-const WHEN_CLASS = "text-ink-soft mt-2 block font-mono text-[0.75rem] tracking-[0.04em] uppercase";
+export function meta() {
+  return [{ title: "Alerts · Five to Nine" }];
+}
+
+const WHEN_CLASS = "mt-2 block font-mono text-meta text-ink-soft uppercase";
 
 export async function loader({ request }: Route.LoaderArgs) {
   const session = await requireSession(request);
+  const page = await loadAlertsPage(session.user.id, parseAlertChip(new URL(request.url).searchParams.get("kind")));
   const workspaceId = await readWorkspaceIdForOwner(session.user.id);
-  const competitors = workspaceId === null ? [] : (await readCompetitors(workspaceId)).competitors;
-  const failures = workspaceId === null ? [] : await readDeliveryFailures(env.DB, workspaceId);
-  const notes = workspaceId === null ? [] : await readTakedownNotes(env.DB, workspaceId);
-  const incidents = workspaceId === null ? [] : await readOwnSiteIncidents(env.DB, workspaceId);
-  const now = new Date();
-  const changes =
-    workspaceId === null
-      ? []
-      : await readSiteChangeViews({ workspaceId, entityId: null, since: daysBefore(now, 30), limit: 30 });
-  const timeZone = workspaceId === null ? "UTC" : await readWorkspaceTimezone(workspaceId);
-  const items: AlertFeedItem[] = [
-    ...changes.map((change) => ({
-      kind: "change" as const,
-      id: change.id,
-      at: change.observedAt,
-      change: { ...change, when: daysAgoLabel(change.observedAt, now) },
-    })),
-    ...notes.map((note) => ({
-      kind: "note" as const,
-      id: note.id,
-      at: note.created_at,
-      note: { ...note, when: daysAgoLabel(note.created_at, now) } satisfies TakedownNoteItem,
-    })),
-    ...failures.map((failure) => ({
-      kind: "failure" as const,
-      id: failure.id,
-      at: failure.created_at,
-      failure: { ...failure, when: daysAgoLabel(failure.created_at, now) } satisfies DeliveryFailureItem,
-    })),
-  ];
-  return {
-    incidents: incidents.map((incident) => ({
-      ...incident,
-      when: daysAgoLabel(incident.created_at, now),
-      fixed: incident.closed_at === null ? null : daysAgoLabel(incident.closed_at, now),
-    })),
-    groups: groupByDay(items, now, timeZone),
-    offLine: offBrandsSentence(
-      competitors.filter((competitor) => competitor.state === "off").map((competitor) => competitor.name),
-    ),
-  };
+  const latest = workspaceId === null ? undefined : (await listBriefs(env.DB, workspaceId))[0];
+  const failedBrief = latest?.status === "failed" ? { id: latest.id, reason: briefSendLine(latest) } : null;
+  return { ...page, failedBrief };
+}
+
+export async function action({ request }: Route.ActionArgs) {
+  const session = await requireSession(request);
+  const form = await request.formData();
+  const alertId = form.get("alertId");
+  if (form.get("intent") !== "acknowledge" || typeof alertId !== "string") return { saved: false };
+  await acknowledgeOwnSiteIncident(session.user.id, alertId);
+  return { saved: true };
 }
 
 export default function Page({ loaderData }: Route.ComponentProps) {
   return (
     <main className={PAGE}>
       <PageHeading title="Alerts" />
-      <p data-testid="alerts-contract" className="text-ink-soft mt-2 leading-[1.65]">
+      <p data-testid="alerts-contract" className="mt-2 leading-[1.65] text-ink-soft">
         One thing here interrupted you by email: your own site.
       </p>
+      {loaderData.failedBrief === null ? null : (
+        <p role="alert" data-alert="brief-send-failed" className="mt-4 leading-[1.65]">
+          We could not send your brief ({loaderData.failedBrief.reason}).{" "}
+          <Link className="underline decoration-1 underline-offset-4" to={`/app/brief/${loaderData.failedBrief.id}`}>
+            Here it is in the app
+          </Link>
+          .
+        </p>
+      )}
+      <IncidentSlot incident={loaderData.openIncident} />
+      {loaderData.sources.length > 0 ? (
+        <p data-testid="alerts-sources" className="mt-4 flex flex-wrap gap-2">
+          {loaderData.sources.map((entry) => (
+            <SourcePill
+              key={entry.source.key}
+              source={entry.source}
+              snapshot={entry.snapshot}
+              now={loaderData.now}
+            />
+          ))}
+        </p>
+      ) : null}
       {loaderData.incidents.map((incident) => (
         <article
           key={incident.id}
           id={incident.id}
           data-testid="own-site-incident"
-          className="border-line mt-8 border-t pt-6"
+          className="mt-8 border-t border-line pt-6"
         >
-          <h2 className="font-display text-lg font-semibold">{incident.title}</h2>
+          <h2 className="font-display text-row-name font-bold [overflow-wrap:anywhere]">
+            {incident.title}
+          </h2>
           <p className="mt-2 leading-[1.65]">
             {incident.fixed === null
               ? "We check it again every hour and email you once it's fixed."
@@ -85,25 +88,17 @@ export default function Page({ loaderData }: Route.ComponentProps) {
           </time>
         </article>
       ))}
-      {loaderData.incidents.length === 0 && loaderData.groups.length === 0 ? (
+      <AlertChips chip={loaderData.chip} counts={loaderData.chipCounts} />
+      {loaderData.chipCounts.all === 0 && loaderData.openIncident === null ? (
         <p className="mt-8 leading-[1.65]">
           Nothing has interrupted you. When your own site breaks you'll get an email; everything else waits here.
         </p>
       ) : null}
-      {loaderData.groups.map((group, groupIndex) => (
-        <section key={group.group} data-testid="alert-day">
-          <h2 className="text-ink-soft mt-10 font-mono text-[0.75rem] tracking-[0.04em] uppercase">
-            {group.group}
-          </h2>
-          {group.items.map((item, index) => (
-            <AlertFeedRow key={item.id} item={item} eager={groupIndex === 0 && index === 0} />
-          ))}
-        </section>
-      ))}
+      <AlertFeed groups={loaderData.groups} />
       {loaderData.offLine === null ? null : (
         <p
           data-testid="alerts-off-footer"
-          className="text-ink-soft border-line mt-10 border-t pt-6 leading-[1.65]"
+          className="mt-10 border-t border-line pt-6 leading-[1.65] text-ink-soft"
         >
           {loaderData.offLine}
         </p>

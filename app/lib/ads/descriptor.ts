@@ -96,7 +96,8 @@ export const adsSourceDescriptorSchema = z
 					input: d.endpoint,
 				});
 			}
-		} catch {
+		} catch (error) {
+			console.error(JSON.stringify({ event: "ads.endpoint_render_failed", error: String(error) }));
 			ctx.issues.push({
 				code: "custom",
 				message: "endpoint does not render to a valid URL",
@@ -122,7 +123,8 @@ export function parseAdsDescriptor(raw: unknown): AdsSourceDescriptor {
 	if (typeof raw === "string") {
 		try {
 			data = JSON.parse(raw);
-		} catch {
+		} catch (error) {
+			console.error(JSON.stringify({ event: "ads.config_json_parse_failed", error: String(error) }));
 			throw new AdsDescriptorError(["config_json is not valid JSON"]);
 		}
 	}

@@ -2,6 +2,7 @@ import { env } from "cloudflare:workers";
 import { z } from "zod";
 
 import { readCachedChoice, readCachedNoul } from "../data/jev_verdict.server";
+import { sha256Hex } from "../sha256";
 
 const MODEL = "typesafe/jev";
 
@@ -34,9 +35,22 @@ export interface ChoiceVerdict {
   cached: boolean;
 }
 
+const noulType = z.literal("noul");
+
+interface NoulAsk {
+  type: z.infer<typeof noulType>;
+  instructions: string;
+  criteria: { true: string; false: string };
+}
+
 const answerSchema = z.object({
-  answers: z.record(z.string(), z.object({ type: z.literal("noul"), noul: z.number().min(0).max(1) })),
+  answers: z.record(
+    z.string(),
+    z.object({ type: noulType, noul: z.number().min(0).max(1) }),
+  ),
 });
+
+type NoulAnswers = z.infer<typeof answerSchema>["answers"];
 
 const choiceAnswerSchema = z.object({
   answers: z.record(z.string(), z.object({ type: z.literal("choice"), choice: z.string() })),
@@ -49,9 +63,38 @@ export class JevUnavailableError extends Error {
   }
 }
 
-async function sha256Hex(text: string): Promise<string> {
-  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
-  return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+function jevBody(raw: unknown): unknown {
+  if (typeof raw !== "object" || raw === null) return raw;
+  const response: unknown = Reflect.get(raw, "response");
+  if (typeof response === "string") {
+    try {
+      return JSON.parse(response);
+    } catch {
+      return raw;
+    }
+  }
+  if (typeof response === "object" && response !== null) return response;
+  const result: unknown = Reflect.get(raw, "result");
+  if (typeof result === "object" && result !== null) return result;
+  return raw;
+}
+
+interface ParseIssue {
+  path: readonly PropertyKey[];
+  code: string;
+}
+
+function shapeOf(raw: unknown, issues: readonly ParseIssue[]): string {
+  const keys = typeof raw === "object" && raw !== null ? Object.keys(raw).slice(0, 20).join(",") : typeof raw;
+  const paths = issues
+    .slice(0, 5)
+    .map((issue) => `${issue.path.map(String).join(".")}:${issue.code}`)
+    .join(" ");
+  return `keys=${keys}; issues=${paths}`;
+}
+
+function missing(what: string, raw: unknown, issues: readonly ParseIssue[]): JevUnavailableError {
+  return new JevUnavailableError(new Error(`answer missing its ${what}; ${shapeOf(raw, issues)}`));
 }
 
 function inputHash(workspaceId: string, question: NoulQuestion, state: unknown): Promise<string> {
@@ -60,7 +103,16 @@ function inputHash(workspaceId: string, question: NoulQuestion, state: unknown):
   );
 }
 
+function noulAsk(question: NoulQuestion): NoulAsk {
+  return {
+    type: "noul",
+    instructions: question.instructions,
+    criteria: { true: question.whenTrue, false: question.whenFalse },
+  };
+}
+
 async function run(question: NoulQuestion, state: unknown): Promise<number> {
+  const asked = noulAsk(question);
   let raw: unknown;
   try {
     raw = await env.AI.run(
@@ -68,11 +120,7 @@ async function run(question: NoulQuestion, state: unknown): Promise<number> {
       {
         state,
         questions: {
-          [question.id]: {
-            type: "noul",
-            instructions: question.instructions,
-            criteria: { true: question.whenTrue, false: question.whenFalse },
-          },
+          [question.id]: asked,
         },
       },
       { gateway: { id: GATEWAY_ID } },
@@ -80,9 +128,9 @@ async function run(question: NoulQuestion, state: unknown): Promise<number> {
   } catch (error) {
     throw new JevUnavailableError(error);
   }
-  const parsed = answerSchema.safeParse(raw);
+  const parsed = answerSchema.safeParse(jevBody(raw));
   const answer = parsed.success ? parsed.data.answers[question.id] : undefined;
-  if (answer === undefined) throw new JevUnavailableError(new Error("answer missing its noul"));
+  if (answer === undefined) throw missing("noul", raw, parsed.error?.issues ?? []);
   return answer.noul;
 }
 
@@ -92,6 +140,50 @@ export async function askNoul(workspaceId: string, question: NoulQuestion, state
   if (cached !== null) return { questionId: question.id, inputHash: hash, p: cached, cached: true };
   const p = await run(question, state);
   return { questionId: question.id, inputHash: hash, p, cached: false };
+}
+
+export async function askNouls(
+  workspaceId: string,
+  questions: readonly NoulQuestion[],
+  state: unknown,
+): Promise<NoulVerdict[]> {
+  const entries = await Promise.all(
+    questions.map(async (question) => {
+      const hash = await inputHash(workspaceId, question, state);
+      const cached = await readCachedNoul(question.id, hash);
+      return { question, hash, cached };
+    }),
+  );
+  const pending = entries.filter((entry) => entry.cached === null);
+  let answers: NoulAnswers = {};
+  let unparsed: { raw: unknown; issues: readonly ParseIssue[] } = { raw: undefined, issues: [] };
+  if (pending.length > 0) {
+    const asked = Object.fromEntries(pending.map((entry) => [entry.question.id, noulAsk(entry.question)]));
+    let raw: unknown;
+    try {
+      raw = await env.AI.run(
+        MODEL,
+        {
+          state,
+          questions: asked,
+        },
+        { gateway: { id: GATEWAY_ID } },
+      );
+    } catch (error) {
+      throw new JevUnavailableError(error);
+    }
+    const parsed = answerSchema.safeParse(jevBody(raw));
+    if (parsed.success) answers = parsed.data.answers;
+    unparsed = { raw, issues: parsed.error?.issues ?? [] };
+  }
+  return entries.map((entry) => {
+    if (entry.cached !== null) {
+      return { questionId: entry.question.id, inputHash: entry.hash, p: entry.cached, cached: true };
+    }
+    const fresh = answers[entry.question.id]?.noul;
+    if (fresh === undefined) throw missing("noul", unparsed.raw, unparsed.issues);
+    return { questionId: entry.question.id, inputHash: entry.hash, p: fresh, cached: false };
+  });
 }
 
 async function runChoice(question: ChoiceQuestion, state: unknown): Promise<string> {
@@ -114,10 +206,10 @@ async function runChoice(question: ChoiceQuestion, state: unknown): Promise<stri
   } catch (error) {
     throw new JevUnavailableError(error);
   }
-  const parsed = choiceAnswerSchema.safeParse(raw);
+  const parsed = choiceAnswerSchema.safeParse(jevBody(raw));
   const answer = parsed.success ? parsed.data.answers[question.id] : undefined;
   if (answer === undefined || !Object.keys(question.options).includes(answer.choice)) {
-    throw new JevUnavailableError(new Error("answer missing its choice"));
+    throw missing("choice", raw, parsed.error?.issues ?? []);
   }
   return answer.choice;
 }

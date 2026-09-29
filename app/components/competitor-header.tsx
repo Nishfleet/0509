@@ -1,13 +1,19 @@
 import type { ReactElement, ReactNode } from "react";
 import { Link } from "react-router";
 
+import { pausedReasonLine } from "../lib/competitor/reason-customer";
 import { BrandSwitch, DAY_MONTH } from "./brand-switch";
 
 export { DAY_MONTH };
 
-export function competitorPausedLine(stateChangedAt: string | null): string {
-  if (stateChangedAt === null) return "Paused";
-  return `Paused ${DAY_MONTH.format(new Date(stateChangedAt))}`;
+export function competitorPausedLine(
+  stateChangedAt: string | null,
+  stateReason: string | null = null,
+): string {
+  const base =
+    stateChangedAt === null ? "Paused" : `Paused ${DAY_MONTH.format(new Date(stateChangedAt))}`;
+  const why = pausedReasonLine(stateReason);
+  return why === undefined ? base : `${base} · ${why}`;
 }
 
 export interface CompetitorHeaderProps {
@@ -15,6 +21,7 @@ export interface CompetitorHeaderProps {
   domain: string;
   state: "on" | "off";
   stateChangedAt: string | null;
+  stateReason?: string | null;
   control?: ReactNode;
 }
 
@@ -23,6 +30,7 @@ export function CompetitorHeader({
   domain,
   state,
   stateChangedAt,
+  stateReason = null,
   control,
 }: CompetitorHeaderProps): ReactElement {
   return (
@@ -40,10 +48,10 @@ export function CompetitorHeader({
       >
         <div className="min-w-0">
           <h1 className="font-display text-display-2 font-extrabold break-words uppercase">{name}</h1>
-          <p className="text-body-sm text-ink-soft [overflow-wrap:anywhere]">{domain}</p>
+          <p className="text-body-sm [overflow-wrap:anywhere] text-ink-soft">{domain}</p>
           {state === "off" ? (
-            <p data-slot="competitor-paused" className="text-meta text-ink-soft font-mono uppercase">
-              {competitorPausedLine(stateChangedAt)}
+            <p data-slot="competitor-paused" className="font-mono text-meta text-ink-soft uppercase">
+              {competitorPausedLine(stateChangedAt, stateReason)}
             </p>
           ) : null}
         </div>
@@ -66,7 +74,7 @@ export function CompetitorSwitch({
   onCheckedChange?: (checked: boolean) => void;
 }): ReactElement {
   return (
-    <div data-slot="competitor-switch" className="flex min-w-0 max-w-[26rem] items-center gap-3">
+    <div data-slot="competitor-switch" className="flex max-w-[26rem] min-w-0 items-center gap-3">
       <BrandSwitch state={state} brandName={brandName} onCheckedChange={onCheckedChange} />
       <p className="min-w-0 text-body-sm text-ink-soft">{CONSEQUENCE}</p>
     </div>

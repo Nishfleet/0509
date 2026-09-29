@@ -1,5 +1,8 @@
 import { expect, test } from "@playwright/test";
 
+import { expectElementFaceLoaded, expectFaceLoaded } from "./fonts";
+import { consoleFailures, watchConsole } from "./inbox";
+
 // The smallest suite that is still an honest answer to "does the thing we are
 // about to ship start and serve". It runs twice: against the built Worker on
 // every PR, and against production on every successful deployment.
@@ -19,7 +22,7 @@ import { expect, test } from "@playwright/test";
 // 5aa0e76a9). What is asserted is the contract: the element exists, is
 // labelled, is enabled, or points at the right destination.
 
-test("the landing page renders its headline and its contact link", async ({ page }) => {
+test("the landing page renders its headline and its contact link @smoke", async ({ page }) => {
   const response = await page.goto("/");
   expect(response?.status()).toBe(200);
 
@@ -33,7 +36,14 @@ test("the landing page renders its headline and its contact link", async ({ page
   await expect(contact).toHaveAccessibleName(/\S/);
 });
 
-test("the landing page does not scroll horizontally", async ({ page }) => {
+test("the rebuild notice renders in the three brand faces @smoke", async ({ page }) => {
+  await page.goto("/");
+  await expectElementFaceLoaded(page, "header .font-display");
+  await expectElementFaceLoaded(page, "main p");
+  await expectElementFaceLoaded(page, "footer");
+});
+
+test("the landing page does not scroll horizontally @smoke", async ({ page }) => {
   await page.goto("/");
   const overflow = await page.evaluate(
     () => document.documentElement.scrollWidth > document.documentElement.clientWidth,
@@ -41,7 +51,32 @@ test("the landing page does not scroll horizontally", async ({ page }) => {
   expect(overflow).toBe(false);
 });
 
-test("/api/health answers ok", async ({ request }) => {
+test("the landing headline is the largest paint and uses the brand display face @smoke", async ({ page }) => {
+  await page.goto("/");
+
+  const lcpTag = await page.evaluate(
+    () =>
+      new Promise<string>((resolve) => {
+        new PerformanceObserver((list) => {
+          const last = list
+            .getEntries()
+            .filter((entry) => entry instanceof LargestContentfulPaint)
+            .at(-1);
+          resolve(last?.element?.tagName ?? "");
+        }).observe({ type: "largest-contentful-paint", buffered: true });
+      }),
+  );
+  expect(lcpTag).toBe("H1");
+
+  await expectFaceLoaded(page, "Bricolage Grotesque");
+
+  const headlineFamily = await page
+    .getByRole("heading", { level: 1 })
+    .evaluate((node) => getComputedStyle(node).fontFamily);
+  expect(headlineFamily).toContain("Bricolage Grotesque");
+});
+
+test("/api/health answers ok @smoke", async ({ request }) => {
   const response = await request.get("/api/health");
   expect(response.status()).toBe(200);
 
@@ -51,7 +86,7 @@ test("/api/health answers ok", async ({ request }) => {
   expect(Number.isNaN(Date.parse(body.timestamp))).toBe(false);
 });
 
-test("the login page renders the one input that signs you in", async ({ page }) => {
+test("the login page renders the one input that signs you in @smoke", async ({ page }) => {
   const response = await page.goto("/login");
   expect(response?.status()).toBe(200);
 
@@ -68,20 +103,17 @@ test("the login page renders the one input that signs you in", async ({ page }) 
   // The J2 affordance: a labelled, enabled passkey sign-in control. Its name is
   // pattern-matched, not verbatim-pinned; the ceremony itself is J2's spec.
   await expect(page.getByRole("button", { name: /passkey/i })).toBeEnabled();
+  await expect(page.locator('link[rel="modulepreload"]')).not.toHaveCount(0);
   const contact = page.locator('footer a[href="mailto:support@0509.io"]');
   await expect(contact).toBeVisible();
   await expect(contact).toHaveAccessibleName(/\S/);
 });
 
-test("the page reaches first paint with no console errors", async ({ page }) => {
-  const errors: string[] = [];
-  page.on("console", (message) => {
-    if (message.type() === "error") errors.push(message.text());
-  });
-  page.on("pageerror", (error) => errors.push(error.message));
+test("the page reaches first paint with no console errors @smoke", async ({ page }, testInfo) => {
+  const watched = watchConsole(page);
 
   await page.goto("/");
-  await page.waitForLoadState("networkidle");
+  await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
 
-  expect(errors).toEqual([]);
+  expect(await consoleFailures(page, watched, testInfo), testInfo.project.name).toEqual([]);
 });

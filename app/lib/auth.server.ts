@@ -1,25 +1,30 @@
 import { betterAuth } from "better-auth";
 import { APIError, createAuthMiddleware } from "better-auth/api";
-import { magicLink } from "better-auth/plugins";
+import { captcha, magicLink } from "better-auth/plugins";
 import { apiKey } from "@better-auth/api-key";
 import { passkey } from "@better-auth/passkey";
 
 import { API_KEY_PREFIX } from "./agent/paths";
 import { ensureWorkspaceForSignIn } from "./workspace.server";
+import { accessPrecleared } from "./auth/access-preclearance.server";
 import { MAGIC_LINK_TTL_SECONDS, magicLinkEmail } from "./auth/magic-link-email";
+import { MAGIC_LINK_PATH } from "./auth/magic-link-path";
+import { redactEmailShaped } from "./auth/redact-email-shaped";
 import { signInLinkAllowed } from "./auth/sign-in-limit";
-import { sendOrThrow } from "../../workers/delivery/send";
+import { errorText, sendOrThrow } from "../../workers/delivery/send";
 
 interface AuthEnv {
   DB: D1Database;
   EMAIL: SendEmail;
   SIGN_IN_EMAIL_LIMIT: RateLimit;
   SIGN_IN_IP_LIMIT: RateLimit;
+  TURNSTILE_SECRET_KEY: string;
+  ACCESS_TEAM_DOMAIN?: string;
+  ACCESS_AUD?: string;
   BETTER_AUTH_SECRET?: string;
   BETTER_AUTH_URL?: string;
 }
 
-const MAGIC_LINK_PATH = "/sign-in/magic-link";
 const CLIENT_IP_HEADER = "cf-connecting-ip";
 
 function emailOf(body: unknown): string {
@@ -39,7 +44,7 @@ export function hasSessionCookie(request: Request) {
   return header.split(";").some((part) => sessionCookieNames.has(part.trim().split("=")[0] ?? ""));
 }
 
-export function createAuth(env: AuthEnv) {
+export function createAuth(env: AuthEnv, options?: { captcha?: boolean; validateSchema?: boolean }) {
   const origin = env.BETTER_AUTH_URL === undefined ? undefined : new URL(env.BETTER_AUTH_URL).origin;
   return betterAuth({
     database: env.DB,
@@ -48,6 +53,7 @@ export function createAuth(env: AuthEnv) {
     advanced: {
       cookiePrefix: COOKIE_PREFIX,
       ipAddress: { ipAddressHeaders: [CLIENT_IP_HEADER] },
+      database: { validateSchema: options?.validateSchema ?? false },
     },
     session: { freshAge: FRESH_SESSION_SECONDS },
     user: { deleteUser: { enabled: true } },
@@ -75,18 +81,35 @@ export function createAuth(env: AuthEnv) {
       },
     },
     plugins: [
+      ...(options?.captcha === false
+        ? []
+        : [
+            captcha({
+              provider: "cloudflare-turnstile",
+              secretKey: env.TURNSTILE_SECRET_KEY,
+              endpoints: [MAGIC_LINK_PATH],
+            }),
+          ]),
       magicLink({
         expiresIn: MAGIC_LINK_TTL_SECONDS,
         storeToken: "hashed",
         sendMagicLink: async ({ email, url }) => {
           const message = magicLinkEmail({ email, url });
-          await sendOrThrow(env.EMAIL, {
-            to: email,
-            from: { email: "hello@0509.io", name: "Five to Nine" },
-            subject: message.subject,
-            text: message.text,
-            html: message.html,
-          });
+          try {
+            await sendOrThrow(env.EMAIL, {
+              to: email,
+              from: { email: "hello@0509.io", name: "Five to Nine" },
+              subject: message.subject,
+              text: message.text,
+              html: message.html,
+            });
+          } catch (failed) {
+            const detail = redactEmailShaped(errorText(failed)).slice(0, 200);
+            console.error(JSON.stringify({ event: "login.magic_link_send_failed", error: detail }));
+            throw new APIError("SERVICE_UNAVAILABLE", {
+              message: "We couldn't send the link. Try again in a minute.",
+            });
+          }
         },
       }),
       passkey({ rpName: "Five to Nine", origin }),
@@ -97,6 +120,11 @@ export function createAuth(env: AuthEnv) {
       }),
     ],
   });
+}
+
+export async function createAuthForRequest(env: AuthEnv, request: Request) {
+  const cleared = await accessPrecleared(request, env);
+  return createAuth(env, { captcha: !cleared });
 }
 
 export async function signOut(env: AuthEnv, request: Request): Promise<Headers> {

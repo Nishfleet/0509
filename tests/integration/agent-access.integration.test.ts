@@ -2,6 +2,7 @@ import type { OAuthHelpers } from "@cloudflare/workers-oauth-provider";
 import { createExecutionContext, env } from "cloudflare:test";
 import { beforeAll, describe, expect, it } from "vitest";
 
+import { clientIp, withinLimit } from "../../app/lib/agent/client-limit.server";
 import { propsForApiKey } from "../../app/lib/agent/keys.server";
 import { createOAuthProvider } from "../../app/lib/agent/oauth.server";
 import { toolResult } from "../../app/lib/agent/mcp.server";
@@ -20,11 +21,15 @@ const auth = createAuth({
   EMAIL: { send: async () => ({ ok: true }) },
   SIGN_IN_EMAIL_LIMIT: env.SIGN_IN_EMAIL_LIMIT,
   SIGN_IN_IP_LIMIT: env.SIGN_IN_IP_LIMIT,
+  TURNSTILE_SECRET_KEY: "1x0000000000000000000000000000000AA",
   BETTER_AUTH_SECRET: "integration-test-secret",
   BETTER_AUTH_URL: "http://localhost:8787",
 });
 
 const NOW = "2026-09-21T12:00:00.000Z";
+// Always inside the trailing-week window readCompetitorPage measures against
+// Date.now(); a fixed date goes stale the way NOW did on 2026-09-28.
+const CHANGE_SEEN_AT = new Date().toISOString();
 
 const PAYLOAD = {
   workspace_id: "ws_agent_a",
@@ -37,6 +42,7 @@ const PAYLOAD = {
   headline_is_new: false,
   why_line: "You climbed one place on new ads.",
   is_quiet_week: false,
+  is_unjudged: false,
   read_this_first: [
     {
       signal_id: "sig_1",
@@ -118,7 +124,7 @@ async function seedCompetitorChange(workspaceId: string) {
       `INSERT INTO signal (id, workspace_id, entity_id, source_id, watch_id, snapshot_id, kind, aspect, url, evidence_url,
          payload_json, dedup_key, observed_at, last_seen_at)
        VALUES (?1, ?2, 'ent_agent_a', 'src_site_web', ?3, ?4, 'change', 'pricing', ?5, ?5, ?6, ?4, ?7, ?7)`,
-    ).bind(SITE_CHANGE_ID, workspaceId, watchId, afterSnapshotId, SITE_CHANGE_URL, JSON.stringify(payload), NOW),
+    ).bind(SITE_CHANGE_ID, workspaceId, watchId, afterSnapshotId, SITE_CHANGE_URL, JSON.stringify(payload), CHANGE_SEEN_AT),
   ]);
   await env.SNAPSHOTS.put(
     SITE_CHANGE_DIFF_KEY,
@@ -207,7 +213,7 @@ describe("agent access, scoped to one workspace", () => {
 
   it("slows one address guessing keys before any key lookup", async () => {
     const statuses = [];
-    for (let attempt = 0; attempt < 121; attempt += 1) {
+    for (let attempt = 0; attempt < 240; attempt += 1) {
       const response = await apiResponse(
         new Request("http://localhost/api/v1/brief", {
           headers: { authorization: "Bearer 0509_not-a-real-key", "cf-connecting-ip": "203.0.113.200" },
@@ -215,9 +221,12 @@ describe("agent access, scoped to one workspace", () => {
         readAgentBrief,
       );
       statuses.push(response.status);
+      if (response.status === 429) break;
     }
-    expect(statuses.slice(0, 120).every((status) => status === 401)).toBe(true);
-    expect(statuses[120]).toBe(429);
+    const first = statuses.indexOf(429);
+    expect(first).toBeGreaterThanOrEqual(120);
+    expect(statuses.slice(0, first).every((status) => status === 401)).toBe(true);
+    expect(first).toBeLessThan(240);
   });
 
   it("serves the MCP tools as read-only, and a call reads only the caller's workspace", async () => {
@@ -242,7 +251,7 @@ describe("agent access, scoped to one workspace", () => {
   });
 
   it("reads one competitor only inside the caller's workspace", async () => {
-    const own = await readAgentCompetitor(a.workspaceId, "ent_agent_a");
+    const own = await readAgentCompetitor(a.workspaceId, "ent_agent_a", new Date(NOW));
     expect(own.competitor).toMatchObject({
       id: "ent_agent_a",
       name: "Rival A",
@@ -259,11 +268,11 @@ describe("agent access, scoped to one workspace", () => {
         headline: "Rival A changed its pricing page",
         page: "pricing page",
         url: SITE_CHANGE_URL,
-        observedAt: NOW,
+        observedAt: CHANGE_SEEN_AT,
         summary: '3 words added, 2 removed. Was: "Plans from $10." Now: "Plans from $12." https://rival-a.example/pricing',
       },
     ]);
-    expect(await readAgentCompetitor(b.workspaceId, "ent_agent_a")).toEqual({ competitor: null });
+    expect(await readAgentCompetitor(b.workspaceId, "ent_agent_a", new Date(NOW))).toEqual({ competitor: null });
 
     const called = await mcpResponse(
       jsonRpc("tools/call", { name: "get_competitor", arguments: { competitorId: "ent_agent_a" } }),
@@ -338,5 +347,37 @@ describe("agent access, scoped to one workspace", () => {
     expect(foreign.status).toBe(403);
     const own = await mcpResponse(from(new URL(env.BETTER_AUTH_URL).origin), { userId: a.userId, clientId: "test" });
     expect(own.status).toBe(200);
+  });
+
+  // #5757: no test in this file runs without a cf-connecting-ip header after
+  // this one — the loop drains the shared unidentified bucket (AGENT_LIMIT,
+  // 120/min), so anything after it sending no IP would 429 with no visible
+  // cause. Tests that want their own budget send a per-IP key like
+  // "203.0.113.<unique>".
+  it("limits a request that carries no client IP, never waving it through", async () => {
+    const bare = new Request("http://localhost/api/v1/brief");
+    expect(clientIp(bare)).toBeNull();
+
+    const statuses: number[] = [];
+    const maxAttempts = 240;
+    for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+      const response = await apiResponse(
+        new Request("http://localhost/api/v1/brief", {
+          headers: { authorization: "Bearer 0509_not-a-real-key" },
+        }),
+        readAgentBrief,
+      );
+      statuses.push(response.status);
+      if (response.status === 429) break;
+    }
+    const first = statuses.indexOf(429);
+    expect(first).toBeGreaterThanOrEqual(0);
+    expect(first).toBeLessThan(maxAttempts);
+    expect(statuses.slice(0, first).every((status) => status === 401)).toBe(true);
+    expect(await withinLimit(env.AGENT_LIMIT, null)).toBe(false);
+
+    // A caller the edge did identify spends its own bucket, not the one the
+    // flood above emptied.
+    expect(await withinLimit(env.AGENT_LIMIT, "203.0.113.210")).toBe(true);
   });
 });

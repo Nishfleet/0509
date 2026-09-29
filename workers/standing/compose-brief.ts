@@ -3,8 +3,10 @@ import { z } from "zod";
 import type { BriefPayload } from "../../app/lib/brief-payload";
 import type { BriefSchedule, BriefWeek } from "../../app/lib/brief-schedule";
 import { nextBriefAt } from "../../app/lib/brief-schedule";
+import { UNJUDGED_WEEK_LINE, readThisFirstLine } from "../../app/lib/read-this-first";
 import { sourceName } from "../../app/lib/source-name";
 import { countPhrase } from "../delivery/brief-template";
+import type { JudgedWeek } from "./read-this-first";
 
 const RANKED_BRANDS = `SELECT s.entity_id AS entity_id,
        COALESCE(e.name, e.domain) AS name,
@@ -13,7 +15,7 @@ const RANKED_BRANDS = `SELECT s.entity_id AS entity_id,
        s.movement AS movement
 FROM standing s
 JOIN entity e ON e.id = s.entity_id AND e.workspace_id = s.workspace_id AND e.state = 'on'
-WHERE s.workspace_id = ?1 AND s.week_start_at = ?2 AND s.rank IS NOT NULL
+WHERE s.workspace_id = ?1 AND s.week_start_at = ?2
 ORDER BY s.rank ASC, s.entity_id ASC`;
 
 const PREVIOUS_FROZEN_WEEKS = `SELECT COUNT(*) AS weeks
@@ -33,8 +35,8 @@ GROUP BY s.entity_id`;
 const SOURCE_COVERAGE = `SELECT src.key AS key,
        src.kind AS kind,
        src.platform AS platform,
-       MAX(sn.fetched_at) AS last_landed_at,
-       MAX(CASE WHEN sn.fetched_at >= ?2 AND sn.fetched_at < ?3 THEN 1 ELSE 0 END) AS answered
+       MAX(CASE WHEN COALESCE(sn.canary_count, 1) > 0 THEN sn.fetched_at END) AS last_landed_at,
+       MAX(CASE WHEN sn.fetched_at >= ?2 AND sn.fetched_at < ?3 AND COALESCE(sn.canary_count, 1) > 0 THEN 1 ELSE 0 END) AS answered
 FROM watch w
 JOIN entity e ON e.id = w.entity_id AND e.workspace_id = ?1 AND e.state = 'on'
 JOIN source src ON src.id = w.source_id AND src.is_enabled = 1
@@ -55,12 +57,21 @@ FROM entity
 WHERE workspace_id = ?1 AND role = 'competitor' AND state = 'off' AND state_changed_at >= ?2 AND state_changed_at < ?3
 ORDER BY state_changed_at ASC`;
 
+const PICKED_SIGNALS = `SELECT s.id AS signal_id, s.entity_id AS entity_id, COALESCE(NULLIF(e.name, ''), e.domain) AS entity_name,
+       s.title AS title, s.summary AS summary, s.url AS url, s.observed_at AS observed_at,
+       src.kind AS source_kind, src.platform AS source_platform,
+       (SELECT v.reason FROM jev_verdict v WHERE v.signal_id = s.id AND v.question_id IN ('noteworthy_change', 'mention_matters') AND v.reason IS NOT NULL ORDER BY v.decided_at DESC LIMIT 1) AS verdict_reason
+FROM signal s
+JOIN entity e ON e.id = s.entity_id AND e.workspace_id = ?1
+JOIN source src ON src.id = s.source_id
+WHERE s.workspace_id = ?1 AND s.id IN (SELECT value FROM json_each(?2))`;
+
 const rankedBrandRows = z.array(
   z.object({
     entity_id: z.string(),
     name: z.string(),
     role: z.enum(["self", "competitor"]),
-    rank: z.number().int(),
+    rank: z.number().int().nullable(),
     movement: z.number().int().nullable(),
   }),
 );
@@ -98,10 +109,26 @@ const incidentRows = z.array(
 
 const pausedCompetitorRows = z.array(z.object({ name: z.string() }));
 
+const pickedSignalRows = z.array(
+  z.object({
+    signal_id: z.string(),
+    entity_id: z.string(),
+    entity_name: z.string(),
+    title: z.string().nullable(),
+    summary: z.string().nullable(),
+    url: z.string().nullable(),
+    observed_at: z.string(),
+    source_kind: z.string(),
+    source_platform: z.string(),
+    verdict_reason: z.string().nullable(),
+  }),
+);
+
 export interface ComposeInput {
   workspaceId: string;
   schedule: BriefSchedule;
   week: BriefWeek;
+  readThisFirst: JudgedWeek;
 }
 
 function quietWeekLine(mentions: number, siteChanges: number, newAds: number): string {
@@ -117,13 +144,15 @@ export function pausedSentence(names: readonly string[]): string | null {
 export async function composeBrief(db: D1Database, input: ComposeInput): Promise<BriefPayload> {
   const startsAt = input.week.startsAt.toISOString();
   const closesAt = input.week.closesAt.toISOString();
-  const [ranked, frozen, counts, coverage, incidents, pausedRows] = await db.batch([
+  const { readThisFirst } = input;
+  const [ranked, frozen, counts, coverage, incidents, pausedRows, pickedRows] = await db.batch([
     db.prepare(RANKED_BRANDS).bind(input.workspaceId, startsAt),
     db.prepare(PREVIOUS_FROZEN_WEEKS).bind(input.workspaceId, startsAt),
     db.prepare(SIGNAL_COUNTS).bind(input.workspaceId, startsAt, closesAt),
     db.prepare(SOURCE_COVERAGE).bind(input.workspaceId, startsAt, closesAt),
     db.prepare(OWN_SITE_INCIDENTS).bind(input.workspaceId, startsAt, closesAt),
     db.prepare(PAUSED_COMPETITORS).bind(input.workspaceId, startsAt, closesAt),
+    db.prepare(PICKED_SIGNALS).bind(input.workspaceId, JSON.stringify(readThisFirst.picks)),
   ]);
 
   const brands = rankedBrandRows.parse(ranked.results);
@@ -134,6 +163,26 @@ export async function composeBrief(db: D1Database, input: ComposeInput): Promise
   const sources = sourceCoverageRows.parse(coverage.results);
   const ownSite = incidentRows.parse(incidents.results);
   const pausedNames = pausedCompetitorRows.parse(pausedRows.results).map((row) => row.name);
+  const pickedById = new Map(pickedSignalRows.parse(pickedRows.results).map((row) => [row.signal_id, row]));
+  const marks = readThisFirst.picks.flatMap((signalId) => {
+    const row = pickedById.get(signalId);
+    if (row === undefined) return [];
+    return [
+      {
+        signal_id: row.signal_id,
+        entity_id: row.entity_id,
+        entity_name: row.entity_name,
+        title: row.title ?? "",
+        source: sourceName(row.source_kind, row.source_platform),
+        observed_at: row.observed_at,
+        thumbnail_r2_key: null,
+        url: row.url ?? "",
+        before: null,
+        after: null,
+        jev_reason: row.verdict_reason ?? row.summary ?? row.title ?? "",
+      },
+    ];
+  });
 
   const lines = brands.map((brand) => {
     const count = countsByEntity.get(brand.entity_id);
@@ -159,6 +208,12 @@ export async function composeBrief(db: D1Database, input: ComposeInput): Promise
 
   const pausedLine = pausedSentence(pausedNames);
   const countsLine = quietWeekLine(mentionCount, siteChangeCount, newAdCount);
+  const lead = marks[0];
+  const headLine = input.readThisFirst.unjudged
+    ? UNJUDGED_WEEK_LINE
+    : lead === undefined
+      ? countsLine
+      : readThisFirstLine(marks.length, readThisFirst.judged, lead.entity_name);
 
   return {
     workspace_id: input.workspaceId,
@@ -169,9 +224,10 @@ export async function composeBrief(db: D1Database, input: ComposeInput): Promise
     headline_total: lines.length,
     headline_movement: self?.movement ?? null,
     headline_is_new: self?.is_new ?? false,
-    why_line: pausedLine === null ? countsLine : `${countsLine} ${pausedLine}`,
-    is_quiet_week: true,
-    read_this_first: [],
+    why_line: pausedLine === null ? headLine : `${headLine} ${pausedLine}`,
+    is_quiet_week: marks.length === 0 && !input.readThisFirst.unjudged,
+    is_unjudged: input.readThisFirst.unjudged,
+    read_this_first: marks,
     brands: lines,
     own_site: {
       status: ownSite.length === 0 ? "ok" : "broken",

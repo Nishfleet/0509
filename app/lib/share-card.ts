@@ -1,7 +1,7 @@
 import type { BriefPayload } from "./brief-payload";
 import type { BriefSchedule } from "./brief-schedule";
 import { homeStanding } from "./home-standing";
-import type { HomeEntity } from "./home-standing";
+import type { HomeEntity, HomeHistoryRow } from "./home-standing";
 
 export interface ShareCard {
   brand: string;
@@ -21,9 +21,10 @@ export function shareCard(input: {
   payload: BriefPayload | null;
   entities: readonly HomeEntity[];
   schedule: BriefSchedule;
+  history: readonly HomeHistoryRow[];
   now: Date;
 }): ShareCard | null {
-  const standing = homeStanding(input);
+  const standing = homeStanding({ ...input, sources: [], counts: [], moves: [] });
   if (standing.kind !== "ranked" || input.payload === null) return null;
   const self = standing.rows.find((row) => row.self);
   if (self === undefined) return null;

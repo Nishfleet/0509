@@ -1,5 +1,10 @@
 import { createMcpHandler, McpServer } from "@modelcontextprotocol/server";
 
+import { sourcePillStatus } from "../../components/source-pill";
+import { readRegistrySources } from "../data/source.server";
+import { joinList } from "../../lib/coverage";
+import type { FreshnessSource } from "../../lib/freshness.server";
+import { sourceKindNoun } from "../../lib/source-name";
 import {
   readAgentAlerts,
   readAgentBrief,
@@ -32,12 +37,23 @@ export async function toolResult<T extends Record<string, unknown>>(read: () => 
   }
 }
 
-function createServer(workspaceId: string): McpServer {
+export function mcpInstructions(sources: readonly FreshnessSource[], now: number = Date.now()): string {
+  const nouns = [
+    ...new Set(
+      sources
+        .filter((entry) => sourcePillStatus(entry.source, entry.snapshot, now).state !== "disabled")
+        .map((entry) => sourceKindNoun(entry.kind)),
+    ),
+  ];
+  const capabilities = nouns.length === 0 ? "public sources" : joinList(nouns);
+  return `Five to Nine watches the user's competitors (${capabilities}) and ranks the user against them every week. Everything here is read-only and limited to the signed-in user's own workspace.`;
+}
+
+async function createServer(workspaceId: string): Promise<McpServer> {
   const server = new McpServer(
     { name: "five-to-nine", title: "Five to Nine", version: "1.0.0" },
     {
-      instructions:
-        "Five to Nine watches the user's competitors (ads, website changes, mentions, hiring) and ranks the user against them every week. Everything here is read-only and limited to the signed-in user's own workspace.",
+      instructions: mcpInstructions(await readRegistrySources()),
     },
   );
 
@@ -85,7 +101,7 @@ function createServer(workspaceId: string): McpServer {
       outputSchema: competitorResultSchema,
       annotations: READ_ONLY,
     },
-    async ({ competitorId }) => result(await readAgentCompetitor(workspaceId, competitorId)),
+    async ({ competitorId }) => result(await readAgentCompetitor(workspaceId, competitorId, new Date())),
   );
 
   server.registerTool(

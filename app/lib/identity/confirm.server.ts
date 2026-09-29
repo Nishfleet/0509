@@ -1,8 +1,11 @@
 import { z } from "zod";
 
-import { insertSelfEntity } from "../data/entity.server";
-import { startDiscovery } from "../discovery/start.server";
-import { normaliseSubject } from "./normalise";
+import { insertSelfEntity, readWorkspaceSelfId } from "../data/entity.server";
+import { insertFieldEdits, type FieldEdit } from "../data/user_decision.server";
+import { readCachedSiteValues } from "./card.server";
+import { readLogo } from "./logo-store.server";
+import { normaliseSubject, type Subject } from "./normalise";
+import { startIdentityTail } from "./tail.server";
 
 const SOCIAL_PREFIX = "social.";
 
@@ -14,7 +17,6 @@ const confirmSchema = z.object({
   subject: z.string(),
   name: z.string().trim().min(1).max(120),
   description: z.string().trim().max(500),
-  logo: z.union([webUrl, z.literal("")]),
   socials: socialsSchema,
 });
 
@@ -29,12 +31,19 @@ function field(form: FormData, name: string): string {
   return typeof value === "string" ? value : "";
 }
 
-export async function confirmCard(workspaceId: string, form: FormData): Promise<boolean> {
+function creatorSite(socials: { platform: string; url: string }[]): Subject | null {
+  const entry = socials.find((social) => social.platform === "site");
+  if (entry === undefined) return null;
+  const normalised = normaliseSubject(entry.url);
+  if (!normalised.ok || normalised.subject.kind !== "domain") return null;
+  return normalised.subject;
+}
+
+export async function confirmCard(workspaceId: string, userId: string, form: FormData): Promise<boolean> {
   const parsed = confirmSchema.safeParse({
     subject: field(form, "subject"),
     name: field(form, "name"),
     description: field(form, "description"),
-    logo: field(form, "logo"),
     socials: socials(form),
   });
   if (!parsed.success) return false;
@@ -42,9 +51,11 @@ export async function confirmCard(workspaceId: string, form: FormData): Promise<
   if (!normalised.ok) return false;
   const { subject } = normalised;
   const card = parsed.data;
+  const id = crypto.randomUUID();
+  const logoUrl = (await readLogo(subject.registrable)) !== null ? `/app/logos/${id}` : null;
   const now = new Date();
   await insertSelfEntity({
-    id: crypto.randomUUID(),
+    id,
     workspaceId,
     domain: subject.registrable,
     name: card.name,
@@ -53,11 +64,49 @@ export async function confirmCard(workspaceId: string, form: FormData): Promise<
       platform: subject.platform ?? null,
       url: subject.url,
       description: card.description === "" ? null : card.description,
-      logoUrl: card.logo === "" ? null : card.logo,
+      logoUrl,
       socials: card.socials,
     }),
     now: now.toISOString(),
   });
-  await startDiscovery(workspaceId, now);
+  const entityId = await readWorkspaceSelfId(workspaceId);
+  if (entityId === null) return false;
+  const cached = await readCachedSiteValues(subject);
+  if (cached !== null) {
+    const candidates: { edit: FieldEdit; changed: boolean }[] = [
+      {
+        edit: { field: "name", from: cached.name, to: card.name },
+        changed: card.name !== cached.name,
+      },
+      {
+        edit: {
+          field: "description",
+          from: cached.description,
+          to: card.description,
+        },
+        changed: (card.description === "" ? null : card.description) !== cached.description,
+      },
+    ];
+    await insertFieldEdits(
+      candidates
+        .filter((candidate) => candidate.changed)
+        .map((candidate) => ({
+          workspaceId,
+          userId,
+          entityId,
+          edit: candidate.edit,
+          decidedAt: now.toISOString(),
+        })),
+    );
+  }
+  const site = subject.kind === "domain" ? null : creatorSite(card.socials);
+  await startIdentityTail({
+    workspaceId,
+    entityId,
+    name: card.name,
+    domain: site?.registrable ?? subject.registrable,
+    homepageUrl: subject.kind === "domain" ? subject.url : (site?.url ?? null),
+    ...(subject.kind === "domain" ? {} : { handle: subject.registrable }),
+  });
   return true;
 }

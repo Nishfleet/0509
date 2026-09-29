@@ -4,10 +4,11 @@ import { claimSendAttempt, resolveSendAttempt } from "../../app/lib/data/send_at
 import { writeUnsubscribeToken } from "../../app/lib/data/send_target.server";
 import type { BriefPayload } from "../../app/lib/brief-payload";
 import { parseBriefPayload } from "../../app/lib/brief-payload";
+import { pageHost } from "../../app/lib/site/own-site.server";
 
 import { renderBrief } from "./brief-template";
 import { renderIncidentFixed, renderIncidentOpen } from "./incident-template";
-import { errorText, sendMessage } from "./send";
+import { errorText, sendMessage, type SendResult } from "./send";
 
 class PayloadError extends Error {
   constructor(message: string) {
@@ -80,7 +81,7 @@ interface IncidentRow {
   kind: string;
   opened_at: string;
   closed_at: string | null;
-  domain: string;
+  page_url: string;
   role: string;
   mark: string | null;
   own_site_alerts: number;
@@ -95,13 +96,14 @@ async function readIncident(env: Env, incidentId: string): Promise<IncidentRow |
             i.kind,
             i.opened_at,
             i.closed_at,
-            e.domain,
+            p.url AS page_url,
             e.role,
             w.own_site_alerts,
             w.timezone,
             (SELECT a.body FROM alert a WHERE a.incident_id = i.id ORDER BY a.created_at ASC LIMIT 1) AS mark
        FROM incident i
        JOIN entity e ON e.id = i.entity_id
+       JOIN page p ON p.id = i.page_id
        JOIN workspace w ON w.id = i.workspace_id
       WHERE i.id = ?`,
   )
@@ -114,7 +116,7 @@ async function readTarget(env: Env, workspaceId: string): Promise<TargetRow | nu
     `SELECT st.id, st.workspace_id, st.channel_id, st.target_value, st.unsubscribe_token
        FROM send_target st
        JOIN channel c ON c.id = st.channel_id
-      WHERE st.workspace_id = ? AND c.key = ? AND c.is_enabled = 1
+      WHERE st.workspace_id = ? AND c.key = ? AND c.is_enabled = 1 AND st.is_verified = 1
       ORDER BY st.created_at ASC
       LIMIT 1`,
   )
@@ -179,6 +181,34 @@ function render(message: MessageRow, to: string, token: string): EmailMessageBui
   };
 }
 
+interface SendAndResolveInput {
+  claimId: string;
+  idempotencyKey: string;
+  send: () => Promise<SendResult>;
+  onSent?: () => Promise<void>;
+}
+
+async function sendAndResolve(
+  env: Env,
+  input: SendAndResolveInput,
+): Promise<DeliveryResult> {
+  const { claimId, idempotencyKey, send, onSent } = input;
+  let sent = false;
+  try {
+    const result = await send();
+    sent = result.outcome === "sent";
+    await resolveSendAttempt(env.DB, claimId, result.outcome, result.error);
+    if (onSent !== undefined && result.outcome === "sent") {
+      await onSent();
+    }
+    return { outcome: result.outcome, attempt_id: claimId, idempotency_key: idempotencyKey };
+  } catch (cause) {
+    if (sent) throw cause;
+    await resolveSendAttempt(env.DB, claimId, "failed", errorText(cause));
+    return { outcome: "failed", attempt_id: claimId, idempotency_key: idempotencyKey };
+  }
+}
+
 export async function deliver(env: Env, message: DigestMessage): Promise<DeliveryResult> {
   const digest = await readDigest(env, message.digest_id);
   if (!digest) {
@@ -205,22 +235,16 @@ export async function deliver(env: Env, message: DigestMessage): Promise<Deliver
     return { outcome: "duplicate", attempt_id: null, idempotency_key: idempotencyKey };
   }
 
-  let sent = false;
-  try {
-    const token = await ensureUnsubscribeToken(env, target);
-    const email = render(digest, target.target_value, token);
-    const result = await sendMessage(env.EMAIL, email);
-    sent = result.outcome === "sent";
-    await resolveSendAttempt(env.DB, claim.id, result.outcome, result.error);
-    if (result.outcome === "sent") {
-      await markDigestSent(env.DB, digest.id);
-    }
-    return { outcome: result.outcome, attempt_id: claim.id, idempotency_key: idempotencyKey };
-  } catch (cause) {
-    if (sent) throw cause;
-    await resolveSendAttempt(env.DB, claim.id, "failed", errorText(cause));
-    return { outcome: "failed", attempt_id: claim.id, idempotency_key: idempotencyKey };
-  }
+  return sendAndResolve(env, {
+    claimId: claim.id,
+    idempotencyKey,
+    send: async () => {
+      const token = await ensureUnsubscribeToken(env, target);
+      const email = render(digest, target.target_value, token);
+      return sendMessage(env.EMAIL, email);
+    },
+    onSent: () => markDigestSent(env.DB, digest.id),
+  });
 }
 
 export async function deliverIncident(
@@ -271,41 +295,38 @@ export async function deliverIncident(
     return { outcome: "duplicate", attempt_id: null, idempotency_key: idempotencyKey };
   }
 
-  let sent = false;
-  try {
-    const rendered =
-      incident.closed_at === null
-        ? renderIncidentOpen({
-            site: incident.domain,
-            kind: incident.kind,
-            opened_at: incident.opened_at,
-            recheck_at: new Date(Date.parse(incident.opened_at) + RECHECK_AFTER_MS).toISOString(),
-            mark: incident.mark,
-            link: INCIDENT_LINK,
-            timezone: incident.timezone,
-          })
-        : renderIncidentFixed({
-            site: incident.domain,
-            kind: incident.kind,
-            closed_at: incident.closed_at,
-            link: INCIDENT_LINK,
-            timezone: incident.timezone,
-          });
-    const result = await sendMessage(env.EMAIL, {
-      to: target.target_value,
-      from: "brief@0509.io",
-      subject: rendered.subject,
-      html: rendered.html,
-      text: rendered.text,
-    });
-    sent = result.outcome === "sent";
-    await resolveSendAttempt(env.DB, claim.id, result.outcome, result.error);
-    return { outcome: result.outcome, attempt_id: claim.id, idempotency_key: idempotencyKey };
-  } catch (cause) {
-    if (sent) throw cause;
-    await resolveSendAttempt(env.DB, claim.id, "failed", errorText(cause));
-    return { outcome: "failed", attempt_id: claim.id, idempotency_key: idempotencyKey };
-  }
+  return sendAndResolve(env, {
+    claimId: claim.id,
+    idempotencyKey,
+    send: () => {
+      const site = pageHost(incident.page_url);
+      const rendered =
+        incident.closed_at === null
+          ? renderIncidentOpen({
+              site,
+              kind: incident.kind,
+              opened_at: incident.opened_at,
+              recheck_at: new Date(Date.parse(incident.opened_at) + RECHECK_AFTER_MS).toISOString(),
+              mark: incident.mark,
+              link: INCIDENT_LINK,
+              timezone: incident.timezone,
+            })
+          : renderIncidentFixed({
+              site,
+              kind: incident.kind,
+              closed_at: incident.closed_at,
+              link: INCIDENT_LINK,
+              timezone: incident.timezone,
+            });
+      return sendMessage(env.EMAIL, {
+        to: target.target_value,
+        from: "brief@0509.io",
+        subject: rendered.subject,
+        html: rendered.html,
+        text: rendered.text,
+      });
+    },
+  });
 }
 
 export async function handleBatch(

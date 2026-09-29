@@ -22,6 +22,7 @@ export const identityExtractSchema = z.object({
     }),
   ),
   navLinks: z.array(z.string()),
+  navPages: z.array(z.object({ url: z.string(), title: z.string() })),
   adLibraryHints: z.array(z.string()),
   text: z.string(),
 });
@@ -48,6 +49,8 @@ interface IdentityRewriterState {
   manifestUrl: string | null;
   anchors: string[];
   navLinks: string[];
+  navPages: { url: string; title: string }[];
+  navTitleOpen: boolean;
 }
 
 const TITLE_SEPARATORS = [" - ", " | ", " – "];
@@ -194,6 +197,8 @@ export async function extractIdentity(html: string, pageUrl: string): Promise<Id
     manifestUrl: null,
     anchors: [],
     navLinks: [],
+    navPages: [],
+    navTitleOpen: false,
   };
   const pageOrigin = new URL(pageUrl).origin;
 
@@ -265,12 +270,21 @@ export async function extractIdentity(html: string, pageUrl: string): Promise<Id
     })
     .on("nav a[href]", {
       element(element) {
+        state.navTitleOpen = false;
         const href = element.getAttribute("href");
-        if (href === null) return;
+        if (href === null || href.trim().startsWith("#")) return;
         const url = resolveUrl(href, pageUrl);
         if (url === null) return;
         if (url.origin !== pageOrigin) return;
         state.navLinks.push(url.href);
+        state.navPages.push({ url: url.href, title: "" });
+        state.navTitleOpen = true;
+      },
+      text(chunk) {
+        if (!state.navTitleOpen) return;
+        const last = state.navPages[state.navPages.length - 1];
+        if (last === undefined) return;
+        state.navPages[state.navPages.length - 1] = { url: last.url, title: last.title + chunk.text };
       },
     })
     .transform(new Response(html, { headers: { "content-type": "text/html;charset=utf-8" } }));
@@ -280,6 +294,14 @@ export async function extractIdentity(html: string, pageUrl: string): Promise<Id
   const organization = readOrganization(state.ldBlocks);
   const anchors = [...state.anchors];
   const navLinks = dedupe(state.navLinks);
+  const navPages: { url: string; title: string }[] = [];
+  const navPageSeen = new Set<string>();
+  for (const entry of state.navPages) {
+    if (navPageSeen.has(entry.url)) continue;
+    navPageSeen.add(entry.url);
+    const title = entry.title.split(/\s+/).join(" ").trim();
+    navPages.push({ url: entry.url, title });
+  }
   const adLibraryHints = dedupe(anchors.filter(isAdLibraryHint));
 
   return identityExtractSchema.parse({
@@ -295,6 +317,7 @@ export async function extractIdentity(html: string, pageUrl: string): Promise<Id
     manifestUrl: state.manifestUrl,
     socials: collectSocials(organization.sameAs, anchors),
     navLinks,
+    navPages,
     adLibraryHints,
     text: (await extractPageText(html)).text,
   });

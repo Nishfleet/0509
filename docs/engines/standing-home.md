@@ -277,7 +277,7 @@ Only one decision belongs to this engine.
 
 ### P6.4 — D4 and the why-line
 
-**GOAL.** At rollover, run D4 `read_this_first` over only the items that passed D3 or D6, batched ten per `step.do`. Take `p >= 0.5`, order by the Score `importance`, keep the top three as read-this-first, and take the top item's reason verbatim as the why-line. Nothing above 0.5 ⇒ the counts line: "Quiet week: N mentions checked, M site changes, no new ads." Write both into `digest.payload_json` and log every call to `jev_verdict`.
+**GOAL.** At rollover, run D4 `read_this_first` over only the items that passed D3 or D6, batched ten per `step.do`. Take `p >= 0.5`, order by the Noul `p` (highest first, ties by `observed_at` newest first; Score `importance` ordering is a later slice), keep the top three as read-this-first, and the why-line is "N of M worth knowing this week, led by <top brand>." (Jev returns no reason text; each mark's reason is the item's own D3/D6 verdict reason, else its summary, else its title). Nothing above 0.5 ⇒ the counts line: "Quiet week: N mentions checked, M site changes, no new ads." Write both into `digest.payload_json` and log every call to `jev_verdict`.
 
 **STOCK FEATURE OR LIBRARY.** The shipped TypeSafe SDK/plugin for Jev (Noul + Score), configured as a Worker secret. The `jev_verdict` UNIQUE `(question_id, input_hash)` as the call cache. `zod` **4.6.5** for the context-pack shape.
 

@@ -1,25 +1,31 @@
 import type { ReactElement } from "react";
 
+import { DevelopmentsFeed } from "./developments-feed";
 import { EmptyState } from "./empty-state";
+import { CompetitorRail, type CompetitorRailProps } from "./competitor-rail";
 import { SiteChangeItem } from "./site-change-item";
 import type { SiteChangeItemData } from "./site-change-item";
+import { SITE_SWEEP_UTC_LABEL } from "../lib/cadence";
+import type { DevelopmentItem } from "../lib/developments";
 
 const HEADING = "mb-3 font-mono text-eyebrow text-ink-soft uppercase";
 
 export interface CompetitorFrameProps {
   changes: readonly SiteChangeItemData[];
+  developments: readonly (DevelopmentItem & { when: string })[];
   weekCount: number;
   biggestId: string | null;
   pages: number;
   lastChecked: string | null;
   pausedOn: string | null;
+  rail: Omit<CompetitorRailProps, "lastChecked">;
 }
 
 export function developmentsEmpty(lastChecked: string | null): string {
   if (lastChecked === null) {
-    return "Watching from today. We read the homepage every night at 02:00 UTC, and the first change shows here after the second read.";
+    return `Watching from today. We read the homepage every night at ${SITE_SWEEP_UTC_LABEL}, and the first change shows here after the second read.`;
   }
-  return "No changes to the homepage since we started watching. We read it again every night at 02:00 UTC.";
+  return `No changes to the homepage since we started watching. We read it again every night at ${SITE_SWEEP_UTC_LABEL}.`;
 }
 
 function Cell({ label, value }: { label: string; value: string }): ReactElement {
@@ -33,11 +39,13 @@ function Cell({ label, value }: { label: string; value: string }): ReactElement 
 
 export function CompetitorFrame({
   changes,
+  developments,
   weekCount,
   biggestId,
   pages,
   lastChecked,
   pausedOn,
+  rail,
 }: CompetitorFrameProps): ReactElement {
   const biggest = changes.find((change) => change.id === biggestId) ?? null;
   return (
@@ -61,7 +69,9 @@ export function CompetitorFrame({
             The week's biggest move
           </h2>
           {biggest === null ? (
-            <EmptyState sentence="Nothing moved on their site in the last 7 days. We read it again every night at 02:00 UTC." />
+            <EmptyState
+              sentence={`Nothing moved on their site in the last 7 days. We read it again every night at ${SITE_SWEEP_UTC_LABEL}.`}
+            />
           ) : (
             <SiteChangeItem change={biggest} size="md" eager />
           )}
@@ -71,30 +81,18 @@ export function CompetitorFrame({
             Developments
           </h2>
           {pausedOn === null ? null : (
-            <p data-slot="feed-paused" className="border-ink border-t pt-3 text-meta text-ink-soft">
+            <p data-slot="feed-paused" className="border-t border-ink pt-3 text-meta text-ink-soft">
               Paused {pausedOn}. We stopped checking here; turn it back on to pick up where it left off.
             </p>
           )}
-          {changes.length === 0 ? (
+          {developments.length === 0 ? (
             <EmptyState sentence={developmentsEmpty(lastChecked)} />
           ) : (
-            changes.map((change) => <SiteChangeItem key={change.id} change={change} />)
+            <DevelopmentsFeed items={developments} changes={changes} />
           )}
         </section>
       </div>
-      <aside data-slot="competitor-rail" className="flex min-w-0 flex-col gap-10">
-        <section data-section="sources" aria-labelledby="competitor-sources" className="min-w-0">
-          <h2 id="competitor-sources" className={HEADING}>
-            Sources on this brand
-          </h2>
-          <p className="font-display text-[1.02rem]">Website</p>
-          <p className="text-meta text-ink-soft">
-            {lastChecked === null
-              ? "Homepage, read every night. First read tonight at 02:00 UTC."
-              : `Homepage, read every night. Last read ${lastChecked}.`}
-          </p>
-        </section>
-      </aside>
+      <CompetitorRail {...rail} lastChecked={lastChecked} />
     </div>
   );
 }

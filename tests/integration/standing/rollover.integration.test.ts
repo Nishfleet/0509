@@ -1,5 +1,5 @@
 import { env, introspectWorkflow, introspectWorkflowInstance } from "cloudflare:test";
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { parseBriefPayload } from "../../../app/lib/brief-payload";
 import type { BriefSchedule } from "../../../app/lib/brief-schedule";
@@ -70,6 +70,20 @@ async function seedMention(slug: string, entity: string, observedAt: Date, p: nu
   ]);
 }
 
+async function seedTitledNotable(slug: string, entity: string, title: string, observedAt: Date) {
+  const id = `${WS}_${slug}`;
+  const entityId = `${WS}_${entity}`;
+  await env.DB.batch([
+    env.DB.prepare(
+      "INSERT INTO signal (id, workspace_id, entity_id, source_id, kind, title, canonical_url, url_hash, dedup_key, observed_at) VALUES (?1, ?2, ?3, ?4, 'mention', ?5, ?6, ?7, ?8, ?9)",
+    ).bind(id, WS, entityId, SOURCE, title, `https://news.example/${id}`, `hash-${id}`, `dedup-${id}`, observedAt.toISOString()),
+    env.DB.prepare(
+      "INSERT INTO jev_verdict (id, workspace_id, question_id, input_hash, signal_id, p, reason, decided_at) VALUES (?1, ?2, 'noteworthy_change', ?3, ?4, 0.95, NULL, ?5)",
+    ).bind(`verdict-${id}`, WS, `input-${id}`, id, observedAt.toISOString()),
+  ]);
+  return id;
+}
+
 async function seedFrozenWeek(weekStartAt: string, ranks: readonly [string, number][]) {
   await env.DB.batch(
     ranks.map(([entity, rank]) =>
@@ -95,6 +109,17 @@ async function standingFor(weekStartAt: string): Promise<StandingRow[]> {
     .all<StandingRow>();
   return rows.results.map((row) => ({ ...row, entity_id: row.entity_id.slice(WS.length + 1) }));
 }
+
+const D4_TITLE_A = "Rival A ships a new pricing tier";
+const D4_TITLE_B = "Rival B expands into three more cities";
+
+interface StubRequest {
+  state: { item: { title: string | null } };
+}
+
+afterEach(() => {
+  Reflect.deleteProperty(env, "AI");
+});
 
 beforeEach(() => {
   runs += 1;
@@ -162,12 +187,91 @@ describe("the weekly rollover Workflow (0509#4004)", () => {
     expect(brief.brands.find((line) => line.name === "Rival C")?.is_new).toBe(true);
     expect(brief.brands.find((line) => line.name === "Rival B")?.mention_delta).toBe(2);
     expect(brief.checked.mention_count).toBe(3);
-    expect(brief.why_line).toBe("Quiet week: 3 mentions checked, no site changes, no new ads.");
+    expect(brief.why_line).toBe("We couldn't judge this week's changes yet.");
+    expect(brief.is_unjudged).toBe(true);
+    expect(brief.is_quiet_week).toBe(false);
     expect(brief.next_brief_at).toBe(nextBriefAt(schedule, closesAt).toISOString());
 
     const successor = rolloverInstance(WS, nextBriefAt(schedule, closesAt), "scheduled");
     const next = await env.STANDING_ROLLOVER.get(successor.id);
     expect(["queued", "running", "waiting"]).toContain((await next.status()).status);
+  });
+
+  it("writes a paused workspace's brief as paused and sends nothing", async () => {
+    const schedule = scheduleOffsetFromToday(3);
+    await seedWorkspace(schedule);
+    await env.DB.prepare("UPDATE workspace SET brief_paused_at = '2026-09-25T10:00:00.000Z' WHERE id = ?1")
+      .bind(WS)
+      .run();
+    const closesAt = nextBriefAt(schedule, new Date());
+    const startsAt = previousBriefAt(schedule, closesAt);
+    const lastWeek = previousBriefAt(schedule, startsAt).toISOString();
+    await seedFrozenWeek(lastWeek, [
+      [SELF, 1],
+      [RIVAL_A, 2],
+      [RIVAL_B, 3],
+    ]);
+    const during = new Date(startsAt.getTime() + hour);
+    await seedMention("p1", RIVAL_B, during, 0.95);
+    await seedMention("p2", RIVAL_B, during, 0.95);
+    await seedMention("p3", SELF, during, 0.95);
+
+    const instance = rolloverInstance(WS, closesAt, "scheduled");
+    await using introspector = await introspectWorkflowInstance(env.STANDING_ROLLOVER, instance.id);
+    await introspector.modify(async (m) => {
+      await m.disableSleeps();
+    });
+    await env.STANDING_ROLLOVER.create(instance);
+    await introspector.waitForStatus("complete");
+
+    const digestId = `digest_${WS}_${instantStamp(closesAt)}`;
+    expect(await introspector.getOutput()).toMatchObject({ digestId, skipped: "brief_paused" });
+
+    const digest = await env.DB.prepare("SELECT status FROM digest WHERE id = ?1")
+      .bind(digestId)
+      .first<{ status: string }>();
+    expect(digest?.status).toBe("paused");
+
+    const successor = rolloverInstance(WS, nextBriefAt(schedule, closesAt), "scheduled");
+    const next = await env.STANDING_ROLLOVER.get(successor.id);
+    expect(["queued", "running", "waiting"]).toContain((await next.status()).status);
+  });
+
+  it("sends again once resumed", async () => {
+    const schedule = scheduleOffsetFromToday(3);
+    await seedWorkspace(schedule);
+    await env.DB.prepare("UPDATE workspace SET brief_paused_at = ?1 WHERE id = ?2")
+      .bind("2026-09-25T10:00:00.000Z", WS)
+      .run();
+    await env.DB.prepare("UPDATE workspace SET brief_paused_at = NULL WHERE id = ?1").bind(WS).run();
+    const closesAt = nextBriefAt(schedule, new Date());
+    const startsAt = previousBriefAt(schedule, closesAt);
+    const lastWeek = previousBriefAt(schedule, startsAt).toISOString();
+    await seedFrozenWeek(lastWeek, [
+      [SELF, 1],
+      [RIVAL_A, 2],
+      [RIVAL_B, 3],
+    ]);
+    const during = new Date(startsAt.getTime() + hour);
+    await seedMention("q1", RIVAL_B, during, 0.95);
+    await seedMention("q2", RIVAL_B, during, 0.95);
+    await seedMention("q3", SELF, during, 0.95);
+
+    const instance = rolloverInstance(WS, closesAt, "scheduled");
+    await using introspector = await introspectWorkflowInstance(env.STANDING_ROLLOVER, instance.id);
+    await introspector.modify(async (m) => {
+      await m.disableSleeps();
+    });
+    await env.STANDING_ROLLOVER.create(instance);
+    await introspector.waitForStatus("complete");
+
+    const digestId = `digest_${WS}_${instantStamp(closesAt)}`;
+    expect(await introspector.getOutput()).toMatchObject({ digestId, skipped: null });
+
+    const digest = await env.DB.prepare("SELECT status FROM digest WHERE id = ?1")
+      .bind(digestId)
+      .first<{ status: string }>();
+    expect(digest?.status).toBe("pending");
   });
 
   it("names only competitors paused during the ranked week in the why-line", async () => {
@@ -223,6 +327,83 @@ describe("the weekly rollover Workflow (0509#4004)", () => {
     expect(digests?.n).toBe(0);
   });
 
+  it("carries the week's read-this-first marks and names the lead brand", async () => {
+    const schedule = scheduleOffsetFromToday(3);
+    await seedWorkspace(schedule);
+    const closesAt = nextBriefAt(schedule, new Date());
+    const startsAt = previousBriefAt(schedule, closesAt);
+    const lastWeek = previousBriefAt(schedule, startsAt).toISOString();
+    await seedFrozenWeek(lastWeek, [
+      [SELF, 1],
+      [RIVAL_A, 2],
+      [RIVAL_B, 3],
+    ]);
+    const during = new Date(startsAt.getTime() + hour);
+    const first = await seedTitledNotable("d4a", RIVAL_A, D4_TITLE_A, during);
+    const second = await seedTitledNotable("d4b", RIVAL_B, D4_TITLE_B, new Date(during.getTime() + 1000));
+    const run = vi.fn(async (_model: string, request: StubRequest) => {
+      const noul = request.state.item.title === D4_TITLE_A ? 0.8 : 0.6;
+      return { answers: { read_this_first: { type: "noul", noul } } };
+    });
+    Reflect.set(env, "AI", { run });
+
+    const instance = rolloverInstance(WS, closesAt, "scheduled");
+    await using introspector = await introspectWorkflowInstance(env.STANDING_ROLLOVER, instance.id);
+    await introspector.modify(async (m) => {
+      await m.disableSleeps();
+    });
+    await env.STANDING_ROLLOVER.create(instance);
+    await introspector.waitForStatus("complete");
+
+    const digestId = `digest_${WS}_${instantStamp(closesAt)}`;
+    const digest = await env.DB.prepare("SELECT payload_json FROM digest WHERE id = ?1")
+      .bind(digestId)
+      .first<{ payload_json: string }>();
+    const brief = parseBriefPayload(digest?.payload_json ?? "");
+
+    expect(brief.read_this_first.map((mark) => mark.signal_id)).toEqual([first, second]);
+    expect(brief.read_this_first[0]?.entity_name).toBe("Rival A");
+    expect(brief.why_line).toBe("2 of 2 worth knowing this week, led by Rival A.");
+    expect(brief.is_quiet_week).toBe(false);
+  });
+
+  it("writes the not-judged brief when the D4 judge is unavailable", async () => {
+    const schedule = scheduleOffsetFromToday(3);
+    await seedWorkspace(schedule);
+    const closesAt = nextBriefAt(schedule, new Date());
+    const startsAt = previousBriefAt(schedule, closesAt);
+    const lastWeek = previousBriefAt(schedule, startsAt).toISOString();
+    await seedFrozenWeek(lastWeek, [
+      [SELF, 1],
+      [RIVAL_A, 2],
+      [RIVAL_B, 3],
+    ]);
+    const during = new Date(startsAt.getTime() + hour);
+    await seedTitledNotable("d4c", RIVAL_A, D4_TITLE_A, during);
+    await seedTitledNotable("d4d", RIVAL_B, D4_TITLE_B, new Date(during.getTime() + 1000));
+    const run = vi.fn(() => Promise.reject(new Error("Jev is down")));
+    Reflect.set(env, "AI", { run });
+
+    const instance = rolloverInstance(WS, closesAt, "scheduled");
+    await using introspector = await introspectWorkflowInstance(env.STANDING_ROLLOVER, instance.id);
+    await introspector.modify(async (m) => {
+      await m.disableSleeps();
+    });
+    await env.STANDING_ROLLOVER.create(instance);
+    await introspector.waitForStatus("complete");
+
+    const digestId = `digest_${WS}_${instantStamp(closesAt)}`;
+    const digest = await env.DB.prepare("SELECT payload_json FROM digest WHERE id = ?1")
+      .bind(digestId)
+      .first<{ payload_json: string }>();
+    const brief = parseBriefPayload(digest?.payload_json ?? "");
+
+    expect(brief.read_this_first).toEqual([]);
+    expect(brief.why_line).toBe("We couldn't judge this week's changes yet.");
+    expect(brief.is_quiet_week).toBe(false);
+    expect(brief.is_unjudged).toBe(true);
+  });
+
   it("writes no brief when only the own brand is on, and still schedules next week", async () => {
     const schedule = scheduleOffsetFromToday(3);
     await seedWorkspace(schedule);
@@ -247,10 +428,69 @@ describe("the weekly rollover Workflow (0509#4004)", () => {
     );
     expect(["queued", "running", "waiting"]).toContain((await successor.status()).status);
   });
+
+  it("does not freeze rank when change signals have no verdict, and writes the not-judged brief", async () => {
+    const schedule = scheduleOffsetFromToday(3);
+    await seedWorkspace(schedule);
+    const closesAt = nextBriefAt(schedule, new Date());
+    const startsAt = previousBriefAt(schedule, closesAt);
+    const lastWeek = previousBriefAt(schedule, startsAt).toISOString();
+    await seedFrozenWeek(lastWeek, [
+      [SELF, 1],
+      [RIVAL_A, 2],
+      [RIVAL_B, 3],
+    ]);
+    const during = new Date(startsAt.getTime() + hour).toISOString();
+    const signalId = `${WS}_unjudged_change`;
+    await env.DB.prepare(
+      "INSERT INTO signal (id, workspace_id, entity_id, source_id, kind, aspect, canonical_url, url_hash, dedup_key, observed_at) VALUES (?1, ?2, ?3, ?4, 'change', 'home', ?5, ?6, ?7, ?8)",
+    )
+      .bind(
+        signalId,
+        WS,
+        `${WS}_${RIVAL_A}`,
+        SOURCE,
+        `https://a.example/${signalId}`,
+        `hash-${signalId}`,
+        `dedup-${signalId}`,
+        during,
+      )
+      .run();
+
+    const instance = rolloverInstance(WS, closesAt, "scheduled");
+    await using introspector = await introspectWorkflowInstance(env.STANDING_ROLLOVER, instance.id);
+    await introspector.modify(async (m) => {
+      await m.disableSleeps();
+    });
+    await env.STANDING_ROLLOVER.create(instance);
+    await introspector.waitForStatus("complete");
+
+    const digestId = `digest_${WS}_${instantStamp(closesAt)}`;
+    expect(await introspector.getOutput()).toEqual({
+      workspaceId: WS,
+      closesAt: closesAt.toISOString(),
+      digestId,
+      skipped: null,
+    });
+    expect(await standingFor(startsAt.toISOString())).toEqual([
+      { entity_id: RIVAL_A, score: 0, rank: null, movement: null },
+      { entity_id: RIVAL_B, score: 0, rank: null, movement: null },
+      { entity_id: RIVAL_C, score: 0, rank: null, movement: null },
+      { entity_id: SELF, score: 0, rank: null, movement: null },
+    ]);
+    const digest = await env.DB.prepare("SELECT payload_json FROM digest WHERE id = ?1")
+      .bind(digestId)
+      .first<{ payload_json: string }>();
+    const brief = parseBriefPayload(digest?.payload_json ?? "");
+    expect(brief.is_unjudged).toBe(true);
+    expect(brief.is_quiet_week).toBe(false);
+    expect(brief.headline_rank).toBeNull();
+    expect(brief.why_line).toBe("We couldn't judge this week's changes yet.");
+  });
 });
 
 describe("the nightly standing cron (0509#3978)", () => {
-  it("refreshes the open week unranked, schedules the next rollover, and catches up a missed one", async () => {
+  it("enqueues the next rollover and a catch-up without scoring workspaces inline", async () => {
     const schedule = scheduleOffsetFromToday(3);
     await seedWorkspace(schedule);
     const now = new Date();
@@ -268,13 +508,8 @@ describe("the nightly standing cron (0509#3978)", () => {
     await using introspector = await introspectWorkflow(env.STANDING_ROLLOVER);
     const result = await runNightlyStanding(env, now);
 
-    expect(result).toMatchObject({ failed: 0, catchUps: 1 });
-    expect((await standingFor(week.startsAt.toISOString())).map((row) => [row.entity_id, row.rank])).toEqual([
-      [RIVAL_A, null],
-      [RIVAL_B, null],
-      [RIVAL_C, null],
-      [SELF, null],
-    ]);
+    expect(result).toMatchObject({ catchUps: 1 });
+    expect(await standingFor(week.startsAt.toISOString())).toEqual([]);
 
     const scheduled = rolloverInstance(WS, week.closesAt, "scheduled");
     const catchUp = rolloverInstance(WS, week.startsAt, "catch-up");
@@ -294,6 +529,23 @@ describe("the nightly standing cron (0509#3978)", () => {
     ]);
 
     const again = await runNightlyStanding(env, now);
-    expect(again).toMatchObject({ failed: 0, catchUps: 0 });
+    expect(again).toMatchObject({ catchUps: 0 });
+  });
+
+  it("does not enqueue a workspace with no self entity", async () => {
+    const schedule = scheduleOffsetFromToday(3);
+    const createdAt = new Date(Date.now() - 60 * 24 * hour).toISOString();
+    await env.DB.batch([
+      env.DB.prepare(
+        "INSERT INTO user (id, name, email, emailVerified, createdAt, updatedAt) VALUES (?1, 'Rollover', ?2, 1, ?3, ?3)",
+      ).bind(USER, `${USER}@example.test`, createdAt),
+      env.DB.prepare(
+        "INSERT INTO workspace (id, name, owner_user_id, timezone, brief_weekday, brief_hour, created_at) VALUES (?1, 'Rollover', ?2, ?3, ?4, ?5, ?6)",
+      ).bind(WS, USER, schedule.timezone, schedule.weekday, schedule.hour, createdAt),
+    ]);
+    const now = new Date();
+    const scheduled = rolloverInstance(WS, openWeek(schedule, now).closesAt, "scheduled");
+    await runNightlyStanding(env, now);
+    await expect(env.STANDING_ROLLOVER.get(scheduled.id)).rejects.toThrow();
   });
 });

@@ -3,6 +3,7 @@ import {
   deleteExpiredSupportReports,
   insertSupportReport,
 } from "../app/lib/data/support_report.server";
+import { sha256Hex } from "../app/lib/sha256";
 
 const FORWARD_TO = "nishant345@gmail.com";
 const ISSUES_URL = "https://api.github.com/repos/Nishfleet/0509/issues";
@@ -29,16 +30,12 @@ function sitePaths(text: string): string[] {
       ) {
         paths.add(url.pathname);
       }
-    } catch {
+    } catch (error) {
+      console.error(JSON.stringify({ event: "support_inbox.url_parse_failed", error: String(error) }));
       continue;
     }
   }
   return [...paths].slice(0, MAX_PATHS);
-}
-
-async function sha256Hex(text: string): Promise<string> {
-  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
-  return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
 export default {

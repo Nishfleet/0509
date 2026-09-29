@@ -1,12 +1,28 @@
 import { expect, test } from "@playwright/test";
 
-import { decodedBodies, readRawMessage, requireInboxToken, waitForMagicLink } from "./inbox";
+import { decodedBodies, deleteCreatedAccount, isLocalLane, readRawMessage, requireInboxToken, settleSignInWidget, waitForMagicLink } from "./inbox";
 
-// Production only, for the same reason as J1: the preview Worker's wrangler dev
-// has no EMAIL binding, so no sign-in email is ever sent, and no inbox to read
-// one back from. Skipping beats faking the copy.
+let createdEmail = "";
+test.afterEach(async ({ page }, testInfo) => {
+  if (createdEmail === "") return;
+  testInfo.setTimeout(testInfo.timeout + 60_000);
+  // The delete failing is a test failure, not a reason to keep the address:
+  // clearing in finally means the next test in this worker cannot try to
+  // delete an account that is already gone.
+  try {
+    await deleteCreatedAccount(page, createdEmail);
+  } finally {
+    createdEmail = "";
+  }
+});
+
+// Remote lanes only: this spec reads the raw MIME message back from the inbox
+// Worker, which has no local-lane counterpart — wrangler's simulated send_email
+// (0509#6092) writes text/html part files under .wrangler/tmp/email/, not a raw
+// message, so nothing here can run against the preview Worker. Skipping beats
+// faking the copy.
 test.skip(
-  !process.env.PLAYWRIGHT_TEST_BASE_URL,
+  isLocalLane(),
   "the sign-in email only exists on the production mail path",
 );
 
@@ -30,14 +46,16 @@ function htmlBodyFrom(raw: string): string {
 // module rather than against the inbox's rendering: the copy has to survive a
 // mail client that shows the HTML part at 600 px in either colour scheme.
 test(
-  "the sign-in email names the address, the expiry and the ignore line, and renders at 600 px in light and dark",
+  "the sign-in email names the address, the expiry and the ignore line, and renders at 600 px in light and dark @own-signin",
   async ({ page }, testInfo) => {
     test.setTimeout(180_000);
     const token = requireInboxToken();
     const email = `e2e+${crypto.randomUUID().replaceAll("-", "").slice(0, 12)}@0509.io`;
+    createdEmail = email;
 
     await page.goto("/login");
     await page.locator('input[name="email"]').fill(email);
+    await settleSignInWidget(page);
     await page.locator('button[type="submit"]').click();
     // The send replaces the form; asserting the field is gone asserts the swap
     // without pinning the "Check your email" copy (smoke.spec.ts's

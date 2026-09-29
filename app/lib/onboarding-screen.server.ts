@@ -1,17 +1,16 @@
-import type { Subject } from "./identity/normalise";
+import { captureException } from "@sentry/cloudflare";
+
+import { isLoginWall, type Subject } from "./identity/normalise";
 import { readSubjectDecision, insertSubjectDecision } from "./data/user_decision.server";
 import { JevUnavailableError } from "./jev/client.server";
 import { screenPublicSubject } from "./jev/public-subject.server";
 
 export const REFUSAL = "we track brands and creators, not people";
 
-export const UNAVAILABLE = "we can't check that right now, so we haven't looked it up. Try again in a few minutes";
-
 export type ScreenResult =
   | { kind: "proceed" }
   | { kind: "refuse"; message: string }
-  | { kind: "ask"; subject: string }
-  | { kind: "unavailable"; message: string };
+  | { kind: "ask"; subject: string };
 
 const runJevOutcome = (input: {
   workspaceId: string;
@@ -20,8 +19,16 @@ const runJevOutcome = (input: {
   now: string;
 }): Promise<{ outcome: "proceed" | "ask" | "refuse" } | null> =>
   screenPublicSubject(input.workspaceId, input.subject, input.raw, input.now).catch((error: unknown) => {
-    if (error instanceof JevUnavailableError) return null;
-    throw error;
+    if (!(error instanceof JevUnavailableError)) throw error;
+    console.log(
+      JSON.stringify({
+        event: "public_subject.jev_unavailable",
+        workspaceId: input.workspaceId,
+        error: error.message.slice(0, 300),
+      }),
+    );
+    captureException(error, { tags: { jev: "public_subject" } });
+    return null;
   });
 
 export async function screenOnboardingSubject(input: {
@@ -36,9 +43,21 @@ export async function screenOnboardingSubject(input: {
   if (decided === "public_subject:confirmed") return { kind: "proceed" };
   if (decided === "public_subject:refused") return { kind: "refuse", message: REFUSAL };
 
+  const ground = isLoginWall(input.raw) ? "login" : null;
+  console.log(JSON.stringify({ event: "public_subject.screen", fetched: false, ground }));
+  if (ground === "login") {
+    await insertSubjectDecision({
+      workspaceId: input.workspaceId,
+      userId: input.userId,
+      subject: input.subject.registrable,
+      verdict: "public_subject:refused",
+      decidedAt: input.now,
+    });
+    return { kind: "refuse", message: REFUSAL };
+  }
+
   const screened = await runJevOutcome(input);
-  if (screened === null) return { kind: "unavailable", message: UNAVAILABLE };
-  const { outcome } = screened;
+  const outcome = screened === null ? "ask" : screened.outcome;
   if (outcome === "proceed") return { kind: "proceed" };
 
   if (outcome === "refuse") {

@@ -112,7 +112,7 @@ describe("0509-support-inbox-v2", () => {
   it("drops unsubscribe and auth token paths from the issue body", async () => {
     const tokenMime = [
       ...MIME.split("\r\n"),
-      "https://0509.io/u/abc",
+      "https://0509.io/u/tok-zq9-unsub",
       "https://0509.io/api/auth/magic-link/verify?token=secret",
     ].join("\r\n");
     const { fetchSpy } = await deliver(env, tokenMime);
@@ -120,7 +120,7 @@ describe("0509-support-inbox-v2", () => {
     const issue = issueBody(fetchSpy);
     expect(issue.body).not.toContain("/u/");
     expect(issue.body).not.toContain("/api/auth");
-    expect(issue.body).not.toContain("abc");
+    expect(issue.body).not.toContain("tok-zq9-unsub");
     expect(issue.body).toContain("/app/pages");
   });
 

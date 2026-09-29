@@ -1,6 +1,5 @@
 # Trigger stub. The dispatch logic lives once in Nishfleet/fleet-ops; a
 # workflow only fires on its own repo's events, so the triggers stay here.
-# opus-vet dispatches this file by name with issue=<N>.
 name: agent-dispatch
 on:
   issues:
@@ -20,11 +19,14 @@ on:
     - cron: '17 */6 * * *'
 jobs:
   dispatch:
-    uses: Nishfleet/fleet-ops/.github/workflows/agent-dispatch.yml@main
+    uses: Nishfleet/fleet-ops/.github/workflows/agent-dispatch.yml@main # same ref runner group 3 enforces for agent.yml; a SHA pin here drifts from agent.yml@main and strands jobs (0509#5231)
     permissions:
       issues: write
       pull-requests: write
       contents: write
+      actions: read
+      checks: read
+      statuses: read
     with:
       issue: ${{ inputs.issue }}
       agent_mode: ${{ vars.AGENT_MODE }}

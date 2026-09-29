@@ -1,13 +1,30 @@
 import type { BriefPayload } from "./brief-payload";
 import type { BriefSchedule } from "./brief-schedule";
 import { nextBriefAt } from "./brief-schedule";
+import { firstSiteSweepAt } from "./onboarding/arrival-estimate";
+import type { SiteChangeView } from "./site-change";
+import { sourceName } from "./source-name";
+export { nextSiteSweepAt } from "./onboarding/arrival-estimate";
 
 export interface HomeEntity {
   id: string;
   role: "self" | "competitor";
   domain: string;
+  name: string;
   state: string;
 }
+
+export interface HomeHistoryRow {
+  entity_id: string;
+  week_start_at: string;
+  rank: number;
+}
+
+export interface HomeSource { key: string; kind: "site" | "ads" | "mentions" | "hiring"; platform: string }
+
+export interface HomeCount { entityId: string; sourceKey: string; count: number }
+
+export interface HomePill { key: string; label: string; count: number; state: "live" | "none" | "degraded" }
 
 export interface HomeRow {
   entityId: string;
@@ -16,17 +33,53 @@ export interface HomeRow {
   domain: string | null;
   movement: string;
   self: boolean;
+  signals: number;
+  why: string | null;
+  move: SiteChangeView | null;
+  pills: readonly HomePill[];
+}
+
+export interface WeekEvidence {
+  id: string;
+  sourceKind: string;
+  title: string | null;
+  summary: string | null;
+  url: string | null;
+  evidenceUrl: string | null;
+  observedAt: string;
+}
+
+interface FourWeekLineSeries {
+  entityId: string;
+  label: string;
+  self: boolean;
+  paused: boolean;
+  ranks: readonly (number | null)[];
+}
+
+export interface FourWeekChart {
+  weeks: readonly string[];
+  lines: readonly FourWeekLineSeries[];
 }
 
 export type HomeStanding =
   | { kind: "add-competitor" }
-  | { kind: "gathering"; briefAt: string }
-  | { kind: "ranked"; rank: number; total: number; whyLine: string; rows: readonly HomeRow[] };
+  | { kind: "gathering"; briefAt: string; firstSweepAt: string | null; brands: number }
+  | { kind: "unjudged"; whyLine: string }
+  | { kind: "ranked"; rank: number; total: number; whyLine: string; unjudged: boolean; readThisFirst: BriefPayload["read_this_first"]; rows: readonly HomeRow[]; chart: FourWeekChart };
+
+export interface HomeChip {
+  name: string;
+  href: string;
+  self: boolean;
+  off: boolean;
+}
 
 export interface HomeView {
   eyebrow: string;
   greeting: string;
   standing: HomeStanding;
+  chips: readonly HomeChip[];
   footer: string;
 }
 
@@ -92,61 +145,160 @@ function byRank(a: HomeRow, b: HomeRow): number {
   return a.position - b.position;
 }
 
-function rankedRows(payload: BriefPayload, entities: readonly HomeEntity[]): readonly HomeRow[] {
+function rankedRows(
+  payload: BriefPayload,
+  entities: readonly HomeEntity[],
+  sources: readonly HomeSource[],
+  counts: readonly HomeCount[],
+  moves: readonly SiteChangeView[],
+): readonly HomeRow[] {
   const byId = new Map(entities.map((entity) => [entity.id, entity]));
   return payload.brands
     .map((brand) => {
       const entity = byId.get(brand.entity_id);
-      const signals = brand.ad_delta + brand.mention_delta + brand.site_change_count + brand.new_roles;
+      const activity = brand.ad_delta + brand.mention_delta + brand.site_change_count + brand.new_roles;
+      const pills = sources.map((source) => {
+        const count = counts.find((entry) => entry.entityId === brand.entity_id && entry.sourceKey === source.key)?.count ?? 0;
+        const degraded = payload.checked.degraded_sources.some((item) => item.key === source.key);
+        return { key: source.key, label: sourceName(source.kind, source.platform), count, state: degraded ? "degraded" : count === 0 ? "none" : "live" } as const;
+      });
       return {
         entityId: brand.entity_id,
-        position: signals === 0 ? null : brand.rank,
+        position: activity === 0 ? null : brand.rank,
         name: brand.name,
         domain: entity?.domain ?? null,
         movement: movementLabel(brand.movement, brand.is_new),
         self: entity?.role === "self",
+        signals: pills.reduce((sum, pill) => sum + pill.count, 0),
+        why: brand.biggest_move,
+        move: moves.find((move) => move.entityId === brand.entity_id) ?? null,
+        pills,
       };
     })
     .sort(byRank);
 }
 
-export function homeStanding(input: {
+function weekLabel(timezone: string, weekStartAt: string): string {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: timezone,
+    day: "numeric",
+    month: "short",
+  }).formatToParts(new Date(weekStartAt));
+  const day = parts.find((part) => part.type === "day")?.value ?? "";
+  const month = parts.find((part) => part.type === "month")?.value ?? "";
+  return `${day} ${month}`.toUpperCase();
+}
+
+function weekKeys(history: readonly HomeHistoryRow[]): readonly string[] {
+  return [...new Set(history.map((row) => row.week_start_at))].sort().slice(-4);
+}
+
+function fourWeekChart(
+  history: readonly HomeHistoryRow[],
+  rows: readonly HomeRow[],
+  entities: readonly HomeEntity[],
+  timezone: string,
+): FourWeekChart {
+  const weeks = weekKeys(history);
+  const entitiesById = new Map(entities.map((entity) => [entity.id, entity]));
+  const rowsByEntityId = new Map(rows.map((row) => [row.entityId, row]));
+  const entityIds = [...new Set(history.map((row) => row.entity_id))];
+  const ranksByEntityId = new Map(
+    entityIds.map((entityId) => [
+      entityId,
+      weeks.map((week) => history.find((entry) => entry.entity_id === entityId && entry.week_start_at === week)?.rank ?? null),
+    ]),
+  );
+  return {
+    weeks: weeks.map((week) => weekLabel(timezone, week)),
+    lines: entityIds.map((entityId) => {
+      const entity = entitiesById.get(entityId);
+      const row = rowsByEntityId.get(entityId);
+      const self = entity?.role === "self";
+      const label = self ? "YOU" : (row?.name ?? entity?.domain ?? entityId);
+      const ranks = ranksByEntityId.get(entityId) ?? [];
+      return { entityId, label, self, paused: entity?.state !== "on", ranks };
+    }),
+  };
+}
+
+interface HomeStandingInput {
   payload: BriefPayload | null;
   entities: readonly HomeEntity[];
   schedule: BriefSchedule;
+  history: readonly HomeHistoryRow[];
+  sources: readonly HomeSource[];
+  counts: readonly HomeCount[];
+  moves: readonly SiteChangeView[];
   now: Date;
-}): HomeStanding {
-  const onBrands = input.entities.filter((entity) => entity.state === "on").length;
-  if (onBrands < 2) return { kind: "add-competitor" };
+}
+
+function gatheringStanding(input: HomeStandingInput, onBrands: number): HomeStanding {
+  const at = firstSiteSweepAt({ now: input.now, sources: input.sources });
+  return {
+    kind: "gathering",
+    briefAt: dayAndTime(input.schedule.timezone, nextBriefAt(input.schedule, input.now)),
+    firstSweepAt: at === null ? null : dayAndTime(input.schedule.timezone, at),
+    brands: onBrands,
+  };
+}
+
+function rankedOrWaiting(input: HomeStandingInput, onBrands: number): HomeStanding {
   const payload = input.payload;
   const rank = payload?.headline_rank ?? null;
-  if (payload === null || rank === null || payload.headline_total < 2) {
-    return { kind: "gathering", briefAt: dayAndTime(input.schedule.timezone, nextBriefAt(input.schedule, input.now)) };
+  if (payload !== null && payload.is_unjudged && (rank === null || payload.headline_total < 2)) {
+    return { kind: "unjudged", whyLine: payload.why_line };
   }
+  if (payload === null || rank === null || payload.headline_total < 2) {
+    return gatheringStanding(input, onBrands);
+  }
+  const rows = rankedRows(payload, input.entities, input.sources, input.counts, input.moves);
   return {
     kind: "ranked",
     rank,
     total: payload.headline_total,
     whyLine: payload.why_line,
-    rows: rankedRows(payload, input.entities),
+    unjudged: payload.is_unjudged,
+    readThisFirst: payload.read_this_first.slice(0, 3),
+    rows,
+    chart: fourWeekChart(input.history, rows, input.entities, input.schedule.timezone),
   };
 }
 
-export function homeView(input: {
-  payload: BriefPayload | null;
-  entities: readonly HomeEntity[];
-  schedule: BriefSchedule;
-  now: Date;
-}): HomeView {
+export function homeStanding(input: HomeStandingInput): HomeStanding {
+  const onBrands = input.entities.filter((entity) => entity.state === "on").length;
+  if (onBrands < 2) return { kind: "add-competitor" };
+  return rankedOrWaiting(input, onBrands);
+}
+
+function chipHref(entity: HomeEntity): string {
+  return entity.role === "self" ? "/app/settings" : `/app/competitors/${entity.id}`;
+}
+
+export function homeChips(entities: readonly HomeEntity[]): readonly HomeChip[] {
+  const kept = entities.filter((entity) => entity.state === "on" || entity.state === "off");
+  const self = kept.filter((entity) => entity.role === "self");
+  const competitors = kept.filter((entity) => entity.role !== "self");
+  return [...self, ...competitors].map((entity) => ({
+    name: entity.name,
+    href: chipHref(entity),
+    self: entity.role === "self",
+    off: entity.state === "off",
+  }));
+}
+
+export function homeView(input: HomeStandingInput): HomeView {
   const onCount = input.entities.filter((entity) => entity.state === "on").length;
   const brandWord = onCount === 1 ? "brand" : "brands";
   const recheckTime = hourAndMinute(input.schedule.timezone, nextHour(input.now));
   const briefTime = dayAndTime(input.schedule.timezone, nextBriefAt(input.schedule, input.now));
   const footer = `Checked ${String(onCount)} ${brandWord} this week · brief ${briefTime} · your site re-checked at ${recheckTime}`;
+  const standing = homeStanding(input);
   return {
     eyebrow: todayEyebrow(input.schedule.timezone, input.now),
     greeting: greetingFor(input.schedule.timezone, input.now),
-    standing: homeStanding(input),
+    standing,
+    chips: homeChips(input.entities),
     footer,
   };
 }

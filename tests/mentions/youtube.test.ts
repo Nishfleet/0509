@@ -78,5 +78,60 @@ describe("youtubeAdapter", () => {
 
 		expect(result.items).toEqual([]);
 		expect(result.canaryCount).toBe(0);
+		expect(result.feedState).toBe("stale");
+	});
+
+	it("does not fetch when the query is a brand name rather than a channel id", async () => {
+		const fakeFetch = stubFetchWith("x", { status: 404 });
+
+		const result = await youtubeAdapter({ query: "Gymshark" }, null);
+
+		expect(fakeFetch).not.toHaveBeenCalled();
+		expect(result.feedState).toBe("error");
+		expect(result.items).toEqual([]);
+	});
+
+	it("reports a 503 as an error so the sweep does not store zero videos", async () => {
+		stubFetchWith("unavailable", { status: 503, headers: { "content-type": "text/html" } });
+
+		const result = await youtubeAdapter({ query: CHANNEL_ID }, null);
+
+		expect(result.feedState).toBe("error");
+		expect(result.items).toEqual([]);
+		expect(result.canaryCount).toBe(0);
+	});
+
+	it("does not treat a 200 non-atom document as an empty channel", async () => {
+		stubFetchWith("<not-a-feed></not-a-feed>", { status: 200, headers: { "content-type": "text/xml" } });
+
+		const result = await youtubeAdapter({ query: CHANNEL_ID }, null);
+
+		expect(result.feedState).toBe("stale");
+		expect(result.items).toEqual([]);
+	});
+
+	it("does not treat a document that merely mentions the Atom namespace as an empty channel", async () => {
+		const body = `<?xml version="1.0"?>
+<html xmlns="http://www.w3.org/2005/Atom"><body>lost channel</body></html>`;
+		stubFetchWith(body, { status: 200, headers: { "content-type": "text/xml" } });
+
+		const result = await youtubeAdapter({ query: CHANNEL_ID }, null);
+
+		expect(result.feedState).toBe("stale");
+		expect(result.items).toEqual([]);
+	});
+
+	it("keeps a 200 Atom feed with no entries as an empty result, not stale", async () => {
+		const body = `<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom" xmlns:yt="http://www.youtube.com/xml/schemas/2015">
+ <title>Quiet</title>
+</feed>`;
+		stubFetchWith(body, { status: 200, headers: { "content-type": "text/xml" } });
+
+		const result = await youtubeAdapter({ query: CHANNEL_ID }, null);
+
+		expect(result.feedState).toBe("ok");
+		expect(result.items).toEqual([]);
+		expect(result.canaryCount).toBe(0);
 	});
 });

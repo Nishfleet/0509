@@ -1,23 +1,54 @@
 import { env } from "cloudflare:workers";
+import { z } from "zod";
 
-export interface SiteChangeSignal {
+import type { ScoredSignal } from "../biggest-move";
+import { isFeedKind, type DevelopmentItem } from "../developments";
+import type { WeekEvidence } from "../home-standing";
+import {
+  D3_QUESTION_ID,
+  D6_QUESTION_ID,
+  reliabilitySchema,
+  scoreBucketSchema,
+} from "../standing-score";
+import type { HiringSignalState, HiringSignalUpdate } from "../hiring/role-lifecycle";
+
+export interface ChangeSignalRow {
   id: string;
   workspaceId: string;
   entityId: string;
   sourceId: string;
   watchId: string;
   snapshotId: string;
-  aspect: string;
+  title: string | null;
+  summary: string | null;
   url: string;
+  aspect: string;
   payloadJson: string;
   observedAt: string;
 }
 
-const INSERT_SITE_CHANGE = `INSERT INTO signal
-  (id, workspace_id, entity_id, source_id, watch_id, snapshot_id, kind, aspect,
-   url, evidence_url, payload_json, dedup_key, observed_at, last_seen_at)
-VALUES (?1, ?2, ?3, ?4, ?5, ?6, 'change', ?7, ?8, ?8, ?9, ?6, ?10, ?10)
+const INSERT_CHANGE_SIGNAL = `INSERT INTO signal
+  (id, workspace_id, entity_id, source_id, watch_id, snapshot_id, kind, title, summary,
+   url, aspect, evidence_url, payload_json, dedup_key, observed_at, last_seen_at)
+VALUES (?1, ?2, ?3, ?4, ?5, ?6, 'change', ?7, ?8, ?9, ?10, ?9, ?11, ?6, ?12, ?12)
 ON CONFLICT (source_id, dedup_key) DO NOTHING`;
+
+export function insertChangeSignalStatement(row: ChangeSignalRow): D1PreparedStatement {
+  return env.DB.prepare(INSERT_CHANGE_SIGNAL).bind(
+    row.id,
+    row.workspaceId,
+    row.entityId,
+    row.sourceId,
+    row.watchId,
+    row.snapshotId,
+    row.title,
+    row.summary,
+    row.url,
+    row.aspect,
+    row.payloadJson,
+    row.observedAt,
+  );
+}
 
 export interface NewHiringSignal {
   id: string;
@@ -75,21 +106,101 @@ export async function insertHiringSignals(rows: readonly NewHiringSignal[]): Pro
   }
 }
 
-export async function insertSiteChange(row: SiteChangeSignal): Promise<void> {
-  await env.DB.prepare(INSERT_SITE_CHANGE)
-    .bind(
-      row.id,
-      row.workspaceId,
-      row.entityId,
-      row.sourceId,
-      row.watchId,
-      row.snapshotId,
-      row.aspect,
-      row.url,
-      row.payloadJson,
-      row.observedAt,
-    )
-    .run();
+const SELECT_HIRING_SIGNAL_STATES = `SELECT id, dedup_key, last_seen_at, payload_json FROM signal
+WHERE kind = 'hiring' AND watch_id = ?1 AND is_tombstoned = 0`;
+
+const hiringSignalStateRows = z.array(
+  z.object({
+    id: z.string(),
+    dedup_key: z.string(),
+    last_seen_at: z.string().nullable(),
+    payload_json: z.string(),
+  }),
+);
+
+export async function readHiringSignalStates(watchId: string): Promise<HiringSignalState[]> {
+  const rows = await env.DB.prepare(SELECT_HIRING_SIGNAL_STATES).bind(watchId).all();
+  return hiringSignalStateRows
+    .parse(rows.results)
+    .filter((row) => row.dedup_key.startsWith(`${watchId}:`))
+    .map((row) => ({
+      id: row.id,
+      roleId: row.dedup_key.slice(watchId.length + 1),
+      lastSeenAt: row.last_seen_at,
+      payloadJson: row.payload_json,
+    }));
+}
+
+const UPDATE_HIRING_LIFECYCLE = `UPDATE signal SET last_seen_at = ?2, payload_json = ?3
+WHERE id = ?1 AND kind = 'hiring'`;
+
+export async function applyHiringLifecycle(updates: readonly HiringSignalUpdate[]): Promise<number> {
+  if (updates.length === 0) return 0;
+  let changes = 0;
+  for (let offset = 0; offset < updates.length; offset += HIRING_BATCH) {
+    const chunk = updates.slice(offset, offset + HIRING_BATCH);
+    const results = await env.DB.batch(
+      chunk.map((update) =>
+        env.DB.prepare(UPDATE_HIRING_LIFECYCLE).bind(update.id, update.lastSeenAt, update.payloadJson),
+      ),
+    );
+    for (const result of results) changes += result.meta.changes;
+  }
+  return changes;
+}
+
+const INSERT_MENTION = `INSERT INTO signal
+  (id, workspace_id, entity_id, source_id, watch_id, snapshot_id, kind, title, url, canonical_url, url_hash,
+   author, engagement_json, payload_json, dedup_key, published_at, observed_at, last_seen_at, is_tombstoned)
+VALUES (?1, ?2, ?3, ?4, ?5, ?6, 'mention', ?7, ?8, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?15, ?16)
+ON CONFLICT (source_id, dedup_key) DO NOTHING`;
+
+const SEEN_KEYS = "SELECT dedup_key FROM signal WHERE source_id = ?1 AND dedup_key IN (SELECT value FROM json_each(?2))";
+
+export interface MentionSignal {
+  id: string;
+  workspaceId: string;
+  entityId: string;
+  sourceId: string;
+  watchId: string;
+  snapshotId: string;
+  title: string;
+  url: string;
+  urlHash: string;
+  author: string | null;
+  engagementJson: string | null;
+  payloadJson: string;
+  dedupKey: string;
+  publishedAt: string | null;
+  observedAt: string;
+  isNotAboutBrand: boolean;
+}
+
+export async function readSeenDedupKeys(sourceId: string, keys: readonly string[]): Promise<Set<string>> {
+  if (keys.length === 0) return new Set();
+  const rows = await env.DB.prepare(SEEN_KEYS).bind(sourceId, JSON.stringify(keys)).all<{ dedup_key: string }>();
+  return new Set(rows.results.map((row) => row.dedup_key));
+}
+
+export function insertMention(signal: MentionSignal): D1PreparedStatement {
+  return env.DB.prepare(INSERT_MENTION).bind(
+    signal.id,
+    signal.workspaceId,
+    signal.entityId,
+    signal.sourceId,
+    signal.watchId,
+    signal.snapshotId,
+    signal.title,
+    signal.url,
+    signal.urlHash,
+    signal.author,
+    signal.engagementJson,
+    signal.payloadJson,
+    signal.dedupKey,
+    signal.publishedAt,
+    signal.observedAt,
+    signal.isNotAboutBrand ? 1 : 0,
+  );
 }
 
 export interface RecentSignal {
@@ -125,6 +236,40 @@ export async function readRecentSignals(entityId: string, since: string): Promis
   }));
 }
 
+const SELECT_WEEK_EVIDENCE = `SELECT s.id, src.kind AS source_kind, s.title, s.summary, s.url, s.evidence_url, s.observed_at
+FROM signal s JOIN source src ON src.id = s.source_id
+WHERE s.workspace_id = ?1 AND s.entity_id = ?2 AND s.observed_at >= ?3 AND s.is_tombstoned = 0
+ORDER BY s.observed_at DESC, s.id DESC LIMIT 100`;
+
+interface WeekEvidenceRow {
+  id: string;
+  source_kind: string;
+  title: string | null;
+  summary: string | null;
+  url: string | null;
+  evidence_url: string | null;
+  observed_at: string;
+}
+
+export async function readWeekEvidence(input: {
+  workspaceId: string;
+  entityId: string;
+  since: string;
+}): Promise<WeekEvidence[]> {
+  const { results } = await env.DB.prepare(SELECT_WEEK_EVIDENCE)
+    .bind(input.workspaceId, input.entityId, input.since)
+    .all<WeekEvidenceRow>();
+  return results.map((row) => ({
+    id: row.id,
+    sourceKind: row.source_kind,
+    title: row.title,
+    summary: row.summary,
+    url: row.url,
+    evidenceUrl: row.evidence_url,
+    observedAt: row.observed_at,
+  }));
+}
+
 export interface SiteChangeRow {
   id: string;
   entity_id: string;
@@ -136,15 +281,26 @@ export interface SiteChangeRow {
   observed_at: string;
   before_at: string | null;
   after_at: string | null;
+  verdict_id: string | null;
+  verdict_p: number | null;
+  verdict_reason: string | null;
+  verdict_decided_at: string | null;
 }
 
 const SELECT_SITE_CHANGES = `SELECT s.id, s.entity_id, e.name AS entity_name, e.domain AS entity_domain,
   e.role AS entity_role, s.url, s.payload_json, s.observed_at,
-  b.fetched_at AS before_at, a.fetched_at AS after_at
+  b.fetched_at AS before_at, a.fetched_at AS after_at,
+  v.id AS verdict_id, v.p AS verdict_p, v.reason AS verdict_reason, v.decided_at AS verdict_decided_at
 FROM signal s
 JOIN entity e ON e.id = s.entity_id AND e.workspace_id = s.workspace_id
 LEFT JOIN snapshot a ON a.id = s.snapshot_id
 LEFT JOIN snapshot b ON b.id = json_extract(s.payload_json, '$.before.snapshotId')
+LEFT JOIN jev_verdict v ON v.id = (
+  SELECT v2.id FROM jev_verdict v2
+  WHERE v2.signal_id = s.id AND v2.workspace_id = s.workspace_id AND v2.question_id = ?5
+  ORDER BY v2.decided_at DESC
+  LIMIT 1
+)
 WHERE s.workspace_id = ?1
   AND s.kind = 'change'
   AND s.is_tombstoned = 0
@@ -161,9 +317,38 @@ export async function readSiteChanges(input: {
   limit: number;
 }): Promise<SiteChangeRow[]> {
   const { results } = await env.DB.prepare(SELECT_SITE_CHANGES)
-    .bind(input.workspaceId, input.since, input.entityId, input.limit)
+    .bind(input.workspaceId, input.since, input.entityId, input.limit, D3_QUESTION_ID)
     .all<SiteChangeRow>();
   return results;
+}
+
+const SELECT_ENTITY_DEVELOPMENTS = `SELECT id, kind, title, summary, url, observed_at FROM signal
+WHERE workspace_id = ?1 AND entity_id = ?2 AND kind IN ('ad', 'change', 'mention', 'hiring')
+  AND is_tombstoned = 0 AND observed_at >= ?3 ORDER BY observed_at DESC, id DESC LIMIT ?4`;
+
+interface DevelopmentRow {
+  id: string;
+  kind: string;
+  title: string | null;
+  summary: string | null;
+  url: string | null;
+  observed_at: string;
+}
+
+export async function readEntityDevelopments(input: {
+  workspaceId: string;
+  entityId: string;
+  since: string;
+  limit: number;
+}): Promise<DevelopmentItem[]> {
+  const { results } = await env.DB.prepare(SELECT_ENTITY_DEVELOPMENTS)
+    .bind(input.workspaceId, input.entityId, input.since, input.limit)
+    .all<DevelopmentRow>();
+  return results.flatMap((row) =>
+    isFeedKind(row.kind)
+      ? [{ id: row.id, kind: row.kind, title: row.title, summary: row.summary, url: row.url, observedAt: row.observed_at }]
+      : [],
+  );
 }
 
 const SELECT_SITE_CHANGE_PAYLOAD = `SELECT payload_json FROM signal
@@ -176,8 +361,93 @@ export async function readSiteChangePayload(workspaceId: string, signalId: strin
   return row?.payload_json ?? null;
 }
 
-const DELETE_ENTITY_SIGNALS = `DELETE FROM signal WHERE workspace_id = ?1 AND entity_id = ?2`;
+export interface SignalCount {
+  kind: string;
+  count: number;
+}
 
-export function deleteEntitySignals(workspaceId: string, entityId: string): D1PreparedStatement {
-  return env.DB.prepare(DELETE_ENTITY_SIGNALS).bind(workspaceId, entityId);
+const COUNT_SIGNALS_BY_KIND = `SELECT kind, COUNT(*) AS n FROM signal WHERE workspace_id = ?1 AND entity_id = ?2 AND observed_at >= ?3 AND is_tombstoned = 0 GROUP BY kind ORDER BY kind`;
+
+export async function readSignalCounts(
+  workspaceId: string,
+  entityId: string,
+  since: string,
+): Promise<readonly SignalCount[]> {
+  const { results } = await env.DB.prepare(COUNT_SIGNALS_BY_KIND)
+    .bind(workspaceId, entityId, since)
+    .all<{ kind: string; n: number }>();
+  return results.map((row) => ({ kind: row.kind, count: row.n }));
+}
+
+const SELECT_SCORED_SIGNALS = `SELECT * FROM (SELECT s.id, s.kind, s.title, s.summary, s.url, s.observed_at,
+  src.platform, src.reliability,
+  CASE
+    WHEN s.kind = 'mention' AND v.p >= 0.9 THEN 'mention_matters'
+    WHEN s.kind = 'mention' AND v.p > 0.1 THEN 'mention_normal'
+    WHEN s.kind = 'change' AND v.p >= 0.9 THEN 'site_change_noteworthy'
+    WHEN s.kind = 'ad' AND s.aspect IS NOT NULL THEN 'ad_copy_change'
+    WHEN s.kind = 'ad' AND s.published_at >= ?3 AND s.published_at < ?4 THEN 'ad_new_creative'
+    WHEN s.kind = 'hiring' THEN 'hiring_new_role'
+  END AS bucket
+FROM signal s
+JOIN source src ON src.id = s.source_id
+LEFT JOIN jev_verdict v ON v.id = (
+  SELECT v2.id FROM jev_verdict v2
+  WHERE v2.signal_id = s.id AND v2.workspace_id = s.workspace_id
+    AND v2.question_id = CASE s.kind WHEN 'mention' THEN ?5 WHEN 'change' THEN ?6 END
+  ORDER BY v2.decided_at DESC
+  LIMIT 1
+)
+WHERE s.workspace_id = ?1 AND s.entity_id = ?2
+  AND s.observed_at >= ?3 AND s.observed_at < ?4 AND s.is_tombstoned = 0)
+WHERE bucket IS NOT NULL
+ORDER BY observed_at DESC, id DESC`;
+
+const scoredSignalRows = z.array(
+  z.object({
+    id: z.string(),
+    kind: z.string(),
+    title: z.string().nullable(),
+    summary: z.string().nullable(),
+    url: z.string().nullable(),
+    observed_at: z.string(),
+    platform: z.string(),
+    reliability: reliabilitySchema,
+    bucket: scoreBucketSchema,
+  }),
+);
+
+export async function readScoredSignals(input: {
+  workspaceId: string;
+  entityId: string;
+  since: string;
+  until: string;
+}): Promise<ScoredSignal[]> {
+  const { results } = await env.DB.prepare(SELECT_SCORED_SIGNALS)
+    .bind(
+      input.workspaceId,
+      input.entityId,
+      input.since,
+      input.until,
+      D6_QUESTION_ID,
+      D3_QUESTION_ID,
+    )
+    .all();
+  return scoredSignalRows.parse(results).flatMap((row) =>
+    isFeedKind(row.kind)
+      ? [
+          {
+            id: row.id,
+            kind: row.kind,
+            bucket: row.bucket,
+            reliability: row.reliability,
+            platform: row.platform,
+            title: row.title,
+            summary: row.summary,
+            url: row.url,
+            observedAt: row.observed_at,
+          },
+        ]
+      : [],
+  );
 }

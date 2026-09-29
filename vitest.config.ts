@@ -1,5 +1,5 @@
 import { cloudflareTest, readD1Migrations } from "@cloudflare/vitest-plugin";
-import { defineConfig } from "vitest/config";
+import { configDefaults, defineConfig } from "vitest/config";
 
 // Deliberately a separate config from vite.config.ts.
 //
@@ -11,6 +11,23 @@ import { defineConfig } from "vitest/config";
 // cloudflareTest() belongs here.
 export default defineConfig({
   test: {
+    // CI runs `vitest run --changed` on pull requests (0509#5849). These files
+    // reach tests without an import edge, so a change to any of them reruns
+    // the whole suite. The stock default "**/{vitest,vite}.config.*/**" does
+    // not match vitest.config.ts itself (PR #5874 ran zero tests), hence the
+    // explicit config globs. migrations/ is read through readD1Migrations,
+    // the wrangler configs hold the bindings, apply-migrations.ts is a
+    // project setupFile, the tsconfigs change how every file compiles.
+    forceRerunTriggers: [
+      ...configDefaults.forceRerunTriggers,
+      "**/vitest.config.*",
+      "**/vite.config.*",
+      "**/package-lock.json",
+      "**/tsconfig*.json",
+      "**/migrations/**",
+      "**/wrangler*.jsonc",
+      "**/tests/integration/apply-migrations.ts",
+    ],
     projects: [
       {
         // Pure logic: no bindings, no workerd.
@@ -18,7 +35,7 @@ export default defineConfig({
           name: "node",
           environment: "node",
           include: ["tests/**/*.test.ts"],
-          exclude: ["tests/integration/**", "tests/unit/site/**"],
+          exclude: ["tests/bundle/**", "tests/integration/**", "tests/unit/site/**", "tests/perf/**"],
         },
       },
       {
@@ -41,10 +58,34 @@ export default defineConfig({
             // #4180's acceptance names this file verbatim, without the
             // .integration infix; it still needs real workerd + real D1.
             "tests/integration/migration-rollback.test.ts",
+            // #3994's acceptance names this file verbatim.
+            "tests/integration/identity/tail.test.ts",
             "tests/unit/site/**/*.test.ts",
+            "tests/perf/**/*.test.ts",
           ],
+          // Applies the chain itself, in two steps, so it can seed rows
+          // before 0021. The workers setup would apply 0021 first.
+          exclude: ["tests/integration/entity-workspace-fk.integration.test.ts"],
           setupFiles: ["./tests/integration/apply-migrations.ts"],
           testTimeout: 30_000,
+        },
+      },
+      {
+        // 0509#4707 applies migrations in the test: earlier files, seed, then
+        // 0021. The workers project setup applies the whole chain first, so
+        // this file cannot prove that the rebuild kept rows already stored.
+        plugins: [
+          cloudflareTest(async () => ({
+            wrangler: { configPath: "./tests/integration/wrangler.test.jsonc" },
+            miniflare: {
+              bindings: { TEST_MIGRATIONS: await readD1Migrations("migrations") },
+            },
+          })),
+        ],
+        test: {
+          name: "entity-fk",
+          include: ["tests/integration/entity-workspace-fk.integration.test.ts"],
+          testTimeout: 60_000,
         },
       },
       {

@@ -2,6 +2,7 @@ import { useEffect, useSyncExternalStore, type ReactElement } from "react";
 import { useFetcher } from "react-router";
 
 import { HOURS, WEEKDAYS, hourLabel } from "../lib/brief-settings";
+import { BriefPauseSetting } from "./brief-pause-setting";
 import { toastSaved } from "./toaster";
 import { Button } from "./ui/button";
 
@@ -25,6 +26,7 @@ export interface ScheduleView {
   weekday: number;
   hour: number;
   timezone: string;
+  pausedAt: string | null;
   nextLine: string;
 }
 
@@ -90,15 +92,15 @@ export function BriefScheduleSettings({ schedule }: { schedule: ScheduleView }):
           </select>
         </label>
       </div>
-      <p className="text-ink-soft mt-3 text-body-sm">
-        Time zone: <span className="text-ink [overflow-wrap:anywhere]">{timezone.replaceAll("_", " ")}</span>.{" "}
+      <p className="mt-3 text-body-sm text-ink-soft">
+        Time zone: <span className="[overflow-wrap:anywhere] text-ink">{timezone.replaceAll("_", " ")}</span>.{" "}
         {schedule.nextLine}.
       </p>
       {deviceZone !== null && deviceZone !== timezone ? (
         <Button
           type="button"
           variant="tertiary"
-          className="whitespace-normal text-left"
+          className="text-left whitespace-normal"
           onClick={() => {
             save({ timezone: deviceZone });
           }}
@@ -111,6 +113,7 @@ export function BriefScheduleSettings({ schedule }: { schedule: ScheduleView }):
           That time didn&apos;t save. Pick it again.
         </p>
       ) : null}
+      <BriefPauseSetting pausedAt={schedule.pausedAt} timezone={schedule.timezone} />
     </div>
   );
 }

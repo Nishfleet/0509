@@ -18,14 +18,14 @@ export function Section({
   children: ReactNode;
 }) {
   return (
-    <section id={id} aria-labelledby={`${id}-title`} className="border-line scroll-mt-4 border-t">
+    <section id={id} aria-labelledby={`${id}-title`} className="scroll-mt-4 border-t border-line">
       <div className={`${pageWidth} py-16 sm:py-24`}>
         <p className={`${eyebrow} text-ink-soft`}>{kicker}</p>
-        <h2 id={`${id}-title`} className="font-display text-display-3 mt-3 max-w-[24ch] font-extrabold uppercase">
+        <h2 id={`${id}-title`} className="mt-3 max-w-[24ch] font-display text-display-3 font-extrabold uppercase">
           {title}
         </h2>
         {lead === undefined ? null : (
-          <p className="text-ink-soft mt-5 max-w-[42rem] text-[1.05rem] leading-[1.6]">{lead}</p>
+          <p className="mt-5 max-w-[42rem] text-[1.05rem] leading-[1.6] text-ink-soft">{lead}</p>
         )}
         <div className="mt-10 min-w-0">{children}</div>
       </div>

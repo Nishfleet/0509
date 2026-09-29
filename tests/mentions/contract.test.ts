@@ -4,6 +4,7 @@ import {
 	fetchUpstream,
 	mentionItemSchema,
 	mentionsResultSchema,
+	UpstreamBlockedError,
 	type MentionsAdapter,
 	type MentionsCursor,
 	type MentionsResult,
@@ -64,15 +65,80 @@ describe("mentions adapter contract", () => {
 	it("fetchUpstream calls fetch exactly once with the URL and an abort signal", async () => {
 		const fetchMock = vi.fn(async () => new Response("ok"));
 		vi.stubGlobal("fetch", fetchMock);
+		const timeoutSpy = vi.spyOn(AbortSignal, "timeout");
 		try {
 			await fetchUpstream("https://example.com/feed");
+			expect(fetchMock).toHaveBeenCalledTimes(1);
+			expect(fetchMock).toHaveBeenCalledWith("https://example.com/feed", {
+				signal: expect.any(AbortSignal),
+			});
+			expect(timeoutSpy).toHaveBeenCalledWith(8000);
+		} finally {
+			vi.unstubAllGlobals();
+			vi.restoreAllMocks();
+		}
+	});
+
+	it("fetchUpstream retries a real AbortSignal.timeout rejection when asked (0509#6079)", async () => {
+		const fetchMock = vi.fn(
+			(_input: unknown, init?: RequestInit) =>
+				new Promise<Response>((_resolve, reject) => {
+					init?.signal?.addEventListener("abort", () => {
+						reject(init.signal.reason);
+					});
+				}),
+		);
+		vi.stubGlobal("fetch", fetchMock);
+		try {
+			await expect(
+				fetchUpstream("https://example.com/feed", 5, { retries: 1 }),
+			).rejects.toMatchObject({
+				name: "TimeoutError",
+			});
+			expect(fetchMock).toHaveBeenCalledTimes(2);
 		} finally {
 			vi.unstubAllGlobals();
 		}
-		expect(fetchMock).toHaveBeenCalledTimes(1);
-		expect(fetchMock).toHaveBeenCalledWith("https://example.com/feed", {
-			signal: expect.any(AbortSignal),
+	});
+
+	it("fetchUpstream does not retry by default, on a blocking status, or on a non-timeout failure (0509#6079)", async () => {
+		const timeoutError = new DOMException("t", "TimeoutError");
+		const defaultMock = vi.fn(async () => {
+			throw timeoutError;
 		});
+		vi.stubGlobal("fetch", defaultMock);
+		try {
+			await expect(fetchUpstream("https://example.com/feed")).rejects.toMatchObject({
+				name: "TimeoutError",
+			});
+			expect(defaultMock).toHaveBeenCalledTimes(1);
+		} finally {
+			vi.unstubAllGlobals();
+		}
+
+		const blockedMock = vi.fn(async () => new Response("", { status: 429 }));
+		vi.stubGlobal("fetch", blockedMock);
+		try {
+			await expect(
+				fetchUpstream("https://example.com/feed", 8000, { retries: 3 }),
+			).rejects.toThrow(UpstreamBlockedError);
+			expect(blockedMock).toHaveBeenCalledTimes(1);
+		} finally {
+			vi.unstubAllGlobals();
+		}
+
+		const failedMock = vi.fn(async () => {
+			throw new TypeError("fetch failed");
+		});
+		vi.stubGlobal("fetch", failedMock);
+		try {
+			await expect(
+				fetchUpstream("https://example.com/feed", 8000, { retries: 3 }),
+			).rejects.toThrow("fetch failed");
+			expect(failedMock).toHaveBeenCalledTimes(1);
+		} finally {
+			vi.unstubAllGlobals();
+		}
 	});
 
 	it("parseFeedEntries reads RSS 2.0 and Atom entries", () => {
@@ -106,8 +172,12 @@ describe("mentions adapter contract", () => {
 		expect(parseFeedEntries(atom)).toHaveLength(1);
 	});
 
-	it("adapterFor returns undefined while the registry is empty", () => {
+	it("adapterFor returns the feed adapters and undefined for an unknown key", () => {
 		expect(adapterFor("news.google_rss")).toBeUndefined();
+		expect(adapterFor("youtube.channel_rss")).toBeTypeOf("function");
+		expect(adapterFor("medium.tag_rss")).toBeTypeOf("function");
+		expect(adapterFor("ddg.html")).toBeUndefined();
+		expect(adapterFor("no.such_source")).toBeUndefined();
 	});
 
 	it("the adapter contract shape is implementable by a sample adapter", async () => {

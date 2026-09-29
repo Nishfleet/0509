@@ -1,6 +1,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { countExtractedChars, readUrl } from "../../app/lib/fetch/transport.server";
+import {
+  countExtractedChars,
+  readUrl,
+  type EscalationReason,
+  type Transport,
+} from "../../app/lib/fetch/transport.server";
 
 const browserHolder = vi.hoisted(() => ({
   current: undefined as
@@ -184,7 +189,7 @@ describe("readUrl", () => {
     });
     try {
       install(browser);
-      const result = await readUrl("https://gated.example.com/");
+      const result = await readUrl("https://gated.example.com/", { mayEscalate: async () => true });
       expect(result.ok).toBe(true);
       if (!result.ok) return;
       expect(result.transport).toBe("browser");
@@ -211,7 +216,7 @@ describe("readUrl", () => {
     });
     try {
       install(browser);
-      const result = await readUrl("https://challenge.example.com/");
+      const result = await readUrl("https://challenge.example.com/", { mayEscalate: async () => true });
       expect(result.ok).toBe(true);
       if (!result.ok) return;
       // The status alone cannot tell gated from served: this is a 200.
@@ -238,7 +243,7 @@ describe("readUrl", () => {
     });
     try {
       install(browser);
-      const result = await readUrl("https://shell.example.com/");
+      const result = await readUrl("https://shell.example.com/", { mayEscalate: async () => true });
       expect(result.ok).toBe(true);
       if (!result.ok) return;
       expect(result.transport).toBe("browser");
@@ -261,7 +266,7 @@ describe("readUrl", () => {
     });
     try {
       install(browser);
-      const result = await readUrl("https://slow.example.com/");
+      const result = await readUrl("https://slow.example.com/", { mayEscalate: async () => true });
       expect(result.ok).toBe(true);
       if (!result.ok) return;
       expect(result.transport).toBe("browser");
@@ -366,7 +371,7 @@ describe("readUrl", () => {
     const browser = fakeBrowser({ ok: false, throwOnCall: true });
     try {
       install(browser);
-      const result = await readUrl("https://gated.example.com/");
+      const result = await readUrl("https://gated.example.com/", { mayEscalate: async () => true });
       expect(result.ok).toBe(false);
       if (result.ok) return;
       expect(result.reason).toBe("escalation-failed");
@@ -384,11 +389,55 @@ describe("readUrl", () => {
     const browser = fakeBrowser({ ok: false, status: 429 });
     try {
       install(browser);
-      const result = await readUrl("https://gated.example.com/");
+      const result = await readUrl("https://gated.example.com/", { mayEscalate: async () => true });
       expect(result.ok).toBe(false);
       if (result.ok) return;
       expect(result.reason).toBe("escalation-failed");
       expect(result.detail).toContain("browser answered 429");
+      expect(browser.calls).toHaveLength(1);
+    } finally {
+      stub.restore();
+    }
+  });
+
+  it("fails typed when the escalated browser page is refused", async () => {
+    const stub = stubFetch({
+      "https://gated.example.com/": () => new Response("Forbidden", { status: 403 }),
+    });
+    const browser = fakeBrowser({
+      ok: true,
+      html: `<html><head><title>Just a moment...</title></head><body></body></html>`,
+      status: 403,
+    });
+    try {
+      install(browser);
+      const result = await readUrl("https://gated.example.com/", { mayEscalate: async () => true });
+      expect(result.ok).toBe(false);
+      if (result.ok) return;
+      expect(result.reason).toBe("escalation-failed");
+      expect(result.detail).toContain("browser page was refused (403)");
+      expect(browser.calls).toHaveLength(1);
+    } finally {
+      stub.restore();
+    }
+  });
+
+  it("fails typed when the escalated browser page is a challenge", async () => {
+    const stub = stubFetch({
+      "https://gated.example.com/": () => new Response("Forbidden", { status: 403 }),
+    });
+    const browser = fakeBrowser({
+      ok: true,
+      html: `<html><body><h1>Checking if the site connection is secure</h1></body></html>`,
+      status: 200,
+    });
+    try {
+      install(browser);
+      const result = await readUrl("https://gated.example.com/", { mayEscalate: async () => true });
+      expect(result.ok).toBe(false);
+      if (result.ok) return;
+      expect(result.reason).toBe("escalation-failed");
+      expect(result.detail).toContain("browser page was refused (200)");
       expect(browser.calls).toHaveLength(1);
     } finally {
       stub.restore();
@@ -406,7 +455,7 @@ describe("readUrl", () => {
     });
     try {
       install(browser);
-      const result = await readUrl("https://gated.example.com/");
+      const result = await readUrl("https://gated.example.com/", { mayEscalate: async () => true });
       expect(result.ok).toBe(false);
       if (result.ok) return;
       // The throw is the case the cost model most needs to see: an escalation
@@ -453,6 +502,88 @@ describe("readUrl", () => {
     }
   });
 
+  it("starts on the browser when the caller learned the fetch is useless", async () => {
+    const stub = stubFetch({
+      "https://learned.example.com/": () => new Response("nope", { status: 403 }),
+    });
+    const browser = fakeBrowser({
+      ok: true,
+      html: SUBSTANTIAL_PAGE,
+      browserMs: "700",
+    });
+    try {
+      install(browser);
+      const startWith: Transport = "browser";
+      const result = await readUrl("https://learned.example.com/", {
+        startWith,
+        mayEscalate: async () => true,
+      });
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      // The whole point: no wasted fetch leg before the browser runs.
+      expect(stub.seen).toEqual([]);
+      expect(result.transport).toBe("browser");
+      expect(result.escalationReason).toBe("learned");
+      expect(browser.calls).toEqual(["https://learned.example.com/"]);
+    } finally {
+      stub.restore();
+    }
+  });
+
+  it("defers to the caller and never escalates when the budget vetoes it", async () => {
+    const stub = stubFetch({
+      "https://gated.example.com/": () => new Response("Forbidden", { status: 403 }),
+    });
+    const browser = fakeBrowser({
+      ok: true,
+      html: SUBSTANTIAL_PAGE,
+    });
+    try {
+      install(browser);
+      const result = await readUrl("https://gated.example.com/", {
+        mayEscalate: async () => false,
+      });
+      expect(result.ok).toBe(false);
+      if (result.ok) return;
+      expect(result.reason).toBe("deferred");
+      // A vetoed escalation costs nothing: no browser call, no retry.
+      expect(result.detail).toBe(
+        "browser budget refused escalation (status)",
+      );
+      expect(browser.calls).toEqual([]);
+    } finally {
+      stub.restore();
+    }
+  });
+
+  it("hands the gate the reason it wants to refuse, and records it on the page", async () => {
+    const stub = stubFetch({
+      "https://gated.example.com/": () => new Response("Forbidden", { status: 403 }),
+    });
+    const browser = fakeBrowser({
+      ok: true,
+      html: SUBSTANTIAL_PAGE,
+      browserMs: "1200",
+    });
+    const seen: EscalationReason[] = [];
+    try {
+      install(browser);
+      const result = await readUrl("https://gated.example.com/", {
+        mayEscalate: async (reason) => {
+          seen.push(reason);
+          return true;
+        },
+      });
+      expect(seen).toEqual(["status"]);
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.transport).toBe("browser");
+      expect(result.escalationReason).toBe("status");
+    } finally {
+      stub.restore();
+    }
+  });
+
   it("never calls browser.close(), even on a successful escalation", async () => {
     const stub = stubFetch({
       "https://gated.example.com/": () => new Response("Forbidden", { status: 403 }),
@@ -464,7 +595,7 @@ describe("readUrl", () => {
     });
     try {
       install(browser);
-      await readUrl("https://gated.example.com/");
+      await readUrl("https://gated.example.com/", { mayEscalate: async () => true });
       // A per-request close re-pays cold-launch seconds and burns the
       // 3-instances-per-second rate limit (REBUILD-STACK.md §4.3).
       expect(browser.closed).toBe(0);
@@ -480,15 +611,15 @@ describe("readUrl", () => {
     const browser = fakeBrowser({
       ok: true,
       html: SUBSTANTIAL_PAGE,
-      status: 404,
+      status: 203,
       browserMs: "900",
     });
     try {
       install(browser);
-      const result = await readUrl("https://gated.example.com/");
+      const result = await readUrl("https://gated.example.com/", { mayEscalate: async () => true });
       expect(result.ok).toBe(true);
       if (!result.ok) return;
-      expect(result.status).toBe(404);
+      expect(result.status).toBe(203);
     } finally {
       stub.restore();
     }
@@ -509,7 +640,7 @@ describe("readUrl", () => {
     });
     try {
       install(browser);
-      await readUrl("https://gated.example.com/");
+      await readUrl("https://gated.example.com/", { mayEscalate: async () => true });
       const escalation = lines
         .map((line) => JSON.parse(line) as { event?: string; url?: string; browserMsUsed?: number })
         .find((row) => row.event === "browser-escalation");
@@ -535,7 +666,7 @@ describe("readUrl", () => {
     });
     try {
       install(browser);
-      const result = await readUrl("https://gated.example.com/");
+      const result = await readUrl("https://gated.example.com/", { mayEscalate: async () => true });
       expect(result.ok).toBe(true);
       if (!result.ok) return;
       expect(result.browserMsUsed).toBeUndefined();
@@ -545,6 +676,68 @@ describe("readUrl", () => {
       expect(escalation?.browserMsUsed).toBeNull();
     } finally {
       spy.mockRestore();
+      stub.restore();
+    }
+  });
+
+  it("without a budget callback a refused fetch is deferred and the browser is never called", async () => {
+    const stub = stubFetch({
+      "https://gated.example.com/": () => new Response("Forbidden", { status: 403 }),
+    });
+    const browser = fakeBrowser({ ok: true, html: SUBSTANTIAL_PAGE });
+    try {
+      install(browser);
+      const result = await readUrl("https://gated.example.com/");
+      expect(result.ok).toBe(false);
+      if (result.ok) return;
+      expect(result.reason).toBe("deferred");
+      expect(result.detail).toBe(
+        "browser budget refused escalation (status)",
+      );
+      expect(browser.calls).toEqual([]);
+    } finally {
+      stub.restore();
+    }
+  });
+
+  it("without a budget callback a learned browser start is deferred", async () => {
+    const stub = stubFetch({
+      "https://learned.example.com/": () => new Response("nope", { status: 403 }),
+    });
+    const browser = fakeBrowser({ ok: true, html: SUBSTANTIAL_PAGE });
+    try {
+      install(browser);
+      const startWith: Transport = "browser";
+      const result = await readUrl("https://learned.example.com/", { startWith });
+      expect(result.ok).toBe(false);
+      if (result.ok) return;
+      expect(result.reason).toBe("deferred");
+      // The defer fires before either leg runs: no fetch, no browser call.
+      expect(stub.seen).toEqual([]);
+      expect(browser.calls).toEqual([]);
+    } finally {
+      stub.restore();
+    }
+  });
+
+  it("without a budget callback a timed-out fetch is deferred and the browser is never called", async () => {
+    const stub = stubFetch({
+      "https://slow.example.com/": () => {
+        throw new DOMException("The operation timed out.", "TimeoutError");
+      },
+    });
+    const browser = fakeBrowser({ ok: true, html: SUBSTANTIAL_PAGE });
+    try {
+      install(browser);
+      const result = await readUrl("https://slow.example.com/");
+      expect(result.ok).toBe(false);
+      if (result.ok) return;
+      expect(result.reason).toBe("deferred");
+      expect(result.detail).toBe(
+        "browser budget refused escalation (timeout)",
+      );
+      expect(browser.calls).toEqual([]);
+    } finally {
       stub.restore();
     }
   });

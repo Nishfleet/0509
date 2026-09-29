@@ -1,11 +1,4 @@
-import {
-  isRouteErrorResponse,
-  Links,
-  Meta,
-  Outlet,
-  Scripts,
-  ScrollRestoration,
-} from "react-router";
+import { isRouteErrorResponse, Links, Meta, Outlet, Scripts, ScrollRestoration, useMatches } from "react-router";
 
 import type { Route } from "./+types/root";
 import { ErrorPage } from "./components/error-page";
@@ -13,22 +6,45 @@ import { Toaster } from "./components/toaster";
 import { hasSessionCookie } from "./lib/auth.server";
 import "./app.css";
 
+const SERVER_ONLY_ROUTES: ReadonlySet<string> = new Set([
+  "routes/landing",
+  "routes/privacy",
+  "routes/terms",
+]);
+
 export function Layout({ children }: { children: React.ReactNode }) {
+  const matches = useMatches();
+  const landing = matches.some((match) => match.id === "routes/landing");
+  const serverOnly = matches.some((match) => SERVER_ONLY_ROUTES.has(match.id));
   return (
     <html lang="en">
       <head>
         <meta charSet="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
-        <link rel="preload" href="/fonts/bricolage-grotesque-latin.woff2" as="font" type="font/woff2" crossOrigin="anonymous" />
-        <link rel="preload" href="/fonts/instrument-sans-latin.woff2" as="font" type="font/woff2" crossOrigin="anonymous" />
+        <link
+          rel="preload"
+          href="/fonts/bricolage-hero.woff2"
+          as="font"
+          type="font/woff2"
+          crossOrigin="anonymous"
+          fetchPriority="high"
+        />
+        <link
+          rel="preload"
+          href="/fonts/instrument-sans-latin.woff2"
+          as="font"
+          type="font/woff2"
+          crossOrigin="anonymous"
+          fetchPriority={landing ? "high" : undefined}
+        />
         <Meta />
         <Links />
       </head>
       <body>
         {children}
         <Toaster />
-        <ScrollRestoration />
-        <Scripts />
+        {serverOnly ? null : <ScrollRestoration />}
+        {serverOnly ? null : <Scripts />}
       </body>
     </html>
   );

@@ -46,7 +46,7 @@ const ROWS: SiteChangeView[] = [
 ];
 
 function markup(rows: readonly SiteChangeView[]): string {
-  return renderToStaticMarkup(createElement(Marks, { marks: pickLandingMarks(rows), now: NOW }));
+  return renderToStaticMarkup(createElement(Marks, { marks: pickLandingMarks(rows), now: Date.parse(NOW) }));
 }
 
 describe("pickLandingMarks", () => {

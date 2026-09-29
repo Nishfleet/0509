@@ -1,6 +1,8 @@
 import { env } from "cloudflare:workers";
 import { z } from "zod";
 
+import { recordSourceLatestSnapshot } from "./source.server";
+
 const LATEST_SITE_SNAPSHOT = `SELECT id, payload_hash, payload_r2_key FROM snapshot
 WHERE watch_id = ? AND page_id = ? AND fetched_at < ?
 ORDER BY fetched_at DESC LIMIT 1`;
@@ -34,9 +36,54 @@ export async function insertSnapshot(row: {
   r2Key: string | null;
   hash: string;
 }): Promise<void> {
-  await env.DB.prepare(INSERT_SNAPSHOT)
-    .bind(row.id, row.watchId, row.pageId, row.fetchedAt, row.r2Key, row.hash)
-    .run();
+  await env.DB.batch([
+    env.DB.prepare(INSERT_SNAPSHOT).bind(
+      row.id,
+      row.watchId,
+      row.pageId,
+      row.fetchedAt,
+      row.r2Key,
+      row.hash,
+    ),
+    recordSourceLatestSnapshot({
+      watchId: row.watchId,
+      fetchedAt: row.fetchedAt,
+      itemCount: 1,
+      canaryCount: null,
+    }),
+  ]);
+}
+
+const INSERT_WATCH_SNAPSHOT = `INSERT INTO snapshot
+  (id, watch_id, page_id, fetched_at, payload_r2_key, payload_hash, item_count, canary_count)
+VALUES (?, ?, NULL, ?, ?, ?, ?, ?)`;
+
+export function insertWatchSnapshot(row: {
+  id: string;
+  watchId: string;
+  fetchedAt: string;
+  r2Key: string;
+  hash: string;
+  itemCount: number;
+  canaryCount: number | null;
+}): D1PreparedStatement[] {
+  return [
+    env.DB.prepare(INSERT_WATCH_SNAPSHOT).bind(
+      row.id,
+      row.watchId,
+      row.fetchedAt,
+      row.r2Key,
+      row.hash,
+      row.itemCount,
+      row.canaryCount,
+    ),
+    recordSourceLatestSnapshot({
+      watchId: row.watchId,
+      fetchedAt: row.fetchedAt,
+      itemCount: row.itemCount,
+      canaryCount: row.canaryCount,
+    }),
+  ];
 }
 
 const LATEST_BOARD_SNAPSHOT = `SELECT id, payload_hash, payload_r2_key, item_count FROM snapshot
@@ -85,17 +132,38 @@ export async function insertBoardSnapshot(row: {
   hash: string;
   itemCount: number;
 }): Promise<void> {
-  await env.DB.prepare(INSERT_BOARD_SNAPSHOT)
-    .bind(row.id, row.watchId, row.fetchedAt, row.r2Key, row.hash, row.itemCount)
-    .run();
+  await env.DB.batch([
+    env.DB.prepare(INSERT_BOARD_SNAPSHOT).bind(
+      row.id,
+      row.watchId,
+      row.fetchedAt,
+      row.r2Key,
+      row.hash,
+      row.itemCount,
+    ),
+    recordSourceLatestSnapshot({
+      watchId: row.watchId,
+      fetchedAt: row.fetchedAt,
+      itemCount: row.itemCount,
+      canaryCount: null,
+    }),
+  ]);
 }
 
-const DELETE_ENTITY_SNAPSHOTS = `DELETE FROM snapshot WHERE watch_id IN (
-  SELECT w.id FROM watch w
-  JOIN entity e ON e.id = w.entity_id
-  WHERE e.id = ?2 AND e.workspace_id = ?1 AND e.role = 'competitor'
-)`;
+const COVERED_PAGE_PAIRS = `SELECT DISTINCT watch_id, page_id FROM snapshot
+WHERE fetched_at >= ?1 AND watch_id IN (SELECT value FROM json_each(?2))`;
 
-export function deleteEntitySnapshots(workspaceId: string, entityId: string): D1PreparedStatement {
-  return env.DB.prepare(DELETE_ENTITY_SNAPSHOTS).bind(workspaceId, entityId);
+export interface CoveredPagePair {
+  watchId: string;
+  pageId: string;
+}
+
+export async function readCoveredPagePairs(
+  sinceIso: string,
+  watchIds: readonly string[],
+): Promise<readonly CoveredPagePair[]> {
+  const rows = await env.DB.prepare(COVERED_PAGE_PAIRS)
+    .bind(sinceIso, JSON.stringify(watchIds))
+    .all<{ watch_id: string; page_id: string }>();
+  return rows.results.map((row) => ({ watchId: row.watch_id, pageId: row.page_id }));
 }

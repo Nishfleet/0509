@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-import { requireInboxToken, signInWithMagicLink } from "./inbox";
+import { sessionStatePath } from "../playwright.config";
 
 // The Competitors page measured once at each shape the product ships, the same
 // lane as `app-nav.spec.ts`: the preview Worker has no EMAIL binding and no
@@ -10,6 +10,7 @@ import { requireInboxToken, signInWithMagicLink } from "./inbox";
 // The spec reads. It toggles no switch and submits no form, because it runs
 // against production and a visit that wrote data would put a row in a real
 // workspace for a mailbox nobody owns.
+test.use({ storageState: process.env.PLAYWRIGHT_TEST_BASE_URL ? sessionStatePath : undefined });
 test.skip(
   !process.env.PLAYWRIGHT_TEST_BASE_URL,
   "the Competitors page needs a real session; the local preview Worker cannot mint one",
@@ -18,9 +19,6 @@ test.skip(
 test("the Competitors page is landmarked, ordered and keyboard-operable at 1440 and 390 in light and dark", async ({
   page,
 }) => {
-  const email = `e2e+${crypto.randomUUID().replaceAll("-", "").slice(0, 12)}@0509.io`;
-  await signInWithMagicLink(page, email, requireInboxToken());
-
   for (const viewport of [
     { width: 1440, height: 900 },
     { width: 390, height: 844 },

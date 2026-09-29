@@ -1,8 +1,11 @@
 import js from "@eslint/js";
+import betterTailwindcss from "eslint-plugin-better-tailwindcss";
 import boundaries from "eslint-plugin-boundaries";
 import importX, { createNodeResolver } from "eslint-plugin-import-x";
 import reactHooks from "eslint-plugin-react-hooks";
 import noComments from "eslint-plugin-no-comments";
+import playwright from "eslint-plugin-playwright";
+import vitest from "@vitest/eslint-plugin";
 import globals from "globals";
 import tseslint from "typescript-eslint";
 
@@ -13,6 +16,12 @@ const CLOUDFLARE_WORKERS_IMPORT = {
   name: "cloudflare:workers",
   message:
     "cloudflare:workers is a Workers runtime module and does not exist in the browser. Bindings are read in *.server modules and passed down. Source: commit 7727bf787 / #3918.",
+};
+
+const FULL_ZOD_IMPORT = {
+  name: "zod",
+  message:
+    "app/components/ ships to the browser; full zod costs about 13 KB gzipped per object schema there. Import from \"zod/mini\" instead (docs/REBUILD-STACK.md, zod). Source: 0509#4134.",
 };
 
 const PAVED_PATH_PATTERNS = [
@@ -29,6 +38,60 @@ const SONNER_IMPORT = {
     "sonner is imported in exactly one module, app/components/toaster.tsx, which owns every toast() call behind toastSaved(). DESIGN.md §11: toasts are only 'saved' and 'undo' — a second import site is a second toast authority. Source: 0509#4116.",
 };
 
+const UPLOT_IMPORT = {
+  name: "uplot",
+  message:
+    "uPlot is 22 KB gzipped and loads only in app/components/four-week-plot.tsx, which four-week-line.tsx pulls in with React.lazy so it stays out of the /app entry (docs/REBUILD-DONE.md §B, 150 KB). Source: 0509#5289.",
+};
+
+const UPLOT_REACT_IMPORT = {
+  name: "uplot-react",
+  message:
+    "uPlot is 22 KB gzipped and loads only in app/components/four-week-plot.tsx, which four-week-line.tsx pulls in with React.lazy so it stays out of the /app entry (docs/REBUILD-DONE.md §B, 150 KB). Source: 0509#5289.",
+};
+
+const FOUR_WEEK_PLOT_STATIC_IMPORT = {
+  name: "./four-week-plot",
+  message:
+    'Load four-week-plot with React.lazy(() => import("./four-week-plot")), never a static import: a static import puts uPlot back in the /app entry. Source: 0509#5289.',
+};
+
+const CHART_IMPORTS = [UPLOT_IMPORT, UPLOT_REACT_IMPORT, FOUR_WEEK_PLOT_STATIC_IMPORT];
+
+const FAST_XML_PARSER_IMPORT = {
+  name: "fast-xml-parser",
+  message:
+    "Feed XML is parsed only by @extractus/feed-extractor in workers/sources/mentions/feed.ts. A direct fast-xml-parser import is a second parser. Source: 0509#4051.",
+};
+
+const UNSCOPED_WRITER_MESSAGE =
+  "Unscoped system writer: this writer updates by id alone, with no workspace_id, because only workers and workflows call it. A route importing it is a cross-workspace write. Routes go through a workspace-scoped writer instead. Source: 0509#4705.";
+
+const UNSCOPED_WRITER_PATTERNS = [
+  {
+    group: [
+      "**/data/send_attempt.server",
+      "**/data/watch.server",
+      "**/data/incident.server",
+      "**/data/snapshot.server",
+    ],
+    message: UNSCOPED_WRITER_MESSAGE,
+  },
+  // These two modules are banned by import NAME, never as a whole module:
+  // routes legitimately import other names from them, so a module-wide ban
+  // would break the reads and the workspace-scoped schedule writer.
+  {
+    group: ["**/data/digest.server"],
+    importNames: ["markDigestSent", "markDigestFailed"],
+    message: UNSCOPED_WRITER_MESSAGE,
+  },
+  {
+    group: ["**/data/workspace.server"],
+    importNames: ["deleteWorkspace"],
+    message: UNSCOPED_WRITER_MESSAGE,
+  },
+];
+
 const ONE_PAVED_PATH_IMPORTS = [
   {
     name: "better-auth",
@@ -44,6 +107,7 @@ const ONE_PAVED_PATH_IMPORTS = [
     message: "Same paved path as better-auth: app/lib/auth.server.ts only.",
   },
   SONNER_IMPORT,
+  FAST_XML_PARSER_IMPORT,
 ];
 
 const SUPPORT_ADDRESS_BAN = {
@@ -59,7 +123,7 @@ const SUPPORT_ADDRESS_BAN = {
 // `.catch(() => null)` callback. The named clause in
 // app/lib/identity/name-cascade.ts is grandfathered by name (see the
 // exemption block) until the cascade grows a logged failure path. Source:
-// 0509#4462 (REBUILD-TRUST.md C1 Q1 — the D grade on PR #4457).
+// 0509#4462 (REBUILD-TRUST.md C1 Q1 — found in review of PR #4457).
 const CATCH_RETURNS_NULL = {
   selector:
     "CatchClause > BlockStatement[body.length=1] > ReturnStatement[argument.value=null]",
@@ -67,9 +131,88 @@ const CATCH_RETURNS_NULL = {
     "A catch whose only statement is `return null` swallows the error, so a thrown fetch or a bug fails as silently as a real 'not found'. Give the clause an error binding and a logged failure path (or rethrow). Source: 0509#4462.",
 };
 
+const FEED_STATE_LITERAL = {
+  selector:
+    "ObjectExpression > Property[key.name='feedState'][value.value=/^(ok|stale|error)$/]",
+  message:
+    "Only workers/sources/mentions/youtube.ts may build a YouTube feedState. commitYoutubeFeed accepts OkYoutubeFeed alone, so a stale or error feed cannot be stored as zero videos. Source: 0509#4051.",
+};
+
+const XML_PARSER_CONSTRUCTOR = {
+  selector: "NewExpression[callee.name='XMLParser']",
+  message:
+    "Feed XML is parsed only by @extractus/feed-extractor in workers/sources/mentions/feed.ts. A second XMLParser is a second feed path. Source: 0509#4051.",
+};
+
+// The one domain normaliser. The identity engine — app/lib/identity/normalise.ts
+// (`normaliseSubject`) — owns every URL-to-domain reduction on the platform, so
+// the onboarding card, the engine and the share tail read one set of rules. A
+// second parser beside it can only drift: 0509#3999's review found a hand-rolled
+// host beside the engine path, and its fix cut that parser out (#4321). This
+// selector makes the second one structurally impossible rather than discouraged
+// by convention. A host read for a non-identity purpose (a public-host guard, a
+// job-board match, a www variant, a site-host allow) is grandfathered in the
+// exemption block below, not here.
+const DOMAIN_HOSTNAME_BAN = {
+  selector: "MemberExpression[property.name='hostname']",
+  message:
+    "URL-to-domain extraction is owned by the identity engine in app/lib/identity/ — `normaliseSubject` in app/lib/identity/normalise.ts. Reading `.hostname` anywhere else is a second domain normaliser that will drift from the engine's rules; the same shape on any URL argument, any binding name. Reuse the engine (or, for a non-identity host read, get the file added to the exemption block below). Source: 0509#4371.",
+};
+
+// DESIGN.md: fonts are self-hosted. A Google Fonts <link> put LCP at 2021 ms against the
+// 1500 ms budget (CI run 35635617508, main 5166ebb81; fixed in fd1457288).
+const GOOGLE_FONTS_BAN = {
+  selector: "Literal[value=/fonts\\.(googleapis|gstatic)\\.com/], TemplateElement[value.raw=/fonts\\.(googleapis|gstatic)\\.com/]",
+  message:
+    "Fonts are self-hosted (DESIGN.md). A Google Fonts link is render-blocking and broke the 1500 ms LCP budget once (fd1457288). Add the font file under public/ and an @font-face instead.",
+};
+
+const USER_DATA_NAME = "^(email|emails|userId|ip|input|raw|prompt|password|token|subject)$";
+// The one operator id the message allows, so `input.workspaceId` stays clean.
+// Widen it only with a comment here naming why the new id is not user data.
+const LOGGABLE_OPERATOR_ID = "workspaceId";
+const LOG_OR_CAPTURE_CALL =
+  "CallExpression:matches([callee.object.name='console'], [callee.name=/^(capture(Exception|Message|Event|Feedback)|set(Tag|Tags|Extra|Extras|Context|Attributes|User|ConversationId))$/], [callee.property.name=/^(capture(Exception|Message|Event|Feedback)|set(Tag|Tags|Extra|Extras|Context|Attributes|User|ConversationId))$/])";
+const NO_USER_DATA_IN_LOGS_MESSAGE =
+  "Logs and Sentry never carry customer data or prompt input: no email, user id, IP, raw input, prompt, subject, password or token, as a key, a value or a property read. Log the ids an operator needs (event, workspaceId) and an error message capped with .slice(0, 300). The selector matches names, so a renamed or aliased value is out of reach; review it. Privacy first (CLAUDE.md; workers/sentry.ts sendDefaultPii: false). Source: 0509#5776.";
+const NO_USER_DATA_IN_LOGS = [
+  {
+    selector: `${LOG_OR_CAPTURE_CALL} :matches(Property[key.name=/${USER_DATA_NAME}/], Property[value.name=/${USER_DATA_NAME}/], MemberExpression[property.name=/${USER_DATA_NAME}/])`,
+    message: NO_USER_DATA_IN_LOGS_MESSAGE,
+  },
+  { selector: `${LOG_OR_CAPTURE_CALL} > Identifier.arguments[name=/${USER_DATA_NAME}/]`, message: NO_USER_DATA_IN_LOGS_MESSAGE },
+  // The first two cover a named key and a named value. These four close the
+  // shapes the message promises but a name-only match misses: the `email` in
+  // `console.log(`user ${email}`)`, the `subject` in `JSON.stringify(subject)`,
+  // the `subject` in `{ ...subject }`, and the `subject` in
+  // `console.log(subject.registrable)`. 0509#5786.
+  { selector: `${LOG_OR_CAPTURE_CALL} TemplateLiteral > Identifier[name=/${USER_DATA_NAME}/]`, message: NO_USER_DATA_IN_LOGS_MESSAGE },
+  { selector: `${LOG_OR_CAPTURE_CALL} CallExpression > Identifier[name=/${USER_DATA_NAME}/]`, message: NO_USER_DATA_IN_LOGS_MESSAGE },
+  { selector: `${LOG_OR_CAPTURE_CALL} SpreadElement > Identifier[name=/${USER_DATA_NAME}/]`, message: NO_USER_DATA_IN_LOGS_MESSAGE },
+  // The identifier wrapped in one expression: `"ip " + ip`, `[email]`,
+  // `email ?? ""`, `flag ? email : "x"`. 0509#5786.
+  {
+    selector: `${LOG_OR_CAPTURE_CALL} :matches(BinaryExpression, ArrayExpression, LogicalExpression, ConditionalExpression) > Identifier[name=/${USER_DATA_NAME}/]`,
+    message: NO_USER_DATA_IN_LOGS_MESSAGE,
+  },
+  // A read off a binding named like user data. `workspaceId` is the one
+  // operator id the message allows, so `input.workspaceId` stays clean while
+  // `subject.registrable` and `email.trim()` do not. An alias
+  // (`const domain = subject.registrable; console.log({ domain })`) is beyond
+  // any name-based selector; the rule bans the identifiers, not the provenance
+  // (0509#5786).
+  {
+    selector: `${LOG_OR_CAPTURE_CALL} MemberExpression[object.name=/${USER_DATA_NAME}/][property.name!='${LOGGABLE_OPERATOR_ID}']`,
+    message: NO_USER_DATA_IN_LOGS_MESSAGE,
+  },
+];
+
 const BANNED_SYNTAX = [
   SUPPORT_ADDRESS_BAN,
+  GOOGLE_FONTS_BAN,
   CATCH_RETURNS_NULL,
+  XML_PARSER_CONSTRUCTOR,
+  DOMAIN_HOSTNAME_BAN,
   {
     selector: "NewExpression[callee.name='RegExp'] > Literal.arguments, NewExpression[callee.name='RegExp'] > TemplateLiteral",
     message:
@@ -127,6 +270,143 @@ const ENV_DB_IN_ROUTES = {
     "Routes do not touch env.DB. Go through the one data layer in app/lib/data/. docs/REBUILD-TRUST.md C4.",
 };
 
+const STATIC_HOME_HTML_PARSER = {
+  meta: { name: "static-home-html" },
+  parse(text) {
+    const lines = text.split("\n");
+    const last = lines.length - 1;
+    return {
+      type: "Program",
+      body: [],
+      sourceType: "script",
+      comments: [],
+      tokens: [],
+      loc: {
+        start: { line: 1, column: 0 },
+        end: { line: lines.length, column: lines[last].length },
+      },
+      range: [0, text.length],
+    };
+  },
+};
+
+const STATIC_HOME_FONT_PRELOAD = {
+  meta: {
+    type: "problem",
+    schema: [],
+    messages: {
+      preload:
+        "The static home must not preload a font. A preload holds the headline paint until the face arrives, so simulated LCP misses lighthouse-budget.json. The three faces stay on the @font-face rules with font-display: swap. Source: 0509#5580.",
+      fontFace:
+        "The static home must not declare @font-face in the document. A face that finishes before the headline is a simulated-LCP dependency and misses lighthouse-budget.json. The three faces live in /home-faces.css. Source: 0509#5598.",
+      scannerLink:
+        "The static home must not include a link element. The preload scanner fetches it before the headline paints, which puts /home-faces.css on the simulated LCP chain. Source: 0509#5630.",
+      lateFaces:
+        "The static home must append /home-faces.css from a load listener placed after </main>, so the brand faces are requested after the headline paints. Source: 0509#5630.",
+    },
+  },
+  create(context) {
+    return {
+      Program(node) {
+        const text = context.sourceCode.getText();
+        const preloadsFont =
+          /<link\b[^>]*\brel="preload"[^>]*\bas="font"/.test(text) ||
+          /<link\b[^>]*\bas="font"[^>]*\brel="preload"/.test(text);
+        if (preloadsFont) {
+          context.report({ node, messageId: "preload" });
+        }
+        if (text.includes("@font-face")) {
+          context.report({ node, messageId: "fontFace" });
+        }
+        if (/<link\b/i.test(text)) {
+          context.report({ node, messageId: "scannerLink" });
+        }
+        const mainEnd = text.lastIndexOf("</main>");
+        const scriptAt = text.indexOf("<script>");
+        const scriptEnd = scriptAt < 0 ? -1 : text.indexOf("</script>", scriptAt);
+        const script = scriptAt >= 0 && scriptEnd > scriptAt ? text.slice(scriptAt, scriptEnd) : "";
+        const asksAfterLoad =
+          script.includes('addEventListener("load"') &&
+          script.includes('faces.href = "/home-faces.css"');
+        if (mainEnd < 0 || scriptAt < mainEnd || !asksAfterLoad) {
+          context.report({ node, messageId: "lateFaces" });
+        }
+      },
+    };
+  },
+};
+
+// DESIGN.md rule 8: "The accent is one colour. Green marker. Red exists only as
+// the strike on a 'before' and the rule on an open incident. Nothing else is
+// coloured, ever." These two restricted-class patterns make a second colour a
+// diff the lint rejects instead of a review comment.
+const TAILWIND_ARBITRARY_COLOUR = {
+  pattern:
+    "^(?:[^\\s]*:)*(?:bg|text|border|fill|stroke|ring|from|via|to|decoration|accent|caret|divide|outline|placeholder|shadow)-(?:\\[(?:#|rgb|hsl|oklch|oklab|lab|lch|color-mix|var\\()|\\(--)",
+  message:
+    "Arbitrary colour values are banned: every colour is a @theme token in app/app.css and the accent is one colour (DESIGN.md rule 8). Source: 0509#5871.",
+};
+
+const TAILWIND_DEFAULT_PALETTE = {
+  pattern:
+    "^(?:[^\\s]*:)*(?:bg|text|border|fill|stroke|ring|from|via|to|decoration|accent|caret|divide|outline|placeholder|shadow)-(?:slate|gray|zinc|neutral|stone|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose)-[0-9]",
+  message:
+    "The Tailwind default palette is banned: every colour is a @theme token in app/app.css (bg-green is the one accent, DESIGN.md rule 8). Source: 0509#5871.",
+};
+
+const SHADCN_STOCK_TOKEN_CLASSES =
+  "(?:^|:)(?:bg|text|border|ring|fill|stroke)-(?:background|foreground|muted|muted-foreground|primary|primary-foreground|secondary|secondary-foreground|destructive|border|input|ring|popover|popover-foreground)(?:/[0-9]+)?$";
+
+const TW_ANIMATE_STOCK_CLASSES =
+  "(?:^|:)(?:animate-in|animate-out|fade-in-0|fade-out-0|zoom-in-95|zoom-out-95|slide-in-from-(?:top|bottom|left|right)-2)$";
+
+// The plugin lints a `const X = "..."` class list only when it has been told
+// the name: its own defaults are `className`, `classNames`, `classes` and
+// `styles`, and this repo's convention is a bare SHOUTY name instead (ROW,
+// WHEN_CLASS, BLOCK, TITLE, …). The list below is every class-list constant on
+// main, so a colour smuggled into one of them is red, not green — without it
+// `const ROW = "bg-[#ff0000]"` passed all three rules. A new class-list
+// constant must add its name here; a name that is already used for a string
+// that is not a class list (a `<title>`, a CSS custom property fallback) will
+// report the words of that string as unknown classes, which is why the two
+// such constants on main are named PAGE_TITLE (app/routes/landing.tsx) and
+// LINE_FALLBACK (app/components/source-pill.tsx).
+const TAILWIND_CLASS_VARIABLES = [
+  // The plugin's own defaults, kept so setting this list does not drop them.
+  "^classNames?$",
+  "^classes$",
+  "^styles?$",
+  "^BLOCK$",
+  "^BODY$",
+  "^BRIEF$",
+  "^BRIEF_LINE$",
+  "^CARD$",
+  "^DETAILS$",
+  "^EYEBROW$",
+  "^FIELD$",
+  "^GREETING$",
+  "^HEAD$",
+  "^HEADING$",
+  "^HEADING_CLASS$",
+  "^LABEL$",
+  "^LABEL_CLASS$",
+  "^LINE$",
+  "^LINK$",
+  "^MARKER$",
+  "^NOTE$",
+  "^OFF$",
+  "^PILL$",
+  "^PREVIOUS_HEADING$",
+  "^PREVIOUS_LINK$",
+  "^PREVIOUS_LIST$",
+  "^ROW$",
+  "^ROW_CLASS$",
+  "^SECTION$",
+  "^SUMMARY$",
+  "^TITLE$",
+  "^WHEN_CLASS$",
+];
+
 const WORKAROUND_TERMS = [
   "todo",
   "fixme",
@@ -160,6 +440,10 @@ export default tseslint.config(
       "node_modules/**",
       "worker-configuration.d.ts",
       "docs/design-directions/**",
+      // Semgrep --test fixtures live next to their rules and intentionally
+      // contain violating calls; they are in no tsconfig project, so typed
+      // linting cannot see them either. Source: 0509#5661.
+      ".semgrep/**",
       "**/+types/**",
     ],
   },
@@ -176,7 +460,9 @@ export default tseslint.config(
       },
       globals: { ...globals.browser, ...globals.node },
     },
-    linterOptions: { reportUnusedDisableDirectives: "error" },
+    // No inline `eslint-disable`: one comment would silence every ban in this file
+    // (the no-comments rule allows /eslint/ comments). Change the rule here, in review.
+    linterOptions: { noInlineConfig: true, reportUnusedDisableDirectives: "error" },
   },
 
   {
@@ -212,7 +498,7 @@ export default tseslint.config(
         "error",
         { terms: WORKAROUND_TERMS, location: "anywhere" },
       ],
-      "no-restricted-syntax": ["error", ...BANNED_SYNTAX],
+      "no-restricted-syntax": ["error", ...BANNED_SYNTAX, ...NO_USER_DATA_IN_LOGS, FEED_STATE_LITERAL],
     },
   },
 
@@ -233,7 +519,7 @@ export default tseslint.config(
     files: ["app/**/*.{ts,tsx}", "workers/**/*.ts"],
     ignores: ["app/lib/data/**", "workers/e2e-inbox.ts", "workers/fixture-site.ts"],
     rules: {
-      "no-restricted-syntax": ["error", ...BANNED_SYNTAX, RAW_DML_WRITER],
+      "no-restricted-syntax": ["error", ...BANNED_SYNTAX, ...NO_USER_DATA_IN_LOGS, RAW_DML_WRITER, FEED_STATE_LITERAL],
     },
   },
 
@@ -245,8 +531,57 @@ export default tseslint.config(
       "no-restricted-syntax": [
         "error",
         ...BANNED_SYNTAX.filter((rule) => rule !== SUPPORT_ADDRESS_BAN),
+        ...NO_USER_DATA_IN_LOGS,
         RAW_DML_WRITER,
+        FEED_STATE_LITERAL,
       ],
+    },
+  },
+
+  {
+    // The one domain normaliser: the identity engine. These files read `.hostname`
+    // for a purpose that is not domain normalisation, so the shared selector is
+    // restated without `DOMAIN_HOSTNAME_BAN`: the identity engine itself, a
+    // public-host guard in the transport layer, the job-board host match, this
+    // site's www variant and page-host display, and the support worker's
+    // site-host allow. Every
+    // other `.hostname` read in app/ or workers/ keeps the ban. This block
+    // restates the list because a later matching block's no-restricted-syntax
+    // entry replaces the earlier one wholesale (flat config never merges a rule's
+    // option array). 0509#4371.
+    files: [
+      "app/lib/identity/**/*.{ts,tsx}",
+      "app/lib/fetch/transport.server.ts",
+      "app/lib/hiring/discover-board.ts",
+      "app/lib/site/own-site.server.ts",
+      "workers/support-inbox.ts",
+    ],
+    rules: {
+      "no-restricted-syntax": [
+        "error",
+        ...BANNED_SYNTAX.filter((rule) => rule !== DOMAIN_HOSTNAME_BAN),
+        ...NO_USER_DATA_IN_LOGS,
+        RAW_DML_WRITER,
+        FEED_STATE_LITERAL,
+      ],
+    },
+  },
+
+  // Lean code is a lint, not a review note: Nish 2026-09-28 16:47Z, "all work
+  // anywhere by any agent should be done as a pro dev team would. lean and
+  // mean", and "make this non negotiable as lints and hard blocks" (0509#5783).
+  // Limits sit at the common industry defaults, below main's p99. Code on main
+  // that is already over them is listed in eslint-suppressions.json (ESLint
+  // bulk suppressions), so new code meets the limit, a listed function cannot
+  // grow its count, and a fix that removes one fails lint until the entry is
+  // pruned with `npx eslint --prune-suppressions`.
+  {
+    files: ["app/**/*.{ts,tsx}", "workers/**/*.ts"],
+    rules: {
+      complexity: ["error", 10],
+      "max-depth": ["error", 3],
+      "max-params": ["error", 3],
+      "max-lines-per-function": ["error", { max: 50, skipBlankLines: true, skipComments: true }],
     },
   },
 
@@ -287,6 +622,20 @@ export default tseslint.config(
   },
 
   {
+    files: ["app/components/**/*.{ts,tsx}"],
+    ignores: ["app/components/toaster.tsx", "app/components/four-week-plot.tsx"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          paths: [...ONE_PAVED_PATH_IMPORTS, CLOUDFLARE_WORKERS_IMPORT, FULL_ZOD_IMPORT, ...CHART_IMPORTS],
+          patterns: PAVED_PATH_PATTERNS,
+        },
+      ],
+    },
+  },
+
+  {
     files: ["app/lib/auth-client.ts"],
     rules: {
       "no-restricted-imports": [
@@ -307,7 +656,40 @@ export default tseslint.config(
           paths: [
             ...ONE_PAVED_PATH_IMPORTS.filter((p) => p !== SONNER_IMPORT),
             CLOUDFLARE_WORKERS_IMPORT,
+            FULL_ZOD_IMPORT,
+            ...CHART_IMPORTS,
           ],
+          patterns: PAVED_PATH_PATTERNS,
+        },
+      ],
+    },
+  },
+
+  {
+    files: ["app/components/four-week-plot.tsx"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          paths: [...ONE_PAVED_PATH_IMPORTS, CLOUDFLARE_WORKERS_IMPORT, FULL_ZOD_IMPORT],
+          patterns: PAVED_PATH_PATTERNS,
+        },
+      ],
+    },
+  },
+
+  // Flat config replaces a rule's options wholesale, so this block restates
+  // ONE_PAVED_PATH_IMPORTS and PAVED_PATH_PATTERNS — a block with only the
+  // new pattern would silently drop the better-auth/sonner bans for routes.
+  // Source: 0509#4705.
+  {
+    files: ["app/routes/**/*.{ts,tsx}", "app/root.tsx"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          paths: ONE_PAVED_PATH_IMPORTS,
+          patterns: [...PAVED_PATH_PATTERNS, ...UNSCOPED_WRITER_PATTERNS],
         },
       ],
     },
@@ -474,17 +856,127 @@ export default tseslint.config(
     files: ["app/routes/**/*.{ts,tsx}"],
     rules: {
       "max-lines": ["error", { max: 150, skipBlankLines: false, skipComments: false }],
-      "no-restricted-syntax": ["error", ...BANNED_SYNTAX, RAW_DML_WRITER, ENV_DB_IN_ROUTES],
+      "no-restricted-syntax": [
+        "error",
+        ...BANNED_SYNTAX,
+        ...NO_USER_DATA_IN_LOGS,
+        RAW_DML_WRITER,
+        ENV_DB_IN_ROUTES,
+        FEED_STATE_LITERAL,
+      ],
     },
   },
 
   {
-    files: ["**/*.js", "**/*.mjs", "**/*.cjs", "*.config.ts", "e2e/**/*.ts", "tests/**/*.ts"],
+    files: ["workers/sources/mentions/youtube.ts"],
+    rules: {
+      "no-restricted-syntax": ["error", ...BANNED_SYNTAX, ...NO_USER_DATA_IN_LOGS, RAW_DML_WRITER],
+    },
+  },
+
+  // 0509#5785, shipped by 0509#5808. Never skip, disable or quarantine a test
+  // to get green: a focused test silently drops the rest of the suite, and a
+  // disabled test stops testing the thing it names. Every rule below is stock
+  // and carries its own message; `maxArgs: 2` is the one non-default value,
+  // because the node suite passes a failure message as `expect`'s second
+  // argument.
+  {
+    files: ["tests/**/*.ts"],
+    plugins: { vitest },
+    rules: {
+      "vitest/no-focused-tests": "error",
+      "vitest/no-disabled-tests": "error",
+      "vitest/no-identical-title": "error",
+      "vitest/expect-expect": "error",
+      "vitest/valid-expect": ["error", { maxArgs: 2 }],
+    },
+  },
+
+  // 0509#5785, shipped by 0509#5808. An e2e spec never waits on wall-clock time
+  // or for the network to go idle, and never focuses or unconditionally skips a
+  // test. `allowConditional` is the one non-default value: the suite gates on
+  // the project and the environment (`test.skip(condition, reason)`), and report
+  // specs use `test.fail()` (CLAUDE.md "Reproducing a user report").
+  {
+    files: ["e2e/**/*.ts"],
+    plugins: { playwright },
+    rules: {
+      "playwright/no-focused-test": "error",
+      "playwright/no-skipped-test": ["error", { allowConditional: true }],
+      "playwright/no-wait-for-timeout": "error",
+      "playwright/no-page-pause": "error",
+      "playwright/missing-playwright-await": "error",
+      "playwright/no-networkidle": "error",
+      "playwright/valid-expect": "error",
+    },
+  },
+
+  {
+    files: ["**/*.js", "**/*.mjs", "**/*.cjs", "*.config.ts", "e2e/**/*.ts", "tests/**/*.ts", "public/index.html"],
     extends: [tseslint.configs.disableTypeChecked],
     rules: {
       "no-inline-comments": "off",
       "no-warning-comments": "off",
       "@typescript-eslint/no-unsafe-assignment": "off",
+    },
+  },
+
+  {
+    files: ["public/index.html"],
+    plugins: {
+      "static-home": {
+        rules: {
+          "no-font-preload": STATIC_HOME_FONT_PRELOAD,
+        },
+      },
+    },
+    languageOptions: {
+      parser: STATIC_HOME_HTML_PARSER,
+      parserOptions: { projectService: false },
+    },
+    rules: {
+      "static-home/no-font-preload": "error",
+    },
+  },
+
+  // The DESIGN.md colour gate (0509#5871). The parent issue says
+  // `no-unregistered-classes`; the rule shipped in 4.7.0 is named
+  // `no-unknown-classes`, so that is the name here. Both patterns open with
+  // `(?:[^\s]*:)*` because a variant prefix is not always one word: this repo
+  // writes `max-[859px]:`, `aria-[current=page]:` and `[&:hover]:`, and a
+  // prefix pattern of `[a-z0-9-]+` let a banned colour hide behind all three.
+  // The `ui/` ignore list covers stock shadcn semantic tokens and
+  // tw-animate-css classes that are dead on main: the tokens are not in
+  // `@theme`, and registering them would start painting, a design change out
+  // of scope for this slice. 81 hits were probed on a74ad41 — 80 in
+  // app/components/ui/, one `cf-turnstile` in
+  // app/components/turnstile-widget.tsx, which is Cloudflare's widget class,
+  // never a Tailwind class. The `ui/` override is a later matching block
+  // because flat config replaces a rule's options per matching block: it
+  // widens `no-unknown-classes` only, and the strict block's
+  // restricted-classes and class-order settings stay in force there.
+  {
+    files: ["app/**/*.{ts,tsx}"],
+    plugins: { "better-tailwindcss": betterTailwindcss },
+    settings: {
+      "better-tailwindcss": { entryPoint: "app/app.css", variables: TAILWIND_CLASS_VARIABLES },
+    },
+    rules: {
+      "better-tailwindcss/no-unknown-classes": ["error", { ignore: ["^cf-turnstile$"] }],
+      "better-tailwindcss/no-restricted-classes": [
+        "error",
+        { restrict: [TAILWIND_ARBITRARY_COLOUR, TAILWIND_DEFAULT_PALETTE] },
+      ],
+      "better-tailwindcss/enforce-consistent-class-order": "error",
+    },
+  },
+  {
+    files: ["app/components/ui/**/*.tsx"],
+    rules: {
+      "better-tailwindcss/no-unknown-classes": [
+        "error",
+        { ignore: [SHADCN_STOCK_TOKEN_CLASSES, TW_ANIMATE_STOCK_CLASSES] },
+      ],
     },
   },
 );

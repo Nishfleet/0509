@@ -1,6 +1,8 @@
 import { env } from "cloudflare:workers";
 import { parse } from "tldts";
 
+import { readEntityDomain } from "../data/entity.server";
+
 const MAX_LOGO_BYTES = 1_000_000;
 
 const FETCH_TIMEOUT_MS = 8_000;
@@ -23,7 +25,8 @@ function publicHttps(raw: string): boolean {
   let url: URL;
   try {
     url = new URL(raw);
-  } catch {
+  } catch (error) {
+    console.error(JSON.stringify({ event: "identity.logo_url_parse_failed", error: String(error) }));
     return false;
   }
   if (url.protocol !== "https:") return false;
@@ -94,7 +97,6 @@ export async function storeLogo(
   } catch (error) {
     console.log(JSON.stringify({
       event: "identity-logo-store-failed",
-      subject: registrable,
       error: String(error),
     }));
     return null;
@@ -103,4 +105,10 @@ export async function storeLogo(
 
 export function readLogo(registrable: string): Promise<R2ObjectBody | null> {
   return env.SNAPSHOTS.get(logoKey(registrable));
+}
+
+export async function readEntityLogo(workspaceId: string, entityId: string): Promise<R2ObjectBody | null> {
+  const domain = await readEntityDomain(workspaceId, entityId);
+  if (domain === null) return null;
+  return readLogo(domain);
 }

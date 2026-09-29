@@ -42,7 +42,7 @@ function safeLogo(value: string | null | undefined): string | null {
   if (value == null) return null;
   const trimmed = value.trim();
   if (trimmed.startsWith("/") && !trimmed.startsWith("//")) return trimmed;
-  return httpUrl(trimmed);
+  return null;
 }
 
 function chipLabel(name: string, self: boolean, off: boolean): string {
@@ -79,7 +79,7 @@ export function BrandChip({
       data-self={self ? "" : undefined}
       data-off={off ? "" : undefined}
       className={cn(
-        "h-auto max-w-full min-h-11 min-w-0 shrink gap-[7px] rounded-none border-[1.5px] border-line bg-card py-[5px] pr-[11px] pl-[5px] text-[0.85rem] font-medium text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink",
+        "h-auto min-h-11 max-w-full min-w-0 shrink gap-[7px] rounded-none border-[1.5px] border-line bg-card py-[5px] pr-[11px] pl-[5px] text-[0.85rem] font-medium text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink",
         self && "border-ink font-semibold",
         off && "border-dashed text-ink-soft",
       )}
@@ -129,7 +129,7 @@ export function BrandChipRow({
   return (
     <div
       aria-label="Your set"
-      className="flex w-full min-w-0 max-w-full flex-wrap gap-2"
+      className="flex w-full max-w-full min-w-0 flex-wrap gap-2"
       data-slot="brand-chip-row"
       role="group"
     >

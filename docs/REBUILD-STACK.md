@@ -167,7 +167,7 @@ npx auth@1.7.5 generate     # emit the schema
 npx auth@1.7.5 migrate      # apply it (Kysely adapters only)
 ```
 
-**Pin the CLI version; never `@latest`.** better-auth validates the schema against the live database **in production** (§2.3, point 3), so the generator and the library have to agree by construction. `@latest` silently drifts ahead of the installed `better-auth` on some future run, emits a schema the running library does not expect, and the first request after deploy fails that validation check. `auth@1.7.5` matches `better-auth` 1.7.5 exactly and moves only when that does.
+**Pin the CLI version; never `@latest`.** `@latest` silently drifts ahead of the installed `better-auth` on some future run and emits a schema the running library does not expect — and with runtime schema validation off in production (§2.3, point 3), that drift no longer fails loudly on the first request; it surfaces as the first touched query failing. `auth@1.7.5` matches `better-auth` 1.7.5 exactly and moves only when that does.
 
 Cited: <https://www.better-auth.com/docs/concepts/cli>, <https://www.better-auth.com/docs/adapters/sqlite> (both read 2026-09-21). `generate` flags: `-c/--cwd`, `--output`, `--config`, `-y/--yes`, `--adapter` (`prisma|drizzle|kysely`), `--dialect`. Other commands: `create-admin`, `init`, `upgrade`, `info`, `secret`.
 
@@ -228,7 +228,7 @@ Three things the docs make mandatory and are easy to miss:
 
 1. **`nodejs_compat` is required.** "Better Auth uses `AsyncLocalStorage`." — <https://www.better-auth.com/docs/integrations/hono> §Cloudflare Workers. It is on by default for `compatibility_date` ≥ `2026-08-04` (§5, platform fact 2), so the scaffold already satisfies it — **set it explicitly anyway**, because the Vitest plugin injects it into tests regardless and an implicit dependency is exactly how a green test suite ships a broken deploy.
 2. **`advanced.database.joins: true`** — "The Kysely SQLite dialect supports joins out of the box since version `1.4.0` … seeing upwards of 2x to 3x performance improvements depending on database latency." (<https://www.better-auth.com/docs/adapters/sqlite>). Off by default. `/get-session` runs on every request; this is the single cheapest latency win in the auth path.
-3. **Schema validation runs in production.** "Validation is enabled by default, including in production … Requests await the same check and fail if the schema does not match" (<https://www.better-auth.com/docs/concepts/database>). Kysely "reads live database metadata and needs database access during initialization" — so a drift between `0001_rebuild.sql` and better-auth's expectations is a **runtime 500 on first request**, not a startup warning. `REBUILD-SCHEMA.md` already carries the four auth tables verbatim; that is why.
+3. **Schema validation is stock-on but deliberately off here.** "Validation is enabled by default, including in production" (<https://www.better-auth.com/docs/concepts/database>) — and the default check cost ~6.5M D1 rows a day, one `sqlite_master`/`pragma_table_info` burst per `createAuth` call (0509#5721), so `createAuth` sets `advanced.database.validateSchema: false`. What still catches a drift between `0001_rebuild.sql` and better-auth's expectations: `tests/integration/auth-schema-check.integration.test.ts` builds one `createAuth` with the check explicitly on — better-auth's router awaits it in `onRequest` before any endpoint logic, so a column-level drift against `getExpectedSchema` throws `SchemaMismatchError` there, in CI, at zero production cost — `tests/integration/schema.integration.test.ts` pins the table count and the six auth tables by name, and the auth integration suite (`apikey`, `magic-link-ttl`, `sign-in-*`) drives the plugins' real write/read queries against real D1. `REBUILD-SCHEMA.md` still carries the four auth tables verbatim for that reason.
 
 ### 2.4 Generating the schema against D1
 
@@ -277,6 +277,14 @@ Core (<https://www.better-auth.com/docs/concepts/database>, field lists read fro
 **passkey adds exactly one table**, `passkey` (<https://www.better-auth.com/docs/plugins/passkey>): `id`, `name?`, `publicKey`, `userId` → `user.id`, `credentialID`, `counter`, `deviceType`, `backedUp`, `transports?`, `createdAt`. It moved out of the main package in 1.7 — `npm install @better-auth/passkey`, `import { passkey } from "@better-auth/passkey"`, client `@better-auth/passkey/client`. It pulls `@simplewebauthn/server` ^13.3.1 and `@simplewebauthn/browser` ^13.3.0, which is the reference WebAuthn implementation, not a hand-roll.
 
 Total for our set: **five tables**, four core plus `passkey`.
+
+### 2.6 Access JWT verification is `jose`, not a hand-rolled verifier
+
+Cloudflare's own "Validate JWTs" guide uses `jose` (`createRemoteJWKSet` + `jwtVerify`): <https://developers.cloudflare.com/cloudflare-one/identity/authorization-cookie/validating-json/> (301 to <https://developers.cloudflare.com/cloudflare-one/access-controls/applications/http-apps/authorization-cookie/validating-json/>, read 2026-09-28). The page names the `jose` NPM package and the JWKS URL `${teamdomain}/cdn-cgi/access/certs`.
+
+**Rejected:** the hand-rolled RS256 verifier in `app/lib/auth/access-preclearance.server.ts` (#5638, #5641) — `crypto.subtle`, a module-level JWKS map, and unsigned `iss`/`aud`/`exp` checks before the signature. An unknown `kid` forced a fresh JWKS fetch with no cooldown, so a forged token with a random `kid` cost one subrequest per request.
+
+`jose` **6.2.12**, exact pin (`npm install --save-exact jose@6.2.12`). Already a transitive of `better-auth`; the Access path imports the direct pin. `createRemoteJWKSet` refetches an unknown `kid` only after `cooldownDuration` (default 30s).
 
 ---
 
@@ -444,7 +452,7 @@ Pricing: 10M reads/mo then $0.50/M; 1M writes then **$5.00/M** — writes cost 1
 
 `batch()` "Sends multiple SQL statements inside a single call to the database" and returns results positionally (<https://developers.cloudflare.com/d1/worker-api/d1-database/>). Limits: **10 GB max database** on Paid, 30 s per query, 100 bound parameters, 100 KB statement, 2 MB row. Billing: rows read $0.001/M past 25B; rows written **$1.00/M** past 50M — written is 1,000× read.
 
-**Anti-pattern:** awaiting prepared statements in a loop instead of `batch()`. And the one that produced the $105 bill on this account on 2026-09-17: **a row per observed event**. Billing is on rows *scanned*, not returned, so an unindexed `WHERE` bills every row it touched. `REBUILD-SCHEMA.md` is the structural answer — snapshots to R2, one `snapshot` row per watch per tick, `signal` rows only after judgment.
+**Anti-pattern:** awaiting prepared statements in a loop instead of `batch()`. And the one that produced the $105 bill on this account on 2026-09-17: **a row per observed event**. Billing is on rows *scanned*, not returned, so an unindexed `WHERE` bills every row it touched. `REBUILD-SCHEMA.md` is the structural answer — snapshots to R2, one `snapshot` row per watch per tick paired in the same `batch()` with the `source` row's latest-facts update, `signal` rows only after judgment.
 
 ### 4.7 Email Service — transactional and one-click unsubscribe
 
@@ -648,7 +656,7 @@ uPlot's README claim of "~50 KB min" checks out exactly (51,081 B minified) — 
 
 `frappe-charts` is the only library under the bar and it is not a candidate: **last published 2021-06-16**, five years stale, imperative DOM mutation with no React wrapper, and it would fight React's reconciler.
 
-**Not yet installed.** No chart ships yet, so `uplot` 1.6.32 and `uplot-react` 1.2.4 are not in `package.json`.
+**Installed** at 1.6.32 / 1.2.4 by the Home four-week chart (#4055).
 
 **Decision (Fable, 2026-09-21): budget raised to 30 KB gzip; take `uplot` 1.6.32.** It is the only maintained candidate. `frappe-charts` is rejected as unmaintained since 2021 despite fitting the old bar, and inline SVG is rejected as hand-rolled. The 20 KB figure was an estimate written before anyone measured; 24–28 KB is the measured cost of the maintained option, and 30 KB is the bar that reflects it.
 
@@ -707,6 +715,33 @@ What the component owes us, it already ships: the toaster section renders `aria-
 |---|---|
 | A hand-rolled live region | Queueing, swipe gestures and aria-live announcements rebuilt in-house — exactly the hand-rolled machinery this file exists to refuse. The one component §11 allows to be ours is the mark. |
 | `react-hot-toast` 2.x | A second library for the same job where the design doc and the shadcn map both name sonner. |
+
+### 5.11 Billing — the Dodo Payments SDK
+
+**Installed: `dodopayments` 2.52.0**, exact pin (npm `dist-tags.latest` on 2026-09-29, modified 2026-09-25). Vendor: <https://github.com/dodopayments/dodopayments-typescript> (README and `src/resources/checkout-sessions.ts`, read 2026-09-29 through Context7), API docs <https://docs.dodopayments.com/> (read 2026-09-29).
+
+Dodo is the payment provider named in DESIGN.md §5 and the ledger. Its own TypeScript SDK is the client, so there is no `fetch` wrapper of ours in the path. J13's checkout is one call, `client.checkoutSessions.create({ product_cart, customer, subscription_data: { trial_period_days }, metadata, return_url })`, which the SDK sends as `POST /checkouts` and returns `{ session_id, checkout_url }`. `environment: "test_mode" | "live_mode"` picks the SDK's own base URL (`https://test.dodopayments.com` or `https://live.dodopayments.com`), so the test-mode switch is a config value, `DODO_ENVIRONMENT`. The SDK is ESM, fetch-based and has one dependency, `standardwebhooks`, which is the library that verifies Dodo's webhooks (§5.12). Probed 2026-09-29: it loads and runs inside workerd in the workers vitest project.
+
+Dodo's subscription statuses, read from the shipped types (`SubscriptionStatus`): `pending`, `active`, `on_hold`, `paused`, `cancelled`, `failed`, `expired`, `past_due`. There is no `trialing`; a trial is an `active` subscription created with `trial_period_days > 0`.
+
+| Rejected | Why |
+|---|---|
+| A hand-written `fetch` client for `/checkouts` | Charter #3842: hand-rolled billing is rejected. The SDK types the request and the response and owns retries and timeouts. |
+| Dodo's `@dodopayments/nextjs`, `@dodopayments/express` and other framework adapters | Each is a route handler for a framework this app does not run. The core SDK is the layer they wrap. |
+| Dodo's hosted overlay checkout script | A browser-side script from a second origin, which the app's CSP would have to admit. The server-created `checkout_url` needs none. |
+
+### 5.12 Billing — Standard Webhooks
+
+**Installed: `standardwebhooks` 1.1.1**, exact pin (npm `latest`, the same version `dodopayments` 2.52.0 depends on, so the lockfile holds one copy). Spec and library: <https://github.com/standard-webhooks/standard-webhooks/tree/main/libraries/javascript> (read 2026-09-29). Dodo signs its webhooks to this spec and the Dodo SDK's own `webhooks.unwrap` calls this library; Dodo's webhook guide: <https://docs.dodopayments.com/developer-resources/webhooks> (read 2026-09-29).
+
+`new Webhook(secret).verify(rawBody, { "webhook-id", "webhook-timestamp", "webhook-signature" })` checks the HMAC-SHA256 signature over `id.timestamp.body`, compares in constant time, accepts a `whsec_`-prefixed secret and rejects a timestamp more than five minutes from now, so a captured request cannot be replayed later. It throws `WebhookVerificationError` on any failure, which the handler turns into a 400 that Dodo retries. Its two dependencies (`fast-sha256`, `@stablelib/base64`) are plain JavaScript, so it runs in workerd without a Node crypto shim. Probed 2026-09-29 in the workers vitest project: the tests sign bodies with `Webhook.sign` and the route verifies them.
+
+The `webhook-id` header is the idempotency key, stored as `dodo_webhook_event.id` (the table exists in `migrations/0001_rebuild.sql`), which is what Dodo's webhook guide recommends for its automatic retries.
+
+| Rejected | Why |
+|---|---|
+| A hand-rolled HMAC over `crypto.subtle` | Charter #3842 rejects hand-rolled auth and billing; timestamp tolerance, multi-signature headers and constant-time comparison are the parts a hand-rolled check gets wrong. |
+| `client.webhooks.unwrap` from the Dodo SDK | It needs a constructed API client and parses into the SDK's event union. The handler needs the verification only and reads five fields with `zod`. |
 
 ---
 
@@ -863,6 +898,14 @@ Cache `.lycheecache` with `actions/cache@v4`; it is one block of stock YAML, not
 ### 6.6 axe — accessibility in Playwright
 
 `@axe-core/playwright` **^4.13.0** runs Deque's axe-core inside the existing Playwright suite. `new AxeBuilder({ page }).withTags([...]).analyze()` returns an `AxeResults` whose `.violations` is the spec's pass/fail — the same suite, the same browser, the same sign-in path, no new runner. Per the Playwright accessibility doc (<https://playwright.dev/docs/accessibility-testing>), the WCAG tag set lives on `withTags`, so one tag list is the spec and the gate.
+
+### 6.7 actionlint — the workflow files type-check
+
+`rhysd/actionlint` **1.7.12**, run as its published Docker image pinned by digest (`docker://rhysd/actionlint:1.7.12@sha256:b1934ee5f1c509618f2508e6eb47ee0d3520686341fec936f3b79331f9315667`), one step inside the required `codex-node-checks` job. The vendor documents exactly this invocation: <https://github.com/rhysd/actionlint/blob/main/docs/usage.md#use-actionlint-on-github-actions>. It checks expression syntax and types, `needs`/`outputs` wiring, runner labels and shellcheck on every `run:`. fleet-ops already runs the same tool. Rejected: a hand-written YAML schema test, which sees keys but not expressions.
+
+### 6.8 zizmor — the workflow files are audited for security
+
+`zizmorcore/zizmor` **1.30.1**, run as its published image pinned by digest (`docker://ghcr.io/zizmorcore/zizmor:1.30.1@sha256:a2eb396d886c053073405c7a980f2139ba2248ec172243cfa3841e57196e8101`) with `--offline`, so it needs no token and never touches the network (<https://docs.zizmor.sh/usage/#operating-modes>, <https://docs.zizmor.sh/installation/#docker>). It catches template injection, excessive permissions, persisted checkout credentials, unscoped App tokens and unpinned actions (<https://docs.zizmor.sh/audits/>). Exceptions live in `.github/zizmor.yml`, each with its reason. It found the weekend-audit C1 class (0509#5590): a model reading worker text with a write token in its environment. Alongside, not instead of: CodeQL default setup already analyses `actions` here, but it reports to code scanning and gates nothing; zizmor adds the App-token, persisted-credential and pinning audits and fails a required check. Rejected: harden-runner, an egress agent on the runner rather than an audit of the files.
 
 ---
 
@@ -1045,6 +1088,7 @@ Every capability the rebuild needs → the one thing that provides it → the ve
 | Worker runtime, deploy, types | `wrangler` (`wrangler types`) | 4.135.0 |
 | Scaffold | `create-cloudflare --framework=react-router` | 2.72.9 |
 | Auth (sessions, magic link) | `better-auth` | 1.7.5 |
+| Access service-token JWT | `jose` (`createRemoteJWKSet` + `jwtVerify`) | 6.2.12 |
 | Auth ↔ D1 | better-auth's built-in D1 Kysely dialect — binding passed directly | bundled in 1.7.5 |
 | Passkeys | `@better-auth/passkey` (SimpleWebAuthn) | 1.7.5 |
 | Auth schema generation | `npx auth@1.7.5 generate` against an empty local SQLite (§2.4) | `auth` 1.7.5, pinned |
@@ -1068,13 +1112,14 @@ Every capability the rebuild needs → the one thing that provides it → the ve
 | Feed parsing | `@extractus/feed-extractor` (wraps `fast-xml-parser`) | 8.0.3 / 5.11.1, not yet installed |
 | Logo | page metadata via `HTMLRewriter`, DuckDuckGo icon fallback | platform |
 | Validation | `zod` | 4.6.5 |
-| Charts | `uplot` (+ `uplot-react`), budget 30 KB gzip | 1.6.32 / 1.2.4, not yet installed |
+| Charts | `uplot` (+ `uplot-react`), budget 30 KB gzip | 1.6.32 / 1.2.4, installed |
 | OG images | Browser Run `/screenshot` → R2 | platform |
 | Dates + timezones | `Intl` + `date-fns` + `@date-fns/tz` (never `Temporal`, workerd#6907) | platform / 4.4.0 / 1.5.0 |
 | Unit + integration tests | `vitest` (**pinned 4.1.11**) + `@cloudflare/vitest-plugin` | 4.1.11 / 1.1.13 |
 | E2E against production | `@playwright/test` | 1.63.0 |
 | Performance gate | `treosh/lighthouse-ci-action` | v12.6.2 |
 | Link checking | `lycheeverse/lychee-action` | v2.9.0 |
+| Red-main issue create-or-update | `JasonEtco/create-an-issue` (update_existing, search_existing: open) | v2.9.2 |
 | MCP server | `createMcpHandler` (`@modelcontextprotocol/server`) | 2.1.0 |
 | MCP auth | `@cloudflare/workers-oauth-provider` | 0.10.4 |
 | API keys + per-key quota | `@better-auth/api-key` (`apikey` table) | 1.7.5 |
@@ -1082,7 +1127,7 @@ Every capability the rebuild needs → the one thing that provides it → the ve
 | OpenAPI document | `zod-openapi` (samchungy) | 6.0.2 |
 | Agent-readable docs | `/llms.txt` + `Accept: text/markdown` + `rel="alternate"` | spec v2 (2026-08-10) |
 
-**Installed beyond the scaffold:** `better-auth` ^1.7.5, `@better-auth/passkey` ^1.7.5, `@better-auth/api-key` ^1.7.5, `zod` ^4.6.5 (also a better-auth peer), `@cloudflare/puppeteer` ^1.4.0, `@base-ui/react` 1.8.0, `clsx` ^2.1.1, `tailwind-merge` ^3.7.0, `class-variance-authority` ^0.7.1, `sonner` ^2.0.8, `diff` 9.0.0, `lucide-react` 1.47.0, `date-fns` 4.4.0, `@date-fns/tz` 1.5.0. **Not yet installed**, because the engine that needs them has not shipped: `@extractus/feed-extractor` 8.0.3 (`fast-xml-parser` 5.11.1 comes with it), `uplot` 1.6.32, `uplot-react` 1.2.4. Do not delete those rows. `@modelcontextprotocol/server` 2.1.0, `@cloudflare/workers-oauth-provider` 0.10.4 and `zod-openapi` 6.0.2 shipped with the agent surface (2026-09-24); `agents` is rejected in §7.1. Platform rows have no package. `create-cloudflare`, `shadcn`, and `auth@1.7.5` are npx-only and are not missing dependencies.
+**Installed beyond the scaffold:** `better-auth` ^1.7.5, `@better-auth/passkey` ^1.7.5, `@better-auth/api-key` ^1.7.5, `jose` 6.2.12 (Access JWT; already a better-auth transitive), `zod` ^4.6.5 (also a better-auth peer), `@cloudflare/puppeteer` ^1.4.0, `@base-ui/react` 1.8.0, `clsx` ^2.1.1, `tailwind-merge` ^3.7.0, `class-variance-authority` ^0.7.1, `sonner` ^2.0.8, `diff` 9.0.0, `lucide-react` 1.47.0, `date-fns` 4.4.0, `@date-fns/tz` 1.5.0, `uplot` 1.6.32, `uplot-react` 1.2.4. **Not yet installed**, because the engine that needs it has not shipped: `@extractus/feed-extractor` 8.0.3 (`fast-xml-parser` 5.11.1 comes with it). Do not delete that row. `@modelcontextprotocol/server` 2.1.0, `@cloudflare/workers-oauth-provider` 0.10.4 and `zod-openapi` 6.0.2 shipped with the agent surface (2026-09-24); `uplot` 1.6.32 and `uplot-react` 1.2.4 shipped with the Home four-week chart (#4055). `agents` is rejected in §7.1. Platform rows have no package. `create-cloudflare`, `shadcn`, and `auth@1.7.5` are npx-only and are not missing dependencies.
 
 ---
 
@@ -1093,6 +1138,8 @@ The version in this table is the `package.json` specifier. An earlier section of
 | Package | Specifier | Where it is named | Why this one | Rejected | Lock |
 |---|---|---|---|---|---|
 | `@axe-core/playwright` | ^4.13.0 | §6.6, #4149 | WCAG 2.2 AA scan inside Playwright specs. Doc: <https://playwright.dev/docs/accessibility-testing> | `axe-playwright` (third-party wrapper), Lighthouse's accessibility category (a subset of axe, per-URL, cannot sign in), hand-written contrast checks | 4.13.0 |
+| `@date-fns/tz` | 1.5.0 | §5.9, #4004 | `TZDate` for brief-schedule arithmetic in the workspace's zone, 1.97 KB gzip | `luxon`, `dayjs` plugins, `Temporal` (not on Workers) | 1.5.0 |
+| `@extractus/feed-extractor` | 8.0.3 | §5.3, #4051 | The one RSS/Atom/RDF parser, `workers/sources/mentions/feed.ts` | `rss-parser` (Node HTTP at load), `feedparser` | 8.0.3 |
 | `@base-ui/react` | 1.8.0 | §3.2 | Badge and avatar import it | Radix. The copied shadcn files import Base UI | 1.8.0 |
 | `@better-auth/api-key` | ^1.7.5 | §7.3 | API keys, quotas, and expiry ship in this plugin | A hand-written key table | 1.7.5 |
 | `@better-auth/passkey` | ^1.7.5 | §2.5 | Passkeys. The plugin pulls SimpleWebAuthn | A hand-rolled WebAuthn | 1.7.5 |
@@ -1102,15 +1149,23 @@ The version in this table is the `package.json` specifier. An earlier section of
 | `@cloudflare/puppeteer` | ^1.4.0 | §4.3 | Session leg of the ads transport (`connect`, `launch`, `sessions`) | `@cloudflare/playwright`, the other session SDK. This file imports puppeteer | 1.4.0 |
 | `better-auth` | ^1.7.5 | §2 | Sessions and magic link on D1 | A custom session table, `kysely-d1`, `better-auth-cloudflare` | 1.7.5 |
 | `class-variance-authority` | ^0.7.1 | §3.2 | Variant map the badge component imports | A hand-written variant map | 0.7.1 |
+| `date-fns` | 4.4.0 | §5.9, #4004 | Zone-aware date arithmetic with `@date-fns/tz`, tree-shaken | `luxon` (no tree-shaking), `dayjs` | 4.4.0 |
+| `diff` | 9.0.0 | §5.2, #4403 | `diffWords` / `structuredPatch` in `app/lib/site/diff.ts` | `fast-diff` (characters only), `diff-match-patch` | 9.0.0 |
+| `dodopayments` | 2.52.0 | §5.11, J13 | The Dodo Payments SDK: one `checkoutSessions.create` call for the plan gate. Doc: <https://github.com/dodopayments/dodopayments-typescript> | A hand-written `fetch` client, the framework adapters (`@dodopayments/nextjs`, `@dodopayments/express`), the hosted overlay script | 2.52.0 |
 | `clsx` | ^2.1.1 | §3.2 | `cn()` in `app/lib/utils.ts` | String concatenation | 2.1.1 |
 | `isbot` | ^5.1.36 | §9 | React Router's server runtime uses it to tell a bot request from a browser request. `react-router typegen` writes `isbot` back into `package.json` if the direct dependency is missing | Dropping it. Typegen then inserts `isbot@^5`, a looser pin, and `@react-router/dev` already depends on a copy of its own | 5.2.2 |
+| `jose` | 6.2.12 | §2.6, #5830 | Access JWT via `createRemoteJWKSet` + `jwtVerify`. Cloudflare's Validate JWTs guide: <https://developers.cloudflare.com/cloudflare-one/identity/authorization-cookie/validating-json/> | The hand-rolled RS256 verifier (`crypto.subtle`, unsigned claims before the signature, unknown `kid` refetch with no cooldown) | 6.2.12 |
 | `react` | ^19.2.8 | §1.1 | UI runtime the scaffold emits | Preact. React Router 8's types are React | 19.3.0 |
 | `react-dom` | ^19.2.8 | §1.1 | Client renderer. Unit tests call `react-dom/server` | A second renderer | 19.3.0 |
 | `react-router` | ^8.4.0 | §1, §8 | Framework mode, SSR, routing | `@react-router/node` and `@react-router/serve`. C3 deletes both | 8.4.0 |
+| `lucide-react` | 1.47.0 | §3.2 | Icons the shadcn/ui components import (`app/components/ui/dialog.tsx`) | A second icon set, inline SVG copies | 1.47.0 |
 | `robots-parser` | 3.0.1 | #4741, REBUILD-GUARDRAILS robots line | robots.txt matching (groups, wildcards, Allow/Disallow precedence) for plain fetches of the customer's own site. Zero dependencies. Doc: <https://github.com/samclarke/robots-parser> | A hand-written robots.txt parser (charter #3842 forbids it), `robotstxt` ports of Google's C++ parser | 3.0.1 |
 | `sonner` | ^2.0.8 | §5.10 | The one toast surface: "saved" and "undo" per DESIGN.md §11 | A hand-rolled live region (Base UI ships no toast primitive), `react-hot-toast` | 2.0.8 |
+| `standardwebhooks` | 1.1.1 | §5.12, J13 | Verifies Dodo's webhook signature, timestamp tolerance and replay window. Doc: <https://github.com/standard-webhooks/standard-webhooks/tree/main/libraries/javascript> | A hand-rolled HMAC check, `client.webhooks.unwrap` from the Dodo SDK | 1.1.1 |
 | `tailwind-merge` | ^3.7.0 | §3.2 | Class conflict resolution inside `cn()` | A hand-written Tailwind merger | 3.7.0 |
 | `tldts` | ^7.4.13 | `docs/engines/identity-card.md` P1 | Registrable domain and public-suffix handling for identity input normalisation. No dependencies, ships a Workers-clean ESM build | A hand-written public-suffix list, `split('.')`, `psl` (unmaintained) | 7.4.13 |
+| `uplot` | 1.6.32 | §5.7, #4055 | The Home four-week standing line: a line-chart library, not a chart framework, at 22 KB gzip. Canvas-based, so the wrapper paints on mount and the server renders only the frame | `recharts` (over the 30 KB budget even tree-shaken), `frappe-charts` (unmaintained since 2021), hand-rolled inline SVG (glue) | 1.6.32 |
+| `uplot-react` | 1.2.4 | §5.7, #4055 | The one React wrapper over uPlot's imperative API, used once in `app/components/four-week-line.tsx` | A hand-written `useRef` + `useEffect` mount, a second chart wrapper | 1.2.4 |
 | `zod-openapi` | ^6.0.2 | §7.5 | The API's OpenAPI 3.1 document from the zod schemas the MCP tools already use. Zero dependencies | `chanfana`, `@hono/zod-openapi` (both need a second router), `z.toJSONSchema()` alone | 6.0.2 |
 | `zod` | ^4.6.5 | §5.6 | Request validation. better-auth already depends on zod 4 | `valibot`, `arktype` | 4.6.5 |
 | `@cloudflare/vite-plugin` | ^1.56.0 | §1.2 | Workers dev and deploy from Vite | A hand-written wrangler wrapper, and a wrangler `assets` block | 1.56.0 |
@@ -1122,11 +1177,16 @@ The version in this table is the `package.json` specifier. An earlier section of
 | `@types/node` | ^22.20.4 | §9 | `tsconfig.node.json` sets `"types": ["node"]` for `vite.config.ts` | Omitting it. `tsc` then has no Node types | 22.20.4 |
 | `@types/react` | ^19.2.18 | §9 | JSX types for `"jsx": "react-jsx"` | Omitting it. Component files fail typecheck | 19.3.0 |
 | `@types/react-dom` | ^19.2.7 | §9 | Types for `react-dom/server` in unit tests | An untyped `renderToStaticMarkup` | 19.3.0 |
+| `@vitest/eslint-plugin` | 1.6.27 | §9, #5785, #5808 | vitest rules in `eslint.config.js`: no focused or disabled tests, no identical titles, valid and present expects. Doc: <https://github.com/vitest-dev/eslint-plugin-vitest> | eslint-plugin-jest (jest-only), hand-written no-restricted-syntax selectors | 1.6.27 |
 | `eslint` | ^10.11.0 | §9 | `npm run lint` is `eslint . && knip` | oxlint or biome. Neither loads this type-checked config or its AST bans | 10.11.0 |
+| `eslint-plugin-better-tailwindcss` | ^4.7.0 | §9, DESIGN.md rule 8, 0509#5871 | no-unknown-classes, no-restricted-classes and enforce-consistent-class-order on app/**; reads the Tailwind 4 tokens from the app/app.css entry point | eslint-plugin-tailwindcss 4.4.0 (no regex-pattern class ban; its no-arbitrary-value is all-or-nothing and would ban the deliberate non-colour arbitrary values on main, e.g. text-[48px] in app/components/share-image.tsx) | 4.7.0 |
 | `eslint-plugin-boundaries` | ^7.2.0 | §9, REBUILD-TRUST §B4 | Declares element types and which of them may import which. Replaces the `**/*.server` glob | dependency-cruiser (a second tool, CI-only feedback), Sheriff (cannot add the other rules this config already runs), Feature-Sliced Design with steiger (a full restructure during the rebuild) | 7.2.0 |
 | `eslint-plugin-import-x` | ^4.17.1 | §9, REBUILD-TRUST §B4 | `import-x/no-cycle` on `app/**` and `workers/**`, and `import-x/no-default-export` except where the framework requires a default export | `eslint-plugin-import` (unmaintained). dependency-cruiser's cycle check, for the same second-tool reason as boundaries | 4.17.1 |
+| `eslint-plugin-no-comments` | ^1.2.1 | §9, CLAUDE.md "Comments are banned in app code" | `no-comments/disallowComments` makes any comment in `app/` and `workers/` red (0509#4225, [npm](https://www.npmjs.com/package/eslint-plugin-no-comments)) | Stock `no-inline-comments` alone, which misses whole-line comments. A reviewer | 1.2.1 |
+| `eslint-plugin-playwright` | 2.12.0 | §9, #5785, #5808 | playwright rules in `eslint.config.js`: no focused or unconditionally skipped test, no fixed sleep, no networkidle, awaits checked. Doc: <https://github.com/mskelton/eslint-plugin-playwright> | hand-written no-restricted-syntax selectors | 2.12.0 |
 | `eslint-plugin-react-hooks` | ^7.1.1 | §9 | Hooks rules on `app/` and `workers/` | Turning the rules off | 7.1.1 |
 | `globals` | ^17.12.0 | §9 | Browser and Node globals in `eslint.config.js` | A handwritten globals list | 17.12.0 |
+| `jscpd` | ^5.3.3 | §9 | Third part of `npm run lint`: copy-paste detection over `app/` and `workers/`, config in `.jscpd.json` ([docs](https://github.com/kucherenko/jscpd)). threshold 0: any copy-paste clone in `app/` or `workers/` fails `npm run lint` (0509#5783) | ESLint `sonarjs/no-identical-functions` (whole functions only), a reviewer | 5.3.3 |
 | `knip` | ^6.37.0 | §9 | Second half of `npm run lint`. Fails on an unused dependency | An allowlist. This file's rule is to remove the unused dependency | 6.37.0 |
 | `tailwindcss` | ^4.3.3 | §3.1 | Styling, configured in CSS | Tailwind 3 and a `tailwind.config.js` | 4.3.3 |
 | `typescript` | ^5.9.3 | §9 | `tsc -b` in `npm run typecheck` | swc or babel, which strip types and do not check them | 5.9.3 |

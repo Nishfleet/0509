@@ -3,7 +3,7 @@ import type { Route } from "./+types/onboarding";
 import { Form, redirect } from "react-router";
 
 import { requireSession } from "../lib/require-session.server";
-import { workspaceLandingForRequest } from "../lib/workspace.server";
+import { ONBOARDING_COMPETITORS, workspaceLandingForRequest } from "../lib/workspace.server";
 import { OneInput } from "../components/one-input";
 import { AddPasskey } from "../components/passkey-button";
 import { OnboardingFrame } from "../components/onboarding-frame";
@@ -13,6 +13,7 @@ import { isTakenDown } from "../lib/data/takedown.server";
 import { readWorkspaceIdForOwner } from "../lib/data/workspace.server";
 import { normaliseSubject } from "../lib/identity/normalise";
 import { screenOnboardingSubject } from "../lib/onboarding-screen.server";
+import { startOnboardingRun } from "../lib/data/onboarding_run.server";
 
 export function meta() {
   return [{ title: "Start with your website or a handle · Five to Nine" }];
@@ -21,7 +22,7 @@ export function meta() {
 export async function loader({ request }: Route.LoaderArgs) {
   const session = await requireSession(request);
   const landing = await workspaceLandingForRequest(request, session.user.id);
-  if (!landing) throw redirect("/app");
+  if (landing === null || landing === ONBOARDING_COMPETITORS) throw redirect(landing ?? "/app");
   return { email: session.user.email };
 }
 
@@ -38,16 +39,18 @@ export async function action({ request }: Route.ActionArgs) {
   if (normalised?.ok && rawSubject !== null) {
     const workspaceId = await readWorkspaceIdForOwner(session.user.id);
     if (workspaceId === null) throw redirect("/app");
+    const now = new Date().toISOString();
     const result = await screenOnboardingSubject({
       workspaceId,
       userId: session.user.id,
       subject: normalised.subject,
       raw: rawSubject,
       answer: typeof answer === "string" ? answer : null,
-      now: new Date().toISOString(),
+      now,
     });
-    if (result.kind === "refuse" || result.kind === "unavailable") return { message: result.message, confirm: null };
+    if (result.kind === "refuse") return { message: result.message, confirm: null };
     if (result.kind === "ask") return { message: null, confirm: { subject: result.subject, raw: rawSubject } };
+    await startOnboardingRun({ workspaceId, userId: session.user.id, inputRaw: rawSubject, startedAt: now });
   }
   const target = subjectRedirect(raw);
   if (target) throw redirect(target);
@@ -57,7 +60,7 @@ export async function action({ request }: Route.ActionArgs) {
 export default function Page({ loaderData, actionData }: Route.ComponentProps) {
   return (
     <OnboardingFrame step={1} heading="Start with your website or a handle" hideHeading>
-      <p className="text-ink-soft mt-3 max-w-prose leading-[1.55]">
+      <p className="mt-3 max-w-prose leading-[1.55] text-ink-soft">
         We read it and draw your card, then find who you're up against. A handle like @yourbrand works too.
       </p>
       <OneInput
@@ -82,7 +85,7 @@ export default function Page({ loaderData, actionData }: Route.ComponentProps) {
           </div>
         </Form>
       ) : null}
-      <footer className="border-line text-ink-soft mt-16 flex flex-wrap items-center gap-x-4 border-t pt-4 font-mono text-meta">
+      <footer className="mt-16 flex flex-wrap items-center gap-x-4 border-t border-line pt-4 font-mono text-meta text-ink-soft">
         <p className="[overflow-wrap:anywhere]">Signed in as {loaderData.email}</p>
         <AddPasskey />
       </footer>

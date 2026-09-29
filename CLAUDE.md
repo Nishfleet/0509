@@ -62,6 +62,15 @@ not so you can follow them from memory — lint will tell you.
   (`todo`, `hack`, `for now`, `revisit`, …); the rest is the reviewer's job.
   Put the reason in the commit message, where it is read at the moment it
   matters. Config files and tests are exempt.
+- **No user data in logs or Sentry.** `no-restricted-syntax` (NO_USER_DATA_IN_LOGS). Source: 0509#5776.
+- **Tests never skip, focus or sleep.** A vitest test is never focused or disabled
+  (`vitest/no-focused-tests`, `vitest/no-disabled-tests`); an e2e spec is never
+  focused or unconditionally skipped, never waits on a fixed sleep and never
+  waits for `networkidle` (`playwright/no-focused-test`,
+  `playwright/no-skipped-test`, `playwright/no-wait-for-timeout`,
+  `playwright/no-networkidle`). Conditional `test.skip(condition, reason)` and
+  `test.fail()` stay allowed. The full enforced set is the two test-lint blocks
+  in `eslint.config.js`. Source: 0509#5785.
 - **Immutability.** New objects, never mutation.
 
 ## Commands
@@ -144,17 +153,28 @@ Gitleaks   codex-node-checks   semgrep   preview-assert
 ```
 
 Renaming one of these is not cosmetic. A required check that never reports fails
-closed and nothing can merge again, including the PR that renamed it. The merge
-queue tests the merge result, so a PR that would redden `main` never lands.
+closed and nothing can merge again, including the PR that renamed it. A
+*skipped* required check counts as passing, so none of these four carries a
+job-level `if:` that can skip it: they report on every event, and on an event
+with nothing to do they pass through one explicit step. The merge queue tests
+the merge result, so a PR that would redden `main` never lands. There is no
+AI grader: CI is the gate, and a PR that touches `.github/`, `migrations/`,
+`app/lib/auth*` or `app/lib/data/` is labelled `needs-coordinator` and the
+coordinator reviews it before it merges.
 
-`e2e-production` and `lighthouse` run on `deployment_status` and are
-deliberately **not** required: they cannot run on a pull request, and a required
-check that cannot report blocks the queue forever.
+`lighthouse` runs on `deployment_status` and `e2e-production` (the sharded full
+suite in `e2e-scheduled.yml`, dispatched with `journey=suite`) runs on demand.
+Neither is **required**, deliberately: they cannot run on a pull request, and a
+required check that cannot report blocks the queue forever. The suite is off the
+deploy path because every sign-in in it sends a real email against the Email
+Service daily quota (Nish 2026-09-28).
 
 ## Rules that are not about code
 
 - Nothing merges on its own author's say-so. An independent reviewer or Nish,
   never the author reviewing itself.
+- A feature's finish line names a production artifact — a real row, run or
+  instance id — not only a green test (0509#5736).
 - Production state stays gated: secrets and provider mutations need Nish's
   explicit authorization. Merging a reviewed green PR is ordinary work.
 - Migrations (Nish 2026-09-24: "this is allowed too, use your best

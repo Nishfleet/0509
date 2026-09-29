@@ -2,6 +2,7 @@ import { z } from "zod";
 
 import { httpUrl } from "./http-url";
 import { shortUtc } from "./short-utc";
+import type { WhyFlagged } from "./why-flagged";
 
 const shotSide = z.object({
   snapshotId: z.string(),
@@ -117,6 +118,7 @@ export interface SiteChangeView {
   mark: ChangeMark | null;
   before: ChangeShot;
   after: ChangeShot;
+  whyFlagged: WhyFlagged | null;
 }
 
 export interface PairedSiteChange extends SiteChangeView {

@@ -6,7 +6,7 @@ import { CapturePlate } from "../capture-plate";
 import { Mark } from "../mark";
 import { Section } from "./section";
 
-export function Marks({ marks, now }: { marks: readonly PairedSiteChange[]; now: string }): ReactElement {
+export function Marks({ marks, now }: { marks: readonly PairedSiteChange[]; now: number }): ReactElement {
   const instant = new Date(now);
   return (
     <Section
@@ -20,7 +20,7 @@ export function Marks({ marks, now }: { marks: readonly PairedSiteChange[]; now:
           {marks.map((mark, index) => (
             <li
               key={mark.id}
-              className={mark.isSelf ? "bg-green-wash min-w-0 p-5" : "min-w-0"}
+              className={mark.isSelf ? "min-w-0 bg-green-wash p-5" : "min-w-0"}
               data-captured-at={mark.capturedAt}
               data-own-site={mark.isSelf ? "true" : "false"}
               data-signal-id={mark.id}
@@ -40,7 +40,7 @@ export function Marks({ marks, now }: { marks: readonly PairedSiteChange[]; now:
                 size="lg"
                 sourceUrl={mark.url}
               />
-              <p className="font-mono text-meta text-ink-soft mt-3">{daysAgoLabel(mark.capturedAt, instant)}</p>
+              <p className="mt-3 font-mono text-meta text-ink-soft">{daysAgoLabel(mark.capturedAt, instant)}</p>
             </li>
           ))}
         </ul>

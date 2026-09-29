@@ -10,7 +10,8 @@ export const PUBLIC_SUBJECT: NoulQuestion = {
   instructions:
     "Does `item` (a domain, handle or channel) present itself to the public for commercial or audience reasons: a company, a brand, a product, or a creator publishing to an audience?",
   whenTrue: "It is a business, brand, product or public creator that presents itself to the public.",
-  whenFalse: "It is a private individual: a person with no public commercial or audience presence.",
+  whenFalse:
+    "It is a private individual: a personal name or personal handle with no sign of a company, brand, product, or creator publishing to an audience.",
 };
 
 export type PublicSubjectOutcome = "proceed" | "ask" | "refuse";

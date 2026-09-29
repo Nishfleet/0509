@@ -1,5 +1,6 @@
 import { env } from "cloudflare:workers";
 
+import { retireReasonLine } from "../competitor/reason-customer";
 import { insertCompetitorRetiredAlert } from "../data/alert.server";
 import type { DiscoveryContext, RefreshTarget } from "../data/entity.server";
 import { retireCompetitorByJev } from "../data/entity.server";
@@ -58,14 +59,6 @@ export interface StillCompetitorResult {
   reason: ChoiceVerdict | null;
 }
 
-const REASON_LINES: Record<string, string> = {
-  active: "We're not sure it still competes with you",
-  acquired: "Looks like it was acquired",
-  shut_down: "Looks like it shut down",
-  pivoted: "Looks like it changed what it sells",
-  dormant: "Quiet for the last 30 days",
-};
-
 export type StillCompetitorAction = "none" | "keep" | "retire" | "ask";
 
 export function stillCompetitorAction(result: StillCompetitorResult): StillCompetitorAction {
@@ -91,7 +84,7 @@ function statementsForStillCompetitor(
 ): D1PreparedStatement[] {
   const { target, verdict, reason } = result;
   if (verdict === null || reason === null) return [];
-  const line = REASON_LINES[reason.choice];
+  const line = retireReasonLine(reason.choice);
   const verdicts = [
     ...(verdict.cached
       ? []

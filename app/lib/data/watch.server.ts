@@ -17,13 +17,15 @@ export interface SiteSweepTarget {
   pageId: string;
   pageRole: string;
   url: string;
+  transport: "fetch" | "browser" | null;
+  transportTestedAt: string | null;
 }
 
 const INSERT_WATCH = `INSERT INTO watch (id, entity_id, source_id, target_key)
 VALUES (?1, ?2, ?3, ?4)
 ON CONFLICT (entity_id, source_id, target_key) DO NOTHING`;
 
-const UNWATCHED_ENTITIES = `SELECT e.id AS id, e.domain AS domain
+const UNWATCHED_ENTITIES = `SELECT e.id AS id, e.domain AS domain, json_extract(e.identity_json, '$.url') AS url
 FROM entity e
 WHERE e.state = 'on'
   AND NOT EXISTS (SELECT 1 FROM watch w WHERE w.entity_id = e.id AND w.source_id = ?1)
@@ -38,7 +40,9 @@ const SITE_SWEEP_TARGETS = `SELECT e.workspace_id AS workspace_id,
        w.id AS watch_id,
        p.id AS page_id,
        COALESCE(p.role, 'other') AS page_role,
-       p.url AS url
+       p.url AS url,
+       p.transport AS transport,
+       p.transport_tested_at AS transport_tested_at
 FROM watch w
 JOIN source src ON src.id = w.source_id AND src.key = ?1 AND src.is_enabled = 1
 JOIN entity e ON e.id = w.entity_id AND e.state = 'on'
@@ -47,6 +51,12 @@ WHERE w.is_active = 1
 ORDER BY e.workspace_id, e.id, p.url`;
 
 const entityRows = z.array(z.object({ id: z.string(), domain: z.string() }));
+
+const unwatchedEntityRows = z.array(
+  z.object({ id: z.string(), domain: z.string(), url: z.string().nullable() }),
+);
+
+type UnwatchedEntity = z.infer<typeof unwatchedEntityRows>[number];
 
 const targetRows = z.array(
   z.object({
@@ -58,6 +68,8 @@ const targetRows = z.array(
     page_id: z.string(),
     page_role: z.string(),
     url: z.string(),
+    transport: z.enum(["fetch", "browser"]).nullable(),
+    transport_tested_at: z.string().nullable(),
   }),
 );
 
@@ -70,15 +82,60 @@ export async function insertWatches(rows: readonly NewWatch[]): Promise<void> {
   );
 }
 
+const SELECT_ENTITY_WATCHES = `SELECT w.id AS id, s.id AS source_id, s.key AS source_key, w.target_key AS target_key
+FROM watch w
+JOIN source s ON s.id = w.source_id
+WHERE w.entity_id = ?1
+ORDER BY s.key, w.target_key, w.id`;
+
+const entityWatchRows = z.array(
+  z.object({
+    id: z.string(),
+    source_id: z.string(),
+    source_key: z.string(),
+    target_key: z.string(),
+  }),
+);
+
+export interface EntityWatch {
+  id: string;
+  sourceId: string;
+  sourceKey: string;
+  targetKey: string;
+}
+
+export async function readEntityWatches(entityId: string): Promise<EntityWatch[]> {
+  const rows = await env.DB.prepare(SELECT_ENTITY_WATCHES).bind(entityId).all();
+  return entityWatchRows.parse(rows.results).map((row) => ({
+    id: row.id,
+    sourceId: row.source_id,
+    sourceKey: row.source_key,
+    targetKey: row.target_key,
+  }));
+}
+
 export async function readUnwatchedEntities(
   sourceId: string,
-): Promise<readonly { id: string; domain: string }[]> {
+): Promise<readonly UnwatchedEntity[]> {
   const rows = await env.DB.prepare(UNWATCHED_ENTITIES).bind(sourceId).all();
-  return entityRows.parse(rows.results);
+  return unwatchedEntityRows.parse(rows.results);
 }
 
 export async function markWatchPolled(watchId: string, polledAt: string): Promise<void> {
   await env.DB.prepare(MARK_POLLED).bind(watchId, polledAt).run();
+}
+
+const READ_WATCH_CONFIG = "SELECT config_json FROM watch WHERE id = ?1";
+const WRITE_WATCH_CONFIG = "UPDATE watch SET config_json = ?2 WHERE id = ?1";
+
+export async function readWatchConfigJson(watchId: string): Promise<string | null> {
+  const row = await env.DB.prepare(READ_WATCH_CONFIG).bind(watchId).first<{ config_json: string }>();
+  return row === null ? null : row.config_json;
+}
+
+export async function writeWatchConfigJson(watchId: string, configJson: string): Promise<void> {
+  const result = await env.DB.prepare(WRITE_WATCH_CONFIG).bind(watchId, configJson).run();
+  if (result.meta.changes !== 1) throw new Error(`watch ${watchId} was not updated`);
 }
 
 export async function readSiteSweepTargets(sourceKey: string): Promise<readonly SiteSweepTarget[]> {
@@ -92,7 +149,45 @@ export async function readSiteSweepTargets(sourceKey: string): Promise<readonly 
     pageId: row.page_id,
     pageRole: row.page_role,
     url: row.url,
+    transport: row.transport,
+    transportTestedAt: row.transport_tested_at,
   }));
+}
+
+const ENSURE_WATCHES = `INSERT INTO watch (id, entity_id, source_id, target_key)
+SELECT lower(hex(randomblob(16))), e.id, s.id, COALESCE(NULLIF(e.name, ''), e.domain)
+FROM entity e JOIN source s ON s.kind = ?1 AND s.is_enabled = 1
+WHERE e.state = 'on'
+ON CONFLICT (entity_id, source_id, target_key) DO NOTHING`;
+
+const SELECT_WATCHES = `SELECT w.id AS watch_id, w.target_key, e.id AS entity_id, e.workspace_id, e.role,
+  COALESCE(NULLIF(e.name, ''), e.domain) AS name, e.domain,
+  s.id AS source_id, s.plugin_key, s.reliability,
+  COALESCE(json_extract(s.config_json, '$.min_interval_seconds'), 0) AS min_interval_seconds
+FROM watch w
+JOIN entity e ON e.id = w.entity_id AND e.state = 'on'
+JOIN source s ON s.id = w.source_id AND s.kind = ?1 AND s.is_enabled = 1
+WHERE w.is_active = 1 AND w.target_key = COALESCE(NULLIF(e.name, ''), e.domain)
+ORDER BY s.plugin_key, w.target_key, w.id`;
+
+export interface WatchRow {
+  watch_id: string;
+  target_key: string;
+  entity_id: string;
+  workspace_id: string;
+  role: "self" | "competitor";
+  name: string;
+  domain: string;
+  source_id: string;
+  plugin_key: string;
+  reliability: string;
+  min_interval_seconds: number;
+}
+
+export async function readActiveWatches(kind: "mentions" | "ads"): Promise<WatchRow[]> {
+  await env.DB.prepare(ENSURE_WATCHES).bind(kind).run();
+  const rows = await env.DB.prepare(SELECT_WATCHES).bind(kind).all<WatchRow>();
+  return rows.results;
 }
 
 const ENTITIES_WITHOUT_HIRING_WATCH = `SELECT e.id AS id, e.domain AS domain

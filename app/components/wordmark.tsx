@@ -5,7 +5,7 @@ export function Wordmark({ className }: { className?: string }) {
     <a href="/" className={cn("font-display text-[1.05rem] font-extrabold tracking-[-0.03em]", className)}>
       <span className="sr-only">Five to Nine</span>
       <span aria-hidden="true">
-        05<span className="bg-green text-on-green px-[5px]">09</span>
+        05<span className="bg-green px-[5px] text-on-green">09</span>
       </span>
     </a>
   );

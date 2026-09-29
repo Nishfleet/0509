@@ -1,3 +1,5 @@
+import { env } from "cloudflare:workers";
+
 import type { BriefPayload } from "../brief-payload";
 import { readBriefPayload } from "../brief-payload";
 
@@ -38,6 +40,7 @@ export interface DeliveryFailureRow {
   title: string;
   body: string | null;
   created_at: string;
+  digest_id: string | null;
   brief: BriefPayload | null;
 }
 
@@ -46,10 +49,11 @@ interface AlertJoinRow {
   title: string;
   body: string | null;
   created_at: string;
+  digest_id: string | null;
   payload_json: string | null;
 }
 
-const SELECT_DELIVERY_FAILURES = `SELECT a.id, a.title, a.body, a.created_at, d.payload_json
+const SELECT_DELIVERY_FAILURES = `SELECT a.id, a.title, a.body, a.created_at, d.id AS digest_id, d.payload_json
 FROM alert a
 LEFT JOIN digest d ON d.id = substr(a.id, 5) AND d.workspace_id = a.workspace_id
 WHERE a.workspace_id = ? AND a.kind = 'delivery_failed'
@@ -66,6 +70,7 @@ export async function readDeliveryFailures(
     title: row.title,
     body: row.body,
     created_at: row.created_at,
+    digest_id: row.digest_id,
     brief: row.payload_json === null ? null : readBriefPayload(row.payload_json),
   }));
 }
@@ -89,32 +94,41 @@ export async function readTakedownNotes(
   return results;
 }
 
-export interface IncidentAlert {
-  incidentId: string;
+export interface OwnSiteBreakageAlertRow {
+  id: string;
   workspaceId: string;
   entityId: string;
   pageId: string;
+  signalId: string | null;
+  incidentId: string;
+  severity: "high" | "normal";
   title: string;
+  body: string | null;
   createdAt: string;
 }
 
-const INSERT_INCIDENT_ALERT = `INSERT INTO alert (id, workspace_id, entity_id, page_id, incident_id, kind, severity, title, created_at)
-VALUES (?1, ?2, ?3, ?4, ?5, 'own_site_broken', 'high', ?6, ?7)
+const INSERT_OWN_SITE_BREAKAGE_ALERT = `INSERT INTO alert
+  (id, workspace_id, entity_id, signal_id, page_id, incident_id, kind, severity, title, body, created_at)
+SELECT ?1, ?2, ?3, ?4, ?5, ?6, 'own_site_broken', ?7, ?8, ?9, ?10
+WHERE EXISTS (SELECT 1 FROM incident WHERE id = ?11)
 ON CONFLICT(id) DO NOTHING`;
 
-export async function insertIncidentAlert(db: D1Database, alert: IncidentAlert): Promise<void> {
-  await db
-    .prepare(INSERT_INCIDENT_ALERT)
+export function insertIncidentAlertStatement(row: OwnSiteBreakageAlertRow): D1PreparedStatement {
+  return env.DB
+    .prepare(INSERT_OWN_SITE_BREAKAGE_ALERT)
     .bind(
-      `incident-${alert.incidentId}`,
-      alert.workspaceId,
-      alert.entityId,
-      alert.pageId,
-      alert.incidentId,
-      alert.title,
-      alert.createdAt,
-    )
-    .run();
+      row.id,
+      row.workspaceId,
+      row.entityId,
+      row.signalId,
+      row.pageId,
+      row.incidentId,
+      row.severity,
+      row.title,
+      row.body,
+      row.createdAt,
+      row.incidentId,
+    );
 }
 
 export interface OwnSiteIncidentNote {
@@ -142,6 +156,87 @@ export async function readOwnSiteIncidents(
   return results;
 }
 
+export interface OpenIncidentBlock {
+  alert_id: string;
+  title: string;
+  kind: string;
+  url: string;
+  opened_at: string;
+}
+
+const SELECT_OPEN_INCIDENT_BLOCK = `SELECT a.id AS alert_id, a.title, i.kind, p.url, i.opened_at FROM alert a JOIN incident i ON i.id = a.incident_id JOIN page p ON p.id = i.page_id WHERE a.workspace_id = ?1 AND a.kind = 'own_site_broken' AND i.closed_at IS NULL AND a.status <> 'acknowledged' ORDER BY i.opened_at DESC LIMIT 1`;
+
+export async function readOpenIncidentBlock(
+  db: D1Database,
+  workspaceId: string,
+): Promise<OpenIncidentBlock | null> {
+  const row = await db
+    .prepare(SELECT_OPEN_INCIDENT_BLOCK)
+    .bind(workspaceId)
+    .first<OpenIncidentBlock>();
+  return row ?? null;
+}
+
+const ACKNOWLEDGE_INCIDENT_ALERT = `UPDATE alert SET status = 'acknowledged', read_at = ?3 WHERE workspace_id = ?1 AND id = ?2 AND kind = 'own_site_broken'`;
+
+export async function acknowledgeIncidentAlert(
+  db: D1Database,
+  workspaceId: string,
+  alertId: string,
+  at: string,
+): Promise<void> {
+  await db
+    .prepare(ACKNOWLEDGE_INCIDENT_ALERT)
+    .bind(workspaceId, alertId, at)
+    .run();
+}
+
+const INSERT_SIGNAL_ALERT = `INSERT INTO alert (id, workspace_id, entity_id, signal_id, kind, severity, title, body, status, created_at)
+VALUES (?1, ?2, ?3, ?4, ?5, 'normal', ?6, ?7, 'unread', ?8) ON CONFLICT(id) DO NOTHING`;
+
+export function insertSignalAlert(db: D1Database, alert: {
+  workspaceId: string;
+  entityId: string;
+  signalId: string;
+  kind: "mention" | "ad";
+  title: string;
+  body: string | null;
+  createdAt: string;
+}): D1PreparedStatement {
+  return db.prepare(INSERT_SIGNAL_ALERT).bind(
+    `${alert.kind}-${alert.signalId}`,
+    alert.workspaceId,
+    alert.entityId,
+    alert.signalId,
+    alert.kind,
+    alert.title,
+    alert.body,
+    alert.createdAt,
+  );
+}
+
+export interface SignalAlert {
+  id: string;
+  kind: string;
+  title: string;
+  body: string | null;
+  url: string | null;
+  created_at: string;
+}
+
+const SELECT_SIGNAL_ALERTS = `SELECT a.id, a.kind, a.title, a.body, s.url, a.created_at
+FROM alert a
+JOIN signal s ON s.id = a.signal_id AND s.is_tombstoned = 0
+JOIN entity e ON e.id = a.entity_id AND e.state = 'on'
+WHERE a.workspace_id = ? AND a.kind IN ('mention', 'ad')
+ORDER BY a.created_at DESC
+LIMIT 50`;
+
+export async function readSignalAlerts(db: D1Database, workspaceId: string): Promise<SignalAlert[]> {
+  const { results } = await db.prepare(SELECT_SIGNAL_ALERTS).bind(workspaceId).all<SignalAlert>();
+  return results;
+}
+
 const INSERT_COMPETITOR_RETIRED_ALERT =
   "INSERT INTO alert (id, workspace_id, entity_id, kind, title, body, created_at) VALUES (?, ?, ?, 'competitor_retired', ?, ?, ?)";
 
@@ -163,4 +258,21 @@ export function insertCompetitorRetiredAlert(
     `${input.line}. Its history is kept, and you can turn it back on in Competitors.`,
     input.now,
   );
+}
+
+const INSERT_SOURCE_BLIND_ALERT = `INSERT INTO alert (id, workspace_id, kind, severity, title, body, status, created_at) VALUES (?1, ?2, 'source_blind', 'high', ?3, ?4, 'unread', ?5) ON CONFLICT(id) DO NOTHING`;
+
+export function insertSourceBlindAlert(
+  db: D1Database,
+  alert: {
+    id: string;
+    workspaceId: string;
+    title: string;
+    body: string;
+    createdAt: string;
+  },
+): D1PreparedStatement {
+  return db
+    .prepare(INSERT_SOURCE_BLIND_ALERT)
+    .bind(alert.id, alert.workspaceId, alert.title, alert.body, alert.createdAt);
 }

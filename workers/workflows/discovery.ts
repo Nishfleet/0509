@@ -2,9 +2,17 @@ import type { WorkflowEvent, WorkflowStep, WorkflowStepConfig } from "cloudflare
 import { WorkflowEntrypoint } from "cloudflare:workers";
 
 import { readBacklog, writeBacklog } from "../../app/lib/data/discovery_backlog.server";
-import { readDiscoveryContext } from "../../app/lib/data/entity.server";
+import type { DiscoveryContext } from "../../app/lib/data/entity.server";
+import { readDiscoveryContext, readRefreshTargets } from "../../app/lib/data/entity.server";
+import type { DiscoveryResult } from "../../app/lib/data/suggestion.server";
 import { writeDiscoveryResults } from "../../app/lib/data/suggestion.server";
-import { generateShortlist, judgeCandidates, resolveShortlist } from "../../app/lib/discovery/run.server";
+import type { ResolvedCandidate } from "../../app/lib/discovery/run.server";
+import { generateShortlist, judgeBatches, judgeCandidates, resolveShortlist } from "../../app/lib/discovery/run.server";
+import {
+  judgeStillCompetitors,
+  stillCompetitorAction,
+  writeStillCompetitorResults,
+} from "../../app/lib/discovery/refresh.server";
 import type { DiscoveryParams } from "../../app/lib/discovery/start.server";
 
 const RETRY: WorkflowStepConfig = {
@@ -20,6 +28,25 @@ export interface DiscoveryOutcome {
   judged: number;
 }
 
+async function judgeAndWriteBatches(
+  step: WorkflowStep,
+  context: DiscoveryContext,
+  resolved: readonly ResolvedCandidate[],
+): Promise<DiscoveryResult[]> {
+  const batches = await Promise.all(
+    judgeBatches(resolved).map(async (batch, index) => {
+      const judgedBatch = await step.do(`judge-${String(index)}`, RETRY, () =>
+        judgeCandidates(context, batch),
+      );
+      await step.do(`write-${String(index)}`, RETRY, () =>
+        writeDiscoveryResults(context.self.workspaceId, judgedBatch, new Date().toISOString()),
+      );
+      return judgedBatch;
+    }),
+  );
+  return batches.flat();
+}
+
 export class Discovery extends WorkflowEntrypoint<Env, DiscoveryParams> {
   async run(event: WorkflowEvent<DiscoveryParams>, step: WorkflowStep): Promise<DiscoveryOutcome> {
     const { workspaceId } = event.payload;
@@ -28,14 +55,27 @@ export class Discovery extends WorkflowEntrypoint<Env, DiscoveryParams> {
       return { workspaceId, shortlisted: 0, queued: 0, promoted: 0, written: 0, judged: 0 };
     }
 
+    if (event.payload.mode === "refresh") {
+      const now = event.timestamp.toISOString();
+      const targets = await step.do("refresh-targets", RETRY, () => readRefreshTargets(workspaceId));
+      const results = await step.do("refresh-judge", RETRY, () =>
+        judgeStillCompetitors(context, targets, now),
+      );
+      await step.do("refresh-write", RETRY, () => writeStillCompetitorResults(workspaceId, results, now));
+      const judged = results.filter((result) => result.verdict !== null).length;
+      const retired = results.filter((result) => stillCompetitorAction(result) === "retire").length;
+      const asked = results.filter((result) => stillCompetitorAction(result) === "ask").length;
+      console.log(
+        JSON.stringify({ event: "discovery.refresh", workspaceId, judged, retired, asked }),
+      );
+      return { workspaceId, shortlisted: 0, queued: 0, promoted: 0, written: 0, judged };
+    }
+
     const backlog = await step.do("backlog", RETRY, () => readBacklog(workspaceId));
     const generated = await step.do("generate", RETRY, () => generateShortlist(context.self, backlog));
     const shortlisted = generated.shortlisted;
     const resolved = await step.do("resolve", RETRY, () => resolveShortlist(context, shortlisted));
-    const results = await step.do("judge", RETRY, () => judgeCandidates(context, resolved));
-    await step.do("write", RETRY, () =>
-      writeDiscoveryResults(workspaceId, results, new Date().toISOString()),
-    );
+    const results = await judgeAndWriteBatches(step, context, resolved);
     await step.do("queue", RETRY, () =>
       writeBacklog(workspaceId, generated.rest, generated.promoted, new Date().toISOString()),
     );
