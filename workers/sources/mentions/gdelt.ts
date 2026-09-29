@@ -1,5 +1,5 @@
 import type { MentionsAdapter } from "./types";
-import { fetchUpstream, mentionItemSchema, SOURCE_TIMEOUT_MS } from "./types";
+import { fetchUpstream, mentionItemSchema, SOURCE_SETTINGS } from "./types";
 import {
   GDELT_SEARCH_URL,
   gdeltResponseSchema,
@@ -15,10 +15,11 @@ function parseBody(rawBody: string): unknown {
 }
 
 export const gdelt: MentionsAdapter = async (target, _cursor) => {
+  const { timeoutMs, timeoutRetries } = SOURCE_SETTINGS["gdelt.doc"];
   const response = await fetchUpstream(
     GDELT_SEARCH_URL + encodeURIComponent(`"${target.query}"`),
-    SOURCE_TIMEOUT_MS["gdelt.doc"],
-    1,
+    timeoutMs,
+    timeoutRetries,
   );
   if (!response.ok) throw new Error(`gdelt answered ${String(response.status)}`);
   const rawBody = await response.text();
