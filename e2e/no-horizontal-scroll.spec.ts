@@ -1,21 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 import type { RouteConfigEntry } from "@react-router/dev/routes";
 import routes from "../app/routes";
-import { deleteCreatedAccount, requireInboxToken, signInWithMagicLink } from "./inbox";
-
-let createdEmail = "";
-test.afterEach(async ({ page }, testInfo) => {
-  if (createdEmail === "") return;
-  testInfo.setTimeout(testInfo.timeout + 60_000);
-  // The delete failing is a test failure, not a reason to keep the address:
-  // clearing in finally means the next test in this worker cannot try to
-  // delete an account that is already gone.
-  try {
-    await deleteCreatedAccount(page, createdEmail);
-  } finally {
-    createdEmail = "";
-  }
-});
+import { sessionStatePath } from "../playwright.config";
 
 function screenPaths(entries: RouteConfigEntry[], parent: string): string[] {
   const paths: string[] = [];
@@ -54,24 +40,24 @@ for (const target of targets) {
   });
 }
 
-test("every signed-in screen has no horizontal scroll at 390", async ({ page }, testInfo) => {
-  test.skip(testInfo.project.name !== "phone-390", "measured at 390 only");
-  test.skip(!process.env.PLAYWRIGHT_TEST_BASE_URL, "needs a real session; the preview Worker cannot send email");
-  test.setTimeout(120_000);
+test.describe("signed in", () => {
+  test.use({ storageState: process.env.PLAYWRIGHT_TEST_BASE_URL ? sessionStatePath : undefined });
 
-  const email = `e2e+${crypto.randomUUID().replaceAll("-", "").slice(0, 12)}@0509.io`;
-  createdEmail = email;
-  await signInWithMagicLink(page, email, requireInboxToken());
+  test("every signed-in screen has no horizontal scroll at 390", async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== "phone-390", "measured at 390 only");
+    test.skip(!process.env.PLAYWRIGHT_TEST_BASE_URL, "needs a real session; the preview Worker cannot send email");
+    test.setTimeout(120_000);
 
-  let rows: { target: string; landed: string; scrollWidth: number; clientWidth: number }[] = [];
-  for (const t of signedInTargets) {
-    await page.goto(t);
-    await expect(page.locator("main")).toBeVisible();
-    const m = await measure(page);
-    rows = [...rows, { target: t, landed: new URL(page.url()).pathname, ...m }];
-  }
-  await test.info().attach("widths", { body: JSON.stringify(rows, null, 2), contentType: "application/json" });
-  expect(rows.filter((r) => r.scrollWidth !== r.clientWidth)).toEqual([]);
+    let rows: { target: string; landed: string; scrollWidth: number; clientWidth: number }[] = [];
+    for (const t of signedInTargets) {
+      await page.goto(t);
+      await expect(page.locator("main")).toBeVisible();
+      const m = await measure(page);
+      rows = [...rows, { target: t, landed: new URL(page.url()).pathname, ...m }];
+    }
+    await test.info().attach("widths", { body: JSON.stringify(rows, null, 2), contentType: "application/json" });
+    expect(rows.filter((r) => r.scrollWidth !== r.clientWidth)).toEqual([]);
+  });
 });
 
 test.fail("a deliberately overflowing element fails the check", async ({ page }, testInfo) => {
