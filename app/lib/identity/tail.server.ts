@@ -9,7 +9,7 @@ import { insertWatches, readEntityWatches } from "../data/watch.server";
 import type { EntityWatch, NewWatch } from "../data/watch.server";
 import { readUrl } from "../fetch/transport.server";
 import { discoverBoard } from "../hiring/discover-board";
-import { readCachedSiteProof } from "./card.server";
+import { readCachedSiteProof, readSiteCard } from "./card.server";
 import { extractIdentity } from "./extract";
 import { normaliseSubject, type Subject } from "./normalise";
 import { classifyNavPages } from "./page-role.server";
@@ -84,6 +84,13 @@ export async function classifyTailPages(params: IdentityTailParams, now: string)
       JSON.stringify({ event: "identity-page-role-skipped", workspaceId: params.workspaceId, error: String(error) }),
     );
   }
+}
+
+export async function warmTailSiteCard(params: IdentityTailParams): Promise<void> {
+  if (params.handle === undefined) return;
+  const subject = subjectFor(params);
+  if (subject === null || subject.kind !== "domain") return;
+  await readSiteCard(subject);
 }
 
 export async function seedTailWatches(params: IdentityTailParams, discoveredAt: string): Promise<EntityWatch[]> {
