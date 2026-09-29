@@ -1,15 +1,10 @@
-import { parse } from "tldts";
-
 import { browserContent } from "../site/browser-budget.server";
+import { BlockedRedirectError, cappedBody, fetchOutbound, targetRefusal } from "./outbound.server";
 import { CRAWLER_USER_AGENT } from "./robots.server";
-
-const FETCH_TIMEOUT_MS = 8_000;
 
 const MIN_EXTRACTED_CHARS = 200;
 
 const MAX_BODY_BYTES = 5_000_000;
-
-const MAX_REDIRECTS = 5;
 
 export type Transport = "fetch" | "browser";
 
@@ -158,64 +153,9 @@ class BodyTooLargeError extends Error {
 }
 
 async function cappedText(res: Response): Promise<string> {
-  const declared = Number(res.headers.get("content-length"));
-  if (Number.isFinite(declared) && declared > MAX_BODY_BYTES) {
-    await res.body?.cancel();
-    throw new BodyTooLargeError();
-  }
-  if (res.body === null) return "";
-  let seen = 0;
-  const capped = res.body.pipeThrough(
-    new TransformStream<Uint8Array, Uint8Array>({
-      transform(chunk, controller) {
-        seen += chunk.byteLength;
-        if (seen > MAX_BODY_BYTES) {
-          controller.error(new BodyTooLargeError());
-          return;
-        }
-        controller.enqueue(chunk);
-      },
-    }),
-  );
-  return new Response(capped).text();
-}
-
-class BlockedRedirectError extends Error {
-  constructor(detail: string) {
-    super(detail);
-    this.name = "BlockedRedirectError";
-  }
-}
-
-function targetRefusal(target: URL): string | null {
-  if (target.protocol !== "http:" && target.protocol !== "https:") {
-    return `unsupported scheme: ${target.protocol}`;
-  }
-  const host = parse(target.hostname);
-  if (host.isIp === true || host.isIcann !== true) {
-    return `not a public internet host: ${target.hostname}`;
-  }
-  return null;
-}
-
-async function fetchGuarded(url: string, signal: AbortSignal): Promise<Response> {
-  let current = url;
-  for (let hop = 0; hop <= MAX_REDIRECTS; hop += 1) {
-    const res = await fetch(current, { headers: FETCH_HEADERS, redirect: "manual", signal });
-    const location = res.headers.get("location");
-    if (res.status < 300 || res.status > 399 || location === null) return res;
-    await res.body?.cancel();
-    let next: URL;
-    try {
-      next = new URL(location, current);
-    } catch {
-      throw new BlockedRedirectError(`redirect to an unparseable location from ${current}`);
-    }
-    const refusal = targetRefusal(next);
-    if (refusal !== null) throw new BlockedRedirectError(`redirect refused: ${refusal}`);
-    current = next.href;
-  }
-  throw new BlockedRedirectError(`more than ${String(MAX_REDIRECTS)} redirects`);
+  const bytes = await cappedBody(res, MAX_BODY_BYTES);
+  if (bytes === null) throw new BodyTooLargeError();
+  return new TextDecoder().decode(bytes);
 }
 
 export async function readUrl(
@@ -251,7 +191,7 @@ export async function readUrl(
   let fetchStatus: number;
   let fetchHtml: string;
   try {
-    const res = await fetchGuarded(url, AbortSignal.timeout(FETCH_TIMEOUT_MS));
+    const res = await fetchOutbound(url, { headers: FETCH_HEADERS });
     fetchStatus = res.status;
     fetchHtml = await cappedText(res);
   } catch (err) {

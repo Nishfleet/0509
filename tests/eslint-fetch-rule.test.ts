@@ -80,7 +80,7 @@ describe("eslint one-outbound-fetch rule (#4951)", () => {
   });
 
   it("leaves a hostname-exempt grandfather alone", { timeout: 60_000 }, async () => {
-    const messages = await lintExisting("app/lib/identity/name-cascade.ts");
+    const messages = await lintExisting("app/lib/identity/youtube-channel.server.ts");
     expect(messages.some((m) => m.includes(FETCH_MESSAGE))).toBe(false);
   });
 });

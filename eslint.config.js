@@ -159,17 +159,19 @@ const DOMAIN_HOSTNAME_BAN = {
     "URL-to-domain extraction is owned by the identity engine in app/lib/identity/ — `normaliseSubject` in app/lib/identity/normalise.ts. Reading `.hostname` anywhere else is a second domain normaliser that will drift from the engine's rules; the same shape on any URL argument, any binding name. Reuse the engine (or, for a non-identity host read, get the file added to the exemption block below). Source: 0509#4371.",
 };
 
-// The one outbound-fetch wrapper. app/lib/fetch/ owns the public-host guard
-// (isPublicHost, URL + scheme policy), the bot user-agent and 8 s deadline
-// (fetchOutbound), and the capped body reader (cappedBody). A bare fetch(
-// outside it is a second transport: the logo store's copy was the instance
-// that raised this (its https-only rule and byte cap had already drifted
-// from readUrl's). Call sites that predate the rule sit in the exemption
-// blocks below, the same shape as DOMAIN_HOSTNAME_BAN's grandfather list.
+// The one outbound-fetch path. app/lib/fetch/outbound.server.ts owns the
+// public-host check (targetRefusal, URL + scheme policy), the redirect walk
+// that re-checks every hop, the 8 s deadline (fetchOutbound) and the capped
+// body reader (cappedBody); the crawler User-Agent is CRAWLER_USER_AGENT in
+// robots.server.ts. A bare fetch( outside it is a second transport: the logo
+// store's copy was the instance that raised this (its https-only rule and
+// byte cap had already drifted from readUrl's). Call sites that predate the
+// rule sit in the exemption blocks below, the same shape as
+// DOMAIN_HOSTNAME_BAN's grandfather list.
 const BARE_FETCH = {
   selector: "CallExpression[callee.name='fetch']",
   message:
-    "Outbound fetch is owned by app/lib/fetch/: isPublicHost guards the host (URL + scheme policy), fetchOutbound sets the bot user-agent and the 8 s deadline, and cappedBody bounds the body. A bare fetch( anywhere else is a second transport that drifts from all three. Source: 0509#4951.",
+    "Outbound fetch is owned by app/lib/fetch/: fetchOutbound refuses non-public hosts and re-checks every redirect hop under an 8 s deadline, and cappedBody bounds the body. A bare fetch( anywhere else is a second transport that drifts from all three. Source: 0509#4951.",
 };
 
 // DESIGN.md: fonts are self-hosted. A Google Fonts <link> put LCP at 2021 ms against the
@@ -625,8 +627,6 @@ export default tseslint.config(
     files: [
       "app/lib/fetch/**",
       "app/lib/identity/youtube-channel.server.ts",
-      "app/lib/identity/name-cascade.ts",
-      "app/lib/site/own-site.server.ts",
       "app/lib/hiring/discover-board.ts",
       "workers/support-inbox.ts",
     ],
