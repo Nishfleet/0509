@@ -183,21 +183,21 @@ describe("nightly mentions sweep", () => {
   it("stores the items after a mid-batch Jev failure as unjudged in the same batch", async () => {
     const { workspaceId, competitorId, brand } = await seedWorkspace();
     stubGdelt();
-    Reflect.set(env, "AI", {
-      run: vi.fn(
-        (_model: string, input: { state: { item: { title: string } }; questions: Record<string, unknown> }) => {
-          const [questionId] = Object.keys(input.questions);
-          if (!input.state.item.title.includes("flagship")) {
-            return Promise.reject(new Error("Insufficient balance"));
-          }
-          const p = questionId === "mention_is_about_brand" ? 0.96 : 0.94;
-          return Promise.resolve({ answers: { [questionId ?? ""]: { type: "noul", noul: p } } });
-        },
-      ),
-    });
+    const run = vi.fn(
+      (_model: string, input: { state: { item: { title: string } }; questions: Record<string, unknown> }) => {
+        const [questionId] = Object.keys(input.questions);
+        if (!input.state.item.title.includes("flagship")) {
+          return Promise.reject(new Error("Insufficient balance"));
+        }
+        const p = questionId === "mention_is_about_brand" ? 0.96 : 0.94;
+        return Promise.resolve({ answers: { [questionId ?? ""]: { type: "noul", noul: p } } });
+      },
+    );
+    Reflect.set(env, "AI", { run });
 
     const outcome = await sweepTarget(await gdeltTargetFor(brand), NOW, null);
     expect(outcome).toEqual({ items: 3, stored: 1, unjudged: 2 });
+    expect(run).toHaveBeenCalledTimes(3);
 
     const signals = await env.DB.prepare(
       "SELECT title, state, is_tombstoned FROM signal WHERE entity_id = ? ORDER BY title",
