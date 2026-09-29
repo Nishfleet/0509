@@ -2,22 +2,14 @@ import { env } from "cloudflare:workers";
 import DodoPayments from "dodopayments";
 
 import { TRIAL_DAYS, type PlanId } from "./plans";
-
-function productId(planId: PlanId): string {
-  const ids: Record<PlanId, string> = {
-    scout: env.DODO_PRODUCT_SCOUT,
-    starter: env.DODO_PRODUCT_STARTER,
-    agency: env.DODO_PRODUCT_AGENCY,
-  };
-  return ids[planId];
-}
+import { productIdFor } from "./products.server";
 
 export async function createCheckoutUrl(input: {
   planId: PlanId;
   workspaceId: string;
   email: string;
 }): Promise<string | null> {
-  const product = productId(input.planId);
+  const product = productIdFor(input.planId);
   if (product === "" || env.DODO_PAYMENTS_API_KEY === "") return null;
   const client = new DodoPayments({
     bearerToken: env.DODO_PAYMENTS_API_KEY,

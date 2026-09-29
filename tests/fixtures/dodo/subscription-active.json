@@ -1,0 +1,28 @@
+{
+  "business_id": "bus_H4ekzPSlcg",
+  "type": "subscription.active",
+  "timestamp": "2026-09-29T10:00:05.736731Z",
+  "data": {
+    "payload_type": "Subscription",
+    "subscription_id": "sub_7EeHq2ewQuadropD2ra",
+    "product_id": "pdt_test_starter",
+    "status": "active",
+    "quantity": 1,
+    "currency": "EUR",
+    "recurring_pre_tax_amount": 4600,
+    "payment_frequency_count": 1,
+    "payment_frequency_interval": "Month",
+    "trial_period_days": 7,
+    "created_at": "2026-09-29T10:00:00.125145Z",
+    "previous_billing_date": "2026-09-29T10:00:00.125145Z",
+    "next_billing_date": "2026-10-06T10:00:00.125145Z",
+    "cancel_at_next_billing_date": false,
+    "cancelled_at": null,
+    "customer": {
+      "customer_id": "cus_8VbC6JDZzPEqfBPUdpj0K",
+      "email": "buyer@example.com",
+      "name": "Test Buyer"
+    },
+    "metadata": { "workspace_id": "ws-webhook", "plan": "starter" }
+  }
+}
