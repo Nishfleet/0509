@@ -333,6 +333,7 @@ describe("home url resolution", () => {
     await ensureHomePages(NOW);
 
     expect((await homePageUrls()).get("ent-fixture")).toBe("https://fixture.0509.in/");
+    expect(await rowCount("page")).toBe(1);
   });
 
   it("uses the entered www host when it shares the entity's registrable domain", async () => {
@@ -373,6 +374,7 @@ describe("home url resolution", () => {
     await ensureHomePages(NOW);
 
     expect((await homePageUrls()).has("ent-channel")).toBe(false);
+    expect(await rowCount("page")).toBe(0);
   });
 
   it("falls back to the registrable domain when the entered host is a different site", async () => {
@@ -403,6 +405,7 @@ describe("home url resolution", () => {
     await planSiteSweep(NOW);
 
     expect((await watchTargets()).get("ent-fixture")).toBe("https://fixture.0509.in/");
+    expect(await rowCount("watch")).toBe(1);
   });
 
   it("still watches the entered host when its page row is already judged as another role", async () => {
