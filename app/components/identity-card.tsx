@@ -13,17 +13,20 @@ function Row({
   label,
   check,
   checkId,
+  wrap,
   children,
 }: {
   label: string;
   check?: boolean;
   checkId?: string;
+  wrap?: boolean;
   children: ReactNode;
 }) {
   return (
     <div
       className={cn(
-        "flex items-baseline gap-4 border-b border-line py-3 max-sm:flex-wrap",
+        "flex items-baseline gap-4 border-b border-line py-3",
+        wrap === true && "max-sm:flex-wrap",
         check === true && "bg-green-wash px-2 text-green-ink",
       )}
     >
@@ -107,7 +110,7 @@ function EditRow({
       />
     );
   return (
-    <Row label={label} check={check} checkId={checkId}>
+    <Row label={label} check={check} checkId={checkId} wrap={empty === true}>
       <Popover
         open={open}
         onOpenChange={(next) => {
