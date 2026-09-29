@@ -22,7 +22,8 @@ setup.setTimeout(480_000);
 async function addCompetitor(page: Page, domain: string): Promise<void> {
   await page.locator("#add-competitor").fill(domain);
   await page.getByRole("button", { name: "Add" }).click();
-  await expect(page.getByRole("switch", { name: `${domain} tracking` })).toBeChecked();
+  const row = page.getByRole("list", { name: "Competitors" }).getByRole("listitem").filter({ hasText: domain });
+  await expect(row.getByRole("switch")).toBeChecked();
 }
 
 setup("mint one onboarded session per viewport lane", async ({ browser }) => {
