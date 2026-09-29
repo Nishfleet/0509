@@ -435,12 +435,12 @@ describe("home url resolution", () => {
     await env.DB.prepare(
       `INSERT INTO page (id, entity_id, url, role, discovered_at) VALUES (?, ?, ?, 'home', ?)`,
     )
-      .bind("page-two-early", "ent-two", "https://nike.com/", "2026-09-23T02:00:00Z")
+      .bind("page-two-early", "ent-two", "https://nike.com/", new Date(Date.parse(NOW) - 7_200_000).toISOString())
       .run();
     await env.DB.prepare(
       `INSERT INTO page (id, entity_id, url, role, discovered_at) VALUES (?, ?, ?, 'home', ?)`,
     )
-      .bind("page-two-late", "ent-two", "https://shop.nike.com/", "2026-09-23T03:00:00Z")
+      .bind("page-two-late", "ent-two", "https://shop.nike.com/", new Date(Date.parse(NOW) - 3_600_000).toISOString())
       .run();
 
     const targets = await planSiteSweep(NOW);

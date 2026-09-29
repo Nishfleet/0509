@@ -56,6 +56,8 @@ const unwatchedEntityRows = z.array(
   z.object({ id: z.string(), domain: z.string(), url: z.string().nullable() }),
 );
 
+type UnwatchedEntity = z.infer<typeof unwatchedEntityRows>[number];
+
 const targetRows = z.array(
   z.object({
     workspace_id: z.string(),
@@ -114,7 +116,7 @@ export async function readEntityWatches(entityId: string): Promise<EntityWatch[]
 
 export async function readUnwatchedEntities(
   sourceId: string,
-): Promise<readonly { id: string; domain: string; url: string | null }[]> {
+): Promise<readonly UnwatchedEntity[]> {
   const rows = await env.DB.prepare(UNWATCHED_ENTITIES).bind(sourceId).all();
   return unwatchedEntityRows.parse(rows.results);
 }

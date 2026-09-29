@@ -110,13 +110,9 @@ JOIN page p ON p.entity_id = e.id AND p.role = 'home'
 WHERE e.role = 'self' AND e.state = 'on'
 ORDER BY e.workspace_id, p.id`;
 
-export interface EntityWithoutHomePage {
-  id: string;
-  domain: string;
-  url: string | null;
-}
-
 const entityRows = z.array(z.object({ id: z.string(), domain: z.string(), url: z.string().nullable() }));
+
+export type EntityWithoutHomePage = z.infer<typeof entityRows>[number];
 
 const ownSiteRows = z.array(
   z.object({

@@ -36,18 +36,23 @@ async function readText(key: string): Promise<string | null> {
   return object === null ? null : object.text();
 }
 
-function homeUrl(entity: { domain: string; url: string | null }): string | null {
-  if (entity.url !== null) {
-    const entered = normaliseSubject(entity.url);
-    if (
-      entered.ok &&
-      entered.subject.kind === "domain" &&
-      entered.subject.registrable === entity.domain &&
-      entered.subject.url !== null
-    ) {
-      return entered.subject.url;
-    }
+function enteredHomeUrl(entity: { domain: string; url: string | null }): string | null {
+  if (entity.url === null) return null;
+  const entered = normaliseSubject(entity.url);
+  if (
+    !entered.ok ||
+    entered.subject.kind !== "domain" ||
+    entered.subject.registrable !== entity.domain ||
+    entered.subject.url === null
+  ) {
+    return null;
   }
+  return entered.subject.url;
+}
+
+function homeUrl(entity: { domain: string; url: string | null }): string | null {
+  const entered = enteredHomeUrl(entity);
+  if (entered !== null) return entered;
   return getDomain(entity.domain) === entity.domain ? `https://${entity.domain}/` : null;
 }
 
