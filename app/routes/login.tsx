@@ -14,7 +14,11 @@ import { safeReturnTo } from "../lib/agent/paths";
 import { authClient } from "../lib/auth-client";
 import { formMagicLinkRequest } from "../lib/auth/login-magic-link.server";
 import { createAuthForRequest } from "../lib/auth.server";
-import { readAccountDeleteInstanceId, readAccountDeleteProgress } from "../lib/account-delete.server";
+import {
+  clearAccountDeleteInstanceId,
+  readAccountDeleteInstanceId,
+  readAccountDeleteProgress,
+} from "../lib/account-delete.server";
 import { timezoneCookie } from "../lib/timezone";
 
 type LoginActionData =
@@ -28,9 +32,13 @@ export function meta() {
 export async function loader({ request }: Route.LoaderArgs) {
   const turnstileSiteKey = env.TURNSTILE_SITE_KEY;
   const id = new URL(request.url).searchParams.get("deleted");
-  if (id === null || id === "") return { turnstileSiteKey, id: null, progress: null };
-  if ((await readAccountDeleteInstanceId(request)) !== id) return { turnstileSiteKey, id: null, progress: null };
-  return { turnstileSiteKey, id, progress: await readAccountDeleteProgress(id) };
+  if (id === null || id === "" || (await readAccountDeleteInstanceId(request)) !== id) {
+    return data({ turnstileSiteKey, id: null, progress: null });
+  }
+  const progress = await readAccountDeleteProgress(id);
+  const finished = progress?.files === "removed";
+  const headers = finished ? { "set-cookie": await clearAccountDeleteInstanceId() } : undefined;
+  return data({ turnstileSiteKey, id, progress }, { headers });
 }
 
 export async function action({ request }: Route.ActionArgs) {

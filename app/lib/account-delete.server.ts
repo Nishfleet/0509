@@ -23,15 +23,24 @@ export async function deleteAccount(
   request: Request,
   userId: string,
 ): Promise<{ headers: Headers; instanceId: string } | null> {
+  const cookie = deleteInstanceCookie();
   const workspaceId = await readWorkspaceIdForOwner(userId);
   const prefixes = workspaceId === null ? [] : await readWorkspaceR2Prefixes(workspaceId);
   const headers = await deleteSignedInUser(env, request, new Date());
   if (headers === null) return null;
   const instance = await env.ACCOUNT_DELETE.create({ params: { prefixes } satisfies AccountDeleteParams });
-  headers.append("set-cookie", await sealAccountDeleteInstanceId(instance.id, request));
-  const grants = await helpers.listUserGrants(userId, { limit: 100 });
-  await Promise.all(grants.items.map((grant) => helpers.revokeGrant(grant.id, userId)));
+  headers.append("set-cookie", await cookie.serialize(instance.id));
+  await revokeGrants(helpers, userId);
   return { headers, instanceId: instance.id };
+}
+
+async function revokeGrants(helpers: Pick<OAuthHelpers, "listUserGrants" | "revokeGrant">, userId: string) {
+  try {
+    const grants = await helpers.listUserGrants(userId, { limit: 100 });
+    await Promise.all(grants.items.map((grant) => helpers.revokeGrant(grant.id, userId)));
+  } catch (error) {
+    console.error(JSON.stringify({ event: "account_delete.grant_revoke_failed", error: String(error) }));
+  }
 }
 
 function deleteInstanceCookie() {
@@ -39,17 +48,20 @@ function deleteInstanceCookie() {
   if (!secret) throw new Error("BETTER_AUTH_SECRET is not configured");
   return createCookie(DELETE_INSTANCE_COOKIE, {
     httpOnly: true,
-    maxAge: 60 * 60 * 24,
+    maxAge: 60 * 60,
     path: "/login",
     sameSite: "lax",
     secrets: [secret],
+    secure: new URL(env.BETTER_AUTH_URL).protocol === "https:",
   });
 }
 
-export async function sealAccountDeleteInstanceId(instanceId: string, request: Request): Promise<string> {
-  return deleteInstanceCookie().serialize(instanceId, {
-    secure: new URL(request.url).protocol === "https:",
-  });
+export async function sealAccountDeleteInstanceId(instanceId: string): Promise<string> {
+  return deleteInstanceCookie().serialize(instanceId);
+}
+
+export async function clearAccountDeleteInstanceId(): Promise<string> {
+  return deleteInstanceCookie().serialize("", { maxAge: 0 });
 }
 
 export async function readAccountDeleteInstanceId(request: Request): Promise<string | null> {
