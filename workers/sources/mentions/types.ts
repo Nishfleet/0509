@@ -33,7 +33,7 @@ export type MentionsAdapter = (
 export const BLOCKING_STATUSES: ReadonlySet<number> = new Set([202, 403, 429]);
 
 export const SOURCE_SETTINGS = {
-	"gdelt.doc": { timeoutMs: 20_000, timeoutRetries: 1 },
+	"gdelt.doc": { timeoutMs: 25_000, timeoutRetries: 1 },
 } as const;
 
 export class UpstreamBlockedError extends Error {
