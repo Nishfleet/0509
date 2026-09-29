@@ -25,7 +25,7 @@ describe("OnboardingFrame", () => {
     expect(html).toContain("<footer");
     expect(html.match(/<h1\b/g) ?? []).toHaveLength(1);
     expect(html).toContain(
-      '<h1 class="font-display text-display-2 mt-10 font-extrabold uppercase">H</h1>',
+      '<h1 class="mt-10 font-display text-display-2 font-extrabold uppercase">H</h1>',
     );
     expect(html.startsWith(`<div class="${ONBOARDING_PAGE}"><header>`)).toBe(true);
     expect(html).toContain('aria-current="step"');

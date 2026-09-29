@@ -3,8 +3,8 @@ import { useFetcher } from "react-router";
 
 import { Switch } from "./ui/switch";
 
-const ROW = "border-line mt-10 border-t pt-4";
-const NOTE = "text-ink-soft mt-2 max-w-prose text-body-sm leading-[1.55]";
+const ROW = "mt-10 border-t border-line pt-4";
+const NOTE = "mt-2 max-w-prose text-body-sm leading-[1.55] text-ink-soft";
 
 export function OwnSiteAlertsSetting({ on }: { on: boolean }): ReactElement {
   const fetcher = useFetcher();

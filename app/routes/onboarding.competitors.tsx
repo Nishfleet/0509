@@ -65,25 +65,25 @@ export default function Page({ loaderData, actionData }: Route.ComponentProps) {
   return (
     <OnboardingFrame step={3} heading="Who you're up against">
       {searching ? (
-        <p role="status" className="text-ink-soft mt-3 max-w-prose leading-[1.55]">
+        <p role="status" className="mt-3 max-w-prose leading-[1.55] text-ink-soft">
           We're reading the news for brands named alongside you. They appear here as we find them.
         </p>
       ) : null}
       {!searching && on.length === 0 && maybes.length === 0 ? (
-        <p role="status" className="text-ink-soft mt-3 max-w-prose leading-[1.55]">
+        <p role="status" className="mt-3 max-w-prose leading-[1.55] text-ink-soft">
           We didn't find anyone named alongside you yet. Add one you know and we'll keep looking every night.
         </p>
       ) : null}
       {on.length === 0 ? null : (
-        <ul aria-label="Watching" aria-live="polite" aria-relevant="additions" className="border-line mt-8 border-b">
+        <ul aria-label="Watching" aria-live="polite" aria-relevant="additions" className="mt-8 border-b border-line">
           {on.map((competitor) => (
-            <li key={competitor.entityId} className="border-line flex items-start gap-3 border-t py-4">
+            <li key={competitor.entityId} className="flex items-start gap-3 border-t border-line py-4">
               <Monogram name={competitor.name} />
               <div className="min-w-0">
-                <p className="font-display text-row-name truncate font-bold">{competitor.name}</p>
-                <p className="text-ink-soft truncate text-body-sm">{competitor.domain}</p>
+                <p className="truncate font-display text-row-name font-bold">{competitor.name}</p>
+                <p className="truncate text-body-sm text-ink-soft">{competitor.domain}</p>
                 {competitor.reason === null ? null : (
-                  <p className="text-ink-soft mt-1 text-body-sm">{competitor.reason}</p>
+                  <p className="mt-1 text-body-sm text-ink-soft">{competitor.reason}</p>
                 )}
               </div>
             </li>
@@ -92,12 +92,12 @@ export default function Page({ loaderData, actionData }: Route.ComponentProps) {
       )}
       <CompetitorMaybes maybes={maybes} />
       <AddCompetitor message={actionData?.message} />
-      <Form method="post" className="border-line mt-12 border-t pt-8">
+      <Form method="post" className="mt-12 border-t border-line pt-8">
         <input type="hidden" name="intent" value="start" />
         <Button type="submit" size="lg">
           Start watching
         </Button>
-        <p className="text-ink-soft mt-3 text-body-sm">You can switch any of them on or off later in Competitors.</p>
+        <p className="mt-3 text-body-sm text-ink-soft">You can switch any of them on or off later in Competitors.</p>
       </Form>
     </OnboardingFrame>
   );

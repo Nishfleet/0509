@@ -21,7 +21,7 @@ vi.mock("../../app/lib/discovery/generators/news", () => ({
     ]),
 }));
 vi.mock("../../app/lib/discovery/generators/hn", () => ({
-  hnGenerator: () => Promise.reject(new Error("hn search returned 503")),
+  hnGenerator: () => Promise.reject(new Error("hn generator fetch failed with status 503")),
 }));
 
 afterEach(() => {
@@ -40,7 +40,7 @@ describe("generateShortlist", () => {
     expect(result.shortlisted.map((entry) => entry.name)).toEqual(["Alphalete"]);
     expect(errors).toHaveBeenCalledTimes(1);
     expect(errors).toHaveBeenCalledWith(
-      JSON.stringify({ event: "discovery.generator_failed", generator: "hn", message: "hn search returned 503" }),
+      JSON.stringify({ event: "discovery.generator_failed", generator: "hn", message: "hn generator fetch failed with status 503" }),
     );
   });
 });

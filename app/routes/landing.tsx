@@ -29,18 +29,18 @@ import {
 } from "../lib/structured-data";
 import { tickerItems } from "../lib/ticker";
 
-const TITLE = "Competitor tracking for founders and creators | Five to Nine";
+const PAGE_TITLE = "Competitor tracking for founders and creators | Five to Nine";
 const DESCRIPTION = `Five to Nine watches your competitors' ${WATCHED_NOUNS} and emails you one brief every Monday with a screenshot behind every change.`;
 const HOME = `${SITE_URL}/`;
 
 export function meta(_: Route.MetaArgs) {
   return [
-    { title: TITLE },
+    { title: PAGE_TITLE },
     { name: "description", content: DESCRIPTION },
     { tagName: "link", rel: "canonical", href: HOME },
     { property: "og:type", content: "website" },
     { property: "og:site_name", content: "Five to Nine" },
-    { property: "og:title", content: TITLE },
+    { property: "og:title", content: PAGE_TITLE },
     { property: "og:description", content: DESCRIPTION },
     { property: "og:url", content: HOME },
     { property: "og:image", content: `${SITE_URL}/og.png` },

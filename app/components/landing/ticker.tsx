@@ -10,7 +10,7 @@ export function Ticker({ items }: { items: readonly TickerItem[] }) {
       id="ticker"
       role="region"
       aria-label="Changes caught recently"
-      className="bg-ink text-bone h-9 overflow-hidden"
+      className="h-9 overflow-hidden bg-ink text-bone"
     >
       <div
         className={`flex h-full w-max items-center${animating ? " animate-[ticker_60s_linear_infinite] motion-reduce:animate-none" : ""}`}

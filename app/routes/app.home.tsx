@@ -64,7 +64,7 @@ function SiteFillLine({ state }: { state: "pending" | "gave_up" }) {
       ? "Your site didn't let us in yet. We're trying again every hour for a day and will fill your card when it does."
       : "We couldn't read your site in a day of trying, so your card keeps what you entered. Everything else is still watched.";
   return (
-    <p role="status" className="text-ink-soft mt-6 text-[0.88rem]">
+    <p role="status" className="mt-6 text-[0.88rem] text-ink-soft">
       {text}
     </p>
   );
