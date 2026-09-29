@@ -2,7 +2,7 @@ import { z } from "zod";
 
 import { insertSelfEntity, readWorkspaceSelfId } from "../data/entity.server";
 import { insertFieldEdits, type FieldEdit } from "../data/user_decision.server";
-import { readCachedSiteValues, readSiteCard } from "./card.server";
+import { readCachedSiteValues } from "./card.server";
 import { readLogo } from "./logo-store.server";
 import { normaliseSubject, type Subject } from "./normalise";
 import { startIdentityTail } from "./tail.server";
@@ -31,12 +31,11 @@ function field(form: FormData, name: string): string {
   return typeof value === "string" ? value : "";
 }
 
-async function creatorSite(socials: { platform: string; url: string }[]): Promise<Subject | null> {
+function creatorSite(socials: { platform: string; url: string }[]): Subject | null {
   const entry = socials.find((social) => social.platform === "site");
   if (entry === undefined) return null;
   const normalised = normaliseSubject(entry.url);
   if (!normalised.ok || normalised.subject.kind !== "domain") return null;
-  await readSiteCard(normalised.subject);
   return normalised.subject;
 }
 
@@ -100,7 +99,7 @@ export async function confirmCard(workspaceId: string, userId: string, form: For
         })),
     );
   }
-  const site = subject.kind === "domain" ? null : await creatorSite(card.socials);
+  const site = subject.kind === "domain" ? null : creatorSite(card.socials);
   await startIdentityTail({
     workspaceId,
     entityId,
