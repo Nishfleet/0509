@@ -163,6 +163,29 @@ describe("Dodo webhook (J13)", () => {
     expect((await planRow())?.updated_at).toBe("2026-10-06T10:00:09Z");
   });
 
+  it("answers 200 and stores nothing for a signed body it does not understand", async () => {
+    for (const [index, body] of ["not json", "[]", '{"hello":"world"}'].entries()) {
+      const response = await deliver(signedRequest(`evt_odd_${String(index)}`, body));
+      expect(response.status).toBe(200);
+      expect(await eventRow(`evt_odd_${String(index)}`)).toBeNull();
+    }
+  });
+
+  it("stores only the event id, type, subscription id and timestamps, never the customer", async () => {
+    await deliver(signedRequest("evt_minimal", eventBody({})));
+
+    const row = await env.DB.prepare("SELECT payload_json, event_type FROM dodo_webhook_event WHERE id = ?")
+      .bind("evt_minimal")
+      .first<{ payload_json: string; event_type: string }>();
+
+    expect(row?.event_type).toBe("subscription.active");
+    expect(JSON.parse(row?.payload_json ?? "")).toEqual({
+      subscription_id: "sub_7EeHq2ewQuadropD2ra",
+      timestamp: "2026-09-29T10:00:05.736731Z",
+    });
+    expect(row?.payload_json).not.toContain("buyer@example.com");
+  });
+
   it("records an unknown product and a non-subscription event and changes no plan", async () => {
     await deliver(signedRequest("evt_product", eventBody({ data: { product_id: "pdt_not_ours" } })));
     await deliver(signedRequest("evt_payment", eventBody({ type: "payment.succeeded" })));

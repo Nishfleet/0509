@@ -66,3 +66,18 @@ describe("upgrade checkout (J13)", () => {
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 });
+
+describe("upgrade checkout when Dodo refuses (J13)", () => {
+  it("answers the friendly line and never the raw error", async () => {
+    await seedOwner();
+    const logged = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      Response.json({ message: "invalid key for upgrade@example.com" }, { status: 401 }),
+    );
+
+    const result = await action(upgradeRequest("starter"));
+
+    expect(result).toEqual({ message: "Upgrading isn't available right now. Try again in a few minutes." });
+    expect(JSON.stringify(logged.mock.calls)).not.toContain("upgrade@example.com");
+  });
+});
