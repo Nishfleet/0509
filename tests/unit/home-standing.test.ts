@@ -326,6 +326,7 @@ describe("Home standing", () => {
     const gathering = render({ payload: null, entities });
     expect(gathering).toContain('role="group"');
     expect(gathering).toContain('aria-label="Your set"');
+    expect(gathering).toContain('class="mt-4"');
     expect(gathering).toContain('href="/app/settings"');
     expect(gathering).toContain('href="/app/competitors/ent_kindred"');
     expect(gathering).toContain("You · Own Brand");
@@ -336,6 +337,18 @@ describe("Home standing", () => {
 
     const ranked = render({ payload: payload(), entities });
     expect(ranked).not.toContain('aria-label="Your set"');
+    expect(ranked).not.toContain('class="mt-4"');
+
+    const quiet = render({ payload: payload({ is_unjudged: true, headline_rank: null }), entities });
+    expect(quiet).not.toContain('aria-label="Your set"');
+    expect(quiet).not.toContain('class="mt-4"');
+
+    const addCompetitor = render({
+      payload: payload(),
+      entities: [SELF, { id: "ent_off", role: "competitor", domain: "off.example", name: "Off Brand", state: "off" }],
+    });
+    expect(addCompetitor).not.toContain('aria-label="Your set"');
+    expect(addCompetitor).not.toContain('class="mt-4"');
   });
 
   it("lands the first site sweep on the next 02:00Z strictly after now", () => {
