@@ -92,15 +92,15 @@ export function BriefScheduleSettings({ schedule }: { schedule: ScheduleView }):
           </select>
         </label>
       </div>
-      <p className="text-ink-soft mt-3 text-body-sm">
-        Time zone: <span className="text-ink [overflow-wrap:anywhere]">{timezone.replaceAll("_", " ")}</span>.{" "}
+      <p className="mt-3 text-body-sm text-ink-soft">
+        Time zone: <span className="[overflow-wrap:anywhere] text-ink">{timezone.replaceAll("_", " ")}</span>.{" "}
         {schedule.nextLine}.
       </p>
       {deviceZone !== null && deviceZone !== timezone ? (
         <Button
           type="button"
           variant="tertiary"
-          className="whitespace-normal text-left"
+          className="text-left whitespace-normal"
           onClick={() => {
             save({ timezone: deviceZone });
           }}

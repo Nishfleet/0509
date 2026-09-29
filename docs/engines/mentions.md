@@ -22,7 +22,7 @@ The runner is the **Workflow** `mentions-sweep` (`workers/workflows/mentions.ts`
 
 `wrangler.jsonc` names the class `MentionsWorkflow`, which `workers/app.ts` exports as an instrumented wrapper around `MentionsSweep` from `workers/workflows/mentions.ts`. It runs one `step.do` per `(plugin_key, target_key)` pair (one target per source per brand), each with `retries: { limit: 2, delay: "10 seconds", backoff: "exponential" }`. The pacing constant is `PACED_PLUGINS = { "gdelt.doc" }`; between two GDELT targets it `step.sleep("6 seconds")` to honour GDELT's one-request-per-five-seconds ceiling. Non-GDELT adapters are not paced.
 
-A target that throws is logged as `mentions.target_failed` and counted as `failed` in the final `mentions.sweep` outcome line; the rest of the targets continue.
+A target that throws is logged as `mentions.target_failed` and counted as `failed` in the final `mentions.sweep` outcome line; the rest of the targets continue. A timeout that survives the source's retry budget is the one exception: it resolves the step with a partial `TargetOutcome` whose `skipped` field names the watches not swept, so the `mentions.sweep` line carries the skipped-watch total rather than a bare failure.
 
 ### Per watch, per tick
 
@@ -37,10 +37,10 @@ A target that throws is logged as `mentions.target_failed` and counted as `faile
   5. Writes the body to **R2** at `snapshot/mentions/<plugin_key>/<hash>` via `env.SNAPSHOTS.put` (unconditional; a re-poll with an unchanged body re-PUTs the same key).
   6. For each watch on this target, reads `readDiscoveryContext(workspace_id)` once per workspace and calls `statementsForWatch(...)`.
 - `statementsForWatch(...)`:
-  - Inserts exactly one `snapshot` row per watch per tick (`app/lib/data/snapshot.server.ts` `insertWatchSnapshot`).
+  - Inserts exactly one `snapshot` row per watch per tick (`app/lib/data/snapshot.server.ts` `insertWatchSnapshot`), and stages the source row's `latest_*` facts in the same batch.
   - Reads `readSeenDedupKeys(source_id, dedup_keys)` against `signal(source_id, dedup_key)` and drops known keys from the batch.
   - Caps the batch at **12** fresh items per watch per tick (`JUDGED_PER_WATCH = 12`).
-  - For each fresh item calls `judge(...)` which runs Jev (below), then stages `signal`, `jev_verdict` and optionally `alert` statements.
+  - For each fresh item calls `judge(...)` which runs Jev (below), then stages `signal`, `jev_verdict` and optionally `alert` statements. Once `judgeOrNull` reports Jev down, the rest of the batch stages the `signal` row alone with `state = 'unjudged'`.
   - Calls `markWatchPolled(watch_id, now)` after the D1 `batch()` lands.
 
 ### Judgment: D5 then D6
@@ -50,7 +50,7 @@ For each fresh item the sweep calls Jev via `app/lib/jev/client.server.ts` `askN
 - **D5** `mention_is_about_brand`. Threshold via `app/lib/jev/thresholds.ts` `noulAction(p)`: `act` at `p >= 0.9`, `reject` at `p <= 0.1`, otherwise `maybe`. A `reject` verdict is recorded on `jev_verdict` (UNIQUE on `(question_id, input_hash)`), and the `signal` row is written with `is_tombstoned = 1`. `readSeenDedupKeys` does **not** filter on `is_tombstoned`, so a one-time reject is never re-judged. Every read path filters `is_tombstoned = 0`.
 - **D6** `mention_matters` — only on a D5 keep. `act` writes an `alert` row via `app/lib/data/alert.server.ts` `insertSignalAlert`, `kind = 'mention'`, `title = "<watch.name>: <item.title>"`. The feed that renders these alerts sits elsewhere (engine 6, standing) and is not this engine's responsibility.
 
-A `JevUnavailableError` thrown by `askNoul` aborts the rest of the watch's batch: no further items are judged and the loop sets `unjudged = fresh.length - index`. The R2 body and the `snapshot` row for the watch are still written, and any item judged successfully before the failure is staged and written with it; only the failing item and the items after it are absent from `signal`. The next night's Workflow instance sees those unstored items again (`readSeenDedupKeys` did not find them) and retries them.
+A `JevUnavailableError` thrown by `askNoul` stops judging for the rest of the watch's batch: the failing item and the items after it are staged into `signal` with `state = 'unjudged'` and `is_tombstoned = 0` in the same D1 batch, and the loop counts them in `unjudged`. The R2 body and the `snapshot` row for the watch are still written, and any item judged successfully before the failure is staged and written with it (`state = 'judged'`). Nothing is dropped; an unjudged row's dedup key is in `signal`, so it is not re-fetched, and it carries no `jev_verdict` row. `state` does not distinguish an item Jev failed on from one the latch never asked; #6078 re-judges both from the stored row, not a re-fetch. At the start of each watch's sweep, `rejudgeUnjudged` reads that watch's `unjudged` rows (oldest first, within the 12-item judge cap, which fresh items share) and re-asks D5 and, when D5 keeps it, D6 from the stored row. A kept row is updated to `state = 'judged'` and gets its `jev_verdict` rows (and an alert on D6 `act`); a D5 reject is updated to `state = 'judged'`, `is_tombstoned = 1` with its `mention_is_about_brand` verdict. If Jev is still down the rows stay `unjudged` and the latch stores fresh items unjudged. Proven by `tests/integration/mentions/rejudge.integration.test.ts`.
 
 **No D8 runs.** Dedup is `(source_id, dedup_key)` on `signal` and `ON CONFLICT DO NOTHING` — string-equal in the DB, no judgment involved. The `dedup_key` stored is `"<entity_id>:<adapter dedupKey>"`, so one story is judged once per brand per source, and the UNIQUE constraint is what stops a second insert, not a verdict. The cross-source fan-in that the pre-#4692 design sketched is **not shipped**.
 
@@ -59,7 +59,7 @@ A `JevUnavailableError` thrown by `askNoul` aborts the rest of the watch's batch
 Code paths that exist on `main` today (verified with `git ls-files <path>`):
 
 ```
-workers/mentions/sweep.ts                          # planTargets / sweepTarget / statementsForWatch / judge
+workers/mentions/sweep.ts                          # planTargets / sweepTarget / statementsForWatch / judge / judgeOrNull
 workers/mentions/map.ts                            # toSignalRow: adapter item -> signal row (contract + tests)
 workers/workflows/mentions.ts                      # MentionsSweep Workflow class (one step per target)
 workers/app.ts                                     # exports the Workflow class bound to wrangler.jsonc MENTIONS
@@ -104,6 +104,7 @@ Per 1,000 polls (one source × one watch × one tick):
 |---|---|---|
 | Workers requests | 1,000 | included |
 | D1 rows written (`snapshot`) | 1,000 | included |
+| D1 rows written (`source` latest facts — one paired update per poll; the guard caps it at one per source per tick) | up to 1,000 | included |
 | D1 rows written (`signal`) | up to ~12 × fraction surviving D5 | included |
 | D1 rows written (`alert` on D6 act) | up to ~12 × fraction with `p >= 0.9` | included |
 | R2 Class A (PUT body) | 1,000 | included |
@@ -116,12 +117,13 @@ Monthly at 100 brands × 2 live sources × 1 tick × 30 days = **6,000 polls/mon
 
 ### Failure modes
 
-- **Jev unavailable** — `JevUnavailableError` aborts the rest of the watch. The snapshot row and the R2 body are still written, as is any item judged successfully before the failure; the failing item and the items after it are not stored, so the next night's instance retries them. Proven by `tests/integration/mentions/sweep.integration.test.ts` "stores nothing unjudged when the AI is unavailable".
+- **Jev unavailable** — `JevUnavailableError` stops the watch's judging. The failing item and the items after it are stored with `state = 'unjudged'` in the same batch as the snapshot row, along with any item judged successfully before the failure; nothing is dropped. Proven by `tests/integration/mentions/sweep.integration.test.ts` "stores every item as unjudged when the AI is unavailable, so none are dropped".
 - **Adapter throw** — `sweepTarget`'s caller catches, logs `mentions.target_failed`, counts the target as failed and moves on. Other targets are not blocked.
 - **Same item twice** — `(source_id, dedup_key)` is `UNIQUE` on `signal`; `insertMention` uses `ON CONFLICT DO NOTHING`. Proven by the "does not judge or alert the same article twice" integration test.
 - **D5 reject** — stored with `is_tombstoned = 1`; never judged again (no tombstone filter in `readSeenDedupKeys`); hidden from every read path that filters `is_tombstoned = 0`.
 - **R2 PUT on unchanged body** — we re-PUT the body at the same key; R2 is idempotent on `PUT`, no extra storage cost, and the `snapshot` row is still written so coverage/freshness is answerable.
 - **GDELT 429 / pacing** — pacing `step.sleep("6 seconds")` between GDELT targets; `step.do` retries twice on transient throws.
+- **Upstream timeout after the source's retry budget** — `markSourceTimedOut` sets `degraded_reason = 'timed out'` and the step resolves with a partial `TargetOutcome` (`items: 0, stored: 0, unjudged: 0, skipped: <watches on the target>`) instead of throwing, so the step output and the `mentions.sweep` line name the skipped watches rather than a silent empty result. Skipped watches keep `last_polled_at` null and are retried on the next tick. Proven by `tests/integration/mentions/blocked.integration.test.ts` case E.
 
 ---
 

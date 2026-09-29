@@ -6,8 +6,8 @@ export const ONBOARDING_STEPS = ["your site", "your card", "your competitors"] a
 
 export function StepBar({ current }: { current: 1 | 2 | 3 }): ReactElement {
   return (
-    <nav aria-label="Onboarding progress" className="border-line border-b pb-3">
-      <ol className="text-eyebrow flex flex-wrap gap-x-5 gap-y-2 font-mono uppercase">
+    <nav aria-label="Onboarding progress" className="border-b border-line pb-3">
+      <ol className="flex flex-wrap gap-x-5 gap-y-2 font-mono text-eyebrow uppercase">
         {ONBOARDING_STEPS.map((label, index) => {
           const step = index + 1;
           const active = step === current;
@@ -15,7 +15,7 @@ export function StepBar({ current }: { current: 1 | 2 | 3 }): ReactElement {
             <li
               key={label}
               aria-current={active ? "step" : undefined}
-              className={cn(active ? "bg-green text-on-green px-1.5" : step < current ? "text-ink" : "text-ink-soft")}
+              className={cn(active ? "bg-green px-1.5 text-on-green" : step < current ? "text-ink" : "text-ink-soft")}
             >
               {step} {label}
             </li>

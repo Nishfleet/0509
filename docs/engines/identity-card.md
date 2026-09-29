@@ -132,7 +132,7 @@ Everything from step 3 to step 9 is **one `db.batch()`** — about 20 rows for a
 | Probes | The identity route's loader, streamed with `<Await>` | 6–10 parallel, 8 s deadline each |
 | Browser escalation | `env.BROWSER.quickAction("content", …)` called **directly**, never through a queue | at most 1 per onboarding; uses the 2 browser slots reserved off the sweep cap |
 | Jev | one batched call after the probes settle | 1 |
-| The durable tail | `IdentityTailWorkflow`, one instance per confirmed card | steps: `persist` → `seed-watches` → `start-discovery` → `enqueue-first-sweep` |
+| The durable tail | `IdentityTailWorkflow`, one instance per confirmed card | steps: `persist` → `classify-pages` → `warm-site-card` → `seed-watches` → `start-discovery` → `enqueue-first-sweep` |
 | Cron | **none** | onboarding is user-triggered by definition |
 
 **The browser cap, as a config value.** `wrangler.jsonc` carries `"vars": { "BROWSER_CONCURRENCY_CAP": "10" }` and the two sweep queues carry `max_concurrency: 8` and `max_concurrency: 20` (the second never touches a browser). Eight capped sweep slots plus two interactive slots is the whole cap; onboarding's escalation uses the reserved two so a customer's first screen never waits behind a sweep. Raising the cap costs $2.00 per additional concurrent browser per month and needs Nish's recorded yes (`REBUILD-COST.md`, Nish's standing rule of 2026-09-21).

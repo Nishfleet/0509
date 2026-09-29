@@ -2,6 +2,7 @@ import { env } from "cloudflare:test";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { readSignalAlerts } from "../../../app/lib/data/alert.server";
+import { readMentionFeed } from "../../../app/lib/data/mention.server";
 import { planTargets, sweepTarget } from "../../../workers/mentions/sweep";
 import { SOURCE_SETTINGS } from "../../../workers/sources/mentions/types";
 
@@ -129,20 +130,20 @@ describe("nightly mentions sweep", () => {
     Reflect.set(env, "AI", { run: jevAnswering() });
 
     const outcome = await sweepTarget(await gdeltTargetFor(brand), NOW, null);
-    expect(outcome).toEqual({ items: 3, stored: 2, unjudged: 0 });
+    expect(outcome).toEqual({ items: 3, stored: 2, unjudged: 0, skipped: 0 });
 
     const alerts = await readSignalAlerts(env.DB, workspaceId);
     expect(alerts.map((alert) => alert.title)).toEqual([`${brand}: Zephyrwear opens a London flagship`]);
 
     const signals = await env.DB.prepare(
-      "SELECT title, is_tombstoned FROM signal WHERE entity_id = ? ORDER BY title",
+      "SELECT title, is_tombstoned, state FROM signal WHERE entity_id = ? ORDER BY title",
     )
       .bind(competitorId)
-      .all<{ title: string; is_tombstoned: number }>();
-    expect(signals.results.map((row) => [row.title, row.is_tombstoned])).toEqual([
-      ["Ten hoodies we liked, Zephyrwear among them", 0],
-      ["Zephyr winds expected this weekend", 1],
-      ["Zephyrwear opens a London flagship", 0],
+      .all<{ title: string; is_tombstoned: number; state: string | null }>();
+    expect(signals.results.map((row) => [row.title, row.is_tombstoned, row.state])).toEqual([
+      ["Ten hoodies we liked, Zephyrwear among them", 0, "judged"],
+      ["Zephyr winds expected this weekend", 1, "judged"],
+      ["Zephyrwear opens a London flagship", 0, "judged"],
     ]);
 
     const snapshot = await env.DB.prepare(
@@ -210,22 +211,104 @@ describe("nightly mentions sweep", () => {
     );
 
     expect(run.mock.calls.length).toBe(callsAfterFirst);
-    expect(second).toEqual({ items: 3, stored: 0, unjudged: 0 });
+    expect(second).toEqual({ items: 3, stored: 0, unjudged: 0, skipped: 0 });
     expect(await readSignalAlerts(env.DB, workspaceId)).toHaveLength(1);
   });
 
-  it("stores nothing unjudged when the AI is unavailable, so the next night retries", async () => {
+  it("stores every item as unjudged when the AI is unavailable, so none are dropped", async () => {
     const { workspaceId, competitorId, brand } = await seedWorkspace();
     stubGdelt();
     Reflect.set(env, "AI", { run: vi.fn(() => Promise.reject(new Error("Insufficient balance"))) });
 
-    const outcome = await sweepTarget(await gdeltTargetFor(brand), NOW, null);
-    expect(outcome).toEqual({ items: 3, stored: 0, unjudged: 3 });
+    const target = await gdeltTargetFor(brand);
+    const outcome = await sweepTarget(target, NOW, null);
+    expect(outcome).toEqual({ items: 3, stored: 0, unjudged: 3, skipped: 0 });
 
-    const signals = await env.DB.prepare("SELECT COUNT(*) AS n FROM signal WHERE entity_id = ?")
+    const signals = await env.DB.prepare(
+      "SELECT title, state, is_tombstoned FROM signal WHERE entity_id = ? ORDER BY title",
+    )
       .bind(competitorId)
+      .all<{ title: string; state: string | null; is_tombstoned: number }>();
+    expect(signals.results.map((row) => [row.title, row.state, row.is_tombstoned])).toEqual([
+      ["Ten hoodies we liked, Zephyrwear among them", "unjudged", 0],
+      ["Zephyr winds expected this weekend", "unjudged", 0],
+      ["Zephyrwear opens a London flagship", "unjudged", 0],
+    ]);
+    const view = await env.DB.prepare("SELECT state FROM mention WHERE entity_id = ? ORDER BY title")
+      .bind(competitorId)
+      .all<{ state: string | null }>();
+    expect(view.results.map((row) => row.state)).toEqual(["unjudged", "unjudged", "unjudged"]);
+
+    const feed = await readMentionFeed(workspaceId, new Date(NOW));
+    expect(feed.map((row) => row.treatment)).toEqual(["unreviewed", "unreviewed", "unreviewed"]);
+
+    const verdicts = await env.DB.prepare(
+      "SELECT COUNT(*) AS n FROM jev_verdict WHERE workspace_id = ?",
+    )
+      .bind(workspaceId)
       .first<{ n: number }>();
-    expect(signals?.n).toBe(0);
+    expect(verdicts?.n).toBe(0);
     expect(await readSignalAlerts(env.DB, workspaceId)).toEqual([]);
+
+    const legacyId = "sig-legacy-null-state";
+    await env.DB.prepare(
+      "INSERT INTO signal (id, workspace_id, entity_id, source_id, kind, title, canonical_url, url_hash, dedup_key, observed_at, is_tombstoned) VALUES (?1, ?2, ?3, ?4, 'mention', ?5, ?6, ?7, ?8, ?9, 0)",
+    )
+      .bind(
+        legacyId,
+        workspaceId,
+        competitorId,
+        target.sourceId,
+        "A mention written before the state column",
+        "https://news.example.com/legacy",
+        "legacy-url-hash",
+        `${competitorId}:legacy`,
+        NOW,
+      )
+      .run();
+    const legacyView = await env.DB.prepare("SELECT state FROM mention WHERE id = ?1")
+      .bind(legacyId)
+      .first<{ state: string | null }>();
+    expect(legacyView?.state).toBeNull();
+    const feedWithLegacy = await readMentionFeed(workspaceId, new Date(NOW));
+    expect(feedWithLegacy.find((row) => row.id === legacyId)?.treatment).toBe("unreviewed");
+  });
+
+  it("stores the items after a mid-batch Jev failure as unjudged in the same batch", async () => {
+    const { workspaceId, competitorId, brand } = await seedWorkspace();
+    stubGdelt();
+    let calls = 0;
+    const run = vi.fn((_model: string, input: { questions: Record<string, unknown> }) => {
+      calls += 1;
+      if (calls > 2) return Promise.reject(new Error("Insufficient balance"));
+      const [questionId] = Object.keys(input.questions);
+      const p = questionId === "mention_is_about_brand" ? 0.96 : 0.94;
+      return Promise.resolve({ answers: { [questionId ?? ""]: { type: "noul", noul: p } } });
+    });
+    Reflect.set(env, "AI", { run });
+
+    const outcome = await sweepTarget(await gdeltTargetFor(brand), NOW, null);
+    expect(outcome).toEqual({ items: 3, stored: 1, unjudged: 2, skipped: 0 });
+    expect(run).toHaveBeenCalledTimes(3);
+
+    const signals = await env.DB.prepare(
+      "SELECT title, state, is_tombstoned FROM signal WHERE entity_id = ? ORDER BY title",
+    )
+      .bind(competitorId)
+      .all<{ title: string; state: string | null; is_tombstoned: number }>();
+    expect(signals.results.map((row) => [row.title, row.state, row.is_tombstoned])).toEqual([
+      ["Ten hoodies we liked, Zephyrwear among them", "unjudged", 0],
+      ["Zephyr winds expected this weekend", "unjudged", 0],
+      ["Zephyrwear opens a London flagship", "judged", 0],
+    ]);
+    const verdicts = await env.DB.prepare(
+      "SELECT COUNT(*) AS n FROM jev_verdict WHERE workspace_id = ?",
+    )
+      .bind(workspaceId)
+      .first<{ n: number }>();
+    expect(verdicts?.n).toBe(2);
+    expect((await readSignalAlerts(env.DB, workspaceId)).map((alert) => alert.title)).toEqual([
+      `${brand}: Zephyrwear opens a London flagship`,
+    ]);
   });
 });

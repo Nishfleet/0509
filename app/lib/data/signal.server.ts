@@ -106,7 +106,7 @@ export async function insertHiringSignals(rows: readonly NewHiringSignal[]): Pro
   }
 }
 
-const SELECT_HIRING_SIGNAL_STATES = `SELECT id, dedup_key, last_seen_at, payload_json FROM signal
+export const SELECT_HIRING_SIGNAL_STATES = `SELECT id, dedup_key, last_seen_at, payload_json FROM signal
 WHERE kind = 'hiring' AND watch_id = ?1 AND is_tombstoned = 0`;
 
 const hiringSignalStateRows = z.array(
@@ -151,8 +151,8 @@ export async function applyHiringLifecycle(updates: readonly HiringSignalUpdate[
 
 const INSERT_MENTION = `INSERT INTO signal
   (id, workspace_id, entity_id, source_id, watch_id, snapshot_id, kind, title, url, canonical_url, url_hash,
-   author, engagement_json, payload_json, dedup_key, published_at, observed_at, last_seen_at, is_tombstoned)
-VALUES (?1, ?2, ?3, ?4, ?5, ?6, 'mention', ?7, ?8, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?15, ?16)
+   author, engagement_json, payload_json, dedup_key, published_at, observed_at, last_seen_at, is_tombstoned, state)
+VALUES (?1, ?2, ?3, ?4, ?5, ?6, 'mention', ?7, ?8, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?15, ?16, ?17)
 ON CONFLICT (source_id, dedup_key) DO NOTHING`;
 
 const SEEN_KEYS = "SELECT dedup_key FROM signal WHERE source_id = ?1 AND dedup_key IN (SELECT value FROM json_each(?2))";
@@ -174,6 +174,7 @@ export interface MentionSignal {
   publishedAt: string | null;
   observedAt: string;
   isNotAboutBrand: boolean;
+  state: "judged" | "unjudged";
 }
 
 export async function readSeenDedupKeys(sourceId: string, keys: readonly string[]): Promise<Set<string>> {
@@ -200,7 +201,50 @@ export function insertMention(signal: MentionSignal): D1PreparedStatement {
     signal.publishedAt,
     signal.observedAt,
     signal.isNotAboutBrand ? 1 : 0,
+    signal.state,
   );
+}
+
+const SELECT_UNJUDGED_MENTIONS = `SELECT id, title, canonical_url, published_at, payload_json FROM signal
+WHERE watch_id = ?1 AND kind = 'mention' AND state = 'unjudged'
+ORDER BY observed_at, id LIMIT ?2`;
+
+const RESOLVE_UNJUDGED_MENTION = `UPDATE signal SET state = 'judged', is_tombstoned = ?2
+WHERE id = ?1 AND kind = 'mention' AND state = 'unjudged'`;
+
+const unjudgedMentionRows = z.array(
+  z.object({
+    id: z.string(),
+    title: z.string(),
+    canonical_url: z.string(),
+    published_at: z.string().nullable(),
+    payload_json: z.string(),
+  }),
+);
+
+const mentionPayload = z.object({ publisher: z.string().optional() });
+
+export interface UnjudgedMention {
+  id: string;
+  title: string;
+  url: string;
+  publishedAt: string | null;
+  publisher: string | null;
+}
+
+export async function readUnjudgedMentions(watchId: string, limit: number): Promise<UnjudgedMention[]> {
+  const rows = await env.DB.prepare(SELECT_UNJUDGED_MENTIONS).bind(watchId, limit).all();
+  return unjudgedMentionRows.parse(rows.results).map((row) => ({
+    id: row.id,
+    title: row.title,
+    url: row.canonical_url,
+    publishedAt: row.published_at,
+    publisher: mentionPayload.parse(JSON.parse(row.payload_json)).publisher ?? null,
+  }));
+}
+
+export function resolveUnjudgedMention(id: string, tombstoned: boolean): D1PreparedStatement {
+  return env.DB.prepare(RESOLVE_UNJUDGED_MENTION).bind(id, tombstoned ? 1 : 0);
 }
 
 export interface RecentSignal {

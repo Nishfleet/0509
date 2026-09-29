@@ -67,3 +67,15 @@ export function resolveEntitlements(tier: string, limitsJson: string): Entitleme
   const parsed = schema.safeParse(parseLimits(limitsJson));
   return parsed.success ? parsed.data : schema.parse({});
 }
+
+const PAID_STATUSES = new Set(["trialing", "active", "past_due"]);
+
+export function entitledTier(
+  plan: { tier: string; status: string; currentPeriodEnd: string | null },
+  now: Date,
+): string {
+  if (PAID_STATUSES.has(plan.status)) return plan.tier;
+  const paidThrough = plan.currentPeriodEnd === null ? Number.NaN : Date.parse(plan.currentPeriodEnd);
+  if (plan.status === "cancelled" && paidThrough > now.getTime()) return plan.tier;
+  return "scout";
+}

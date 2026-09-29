@@ -1,6 +1,5 @@
 # Trigger stub. The dispatch logic lives once in Nishfleet/fleet-ops; a
 # workflow only fires on its own repo's events, so the triggers stay here.
-# opus-vet dispatches this file by name with issue=<N>.
 name: agent-dispatch
 on:
   issues:
@@ -17,7 +16,9 @@ on:
     workflows: [CI]
     types: [completed]
   schedule:
-    - cron: '17 */6 * * *'
+    # Hourly: a walled issue is requeued with GITHUB_TOKEN, which fires no
+    # run, so this sweep is what picks it up again (fleet-ops#8969).
+    - cron: '17 * * * *'
 jobs:
   dispatch:
     uses: Nishfleet/fleet-ops/.github/workflows/agent-dispatch.yml@main # same ref runner group 3 enforces for agent.yml; a SHA pin here drifts from agent.yml@main and strands jobs (0509#5231)

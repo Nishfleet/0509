@@ -122,7 +122,7 @@ describe("YouTube sweep stale channel", () => {
       null,
     );
 
-    expect(outcome).toEqual({ items: 0, stored: 0, unjudged: 0 });
+    expect(outcome).toEqual({ items: 0, stored: 0, unjudged: 0, skipped: 0 });
     expect(JSON.parse(await configOf(watchId))).toEqual({
       degraded: { state: "degraded", reason: NO_CHANNEL_REASON, at: NOW },
     });
@@ -176,7 +176,7 @@ describe("YouTube sweep stale channel", () => {
       4,
     );
 
-    expect(outcome).toEqual({ items: 0, stored: 0, unjudged: 0 });
+    expect(outcome).toEqual({ items: 0, stored: 0, unjudged: 0, skipped: 0 });
     expect(JSON.parse(await configOf(resolved.watchId))).toEqual({
       channelId: LOST_ID,
       pendingChannelId: LIVE_ID,
@@ -195,7 +195,7 @@ describe("YouTube sweep stale channel", () => {
       4,
     );
 
-    expect(confirmed).toEqual({ items: 0, stored: 0, unjudged: 0 });
+    expect(confirmed).toEqual({ items: 0, stored: 0, unjudged: 0, skipped: 0 });
     expect(JSON.parse(await configOf(resolved.watchId))).toEqual({ channelId: LIVE_ID });
     expect(await snapshotCount(resolved.watchId)).toBe(1);
     const snapshot = await env.DB.prepare(
@@ -225,7 +225,7 @@ describe("YouTube sweep stale channel", () => {
       null,
     );
 
-    expect(outcome).toEqual({ items: 0, stored: 0, unjudged: 0 });
+    expect(outcome).toEqual({ items: 0, stored: 0, unjudged: 0, skipped: 0 });
     expect(JSON.parse(await configOf(watchId))).toEqual({
       channelId: LOST_ID,
       pendingChannelId: LIVE_ID,
@@ -244,7 +244,7 @@ describe("YouTube sweep stale channel", () => {
       null,
     );
 
-    expect(confirmed).toEqual({ items: 0, stored: 0, unjudged: 0 });
+    expect(confirmed).toEqual({ items: 0, stored: 0, unjudged: 0, skipped: 0 });
     expect(JSON.parse(await configOf(watchId))).toEqual({ channelId: LIVE_ID });
     expect(await snapshotCount(watchId)).toBe(1);
     expect(fakeFetch.mock.calls.map((call) => String(call[0]))).toEqual([
@@ -308,7 +308,7 @@ describe("YouTube sweep stale channel", () => {
       4,
     );
 
-    expect(outcome).toEqual({ items: 0, stored: 0, unjudged: 0 });
+    expect(outcome).toEqual({ items: 0, stored: 0, unjudged: 0, skipped: 0 });
     expect(JSON.parse(await configOf(watchId))).toEqual({ channelId: LIVE_ID });
     expect(await snapshotCount(watchId)).toBe(1);
   });
@@ -332,7 +332,7 @@ describe("YouTube sweep stale channel", () => {
       null,
     );
 
-    expect(outcome).toEqual({ items: 0, stored: 0, unjudged: 0 });
+    expect(outcome).toEqual({ items: 0, stored: 0, unjudged: 0, skipped: 0 });
     expect(JSON.parse(await configOf(watchId))).toEqual({
       degraded: { state: "degraded", reason: LOST_CHANNEL_REASON, at: NOW },
     });
@@ -417,7 +417,7 @@ describe("YouTube sweep stale channel", () => {
       null,
     );
 
-    expect(outcome).toEqual({ items: 0, stored: 0, unjudged: 0 });
+    expect(outcome).toEqual({ items: 0, stored: 0, unjudged: 0, skipped: 0 });
     expect(JSON.parse(await configOf(watchId))).toEqual({
       degraded: { state: "degraded", reason: LOST_CHANNEL_REASON, at: NOW },
     });
