@@ -83,18 +83,23 @@ jobs:
         with:
           dir: ${{ runner.temp }}/devin-in
       - name: Post the result
-        if: ${{ !cancelled() }}
+        if: always()
         env:
           GH_TOKEN: ${{ github.token }}
           LEAKED: ${{ steps.devin.outputs.leaked }}
+          DEVIN_OUTCOME: ${{ steps.devin.outcome }}
         run: |
-          expect=$(jq -r .expect "$RUNNER_TEMP/case.json")
-          case "$expect" in block|pass) ;; *) echo "::error::case $CASE has expect '$expect', not block or pass" >&2; exit 1 ;; esac
+          expect=$(jq -r '.expect // "unknown"' "$RUNNER_TEMP/case.json" 2>/dev/null || echo unknown)
+          post_bare() {
+            printf 'calibration run %s case %s expect=%s got=none result=%s\n' "$GITHUB_RUN_ID" "$CASE" "$expect" "$1" > "$RUNNER_TEMP/result.md"
+            gh issue comment "$RESULTS_ISSUE" --repo "$GITHUB_REPOSITORY" --body-file "$RUNNER_TEMP/result.md"
+          }
+          case "$DEVIN_OUTCOME" in cancelled|skipped) post_bare aborted; exit 0 ;; esac
+          case "$expect" in block|pass) ;; *) post_bare bad-case; echo "::error::case $CASE has expect '$expect', not block or pass" >&2; exit 1 ;; esac
           graded="$RUNNER_TEMP/devin-graded.txt"
           : > "$graded"
           if [ "$LEAKED" != false ]; then
-            printf 'calibration run %s case %s expect=%s got=none result=leak-blocked\n' "$GITHUB_RUN_ID" "$CASE" "$expect" > "$RUNNER_TEMP/result.md"
-            gh issue comment "$RESULTS_ISSUE" --repo "$GITHUB_REPOSITORY" --body-file "$RUNNER_TEMP/result.md"
+            post_bare leak-blocked
             exit 0
           fi
           clean="$RUNNER_TEMP/devin-clean.txt"
@@ -123,7 +128,7 @@ jobs:
 
   summary:
     name: summary
-    needs: grade
+    needs: [cases, grade]
     if: ${{ !cancelled() && github.ref == 'refs/heads/main' }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -131,6 +136,7 @@ jobs:
       issues: write
     env:
       RESULTS_ISSUE: 5872
+      EXPECTED_IDS: ${{ needs.cases.outputs.ids }}
     steps:
       - name: Count catches and false A+ grades for this run
         env:
@@ -140,7 +146,10 @@ jobs:
             --jq ".[] | select(.user.login == \"github-actions[bot]\") | .body | select(startswith(\"calibration run $GITHUB_RUN_ID \")) | split(\"\n\")[0]" \
             > "$RUNNER_TEMP/lines.txt"
           count() { grep -c "result=$1\$" "$RUNNER_TEMP/lines.txt" || true; }
-          caught=$(count caught); falsepass=$(count false-A+); passed=$(count passed); falseblock=$(count false-block); nograde=$(count no-grade); leaks=$(count leak-blocked)
+          caught=$(count caught); falsepass=$(count false-A+); passed=$(count passed); falseblock=$(count false-block); nograde=$(count no-grade); leaks=$(count leak-blocked); aborted=$(( $(count aborted) + $(count bad-case) ))
+          sed -E 's/^calibration run [0-9]+ case ([^ ]+) .*/\1/' "$RUNNER_TEMP/lines.txt" | sort -u > "$RUNNER_TEMP/posted.txt"
+          printf '%s' "$EXPECTED_IDS" | jq -r '.[]' | sort > "$RUNNER_TEMP/expected.txt"
+          missing=$(comm -23 "$RUNNER_TEMP/expected.txt" "$RUNNER_TEMP/posted.txt" | paste -sd, -)
           {
             printf 'calibration summary run %s (%s)\n\n' "$GITHUB_RUN_ID" "$GITHUB_SHA"
             printf -- '- Known-bad caught: %s of %s\n' "$caught" "$((caught + falsepass))"
@@ -148,7 +157,10 @@ jobs:
             printf -- '- Known-good given A+: %s of %s\n' "$passed" "$((passed + falseblock))"
             printf -- '- Known-good blocked (false block): %s\n' "$falseblock"
             printf -- '- No grade produced: %s\n' "$nograde"
-            printf -- '- Blocked by the leak check: %s\n\n' "$leaks"
+            printf -- '- Blocked by the leak check: %s\n' "$leaks"
+            printf -- '- Aborted or bad case: %s\n' "$aborted"
+            printf -- '- Cases posted: %s of %s\n' "$(wc -l < "$RUNNER_TEMP/posted.txt")" "$(wc -l < "$RUNNER_TEMP/expected.txt")"
+            printf -- '- Missing: %s\n\n' "${missing:-none}"
             printf '~~~text\n'
             sort "$RUNNER_TEMP/lines.txt" | sed -E 's/^calibration run [0-9]+ //'
             printf '~~~\n'
