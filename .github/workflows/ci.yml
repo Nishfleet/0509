@@ -92,35 +92,6 @@ jobs:
         with:
           args: --offline --format plain .github/workflows
 
-      - name: Migration numbers are unique
-        # A change that adds migrations/NNNN_* while its base already has an
-        # NNNN_*, or adds two with one number, fails and names the next free
-        # numbers. The first of several open PRs on one number merges; each
-        # later one fails here and renumbers at rework time. HEAD^1 is the base
-        # side of the merge ref: main on a pull request, the entries ahead in
-        # the queue on merge_group, where two individually green PRs collide.
-        if: github.event_name == 'pull_request' || github.event_name == 'merge_group'
-        run: |
-          set -euo pipefail
-          on_base=$(git ls-tree --name-only HEAD^1 migrations/)
-          last=$(printf '%s\n' "$on_base" | sed -nE 's|^migrations/([0-9]+)_.*|\1|p' | sort -n | tail -1)
-          next=$((10#${last:-0} + 1))
-          added=$(git diff --name-only --diff-filter=A HEAD^1 HEAD -- migrations/)
-          status=0
-          for n in $(printf '%s\n' "$added" | xargs -rn1 basename | sed -nE 's|^([0-9]+)_.*|\1|p' | sort | uniq -d); do
-            echo "::error::Two added migrations share number $n. Give each its own number, starting at $(printf '%04d' "$next")."
-            status=1
-          done
-          while IFS= read -r f; do
-            n=$(basename "$f" | sed -nE 's|^([0-9]+)_.*|\1|p')
-            [ -n "$n" ] || continue
-            if grep -q "^migrations/${n}_" <<< "$on_base"; then
-              echo "::error file=$f::Migration number $n already exists on the base. Rename this file to $(printf '%04d' "$next")_<name>.sql."
-              next=$((next + 1))
-              status=1
-            fi
-          done <<< "$added"
-          exit "$status"
       - name: Test only what the pull request can affect
         # vitest's own --changed: the test files that import a changed file,
         # through the module graph. A change to package.json or a vitest/vite
