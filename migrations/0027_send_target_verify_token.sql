@@ -11,6 +11,7 @@
 -- without colliding. No backfill: the first change to a new address writes the
 -- token.
 ALTER TABLE send_target ADD COLUMN verify_token TEXT;
+ALTER TABLE send_target ADD COLUMN verify_token_expires_at TEXT;
 
 -- The /v/<token> route's only lookup: token -> send_target, the same shape and
 -- the same reason as idx_send_target_unsubscribe_token. A UNIQUE index makes it

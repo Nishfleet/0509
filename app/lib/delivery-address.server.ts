@@ -1,6 +1,7 @@
 import { env } from "cloudflare:workers";
 
 import { sendMessage } from "../../workers/delivery/send";
+import { redactEmailShaped } from "./auth/redact-email-shaped";
 import { clearSuppression, isAddressSuppressed } from "./data/email_suppression.server";
 import {
   changeEmailTarget,
@@ -16,6 +17,7 @@ const INVALID = "Enter an email address, like you@company.com.";
 const SUPPRESSED =
   'This address unsubscribed from the brief. Tick "Send to it again" and save to resume.';
 const NO_WORKSPACE = "Finish setting up first, then choose where the brief goes.";
+const VERIFY_TOKEN_TTL_MS = 24 * 60 * 60 * 1000;
 const SEND_FAILED = "We could not send the confirmation email. Save again to retry.";
 
 function newVerifyToken(): string {
@@ -37,7 +39,8 @@ async function sendVerifyConfirmation(
   address: string,
 ): Promise<string | null> {
   const token = newVerifyToken();
-  await writeVerifyToken(env.DB, { workspaceId, token });
+  const expiresAt = new Date(Date.now() + VERIFY_TOKEN_TTL_MS).toISOString();
+  await writeVerifyToken(env.DB, { workspaceId, token, expiresAt });
   const message = verifyAddressEmail({ email: address, url: `https://0509.io/v/${token}` });
   const outcome = await sendMessage(email, {
     to: address,
@@ -48,7 +51,10 @@ async function sendVerifyConfirmation(
   });
   if (outcome.outcome === "failed") {
     console.error(
-      JSON.stringify({ event: "delivery.address_verify_send_failed", error: outcome.error }),
+      JSON.stringify({
+        event: "delivery.address_verify_send_failed",
+        error: redactEmailShaped(outcome.error ?? ""),
+      }),
     );
     return SEND_FAILED;
   }

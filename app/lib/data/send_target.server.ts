@@ -6,7 +6,7 @@ WHERE st.workspace_id = ? AND c.key = 'email'
 ORDER BY st.created_at ASC
 LIMIT 1`;
 
-const WRITE_VERIFY_TOKEN = `UPDATE send_target SET verify_token = ?
+const WRITE_VERIFY_TOKEN = `UPDATE send_target SET verify_token = ?, verify_token_expires_at = ?
 WHERE id = (
   SELECT st.id FROM send_target st
   JOIN channel c ON c.id = st.channel_id
@@ -15,7 +15,7 @@ WHERE id = (
   LIMIT 1
 )`;
 
-const MARK_EMAIL_TARGET_VERIFIED = `UPDATE send_target SET is_verified = 1, verify_token = NULL
+const MARK_EMAIL_TARGET_VERIFIED = `UPDATE send_target SET is_verified = 1, verify_token = NULL, verify_token_expires_at = NULL
 WHERE id = (
   SELECT st.id FROM send_target st
   JOIN channel c ON c.id = st.channel_id
@@ -25,12 +25,13 @@ WHERE id = (
 )`;
 
 const CHANGE_EMAIL_TARGET = `UPDATE send_target
-SET target_value = ?, is_verified = 0, unsubscribe_token = NULL, verify_token = NULL
+SET target_value = ?, is_verified = 0, unsubscribe_token = NULL, verify_token = NULL, verify_token_expires_at = NULL
 WHERE workspace_id = ?
   AND channel_id = (SELECT id FROM channel WHERE key = 'email')
   AND target_value <> ?`;
 
-const CONFIRM_EMAIL_TARGET_BY_TOKEN = `UPDATE send_target SET is_verified = 1, verify_token = NULL WHERE verify_token = ?`;
+const CONFIRM_EMAIL_TARGET_BY_TOKEN = `UPDATE send_target SET is_verified = 1, verify_token = NULL, verify_token_expires_at = NULL
+WHERE verify_token = ? AND verify_token_expires_at > ?`;
 
 const INSERT_OWNER_EMAIL_TARGET = `INSERT INTO send_target (id, workspace_id, channel_id, target_value, is_verified, created_at)
 SELECT 'st-email-' || w.id, w.id, c.id, u.email, u.emailVerified, ?
@@ -78,9 +79,9 @@ export async function readEmailTarget(
 
 export async function writeVerifyToken(
   db: TargetDb,
-  input: { workspaceId: string; token: string },
+  input: { workspaceId: string; token: string; expiresAt: string },
 ): Promise<void> {
-  await db.prepare(WRITE_VERIFY_TOKEN).bind(input.token, input.workspaceId).run();
+  await db.prepare(WRITE_VERIFY_TOKEN).bind(input.token, input.expiresAt, input.workspaceId).run();
 }
 
 export async function markEmailTargetVerified(
@@ -100,6 +101,9 @@ export async function changeEmailTarget(
     .run();
 }
 
-export async function confirmEmailTargetByToken(db: TargetDb, token: string): Promise<void> {
-  await db.prepare(CONFIRM_EMAIL_TARGET_BY_TOKEN).bind(token).run();
+export async function confirmEmailTargetByToken(
+  db: TargetDb,
+  input: { token: string; now: string },
+): Promise<void> {
+  await db.prepare(CONFIRM_EMAIL_TARGET_BY_TOKEN).bind(input.token, input.now).run();
 }

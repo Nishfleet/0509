@@ -205,6 +205,21 @@ describe("confirm a changed delivery address (0509#5811)", () => {
     });
   });
 
+  it("confirmDeliveryAddress treats an expired token like an unknown one", async () => {
+    const workspaceId = firstWorkspaceId(USER_ID);
+    await save(recorder(), NEW_ADDRESS);
+    const token = (await onlyTarget(workspaceId)).verify_token;
+    if (token === null) throw new Error("expected a verify token");
+    await env.DB.prepare("UPDATE send_target SET verify_token_expires_at = ? WHERE workspace_id = ?")
+      .bind("2020-01-01T00:00:00.000Z", workspaceId)
+      .run();
+    const before = await onlyTarget(workspaceId);
+
+    await confirmDeliveryAddress(token);
+
+    expect(await onlyTarget(workspaceId)).toEqual(before);
+  });
+
   it("confirmDeliveryAddress writes nothing for an unknown, empty, or missing token", async () => {
     const workspaceId = firstWorkspaceId(USER_ID);
     await save(recorder(), NEW_ADDRESS);
