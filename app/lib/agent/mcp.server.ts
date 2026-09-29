@@ -5,7 +5,8 @@ import { readRegistrySources } from "../data/source.server";
 import { joinList } from "../../lib/coverage";
 import type { FreshnessSource } from "../../lib/freshness.server";
 import { sourceKindNoun } from "../../lib/source-name";
-import { namedTool } from "./mcp-tools";import {
+import { namedTool } from "./mcp-tools";
+import {
   readAgentAlerts,
   readAgentBrief,
   readAgentCompetitor,
