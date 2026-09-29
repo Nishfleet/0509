@@ -624,7 +624,6 @@ export default tseslint.config(
     // fires: only the two callers that predate the rule are exempted.
     files: [
       "app/lib/fetch/**",
-      "app/lib/identity/youtube-channel.server.ts",
       "app/lib/hiring/discover-board.ts",
       "workers/support-inbox.ts",
     ],
