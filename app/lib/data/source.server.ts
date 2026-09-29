@@ -243,7 +243,7 @@ export async function readWorkspaceMentionSources(
   }));
 }
 
-const SELECT_REGISTRY_SOURCES = `SELECT s.key, s.plugin_key, s.platform, s.kind, s.is_enabled, s.config_json, s.degraded_reason, s.last_good_at, (SELECT MAX(sn.fetched_at) FROM snapshot sn JOIN watch w ON w.id = sn.watch_id WHERE w.source_id = s.id) AS fetched_at, (SELECT sn.item_count FROM snapshot sn JOIN watch w ON w.id = sn.watch_id WHERE w.source_id = s.id ORDER BY sn.fetched_at DESC LIMIT 1) AS item_count, (SELECT sn.canary_count FROM snapshot sn JOIN watch w ON w.id = sn.watch_id WHERE w.source_id = s.id ORDER BY sn.fetched_at DESC LIMIT 1) AS canary_count, (SELECT w3.config_json FROM watch w3 WHERE w3.source_id = s.id AND w3.is_active = 1 ORDER BY CASE WHEN json_extract(w3.config_json, '$.degraded.state') = 'degraded' THEN 0 ELSE 1 END, w3.last_polled_at DESC LIMIT 1) AS watch_config_json FROM source s ORDER BY s.kind, s.key`;
+const SELECT_REGISTRY_SOURCES = `SELECT s.key, s.plugin_key, s.platform, s.kind, s.is_enabled, s.config_json, s.degraded_reason, s.last_good_at, (SELECT MAX(sn.fetched_at) FROM snapshot sn JOIN watch w ON w.id = sn.watch_id WHERE w.source_id = s.id) AS fetched_at, (SELECT sn.item_count FROM snapshot sn JOIN watch w ON w.id = sn.watch_id WHERE w.source_id = s.id ORDER BY sn.fetched_at DESC LIMIT 1) AS item_count, (SELECT sn.canary_count FROM snapshot sn JOIN watch w ON w.id = sn.watch_id WHERE w.source_id = s.id ORDER BY sn.fetched_at DESC LIMIT 1) AS canary_count FROM source s ORDER BY s.kind, s.key`;
 
 interface RegistrySourceRow {
   key: string;
@@ -257,7 +257,6 @@ interface RegistrySourceRow {
   fetched_at: string | null;
   item_count: number | null;
   canary_count: number | null;
-  watch_config_json: string | null;
 }
 
 export async function readRegistrySources(): Promise<readonly FreshnessSource[]> {
@@ -272,7 +271,7 @@ export async function readRegistrySources(): Promise<readonly FreshnessSource[]>
       config_json: row.config_json,
       degraded_reason: row.degraded_reason,
       last_good_at: row.last_good_at,
-      watch_config_json: row.watch_config_json,
+      watch_config_json: null,
     },
     snapshot: snapshotOf(row),
   }));

@@ -347,9 +347,13 @@ async function sweepOneYoutube(
     const lookup = await lookupYoutubeChannel(
       await requireEntityIdentityJson(watch.workspace_id, watch.entity_id),
     );
-    if (lookup.status !== "id") {
-      if (lookup.status === "no-url") await flagNoChannel(watch.watch_id, now);
-      else await flagLostChannel(watch.watch_id, now);
+    if (lookup.status === "no-url") {
+      await flagNoChannel(watch.watch_id, now);
+      await markWatchPolled(watch.watch_id, now);
+      return { items: 0, stored: 0, unjudged: 0 };
+    }
+    if (lookup.status === "unresolved") {
+      await flagLostChannel(watch.watch_id, now);
       await markWatchPolled(watch.watch_id, now);
       return { items: 0, stored: 0, unjudged: 0 };
     }

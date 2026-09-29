@@ -1,6 +1,7 @@
 import { env } from "cloudflare:workers";
 import { describe, expect, it } from "vitest";
 
+import { loader as landingLoader } from "../../../app/routes/landing";
 import { readRegistrySources, readWorkspaceMentionSources } from "../../../app/lib/data/source.server";
 import { sourcePillStatus } from "../../../app/components/source-pill";
 import { NO_CHANNEL_REASON } from "../../../app/lib/mentions/youtube-channel";
@@ -155,16 +156,43 @@ describe("alerts mentions source pills (#4003 4/6)", () => {
       expect(status.state).toBe("degraded");
       expect(status.reason).toBe(NO_CHANNEL_REASON);
 
-      // The landing page reads the registry, which has no workspace scope, and
-      // it reaches anonymous visitors. The same no-channel reason has to reach
-      // it, or the public list still says "no fresh data".
+      // The registry read has no workspace scope and feeds the unauthenticated
+      // landing page, so it carries no watch config at all: one tenant's
+      // degraded watch must never reach an anonymous visitor's pill.
       const registry = (await readRegistrySources()).filter((item) => item.source.key === "youtube.channel_rss");
       const registryYoutube = registry[0];
       if (!registryYoutube) throw new Error("the enabled YouTube source must be in the registry");
       expect(registryYoutube.snapshot).toBeNull();
+      expect(registryYoutube.source.watch_config_json).toBeNull();
       const registryStatus = sourcePillStatus(registryYoutube.source, registryYoutube.snapshot, NOW_MS);
       expect(registryStatus.state).toBe("degraded");
-      expect(registryStatus.reason).toBe(NO_CHANNEL_REASON);
+      expect(registryStatus.reason).not.toBe(NO_CHANNEL_REASON);
+    } finally {
+      await clearOwner(USER, WS, COMP);
+    }
+  });
+
+  it("carries no tenant watch config into the landing loader output (#5827)", async () => {
+    await seedOwner(USER, WS, COMP);
+    await seedWatch(
+      `watch-${COMP}-youtube`,
+      COMP,
+      YOUTUBE_SRC,
+      1,
+      JSON.stringify({
+        degraded: { state: "degraded", reason: NO_CHANNEL_REASON, at: NOW },
+      }),
+    );
+
+    try {
+      const { sources } = await landingLoader({} as Parameters<typeof landingLoader>[0]);
+      expect(sources.length).toBeGreaterThan(0);
+      for (const entry of sources) {
+        expect(entry.source.watch_config_json).toBeNull();
+      }
+      const youtube = sources.find((entry) => entry.source.key === "youtube.channel_rss");
+      if (!youtube) throw new Error("the enabled YouTube source must reach the landing loader");
+      expect(sourcePillStatus(youtube.source, youtube.snapshot, NOW_MS).reason).not.toBe(NO_CHANNEL_REASON);
     } finally {
       await clearOwner(USER, WS, COMP);
     }
