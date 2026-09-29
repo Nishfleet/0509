@@ -61,7 +61,7 @@ Do not use `set -x` and do not echo the header JSON. The stock CLI takes those h
 
 `/app`, `/onboarding`, Alerts and Settings sit behind sign-in. There is exactly one sign-in path — the form at `/login`, the link the app emails, the session it sets — and the e2e suite drives that same path (`signInWithMagicLink` in `e2e/inbox.ts`) and saves its result to `e2e/.auth/session.json` and the per-lane `e2e/.auth/onboarded-<lane>.json`. This section reuses it: sign in as a fixture account from `app/lib/fixture-accounts.ts` (`FIXTURE_ACCOUNTS`, e.g. `FIXTURE_ACCOUNTS.j7.email` = `e2e+j7@0509.io`), which the suite keeps on purpose (`KEPT_JOURNEY_ACCOUNTS` in `e2e/inbox.ts`). No test-login shortcut, no cookie to mint.
 
-Snapshot the form, fill the email, wait for the Turnstile token, submit. The `evaluate_script` is the Turnstile gate (`settleSignInWidget` in `e2e/inbox.ts`): submitting before the widget has minted its token answers "Confirm you're a person, then we'll send the link." A `0` means wait a beat and read it again; the local lane sees the always-pass test token the same way.
+Snapshot the form, fill the email, wait for the Turnstile token, submit. The `evaluate_script` is the Turnstile gate (`settleSignInWidget` in `e2e/inbox.ts`): submitting before the widget has minted its token answers "Confirm you're a person, then we'll send the link." On the local lane a `0` means wait a beat and read it again — that lane has no pre-clearance, so the widget mints the always-pass test token. On production the Access service token pre-clears the captcha server side and a `0` is expected; the gate there is the "CHECK YOUR EMAIL" heading after the click.
 
 ```bash
 npx chrome-devtools take_snapshot <pageId>
