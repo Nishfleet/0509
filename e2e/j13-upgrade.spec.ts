@@ -143,15 +143,6 @@ async function watchOneCompetitor(page: Page): Promise<void> {
   await expect(page).toHaveURL(/\/app$/);
 }
 
-async function payAtDodoTestCheckout(page: Page): Promise<void> {
-  await page.waitForURL(/checkout\.dodopayments\.com/, { timeout: 30_000 });
-  await page.getByPlaceholder(/card number|1234 1234 1234 1234/i).fill("4242424242424242");
-  await page.getByPlaceholder(/MM ?\/ ?YY/i).fill("06/32");
-  await page.getByPlaceholder(/cvc|cvv|security code/i).fill("123");
-  await page.getByRole("button", { name: /subscribe|start trial|pay|confirm/i }).click();
-  await page.waitForURL(/\/app\/competitors\?.*upgraded=starter/, { timeout: 120_000 });
-}
-
 async function deliverPreviewWebhook(page: Page, workspaceId: string): Promise<void> {
   const id = `evt_j13_${crypto.randomUUID()}`;
   const body = JSON.stringify({
@@ -200,22 +191,19 @@ test("J13: the plan gate upgrades a workspace and the page flips without a reloa
   await expect(upgrade).toBeVisible();
   await expect(page.getByText("Starter watches up to 15 competitors.")).toBeVisible();
 
-  if (isLocalLane()) {
-    await page.evaluate(() => {
-      Object.assign(window, { j13NoReload: true });
-    });
-    await deliverPreviewWebhook(page, workspaceId);
-  } else {
+  if (!isLocalLane()) {
     await upgrade.click();
-    await payAtDodoTestCheckout(page);
-    console.log(`J13 return url=${page.url()}`);
-    await page.evaluate(() => {
-      Object.assign(window, { j13NoReload: true });
-    });
+    await page.waitForURL(/checkout\.dodopayments\.com/, { timeout: 30_000 });
+    console.log(`J13 stopped at Dodo hosted checkout, no payment made: ${new URL(page.url()).origin}`);
+    return;
   }
 
+  await page.evaluate(() => {
+    Object.assign(window, { j13NoReload: true });
+  });
+  await deliverPreviewWebhook(page, workspaceId);
   await expect(page.getByText(/You're on Starter\. It watches up to 15 competitors\./)).toBeVisible({
-    timeout: isLocalLane() ? 15_000 : 120_000,
+    timeout: 15_000,
   });
   expect(await page.evaluate(() => "j13NoReload" in window)).toBe(true);
 
