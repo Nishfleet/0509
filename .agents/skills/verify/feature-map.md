@@ -7,11 +7,10 @@ user meant" (Lauren Tan, *2,500 PRs*, 11:02). It is materialised memory: a route
 that is not here cannot be reached, and a row here that no route serves is a
 lie. `app/routes.ts` is the only registry — start there, not from a guess.
 
-**Every PR that adds, removes or changes a route updates this file in the same
-PR.** The Opus reviewer checks it against `app/routes.ts` and the e2e titles
-before approving, and `tests/unit/feature-map-proof.test.ts` fails a PR whose
-spec is named by no Proof row here or whose Proof row names a spec not on
-disk (#6133).
+**Every PR that adds, removes or changes a route, or adds an e2e spec, updates
+this file in the same PR.** The grader checks it against `app/routes.ts` and
+`e2e/` before approving: every spec is named in a Proof row, and every spec a
+Proof row names exists.
 
 Legend: **Reach** is how a human gets there — the route or entry point, the
 element's role and accessible name, and the keyboard path with no pointer.
