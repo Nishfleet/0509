@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { CRAWLER_USER_AGENT } from "../fetch/robots.server";
+
 export interface NameSources {
 	ldOrganizationName: string | null;
 	ogSiteName: string | null;
@@ -41,7 +43,7 @@ export async function resolveBrandName(
 				encodeURIComponent(term),
 			{
 				method: "GET",
-				headers: { "user-agent": "FiveToNineBot/1.0 (+https://0509.io)" },
+				headers: { "user-agent": CRAWLER_USER_AGENT },
 				signal: AbortSignal.timeout(8000),
 			},
 		);

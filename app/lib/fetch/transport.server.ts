@@ -1,6 +1,7 @@
 import { parse } from "tldts";
 
 import { browserContent } from "../site/browser-budget.server";
+import { CRAWLER_USER_AGENT } from "./robots.server";
 
 const FETCH_TIMEOUT_MS = 8_000;
 
@@ -60,7 +61,7 @@ const CHALLENGE_MARKERS = [
 
 const FETCH_HEADERS = {
   accept: "text/html,application/xhtml+xml",
-  "user-agent": "FiveToNineBot/1.0 (+https://0509.io)",
+  "user-agent": CRAWLER_USER_AGENT,
 } as const;
 
 export async function countExtractedChars(html: string): Promise<number> {

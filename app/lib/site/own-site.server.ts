@@ -4,10 +4,10 @@ import { insertIncidentAlertStatement } from "../data/alert.server";
 import { closeIncident, closeIncidentsOutside, openIncident, readOpenBreakageBaselines, readOpenIncidents } from "../data/incident.server";
 import type { OwnSitePage } from "../data/page.server";
 import { readOwnSitePages } from "../data/page.server";
+import { CRAWLER_USER_AGENT, robotsAllows } from "../fetch/robots.server";
 import { computeBreakageEvidence } from "./breakage-evidence";
 import { extractPageText } from "./extract-text";
 import { ensureHomePages } from "./sweep.server";
-import { robotsAllows } from "../fetch/robots.server";
 import { BlockedRedirectError, fetchGuarded } from "../fetch/transport.server";
 
 export type OwnSiteHealth =
@@ -25,7 +25,7 @@ const PROBE_TIMEOUT_MS = 10_000;
 
 const PROBE_HEADERS = {
   accept: "text/html,application/xhtml+xml",
-  "user-agent": "FiveToNineBot/1.0 (+https://0509.io)",
+  "user-agent": CRAWLER_USER_AGENT,
 } as const;
 
 async function fetchStatus(url: string): Promise<Response | Error> {
