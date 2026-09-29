@@ -27,7 +27,7 @@ type LoginActionData =
   | { sent: { email: string; at: number }; error?: never };
 
 function signInTarget(search: URLSearchParams): string {
-  return safeReturnTo(search.get("next") || subjectRedirect(search.get("subject")));
+  return safeReturnTo(search.get("next") ?? subjectRedirect(search.get("subject")));
 }
 
 export function meta() {
