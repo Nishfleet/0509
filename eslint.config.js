@@ -599,7 +599,6 @@ export default tseslint.config(
     // app/lib/fetch/, not on this list.
     files: [
       "app/lib/liveness-ping.server.ts",
-      "app/lib/discovery/resolve-domain.server.ts",
       "app/lib/discovery/types.ts",
       "app/lib/observability/cost-analytics.server.ts",
       "app/components/share-button.tsx",

@@ -1,6 +1,7 @@
 import { getDomain } from "tldts";
 import { z } from "zod";
 
+import { fetchOutbound } from "../fetch/outbound.server";
 import { CRAWLER_USER_AGENT } from "../fetch/robots.server";
 import { readThrough } from "../identity/probe-cache.server";
 import { readPageNames } from "./page-names";
@@ -55,7 +56,7 @@ function logLookupFailure(step: "wikidata" | "slug", url: string, error: unknown
 
 async function wikidataGet(url: string): Promise<unknown> {
   try {
-    const res = await fetch(url, {
+    const res = await fetchOutbound(url, {
       headers: { "User-Agent": CRAWLER_USER_AGENT },
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     });
@@ -100,10 +101,9 @@ async function slugDomain(name: string): Promise<string | null> {
   if (slug.length === 0) return null;
 
   try {
-    const res = await fetch(`https://${slug}.com/`, {
+    const res = await fetchOutbound(`https://${slug}.com/`, {
       headers: { "User-Agent": CRAWLER_USER_AGENT },
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-      redirect: "follow",
     });
     if (!res.ok) return null;
 
