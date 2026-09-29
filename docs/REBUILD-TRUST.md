@@ -84,7 +84,7 @@ so every agent session drives the app the same way.
 | `PLAYWRIGHT_TEST_BASE_URL` | `webServer` | What runs | Where |
 |---|---|---|---|
 | unset | starts `npx wrangler dev --local` on a per-process port (8000 + pid % 1000), waits on `/api/health` | the built Worker | `preview-assert`, every PR, and `npm run e2e` on a laptop |
-| set | `undefined` | that URL | `e2e-production`, every successful deploy |
+| set | `undefined` | that URL | `e2e-scheduled.yml` (production suite, on demand) |
 
 This is the vendor's own division. `webServer`'s doc says it is for "when you
 don't have a staging or production url to test against"
@@ -461,8 +461,12 @@ can at least stop the bleeding."* A review comment that only asks for a change
 teaches one agent once; a rule teaches every agent forever.
 
 Implemented in the `opus-review` job's `prompt:` (`.github/workflows/ci.yml`) by
-PR #4255, which asks all three questions above word for word and states the
-verdict rule in its grade-capping form. The fourth question (Nish 2026-09-22,
+PR #4255, which asked all three questions above word for word and stated the
+verdict rule in its grade-capping form; that job is removed (#6091). The shared
+grader (`Nishfleet/fleet-ops` `grade.yml`) grades against the fleet bar, whose
+points 3, 5 and 2 are these three questions in its own words, and reads this
+file as the trust doc; the bar does not carry the "lint rule or a filed issue"
+verdict. The fourth question (Nish 2026-09-22,
 a pasted `## Verification` section) was removed by #4523: proof at the prose
 rung failed 37 of 39 graded PRs. The running app is proven by `preview-assert`,
 a required check that builds the Worker and runs the e2e suite at the PR head.
