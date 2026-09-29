@@ -4,7 +4,7 @@ function unknownToken(): string {
   return crypto.randomUUID().replaceAll("-", "");
 }
 
-test("an unknown unsubscribe link is a 404 that says the link is not valid (0509#5761)", async ({ page }) => {
+test("an unknown unsubscribe link is a 404 that says the link is not valid (0509#5761) @smoke", async ({ page }) => {
   const response = await page.goto(`/u/${unknownToken()}`);
   expect(response?.status()).toBe(404);
   expect(response?.headers()["cache-control"]).toBe("no-store");
@@ -13,7 +13,7 @@ test("an unknown unsubscribe link is a 404 that says the link is not valid (0509
   await expect(page.getByText("You're unsubscribed")).toHaveCount(0);
 });
 
-test("the RFC 8058 one-click POST answers 404 for an unknown token (0509#5761)", async ({ request }) => {
+test("the RFC 8058 one-click POST answers 404 for an unknown token (0509#5761) @smoke", async ({ request }) => {
   const response = await request.post(`/u/${unknownToken()}`, {
     form: { "List-Unsubscribe": "One-Click" },
     maxRedirects: 0,

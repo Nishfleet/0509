@@ -22,7 +22,7 @@ import { consoleFailures, watchConsole } from "./inbox";
 // 5aa0e76a9). What is asserted is the contract: the element exists, is
 // labelled, is enabled, or points at the right destination.
 
-test("the landing page renders its headline and its contact link", async ({ page }) => {
+test("the landing page renders its headline and its contact link @smoke", async ({ page }) => {
   const response = await page.goto("/");
   expect(response?.status()).toBe(200);
 
@@ -36,14 +36,14 @@ test("the landing page renders its headline and its contact link", async ({ page
   await expect(contact).toHaveAccessibleName(/\S/);
 });
 
-test("the rebuild notice renders in the three brand faces", async ({ page }) => {
+test("the rebuild notice renders in the three brand faces @smoke", async ({ page }) => {
   await page.goto("/");
   await expectElementFaceLoaded(page, "header .font-display");
   await expectElementFaceLoaded(page, "main p");
   await expectElementFaceLoaded(page, "footer");
 });
 
-test("the landing page does not scroll horizontally", async ({ page }) => {
+test("the landing page does not scroll horizontally @smoke", async ({ page }) => {
   await page.goto("/");
   const overflow = await page.evaluate(
     () => document.documentElement.scrollWidth > document.documentElement.clientWidth,
@@ -51,7 +51,7 @@ test("the landing page does not scroll horizontally", async ({ page }) => {
   expect(overflow).toBe(false);
 });
 
-test("the landing headline is the largest paint and uses the brand display face", async ({ page }) => {
+test("the landing headline is the largest paint and uses the brand display face @smoke", async ({ page }) => {
   await page.goto("/");
 
   const lcpTag = await page.evaluate(
@@ -76,7 +76,7 @@ test("the landing headline is the largest paint and uses the brand display face"
   expect(headlineFamily).toContain("Bricolage Grotesque");
 });
 
-test("/api/health answers ok", async ({ request }) => {
+test("/api/health answers ok @smoke", async ({ request }) => {
   const response = await request.get("/api/health");
   expect(response.status()).toBe(200);
 
@@ -86,7 +86,7 @@ test("/api/health answers ok", async ({ request }) => {
   expect(Number.isNaN(Date.parse(body.timestamp))).toBe(false);
 });
 
-test("the login page renders the one input that signs you in", async ({ page }) => {
+test("the login page renders the one input that signs you in @smoke", async ({ page }) => {
   const response = await page.goto("/login");
   expect(response?.status()).toBe(200);
 
@@ -109,7 +109,7 @@ test("the login page renders the one input that signs you in", async ({ page }) 
   await expect(contact).toHaveAccessibleName(/\S/);
 });
 
-test("the page reaches first paint with no console errors", async ({ page }, testInfo) => {
+test("the page reaches first paint with no console errors @smoke", async ({ page }, testInfo) => {
   const watched = watchConsole(page);
 
   await page.goto("/");
