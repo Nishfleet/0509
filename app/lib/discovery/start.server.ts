@@ -55,6 +55,6 @@ export async function readDiscoveryState(workspaceId: string, now: Date): Promis
     return discoveryStateFor(status);
   } catch (error) {
     console.warn(JSON.stringify({ event: "discovery.status_unread", message: String(error) }));
-    return "unavailable";
+    return "looking";
   }
 }
