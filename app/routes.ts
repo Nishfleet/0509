@@ -4,6 +4,7 @@ export default [
   route("login", "routes/login.tsx"),
   route("privacy", "routes/privacy.tsx"),
   route("terms", "routes/terms.tsx"),
+  route("pricing", "routes/pricing.tsx"),
   route("robots.txt", "routes/robots[.]txt.ts"),
   route("sitemap.xml", "routes/sitemap[.]xml.ts"),
   layout("routes/app-layout.tsx", [

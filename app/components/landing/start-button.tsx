@@ -1,4 +1,5 @@
 import { monthlyPrice, PLANS } from "../../lib/billing/plans";
+import type { StartSource } from "../../lib/pricing-page";
 import { buttonVariants } from "../ui/button";
 
 const [scout] = PLANS;
@@ -14,9 +15,9 @@ export function StartWatchingLabel() {
   );
 }
 
-export function StartButton() {
+export function StartButton({ source = null }: { source?: StartSource | null }) {
   return (
-    <a href="/login" className={buttonVariants({ variant: "primary", size: "lg" })}>
+    <a href={source === null ? "/login" : `/login?utm_source=${source}`} className={buttonVariants({ variant: "primary", size: "lg" })}>
       <StartWatchingLabel />
     </a>
   );

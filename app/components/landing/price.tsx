@@ -1,5 +1,6 @@
 import { type PlanId, PLANS, TRIAL_TERMS } from "../../lib/billing/plans";
 import { type CoverageId, isLive } from "../../lib/coverage";
+import type { StartSource } from "../../lib/pricing-page";
 import { cn } from "../../lib/utils";
 import { eyebrow, Section } from "./section";
 import { StartButton } from "./start-button";
@@ -34,7 +35,7 @@ function includes(plan: PlanId): string[] {
   );
 }
 
-export function Price() {
+export function Price({ source = null }: { source?: StartSource | null }) {
   return (
     <Section
       id="price"
@@ -64,7 +65,7 @@ export function Price() {
         ))}
       </ul>
       <div className="mt-10 flex flex-col gap-4 sm:flex-row sm:items-center sm:gap-6">
-        <StartButton />
+        <StartButton source={source} />
         <p className="max-w-[36rem] font-mono text-meta text-ink-soft">
           {TRIAL_TERMS} Change plan any time from Settings.
         </p>
