@@ -7,7 +7,7 @@ test.skip(
   "J14 needs a real session; the local preview Worker can neither send nor receive email",
 );
 
-test("J14: a fresh account deleted from settings leaves nothing signed in and its files removed", async ({
+test("J14: a fresh account deleted from settings leaves nothing signed in and its files removed @own-signin", async ({
   page,
 }) => {
   const email = `e2e+${crypto.randomUUID().replaceAll("-", "").slice(0, 12)}@0509.io`;

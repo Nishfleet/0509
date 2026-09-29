@@ -28,7 +28,7 @@ test.describe("J4 onboard a creator handle", () => {
     { width: 1440, height: 900 },
     { width: 390, height: 844 },
   ]) {
-    test(`J4 a creator handle onboards at ${width}`, async ({ page }, testInfo) => {
+    test(`J4 a creator handle onboards at ${width} @own-signin`, async ({ page }, testInfo) => {
       test.setTimeout(240_000);
       const token = requireInboxToken();
       const email = `e2e+${crypto.randomUUID().replaceAll("-", "").slice(0, 12)}@0509.io`;

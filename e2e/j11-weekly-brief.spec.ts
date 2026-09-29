@@ -136,7 +136,7 @@ function assertOrder(text: string, markers: readonly string[]): void {
   }
 }
 
-test("the weekly brief arrives from the inbox, in order, and unsubscribe stops the next one", async ({ page }, testInfo) => {
+test("the weekly brief arrives from the inbox, in order, and unsubscribe stops the next one @own-signin", async ({ page }, testInfo) => {
   test.setTimeout(480_000);
   test.skip(testInfo.project.name === "phone-390", "one production brief; the HTML is checked at 600 px");
 
