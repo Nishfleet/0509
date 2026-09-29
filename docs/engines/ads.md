@@ -91,13 +91,13 @@ This replaces #3891's stated order (Meta, then Google, then "one adapter per rem
 | Step | Reads | Writes |
 |---|---|---|
 | Select | `watch JOIN entity WHERE entity.state='on'` and `source.kind='ads'` | — |
-| Collect | `source` (descriptor, rate limit, reliability) | R2: the raw payload per (watch, tick); `snapshot`: **one row** per watch per tick with `payload_r2_key`, `payload_hash`, `item_count`, `fetched_at` |
+| Collect | `source` (descriptor, rate limit, reliability) | R2: the raw payload per (watch, tick); `snapshot`: **one row** per watch per tick with `payload_r2_key`, `payload_hash`, `item_count`, `fetched_at`, paired in the same `batch()` with the `source` latest-facts update |
 | Diff the ad set | the previous `snapshot.payload_hash` for that watch | nothing when the hash is unchanged — no creative rows, no screenshots, no Jev |
 | New creatives | — | `signal` rows, `kind='ad'`, one **per creative**, never per impression or per element; the creative screenshot and image go to R2 by key |
 | Dedup | existing `signal` rows for the entity | `jev_verdict` (D8) only for the cross-platform / re-upload case |
 | Materiality | `signal` history | `jev_verdict` (D6-style), and `alert` only when the verdict passes |
 
-**The two rules this table exists to enforce** (`REBUILD-COST.md`): one `snapshot` row per watch per tick, and never a row per observed element. A brand running 400 live creatives writes **one** snapshot row on an unchanged tick, and on a changed tick writes only the creatives that are new. The $105 rows-written bill of 2026-09-17 was the other shape.
+**The two rules this table exists to enforce** (`REBUILD-COST.md`): one `snapshot` row per watch per tick (paired in the same batch with one `source` latest-facts update), and never a row per observed element. A brand running 400 live creatives writes **one** snapshot row on an unchanged tick, and on a changed tick writes only the creatives that are new. The $105 rows-written bill of 2026-09-17 was the other shape.
 
 ## Workflow / Queue / cron layout
 
@@ -145,13 +145,13 @@ Per 1,000 ad pulls, priced from `REBUILD-COST.md` (2026-09-21):
 | Fetch pull (Reddit, TikTok API once approved) | subrequests | 1,000 — free |
 | Queue | 1 message × 3 ops, plus retries | 3,000 ops — **$0.0012** |
 | R2 | 1 payload PUT + ~2 creative image PUTs on a changed tick | ~3,000 Class A (**$0.0135**), ~0.5 GB-mo (**$0.008**) |
-| D1 | 1 snapshot row always + ~2 signal rows on a changed tick (~30% of ticks) | ~1,600 rows — **0.003% of the 50M included** |
+| D1 | 1 snapshot row always + 1 `source` latest-facts row (both planned — no ads snapshot writer on main yet) + ~2 signal rows on a changed tick (~30% of ticks) | ~2,600 rows — **0.005% of the 50M included** |
 | Jev | ≤2 calls per changed pull ≈ 600 | $0 on the seat, **$0.0096** at the measured market rate |
 
 **Monthly at 100 brands**, daily cadence, Meta + Google browser plus Reddit fetch:
 
 - Browser: 100 × 2 × 6.97 s × 30 = **11.6 browser-hours** → 1.6 h beyond the allotment → **$0.15/month**.
-- D1: 100 × 3 × 30 = 9,000 snapshot rows + ~1,800 signal rows = **10,800 rows written**, 0.02% of the 50M included → **$0.00**.
+- D1: 100 × 3 × 30 = 9,000 snapshot + 9,000 `source` latest-facts rows (planned — no ads snapshot writer on main yet) + ~1,800 signal rows = **19,800 rows written**, 0.04% of the 50M included → **$0.00**.
 - R2: ~27,000 Class A ops → **$0.12**; ~4 GB stored under the 1-year guardrail retention → **$0.06**.
 - Queues: 27,000 ops → **$0.01**.
 - Jev: ~1,800 calls → **$0 on the seat**, $0.03 at market.
@@ -232,11 +232,11 @@ Per 1,000 ad pulls, priced from `REBUILD-COST.md` (2026-09-21):
 
 **FORBIDDEN.** A row per observed element — the $105 anti-pattern, named here so it cannot be claimed it was not known. Base64ing an image into a D1 row. Calling D8 for exact `(platform, ad_archive_id)` matches — that is arithmetic. Awaiting prepared statements in a loop instead of `batch()`. Any hand-rolled fuzzy matching beyond the stored normalised hashes that feed D8.
 
-**PROOF REQUIRED.** A real brand's pull shown writing exactly one snapshot row plus N signal rows where N is the count of genuinely new creatives, with the row ids and the D1 rows-written figure for the run. One D8 verdict on a real near-duplicate with its probability, and one exact-id duplicate shown collapsing **without** a Jev call.
+**PROOF REQUIRED.** A real brand's pull shown writing exactly one snapshot row, its paired `source` latest-facts row, plus N signal rows where N is the count of genuinely new creatives, with the row ids and the D1 rows-written figure for the run. One D8 verdict on a real near-duplicate with its probability, and one exact-id duplicate shown collapsing **without** a Jev call.
 
 **PUSH.** `wip/issue-3891-p4`.
 
-**COST.** State D1 rows written per pull and the monthly total at 100 brands. It must not exceed 1 snapshot row + new creatives.
+**COST.** State D1 rows written per pull and the monthly total at 100 brands. It must not exceed 1 snapshot row + 1 `source` latest-facts row + new creatives.
 
 ### P5 — Reddit (fetch) and Google (browser) as rows
 

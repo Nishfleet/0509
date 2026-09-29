@@ -326,7 +326,7 @@ Plus the mentions engine's six sources (`REBUILD-MENTIONS.md`), which are platfo
 
 ## Cost of the zero-spend set
 
-All four MVP routes are plain `fetch` from the Worker. At **100 tracked creators on a daily cadence** that is 400 requests/day ≈ **12,000/month**, against the Workers Paid allowance of 10M requests/month — **0.12%**, effectively free. Per `REBUILD-SCHEMA.md` each poll writes **one `snapshot` row per watch per tick** (400 D1 rows/day, ~12,000/month against 50M included rows-written) with the body in R2.
+All four MVP routes are plain `fetch` from the Worker. At **100 tracked creators on a daily cadence** that is 400 requests/day ≈ **12,000/month**, against the Workers Paid allowance of 10M requests/month — **0.12%**, effectively free. Per `REBUILD-SCHEMA.md` each poll writes **one `snapshot` row per watch per tick plus its paired `source` latest-facts update** (800 D1 rows/day, ~24,000/month against 50M included rows-written) with the body in R2.
 
 The one route with a real unit cost is **Browser Run**, and none of the four MVP routes needs it. Two adjacent jobs do: YouTube channel-id resolution (a 2 MB bot-gated page, **once per creator, cached forever**) and any future TikTok profile-grid route. At 10 h/month included and $0.09/hour after (`REBUILD-STACK.md` §4.3), one-off resolution for 100 creators is noise; a daily TikTok grid render for 100 creators is not, and would need its own budget line before anyone builds it.
 

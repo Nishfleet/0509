@@ -465,8 +465,13 @@ describe("readCachedSiteProof", () => {
     await expect(readCachedSiteProof(subject)).resolves.toEqual({ adLibraryHints: [], navLinks: [] });
   });
 
-  it("throws when the cached entry does not match the site card", async () => {
+  it("returns empty hints when the cached entry does not match the site card", async () => {
     await env.IDENTITY_CACHE.put(key, JSON.stringify({ name: 1 }));
-    await expect(readCachedSiteProof(subject)).rejects.toThrow();
+    await expect(readCachedSiteProof(subject)).resolves.toEqual({ adLibraryHints: [], navLinks: [] });
+  });
+
+  it("returns empty hints when the cached entry is an unrelated object", async () => {
+    await env.IDENTITY_CACHE.put(key, JSON.stringify({ bad: true }));
+    await expect(readCachedSiteProof(subject)).resolves.toEqual({ adLibraryHints: [], navLinks: [] });
   });
 });
