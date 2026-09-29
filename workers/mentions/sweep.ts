@@ -14,6 +14,7 @@ import type { NoulQuestion, NoulVerdict } from "../../app/lib/jev/client.server"
 import { askNoul, JevUnavailableError } from "../../app/lib/jev/client.server";
 import { lookupYoutubeChannel } from "../../app/lib/identity/youtube-channel.server";
 import { noulAction } from "../../app/lib/jev/thresholds";
+import { mentionReasonLine, MENTION_MATTERS_WHEN_FALSE, MENTION_MATTERS_WHEN_TRUE } from "../../app/lib/mentions/reason-customer";
 import {
   readWatchConfig,
   withLostChannel,
@@ -59,8 +60,8 @@ const MATTERS: NoulQuestion = {
   id: "mention_matters",
   instructions:
     "Would the owner of `self` want to know about this mention of `subject` this week? It matters when it shows a move: a launch, a price or offer change, funding, a deal, a hire or exit at the top, an expansion, a campaign, a controversy or a big review.",
-  whenTrue: "It reports a move or an event a competitor-watcher would act on or bring up.",
-  whenFalse: "It is a passing mention, a listicle entry, a stock ticker line, or old news retold.",
+  whenTrue: MENTION_MATTERS_WHEN_TRUE,
+  whenFalse: MENTION_MATTERS_WHEN_FALSE,
 };
 
 export async function planTargets(): Promise<MentionTarget[]> {
@@ -138,7 +139,7 @@ function judgedStatements(input: {
   now: string;
 }): D1PreparedStatement[] {
   const { watch, signalId, item, verdicts, now } = input;
-  const verdictRow = (verdict: NoulVerdict) =>
+  const verdictRow = (verdict: NoulVerdict, reason: string | null) =>
     insertVerdict({
       workspaceId: watch.workspace_id,
       questionId: verdict.questionId,
@@ -147,12 +148,12 @@ function judgedStatements(input: {
       entityId: watch.entity_id,
       p: verdict.p,
       choice: null,
-      reason: null,
+      reason,
       decidedAt: now,
     });
-  const statements = [verdictRow(verdicts.about)];
+  const statements = [verdictRow(verdicts.about, null)];
   if (verdicts.matters === null) return statements;
-  statements.push(verdictRow(verdicts.matters));
+  statements.push(verdictRow(verdicts.matters, mentionReasonLine(noulAction(verdicts.matters.p))));
   if (noulAction(verdicts.matters.p) === "act") {
     statements.push(
       insertSignalAlert(env.DB, {
