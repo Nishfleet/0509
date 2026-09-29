@@ -8,7 +8,7 @@ import { CRAWLER_USER_AGENT, robotsAllows } from "../fetch/robots.server";
 import { computeBreakageEvidence } from "./breakage-evidence";
 import { extractPageText } from "./extract-text";
 import { ensureHomePages } from "./sweep.server";
-import { BlockedRedirectError, fetchGuarded } from "../fetch/transport.server";
+import { BlockedRedirectError, fetchGuarded } from "../fetch/guarded-fetch.server";
 
 export type OwnSiteHealth =
   | { state: "healthy" }

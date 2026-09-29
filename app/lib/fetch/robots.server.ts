@@ -1,6 +1,6 @@
 import robotsParser from "robots-parser";
 
-import { fetchGuarded } from "./transport.server";
+import { fetchGuarded } from "./guarded-fetch.server";
 
 const ROBOTS_TIMEOUT_MS = 5_000;
 
