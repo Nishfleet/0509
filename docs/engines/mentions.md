@@ -31,7 +31,7 @@ A target that throws is logged as `mentions.target_failed` and counted as `faile
 - `planTargets()` reads `app/lib/data/watch.server.ts` `readActiveWatches("mentions")` and groups them by `(source_id, target_key)`, returning one `MentionTarget` per `(plugin, target_key)`.
 - `sweepTarget(target, now)`:
   1. Looks up the adapter (`adapterFor(pluginKey)` from `workers/sources/registry.ts`); throws if missing.
-  2. Calls the adapter once with a request timeout that defaults to 8000 ms (`fetchUpstream` in `workers/sources/mentions/types.ts`); the GDELT adapter passes 30000 ms.
+  2. Calls the adapter once per target; `fetchUpstream` in `workers/sources/mentions/types.ts` bounds each request attempt at 8000 ms by default, while `gdelt.doc` reads `SOURCE_SETTINGS` — 24000 ms per attempt (measured p95 plus margin under a 25 s cap) and one retry on timeout after a 1 s backoff, so one sweep step waits up to ~49 s inside the Workflow step's own retry.
   3. Filters items to those with non-empty titles.
   4. Computes `hash = sha256(rawBody)`.
   5. Writes the body to **R2** at `snapshot/mentions/<plugin_key>/<hash>` via `env.SNAPSHOTS.put` (unconditional; a re-poll with an unchanged body re-PUTs the same key).
@@ -64,7 +64,7 @@ workers/mentions/map.ts                            # toSignalRow: adapter item -
 workers/workflows/mentions.ts                      # MentionsSweep Workflow class (one step per target)
 workers/app.ts                                     # exports the Workflow class bound to wrangler.jsonc MENTIONS
 workers/sources/registry.ts                        # adapter dispatch by plugin_key
-workers/sources/mentions/types.ts                  # mentionsResultSchema, fetchUpstream (default 8 s AbortSignal; GDELT 30 s)
+workers/sources/mentions/types.ts                  # mentionsResultSchema, fetchUpstream (default 8 s AbortSignal; gdelt.doc 24 s + one retry via SOURCE_SETTINGS)
 workers/sources/mentions/feed.ts                   # @extractus/feed-extractor wrapper used by youtube / medium
 workers/sources/mentions/gdelt.ts                  # gdelt.doc adapter
 workers/sources/mentions/hn.ts                     # hn.algolia adapter
