@@ -5,7 +5,7 @@ import { insertSignalAlert } from "../../app/lib/data/alert.server";
 import type { DiscoveryContext } from "../../app/lib/data/entity.server";
 import { readDiscoveryContext, readEntityIdentityJson } from "../../app/lib/data/entity.server";
 import { insertVerdict } from "../../app/lib/data/jev_verdict.server";
-import { insertMention, readSeenDedupKeys } from "../../app/lib/data/signal.server";
+import { insertMention, readSeenDedupKeys, readUnjudgedMentions, resolveUnjudgedMention } from "../../app/lib/data/signal.server";
 import { insertWatchSnapshot } from "../../app/lib/data/snapshot.server";
 import { markSourceBlocked, markSourceTimedOut } from "../../app/lib/data/source.server";
 import type { WatchRow } from "../../app/lib/data/watch.server";
@@ -83,7 +83,9 @@ function subjectOf(watch: WatchRow) {
   return { name: watch.name, domain: watch.domain, role: watch.role };
 }
 
-function itemOf(item: MentionItem, reliability: string) {
+type JudgedItem = Pick<MentionItem, "title" | "url" | "publishedAt" | "publisher">;
+
+function itemOf(item: JudgedItem, reliability: string) {
   return {
     title: item.title,
     publisher: item.publisher ?? null,
@@ -96,7 +98,7 @@ function itemOf(item: MentionItem, reliability: string) {
 async function judge(
   watch: WatchRow,
   context: DiscoveryContext,
-  item: MentionItem,
+  item: JudgedItem,
 ): Promise<{ about: NoulVerdict; matters: NoulVerdict | null }> {
   const subject = subjectOf(watch);
   const about = await askNoul(watch.workspace_id, ABOUT_BRAND, {
@@ -111,6 +113,80 @@ async function judge(
     item: itemOf(item, watch.reliability),
   });
   return { about, matters };
+}
+
+async function judgeOrNull(
+  watch: WatchRow,
+  context: DiscoveryContext,
+  item: JudgedItem,
+): Promise<{ about: NoulVerdict; matters: NoulVerdict | null } | null> {
+  try {
+    return await judge(watch, context, item);
+  } catch (error) {
+    if (!(error instanceof JevUnavailableError)) throw error;
+    console.error(JSON.stringify({ event: "mentions.jev_unavailable", message: error.message }));
+    return null;
+  }
+}
+
+function judgedStatements(input: {
+  watch: WatchRow;
+  signalId: string;
+  item: JudgedItem;
+  verdicts: { about: NoulVerdict; matters: NoulVerdict | null };
+  now: string;
+}): D1PreparedStatement[] {
+  const { watch, signalId, item, verdicts, now } = input;
+  const verdictRow = (verdict: NoulVerdict) =>
+    insertVerdict({
+      workspaceId: watch.workspace_id,
+      questionId: verdict.questionId,
+      inputHash: verdict.inputHash,
+      signalId,
+      entityId: watch.entity_id,
+      p: verdict.p,
+      choice: null,
+      reason: null,
+      decidedAt: now,
+    });
+  const statements = [verdictRow(verdicts.about)];
+  if (verdicts.matters === null) return statements;
+  statements.push(verdictRow(verdicts.matters));
+  if (noulAction(verdicts.matters.p) === "act") {
+    statements.push(
+      insertSignalAlert(env.DB, {
+        workspaceId: watch.workspace_id,
+        entityId: watch.entity_id,
+        signalId,
+        kind: "mention",
+        title: `${watch.name}: ${item.title}`,
+        body: item.publisher ?? null,
+        createdAt: now,
+      }),
+    );
+  }
+  return statements;
+}
+
+async function rejudgeUnjudged(
+  watch: WatchRow,
+  context: DiscoveryContext,
+  now: string,
+): Promise<{ statements: D1PreparedStatement[]; stored: number; attempted: number; jevDown: boolean }> {
+  const pending = await readUnjudgedMentions(watch.watch_id, JUDGED_PER_WATCH);
+  const statements: D1PreparedStatement[] = [];
+  let stored = 0;
+  for (const row of pending) {
+    const verdicts = await judgeOrNull(watch, context, row);
+    if (verdicts === null) return { statements, stored, attempted: pending.length, jevDown: true };
+    const rejected = noulAction(verdicts.about.p) === "reject";
+    statements.push(
+      resolveUnjudgedMention(row.id, rejected),
+      ...judgedStatements({ watch, signalId: row.id, item: row, verdicts, now }),
+    );
+    if (!rejected) stored += 1;
+  }
+  return { statements, stored, attempted: pending.length, jevDown: false };
 }
 
 async function statementsForWatch(input: {
@@ -131,7 +207,7 @@ async function statementsForWatch(input: {
     watch.source_id,
     keyed.map((entry) => entry.dedupKey),
   );
-  const fresh = keyed.filter((entry) => !seen.has(entry.dedupKey)).slice(0, JUDGED_PER_WATCH);
+  const fresh = keyed.filter((entry) => !seen.has(entry.dedupKey));
   const statements: D1PreparedStatement[] = [
     ...insertWatchSnapshot({
       id: snapshotId,
@@ -145,16 +221,13 @@ async function statementsForWatch(input: {
   ];
   let stored = 0;
   let unjudged = 0;
-  for (const [index, { item }] of fresh.entries()) {
-    let verdicts: Awaited<ReturnType<typeof judge>>;
-    try {
-      verdicts = await judge(watch, context, item);
-    } catch (error) {
-      if (!(error instanceof JevUnavailableError)) throw error;
-      unjudged = fresh.length - index;
-      console.error(JSON.stringify({ event: "mentions.jev_unavailable", message: error.message }));
-      break;
-    }
+  const rejudged = await rejudgeUnjudged(watch, context, now);
+  statements.push(...rejudged.statements);
+  stored += rejudged.stored;
+  let jevDown = rejudged.jevDown;
+  const freshBudget = jevDown ? JUDGED_PER_WATCH : JUDGED_PER_WATCH - rejudged.attempted;
+  for (const { item } of fresh.slice(0, freshBudget)) {
+    const verdicts = jevDown ? null : await judgeOrNull(watch, context, item);
     const mapped = await toSignalRow(item, {
       workspaceId: watch.workspace_id,
       entityId: watch.entity_id,
@@ -165,19 +238,7 @@ async function statementsForWatch(input: {
     });
     const dedupKey = storedDedupKey(watch.entity_id, mapped.dedup_key);
     const signalId = `sig-${(await sha256Hex(`${watch.source_id}:${dedupKey}`)).slice(0, 32)}`;
-    const rejected = noulAction(verdicts.about.p) === "reject";
-    const verdictRow = (verdict: NoulVerdict) =>
-      insertVerdict({
-        workspaceId: watch.workspace_id,
-        questionId: verdict.questionId,
-        inputHash: verdict.inputHash,
-        signalId,
-        entityId: watch.entity_id,
-        p: verdict.p,
-        choice: null,
-        reason: null,
-        decidedAt: now,
-      });
+    const rejected = verdicts !== null && noulAction(verdicts.about.p) === "reject";
     statements.push(
       insertMention({
         id: signalId,
@@ -196,25 +257,16 @@ async function statementsForWatch(input: {
         publishedAt: mapped.published_at,
         observedAt: mapped.observed_at,
         isNotAboutBrand: rejected,
+        state: verdicts === null ? "unjudged" : "judged",
       }),
-      verdictRow(verdicts.about),
     );
-    if (rejected) continue;
-    if (verdicts.matters !== null) statements.push(verdictRow(verdicts.matters));
-    if (verdicts.matters !== null && noulAction(verdicts.matters.p) === "act") {
-      statements.push(
-        insertSignalAlert(env.DB, {
-          workspaceId: watch.workspace_id,
-          entityId: watch.entity_id,
-          signalId,
-          kind: "mention",
-          title: `${watch.name}: ${item.title}`,
-          body: item.publisher ?? null,
-          createdAt: now,
-        }),
-      );
+    if (verdicts === null) {
+      jevDown = true;
+      unjudged += 1;
+      continue;
     }
-    stored += 1;
+    statements.push(...judgedStatements({ watch, signalId, item, verdicts, now }));
+    if (!rejected) stored += 1;
   }
   return { statements, stored, unjudged };
 }

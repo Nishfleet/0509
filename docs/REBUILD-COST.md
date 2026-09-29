@@ -133,3 +133,11 @@ No design in this document approaches that: the largest here is 600,000 D1 rows 
 - Blobs — screenshots, raw payloads, HTML — in **R2**, never base64 into a D1 row.
 - Hot counters (poll cursors, budgets, tallies) in **KV or a Durable Object**, never a D1 write per increment.
 - Billing notifications set at **$10 and $25**, so the first surprise arrives as an email rather than as an invoice.
+
+## What the nightly cost guard measures, and what it refuses to
+
+The guard (`app/lib/observability/cost-guard.ts`, called by `runCostGuard`) divides the day's usage by the count of ON **competitor** brands — `role = 'competitor' AND state = 'on'`. The workspace's own `self` entity row is not a brand in the divisor: the schema CHECK (`role = 'competitor' OR state = 'on'`) forces every `self` row to `on`, so counting `state = 'on'` alone made the divisor `competitors_on + workspaces_self` and diluted both `measured_per_brand` and the alert's `on_brands` (0509#6086).
+
+The guard does **not** evaluate `browser_ms`, and that is a declared gap, not an oversight. The only Browser Rendering duration dataset (`browserRenderingBrowserTimeUsageAdaptiveGroups`) carries no script dimension, so its daily total is the whole account's, not worker `0509`'s alone — dividing an account-wide total by 0509's brand count and comparing it to the 15 browser-seconds per-brand figure would report a 0509 breach caused by another worker's browser use. The 15 browser-seconds per-brand figure remains the design budget in this document, but the guard only alerts on the two lines that are attributable to 0509 (`d1_rows_written`, `r2_class_a_ops`).
+
+**mechanism-partial (0509#6086):** no in-repo alert covers browser spend. The mechanism that does cover it is the Cloudflare billing notification at $10 and $25 named in the guardrails above, and that is an account setting outside this repo — it is not asserted by any test here, so this document is the only record that the replacement exists. A repository-visible account-level browser check needs a Cloudflare dataset that carries a script dimension; the duration dataset has none, so the alert is deferred until one exists or a spend ceiling is enforced in the Worker. The integration test `does not alert on browser_ms` pins the exclusion itself, so re-adding the line to `LINES` fails that test.

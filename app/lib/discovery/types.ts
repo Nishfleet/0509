@@ -1,4 +1,4 @@
-export type GeneratorKey = "news" | "hn" | "ads";
+export type GeneratorKey = "news" | "hn" | "ads" | "ai";
 
 interface Evidence {
   sourceUrl: string;
@@ -15,6 +15,7 @@ interface Candidate {
 interface Subject {
   name: string;
   domain: string;
+  description?: string | null;
 }
 
 interface FetchedText {
@@ -31,10 +32,10 @@ type Generator = (subject: Subject, fetchText?: FetchText) => Promise<Candidate[
 
 export type { Candidate, Evidence, FetchText, FetchedText, Generator, Subject };
 
-export function defaultFetchText(event: string): FetchText {
+export function defaultFetchText(event: string, timeoutMs = 8_000): FetchText {
   return async (url) => {
     try {
-      const response = await fetch(url, { signal: AbortSignal.timeout(8_000) });
+      const response = await fetch(url, { signal: AbortSignal.timeout(timeoutMs) });
       return {
         ok: response.ok,
         status: response.status,

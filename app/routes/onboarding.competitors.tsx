@@ -1,6 +1,6 @@
 import type { Route } from "./+types/onboarding.competitors";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { Form, redirect, useRevalidator } from "react-router";
 
 import { AddCompetitor, CompetitorMaybes } from "../components/competitor-maybes";
@@ -11,11 +11,13 @@ import { handleCompetitorIntent } from "../lib/competitors.server";
 import { readOnboardingCompetitors } from "../lib/data/entity.server";
 import { markCompetitorsReady, markWatchingStarted } from "../lib/data/onboarding_run.server";
 import { readWorkspaceIdForOwner } from "../lib/data/workspace.server";
-import { isDiscoveryActive } from "../lib/discovery/start.server";
+import { readDiscoveryState } from "../lib/discovery/start.server";
+import { discoveryNotice, type DiscoveryState } from "../lib/discovery/state";
 import { requireSession } from "../lib/require-session.server";
 import { ONBOARDING_COMPETITORS, workspaceLandingForRequest } from "../lib/workspace.server";
 
 const POLL_MS = 3000;
+const MAX_POLLS = 60;
 
 async function workspaceFor(request: Request): Promise<string> {
   const session = await requireSession(request);
@@ -28,14 +30,14 @@ async function workspaceFor(request: Request): Promise<string> {
 
 export async function loader({ request }: Route.LoaderArgs) {
   const workspaceId = await workspaceFor(request);
-  const [competitors, searching] = await Promise.all([
+  const [competitors, discovery] = await Promise.all([
     readOnboardingCompetitors(workspaceId),
-    isDiscoveryActive(workspaceId, new Date()),
+    readDiscoveryState(workspaceId, new Date()),
   ]);
   if (competitors.on.length + competitors.maybes.length > 0) {
     await markCompetitorsReady(workspaceId, new Date().toISOString());
   }
-  return { ...competitors, searching };
+  return { ...competitors, discovery };
 }
 
 export async function action({ request }: Route.ActionArgs) {
@@ -48,13 +50,16 @@ export async function action({ request }: Route.ActionArgs) {
   return handleCompetitorIntent(workspaceId, form);
 }
 
-export default function Page({ loaderData, actionData }: Route.ComponentProps) {
-  const { on, maybes, searching } = loaderData;
+function useDiscoveryPolling(discovery: DiscoveryState): DiscoveryState {
+  const [polls, setPolls] = useState(0);
+  const stalled = polls >= MAX_POLLS;
+  const searching = discovery === "looking" && !stalled;
   const revalidator = useRevalidator();
 
   useEffect(() => {
     if (!searching) return;
     const id = setInterval(() => {
+      setPolls((count) => count + 1);
       if (revalidator.state === "idle") void revalidator.revalidate();
     }, POLL_MS);
     return () => {
@@ -62,18 +67,20 @@ export default function Page({ loaderData, actionData }: Route.ComponentProps) {
     };
   }, [revalidator, searching]);
 
+  return stalled && discovery === "looking" ? "unavailable" : discovery;
+}
+
+export default function Page({ loaderData, actionData }: Route.ComponentProps) {
+  const { on, maybes, discovery } = loaderData;
+  const notice = discoveryNotice(useDiscoveryPolling(discovery), on.length + maybes.length);
+
   return (
     <OnboardingFrame step={3} heading="Who you're up against">
-      {searching ? (
+      {notice === null ? null : (
         <p role="status" className="mt-3 max-w-prose leading-[1.55] text-ink-soft">
-          We're reading the news for brands named alongside you. They appear here as we find them.
+          {notice}
         </p>
-      ) : null}
-      {!searching && on.length === 0 && maybes.length === 0 ? (
-        <p role="status" className="mt-3 max-w-prose leading-[1.55] text-ink-soft">
-          We didn't find anyone named alongside you yet. Add one you know and we'll keep looking every night.
-        </p>
-      ) : null}
+      )}
       {on.length === 0 ? null : (
         <ul aria-label="Watching" aria-live="polite" aria-relevant="additions" className="mt-8 border-b border-line">
           {on.map((competitor) => (

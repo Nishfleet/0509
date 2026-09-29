@@ -1,6 +1,7 @@
 import { env } from "cloudflare:workers";
 
 import { readSelfWorkspaceIds } from "../data/entity.server";
+import { discoveryStateFor, type DiscoveryState } from "./state";
 
 export interface DiscoveryParams {
   workspaceId: string;
@@ -10,8 +11,6 @@ export interface DiscoveryParams {
 const BATCH_LIMIT = 100;
 
 export { WEEKLY_REFRESH_CRON } from "../cadence";
-
-const ACTIVE = new Set(["queued", "running", "waiting", "waitingForPause"]);
 
 function discoveryInstanceId(workspaceId: string, now: Date, mode: "create" | "refresh"): string {
   const date = now.toISOString().slice(0, 10);
@@ -49,13 +48,13 @@ export async function startWeeklyRefresh(now: Date): Promise<number> {
   return startAll(now, "refresh");
 }
 
-export async function isDiscoveryActive(workspaceId: string, now: Date): Promise<boolean> {
+export async function readDiscoveryState(workspaceId: string, now: Date): Promise<DiscoveryState> {
   try {
     const instance = await env.DISCOVERY.get(discoveryInstanceId(workspaceId, now, "create"));
     const { status } = await instance.status();
-    return ACTIVE.has(status);
+    return discoveryStateFor(status);
   } catch (error) {
     console.warn(JSON.stringify({ event: "discovery.status_unread", message: String(error) }));
-    return false;
+    return "looking";
   }
 }

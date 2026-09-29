@@ -246,7 +246,7 @@ export async function readWorkspaceMentionSources(
   }));
 }
 
-const SELECT_REGISTRY_SOURCES = `SELECT s.key, s.plugin_key, s.platform, s.kind, s.is_enabled, s.config_json, s.degraded_reason, s.last_good_at, (SELECT MAX(sn.fetched_at) FROM snapshot sn JOIN watch w ON w.id = sn.watch_id WHERE w.source_id = s.id) AS fetched_at, (SELECT sn.item_count FROM snapshot sn JOIN watch w ON w.id = sn.watch_id WHERE w.source_id = s.id ORDER BY sn.fetched_at DESC LIMIT 1) AS item_count, (SELECT sn.canary_count FROM snapshot sn JOIN watch w ON w.id = sn.watch_id WHERE w.source_id = s.id ORDER BY sn.fetched_at DESC LIMIT 1) AS canary_count FROM source s ORDER BY s.kind, s.key`;
+export const SELECT_REGISTRY_SOURCES = `SELECT s.key, s.plugin_key, s.platform, s.kind, s.is_enabled, s.config_json, s.degraded_reason, s.last_good_at, s.latest_fetched_at AS fetched_at, s.latest_item_count AS item_count, s.latest_canary_count AS canary_count FROM source s ORDER BY s.kind, s.key`;
 
 interface RegistrySourceRow {
   key: string;
