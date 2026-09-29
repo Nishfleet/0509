@@ -35,8 +35,8 @@ describe("landing LCP critical path", () => {
     expect(html).toContain("Know where you stand.");
     expect(html).toContain('rel="preload"');
     expect(html).toContain("/fonts/bricolage-hero.woff2");
+    expect(html).toContain("/fonts/instrument-sans-latin.woff2");
     expect(html).not.toContain("bricolage-grotesque-latin");
-    expect(html).not.toContain("instrument-sans");
     expect(html).not.toContain('type="module"');
     expect(html).not.toContain("modulepreload");
   });
