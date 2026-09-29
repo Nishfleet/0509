@@ -7,6 +7,14 @@ export interface DailyUsage {
   browserMs: number;
 }
 
+/**
+ * Documented per-brand daily budgets from docs/REBUILD-COST.md.
+ * `browser_ms` is included for documentation but is NOT evaluated by the guard
+ * because the Cloudflare browser-rendering dataset has no script dimension —
+ * its daily total is account-wide, not worker 0509's alone. Dividing that
+ * account-wide total by 0509's brand count and comparing it to a per-brand
+ * budget would report a 0509 breach from another worker's browser use.
+ */
 export const EXPECTED_PER_BRAND_DAY: Readonly<Record<CostLine, number>> = {
   d1_rows_written: 10,
   r2_class_a_ops: 10,
@@ -23,7 +31,8 @@ export interface CostBreach {
   onBrands: number;
 }
 
-const LINES: readonly CostLine[] = ["d1_rows_written", "r2_class_a_ops", "browser_ms"];
+/** Lines the guard evaluates for per-brand breaches. `browser_ms` is excluded — see EXPECTED_PER_BRAND_DAY comment. */
+const LINES: readonly CostLine[] = ["d1_rows_written", "r2_class_a_ops"];
 
 const MEASURED: Readonly<Record<CostLine, (usage: DailyUsage) => number>> = {
   d1_rows_written: (usage) => usage.d1RowsWritten,

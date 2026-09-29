@@ -26,6 +26,15 @@ describe("evaluateCost", () => {
     expect(evaluateCost(AT_FACTOR, 10)).toEqual([]);
   });
 
+  it("excludes browser_ms from evaluation: the browser dataset is account-wide, not per brand", () => {
+    // AT_FACTOR has browserMs = 450,000 which at onBrands=10 is 45,000/brand — 3x the
+    // documented 15,000 — but the guard must not alert on it (the Cloudflare
+    // browser-rendering dataset has no script dimension). Only d1/r2 are evaluated.
+    const withHugeBrowser = { ...AT_FACTOR, browserMs: 10_000_000 };
+    const result = evaluateCost(withHugeBrowser, 10);
+    expect(result.map((b) => b.line)).not.toContain("browser_ms");
+  });
+
   it("reports d1 when one extra row puts the line strictly over the factor", () => {
     expect(evaluateCost({ ...AT_FACTOR, d1RowsWritten: 301 }, 10)).toEqual([
       {
@@ -74,13 +83,6 @@ describe("evaluateCost", () => {
         line: "r2_class_a_ops",
         measuredPerBrand: 30.1,
         expectedPerBrand: 10,
-        onBrands: 10,
-      },
-      {
-        day: "2026-09-21",
-        line: "browser_ms",
-        measuredPerBrand: 45_000.1,
-        expectedPerBrand: 15_000,
         onBrands: 10,
       },
     ]);
