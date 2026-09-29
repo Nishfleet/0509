@@ -199,8 +199,8 @@ describe("addManualCompetitor cap (0509#4891)", () => {
       .bind(workspaceId, "0509.in")
       .first<{ domain: string; identity_json: string }>();
     expect(fixtureRow).not.toBeNull();
-    expect(fixtureRow!.domain).toBe("0509.in");
-    expect(JSON.parse(fixtureRow!.identity_json).url).toBe("https://fixture.0509.in/");
+    expect(fixtureRow?.domain).toBe("0509.in");
+    expect(JSON.parse(fixtureRow?.identity_json ?? "{}").url).toBe("https://fixture.0509.in/");
 
     const nikeResult = await handleCompetitorIntent(
       workspaceId,
@@ -213,7 +213,7 @@ describe("addManualCompetitor cap (0509#4891)", () => {
       .bind(workspaceId, "nike.com")
       .first<{ domain: string; identity_json: string }>();
     expect(nikeRow).not.toBeNull();
-    expect(JSON.parse(nikeRow!.identity_json).url).toBe("https://nike.com/");
+    expect(JSON.parse(nikeRow?.identity_json ?? "{}").url).toBe("https://nike.com/");
 
     await env.DB.prepare(
       "UPDATE entity SET state = 'off', state_changed_at = ?, state_changed_by = 'user' WHERE workspace_id = ? AND domain = ?",
@@ -232,7 +232,7 @@ describe("addManualCompetitor cap (0509#4891)", () => {
       .bind(workspaceId, "nike.com")
       .first<{ domain: string; identity_json: string }>();
     expect(reAddRow).not.toBeNull();
-    expect(JSON.parse(reAddRow!.identity_json).url).toBe("https://www.nike.com/");
+    expect(JSON.parse(reAddRow?.identity_json ?? "{}").url).toBe("https://www.nike.com/");
     expect(await domainCount(workspaceId, "nike.com")).toBe(1);
   });
 });
