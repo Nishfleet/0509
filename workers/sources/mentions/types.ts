@@ -43,7 +43,7 @@ export class UpstreamBlockedError extends Error {
 	}
 }
 
-function isUpstreamTimeout(error: unknown): boolean {
+export function isUpstreamTimeout(error: unknown): boolean {
 	return (
 		typeof error === "object" &&
 		error !== null &&
