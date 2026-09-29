@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { extractMagicLink, InboxReadError, readRawMessage, staleLinks, waitForMagicLink } from "../e2e/inbox";
 
@@ -120,6 +120,54 @@ describe("extractMagicLink", () => {
   });
 });
 
+// 0509#5841: a verify link is only the lane's own origin. The production and
+// merge-queue lanes mail their own baseURL; a link on any other origin is a
+// different run's mail and returns null.
+describe("extractMagicLink on a named lane", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it("returns a link on the PLAYWRIGHT_TEST_BASE_URL origin", () => {
+    vi.stubEnv("PLAYWRIGHT_TEST_BASE_URL", "https://mq-1-0509-preview.example.workers.dev");
+    const link =
+      "https://mq-1-0509-preview.example.workers.dev/api/auth/magic-link/verify?token=abc123&callbackURL=%2Fapp";
+    expect(extractMagicLink(`Sign in to Five to Nine:\n\n${link}`)).toBe(link);
+  });
+
+  it("rejects a production link when the lane is a preview", () => {
+    vi.stubEnv("PLAYWRIGHT_TEST_BASE_URL", "https://mq-1-0509-preview.example.workers.dev");
+    expect(extractMagicLink(PLAIN)).toBeNull();
+  });
+
+  // 0509#6092: the preview lane's wrangler dev mails the --var BETTER_AUTH_URL
+  // playwright.config.ts gives it, so the local link is on the pinned port.
+  // PLAYWRIGHT_TEST_BASE_URL is stubbed empty so a caller's environment cannot
+  // pull these cases onto the remote lane.
+  it("returns a link on the local port when no base URL is set", () => {
+    vi.stubEnv("PLAYWRIGHT_TEST_BASE_URL", "");
+    vi.stubEnv("PLAYWRIGHT_LOCAL_PORT", "8791");
+    const link = "http://127.0.0.1:8791/api/auth/magic-link/verify?token=abc123&callbackURL=%2Fapp";
+    expect(extractMagicLink(`Sign in to Five to Nine\n\n${link}`)).toBe(link);
+  });
+
+  it("rejects a link on a different port", () => {
+    vi.stubEnv("PLAYWRIGHT_TEST_BASE_URL", "");
+    vi.stubEnv("PLAYWRIGHT_LOCAL_PORT", "8791");
+    expect(
+      extractMagicLink(
+        "Sign in to Five to Nine\n\nhttp://127.0.0.1:9999/api/auth/magic-link/verify?token=abc123&callbackURL=%2Fapp",
+      ),
+    ).toBeNull();
+  });
+
+  it("rejects a production link when the lane is local", () => {
+    vi.stubEnv("PLAYWRIGHT_TEST_BASE_URL", "");
+    vi.stubEnv("PLAYWRIGHT_LOCAL_PORT", "8791");
+    expect(extractMagicLink(PLAIN)).toBeNull();
+  });
+});
+
 // The pre-send read on the sign-in path (0509#5839) must tell a missing
 // message (404) from the inbox failing, so a 500 is never read as "nothing
 // stored".
@@ -150,10 +198,15 @@ describe("readRawMessage", () => {
 // The pre-send read on the sign-in path (0509#5839): a fixed fixture address
 // still holds the previous run's spent link, so staleLinks is what the wait
 // skips. Only a 404 is nothing stored; every other inbox answer is a failure
-// that must name itself rather than hand back the spent link.
+// that must name itself rather than hand back the spent link. These cases pin
+// the remote lane, so they name a production base URL (0509#6092).
 describe("staleLinks", () => {
+  beforeEach(() => {
+    vi.stubEnv("PLAYWRIGHT_TEST_BASE_URL", "https://0509.io");
+  });
   afterEach(() => {
     vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
   });
 
   it("is empty when the inbox holds nothing for the address", async () => {

@@ -1,3 +1,6 @@
+import { readdir, readFile, stat } from "node:fs/promises";
+import { join } from "node:path";
+
 import { expect, type Page, type TestInfo } from "@playwright/test";
 
 // The J1 mail path, per the amended decision on 0509#3927: Email Routing's
@@ -6,9 +9,32 @@ import { expect, type Page, type TestInfo } from "@playwright/test";
 // Durable Object for an hour and serves it back on this one endpoint, gated by the
 // E2E_INBOX_TOKEN secret. Nothing here reads D1 and nothing shortens the
 // auth path — the link the test clicks is the link the app really sent.
+//
+// Preview lane (PLAYWRIGHT_TEST_BASE_URL unset, 0509#6092): `wrangler dev`
+// simulates the send_email binding — nothing is sent, and each part of the
+// message lands as a file under .wrangler/tmp/email/, which this module reads
+// instead of the inbox Worker. The secret belongs to the production job only,
+// so the token argument is null on that lane.
 const INBOX_URL = "https://e2e-inbox.0509.io";
 const POLL_LIMIT_MS = 120_000;
 const POLL_INTERVAL_MS = 3_000;
+
+const PRODUCTION_ORIGIN = "https://0509.io";
+
+// The lane's origin is the only one a verify link may carry (0509#5841):
+// production and the merge-queue previews mail their own baseURL, and local
+// `wrangler dev` mails the --var BETTER_AUTH_URL playwright.config.ts gives
+// it — the local port, pinned in the environment there so test workers see
+// the port webServer started on. A link on any other origin belongs to a
+// different run. Under vitest neither variable is set and the fixtures carry
+// the production origin.
+function laneOrigin(): string {
+  const baseUrl = process.env.PLAYWRIGHT_TEST_BASE_URL;
+  if (baseUrl) return new URL(baseUrl).origin;
+  return process.env.PLAYWRIGHT_LOCAL_PORT
+    ? `http://127.0.0.1:${process.env.PLAYWRIGHT_LOCAL_PORT}`
+    : PRODUCTION_ORIGIN;
+}
 
 // Fail loudly, never skip: the amended decision on #3927 requires a missing
 // secret or routing rule to name itself in the failure. In the production lane
@@ -17,7 +43,7 @@ export function requireInboxToken(): string {
   const token = process.env.E2E_INBOX_TOKEN;
   if (!token) {
     throw new Error(
-      "E2E_INBOX_TOKEN is empty: the repo secret is not wired into the e2e-production job env in .github/workflows/ci.yml",
+      "E2E_INBOX_TOKEN is empty: the repo secret is not wired into the e2e-production job env in .github/workflows/e2e-scheduled.yml",
     );
   }
   return token;
@@ -100,12 +126,74 @@ export async function readRawMessage(to: string, token: string): Promise<string>
 }
 
 export function extractMagicLink(rawMessage: string): string | null {
-  const verifyUrl = /https:\/\/0509\.io\/api\/auth\/magic-link\/verify\?[^\s"'<>]+/;
+  const prefix = `${laneOrigin()}/api/auth/magic-link/verify?`;
   for (const body of decodedBodies(rawMessage)) {
-    const match = verifyUrl.exec(body);
+    const start = body.indexOf(prefix);
+    if (start === -1) continue;
+    const match = /^[^\s"'<>]+/.exec(body.slice(start));
     if (match) return match[0].replaceAll("&amp;", "&");
   }
   return null;
+}
+
+// The local send_email sink (0509#6092). `wrangler dev` writes each part of a
+// simulated message under .wrangler/tmp/email/<session>/email-text/ and
+// email-html/ as <storage-id>.txt/.html; <session> is the miniflare instance's
+// id, so one run's files never mix with another's. The recipient is not in the
+// file name — the address only appears in the body the app wrote ("We sent
+// this link to …"), so a file is this recipient's when its contents name the
+// address.
+const LOCAL_EMAIL_PARTS = ["email-text", "email-html"];
+
+// ENOENT is the honest "nothing sent yet" (the directory appears on the first
+// send); any other error is the dev server or the filesystem failing and must
+// name itself rather than read as an empty inbox.
+function isNotFound(error: unknown): boolean {
+  return error instanceof Error && "code" in error && error.code === "ENOENT";
+}
+
+// The message files on disk, newest first: a second send to the same address
+// wins over the earlier file, the same as the inbox's overwrite-per-recipient.
+async function localEmailFiles(): Promise<string[]> {
+  const root = join(process.cwd(), ".wrangler", "tmp", "email");
+  let sessions: string[];
+  try {
+    sessions = await readdir(root);
+  } catch (error) {
+    if (isNotFound(error)) return [];
+    throw error;
+  }
+  const files: { file: string; mtimeMs: number }[] = [];
+  for (const session of sessions) {
+    for (const part of LOCAL_EMAIL_PARTS) {
+      const dir = join(root, session, part);
+      let names: string[];
+      try {
+        names = await readdir(dir);
+      } catch (error) {
+        if (isNotFound(error)) continue;
+        throw error;
+      }
+      for (const name of names) {
+        const file = join(dir, name);
+        files.push({ file, mtimeMs: (await stat(file)).mtimeMs });
+      }
+    }
+  }
+  return files.sort((a, b) => b.mtimeMs - a.mtimeMs).map((entry) => entry.file);
+}
+
+// Every verify link the local sink holds for this recipient, newest first.
+// Both parts of one message carry the same link; the list dedupes it.
+async function localLinks(to: string): Promise<string[]> {
+  const links: string[] = [];
+  for (const file of await localEmailFiles()) {
+    const body = await readFile(file, "utf8");
+    if (!body.includes(to)) continue;
+    const link = extractMagicLink(body);
+    if (link !== null && !links.includes(link)) links.push(link);
+  }
+  return links;
 }
 
 // The link this recipient already has stored, for waitForMagicLink to skip: the
@@ -115,8 +203,11 @@ export function extractMagicLink(rawMessage: string): string | null {
 // but waitForMagicLink takes an exclude array. Only a 404 (nothing stored) is an
 // empty list; every other answer is the inbox failing, and reading one as "no
 // message" would hand back the spent link as if arriving mail had been seen.
-export async function staleLinks(to: string, token: string): Promise<string[]> {
-  const stored = await readRawMessage(to, token).then(
+export async function staleLinks(to: string, token: string | null): Promise<string[]> {
+  // Preview lane: the local sink keeps one file per message, and the files
+  // already on disk for this address are the spent links to skip.
+  if (!process.env.PLAYWRIGHT_TEST_BASE_URL) return localLinks(to);
+  const stored = await readRawMessage(to, token ?? requireInboxToken()).then(
     (raw) => extractMagicLink(raw),
     (error: unknown) => {
       if (error instanceof InboxReadError && error.status === 404) return null;
@@ -145,9 +236,36 @@ async function probeInbox(url: string, headers: Record<string, string>): Promise
 // recipient address, so a second email to the same address overwrites the
 // first: `exclude` carries links already read for this recipient, and the poll
 // keeps waiting while the stored message still points at one of them.
-export async function waitForMagicLink(to: string, token: string, exclude: string[] = []): Promise<string> {
+export async function waitForMagicLink(to: string, token: string | null, exclude: string[] = []): Promise<string> {
+  // Preview lane: poll the files wrangler's simulated send_email wrote instead
+  // of the inbox endpoint. The write rides on ctx.waitUntil after the sign-in
+  // response, so the file lands a beat after the form's sent state.
+  if (!process.env.PLAYWRIGHT_TEST_BASE_URL) {
+    let fresh: string[] = [];
+    try {
+      await expect
+        .poll(
+          async () => {
+            fresh = (await localLinks(to)).filter((link) => !exclude.includes(link));
+            return fresh.length > 0;
+          },
+          { timeout: POLL_LIMIT_MS, intervals: [POLL_INTERVAL_MS] },
+        )
+        .toBe(true);
+    } catch {
+      // The named error below carries the detail; the poll's own timeout text
+      // would not.
+    }
+    if (fresh.length > 0) return fresh[0];
+    throw new Error(
+      `No magic-link email for ${to} within ${POLL_LIMIT_MS / 1000}s. ` +
+        `The preview lane reads wrangler's simulated send_email output under .wrangler/tmp/email/<session>/email-{text,html}/: ` +
+        `no file for this address carried a ${laneOrigin()} verify link.`,
+    );
+  }
+  const resolved = token ?? requireInboxToken();
   const url = `${INBOX_URL}/message?to=${encodeURIComponent(to)}`;
-  const headers = inboxHeaders(token);
+  const headers = inboxHeaders(resolved);
   await probeInbox(url, headers);
 
   let lastDetail = "the inbox endpoint did not respond";
@@ -314,7 +432,7 @@ export function ownDocument404For(pathname: string): (entry: ConsoleEntry) => bo
 export async function signInWithMagicLink(
   page: Page,
   email: string,
-  token: string,
+  token: string | null,
   landing = /\/onboarding/,
 ): Promise<{ link: string; status: number }> {
   await page.goto("/login");
