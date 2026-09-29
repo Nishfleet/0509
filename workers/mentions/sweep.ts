@@ -144,15 +144,17 @@ async function statementsForWatch(input: {
   ];
   let stored = 0;
   let unjudged = 0;
-  for (const [index, { item }] of fresh.entries()) {
-    let verdicts: Awaited<ReturnType<typeof judge>>;
-    try {
-      verdicts = await judge(watch, context, item);
-    } catch (error) {
-      if (!(error instanceof JevUnavailableError)) throw error;
-      unjudged = fresh.length - index;
-      console.error(JSON.stringify({ event: "mentions.jev_unavailable", message: error.message }));
-      break;
+  let jevDown = false;
+  for (const { item } of fresh) {
+    let verdicts: Awaited<ReturnType<typeof judge>> | null = null;
+    if (!jevDown) {
+      try {
+        verdicts = await judge(watch, context, item);
+      } catch (error) {
+        if (!(error instanceof JevUnavailableError)) throw error;
+        jevDown = true;
+        console.error(JSON.stringify({ event: "mentions.jev_unavailable", message: error.message }));
+      }
     }
     const mapped = await toSignalRow(item, {
       workspaceId: watch.workspace_id,
@@ -164,7 +166,7 @@ async function statementsForWatch(input: {
     });
     const dedupKey = storedDedupKey(watch.entity_id, mapped.dedup_key);
     const signalId = `sig-${(await sha256Hex(`${watch.source_id}:${dedupKey}`)).slice(0, 32)}`;
-    const rejected = noulAction(verdicts.about.p) === "reject";
+    const rejected = verdicts !== null && noulAction(verdicts.about.p) === "reject";
     const verdictRow = (verdict: NoulVerdict) =>
       insertVerdict({
         workspaceId: watch.workspace_id,
@@ -195,9 +197,14 @@ async function statementsForWatch(input: {
         publishedAt: mapped.published_at,
         observedAt: mapped.observed_at,
         isNotAboutBrand: rejected,
+        state: verdicts === null ? "unjudged" : "judged",
       }),
-      verdictRow(verdicts.about),
     );
+    if (verdicts === null) {
+      unjudged += 1;
+      continue;
+    }
+    statements.push(verdictRow(verdicts.about));
     if (rejected) continue;
     if (verdicts.matters !== null) statements.push(verdictRow(verdicts.matters));
     if (verdicts.matters !== null && noulAction(verdicts.matters.p) === "act") {

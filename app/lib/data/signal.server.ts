@@ -151,8 +151,8 @@ export async function applyHiringLifecycle(updates: readonly HiringSignalUpdate[
 
 const INSERT_MENTION = `INSERT INTO signal
   (id, workspace_id, entity_id, source_id, watch_id, snapshot_id, kind, title, url, canonical_url, url_hash,
-   author, engagement_json, payload_json, dedup_key, published_at, observed_at, last_seen_at, is_tombstoned)
-VALUES (?1, ?2, ?3, ?4, ?5, ?6, 'mention', ?7, ?8, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?15, ?16)
+   author, engagement_json, payload_json, dedup_key, published_at, observed_at, last_seen_at, is_tombstoned, state)
+VALUES (?1, ?2, ?3, ?4, ?5, ?6, 'mention', ?7, ?8, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?15, ?16, ?17)
 ON CONFLICT (source_id, dedup_key) DO NOTHING`;
 
 const SEEN_KEYS = "SELECT dedup_key FROM signal WHERE source_id = ?1 AND dedup_key IN (SELECT value FROM json_each(?2))";
@@ -174,6 +174,7 @@ export interface MentionSignal {
   publishedAt: string | null;
   observedAt: string;
   isNotAboutBrand: boolean;
+  state: "judged" | "unjudged";
 }
 
 export async function readSeenDedupKeys(sourceId: string, keys: readonly string[]): Promise<Set<string>> {
@@ -200,6 +201,7 @@ export function insertMention(signal: MentionSignal): D1PreparedStatement {
     signal.publishedAt,
     signal.observedAt,
     signal.isNotAboutBrand ? 1 : 0,
+    signal.state,
   );
 }
 
