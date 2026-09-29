@@ -53,11 +53,11 @@ describe("gdelt adapter", () => {
     expect(result?.items).toEqual([]);
   });
 
-  it("gives GDELT 25 seconds before the request is aborted", async () => {
+  it("gives GDELT 24 seconds before the request is aborted", async () => {
     stubFetch(gdeltBody);
     const timeoutSpy = vi.spyOn(AbortSignal, "timeout");
     await adapterFor("gdelt.doc")?.({ query: "Gymshark" }, null);
-    expect(timeoutSpy).toHaveBeenCalledWith(25_000);
+    expect(timeoutSpy).toHaveBeenCalledWith(24_000);
   });
 
   it("retries the request once after a timeout", async () => {
