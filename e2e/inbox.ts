@@ -230,16 +230,14 @@ function remoteToken(token: string | null): string {
   return token;
 }
 
-// The link this recipient already has stored, for waitForMagicLink to skip: the
-// inbox keeps one message per recipient for an hour, so a fixed fixture address
-// still holds the previous run's spent link, and a poll that accepted it would
-// follow a token the app has already burned. At most one link ever comes back,
-// but waitForMagicLink takes an exclude array. Only a 404 (nothing stored) is an
+// The links this recipient already has stored, for waitForMagicLink to skip: a
+// poll that accepted one would follow a token the app has already burned. The
+// remote inbox keeps one message per recipient for an hour, so at most one
+// link comes back there; the local disk sink keeps every file ever written for
+// the address, so its whole backlog is stale. Only a 404 (nothing stored) is an
 // empty list; every other answer is the inbox failing, and reading one as "no
 // message" would hand back the spent link as if arriving mail had been seen.
 export async function staleLinks(to: string, token: string | null): Promise<string[]> {
-  // Local lane: the disk sink keeps one file per message, and the files
-  // already on disk for this address are the spent links to skip.
   if (isLocalLane()) return localLinks(to);
   const stored = await readRawMessage(to, remoteToken(token)).then(
     (raw) => extractMagicLink(raw),
