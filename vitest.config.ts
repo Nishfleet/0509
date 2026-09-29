@@ -65,7 +65,7 @@ export default defineConfig({
           ],
           // Applies the chain itself, in two steps, so it can seed rows
           // before 0021. The workers setup would apply 0021 first.
-          exclude: ["tests/integration/entity-workspace-fk.integration.test.ts"],
+          exclude: ["tests/integration/entity-workspace-fk*.integration.test.ts"],
           setupFiles: ["./tests/integration/apply-migrations.ts"],
           testTimeout: 30_000,
         },
@@ -84,7 +84,7 @@ export default defineConfig({
         ],
         test: {
           name: "entity-fk",
-          include: ["tests/integration/entity-workspace-fk.integration.test.ts"],
+          include: ["tests/integration/entity-workspace-fk*.integration.test.ts"],
           testTimeout: 60_000,
         },
       },
