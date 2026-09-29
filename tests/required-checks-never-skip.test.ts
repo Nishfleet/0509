@@ -74,6 +74,11 @@ describe("required checks always report (0509#5738)", () => {
     expect(condition).not.toContain("deployment_status");
   });
 
+  it("grades a head only after every other required check has passed on it", async () => {
+    const run = (await allJobs()).find((job) => job.file === "ci.yml" && job.key === "grade-run");
+    expect(run?.body).toContain(`    needs: [${REQUIRED.join(", ")}]`);
+  });
+
   it("keeps the required grade job running, and failing, when grade-run does not succeed", async () => {
     const grade = (await allJobs()).find((job) => job.file === "ci.yml" && job.key === "grade");
     const condition = grade?.body.find((l) => /^ {4}if:/.test(l)) ?? "";
