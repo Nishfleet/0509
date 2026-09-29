@@ -374,11 +374,6 @@
       "count": 1
     }
   },
-  "app/routes/onboarding.competitors.tsx": {
-    "max-lines-per-function": {
-      "count": 1
-    }
-  },
   "app/routes/onboarding.tsx": {
     "complexity": {
       "count": 1
