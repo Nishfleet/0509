@@ -58,13 +58,6 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          repository: Nishfleet/fleet-ops
-          ref: main
-          path: .bar
-          fetch-depth: 1
-          persist-credentials: false
       - name: Collect this case's files for the grader
         env:
           GH_TOKEN: ${{ github.token }}
@@ -78,7 +71,7 @@ jobs:
           rm -rf "$RUNNER_TEMP/devin-in"
           mkdir "$RUNNER_TEMP/devin-in"
           cd "$RUNNER_TEMP/devin-in"
-          cp "$GITHUB_WORKSPACE/.bar/docs/quality-bar.md" bar.md
+          gh api -H "Accept: application/vnd.github.raw" "repos/Nishfleet/fleet-ops/contents/docs/quality-bar.md?ref=main" > bar.md
           gh api -H "Accept: application/vnd.github.raw" "repos/$GITHUB_REPOSITORY/contents/docs/REBUILD-TRUST.md?ref=$base" > trust.md
           jq -e '.pr' "$RUNNER_TEMP/case.json" > pr.json
           jq -c '.issues[]' "$RUNNER_TEMP/case.json" > issues.json
