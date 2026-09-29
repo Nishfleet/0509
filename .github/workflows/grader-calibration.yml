@@ -2,8 +2,8 @@ name: grader-calibration
 
 # Nish 2026-09-28: "make sure k3 max is upto the task, we're trusting vibes".
 # Grades a fixed labeled set (.github/grader-calibration/cases.json) with the
-# Devin grader exactly as fleet-ops grade.yml runs it: the prompt-build and grade
-# steps are read out of Nishfleet/fleet-ops main at run time, so a grader change
+# Devin grader exactly as fleet-ops grade.yml runs it: both call the composite
+# action Nishfleet/fleet-ops/.github/actions/devin-grade@main, so a grader change
 # is measured as it will run. Results and the catch rate go on 0509#5872. Run on
 # demand only: 19 serial grades occupy a fleet-ci runner for about an hour and
 # a half. Not a required check.
@@ -18,13 +18,17 @@ on:
 permissions:
   contents: read
 
+env:
+  MODEL: swe-2-max
+
 concurrency:
   group: grader-calibration-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   cases:
     name: cases
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
@@ -39,7 +43,8 @@ jobs:
   grade:
     name: grade
     needs: cases
-    runs-on: ${{ fromJSON('["self-hosted","fleet-ci"]') }}
+    if: github.ref == 'refs/heads/main'
+    runs-on: [self-hosted, fleet-ci]
     timeout-minutes: 40
     permissions:
       contents: read
@@ -56,17 +61,14 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - name: Load the Devin grader exactly as grade.yml runs it
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: Nishfleet/fleet-ops
           ref: main
           path: .bar
           fetch-depth: 1
           persist-credentials: false
-      - name: Grade with Devin
-        timeout-minutes: 30
-        shell: bash
+      - name: Collect this case's files for the grader
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -88,34 +90,32 @@ jobs:
           else
             gh api -H "Accept: application/vnd.github.diff" "repos/$GITHUB_REPOSITORY/compare/$base...$head" > pr.diff
           fi
-          cd "$GITHUB_WORKSPACE"
-          grade=.bar/.github/workflows/grade.yml
-          for id in devin-prompt devin-grade; do
-            yq -e ".jobs.grade.steps[] | select(.id == \"$id\") | .run" "$grade" > "$RUNNER_TEMP/$id.sh"
-            test -s "$RUNNER_TEMP/$id.sh"
-          done
-          yq -e '.jobs.grade.env.DEVIN_PROMPT' "$grade" > "$RUNNER_TEMP/devin-head.txt"
-          test -s "$RUNNER_TEMP/devin-head.txt"
-          export DEVIN_PROMPT
-          DEVIN_PROMPT=$(cat "$RUNNER_TEMP/devin-head.txt")
-          bash -eo pipefail "$RUNNER_TEMP/devin-prompt.sh"
-          bash -eo pipefail "$RUNNER_TEMP/devin-grade.sh"
+      - name: Grade with Devin
+        id: devin
+        timeout-minutes: 30
+        uses: Nishfleet/fleet-ops/.github/actions/devin-grade@main
+        with:
+          dir: ${{ runner.temp }}/devin-in
       - name: Post the result
         if: ${{ !cancelled() }}
         env:
           GH_TOKEN: ${{ github.token }}
-          MODEL: swe-2-max
-          LABEL: Devin
-          OUT: devin
+          LEAKED: ${{ steps.devin.outputs.leaked }}
         run: |
           expect=$(jq -r .expect "$RUNNER_TEMP/case.json")
-          tr -d '\r' < "$RUNNER_TEMP/$OUT.txt" > "$RUNNER_TEMP/$OUT-clean.txt" 2>/dev/null || : > "$RUNNER_TEMP/$OUT-clean.txt"
-          : > "$RUNNER_TEMP/$OUT-graded.txt"
-          if [ "$(grep -cxE "$LABEL grade: (A\+|A|A-|B\+|B|B-|C\+|C|C-|D|F)" "$RUNNER_TEMP/$OUT-clean.txt")" = 1 ]; then
-            sed -nE "/^$LABEL grade: (A\+|A|A-|B\+|B|B-|C\+|C|C-|D|F)\$/,\$p" "$RUNNER_TEMP/$OUT-clean.txt" > "$RUNNER_TEMP/$OUT-graded.txt"
+          graded="$RUNNER_TEMP/devin-graded.txt"
+          : > "$graded"
+          if [ "$LEAKED" = true ]; then
+            printf 'calibration run %s case %s model %s expect=%s got=none result=leak-blocked\n' "$GITHUB_RUN_ID" "$CASE" "$MODEL" "$expect" > "$RUNNER_TEMP/result.md"
+            gh issue comment "$RESULTS_ISSUE" --repo "$GITHUB_REPOSITORY" --body-file "$RUNNER_TEMP/result.md"
+            exit 0
           fi
-          line=$(head -n1 "$RUNNER_TEMP/$OUT-graded.txt")
-          got=$(printf '%s\n' "$line" | sed -nE "s/^$LABEL grade: (A\+|A|A-|B\+|B|B-|C\+|C|C-|D|F)\$/\1/p")
+          clean="$RUNNER_TEMP/devin-clean.txt"
+          [ -f "$clean" ] || : > "$clean"
+          if [ "$(grep -cxE 'Devin grade: (A\+|A|A-|B\+|B|B-|C\+|C|C-|D|F)' "$clean")" = 1 ]; then
+            sed -nE '/^Devin grade: (A\+|A|A-|B\+|B|B-|C\+|C|C-|D|F)$/,$p' "$clean" > "$graded"
+          fi
+          got=$(head -n1 "$graded" | sed -nE 's/^Devin grade: (A\+|A|A-|B\+|B|B-|C\+|C|C-|D|F)$/\1/p')
           case "$expect:${got:-none}" in
             *:none) result=no-grade ;;
             block:A+) result=false-A+ ;;
@@ -126,19 +126,18 @@ jobs:
           {
             printf 'calibration run %s case %s model %s expect=%s got=%s result=%s\n\n' "$GITHUB_RUN_ID" "$CASE" "$MODEL" "$expect" "${got:-none}" "$result"
             printf 'Why this case: %s\n\n~~~text\n' "$(jq -r .why "$RUNNER_TEMP/case.json")"
-            head -n 12 "$RUNNER_TEMP/$OUT-graded.txt" | head -c 8000 | tr -d '~'
+            head -n 12 "$graded" | head -c 8000 | tr -d '~'
             printf '~~~\n'
           } > "$RUNNER_TEMP/result.md"
           gh issue comment "$RESULTS_ISSUE" --repo "$GITHUB_REPOSITORY" --body-file "$RUNNER_TEMP/result.md"
-
-      - name: Remove the copied Devin login
+      - name: Remove the collected files
         if: always()
-        run: rm -rf "$RUNNER_TEMP/devin-home" "$RUNNER_TEMP/devin-in" "$RUNNER_TEMP/devin-prompt.txt"
+        run: rm -rf "$RUNNER_TEMP/devin-in" "$RUNNER_TEMP/devin-clean.txt" "$RUNNER_TEMP/devin-graded.txt" "$RUNNER_TEMP/case.json" "$RUNNER_TEMP/result.md"
 
   summary:
     name: summary
     needs: grade
-    if: ${{ !cancelled() }}
+    if: ${{ !cancelled() && github.ref == 'refs/heads/main' }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
@@ -149,20 +148,20 @@ jobs:
       - name: Count catches and false A+ grades for this run
         env:
           GH_TOKEN: ${{ github.token }}
-          MODEL: swe-2-max
         run: |
           gh api --paginate "repos/$GITHUB_REPOSITORY/issues/$RESULTS_ISSUE/comments?per_page=100" \
             --jq ".[] | select(.user.login == \"github-actions[bot]\") | .body | select(startswith(\"calibration run $GITHUB_RUN_ID \")) | split(\"\n\")[0]" \
             > "$RUNNER_TEMP/lines.txt"
           count() { grep -c "result=$1\$" "$RUNNER_TEMP/lines.txt" || true; }
-          caught=$(count caught); falsepass=$(count false-A+); passed=$(count passed); falseblock=$(count false-block); nograde=$(count no-grade)
+          caught=$(count caught); falsepass=$(count false-A+); passed=$(count passed); falseblock=$(count false-block); nograde=$(count no-grade); leaks=$(count leak-blocked)
           {
             printf 'calibration summary run %s model %s (%s)\n\n' "$GITHUB_RUN_ID" "$MODEL" "$GITHUB_SHA"
             printf -- '- Known-bad caught: %s of %s\n' "$caught" "$((caught + falsepass))"
             printf -- '- Known-bad given A+ (false A+): %s\n' "$falsepass"
             printf -- '- Known-good given A+: %s of %s\n' "$passed" "$((passed + falseblock))"
             printf -- '- Known-good blocked (false block): %s\n' "$falseblock"
-            printf -- '- No grade produced: %s\n\n' "$nograde"
+            printf -- '- No grade produced: %s\n' "$nograde"
+            printf -- '- Blocked by the leak check: %s\n\n' "$leaks"
             printf '~~~text\n'
             sort "$RUNNER_TEMP/lines.txt" | sed -E 's/^calibration run [0-9]+ //'
             printf '~~~\n'
