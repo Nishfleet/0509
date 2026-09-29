@@ -6,7 +6,7 @@ import { betterAuth } from "better-auth";
 import { magicLink } from "better-auth/plugins";
 import { expect, test, type Page } from "@playwright/test";
 
-import { consoleFailures, watchConsole } from "./inbox";
+import { consoleFailures, laneOrigin, watchConsole } from "./inbox";
 
 test.skip(
   Boolean(process.env.PLAYWRIGHT_TEST_BASE_URL),
@@ -53,7 +53,10 @@ async function seedSession(): Promise<{ cookie: string; workspaceId: string }> {
   const auth = betterAuth({
     database: db,
     secret: authSecret(),
-    baseURL: "https://0509.io",
+    // The app runs --var BETTER_AUTH_URL on this lane's http origin, and
+    // better-auth prefixes the session cookie __Secure- only for https:
+    // seeding on the same origin mints the cookie name the app reads.
+    baseURL: laneOrigin(),
     advanced: { cookiePrefix: "better-auth" },
     plugins: [
       magicLink({

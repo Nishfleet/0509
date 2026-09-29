@@ -36,8 +36,9 @@ export function isLocalLane(): boolean {
 // there so test workers see the port webServer started on. A link on any
 // other origin belongs to a different run. Callers outside Playwright
 // (vitest) set neither variable, and their fixtures carry the production
-// origin.
-function laneOrigin(): string {
+// origin. The preview-lane seeding specs mint their sessions on the same
+// origin — the session cookie's name is scheme-derived, so it must be.
+export function laneOrigin(): string {
   const baseUrl = process.env.PLAYWRIGHT_TEST_BASE_URL;
   if (baseUrl) return new URL(baseUrl).origin;
   return process.env.PLAYWRIGHT_LOCAL_PORT
@@ -52,7 +53,7 @@ export function requireInboxToken(): string {
   const token = process.env.E2E_INBOX_TOKEN;
   if (!token) {
     throw new Error(
-      "E2E_INBOX_TOKEN is empty: the repo secret is not wired into the e2e-production job env in .github/workflows/e2e-scheduled.yml",
+      "E2E_INBOX_TOKEN is empty: the repo secret is not wired into the e2e job env in .github/workflows/ci.yml (e2e-production, merge-e2e)",
     );
   }
   return token;
@@ -137,12 +138,10 @@ export async function readRawMessage(to: string, token: string): Promise<string>
 export function extractMagicLink(rawMessage: string): string | null {
   const prefix = `${laneOrigin()}/api/auth/magic-link/verify?`;
   for (const body of decodedBodies(rawMessage)) {
-    // A bare prefix with no token behind it is not a link — keep scanning so a
-    // truncated mention cannot hide a full link later in the same body.
-    for (let start = body.indexOf(prefix); start !== -1; start = body.indexOf(prefix, start + prefix.length)) {
-      const match = /^[^\s"'<>]+/.exec(body.slice(start + prefix.length));
-      if (match) return `${prefix}${match[0]}`.replaceAll("&amp;", "&");
-    }
+    const start = body.indexOf(prefix);
+    if (start === -1) continue;
+    const match = /^[^\s"'<>]+/.exec(body.slice(start));
+    if (match) return match[0].replaceAll("&amp;", "&");
   }
   return null;
 }

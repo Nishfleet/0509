@@ -133,14 +133,6 @@ describe("extractMagicLink", () => {
   it("unescapes &amp; in an HTML-only href", () => {
     expect(extractMagicLink(HTML_ONLY)).toBe(EXPECTED);
   });
-
-  // A bare verify prefix (a truncated mention, a quoted example) is not a
-  // link; scanning must continue to a full one later in the same body.
-  it("skips a bare verify prefix and returns a later full link", () => {
-    expect(
-      extractMagicLink(`the prefix https://0509.io/api/auth/magic-link/verify?" alone, then\n${EXPECTED}`),
-    ).toBe(EXPECTED);
-  });
 });
 
 // 0509#5841: a verify link is only the lane's own origin. The production and

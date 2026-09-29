@@ -6,7 +6,7 @@ import { betterAuth } from "better-auth";
 import { magicLink } from "better-auth/plugins";
 import { expect, test, type Page } from "@playwright/test";
 
-import { consoleFailures, watchConsole } from "./inbox";
+import { consoleFailures, laneOrigin, watchConsole } from "./inbox";
 
 const BANNED = /mention_matters|mention_is_about_brand|probability|confidence/i;
 
@@ -55,7 +55,10 @@ async function seedSession(): Promise<string> {
   const auth = betterAuth({
     database: db,
     secret: authSecret(),
-    baseURL: "https://0509.io",
+    // The app runs --var BETTER_AUTH_URL on this lane's http origin, and
+    // better-auth prefixes the session cookie __Secure- only for https:
+    // seeding on the same origin mints the cookie name the app reads.
+    baseURL: laneOrigin(),
     advanced: { cookiePrefix: "better-auth" },
     plugins: [
       magicLink({
