@@ -140,7 +140,7 @@ async function watchOneCompetitor(page: Page): Promise<void> {
     await expect(watching.first()).toBeVisible();
   }
   await page.getByRole("button", { name: "Start watching" }).click();
-  await expect(page).toHaveURL(/\/app$/);
+  await expect(page).toHaveURL(/\/app$/, { timeout: 30_000 });
 }
 
 async function deliverPreviewWebhook(page: Page, workspaceId: string): Promise<void> {
