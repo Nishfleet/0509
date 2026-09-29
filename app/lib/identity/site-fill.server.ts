@@ -4,8 +4,7 @@ import { NonRetryableError } from "cloudflare:workflows";
 import { fillSelfSiteFields, markSelfSiteFill } from "../data/entity.server";
 import type { SiteFillState } from "../data/entity.server";
 import { readEditedFields } from "../data/user_decision.server";
-import { takeBrowserEscalation } from "../site/browser-budget.server";
-import { readSiteCard } from "./card.server";
+import { brandBudget, readSiteCard } from "./card.server";
 import { normaliseSubject } from "./normalise";
 import { probeKey } from "./probe-cache.server";
 
@@ -27,11 +26,7 @@ export async function attemptSiteFill(
   const normalised = normaliseSubject(homepageUrl);
   if (!normalised.ok) return "pending";
   const { subject } = normalised;
-  const mayEscalate = () => {
-    const day = new Date().toISOString().slice(0, 10);
-    return takeBrowserEscalation(workspaceId, subject.registrable, day);
-  };
-  const { card, reached } = await readSiteCard(subject, mayEscalate);
+  const { card, reached } = await readSiteCard(subject, brandBudget(workspaceId, subject.registrable));
   if (!reached) return "pending";
   const edited = await readEditedFields(workspaceId, entityId);
   const filled = await fillSelfSiteFields({

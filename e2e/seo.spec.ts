@@ -5,7 +5,7 @@ import { expect, test } from "@playwright/test";
 // contract — the disallow rows and the sitemap line — never the full file
 // verbatim.
 
-test("GET /robots.txt serves the manifest-generated file", async ({
+test("GET /robots.txt serves the manifest-generated file @smoke", async ({
   request,
 }) => {
   const response = await request.get("/robots.txt");
@@ -17,7 +17,7 @@ test("GET /robots.txt serves the manifest-generated file", async ({
   expect(body).toMatch(/^Sitemap: https?:\/\/\S+\/sitemap\.xml$/m);
 });
 
-test("GET /sitemap.xml serves the manifest-generated urlset", async ({
+test("GET /sitemap.xml serves the manifest-generated urlset @smoke", async ({
   request,
 }) => {
   const response = await request.get("/sitemap.xml");
@@ -32,7 +32,7 @@ test("GET /sitemap.xml serves the manifest-generated urlset", async ({
   expect(body).toMatch(/<loc>https?:\/\/[^<]+\/terms<\/loc>/);
 });
 
-test("GET /llms.txt serves the manifest-generated summary", async ({
+test("GET /llms.txt serves the manifest-generated summary @smoke", async ({
   request,
 }) => {
   const response = await request.get("/llms.txt");
@@ -45,17 +45,19 @@ test("GET /llms.txt serves the manifest-generated summary", async ({
   expect(body).toMatch(/^- \[[^\]]+\]\(https?:\/\/[^)]+\/privacy\): \S/m);
 });
 
-test("the sitemap leaves out the noindex rebuild notice at /", async ({
+test("the sitemap leaves out the noindex rebuild notice at / @smoke", async ({
   request,
 }) => {
   const body = await (await request.get("/sitemap.xml")).text();
   expect(body).not.toMatch(/<loc>https?:\/\/[^<]+\/<\/loc>/);
 });
 
-test("GET /privacy serves robots index, follow", async ({ page }) => {
-  await page.goto("/privacy");
-  await expect(page.locator('meta[name="robots"]')).toHaveAttribute(
-    "content",
-    "index, follow",
-  );
+test("both legal routes carry the one robots policy @smoke", async ({ page }) => {
+  for (const path of ["/privacy", "/terms"]) {
+    await page.goto(path);
+    await expect(page.locator('meta[name="robots"]')).toHaveAttribute(
+      "content",
+      "index, follow",
+    );
+  }
 });

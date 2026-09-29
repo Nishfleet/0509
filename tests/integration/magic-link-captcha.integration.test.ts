@@ -1,4 +1,5 @@
 import { env } from "cloudflare:test";
+import { data } from "react-router";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { createAuth, createAuthForRequest } from "../../app/lib/auth.server";
@@ -46,6 +47,31 @@ describe("magic-link captcha", () => {
     const response = await createAuth(authEnv(sent)).handler(magicLinkPost(PASSING_TOKEN));
     expect(response.status).toBe(200);
     expect(sent).toHaveLength(1);
+  });
+
+  it("does not put the provider error or address in the magic-link API body", async () => {
+    const failing = {
+      ...authEnv([]),
+      EMAIL: {
+        send: async () => {
+          throw new Error("account daily sending quota exceeded for captcha@test.dev");
+        },
+      },
+    };
+    const logged = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    try {
+      const response = await createAuth(failing).handler(magicLinkPost(PASSING_TOKEN));
+      const body = await response.text();
+      expect(response.status).toBe(503);
+      expect(body).not.toContain("captcha@test.dev");
+      expect(body).not.toContain("account daily sending quota exceeded");
+      const text = logged.mock.calls.map((call) => String(call[0])).join("\n");
+      expect(text).toContain("account daily sending quota exceeded");
+      expect(text).toContain("[redacted]");
+      expect(text).not.toContain("captcha@test.dev");
+    } finally {
+      logged.mockRestore();
+    }
   });
 
   it("refuses a token the secret rejects", async () => {
@@ -254,6 +280,31 @@ describe("login form action access pre-clearance", () => {
     const result = await loginAction({ request: loginFormPost(`CF_Authorization=${assertion}`) });
     expect(result).toMatchObject({ sent: { email: "cookie-precleared@test.dev" } });
     expect(sent).toHaveLength(1);
+  });
+
+  it("returns 503 and the send-failed copy when the provider rejects the send", async () => {
+    const { assertion, iss } = await serviceTokenAssertion();
+    for (const key of keys) if (!saved.has(key)) saved.set(key, Reflect.get(env, key));
+    Reflect.set(env, "ACCESS_TEAM_DOMAIN", iss);
+    Reflect.set(env, "ACCESS_AUD", ACCESS_AUD);
+    Reflect.set(env, "EMAIL", {
+      send: async () => {
+        throw new Error("account daily sending quota exceeded for cookie-precleared@test.dev");
+      },
+    });
+    const logged = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    try {
+      const result = await loginAction({ request: loginFormPost(`CF_Authorization=${assertion}`) });
+      expect(result).toEqual(
+        data({ error: "We couldn't send the link. Try again in a minute." }, { status: 503 }),
+      );
+      const text = logged.mock.calls.map((call) => String(call[0])).join("\n");
+      expect(text).toContain("account daily sending quota exceeded");
+      expect(text).toContain("[redacted]");
+      expect(text).not.toContain("cookie-precleared@test.dev");
+    } finally {
+      logged.mockRestore();
+    }
   });
 
   it("still refuses a form post with a forged cookie assertion and empty captcha", async () => {

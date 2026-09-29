@@ -4,9 +4,11 @@ import { WorkflowEntrypoint } from "cloudflare:workers";
 import { startDiscovery } from "../app/lib/discovery/start.server";
 import { attemptSiteFill, markSiteFill, siteWasReached } from "../app/lib/identity/site-fill.server";
 import {
+  classifyTailPages,
   enqueueFirstSweep,
   persistTail,
   seedTailWatches,
+  warmTailSiteCard,
 } from "../app/lib/identity/tail.server";
 import type { IdentityTailOutcome, IdentityTailParams } from "../app/lib/identity/tail.server";
 
@@ -23,11 +25,13 @@ export class IdentityTail extends WorkflowEntrypoint<Env, IdentityTailParams> {
     const entityId = (
       await step.do("persist", RETRY, () => persistTail(params))
     ).entityId;
-    const watches = await step.do("seed-watches", RETRY, () =>
-      seedTailWatches(params, event.timestamp.toISOString()),
-    );
     const discoveryInstanceId = await step.do("start-discovery", RETRY, () =>
       startDiscovery(params.workspaceId, event.timestamp),
+    );
+    await step.do("classify-pages", RETRY, () => classifyTailPages(params, event.timestamp.toISOString()));
+    await step.do("warm-site-card", RETRY, () => warmTailSiteCard(params));
+    const watches = await step.do("seed-watches", RETRY, () =>
+      seedTailWatches(params, event.timestamp.toISOString()),
     );
     const queued = await step.do("enqueue-first-sweep", RETRY, () => enqueueFirstSweep(entityId, watches));
     const siteFill =

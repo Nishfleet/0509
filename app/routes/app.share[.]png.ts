@@ -2,9 +2,11 @@ import type { Route } from "./+types/app.share[.]png";
 import { env } from "cloudflare:workers";
 
 import { readHomeStandingInputs } from "../lib/home-standing.server";
+import { readWorkspaceIdForOwner } from "../lib/data/workspace.server";
 import { requireSession } from "../lib/require-session.server";
 import { shareCard } from "../lib/share-card";
 import { renderShareImage, shareDocument } from "../lib/share-image.server";
+import { takeBrowserShareImage } from "../lib/site/browser-budget.server";
 
 function plain(status: number, message: string, headers: Record<string, string> = {}): Response {
   return new Response(message, {
@@ -15,11 +17,14 @@ function plain(status: number, message: string, headers: Record<string, string> 
 
 export async function loader({ request }: Route.LoaderArgs) {
   const session = await requireSession(request);
+  const workspaceId = await readWorkspaceIdForOwner(session.user.id);
   const inputs = await readHomeStandingInputs(env.DB, session.user.id);
   const card = inputs === null ? null : shareCard({ ...inputs, now: new Date() });
   if (card === null) return plain(404, "There is no ranking to share yet.");
 
-  const png = await renderShareImage(shareDocument(card, new URL(request.url).origin));
+  const mayRender =
+    workspaceId === null ? undefined : () => takeBrowserShareImage(workspaceId, new Date().toISOString().slice(0, 10));
+  const png = await renderShareImage(shareDocument(card, new URL(request.url).origin), mayRender);
   if (png === null) return plain(503, "We could not make the picture. Try again in a minute.", { "retry-after": "60" });
 
   return new Response(png, {

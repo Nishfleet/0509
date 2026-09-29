@@ -6,7 +6,7 @@ function rankedRow(page: Page, name: string) {
   return page.locator('[data-testid="standing-row"]', { hasText: name });
 }
 
-test("a ranked row expands in place and the open param survives a reload", async ({ page }, testInfo) => {
+test("a ranked row expands in place and the open param survives a reload @smoke", async ({ page }, testInfo) => {
   test.skip(testInfo.project.name !== "desktop-1440", "in-place expansion is the desktop layout");
   const watched = watchConsole(page);
 
@@ -34,7 +34,7 @@ test("a ranked row expands in place and the open param survives a reload", async
   expect(await consoleFailures(page, watched, testInfo), testInfo.project.name).toEqual([]);
 });
 
-test("below 860px an open ranked row's evidence is a bottom sheet that clears the param", async ({
+test("below 860px an open ranked row's evidence is a bottom sheet that clears the param @smoke", async ({
   page,
 }, testInfo) => {
   test.skip(testInfo.project.name !== "phone-390", "the sheet is the phone layout");
@@ -61,7 +61,7 @@ test("below 860px an open ranked row's evidence is a bottom sheet that clears th
   expect(await consoleFailures(page, watched, testInfo), testInfo.project.name).toEqual([]);
 });
 
-test("a zero-signal row shows a dash and the self row's switch reads you", async ({ page }, testInfo) => {
+test("a zero-signal row shows a dash and the self row's switch reads you @smoke", async ({ page }, testInfo) => {
   const watched = watchConsole(page);
 
   await page.goto("/design/ranked-rows");

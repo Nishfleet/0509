@@ -8,7 +8,8 @@ import type { CardReview, CardValues, DraftField, SiteFields } from "./card-fiel
 import { extractIdentity } from "./extract";
 import { reviewFields } from "./field-confidence.server";
 import { readLogo, storeLogo } from "./logo-store.server";
-import { resolveLogo } from "./logo-cascade";
+import { logoCandidateUrls } from "./logo-cascade";
+import type { LogoCandidates } from "./logo-cascade";
 import { resolveBrandName } from "./name-cascade";
 import type { Subject } from "./normalise";
 import { cachedProbe, probeKey } from "./probe-cache.server";
@@ -36,7 +37,9 @@ function hasIdentity(card: SiteCard): boolean {
 
 const readSiteCardSchema = siteCardSchema.refine(hasIdentity);
 
-const logoSchema = z.object({ url: z.string().nullable() });
+const ICON_PROBE_V = 2;
+
+const logoSchema = z.object({ v: z.literal(ICON_PROBE_V), url: z.string().nullable() });
 
 const UNREACHED: SiteCard = {
   name: null,
@@ -48,6 +51,10 @@ const UNREACHED: SiteCard = {
 };
 
 type MayEscalate = NonNullable<ReadUrlOptions["mayEscalate"]>;
+
+export function brandBudget(workspaceId: string, registrable: string): MayEscalate {
+  return () => takeBrowserEscalation(workspaceId, registrable, new Date().toISOString().slice(0, 10));
+}
 
 function wikidataTerm(subject: Subject): string {
   return subject.registrable.split(".")[0] ?? subject.registrable;
@@ -169,16 +176,21 @@ function applyReview(fields: CardValues, review: CardReview): Omit<SiteFields, "
   };
 }
 
+async function firstStorableLogoUrl(candidates: LogoCandidates): Promise<string | null> {
+  const registrable = candidates.registrableDomain;
+  for (const url of logoCandidateUrls(candidates)) {
+    const stored = await storeLogo(registrable, url);
+    if (stored !== null) return url;
+  }
+  return null;
+}
+
 export function startCard(
   workspaceId: string,
   subject: Subject,
   edited: readonly DraftField[],
 ): { site: Promise<SiteFields>; logo: Promise<string | null> } {
-  const mayEscalate = () => {
-    const day = new Date().toISOString().slice(0, 10);
-    return takeBrowserEscalation(workspaceId, subject.registrable, day);
-  };
-  const read = readSiteCard(subject, mayEscalate);
+  const read = readSiteCard(subject, brandBudget(workspaceId, subject.registrable));
   const site = read.then(async ({ card, reached }): Promise<SiteFields> => {
     const values: CardValues = {
       name: card.name ?? (subject.kind === "domain" ? null : `@${subject.registrable}`),
@@ -198,8 +210,11 @@ export function startCard(
   const logo = read.then(async ({ card, reached }) => {
     if (!reached) return null;
     const cached = await cachedProbe(subject, "icon", logoSchema, async () => {
-      const result = await resolveLogo({ ...card.logoCandidates, registrableDomain: subject.registrable });
-      return { url: result.ok ? result.url : null };
+      const url = await firstStorableLogoUrl({
+        ...card.logoCandidates,
+        registrableDomain: subject.registrable,
+      });
+      return { v: ICON_PROBE_V, url };
     });
     const url = cached.url;
     if (url === null) return null;

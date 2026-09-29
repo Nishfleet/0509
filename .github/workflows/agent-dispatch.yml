@@ -1,6 +1,5 @@
 # Trigger stub. The dispatch logic lives once in Nishfleet/fleet-ops; a
 # workflow only fires on its own repo's events, so the triggers stay here.
-# opus-vet dispatches this file by name with issue=<N>.
 name: agent-dispatch
 on:
   issues:
