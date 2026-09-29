@@ -337,6 +337,62 @@ describe("IdentityTailWorkflow", () => {
     ]);
   });
 
+  it("warms the creator's site card in the tail, off the confirm action", async () => {
+    await seed();
+    await using introspector = await introspectWorkflow(env.IDENTITY_TAIL);
+    const siteHtml = `<html><head><title>Veritasium</title></head><body>${"Veritasium makes science videos about physics, engineering and the world. ".repeat(4)}</body></html>`;
+    vi.stubGlobal("fetch", (input: RequestInfo | URL) => {
+      const url = input instanceof Request ? input.url : String(input);
+      if (url === "https://veritasium.com/") {
+        return Promise.resolve(
+          new Response(siteHtml, { status: 200, headers: { "content-type": "text/html" } }),
+        );
+      }
+      if (url === GREENHOUSE_JOBS) {
+        return Promise.resolve(
+          new Response(JSON.stringify({ jobs: [] }), {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          }),
+        );
+      }
+      return Promise.resolve(new Response("", { status: 200 }));
+    });
+    Reflect.set(env, "AI", {
+      run: vi.fn(() =>
+        Promise.resolve({
+          answers: {
+            "identity_field_confidence.name": { type: "noul", noul: 0.95 },
+            "identity_field_confidence.description": { type: "noul", noul: 0.95 },
+            "identity_field_confidence.socials": { type: "noul", noul: 0.95 },
+          },
+        }),
+      ),
+    });
+    expect(
+      await confirmCard(
+        workspaceId,
+        userId,
+        form({
+          subject: "https://www.youtube.com/@gymshark",
+          name: "Gymshark",
+          description: "Gym clothes",
+          "social.youtube": "https://www.youtube.com/@gymshark",
+          "social.site": "https://veritasium.com/",
+        }),
+      ),
+    ).toBe(true);
+    const [instance] = await introspector.get();
+    if (instance === undefined) throw new Error("tail instance was not started");
+    await instance.waitForStatus("complete");
+    await instance.getOutput();
+    const siteSubject = normaliseSubject("veritasium.com");
+    if (!siteSubject.ok) throw new Error("veritasium.com must normalise");
+    expect(
+      await env.IDENTITY_CACHE.get(probeKey(siteSubject.subject, "homepage"), "json"),
+    ).not.toBeNull();
+  });
+
   it("seeds a creator with no website without any site, ads or hiring watch", async () => {
     await seed();
     await using introspector = await introspectWorkflow(env.IDENTITY_TAIL);
