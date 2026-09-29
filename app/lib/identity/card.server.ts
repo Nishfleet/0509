@@ -6,7 +6,8 @@ import type { CardReview, CardValues, DraftField, SiteFields } from "./card-fiel
 import { extractIdentity } from "./extract";
 import { reviewFields } from "./field-confidence.server";
 import { readLogo, storeLogo } from "./logo-store.server";
-import { resolveLogo } from "./logo-cascade";
+import { logoCandidateUrls } from "./logo-cascade";
+import type { LogoCandidates } from "./logo-cascade";
 import { resolveBrandName } from "./name-cascade";
 import type { Subject } from "./normalise";
 import { cachedProbe, probeKey } from "./probe-cache.server";
@@ -34,7 +35,9 @@ function hasIdentity(card: SiteCard): boolean {
 
 const readSiteCardSchema = siteCardSchema.refine(hasIdentity);
 
-const logoSchema = z.object({ url: z.string().nullable() });
+const ICON_PROBE_V = 2;
+
+const logoSchema = z.object({ v: z.literal(ICON_PROBE_V), url: z.string().nullable() });
 
 const UNREACHED: SiteCard = {
   name: null,
@@ -155,6 +158,15 @@ function applyReview(fields: CardValues, review: CardReview): Omit<SiteFields, "
   };
 }
 
+async function firstStorableLogoUrl(candidates: LogoCandidates): Promise<string | null> {
+  const registrable = candidates.registrableDomain;
+  for (const url of logoCandidateUrls(candidates)) {
+    const stored = await storeLogo(registrable, url);
+    if (stored !== null) return url;
+  }
+  return null;
+}
+
 export function startCard(
   workspaceId: string,
   subject: Subject,
@@ -180,8 +192,11 @@ export function startCard(
   const logo = read.then(async ({ card, reached }) => {
     if (!reached) return null;
     const cached = await cachedProbe(subject, "icon", logoSchema, async () => {
-      const result = await resolveLogo({ ...card.logoCandidates, registrableDomain: subject.registrable });
-      return { url: result.ok ? result.url : null };
+      const url = await firstStorableLogoUrl({
+        ...card.logoCandidates,
+        registrableDomain: subject.registrable,
+      });
+      return { v: ICON_PROBE_V, url };
     });
     const url = cached.url;
     if (url === null) return null;
