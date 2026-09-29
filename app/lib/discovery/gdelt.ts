@@ -14,8 +14,6 @@ export const gdeltResponseSchema = z.object({
   articles: z.array(gdeltArticleSchema).default([]),
 });
 
-export const gdeltWebUrlSchema = z.url({ protocol: /^https?$/ });
-
 const SEENDATE_PATTERN = /^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})Z$/;
 
 export function gdeltSeendateToIso(seendate: string | null | undefined): string | null {

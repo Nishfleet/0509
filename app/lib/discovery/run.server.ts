@@ -9,7 +9,6 @@ import { askNoul, JevUnavailableError } from "../jev/client.server";
 import { evidenceLine } from "./evidence-line";
 import { aiGenerator } from "./generators/ai.server";
 import { hnGenerator } from "./generators/hn";
-import { newsGenerator } from "./generators/news";
 import { resolveDomain } from "./resolve-domain.server";
 import { nameKey, partitionShortlist } from "./shortlist";
 import type { ShortlistEntry } from "./shortlist";
@@ -52,7 +51,6 @@ const IS_CREATOR_RIVAL: NoulQuestion = {
 };
 
 const GENERATORS = [
-  { name: "news", run: newsGenerator },
   { name: "hn", run: hnGenerator },
   { name: "ai", run: aiGenerator },
 ] as const;
@@ -152,7 +150,7 @@ function competitorState(context: DiscoveryContext, candidate: ResolvedCandidate
       evidence: candidate.evidence.map((item) => ({ source: item.sourceUrl, excerpt: item.excerpt })),
     },
     user_memory: { dismissed_domains: context.dismissedDomains },
-    reliability: { news: "rss", hn: "best_effort" },
+    reliability: { hn: "best_effort" },
   };
 }
 
