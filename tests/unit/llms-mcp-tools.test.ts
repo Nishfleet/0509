@@ -6,29 +6,26 @@ import { llmsTxt, type LlmsTxtSource } from "../../app/lib/public-routes";
 const NOW = Date.parse("2026-09-28T12:00:00.000Z");
 const FRESH = { item_count: 4, fetched_at: "2026-09-28T11:00:00.000Z", canary_count: 1 } as const;
 
+function source(key: string, platform: string) {
+  return { key, platform, is_enabled: 1, degraded_reason: null, last_good_at: null, config_json: null };
+}
+
 function registryEntry(key: string, platform: string): LlmsTxtSource {
-  return {
-    source: { key, platform, is_enabled: 1, degraded_reason: null, last_good_at: null, config_json: null },
-    snapshot: FRESH,
-  };
+  return { source: source(key, platform), snapshot: FRESH };
 }
 
-const MANIFEST_TOOL_LINE = /^\s*- ([a-z0-9_]+): (.+)$/gm;
+const AGENTS_HEADING = "## Agents";
 
-function agentsBlock(body: string): string {
-  const start = body.indexOf("## Agents");
-  expect(start).toBeGreaterThanOrEqual(0);
-  const afterHeading = start + "## Agents".length;
+function agentToolLines(body: string): string[] {
+  const start = body.indexOf(AGENTS_HEADING);
+  expect(start, "llms.txt has no ## Agents section").toBeGreaterThanOrEqual(0);
+  const afterHeading = start + AGENTS_HEADING.length;
   const nextHeading = body.indexOf("\n## ", afterHeading);
-  return body.slice(afterHeading, nextHeading === -1 ? undefined : nextHeading);
-}
-
-function manifestTools(body: string): Map<string, string> {
-  const tools = new Map<string, string>();
-  for (const match of agentsBlock(body).matchAll(MANIFEST_TOOL_LINE)) {
-    tools.set(match[1] ?? "", match[2] ?? "");
-  }
-  return tools;
+  const section = body.slice(afterHeading, nextHeading === -1 ? undefined : nextHeading);
+  return section
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => /^-\s+\w+:\s/.test(line) && !line.startsWith("- ["));
 }
 
 describe("llms.txt MCP tool manifest", () => {
@@ -42,7 +39,7 @@ describe("llms.txt MCP tool manifest", () => {
     ]);
   });
 
-  it("names every tool in the registry, derived from the same export, never a hand-written list", () => {
+  it("names exactly the registered tools, derived from the same export, and shows each registry title", () => {
     const body = llmsTxt(
       "https://0509.io",
       [
@@ -53,14 +50,17 @@ describe("llms.txt MCP tool manifest", () => {
       ],
       NOW,
     );
-    expect([...manifestTools(body).keys()].sort()).toEqual(Object.keys(registeredToolDescriptors).sort());
-  });
 
-  it("describes each tool with the registry title, one bullet per tool, flat at the section level", () => {
-    const tools = manifestTools(llmsTxt("https://0509.io", [], NOW));
-    expect(tools.size).toBe(Object.keys(registeredToolDescriptors).length);
+    const rendered = new Map<string, string>();
+    for (const line of agentToolLines(body)) {
+      const match = /^-\s+([a-z0-9_]+):\s+(.+)$/.exec(line);
+      expect(match, `unexpected Agents bullet: ${line}`).not.toBeNull();
+      rendered.set(match?.[1] ?? "", match?.[2] ?? "");
+    }
+
+    expect([...rendered.keys()].sort()).toEqual(Object.keys(registeredToolDescriptors).sort());
     for (const [name, tool] of Object.entries(registeredToolDescriptors)) {
-      expect(tools.get(name)).toBe(tool.title);
+      expect(rendered.get(name)).toBe(tool.title);
     }
   });
 
