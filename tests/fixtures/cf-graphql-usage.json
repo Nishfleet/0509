@@ -1,0 +1,32 @@
+{
+  "data": {
+    "viewer": {
+      "accounts": [
+        {
+          "browser": [
+            {
+              "sum": {
+                "totalSessionDurationMs": 157107
+              }
+            }
+          ],
+          "d1": [
+            {
+              "sum": {
+                "rowsWritten": 4677
+              }
+            }
+          ],
+          "r2": [
+            {
+              "sum": {
+                "requests": 13
+              }
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "errors": null
+}

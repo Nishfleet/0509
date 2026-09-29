@@ -23,7 +23,7 @@ export function EmptyState({ sentence, action }: EmptyStateProps) {
   }
 
   return (
-    <div className="border-line border p-4">
+    <div className="border border-line p-4">
       <p className="max-w-prose text-[0.88rem] leading-[1.5]">{sentence}</p>
       {action ? <Action action={action} /> : null}
     </div>
@@ -36,7 +36,7 @@ function Action({ action }: { action: EmptyStateAction }): ReactNode {
       <label className="mt-3 flex items-center gap-3">
         <span className="font-display text-[1.02rem] uppercase">{action.label}</span>
         <input
-          className="border-line min-w-0 flex-1 border px-3 py-2 text-[0.88rem]"
+          className="min-w-0 flex-1 border border-line px-3 py-2 text-[0.88rem]"
           name={action.name}
           placeholder={action.placeholder}
           aria-label={action.label}
@@ -45,7 +45,7 @@ function Action({ action }: { action: EmptyStateAction }): ReactNode {
     );
   }
   return (
-    <a className="font-display mt-3 inline-block text-[1.02rem] uppercase" href={href(action.href)}>
+    <a className="mt-3 inline-block font-display text-[1.02rem] uppercase" href={href(action.href)}>
       {action.label}
     </a>
   );
@@ -73,10 +73,9 @@ export interface HomeSecondZero {
 }
 
 export function homeSecondZero(now: Date): HomeSecondZero {
-  const firstRead = shift(now, 1);
   const brief = shift(now, 6);
   return {
-    sentence: `We're gathering the first week. Your first read-this-first lands by ${clock(firstRead)} today; the brief comes ${weekday(brief)} ${clock(brief)}.`,
+    sentence: `We're gathering the first week. Your first read-this-first comes with the brief on ${weekday(brief)} ${clock(brief)}.`,
     action: { kind: "link", label: "Add a competitor", href: "/app/competitors" },
   };
 }
@@ -114,7 +113,7 @@ export function evidenceEmpty(paths: readonly string[], lastCheckedAt: Date): { 
 export function competitorJustAdded(): { sentence: string } {
   return {
     sentence:
-      "Watching from today. The first ads and mentions land within the hour; site changes need a second snapshot, so the first mark comes tomorrow.",
+      "Watching from today. The first mentions land in the nightly sweep; site changes need a second snapshot, so the first mark comes tomorrow.",
   };
 }
 

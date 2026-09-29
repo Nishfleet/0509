@@ -1,6 +1,9 @@
 import type { WorkflowEvent, WorkflowStep, WorkflowStepConfig } from "cloudflare:workers";
 import { WorkflowEntrypoint } from "cloudflare:workers";
 
+import { withMonitor } from "@sentry/cloudflare";
+
+import { recordSweepRun } from "../../app/lib/data/sweep_run.server";
 import { pingLiveness } from "../../app/lib/liveness-ping.server";
 import {
   CHUNK_SIZE,
@@ -16,9 +19,19 @@ const RETRY: WorkflowStepConfig = {
   timeout: "5 minutes",
 };
 
+const MONITOR = {
+  schedule: { type: "crontab", value: "0 2 * * *" },
+  checkinMargin: 60,
+  timezone: "UTC",
+} as const;
+
 type PageOutcome = "failed" | "first" | "unchanged" | "changed";
 
-export type SiteSweepOutcome = Record<PageOutcome, number> & { pages: number; rechecked: number };
+export type SiteSweepOutcome = Record<PageOutcome, number> & {
+  pages: number;
+  rechecked: number;
+  recorded: boolean;
+};
 
 async function settle<T>(label: string, run: () => Promise<T>): Promise<T | null> {
   try {
@@ -35,6 +48,13 @@ async function settle<T>(label: string, run: () => Promise<T>): Promise<T | null
 
 export class SiteSweep extends WorkflowEntrypoint<Env & { SITE_SWEEP_PING_URL?: string }> {
   async run(event: WorkflowEvent<unknown>, step: WorkflowStep): Promise<SiteSweepOutcome> {
+    return withMonitor("site-sweep", () => this.runSweep(event, step), MONITOR);
+  }
+
+  private async runSweep(
+    event: WorkflowEvent<unknown>,
+    step: WorkflowStep,
+  ): Promise<SiteSweepOutcome> {
     const tick = {
       instanceId: event.instanceId,
       plannedAt: plannedAt(event.timestamp, event.schedule?.scheduledTime),
@@ -89,13 +109,32 @@ export class SiteSweep extends WorkflowEntrypoint<Env & { SITE_SWEEP_PING_URL?: 
     );
 
     const count = (outcome: PageOutcome) => finalOutcomes.filter((o) => o === outcome).length;
+    const pages = finalOutcomes.length;
+    const failed = count("failed");
+    const recorded =
+      (await settle("record", () =>
+        step.do("record", RETRY, async () => {
+          const finishedAt = new Date();
+          await recordSweepRun({
+            id: tick.instanceId,
+            kind: "site",
+            plannedAt: tick.plannedAt,
+            finishedAt: finishedAt.toISOString(),
+            wallMs: finishedAt.getTime() - Date.parse(tick.plannedAt),
+            pages,
+            failed,
+          });
+          return true;
+        }),
+      )) === true;
     const summary: SiteSweepOutcome = {
-      pages: finalOutcomes.length,
-      failed: count("failed"),
+      pages,
+      failed,
       first: count("first"),
       unchanged: count("unchanged"),
       changed: count("changed"),
       rechecked: missing.length,
+      recorded,
     };
     console.log(JSON.stringify({ event: "site.sweep", ...summary }));
     await step.do("report", RETRY, async () => {

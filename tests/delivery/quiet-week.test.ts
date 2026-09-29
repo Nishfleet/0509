@@ -26,6 +26,7 @@ function quiet(overrides: Partial<BriefPayload> = {}): BriefPayload {
     headline_is_new: false,
     why_line: "Quiet week: 61 mentions checked, 14 site changes, no new ads.",
     is_quiet_week: true,
+    is_unjudged: false,
     read_this_first: [],
     brands: [
       {

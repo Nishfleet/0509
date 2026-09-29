@@ -2,10 +2,11 @@ import { env } from "cloudflare:workers";
 import { z } from "zod";
 
 import { readCachedChoice, readCachedNoul } from "../data/jev_verdict.server";
+import { sha256Hex } from "../sha256";
 
 const MODEL = "typesafe/jev";
 
-const GATEWAY_ID = "default";
+export const GATEWAY_ID = "default";
 
 export interface NoulQuestion {
   id: string;
@@ -94,11 +95,6 @@ function shapeOf(raw: unknown, issues: readonly ParseIssue[]): string {
 
 function missing(what: string, raw: unknown, issues: readonly ParseIssue[]): JevUnavailableError {
   return new JevUnavailableError(new Error(`answer missing its ${what}; ${shapeOf(raw, issues)}`));
-}
-
-async function sha256Hex(text: string): Promise<string> {
-  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
-  return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
 function inputHash(workspaceId: string, question: NoulQuestion, state: unknown): Promise<string> {

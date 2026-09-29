@@ -6,9 +6,9 @@ import { betterAuth } from "better-auth";
 import { magicLink } from "better-auth/plugins";
 import { expect, test, type Locator, type Page } from "@playwright/test";
 
-import { consoleFailures, watchConsole } from "./inbox";
+import { consoleFailures, isLocalLane, laneOrigin, watchConsole } from "./inbox";
 
-// Preview-lane proof for #5441: Enter saves and closes the identity card
+// Preview-lane proof for #5441 and #5557: Enter saves and closes the identity card
 // editor, Escape saves and closes, and Base UI returns focus to the trigger.
 // `e2e/onboarding-identity.spec.ts` keeps the production walk on the same
 // component, but its signed-in describe skips in this lane (no inbox), so
@@ -22,15 +22,11 @@ import { consoleFailures, watchConsole } from "./inbox";
 // returns the unfound card — empty fields, every `EditRow` openable — and the
 // keyboard paths the packet specifies are reachable without any network.
 //
-// The 390 lane runs and is marked expected-to-fail rather than skipped: on an
-// unread card, `Row` puts the fixed `w-20 shrink-0` label and the "we'll fill
-// this on the first crawl" line beside the `min-w-0 flex-1` trigger, and the
-// trigger measures 0px wide at 390, so Playwright never sees it. 0509#5557
-// probed that row — 316px across, the 80px label, the 204px empty line and the
-// two `gap-4` taking the 32px — and owns the fix, which deletes this file's
-// expected failure rather than this packet's slice.
+// At 390 the `Row` now wraps the empty-line span under the trigger,
+// giving the edit name/about triggers a non-zero bounding box on the unread card.
+// 0509#5557 owns this fix; the 390 lane asserts the triggers are clickable.
 test.skip(
-  Boolean(process.env.PLAYWRIGHT_TEST_BASE_URL),
+  !isLocalLane(),
   "production signs in through the magic-link inbox; the local preview D1 carries the seed",
 );
 
@@ -74,7 +70,10 @@ async function seedCardSession(registrable: string): Promise<string> {
   const auth = betterAuth({
     database: db,
     secret: authSecret(),
-    baseURL: "https://0509.io",
+    // The app runs --var BETTER_AUTH_URL on this lane's http origin, and
+    // better-auth prefixes the session cookie __Secure- only for https:
+    // seeding on the same origin mints the cookie name the app reads.
+    baseURL: laneOrigin(),
     advanced: { cookiePrefix: "better-auth" },
     plugins: [
       magicLink({
@@ -129,12 +128,15 @@ const TRIGGERS: Record<"name" | "about", RegExp> = {
   about: /^edit about\b/,
 };
 
-const PHONE_390_DEFECT =
-  "the unfound card's 0px trigger at 390 is filed separately; the keyboard contract does not vary by viewport, 0509#5557";
-
 async function openEditor(page: Page, field: "name" | "about"): Promise<Locator> {
   const trigger = page.getByRole("button", { name: TRIGGERS[field] });
   await expect(trigger).toBeVisible({ timeout: 30_000 });
+  const box = await trigger.boundingBox();
+  if (box === null) throw new Error(`the edit ${field} trigger has no bounding box`);
+  // 0509#5557: an empty-line span beside the `min-w-0 flex-1` trigger used to
+  // starve it to 0px wide on the unread card at 390; this keeps that from
+  // returning silently.
+  expect(box.width, `edit ${field} trigger has zero width`).toBeGreaterThan(0);
   await trigger.click();
   const editor = page.getByRole("textbox", { name: field });
   await expect(editor).toBeVisible({ timeout: 5_000 });
@@ -153,7 +155,6 @@ function watchDraftPosts(page: Page): string[] {
 
 test("the identity card editor saves and closes on Enter, with focus back on the trigger", async ({ page }, testInfo) => {
   test.setTimeout(90_000);
-  test.fail(testInfo.project.name === "phone-390", PHONE_390_DEFECT);
   const watched = watchConsole(page);
   const draftPosts = watchDraftPosts(page);
   const subject = "nope-card-keyboard-enter.example.com";
@@ -166,14 +167,19 @@ test("the identity card editor saves and closes on Enter, with focus back on the
   const trigger = page.getByRole("button", { name: TRIGGERS.name });
   const name = await openEditor(page, "name");
   await name.fill("Brand One");
+  const saveResponse = page.waitForResponse(
+    (response) => response.request().method() === "POST" && new URL(response.url()).pathname === "/onboarding/identity.data",
+  );
   await name.press("Enter");
 
   // The controlled `open` prop closing does not fire Popover's onOpenChange, so
-  // Enter reaches onSave through exactly one path. The count is read once the
-  // network settles: a second submit is a second observed POST, not a count
-  // that already moved past 1.
-  await expect.poll(() => draftPosts.length).toBeGreaterThan(0);
-  await page.waitForLoadState("networkidle");
+  // Enter reaches onSave through exactly one path, and `saveOnEnter` calls it
+  // inside the keydown handler. Awaiting that save's response proves the one POST
+  // round-tripped, so the `toHaveLength(1)` count below is the post-save count, not
+  // a zero read taken before the request went out; a second `onSave` from that
+  // same keydown task would be dispatched, and observed by `watchDraftPosts`,
+  // before this response returns.
+  await saveResponse;
   expect(draftPosts).toHaveLength(1);
   await expect(name).toHaveCount(0);
   await expect(trigger).toBeFocused();
@@ -184,7 +190,6 @@ test("the identity card editor saves and closes on Enter, with focus back on the
 
 test("the identity card editor saves and closes on Escape, with focus back on the trigger", async ({ page }, testInfo) => {
   test.setTimeout(90_000);
-  test.fail(testInfo.project.name === "phone-390", PHONE_390_DEFECT);
   const watched = watchConsole(page);
   const draftPosts = watchDraftPosts(page);
   const subject = "nope-card-keyboard-escape.example.com";
@@ -197,10 +202,12 @@ test("the identity card editor saves and closes on Escape, with focus back on th
   const trigger = page.getByRole("button", { name: TRIGGERS.about });
   const about = await openEditor(page, "about");
   await about.fill("one line on what we do");
+  const saveResponse = page.waitForResponse(
+    (response) => response.request().method() === "POST" && new URL(response.url()).pathname === "/onboarding/identity.data",
+  );
   await about.press("Escape");
 
-  await expect.poll(() => draftPosts.length).toBeGreaterThan(0);
-  await page.waitForLoadState("networkidle");
+  await saveResponse;
   expect(draftPosts).toHaveLength(1);
   await expect(about).toHaveCount(0);
   await expect(trigger).toBeFocused();

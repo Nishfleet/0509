@@ -5,6 +5,7 @@ import { DAY_MONTH } from "./competitor-header";
 import { EmptyState } from "./empty-state";
 import { SourcePill } from "./source-pill";
 import type { SourceRow, SourceSnapshot } from "./source-pill";
+import { SITE_SWEEP_UTC_LABEL } from "../lib/cadence";
 
 const HEADING = "mb-3 font-mono text-eyebrow text-ink-soft uppercase";
 const ROW = "min-w-0";
@@ -134,7 +135,7 @@ function Sources({
         <p className="font-display text-[1.02rem]">Website</p>
         <p className="text-meta text-ink-soft">
           {lastChecked === null
-            ? "Homepage, read every night. First read tonight at 02:00 UTC."
+            ? `Homepage, read every night. First read tonight at ${SITE_SWEEP_UTC_LABEL}.`
             : `Homepage, read every night. Last read ${lastChecked}.`}
         </p>
       </>

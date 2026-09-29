@@ -7,7 +7,7 @@ import { describe, expect, it } from "vitest";
 
 // #4462: a bare `catch { return null }` swallows the error — a thrown fetch, a
 // bug, and a genuine "not found" all reach the caller as the same null, so the
-// failure leaves no trace. The D grade on #4457 (REBUILD-TRUST.md C1 Q1) wanted
+// failure leaves no trace. The review of #4457 (REBUILD-TRUST.md C1 Q1) wanted
 // the lint gate, not a filed issue, because the shape only shows up when
 // someone writes it. The gate is a CATCH_RETURNS_NULL selector in
 // BANNED_SYNTAX plus a by-name grandfather list in eslint.config.js. These

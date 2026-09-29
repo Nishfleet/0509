@@ -39,7 +39,6 @@ export class FixtureState extends DurableObject<FixtureEnv> {
 type BreakMode = "off" | "hard" | "soft";
 
 const BREAK_KEY = "break-mode";
-const STATE_NAME = "fixture";
 
 const isBreakMode = (value: string | null): value is BreakMode =>
   value === "off" || value === "hard" || value === "soft";
@@ -111,23 +110,24 @@ const HTML_HEADERS = {
 export default {
   async fetch(request, env): Promise<Response> {
     const url = new URL(request.url);
+    const state = env.STATE.getByName(url.host);
 
     if (url.pathname === "/__break") {
-      return flip(request, env);
+      return flip(request, env, state);
     }
     if (url.pathname === "/__price") {
-      return price(request, env);
+      return price(request, env, state);
     }
     if (url.pathname === "/__wall") {
-      return wall(request, env);
+      return wall(request, env, state);
     }
 
-    const walled = await env.STATE.getByName(STATE_NAME).get(WALL_KEY);
+    const walled = await state.get(WALL_KEY);
     if (walled === "on") {
       return new Response(WALL_PAGE, { status: 403, headers: HTML_HEADERS });
     }
 
-    const stored = await env.STATE.getByName(STATE_NAME).get(BREAK_KEY);
+    const stored = await state.get(BREAK_KEY);
     const mode: BreakMode = isBreakMode(stored) ? stored : "off";
 
     if (mode === "hard") {
@@ -137,9 +137,9 @@ export default {
       });
     }
 
-    const storedVariant = await env.STATE.getByName(STATE_NAME).get(PRICE_KEY);
+    const storedVariant = await state.get(PRICE_KEY);
     const variant: PriceVariant = isPriceVariant(storedVariant) ? storedVariant : "base";
-    const flippedAt = (await env.STATE.getByName(STATE_NAME).get(PRICE_AT_KEY)) ?? "";
+    const flippedAt = (await state.get(PRICE_AT_KEY)) ?? "";
 
     return new Response(renderPage(mode, variant, flippedAt), {
       status: 200,
@@ -167,7 +167,11 @@ function authorize(request: Request, env: FixtureEnv): Response | null {
   return null;
 }
 
-async function flip(request: Request, env: FixtureEnv): Promise<Response> {
+async function flip(
+  request: Request,
+  env: FixtureEnv,
+  state: DurableObjectStub<FixtureState>,
+): Promise<Response> {
   const denied = authorize(request, env);
   if (denied) {
     return denied;
@@ -176,11 +180,15 @@ async function flip(request: Request, env: FixtureEnv): Promise<Response> {
   if (!isBreakMode(requested)) {
     return new Response("mode must be off, hard or soft", { status: 400 });
   }
-  await env.STATE.getByName(STATE_NAME).put(BREAK_KEY, requested);
+  await state.put(BREAK_KEY, requested);
   return new Response(`break mode set to ${requested}`, { status: 200 });
 }
 
-async function wall(request: Request, env: FixtureEnv): Promise<Response> {
+async function wall(
+  request: Request,
+  env: FixtureEnv,
+  state: DurableObjectStub<FixtureState>,
+): Promise<Response> {
   const denied = authorize(request, env);
   if (denied) {
     return denied;
@@ -189,11 +197,15 @@ async function wall(request: Request, env: FixtureEnv): Promise<Response> {
   if (!isWallState(requested)) {
     return new Response("state must be on or off", { status: 400 });
   }
-  await env.STATE.getByName(STATE_NAME).put(WALL_KEY, requested);
+  await state.put(WALL_KEY, requested);
   return new Response(`bot wall set to ${requested}`, { status: 200 });
 }
 
-async function price(request: Request, env: FixtureEnv): Promise<Response> {
+async function price(
+  request: Request,
+  env: FixtureEnv,
+  state: DurableObjectStub<FixtureState>,
+): Promise<Response> {
   const denied = authorize(request, env);
   if (denied) {
     return denied;
@@ -203,7 +215,7 @@ async function price(request: Request, env: FixtureEnv): Promise<Response> {
     return new Response("variant must be base or raised", { status: 400 });
   }
   const at = new Date().toISOString();
-  await env.STATE.getByName(STATE_NAME).put(PRICE_KEY, variant);
-  await env.STATE.getByName(STATE_NAME).put(PRICE_AT_KEY, at);
+  await state.put(PRICE_KEY, variant);
+  await state.put(PRICE_AT_KEY, at);
   return new Response(`price variant set to ${variant} at ${at}`, { status: 200 });
 }

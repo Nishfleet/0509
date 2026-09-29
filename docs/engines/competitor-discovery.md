@@ -6,6 +6,22 @@ The job: from one confirmed identity card, on a **cold database**, produce a rea
 
 ---
 
+## What runs on the request path today
+
+This section wins over the design below wherever they differ. The onboarding Workflow runs the `GENERATORS` list in `app/lib/discovery/run.server.ts`, and that list is **two generators: HN Algolia and the `ai` proposer**.
+
+| Generator | On the request path | Why |
+|---|---|---|
+| HN Algolia (`generators/hn.ts`) | **Yes** | Searches `tags=(story,comment)` and reads the text, not only the titles: `comment_text`, `story_text`, `title` and `story_title`. HTML is stripped and entities decoded by `html-text.ts`, then `coMentions` reads each sentence that names the brand ("alternatives to Gymshark like Alo, Vuori and Fabletics", "Gymshark vs Alo"). Best effort: a 5 s fetch timeout, a failed fetch is logged by `assertFetched` and the run continues with zero candidates from it, an unparseable body is logged and returns none, and an empty result is logged by `logIfEmpty`. |
+| GDELT news | **No** | GDELT answers 429 to an on-demand burst (`REBUILD-MENTIONS.md` §12: paced-cron only). The `news` generator is deleted. GDELT is collected only by the paced mentions cron in `workers/sources/mentions/gdelt.ts`. |
+| Google News RSS roundup harvest | **No** | Probes 1 and 2 below measured it, but it was never built as a generator and is not used. |
+| Meta Ad Library | **Skipped for onboarding** | It needs the browser leg, which stays off the 60-second onboarding path. |
+| `ai` proposer (`generators/ai.server.ts`) | **Yes** | Jev cannot generate a list, so a stock Workers AI model proposes brands from the user's own site; see "The `ai` proposer" below. Its candidates carry evidence count 0 and are marked suggested. |
+
+`GeneratorKey` still contains `news` so backlog rows and evidence written before this change keep parsing; nothing produces it now. The `reliability` field in the D1 context pack carries `hn: best_effort` only.
+
+---
+
 ## The two candidate shapes
 
 ### Candidate A — recall first, judge everything
@@ -47,6 +63,16 @@ Candidate B's ordering is a count of independent corroboration, which is stable,
 **Rejected from A, recorded:** judging every candidate, and sorting the list by D1's probability. If recall ever proves to be the binding problem, the fix is another generator, not a bigger judgment budget.
 
 ---
+
+## The `ai` proposer
+
+HN alone can return nothing on a cold request path, so a second generator, `ai` (`app/lib/discovery/generators/ai.server.ts`), proposes candidates from the user's own site. Jev has no list primitive (Noul, Choice, Score only; `REBUILD-JEV.md`), so the proposer is a stock Workers AI text model, `@cf/meta/llama-3.3-70b-instruct-fp8-fast`, called with `env.AI.run` and JSON Mode (`response_format: { type: "json_schema" }`) through AI Gateway `default`, the same gateway option the Jev client passes. Docs: https://developers.cloudflare.com/workers-ai/features/json-mode/ (that page lists the model as JSON Mode capable). No custom client and no prompt-templating library.
+
+- Input: the identity card's name, domain and description, plus the homepage `<title>` and meta description read from a plain `fetch` with `HTMLRewriter`. An unreachable homepage still proposes from the card.
+- Output: up to 10 `{ name, domain }` pairs, validated with `zod`. Malformed JSON or an AI binding error is logged and yields zero candidates; the run does not fail.
+- Invented domains: each proposed domain is reduced to its registrable domain and must answer a `HEAD` request within 5 seconds, or it is dropped. The subject's own domain and repeats are dropped there; known, dismissed and taken-down domains are dropped by `resolveShortlist` like every other candidate.
+- Evidence count 0, "suggested": an `ai` candidate carries one `Evidence` with `generator: "ai"` that says it is uncorroborated. Ranking counts corroboration as the number of generators other than `ai`, so anything HN also found ranks above any `ai`-only candidate, and an `ai` candidate that another generator confirms gains rank. `ai` keeps its one guaranteed judgment slot. The evidence line reads "Suggested from your site, not yet seen elsewhere".
+- Jev still judges: every proposed name goes through D1 (`is_competitor`) with the same thresholds; the model never decides what is a competitor.
 
 ## Live probes — one per generator, on Gymshark
 

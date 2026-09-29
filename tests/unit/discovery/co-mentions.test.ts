@@ -66,4 +66,24 @@ describe("leadingName", () => {
   it("returns null when the run is longer than four words", () => {
     expect(leadingName("One Two Three Four Five")).toBeNull();
   });
+
+  it("reads a list introduced by like", () => {
+    expect(coMentions("Try alternatives to Gymshark like Alo, Vuori and Fabletics", BRAND)).toEqual([
+      "Alo",
+      "Vuori",
+      "Fabletics",
+    ]);
+  });
+
+  it("reads a rival named before an alternatives cue", () => {
+    expect(coMentions("Alo, Vuori and Fabletics are alternatives to Gymshark", BRAND)).toEqual([
+      "Alo",
+      "Vuori",
+      "Fabletics",
+    ]);
+  });
+
+  it("does not read a lowercase word after like as a name", () => {
+    expect(coMentions("Gymshark is like a gym uniform", BRAND)).toEqual([]);
+  });
 });

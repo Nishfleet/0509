@@ -1,20 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 
-import { consoleFailures, deleteCreatedAccount, requireInboxToken, signInWithMagicLink, watchConsole } from "./inbox";
-
-let createdEmail = "";
-test.afterEach(async ({ page }, testInfo) => {
-  if (createdEmail === "") return;
-  testInfo.setTimeout(testInfo.timeout + 60_000);
-  // The delete failing is a test failure, not a reason to keep the address:
-  // clearing in finally means the next test in this worker cannot try to
-  // delete an account that is already gone.
-  try {
-    await deleteCreatedAccount(page, createdEmail);
-  } finally {
-    createdEmail = "";
-  }
-});
+import { onboardedStatePath } from "../playwright.config";
+import { consoleFailures, watchConsole } from "./inbox";
 
 // Filter vocabulary is the feed's own (app/lib/developments.ts FEED_FILTERS);
 // the counts are live and asserted only as numerals — a just-watched
@@ -36,44 +23,29 @@ function list(page: Page) {
 }
 
 // The feed test against the real detail page, production only: the preview
-// Worker cannot mint a session, so this test skips there. The journey is J3's
-// — gymshark.com onboarded through "Start watching" — then the first watched
-// chip on /app/competitors opens a real /app/competitors/:entityId page.
-test("the developments feed filters by kind and keeps its layout across filters", async ({
+// Worker cannot mint a session, so this file skips there. The signed-in one
+// comes from onboarded.setup.ts — a real /app/competitors/:entityId page is
+// already watched in the shared session before this test opens it.
+test.skip(
+  !process.env.PLAYWRIGHT_TEST_BASE_URL,
+  "the developments feed needs a real session; the local preview Worker cannot mint one",
+);
+
+// Playwright's fixture validator requires an object destructuring pattern
+// here, and no-empty-pattern bans `({})`: the ignored binding is the price.
+test.use({
+  storageState: async ({ browserName: _browserName }, use, testInfo) => {
+    await use(onboardedStatePath(testInfo.project.name === "phone-390" ? "phone" : "desktop"));
+  },
+});
+
+test("the developments feed filters by kind and keeps its layout across filters @own-signin", async ({
   page,
 }, testInfo) => {
-  test.skip(
-    !process.env.PLAYWRIGHT_TEST_BASE_URL,
-    "the developments feed needs a real session; the local preview Worker cannot mint one",
-  );
   test.setTimeout(150_000);
   const watched = watchConsole(page);
 
-  const email = `e2e+${crypto.randomUUID().replaceAll("-", "").slice(0, 12)}@0509.io`;
-  createdEmail = email;
-  await signInWithMagicLink(page, email, requireInboxToken());
-
-  await page.goto("/onboarding");
-  const input = page.getByRole("textbox", { name: "your website, or a handle" });
-  await input.fill("gymshark.com");
-  await input.press("Enter");
-
-  await expect(page.getByRole("button", { name: "edit name" })).toBeVisible({ timeout: 30_000 });
-  await expect(page.getByText("looking on the site")).toHaveCount(0, { timeout: 30_000 });
-  await page.getByRole("button", { name: "That's me" }).click();
-  await expect(page).toHaveURL(/\/onboarding\/competitors$/, { timeout: 30_000 });
-
-  const watching = page.getByRole("list", { name: "Watching" }).getByRole("listitem");
-  await expect(
-    watching.first().or(page.getByRole("button", { name: /^Watch / }).first()),
-  ).toBeVisible({ timeout: 60_000 });
-  if ((await watching.count()) === 0) {
-    await page.getByRole("button", { name: /^Watch / }).first().click();
-    await expect(watching.first()).toBeVisible();
-  }
-  await page.getByRole("button", { name: "Start watching" }).click();
-  await expect(page).toHaveURL(/\/app$/);
-
+  // Read-only test: any watched competitor serves, so it opens the first row.
   await page.goto("/app/competitors");
   await page.getByRole("list", { name: "Competitors" }).getByRole("link").first().click();
   await expect(page).toHaveURL(/\/app\/competitors\/[^/]+$/);

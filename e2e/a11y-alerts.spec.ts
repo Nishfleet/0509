@@ -1,21 +1,7 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
 
-import { deleteCreatedAccount, requireInboxToken, signInWithMagicLink } from "./inbox";
-
-let createdEmail = "";
-test.afterEach(async ({ page }, testInfo) => {
-  if (createdEmail === "") return;
-  testInfo.setTimeout(testInfo.timeout + 60_000);
-  // The delete failing is a test failure, not a reason to keep the address:
-  // clearing in finally means the next test in this worker cannot try to
-  // delete an account that is already gone.
-  try {
-    await deleteCreatedAccount(page, createdEmail);
-  } finally {
-    createdEmail = "";
-  }
-});
+import { sessionStatePath } from "../playwright.config";
 
 // The Alerts page measured at each shape the product ships, the same production
 // lane and the same reason as e2e/a11y-competitors.spec.ts and
@@ -25,10 +11,9 @@ test.afterEach(async ({ page }, testInfo) => {
 //
 // The Alerts journey only reads: it clicks no chip and opens no settings form,
 // because it runs against production and a visit that wrote data would put a
-// row in a real workspace for a mailbox nobody owns. The write that needs
-// cleanup is the sign-in below: signInWithMagicLink submits the login form
-// (e2e/inbox.ts:272) and the link it then visits creates the session and its
-// user row (e2e/inbox.ts:278; e2e/inbox.ts:293-295). The afterEach deletes it.
+// row in a real workspace for a mailbox nobody owns. It signs in nowhere: it
+// reuses the shared per-run session the `session` project saved.
+test.use({ storageState: process.env.PLAYWRIGHT_TEST_BASE_URL ? sessionStatePath : undefined });
 test.skip(
   !process.env.PLAYWRIGHT_TEST_BASE_URL,
   "the Alerts page needs a real session; the local preview Worker cannot mint one",
@@ -37,16 +22,11 @@ test.skip(
 test("the Alerts page passes axe at WCAG 2.2 AA and is keyboard-operable at 1440 and 390 in light and dark (#4153)", async ({
   page,
 }, testInfo) => {
-  // One magic-link sign-in plus four shapes, each a full page load, an axe
-  // scan, a reload, four Tab presses and a screenshot. Playwright's 30s default
-  // does not cover the sign-in's redirect chain plus the loop: a production run
-  // read it as a timeout at page.reload(), before the gate. magic-link-email.spec.ts:35
-  // takes the same 180s for its signed-in production journey.
+  // Four shapes on the shared session, each a full page load, an axe scan, a
+  // reload, four Tab presses and a screenshot. Playwright's 30s default does
+  // not cover the loop: a production run read it as a timeout at page.reload(),
+  // before the gate.
   test.setTimeout(180_000);
-  const token = requireInboxToken();
-  const email = `e2e+${crypto.randomUUID().replaceAll("-", "").slice(0, 12)}@0509.io`;
-  createdEmail = email;
-  await signInWithMagicLink(page, email, token);
 
   for (const viewport of [
     { width: 1440, height: 900 },

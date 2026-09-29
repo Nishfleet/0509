@@ -26,6 +26,16 @@ describe("Sentry beforeSend", () => {
     expect(result.request?.url).toBe("https://0509.io/u/[redacted]");
   });
 
+  it("redacts a delivery-confirm token the same way", async () => {
+    const result = await beforeSend({
+      type: undefined,
+      event_id: "e1",
+      request: { method: "GET", url: "https://0509.io/v/abc?x=1" },
+    });
+
+    expect(result.request?.url).toBe("https://0509.io/v/[redacted]");
+  });
+
   it("redacts the unsubscribe token in the transaction name", async () => {
     const result = await beforeSend({
       type: undefined,
@@ -34,6 +44,16 @@ describe("Sentry beforeSend", () => {
     });
 
     expect(result.transaction).toBe("GET /u/[redacted]");
+  });
+
+  it("redacts a delivery-confirm token in the transaction name", async () => {
+    const result = await beforeSend({
+      type: undefined,
+      event_id: "e1",
+      transaction: "GET /v/abc",
+    });
+
+    expect(result.transaction).toBe("GET /v/[redacted]");
   });
 
   it("leaves a path without a token alone apart from the query", async () => {

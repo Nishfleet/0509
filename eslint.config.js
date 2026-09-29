@@ -1,8 +1,11 @@
 import js from "@eslint/js";
+import betterTailwindcss from "eslint-plugin-better-tailwindcss";
 import boundaries from "eslint-plugin-boundaries";
 import importX, { createNodeResolver } from "eslint-plugin-import-x";
 import reactHooks from "eslint-plugin-react-hooks";
 import noComments from "eslint-plugin-no-comments";
+import playwright from "eslint-plugin-playwright";
+import vitest from "@vitest/eslint-plugin";
 import globals from "globals";
 import tseslint from "typescript-eslint";
 
@@ -340,6 +343,77 @@ const STATIC_HOME_FONT_PRELOAD = {
     };
   },
 };
+
+// DESIGN.md rule 8: "The accent is one colour. Green marker. Red exists only as
+// the strike on a 'before' and the rule on an open incident. Nothing else is
+// coloured, ever." These two restricted-class patterns make a second colour a
+// diff the lint rejects instead of a review comment.
+const TAILWIND_ARBITRARY_COLOUR = {
+  pattern:
+    "^(?:[^\\s]*:)*(?:bg|text|border|fill|stroke|ring|from|via|to|decoration|accent|caret|divide|outline|placeholder|shadow)-(?:\\[(?:#|rgb|hsl|oklch|oklab|lab|lch|color-mix|var\\()|\\(--)",
+  message:
+    "Arbitrary colour values are banned: every colour is a @theme token in app/app.css and the accent is one colour (DESIGN.md rule 8). Source: 0509#5871.",
+};
+
+const TAILWIND_DEFAULT_PALETTE = {
+  pattern:
+    "^(?:[^\\s]*:)*(?:bg|text|border|fill|stroke|ring|from|via|to|decoration|accent|caret|divide|outline|placeholder|shadow)-(?:slate|gray|zinc|neutral|stone|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose)-[0-9]",
+  message:
+    "The Tailwind default palette is banned: every colour is a @theme token in app/app.css (bg-green is the one accent, DESIGN.md rule 8). Source: 0509#5871.",
+};
+
+const SHADCN_STOCK_TOKEN_CLASSES =
+  "(?:^|:)(?:bg|text|border|ring|fill|stroke)-(?:background|foreground|muted|muted-foreground|primary|primary-foreground|secondary|secondary-foreground|destructive|border|input|ring|popover|popover-foreground)(?:/[0-9]+)?$";
+
+const TW_ANIMATE_STOCK_CLASSES =
+  "(?:^|:)(?:animate-in|animate-out|fade-in-0|fade-out-0|zoom-in-95|zoom-out-95|slide-in-from-(?:top|bottom|left|right)-2)$";
+
+// The plugin lints a `const X = "..."` class list only when it has been told
+// the name: its own defaults are `className`, `classNames`, `classes` and
+// `styles`, and this repo's convention is a bare SHOUTY name instead (ROW,
+// WHEN_CLASS, BLOCK, TITLE, …). The list below is every class-list constant on
+// main, so a colour smuggled into one of them is red, not green — without it
+// `const ROW = "bg-[#ff0000]"` passed all three rules. A new class-list
+// constant must add its name here; a name that is already used for a string
+// that is not a class list (a `<title>`, a CSS custom property fallback) will
+// report the words of that string as unknown classes, which is why the two
+// such constants on main are named PAGE_TITLE (app/routes/landing.tsx) and
+// LINE_FALLBACK (app/components/source-pill.tsx).
+const TAILWIND_CLASS_VARIABLES = [
+  // The plugin's own defaults, kept so setting this list does not drop them.
+  "^classNames?$",
+  "^classes$",
+  "^styles?$",
+  "^BLOCK$",
+  "^BODY$",
+  "^BRIEF$",
+  "^BRIEF_LINE$",
+  "^CARD$",
+  "^DETAILS$",
+  "^EYEBROW$",
+  "^FIELD$",
+  "^GREETING$",
+  "^HEAD$",
+  "^HEADING$",
+  "^HEADING_CLASS$",
+  "^LABEL$",
+  "^LABEL_CLASS$",
+  "^LINE$",
+  "^LINK$",
+  "^MARKER$",
+  "^NOTE$",
+  "^OFF$",
+  "^PILL$",
+  "^PREVIOUS_HEADING$",
+  "^PREVIOUS_LINK$",
+  "^PREVIOUS_LIST$",
+  "^ROW$",
+  "^ROW_CLASS$",
+  "^SECTION$",
+  "^SUMMARY$",
+  "^TITLE$",
+  "^WHEN_CLASS$",
+];
 
 const WORKAROUND_TERMS = [
   "todo",
@@ -757,6 +831,12 @@ export default tseslint.config(
               from: { element: { type: "worker" } },
               allow: { to: { file: { categories: "server-module" } } },
             },
+            {
+              from: { file: { path: "app/lib/delivery-address.server.ts" } },
+              allow: { to: { file: { path: "workers/delivery/send.ts" } } },
+              message:
+                "The delivery-address save is the second app-side sender after app/lib/auth.server.ts, and it goes through the one paved path (workers/delivery/send.ts) instead of calling env.EMAIL.send a second time. Only that one file reaches the worker; every other server leaf keeps the boundary. Source: 0509#5811.",
+            },
           ],
         },
       ],
@@ -808,6 +888,43 @@ export default tseslint.config(
     },
   },
 
+  // 0509#5785, shipped by 0509#5808. Never skip, disable or quarantine a test
+  // to get green: a focused test silently drops the rest of the suite, and a
+  // disabled test stops testing the thing it names. Every rule below is stock
+  // and carries its own message; `maxArgs: 2` is the one non-default value,
+  // because the node suite passes a failure message as `expect`'s second
+  // argument.
+  {
+    files: ["tests/**/*.ts"],
+    plugins: { vitest },
+    rules: {
+      "vitest/no-focused-tests": "error",
+      "vitest/no-disabled-tests": "error",
+      "vitest/no-identical-title": "error",
+      "vitest/expect-expect": "error",
+      "vitest/valid-expect": ["error", { maxArgs: 2 }],
+    },
+  },
+
+  // 0509#5785, shipped by 0509#5808. An e2e spec never waits on wall-clock time
+  // or for the network to go idle, and never focuses or unconditionally skips a
+  // test. `allowConditional` is the one non-default value: the suite gates on
+  // the project and the environment (`test.skip(condition, reason)`), and report
+  // specs use `test.fail()` (CLAUDE.md "Reproducing a user report").
+  {
+    files: ["e2e/**/*.ts"],
+    plugins: { playwright },
+    rules: {
+      "playwright/no-focused-test": "error",
+      "playwright/no-skipped-test": ["error", { allowConditional: true }],
+      "playwright/no-wait-for-timeout": "error",
+      "playwright/no-page-pause": "error",
+      "playwright/missing-playwright-await": "error",
+      "playwright/no-networkidle": "error",
+      "playwright/valid-expect": "error",
+    },
+  },
+
   {
     files: ["**/*.js", "**/*.mjs", "**/*.cjs", "*.config.ts", "e2e/**/*.ts", "tests/**/*.ts", "public/index.html"],
     extends: [tseslint.configs.disableTypeChecked],
@@ -833,6 +950,47 @@ export default tseslint.config(
     },
     rules: {
       "static-home/no-font-preload": "error",
+    },
+  },
+
+  // The DESIGN.md colour gate (0509#5871). The parent issue says
+  // `no-unregistered-classes`; the rule shipped in 4.7.0 is named
+  // `no-unknown-classes`, so that is the name here. Both patterns open with
+  // `(?:[^\s]*:)*` because a variant prefix is not always one word: this repo
+  // writes `max-[859px]:`, `aria-[current=page]:` and `[&:hover]:`, and a
+  // prefix pattern of `[a-z0-9-]+` let a banned colour hide behind all three.
+  // The `ui/` ignore list covers stock shadcn semantic tokens and
+  // tw-animate-css classes that are dead on main: the tokens are not in
+  // `@theme`, and registering them would start painting, a design change out
+  // of scope for this slice. 81 hits were probed on a74ad41 — 80 in
+  // app/components/ui/, one `cf-turnstile` in
+  // app/components/turnstile-widget.tsx, which is Cloudflare's widget class,
+  // never a Tailwind class. The `ui/` override is a later matching block
+  // because flat config replaces a rule's options per matching block: it
+  // widens `no-unknown-classes` only, and the strict block's
+  // restricted-classes and class-order settings stay in force there.
+  {
+    files: ["app/**/*.{ts,tsx}"],
+    plugins: { "better-tailwindcss": betterTailwindcss },
+    settings: {
+      "better-tailwindcss": { entryPoint: "app/app.css", variables: TAILWIND_CLASS_VARIABLES },
+    },
+    rules: {
+      "better-tailwindcss/no-unknown-classes": ["error", { ignore: ["^cf-turnstile$"] }],
+      "better-tailwindcss/no-restricted-classes": [
+        "error",
+        { restrict: [TAILWIND_ARBITRARY_COLOUR, TAILWIND_DEFAULT_PALETTE] },
+      ],
+      "better-tailwindcss/enforce-consistent-class-order": "error",
+    },
+  },
+  {
+    files: ["app/components/ui/**/*.tsx"],
+    rules: {
+      "better-tailwindcss/no-unknown-classes": [
+        "error",
+        { ignore: [SHADCN_STOCK_TOKEN_CLASSES, TW_ANIMATE_STOCK_CLASSES] },
+      ],
     },
   },
 );

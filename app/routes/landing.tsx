@@ -13,6 +13,7 @@ import { pageWidth } from "../components/landing/section";
 import { TheMark } from "../components/landing/the-mark";
 import { Ticker } from "../components/landing/ticker";
 import { WhatWeWatch } from "../components/landing/what-we-watch";
+import { sourcePillStatus } from "../components/source-pill";
 import { WATCHED_NOUNS } from "../lib/coverage";
 import { readSiteChanges } from "../lib/data/signal.server";
 import { readRegistrySources } from "../lib/data/source.server";
@@ -28,18 +29,18 @@ import {
 } from "../lib/structured-data";
 import { tickerItems } from "../lib/ticker";
 
-const TITLE = "Competitor tracking for founders and creators | Five to Nine";
+const PAGE_TITLE = "Competitor tracking for founders and creators | Five to Nine";
 const DESCRIPTION = `Five to Nine watches your competitors' ${WATCHED_NOUNS} and emails you one brief every Monday with a screenshot behind every change.`;
 const HOME = `${SITE_URL}/`;
 
 export function meta(_: Route.MetaArgs) {
   return [
-    { title: TITLE },
+    { title: PAGE_TITLE },
     { name: "description", content: DESCRIPTION },
     { tagName: "link", rel: "canonical", href: HOME },
     { property: "og:type", content: "website" },
     { property: "og:site_name", content: "Five to Nine" },
-    { property: "og:title", content: TITLE },
+    { property: "og:title", content: PAGE_TITLE },
     { property: "og:description", content: DESCRIPTION },
     { property: "og:url", content: HOME },
     { property: "og:image", content: `${SITE_URL}/og.png` },
@@ -59,8 +60,11 @@ export function meta(_: Route.MetaArgs) {
 }
 
 export async function loader(_: Route.LoaderArgs) {
-  const sources = await readRegistrySources();
   const now = Date.now();
+  const registry = await readRegistrySources();
+  const sources = registry.filter(
+    (entry) => sourcePillStatus(entry.source, entry.snapshot, now).state !== "disabled",
+  );
   const id: unknown = env.LANDING_WORKSPACE_ID;
   if (typeof id !== "string" || id.trim() === "") return { ticker: [], sources, now };
   const rows = await readSiteChanges({

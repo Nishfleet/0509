@@ -28,7 +28,7 @@ export function FreshnessLine({
 }): ReactElement | null {
   if (entries.length === 0) return null;
   return (
-    <p data-home="freshness" className="font-mono text-eyebrow text-ink-soft mt-2">
+    <p data-home="freshness" className="mt-2 font-mono text-eyebrow text-ink-soft">
       {entries.flatMap((entry, index) =>
         index === 0
           ? [<span key={entry.key} data-state={entry.state}>{freshnessText(entry)}</span>]

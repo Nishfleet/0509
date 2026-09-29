@@ -10,9 +10,18 @@ import {
   markSiteFill,
   siteWasReached,
 } from "../../../app/lib/identity/site-fill.server";
+import { takeBrowserEscalation } from "../../../app/lib/site/browser-budget.server";
 
 const NOW = "2026-09-25T08:00:00Z";
 const HOMEPAGE = "https://gymshark.com/";
+const BOT_GATED_HTML = `<!doctype html>
+<html>
+  <head>
+    <title>Botgated</title>
+    <meta property="og:description" content="A description that only the browser could read">
+  </head>
+  <body><h1>Botgated</h1></body>
+</html>`;
 const SOCIAL = { platform: "instagram", url: "https://instagram.com/gymshark" };
 const CARD = {
   name: "Gymshark",
@@ -26,11 +35,28 @@ const CARD = {
 let entityId = "";
 let userId = "";
 let workspaceId = "";
+let otherWorkspaceId = "";
 
 function key(): string {
   const normalised = normaliseSubject("gymshark.com");
   if (!normalised.ok) throw new Error("gymshark.com must normalise");
   return probeKey(normalised.subject, "homepage");
+}
+
+function browserStub(html: string) {
+  const calls: string[] = [];
+  return {
+    calls,
+    quickAction(_action: "content", options: { url: string }): Promise<Response> {
+      calls.push(options.url);
+      return Promise.resolve(
+        new Response(JSON.stringify({ success: true, result: html, meta: { status: 200 } }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+      );
+    },
+  };
 }
 
 async function seed(identity: Record<string, unknown>): Promise<void> {
@@ -52,6 +78,16 @@ async function seed(identity: Record<string, unknown>): Promise<void> {
     identityJson: JSON.stringify(identity),
     now: NOW,
   });
+  await env.DB.prepare(
+    `INSERT INTO "user" (id, name, email, emailVerified, createdAt, updatedAt) VALUES (?1, 'Owner', ?2, 0, ?3, ?3)`,
+  )
+    .bind(`${userId}-b`, `${userId}-b@0509.io`, NOW)
+    .run();
+  await env.DB.prepare(
+    `INSERT INTO workspace (id, name, owner_user_id, created_at) VALUES (?1, 'Owner', ?2, ?3)`,
+  )
+    .bind(otherWorkspaceId, `${userId}-b`, NOW)
+    .run();
 }
 
 async function identity(): Promise<Record<string, unknown>> {
@@ -65,15 +101,25 @@ beforeEach(() => {
   entityId = `entity-site-fill-${suffix}`;
   userId = `user-site-fill-${suffix}`;
   workspaceId = `ws-site-fill-${suffix}`;
+  otherWorkspaceId = `ws-site-fill-other-${suffix}`;
 });
 
 afterEach(async () => {
   vi.unstubAllGlobals();
+  Reflect.deleteProperty(env, "BROWSER");
   await env.IDENTITY_CACHE.delete(key());
-  await env.DB.prepare('DELETE FROM "user" WHERE id = ?1').bind(userId).run();
+  await env.DB.prepare('DELETE FROM "user" WHERE id = ?1 OR id = ?2').bind(userId, `${userId}-b`).run();
 });
 
 describe("site fill", () => {
+  it("treats an unparseable homepage as not reached", async () => {
+    expect(await siteWasReached("::::")).toBe(false);
+  });
+
+  it("treats a homepage with no registrable domain as not reached", async () => {
+    expect(await siteWasReached("http://")).toBe(false);
+  });
+
   it("reports whether the homepage probe is cached", async () => {
     await seed({ description: null, socials: [] });
 
@@ -128,12 +174,70 @@ describe("site fill", () => {
     });
   });
 
+  it("ignores a field edit recorded in another workspace", async () => {
+    await seed({ description: null, socials: [] });
+    // user_decision.entity_id is a bare entity FK until 0509#4965 lands the composite key.
+    await insertFieldEdits([
+      {
+        workspaceId: otherWorkspaceId,
+        userId: `${userId}-b`,
+        entityId,
+        edit: { field: "description", from: "Gym clothes", to: "" },
+        decidedAt: NOW,
+      },
+    ]);
+    await env.IDENTITY_CACHE.put(key(), JSON.stringify(CARD));
+
+    expect(await attemptSiteFill(workspaceId, entityId, HOMEPAGE)).toBe("filled");
+    expect(await identity()).toEqual({
+      description: "Gym clothes",
+      socials: [SOCIAL],
+      siteFill: "filled",
+    });
+  });
+
   it("leaves the card unchanged when the homepage remains unreachable", async () => {
     await seed({ description: null, socials: [] });
     const before = await readEntityIdentityJson(workspaceId, entityId);
     vi.stubGlobal("fetch", () => Promise.reject(new Error("refused")));
 
     expect(await attemptSiteFill(workspaceId, entityId, HOMEPAGE)).toBe("pending");
+    expect(await readEntityIdentityJson(workspaceId, entityId)).toBe(before);
+  });
+
+  it("escalates a bot-gated homepage through the brand's last budgeted read", async () => {
+    await seed({ description: null, socials: [] });
+    const day = new Date().toISOString().slice(0, 10);
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      expect(await takeBrowserEscalation(workspaceId, "gymshark.com", day)).toBe(true);
+    }
+    vi.stubGlobal("fetch", () => Promise.resolve(new Response("blocked", { status: 403 })));
+    const stub = browserStub(BOT_GATED_HTML);
+    Object.defineProperty(env, "BROWSER", { configurable: true, get: () => stub });
+
+    expect(await attemptSiteFill(workspaceId, entityId, HOMEPAGE)).toBe("filled");
+    expect(await identity()).toEqual({
+      description: "A description that only the browser could read",
+      socials: [],
+      siteFill: "filled",
+    });
+    expect(stub.calls).toEqual([HOMEPAGE]);
+    expect(await takeBrowserEscalation(workspaceId, "gymshark.com", day)).toBe(false);
+  });
+
+  it("does not escalate a bot-gated homepage once the brand's day budget is spent", async () => {
+    await seed({ description: null, socials: [] });
+    const day = new Date().toISOString().slice(0, 10);
+    for (let attempt = 0; attempt < 4; attempt += 1) {
+      expect(await takeBrowserEscalation(workspaceId, "gymshark.com", day)).toBe(true);
+    }
+    vi.stubGlobal("fetch", () => Promise.resolve(new Response("blocked", { status: 403 })));
+    const stub = browserStub(BOT_GATED_HTML);
+    Object.defineProperty(env, "BROWSER", { configurable: true, get: () => stub });
+    const before = await readEntityIdentityJson(workspaceId, entityId);
+
+    expect(await attemptSiteFill(workspaceId, entityId, HOMEPAGE)).toBe("pending");
+    expect(stub.calls).toEqual([]);
     expect(await readEntityIdentityJson(workspaceId, entityId)).toBe(before);
   });
 
