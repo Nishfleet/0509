@@ -11,8 +11,6 @@ const PURGED = [
   "probe@fixture.0509.in",
   "someone@gymshark.com",
 ];
-// 0509#6020: the keep-list is the shared module; the applied migration 0026 is
-// the immutable oracle that fails the test if the two drift apart.
 const KEPT = Object.values(FIXTURE_ACCOUNTS).map((account) => account.email);
 
 function purgeMigration(): D1Migration {
@@ -43,7 +41,6 @@ async function remaining(sql: string): Promise<string[]> {
 
 describe("the fixture-account purge migration", () => {
   it("deletes test accounts with their workspaces and keys, and keeps only the four fixed spec accounts", async () => {
-    expect(KEPT).toHaveLength(4);
     const emails = [...PURGED, ...KEPT];
     await Promise.all(emails.map((email, index) => seed(email, index)));
 

@@ -57,4 +57,4 @@ The recorded live read above returned `signups_7d = 2`, `signups_30d = 2`, total
 
 ## Boundary
 
-This doc is measurement only. The fixture-row cleanup shipped separately as migration `0026_purge_e2e_fixture_users.sql` (#5730): every `user` row outside the four-account keep-list was deleted.
+**No fixture-row cleanup in this PR.** Row cleanup of the 308 fixture rows in production D1 is destructive-adjacent; the conference owns its shape. This doc lands measurement only.
