@@ -147,7 +147,7 @@ jobs:
         # @scheduled journeys run on their own clock above: J12 now, J8 with its spec (0509#4124, 0509#4128).
         # https://playwright.dev/docs/test-sharding
         timeout-minutes: 25
-        run: npm run e2e -- --shard=${{ matrix.shard }}/4 --reporter=github,list --grep-invert @scheduled --retries=0
+        run: npm run e2e -- --shard=${{ matrix.shard }}/4 --project=desktop-1440 --reporter=github,list --grep-invert @scheduled --retries=0
         env:
           PLAYWRIGHT_TEST_BASE_URL: https://0509.io
           CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
