@@ -11,7 +11,7 @@ import { describe, expect, it } from "vitest";
 // drifted (https-only vs http-or-https, byte cap vs text cap). The transport
 // primitives now live in app/lib/fetch/outbound.server.ts and the BARE_FETCH
 // selector in eslint.config.js makes a third copy red instead of a review
-// note. The call sites that predate the rule are grandfathered by file list,
+// note. Client code is exempt (a browser fetch goes to our own origin; SSRF is server-side),
 // the same shape DOMAIN_HOSTNAME_BAN landed in 0509#4371. These probes boot
 // the real eslint.config.js (same rig as eslint-writer-rule.test.ts).
 
@@ -81,7 +81,13 @@ describe("eslint one-outbound-fetch rule (#4951)", () => {
     expect(result.messages.some((m) => m.includes(FETCH_MESSAGE))).toBe(false);
   });
 
-  it("leaves a grandfathered call site alone", { timeout: 60_000 }, async () => {
+  it("leaves a client component under app/components alone", { timeout: 60_000 }, async () => {
+    const result = await lintProbe("app/components/probe-fetch-tmp.tsx", BARE_FETCH_CALL);
+    expect(result.ignored).toBe(false);
+    expect(result.messages.some((m) => m.includes(FETCH_MESSAGE))).toBe(false);
+  });
+
+  it("leaves the real share button alone", { timeout: 60_000 }, async () => {
     const messages = await lintExisting("app/components/share-button.tsx");
     expect(messages.some((m) => m.includes(FETCH_MESSAGE))).toBe(false);
   });

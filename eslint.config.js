@@ -171,7 +171,7 @@ const DOMAIN_HOSTNAME_BAN = {
 const BARE_FETCH = {
   selector: "CallExpression[callee.name='fetch']",
   message:
-    "Outbound fetch is owned by app/lib/fetch/: fetchOutbound refuses non-public hosts and re-checks every redirect hop under an 8 s deadline, and cappedBody bounds the body. A bare fetch( anywhere else is a second transport that drifts from all three. Source: 0509#4951.",
+    "Outbound fetch is owned by app/lib/fetch/: fetchOutbound refuses non-public hosts and re-checks every redirect hop under an 8 s deadline, and cappedBody bounds the body. A bare fetch( anywhere else in server code is a second transport that drifts from all three. Client code is exempt: a browser fetch goes to our own origin and SSRF is a server-side risk. Source: 0509#4951, 0509#6212.",
 };
 
 // DESIGN.md: fonts are self-hosted. A Google Fonts <link> put LCP at 2021 ms against the
@@ -592,12 +592,14 @@ export default tseslint.config(
   },
 
   {
-    // BARE_FETCH grandfather: the one file left that called fetch before the rule
-    // existed (0509#4951), client code that cannot import a server module. It keeps every other ban — the array restates the
-    // shared list because a later matching block's no-restricted-syntax entry
-    // replaces the earlier one wholesale. New outbound fetch belongs in
-    // app/lib/fetch/, not on this list.
-    files: ["app/components/share-button.tsx"],
+    // BARE_FETCH is a server-side rule: a browser fetch goes to our own origin,
+    // and SSRF needs a server making the request. Server code is app/lib/**,
+    // app/routes/** (loaders and actions), *.server.ts and workers/**; the rest of
+    // app/ (components, root, entries) is client and exempt. The array restates
+    // the shared list because a later matching block's no-restricted-syntax entry
+    // replaces the earlier one wholesale. 0509#4951, 0509#6212.
+    ignores: ["app/lib/**", "app/routes/**", "app/**/*.server.ts", "app/components/footer.tsx"],
+    files: ["app/**/*.{ts,tsx}"],
     rules: {
       "no-restricted-syntax": [
         "error",
