@@ -16,19 +16,18 @@ function headersBlock(pattern: string): string {
   const body: string[] = [];
   for (let index = start + 1; index < lines.length; index++) {
     const line = lines[index] ?? "";
-    if (line.length > 0 && !line.startsWith(" ")) break;
+    if (line.length > 0 && !/^\s/.test(line)) break;
     body.push(line);
   }
   return body.join("\n");
 }
 
 function headerValue(block: string, name: string): string | undefined {
-  return block
+  const line = block
     .split("\n")
-    .map((line) => line.trim())
-    .find((line) => line.toLowerCase().startsWith(`${name.toLowerCase()}:`))
-    ?.slice(name.length + 1)
-    .trim();
+    .map((entry) => entry.trim())
+    .find((entry) => entry.toLowerCase().startsWith(`${name.toLowerCase()}:`));
+  return line?.slice(line.indexOf(":") + 1).trim();
 }
 
 describe("static home analytics", () => {

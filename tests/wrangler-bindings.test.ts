@@ -43,10 +43,12 @@ describe("deployed wrangler configs", () => {
     const { rawConfig } = experimental_readRawConfig({ config: "wrangler.jsonc" });
     const limits = rawConfig.limits;
     expect(limits).toBeDefined();
-    // Above the measured p99.9 (1,075.6 ms) so the tail stays watchable
+    // Above the measured p99.9 so the tail stays watchable
     // rather than becoming a 5xx, and below the 30,000 ms paid default.
-    expect(limits?.cpu_ms).toBeGreaterThan(1_076);
-    expect(limits?.cpu_ms).toBeLessThan(30_000);
+    const MEASURED_CPU_P99_9_MS = 1_076;
+    const PAID_DEFAULT_CPU_MS = 30_000;
+    expect(limits?.cpu_ms).toBeGreaterThan(MEASURED_CPU_P99_9_MS);
+    expect(limits?.cpu_ms).toBeLessThan(PAID_DEFAULT_CPU_MS);
     expect(limits?.subrequests).toBe(10_000);
   });
 
