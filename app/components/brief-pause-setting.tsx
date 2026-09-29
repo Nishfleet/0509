@@ -9,7 +9,7 @@ export function BriefPauseSetting({ pausedAt, timezone }: { pausedAt: string | n
   return (
     <div className="mt-4">
       {pausedAt !== null ? (
-        <p className="text-ink-soft text-body-sm">
+        <p className="text-body-sm text-ink-soft">
           Paused since {formatPausedSince(pausedAt, timezone)}. Your ranking still updates; the email doesn't come.
         </p>
       ) : null}

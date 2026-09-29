@@ -4,7 +4,7 @@ export function PageHeading({ title, lede }: { title: string; lede?: ReactNode }
   return (
     <header className="min-w-0">
       <h1 className="font-display text-display-2 font-extrabold break-words uppercase">{title}</h1>
-      {lede === undefined ? null : <p className="text-ink-soft mt-3 max-w-prose leading-[1.55]">{lede}</p>}
+      {lede === undefined ? null : <p className="mt-3 max-w-prose leading-[1.55] text-ink-soft">{lede}</p>}
     </header>
   );
 }

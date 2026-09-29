@@ -4,7 +4,7 @@ import { Mark } from "./mark";
 import type { BriefPayload } from "../lib/brief-payload";
 import { httpUrl } from "../lib/http-url";
 
-const SECTION = "border-line mt-5 border-t pt-4";
+const SECTION = "mt-5 border-t border-line pt-4";
 const HEAD = "font-mono text-eyebrow text-ink-soft uppercase";
 const BODY = "mt-2 text-[0.95rem] leading-[1.6]";
 
@@ -47,7 +47,7 @@ export function ReadThisFirst({
                   size="md"
                 />
               )}
-              <p className="text-ink-soft mt-2 text-[0.88rem] leading-[1.6]">
+              <p className="mt-2 text-[0.88rem] leading-[1.6] text-ink-soft">
                 {mark.entity_name}: {mark.jev_reason}
               </p>
             </Fragment>

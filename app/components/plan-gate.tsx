@@ -21,7 +21,7 @@ export function PlanGate({ planId }: { planId: PlanId }) {
           {monthlyPrice(plan.monthlyPriceEur)}
         </span>
       </Button>
-      <p className="text-body-sm text-ink-soft mt-2">{TRIAL_TERMS}</p>
+      <p className="mt-2 text-body-sm text-ink-soft">{TRIAL_TERMS}</p>
       {fetcher.data?.message ? (
         <p role="status" className="mt-2 text-[0.95rem]">
           {fetcher.data.message}
@@ -57,13 +57,13 @@ export function UpgradeStatus({ tier, wanted }: { tier: PlanId; wanted: PlanId |
   if (plan === undefined) return null;
   if (!pending) {
     return (
-      <p role="status" className="text-body-sm mt-4">
+      <p role="status" className="mt-4 text-body-sm">
         You're on {plan.name}. It watches up to {String(plan.limits.competitors)} competitors.
       </p>
     );
   }
   return (
-    <p role="status" className="text-body-sm text-ink-soft mt-4">
+    <p role="status" className="mt-4 text-body-sm text-ink-soft">
       {gaveUp
         ? "We haven't heard back from our payment provider yet. Your plan turns on the moment we do."
         : `Confirming your ${plan.name} plan with our payment provider. This page updates by itself.`}
