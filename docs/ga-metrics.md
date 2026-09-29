@@ -2,7 +2,7 @@
 
 The direction metric `signups/week` is defined by source [0509#4518](https://github.com/Nishfleet/0509/issues/4518): it is the trailing seven-day count of real signups, with every non-customer fixture class excluded. This doc is the landed source for that read. It is measurement only; no fixture row is deleted here.
 
-The read below is **self-detecting**: it returns the filtered signup counts beside a per-class breakdown of the rows it left out (`e2e+%`, `billing-canary%`, `other`). The breakdown is the detector — a fixture class nobody has declared yet shows up in `other_*` instead of silently inflating `signups_7d` ([0509#5552](https://github.com/Nishfleet/0509/issues/5552)).
+The read below is **self-detecting**: beside the filtered signup counts it returns a per-class breakdown of the table — what it excluded (`e2e+%`, `billing-canary%`) and what it kept (`other`). The breakdown is the detector: every row the read sees lands in a declared class or in `other`, so a fixture class nobody has declared yet is visible as an `other` row to inspect instead of being silently folded into `signups_7d` ([0509#5552](https://github.com/Nishfleet/0509/issues/5552)).
 
 ## The live truth: the raw count is the mixture
 
@@ -30,7 +30,7 @@ The same table read on **2026-09-23T19:06Z and 2026-09-23T19:12Z**, before the p
 | real signups with the canary **counted**, trailing 30d | **2** |
 | real signups with the canary **excluded**, trailing 30d | **1** |
 
-The 2026-09-23 pair is the defect this doc was amended for: the `2` is the one human signup plus the `billing-canary-0509` machine row, which the then-`e2e+`-only rule counted as a signup ([0509#5552](https://github.com/Nishfleet/0509/issues/5552)). The 2026-09-29 read is what the amended read returns: `0`.
+The 2026-09-23 pair is the defect this doc was amended for: the **2** is the one human signup plus the `billing-canary-0509` machine row, which the then-`e2e+`-only rule counted as a signup ([0509#5552](https://github.com/Nishfleet/0509/issues/5552)). The 2026-09-29 read returns **0** — the honest number for a table with no external signup in the window.
 
 `PRAGMA table_info("user")` shows the better-auth column is **`createdAt`** (camelCase). The A.8 shorthand `created_at` fails live with `no such column: created_at at offset 40: SQLITE_ERROR [code: 7500]`. Use `createdAt`.
 
@@ -44,7 +44,7 @@ Run this from the repository root with D1 read access. It returns **one row** wi
 npx wrangler d1 execute 0509 --remote --json --command "SELECT (SELECT COUNT(*) FROM \"user\" WHERE email NOT LIKE 'e2e+%' AND email NOT LIKE 'billing-canary%' AND \"createdAt\" >= datetime('now', '-7 days')) AS signups_7d, (SELECT COUNT(*) FROM \"user\" WHERE email NOT LIKE 'e2e+%' AND email NOT LIKE 'billing-canary%' AND \"createdAt\" >= datetime('now', '-30 days')) AS signups_30d, (SELECT COUNT(*) FROM \"user\" WHERE email LIKE 'e2e+%' AND \"createdAt\" >= datetime('now', '-7 days')) AS excluded_e2e_7d, (SELECT COUNT(*) FROM \"user\" WHERE email LIKE 'e2e+%' AND \"createdAt\" >= datetime('now', '-30 days')) AS excluded_e2e_30d, (SELECT COUNT(*) FROM \"user\" WHERE email LIKE 'billing-canary%' AND \"createdAt\" >= datetime('now', '-7 days')) AS excluded_billing_canary_7d, (SELECT COUNT(*) FROM \"user\" WHERE email LIKE 'billing-canary%' AND \"createdAt\" >= datetime('now', '-30 days')) AS excluded_billing_canary_30d, (SELECT COUNT(*) FROM \"user\" WHERE email NOT LIKE 'e2e+%' AND email NOT LIKE 'billing-canary%' AND \"createdAt\" >= datetime('now', '-7 days')) AS other_7d, (SELECT COUNT(*) FROM \"user\" WHERE email NOT LIKE 'e2e+%' AND email NOT LIKE 'billing-canary%' AND \"createdAt\" >= datetime('now', '-30 days')) AS other_30d"
 ```
 
-The last two columns are the read's own blind-spot detector. `other_*` is every row matching neither declared class, so a fixture shape this doc has never heard of lands there and is visible in this read rather than inside the headline number. A compound `UNION ALL` of the same columns is **not** portable here: D1 answers `too many terms in compound SELECT: SQLITE_ERROR [code: 7500]`, which is why the read is one row of scalar subqueries.
+The last two columns are the read's own blind-spot detector. `other_*` is every row matching neither declared class — real signups and any fixture shape this doc has never heard of, which is why its movement is the signal to inspect and amend. A compound `UNION ALL` of the same columns is **not** portable here: D1 answers `too many terms in compound SELECT: SQLITE_ERROR [code: 7500]`, which is why the read is one row of scalar subqueries.
 
 For the individual reads, use these commands verbatim:
 
@@ -102,7 +102,7 @@ The one command, run against production D1 (database `0509`, id `746c6e3d-782e-4
 | `excluded_billing_canary_7d` / `excluded_billing_canary_30d` | **0** / **0** |
 | `other_7d` / `other_30d` | **0** / **0** |
 
-The same table read minutes earlier returned `total = 8`, journey accounts `1`, `e2e+%` class `8`, `billing-canary%` class `0`, `other` `0`: the table is small now because [#5730](https://github.com/Nishfleet/0509/issues/5730) purged the fixture pile, and the rows that remain are e2e runs minting accounts while the read runs. The 2026-09-23 read above, on the pre-purge table, returned **2** with the canary counted and **1** with it excluded — the one human signup plus the `billing-canary-0509` machine row ([0509#5552](https://github.com/Nishfleet/0509/issues/5552)). The 2026-09-29 read with both classes excluded returns **0**, which is the same human truth, reached by the rule instead of by luck.
+The same table read minutes earlier returned `total = 8`, journey accounts `1`, `e2e+%` class `8`, `billing-canary%` class `0`, `other` `0`: the table is small now because [#5730](https://github.com/Nishfleet/0509/issues/5730) purged the fixture pile, and the rows that remain are e2e runs minting accounts while the read runs. The 2026-09-23 read above, on the pre-purge table, returned **2** with the canary counted and **1** with it excluded — the one human signup then alive plus the `billing-canary-0509` machine row ([0509#5552](https://github.com/Nishfleet/0509/issues/5552)). The 2026-09-29 read with both classes excluded returns **0**: no human signed up in the window, and the read says so.
 
 ## Boundary
 
