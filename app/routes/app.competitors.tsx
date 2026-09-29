@@ -5,12 +5,15 @@ import { redirect, useFetcher } from "react-router";
 import { BrandChip } from "../components/brand-chip";
 import { BrandSwitchField } from "../components/brand-switch";
 import { AddCompetitor, CompetitorMaybes } from "../components/competitor-maybes";
+import { UpgradeStatus } from "../components/plan-gate";
 import { EmptyState } from "../components/empty-state";
 import { PAGE, PageHeading } from "../components/page-heading";
 import { RetireQuestions } from "../components/retire-questions";
+import { isPlanId } from "../lib/billing/plans";
 import { handleCompetitorIntent } from "../lib/competitors.server";
 import type { CompetitorRow } from "../lib/data/entity.server";
 import { readCompetitors } from "../lib/data/entity.server";
+import { readPlanTier } from "../lib/data/plan.server";
 import { readWorkspaceIdForOwner } from "../lib/data/workspace.server";
 import { requireSession } from "../lib/require-session.server";
 
@@ -26,7 +29,13 @@ async function workspaceFor(request: Request): Promise<string> {
 }
 
 export async function loader({ request }: Route.LoaderArgs) {
-  return readCompetitors(await workspaceFor(request));
+  const workspaceId = await workspaceFor(request);
+  const wanted = new URL(request.url).searchParams.get("upgraded");
+  return {
+    ...(await readCompetitors(workspaceId)),
+    tier: await readPlanTier(workspaceId),
+    wanted: isPlanId(wanted) ? wanted : null,
+  };
 }
 
 export async function action({ request }: Route.ActionArgs) {
@@ -63,13 +72,14 @@ function CompetitorItem({ competitor }: { competitor: CompetitorRow }) {
 }
 
 export default function Page({ loaderData, actionData }: Route.ComponentProps) {
-  const { competitors, maybes, questions } = loaderData;
+  const { competitors, maybes, questions, tier, wanted } = loaderData;
   return (
     <main className={PAGE}>
       <PageHeading
         title="Competitors"
         lede="Each brand has one switch. Off stops the watching and the alerts; the history stays."
       />
+      <UpgradeStatus tier={tier} wanted={wanted} />
       {competitors.length === 0 ? (
         <div className="mt-8">
           <EmptyState sentence="Add a competitor to see where you stand. We also look for new ones every night." />
