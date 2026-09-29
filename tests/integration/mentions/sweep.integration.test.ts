@@ -2,6 +2,7 @@ import { env } from "cloudflare:test";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { readSignalAlerts } from "../../../app/lib/data/alert.server";
+import { mentionReasonLine } from "../../../app/lib/mentions/reason-customer";
 import { planTargets, sweepTarget } from "../../../workers/mentions/sweep";
 import { SOURCE_SETTINGS } from "../../../workers/sources/mentions/types";
 
@@ -212,6 +213,33 @@ describe("nightly mentions sweep", () => {
     expect(run.mock.calls.length).toBe(callsAfterFirst);
     expect(second).toEqual({ items: 3, stored: 0, unjudged: 0, skipped: 0 });
     expect(await readSignalAlerts(env.DB, workspaceId)).toHaveLength(1);
+  });
+
+  it("stores a customer sentence on the D6 verdict, never a probability or a question id (0509#5121)", async () => {
+    const { workspaceId, brand } = await seedWorkspace();
+    stubGdelt();
+    Reflect.set(env, "AI", { run: jevAnswering() });
+
+    const outcome = await sweepTarget(await gdeltTargetFor(brand), NOW, null);
+    expect(outcome).toEqual({ items: 3, stored: 2, unjudged: 0, skipped: 0 });
+
+    const reasons = await env.DB.prepare(
+      "SELECT reason FROM jev_verdict WHERE workspace_id = ? AND question_id = 'mention_matters' ORDER BY reason"
+    )
+      .bind(workspaceId)
+      .all<{ reason: string | null }>();
+    const stored = reasons.results.map((row) => row.reason ?? "").sort();
+    expect(stored).toEqual([mentionReasonLine("act"), mentionReasonLine("maybe")].sort());
+    for (const reason of stored) {
+      expect(reason).not.toMatch(/probability|confidence|mention_matters|mention_is_about_brand|\b0\.\d/i);
+    }
+
+    const aboutReason = await env.DB.prepare(
+      "SELECT reason FROM jev_verdict WHERE workspace_id = ? AND question_id = 'mention_is_about_brand' ORDER BY decided_at DESC LIMIT 1"
+    )
+      .bind(workspaceId)
+      .first<{ reason: string | null }>();
+    expect(aboutReason?.reason).toBeNull();
   });
 
   it("stores nothing unjudged when the AI is unavailable, so the next night retries", async () => {

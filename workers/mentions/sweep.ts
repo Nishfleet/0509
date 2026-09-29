@@ -14,6 +14,7 @@ import type { NoulQuestion, NoulVerdict } from "../../app/lib/jev/client.server"
 import { askNoul, JevUnavailableError } from "../../app/lib/jev/client.server";
 import { lookupYoutubeChannel } from "../../app/lib/identity/youtube-channel.server";
 import { noulAction } from "../../app/lib/jev/thresholds";
+import { mentionReasonLine, MENTION_MATTERS_WHEN_FALSE, MENTION_MATTERS_WHEN_TRUE } from "../../app/lib/mentions/reason-customer";
 import {
   readWatchConfig,
   withLostChannel,
@@ -58,8 +59,8 @@ const MATTERS: NoulQuestion = {
   id: "mention_matters",
   instructions:
     "Would the owner of `self` want to know about this mention of `subject` this week? It matters when it shows a move: a launch, a price or offer change, funding, a deal, a hire or exit at the top, an expansion, a campaign, a controversy or a big review.",
-  whenTrue: "It reports a move or an event a competitor-watcher would act on or bring up.",
-  whenFalse: "It is a passing mention, a listicle entry, a stock ticker line, or old news retold.",
+  whenTrue: MENTION_MATTERS_WHEN_TRUE,
+  whenFalse: MENTION_MATTERS_WHEN_FALSE,
 };
 
 export async function planTargets(): Promise<MentionTarget[]> {
@@ -166,7 +167,7 @@ async function statementsForWatch(input: {
     const dedupKey = storedDedupKey(watch.entity_id, mapped.dedup_key);
     const signalId = `sig-${(await sha256Hex(`${watch.source_id}:${dedupKey}`)).slice(0, 32)}`;
     const rejected = noulAction(verdicts.about.p) === "reject";
-    const verdictRow = (verdict: NoulVerdict) =>
+    const verdictRow = (verdict: NoulVerdict, reason: string | null) =>
       insertVerdict({
         workspaceId: watch.workspace_id,
         questionId: verdict.questionId,
@@ -175,7 +176,7 @@ async function statementsForWatch(input: {
         entityId: watch.entity_id,
         p: verdict.p,
         choice: null,
-        reason: null,
+        reason,
         decidedAt: now,
       });
     statements.push(
@@ -197,10 +198,12 @@ async function statementsForWatch(input: {
         observedAt: mapped.observed_at,
         isNotAboutBrand: rejected,
       }),
-      verdictRow(verdicts.about),
+      verdictRow(verdicts.about, null),
     );
     if (rejected) continue;
-    if (verdicts.matters !== null) statements.push(verdictRow(verdicts.matters));
+    if (verdicts.matters !== null) {
+      statements.push(verdictRow(verdicts.matters, mentionReasonLine(noulAction(verdicts.matters.p))));
+    }
     if (verdicts.matters !== null && noulAction(verdicts.matters.p) === "act") {
       statements.push(
         insertSignalAlert(env.DB, {
