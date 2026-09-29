@@ -290,9 +290,11 @@ export async function waitForMagicLink(to: string, token: string | null, exclude
       }
       const sinkMissing = await stat(join(process.cwd(), LOCAL_EMAIL_SINK)).then(
         () => false,
-        (error: unknown) => isNotFound(error),
+        (error: unknown) => {
+          if (isNotFound(error)) return true;
+          throw new Error(`Reading the local email sink failed while waiting for ${to}: ${error}`, { cause });
+        },
       );
-      if (fresh.length > 0) return fresh[0];
       throw new Error(
         `No magic-link email for ${to} within ${POLL_LIMIT_MS / 1000}s. ` +
           `The local lane reads wrangler's simulated send_email output under .wrangler/tmp/email/<session>/email-{text,html}/: ` +
