@@ -115,6 +115,10 @@ describe("runCostGuard (0509#4432)", () => {
     await clearBrands();
   });
 
+  afterEach(async () => {
+    await clearBrands();
+  });
+
   afterEach(() => {
     vi.unstubAllGlobals();
   });
