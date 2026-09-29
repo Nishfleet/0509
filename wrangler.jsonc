@@ -285,6 +285,17 @@
       "class_name": "SiteSweepWorkflow",
       "schedules": ["0 2 * * *"]
     },
+    // The nightly hiring sweep (docs/engines/hiring.md): finds each tracked
+    // brand's job board, then reads every watched board. 02:30 UTC — after
+    // the 02:00 site sweep and before the 03:00 standing refresh counts its
+    // new-role signals. One retried step per entity and per board; a step
+    // that cannot be read fails alone.
+    {
+      "name": "hiring-sweep",
+      "binding": "HIRING_SWEEP",
+      "class_name": "HiringSweepWorkflow",
+      "schedules": ["30 2 * * *"]
+    },
     // The nightly snapshot backup (0509#5802): copies every object in
     // 0509-snapshots that 0509-snapshots-backup does not yet hold, one
     // retried step per page of up to 200 objects, preserving httpMetadata.
