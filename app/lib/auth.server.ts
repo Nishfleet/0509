@@ -106,7 +106,7 @@ export function createAuth(env: AuthEnv, options?: { captcha?: boolean; validate
           } catch (failed) {
             const detail = redactEmailShaped(errorText(failed)).slice(0, 200);
             console.error(JSON.stringify({ event: "login.magic_link_send_failed", error: detail }));
-            throw new APIError("INTERNAL_SERVER_ERROR", {
+            throw new APIError("SERVICE_UNAVAILABLE", {
               message: "We couldn't send the link. Try again in a minute.",
             });
           }

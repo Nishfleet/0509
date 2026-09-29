@@ -75,10 +75,10 @@ describe("login magic-link action", () => {
         data({ error: "We couldn't send the link. Try again in a minute." }, { status: 503 }),
       );
       expect(result).not.toHaveProperty("sent");
-      expect(logged.mock.calls.map((call) => String(call[0])).join("\n")).toContain(
-        "account daily sending quota exceeded",
-      );
-      expect(logged.mock.calls.map((call) => String(call[0])).join("\n")).toContain("login.magic_link_send_failed");
+      const text = logged.mock.calls.map((call) => String(call[0])).join("\n");
+      expect(text).toContain("login.magic_link_send_failed");
+      expect(text).toContain('"status":500');
+      expect(text).not.toContain("account daily sending quota exceeded");
     } finally {
       logged.mockRestore();
     }
@@ -93,8 +93,7 @@ describe("login magic-link action", () => {
       await action({ request: formRequest({ email: "person@0509.io", "cf-turnstile-response": "token-1" }) });
       const text = logged.mock.calls.map((call) => String(call[0])).join("\n");
       expect(text).toContain("login.magic_link_send_failed");
-      expect(text).toContain("account daily sending quota exceeded");
-      expect(text).toContain("[redacted]");
+      expect(text).toContain('"status":500');
       expect(text).not.toContain("victim@example.com");
       expect(text).not.toContain("person@0509.io");
     } finally {

@@ -13,7 +13,6 @@ import { Footer } from "../components/footer";
 import { safeReturnTo } from "../lib/agent/paths";
 import { authClient } from "../lib/auth-client";
 import { formMagicLinkRequest } from "../lib/auth/login-magic-link.server";
-import { redactEmailShaped } from "../lib/auth/redact-email-shaped";
 import { createAuthForRequest } from "../lib/auth.server";
 import { readAccountDeleteProgress } from "../lib/account-delete.server";
 import { timezoneCookie } from "../lib/timezone";
@@ -52,13 +51,7 @@ export async function action({ request }: Route.ActionArgs) {
     return { error: "Confirm you're a person, then we'll send the link." };
   }
   if (response.status === 400) return { error: "Enter an email address we can send the link to." };
-  console.error(
-    JSON.stringify({
-      event: "login.magic_link_send_failed",
-      status: response.status,
-      error: redactEmailShaped(detail).slice(0, 200),
-    }),
-  );
+  console.error(JSON.stringify({ event: "login.magic_link_send_failed", status: response.status }));
   return data({ error: "We couldn't send the link. Try again in a minute." }, { status: 503 });
 }
 

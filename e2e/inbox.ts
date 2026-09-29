@@ -495,13 +495,14 @@ export async function signInWithMagicLink(
   const stale = await staleLinks(email, token);
   const sentAt = new Date().toISOString();
   const failed = page.getByRole("alert").filter({ hasText: MAGIC_LINK_SEND_FAILED });
-  const emailField = page.locator('input[name="email"]');
+  const sent = page.getByRole("heading", { level: 1, name: "Check your email" });
   await page.locator('button[type="submit"]').click();
   const outcome = await Promise.race([
-    emailField.waitFor({ state: "detached" }).then(() => "sent" as const),
+    sent.waitFor({ state: "visible" }).then(() => "sent" as const),
     failed.waitFor({ state: "visible" }).then(() => "failed" as const),
   ]);
   if (outcome === "failed") throw new Error(MAGIC_LINK_SEND_FAILED);
+  await expect(failed).toHaveCount(0);
   const link = await waitForMagicLink(email, token, stale);
   const linkReadAt = new Date().toISOString();
   const response = await page.goto(link);

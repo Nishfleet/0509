@@ -62,7 +62,7 @@ describe("magic-link captcha", () => {
     try {
       const response = await createAuth(failing).handler(magicLinkPost(PASSING_TOKEN));
       const body = await response.text();
-      expect(response.status).toBe(500);
+      expect(response.status).toBe(503);
       expect(body).not.toContain("captcha@test.dev");
       expect(body).not.toContain("account daily sending quota exceeded");
       const text = logged.mock.calls.map((call) => String(call[0])).join("\n");
