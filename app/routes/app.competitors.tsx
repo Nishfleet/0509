@@ -83,7 +83,7 @@ export default function Page({ loaderData, actionData }: Route.ComponentProps) {
       )}
       <RetireQuestions questions={questions} />
       <CompetitorMaybes maybes={maybes} />
-      <AddCompetitor message={actionData?.message} />
+      <AddCompetitor message={actionData?.message} upgradePlanId={actionData?.upgradePlanId} />
     </main>
   );
 }
