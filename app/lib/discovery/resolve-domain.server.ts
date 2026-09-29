@@ -59,7 +59,10 @@ async function wikidataGet(url: string): Promise<unknown> {
       headers: { "User-Agent": CRAWLER_USER_AGENT },
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     });
-    if (!res.ok) return null;
+    if (!res.ok) {
+      logLookupFailure("wikidata", url, new Error(`status ${String(res.status)}`));
+      return null;
+    }
     return await res.json();
   } catch (error) {
     logLookupFailure("wikidata", url, error);
