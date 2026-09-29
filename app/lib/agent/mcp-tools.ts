@@ -4,6 +4,10 @@ export const registeredToolDescriptors = {
   list_competitors: { title: "Competitors" },
   get_competitor: { title: "One competitor" },
   list_alerts: { title: "Alerts" },
-} as const;
+} as const satisfies Record<string, { title: string }>;
 
 export type RegisteredToolName = keyof typeof registeredToolDescriptors;
+
+export function namedTool<K extends RegisteredToolName>(name: K): { name: K; title: string } {
+  return { name, title: registeredToolDescriptors[name].title };
+}

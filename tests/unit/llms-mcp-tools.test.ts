@@ -13,19 +13,26 @@ function registryEntry(key: string, platform: string): LlmsTxtSource {
   };
 }
 
-const MANIFEST_TOOL_LINE = /^ {2}- ([a-z_]+): (.+)$/gm;
+const MANIFEST_TOOL_LINE = /^- ([a-z0-9_]+): (.+)$/gm;
+
+function agentsBlock(body: string): string {
+  const start = body.indexOf("## Agents");
+  expect(start).toBeGreaterThanOrEqual(0);
+  const afterHeading = start + "## Agents".length;
+  const nextHeading = body.indexOf("\n## ", afterHeading);
+  return body.slice(afterHeading, nextHeading === -1 ? undefined : nextHeading);
+}
 
 function manifestTools(body: string): Map<string, string> {
-  const agents = body.slice(body.indexOf("## Agents"));
   const tools = new Map<string, string>();
-  for (const match of agents.matchAll(MANIFEST_TOOL_LINE)) {
+  for (const match of agentsBlock(body).matchAll(MANIFEST_TOOL_LINE)) {
     tools.set(match[1] ?? "", match[2] ?? "");
   }
   return tools;
 }
 
 describe("llms.txt MCP tool manifest", () => {
-  it("names every tool registered by mcp.server.ts, derived from the registry", () => {
+  it("names every tool in the MCP registry, derived from the same export, never a hand-written list", () => {
     const body = llmsTxt(
       "https://0509.io",
       [
@@ -39,10 +46,9 @@ describe("llms.txt MCP tool manifest", () => {
     expect([...manifestTools(body).keys()].sort()).toEqual(Object.keys(registeredToolDescriptors).sort());
   });
 
-  it("shows the registry title after each tool name, never its own prose", () => {
-    const body = llmsTxt("https://0509.io", [], NOW);
-    const tools = manifestTools(body);
-    expect(tools.size).toBeGreaterThan(0);
+  it("describes each tool with the registry title, one bullet per tool", () => {
+    const tools = manifestTools(llmsTxt("https://0509.io", [], NOW));
+    expect(tools.size).toBe(Object.keys(registeredToolDescriptors).length);
     for (const [name, tool] of Object.entries(registeredToolDescriptors)) {
       expect(tools.get(name)).toBe(tool.title);
     }

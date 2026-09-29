@@ -67,7 +67,7 @@ export function llmsTxt(origin: string, sources: readonly LlmsTxtSource[], now: 
       "## Agents",
       "",
       `- [MCP server](${MCP_URL}): add it as a connector in Claude, ChatGPT or Cursor and sign in; read-only, limited to your own workspace`,
-      ...Object.entries(registeredToolDescriptors).map(([name, tool]) => `  - ${name}: ${tool.title}`),
+      ...Object.entries(registeredToolDescriptors).map(([name, tool]) => `- ${name}: ${tool.title}`),
       `- [API reference](${origin}/api/v1/openapi.json): OpenAPI 3.1 for the read-only REST API; send an API key from Settings as a Bearer token`,
       "",
       "## Pages",
