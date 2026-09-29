@@ -1,7 +1,7 @@
 import type { Route } from "./+types/onboarding.competitors";
 
 import { useEffect, useState } from "react";
-import { Form, redirect, useRevalidator } from "react-router";
+import { Form, redirect, useNavigation, useRevalidator } from "react-router";
 
 import { AddCompetitor, CompetitorMaybes } from "../components/competitor-maybes";
 import { Monogram } from "../components/monogram";
@@ -55,17 +55,18 @@ function useDiscoveryPolling(discovery: DiscoveryState): DiscoveryState {
   const stalled = polls >= MAX_POLLS;
   const searching = discovery === "looking" && !stalled;
   const revalidator = useRevalidator();
+  const navigation = useNavigation();
 
   useEffect(() => {
     if (!searching) return;
     const id = setInterval(() => {
       setPolls((count) => count + 1);
-      if (revalidator.state === "idle") void revalidator.revalidate();
+      if (revalidator.state === "idle" && navigation.state === "idle") void revalidator.revalidate();
     }, POLL_MS);
     return () => {
       clearInterval(id);
     };
-  }, [revalidator, searching]);
+  }, [navigation, revalidator, searching]);
 
   return stalled && discovery === "looking" ? "unavailable" : discovery;
 }
