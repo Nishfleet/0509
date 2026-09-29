@@ -7,6 +7,7 @@ import { IdentityCard } from "../components/identity-card";
 import { OnboardingFrame } from "../components/onboarding-frame";
 import { OneInput } from "../components/one-input";
 import { isTakenDown } from "../lib/data/takedown.server";
+import { startOnboardingRun } from "../lib/data/onboarding_run.server";
 import { readWorkspaceIdForOwner } from "../lib/data/workspace.server";
 import { creatorRows, editedFields, isDraftSave } from "../lib/identity/card-fields";
 import { applyDraftIntent, readDraft } from "../lib/identity/card-draft.server";
@@ -29,15 +30,17 @@ export async function loader({ request }: Route.LoaderArgs) {
   if (await isTakenDown(subject.registrable)) throw redirect("/onboarding");
   const workspaceId = await readWorkspaceIdForOwner(session.user.id);
   if (workspaceId === null) throw redirect("/onboarding");
+  const now = new Date().toISOString();
   const screened = await screenOnboardingSubject({
     workspaceId,
     userId: session.user.id,
     subject,
     raw,
     answer: null,
-    now: new Date().toISOString(),
+    now,
   });
   if (screened.kind !== "proceed") throw redirect("/onboarding");
+  await startOnboardingRun({ workspaceId, userId: session.user.id, inputRaw: raw, startedAt: now });
   if (!(await withinProbeLimit(session.user.id))) return { card: null, limited: true };
   const shown = subject.kind === "domain" ? subject.registrable : (subject.url ?? `@${subject.registrable}`);
   const draft = await readDraft(workspaceId, subject.registrable);

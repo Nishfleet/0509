@@ -7,13 +7,23 @@ describe("login's return address", () => {
     expect(safeReturnTo("/oauth/authorize?client_id=x&state=y")).toBe("/oauth/authorize?client_id=x&state=y");
   });
 
+  it("returns to the onboarding identity card with its subject intact", () => {
+    expect(safeReturnTo("/onboarding/identity?subject=gymshark.com")).toBe(
+      "/onboarding/identity?subject=gymshark.com",
+    );
+  });
+
   it.each([
     null,
     "",
     "https://evil.example/oauth/authorize",
     "//evil.example/oauth/authorize",
     "/\\evil.example/oauth/authorize",
+    "/app",
     "/app/settings",
+    "/onboarding",
+    "/onboarding/identity/",
+    "https://evil.example/onboarding/identity?subject=x",
     "/oauth/authorize/../../app",
     "javascript:alert(1)",
   ])("sends anything else to /app: %s", (value) => {
