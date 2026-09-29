@@ -31,11 +31,8 @@ async function workspaceFor(request: Request): Promise<string> {
 export async function loader({ request }: Route.LoaderArgs) {
   const workspaceId = await workspaceFor(request);
   const wanted = new URL(request.url).searchParams.get("upgraded");
-  return {
-    ...(await readCompetitors(workspaceId)),
-    tier: await readPlanTier(workspaceId),
-    wanted: isPlanId(wanted) ? wanted : null,
-  };
+  const [competitors, tier] = await Promise.all([readCompetitors(workspaceId), readPlanTier(workspaceId)]);
+  return { ...competitors, tier, wanted: isPlanId(wanted) ? wanted : null };
 }
 
 export async function action({ request }: Route.ActionArgs) {
