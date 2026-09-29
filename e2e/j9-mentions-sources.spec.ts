@@ -2,11 +2,11 @@ import type { DatabaseSync } from "node:sqlite";
 
 import { expect, test } from "@playwright/test";
 
-import { consoleFailures, watchConsole } from "./inbox";
+import { consoleFailures, isLocalLane, watchConsole } from "./inbox";
 import { run, seedPreviewSession } from "./preview-session";
 
 test.skip(
-  Boolean(process.env.PLAYWRIGHT_TEST_BASE_URL),
+  !isLocalLane(),
   "the three sources are rows in the local preview database; production signs in through the magic-link inbox and has no fixture workspace",
 );
 

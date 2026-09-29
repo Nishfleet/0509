@@ -123,9 +123,9 @@ describe("J9 mentions land from three sources", () => {
       outcomes.set(target.pluginKey, await sweepTarget(target, NOW, null));
     }
     expect(Object.fromEntries(outcomes)).toEqual({
-      "gdelt.doc": { items: 2, stored: 1, unjudged: 0 },
-      "hn.algolia": { items: 2, stored: 1, unjudged: 0 },
-      "youtube.channel_rss": { items: 2, stored: 1, unjudged: 0 },
+      "gdelt.doc": { items: 2, stored: 1, unjudged: 0, skipped: 0 },
+      "hn.algolia": { items: 2, stored: 1, unjudged: 0, skipped: 0 },
+      "youtube.channel_rss": { items: 2, stored: 1, unjudged: 0, skipped: 0 },
     });
 
     const rows = await env.DB.prepare(

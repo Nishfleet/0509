@@ -2,13 +2,13 @@ import type { DatabaseSync } from "node:sqlite";
 
 import { expect, test, type Page } from "@playwright/test";
 
-import { consoleFailures, watchConsole } from "./inbox";
+import { consoleFailures, isLocalLane, watchConsole } from "./inbox";
 import { run, seedPreviewSession } from "./preview-session";
 
 const BANNED = /mention_matters|mention_is_about_brand|probability|confidence/i;
 
 test.skip(
-  Boolean(process.env.PLAYWRIGHT_TEST_BASE_URL),
+  !isLocalLane(),
   "the three treatments are rows in the local preview database; production signs in through the magic-link inbox and has no fixture workspace",
 );
 

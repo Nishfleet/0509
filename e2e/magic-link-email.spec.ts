@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-import { decodedBodies, deleteCreatedAccount, readRawMessage, requireInboxToken, settleSignInWidget, waitForMagicLink } from "./inbox";
+import { decodedBodies, deleteCreatedAccount, isLocalLane, readRawMessage, requireInboxToken, settleSignInWidget, waitForMagicLink } from "./inbox";
 
 let createdEmail = "";
 test.afterEach(async ({ page }, testInfo) => {
@@ -16,11 +16,13 @@ test.afterEach(async ({ page }, testInfo) => {
   }
 });
 
-// Production only, for the same reason as J1: the preview Worker's wrangler dev
-// has no EMAIL binding, so no sign-in email is ever sent, and no inbox to read
-// one back from. Skipping beats faking the copy.
+// Remote lanes only: this spec reads the raw MIME message back from the inbox
+// Worker, which has no local-lane counterpart — wrangler's simulated send_email
+// (0509#6092) writes text/html part files under .wrangler/tmp/email/, not a raw
+// message, so nothing here can run against the preview Worker. Skipping beats
+// faking the copy.
 test.skip(
-  !process.env.PLAYWRIGHT_TEST_BASE_URL,
+  isLocalLane(),
   "the sign-in email only exists on the production mail path",
 );
 

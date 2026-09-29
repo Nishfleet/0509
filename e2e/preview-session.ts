@@ -5,6 +5,8 @@ import { join } from "node:path";
 import { betterAuth } from "better-auth";
 import { magicLink } from "better-auth/plugins";
 
+import { laneOrigin } from "./inbox";
+
 function authSecret(): string {
   const line = readFileSync(".dev.vars.example", "utf8")
     .split("\n")
@@ -58,7 +60,7 @@ export async function seedPreviewSession(
   const auth = betterAuth({
     database: db,
     secret: authSecret(),
-    baseURL: "https://0509.io",
+    baseURL: laneOrigin(),
     advanced: { cookiePrefix: "better-auth" },
     plugins: [
       magicLink({

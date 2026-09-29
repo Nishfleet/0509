@@ -29,9 +29,14 @@ export function Layout({ children }: { children: React.ReactNode }) {
           crossOrigin="anonymous"
           fetchPriority="high"
         />
-        {landing ? null : (
-          <link rel="preload" href="/fonts/instrument-sans-latin.woff2" as="font" type="font/woff2" crossOrigin="anonymous" />
-        )}
+        <link
+          rel="preload"
+          href="/fonts/instrument-sans-latin.woff2"
+          as="font"
+          type="font/woff2"
+          crossOrigin="anonymous"
+          fetchPriority={landing ? "high" : undefined}
+        />
         <Meta />
         <Links />
       </head>

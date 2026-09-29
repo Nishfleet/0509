@@ -129,7 +129,7 @@ describe("nightly mentions sweep", () => {
     Reflect.set(env, "AI", { run: jevAnswering() });
 
     const outcome = await sweepTarget(await gdeltTargetFor(brand), NOW, null);
-    expect(outcome).toEqual({ items: 3, stored: 2, unjudged: 0 });
+    expect(outcome).toEqual({ items: 3, stored: 2, unjudged: 0, skipped: 0 });
 
     const alerts = await readSignalAlerts(env.DB, workspaceId);
     expect(alerts.map((alert) => alert.title)).toEqual([`${brand}: Zephyrwear opens a London flagship`]);
@@ -210,7 +210,7 @@ describe("nightly mentions sweep", () => {
     );
 
     expect(run.mock.calls.length).toBe(callsAfterFirst);
-    expect(second).toEqual({ items: 3, stored: 0, unjudged: 0 });
+    expect(second).toEqual({ items: 3, stored: 0, unjudged: 0, skipped: 0 });
     expect(await readSignalAlerts(env.DB, workspaceId)).toHaveLength(1);
   });
 
@@ -220,7 +220,7 @@ describe("nightly mentions sweep", () => {
     Reflect.set(env, "AI", { run: vi.fn(() => Promise.reject(new Error("Insufficient balance"))) });
 
     const outcome = await sweepTarget(await gdeltTargetFor(brand), NOW, null);
-    expect(outcome).toEqual({ items: 3, stored: 0, unjudged: 3 });
+    expect(outcome).toEqual({ items: 3, stored: 0, unjudged: 3, skipped: 0 });
 
     const signals = await env.DB.prepare("SELECT COUNT(*) AS n FROM signal WHERE entity_id = ?")
       .bind(competitorId)

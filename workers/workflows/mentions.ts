@@ -24,6 +24,7 @@ export interface MentionsOutcome {
   failed: number;
   stored: number;
   unjudged: number;
+  skipped: number;
 }
 
 export class MentionsSweep extends WorkflowEntrypoint<Env> {
@@ -74,6 +75,7 @@ export class MentionsSweep extends WorkflowEntrypoint<Env> {
       failed: outcomes.length - done.length,
       stored: done.reduce((sum, outcome) => sum + outcome.stored, 0),
       unjudged: done.reduce((sum, outcome) => sum + outcome.unjudged, 0),
+      skipped: done.reduce((sum, outcome) => sum + outcome.skipped, 0),
     };
     console.log(JSON.stringify({ event: "mentions.sweep", ...result }));
     return result;
