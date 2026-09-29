@@ -205,7 +205,7 @@ describe("resolveDomain", () => {
   it("refuses a Wikidata answer that redirects to an internal host", async () => {
     const fetchMock = vi.fn((input: RequestInfo | URL) => {
       const url = String(input);
-      if (url.includes("wikidata.org")) {
+      if (new URL(url).hostname === "www.wikidata.org") {
         return Promise.resolve(new Response(null, { status: 302, headers: { location: "http://169.254.169.254/" } }));
       }
       return NOT_FOUND();
@@ -225,7 +225,7 @@ describe("resolveDomain", () => {
       vi.fn((input: RequestInfo | URL) => {
         const url = String(input);
         if (url.includes("wbsearchentities")) return Promise.resolve(Response.json({ search: [] }));
-        if (url.startsWith("https://www.publicbrand0509.com")) {
+        if (new URL(url).hostname === "www.publicbrand0509.com") {
           return Promise.resolve(new Response('<meta property="og:site_name" content="Publicbrand0509">', { status: 200, headers: { "content-type": "text/html" } }));
         }
         return Promise.resolve(new Response(null, { status: 301, headers: { location: "https://www.publicbrand0509.com/" } }));
