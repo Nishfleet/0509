@@ -295,6 +295,64 @@ describe("readUrl", () => {
     }
   });
 
+  it("follows a public redirect by hand, re-validating each hop", async () => {
+    const stub = stubFetch({
+      "https://brand.example.com/": () =>
+        new Response(null, { status: 301, headers: { location: "https://www.brand.example.com/home" } }),
+      "https://www.brand.example.com/home": () => new Response(SUBSTANTIAL_PAGE, { status: 200 }),
+    });
+    try {
+      install(fakeBrowser({ ok: true, html: SUBSTANTIAL_PAGE }));
+      const result = await readUrl("https://brand.example.com/");
+      expect(result.ok).toBe(true);
+      expect(stub.seen).toEqual(["https://brand.example.com/", "https://www.brand.example.com/home"]);
+      expect(stub.inits.every((init) => init.redirect === "manual")).toBe(true);
+    } finally {
+      stub.restore();
+    }
+  });
+
+  it.each([
+    "http://169.254.169.254/latest/meta-data/",
+    "http://127.0.0.1/admin",
+    "http://metadata.google.internal/",
+    "http://localhost/",
+    "ftp://brand.example.com/file",
+  ])("refuses a redirect to %s without fetching it or escalating", async (location) => {
+    const stub = stubFetch({
+      "https://brand.example.com/": () => new Response(null, { status: 302, headers: { location } }),
+    });
+    const browser = fakeBrowser({ ok: true, html: SUBSTANTIAL_PAGE });
+    try {
+      install(browser);
+      const result = await readUrl("https://brand.example.com/");
+      expect(result.ok).toBe(false);
+      if (result.ok) return;
+      expect(result.reason).toBe("invalid-url");
+      expect(stub.seen).toEqual(["https://brand.example.com/"]);
+      expect(browser.calls).toEqual([]);
+    } finally {
+      stub.restore();
+    }
+  });
+
+  it("gives up on a redirect loop after 5 hops", async () => {
+    const stub = stubFetch({
+      "https://brand.example.com/": () =>
+        new Response(null, { status: 302, headers: { location: "https://brand.example.com/" } }),
+    });
+    try {
+      install(fakeBrowser({ ok: true, html: SUBSTANTIAL_PAGE }));
+      const result = await readUrl("https://brand.example.com/");
+      expect(result.ok).toBe(false);
+      if (result.ok) return;
+      expect(result.reason).toBe("invalid-url");
+      expect(stub.seen).toHaveLength(6);
+    } finally {
+      stub.restore();
+    }
+  });
+
   it.each([
     "http://foo.localhost/",
     "http://metadata.google.internal/",
