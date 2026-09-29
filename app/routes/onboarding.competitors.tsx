@@ -1,6 +1,6 @@
 import type { Route } from "./+types/onboarding.competitors";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { Form, redirect, useRevalidator } from "react-router";
 
 import { AddCompetitor, CompetitorMaybes } from "../components/competitor-maybes";
@@ -17,6 +17,7 @@ import { requireSession } from "../lib/require-session.server";
 import { ONBOARDING_COMPETITORS, workspaceLandingForRequest } from "../lib/workspace.server";
 
 const POLL_MS = 3000;
+const MAX_POLLS = 60;
 
 async function workspaceFor(request: Request): Promise<string> {
   const session = await requireSession(request);
@@ -51,13 +52,17 @@ export async function action({ request }: Route.ActionArgs) {
 
 export default function Page({ loaderData, actionData }: Route.ComponentProps) {
   const { on, maybes, discovery } = loaderData;
-  const searching = discovery === "looking";
-  const notice = discoveryNotice(discovery, on.length + maybes.length);
+  const [polls, setPolls] = useState(0);
+  const stalled = polls >= MAX_POLLS;
+  const searching = discovery === "looking" && !stalled;
+  const shown = stalled && discovery === "looking" ? "unavailable" : discovery;
+  const notice = discoveryNotice(shown, on.length + maybes.length);
   const revalidator = useRevalidator();
 
   useEffect(() => {
     if (!searching) return;
     const id = setInterval(() => {
+      setPolls((count) => count + 1);
       if (revalidator.state === "idle") void revalidator.revalidate();
     }, POLL_MS);
     return () => {
