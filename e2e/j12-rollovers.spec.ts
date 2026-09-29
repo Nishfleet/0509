@@ -1,5 +1,6 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
 
+import { FIXTURE_ACCOUNTS } from "../app/lib/fixture-accounts";
 import { requireInboxToken, signInWithMagicLink } from "./inbox";
 
 // J12 from docs/REBUILD-DONE.md §A. Production only: the fixed kept account
@@ -12,7 +13,6 @@ test.skip(
   "J12 reads weeks the production Workflow froze; the local preview Worker has none and no inbox",
 );
 
-const EMAIL = "e2e+j12-rollovers@0509.io";
 const SELF_DOMAIN = "gymshark.com";
 const SELF_NAME = "J12 rollovers";
 const STEADY = ["linear.app", "notion.so", "figma.com"] as const;
@@ -167,8 +167,15 @@ test("two weekly rollovers: the stored standing matches Home and the brief, and 
   test.setTimeout(480_000);
   test.skip(testInfo.project.name === "phone-390", "one production read; Home and the brief are read at 1440");
 
-  await signInWithMagicLink(page, EMAIL, requireInboxToken(), /\/(app|onboarding)/);
+  await signInWithMagicLink(page, FIXTURE_ACCOUNTS.j12Rollovers.email, requireInboxToken(), /\/(app|onboarding)/);
   if (page.url().includes("/onboarding")) await onboardSelf(page);
+
+  await page.goto("/app/competitors");
+  const items = page.getByRole("list", { name: "Competitors" }).getByRole("listitem");
+  expect(
+    await items.count(),
+    "the j12-rollovers account holds more competitors than its journey needs",
+  ).toBeLessThanOrEqual(FIXTURE_ACCOUNTS.j12Rollovers.maxCompetitors);
   await ensureBrands(page);
 
   const links = await briefLinks(page);
