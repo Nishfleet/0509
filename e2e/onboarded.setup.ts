@@ -34,6 +34,13 @@ setup("mint one onboarded session per viewport lane", async ({ browser }) => {
       const email = `e2e+onboarded-${lane}-${crypto.randomUUID().replaceAll("-", "").slice(0, 12)}@0509.io`;
       await signInWithMagicLink(page, email, token);
 
+      // The magic link's verify creates the user row, so the account exists
+      // before the onboarding drive below runs. Recording what the teardown
+      // needs here means a drive that fails mid-way still leaves a deletable
+      // account instead of a row nobody can find (#5733).
+      await context.storageState({ path: onboardedStatePath(lane) });
+      writeFileSync(onboardedEmailPath(lane), email);
+
       await page.goto("/onboarding");
       const input = page.getByRole("textbox", { name: "your website, or a handle" });
       await input.fill("gymshark.com");
@@ -59,8 +66,8 @@ setup("mint one onboarded session per viewport lane", async ({ browser }) => {
       await addCompetitor(page, "nike.com");
       await addCompetitor(page, "adidas.com");
 
+      // The fully onboarded session replaces the sign-in-only one recorded above.
       await context.storageState({ path: onboardedStatePath(lane) });
-      writeFileSync(onboardedEmailPath(lane), email);
     } finally {
       await context.close();
     }
