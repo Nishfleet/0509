@@ -92,6 +92,7 @@ const signals = async () => {
 };
 
 const resetTenant = async () => {
+  await env.DB.exec("DELETE FROM sweep_run");
   await env.DB.exec("DELETE FROM signal");
   await env.DB.exec("DELETE FROM snapshot");
   await env.DB.exec("DELETE FROM watch");
@@ -396,7 +397,16 @@ describe("nightly site sweep", () => {
     await introspector.waitForStatus("complete");
 
     expect(calls.filter((call) => call === "POST https://hc-ping.example/site-sweep")).toHaveLength(1);
-    expect(await introspector.getOutput()).toMatchObject({ pages: 2 });
+    expect(await introspector.getOutput()).toMatchObject({ pages: 2, recorded: true });
+
+    const run = await env.DB.prepare(
+      "SELECT kind, pages, failed, wall_ms, planned_at, finished_at FROM sweep_run WHERE id = ?",
+    )
+      .bind(id)
+      .first<{ kind: string; pages: number; failed: number; wall_ms: number; planned_at: string; finished_at: string }>();
+    if (run === null) throw new Error("finished sweep wrote no sweep_run row");
+    expect(run).toMatchObject({ kind: "site", pages: 2, failed: 0 });
+    expect(run.wall_ms).toBe(Date.parse(run.finished_at) - Date.parse(run.planned_at));
   });
 });
 
