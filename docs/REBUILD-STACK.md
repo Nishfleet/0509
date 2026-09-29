@@ -716,6 +716,20 @@ What the component owes us, it already ships: the toaster section renders `aria-
 | A hand-rolled live region | Queueing, swipe gestures and aria-live announcements rebuilt in-house — exactly the hand-rolled machinery this file exists to refuse. The one component §11 allows to be ours is the mark. |
 | `react-hot-toast` 2.x | A second library for the same job where the design doc and the shadcn map both name sonner. |
 
+### 5.11 Billing — the Dodo Payments SDK
+
+**Installed: `dodopayments` 2.52.0**, exact pin (npm `dist-tags.latest` on 2026-09-29, modified 2026-09-25). Vendor: <https://github.com/dodopayments/dodopayments-typescript> (README and `src/resources/checkout-sessions.ts`, read 2026-09-29 through Context7), API docs <https://docs.dodopayments.com/> (read 2026-09-29).
+
+Dodo is the payment provider named in DESIGN.md §5 and the ledger. Its own TypeScript SDK is the client, so there is no `fetch` wrapper of ours in the path. J13's checkout is one call, `client.checkoutSessions.create({ product_cart, customer, subscription_data: { trial_period_days }, metadata, return_url })`, which the SDK sends as `POST /checkouts` and returns `{ session_id, checkout_url }`. `environment: "test_mode" | "live_mode"` picks the SDK's own base URL (`https://test.dodopayments.com` or `https://live.dodopayments.com`), so the test-mode switch is a config value, `DODO_ENVIRONMENT`. The SDK is ESM, fetch-based and has one dependency, `standardwebhooks`, which is the library that verifies Dodo's webhooks (§5.12). Probed 2026-09-29: it loads and runs inside workerd in the workers vitest project.
+
+Dodo's subscription statuses, read from the shipped types (`SubscriptionStatus`): `pending`, `active`, `on_hold`, `paused`, `cancelled`, `failed`, `expired`, `past_due`. There is no `trialing`; a trial is an `active` subscription created with `trial_period_days > 0`.
+
+| Rejected | Why |
+|---|---|
+| A hand-written `fetch` client for `/checkouts` | Charter #3842: hand-rolled billing is rejected. The SDK types the request and the response and owns retries and timeouts. |
+| Dodo's `@dodopayments/nextjs`, `@dodopayments/express` and other framework adapters | Each is a route handler for a framework this app does not run. The core SDK is the layer they wrap. |
+| Dodo's hosted overlay checkout script | A browser-side script from a second origin, which the app's CSP would have to admit. The server-created `checkout_url` needs none. |
+
 ---
 
 ## 6. Testing — and what not to build
@@ -1124,6 +1138,7 @@ The version in this table is the `package.json` specifier. An earlier section of
 | `class-variance-authority` | ^0.7.1 | §3.2 | Variant map the badge component imports | A hand-written variant map | 0.7.1 |
 | `date-fns` | 4.4.0 | §5.9, #4004 | Zone-aware date arithmetic with `@date-fns/tz`, tree-shaken | `luxon` (no tree-shaking), `dayjs` | 4.4.0 |
 | `diff` | 9.0.0 | §5.2, #4403 | `diffWords` / `structuredPatch` in `app/lib/site/diff.ts` | `fast-diff` (characters only), `diff-match-patch` | 9.0.0 |
+| `dodopayments` | 2.52.0 | §5.11, J13 | The Dodo Payments SDK: one `checkoutSessions.create` call for the plan gate. Doc: <https://github.com/dodopayments/dodopayments-typescript> | A hand-written `fetch` client, the framework adapters (`@dodopayments/nextjs`, `@dodopayments/express`), the hosted overlay script | 2.52.0 |
 | `clsx` | ^2.1.1 | §3.2 | `cn()` in `app/lib/utils.ts` | String concatenation | 2.1.1 |
 | `isbot` | ^5.1.36 | §9 | React Router's server runtime uses it to tell a bot request from a browser request. `react-router typegen` writes `isbot` back into `package.json` if the direct dependency is missing | Dropping it. Typegen then inserts `isbot@^5`, a looser pin, and `@react-router/dev` already depends on a copy of its own | 5.2.2 |
 | `jose` | 6.2.12 | §2.6, #5830 | Access JWT via `createRemoteJWKSet` + `jwtVerify`. Cloudflare's Validate JWTs guide: <https://developers.cloudflare.com/cloudflare-one/identity/authorization-cookie/validating-json/> | The hand-rolled RS256 verifier (`crypto.subtle`, unsigned claims before the signature, unknown `kid` refetch with no cooldown) | 6.2.12 |

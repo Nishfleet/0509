@@ -78,6 +78,7 @@ describe("addManualCompetitor cap (0509#4891)", () => {
     );
     expect(sixth.message).not.toBeNull();
     expect(sixth.message).toContain("5 competitors");
+    expect(sixth.upgradePlanId).toBe("starter");
     expect(await domainCount(workspaceId, "a6.com")).toBe(0);
   });
 
