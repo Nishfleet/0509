@@ -6,6 +6,7 @@ import { describe, expect, it } from "vitest";
 import { HomePageFrame, HomeStanding } from "../../app/components/home-standing";
 import type { BriefPayload } from "../../app/lib/brief-payload";
 import type { BriefSchedule } from "../../app/lib/brief-schedule";
+import { WATCHED_NOUNS } from "../../app/lib/coverage";
 import type { HowRanked } from "../../app/lib/how-ranked";
 import {
   greetingFor,
@@ -31,6 +32,18 @@ const ENTITIES: readonly HomeEntity[] = [
 ];
 
 const SITE_SOURCES = [{ key: "site", kind: "site", platform: "site" }] as const;
+const MENTION_SOURCES = [{ key: "reddit.search_rss", kind: "mentions", platform: "reddit" }] as const;
+
+const GATHERING_INPUT: Parameters<typeof homeStanding>[0] = {
+  payload: null,
+  entities: ENTITIES,
+  schedule: SCHEDULE,
+  history: [],
+  sources: SITE_SOURCES,
+  counts: [],
+  moves: [],
+  now: THURSDAY_MORNING,
+};
 
 function brand(
   entityId: string,
@@ -289,7 +302,7 @@ describe("Home standing", () => {
   it("says when the first standing comes while the first week is still open", () => {
     const html = render({ payload: null });
     expect(html).toContain(
-      "We&#x27;re gathering the first week: site snapshots, ads and mentions for 3 brands. The first site snapshots land by Friday 03:00; your first read-this-first comes with the brief on Monday 08:00.",
+      `We&#x27;re gathering the first week: ${WATCHED_NOUNS} for 3 brands. The first site snapshots land by Friday 03:00; your first read-this-first comes with the brief on Monday 08:00.`,
     );
     expect(html).toContain('data-home="first-file"');
     expect(html).toContain("Good morning.</h1>");
@@ -327,6 +340,26 @@ describe("Home standing", () => {
   it("lands the first site sweep on the next 02:00Z strictly after now", () => {
     expect(nextSiteSweepAt(new Date("2026-09-24T01:00:00Z"))).toEqual(new Date("2026-09-24T02:00:00Z"));
     expect(nextSiteSweepAt(new Date("2026-09-24T02:00:00Z"))).toEqual(new Date("2026-09-25T02:00:00Z"));
+  });
+
+  it("has no first sweep when the sources carry no site kind", () => {
+    const noSiteInputs = [
+      { ...GATHERING_INPUT, sources: [] },
+      { ...GATHERING_INPUT, sources: MENTION_SOURCES },
+    ];
+    for (const input of noSiteInputs) {
+      const standing = homeStanding(input);
+      if (standing.kind !== "gathering") throw new Error("expected a gathering standing");
+      expect(standing.firstSweepAt).toBeNull();
+    }
+  });
+
+  it("gives the view the same first sweep, so Home keeps one answer for it", () => {
+    expect(homeView({ ...GATHERING_INPUT, sources: [] }).standing).toEqual(homeStanding({ ...GATHERING_INPUT, sources: [] }));
+    const standing = homeStanding(GATHERING_INPUT);
+    if (standing.kind !== "gathering") throw new Error("expected a gathering standing");
+    expect(standing.firstSweepAt).toBe("Friday 03:00");
+    expect(homeView(GATHERING_INPUT).standing).toEqual(standing);
   });
 
   it("names the movement the way the brief does", () => {

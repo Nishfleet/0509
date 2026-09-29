@@ -31,7 +31,9 @@ export class IdentityTail extends WorkflowEntrypoint<Env, IdentityTailParams> {
     );
     const queued = await step.do("enqueue-first-sweep", RETRY, () => enqueueFirstSweep(entityId, watches));
     const siteFill =
-      params.homepageUrl === null ? null : await this.fillSite(step, entityId, params.homepageUrl);
+      params.homepageUrl === null
+        ? null
+        : await this.fillSite(step, params.workspaceId, entityId, params.homepageUrl);
     return {
       entityId,
       watches: watches.map((watch) => ({
@@ -48,20 +50,21 @@ export class IdentityTail extends WorkflowEntrypoint<Env, IdentityTailParams> {
 
   private async fillSite(
     step: WorkflowStep,
+    workspaceId: string,
     entityId: string,
     homepageUrl: string,
   ): Promise<"filled" | "gave_up" | null> {
     const reached = await step.do("site-reached", RETRY, () => siteWasReached(homepageUrl));
     if (reached) return null;
-    await step.do("site-fill-pending", RETRY, () => markSiteFill(entityId, "pending"));
+    await step.do("site-fill-pending", RETRY, () => markSiteFill(workspaceId, entityId, "pending"));
     for (let attempt = 1; attempt <= SITE_FILL_ATTEMPTS; attempt += 1) {
       await step.sleep(`site-fill-wait-${String(attempt)}`, SITE_FILL_WAIT);
       const result = await step.do(`site-fill-${String(attempt)}`, RETRY, () =>
-        attemptSiteFill(entityId, homepageUrl),
+        attemptSiteFill(workspaceId, entityId, homepageUrl),
       );
       if (result === "filled") return "filled";
     }
-    await step.do("site-fill-gave-up", RETRY, () => markSiteFill(entityId, "gave_up"));
+    await step.do("site-fill-gave-up", RETRY, () => markSiteFill(workspaceId, entityId, "gave_up"));
     return "gave_up";
   }
 }

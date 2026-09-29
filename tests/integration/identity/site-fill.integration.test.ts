@@ -26,6 +26,7 @@ const CARD = {
 let entityId = "";
 let userId = "";
 let workspaceId = "";
+let otherWorkspaceId = "";
 
 function key(): string {
   const normalised = normaliseSubject("gymshark.com");
@@ -52,10 +53,20 @@ async function seed(identity: Record<string, unknown>): Promise<void> {
     identityJson: JSON.stringify(identity),
     now: NOW,
   });
+  await env.DB.prepare(
+    `INSERT INTO "user" (id, name, email, emailVerified, createdAt, updatedAt) VALUES (?1, 'Owner', ?2, 0, ?3, ?3)`,
+  )
+    .bind(`${userId}-b`, `${userId}-b@0509.io`, NOW)
+    .run();
+  await env.DB.prepare(
+    `INSERT INTO workspace (id, name, owner_user_id, created_at) VALUES (?1, 'Owner', ?2, ?3)`,
+  )
+    .bind(otherWorkspaceId, `${userId}-b`, NOW)
+    .run();
 }
 
 async function identity(): Promise<Record<string, unknown>> {
-  const value = await readEntityIdentityJson(entityId);
+  const value = await readEntityIdentityJson(workspaceId, entityId);
   if (value === null) throw new Error("self entity was not stored");
   return JSON.parse(value) as Record<string, unknown>;
 }
@@ -65,15 +76,24 @@ beforeEach(() => {
   entityId = `entity-site-fill-${suffix}`;
   userId = `user-site-fill-${suffix}`;
   workspaceId = `ws-site-fill-${suffix}`;
+  otherWorkspaceId = `ws-site-fill-other-${suffix}`;
 });
 
 afterEach(async () => {
   vi.unstubAllGlobals();
   await env.IDENTITY_CACHE.delete(key());
-  await env.DB.prepare('DELETE FROM "user" WHERE id = ?1').bind(userId).run();
+  await env.DB.prepare('DELETE FROM "user" WHERE id = ?1 OR id = ?2').bind(userId, `${userId}-b`).run();
 });
 
 describe("site fill", () => {
+  it("treats an unparseable homepage as not reached", async () => {
+    expect(await siteWasReached("::::")).toBe(false);
+  });
+
+  it("treats a homepage with no registrable domain as not reached", async () => {
+    expect(await siteWasReached("http://")).toBe(false);
+  });
+
   it("reports whether the homepage probe is cached", async () => {
     await seed({ description: null, socials: [] });
 
@@ -86,7 +106,7 @@ describe("site fill", () => {
     await seed({ description: null, socials: [] });
     await env.IDENTITY_CACHE.put(key(), JSON.stringify(CARD));
 
-    expect(await attemptSiteFill(entityId, HOMEPAGE)).toBe("filled");
+    expect(await attemptSiteFill(workspaceId, entityId, HOMEPAGE)).toBe("filled");
     expect(await identity()).toEqual({
       description: "Gym clothes",
       socials: [SOCIAL],
@@ -99,7 +119,7 @@ describe("site fill", () => {
     await seed({ description: "Mine", socials: [existing] });
     await env.IDENTITY_CACHE.put(key(), JSON.stringify(CARD));
 
-    expect(await attemptSiteFill(entityId, HOMEPAGE)).toBe("filled");
+    expect(await attemptSiteFill(workspaceId, entityId, HOMEPAGE)).toBe("filled");
     expect(await identity()).toEqual({
       description: "Mine",
       socials: [existing],
@@ -120,7 +140,7 @@ describe("site fill", () => {
     ]);
     await env.IDENTITY_CACHE.put(key(), JSON.stringify(CARD));
 
-    expect(await attemptSiteFill(entityId, HOMEPAGE)).toBe("filled");
+    expect(await attemptSiteFill(workspaceId, entityId, HOMEPAGE)).toBe("filled");
     expect(await identity()).toEqual({
       description: null,
       socials: [SOCIAL],
@@ -128,19 +148,41 @@ describe("site fill", () => {
     });
   });
 
+  it("ignores a field edit recorded in another workspace", async () => {
+    await seed({ description: null, socials: [] });
+    // user_decision.entity_id is a bare entity FK until 0509#4965 lands the composite key.
+    await insertFieldEdits([
+      {
+        workspaceId: otherWorkspaceId,
+        userId: `${userId}-b`,
+        entityId,
+        edit: { field: "description", from: "Gym clothes", to: "" },
+        decidedAt: NOW,
+      },
+    ]);
+    await env.IDENTITY_CACHE.put(key(), JSON.stringify(CARD));
+
+    expect(await attemptSiteFill(workspaceId, entityId, HOMEPAGE)).toBe("filled");
+    expect(await identity()).toEqual({
+      description: "Gym clothes",
+      socials: [SOCIAL],
+      siteFill: "filled",
+    });
+  });
+
   it("leaves the card unchanged when the homepage remains unreachable", async () => {
     await seed({ description: null, socials: [] });
-    const before = await readEntityIdentityJson(entityId);
+    const before = await readEntityIdentityJson(workspaceId, entityId);
     vi.stubGlobal("fetch", () => Promise.reject(new Error("refused")));
 
-    expect(await attemptSiteFill(entityId, HOMEPAGE)).toBe("pending");
-    expect(await readEntityIdentityJson(entityId)).toBe(before);
+    expect(await attemptSiteFill(workspaceId, entityId, HOMEPAGE)).toBe("pending");
+    expect(await readEntityIdentityJson(workspaceId, entityId)).toBe(before);
   });
 
   it("records a terminal fill state without changing card fields", async () => {
     await seed({ description: "Mine", socials: [] });
 
-    await markSiteFill(entityId, "gave_up");
+    await markSiteFill(workspaceId, entityId, "gave_up");
 
     expect(await identity()).toEqual({
       description: "Mine",

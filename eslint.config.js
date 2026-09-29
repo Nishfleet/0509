@@ -164,6 +164,46 @@ const GOOGLE_FONTS_BAN = {
     "Fonts are self-hosted (DESIGN.md). A Google Fonts link is render-blocking and broke the 1500 ms LCP budget once (fd1457288). Add the font file under public/ and an @font-face instead.",
 };
 
+const USER_DATA_NAME = "^(email|emails|userId|ip|input|raw|prompt|password|token|subject)$";
+// The one operator id the message allows, so `input.workspaceId` stays clean.
+// Widen it only with a comment here naming why the new id is not user data.
+const LOGGABLE_OPERATOR_ID = "workspaceId";
+const LOG_OR_CAPTURE_CALL =
+  "CallExpression:matches([callee.object.name='console'], [callee.name=/^(capture(Exception|Message|Event|Feedback)|set(Tag|Tags|Extra|Extras|Context|Attributes|User|ConversationId))$/], [callee.property.name=/^(capture(Exception|Message|Event|Feedback)|set(Tag|Tags|Extra|Extras|Context|Attributes|User|ConversationId))$/])";
+const NO_USER_DATA_IN_LOGS_MESSAGE =
+  "Logs and Sentry never carry customer data or prompt input: no email, user id, IP, raw input, prompt, subject, password or token, as a key, a value or a property read. Log the ids an operator needs (event, workspaceId) and an error message capped with .slice(0, 300). The selector matches names, so a renamed or aliased value is out of reach; review it. Privacy first (CLAUDE.md; workers/sentry.ts sendDefaultPii: false). Source: 0509#5776.";
+const NO_USER_DATA_IN_LOGS = [
+  {
+    selector: `${LOG_OR_CAPTURE_CALL} :matches(Property[key.name=/${USER_DATA_NAME}/], Property[value.name=/${USER_DATA_NAME}/], MemberExpression[property.name=/${USER_DATA_NAME}/])`,
+    message: NO_USER_DATA_IN_LOGS_MESSAGE,
+  },
+  { selector: `${LOG_OR_CAPTURE_CALL} > Identifier.arguments[name=/${USER_DATA_NAME}/]`, message: NO_USER_DATA_IN_LOGS_MESSAGE },
+  // The first two cover a named key and a named value. These four close the
+  // shapes the message promises but a name-only match misses: the `email` in
+  // `console.log(`user ${email}`)`, the `subject` in `JSON.stringify(subject)`,
+  // the `subject` in `{ ...subject }`, and the `subject` in
+  // `console.log(subject.registrable)`. 0509#5786.
+  { selector: `${LOG_OR_CAPTURE_CALL} TemplateLiteral > Identifier[name=/${USER_DATA_NAME}/]`, message: NO_USER_DATA_IN_LOGS_MESSAGE },
+  { selector: `${LOG_OR_CAPTURE_CALL} CallExpression > Identifier[name=/${USER_DATA_NAME}/]`, message: NO_USER_DATA_IN_LOGS_MESSAGE },
+  { selector: `${LOG_OR_CAPTURE_CALL} SpreadElement > Identifier[name=/${USER_DATA_NAME}/]`, message: NO_USER_DATA_IN_LOGS_MESSAGE },
+  // The identifier wrapped in one expression: `"ip " + ip`, `[email]`,
+  // `email ?? ""`, `flag ? email : "x"`. 0509#5786.
+  {
+    selector: `${LOG_OR_CAPTURE_CALL} :matches(BinaryExpression, ArrayExpression, LogicalExpression, ConditionalExpression) > Identifier[name=/${USER_DATA_NAME}/]`,
+    message: NO_USER_DATA_IN_LOGS_MESSAGE,
+  },
+  // A read off a binding named like user data. `workspaceId` is the one
+  // operator id the message allows, so `input.workspaceId` stays clean while
+  // `subject.registrable` and `email.trim()` do not. An alias
+  // (`const domain = subject.registrable; console.log({ domain })`) is beyond
+  // any name-based selector; the rule bans the identifiers, not the provenance
+  // (0509#5786).
+  {
+    selector: `${LOG_OR_CAPTURE_CALL} MemberExpression[object.name=/${USER_DATA_NAME}/][property.name!='${LOGGABLE_OPERATOR_ID}']`,
+    message: NO_USER_DATA_IN_LOGS_MESSAGE,
+  },
+];
+
 const BANNED_SYNTAX = [
   SUPPORT_ADDRESS_BAN,
   GOOGLE_FONTS_BAN,
@@ -384,7 +424,7 @@ export default tseslint.config(
         "error",
         { terms: WORKAROUND_TERMS, location: "anywhere" },
       ],
-      "no-restricted-syntax": ["error", ...BANNED_SYNTAX, FEED_STATE_LITERAL],
+      "no-restricted-syntax": ["error", ...BANNED_SYNTAX, ...NO_USER_DATA_IN_LOGS, FEED_STATE_LITERAL],
     },
   },
 
@@ -405,7 +445,7 @@ export default tseslint.config(
     files: ["app/**/*.{ts,tsx}", "workers/**/*.ts"],
     ignores: ["app/lib/data/**", "workers/e2e-inbox.ts", "workers/fixture-site.ts"],
     rules: {
-      "no-restricted-syntax": ["error", ...BANNED_SYNTAX, RAW_DML_WRITER, FEED_STATE_LITERAL],
+      "no-restricted-syntax": ["error", ...BANNED_SYNTAX, ...NO_USER_DATA_IN_LOGS, RAW_DML_WRITER, FEED_STATE_LITERAL],
     },
   },
 
@@ -417,6 +457,7 @@ export default tseslint.config(
       "no-restricted-syntax": [
         "error",
         ...BANNED_SYNTAX.filter((rule) => rule !== SUPPORT_ADDRESS_BAN),
+        ...NO_USER_DATA_IN_LOGS,
         RAW_DML_WRITER,
         FEED_STATE_LITERAL,
       ],
@@ -427,8 +468,9 @@ export default tseslint.config(
     // The one domain normaliser: the identity engine. These files read `.hostname`
     // for a purpose that is not domain normalisation, so the shared selector is
     // restated without `DOMAIN_HOSTNAME_BAN`: the identity engine itself, a
-    // public-host guard in the transport layer, the job-board host match, the www
-    // variant for this site, and the support worker's site-host allow. Every
+    // public-host guard in the transport layer, the job-board host match, this
+    // site's www variant and page-host display, and the support worker's
+    // site-host allow. Every
     // other `.hostname` read in app/ or workers/ keeps the ban. This block
     // restates the list because a later matching block's no-restricted-syntax
     // entry replaces the earlier one wholesale (flat config never merges a rule's
@@ -444,9 +486,28 @@ export default tseslint.config(
       "no-restricted-syntax": [
         "error",
         ...BANNED_SYNTAX.filter((rule) => rule !== DOMAIN_HOSTNAME_BAN),
+        ...NO_USER_DATA_IN_LOGS,
         RAW_DML_WRITER,
         FEED_STATE_LITERAL,
       ],
+    },
+  },
+
+  // Lean code is a lint, not a review note: Nish 2026-09-28 16:47Z, "all work
+  // anywhere by any agent should be done as a pro dev team would. lean and
+  // mean", and "make this non negotiable as lints and hard blocks" (0509#5783).
+  // Limits sit at the common industry defaults, below main's p99. Code on main
+  // that is already over them is listed in eslint-suppressions.json (ESLint
+  // bulk suppressions), so new code meets the limit, a listed function cannot
+  // grow its count, and a fix that removes one fails lint until the entry is
+  // pruned with `npx eslint --prune-suppressions`.
+  {
+    files: ["app/**/*.{ts,tsx}", "workers/**/*.ts"],
+    rules: {
+      complexity: ["error", 10],
+      "max-depth": ["error", 3],
+      "max-params": ["error", 3],
+      "max-lines-per-function": ["error", { max: 50, skipBlankLines: true, skipComments: true }],
     },
   },
 
@@ -724,6 +785,7 @@ export default tseslint.config(
       "no-restricted-syntax": [
         "error",
         ...BANNED_SYNTAX,
+        ...NO_USER_DATA_IN_LOGS,
         RAW_DML_WRITER,
         ENV_DB_IN_ROUTES,
         FEED_STATE_LITERAL,
@@ -734,7 +796,7 @@ export default tseslint.config(
   {
     files: ["workers/sources/mentions/youtube.ts"],
     rules: {
-      "no-restricted-syntax": ["error", ...BANNED_SYNTAX, RAW_DML_WRITER],
+      "no-restricted-syntax": ["error", ...BANNED_SYNTAX, ...NO_USER_DATA_IN_LOGS, RAW_DML_WRITER],
     },
   },
 

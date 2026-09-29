@@ -34,7 +34,7 @@ export default defineConfig({
     baseURL,
     trace: "on-first-retry",
   },
-  // Production sits behind Cloudflare Access; only / and /api/health are
+  // Production sits behind Cloudflare Access; only /, /privacy, /terms and /api/health are
   // public. The setup project presents the agents' service token once and
   // saves the CF_Authorization cookie Access issues; the browser then sends
   // that cookie to 0509.io only, so third-party origins (fonts, the beacon)
@@ -42,6 +42,15 @@ export default defineConfig({
   // setup project is absent and tests run without it.
   projects: [
     ...(process.env.CF_ACCESS_CLIENT_ID ? [{ name: "setup", testMatch: /auth\.setup\.ts/ }] : []),
+    // The lighthouse job's sign-in (0509#5767): a request-only setup that mints
+    // a better-auth session cookie into GITHUB_ENV for lighthouserc.cjs. Gated
+    // on its own env var so the e2e suite never runs it, and request-only so
+    // the job needs no browser install.
+    ...(process.env.LHCI_SESSION ? [{ name: "lhci-session", testMatch: /lhci-session\.setup\.ts/ }] : []),
+    // The lighthouse job's post-audit teardown (0509#5767): deletes the address
+    // the sign-in minted, via the product's own settings delete path. Gated on
+    // its own env var so the e2e suite never runs it.
+    ...(process.env.LHCI_TEARDOWN ? [{ name: "lhci-teardown", testMatch: /lhci-teardown\.setup\.ts/ }] : []),
     {
       name: "desktop-1440",
       use: { ...devices["Desktop Chrome"], viewport: { width: 1440, height: 900 }, ...accessState },

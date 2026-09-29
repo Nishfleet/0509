@@ -1,6 +1,8 @@
 import type { WorkflowEvent, WorkflowStep, WorkflowStepConfig } from "cloudflare:workers";
 import { WorkflowEntrypoint } from "cloudflare:workers";
 
+import { withMonitor } from "@sentry/cloudflare";
+
 import { pingLiveness } from "../../app/lib/liveness-ping.server";
 import {
   CHUNK_SIZE,
@@ -9,11 +11,18 @@ import {
   publishSiteChange,
   uncoveredItems,
 } from "../../app/lib/site/sweep.server";
+import { plannedAt } from "../../app/lib/workflow-time";
 
 const RETRY: WorkflowStepConfig = {
   retries: { limit: 3, delay: "30 seconds", backoff: "exponential" },
   timeout: "5 minutes",
 };
+
+const MONITOR = {
+  schedule: { type: "crontab", value: "0 2 * * *" },
+  checkinMargin: 60,
+  timezone: "UTC",
+} as const;
 
 type PageOutcome = "failed" | "first" | "unchanged" | "changed";
 
@@ -34,7 +43,17 @@ async function settle<T>(label: string, run: () => Promise<T>): Promise<T | null
 
 export class SiteSweep extends WorkflowEntrypoint<Env & { SITE_SWEEP_PING_URL?: string }> {
   async run(event: WorkflowEvent<unknown>, step: WorkflowStep): Promise<SiteSweepOutcome> {
-    const tick = { instanceId: event.instanceId, plannedAt: event.timestamp.toISOString() };
+    return withMonitor("site-sweep", () => this.runSweep(event, step), MONITOR);
+  }
+
+  private async runSweep(
+    event: WorkflowEvent<unknown>,
+    step: WorkflowStep,
+  ): Promise<SiteSweepOutcome> {
+    const tick = {
+      instanceId: event.instanceId,
+      plannedAt: plannedAt(event.timestamp, event.schedule?.scheduledTime),
+    };
     const targets = await step.do("plan", RETRY, () => planSiteSweep(tick.plannedAt));
 
     const outcomes = await targets.reduce<Promise<readonly PageOutcome[]>>(async (done, target) => {
