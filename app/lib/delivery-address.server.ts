@@ -24,6 +24,13 @@ function newVerifyToken(): string {
   return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
 }
 
+function isUnchangedVerifiedTarget(
+  target: { target_value: string; is_verified: number } | null,
+  address: string,
+): boolean {
+  return target !== null && target.target_value === address && target.is_verified === 1;
+}
+
 async function sendVerifyConfirmation(
   email: SendEmail,
   workspaceId: string,
@@ -89,7 +96,7 @@ export async function saveDeliveryAddress(input: {
     return { error: null, suppressed: false };
   }
 
-  if (target !== null && target.target_value === address && target.is_verified === 1) {
+  if (isUnchangedVerifiedTarget(target, address)) {
     return { error: null, suppressed: false };
   }
 
