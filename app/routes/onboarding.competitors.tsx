@@ -13,6 +13,7 @@ import { markCompetitorsReady, markWatchingStarted } from "../lib/data/onboardin
 import { readWorkspaceIdForOwner } from "../lib/data/workspace.server";
 import { readDiscoveryState } from "../lib/discovery/start.server";
 import { discoveryNotice } from "../lib/discovery/state";
+import type { DiscoveryState } from "../lib/discovery/state";
 import { requireSession } from "../lib/require-session.server";
 import { ONBOARDING_COMPETITORS, workspaceLandingForRequest } from "../lib/workspace.server";
 
@@ -50,13 +51,10 @@ export async function action({ request }: Route.ActionArgs) {
   return handleCompetitorIntent(workspaceId, form);
 }
 
-export default function Page({ loaderData, actionData }: Route.ComponentProps) {
-  const { on, maybes, discovery } = loaderData;
+function useDiscoveryPolling(discovery: DiscoveryState): DiscoveryState {
   const [polls, setPolls] = useState(0);
   const stalled = polls >= MAX_POLLS;
   const searching = discovery === "looking" && !stalled;
-  const shown = stalled && discovery === "looking" ? "unavailable" : discovery;
-  const notice = discoveryNotice(shown, on.length + maybes.length);
   const revalidator = useRevalidator();
 
   useEffect(() => {
@@ -69,6 +67,13 @@ export default function Page({ loaderData, actionData }: Route.ComponentProps) {
       clearInterval(id);
     };
   }, [revalidator, searching]);
+
+  return stalled && discovery === "looking" ? "unavailable" : discovery;
+}
+
+export default function Page({ loaderData, actionData }: Route.ComponentProps) {
+  const { on, maybes, discovery } = loaderData;
+  const notice = discoveryNotice(useDiscoveryPolling(discovery), on.length + maybes.length);
 
   return (
     <OnboardingFrame step={3} heading="Who you're up against">
