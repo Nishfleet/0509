@@ -26,7 +26,7 @@ export default function VerifyAddress({ actionData }: Route.ComponentProps) {
     return (
       <main className="mx-auto max-w-xl px-4 py-16">
         <h1 className="font-display text-2xl font-semibold tracking-[-0.02em]">Address confirmed</h1>
-        <p className="text-ink-soft mt-4 leading-[1.65]">The brief now goes to this address.</p>
+        <p className="mt-4 leading-[1.65] text-ink-soft">The brief now goes to this address.</p>
         <Footer />
       </main>
     );
@@ -37,7 +37,7 @@ export default function VerifyAddress({ actionData }: Route.ComponentProps) {
       <h1 className="font-display text-2xl font-semibold tracking-[-0.02em]">
         Confirm this address for your brief?
       </h1>
-      <p className="text-ink-soft mt-4 leading-[1.65]">
+      <p className="mt-4 leading-[1.65] text-ink-soft">
         The weekly brief and any alerts go to this address once you confirm. If you did not ask for
         this, ignore this page.
       </p>
