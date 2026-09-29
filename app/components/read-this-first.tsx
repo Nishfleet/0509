@@ -11,7 +11,7 @@ const BODY = "mt-2 text-[0.95rem] leading-[1.6]";
 
 const MAX_MARKS = 3;
 
-function firstMark(mark: BriefPayload["read_this_first"][number]): ReactElement {
+function markBlock(mark: BriefPayload["read_this_first"][number]): ReactElement {
   const href = httpUrl(mark.url);
   const title =
     mark.before === null || mark.after === null ? (
@@ -61,7 +61,7 @@ export function ReadThisFirst({
       ) : marks.length === 0 ? (
         <p className={BODY}>Nothing this week needed reading first.</p>
       ) : (
-        marks.slice(0, MAX_MARKS).map(firstMark)
+        marks.slice(0, MAX_MARKS).map(markBlock)
       )}
     </section>
   );

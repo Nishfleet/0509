@@ -178,6 +178,39 @@ describe("nightly site sweep", () => {
     expect(polled?.last_polled_at).not.toBeNull();
   });
 
+  it("judges the filed change signal, and a retried publish judges the same signal", async () => {
+    Reflect.set(env, "AI", {
+      async run(_model: string, request: { questions: Record<string, { type: string }> }) {
+        const answers: Record<string, { type: "noul"; noul: number } | { type: "choice"; choice: string }> = {};
+        for (const [id, question] of Object.entries(request.questions)) {
+          answers[id] = question.type === "noul" ? { type: "noul", noul: 0.95 } : { type: "choice", choice: "pricing" };
+        }
+        return { answers };
+      },
+    });
+    try {
+      await env.DB.exec("DELETE FROM jev_verdict");
+      const [rival] = (await planSiteSweep(NOW)).filter((t) => t.entityId === "ent-rival");
+      if (rival === undefined) throw new Error("expected the rival's homepage");
+      await checkSitePage(rival, await nextTick("night-1"));
+      readHolder.html = AFTER_HTML;
+      const changed = await checkSitePage(rival, await nextTick("night-2"));
+      if (changed.outcome !== "changed") throw new Error("expected a change");
+      await publishSiteChange(rival, changed);
+      await publishSiteChange(rival, changed);
+
+      const [signal] = await signals();
+      const filedId = await env.DB.prepare("SELECT id FROM signal WHERE workspace_id = ?").bind(WS).first<{ id: string }>();
+      const verdicts = await env.DB.prepare("SELECT DISTINCT signal_id FROM jev_verdict WHERE entity_id = 'ent-rival'").all<{
+        signal_id: string | null;
+      }>();
+      expect(signal).toBeDefined();
+      expect(verdicts.results).toEqual([{ signal_id: filedId?.id }]);
+    } finally {
+      Reflect.deleteProperty(env, "AI");
+    }
+  });
+
   it("counts one snapshot per page per night even when the check step is retried", async () => {
     const [rival] = (await planSiteSweep(NOW)).filter((t) => t.entityId === "ent-rival");
     if (rival === undefined) throw new Error("expected the rival's homepage");

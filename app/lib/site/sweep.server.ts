@@ -161,10 +161,10 @@ export async function publishSiteChange(target: SiteSweepTarget, changed: Change
     transport: changed.transport,
   };
 
-  const signalId = crypto.randomUUID();
+  const newSignalId = crypto.randomUUID();
   const observedAt = new Date().toISOString();
   await insertChangeSignalStatement({
-    id: signalId,
+    id: newSignalId,
     workspaceId: target.workspaceId,
     entityId: target.entityId,
     sourceId: target.sourceId,
@@ -178,6 +178,13 @@ export async function publishSiteChange(target: SiteSweepTarget, changed: Change
     observedAt,
   }).run();
 
+  const filed = await env.DB.prepare("SELECT id FROM signal WHERE source_id = ?1 AND dedup_key = ?2")
+    .bind(target.sourceId, changed.snapshotId)
+    .first<{ id: string }>();
+  if (filed === null) {
+    throw new Error(`missing change signal for snapshot ${changed.snapshotId}`);
+  }
+  const signalId = filed.id;
   const subject = await env.DB.prepare("SELECT name, domain FROM entity WHERE id = ?1 AND workspace_id = ?2")
     .bind(target.entityId, target.workspaceId)
     .first<{ name: string | null; domain: string }>();
