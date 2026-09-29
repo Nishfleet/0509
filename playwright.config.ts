@@ -20,6 +20,8 @@ process.env.PLAYWRIGHT_LOCAL_PORT ??= String(8000 + (process.pid % 1000));
 const localPort = process.env.PLAYWRIGHT_LOCAL_PORT;
 const baseURL = process.env.PLAYWRIGHT_TEST_BASE_URL ?? `http://127.0.0.1:${localPort}`;
 export const accessStatePath = "e2e/.auth/access.json";
+export const onboardedStatePath = (lane: "desktop" | "phone"): string => `e2e/.auth/onboarded-${lane}.json`;
+export const onboardedEmailPath = (lane: "desktop" | "phone"): string => `e2e/.auth/onboarded-${lane}.email`;
 export const sessionStatePath = "e2e/.auth/session.json";
 const accessState = process.env.CF_ACCESS_CLIENT_ID ? { storageState: accessStatePath } : {};
 const productionLane = Boolean(process.env.PLAYWRIGHT_TEST_BASE_URL && process.env.CF_ACCESS_CLIENT_ID);
@@ -30,7 +32,7 @@ export default defineConfig({
   forbidOnly: Boolean(process.env.CI),
   retries: process.env.CI ? 2 : 0,
   // https://playwright.dev/docs/ci#workers
-  workers: process.env.CI ? (process.env.PLAYWRIGHT_TEST_BASE_URL ? 4 : 1) : undefined,
+  workers: process.env.PLAYWRIGHT_TEST_BASE_URL ? (process.env.CI ? 4 : undefined) : 1,
   reporter: process.env.CI ? "github" : "list",
   use: {
     baseURL,
@@ -66,15 +68,31 @@ export default defineConfig({
     // the sign-in minted, via the product's own settings delete path. Gated on
     // its own env var so the e2e suite never runs it.
     ...(process.env.LHCI_TEARDOWN ? [{ name: "lhci-teardown", testMatch: /lhci-teardown\.setup\.ts/ }] : []),
+    ...(process.env.CF_ACCESS_CLIENT_ID
+      ? [
+          { name: "onboarded-setup", testMatch: /onboarded\.setup\.ts/, dependencies: ["setup"], teardown: "onboarded-teardown" },
+          { name: "onboarded-teardown", testMatch: /onboarded-teardown\.setup\.ts/ },
+        ]
+      : []),
     {
       name: "desktop-1440",
       use: { ...devices["Desktop Chrome"], viewport: { width: 1440, height: 900 }, ...accessState },
-      dependencies: productionLane ? ["setup", "session"] : process.env.CF_ACCESS_CLIENT_ID ? ["setup"] : [],
+      dependencies: productionLane
+        ? ["setup", "session", "onboarded-setup"]
+        : process.env.CF_ACCESS_CLIENT_ID
+          ? ["setup", "onboarded-setup"]
+          : [],
+      testIgnore: /onboarded.*\.setup\.ts/,
     },
     {
       name: "phone-390",
       use: { ...devices["Desktop Chrome"], viewport: { width: 390, height: 844 }, ...accessState },
-      dependencies: productionLane ? ["setup", "session"] : process.env.CF_ACCESS_CLIENT_ID ? ["setup"] : [],
+      dependencies: productionLane
+        ? ["setup", "session", "onboarded-setup"]
+        : process.env.CF_ACCESS_CLIENT_ID
+          ? ["setup", "onboarded-setup"]
+          : [],
+      testIgnore: /onboarded.*\.setup\.ts/,
     },
   ],
   webServer: process.env.PLAYWRIGHT_TEST_BASE_URL
@@ -92,7 +110,7 @@ export default defineConfig({
         // link at this origin so the preview lane can follow it, and wrangler's
         // simulated send_email writes the message under .wrangler/tmp/email/
         // for e2e/inbox.ts to read instead of the inbox Worker (0509#6092).
-        command: `npx wrangler d1 migrations apply 0509 --local </dev/null && npx wrangler dev --env-file .dev.vars.example --port ${localPort} --local --var "BETTER_AUTH_URL:http://127.0.0.1:${localPort}"`,
+        command: `npx wrangler d1 migrations apply 0509 --local </dev/null && npx wrangler dev --env-file .dev.vars.example --port ${localPort} --local --var "BETTER_AUTH_URL:http://127.0.0.1:${localPort}" --var "DODO_PRODUCT_STARTER:pdt_preview_starter"`,
         url: `http://127.0.0.1:${localPort}/api/health`,
         reuseExistingServer: false,
         timeout: 120_000,

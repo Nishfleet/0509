@@ -18,6 +18,9 @@ export function evidenceLine(evidence: readonly Evidence[]): string {
     publishers.size > 0 ? `by ${plural(publishers.size, "publisher", "publishers")}` : null,
     threads.size > 0 ? `in ${plural(threads.size, "Hacker News thread", "Hacker News threads")}` : null,
   ].filter((part): part is string => part !== null);
+  if (parts.length === 0 && evidence.length > 0 && evidence.every((item) => item.generator === "ai")) {
+    return "Suggested from your site, not yet seen elsewhere";
+  }
   if (parts.length === 0) return "Named alongside you online";
   return `Named alongside you ${parts.join(" and ")}`;
 }

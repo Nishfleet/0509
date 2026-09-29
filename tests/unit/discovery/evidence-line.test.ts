@@ -26,4 +26,10 @@ describe("noulAction", () => {
     expect(noulAction(0.1)).toBe("reject");
     expect(noulAction(0.5)).toBe("maybe");
   });
+
+  it("marks a candidate only the ai proposer named as suggested", () => {
+    expect(evidenceLine([{ sourceUrl: "https://gymshark.com/", excerpt: "", generator: "ai" }])).toBe(
+      "Suggested from your site, not yet seen elsewhere",
+    );
+  });
 });

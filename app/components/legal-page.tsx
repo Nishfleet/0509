@@ -30,18 +30,18 @@ function Section({ section }: { section: LegalSection }) {
       </h2>
       <Paragraphs items={section.paragraphs} />
       {section.list === undefined ? null : (
-        <ul className="text-ink-soft mt-4 list-disc space-y-2 pl-5 leading-[1.65]">
+        <ul className="mt-4 list-disc space-y-2 pl-5 leading-[1.65] text-ink-soft">
           {section.list.map((item) => (
             <li key={item}>{item}</li>
           ))}
         </ul>
       )}
       {section.entries === undefined ? null : (
-        <dl className="border-line mt-6 border-t">
+        <dl className="mt-6 border-t border-line">
           {section.entries.map((entry) => (
-            <div className="border-line grid gap-1 border-b py-4 sm:grid-cols-[13rem_1fr] sm:gap-6" key={entry.term}>
-              <dt className="text-ink font-medium">{entry.term}</dt>
-              <dd className="text-ink-soft space-y-1 leading-[1.6]">
+            <div className="grid gap-1 border-b border-line py-4 sm:grid-cols-[13rem_1fr] sm:gap-6" key={entry.term}>
+              <dt className="font-medium text-ink">{entry.term}</dt>
+              <dd className="space-y-1 leading-[1.6] text-ink-soft">
                 {entry.details.map((detail) => (
                   <p key={detail}>{detail}</p>
                 ))}
@@ -64,31 +64,31 @@ function Section({ section }: { section: LegalSection }) {
 
 export function LegalPage({ doc }: { doc: LegalDocument }) {
   return (
-    <div className="bg-bone text-ink mx-auto w-full max-w-[46rem] px-6 py-16 sm:py-24">
+    <div className="mx-auto w-full max-w-[46rem] bg-bone px-6 py-16 text-ink sm:py-24">
       <header>
-        <a className="font-display text-ink text-base font-bold tracking-[-0.03em]" href="/">
-          05<span className="bg-green text-on-green px-[5px]">09</span>
+        <a className="font-display text-base font-bold tracking-[-0.03em] text-ink" href="/">
+          05<span className="bg-green px-[5px] text-on-green">09</span>
         </a>
       </header>
       <main className="mt-8">
         <h1 className="font-display text-[clamp(1.75rem,3.6vw,2.9rem)] leading-[1.15] font-semibold tracking-[-0.02em]">
           {doc.title}
         </h1>
-        <p className="text-ink-soft mt-4 font-mono text-[0.72rem] tracking-[0.06em]">
+        <p className="mt-4 font-mono text-[0.72rem] tracking-[0.06em] text-ink-soft">
           Last updated <time dateTime={LEGAL_UPDATED}>{updatedLabel}</time>
         </p>
-        <p className="text-ink-soft mt-6 leading-[1.65]">{doc.intro}</p>
-        <nav aria-label="On this page" className="border-line mt-10 border-y py-5">
+        <p className="mt-6 leading-[1.65] text-ink-soft">{doc.intro}</p>
+        <nav aria-label="On this page" className="mt-10 border-y border-line py-5">
           <ol className="grid gap-x-6 gap-y-2 text-[0.92rem] sm:grid-cols-2">
             {doc.sections.map((section) => (
               <li key={section.id}>
-                <a className="text-ink-soft hover:text-ink underline-offset-4 hover:underline" href={`#${section.id}`}>
+                <a className="text-ink-soft underline-offset-4 hover:text-ink hover:underline" href={`#${section.id}`}>
                   {section.heading}
                 </a>
               </li>
             ))}
             <li>
-              <a className="text-ink-soft hover:text-ink underline-offset-4 hover:underline" href="#contact">
+              <a className="text-ink-soft underline-offset-4 hover:text-ink hover:underline" href="#contact">
                 Contact
               </a>
             </li>

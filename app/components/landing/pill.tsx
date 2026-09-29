@@ -4,7 +4,7 @@ export function Pill({ label, note, highlight = false }: { label: string; note?:
   return (
     <li
       className={cn(
-        "font-mono text-pill inline-block border px-2 py-1 font-medium uppercase",
+        "inline-block border px-2 py-1 font-mono text-pill font-medium uppercase",
         highlight ? "border-green-ink bg-green-wash text-green-ink" : "border-line bg-card text-ink",
       )}
     >
