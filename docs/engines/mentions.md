@@ -22,7 +22,7 @@ The runner is the **Workflow** `mentions-sweep` (`workers/workflows/mentions.ts`
 
 `wrangler.jsonc` names the class `MentionsWorkflow`, which `workers/app.ts` exports as an instrumented wrapper around `MentionsSweep` from `workers/workflows/mentions.ts`. It runs one `step.do` per `(plugin_key, target_key)` pair (one target per source per brand), each with `retries: { limit: 2, delay: "10 seconds", backoff: "exponential" }`. The pacing constant is `PACED_PLUGINS = { "gdelt.doc" }`; between two GDELT targets it `step.sleep("6 seconds")` to honour GDELT's one-request-per-five-seconds ceiling. Non-GDELT adapters are not paced.
 
-A target that throws is logged as `mentions.target_failed` and counted as `failed` in the final `mentions.sweep` outcome line; the rest of the targets continue.
+A target that throws is logged as `mentions.target_failed` and counted as `failed` in the final `mentions.sweep` outcome line; the rest of the targets continue. A timeout that survives the source's retry budget is the one exception: it resolves the step with a partial `TargetOutcome` whose `skipped` field names the watches not swept, so the `mentions.sweep` line carries the skipped-watch total rather than a bare failure.
 
 ### Per watch, per tick
 
@@ -122,6 +122,7 @@ Monthly at 100 brands × 2 live sources × 1 tick × 30 days = **6,000 polls/mon
 - **D5 reject** — stored with `is_tombstoned = 1`; never judged again (no tombstone filter in `readSeenDedupKeys`); hidden from every read path that filters `is_tombstoned = 0`.
 - **R2 PUT on unchanged body** — we re-PUT the body at the same key; R2 is idempotent on `PUT`, no extra storage cost, and the `snapshot` row is still written so coverage/freshness is answerable.
 - **GDELT 429 / pacing** — pacing `step.sleep("6 seconds")` between GDELT targets; `step.do` retries twice on transient throws.
+- **Upstream timeout after the source's retry budget** — `markSourceTimedOut` sets `degraded_reason = 'timed out'` and the step resolves with a partial `TargetOutcome` (`items: 0, stored: 0, unjudged: 0, skipped: <watches on the target>`) instead of throwing, so the step output and the `mentions.sweep` line name the skipped watches rather than a silent empty result. Skipped watches keep `last_polled_at` null and are retried on the next tick. Proven by `tests/integration/mentions/blocked.integration.test.ts` case E.
 
 ---
 
