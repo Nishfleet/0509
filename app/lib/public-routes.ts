@@ -12,7 +12,7 @@ export interface LlmsTxtSource {
 
 export const PUBLIC_PATHS = ["/privacy", "/terms"] as const;
 export const SITEMAP_PATHS = ["/privacy", "/terms", "/llms.txt"] as const;
-export const DISALLOWED_PREFIXES = ["/app", "/api", "/mcp", "/u", "/login", "/onboarding", "/oauth", "/design"] as const;
+export const DISALLOWED_PREFIXES = ["/app", "/api", "/mcp", "/u", "/v", "/login", "/onboarding", "/oauth", "/design"] as const;
 export const MCP_URL = `${SITE_URL}/mcp`;
 
 const PAGE_SUMMARIES: Record<(typeof PUBLIC_PATHS)[number], { title: string; summary: string }> = {
