@@ -1,8 +1,5 @@
-import { parse } from "tldts";
-
 import { browserContent } from "../site/browser-budget.server";
-
-const FETCH_TIMEOUT_MS = 8_000;
+import { cappedBody, fetchOutbound, isPublicHost } from "./outbound.server";
 
 const MIN_EXTRACTED_CHARS = 200;
 
@@ -55,11 +52,6 @@ const CHALLENGE_MARKERS = [
   "are you a robot",
   "verification successful. waiting for",
 ] as const;
-
-const FETCH_HEADERS = {
-  accept: "text/html,application/xhtml+xml",
-  "user-agent": "FiveToNineBot/1.0 (+https://0509.io)",
-} as const;
 
 export async function countExtractedChars(html: string): Promise<number> {
   let chars = 0;
@@ -155,26 +147,9 @@ class BodyTooLargeError extends Error {
 }
 
 async function cappedText(res: Response): Promise<string> {
-  const declared = Number(res.headers.get("content-length"));
-  if (Number.isFinite(declared) && declared > MAX_BODY_BYTES) {
-    await res.body?.cancel();
-    throw new BodyTooLargeError();
-  }
-  if (res.body === null) return "";
-  let seen = 0;
-  const capped = res.body.pipeThrough(
-    new TransformStream<Uint8Array, Uint8Array>({
-      transform(chunk, controller) {
-        seen += chunk.byteLength;
-        if (seen > MAX_BODY_BYTES) {
-          controller.error(new BodyTooLargeError());
-          return;
-        }
-        controller.enqueue(chunk);
-      },
-    }),
-  );
-  return new Response(capped).text();
+  const bytes = await cappedBody(res, MAX_BODY_BYTES);
+  if (bytes === null) throw new BodyTooLargeError();
+  return new TextDecoder().decode(bytes);
 }
 
 export async function readUrl(
@@ -190,19 +165,14 @@ export async function readUrl(
     console.error(JSON.stringify({ event: "fetch.url_parse_failed", error: String(error) }));
     return { ok: false, reason: "invalid-url", detail: `not a URL: ${url}` };
   }
-  if (target.protocol !== "http:" && target.protocol !== "https:") {
+  if (!isPublicHost(target, ["http:", "https:"])) {
     return {
       ok: false,
       reason: "invalid-url",
-      detail: `unsupported scheme: ${target.protocol}`,
-    };
-  }
-  const host = parse(target.hostname);
-  if (host.isIp === true || host.isIcann !== true) {
-    return {
-      ok: false,
-      reason: "invalid-url",
-      detail: `not a public internet host: ${target.hostname}`,
+      detail:
+        target.protocol !== "http:" && target.protocol !== "https:"
+          ? `unsupported scheme: ${target.protocol}`
+          : `not a public internet host: ${target.hostname}`,
     };
   }
 
@@ -221,9 +191,8 @@ export async function readUrl(
   let fetchStatus: number;
   let fetchHtml: string;
   try {
-    const res = await fetch(url, {
-      headers: FETCH_HEADERS,
-      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+    const res = await fetchOutbound(url, {
+      accept: "text/html,application/xhtml+xml",
     });
     fetchStatus = res.status;
     fetchHtml = await cappedText(res);
