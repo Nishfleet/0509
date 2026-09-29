@@ -2,6 +2,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
+import { Hero } from "../../app/components/landing/hero";
 import { Marks } from "../../app/components/landing/marks";
 import { pickLandingMarks, type SiteChangeView } from "../../app/lib/site-change";
 
@@ -109,5 +110,21 @@ describe("landing marks", () => {
     expect(none).not.toContain("€29");
     expect(none.toLowerCase()).not.toContain("sample");
     expect(none.toLowerCase()).not.toContain("legend");
+  });
+
+  it("gives every mark its own capture and source, so no caption promises a screenshot that is not there", () => {
+    const one = markup([view({ id: "sig-own", isSelf: true, url: "https://own.example/" })]);
+    expect(one.match(/<img/g)).toHaveLength(1);
+    expect(one).toContain('src="/app/changes/sig-own/after?w=208"');
+    expect(one).toContain('aria-label="Open before and after: Rival changed its pricing page"');
+    expect(one).toContain('href="https://own.example/"');
+    expect(one).not.toContain("both screenshots kept");
+    expect(one).not.toContain("one tap to the page itself");
+  });
+
+  it("names the hero's three literal pairs as examples, so a live mark is never mistaken for one", () => {
+    const hero = renderToStaticMarkup(createElement(Hero));
+    expect(hero).toContain("Worked examples, not live marks.");
+    expect(hero).not.toContain("screenshot");
   });
 });
