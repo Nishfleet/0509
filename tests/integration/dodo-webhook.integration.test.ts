@@ -118,7 +118,7 @@ describe("Dodo webhook (J13)", () => {
     expect(await eventRow("evt_stale")).toBeNull();
   });
 
-  it("takes paid access away on_hold and keeps it through a cancelled paid period", async () => {
+  it("takes paid access away on_hold and keeps it through a cancel scheduled for period end", async () => {
     await deliver(signedRequest("evt_1", eventBody({})));
 
     await deliver(
@@ -133,7 +133,7 @@ describe("Dodo webhook (J13)", () => {
         eventBody({
           type: "subscription.cancelled",
           timestamp: "2026-10-01T00:00:00Z",
-          data: { status: "cancelled", next_billing_date: paidThrough },
+          data: { status: "cancelled", cancel_at_next_billing_date: true, next_billing_date: paidThrough },
         }),
       ),
     );
@@ -142,6 +142,25 @@ describe("Dodo webhook (J13)", () => {
     await deliver(
       signedRequest("evt_4", eventBody({ type: "subscription.expired", timestamp: "2026-10-02T00:00:00Z", data: { status: "expired" } })),
     );
+    expect((await readEntitlements(WORKSPACE)).competitors).toBe(5);
+  });
+
+  it("drops to scout at once on a cancel that was not scheduled for period end", async () => {
+    await deliver(signedRequest("evt_now_1", eventBody({})));
+    const stillPaidFor = new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString();
+
+    await deliver(
+      signedRequest(
+        "evt_now_2",
+        eventBody({
+          type: "subscription.cancelled",
+          timestamp: "2026-10-01T00:00:00Z",
+          data: { status: "cancelled", cancel_at_next_billing_date: false, next_billing_date: stillPaidFor },
+        }),
+      ),
+    );
+
+    expect((await planRow())?.current_period_end).toBeNull();
     expect((await readEntitlements(WORKSPACE)).competitors).toBe(5);
   });
 

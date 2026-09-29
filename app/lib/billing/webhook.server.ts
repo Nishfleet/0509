@@ -17,6 +17,7 @@ const subscriptionData = z.object({
   product_id: z.string(),
   status: z.string(),
   next_billing_date: z.string().nullish(),
+  cancel_at_next_billing_date: z.boolean().nullish(),
   customer: z.object({ customer_id: z.string() }),
   metadata: z.record(z.string(), z.string()).nullish(),
 });
@@ -47,13 +48,14 @@ async function applySubscription(body: unknown, type: string, timestamp: string)
     log("billing.webhook_no_workspace", { type, subscription: data.subscription_id });
     return;
   }
+  const cancelledNow = data.status === "cancelled" && data.cancel_at_next_billing_date !== true;
   await upsertSubscriptionPlan({
     workspaceId,
     tier,
     status: data.status,
     customerId: data.customer.customer_id,
     subscriptionId: data.subscription_id,
-    currentPeriodEnd: data.next_billing_date ?? null,
+    currentPeriodEnd: cancelledNow ? null : (data.next_billing_date ?? null),
     updatedAt: timestamp,
   });
 }
