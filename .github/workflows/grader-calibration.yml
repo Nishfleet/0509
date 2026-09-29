@@ -9,11 +9,6 @@ name: grader-calibration
 # a half. Not a required check.
 on:
   workflow_dispatch:
-    inputs:
-      issue:
-        description: Issue the results are posted on
-        type: number
-        default: 5872
 
 permissions:
   contents: read
@@ -53,7 +48,7 @@ jobs:
         case: ${{ fromJSON(needs.cases.outputs.ids) }}
     env:
       CASE: ${{ matrix.case }}
-      RESULTS_ISSUE: ${{ inputs.issue || 5872 }}
+      RESULTS_ISSUE: 5872
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -83,6 +78,7 @@ jobs:
       - name: Grade with Devin
         id: devin
         timeout-minutes: 30
+        # @main on purpose: the grader under test runs as grade.yml runs it (fleet-ops#8927)
         uses: Nishfleet/fleet-ops/.github/actions/devin-grade@main
         with:
           dir: ${{ runner.temp }}/devin-in
@@ -134,7 +130,7 @@ jobs:
     permissions:
       issues: write
     env:
-      RESULTS_ISSUE: ${{ inputs.issue || 5872 }}
+      RESULTS_ISSUE: 5872
     steps:
       - name: Count catches and false A+ grades for this run
         env:
