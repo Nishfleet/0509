@@ -15,6 +15,7 @@ import type { ShortlistEntry } from "./shortlist";
 import type { Candidate, Evidence } from "./types";
 
 const EVIDENCE_KEPT = 5;
+export const JUDGE_BATCH_SIZE = 5;
 
 export interface ShortlistedCandidate {
   name: string;
@@ -48,10 +49,25 @@ const IS_CREATOR_RIVAL: NoulQuestion = {
     "It is a platform, publisher, sponsor, retailer, a product of `self`, `self` itself, or an unrelated name that only shares a headline.",
 };
 
+const GENERATORS = [
+  { name: "news", run: newsGenerator },
+  { name: "hn", run: hnGenerator },
+] as const;
+
 async function settledCandidates(self: DiscoverySelf): Promise<Candidate[]> {
   const subject = { name: self.name, domain: self.domain };
-  const runs = await Promise.allSettled([newsGenerator(subject), hnGenerator(subject)]);
-  return runs.flatMap((run) => (run.status === "fulfilled" ? run.value : []));
+  const runs = await Promise.allSettled(GENERATORS.map((generator) => generator.run(subject)));
+  return runs.flatMap((run, index) => {
+    if (run.status === "fulfilled") return run.value;
+    console.error(
+      JSON.stringify({
+        event: "discovery.generator_failed",
+        generator: GENERATORS[index]?.name,
+        message: (run.reason instanceof Error ? run.reason.message : String(run.reason)).slice(0, 300),
+      }),
+    );
+    return [];
+  });
 }
 
 export function withBacklog(
@@ -161,4 +177,10 @@ export async function judgeCandidates(
     results.push({ ...candidate, verdict });
   }
   return results;
+}
+
+export function judgeBatches(candidates: readonly ResolvedCandidate[]): ResolvedCandidate[][] {
+  return Array.from({ length: Math.ceil(candidates.length / JUDGE_BATCH_SIZE) }, (_, index) =>
+    candidates.slice(index * JUDGE_BATCH_SIZE, (index + 1) * JUDGE_BATCH_SIZE),
+  );
 }

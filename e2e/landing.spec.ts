@@ -10,7 +10,7 @@ import { consoleFailures, watchConsole } from "./inbox";
 
 const PATH = "/design/landing";
 
-test("the landing document paints without a module graph", async ({ page }) => {
+test("the landing document paints without a module graph @smoke", async ({ page }) => {
   const response = await page.goto(PATH);
   expect(response?.status()).toBe(200);
   const html = (await response?.text()) ?? "";
@@ -22,7 +22,7 @@ test("the landing document paints without a module graph", async ({ page }) => {
   expect(head).not.toContain('type="module"');
 });
 
-test("the landing renders its sections in order under one headline", async ({ page }) => {
+test("the landing renders its sections in order under one headline @smoke", async ({ page }) => {
   const response = await page.goto(PATH);
   expect(response?.status()).toBe(200);
 
@@ -33,7 +33,7 @@ test("the landing renders its sections in order under one headline", async ({ pa
   expect(order).toEqual(["hero", "mark", "how-it-works", "what-we-watch", "agents", "price", "faq"]);
 });
 
-test("the landing route data and document carry no disabled source's internal notes", async ({ page, request }) => {
+test("the landing route data and document carry no disabled source's internal notes @smoke", async ({ page, request }) => {
   const response = await page.goto(PATH);
   expect(response?.status()).toBe(200);
 
@@ -44,14 +44,13 @@ test("the landing route data and document carry no disabled source's internal no
   // payload is the route's own client-navigation serialization and is where
   // the filter has to bite; app/root.tsx:34 omits <Scripts /> for the landing,
   // so the document carries no loader data — its negatives below are a guard
-  // for the day hydration comes back, and the two positives are the evidence
+  // for the day hydration comes back, and the payload positive is the evidence
   // the route still has sources.
   const data = await request.get(`${PATH}.data`);
   expect(data.status()).toBe(200);
   const payload = await data.text();
   const document = await page.content();
 
-  expect(document).toContain("site.page");
   expect(payload).toContain("site.page");
   for (const body of [document, payload]) {
     expect(body).not.toContain("x.search");
@@ -62,7 +61,31 @@ test("the landing route data and document carry no disabled source's internal no
   }
 });
 
-test("how it works reads as three ruled steps in order, wide and narrow", async ({ page }, testInfo) => {
+test("the landing never leads with a full row of dimmed sources @smoke", async ({ page }) => {
+  const response = await page.goto(PATH);
+  expect(response?.status()).toBe(200);
+
+  // #5674 at the real HTTP surface: the What we watch section holds the pill
+  // row with at least one pill not degraded, or the all-degraded gate has
+  // replaced the row with the one rebuilding line and left no row behind. The
+  // local preview is always the gated state — no migration seeds a `snapshot`
+  // row, so every enabled source reads degraded — and the production lane
+  // carries whichever state its sources are in; both are correct here, an
+  // all-degraded pill row is not.
+  const watch = page.locator("#what-we-watch");
+  const pills = await watch.locator("[data-state]").count();
+  const degraded = await watch.locator('[data-state="degraded"]').count();
+  const row = await watch.locator("ul").count();
+  expect(pills > 0).toBe(row > 0);
+  expect(degraded === pills && pills > 0).toBe(false);
+  if (row === 0) {
+    // The gate leaves the one rebuilding line where the row was; a bare section
+    // with neither row nor line is the regression this guards.
+    expect(await watch.textContent()).toContain("We're rebuilding coverage of news mentions");
+  }
+});
+
+test("how it works reads as three ruled steps in order, wide and narrow @smoke", async ({ page }, testInfo) => {
   const watched = watchConsole(page);
 
   await page.goto(PATH);
@@ -103,7 +126,7 @@ test("how it works reads as three ruled steps in order, wide and narrow", async 
   });
 });
 
-test("the agents section hands a visitor's agent the MCP address and the API docs", async ({ page }, testInfo) => {
+test("the agents section hands a visitor's agent the MCP address and the API docs @smoke", async ({ page }, testInfo) => {
   const watched = watchConsole(page);
 
   await page.goto(PATH);
@@ -125,7 +148,7 @@ test("the agents section hands a visitor's agent the MCP address and the API doc
   });
 });
 
-test("the landing's action names its price and leads to sign-in", async ({ page }) => {
+test("the landing's action names its price and leads to sign-in @smoke", async ({ page }) => {
   await page.goto(PATH);
   const hero = page.locator("#hero");
   await expect(hero.getByRole("button", { name: /€\d+\/mo/ })).toBeVisible();
@@ -134,7 +157,7 @@ test("the landing's action names its price and leads to sign-in", async ({ page 
   await expect(page.locator("#price").getByRole("link", { name: /€\d+\/mo/ })).toHaveAttribute("href", "/login");
 });
 
-test("the hero's first viewport holds the outcome and the one priced input", async ({ page }, testInfo) => {
+test("the hero's first viewport holds the outcome and the one priced input @smoke", async ({ page }, testInfo) => {
   const watched = watchConsole(page);
   const fullFace: string[] = [];
   page.on("request", (request) => {
@@ -220,14 +243,14 @@ test("the hero's first viewport holds the outcome and the one priced input", asy
   }
 });
 
-test("the hero input carries what you typed to sign-in", async ({ page }) => {
+test("the hero input carries what you typed to sign-in @smoke", async ({ page }) => {
   await page.goto(PATH);
   await page.locator("#hero").getByRole("textbox", { name: "your website, or a handle" }).fill("example.com");
   await page.locator("#hero").getByRole("button", { name: /€\d+\/mo/ }).click();
   await expect(page).toHaveURL(/\/login\?subject=example\.com$/);
 });
 
-test("the landing carries its search metadata and structured data", async ({ page }) => {
+test("the landing carries its search metadata and structured data @smoke", async ({ page }) => {
   await page.goto(PATH);
   await expect(page).toHaveTitle(/\S/);
   await expect(page.locator('meta[name="description"]')).toHaveAttribute("content", /^.{50,160}$/);
@@ -252,7 +275,7 @@ test("the landing carries its search metadata and structured data", async ({ pag
   expect(graph["@graph"][3]?.mainEntity?.map((question) => question.name)).toEqual(visible);
 });
 
-test("the landing does not scroll horizontally", async ({ page }) => {
+test("the landing does not scroll horizontally @smoke", async ({ page }) => {
   await page.goto(PATH);
   const overflow = await page.evaluate(
     () => document.documentElement.scrollWidth > document.documentElement.clientWidth,
@@ -260,13 +283,13 @@ test("the landing does not scroll horizontally", async ({ page }) => {
   expect(overflow).toBe(false);
 });
 
-test("the social preview image is served", async ({ request }) => {
+test("the social preview image is served @smoke", async ({ request }) => {
   const response = await request.get("/og.png");
   expect(response.status()).toBe(200);
   expect(response.headers()["content-type"]).toBe("image/png");
 });
 
-test("the organization logo is served", async ({ request }) => {
+test("the organization logo is served @smoke", async ({ request }) => {
   const response = await request.get("/logo.svg");
   expect(response.status()).toBe(200);
   expect(response.headers()["content-type"].startsWith("image/svg+xml")).toBe(true);
@@ -278,7 +301,7 @@ test("the organization logo is served", async ({ request }) => {
 // shift layout, it stops for prefers-reduced-motion, and every item is a
 // distinct real signal row.
 
-test("the ticker sits above the page and reserves its height", async ({ page }) => {
+test("the ticker sits above the page and reserves its height @smoke", async ({ page }) => {
   await page.goto(PATH);
   const ticker = page.locator("#ticker");
   await expect(ticker).toBeVisible();
@@ -296,7 +319,7 @@ test("the ticker sits above the page and reserves its height", async ({ page }) 
   expect(mainFollowsTicker).toBe(true);
 });
 
-test("the ticker never scrolls the page sideways", async ({ page }) => {
+test("the ticker never scrolls the page sideways @smoke", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto(PATH);
   await expect(page.locator("#ticker")).toBeVisible();
@@ -314,7 +337,7 @@ test("the ticker never scrolls the page sideways", async ({ page }) => {
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(1440);
 });
 
-test("the ticker causes no layout shift", async ({ page }) => {
+test("the ticker causes no layout shift @smoke", async ({ page }) => {
   await page.addInitScript(() => {
     Reflect.set(window, "__cls", 0);
     new PerformanceObserver((list) => {
@@ -333,7 +356,7 @@ test("the ticker causes no layout shift", async ({ page }) => {
   expect(await page.evaluate(() => Reflect.get(window, "__cls"))).toBeLessThan(0.05);
 });
 
-test("the ticker stops under reduced motion", async ({ page }) => {
+test("the ticker stops under reduced motion @smoke", async ({ page }) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.goto(PATH);
   const animations = await page.evaluate(
@@ -342,7 +365,7 @@ test("the ticker stops under reduced motion", async ({ page }) => {
   expect(animations).toBe(0);
 });
 
-test("every ticker item is a real signal row, listed once", async ({ page }) => {
+test("every ticker item is a real signal row, listed once @smoke", async ({ page }) => {
   await page.goto(PATH);
   const ids = await page
     .locator("#ticker li[data-signal-id]")

@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { newsGenerator } from "../../../app/lib/discovery/generators/news";
 import type { FetchedText, Subject } from "../../../app/lib/discovery/types";
@@ -18,6 +18,7 @@ function fetchTextWith(body: string, ok = true): (url: string) => Promise<Fetche
   return (url) =>
     Promise.resolve({
       ok,
+      status: ok ? 200 : 503,
       url,
       contentType: ok ? "application/json" : null,
       body,
@@ -25,6 +26,10 @@ function fetchTextWith(body: string, ok = true): (url: string) => Promise<Fetche
 }
 
 const MULTIBRAND_TITLE = "Gymshark, Adanola and Bratz launch activewear capsule";
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
 
 describe("newsGenerator", () => {
   it("reads the live Gymshark fixture into candidates that each carry GDELT evidence", async () => {
@@ -180,7 +185,7 @@ describe("newsGenerator", () => {
     const urls: string[] = [];
     const record = (url: string): Promise<FetchedText> => {
       urls.push(url);
-      return Promise.resolve({ ok: true, url, contentType: "application/json", body: "{}" });
+      return Promise.resolve({ ok: true, status: 200, url, contentType: "application/json", body: "{}" });
     };
 
     await newsGenerator(SUBJECT, record);
@@ -194,13 +199,35 @@ describe("newsGenerator", () => {
     expect(urls[0]).toContain(encodeURIComponent('"Gymshark"'));
   });
 
-  it("returns nothing when the request failed", async () => {
-    const candidates = await newsGenerator(SUBJECT, fetchTextWith("", false));
-    expect(candidates).toEqual([]);
+  it("throws naming the generator and status when the request failed", async () => {
+    await expect(newsGenerator(SUBJECT, fetchTextWith("", false))).rejects.toThrow(
+      "news generator fetch failed with status 503",
+    );
   });
 
-  it("returns nothing when the body is not json", async () => {
-    const candidates = await newsGenerator(SUBJECT, fetchTextWith("not json"));
-    expect(candidates).toEqual([]);
+  it("throws when the body is not json", async () => {
+    await expect(newsGenerator(SUBJECT, fetchTextWith("not json"))).rejects.toThrow(
+      "news generator got a non-JSON GDELT body",
+    );
+  });
+
+  it("logs generator_empty with the article count when no rival is co-mentioned", async () => {
+    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    const body = JSON.stringify({
+      articles: [
+        {
+          url: "https://example.com/a",
+          title: "Gymshark opens a store",
+          seendate: "20260920T070000Z",
+          domain: "example.com",
+        },
+      ],
+    });
+
+    expect(await newsGenerator(SUBJECT, fetchTextWith(body))).toEqual([]);
+
+    expect(log).toHaveBeenCalledWith(
+      JSON.stringify({ event: "discovery.generator_empty", generator: "news", articles: 1 }),
+    );
   });
 });

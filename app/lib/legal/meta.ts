@@ -5,6 +5,7 @@ export function legalMeta(doc: LegalDocument) {
   return [
     { title: `${doc.title} · Five to Nine` },
     { name: "description", content: doc.description },
+    { name: "robots", content: "index, follow" },
     { tagName: "link", rel: "canonical", href: `${SITE_URL}${doc.path}` },
     {
       "script:ld+json": jsonLdGraph([

@@ -22,7 +22,7 @@ The runner is the **Workflow** `mentions-sweep` (`workers/workflows/mentions.ts`
 
 `wrangler.jsonc` names the class `MentionsWorkflow`, which `workers/app.ts` exports as an instrumented wrapper around `MentionsSweep` from `workers/workflows/mentions.ts`. It runs one `step.do` per `(plugin_key, target_key)` pair (one target per source per brand), each with `retries: { limit: 2, delay: "10 seconds", backoff: "exponential" }`. The pacing constant is `PACED_PLUGINS = { "gdelt.doc" }`; between two GDELT targets it `step.sleep("6 seconds")` to honour GDELT's one-request-per-five-seconds ceiling. Non-GDELT adapters are not paced.
 
-A target that throws is logged as `mentions.target_failed` and counted as `failed` in the final `mentions.sweep` outcome line; the rest of the targets continue.
+A target that throws is logged as `mentions.target_failed` and counted as `failed` in the final `mentions.sweep` outcome line; the rest of the targets continue. A timeout that survives the source's retry budget is the one exception: it resolves the step with a partial `TargetOutcome` whose `skipped` field names the watches not swept, so the `mentions.sweep` line carries the skipped-watch total rather than a bare failure.
 
 ### Per watch, per tick
 
@@ -31,13 +31,13 @@ A target that throws is logged as `mentions.target_failed` and counted as `faile
 - `planTargets()` reads `app/lib/data/watch.server.ts` `readActiveWatches("mentions")` and groups them by `(source_id, target_key)`, returning one `MentionTarget` per `(plugin, target_key)`.
 - `sweepTarget(target, now)`:
   1. Looks up the adapter (`adapterFor(pluginKey)` from `workers/sources/registry.ts`); throws if missing.
-  2. Calls the adapter once with a request timeout that defaults to 8000 ms (`fetchUpstream` in `workers/sources/mentions/types.ts`); the GDELT adapter passes 30000 ms.
+  2. Calls the adapter once per target; `fetchUpstream` in `workers/sources/mentions/types.ts` bounds each request attempt at 8000 ms by default, while `gdelt.doc` reads `SOURCE_SETTINGS` — 24000 ms per attempt (measured p95 plus margin under a 25 s cap) and one retry on timeout after a 1 s backoff, so one sweep step waits up to ~49 s inside the Workflow step's own retry.
   3. Filters items to those with non-empty titles.
   4. Computes `hash = sha256(rawBody)`.
   5. Writes the body to **R2** at `snapshot/mentions/<plugin_key>/<hash>` via `env.SNAPSHOTS.put` (unconditional; a re-poll with an unchanged body re-PUTs the same key).
   6. For each watch on this target, reads `readDiscoveryContext(workspace_id)` once per workspace and calls `statementsForWatch(...)`.
 - `statementsForWatch(...)`:
-  - Inserts exactly one `snapshot` row per watch per tick (`app/lib/data/snapshot.server.ts` `insertWatchSnapshot`).
+  - Inserts exactly one `snapshot` row per watch per tick (`app/lib/data/snapshot.server.ts` `insertWatchSnapshot`), and stages the source row's `latest_*` facts in the same batch.
   - Reads `readSeenDedupKeys(source_id, dedup_keys)` against `signal(source_id, dedup_key)` and drops known keys from the batch.
   - Caps the batch at **12** fresh items per watch per tick (`JUDGED_PER_WATCH = 12`).
   - For each fresh item calls `judge(...)` which runs Jev (below), then stages `signal`, `jev_verdict` and optionally `alert` statements.
@@ -64,7 +64,7 @@ workers/mentions/map.ts                            # toSignalRow: adapter item -
 workers/workflows/mentions.ts                      # MentionsSweep Workflow class (one step per target)
 workers/app.ts                                     # exports the Workflow class bound to wrangler.jsonc MENTIONS
 workers/sources/registry.ts                        # adapter dispatch by plugin_key
-workers/sources/mentions/types.ts                  # mentionsResultSchema, fetchUpstream (default 8 s AbortSignal; GDELT 30 s)
+workers/sources/mentions/types.ts                  # mentionsResultSchema, fetchUpstream (default 8 s AbortSignal; gdelt.doc 24 s + one retry via SOURCE_SETTINGS)
 workers/sources/mentions/feed.ts                   # @extractus/feed-extractor wrapper used by youtube / medium
 workers/sources/mentions/gdelt.ts                  # gdelt.doc adapter
 workers/sources/mentions/hn.ts                     # hn.algolia adapter
@@ -104,6 +104,7 @@ Per 1,000 polls (one source × one watch × one tick):
 |---|---|---|
 | Workers requests | 1,000 | included |
 | D1 rows written (`snapshot`) | 1,000 | included |
+| D1 rows written (`source` latest facts — one paired update per poll; the guard caps it at one per source per tick) | up to 1,000 | included |
 | D1 rows written (`signal`) | up to ~12 × fraction surviving D5 | included |
 | D1 rows written (`alert` on D6 act) | up to ~12 × fraction with `p >= 0.9` | included |
 | R2 Class A (PUT body) | 1,000 | included |
@@ -122,6 +123,7 @@ Monthly at 100 brands × 2 live sources × 1 tick × 30 days = **6,000 polls/mon
 - **D5 reject** — stored with `is_tombstoned = 1`; never judged again (no tombstone filter in `readSeenDedupKeys`); hidden from every read path that filters `is_tombstoned = 0`.
 - **R2 PUT on unchanged body** — we re-PUT the body at the same key; R2 is idempotent on `PUT`, no extra storage cost, and the `snapshot` row is still written so coverage/freshness is answerable.
 - **GDELT 429 / pacing** — pacing `step.sleep("6 seconds")` between GDELT targets; `step.do` retries twice on transient throws.
+- **Upstream timeout after the source's retry budget** — `markSourceTimedOut` sets `degraded_reason = 'timed out'` and the step resolves with a partial `TargetOutcome` (`items: 0, stored: 0, unjudged: 0, skipped: <watches on the target>`) instead of throwing, so the step output and the `mentions.sweep` line name the skipped watches rather than a silent empty result. Skipped watches keep `last_polled_at` null and are retried on the next tick. Proven by `tests/integration/mentions/blocked.integration.test.ts` case E.
 
 ---
 

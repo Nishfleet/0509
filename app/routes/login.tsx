@@ -1,7 +1,7 @@
 import type { Route } from "./+types/login";
 import { env } from "cloudflare:workers";
 import { useEffect, useState } from "react";
-import { Form, useActionData, useLoaderData, useNavigate, useNavigation, useSearchParams } from "react-router";
+import { data, Form, useActionData, useLoaderData, useNavigate, useNavigation, useSearchParams } from "react-router";
 
 import { AccountDeleteNotice } from "../components/account-delete-notice";
 import { SIGN_IN_LEDE, SIGN_IN_SHELL, SIGN_IN_TITLE, SignInSent } from "../components/sign-in-sent";
@@ -14,8 +14,16 @@ import { safeReturnTo } from "../lib/agent/paths";
 import { authClient } from "../lib/auth-client";
 import { formMagicLinkRequest } from "../lib/auth/login-magic-link.server";
 import { createAuthForRequest } from "../lib/auth.server";
-import { readAccountDeleteProgress } from "../lib/account-delete.server";
+import {
+  clearAccountDeleteInstanceId,
+  readAccountDeleteInstanceId,
+  readAccountDeleteProgress,
+} from "../lib/account-delete.server";
 import { timezoneCookie } from "../lib/timezone";
+
+type LoginActionData =
+  | { error: string; sent?: never }
+  | { sent: { email: string; at: number }; error?: never };
 
 export function meta() {
   return [{ title: "Sign in · Five to Nine" }];
@@ -24,8 +32,13 @@ export function meta() {
 export async function loader({ request }: Route.LoaderArgs) {
   const turnstileSiteKey = env.TURNSTILE_SITE_KEY;
   const id = new URL(request.url).searchParams.get("deleted");
-  if (id === null || id === "") return { turnstileSiteKey, id: null, progress: null };
-  return { turnstileSiteKey, id, progress: await readAccountDeleteProgress(id) };
+  if (id === null || id === "" || (await readAccountDeleteInstanceId(request)) !== id) {
+    return data({ turnstileSiteKey, id: null, progress: null });
+  }
+  const progress = await readAccountDeleteProgress(id);
+  const finished = progress?.files === "removed";
+  const headers = finished ? { "set-cookie": await clearAccountDeleteInstanceId() } : undefined;
+  return data({ turnstileSiteKey, id, progress }, { headers });
 }
 
 export async function action({ request }: Route.ActionArgs) {
@@ -47,14 +60,12 @@ export async function action({ request }: Route.ActionArgs) {
     return { error: "Confirm you're a person, then we'll send the link." };
   }
   if (response.status === 400) return { error: "Enter an email address we can send the link to." };
-  console.error(
-    JSON.stringify({ event: "login.magic_link_send_failed", status: response.status, error: detail.slice(0, 200) }),
-  );
-  return { error: "We couldn't send the link. Try again in a minute." };
+  console.error(JSON.stringify({ event: "login.magic_link_send_failed", status: response.status }));
+  return data({ error: "We couldn't send the link. Try again in a minute." }, { status: 503 });
 }
 
 export default function Login() {
-  const data = useActionData<typeof action>();
+  const actionData = useActionData<LoginActionData>();
   const deleted = useLoaderData<typeof loader>();
   const busy = useNavigation().state !== "idle";
   const navigate = useNavigate();
@@ -83,8 +94,8 @@ export default function Login() {
     setPasskeyState(code === "AUTH_CANCELLED" ? "idle" : "failed");
   }
 
-  if (data?.sent) {
-    return <SignInSent key={data.sent.at} email={data.sent.email} turnstileSiteKey={deleted.turnstileSiteKey} />;
+  if (actionData?.sent) {
+    return <SignInSent key={actionData.sent.at} email={actionData.sent.email} turnstileSiteKey={deleted.turnstileSiteKey} />;
   }
 
   return (
@@ -98,6 +109,11 @@ export default function Login() {
         {deleted.progress === null || deleted.id === null ? null : (
           <AccountDeleteNotice id={deleted.id} progress={deleted.progress} />
         )}
+        {actionData?.error ? (
+          <p role="alert" className="mt-8 text-[0.95rem]">
+            {actionData.error}
+          </p>
+        ) : null}
         <Form method="post" className="mt-8 flex flex-col gap-3">
           <label htmlFor="email" className="font-mono text-eyebrow text-ink-soft uppercase">
             Email
@@ -108,11 +124,6 @@ export default function Login() {
             {busy ? "Sending…" : "Email me a link"}
           </Button>
         </Form>
-        {data?.error ? (
-          <p role="alert" className="mt-3 text-[0.95rem]">
-            {data.error}
-          </p>
-        ) : null}
         <Button
           type="button"
           variant="tertiary"

@@ -1,10 +1,8 @@
 import { z } from "zod";
 
 import { coMentions } from "../co-mentions";
-import type { Candidate, Evidence, FetchText, Generator, Subject } from "../types";
+import { assertFetched, defaultFetchText, logIfEmpty, type Candidate, type Evidence, type FetchText, type Generator, type Subject } from "../types";
 import { GDELT_SEARCH_URL, gdeltResponseSchema, gdeltWebUrlSchema } from "../gdelt";
-
-const TIMEOUT_MS = 8_000;
 
 const NEWS_ARTICLE_SCHEMA = z.object({
   title: z.string().min(1),
@@ -18,13 +16,12 @@ function parseArticles(body: string): NewsArticle[] {
   let raw: unknown;
   try {
     raw = JSON.parse(body) as unknown;
-  } catch (error) {
-    console.error(JSON.stringify({ event: "discovery.news_feed_parse_failed", error: String(error) }));
-    return [];
+  } catch {
+    throw new Error("news generator got a non-JSON GDELT body");
   }
 
   const response = gdeltResponseSchema.safeParse(raw);
-  if (!response.success) return [];
+  if (!response.success) throw new Error("news generator got an unrecognised GDELT body");
 
   const parsed: NewsArticle[] = [];
   for (const article of response.data.articles) {
@@ -45,28 +42,14 @@ function addCandidate(merged: Merge, name: string, evidence: Evidence): void {
   });
 }
 
-const defaultFetchText: FetchText = async (url) => {
-  try {
-    const response = await fetch(url, { signal: AbortSignal.timeout(TIMEOUT_MS) });
-    return {
-      ok: response.ok,
-      url: response.url,
-      contentType: response.headers.get("content-type"),
-      body: await response.text(),
-    };
-  } catch (error) {
-    console.error(JSON.stringify({ event: "discovery.news_fetch_failed", error: String(error) }));
-    return { ok: false, url, contentType: null, body: "" };
-  }
-};
-
 export const newsGenerator: Generator = async (subject: Subject, fetchText?: FetchText) => {
-  const fetchFn = fetchText ?? defaultFetchText;
+  const fetchFn = fetchText ?? defaultFetchText("discovery.news_fetch_failed");
   const page = await fetchFn(GDELT_SEARCH_URL + encodeURIComponent(`"${subject.name}"`));
-  if (!page.ok) return [];
+  assertFetched("news", page);
 
   const merged: Merge = new Map<string, { name: string; evidence: Evidence[] }>();
-  for (const article of parseArticles(page.body)) {
+  const articles = parseArticles(page.body);
+  for (const article of articles) {
     for (const name of coMentions(article.title, subject.name)) {
       addCandidate(merged, name, {
         sourceUrl: article.domain,
@@ -80,5 +63,6 @@ export const newsGenerator: Generator = async (subject: Subject, fetchText?: Fet
     name: entry.name,
     evidence: entry.evidence,
   }));
+  logIfEmpty("news", articles.length, candidates);
   return candidates;
 };

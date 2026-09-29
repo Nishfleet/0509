@@ -13,6 +13,8 @@ import {
   readUnwatchedEntities,
 } from "../data/watch.server";
 import { robotsAllows } from "../fetch/robots.server";
+import { normaliseSubject } from "../identity/normalise";
+import { takeBrowserScreenshot } from "./browser-budget.server";
 import { computeBreakageEvidence } from "./breakage-evidence";
 import type { CheckPageResult } from "./check-page.server";
 import { checkPage } from "./check-page.server";
@@ -37,15 +39,31 @@ async function readText(key: string): Promise<string | null> {
   return object === null ? null : object.text();
 }
 
-function homeUrl(domain: string): string | null {
-  return getDomain(domain) === domain ? `https://${domain}/` : null;
+function enteredHomeUrl(entity: { domain: string; url: string | null }): string | null {
+  if (entity.url === null) return null;
+  const entered = normaliseSubject(entity.url);
+  if (
+    !entered.ok ||
+    entered.subject.kind !== "domain" ||
+    entered.subject.registrable !== entity.domain ||
+    entered.subject.url === null
+  ) {
+    return null;
+  }
+  return entered.subject.url;
+}
+
+function homeUrl(entity: { domain: string; url: string | null }): string | null {
+  const entered = enteredHomeUrl(entity);
+  if (entered !== null) return entered;
+  return getDomain(entity.domain) === entity.domain ? `https://${entity.domain}/` : null;
 }
 
 export async function ensureHomePages(now: string): Promise<void> {
   const entities = await readEntitiesWithoutHomePage();
   await insertPages(
     entities.flatMap((entity) => {
-      const url = homeUrl(entity.domain);
+      const url = homeUrl(entity);
       return url === null
         ? []
         : [{ id: crypto.randomUUID(), entityId: entity.id, url, role: "home" as const, discoveredAt: now }];
@@ -61,7 +79,7 @@ export async function planSiteSweep(now: string): Promise<SiteSweepTarget[]> {
   const unwatched = await readUnwatchedEntities(sourceId);
   await insertWatches(
     unwatched.flatMap((entity) => {
-      const url = homeUrl(entity.domain);
+      const url = homeUrl(entity);
       return url === null
         ? []
         : [{ id: crypto.randomUUID(), entityId: entity.id, sourceId, targetKey: url }];
@@ -101,6 +119,8 @@ export async function checkSitePage(target: SiteSweepTarget, tick: SweepTick): P
     snapshotId: `${tick.instanceId}-${target.pageId}`,
     before: tick.plannedAt,
     read,
+    mayScreenshot: () =>
+      takeBrowserScreenshot(target.workspaceId, target.entityId, tick.plannedAt.slice(0, 10)),
   });
   if (result.outcome === "failed") {
     console.log(JSON.stringify({

@@ -2,15 +2,7 @@ import { expect, test, type Page, type TestInfo } from "@playwright/test";
 import type { RouteConfigEntry } from "@react-router/dev/routes";
 import routes from "../app/routes";
 
-import { deleteCreatedAccount, requireInboxToken, signInWithMagicLink } from "./inbox";
-
-let createdEmail = "";
-test.afterEach(async ({ page }, testInfo) => {
-  if (createdEmail === "") return;
-  testInfo.setTimeout(testInfo.timeout + 60_000);
-  await deleteCreatedAccount(page, createdEmail);
-  createdEmail = "";
-});
+import { onboardedStatePath } from "../playwright.config";
 
 interface MotionFinding {
   selector: string;
@@ -66,40 +58,24 @@ async function saveShot(
 const targets = ["/", ...screenPaths(routes, "").map(visitPath)];
 
 // The two end-state switch tests run against a real /app/competitors/:entityId
-// page, which exists only once a competitor is watched — so both open with
-// J3's journey (magic-link sign-in, gymshark.com onboarded through "Start
-// watching") and then walk /app/competitors onto the first watched chip. The
+// page, which exists only once a competitor is watched — so both open on the
+// shared onboarded session (e2e/onboarded.setup.ts signs in and drives the J3
+// journey once per viewport lane) and walk /app/competitors onto adidas.com,
+// the switch this file owns; competitor-page.spec.ts owns nike.com's. The
 // preview Worker cannot mint a session, so both tests skip on the preview lane
 // and run in the e2e-production job. The function returns nothing the tests
 // need beyond the open page: the detail page carries exactly one switch.
 async function openWatchedCompetitor(page: Page): Promise<void> {
-  const email = `e2e+${crypto.randomUUID().replaceAll("-", "").slice(0, 12)}@0509.io`;
-  createdEmail = email;
-  await signInWithMagicLink(page, email, requireInboxToken());
-
-  await page.goto("/onboarding");
-  const input = page.getByRole("textbox", { name: "your website, or a handle" });
-  await input.fill("gymshark.com");
-  await input.press("Enter");
-
-  await expect(page.getByRole("button", { name: "edit name" })).toBeVisible({ timeout: 30_000 });
-  await expect(page.getByText("looking on the site")).toHaveCount(0, { timeout: 30_000 });
-  await page.getByRole("button", { name: "That's me" }).click();
-  await expect(page).toHaveURL(/\/onboarding\/competitors$/, { timeout: 30_000 });
-
-  const watching = page.getByRole("list", { name: "Watching" }).getByRole("listitem");
-  await expect(
-    watching.first().or(page.getByRole("button", { name: /^Watch / }).first()),
-  ).toBeVisible({ timeout: 60_000 });
-  if ((await watching.count()) === 0) {
-    await page.getByRole("button", { name: /^Watch / }).first().click();
-    await expect(watching.first()).toBeVisible();
-  }
-  await page.getByRole("button", { name: "Start watching" }).click();
-  await expect(page).toHaveURL(/\/app$/);
-
   await page.goto("/app/competitors");
-  await page.getByRole("list", { name: "Competitors" }).getByRole("link").first().click();
+  // The row is matched on its domain, not its display name: names are
+  // non-deterministic after onboarding (the brand chip falls back to a title
+  // cased handle) while the per-row domain `<p>` is app/routes/app.competitors.tsx.
+  await page
+    .getByRole("list", { name: "Competitors" })
+    .getByRole("listitem")
+    .filter({ hasText: "adidas.com" })
+    .getByRole("link")
+    .click();
   await expect(page).toHaveURL(/\/app\/competitors\/[^/]+$/);
 }
 
@@ -227,72 +203,88 @@ for (const target of targets) {
   });
 }
 
-// End-state assertion: toggling a brand switch must produce the same visible
-// state regardless of whether motion is reduced. The whole point of
-// "honoured" is "the user can still use the thing"; a transition being
-// stripped is fine only if the final state lands.
-test("the brand switch toggles under reduced motion", async ({ page }, testInfo) => {
+test.describe("the watched-competitor page's brand switch and its motion @own-signin", () => {
   test.skip(
     !process.env.PLAYWRIGHT_TEST_BASE_URL,
-    "the brand switch needs a real session; the preview Worker cannot mint one",
+    "the switch tests need a real session; the preview Worker cannot mint one and has no saved state file",
   );
-  test.setTimeout(150_000);
-  await page.emulateMedia({ reducedMotion: "reduce" });
-  await openWatchedCompetitor(page);
+  // The storageState must be set at the describe level: it is resolved when the
+  // context is created, before an in-body skip could fire, and the preview lane
+  // has no e2e/.auth/onboarded-*.json to load (an ENOENT failure instead of a
+  // skip). The session itself comes from onboarded.setup.ts, one per lane.
+  // Playwright's fixture validator requires an object destructuring pattern
+  // here, and no-empty-pattern bans `({})`: the ignored binding is the price.
+  test.use({
+    storageState: async ({ browserName: _browserName }, use, testInfo) => {
+      await use(onboardedStatePath(testInfo.project.name === "phone-390" ? "phone" : "desktop"));
+    },
+  });
 
-  const toggle = page.getByRole("switch", { name: / tracking$/ });
-  await expect(toggle).toHaveAttribute("aria-checked", "true");
+  // End-state assertion: toggling a brand switch must produce the same visible
+  // state regardless of whether motion is reduced. The whole point of
+  // "honoured" is "the user can still use the thing"; a transition being
+  // stripped is fine only if the final state lands.
+  test("the brand switch toggles under reduced motion @own-signin", async ({ page }, testInfo) => {
+    test.setTimeout(150_000);
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await openWatchedCompetitor(page);
 
-  await toggle.click();
-  await expect(toggle).toHaveAttribute("aria-checked", "false");
+    const toggle = page.getByRole("switch", { name: / tracking$/ });
+    await expect(toggle).toHaveAttribute("aria-checked", "true");
 
-  const field = page.locator("[data-slot='brand-switch-field'] [data-slot='brand-switch']");
-  await expect(field).toHaveAttribute("data-state", "off");
-  await expect(page.locator("[data-slot='competitor-paused']")).toContainText("Paused");
+    await toggle.click();
+    await expect(toggle).toHaveAttribute("aria-checked", "false");
 
-  const findings = await inspectMotion(page);
-  expect(findings, `after toggle: ${JSON.stringify(findings[0])}`).toEqual([]);
+    const field = page.locator("[data-slot='brand-switch-field'] [data-slot='brand-switch']");
+    await expect(field).toHaveAttribute("data-state", "off");
+    await expect(page.locator("[data-slot='competitor-paused']")).toContainText("Paused");
 
-  // Same for the switch: the header reads "Paused", the thumb has moved, and
-  // nothing is animating. The motion assertion above already guaranteed the
-  // last part; this is the part a human looks at.
-  await saveShot(page, testInfo, "end-state-brand-switch-paused", { fullPage: true });
-});
+    const findings = await inspectMotion(page);
+    expect(findings, `after toggle: ${JSON.stringify(findings[0])}`).toEqual([]);
 
-// Control assertion: without reduced motion, the switch thumb carries a
-// non-zero `transition-duration` (`duration-180` -> 180ms). A spec that
-// always reports "no motion found" because of a broken selector or a stale
-// page snapshot would still be green on the assertions above — this one
-// proves the inspection is actually looking at the live styles. If the
-// non-reduced visit lands with all-zero durations too, the assertions
-// above are vacuous and this file's PR should not merge.
-test("control: the switch thumb has a non-zero transition-duration without reduced motion", async ({
-  page,
-}, testInfo) => {
-  test.skip(
-    !process.env.PLAYWRIGHT_TEST_BASE_URL,
-    "the switch thumb needs a real session; the preview Worker cannot mint one",
-  );
-  test.setTimeout(150_000);
-  await page.emulateMedia({ reducedMotion: "no-preference" });
-  await openWatchedCompetitor(page);
+    // Same for the switch: the header reads "Paused", the thumb has moved, and
+    // nothing is animating. The motion assertion above already guaranteed the
+    // last part; this is the part a human looks at.
+    await saveShot(page, testInfo, "end-state-brand-switch-paused", { fullPage: true });
 
-  // The switch thumb is the element the brand-switch.tsx component pins at
-  // `[&_[data-slot=switch-thumb]]:duration-180`. That utility is what we
-  // expect the global reduced-motion block to neutralise. The real detail
-  // page wraps it in `brand-switch-field`, not the preview's
-  // `competitor-switch`.
-  const thumb = page.locator("[data-slot='brand-switch-field'] [data-slot='switch-thumb']").first();
-  await expect(thumb).toBeVisible();
+    // The account is shared with every other consumer of this session, so the
+    // switch is turned back on before the test ends; a run that left adidas.com
+    // off would break the next test to read it.
+    await toggle.click();
+    await expect(toggle).toHaveAttribute("aria-checked", "true");
+  });
 
-  const duration = await thumb.evaluate((el) => getComputedStyle(el).transitionDuration);
+  // Control assertion: without reduced motion, the switch thumb carries a
+  // non-zero `transition-duration` (`duration-180` -> 180ms). A spec that
+  // always reports "no motion found" because of a broken selector or a stale
+  // page snapshot would still be green on the assertions above — this one
+  // proves the inspection is actually looking at the live styles. If the
+  // non-reduced visit lands with all-zero durations too, the assertions
+  // above are vacuous and this file's PR should not merge.
+  test("control: the switch thumb has a non-zero transition-duration without reduced motion @own-signin", async ({
+    page,
+  }, testInfo) => {
+    test.setTimeout(150_000);
+    await page.emulateMedia({ reducedMotion: "no-preference" });
+    await openWatchedCompetitor(page);
 
-  // Tailwind compiles `duration-180` to `180ms`; the browser reports it as
-  // `"0.18s"`. Either non-zero form is acceptable; `0s` is the failure.
-  const numeric = parseFloat(duration);
-  await saveShot(page, testInfo, "control-switch-thumb-with-motion", { fullPage: true });
-  expect(
-    numeric,
-    `expected switch thumb transition-duration > 0 without reduced motion, got "${duration}"`,
-  ).toBeGreaterThan(0);
+    // The switch thumb is the element the brand-switch.tsx component pins at
+    // `[&_[data-slot=switch-thumb]]:duration-180`. That utility is what we
+    // expect the global reduced-motion block to neutralise. The real detail
+    // page wraps it in `brand-switch-field`, not the preview's
+    // `competitor-switch`.
+    const thumb = page.locator("[data-slot='brand-switch-field'] [data-slot='switch-thumb']").first();
+    await expect(thumb).toBeVisible();
+
+    const duration = await thumb.evaluate((el) => getComputedStyle(el).transitionDuration);
+
+    // Tailwind compiles `duration-180` to `180ms`; the browser reports it as
+    // `"0.18s"`. Either non-zero form is acceptable; `0s` is the failure.
+    const numeric = parseFloat(duration);
+    await saveShot(page, testInfo, "control-switch-thumb-with-motion", { fullPage: true });
+    expect(
+      numeric,
+      `expected switch thumb transition-duration > 0 without reduced motion, got "${duration}"`,
+    ).toBeGreaterThan(0);
+  });
 });
