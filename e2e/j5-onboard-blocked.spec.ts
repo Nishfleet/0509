@@ -35,7 +35,7 @@ async function setWall(state: "on" | "off"): Promise<void> {
 test.describe("J5", () => {
   test.skip(
     !process.env.PLAYWRIGHT_TEST_BASE_URL,
-    "J5 needs a signed-in session and the production fixture wall; the preview lane has neither",
+    "J5 needs the production fixture.0509.in bot wall, raised with FIXTURE_SITE_TOKEN, which the preview job does not hold",
   );
   test.describe.configure({ mode: "serial" });
 

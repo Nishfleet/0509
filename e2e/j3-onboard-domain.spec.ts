@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-import { deleteCreatedAccount, isLocalLane, requireInboxToken, signInWithMagicLink } from "./inbox";
+import { deleteCreatedAccount, requireInboxToken, signInWithMagicLink } from "./inbox";
 
 let createdEmail = "";
 test.afterEach(async ({ page }, testInfo) => {
@@ -19,8 +19,13 @@ test.afterEach(async ({ page }, testInfo) => {
 // J3 from docs/REBUILD-DONE.md §A: one input becomes a confirmed brand card
 // in under 30 s, a competitor list in under 60 s, and Home's first-file
 // panel names a real arrival time. Timings come from the test's own clock.
-// Two lanes: production mails through the inbox Worker; the preview lane's
-// wrangler dev simulates send_email and inbox.ts reads the link from its sink.
+// Production only: sign-in itself works in preview (inbox.ts reads wrangler's
+// simulated send_email sink), but the card and list budgets need the real
+// identity read and discovery, so the spec skips there rather than fake them.
+test.skip(
+  !process.env.PLAYWRIGHT_TEST_BASE_URL,
+  "J3 needs the real identity read and competitor discovery: wrangler dev has no Browser Rendering or Jev (without them the card comes back unread and the user must type the name), so preview cannot prove the card and list budgets",
+);
 
 for (const { width, height } of [
   { width: 1440, height: 900 },
@@ -30,7 +35,7 @@ for (const { width, height } of [
     // The journey's own budget reaches 60 s from the input, after the
     // magic-link sign-in, so the test timeout has to clear that ceiling.
     test.setTimeout(150_000);
-    const token = isLocalLane() ? null : requireInboxToken();
+    const token = requireInboxToken();
     const email = `e2e+${crypto.randomUUID().replaceAll("-", "").slice(0, 12)}@0509.io`;
     createdEmail = email;
 
@@ -47,8 +52,6 @@ for (const { width, height } of [
     await input.fill("gymshark.com");
     const started = Date.now();
     await input.press("Enter");
-    // Preview has no AI binding, so the public-subject screen falls back to asking (onboarding-screen.server.ts).
-    if (isLocalLane()) await page.getByRole("button", { name: "Yes, a business or creator" }).click();
 
     const editName = page.getByRole("button", { name: "edit name" });
     await expect(editName).toBeVisible({ timeout: 30_000 });

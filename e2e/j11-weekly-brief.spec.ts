@@ -11,12 +11,12 @@ test.afterEach(async ({ page }, testInfo) => {
   createdEmail = "";
 });
 
-// J11 from docs/REBUILD-DONE.md §A. Production only: the preview Worker has
-// no EMAIL binding and no inbox. One project — the phone project would send a
+// J11 from docs/REBUILD-DONE.md §A. Production only: the preview sink keeps
+// no headers and no cron ticks there. One project — the phone project would send a
 // second brief, and the check the contract asks for is the HTML at 600 px.
 test.skip(
   !process.env.PLAYWRIGHT_TEST_BASE_URL,
-  "J11 proves the production mail path; the local preview Worker can neither send nor receive email",
+  "J11 reads the brief's Message-ID and List-Unsubscribe headers, which wrangler's send_email sink does not keep (text and HTML parts only), and the brief comes from a cron that wrangler dev does not tick",
 );
 
 const ON = ["linear.app", "notion.so", "figma.com"] as const;

@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-import { consoleFailures, deleteCreatedAccount, isLocalLane, requireInboxToken, signInWithMagicLink, watchConsole } from "./inbox";
+import { consoleFailures, deleteCreatedAccount, requireInboxToken, signInWithMagicLink, watchConsole } from "./inbox";
 
 let createdEmail = "";
 test.afterEach(async ({ page }, testInfo) => {
@@ -19,13 +19,18 @@ test.afterEach(async ({ page }, testInfo) => {
 const SUBJECT = "https://www.youtube.com/@veritasium";
 
 test.describe("J4 onboard a creator handle", () => {
+  test.skip(
+    !process.env.PLAYWRIGHT_TEST_BASE_URL,
+    "J4 needs the real YouTube channel read and competitor discovery: wrangler dev has no Browser Rendering or Jev, so preview cannot prove the card and list budgets",
+  );
+
   for (const { width, height } of [
     { width: 1440, height: 900 },
     { width: 390, height: 844 },
   ]) {
     test(`J4 a creator handle onboards at ${width} @own-signin`, async ({ page }, testInfo) => {
       test.setTimeout(240_000);
-      const token = isLocalLane() ? null : requireInboxToken();
+      const token = requireInboxToken();
       const email = `e2e+${crypto.randomUUID().replaceAll("-", "").slice(0, 12)}@0509.io`;
       createdEmail = email;
 
@@ -39,8 +44,6 @@ test.describe("J4 onboard a creator handle", () => {
       await input.fill(SUBJECT);
       const started = Date.now();
       await input.press("Enter");
-      // Preview has no AI binding, so the public-subject screen falls back to asking (onboarding-screen.server.ts).
-      if (isLocalLane()) await page.getByRole("button", { name: "Yes, a business or creator" }).click();
 
       await expect(
         page.getByRole("heading", { name: "This is you. Fix anything we got wrong." }),
