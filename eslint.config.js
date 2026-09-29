@@ -802,12 +802,12 @@ export default tseslint.config(
     },
   },
 
-  // 0509#5785 (shipped by #5808): never skip, disable or quarantine a test to
-  // get green. A focused test (`.only`) silently drops the rest of the suite; a
-  // disabled test stops testing the thing it names; identical titles make a
-  // failure ambiguous. The rules carry their own messages and their schemas
-  // reject a `message`, so this comment is the provenance for every entry
-  // below.
+  // 0509#5785, shipped by 0509#5808. Never skip, disable or quarantine a test
+  // to get green: a focused test silently drops the rest of the suite, and a
+  // disabled test stops testing the thing it names. Every rule below is stock
+  // and carries its own message; `maxArgs: 2` is the one non-default value,
+  // because the node suite passes a failure message as `expect`'s second
+  // argument.
   {
     files: ["tests/**/*.ts"],
     plugins: { vitest },
@@ -816,22 +816,15 @@ export default tseslint.config(
       "vitest/no-disabled-tests": "error",
       "vitest/no-identical-title": "error",
       "vitest/expect-expect": "error",
-      // maxArgs 2 is a sizing decision, not a weakening: vitest's expect takes
-      // a failure message as its second argument and the suite uses it (the
-      // `parked-sources.migration` and `entity-workspace-fk.integration` specs
-      // pass the seeding count and the table name as that message). The rule
-      // keeps its teeth: a missing matcher or an unawaited async expect. It
-      // matches `playwright/valid-expect`, which permits the same two-arg shape
-      // on the e2e side. Source: 0509#5808.
       "vitest/valid-expect": ["error", { maxArgs: 2 }],
     },
   },
 
-  // 0509#5785 (shipped by #5808): never skip, disable or quarantine a test to
-  // get green, and an e2e spec never waits on wall-clock time or the network
-  // going idle. A conditional `test.skip(condition, reason)` stays allowed for
-  // project and environment gating, and `test.fail()` stays allowed for report
-  // specs (CLAUDE.md "Reproducing a user report") — neither rule touches it.
+  // 0509#5785, shipped by 0509#5808. An e2e spec never waits on wall-clock time
+  // or for the network to go idle, and never focuses or unconditionally skips a
+  // test. `allowConditional` is the one non-default value: the suite gates on
+  // the project and the environment (`test.skip(condition, reason)`), and report
+  // specs use `test.fail()` (CLAUDE.md "Reproducing a user report").
   {
     files: ["e2e/**/*.ts"],
     plugins: { playwright },
