@@ -452,7 +452,7 @@ Pricing: 10M reads/mo then $0.50/M; 1M writes then **$5.00/M** — writes cost 1
 
 `batch()` "Sends multiple SQL statements inside a single call to the database" and returns results positionally (<https://developers.cloudflare.com/d1/worker-api/d1-database/>). Limits: **10 GB max database** on Paid, 30 s per query, 100 bound parameters, 100 KB statement, 2 MB row. Billing: rows read $0.001/M past 25B; rows written **$1.00/M** past 50M — written is 1,000× read.
 
-**Anti-pattern:** awaiting prepared statements in a loop instead of `batch()`. And the one that produced the $105 bill on this account on 2026-09-17: **a row per observed event**. Billing is on rows *scanned*, not returned, so an unindexed `WHERE` bills every row it touched. `REBUILD-SCHEMA.md` is the structural answer — snapshots to R2, one `snapshot` row per watch per tick, `signal` rows only after judgment.
+**Anti-pattern:** awaiting prepared statements in a loop instead of `batch()`. And the one that produced the $105 bill on this account on 2026-09-17: **a row per observed event**. Billing is on rows *scanned*, not returned, so an unindexed `WHERE` bills every row it touched. `REBUILD-SCHEMA.md` is the structural answer — snapshots to R2, one `snapshot` row per watch per tick paired in the same `batch()` with the `source` row's latest-facts update, `signal` rows only after judgment.
 
 ### 4.7 Email Service — transactional and one-click unsubscribe
 
