@@ -1,41 +1,29 @@
 import { expect, test } from "@playwright/test";
 
-import { consoleFailures, deleteCreatedAccount, requireInboxToken, signInWithMagicLink, watchConsole } from "./inbox";
+import { sessionStatePath } from "../playwright.config";
+import { consoleFailures, watchConsole } from "./inbox";
 
-let createdEmail = "";
-test.afterEach(async ({ page }, testInfo) => {
-  if (createdEmail === "") return;
-  testInfo.setTimeout(testInfo.timeout + 60_000);
-  // The delete failing is a test failure, not a reason to keep the address:
-  // clearing in finally means the next test in this worker cannot try to
-  // delete an account that is already gone.
-  try {
-    await deleteCreatedAccount(page, createdEmail);
-  } finally {
-    createdEmail = "";
-  }
-});
+// The session comes from the `session` setup project's storageState (one
+// magic-link sign-in per run). The only test here is production-only, so the
+// missing local state file is never read.
+test.use({ storageState: process.env.PLAYWRIGHT_TEST_BASE_URL ? sessionStatePath : undefined });
 
-// The signed-in nav walk, production only — exactly like J1: the preview
-// Worker has no EMAIL binding and no inbox to read, so it cannot mint a
-// session, and this spec skips there rather than fake the journey. It runs in
-// the `e2e-production` job after deploy. A fresh address has no self entity,
-// so Home (`/app`) redirects to `/onboarding`; Home is therefore the last step
-// of each walk and asserts `/onboarding`, not `/app`.
+// The signed-in nav walk, production only: the preview Worker has no inbox, so
+// the session setup project does not exist there, and this spec skips rather
+// than fake the journey. It runs in the `e2e-production` job after deploy. A
+// fresh address has no self entity, so Home (`/app`) redirects to
+// `/onboarding`; Home is therefore the last step of each walk and asserts
+// `/onboarding`, not `/app`.
 test.skip(
   !process.env.PLAYWRIGHT_TEST_BASE_URL,
   "the nav walk needs a real session; the local preview Worker can neither send nor receive email",
 );
 
 test("a signed-in user reaches the four places by tapping and by Tab+Enter", async ({ page }, testInfo) => {
-  // Production lane: the sign-in poll plus the nav walk overruns the 30 s
+  // Production lane: the nav walk overruns the 30 s
   // default (0509#5681).
   test.setTimeout(120_000);
   const watched = watchConsole(page);
-
-  const email = `e2e+${crypto.randomUUID().replaceAll("-", "").slice(0, 12)}@0509.io`;
-  createdEmail = email;
-  await signInWithMagicLink(page, email, requireInboxToken());
 
   const nav = page.getByRole("navigation", { name: "Places" });
   const noOverflow = () =>
