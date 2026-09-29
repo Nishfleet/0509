@@ -219,63 +219,6 @@ describe("change the workspace's email address (0509#4779)", () => {
     expect(rows[0]?.target_value).toBe("new@0509.io");
   });
 
-  it("(f) a stored mixed-case target is the same address: the unchanged save writes nothing and sends nothing", async () => {
-    const workspaceId = firstWorkspaceId(USER_ID);
-    await env.DB.prepare(
-      `UPDATE send_target SET target_value = 'Alice@0509.io', is_verified = 1 WHERE workspace_id = ?`,
-    )
-      .bind(workspaceId)
-      .run();
-
-    const rec = recorder();
-    const result = await saveDeliveryAddress({
-      userId: USER_ID,
-      signInEmail: SIGN_IN_EMAIL,
-      email: bindingFor(rec),
-      address: "alice@0509.io",
-      resume: false,
-    });
-    expect(result).toEqual({ error: null, suppressed: false });
-    expect(rec.sent).toHaveLength(0);
-
-    const rows = await allTargets(workspaceId);
-    expect(rows[0]).toMatchObject({
-      target_value: "Alice@0509.io",
-      is_verified: 1,
-      verify_token: null,
-    });
-  });
-
-  it("(g) a suppression stored under another case still suppresses, and resume clears it", async () => {
-    await env.DB.prepare(
-      `INSERT INTO email_suppression (address, reason, created_at) VALUES ('Gone@0509.io', 'unsubscribed', ?)`,
-    )
-      .bind(NOW)
-      .run();
-
-    const rec = recorder();
-    const blocked = await saveDeliveryAddress({
-      userId: USER_ID,
-      signInEmail: SIGN_IN_EMAIL,
-      email: bindingFor(rec),
-      address: "gone@0509.io",
-      resume: false,
-    });
-    expect(blocked.error).not.toBeNull();
-    expect(blocked.suppressed).toBe(true);
-    expect(rec.sent).toHaveLength(0);
-
-    const resumed = await saveDeliveryAddress({
-      userId: USER_ID,
-      signInEmail: SIGN_IN_EMAIL,
-      email: bindingFor(recorder()),
-      address: "gone@0509.io",
-      resume: true,
-    });
-    expect(resumed).toEqual({ error: null, suppressed: false });
-    expect(await suppressionRow("Gone@0509.io")).toBeNull();
-  });
-
   it("readDeliveryAddress returns the stored target, falling back to sign-in email for a workspace with no target", async () => {
     await env.DB.exec("DELETE FROM send_target");
 

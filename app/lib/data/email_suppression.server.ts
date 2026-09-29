@@ -1,22 +1,22 @@
 import { env } from "cloudflare:workers";
 
 const SUPPRESS_BY_UNSUBSCRIBE_TOKEN = `INSERT INTO email_suppression (address, reason, created_at)
-SELECT lower(target_value), 'unsubscribed', ?
+SELECT target_value, 'unsubscribed', ?
   FROM send_target
  WHERE unsubscribe_token = ?
 ON CONFLICT(address) DO NOTHING`;
 
 const SUPPRESS_WORKSPACE_TARGETS = `INSERT INTO email_suppression (address, reason, created_at)
-SELECT lower(target_value), 'workspace_deleted', ?
+SELECT target_value, 'workspace_deleted', ?
   FROM send_target
  WHERE workspace_id = ?
 ON CONFLICT(address) DO NOTHING`;
 
-const SELECT_SUPPRESSION = `SELECT address FROM email_suppression WHERE address = ? COLLATE NOCASE`;
+const SELECT_SUPPRESSION = `SELECT address FROM email_suppression WHERE address = ?`;
 
 const SELECT_UNSUBSCRIBE_TOKEN = `SELECT 1 AS present FROM send_target WHERE unsubscribe_token = ?`;
 
-const DELETE_SUPPRESSION = `DELETE FROM email_suppression WHERE address = ? COLLATE NOCASE`;
+const DELETE_SUPPRESSION = `DELETE FROM email_suppression WHERE address = ?`;
 
 export async function suppressByUnsubscribeToken(token: string): Promise<void> {
   await env.DB.prepare(SUPPRESS_BY_UNSUBSCRIBE_TOKEN)

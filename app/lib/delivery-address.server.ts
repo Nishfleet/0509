@@ -24,16 +24,6 @@ function newVerifyToken(): string {
   return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
 }
 
-function isAddressShape(address: string): boolean {
-  const at = address.indexOf("@");
-  if (at < 1 || at !== address.lastIndexOf("@") || at === address.length - 1) return false;
-  for (let i = 0; i < address.length; i++) {
-    const code = address.charCodeAt(i);
-    if (code <= 0x20 || code === 0x7f) return false;
-  }
-  return true;
-}
-
 async function sendVerifyConfirmation(
   email: SendEmail,
   workspaceId: string,
@@ -76,8 +66,11 @@ export async function saveDeliveryAddress(input: {
   resume: boolean;
   email: SendEmail;
 }): Promise<{ error: string | null; suppressed: boolean }> {
-  const address = input.address.trim().toLowerCase();
-  if (!isAddressShape(address)) return { error: INVALID, suppressed: false };
+  const address = input.address.trim();
+  const at = address.indexOf("@");
+  if (at < 1 || at !== address.lastIndexOf("@") || at === address.length - 1) {
+    return { error: INVALID, suppressed: false };
+  }
 
   const workspaceId = await readWorkspaceIdForOwner(input.userId);
   if (workspaceId === null) return { error: NO_WORKSPACE, suppressed: false };
@@ -88,15 +81,15 @@ export async function saveDeliveryAddress(input: {
   }
 
   await ensureOwnerEmailTarget(env.DB, { workspaceId, now: new Date().toISOString() });
+  const target = await readEmailTarget(env.DB, workspaceId);
   await changeEmailTarget(env.DB, { workspaceId, address });
 
-  if (address === input.signInEmail.toLowerCase()) {
+  if (address === input.signInEmail) {
     await markEmailTargetVerified(env.DB, { workspaceId });
     return { error: null, suppressed: false };
   }
 
-  const target = await readEmailTarget(env.DB, workspaceId);
-  if (target !== null && target.is_verified === 1) {
+  if (target !== null && target.target_value === address && target.is_verified === 1) {
     return { error: null, suppressed: false };
   }
 

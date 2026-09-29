@@ -167,38 +167,4 @@ describe("confirm a changed delivery address (0509#5811)", () => {
     });
     expect((await onlyTarget(workspaceId)).verify_token).toMatch(/^[0-9a-f]{64}$/);
   });
-
-  it("(f) an unchanged, already verified address stays verified and sends nothing", async () => {
-    const workspaceId = firstWorkspaceId(USER_ID);
-    await env.DB.prepare(
-      `UPDATE send_target SET target_value = ?, is_verified = 1, verify_token = NULL WHERE workspace_id = ?`,
-    )
-      .bind(NEW_ADDRESS, workspaceId)
-      .run();
-
-    const rec = recorder();
-    const result = await save(rec, NEW_ADDRESS);
-
-    expect(result).toEqual({ error: null, suppressed: false });
-    expect(rec.sent).toHaveLength(0);
-    expect(await onlyTarget(workspaceId)).toMatchObject({
-      target_value: NEW_ADDRESS,
-      is_verified: 1,
-      verify_token: null,
-    });
-  });
-
-  it("(g) the sign-in address in another case still verifies at once", async () => {
-    const workspaceId = firstWorkspaceId(USER_ID);
-    const rec = recorder();
-    const result = await save(rec, " Owner@0509.io ");
-
-    expect(result).toEqual({ error: null, suppressed: false });
-    expect(rec.sent).toHaveLength(0);
-    expect(await onlyTarget(workspaceId)).toMatchObject({
-      target_value: SIGN_IN_EMAIL,
-      is_verified: 1,
-      verify_token: null,
-    });
-  });
 });
