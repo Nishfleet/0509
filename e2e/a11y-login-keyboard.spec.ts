@@ -1,6 +1,20 @@
 import { expect, test } from "@playwright/test";
 
-import { settleSignInWidget } from "./inbox";
+import { deleteCreatedAccount, settleSignInWidget } from "./inbox";
+
+let createdEmail = "";
+test.afterEach(async ({ page }, testInfo) => {
+  if (createdEmail === "") return;
+  testInfo.setTimeout(testInfo.timeout + 60_000);
+  // The delete failing is a test failure, not a reason to keep the address:
+  // clearing in finally means the next test in this worker cannot try to
+  // delete an account that is already gone.
+  try {
+    await deleteCreatedAccount(page, createdEmail);
+  } finally {
+    createdEmail = "";
+  }
+});
 
 // #4148: the /login screens expose the three landmarks, the Tab order reaches
 // every action, the sent state moves focus to its heading, and the resend wait
@@ -39,6 +53,7 @@ test("/login keyboard path, landmarks and the sent-state announcement (#4148) @o
   await expect(page.getByRole("link", { name: "Terms" })).toBeFocused();
 
   const email = `e2e+${crypto.randomUUID().replaceAll("-", "").slice(0, 12)}@0509.io`;
+  createdEmail = email;
   await page.getByLabel("Email").focus();
   await page.getByLabel("Email").fill(email);
   await settleSignInWidget(page);
