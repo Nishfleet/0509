@@ -19,7 +19,7 @@ export interface AccountDeleteProgress {
 }
 
 export async function deleteAccount(
-  helpers: OAuthHelpers,
+  helpers: Pick<OAuthHelpers, "listUserGrants" | "revokeGrant">,
   request: Request,
   userId: string,
 ): Promise<{ headers: Headers; instanceId: string } | null> {

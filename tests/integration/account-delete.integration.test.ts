@@ -1,4 +1,6 @@
+import type { OAuthHelpers } from "@cloudflare/workers-oauth-provider";
 import { env, introspectWorkflowInstance } from "cloudflare:test";
+import { RouterContextProvider } from "react-router";
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { createAuth, deleteSignedInUser } from "../../app/lib/auth.server";
@@ -27,7 +29,7 @@ const authEnv = {
   SIGN_IN_IP_LIMIT: env.SIGN_IN_IP_LIMIT,
   TURNSTILE_SECRET_KEY: "1x0000000000000000000000000000000AA",
   BETTER_AUTH_SECRET: "integration-test-secret",
-  BETTER_AUTH_URL: ORIGIN,
+  BETTER_AUTH_URL: env.BETTER_AUTH_URL,
 };
 
 const auth = createAuth(authEnv);
@@ -48,6 +50,14 @@ async function signIn(): Promise<{ cookie: string; userId: string }> {
 
 const settingsRequest = (cookie: string) =>
   new Request(`${ORIGIN}/app/settings`, { method: "POST", headers: { cookie, origin: ORIGIN } });
+
+const loginArgs = (request: Request): Parameters<typeof loginLoader>[0] => ({
+  request,
+  url: new URL(request.url),
+  params: {},
+  pattern: "/login",
+  context: new RouterContextProvider(),
+});
 
 const count = async (sql: string, ...values: unknown[]) =>
   (await env.DB.prepare(sql).bind(...values).first<{ n: number }>())?.n ?? -1;
@@ -197,39 +207,36 @@ describe("delete my account", () => {
     await introspector.waitForStatus("complete");
 
     const page = `${ORIGIN}/login?deleted=${id}`;
-    const anonymous = await loginLoader({ request: new Request(page) } as never);
+    const anonymous = await loginLoader(loginArgs(new Request(page)));
     expect(anonymous).toMatchObject({ id: null, progress: null });
 
-    const forged = await loginLoader({
-      request: new Request(page, { headers: { cookie: `account-delete=${id}` } }),
-    } as never);
+    const forged = await loginLoader(
+      loginArgs(new Request(page, { headers: { cookie: `account-delete=${id}` } })),
+    );
     expect(forged).toMatchObject({ id: null, progress: null });
 
     const other = (await sealAccountDeleteInstanceId("a-different-instance", new Request(page))).split(";")[0];
-    const wrongSeal = await loginLoader({
-      request: new Request(page, { headers: { cookie: other } }),
-    } as never);
+    const wrongSeal = await loginLoader(
+      loginArgs(new Request(page, { headers: { cookie: other } })),
+    );
     expect(wrongSeal).toMatchObject({ id: null, progress: null });
 
     const sealed = (await sealAccountDeleteInstanceId(id, new Request(page))).split(";")[0];
-    const owned = await loginLoader({
-      request: new Request(page, { headers: { cookie: sealed } }),
-    } as never);
+    const owned = await loginLoader(
+      loginArgs(new Request(page, { headers: { cookie: sealed } })),
+    );
     expect(owned.id).toBe(id);
     expect(owned.progress).toEqual({ rows: "removed", files: "removed", deleted: 1 });
   });
 
   it("seals the Workflow instance id on the headers the deleting browser leaves with", async () => {
     const { cookie, userId } = await signIn();
-    const helpers = {
+    const helpers: Pick<OAuthHelpers, "listUserGrants" | "revokeGrant"> = {
       listUserGrants: async () => ({ items: [] }),
       revokeGrant: async () => undefined,
     };
 
-    // The fixture mints over http://localhost; the worker's own env reads the
-    // __Secure- name its https baseURL implies, same as production.
-    const secureCookie = cookie.replace("better-auth.session_token=", "__Secure-better-auth.session_token=");
-    const deleted = await deleteAccount(helpers as never, settingsRequest(secureCookie), userId);
+    const deleted = await deleteAccount(helpers, settingsRequest(cookie), userId);
 
     if (deleted === null) throw new Error("deleteAccount refused a fresh session");
     const baked = deleted.headers.getSetCookie().find((header) => header.startsWith("account-delete="));
@@ -245,7 +252,7 @@ describe("delete my account", () => {
     const pair = baked.split(";")[0];
     if (!pair) throw new Error("the account-delete cookie carried no pair");
     const page = `${ORIGIN}/login?deleted=${deleted.instanceId}`;
-    const shown = await loginLoader({ request: new Request(page, { headers: { cookie: pair } }) } as never);
+    const shown = await loginLoader(loginArgs(new Request(page, { headers: { cookie: pair } })));
     expect(shown.id).toBe(deleted.instanceId);
     expect(shown.progress).toMatchObject({ rows: "removed" });
   });
