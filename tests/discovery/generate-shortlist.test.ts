@@ -20,6 +20,7 @@ vi.mock("../../app/lib/discovery/generators/news", () => ({
       },
     ]),
 }));
+vi.mock("../../app/lib/discovery/generators/ai.server", () => ({ aiGenerator: () => Promise.resolve([]) }));
 vi.mock("../../app/lib/discovery/generators/hn", () => ({
   hnGenerator: () => Promise.reject(new Error("hn generator fetch failed with status 503")),
 }));
