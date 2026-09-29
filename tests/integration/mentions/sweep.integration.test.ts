@@ -159,7 +159,8 @@ describe("nightly mentions sweep", () => {
     stubGdelt();
     Reflect.set(env, "AI", { run: vi.fn(() => Promise.reject(new Error("Insufficient balance"))) });
 
-    const outcome = await sweepTarget(await gdeltTargetFor(brand), NOW, null);
+    const target = await gdeltTargetFor(brand);
+    const outcome = await sweepTarget(target, NOW, null);
     expect(outcome).toEqual({ items: 3, stored: 0, unjudged: 3 });
 
     const signals = await env.DB.prepare(
@@ -187,21 +188,42 @@ describe("nightly mentions sweep", () => {
       .first<{ n: number }>();
     expect(verdicts?.n).toBe(0);
     expect(await readSignalAlerts(env.DB, workspaceId)).toEqual([]);
+
+    const legacyId = "sig-legacy-null-state";
+    await env.DB.prepare(
+      "INSERT INTO signal (id, workspace_id, entity_id, source_id, kind, title, canonical_url, url_hash, dedup_key, observed_at, is_tombstoned) VALUES (?1, ?2, ?3, ?4, 'mention', ?5, ?6, ?7, ?8, ?9, 0)",
+    )
+      .bind(
+        legacyId,
+        workspaceId,
+        competitorId,
+        target.sourceId,
+        "A mention written before the state column",
+        "https://news.example.com/legacy",
+        "legacy-url-hash",
+        `${competitorId}:legacy`,
+        NOW,
+      )
+      .run();
+    const legacyView = await env.DB.prepare("SELECT state FROM mention WHERE id = ?1")
+      .bind(legacyId)
+      .first<{ state: string | null }>();
+    expect(legacyView?.state).toBeNull();
+    const feedWithLegacy = await readMentionFeed(workspaceId, new Date(NOW));
+    expect(feedWithLegacy.find((row) => row.id === legacyId)?.treatment).toBe("unreviewed");
   });
 
   it("stores the items after a mid-batch Jev failure as unjudged in the same batch", async () => {
     const { workspaceId, competitorId, brand } = await seedWorkspace();
     stubGdelt();
-    const run = vi.fn(
-      (_model: string, input: { state: { item: { title: string } }; questions: Record<string, unknown> }) => {
-        const [questionId] = Object.keys(input.questions);
-        if (!input.state.item.title.includes("flagship")) {
-          return Promise.reject(new Error("Insufficient balance"));
-        }
-        const p = questionId === "mention_is_about_brand" ? 0.96 : 0.94;
-        return Promise.resolve({ answers: { [questionId ?? ""]: { type: "noul", noul: p } } });
-      },
-    );
+    let calls = 0;
+    const run = vi.fn((_model: string, input: { questions: Record<string, unknown> }) => {
+      calls += 1;
+      if (calls > 2) return Promise.reject(new Error("Insufficient balance"));
+      const [questionId] = Object.keys(input.questions);
+      const p = questionId === "mention_is_about_brand" ? 0.96 : 0.94;
+      return Promise.resolve({ answers: { [questionId ?? ""]: { type: "noul", noul: p } } });
+    });
     Reflect.set(env, "AI", { run });
 
     const outcome = await sweepTarget(await gdeltTargetFor(brand), NOW, null);

@@ -8,6 +8,6 @@ ALTER TABLE signal ADD COLUMN state TEXT CHECK (state IS NULL OR state IN ('judg
 DROP VIEW IF EXISTS mention;
 
 CREATE VIEW mention AS
-  SELECT id, workspace_id, entity_id, source_id, state, title, summary, canonical_url,
-         url_hash, author, engagement_json, published_at, observed_at
+  SELECT id, workspace_id, entity_id, source_id, title, summary, canonical_url,
+         url_hash, author, engagement_json, published_at, observed_at, state
   FROM signal WHERE kind = 'mention' AND is_tombstoned = 0;
