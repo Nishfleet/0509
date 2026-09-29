@@ -344,3 +344,19 @@ jobs:
         run: |
           N=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search '"lighthouse red on main" in:title' --json number --jq '.[0].number // empty')
           [ -z "$N" ] || gh issue close "$N" --repo "$GITHUB_REPOSITORY" --reason completed --comment "Green again on $RUN_URL."
+
+  # The shared A+ grader (fleet-ops#8655, fleet-ops#8922), the check `grade / grade`.
+  # It grades every pull request from a branch of this repo with the rubric on
+  # fleet-ops@main and this repo's trust doc. It replaced opus-review, whose
+  # Kimi grader is out of usage until 2026-10-25.
+  grade:
+    if: github.event_name == 'pull_request' || github.event_name == 'merge_group'
+    uses: Nishfleet/fleet-ops/.github/workflows/grade.yml@main
+    with:
+      trust-doc: docs/REBUILD-TRUST.md
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
+    secrets:
+      CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
