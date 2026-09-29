@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   handleFetchSweepBatch,
+  handleFetchSweepDlqBatch,
   parseFetchSweepMessage,
   type FetchSweepMessage,
 } from "../../../workers/sources/fetch-sweep-consumer";
@@ -281,6 +282,34 @@ describe("fetch-sweep consumer (0509#5261)", () => {
     expect(calls.acked).toEqual([]);
     expect(await snapshots()).toHaveLength(0);
     expect(await watchPolledAt()).toBeNull();
+  });
+
+  it("acks a robots-disallowed page instead of retrying it into the DLQ", async () => {
+    await env.DB.prepare("UPDATE entity SET role = 'self' WHERE id = ?").bind(ENTITY).run();
+    vi.stubGlobal("fetch", (input: RequestInfo | URL) => {
+      const url = input instanceof Request ? input.url : String(input);
+      return Promise.resolve(
+        new Response(url.endsWith("/robots.txt") ? "User-agent: *\nDisallow: /" : HOME_HTML, { status: 200 }),
+      );
+    });
+
+    const { batch, calls } = batchFor([message()]);
+
+    const results = await handleFetchSweepBatch(batch);
+
+    expect(results).toEqual(["disallowed"]);
+    expect(calls.acked).toEqual([0]);
+    expect(calls.retried).toEqual([]);
+    expect(await snapshots()).toHaveLength(0);
+  });
+
+  it("acks a dead-lettered batch on its own branch", () => {
+    const { batch, calls } = batchFor([message(), message()]);
+
+    handleFetchSweepDlqBatch(batch);
+
+    expect(calls.acked).toEqual([0, 1]);
+    expect(calls.retried).toEqual([]);
   });
 
   it("acks and logs a message whose watch is gone instead of looping it", async () => {

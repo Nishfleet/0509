@@ -1,4 +1,4 @@
-import { readdirSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 
 import { experimental_readRawConfig } from "wrangler";
 import { describe, expect, it } from "vitest";
@@ -105,5 +105,22 @@ describe("deployed wrangler configs", () => {
     expect(consumer?.max_retries).toBe(3);
     const dlq = (rawConfig.queues?.consumers ?? []).find((queue) => queue.queue === "fetch-sweep-dlq");
     expect(dlq).toBeDefined();
+  });
+
+  it("routes every consumer queue in wrangler.jsonc to its own branch in queue()", () => {
+    const { rawConfig } = experimental_readRawConfig({ config: "wrangler.jsonc" });
+    const consumers = (rawConfig.queues?.consumers ?? []).map((queue) => queue.queue);
+    const constants = Object.fromEntries(
+      [...readFileSync("workers/sources/fetch-sweep-consumer.ts", "utf8").matchAll(/export const (\w+) = "([^"]+)"/g)].map(
+        (match) => [match[1], match[2]],
+      ),
+    );
+    const source = readFileSync("workers/app.ts", "utf8");
+    const branched = [...source.matchAll(/batch\.queue === (?:"([^"]+)"|(\w+))/g)].map(
+      (match) => match[1] ?? constants[match[2] ?? ""],
+    );
+    const fallthrough = "send-email";
+    expect(consumers).toContain(fallthrough);
+    expect(consumers.filter((queue) => queue !== fallthrough).sort()).toEqual([...branched].sort());
   });
 });

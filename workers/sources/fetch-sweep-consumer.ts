@@ -9,6 +9,7 @@ import {
 } from "../../app/lib/site/sweep.server";
 
 export const FETCH_SWEEP_QUEUE = "fetch-sweep";
+export const FETCH_SWEEP_DLQ = "fetch-sweep-dlq";
 
 const fetchSweepMessage = z.object({
   watchId: z.string().min(1),
@@ -24,6 +25,7 @@ export type FetchSweepOutcome =
   | "first"
   | "unchanged"
   | "changed"
+  | "disallowed"
   | "failed"
   | "unparseable";
 
@@ -81,6 +83,7 @@ async function collectWatch(
     await publishSiteChange(target, result);
   }
   if (result.outcome !== "failed") return result.outcome;
+  if (result.reason === "robots") return "disallowed";
 
   captureException(
     new Error(
@@ -120,15 +123,27 @@ export async function handleFetchSweepBatch(
   }
   const failed = results.filter((outcome) => outcome === "failed").length;
   const unparseable = results.filter((outcome) => outcome === "unparseable").length;
+  const disallowed = results.filter((outcome) => outcome === "disallowed").length;
   console.log(
     JSON.stringify({
       event: "fetch-sweep.batch",
       queue: batch.queue,
       instanceId: batch.messages[0]?.id ?? null,
       messages: batch.messages.length,
-      collected: results.length - failed - unparseable,
+      collected: results.length - failed - unparseable - disallowed,
       failed,
     }),
   );
   return results;
+}
+
+export function handleFetchSweepDlqBatch(batch: MessageBatch): void {
+  console.error(
+    JSON.stringify({
+      event: "fetch-sweep.dead_lettered",
+      queue: batch.queue,
+      messages: batch.messages.length,
+    }),
+  );
+  batch.ackAll();
 }
