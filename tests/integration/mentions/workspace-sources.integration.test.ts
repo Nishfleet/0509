@@ -1,6 +1,5 @@
 import { env } from "cloudflare:workers";
 import { describe, expect, it } from "vitest";
-
 import { RouterContextProvider } from "react-router";
 
 import { loader as landingLoader } from "../../../app/routes/landing";
@@ -229,6 +228,46 @@ describe("alerts mentions source pills (#4003 4/6)", () => {
       expect(JSON.parse(youtube.source.watch_config_json ?? "{}")).toEqual({
         degraded: { state: "degraded", reason: NO_CHANNEL_REASON, at: NOW },
       });
+    } finally {
+      await clearOwner(USER, WS, COMP);
+    }
+  });
+
+  it("prefers the no-channel reason over a fresh snapshot from a healthier watch (#5827)", async () => {
+    await seedOwner(USER, WS, COMP);
+    await seedWatch(
+      `watch-${COMP}-yt-flag`,
+      COMP,
+      YOUTUBE_SRC,
+      1,
+      JSON.stringify({
+        degraded: { state: "degraded", reason: NO_CHANNEL_REASON, at: NOW },
+      }),
+    );
+    await seedWatch(`watch-${COMP}-yt-ok`, COMP, YOUTUBE_SRC, 1);
+    await env.DB.prepare("UPDATE watch SET last_polled_at = ? WHERE id = ?")
+      .bind("2026-09-24T00:00:00.000Z", `watch-${COMP}-yt-flag`)
+      .run();
+    await env.DB.prepare("UPDATE watch SET last_polled_at = ? WHERE id = ?")
+      .bind(NOW, `watch-${COMP}-yt-ok`)
+      .run();
+    await seedSnapshot(`snap-${COMP}-yt-ok`, `watch-${COMP}-yt-ok`, 4, 1);
+
+    try {
+      const entries = await readWorkspaceMentionSources(WS);
+      const youtube = entries.find((entry) => entry.source.key === "youtube.channel_rss");
+      if (!youtube) throw new Error("the watched YouTube mentions source must be read");
+      // One source row carries a source-level snapshot and a watch-level
+      // config. The pill's own order decides what a visitor reads, so pin it:
+      // the watch reason wins over the fresh snapshot, and the snapshot shown
+      // is the healthy watch's.
+      expect(JSON.parse(youtube.source.watch_config_json ?? "{}")).toEqual({
+        degraded: { state: "degraded", reason: NO_CHANNEL_REASON, at: NOW },
+      });
+      expect(youtube.snapshot?.item_count).toBe(4);
+      const status = sourcePillStatus(youtube.source, youtube.snapshot, NOW_MS);
+      expect(status.state).toBe("degraded");
+      expect(status.reason).toBe(NO_CHANNEL_REASON);
     } finally {
       await clearOwner(USER, WS, COMP);
     }
