@@ -481,7 +481,7 @@ export function ownDocument404For(pathname: string): (entry: ConsoleEntry) => bo
 // in playwright.config.ts) against one inbox slot per recipient, so two tests
 // sharing one fixed address need serial mode or an address each.
 // Timestamps are logged for the packet's proof line (send and session).
-export const MAGIC_LINK_SEND_FAILED = "We couldn't send the link. Try again in a minute.";
+const MAGIC_LINK_SEND_FAILED = "We couldn't send the link. Try again in a minute.";
 
 export async function signInWithMagicLink(
   page: Page,
