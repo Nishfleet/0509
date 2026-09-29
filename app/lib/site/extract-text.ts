@@ -1,3 +1,5 @@
+import { sha256Hex } from "../sha256";
+
 const SKIP_SELECTOR = "script, style, noscript, [aria-hidden='true']";
 
 const VOID_ELEMENTS = new Set([
@@ -31,15 +33,6 @@ interface ExtractState {
 
 function collapseWhitespace(value: string): string {
   return value.replace(/\s+/g, " ").trim();
-}
-
-async function sha256Hex(value: string): Promise<string> {
-  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
-  let hex = "";
-  for (const byte of new Uint8Array(digest)) {
-    hex += byte.toString(16).padStart(2, "0");
-  }
-  return hex;
 }
 
 export async function extractPageText(html: string): Promise<ExtractedPageText> {
