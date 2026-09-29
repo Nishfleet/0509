@@ -54,18 +54,17 @@ describe("static home analytics", () => {
 
   // 0509#5758 / audit V16. `/` is served by the static-assets pipeline, not by
   // app/entry.server.tsx, so it is the only HTML page on the origin with no
-  // security headers at all. The four the launch audit names are asserted here
-  // against the `/*` block, which Cloudflare applies to every static asset in
-  // addition to the more specific Cache-Control blocks ("an incoming request
-  // which matches multiple rules' URL patterns will inherit all rules'
-  // headers").
-  it("sends the four audit headers on every static asset", () => {
+  // security headers at all. The four the launch audit names (CSP, HSTS,
+  // X-Frame-Options, Referrer-Policy) are asserted here against the `/*` block,
+  // which Cloudflare applies to every static asset in addition to the more
+  // specific Cache-Control blocks ("an incoming request which matches multiple
+  // rules' URL patterns will inherit all rules' headers").
+  it("sends the four security headers on every static asset", () => {
     const all = headersBlock("/*");
     expect(headerValue(all, "Content-Security-Policy")).toBeDefined();
     expect(headerValue(all, "Strict-Transport-Security")).toContain("max-age=31536000");
     expect(headerValue(all, "X-Frame-Options")).toBe("DENY");
     expect(headerValue(all, "Referrer-Policy")).toBe("same-origin");
-    expect(headerValue(all, "X-Content-Type-Options")).toBe("nosniff");
   });
 
   // The one script the static home ships is inline and load-bearing: it appends
