@@ -1,3 +1,6 @@
+import { readdir, readFile, stat } from "node:fs/promises";
+import { join } from "node:path";
+
 import { expect, type Page, type TestInfo } from "@playwright/test";
 
 // The J1 mail path, per the amended decision on 0509#3927: Email Routing's
@@ -6,9 +9,42 @@ import { expect, type Page, type TestInfo } from "@playwright/test";
 // Durable Object for an hour and serves it back on this one endpoint, gated by the
 // E2E_INBOX_TOKEN secret. Nothing here reads D1 and nothing shortens the
 // auth path — the link the test clicks is the link the app really sent.
+//
+// Local lane (PLAYWRIGHT_TEST_BASE_URL unset, 0509#6092): `wrangler dev`
+// simulates the send_email binding — nothing is sent, and each part of the
+// message lands as a file under .wrangler/tmp/email/, which this module reads
+// instead of the inbox Worker. The secret belongs to the production job only,
+// so the token argument is null on that lane.
 const INBOX_URL = "https://e2e-inbox.0509.io";
 const POLL_LIMIT_MS = 120_000;
 const POLL_INTERVAL_MS = 3_000;
+
+const PRODUCTION_ORIGIN = "https://0509.io";
+
+// The one lane predicate every mailbox read switches on: unset base URL means
+// the local wrangler dev sink under .wrangler/tmp/email/, set means the inbox
+// Worker (production and the merge-queue previews alike are remote lanes).
+// Specs take the same branch off this rather than re-testing the variable.
+export function isLocalLane(): boolean {
+  return !process.env.PLAYWRIGHT_TEST_BASE_URL;
+}
+
+// The lane's origin is the only one a verify link may carry (0509#5841):
+// production and the merge-queue previews mail their own baseURL, and the
+// local lane's `wrangler dev` mails the --var BETTER_AUTH_URL
+// playwright.config.ts gives it — the local port, pinned in the environment
+// there so test workers see the port webServer started on. A link on any
+// other origin belongs to a different run. Callers outside Playwright
+// (vitest) set neither variable, and their fixtures carry the production
+// origin. The preview-lane seeding specs mint their sessions on the same
+// origin — the session cookie's name is scheme-derived, so it must be.
+export function laneOrigin(): string {
+  const baseUrl = process.env.PLAYWRIGHT_TEST_BASE_URL;
+  if (baseUrl) return new URL(baseUrl).origin;
+  const pinned = process.env.PLAYWRIGHT_LOCAL_PORT;
+  if (!pinned) return PRODUCTION_ORIGIN;
+  return `http://127.0.0.1:${pinned}`;
+}
 
 // Fail loudly, never skip: the amended decision on #3927 requires a missing
 // secret or routing rule to name itself in the failure. In the production lane
@@ -17,7 +53,7 @@ export function requireInboxToken(): string {
   const token = process.env.E2E_INBOX_TOKEN;
   if (!token) {
     throw new Error(
-      "E2E_INBOX_TOKEN is empty: the repo secret is not wired into the e2e-production job env in .github/workflows/ci.yml",
+      "E2E_INBOX_TOKEN is empty: the repo secret is not wired into the e2e job env in .github/workflows/ci.yml (e2e-production, merge-e2e)",
     );
   }
   return token;
@@ -100,23 +136,110 @@ export async function readRawMessage(to: string, token: string): Promise<string>
 }
 
 export function extractMagicLink(rawMessage: string): string | null {
-  const verifyUrl = /https:\/\/0509\.io\/api\/auth\/magic-link\/verify\?[^\s"'<>]+/;
+  const prefix = `${laneOrigin()}/api/auth/magic-link/verify?`;
   for (const body of decodedBodies(rawMessage)) {
-    const match = verifyUrl.exec(body);
+    const start = body.indexOf(prefix);
+    if (start === -1) continue;
+    const match = /^[^\s"'<>]+/.exec(body.slice(start));
     if (match) return match[0].replaceAll("&amp;", "&");
   }
   return null;
 }
 
-// The link this recipient already has stored, for waitForMagicLink to skip: the
-// inbox keeps one message per recipient for an hour, so a fixed fixture address
-// still holds the previous run's spent link, and a poll that accepted it would
-// follow a token the app has already burned. At most one link ever comes back,
-// but waitForMagicLink takes an exclude array. Only a 404 (nothing stored) is an
+// The local send_email sink (0509#6092). `wrangler dev` writes each part of a
+// simulated message under .wrangler/tmp/email/<session>/email-text/ and
+// email-html/ as <storage-id>.txt/.html; <session> is the miniflare instance's
+// id, so one run's files never mix with another's. The recipient is not in the
+// file name — the address only appears in the body the app wrote ("We sent
+// this link to …"), so a file is this recipient's when its contents name the
+// address.
+const LOCAL_EMAIL_SINK = join(".wrangler", "tmp", "email");
+const LOCAL_EMAIL_PARTS = ["email-text", "email-html"];
+
+// ENOENT is the honest "nothing sent yet" (the directory appears on the first
+// send); any other error is the dev server or the filesystem failing and must
+// name itself rather than read as an empty inbox.
+function isNotFound(error: unknown): boolean {
+  return error instanceof Error && "code" in error && error.code === "ENOENT";
+}
+
+// The message files on disk, newest first: a second send to the same address
+// wins over the earlier file, the same as the inbox's overwrite-per-recipient.
+// A file can vanish between the listing and the stat or read when wrangler
+// prunes .wrangler/tmp — gone is "not this one", never a failure.
+async function localEmailFiles(): Promise<string[]> {
+  const root = join(process.cwd(), LOCAL_EMAIL_SINK);
+  let sessions: string[];
+  try {
+    sessions = await readdir(root);
+  } catch (error) {
+    if (isNotFound(error)) return [];
+    throw error;
+  }
+  const files: { file: string; mtimeMs: number }[] = [];
+  for (const session of sessions) {
+    for (const part of LOCAL_EMAIL_PARTS) {
+      const dir = join(root, session, part);
+      let names: string[];
+      try {
+        names = await readdir(dir);
+      } catch (error) {
+        if (isNotFound(error)) continue;
+        throw error;
+      }
+      for (const name of names) {
+        const file = join(dir, name);
+        try {
+          files.push({ file, mtimeMs: (await stat(file)).mtimeMs });
+        } catch (error) {
+          if (!isNotFound(error)) throw error;
+        }
+      }
+    }
+  }
+  return files.sort((a, b) => b.mtimeMs - a.mtimeMs).map((entry) => entry.file);
+}
+
+// Every verify link the local sink holds for this recipient, newest first.
+// Both parts of one message carry the same link; the list dedupes it.
+async function localLinks(to: string): Promise<string[]> {
+  const links: string[] = [];
+  for (const file of await localEmailFiles()) {
+    let body: string;
+    try {
+      body = await readFile(file, "utf8");
+    } catch (error) {
+      if (isNotFound(error)) continue;
+      throw error;
+    }
+    if (!body.includes(to)) continue;
+    const link = extractMagicLink(body);
+    if (link !== null && !links.includes(link)) links.push(link);
+  }
+  return links;
+}
+
+// Callers pass null only on the local lane, whose branch returns before the
+// inbox reads below; a null reaching a remote read is the caller shipping the
+// local marker to a lane that needs the real secret. Name that rather than
+// re-resolve the token from the environment behind the caller's back.
+function remoteToken(token: string | null): string {
+  if (token === null) {
+    throw new Error("an inbox read on a remote lane needs the E2E_INBOX_TOKEN the caller resolved; null is the local lane's marker");
+  }
+  return token;
+}
+
+// The links this recipient already has stored, for waitForMagicLink to skip: a
+// poll that accepted one would follow a token the app has already burned. The
+// remote inbox keeps one message per recipient for an hour, so at most one
+// link comes back there; the local disk sink keeps every file ever written for
+// the address, so its whole backlog is stale. Only a 404 (nothing stored) is an
 // empty list; every other answer is the inbox failing, and reading one as "no
 // message" would hand back the spent link as if arriving mail had been seen.
-export async function staleLinks(to: string, token: string): Promise<string[]> {
-  const stored = await readRawMessage(to, token).then(
+export async function staleLinks(to: string, token: string | null): Promise<string[]> {
+  if (isLocalLane()) return localLinks(to);
+  const stored = await readRawMessage(to, remoteToken(token)).then(
     (raw) => extractMagicLink(raw),
     (error: unknown) => {
       if (error instanceof InboxReadError && error.status === 404) return null;
@@ -145,9 +268,56 @@ async function probeInbox(url: string, headers: Record<string, string>): Promise
 // recipient address, so a second email to the same address overwrites the
 // first: `exclude` carries links already read for this recipient, and the poll
 // keeps waiting while the stored message still points at one of them.
-export async function waitForMagicLink(to: string, token: string, exclude: string[] = []): Promise<string> {
+export async function waitForMagicLink(to: string, token: string | null, exclude: string[] = []): Promise<string> {
+  // Local lane: poll the files wrangler's simulated send_email wrote instead
+  // of the inbox endpoint. The write rides on ctx.waitUntil after the sign-in
+  // response, so the file lands a beat after the form's sent state.
+  if (isLocalLane()) {
+    let fresh: string[] = [];
+    let pollError: unknown;
+    try {
+      await expect
+        .poll(
+          async () => {
+            try {
+              fresh = (await localLinks(to)).filter((link) => !exclude.includes(link));
+            } catch (error) {
+              pollError = error;
+              throw error;
+            }
+            return fresh.length > 0;
+          },
+          { timeout: POLL_LIMIT_MS, intervals: [POLL_INTERVAL_MS] },
+        )
+        .toBe(true);
+    } catch (cause) {
+      // The poll's own timeout text cannot tell a dead sink from an empty
+      // one, and a poll-callback error would read as "no email" — the thrown
+      // error names the sink's state and carries the poll failure as cause.
+      if (pollError !== undefined) {
+        throw new Error(`Reading the local email sink failed while waiting for ${to}: ${pollError}`, { cause });
+      }
+      const sinkMissing = await stat(join(process.cwd(), LOCAL_EMAIL_SINK)).then(
+        () => false,
+        (error: unknown) => {
+          if (isNotFound(error)) return true;
+          throw new Error(`Reading the local email sink failed while waiting for ${to}: ${error}`, { cause });
+        },
+      );
+      throw new Error(
+        `No magic-link email for ${to} within ${POLL_LIMIT_MS / 1000}s. ` +
+          `The local lane reads wrangler's simulated send_email output under .wrangler/tmp/email/<session>/email-{text,html}/: ` +
+          (sinkMissing
+            ? "the sink directory never appeared — the dev server died or wrangler's simulated-send layout moved."
+            : `no file for this address carried a ${laneOrigin()} verify link.`),
+        { cause },
+      );
+    }
+    return fresh[0];
+  }
+  const resolved = remoteToken(token);
   const url = `${INBOX_URL}/message?to=${encodeURIComponent(to)}`;
-  const headers = inboxHeaders(token);
+  const headers = inboxHeaders(resolved);
   await probeInbox(url, headers);
 
   let lastDetail = "the inbox endpoint did not respond";
@@ -316,7 +486,7 @@ export const MAGIC_LINK_SEND_FAILED = "We couldn't send the link. Try again in a
 export async function signInWithMagicLink(
   page: Page,
   email: string,
-  token: string,
+  token: string | null,
   landing = /\/onboarding/,
 ): Promise<{ link: string; status: number }> {
   await page.goto("/login");
@@ -347,17 +517,40 @@ export async function signInWithMagicLink(
 // delete path — the settings flow J14 proves end to end — called from each
 // spec's afterEach so a failed test still cleans up. deleteAccount removes
 // the user row synchronously before it redirects here, so the redirect is
-// the proof the row is gone.
+// the proof the row is gone. The KEPT_JOURNEY_ACCOUNTS guard below runs
+// first: the four fixed journey accounts return untouched, matched as exact
+// addresses, never a pattern.
 //
 // The /login short-circuit is the no-session case: better-auth inserts the
 // user row when the magic link is verified, inside signInWithMagicLink, so a
-// test that never got past that link has no session and no row. It is also
-// the shape a J2 failure mid-ceremony leaves behind — signed out, row still
-// there — and this helper cannot tell the two apart, so that leak is a named
-// gap (#5733), not a solved case.
+// test that never got past that link has no session and no row; the skip
+// logs "deleteCreatedAccount: no session for <email>; nothing to delete"
+// before it returns. It is also the shape a J2 failure mid-ceremony leaves
+// behind — signed out, row still there — and this helper cannot tell the
+// two apart, so that leak is a named gap (#5733), not a solved case.
+
+// 0509#5688 (fleet-manager): the journey specs keep these four accounts on
+// purpose; the recurring teardown must never delete them. Match these exact
+// addresses, never a pattern. The one-time purge (0509#5730) kept the same
+// four; a later purge may still take them — once the kept-account journey
+// specs land (0509#4123, #4124, #4125, #4128) they create them again.
+const KEPT_JOURNEY_ACCOUNTS: readonly string[] = [
+  "e2e+j7@0509.io",
+  "e2e+j8-soft@0509.io",
+  "e2e+j9-mentions@0509.io",
+  "e2e+j12-rollovers@0509.io",
+];
+
 export async function deleteCreatedAccount(page: Page, email: string): Promise<void> {
+  if (KEPT_JOURNEY_ACCOUNTS.includes(email)) {
+    console.log(`deleteCreatedAccount: ${email} is a kept journey account; skipping`);
+    return;
+  }
   await page.goto("/app/settings");
-  if (page.url().includes("/login")) return;
+  if (page.url().includes("/login")) {
+    console.log(`deleteCreatedAccount: no session for ${email}; nothing to delete`);
+    return;
+  }
   await page.getByLabel("Type " + email + " to confirm").fill(email);
   await page.getByRole("button", { name: "Delete my account" }).click();
   await page.waitForURL(/\/login\?deleted=/);

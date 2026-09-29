@@ -1,7 +1,7 @@
+import { SITE_SWEEP_UTC_LABEL } from "./cadence";
 import { daysAgoLabel } from "./delivery-alert";
 import { SOURCE_LABEL, type FeedKind } from "./developments";
 import { BUCKET_LABELS } from "./how-ranked";
-import { SITE_SWEEP_UTC_HOUR } from "./onboarding/arrival-estimate";
 import { weightOf, type Reliability, type ScoreBucket } from "./standing-score";
 
 export interface ScoredSignal {
@@ -79,8 +79,7 @@ export function quietWeekSentence(
       ? "its website"
       : new Intl.ListFormat("en", { type: "conjunction" }).format(checked);
   if (lastChecked === null) {
-    const sweepHour = String(SITE_SWEEP_UTC_HOUR).padStart(2, "0");
-    return `Nothing scored for this brand in the last 7 days. We watch ${list}; the first read lands tonight at ${sweepHour}:00 UTC.`;
+    return `Nothing scored for this brand in the last 7 days. We watch ${list}; the first read lands tonight at ${SITE_SWEEP_UTC_LABEL}.`;
   }
   return `Nothing scored for this brand in the last 7 days. We checked ${list}, last at ${lastChecked}.`;
 }

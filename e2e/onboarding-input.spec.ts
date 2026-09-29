@@ -27,7 +27,7 @@ test.skip(
   "screen 1 needs a signed-in session; the preview lane cannot read the magic-link inbox",
 );
 
-test("the one input posts and redirects every non-empty value to the card", async ({ page }, testInfo) => {
+test("the one input posts and redirects every non-empty value to the card @own-signin", async ({ page }, testInfo) => {
   const token = requireInboxToken();
   const email = `e2e+${crypto.randomUUID().replaceAll("-", "").slice(0, 12)}@0509.io`;
   createdEmail = email;

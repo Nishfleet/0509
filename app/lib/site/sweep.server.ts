@@ -13,6 +13,7 @@ import {
   readUnwatchedEntities,
 } from "../data/watch.server";
 import { robotsAllows } from "../fetch/robots.server";
+import { takeBrowserScreenshot } from "./browser-budget.server";
 import type { CheckPageResult } from "./check-page.server";
 import { checkPage } from "./check-page.server";
 import { diffPageText } from "./diff";
@@ -99,6 +100,8 @@ export async function checkSitePage(target: SiteSweepTarget, tick: SweepTick): P
     snapshotId: `${tick.instanceId}-${target.pageId}`,
     before: tick.plannedAt,
     read,
+    mayScreenshot: () =>
+      takeBrowserScreenshot(target.workspaceId, target.entityId, tick.plannedAt.slice(0, 10)),
   });
   if (result.outcome === "failed") {
     console.log(JSON.stringify({

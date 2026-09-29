@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-import { deleteCreatedAccount, MAGIC_LINK_SEND_FAILED, requireInboxToken, signInWithMagicLink } from "./inbox";
+import { deleteCreatedAccount, isLocalLane, MAGIC_LINK_SEND_FAILED, requireInboxToken, signInWithMagicLink } from "./inbox";
 
 let createdEmail = "";
 test.afterEach(async ({ page }, testInfo) => {
@@ -17,16 +17,15 @@ test.afterEach(async ({ page }, testInfo) => {
 });
 
 // J1 from docs/REBUILD-DONE.md §A: a fresh address signs up, the magic link
-// arrives over the real mail path, and the session lands on /onboarding. Production
-// only — the preview lane's wrangler dev has no EMAIL binding and no inbox to
-// read, so this spec skips there rather than fake the journey.
-test.skip(
-  !process.env.PLAYWRIGHT_TEST_BASE_URL,
-  "J1 proves the production mail path; the local preview Worker can neither send nor receive email",
-);
-
-test("a fresh address signs in with the magic link that was emailed to it", async ({ page }) => {
-  const token = requireInboxToken();
+// arrives over the lane's mail path, and the session lands on /onboarding.
+// Production sends through Email Routing to the inbox Worker; the local
+// lane's wrangler dev simulates send_email and writes the message under
+// .wrangler/tmp/email/, which inbox.ts reads instead — no real sends there.
+// @own-signin (0509#6042): this title mints its own session.
+test("a fresh address signs in with the magic link that was emailed to it @own-signin", async ({ page }) => {
+  // The inbox secret exists only in the production job env; the local lane
+  // reads wrangler's simulated-send files and has no token to require.
+  const token = isLocalLane() ? null : requireInboxToken();
   const email = `e2e+${crypto.randomUUID().replaceAll("-", "").slice(0, 12)}@0509.io`;
   createdEmail = email;
 

@@ -7,7 +7,7 @@ import { describe, expect, it } from "vitest";
 // (0509#5783). ESLint prunes an entry when its code is fixed, but a PR could
 // still raise a count or commit `eslint --suppress-all`. This pin is the
 // ceiling: it only ever goes down, in the PR that fixes a listed violation.
-const SUPPRESSION_CEILING = 112;
+const SUPPRESSION_CEILING = 111;
 
 type Suppressions = Record<string, Record<string, { count: number }>>;
 
