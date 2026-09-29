@@ -26,7 +26,7 @@ import { storedDedupKey, toSignalRow, type MentionItem } from "./map";
 import { writeSourcePoint } from "./canary";
 import { adapterFor } from "../sources/registry";
 import { youtubeAdapter } from "../sources/mentions/youtube";
-import { UpstreamBlockedError } from "../sources/mentions/types";
+import { isUpstreamTimeout, UpstreamBlockedError } from "../sources/mentions/types";
 import type { OkYoutubeFeed } from "../sources/mentions/youtube";
 
 const JUDGED_PER_WATCH = 12;
@@ -43,6 +43,7 @@ export interface TargetOutcome {
   items: number;
   stored: number;
   unjudged: number;
+  skipped: number;
 }
 
 const ABOUT_BRAND: NoulQuestion = {
@@ -304,7 +305,7 @@ async function commitYoutubeFeed(
   }
   const snapshot = await putMentionBody(pluginKey, feed.rawBody);
   const context = await readDiscoveryContext(watch.workspace_id);
-  if (context === null) return { items: feed.items.length, stored: 0, unjudged: 0 };
+  if (context === null) return { items: feed.items.length, stored: 0, unjudged: 0, skipped: 0 };
   const committed = await commitMentionWatch({
     watch,
     context,
@@ -313,7 +314,7 @@ async function commitYoutubeFeed(
     canaryCount,
     now,
   });
-  return { items: feed.items.length, stored: committed.stored, unjudged: committed.unjudged };
+  return { items: feed.items.length, stored: committed.stored, unjudged: committed.unjudged, skipped: 0 };
 }
 
 async function verifyPendingYoutube(
@@ -333,7 +334,7 @@ async function verifyPendingYoutube(
     await writeWatchConfigJson(watch.watch_id, flagged);
   }
   await markWatchPolled(watch.watch_id, now);
-  return { items: 0, stored: 0, unjudged: 0 };
+  return { items: 0, stored: 0, unjudged: 0, skipped: 0 };
 }
 
 async function sweepOneYoutube(
@@ -358,7 +359,7 @@ async function sweepOneYoutube(
     if (lookup.status !== "id") {
       if (lookup.status === "unresolved") await flagLostChannel(watch.watch_id, now);
       await markWatchPolled(watch.watch_id, now);
-      return { items: 0, stored: 0, unjudged: 0 };
+      return { items: 0, stored: 0, unjudged: 0, skipped: 0 };
     }
     channelId = lookup.channelId;
   }
@@ -374,13 +375,13 @@ async function sweepOneYoutube(
       await writeWatchConfigJson(watch.watch_id, withPendingChannel(raw, lookup.channelId));
     }
     await markWatchPolled(watch.watch_id, now);
-    return { items: 0, stored: 0, unjudged: 0 };
+    return { items: 0, stored: 0, unjudged: 0, skipped: 0 };
   }
   if (first.feedState === "ok") {
     return commitYoutubeFeed(watch, first, pluginKey, canaryCount, now, channelId);
   }
   await markWatchPolled(watch.watch_id, now);
-  return { items: 0, stored: 0, unjudged: 0 };
+  return { items: 0, stored: 0, unjudged: 0, skipped: 0 };
 }
 
 async function sweepYoutubeTarget(
@@ -394,14 +395,22 @@ async function sweepYoutubeTarget(
   let items = 0;
   let stored = 0;
   let unjudged = 0;
-  for (const watch of target.watches) {
-    const outcome = await sweepOneYoutube(watch, target.pluginKey, now, canaryCount);
-    items += outcome.items;
-    stored += outcome.stored;
-    unjudged += outcome.unjudged;
+  let skipped = 0;
+  for (const [index, watch] of target.watches.entries()) {
+    try {
+      const outcome = await sweepOneYoutube(watch, target.pluginKey, now, canaryCount);
+      items += outcome.items;
+      stored += outcome.stored;
+      unjudged += outcome.unjudged;
+    } catch (error) {
+      if (!isUpstreamTimeout(error)) throw error;
+      await markSourceTimedOut(target.sourceId);
+      skipped += target.watches.length - index;
+      break;
+    }
   }
   writeSourcePoint(target.pluginKey, items, canaryCount);
-  return { items, stored, unjudged };
+  return { items, stored, unjudged, skipped };
 }
 
 export async function sweepTarget(
@@ -436,15 +445,15 @@ export async function sweepTarget(
       stored += committed.stored;
       unjudged += committed.unjudged;
     }
-    return { items: result.items.length, stored, unjudged };
+    return { items: result.items.length, stored, unjudged, skipped: 0 };
   } catch (error) {
     if (error instanceof UpstreamBlockedError) {
       await markSourceBlocked(target.sourceId, error.status);
       throw new NonRetryableError(error.message, "UpstreamBlockedError");
     }
-    if (error instanceof DOMException && error.name === "TimeoutError") {
+    if (isUpstreamTimeout(error)) {
       await markSourceTimedOut(target.sourceId);
-      throw new NonRetryableError(error.message, "TimeoutError");
+      return { items: 0, stored: 0, unjudged: 0, skipped: target.watches.length };
     }
     throw error;
   }

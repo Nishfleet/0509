@@ -5,6 +5,7 @@ import { EmptyState } from "./empty-state";
 import { CompetitorRail, type CompetitorRailProps } from "./competitor-rail";
 import { SiteChangeItem } from "./site-change-item";
 import type { SiteChangeItemData } from "./site-change-item";
+import { SITE_SWEEP_UTC_LABEL } from "../lib/cadence";
 import type { DevelopmentItem } from "../lib/developments";
 
 const HEADING = "mb-3 font-mono text-eyebrow text-ink-soft uppercase";
@@ -22,9 +23,9 @@ export interface CompetitorFrameProps {
 
 export function developmentsEmpty(lastChecked: string | null): string {
   if (lastChecked === null) {
-    return "Watching from today. We read the homepage every night at 02:00 UTC, and the first change shows here after the second read.";
+    return `Watching from today. We read the homepage every night at ${SITE_SWEEP_UTC_LABEL}, and the first change shows here after the second read.`;
   }
-  return "No changes to the homepage since we started watching. We read it again every night at 02:00 UTC.";
+  return `No changes to the homepage since we started watching. We read it again every night at ${SITE_SWEEP_UTC_LABEL}.`;
 }
 
 function Cell({ label, value }: { label: string; value: string }): ReactElement {
@@ -68,7 +69,9 @@ export function CompetitorFrame({
             The week's biggest move
           </h2>
           {biggest === null ? (
-            <EmptyState sentence="Nothing moved on their site in the last 7 days. We read it again every night at 02:00 UTC." />
+            <EmptyState
+              sentence={`Nothing moved on their site in the last 7 days. We read it again every night at ${SITE_SWEEP_UTC_LABEL}.`}
+            />
           ) : (
             <SiteChangeItem change={biggest} size="md" eager />
           )}

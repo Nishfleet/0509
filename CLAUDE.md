@@ -63,6 +63,14 @@ not so you can follow them from memory — lint will tell you.
   Put the reason in the commit message, where it is read at the moment it
   matters. Config files and tests are exempt.
 - **No user data in logs or Sentry.** `no-restricted-syntax` (NO_USER_DATA_IN_LOGS). Source: 0509#5776.
+- **Tests never skip, focus or sleep.** A vitest test is never focused or disabled
+  (`vitest/no-focused-tests`, `vitest/no-disabled-tests`); an e2e spec is never
+  focused or unconditionally skipped, never waits on a fixed sleep and never
+  waits for `networkidle` (`playwright/no-focused-test`,
+  `playwright/no-skipped-test`, `playwright/no-wait-for-timeout`,
+  `playwright/no-networkidle`). Conditional `test.skip(condition, reason)` and
+  `test.fail()` stay allowed. The full enforced set is the two test-lint blocks
+  in `eslint.config.js`. Source: 0509#5785.
 - **Immutability.** New objects, never mutation.
 
 ## Commands
