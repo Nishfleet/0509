@@ -56,19 +56,21 @@ const KEPT_JOURNEY_ACCOUNTS = [
   "e2e+j9-mentions@0509.io",
   "e2e+j12-rollovers@0509.io",
 ];
-// What Playwright runs: the files in the root of e2e/, nothing recursive. A
-// spec a future subdirectory holds is not run by `npm run e2e` today, so
-// scanning it would hold this detector to a contract the runner has not made.
-const SCANNED_DIR = "e2e";
-
-async function e2eSpecs(): Promise<string[]> {
-  const dir = path.join(REPO_ROOT, SCANNED_DIR);
+// Playwright scans the root of e2e/, so the walk is the toaster.test.ts
+// recursion over that dir, filtered to *.spec.ts — the paved shape by copy, so
+// a file a subdirectory ever holds is swept from the day it lands.
+async function e2eSpecs(dir: string): Promise<string[]> {
   const found: string[] = [];
   for (const entry of await readdir(dir, { withFileTypes: true })) {
-    if (entry.isDirectory() || !/\.spec\.ts$/.test(entry.name)) continue;
-    found.push(`${SCANNED_DIR}/${entry.name}`);
+    const full = path.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      found.push(...(await e2eSpecs(full)));
+      continue;
+    }
+    if (!/\.spec\.ts$/.test(entry.name)) continue;
+    found.push(path.relative(REPO_ROOT, full).split(path.sep).join("/"));
   }
-  return found.sort();
+  return found;
 }
 
 describe("e2e fixture teardown detector", () => {
@@ -89,7 +91,7 @@ describe("e2e fixture teardown detector", () => {
   });
 
   it("leaves no minting spec without a teardown call", async () => {
-    const specs = await e2eSpecs();
+    const specs = await e2eSpecs(path.join(REPO_ROOT, "e2e"));
     // A vacuous pass — an empty walk reporting no offenders — is the failure
     // mode of every repo-scanning detector, so the walk proves it found specs.
     expect(specs.length).toBeGreaterThan(0);
@@ -117,10 +119,7 @@ describe("e2e fixture teardown detector", () => {
     // without landing here is a skip rule the fleet-manager constraint never
     // approved, and it must fail here rather than sit in production until
     // someone reads the diff.
-    const guard = /const KEPT_JOURNEY_ACCOUNTS[^=]*=\s*\[([^\]]*)\]/.exec(source);
-    expect(guard).not.toBeNull();
-    expect([...(guard?.[1] ?? "").matchAll(/"([^"]+)"/g)].map((entry) => entry[1]).sort()).toEqual(
-      [...KEPT_JOURNEY_ACCOUNTS].sort(),
-    );
+    const guarded = [...source.matchAll(/^ {2}"(e2e\+[^"]+@0509\.io)",$/gm)].map((entry) => entry[1]).sort();
+    expect(guarded).toEqual([...KEPT_JOURNEY_ACCOUNTS].sort());
   });
 });
