@@ -26,7 +26,12 @@ function newVerifyToken(): string {
 
 function isAddressShape(address: string): boolean {
   const at = address.indexOf("@");
-  return at >= 1 && at === address.lastIndexOf("@") && at !== address.length - 1;
+  if (at < 1 || at !== address.lastIndexOf("@") || at === address.length - 1) return false;
+  for (let i = 0; i < address.length; i++) {
+    const code = address.charCodeAt(i);
+    if (code <= 0x20 || code === 0x7f) return false;
+  }
+  return true;
 }
 
 async function sendVerifyConfirmation(
