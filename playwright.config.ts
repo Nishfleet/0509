@@ -51,7 +51,7 @@ export default defineConfig({
           {
             name: "session",
             testMatch: /(?:^|\/)session\.setup\.ts$/,
-            dependencies: ["setup"],
+            dependencies: process.env.CF_ACCESS_CLIENT_ID ? ["setup"] : [],
             teardown: "session-teardown",
           },
           { name: "session-teardown", testMatch: /(?:^|\/)session\.teardown\.ts$/ },
