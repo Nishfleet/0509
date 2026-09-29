@@ -1,5 +1,7 @@
 import robotsParser from "robots-parser";
 
+import { fetchGuarded } from "./transport.server";
+
 const ROBOTS_TIMEOUT_MS = 5_000;
 
 const ROBOTS_AGENT = "FiveToNineBot";
@@ -9,7 +11,7 @@ const ROBOTS_HEADERS = { "user-agent": "FiveToNineBot/1.0 (+https://0509.io)" };
 export async function robotsAllows(url: string): Promise<boolean> {
   const robotsUrl = new URL("/robots.txt", url).toString();
   try {
-    const response = await fetch(robotsUrl, {
+    const response = await fetchGuarded(robotsUrl, {
       headers: ROBOTS_HEADERS,
       signal: AbortSignal.timeout(ROBOTS_TIMEOUT_MS),
     });

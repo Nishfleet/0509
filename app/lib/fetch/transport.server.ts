@@ -179,7 +179,7 @@ async function cappedText(res: Response): Promise<string> {
   return new Response(capped).text();
 }
 
-class BlockedRedirectError extends Error {
+export class BlockedRedirectError extends Error {
   constructor(detail: string) {
     super(detail);
     this.name = "BlockedRedirectError";
@@ -197,10 +197,13 @@ function targetRefusal(target: URL): string | null {
   return null;
 }
 
-async function fetchGuarded(url: string, signal: AbortSignal): Promise<Response> {
+export async function fetchGuarded(
+  url: string,
+  init: { headers: HeadersInit; signal: AbortSignal },
+): Promise<Response> {
   let current = url;
   for (let hop = 0; hop <= MAX_REDIRECTS; hop += 1) {
-    const res = await fetch(current, { headers: FETCH_HEADERS, redirect: "manual", signal });
+    const res = await fetch(current, { headers: init.headers, redirect: "manual", signal: init.signal });
     const location = res.headers.get("location");
     if (res.status < 300 || res.status > 399 || location === null) return res;
     await res.body?.cancel();
@@ -250,7 +253,10 @@ export async function readUrl(
   let fetchStatus: number;
   let fetchHtml: string;
   try {
-    const res = await fetchGuarded(url, AbortSignal.timeout(FETCH_TIMEOUT_MS));
+    const res = await fetchGuarded(url, {
+      headers: FETCH_HEADERS,
+      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+    });
     fetchStatus = res.status;
     fetchHtml = await cappedText(res);
   } catch (err) {
