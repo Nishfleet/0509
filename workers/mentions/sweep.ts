@@ -147,7 +147,7 @@ async function statementsForWatch(input: {
   );
   const fresh = keyed.filter((entry) => !seen.has(entry.dedupKey)).slice(0, JUDGED_PER_WATCH);
   const statements: D1PreparedStatement[] = [
-    insertWatchSnapshot({
+    ...insertWatchSnapshot({
       id: snapshotId,
       watchId: watch.watch_id,
       fetchedAt: now,

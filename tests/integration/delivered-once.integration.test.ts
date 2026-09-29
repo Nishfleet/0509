@@ -88,7 +88,7 @@ const weekOne = async () => {
     workspaceId: WS,
     schedule: MONDAY,
     week: WEEK_1,
-    readThisFirst: { picks: [SIG_A, SIG_B], judged: 2 },
+    readThisFirst: { picks: [SIG_A, SIG_B], judged: 2, unjudged: false },
   });
   await seedDigest("digest-w1", payload, "2026-09-14", "2026-09-21");
   return deliver(envWith(bindingFor(recorder())), { digest_id: "digest-w1" });
@@ -185,7 +185,7 @@ describe("delivered once across weeks (0509#4063)", () => {
       .run();
 
     const judged = await judgeWeek(env.DB, weekTwoInput);
-    expect(judged).toEqual({ picks: [SIG_C], judged: 1 });
+    expect(judged).toEqual({ picks: [SIG_C], judged: 1, unjudged: false });
 
     const payload = await composeBrief(env.DB, {
       workspaceId: WS,

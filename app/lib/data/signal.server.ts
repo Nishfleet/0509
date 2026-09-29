@@ -106,7 +106,7 @@ export async function insertHiringSignals(rows: readonly NewHiringSignal[]): Pro
   }
 }
 
-const SELECT_HIRING_SIGNAL_STATES = `SELECT id, dedup_key, last_seen_at, payload_json FROM signal
+export const SELECT_HIRING_SIGNAL_STATES = `SELECT id, dedup_key, last_seen_at, payload_json FROM signal
 WHERE kind = 'hiring' AND watch_id = ?1 AND is_tombstoned = 0`;
 
 const hiringSignalStateRows = z.array(

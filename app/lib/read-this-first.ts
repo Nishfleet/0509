@@ -1,5 +1,7 @@
 export const D4_QUESTION_ID = "read_this_first";
 
+export const UNJUDGED_WEEK_LINE = "We couldn't judge this week's changes yet.";
+
 export interface D4Verdict {
   signalId: string;
   p: number;

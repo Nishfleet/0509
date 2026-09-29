@@ -23,7 +23,7 @@ test.afterEach(async ({ page }, testInfo) => {
 const TAGS = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"];
 
 for (const scheme of ["light", "dark"] as const) {
-  test(`/login form has zero WCAG 2.2 AA violations in ${scheme} (#4148)`, async ({ page }) => {
+  test(`/login form has zero WCAG 2.2 AA violations in ${scheme} (#4148) @smoke`, async ({ page }) => {
     await page.emulateMedia({ colorScheme: scheme });
     await page.goto("/login");
 

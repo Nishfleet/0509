@@ -25,14 +25,14 @@ export function Hero() {
   return (
     <section id="hero" aria-labelledby="hero-title">
       <div
-        className={`${pageWidth} grid gap-12 py-14 sm:py-20 min-[1080px]:grid-cols-[1.15fr_0.85fr] min-[1080px]:items-center min-[1080px]:gap-16`}
+        className={`${pageWidth} grid gap-12 py-14 min-[1080px]:grid-cols-[1.15fr_0.85fr] min-[1080px]:items-center min-[1080px]:gap-16 sm:py-20`}
       >
         <div className="min-w-0">
           <p className={`${eyebrow} text-ink-soft`}>For founders, brands and creators</p>
-          <h1 id="hero-title" className="font-display text-display-1 mt-5 font-extrabold uppercase">
+          <h1 id="hero-title" className="mt-5 font-display text-display-1 font-extrabold uppercase">
             Know where you stand. And who’s gaining on you.
           </h1>
-          <p className="text-ink-soft mt-6 max-w-[38rem] text-[clamp(1.05rem,1.4vw,1.2rem)] leading-[1.55]">
+          <p className="mt-6 max-w-[38rem] text-[clamp(1.05rem,1.4vw,1.2rem)] leading-[1.55] text-ink-soft">
             We watch {WATCHED_NOUNS} across your market, and we name the rivals for you, so you do not have to know
             them.
           </p>
@@ -48,7 +48,7 @@ export function Hero() {
               submitLabel={<StartWatchingLabel />}
             />
           </div>
-          <p className="font-mono text-meta text-ink-soft mt-4 max-w-[38rem]">
+          <p className="mt-4 max-w-[38rem] font-mono text-meta text-ink-soft">
             One input. Sixty seconds to who’s gaining on you.
           </p>
         </div>
@@ -60,14 +60,14 @@ export function Hero() {
             {SHOWN.map((example) => (
               <li
                 key={example.needs}
-                className={cn("border-ink border-[1.5px] p-5", example.own ? "bg-green-wash" : "bg-card")}
+                className={cn("border-[1.5px] border-ink p-5", example.own ? "bg-green-wash" : "bg-card")}
               >
                 <p className="font-mono text-meta text-ink-soft">
-                  <strong className="text-ink font-medium">{example.who}</strong> · {example.where}
+                  <strong className="font-medium text-ink">{example.who}</strong> · {example.where}
                 </p>
-                <ExampleMark before={example.before} after={example.after} className="text-mark-md mt-3" />
+                <ExampleMark before={example.before} after={example.after} className="mt-3 text-mark-md" />
                 {example.own ? (
-                  <p className="font-mono text-meta text-ink-soft mt-3">This one is emailed to you the moment we see it.</p>
+                  <p className="mt-3 font-mono text-meta text-ink-soft">This one is emailed to you the moment we see it.</p>
                 ) : null}
               </li>
             ))}

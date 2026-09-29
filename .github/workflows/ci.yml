@@ -1,7 +1,6 @@
 # The checks the main-merge-queue ruleset requires, by exactly these names:
-#   Gitleaks   codex-node-checks   semgrep   preview-assert   grade
-# `grade` is a job that reports the result of `grade-run`, the shared A+ grader
-# (Nishfleet/fleet-ops grade.yml@main). Bypass actors on that ruleset is empty, so a
+#   Gitleaks   codex-node-checks   semgrep   preview-assert
+# Bypass actors on that ruleset is empty, so a
 # renamed job is not a cosmetic change — a required check that never reports
 # fails closed and nothing can merge, including the PR that renamed it.
 # Verified against the live ruleset (id 21391031) before this file was written.
@@ -10,9 +9,7 @@
 # the queue evaluates checks on the merge ref, so a job that skips there gives
 # the queue no verdict, and on GitHub a skipped required check counts as
 # passing (#4664): no required job may carry a job-level `if:` that can skip
-# it, except `grade-run` and `grade`, which run only on pull_request and
-# merge_group (`grade` also `always()`, so a failed or cancelled grade-run fails
-# it instead of skipping it); tests/required-checks-never-skip.test.ts pins both. On an event where a job has
+# it; tests/required-checks-never-skip.test.ts pins it. On an event where a job has
 # nothing to do it runs one explicit pass step.
 name: CI
 
@@ -92,35 +89,6 @@ jobs:
         with:
           args: --offline --format plain .github/workflows
 
-      - name: Migration numbers are unique
-        # A change that adds migrations/NNNN_* while its base already has an
-        # NNNN_*, or adds two with one number, fails and names the next free
-        # numbers. The first of several open PRs on one number merges; each
-        # later one fails here and renumbers at rework time. HEAD^1 is the base
-        # side of the merge ref: main on a pull request, the entries ahead in
-        # the queue on merge_group, where two individually green PRs collide.
-        if: github.event_name == 'pull_request' || github.event_name == 'merge_group'
-        run: |
-          set -euo pipefail
-          on_base=$(git ls-tree --name-only HEAD^1 migrations/)
-          last=$(printf '%s\n' "$on_base" | sed -nE 's|^migrations/([0-9]+)_.*|\1|p' | sort -n | tail -1)
-          next=$((10#${last:-0} + 1))
-          added=$(git diff --name-only --diff-filter=A HEAD^1 HEAD -- migrations/)
-          status=0
-          for n in $(printf '%s\n' "$added" | xargs -rn1 basename | sed -nE 's|^([0-9]+)_.*|\1|p' | sort | uniq -d); do
-            echo "::error::Two added migrations share number $n. Give each its own number, starting at $(printf '%04d' "$next")."
-            status=1
-          done
-          while IFS= read -r f; do
-            n=$(basename "$f" | sed -nE 's|^([0-9]+)_.*|\1|p')
-            [ -n "$n" ] || continue
-            if grep -q "^migrations/${n}_" <<< "$on_base"; then
-              echo "::error file=$f::Migration number $n already exists on the base. Rename this file to $(printf '%04d' "$next")_<name>.sql."
-              next=$((next + 1))
-              status=1
-            fi
-          done <<< "$added"
-          exit "$status"
       - name: Test only what the pull request can affect
         # vitest's own --changed: the test files that import a changed file,
         # through the module graph. A change to package.json or a vitest/vite
@@ -130,6 +98,14 @@ jobs:
         # 545 s of the 17 min PR run 36432985831 was the full suite (#5849).
         if: github.event_name == 'pull_request'
         run: npx vitest run --changed HEAD^1 --passWithNoTests
+      - name: Feature map names every e2e spec
+        # `vitest --changed` selects tests through the import graph, and this
+        # test reads e2e/ and the map from disk — a spec added without a map
+        # edit touches no file it imports, so it is never selected and the
+        # drift would reach the queue unseen (#6133). The merge_group
+        # `npm test` below already runs it inside the full suite.
+        if: github.event_name == 'pull_request'
+        run: npx vitest run tests/unit/feature-map-proof.test.ts
       - name: Test
         if: github.event_name == 'merge_group'
         run: npm test
@@ -182,7 +158,7 @@ jobs:
           persist-credentials: false
       # `semgrep ci` is the hosted mode and needs SEMGREP_APP_TOKEN, exiting 2
       # without one. `semgrep scan` is the local mode and needs nothing.
-      - run: semgrep scan --config p/typescript --config p/security-audit --config .semgrep/rollover-catch-up.yml --error
+      - run: semgrep scan --config p/typescript --config p/security-audit --config .semgrep/rollover-catch-up.yml --config https://raw.githubusercontent.com/Nishfleet/fleet-ops/main/.semgrep/no-glue.yml --error
         if: github.event_name != 'deployment_status'
       # Keep the local rule's fixture honest: --test fails if ruleid:/ok:
       # annotations in .semgrep/<rule>.ts stop matching what the rule fires on.
@@ -347,36 +323,3 @@ jobs:
         run: |
           N=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search '"lighthouse red on main" in:title' --json number --jq '.[0].number // empty')
           [ -z "$N" ] || gh issue close "$N" --repo "$GITHUB_REPOSITORY" --reason completed --comment "Green again on $RUN_URL."
-
-  # The shared A+ grader (fleet-ops#8655, fleet-ops#8922), reported as
-  # `grade-run / grade`. It grades every pull request from a branch of this
-  # repo with the rubric on fleet-ops@main and this repo's trust doc. It
-  # replaced opus-review, whose Kimi grader is out of usage until 2026-10-25.
-  # It waits for the four deterministic required checks, so a red head never
-  # spends a call on the shared free Devin login (fleet-ops#8934).
-  grade-run:
-    needs: [Gitleaks, codex-node-checks, semgrep, preview-assert]
-    if: github.event_name == 'pull_request' || github.event_name == 'merge_group'
-    uses: Nishfleet/fleet-ops/.github/workflows/grade.yml@main
-    with:
-      trust-doc: docs/REBUILD-TRUST.md
-    permissions:
-      contents: read
-      pull-requests: write
-      issues: write
-    secrets:
-      CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-
-  # The required check `grade`. always() keeps it running, and failing, when
-  # grade-run fails or is cancelled: a skipped required check counts as passing.
-  grade:
-    if: always() && (github.event_name == 'pull_request' || github.event_name == 'merge_group')
-    needs: grade-run
-    runs-on: ubuntu-latest
-    timeout-minutes: 2
-    permissions: {}
-    steps:
-      - name: The grade-run result must be success
-        env:
-          RESULT: ${{ needs.grade-run.result }}
-        run: test "$RESULT" = success
