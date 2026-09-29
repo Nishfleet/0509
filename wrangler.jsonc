@@ -125,13 +125,13 @@
     // base URL: test_mode is https://test.dodopayments.com, live_mode is
     // https://live.dodopayments.com. The three product ids are the recurring
     // products in the Dodo dashboard, one per plan in app/lib/billing/plans.ts.
-    // Empty means checkout for that plan answers "not available" instead of
+    // Empty would mean checkout for that plan answers "not available" instead of
     // calling Dodo. DODO_PAYMENTS_API_KEY and DODO_WEBHOOK_SECRET are Worker
     // secrets and are not declared here.
     "DODO_ENVIRONMENT": "live_mode",
-    "DODO_PRODUCT_SCOUT": "",
-    "DODO_PRODUCT_STARTER": "",
-    "DODO_PRODUCT_AGENCY": "",
+    "DODO_PRODUCT_SCOUT": "pdt_0NoeiCehl28XydokfKsmk",
+    "DODO_PRODUCT_STARTER": "pdt_0NoeiCjBmCJTfOHquf26O",
+    "DODO_PRODUCT_AGENCY": "pdt_0NoeiCmf66xTM4sWXDrAj",
     "ACCESS_TEAM_DOMAIN": "https://nish345.cloudflareaccess.com",
     "ACCESS_AUD": "b4fa400a1848c913b92c3212dc0714fcdbd1b1b66eb24659e4a7cc01c790575d"
   },
