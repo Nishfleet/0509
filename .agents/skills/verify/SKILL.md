@@ -26,8 +26,11 @@ The port is per process, the same formula as `playwright.config.ts`: `8000 + (pi
 npm run build
 export PLAYWRIGHT_LOCAL_PORT="${PLAYWRIGHT_LOCAL_PORT:-$((8000 + $$ % 1000))}"
 npx wrangler d1 migrations apply 0509 --local </dev/null
-npx wrangler dev --env-file .dev.vars.example --local --port "$PLAYWRIGHT_LOCAL_PORT"
+npx wrangler dev --env-file .dev.vars.example --local --port "$PLAYWRIGHT_LOCAL_PORT" \
+  --var "BETTER_AUTH_URL:http://127.0.0.1:${PLAYWRIGHT_LOCAL_PORT}" --var "DODO_PRODUCT_STARTER:pdt_preview_starter"
 ```
+
+The two `--var` overrides are the ones `playwright.config.ts` gives its webServer. `BETTER_AUTH_URL` is load-bearing for Sign in below: without it the emailed magic link carries the production origin and the local Worker cannot verify it.
 
 Wait until `curl -fsS "http://127.0.0.1:${PLAYWRIGHT_LOCAL_PORT}/api/health"` returns. Then open the page:
 
@@ -53,6 +56,53 @@ npx chrome-devtools take_snapshot <pageId>
 ```
 
 Do not use `set -x` and do not echo the header JSON. The stock CLI takes those headers only as `--extraHttpHeaders`. A proving run's emulate stdout was exactly `Emulation configured successfully` and contained neither header value. If the output is anything else, stop and do not paste it. The snapshot is the app (heading "Sign in"), not the Access login page.
+
+## Sign in
+
+`/app`, `/onboarding`, Alerts and Settings sit behind sign-in. There is exactly one sign-in path — the form at `/login`, the link the app emails, the session it sets — and the e2e suite drives that same path (`signInWithMagicLink` in `e2e/inbox.ts`) and saves its result to `e2e/.auth/session.json` and the per-lane `e2e/.auth/onboarded-<lane>.json`. This section reuses it: sign in as a fixture account from `app/lib/fixture-accounts.ts` (`FIXTURE_ACCOUNTS`, e.g. `FIXTURE_ACCOUNTS.j7.email` = `e2e+j7@0509.io`), which the suite keeps on purpose (`KEPT_JOURNEY_ACCOUNTS` in `e2e/inbox.ts`). No test-login shortcut, no cookie to mint.
+
+Snapshot the form, fill the email, wait for the Turnstile token, submit. The `evaluate_script` is the Turnstile gate (`settleSignInWidget` in `e2e/inbox.ts`): submitting before the widget has minted its token answers "Confirm you're a person, then we'll send the link." A `0` means wait a beat and read it again; the local lane sees the always-pass test token the same way.
+
+```bash
+npx chrome-devtools take_snapshot <pageId>
+npx chrome-devtools fill <pageId> <emailUid> "e2e+j7@0509.io"
+npx chrome-devtools evaluate_script --pageId <pageId> '() => { const f = document.querySelector("input[name=\"cf-turnstile-response\"]"); return f ? f.value.length : 0; }'
+npx chrome-devtools click <pageId> <submitUid>
+```
+
+Read the link the lane stored it in, then open it in the same page (or a new one). Never paste the verify link into a proof — it is single-use and carries a token.
+
+### Local link
+
+`wrangler dev --local` simulates `send_email`, so the message is the file the local lane of `e2e/inbox.ts` reads: `.wrangler/tmp/email/<session>/email-{text,html}/<id>.txt`. Pick the recipient's newest text part, then take its verify link; the HTML part escapes `&` as `&amp;`.
+
+```bash
+MAIL=$(grep -rlF "e2e+j7@0509.io" .wrangler/tmp/email --include='*.txt' | xargs -r ls -t | head -1)
+LINK=$(grep -oh "http://127.0.0.1:${PLAYWRIGHT_LOCAL_PORT}/api/auth/magic-link/verify?[^ \"'<>]*" "$MAIL" | sed 's/&amp;/\&/g' | head -1)
+npx chrome-devtools navigate_page <pageId> --url "$LINK"
+```
+
+### Production link
+
+The real inbox Worker holds the message, gated by `E2E_INBOX_TOKEN` — the endpoint and headers are exactly `readRawMessage` in `e2e/inbox.ts`; the inbox may sit in the same Access application, so send the Access headers too. The message is MIME and both parts are quoted-printable, so join its soft line breaks (`=\n`) and undo `=3D` before taking the `verify?token=` line. `E2E_INBOX_TOKEN` lives in `~/.config/cloudflare/0509-e2e-inbox.env`; do not echo it or the header JSON.
+
+```bash
+set -a
+. ~/.config/cloudflare/0509-e2e-inbox.env
+. ~/.config/cloudflare/access-0509-agents.env
+set +a
+curl -fsS -H "authorization: Bearer $E2E_INBOX_TOKEN" \
+  -H "CF-Access-Client-Id: $CF_ACCESS_CLIENT_ID" -H "CF-Access-Client-Secret: $CF_ACCESS_CLIENT_SECRET" \
+  "https://e2e-inbox.0509.io/message?to=e2e%2Bj7%400509.io" > /tmp/verify-proof/magic-link.txt
+LINK=$(sed ':a;N;$!ba;s/=\r\?\n//g' /tmp/verify-proof/magic-link.txt | grep -oh "https://0509.io/api/auth/magic-link/verify?[^ \"'<>]*" | sed -e 's/=3D/=/g' -e 's/&amp;/\&/g' | grep 'token=' | head -1)
+npx chrome-devtools navigate_page <pageId> --url "$LINK"
+```
+
+An inbox that still holds an earlier message answers with that spent link; sign in again (a new send overwrites the stored message per recipient) and re-read it.
+
+### Landing
+
+A brand-new account lands on `/onboarding`, not `/app`: the workspace has no confirmed brand yet. Finish the one input — `fill` "gymshark.com", `press_key Enter`, and if the card marks the name `CHECK THIS` open `edit name`, `fill` it and `press_key Enter` (the POST rejects an empty name), then `click "That's me"`, `click "Start watching"` — and the app lands on `/app`. The next sign-in as that address goes straight to `/app`, which is the state `e2e/.auth/onboarded-<lane>.json` caches. Take the `/app` snapshot here and paste it as the proof.
 
 ## Drive it
 
