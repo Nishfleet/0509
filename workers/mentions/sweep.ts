@@ -112,6 +112,20 @@ async function judge(
   return { about, matters };
 }
 
+async function judgeOrNull(
+  watch: WatchRow,
+  context: DiscoveryContext,
+  item: MentionItem,
+): Promise<{ about: NoulVerdict; matters: NoulVerdict | null } | null> {
+  try {
+    return await judge(watch, context, item);
+  } catch (error) {
+    if (!(error instanceof JevUnavailableError)) throw error;
+    console.error(JSON.stringify({ event: "mentions.jev_unavailable", message: error.message }));
+    return null;
+  }
+}
+
 async function statementsForWatch(input: {
   watch: WatchRow;
   context: DiscoveryContext;
@@ -146,16 +160,7 @@ async function statementsForWatch(input: {
   let unjudged = 0;
   let jevDown = false;
   for (const { item } of fresh) {
-    let verdicts: Awaited<ReturnType<typeof judge>> | null = null;
-    if (!jevDown) {
-      try {
-        verdicts = await judge(watch, context, item);
-      } catch (error) {
-        if (!(error instanceof JevUnavailableError)) throw error;
-        jevDown = true;
-        console.error(JSON.stringify({ event: "mentions.jev_unavailable", message: error.message }));
-      }
-    }
+    const verdicts = jevDown ? null : await judgeOrNull(watch, context, item);
     const mapped = await toSignalRow(item, {
       workspaceId: watch.workspace_id,
       entityId: watch.entity_id,
@@ -201,24 +206,27 @@ async function statementsForWatch(input: {
       }),
     );
     if (verdicts === null) {
+      jevDown = true;
       unjudged += 1;
       continue;
     }
     statements.push(verdictRow(verdicts.about));
     if (rejected) continue;
-    if (verdicts.matters !== null) statements.push(verdictRow(verdicts.matters));
-    if (verdicts.matters !== null && noulAction(verdicts.matters.p) === "act") {
-      statements.push(
-        insertSignalAlert(env.DB, {
-          workspaceId: watch.workspace_id,
-          entityId: watch.entity_id,
-          signalId,
-          kind: "mention",
-          title: `${watch.name}: ${item.title}`,
-          body: item.publisher ?? null,
-          createdAt: now,
-        }),
-      );
+    if (verdicts.matters !== null) {
+      statements.push(verdictRow(verdicts.matters));
+      if (noulAction(verdicts.matters.p) === "act") {
+        statements.push(
+          insertSignalAlert(env.DB, {
+            workspaceId: watch.workspace_id,
+            entityId: watch.entity_id,
+            signalId,
+            kind: "mention",
+            title: `${watch.name}: ${item.title}`,
+            body: item.publisher ?? null,
+            createdAt: now,
+          }),
+        );
+      }
     }
     stored += 1;
   }
