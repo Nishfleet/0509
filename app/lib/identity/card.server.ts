@@ -2,6 +2,8 @@ import { env } from "cloudflare:workers";
 import { z } from "zod";
 
 import { readUrl } from "../fetch/transport.server";
+import type { ReadUrlOptions } from "../fetch/transport.server";
+import { takeBrowserEscalation } from "../site/browser-budget.server";
 import type { CardReview, CardValues, DraftField, SiteFields } from "./card-fields";
 import { extractIdentity } from "./extract";
 import { reviewFields } from "./field-confidence.server";
@@ -48,13 +50,19 @@ const UNREACHED: SiteCard = {
   navLinks: [],
 };
 
+type MayEscalate = NonNullable<ReadUrlOptions["mayEscalate"]>;
+
+export function brandBudget(workspaceId: string, registrable: string): MayEscalate {
+  return () => takeBrowserEscalation(workspaceId, registrable, new Date().toISOString().slice(0, 10));
+}
+
 function wikidataTerm(subject: Subject): string {
   return subject.registrable.split(".")[0] ?? subject.registrable;
 }
 
-async function probeSite(subject: Subject): Promise<SiteCard> {
+async function probeSite(subject: Subject, mayEscalate: MayEscalate): Promise<SiteCard> {
   if (subject.url === null) throw new Error("no site to read");
-  const page = await readUrl(subject.url);
+  const page = await readUrl(subject.url, { mayEscalate });
   if (!page.ok) throw new Error(page.detail);
   const extract = await extractIdentity(page.html, subject.url);
   const name = await resolveBrandName(extract.nameSources, wikidataTerm(subject));
@@ -76,9 +84,9 @@ async function probeSite(subject: Subject): Promise<SiteCard> {
   return card;
 }
 
-async function probeProfile(subject: Subject): Promise<SiteCard> {
+async function probeProfile(subject: Subject, mayEscalate: MayEscalate): Promise<SiteCard> {
   if (subject.url === null) throw new Error("no profile to read");
-  const page = await readUrl(subject.url);
+  const page = await readUrl(subject.url, { mayEscalate });
   if (!page.ok) throw new Error(page.detail);
   const extract = await extractIdentity(page.html, subject.url);
   return {
@@ -106,12 +114,17 @@ function filledProfileFields(card: SiteCard): string[] {
   return filled;
 }
 
-export async function readSiteCard(subject: Subject): Promise<{ card: SiteCard; reached: boolean }> {
+export async function readSiteCard(
+  subject: Subject,
+  mayEscalate: MayEscalate,
+): Promise<{ card: SiteCard; reached: boolean }> {
   if (subject.kind !== "domain") {
     const probe = profileProbe(subject);
     if (probe === null || subject.url === null) return { card: UNREACHED, reached: false };
     try {
-      const card = await cachedProbe(subject, probe, siteCardSchema, () => probeProfile(subject));
+      const card = await cachedProbe(subject, probe, siteCardSchema, () =>
+        probeProfile(subject, mayEscalate),
+      );
       console.log(
         JSON.stringify({
           event: "identity-creator-card",
@@ -128,7 +141,12 @@ export async function readSiteCard(subject: Subject): Promise<{ card: SiteCard; 
     }
   }
   try {
-    return { card: await cachedProbe(subject, "homepage", readSiteCardSchema, () => probeSite(subject)), reached: true };
+    return {
+      card: await cachedProbe(subject, "homepage", readSiteCardSchema, () =>
+        probeSite(subject, mayEscalate),
+      ),
+      reached: true,
+    };
   } catch (error) {
     console.log(JSON.stringify({ event: "identity-site-unreached", error: String(error) }));
     return { card: UNREACHED, reached: false };
@@ -172,7 +190,7 @@ export function startCard(
   subject: Subject,
   edited: readonly DraftField[],
 ): { site: Promise<SiteFields>; logo: Promise<string | null> } {
-  const read = readSiteCard(subject);
+  const read = readSiteCard(subject, brandBudget(workspaceId, subject.registrable));
   const site = read.then(async ({ card, reached }): Promise<SiteFields> => {
     const values: CardValues = {
       name: card.name ?? (subject.kind === "domain" ? null : `@${subject.registrable}`),
