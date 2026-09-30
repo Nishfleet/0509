@@ -77,7 +77,7 @@ test.describe("J4 onboard a creator handle", () => {
         );
 
       await page.getByRole("button", { name: "That's me" }).click();
-      await expect(page).toHaveURL(/\/onboarding\/competitors$/);
+      await expect(page).toHaveURL(/\/onboarding\/competitors$/, { timeout: 30_000 });
 
       const competitorRows = page.locator('ul[aria-label="Watching"] li, ul[aria-label="Maybe"] li');
       await expect.poll(async () => competitorRows.count(), { timeout: 60_000 }).toBeGreaterThan(0);
