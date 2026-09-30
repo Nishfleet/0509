@@ -93,3 +93,15 @@ test("both legal routes carry the one robots policy @smoke", async ({ page }) =>
     await expect(page.locator('meta[name="robots"]')).toHaveAttribute("content", "index, follow");
   }
 });
+
+test("GET /.well-known/security.txt names a contact, an expiry and its canonical URL @smoke", async ({ request }) => {
+  const response = await request.get("/.well-known/security.txt");
+  expect(response.status()).toBe(200);
+  expect(response.headers()["content-type"]).toMatch(/^text\/plain/);
+
+  const body = await response.text();
+  expect(body).toMatch(/^Contact: mailto:\S+@\S+$/m);
+  expect(body).toMatch(/^Canonical: https:\/\/0509\.io\/\.well-known\/security\.txt$/m);
+  const expires = /^Expires: (\S+)$/m.exec(body)?.[1] ?? "";
+  expect(new Date(expires).getTime(), "security.txt has expired").toBeGreaterThan(Date.now());
+});
