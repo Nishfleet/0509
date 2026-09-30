@@ -50,7 +50,12 @@ describe("mention question state builders", () => {
     expect(
       aboutBrandState({
         subject: { name: "Adidas", domain: "adidas.com", role: "competitor" },
-        item: { title: "Adidas raises prices", url: "https://example.com/a", publishedAt: "2026-09-20", publisher: null },
+        item: {
+          title: "Adidas raises prices",
+          url: "https://example.com/a",
+          publishedAt: "2026-09-20",
+          publisher: null,
+        },
         reliability: "rss",
       }),
     ).toEqual({
@@ -71,7 +76,12 @@ describe("mention question state builders", () => {
         self: { name: "Nike", domain: "nike.com", description: "sportswear" },
         subject: { name: "Adidas", domain: "adidas.com", role: "competitor" },
         competitors: [{ name: "Puma", domain: "puma.com" }],
-        item: { title: "Adidas raises prices", url: "https://example.com/a", publishedAt: "2026-09-20", publisher: "gq.com" },
+        item: {
+          title: "Adidas raises prices",
+          url: "https://example.com/a",
+          publishedAt: "2026-09-20",
+          publisher: "gq.com",
+        },
         reliability: "rss",
       }),
     ).toEqual({

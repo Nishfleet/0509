@@ -36,7 +36,7 @@ export interface MentionSelf {
   description: string | null;
 }
 
-export function mentionItemState(
+function mentionItemState(
   item: MentionItemInput,
   reliability: string,
 ): { title: string; publisher: string | null; url: string; published_at: string | null; reliability: string } {

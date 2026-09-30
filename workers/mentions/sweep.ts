@@ -90,7 +90,11 @@ async function judge(
   item: JudgedItem,
 ): Promise<{ about: NoulVerdict; matters: NoulVerdict | null }> {
   const subject = subjectOf(watch);
-  const about = await askNoul(watch.workspace_id, ABOUT_BRAND, aboutBrandState({ subject, item, reliability: watch.reliability }));
+  const about = await askNoul(
+    watch.workspace_id,
+    ABOUT_BRAND,
+    aboutBrandState({ subject, item, reliability: watch.reliability }),
+  );
   if (noulAction(about.p) === "reject") return { about, matters: null };
   const matters = await askNoul(
     watch.workspace_id,

@@ -1,1970 +1,1970 @@
 [
- {
-  "id": "adidas-adizero-berlin",
-  "split": "train",
-  "label": true,
-  "why": "Adizero is Adidas's racing-shoe line, so the item is about the subject brand's product.",
-  "self": {
-   "name": "Nike",
-   "domain": "nike.com",
-   "description": "Athletic footwear and apparel brand"
+  {
+    "id": "adidas-adizero-berlin",
+    "split": "train",
+    "label": true,
+    "why": "Adizero is Adidas's racing-shoe line, so the item is about the subject brand's product.",
+    "self": {
+      "name": "Nike",
+      "domain": "nike.com",
+      "description": "Athletic footwear and apparel brand"
+    },
+    "subject": {
+      "name": "Adidas",
+      "domain": "adidas.com",
+      "role": "competitor"
+    },
+    "competitors": [
+      {
+        "name": "Puma",
+        "domain": "puma.com"
+      },
+      {
+        "name": "On",
+        "domain": "on.com"
+      }
+    ],
+    "reliability": "rss",
+    "item": {
+      "title": "Adizero Evo Pro 2 helps two more athletes break two hours in Berlin",
+      "url": "https://www.reuters.com/sports/adizero-evo-pro-2-berlin-2026-09-03/",
+      "publishedAt": "2026-09-03",
+      "publisher": "reuters.com"
+    }
   },
-  "subject": {
-   "name": "Adidas",
-   "domain": "adidas.com",
-   "role": "competitor"
+  {
+    "id": "samsung-unpacked-fold7",
+    "split": "train",
+    "label": true,
+    "why": "Galaxy Z Fold is a Samsung phone family; Unpacked is Samsung's launch event.",
+    "self": {
+      "name": "Apple",
+      "domain": "apple.com",
+      "description": "Consumer electronics and services company"
+    },
+    "subject": {
+      "name": "Samsung",
+      "domain": "samsung.com",
+      "role": "competitor"
+    },
+    "competitors": [
+      {
+        "name": "Google",
+        "domain": "google.com"
+      },
+      {
+        "name": "Xiaomi",
+        "domain": "mi.com"
+      }
+    ],
+    "reliability": "official_api",
+    "item": {
+      "title": "Galaxy Z Fold 7 and trifold prototype headline Unpacked in Seoul",
+      "url": "https://www.theverge.com/2026/9/4/galaxy-z-fold-7-unpacked",
+      "publishedAt": "2026-09-04",
+      "publisher": "theverge.com"
+    }
   },
-  "competitors": [
-   {
-    "name": "Puma",
-    "domain": "puma.com"
-   },
-   {
-    "name": "On",
-    "domain": "on.com"
-   }
-  ],
-  "reliability": "rss",
-  "item": {
-   "title": "Adizero Evo Pro 2 helps two more athletes break two hours in Berlin",
-   "url": "https://www.reuters.com/sports/adizero-evo-pro-2-berlin-2026-09-03/",
-   "publishedAt": "2026-09-03",
-   "publisher": "reuters.com"
+  {
+    "id": "pepsi-nfl-halftime",
+    "split": "train",
+    "label": true,
+    "why": "The item is a Pepsi commercial and sponsorship deal, which is the subject brand.",
+    "self": {
+      "name": "Coca-Cola",
+      "domain": "coca-cola.com",
+      "description": "Global beverage company"
+    },
+    "subject": {
+      "name": "Pepsi",
+      "domain": "pepsi.com",
+      "role": "competitor"
+    },
+    "competitors": [
+      {
+        "name": "Dr Pepper",
+        "domain": "drpepper.com"
+      },
+      {
+        "name": "Keurig Dr Pepper",
+        "domain": "keurigdrpepper.com"
+      }
+    ],
+    "reliability": "rss",
+    "item": {
+      "title": "Pepsi locks in NFL halftime presenting rights through 2032",
+      "url": "https://www.cnbc.com/2026/09/05/pepsi-nfl-halftime-rights.html",
+      "publishedAt": "2026-09-05",
+      "publisher": "cnbc.com"
+    }
+  },
+  {
+    "id": "lyft-women-priority",
+    "split": "train",
+    "label": true,
+    "why": "The headline names Lyft and a Lyft product change, so it is about the subject.",
+    "self": {
+      "name": "Uber",
+      "domain": "uber.com",
+      "description": "Ride-hail and delivery marketplace"
+    },
+    "subject": {
+      "name": "Lyft",
+      "domain": "lyft.com",
+      "role": "competitor"
+    },
+    "competitors": [
+      {
+        "name": "Via",
+        "domain": "ridewithvia.com"
+      }
+    ],
+    "reliability": "official_api",
+    "item": {
+      "title": "Lyft rolls out Women+ Priority matching in 40 more U.S. cities",
+      "url": "https://techcrunch.com/2026/09/06/lyft-women-priority-expansion/",
+      "publishedAt": "2026-09-06",
+      "publisher": "techcrunch.com"
+    }
+  },
+  {
+    "id": "disney-hulu-bundle-price",
+    "split": "train",
+    "label": true,
+    "why": "Disney+ and Hulu are Disney streaming products, so the item is about the subject brand.",
+    "self": {
+      "name": "Netflix",
+      "domain": "netflix.com",
+      "description": "Subscription streaming entertainment"
+    },
+    "subject": {
+      "name": "Disney",
+      "domain": "disney.com",
+      "role": "competitor"
+    },
+    "competitors": [
+      {
+        "name": "Warner Bros. Discovery",
+        "domain": "wbd.com"
+      },
+      {
+        "name": "Paramount",
+        "domain": "paramount.com"
+      }
+    ],
+    "reliability": "rss",
+    "item": {
+      "title": "Disney+ and Hulu bundle jumps $3 as ad-free tier is reworked",
+      "url": "https://www.bloomberg.com/news/articles/2026-09-07/disney-hulu-bundle-price",
+      "publishedAt": "2026-09-07",
+      "publisher": "bloomberg.com"
+    }
+  },
+  {
+    "id": "walmart-plus-in-home",
+    "split": "train",
+    "label": true,
+    "why": "Walmart+ InHome is a Walmart delivery service, clearly the subject retailer.",
+    "self": {
+      "name": "Target",
+      "domain": "target.com",
+      "description": "U.S. general merchandise retailer"
+    },
+    "subject": {
+      "name": "Walmart",
+      "domain": "walmart.com",
+      "role": "competitor"
+    },
+    "competitors": [
+      {
+        "name": "Amazon",
+        "domain": "amazon.com"
+      },
+      {
+        "name": "Costco",
+        "domain": "costco.com"
+      }
+    ],
+    "reliability": "official_api",
+    "item": {
+      "title": "Walmart+ InHome same-day fridge stocking expands to 1,200 stores",
+      "url": "https://www.wsj.com/articles/walmart-plus-inhome-expansion-2026",
+      "publishedAt": "2026-09-08",
+      "publisher": "wsj.com"
+    }
+  },
+  {
+    "id": "rivian-r2-price-cut",
+    "split": "train",
+    "label": true,
+    "why": "The R2 is Rivian's upcoming vehicle, so this is about the subject automaker.",
+    "self": {
+      "name": "Tesla",
+      "domain": "tesla.com",
+      "description": "Electric vehicles and energy company"
+    },
+    "subject": {
+      "name": "Rivian",
+      "domain": "rivian.com",
+      "role": "competitor"
+    },
+    "competitors": [
+      {
+        "name": "Lucid",
+        "domain": "lucidmotors.com"
+      },
+      {
+        "name": "Ford",
+        "domain": "ford.com"
+      }
+    ],
+    "reliability": "rss",
+    "item": {
+      "title": "Rivian cuts R2 starting price to $39,900 ahead of 2027 deliveries",
+      "url": "https://www.reuters.com/business/autos-transportation/rivian-r2-price-cut-2026-09-09/",
+      "publishedAt": "2026-09-09",
+      "publisher": "reuters.com"
+    }
+  },
+  {
+    "id": "airbus-india-a320neo",
+    "split": "train",
+    "label": true,
+    "why": "A320neo is an Airbus aircraft family; the order is Airbus business.",
+    "self": {
+      "name": "Boeing",
+      "domain": "boeing.com",
+      "description": "Commercial airplanes and defense manufacturer"
+    },
+    "subject": {
+      "name": "Airbus",
+      "domain": "airbus.com",
+      "role": "competitor"
+    },
+    "competitors": [
+      {
+        "name": "Embraer",
+        "domain": "embraer.com"
+      }
+    ],
+    "reliability": "official_api",
+    "item": {
+      "title": "IndiGo firms 200-jet A320neo order, Airbus says",
+      "url": "https://www.ft.com/content/airbus-indigo-a320neo-2026-09",
+      "publishedAt": "2026-09-10",
+      "publisher": "ft.com"
+    }
+  },
+  {
+    "id": "mastercard-crypto-card-eu",
+    "split": "train",
+    "label": true,
+    "why": "The item describes a Mastercard consumer card product in Europe.",
+    "self": {
+      "name": "Visa",
+      "domain": "visa.com",
+      "description": "Global payments network"
+    },
+    "subject": {
+      "name": "Mastercard",
+      "domain": "mastercard.com",
+      "role": "competitor"
+    },
+    "competitors": [
+      {
+        "name": "American Express",
+        "domain": "americanexpress.com"
+      },
+      {
+        "name": "PayPal",
+        "domain": "paypal.com"
+      }
+    ],
+    "reliability": "rss",
+    "item": {
+      "title": "Mastercard launches euro stablecoin debit card with four EU banks",
+      "url": "https://www.cnbc.com/2026/09/11/mastercard-euro-crypto-card.html",
+      "publishedAt": "2026-09-11",
+      "publisher": "cnbc.com"
+    }
+  },
+  {
+    "id": "figma-make-ga",
+    "split": "train",
+    "label": true,
+    "why": "Figma Make is a Figma product reaching general availability.",
+    "self": {
+      "name": "Adobe",
+      "domain": "adobe.com",
+      "description": "Creative software and digital media company"
+    },
+    "subject": {
+      "name": "Figma",
+      "domain": "figma.com",
+      "role": "competitor"
+    },
+    "competitors": [
+      {
+        "name": "Canva",
+        "domain": "canva.com"
+      },
+      {
+        "name": "Sketch",
+        "domain": "sketch.com"
+      }
+    ],
+    "reliability": "official_api",
+    "item": {
+      "title": "Figma Make exits beta with paid seats and enterprise SSO",
+      "url": "https://techcrunch.com/2026/09/12/figma-make-ga/",
+      "publishedAt": "2026-09-12",
+      "publisher": "techcrunch.com"
+    }
+  },
+  {
+    "id": "amd-instinct-mi355",
+    "split": "train",
+    "label": true,
+    "why": "Instinct MI355 is AMD's data-center GPU, so the item is about AMD.",
+    "self": {
+      "name": "NVIDIA",
+      "domain": "nvidia.com",
+      "description": "GPUs and accelerated computing company"
+    },
+    "subject": {
+      "name": "AMD",
+      "domain": "amd.com",
+      "role": "competitor"
+    },
+    "competitors": [
+      {
+        "name": "Intel",
+        "domain": "intel.com"
+      }
+    ],
+    "reliability": "rss",
+    "item": {
+      "title": "AMD Instinct MI355 racks start shipping to hyperscalers this quarter",
+      "url": "https://www.theverge.com/2026/9/13/amd-instinct-mi355-shipping",
+      "publishedAt": "2026-09-13",
+      "publisher": "theverge.com"
+    }
+  },
+  {
+    "id": "tnf-futurelight-line",
+    "split": "train",
+    "label": true,
+    "why": "Futurelight is The North Face's waterproof membrane, a subject-brand product line.",
+    "self": {
+      "name": "Patagonia",
+      "domain": "patagonia.com",
+      "description": "Outdoor apparel and gear company"
+    },
+    "subject": {
+      "name": "The North Face",
+      "domain": "thenorthface.com",
+      "role": "competitor"
+    },
+    "competitors": [
+      {
+        "name": "Columbia",
+        "domain": "columbia.com"
+      },
+      {
+        "name": "Arc'teryx",
+        "domain": "arcteryx.com"
+      }
+    ],
+    "reliability": "scraped_page",
+    "item": {
+      "title": "The North Face Futurelight Summit Series gets a recycled-face refresh",
+      "url": "https://www.outsideonline.com/outdoor-gear/north-face-futurelight-summit-2026/",
+      "publishedAt": "2026-09-14",
+      "publisher": "outsideonline.com"
+    }
+  },
+  {
+    "id": "united-basic-economy",
+    "split": "train",
+    "label": true,
+    "why": "The item is a United Airlines fare-product change, which is the subject carrier.",
+    "self": {
+      "name": "Delta Air Lines",
+      "domain": "delta.com",
+      "description": "U.S. legacy passenger airline"
+    },
+    "subject": {
+      "name": "United Airlines",
+      "domain": "united.com",
+      "role": "competitor"
+    },
+    "competitors": [
+      {
+        "name": "American Airlines",
+        "domain": "aa.com"
+      },
+      {
+        "name": "Southwest",
+        "domain": "southwest.com"
+      }
+    ],
+    "reliability": "official_api",
+    "item": {
+      "title": "United overhauls Basic Economy with paid seat selection on domestic routes",
+      "url": "https://www.wsj.com/articles/united-basic-economy-overhaul-2026",
+      "publishedAt": "2026-09-15",
+      "publisher": "wsj.com"
+    }
+  },
+  {
+    "id": "paypal-venmo-business",
+    "split": "train",
+    "label": true,
+    "why": "Venmo is PayPal's consumer product, so a Venmo business-card launch is about PayPal.",
+    "self": {
+      "name": "Stripe",
+      "domain": "stripe.com",
+      "description": "Online payments infrastructure"
+    },
+    "subject": {
+      "name": "PayPal",
+      "domain": "paypal.com",
+      "role": "competitor"
+    },
+    "competitors": [
+      {
+        "name": "Square",
+        "domain": "squareup.com"
+      },
+      {
+        "name": "Adyen",
+        "domain": "adyen.com"
+      }
+    ],
+    "reliability": "rss",
+    "item": {
+      "title": "Venmo Business Card adds 2% cash back on inventory purchases",
+      "url": "https://techcrunch.com/2026/09/02/venmo-business-card-cashback/",
+      "publishedAt": "2026-09-02",
+      "publisher": "techcrunch.com"
+    }
+  },
+  {
+    "id": "tim-cook-ondevice-siri",
+    "split": "train",
+    "label": true,
+    "why": "Tim Cook is Apple's CEO teasing Siri, so the item is about Apple people and products.",
+    "self": {
+      "name": "Samsung",
+      "domain": "samsung.com",
+      "description": "Consumer electronics and mobile devices"
+    },
+    "subject": {
+      "name": "Apple",
+      "domain": "apple.com",
+      "role": "competitor"
+    },
+    "competitors": [
+      {
+        "name": "Google",
+        "domain": "google.com"
+      },
+      {
+        "name": "Microsoft",
+        "domain": "microsoft.com"
+      }
+    ],
+    "reliability": "official_api",
+    "item": {
+      "title": "Tim Cook teases fully on-device Siri for spring 2027",
+      "url": "https://www.bloomberg.com/news/articles/2026-09-01/tim-cook-on-device-siri",
+      "publishedAt": "2026-09-01",
+      "publisher": "bloomberg.com"
+    }
+  },
+  {
+    "id": "tiktok-shop-us-gmv",
+    "split": "test",
+    "label": true,
+    "why": "TikTok Shop is TikTok's commerce product; GMV news is about the subject brand.",
+    "self": {
+      "name": "Meta",
+      "domain": "meta.com",
+      "description": "Social apps and ads company"
+    },
+    "subject": {
+      "name": "TikTok",
+      "domain": "tiktok.com",
+      "role": "competitor"
+    },
+    "competitors": [
+      {
+        "name": "YouTube",
+        "domain": "youtube.com"
+      },
+      {
+        "name": "Snap",
+        "domain": "snap.com"
+      }
+    ],
+    "reliability": "rss",
+    "item": {
+      "title": "TikTok Shop U.S. GMV tops $30 billion as live shopping goes mainstream",
+      "url": "https://www.reuters.com/technology/tiktok-shop-us-gmv-2026-09-16/",
+      "publishedAt": "2026-09-16",
+      "publisher": "reuters.com"
+    }
+  },
+  {
+    "id": "shopify-magic-editions",
+    "split": "test",
+    "label": true,
+    "why": "Shopify Editions and Magic are Shopify product events and features.",
+    "self": {
+      "name": "BigCommerce",
+      "domain": "bigcommerce.com",
+      "description": "Ecommerce platform for mid-market merchants"
+    },
+    "subject": {
+      "name": "Shopify",
+      "domain": "shopify.com",
+      "role": "competitor"
+    },
+    "competitors": [
+      {
+        "name": "WooCommerce",
+        "domain": "woocommerce.com"
+      },
+      {
+        "name": "Amazon",
+        "domain": "amazon.com"
+      }
+    ],
+    "reliability": "official_api",
+    "item": {
+      "title": "Shopify Editions Winter adds Magic copilot checkout and B2B themes",
+      "url": "https://www.theverge.com/2026/9/17/shopify-editions-winter-magic",
+      "publishedAt": "2026-09-17",
+      "publisher": "theverge.com"
+    }
+  },
+  {
+    "id": "dunkin-pistachio-nitro",
+    "split": "test",
+    "label": true,
+    "why": "The item is a Dunkin beverage launch, which is the subject restaurant brand.",
+    "self": {
+      "name": "Starbucks",
+      "domain": "starbucks.com",
+      "description": "Global coffeehouse chain"
+    },
+    "subject": {
+      "name": "Dunkin",
+      "domain": "dunkin.com",
+      "role": "competitor"
+    },
+    "competitors": [
+      {
+        "name": "Peet's",
+        "domain": "peets.com"
+      },
+      {
+        "name": "Dutch Bros",
+        "domain": "dutchbros.com"
+      }
+    ],
+    "reliability": "best_effort",
+    "item": {
+      "title": "Dunkin pistachio nitro cold brew goes national for fall",
+      "url": "https://www.cnbc.com/2026/09/18/dunkin-pistachio-nitro-national.html",
+      "publishedAt": "2026-09-18",
+      "publisher": "cnbc.com"
+    }
+  },
+  {
+    "id": "gm-software-defined-van",
+    "split": "test",
+    "label": true,
+    "why": "The headline is about General Motors' vehicle software and a GM van platform.",
+    "self": {
+      "name": "Ford",
+      "domain": "ford.com",
+      "description": "U.S. automaker of trucks, cars, and vans"
+    },
+    "subject": {
+      "name": "General Motors",
+      "domain": "gm.com",
+      "role": "competitor"
+    },
+    "competitors": [
+      {
+        "name": "Stellantis",
+        "domain": "stellantis.com"
+      },
+      {
+        "name": "Toyota",
+        "domain": "toyota.com"
+      }
+    ],
+    "reliability": "rss",
+    "item": {
+      "title": "GM says next Chevrolet van will be software-defined with quarterly OTA features",
+      "url": "https://www.reuters.com/business/autos-transportation/gm-software-defined-van-2026-09-19/",
+      "publishedAt": "2026-09-19",
+      "publisher": "reuters.com"
+    }
+  },
+  {
+    "id": "anthropic-claude-sonnet",
+    "split": "test",
+    "label": true,
+    "why": "Claude is Anthropic's model family, so a Claude launch is about the subject.",
+    "self": {
+      "name": "OpenAI",
+      "domain": "openai.com",
+      "description": "AI research and ChatGPT products"
+    },
+    "subject": {
+      "name": "Anthropic",
+      "domain": "anthropic.com",
+      "role": "competitor"
+    },
+    "competitors": [
+      {
+        "name": "Google",
+        "domain": "google.com"
+      },
+      {
+        "name": "Meta",
+        "domain": "meta.com"
+      }
+    ],
+    "reliability": "official_api",
+    "item": {
+      "title": "Claude Sonnet 4.5 adds computer use in the paid API",
+      "url": "https://techcrunch.com/2026/09/20/claude-sonnet-4-5-computer-use/",
+      "publishedAt": "2026-09-20",
+      "publisher": "techcrunch.com"
+    }
+  },
+  {
+    "id": "hoka-clifton-10",
+    "split": "test",
+    "label": true,
+    "why": "Clifton is Hoka's core daily trainer; the item is about the subject brand's product.",
+    "self": {
+      "name": "Nike",
+      "domain": "nike.com",
+      "description": "Athletic footwear and apparel brand"
+    },
+    "subject": {
+      "name": "Hoka",
+      "domain": "hoka.com",
+      "role": "competitor"
+    },
+    "competitors": [
+      {
+        "name": "On",
+        "domain": "on.com"
+      },
+      {
+        "name": "Brooks",
+        "domain": "brooksrunning.com"
+      }
+    ],
+    "reliability": "scraped_page",
+    "item": {
+      "title": "Clifton 10 drops 8mm stack and a new supercritical foam midsole",
+      "url": "https://www.runnersworld.com/gear/a65001234/hoka-clifton-10-drop/",
+      "publishedAt": "2026-09-21",
+      "publisher": "runnersworld.com"
+    }
+  },
+  {
+    "id": "swoosh-vaporfly-rules",
+    "split": "test",
+    "label": true,
+    "why": "Swoosh is Nike's mark and the marathon shoe is Nike Vaporfly, so this is about Nike.",
+    "self": {
+      "name": "Adidas",
+      "domain": "adidas.com",
+      "description": "Athletic footwear and apparel brand"
+    },
+    "subject": {
+      "name": "Nike",
+      "domain": "nike.com",
+      "role": "competitor"
+    },
+    "competitors": [
+      {
+        "name": "Puma",
+        "domain": "puma.com"
+      },
+      {
+        "name": "New Balance",
+        "domain": "newbalance.com"
+      }
+    ],
+    "reliability": "rss",
+    "item": {
+      "title": "World Athletics reviews stacked-plate rules after Swoosh marathon shoe sweeps majors",
+      "url": "https://www.bbc.com/sport/athletics/articles/swoosh-vaporfly-rules-2026",
+      "publishedAt": "2026-09-22",
+      "publisher": "bbc.com"
+    }
+  },
+  {
+    "id": "cupertino-cheaper-vision",
+    "split": "test",
+    "label": true,
+    "why": "Cupertino plus a spatial computer is an oblique reference to Apple Vision hardware.",
+    "self": {
+      "name": "Samsung",
+      "domain": "samsung.com",
+      "description": "Consumer electronics and mobile devices"
+    },
+    "subject": {
+      "name": "Apple",
+      "domain": "apple.com",
+      "role": "competitor"
+    },
+    "competitors": [
+      {
+        "name": "Meta",
+        "domain": "meta.com"
+      },
+      {
+        "name": "Google",
+        "domain": "google.com"
+      }
+    ],
+    "reliability": "best_effort",
+    "item": {
+      "title": "Cupertino readies a $1,599 spatial computer for the holidays",
+      "url": "https://www.theinformation.com/articles/cupertino-cheaper-spatial-computer-2026",
+      "publishedAt": "2026-09-23",
+      "publisher": "theinformation.com"
+    }
+  },
+  {
+    "id": "iphone-17-pro-camera",
+    "split": "test",
+    "label": true,
+    "why": "iPhone is Apple's flagship product even though the company name is absent.",
+    "self": {
+      "name": "Samsung",
+      "domain": "samsung.com",
+      "description": "Consumer electronics and mobile devices"
+    },
+    "subject": {
+      "name": "Apple",
+      "domain": "apple.com",
+      "role": "competitor"
+    },
+    "competitors": [
+      {
+        "name": "Google",
+        "domain": "google.com"
+      },
+      {
+        "name": "Xiaomi",
+        "domain": "mi.com"
+      }
+    ],
+    "reliability": "scraped_page",
+    "item": {
+      "title": "iPhone 17 Pro Max tetra-prism leak points to 8x optical zoom",
+      "url": "https://www.macrumors.com/2026/09/24/iphone-17-pro-max-tetraprism-leak/",
+      "publishedAt": "2026-09-24",
+      "publisher": "macrumors.com"
+    }
+  },
+  {
+    "id": "waymo-miami-robotaxi",
+    "split": "test",
+    "label": true,
+    "why": "Waymo robotaxis are the subject company's service expanding to a new city.",
+    "self": {
+      "name": "Tesla",
+      "domain": "tesla.com",
+      "description": "Electric vehicles and autonomy company"
+    },
+    "subject": {
+      "name": "Waymo",
+      "domain": "waymo.com",
+      "role": "competitor"
+    },
+    "competitors": [
+      {
+        "name": "Cruise",
+        "domain": "getcruise.com"
+      },
+      {
+        "name": "Zoox",
+        "domain": "zoox.com"
+      }
+    ],
+    "reliability": "official_api",
+    "item": {
+      "title": "Waymo robotaxis open rider waitlist in Miami after state permit",
+      "url": "https://www.bloomberg.com/news/articles/2026-09-25/waymo-miami-robotaxi",
+      "publishedAt": "2026-09-25",
+      "publisher": "bloomberg.com"
+    }
+  },
+  {
+    "id": "search-giant-ai-overviews",
+    "split": "test",
+    "label": true,
+    "why": "AI Overviews is Google Search's product; search giant is an oblique name for Google.",
+    "self": {
+      "name": "Microsoft",
+      "domain": "microsoft.com",
+      "description": "Software, cloud, and search company"
+    },
+    "subject": {
+      "name": "Google",
+      "domain": "google.com",
+      "role": "competitor"
+    },
+    "competitors": [
+      {
+        "name": "OpenAI",
+        "domain": "openai.com"
+      },
+      {
+        "name": "Apple",
+        "domain": "apple.com"
+      }
+    ],
+    "reliability": "rss",
+    "item": {
+      "title": "Search giant's AI Overviews blamed for 40% publisher traffic drop",
+      "url": "https://www.wsj.com/articles/google-ai-overviews-publisher-traffic-2026",
+      "publishedAt": "2026-09-26",
+      "publisher": "wsj.com"
+    }
+  },
+  {
+    "id": "redmond-windows-12",
+    "split": "test",
+    "label": true,
+    "why": "Redmond and Windows 12 refer to Microsoft's HQ and operating system.",
+    "self": {
+      "name": "Google",
+      "domain": "google.com",
+      "description": "Search, ads, and consumer software company"
+    },
+    "subject": {
+      "name": "Microsoft",
+      "domain": "microsoft.com",
+      "role": "competitor"
+    },
+    "competitors": [
+      {
+        "name": "Apple",
+        "domain": "apple.com"
+      },
+      {
+        "name": "Amazon",
+        "domain": "amazon.com"
+      }
+    ],
+    "reliability": "official_api",
+    "item": {
+      "title": "Redmond ships Windows 12 Canary to Insiders with redesigned Start",
+      "url": "https://www.theverge.com/2026/9/27/windows-12-canary-insider",
+      "publishedAt": "2026-09-27",
+      "publisher": "theverge.com"
+    }
+  },
+  {
+    "id": "kirkland-membership-fee",
+    "split": "test",
+    "label": true,
+    "why": "Kirkland Signature is Costco's private label, so the item is about Costco's business.",
+    "self": {
+      "name": "Walmart",
+      "domain": "walmart.com",
+      "description": "Mass-market retailer and warehouse clubs"
+    },
+    "subject": {
+      "name": "Costco",
+      "domain": "costco.com",
+      "role": "competitor"
+    },
+    "competitors": [
+      {
+        "name": "Sam's Club",
+        "domain": "samsclub.com"
+      },
+      {
+        "name": "Target",
+        "domain": "target.com"
+      }
+    ],
+    "reliability": "rss",
+    "item": {
+      "title": "Kirkland Signature line expands into auto insurance as warehouse club lifts annual fee",
+      "url": "https://www.cnbc.com/2026/09/28/kirkland-signature-auto-membership-fee.html",
+      "publishedAt": "2026-09-28",
+      "publisher": "cnbc.com"
+    }
+  },
+  {
+    "id": "sweetgreen-infinite-dallas",
+    "split": "test",
+    "label": true,
+    "why": "Infinite Kitchen is Sweetgreen's automated restaurant format in a new city.",
+    "self": {
+      "name": "Chipotle",
+      "domain": "chipotle.com",
+      "description": "Fast-casual Mexican restaurant chain"
+    },
+    "subject": {
+      "name": "Sweetgreen",
+      "domain": "sweetgreen.com",
+      "role": "competitor"
+    },
+    "competitors": [
+      {
+        "name": "Cava",
+        "domain": "cava.com"
+      },
+      {
+        "name": "Panera",
+        "domain": "panerabread.com"
+      }
+    ],
+    "reliability": "scraped_page",
+    "item": {
+      "title": "Sweetgreen opens first Dallas Infinite Kitchen with 90-second bowls",
+      "url": "https://www.restaurantbusinessonline.com/financing/sweetgreen-dallas-infinite-kitchen",
+      "publishedAt": "2026-09-29",
+      "publisher": "restaurantbusinessonline.com"
+    }
+  },
+  {
+    "id": "three-stripes-eu-prices",
+    "split": "test",
+    "label": true,
+    "why": "Three-stripes is Adidas's trademark; an EU price cut is about that brand.",
+    "self": {
+      "name": "Nike",
+      "domain": "nike.com",
+      "description": "Athletic footwear and apparel brand"
+    },
+    "subject": {
+      "name": "Adidas",
+      "domain": "adidas.com",
+      "role": "competitor"
+    },
+    "competitors": [
+      {
+        "name": "Puma",
+        "domain": "puma.com"
+      },
+      {
+        "name": "Hoka",
+        "domain": "hoka.com"
+      }
+    ],
+    "reliability": "best_effort",
+    "item": {
+      "title": "Three-stripes brand slashes running-shoe prices across the EU to win back share",
+      "url": "https://www.ft.com/content/adidas-eu-running-price-cut-2026-09",
+      "publishedAt": "2026-09-30",
+      "publisher": "ft.com"
+    }
+  },
+  {
+    "id": "delta-faucet-not-airline",
+    "split": "train",
+    "label": false,
+    "why": "Delta Faucet is a different company from Delta Air Lines despite sharing the name.",
+    "self": {
+      "name": "United Airlines",
+      "domain": "united.com",
+      "description": "U.S. passenger airline"
+    },
+    "subject": {
+      "name": "Delta Air Lines",
+      "domain": "delta.com",
+      "role": "competitor"
+    },
+    "competitors": [
+      {
+        "name": "American Airlines",
+        "domain": "aa.com"
+      },
+      {
+        "name": "Southwest",
+        "domain": "southwest.com"
+      }
+    ],
+    "reliability": "rss",
+    "item": {
+      "title": "Delta unveils Touch2O kitchen faucet in matte black for holiday displays",
+      "url": "https://www.homesandgardens.com/news/delta-touch2o-matte-black-2026",
+      "publishedAt": "2026-09-03",
+      "publisher": "homesandgardens.com"
+    }
+  },
+  {
+    "id": "vale-oregon-town",
+    "split": "train",
+    "label": false,
+    "why": "The item is about the town of Vale, Oregon, not Vale the mining company.",
+    "self": {
+      "name": "BHP",
+      "domain": "bhp.com",
+      "description": "Global mining company"
+    },
+    "subject": {
+      "name": "Vale",
+      "domain": "vale.com",
+      "role": "competitor"
+    },
+    "competitors": [
+      {
+        "name": "Rio Tinto",
+        "domain": "riotinto.com"
+      },
+      {
+        "name": "Glencore",
+        "domain": "glencore.com"
+      }
+    ],
+    "reliability": "best_effort",
+    "item": {
+      "title": "Flash floods swamp Vale, Oregon after the Malheur River overflows",
+      "url": "https://apnews.com/article/vale-oregon-malheur-flood-2026",
+      "publishedAt": "2026-09-04",
+      "publisher": "apnews.com"
+    }
+  },
+  {
+    "id": "arc-institute-not-browser",
+    "split": "train",
+    "label": false,
+    "why": "Arc Institute is a biomedical research org, not The Browser Company's Arc browser.",
+    "self": {
+      "name": "Google Chrome",
+      "domain": "google.com",
+      "description": "Web browser and search company"
+    },
+    "subject": {
+      "name": "Arc",
+      "domain": "arc.net",
+      "role": "competitor"
+    },
+    "competitors": [
+      {
+        "name": "Brave",
+        "domain": "brave.com"
+      },
+      {
+        "name": "Mozilla",
+        "domain": "mozilla.org"
+      }
+    ],
+    "reliability": "rss",
+    "item": {
+      "title": "Arc Institute publishes open virtual cell model with Stanford",
+      "url": "https://www.nature.com/articles/arc-institute-virtual-cell-2026",
+      "publishedAt": "2026-09-05",
+      "publisher": "nature.com"
+    }
+  },
+  {
+    "id": "meridian-energy-not-link",
+    "split": "train",
+    "label": false,
+    "why": "Meridian Energy is a New Zealand utility, not MeridianLink the U.S. fintech.",
+    "self": {
+      "name": "Plaid",
+      "domain": "plaid.com",
+      "description": "Bank-linking and financial data APIs"
+    },
+    "subject": {
+      "name": "MeridianLink",
+      "domain": "meridianlink.com",
+      "role": "competitor"
+    },
+    "competitors": [
+      {
+        "name": "nCino",
+        "domain": "ncino.com"
+      },
+      {
+        "name": "Blend",
+        "domain": "blend.com"
+      }
+    ],
+    "reliability": "official_api",
+    "item": {
+      "title": "Meridian Energy to add 400 MW of hydro storage in New Zealand",
+      "url": "https://www.reuters.com/business/energy/meridian-energy-hydro-storage-2026-09-06/",
+      "publishedAt": "2026-09-06",
+      "publisher": "reuters.com"
+    }
+  },
+  {
+    "id": "apple-orchard-fruit",
+    "split": "train",
+    "label": false,
+    "why": "The item is about apple fruit harvests, not Apple the electronics company.",
+    "self": {
+      "name": "Samsung",
+      "domain": "samsung.com",
+      "description": "Consumer electronics and mobile devices"
+    },
+    "subject": {
+      "name": "Apple",
+      "domain": "apple.com",
+      "role": "competitor"
+    },
+    "competitors": [
+      {
+        "name": "Google",
+        "domain": "google.com"
+      },
+      {
+        "name": "Microsoft",
+        "domain": "microsoft.com"
+      }
+    ],
+    "reliability": "rss",
+    "item": {
+      "title": "Hudson Valley apple harvest runs two weeks early after a mild winter",
+      "url": "https://www.nytimes.com/2026/09/07/nyregion/hudson-valley-apple-harvest.html",
+      "publishedAt": "2026-09-07",
+      "publisher": "nytimes.com"
+    }
+  },
+  {
+    "id": "amazon-rainforest-drought",
+    "split": "train",
+    "label": false,
+    "why": "The Amazon rainforest and Rio Negro are geography, not Amazon.com the retailer.",
+    "self": {
+      "name": "Walmart",
+      "domain": "walmart.com",
+      "description": "Mass-market retailer"
+    },
+    "subject": {
+      "name": "Amazon",
+      "domain": "amazon.com",
+      "role": "competitor"
+    },
+    "competitors": [
+      {
+        "name": "Target",
+        "domain": "target.com"
+      },
+      {
+        "name": "Shopify",
+        "domain": "shopify.com"
+      }
+    ],
+    "reliability": "official_api",
+    "item": {
+      "title": "Amazon rainforest drought pushes the Rio Negro to a historic low",
+      "url": "https://www.bbc.com/news/science-environment-amazon-rio-negro-2026",
+      "publishedAt": "2026-09-08",
+      "publisher": "bbc.com"
+    }
+  },
+  {
+    "id": "nikola-tesla-patents",
+    "split": "train",
+    "label": false,
+    "why": "The exhibit is about inventor Nikola Tesla, not Tesla the automaker.",
+    "self": {
+      "name": "Ford",
+      "domain": "ford.com",
+      "description": "U.S. automaker expanding EVs"
+    },
+    "subject": {
+      "name": "Tesla",
+      "domain": "tesla.com",
+      "role": "competitor"
+    },
+    "competitors": [
+      {
+        "name": "Rivian",
+        "domain": "rivian.com"
+      },
+      {
+        "name": "GM",
+        "domain": "gm.com"
+      }
+    ],
+    "reliability": "scraped_page",
+    "item": {
+      "title": "Nikola Tesla's Wardenclyffe patents go on display in Belgrade",
+      "url": "https://apnews.com/article/nikola-tesla-wardenclyffe-belgrade-exhibit",
+      "publishedAt": "2026-09-09",
+      "publisher": "apnews.com"
+    }
+  },
+  {
+    "id": "harrison-ford-actor",
+    "split": "train",
+    "label": false,
+    "why": "Harrison Ford the actor shares a surname with Ford Motor, not a company mention.",
+    "self": {
+      "name": "General Motors",
+      "domain": "gm.com",
+      "description": "U.S. automaker"
+    },
+    "subject": {
+      "name": "Ford",
+      "domain": "ford.com",
+      "role": "competitor"
+    },
+    "competitors": [
+      {
+        "name": "Stellantis",
+        "domain": "stellantis.com"
+      },
+      {
+        "name": "Toyota",
+        "domain": "toyota.com"
+      }
+    ],
+    "reliability": "rss",
+    "item": {
+      "title": "Harrison Ford says a fifth Indiana Jones will be his last adventure",
+      "url": "https://www.hollywoodreporter.com/movies/harrison-ford-indiana-jones-last-2026",
+      "publishedAt": "2026-09-10",
+      "publisher": "hollywoodreporter.com"
+    }
+  },
+  {
+    "id": "lincoln-memorial-nps",
+    "split": "train",
+    "label": false,
+    "why": "The Lincoln Memorial honors Abraham Lincoln, not the Lincoln car brand.",
+    "self": {
+      "name": "Cadillac",
+      "domain": "cadillac.com",
+      "description": "GM luxury vehicle brand"
+    },
+    "subject": {
+      "name": "Lincoln",
+      "domain": "lincoln.com",
+      "role": "competitor"
+    },
+    "competitors": [
+      {
+        "name": "Lexus",
+        "domain": "lexus.com"
+      },
+      {
+        "name": "Genesis",
+        "domain": "genesis.com"
+      }
+    ],
+    "reliability": "official_api",
+    "item": {
+      "title": "National Park Service begins Lincoln Memorial marble restoration",
+      "url": "https://www.washingtonpost.com/dc-md-va/2026/09/11/lincoln-memorial-restoration/",
+      "publishedAt": "2026-09-11",
+      "publisher": "washingtonpost.com"
+    }
+  },
+  {
+    "id": "dove-chocolate-not-soap",
+    "split": "train",
+    "label": false,
+    "why": "Dove chocolate is a Mars candy line, not Unilever's Dove personal-care brand.",
+    "self": {
+      "name": "Procter & Gamble",
+      "domain": "pg.com",
+      "description": "Consumer packaged goods company"
+    },
+    "subject": {
+      "name": "Dove",
+      "domain": "dove.com",
+      "role": "competitor"
+    },
+    "competitors": [
+      {
+        "name": "Olay",
+        "domain": "olay.com"
+      },
+      {
+        "name": "Neutrogena",
+        "domain": "neutrogena.com"
+      }
+    ],
+    "reliability": "rss",
+    "item": {
+      "title": "Dove chocolate thins add sea-salt caramel as Mars pushes premium bags",
+      "url": "https://www.foodbusinessnews.net/articles/dove-chocolate-thins-caramel-2026",
+      "publishedAt": "2026-09-12",
+      "publisher": "foodbusinessnews.net"
+    }
+  },
+  {
+    "id": "high-school-coach-job",
+    "split": "train",
+    "label": false,
+    "why": "Coach here is a sports job title, not Coach the luxury-goods brand.",
+    "self": {
+      "name": "Michael Kors",
+      "domain": "michaelkors.com",
+      "description": "Fashion and accessories brand"
+    },
+    "subject": {
+      "name": "Coach",
+      "domain": "coach.com",
+      "role": "competitor"
+    },
+    "competitors": [
+      {
+        "name": "Kate Spade",
+        "domain": "katespade.com"
+      },
+      {
+        "name": "Tory Burch",
+        "domain": "toryburch.com"
+      }
+    ],
+    "reliability": "best_effort",
+    "item": {
+      "title": "High school football coach fired after playoff sideline incident",
+      "url": "https://www.espn.com/high-school/story/_/id/coach-fired-playoff-sideline-2026",
+      "publishedAt": "2026-09-13",
+      "publisher": "espn.com"
+    }
+  },
+  {
+    "id": "solar-corona-eclipse",
+    "split": "train",
+    "label": false,
+    "why": "Solar corona is an astronomical term, not Corona the beer brand.",
+    "self": {
+      "name": "Heineken",
+      "domain": "heineken.com",
+      "description": "Global beer company"
+    },
+    "subject": {
+      "name": "Corona",
+      "domain": "corona.com",
+      "role": "competitor"
+    },
+    "competitors": [
+      {
+        "name": "Modelo",
+        "domain": "modelo.com"
+      },
+      {
+        "name": "Budweiser",
+        "domain": "budweiser.com"
+      }
+    ],
+    "reliability": "rss",
+    "item": {
+      "title": "Scientists capture longest solar corona footage during a Pacific eclipse",
+      "url": "https://www.space.com/solar-corona-pacific-eclipse-2026",
+      "publishedAt": "2026-09-14",
+      "publisher": "space.com"
+    }
+  },
+  {
+    "id": "galaxy-chocolate-not-samsung",
+    "split": "train",
+    "label": false,
+    "why": "Cadbury Galaxy is a UK chocolate brand, not Samsung's Galaxy phones.",
+    "self": {
+      "name": "Apple",
+      "domain": "apple.com",
+      "description": "Consumer electronics and services company"
+    },
+    "subject": {
+      "name": "Samsung",
+      "domain": "samsung.com",
+      "role": "competitor"
+    },
+    "competitors": [
+      {
+        "name": "Google",
+        "domain": "google.com"
+      },
+      {
+        "name": "Xiaomi",
+        "domain": "mi.com"
+      }
+    ],
+    "reliability": "scraped_page",
+    "item": {
+      "title": "Cadbury Galaxy chocolate thins return to UK Tesco aisles",
+      "url": "https://www.thegrocer.co.uk/news/cadbury-galaxy-thins-tesco-2026",
+      "publishedAt": "2026-09-15",
+      "publisher": "thegrocer.co.uk"
+    }
+  },
+  {
+    "id": "pioneer-natural-not-dj",
+    "split": "train",
+    "label": false,
+    "why": "Pioneer Natural Resources is an oil producer, not Pioneer DJ audio gear.",
+    "self": {
+      "name": "Native Instruments",
+      "domain": "native-instruments.com",
+      "description": "DJ and music-production hardware and software"
+    },
+    "subject": {
+      "name": "Pioneer DJ",
+      "domain": "pioneerdj.com",
+      "role": "competitor"
+    },
+    "competitors": [
+      {
+        "name": "Serato",
+        "domain": "serato.com"
+      },
+      {
+        "name": "Allen & Heath",
+        "domain": "allen-heath.com"
+      }
+    ],
+    "reliability": "official_api",
+    "item": {
+      "title": "Exxon keeps Permian staff after closing the Pioneer Natural Resources deal",
+      "url": "https://www.reuters.com/business/energy/exxon-pioneer-natural-resources-staff-2026-09-01/",
+      "publishedAt": "2026-09-01",
+      "publisher": "reuters.com"
+    }
+  },
+  {
+    "id": "schengen-visa-not-card",
+    "split": "train",
+    "label": false,
+    "why": "Schengen visa is a travel document, not Visa Inc the payments network.",
+    "self": {
+      "name": "Mastercard",
+      "domain": "mastercard.com",
+      "description": "Global payments network"
+    },
+    "subject": {
+      "name": "Visa",
+      "domain": "visa.com",
+      "role": "competitor"
+    },
+    "competitors": [
+      {
+        "name": "American Express",
+        "domain": "americanexpress.com"
+      },
+      {
+        "name": "Discover",
+        "domain": "discover.com"
+      }
+    ],
+    "reliability": "rss",
+    "item": {
+      "title": "Schengen visa wait times stretch past 90 days for Indian travelers",
+      "url": "https://www.bbc.com/news/world-europe-schengen-visa-waits-2026",
+      "publishedAt": "2026-09-02",
+      "publisher": "bbc.com"
+    }
+  },
+  {
+    "id": "caterpillar-insect-oaks",
+    "split": "test",
+    "label": false,
+    "why": "Tent caterpillars are insects, not Caterpillar the heavy-equipment maker.",
+    "self": {
+      "name": "Komatsu",
+      "domain": "komatsu.com",
+      "description": "Construction and mining equipment maker"
+    },
+    "subject": {
+      "name": "Caterpillar",
+      "domain": "caterpillar.com",
+      "role": "competitor"
+    },
+    "competitors": [
+      {
+        "name": "John Deere",
+        "domain": "deere.com"
+      },
+      {
+        "name": "Volvo Construction Equipment",
+        "domain": "volvoce.com"
+      }
+    ],
+    "reliability": "best_effort",
+    "item": {
+      "title": "Tent caterpillar infestation strips oaks across New England",
+      "url": "https://apnews.com/article/tent-caterpillar-oaks-new-england-2026",
+      "publishedAt": "2026-09-16",
+      "publisher": "apnews.com"
+    }
+  },
+  {
+    "id": "adobe-homes-santa-fe",
+    "split": "test",
+    "label": false,
+    "why": "Adobe here is a mud-brick building material, not Adobe the software company.",
+    "self": {
+      "name": "Figma",
+      "domain": "figma.com",
+      "description": "Collaborative design software"
+    },
+    "subject": {
+      "name": "Adobe",
+      "domain": "adobe.com",
+      "role": "competitor"
+    },
+    "competitors": [
+      {
+        "name": "Canva",
+        "domain": "canva.com"
+      },
+      {
+        "name": "Autodesk",
+        "domain": "autodesk.com"
+      }
+    ],
+    "reliability": "rss",
+    "item": {
+      "title": "Santa Fe tightens permits for new adobe homes in the historic district",
+      "url": "https://www.santafenewmexican.com/news/adobe-homes-permits-2026",
+      "publishedAt": "2026-09-17",
+      "publisher": "santafenewmexican.com"
+    }
+  },
+  {
+    "id": "snowflake-denver-weather",
+    "split": "test",
+    "label": false,
+    "why": "The item is weather snow, not Snowflake the data-cloud company.",
+    "self": {
+      "name": "Databricks",
+      "domain": "databricks.com",
+      "description": "Data and AI lakehouse platform"
+    },
+    "subject": {
+      "name": "Snowflake",
+      "domain": "snowflake.com",
+      "role": "competitor"
+    },
+    "competitors": [
+      {
+        "name": "Google",
+        "domain": "google.com"
+      },
+      {
+        "name": "Amazon",
+        "domain": "amazon.com"
+      }
+    ],
+    "reliability": "official_api",
+    "item": {
+      "title": "Denver schools close as heavy snowflakes pile up overnight",
+      "url": "https://www.denverpost.com/2026/09/18/denver-schools-snow-closure/",
+      "publishedAt": "2026-09-18",
+      "publisher": "denverpost.com"
+    }
+  },
+  {
+    "id": "palantir-lotr-replica",
+    "split": "test",
+    "label": false,
+    "why": "A palantír replica is Tolkien merchandise, not Palantir Technologies.",
+    "self": {
+      "name": "Databricks",
+      "domain": "databricks.com",
+      "description": "Data and AI platform"
+    },
+    "subject": {
+      "name": "Palantir",
+      "domain": "palantir.com",
+      "role": "competitor"
+    },
+    "competitors": [
+      {
+        "name": "C3.ai",
+        "domain": "c3.ai"
+      },
+      {
+        "name": "Snowflake",
+        "domain": "snowflake.com"
+      }
+    ],
+    "reliability": "scraped_page",
+    "item": {
+      "title": "Weta Workshop sells out palantír replica ahead of new LOTR series",
+      "url": "https://www.theguardian.com/film/2026/sep/19/weta-palantir-replica-lotr",
+      "publishedAt": "2026-09-19",
+      "publisher": "theguardian.com"
+    }
+  },
+  {
+    "id": "lucidchart-not-lucid-motors",
+    "split": "test",
+    "label": false,
+    "why": "Lucidchart is Lucid Software, a different company from Lucid Motors despite the shared name.",
+    "self": {
+      "name": "Tesla",
+      "domain": "tesla.com",
+      "description": "Electric vehicles and energy company"
+    },
+    "subject": {
+      "name": "Lucid",
+      "domain": "lucidmotors.com",
+      "role": "competitor"
+    },
+    "competitors": [
+      {
+        "name": "Rivian",
+        "domain": "rivian.com"
+      },
+      {
+        "name": "BMW",
+        "domain": "bmw.com"
+      }
+    ],
+    "reliability": "rss",
+    "item": {
+      "title": "Lucidchart adds one-click Visio import for AWS architecture maps",
+      "url": "https://techcrunch.com/2026/09/20/lucidchart-visio-import-aws/",
+      "publishedAt": "2026-09-20",
+      "publisher": "techcrunch.com"
+    }
+  },
+  {
+    "id": "genesis-band-boxset",
+    "split": "test",
+    "label": false,
+    "why": "Genesis the rock band is not Genesis Motors, Hyundai's luxury car brand.",
+    "self": {
+      "name": "Lexus",
+      "domain": "lexus.com",
+      "description": "Toyota luxury vehicle brand"
+    },
+    "subject": {
+      "name": "Genesis",
+      "domain": "genesis.com",
+      "role": "competitor"
+    },
+    "competitors": [
+      {
+        "name": "BMW",
+        "domain": "bmw.com"
+      },
+      {
+        "name": "Cadillac",
+        "domain": "cadillac.com"
+      }
+    ],
+    "reliability": "best_effort",
+    "item": {
+      "title": "Genesis announces a last reunion box set with Peter Gabriel demos",
+      "url": "https://www.rollingstone.com/music/genesis-reunion-box-set-2026",
+      "publishedAt": "2026-09-21",
+      "publisher": "rollingstone.com"
+    }
+  },
+  {
+    "id": "bentley-university-mba",
+    "split": "test",
+    "label": false,
+    "why": "Bentley University is a Massachusetts business school, not Bentley Motors.",
+    "self": {
+      "name": "Rolls-Royce",
+      "domain": "rolls-roycemotorcars.com",
+      "description": "Ultra-luxury automobile maker"
+    },
+    "subject": {
+      "name": "Bentley",
+      "domain": "bentleymotors.com",
+      "role": "competitor"
+    },
+    "competitors": [
+      {
+        "name": "Aston Martin",
+        "domain": "astonmartin.com"
+      },
+      {
+        "name": "Porsche",
+        "domain": "porsche.com"
+      }
+    ],
+    "reliability": "rss",
+    "item": {
+      "title": "Bentley University posts record MBA applications for 2027",
+      "url": "https://www.bostonglobe.com/2026/09/22/business/bentley-university-mba-applications/",
+      "publishedAt": "2026-09-22",
+      "publisher": "bostonglobe.com"
+    }
+  },
+  {
+    "id": "nasa-mars-sample",
+    "split": "test",
+    "label": false,
+    "why": "NASA's Mars sample return is about the planet, not Mars Inc the candy company.",
+    "self": {
+      "name": "Hershey",
+      "domain": "hersheys.com",
+      "description": "U.S. chocolate and snacks company"
+    },
+    "subject": {
+      "name": "Mars",
+      "domain": "mars.com",
+      "role": "competitor"
+    },
+    "competitors": [
+      {
+        "name": "Nestlé",
+        "domain": "nestle.com"
+      },
+      {
+        "name": "Mondelez",
+        "domain": "mondelezinternational.com"
+      }
+    ],
+    "reliability": "official_api",
+    "item": {
+      "title": "NASA delays Mars sample return as the budget fight drags on",
+      "url": "https://www.nytimes.com/2026/09/23/science/nasa-mars-sample-return.html",
+      "publishedAt": "2026-09-23",
+      "publisher": "nytimes.com"
+    }
+  },
+  {
+    "id": "patagonia-icefields-region",
+    "split": "test",
+    "label": false,
+    "why": "The item is a survey of the Patagonia icefields as geography, not Patagonia the apparel brand.",
+    "self": {
+      "name": "The North Face",
+      "domain": "thenorthface.com",
+      "description": "Outdoor apparel and gear brand"
+    },
+    "subject": {
+      "name": "Patagonia",
+      "domain": "patagonia.com",
+      "role": "competitor"
+    },
+    "competitors": [
+      {
+        "name": "Arc'teryx",
+        "domain": "arcteryx.com"
+      },
+      {
+        "name": "Columbia",
+        "domain": "columbia.com"
+      }
+    ],
+    "reliability": "rss",
+    "item": {
+      "title": "Patagonia icefields lose another 2% of mass, Chilean survey finds",
+      "url": "https://www.theguardian.com/environment/2026/sep/24/patagonia-icefields-mass-loss",
+      "publishedAt": "2026-09-24",
+      "publisher": "theguardian.com"
+    }
+  },
+  {
+    "id": "tour-peloton-not-bike",
+    "split": "test",
+    "label": false,
+    "why": "Peloton here is the Tour de France group of riders, not Peloton the fitness company.",
+    "self": {
+      "name": "NordicTrack",
+      "domain": "nordictrack.com",
+      "description": "Home fitness equipment brand"
+    },
+    "subject": {
+      "name": "Peloton",
+      "domain": "onepeloton.com",
+      "role": "competitor"
+    },
+    "competitors": [
+      {
+        "name": "Apple",
+        "domain": "apple.com"
+      },
+      {
+        "name": "lululemon",
+        "domain": "lululemon.com"
+      }
+    ],
+    "reliability": "official_api",
+    "item": {
+      "title": "Tour de France peloton split by crosswinds on stage 17 into Pau",
+      "url": "https://www.cyclingnews.com/races/tour-de-france-2026/stage-17/",
+      "publishedAt": "2026-09-25",
+      "publisher": "cyclingnews.com"
+    }
+  },
+  {
+    "id": "mta-subway-not-sandwiches",
+    "split": "test",
+    "label": false,
+    "why": "The MTA subway is New York transit, not Subway the sandwich chain.",
+    "self": {
+      "name": "Jimmy John's",
+      "domain": "jimmyjohns.com",
+      "description": "U.S. sandwich restaurant chain"
+    },
+    "subject": {
+      "name": "Subway",
+      "domain": "subway.com",
+      "role": "competitor"
+    },
+    "competitors": [
+      {
+        "name": "Jersey Mike's",
+        "domain": "jerseymikes.com"
+      },
+      {
+        "name": "McDonald's",
+        "domain": "mcdonalds.com"
+      }
+    ],
+    "reliability": "rss",
+    "item": {
+      "title": "MTA to shut parts of the subway this weekend for signal upgrades",
+      "url": "https://www.nytimes.com/2026/09/26/nyregion/mta-subway-weekend-shutdown.html",
+      "publishedAt": "2026-09-26",
+      "publisher": "nytimes.com"
+    }
+  },
+  {
+    "id": "canvas-lms-not-canva",
+    "split": "test",
+    "label": false,
+    "why": "Instructure Canvas LMS is a different product and company from Canva, with a similar name and domain family.",
+    "self": {
+      "name": "Adobe",
+      "domain": "adobe.com",
+      "description": "Creative software company"
+    },
+    "subject": {
+      "name": "Canva",
+      "domain": "canva.com",
+      "role": "competitor"
+    },
+    "competitors": [
+      {
+        "name": "Figma",
+        "domain": "figma.com"
+      },
+      {
+        "name": "Microsoft",
+        "domain": "microsoft.com"
+      }
+    ],
+    "reliability": "scraped_page",
+    "item": {
+      "title": "Instructure Canvas LMS adds an AI grader for college midterms",
+      "url": "https://www.edsurge.com/news/2026-09-27-instructure-canvas-lms-ai-grader",
+      "publishedAt": "2026-09-27",
+      "publisher": "edsurge.com"
+    }
+  },
+  {
+    "id": "plaid-flannel-nordstrom",
+    "split": "test",
+    "label": false,
+    "why": "Plaid here is a fabric pattern, not Plaid the bank-linking fintech.",
+    "self": {
+      "name": "TrueLayer",
+      "domain": "truelayer.com",
+      "description": "Open-banking payments infrastructure"
+    },
+    "subject": {
+      "name": "Plaid",
+      "domain": "plaid.com",
+      "role": "competitor"
+    },
+    "competitors": [
+      {
+        "name": "MX",
+        "domain": "mx.com"
+      },
+      {
+        "name": "Yodlee",
+        "domain": "yodlee.com"
+      }
+    ],
+    "reliability": "best_effort",
+    "item": {
+      "title": "Plaid flannel shirts lead fall menswear sell-through at Nordstrom",
+      "url": "https://www.businessoffashion.com/news/retail/plaid-flannel-nordstrom-fall-2026",
+      "publishedAt": "2026-09-28",
+      "publisher": "businessoffashion.com"
+    }
+  },
+  {
+    "id": "nato-discord-not-app",
+    "split": "test",
+    "label": false,
+    "why": "Discord here means disagreement among allies, not the Discord chat app.",
+    "self": {
+      "name": "Slack",
+      "domain": "slack.com",
+      "description": "Workplace messaging software"
+    },
+    "subject": {
+      "name": "Discord",
+      "domain": "discord.com",
+      "role": "competitor"
+    },
+    "competitors": [
+      {
+        "name": "Microsoft",
+        "domain": "microsoft.com"
+      },
+      {
+        "name": "Telegram",
+        "domain": "telegram.org"
+      }
+    ],
+    "reliability": "official_api",
+    "item": {
+      "title": "Discord among NATO allies grows over Ukraine ammunition stocks",
+      "url": "https://www.ft.com/content/nato-discord-ukraine-ammunition-2026-09",
+      "publishedAt": "2026-09-29",
+      "publisher": "ft.com"
+    }
+  },
+  {
+    "id": "engagement-ring-not-doorbell",
+    "split": "test",
+    "label": false,
+    "why": "Engagement rings are jewelry, not Amazon Ring doorbell cameras.",
+    "self": {
+      "name": "Google Nest",
+      "domain": "nest.com",
+      "description": "Smart-home cameras and thermostats"
+    },
+    "subject": {
+      "name": "Ring",
+      "domain": "ring.com",
+      "role": "competitor"
+    },
+    "competitors": [
+      {
+        "name": "Arlo",
+        "domain": "arlo.com"
+      },
+      {
+        "name": "SimpliSafe",
+        "domain": "simplisafe.com"
+      }
+    ],
+    "reliability": "rss",
+    "item": {
+      "title": "Engagement ring sales jump 18% as lab-grown diamonds go mainstream",
+      "url": "https://www.wsj.com/articles/engagement-ring-lab-grown-diamonds-2026",
+      "publishedAt": "2026-09-30",
+      "publisher": "wsj.com"
+    }
   }
- },
- {
-  "id": "samsung-unpacked-fold7",
-  "split": "train",
-  "label": true,
-  "why": "Galaxy Z Fold is a Samsung phone family; Unpacked is Samsung's launch event.",
-  "self": {
-   "name": "Apple",
-   "domain": "apple.com",
-   "description": "Consumer electronics and services company"
-  },
-  "subject": {
-   "name": "Samsung",
-   "domain": "samsung.com",
-   "role": "competitor"
-  },
-  "competitors": [
-   {
-    "name": "Google",
-    "domain": "google.com"
-   },
-   {
-    "name": "Xiaomi",
-    "domain": "mi.com"
-   }
-  ],
-  "reliability": "official_api",
-  "item": {
-   "title": "Galaxy Z Fold 7 and trifold prototype headline Unpacked in Seoul",
-   "url": "https://www.theverge.com/2026/9/4/galaxy-z-fold-7-unpacked",
-   "publishedAt": "2026-09-04",
-   "publisher": "theverge.com"
-  }
- },
- {
-  "id": "pepsi-nfl-halftime",
-  "split": "train",
-  "label": true,
-  "why": "The item is a Pepsi commercial and sponsorship deal, which is the subject brand.",
-  "self": {
-   "name": "Coca-Cola",
-   "domain": "coca-cola.com",
-   "description": "Global beverage company"
-  },
-  "subject": {
-   "name": "Pepsi",
-   "domain": "pepsi.com",
-   "role": "competitor"
-  },
-  "competitors": [
-   {
-    "name": "Dr Pepper",
-    "domain": "drpepper.com"
-   },
-   {
-    "name": "Keurig Dr Pepper",
-    "domain": "keurigdrpepper.com"
-   }
-  ],
-  "reliability": "rss",
-  "item": {
-   "title": "Pepsi locks in NFL halftime presenting rights through 2032",
-   "url": "https://www.cnbc.com/2026/09/05/pepsi-nfl-halftime-rights.html",
-   "publishedAt": "2026-09-05",
-   "publisher": "cnbc.com"
-  }
- },
- {
-  "id": "lyft-women-priority",
-  "split": "train",
-  "label": true,
-  "why": "The headline names Lyft and a Lyft product change, so it is about the subject.",
-  "self": {
-   "name": "Uber",
-   "domain": "uber.com",
-   "description": "Ride-hail and delivery marketplace"
-  },
-  "subject": {
-   "name": "Lyft",
-   "domain": "lyft.com",
-   "role": "competitor"
-  },
-  "competitors": [
-   {
-    "name": "Via",
-    "domain": "ridewithvia.com"
-   }
-  ],
-  "reliability": "official_api",
-  "item": {
-   "title": "Lyft rolls out Women+ Priority matching in 40 more U.S. cities",
-   "url": "https://techcrunch.com/2026/09/06/lyft-women-priority-expansion/",
-   "publishedAt": "2026-09-06",
-   "publisher": "techcrunch.com"
-  }
- },
- {
-  "id": "disney-hulu-bundle-price",
-  "split": "train",
-  "label": true,
-  "why": "Disney+ and Hulu are Disney streaming products, so the item is about the subject brand.",
-  "self": {
-   "name": "Netflix",
-   "domain": "netflix.com",
-   "description": "Subscription streaming entertainment"
-  },
-  "subject": {
-   "name": "Disney",
-   "domain": "disney.com",
-   "role": "competitor"
-  },
-  "competitors": [
-   {
-    "name": "Warner Bros. Discovery",
-    "domain": "wbd.com"
-   },
-   {
-    "name": "Paramount",
-    "domain": "paramount.com"
-   }
-  ],
-  "reliability": "rss",
-  "item": {
-   "title": "Disney+ and Hulu bundle jumps $3 as ad-free tier is reworked",
-   "url": "https://www.bloomberg.com/news/articles/2026-09-07/disney-hulu-bundle-price",
-   "publishedAt": "2026-09-07",
-   "publisher": "bloomberg.com"
-  }
- },
- {
-  "id": "walmart-plus-in-home",
-  "split": "train",
-  "label": true,
-  "why": "Walmart+ InHome is a Walmart delivery service, clearly the subject retailer.",
-  "self": {
-   "name": "Target",
-   "domain": "target.com",
-   "description": "U.S. general merchandise retailer"
-  },
-  "subject": {
-   "name": "Walmart",
-   "domain": "walmart.com",
-   "role": "competitor"
-  },
-  "competitors": [
-   {
-    "name": "Amazon",
-    "domain": "amazon.com"
-   },
-   {
-    "name": "Costco",
-    "domain": "costco.com"
-   }
-  ],
-  "reliability": "official_api",
-  "item": {
-   "title": "Walmart+ InHome same-day fridge stocking expands to 1,200 stores",
-   "url": "https://www.wsj.com/articles/walmart-plus-inhome-expansion-2026",
-   "publishedAt": "2026-09-08",
-   "publisher": "wsj.com"
-  }
- },
- {
-  "id": "rivian-r2-price-cut",
-  "split": "train",
-  "label": true,
-  "why": "The R2 is Rivian's upcoming vehicle, so this is about the subject automaker.",
-  "self": {
-   "name": "Tesla",
-   "domain": "tesla.com",
-   "description": "Electric vehicles and energy company"
-  },
-  "subject": {
-   "name": "Rivian",
-   "domain": "rivian.com",
-   "role": "competitor"
-  },
-  "competitors": [
-   {
-    "name": "Lucid",
-    "domain": "lucidmotors.com"
-   },
-   {
-    "name": "Ford",
-    "domain": "ford.com"
-   }
-  ],
-  "reliability": "rss",
-  "item": {
-   "title": "Rivian cuts R2 starting price to $39,900 ahead of 2027 deliveries",
-   "url": "https://www.reuters.com/business/autos-transportation/rivian-r2-price-cut-2026-09-09/",
-   "publishedAt": "2026-09-09",
-   "publisher": "reuters.com"
-  }
- },
- {
-  "id": "airbus-india-a320neo",
-  "split": "train",
-  "label": true,
-  "why": "A320neo is an Airbus aircraft family; the order is Airbus business.",
-  "self": {
-   "name": "Boeing",
-   "domain": "boeing.com",
-   "description": "Commercial airplanes and defense manufacturer"
-  },
-  "subject": {
-   "name": "Airbus",
-   "domain": "airbus.com",
-   "role": "competitor"
-  },
-  "competitors": [
-   {
-    "name": "Embraer",
-    "domain": "embraer.com"
-   }
-  ],
-  "reliability": "official_api",
-  "item": {
-   "title": "IndiGo firms 200-jet A320neo order, Airbus says",
-   "url": "https://www.ft.com/content/airbus-indigo-a320neo-2026-09",
-   "publishedAt": "2026-09-10",
-   "publisher": "ft.com"
-  }
- },
- {
-  "id": "mastercard-crypto-card-eu",
-  "split": "train",
-  "label": true,
-  "why": "The item describes a Mastercard consumer card product in Europe.",
-  "self": {
-   "name": "Visa",
-   "domain": "visa.com",
-   "description": "Global payments network"
-  },
-  "subject": {
-   "name": "Mastercard",
-   "domain": "mastercard.com",
-   "role": "competitor"
-  },
-  "competitors": [
-   {
-    "name": "American Express",
-    "domain": "americanexpress.com"
-   },
-   {
-    "name": "PayPal",
-    "domain": "paypal.com"
-   }
-  ],
-  "reliability": "rss",
-  "item": {
-   "title": "Mastercard launches euro stablecoin debit card with four EU banks",
-   "url": "https://www.cnbc.com/2026/09/11/mastercard-euro-crypto-card.html",
-   "publishedAt": "2026-09-11",
-   "publisher": "cnbc.com"
-  }
- },
- {
-  "id": "figma-make-ga",
-  "split": "train",
-  "label": true,
-  "why": "Figma Make is a Figma product reaching general availability.",
-  "self": {
-   "name": "Adobe",
-   "domain": "adobe.com",
-   "description": "Creative software and digital media company"
-  },
-  "subject": {
-   "name": "Figma",
-   "domain": "figma.com",
-   "role": "competitor"
-  },
-  "competitors": [
-   {
-    "name": "Canva",
-    "domain": "canva.com"
-   },
-   {
-    "name": "Sketch",
-    "domain": "sketch.com"
-   }
-  ],
-  "reliability": "official_api",
-  "item": {
-   "title": "Figma Make exits beta with paid seats and enterprise SSO",
-   "url": "https://techcrunch.com/2026/09/12/figma-make-ga/",
-   "publishedAt": "2026-09-12",
-   "publisher": "techcrunch.com"
-  }
- },
- {
-  "id": "amd-instinct-mi355",
-  "split": "train",
-  "label": true,
-  "why": "Instinct MI355 is AMD's data-center GPU, so the item is about AMD.",
-  "self": {
-   "name": "NVIDIA",
-   "domain": "nvidia.com",
-   "description": "GPUs and accelerated computing company"
-  },
-  "subject": {
-   "name": "AMD",
-   "domain": "amd.com",
-   "role": "competitor"
-  },
-  "competitors": [
-   {
-    "name": "Intel",
-    "domain": "intel.com"
-   }
-  ],
-  "reliability": "rss",
-  "item": {
-   "title": "AMD Instinct MI355 racks start shipping to hyperscalers this quarter",
-   "url": "https://www.theverge.com/2026/9/13/amd-instinct-mi355-shipping",
-   "publishedAt": "2026-09-13",
-   "publisher": "theverge.com"
-  }
- },
- {
-  "id": "tnf-futurelight-line",
-  "split": "train",
-  "label": true,
-  "why": "Futurelight is The North Face's waterproof membrane, a subject-brand product line.",
-  "self": {
-   "name": "Patagonia",
-   "domain": "patagonia.com",
-   "description": "Outdoor apparel and gear company"
-  },
-  "subject": {
-   "name": "The North Face",
-   "domain": "thenorthface.com",
-   "role": "competitor"
-  },
-  "competitors": [
-   {
-    "name": "Columbia",
-    "domain": "columbia.com"
-   },
-   {
-    "name": "Arc'teryx",
-    "domain": "arcteryx.com"
-   }
-  ],
-  "reliability": "scraped_page",
-  "item": {
-   "title": "The North Face Futurelight Summit Series gets a recycled-face refresh",
-   "url": "https://www.outsideonline.com/outdoor-gear/north-face-futurelight-summit-2026/",
-   "publishedAt": "2026-09-14",
-   "publisher": "outsideonline.com"
-  }
- },
- {
-  "id": "united-basic-economy",
-  "split": "train",
-  "label": true,
-  "why": "The item is a United Airlines fare-product change, which is the subject carrier.",
-  "self": {
-   "name": "Delta Air Lines",
-   "domain": "delta.com",
-   "description": "U.S. legacy passenger airline"
-  },
-  "subject": {
-   "name": "United Airlines",
-   "domain": "united.com",
-   "role": "competitor"
-  },
-  "competitors": [
-   {
-    "name": "American Airlines",
-    "domain": "aa.com"
-   },
-   {
-    "name": "Southwest",
-    "domain": "southwest.com"
-   }
-  ],
-  "reliability": "official_api",
-  "item": {
-   "title": "United overhauls Basic Economy with paid seat selection on domestic routes",
-   "url": "https://www.wsj.com/articles/united-basic-economy-overhaul-2026",
-   "publishedAt": "2026-09-15",
-   "publisher": "wsj.com"
-  }
- },
- {
-  "id": "paypal-venmo-business",
-  "split": "train",
-  "label": true,
-  "why": "Venmo is PayPal's consumer product, so a Venmo business-card launch is about PayPal.",
-  "self": {
-   "name": "Stripe",
-   "domain": "stripe.com",
-   "description": "Online payments infrastructure"
-  },
-  "subject": {
-   "name": "PayPal",
-   "domain": "paypal.com",
-   "role": "competitor"
-  },
-  "competitors": [
-   {
-    "name": "Square",
-    "domain": "squareup.com"
-   },
-   {
-    "name": "Adyen",
-    "domain": "adyen.com"
-   }
-  ],
-  "reliability": "rss",
-  "item": {
-   "title": "Venmo Business Card adds 2% cash back on inventory purchases",
-   "url": "https://techcrunch.com/2026/09/02/venmo-business-card-cashback/",
-   "publishedAt": "2026-09-02",
-   "publisher": "techcrunch.com"
-  }
- },
- {
-  "id": "tim-cook-ondevice-siri",
-  "split": "train",
-  "label": true,
-  "why": "Tim Cook is Apple's CEO teasing Siri, so the item is about Apple people and products.",
-  "self": {
-   "name": "Samsung",
-   "domain": "samsung.com",
-   "description": "Consumer electronics and mobile devices"
-  },
-  "subject": {
-   "name": "Apple",
-   "domain": "apple.com",
-   "role": "competitor"
-  },
-  "competitors": [
-   {
-    "name": "Google",
-    "domain": "google.com"
-   },
-   {
-    "name": "Microsoft",
-    "domain": "microsoft.com"
-   }
-  ],
-  "reliability": "official_api",
-  "item": {
-   "title": "Tim Cook teases fully on-device Siri for spring 2027",
-   "url": "https://www.bloomberg.com/news/articles/2026-09-01/tim-cook-on-device-siri",
-   "publishedAt": "2026-09-01",
-   "publisher": "bloomberg.com"
-  }
- },
- {
-  "id": "tiktok-shop-us-gmv",
-  "split": "test",
-  "label": true,
-  "why": "TikTok Shop is TikTok's commerce product; GMV news is about the subject brand.",
-  "self": {
-   "name": "Meta",
-   "domain": "meta.com",
-   "description": "Social apps and ads company"
-  },
-  "subject": {
-   "name": "TikTok",
-   "domain": "tiktok.com",
-   "role": "competitor"
-  },
-  "competitors": [
-   {
-    "name": "YouTube",
-    "domain": "youtube.com"
-   },
-   {
-    "name": "Snap",
-    "domain": "snap.com"
-   }
-  ],
-  "reliability": "rss",
-  "item": {
-   "title": "TikTok Shop U.S. GMV tops $30 billion as live shopping goes mainstream",
-   "url": "https://www.reuters.com/technology/tiktok-shop-us-gmv-2026-09-16/",
-   "publishedAt": "2026-09-16",
-   "publisher": "reuters.com"
-  }
- },
- {
-  "id": "shopify-magic-editions",
-  "split": "test",
-  "label": true,
-  "why": "Shopify Editions and Magic are Shopify product events and features.",
-  "self": {
-   "name": "BigCommerce",
-   "domain": "bigcommerce.com",
-   "description": "Ecommerce platform for mid-market merchants"
-  },
-  "subject": {
-   "name": "Shopify",
-   "domain": "shopify.com",
-   "role": "competitor"
-  },
-  "competitors": [
-   {
-    "name": "WooCommerce",
-    "domain": "woocommerce.com"
-   },
-   {
-    "name": "Amazon",
-    "domain": "amazon.com"
-   }
-  ],
-  "reliability": "official_api",
-  "item": {
-   "title": "Shopify Editions Winter adds Magic copilot checkout and B2B themes",
-   "url": "https://www.theverge.com/2026/9/17/shopify-editions-winter-magic",
-   "publishedAt": "2026-09-17",
-   "publisher": "theverge.com"
-  }
- },
- {
-  "id": "dunkin-pistachio-nitro",
-  "split": "test",
-  "label": true,
-  "why": "The item is a Dunkin beverage launch, which is the subject restaurant brand.",
-  "self": {
-   "name": "Starbucks",
-   "domain": "starbucks.com",
-   "description": "Global coffeehouse chain"
-  },
-  "subject": {
-   "name": "Dunkin",
-   "domain": "dunkin.com",
-   "role": "competitor"
-  },
-  "competitors": [
-   {
-    "name": "Peet's",
-    "domain": "peets.com"
-   },
-   {
-    "name": "Dutch Bros",
-    "domain": "dutchbros.com"
-   }
-  ],
-  "reliability": "best_effort",
-  "item": {
-   "title": "Dunkin pistachio nitro cold brew goes national for fall",
-   "url": "https://www.cnbc.com/2026/09/18/dunkin-pistachio-nitro-national.html",
-   "publishedAt": "2026-09-18",
-   "publisher": "cnbc.com"
-  }
- },
- {
-  "id": "gm-software-defined-van",
-  "split": "test",
-  "label": true,
-  "why": "The headline is about General Motors' vehicle software and a GM van platform.",
-  "self": {
-   "name": "Ford",
-   "domain": "ford.com",
-   "description": "U.S. automaker of trucks, cars, and vans"
-  },
-  "subject": {
-   "name": "General Motors",
-   "domain": "gm.com",
-   "role": "competitor"
-  },
-  "competitors": [
-   {
-    "name": "Stellantis",
-    "domain": "stellantis.com"
-   },
-   {
-    "name": "Toyota",
-    "domain": "toyota.com"
-   }
-  ],
-  "reliability": "rss",
-  "item": {
-   "title": "GM says next Chevrolet van will be software-defined with quarterly OTA features",
-   "url": "https://www.reuters.com/business/autos-transportation/gm-software-defined-van-2026-09-19/",
-   "publishedAt": "2026-09-19",
-   "publisher": "reuters.com"
-  }
- },
- {
-  "id": "anthropic-claude-sonnet",
-  "split": "test",
-  "label": true,
-  "why": "Claude is Anthropic's model family, so a Claude launch is about the subject.",
-  "self": {
-   "name": "OpenAI",
-   "domain": "openai.com",
-   "description": "AI research and ChatGPT products"
-  },
-  "subject": {
-   "name": "Anthropic",
-   "domain": "anthropic.com",
-   "role": "competitor"
-  },
-  "competitors": [
-   {
-    "name": "Google",
-    "domain": "google.com"
-   },
-   {
-    "name": "Meta",
-    "domain": "meta.com"
-   }
-  ],
-  "reliability": "official_api",
-  "item": {
-   "title": "Claude Sonnet 4.5 adds computer use in the paid API",
-   "url": "https://techcrunch.com/2026/09/20/claude-sonnet-4-5-computer-use/",
-   "publishedAt": "2026-09-20",
-   "publisher": "techcrunch.com"
-  }
- },
- {
-  "id": "hoka-clifton-10",
-  "split": "test",
-  "label": true,
-  "why": "Clifton is Hoka's core daily trainer; the item is about the subject brand's product.",
-  "self": {
-   "name": "Nike",
-   "domain": "nike.com",
-   "description": "Athletic footwear and apparel brand"
-  },
-  "subject": {
-   "name": "Hoka",
-   "domain": "hoka.com",
-   "role": "competitor"
-  },
-  "competitors": [
-   {
-    "name": "On",
-    "domain": "on.com"
-   },
-   {
-    "name": "Brooks",
-    "domain": "brooksrunning.com"
-   }
-  ],
-  "reliability": "scraped_page",
-  "item": {
-   "title": "Clifton 10 drops 8mm stack and a new supercritical foam midsole",
-   "url": "https://www.runnersworld.com/gear/a65001234/hoka-clifton-10-drop/",
-   "publishedAt": "2026-09-21",
-   "publisher": "runnersworld.com"
-  }
- },
- {
-  "id": "swoosh-vaporfly-rules",
-  "split": "test",
-  "label": true,
-  "why": "Swoosh is Nike's mark and the marathon shoe is Nike Vaporfly, so this is about Nike.",
-  "self": {
-   "name": "Adidas",
-   "domain": "adidas.com",
-   "description": "Athletic footwear and apparel brand"
-  },
-  "subject": {
-   "name": "Nike",
-   "domain": "nike.com",
-   "role": "competitor"
-  },
-  "competitors": [
-   {
-    "name": "Puma",
-    "domain": "puma.com"
-   },
-   {
-    "name": "New Balance",
-    "domain": "newbalance.com"
-   }
-  ],
-  "reliability": "rss",
-  "item": {
-   "title": "World Athletics reviews stacked-plate rules after Swoosh marathon shoe sweeps majors",
-   "url": "https://www.bbc.com/sport/athletics/articles/swoosh-vaporfly-rules-2026",
-   "publishedAt": "2026-09-22",
-   "publisher": "bbc.com"
-  }
- },
- {
-  "id": "cupertino-cheaper-vision",
-  "split": "test",
-  "label": true,
-  "why": "Cupertino plus a spatial computer is an oblique reference to Apple Vision hardware.",
-  "self": {
-   "name": "Samsung",
-   "domain": "samsung.com",
-   "description": "Consumer electronics and mobile devices"
-  },
-  "subject": {
-   "name": "Apple",
-   "domain": "apple.com",
-   "role": "competitor"
-  },
-  "competitors": [
-   {
-    "name": "Meta",
-    "domain": "meta.com"
-   },
-   {
-    "name": "Google",
-    "domain": "google.com"
-   }
-  ],
-  "reliability": "best_effort",
-  "item": {
-   "title": "Cupertino readies a $1,599 spatial computer for the holidays",
-   "url": "https://www.theinformation.com/articles/cupertino-cheaper-spatial-computer-2026",
-   "publishedAt": "2026-09-23",
-   "publisher": "theinformation.com"
-  }
- },
- {
-  "id": "iphone-17-pro-camera",
-  "split": "test",
-  "label": true,
-  "why": "iPhone is Apple's flagship product even though the company name is absent.",
-  "self": {
-   "name": "Samsung",
-   "domain": "samsung.com",
-   "description": "Consumer electronics and mobile devices"
-  },
-  "subject": {
-   "name": "Apple",
-   "domain": "apple.com",
-   "role": "competitor"
-  },
-  "competitors": [
-   {
-    "name": "Google",
-    "domain": "google.com"
-   },
-   {
-    "name": "Xiaomi",
-    "domain": "mi.com"
-   }
-  ],
-  "reliability": "scraped_page",
-  "item": {
-   "title": "iPhone 17 Pro Max tetra-prism leak points to 8x optical zoom",
-   "url": "https://www.macrumors.com/2026/09/24/iphone-17-pro-max-tetraprism-leak/",
-   "publishedAt": "2026-09-24",
-   "publisher": "macrumors.com"
-  }
- },
- {
-  "id": "waymo-miami-robotaxi",
-  "split": "test",
-  "label": true,
-  "why": "Waymo robotaxis are the subject company's service expanding to a new city.",
-  "self": {
-   "name": "Tesla",
-   "domain": "tesla.com",
-   "description": "Electric vehicles and autonomy company"
-  },
-  "subject": {
-   "name": "Waymo",
-   "domain": "waymo.com",
-   "role": "competitor"
-  },
-  "competitors": [
-   {
-    "name": "Cruise",
-    "domain": "getcruise.com"
-   },
-   {
-    "name": "Zoox",
-    "domain": "zoox.com"
-   }
-  ],
-  "reliability": "official_api",
-  "item": {
-   "title": "Waymo robotaxis open rider waitlist in Miami after state permit",
-   "url": "https://www.bloomberg.com/news/articles/2026-09-25/waymo-miami-robotaxi",
-   "publishedAt": "2026-09-25",
-   "publisher": "bloomberg.com"
-  }
- },
- {
-  "id": "search-giant-ai-overviews",
-  "split": "test",
-  "label": true,
-  "why": "AI Overviews is Google Search's product; search giant is an oblique name for Google.",
-  "self": {
-   "name": "Microsoft",
-   "domain": "microsoft.com",
-   "description": "Software, cloud, and search company"
-  },
-  "subject": {
-   "name": "Google",
-   "domain": "google.com",
-   "role": "competitor"
-  },
-  "competitors": [
-   {
-    "name": "OpenAI",
-    "domain": "openai.com"
-   },
-   {
-    "name": "Apple",
-    "domain": "apple.com"
-   }
-  ],
-  "reliability": "rss",
-  "item": {
-   "title": "Search giant's AI Overviews blamed for 40% publisher traffic drop",
-   "url": "https://www.wsj.com/articles/google-ai-overviews-publisher-traffic-2026",
-   "publishedAt": "2026-09-26",
-   "publisher": "wsj.com"
-  }
- },
- {
-  "id": "redmond-windows-12",
-  "split": "test",
-  "label": true,
-  "why": "Redmond and Windows 12 refer to Microsoft's HQ and operating system.",
-  "self": {
-   "name": "Google",
-   "domain": "google.com",
-   "description": "Search, ads, and consumer software company"
-  },
-  "subject": {
-   "name": "Microsoft",
-   "domain": "microsoft.com",
-   "role": "competitor"
-  },
-  "competitors": [
-   {
-    "name": "Apple",
-    "domain": "apple.com"
-   },
-   {
-    "name": "Amazon",
-    "domain": "amazon.com"
-   }
-  ],
-  "reliability": "official_api",
-  "item": {
-   "title": "Redmond ships Windows 12 Canary to Insiders with redesigned Start",
-   "url": "https://www.theverge.com/2026/9/27/windows-12-canary-insider",
-   "publishedAt": "2026-09-27",
-   "publisher": "theverge.com"
-  }
- },
- {
-  "id": "kirkland-membership-fee",
-  "split": "test",
-  "label": true,
-  "why": "Kirkland Signature is Costco's private label, so the item is about Costco's business.",
-  "self": {
-   "name": "Walmart",
-   "domain": "walmart.com",
-   "description": "Mass-market retailer and warehouse clubs"
-  },
-  "subject": {
-   "name": "Costco",
-   "domain": "costco.com",
-   "role": "competitor"
-  },
-  "competitors": [
-   {
-    "name": "Sam's Club",
-    "domain": "samsclub.com"
-   },
-   {
-    "name": "Target",
-    "domain": "target.com"
-   }
-  ],
-  "reliability": "rss",
-  "item": {
-   "title": "Kirkland Signature line expands into auto insurance as warehouse club lifts annual fee",
-   "url": "https://www.cnbc.com/2026/09/28/kirkland-signature-auto-membership-fee.html",
-   "publishedAt": "2026-09-28",
-   "publisher": "cnbc.com"
-  }
- },
- {
-  "id": "sweetgreen-infinite-dallas",
-  "split": "test",
-  "label": true,
-  "why": "Infinite Kitchen is Sweetgreen's automated restaurant format in a new city.",
-  "self": {
-   "name": "Chipotle",
-   "domain": "chipotle.com",
-   "description": "Fast-casual Mexican restaurant chain"
-  },
-  "subject": {
-   "name": "Sweetgreen",
-   "domain": "sweetgreen.com",
-   "role": "competitor"
-  },
-  "competitors": [
-   {
-    "name": "Cava",
-    "domain": "cava.com"
-   },
-   {
-    "name": "Panera",
-    "domain": "panerabread.com"
-   }
-  ],
-  "reliability": "scraped_page",
-  "item": {
-   "title": "Sweetgreen opens first Dallas Infinite Kitchen with 90-second bowls",
-   "url": "https://www.restaurantbusinessonline.com/financing/sweetgreen-dallas-infinite-kitchen",
-   "publishedAt": "2026-09-29",
-   "publisher": "restaurantbusinessonline.com"
-  }
- },
- {
-  "id": "three-stripes-eu-prices",
-  "split": "test",
-  "label": true,
-  "why": "Three-stripes is Adidas's trademark; an EU price cut is about that brand.",
-  "self": {
-   "name": "Nike",
-   "domain": "nike.com",
-   "description": "Athletic footwear and apparel brand"
-  },
-  "subject": {
-   "name": "Adidas",
-   "domain": "adidas.com",
-   "role": "competitor"
-  },
-  "competitors": [
-   {
-    "name": "Puma",
-    "domain": "puma.com"
-   },
-   {
-    "name": "Hoka",
-    "domain": "hoka.com"
-   }
-  ],
-  "reliability": "best_effort",
-  "item": {
-   "title": "Three-stripes brand slashes running-shoe prices across the EU to win back share",
-   "url": "https://www.ft.com/content/adidas-eu-running-price-cut-2026-09",
-   "publishedAt": "2026-09-30",
-   "publisher": "ft.com"
-  }
- },
- {
-  "id": "delta-faucet-not-airline",
-  "split": "train",
-  "label": false,
-  "why": "Delta Faucet is a different company from Delta Air Lines despite sharing the name.",
-  "self": {
-   "name": "United Airlines",
-   "domain": "united.com",
-   "description": "U.S. passenger airline"
-  },
-  "subject": {
-   "name": "Delta Air Lines",
-   "domain": "delta.com",
-   "role": "competitor"
-  },
-  "competitors": [
-   {
-    "name": "American Airlines",
-    "domain": "aa.com"
-   },
-   {
-    "name": "Southwest",
-    "domain": "southwest.com"
-   }
-  ],
-  "reliability": "rss",
-  "item": {
-   "title": "Delta unveils Touch2O kitchen faucet in matte black for holiday displays",
-   "url": "https://www.homesandgardens.com/news/delta-touch2o-matte-black-2026",
-   "publishedAt": "2026-09-03",
-   "publisher": "homesandgardens.com"
-  }
- },
- {
-  "id": "vale-oregon-town",
-  "split": "train",
-  "label": false,
-  "why": "The item is about the town of Vale, Oregon, not Vale the mining company.",
-  "self": {
-   "name": "BHP",
-   "domain": "bhp.com",
-   "description": "Global mining company"
-  },
-  "subject": {
-   "name": "Vale",
-   "domain": "vale.com",
-   "role": "competitor"
-  },
-  "competitors": [
-   {
-    "name": "Rio Tinto",
-    "domain": "riotinto.com"
-   },
-   {
-    "name": "Glencore",
-    "domain": "glencore.com"
-   }
-  ],
-  "reliability": "best_effort",
-  "item": {
-   "title": "Flash floods swamp Vale, Oregon after the Malheur River overflows",
-   "url": "https://apnews.com/article/vale-oregon-malheur-flood-2026",
-   "publishedAt": "2026-09-04",
-   "publisher": "apnews.com"
-  }
- },
- {
-  "id": "arc-institute-not-browser",
-  "split": "train",
-  "label": false,
-  "why": "Arc Institute is a biomedical research org, not The Browser Company's Arc browser.",
-  "self": {
-   "name": "Google Chrome",
-   "domain": "google.com",
-   "description": "Web browser and search company"
-  },
-  "subject": {
-   "name": "Arc",
-   "domain": "arc.net",
-   "role": "competitor"
-  },
-  "competitors": [
-   {
-    "name": "Brave",
-    "domain": "brave.com"
-   },
-   {
-    "name": "Mozilla",
-    "domain": "mozilla.org"
-   }
-  ],
-  "reliability": "rss",
-  "item": {
-   "title": "Arc Institute publishes open virtual cell model with Stanford",
-   "url": "https://www.nature.com/articles/arc-institute-virtual-cell-2026",
-   "publishedAt": "2026-09-05",
-   "publisher": "nature.com"
-  }
- },
- {
-  "id": "meridian-energy-not-link",
-  "split": "train",
-  "label": false,
-  "why": "Meridian Energy is a New Zealand utility, not MeridianLink the U.S. fintech.",
-  "self": {
-   "name": "Plaid",
-   "domain": "plaid.com",
-   "description": "Bank-linking and financial data APIs"
-  },
-  "subject": {
-   "name": "MeridianLink",
-   "domain": "meridianlink.com",
-   "role": "competitor"
-  },
-  "competitors": [
-   {
-    "name": "nCino",
-    "domain": "ncino.com"
-   },
-   {
-    "name": "Blend",
-    "domain": "blend.com"
-   }
-  ],
-  "reliability": "official_api",
-  "item": {
-   "title": "Meridian Energy to add 400 MW of hydro storage in New Zealand",
-   "url": "https://www.reuters.com/business/energy/meridian-energy-hydro-storage-2026-09-06/",
-   "publishedAt": "2026-09-06",
-   "publisher": "reuters.com"
-  }
- },
- {
-  "id": "apple-orchard-fruit",
-  "split": "train",
-  "label": false,
-  "why": "The item is about apple fruit harvests, not Apple the electronics company.",
-  "self": {
-   "name": "Samsung",
-   "domain": "samsung.com",
-   "description": "Consumer electronics and mobile devices"
-  },
-  "subject": {
-   "name": "Apple",
-   "domain": "apple.com",
-   "role": "competitor"
-  },
-  "competitors": [
-   {
-    "name": "Google",
-    "domain": "google.com"
-   },
-   {
-    "name": "Microsoft",
-    "domain": "microsoft.com"
-   }
-  ],
-  "reliability": "rss",
-  "item": {
-   "title": "Hudson Valley apple harvest runs two weeks early after a mild winter",
-   "url": "https://www.nytimes.com/2026/09/07/nyregion/hudson-valley-apple-harvest.html",
-   "publishedAt": "2026-09-07",
-   "publisher": "nytimes.com"
-  }
- },
- {
-  "id": "amazon-rainforest-drought",
-  "split": "train",
-  "label": false,
-  "why": "The Amazon rainforest and Rio Negro are geography, not Amazon.com the retailer.",
-  "self": {
-   "name": "Walmart",
-   "domain": "walmart.com",
-   "description": "Mass-market retailer"
-  },
-  "subject": {
-   "name": "Amazon",
-   "domain": "amazon.com",
-   "role": "competitor"
-  },
-  "competitors": [
-   {
-    "name": "Target",
-    "domain": "target.com"
-   },
-   {
-    "name": "Shopify",
-    "domain": "shopify.com"
-   }
-  ],
-  "reliability": "official_api",
-  "item": {
-   "title": "Amazon rainforest drought pushes the Rio Negro to a historic low",
-   "url": "https://www.bbc.com/news/science-environment-amazon-rio-negro-2026",
-   "publishedAt": "2026-09-08",
-   "publisher": "bbc.com"
-  }
- },
- {
-  "id": "nikola-tesla-patents",
-  "split": "train",
-  "label": false,
-  "why": "The exhibit is about inventor Nikola Tesla, not Tesla the automaker.",
-  "self": {
-   "name": "Ford",
-   "domain": "ford.com",
-   "description": "U.S. automaker expanding EVs"
-  },
-  "subject": {
-   "name": "Tesla",
-   "domain": "tesla.com",
-   "role": "competitor"
-  },
-  "competitors": [
-   {
-    "name": "Rivian",
-    "domain": "rivian.com"
-   },
-   {
-    "name": "GM",
-    "domain": "gm.com"
-   }
-  ],
-  "reliability": "scraped_page",
-  "item": {
-   "title": "Nikola Tesla's Wardenclyffe patents go on display in Belgrade",
-   "url": "https://apnews.com/article/nikola-tesla-wardenclyffe-belgrade-exhibit",
-   "publishedAt": "2026-09-09",
-   "publisher": "apnews.com"
-  }
- },
- {
-  "id": "harrison-ford-actor",
-  "split": "train",
-  "label": false,
-  "why": "Harrison Ford the actor shares a surname with Ford Motor, not a company mention.",
-  "self": {
-   "name": "General Motors",
-   "domain": "gm.com",
-   "description": "U.S. automaker"
-  },
-  "subject": {
-   "name": "Ford",
-   "domain": "ford.com",
-   "role": "competitor"
-  },
-  "competitors": [
-   {
-    "name": "Stellantis",
-    "domain": "stellantis.com"
-   },
-   {
-    "name": "Toyota",
-    "domain": "toyota.com"
-   }
-  ],
-  "reliability": "rss",
-  "item": {
-   "title": "Harrison Ford says a fifth Indiana Jones will be his last adventure",
-   "url": "https://www.hollywoodreporter.com/movies/harrison-ford-indiana-jones-last-2026",
-   "publishedAt": "2026-09-10",
-   "publisher": "hollywoodreporter.com"
-  }
- },
- {
-  "id": "lincoln-memorial-nps",
-  "split": "train",
-  "label": false,
-  "why": "The Lincoln Memorial honors Abraham Lincoln, not the Lincoln car brand.",
-  "self": {
-   "name": "Cadillac",
-   "domain": "cadillac.com",
-   "description": "GM luxury vehicle brand"
-  },
-  "subject": {
-   "name": "Lincoln",
-   "domain": "lincoln.com",
-   "role": "competitor"
-  },
-  "competitors": [
-   {
-    "name": "Lexus",
-    "domain": "lexus.com"
-   },
-   {
-    "name": "Genesis",
-    "domain": "genesis.com"
-   }
-  ],
-  "reliability": "official_api",
-  "item": {
-   "title": "National Park Service begins Lincoln Memorial marble restoration",
-   "url": "https://www.washingtonpost.com/dc-md-va/2026/09/11/lincoln-memorial-restoration/",
-   "publishedAt": "2026-09-11",
-   "publisher": "washingtonpost.com"
-  }
- },
- {
-  "id": "dove-chocolate-not-soap",
-  "split": "train",
-  "label": false,
-  "why": "Dove chocolate is a Mars candy line, not Unilever's Dove personal-care brand.",
-  "self": {
-   "name": "Procter & Gamble",
-   "domain": "pg.com",
-   "description": "Consumer packaged goods company"
-  },
-  "subject": {
-   "name": "Dove",
-   "domain": "dove.com",
-   "role": "competitor"
-  },
-  "competitors": [
-   {
-    "name": "Olay",
-    "domain": "olay.com"
-   },
-   {
-    "name": "Neutrogena",
-    "domain": "neutrogena.com"
-   }
-  ],
-  "reliability": "rss",
-  "item": {
-   "title": "Dove chocolate thins add sea-salt caramel as Mars pushes premium bags",
-   "url": "https://www.foodbusinessnews.net/articles/dove-chocolate-thins-caramel-2026",
-   "publishedAt": "2026-09-12",
-   "publisher": "foodbusinessnews.net"
-  }
- },
- {
-  "id": "high-school-coach-job",
-  "split": "train",
-  "label": false,
-  "why": "Coach here is a sports job title, not Coach the luxury-goods brand.",
-  "self": {
-   "name": "Michael Kors",
-   "domain": "michaelkors.com",
-   "description": "Fashion and accessories brand"
-  },
-  "subject": {
-   "name": "Coach",
-   "domain": "coach.com",
-   "role": "competitor"
-  },
-  "competitors": [
-   {
-    "name": "Kate Spade",
-    "domain": "katespade.com"
-   },
-   {
-    "name": "Tory Burch",
-    "domain": "toryburch.com"
-   }
-  ],
-  "reliability": "best_effort",
-  "item": {
-   "title": "High school football coach fired after playoff sideline incident",
-   "url": "https://www.espn.com/high-school/story/_/id/coach-fired-playoff-sideline-2026",
-   "publishedAt": "2026-09-13",
-   "publisher": "espn.com"
-  }
- },
- {
-  "id": "solar-corona-eclipse",
-  "split": "train",
-  "label": false,
-  "why": "Solar corona is an astronomical term, not Corona the beer brand.",
-  "self": {
-   "name": "Heineken",
-   "domain": "heineken.com",
-   "description": "Global beer company"
-  },
-  "subject": {
-   "name": "Corona",
-   "domain": "corona.com",
-   "role": "competitor"
-  },
-  "competitors": [
-   {
-    "name": "Modelo",
-    "domain": "modelo.com"
-   },
-   {
-    "name": "Budweiser",
-    "domain": "budweiser.com"
-   }
-  ],
-  "reliability": "rss",
-  "item": {
-   "title": "Scientists capture longest solar corona footage during a Pacific eclipse",
-   "url": "https://www.space.com/solar-corona-pacific-eclipse-2026",
-   "publishedAt": "2026-09-14",
-   "publisher": "space.com"
-  }
- },
- {
-  "id": "galaxy-chocolate-not-samsung",
-  "split": "train",
-  "label": false,
-  "why": "Cadbury Galaxy is a UK chocolate brand, not Samsung's Galaxy phones.",
-  "self": {
-   "name": "Apple",
-   "domain": "apple.com",
-   "description": "Consumer electronics and services company"
-  },
-  "subject": {
-   "name": "Samsung",
-   "domain": "samsung.com",
-   "role": "competitor"
-  },
-  "competitors": [
-   {
-    "name": "Google",
-    "domain": "google.com"
-   },
-   {
-    "name": "Xiaomi",
-    "domain": "mi.com"
-   }
-  ],
-  "reliability": "scraped_page",
-  "item": {
-   "title": "Cadbury Galaxy chocolate thins return to UK Tesco aisles",
-   "url": "https://www.thegrocer.co.uk/news/cadbury-galaxy-thins-tesco-2026",
-   "publishedAt": "2026-09-15",
-   "publisher": "thegrocer.co.uk"
-  }
- },
- {
-  "id": "pioneer-natural-not-dj",
-  "split": "train",
-  "label": false,
-  "why": "Pioneer Natural Resources is an oil producer, not Pioneer DJ audio gear.",
-  "self": {
-   "name": "Native Instruments",
-   "domain": "native-instruments.com",
-   "description": "DJ and music-production hardware and software"
-  },
-  "subject": {
-   "name": "Pioneer DJ",
-   "domain": "pioneerdj.com",
-   "role": "competitor"
-  },
-  "competitors": [
-   {
-    "name": "Serato",
-    "domain": "serato.com"
-   },
-   {
-    "name": "Allen & Heath",
-    "domain": "allen-heath.com"
-   }
-  ],
-  "reliability": "official_api",
-  "item": {
-   "title": "Exxon keeps Permian staff after closing the Pioneer Natural Resources deal",
-   "url": "https://www.reuters.com/business/energy/exxon-pioneer-natural-resources-staff-2026-09-01/",
-   "publishedAt": "2026-09-01",
-   "publisher": "reuters.com"
-  }
- },
- {
-  "id": "schengen-visa-not-card",
-  "split": "train",
-  "label": false,
-  "why": "Schengen visa is a travel document, not Visa Inc the payments network.",
-  "self": {
-   "name": "Mastercard",
-   "domain": "mastercard.com",
-   "description": "Global payments network"
-  },
-  "subject": {
-   "name": "Visa",
-   "domain": "visa.com",
-   "role": "competitor"
-  },
-  "competitors": [
-   {
-    "name": "American Express",
-    "domain": "americanexpress.com"
-   },
-   {
-    "name": "Discover",
-    "domain": "discover.com"
-   }
-  ],
-  "reliability": "rss",
-  "item": {
-   "title": "Schengen visa wait times stretch past 90 days for Indian travelers",
-   "url": "https://www.bbc.com/news/world-europe-schengen-visa-waits-2026",
-   "publishedAt": "2026-09-02",
-   "publisher": "bbc.com"
-  }
- },
- {
-  "id": "caterpillar-insect-oaks",
-  "split": "test",
-  "label": false,
-  "why": "Tent caterpillars are insects, not Caterpillar the heavy-equipment maker.",
-  "self": {
-   "name": "Komatsu",
-   "domain": "komatsu.com",
-   "description": "Construction and mining equipment maker"
-  },
-  "subject": {
-   "name": "Caterpillar",
-   "domain": "caterpillar.com",
-   "role": "competitor"
-  },
-  "competitors": [
-   {
-    "name": "John Deere",
-    "domain": "deere.com"
-   },
-   {
-    "name": "Volvo Construction Equipment",
-    "domain": "volvoce.com"
-   }
-  ],
-  "reliability": "best_effort",
-  "item": {
-   "title": "Tent caterpillar infestation strips oaks across New England",
-   "url": "https://apnews.com/article/tent-caterpillar-oaks-new-england-2026",
-   "publishedAt": "2026-09-16",
-   "publisher": "apnews.com"
-  }
- },
- {
-  "id": "adobe-homes-santa-fe",
-  "split": "test",
-  "label": false,
-  "why": "Adobe here is a mud-brick building material, not Adobe the software company.",
-  "self": {
-   "name": "Figma",
-   "domain": "figma.com",
-   "description": "Collaborative design software"
-  },
-  "subject": {
-   "name": "Adobe",
-   "domain": "adobe.com",
-   "role": "competitor"
-  },
-  "competitors": [
-   {
-    "name": "Canva",
-    "domain": "canva.com"
-   },
-   {
-    "name": "Autodesk",
-    "domain": "autodesk.com"
-   }
-  ],
-  "reliability": "rss",
-  "item": {
-   "title": "Santa Fe tightens permits for new adobe homes in the historic district",
-   "url": "https://www.santafenewmexican.com/news/adobe-homes-permits-2026",
-   "publishedAt": "2026-09-17",
-   "publisher": "santafenewmexican.com"
-  }
- },
- {
-  "id": "snowflake-denver-weather",
-  "split": "test",
-  "label": false,
-  "why": "The item is weather snow, not Snowflake the data-cloud company.",
-  "self": {
-   "name": "Databricks",
-   "domain": "databricks.com",
-   "description": "Data and AI lakehouse platform"
-  },
-  "subject": {
-   "name": "Snowflake",
-   "domain": "snowflake.com",
-   "role": "competitor"
-  },
-  "competitors": [
-   {
-    "name": "Google",
-    "domain": "google.com"
-   },
-   {
-    "name": "Amazon",
-    "domain": "amazon.com"
-   }
-  ],
-  "reliability": "official_api",
-  "item": {
-   "title": "Denver schools close as heavy snowflakes pile up overnight",
-   "url": "https://www.denverpost.com/2026/09/18/denver-schools-snow-closure/",
-   "publishedAt": "2026-09-18",
-   "publisher": "denverpost.com"
-  }
- },
- {
-  "id": "palantir-lotr-replica",
-  "split": "test",
-  "label": false,
-  "why": "A palantír replica is Tolkien merchandise, not Palantir Technologies.",
-  "self": {
-   "name": "Databricks",
-   "domain": "databricks.com",
-   "description": "Data and AI platform"
-  },
-  "subject": {
-   "name": "Palantir",
-   "domain": "palantir.com",
-   "role": "competitor"
-  },
-  "competitors": [
-   {
-    "name": "C3.ai",
-    "domain": "c3.ai"
-   },
-   {
-    "name": "Snowflake",
-    "domain": "snowflake.com"
-   }
-  ],
-  "reliability": "scraped_page",
-  "item": {
-   "title": "Weta Workshop sells out palantír replica ahead of new LOTR series",
-   "url": "https://www.theguardian.com/film/2026/sep/19/weta-palantir-replica-lotr",
-   "publishedAt": "2026-09-19",
-   "publisher": "theguardian.com"
-  }
- },
- {
-  "id": "lucidchart-not-lucid-motors",
-  "split": "test",
-  "label": false,
-  "why": "Lucidchart is Lucid Software, a different company from Lucid Motors despite the shared name.",
-  "self": {
-   "name": "Tesla",
-   "domain": "tesla.com",
-   "description": "Electric vehicles and energy company"
-  },
-  "subject": {
-   "name": "Lucid",
-   "domain": "lucidmotors.com",
-   "role": "competitor"
-  },
-  "competitors": [
-   {
-    "name": "Rivian",
-    "domain": "rivian.com"
-   },
-   {
-    "name": "BMW",
-    "domain": "bmw.com"
-   }
-  ],
-  "reliability": "rss",
-  "item": {
-   "title": "Lucidchart adds one-click Visio import for AWS architecture maps",
-   "url": "https://techcrunch.com/2026/09/20/lucidchart-visio-import-aws/",
-   "publishedAt": "2026-09-20",
-   "publisher": "techcrunch.com"
-  }
- },
- {
-  "id": "genesis-band-boxset",
-  "split": "test",
-  "label": false,
-  "why": "Genesis the rock band is not Genesis Motors, Hyundai's luxury car brand.",
-  "self": {
-   "name": "Lexus",
-   "domain": "lexus.com",
-   "description": "Toyota luxury vehicle brand"
-  },
-  "subject": {
-   "name": "Genesis",
-   "domain": "genesis.com",
-   "role": "competitor"
-  },
-  "competitors": [
-   {
-    "name": "BMW",
-    "domain": "bmw.com"
-   },
-   {
-    "name": "Cadillac",
-    "domain": "cadillac.com"
-   }
-  ],
-  "reliability": "best_effort",
-  "item": {
-   "title": "Genesis announces a last reunion box set with Peter Gabriel demos",
-   "url": "https://www.rollingstone.com/music/genesis-reunion-box-set-2026",
-   "publishedAt": "2026-09-21",
-   "publisher": "rollingstone.com"
-  }
- },
- {
-  "id": "bentley-university-mba",
-  "split": "test",
-  "label": false,
-  "why": "Bentley University is a Massachusetts business school, not Bentley Motors.",
-  "self": {
-   "name": "Rolls-Royce",
-   "domain": "rolls-roycemotorcars.com",
-   "description": "Ultra-luxury automobile maker"
-  },
-  "subject": {
-   "name": "Bentley",
-   "domain": "bentleymotors.com",
-   "role": "competitor"
-  },
-  "competitors": [
-   {
-    "name": "Aston Martin",
-    "domain": "astonmartin.com"
-   },
-   {
-    "name": "Porsche",
-    "domain": "porsche.com"
-   }
-  ],
-  "reliability": "rss",
-  "item": {
-   "title": "Bentley University posts record MBA applications for 2027",
-   "url": "https://www.bostonglobe.com/2026/09/22/business/bentley-university-mba-applications/",
-   "publishedAt": "2026-09-22",
-   "publisher": "bostonglobe.com"
-  }
- },
- {
-  "id": "nasa-mars-sample",
-  "split": "test",
-  "label": false,
-  "why": "NASA's Mars sample return is about the planet, not Mars Inc the candy company.",
-  "self": {
-   "name": "Hershey",
-   "domain": "hersheys.com",
-   "description": "U.S. chocolate and snacks company"
-  },
-  "subject": {
-   "name": "Mars",
-   "domain": "mars.com",
-   "role": "competitor"
-  },
-  "competitors": [
-   {
-    "name": "Nestlé",
-    "domain": "nestle.com"
-   },
-   {
-    "name": "Mondelez",
-    "domain": "mondelezinternational.com"
-   }
-  ],
-  "reliability": "official_api",
-  "item": {
-   "title": "NASA delays Mars sample return as the budget fight drags on",
-   "url": "https://www.nytimes.com/2026/09/23/science/nasa-mars-sample-return.html",
-   "publishedAt": "2026-09-23",
-   "publisher": "nytimes.com"
-  }
- },
- {
-  "id": "patagonia-icefields-region",
-  "split": "test",
-  "label": false,
-  "why": "The item is a survey of the Patagonia icefields as geography, not Patagonia the apparel brand.",
-  "self": {
-   "name": "The North Face",
-   "domain": "thenorthface.com",
-   "description": "Outdoor apparel and gear brand"
-  },
-  "subject": {
-   "name": "Patagonia",
-   "domain": "patagonia.com",
-   "role": "competitor"
-  },
-  "competitors": [
-   {
-    "name": "Arc'teryx",
-    "domain": "arcteryx.com"
-   },
-   {
-    "name": "Columbia",
-    "domain": "columbia.com"
-   }
-  ],
-  "reliability": "rss",
-  "item": {
-   "title": "Patagonia icefields lose another 2% of mass, Chilean survey finds",
-   "url": "https://www.theguardian.com/environment/2026/sep/24/patagonia-icefields-mass-loss",
-   "publishedAt": "2026-09-24",
-   "publisher": "theguardian.com"
-  }
- },
- {
-  "id": "tour-peloton-not-bike",
-  "split": "test",
-  "label": false,
-  "why": "Peloton here is the Tour de France group of riders, not Peloton the fitness company.",
-  "self": {
-   "name": "NordicTrack",
-   "domain": "nordictrack.com",
-   "description": "Home fitness equipment brand"
-  },
-  "subject": {
-   "name": "Peloton",
-   "domain": "onepeloton.com",
-   "role": "competitor"
-  },
-  "competitors": [
-   {
-    "name": "Apple",
-    "domain": "apple.com"
-   },
-   {
-    "name": "lululemon",
-    "domain": "lululemon.com"
-   }
-  ],
-  "reliability": "official_api",
-  "item": {
-   "title": "Tour de France peloton split by crosswinds on stage 17 into Pau",
-   "url": "https://www.cyclingnews.com/races/tour-de-france-2026/stage-17/",
-   "publishedAt": "2026-09-25",
-   "publisher": "cyclingnews.com"
-  }
- },
- {
-  "id": "mta-subway-not-sandwiches",
-  "split": "test",
-  "label": false,
-  "why": "The MTA subway is New York transit, not Subway the sandwich chain.",
-  "self": {
-   "name": "Jimmy John's",
-   "domain": "jimmyjohns.com",
-   "description": "U.S. sandwich restaurant chain"
-  },
-  "subject": {
-   "name": "Subway",
-   "domain": "subway.com",
-   "role": "competitor"
-  },
-  "competitors": [
-   {
-    "name": "Jersey Mike's",
-    "domain": "jerseymikes.com"
-   },
-   {
-    "name": "McDonald's",
-    "domain": "mcdonalds.com"
-   }
-  ],
-  "reliability": "rss",
-  "item": {
-   "title": "MTA to shut parts of the subway this weekend for signal upgrades",
-   "url": "https://www.nytimes.com/2026/09/26/nyregion/mta-subway-weekend-shutdown.html",
-   "publishedAt": "2026-09-26",
-   "publisher": "nytimes.com"
-  }
- },
- {
-  "id": "canvas-lms-not-canva",
-  "split": "test",
-  "label": false,
-  "why": "Instructure Canvas LMS is a different product and company from Canva, with a similar name and domain family.",
-  "self": {
-   "name": "Adobe",
-   "domain": "adobe.com",
-   "description": "Creative software company"
-  },
-  "subject": {
-   "name": "Canva",
-   "domain": "canva.com",
-   "role": "competitor"
-  },
-  "competitors": [
-   {
-    "name": "Figma",
-    "domain": "figma.com"
-   },
-   {
-    "name": "Microsoft",
-    "domain": "microsoft.com"
-   }
-  ],
-  "reliability": "scraped_page",
-  "item": {
-   "title": "Instructure Canvas LMS adds an AI grader for college midterms",
-   "url": "https://www.edsurge.com/news/2026-09-27-instructure-canvas-lms-ai-grader",
-   "publishedAt": "2026-09-27",
-   "publisher": "edsurge.com"
-  }
- },
- {
-  "id": "plaid-flannel-nordstrom",
-  "split": "test",
-  "label": false,
-  "why": "Plaid here is a fabric pattern, not Plaid the bank-linking fintech.",
-  "self": {
-   "name": "TrueLayer",
-   "domain": "truelayer.com",
-   "description": "Open-banking payments infrastructure"
-  },
-  "subject": {
-   "name": "Plaid",
-   "domain": "plaid.com",
-   "role": "competitor"
-  },
-  "competitors": [
-   {
-    "name": "MX",
-    "domain": "mx.com"
-   },
-   {
-    "name": "Yodlee",
-    "domain": "yodlee.com"
-   }
-  ],
-  "reliability": "best_effort",
-  "item": {
-   "title": "Plaid flannel shirts lead fall menswear sell-through at Nordstrom",
-   "url": "https://www.businessoffashion.com/news/retail/plaid-flannel-nordstrom-fall-2026",
-   "publishedAt": "2026-09-28",
-   "publisher": "businessoffashion.com"
-  }
- },
- {
-  "id": "nato-discord-not-app",
-  "split": "test",
-  "label": false,
-  "why": "Discord here means disagreement among allies, not the Discord chat app.",
-  "self": {
-   "name": "Slack",
-   "domain": "slack.com",
-   "description": "Workplace messaging software"
-  },
-  "subject": {
-   "name": "Discord",
-   "domain": "discord.com",
-   "role": "competitor"
-  },
-  "competitors": [
-   {
-    "name": "Microsoft",
-    "domain": "microsoft.com"
-   },
-   {
-    "name": "Telegram",
-    "domain": "telegram.org"
-   }
-  ],
-  "reliability": "official_api",
-  "item": {
-   "title": "Discord among NATO allies grows over Ukraine ammunition stocks",
-   "url": "https://www.ft.com/content/nato-discord-ukraine-ammunition-2026-09",
-   "publishedAt": "2026-09-29",
-   "publisher": "ft.com"
-  }
- },
- {
-  "id": "engagement-ring-not-doorbell",
-  "split": "test",
-  "label": false,
-  "why": "Engagement rings are jewelry, not Amazon Ring doorbell cameras.",
-  "self": {
-   "name": "Google Nest",
-   "domain": "nest.com",
-   "description": "Smart-home cameras and thermostats"
-  },
-  "subject": {
-   "name": "Ring",
-   "domain": "ring.com",
-   "role": "competitor"
-  },
-  "competitors": [
-   {
-    "name": "Arlo",
-    "domain": "arlo.com"
-   },
-   {
-    "name": "SimpliSafe",
-    "domain": "simplisafe.com"
-   }
-  ],
-  "reliability": "rss",
-  "item": {
-   "title": "Engagement ring sales jump 18% as lab-grown diamonds go mainstream",
-   "url": "https://www.wsj.com/articles/engagement-ring-lab-grown-diamonds-2026",
-   "publishedAt": "2026-09-30",
-   "publisher": "wsj.com"
-  }
- }
 ]

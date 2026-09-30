@@ -113,11 +113,7 @@ describe.skipIf(!jevKeyPresent())("eval: read_this_first against Jev", () => {
           entities: entitiesFor(row),
         }),
       );
-    const report = await runEval(
-      "read_this_first",
-      ask,
-      await loadCasesAs("read_this_first", parseReadThisFirstCase),
-    );
+    const report = await runEval("read_this_first", ask, await loadCasesAs("read_this_first", parseReadThisFirstCase));
     console.log(formatReport(report));
     expect(report.splits.length).toBeGreaterThan(0);
   });
