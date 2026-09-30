@@ -236,7 +236,9 @@ export function formatReport(report: EvalReport): string {
         `${split.split}\tcases ${split.cases}\tscore ${split.score}\t95% CI [${split.low}, ${split.high}]\twrong ${split.wrong}\tmaybe ${split.maybe}/${split.calls}\tflipped ${split.flipped}`,
     )
     .join("\n");
-  return [`question ${report.questionId}\tmodel ${report.model}\trepeats ${report.repeats}`, rows].join("\n");
+  const train = report.splits.find((split) => split.split === "train");
+  const uncertain = train === undefined ? "" : `\ntrain maybes: ${train.maybeIds.join(", ") || "none"}\ntrain wrong: ${train.wrongIds.join(", ") || "none"}`;
+  return [`question ${report.questionId}\tmodel ${report.model}\trepeats ${report.repeats}`, rows, uncertain].join("\n");
 }
 
 export function jevKeyPresent(): boolean {

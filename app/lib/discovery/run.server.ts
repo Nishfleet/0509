@@ -44,7 +44,7 @@ export const IS_COMPETITOR: NoulQuestion = {
 export const IS_CREATOR_RIVAL: NoulQuestion = {
   id: "is_creator_rival",
   instructions:
-    "Is `item` a real rival of `self`, a creator: another creator, channel or media brand competing for the same audience's attention, or a brand in the category `self` sells into, so `self` would want to watch what it does? `item.evidence` is where the two were named together.",
+    "Is `item` a real rival of `self`, a creator? A rival is a peer a viewer could watch instead of `self`: another creator or channel on the same platform courting the same audience, or a brand selling into the category `self` sells into. `item.evidence` is where the two were named together. Judge that from the evidence: an item that only carries, hosts, reports on, or sponsors `self` is a false case, while an item whose own audience or catalogue points at the same fans or buyers as `self` is a true case.",
   whenTrue: "It competes with `self` for the same audience or sells into the same category as `self`.",
   whenFalse:
     "It is a platform, publisher, sponsor, retailer, a product of `self`, `self` itself, or an unrelated name that only shares a headline.",
