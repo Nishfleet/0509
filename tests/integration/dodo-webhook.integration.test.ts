@@ -225,4 +225,21 @@ describe("Dodo webhook (J13)", () => {
     expect((await eventRow("evt_product"))?.processed_at).not.toBeNull();
     expect(await eventRow("evt_payment")).toMatchObject({ event_type: "payment.succeeded" });
   });
+
+  it("answers 500 and leaves the event unprocessed when no workspace exists yet, then applies it on redelivery", async () => {
+    const orphan = eventBody({ data: { metadata: {}, subscription_id: "sub_not_yet_linked" } });
+
+    const first = await deliver(signedRequest("evt_orphan", orphan));
+
+    expect(first.status).toBe(500);
+    expect(await planRow()).toBeNull();
+    expect((await eventRow("evt_orphan"))?.processed_at).toBeNull();
+
+    const linked = eventBody({ data: { subscription_id: "sub_not_yet_linked" } });
+    const second = await deliver(signedRequest("evt_orphan", linked));
+
+    expect(second.status).toBe(200);
+    expect((await planRow())?.tier).toBe("starter");
+    expect((await eventRow("evt_orphan"))?.processed_at).not.toBeNull();
+  });
 });
