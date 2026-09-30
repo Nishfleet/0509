@@ -21,7 +21,6 @@ Schema requirements (carried by the schema PR): a `delivery` record per item per
 | Own-site breakage (D3s p >= 0.5)                 | yes, pinned until acknowledged | recap line                                            | **yes, within one tick** |
 | Competitor site change, noteworthy (D3 p >= 0.9) | yes                            | yes, if it survives D4 or is the brand's biggest move | no                       |
 | Competitor site change, possibly (D3 between)    | yes, low, "possibly"           | no                                                    | no                       |
-| New ads / ad copy change                         | yes                            | yes, one line per brand with the count                | no                       |
 | Mention, matters (D6 p >= 0.9)                   | yes                            | counted per brand; the top one quoted if D4 ranks it  | no                       |
 | Mention, normal                                  | yes, behind the source pill    | counted                                               | no                       |
 | Competitor added or retired by Jev               | yes                            | yes                                                   | no                       |

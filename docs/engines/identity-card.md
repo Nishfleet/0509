@@ -122,7 +122,7 @@ Tables by name, in write order:
 4. `entity` — one row, `role='self'`, `state='on'`, `origin='user_input'`, `identity_json` the card, `domain` the registrable domain. The partial unique index pins one `self` per workspace.
 5. `page` — one row for the homepage plus each page found in the nav that the D9 choice classifies; `role` and `role_decided_for_hash` set from that call.
 6. `source` — **read only**. The registry is global; onboarding never writes it.
-7. `watch` — one row per (entity, source, target) the card proves we can serve: ads where an ad-library id or advertiser name was found, site for the homepage and the pricing page, mentions for the brand name, hiring where a board was found.
+7. `watch` — one row per (entity, source, target) the card proves we can serve: site for the homepage and the pricing page, mentions for the brand name, hiring where a board was found.
 8. `snapshot` — the first homepage snapshot: one row, `payload_r2_key` pointing at the stored HTML, `payload_hash` over **extracted text**, `item_count`, `fetched_at`.
 9. `user_decision` — one row per field the user edits on the card. This is the `user_memory` the Jev context pack reads on every later judgment; an edited field is never re-judged against the extracted value.
 

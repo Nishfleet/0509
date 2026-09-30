@@ -28,7 +28,7 @@ Movement is this week's rank minus last week's rank, for brands that were ON bot
 
 ## The why-line
 
-The sentence under the headline ("Kindred is the mover: 3 new ads and the loudest mention spike") is D4's top reason for the mover of the week. If D4 returned nothing (quiet week), the line is the counts: "Quiet week: 61 mentions checked, 2 site changes, no new ads."
+The sentence under the headline ("Kindred is the mover: 2 site changes and the loudest mention spike") is D4's top reason for the mover of the week. If D4 returned nothing (quiet week), the line is the counts: "Quiet week: 61 mentions checked, 2 site changes."
 
 ## Rules
 

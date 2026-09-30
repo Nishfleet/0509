@@ -6,7 +6,6 @@ One file per engine, in the P3 build order (umbrella #3842):
 | ----- | ----------------------------------- | ----- | ---------------------------------------------------- |
 | 1     | Identity card                       | #3885 | [`identity-card.md`](identity-card.md)               |
 | 2     | Competitor discovery                | #3884 | [`competitor-discovery.md`](competitor-discovery.md) |
-| 3     | Ads, Meta first                     | #3891 | [`ads.md`](ads.md)                                   |
 | 4     | Site-change tracking incl. own site | #3879 | [`site-change.md`](site-change.md)                   |
 | 5     | Hiring (job boards)                 | #4725 | [`hiring.md`](hiring.md)                             |
 
