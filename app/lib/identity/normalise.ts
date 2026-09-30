@@ -49,6 +49,52 @@ function socialHandle(
   return ok({ kind: "handle", registrable: h, url: url(h), platform });
 }
 
+const SOCIAL_HOSTS: ReadonlyMap<string, { platform: "instagram" | "tiktok" | "x"; url: (handle: string) => string }> =
+  new Map([
+    ["instagram.com", { platform: "instagram", url: (h) => `https://www.instagram.com/${h}/` }],
+    ["tiktok.com", { platform: "tiktok", url: (h) => `https://www.tiktok.com/@${h}` }],
+    ["x.com", { platform: "x", url: (h) => `https://x.com/${h}` }],
+    ["twitter.com", { platform: "x", url: (h) => `https://x.com/${h}` }],
+  ]);
+
+function parseWebUrl(s: string): URL | null {
+  const candidate = URL.canParse(s) ? s : `https://${s}`;
+  if (!URL.canParse(candidate)) return null;
+  const u = new URL(candidate);
+  return u.protocol === "http:" || u.protocol === "https:" ? u : null;
+}
+
+function youtubeSubject(seg: string[]): NormaliseResult {
+  const head = seg[0];
+  if (head?.startsWith("@")) {
+    return ok({
+      kind: "channel",
+      platform: "youtube",
+      registrable: head.slice(1).toLowerCase(),
+      url: `https://www.youtube.com/${head}`,
+    });
+  }
+  const name = seg[1];
+  if (!name) return fail("unsupported-platform");
+  if (head === "user" || head === "c") {
+    return ok({
+      kind: "channel",
+      platform: "youtube",
+      registrable: name.toLowerCase(),
+      url: `https://www.youtube.com/${head}/${name}`,
+    });
+  }
+  if (head === "channel") {
+    return ok({
+      kind: "channel",
+      platform: "youtube",
+      registrable: name,
+      url: `https://www.youtube.com/${head}/${name}`,
+    });
+  }
+  return fail("unsupported-platform");
+}
+
 export function normaliseSubject(input: string): NormaliseResult {
   const s = input.trim();
   if (s === "") return fail("empty");
@@ -59,56 +105,19 @@ export function normaliseSubject(input: string): NormaliseResult {
     return ok({ kind: "handle", registrable: h.toLowerCase(), url: null });
   }
 
-  const candidate = URL.canParse(s) ? s : `https://${s}`;
-  if (!URL.canParse(candidate)) return fail("unparseable");
-  const u = new URL(candidate);
-  if (u.protocol !== "http:" && u.protocol !== "https:") return fail("unparseable");
+  const u = parseWebUrl(s);
+  if (u === null) return fail("unparseable");
 
   const reg = getDomain(u.hostname);
   if (reg === null) return fail("no-registrable-domain");
 
   const seg = u.pathname.split("/").filter(Boolean);
 
-  if (reg === "youtube.com") {
-    const head = seg[0];
-    if (head?.startsWith("@")) {
-      return ok({
-        kind: "channel",
-        platform: "youtube",
-        registrable: head.slice(1).toLowerCase(),
-        url: `https://www.youtube.com/${head}`,
-      });
-    }
-    if ((head === "user" || head === "c") && seg[1]) {
-      return ok({
-        kind: "channel",
-        platform: "youtube",
-        registrable: seg[1].toLowerCase(),
-        url: `https://www.youtube.com/${head}/${seg[1]}`,
-      });
-    }
-    if (head === "channel" && seg[1]) {
-      return ok({
-        kind: "channel",
-        platform: "youtube",
-        registrable: seg[1],
-        url: `https://www.youtube.com/${head}/${seg[1]}`,
-      });
-    }
-    return fail("unsupported-platform");
-  }
+  if (reg === "youtube.com") return youtubeSubject(seg);
 
-  if (reg === "instagram.com") {
-    if (!seg[0]) return fail("unsupported-platform");
-    return socialHandle(seg[0], "instagram", (h) => `https://www.instagram.com/${h}/`);
-  }
-  if (reg === "tiktok.com") {
-    if (!seg[0]) return fail("unsupported-platform");
-    return socialHandle(seg[0], "tiktok", (h) => `https://www.tiktok.com/@${h}`);
-  }
-  if (reg === "x.com" || reg === "twitter.com") {
-    if (!seg[0]) return fail("unsupported-platform");
-    return socialHandle(seg[0], "x", (h) => `https://x.com/${h}`);
+  const social = SOCIAL_HOSTS.get(reg);
+  if (social !== undefined) {
+    return seg[0] ? socialHandle(seg[0], social.platform, social.url) : fail("unsupported-platform");
   }
 
   return ok({ kind: "domain", registrable: reg, url: `https://${u.hostname}/` });

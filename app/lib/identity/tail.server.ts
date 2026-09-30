@@ -73,7 +73,12 @@ export async function classifyTailPages(params: IdentityTailParams, now: string)
       return;
     }
     const extract = await extractIdentity(page.html, params.homepageUrl);
-    await classifyNavPages(params.workspaceId, { id: params.entityId, domain: params.domain }, extract.navPages, now);
+    await classifyNavPages({
+      workspaceId: params.workspaceId,
+      entity: { id: params.entityId, domain: params.domain },
+      pages: extract.navPages,
+      now,
+    });
   } catch (error) {
     const subjectSha256 = await sha256Hex(params.domain);
     console.log(
@@ -94,6 +99,51 @@ export async function warmTailSiteCard(params: IdentityTailParams): Promise<void
   await readSiteCard(subject, brandBudget(params.workspaceId, subject.registrable));
 }
 
+interface WatchTarget {
+  sourceId: string;
+  targetKey: string;
+}
+
+function siteTargets(params: IdentityTailParams, siteSourceId: string | null, pricing: string | null): WatchTarget[] {
+  if (siteSourceId === null || params.homepageUrl === null) return [];
+  const home = { sourceId: siteSourceId, targetKey: params.homepageUrl };
+  return pricing !== null && pricing !== params.homepageUrl
+    ? [home, { sourceId: siteSourceId, targetKey: pricing }]
+    : [home];
+}
+
+async function mentionTargets(params: IdentityTailParams): Promise<WatchTarget[]> {
+  const sources = await readEnabledSources("mentions");
+  const named =
+    params.name.trim() === "" ? [] : sources.map((source) => ({ sourceId: source.id, targetKey: params.name }));
+  const handled =
+    params.handle === undefined
+      ? []
+      : sources
+          .filter((source) => source.key !== "youtube.channel_rss")
+          .map((source) => ({ sourceId: source.id, targetKey: `@${String(params.handle)}` }));
+  return [...named, ...handled];
+}
+
+async function enabledTargets(items: readonly AdTarget[]): Promise<WatchTarget[]> {
+  const targets: WatchTarget[] = [];
+  for (const item of items) {
+    const sourceId = await readEnabledSourceId(item.sourceKey);
+    if (sourceId !== null) targets.push({ sourceId, targetKey: item.targetKey });
+  }
+  return targets;
+}
+
+function uniqueTargets(targets: readonly WatchTarget[]): WatchTarget[] {
+  const seen = new Set<string>();
+  return targets.filter((target) => {
+    const key = `${target.sourceId}\n${target.targetKey}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
 export async function seedTailWatches(params: IdentityTailParams, discoveredAt: string): Promise<EntityWatch[]> {
   const subject = subjectFor(params);
   const proof = subject === null ? { adLibraryHints: [], navLinks: [] } : await readCachedSiteProof(subject);
@@ -101,51 +151,21 @@ export async function seedTailWatches(params: IdentityTailParams, discoveredAt: 
   const ads = adTargets(proof.adLibraryHints);
   const hiring = await hiringTarget(proof.navLinks, params.domain);
   const siteSourceId = await readEnabledSourceId("site.web");
-  const planned: NewWatch[] = [];
-  const pages: NewPage[] = [];
-  const seen = new Set<string>();
-  const seenPages = new Set<string>();
-
-  function page(url: string): void {
-    if (seenPages.has(url)) return;
-    seenPages.add(url);
-    pages.push({ id: crypto.randomUUID(), entityId: params.entityId, url, role: "home", discoveredAt });
-  }
-
-  function watch(sourceId: string, targetKey: string): void {
-    const key = `${sourceId}\n${targetKey}`;
-    if (seen.has(key)) return;
-    seen.add(key);
-    planned.push({ id: crypto.randomUUID(), entityId: params.entityId, sourceId, targetKey });
-  }
-
-  if (siteSourceId !== null && params.homepageUrl !== null) {
-    page(params.homepageUrl);
-    watch(siteSourceId, params.homepageUrl);
-    if (pricing !== null && pricing !== params.homepageUrl) {
-      watch(siteSourceId, pricing);
-    }
-  }
-
-  const mentionSources = await readEnabledSources("mentions");
-  if (params.name.trim() !== "") {
-    for (const source of mentionSources) watch(source.id, params.name);
-  }
-  if (params.handle !== undefined) {
-    for (const source of mentionSources.filter((source) => source.key !== "youtube.channel_rss")) {
-      watch(source.id, `@${params.handle}`);
-    }
-  }
-
-  for (const target of ads) {
-    const sourceId = await readEnabledSourceId(target.sourceKey);
-    if (sourceId !== null) watch(sourceId, target.targetKey);
-  }
-
-  if (hiring !== null) {
-    const sourceId = await readEnabledSourceId(hiring.sourceKey);
-    if (sourceId !== null) watch(sourceId, hiring.boardUrl);
-  }
+  const targets = [
+    ...siteTargets(params, siteSourceId, pricing),
+    ...(await mentionTargets(params)),
+    ...(await enabledTargets(ads)),
+    ...(await enabledTargets(hiring === null ? [] : [{ sourceKey: hiring.sourceKey, targetKey: hiring.boardUrl }])),
+  ];
+  const pages: NewPage[] =
+    siteSourceId !== null && params.homepageUrl !== null
+      ? [{ id: crypto.randomUUID(), entityId: params.entityId, url: params.homepageUrl, role: "home", discoveredAt }]
+      : [];
+  const planned: NewWatch[] = uniqueTargets(targets).map((target) => ({
+    id: crypto.randomUUID(),
+    entityId: params.entityId,
+    ...target,
+  }));
 
   await insertPages(pages);
   await insertWatches(planned);

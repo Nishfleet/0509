@@ -166,8 +166,7 @@ export function listingForBoard(boardUrl: string): BoardListing | null {
 
 function boardCandidate(
   host: DocumentedHost,
-  matchedAlias: string,
-  slug: string,
+  { matchedAlias, slug }: { matchedAlias: string; slug: string },
   via: "nav" | "careers-page",
 ): BoardCandidate {
   return {
@@ -187,7 +186,7 @@ function linkItemsFor(link: string, domain: string): LinkItem[] {
   const documented = documentedHostFor(host);
   if (documented) {
     const slug = documented.slugFrom(url);
-    return slug === null ? [] : [boardCandidate(documented, host, slug, "nav")];
+    return slug === null ? [] : [boardCandidate(documented, { matchedAlias: host, slug }, "nav")];
   }
 
   return isCareersLead(url, domain) ? [{ leadUrl: url.href }] : [];
@@ -212,7 +211,7 @@ function boardCandidateFromText(text: string): BoardCandidate | null {
   const documented = documentedHostFor(host);
   if (documented === null) return null;
   const slug = documented.slugFrom(url);
-  return slug === null ? null : boardCandidate(documented, host, slug, "careers-page");
+  return slug === null ? null : boardCandidate(documented, { matchedAlias: host, slug }, "careers-page");
 }
 
 function isScannablePage(body: string, contentType: string | null): boolean {
@@ -237,6 +236,17 @@ const defaultProbe = async (url: string): Promise<ProbeResponse> => {
   }
 };
 
+async function expandLead(leadUrl: string, probe: Probe): Promise<BoardCandidate[]> {
+  const page = await probe(leadUrl);
+  return !page.ok || !isScannablePage(page.body, page.contentType) ? [] : documentedLinksInPage(page.body);
+}
+
+async function confirmCandidate(item: BoardCandidate, probe: Probe): Promise<DiscoveredBoard | null> {
+  const response = await probe(item.probeUrl);
+  if (!response.ok || !item.hasListing(response.body)) return null;
+  return { platform: item.platform, boardUrl: item.boardUrl, via: item.via };
+}
+
 export async function discoverBoard(
   links: readonly string[],
   domain: string,
@@ -251,18 +261,14 @@ export async function discoverBoard(
     const item = queue.shift();
     if (item === undefined) continue;
 
+    probes += 1;
     if ("leadUrl" in item) {
-      probes += 1;
-      const page = await probe(item.leadUrl);
-      if (!page.ok || !isScannablePage(page.body, page.contentType)) continue;
-      queue.push(...documentedLinksInPage(page.body));
+      queue.push(...(await expandLead(item.leadUrl, probe)));
       continue;
     }
 
-    probes += 1;
-    const response = await probe(item.probeUrl);
-    if (!response.ok || !item.hasListing(response.body)) continue;
-    return { platform: item.platform, boardUrl: item.boardUrl, via: item.via };
+    const found = await confirmCandidate(item, probe);
+    if (found !== null) return found;
   }
 
   return { platform: "none", boardUrl: null, via: "none" };

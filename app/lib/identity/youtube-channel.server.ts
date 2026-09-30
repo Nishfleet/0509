@@ -63,9 +63,10 @@ export async function lookupYoutubeChannel(identityJson: string): Promise<Youtub
   const pageUrl = normalised.subject.url;
   if (!pageUrl?.startsWith("https://www.youtube.com/")) return { status: "unresolved" };
   try {
-    const found = await cachedProbe(normalised.subject, "youtube-channel", cachedChannel, () =>
-      readYoutubeChannelPage(pageUrl),
-    );
+    const found = await cachedProbe(normalised.subject, "youtube-channel", {
+      schema: cachedChannel,
+      run: () => readYoutubeChannelPage(pageUrl),
+    });
     return { status: "id", channelId: found.channelId };
   } catch (error) {
     if (error instanceof YoutubePageMiss) return { status: "unresolved" };

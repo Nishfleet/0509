@@ -36,12 +36,19 @@ export function publicSubjectState(subject: Subject, raw: string): Record<string
   };
 }
 
-export async function screenPublicSubject(
-  workspaceId: string,
-  subject: Subject,
-  raw: string,
-  now: string,
-): Promise<{ outcome: PublicSubjectOutcome; verdict: NoulVerdict }> {
+export interface ScreenPublicSubjectInput {
+  workspaceId: string;
+  subject: Subject;
+  raw: string;
+  now: string;
+}
+
+export async function screenPublicSubject({
+  workspaceId,
+  subject,
+  raw,
+  now,
+}: ScreenPublicSubjectInput): Promise<{ outcome: PublicSubjectOutcome; verdict: NoulVerdict }> {
   const verdict = await askNoul(workspaceId, PUBLIC_SUBJECT, publicSubjectState(subject, raw));
   if (!verdict.cached) {
     await insertVerdict({
