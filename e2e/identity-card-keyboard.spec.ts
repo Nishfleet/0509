@@ -179,7 +179,7 @@ test("the identity card editor saves and closes on Enter, with focus back on the
   // a zero read taken before the request went out; a second `onSave` from that
   // same keydown task would be dispatched, and observed by `watchDraftPosts`,
   // before this response returns.
-  await saveResponse;
+  expect((await saveResponse).status()).toBe(200);
   expect(draftPosts).toHaveLength(1);
   await expect(name).toHaveCount(0);
   await expect(trigger).toBeFocused();
@@ -210,7 +210,7 @@ test("the identity card editor saves and closes on Escape, with focus back on th
   );
   await about.press("Escape");
 
-  await saveResponse;
+  expect((await saveResponse).status()).toBe(200);
   expect(draftPosts).toHaveLength(1);
   await expect(about).toHaveCount(0);
   await expect(trigger).toBeFocused();
