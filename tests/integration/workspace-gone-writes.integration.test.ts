@@ -38,6 +38,18 @@ async function deleteAccount(userId: string, workspaceId: string): Promise<void>
   expect(row?.n).toBe(0);
 }
 
+async function seedGoneUser(): Promise<string> {
+  runs += 1;
+  const userId = `user-gone-${String(runs)}`;
+  await env.DB.prepare(
+    'INSERT INTO "user" (id, name, email, emailVerified, createdAt, updatedAt) VALUES (?1, ?2, ?2, 1, ?3, ?3)',
+  )
+    .bind(userId, `${userId}@example.com`, NOW)
+    .run();
+  await env.DB.prepare('DELETE FROM "user" WHERE id = ?').bind(userId).run();
+  return userId;
+}
+
 function domainSubject(registrable: string) {
   return { kind: "domain" as const, registrable, url: `https://${registrable}/` };
 }
@@ -146,6 +158,41 @@ describe("an account deleted mid-request", () => {
         workspaceId,
         userId,
         entityId: "entity-ws-gone",
+        edit: { field: "name", from: "Alpha", to: "Alphalete" },
+        decidedAt: NOW,
+      },
+    ]);
+
+    expect(await countRows("user_decision", workspaceId)).toBe(before);
+  });
+
+  it("insertSubjectDecision is a no-op when the workspace lives but the user row is gone", async () => {
+    const { workspaceId } = await seedWorkspace();
+    const goneUser = await seedGoneUser();
+    const before = await countRows("user_decision", workspaceId);
+
+    await insertSubjectDecision({
+      workspaceId,
+      userId: goneUser,
+      subject: "alphaleteathletics.com",
+      verdict: "public_subject:refused",
+      decidedAt: NOW,
+    });
+
+    expect(await countRows("user_decision", workspaceId)).toBe(before);
+    expect(await readSubjectDecision(workspaceId, "alphaleteathletics.com")).toBeNull();
+  });
+
+  it("insertFieldEdits is a no-op when the workspace lives but the user row is gone", async () => {
+    const { workspaceId } = await seedWorkspace();
+    const goneUser = await seedGoneUser();
+    const before = await countRows("user_decision", workspaceId);
+
+    await insertFieldEdits([
+      {
+        workspaceId,
+        userId: goneUser,
+        entityId: "entity-user-gone",
         edit: { field: "name", from: "Alpha", to: "Alphalete" },
         decidedAt: NOW,
       },
