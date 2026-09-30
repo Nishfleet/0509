@@ -31,6 +31,11 @@ setup("mint one onboarded session per viewport lane", async ({ browser }) => {
   for (const lane of LANES) {
     const context = await browser.newContext({ storageState: accessStatePath });
     const page = await context.newPage();
+    page.on("response", (response) => {
+      const timing = response.headers()["server-timing"];
+      if (timing === undefined) return;
+      console.log(`server-timing ${lane} ${new URL(response.url()).pathname} ${String(response.status())} ${timing}`);
+    });
     try {
       const email = `e2e+onboarded-${lane}-${crypto.randomUUID().replaceAll("-", "").slice(0, 12)}@0509.io`;
       await signInWithMagicLink(page, email, token);
