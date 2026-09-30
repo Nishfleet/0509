@@ -949,6 +949,10 @@ export default tseslint.config(
   // test. `allowConditional` is the one non-default value: the suite gates on
   // the project and the environment (`test.skip(condition, reason)`), and report
   // specs use `test.fail()` (CLAUDE.md "Reproducing a user report").
+  // 0509#6138: a `test.use` fixture function must declare an object destructuring
+  // pattern as its first parameter (Playwright rejects anything else), so
+  // `async ({}, use, testInfo) => {}` is the form when no fixture is needed;
+  // `allowObjectPatternsAsParameters` permits exactly that and nothing else.
   {
     files: ["e2e/**/*.ts"],
     plugins: { playwright },
@@ -960,6 +964,7 @@ export default tseslint.config(
       "playwright/missing-playwright-await": "error",
       "playwright/no-networkidle": "error",
       "playwright/valid-expect": "error",
+      "no-empty-pattern": ["error", { allowObjectPatternsAsParameters: true }],
     },
   },
 

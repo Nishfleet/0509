@@ -31,10 +31,8 @@ test.skip(
   "the developments feed needs a real session; the local preview Worker cannot mint one",
 );
 
-// Playwright's fixture validator requires an object destructuring pattern
-// here, and no-empty-pattern bans `({})`: the ignored binding is the price.
 test.use({
-  storageState: async ({ browserName: _browserName }, use, testInfo) => {
+  storageState: async ({}, use, testInfo) => {
     await use(onboardedStatePath(testInfo.project.name === "phone-390" ? "phone" : "desktop"));
   },
 });
