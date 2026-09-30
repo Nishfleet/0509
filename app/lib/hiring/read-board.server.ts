@@ -6,7 +6,7 @@ import { insertBoardSnapshot, latestBoardSnapshot } from "../data/snapshot.serve
 import { insertHiringSignals } from "../data/signal.server";
 import type { readHiringTargets } from "../data/watch.server";
 import { deactivateWatch, markWatchPolled } from "../data/watch.server";
-import { fetchOutbound } from "../fetch/outbound.server";
+import { cappedText, fetchOutbound } from "../fetch/outbound.server";
 import { CRAWLER_USER_AGENT } from "../fetch/robots.server";
 import type { SweepTick } from "../site/sweep.server";
 import { listingForBoard } from "./discover-board.server";
@@ -23,13 +23,16 @@ export interface BoardResult {
 
 const previousRolesSchema = z.array(z.object({ id: z.string() }));
 
+const MAX_LISTING_BYTES = 5 * 1024 * 1024;
+
 async function fetchListingPages(platform: BoardPlatform, boardUrl: string, url: string): Promise<OpenRole[] | "gone"> {
   const response = await fetchOutbound(url, { headers: { "user-agent": CRAWLER_USER_AGENT } });
   if (response.status === 404 || response.status === 410) return "gone";
   if (!response.ok) {
     throw new Error(`hiring.listing_status ${String(response.status)} for ${url}`);
   }
-  const body = await response.text();
+  const body = await cappedText(response, MAX_LISTING_BYTES);
+  if (body === null) throw new Error(`hiring.listing_too_large for ${url}`);
   const pageRoles = parseListing(platform, body, boardUrl);
   const next = nextListingUrl(platform, url, body);
   if (next === null) return pageRoles;

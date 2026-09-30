@@ -1,7 +1,7 @@
 import { getDomain } from "tldts";
 import { z } from "zod";
 
-import { fetchOutbound } from "../fetch/outbound.server";
+import { cappedJson, cappedText, fetchOutbound } from "../fetch/outbound.server";
 import { CRAWLER_USER_AGENT } from "../fetch/robots.server";
 import { readThrough } from "../identity/probe-cache.server";
 import { readPageNames } from "./page-names";
@@ -14,6 +14,8 @@ export interface Resolution {
 const UNRESOLVED: Resolution = { domain: null, via: "unresolved" };
 const CACHE_TTL_SECONDS = 2592000;
 const REQUEST_TIMEOUT_MS = 8000;
+const MAX_JSON_BYTES = 1024 * 1024;
+const MAX_PAGE_BYTES = 5 * 1024 * 1024;
 
 const resolutionSchema = z.object({
   domain: z.string().nullable(),
@@ -68,7 +70,7 @@ async function wikidataGet(url: string): Promise<unknown> {
       logLookupFailure("wikidata", url, new Error(`status ${String(res.status)}`));
       return null;
     }
-    return await res.json();
+    return await cappedJson(res, MAX_JSON_BYTES);
   } catch (error) {
     logLookupFailure("wikidata", url, error);
     return null;
@@ -110,7 +112,9 @@ async function slugDomain(name: string): Promise<string | null> {
     });
     if (!res.ok) return null;
 
-    const names = await readPageNames(await res.text());
+    const html = await cappedText(res, MAX_PAGE_BYTES);
+    if (html === null) return null;
+    const names = await readPageNames(html);
     const target = normaliseName(name);
     if (names.ogSiteName !== null && normaliseName(names.ogSiteName) === target) {
       return `${slug}.com`;

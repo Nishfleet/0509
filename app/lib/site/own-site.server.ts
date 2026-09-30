@@ -10,7 +10,7 @@ import {
 } from "../data/incident.server";
 import type { OwnSitePage } from "../data/page.server";
 import { readOwnSitePages } from "../data/page.server";
-import { BlockedRedirectError, fetchOutbound } from "../fetch/outbound.server";
+import { BlockedRedirectError, cappedText, fetchOutbound } from "../fetch/outbound.server";
 import { CRAWLER_USER_AGENT, robotsAllows } from "../fetch/robots.server";
 import { computeBreakageEvidence } from "./breakage-evidence";
 import { extractPageText } from "./extract-text";
@@ -26,6 +26,8 @@ export interface OwnSitePlan {
 }
 
 const PROBE_TIMEOUT_MS = 10_000;
+
+const MAX_PAGE_BYTES = 5 * 1024 * 1024;
 
 const PROBE_HEADERS = {
   accept: "text/html,application/xhtml+xml",
@@ -87,7 +89,9 @@ export async function breakageRepaired(url: string, beforeKey: string | null): P
     );
     return false;
   }
-  const afterText = (await extractPageText(await response.text())).text;
+  const html = await cappedText(response, MAX_PAGE_BYTES);
+  if (html === null) return false;
+  const afterText = (await extractPageText(html)).text;
   const before = await env.SNAPSHOTS.get(beforeKey);
   if (before === null) return false;
   const e = computeBreakageEvidence({
