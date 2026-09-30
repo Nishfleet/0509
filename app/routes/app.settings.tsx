@@ -30,14 +30,7 @@ export default function Page({ loaderData, actionData }: Route.ComponentProps) {
       <OwnSiteAlertsSetting on={loaderData.ownSiteAlerts} />
       <DismissedBrands dismissed={loaderData.dismissed} />
       <AgentsSection />
-      <AccountSection
-        email={loaderData.email}
-        delivery={loaderData.delivery}
-        deliveryError={actionData?.deliveryError ?? null}
-        deliverySuppressed={actionData?.deliverySuppressed ?? false}
-        emailChangeSent={actionData?.emailChangeSent ?? false}
-        emailChangeError={actionData?.emailChangeError ?? null}
-      />
+      <AccountSection email={loaderData.email} delivery={loaderData.delivery} result={actionData} />
       <DeleteAccount email={loaderData.email} error={actionData?.deleteError ?? null} />
     </main>
   );
