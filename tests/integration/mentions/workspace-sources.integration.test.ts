@@ -20,6 +20,9 @@ const NOW_MS = Date.parse(NOW);
 const GDELT_SRC = "src_mentions_gdelt";
 const HN_SRC = "src_mentions_hn";
 const YOUTUBE_SRC = "src_mentions_youtube";
+// A truncated write: the value a cut-off JSON.stringify leaves behind. Not
+// valid JSON, so a bare json_extract raises and aborts the whole statement.
+const MALFORMED_WATCH_CONFIG = '{"degraded":';
 
 async function seedOwner(id: string, workspaceId: string, entityId: string): Promise<void> {
   await env.DB.prepare(
@@ -209,8 +212,10 @@ describe("alerts mentions source pills (#4003 4/6)", () => {
     // aborts the whole statement, so one bad row 500s the reads that select
     // it. The guard has to let the row through so the pill renders the
     // "watch config is unreadable" case the component already handles.
-    const MALFORMED = '{"degraded":';
-    await seedWatch(`watch-${COMP}-yt-broken`, COMP, YOUTUBE_SRC, 1, MALFORMED);
+    // json_valid(w3.config_json) AND json_extract(...) is load-bearing: SQLite
+    // evaluates the AND left to right, so the extract never runs on invalid
+    // JSON. These tests pin that ordering on real D1.
+    await seedWatch(`watch-${COMP}-yt-broken`, COMP, YOUTUBE_SRC, 1, MALFORMED_WATCH_CONFIG);
     await env.DB.prepare("UPDATE watch SET last_polled_at = ? WHERE id = ?")
       .bind("2026-09-25T09:00:00.000Z", `watch-${COMP}-yt-broken`)
       .run();
@@ -219,7 +224,7 @@ describe("alerts mentions source pills (#4003 4/6)", () => {
       const entries = await readWorkspaceMentionSources(WS);
       const youtube = entries.find((entry) => entry.source.key === "youtube.channel_rss");
       if (!youtube) throw new Error("the malformed watch must not abort the workspace read");
-      expect(youtube.source.watch_config_json).toBe(MALFORMED);
+      expect(youtube.source.watch_config_json).toBe(MALFORMED_WATCH_CONFIG);
       expect(sourcePillStatus(youtube.source, youtube.snapshot, NOW_MS)).toEqual({
         state: "degraded",
         reason: "watch config is unreadable",
@@ -229,10 +234,23 @@ describe("alerts mentions source pills (#4003 4/6)", () => {
       const rail = await readEntitySources(WS, COMP);
       const railYoutube = rail.find((entry) => entry.source.key === "youtube.channel_rss");
       if (!railYoutube) throw new Error("the malformed watch must not abort the entity read");
-      expect(railYoutube.source.watch_config_json).toBe(MALFORMED);
+      expect(railYoutube.source.watch_config_json).toBe(MALFORMED_WATCH_CONFIG);
       expect(sourcePillStatus(railYoutube.source, railYoutube.snapshot, NOW_MS).reason).toBe(
         "watch config is unreadable",
       );
+
+      // A malformed watch config must not shadow a recorded source-level
+      // reason: sourcePillStatus reads s.degraded_reason before the watch
+      // config, and the guard only changes which watch the subquery picks.
+      await env.DB.prepare("UPDATE source SET degraded_reason = 'not answering' WHERE id = ?")
+        .bind(YOUTUBE_SRC)
+        .run();
+      const flagged = await readWorkspaceMentionSources(WS);
+      const flaggedYoutube = flagged.find((entry) => entry.source.key === "youtube.channel_rss");
+      if (!flaggedYoutube) throw new Error("the flagged mentions source must be read");
+      const flaggedStatus = sourcePillStatus(flaggedYoutube.source, flaggedYoutube.snapshot, NOW_MS);
+      expect(flaggedStatus.state).toBe("degraded");
+      expect(flaggedStatus.reason).toBe("not answering");
 
       // The registry and the anonymous landing read the source table only,
       // so a malformed watch row must not take either of them down either.
@@ -247,6 +265,7 @@ describe("alerts mentions source pills (#4003 4/6)", () => {
       });
       expect(sources.find((entry) => entry.source.key === "youtube.channel_rss")).toBeDefined();
     } finally {
+      await env.DB.prepare("UPDATE source SET degraded_reason = NULL WHERE id = ?").bind(YOUTUBE_SRC).run();
       await clearOwner(USER, WS, COMP);
     }
   });
@@ -256,8 +275,7 @@ describe("alerts mentions source pills (#4003 4/6)", () => {
     // The guard sorts an unreadable config into the not-degraded bucket rather
     // than aborting. A readable degraded flag must keep winning the subquery,
     // or the rail would report "unreadable" while a known cause goes unnamed.
-    const MALFORMED = "{not json";
-    await seedWatch(`watch-${COMP}-yt-broken`, COMP, YOUTUBE_SRC, 1, MALFORMED);
+    await seedWatch(`watch-${COMP}-yt-broken`, COMP, YOUTUBE_SRC, 1, MALFORMED_WATCH_CONFIG);
     await seedWatch(
       `watch-${COMP}-yt-flag`,
       COMP,
