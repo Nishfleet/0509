@@ -50,9 +50,7 @@ interface JevResponse {
   answers?: Record<string, { type?: string; noul?: number }>;
 }
 
-export interface Ask {
-  (row: EvalCase): Promise<{ p: number; model: string }>;
-}
+export type Ask = (row: EvalCase) => Promise<{ p: number; model: string }>;
 
 export async function loadCases(questionId: string): Promise<EvalCase[]> {
   const file = path.join(HERE, "cases", `${questionId}.json`);
