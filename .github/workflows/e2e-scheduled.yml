@@ -333,7 +333,7 @@ jobs:
           instances() {
             page=1
             rows=""
-            while :; do
+            while [ "$page" -le 50 ]; do
               batch=$(curl -sS --fail-with-body -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
                 "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workflows/$1/instances?per_page=100&page=$page&date_start=$since" \
                 | jq -c '.result')
