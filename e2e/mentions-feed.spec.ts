@@ -2,8 +2,7 @@ import type { DatabaseSync } from "node:sqlite";
 
 import { expect, test, type Page } from "@playwright/test";
 
-import { consoleFailures, isLocalLane, watchConsole } from "./inbox";
-import { run, seedPreviewSession } from "./preview-session";
+import { consoleFailures, isLocalLane, run, seedPreviewSession, watchConsole } from "./inbox";
 
 const BANNED = /mention_matters|mention_is_about_brand|probability|confidence/i;
 
@@ -185,7 +184,7 @@ function seed({ db, suffix, userId }: { db: DatabaseSync; suffix: string; userId
 }
 
 function seedSession(): Promise<string> {
-  return seedPreviewSession("mention-feed", seed);
+  return seedPreviewSession("mention-feed", seed).then(({ cookie }) => cookie);
 }
 
 async function measure(page: Page) {
