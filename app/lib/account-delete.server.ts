@@ -36,12 +36,19 @@ export async function deleteAccount(
 }
 
 async function revokeGrants(helpers: Pick<OAuthHelpers, "listUserGrants" | "revokeGrant">, userId: string) {
+  let failed = 0;
+  let cursor: string | undefined;
   try {
-    const grants = await helpers.listUserGrants(userId, { limit: 100 });
-    await Promise.all(grants.items.map((grant) => helpers.revokeGrant(grant.id, userId)));
-  } catch (error) {
-    console.error(JSON.stringify({ event: "account_delete.grant_revoke_failed", error: String(error) }));
+    do {
+      const grants = await helpers.listUserGrants(userId, { limit: 100, cursor });
+      const settled = await Promise.allSettled(grants.items.map((grant) => helpers.revokeGrant(grant.id, userId)));
+      failed += settled.filter((result) => result.status === "rejected").length;
+      cursor = grants.cursor;
+    } while (cursor !== undefined);
+  } catch {
+    failed += 1;
   }
+  if (failed > 0) console.error(JSON.stringify({ event: "account_delete.grant_revoke_failed", failed }));
 }
 
 function deleteInstanceCookie() {

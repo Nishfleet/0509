@@ -1,7 +1,7 @@
 import type { OAuthHelpers } from "@cloudflare/workers-oauth-provider";
 import { env, introspectWorkflowInstance } from "cloudflare:test";
 import { RouterContextProvider } from "react-router";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { createAuth, deleteSignedInUser } from "../../app/lib/auth.server";
 import { firstWorkspaceId } from "../../app/lib/workspace.server";
@@ -115,34 +115,41 @@ describe("delete my account", () => {
     await env.SNAPSHOTS.put("snapshot/site/watch-leaving/1.txt", "b");
     await env.SNAPSHOTS.put("snapshot/site/watch-leaving/1.png", "c");
     await env.SNAPSHOTS.put("snapshot/site/watch-staying/1.txt", "d");
+    await env.SNAPSHOTS.put("snapshot/hiring/watch-leaving/1.json", "e");
+    await env.SNAPSHOTS.put("snapshot/hiring/watch-staying/1.json", "f");
 
     const id = "account-delete-test";
     await using introspector = await introspectWorkflowInstance(env.ACCOUNT_DELETE, id);
     await env.ACCOUNT_DELETE.create({
       id,
-      params: { prefixes: ["card/ws-leaving/", "snapshot/site/watch-leaving/"] },
+      params: { prefixes: ["card/ws-leaving/", "snapshot/site/watch-leaving/", "snapshot/hiring/watch-leaving/"] },
     });
     await introspector.waitForStatus("complete");
 
-    expect(await introspector.getOutput()).toEqual({ deleted: 3 });
+    expect(await introspector.getOutput()).toEqual({ deleted: 4 });
     const left = await env.SNAPSHOTS.list();
-    expect(left.objects.map((object) => object.key)).toEqual(["snapshot/site/watch-staying/1.txt"]);
+    expect(left.objects.map((object) => object.key)).toEqual([
+      "snapshot/hiring/watch-staying/1.json",
+      "snapshot/site/watch-staying/1.txt",
+    ]);
   });
 
   it("reports the Workflow's own progress for the deleted account", async () => {
     await env.SNAPSHOTS.put("card/ws-leaving/share.png", "a");
     await env.SNAPSHOTS.put("snapshot/site/watch-leaving/1.txt", "b");
     await env.SNAPSHOTS.put("snapshot/site/watch-leaving/1.png", "c");
+    await env.SNAPSHOTS.put("snapshot/hiring/watch-leaving/1.json", "e");
+    await env.SNAPSHOTS.put("snapshot/hiring/watch-staying/1.json", "f");
 
     const id = "account-delete-progress";
     await using introspector = await introspectWorkflowInstance(env.ACCOUNT_DELETE, id);
     await env.ACCOUNT_DELETE.create({
       id,
-      params: { prefixes: ["card/ws-leaving/", "snapshot/site/watch-leaving/"] },
+      params: { prefixes: ["card/ws-leaving/", "snapshot/site/watch-leaving/", "snapshot/hiring/watch-leaving/"] },
     });
     await introspector.waitForStatus("complete");
 
-    expect(await readAccountDeleteProgress(id)).toEqual({ rows: "removed", files: "removed", deleted: 3 });
+    expect(await readAccountDeleteProgress(id)).toEqual({ rows: "removed", files: "removed", deleted: 4 });
     expect(await readAccountDeleteProgress("no-such-instance")).toBeNull();
   });
 
@@ -228,14 +235,23 @@ describe("delete my account", () => {
 
   it("seals the Workflow instance id on the headers the deleting browser leaves with", async () => {
     const { cookie, userId } = await signIn();
+    const revoked: string[] = [];
+    const pages: Record<string, { items: { id: string }[]; cursor?: string }> = {
+      first: { items: [{ id: "grant-1" }], cursor: "second" },
+      second: { items: [{ id: "grant-2" }] },
+    };
     const helpers: Pick<OAuthHelpers, "listUserGrants" | "revokeGrant"> = {
-      listUserGrants: async () => ({ items: [] }),
-      revokeGrant: async () => undefined,
+      listUserGrants: async (_user, options) =>
+        pages[options?.cursor ?? "first"] as Awaited<ReturnType<OAuthHelpers["listUserGrants"]>>,
+      revokeGrant: async (grantId) => {
+        revoked.push(grantId);
+      },
     };
 
     const deleted = await deleteAccount(helpers, settingsRequest(cookie), userId);
 
     if (deleted === null) throw new Error("deleteAccount refused a fresh session");
+    expect(revoked).toEqual(["grant-1", "grant-2"]);
     const baked = deleted.headers.getSetCookie().find((header) => header.startsWith("account-delete="));
     if (baked === undefined) throw new Error("no account-delete cookie on the delete headers");
     expect(baked).toContain("HttpOnly");
@@ -294,20 +310,34 @@ describe("delete my account", () => {
     expect(await count("SELECT COUNT(*) AS n FROM session WHERE userId = ?", userId)).toBe(1);
   });
 
-  it("still hands back the headers and cookie when revoking a grant fails", async () => {
+  it("still hands back the headers and cookie when revoking a grant fails, and keeps revoking later pages", async () => {
     const { cookie, userId } = await signIn();
+    const revoked: string[] = [];
+    const pages: Record<string, { items: { id: string }[]; cursor?: string }> = {
+      first: { items: [{ id: "grant-1" }], cursor: "second" },
+      second: { items: [{ id: "grant-2" }] },
+    };
     const helpers: Pick<OAuthHelpers, "listUserGrants" | "revokeGrant"> = {
-      listUserGrants: async () =>
-        ({ items: [{ id: "grant-1" }] }) as Awaited<ReturnType<OAuthHelpers["listUserGrants"]>>,
-      revokeGrant: async () => {
-        throw new Error("KV is down");
+      listUserGrants: async (_user, options) =>
+        pages[options?.cursor ?? "first"] as Awaited<ReturnType<OAuthHelpers["listUserGrants"]>>,
+      revokeGrant: async (grantId) => {
+        if (grantId === "grant-1") throw new Error("KV is down for grant-1");
+        revoked.push(grantId);
       },
     };
+    const errors = vi.spyOn(console, "error").mockImplementation(() => undefined);
 
     const deleted = await deleteAccount(helpers, settingsRequest(cookie), userId);
 
     if (deleted === null) throw new Error("deleteAccount refused a fresh session");
     expect(await count('SELECT COUNT(*) AS n FROM "user" WHERE id = ?', userId)).toBe(0);
     expect(deleted.headers.getSetCookie().some((header) => header.startsWith("account-delete="))).toBe(true);
+    expect(revoked).toEqual(["grant-2"]);
+    expect(errors).toHaveBeenCalledTimes(1);
+    expect(JSON.parse(String(errors.mock.calls[0]?.[0]))).toEqual({
+      event: "account_delete.grant_revoke_failed",
+      failed: 1,
+    });
+    errors.mockRestore();
   });
 });
