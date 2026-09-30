@@ -130,39 +130,50 @@ function filledProfileFields(card: SiteCard): string[] {
   return filled;
 }
 
+async function readProfileCard(
+  subject: Subject,
+  mayEscalate: MayEscalate,
+): Promise<{ card: SiteCard; reached: boolean }> {
+  const probe = profileProbe(subject);
+  if (probe === null || subject.url === null) return { card: UNREACHED, reached: false };
+  try {
+    const card = await cachedProbe(subject, probe, {
+      schema: siteCardSchema,
+      run: () => probeProfile(subject, mayEscalate),
+    });
+    console.log(
+      JSON.stringify({
+        event: "identity-creator-card",
+        probe,
+        filled: filledProfileFields(card),
+      }),
+    );
+    return { card, reached: true };
+  } catch (error) {
+    const subjectSha256 = await sha256Hex(subject.registrable);
+    console.log(
+      JSON.stringify({
+        event: unreachedEvent("creator", error),
+        probe,
+        reason: probeFailureReason(error),
+        subjectSha256,
+      }),
+    );
+    return { card: UNREACHED, reached: false };
+  }
+}
+
 export async function readSiteCard(
   subject: Subject,
   mayEscalate: MayEscalate,
 ): Promise<{ card: SiteCard; reached: boolean }> {
-  if (subject.kind !== "domain") {
-    const probe = profileProbe(subject);
-    if (probe === null || subject.url === null) return { card: UNREACHED, reached: false };
-    try {
-      const card = await cachedProbe(subject, probe, siteCardSchema, () => probeProfile(subject, mayEscalate));
-      console.log(
-        JSON.stringify({
-          event: "identity-creator-card",
-          probe,
-          filled: filledProfileFields(card),
-        }),
-      );
-      return { card, reached: true };
-    } catch (error) {
-      const subjectSha256 = await sha256Hex(subject.registrable);
-      console.log(
-        JSON.stringify({
-          event: unreachedEvent("creator", error),
-          probe,
-          reason: probeFailureReason(error),
-          subjectSha256,
-        }),
-      );
-      return { card: UNREACHED, reached: false };
-    }
-  }
+  if (subject.kind !== "domain") return readProfileCard(subject, mayEscalate);
   try {
     return {
-      card: await cachedProbe(subject, "homepage", readSiteCardSchema, () => probeSite(subject, mayEscalate)),
+      card: await cachedProbe(subject, "homepage", {
+        schema: readSiteCardSchema,
+        run: () => probeSite(subject, mayEscalate),
+      }),
       reached: true,
     };
   } catch (error) {
@@ -225,12 +236,15 @@ function cardValues(subject: Subject, card: SiteCard): CardValues {
 }
 
 async function logoDataUrl(subject: Subject, card: SiteCard): Promise<string | null> {
-  const cached = await cachedProbe(subject, "icon", logoSchema, async () => {
-    const url = await firstStorableLogoUrl({
-      ...card.logoCandidates,
-      registrableDomain: subject.registrable,
-    });
-    return { v: ICON_PROBE_V, url };
+  const cached = await cachedProbe(subject, "icon", {
+    schema: logoSchema,
+    run: async () => {
+      const url = await firstStorableLogoUrl({
+        ...card.logoCandidates,
+        registrableDomain: subject.registrable,
+      });
+      return { v: ICON_PROBE_V, url };
+    },
   });
   const url = cached.url;
   if (url === null) return null;
@@ -254,7 +268,7 @@ export function startCard(
   const site = read.then(async ({ card, reached }): Promise<SiteFields> => {
     const values = cardValues(subject, card);
     const review: CardReview = reached
-      ? await reviewFields(workspaceId, subject, values, edited, new Date().toISOString())
+      ? await reviewFields({ workspaceId, subject, fields: values, edited, now: new Date().toISOString() })
       : fillReview(values);
     return { ...applyReview(values, review), unfound: subject.kind === "domain" && !reached };
   });

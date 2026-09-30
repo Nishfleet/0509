@@ -56,7 +56,7 @@ describe("classifyNavPages", () => {
     const run = vi.fn(() => Promise.resolve({ answers: { page_role: { type: "choice", choice: "pricing" } } }));
     Reflect.set(env, "AI", { run });
 
-    const rows = await classifyNavPages(workspaceId, ENTITY, [PAGE], NOW);
+    const rows = await classifyNavPages({ workspaceId, entity: ENTITY, pages: [PAGE], now: NOW });
 
     expect(rows).toHaveLength(1);
     expect(rows[0]).toMatchObject({
@@ -89,8 +89,13 @@ describe("classifyNavPages", () => {
     const run = vi.fn(() => Promise.resolve({ answers: { page_role: { type: "choice", choice: "pricing" } } }));
     Reflect.set(env, "AI", { run });
 
-    await classifyNavPages(workspaceId, ENTITY, [PAGE], NOW);
-    const second = await classifyNavPages(workspaceId, ENTITY, [PAGE], "2026-09-25T12:00:00.000Z");
+    await classifyNavPages({ workspaceId, entity: ENTITY, pages: [PAGE], now: NOW });
+    const second = await classifyNavPages({
+      workspaceId,
+      entity: ENTITY,
+      pages: [PAGE],
+      now: "2026-09-25T12:00:00.000Z",
+    });
 
     expect(second).toEqual([]);
     expect(run).toHaveBeenCalledTimes(1);
@@ -102,14 +107,19 @@ describe("classifyNavPages", () => {
   it("re-judges a page whose title changed and rewrites the one row", async () => {
     const run = vi.fn(() => Promise.resolve({ answers: { page_role: { type: "choice", choice: "pricing" } } }));
     Reflect.set(env, "AI", { run });
-    await classifyNavPages(workspaceId, ENTITY, [PAGE], NOW);
+    await classifyNavPages({ workspaceId, entity: ENTITY, pages: [PAGE], now: NOW });
     const firstHash = (await readPages())[0]?.role_decided_for_hash;
 
     Reflect.deleteProperty(env, "AI");
     const secondRun = vi.fn(() => Promise.resolve({ answers: { page_role: { type: "choice", choice: "other" } } }));
     Reflect.set(env, "AI", { run: secondRun });
 
-    const second = await classifyNavPages(workspaceId, ENTITY, [{ url: PAGE_URL, title: "Sale" }], NOW);
+    const second = await classifyNavPages({
+      workspaceId,
+      entity: ENTITY,
+      pages: [{ url: PAGE_URL, title: "Sale" }],
+      now: NOW,
+    });
 
     expect(secondRun).toHaveBeenCalledTimes(1);
     expect(run).toHaveBeenCalledTimes(1);
@@ -151,12 +161,12 @@ describe("classifyNavPages", () => {
     const run = vi.fn(() => Promise.resolve({ answers: { page_role: { type: "choice", choice: "blog" } } }));
     Reflect.set(env, "AI", { run });
 
-    await classifyNavPages(
+    await classifyNavPages({
       workspaceId,
-      ENTITY,
-      [PAGE, { url: "https://www.gymshark.com/blogs/news/introducing-adapt", title: "Adapt" }],
-      NOW,
-    );
+      entity: ENTITY,
+      pages: [PAGE, { url: "https://www.gymshark.com/blogs/news/introducing-adapt", title: "Adapt" }],
+      now: NOW,
+    });
 
     const { results } = await env.DB.prepare(
       "SELECT question_id, choice, entity_id, p, signal_id, reason, decided_at, workspace_id FROM jev_verdict",
@@ -182,7 +192,9 @@ describe("classifyNavPages", () => {
     const run = vi.fn(() => Promise.reject(new Error("jev down")));
     Reflect.set(env, "AI", { run });
 
-    await expect(classifyNavPages(workspaceId, ENTITY, [PAGE], NOW)).rejects.toThrow(/^jev unavailable: jev down$/);
+    await expect(classifyNavPages({ workspaceId, entity: ENTITY, pages: [PAGE], now: NOW })).rejects.toThrow(
+      /^jev unavailable: jev down$/,
+    );
     expect(await readPages()).toEqual([]);
     const { results } = await env.DB.prepare("SELECT id FROM jev_verdict").all();
     expect(results).toHaveLength(0);

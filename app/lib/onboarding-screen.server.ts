@@ -15,7 +15,7 @@ const runJevOutcome = (input: {
   raw: string;
   now: string;
 }): Promise<{ outcome: "proceed" | "ask" | "refuse" } | null> =>
-  screenPublicSubject(input.workspaceId, input.subject, input.raw, input.now).catch((error: unknown) => {
+  screenPublicSubject(input).catch((error: unknown) => {
     if (!(error instanceof JevUnavailableError)) throw error;
     console.log(
       JSON.stringify({

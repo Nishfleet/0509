@@ -29,8 +29,7 @@ export async function readDraft(workspaceId: string, registrable: string): Promi
 export async function saveDraftField(
   workspaceId: string,
   registrable: string,
-  field: DraftField,
-  value: string,
+  { field, value }: { field: DraftField; value: string },
 ): Promise<void> {
   const current = await readDraft(workspaceId, registrable);
   const max = DRAFT_FIELD_MAX[field];
@@ -64,7 +63,7 @@ export async function applyDraftIntent(workspaceId: string, form: FormData): Pro
     const normalised = normaliseSubject(draftSubject);
     if (normalised.ok) {
       if (intent === "draft" && typeof value === "string") {
-        await saveDraftField(workspaceId, normalised.subject.registrable, field, value);
+        await saveDraftField(workspaceId, normalised.subject.registrable, { field, value });
       }
       if (intent === "revert") {
         await clearDraftField(workspaceId, normalised.subject.registrable, field);

@@ -58,11 +58,16 @@ export async function findBoard(entity: { id: string; domain: string }): Promise
   }
 
   const homepage = `https://${entity.domain}/`;
-  const board = await readThrough(`hiring:${registrable}:board`, BOARD_SCHEMA, BOARD_TTL_SECONDS, async () => {
-    const page = await readUrl(homepage);
-    if (!page.ok) throw new Error(`hiring.homepage_unreadable ${entity.domain}: ${page.reason}`);
-    const found = await discoverBoard(await homepageLinks(page.html, homepage), entity.domain);
-    return { platform: found.platform, boardUrl: found.boardUrl };
+  const board = await readThrough({
+    key: `hiring:${registrable}:board`,
+    schema: BOARD_SCHEMA,
+    ttlSeconds: BOARD_TTL_SECONDS,
+    run: async () => {
+      const page = await readUrl(homepage);
+      if (!page.ok) throw new Error(`hiring.homepage_unreadable ${entity.domain}: ${page.reason}`);
+      const found = await discoverBoard(await homepageLinks(page.html, homepage), entity.domain);
+      return { platform: found.platform, boardUrl: found.boardUrl };
+    },
   });
 
   const base = { entityId: entity.id, platform: board.platform, boardUrl: board.boardUrl };
