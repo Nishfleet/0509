@@ -1,0 +1,1150 @@
+[
+  {
+    "id": "gymshark-fitness-apparel",
+    "split": "train",
+    "label": true,
+    "why": "Matches how Gymshark describes itself: a UK fitness apparel brand",
+    "subject": {
+      "registrable": "gymshark.com",
+      "kind": "domain",
+      "url": "https://www.gymshark.com"
+    },
+    "fields": {
+      "name": "Gymshark",
+      "description": "British fitness apparel and accessories brand",
+      "socials": [
+        {
+          "platform": "instagram",
+          "url": "https://www.instagram.com/gymshark"
+        }
+      ]
+    },
+    "edited": []
+  },
+  {
+    "id": "stripe-payments-infra",
+    "split": "train",
+    "label": true,
+    "why": "Stripe's own line is payments infrastructure for the internet",
+    "subject": {
+      "registrable": "stripe.com",
+      "kind": "domain",
+      "url": "https://www.stripe.com"
+    },
+    "fields": {
+      "name": "Stripe",
+      "description": "Payments infrastructure for the internet",
+      "socials": [
+        {
+          "platform": "x",
+          "url": "https://x.com/stripe"
+        }
+      ]
+    },
+    "edited": []
+  },
+  {
+    "id": "patagonia-outdoor-gear",
+    "split": "train",
+    "label": true,
+    "why": "Names Patagonia's own categories: climbing, surfing and outdoor gear",
+    "subject": {
+      "registrable": "patagonia.com",
+      "kind": "domain",
+      "url": "https://www.patagonia.com"
+    },
+    "fields": {
+      "name": "Patagonia",
+      "description": "Climbing, surfing and outdoor apparel and gear",
+      "socials": [
+        {
+          "platform": "instagram",
+          "url": "https://www.instagram.com/patagonia"
+        }
+      ]
+    },
+    "edited": []
+  },
+  {
+    "id": "allbirds-sustainable",
+    "split": "train",
+    "label": true,
+    "why": "The brand's own line is sustainable footwear and apparel",
+    "subject": {
+      "registrable": "allbirds.com",
+      "kind": "domain",
+      "url": "https://www.allbirds.com"
+    },
+    "fields": {
+      "name": "Allbirds",
+      "description": "Sustainable footwear and apparel",
+      "socials": [
+        {
+          "platform": "instagram",
+          "url": "https://www.instagram.com/allbirds"
+        }
+      ]
+    },
+    "edited": []
+  },
+  {
+    "id": "duolingo-language-app",
+    "split": "train",
+    "label": true,
+    "why": "Matches Duolingo's own app framing, mascot and daily streak included",
+    "subject": {
+      "registrable": "duolingo.com",
+      "kind": "domain",
+      "url": "https://www.duolingo.com"
+    },
+    "fields": {
+      "name": "Duolingo",
+      "description": "Language-learning app with a mascot-led daily streak",
+      "socials": [
+        {
+          "platform": "x",
+          "url": "https://x.com/duolingo"
+        }
+      ]
+    },
+    "edited": []
+  },
+  {
+    "id": "shopify-commerce-platform",
+    "split": "train",
+    "label": true,
+    "why": "Matches Shopify's own line about building and running a store",
+    "subject": {
+      "registrable": "shopify.com",
+      "kind": "domain",
+      "url": "https://www.shopify.com"
+    },
+    "fields": {
+      "name": "Shopify",
+      "description": "Commerce platform for building and running an online store",
+      "socials": [
+        {
+          "platform": "x",
+          "url": "https://x.com/shopify"
+        }
+      ]
+    },
+    "edited": []
+  },
+  {
+    "id": "monzo-digital-bank",
+    "split": "train",
+    "label": true,
+    "why": "Matches Monzo's own line: a UK digital bank with no monthly fees",
+    "subject": {
+      "registrable": "monzo.com",
+      "kind": "domain",
+      "url": "https://www.monzo.com"
+    },
+    "fields": {
+      "name": "Monzo",
+      "description": "UK digital bank with no monthly fees",
+      "socials": [
+        {
+          "platform": "x",
+          "url": "https://x.com/monzo"
+        }
+      ]
+    },
+    "edited": []
+  },
+  {
+    "id": "linear-issue-tracking",
+    "split": "train",
+    "label": true,
+    "why": "Matches Linear's own line about issue tracking and product planning",
+    "subject": {
+      "registrable": "linear.app",
+      "kind": "domain",
+      "url": "https://www.linear.app"
+    },
+    "fields": {
+      "name": "Linear",
+      "description": "Issue tracking and product planning for software teams",
+      "socials": [
+        {
+          "platform": "x",
+          "url": "https://x.com/linear"
+        }
+      ]
+    },
+    "edited": []
+  },
+  {
+    "id": "uniqlo-japanese-basics",
+    "split": "train",
+    "label": true,
+    "why": "Matches Uniqlo's own framing as a Japanese basics and fleece retailer",
+    "subject": {
+      "registrable": "uniqlo.com",
+      "kind": "domain",
+      "url": "https://www.uniqlo.com"
+    },
+    "fields": {
+      "name": "Uniqlo",
+      "description": "Japanese casual clothing retailer selling basics and fleece",
+      "socials": [
+        {
+          "platform": "instagram",
+          "url": "https://www.instagram.com/uniqlo"
+        }
+      ]
+    },
+    "edited": []
+  },
+  {
+    "id": "lego-brick-sets",
+    "split": "train",
+    "label": true,
+    "why": "Matches LEGO's own line about bricks for children and adults",
+    "subject": {
+      "registrable": "lego.com",
+      "kind": "domain",
+      "url": "https://www.lego.com"
+    },
+    "fields": {
+      "name": "LEGO",
+      "description": "Toy bricks and construction sets for children and adults",
+      "socials": [
+        {
+          "platform": "instagram",
+          "url": "https://www.instagram.com/lego"
+        }
+      ]
+    },
+    "edited": []
+  },
+  {
+    "id": "plaid-bank-data-api",
+    "split": "train",
+    "label": true,
+    "why": "Matches Plaid's own line about bank data APIs for fintech products",
+    "subject": {
+      "registrable": "plaid.com",
+      "kind": "domain",
+      "url": "https://www.plaid.com"
+    },
+    "fields": {
+      "name": "Plaid",
+      "description": "API connecting bank data to consumer fintech products",
+      "socials": [
+        {
+          "platform": "x",
+          "url": "https://x.com/plaid"
+        }
+      ]
+    },
+    "edited": []
+  },
+  {
+    "id": "slack-handle-messaging",
+    "split": "train",
+    "label": true,
+    "why": "Matches Slack's own framing as a workplace messaging and workflow tool",
+    "subject": {
+      "registrable": "slack",
+      "kind": "handle",
+      "url": null,
+      "platform": "x"
+    },
+    "fields": {
+      "name": "Slack",
+      "description": "Team messaging and workflow tool for workplaces",
+      "socials": [
+        {
+          "platform": "x",
+          "url": "https://x.com/slack"
+        }
+      ]
+    },
+    "edited": []
+  },
+  {
+    "id": "liquiddeath-cans",
+    "split": "train",
+    "label": true,
+    "why": "Matches Liquid Death's own cans-first framing of its drinks",
+    "subject": {
+      "registrable": "liquiddeath",
+      "kind": "handle",
+      "url": null,
+      "platform": "youtube"
+    },
+    "fields": {
+      "name": "Liquid Death",
+      "description": "Sparkling water and energy drinks sold in tall cans",
+      "socials": [
+        {
+          "platform": "youtube",
+          "url": "https://www.youtube.com/@liquideath"
+        }
+      ]
+    },
+    "edited": []
+  },
+  {
+    "id": "tesla-mission-line",
+    "split": "train",
+    "label": false,
+    "why": "A sustainability mission, not a description of what the company sells",
+    "subject": {
+      "registrable": "tesla.com",
+      "kind": "domain",
+      "url": "https://www.tesla.com"
+    },
+    "fields": {
+      "name": "Tesla",
+      "description": "Driving the world toward a greener, cleaner tomorrow for everyone",
+      "socials": [
+        {
+          "platform": "x",
+          "url": "https://x.com/tesla"
+        }
+      ]
+    },
+    "edited": []
+  },
+  {
+    "id": "apple-shopper-phrasing",
+    "split": "train",
+    "label": false,
+    "why": "Shopper phrasing any phone maker could use, not Apple's own line",
+    "subject": {
+      "registrable": "apple.com",
+      "kind": "domain",
+      "url": "https://www.apple.com"
+    },
+    "fields": {
+      "name": "Apple",
+      "description": "Premium smartphones, laptops and gadgets",
+      "socials": [
+        {
+          "platform": "instagram",
+          "url": "https://www.instagram.com/apple"
+        }
+      ]
+    },
+    "edited": []
+  },
+  {
+    "id": "spotify-for-everyone",
+    "split": "train",
+    "label": false,
+    "why": "Generic audience phrasing rather than Spotify's own one-liner",
+    "subject": {
+      "registrable": "spotify.com",
+      "kind": "domain",
+      "url": "https://www.spotify.com"
+    },
+    "fields": {
+      "name": "Spotify",
+      "description": "Music and podcasts for everyone, wherever you are",
+      "socials": [
+        {
+          "platform": "instagram",
+          "url": "https://www.instagram.com/spotify"
+        }
+      ]
+    },
+    "edited": []
+  },
+  {
+    "id": "mailchimp-keyword-stuffed",
+    "split": "train",
+    "label": false,
+    "why": "Keyword-stuffed SEO filler, not a line Mailchimp publishes",
+    "subject": {
+      "registrable": "mailchimp.com",
+      "kind": "domain",
+      "url": "https://www.mailchimp.com"
+    },
+    "fields": {
+      "name": "Mailchimp",
+      "description": "cheap email marketing software best email marketing tools email marketing services",
+      "socials": [
+        {
+          "platform": "x",
+          "url": "https://x.com/mailchimp"
+        }
+      ]
+    },
+    "edited": []
+  },
+  {
+    "id": "nike-air-jordan-line",
+    "split": "train",
+    "label": false,
+    "why": "Covers the Air Jordan line, not the whole Nike brand",
+    "subject": {
+      "registrable": "nike.com",
+      "kind": "domain",
+      "url": "https://www.nike.com"
+    },
+    "fields": {
+      "name": "Nike",
+      "description": "Air Jordan basketball sneakers",
+      "socials": [
+        {
+          "platform": "instagram",
+          "url": "https://www.instagram.com/nike"
+        }
+      ]
+    },
+    "edited": []
+  },
+  {
+    "id": "squareup-bare-noun",
+    "split": "train",
+    "label": false,
+    "why": "A single generic category word with nothing to identify Square",
+    "subject": {
+      "registrable": "squareup.com",
+      "kind": "domain",
+      "url": "https://www.squareup.com"
+    },
+    "fields": {
+      "name": "Square",
+      "description": "Payments",
+      "socials": [
+        {
+          "platform": "x",
+          "url": "https://x.com/square"
+        }
+      ]
+    },
+    "edited": []
+  },
+  {
+    "id": "decathlon-translated-bare-noun",
+    "split": "train",
+    "label": false,
+    "why": "French for 'sporting-goods store': a bare category noun, not Decathlon's line",
+    "subject": {
+      "registrable": "decathlon.com",
+      "kind": "domain",
+      "url": "https://www.decathlon.com"
+    },
+    "fields": {
+      "name": "Decathlon",
+      "description": "Magasin d'articles de sport",
+      "socials": [
+        {
+          "platform": "instagram",
+          "url": "https://www.instagram.com/decathlon"
+        }
+      ]
+    },
+    "edited": []
+  },
+  {
+    "id": "breitling-generic-luxury",
+    "split": "train",
+    "label": false,
+    "why": "Wording any Swiss watchmaker could print about Breitling",
+    "subject": {
+      "registrable": "breitling.com",
+      "kind": "domain",
+      "url": "https://www.breitling.com"
+    },
+    "fields": {
+      "name": "Breitling",
+      "description": "Precision Swiss luxury timepieces",
+      "socials": [
+        {
+          "platform": "instagram",
+          "url": "https://www.instagram.com/breitling"
+        }
+      ]
+    },
+    "edited": []
+  },
+  {
+    "id": "adobe-photoshop-only",
+    "split": "train",
+    "label": false,
+    "why": "Names one Adobe product instead of the company it belongs to",
+    "subject": {
+      "registrable": "adobe.com",
+      "kind": "domain",
+      "url": "https://www.adobe.com"
+    },
+    "fields": {
+      "name": "Adobe",
+      "description": "The Photoshop graphics editor",
+      "socials": [
+        {
+          "platform": "x",
+          "url": "https://x.com/adobe"
+        }
+      ]
+    },
+    "edited": []
+  },
+  {
+    "id": "asana-atlassian-credit",
+    "split": "train",
+    "label": false,
+    "why": "Asana is independent software; the Atlassian credit is not its own",
+    "subject": {
+      "registrable": "asana.com",
+      "kind": "domain",
+      "url": "https://www.asana.com"
+    },
+    "fields": {
+      "name": "Asana",
+      "description": "Project management software from Atlassian",
+      "socials": [
+        {
+          "platform": "x",
+          "url": "https://x.com/asana"
+        }
+      ]
+    },
+    "edited": []
+  },
+  {
+    "id": "hubspot-salesforce-credit",
+    "split": "train",
+    "label": false,
+    "why": "Salesforce is a rival; HubSpot is not its marketing product",
+    "subject": {
+      "registrable": "hubspot.com",
+      "kind": "domain",
+      "url": "https://www.hubspot.com"
+    },
+    "fields": {
+      "name": "HubSpot",
+      "description": "Marketing automation software from Salesforce",
+      "socials": [
+        {
+          "platform": "x",
+          "url": "https://x.com/hubspot"
+        }
+      ]
+    },
+    "edited": []
+  },
+  {
+    "id": "salesforce-garbled",
+    "split": "train",
+    "label": false,
+    "why": "A garbled mash of enterprise CRM wording, not a clean line",
+    "subject": {
+      "registrable": "salesforce.com",
+      "kind": "domain",
+      "url": "https://www.salesforce.com"
+    },
+    "fields": {
+      "name": "Salesforce",
+      "description": "Enterprize CRM softwar for sales teams",
+      "socials": [
+        {
+          "platform": "x",
+          "url": "https://x.com/salesforce"
+        }
+      ]
+    },
+    "edited": []
+  },
+  {
+    "id": "postman-keyword-repetition",
+    "split": "train",
+    "label": false,
+    "why": "Keyword repetition, not the description Postman publishes",
+    "subject": {
+      "registrable": "postman.com",
+      "kind": "domain",
+      "url": "https://www.postman.com"
+    },
+    "fields": {
+      "name": "Postman",
+      "description": "api testing developer tool sandbox mock server api developer api",
+      "socials": [
+        {
+          "platform": "x",
+          "url": "https://x.com/getpostman"
+        }
+      ]
+    },
+    "edited": []
+  },
+  {
+    "id": "wise-multi-currency",
+    "split": "test",
+    "label": true,
+    "why": "Matches Wise's own line about transfers and multi-currency accounts",
+    "subject": {
+      "registrable": "wise.com",
+      "kind": "domain",
+      "url": "https://www.wise.com"
+    },
+    "fields": {
+      "name": "Wise",
+      "description": "Money transfer and multi-currency accounts for moving money abroad",
+      "socials": [
+        {
+          "platform": "x",
+          "url": "https://x.com/wisecom"
+        }
+      ]
+    },
+    "edited": []
+  },
+  {
+    "id": "vercel-handle-deploy",
+    "split": "test",
+    "label": true,
+    "why": "Matches Vercel's own line about deploying web and AI workloads",
+    "subject": {
+      "registrable": "vercel",
+      "kind": "handle",
+      "url": null,
+      "platform": "youtube"
+    },
+    "fields": {
+      "name": "Vercel",
+      "description": "Cloud platform for deploying web apps and AI workloads",
+      "socials": [
+        {
+          "platform": "x",
+          "url": "https://x.com/vercel"
+        }
+      ]
+    },
+    "edited": []
+  },
+  {
+    "id": "airtable-no-code-db",
+    "split": "test",
+    "label": true,
+    "why": "Matches Airtable's own line about a collaborative database and app builder",
+    "subject": {
+      "registrable": "airtable.com",
+      "kind": "domain",
+      "url": "https://www.airtable.com"
+    },
+    "fields": {
+      "name": "Airtable",
+      "description": "Collaborative database and app builder for teams",
+      "socials": [
+        {
+          "platform": "x",
+          "url": "https://x.com/airtable"
+        }
+      ]
+    },
+    "edited": []
+  },
+  {
+    "id": "figma-design-prototyping",
+    "split": "test",
+    "label": true,
+    "why": "Matches Figma's own line about collaborative design and prototyping",
+    "subject": {
+      "registrable": "figma.com",
+      "kind": "domain",
+      "url": "https://www.figma.com"
+    },
+    "fields": {
+      "name": "Figma",
+      "description": "Collaborative interface design and prototyping tool",
+      "socials": [
+        {
+          "platform": "x",
+          "url": "https://x.com/figma"
+        }
+      ]
+    },
+    "edited": []
+  },
+  {
+    "id": "atlassian-dev-tools",
+    "split": "test",
+    "label": true,
+    "why": "Matches Atlassian's own line about dev, issues and teamwork tools",
+    "subject": {
+      "registrable": "atlassian.com",
+      "kind": "domain",
+      "url": "https://www.atlassian.com"
+    },
+    "fields": {
+      "name": "Atlassian",
+      "description": "Tools for software development, issue tracking and teamwork",
+      "socials": [
+        {
+          "platform": "instagram",
+          "url": "https://www.instagram.com/atlassian"
+        }
+      ]
+    },
+    "edited": []
+  },
+  {
+    "id": "canva-online-design",
+    "split": "test",
+    "label": true,
+    "why": "Matches Canva's own line about online design for everyone",
+    "subject": {
+      "registrable": "canva.com",
+      "kind": "domain",
+      "url": "https://www.canva.com"
+    },
+    "fields": {
+      "name": "Canva",
+      "description": "Online graphic design and video editing for everyone",
+      "socials": [
+        {
+          "platform": "instagram",
+          "url": "https://www.instagram.com/canva"
+        }
+      ]
+    },
+    "edited": []
+  },
+  {
+    "id": "kraken-digital-assets",
+    "split": "test",
+    "label": true,
+    "why": "Matches Kraken's own line about trading and custody of digital assets",
+    "subject": {
+      "registrable": "kraken.com",
+      "kind": "domain",
+      "url": "https://www.kraken.com"
+    },
+    "fields": {
+      "name": "Kraken",
+      "description": "Digital-asset exchange and institutional trading platform",
+      "socials": [
+        {
+          "platform": "x",
+          "url": "https://x.com/krakenfx"
+        }
+      ]
+    },
+    "edited": []
+  },
+  {
+    "id": "nikon-cameras-lenses",
+    "split": "test",
+    "label": true,
+    "why": "Matches Nikon's own line about cameras, lenses and imaging gear",
+    "subject": {
+      "registrable": "nikon.com",
+      "kind": "domain",
+      "url": "https://www.nikon.com"
+    },
+    "fields": {
+      "name": "Nikon",
+      "description": "Cameras, lenses and imaging equipment for photographers",
+      "socials": [
+        {
+          "platform": "instagram",
+          "url": "https://www.instagram.com/nikon"
+        }
+      ]
+    },
+    "edited": []
+  },
+  {
+    "id": "rivian-electric-adventure",
+    "split": "test",
+    "label": true,
+    "why": "Matches Rivian's own framing: electric adventure vehicles plus charging",
+    "subject": {
+      "registrable": "rivian.com",
+      "kind": "domain",
+      "url": "https://www.rivian.com"
+    },
+    "fields": {
+      "name": "Rivian",
+      "description": "Electric adventure vehicles and a charging network",
+      "socials": [
+        {
+          "platform": "x",
+          "url": "https://x.com/rivian"
+        }
+      ]
+    },
+    "edited": []
+  },
+  {
+    "id": "basecamp-small-teams",
+    "split": "test",
+    "label": true,
+    "why": "Matches Basecamp's own line: project work and chat for small teams",
+    "subject": {
+      "registrable": "basecamp.com",
+      "kind": "domain",
+      "url": "https://www.basecamp.com"
+    },
+    "fields": {
+      "name": "Basecamp",
+      "description": "Project management and team messaging for small companies",
+      "socials": [
+        {
+          "platform": "x",
+          "url": "https://x.com/basecamp"
+        }
+      ]
+    },
+    "edited": []
+  },
+  {
+    "id": "squarespace-site-tools",
+    "split": "test",
+    "label": true,
+    "why": "Matches Squarespace's own line about website building and selling tools",
+    "subject": {
+      "registrable": "squarespace.com",
+      "kind": "domain",
+      "url": "https://www.squarespace.com"
+    },
+    "fields": {
+      "name": "Squarespace",
+      "description": "Website building and online selling tools for small businesses",
+      "socials": [
+        {
+          "platform": "instagram",
+          "url": "https://www.instagram.com/squarespace"
+        }
+      ]
+    },
+    "edited": []
+  },
+  {
+    "id": "sonos-wireless-audio",
+    "split": "test",
+    "label": true,
+    "why": "Matches Sonos's own line about wireless speakers and home audio",
+    "subject": {
+      "registrable": "sonos.com",
+      "kind": "domain",
+      "url": "https://www.sonos.com"
+    },
+    "fields": {
+      "name": "Sonos",
+      "description": "Wireless speakers and home audio",
+      "socials": [
+        {
+          "platform": "instagram",
+          "url": "https://www.instagram.com/sonos"
+        }
+      ]
+    },
+    "edited": []
+  },
+  {
+    "id": "brompton-handle-folding",
+    "split": "test",
+    "label": true,
+    "why": "Matches Brompton's own line about folding bikes made in London",
+    "subject": {
+      "registrable": "brompton",
+      "kind": "handle",
+      "url": null,
+      "platform": "instagram"
+    },
+    "fields": {
+      "name": "Brompton",
+      "description": "Folding bicycles made in London",
+      "socials": [
+        {
+          "platform": "instagram",
+          "url": "https://www.instagram.com/brompton"
+        }
+      ]
+    },
+    "edited": []
+  },
+  {
+    "id": "trello-microsoft-credit",
+    "split": "test",
+    "label": false,
+    "why": "Trello is Atlassian software; the Microsoft credit is not its own",
+    "subject": {
+      "registrable": "trello.com",
+      "kind": "domain",
+      "url": "https://www.trello.com"
+    },
+    "fields": {
+      "name": "Trello",
+      "description": "Project management software from Microsoft",
+      "socials": [
+        {
+          "platform": "x",
+          "url": "https://x.com/trello"
+        }
+      ]
+    },
+    "edited": []
+  },
+  {
+    "id": "grammarly-office-claim",
+    "split": "test",
+    "label": false,
+    "why": "Grammarly is a separate product, not part of Microsoft Office",
+    "subject": {
+      "registrable": "grammarly.com",
+      "kind": "domain",
+      "url": "https://www.grammarly.com"
+    },
+    "fields": {
+      "name": "Grammarly",
+      "description": "The AI writing assistant built into Microsoft Office",
+      "socials": [
+        {
+          "platform": "x",
+          "url": "https://x.com/grammarly"
+        }
+      ]
+    },
+    "edited": []
+  },
+  {
+    "id": "indeed-keyword-list",
+    "split": "test",
+    "label": false,
+    "why": "A keyword list, not the description Indeed publishes",
+    "subject": {
+      "registrable": "indeed.com",
+      "kind": "domain",
+      "url": "https://www.indeed.com"
+    },
+    "fields": {
+      "name": "Indeed",
+      "description": "job search jobs hiring resume careers employment",
+      "socials": [
+        {
+          "platform": "x",
+          "url": "https://x.com/indeed"
+        }
+      ]
+    },
+    "edited": []
+  },
+  {
+    "id": "starbucks-mission-line",
+    "split": "test",
+    "label": false,
+    "why": "A mission statement, not a description of what the site is",
+    "subject": {
+      "registrable": "starbucks.com",
+      "kind": "domain",
+      "url": "https://www.starbucks.com"
+    },
+    "fields": {
+      "name": "Starbucks",
+      "description": "A global mission to build the finest coffeehouses and communities",
+      "socials": [
+        {
+          "platform": "instagram",
+          "url": "https://www.instagram.com/starbucks"
+        }
+      ]
+    },
+    "edited": []
+  },
+  {
+    "id": "homedepot-bare-noun",
+    "split": "test",
+    "label": false,
+    "why": "A single generic category phrase with nothing to identify the brand",
+    "subject": {
+      "registrable": "homedepot.com",
+      "kind": "domain",
+      "url": "https://www.homedepot.com"
+    },
+    "fields": {
+      "name": "The Home Depot",
+      "description": "Home improvement",
+      "socials": [
+        {
+          "platform": "instagram",
+          "url": "https://www.instagram.com/homedepot"
+        }
+      ]
+    },
+    "edited": []
+  },
+  {
+    "id": "amazon-devices-only",
+    "split": "test",
+    "label": false,
+    "why": "Covers Amazon's device line, not the company itself",
+    "subject": {
+      "registrable": "amazon.com",
+      "kind": "domain",
+      "url": "https://www.amazon.com"
+    },
+    "fields": {
+      "name": "Amazon",
+      "description": "Kindle e-readers and Fire tablets",
+      "socials": [
+        {
+          "platform": "instagram",
+          "url": "https://www.instagram.com/amazon"
+        }
+      ]
+    },
+    "edited": []
+  },
+  {
+    "id": "rolex-generic-swiss",
+    "split": "test",
+    "label": false,
+    "why": "Wording any Swiss luxury watchmaker could print about Rolex",
+    "subject": {
+      "registrable": "rolex.com",
+      "kind": "domain",
+      "url": "https://www.rolex.com"
+    },
+    "fields": {
+      "name": "Rolex",
+      "description": "Luxury watches made in Switzerland",
+      "socials": [
+        {
+          "platform": "instagram",
+          "url": "https://www.instagram.com/rolex"
+        }
+      ]
+    },
+    "edited": []
+  },
+  {
+    "id": "nintendo-paraphrase",
+    "split": "test",
+    "label": false,
+    "why": "An awkward paraphrase, not the wording Nintendo publishes",
+    "subject": {
+      "registrable": "nintendo.com",
+      "kind": "domain",
+      "url": "https://www.nintendo.com"
+    },
+    "fields": {
+      "name": "Nintendo",
+      "description": "Game machines that bring smiles to everyone in the family",
+      "socials": [
+        {
+          "platform": "x",
+          "url": "https://x.com/nintendo"
+        }
+      ]
+    },
+    "edited": []
+  },
+  {
+    "id": "lululemon-yoga-leggings",
+    "split": "test",
+    "label": false,
+    "why": "True of the category and its best seller, but not the brand's own line",
+    "subject": {
+      "registrable": "lululemon.com",
+      "kind": "domain",
+      "url": "https://www.lululemon.com"
+    },
+    "fields": {
+      "name": "lululemon",
+      "description": "Premium yoga pants and leggings",
+      "socials": [
+        {
+          "platform": "instagram",
+          "url": "https://www.instagram.com/lululemon"
+        }
+      ]
+    },
+    "edited": []
+  },
+  {
+    "id": "gitlab-bare-noun",
+    "split": "test",
+    "label": false,
+    "why": "Two generic category words with nothing to identify GitLab",
+    "subject": {
+      "registrable": "gitlab.com",
+      "kind": "domain",
+      "url": "https://www.gitlab.com"
+    },
+    "fields": {
+      "name": "GitLab",
+      "description": "Repository hosting",
+      "socials": [
+        {
+          "platform": "x",
+          "url": "https://x.com/gitlab"
+        }
+      ]
+    },
+    "edited": []
+  },
+  {
+    "id": "microsoft-xbox-only",
+    "split": "test",
+    "label": false,
+    "why": "Covers one Microsoft product, not the company",
+    "subject": {
+      "registrable": "microsoft.com",
+      "kind": "domain",
+      "url": "https://www.microsoft.com"
+    },
+    "fields": {
+      "name": "Microsoft",
+      "description": "The Xbox game console",
+      "socials": [
+        {
+          "platform": "x",
+          "url": "https://x.com/microsoft"
+        }
+      ]
+    },
+    "edited": []
+  },
+  {
+    "id": "netflix-garbled",
+    "split": "test",
+    "label": false,
+    "why": "A garbled line of typos, not Netflix's own copy",
+    "subject": {
+      "registrable": "netflix.com",
+      "kind": "domain",
+      "url": "https://www.netflix.com"
+    },
+    "fields": {
+      "name": "Netflix",
+      "description": "Streamng films and serias with no cancellaton fees",
+      "socials": [
+        {
+          "platform": "instagram",
+          "url": "https://www.instagram.com/netflix"
+        }
+      ]
+    },
+    "edited": []
+  },
+  {
+    "id": "tesco-mission-line",
+    "split": "test",
+    "label": false,
+    "why": "Generic mission phrasing, not the description Tesco publishes",
+    "subject": {
+      "registrable": "tesco.com",
+      "kind": "domain",
+      "url": "https://www.tesco.com"
+    },
+    "fields": {
+      "name": "Tesco",
+      "description": "Bringing everyone together through great food and good times",
+      "socials": [
+        {
+          "platform": "instagram",
+          "url": "https://www.instagram.com/tesco"
+        }
+      ]
+    },
+    "edited": []
+  }
+]
