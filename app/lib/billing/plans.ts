@@ -50,6 +50,13 @@ export const PLANS = [
 
 export type PlanId = (typeof PLANS)[number]["id"];
 
+export interface PlanSummary {
+  tier: PlanId;
+  status: string;
+  currentPeriodEnd: string | null;
+  billed: boolean;
+}
+
 export const TRIAL_DAYS = 7;
 
 export const TRIAL_TERMS = `Every plan starts with a ${String(TRIAL_DAYS)}-day trial. Your card is taken up front and charged on day ${String(TRIAL_DAYS + 1)} unless you cancel.`;

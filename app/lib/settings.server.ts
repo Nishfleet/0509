@@ -8,6 +8,7 @@ import { oauthHelpersContext } from "./agent/context.server";
 import { requestEmailChange, signOut } from "./auth.server";
 import { nextBriefAt } from "./brief-schedule";
 import { formatBriefAt, parseBriefSchedule } from "./brief-settings";
+import { readPlanSummary } from "./data/plan.server";
 import { readUserDismissed, restoreSuggestion } from "./data/suggestion.server";
 import {
   readBriefScheduleForOwner,
@@ -63,7 +64,8 @@ export async function readSettings(user: SettingsUser) {
   const ownSiteAlerts = workspaceId === null ? true : await readOwnSiteAlerts(workspaceId);
   const dismissed = workspaceId === null ? [] : await readUserDismissed(workspaceId);
   const delivery = await readDeliveryAddress(user.id, user.email);
-  return { email: user.email, schedule, ownSiteAlerts, dismissed, delivery };
+  const plan = workspaceId === null ? null : await readPlanSummary(workspaceId);
+  return { email: user.email, schedule, ownSiteAlerts, dismissed, delivery, plan };
 }
 
 async function saveOwnSiteAlerts(userId: string, form: FormData): Promise<SettingsResult> {
