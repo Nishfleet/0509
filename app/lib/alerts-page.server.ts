@@ -23,6 +23,8 @@ import { withoutMentionAlerts } from "./mention-feed";
 import { offBrandsSentence } from "./off-brands";
 import { daysBefore, readSiteChangeViews } from "./site-changes.server";
 
+const HIRING_LIMIT = 100;
+
 async function readWorkspaceAlertInputs(workspaceId: string, now: Date) {
   const competitors = (await readCompetitors(workspaceId)).competitors;
   const failures = await readDeliveryFailures(env.DB, workspaceId);
@@ -30,7 +32,7 @@ async function readWorkspaceAlertInputs(workspaceId: string, now: Date) {
   const incidents = await readOwnSiteIncidents(env.DB, workspaceId);
   const signals = await readSignalAlerts(env.DB, workspaceId);
   const mentions = await readMentionFeed(workspaceId, now);
-  const hiring = await readWorkspaceHiring(workspaceId, daysBefore(now, 30), 30);
+  const hiring = await readWorkspaceHiring(workspaceId, daysBefore(now, 30), HIRING_LIMIT);
   const sources = await readWorkspaceMentionSources(workspaceId);
   const changes = await readSiteChangeViews({ workspaceId, entityId: null, since: daysBefore(now, 30), limit: 30 });
   const timeZone = await readWorkspaceTimezone(workspaceId);
@@ -154,6 +156,7 @@ export async function loadAlertsPage(userId: string, chip: AlertChipKey) {
   return {
     incidents: buildPastIncidents(inputs, now),
     chip,
+    hiringCapped: inputs.hiring.length === HIRING_LIMIT,
     chipCounts: countAlertChips(
       items.map((item) => item.kind),
       inputs.incidents.length,

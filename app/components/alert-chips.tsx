@@ -7,9 +7,11 @@ import { ToggleGroup, ToggleGroupItem } from "./ui/toggle-group";
 export function AlertChips({
   chip,
   counts,
+  hiringCapped,
 }: {
   chip: AlertChipKey;
   counts: Record<AlertChipKey, number>;
+  hiringCapped: boolean;
 }): ReactElement {
   const [, setSearchParams] = useSearchParams();
   return (
@@ -30,7 +32,11 @@ export function AlertChips({
           disabled={counts[entry.key] === 0 && entry.key !== chip}
           className="min-h-11"
         >
-          {entry.label} <span className="font-mono tabular-nums">{counts[entry.key]}</span>
+          {entry.label}{" "}
+          <span className="font-mono tabular-nums">
+            {counts[entry.key]}
+            {entry.key === "hiring" && hiringCapped ? "+" : ""}
+          </span>
         </ToggleGroupItem>
       ))}
     </ToggleGroup>
