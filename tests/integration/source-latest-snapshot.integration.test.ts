@@ -244,6 +244,39 @@ describe("source latest snapshot facts (0509#5724)", () => {
     });
   });
 
+  it("a retried write with a recomputed fetched_at fails over to the stored snapshot row's facts", async () => {
+    await seedSource(SOURCE, WATCH);
+    const id = "snap-site-retry-recomputed";
+    const storedFetchedAt = "2026-09-25T05:30:00Z";
+    await insertSnapshot({
+      id,
+      watchId: WATCH,
+      pageId: PAGE,
+      fetchedAt: storedFetchedAt,
+      r2Key: `snapshot/site/${WATCH}/${id}.txt`,
+      hash: "hash-site-retry-recomputed",
+    });
+    await insertSnapshot({
+      id,
+      watchId: WATCH,
+      pageId: PAGE,
+      fetchedAt: "2026-09-25T05:30:05Z",
+      r2Key: `snapshot/site/${WATCH}/${id}.txt`,
+      hash: "hash-site-retry-recomputed",
+    });
+
+    const stored = await env.DB.prepare("SELECT fetched_at FROM snapshot WHERE id = ?1")
+      .bind(id)
+      .first<{ fetched_at: string }>();
+    if (stored === null) throw new Error("retried snapshot row missing");
+    expect(stored.fetched_at).toBe(storedFetchedAt);
+    expect(await latestFacts(SOURCE)).toEqual({
+      latest_fetched_at: stored.fetched_at,
+      latest_item_count: 1,
+      latest_canary_count: null,
+    });
+  });
+
   it("an equal fetched_at is not newer: the first committed fact set stays", async () => {
     await seedSource(SOURCE, WATCH);
     await seedWatch(WATCH_TIE, SOURCE, "acme-campaign");

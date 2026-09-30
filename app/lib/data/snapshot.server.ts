@@ -1,7 +1,7 @@
 import { env } from "cloudflare:workers";
 import { z } from "zod";
 
-import { recordSourceLatestSnapshot } from "./source.server";
+import { withSourceLatestFacts } from "./source.server";
 
 const LATEST_SITE_SNAPSHOT = `SELECT id, payload_hash, payload_r2_key FROM snapshot
 WHERE watch_id = ? AND page_id = ? AND fetched_at < ?
@@ -36,22 +36,19 @@ export async function insertSnapshot(row: {
   r2Key: string | null;
   hash: string;
 }): Promise<void> {
-  await env.DB.batch([
-    env.DB.prepare(INSERT_SNAPSHOT).bind(
+  await env.DB.batch(
+    withSourceLatestFacts(
+      env.DB.prepare(INSERT_SNAPSHOT).bind(
+        row.id,
+        row.watchId,
+        row.pageId,
+        row.fetchedAt,
+        row.r2Key,
+        row.hash,
+      ),
       row.id,
-      row.watchId,
-      row.pageId,
-      row.fetchedAt,
-      row.r2Key,
-      row.hash,
     ),
-    recordSourceLatestSnapshot({
-      watchId: row.watchId,
-      fetchedAt: row.fetchedAt,
-      itemCount: 1,
-      canaryCount: null,
-    }),
-  ]);
+  );
 }
 
 const INSERT_WATCH_SNAPSHOT = `INSERT INTO snapshot
@@ -67,7 +64,7 @@ export function insertWatchSnapshot(row: {
   itemCount: number;
   canaryCount: number | null;
 }): D1PreparedStatement[] {
-  return [
+  return withSourceLatestFacts(
     env.DB.prepare(INSERT_WATCH_SNAPSHOT).bind(
       row.id,
       row.watchId,
@@ -77,13 +74,8 @@ export function insertWatchSnapshot(row: {
       row.itemCount,
       row.canaryCount,
     ),
-    recordSourceLatestSnapshot({
-      watchId: row.watchId,
-      fetchedAt: row.fetchedAt,
-      itemCount: row.itemCount,
-      canaryCount: row.canaryCount,
-    }),
-  ];
+    row.id,
+  );
 }
 
 const LATEST_BOARD_SNAPSHOT = `SELECT id, payload_hash, payload_r2_key, item_count FROM snapshot
@@ -132,22 +124,19 @@ export async function insertBoardSnapshot(row: {
   hash: string;
   itemCount: number;
 }): Promise<void> {
-  await env.DB.batch([
-    env.DB.prepare(INSERT_BOARD_SNAPSHOT).bind(
+  await env.DB.batch(
+    withSourceLatestFacts(
+      env.DB.prepare(INSERT_BOARD_SNAPSHOT).bind(
+        row.id,
+        row.watchId,
+        row.fetchedAt,
+        row.r2Key,
+        row.hash,
+        row.itemCount,
+      ),
       row.id,
-      row.watchId,
-      row.fetchedAt,
-      row.r2Key,
-      row.hash,
-      row.itemCount,
     ),
-    recordSourceLatestSnapshot({
-      watchId: row.watchId,
-      fetchedAt: row.fetchedAt,
-      itemCount: row.itemCount,
-      canaryCount: null,
-    }),
-  ]);
+  );
 }
 
 const COVERED_PAGE_PAIRS = `SELECT DISTINCT watch_id, page_id FROM snapshot
