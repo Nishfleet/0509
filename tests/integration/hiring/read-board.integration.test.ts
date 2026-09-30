@@ -111,7 +111,7 @@ describe("readBoard", () => {
   it("files the first snapshot as the baseline and no signals", async () => {
     const result = await readBoard(await target(), await nextTick("night-1"));
 
-    expect(result).toEqual({ outcome: "first", newRoles: 0 });
+    expect(result).toMatchObject({ outcome: "first", newRoles: 0 });
     expect(await signalRows()).toEqual([]);
     const snapshots = await snapshotRows();
     expect(snapshots).toHaveLength(1);
@@ -125,7 +125,7 @@ describe("readBoard", () => {
     await readBoard(t, await nextTick("night-1"));
     const result = await readBoard(t, await nextTick("night-2"));
 
-    expect(result).toEqual({ outcome: "unchanged", newRoles: 0 });
+    expect(result).toMatchObject({ outcome: "unchanged", newRoles: 0 });
     const snapshots = await snapshotRows();
     expect(snapshots).toHaveLength(2);
     expect(snapshots[1]?.payload_r2_key).toBe(snapshots[0]?.payload_r2_key);
@@ -140,7 +140,7 @@ describe("readBoard", () => {
     const night3 = await nextTick("night-3");
     const result = await readBoard(t, night3);
 
-    expect(result).toEqual({ outcome: "changed", newRoles: 1 });
+    expect(result).toMatchObject({ outcome: "changed", newRoles: 1 });
     const signals = await signalRows();
     expect(signals).toHaveLength(1);
     expect(signals[0]).toMatchObject({
@@ -151,7 +151,7 @@ describe("readBoard", () => {
     });
 
     const again = await readBoard(t, night3);
-    expect(again).toEqual({ outcome: "changed", newRoles: 1 });
+    expect(again).toMatchObject({ outcome: "changed", newRoles: 0 });
     expect(await signalRows()).toHaveLength(1);
     expect(await snapshotRows()).toHaveLength(3);
   });
@@ -160,7 +160,7 @@ describe("readBoard", () => {
     listing.status = 404;
     const result = await readBoard(await target(), await nextTick("night-1"));
 
-    expect(result).toEqual({ outcome: "gone", newRoles: 0 });
+    expect(result).toMatchObject({ outcome: "gone", newRoles: 0 });
     const watch = await env.DB.prepare("SELECT is_active FROM watch WHERE id = ?1")
       .bind(WATCH_ID)
       .first<{ is_active: number }>();

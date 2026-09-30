@@ -3,7 +3,7 @@ import { z } from "zod";
 
 import type { BoardSnapshot } from "../data/snapshot.server";
 import { insertBoardSnapshot, latestBoardSnapshot } from "../data/snapshot.server";
-import { insertHiringSignals } from "../data/signal.server";
+import { applyHiringLifecycle, insertHiringSignals, readHiringSignalStates } from "../data/signal.server";
 import type { readHiringTargets } from "../data/watch.server";
 import { deactivateWatch, markWatchPolled } from "../data/watch.server";
 import { fetchOutbound } from "../fetch/outbound.server";
@@ -12,13 +12,20 @@ import { listingForBoard } from "./discover-board.server";
 import type { BoardPlatform } from "./listing";
 import type { OpenRole } from "./listing";
 import { nextListingUrl, parseListing } from "./listing";
+import { planRoleLifecycle, readLifecycle } from "./role-lifecycle";
 
 export type HiringTarget = Awaited<ReturnType<typeof readHiringTargets>>[number];
 
 export interface BoardResult {
   outcome: "first" | "unchanged" | "changed" | "gone";
   newRoles: number;
+  advanced: number;
+  closed: number;
+  reopened: number;
+  lifecycleWrites: number;
 }
+
+const NO_LIFECYCLE = { advanced: 0, closed: 0, reopened: 0, lifecycleWrites: 0 };
 
 const previousRolesSchema = z.array(z.object({ id: z.string() }));
 
@@ -72,19 +79,44 @@ async function storeBoardSnapshot(input: {
   });
 }
 
+async function applyLifecycle(
+  target: HiringTarget,
+  roles: readonly OpenRole[],
+  tickAt: string,
+): Promise<{ counts: typeof NO_LIFECYCLE; knownRoleIds: ReadonlySet<string> }> {
+  const states = await readHiringSignalStates(target.watchId);
+  const updates = planRoleLifecycle(
+    states,
+    roles.map((role) => role.id),
+    tickAt,
+  );
+  const lifecycleWrites = await applyHiringLifecycle(updates);
+  const lifecycles = updates.map((update) => ({ update, lifecycle: readLifecycle(update.payloadJson) }));
+  return {
+    counts: {
+      advanced: updates.filter((update) => update.lastSeenAt === tickAt).length,
+      closed: lifecycles.filter(({ lifecycle }) => lifecycle.state === "closed").length,
+      reopened: lifecycles.filter(({ lifecycle }) => lifecycle.reopenedAt === tickAt).length,
+      lifecycleWrites,
+    },
+    knownRoleIds: new Set(states.map((state) => state.roleId)),
+  };
+}
+
 async function fileFreshRoles(input: {
   target: HiringTarget;
   previous: BoardSnapshot;
   roles: readonly OpenRole[];
   snapshotId: string;
   now: string;
+  knownRoleIds: ReadonlySet<string>;
 }): Promise<number> {
-  const { target, previous, roles, snapshotId, now } = input;
+  const { target, previous, roles, snapshotId, now, knownRoleIds } = input;
   const previousObject = previous.r2Key === null ? null : await env.SNAPSHOTS.get(previous.r2Key);
   if (previousObject === null) throw new Error("hiring.previous_snapshot_missing");
   const stored = previousRolesSchema.parse(JSON.parse(await previousObject.text()));
   const previousIds = new Set(stored.map((role) => role.id));
-  const fresh = roles.filter((role) => !previousIds.has(role.id));
+  const fresh = roles.filter((role) => !previousIds.has(role.id) && !knownRoleIds.has(role.id));
   await insertHiringSignals(
     fresh.map((role) => ({
       id: crypto.randomUUID(),
@@ -113,7 +145,7 @@ export async function readBoard(target: HiringTarget, tick: SweepTick): Promise<
     const fetched = await fetchListingPages(listing.platform, target.boardUrl, listing.listingUrl);
     if (fetched === "gone") {
       await deactivateWatch(target.watchId);
-      return { outcome: "gone", newRoles: 0 };
+      return { outcome: "gone", newRoles: 0, ...NO_LIFECYCLE };
     }
     const roles = dedupeRoles(fetched);
     const hash = await hashRoleIds(roles);
@@ -129,18 +161,20 @@ export async function readBoard(target: HiringTarget, tick: SweepTick): Promise<
         hash,
         itemCount: roles.length,
       });
+      const { counts } = await applyLifecycle(target, roles, tick.plannedAt);
       await markWatchPolled(target.watchId, now);
-      return { outcome: "unchanged", newRoles: 0 };
+      return { outcome: "unchanged", newRoles: 0, ...counts };
     }
     const r2Key = `snapshot/hiring/${target.watchId}/${snapshotId}.json`;
     await storeBoardSnapshot({ snapshotId, watchId: target.watchId, r2Key, hash, roles, now });
     if (previous === null) {
       await markWatchPolled(target.watchId, now);
-      return { outcome: "first", newRoles: 0 };
+      return { outcome: "first", newRoles: 0, ...NO_LIFECYCLE };
     }
-    const newRoles = await fileFreshRoles({ target, previous, roles, snapshotId, now });
+    const { counts, knownRoleIds } = await applyLifecycle(target, roles, tick.plannedAt);
+    const newRoles = await fileFreshRoles({ target, previous, roles, snapshotId, now, knownRoleIds });
     await markWatchPolled(target.watchId, now);
-    return { outcome: "changed", newRoles };
+    return { outcome: "changed", newRoles, ...counts };
   } catch (error) {
     console.log(
       JSON.stringify({

@@ -19,6 +19,10 @@ export interface HiringSweepOutcome {
   unchanged: number;
   changed: number;
   newRoles: number;
+  advanced: number;
+  closed: number;
+  reopened: number;
+  lifecycleWrites: number;
   failed: number;
 }
 
@@ -59,6 +63,8 @@ export class HiringSweep extends WorkflowEntrypoint<Env> {
       return [...previous, result];
     }, Promise.resolve([]));
 
+    const total = (pick: (result: BoardResult) => number) =>
+      reads.reduce((sum, result) => sum + (result === null ? 0 : pick(result)), 0);
     const outcome = (name: BoardResult["outcome"]) => reads.filter((result) => result?.outcome === name).length;
     const summary: HiringSweepOutcome = {
       discovered: found.filter((result) => result?.watched === true).length,
@@ -66,7 +72,11 @@ export class HiringSweep extends WorkflowEntrypoint<Env> {
       first: outcome("first"),
       unchanged: outcome("unchanged"),
       changed: outcome("changed"),
-      newRoles: reads.reduce((total, result) => total + (result?.newRoles ?? 0), 0),
+      newRoles: total((result) => result.newRoles),
+      advanced: total((result) => result.advanced),
+      closed: total((result) => result.closed),
+      reopened: total((result) => result.reopened),
+      lifecycleWrites: total((result) => result.lifecycleWrites),
       failed: found.filter((result) => result === null).length + reads.filter((result) => result === null).length,
     };
     console.log(JSON.stringify({ event: "hiring.sweep", ...summary }));
