@@ -119,13 +119,14 @@ export async function workspaceLanding(
   return resumePoint(selfId !== null, run);
 }
 
-export async function workspaceLandingForRequest(request: Request, userId: string): Promise<string | null> {
-  const header = request.headers.get("cookie");
-  const user = await env.DB.prepare('SELECT email FROM "user" WHERE id = ?').bind(userId).first<{ email: string }>();
-  if (!user?.email) return "/onboarding";
+export async function workspaceLandingForRequest(
+  request: Request,
+  user: { id: string; email: string },
+): Promise<string | null> {
+  if (!user.email) return "/onboarding";
   return workspaceLanding(env.DB, {
-    userId,
+    userId: user.id,
     email: user.email,
-    timezone: await timezoneCookieValue(header),
+    timezone: await timezoneCookieValue(request.headers.get("cookie")),
   });
 }
