@@ -3,14 +3,15 @@ import { z } from "zod";
 
 import type { SnapshotInput } from "./competitor-snapshot";
 import { daysBefore } from "./site-changes.server";
+import { ACT_AT } from "./jev/thresholds";
 import { D3_QUESTION_ID, D6_QUESTION_ID } from "./standing-score";
 import { sourceName } from "./source-name";
 
 const SELECT_COMPETITOR_COUNTS = `SELECT
   COALESCE(SUM(CASE WHEN s.kind = 'ad' AND s.aspect IS NULL AND s.published_at >= ?3 AND s.published_at < ?4 THEN 1 ELSE 0 END), 0) AS new_creatives,
   COALESCE(SUM(CASE WHEN s.kind = 'ad' AND s.aspect IS NOT NULL THEN 1 ELSE 0 END), 0) AS copy_changes,
-  COALESCE(SUM(CASE WHEN s.kind = 'change' AND v.p >= 0.9 THEN 1 ELSE 0 END), 0) AS site_changes,
-  COALESCE(SUM(CASE WHEN s.kind = 'mention' AND v.p >= 0.9 THEN 1 ELSE 0 END), 0) AS mentions,
+  COALESCE(SUM(CASE WHEN s.kind = 'change' AND v.p >= ${String(ACT_AT)} THEN 1 ELSE 0 END), 0) AS site_changes,
+  COALESCE(SUM(CASE WHEN s.kind = 'mention' AND v.p >= ${String(ACT_AT)} THEN 1 ELSE 0 END), 0) AS mentions,
   COALESCE(SUM(CASE WHEN s.kind = 'hiring' THEN 1 ELSE 0 END), 0) AS new_roles
 FROM signal s
 LEFT JOIN jev_verdict v ON v.signal_id = s.id

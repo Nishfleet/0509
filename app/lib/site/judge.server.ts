@@ -10,6 +10,7 @@ import {
   type NoulQuestion,
   type NoulVerdict,
 } from "../jev/client.server";
+import { ACT_AT, REJECT_AT } from "../jev/thresholds";
 import type { BreakageEvidence } from "./breakage-evidence";
 
 const JEV_JUDGMENTS_PER_BRAND_PER_DAY = 6;
@@ -23,9 +24,9 @@ const BREAKAGE_ALERT_P = 0.5;
 
 const BREAKAGE_CLEAR_P = 0.1;
 
-const PUBLISH_P = 0.9;
+const PUBLISH_P = ACT_AT;
 
-const DISCARD_P = 0.1;
+const DISCARD_P = REJECT_AT;
 
 const D3S_BREAKAGE_QID = "own_site_breakage";
 
