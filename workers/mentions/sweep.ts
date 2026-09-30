@@ -184,6 +184,52 @@ async function rejudgeUnjudged(
   return { statements, stored, attempted: pending.length, jevDown: false };
 }
 
+async function freshMentionStatements(input: {
+  watch: WatchRow;
+  item: MentionItem;
+  snapshotId: string;
+  verdicts: Awaited<ReturnType<typeof judgeOrNull>>;
+  now: string;
+}): Promise<{ statements: D1PreparedStatement[]; stored: number; unjudged: number }> {
+  const { watch, item, snapshotId, verdicts, now } = input;
+  const mapped = await toSignalRow(item, {
+    workspaceId: watch.workspace_id,
+    entityId: watch.entity_id,
+    sourceId: watch.source_id,
+    watchId: watch.watch_id,
+    snapshotId,
+    observedAt: now,
+  });
+  const dedupKey = storedDedupKey(watch.entity_id, mapped.dedup_key);
+  const signalId = `sig-${(await sha256Hex(`${watch.source_id}:${dedupKey}`)).slice(0, 32)}`;
+  const rejected = verdicts !== null && noulAction(verdicts.about.p) === "reject";
+  const insert = insertMention({
+    id: signalId,
+    workspaceId: mapped.workspace_id,
+    entityId: mapped.entity_id,
+    sourceId: mapped.source_id,
+    watchId: watch.watch_id,
+    snapshotId,
+    title: mapped.title,
+    url: mapped.canonical_url,
+    urlHash: mapped.url_hash,
+    author: mapped.author,
+    engagementJson: mapped.engagement_json,
+    payloadJson: mapped.payload_json,
+    dedupKey,
+    publishedAt: mapped.published_at,
+    observedAt: mapped.observed_at,
+    isNotAboutBrand: rejected,
+    state: verdicts === null ? "unjudged" : "judged",
+  });
+  if (verdicts === null) return { statements: [insert], stored: 0, unjudged: 1 };
+  return {
+    statements: [insert, ...judgedStatements({ watch, signalId, item, verdicts, now })],
+    stored: rejected ? 0 : 1,
+    unjudged: 0,
+  };
+}
+
 async function statementsForWatch(input: {
   watch: WatchRow;
   context: DiscoveryContext;
@@ -214,54 +260,19 @@ async function statementsForWatch(input: {
       canaryCount,
     }),
   ];
-  let stored = 0;
-  let unjudged = 0;
   const rejudged = await rejudgeUnjudged(watch, context, now);
   statements.push(...rejudged.statements);
-  stored += rejudged.stored;
+  let stored = rejudged.stored;
+  let unjudged = 0;
   let jevDown = rejudged.jevDown;
   const freshBudget = jevDown ? JUDGED_PER_WATCH : JUDGED_PER_WATCH - rejudged.attempted;
   for (const { item } of fresh.slice(0, freshBudget)) {
     const verdicts = jevDown ? null : await judgeOrNull(watch, context, item);
-    const mapped = await toSignalRow(item, {
-      workspaceId: watch.workspace_id,
-      entityId: watch.entity_id,
-      sourceId: watch.source_id,
-      watchId: watch.watch_id,
-      snapshotId,
-      observedAt: now,
-    });
-    const dedupKey = storedDedupKey(watch.entity_id, mapped.dedup_key);
-    const signalId = `sig-${(await sha256Hex(`${watch.source_id}:${dedupKey}`)).slice(0, 32)}`;
-    const rejected = verdicts !== null && noulAction(verdicts.about.p) === "reject";
-    statements.push(
-      insertMention({
-        id: signalId,
-        workspaceId: mapped.workspace_id,
-        entityId: mapped.entity_id,
-        sourceId: mapped.source_id,
-        watchId: watch.watch_id,
-        snapshotId,
-        title: mapped.title,
-        url: mapped.canonical_url,
-        urlHash: mapped.url_hash,
-        author: mapped.author,
-        engagementJson: mapped.engagement_json,
-        payloadJson: mapped.payload_json,
-        dedupKey,
-        publishedAt: mapped.published_at,
-        observedAt: mapped.observed_at,
-        isNotAboutBrand: rejected,
-        state: verdicts === null ? "unjudged" : "judged",
-      }),
-    );
-    if (verdicts === null) {
-      jevDown = true;
-      unjudged += 1;
-      continue;
-    }
-    statements.push(...judgedStatements({ watch, signalId, item, verdicts, now }));
-    if (!rejected) stored += 1;
+    const result = await freshMentionStatements({ watch, item, snapshotId, verdicts, now });
+    statements.push(...result.statements);
+    stored += result.stored;
+    unjudged += result.unjudged;
+    if (verdicts === null) jevDown = true;
   }
   return { statements, stored, unjudged };
 }
@@ -320,14 +331,20 @@ async function flagNoChannel(watchId: string, now: string): Promise<void> {
   if (flagged !== current) await writeWatchConfigJson(watchId, flagged);
 }
 
-async function commitYoutubeFeed(
-  watch: WatchRow,
-  feed: OkYoutubeFeed,
-  pluginKey: string,
-  canaryCount: number | null,
-  now: string,
-  channelId: string,
-): Promise<TargetOutcome> {
+interface YoutubeRun {
+  pluginKey: string;
+  now: string;
+  canaryCount: number | null;
+}
+
+async function commitYoutubeFeed(input: {
+  watch: WatchRow;
+  feed: OkYoutubeFeed;
+  run: YoutubeRun;
+  channelId: string;
+}): Promise<TargetOutcome> {
+  const { watch, feed, run, channelId } = input;
+  const { pluginKey, now, canaryCount } = run;
   const current = await requireWatchConfigJson(watch.watch_id);
   const currentConfig = readWatchConfig(current);
   if (
@@ -353,16 +370,11 @@ async function commitYoutubeFeed(
   return { items: feed.items.length, stored: committed.stored, unjudged: committed.unjudged, skipped: 0 };
 }
 
-async function verifyPendingYoutube(
-  watch: WatchRow,
-  pendingId: string,
-  pluginKey: string,
-  now: string,
-  canaryCount: number | null,
-): Promise<TargetOutcome> {
+async function verifyPendingYoutube(watch: WatchRow, pendingId: string, run: YoutubeRun): Promise<TargetOutcome> {
+  const { now } = run;
   const result = await youtubeAdapter({ query: pendingId }, null);
   if (result.feedState === "ok") {
-    return commitYoutubeFeed(watch, result, pluginKey, canaryCount, now, pendingId);
+    return commitYoutubeFeed({ watch, feed: result, run, channelId: pendingId });
   }
   if (result.feedState === "stale") {
     const current = await requireWatchConfigJson(watch.watch_id);
@@ -373,18 +385,14 @@ async function verifyPendingYoutube(
   return { items: 0, stored: 0, unjudged: 0, skipped: 0 };
 }
 
-async function sweepOneYoutube(
-  watch: WatchRow,
-  pluginKey: string,
-  now: string,
-  canaryCount: number | null,
-): Promise<TargetOutcome> {
+async function sweepOneYoutube(watch: WatchRow, run: YoutubeRun): Promise<TargetOutcome> {
+  const { now } = run;
   const configRaw = await requireWatchConfigJson(watch.watch_id);
   const config = readWatchConfig(configRaw);
   if (config.status !== "ok") throw new Error(`watch ${watch.watch_id} config_json is unreadable`);
 
   if (config.pendingChannelId !== null) {
-    return verifyPendingYoutube(watch, config.pendingChannelId, pluginKey, now, canaryCount);
+    return verifyPendingYoutube(watch, config.pendingChannelId, run);
   }
 
   let channelId = config.channelId;
@@ -415,7 +423,7 @@ async function sweepOneYoutube(
     return { items: 0, stored: 0, unjudged: 0, skipped: 0 };
   }
   if (first.feedState === "ok") {
-    return commitYoutubeFeed(watch, first, pluginKey, canaryCount, now, channelId);
+    return commitYoutubeFeed({ watch, feed: first, run, channelId });
   }
   await markWatchPolled(watch.watch_id, now);
   return { items: 0, stored: 0, unjudged: 0, skipped: 0 };
@@ -435,7 +443,7 @@ async function sweepYoutubeTarget(
   let skipped = 0;
   for (const [index, watch] of target.watches.entries()) {
     try {
-      const outcome = await sweepOneYoutube(watch, target.pluginKey, now, canaryCount);
+      const outcome = await sweepOneYoutube(watch, { pluginKey: target.pluginKey, now, canaryCount });
       items += outcome.items;
       stored += outcome.stored;
       unjudged += outcome.unjudged;

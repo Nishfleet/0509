@@ -31,7 +31,9 @@ export class IdentityTail extends WorkflowEntrypoint<Env, IdentityTailParams> {
     const watches = await step.do("seed-watches", RETRY, () => seedTailWatches(params, event.timestamp.toISOString()));
     const queued = await step.do("enqueue-first-sweep", RETRY, () => enqueueFirstSweep(entityId, watches));
     const siteFill =
-      params.homepageUrl === null ? null : await this.fillSite(step, params.workspaceId, entityId, params.homepageUrl);
+      params.homepageUrl === null
+        ? null
+        : await this.fillSite(step, { workspaceId: params.workspaceId, entityId, homepageUrl: params.homepageUrl });
     return {
       entityId,
       watches: watches.map((watch) => ({
@@ -48,10 +50,9 @@ export class IdentityTail extends WorkflowEntrypoint<Env, IdentityTailParams> {
 
   private async fillSite(
     step: WorkflowStep,
-    workspaceId: string,
-    entityId: string,
-    homepageUrl: string,
+    site: { workspaceId: string; entityId: string; homepageUrl: string },
   ): Promise<"filled" | "gave_up" | null> {
+    const { workspaceId, entityId, homepageUrl } = site;
     const reached = await step.do("site-reached", RETRY, () => siteWasReached(homepageUrl));
     if (reached) return null;
     await step.do("site-fill-pending", RETRY, () => markSiteFill(workspaceId, entityId, "pending"));

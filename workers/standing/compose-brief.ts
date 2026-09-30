@@ -141,10 +141,15 @@ export function pausedSentence(names: readonly string[]): string | null {
   return `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]} paused, so every brand below them moved up.`;
 }
 
-export async function composeBrief(db: D1Database, input: ComposeInput): Promise<BriefPayload> {
+type RankedBrand = z.infer<typeof rankedBrandRows>[number];
+type SignalCount = z.infer<typeof signalCountRows>[number];
+type SourceCoverage = z.infer<typeof sourceCoverageRows>[number];
+type OwnSiteIncident = z.infer<typeof incidentRows>[number];
+type PickedSignal = z.infer<typeof pickedSignalRows>[number];
+
+async function loadBriefRows(db: D1Database, input: ComposeInput) {
   const startsAt = input.week.startsAt.toISOString();
   const closesAt = input.week.closesAt.toISOString();
-  const { readThisFirst } = input;
   const [ranked, frozen, counts, coverage, incidents, pausedRows, pickedRows] = await db.batch([
     db.prepare(RANKED_BRANDS).bind(input.workspaceId, startsAt),
     db.prepare(PREVIOUS_FROZEN_WEEKS).bind(input.workspaceId, startsAt),
@@ -152,17 +157,21 @@ export async function composeBrief(db: D1Database, input: ComposeInput): Promise
     db.prepare(SOURCE_COVERAGE).bind(input.workspaceId, startsAt, closesAt),
     db.prepare(OWN_SITE_INCIDENTS).bind(input.workspaceId, startsAt, closesAt),
     db.prepare(PAUSED_COMPETITORS).bind(input.workspaceId, startsAt, closesAt),
-    db.prepare(PICKED_SIGNALS).bind(input.workspaceId, JSON.stringify(readThisFirst.picks)),
+    db.prepare(PICKED_SIGNALS).bind(input.workspaceId, JSON.stringify(input.readThisFirst.picks)),
   ]);
+  return {
+    brands: rankedBrandRows.parse(ranked.results),
+    hadPreviousWeek: frozenWeekRows.parse(frozen.results).some((row) => row.weeks > 0),
+    countsByEntity: new Map(signalCountRows.parse(counts.results).map((row) => [row.entity_id, row])),
+    sources: sourceCoverageRows.parse(coverage.results),
+    ownSite: incidentRows.parse(incidents.results),
+    pausedNames: pausedCompetitorRows.parse(pausedRows.results).map((row) => row.name),
+    pickedById: new Map(pickedSignalRows.parse(pickedRows.results).map((row) => [row.signal_id, row])),
+  };
+}
 
-  const brands = rankedBrandRows.parse(ranked.results);
-  const hadPreviousWeek = frozenWeekRows.parse(frozen.results).some((row) => row.weeks > 0);
-  const countsByEntity = new Map(signalCountRows.parse(counts.results).map((row) => [row.entity_id, row]));
-  const sources = sourceCoverageRows.parse(coverage.results);
-  const ownSite = incidentRows.parse(incidents.results);
-  const pausedNames = pausedCompetitorRows.parse(pausedRows.results).map((row) => row.name);
-  const pickedById = new Map(pickedSignalRows.parse(pickedRows.results).map((row) => [row.signal_id, row]));
-  const marks = readThisFirst.picks.flatMap((signalId) => {
+function buildMarks(picks: readonly string[], pickedById: ReadonlyMap<string, PickedSignal>) {
+  return picks.flatMap((signalId) => {
     const row = pickedById.get(signalId);
     if (row === undefined) return [];
     return [
@@ -181,8 +190,14 @@ export async function composeBrief(db: D1Database, input: ComposeInput): Promise
       },
     ];
   });
+}
 
-  const lines = brands.map((brand) => {
+function buildLines(
+  brands: readonly RankedBrand[],
+  countsByEntity: ReadonlyMap<string, SignalCount>,
+  hadPreviousWeek: boolean,
+) {
+  return brands.map((brand) => {
     const count = countsByEntity.get(brand.entity_id);
     return {
       entity_id: brand.entity_id,
@@ -197,21 +212,74 @@ export async function composeBrief(db: D1Database, input: ComposeInput): Promise
       new_roles: count?.new_roles ?? 0,
     };
   });
-  const mentionCount = lines.reduce((total, line) => total + line.mention_delta, 0);
-  const siteChangeCount = lines.reduce((total, line) => total + line.site_change_count, 0);
-  const newAdCount = lines.reduce((total, line) => total + line.ad_delta, 0);
-  const selfId = brands.find((brand) => brand.role === "self")?.entity_id;
-  const self = lines.find((line) => line.entity_id === selfId);
-  const degraded = sources.filter((source) => source.answered === 0);
+}
 
-  const pausedLine = pausedSentence(pausedNames);
-  const countsLine = quietWeekLine(mentionCount, siteChangeCount, newAdCount);
+function buildOwnSite(ownSite: readonly OwnSiteIncident[], closesAt: string) {
+  return {
+    status: ownSite.length === 0 ? ("ok" as const) : ("broken" as const),
+    incidents: ownSite.map((incident) => {
+      const isOpen = incident.closed_at === null || incident.closed_at >= closesAt;
+      return {
+        page_url: incident.page_url,
+        kind: incident.kind,
+        observed_at: isOpen || incident.closed_at === null ? closesAt : incident.closed_at,
+        is_open: isOpen,
+      };
+    }),
+  };
+}
+
+interface CheckedTotals {
+  mentions: number;
+  siteChanges: number;
+  newAds: number;
+}
+
+function buildChecked(sources: readonly SourceCoverage[], totals: CheckedTotals) {
+  const degraded = sources.filter((source) => source.answered === 0);
+  return {
+    mention_count: totals.mentions,
+    site_change_count: totals.siteChanges,
+    new_ad_count: totals.newAds,
+    source_keys: sources.map((source) => source.key),
+    degraded_source_keys: degraded.map((source) => source.key),
+    degraded_sources: degraded.map((source) => ({
+      key: source.key,
+      name: sourceName(source.kind, source.platform),
+      last_landed_at: source.last_landed_at,
+    })),
+  };
+}
+
+function buildHeadLine(
+  readThisFirst: JudgedWeek,
+  marks: readonly { entity_name: string }[],
+  totals: CheckedTotals,
+): string {
+  if (readThisFirst.unjudged) return UNJUDGED_WEEK_LINE;
   const lead = marks[0];
-  const headLine = input.readThisFirst.unjudged
-    ? UNJUDGED_WEEK_LINE
-    : lead === undefined
-      ? countsLine
-      : readThisFirstLine(marks.length, readThisFirst.judged, lead.entity_name);
+  if (lead === undefined) return quietWeekLine(totals.mentions, totals.siteChanges, totals.newAds);
+  return readThisFirstLine(marks.length, readThisFirst.judged, lead.entity_name);
+}
+
+export async function composeBrief(db: D1Database, input: ComposeInput): Promise<BriefPayload> {
+  const startsAt = input.week.startsAt.toISOString();
+  const closesAt = input.week.closesAt.toISOString();
+  const { readThisFirst } = input;
+  const rows = await loadBriefRows(db, input);
+
+  const marks = buildMarks(readThisFirst.picks, rows.pickedById);
+  const lines = buildLines(rows.brands, rows.countsByEntity, rows.hadPreviousWeek);
+  const totals: CheckedTotals = {
+    mentions: lines.reduce((total, line) => total + line.mention_delta, 0),
+    siteChanges: lines.reduce((total, line) => total + line.site_change_count, 0),
+    newAds: lines.reduce((total, line) => total + line.ad_delta, 0),
+  };
+  const selfId = rows.brands.find((brand) => brand.role === "self")?.entity_id;
+  const self = lines.find((line) => line.entity_id === selfId);
+
+  const pausedLine = pausedSentence(rows.pausedNames);
+  const headLine = buildHeadLine(readThisFirst, marks, totals);
 
   return {
     workspace_id: input.workspaceId,
@@ -223,34 +291,12 @@ export async function composeBrief(db: D1Database, input: ComposeInput): Promise
     headline_movement: self?.movement ?? null,
     headline_is_new: self?.is_new ?? false,
     why_line: pausedLine === null ? headLine : `${headLine} ${pausedLine}`,
-    is_quiet_week: marks.length === 0 && !input.readThisFirst.unjudged,
-    is_unjudged: input.readThisFirst.unjudged,
+    is_quiet_week: marks.length === 0 && !readThisFirst.unjudged,
+    is_unjudged: readThisFirst.unjudged,
     read_this_first: marks,
     brands: lines,
-    own_site: {
-      status: ownSite.length === 0 ? "ok" : "broken",
-      incidents: ownSite.map((incident) => {
-        const isOpen = incident.closed_at === null || incident.closed_at >= closesAt;
-        return {
-          page_url: incident.page_url,
-          kind: incident.kind,
-          observed_at: isOpen || incident.closed_at === null ? closesAt : incident.closed_at,
-          is_open: isOpen,
-        };
-      }),
-    },
-    checked: {
-      mention_count: mentionCount,
-      site_change_count: siteChangeCount,
-      new_ad_count: newAdCount,
-      source_keys: sources.map((source) => source.key),
-      degraded_source_keys: degraded.map((source) => source.key),
-      degraded_sources: degraded.map((source) => ({
-        key: source.key,
-        name: sourceName(source.kind, source.platform),
-        last_landed_at: source.last_landed_at,
-      })),
-    },
+    own_site: buildOwnSite(rows.ownSite, closesAt),
+    checked: buildChecked(rows.sources, totals),
     next_brief_at: nextBriefAt(input.schedule, input.week.closesAt).toISOString(),
   };
 }

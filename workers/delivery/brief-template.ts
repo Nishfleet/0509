@@ -131,6 +131,16 @@ function renderHeadline(payload: BriefPayload, whyLine: string): { html: string;
   return { html, text };
 }
 
+function renderMarkBeforeAfter(mark: BriefPayload["read_this_first"][number]): string {
+  if (mark.before === null || mark.after === null) return "";
+  return `<p style="margin:8px 0 0;font-family:${FONT};font-size:18px;line-height:26px;font-weight:700;"><s class="brief-strike">${escapeHtml(mark.before)}</s> → <span class="brief-marker" style="padding:0 4px;">${escapeHtml(mark.after)}</span></p>`;
+}
+
+function renderMarkThumbnail(thumb: string | null, href: string | null): string {
+  if (thumb === null || href === null) return "";
+  return `<p style="margin:10px 0 0;"><a class="brief-ink" href="${href}"><img src="${thumb}" alt="Screenshot of the change" width="${n(120)}" height="${n(90)}" style="display:block;"></a></p>`;
+}
+
 function renderMark(
   mark: BriefPayload["read_this_first"][number],
   payload: BriefPayload,
@@ -149,12 +159,8 @@ function renderMark(
     `<p style="margin:6px 0 0;font-family:${FONT};font-size:16px;line-height:24px;">`,
     href === null ? escapeHtml(title) : `<a class="brief-ink" href="${href}">${escapeHtml(title)}</a>`,
     `</p>`,
-    mark.before !== null && mark.after !== null
-      ? `<p style="margin:8px 0 0;font-family:${FONT};font-size:18px;line-height:26px;font-weight:700;"><s class="brief-strike">${escapeHtml(mark.before)}</s> → <span class="brief-marker" style="padding:0 4px;">${escapeHtml(mark.after)}</span></p>`
-      : "",
-    thumb !== null && href !== null
-      ? `<p style="margin:10px 0 0;"><a class="brief-ink" href="${href}"><img src="${thumb}" alt="Screenshot of the change" width="${n(120)}" height="${n(90)}" style="display:block;"></a></p>`
-      : "",
+    renderMarkBeforeAfter(mark),
+    renderMarkThumbnail(thumb, href),
     `<p style="margin:8px 0 0;font-family:${FONT};font-size:14px;line-height:20px;">${escapeHtml(mark.jev_reason)}</p>`,
     `</div>`,
   ].join("");
