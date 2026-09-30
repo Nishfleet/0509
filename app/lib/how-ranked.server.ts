@@ -4,6 +4,7 @@ import { howRanked } from "./how-ranked";
 import type { BucketCount, WeightRow } from "./standing-score";
 import { D3_QUESTION_ID, D6_QUESTION_ID } from "./standing-score";
 import { ALL_WEIGHTS, COUNT_BUCKETS, bucketCountRows, weightRows } from "./standing-score.server";
+import { required } from "./required";
 
 export interface HowRankedInputs {
   weightRows: readonly WeightRow[];
@@ -21,8 +22,8 @@ export async function readHowRankedInputs(
     db.prepare(COUNT_BUCKETS).bind(workspaceId, weekStartAt, weekEndAt, D6_QUESTION_ID, D3_QUESTION_ID),
   ]);
   return {
-    weightRows: weightRows.parse(reads[0].results),
-    counts: bucketCountRows.parse(reads[1].results),
+    weightRows: weightRows.parse(required(reads[0]).results),
+    counts: bucketCountRows.parse(required(reads[1]).results),
   };
 }
 

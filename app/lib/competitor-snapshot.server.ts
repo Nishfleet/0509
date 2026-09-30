@@ -6,6 +6,7 @@ import { daysBefore } from "./site-changes.server";
 import { ACT_AT } from "./jev/thresholds";
 import { D3_QUESTION_ID, D6_QUESTION_ID } from "./standing-score";
 import { sourceName } from "./source-name";
+import { required } from "./required";
 
 const SELECT_COMPETITOR_COUNTS = `SELECT
   COALESCE(SUM(CASE WHEN s.kind = 'ad' AND s.aspect IS NULL AND s.published_at >= ?3 AND s.published_at < ?4 THEN 1 ELSE 0 END), 0) AS new_creatives,
@@ -66,9 +67,9 @@ export async function readCompetitorSnapshot(workspaceId: string, entityId: stri
     env.DB.prepare(SELECT_COMPETITOR_COVERAGE).bind(workspaceId, entityId, since, until),
   ]);
 
-  const [counts] = countRows.parse(countsResult.results);
-  const standing = standingRows.parse(standingResult.results)[0];
-  const sources = coverageRows.parse(coverageResult.results);
+  const [counts] = countRows.parse(required(countsResult).results);
+  const standing = standingRows.parse(required(standingResult).results)[0];
+  const sources = coverageRows.parse(required(coverageResult).results);
 
   return {
     standing: standing === undefined ? null : { rank: standing.rank, movement: standing.movement },

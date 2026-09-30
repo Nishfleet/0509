@@ -1,3 +1,5 @@
+import { required } from "../required";
+
 const REASON_LINES: Readonly<Record<string, string>> = {
   active: "We're not sure it still competes with you",
   acquired: "Looks like it was acquired",
@@ -7,12 +9,12 @@ const REASON_LINES: Readonly<Record<string, string>> = {
 };
 
 export function retireReasonLine(code: string): string {
-  return REASON_LINES[code];
+  return required(REASON_LINES[code]);
 }
 
 export function pausedReasonLine(code: string | null): string | undefined {
   if (code === null) return undefined;
   if (code !== "acquired" && code !== "shut_down") return undefined;
-  const line = REASON_LINES[code];
+  const line = required(REASON_LINES[code]);
   return `${line.charAt(0).toLowerCase()}${line.slice(1)}`;
 }

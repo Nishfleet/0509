@@ -4,6 +4,7 @@ import type { StandingScore } from "../../app/lib/data/standing.server";
 import { upsertStandingScores } from "../../app/lib/data/standing.server";
 import { D3_QUESTION_ID, D6_QUESTION_ID, scoreByEntity, weightsAsOf } from "../../app/lib/standing-score";
 import { ALL_WEIGHTS, COUNT_BUCKETS, bucketCountRows, weightRows } from "../../app/lib/standing-score.server";
+import { required } from "../../app/lib/required";
 
 const ON_ENTITY_IDS = `SELECT id FROM entity WHERE workspace_id = ?1 AND state = 'on' ORDER BY id`;
 
@@ -28,9 +29,9 @@ export async function refreshWorkspaceScores(
       .prepare(COUNT_BUCKETS)
       .bind(input.workspaceId, input.windowStartAt, input.windowEndAt, D6_QUESTION_ID, D3_QUESTION_ID),
   ]);
-  const entityIds = entityIdRows.parse(reads[0].results).map((row) => row.id);
-  const weights = weightsAsOf(weightRows.parse(reads[1].results), input.weekStartAt);
-  const counts = bucketCountRows.parse(reads[2].results);
+  const entityIds = entityIdRows.parse(required(reads[0]).results).map((row) => row.id);
+  const weights = weightsAsOf(weightRows.parse(required(reads[1]).results), input.weekStartAt);
+  const counts = bucketCountRows.parse(required(reads[2]).results);
   const scores = scoreByEntity(counts, weights);
   const rows: StandingScore[] = entityIds.map((entity_id) => ({
     workspace_id: input.workspaceId,
