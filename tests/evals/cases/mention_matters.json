@@ -1,0 +1,1966 @@
+[
+ {
+  "id": "mm-nike-wholesale-cut",
+  "split": "train",
+  "label": true,
+  "why": "A 20% wholesale price cut on Nike running is a live offer change Adidas would act on this week.",
+  "self": {
+   "name": "Adidas",
+   "domain": "adidas.com",
+   "description": "German sportswear brand competing with Nike on running and lifestyle."
+  },
+  "subject": {
+   "name": "Nike",
+   "domain": "nike.com",
+   "role": "competitor"
+  },
+  "competitors": [
+   {
+    "name": "Puma",
+    "domain": "puma.com"
+   },
+   {
+    "name": "Under Armour",
+    "domain": "underarmour.com"
+   }
+  ],
+  "reliability": "official_api",
+  "item": {
+   "title": "Nike slashes wholesale prices on running line by 20% ahead of holiday",
+   "url": "https://www.reuters.com/business/retail-consumer/nike-slashes-running-wholesale-prices-2026-09-21/",
+   "publishedAt": "2026-09-21",
+   "publisher": "reuters.com"
+  }
+ },
+ {
+  "id": "mm-tesla-autopilot-recall",
+  "split": "train",
+  "label": true,
+  "why": "A 1.2 million vehicle Autopilot recall is a safety controversy Ford's EV team would brief on immediately.",
+  "self": {
+   "name": "Ford",
+   "domain": "ford.com",
+   "description": "US automaker racing Tesla in electric trucks and SUVs."
+  },
+  "subject": {
+   "name": "Tesla",
+   "domain": "tesla.com",
+   "role": "competitor"
+  },
+  "competitors": [
+   {
+    "name": "Rivian",
+    "domain": "rivian.com"
+   },
+   {
+    "name": "GM",
+    "domain": "gm.com"
+   }
+  ],
+  "reliability": "rss",
+  "item": {
+   "title": "Tesla recalls 1.2 million vehicles over Autopilot crash defect",
+   "url": "https://www.reuters.com/business/autos-transportation/tesla-recalls-autopilot-defect-2026-09-22/",
+   "publishedAt": "2026-09-22",
+   "publisher": "reuters.com"
+  }
+ },
+ {
+  "id": "mm-stripe-series-i",
+  "split": "train",
+  "label": true,
+  "why": "A $2B round at a jump in valuation is funding a payments rival would track and respond to.",
+  "self": {
+   "name": "PayPal",
+   "domain": "paypal.com",
+   "description": "Digital payments firm competing with Stripe for online checkout."
+  },
+  "subject": {
+   "name": "Stripe",
+   "domain": "stripe.com",
+   "role": "competitor"
+  },
+  "competitors": [
+   {
+    "name": "Adyen",
+    "domain": "adyen.com"
+   },
+   {
+    "name": "Block",
+    "domain": "block.xyz"
+   }
+  ],
+  "reliability": "official_api",
+  "item": {
+   "title": "Stripe raises $2 billion Series I at $95 billion valuation",
+   "url": "https://www.bloomberg.com/news/articles/2026-09-18/stripe-raises-2-billion-series-i",
+   "publishedAt": "2026-09-18",
+   "publisher": "bloomberg.com"
+  }
+ },
+ {
+  "id": "mm-uber-grocery-acquire",
+  "split": "train",
+  "label": true,
+  "why": "Uber buying a grocery-delivery startup is a deal that changes DoorDash's competitive map.",
+  "self": {
+   "name": "DoorDash",
+   "domain": "doordash.com",
+   "description": "US food and grocery delivery app competing with Uber Eats."
+  },
+  "subject": {
+   "name": "Uber",
+   "domain": "uber.com",
+   "role": "competitor"
+  },
+  "competitors": [
+   {
+    "name": "Lyft",
+    "domain": "lyft.com"
+   },
+   {
+    "name": "Instacart",
+    "domain": "instacart.com"
+   }
+  ],
+  "reliability": "rss",
+  "item": {
+   "title": "Uber to acquire grocery startup Jokr's US operations for $1.1 billion",
+   "url": "https://techcrunch.com/2026/09/19/uber-acquires-jokr-us/",
+   "publishedAt": "2026-09-19",
+   "publisher": "techcrunch.com"
+  }
+ },
+ {
+  "id": "mm-starbucks-india-500",
+  "split": "train",
+  "label": true,
+  "why": "A 500-store India expansion is a footprint move Dunkin would want on this week's radar.",
+  "self": {
+   "name": "Dunkin'",
+   "domain": "dunkin.com",
+   "description": "Coffee and doughnut chain competing with Starbucks on convenience."
+  },
+  "subject": {
+   "name": "Starbucks",
+   "domain": "starbucks.com",
+   "role": "competitor"
+  },
+  "competitors": [
+   {
+    "name": "Peet's Coffee",
+    "domain": "peets.com"
+   },
+   {
+    "name": "Tim Hortons",
+    "domain": "timhortons.com"
+   }
+  ],
+  "reliability": "official_api",
+  "item": {
+   "title": "Starbucks to open 500 new cafes in India by 2028, doubling its bet",
+   "url": "https://www.ft.com/content/starbucks-india-500-stores-2026",
+   "publishedAt": "2026-09-23",
+   "publisher": "ft.com"
+  }
+ },
+ {
+  "id": "mm-netflix-global-price",
+  "split": "train",
+  "label": true,
+  "why": "A worldwide price increase is an offer change Disney+ would model against its own plans.",
+  "self": {
+   "name": "Disney",
+   "domain": "disney.com",
+   "description": "Entertainment company whose Disney+ service competes with Netflix."
+  },
+  "subject": {
+   "name": "Netflix",
+   "domain": "netflix.com",
+   "role": "competitor"
+  },
+  "competitors": [
+   {
+    "name": "Amazon",
+    "domain": "amazon.com"
+   },
+   {
+    "name": "Warner Bros. Discovery",
+    "domain": "wbd.com"
+   }
+  ],
+  "reliability": "rss",
+  "item": {
+   "title": "Netflix raises prices in US, UK and 40 other markets starting October",
+   "url": "https://www.cnbc.com/2026/09/20/netflix-raises-prices-globally.html",
+   "publishedAt": "2026-09-20",
+   "publisher": "cnbc.com"
+  }
+ },
+ {
+  "id": "mm-openai-gpt6-launch",
+  "split": "train",
+  "label": true,
+  "why": "A flagship model launch is a product move Google's Gemini team would treat as this week's fire drill.",
+  "self": {
+   "name": "Google",
+   "domain": "google.com",
+   "description": "Search and cloud company competing with OpenAI on consumer and API models."
+  },
+  "subject": {
+   "name": "OpenAI",
+   "domain": "openai.com",
+   "role": "competitor"
+  },
+  "competitors": [
+   {
+    "name": "Anthropic",
+    "domain": "anthropic.com"
+   },
+   {
+    "name": "Microsoft",
+    "domain": "microsoft.com"
+   }
+  ],
+  "reliability": "official_api",
+  "item": {
+   "title": "OpenAI launches GPT-6 with native computer use and half the API price",
+   "url": "https://www.theverge.com/2026/9/24/openai-gpt-6-launch",
+   "publishedAt": "2026-09-24",
+   "publisher": "theverge.com"
+  }
+ },
+ {
+  "id": "mm-lululemon-ceo-resigns",
+  "split": "train",
+  "label": true,
+  "why": "A sudden CEO exit at a core apparel rival is a top-level hire/exit Nike would bring to leadership.",
+  "self": {
+   "name": "Nike",
+   "domain": "nike.com",
+   "description": "Sportswear giant competing with Lululemon in premium athletic apparel."
+  },
+  "subject": {
+   "name": "Lululemon",
+   "domain": "lululemon.com",
+   "role": "competitor"
+  },
+  "competitors": [
+   {
+    "name": "Adidas",
+    "domain": "adidas.com"
+   },
+   {
+    "name": "Athleta",
+    "domain": "athleta.gap.com"
+   }
+  ],
+  "reliability": "rss",
+  "item": {
+   "title": "Lululemon CEO to step down immediately after disappointing holiday outlook",
+   "url": "https://www.wsj.com/business/retail/lululemon-ceo-resigns-2026-09-25",
+   "publishedAt": "2026-09-25",
+   "publisher": "wsj.com"
+  }
+ },
+ {
+  "id": "mm-walmart-drone-2000",
+  "split": "train",
+  "label": true,
+  "why": "Same-day drone delivery in 2,000 cities is an expansion Amazon grocery would treat as a threat.",
+  "self": {
+   "name": "Amazon",
+   "domain": "amazon.com",
+   "description": "E-commerce and logistics company competing with Walmart on speed of delivery."
+  },
+  "subject": {
+   "name": "Walmart",
+   "domain": "walmart.com",
+   "role": "competitor"
+  },
+  "competitors": [
+   {
+    "name": "Target",
+    "domain": "target.com"
+   },
+   {
+    "name": "Instacart",
+    "domain": "instacart.com"
+   }
+  ],
+  "reliability": "official_api",
+  "item": {
+   "title": "Walmart launches same-day drone delivery in 2,000 US cities",
+   "url": "https://www.bloomberg.com/news/articles/2026-09-16/walmart-drone-delivery-2000-cities",
+   "publishedAt": "2026-09-16",
+   "publisher": "bloomberg.com"
+  }
+ },
+ {
+  "id": "mm-chipotle-ecoli-suit",
+  "split": "train",
+  "label": true,
+  "why": "A nationwide E. coli outbreak and class action is a controversy a fast-casual rival would watch this week.",
+  "self": {
+   "name": "Cava",
+   "domain": "cava.com",
+   "description": "Mediterranean fast-casual chain competing with Chipotle for lunch traffic."
+  },
+  "subject": {
+   "name": "Chipotle",
+   "domain": "chipotle.com",
+   "role": "competitor"
+  },
+  "competitors": [
+   {
+    "name": "Sweetgreen",
+    "domain": "sweetgreen.com"
+   },
+   {
+    "name": "Qdoba",
+    "domain": "qdoba.com"
+   }
+  ],
+  "reliability": "rss",
+  "item": {
+   "title": "Chipotle faces class action after E. coli outbreak spans 14 states",
+   "url": "https://www.cnn.com/2026/09/17/business/chipotle-ecoli-class-action",
+   "publishedAt": "2026-09-17",
+   "publisher": "cnn.com"
+  }
+ },
+ {
+  "id": "mm-spotify-premium-hike",
+  "split": "train",
+  "label": true,
+  "why": "A global Premium price hike is an offer change Apple Music would use in positioning this week.",
+  "self": {
+   "name": "Apple",
+   "domain": "apple.com",
+   "description": "Consumer tech company whose Apple Music service competes with Spotify."
+  },
+  "subject": {
+   "name": "Spotify",
+   "domain": "spotify.com",
+   "role": "competitor"
+  },
+  "competitors": [
+   {
+    "name": "Amazon",
+    "domain": "amazon.com"
+   },
+   {
+    "name": "YouTube",
+    "domain": "youtube.com"
+   }
+  ],
+  "reliability": "official_api",
+  "item": {
+   "title": "Spotify lifts Premium to $12.99 in the US and matches hikes across Europe",
+   "url": "https://www.theverge.com/2026/9/15/spotify-premium-price-increase",
+   "publishedAt": "2026-09-15",
+   "publisher": "theverge.com"
+  }
+ },
+ {
+  "id": "mm-airbnb-hotel-rollout",
+  "split": "train",
+  "label": true,
+  "why": "Airbnb rolling hotel-style properties is a product expansion Booking.com would treat as a direct attack.",
+  "self": {
+   "name": "Booking.com",
+   "domain": "booking.com",
+   "description": "Online travel agency competing with Airbnb for stays."
+  },
+  "subject": {
+   "name": "Airbnb",
+   "domain": "airbnb.com",
+   "role": "competitor"
+  },
+  "competitors": [
+   {
+    "name": "Expedia",
+    "domain": "expedia.com"
+   },
+   {
+    "name": "Vrbo",
+    "domain": "vrbo.com"
+   }
+  ],
+  "reliability": "rss",
+  "item": {
+   "title": "Airbnb unveils professionally managed hotel-style stays in 50 cities",
+   "url": "https://www.wsj.com/business/travel/airbnb-hotel-style-rollout-2026-09-26",
+   "publishedAt": "2026-09-26",
+   "publisher": "wsj.com"
+  }
+ },
+ {
+  "id": "mm-figma-ai-designer",
+  "split": "train",
+  "label": true,
+  "why": "Figma shipping an AI designer that generates production files is a launch Adobe would escalate internally.",
+  "self": {
+   "name": "Adobe",
+   "domain": "adobe.com",
+   "description": "Creative software company competing with Figma on UI and marketing design."
+  },
+  "subject": {
+   "name": "Figma",
+   "domain": "figma.com",
+   "role": "competitor"
+  },
+  "competitors": [
+   {
+    "name": "Canva",
+    "domain": "canva.com"
+   },
+   {
+    "name": "Sketch",
+    "domain": "sketch.com"
+   }
+  ],
+  "reliability": "official_api",
+  "item": {
+   "title": "Figma launches AI designer that turns prompts into production-ready files",
+   "url": "https://techcrunch.com/2026/09/22/figma-ai-designer-launch/",
+   "publishedAt": "2026-09-22",
+   "publisher": "techcrunch.com"
+  }
+ },
+ {
+  "id": "mm-tmobile-plan-hike",
+  "split": "train",
+  "label": true,
+  "why": "An unlimited-plan price hike is an offer change Verizon would use in ads and win-back this week.",
+  "self": {
+   "name": "Verizon",
+   "domain": "verizon.com",
+   "description": "US wireless carrier competing with T-Mobile on unlimited plans."
+  },
+  "subject": {
+   "name": "T-Mobile",
+   "domain": "t-mobile.com",
+   "role": "competitor"
+  },
+  "competitors": [
+   {
+    "name": "AT&T",
+    "domain": "att.com"
+   },
+   {
+    "name": "Mint Mobile",
+    "domain": "mintmobile.com"
+   }
+  ],
+  "reliability": "rss",
+  "item": {
+   "title": "T-Mobile raises Magenta Max by $5 a line, ending a two-year price freeze",
+   "url": "https://www.cnbc.com/2026/09/14/t-mobile-raises-unlimited-plan-prices.html",
+   "publishedAt": "2026-09-14",
+   "publisher": "cnbc.com"
+  }
+ },
+ {
+  "id": "mm-rivian-georgia-ramp",
+  "split": "train",
+  "label": true,
+  "why": "A new plant hitting volume production is an expansion Tesla's truck team would track this week.",
+  "self": {
+   "name": "Tesla",
+   "domain": "tesla.com",
+   "description": "EV maker competing with Rivian in electric trucks and SUVs."
+  },
+  "subject": {
+   "name": "Rivian",
+   "domain": "rivian.com",
+   "role": "competitor"
+  },
+  "competitors": [
+   {
+    "name": "Ford",
+    "domain": "ford.com"
+   },
+   {
+    "name": "GM",
+    "domain": "gm.com"
+   }
+  ],
+  "reliability": "official_api",
+  "item": {
+   "title": "Rivian's Georgia plant hits 150,000-unit run rate, beating Tesla Semi cadence",
+   "url": "https://www.reuters.com/business/autos-transportation/rivian-georgia-plant-run-rate-2026-09-27/",
+   "publishedAt": "2026-09-27",
+   "publisher": "reuters.com"
+  }
+ },
+ {
+  "id": "mm-nike-best-shoes-listicle",
+  "split": "train",
+  "label": false,
+  "why": "A seasonal 'best shoes' listicle naming Nike among many models is not a competitor move to act on.",
+  "self": {
+   "name": "Adidas",
+   "domain": "adidas.com",
+   "description": "German sportswear brand competing with Nike on running shoes."
+  },
+  "subject": {
+   "name": "Nike",
+   "domain": "nike.com",
+   "role": "competitor"
+  },
+  "competitors": [
+   {
+    "name": "Puma",
+    "domain": "puma.com"
+   },
+   {
+    "name": "New Balance",
+    "domain": "newbalance.com"
+   }
+  ],
+  "reliability": "scraped_page",
+  "item": {
+   "title": "The 15 best running shoes of 2026, tested by our editors",
+   "url": "https://www.runnersworld.com/gear/a123456/best-running-shoes-2026/",
+   "publishedAt": "2026-09-20",
+   "publisher": "runnersworld.com"
+  }
+ },
+ {
+  "id": "mm-apple-afterhours-uptick",
+  "split": "train",
+  "label": false,
+  "why": "A 0.3% after-hours tick is a stock-tape line, not news Samsung would bring to a competitive review.",
+  "self": {
+   "name": "Samsung",
+   "domain": "samsung.com",
+   "description": "Consumer electronics company competing with Apple in phones and tablets."
+  },
+  "subject": {
+   "name": "Apple",
+   "domain": "apple.com",
+   "role": "competitor"
+  },
+  "competitors": [
+   {
+    "name": "Google",
+    "domain": "google.com"
+   },
+   {
+    "name": "Xiaomi",
+    "domain": "mi.com"
+   }
+  ],
+  "reliability": "official_api",
+  "item": {
+   "title": "Apple (AAPL) rises 0.3% in after-hours trading",
+   "url": "https://finance.yahoo.com/news/apple-aapl-rises-0-3-after-hours-2026-09-21",
+   "publishedAt": "2026-09-21",
+   "publisher": "finance.yahoo.com"
+  }
+ },
+ {
+  "id": "mm-nike-kaepernick-lookback",
+  "split": "train",
+  "label": false,
+  "why": "A retrospective on the 2018 Kaepernick ad is old news retold, not a live Nike move.",
+  "self": {
+   "name": "Adidas",
+   "domain": "adidas.com",
+   "description": "Sportswear rival that tracks Nike marketing, but not eight-year-old campaigns."
+  },
+  "subject": {
+   "name": "Nike",
+   "domain": "nike.com",
+   "role": "competitor"
+  },
+  "competitors": [
+   {
+    "name": "Puma",
+    "domain": "puma.com"
+   }
+  ],
+  "reliability": "rss",
+  "item": {
+   "title": "Looking back: How Nike's 2018 Colin Kaepernick ad changed sports marketing",
+   "url": "https://www.adweek.com/brand-marketing/nike-kaepernick-ad-lookback-2026/",
+   "publishedAt": "2026-09-18",
+   "publisher": "adweek.com"
+  }
+ },
+ {
+  "id": "mm-nike-retail-roundup",
+  "split": "train",
+  "label": false,
+  "why": "A routine weekly roundup listing Nike with three other retailers is not an actionable Nike event.",
+  "self": {
+   "name": "Puma",
+   "domain": "puma.com",
+   "description": "Sportswear brand competing with Nike in lifestyle and performance."
+  },
+  "subject": {
+   "name": "Nike",
+   "domain": "nike.com",
+   "role": "competitor"
+  },
+  "competitors": [
+   {
+    "name": "Adidas",
+    "domain": "adidas.com"
+   },
+   {
+    "name": "Under Armour",
+    "domain": "underarmour.com"
+   }
+  ],
+  "reliability": "rss",
+  "item": {
+   "title": "Retail roundup: Walmart, Target, Costco and Nike see mixed mall traffic",
+   "url": "https://www.retailwire.com/discussion/retail-roundup-mall-traffic-sept-2026/",
+   "publishedAt": "2026-09-19",
+   "publisher": "retailwire.com"
+  }
+ },
+ {
+  "id": "mm-starbucks-coffee-ranking",
+  "split": "train",
+  "label": false,
+  "why": "A 'best coffee chains' ranking that slots Starbucks third is a listicle, not a competitive event.",
+  "self": {
+   "name": "Dunkin'",
+   "domain": "dunkin.com",
+   "description": "Coffee chain competing with Starbucks on everyday drinks."
+  },
+  "subject": {
+   "name": "Starbucks",
+   "domain": "starbucks.com",
+   "role": "competitor"
+  },
+  "competitors": [
+   {
+    "name": "Peet's Coffee",
+    "domain": "peets.com"
+   },
+   {
+    "name": "Dutch Bros",
+    "domain": "dutchbros.com"
+   }
+  ],
+  "reliability": "scraped_page",
+  "item": {
+   "title": "The 25 best coffee chains in America, ranked for 2026",
+   "url": "https://www.tastingtable.com/best-coffee-chains-america-2026/",
+   "publishedAt": "2026-09-12",
+   "publisher": "tastingtable.com"
+  }
+ },
+ {
+  "id": "mm-tesla-ipo-onthisday",
+  "split": "train",
+  "label": false,
+  "why": "An on-this-day recap of Tesla's 2010 IPO is old news, not a move GM would act on this week.",
+  "self": {
+   "name": "GM",
+   "domain": "gm.com",
+   "description": "US automaker competing with Tesla in electric vehicles."
+  },
+  "subject": {
+   "name": "Tesla",
+   "domain": "tesla.com",
+   "role": "competitor"
+  },
+  "competitors": [
+   {
+    "name": "Ford",
+    "domain": "ford.com"
+   },
+   {
+    "name": "Rivian",
+    "domain": "rivian.com"
+   }
+  ],
+  "reliability": "best_effort",
+  "item": {
+   "title": "On this day: Tesla goes public in 2010, raising $226 million",
+   "url": "https://www.history.com/this-day-in-history/tesla-ipo-2010",
+   "publishedAt": "2026-09-11",
+   "publisher": "history.com"
+  }
+ },
+ {
+  "id": "mm-amazon-gift-guide-40",
+  "split": "train",
+  "label": false,
+  "why": "A 40-item gift guide that includes Amazon gift cards is a listicle passing mention, not a Walmart threat.",
+  "self": {
+   "name": "Walmart",
+   "domain": "walmart.com",
+   "description": "Mass retailer competing with Amazon on e-commerce and gifts."
+  },
+  "subject": {
+   "name": "Amazon",
+   "domain": "amazon.com",
+   "role": "competitor"
+  },
+  "competitors": [
+   {
+    "name": "Target",
+    "domain": "target.com"
+   },
+   {
+    "name": "eBay",
+    "domain": "ebay.com"
+   }
+  ],
+  "reliability": "scraped_page",
+  "item": {
+   "title": "40 last-minute gift ideas for everyone on your list",
+   "url": "https://www.goodhousekeeping.com/holidays/gift-ideas/g40-last-minute-2026/",
+   "publishedAt": "2026-09-28",
+   "publisher": "goodhousekeeping.com"
+  }
+ },
+ {
+  "id": "mm-google-job-board-500",
+  "split": "train",
+  "label": false,
+  "why": "An aggregator listing 500 open Google roles is a job-board scrape, not a hiring or strategy event.",
+  "self": {
+   "name": "Microsoft",
+   "domain": "microsoft.com",
+   "description": "Cloud and productivity company competing with Google for talent and products."
+  },
+  "subject": {
+   "name": "Google",
+   "domain": "google.com",
+   "role": "competitor"
+  },
+  "competitors": [
+   {
+    "name": "Amazon",
+    "domain": "amazon.com"
+   },
+   {
+    "name": "Meta",
+    "domain": "meta.com"
+   }
+  ],
+  "reliability": "best_effort",
+  "item": {
+   "title": "500+ Google jobs hiring this week, from ads to Android",
+   "url": "https://www.linkedin.com/pulse/google-jobs-hiring-this-week-sept-2026",
+   "publishedAt": "2026-09-13",
+   "publisher": "linkedin.com"
+  }
+ },
+ {
+  "id": "mm-adidas-kit-match-recap",
+  "split": "train",
+  "label": false,
+  "why": "A match recap that notes Adidas away kits in passing is not an Adidas business move Nike would act on.",
+  "self": {
+   "name": "Nike",
+   "domain": "nike.com",
+   "description": "Sportswear brand competing with Adidas on football kits and athletes."
+  },
+  "subject": {
+   "name": "Adidas",
+   "domain": "adidas.com",
+   "role": "competitor"
+  },
+  "competitors": [
+   {
+    "name": "Puma",
+    "domain": "puma.com"
+   },
+   {
+    "name": "New Balance",
+    "domain": "newbalance.com"
+   }
+  ],
+  "reliability": "rss",
+  "item": {
+   "title": "Arsenal hold City as Haaland's late header is ruled offside",
+   "url": "https://www.espn.com/soccer/report/_/id/20260914/arsenal-manchester-city",
+   "publishedAt": "2026-09-14",
+   "publisher": "espn.com"
+  }
+ },
+ {
+  "id": "mm-netflix-weekend-list",
+  "split": "train",
+  "label": false,
+  "why": "A weekend watch list naming one Netflix title among 12 is a passing programming mention, not a Netflix move.",
+  "self": {
+   "name": "Disney",
+   "domain": "disney.com",
+   "description": "Entertainment company competing with Netflix via Disney+ and Hulu."
+  },
+  "subject": {
+   "name": "Netflix",
+   "domain": "netflix.com",
+   "role": "competitor"
+  },
+  "competitors": [
+   {
+    "name": "Amazon",
+    "domain": "amazon.com"
+   },
+   {
+    "name": "Max",
+    "domain": "max.com"
+   }
+  ],
+  "reliability": "scraped_page",
+  "item": {
+   "title": "What to watch this weekend: 12 titles, from prestige drama to reality TV",
+   "url": "https://www.vulture.com/article/what-to-watch-weekend-september-2026.html",
+   "publishedAt": "2026-09-25",
+   "publisher": "vulture.com"
+  }
+ },
+ {
+  "id": "mm-coke-interbrand-rank",
+  "split": "train",
+  "label": false,
+  "why": "An annual most-valuable-brands ranking with Coca-Cola at No. 6 is a listicle, not a Pepsi-week event.",
+  "self": {
+   "name": "PepsiCo",
+   "domain": "pepsico.com",
+   "description": "Beverage and snacks company competing with Coca-Cola on cola and hydration."
+  },
+  "subject": {
+   "name": "Coca-Cola",
+   "domain": "coca-cola.com",
+   "role": "competitor"
+  },
+  "competitors": [
+   {
+    "name": "Keurig Dr Pepper",
+    "domain": "keurigdrpepper.com"
+   },
+   {
+    "name": "Red Bull",
+    "domain": "redbull.com"
+   }
+  ],
+  "reliability": "rss",
+  "item": {
+   "title": "Interbrand 2026: Apple holds No. 1 as Coca-Cola slips to sixth",
+   "url": "https://www.interbrand.com/best-global-brands-2026/",
+   "publishedAt": "2026-09-10",
+   "publisher": "interbrand.com"
+  }
+ },
+ {
+  "id": "mm-samsung-phone-history",
+  "split": "train",
+  "label": false,
+  "why": "A smartphone-history feature that cites Galaxy S in a timeline is old context, not a Samsung launch.",
+  "self": {
+   "name": "Apple",
+   "domain": "apple.com",
+   "description": "iPhone maker competing with Samsung in flagship smartphones."
+  },
+  "subject": {
+   "name": "Samsung",
+   "domain": "samsung.com",
+   "role": "competitor"
+  },
+  "competitors": [
+   {
+    "name": "Google",
+    "domain": "google.com"
+   },
+   {
+    "name": "OnePlus",
+    "domain": "oneplus.com"
+   }
+  ],
+  "reliability": "scraped_page",
+  "item": {
+   "title": "A brief history of the smartphone, from BlackBerry to foldables",
+   "url": "https://www.wired.com/story/history-of-the-smartphone-2026/",
+   "publishedAt": "2026-09-08",
+   "publisher": "wired.com"
+  }
+ },
+ {
+  "id": "mm-costco-charity-5k",
+  "split": "train",
+  "label": false,
+  "why": "Costco as one of several 5K sponsors is a passing community mention, not a warehouse-club move.",
+  "self": {
+   "name": "Sam's Club",
+   "domain": "samsclub.com",
+   "description": "Walmart warehouse club competing with Costco on membership retail."
+  },
+  "subject": {
+   "name": "Costco",
+   "domain": "costco.com",
+   "role": "competitor"
+  },
+  "competitors": [
+   {
+    "name": "BJ's Wholesale",
+    "domain": "bjs.com"
+   },
+   {
+    "name": "Walmart",
+    "domain": "walmart.com"
+   }
+  ],
+  "reliability": "best_effort",
+  "item": {
+   "title": "City 5K raises $80,000 with sponsors Costco, Nike and Harbor Grocers",
+   "url": "https://www.seattletimes.com/seattle-news/city-5k-raises-80000-2026/",
+   "publishedAt": "2026-09-07",
+   "publisher": "seattletimes.com"
+  }
+ },
+ {
+  "id": "mm-salesforce-hbs-2018",
+  "split": "train",
+  "label": false,
+  "why": "A reprinted 2018 HBS case on Salesforce platform strategy is old news, not a live CRM shift.",
+  "self": {
+   "name": "HubSpot",
+   "domain": "hubspot.com",
+   "description": "CRM and marketing platform competing with Salesforce for mid-market."
+  },
+  "subject": {
+   "name": "Salesforce",
+   "domain": "salesforce.com",
+   "role": "competitor"
+  },
+  "competitors": [
+   {
+    "name": "Microsoft",
+    "domain": "microsoft.com"
+   },
+   {
+    "name": "Zoho",
+    "domain": "zoho.com"
+   }
+  ],
+  "reliability": "scraped_page",
+  "item": {
+   "title": "Case study reprint: Salesforce's 2018 platform bet, revisited",
+   "url": "https://www.hbs.edu/faculty/Pages/item.aspx?num=salesforce-2018-reprint",
+   "publishedAt": "2026-09-09",
+   "publisher": "hbs.edu"
+  }
+ },
+ {
+  "id": "mm-nvidia-sp-nudge",
+  "split": "train",
+  "label": false,
+  "why": "A 0.1% S&P weight nudge is an index/ticker line, not an NVIDIA product or go-to-market event.",
+  "self": {
+   "name": "AMD",
+   "domain": "amd.com",
+   "description": "Chipmaker competing with NVIDIA in GPUs and data-center accelerators."
+  },
+  "subject": {
+   "name": "NVIDIA",
+   "domain": "nvidia.com",
+   "role": "competitor"
+  },
+  "competitors": [
+   {
+    "name": "Intel",
+    "domain": "intel.com"
+   },
+   {
+    "name": "Broadcom",
+    "domain": "broadcom.com"
+   }
+  ],
+  "reliability": "official_api",
+  "item": {
+   "title": "S&P 500 rebalance: NVIDIA weighting nudged up 0.1 percentage point",
+   "url": "https://www.marketwatch.com/story/sp-500-rebalance-nvidia-weight-nudge-2026-09-06",
+   "publishedAt": "2026-09-06",
+   "publisher": "marketwatch.com"
+  }
+ },
+ {
+  "id": "mm-pepsi-super-bowl-ad",
+  "split": "test",
+  "label": true,
+  "why": "A Super Bowl campaign with a global pop star is a campaign Coca-Cola would staff up against this week.",
+  "self": {
+   "name": "Coca-Cola",
+   "domain": "coca-cola.com",
+   "description": "Beverage company competing with Pepsi on cola and sports sponsorships."
+  },
+  "subject": {
+   "name": "Pepsi",
+   "domain": "pepsi.com",
+   "role": "competitor"
+  },
+  "competitors": [
+   {
+    "name": "Keurig Dr Pepper",
+    "domain": "keurigdrpepper.com"
+   },
+   {
+    "name": "Red Bull",
+    "domain": "redbull.com"
+   }
+  ],
+  "reliability": "rss",
+  "item": {
+   "title": "Pepsi books Adele for Super Bowl LXI halftime and a year-long Zero Sugar push",
+   "url": "https://www.adage.com/article/pepsi-adele-super-bowl-lxi-2026",
+   "publishedAt": "2026-09-23",
+   "publisher": "adage.com"
+  }
+ },
+ {
+  "id": "mm-boeing-max-grounding",
+  "split": "test",
+  "label": true,
+  "why": "A fresh 737 MAX grounding is a controversy and fleet event Airbus sales would exploit this week.",
+  "self": {
+   "name": "Airbus",
+   "domain": "airbus.com",
+   "description": "Aircraft maker competing with Boeing on narrowbody jets."
+  },
+  "subject": {
+   "name": "Boeing",
+   "domain": "boeing.com",
+   "role": "competitor"
+  },
+  "competitors": [
+   {
+    "name": "Embraer",
+    "domain": "embraer.com"
+   },
+   {
+    "name": "COMAC",
+    "domain": "comac.cc"
+   }
+  ],
+  "reliability": "official_api",
+  "item": {
+   "title": "FAA grounds 180 Boeing 737 MAX 10 jets after rudder-cable findings",
+   "url": "https://www.reuters.com/business/aerospace-defense/faa-grounds-737-max-10-2026-09-24/",
+   "publishedAt": "2026-09-24",
+   "publisher": "reuters.com"
+  }
+ },
+ {
+  "id": "mm-iphone18-verge-review",
+  "split": "test",
+  "label": true,
+  "why": "A major iPhone 18 review is a big product review Samsung's Galaxy team would dissect this week.",
+  "self": {
+   "name": "Samsung",
+   "domain": "samsung.com",
+   "description": "Phone maker competing with Apple at the top of the smartphone market."
+  },
+  "subject": {
+   "name": "Apple",
+   "domain": "apple.com",
+   "role": "competitor"
+  },
+  "competitors": [
+   {
+    "name": "Google",
+    "domain": "google.com"
+   },
+   {
+    "name": "Xiaomi",
+    "domain": "mi.com"
+   }
+  ],
+  "reliability": "rss",
+  "item": {
+   "title": "iPhone 18 review: satellite messaging as default almost makes you forget the notch is gone",
+   "url": "https://www.theverge.com/review/iphone-18-review-2026",
+   "publishedAt": "2026-09-22",
+   "publisher": "theverge.com"
+  }
+ },
+ {
+  "id": "mm-meta-reels-reorg",
+  "split": "test",
+  "label": true,
+  "why": "Meta dissolving the Reels org is a top-level reorg TikTok would treat as a competitive signal this week.",
+  "self": {
+   "name": "TikTok",
+   "domain": "tiktok.com",
+   "description": "Short-video app competing with Instagram Reels and Facebook video."
+  },
+  "subject": {
+   "name": "Meta",
+   "domain": "meta.com",
+   "role": "competitor"
+  },
+  "competitors": [
+   {
+    "name": "YouTube",
+    "domain": "youtube.com"
+   },
+   {
+    "name": "Snap",
+    "domain": "snap.com"
+   }
+  ],
+  "reliability": "official_api",
+  "item": {
+   "title": "Meta dissolves Instagram Reels team and folds short video into a single feed org",
+   "url": "https://www.wsj.com/tech/meta-dissolves-reels-team-2026-09-21",
+   "publishedAt": "2026-09-21",
+   "publisher": "wsj.com"
+  }
+ },
+ {
+  "id": "mm-shopify-tiktok-exclusive",
+  "split": "test",
+  "label": true,
+  "why": "An exclusive TikTok Shop partnership is a distribution deal BigCommerce merchants would feel immediately.",
+  "self": {
+   "name": "BigCommerce",
+   "domain": "bigcommerce.com",
+   "description": "Ecommerce platform competing with Shopify for SMB storefronts."
+  },
+  "subject": {
+   "name": "Shopify",
+   "domain": "shopify.com",
+   "role": "competitor"
+  },
+  "competitors": [
+   {
+    "name": "WooCommerce",
+    "domain": "woocommerce.com"
+   },
+   {
+    "name": "Squarespace",
+    "domain": "squarespace.com"
+   }
+  ],
+  "reliability": "rss",
+  "item": {
+   "title": "Shopify becomes exclusive US partner for TikTok Shop merchant onboarding",
+   "url": "https://techcrunch.com/2026/09/18/shopify-tiktok-shop-exclusive/",
+   "publishedAt": "2026-09-18",
+   "publisher": "techcrunch.com"
+  }
+ },
+ {
+  "id": "mm-nvidia-nextgpu",
+  "split": "test",
+  "label": true,
+  "why": "A next-gen AI GPU launch is a product event AMD's data-center group would scramble on this week.",
+  "self": {
+   "name": "AMD",
+   "domain": "amd.com",
+   "description": "Semiconductor company competing with NVIDIA on AI accelerators."
+  },
+  "subject": {
+   "name": "NVIDIA",
+   "domain": "nvidia.com",
+   "role": "competitor"
+  },
+  "competitors": [
+   {
+    "name": "Intel",
+    "domain": "intel.com"
+   },
+   {
+    "name": "Broadcom",
+    "domain": "broadcom.com"
+   }
+  ],
+  "reliability": "official_api",
+  "item": {
+   "title": "NVIDIA unveils Rubin GPU with 2x inference throughput and new rack design",
+   "url": "https://www.theverge.com/2026/9/20/nvidia-rubin-gpu-announcement",
+   "publishedAt": "2026-09-20",
+   "publisher": "theverge.com"
+  }
+ },
+ {
+  "id": "mm-disneyplus-sub-loss",
+  "split": "test",
+  "label": true,
+  "why": "An 8 million subscriber drop is a material competitive datapoint Netflix leadership would raise this week.",
+  "self": {
+   "name": "Netflix",
+   "domain": "netflix.com",
+   "description": "Streaming service competing with Disney+ for subscribers and content."
+  },
+  "subject": {
+   "name": "Disney",
+   "domain": "disney.com",
+   "role": "competitor"
+  },
+  "competitors": [
+   {
+    "name": "Amazon",
+    "domain": "amazon.com"
+   },
+   {
+    "name": "Warner Bros. Discovery",
+    "domain": "wbd.com"
+   }
+  ],
+  "reliability": "rss",
+  "item": {
+   "title": "Disney+ sheds 8 million subscribers in a quarter as bundle fatigue bites",
+   "url": "https://www.cnbc.com/2026/09/17/disney-plus-loses-8-million-subscribers.html",
+   "publishedAt": "2026-09-17",
+   "publisher": "cnbc.com"
+  }
+ },
+ {
+  "id": "mm-mcdonalds-5meal-permanent",
+  "split": "test",
+  "label": true,
+  "why": "Making a $5 meal nationwide and permanent is a price/offer change Burger King would counter this week.",
+  "self": {
+   "name": "Burger King",
+   "domain": "burgerking.com",
+   "description": "QSR burger chain competing with McDonald's on value menus."
+  },
+  "subject": {
+   "name": "McDonald's",
+   "domain": "mcdonalds.com",
+   "role": "competitor"
+  },
+  "competitors": [
+   {
+    "name": "Wendy's",
+    "domain": "wendys.com"
+   },
+   {
+    "name": "Taco Bell",
+    "domain": "tacobell.com"
+   }
+  ],
+  "reliability": "official_api",
+  "item": {
+   "title": "McDonald's makes the $5 meal deal permanent in all US restaurants",
+   "url": "https://www.reuters.com/business/retail-consumer/mcdonalds-5-dollar-meal-permanent-2026-09-16/",
+   "publishedAt": "2026-09-16",
+   "publisher": "reuters.com"
+  }
+ },
+ {
+  "id": "mm-homedepot-regional-buy",
+  "split": "test",
+  "label": true,
+  "why": "Buying a 200-store regional chain is a deal and expansion Lowe's would war-game immediately.",
+  "self": {
+   "name": "Lowe's",
+   "domain": "lowes.com",
+   "description": "Home-improvement retailer competing with Home Depot on stores and pros."
+  },
+  "subject": {
+   "name": "Home Depot",
+   "domain": "homedepot.com",
+   "role": "competitor"
+  },
+  "competitors": [
+   {
+    "name": "Menards",
+    "domain": "menards.com"
+   },
+   {
+    "name": "Ace Hardware",
+    "domain": "acehardware.com"
+   }
+  ],
+  "reliability": "rss",
+  "item": {
+   "title": "Home Depot to acquire 200-store regional chain Hammond Lumber for $4.2 billion",
+   "url": "https://www.wsj.com/business/retail/home-depot-hammond-lumber-deal-2026-09-15",
+   "publishedAt": "2026-09-15",
+   "publisher": "wsj.com"
+  }
+ },
+ {
+  "id": "mm-zoom-ai-notes-deal",
+  "split": "test",
+  "label": true,
+  "why": "A $1.2B AI note-taker acquisition is a deal Microsoft Teams would treat as a feature-race threat.",
+  "self": {
+   "name": "Microsoft",
+   "domain": "microsoft.com",
+   "description": "Productivity company whose Teams product competes with Zoom meetings."
+  },
+  "subject": {
+   "name": "Zoom",
+   "domain": "zoom.us",
+   "role": "competitor"
+  },
+  "competitors": [
+   {
+    "name": "Cisco",
+    "domain": "cisco.com"
+   },
+   {
+    "name": "Google",
+    "domain": "google.com"
+   }
+  ],
+  "reliability": "official_api",
+  "item": {
+   "title": "Zoom acquires AI meeting-notes startup Otter's enterprise unit for $1.2 billion",
+   "url": "https://www.bloomberg.com/news/articles/2026-09-19/zoom-acquires-otter-enterprise",
+   "publishedAt": "2026-09-19",
+   "publisher": "bloomberg.com"
+  }
+ },
+ {
+  "id": "mm-costco-fee-80",
+  "split": "test",
+  "label": true,
+  "why": "Raising the Gold Star fee to $80 is a price change Sam's Club membership teams would match or message against.",
+  "self": {
+   "name": "Sam's Club",
+   "domain": "samsclub.com",
+   "description": "Warehouse club competing with Costco on membership fees and bulk goods."
+  },
+  "subject": {
+   "name": "Costco",
+   "domain": "costco.com",
+   "role": "competitor"
+  },
+  "competitors": [
+   {
+    "name": "BJ's Wholesale",
+    "domain": "bjs.com"
+   },
+   {
+    "name": "Walmart",
+    "domain": "walmart.com"
+   }
+  ],
+  "reliability": "rss",
+  "item": {
+   "title": "Costco lifts Gold Star membership to $80, first increase since 2024",
+   "url": "https://www.cnbc.com/2026/09/13/costco-raises-membership-fee-to-80.html",
+   "publishedAt": "2026-09-13",
+   "publisher": "cnbc.com"
+  }
+ },
+ {
+  "id": "mm-ubereats-zero-commission",
+  "split": "test",
+  "label": true,
+  "why": "A 90-day 0% commission blitz is a price war DoorDash would have to answer this week.",
+  "self": {
+   "name": "DoorDash",
+   "domain": "doordash.com",
+   "description": "Delivery platform competing with Uber Eats for restaurants and diners."
+  },
+  "subject": {
+   "name": "Uber",
+   "domain": "uber.com",
+   "role": "competitor"
+  },
+  "competitors": [
+   {
+    "name": "Grubhub",
+    "domain": "grubhub.com"
+   },
+   {
+    "name": "Instacart",
+    "domain": "instacart.com"
+   }
+  ],
+  "reliability": "official_api",
+  "item": {
+   "title": "Uber Eats undercuts DoorDash with 0% restaurant commission for 90 days",
+   "url": "https://www.reuters.com/business/retail-consumer/uber-eats-zero-commission-promo-2026-09-12/",
+   "publishedAt": "2026-09-12",
+   "publisher": "reuters.com"
+  }
+ },
+ {
+  "id": "mm-hm-campaign-boycott",
+  "split": "test",
+  "label": true,
+  "why": "A yanked campaign and designer-led boycott is a viral controversy Zara would monitor this week.",
+  "self": {
+   "name": "Zara",
+   "domain": "zara.com",
+   "description": "Fast-fashion retailer competing with H&M on trend speed and price."
+  },
+  "subject": {
+   "name": "H&M",
+   "domain": "hm.com",
+   "role": "competitor"
+  },
+  "competitors": [
+   {
+    "name": "Uniqlo",
+    "domain": "uniqlo.com"
+   },
+   {
+    "name": "Gap",
+    "domain": "gap.com"
+   }
+  ],
+  "reliability": "rss",
+  "item": {
+   "title": "H&M yanks global campaign as independent designers accuse it of copying and call a boycott",
+   "url": "https://www.businessoffashion.com/news/hm-campaign-boycott-copying-2026-09-26",
+   "publishedAt": "2026-09-26",
+   "publisher": "businessoffashion.com"
+  }
+ },
+ {
+  "id": "mm-target-close-120",
+  "split": "test",
+  "label": true,
+  "why": "Closing 120 stores is a footprint event Walmart's store strategy team would brief on this week.",
+  "self": {
+   "name": "Walmart",
+   "domain": "walmart.com",
+   "description": "Mass retailer competing with Target on general merchandise."
+  },
+  "subject": {
+   "name": "Target",
+   "domain": "target.com",
+   "role": "competitor"
+  },
+  "competitors": [
+   {
+    "name": "Amazon",
+    "domain": "amazon.com"
+   },
+   {
+    "name": "Costco",
+    "domain": "costco.com"
+   }
+  ],
+  "reliability": "official_api",
+  "item": {
+   "title": "Target to close 120 underperforming stores in a reset of urban formats",
+   "url": "https://www.wsj.com/business/retail/target-close-120-stores-2026-09-11",
+   "publishedAt": "2026-09-11",
+   "publisher": "wsj.com"
+  }
+ },
+ {
+  "id": "mm-paypal-exits-crypto",
+  "split": "test",
+  "label": true,
+  "why": "Exiting crypto trading is a product-line retreat Block/Cash App would treat as a share-gain opening.",
+  "self": {
+   "name": "Block",
+   "domain": "block.xyz",
+   "description": "Payments company whose Cash App competes with PayPal and Venmo on consumer money."
+  },
+  "subject": {
+   "name": "PayPal",
+   "domain": "paypal.com",
+   "role": "competitor"
+  },
+  "competitors": [
+   {
+    "name": "Stripe",
+    "domain": "stripe.com"
+   },
+   {
+    "name": "Venmo",
+    "domain": "venmo.com"
+   }
+  ],
+  "reliability": "rss",
+  "item": {
+   "title": "PayPal shuts consumer crypto trading in the US, citing compliance costs",
+   "url": "https://www.bloomberg.com/news/articles/2026-09-10/paypal-exits-us-crypto-trading",
+   "publishedAt": "2026-09-10",
+   "publisher": "bloomberg.com"
+  }
+ },
+ {
+  "id": "mm-coke-ticker-slip",
+  "split": "test",
+  "label": false,
+  "why": "A 0.2% ticker slip in a mixed beverage tape is a stock line, not a Coca-Cola competitive event.",
+  "self": {
+   "name": "PepsiCo",
+   "domain": "pepsico.com",
+   "description": "Beverage rival that tracks Coca-Cola commercial moves, not daily ticks."
+  },
+  "subject": {
+   "name": "Coca-Cola",
+   "domain": "coca-cola.com",
+   "role": "competitor"
+  },
+  "competitors": [
+   {
+    "name": "Keurig Dr Pepper",
+    "domain": "keurigdrpepper.com"
+   }
+  ],
+  "reliability": "official_api",
+  "item": {
+   "title": "KO slips 0.2% as beverage stocks trade mixed",
+   "url": "https://www.marketwatch.com/story/ko-slips-beverage-stocks-mixed-2026-09-22",
+   "publishedAt": "2026-09-22",
+   "publisher": "marketwatch.com"
+  }
+ },
+ {
+  "id": "mm-delta-airlines-listicle",
+  "split": "test",
+  "label": false,
+  "why": "A 'best airlines 2026' ranking with Delta mid-pack is a listicle, not a network or pricing move.",
+  "self": {
+   "name": "United",
+   "domain": "united.com",
+   "description": "US airline competing with Delta on hubs, loyalty, and corporate travel."
+  },
+  "subject": {
+   "name": "Delta",
+   "domain": "delta.com",
+   "role": "competitor"
+  },
+  "competitors": [
+   {
+    "name": "American Airlines",
+    "domain": "aa.com"
+   },
+   {
+    "name": "Southwest",
+    "domain": "southwest.com"
+   }
+  ],
+  "reliability": "scraped_page",
+  "item": {
+   "title": "The 10 best US airlines of 2026, ranked by on-time and cabin scores",
+   "url": "https://www.travelandleisure.com/best-us-airlines-2026",
+   "publishedAt": "2026-09-20",
+   "publisher": "travelandleisure.com"
+  }
+ },
+ {
+  "id": "mm-microsoft-garage-reprint",
+  "split": "test",
+  "label": false,
+  "why": "A garage-origin feature reprint is old founding lore, not a Microsoft product or deal this week.",
+  "self": {
+   "name": "Google",
+   "domain": "google.com",
+   "description": "Cloud and productivity rival of Microsoft."
+  },
+  "subject": {
+   "name": "Microsoft",
+   "domain": "microsoft.com",
+   "role": "competitor"
+  },
+  "competitors": [
+   {
+    "name": "Amazon",
+    "domain": "amazon.com"
+   },
+   {
+    "name": "Apple",
+    "domain": "apple.com"
+   }
+  ],
+  "reliability": "rss",
+  "item": {
+   "title": "How Microsoft started in a garage: the Albuquerque years, retold",
+   "url": "https://www.forbes.com/sites/microsoft-garage-albuquerque-retold-2026/",
+   "publishedAt": "2026-09-09",
+   "publisher": "forbes.com"
+  }
+ },
+ {
+  "id": "mm-uber-earnings-calendar",
+  "split": "test",
+  "label": false,
+  "why": "An earnings-calendar reminder that Uber reports Thursday is a ticker/calendar line, not the results.",
+  "self": {
+   "name": "Lyft",
+   "domain": "lyft.com",
+   "description": "Rideshare company competing with Uber in US mobility."
+  },
+  "subject": {
+   "name": "Uber",
+   "domain": "uber.com",
+   "role": "competitor"
+  },
+  "competitors": [
+   {
+    "name": "DoorDash",
+    "domain": "doordash.com"
+   }
+  ],
+  "reliability": "official_api",
+  "item": {
+   "title": "Earnings calendar: Uber reports Thursday; Ford and Nike follow Friday",
+   "url": "https://www.cnbc.com/2026/09/08/earnings-calendar-uber-ford-nike.html",
+   "publishedAt": "2026-09-08",
+   "publisher": "cnbc.com"
+  }
+ },
+ {
+  "id": "mm-ikea-furniture-list-30",
+  "split": "test",
+  "label": false,
+  "why": "A 30-brand furniture listicle that includes IKEA is not an IKEA launch or pricing move Wayfair would act on.",
+  "self": {
+   "name": "Wayfair",
+   "domain": "wayfair.com",
+   "description": "Online furniture retailer competing with IKEA on home goods."
+  },
+  "subject": {
+   "name": "IKEA",
+   "domain": "ikea.com",
+   "role": "competitor"
+  },
+  "competitors": [
+   {
+    "name": "West Elm",
+    "domain": "westelm.com"
+   },
+   {
+    "name": "Article",
+    "domain": "article.com"
+   }
+  ],
+  "reliability": "scraped_page",
+  "item": {
+   "title": "30 best furniture brands of 2026 for every budget",
+   "url": "https://www.architecturaldigest.com/story/best-furniture-brands-2026",
+   "publishedAt": "2026-09-14",
+   "publisher": "architecturaldigest.com"
+  }
+ },
+ {
+  "id": "mm-salesforce-attendee-list",
+  "split": "test",
+  "label": false,
+  "why": "A conference attendee list naming Salesforce execs is a passing mention, not a product or deal.",
+  "self": {
+   "name": "HubSpot",
+   "domain": "hubspot.com",
+   "description": "CRM platform competing with Salesforce for sales teams."
+  },
+  "subject": {
+   "name": "Salesforce",
+   "domain": "salesforce.com",
+   "role": "competitor"
+  },
+  "competitors": [
+   {
+    "name": "Microsoft",
+    "domain": "microsoft.com"
+   },
+   {
+    "name": "Oracle",
+    "domain": "oracle.com"
+   }
+  ],
+  "reliability": "best_effort",
+  "item": {
+   "title": "Dreamforce 2026 attendee list: who is on stage and in the halls",
+   "url": "https://www.salesforceben.com/dreamforce-2026-attendee-list/",
+   "publishedAt": "2026-09-07",
+   "publisher": "salesforceben.com"
+  }
+ },
+ {
+  "id": "mm-pfizer-stocks-watch",
+  "split": "test",
+  "label": false,
+  "why": "A morning 'stocks to watch' line grouping PFE with two peers is a ticker blurb, not a Pfizer event.",
+  "self": {
+   "name": "Moderna",
+   "domain": "moderna.com",
+   "description": "Biotech competing with Pfizer on vaccines and mRNA drugs."
+  },
+  "subject": {
+   "name": "Pfizer",
+   "domain": "pfizer.com",
+   "role": "competitor"
+  },
+  "competitors": [
+   {
+    "name": "BioNTech",
+    "domain": "biontech.com"
+   },
+   {
+    "name": "Johnson & Johnson",
+    "domain": "jnj.com"
+   }
+  ],
+  "reliability": "official_api",
+  "item": {
+   "title": "Stocks to watch: PFE, MRNA, JNJ open mixed ahead of FDA calendar",
+   "url": "https://finance.yahoo.com/news/stocks-to-watch-pfe-mrna-jnj-2026-09-05",
+   "publishedAt": "2026-09-05",
+   "publisher": "finance.yahoo.com"
+  }
+ },
+ {
+  "id": "mm-gucci-red-carpet",
+  "split": "test",
+  "label": false,
+  "why": "A red-carpet caption that Zendaya wore vintage Gucci is a passing fashion mention, not a Gucci campaign.",
+  "self": {
+   "name": "Louis Vuitton",
+   "domain": "louisvuitton.com",
+   "description": "Luxury house competing with Gucci on ready-to-wear and celebrity dressing."
+  },
+  "subject": {
+   "name": "Gucci",
+   "domain": "gucci.com",
+   "role": "competitor"
+  },
+  "competitors": [
+   {
+    "name": "Prada",
+    "domain": "prada.com"
+   },
+   {
+    "name": "Dior",
+    "domain": "dior.com"
+   }
+  ],
+  "reliability": "rss",
+  "item": {
+   "title": "Zendaya in vintage Gucci at the Met after-party",
+   "url": "https://www.vogue.com/article/zendaya-vintage-gucci-met-afterparty-2026",
+   "publishedAt": "2026-09-21",
+   "publisher": "vogue.com"
+  }
+ },
+ {
+  "id": "mm-slack-newsletters-12",
+  "split": "test",
+  "label": false,
+  "why": "A 'newsletters we love' list that includes Slack's engineering blog is a listicle entry, not a Slack move.",
+  "self": {
+   "name": "Microsoft",
+   "domain": "microsoft.com",
+   "description": "Company whose Teams product competes with Slack for workplace chat."
+  },
+  "subject": {
+   "name": "Slack",
+   "domain": "slack.com",
+   "role": "competitor"
+  },
+  "competitors": [
+   {
+    "name": "Google",
+    "domain": "google.com"
+   },
+   {
+    "name": "Zoom",
+    "domain": "zoom.us"
+   }
+  ],
+  "reliability": "scraped_page",
+  "item": {
+   "title": "12 newsletters we love this fall, from climate to engineering",
+   "url": "https://www.theverge.com/2026/9/06/newsletters-we-love-fall",
+   "publishedAt": "2026-09-06",
+   "publisher": "theverge.com"
+  }
+ },
+ {
+  "id": "mm-bmw-storm-delays",
+  "split": "test",
+  "label": false,
+  "why": "A weather roundup that names BMW among several automakers delayed by a storm is a passing mention.",
+  "self": {
+   "name": "Mercedes-Benz",
+   "domain": "mercedes-benz.com",
+   "description": "Premium automaker competing with BMW in luxury vehicles."
+  },
+  "subject": {
+   "name": "BMW",
+   "domain": "bmw.com",
+   "role": "competitor"
+  },
+  "competitors": [
+   {
+    "name": "Audi",
+    "domain": "audi.com"
+   },
+   {
+    "name": "Lexus",
+    "domain": "lexus.com"
+   }
+  ],
+  "reliability": "rss",
+  "item": {
+   "title": "Gulf storm delays auto shipments; BMW, Ford and Toyota among those waiting on parts",
+   "url": "https://www.freightwaves.com/news/gulf-storm-delays-auto-shipments-2026-09-04",
+   "publishedAt": "2026-09-04",
+   "publisher": "freightwaves.com"
+  }
+ },
+ {
+  "id": "mm-verizon-crossword-clue",
+  "split": "test",
+  "label": false,
+  "why": "A crossword clue whose answer is Verizon is not competitive intelligence AT&T would act on.",
+  "self": {
+   "name": "AT&T",
+   "domain": "att.com",
+   "description": "US wireless and fiber carrier competing with Verizon."
+  },
+  "subject": {
+   "name": "Verizon",
+   "domain": "verizon.com",
+   "role": "competitor"
+  },
+  "competitors": [
+   {
+    "name": "T-Mobile",
+    "domain": "t-mobile.com"
+   }
+  ],
+  "reliability": "best_effort",
+  "item": {
+   "title": "NYT Crossword: Thursday grid, 'Big wireless name' (7)",
+   "url": "https://www.nytimes.com/2026/09/03/crosswords/daily-puzzle.html",
+   "publishedAt": "2026-09-03",
+   "publisher": "nytimes.com"
+  }
+ },
+ {
+  "id": "mm-etsy-shopping-widget",
+  "split": "test",
+  "label": false,
+  "why": "A shopping-comparison widget pairing Etsy and Amazon Handmade mugs is not an Etsy strategy event.",
+  "self": {
+   "name": "Amazon",
+   "domain": "amazon.com",
+   "description": "Marketplace competing with Etsy on handmade and small-seller goods."
+  },
+  "subject": {
+   "name": "Etsy",
+   "domain": "etsy.com",
+   "role": "competitor"
+  },
+  "competitors": [
+   {
+    "name": "eBay",
+    "domain": "ebay.com"
+   },
+   {
+    "name": "Shopify",
+    "domain": "shopify.com"
+   }
+  ],
+  "reliability": "best_effort",
+  "item": {
+   "title": "Shop the look: ceramic mugs from Etsy, Amazon Handmade and West Elm",
+   "url": "https://www.google.com/shopping/mugs-etsy-amazon-handmade-2026",
+   "publishedAt": "2026-09-02",
+   "publisher": "google.com"
+  }
+ },
+ {
+  "id": "mm-hilton-2019-milestone",
+  "split": "test",
+  "label": false,
+  "why": "An on-this-day recap of Hilton's 2019 6,000th hotel is old news retold, not a 2026 expansion.",
+  "self": {
+   "name": "Marriott",
+   "domain": "marriott.com",
+   "description": "Hotel group competing with Hilton on loyalty and global rooms."
+  },
+  "subject": {
+   "name": "Hilton",
+   "domain": "hilton.com",
+   "role": "competitor"
+  },
+  "competitors": [
+   {
+    "name": "Hyatt",
+    "domain": "hyatt.com"
+   },
+   {
+    "name": "IHG",
+    "domain": "ihg.com"
+   }
+  ],
+  "reliability": "rss",
+  "item": {
+   "title": "On this day in 2019: Hilton opened its 6,000th hotel",
+   "url": "https://www.hotelnewsnow.com/on-this-day-hilton-6000th-hotel-2019",
+   "publishedAt": "2026-09-01",
+   "publisher": "hotelnewsnow.com"
+  }
+ },
+ {
+  "id": "mm-jpm-premarket-line",
+  "split": "test",
+  "label": false,
+  "why": "A premarket movers line grouping JPM with other banks is a ticker blurb, not a JPMorgan deal or hire.",
+  "self": {
+   "name": "Bank of America",
+   "domain": "bankofamerica.com",
+   "description": "US bank competing with JPMorgan Chase on consumer and investment banking."
+  },
+  "subject": {
+   "name": "JPMorgan Chase",
+   "domain": "jpmorganchase.com",
+   "role": "competitor"
+  },
+  "competitors": [
+   {
+    "name": "Wells Fargo",
+    "domain": "wellsfargo.com"
+   },
+   {
+    "name": "Citigroup",
+    "domain": "citigroup.com"
+   }
+  ],
+  "reliability": "official_api",
+  "item": {
+   "title": "Premarket movers: JPM, WFC, BAC mixed as Treasury yields dip",
+   "url": "https://www.marketwatch.com/story/premarket-movers-jpm-wfc-bac-2026-09-28",
+   "publishedAt": "2026-09-28",
+   "publisher": "marketwatch.com"
+  }
+ },
+ {
+  "id": "mm-sony-ps5-five-years",
+  "split": "test",
+  "label": false,
+  "why": "A five-years-later PS5 launch retrospective is old news retold, not a new Sony hardware move.",
+  "self": {
+   "name": "Microsoft",
+   "domain": "microsoft.com",
+   "description": "Xbox maker competing with Sony PlayStation in consoles and services."
+  },
+  "subject": {
+   "name": "Sony",
+   "domain": "sony.com",
+   "role": "competitor"
+  },
+  "competitors": [
+   {
+    "name": "Nintendo",
+    "domain": "nintendo.com"
+   },
+   {
+    "name": "Valve",
+    "domain": "valvesoftware.com"
+   }
+  ],
+  "reliability": "scraped_page",
+  "item": {
+   "title": "Five years later: how Sony's PS5 launch shaped a console generation",
+   "url": "https://www.polygon.com/2026/9/29/ps5-launch-five-years-later",
+   "publishedAt": "2026-09-29",
+   "publisher": "polygon.com"
+  }
+ }
+]
