@@ -17,7 +17,10 @@ export function StartWatchingLabel() {
 
 export function StartButton({ source = null }: { source?: StartSource | null }) {
   return (
-    <a href={source === null ? "/login" : `/login?utm_source=${source}`} className={buttonVariants({ variant: "primary", size: "lg" })}>
+    <a
+      href={source === null ? "/login" : `/login?utm_source=${source}`}
+      className={buttonVariants({ variant: "primary", size: "lg" })}
+    >
       <StartWatchingLabel />
     </a>
   );
