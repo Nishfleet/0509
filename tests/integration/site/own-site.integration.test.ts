@@ -28,8 +28,7 @@ const fetched: string[] = [];
 const respond = (input: RequestInfo | URL): Promise<Response> => {
   const requestUrl = new URL(input instanceof Request ? input.url : String(input));
   fetched.push(requestUrl.toString());
-  if (site.apexDown && !requestUrl.hostname.startsWith("www."))
-    return Promise.reject(new Error("DNS lookup failed"));
+  if (site.apexDown && !requestUrl.hostname.startsWith("www.")) return Promise.reject(new Error("DNS lookup failed"));
   if (requestUrl.pathname === "/robots.txt") {
     return Promise.resolve(new Response(site.robots ?? "", { status: site.robots === null ? 404 : 200 }));
   }
@@ -67,9 +66,7 @@ const incidents = async () => {
 };
 
 const alerts = async () => {
-  const rows = await env.DB.prepare(
-    "SELECT kind, severity, title, incident_id FROM alert WHERE workspace_id = ?",
-  )
+  const rows = await env.DB.prepare("SELECT kind, severity, title, incident_id FROM alert WHERE workspace_id = ?")
     .bind(WS)
     .all<{ kind: string; severity: string; title: string; incident_id: string | null }>();
   return rows.results;

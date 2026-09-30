@@ -55,9 +55,7 @@ async function seed(): Promise<void> {
   )
     .bind(userId, `${userId}@0509.io`, now)
     .run();
-  await env.DB.prepare(
-    `INSERT INTO workspace (id, name, owner_user_id, created_at) VALUES (?1, 'Owner', ?2, ?3)`,
-  )
+  await env.DB.prepare(`INSERT INTO workspace (id, name, owner_user_id, created_at) VALUES (?1, 'Owner', ?2, ?3)`)
     .bind(workspaceId, userId, now)
     .run();
   await env.DB.prepare(
@@ -82,9 +80,9 @@ async function answerHomepage(): Promise<void> {
 }
 
 async function confirmRefusedCard(): Promise<string> {
-  expect(
-    await confirmCard(workspaceId, userId, form({ subject: DOMAIN, name: "Gymshark", description: "" })),
-  ).toBe(true);
+  expect(await confirmCard(workspaceId, userId, form({ subject: DOMAIN, name: "Gymshark", description: "" }))).toBe(
+    true,
+  );
   const row = await env.DB.prepare("SELECT id FROM entity WHERE workspace_id = ?1 AND role = 'self'")
     .bind(workspaceId)
     .first<{ id: string }>();

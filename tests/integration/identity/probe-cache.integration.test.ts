@@ -2,11 +2,7 @@ import { env } from "cloudflare:workers";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 
-import {
-  cachedProbe,
-  PROBE_TTL_SECONDS,
-  probeKey,
-} from "../../../app/lib/identity/probe-cache.server";
+import { cachedProbe, PROBE_TTL_SECONDS, probeKey } from "../../../app/lib/identity/probe-cache.server";
 import { normaliseSubject } from "../../../app/lib/identity/normalise";
 
 /**
@@ -82,9 +78,7 @@ describe("identity probe cache", () => {
       throw new Error("probe failed");
     });
 
-    await expect(
-      cachedProbe(subject, "homepage", NAME_SCHEMA, run),
-    ).rejects.toThrow("probe failed");
+    await expect(cachedProbe(subject, "homepage", NAME_SCHEMA, run)).rejects.toThrow("probe failed");
     expect(await env.IDENTITY_CACHE.get(KEY, "json")).toBeNull();
   });
 });

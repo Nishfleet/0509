@@ -23,9 +23,7 @@ export async function latestSiteSnapshot(
   pageId: string,
   before: string,
 ): Promise<SiteSnapshotRow | null> {
-  return env.DB.prepare(LATEST_SITE_SNAPSHOT)
-    .bind(watchId, pageId, before)
-    .first<SiteSnapshotRow>();
+  return env.DB.prepare(LATEST_SITE_SNAPSHOT).bind(watchId, pageId, before).first<SiteSnapshotRow>();
 }
 
 export async function insertSnapshot(row: {
@@ -101,10 +99,7 @@ export interface BoardSnapshot {
   itemCount: number;
 }
 
-export async function latestBoardSnapshot(
-  watchId: string,
-  before: string,
-): Promise<BoardSnapshot | null> {
+export async function latestBoardSnapshot(watchId: string, before: string): Promise<BoardSnapshot | null> {
   const row = await env.DB.prepare(LATEST_BOARD_SNAPSHOT).bind(watchId, before).first();
   if (row === null) return null;
   const parsed = boardSnapshotRow.parse(row);
@@ -126,14 +121,7 @@ export async function insertBoardSnapshot(row: {
 }): Promise<void> {
   await env.DB.batch(
     withSourceLatestFacts(
-      env.DB.prepare(INSERT_BOARD_SNAPSHOT).bind(
-        row.id,
-        row.watchId,
-        row.fetchedAt,
-        row.r2Key,
-        row.hash,
-        row.itemCount,
-      ),
+      env.DB.prepare(INSERT_BOARD_SNAPSHOT).bind(row.id, row.watchId, row.fetchedAt, row.r2Key, row.hash, row.itemCount),
       row.id,
     ),
   );

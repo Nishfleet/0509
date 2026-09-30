@@ -23,6 +23,7 @@ export default [
   route("app/changes/:signalId/:side", "routes/app.change-shot.ts"),
   route("app/logos/:entityId", "routes/app.logo.ts"),
   route("u/:token", "routes/u.$token.tsx"),
+  route("v/:token", "routes/v.$token.tsx"),
   route("api/health", "routes/api.health.ts"),
   route("api/auth/*", "routes/api.auth.$.ts"),
   route("api/webhooks/dodo", "routes/api.webhooks.dodo.ts"),

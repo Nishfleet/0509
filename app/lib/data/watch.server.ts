@@ -33,7 +33,7 @@ ORDER BY e.id`;
 
 const MARK_POLLED = `UPDATE watch SET last_polled_at = ?2 WHERE id = ?1`;
 
-const SITE_SWEEP_TARGETS = `SELECT e.workspace_id AS workspace_id,
+const SITE_SWEEP_TARGET_JOIN = `SELECT e.workspace_id AS workspace_id,
        e.id AS entity_id,
        e.role AS entity_role,
        w.source_id AS source_id,
@@ -44,17 +44,17 @@ const SITE_SWEEP_TARGETS = `SELECT e.workspace_id AS workspace_id,
        p.transport AS transport,
        p.transport_tested_at AS transport_tested_at
 FROM watch w
-JOIN source src ON src.id = w.source_id AND src.key = ?1 AND src.is_enabled = 1
+JOIN source src ON src.id = w.source_id AND src.is_enabled = 1
 JOIN entity e ON e.id = w.entity_id AND e.state = 'on'
 JOIN page p ON p.entity_id = e.id AND p.url = w.target_key
-WHERE w.is_active = 1
+WHERE w.is_active = 1`;
+
+const SITE_SWEEP_TARGETS = `${SITE_SWEEP_TARGET_JOIN} AND src.key = ?1
 ORDER BY e.workspace_id, e.id, p.url`;
 
 const entityRows = z.array(z.object({ id: z.string(), domain: z.string() }));
 
-const unwatchedEntityRows = z.array(
-  z.object({ id: z.string(), domain: z.string(), url: z.string().nullable() }),
-);
+const unwatchedEntityRows = z.array(z.object({ id: z.string(), domain: z.string(), url: z.string().nullable() }));
 
 type UnwatchedEntity = z.infer<typeof unwatchedEntityRows>[number];
 
@@ -76,9 +76,7 @@ const targetRows = z.array(
 export async function insertWatches(rows: readonly NewWatch[]): Promise<void> {
   if (rows.length === 0) return;
   await env.DB.batch(
-    rows.map((row) =>
-      env.DB.prepare(INSERT_WATCH).bind(row.id, row.entityId, row.sourceId, row.targetKey),
-    ),
+    rows.map((row) => env.DB.prepare(INSERT_WATCH).bind(row.id, row.entityId, row.sourceId, row.targetKey)),
   );
 }
 
@@ -114,9 +112,7 @@ export async function readEntityWatches(entityId: string): Promise<EntityWatch[]
   }));
 }
 
-export async function readUnwatchedEntities(
-  sourceId: string,
-): Promise<readonly UnwatchedEntity[]> {
+export async function readUnwatchedEntities(sourceId: string): Promise<readonly UnwatchedEntity[]> {
   const rows = await env.DB.prepare(UNWATCHED_ENTITIES).bind(sourceId).all();
   return unwatchedEntityRows.parse(rows.results);
 }
@@ -138,20 +134,31 @@ export async function writeWatchConfigJson(watchId: string, configJson: string):
   if (result.meta.changes !== 1) throw new Error(`watch ${watchId} was not updated`);
 }
 
+const toSiteSweepTarget = (row: z.infer<typeof targetRows>[number]): SiteSweepTarget => ({
+  workspaceId: row.workspace_id,
+  entityId: row.entity_id,
+  entityRole: row.entity_role,
+  sourceId: row.source_id,
+  watchId: row.watch_id,
+  pageId: row.page_id,
+  pageRole: row.page_role,
+  url: row.url,
+  transport: row.transport,
+  transportTestedAt: row.transport_tested_at,
+});
+
 export async function readSiteSweepTargets(sourceKey: string): Promise<readonly SiteSweepTarget[]> {
   const rows = await env.DB.prepare(SITE_SWEEP_TARGETS).bind(sourceKey).all();
-  return targetRows.parse(rows.results).map((row) => ({
-    workspaceId: row.workspace_id,
-    entityId: row.entity_id,
-    entityRole: row.entity_role,
-    sourceId: row.source_id,
-    watchId: row.watch_id,
-    pageId: row.page_id,
-    pageRole: row.page_role,
-    url: row.url,
-    transport: row.transport,
-    transportTestedAt: row.transport_tested_at,
-  }));
+  return targetRows.parse(rows.results).map(toSiteSweepTarget);
+}
+
+const SITE_SWEEP_TARGET_BY_WATCH = `${SITE_SWEEP_TARGET_JOIN} AND w.id = ?1
+ORDER BY p.url LIMIT 1`;
+
+export async function readSiteSweepTarget(watchId: string): Promise<SiteSweepTarget | null> {
+  const row = await env.DB.prepare(SITE_SWEEP_TARGET_BY_WATCH).bind(watchId).first();
+  if (row === null) return null;
+  return toSiteSweepTarget(targetRows.parse([row])[0]);
 }
 
 const ENSURE_WATCHES = `INSERT INTO watch (id, entity_id, source_id, target_key)
@@ -230,9 +237,7 @@ export interface HiringTarget {
   boardUrl: string;
 }
 
-export async function readEntitiesWithoutHiringWatch(): Promise<
-  readonly { id: string; domain: string }[]
-> {
+export async function readEntitiesWithoutHiringWatch(): Promise<readonly { id: string; domain: string }[]> {
   const rows = await env.DB.prepare(ENTITIES_WITHOUT_HIRING_WATCH).all();
   return entityRows.parse(rows.results);
 }
@@ -278,8 +283,6 @@ WHERE e.id = ?2 AND e.workspace_id = ?1 AND e.role = 'competitor'
 ORDER BY w.id`;
 
 export async function readEntityR2Prefixes(workspaceId: string, entityId: string): Promise<string[]> {
-  const { results } = await env.DB.prepare(ENTITY_R2_PREFIXES)
-    .bind(workspaceId, entityId)
-    .all<{ id: string }>();
+  const { results } = await env.DB.prepare(ENTITY_R2_PREFIXES).bind(workspaceId, entityId).all<{ id: string }>();
   return results.map((row) => `snapshot/site/${row.id}/`);
 }

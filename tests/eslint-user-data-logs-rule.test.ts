@@ -111,7 +111,13 @@ describe("eslint no-user-data-in-logs rule (#5786)", () => {
   });
 
   it("flags a user-data name sent to Sentry", { timeout: 60_000 }, async () => {
-    expect(flagged(await lintProbe(`import { captureException } from "@sentry/cloudflare";\ncaptureException(error, { extra: { prompt } });\n`))).toBe(true);
+    expect(
+      flagged(
+        await lintProbe(
+          `import { captureException } from "@sentry/cloudflare";\ncaptureException(error, { extra: { prompt } });\n`,
+        ),
+      ),
+    ).toBe(true);
   });
 
   it("flags a user-data name sent to a Sentry scope setter", { timeout: 60_000 }, async () => {
@@ -139,7 +145,9 @@ describe("eslint no-user-data-in-logs rule (#5786)", () => {
   });
 
   it("leaves the workspaceId read off a user-data-named binding alone", { timeout: 60_000 }, async () => {
-    expect(flagged(await lintProbe(`console.log(JSON.stringify({ event: "probe", workspaceId: input.workspaceId }));\n`))).toBe(false);
+    expect(
+      flagged(await lintProbe(`console.log(JSON.stringify({ event: "probe", workspaceId: input.workspaceId }));\n`)),
+    ).toBe(false);
     expect(flagged(await lintProbe(`console.log("ws " + input.workspaceId);\n`))).toBe(false);
   });
 

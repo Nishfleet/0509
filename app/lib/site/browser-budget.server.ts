@@ -19,9 +19,7 @@ export async function takeBrowserShareImage(workspaceId: string, day: string): P
   return env.BROWSER_BUDGET.get(id).take(SHARE_IMAGES_PER_WORKSPACE_PER_DAY);
 }
 
-export async function browserContent(
-  url: string,
-): Promise<{ ok: true; res: Response } | { ok: false; cause: string }> {
+export async function browserContent(url: string): Promise<{ ok: true; res: Response } | { ok: false; cause: string }> {
   if (!env.BROWSER || typeof env.BROWSER.quickAction !== "function") {
     return { ok: false, cause: "browser binding is not configured" };
   }

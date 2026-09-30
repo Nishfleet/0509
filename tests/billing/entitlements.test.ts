@@ -61,9 +61,7 @@ describe("resolveEntitlements", () => {
   });
 
   it("ignores override values of the wrong type", () => {
-    expect(
-      resolveEntitlements("scout", JSON.stringify({ competitors: "7", api_access: "yes" })),
-    ).toEqual(SCOUT);
+    expect(resolveEntitlements("scout", JSON.stringify({ competitors: "7", api_access: "yes" }))).toEqual(SCOUT);
   });
 
   it("is silent for the empty override object a workspace with no plan row gets", () => {

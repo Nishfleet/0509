@@ -53,17 +53,15 @@ export async function insertFieldEdits(
   if (rows.length === 0) return;
   await env.DB.batch(
     rows.map((row) =>
-      env.DB
-        .prepare(INSERT_FIELD_EDIT)
-        .bind(
-          crypto.randomUUID(),
-          row.workspaceId,
-          row.userId,
-          row.entityId,
-          FIELD_EDIT_VERDICT,
-          JSON.stringify(row.edit),
-          row.decidedAt,
-        ),
+      env.DB.prepare(INSERT_FIELD_EDIT).bind(
+        crypto.randomUUID(),
+        row.workspaceId,
+        row.userId,
+        row.entityId,
+        FIELD_EDIT_VERDICT,
+        JSON.stringify(row.edit),
+        row.decidedAt,
+      ),
     ),
   );
 }

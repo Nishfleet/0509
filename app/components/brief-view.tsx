@@ -10,10 +10,7 @@ const LINE = "mt-2 text-[0.92rem] leading-[1.6]";
 
 export function BriefView({ payload }: { payload: BriefPayload }) {
   return (
-    <article
-      data-brief="view"
-      className="min-w-0 border border-line p-4 break-words"
-    >
+    <article data-brief="view" className="min-w-0 border border-line p-4 break-words">
       {headlineBlock(payload)}
       <ReadThisFirst marks={payload.read_this_first} unjudged={payload.is_unjudged} />
       {brandsBlock(payload)}
@@ -30,8 +27,8 @@ function headlineBlock(payload: BriefPayload): ReactElement {
         {payload.is_unjudged
           ? payload.why_line
           : payload.headline_rank !== null && payload.headline_total >= 2
-          ? `You're #${String(payload.headline_rank)} of ${String(payload.headline_total)} this week`
-          : "Add a competitor to see where you stand"}
+            ? `You're #${String(payload.headline_rank)} of ${String(payload.headline_total)} this week`
+            : "Add a competitor to see where you stand"}
       </h2>
       <p className={BODY}>{payload.why_line}</p>
     </section>
@@ -66,10 +63,7 @@ function ownSiteBlock(payload: BriefPayload): ReactElement {
         <Fragment>
           <p className={BODY}>Your site looks broken</p>
           {payload.own_site.incidents.map((incident) => (
-            <p
-              key={`${incident.page_url} ${incident.observed_at} ${String(incident.is_open)}`}
-              className={LINE}
-            >
+            <p key={`${incident.page_url} ${incident.observed_at} ${String(incident.is_open)}`} className={LINE}>
               {incident.kind === ""
                 ? incident.page_url
                 : `${incident.kind} on ${incident.page_url} — ${incident.is_open ? "still broken" : "fixed"}`}

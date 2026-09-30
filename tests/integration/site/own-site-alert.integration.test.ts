@@ -3,12 +3,8 @@ import { env as workerEnv } from "cloudflare:workers";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { SiteSweepTarget } from "../../../app/lib/data/watch.server";
-import { computeBreakageEvidence } from "../../../app/lib/site/breakage-evidence";
 import type { CheckPageResult } from "../../../app/lib/site/check-page.server";
-import { diffPageText } from "../../../app/lib/site/diff";
-import { judgeChange } from "../../../app/lib/site/judge.server";
-import { publishChange } from "../../../app/lib/site/publish.server";
-import { checkSitePage, planSiteSweep, type SweepTick } from "../../../app/lib/site/sweep.server";
+import { checkSitePage, planSiteSweep, publishSiteChange, type SweepTick } from "../../../app/lib/site/sweep.server";
 
 const jevAnswers = {
   noul: new Map<string, number>(),
@@ -104,59 +100,10 @@ const seedEntity = (id: string, role: "self" | "competitor", domain: string, nam
     .bind(id, WS, role, domain, name, NOW)
     .run();
 
-const readText = async (key: string): Promise<string> => {
-  const object = await env.SNAPSHOTS.get(key);
-  if (object === null) throw new Error(`missing stored page text ${key}`);
-  return object.text();
-};
-
-// One pass of the sweep's per-page item: check, diff, code-computed breakage
-// evidence, the D3s-then-D3 judgment and the judged publish, exactly the chain
-// docs/engines/site-change.md §P4/P6 describes (the issue's `sweepItem`).
 const sweepOnePage = async (target: SiteSweepTarget, at: SweepTick): Promise<CheckPageResult> => {
   const checked = await checkSitePage(target, at);
   if (checked.outcome !== "changed") return checked;
-  const [beforeText, afterText, subject] = await Promise.all([
-    readText(checked.previousTextKey),
-    readText(checked.textKey),
-    env.DB.prepare("SELECT name, domain FROM entity WHERE id = ?")
-      .bind(target.entityId)
-      .first<{ name: string | null; domain: string }>(),
-  ]);
-  if (subject === null) throw new Error(`missing entity ${target.entityId}`);
-  const diff = diffPageText(
-    { text: beforeText, hash: checked.previousHash, charCount: beforeText.length },
-    { text: afterText, hash: checked.hash, charCount: afterText.length },
-  );
-  if (diff === null) throw new Error("expected a text diff for the changed page");
-  const judgment = await judgeChange({
-    workspaceId: target.workspaceId,
-    entityId: target.entityId,
-    signalId: null,
-    isSelf: target.entityRole === "self",
-    subject,
-    pageUrl: target.url,
-    pageRole: target.pageRole,
-    hunks: diff.hunks,
-    evidence: computeBreakageEvidence({ status: checked.status, beforeText, afterText }),
-  });
-  if (checked.screenshotKey === null || checked.previousScreenshotKey === null) {
-    throw new Error("expected the before-and-after capture pair");
-  }
-  await publishChange({
-    workspaceId: target.workspaceId,
-    entityId: target.entityId,
-    sourceId: target.sourceId,
-    watchId: target.watchId,
-    pageId: target.pageId,
-    snapshotId: checked.snapshotId,
-    url: target.url,
-    judgment,
-    textKey: checked.textKey,
-    previousTextKey: checked.previousTextKey,
-    screenshotKey: checked.screenshotKey,
-    previousScreenshotKey: checked.previousScreenshotKey,
-  });
+  await publishSiteChange(target, checked);
   return checked;
 };
 
@@ -234,9 +181,7 @@ describe("own-site alert in one sweep pass", () => {
     const broken = await sweepOnePage(self, await tick("broken-self"));
     expect(broken.outcome).toBe("changed");
 
-    const verdicts = await env.DB.prepare(
-      "SELECT question_id, p, entity_id FROM jev_verdict WHERE workspace_id = ?",
-    )
+    const verdicts = await env.DB.prepare("SELECT question_id, p, entity_id FROM jev_verdict WHERE workspace_id = ?")
       .bind(WS)
       .all<{ question_id: string; p: number | null; entity_id: string }>();
     expect(verdicts.results).toEqual([{ question_id: "own_site_breakage", p: 0.8, entity_id: SELF }]);
@@ -252,9 +197,7 @@ describe("own-site alert in one sweep pass", () => {
     const incident = incidents.results[0];
     if (incident === undefined) throw new Error("expected one open incident");
 
-    const alerts = await env.DB.prepare(
-      "SELECT incident_id, kind, severity FROM alert WHERE workspace_id = ?",
-    )
+    const alerts = await env.DB.prepare("SELECT incident_id, kind, severity FROM alert WHERE workspace_id = ?")
       .bind(WS)
       .all<{ incident_id: string | null; kind: string; severity: string }>();
     expect(alerts.results).toEqual([{ incident_id: incident.id, kind: "own_site_broken", severity: "high" }]);
