@@ -22,10 +22,7 @@ export function DeleteAccount({ email, error }: { email: string; error: string |
         Delete your account
       </h2>
       <p className="mt-2 max-w-prose leading-[1.55]">Deleting your account removes, for good:</p>
-      <ul
-        data-delete="removes"
-        className="mt-2 flex max-w-prose list-disc flex-col gap-1 pl-5 leading-[1.55]"
-      >
+      <ul data-delete="removes" className="mt-2 flex max-w-prose list-disc flex-col gap-1 pl-5 leading-[1.55]">
         <li>Every brand you track, yours included</li>
         <li>Every signal: site changes, ads, mentions and roles</li>
         <li>Every site snapshot</li>

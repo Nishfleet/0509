@@ -21,6 +21,7 @@ There is no four-week standing line yet: the frozen weekly brief it is drawn fro
 - **Browser Rendering stays inside the 10-session cap** (`docs/REBUILD-COST.md`). If the browser cannot take the job, the route answers 503 with `retry-after: 60` and the button says to try again in a minute. It never queues behind the sweeps.
 
 Rejected, recorded so it is not re-litigated:
+
 - A public card page with an unlisted link (built, then removed on Nish's call): a link can be forwarded, crawled and indexed, and it publishes a watch list.
 - `@resvg/resvg-wasm`: a 2.5 MB WASM module parsed on every request to the app, with its latest release in 2024.
 - `satori`: it does not run on workerd.

@@ -75,7 +75,12 @@ describe("askChoice", () => {
     const second = await askChoice(workspaceId, question, state);
 
     expect(run).toHaveBeenCalledTimes(1);
-    expect(second).toMatchObject({ questionId: "activity", inputHash: first.inputHash, choice: "dormant", cached: true });
+    expect(second).toMatchObject({
+      questionId: "activity",
+      inputHash: first.inputHash,
+      choice: "dormant",
+      cached: true,
+    });
   });
 
   it("throws JevUnavailableError when the answer's choice is not one of the options", async () => {

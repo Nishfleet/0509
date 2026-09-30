@@ -79,4 +79,3 @@ describe("the dismissed brands list", () => {
     expect(row).not.toMatch(/>\s*2026-09-20\s*</);
   });
 });
-

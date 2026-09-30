@@ -15,9 +15,14 @@ VALUES (?1, ?2, ?3, ?4, ?5, ?6)
 ON CONFLICT (page_id) WHERE closed_at IS NULL DO NOTHING`;
 
 export function openIncidentStatement(row: NewIncident): D1PreparedStatement {
-  return env.DB
-    .prepare(INSERT_OPEN_INCIDENT_ON_CONFLICT)
-    .bind(row.id, row.workspaceId, row.entityId, row.pageId, row.kind, row.openedAt);
+  return env.DB.prepare(INSERT_OPEN_INCIDENT_ON_CONFLICT).bind(
+    row.id,
+    row.workspaceId,
+    row.entityId,
+    row.pageId,
+    row.kind,
+    row.openedAt,
+  );
 }
 
 const OPEN_INCIDENT_FOR_PAGE = `SELECT id FROM incident WHERE page_id = ?1 AND closed_at IS NULL`;
@@ -30,7 +35,8 @@ const CLOSE_UNWATCHED = `UPDATE incident SET closed_at = ?2
 WHERE closed_at IS NULL AND page_id NOT IN (SELECT value FROM json_each(?1))`;
 
 const OPEN_BREAKAGE_BASELINES = `SELECT i.page_id AS page_id,
-  (SELECT json_extract(s.payload_json, '$.before.textKey')
+  (SELECT COALESCE(json_extract(s.payload_json, '$.before.textKey'),
+                   json_extract(s.payload_json, '$.previousTextKey'))
    FROM alert a
    JOIN signal s ON s.id = a.signal_id
    WHERE a.incident_id = i.id
@@ -41,9 +47,7 @@ WHERE i.closed_at IS NULL AND i.kind = 'breakage'`;
 
 const openRows = z.array(z.object({ id: z.string(), page_id: z.string() }));
 
-const breakageRows = z.array(
-  z.object({ page_id: z.string(), before_key: z.string().nullable() }),
-);
+const breakageRows = z.array(z.object({ page_id: z.string(), before_key: z.string().nullable() }));
 
 export async function openIncident(row: NewIncident): Promise<string | null> {
   await openIncidentStatement(row).run();
@@ -58,9 +62,7 @@ export async function readOpenIncidents(): Promise<Record<string, string>> {
 
 export async function readOpenBreakageBaselines(): Promise<Record<string, string | null>> {
   const rows = await env.DB.prepare(OPEN_BREAKAGE_BASELINES).all();
-  return Object.fromEntries(
-    breakageRows.parse(rows.results).map((row) => [row.page_id, row.before_key]),
-  );
+  return Object.fromEntries(breakageRows.parse(rows.results).map((row) => [row.page_id, row.before_key]));
 }
 
 export async function closeIncident(id: string, closedAt: string): Promise<void> {

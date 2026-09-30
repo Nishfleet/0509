@@ -1,0 +1,12 @@
+build/
+.wrangler/
+.react-router/
+**/+types/
+worker-configuration.d.ts
+package-lock.json
+migrations/
+docs/design-directions/
+playwright-report/
+test-results/
+tests/fixtures/
+.github/workflows/

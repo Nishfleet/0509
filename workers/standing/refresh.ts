@@ -3,12 +3,7 @@ import { z } from "zod";
 import type { StandingScore } from "../../app/lib/data/standing.server";
 import { upsertStandingScores } from "../../app/lib/data/standing.server";
 import { D3_QUESTION_ID, D6_QUESTION_ID, scoreByEntity, weightsAsOf } from "../../app/lib/standing-score";
-import {
-  ALL_WEIGHTS,
-  COUNT_BUCKETS,
-  bucketCountRows,
-  weightRows,
-} from "../../app/lib/standing-score.server";
+import { ALL_WEIGHTS, COUNT_BUCKETS, bucketCountRows, weightRows } from "../../app/lib/standing-score.server";
 
 const ON_ENTITY_IDS = `SELECT id FROM entity WHERE workspace_id = ?1 AND state = 'on' ORDER BY id`;
 
@@ -29,13 +24,9 @@ export async function refreshWorkspaceScores(
   const reads = await db.batch([
     db.prepare(ON_ENTITY_IDS).bind(input.workspaceId),
     db.prepare(ALL_WEIGHTS),
-    db.prepare(COUNT_BUCKETS).bind(
-      input.workspaceId,
-      input.windowStartAt,
-      input.windowEndAt,
-      D6_QUESTION_ID,
-      D3_QUESTION_ID,
-    ),
+    db
+      .prepare(COUNT_BUCKETS)
+      .bind(input.workspaceId, input.windowStartAt, input.windowEndAt, D6_QUESTION_ID, D3_QUESTION_ID),
   ]);
   const entityIds = entityIdRows.parse(reads[0].results).map((row) => row.id);
   const weights = weightsAsOf(weightRows.parse(reads[1].results), input.weekStartAt);

@@ -63,10 +63,7 @@ describe("gdelt adapter", () => {
   it("retries the request once after a timeout", async () => {
     const timedOut = AbortSignal.timeout(1);
     await new Promise((resolve) => setTimeout(resolve, 10));
-    const fetchMock = vi
-      .fn()
-      .mockRejectedValueOnce(timedOut.reason)
-      .mockResolvedValue(new Response(gdeltBody));
+    const fetchMock = vi.fn().mockRejectedValueOnce(timedOut.reason).mockResolvedValue(new Response(gdeltBody));
     vi.stubGlobal("fetch", fetchMock);
     const result = await adapterFor("gdelt.doc")?.({ query: "Gymshark" }, null);
     expect(fetchMock).toHaveBeenCalledTimes(2);
@@ -80,9 +77,7 @@ describe("gdelt adapter", () => {
       throw timedOut.reason;
     });
     vi.stubGlobal("fetch", fetchMock);
-    await expect(adapterFor("gdelt.doc")?.({ query: "Gymshark" }, null)).rejects.toThrow(
-      "aborted due to timeout",
-    );
+    await expect(adapterFor("gdelt.doc")?.({ query: "Gymshark" }, null)).rejects.toThrow("aborted due to timeout");
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
@@ -91,9 +86,7 @@ describe("gdelt adapter", () => {
       throw new TypeError("fetch failed");
     });
     vi.stubGlobal("fetch", fetchMock);
-    await expect(adapterFor("gdelt.doc")?.({ query: "Gymshark" }, null)).rejects.toThrow(
-      "fetch failed",
-    );
+    await expect(adapterFor("gdelt.doc")?.({ query: "Gymshark" }, null)).rejects.toThrow("fetch failed");
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 

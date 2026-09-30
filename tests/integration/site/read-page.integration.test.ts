@@ -7,10 +7,7 @@ import { readPage } from "../../../app/lib/site/read-page.server";
 interface BrowserStub {
   calls: string[];
   closed: number;
-  quickAction(
-    action: "content",
-    options: { url: string },
-  ): Promise<Response>;
+  quickAction(action: "content", options: { url: string }): Promise<Response>;
 }
 
 const browserHolder = vi.hoisted(() => ({
@@ -31,10 +28,12 @@ const WS = "ws-read-page";
 const NOW = "2026-09-25T02:00:00Z";
 const NEXT_DAY = "2026-09-26T02:00:00Z";
 const EIGHT_DAYS_LATER = "2026-10-02T02:00:00Z";
-const THIN_PAGE = "<!doctype html><html><body><div id=\"app\"></div></body></html>";
+const THIN_PAGE = '<!doctype html><html><body><div id="app"></div></body></html>';
 const SUBSTANTIAL_PAGE =
   "<!doctype html><html><body><h1>Brand</h1><p>" +
-  "Every plan includes unlimited projects, priority support, single sign-on, audit logs, and a named account manager who answers within one business day, with onboarding help for your whole team.".repeat(3) +
+  "Every plan includes unlimited projects, priority support, single sign-on, audit logs, and a named account manager who answers within one business day, with onboarding help for your whole team.".repeat(
+    3,
+  ) +
   "</p></body></html>";
 
 const fetchState = {
@@ -152,9 +151,7 @@ describe("readPage (0509#5299)", () => {
     expect(fetchState.calls).toEqual([url]);
     expect(browserHolder.current?.calls).toEqual([url]);
 
-    const row = await env.DB.prepare(
-      "SELECT transport, transport_reason, transport_tested_at FROM page WHERE id = ?",
-    )
+    const row = await env.DB.prepare("SELECT transport, transport_reason, transport_tested_at FROM page WHERE id = ?")
       .bind(target.pageId)
       .first<{ transport: string | null; transport_reason: string | null; transport_tested_at: string | null }>();
     expect(row).toEqual({
@@ -196,9 +193,7 @@ describe("readPage (0509#5299)", () => {
     expect(fetchState.calls).toEqual([url]);
     expect(browserHolder.current?.calls.length).toBe(browserCallsBefore + 1);
 
-    const row = await env.DB.prepare(
-      "SELECT transport, transport_reason, transport_tested_at FROM page WHERE id = ?",
-    )
+    const row = await env.DB.prepare("SELECT transport, transport_reason, transport_tested_at FROM page WHERE id = ?")
       .bind(target.pageId)
       .first<{ transport: string | null; transport_reason: string | null; transport_tested_at: string | null }>();
     expect(row).toEqual({
@@ -228,9 +223,7 @@ describe("readPage (0509#5299)", () => {
 
     const fifth = targets[4];
     if (fifth === undefined) throw new Error("expected five sweep targets");
-    const row = await env.DB.prepare(
-      "SELECT deferred_at FROM page WHERE id = ?",
-    )
+    const row = await env.DB.prepare("SELECT deferred_at FROM page WHERE id = ?")
       .bind(fifth.pageId)
       .first<{ deferred_at: string | null }>();
     expect(row?.deferred_at).toBe(NOW);

@@ -37,7 +37,11 @@ describe("landing what we watch", () => {
     const html = markup([
       entry({ source: { key: "gdelt.doc", name: "gdelt.doc", platform: "gdelt", is_enabled: 1 }, snapshot: LIVE }),
       entry({ source: { key: "hn.algolia", name: "hn.algolia", platform: "hn", is_enabled: 1 }, snapshot: LIVE }),
-      entry({ kind: "site", source: { key: "site.web", name: "site.page", platform: "web", is_enabled: 1 }, snapshot: LIVE }),
+      entry({
+        kind: "site",
+        source: { key: "site.web", name: "site.page", platform: "web", is_enabled: 1 },
+        snapshot: LIVE,
+      }),
     ]);
     expect(html).toContain("gdelt.doc");
     expect(html).toContain("hn.algolia");
@@ -142,7 +146,13 @@ describe("landing what we watch", () => {
   it("keeps a degraded pill when a none-state source is visible too", () => {
     const html = markup([
       entry({
-        source: { key: "gdelt.doc", name: "gdelt.doc", platform: "gdelt", is_enabled: 1, degraded_reason: "not answering" },
+        source: {
+          key: "gdelt.doc",
+          name: "gdelt.doc",
+          platform: "gdelt",
+          is_enabled: 1,
+          degraded_reason: "not answering",
+        },
         snapshot: LIVE,
       }),
       entry({
@@ -172,8 +182,16 @@ describe("landing what we watch", () => {
   it("says what we watch from the registry kinds it is given, not a list written into the component", () => {
     const html = markup([
       entry({ source: { key: "hn.algolia", name: "hn.algolia", platform: "hn", is_enabled: 1 }, snapshot: LIVE }),
-      entry({ kind: "site", source: { key: "site.web", name: "site.page", platform: "web", is_enabled: 1 }, snapshot: LIVE }),
-      entry({ kind: "hiring", source: { key: "hiring.lever", name: "hiring.board", platform: "lever", is_enabled: 1 }, snapshot: LIVE }),
+      entry({
+        kind: "site",
+        source: { key: "site.web", name: "site.page", platform: "web", is_enabled: 1 },
+        snapshot: LIVE,
+      }),
+      entry({
+        kind: "hiring",
+        source: { key: "hiring.lever", name: "hiring.board", platform: "lever", is_enabled: 1 },
+        snapshot: LIVE,
+      }),
     ]);
     expect(html).toContain("We read mentions, site checks, and job posts.");
     expect(html).not.toContain("ads");

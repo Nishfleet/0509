@@ -6,11 +6,7 @@ import { Toaster } from "./components/toaster";
 import { hasSessionCookie } from "./lib/auth.server";
 import "./app.css";
 
-const SERVER_ONLY_ROUTES: ReadonlySet<string> = new Set([
-  "routes/landing",
-  "routes/privacy",
-  "routes/terms",
-]);
+const SERVER_ONLY_ROUTES: ReadonlySet<string> = new Set(["routes/landing", "routes/privacy", "routes/terms"]);
 
 export function Layout({ children }: { children: React.ReactNode }) {
   const matches = useMatches();

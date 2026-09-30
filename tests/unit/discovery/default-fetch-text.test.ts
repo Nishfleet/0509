@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { hnGenerator } from "../../../app/lib/discovery/generators/hn";
-import { newsGenerator } from "../../../app/lib/discovery/generators/news";
-import { defaultFetchText, type Subject } from "../../../app/lib/discovery/types";
+import { hnGenerator } from "../../../app/lib/discovery/generators/hn.server";
+import { defaultFetchText } from "../../../app/lib/discovery/fetch-text.server";
+import type { Subject } from "../../../app/lib/discovery/types";
 
 const SUBJECT: Subject = { name: "Gymshark", domain: "gymshark.com" };
 
@@ -31,7 +31,10 @@ describe("defaultFetchText", () => {
       headers: { "content-type": "text/plain" },
     });
     Object.defineProperty(response, "url", { value: "https://example.com/ok" });
-    vi.stubGlobal("fetch", vi.fn(async () => response));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => response),
+    );
 
     const result = await defaultFetchText("discovery.test_event")("https://example.com/ok");
 
@@ -50,7 +53,10 @@ describe("defaultFetchText", () => {
       headers: { "content-type": "text/html" },
     });
     Object.defineProperty(response, "url", { value: "https://example.com/fail" });
-    vi.stubGlobal("fetch", vi.fn(async () => response));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => response),
+    );
 
     const result = await defaultFetchText("discovery.test_event")("https://example.com/fail");
 
@@ -92,7 +98,10 @@ describe("defaultFetchText", () => {
 
   it("bounds the fetch with AbortSignal.timeout(8000)", async () => {
     const response = new Response("body", { status: 200, headers: { "content-type": "text/plain" } });
-    vi.stubGlobal("fetch", vi.fn(async () => response));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => response),
+    );
     const timeoutSpy = vi.spyOn(AbortSignal, "timeout");
 
     await defaultFetchText("discovery.test_event")("https://example.com/ok");
@@ -108,11 +117,16 @@ describe("defaultFetchText", () => {
     expect(loggedEvents(errorSpy)).toEqual(["discovery.hn_fetch_failed"]);
   });
 
-  it("logs discovery.news_fetch_failed from the news generator's default fetch", async () => {
-    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
-    stubRejectingFetch();
+  it("gives the hn generator's default fetch a five second timeout", async () => {
+    const response = new Response("{}", { status: 200 });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => response),
+    );
+    const timeoutSpy = vi.spyOn(AbortSignal, "timeout");
 
-    await expect(newsGenerator(SUBJECT)).rejects.toThrow("news generator fetch failed with status 0");
-    expect(loggedEvents(errorSpy)).toEqual(["discovery.news_fetch_failed"]);
+    await hnGenerator(SUBJECT);
+
+    expect(timeoutSpy).toHaveBeenCalledWith(5_000);
   });
 });

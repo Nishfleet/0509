@@ -12,8 +12,7 @@ const JUDGE_CHUNK = 10;
 
 export const READ_THIS_FIRST: NoulQuestion = {
   id: D4_QUESTION_ID,
-  instructions:
-    "Does this item belong in the three things this brand's owner should read first this week?",
+  instructions: "Does this item belong in the three things this brand's owner should read first this week?",
   whenTrue: "It would change what the owner does or thinks about a competitor this week.",
   whenFalse: "It is routine and can wait for the full list.",
 };
@@ -106,13 +105,7 @@ function packFor(
 
 export async function judgeWeek(db: D1Database, input: JudgeWeekInput): Promise<JudgedWeek> {
   const [weekItemResult, entityResult] = await db.batch([
-    db.prepare(WEEK_ITEMS).bind(
-      input.workspaceId,
-      input.startsAt,
-      input.closesAt,
-      D3_QUESTION_ID,
-      D6_QUESTION_ID,
-    ),
+    db.prepare(WEEK_ITEMS).bind(input.workspaceId, input.startsAt, input.closesAt, D3_QUESTION_ID, D6_QUESTION_ID),
     db.prepare(ON_ENTITIES).bind(input.workspaceId),
   ]);
   const items = weekItemRows.parse(weekItemResult.results);

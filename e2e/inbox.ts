@@ -94,9 +94,7 @@ function decodeQuotedPrintable(input: string): string {
 }
 
 export function decodedBodies(raw: string): string[] {
-  const quoted = /content-transfer-encoding:\s*quoted-printable/i.test(raw)
-    ? decodeQuotedPrintable(raw)
-    : raw;
+  const quoted = /content-transfer-encoding:\s*quoted-printable/i.test(raw) ? decodeQuotedPrintable(raw) : raw;
   const bodies = [quoted];
   const base64Part = /content-transfer-encoding:\s*base64[^]*?\r?\n\r?\n([A-Za-z0-9+/=\r\n]+)/gi;
   for (const match of raw.matchAll(base64Part)) {
@@ -225,7 +223,9 @@ async function localLinks(to: string): Promise<string[]> {
 // re-resolve the token from the environment behind the caller's back.
 function remoteToken(token: string | null): string {
   if (token === null) {
-    throw new Error("an inbox read on a remote lane needs the E2E_INBOX_TOKEN the caller resolved; null is the local lane's marker");
+    throw new Error(
+      "an inbox read on a remote lane needs the E2E_INBOX_TOKEN the caller resolved; null is the local lane's marker",
+    );
   }
   return token;
 }
@@ -453,9 +453,7 @@ export async function consoleFailures(
 // empty-url guard keeps `new URL("")` from throwing on a location-less error.
 export function ownDocument404For(pathname: string): (entry: ConsoleEntry) => boolean {
   return (entry) =>
-    /status of 404\b/.test(entry.text) &&
-    entry.url.length > 0 &&
-    new URL(entry.url).pathname === pathname;
+    /status of 404\b/.test(entry.text) && entry.url.length > 0 && new URL(entry.url).pathname === pathname;
 }
 
 // J1's core: submit the login form for a fresh e2e+ address, read the real
@@ -531,13 +529,14 @@ export async function signInWithMagicLink(
 // behind — signed out, row still there — and this helper cannot tell the
 // two apart, so that leak is a named gap (#5733), not a solved case.
 
-// 0509#5688 (fleet-manager): the journey specs keep these four accounts on
+// 0509#5688 (fleet-manager): the journey specs keep these five accounts on
 // purpose; the recurring teardown must never delete them. Match these exact
-// addresses, never a pattern. The one-time purge (0509#5730) kept the same
-// four; a later purge may still take them — once the kept-account journey
+// addresses, never a pattern. The one-time purge (0509#5730) kept four
+// of them (not e2e+j8-hard, added by J8, 0509#4124); a later purge may still take them — once the kept-account journey
 // specs land (0509#4123, #4124, #4125, #4128) they create them again.
 const KEPT_JOURNEY_ACCOUNTS: readonly string[] = [
   "e2e+j7@0509.io",
+  "e2e+j8-hard@0509.io",
   "e2e+j8-soft@0509.io",
   "e2e+j9-mentions@0509.io",
   "e2e+j12-rollovers@0509.io",

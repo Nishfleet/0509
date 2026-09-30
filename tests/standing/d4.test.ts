@@ -1,11 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import {
-  D4_QUESTION_ID,
-  pickReadThisFirst,
-  readThisFirstLine,
-  type D4Verdict,
-} from "../../app/lib/read-this-first";
+import { D4_QUESTION_ID, pickReadThisFirst, readThisFirstLine, type D4Verdict } from "../../app/lib/read-this-first";
 
 const verdict = (signalId: string, p: number, observedAt: string): D4Verdict => ({
   signalId,
@@ -16,7 +11,10 @@ const verdict = (signalId: string, p: number, observedAt: string): D4Verdict => 
 describe("pickReadThisFirst", () => {
   it("drops anything below the 0.5 gate and keeps exactly 0.5", () => {
     expect(
-      pickReadThisFirst([verdict("a", 0.49, "2026-09-20T00:00:00.000Z"), verdict("b", 0.5, "2026-09-20T00:00:00.000Z")]),
+      pickReadThisFirst([
+        verdict("a", 0.49, "2026-09-20T00:00:00.000Z"),
+        verdict("b", 0.5, "2026-09-20T00:00:00.000Z"),
+      ]),
     ).toEqual(["b"]);
   });
 

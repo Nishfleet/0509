@@ -16,9 +16,7 @@ function render(path: string): string {
 }
 
 function anchor(html: string, href: string): string {
-  const segment = html
-    .split("<a ")
-    .find((part) => part.includes(`href="${href}"`));
+  const segment = html.split("<a ").find((part) => part.includes(`href="${href}"`));
   if (!segment) return "";
   return segment.slice(0, segment.indexOf(">") + 1);
 }

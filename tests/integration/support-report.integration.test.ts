@@ -1,10 +1,7 @@
 import { env } from "cloudflare:test";
 import { beforeEach, describe, expect, it } from "vitest";
 
-import {
-  deleteExpiredSupportReports,
-  insertSupportReport,
-} from "../../app/lib/data/support_report.server";
+import { deleteExpiredSupportReports, insertSupportReport } from "../../app/lib/data/support_report.server";
 
 /**
  * support_report writer module (0509#4229 child 1).

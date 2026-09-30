@@ -30,9 +30,7 @@ export function RetireQuestions({ questions }: { questions: readonly RetireQuest
               <div className="min-w-0">
                 <p className="truncate font-display text-row-name font-bold">{question.name}</p>
                 <p className="truncate text-body-sm text-ink-soft">{question.domain}</p>
-                {question.reason === null ? null : (
-                  <p className="mt-1 text-body-sm text-ink-soft">{question.reason}</p>
-                )}
+                {question.reason === null ? null : <p className="mt-1 text-body-sm text-ink-soft">{question.reason}</p>}
               </div>
             </div>
             <Form method="post" className="flex gap-2">

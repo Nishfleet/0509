@@ -4,12 +4,7 @@ import { describe, expect, it } from "vitest";
 
 import { WhyFlaggedSheet } from "../../app/components/why-flagged";
 import { Dialog, DialogContent } from "../../app/components/ui/dialog";
-import {
-  whyFlagged,
-  type WhyFlagged,
-  type WhyFlaggedDecision,
-  type WhyFlaggedField,
-} from "../../app/lib/why-flagged";
+import { whyFlagged, type WhyFlagged, type WhyFlaggedDecision, type WhyFlaggedField } from "../../app/lib/why-flagged";
 
 const COMPARED: readonly WhyFlaggedField[] = [
   { label: "Last week", value: "$49" },
@@ -57,9 +52,7 @@ function contentBody(why: WhyFlagged = WHY): string {
   const content = sheetContent(why);
   // DialogTitle reads Base UI's root context, so the children render inside
   // the root the component already supplies.
-  return renderToStaticMarkup(
-    createElement(Dialog, null, createElement("div", null, content.props.children)),
-  );
+  return renderToStaticMarkup(createElement(Dialog, null, createElement("div", null, content.props.children)));
 }
 
 describe("whyFlagged", () => {

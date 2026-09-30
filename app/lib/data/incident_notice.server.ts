@@ -13,10 +13,7 @@ export interface IncidentNoticeInput {
   isResolution: 0 | 1;
 }
 
-export async function claimIncidentNotice(
-  db: D1Database,
-  input: IncidentNoticeInput,
-): Promise<{ id: string } | null> {
+export async function claimIncidentNotice(db: D1Database, input: IncidentNoticeInput): Promise<{ id: string } | null> {
   return db
     .prepare(CLAIM_NOTICE)
     .bind(

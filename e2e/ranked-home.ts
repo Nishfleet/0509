@@ -14,15 +14,7 @@ import { run, seedPreviewSession } from "./preview-session";
 // kind 'change' needs an aspect and kind 'mention' needs a canonical_url and a
 // url_hash; both are the schema's own CHECK constraints, not this fixture's
 // rules.
-export function seedRankedHome({
-  db,
-  suffix,
-  userId,
-}: {
-  db: DatabaseSync;
-  suffix: string;
-  userId: string;
-}): void {
+export function seedRankedHome({ db, suffix, userId }: { db: DatabaseSync; suffix: string; userId: string }): void {
   const workspaceId = `ws-${suffix}`;
   const selfId = `ent_self-${suffix}`;
   const kindredId = `ent_kindred-${suffix}`;
