@@ -7,7 +7,7 @@ export const WORKFLOW_CRONS = {
   [SNAPSHOT_BACKUP_CRON]: { binding: "SNAPSHOT_BACKUP", name: "snapshot-backup" },
 } as const satisfies Record<string, { binding: keyof Env; name: string }>;
 
-type WorkflowCron = keyof typeof WORKFLOW_CRONS;
+type WorkflowCron = Extract<keyof typeof WORKFLOW_CRONS, string>;
 
 export function isWorkflowCron(cron: string): cron is WorkflowCron {
   return Object.hasOwn(WORKFLOW_CRONS, cron);
