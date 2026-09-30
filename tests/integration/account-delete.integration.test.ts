@@ -120,7 +120,7 @@ describe("delete my account", () => {
     await using introspector = await introspectWorkflowInstance(env.ACCOUNT_DELETE, id);
     await env.ACCOUNT_DELETE.create({
       id,
-      params: { prefixes: ["card/ws-leaving/", "snapshot/site/watch-leaving/"] },
+      params: { prefixes: ["card/ws-leaving/", "snapshot/site/watch-leaving/", "snapshot/hiring/watch-leaving/"] },
     });
     await introspector.waitForStatus("complete");
 
@@ -138,7 +138,7 @@ describe("delete my account", () => {
     await using introspector = await introspectWorkflowInstance(env.ACCOUNT_DELETE, id);
     await env.ACCOUNT_DELETE.create({
       id,
-      params: { prefixes: ["card/ws-leaving/", "snapshot/site/watch-leaving/"] },
+      params: { prefixes: ["card/ws-leaving/", "snapshot/site/watch-leaving/", "snapshot/hiring/watch-leaving/"] },
     });
     await introspector.waitForStatus("complete");
 
@@ -228,14 +228,23 @@ describe("delete my account", () => {
 
   it("seals the Workflow instance id on the headers the deleting browser leaves with", async () => {
     const { cookie, userId } = await signIn();
+    const revoked: string[] = [];
+    const pages: Record<string, { items: { id: string }[]; cursor?: string }> = {
+      first: { items: [{ id: "grant-1" }], cursor: "second" },
+      second: { items: [{ id: "grant-2" }] },
+    };
     const helpers: Pick<OAuthHelpers, "listUserGrants" | "revokeGrant"> = {
-      listUserGrants: async () => ({ items: [] }),
-      revokeGrant: async () => undefined,
+      listUserGrants: async (_user, options) =>
+        pages[options?.cursor ?? "first"] as Awaited<ReturnType<OAuthHelpers["listUserGrants"]>>,
+      revokeGrant: async (grantId) => {
+        revoked.push(grantId);
+      },
     };
 
     const deleted = await deleteAccount(helpers, settingsRequest(cookie), userId);
 
     if (deleted === null) throw new Error("deleteAccount refused a fresh session");
+    expect(revoked).toEqual(["grant-1", "grant-2"]);
     const baked = deleted.headers.getSetCookie().find((header) => header.startsWith("account-delete="));
     if (baked === undefined) throw new Error("no account-delete cookie on the delete headers");
     expect(baked).toContain("HttpOnly");

@@ -37,8 +37,12 @@ export async function deleteAccount(
 
 async function revokeGrants(helpers: Pick<OAuthHelpers, "listUserGrants" | "revokeGrant">, userId: string) {
   try {
-    const grants = await helpers.listUserGrants(userId, { limit: 100 });
-    await Promise.all(grants.items.map((grant) => helpers.revokeGrant(grant.id, userId)));
+    let cursor: string | undefined;
+    do {
+      const grants = await helpers.listUserGrants(userId, { limit: 100, cursor });
+      await Promise.all(grants.items.map((grant) => helpers.revokeGrant(grant.id, userId)));
+      cursor = grants.cursor;
+    } while (cursor !== undefined);
   } catch (error) {
     console.error(JSON.stringify({ event: "account_delete.grant_revoke_failed", error: String(error) }));
   }

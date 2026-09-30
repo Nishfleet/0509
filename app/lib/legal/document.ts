@@ -21,10 +21,9 @@ export interface LegalDocument {
   readonly sections: readonly LegalSection[];
 }
 
-export const LEGAL_UPDATED = "2026-09-24";
+export const LEGAL_UPDATED = "2026-09-30";
 export const OPERATOR = "Five to Nine";
 export const GOVERNING_LAW = "India";
-export const ACCOUNT_DELETION_DAYS = 30;
 export const PRICE_NOTICE_DAYS = 30;
 export const LIABILITY_CAP_MONTHS = 12;
 export const MINIMUM_AGE = 18;
