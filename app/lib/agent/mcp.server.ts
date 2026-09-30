@@ -113,7 +113,7 @@ async function createServer(workspaceId: string): Promise<McpServer> {
       outputSchema: competitorResultSchema,
       annotations: READ_ONLY,
     },
-    async ({ competitorId }) => result(await readAgentCompetitor(workspaceId, competitorId, new Date())),
+    async ({ competitorId }) => toolResult(() => readAgentCompetitor(workspaceId, competitorId, new Date())),
   );
 
   const alerts = namedTool("list_alerts");
