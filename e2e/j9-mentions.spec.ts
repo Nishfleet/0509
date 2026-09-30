@@ -3,8 +3,7 @@ import type { DatabaseSync } from "node:sqlite";
 import { expect, test } from "@playwright/test";
 
 import { FIXTURE_ACCOUNTS } from "../app/lib/fixture-accounts";
-import { consoleFailures, isLocalLane, watchConsole } from "./inbox";
-import { run, seedPreviewSession } from "./preview-session";
+import { consoleFailures, isLocalLane, run, seedPreviewSession, watchConsole } from "./inbox";
 
 test.skip(
   !isLocalLane(),
@@ -100,7 +99,7 @@ function seed({ db, suffix, userId }: { db: DatabaseSync; suffix: string; userId
 }
 
 function seedSession(): Promise<string> {
-  return seedPreviewSession("j9-mentions", seed);
+  return seedPreviewSession("j9-mentions", seed).then(({ cookie }) => cookie);
 }
 
 test("J9: news, Hacker News and YouTube mentions are listed and the homonym is not", async ({ page }, testInfo) => {

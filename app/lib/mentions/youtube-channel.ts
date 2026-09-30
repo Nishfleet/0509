@@ -148,6 +148,15 @@ export function youtubeUrlFromIdentity(raw: string): string | null {
   return null;
 }
 
+export function identityHasYoutubeUrl(raw: string): boolean {
+  const value: unknown = JSON.parse(raw);
+  const card = identitySchema.parse(value);
+  return (card.socials ?? []).some((social) => {
+    const normalised = normaliseSubject(social.url);
+    return normalised.ok && normalised.subject.platform === "youtube";
+  });
+}
+
 export function channelIdFromIdentity(raw: string): string | null {
   const url = youtubeUrlFromIdentity(raw);
   if (url === null) return null;

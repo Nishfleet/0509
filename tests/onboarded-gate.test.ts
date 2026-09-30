@@ -42,7 +42,7 @@ describe("requireOnboarded", () => {
   });
 });
 
-const SETTINGS_PATHS = ["app/settings", "app/settings/agents", "app/settings/brief-pause"];
+const SETTINGS_PATHS = ["app/settings", "app/settings/agents", "app/settings/brief-pause", "app/settings/export"];
 
 const childPathsOf = (layoutFile: string) =>
   routes

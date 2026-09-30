@@ -31,10 +31,10 @@ export function EmptyState({ sentence, action }: EmptyStateProps) {
 function Action({ action }: { action: EmptyStateAction }): ReactNode {
   if (action.kind === "input") {
     return (
-      <label className="mt-3 flex items-center gap-3">
+      <label className="mt-3 flex flex-col items-start gap-2 sm:flex-row sm:items-center sm:gap-3">
         <span className="font-display text-[1.02rem] uppercase">{action.label}</span>
         <input
-          className="min-w-0 flex-1 border border-line px-3 py-2 text-[0.88rem]"
+          className="w-full min-w-0 border border-line px-3 py-2 text-[0.88rem] sm:flex-1"
           name={action.name}
           placeholder={action.placeholder}
           aria-label={action.label}
@@ -70,9 +70,9 @@ export interface QuietWeek {
   action: EmptyStateAction;
 }
 
-export function quietWeek(mentions: number, siteChanges: number, adsChecked: number): QuietWeek {
+export function quietWeek(mentions: number, siteChanges: number): QuietWeek {
   return {
-    sentence: `Quiet week. ${String(mentions)} mentions, ${String(siteChanges)} site changes and ${String(adsChecked)} new ads checked — nothing crossed the bar.`,
+    sentence: `Quiet week. ${String(mentions)} mentions, ${String(siteChanges)} site changes checked — nothing crossed the bar.`,
     action: { kind: "link", label: "Open the counts", href: "/app" },
   };
 }

@@ -18,6 +18,7 @@ export default [
     route("app/settings", "routes/app.settings.tsx"),
     route("app/settings/agents", "routes/settings.agents.tsx"),
     route("app/settings/brief-pause", "routes/settings.brief-pause.ts"),
+    route("app/settings/export", "routes/settings.export.ts"),
   ]),
   route("app/share.png", "routes/app.share[.]png.ts"),
   route("app/changes/:signalId/:side", "routes/app.change-shot.ts"),

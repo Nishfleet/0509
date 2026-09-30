@@ -1,9 +1,11 @@
 import { z } from "zod";
 
 import { BlockedRedirectError, fetchOutbound } from "../fetch/outbound.server";
+import { CRAWLER_USER_AGENT } from "../fetch/robots.server";
 import {
   channelIdFromHtml,
   channelIdFromUrl,
+  identityHasYoutubeUrl,
   isYoutubeChannelId,
   youtubeUrlFromIdentity,
 } from "../mentions/youtube-channel";
@@ -28,7 +30,7 @@ async function readYoutubeChannelPage(pageUrl: string): Promise<{ channelId: str
   let response: Response;
   try {
     response = await fetchOutbound(pageUrl, {
-      headers: {},
+      headers: { "user-agent": CRAWLER_USER_AGENT },
       signal: AbortSignal.timeout(8_000),
     });
   } catch (error) {
@@ -49,7 +51,7 @@ async function readYoutubeChannelPage(pageUrl: string): Promise<{ channelId: str
 
 export async function lookupYoutubeChannel(identityJson: string): Promise<YoutubeChannelLookup> {
   const url = youtubeUrlFromIdentity(identityJson);
-  if (url === null) return { status: "no-url" };
+  if (url === null) return { status: identityHasYoutubeUrl(identityJson) ? "unresolved" : "no-url" };
   const fromUrl = channelIdFromUrl(url);
   if (fromUrl !== null) return { status: "id", channelId: fromUrl };
   const normalised = normaliseSubject(url);
