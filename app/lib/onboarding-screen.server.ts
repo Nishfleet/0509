@@ -28,14 +28,41 @@ const runJevOutcome = (input: {
     return null;
   });
 
-export async function screenOnboardingSubject(input: {
+interface ScreenInput {
   workspaceId: string;
   userId: string;
   subject: Subject;
   raw: string;
   answer: string | null;
   now: string;
-}): Promise<ScreenResult> {
+}
+
+async function decide(input: ScreenInput, verdict: "public_subject:confirmed" | "public_subject:refused") {
+  await insertSubjectDecision({
+    workspaceId: input.workspaceId,
+    userId: input.userId,
+    subject: input.subject.registrable,
+    verdict,
+    decidedAt: input.now,
+  });
+}
+
+async function refuse(input: ScreenInput): Promise<ScreenResult> {
+  await decide(input, "public_subject:refused");
+  return { kind: "refuse", message: REFUSAL };
+}
+
+async function settle(input: ScreenInput, outcome: "proceed" | "ask" | "refuse"): Promise<ScreenResult> {
+  if (outcome === "proceed") return { kind: "proceed" };
+  if (outcome === "refuse" || input.answer === "person") return refuse(input);
+  if (input.answer === "business") {
+    await decide(input, "public_subject:confirmed");
+    return { kind: "proceed" };
+  }
+  return { kind: "ask", subject: input.subject.registrable };
+}
+
+export async function screenOnboardingSubject(input: ScreenInput): Promise<ScreenResult> {
   const ground = isLoginWall(input.raw) ? "login" : null;
   const screening = ground === null ? runJevOutcome(input) : null;
   screening?.catch(() => undefined);
@@ -44,53 +71,7 @@ export async function screenOnboardingSubject(input: {
   if (decided === "public_subject:refused") return { kind: "refuse", message: REFUSAL };
 
   console.log(JSON.stringify({ event: "public_subject.screen", fetched: false, ground }));
-  if (ground === "login") {
-    await insertSubjectDecision({
-      workspaceId: input.workspaceId,
-      userId: input.userId,
-      subject: input.subject.registrable,
-      verdict: "public_subject:refused",
-      decidedAt: input.now,
-    });
-    return { kind: "refuse", message: REFUSAL };
-  }
-
-  const screened = screening === null ? null : await screening;
-  const outcome = screened === null ? "ask" : screened.outcome;
-  if (outcome === "proceed") return { kind: "proceed" };
-
-  if (outcome === "refuse") {
-    await insertSubjectDecision({
-      workspaceId: input.workspaceId,
-      userId: input.userId,
-      subject: input.subject.registrable,
-      verdict: "public_subject:refused",
-      decidedAt: input.now,
-    });
-    return { kind: "refuse", message: REFUSAL };
-  }
-
-  if (input.answer === "business") {
-    await insertSubjectDecision({
-      workspaceId: input.workspaceId,
-      userId: input.userId,
-      subject: input.subject.registrable,
-      verdict: "public_subject:confirmed",
-      decidedAt: input.now,
-    });
-    return { kind: "proceed" };
-  }
-
-  if (input.answer === "person") {
-    await insertSubjectDecision({
-      workspaceId: input.workspaceId,
-      userId: input.userId,
-      subject: input.subject.registrable,
-      verdict: "public_subject:refused",
-      decidedAt: input.now,
-    });
-    return { kind: "refuse", message: REFUSAL };
-  }
-
-  return { kind: "ask", subject: input.subject.registrable };
+  if (screening === null) return refuse(input);
+  const screened = await screening;
+  return settle(input, screened === null ? "ask" : screened.outcome);
 }
