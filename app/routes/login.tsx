@@ -54,7 +54,7 @@ export async function action({ request }: Route.ActionArgs) {
   const callbackURL = signInTarget(new URL(request.url).searchParams);
   const response = await (
     await createAuthForRequest(env, request)
-  ).handler(formMagicLinkRequest(env.BETTER_AUTH_URL, request, email, captcha, callbackURL));
+  ).handler(formMagicLinkRequest({ authUrl: env.BETTER_AUTH_URL, request, email, captcha, callbackURL }));
   if (response.status === 200) return { sent: { email, at: Date.now() } };
   const detail = await response.text();
   if (response.status === 429) return { error: "Too many sign-in links. Wait a minute and try again." };

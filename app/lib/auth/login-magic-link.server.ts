@@ -1,12 +1,13 @@
 import { magicLinkRequestURL } from "./magic-link-path";
 
-export function formMagicLinkRequest(
-  authUrl: string,
-  request: Request,
-  email: string,
-  captcha: string,
-  callbackURL: string,
-): Request {
+export function formMagicLinkRequest(input: {
+  authUrl: string;
+  request: Request;
+  email: string;
+  captcha: string;
+  callbackURL: string;
+}): Request {
+  const { authUrl, request, email, captcha, callbackURL } = input;
   const endpoint = magicLinkRequestURL(authUrl);
   const headers = new Headers();
   headers.set("content-type", "application/json");

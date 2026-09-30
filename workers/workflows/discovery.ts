@@ -71,7 +71,12 @@ export class Discovery extends WorkflowEntrypoint<Env, DiscoveryParams> {
     const resolved = await step.do("resolve", RETRY, () => resolveShortlist(context, shortlisted));
     const results = await judgeAndWriteBatches(step, context, resolved);
     await step.do("queue", RETRY, () =>
-      writeBacklog(workspaceId, generated.rest, generated.promoted, new Date().toISOString()),
+      writeBacklog({
+        workspaceId,
+        rows: generated.rest,
+        promotedKeys: generated.promoted,
+        now: new Date().toISOString(),
+      }),
     );
 
     const outcome = {

@@ -87,7 +87,7 @@ export async function handleCompetitorIntent(workspaceId: string, form: FormData
     return DONE;
   }
   if ((intent === "on" || intent === "off") && entityId !== "") {
-    await setCompetitorState(workspaceId, entityId, intent, now);
+    await setCompetitorState({ workspaceId, entityId, state: intent, now });
     return DONE;
   }
   if (intent === "add") return addCompetitor(workspaceId, text(form, "competitor"), now);

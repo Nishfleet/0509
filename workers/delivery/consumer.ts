@@ -204,14 +204,14 @@ async function sendAndResolve(env: Env, input: SendAndResolveInput): Promise<Del
   try {
     const result = await send();
     sent = result.outcome === "sent";
-    await resolveSendAttempt(env.DB, claimId, result.outcome, result.error);
+    await resolveSendAttempt(env.DB, { attemptId: claimId, outcome: result.outcome, error: result.error });
     if (onSent !== undefined && result.outcome === "sent") {
       await onSent();
     }
     return { outcome: result.outcome, attempt_id: claimId, idempotency_key: idempotencyKey };
   } catch (cause) {
     if (sent) throw cause;
-    await resolveSendAttempt(env.DB, claimId, "failed", errorText(cause));
+    await resolveSendAttempt(env.DB, { attemptId: claimId, outcome: "failed", error: errorText(cause) });
     return { outcome: "failed", attempt_id: claimId, idempotency_key: idempotencyKey };
   }
 }
