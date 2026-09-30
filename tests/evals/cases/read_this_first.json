@@ -1,0 +1,2060 @@
+[
+ {
+  "id": "adidas-ultraboost-price-hike",
+  "split": "train",
+  "label": true,
+  "why": "A 12% hike on flagship running shoes forces Nike to decide this week whether to match, hold, or message value.",
+  "self": {
+   "name": "Nike",
+   "domain": "nike.com"
+  },
+  "subject": {
+   "id": "ent_adidas",
+   "role": "competitor",
+   "name": "Adidas",
+   "domain": "adidas.com"
+  },
+  "competitors": [
+   {
+    "id": "ent_puma",
+    "role": "competitor",
+    "name": "Puma",
+    "domain": "puma.com"
+   },
+   {
+    "id": "ent_newbalance",
+    "role": "competitor",
+    "name": "New Balance",
+    "domain": "newbalance.com"
+   }
+  ],
+  "item": {
+   "kind": "change",
+   "title": "Adidas lifts Ultraboost and Adizero prices 12% worldwide",
+   "summary": "Adidas raised MSRP on Ultraboost 5 and the Adizero race line by about 12% in the US, UK, and EU, effective immediately at adidas.com and major retailers. No grandfathering for in-cart orders.",
+   "url": "https://news.adidas.com/ultraboost-adizero-price-update-fall-2026",
+   "aspect": null,
+   "observed_at": "2026-09-21T14:22:00Z"
+  }
+ },
+ {
+  "id": "pepsi-zero-200m-relaunch",
+  "split": "train",
+  "label": true,
+  "why": "A reformulated flagship plus a $200M campaign is a share-of-throat event Coke has to answer this week.",
+  "self": {
+   "name": "Coca-Cola",
+   "domain": "coca-cola.com"
+  },
+  "subject": {
+   "id": "ent_pepsi",
+   "role": "competitor",
+   "name": "Pepsi",
+   "domain": "pepsi.com"
+  },
+  "competitors": [
+   {
+    "id": "ent_drpepper",
+    "role": "competitor",
+    "name": "Dr Pepper",
+    "domain": "drpepper.com"
+   }
+  ],
+  "item": {
+   "kind": "change",
+   "title": "Pepsi Zero Sugar fully reformulated; $200M NFL-season campaign starts Friday",
+   "summary": "PepsiCo is replacing the current Pepsi Zero Sugar formula in all US packages and backing the relaunch with a reported $200 million media buy anchored to NFL kickoff. Bottler sell-in is already underway.",
+   "url": "https://www.pepsi.com/pepsi-zero-sugar-relaunch-2026",
+   "aspect": null,
+   "observed_at": "2026-09-03T09:11:33Z"
+  }
+ },
+ {
+  "id": "samsung-fold-sub-1000",
+  "split": "train",
+  "label": true,
+  "why": "A foldable at $999 undercuts Apple's premium floor and changes iPhone mix and trade-in math this week.",
+  "self": {
+   "name": "Apple",
+   "domain": "apple.com"
+  },
+  "subject": {
+   "id": "ent_samsung",
+   "role": "competitor",
+   "name": "Samsung",
+   "domain": "samsung.com"
+  },
+  "competitors": [
+   {
+    "id": "ent_google",
+    "role": "competitor",
+    "name": "Google",
+    "domain": "google.com"
+   }
+  ],
+  "item": {
+   "kind": "change",
+   "title": "Galaxy Z Fold7 drops to $999, matching last-gen iPhone pricing",
+   "summary": "Samsung cut the unlocked Galaxy Z Fold7 to $999 in the US with a two-year price lock, the first mainstream foldable under a thousand dollars. Carrier promos stack an extra $200 trade-in on any iPhone 14 or newer.",
+   "url": "https://news.samsung.com/us/galaxy-z-fold7-price-cut-999",
+   "aspect": null,
+   "observed_at": "2026-09-15T16:40:12Z"
+  }
+ },
+ {
+  "id": "disney-triple-bundle-1299",
+  "split": "train",
+  "label": true,
+  "why": "Disney+ Hulu ESPN at $12.99 reprices the whole streaming stack Netflix sells against this week.",
+  "self": {
+   "name": "Netflix",
+   "domain": "netflix.com"
+  },
+  "subject": {
+   "id": "ent_disneyplus",
+   "role": "competitor",
+   "name": "Disney+",
+   "domain": "disneyplus.com"
+  },
+  "competitors": [
+   {
+    "id": "ent_max",
+    "role": "competitor",
+    "name": "Max",
+    "domain": "max.com"
+   },
+   {
+    "id": "ent_paramountplus",
+    "role": "competitor",
+    "name": "Paramount+",
+    "domain": "paramountplus.com"
+   }
+  ],
+  "item": {
+   "kind": "change",
+   "title": "Disney bundles Disney+, Hulu, and ESPN at $12.99/month",
+   "summary": "Disney launched a US-only triple bundle of Disney+, Hulu (no ads), and ESPN at $12.99, undercutting Netflix Standard. Existing Disney+ subscribers are being pushed an in-app upgrade with a three-month rate lock.",
+   "url": "https://www.disneyplus.com/news/triple-bundle-1299",
+   "aspect": null,
+   "observed_at": "2026-09-08T11:05:00Z"
+  }
+ },
+ {
+  "id": "lyft-removes-price-caps",
+  "split": "train",
+  "label": true,
+  "why": "Removing surge caps in 20 cities and lifting take-home prices 18% changes Uber's fare and driver-pay response this week.",
+  "self": {
+   "name": "Uber",
+   "domain": "uber.com"
+  },
+  "subject": {
+   "id": "ent_lyft",
+   "role": "competitor",
+   "name": "Lyft",
+   "domain": "lyft.com"
+  },
+  "competitors": [
+   {
+    "id": "ent_waymo",
+    "role": "competitor",
+    "name": "Waymo",
+    "domain": "waymo.com"
+   }
+  ],
+  "item": {
+   "kind": "change",
+   "title": "Lyft drops rider price caps in 20 US cities; fares up ~18%",
+   "summary": "Lyft removed its rush-hour rider price cap in 20 metros including NYC, LA, and Chicago. Independent fare scrapes show typical Friday-night trips up about 18% versus last week, with driver promotions unchanged.",
+   "url": "https://www.lyft.com/blog/rider-price-cap-update-sept-2026",
+   "aspect": null,
+   "observed_at": "2026-09-27T18:30:45Z"
+  }
+ },
+ {
+  "id": "rivian-4b-series-e",
+  "split": "train",
+  "label": true,
+  "why": "A $4.2B round lets Rivian outspend Tesla on the R2 launch and service footprint this quarter.",
+  "self": {
+   "name": "Tesla",
+   "domain": "tesla.com"
+  },
+  "subject": {
+   "id": "ent_rivian",
+   "role": "competitor",
+   "name": "Rivian",
+   "domain": "rivian.com"
+  },
+  "competitors": [
+   {
+    "id": "ent_lucid",
+    "role": "competitor",
+    "name": "Lucid",
+    "domain": "lucidmotors.com"
+   },
+   {
+    "id": "ent_ford",
+    "role": "competitor",
+    "name": "Ford",
+    "domain": "ford.com"
+   }
+  ],
+  "item": {
+   "kind": "mention",
+   "title": "Rivian closes $4.2 billion Series E led by Volkswagen and T. Rowe",
+   "summary": "Rivian confirmed a $4.2 billion Series E to fund the R2 launch and 50 new service centers. VW takes a larger minority stake; the round values Rivian above its last public-market peak.",
+   "url": "https://www.wsj.com/business/autos/rivian-series-e-4-2-billion-2026",
+   "aspect": null,
+   "observed_at": "2026-09-12T07:00:00Z"
+  }
+ },
+ {
+  "id": "walmart-2hr-grocery-undercut",
+  "split": "train",
+  "label": true,
+  "why": "Two-hour grocery in 40 metros at 10% below Amazon Fresh is a direct share fight Amazon has to price against now.",
+  "self": {
+   "name": "Amazon",
+   "domain": "amazon.com"
+  },
+  "subject": {
+   "id": "ent_walmart",
+   "role": "competitor",
+   "name": "Walmart",
+   "domain": "walmart.com"
+  },
+  "competitors": [
+   {
+    "id": "ent_target",
+    "role": "competitor",
+    "name": "Target",
+    "domain": "target.com"
+   },
+   {
+    "id": "ent_instacart",
+    "role": "competitor",
+    "name": "Instacart",
+    "domain": "instacart.com"
+   }
+  ],
+  "item": {
+   "kind": "change",
+   "title": "Walmart rolls 2-hour grocery to 40 metros, priced 10% under Amazon Fresh",
+   "summary": "Walmart+ now promises two-hour grocery delivery in 40 US metros with a published basket 10% below matched Amazon Fresh items. The promise is on the homepage and in a national TV spot starting tonight.",
+   "url": "https://corporate.walmart.com/news/2026/09/19/two-hour-grocery-expansion",
+   "aspect": null,
+   "observed_at": "2026-09-19T13:15:22Z"
+  }
+ },
+ {
+  "id": "openai-gpt5-general-availability",
+  "split": "train",
+  "label": true,
+  "why": "GPT-5 GA at 10x lower token prices is a Gemini and Search competitive emergency, not a backlog item.",
+  "self": {
+   "name": "Google",
+   "domain": "google.com"
+  },
+  "subject": {
+   "id": "ent_openai",
+   "role": "competitor",
+   "name": "OpenAI",
+   "domain": "openai.com"
+  },
+  "competitors": [
+   {
+    "id": "ent_anthropic",
+    "role": "competitor",
+    "name": "Anthropic",
+    "domain": "anthropic.com"
+   },
+   {
+    "id": "ent_xai",
+    "role": "competitor",
+    "name": "xAI",
+    "domain": "x.ai"
+   }
+  ],
+  "item": {
+   "kind": "change",
+   "title": "OpenAI ships GPT-5 to all ChatGPT and API customers, tokens 10x cheaper",
+   "summary": "GPT-5 is generally available in ChatGPT and the API with native multimodal input and published token prices roughly 10x below GPT-4o. Default routing in ChatGPT Free now uses GPT-5-mini.",
+   "url": "https://openai.com/index/gpt-5-general-availability",
+   "aspect": null,
+   "observed_at": "2026-09-02T10:44:01Z"
+  }
+ },
+ {
+  "id": "tiktok-shop-zero-commission",
+  "split": "train",
+  "label": true,
+  "why": "Zero seller fees through Q1 will pull Meta Shops merchants this week; Instagram needs a counter or a loss-story.",
+  "self": {
+   "name": "Meta",
+   "domain": "meta.com"
+  },
+  "subject": {
+   "id": "ent_tiktok",
+   "role": "competitor",
+   "name": "TikTok",
+   "domain": "tiktok.com"
+  },
+  "competitors": [
+   {
+    "id": "ent_snap",
+    "role": "competitor",
+    "name": "Snap",
+    "domain": "snapchat.com"
+   },
+   {
+    "id": "ent_youtube",
+    "role": "competitor",
+    "name": "YouTube",
+    "domain": "youtube.com"
+   }
+  ],
+  "item": {
+   "kind": "change",
+   "title": "TikTok Shop sets 0% US seller commission through Q1 2027",
+   "summary": "TikTok told US Shop sellers it will take 0% commission on all product sales through March 31, 2027, waiving the current 6% take. The offer is live in Seller Center and being sold by TikTok account teams this week.",
+   "url": "https://sellers.tiktok.com/university/zero-commission-us-q1",
+   "aspect": null,
+   "observed_at": "2026-09-24T20:01:59Z"
+  }
+ },
+ {
+  "id": "booking-acquires-vacasa",
+  "split": "train",
+  "label": true,
+  "why": "Booking owning Vacasa's managed-homes network redraws Airbnb's vacation-rental map this week.",
+  "self": {
+   "name": "Airbnb",
+   "domain": "airbnb.com"
+  },
+  "subject": {
+   "id": "ent_booking",
+   "role": "competitor",
+   "name": "Booking.com",
+   "domain": "booking.com"
+  },
+  "competitors": [
+   {
+    "id": "ent_expedia",
+    "role": "competitor",
+    "name": "Expedia",
+    "domain": "expedia.com"
+   },
+   {
+    "id": "ent_vrbo",
+    "role": "competitor",
+    "name": "Vrbo",
+    "domain": "vrbo.com"
+   }
+  ],
+  "item": {
+   "kind": "mention",
+   "title": "Booking Holdings to acquire Vacasa for $1.4 billion",
+   "summary": "Booking Holdings agreed to buy Vacasa, adding tens of thousands of professionally managed US homes to Booking.com. The deal is expected to close in Q4 pending Hart-Scott-Rodino.",
+   "url": "https://www.reuters.com/markets/deals/booking-holdings-acquire-vacasa-2026-09-06",
+   "aspect": null,
+   "observed_at": "2026-09-06T08:30:00Z"
+  }
+ },
+ {
+  "id": "paypal-us-fee-cut",
+  "split": "train",
+  "label": true,
+  "why": "PayPal at 2.5%+10¢ on US cards is a pricing event Stripe has to answer in sales calls this week.",
+  "self": {
+   "name": "Stripe",
+   "domain": "stripe.com"
+  },
+  "subject": {
+   "id": "ent_paypal",
+   "role": "competitor",
+   "name": "PayPal",
+   "domain": "paypal.com"
+  },
+  "competitors": [
+   {
+    "id": "ent_square",
+    "role": "competitor",
+    "name": "Block",
+    "domain": "squareup.com"
+   },
+   {
+    "id": "ent_adyen",
+    "role": "competitor",
+    "name": "Adyen",
+    "domain": "adyen.com"
+   }
+  ],
+  "item": {
+   "kind": "change",
+   "title": "PayPal cuts US commercial card-present and checkout fees to 2.5% + 10¢",
+   "summary": "PayPal published new US merchant pricing of 2.5% + $0.10, down from 3.49% + 49¢ on standard checkout, effective October 1 for new accounts and opt-in for existing. A comparison table on the pricing page names 'typical processor rates' near Stripe's list price.",
+   "url": "https://www.paypal.com/us/business/paypal-business-fees",
+   "aspect": null,
+   "observed_at": "2026-09-17T12:12:12Z"
+  }
+ },
+ {
+  "id": "tmobile-25-home-internet-blitz",
+  "split": "train",
+  "label": true,
+  "why": "A locked $25 5G home-internet offer is a broadband share grab Verizon Fios and 5G Home have to counter this week.",
+  "self": {
+   "name": "Verizon",
+   "domain": "verizon.com"
+  },
+  "subject": {
+   "id": "ent_tmobile",
+   "role": "competitor",
+   "name": "T-Mobile",
+   "domain": "t-mobile.com"
+  },
+  "competitors": [
+   {
+    "id": "ent_att",
+    "role": "competitor",
+    "name": "AT&T",
+    "domain": "att.com"
+   }
+  ],
+  "item": {
+   "kind": "ad",
+   "title": "T-Mobile national blitz: 5G Home Internet at $25/mo locked two years",
+   "summary": "T-Mobile launched a two-week national TV, YouTube, and CTV flight offering 5G Home Internet at $25 a month with a two-year rate lock and free gateway. Estimated spend is well above its usual home-internet baseline.",
+   "url": "https://www.t-mobile.com/home-internet/25-dollar-lock",
+   "aspect": null,
+   "observed_at": "2026-09-09T15:45:00Z"
+  }
+ },
+ {
+  "id": "united-49-transcon-sale",
+  "split": "train",
+  "label": true,
+  "why": "A $49 transcon flash sale is a fare-war opening Delta revenue management has to match or concede this week.",
+  "self": {
+   "name": "Delta",
+   "domain": "delta.com"
+  },
+  "subject": {
+   "id": "ent_united",
+   "role": "competitor",
+   "name": "United",
+   "domain": "united.com"
+  },
+  "competitors": [
+   {
+    "id": "ent_aa",
+    "role": "competitor",
+    "name": "American Airlines",
+    "domain": "aa.com"
+   },
+   {
+    "id": "ent_southwest",
+    "role": "competitor",
+    "name": "Southwest",
+    "domain": "southwest.com"
+   }
+  ],
+  "item": {
+   "kind": "change",
+   "title": "United posts $49 transcontinental one-ways for two weeks",
+   "summary": "United loaded $49 one-way fares on NYC–LA, NYC–SFO, and BOS–LAX for travel through November, inventory live on united.com and GDSs. The sale was not pre-announced to the trade.",
+   "url": "https://www.united.com/en/us/fly/deals/transcon-49",
+   "aspect": null,
+   "observed_at": "2026-09-23T09:00:00Z"
+  }
+ },
+ {
+  "id": "hubspot-free-sequences",
+  "split": "train",
+  "label": true,
+  "why": "Sequences and workflows on a free CRM undercuts Salesforce's low-end ladder and will show up in every SMB deal this week.",
+  "self": {
+   "name": "Salesforce",
+   "domain": "salesforce.com"
+  },
+  "subject": {
+   "id": "ent_hubspot",
+   "role": "competitor",
+   "name": "HubSpot",
+   "domain": "hubspot.com"
+  },
+  "competitors": [
+   {
+    "id": "ent_zoho",
+    "role": "competitor",
+    "name": "Zoho",
+    "domain": "zoho.com"
+   },
+   {
+    "id": "ent_pipedrive",
+    "role": "competitor",
+    "name": "Pipedrive",
+    "domain": "pipedrive.com"
+   }
+  ],
+  "item": {
+   "kind": "change",
+   "title": "HubSpot moves sequences and workflows onto the free CRM",
+   "summary": "HubSpot announced that email sequences and basic workflows are now included on the free CRM with a 500-contact cap, features that previously required Sales Hub Starter. The pricing page and in-app upgrade prompts were updated today.",
+   "url": "https://www.hubspot.com/product-updates/free-sequences-workflows",
+   "aspect": null,
+   "observed_at": "2026-09-11T19:22:41Z"
+  }
+ },
+ {
+  "id": "nordictrack-bike-799-campaign",
+  "split": "train",
+  "label": true,
+  "why": "A Peloton-class bike at $799 with a national ad flight is a conversion and pricing problem for Peloton this week.",
+  "self": {
+   "name": "Peloton",
+   "domain": "onepeloton.com"
+  },
+  "subject": {
+   "id": "ent_ifit",
+   "role": "competitor",
+   "name": "iFIT / NordicTrack",
+   "domain": "ifit.com"
+  },
+  "competitors": [
+   {
+    "id": "ent_hydrow",
+    "role": "competitor",
+    "name": "Hydrow",
+    "domain": "hydrow.com"
+   },
+   {
+    "id": "ent_tonal",
+    "role": "competitor",
+    "name": "Tonal",
+    "domain": "tonal.com"
+   }
+  ],
+  "item": {
+   "kind": "ad",
+   "title": "NordicTrack Commercial Plus bike at $799 in a national CTV flight",
+   "summary": "iFIT is running a national CTV and YouTube campaign putting the NordicTrack Commercial Plus bike at $799, less than half of Peloton Bike+. Spots compare live classes and a no-subscription-required mode on screen.",
+   "url": "https://www.nordictrack.com/bikes/commercial-plus-799",
+   "aspect": null,
+   "observed_at": "2026-09-04T06:18:00Z"
+  }
+ },
+ {
+  "id": "adidas-footer-year-tweak",
+  "split": "train",
+  "label": false,
+  "why": "A copyright-year footer edit is a routine site hygiene change and will not change what Nike does this week.",
+  "self": {
+   "name": "Nike",
+   "domain": "nike.com"
+  },
+  "subject": {
+   "id": "ent_adidas",
+   "role": "competitor",
+   "name": "Adidas",
+   "domain": "adidas.com"
+  },
+  "competitors": [
+   {
+    "id": "ent_puma",
+    "role": "competitor",
+    "name": "Puma",
+    "domain": "puma.com"
+   }
+  ],
+  "item": {
+   "kind": "change",
+   "title": "adidas.com footer copyright updated to 2026",
+   "summary": "The global footer on adidas.com now reads © 2026 adidas. No other nav, pricing, or product-card changes were detected with the deploy.",
+   "url": "https://www.adidas.com/",
+   "aspect": null,
+   "observed_at": "2026-09-26T14:00:00Z"
+  }
+ },
+ {
+  "id": "pepsi-intern-class-blog",
+  "split": "train",
+  "label": false,
+  "why": "An intern-program recap is HR content, not a competitive move Coke needs to act on this week.",
+  "self": {
+   "name": "Coca-Cola",
+   "domain": "coca-cola.com"
+  },
+  "subject": {
+   "id": "ent_pepsi",
+   "role": "competitor",
+   "name": "Pepsi",
+   "domain": "pepsi.com"
+  },
+  "competitors": [
+   {
+    "id": "ent_drpepper",
+    "role": "competitor",
+    "name": "Dr Pepper",
+    "domain": "drpepper.com"
+   }
+  ],
+  "item": {
+   "kind": "mention",
+   "title": "PepsiCo careers blog: meet the 2026 summer intern class",
+   "summary": "A PepsiCo campus-recruiting post profiles eight summer interns and their projects. It does not announce hiring targets, a new brand, or a product.",
+   "url": "https://www.pepsicojobs.com/blog/2026-summer-intern-class",
+   "aspect": null,
+   "observed_at": "2026-09-14T11:11:11Z"
+  }
+ },
+ {
+  "id": "samsung-support-border-radius",
+  "split": "train",
+  "label": false,
+  "why": "A support-page button-radius A/B is a minor UI tweak, not a product or pricing event for Apple.",
+  "self": {
+   "name": "Apple",
+   "domain": "apple.com"
+  },
+  "subject": {
+   "id": "ent_samsung",
+   "role": "competitor",
+   "name": "Samsung",
+   "domain": "samsung.com"
+  },
+  "competitors": [
+   {
+    "id": "ent_google",
+    "role": "competitor",
+    "name": "Google",
+    "domain": "google.com"
+   }
+  ],
+  "item": {
+   "kind": "change",
+   "title": "Samsung support site test: slightly rounder primary buttons",
+   "summary": "samsung.com/us/support is serving a variant with 8px button radii instead of 4px on 'Start a chat' and 'Request repair'. Copy, IA, and warranty terms are unchanged.",
+   "url": "https://www.samsung.com/us/support/",
+   "aspect": null,
+   "observed_at": "2026-09-07T17:33:08Z"
+  }
+ },
+ {
+  "id": "disneyplus-help-center-rewrite",
+  "split": "train",
+  "label": false,
+  "why": "Rewriting a help article on downloads does not change Netflix's competitive posture this week.",
+  "self": {
+   "name": "Netflix",
+   "domain": "netflix.com"
+  },
+  "subject": {
+   "id": "ent_disneyplus",
+   "role": "competitor",
+   "name": "Disney+",
+   "domain": "disneyplus.com"
+  },
+  "competitors": [
+   {
+    "id": "ent_max",
+    "role": "competitor",
+    "name": "Max",
+    "domain": "max.com"
+   }
+  ],
+  "item": {
+   "kind": "change",
+   "title": "Disney+ help center rewrites 'How to download titles' article",
+   "summary": "The Disney+ help article on offline downloads was copy-edited for clarity and screenshots were updated to the current iOS app. Download limits and plans were not changed.",
+   "url": "https://help.disneyplus.com/article/download-titles",
+   "aspect": null,
+   "observed_at": "2026-09-20T08:05:19Z"
+  }
+ },
+ {
+  "id": "lyft-new-driver-tips-post",
+  "split": "train",
+  "label": false,
+  "why": "A generic 'five tips for new drivers' blog post is routine content Uber can ignore until the full digest.",
+  "self": {
+   "name": "Uber",
+   "domain": "uber.com"
+  },
+  "subject": {
+   "id": "ent_lyft",
+   "role": "competitor",
+   "name": "Lyft",
+   "domain": "lyft.com"
+  },
+  "competitors": [
+   {
+    "id": "ent_waymo",
+    "role": "competitor",
+    "name": "Waymo",
+    "domain": "waymo.com"
+   }
+  ],
+  "item": {
+   "kind": "change",
+   "title": "Lyft driver blog: five tips for your first week",
+   "summary": "Lyft published a evergreen-style post on airport queues, phone mounts, and rating etiquette. No pay-rate, bonus, or city-launch news is in the piece.",
+   "url": "https://www.lyft.com/hub/posts/five-tips-first-week-driving",
+   "aspect": null,
+   "observed_at": "2026-09-01T12:00:00Z"
+  }
+ },
+ {
+  "id": "rivian-factory-broll-upload",
+  "split": "train",
+  "label": false,
+  "why": "A factory-tour B-roll upload is brand content, not a production, price, or product change Tesla needs this week.",
+  "self": {
+   "name": "Tesla",
+   "domain": "tesla.com"
+  },
+  "subject": {
+   "id": "ent_rivian",
+   "role": "competitor",
+   "name": "Rivian",
+   "domain": "rivian.com"
+  },
+  "competitors": [
+   {
+    "id": "ent_lucid",
+    "role": "competitor",
+    "name": "Lucid",
+    "domain": "lucidmotors.com"
+   }
+  ],
+  "item": {
+   "kind": "mention",
+   "title": "Rivian posts a 12-minute Normal factory tour on YouTube",
+   "summary": "Rivian's channel uploaded a guided walkthrough of the Normal, Illinois plant. It shows existing R1 lines; no R2 volume, new factory, or delivery-target claims.",
+   "url": "https://www.youtube.com/watch?v=rivian-normal-factory-tour-2026",
+   "aspect": null,
+   "observed_at": "2026-09-13T10:10:10Z"
+  }
+ },
+ {
+  "id": "walmart-careers-css-columns",
+  "split": "train",
+  "label": false,
+  "why": "A careers-page layout tweak is unrelated to grocery, marketplace, or pricing competition with Amazon.",
+  "self": {
+   "name": "Amazon",
+   "domain": "amazon.com"
+  },
+  "subject": {
+   "id": "ent_walmart",
+   "role": "competitor",
+   "name": "Walmart",
+   "domain": "walmart.com"
+  },
+  "competitors": [
+   {
+    "id": "ent_target",
+    "role": "competitor",
+    "name": "Target",
+    "domain": "target.com"
+   }
+  ],
+  "item": {
+   "kind": "change",
+   "title": "Walmart careers page switches job cards from two columns to three",
+   "summary": "careers.walmart.com now shows search results in three cards per row on desktop. Filters, requisitions, and pay disclosures are the same.",
+   "url": "https://careers.walmart.com/",
+   "aspect": null,
+   "observed_at": "2026-09-18T22:00:00Z"
+  }
+ },
+ {
+  "id": "openai-12min-status-blip",
+  "split": "train",
+  "label": false,
+  "why": "A 12-minute resolved API blip is routine platform noise, not a reliability story Google should act on this week.",
+  "self": {
+   "name": "Google",
+   "domain": "google.com"
+  },
+  "subject": {
+   "id": "ent_openai",
+   "role": "competitor",
+   "name": "OpenAI",
+   "domain": "openai.com"
+  },
+  "competitors": [
+   {
+    "id": "ent_anthropic",
+    "role": "competitor",
+    "name": "Anthropic",
+    "domain": "anthropic.com"
+   }
+  ],
+  "item": {
+   "kind": "mention",
+   "title": "OpenAI status: Chat Completions elevated errors for 12 minutes",
+   "summary": "status.openai.com logged elevated 500s on Chat Completions from 03:14–03:26 UTC, then marked the incident resolved. No data-loss or billing impact was reported.",
+   "url": "https://status.openai.com/incidents/2026-09-05-chat-completions",
+   "aspect": null,
+   "observed_at": "2026-09-05T13:45:00Z"
+  }
+ },
+ {
+  "id": "tiktok-cookie-banner-copy",
+  "split": "train",
+  "label": false,
+  "why": "Cookie-banner wording is compliance copy, not a product, ads, or Shop change Meta should jump on.",
+  "self": {
+   "name": "Meta",
+   "domain": "meta.com"
+  },
+  "subject": {
+   "id": "ent_tiktok",
+   "role": "competitor",
+   "name": "TikTok",
+   "domain": "tiktok.com"
+  },
+  "competitors": [
+   {
+    "id": "ent_snap",
+    "role": "competitor",
+    "name": "Snap",
+    "domain": "snapchat.com"
+   }
+  ],
+  "item": {
+   "kind": "change",
+   "title": "TikTok EU cookie banner swaps 'Accept all' helper text",
+   "summary": "The EU cookie banner on tiktok.com now says 'You can change this later in Settings' under Accept all. Categories and default state are unchanged.",
+   "url": "https://www.tiktok.com/",
+   "aspect": null,
+   "observed_at": "2026-09-22T07:07:07Z"
+  }
+ },
+ {
+  "id": "booking-hotel-webinar-recap",
+  "split": "train",
+  "label": false,
+  "why": "A partner-webinar recap is trade enablement content, not an acquisition, ranking, or payout change for Airbnb.",
+  "self": {
+   "name": "Airbnb",
+   "domain": "airbnb.com"
+  },
+  "subject": {
+   "id": "ent_booking",
+   "role": "competitor",
+   "name": "Booking.com",
+   "domain": "booking.com"
+  },
+  "competitors": [
+   {
+    "id": "ent_expedia",
+    "role": "competitor",
+    "name": "Expedia",
+    "domain": "expedia.com"
+   }
+  ],
+  "item": {
+   "kind": "mention",
+   "title": "Booking.com Partner Hub recap: September demand webinar",
+   "summary": "Booking.com posted slides from a 30-minute webinar on fall weekend demand. Advice is generic (update photos, reply faster); no commission or ranking-algorithm change.",
+   "url": "https://partner.booking.com/en-us/click-magazine/september-demand-webinar",
+   "aspect": null,
+   "observed_at": "2026-09-16T09:30:00Z"
+  }
+ },
+ {
+  "id": "paypal-summer-intern-jd",
+  "split": "train",
+  "label": false,
+  "why": "A summer intern job description is a routine hire post, not a pricing or product move Stripe cares about this week.",
+  "self": {
+   "name": "Stripe",
+   "domain": "stripe.com"
+  },
+  "subject": {
+   "id": "ent_paypal",
+   "role": "competitor",
+   "name": "PayPal",
+   "domain": "paypal.com"
+  },
+  "competitors": [
+   {
+    "id": "ent_square",
+    "role": "competitor",
+    "name": "Block",
+    "domain": "squareup.com"
+   }
+  ],
+  "item": {
+   "kind": "change",
+   "title": "PayPal posts 2027 summer intern, software engineering (San Jose)",
+   "summary": "PayPal's careers site added a standard intern requisition for summer 2027 in San Jose. Level, team, and headcount are the usual campus-recruiting template.",
+   "url": "https://careers.pypl.com/job/san-jose-intern-swe-2027",
+   "aspect": null,
+   "observed_at": "2026-09-10T18:18:18Z"
+  }
+ },
+ {
+  "id": "tmobile-topeka-free-case-ad",
+  "split": "train",
+  "label": false,
+  "why": "A one-store free-case geo ad in Topeka is low-spend local retail, not a national broadband or wireless shift.",
+  "self": {
+   "name": "Verizon",
+   "domain": "verizon.com"
+  },
+  "subject": {
+   "id": "ent_tmobile",
+   "role": "competitor",
+   "name": "T-Mobile",
+   "domain": "t-mobile.com"
+  },
+  "competitors": [
+   {
+    "id": "ent_att",
+    "role": "competitor",
+    "name": "AT&T",
+    "domain": "att.com"
+   }
+  ],
+  "item": {
+   "kind": "ad",
+   "title": "T-Mobile Topeka store: free case with any same-day upgrade",
+   "summary": "A Facebook geo ad targeting a 10-mile radius around one T-Mobile store in Topeka, Kansas, offers a free silicone case with an in-store upgrade. Estimated impressions are in the low thousands.",
+   "url": "https://www.facebook.com/ads/library/?id=tmobile-topeka-case-2026",
+   "aspect": null,
+   "observed_at": "2026-09-25T11:50:00Z"
+  }
+ },
+ {
+  "id": "united-hemisphere-recipe",
+  "split": "train",
+  "label": false,
+  "why": "An inflight-magazine recipe is lifestyle filler, not a network, fare, or lounge move Delta should read first.",
+  "self": {
+   "name": "Delta",
+   "domain": "delta.com"
+  },
+  "subject": {
+   "id": "ent_united",
+   "role": "competitor",
+   "name": "United",
+   "domain": "united.com"
+  },
+  "competitors": [
+   {
+    "id": "ent_aa",
+    "role": "competitor",
+    "name": "American Airlines",
+    "domain": "aa.com"
+   }
+  ],
+  "item": {
+   "kind": "mention",
+   "title": "Hemispheres magazine: a Denver chef's green-chile stew",
+   "summary": "United's inflight magazine ran a two-page food feature on a Denver restaurant. No route, aircraft, or MileagePlus news is attached.",
+   "url": "https://www.united.com/hemispheres/denver-green-chile-stew",
+   "aspect": null,
+   "observed_at": "2026-09-29T08:00:00Z"
+  }
+ },
+ {
+  "id": "hubspot-webinar-recap-blog",
+  "split": "train",
+  "label": false,
+  "why": "A webinar-recap blog is top-of-funnel content, not a packaging or price change Salesforce needs this week.",
+  "self": {
+   "name": "Salesforce",
+   "domain": "salesforce.com"
+  },
+  "subject": {
+   "id": "ent_hubspot",
+   "role": "competitor",
+   "name": "HubSpot",
+   "domain": "hubspot.com"
+  },
+  "competitors": [
+   {
+    "id": "ent_zoho",
+    "role": "competitor",
+    "name": "Zoho",
+    "domain": "zoho.com"
+   }
+  ],
+  "item": {
+   "kind": "mention",
+   "title": "HubSpot blog recaps last week's inbound-reporting webinar",
+   "summary": "A 600-word recap links the recording and three dashboard screenshots from a generic reporting webinar. No new SKU, limit, or price is announced.",
+   "url": "https://blog.hubspot.com/marketing/inbound-reporting-webinar-recap-sep-2026",
+   "aspect": null,
+   "observed_at": "2026-09-28T16:20:00Z"
+  }
+ },
+ {
+  "id": "ifit-low-spend-accessory-retarget",
+  "split": "train",
+  "label": false,
+  "why": "A low-spend retargeting carousel of heart-rate straps is a catalog variant, not a bike-price or class war.",
+  "self": {
+   "name": "Peloton",
+   "domain": "onepeloton.com"
+  },
+  "subject": {
+   "id": "ent_ifit",
+   "role": "competitor",
+   "name": "iFIT / NordicTrack",
+   "domain": "ifit.com"
+  },
+  "competitors": [
+   {
+    "id": "ent_hydrow",
+    "role": "competitor",
+    "name": "Hydrow",
+    "domain": "hydrow.com"
+   }
+  ],
+  "item": {
+   "kind": "ad",
+   "title": "iFIT retargeting carousel: chest strap and yoga block bundle",
+   "summary": "An iFIT dynamic product ad is retargeting site visitors with a $39 chest-strap and yoga-block bundle. Frequency is low and the creative is a standard catalog template.",
+   "url": "https://www.facebook.com/ads/library/?id=ifit-accessory-retarget-sep2026",
+   "aspect": null,
+   "observed_at": "2026-09-30T21:15:00Z"
+  }
+ },
+ {
+  "id": "apple-music-lossless-default",
+  "split": "test",
+  "label": true,
+  "why": "Making lossless the default on Apple Music is a quality-positioning shift Spotify has to answer in product and marketing this week.",
+  "self": {
+   "name": "Spotify",
+   "domain": "spotify.com"
+  },
+  "subject": {
+   "id": "ent_apple",
+   "role": "competitor",
+   "name": "Apple",
+   "domain": "apple.com"
+  },
+  "competitors": [
+   {
+    "id": "ent_youtubemusic",
+    "role": "competitor",
+    "name": "YouTube Music",
+    "domain": "music.youtube.com"
+   },
+   {
+    "id": "ent_amazonmusic",
+    "role": "competitor",
+    "name": "Amazon Music",
+    "domain": "music.amazon.com"
+   }
+  ],
+  "item": {
+   "kind": "change",
+   "title": "Apple Music turns Lossless on by default for all paid plans",
+   "summary": "iOS 26.1 and Android Apple Music now default new and existing subscribers to Lossless, not AAC. Apple published a comparison page that names 'other streaming apps' as still compressing by default.",
+   "url": "https://www.apple.com/newsroom/2026/09/apple-music-lossless-default",
+   "aspect": null,
+   "observed_at": "2026-09-08T09:40:00Z"
+  }
+ },
+ {
+  "id": "dunkin-4-dollar-value-menu",
+  "split": "test",
+  "label": true,
+  "why": "A national $4 value menu with an NFL-week media flight is a traffic war Starbucks has to price against now.",
+  "self": {
+   "name": "Starbucks",
+   "domain": "starbucks.com"
+  },
+  "subject": {
+   "id": "ent_dunkin",
+   "role": "competitor",
+   "name": "Dunkin'",
+   "domain": "dunkin.com"
+  },
+  "competitors": [
+   {
+    "id": "ent_peets",
+    "role": "competitor",
+    "name": "Peet's",
+    "domain": "peets.com"
+   },
+   {
+    "id": "ent_dutchbros",
+    "role": "competitor",
+    "name": "Dutch Bros",
+    "domain": "dutchbros.com"
+   }
+  ],
+  "item": {
+   "kind": "ad",
+   "title": "Dunkin' launches a national $4 breakfast value menu for NFL season",
+   "summary": "Dunkin' is advertising a $4 coffee-plus-sandwich value menu in a national TV and CTV flight timed to NFL week 2. The offer is in the app and on menu boards in all US company and franchise stores.",
+   "url": "https://news.dunkindonuts.com/4-dollar-value-menu-nfl-2026",
+   "aspect": null,
+   "observed_at": "2026-09-10T14:05:00Z"
+  }
+ },
+ {
+  "id": "teams-free-unlimited-history",
+  "split": "test",
+  "label": true,
+  "why": "Unlimited message history on free Teams removes a Slack free-tier wedge and will hit every bottom-up deal this week.",
+  "self": {
+   "name": "Slack",
+   "domain": "slack.com"
+  },
+  "subject": {
+   "id": "ent_microsoft",
+   "role": "competitor",
+   "name": "Microsoft",
+   "domain": "microsoft.com"
+  },
+  "competitors": [
+   {
+    "id": "ent_google",
+    "role": "competitor",
+    "name": "Google",
+    "domain": "google.com"
+   },
+   {
+    "id": "ent_discord",
+    "role": "competitor",
+    "name": "Discord",
+    "domain": "discord.com"
+   }
+  ],
+  "item": {
+   "kind": "change",
+   "title": "Microsoft Teams free tier now keeps unlimited message history",
+   "summary": "Microsoft removed the 90-day history cap on Teams Free and Microsoft 365 Free. The change is live and called out on the Teams pricing page versus 'chat apps that lock history behind a paywall.'",
+   "url": "https://www.microsoft.com/en-us/microsoft-teams/free-unlimited-history",
+   "aspect": null,
+   "observed_at": "2026-09-16T11:20:33Z"
+  }
+ },
+ {
+  "id": "meet-gemini-notes-free",
+  "split": "test",
+  "label": true,
+  "why": "Free Gemini meeting notes in Meet undercuts Zoom's AI add-on and will show up in every renewal this week.",
+  "self": {
+   "name": "Zoom",
+   "domain": "zoom.us"
+  },
+  "subject": {
+   "id": "ent_google",
+   "role": "competitor",
+   "name": "Google",
+   "domain": "google.com"
+  },
+  "competitors": [
+   {
+    "id": "ent_microsoft",
+    "role": "competitor",
+    "name": "Microsoft",
+    "domain": "microsoft.com"
+   },
+   {
+    "id": "ent_webex",
+    "role": "competitor",
+    "name": "Webex",
+    "domain": "webex.com"
+   }
+  ],
+  "item": {
+   "kind": "change",
+   "title": "Google Meet turns on Gemini notes and summaries for all Workspace editions, including Free",
+   "summary": "Gemini-generated meeting notes, action items, and recordings summaries are now on by default for Google Meet, including personal Gmail and Workspace Business Starter. Previously they required the Gemini add-on.",
+   "url": "https://workspace.google.com/blog/product-announcements/gemini-notes-meet-free",
+   "aspect": null,
+   "observed_at": "2026-09-21T08:12:00Z"
+  }
+ },
+ {
+  "id": "bigcommerce-checkout-redesign",
+  "split": "test",
+  "label": true,
+  "why": "A one-page checkout redesign claiming a 30% conversion lift is a bake-off talking point Shopify must counter this week.",
+  "self": {
+   "name": "Shopify",
+   "domain": "shopify.com"
+  },
+  "subject": {
+   "id": "ent_bigcommerce",
+   "role": "competitor",
+   "name": "BigCommerce",
+   "domain": "bigcommerce.com"
+  },
+  "competitors": [
+   {
+    "id": "ent_woocommerce",
+    "role": "competitor",
+    "name": "WooCommerce",
+    "domain": "woocommerce.com"
+   },
+   {
+    "id": "ent_squarespace",
+    "role": "competitor",
+    "name": "Squarespace",
+    "domain": "squarespace.com"
+   }
+  ],
+  "item": {
+   "kind": "change",
+   "title": "BigCommerce ships a one-page checkout and claims 30% conversion lift",
+   "summary": "BigCommerce made a redesigned one-page checkout the default for new stores and an opt-in for existing ones, publishing a 30% conversion lift from its beta. Shop Pay-style wallets and a Shopify-like address autocomplete are included at no extra SKU.",
+   "url": "https://www.bigcommerce.com/blog/one-page-checkout-ga",
+   "aspect": null,
+   "observed_at": "2026-09-03T15:00:00Z"
+  }
+ },
+ {
+  "id": "ubereats-free-delivery-forever",
+  "split": "test",
+  "label": true,
+  "why": "A 'free delivery forever' promo on Uber One is a take-rate and share event DoorDash has to match or explain this week.",
+  "self": {
+   "name": "DoorDash",
+   "domain": "doordash.com"
+  },
+  "subject": {
+   "id": "ent_uber",
+   "role": "competitor",
+   "name": "Uber",
+   "domain": "uber.com"
+  },
+  "competitors": [
+   {
+    "id": "ent_grubhub",
+    "role": "competitor",
+    "name": "Grubhub",
+    "domain": "grubhub.com"
+   }
+  ],
+  "item": {
+   "kind": "change",
+   "title": "Uber Eats offers free delivery forever on new Uber One annual plans",
+   "summary": "Uber Eats is selling Uber One annual memberships with 'free delivery forever' on orders over $15, dropping the usual $0.99–$2.99 fee. The offer is on the homepage and in a push campaign to lapsed DoorDash users.",
+   "url": "https://www.uber.com/blog/uber-one-free-delivery-forever",
+   "aspect": null,
+   "observed_at": "2026-09-18T12:45:00Z"
+  }
+ },
+ {
+  "id": "hilton-bonvoy-status-match",
+  "split": "test",
+  "label": true,
+  "why": "A public Marriott Bonvoy status match is a loyalty raid Marriott has to decide on matching or blocking this week.",
+  "self": {
+   "name": "Marriott",
+   "domain": "marriott.com"
+  },
+  "subject": {
+   "id": "ent_hilton",
+   "role": "competitor",
+   "name": "Hilton",
+   "domain": "hilton.com"
+  },
+  "competitors": [
+   {
+    "id": "ent_hyatt",
+    "role": "competitor",
+    "name": "Hyatt",
+    "domain": "hyatt.com"
+   },
+   {
+    "id": "ent_ihg",
+    "role": "competitor",
+    "name": "IHG",
+    "domain": "ihg.com"
+   }
+  ],
+  "item": {
+   "kind": "change",
+   "title": "Hilton Honors runs a 60-day public status match from Marriott Bonvoy",
+   "summary": "Hilton launched a public match taking Bonvoy Gold and Platinum to Honors Gold and Diamond through 2027 with a two-stay qualifier. The landing page names Marriott explicitly.",
+   "url": "https://www.hilton.com/en/honors/status-match-marriott-2026",
+   "aspect": null,
+   "observed_at": "2026-09-07T10:00:00Z"
+  }
+ },
+ {
+  "id": "canva-enterprise-firefly-rival",
+  "split": "test",
+  "label": true,
+  "why": "An enterprise AI design suite at a third of Creative Cloud is a seat-loss risk Adobe has to brief sales on this week.",
+  "self": {
+   "name": "Adobe",
+   "domain": "adobe.com"
+  },
+  "subject": {
+   "id": "ent_canva",
+   "role": "competitor",
+   "name": "Canva",
+   "domain": "canva.com"
+  },
+  "competitors": [
+   {
+    "id": "ent_figma",
+    "role": "competitor",
+    "name": "Figma",
+    "domain": "figma.com"
+   }
+  ],
+  "item": {
+   "kind": "change",
+   "title": "Canva Enterprise launches Magic Design Studio with SSO, brand kits, and $15/seat AI",
+   "summary": "Canva opened Magic Design Studio to Enterprise with SSO, audit logs, and unlimited generative credits at $15 per seat per month. The launch page compares total cost to 'legacy creative suites.'",
+   "url": "https://www.canva.com/newsroom/magic-design-studio-enterprise",
+   "aspect": null,
+   "observed_at": "2026-09-14T16:28:00Z"
+  }
+ },
+ {
+  "id": "athleta-align-lookalike-launch",
+  "split": "test",
+  "label": true,
+  "why": "A nationally advertised Align-lookalike drop at a lower price is a core-franchise threat Lululemon has to answer this week.",
+  "self": {
+   "name": "Lululemon",
+   "domain": "lululemon.com"
+  },
+  "subject": {
+   "id": "ent_athleta",
+   "role": "competitor",
+   "name": "Athleta",
+   "domain": "athleta.gap.com"
+  },
+  "competitors": [
+   {
+    "id": "ent_alo",
+    "role": "competitor",
+    "name": "Alo Yoga",
+    "domain": "aloyoga.com"
+   },
+   {
+    "id": "ent_ov",
+    "role": "competitor",
+    "name": "Outdoor Voices",
+    "domain": "outdoorvoices.com"
+   }
+  ],
+  "item": {
+   "kind": "change",
+   "title": "Athleta drops 'Form' leggings, a $79 Align-like nulu competitor, in 800 stores",
+   "summary": "Athleta launched Form high-rise leggings at $79 in nulu-like fabric, with a side-by-side fit video on athleta.com and a national Instagram/CTV burst. Inventory is in 800 Gap Inc. stores this weekend.",
+   "url": "https://athleta.gap.com/browse/info.do?cid=form-legging-launch-2026",
+   "aspect": null,
+   "observed_at": "2026-09-19T09:09:09Z"
+  }
+ },
+ {
+  "id": "zenni-ar-fit-nationwide",
+  "split": "test",
+  "label": true,
+  "why": "A working nationwide AR fit that cuts returns is a conversion leap Warby Parker's home try-on has to respond to now.",
+  "self": {
+   "name": "Warby Parker",
+   "domain": "warbyparker.com"
+  },
+  "subject": {
+   "id": "ent_zenni",
+   "role": "competitor",
+   "name": "Zenni Optical",
+   "domain": "zennioptical.com"
+  },
+  "competitors": [
+   {
+    "id": "ent_eyebuydirect",
+    "role": "competitor",
+    "name": "EyeBuyDirect",
+    "domain": "eyebuydirect.com"
+   },
+   {
+    "id": "ent_glassesusa",
+    "role": "competitor",
+    "name": "GlassesUSA",
+    "domain": "glassesusa.com"
+   }
+  ],
+  "item": {
+   "kind": "change",
+   "title": "Zenni ships TrueFit AR that maps PD and face width in-browser, no app",
+   "summary": "Zenni's new TrueFit AR runs in mobile Chrome and Safari, estimates PD, and recommends frame sizes. Zenni says return rates in the beta fell 40%. It is the default on every PDP as of this morning.",
+   "url": "https://www.zennioptical.com/blog/truefit-ar-launch",
+   "aspect": null,
+   "observed_at": "2026-09-02T13:13:13Z"
+  }
+ },
+ {
+  "id": "on-cloudmonster-global-push",
+  "split": "test",
+  "label": true,
+  "why": "A global Cloudmonster campaign with World Cup-level spend is a share-of-voice event Allbirds cannot treat as routine.",
+  "self": {
+   "name": "Allbirds",
+   "domain": "allbirds.com"
+  },
+  "subject": {
+   "id": "ent_on",
+   "role": "competitor",
+   "name": "On",
+   "domain": "on.com"
+  },
+  "competitors": [
+   {
+    "id": "ent_hoka",
+    "role": "competitor",
+    "name": "HOKA",
+    "domain": "hoka.com"
+   },
+   {
+    "id": "ent_veja",
+    "role": "competitor",
+    "name": "Veja",
+    "domain": "veja-store.com"
+   }
+  ],
+  "item": {
+   "kind": "ad",
+   "title": "On Running launches a global Cloudmonster 3 campaign across NYC, London, and Seoul",
+   "summary": "On is running out-of-home, YouTube, and Instagram takeover creative for Cloudmonster 3 in New York, London, and Seoul, with a reported eight-figure September burst. Retail partners were allocated extra inventory for the weekend.",
+   "url": "https://www.on.com/en-us/cloudmonster-3-campaign",
+   "aspect": null,
+   "observed_at": "2026-09-11T07:30:00Z"
+  }
+ },
+ {
+  "id": "babbel-live-9-dollar-tutors",
+  "split": "test",
+  "label": true,
+  "why": "Live tutors at $9 undercuts Duolingo Max's paid lane and changes how Duolingo sells conversation practice this week.",
+  "self": {
+   "name": "Duolingo",
+   "domain": "duolingo.com"
+  },
+  "subject": {
+   "id": "ent_babbel",
+   "role": "competitor",
+   "name": "Babbel",
+   "domain": "babbel.com"
+  },
+  "competitors": [
+   {
+    "id": "ent_busuu",
+    "role": "competitor",
+    "name": "Busuu",
+    "domain": "busuu.com"
+   },
+   {
+    "id": "ent_memrise",
+    "role": "competitor",
+    "name": "Memrise",
+    "domain": "memrise.com"
+   }
+  ],
+  "item": {
+   "kind": "change",
+   "title": "Babbel Live drops 25-minute tutor sessions to $9 with no subscription",
+   "summary": "Babbel opened a la carte 25-minute Live tutor sessions at $9, no Babbel subscription required, in Spanish, French, and German. Previously Live required a higher-tier plan. The offer is on the homepage.",
+   "url": "https://www.babbel.com/en/magazine/babbel-live-9-dollar-sessions",
+   "aspect": null,
+   "observed_at": "2026-09-24T10:10:00Z"
+  }
+ },
+ {
+  "id": "headspace-40m-data-breach",
+  "split": "test",
+  "label": true,
+  "why": "A 40 million-user breach is a category-trust and enterprise-RFI event Calm has to handle this week, including win-back and risk talk tracks.",
+  "self": {
+   "name": "Calm",
+   "domain": "calm.com"
+  },
+  "subject": {
+   "id": "ent_headspace",
+   "role": "competitor",
+   "name": "Headspace",
+   "domain": "headspace.com"
+  },
+  "competitors": [
+   {
+    "id": "ent_insighttimer",
+    "role": "competitor",
+    "name": "Insight Timer",
+    "domain": "insighttimer.com"
+   },
+   {
+    "id": "ent_tph",
+    "role": "competitor",
+    "name": "Ten Percent Happier",
+    "domain": "tenpercent.com"
+   }
+  ],
+  "item": {
+   "kind": "mention",
+   "title": "Headspace discloses a breach affecting 40 million accounts, including emails and session history",
+   "summary": "Headspace notified users and state AGs of a August intrusion that exposed emails, hashed passwords, and meditation-history metadata for about 40 million accounts. Enterprise admin consoles were included. Class-action firms filed the same day.",
+   "url": "https://www.nytimes.com/2026/09/12/technology/headspace-data-breach.html",
+   "aspect": null,
+   "observed_at": "2026-09-12T15:02:00Z"
+  }
+ },
+ {
+  "id": "fidelity-zero-options-comms",
+  "split": "test",
+  "label": true,
+  "why": "Fidelity matching $0 options commissions is a core Robinhood monetization threat that changes acquisition math this week.",
+  "self": {
+   "name": "Robinhood",
+   "domain": "robinhood.com"
+  },
+  "subject": {
+   "id": "ent_fidelity",
+   "role": "competitor",
+   "name": "Fidelity",
+   "domain": "fidelity.com"
+  },
+  "competitors": [
+   {
+    "id": "ent_schwab",
+    "role": "competitor",
+    "name": "Charles Schwab",
+    "domain": "schwab.com"
+   },
+   {
+    "id": "ent_etrade",
+    "role": "competitor",
+    "name": "E*TRADE",
+    "domain": "etrade.com"
+   }
+  ],
+  "item": {
+   "kind": "ad",
+   "title": "Fidelity national campaign: options trades now $0, no account minimum",
+   "summary": "Fidelity cut listed-options commissions to $0 and is backing it with a national CTV and podcast flight aimed at 'app-first traders.' The comparison chart on the landing page puts Robinhood's Gold extras in a footnote.",
+   "url": "https://www.fidelity.com/trading/options-zero-commission",
+   "aspect": null,
+   "observed_at": "2026-09-26T09:00:00Z"
+  }
+ },
+ {
+  "id": "gitlab-duo-free-for-all",
+  "split": "test",
+  "label": true,
+  "why": "GitLab Duo GA on the free tier is a Copilot/GitHub competitive event engineering buyers will raise this week.",
+  "self": {
+   "name": "GitHub",
+   "domain": "github.com"
+  },
+  "subject": {
+   "id": "ent_gitlab",
+   "role": "competitor",
+   "name": "GitLab",
+   "domain": "gitlab.com"
+  },
+  "competitors": [
+   {
+    "id": "ent_bitbucket",
+    "role": "competitor",
+    "name": "Bitbucket",
+    "domain": "bitbucket.org"
+   }
+  ],
+  "item": {
+   "kind": "change",
+   "title": "GitLab Duo code review and chat go GA on the free tier",
+   "summary": "GitLab made Duo code review comments and in-IDE chat generally available to Free users with a 2,000-completion monthly cap. The changelog and homepage hero both position it against paid-only AI coding tools.",
+   "url": "https://about.gitlab.com/blog/gitlab-duo-ga-free-tier",
+   "aspect": null,
+   "observed_at": "2026-09-09T18:40:00Z"
+  }
+ },
+ {
+  "id": "apple-music-mood-playlist-refresh",
+  "split": "test",
+  "label": false,
+  "why": "A weekly editorial playlist refresh is routine programming, not a product or pricing change for Spotify.",
+  "self": {
+   "name": "Spotify",
+   "domain": "spotify.com"
+  },
+  "subject": {
+   "id": "ent_apple",
+   "role": "competitor",
+   "name": "Apple",
+   "domain": "apple.com"
+  },
+  "competitors": [
+   {
+    "id": "ent_youtubemusic",
+    "role": "competitor",
+    "name": "YouTube Music",
+    "domain": "music.youtube.com"
+   }
+  ],
+  "item": {
+   "kind": "change",
+   "title": "Apple Music updates the 'Feel Good' mood playlist with 14 new tracks",
+   "summary": "The editorial Feel Good playlist swapped in 14 songs and a new cover image. No algorithm, plan, or audio-quality change shipped with it.",
+   "url": "https://music.apple.com/us/playlist/feel-good/pl.feelgood-2026-09",
+   "aspect": null,
+   "observed_at": "2026-09-04T12:00:00Z"
+  }
+ },
+ {
+  "id": "dunkin-barista-spotlight-ig",
+  "split": "test",
+  "label": false,
+  "why": "An employee-spotlight Reel is brand social, not a menu, price, or store-footprint move Starbucks should read first.",
+  "self": {
+   "name": "Starbucks",
+   "domain": "starbucks.com"
+  },
+  "subject": {
+   "id": "ent_dunkin",
+   "role": "competitor",
+   "name": "Dunkin'",
+   "domain": "dunkin.com"
+  },
+  "competitors": [
+   {
+    "id": "ent_dutchbros",
+    "role": "competitor",
+    "name": "Dutch Bros",
+    "domain": "dutchbros.com"
+   }
+  ],
+  "item": {
+   "kind": "mention",
+   "title": "Dunkin' Instagram: barista of the week in Providence",
+   "summary": "Dunkin's US Instagram posted a 20-second Reel of a Providence crew member making a cold brew. No national promo code or LTO is attached.",
+   "url": "https://www.instagram.com/p/dunkin-barista-providence-sep2026",
+   "aspect": null,
+   "observed_at": "2026-09-17T19:22:00Z"
+  }
+ },
+ {
+  "id": "teams-app-icon-padding",
+  "split": "test",
+  "label": false,
+  "why": "Icon padding on the Windows tray is a trivial UI tweak, not a Teams packaging change Slack should act on.",
+  "self": {
+   "name": "Slack",
+   "domain": "slack.com"
+  },
+  "subject": {
+   "id": "ent_microsoft",
+   "role": "competitor",
+   "name": "Microsoft",
+   "domain": "microsoft.com"
+  },
+  "competitors": [
+   {
+    "id": "ent_google",
+    "role": "competitor",
+    "name": "Google",
+    "domain": "google.com"
+   }
+  ],
+  "item": {
+   "kind": "change",
+   "title": "Teams Windows app adds 2px padding around the tray icon",
+   "summary": "Version 25234 of the Teams desktop app slightly increases padding on the notification-tray icon. No feature flags, pricing, or admin-center changes shipped in the build.",
+   "url": "https://learn.microsoft.com/en-us/microsoftteams/teams-client-update-25234",
+   "aspect": null,
+   "observed_at": "2026-09-06T08:08:08Z"
+  }
+ },
+ {
+  "id": "meet-help-article-typo",
+  "split": "test",
+  "label": false,
+  "why": "A help-article typo fix is documentation hygiene, not a Meet feature launch Zoom needs this week.",
+  "self": {
+   "name": "Zoom",
+   "domain": "zoom.us"
+  },
+  "subject": {
+   "id": "ent_google",
+   "role": "competitor",
+   "name": "Google",
+   "domain": "google.com"
+  },
+  "competitors": [
+   {
+    "id": "ent_microsoft",
+    "role": "competitor",
+    "name": "Microsoft",
+    "domain": "microsoft.com"
+   }
+  ],
+  "item": {
+   "kind": "change",
+   "title": "Google Meet help: typo corrected in 'Record a meeting' article",
+   "summary": "The Meet help doc now spells 'organizer' correctly in one sentence. Recording limits, storage, and who can file recordings did not change.",
+   "url": "https://support.google.com/meet/answer/9308687",
+   "aspect": null,
+   "observed_at": "2026-09-23T11:11:00Z"
+  }
+ },
+ {
+  "id": "bigcommerce-docs-typo-fix",
+  "split": "test",
+  "label": false,
+  "why": "A developer-docs typo is not a platform, pricing, or checkout change Shopify should put in the top three.",
+  "self": {
+   "name": "Shopify",
+   "domain": "shopify.com"
+  },
+  "subject": {
+   "id": "ent_bigcommerce",
+   "role": "competitor",
+   "name": "BigCommerce",
+   "domain": "bigcommerce.com"
+  },
+  "competitors": [
+   {
+    "id": "ent_woocommerce",
+    "role": "competitor",
+    "name": "WooCommerce",
+    "domain": "woocommerce.com"
+   }
+  ],
+  "item": {
+   "kind": "change",
+   "title": "BigCommerce API docs fix a misspelling in the webhooks guide",
+   "summary": "developers.bigcommerce.com corrected 'recieve' to 'receive' in the webhooks overview. Endpoints and payloads are unchanged.",
+   "url": "https://developer.bigcommerce.com/docs/webhooks",
+   "aspect": null,
+   "observed_at": "2026-09-01T16:40:00Z"
+  }
+ },
+ {
+  "id": "ubereats-one-city-taco-ad",
+  "split": "test",
+  "label": false,
+  "why": "A low-budget one-city taco-Tuesday geo ad is a local variant, not a national delivery-fee move for DoorDash.",
+  "self": {
+   "name": "DoorDash",
+   "domain": "doordash.com"
+  },
+  "subject": {
+   "id": "ent_uber",
+   "role": "competitor",
+   "name": "Uber",
+   "domain": "uber.com"
+  },
+  "competitors": [
+   {
+    "id": "ent_grubhub",
+    "role": "competitor",
+    "name": "Grubhub",
+    "domain": "grubhub.com"
+   }
+  ],
+  "item": {
+   "kind": "ad",
+   "title": "Uber Eats Austin geo ad: $5 off taco Tuesday at 12 listed spots",
+   "summary": "A Meta geo ad limited to Austin, Texas, offers $5 off taco orders from 12 restaurants on Tuesdays. Lifetime spend in the ads library is under $500.",
+   "url": "https://www.facebook.com/ads/library/?id=ubereats-austin-taco-tue-2026",
+   "aspect": null,
+   "observed_at": "2026-09-15T20:20:20Z"
+  }
+ },
+ {
+  "id": "hilton-lobby-plants-trade",
+  "split": "test",
+  "label": false,
+  "why": "A trade-blog note about lobby plants is interior design, not a loyalty, rate, or network change for Marriott.",
+  "self": {
+   "name": "Marriott",
+   "domain": "marriott.com"
+  },
+  "subject": {
+   "id": "ent_hilton",
+   "role": "competitor",
+   "name": "Hilton",
+   "domain": "hilton.com"
+  },
+  "competitors": [
+   {
+    "id": "ent_hyatt",
+    "role": "competitor",
+    "name": "Hyatt",
+    "domain": "hyatt.com"
+   }
+  ],
+  "item": {
+   "kind": "mention",
+   "title": "Hotel Design Weekly: Hilton Garden Inn Tucson refreshes lobby planters",
+   "summary": "A short trade item notes a single Garden Inn replaced plastic plants with live ones during a soft remodel. No brand-standard or prototype rollout is mentioned.",
+   "url": "https://www.hoteldesignweekly.com/hilton-garden-inn-tucson-planters",
+   "aspect": null,
+   "observed_at": "2026-09-27T13:00:00Z"
+  }
+ },
+ {
+  "id": "canva-halloween-sticker-pack",
+  "split": "test",
+  "label": false,
+  "why": "A seasonal sticker pack is expected content, not an enterprise or pricing move Adobe should read first.",
+  "self": {
+   "name": "Adobe",
+   "domain": "adobe.com"
+  },
+  "subject": {
+   "id": "ent_canva",
+   "role": "competitor",
+   "name": "Canva",
+   "domain": "canva.com"
+  },
+  "competitors": [
+   {
+    "id": "ent_figma",
+    "role": "competitor",
+    "name": "Figma",
+    "domain": "figma.com"
+   }
+  ],
+  "item": {
+   "kind": "change",
+   "title": "Canva adds a free Halloween sticker pack to the elements library",
+   "summary": "Canva published 80 Halloween stickers and a pumpkin-themed template set in Elements. They are free for all plans and replace last year's pack.",
+   "url": "https://www.canva.com/templates/halloween-2026-stickers",
+   "aspect": null,
+   "observed_at": "2026-09-20T17:17:17Z"
+  }
+ },
+ {
+  "id": "athleta-junior-stylist-hire",
+  "split": "test",
+  "label": false,
+  "why": "A junior store-stylist hire is a routine retail job, not an assortment or campaign change for Lululemon.",
+  "self": {
+   "name": "Lululemon",
+   "domain": "lululemon.com"
+  },
+  "subject": {
+   "id": "ent_athleta",
+   "role": "competitor",
+   "name": "Athleta",
+   "domain": "athleta.gap.com"
+  },
+  "competitors": [
+   {
+    "id": "ent_alo",
+    "role": "competitor",
+    "name": "Alo Yoga",
+    "domain": "aloyoga.com"
+   }
+  ],
+  "item": {
+   "kind": "change",
+   "title": "Athleta Walnut Creek posts a junior stylist opening",
+   "summary": "Athleta's careers page lists a part-time junior stylist role at the Walnut Creek, California store. It is a single-store requisition at the usual associate band.",
+   "url": "https://www.gapinc.com/en-us/careers/athleta-walnut-creek-junior-stylist",
+   "aspect": null,
+   "observed_at": "2026-09-05T09:45:00Z"
+  }
+ },
+ {
+  "id": "zenni-blue-frame-restock",
+  "split": "test",
+  "label": false,
+  "why": "A colorway restock of an existing frame is inventory, not a try-on, price, or prescription-feature change.",
+  "self": {
+   "name": "Warby Parker",
+   "domain": "warbyparker.com"
+  },
+  "subject": {
+   "id": "ent_zenni",
+   "role": "competitor",
+   "name": "Zenni Optical",
+   "domain": "zennioptical.com"
+  },
+  "competitors": [
+   {
+    "id": "ent_eyebuydirect",
+    "role": "competitor",
+    "name": "EyeBuyDirect",
+    "domain": "eyebuydirect.com"
+   }
+  ],
+  "item": {
+   "kind": "ad",
+   "title": "Zenni retargeting: 'Navy Inez is back in stock' catalog ad",
+   "summary": "A dynamic catalog ad tells previous viewers that the navy Inez frame is back. Price, lens options, and creative template are unchanged; the ad set is a standard restock audience.",
+   "url": "https://www.zennioptical.com/p/inez-navy",
+   "aspect": null,
+   "observed_at": "2026-09-28T07:07:00Z"
+  }
+ },
+ {
+  "id": "on-passing-sustainable-listicle",
+  "split": "test",
+  "label": false,
+  "why": "A passing bullet in a 25-brand listicle is not news Allbirds should treat as a competitive event this week.",
+  "self": {
+   "name": "Allbirds",
+   "domain": "allbirds.com"
+  },
+  "subject": {
+   "id": "ent_on",
+   "role": "competitor",
+   "name": "On",
+   "domain": "on.com"
+  },
+  "competitors": [
+   {
+    "id": "ent_hoka",
+    "role": "competitor",
+    "name": "HOKA",
+    "domain": "hoka.com"
+   }
+  ],
+  "item": {
+   "kind": "mention",
+   "title": "Well+Good: '25 sustainable shoe brands to know in 2026' names On at #19",
+   "summary": "A roundup of 25 shoe brands includes a two-sentence blurb on On's Cloudmonster and a product photo. There is no exclusive, price, or campaign news.",
+   "url": "https://www.wellandgood.com/sustainable-shoe-brands-2026",
+   "aspect": null,
+   "observed_at": "2026-09-13T14:14:14Z"
+  }
+ },
+ {
+  "id": "babbel-local-meetup-sponsor",
+  "split": "test",
+  "label": false,
+  "why": "Sponsoring a 40-person language meetup is a tiny partnership, not a Live-tutor or pricing move for Duolingo.",
+  "self": {
+   "name": "Duolingo",
+   "domain": "duolingo.com"
+  },
+  "subject": {
+   "id": "ent_babbel",
+   "role": "competitor",
+   "name": "Babbel",
+   "domain": "babbel.com"
+  },
+  "competitors": [
+   {
+    "id": "ent_busuu",
+    "role": "competitor",
+    "name": "Busuu",
+    "domain": "busuu.com"
+   }
+  ],
+  "item": {
+   "kind": "mention",
+   "title": "Babbel listed as pizza sponsor for a Berlin language-exchange meetup",
+   "summary": "A Meetup.com event for 40 people in Berlin lists Babbel as the pizza sponsor. No product demo, discount code, or city launch is described.",
+   "url": "https://www.meetup.com/berlin-language-exchange/events/babbel-pizza-sep2026",
+   "aspect": null,
+   "observed_at": "2026-09-22T18:30:00Z"
+  }
+ },
+ {
+  "id": "headspace-new-narrator-track",
+  "split": "test",
+  "label": false,
+  "why": "A new narrator on a daily meditation is routine catalog content, not a breach, pricing, or enterprise change.",
+  "self": {
+   "name": "Calm",
+   "domain": "calm.com"
+  },
+  "subject": {
+   "id": "ent_headspace",
+   "role": "competitor",
+   "name": "Headspace",
+   "domain": "headspace.com"
+  },
+  "competitors": [
+   {
+    "id": "ent_insighttimer",
+    "role": "competitor",
+    "name": "Insight Timer",
+    "domain": "insighttimer.com"
+   }
+  ],
+  "item": {
+   "kind": "change",
+   "title": "Headspace Daily Calm adds a new narrator for the 10-minute wind-down",
+   "summary": "The Daily Calm wind-down track is now read by a new staff narrator. Length, music bed, and membership requirements are the same.",
+   "url": "https://www.headspace.com/meditation/daily-calm",
+   "aspect": null,
+   "observed_at": "2026-09-08T06:30:00Z"
+  }
+ },
+ {
+  "id": "fidelity-branch-holiday-hours",
+  "split": "test",
+  "label": false,
+  "why": "Columbus Day branch hours are operations trivia, not a commission, product, or app change for Robinhood.",
+  "self": {
+   "name": "Robinhood",
+   "domain": "robinhood.com"
+  },
+  "subject": {
+   "id": "ent_fidelity",
+   "role": "competitor",
+   "name": "Fidelity",
+   "domain": "fidelity.com"
+  },
+  "competitors": [
+   {
+    "id": "ent_schwab",
+    "role": "competitor",
+    "name": "Charles Schwab",
+    "domain": "schwab.com"
+   }
+  ],
+  "item": {
+   "kind": "change",
+   "title": "Fidelity investor-center holiday hours posted for Columbus Day",
+   "summary": "Fidelity updated the investor-center hours page to show most branches closed October 12. Trading, app, and commission pages are untouched.",
+   "url": "https://www.fidelity.com/customer-service/branch-holiday-hours",
+   "aspect": null,
+   "observed_at": "2026-09-29T12:12:00Z"
+  }
+ },
+ {
+  "id": "gitlab-community-file-typo",
+  "split": "test",
+  "label": false,
+  "why": "A community-template typo fix is noise, not a Duo, pricing, or SCM-share event GitHub should read first.",
+  "self": {
+   "name": "GitHub",
+   "domain": "github.com"
+  },
+  "subject": {
+   "id": "ent_gitlab",
+   "role": "competitor",
+   "name": "GitLab",
+   "domain": "gitlab.com"
+  },
+  "competitors": [
+   {
+    "id": "ent_bitbucket",
+    "role": "competitor",
+    "name": "Bitbucket",
+    "domain": "bitbucket.org"
+   }
+  ],
+  "item": {
+   "kind": "change",
+   "title": "GitLab.com project template: typo in README of 'Pages/Plain HTML'",
+   "summary": "The starter README in the Pages/Plain HTML project template now spells 'deployment' correctly. CI YAML and Pages behavior did not change.",
+   "url": "https://gitlab.com/gitlab-org/project-templates/pages-plain-html",
+   "aspect": null,
+   "observed_at": "2026-09-25T08:55:00Z"
+  }
+ }
+]
