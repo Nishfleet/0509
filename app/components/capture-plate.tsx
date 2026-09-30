@@ -1,10 +1,13 @@
-import { useState } from "react";
+import { lazy, Suspense, useState } from "react";
 import type { ReactElement } from "react";
 
-import { AspectRatio } from "./ui/aspect-ratio";
-import { Dialog, DialogContent, DialogTitle, DialogTrigger } from "./ui/dialog";
+import { MissingShot, ShotImage, shotSrc } from "./capture-shot";
+import type { CaptureShot } from "./capture-shot";
 
-export type CaptureShot = { src: string; capturedAt: string } | { missing: string };
+export { shotSrc };
+export type { CaptureShot };
+
+const CaptureDialog = lazy(() => import("./capture-dialog").then((module) => ({ default: module.CaptureDialog })));
 
 export interface CapturePlateProps {
   label: string;
@@ -13,89 +16,19 @@ export interface CapturePlateProps {
   eager?: boolean;
 }
 
-export function shotSrc(src: string, width: number): string {
-  return `${src}${src.includes("?") ? "&" : "?"}w=${String(width)}`;
-}
-
-function MissingShot({ text }: { text: string }): ReactElement {
-  return (
-    <span
-      className="flex size-full items-center justify-center p-1 text-center font-mono text-[0.6rem] leading-tight text-ink-soft"
-      data-slot="capture-missing"
-    >
-      {text}
-    </span>
-  );
-}
-
-function ShotImage({
-  src,
-  width,
-  height,
-  loading,
-  fetchPriority,
-  className,
-}: {
-  src: string;
-  width: number;
-  height: number;
-  loading: "eager" | "lazy";
-  fetchPriority?: "high" | "auto";
-  className: string;
-}): ReactElement {
-  const [failed, setFailed] = useState(false);
-  if (failed) return <MissingShot text="Screenshot unavailable" />;
-  return (
-    <img
-      alt=""
-      className={className}
-      decoding="async"
-      fetchPriority={fetchPriority}
-      height={height}
-      loading={loading}
-      onError={() => {
-        setFailed(true);
-      }}
-      ref={(el) => {
-        if (el !== null && el.complete && el.naturalWidth === 0) setFailed(true);
-      }}
-      src={src}
-      width={width}
-    />
-  );
-}
-
-function PairFigure({ caption, shot }: { caption: string; shot: CaptureShot }): ReactElement {
-  return (
-    <figure>
-      <AspectRatio ratio={1440 / 900}>
-        {"src" in shot ? (
-          <ShotImage
-            className="size-full object-cover object-top"
-            height={900}
-            loading="lazy"
-            src={shotSrc(shot.src, 1440)}
-            width={1440}
-          />
-        ) : (
-          <MissingShot text={shot.missing} />
-        )}
-      </AspectRatio>
-      <figcaption className="font-mono text-[0.7rem] text-ink-soft">
-        {"src" in shot ? `${caption} · ${shot.capturedAt}` : caption}
-      </figcaption>
-    </figure>
-  );
-}
-
 export function CapturePlate({ label, before, after, eager = false }: CapturePlateProps): ReactElement {
+  const [opened, setOpened] = useState(false);
   return (
-    <Dialog>
-      <DialogTrigger
-        render={<button type="button" />}
+    <>
+      <button
+        type="button"
+        aria-haspopup="dialog"
         aria-label={`Open before and after: ${label}`}
         className="relative block h-[74px] w-[104px] shrink-0 overflow-hidden rounded-none border-[1.5px] border-line bg-card max-[859px]:h-[56px] max-[859px]:w-[76px]"
         data-slot="capture-plate"
+        onClick={() => {
+          setOpened(true);
+        }}
       >
         {"src" in after ? (
           <ShotImage
@@ -109,17 +42,19 @@ export function CapturePlate({ label, before, after, eager = false }: CapturePla
         ) : (
           <MissingShot text={after.missing} />
         )}
-      </DialogTrigger>
-      <DialogContent
-        className="max-h-[90dvh] overflow-y-auto rounded-none bg-card text-ink max-[859px]:top-auto max-[859px]:bottom-0 max-[859px]:left-0 max-[859px]:w-full max-[859px]:max-w-none max-[859px]:translate-x-0 max-[859px]:translate-y-0 min-[860px]:max-w-[960px]"
-        data-slot="capture-pair"
-      >
-        <DialogTitle>{label}</DialogTitle>
-        <div className="grid gap-4 min-[860px]:grid-cols-2">
-          <PairFigure caption="Before" shot={before} />
-          <PairFigure caption="After" shot={after} />
-        </div>
-      </DialogContent>
-    </Dialog>
+      </button>
+      {opened ? (
+        <Suspense fallback={null}>
+          <CaptureDialog
+            label={label}
+            before={before}
+            after={after}
+            onClose={() => {
+              setOpened(false);
+            }}
+          />
+        </Suspense>
+      ) : null}
+    </>
   );
 }

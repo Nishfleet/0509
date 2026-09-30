@@ -147,6 +147,10 @@ export async function checkSitePage(
     );
     return result;
   }
+  if (result.outcome === "gone") {
+    console.log(JSON.stringify({ event: "site.check_gone", pageId: target.pageId }));
+    return result;
+  }
   await markWatchPolled(target.watchId, new Date().toISOString());
   return result;
 }

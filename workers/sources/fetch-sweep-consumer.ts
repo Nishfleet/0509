@@ -69,8 +69,10 @@ async function collectWatch(message: FetchSweepMessage, tick: SweepTick): Promis
   if (result.outcome === "changed") {
     await publishSiteChange(target, result);
   }
+  if (result.outcome === "gone") return "not_collectable";
   if (result.outcome !== "failed") return result.outcome;
   if (result.reason === "robots") return "disallowed";
+  if (result.reason === "deferred") return "failed";
 
   captureException(
     new Error(

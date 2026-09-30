@@ -172,7 +172,7 @@ describe("site changes a customer can see", () => {
     const page = await readCompetitorPage("ws-mine", "paused", NOW);
     expect(page?.changes.map((view) => view.id)).toEqual(["sig-paused"]);
     expect(page?.weekCount).toBe(1);
-    expect(page?.biggestId).toBe("sig-paused");
+    expect(page?.biggestMove).toBeNull();
     expect(page?.watch).toEqual({ pages: 1, lastPolledAt: "2026-09-23T02:10:00.000Z" });
     expect(page?.rail.verdict).toBeNull();
     expect(page?.rail.facts.every((fact) => fact.count > 0)).toBe(true);

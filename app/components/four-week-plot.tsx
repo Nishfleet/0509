@@ -51,7 +51,7 @@ export function FourWeekPlot({ chart, width }: { chart: FourWeekChart; width: nu
               const index = lastRank(line.ranks);
               if (index < 0) continue;
               const rank = line.ranks[index];
-              if (rank === null) continue;
+              if (rank === null || rank === undefined) continue;
               plot.ctx.fillStyle = line.self ? color.ink : color.inkSoft;
               plot.ctx.fillText(
                 line.paused ? "paused" : line.label,

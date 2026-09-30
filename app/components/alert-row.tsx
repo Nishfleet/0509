@@ -3,6 +3,7 @@ import type { ReactElement } from "react";
 import type { BriefPayload } from "../lib/brief-payload";
 import type { MentionRowModel } from "../lib/mention-feed";
 import { BriefView } from "./brief-view";
+import { HiringRow, type HiringAlertItem } from "./hiring-row";
 import { MentionRow } from "./mention-row";
 import { SiteChangeItem, type SiteChangeItemData } from "./site-change-item";
 import { buttonVariants } from "./ui/button";
@@ -48,7 +49,8 @@ export type AlertFeedItem =
   | { kind: "note"; id: string; at: string; note: TakedownNoteItem }
   | { kind: "failure"; id: string; at: string; failure: DeliveryFailureItem }
   | { kind: "signal"; id: string; at: string; signal: SignalAlertItem }
-  | { kind: "mention"; id: string; at: string; mention: MentionRowModel };
+  | { kind: "mention"; id: string; at: string; mention: MentionRowModel }
+  | { kind: "hiring"; id: string; at: string; hiring: HiringAlertItem };
 
 function TakedownNote({ note }: { note: TakedownNoteItem }): ReactElement {
   return (
@@ -115,6 +117,10 @@ export function AlertFeedRow({ item, eager }: { item: AlertFeedItem; eager: bool
 
   if (item.kind === "note") {
     return <TakedownNote note={item.note} />;
+  }
+
+  if (item.kind === "hiring") {
+    return <HiringRow hiring={item.hiring} />;
   }
 
   if (item.kind === "mention") {

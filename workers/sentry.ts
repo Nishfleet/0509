@@ -49,7 +49,7 @@ function scrubText(value: string): string {
 }
 
 function scrubRequestUrl(url: string | undefined): string | undefined {
-  return url === undefined ? undefined : scrubTokenPath(url.split("?")[0]);
+  return url === undefined ? undefined : scrubTokenPath(url.split("?")[0] ?? url);
 }
 
 function scrubTokenPath(value: string): string {

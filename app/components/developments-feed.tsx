@@ -59,7 +59,7 @@ export function DevelopmentsFeed({
         aria-label="Filter developments"
         value={[filter]}
         onValueChange={(values) => {
-          const next = parseFeedFilter(values[0]);
+          const next = parseFeedFilter(values[0] ?? null);
           setParams(next === "all" ? {} : { [FEED_PARAM]: next }, { replace: true, preventScrollReset: true });
         }}
         className="flex min-w-0 flex-wrap gap-2"

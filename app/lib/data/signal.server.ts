@@ -492,3 +492,29 @@ export async function readScoredSignals(input: {
       : [],
   );
 }
+
+const SELECT_WORKSPACE_HIRING = `SELECT s.id, s.title, s.summary, s.url, s.published_at, s.observed_at, COALESCE(e.name, e.domain) AS brand
+FROM signal s
+JOIN entity e ON e.id = s.entity_id AND e.workspace_id = s.workspace_id AND e.role = 'competitor' AND e.state = 'on'
+WHERE s.workspace_id = ?1 AND s.kind = 'hiring' AND s.is_tombstoned = 0 AND s.title IS NOT NULL AND s.url IS NOT NULL
+  AND COALESCE(s.published_at, s.observed_at) >= ?2
+ORDER BY COALESCE(s.published_at, s.observed_at) DESC, s.id DESC LIMIT ?3`;
+
+const workspaceHiringRows = z.array(
+  z.object({
+    id: z.string(),
+    title: z.string(),
+    summary: z.string().nullable(),
+    url: z.string(),
+    published_at: z.string().nullable(),
+    observed_at: z.string(),
+    brand: z.string(),
+  }),
+);
+
+export type HiringPost = z.infer<typeof workspaceHiringRows>[number];
+
+export async function readWorkspaceHiring(workspaceId: string, since: string, limit: number): Promise<HiringPost[]> {
+  const { results } = await env.DB.prepare(SELECT_WORKSPACE_HIRING).bind(workspaceId, since, limit).all();
+  return workspaceHiringRows.parse(results);
+}

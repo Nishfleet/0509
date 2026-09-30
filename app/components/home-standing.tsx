@@ -1,3 +1,4 @@
+import { lazy, Suspense } from "react";
 import type { ReactElement, ReactNode } from "react";
 import { Form } from "react-router";
 
@@ -9,10 +10,11 @@ import { HowRankedSheet } from "./how-ranked-sheet";
 import { PAGE } from "./page-heading";
 import { RankedRow } from "./ranked-row";
 import { ReadThisFirst } from "./read-this-first";
-import { RowSheet } from "./row-sheet";
 import type { HomeRow, HomeView, WeekEvidence } from "../lib/home-standing";
 import type { HowRanked } from "../lib/how-ranked";
 import { cn } from "../lib/utils";
+
+const RowSheet = lazy(() => import("./row-sheet").then((module) => ({ default: module.RowSheet })));
 
 const EYEBROW = "font-mono text-eyebrow text-ink-soft uppercase";
 const GREETING = "mt-2 font-display text-display-2 font-extrabold uppercase";
@@ -167,5 +169,9 @@ function rowSheet(
   if (openId === null || evidence === null) return null;
   const row = rows.find((entry) => entry.entityId === openId);
   if (row === undefined) return null;
-  return <RowSheet title={row.name} evidence={evidence} />;
+  return (
+    <Suspense fallback={null}>
+      <RowSheet title={row.name} evidence={evidence} />
+    </Suspense>
+  );
 }
