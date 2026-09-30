@@ -3,7 +3,7 @@ import type { Route } from "./+types/oauth.authorize";
 import { Button } from "../components/ui/button";
 import { oauthHelpersContext } from "../lib/agent/context.server";
 import { decideConsent, readConsent } from "../lib/agent/consent.server";
-import { requireSession } from "../lib/require-session.server";
+import { requireFreshSession } from "../lib/require-session.server";
 
 export function headers() {
   return {
@@ -22,12 +22,12 @@ function returnTo(request: Request): string {
 }
 
 export async function loader({ request, context }: Route.LoaderArgs) {
-  await requireSession(request, returnTo(request));
+  await requireFreshSession(request, returnTo(request));
   return readConsent(context.get(oauthHelpersContext), request);
 }
 
 export async function action({ request, context }: Route.ActionArgs) {
-  const session = await requireSession(request, returnTo(request));
+  const session = await requireFreshSession(request, returnTo(request));
   const form = await request.formData();
   return decideConsent(context.get(oauthHelpersContext), request, {
     userId: session.user.id,
