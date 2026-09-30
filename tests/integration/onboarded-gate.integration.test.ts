@@ -24,7 +24,11 @@ async function seedUser(id: string, email: string) {
 
 function gateRequest(userId: string): Request {
   return new Request("https://0509.io/app/alerts", {
-    headers: { cookie: "better-auth.session_token=x", "x-test-user": userId, "x-test-email": `${userId.replace("user-", "")}@example.com` },
+    headers: {
+      cookie: "better-auth.session_token=x",
+      "x-test-user": userId,
+      "x-test-email": `${userId.replace("user-", "")}@example.com`,
+    },
   });
 }
 
