@@ -61,7 +61,11 @@ test.describe("J5", () => {
     await input.fill("fixture.0509.in");
     await input.press("Enter");
 
-    await expect(page).toHaveURL(/\/onboarding\/identity\?subject=fixture\.0509\.in$/);
+    const business = page.getByRole("button", { name: "Yes, a business or creator" });
+    await expect(async () => {
+      if (await business.isVisible()) await business.click();
+      await expect(page).toHaveURL(/\/onboarding\/identity\?subject=fixture\.0509\.in$/, { timeout: 3_000 });
+    }).toPass({ timeout: 30_000 });
     await expect(page.getByRole("status")).toHaveText("We couldn't read that site, so fill in what you can.", {
       timeout: 45_000,
     });
