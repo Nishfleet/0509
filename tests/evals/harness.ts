@@ -6,9 +6,9 @@ import { fileURLToPath } from "node:url";
 import { noulAction } from "../../app/lib/jev/thresholds";
 import type { NoulAction } from "../../app/lib/jev/thresholds";
 
-export const REPEATS = 3;
+const REPEATS = 3;
 
-export const CONCURRENCY = 8;
+const CONCURRENCY = 8;
 
 const MIN_PER_SPLIT = 20;
 
@@ -20,9 +20,9 @@ const JEV_URL = process.env.JEV_URL ?? "http://127.0.0.1:4000/jev";
 
 const JEV_KEY = process.env.LITELLM_JEV_KEY ?? "";
 
-export type Split = "train" | "test";
+type Split = "train" | "test";
 
-export interface EvalEvidence {
+interface EvalEvidence {
   source: string;
   excerpt: string;
 }
@@ -69,12 +69,13 @@ export async function loadCases(questionId: string): Promise<EvalCase[]> {
   if (cases.length < MIN_TOTAL) throw new Error(`${questionId} has ${cases.length} cases, needs ${MIN_TOTAL}`);
   for (const split of ["train", "test"] as const) {
     const count = cases.filter((row) => row.split === split).length;
-    if (count < MIN_PER_SPLIT) throw new Error(`${questionId} ${split} split has ${count} cases, needs ${MIN_PER_SPLIT}`);
+    if (count < MIN_PER_SPLIT)
+      throw new Error(`${questionId} ${split} split has ${count} cases, needs ${MIN_PER_SPLIT}`);
   }
   return cases;
 }
 
-export function selectedSplits(): Split[] {
+function selectedSplits(): Split[] {
   const value = process.env.EVAL_SPLIT ?? "all";
   if (value === "train") return ["train"];
   if (value === "test") return ["test"];
@@ -142,7 +143,7 @@ async function mapLimit<T, R>(items: readonly T[], limit: number, fn: (item: T) 
   return results;
 }
 
-export interface SplitScore {
+interface SplitScore {
   split: Split;
   cases: number;
   calls: number;
@@ -235,8 +236,13 @@ export function formatReport(report: EvalReport): string {
     )
     .join("\n");
   const train = report.splits.find((split) => split.split === "train");
-  const uncertain = train === undefined ? "" : `\ntrain maybes: ${train.maybeIds.join(", ") || "none"}\ntrain wrong: ${train.wrongIds.join(", ") || "none"}`;
-  return [`question ${report.questionId}\tmodel ${report.model}\trepeats ${report.repeats}`, rows, uncertain].join("\n");
+  const uncertain =
+    train === undefined
+      ? ""
+      : `\ntrain maybes: ${train.maybeIds.join(", ") || "none"}\ntrain wrong: ${train.wrongIds.join(", ") || "none"}`;
+  return [`question ${report.questionId}\tmodel ${report.model}\trepeats ${report.repeats}`, rows, uncertain].join(
+    "\n",
+  );
 }
 
 export function jevKeyPresent(): boolean {
