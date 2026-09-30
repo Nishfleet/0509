@@ -53,6 +53,15 @@ test("the privacy page names who helps run 0509 @smoke", async ({ page }) => {
   await expect(helpers).toContainText(["Cloudflare", "Dodo Payments", "Sentry", "Gmail", "GitHub"]);
 });
 
+test("the privacy page says support mail is stored, read by AI for drafts, and forwarded @smoke", async ({ page }) => {
+  await page.goto("/privacy");
+
+  const helpers = page.locator("section", { has: page.locator("#who-helps") });
+  await expect(helpers).toContainText(/support@0509\.io arrives through Cloudflare Email Routing/);
+  await expect(helpers).toContainText(/draft a reply for us\. It drafts only; it does not send/);
+  await expect(helpers).toContainText(/Mail to support@0509\.io is forwarded to it/);
+});
+
 test("the privacy page says sharing is a picture and there are no public pages @smoke", async ({ page }) => {
   await page.goto("/privacy");
 
