@@ -35,6 +35,7 @@ function emailOf(body: unknown): string {
 
 const COOKIE_PREFIX = "better-auth";
 const FRESH_SESSION_SECONDS = 60 * 60 * 24;
+const SESSION_COOKIE_CACHE_SECONDS = 5 * 60;
 const SESSION_COOKIE = `${COOKIE_PREFIX}.session_token`;
 const sessionCookieNames = new Set([SESSION_COOKIE, `__Secure-${SESSION_COOKIE}`]);
 
@@ -55,7 +56,10 @@ export function createAuth(env: AuthEnv, options?: { captcha?: boolean; validate
       ipAddress: { ipAddressHeaders: [CLIENT_IP_HEADER] },
       database: { validateSchema: options?.validateSchema ?? false },
     },
-    session: { freshAge: FRESH_SESSION_SECONDS },
+    session: {
+      freshAge: FRESH_SESSION_SECONDS,
+      cookieCache: { enabled: true, maxAge: SESSION_COOKIE_CACHE_SECONDS },
+    },
     user: { deleteUser: { enabled: true } },
     hooks: {
       before: createAuthMiddleware(async (ctx) => {
