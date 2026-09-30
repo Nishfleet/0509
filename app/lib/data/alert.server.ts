@@ -217,7 +217,7 @@ export async function readSignalAlerts(db: D1Database, workspaceId: string): Pro
 }
 
 const INSERT_COMPETITOR_RETIRED_ALERT =
-  "INSERT INTO alert (id, workspace_id, entity_id, kind, title, body, created_at) VALUES (?, ?, ?, 'competitor_retired', ?, ?, ?)";
+  "INSERT INTO alert (id, workspace_id, entity_id, kind, title, body, created_at) SELECT ?1, ?2, ?3, 'competitor_retired', ?4, ?5, ?6 WHERE EXISTS (SELECT 1 FROM workspace WHERE id = ?2)";
 
 export function insertCompetitorRetiredAlert(
   db: D1Database,

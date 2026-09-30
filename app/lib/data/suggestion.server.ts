@@ -145,7 +145,7 @@ export async function keepFromRetireSuggestion(input: {
 }
 
 const ASK_RETIRE_SUGGESTION =
-  "INSERT INTO suggestion (id, workspace_id, entity_id, kind, candidate_domain, candidate_name, verdict_p, verdict_reason, status, created_at) VALUES (?1, ?2, ?3, 'retire', ?4, ?5, ?6, ?7, 'pending', ?8) ON CONFLICT (workspace_id, candidate_domain) DO UPDATE SET kind = 'retire', entity_id = excluded.entity_id, verdict_p = excluded.verdict_p, verdict_reason = excluded.verdict_reason, status = 'pending', decided_by = NULL, decided_at = NULL WHERE NOT (suggestion.kind = 'retire' AND suggestion.status = 'dismissed' AND suggestion.decided_at > ?9)";
+  "INSERT INTO suggestion (id, workspace_id, entity_id, kind, candidate_domain, candidate_name, verdict_p, verdict_reason, status, created_at) SELECT ?1, ?2, ?3, 'retire', ?4, ?5, ?6, ?7, 'pending', ?8 WHERE EXISTS (SELECT 1 FROM workspace WHERE id = ?2) ON CONFLICT (workspace_id, candidate_domain) DO UPDATE SET kind = 'retire', entity_id = excluded.entity_id, verdict_p = excluded.verdict_p, verdict_reason = excluded.verdict_reason, status = 'pending', decided_by = NULL, decided_at = NULL WHERE NOT (suggestion.kind = 'retire' AND suggestion.status = 'dismissed' AND suggestion.decided_at > ?9)";
 
 export function askRetireSuggestion(input: {
   workspaceId: string;
