@@ -1,6 +1,8 @@
 import { env } from "cloudflare:workers";
 import { getDomain } from "tldts";
 
+import { insertIncidentAlertStatement } from "../data/alert.server";
+import { openIncidentStatement } from "../data/incident.server";
 import { insertPages, readEntitiesWithoutHomePage } from "../data/page.server";
 import { linkVerdictsStatement } from "../data/jev_verdict.server";
 import { insertChangeSignalStatement } from "../data/signal.server";
@@ -228,6 +230,11 @@ async function judgeCompetitorChange(change: SiteChangeInput): Promise<JudgedCha
   return judgeUnlessFailed(change, null);
 }
 
+async function judgeSelfChange(change: SiteChangeInput): Promise<JudgedChange | null> {
+  if (change.target.entityRole !== "self" || change.diff === null) return null;
+  return judgeUnlessFailed(change, null);
+}
+
 async function fileChangeSignal(
   change: SiteChangeInput,
   payloadJson: string,
@@ -267,16 +274,99 @@ async function fileChangeSignal(
   return filed.id;
 }
 
+interface BreakageFiling {
+  payloadJson: string;
+  judgment: JudgedChange;
+  band: "alert" | "check";
+}
+
+function breakageStatements(
+  change: SiteChangeInput,
+  filing: BreakageFiling,
+  ids: { signal: string; incident: string },
+) {
+  const { target, changed, subject } = change;
+  const now = new Date().toISOString();
+  return [
+    insertChangeSignalStatement({
+      id: ids.signal,
+      workspaceId: target.workspaceId,
+      entityId: target.entityId,
+      sourceId: target.sourceId,
+      watchId: target.watchId,
+      snapshotId: changed.snapshotId,
+      title: null,
+      summary: null,
+      aspect: "breakage",
+      url: target.url,
+      payloadJson: filing.payloadJson,
+      observedAt: now,
+    }),
+    openIncidentStatement({
+      id: ids.incident,
+      workspaceId: target.workspaceId,
+      entityId: target.entityId,
+      pageId: target.pageId,
+      kind: "breakage",
+      openedAt: now,
+    }),
+    insertIncidentAlertStatement({
+      id: `incident-${ids.incident}`,
+      workspaceId: target.workspaceId,
+      entityId: target.entityId,
+      pageId: target.pageId,
+      signalId: ids.signal,
+      incidentId: ids.incident,
+      severity: filing.band === "alert" ? "high" : "normal",
+      title: `${subject.domain} looks broken: breakage`,
+      body: null,
+      createdAt: now,
+    }),
+  ];
+}
+
+async function openBreakageIncident(change: SiteChangeInput, filing: BreakageFiling): Promise<void> {
+  const ids = { signal: crypto.randomUUID(), incident: crypto.randomUUID() };
+  const results = await env.DB.batch(breakageStatements(change, filing, ids));
+  if (results[0]?.meta.changes === 1 && filing.judgment.verdictIds.length > 0) {
+    await linkVerdictsStatement({
+      signalId: ids.signal,
+      workspaceId: change.target.workspaceId,
+      verdictIds: filing.judgment.verdictIds,
+    }).run();
+  }
+  if (results[1]?.meta.changes === 1 && filing.band === "alert") {
+    await env.SEND_EMAIL.send({ incident_id: ids.incident });
+  }
+}
+
+async function storeDiff(diffKey: string, diff: ReturnType<typeof diffPageText> | null) {
+  if (diff === null) return;
+  await env.SNAPSHOTS.put(diffKey, JSON.stringify({ hunks: diff.hunks }), {
+    httpMetadata: { contentType: "application/json" },
+  });
+}
+
+async function fileUnlessDiscarded(change: SiteChangeInput, payloadJson: string, selfJudgment: JudgedChange | null) {
+  const { target } = change;
+  const competitorJudgment = await judgeCompetitorChange(change);
+  if (competitorJudgment?.noteworthy?.band === "discard") {
+    console.log(
+      JSON.stringify({ event: "site.change_discarded", url: target.url, kind: competitorJudgment.noteworthy.kind }),
+    );
+    return;
+  }
+  const signalId = await fileChangeSignal(change, payloadJson, selfJudgment ?? competitorJudgment);
+  if (target.entityRole === "self" && change.diff === null) {
+    await judgeUnlessFailed(change, signalId);
+  }
+}
+
 export async function publishSiteChange(target: SiteSweepTarget, changed: ChangedPage): Promise<string> {
   const [before, after] = await Promise.all([readText(changed.previousTextKey), readText(changed.textKey)]);
   const diff = pageTextDiff(before, after, changed);
-
   const diffKey = `snapshot/site/${target.watchId}/${changed.snapshotId}.diff.json`;
-  if (diff !== null) {
-    await env.SNAPSHOTS.put(diffKey, JSON.stringify({ hunks: diff.hunks }), {
-      httpMetadata: { contentType: "application/json" },
-    });
-  }
+  await storeDiff(diffKey, diff);
 
   const subject = await env.DB.prepare("SELECT name, domain FROM entity WHERE id = ?1 AND workspace_id = ?2")
     .bind(target.entityId, target.workspaceId)
@@ -292,15 +382,13 @@ export async function publishSiteChange(target: SiteSweepTarget, changed: Change
     evidence: computeBreakageEvidence({ status: changed.status, beforeText: before ?? "", afterText: after ?? "" }),
   };
 
-  const judgment = await judgeCompetitorChange(change);
-  if (judgment?.noteworthy?.band === "discard") {
-    console.log(JSON.stringify({ event: "site.change_discarded", url: target.url, kind: judgment.noteworthy.kind }));
-    return changed.snapshotId;
-  }
-
-  const signalId = await fileChangeSignal(change, changeSignalPayload({ target, changed, diff, diffKey }), judgment);
-  if (target.entityRole === "self") {
-    await judgeUnlessFailed(change, signalId);
+  const payloadJson = changeSignalPayload({ target, changed, diff, diffKey });
+  const selfJudgment = await judgeSelfChange(change);
+  const band = selfJudgment?.selfBreakage?.band;
+  if (selfJudgment !== null && (band === "alert" || band === "check")) {
+    await openBreakageIncident(change, { payloadJson, judgment: selfJudgment, band });
+  } else {
+    await fileUnlessDiscarded(change, payloadJson, selfJudgment);
   }
   return changed.snapshotId;
 }
