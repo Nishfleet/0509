@@ -5,7 +5,7 @@ import { readDeliveryAddress, saveDeliveryAddress } from "../../app/lib/delivery
 import { confirmDeliveryAddress } from "../../app/lib/verify-delivery-address.server";
 import { ensureWorkspaceForSignIn, firstWorkspaceId } from "../../app/lib/workspace.server";
 
-const USER_ID = "user-dav";
+let USER_ID = "user-dav";
 const SIGN_IN_EMAIL = "owner@0509.io";
 const NOW = "2026-09-28T00:00:00Z";
 const NEW_ADDRESS = "new@0509.io";
@@ -71,6 +71,7 @@ const save = (rec: Recorder, address: string) =>
 
 describe("confirm a changed delivery address (0509#5811)", () => {
   beforeEach(async () => {
+    USER_ID = `user-dav-${crypto.randomUUID()}`;
     await env.DB.exec("DELETE FROM email_suppression");
     await env.DB.exec("DELETE FROM send_target");
     await env.DB.exec("DELETE FROM channel");
@@ -133,6 +134,23 @@ describe("confirm a changed delivery address (0509#5811)", () => {
     expect(secondToken).not.toBe(firstToken);
     expect(resend.sent).toHaveLength(1);
     expect(resend.sent[0].text).toContain(`https://0509.io/v/${secondToken}`);
+  });
+
+  it("(f) saves past the cap return an error and write no token and send no mail", async () => {
+    const workspaceId = firstWorkspaceId(USER_ID);
+    const limit = 5;
+    for (let attempt = 0; attempt < limit + 2; attempt += 1) {
+      await save(recorder(), NEW_ADDRESS);
+    }
+    const before = await onlyTarget(workspaceId);
+    const rec = recorder();
+
+    const result = await save(rec, NEW_ADDRESS);
+
+    expect(result.error).not.toBeNull();
+    expect(result.suppressed).toBe(false);
+    expect(rec.sent).toHaveLength(0);
+    expect(await onlyTarget(workspaceId)).toEqual(before);
   });
 
   it("a rotated token no longer confirms the row", async () => {
