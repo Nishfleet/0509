@@ -13,12 +13,12 @@ Umbrella #3842. Author: Fable. Checked by the Opus deputy. Nish's decisions stan
 - Public pages, public posts, public ad libraries, public feeds. Screenshots of public pages. No DMs, no private groups, no purchased personal data.
 - Stored bodies on the `0509-snapshots` bucket follow this table. The platform deletes an object when its rule expires. Age expiry is not a cron and not a Worker. Expiry is day-granular, and Cloudflare typically removes an object within 24 hours of the day it expires, so the promise is the period in the table.
 
-| Prefix | What it holds | Kept |
-|---|---|---|
-| `mentions/` | Feed bodies | 30 days |
-| `snapshot/` | Raw page snapshots | one year |
-| `shot/` | Before-and-after screenshots | one year |
-| `card/` | Standing-card artifacts | 90 days |
+| Prefix       | What it holds                | Kept                 |
+| ------------ | ---------------------------- | -------------------- |
+| `mentions/`  | Feed bodies                  | 30 days              |
+| `snapshot/`  | Raw page snapshots           | one year             |
+| `shot/`      | Before-and-after screenshots | one year             |
+| `card/`      | Standing-card artifacts      | 90 days              |
 | all prefixes | Incomplete multipart uploads | aborted after 7 days |
 
 - `0509-snapshots-backup` is the disaster-recovery copy of `0509-snapshots` (`wrangler.jsonc` binds it as `SNAPSHOTS_BACKUP`; the `snapshot-backup` Workflow fills it, copying every key the copy does not already hold). Its schedule `0 5 * * *` is registered on the live Workflow, not only in the config: the Cloudflare Workflows listing read on 2026-09-28 (pasted on #5982) returns `schedules: [{cron: "0 5 * * *", next_instance: "0 5 * * *-1790658000000"}]`, so its first scheduled fire is 2026-09-29T05:00:00Z. Its only two instances so far were both triggered by hand, at 17:31:05Z and 17:43:34Z that day, because the Workflow was created at 17:07:32Z; the first scheduled instance's counts are owed to #5982.

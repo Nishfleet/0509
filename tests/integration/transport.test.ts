@@ -8,9 +8,7 @@ import {
 } from "../../app/lib/fetch/transport.server";
 
 const browserHolder = vi.hoisted(() => ({
-  current: undefined as
-    | undefined
-    | (BrowserStub & { calls: string[]; closed: number }),
+  current: undefined as undefined | (BrowserStub & { calls: string[]; closed: number }),
 }));
 
 vi.mock("cloudflare:workers", () => ({
@@ -22,10 +20,7 @@ vi.mock("cloudflare:workers", () => ({
 }));
 
 interface BrowserStub {
-  quickAction(
-    action: "content",
-    options: { url: string },
-  ): Promise<Response>;
+  quickAction(action: "content", options: { url: string }): Promise<Response>;
 }
 
 /**
@@ -110,9 +105,7 @@ afterEach(() => {
 });
 
 /** Swap the outbound `fetch` for one that serves `handlers` by URL. */
-function stubFetch(
-  handlers: Record<string, () => Response | Promise<Response>>,
-) {
+function stubFetch(handlers: Record<string, () => Response | Promise<Response>>) {
   const real = globalThis.fetch;
   const seen: string[] = [];
   const inits: RequestInit[] = [];
@@ -130,8 +123,7 @@ function stubFetch(
 describe("readUrl", () => {
   it("serves a healthy page over plain fetch and never touches the browser", async () => {
     const stub = stubFetch({
-      "https://brand.example.com/": () =>
-        new Response(SUBSTANTIAL_PAGE, { status: 200 }),
+      "https://brand.example.com/": () => new Response(SUBSTANTIAL_PAGE, { status: 200 }),
     });
     const browser = fakeBrowser({
       ok: true,
@@ -160,8 +152,7 @@ describe("readUrl", () => {
 
   it("bounds the plain fetch with AbortSignal.timeout(8000)", async () => {
     const stub = stubFetch({
-      "https://brand.example.com/": () =>
-        new Response(SUBSTANTIAL_PAGE, { status: 200 }),
+      "https://brand.example.com/": () => new Response(SUBSTANTIAL_PAGE, { status: 200 }),
     });
     const browser = fakeBrowser({ ok: true, html: SUBSTANTIAL_PAGE });
     const spy = vi.spyOn(AbortSignal, "timeout");
@@ -206,8 +197,7 @@ describe("readUrl", () => {
 
   it("escalates on a challenge body served with a 200", async () => {
     const stub = stubFetch({
-      "https://challenge.example.com/": () =>
-        new Response(CHALLENGE_PAGE, { status: 200 }),
+      "https://challenge.example.com/": () => new Response(CHALLENGE_PAGE, { status: 200 }),
     });
     const browser = fakeBrowser({
       ok: true,
@@ -231,10 +221,7 @@ describe("readUrl", () => {
   it("escalates on a 200 whose extracted text is under the floor", async () => {
     const stub = stubFetch({
       "https://shell.example.com/": () =>
-        new Response(
-          `<!doctype html><html><body><div id="app"></div></body></html>`,
-          { status: 200 },
-        ),
+        new Response(`<!doctype html><html><body><div id="app"></div></body></html>`, { status: 200 }),
     });
     const browser = fakeBrowser({
       ok: true,
@@ -295,6 +282,64 @@ describe("readUrl", () => {
     }
   });
 
+  it("follows a public redirect by hand, re-validating each hop", async () => {
+    const stub = stubFetch({
+      "https://brand.example.com/": () =>
+        new Response(null, { status: 301, headers: { location: "https://www.brand.example.com/home" } }),
+      "https://www.brand.example.com/home": () => new Response(SUBSTANTIAL_PAGE, { status: 200 }),
+    });
+    try {
+      install(fakeBrowser({ ok: true, html: SUBSTANTIAL_PAGE }));
+      const result = await readUrl("https://brand.example.com/");
+      expect(result.ok).toBe(true);
+      expect(stub.seen).toEqual(["https://brand.example.com/", "https://www.brand.example.com/home"]);
+      expect(stub.inits.every((init) => init.redirect === "manual")).toBe(true);
+    } finally {
+      stub.restore();
+    }
+  });
+
+  it.each([
+    "http://169.254.169.254/latest/meta-data/",
+    "http://127.0.0.1/admin",
+    "http://metadata.google.internal/",
+    "http://localhost/",
+    "ftp://brand.example.com/file",
+  ])("refuses a redirect to %s without fetching it or escalating", async (location) => {
+    const stub = stubFetch({
+      "https://brand.example.com/": () => new Response(null, { status: 302, headers: { location } }),
+    });
+    const browser = fakeBrowser({ ok: true, html: SUBSTANTIAL_PAGE });
+    try {
+      install(browser);
+      const result = await readUrl("https://brand.example.com/");
+      expect(result.ok).toBe(false);
+      if (result.ok) return;
+      expect(result.reason).toBe("invalid-url");
+      expect(stub.seen).toEqual(["https://brand.example.com/"]);
+      expect(browser.calls).toEqual([]);
+    } finally {
+      stub.restore();
+    }
+  });
+
+  it("gives up on a redirect loop after 5 hops", async () => {
+    const stub = stubFetch({
+      "https://brand.example.com/": () =>
+        new Response(null, { status: 302, headers: { location: "https://brand.example.com/" } }),
+    });
+    try {
+      install(fakeBrowser({ ok: true, html: SUBSTANTIAL_PAGE }));
+      const result = await readUrl("https://brand.example.com/");
+      expect(result.ok).toBe(false);
+      if (result.ok) return;
+      expect(result.reason).toBe("invalid-url");
+      expect(stub.seen).toHaveLength(6);
+    } finally {
+      stub.restore();
+    }
+  });
+
   it.each([
     "http://foo.localhost/",
     "http://metadata.google.internal/",
@@ -322,8 +367,7 @@ describe("readUrl", () => {
 
   it("refuses a page that declares more than 5 MB without reading it", async () => {
     const stub = stubFetch({
-      "https://huge.example.com/": () =>
-        new Response("x", { status: 200, headers: { "content-length": "50000000" } }),
+      "https://huge.example.com/": () => new Response("x", { status: 200, headers: { "content-length": "50000000" } }),
     });
     const browser = fakeBrowser({ ok: true, html: SUBSTANTIAL_PAGE });
     try {
@@ -547,9 +591,7 @@ describe("readUrl", () => {
       if (result.ok) return;
       expect(result.reason).toBe("deferred");
       // A vetoed escalation costs nothing: no browser call, no retry.
-      expect(result.detail).toBe(
-        "browser budget refused escalation (status)",
-      );
+      expect(result.detail).toBe("browser budget refused escalation (status)");
       expect(browser.calls).toEqual([]);
     } finally {
       stub.restore();
@@ -680,6 +722,50 @@ describe("readUrl", () => {
     }
   });
 
+  it("an unconfigured browser binding logs no cost line", async () => {
+    const stub = stubFetch({
+      "https://gated.example.com/": () => new Response("Forbidden", { status: 403 }),
+    });
+    const lines: string[] = [];
+    const spy = vi.spyOn(console, "log").mockImplementation((line) => {
+      lines.push(String(line));
+    });
+    try {
+      const result = await readUrl("https://gated.example.com/", { mayEscalate: async () => true });
+      expect(result.ok).toBe(false);
+      if (result.ok) return;
+      expect(result.reason).toBe("escalation-failed");
+      expect(result.detail).toContain("browser binding is not configured");
+      expect(lines.filter((line) => line.includes("browser-escalation"))).toEqual([]);
+    } finally {
+      spy.mockRestore();
+      stub.restore();
+    }
+  });
+
+  it("a browser call that throws still logs a null cost line", async () => {
+    const stub = stubFetch({
+      "https://gated.example.com/": () => new Response("Forbidden", { status: 403 }),
+    });
+    const lines: string[] = [];
+    const spy = vi.spyOn(console, "log").mockImplementation((line) => {
+      lines.push(String(line));
+    });
+    try {
+      install(fakeBrowser({ ok: false, throwOnCall: true }));
+      const result = await readUrl("https://gated.example.com/", { mayEscalate: async () => true });
+      expect(result.ok).toBe(false);
+      const rows = lines
+        .filter((line) => line.includes("browser-escalation"))
+        .map((line) => JSON.parse(line) as { browserMsUsed: number | null });
+      expect(rows).toHaveLength(1);
+      expect(rows[0]?.browserMsUsed).toBeNull();
+    } finally {
+      spy.mockRestore();
+      stub.restore();
+    }
+  });
+
   it("without a budget callback a refused fetch is deferred and the browser is never called", async () => {
     const stub = stubFetch({
       "https://gated.example.com/": () => new Response("Forbidden", { status: 403 }),
@@ -691,9 +777,7 @@ describe("readUrl", () => {
       expect(result.ok).toBe(false);
       if (result.ok) return;
       expect(result.reason).toBe("deferred");
-      expect(result.detail).toBe(
-        "browser budget refused escalation (status)",
-      );
+      expect(result.detail).toBe("no browser budget callback wired (status)");
       expect(browser.calls).toEqual([]);
     } finally {
       stub.restore();
@@ -712,6 +796,7 @@ describe("readUrl", () => {
       expect(result.ok).toBe(false);
       if (result.ok) return;
       expect(result.reason).toBe("deferred");
+      expect(result.detail).toBe("no browser budget callback wired (learned)");
       // The defer fires before either leg runs: no fetch, no browser call.
       expect(stub.seen).toEqual([]);
       expect(browser.calls).toEqual([]);
@@ -733,9 +818,7 @@ describe("readUrl", () => {
       expect(result.ok).toBe(false);
       if (result.ok) return;
       expect(result.reason).toBe("deferred");
-      expect(result.detail).toBe(
-        "browser budget refused escalation (timeout)",
-      );
+      expect(result.detail).toBe("no browser budget callback wired (timeout)");
       expect(browser.calls).toEqual([]);
     } finally {
       stub.restore();
@@ -769,9 +852,7 @@ describe("countExtractedChars", () => {
   it("counts the 200-character floor boundary as served", async () => {
     const html = `<!doctype html><html><body><p>${"z".repeat(199)}</p></body></html>`;
     const thin = await countExtractedChars(html);
-    const atFloor = await countExtractedChars(
-      `<!doctype html><html><body><p>${"z".repeat(200)}</p></body></html>`,
-    );
+    const atFloor = await countExtractedChars(`<!doctype html><html><body><p>${"z".repeat(200)}</p></body></html>`);
     expect(thin).toBe(199);
     expect(atFloor).toBe(200);
   });

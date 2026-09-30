@@ -53,14 +53,7 @@ describe("the competitor snapshot card", () => {
   it("keeps the six data-cell elements in the input order", () => {
     const html = snapshot(CELLS);
     const keys = [...html.matchAll(/data-cell="([^"]+)"/g)].map((match) => match[1]);
-    expect(keys).toEqual([
-      "rank",
-      "new_creatives",
-      "copy_changes",
-      "site_changes",
-      "mentions",
-      "new_roles",
-    ]);
+    expect(keys).toEqual(["rank", "new_creatives", "copy_changes", "site_changes", "mentions", "new_roles"]);
   });
 
   it("renders a zero as 0 and never as a dash", () => {

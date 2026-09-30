@@ -2,7 +2,7 @@
 
 P3 step 8 of umbrella #3842, engine child **#3905**. Written by the Opus deputy (second architect), **2026-09-21**. Contracts: the charter's agent-native addendum (Nish, 2026-09-21 ~18:05 IST), `docs/REBUILD-STACK.md` §7, `docs/REBUILD-SCHEMA.md`, `docs/REBUILD-DONE.md`.
 
-The charter, verbatim: *"everything a human sees on Home, Competitors and Alerts is available to an agent through a read API and an MCP server, on every paid plan (no free plan exists). Settings carries 'Connect your agent' (API key, MCP URL). Stock only … No hand-rolled auth or rate limiting."*
+The charter, verbatim: _"everything a human sees on Home, Competitors and Alerts is available to an agent through a read API and an MCP server, on every paid plan (no free plan exists). Settings carries 'Connect your agent' (API key, MCP URL). Stock only … No hand-rolled auth or rate limiting."_
 
 ---
 
@@ -10,16 +10,16 @@ The charter, verbatim: *"everything a human sees on Home, Competitors and Alerts
 
 The upstreams here are packages, so the probe is the published artifact. All read **2026-09-21 12:16–12:20 UTC** from `registry.npmjs.org`.
 
-| Package | `dist-tags.latest` | Published |
-|---|---|---|
-| `agents` | **0.24.0** | 2026-09-18 |
-| `@modelcontextprotocol/server` | **2.0.0** | 2026-07-27 |
-| `@modelcontextprotocol/client` | **2.0.0** | 2026-07-27 |
-| `@better-auth/api-key` | **1.7.5** | 2026-09-14 |
-| `@cloudflare/workers-oauth-provider` | **0.10.3** | 2026-08-10 |
-| `zod-openapi` | **6.0.2** | 2026-08-31 |
-| `zod` | **4.6.5** | 2026-09-13 |
-| `wrangler` | **4.135.0** | 2026-09-18 |
+| Package                              | `dist-tags.latest` | Published  |
+| ------------------------------------ | ------------------ | ---------- |
+| `agents`                             | **0.24.0**         | 2026-09-18 |
+| `@modelcontextprotocol/server`       | **2.0.0**          | 2026-07-27 |
+| `@modelcontextprotocol/client`       | **2.0.0**          | 2026-07-27 |
+| `@better-auth/api-key`               | **1.7.5**          | 2026-09-14 |
+| `@cloudflare/workers-oauth-provider` | **0.10.3**         | 2026-08-10 |
+| `zod-openapi`                        | **6.0.2**          | 2026-08-31 |
+| `zod`                                | **4.6.5**          | 2026-09-13 |
+| `wrangler`                           | **4.135.0**        | 2026-09-18 |
 
 **I unpacked `agents@0.24.0` and read its manifest and types**, because the stack doc's central claim for this engine — that the stateless handler is the one to use — is the thing most likely to be built wrong from memory.
 
@@ -37,7 +37,7 @@ And `dist/mcp/server/index.d.ts` line 15:
 createStatelessMcpHandler as createMcpHandler,
 ```
 
-**So `createMcpHandler` imported from `agents/mcp/server` *is* the stateless handler, under an alias.** The same identifier exported from `agents/mcp` is the legacy overload. The stack doc's warning that "the import path is load-bearing" is confirmed at the source: the two paths give you two different functions with the same name, and only one of them avoids a Durable Object.
+**So `createMcpHandler` imported from `agents/mcp/server` _is_ the stateless handler, under an alias.** The same identifier exported from `agents/mcp` is the legacy overload. The stack doc's warning that "the import path is load-bearing" is confirmed at the source: the two paths give you two different functions with the same name, and only one of them avoids a Durable Object.
 
 `peerDependencies`, verbatim, with `peerDependenciesMeta` showing which are optional:
 
@@ -66,24 +66,24 @@ Everything else in this engine is settled by the stack doc. This is the fork, an
 export default new OAuthProvider({ apiRoute: "/mcp", apiHandler: …, defaultHandler: … });
 ```
 
-But `workers/app.ts` in a React Router 8 framework-mode app is *already* the default export — `export default { async fetch(request) { return requestHandler(request); } }` (`docs/REBUILD-STACK.md` §1.3, verbatim from the scaffold). There is one default export per Worker. So adopting the OAuth provider means the React Router handler stops being the Worker's entry point and becomes the provider's `defaultHandler`, and **every request to every page of the app is routed through the OAuth library first**.
+But `workers/app.ts` in a React Router 8 framework-mode app is _already_ the default export — `export default { async fetch(request) { return requestHandler(request); } }` (`docs/REBUILD-STACK.md` §1.3, verbatim from the scaffold). There is one default export per Worker. So adopting the OAuth provider means the React Router handler stops being the Worker's entry point and becomes the provider's `defaultHandler`, and **every request to every page of the app is routed through the OAuth library first**.
 
 ### Candidate A — OAuth 2.1, spec-conformant
 
 `@cloudflare/workers-oauth-provider` **0.10.3** wraps the Worker. One KV binding (`OAUTH_KV`), an `/authorize` endpoint, a consent screen, `clientIdMetadataDocumentEnabled` (which additionally needs the `global_fetch_strictly_public` compatibility flag).
 
-- **It is what the spec requires.** MCP revision 2026-07-28: *"MCP servers **MUST** implement OAuth 2.0 Protected Resource Metadata (RFC9728)"* and *"Authorization servers MUST implement OAuth 2.1."*
+- **It is what the spec requires.** MCP revision 2026-07-28: _"MCP servers **MUST** implement OAuth 2.0 Protected Resource Metadata (RFC9728)"_ and _"Authorization servers MUST implement OAuth 2.1."_
 - Interactive MCP clients that do the discovery dance — the connector flows in desktop LLM clients — work by pasting a URL and clicking through. No key handling by the user.
 - Tokens are audience-checked and `props` are AES-GCM encrypted at rest.
 - **It puts an auth library on the request path of every page load** in an app whose budget is LCP under 1.5 s and no Home loader request over 500 ms at p95 (`docs/REBUILD-DONE.md` §B). The cost is probably small; the blast radius is not — a bug or a bad deploy in the OAuth layer takes down the marketing site, not just `/mcp`.
 - It adds a KV namespace, a consent UI, and a second identity system beside better-auth, which already owns sessions, magic links and passkeys. Two things that know who you are.
-- The provider explicitly does **not** do multi-tenancy: *"Application permissions — scope, ownership, tenancy — remain ours to enforce."* So workspace scoping is ours either way.
+- The provider explicitly does **not** do multi-tenancy: _"Application permissions — scope, ownership, tenancy — remain ours to enforce."_ So workspace scoping is ours either way.
 
 ### Candidate B — API keys, via better-auth's plugin
 
 `@better-auth/api-key` **1.7.5**. `/mcp` is an ordinary React Router resource route; the MCP handler is composed inside it; the bearer token is an API key the user generates in Settings.
 
-- **It is what the charter specifies**: *"Settings carries 'Connect your agent' (API key, MCP URL)."*
+- **It is what the charter specifies**: _"Settings carries 'Connect your agent' (API key, MCP URL)."_
 - **Nothing wraps the app.** `workers/app.ts` stays the scaffold's eleven lines, and a fault in the API surface cannot reach the marketing site.
 - The plugin generates **one table, `apikey`, with 22 columns**, and those columns are the product: `rateLimitEnabled`, `rateLimitTimeWindow`, `rateLimitMax`, `requestCount`, `remaining`, `refillInterval`, `refillAmount`, `lastRefillAt`, `expiresAt`, `permissions`, `metadata`. **Per-key quota, refill, expiry and permissions ship in the box** — and per §3 that is the only thing that can meter a paid plan correctly.
 - One identity system: the plugin supports sessions-from-API-keys, so the browser and the agent resolve to the same user through the same code.
@@ -95,7 +95,7 @@ But `workers/app.ts` in a React Router 8 framework-mode app is *already* the def
 
 Three reasons, in order of weight:
 
-1. **The quota argument is decisive and it is not about convenience.** `docs/REBUILD-STACK.md` §7.4 is explicit that Cloudflare's rate-limit binding is *"permissive, eventually consistent, and intentionally designed to not be used as an accurate accounting system"* and is **per-colo, not global** — so using it to enforce a customer's plan limit *"would under-count across colos"*, a billing bug by construction. The only exact, per-key, persisted counter available without hand-rolling one is `apikey.requestCount`/`remaining`. Candidate A does not provide it; adopting A still means adopting the `apikey` table for metering, which means adopting both.
+1. **The quota argument is decisive and it is not about convenience.** `docs/REBUILD-STACK.md` §7.4 is explicit that Cloudflare's rate-limit binding is _"permissive, eventually consistent, and intentionally designed to not be used as an accurate accounting system"_ and is **per-colo, not global** — so using it to enforce a customer's plan limit _"would under-count across colos"_, a billing bug by construction. The only exact, per-key, persisted counter available without hand-rolling one is `apikey.requestCount`/`remaining`. Candidate A does not provide it; adopting A still means adopting the `apikey` table for metering, which means adopting both.
 2. **Blast radius.** Candidate A moves every page load of the product behind an auth library to serve one endpoint. That is a disproportionate coupling for a v1 whose landing page has a 1.5 s LCP budget.
 3. **The charter names API keys.** It is not ambiguous, and `docs/REBUILD-STACK.md` §7.3 independently reached the same conclusion.
 
@@ -104,11 +104,11 @@ Three reasons, in order of weight:
 **Grafted from A, because A was right that discovery matters:**
 
 1. **`/.well-known/oauth-protected-resource` is implemented when A lands, and not before.** Serving the metadata document while no authorization server exists would advertise a flow that does not work — worse than not serving it.
-2. **`llms.txt` and the OpenAPI document are the discovery surface we *can* honestly ship now** (§4). An agent that can read finds the API without any handshake.
+2. **`llms.txt` and the OpenAPI document are the discovery surface we _can_ honestly ship now** (§4). An agent that can read finds the API without any handshake.
 
 **The revisit trigger, stated precisely: the first client that refuses a bearer token.** Not "when we have time", not "when a customer asks about OAuth" — a client that will accept an `Authorization: Bearer` header, however configured, is served by v1 and is not a trigger. At that point Candidate A is additive — `apiRoute: "/mcp"`, `apiHandler` the existing handler, `defaultHandler` the existing React Router export — and the `apikey` table stays for metering regardless. Nothing in this design has to be undone.
 
-**Rejected outright, recorded:** `McpAgent` from `agents/mcp` — deprecated and feature-frozen by Cloudflare's own docs, and it forces a Durable Object plus a migration for session state we do not want. The C3 MCP templates (`remote-mcp-authless`, `remote-mcp-github-oauth`) — the same docs page says not to start from them because they use the deprecated path. `@modelcontextprotocol/sdk` **as the server** — it hard-depends on `express`, `cors`, `raw-body` and `@hono/node-server`; it appears in our tree only because `agents` pins it as a peer. `chanfana` and `@hono/zod-openapi` — both require a router (Hono or itty) running *inside* the Worker beside React Router's handler, to emit a JSON file.
+**Rejected outright, recorded:** `McpAgent` from `agents/mcp` — deprecated and feature-frozen by Cloudflare's own docs, and it forces a Durable Object plus a migration for session state we do not want. The C3 MCP templates (`remote-mcp-authless`, `remote-mcp-github-oauth`) — the same docs page says not to start from them because they use the deprecated path. `@modelcontextprotocol/sdk` **as the server** — it hard-depends on `express`, `cors`, `raw-body` and `@hono/node-server`; it appears in our tree only because `agents` pins it as a peer. `chanfana` and `@hono/zod-openapi` — both require a router (Hono or itty) running _inside_ the Worker beside React Router's handler, to emit a JSON file.
 
 ---
 
@@ -117,7 +117,7 @@ Three reasons, in order of weight:
 ```ts
 // app/routes/mcp.ts — a React Router resource route, not a second app
 import { McpServer } from "@modelcontextprotocol/server";
-import { createMcpHandler } from "agents/mcp/server";   // NOT "agents/mcp"
+import { createMcpHandler } from "agents/mcp/server"; // NOT "agents/mcp"
 ```
 
 ```jsonc
@@ -127,13 +127,13 @@ import { createMcpHandler } from "agents/mcp/server";   // NOT "agents/mcp"
 
 Five tools, one per thing a human can see. Each takes the workspace from the authenticated key, never from an argument — a `workspaceId` parameter would be an authorization bug wearing a schema.
 
-| Tool | Returns | Backed by |
-|---|---|---|
-| `get_standing` | this week's rank, score, movement per ON brand, and the why-line | `standing`, `digest.payload_json` |
-| `list_competitors` | ON, off and dismissed brands with their identity cards and state | `entity` |
-| `list_alerts` | the alerts feed, filterable by kind and since | `alert` |
-| `get_competitor` | one brand's ads, site changes, mentions and hiring for a window | `signal` via the `mention` and `change` views |
-| `get_brief` | the latest weekly brief as structured data | `digest` |
+| Tool               | Returns                                                          | Backed by                                     |
+| ------------------ | ---------------------------------------------------------------- | --------------------------------------------- |
+| `get_standing`     | this week's rank, score, movement per ON brand, and the why-line | `standing`, `digest.payload_json`             |
+| `list_competitors` | ON, off and dismissed brands with their identity cards and state | `entity`                                      |
+| `list_alerts`      | the alerts feed, filterable by kind and since                    | `alert`                                       |
+| `get_competitor`   | one brand's site changes, mentions and hiring for a window       | `signal` via the `mention` and `change` views |
+| `get_brief`        | the latest weekly brief as structured data                       | `digest`                                      |
 
 Configuration that is load-bearing and easy to miss, each from `docs/REBUILD-STACK.md` §7.1:
 
@@ -149,10 +149,10 @@ Configuration that is load-bearing and easy to miss, each from `docs/REBUILD-STA
 
 This is the part most likely to be built as one thing, and it must be two.
 
-| Layer | Mechanism | Job | Why not the other one |
-|---|---|---|---|
-| **Edge abuse shield** | Cloudflare rate-limit binding, `{ "ratelimits": [{ "name": "API_RL", "namespace_id": "1001", "simple": { "limit": 100, "period": 60 } }] }`, called as `await env.API_RL.limit({ key })` **before any D1 read** | stop floods cheaply, per IP and per path | it is **per-colo**, eventually consistent, and documented as *"intentionally designed to not be used as an accurate accounting system"*. Metering a plan with it under-counts across colos. |
-| **Billable quota** | `apikey.rateLimitMax` / `rateLimitTimeWindow` / `remaining` / `refillInterval`, enforced by `@better-auth/api-key` | the customer's plan entitlement | the binding cannot be exact and cannot persist per key. |
+| Layer                 | Mechanism                                                                                                                                                                                                       | Job                                      | Why not the other one                                                                                                                                                                       |
+| --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Edge abuse shield** | Cloudflare rate-limit binding, `{ "ratelimits": [{ "name": "API_RL", "namespace_id": "1001", "simple": { "limit": 100, "period": 60 } }] }`, called as `await env.API_RL.limit({ key })` **before any D1 read** | stop floods cheaply, per IP and per path | it is **per-colo**, eventually consistent, and documented as _"intentionally designed to not be used as an accurate accounting system"_. Metering a plan with it under-counts across colos. |
+| **Billable quota**    | `apikey.rateLimitMax` / `rateLimitTimeWindow` / `remaining` / `refillInterval`, enforced by `@better-auth/api-key`                                                                                              | the customer's plan entitlement          | the binding cannot be exact and cannot persist per key.                                                                                                                                     |
 
 **`period` must be `10` or `60`. There is no other value.** A packet that writes `period: 30` fails at config parse, and that is the good case.
 
@@ -208,26 +208,26 @@ The only concurrency control is the rate-limit binding (§3), and the only sched
 
 **Unit of work = 1,000 API or MCP calls.**
 
-| Resource | Units per 1k calls | Rate | Cost |
-|---|---|---|---|
-| Workers requests | 1,000 | 10M/mo included | $0.00 |
-| Workers CPU | ~1,000 × ~5 ms | 30M CPU-ms/mo included | $0.00 |
-| D1 rows read | ~50,000 (indexed reads over `standing`, `entity`, `alert`, `signal`) | 25 billion/mo included, then $0.001/M | $0.00 |
-| D1 rows written | **~1,000** (`apikey.requestCount`/`remaining` — **one write per call**) | 50M/mo included, then $1.00/M | $0.00 |
-| Rate-limit binding | 1,000 | no separate charge | $0.00 |
-| KV | **0** | — | $0.00 |
-| **Browser Rendering** | **0** | — | $0.00 |
+| Resource              | Units per 1k calls                                                      | Rate                                  | Cost  |
+| --------------------- | ----------------------------------------------------------------------- | ------------------------------------- | ----- |
+| Workers requests      | 1,000                                                                   | 10M/mo included                       | $0.00 |
+| Workers CPU           | ~1,000 × ~5 ms                                                          | 30M CPU-ms/mo included                | $0.00 |
+| D1 rows read          | ~50,000 (indexed reads over `standing`, `entity`, `alert`, `signal`)    | 25 billion/mo included, then $0.001/M | $0.00 |
+| D1 rows written       | **~1,000** (`apikey.requestCount`/`remaining` — **one write per call**) | 50M/mo included, then $1.00/M         | $0.00 |
+| Rate-limit binding    | 1,000                                                                   | no separate charge                    | $0.00 |
+| KV                    | **0**                                                                   | —                                     | $0.00 |
+| **Browser Rendering** | **0**                                                                   | —                                     | $0.00 |
 
 ### Monthly at 100 brands
 
 100 brands across ~25 workspaces. Assume every workspace has an agent connected making 200 calls a day — deliberately generous, since this is a new surface:
 
-| Resource | Monthly | Against included | Cost |
-|---|---|---|---|
-| Calls | 25 × 200 × 30 = **150,000** | 1.5% of 10M requests | $0.00 |
-| D1 rows read | ~7.5M | 0.03% of 25 billion | $0.00 |
-| D1 rows written (quota counters) | **150,000** | 0.3% of 50M | $0.00 |
-| **Cloudflare total** | | | **$0.00** |
+| Resource                         | Monthly                     | Against included     | Cost      |
+| -------------------------------- | --------------------------- | -------------------- | --------- |
+| Calls                            | 25 × 200 × 30 = **150,000** | 1.5% of 10M requests | $0.00     |
+| D1 rows read                     | ~7.5M                       | 0.03% of 25 billion  | $0.00     |
+| D1 rows written (quota counters) | **150,000**                 | 0.3% of 50M          | $0.00     |
+| **Cloudflare total**             |                             |                      | **$0.00** |
 
 **The one line to watch is `apikey`'s counter write — one D1 row written per API call.** It is the only per-request write in the product. At 150,000 calls/month it is 0.3% of the allowance and irrelevant. It stops being irrelevant around **50 million calls a month**, at which point the honest move is the plugin's own refill window rather than a per-call decrement. Recording the number here means that conversation starts with arithmetic instead of alarm — and it is the same class of mistake as the 2026-09-17 rows-written bill, caught at design time.
 
@@ -237,16 +237,16 @@ The only concurrency control is the rate-limit binding (§3), and the only sched
 
 ## 8. Failure modes and the degraded state
 
-| Failure | Detection | Degraded state |
-|---|---|---|
-| **Wrong import path** — `createMcpHandler` from `agents/mcp` instead of `agents/mcp/server` | it *works*, and silently uses the legacy overload | the worst failure here, because nothing goes red. P8.2 pins it with a test asserting the resolved function and that **no Durable Object binding and no `migrations` block exist** in `wrangler.jsonc`. |
-| `allowedHostnames` unset on the custom domain | every real request rejected; localhost fine | caught by the production probe in P8.2, never by local dev. |
-| Static assets shadow `/mcp` | 404 or an HTML page where JSON belongs | `run_worker_first: ["/mcp"]`; asserted in the same test. |
-| Key over quota | `apikey.remaining` at 0 | 429 with the reset time and the plan's limit. Settings shows usage against the limit. Never a silent truncation of results. |
-| Edge rate limit hit | binding returns `success: false` | 429 before any D1 read. Per-colo, so a legitimate burst from one region may trip while another does not — documented in the API docs, because an undocumented eventually-consistent limit reads as a bug. |
-| Interactive MCP client cannot discover auth | connection fails at the client | **expected, by §1's decision.** Settings' "Connect your agent" shows the `Authorization: Bearer` header alongside the URL, and the docs say the server uses bearer tokens rather than OAuth. A client that cannot set a header is not supported in v1, and we say so. |
-| OpenAPI document drifts from the routes | impossible by construction | it is generated from the same zod modules the loaders parse with. A drift means someone hand-wrote a document; P8.3 forbids it. |
-| Agent reads an OFF brand | tenancy/state test | a scoping bug and treated as one: OFF must mean OFF on every surface. Pinned by a test, not by review. |
+| Failure                                                                                     | Detection                                         | Degraded state                                                                                                                                                                                                                                                        |
+| ------------------------------------------------------------------------------------------- | ------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Wrong import path** — `createMcpHandler` from `agents/mcp` instead of `agents/mcp/server` | it _works_, and silently uses the legacy overload | the worst failure here, because nothing goes red. P8.2 pins it with a test asserting the resolved function and that **no Durable Object binding and no `migrations` block exist** in `wrangler.jsonc`.                                                                |
+| `allowedHostnames` unset on the custom domain                                               | every real request rejected; localhost fine       | caught by the production probe in P8.2, never by local dev.                                                                                                                                                                                                           |
+| Static assets shadow `/mcp`                                                                 | 404 or an HTML page where JSON belongs            | `run_worker_first: ["/mcp"]`; asserted in the same test.                                                                                                                                                                                                              |
+| Key over quota                                                                              | `apikey.remaining` at 0                           | 429 with the reset time and the plan's limit. Settings shows usage against the limit. Never a silent truncation of results.                                                                                                                                           |
+| Edge rate limit hit                                                                         | binding returns `success: false`                  | 429 before any D1 read. Per-colo, so a legitimate burst from one region may trip while another does not — documented in the API docs, because an undocumented eventually-consistent limit reads as a bug.                                                             |
+| Interactive MCP client cannot discover auth                                                 | connection fails at the client                    | **expected, by §1's decision.** Settings' "Connect your agent" shows the `Authorization: Bearer` header alongside the URL, and the docs say the server uses bearer tokens rather than OAuth. A client that cannot set a header is not supported in v1, and we say so. |
+| OpenAPI document drifts from the routes                                                     | impossible by construction                        | it is generated from the same zod modules the loaders parse with. A drift means someone hand-wrote a document; P8.3 forbids it.                                                                                                                                       |
+| Agent reads an OFF brand                                                                    | tenancy/state test                                | a scoping bug and treated as one: OFF must mean OFF on every surface. Pinned by a test, not by review.                                                                                                                                                                |
 
 ---
 
@@ -316,7 +316,7 @@ The only concurrency control is the rate-limit binding (§3), and the only sched
 
 **FILES IN SCOPE.** `wrangler.jsonc` (ratelimits block), `app/lib/api/guard.ts`, `app/routes/api.*.ts` (the guard call only), `docs/` API reference.
 
-**FORBIDDEN.** **Using the rate-limit binding to enforce a plan entitlement** — it is per-colo and documented as *"not… an accurate accounting system"*, so metering a customer with it under-counts across colos, which is a billing bug by construction. A `period` other than `10` or `60` (no other value exists). A hand-written counter in D1 or KV. Calling the limiter after a D1 read. A per-request KV write for counting (KV writes cost 10× reads and cap at 1/s/key).
+**FORBIDDEN.** **Using the rate-limit binding to enforce a plan entitlement** — it is per-colo and documented as _"not… an accurate accounting system"_, so metering a customer with it under-counts across colos, which is a billing bug by construction. A `period` other than `10` or `60` (no other value exists). A hand-written counter in D1 or KV. Calling the limiter after a D1 read. A per-request KV write for counting (KV writes cost 10× reads and cap at 1/s/key).
 
 **PROOF REQUIRED.** Real runs against production: (a) exceed the edge limit from one IP and show the 429 arriving **before** any D1 query (proven from the query log or a timing/trace showing no D1 call); (b) exhaust one key's quota and show the 429 with the reset time, `apikey.remaining` at 0, cited by row; (c) show the two are independent — a key under quota still shielded by the edge limit, and a key over quota rejected even from a fresh IP.
 

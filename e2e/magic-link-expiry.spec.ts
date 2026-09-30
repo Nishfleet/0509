@@ -1,7 +1,13 @@
 import { expect, test, type Browser, type BrowserContext, type Page } from "@playwright/test";
 
 import { accessStatePath } from "../playwright.config";
-import { deleteCreatedAccount, requireInboxToken, signInWithMagicLink, turnstileToken, waitForMagicLink } from "./inbox";
+import {
+  deleteCreatedAccount,
+  requireInboxToken,
+  signInWithMagicLink,
+  turnstileToken,
+  waitForMagicLink,
+} from "./inbox";
 
 let createdEmail = "";
 test.afterEach(async ({ page }, testInfo) => {
@@ -22,10 +28,7 @@ test.skip(
 // The expiry probe owes the token's real 300 s TTL (better-auth's expiresIn
 // default; auth.server.ts does not override it) — a wait no viewport can
 // shrink, so it runs on one lane per deploy instead of once per viewport.
-test.skip(
-  ({ viewport }) => viewport?.width !== 1440,
-  "expiry costs five real minutes; one lane per deploy proves it",
-);
+test.skip(({ viewport }) => viewport?.width !== 1440, "expiry costs five real minutes; one lane per deploy proves it");
 test.describe.configure({ retries: 1 });
 
 const TOKEN_TTL_MS = 305_000;
@@ -57,7 +60,12 @@ async function followOnce(context: BrowserContext, link: string) {
   return {
     status: response.status(),
     location: response.headers()["location"] ?? "",
-    setsSession: cookies.some((c) => SESSION_COOKIE.test(c) && !/;\s*max-age=0(;|$)/i.test(c) && (c.split(";")[0] ?? "").split("=").slice(1).join("=").trim() !== ""),
+    setsSession: cookies.some(
+      (c) =>
+        SESSION_COOKIE.test(c) &&
+        !/;\s*max-age=0(;|$)/i.test(c) &&
+        (c.split(";")[0] ?? "").split("=").slice(1).join("=").trim() !== "",
+    ),
     at: new Date().toISOString(),
   };
 }
@@ -89,7 +97,8 @@ async function requestMagicLink(page: Page, baseURL: string, email: string) {
 // session's user when the jar holds one and null when it does not.
 async function sessionEmail(context: BrowserContext, baseURL: string): Promise<string | null> {
   const response = await context.request.get(`${baseURL}/api/auth/get-session`);
-  if (response.status() !== 200) throw new Error(`GET /api/auth/get-session answered HTTP ${response.status()} (expected 200)`);
+  if (response.status() !== 200)
+    throw new Error(`GET /api/auth/get-session answered HTTP ${response.status()} (expected 200)`);
   const body: unknown = await response.json();
   if (body && typeof body === "object" && "user" in body) {
     const user = (body as { user?: { email?: string } }).user;
@@ -112,13 +121,17 @@ test("the sign-in link works once, survives a newer request, dies on its own clo
   const stranger = freshAddress("stranger");
 
   // First follow: the full J1 journey — real form, real email, real link.
-  const verifyResponse = page.waitForResponse((r) => r.url().includes("/api/auth/magic-link/verify"), { timeout: 240_000 });
+  const verifyResponse = page.waitForResponse((r) => r.url().includes("/api/auth/magic-link/verify"), {
+    timeout: 240_000,
+  });
   const first = await signInWithMagicLink(page, email, token);
   const verifyStatus = (await verifyResponse).status();
   expect(verifyStatus).toBeGreaterThanOrEqual(300);
   expect(verifyStatus).toBeLessThan(400);
   await expect(page.getByText(email)).toBeVisible();
-  console.log(`magic-link-expiry follow=first verifyStatus=${verifyStatus} email=${email} landed=${page.url()} at=${new Date().toISOString()}`);
+  console.log(
+    `magic-link-expiry follow=first verifyStatus=${verifyStatus} email=${email} landed=${page.url()} at=${new Date().toISOString()}`,
+  );
 
   // Replay: the same link a second time, in a jar that has no session.
   const replayContext = await freshContext(browser);
@@ -167,9 +180,7 @@ test("the sign-in link works once, survives a newer request, dies on its own clo
   expect(newerFollow.status).toBe(302);
   expect(newerFollow.location).not.toContain("error=");
   expect(newerFollow.setsSession).toBe(true);
-  console.log(
-    `magic-link-expiry follow=newer status=${newerFollow.status} session=${email} at=${newerFollow.at}`,
-  );
+  console.log(`magic-link-expiry follow=newer status=${newerFollow.status} session=${email} at=${newerFollow.at}`);
   await newerContext.close();
 
   // Expiry: the fourth link is never followed until its TTL has fully elapsed.

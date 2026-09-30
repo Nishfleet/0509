@@ -4,6 +4,8 @@ import { env } from "cloudflare:workers";
 import { createAuth } from "../auth.server";
 import type { AgentKey, ConnectedApp } from "./access";
 
+const FRESH = { disableCookieCache: true };
+
 function appName(metadata: unknown, fallback: string): string {
   if (typeof metadata !== "object" || metadata === null) return fallback;
   const name: unknown = Reflect.get(metadata, "appName");
@@ -38,12 +40,12 @@ export async function readAgentAccess(
 }
 
 export async function createAgentKey(request: Request, name: string): Promise<string> {
-  const created = await createAuth(env).api.createApiKey({ body: { name }, headers: request.headers });
+  const created = await createAuth(env).api.createApiKey({ body: { name }, headers: request.headers, query: FRESH });
   return created.key;
 }
 
 export async function revokeAgentKey(request: Request, keyId: string): Promise<void> {
-  await createAuth(env).api.deleteApiKey({ body: { keyId }, headers: request.headers });
+  await createAuth(env).api.deleteApiKey({ body: { keyId }, headers: request.headers, query: FRESH });
 }
 
 export function disconnectApp(helpers: OAuthHelpers, userId: string, grantId: string): Promise<void> {

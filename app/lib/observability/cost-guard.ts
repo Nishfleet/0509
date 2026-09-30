@@ -1,4 +1,4 @@
-export type CostLine = "d1_rows_written" | "r2_class_a_ops" | "browser_ms";
+export type CostLine = "d1_rows_written" | "r2_class_a_ops";
 
 export interface DailyUsage {
   day: string;
@@ -10,7 +10,6 @@ export interface DailyUsage {
 export const EXPECTED_PER_BRAND_DAY: Readonly<Record<CostLine, number>> = {
   d1_rows_written: 10,
   r2_class_a_ops: 10,
-  browser_ms: 15_000,
 };
 
 export const COST_GUARD_FACTOR = 3;
@@ -23,12 +22,11 @@ export interface CostBreach {
   onBrands: number;
 }
 
-const LINES: readonly CostLine[] = ["d1_rows_written", "r2_class_a_ops", "browser_ms"];
+const LINES: readonly CostLine[] = ["d1_rows_written", "r2_class_a_ops"];
 
 const MEASURED: Readonly<Record<CostLine, (usage: DailyUsage) => number>> = {
   d1_rows_written: (usage) => usage.d1RowsWritten,
   r2_class_a_ops: (usage) => usage.r2ClassAOps,
-  browser_ms: (usage) => usage.browserMs,
 };
 
 export function evaluateCost(usage: DailyUsage, onBrands: number): readonly CostBreach[] {

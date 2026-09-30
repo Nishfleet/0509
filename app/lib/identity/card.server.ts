@@ -1,9 +1,8 @@
 import { env } from "cloudflare:workers";
 import { z } from "zod";
 
-import { readUrl, probeFailureReason, ReadUrlError } from "../fetch/transport.server";
+import { readUrl } from "../fetch/transport.server";
 import type { ReadUrlOptions } from "../fetch/transport.server";
-import { sha256Hex } from "../sha256";
 import { takeBrowserEscalation } from "../site/browser-budget.server";
 import type { CardReview, CardValues, DraftField, SiteFields } from "./card-fields";
 import { extractIdentity } from "./extract";
@@ -11,7 +10,7 @@ import { reviewFields } from "./field-confidence.server";
 import { readLogo, storeLogo } from "./logo-store.server";
 import { logoCandidateUrls } from "./logo-cascade";
 import type { LogoCandidates } from "./logo-cascade";
-import { resolveBrandName } from "./name-cascade";
+import { resolveBrandName } from "./name-cascade.server";
 import type { Subject } from "./normalise";
 import { cachedProbe, probeKey } from "./probe-cache.server";
 
@@ -51,6 +50,16 @@ const UNREACHED: SiteCard = {
   navLinks: [],
 };
 
+class BudgetDeferredError extends Error {}
+
+function readFailure(page: { reason: string; detail: string }): Error {
+  return page.reason === "deferred" ? new BudgetDeferredError(page.detail) : new Error(page.detail);
+}
+
+function unreachedEvent(scope: "site" | "creator", error: unknown): string {
+  return error instanceof BudgetDeferredError ? `identity-${scope}-deferred` : `identity-${scope}-unreached`;
+}
+
 type MayEscalate = NonNullable<ReadUrlOptions["mayEscalate"]>;
 
 export function brandBudget(workspaceId: string, registrable: string): MayEscalate {
@@ -64,7 +73,7 @@ function wikidataTerm(subject: Subject): string {
 async function probeSite(subject: Subject, mayEscalate: MayEscalate): Promise<SiteCard> {
   if (subject.url === null) throw new Error("no site to read");
   const page = await readUrl(subject.url, { mayEscalate });
-  if (!page.ok) throw new ReadUrlError(page.reason);
+  if (!page.ok) throw readFailure(page);
   const extract = await extractIdentity(page.html, subject.url);
   const name = await resolveBrandName(extract.nameSources, wikidataTerm(subject));
   const card: SiteCard = {
@@ -88,7 +97,7 @@ async function probeSite(subject: Subject, mayEscalate: MayEscalate): Promise<Si
 async function probeProfile(subject: Subject, mayEscalate: MayEscalate): Promise<SiteCard> {
   if (subject.url === null) throw new Error("no profile to read");
   const page = await readUrl(subject.url, { mayEscalate });
-  if (!page.ok) throw new ReadUrlError(page.reason);
+  if (!page.ok) throw readFailure(page);
   const extract = await extractIdentity(page.html, subject.url);
   return {
     name: extract.nameSources.title,
@@ -123,9 +132,7 @@ export async function readSiteCard(
     const probe = profileProbe(subject);
     if (probe === null || subject.url === null) return { card: UNREACHED, reached: false };
     try {
-      const card = await cachedProbe(subject, probe, siteCardSchema, () =>
-        probeProfile(subject, mayEscalate),
-      );
+      const card = await cachedProbe(subject, probe, siteCardSchema, () => probeProfile(subject, mayEscalate));
       console.log(
         JSON.stringify({
           event: "identity-creator-card",
@@ -135,30 +142,17 @@ export async function readSiteCard(
       );
       return { card, reached: true };
     } catch (error) {
-      const subjectSha256 = await sha256Hex(subject.registrable);
-      console.log(
-        JSON.stringify({
-          event: "identity-creator-unreached",
-          probe,
-          reason: probeFailureReason(error),
-          subjectSha256,
-        }),
-      );
+      console.log(JSON.stringify({ event: unreachedEvent("creator", error), error: String(error) }));
       return { card: UNREACHED, reached: false };
     }
   }
   try {
     return {
-      card: await cachedProbe(subject, "homepage", readSiteCardSchema, () =>
-        probeSite(subject, mayEscalate),
-      ),
+      card: await cachedProbe(subject, "homepage", readSiteCardSchema, () => probeSite(subject, mayEscalate)),
       reached: true,
     };
   } catch (error) {
-    const subjectSha256 = await sha256Hex(subject.registrable);
-    console.log(
-      JSON.stringify({ event: "identity-site-unreached", reason: probeFailureReason(error), subjectSha256 }),
-    );
+    console.log(JSON.stringify({ event: unreachedEvent("site", error), error: String(error) }));
     return { card: UNREACHED, reached: false };
   }
 }
@@ -195,6 +189,41 @@ async function firstStorableLogoUrl(candidates: LogoCandidates): Promise<string 
   return null;
 }
 
+function cardValues(subject: Subject, card: SiteCard): CardValues {
+  return {
+    name: card.name ?? (subject.kind === "domain" ? null : `@${subject.registrable}`),
+    description: card.description,
+    socials:
+      subject.url !== null && subject.kind !== "domain"
+        ? [
+            { platform: subject.platform ?? "site", url: subject.url },
+            ...card.socials.filter((social) => social.platform !== subject.platform),
+          ]
+        : card.socials,
+  };
+}
+
+async function logoDataUrl(subject: Subject, card: SiteCard): Promise<string | null> {
+  const cached = await cachedProbe(subject, "icon", logoSchema, async () => {
+    const url = await firstStorableLogoUrl({
+      ...card.logoCandidates,
+      registrableDomain: subject.registrable,
+    });
+    return { v: ICON_PROBE_V, url };
+  });
+  const url = cached.url;
+  if (url === null) return null;
+  const kept = await readLogo(subject.registrable);
+  if (kept !== null) {
+    const contentType = kept.httpMetadata?.contentType ?? "image/png";
+    const bytes = new Uint8Array(await kept.arrayBuffer());
+    return toDataUrl(contentType, bytes);
+  }
+  const stored = await storeLogo(subject.registrable, url);
+  if (stored === null) return null;
+  return toDataUrl(stored.contentType, stored.bytes);
+}
+
 export function startCard(
   workspaceId: string,
   subject: Subject,
@@ -202,51 +231,22 @@ export function startCard(
 ): { site: Promise<SiteFields>; logo: Promise<string | null> } {
   const read = readSiteCard(subject, brandBudget(workspaceId, subject.registrable));
   const site = read.then(async ({ card, reached }): Promise<SiteFields> => {
-    const values: CardValues = {
-      name: card.name ?? (subject.kind === "domain" ? null : `@${subject.registrable}`),
-      description: card.description,
-      socials: subject.url !== null && subject.kind !== "domain"
-        ? [
-            { platform: subject.platform ?? "site", url: subject.url },
-            ...card.socials.filter((social) => social.platform !== subject.platform),
-          ]
-        : card.socials,
-    };
+    const values = cardValues(subject, card);
     const review: CardReview = reached
       ? await reviewFields(workspaceId, subject, values, edited, new Date().toISOString())
       : fillReview(values);
     return { ...applyReview(values, review), unfound: subject.kind === "domain" && !reached };
   });
-  const logo = read.then(async ({ card, reached }) => {
-    if (!reached) return null;
-    const cached = await cachedProbe(subject, "icon", logoSchema, async () => {
-      const url = await firstStorableLogoUrl({
-        ...card.logoCandidates,
-        registrableDomain: subject.registrable,
-      });
-      return { v: ICON_PROBE_V, url };
+  const logo = read
+    .then(({ card, reached }) => (reached ? logoDataUrl(subject, card) : null))
+    .catch((error: unknown) => {
+      console.log(JSON.stringify({ event: "identity-logo-failed", workspaceId, error: String(error) }));
+      return null;
     });
-    const url = cached.url;
-    if (url === null) return null;
-    const kept = await readLogo(subject.registrable);
-    if (kept !== null) {
-      const contentType = kept.httpMetadata?.contentType ?? "image/png";
-      const bytes = new Uint8Array(await kept.arrayBuffer());
-      return toDataUrl(contentType, bytes);
-    }
-    const stored = await storeLogo(subject.registrable, url);
-    if (stored === null) return null;
-    return toDataUrl(stored.contentType, stored.bytes);
-  }).catch((error: unknown) => {
-    console.log(JSON.stringify({ event: "identity-logo-failed", workspaceId, error: String(error) }));
-    return null;
-  });
   return { site, logo };
 }
 
-export async function readCachedSiteProof(
-  subject: Subject,
-): Promise<{ adLibraryHints: string[]; navLinks: string[] }> {
+export async function readCachedSiteProof(subject: Subject): Promise<{ adLibraryHints: string[]; navLinks: string[] }> {
   const hit = await env.IDENTITY_CACHE.get(probeKey(subject, "homepage"), "json");
   const parsed = siteCardSchema.safeParse(hit);
   if (!parsed.success) return { adLibraryHints: [], navLinks: [] };

@@ -23,7 +23,15 @@ export async function claimSendAttempt(
   const staleBefore = new Date(Date.now() - STALE_CLAIM_MS).toISOString();
   return db
     .prepare(CLAIM_ATTEMPT)
-    .bind(input.idempotencyKey, input.workspaceId, input.targetId, input.digestId, input.idempotencyKey, now, staleBefore)
+    .bind(
+      input.idempotencyKey,
+      input.workspaceId,
+      input.targetId,
+      input.digestId,
+      input.idempotencyKey,
+      now,
+      staleBefore,
+    )
     .first<{ id: string }>();
 }
 

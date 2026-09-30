@@ -42,11 +42,13 @@ async function settle<T>(label: string, run: () => Promise<T>): Promise<T | null
   try {
     return await run();
   } catch (error) {
-    console.error(JSON.stringify({
-      event: "site.own_check_step_failed",
-      step: label,
-      error: error instanceof Error ? error.message : String(error),
-    }));
+    console.error(
+      JSON.stringify({
+        event: "site.own_check_step_failed",
+        step: label,
+        error: error instanceof Error ? error.message : String(error),
+      }),
+    );
     return null;
   }
 }
@@ -56,10 +58,7 @@ export class OwnSiteCheck extends WorkflowEntrypoint<Env> {
     return withMonitor("own-site-check", () => this.runCheck(event, step), MONITOR);
   }
 
-  private async runCheck(
-    event: WorkflowEvent<unknown>,
-    step: WorkflowStep,
-  ): Promise<OwnSiteCheckOutcome> {
+  private async runCheck(event: WorkflowEvent<unknown>, step: WorkflowStep): Promise<OwnSiteCheckOutcome> {
     const plannedAt = event.timestamp.toISOString();
     const plan = await step.do("plan", RETRY, () => planOwnSiteCheck(plannedAt));
 
@@ -70,22 +69,17 @@ export class OwnSiteCheck extends WorkflowEntrypoint<Env> {
       return [...previous, { page, health }];
     }, Promise.resolve([]));
 
-    const recovered = await probed.reduce<Promise<readonly string[]>>(
-      async (done, { page, health }) => {
-        const previous = await done;
-        const incidentId = plan.openIncidents[page.pageId];
-        if (health?.state !== "healthy" || incidentId === undefined) return previous;
-        if (!Object.hasOwn(plan.breakage, page.pageId)) return [...previous, incidentId];
-        const label = `verify ${incidentId}`;
-        const repaired = await settle(label, () =>
-          step.do(label, RETRY, () =>
-            breakageRepaired(page.url, plan.breakage[page.pageId] ?? null),
-          ),
-        );
-        return repaired === true ? [...previous, incidentId] : previous;
-      },
-      Promise.resolve([]),
-    );
+    const recovered = await probed.reduce<Promise<readonly string[]>>(async (done, { page, health }) => {
+      const previous = await done;
+      const incidentId = plan.openIncidents[page.pageId];
+      if (health?.state !== "healthy" || incidentId === undefined) return previous;
+      if (!Object.hasOwn(plan.breakage, page.pageId)) return [...previous, incidentId];
+      const label = `verify ${incidentId}`;
+      const repaired = await settle(label, () =>
+        step.do(label, RETRY, () => breakageRepaired(page.url, plan.breakage[page.pageId] ?? null)),
+      );
+      return repaired === true ? [...previous, incidentId] : previous;
+    }, Promise.resolve([]));
     const closed = await recovered.reduce<Promise<number>>(async (done, incidentId) => {
       const count = await done;
       const label = `close ${incidentId}`;
@@ -106,9 +100,7 @@ export class OwnSiteCheck extends WorkflowEntrypoint<Env> {
     const opened = await suspects.reduce<Promise<number>>(async (done, { page }) => {
       const count = await done;
       const confirmLabel = `confirm ${page.pageId}`;
-      const confirmed = await settle(confirmLabel, () =>
-        step.do(confirmLabel, RETRY, () => probeOwnSite(page.url)),
-      );
+      const confirmed = await settle(confirmLabel, () => step.do(confirmLabel, RETRY, () => probeOwnSite(page.url)));
       if (confirmed?.state !== "broken") return count;
       const openLabel = `open ${page.pageId}`;
       const incidentId = await settle(openLabel, () =>

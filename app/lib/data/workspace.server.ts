@@ -5,9 +5,7 @@ import { canonicalTimezone } from "../timezone";
 const SELECT_WORKSPACE_TIMEZONE = "SELECT timezone FROM workspace WHERE id = ?";
 
 export async function readWorkspaceTimezone(workspaceId: string): Promise<string> {
-  const row = await env.DB.prepare(SELECT_WORKSPACE_TIMEZONE)
-    .bind(workspaceId)
-    .first<{ timezone: string | null }>();
+  const row = await env.DB.prepare(SELECT_WORKSPACE_TIMEZONE).bind(workspaceId).first<{ timezone: string | null }>();
   return canonicalTimezone(row?.timezone);
 }
 
@@ -58,9 +56,7 @@ export async function fillWorkspaceTimezone(db: WorkspaceDb, id: string, timezon
 }
 
 export async function readWorkspaceR2Prefixes(workspaceId: string): Promise<string[]> {
-  const { results } = await env.DB.prepare(SELECT_WORKSPACE_WATCHES)
-    .bind(workspaceId)
-    .all<{ id: string }>();
+  const { results } = await env.DB.prepare(SELECT_WORKSPACE_WATCHES).bind(workspaceId).all<{ id: string }>();
   return [`card/${workspaceId}/`, ...results.map((row) => `snapshot/site/${row.id}/`)];
 }
 
@@ -79,16 +75,13 @@ export interface OwnedSchedule {
 }
 
 export async function readBriefScheduleForOwner(userId: string): Promise<OwnedSchedule | null> {
-  const row = await env.DB
-    .prepare(SELECT_SCHEDULE_BY_OWNER)
-    .bind(userId)
-    .first<{
-      id: string;
-      timezone: string;
-      brief_weekday: number;
-      brief_hour: number;
-      brief_paused_at: string | null;
-    }>();
+  const row = await env.DB.prepare(SELECT_SCHEDULE_BY_OWNER).bind(userId).first<{
+    id: string;
+    timezone: string;
+    brief_weekday: number;
+    brief_hour: number;
+    brief_paused_at: string | null;
+  }>();
   if (row === null) return null;
   return {
     workspaceId: row.id,
@@ -105,9 +98,7 @@ export async function updateBriefSchedule(
   workspaceId: string,
   schedule: { timezone: string; weekday: number; hour: number },
 ): Promise<void> {
-  await env.DB.prepare(UPDATE_SCHEDULE)
-    .bind(schedule.timezone, schedule.weekday, schedule.hour, workspaceId)
-    .run();
+  await env.DB.prepare(UPDATE_SCHEDULE).bind(schedule.timezone, schedule.weekday, schedule.hour, workspaceId).run();
 }
 
 const UPDATE_BRIEF_PAUSED = "UPDATE workspace SET brief_paused_at = ? WHERE id = ?";
@@ -128,5 +119,7 @@ export async function readOwnSiteAlerts(workspaceId: string): Promise<boolean> {
 }
 
 export async function setOwnSiteAlerts(workspaceId: string, ownSiteAlerts: boolean): Promise<void> {
-  await env.DB.prepare(UPDATE_OWN_SITE_ALERTS).bind(ownSiteAlerts ? 1 : 0, workspaceId).run();
+  await env.DB.prepare(UPDATE_OWN_SITE_ALERTS)
+    .bind(ownSiteAlerts ? 1 : 0, workspaceId)
+    .run();
 }

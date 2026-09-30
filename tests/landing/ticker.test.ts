@@ -5,13 +5,15 @@ import { describe, expect, it } from "vitest";
 import { Ticker } from "../../app/components/landing/ticker";
 import { agoLabel, tickerItems, type TickerItem } from "../../app/lib/ticker";
 
-function siteChangeRow(overrides: Partial<{
-  id: string;
-  entity_name: string | null;
-  entity_domain: string;
-  payload_json: string;
-  observed_at: string;
-}> = {}) {
+function siteChangeRow(
+  overrides: Partial<{
+    id: string;
+    entity_name: string | null;
+    entity_domain: string;
+    payload_json: string;
+    observed_at: string;
+  }> = {},
+) {
   return {
     id: overrides.id ?? "sig-1",
     entity_name: overrides.entity_name === undefined ? "Acme" : overrides.entity_name,
@@ -52,9 +54,7 @@ describe("tickerItems", () => {
   it("maps a real site-change row to a headline", () => {
     const now = new Date("2026-09-24T12:05:00.000Z");
     const items = tickerItems([siteChangeRow()], now);
-    expect(items).toEqual([
-      { id: "sig-1", text: "Acme changed its pricing page", ago: "5m ago" } satisfies TickerItem,
-    ]);
+    expect(items).toEqual([{ id: "sig-1", text: "Acme changed its pricing page", ago: "5m ago" } satisfies TickerItem]);
   });
 
   it("falls back to the domain when the row has no name", () => {
@@ -63,10 +63,7 @@ describe("tickerItems", () => {
   });
 
   it("drops a row whose payload is not readable", () => {
-    const rows = [
-      siteChangeRow({ id: "a", payload_json: "not json" }),
-      siteChangeRow({ id: "b" }),
-    ];
+    const rows = [siteChangeRow({ id: "a", payload_json: "not json" }), siteChangeRow({ id: "b" })];
     const items = tickerItems(rows, new Date());
     expect(items.map((item) => item.id)).toEqual(["b"]);
   });

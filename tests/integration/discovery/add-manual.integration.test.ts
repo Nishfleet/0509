@@ -150,9 +150,7 @@ describe("handleCompetitorIntent intent=add", () => {
       message: "We couldn't find that brand's website. Try their main website, like brand.com.",
     });
 
-    const rows = await env.DB.prepare(
-      "SELECT COUNT(*) AS n FROM entity WHERE workspace_id = ? AND role = 'competitor'",
-    )
+    const rows = await env.DB.prepare("SELECT COUNT(*) AS n FROM entity WHERE workspace_id = ? AND role = 'competitor'")
       .bind(workspaceId)
       .first<{ n: number }>();
     expect(rows?.n).toBe(0);
@@ -171,9 +169,7 @@ describe("handleCompetitorIntent intent=add", () => {
       message: "That brand asked not to be tracked, so we can't add it.",
     });
 
-    const rows = await env.DB.prepare(
-      "SELECT COUNT(*) AS n FROM entity WHERE workspace_id = ? AND role = 'competitor'",
-    )
+    const rows = await env.DB.prepare("SELECT COUNT(*) AS n FROM entity WHERE workspace_id = ? AND role = 'competitor'")
       .bind(workspaceId)
       .first<{ n: number }>();
     expect(rows?.n).toBe(0);

@@ -53,14 +53,19 @@ async function seedWatch(id: string, entityId: string, sourceId: string): Promis
 }
 
 async function seedSiteSnapshot(id: string, watchId: string, fetchedAt: string): Promise<void> {
-  await env.DB.prepare(
-    `INSERT INTO snapshot (id, watch_id, fetched_at, payload_hash) VALUES (?1, ?2, ?3, ?4)`,
-  )
+  await env.DB.prepare(`INSERT INTO snapshot (id, watch_id, fetched_at, payload_hash) VALUES (?1, ?2, ?3, ?4)`)
     .bind(id, watchId, fetchedAt, `hash-${id}`)
     .run();
 }
 
-async function seedStanding(id: string, ws: string, entityId: string, weekStartAt: string, rank: number, movement: number): Promise<void> {
+async function seedStanding(
+  id: string,
+  ws: string,
+  entityId: string,
+  weekStartAt: string,
+  rank: number,
+  movement: number,
+): Promise<void> {
   await env.DB.prepare(
     `INSERT INTO standing (id, workspace_id, entity_id, week_start_at, score, rank, movement, computed_at)
      VALUES (?1, ?2, ?3, ?4, 0, ?5, ?6, ?7)`,
@@ -83,7 +88,15 @@ async function seedSignal(
   },
 ): Promise<void> {
   const columns: string[] = ["id", "workspace_id", "entity_id", "source_id", "kind", "dedup_key", "observed_at"];
-  const values: (string | number | null)[] = [id, ws, entityId, sourceId, fields.kind, `dedup-${id}`, fields.observedAt];
+  const values: (string | number | null)[] = [
+    id,
+    ws,
+    entityId,
+    sourceId,
+    fields.kind,
+    `dedup-${id}`,
+    fields.observedAt,
+  ];
   if (fields.canonicalUrl !== undefined) {
     columns.push("canonical_url", "url_hash");
     values.push(fields.canonicalUrl, `url-hash-${id}`);
@@ -97,20 +110,12 @@ async function seedSignal(
     values.push(fields.publishedAt);
   }
   const placeholders = values.map((_, index) => `?${index + 1}`).join(", ");
-  await env.DB.prepare(
-    `INSERT INTO signal (${columns.join(", ")}) VALUES (${placeholders})`,
-  )
+  await env.DB.prepare(`INSERT INTO signal (${columns.join(", ")}) VALUES (${placeholders})`)
     .bind(...values)
     .run();
 }
 
-async function seedVerdict(
-  id: string,
-  ws: string,
-  questionId: string,
-  signalId: string,
-  p: number,
-): Promise<void> {
+async function seedVerdict(id: string, ws: string, questionId: string, signalId: string, p: number): Promise<void> {
   await env.DB.prepare(
     `INSERT INTO jev_verdict (id, workspace_id, question_id, input_hash, signal_id, p, decided_at)
      VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)`,
@@ -120,7 +125,17 @@ async function seedVerdict(
 }
 
 beforeEach(async () => {
-  for (const table of ["signal", "snapshot", "watch", "source", "entity", "standing", "workspace", '"user"', "jev_verdict"]) {
+  for (const table of [
+    "signal",
+    "snapshot",
+    "watch",
+    "source",
+    "entity",
+    "standing",
+    "workspace",
+    '"user"',
+    "jev_verdict",
+  ]) {
     await env.DB.exec(`DELETE FROM ${table}`);
   }
 });

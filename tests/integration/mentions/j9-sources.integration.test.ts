@@ -100,7 +100,7 @@ describe("J9 mentions land from three sources", () => {
     });
     await env.DB.batch([
       env.DB.prepare(
-        'INSERT INTO "user" (id, name, email, emailVerified, createdAt, updatedAt) VALUES (\'user-j9\', \'user-j9\', \'user-j9@example.com\', 1, ?1, ?1)',
+        "INSERT INTO \"user\" (id, name, email, emailVerified, createdAt, updatedAt) VALUES ('user-j9', 'user-j9', 'user-j9@example.com', 1, ?1, ?1)",
       ).bind(NOW),
       env.DB.prepare(
         "INSERT INTO workspace (id, name, owner_user_id, timezone, brief_weekday, brief_hour, created_at) VALUES (?1, 'Gymshark', 'user-j9', 'UTC', 1, 8, ?2)",
@@ -145,7 +145,9 @@ describe("J9 mentions land from three sources", () => {
       ["youtube.channel_rss", "Zephyrwear J9 autumn campaign film", 0],
     ]);
 
-    const alerts = await env.DB.prepare("SELECT title FROM alert WHERE workspace_id = ?1 AND kind = 'mention' ORDER BY title")
+    const alerts = await env.DB.prepare(
+      "SELECT title FROM alert WHERE workspace_id = ?1 AND kind = 'mention' ORDER BY title",
+    )
       .bind(workspaceId)
       .all<{ title: string }>();
     expect(alerts.results.map((row) => row.title)).toEqual([

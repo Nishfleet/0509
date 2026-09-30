@@ -56,11 +56,7 @@ async function seed(): Promise<Seeded> {
     otherEntity: `biggest-move-t-sig-b-${run}`,
   };
 
-  const mention = (
-    id: string,
-    dedupKey: string,
-    observedAt: string,
-  ): D1PreparedStatement =>
+  const mention = (id: string, dedupKey: string, observedAt: string): D1PreparedStatement =>
     env.DB.prepare(
       `INSERT INTO signal (id, workspace_id, entity_id, source_id, kind, title, url, canonical_url, url_hash, dedup_key, observed_at)
        VALUES (?1, ?2, ?3, ?4, 'mention', ?5, ?6, ?6, ?7, ?8, ?9)`,
@@ -80,16 +76,7 @@ async function seed(): Promise<Seeded> {
     env.DB.prepare(
       `INSERT INTO signal (id, workspace_id, entity_id, source_id, kind, title, url, aspect, dedup_key, observed_at)
        VALUES (?1, ?2, ?3, ?4, 'change', ?5, ?6, 'copy', ?7, ?8)`,
-    ).bind(
-      id,
-      workspaceId,
-      entityA,
-      srcSite,
-      `Change ${id}`,
-      `https://a-${run}.example/pricing`,
-      dedupKey,
-      observedAt,
-    );
+    ).bind(id, workspaceId, entityA, srcSite, `Change ${id}`, `https://a-${run}.example/pricing`, dedupKey, observedAt);
 
   const hiring = (
     id: string,
@@ -164,9 +151,21 @@ async function seed(): Promise<Seeded> {
     hiring(ids.before, entityA, `dedup-before-${run}`, "2026-09-10T10:00:00.000Z"),
     hiring(ids.atUntil, entityA, `dedup-at-until-${run}`, UNTIL),
     hiring(ids.otherEntity, entityB, `dedup-b-${run}`, "2026-09-18T12:00:00.000Z"),
-    verdict(`biggest-move-t-jev-change-high-${run}`, "noteworthy_change", `ih-change-high-${run}`, ids.changeHigh, 0.95),
+    verdict(
+      `biggest-move-t-jev-change-high-${run}`,
+      "noteworthy_change",
+      `ih-change-high-${run}`,
+      ids.changeHigh,
+      0.95,
+    ),
     verdict(`biggest-move-t-jev-change-mid-${run}`, "noteworthy_change", `ih-change-mid-${run}`, ids.changeMid, 0.5),
-    verdict(`biggest-move-t-jev-mention-high-${run}`, "mention_matters", `ih-mention-high-${run}`, ids.mentionHigh, 0.95),
+    verdict(
+      `biggest-move-t-jev-mention-high-${run}`,
+      "mention_matters",
+      `ih-mention-high-${run}`,
+      ids.mentionHigh,
+      0.95,
+    ),
     verdict(`biggest-move-t-jev-mention-mid-${run}`, "mention_matters", `ih-mention-mid-${run}`, ids.mentionMid, 0.5),
     verdict(`biggest-move-t-jev-mention-low-${run}`, "mention_matters", `ih-mention-low-${run}`, ids.mentionLow, 0.05),
   ]);

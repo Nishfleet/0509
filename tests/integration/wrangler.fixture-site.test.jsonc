@@ -6,8 +6,8 @@
   "compatibility_date": "2026-09-16",
   "main": "../../workers/fixture-site.ts",
   "durable_objects": {
-    "bindings": [{ "name": "STATE", "class_name": "FixtureState" }]
+    "bindings": [{ "name": "STATE", "class_name": "FixtureState" }],
   },
   "migrations": [{ "tag": "v1", "new_sqlite_classes": ["FixtureState"] }],
-  "vars": { "FIXTURE_SITE_TOKEN": "integration-token" }
+  "vars": { "FIXTURE_SITE_TOKEN": "integration-token" },
 }

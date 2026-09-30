@@ -30,16 +30,13 @@ export function HowRankedTable({ howRanked }: { howRanked: HowRanked }): ReactEl
   return (
     <section data-testid="how-ranked-table" className="font-mono">
       <h2 className={HEADING_CLASS}>How this is ranked</h2>
-      <p className="mt-2 text-ink-soft">
-        Ranked by what the internet did about each brand this week.
-      </p>
+      <p className="mt-2 text-ink-soft">Ranked by what the internet did about each brand this week.</p>
 
       <h3 className={HEADING_CLASS}>What each signal is worth</h3>
       <ul className="mt-2">
         {howRanked.weights.map((entry) => (
           <li key={entry.key} className={ROW_CLASS}>
-            <span className={LABEL_CLASS}>{entry.label}</span>{" "}
-            <span>{String(entry.weight)}</span>
+            <span className={LABEL_CLASS}>{entry.label}</span> <span>{String(entry.weight)}</span>
           </li>
         ))}
       </ul>
@@ -48,8 +45,7 @@ export function HowRankedTable({ howRanked }: { howRanked: HowRanked }): ReactEl
       <ul className="mt-2">
         {howRanked.multipliers.map((entry) => (
           <li key={entry.reliability} className={ROW_CLASS}>
-            <span className={LABEL_CLASS}>{entry.label}</span>{" "}
-            <span>×{String(entry.value)}</span>
+            <span className={LABEL_CLASS}>{entry.label}</span> <span>×{String(entry.value)}</span>
           </li>
         ))}
       </ul>

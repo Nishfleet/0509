@@ -21,9 +21,9 @@ export async function takeBrowserShareImage(workspaceId: string, day: string): P
 
 export async function browserContent(
   url: string,
-): Promise<{ ok: true; res: Response } | { ok: false; cause: string }> {
+): Promise<{ ok: true; res: Response } | { ok: false; kind: "unconfigured" | "threw"; cause: string }> {
   if (!env.BROWSER || typeof env.BROWSER.quickAction !== "function") {
-    return { ok: false, cause: "browser binding is not configured" };
+    return { ok: false, kind: "unconfigured", cause: "browser binding is not configured" };
   }
   try {
     const res = await env.BROWSER.quickAction("content", { url });
@@ -31,6 +31,7 @@ export async function browserContent(
   } catch (err) {
     return {
       ok: false,
+      kind: "threw",
       cause: `browser call threw (${err instanceof Error ? err.message : String(err)})`,
     };
   }

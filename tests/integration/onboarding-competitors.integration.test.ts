@@ -40,15 +40,7 @@ async function seedEntity(input: {
     `INSERT INTO entity (id, workspace_id, role, domain, name, state, created_at)
      VALUES (?, ?, ?, ?, ?, ?, ?)`,
   )
-    .bind(
-      input.id,
-      input.workspaceId,
-      input.role,
-      input.domain,
-      input.name,
-      input.state,
-      input.createdAt,
-    )
+    .bind(input.id, input.workspaceId, input.role, input.domain, input.name, input.state, input.createdAt)
     .run();
 }
 

@@ -2,11 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { PLANS } from "../../app/lib/billing/plans";
 import { FAQ } from "../../app/lib/faq";
-import {
-  faqPageJsonLd,
-  softwareApplicationJsonLd,
-  websiteJsonLd,
-} from "../../app/lib/structured-data";
+import { faqPageJsonLd, softwareApplicationJsonLd, websiteJsonLd } from "../../app/lib/structured-data";
 
 describe("softwareApplicationJsonLd", () => {
   it("prices one Offer per plan from the plan module", () => {

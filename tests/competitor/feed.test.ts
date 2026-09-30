@@ -18,7 +18,14 @@ const ITEMS: readonly DevelopmentItem[] = [
   { id: "a2", kind: "hiring", title: "Staff engineer", summary: null, url: null, observedAt: "2026-09-02T00:00:00Z" },
   { id: "a3", kind: "ad", title: "New creative", summary: null, url: null, observedAt: "2026-09-03T00:00:00Z" },
   { id: "a4", kind: "change", title: "Pricing page", summary: null, url: null, observedAt: "2026-09-04T00:00:00Z" },
-  { id: "a5", kind: "mention", title: "Hacker News thread", summary: null, url: null, observedAt: "2026-09-05T00:00:00Z" },
+  {
+    id: "a5",
+    kind: "mention",
+    title: "Hacker News thread",
+    summary: null,
+    url: null,
+    observedAt: "2026-09-05T00:00:00Z",
+  },
   { id: "a6", kind: "hiring", title: "Designer", summary: null, url: null, observedAt: "2026-09-06T00:00:00Z" },
 ];
 

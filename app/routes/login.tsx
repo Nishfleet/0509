@@ -11,6 +11,7 @@ import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Footer } from "../components/footer";
 import { safeReturnTo } from "../lib/agent/paths";
+import { subjectRedirect } from "../lib/onboarding-subject";
 import { authClient } from "../lib/auth-client";
 import { formMagicLinkRequest } from "../lib/auth/login-magic-link.server";
 import { createAuthForRequest } from "../lib/auth.server";
@@ -21,9 +22,11 @@ import {
 } from "../lib/account-delete.server";
 import { timezoneCookie } from "../lib/timezone";
 
-type LoginActionData =
-  | { error: string; sent?: never }
-  | { sent: { email: string; at: number }; error?: never };
+type LoginActionData = { error: string; sent?: never } | { sent: { email: string; at: number }; error?: never };
+
+function signInTarget(search: URLSearchParams): string {
+  return safeReturnTo(search.get("next") ?? subjectRedirect(search.get("subject")));
+}
 
 export function meta() {
   return [{ title: "Sign in · Five to Nine" }];
@@ -49,10 +52,10 @@ export async function action({ request }: Route.ActionArgs) {
 
   const captchaField = form.get("cf-turnstile-response");
   const captcha = typeof captchaField === "string" ? captchaField.trim() : "";
-  const callbackURL = safeReturnTo(new URL(request.url).searchParams.get("next"));
-  const response = await (await createAuthForRequest(env, request)).handler(
-    formMagicLinkRequest(env.BETTER_AUTH_URL, request, email, captcha, callbackURL),
-  );
+  const callbackURL = signInTarget(new URL(request.url).searchParams);
+  const response = await (
+    await createAuthForRequest(env, request)
+  ).handler(formMagicLinkRequest(env.BETTER_AUTH_URL, request, email, captcha, callbackURL));
   if (response.status === 200) return { sent: { email, at: Date.now() } };
   const detail = await response.text();
   if (response.status === 429) return { error: "Too many sign-in links. Wait a minute and try again." };
@@ -87,7 +90,7 @@ export default function Login() {
       return null;
     });
     if (result && !result.error) {
-      await navigate(safeReturnTo(searchParams.get("next")));
+      await navigate(signInTarget(searchParams));
       return;
     }
     const code = result?.error && "code" in result.error ? result.error.code : "";
@@ -95,7 +98,9 @@ export default function Login() {
   }
 
   if (actionData?.sent) {
-    return <SignInSent key={actionData.sent.at} email={actionData.sent.email} turnstileSiteKey={deleted.turnstileSiteKey} />;
+    return (
+      <SignInSent key={actionData.sent.at} email={actionData.sent.email} turnstileSiteKey={deleted.turnstileSiteKey} />
+    );
   }
 
   return (

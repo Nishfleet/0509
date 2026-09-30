@@ -139,9 +139,7 @@ describe("parked ad platforms (#4039)", () => {
     // these rows cannot enter the degraded path at all.
     const placeholders = PARKED.map(() => "?").join(",");
     const args = [...PARKED.map((p) => p.id)];
-    const watches = await env.DB.prepare(
-      `SELECT count(*) AS n FROM watch WHERE source_id IN (${placeholders})`,
-    )
+    const watches = await env.DB.prepare(`SELECT count(*) AS n FROM watch WHERE source_id IN (${placeholders})`)
       .bind(...args)
       .first<{ n: number }>();
     expect(watches?.n, "a parked source must have no watch and so cannot be swept").toBe(0);
@@ -157,9 +155,7 @@ describe("parked ad platforms (#4039)", () => {
     expect(snapshots?.n).toBe(0);
 
     // And no signal, which is what a UI would render.
-    const signals = await env.DB.prepare(
-      `SELECT count(*) AS n FROM signal WHERE source_id IN (${placeholders})`,
-    )
+    const signals = await env.DB.prepare(`SELECT count(*) AS n FROM signal WHERE source_id IN (${placeholders})`)
       .bind(...args)
       .first<{ n: number }>();
     expect(signals?.n, "a parked source has no UI surface").toBe(0);
@@ -172,14 +168,10 @@ describe("parked ad platforms (#4039)", () => {
     // definitely exist: `source` must see all five. A control that greps the
     // real rows beats seeding workspace/entity/watch/signal/snapshot by hand
     // through five foreign keys.
-    const sameIdsInSource = await env.DB.prepare(
-      `SELECT count(*) AS n FROM source WHERE id IN (${placeholders})`,
-    )
+    const sameIdsInSource = await env.DB.prepare(`SELECT count(*) AS n FROM source WHERE id IN (${placeholders})`)
       .bind(...args)
       .first<{ n: number }>();
-    expect(sameIdsInSource?.n, "the placeholder list must resolve all five rows").toBe(
-      PARKED.length,
-    );
+    expect(sameIdsInSource?.n, "the placeholder list must resolve all five rows").toBe(PARKED.length);
 
     // And a zero that is not this query's answer: the signals for the parked
     // rows are zero while the rows themselves are present, so the signal table
@@ -205,15 +197,11 @@ describe("parked ad platforms (#4039)", () => {
       .run();
 
     try {
-      const disabled = (await env.DB.prepare(ADS_ELIGIBILITY_SELECT).all<{ id: string }>())
-        .results ?? [];
+      const disabled = (await env.DB.prepare(ADS_ELIGIBILITY_SELECT).all<{ id: string }>()).results ?? [];
       expect(disabled.map((r) => r.id)).not.toContain(controlId);
 
-      await env.DB.prepare("UPDATE source SET is_enabled = 1 WHERE id = ?")
-        .bind(controlId)
-        .run();
-      const enabled = (await env.DB.prepare(ADS_ELIGIBILITY_SELECT).all<{ id: string }>())
-        .results ?? [];
+      await env.DB.prepare("UPDATE source SET is_enabled = 1 WHERE id = ?").bind(controlId).run();
+      const enabled = (await env.DB.prepare(ADS_ELIGIBILITY_SELECT).all<{ id: string }>()).results ?? [];
       expect(enabled.map((r) => r.id)).toContain(controlId);
 
       // The five parked rows were unmoved by that flip.
