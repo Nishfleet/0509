@@ -336,6 +336,20 @@ jobs:
             done
             jq -s -r 'add | if length == 0 then "no instances" else (group_by(.status) | map("\(.[0].status): \(length)") | join(", ")) end' <<< "$rows"
           }
+          d1() {
+            npx wrangler d1 execute 0509 --remote --json --command "$1" | jq -c '.[0].results'
+          }
+          failed=0
+          required='["is_competitor","still_competitor","noteworthy_change","own_site_breakage","read_this_first","mention_is_about_brand","mention_matters","page_role","identity_field_confidence.name","identity_field_confidence.description","identity_field_confidence.socials"]'
+          verdicts=$(d1 "SELECT question_id, COUNT(*) AS n, MAX(decided_at) AS last FROM jev_verdict GROUP BY question_id")
+          missing=$(jq -r --argjson req "$required" '[.[].question_id] as $have | $req - $have | join(", ")' <<< "$verdicts")
+          dup=$(jq -r '[.[] | select(.question_id == "duplicate_signal")] | if length == 0 then "no rows yet" else "\(.[0].n) rows, last \(.[0].last)" end' <<< "$verdicts")
+          [ -z "$missing" ] || failed=1
+          stale=$(d1 "SELECT s.key AS key FROM source s WHERE s.is_enabled = 1 AND s.degraded_reason IS NULL AND (s.latest_fetched_at IS NULL OR s.latest_fetched_at < '$since') AND EXISTS (SELECT 1 FROM watch w WHERE w.source_id = s.id AND w.is_active = 1) ORDER BY s.key" | jq -r 'map(.key) | join(", ")')
+          [ -z "$stale" ] || failed=1
+          gdelt=$(d1 "SELECT COUNT(*) AS n FROM snapshot sn JOIN watch w ON w.id = sn.watch_id JOIN source s ON s.id = w.source_id WHERE s.key = 'gdelt.doc' AND sn.item_count > 0 AND sn.fetched_at >= '$since'" | jq -r '.[0].n')
+          mentions=$(d1 "SELECT COUNT(*) AS n FROM signal WHERE kind = 'mention' AND observed_at >= '$since'" | jq -r '.[0].n')
+          [ "$gdelt" -gt 0 ] && [ "$mentions" -gt 0 ] || failed=1
           {
             echo "Soak report for the 24 hours before $(date -u +%Y-%m-%dT%H:%MZ) (send counts: $label)."
             echo
@@ -343,7 +357,11 @@ jobs:
             echo "- site sweeps recorded in sweep_run: $sweeps"
             echo "- standing-rollover Workflow instances: $(instances standing-rollover)"
             echo "- send_attempt rows by status: $sends"
+            echo "- Jev verdicts: $([ -z "$missing" ] && echo "every required question has a row" || echo "FAIL, no rows for: $missing"); duplicate_signal (informational): $dup"
+            echo "- enabled sources with an active watch: $([ -z "$stale" ] && echo "all fetched in the last 24 h or marked degraded" || echo "FAIL, stale and not degraded: $stale")"
+            echo "- #6110 news: $gdelt gdelt.doc snapshots with items, $mentions mention signals in the last 24 h$([ "$gdelt" -gt 0 ] && [ "$mentions" -gt 0 ] || echo " (FAIL)")"
             echo "- healthchecks.io dead-man and site-sweep pings: not read, no healthchecks.io read key is a repository secret"
             echo "- new Sentry issues: not read, no Sentry auth token is a repository secret"
           } > comment.md
           gh issue comment 4730 --body-file comment.md
+          [ "$failed" -eq 0 ] || { echo "An engine check failed, see the issue comment"; exit 1; }
