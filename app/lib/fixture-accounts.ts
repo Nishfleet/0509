@@ -4,6 +4,7 @@ export const FIXTURE_ACCOUNTS = {
   j8Soft: { email: "e2e+j8-soft@0509.io", maxCompetitors: 0 },
   j9Mentions: { email: "e2e+j9-mentions@0509.io", maxCompetitors: 1 },
   j12Rollovers: { email: "e2e+j12-rollovers@0509.io", maxCompetitors: 4 },
+  soak: { email: "e2e+soak@0509.io", maxCompetitors: 4 },
 } as const;
 
 export function isFixtureAccount(email: string): boolean {
