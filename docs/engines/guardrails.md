@@ -122,6 +122,8 @@ Granularity is **days**, up to 1,000 rules per bucket, and objects are *"typical
 
 **Email stops first, not last.** The order is: suppress the address and cancel pending `digest` rows, *then* delete. Deleting first leaves an in-flight queue message that renders from rows that no longer exist and either errors or, worse, sends something malformed to someone who just asked to be forgotten.
 
+**A write that lands after the workspace is deleted must not FK-fail.** An account delete drops the `user` row, `workspace.owner_user_id` cascades it away, and better-auth's `session` table carries no foreign key to `user`, so a request already past `requireSession` keeps running with a `workspaceId` whose parent is gone. The next `workspace_id` insert then fails `FOREIGN KEY constraint failed` — Sentry saw it out of `screenPublicSubject`/`screenOnboardingSubject` (0509#6009), the same shape as the snapshot (#6221) and discovery (#5972) crashes. The workspace-scoped writes that run after a read guard their parent in the statement itself, `INSERT ... SELECT ... WHERE EXISTS (SELECT 1 FROM workspace WHERE id = ?)` (`jev_verdict`, `user_decision`; `onboarding_run` already did), so a vanished workspace inserts nothing instead of erroring. This is a skipped write, not a swallowed error: there is no workspace to record against, and the cascade already removed the old rows.
+
 **"Remove and forget"** (a user removing a competitor and choosing to purge) is the same code path scoped to one entity: delete that entity's `signal` rows for that workspace and its R2 objects, keep the workspace. A plain removal keeps history, per the product rule — the two are different actions and the UI must not collapse them into one button.
 
 ---

@@ -14,9 +14,6 @@ export interface FieldEdit {
   to: string;
 }
 
-// Same EXISTS arm as the jev_verdict insert: a decision written after the
-// workspace is deleted (account delete cascades it away mid-request) must not
-// FK-fail. Nothing is recorded because there is no workspace to record it on.
 const INSERT_SUBJECT_DECISION = `INSERT INTO user_decision (id, workspace_id, user_id, signal_id, entity_id, verdict, note, decided_at)
 SELECT ?1, ?2, ?3, NULL, NULL, ?4, ?5, ?6
 WHERE EXISTS (SELECT 1 FROM workspace WHERE id = ?2) AND EXISTS (SELECT 1 FROM "user" WHERE id = ?3)`;
