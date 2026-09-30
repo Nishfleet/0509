@@ -92,15 +92,21 @@ async function signInAndWatchFixture(
     const input = page.getByRole("textbox", { name: "your website, or a handle" });
     await input.fill(FIXTURE_HOST);
     await input.press("Enter");
-    await expect(page).toHaveURL(/\/onboarding\/identity\?subject=j8\.fixture\.0509\.in$/);
+    const business = page.getByRole("button", { name: "Yes, a business or creator" });
+    await expect(async () => {
+      if (await business.isVisible()) await business.click();
+      await expect(page).toHaveURL(/\/onboarding\/identity\?subject=j8\.fixture\.0509\.in$/, { timeout: 3_000 });
+    }).toPass({ timeout: 30_000 });
+    await expect(page.getByRole("button", { name: "edit name" })).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByText("looking on the site")).toHaveCount(0, { timeout: 30_000 });
     await page.getByRole("button", { name: "edit name" }).click();
     const name = page.getByRole("textbox", { name: "name" });
     await name.fill("Fixture Brand");
     await name.press("Escape");
     await page.getByRole("button", { name: "That's me" }).click();
-    await expect(page).toHaveURL(/\/onboarding\/competitors$/);
+    await expect(page).toHaveURL(/\/onboarding\/competitors$/, { timeout: 10_000 });
     await page.getByRole("button", { name: "Start watching" }).click();
-    await expect(page).toHaveURL(/\/app$/);
+    await expect(page).toHaveURL(/\/app$/, { timeout: 30_000 });
   }
   await page.goto("/app/competitors");
   const items = page.getByRole("list", { name: "Competitors" }).getByRole("listitem");
