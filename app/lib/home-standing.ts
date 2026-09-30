@@ -167,13 +167,15 @@ function byRank(a: HomeRow, b: HomeRow): number {
   return a.position - b.position;
 }
 
-function rankedRows(
-  payload: BriefPayload,
-  entities: readonly HomeEntity[],
-  sources: readonly HomeSource[],
-  counts: readonly HomeCount[],
-  moves: readonly SiteChangeView[],
-): readonly HomeRow[] {
+interface RankedRowsInput {
+  payload: BriefPayload;
+  entities: readonly HomeEntity[];
+  sources: readonly HomeSource[];
+  counts: readonly HomeCount[];
+  moves: readonly SiteChangeView[];
+}
+
+function rankedRows({ payload, entities, sources, counts, moves }: RankedRowsInput): readonly HomeRow[] {
   const byId = new Map(entities.map((entity) => [entity.id, entity]));
   return payload.brands
     .map((brand) => {
@@ -221,12 +223,14 @@ function weekKeys(history: readonly HomeHistoryRow[]): readonly string[] {
   return [...new Set(history.map((row) => row.week_start_at))].sort().slice(-4);
 }
 
-function fourWeekChart(
-  history: readonly HomeHistoryRow[],
-  rows: readonly HomeRow[],
-  entities: readonly HomeEntity[],
-  timezone: string,
-): FourWeekChart {
+interface FourWeekChartInput {
+  history: readonly HomeHistoryRow[];
+  rows: readonly HomeRow[];
+  entities: readonly HomeEntity[];
+  timezone: string;
+}
+
+function fourWeekChart({ history, rows, entities, timezone }: FourWeekChartInput): FourWeekChart {
   const weeks = weekKeys(history);
   const entitiesById = new Map(entities.map((entity) => [entity.id, entity]));
   const rowsByEntityId = new Map(rows.map((row) => [row.entityId, row]));
@@ -282,7 +286,13 @@ function rankedOrWaiting(input: HomeStandingInput, onBrands: number): HomeStandi
   if (payload === null || rank === null || payload.headline_total < 2) {
     return gatheringStanding(input, onBrands);
   }
-  const rows = rankedRows(payload, input.entities, input.sources, input.counts, input.moves);
+  const rows = rankedRows({
+    payload,
+    entities: input.entities,
+    sources: input.sources,
+    counts: input.counts,
+    moves: input.moves,
+  });
   return {
     kind: "ranked",
     rank,
@@ -291,7 +301,7 @@ function rankedOrWaiting(input: HomeStandingInput, onBrands: number): HomeStandi
     unjudged: payload.is_unjudged,
     readThisFirst: payload.read_this_first.slice(0, 3),
     rows,
-    chart: fourWeekChart(input.history, rows, input.entities, input.schedule.timezone),
+    chart: fourWeekChart({ history: input.history, rows, entities: input.entities, timezone: input.schedule.timezone }),
   };
 }
 

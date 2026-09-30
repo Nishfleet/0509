@@ -57,57 +57,69 @@ function chipLink(href: string): ReactElement {
   return <a href={href} rel="noreferrer" />;
 }
 
+function flagAttrs(self: boolean, off: boolean): Record<string, string | undefined> {
+  return { "data-self": self ? "" : undefined, "data-off": off ? "" : undefined };
+}
+
+function chipClass(self: boolean, off: boolean): string {
+  return cn(
+    "h-auto min-h-11 max-w-full min-w-0 shrink gap-[7px] rounded-none border-[1.5px] border-line bg-card py-[5px] pr-[11px] pl-[5px] text-[0.85rem] font-medium text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink",
+    self && "border-ink font-semibold",
+    off && "border-dashed text-ink-soft",
+  );
+}
+
+interface BrandAvatarProps {
+  logo: string | null;
+  monogram: string;
+  self: boolean;
+  off: boolean;
+}
+
+function BrandAvatar({ logo, monogram, self, off }: BrandAvatarProps): ReactElement {
+  return (
+    <Avatar
+      aria-hidden="true"
+      className={cn(
+        "size-[26px] rounded-none after:rounded-none after:border-0",
+        self ? "bg-green" : "bg-card",
+        off ? "text-ink-faint" : "text-ink",
+      )}
+      style={boxStyle}
+    >
+      {logo === null ? null : (
+        <AvatarImage
+          alt=""
+          className="absolute inset-0 size-full rounded-none object-cover data-error:hidden"
+          height={BOX}
+          keepMounted
+          src={logo}
+          width={BOX}
+        />
+      )}
+      <AvatarFallback
+        className={cn(
+          "rounded-none border-[1.5px] font-display text-[0.8rem] font-extrabold",
+          self ? "bg-green" : "bg-card",
+          off ? "border-line text-ink-faint" : "border-ink text-ink",
+        )}
+      >
+        {monogram}
+      </AvatarFallback>
+    </Avatar>
+  );
+}
+
 export function BrandChip({ name, href, logoUrl, self = false, off = false }: BrandChipBrand): ReactElement | null {
   const trimmed = name.trim();
   const monogram = brandMonogram(trimmed);
   const to = safeHref(href);
   if (trimmed === "" || monogram === "" || to === null) return null;
 
-  const logo = safeLogo(logoUrl);
-  const label = chipLabel(trimmed, self, off);
-
   return (
-    <Badge
-      variant="outline"
-      render={chipLink(to)}
-      data-self={self ? "" : undefined}
-      data-off={off ? "" : undefined}
-      className={cn(
-        "h-auto min-h-11 max-w-full min-w-0 shrink gap-[7px] rounded-none border-[1.5px] border-line bg-card py-[5px] pr-[11px] pl-[5px] text-[0.85rem] font-medium text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink",
-        self && "border-ink font-semibold",
-        off && "border-dashed text-ink-soft",
-      )}
-    >
-      <Avatar
-        aria-hidden="true"
-        className={cn(
-          "size-[26px] rounded-none after:rounded-none after:border-0",
-          self ? "bg-green" : "bg-card",
-          off ? "text-ink-faint" : "text-ink",
-        )}
-        style={boxStyle}
-      >
-        {logo === null ? null : (
-          <AvatarImage
-            alt=""
-            className="absolute inset-0 size-full rounded-none object-cover data-error:hidden"
-            height={BOX}
-            keepMounted
-            src={logo}
-            width={BOX}
-          />
-        )}
-        <AvatarFallback
-          className={cn(
-            "rounded-none border-[1.5px] font-display text-[0.8rem] font-extrabold",
-            self ? "bg-green" : "bg-card",
-            off ? "border-line text-ink-faint" : "border-ink text-ink",
-          )}
-        >
-          {monogram}
-        </AvatarFallback>
-      </Avatar>
-      <span className="block min-w-0 truncate">{label}</span>
+    <Badge variant="outline" render={chipLink(to)} {...flagAttrs(self, off)} className={chipClass(self, off)}>
+      <BrandAvatar logo={safeLogo(logoUrl)} monogram={monogram} self={self} off={off} />
+      <span className="block min-w-0 truncate">{chipLabel(trimmed, self, off)}</span>
     </Badge>
   );
 }
