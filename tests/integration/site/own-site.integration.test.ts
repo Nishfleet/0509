@@ -15,13 +15,24 @@ const BEFORE_TEXT =
 const PRICED_HTML = `<!doctype html><html><body><h1>My brand</h1><p>Every plan includes unlimited projects, priority support, single sign-on, audit logs, and a named account manager who answers within one business day, with onboarding help for your whole team.</p><p>Plans start at ₹499 a month for the starter tier and ₹1,299 a month for the growth tier, both billed yearly or monthly, with every seat covered by the same uptime promise.</p></body></html>`;
 const SOFT_BROKEN_HTML = `<!doctype html><html><body><h1>My brand</h1><p>Every plan includes unlimited projects, priority support, single sign-on, audit logs, and a named account manager who answers within one business day, with onboarding help for your whole team.</p></body></html>`;
 
-const site: { status: number; apexDown: boolean; challenge: boolean; robots: string | null; html: string | null } = {
+const site: {
+  status: number;
+  apexDown: boolean;
+  challenge: boolean;
+  robots: string | null;
+  robotsByHost: Readonly<Record<string, string | null>>;
+  html: string | null;
+} = {
   status: 200,
   apexDown: false,
   challenge: false,
   robots: null,
+  robotsByHost: {},
   html: null,
 };
+
+const robotsFor = (hostname: string): string | null =>
+  site.robotsByHost[hostname] === undefined ? site.robots : site.robotsByHost[hostname] ?? null;
 
 const fetched: string[] = [];
 
@@ -31,7 +42,8 @@ const respond = (input: RequestInfo | URL): Promise<Response> => {
   if (site.apexDown && !requestUrl.hostname.startsWith("www."))
     return Promise.reject(new Error("DNS lookup failed"));
   if (requestUrl.pathname === "/robots.txt") {
-    return Promise.resolve(new Response(site.robots ?? "", { status: site.robots === null ? 404 : 200 }));
+    const robots = robotsFor(requestUrl.hostname);
+    return Promise.resolve(new Response(robots ?? "", { status: robots === null ? 404 : 200 }));
   }
   const headers = site.challenge ? { "cf-mitigated": "challenge" } : undefined;
   return Promise.resolve(
@@ -106,6 +118,7 @@ describe("own-site check", () => {
     site.apexDown = false;
     site.challenge = false;
     site.robots = null;
+    site.robotsByHost = {};
     site.html = null;
     fetched.length = 0;
     await env.DB.exec("UPDATE source SET is_enabled = 1 WHERE id = 'src_site_web'");
@@ -204,6 +217,15 @@ describe("own-site check", () => {
     site.apexDown = true;
     expect(await runCheck("own-www")).toEqual({ pages: 1, opened: 0, closed: 0, failed: 0 });
     expect(await incidents()).toEqual([]);
+  });
+
+  it("never reads the www retry when www disallows FiveToNineBot and the apex is down", async () => {
+    site.apexDown = true;
+    site.robotsByHost = { "www.mybrand.com": "User-agent: FiveToNineBot\nDisallow: /\n" };
+    expect(await runCheck("own-www-robots")).toEqual({ pages: 1, opened: 0, closed: 0, failed: 0 });
+    expect(await incidents()).toEqual([]);
+    expect(fetched).toContain("https://www.mybrand.com/robots.txt");
+    expect(fetched.filter((u) => !u.endsWith("/robots.txt"))).toEqual(["https://mybrand.com/"]);
   });
 
   it("keeps guarding the customer's own site when the nightly sweep's source is paused", async () => {

@@ -52,7 +52,12 @@ export function pageHost(url: string): string {
 export async function probeOwnSite(url: string): Promise<OwnSiteHealth> {
   if (!(await robotsAllows(url))) return { state: "unknown", reason: "robots" };
   const first = await fetchStatus(url);
-  const response = first instanceof Error ? await fetchStatus(wwwVariant(url)) : first;
+  let response: Response | Error = first;
+  if (first instanceof Error) {
+    const alternate = wwwVariant(url);
+    if (!(await robotsAllows(alternate))) return { state: "unknown", reason: "robots" };
+    response = await fetchStatus(alternate);
+  }
   if (response instanceof Error) return { state: "broken", kind: "not loading" };
   if (response.headers.get("cf-mitigated") === "challenge") return { state: "unknown", reason: "challenge" };
   if (response.status >= 500 || response.status === 404 || response.status === 410) {
