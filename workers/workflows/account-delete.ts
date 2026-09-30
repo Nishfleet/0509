@@ -9,10 +9,15 @@ const RETRY: WorkflowStepConfig = {
   timeout: "5 minutes",
 };
 
-async function emptyPrefix(step: WorkflowStep, prefix: string, page: number, total: number): Promise<number> {
+async function emptyPrefix(
+  step: WorkflowStep,
+  prefix: string,
+  progress: { page: number; total: number },
+): Promise<number> {
+  const { page, total } = progress;
   const result = await step.do(`delete ${prefix} page ${String(page)}`, RETRY, () => deleteStoredPage(prefix));
   const sum = total + result.deleted;
-  return result.more ? emptyPrefix(step, prefix, page + 1, sum) : sum;
+  return result.more ? emptyPrefix(step, prefix, { page: page + 1, total: sum }) : sum;
 }
 
 async function emptyBackupPrefix(step: WorkflowStep, prefix: string, page: number): Promise<void> {
@@ -23,7 +28,7 @@ async function emptyBackupPrefix(step: WorkflowStep, prefix: string, page: numbe
 export class AccountDelete extends WorkflowEntrypoint<Env, AccountDeleteParams> {
   async run(event: WorkflowEvent<AccountDeleteParams>, step: WorkflowStep): Promise<{ deleted: number }> {
     const deleted = await event.payload.prefixes.reduce<Promise<number>>(
-      async (done, prefix) => emptyPrefix(step, prefix, 0, await done),
+      async (done, prefix) => emptyPrefix(step, prefix, { page: 0, total: await done }),
       Promise.resolve(0),
     );
     await event.payload.prefixes.reduce<Promise<void>>(async (done, prefix) => {

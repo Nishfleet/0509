@@ -24,17 +24,17 @@ interface BackupTotals {
 
 async function copyPages(
   step: WorkflowStep,
-  page: number,
-  cursor: string | null,
+  position: { page: number; cursor: string | null },
   totals: BackupTotals,
 ): Promise<BackupTotals> {
+  const { page, cursor } = position;
   const result = await step.do(`copy page ${String(page)}`, RETRY, () => copyMissingPage(cursor ?? undefined));
   const sum: BackupTotals = {
     listed: totals.listed + result.listed,
     copied: totals.copied + result.copied,
     present: totals.present + result.present,
   };
-  return result.cursor === null ? sum : copyPages(step, page + 1, result.cursor, sum);
+  return result.cursor === null ? sum : copyPages(step, { page: page + 1, cursor: result.cursor }, sum);
 }
 
 export class SnapshotBackup extends WorkflowEntrypoint<Env> {
@@ -42,7 +42,7 @@ export class SnapshotBackup extends WorkflowEntrypoint<Env> {
     return withMonitor(
       "snapshot-backup",
       async () => {
-        const totals = await copyPages(step, 0, null, { listed: 0, copied: 0, present: 0 });
+        const totals = await copyPages(step, { page: 0, cursor: null }, { listed: 0, copied: 0, present: 0 });
         console.log(JSON.stringify({ event: "snapshot.backup", ...totals }));
         return totals;
       },

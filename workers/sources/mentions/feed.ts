@@ -3,15 +3,20 @@ import type { FeedEntry } from "@extractus/feed-extractor";
 
 const NOT_A_FEED = new Set(["Unrecognized feed format", "The XML document is not well-formed"]);
 
+const XML_WHITESPACE = new Set([" ", "\n", "\r", "\t"]);
+
+function skipWhitespace(xml: string, from: number): number {
+  let i = from;
+  while (XML_WHITESPACE.has(xml[i] ?? "")) i += 1;
+  return i;
+}
+
 function rootElementIsFeed(xml: string): boolean {
-  let i = 0;
-  if (xml.charCodeAt(0) === 0xfeff) i = 1;
-  while (xml[i] === " " || xml[i] === "\n" || xml[i] === "\r" || xml[i] === "\t") i += 1;
+  let i = skipWhitespace(xml, xml.charCodeAt(0) === 0xfeff ? 1 : 0);
   if (xml.startsWith("<?", i)) {
     const end = xml.indexOf("?>", i);
     if (end < 0) return false;
-    i = end + 2;
-    while (xml[i] === " " || xml[i] === "\n" || xml[i] === "\r" || xml[i] === "\t") i += 1;
+    i = skipWhitespace(xml, end + 2);
   }
   return /^<feed(?:\s|\/?>)/.test(xml.slice(i));
 }

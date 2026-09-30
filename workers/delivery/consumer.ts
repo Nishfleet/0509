@@ -254,6 +254,35 @@ export async function deliver(env: Env, message: DigestMessage): Promise<Deliver
   });
 }
 
+function renderIncidentEmail(incident: IncidentRow, to: string) {
+  const site = pageHost(incident.page_url);
+  const rendered =
+    incident.closed_at === null
+      ? renderIncidentOpen({
+          site,
+          kind: incident.kind,
+          opened_at: incident.opened_at,
+          recheck_at: nextOwnSiteCheck(new Date(incident.opened_at)),
+          mark: incident.mark,
+          link: INCIDENT_LINK,
+          timezone: incident.timezone,
+        })
+      : renderIncidentFixed({
+          site,
+          kind: incident.kind,
+          closed_at: incident.closed_at,
+          link: INCIDENT_LINK,
+          timezone: incident.timezone,
+        });
+  return {
+    to,
+    from: "brief@0509.io",
+    subject: rendered.subject,
+    html: rendered.html,
+    text: rendered.text,
+  };
+}
+
 export async function deliverIncident(env: Env, message: IncidentMessage): Promise<DeliveryResult> {
   const incident = await readIncident(env, message.incident_id);
   if (!incident) {
@@ -302,34 +331,7 @@ export async function deliverIncident(env: Env, message: IncidentMessage): Promi
   return sendAndResolve(env, {
     claimId: claim.id,
     idempotencyKey,
-    send: () => {
-      const site = pageHost(incident.page_url);
-      const rendered =
-        incident.closed_at === null
-          ? renderIncidentOpen({
-              site,
-              kind: incident.kind,
-              opened_at: incident.opened_at,
-              recheck_at: nextOwnSiteCheck(new Date(incident.opened_at)),
-              mark: incident.mark,
-              link: INCIDENT_LINK,
-              timezone: incident.timezone,
-            })
-          : renderIncidentFixed({
-              site,
-              kind: incident.kind,
-              closed_at: incident.closed_at,
-              link: INCIDENT_LINK,
-              timezone: incident.timezone,
-            });
-      return sendMessage(env.EMAIL, {
-        to: target.target_value,
-        from: "brief@0509.io",
-        subject: rendered.subject,
-        html: rendered.html,
-        text: rendered.text,
-      });
-    },
+    send: () => sendMessage(env.EMAIL, renderIncidentEmail(incident, target.target_value)),
   });
 }
 

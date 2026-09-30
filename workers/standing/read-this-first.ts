@@ -91,6 +91,54 @@ function packFor(
   });
 }
 
+interface JudgeContext {
+  db: D1Database;
+  input: JudgeWeekInput;
+  self: { name: string; domain: string } | null;
+  entities: readonly EntityRow[];
+}
+
+async function judgeChunk(context: JudgeContext, chunk: readonly LocatedItem[]): Promise<D4Verdict[]> {
+  const { db, input, self, entities } = context;
+  const verdicts: NoulVerdict[] = await Promise.all(
+    chunk.map((entry) => askNoul(input.workspaceId, READ_THIS_FIRST, packFor(entry, self, entities))),
+  );
+  const statements = chunk.flatMap((entry, position) => {
+    const verdict = required(verdicts[position], "read-this-first.verdict");
+    if (verdict.cached) return [];
+    return [
+      insertVerdict({
+        workspaceId: input.workspaceId,
+        questionId: verdict.questionId,
+        inputHash: verdict.inputHash,
+        signalId: entry.item.signal_id,
+        entityId: entry.item.entity_id,
+        p: verdict.p,
+        choice: null,
+        reason: null,
+        decidedAt: input.decidedAt,
+      }),
+    ];
+  });
+  if (statements.length > 0) {
+    await db.batch(statements);
+  }
+  return chunk.map((entry, position) => ({
+    signalId: entry.item.signal_id,
+    p: required(verdicts[position], "read-this-first.verdict").p,
+    observedAt: entry.item.observed_at,
+  }));
+}
+
+async function judgeAll(context: JudgeContext, located: readonly LocatedItem[]): Promise<D4Verdict[]> {
+  let collected: D4Verdict[] = [];
+  for (let index = 0; index < located.length; index += JUDGE_CHUNK) {
+    const chunk = located.slice(index, index + JUDGE_CHUNK);
+    collected = [...collected, ...(await judgeChunk(context, chunk))];
+  }
+  return collected;
+}
+
 export async function judgeWeek(db: D1Database, input: JudgeWeekInput): Promise<JudgedWeek> {
   const [weekItemResult, entityResult] = await db.batch([
     db.prepare(WEEK_ITEMS).bind(input.workspaceId, input.startsAt, input.closesAt, D3_QUESTION_ID, D6_QUESTION_ID),
@@ -114,47 +162,13 @@ export async function judgeWeek(db: D1Database, input: JudgeWeekInput): Promise<
   const selfEntity = entities.find((entity) => entity.role === "self");
   const self = selfEntity === undefined ? null : { name: selfEntity.name, domain: selfEntity.domain };
 
-  let collected: D4Verdict[] = [];
   try {
-    for (let index = 0; index < located.length; index += JUDGE_CHUNK) {
-      const chunk = located.slice(index, index + JUDGE_CHUNK);
-      const verdicts: NoulVerdict[] = await Promise.all(
-        chunk.map((entry) => askNoul(input.workspaceId, READ_THIS_FIRST, packFor(entry, self, entities))),
-      );
-      const statements = chunk.flatMap((entry, position) => {
-        const verdict = required(verdicts[position], "read-this-first.verdict");
-        if (verdict.cached) return [];
-        return [
-          insertVerdict({
-            workspaceId: input.workspaceId,
-            questionId: verdict.questionId,
-            inputHash: verdict.inputHash,
-            signalId: entry.item.signal_id,
-            entityId: entry.item.entity_id,
-            p: verdict.p,
-            choice: null,
-            reason: null,
-            decidedAt: input.decidedAt,
-          }),
-        ];
-      });
-      if (statements.length > 0) {
-        await db.batch(statements);
-      }
-      collected = [
-        ...collected,
-        ...chunk.map((entry, position) => ({
-          signalId: entry.item.signal_id,
-          p: required(verdicts[position], "read-this-first.verdict").p,
-          observedAt: entry.item.observed_at,
-        })),
-      ];
-    }
+    const collected = await judgeAll({ db, input, self, entities }, located);
+    return { picks: pickReadThisFirst(collected), judged: items.length, unjudged: unjudgedInputs > 0 };
   } catch (error) {
     if (error instanceof JevUnavailableError) {
       return { picks: [], judged: 0, unjudged: true };
     }
     throw error;
   }
-  return { picks: pickReadThisFirst(collected), judged: items.length, unjudged: unjudgedInputs > 0 };
 }

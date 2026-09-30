@@ -380,6 +380,45 @@ async function freshMentionStatements(input: {
   };
 }
 
+async function judgeFreshItems(input: {
+  watch: WatchRow;
+  context: DiscoveryContext;
+  items: readonly MentionItem[];
+  snapshotId: string;
+  now: string;
+  jevDown: boolean;
+  budget: number;
+}): Promise<{ statements: D1PreparedStatement[]; stored: number; unjudged: number }> {
+  const { watch, context, snapshotId, now } = input;
+  const statements: D1PreparedStatement[] = [];
+  let stored = 0;
+  let unjudged = 0;
+  let jevDown = input.jevDown;
+  let budget = input.budget;
+  let peers: readonly SweepPeer[] = [];
+  for (const item of input.items) {
+    if (budget <= 0) break;
+    budget -= 1;
+    const done = await freshMentionStatements({
+      watch,
+      context,
+      item,
+      snapshotId,
+      now,
+      jevDown,
+      peers,
+      canAsk: () => budget > 0,
+    });
+    if (done.peer !== null) peers = [...peers, done.peer];
+    if (done.asked) budget -= 1;
+    jevDown = done.jevDown;
+    statements.push(...done.statements);
+    stored += done.stored;
+    unjudged += done.unjudged;
+  }
+  return { statements, stored, unjudged };
+}
+
 async function statementsForWatch(input: {
   watch: WatchRow;
   context: DiscoveryContext;
@@ -410,35 +449,24 @@ async function statementsForWatch(input: {
       canaryCount,
     }),
   ];
-  let stored = 0;
-  let unjudged = 0;
   const rejudged = await rejudgeUnjudged(watch, context, now);
   statements.push(...rejudged.statements);
-  stored += rejudged.stored;
-  let jevDown = rejudged.jevDown;
+  let stored = rejudged.stored;
+  let unjudged = 0;
+  const { jevDown } = rejudged;
   const freshBudget = jevDown ? JUDGED_PER_WATCH : JUDGED_PER_WATCH - rejudged.attempted;
-  let budget = freshBudget;
-  let peers: readonly SweepPeer[] = [];
-  for (const { item } of fresh) {
-    if (budget <= 0) break;
-    budget -= 1;
-    const done = await freshMentionStatements({
-      watch,
-      context,
-      item,
-      snapshotId,
-      now,
-      jevDown,
-      peers,
-      canAsk: () => budget > 0,
-    });
-    if (done.peer !== null) peers = [...peers, done.peer];
-    if (done.asked) budget -= 1;
-    jevDown = done.jevDown;
-    statements.push(...done.statements);
-    stored += done.stored;
-    unjudged += done.unjudged;
-  }
+  const freshJudged = await judgeFreshItems({
+    watch,
+    context,
+    items: fresh.map((entry) => entry.item),
+    snapshotId,
+    now,
+    jevDown,
+    budget: freshBudget,
+  });
+  statements.push(...freshJudged.statements);
+  stored += freshJudged.stored;
+  unjudged += freshJudged.unjudged;
   return { statements, stored, unjudged };
 }
 
@@ -496,14 +524,20 @@ async function flagNoChannel(watchId: string, now: string): Promise<void> {
   if (flagged !== current) await writeWatchConfigJson(watchId, flagged);
 }
 
-async function commitYoutubeFeed(
-  watch: WatchRow,
-  feed: OkYoutubeFeed,
-  pluginKey: string,
-  canaryCount: number | null,
-  now: string,
-  channelId: string,
-): Promise<TargetOutcome> {
+interface YoutubeRun {
+  pluginKey: string;
+  now: string;
+  canaryCount: number | null;
+}
+
+async function commitYoutubeFeed(input: {
+  watch: WatchRow;
+  feed: OkYoutubeFeed;
+  run: YoutubeRun;
+  channelId: string;
+}): Promise<TargetOutcome> {
+  const { watch, feed, run, channelId } = input;
+  const { pluginKey, now, canaryCount } = run;
   const current = await requireWatchConfigJson(watch.watch_id);
   const currentConfig = readWatchConfig(current);
   if (
@@ -529,16 +563,11 @@ async function commitYoutubeFeed(
   return { items: feed.items.length, stored: committed.stored, unjudged: committed.unjudged, skipped: 0 };
 }
 
-async function verifyPendingYoutube(
-  watch: WatchRow,
-  pendingId: string,
-  pluginKey: string,
-  now: string,
-  canaryCount: number | null,
-): Promise<TargetOutcome> {
+async function verifyPendingYoutube(watch: WatchRow, pendingId: string, run: YoutubeRun): Promise<TargetOutcome> {
+  const { now } = run;
   const result = await youtubeAdapter({ query: pendingId }, null);
   if (result.feedState === "ok") {
-    return commitYoutubeFeed(watch, result, pluginKey, canaryCount, now, pendingId);
+    return commitYoutubeFeed({ watch, feed: result, run, channelId: pendingId });
   }
   if (result.feedState === "stale") {
     const current = await requireWatchConfigJson(watch.watch_id);
@@ -549,18 +578,14 @@ async function verifyPendingYoutube(
   return { items: 0, stored: 0, unjudged: 0, skipped: 0 };
 }
 
-async function sweepOneYoutube(
-  watch: WatchRow,
-  pluginKey: string,
-  now: string,
-  canaryCount: number | null,
-): Promise<TargetOutcome> {
+async function sweepOneYoutube(watch: WatchRow, run: YoutubeRun): Promise<TargetOutcome> {
+  const { now } = run;
   const configRaw = await requireWatchConfigJson(watch.watch_id);
   const config = readWatchConfig(configRaw);
   if (config.status !== "ok") throw new Error(`watch ${watch.watch_id} config_json is unreadable`);
 
   if (config.pendingChannelId !== null) {
-    return verifyPendingYoutube(watch, config.pendingChannelId, pluginKey, now, canaryCount);
+    return verifyPendingYoutube(watch, config.pendingChannelId, run);
   }
 
   let channelId = config.channelId;
@@ -591,7 +616,7 @@ async function sweepOneYoutube(
     return { items: 0, stored: 0, unjudged: 0, skipped: 0 };
   }
   if (first.feedState === "ok") {
-    return commitYoutubeFeed(watch, first, pluginKey, canaryCount, now, channelId);
+    return commitYoutubeFeed({ watch, feed: first, run, channelId });
   }
   await markWatchPolled(watch.watch_id, now);
   return { items: 0, stored: 0, unjudged: 0, skipped: 0 };
@@ -611,7 +636,7 @@ async function sweepYoutubeTarget(
   let skipped = 0;
   for (const [index, watch] of target.watches.entries()) {
     try {
-      const outcome = await sweepOneYoutube(watch, target.pluginKey, now, canaryCount);
+      const outcome = await sweepOneYoutube(watch, { pluginKey: target.pluginKey, now, canaryCount });
       items += outcome.items;
       stored += outcome.stored;
       unjudged += outcome.unjudged;
