@@ -92,7 +92,9 @@ async function lookupInstanceStatus(instanceId: string) {
 async function withinDeadline<T>(work: Promise<T>): Promise<T | "timeout"> {
   let timer: ReturnType<typeof setTimeout> | undefined;
   const deadline = new Promise<"timeout">((resolve) => {
-    timer = setTimeout(() => resolve("timeout"), STATUS_DEADLINE_MS);
+    timer = setTimeout(() => {
+      resolve("timeout");
+    }, STATUS_DEADLINE_MS);
   });
   try {
     return await Promise.race([work, deadline]);
