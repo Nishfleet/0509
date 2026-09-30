@@ -35,6 +35,7 @@ export function withDocumentSecurityHeaders(headers: Headers, nonce: string): He
   for (const [name, value] of Object.entries(documentSecurityHeaders(nonce))) {
     if (!merged.has(name)) merged.set(name, value);
   }
+  if (!merged.has("Cache-Control")) merged.set("Cache-Control", "no-transform");
   return merged;
 }
 

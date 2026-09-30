@@ -10,10 +10,11 @@ const FIXED = [
   "e2e+j8-soft@0509.io",
   "e2e+j9-mentions@0509.io",
   "e2e+j12-rollovers@0509.io",
+  "e2e+soak@0509.io",
 ];
 
 describe("fixture accounts", () => {
-  it("recognizes each of the five fixed journey accounts", () => {
+  it("recognizes each of the six fixed journey accounts", () => {
     for (const email of FIXED) {
       expect(isFixtureAccount(email)).toBe(true);
     }
@@ -29,8 +30,15 @@ describe("fixture accounts", () => {
     expect(isFixtureAccount("")).toBe(false);
   });
 
-  it("has exactly five entries keyed j7, j8Hard, j8Soft, j9Mentions, j12Rollovers", () => {
-    expect(Object.keys(FIXTURE_ACCOUNTS).sort()).toEqual(["j12Rollovers", "j7", "j8Hard", "j8Soft", "j9Mentions"]);
+  it("has exactly six entries keyed j7, j8Hard, j8Soft, j9Mentions, j12Rollovers, soak", () => {
+    expect(Object.keys(FIXTURE_ACCOUNTS).sort()).toEqual([
+      "j12Rollovers",
+      "j7",
+      "j8Hard",
+      "j8Soft",
+      "j9Mentions",
+      "soak",
+    ]);
   });
 
   it("carries a non-negative integer maxCompetitors on every entry", () => {
