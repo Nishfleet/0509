@@ -19,6 +19,11 @@ const ALL_ANSWERING = [
   row("gdelt.doc", FRESH),
   row("hn.algolia", FRESH),
   row("youtube.channel_rss", FRESH),
+  row("hiring.greenhouse", FRESH),
+  row("hiring.lever", FRESH),
+  row("hiring.ashby", FRESH),
+  row("hiring.workable", FRESH),
+  row("hiring.smartrecruiters", FRESH),
 ];
 
 describe("watchedClaims", () => {

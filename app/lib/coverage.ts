@@ -57,7 +57,13 @@ export const COVERAGE = [
     kind: "Hiring",
     noun: "hiring",
     origin: "public job boards",
-    sources: [{ id: "hiring.boards", label: "Public job boards", live: false }],
+    sources: [
+      { id: "hiring.greenhouse", label: "Greenhouse", live: true, sourceKey: "hiring.greenhouse" },
+      { id: "hiring.lever", label: "Lever", live: true, sourceKey: "hiring.lever" },
+      { id: "hiring.ashby", label: "Ashby", live: true, sourceKey: "hiring.ashby" },
+      { id: "hiring.workable", label: "Workable", live: true, sourceKey: "hiring.workable" },
+      { id: "hiring.smartrecruiters", label: "SmartRecruiters", live: true, sourceKey: "hiring.smartrecruiters" },
+    ],
   },
   {
     kind: "Your own site",
