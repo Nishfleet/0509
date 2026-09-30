@@ -7,7 +7,7 @@ import { firstWorkspaceId } from "../../app/lib/workspace.server";
 
 vi.mock("../../app/lib/require-session.server", () => ({
   requireSession: async (request: Request) => ({
-    user: { id: request.headers.get("x-test-user") },
+    user: { id: request.headers.get("x-test-user"), email: request.headers.get("x-test-email") },
   }),
 }));
 
@@ -24,7 +24,7 @@ async function seedUser(id: string, email: string) {
 
 function gateRequest(userId: string): Request {
   return new Request("https://0509.io/app/alerts", {
-    headers: { cookie: "better-auth.session_token=x", "x-test-user": userId },
+    headers: { cookie: "better-auth.session_token=x", "x-test-user": userId, "x-test-email": `${userId.replace("user-", "")}@example.com` },
   });
 }
 
