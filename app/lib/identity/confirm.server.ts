@@ -40,15 +40,26 @@ function creatorSite(socials: { platform: string; url: string }[]): Subject | nu
 }
 
 export async function confirmCard(workspaceId: string, userId: string, form: FormData): Promise<boolean> {
+  const startTail = await confirmCardLater(workspaceId, userId, form);
+  if (startTail === null) return false;
+  await startTail();
+  return true;
+}
+
+export async function confirmCardLater(
+  workspaceId: string,
+  userId: string,
+  form: FormData,
+): Promise<(() => Promise<string>) | null> {
   const parsed = confirmSchema.safeParse({
     subject: field(form, "subject"),
     name: field(form, "name"),
     description: field(form, "description"),
     socials: socials(form),
   });
-  if (!parsed.success) return false;
+  if (!parsed.success) return null;
   const normalised = normaliseSubject(parsed.data.subject);
-  if (!normalised.ok) return false;
+  if (!normalised.ok) return null;
   const { subject } = normalised;
   const card = parsed.data;
   const id = crypto.randomUUID();
@@ -71,7 +82,7 @@ export async function confirmCard(workspaceId: string, userId: string, form: For
     now: now.toISOString(),
   });
   const entityId = inserted ? id : await readWorkspaceSelfId(workspaceId);
-  if (entityId === null) return false;
+  if (entityId === null) return null;
   const candidates: { edit: FieldEdit; changed: boolean }[] =
     !inserted || cached === null
       ? []
@@ -97,14 +108,14 @@ export async function confirmCard(workspaceId: string, userId: string, form: For
       })),
   );
   const site = subject.kind === "domain" ? null : creatorSite(card.socials);
-  const tail = startIdentityTail({
+  const tailParams = {
     workspaceId,
     entityId,
     name: card.name,
     domain: site?.registrable ?? subject.registrable,
     homepageUrl: subject.kind === "domain" ? subject.url : (site?.url ?? null),
     ...(subject.kind === "domain" ? {} : { handle: subject.registrable }),
-  });
-  await Promise.all([edits, tail]);
-  return true;
+  };
+  await edits;
+  return () => startIdentityTail(tailParams);
 }

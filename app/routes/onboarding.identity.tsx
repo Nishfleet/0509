@@ -1,6 +1,7 @@
 import type { ShouldRevalidateFunctionArgs } from "react-router";
 import type { Route } from "./+types/onboarding.identity";
 
+import { captureException } from "@sentry/cloudflare";
 import { data, redirect } from "react-router";
 
 import { IdentityCard } from "../components/identity-card";
@@ -9,10 +10,11 @@ import { OneInput } from "../components/one-input";
 import { isTakenDown } from "../lib/data/takedown.server";
 import { startOnboardingRun } from "../lib/data/onboarding_run.server";
 import { readWorkspaceIdForOwner } from "../lib/data/workspace.server";
+import { executionContext } from "../lib/agent/context.server";
 import { creatorRows, editedFields, isDraftSave } from "../lib/identity/card-fields";
 import { applyDraftIntent, readDraft } from "../lib/identity/card-draft.server";
 import { startCard, withinProbeLimit } from "../lib/identity/card.server";
-import { confirmCard } from "../lib/identity/confirm.server";
+import { confirmCardLater } from "../lib/identity/confirm.server";
 import { normaliseSubject } from "../lib/identity/normalise";
 import { screenOnboardingSubject } from "../lib/onboarding-screen.server";
 import { timeCard } from "../lib/onboarding/card-timing.server";
@@ -62,7 +64,7 @@ export async function loader({ request }: Route.LoaderArgs) {
   );
 }
 
-export async function action({ request }: Route.ActionArgs) {
+export async function action({ request, context }: Route.ActionArgs) {
   const timings = createTimings();
   const session = await timings.measure("session", requireFreshSession(request));
   const workspaceId = await timings.measure("workspace", readWorkspaceIdForOwner(session.user.id));
@@ -87,7 +89,13 @@ export async function action({ request }: Route.ActionArgs) {
       if (screened.kind !== "proceed") throw redirect("/onboarding");
     }
   }
-  if (await timings.measure("confirm", confirmCard(workspaceId, session.user.id, form))) {
+  const startTail = await timings.measure("confirm", confirmCardLater(workspaceId, session.user.id, form));
+  if (startTail !== null) {
+    context.get(executionContext).waitUntil(
+      startTail().catch((error: unknown) => {
+        captureException(error, { tags: { step: "identity-tail-start" } });
+      }),
+    );
     throw redirect("/onboarding/competitors", { headers: timings.header() });
   }
   return { message: "Add your brand's name, then tap That's me." };
