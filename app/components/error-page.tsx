@@ -11,6 +11,7 @@ export function ErrorPage({
 }) {
   return (
     <main className="mx-auto flex min-h-dvh w-full max-w-[40rem] min-w-0 flex-col justify-center px-6 py-12">
+      <title>{`${title} · Five to Nine`}</title>
       <h1 className="max-w-full font-display text-[clamp(1.75rem,3.6vw,2.9rem)] leading-[1.15] font-bold tracking-[-0.02em] [overflow-wrap:anywhere]">
         {title}
       </h1>

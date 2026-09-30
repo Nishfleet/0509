@@ -12,7 +12,7 @@ import { changeEmailAllowed } from "./auth/change-email-limit";
 import { MAGIC_LINK_TTL_SECONDS, magicLinkEmail } from "./auth/magic-link-email";
 import { MAGIC_LINK_PATH } from "./auth/magic-link-path";
 import { redactEmailShaped } from "./auth/redact-email-shaped";
-import { signInLinkAllowed } from "./auth/sign-in-limit";
+import { signInLinkAllowed } from "./auth/sign-in-limit.server";
 import { errorText, sendOrThrow } from "../../workers/delivery/send";
 
 interface AuthEnv {

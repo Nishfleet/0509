@@ -212,7 +212,8 @@ describe("the source pill", () => {
     const html = pill(source, quietSnapshot);
     expect(html).toContain('data-state="degraded"');
     expect(html).toContain("we lost the channel, re-resolving");
-    expect(html).toContain("last good 2026-09-24 23:01 UTC");
+    expect(html).toContain("last good unknown");
+    expect(html).not.toContain("last good 2026-09-24 23:01 UTC");
     expect(html).not.toContain("— none");
     expect(sourcePillStatus(source, quietSnapshot, NOW).state).toBe("degraded");
     expect(sourcePillStatus(reddit, quietSnapshot, NOW).state).toBe("none");
@@ -221,6 +222,26 @@ describe("the source pill", () => {
     expect(brokenHtml).toContain('data-state="degraded"');
     expect(brokenHtml).toContain("watch config is unreadable");
     expect(brokenHtml).not.toContain("— none");
+  });
+
+  it("shows a watch-degraded source's own last-good time, never the flag's write time (#5936)", () => {
+    const source: SourceRow = {
+      ...reddit,
+      key: "youtube.channel_rss",
+      platform: "youtube",
+      last_good_at: "2026-09-19T06:02:00.000Z",
+      watch_config_json: JSON.stringify({
+        degraded: {
+          state: "degraded",
+          reason: "we lost the channel, re-resolving",
+          at: "2026-09-24T23:01:56.000Z",
+        },
+      }),
+    };
+    expect(sourcePillStatus(source, quietSnapshot, NOW).lastGoodAt).toBe("2026-09-19T06:02:00.000Z");
+    const html = pill(source, quietSnapshot);
+    expect(html).toContain("last good 2026-09-19 06:02 UTC");
+    expect(html).not.toContain("2026-09-24 23:01");
   });
 
   it("survives malformed config_json and falls back to the row key for a name", () => {

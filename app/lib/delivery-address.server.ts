@@ -17,6 +17,7 @@ const INVALID = "Enter an email address, like you@company.com.";
 const SUPPRESSED = 'This address unsubscribed from the brief. Tick "Send to it again" and save to resume.';
 const NO_WORKSPACE = "Finish setting up first, then choose where the brief goes.";
 const VERIFY_TOKEN_TTL_MS = 24 * 60 * 60 * 1000;
+const RATE_LIMITED = "Too many confirmation emails. Wait a minute, then save again.";
 const SEND_FAILED = "We could not send the confirmation email. Save again to retry.";
 
 function newVerifyToken(): string {
@@ -82,6 +83,9 @@ export async function saveDeliveryAddress(input: {
 
   const workspaceId = await readWorkspaceIdForOwner(input.userId);
   if (workspaceId === null) return { error: NO_WORKSPACE, suppressed: false };
+
+  const { success } = await env.SIGN_IN_EMAIL_LIMIT.limit({ key: `delivery-address:${workspaceId}` });
+  if (!success) return { error: RATE_LIMITED, suppressed: false };
 
   if (await isAddressSuppressed(address)) {
     if (!input.resume) return { error: SUPPRESSED, suppressed: true };

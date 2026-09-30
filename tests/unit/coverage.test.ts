@@ -1,3 +1,6 @@
+import { readFile } from "node:fs/promises";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -62,6 +65,21 @@ describe("coverage", () => {
       llmsTxt("https://0509.io", []),
       JSON.stringify(softwareApplicationJsonLd()),
     ].join("\n");
+    for (const group of notLive) {
+      for (const phrase of [group.kind, group.noun ?? group.kind]) {
+        expect(claims(copy, phrase), `"${phrase}" is claimed but ${group.kind} has no live source`).toBe(false);
+      }
+    }
+  });
+
+  it("claims no kind that has no live source, in the README or DESIGN.md", async () => {
+    const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
+    const copy = (await Promise.all(["README.md", "DESIGN.md"].map((file) => readFile(path.join(root, file), "utf8"))))
+      .join("\n")
+      .split("\n")
+      .filter((line) => line.startsWith("Five to Nine watches") || line.startsWith("| Read this first, quiet week"))
+      .join("\n");
+    expect(copy).not.toBe("");
     for (const group of notLive) {
       for (const phrase of [group.kind, group.noun ?? group.kind]) {
         expect(claims(copy, phrase), `"${phrase}" is claimed but ${group.kind} has no live source`).toBe(false);

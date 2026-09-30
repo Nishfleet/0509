@@ -1,7 +1,8 @@
 import type { Route } from "./+types/app.settings";
 
-import { DeleteAccount } from "../components/account-settings";
+import { DeleteAccount, ExportData } from "../components/account-settings";
 import { DismissedBrands } from "../components/dismissed-brands";
+import { Footer } from "../components/footer";
 import { OwnSiteAlertsSetting } from "../components/own-site-alerts-setting";
 import { PAGE, PageHeading } from "../components/page-heading";
 import { AccountSection, AgentsSection, BriefSection } from "../components/settings-sections";
@@ -31,7 +32,9 @@ export default function Page({ loaderData, actionData }: Route.ComponentProps) {
       <DismissedBrands dismissed={loaderData.dismissed} />
       <AgentsSection />
       <AccountSection email={loaderData.email} delivery={loaderData.delivery} result={actionData} />
+      <ExportData />
       <DeleteAccount email={loaderData.email} error={actionData?.deleteError ?? null} />
+      <Footer />
     </main>
   );
 }

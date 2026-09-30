@@ -47,7 +47,7 @@ function CompetitorItem({ competitor }: { competitor: CompetitorRow }) {
   const off = state === "off";
   return (
     <li className="flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-line py-4">
-      <div className="flex min-w-0 flex-1 items-start gap-3">
+      <div className="flex min-w-0 flex-[1_1_16rem] items-start gap-3">
         <BrandChip name={competitor.name} href={`/app/competitors/${competitor.entityId}`} off={off} />
         <div className="min-w-0">
           <p className="truncate text-body-sm text-ink-soft">{competitor.domain}</p>

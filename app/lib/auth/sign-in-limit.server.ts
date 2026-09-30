@@ -1,3 +1,4 @@
+import { ipBucketKey } from "../agent/client-limit.server";
 import { sha256Hex } from "../sha256";
 
 export interface SignInLimits {
@@ -12,7 +13,7 @@ async function addressKey(email: string): Promise<string> {
 export async function signInLinkAllowed(limits: SignInLimits, email: string, ip: string | null): Promise<boolean> {
   const checks = [
     limits.SIGN_IN_EMAIL_LIMIT.limit({ key: await addressKey(email) }),
-    ...(ip ? [limits.SIGN_IN_IP_LIMIT.limit({ key: `ip:${ip}` })] : []),
+    limits.SIGN_IN_IP_LIMIT.limit({ key: ipBucketKey(ip) }),
   ];
   const outcomes = await Promise.all(checks);
   return outcomes.every((outcome) => outcome.success);

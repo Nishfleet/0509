@@ -15,6 +15,26 @@ export function SignOut() {
   );
 }
 
+export function ExportData() {
+  return (
+    <section aria-labelledby="export-data" className="mt-10 border-t border-line pt-4">
+      <h2 id="export-data" className={BLOCK_HEADING}>
+        Export your data
+      </h2>
+      <p className="mt-2 max-w-prose leading-[1.55]">
+        One file with your brands, everything we found about them, and your brief history.
+      </p>
+      <a
+        href="/app/settings/export"
+        download
+        className="mt-3 inline-flex min-h-11 items-center font-display font-bold underline decoration-1 underline-offset-4"
+      >
+        Download my data
+      </a>
+    </section>
+  );
+}
+
 export function DeleteAccount({ email, error }: { email: string; error: string | null }) {
   return (
     <section aria-labelledby="delete-account" className="mt-10 border-t border-line pt-4">
