@@ -116,6 +116,28 @@ async function readTarget(env: Env, workspaceId: string): Promise<TargetRow | nu
     .first<TargetRow>();
 }
 
+type NoTargetReason = "no_row" | "channel_disabled" | "unverified";
+
+async function noTarget(
+  env: Env,
+  workspaceId: string,
+  item: { digest_id: string } | { incident_id: string },
+): Promise<DeliveryResult> {
+  const row = await env.DB.prepare(
+    `SELECT st.is_verified, c.is_enabled
+       FROM send_target st
+       JOIN channel c ON c.id = st.channel_id
+      WHERE st.workspace_id = ? AND c.key = ?
+      ORDER BY st.created_at ASC
+      LIMIT 1`,
+  )
+    .bind(workspaceId, EMAIL_CHANNEL_KEY)
+    .first<{ is_verified: number; is_enabled: number }>();
+  const reason: NoTargetReason = row === null ? "no_row" : row.is_enabled === 0 ? "channel_disabled" : "unverified";
+  console.log(JSON.stringify({ event: "delivery.no_target", ...item, workspace_id: workspaceId, reason }));
+  return { outcome: "no_target", attempt_id: null, idempotency_key: null };
+}
+
 async function isSuppressed(env: Env, address: string): Promise<boolean> {
   const row = await env.DB.prepare(`SELECT address FROM email_suppression WHERE address = ?`)
     .bind(address)
@@ -202,7 +224,7 @@ export async function deliver(env: Env, message: DigestMessage): Promise<Deliver
 
   const target = await readTarget(env, digest.workspace_id);
   if (!target) {
-    return { outcome: "no_target", attempt_id: null, idempotency_key: null };
+    return noTarget(env, digest.workspace_id, { digest_id: digest.id });
   }
 
   if (await isSuppressed(env, target.target_value)) {
@@ -247,7 +269,7 @@ export async function deliverIncident(env: Env, message: IncidentMessage): Promi
 
   const target = await readTarget(env, incident.workspace_id);
   if (!target) {
-    return { outcome: "no_target", attempt_id: null, idempotency_key: null };
+    return noTarget(env, incident.workspace_id, { incident_id: incident.id });
   }
 
   if (await isSuppressed(env, target.target_value)) {
