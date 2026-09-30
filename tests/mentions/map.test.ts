@@ -161,4 +161,22 @@ describe("toSignalRow", () => {
     expect(row.dedup_key).toBe(guid);
     expect(storedDedupKey("ent_med", row.dedup_key)).toBe(`ent_med:${guid}`);
   });
+
+  it("stores the hashes of the normalized title and normalized url, equal across syndicated copies", async () => {
+    const a = await toSignalRow(
+      { ...ITEM, title: "Quillon Opens a London Flagship!", url: "https://www.example.com/a/?utm_source=x#top" },
+      CTX,
+    );
+    const b = await toSignalRow(
+      { ...ITEM, title: "quillon opens a london flagship", url: "https://example.com/a" },
+      CTX,
+    );
+    const c = await toSignalRow({ ...ITEM, title: "Something else", url: "https://example.com/other" }, CTX);
+    expect(a.title_hash).toMatch(/^[0-9a-f]{64}$/);
+    expect(a.title_hash).toBe(b.title_hash);
+    expect(a.norm_url_hash).toBe(b.norm_url_hash);
+    expect(a.url_hash).not.toBe(b.url_hash);
+    expect(c.title_hash).not.toBe(a.title_hash);
+    expect(c.norm_url_hash).not.toBe(a.norm_url_hash);
+  });
 });

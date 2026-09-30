@@ -30,9 +30,14 @@ export interface ScheduleView {
   nextLine: string;
 }
 
-export function BriefScheduleSettings({ schedule }: { schedule: ScheduleView }): ReactElement {
+interface ScheduleChange {
+  weekday?: number;
+  hour?: number;
+  timezone?: string;
+}
+
+function useScheduleForm(schedule: ScheduleView) {
   const fetcher = useFetcher<{ saved: boolean }>();
-  const deviceZone = useSyncExternalStore(subscribeToNothing, browserZone, noZoneOnServer);
 
   useEffect(() => {
     if (fetcher.state === "idle" && fetcher.data?.saved === true) toastSaved("Brief time saved");
@@ -44,7 +49,7 @@ export function BriefScheduleSettings({ schedule }: { schedule: ScheduleView }):
   const pendingZone = pending?.get("timezone");
   const timezone = typeof pendingZone === "string" ? pendingZone : schedule.timezone;
 
-  function save(next: { weekday?: number; hour?: number; timezone?: string }) {
+  function save(next: ScheduleChange) {
     void fetcher.submit(
       {
         intent: "schedule",
@@ -56,60 +61,82 @@ export function BriefScheduleSettings({ schedule }: { schedule: ScheduleView }):
     );
   }
 
+  return { saved: fetcher.data?.saved, weekday, hour, timezone, save };
+}
+
+interface ScheduleSelectProps {
+  label: string;
+  value: number;
+  options: readonly { value: number; text: string }[];
+  onPick: (value: number) => void;
+}
+
+function ScheduleSelect({ label, value, options, onPick }: ScheduleSelectProps): ReactElement {
+  return (
+    <label className="flex flex-col gap-1">
+      <span className={LABEL}>{label}</span>
+      <select
+        className={SELECT}
+        value={value}
+        onChange={(event) => {
+          onPick(Number(event.currentTarget.value));
+        }}
+      >
+        {options.map((option) => (
+          <option key={option.text} value={option.value}>
+            {option.text}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
+const DAY_OPTIONS = WEEKDAYS.map((text, value) => ({ value, text }));
+const HOUR_OPTIONS = HOURS.map((value) => ({ value, text: hourLabel(value) }));
+
+export function BriefScheduleSettings({ schedule }: { schedule: ScheduleView }): ReactElement {
+  const form = useScheduleForm(schedule);
+  const deviceZone = useSyncExternalStore(subscribeToNothing, browserZone, noZoneOnServer);
+
   return (
     <div className="mt-3">
       <Toaster />
       <div className="flex flex-wrap items-end gap-3">
-        <label className="flex flex-col gap-1">
-          <span className={LABEL}>Day</span>
-          <select
-            className={SELECT}
-            value={weekday}
-            onChange={(event) => {
-              save({ weekday: Number(event.currentTarget.value) });
-            }}
-          >
-            {WEEKDAYS.map((name, index) => (
-              <option key={name} value={index}>
-                {name}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="flex flex-col gap-1">
-          <span className={LABEL}>Time</span>
-          <select
-            className={SELECT}
-            value={hour}
-            onChange={(event) => {
-              save({ hour: Number(event.currentTarget.value) });
-            }}
-          >
-            {HOURS.map((value) => (
-              <option key={value} value={value}>
-                {hourLabel(value)}
-              </option>
-            ))}
-          </select>
-        </label>
+        <ScheduleSelect
+          label="Day"
+          value={form.weekday}
+          options={DAY_OPTIONS}
+          onPick={(weekday) => {
+            form.save({ weekday });
+          }}
+        />
+        <ScheduleSelect
+          label="Time"
+          value={form.hour}
+          options={HOUR_OPTIONS}
+          onPick={(hour) => {
+            form.save({ hour });
+          }}
+        />
       </div>
       <p className="mt-3 text-body-sm text-ink-soft">
-        Time zone: <span className="[overflow-wrap:anywhere] text-ink">{timezone.replaceAll("_", " ")}</span>.{" "}
+        Time zone: <span className="[overflow-wrap:anywhere] text-ink">{form.timezone.replaceAll("_", " ")}</span>.{" "}
         {schedule.nextLine}.
       </p>
-      {deviceZone !== null && deviceZone !== timezone ? (
+      {deviceZone !== null && deviceZone !== form.timezone ? (
         <Button
           type="button"
           variant="tertiary"
           className="text-left whitespace-normal"
           onClick={() => {
-            save({ timezone: deviceZone });
+            form.save({ timezone: deviceZone });
           }}
         >
           Use this device&apos;s time zone ({deviceZone.replaceAll("_", " ")})
         </Button>
       ) : null}
-      {fetcher.data?.saved === false ? (
+      {form.saved === false ? (
         <p role="alert" className="mt-2 text-[0.95rem]">
           That time didn&apos;t save. Pick it again.
         </p>

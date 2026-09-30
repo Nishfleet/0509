@@ -1,3 +1,5 @@
+import type { ReactElement } from "react";
+
 import { type CoverageId, isLive } from "../../lib/coverage";
 import { cn } from "../../lib/utils";
 import { OneInput } from "../one-input";
@@ -42,6 +44,38 @@ const EXAMPLES: readonly {
 
 const SHOWN = EXAMPLES.filter((example) => isLive(example.needs)).slice(0, 3);
 
+type Example = (typeof EXAMPLES)[number];
+
+function ExampleCard({ example }: { example: Example }): ReactElement {
+  return (
+    <li className={cn("border-[1.5px] border-ink p-5", example.own ? "bg-green-wash" : "bg-card")}>
+      <p className="font-mono text-meta text-ink-soft">
+        <strong className="font-medium text-ink">{example.who}</strong> · {example.where}
+      </p>
+      <ExampleMark before={example.before} after={example.after} className="mt-3 text-mark-md" />
+      {example.own ? (
+        <p className="mt-3 font-mono text-meta text-ink-soft">This one is emailed to you the moment we see it.</p>
+      ) : null}
+    </li>
+  );
+}
+
+function HeroProof(): ReactElement {
+  return (
+    <aside aria-labelledby="hero-proof" className="min-w-0">
+      <p id="hero-proof" className={`${eyebrow} text-green-ink`}>
+        How a change reads
+      </p>
+      <p className="mt-2 font-mono text-meta text-ink-soft">Worked examples, not live marks.</p>
+      <ul className="mt-4 grid gap-3">
+        {SHOWN.map((example) => (
+          <ExampleCard key={example.needs} example={example} />
+        ))}
+      </ul>
+    </aside>
+  );
+}
+
 export function Hero({ nouns }: { nouns: string }) {
   return (
     <section id="hero" aria-labelledby="hero-title">
@@ -72,30 +106,7 @@ export function Hero({ nouns }: { nouns: string }) {
             One input. Sixty seconds to who’s gaining on you.
           </p>
         </div>
-        <aside aria-labelledby="hero-proof" className="min-w-0">
-          <p id="hero-proof" className={`${eyebrow} text-green-ink`}>
-            How a change reads
-          </p>
-          <p className="mt-2 font-mono text-meta text-ink-soft">Worked examples, not live marks.</p>
-          <ul className="mt-4 grid gap-3">
-            {SHOWN.map((example) => (
-              <li
-                key={example.needs}
-                className={cn("border-[1.5px] border-ink p-5", example.own ? "bg-green-wash" : "bg-card")}
-              >
-                <p className="font-mono text-meta text-ink-soft">
-                  <strong className="font-medium text-ink">{example.who}</strong> · {example.where}
-                </p>
-                <ExampleMark before={example.before} after={example.after} className="mt-3 text-mark-md" />
-                {example.own ? (
-                  <p className="mt-3 font-mono text-meta text-ink-soft">
-                    This one is emailed to you the moment we see it.
-                  </p>
-                ) : null}
-              </li>
-            ))}
-          </ul>
-        </aside>
+        <HeroProof />
       </div>
     </section>
   );

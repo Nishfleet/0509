@@ -39,6 +39,62 @@ function Cell({ label, value }: { label: string; value: string }): ReactElement 
   );
 }
 
+type SnapshotProps = Pick<CompetitorFrameProps, "weekCount" | "pages" | "lastChecked">;
+
+function SnapshotSection({ weekCount, pages, lastChecked }: SnapshotProps): ReactElement {
+  return (
+    <section data-section="snapshot" aria-labelledby="competitor-snapshot" className="min-w-0">
+      <h2 id="competitor-snapshot" className={HEADING}>
+        This week
+      </h2>
+      <dl className="grid grid-cols-1 border border-line min-[480px]:grid-cols-3">
+        <Cell label="Site changes" value={String(weekCount)} />
+        <Cell label="Pages watched" value={String(pages)} />
+        <Cell label="Last checked" value={lastChecked ?? "Tonight"} />
+      </dl>
+    </section>
+  );
+}
+
+type BiggestMoveSectionProps = Pick<CompetitorFrameProps, "biggestMove" | "quiet" | "changes">;
+
+function BiggestMoveSection({ biggestMove, quiet, changes }: BiggestMoveSectionProps): ReactElement {
+  return (
+    <section data-section="biggest-move" aria-labelledby="competitor-biggest-move" className="min-w-0">
+      <h2 id="competitor-biggest-move" className={HEADING}>
+        The week's biggest move
+      </h2>
+      <BiggestMove
+        move={biggestMove}
+        quiet={quiet}
+        change={changes.find((change) => change.id === biggestMove?.id) ?? null}
+      />
+    </section>
+  );
+}
+
+type DevelopmentsSectionProps = Pick<CompetitorFrameProps, "changes" | "developments" | "lastChecked" | "pausedOn">;
+
+function DevelopmentsSection({ changes, developments, lastChecked, pausedOn }: DevelopmentsSectionProps): ReactElement {
+  return (
+    <section data-section="developments" aria-labelledby="competitor-developments" className="min-w-0">
+      <h2 id="competitor-developments" className={HEADING}>
+        Developments
+      </h2>
+      {pausedOn === null ? null : (
+        <p data-slot="feed-paused" className="border-t border-ink pt-3 text-meta text-ink-soft">
+          Paused {pausedOn}. We stopped checking here; turn it back on to pick up where it left off.
+        </p>
+      )}
+      {developments.length === 0 ? (
+        <EmptyState sentence={developmentsEmpty(lastChecked)} />
+      ) : (
+        <DevelopmentsFeed items={developments} changes={changes} />
+      )}
+    </section>
+  );
+}
+
 export function CompetitorFrame({
   changes,
   developments,
@@ -53,41 +109,14 @@ export function CompetitorFrame({
   return (
     <div data-slot="competitor-frame" className="grid min-w-0 gap-10 min-[1080px]:grid-cols-[minmax(0,1fr)_20rem]">
       <div className="flex min-w-0 flex-col gap-10">
-        <section data-section="snapshot" aria-labelledby="competitor-snapshot" className="min-w-0">
-          <h2 id="competitor-snapshot" className={HEADING}>
-            This week
-          </h2>
-          <dl className="grid grid-cols-1 border border-line min-[480px]:grid-cols-3">
-            <Cell label="Site changes" value={String(weekCount)} />
-            <Cell label="Pages watched" value={String(pages)} />
-            <Cell label="Last checked" value={lastChecked ?? "Tonight"} />
-          </dl>
-        </section>
-        <section data-section="biggest-move" aria-labelledby="competitor-biggest-move" className="min-w-0">
-          <h2 id="competitor-biggest-move" className={HEADING}>
-            The week's biggest move
-          </h2>
-          <BiggestMove
-            move={biggestMove}
-            quiet={quiet}
-            change={changes.find((change) => change.id === biggestMove?.id) ?? null}
-          />
-        </section>
-        <section data-section="developments" aria-labelledby="competitor-developments" className="min-w-0">
-          <h2 id="competitor-developments" className={HEADING}>
-            Developments
-          </h2>
-          {pausedOn === null ? null : (
-            <p data-slot="feed-paused" className="border-t border-ink pt-3 text-meta text-ink-soft">
-              Paused {pausedOn}. We stopped checking here; turn it back on to pick up where it left off.
-            </p>
-          )}
-          {developments.length === 0 ? (
-            <EmptyState sentence={developmentsEmpty(lastChecked)} />
-          ) : (
-            <DevelopmentsFeed items={developments} changes={changes} />
-          )}
-        </section>
+        <SnapshotSection weekCount={weekCount} pages={pages} lastChecked={lastChecked} />
+        <BiggestMoveSection biggestMove={biggestMove} quiet={quiet} changes={changes} />
+        <DevelopmentsSection
+          changes={changes}
+          developments={developments}
+          lastChecked={lastChecked}
+          pausedOn={pausedOn}
+        />
       </div>
       <CompetitorRail {...rail} lastChecked={lastChecked} />
     </div>

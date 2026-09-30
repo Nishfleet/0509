@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { COST_GUARD_FACTOR, EXPECTED_PER_BRAND_DAY, evaluateCost } from "../../app/lib/observability/cost-guard";
+import {
+  BROWSER_ONLY_LINES,
+  COST_GUARD_FACTOR,
+  EXPECTED_PER_BRAND_DAY,
+  evaluateCost,
+} from "../../app/lib/observability/cost-guard";
 import type { CostLine, DailyUsage } from "../../app/lib/observability/cost-guard";
 
 const AT_FACTOR: DailyUsage = {
@@ -86,5 +91,12 @@ describe("evaluateCost", () => {
 
   it("does not throw when the usage object is frozen", () => {
     expect(() => evaluateCost(Object.freeze({ ...AT_FACTOR }), 10)).not.toThrow();
+  });
+});
+
+describe("evaluateCost with a line subset", () => {
+  it("evaluates only the requested lines", () => {
+    const usage = { day: "2026-09-21", d1RowsWritten: 301, r2ClassAOps: 301, browserMs: 450_001 };
+    expect(evaluateCost(usage, 10, BROWSER_ONLY_LINES).map((breach) => breach.line)).toEqual(["browser_ms_0509"]);
   });
 });

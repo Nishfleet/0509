@@ -37,24 +37,36 @@ const ACCENT_WASH = "var(--green-wash, var(--color-green-wash))";
 
 const LIVE_WINDOW_MS = 48 * 60 * 60 * 1000;
 
-export function sourcePillStatus(
-  source: SourceRow,
-  snapshot: SourceSnapshot | null,
-  now: number = Date.now(),
-): SourcePillStatus {
-  const config = sourceConfig(source.config_json);
-  const configState = configString(config, "state");
-  if (!enabled(source.is_enabled) || configState === "disabled" || configState === "parked") {
-    return { state: "disabled", reason: null, lastGoodAt: null };
-  }
+const DISABLED: SourcePillStatus = { state: "disabled", reason: null, lastGoodAt: null };
+
+function isDisabled(source: SourceRow, configState: string | null): boolean {
+  return !enabled(source.is_enabled) || configState === "disabled" || configState === "parked";
+}
+
+interface ConfigDegradeInput {
+  source: SourceRow;
+  config: Record<string, unknown>;
+  configState: string | null;
+  snapshot: SourceSnapshot | null;
+  lastGoodAt: string | null;
+}
+
+function configDegraded({
+  source,
+  config,
+  configState,
+  snapshot,
+  lastGoodAt,
+}: ConfigDegradeInput): SourcePillStatus | null {
   const columnReason = blankToNull(source.degraded_reason);
-  const configReason = configString(config, "reason");
-  const lastGoodAt = blankToNull(source.last_good_at) ?? configString(config, "last_good_at");
-  if (columnReason !== null || configState === "degraded" || snapshot?.canary_count === 0) {
-    const reason =
-      columnReason ?? configReason ?? (snapshot?.canary_count === 0 ? "not answering" : "no reason recorded");
-    return { state: "degraded", reason, lastGoodAt };
-  }
+  const canaryDown = snapshot?.canary_count === 0;
+  if (columnReason === null && configState !== "degraded" && !canaryDown) return null;
+  const reason =
+    columnReason ?? configString(config, "reason") ?? (canaryDown ? "not answering" : "no reason recorded");
+  return { state: "degraded", reason, lastGoodAt };
+}
+
+function watchDegraded(source: SourceRow, lastGoodAt: string | null): SourcePillStatus | null {
   const watchConfig = readWatchConfig(source.watch_config_json);
   if (watchConfig.status === "unreadable") {
     return { state: "degraded", reason: "watch config is unreadable", lastGoodAt: null };
@@ -62,10 +74,18 @@ export function sourcePillStatus(
   if (watchConfig.degraded !== null) {
     return { state: "degraded", reason: watchConfig.degraded.reason, lastGoodAt };
   }
+  return null;
+}
+
+function fetchedInstant(snapshot: SourceSnapshot | null): { captured: string | null; ms: number } {
   const fetchedAt = snapshot === null ? null : blankToNull(snapshot.fetched_at);
-  const fetchedMs = fetchedAt === null ? Number.NaN : Date.parse(fetchedAt);
-  const captured = Number.isNaN(fetchedMs) ? null : fetchedAt;
-  const fresh = captured !== null && now - fetchedMs <= LIVE_WINDOW_MS;
+  const ms = fetchedAt === null ? Number.NaN : Date.parse(fetchedAt);
+  return { captured: Number.isNaN(ms) ? null : fetchedAt, ms };
+}
+
+function freshnessStatus(snapshot: SourceSnapshot | null, lastGoodAt: string | null, now: number): SourcePillStatus {
+  const { captured, ms } = fetchedInstant(snapshot);
+  const fresh = captured !== null && now - ms <= LIVE_WINDOW_MS;
   if (snapshot === null || !fresh) {
     return { state: "degraded", reason: "no fresh data", lastGoodAt: lastGoodAt ?? captured };
   }
@@ -75,21 +95,24 @@ export function sourcePillStatus(
   return { state: "live", reason: null, lastGoodAt };
 }
 
-export function SourcePill({
-  source,
-  snapshot,
-  now,
-}: {
-  source: SourceRow;
-  snapshot: SourceSnapshot | null;
-  now?: number;
-}): ReactElement | null {
-  const status = sourcePillStatus(source, snapshot, now);
-  if (status.state === "disabled") return null;
-  const live = status.state === "live";
-  const name = blankToNull(source.name) ?? blankToNull(source.platform) ?? source.key;
-  const lastGood = lastGoodLabel(status.lastGoodAt);
-  const style: CSSProperties = {
+export function sourcePillStatus(
+  source: SourceRow,
+  snapshot: SourceSnapshot | null,
+  now: number = Date.now(),
+): SourcePillStatus {
+  const config = sourceConfig(source.config_json);
+  const configState = configString(config, "state");
+  if (isDisabled(source, configState)) return DISABLED;
+  const lastGoodAt = blankToNull(source.last_good_at) ?? configString(config, "last_good_at");
+  return (
+    configDegraded({ source, config, configState, snapshot, lastGoodAt }) ??
+    watchDegraded(source, lastGoodAt) ??
+    freshnessStatus(snapshot, lastGoodAt, now)
+  );
+}
+
+function pillStyle(live: boolean): CSSProperties {
+  return {
     display: "inline-flex",
     alignItems: "baseline",
     flexWrap: "wrap",
@@ -107,8 +130,23 @@ export function SourcePill({
     textTransform: "uppercase",
     overflowWrap: "anywhere",
   };
+}
+
+export function SourcePill({
+  source,
+  snapshot,
+  now,
+}: {
+  source: SourceRow;
+  snapshot: SourceSnapshot | null;
+  now?: number;
+}): ReactElement | null {
+  const status = sourcePillStatus(source, snapshot, now);
+  if (status.state === "disabled") return null;
+  const name = blankToNull(source.name) ?? blankToNull(source.platform) ?? source.key;
+  const lastGood = lastGoodLabel(status.lastGoodAt);
   return (
-    <span data-state={status.state} style={style}>
+    <span data-state={status.state} style={pillStyle(status.state === "live")}>
       <span>{name}</span>
       {status.state === "none" ? <span>— none</span> : null}
       {status.state === "degraded" ? (

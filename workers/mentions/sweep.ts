@@ -6,7 +6,10 @@ import type { DiscoveryContext } from "../../app/lib/data/entity.server";
 import { readDiscoveryContext, readEntityIdentityJson } from "../../app/lib/data/entity.server";
 import { insertVerdict } from "../../app/lib/data/jev_verdict.server";
 import {
+  findDuplicateCandidate,
   insertMention,
+  markDuplicateOf,
+  type MentionSignal,
   readSeenDedupKeys,
   readUnjudgedMentions,
   resolveUnjudgedMention,
@@ -25,7 +28,14 @@ import { askNoul, JevUnavailableError } from "../../app/lib/jev/client.server";
 import { lookupYoutubeChannel } from "../../app/lib/identity/youtube-channel.server";
 import { noulAction } from "../../app/lib/jev/thresholds";
 import { mentionReasonLine } from "../../app/lib/mentions/reason-customer";
-import { ABOUT_BRAND, aboutBrandState, MATTERS, mentionMattersState } from "../../app/lib/mentions/questions";
+import {
+  ABOUT_BRAND,
+  aboutBrandState,
+  DUPLICATE_SIGNAL,
+  duplicateSignalState,
+  MATTERS,
+  mentionMattersState,
+} from "../../app/lib/mentions/questions";
 import {
   readWatchConfig,
   withLostChannel,
@@ -37,7 +47,7 @@ import {
   withoutPendingChannel,
 } from "../../app/lib/mentions/youtube-channel";
 import { sha256Hex } from "../../app/lib/sha256";
-import { storedDedupKey, toSignalRow, type MentionItem } from "./map";
+import { storedDedupKey, toSignalRow, type MentionItem, type SignalRow } from "./map";
 import { writeSourcePoint } from "./canary";
 import { adapterFor } from "../sources/registry";
 import { youtubeAdapter } from "../sources/mentions/youtube";
@@ -45,6 +55,8 @@ import { isUpstreamTimeout, UpstreamBlockedError } from "../sources/mentions/typ
 import type { OkYoutubeFeed } from "../sources/mentions/youtube";
 
 const JUDGED_PER_WATCH = 12;
+
+const DUPLICATE_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
 
 export interface MentionTarget {
   sourceId: string;
@@ -163,6 +175,67 @@ function judgedStatements(input: {
   return statements;
 }
 
+function duplicateStatements(input: {
+  watch: WatchRow;
+  signalId: string;
+  candidateId: string;
+  verdict: NoulVerdict;
+  now: string;
+}): D1PreparedStatement[] {
+  const { watch, signalId, candidateId, verdict, now } = input;
+  const verdictRow = insertVerdict({
+    workspaceId: watch.workspace_id,
+    questionId: verdict.questionId,
+    inputHash: verdict.inputHash,
+    signalId,
+    entityId: watch.entity_id,
+    p: verdict.p,
+    choice: null,
+    reason: null,
+    decidedAt: now,
+  });
+  return noulAction(verdict.p) === "reject" ? [verdictRow] : [verdictRow, markDuplicateOf(signalId, candidateId)];
+}
+
+async function judgeDuplicate(input: {
+  watch: WatchRow;
+  signalId: string;
+  item: MentionItem;
+  hashes: { titleHash: string; normUrlHash: string };
+  now: string;
+  canAsk: () => boolean;
+}): Promise<{ statements: D1PreparedStatement[]; asked: boolean; jevDown: boolean }> {
+  const { watch, signalId, item, now } = input;
+  const candidate = await findDuplicateCandidate({
+    workspaceId: watch.workspace_id,
+    entityId: watch.entity_id,
+    since: new Date(Date.parse(now) - DUPLICATE_WINDOW_MS).toISOString(),
+    ...input.hashes,
+  });
+  if (candidate === null || !input.canAsk()) return { statements: [], asked: false, jevDown: false };
+  const state = duplicateSignalState({
+    subject: { name: watch.name, domain: watch.domain },
+    first: {
+      id: signalId,
+      title: item.title,
+      url: item.url,
+      publishedAt: item.publishedAt,
+      publisher: item.publisher ?? null,
+      source: watch.plugin_key,
+    },
+    second: candidate,
+  });
+  try {
+    const verdict = await askNoul(watch.workspace_id, DUPLICATE_SIGNAL, state);
+    const statements = duplicateStatements({ watch, signalId, candidateId: candidate.id, verdict, now });
+    return { statements, asked: true, jevDown: false };
+  } catch (error) {
+    if (!(error instanceof JevUnavailableError)) throw error;
+    console.error(JSON.stringify({ event: "mentions.jev_unavailable", message: error.message }));
+    return { statements: [], asked: true, jevDown: true };
+  }
+}
+
 async function rejudgeUnjudged(
   watch: WatchRow,
   context: DiscoveryContext,
@@ -184,14 +257,56 @@ async function rejudgeUnjudged(
   return { statements, stored, attempted: pending.length, jevDown: false };
 }
 
+function mentionSignal(input: {
+  mapped: SignalRow;
+  watch: WatchRow;
+  snapshotId: string;
+  signalId: string;
+  dedupKey: string;
+  rejected: boolean;
+  judged: boolean;
+}): MentionSignal {
+  const { mapped, watch } = input;
+  return {
+    id: input.signalId,
+    workspaceId: mapped.workspace_id,
+    entityId: mapped.entity_id,
+    sourceId: mapped.source_id,
+    watchId: watch.watch_id,
+    snapshotId: input.snapshotId,
+    title: mapped.title,
+    url: mapped.canonical_url,
+    urlHash: mapped.url_hash,
+    titleHash: mapped.title_hash,
+    normUrlHash: mapped.norm_url_hash,
+    author: mapped.author,
+    engagementJson: mapped.engagement_json,
+    payloadJson: mapped.payload_json,
+    dedupKey: input.dedupKey,
+    publishedAt: mapped.published_at,
+    observedAt: mapped.observed_at,
+    isNotAboutBrand: input.rejected,
+    state: input.judged ? "judged" : "unjudged",
+  };
+}
+
 async function freshMentionStatements(input: {
   watch: WatchRow;
+  context: DiscoveryContext;
   item: MentionItem;
   snapshotId: string;
-  verdicts: Awaited<ReturnType<typeof judgeOrNull>>;
   now: string;
-}): Promise<{ statements: D1PreparedStatement[]; stored: number; unjudged: number }> {
-  const { watch, item, snapshotId, verdicts, now } = input;
+  jevDown: boolean;
+  canAsk: () => boolean;
+}): Promise<{
+  statements: D1PreparedStatement[];
+  stored: number;
+  unjudged: number;
+  asked: boolean;
+  jevDown: boolean;
+}> {
+  const { watch, context, item, snapshotId, now } = input;
+  const verdicts = input.jevDown ? null : await judgeOrNull(watch, context, item);
   const mapped = await toSignalRow(item, {
     workspaceId: watch.workspace_id,
     entityId: watch.entity_id,
@@ -203,31 +318,63 @@ async function freshMentionStatements(input: {
   const dedupKey = storedDedupKey(watch.entity_id, mapped.dedup_key);
   const signalId = `sig-${(await sha256Hex(`${watch.source_id}:${dedupKey}`)).slice(0, 32)}`;
   const rejected = verdicts !== null && noulAction(verdicts.about.p) === "reject";
-  const insert = insertMention({
-    id: signalId,
-    workspaceId: mapped.workspace_id,
-    entityId: mapped.entity_id,
-    sourceId: mapped.source_id,
-    watchId: watch.watch_id,
-    snapshotId,
-    title: mapped.title,
-    url: mapped.canonical_url,
-    urlHash: mapped.url_hash,
-    author: mapped.author,
-    engagementJson: mapped.engagement_json,
-    payloadJson: mapped.payload_json,
-    dedupKey,
-    publishedAt: mapped.published_at,
-    observedAt: mapped.observed_at,
-    isNotAboutBrand: rejected,
-    state: verdicts === null ? "unjudged" : "judged",
+  const insert = insertMention(
+    mentionSignal({ mapped, watch, snapshotId, signalId, dedupKey, rejected, judged: verdicts !== null }),
+  );
+  if (verdicts === null) return { statements: [insert], stored: 0, unjudged: 1, asked: false, jevDown: true };
+  const judged = [insert, ...judgedStatements({ watch, signalId, item, verdicts, now })];
+  if (rejected) return { statements: judged, stored: 0, unjudged: 0, asked: false, jevDown: false };
+  const duplicate = await judgeDuplicate({
+    watch,
+    signalId,
+    item,
+    hashes: { titleHash: mapped.title_hash, normUrlHash: mapped.norm_url_hash },
+    now,
+    canAsk: input.canAsk,
   });
-  if (verdicts === null) return { statements: [insert], stored: 0, unjudged: 1 };
   return {
-    statements: [insert, ...judgedStatements({ watch, signalId, item, verdicts, now })],
-    stored: rejected ? 0 : 1,
+    statements: [...judged, ...duplicate.statements],
+    stored: 1,
     unjudged: 0,
+    asked: duplicate.asked,
+    jevDown: duplicate.jevDown,
   };
+}
+
+async function judgeFreshItems(input: {
+  watch: WatchRow;
+  context: DiscoveryContext;
+  items: readonly MentionItem[];
+  snapshotId: string;
+  now: string;
+  jevDown: boolean;
+  budget: number;
+}): Promise<{ statements: D1PreparedStatement[]; stored: number; unjudged: number }> {
+  const { watch, context, snapshotId, now } = input;
+  const statements: D1PreparedStatement[] = [];
+  let stored = 0;
+  let unjudged = 0;
+  let jevDown = input.jevDown;
+  let budget = input.budget;
+  for (const item of input.items) {
+    if (budget <= 0) break;
+    budget -= 1;
+    const done = await freshMentionStatements({
+      watch,
+      context,
+      item,
+      snapshotId,
+      now,
+      jevDown,
+      canAsk: () => budget > 0,
+    });
+    if (done.asked) budget -= 1;
+    jevDown = done.jevDown;
+    statements.push(...done.statements);
+    stored += done.stored;
+    unjudged += done.unjudged;
+  }
+  return { statements, stored, unjudged };
 }
 
 async function statementsForWatch(input: {
@@ -264,16 +411,20 @@ async function statementsForWatch(input: {
   statements.push(...rejudged.statements);
   let stored = rejudged.stored;
   let unjudged = 0;
-  let jevDown = rejudged.jevDown;
+  const { jevDown } = rejudged;
   const freshBudget = jevDown ? JUDGED_PER_WATCH : JUDGED_PER_WATCH - rejudged.attempted;
-  for (const { item } of fresh.slice(0, freshBudget)) {
-    const verdicts = jevDown ? null : await judgeOrNull(watch, context, item);
-    const result = await freshMentionStatements({ watch, item, snapshotId, verdicts, now });
-    statements.push(...result.statements);
-    stored += result.stored;
-    unjudged += result.unjudged;
-    if (verdicts === null) jevDown = true;
-  }
+  const freshJudged = await judgeFreshItems({
+    watch,
+    context,
+    items: fresh.map((entry) => entry.item),
+    snapshotId,
+    now,
+    jevDown,
+    budget: freshBudget,
+  });
+  statements.push(...freshJudged.statements);
+  stored += freshJudged.stored;
+  unjudged += freshJudged.unjudged;
   return { statements, stored, unjudged };
 }
 
