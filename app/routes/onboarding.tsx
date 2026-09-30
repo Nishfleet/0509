@@ -27,20 +27,57 @@ export async function loader({ request }: Route.LoaderArgs) {
   return { email: session.user.email };
 }
 
+type Timings = ReturnType<typeof createTimings>;
+type Normalised = ReturnType<typeof normaliseSubject>;
+type AcceptedSubject = Extract<Normalised, { ok: true }>["subject"];
+
+function readSubjectForm(formData: FormData) {
+  const raw = formData.get("subject");
+  const answer = formData.get("answer");
+  const rawSubject = typeof raw === "string" ? raw : null;
+  return {
+    raw,
+    rawSubject,
+    answer: typeof answer === "string" ? answer : null,
+    normalised: rawSubject === null ? null : normaliseSubject(rawSubject),
+  };
+}
+
+async function readTakenAndWorkspace(timings: Timings, userId: string, normalised: Normalised | null) {
+  if (!normalised?.ok) return { taken: false, workspaceId: null };
+  const [taken, workspaceId] = await timings.measure(
+    "workspace",
+    Promise.all([isTakenDown(normalised.subject.registrable), readWorkspaceIdForOwner(userId)]),
+  );
+  return { taken, workspaceId };
+}
+
+interface ScreenInput {
+  timings: Timings;
+  userId: string;
+  workspaceId: string;
+  subject: AcceptedSubject;
+  rawSubject: string;
+  answer: string | null;
+}
+
+async function screenAndStart({ timings, userId, workspaceId, subject, rawSubject, answer }: ScreenInput) {
+  const now = new Date().toISOString();
+  const result = await timings.measure(
+    "screen",
+    screenOnboardingSubject({ workspaceId, userId, subject, raw: rawSubject, answer, now }),
+  );
+  if (result.kind === "refuse") return { message: result.message, confirm: null };
+  if (result.kind === "ask") return { message: null, confirm: { subject: result.subject, raw: rawSubject } };
+  await timings.measure("run", startOnboardingRun({ workspaceId, userId, inputRaw: rawSubject, startedAt: now }));
+  return null;
+}
+
 export async function action({ request }: Route.ActionArgs) {
   const timings = createTimings();
   const session = await timings.measure("session", requireFreshSession(request));
-  const formData = await request.formData();
-  const raw = formData.get("subject");
-  const rawSubject = typeof raw === "string" ? raw : null;
-  const answer = formData.get("answer");
-  const normalised = rawSubject === null ? null : normaliseSubject(rawSubject);
-  const [taken, workspaceId] = normalised?.ok
-    ? await timings.measure(
-        "workspace",
-        Promise.all([isTakenDown(normalised.subject.registrable), readWorkspaceIdForOwner(session.user.id)]),
-      )
-    : [false, null];
+  const { raw, rawSubject, answer, normalised } = readSubjectForm(await request.formData());
+  const { taken, workspaceId } = await readTakenAndWorkspace(timings, session.user.id, normalised);
   if (taken) {
     return {
       message: "This brand asked not to be tracked, so we can't set it up. Try your own website.",
@@ -49,24 +86,15 @@ export async function action({ request }: Route.ActionArgs) {
   }
   if (normalised?.ok && rawSubject !== null) {
     if (workspaceId === null) throw redirect("/app");
-    const now = new Date().toISOString();
-    const result = await timings.measure(
-      "screen",
-      screenOnboardingSubject({
-        workspaceId,
-        userId: session.user.id,
-        subject: normalised.subject,
-        raw: rawSubject,
-        answer: typeof answer === "string" ? answer : null,
-        now,
-      }),
-    );
-    if (result.kind === "refuse") return { message: result.message, confirm: null };
-    if (result.kind === "ask") return { message: null, confirm: { subject: result.subject, raw: rawSubject } };
-    await timings.measure(
-      "run",
-      startOnboardingRun({ workspaceId, userId: session.user.id, inputRaw: rawSubject, startedAt: now }),
-    );
+    const outcome = await screenAndStart({
+      timings,
+      userId: session.user.id,
+      workspaceId,
+      subject: normalised.subject,
+      rawSubject,
+      answer,
+    });
+    if (outcome !== null) return outcome;
   }
   const target = subjectRedirect(raw);
   if (target) throw redirect(target, { headers: timings.header() });

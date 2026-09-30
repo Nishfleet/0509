@@ -49,20 +49,7 @@ function Pending({ label, fill }: { label: string; fill: string }) {
   );
 }
 
-function EditRow({
-  label,
-  name,
-  initial,
-  placeholder,
-  check,
-  empty,
-  emptyLine,
-  multiline,
-  edited,
-  reverted,
-  onRevert,
-  onSave,
-}: {
+interface EditRowProps {
   label: string;
   name: string;
   initial: string;
@@ -75,7 +62,68 @@ function EditRow({
   reverted: boolean;
   onRevert: () => void;
   onSave: (value: string) => void;
-}) {
+}
+
+interface EditorProps {
+  label: string;
+  value: string;
+  multiline: boolean;
+  onValue: (value: string) => void;
+  onKeyDown: (event: KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>) => void;
+}
+
+function Editor({ label, value, multiline, onValue, onKeyDown }: EditorProps) {
+  if (multiline) {
+    return (
+      <textarea
+        aria-label={label}
+        autoFocus
+        value={value}
+        rows={2}
+        className={`${FIELD} resize-none`}
+        onChange={(event) => {
+          onValue(event.currentTarget.value);
+        }}
+        onKeyDown={onKeyDown}
+      />
+    );
+  }
+  return (
+    <Input
+      aria-label={label}
+      autoFocus
+      value={value}
+      onChange={(event) => {
+        onValue(event.currentTarget.value);
+      }}
+      onKeyDown={onKeyDown}
+    />
+  );
+}
+
+function EditStatus({ edited, reverted, onRevert }: Pick<EditRowProps, "edited" | "reverted" | "onRevert">) {
+  if (edited) {
+    return (
+      <>
+        <span className="font-mono text-[0.7rem] text-ink-soft uppercase">edited by you</span>
+        <button type="button" className="text-[0.88rem] text-ink-soft underline" onClick={onRevert}>
+          use what we found
+        </button>
+      </>
+    );
+  }
+  if (reverted) {
+    return (
+      <span role="status" className="text-[0.88rem] text-ink-soft">
+        back to what we found, we will check it again
+      </span>
+    );
+  }
+  return null;
+}
+
+function EditRow(props: EditRowProps) {
+  const { label, name, initial, placeholder, check, empty, emptyLine, multiline, onSave } = props;
   const [value, setValue] = useState(initial);
   const [open, setOpen] = useState(false);
   const checkId = useId();
@@ -86,30 +134,6 @@ function EditRow({
     setOpen(false);
     onSave(value);
   };
-  const editor =
-    multiline === true ? (
-      <textarea
-        aria-label={label}
-        autoFocus
-        value={value}
-        rows={2}
-        className={`${FIELD} resize-none`}
-        onChange={(event) => {
-          setValue(event.currentTarget.value);
-        }}
-        onKeyDown={saveOnEnter}
-      />
-    ) : (
-      <Input
-        aria-label={label}
-        autoFocus
-        value={value}
-        onChange={(event) => {
-          setValue(event.currentTarget.value);
-        }}
-        onKeyDown={saveOnEnter}
-      />
-    );
   return (
     <Row label={label} check={check} checkId={checkId} wrap={empty === true}>
       <Popover
@@ -126,20 +150,17 @@ function EditRow({
           <span className="sr-only">{`edit ${label}: `}</span>
           {value === "" ? <span className="text-ink-soft">{placeholder}</span> : value}
         </PopoverTrigger>
-        <PopoverContent>{editor}</PopoverContent>
+        <PopoverContent>
+          <Editor
+            label={label}
+            value={value}
+            multiline={multiline === true}
+            onValue={setValue}
+            onKeyDown={saveOnEnter}
+          />
+        </PopoverContent>
       </Popover>
-      {edited ? (
-        <>
-          <span className="font-mono text-[0.7rem] text-ink-soft uppercase">edited by you</span>
-          <button type="button" className="text-[0.88rem] text-ink-soft underline" onClick={onRevert}>
-            use what we found
-          </button>
-        </>
-      ) : reverted ? (
-        <span role="status" className="text-[0.88rem] text-ink-soft">
-          back to what we found, we will check it again
-        </span>
-      ) : null}
+      <EditStatus edited={props.edited} reverted={props.reverted} onRevert={props.onRevert} />
       <input type="hidden" name={name} value={value} />
       {empty === true ? <span className="text-[0.88rem] text-ink-soft max-sm:basis-full">{emptyLine}</span> : null}
     </Row>
@@ -167,6 +188,105 @@ function Logo({ logo }: { logo: Promise<string | null> }) {
 const EMPTY_LINE = "we'll fill this after the first crawl";
 const UNREAD_LINE = "we'll fill this on the first crawl, within the hour";
 
+const DRAFT_META = {
+  name: { label: "name", placeholder: "your brand's name", multiline: false },
+  description: { label: "about", placeholder: "one line on what you do", multiline: true },
+} as const;
+
+interface DraftActions {
+  reverted: DraftField | null;
+  revert: (field: DraftField) => void;
+  save: (field: DraftField, value: string) => void;
+}
+
+function useDraftActions(subject: string): DraftActions {
+  const fetcher = useFetcher();
+  const [reverted, setReverted] = useState<DraftField | null>(null);
+  return {
+    reverted,
+    revert: (field) => {
+      setReverted(field);
+      void fetcher.submit({ intent: "revert", subject, field }, { method: "post" });
+    },
+    save: (field, value) => {
+      setReverted(null);
+      void fetcher.submit({ intent: "draft", subject, field, value }, { method: "post" });
+    },
+  };
+}
+
+interface DraftRowProps {
+  field: DraftField;
+  site: SiteFields;
+  draft: CardDraft;
+  emptyLine: string;
+  actions: DraftActions;
+}
+
+function DraftRow({ field, site, draft, emptyLine, actions }: DraftRowProps) {
+  const meta = DRAFT_META[field];
+  const check = site.review[field] === "check";
+  return (
+    <EditRow
+      key={draft[field] === undefined ? `${field}:found` : `${field}:edited`}
+      label={meta.label}
+      name={field}
+      initial={draft[field] ?? (check ? "" : (site[field] ?? ""))}
+      placeholder={check ? (site[field] ?? "") : meta.placeholder}
+      check={check}
+      empty={site.review[field] === "empty"}
+      emptyLine={emptyLine}
+      multiline={meta.multiline}
+      edited={draft[field] !== undefined}
+      reverted={actions.reverted === field}
+      onRevert={() => {
+        actions.revert(field);
+      }}
+      onSave={(value) => {
+        actions.save(field, value);
+      }}
+    />
+  );
+}
+
+function SocialsBody({ site, emptyLine }: { site: SiteFields; emptyLine: string }) {
+  if (site.review.socials === "empty") {
+    return <span className="text-[0.88rem] text-ink-soft">{emptyLine}</span>;
+  }
+  if (site.review.socials === "check") {
+    return (
+      <ul className="min-w-0 flex-1 text-[0.95rem]">
+        {site.socials.map((social) => (
+          <li key={social.platform} className="min-w-0">
+            <label className="flex min-h-11 min-w-0 items-center gap-3">
+              <input
+                type="checkbox"
+                className="size-5 shrink-0"
+                name={`social.${social.platform}`}
+                value={social.url}
+              />
+              <span className="truncate">{social.url}</span>
+            </label>
+          </li>
+        ))}
+      </ul>
+    );
+  }
+  if (site.socials.length === 0) {
+    return <span className="text-[0.95rem] text-ink-soft">none found on the site</span>;
+  }
+  return (
+    <ul className="min-w-0 flex-1 text-[0.95rem]">
+      {site.socials.map((social) => (
+        <li key={social.platform} className="truncate">
+          {social.url}
+          <input type="hidden" name={`social.${social.platform}`} value={social.url} />
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 export function Fields({
   subject,
   site,
@@ -179,32 +299,10 @@ export function Fields({
   draft: CardDraft;
 }) {
   const emptyLine = site.unfound ? UNREAD_LINE : EMPTY_LINE;
-  const nameCheck = site.review.name === "check";
-  const descriptionCheck = site.review.description === "check";
-  const fetcher = useFetcher();
-  const [reverted, setReverted] = useState<DraftField | null>(null);
+  const actions = useDraftActions(subject);
   return (
     <>
-      <EditRow
-        key={draft.name === undefined ? "name:found" : "name:edited"}
-        label="name"
-        name="name"
-        initial={draft.name ?? (nameCheck ? "" : (site.name ?? ""))}
-        placeholder={nameCheck ? (site.name ?? "") : "your brand's name"}
-        check={nameCheck}
-        empty={site.review.name === "empty"}
-        emptyLine={emptyLine}
-        edited={draft.name !== undefined}
-        reverted={reverted === "name"}
-        onRevert={() => {
-          setReverted("name");
-          void fetcher.submit({ intent: "revert", subject, field: "name" }, { method: "post" });
-        }}
-        onSave={(value) => {
-          setReverted(null);
-          void fetcher.submit({ intent: "draft", subject, field: "name", value }, { method: "post" });
-        }}
-      />
+      <DraftRow field="name" site={site} draft={draft} emptyLine={emptyLine} actions={actions} />
       {site.unfound ? (
         <Row label="logo">
           <span className="text-[0.88rem] text-ink-soft">{UNREAD_LINE}</span>
@@ -212,58 +310,9 @@ export function Fields({
       ) : (
         <Logo logo={logo} />
       )}
-      <EditRow
-        key={draft.description === undefined ? "description:found" : "description:edited"}
-        label="about"
-        name="description"
-        initial={draft.description ?? (descriptionCheck ? "" : (site.description ?? ""))}
-        placeholder={descriptionCheck ? (site.description ?? "") : "one line on what you do"}
-        check={descriptionCheck}
-        empty={site.review.description === "empty"}
-        emptyLine={emptyLine}
-        multiline
-        edited={draft.description !== undefined}
-        reverted={reverted === "description"}
-        onRevert={() => {
-          setReverted("description");
-          void fetcher.submit({ intent: "revert", subject, field: "description" }, { method: "post" });
-        }}
-        onSave={(value) => {
-          setReverted(null);
-          void fetcher.submit({ intent: "draft", subject, field: "description", value }, { method: "post" });
-        }}
-      />
+      <DraftRow field="description" site={site} draft={draft} emptyLine={emptyLine} actions={actions} />
       <Row label="socials" check={site.review.socials === "check"}>
-        {site.review.socials === "empty" ? (
-          <span className="text-[0.88rem] text-ink-soft">{emptyLine}</span>
-        ) : site.review.socials === "check" ? (
-          <ul className="min-w-0 flex-1 text-[0.95rem]">
-            {site.socials.map((social) => (
-              <li key={social.platform} className="min-w-0">
-                <label className="flex min-h-11 min-w-0 items-center gap-3">
-                  <input
-                    type="checkbox"
-                    className="size-5 shrink-0"
-                    name={`social.${social.platform}`}
-                    value={social.url}
-                  />
-                  <span className="truncate">{social.url}</span>
-                </label>
-              </li>
-            ))}
-          </ul>
-        ) : site.socials.length === 0 ? (
-          <span className="text-[0.95rem] text-ink-soft">none found on the site</span>
-        ) : (
-          <ul className="min-w-0 flex-1 text-[0.95rem]">
-            {site.socials.map((social) => (
-              <li key={social.platform} className="truncate">
-                {social.url}
-                <input type="hidden" name={`social.${social.platform}`} value={social.url} />
-              </li>
-            ))}
-          </ul>
-        )}
+        <SocialsBody site={site} emptyLine={emptyLine} />
       </Row>
     </>
   );
@@ -283,6 +332,33 @@ export function ArrivalLine({ fields }: { fields: SiteFields }) {
     <span className="sr-only">
       {checks.length === 0 ? "Your card is drawn." : `Your card is drawn. Check this: ${list}.`}
     </span>
+  );
+}
+
+function CreatorLines({ creator }: { creator: CreatorRows | null }) {
+  if (creator === null) return null;
+  return (
+    <>
+      {creator.channel === null ? null : (
+        <Row label="channel">
+          <span className="truncate text-[0.95rem]">{creator.channel}</span>
+        </Row>
+      )}
+      <Row label="handle">
+        <span className="truncate text-[0.95rem]">{creator.handle}</span>
+      </Row>
+    </>
+  );
+}
+
+function PendingRows() {
+  return (
+    <>
+      <Pending label="name" fill="looking on the site" />
+      <Pending label="logo" fill="looking on the site" />
+      <Pending label="about" fill="looking on the site" />
+      <Pending label="socials" fill="looking on the site" />
+    </>
   );
 }
 
@@ -314,26 +390,8 @@ export function IdentityCard({
           <Await resolve={site}>{(fields) => <ArrivalLine fields={fields} />}</Await>
         </Suspense>
       </p>
-      {creator !== null && creator.channel !== null ? (
-        <Row label="channel">
-          <span className="truncate text-[0.95rem]">{creator.channel}</span>
-        </Row>
-      ) : null}
-      {creator !== null ? (
-        <Row label="handle">
-          <span className="truncate text-[0.95rem]">{creator.handle}</span>
-        </Row>
-      ) : null}
-      <Suspense
-        fallback={
-          <>
-            <Pending label="name" fill="looking on the site" />
-            <Pending label="logo" fill="looking on the site" />
-            <Pending label="about" fill="looking on the site" />
-            <Pending label="socials" fill="looking on the site" />
-          </>
-        }
-      >
+      <CreatorLines creator={creator} />
+      <Suspense fallback={<PendingRows />}>
         <Await resolve={site}>
           {(fields) => (
             <>

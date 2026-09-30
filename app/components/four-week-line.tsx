@@ -36,12 +36,43 @@ function useWidth(element: HTMLElement | null): number {
   );
 }
 
+function RanksTable({ chart }: { chart: FourWeekChart }): ReactElement {
+  const caption = chart.weeks.length === 1 ? "Four-week ranks, first week" : "Four-week ranks";
+  return (
+    <table className="sr-only">
+      <caption>{caption}</caption>
+      <thead>
+        <tr>
+          <th scope="col">Brand</th>
+          {chart.weeks.map((week, index) => (
+            <th key={`${week}-${String(index)}`} scope="col">
+              {week}
+            </th>
+          ))}
+        </tr>
+      </thead>
+      <tbody>
+        {chart.lines.map((line) => (
+          <tr key={line.entityId}>
+            <th scope="row">
+              {line.label}
+              {line.paused ? " paused" : ""}
+            </th>
+            {line.ranks.map((rank, index) => (
+              <td key={`${line.entityId}-${String(index)}`}>{rank === null ? "none" : String(rank)}</td>
+            ))}
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
 export function FourWeekLine({ chart }: { chart: FourWeekChart }): ReactElement {
   const mounted = useSyncExternalStore(subscribeToNothing, mountedInBrowser, notMountedOnServer);
   const [frame, setFrame] = useState<HTMLDivElement | null>(null);
   const width = useWidth(frame);
 
-  const caption = chart.weeks.length === 1 ? "Four-week ranks, first week" : "Four-week ranks";
   return (
     <>
       <figure data-chart="four-week">
@@ -54,32 +85,7 @@ export function FourWeekLine({ chart }: { chart: FourWeekChart }): ReactElement 
             ) : null}
           </div>
         </div>
-        <table className="sr-only">
-          <caption>{caption}</caption>
-          <thead>
-            <tr>
-              <th scope="col">Brand</th>
-              {chart.weeks.map((week, index) => (
-                <th key={`${week}-${String(index)}`} scope="col">
-                  {week}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {chart.lines.map((line) => (
-              <tr key={line.entityId}>
-                <th scope="row">
-                  {line.label}
-                  {line.paused ? " paused" : ""}
-                </th>
-                {line.ranks.map((rank, index) => (
-                  <td key={`${line.entityId}-${String(index)}`}>{rank === null ? "none" : String(rank)}</td>
-                ))}
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <RanksTable chart={chart} />
       </figure>
       <ol aria-hidden="true" className="flex justify-between font-mono text-eyebrow text-ink-soft uppercase">
         {chart.weeks.map((week, index) => (
