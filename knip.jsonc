@@ -24,7 +24,6 @@
     "workers/fixture-site.ts",
     "e2e/*.setup.ts",
     "e2e/*.teardown.ts",
-    "app/components/ui/*.{ts,tsx}",
   ],
   "project": ["app/**/*.{ts,tsx}", "workers/**/*.ts", "e2e/**/*.ts", "tests/**/*.ts"],
 
