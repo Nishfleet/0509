@@ -1,3 +1,4 @@
+import { captureException } from "@sentry/cloudflare";
 import { z } from "zod";
 
 import { insertSelfEntity, readWorkspaceSelfId } from "../data/entity.server";
@@ -39,7 +40,12 @@ function creatorSite(socials: { platform: string; url: string }[]): Subject | nu
   return normalised.subject;
 }
 
-export async function confirmCard(workspaceId: string, userId: string, form: FormData): Promise<boolean> {
+export async function confirmCard(
+  workspaceId: string,
+  userId: string,
+  form: FormData,
+  waitUntil?: (work: Promise<unknown>) => void,
+): Promise<boolean> {
   const parsed = confirmSchema.safeParse({
     subject: field(form, "subject"),
     name: field(form, "name"),
@@ -97,14 +103,23 @@ export async function confirmCard(workspaceId: string, userId: string, form: For
       })),
   );
   const site = subject.kind === "domain" ? null : creatorSite(card.socials);
-  const tail = startIdentityTail({
+  const tailParams = {
     workspaceId,
     entityId,
     name: card.name,
     domain: site?.registrable ?? subject.registrable,
     homepageUrl: subject.kind === "domain" ? subject.url : (site?.url ?? null),
     ...(subject.kind === "domain" ? {} : { handle: subject.registrable }),
-  });
-  await Promise.all([edits, tail]);
+  };
+  if (waitUntil === undefined) {
+    await Promise.all([edits, startIdentityTail(tailParams)]);
+    return true;
+  }
+  await edits;
+  waitUntil(
+    startIdentityTail(tailParams).catch((error: unknown) => {
+      captureException(error, { tags: { step: "identity-tail-start" } });
+    }),
+  );
   return true;
 }

@@ -9,6 +9,7 @@ import { OneInput } from "../components/one-input";
 import { isTakenDown } from "../lib/data/takedown.server";
 import { startOnboardingRun } from "../lib/data/onboarding_run.server";
 import { readWorkspaceIdForOwner } from "../lib/data/workspace.server";
+import { executionContext } from "../lib/agent/context.server";
 import { creatorRows, editedFields, isDraftSave } from "../lib/identity/card-fields";
 import { applyDraftIntent, readDraft } from "../lib/identity/card-draft.server";
 import { startCard, withinProbeLimit } from "../lib/identity/card.server";
@@ -62,7 +63,7 @@ export async function loader({ request }: Route.LoaderArgs) {
   );
 }
 
-export async function action({ request }: Route.ActionArgs) {
+export async function action({ request, context }: Route.ActionArgs) {
   const timings = createTimings();
   const session = await timings.measure("session", requireFreshSession(request));
   const workspaceId = await timings.measure("workspace", readWorkspaceIdForOwner(session.user.id));
@@ -87,7 +88,14 @@ export async function action({ request }: Route.ActionArgs) {
       if (screened.kind !== "proceed") throw redirect("/onboarding");
     }
   }
-  if (await timings.measure("confirm", confirmCard(workspaceId, session.user.id, form))) {
+  if (
+    await timings.measure(
+      "confirm",
+      confirmCard(workspaceId, session.user.id, form, (work) => {
+        context.get(executionContext).waitUntil(work);
+      }),
+    )
+  ) {
     throw redirect("/onboarding/competitors", { headers: timings.header() });
   }
   return { message: "Add your brand's name, then tap That's me." };

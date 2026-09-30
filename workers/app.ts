@@ -38,10 +38,10 @@ const requestHandler = createRequestHandler(() => import("virtual:react-router/s
 
 const oauth = createOAuthProvider<OAuthEnv>({
   apiHandler: {
-    fetch: (request, env, ctx) => requestHandler(request, requestContext(env.OAUTH_PROVIDER, ctx.props)),
+    fetch: (request, env, ctx) => requestHandler(request, requestContext(env.OAUTH_PROVIDER, ctx, ctx.props)),
   },
   defaultHandler: {
-    fetch: (request, env) => requestHandler(request, requestContext(env.OAUTH_PROVIDER)),
+    fetch: (request, env, ctx) => requestHandler(request, requestContext(env.OAUTH_PROVIDER, ctx)),
   },
 });
 

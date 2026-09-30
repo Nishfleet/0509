@@ -1,5 +1,6 @@
 import { env, introspectWorkflow } from "cloudflare:test";
 import { NonRetryableError } from "cloudflare:workflows";
+import { captureException } from "@sentry/cloudflare";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 
@@ -16,6 +17,11 @@ import {
   startIdentityTail,
 } from "../../../app/lib/identity/tail.server";
 import gym from "../../fixtures/gymshark-2026-09-22-a.html?raw";
+
+vi.mock("@sentry/cloudflare", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@sentry/cloudflare")>()),
+  captureException: vi.fn(),
+}));
 
 const DOMAIN = "gymshark.com";
 const GREENHOUSE_JOBS = "https://boards-api.greenhouse.io/v1/boards/gymshark/jobs";
@@ -245,6 +251,42 @@ describe("IdentityTailWorkflow", () => {
       }),
     ).resolves.toBe(identityTailInstanceId(entityId));
     expect(await introspector.get()).toHaveLength(1);
+  });
+
+  it("hands the tail start to waitUntil and still starts one instance", async () => {
+    await seed();
+    await using introspector = await introspectWorkflow(env.IDENTITY_TAIL);
+    const deferred: Promise<unknown>[] = [];
+    expect(
+      await confirmCard(
+        workspaceId,
+        userId,
+        form({ subject: DOMAIN, name: "Gymshark", description: "Gym clothes" }),
+        (work) => deferred.push(work),
+      ),
+    ).toBe(true);
+
+    expect(deferred).toHaveLength(1);
+    await Promise.all(deferred);
+    expect(await introspector.get()).toHaveLength(1);
+  });
+
+  it("reports a tail start that fails after the response and does not fail the confirm", async () => {
+    await seed();
+    const failure = new Error("workflow binding unavailable");
+    vi.spyOn(env.IDENTITY_TAIL, "createBatch").mockRejectedValueOnce(failure);
+    const deferred: Promise<unknown>[] = [];
+    expect(
+      await confirmCard(
+        workspaceId,
+        userId,
+        form({ subject: DOMAIN, name: "Gymshark", description: "Gym clothes" }),
+        (work) => deferred.push(work),
+      ),
+    ).toBe(true);
+
+    await expect(Promise.all(deferred)).resolves.toBeDefined();
+    expect(captureException).toHaveBeenCalledWith(failure, { tags: { step: "identity-tail-start" } });
   });
 
   it("watches the page Jev judged pricing, not a /pricing path", async () => {
