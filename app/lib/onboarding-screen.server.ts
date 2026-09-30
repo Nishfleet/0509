@@ -36,11 +36,13 @@ export async function screenOnboardingSubject(input: {
   answer: string | null;
   now: string;
 }): Promise<ScreenResult> {
+  const ground = isLoginWall(input.raw) ? "login" : null;
+  const screening = ground === null ? runJevOutcome(input) : null;
+  screening?.catch(() => undefined);
   const decided = await readSubjectDecision(input.workspaceId, input.subject.registrable);
   if (decided === "public_subject:confirmed") return { kind: "proceed" };
   if (decided === "public_subject:refused") return { kind: "refuse", message: REFUSAL };
 
-  const ground = isLoginWall(input.raw) ? "login" : null;
   console.log(JSON.stringify({ event: "public_subject.screen", fetched: false, ground }));
   if (ground === "login") {
     await insertSubjectDecision({
@@ -53,7 +55,7 @@ export async function screenOnboardingSubject(input: {
     return { kind: "refuse", message: REFUSAL };
   }
 
-  const screened = await runJevOutcome(input);
+  const screened = screening === null ? null : await screening;
   const outcome = screened === null ? "ask" : screened.outcome;
   if (outcome === "proceed") return { kind: "proceed" };
 
