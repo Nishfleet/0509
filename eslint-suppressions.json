@@ -228,11 +228,6 @@
       "count": 1
     }
   },
-  "app/lib/site/check-page.server.ts": {
-    "max-lines-per-function": {
-      "count": 1
-    }
-  },
   "app/lib/site/judge.server.ts": {
     "max-lines-per-function": {
       "count": 1

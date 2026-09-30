@@ -179,6 +179,42 @@ describe("checkPage (0509#4433)", () => {
     expect(await snapshotCount()).toBe(4);
   });
 
+  it("returns gone and leaves no stored objects when the watch is deleted mid-check", async () => {
+    browserHolder.current = browserStub();
+    const result = await checkPage({
+      watchId: WATCH,
+      pageId: PAGE,
+      url: URL,
+      mayScreenshot: async () => {
+        await env.DB.prepare("DELETE FROM watch WHERE id = ?").bind(WATCH).run();
+        return true;
+      },
+    });
+
+    expect(result).toEqual({ outcome: "gone" });
+    expect(await objectCount()).toBe(0);
+  });
+
+  it("returns gone without a stored object when the page is deleted before an unchanged reuse", async () => {
+    const first = await checkPage({ watchId: WATCH, pageId: PAGE, url: URL });
+    if (first.outcome !== "first") throw new Error("expected first");
+    await env.DB.prepare("DELETE FROM page WHERE id = ?").bind(PAGE).run();
+
+    const result = await checkPage({ watchId: WATCH, pageId: PAGE, url: URL });
+
+    expect(result).toEqual({ outcome: "gone" });
+    expect(await objectCount()).toBe(1);
+  });
+
+  it("treats a replayed snapshot id as unchanged, not gone", async () => {
+    await checkPage({ watchId: WATCH, pageId: PAGE, url: URL });
+    const once = await checkPage({ watchId: WATCH, pageId: PAGE, url: URL, snapshotId: "replayed" });
+    const again = await checkPage({ watchId: WATCH, pageId: PAGE, url: URL, snapshotId: "replayed" });
+
+    expect(once).toEqual({ outcome: "unchanged", snapshotId: "replayed" });
+    expect(again).toEqual({ outcome: "unchanged", snapshotId: "replayed" });
+  });
+
   it("stores the screenshot under snapshot/site/<watch>/<id>.png when the budget grants it (0509#5816)", async () => {
     browserHolder.current = browserStub();
     const first = await checkPage({ watchId: WATCH, pageId: PAGE, url: URL });

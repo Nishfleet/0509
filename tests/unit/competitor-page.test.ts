@@ -6,6 +6,7 @@ import { describe, expect, it } from "vitest";
 import { CompetitorFrame, type CompetitorFrameProps, developmentsEmpty } from "../../app/components/competitor-frame";
 import type { RailSource } from "../../app/components/competitor-rail";
 import type { SiteChangeItemData } from "../../app/components/site-change-item";
+import type { BiggestMoveView } from "../../app/lib/biggest-move";
 import { LOST_CHANNEL_REASON } from "../../app/lib/mentions/youtube-channel";
 import {
   CompetitorHeader,
@@ -36,11 +37,25 @@ const change: SiteChangeItemData = {
   when: "today",
 };
 
+const move: BiggestMoveView = {
+  id: "sig-1",
+  kind: "change",
+  source: "Site change · website",
+  title: "Kindred changed its homepage",
+  url: null,
+  when: "today",
+  read: "Price change: 5 × 1 = 5 points, the most of anything this brand did this week.",
+  weight: 5,
+  multiplier: 1,
+  points: 5,
+};
+
 const quiet: CompetitorFrameProps = {
   changes: [],
   developments: [],
   weekCount: 0,
-  biggestId: null,
+  biggestMove: null,
+  quiet: "Nothing scored for this brand in the last 7 days. We checked website, last at 2026-09-24 02:09 UTC.",
   pages: 0,
   lastChecked: null,
   pausedOn: null,
@@ -100,7 +115,7 @@ describe("the competitor page frame", () => {
           stateChangedAt: null,
           control: createElement("span", { "data-testid": "control-slot" }),
         }),
-        createElement(CompetitorFrame, { ...quiet, changes: [change], weekCount: 1, biggestId: "sig-1" }),
+        createElement(CompetitorFrame, { ...quiet, changes: [change], weekCount: 1, biggestMove: move }),
       ),
     );
     const markers = [
@@ -196,7 +211,7 @@ describe("the competitor page frame", () => {
   });
 
   it("draws a change as the mark with its before-and-after capture plate", () => {
-    const html = frame({ changes: [change], weekCount: 1, biggestId: "sig-1" });
+    const html = frame({ changes: [change], weekCount: 1, biggestMove: move });
     expect(html).toContain("Kindred changed its homepage");
     expect(html).toContain("<s");
     expect(html).toContain("Plans from $10.");
@@ -222,13 +237,19 @@ describe("the competitor page frame", () => {
         },
       ],
       weekCount: 1,
-      biggestId: "sig-1",
+      biggestMove: move,
     });
     expect(html).toContain("Why we flagged this");
   });
 
+  it("reads the quiet-week sentence in the biggest-move slab when nothing scored", () => {
+    const html = frame();
+    const slab = html.slice(html.indexOf('data-section="biggest-move"'), html.indexOf('data-section="developments"'));
+    expect(slab).toContain(quiet.quiet);
+  });
+
   it("does not open a WhyFlaggedSheet without a verdict", () => {
-    expect(frame({ changes: [change], weekCount: 1, biggestId: "sig-1" })).not.toContain("Why we flagged this");
+    expect(frame({ changes: [change], weekCount: 1, biggestMove: move })).not.toContain("Why we flagged this");
   });
 
   it("says when the first change can land, and freezes the feed at the pause", () => {

@@ -224,6 +224,29 @@ function seed({ db, suffix, userId }: { db: DatabaseSync; suffix: string; userId
   };
   ad(1);
   ad(2);
+  const hiringSourceId = `src-hiring-${suffix}`;
+  run(
+    db,
+    "INSERT INTO source (id, key, kind, platform, plugin_key, reliability, is_enabled, config_json) VALUES (?, ?, 'hiring', 'greenhouse', ?, 'official_api', 1, '{}')",
+    hiringSourceId,
+    `hiring.greenhouse-${suffix}`,
+    `hiring.greenhouse-${suffix}`,
+  );
+  const role = (id: string, entityId: string, title: string) =>
+    run(
+      db,
+      `INSERT INTO signal (id, workspace_id, entity_id, source_id, kind, title, summary, url, payload_json, dedup_key, published_at, observed_at)
+         VALUES (?, ?, ?, ?, 'hiring', ?, 'Berlin · Platform', ?, '{}', ?, NULL, '2026-09-26T08:00:00.000Z')`,
+      id,
+      workspaceId,
+      entityId,
+      hiringSourceId,
+      title,
+      `https://boards.example/${id}`,
+      `dedup-${id}`,
+    );
+  role(`sig-role-${suffix}`, onId, "Senior Backend Engineer");
+  role(`sig-role-off-${suffix}`, offId, "Paused brand role should stay hidden");
   return workspaceId;
 }
 
@@ -235,7 +258,7 @@ async function measure(page: Page) {
   }));
 }
 
-function sqlCounts(workspaceId: string): { ads: number; mentions: number } {
+function sqlCounts(workspaceId: string): { ads: number; mentions: number; hiring: number } {
   return readPreview((db) => {
     const ads = db
       .prepare(
@@ -252,7 +275,14 @@ function sqlCounts(workspaceId: string): { ads: number; mentions: number } {
          WHERE s.workspace_id = ? AND s.kind = 'mention'`,
       )
       .get(workspaceId) as { n: number };
-    return { ads: ads.n, mentions: mentions.n };
+    const hiring = db
+      .prepare(
+        `SELECT count(*) AS n FROM signal s
+         JOIN entity e ON e.id = s.entity_id AND e.state = 'on'
+         WHERE s.workspace_id = ? AND s.kind = 'hiring'`,
+      )
+      .get(workspaceId) as { n: number };
+    return { ads: ads.n, mentions: mentions.n, hiring: hiring.n };
   });
 }
 
@@ -264,6 +294,7 @@ test("alert type chips filter one feed with honest counts", async ({ page }, tes
   const counts = sqlCounts(workspaceId);
   expect(counts.ads).toBe(2);
   expect(counts.mentions).toBe(4);
+  expect(counts.hiring).toBe(1);
 
   await page.setExtraHTTPHeaders({ cookie });
   const response = await page.goto("/app/alerts");
@@ -271,7 +302,7 @@ test("alert type chips filter one feed with honest counts", async ({ page }, tes
 
   await expect(page.getByTestId("alert-chip-ads")).toContainText(String(counts.ads));
   await expect(page.getByTestId("alert-chip-mentions")).toContainText(String(counts.mentions));
-  await expect(page.getByTestId("alert-chip-hiring")).toBeDisabled();
+  await expect(page.getByTestId("alert-chip-hiring")).toContainText(String(counts.hiring));
   await expect(page.getByTestId("alert-chip-site-changes")).toBeDisabled();
 
   await page.getByTestId("alert-chip-ads").click();
@@ -290,6 +321,18 @@ test("alert type chips filter one feed with honest counts", async ({ page }, tes
   await expect(page).toHaveURL(/[?&]kind=mentions/);
   await expect(page.getByText("Zephyrwear ran ad 1")).toHaveCount(0);
   await expect(page.getByText("Zephyrwear ran ad 2")).toHaveCount(0);
+
+  await page.getByTestId("alert-chip-hiring").click();
+  await expect(page).toHaveURL(/[?&]kind=hiring/);
+  const role = page.getByTestId("hiring-row");
+  await expect(role).toHaveCount(1);
+  await expect(role).toContainText("Senior Backend Engineer");
+  await expect(role).toContainText("Zephyrwear is hiring · Berlin · Platform");
+  await expect(role.getByRole("link", { name: "Senior Backend Engineer" })).toHaveAttribute(
+    "rel",
+    "noopener noreferrer nofollow",
+  );
+  await expect(page.getByText("Paused brand role should stay hidden")).toHaveCount(0);
 
   await page.getByTestId("alert-chip-all").click();
   await expect(page).not.toHaveURL(/kind=/);

@@ -1,7 +1,16 @@
 import AxeBuilder from "@axe-core/playwright";
+
 import { expect, test } from "@playwright/test";
 
+import { isLocalLane } from "./inbox";
+import { seedRankedHomeSession } from "./ranked-home";
+
 const TAGS = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"];
+
+test.skip(
+  !isLocalLane(),
+  "seeds a ranked workspace in the local preview database; production reads a real ranked /app",
+);
 
 function activeName(): string {
   const el = document.activeElement;
@@ -16,11 +25,14 @@ test("ranked home passes axe at WCAG 2.2 AA and is keyboard-operable at 1440 and
 }, testInfo) => {
   test.skip(testInfo.project.name !== "desktop-1440", "this spec sets 1440 and 390 itself");
 
+  const cookie = await seedRankedHomeSession("a11y-ranked-home");
+  await page.setExtraHTTPHeaders({ cookie });
+
   for (const colorScheme of ["light", "dark"] as const) {
     for (const width of [1440, 390] as const) {
       await page.emulateMedia({ colorScheme });
       await page.setViewportSize({ width, height: width === 1440 ? 900 : 844 });
-      await page.goto("/design/ranked-rows");
+      await page.goto("/app");
 
       await expect(page.getByRole("banner")).toHaveCount(1);
       await expect(page.getByRole("main")).toHaveCount(1);
@@ -49,6 +61,11 @@ test("ranked home passes axe at WCAG 2.2 AA and is keyboard-operable at 1440 and
         "1",
       ]);
 
+      // The degraded pill is part of what the scan covers: the seeded week
+      // leaves Hacker News unanswered, so its dashed, dimmed pill is on the
+      // page in both themes rather than only asserted by another spec.
+      await expect(page.locator('[data-slot="row-pills"] li[data-state="degraded"]').first()).toBeVisible();
+
       const closed = await new AxeBuilder({ page }).withTags(TAGS).analyze();
       await testInfo.attach(`axe-home-${colorScheme}-${String(width)}`, {
         body: JSON.stringify(closed.violations, null, 2),
@@ -61,11 +78,19 @@ test("ranked home passes axe at WCAG 2.2 AA and is keyboard-operable at 1440 and
         if (active instanceof HTMLElement) active.blur();
       });
       const order: string[] = [];
-      for (let i = 0; i < 5; i += 1) {
+      // The app shell's nav is the first focusable content, then Home's own
+      // **How this is ranked** button, then the standing rows in rank order —
+      // the self row's switch is disabled and reads YOU, so it is skipped.
+      for (let i = 0; i < 10; i += 1) {
         await page.keyboard.press("Tab");
         order.push(await page.evaluate(activeName));
       }
       expect(order).toEqual([
+        "HOME",
+        "COMPETITORS",
+        "ALERTS",
+        "SETTINGS",
+        "HOW THIS IS RANKED",
         "Kindred kindred.example",
         "Kindred tracking",
         "Loopwell loopwell.example",
@@ -73,9 +98,11 @@ test("ranked home passes axe at WCAG 2.2 AA and is keyboard-operable at 1440 and
         "Casetta tracking",
       ]);
 
-      await page.mouse.click(1, 1);
-      await page.keyboard.press("Tab");
+      // The order walk ends on "Casetta tracking"; walking backward along the
+      // list it just asserted reaches the first row's toggle — no restart, so
+      // no dependence on where the browser resumes sequential focus.
       const toggle = page.locator('[data-testid="standing-row"]').first().locator('[data-slot="row-toggle"]');
+      for (let i = 0; i < 4; i += 1) await page.keyboard.press("Shift+Tab");
       await expect(toggle).toBeFocused();
       await expect(toggle).toHaveCSS("outline-style", "solid");
       await page.screenshot({

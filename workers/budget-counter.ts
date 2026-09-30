@@ -1,6 +1,7 @@
 import { DurableObject } from "cloudflare:workers";
 
 const COUNT_KEY = "count";
+const MS_KEY = "ms";
 const EXPIRE_MS = 2 * 24 * 60 * 60 * 1000;
 
 export class BrowserBudget extends DurableObject {
@@ -10,6 +11,16 @@ export class BrowserBudget extends DurableObject {
     await this.ctx.storage.put(COUNT_KEY, used + 1);
     if (used === 0) await this.ctx.storage.setAlarm(Date.now() + EXPIRE_MS);
     return true;
+  }
+
+  async addMs(ms: number): Promise<void> {
+    const total = (await this.ctx.storage.get<number>(MS_KEY)) ?? 0;
+    await this.ctx.storage.put(MS_KEY, total + ms);
+    if (total === 0) await this.ctx.storage.setAlarm(Date.now() + EXPIRE_MS);
+  }
+
+  async totalMs(): Promise<number> {
+    return (await this.ctx.storage.get<number>(MS_KEY)) ?? 0;
   }
 
   async alarm(): Promise<void> {
