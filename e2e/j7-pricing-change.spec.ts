@@ -17,6 +17,7 @@ test.skip(!process.env.PLAYWRIGHT_TEST_BASE_URL, "J7 needs the production sweep,
 const FIXTURE_ORIGIN = "https://fixture.0509.in";
 const SWEEP_UTC_HOUR = 2;
 const SETTLE_MS = 60 * 60 * 1000;
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 type Variant = "base" | "raised";
 
@@ -41,7 +42,7 @@ async function readFixture(): Promise<{ variant: Variant; flippedAt: string }> {
 function lastCompletedTick(now: number): number {
   const date = new Date(now);
   const today = Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate(), SWEEP_UTC_HOUR);
-  return today + SETTLE_MS <= now ? today : today - 24 * 60 * 60 * 1000;
+  return today + SETTLE_MS <= now ? today : today - DAY_MS;
 }
 
 async function flip(variant: Variant): Promise<void> {
@@ -96,7 +97,17 @@ test("J7 a fixture price flip reaches Alerts as a before-and-after mark @own-sig
   }
 
   await page.goto("/app/alerts");
-  await expect(page.getByTestId("alert-chip-site-changes")).toBeEnabled();
+  const chip = page.getByTestId("alert-chip-site-changes");
+  const sweepsSinceFlip = Math.floor((lastCompletedTick(Date.now()) - Date.parse(flippedAt)) / DAY_MS) + 1;
+  if ((await chip.isDisabled()) && sweepsSinceFlip < 2) {
+    const next: Variant = variant === "raised" ? "base" : "raised";
+    await flip(next);
+    test.skip(
+      sweepsSinceFlip < 2,
+      `J7: the first sweep after the flip only took the baseline; flipped to ${next} for the next one`,
+    );
+  }
+  await expect(chip).toBeEnabled();
   const mark = page
     .getByTestId("site-change")
     .filter({ has: page.locator(`a[href^="${FIXTURE_ORIGIN}"]`) })
