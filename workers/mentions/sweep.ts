@@ -6,6 +6,7 @@ import type { DiscoveryContext } from "../../app/lib/data/entity.server";
 import { readDiscoveryContext, readEntityIdentityJson } from "../../app/lib/data/entity.server";
 import { insertVerdict } from "../../app/lib/data/jev_verdict.server";
 import {
+  type DuplicateCandidate,
   findDuplicateCandidate,
   insertMention,
   markDuplicateOf,
@@ -194,35 +195,61 @@ function duplicateStatements(input: {
     reason: null,
     decidedAt: now,
   });
-  return noulAction(verdict.p) === "reject" ? [verdictRow] : [verdictRow, markDuplicateOf(signalId, candidateId)];
+  return noulAction(verdict.p) === "act" ? [verdictRow, markDuplicateOf(signalId, candidateId)] : [verdictRow];
+}
+
+interface SweepPeer {
+  titleHash: string;
+  normUrlHash: string;
+  candidate: DuplicateCandidate;
+}
+
+type DuplicateHashes = Pick<SweepPeer, "titleHash" | "normUrlHash">;
+
+function asCandidate(watch: WatchRow, signalId: string, item: MentionItem): DuplicateCandidate {
+  return {
+    id: signalId,
+    title: item.title,
+    url: item.url,
+    publishedAt: item.publishedAt,
+    publisher: item.publisher ?? null,
+    source: watch.plugin_key,
+  };
+}
+
+async function pickCandidate(input: {
+  watch: WatchRow;
+  hashes: DuplicateHashes;
+  peers: readonly SweepPeer[];
+  now: string;
+}): Promise<DuplicateCandidate | null> {
+  const { watch, hashes, peers, now } = input;
+  const stored = await findDuplicateCandidate({
+    workspaceId: watch.workspace_id,
+    entityId: watch.entity_id,
+    since: new Date(Date.parse(now) - DUPLICATE_WINDOW_MS).toISOString(),
+    ...hashes,
+  });
+  if (stored !== null) return stored;
+  const peer = peers.find((entry) => entry.titleHash === hashes.titleHash || entry.normUrlHash === hashes.normUrlHash);
+  return peer?.candidate ?? null;
 }
 
 async function judgeDuplicate(input: {
   watch: WatchRow;
   signalId: string;
   item: MentionItem;
-  hashes: { titleHash: string; normUrlHash: string };
+  hashes: DuplicateHashes;
+  peers: readonly SweepPeer[];
   now: string;
   canAsk: () => boolean;
 }): Promise<{ statements: D1PreparedStatement[]; asked: boolean; jevDown: boolean }> {
   const { watch, signalId, item, now } = input;
-  const candidate = await findDuplicateCandidate({
-    workspaceId: watch.workspace_id,
-    entityId: watch.entity_id,
-    since: new Date(Date.parse(now) - DUPLICATE_WINDOW_MS).toISOString(),
-    ...input.hashes,
-  });
+  const candidate = await pickCandidate({ watch, hashes: input.hashes, peers: input.peers, now });
   if (candidate === null || !input.canAsk()) return { statements: [], asked: false, jevDown: false };
   const state = duplicateSignalState({
     subject: { name: watch.name, domain: watch.domain },
-    first: {
-      id: signalId,
-      title: item.title,
-      url: item.url,
-      publishedAt: item.publishedAt,
-      publisher: item.publisher ?? null,
-      source: watch.plugin_key,
-    },
+    first: asCandidate(watch, signalId, item),
     second: candidate,
   });
   try {
@@ -290,23 +317,8 @@ function mentionSignal(input: {
   };
 }
 
-async function freshMentionStatements(input: {
-  watch: WatchRow;
-  context: DiscoveryContext;
-  item: MentionItem;
-  snapshotId: string;
-  now: string;
-  jevDown: boolean;
-  canAsk: () => boolean;
-}): Promise<{
-  statements: D1PreparedStatement[];
-  stored: number;
-  unjudged: number;
-  asked: boolean;
-  jevDown: boolean;
-}> {
-  const { watch, context, item, snapshotId, now } = input;
-  const verdicts = input.jevDown ? null : await judgeOrNull(watch, context, item);
+async function mapFresh(input: { watch: WatchRow; item: MentionItem; snapshotId: string; now: string }) {
+  const { watch, item, snapshotId, now } = input;
   const mapped = await toSignalRow(item, {
     workspaceId: watch.workspace_id,
     entityId: watch.entity_id,
@@ -317,23 +329,50 @@ async function freshMentionStatements(input: {
   });
   const dedupKey = storedDedupKey(watch.entity_id, mapped.dedup_key);
   const signalId = `sig-${(await sha256Hex(`${watch.source_id}:${dedupKey}`)).slice(0, 32)}`;
+  return { mapped, dedupKey, signalId };
+}
+
+async function freshMentionStatements(input: {
+  watch: WatchRow;
+  context: DiscoveryContext;
+  item: MentionItem;
+  snapshotId: string;
+  now: string;
+  jevDown: boolean;
+  peers: readonly SweepPeer[];
+  canAsk: () => boolean;
+}): Promise<{
+  statements: D1PreparedStatement[];
+  peer: SweepPeer | null;
+  stored: number;
+  unjudged: number;
+  asked: boolean;
+  jevDown: boolean;
+}> {
+  const { watch, context, item, snapshotId, now } = input;
+  const verdicts = input.jevDown ? null : await judgeOrNull(watch, context, item);
+  const { mapped, dedupKey, signalId } = await mapFresh({ watch, item, snapshotId, now });
   const rejected = verdicts !== null && noulAction(verdicts.about.p) === "reject";
   const insert = insertMention(
     mentionSignal({ mapped, watch, snapshotId, signalId, dedupKey, rejected, judged: verdicts !== null }),
   );
-  if (verdicts === null) return { statements: [insert], stored: 0, unjudged: 1, asked: false, jevDown: true };
+  if (verdicts === null)
+    return { statements: [insert], peer: null, stored: 0, unjudged: 1, asked: false, jevDown: true };
   const judged = [insert, ...judgedStatements({ watch, signalId, item, verdicts, now })];
-  if (rejected) return { statements: judged, stored: 0, unjudged: 0, asked: false, jevDown: false };
+  if (rejected) return { statements: judged, peer: null, stored: 0, unjudged: 0, asked: false, jevDown: false };
+  const hashes = { titleHash: mapped.title_hash, normUrlHash: mapped.norm_url_hash };
   const duplicate = await judgeDuplicate({
     watch,
     signalId,
     item,
-    hashes: { titleHash: mapped.title_hash, normUrlHash: mapped.norm_url_hash },
+    hashes,
+    peers: input.peers,
     now,
     canAsk: input.canAsk,
   });
   return {
     statements: [...judged, ...duplicate.statements],
+    peer: { ...hashes, candidate: asCandidate(watch, signalId, item) },
     stored: 1,
     unjudged: 0,
     asked: duplicate.asked,
@@ -379,6 +418,7 @@ async function statementsForWatch(input: {
   let jevDown = rejudged.jevDown;
   const freshBudget = jevDown ? JUDGED_PER_WATCH : JUDGED_PER_WATCH - rejudged.attempted;
   let budget = freshBudget;
+  let peers: readonly SweepPeer[] = [];
   for (const { item } of fresh) {
     if (budget <= 0) break;
     budget -= 1;
@@ -389,8 +429,10 @@ async function statementsForWatch(input: {
       snapshotId,
       now,
       jevDown,
+      peers,
       canAsk: () => budget > 0,
     });
+    if (done.peer !== null) peers = [...peers, done.peer];
     if (done.asked) budget -= 1;
     jevDown = done.jevDown;
     statements.push(...done.statements);

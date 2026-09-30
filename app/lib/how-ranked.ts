@@ -65,6 +65,29 @@ const reliabilityIndex = new Map(reliabilitySchema.options.map((reliability, ind
 
 const orderOf = (index: ReadonlyMap<string, number>, key: string): number => index.get(key) ?? 0;
 
+type WeightMap = ReturnType<typeof weightsAsOf>;
+
+function brandLines(counts: readonly BucketCount[], weights: WeightMap): readonly HowRankedLine[] {
+  return [...counts]
+    .sort(
+      (left, right) =>
+        orderOf(bucketIndex, left.bucket) - orderOf(bucketIndex, right.bucket) ||
+        orderOf(reliabilityIndex, left.reliability) - orderOf(reliabilityIndex, right.reliability),
+    )
+    .map((count) => {
+      const weight = weightOf(weights, count.bucket);
+      const multiplier = weightOf(weights, `reliability_${count.reliability}`);
+      return {
+        bucket: count.bucket,
+        reliability: count.reliability,
+        n: count.n,
+        weight,
+        multiplier,
+        points: count.n * weight * multiplier,
+      };
+    });
+}
+
 export function howRanked(input: {
   weekStartAt: string;
   weightRows: readonly WeightRow[];
@@ -93,26 +116,7 @@ export function howRanked(input: {
   );
 
   const brands: readonly HowRankedBrand[] = input.brands.map((brand) => {
-    const brandCounts = countsByEntity.get(brand.entity_id) ?? [];
-    const lines: readonly HowRankedLine[] = [...brandCounts]
-      .sort(
-        (left, right) =>
-          orderOf(bucketIndex, left.bucket) - orderOf(bucketIndex, right.bucket) ||
-          orderOf(reliabilityIndex, left.reliability) - orderOf(reliabilityIndex, right.reliability),
-      )
-      .map((count) => {
-        const weight = weightOf(weights, count.bucket);
-        const multiplier = weightOf(weights, `reliability_${count.reliability}`);
-        return {
-          bucket: count.bucket,
-          reliability: count.reliability,
-          n: count.n,
-          weight,
-          multiplier,
-          points: count.n * weight * multiplier,
-        };
-      });
-
+    const lines = brandLines(countsByEntity.get(brand.entity_id) ?? [], weights);
     return {
       entityId: brand.entity_id,
       name: brand.name,

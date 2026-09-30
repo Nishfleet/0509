@@ -28,7 +28,8 @@ function shotPath(id: string, side: ShotSide): string {
   return `/app/changes/${encodeURIComponent(id)}/${side}`;
 }
 
-function shot(id: string, side: ShotSide, key: string | null, at: string | null): ChangeShot {
+function shot(id: string, side: ShotSide, capture: { key: string | null; at: string | null }): ChangeShot {
+  const { key, at } = capture;
   if (key === null || at === null) {
     return { missing: side === "before" ? "No screenshot of the earlier version" : "Screenshot unavailable" };
   }
@@ -57,8 +58,8 @@ async function toView(row: SiteChangeRow, payload: SiteChangePayload): Promise<S
     wordsChanged: payload.wordsAdded + payload.wordsRemoved,
     sentence: wordsSentence(payload.wordsAdded, payload.wordsRemoved),
     mark: await readMark(payload.diffKey),
-    before: shot(row.id, "before", payload.before.screenshotKey, row.before_at),
-    after: shot(row.id, "after", payload.after.screenshotKey, row.after_at),
+    before: shot(row.id, "before", { key: payload.before.screenshotKey, at: row.before_at }),
+    after: shot(row.id, "after", { key: payload.after.screenshotKey, at: row.after_at }),
     whyFlagged: whyFlagged({
       verdictId: row.verdict_id,
       p: row.verdict_p,
