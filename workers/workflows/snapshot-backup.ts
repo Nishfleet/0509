@@ -1,12 +1,20 @@
 import type { WorkflowEvent, WorkflowStep, WorkflowStepConfig } from "cloudflare:workers";
 import { WorkflowEntrypoint } from "cloudflare:workers";
 
+import { withMonitor } from "@sentry/cloudflare";
+
 import { copyMissingPage } from "../../app/lib/snapshot-backup.server";
 
 const RETRY: WorkflowStepConfig = {
   retries: { limit: 5, delay: "30 seconds", backoff: "exponential" },
   timeout: "5 minutes",
 };
+
+const MONITOR = {
+  schedule: { type: "crontab", value: "0 5 * * *" },
+  checkinMargin: 60,
+  timezone: "UTC",
+} as const;
 
 interface BackupTotals {
   listed: number;
@@ -31,8 +39,14 @@ async function copyPages(
 
 export class SnapshotBackup extends WorkflowEntrypoint<Env> {
   async run(_event: WorkflowEvent<unknown>, step: WorkflowStep): Promise<BackupTotals> {
-    const totals = await copyPages(step, 0, null, { listed: 0, copied: 0, present: 0 });
-    console.log(JSON.stringify({ event: "snapshot.backup", ...totals }));
-    return totals;
+    return withMonitor(
+      "snapshot-backup",
+      async () => {
+        const totals = await copyPages(step, 0, null, { listed: 0, copied: 0, present: 0 });
+        console.log(JSON.stringify({ event: "snapshot.backup", ...totals }));
+        return totals;
+      },
+      MONITOR,
+    );
   }
 }

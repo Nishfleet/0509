@@ -1,0 +1,25 @@
+import { HIRING_SWEEP_CRON, MENTIONS_SWEEP_CRON, SITE_SWEEP_CRON, SNAPSHOT_BACKUP_CRON } from "../app/lib/cadence";
+
+export const WORKFLOW_CRONS = {
+  [MENTIONS_SWEEP_CRON]: { binding: "MENTIONS", name: "mentions-sweep" },
+  [SITE_SWEEP_CRON]: { binding: "SITE_SWEEP", name: "site-sweep" },
+  [HIRING_SWEEP_CRON]: { binding: "HIRING_SWEEP", name: "hiring-sweep" },
+  [SNAPSHOT_BACKUP_CRON]: { binding: "SNAPSHOT_BACKUP", name: "snapshot-backup" },
+} as const satisfies Record<string, { binding: keyof Env; name: string }>;
+
+type WorkflowCron = keyof typeof WORKFLOW_CRONS;
+
+export function isWorkflowCron(cron: string): cron is WorkflowCron {
+  return Object.hasOwn(WORKFLOW_CRONS, cron);
+}
+
+export async function startScheduledWorkflow(
+  env: Pick<Env, (typeof WORKFLOW_CRONS)[WorkflowCron]["binding"]>,
+  cron: WorkflowCron,
+  scheduledTime: number,
+): Promise<string> {
+  const { binding, name } = WORKFLOW_CRONS[cron];
+  const id = `${name}-${new Date(scheduledTime).toISOString()}`;
+  await env[binding].createBatch([{ id }]);
+  return id;
+}
