@@ -5,19 +5,29 @@ import { decodedBodies, InboxReadError, readRawMessage, requireInboxToken, signI
 
 test.skip(
   !process.env.PLAYWRIGHT_TEST_BASE_URL,
-  "J8 needs the production fixture Worker on j8.fixture.0509.in, the hourly own-site check and the mail inbox; the preview lane has none of them",
+  "J8 needs the production fixture Worker on j8-hard.fixture.0509.in and j8-soft.fixture.0509.in, the hourly own-site check and the mail inbox; the preview lane has none of them",
 );
 
-const FIXTURE_HOST = "j8.fixture.0509.in";
-const FIXTURE = `https://${FIXTURE_HOST}`;
 const POLL_INTERVAL_MS = 30_000;
 const TICK_WAIT_MS = 75 * 60_000;
 const SWEEP_WAIT_MS = 90 * 60_000;
 const OPEN_BUDGET_MS = 70 * 60_000;
 
 const MODES = [
-  { mode: "hard", kind: "error 500", waitMs: TICK_WAIT_MS, account: FIXTURE_ACCOUNTS.j8Hard },
-  { mode: "soft", kind: "breakage", waitMs: SWEEP_WAIT_MS, account: FIXTURE_ACCOUNTS.j8Soft },
+  {
+    mode: "hard",
+    kind: "error 500",
+    waitMs: TICK_WAIT_MS,
+    account: FIXTURE_ACCOUNTS.j8Hard,
+    host: "j8-hard.fixture.0509.in",
+  },
+  {
+    mode: "soft",
+    kind: "breakage",
+    waitMs: SWEEP_WAIT_MS,
+    account: FIXTURE_ACCOUNTS.j8Soft,
+    host: "j8-soft.fixture.0509.in",
+  },
 ] as const;
 
 type Mode = "off" | (typeof MODES)[number]["mode"];
@@ -30,8 +40,8 @@ function fixtureToken(): string {
   return token;
 }
 
-async function setMode(mode: Mode): Promise<void> {
-  const response = await fetch(`${FIXTURE}/__break?mode=${mode}`, {
+async function setMode(host: string, mode: Mode): Promise<void> {
+  const response = await fetch(`https://${host}/__break?mode=${mode}`, {
     method: "POST",
     headers: { authorization: `Bearer ${fixtureToken()}` },
   });
@@ -85,17 +95,20 @@ async function waitForMail(
 async function signInAndWatchFixture(
   page: Page,
   account: { email: string; maxCompetitors: number },
+  host: string,
   token: string,
 ): Promise<void> {
   await signInWithMagicLink(page, account.email, token, /\/(app|onboarding)/);
   if (page.url().includes("/onboarding")) {
     const input = page.getByRole("textbox", { name: "your website, or a handle" });
-    await input.fill(FIXTURE_HOST);
+    await input.fill(host);
     await input.press("Enter");
     const business = page.getByRole("button", { name: "Yes, a business or creator" });
     await expect(async () => {
       if (await business.isVisible()) await business.click();
-      await expect(page).toHaveURL(/\/onboarding\/identity\?subject=j8\.fixture\.0509\.in$/, { timeout: 3_000 });
+      await expect(page).toHaveURL(new RegExp(`/onboarding/identity\\?subject=${host.replaceAll(".", "\\.")}$`), {
+        timeout: 3_000,
+      });
     }).toPass({ timeout: 30_000 });
     await expect(page.getByRole("button", { name: "edit name" })).toBeVisible({ timeout: 30_000 });
     await expect(page.getByText("looking on the site")).toHaveCount(0, { timeout: 30_000 });
@@ -117,24 +130,27 @@ async function signInAndWatchFixture(
 
 test.describe.configure({ mode: "serial" });
 
-for (const { mode, kind, waitMs, account } of MODES) {
+for (const { mode, kind, waitMs, account, host } of MODES) {
   test(`J8 your own site breaks ${mode}: one incident email, then fixed, then no second email that day @scheduled`, async ({
     page,
   }, testInfo) => {
     test.setTimeout(5 * 60 * 60_000);
-    test.skip(testInfo.project.name === "phone-390", "one production run per break; the fixture host is shared");
+    test.skip(
+      testInfo.project.name === "phone-390",
+      "one production run per break; each mode has its own fixture host",
+    );
 
     const token = requireInboxToken();
     const { email } = account;
-    const openSubject = `${FIXTURE_HOST} looks broken: ${kind}`;
-    const fixedSubject = `${FIXTURE_HOST} looks fixed: ${kind}`;
+    const openSubject = `${host} looks broken: ${kind}`;
+    const fixedSubject = `${host} looks fixed: ${kind}`;
 
     try {
-      await setMode("off");
-      await signInAndWatchFixture(page, account, token);
+      await setMode(host, "off");
+      await signInAndWatchFixture(page, account, host, token);
 
       const brokenAt = new Date();
-      await setMode(mode);
+      await setMode(host, mode);
       const openRaw = await waitForMail(email, token, openSubject, brokenAt, waitMs);
       const openSentAt = new Date(header(openRaw, SENT_DATE));
       const openBody = decodedBodies(openRaw).join("\n");
@@ -150,7 +166,7 @@ for (const { mode, kind, waitMs, account } of MODES) {
       expect(openId).not.toBe("");
 
       const repairedAt = new Date();
-      await setMode("off");
+      await setMode(host, "off");
       const fixedRaw = await waitForMail(email, token, fixedSubject, repairedAt, TICK_WAIT_MS);
       const fixedId = header(fixedRaw, MESSAGE_ID);
       expect(fixedId).not.toBe(openId);
@@ -161,7 +177,7 @@ for (const { mode, kind, waitMs, account } of MODES) {
       await expect(openIncidents).toHaveCount(0);
 
       const openDay = openSentAt.toISOString().slice(0, 10);
-      await setMode(mode);
+      await setMode(host, mode);
       await expect
         .poll(
           async () => {
@@ -192,7 +208,7 @@ for (const { mode, kind, waitMs, account } of MODES) {
         { type: "fixed-message-id", description: fixedId },
       );
     } finally {
-      await setMode("off");
+      await setMode(host, "off");
     }
   });
 }
