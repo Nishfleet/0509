@@ -1,9 +1,11 @@
+import { useId } from "react";
+
 import type { Route } from "./+types/app.competitors";
 
 import { redirect, useFetcher } from "react-router";
 
 import { BrandChip } from "../components/brand-chip";
-import { BrandSwitchField } from "../components/brand-switch";
+import { BrandSwitch, brandSwitchNote } from "../components/brand-switch";
 import { AddCompetitor, CompetitorMaybes } from "../components/competitor-maybes";
 import { UpgradeStatus } from "../components/plan-gate";
 import { EmptyState } from "../components/empty-state";
@@ -42,26 +44,36 @@ export async function action({ request }: Route.ActionArgs) {
 
 function CompetitorItem({ competitor }: { competitor: CompetitorRow }) {
   const fetcher = useFetcher();
+  const noteId = useId();
   const pending = fetcher.formData?.get("intent");
   const state = pending === "on" || pending === "off" ? pending : competitor.state;
   const off = state === "off";
   return (
-    <li className="flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-line py-4">
-      <div className="flex min-w-0 flex-1 items-start gap-3">
-        <BrandChip name={competitor.name} href={`/app/competitors/${competitor.entityId}`} off={off} />
-        <div className="min-w-0">
-          <p className="truncate text-body-sm text-ink-soft">{competitor.domain}</p>
-          {competitor.reason === null ? null : <p className="mt-1 text-body-sm text-ink-soft">{competitor.reason}</p>}
+    <li className="border-t border-line py-4">
+      <div
+        data-slot="brand-switch-field"
+        data-state={state}
+        className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-2"
+      >
+        <div className="flex min-w-0 flex-1 items-start gap-3">
+          <BrandChip name={competitor.name} href={`/app/competitors/${competitor.entityId}`} off={off} />
+          <div className="min-w-0">
+            <p className="truncate text-body-sm text-ink-soft">{competitor.domain}</p>
+            {competitor.reason === null ? null : <p className="mt-1 text-body-sm text-ink-soft">{competitor.reason}</p>}
+          </div>
         </div>
+        <BrandSwitch
+          state={state}
+          brandName={competitor.name}
+          describedBy={noteId}
+          onCheckedChange={(checked) => {
+            void fetcher.submit({ intent: checked ? "on" : "off", entityId: competitor.entityId }, { method: "post" });
+          }}
+        />
+        <p id={noteId} className="basis-full text-meta text-ink-soft">
+          {brandSwitchNote(state, competitor.stateChangedAt === null ? null : new Date(competitor.stateChangedAt))}
+        </p>
       </div>
-      <BrandSwitchField
-        state={state}
-        brandName={competitor.name}
-        pausedOn={competitor.stateChangedAt === null ? null : new Date(competitor.stateChangedAt)}
-        onCheckedChange={(checked) => {
-          void fetcher.submit({ intent: checked ? "on" : "off", entityId: competitor.entityId }, { method: "post" });
-        }}
-      />
     </li>
   );
 }
