@@ -1,17 +1,8 @@
-import type { NoulQuestion } from "./jev/client.server";
+import type { NoulQuestion } from "./jev/thresholds";
 
 export const D4_QUESTION_ID = "read_this_first";
 
 export const UNJUDGED_WEEK_LINE = "We couldn't judge this week's changes yet.";
-
-/**
- * The weekly "read this first" question and the state it is judged on.
- *
- * They live here, not in the standing worker, because that worker imports
- * `cloudflare:workers` and the held-out evals in tests/evals run in node.
- * Moving the text is what lets `tests/evals/read-this-first.eval.test.ts`
- * judge the shipped wording instead of a copy of it (0509#6163).
- */
 
 export const READ_THIS_FIRST: NoulQuestion = {
   id: D4_QUESTION_ID,
@@ -20,7 +11,6 @@ export const READ_THIS_FIRST: NoulQuestion = {
   whenFalse: "It is routine and can wait for the full list.",
 };
 
-/** One located signal: the week's item plus the entity it belongs to. */
 export interface ReadThisFirstItem {
   kind: string;
   title: string | null;

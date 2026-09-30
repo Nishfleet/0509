@@ -1,16 +1,5 @@
-import type { NoulQuestion } from "../jev/client.server";
+import type { NoulQuestion } from "../jev/thresholds";
 import { MENTION_MATTERS_WHEN_FALSE, MENTION_MATTERS_WHEN_TRUE } from "./reason-customer";
-
-/**
- * The two mention questions and the exact state each one is judged on.
- *
- * They live here, not in the sweep worker, because the sweep worker imports
- * `cloudflare:workers` and the held-out evals in tests/evals run in node.
- * Moving the text is what lets `tests/evals/mentions.eval.test.ts` judge the
- * shipped wording instead of a copy of it: the worker asks these constants
- * through these builders, so a wording edit and its eval move together
- * (0509#6163).
- */
 
 export const ABOUT_BRAND: NoulQuestion = {
   id: "mention_is_about_brand",
@@ -28,14 +17,12 @@ export const MATTERS: NoulQuestion = {
   whenFalse: MENTION_MATTERS_WHEN_FALSE,
 };
 
-/** The watch row fields the two questions are asked about. */
 export interface MentionSubject {
   name: string;
   domain: string;
   role: string;
 }
 
-/** The judged mention item, as the sweep carries it before it hits D1. */
 export interface MentionItemInput {
   title: string;
   url: string;
@@ -43,7 +30,6 @@ export interface MentionItemInput {
   publisher?: string | null;
 }
 
-/** The workspace brand, the "who is asking" half of `mention_matters`. */
 export interface MentionSelf {
   name: string;
   domain: string;
@@ -63,7 +49,6 @@ export function mentionItemState(
   };
 }
 
-/** The state `mention_is_about_brand` is asked on. */
 export function aboutBrandState(input: {
   subject: MentionSubject;
   item: MentionItemInput;
@@ -75,7 +60,6 @@ export function aboutBrandState(input: {
   };
 }
 
-/** The state `mention_matters` is asked on. */
 export function mentionMattersState(input: {
   self: MentionSelf;
   subject: MentionSubject;
