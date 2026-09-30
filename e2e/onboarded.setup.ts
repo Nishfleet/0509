@@ -53,11 +53,14 @@ setup("mint one onboarded session per viewport lane", async ({ browser }) => {
       await expect(page).toHaveURL(/\/onboarding\/competitors$/, { timeout: 30_000 });
 
       const watching = page.getByRole("list", { name: "Watching" }).getByRole("listitem");
-      await expect(
-        watching.first().or(page.getByRole("button", { name: /^Watch / }).first()),
-      ).toBeVisible({ timeout: 60_000 });
+      await expect(watching.first().or(page.getByRole("button", { name: /^Watch / }).first())).toBeVisible({
+        timeout: 60_000,
+      });
       if ((await watching.count()) === 0) {
-        await page.getByRole("button", { name: /^Watch / }).first().click();
+        await page
+          .getByRole("button", { name: /^Watch / })
+          .first()
+          .click();
         await expect(watching.first()).toBeVisible();
       }
       await page.getByRole("button", { name: "Start watching" }).click();

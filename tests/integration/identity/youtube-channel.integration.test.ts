@@ -17,9 +17,16 @@ describe("lookupYoutubeChannel", () => {
   it("reads the channel id from the handle page", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn(() => Promise.resolve(new Response(`<link rel="canonical" href="https://www.youtube.com/channel/${CHANNEL_ID}">`, { status: 200 }))),
+      vi.fn(() =>
+        Promise.resolve(
+          new Response(`<link rel="canonical" href="https://www.youtube.com/channel/${CHANNEL_ID}">`, { status: 200 }),
+        ),
+      ),
     );
-    await expect(lookupYoutubeChannel(identityFor("okhandle0509"))).resolves.toEqual({ status: "id", channelId: CHANNEL_ID });
+    await expect(lookupYoutubeChannel(identityFor("okhandle0509"))).resolves.toEqual({
+      status: "id",
+      channelId: CHANNEL_ID,
+    });
   });
 
   it.each([

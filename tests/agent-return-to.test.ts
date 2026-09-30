@@ -8,9 +8,7 @@ describe("login's return address", () => {
   });
 
   it("returns to the onboarding identity card with its subject intact", () => {
-    expect(safeReturnTo("/onboarding/identity?subject=gymshark.com")).toBe(
-      "/onboarding/identity?subject=gymshark.com",
-    );
+    expect(safeReturnTo("/onboarding/identity?subject=gymshark.com")).toBe("/onboarding/identity?subject=gymshark.com");
   });
 
   it.each([

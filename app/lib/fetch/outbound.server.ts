@@ -21,10 +21,7 @@ export class BlockedRedirectError extends Error {
   }
 }
 
-export function targetRefusal(
-  target: URL,
-  schemes: readonly OutboundScheme[] = ["http:", "https:"],
-): string | null {
+export function targetRefusal(target: URL, schemes: readonly OutboundScheme[] = ["http:", "https:"]): string | null {
   if (!schemes.includes(target.protocol as OutboundScheme)) {
     return `unsupported scheme: ${target.protocol}`;
   }
@@ -71,10 +68,7 @@ function redirectTarget(location: string, base: string, schemes: readonly Outbou
   return next;
 }
 
-export async function fetchOutbound(
-  url: string,
-  init: OutboundInit,
-): Promise<Response> {
+export async function fetchOutbound(url: string, init: OutboundInit): Promise<Response> {
   const signal = init.signal ?? AbortSignal.timeout(FETCH_TIMEOUT_MS);
   let request: OutboundRequest = { url, method: init.method ?? "GET", headers: init.headers, body: init.body };
   for (let hop = 0; hop <= MAX_REDIRECTS; hop += 1) {
@@ -93,10 +87,7 @@ export async function fetchOutbound(
   throw new BlockedRedirectError(`more than ${String(MAX_REDIRECTS)} redirects`);
 }
 
-export async function cappedBody(
-  res: Response,
-  capBytes: number,
-): Promise<Uint8Array | null> {
+export async function cappedBody(res: Response, capBytes: number): Promise<Uint8Array | null> {
   const declared = Number(res.headers.get("content-length"));
   if (Number.isFinite(declared) && declared > capBytes) {
     await res.body?.cancel();

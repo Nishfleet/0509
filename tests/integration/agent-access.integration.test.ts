@@ -258,7 +258,9 @@ describe("agent access, scoped to one workspace", () => {
   it("serves the MCP tools as read-only, and a call reads only the caller's workspace", async () => {
     const listed = await mcpResponse(jsonRpc("tools/list"), { userId: a.userId, clientId: "test" });
     expect(listed.status).toBe(200);
-    const list = await rpcResult<{ tools: { name: string; title?: string; annotations: { readOnlyHint: boolean } }[] }>(listed);
+    const list = await rpcResult<{ tools: { name: string; title?: string; annotations: { readOnlyHint: boolean } }[] }>(
+      listed,
+    );
     expect(list.tools.map((tool) => [tool.name, tool.title]).sort()).toEqual(
       Object.entries(registeredToolDescriptors)
         .map(([name, tool]) => [name, tool.title])

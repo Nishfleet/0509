@@ -49,11 +49,7 @@ async function openCompetitor(page: Page, width: number): Promise<void> {
   await page.setExtraHTTPHeaders({ cookie });
   await page.setViewportSize({ width, height: 844 });
   await page.goto("/app/competitors");
-  await page
-    .getByRole("list", { name: "Competitors" })
-    .getByRole("link", { name: /Boots/ })
-    .first()
-    .press("Enter");
+  await page.getByRole("list", { name: "Competitors" }).getByRole("link", { name: /Boots/ }).first().press("Enter");
   await expect(page).toHaveURL(/\/app\/competitors\/ent-/);
 }
 
@@ -84,7 +80,9 @@ test("the competitor header carries Their ads on Meta and Their ads on Google li
 
 test("the competitor header ad links wrap without horizontal scroll at 390px", async ({ page }) => {
   await openCompetitor(page, 390);
-  await expect(page.getByRole("link", { name: `${BRAND}'s ads on Meta (opens in a new tab)`, exact: true })).toBeVisible();
+  await expect(
+    page.getByRole("link", { name: `${BRAND}'s ads on Meta (opens in a new tab)`, exact: true }),
+  ).toBeVisible();
   const widths = await page.evaluate(() => ({
     scrollWidth: document.documentElement.scrollWidth,
     clientWidth: document.documentElement.clientWidth,

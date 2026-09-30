@@ -8,28 +8,28 @@ The read below is **self-detecting**: beside the filtered signup counts it retur
 
 A live read of production D1 (database `0509`, binding `DB`, database id `746c6e3d-782e-443a-82d6-28ca93a16294`) on **2026-09-29T17:31Z** returned:
 
-| Read | Result |
-|---|---|
-| `SELECT COUNT(*) FROM "user"` | **6** |
-| trailing 7d on `createdAt` | 6 (every row is inside 30 days) |
-| trailing 30d on `createdAt` | 6 |
-| `email LIKE 'e2e+%'` | **6** — one fixed journey account plus five per-run mints (`e2e+onboarded-desktop-*`, `e2e+<uuid>`) still in the table |
-| `email LIKE '%@0509.internal'` | **0** — the internal-account shape; `billing-canary@0509.internal` was the row that made this read report signups that never happened |
-| real signups (`email NOT LIKE 'e2e+%' AND email NOT LIKE '%@0509.internal'`), trailing 7d | **0** |
-| real signups (same exclusions), trailing 30d | **0** |
+| Read                                                                                      | Result                                                                                                                                |
+| ----------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `SELECT COUNT(*) FROM "user"`                                                             | **6**                                                                                                                                 |
+| trailing 7d on `createdAt`                                                                | 6 (every row is inside 30 days)                                                                                                       |
+| trailing 30d on `createdAt`                                                               | 6                                                                                                                                     |
+| `email LIKE 'e2e+%'`                                                                      | **6** — one fixed journey account plus five per-run mints (`e2e+onboarded-desktop-*`, `e2e+<uuid>`) still in the table                |
+| `email LIKE '%@0509.internal'`                                                            | **0** — the internal-account shape; `billing-canary@0509.internal` was the row that made this read report signups that never happened |
+| real signups (`email NOT LIKE 'e2e+%' AND email NOT LIKE '%@0509.internal'`), trailing 7d | **0**                                                                                                                                 |
+| real signups (same exclusions), trailing 30d                                              | **0**                                                                                                                                 |
 
 The same table read on **2026-09-23T19:06Z and 2026-09-23T19:12Z**, before the purge, returned:
 
-| Read | Result |
-|---|---|
-| `SELECT COUNT(*) FROM "user"` | **310** (308 at 19:06Z, 310 at 19:12Z — e2e runs mint rows while the read runs) |
-| trailing 7d on `createdAt` | 310 (every row is inside 30 days) |
-| trailing 30d on `createdAt` | 310 |
-| `email LIKE 'e2e+%'` | **308** |
-| real signups with the internal canary **counted**, trailing 7d | **2** |
-| real signups with the internal canary **excluded**, trailing 7d | **1** |
-| real signups with the internal canary **counted**, trailing 30d | **2** |
-| real signups with the internal canary **excluded**, trailing 30d | **1** |
+| Read                                                             | Result                                                                          |
+| ---------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| `SELECT COUNT(*) FROM "user"`                                    | **310** (308 at 19:06Z, 310 at 19:12Z — e2e runs mint rows while the read runs) |
+| trailing 7d on `createdAt`                                       | 310 (every row is inside 30 days)                                               |
+| trailing 30d on `createdAt`                                      | 310                                                                             |
+| `email LIKE 'e2e+%'`                                             | **308**                                                                         |
+| real signups with the internal canary **counted**, trailing 7d   | **2**                                                                           |
+| real signups with the internal canary **excluded**, trailing 7d  | **1**                                                                           |
+| real signups with the internal canary **counted**, trailing 30d  | **2**                                                                           |
+| real signups with the internal canary **excluded**, trailing 30d | **1**                                                                           |
 
 The 2026-09-23 pair is the defect this doc was amended for: the **2** is the one human signup alive then plus the `billing-canary@0509.internal` machine row, which the then-`e2e+`-only rule counted as a signup ([0509#5552](https://github.com/Nishfleet/0509/issues/5552), [0509#6002](https://github.com/Nishfleet/0509/issues/6002)). The 2026-09-29 read returns **0** — the honest number for a table with no external signup in the window.
 
@@ -49,14 +49,14 @@ The last two columns are the read's own blind-spot detector. `other_*` is every 
 
 For the individual reads, use these commands verbatim:
 
-| Read | Command |
-|---|---|
-| total | `npx wrangler d1 execute 0509 --remote --json --command "SELECT COUNT(*) AS total FROM \"user\""` |
-| trailing 7d, excluded | `npx wrangler d1 execute 0509 --remote --json --command "SELECT COUNT(*) AS signups_7d FROM \"user\" WHERE email NOT LIKE 'e2e+%' AND email NOT LIKE '%@0509.internal' AND \"createdAt\" >= datetime('now', '-7 days')"` |
-| trailing 30d, excluded | `npx wrangler d1 execute 0509 --remote --json --command "SELECT COUNT(*) AS signups_30d FROM \"user\" WHERE email NOT LIKE 'e2e+%' AND email NOT LIKE '%@0509.internal' AND \"createdAt\" >= datetime('now', '-30 days')"` |
-| fixture rows | `npx wrangler d1 execute 0509 --remote --json --command "SELECT COUNT(*) AS fixture_rows FROM \"user\" WHERE email LIKE 'e2e+%'"` |
-| internal rows | `npx wrangler d1 execute 0509 --remote --json --command "SELECT COUNT(*) AS internal_rows FROM \"user\" WHERE email LIKE '%@0509.internal'"` |
-| per-class breakdown, one read | the one command above: `signups_7d`, `signups_30d`, `excluded_e2e_*`, `excluded_internal_*`, `other_*` |
+| Read                          | Command                                                                                                                                                                                                                    |
+| ----------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| total                         | `npx wrangler d1 execute 0509 --remote --json --command "SELECT COUNT(*) AS total FROM \"user\""`                                                                                                                          |
+| trailing 7d, excluded         | `npx wrangler d1 execute 0509 --remote --json --command "SELECT COUNT(*) AS signups_7d FROM \"user\" WHERE email NOT LIKE 'e2e+%' AND email NOT LIKE '%@0509.internal' AND \"createdAt\" >= datetime('now', '-7 days')"`   |
+| trailing 30d, excluded        | `npx wrangler d1 execute 0509 --remote --json --command "SELECT COUNT(*) AS signups_30d FROM \"user\" WHERE email NOT LIKE 'e2e+%' AND email NOT LIKE '%@0509.internal' AND \"createdAt\" >= datetime('now', '-30 days')"` |
+| fixture rows                  | `npx wrangler d1 execute 0509 --remote --json --command "SELECT COUNT(*) AS fixture_rows FROM \"user\" WHERE email LIKE 'e2e+%'"`                                                                                          |
+| internal rows                 | `npx wrangler d1 execute 0509 --remote --json --command "SELECT COUNT(*) AS internal_rows FROM \"user\" WHERE email LIKE '%@0509.internal'"`                                                                               |
+| per-class breakdown, one read | the one command above: `signups_7d`, `signups_30d`, `excluded_e2e_*`, `excluded_internal_*`, `other_*`                                                                                                                     |
 
 ## The exclusion rule
 
@@ -69,6 +69,7 @@ Two email shapes are excluded, and neither is a signup. Every one of them must a
   - [`e2e/magic-link-expiry.spec.ts:27`](../e2e/magic-link-expiry.spec.ts) — `e2e+<tag>-<uuid>@0509.io`
 
   Each run's own teardown deletes its minted account. A teardown gap — the J2 mid-ceremony leak is [0509#5733](https://github.com/Nishfleet/0509/issues/5733) — leaves a row in the table; five per-run `e2e+` mints were live on 2026-09-29. A leftover fixture row is not a signup either, so the SQL exclusion is the `e2e+%` prefix, not a fixed email list. The detector question for the leaks themselves lives in [0509#6056](https://github.com/Nishfleet/0509/issues/6056).
+
 - `%@0509.internal` — internal accounts on the fleet domain. No product surface and no test surface mints them; `billing-canary@0509.internal` was created out of band and made this read report `signups_30d=2` while zero external signups existed ([0509#6002](https://github.com/Nishfleet/0509/issues/6002)). An internal canary row is not a signup. It was one row, id `billing-canary-0509`, created 2026-09-21T12:45:16Z, **no workspace row** — a machine account that exercises the billing path. The [0509#5730](https://github.com/Nishfleet/0509/issues/5730) purge removed it, so `excluded_internal_*` reads 0 today; the exclusion stays, because the canary is minted out of band and the next one lands with no PR of ours to amend this rule ([0509#5552](https://github.com/Nishfleet/0509/issues/5552)).
 
 A real reader signs up on the production login flow; no product surface mints `e2e+` or `@0509.internal` addresses. **Amend the exclusion here in the same PR that adds the shape** — for a fixed fixture account that also means adding it to `app/lib/fixture-accounts.ts`. The two patterns to copy:
@@ -84,13 +85,13 @@ A real reader signs up on the production login flow; no product surface mints `e
 
 The one command, run against production D1 (database `0509`, id `746c6e3d-782e-443a-82d6-28ca93a16294`) on **2026-09-29T17:59Z**:
 
-| Column | Value |
-|---|---|
-| `signups_7d` | **0** |
-| `signups_30d` | **0** |
-| `excluded_e2e_7d` / `excluded_e2e_30d` | **6** / **6** |
+| Column                                           | Value         |
+| ------------------------------------------------ | ------------- |
+| `signups_7d`                                     | **0**         |
+| `signups_30d`                                    | **0**         |
+| `excluded_e2e_7d` / `excluded_e2e_30d`           | **6** / **6** |
 | `excluded_internal_7d` / `excluded_internal_30d` | **0** / **0** |
-| `other_7d` / `other_30d` | **0** / **0** |
+| `other_7d` / `other_30d`                         | **0** / **0** |
 
 The recorded live read above returned `signups_7d = 0`, `signups_30d = 0`, total `6`, `6` `e2e+%` rows and `0` `@0509.internal` rows, read 2026-09-29T17:31Z. The previously recorded read (2026-09-23, `signups_30d=2`) counted `billing-canary@0509.internal` and the operator's own account — internal rows, neither of them signups.
 

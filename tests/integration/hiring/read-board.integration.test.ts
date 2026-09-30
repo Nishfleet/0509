@@ -88,9 +88,7 @@ describe("readBoard", () => {
       `INSERT OR IGNORE INTO source (id, key, kind, platform, plugin_key, reliability, is_enabled, config_json)
        VALUES ('src_hiring_greenhouse', 'hiring.greenhouse', 'hiring', 'greenhouse', 'hiring.board', 'official_api', 1, '{}')`,
     ).run();
-    await env.DB.prepare(
-      "UPDATE source SET is_enabled = 1 WHERE id = 'src_hiring_greenhouse'",
-    ).run();
+    await env.DB.prepare("UPDATE source SET is_enabled = 1 WHERE id = 'src_hiring_greenhouse'").run();
     await insertWatches([
       { id: WATCH_ID, entityId: "ent-rival", sourceId: "src_hiring_greenhouse", targetKey: BOARD_URL },
     ]);

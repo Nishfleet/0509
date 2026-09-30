@@ -40,7 +40,8 @@ export function leadingName(item: string): string | null {
 
 const LIST_INTRO = /\b(?:like|such as|including|e\.g\.,?|for example)\s+(.+)$/i;
 
-const RIVAL_CUE = /\b(?:are|is)\s+(?:\w+\s+){0,2}?(?:alternatives?|competitors?|rivals?)\b|\b(?:better|cheaper) than\b/i;
+const RIVAL_CUE =
+  /\b(?:are|is)\s+(?:\w+\s+){0,2}?(?:alternatives?|competitors?|rivals?)\b|\b(?:better|cheaper) than\b/i;
 
 function namesBesideBrand(item: string, needle: string): string[] {
   const at = item.toLowerCase().indexOf(needle);

@@ -529,9 +529,9 @@ describe("confirmCard", () => {
     const stub = stubBrowser(BOT_GATED_HTML);
     installBrowser(stub);
 
-    expect(
-      await confirmCard("ws-1", "u1", form({ subject: domain, name: "Botgated Confirm", description: "" })),
-    ).toBe(true);
+    expect(await confirmCard("ws-1", "u1", form({ subject: domain, name: "Botgated Confirm", description: "" }))).toBe(
+      true,
+    );
     await settledClassification(introspector);
 
     expect(stub.calls).toEqual([]);
@@ -549,9 +549,9 @@ describe("confirmCard", () => {
     const stub = stubBrowser(BOT_GATED_HTML);
     installBrowser(stub);
 
-    expect(
-      await confirmCard("ws-1", "u1", form({ subject: domain, name: "Botgated Positive", description: "" })),
-    ).toBe(true);
+    expect(await confirmCard("ws-1", "u1", form({ subject: domain, name: "Botgated Positive", description: "" }))).toBe(
+      true,
+    );
     await settledClassification(introspector);
 
     expect(stub.calls).toEqual([`https://${domain}/`]);

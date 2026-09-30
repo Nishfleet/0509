@@ -1,12 +1,6 @@
 import { z } from "zod";
 
-export const BOARD_PLATFORMS = [
-  "greenhouse",
-  "lever",
-  "ashby",
-  "workable",
-  "smartrecruiters",
-] as const;
+export const BOARD_PLATFORMS = ["greenhouse", "lever", "ashby", "workable", "smartrecruiters"] as const;
 
 export type BoardPlatform = (typeof BOARD_PLATFORMS)[number];
 

@@ -160,11 +160,7 @@ function authorize(request: Request, env: FixtureEnv): Response | null {
   return null;
 }
 
-async function flip(
-  request: Request,
-  env: FixtureEnv,
-  state: DurableObjectStub<FixtureState>,
-): Promise<Response> {
+async function flip(request: Request, env: FixtureEnv, state: DurableObjectStub<FixtureState>): Promise<Response> {
   const denied = authorize(request, env);
   if (denied) {
     return denied;
@@ -177,11 +173,7 @@ async function flip(
   return new Response(`break mode set to ${requested}`, { status: 200 });
 }
 
-async function wall(
-  request: Request,
-  env: FixtureEnv,
-  state: DurableObjectStub<FixtureState>,
-): Promise<Response> {
+async function wall(request: Request, env: FixtureEnv, state: DurableObjectStub<FixtureState>): Promise<Response> {
   const denied = authorize(request, env);
   if (denied) {
     return denied;
@@ -194,11 +186,7 @@ async function wall(
   return new Response(`bot wall set to ${requested}`, { status: 200 });
 }
 
-async function price(
-  request: Request,
-  env: FixtureEnv,
-  state: DurableObjectStub<FixtureState>,
-): Promise<Response> {
+async function price(request: Request, env: FixtureEnv, state: DurableObjectStub<FixtureState>): Promise<Response> {
   const denied = authorize(request, env);
   if (denied) {
     return denied;

@@ -3,10 +3,7 @@ import { readdirSync, readFileSync } from "node:fs";
 import { experimental_readRawConfig } from "wrangler";
 import { describe, expect, it } from "vitest";
 
-import {
-  D1_DATABASE_ID,
-  SNAPSHOT_BUCKET,
-} from "../app/lib/observability/cost-analytics.server";
+import { D1_DATABASE_ID, SNAPSHOT_BUCKET } from "../app/lib/observability/cost-analytics.server";
 
 // #4631, and 225c3eb before it: the production CLOUDFLARE_API_TOKEN cannot reach
 // the KV namespaces endpoint, so a KV binding without an id sends wrangler to
@@ -111,9 +108,9 @@ describe("deployed wrangler configs", () => {
     const { rawConfig } = experimental_readRawConfig({ config: "wrangler.jsonc" });
     const consumers = (rawConfig.queues?.consumers ?? []).map((queue) => queue.queue);
     const constants = Object.fromEntries(
-      [...readFileSync("workers/sources/fetch-sweep-consumer.ts", "utf8").matchAll(/export const (\w+) = "([^"]+)"/g)].map(
-        (match) => [match[1], match[2]],
-      ),
+      [
+        ...readFileSync("workers/sources/fetch-sweep-consumer.ts", "utf8").matchAll(/export const (\w+) = "([^"]+)"/g),
+      ].map((match) => [match[1], match[2]]),
     );
     const source = readFileSync("workers/app.ts", "utf8");
     const branched = [...source.matchAll(/batch\.queue === (?:"([^"]+)"|(\w+))/g)].map(

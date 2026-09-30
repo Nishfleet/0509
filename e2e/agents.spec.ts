@@ -25,7 +25,9 @@ const MCP_INIT = {
 
 const MCP_HEADERS = { "content-type": "application/json", accept: "application/json, text/event-stream" };
 
-test("/mcp refuses an unsigned request with a challenge that points at its sign-in metadata @smoke", async ({ request }) => {
+test("/mcp refuses an unsigned request with a challenge that points at its sign-in metadata @smoke", async ({
+  request,
+}) => {
   const response = await request.post("/mcp", { data: MCP_INIT, headers: MCP_HEADERS });
   expect(response.status()).toBe(401);
   expect(response.headers()["www-authenticate"]).toMatch(
@@ -41,7 +43,9 @@ test("/mcp refuses a made-up bearer token @smoke", async ({ request }) => {
   expect(response.status()).toBe(401);
 });
 
-test("the MCP server publishes its protected-resource and authorization-server metadata @smoke", async ({ request }) => {
+test("the MCP server publishes its protected-resource and authorization-server metadata @smoke", async ({
+  request,
+}) => {
   const resource = await request.get("/.well-known/oauth-protected-resource/mcp");
   expect(resource.status()).toBe(200);
   const resourceBody: { resource: string; authorization_servers: string[]; scopes_supported: string[] } =

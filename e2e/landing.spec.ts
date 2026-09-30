@@ -33,7 +33,10 @@ test("the landing renders its sections in order under one headline @smoke", asyn
   expect(order).toEqual(["hero", "mark", "how-it-works", "what-we-watch", "agents", "price", "faq"]);
 });
 
-test("the landing route data and document carry no disabled source's internal notes @smoke", async ({ page, request }) => {
+test("the landing route data and document carry no disabled source's internal notes @smoke", async ({
+  page,
+  request,
+}) => {
   const response = await page.goto(PATH);
   expect(response?.status()).toBe(200);
 
@@ -126,7 +129,9 @@ test("how it works reads as three ruled steps in order, wide and narrow @smoke",
   });
 });
 
-test("the agents section hands a visitor's agent the MCP address and the API docs @smoke", async ({ page }, testInfo) => {
+test("the agents section hands a visitor's agent the MCP address and the API docs @smoke", async ({
+  page,
+}, testInfo) => {
   const watched = watchConsole(page);
 
   await page.goto(PATH);

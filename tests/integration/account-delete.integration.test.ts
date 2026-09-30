@@ -297,7 +297,8 @@ describe("delete my account", () => {
   it("still hands back the headers and cookie when revoking a grant fails", async () => {
     const { cookie, userId } = await signIn();
     const helpers: Pick<OAuthHelpers, "listUserGrants" | "revokeGrant"> = {
-      listUserGrants: async () => ({ items: [{ id: "grant-1" }] }) as Awaited<ReturnType<OAuthHelpers["listUserGrants"]>>,
+      listUserGrants: async () =>
+        ({ items: [{ id: "grant-1" }] }) as Awaited<ReturnType<OAuthHelpers["listUserGrants"]>>,
       revokeGrant: async () => {
         throw new Error("KV is down");
       },

@@ -251,9 +251,7 @@ describe("fetch-sweep consumer (0509#5261)", () => {
       const changed = await handleFetchSweepBatch(batchFor([message()]).batch);
       expect(changed).toEqual(["changed"]);
 
-      const filed = await env.DB.prepare(
-        "SELECT kind, aspect, url, snapshot_id FROM signal WHERE workspace_id = ?",
-      )
+      const filed = await env.DB.prepare("SELECT kind, aspect, url, snapshot_id FROM signal WHERE workspace_id = ?")
         .bind(WS)
         .all<{ kind: string; aspect: string; url: string; snapshot_id: string }>();
       expect(filed.results).toHaveLength(1);

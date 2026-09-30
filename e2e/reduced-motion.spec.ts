@@ -102,8 +102,7 @@ async function openWatchedCompetitor(page: Page): Promise<void> {
 async function inspectMotion(page: Page): Promise<MotionFinding[]> {
   return page.evaluate(() => {
     const findings: { selector: string; reason: string; duration?: string }[] = [];
-    const label = (element: Element) =>
-      `${element.tagName.toLowerCase()}${element.id ? `#${element.id}` : ""}`;
+    const label = (element: Element) => `${element.tagName.toLowerCase()}${element.id ? `#${element.id}` : ""}`;
 
     // `document.getAnimations()` takes no options — the `subtree` option only
     // exists on `Element.getAnimations()` — so a shadow root opened by a Base
@@ -137,10 +136,7 @@ async function inspectMotion(page: Page): Promise<MotionFinding[]> {
     //
     // The value is a comma-separated list (`transition-property: all` with
     // several properties), so every entry is checked, not just the first.
-    const nonZero = (value: string) =>
-      value
-        .split(",")
-        .some((part) => Number.parseFloat(part) > 0);
+    const nonZero = (value: string) => value.split(",").some((part) => Number.parseFloat(part) > 0);
 
     // `querySelectorAll("*")` on a Document already includes the document
     // element (`<html>`) — it is a child of the document node — so this is

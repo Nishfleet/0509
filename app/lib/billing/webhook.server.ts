@@ -42,8 +42,7 @@ async function applySubscription(body: unknown, type: string, timestamp: string)
     log("billing.webhook_unknown_product", { type, product: data.product_id });
     return;
   }
-  const workspaceId =
-    data.metadata?.workspace_id ?? (await readWorkspaceIdBySubscription(data.subscription_id));
+  const workspaceId = data.metadata?.workspace_id ?? (await readWorkspaceIdBySubscription(data.subscription_id));
   if (workspaceId === null || workspaceId === undefined) {
     log("billing.webhook_no_workspace", { type, subscription: data.subscription_id });
     return;

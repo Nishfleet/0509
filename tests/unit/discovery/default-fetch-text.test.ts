@@ -119,7 +119,10 @@ describe("defaultFetchText", () => {
 
   it("gives the hn generator's default fetch a five second timeout", async () => {
     const response = new Response("{}", { status: 200 });
-    vi.stubGlobal("fetch", vi.fn(async () => response));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => response),
+    );
     const timeoutSpy = vi.spyOn(AbortSignal, "timeout");
 
     await hnGenerator(SUBJECT);

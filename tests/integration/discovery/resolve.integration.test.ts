@@ -226,9 +226,16 @@ describe("resolveDomain", () => {
         const url = String(input);
         if (url.includes("wbsearchentities")) return Promise.resolve(Response.json({ search: [] }));
         if (new URL(url).hostname === "www.publicbrand0509.com") {
-          return Promise.resolve(new Response('<meta property="og:site_name" content="Publicbrand0509">', { status: 200, headers: { "content-type": "text/html" } }));
+          return Promise.resolve(
+            new Response('<meta property="og:site_name" content="Publicbrand0509">', {
+              status: 200,
+              headers: { "content-type": "text/html" },
+            }),
+          );
         }
-        return Promise.resolve(new Response(null, { status: 301, headers: { location: "https://www.publicbrand0509.com/" } }));
+        return Promise.resolve(
+          new Response(null, { status: 301, headers: { location: "https://www.publicbrand0509.com/" } }),
+        );
       }),
     );
 

@@ -18,8 +18,6 @@ describe("redactEmailShaped", () => {
   });
 
   it("leaves a message with no address or URL alone", () => {
-    expect(redactEmailShaped("account daily sending quota exceeded")).toBe(
-      "account daily sending quota exceeded",
-    );
+    expect(redactEmailShaped("account daily sending quota exceeded")).toBe("account daily sending quota exceeded");
   });
 });

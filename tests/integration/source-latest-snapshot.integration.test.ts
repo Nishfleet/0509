@@ -1,11 +1,7 @@
 import { env, type D1Migration } from "cloudflare:test";
 import { beforeEach, describe, expect, it } from "vitest";
 
-import {
-  insertSnapshot,
-  insertBoardSnapshot,
-  insertWatchSnapshot,
-} from "../../app/lib/data/snapshot.server";
+import { insertSnapshot, insertBoardSnapshot, insertWatchSnapshot } from "../../app/lib/data/snapshot.server";
 import { readRegistrySources } from "../../app/lib/data/source.server";
 
 const MIGRATION = "0028_source_latest_snapshot.sql";
@@ -39,9 +35,7 @@ const latestFacts = async (sourceId: string): Promise<LatestFacts> => {
 };
 
 const seedWatch = async (watchId: string, sourceId: string, targetKey = "acme"): Promise<void> => {
-  await env.DB.prepare(
-    "INSERT INTO watch (id, entity_id, source_id, target_key, is_active) VALUES (?1, ?2, ?3, ?4, 1)",
-  )
+  await env.DB.prepare("INSERT INTO watch (id, entity_id, source_id, target_key, is_active) VALUES (?1, ?2, ?3, ?4, 1)")
     .bind(watchId, ENTITY, sourceId, targetKey)
     .run();
 };

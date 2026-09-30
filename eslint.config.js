@@ -615,9 +615,7 @@ export default tseslint.config(
     rules: {
       "no-restricted-syntax": [
         "error",
-        ...BANNED_SYNTAX.filter(
-          (rule) => rule !== BARE_FETCH && rule !== DOMAIN_HOSTNAME_BAN,
-        ),
+        ...BANNED_SYNTAX.filter((rule) => rule !== BARE_FETCH && rule !== DOMAIN_HOSTNAME_BAN),
         ...NO_USER_DATA_IN_LOGS,
         RAW_DML_WRITER,
         FEED_STATE_LITERAL,

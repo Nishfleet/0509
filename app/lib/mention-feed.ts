@@ -63,8 +63,7 @@ export function mentionsFromRows(rows: readonly MentionReadRow[], now: Date): Me
   return rows.flatMap((row) => {
     const title = row.title?.trim() ?? "";
     if (title === "" || row.url === "") return [];
-    const judged: MentionTreatment | null =
-      row.p === null || !Number.isFinite(row.p) ? null : mentionTreatment(row.p);
+    const judged: MentionTreatment | null = row.p === null || !Number.isFinite(row.p) ? null : mentionTreatment(row.p);
     const treatment: MentionTreatment = row.state === "unjudged" ? "pending" : (judged ?? "unreviewed");
     return [
       {

@@ -32,11 +32,7 @@ function isUnchangedVerifiedTarget(
   return target !== null && target.target_value === address && target.is_verified === 1;
 }
 
-async function sendVerifyConfirmation(
-  email: SendEmail,
-  workspaceId: string,
-  address: string,
-): Promise<string | null> {
+async function sendVerifyConfirmation(email: SendEmail, workspaceId: string, address: string): Promise<string | null> {
   const token = newVerifyToken();
   const expiresAt = new Date(Date.now() + VERIFY_TOKEN_TTL_MS).toISOString();
   await writeVerifyToken(env.DB, { workspaceId, token, expiresAt });

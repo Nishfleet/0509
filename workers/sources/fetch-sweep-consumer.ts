@@ -2,11 +2,7 @@ import { captureException } from "@sentry/cloudflare";
 import { z } from "zod";
 
 import { readSiteSweepTarget } from "../../app/lib/data/watch.server";
-import {
-  checkSitePage,
-  publishSiteChange,
-  type SweepTick,
-} from "../../app/lib/site/sweep.server";
+import { checkSitePage, publishSiteChange, type SweepTick } from "../../app/lib/site/sweep.server";
 
 export const FETCH_SWEEP_QUEUE = "fetch-sweep";
 export const FETCH_SWEEP_DLQ = "fetch-sweep-dlq";
@@ -21,13 +17,7 @@ const fetchSweepMessage = z.object({
 export type FetchSweepMessage = z.infer<typeof fetchSweepMessage>;
 
 export type FetchSweepOutcome =
-  | "not_collectable"
-  | "first"
-  | "unchanged"
-  | "changed"
-  | "disallowed"
-  | "failed"
-  | "unparseable";
+  "not_collectable" | "first" | "unchanged" | "changed" | "disallowed" | "failed" | "unparseable";
 
 export function parseFetchSweepMessage(body: unknown): FetchSweepMessage | null {
   const parsed = fetchSweepMessage.safeParse(typeof body === "string" ? readJson(body) : body);
@@ -59,10 +49,7 @@ function readJson(body: string): unknown {
   }
 }
 
-async function collectWatch(
-  message: FetchSweepMessage,
-  tick: SweepTick,
-): Promise<FetchSweepOutcome> {
+async function collectWatch(message: FetchSweepMessage, tick: SweepTick): Promise<FetchSweepOutcome> {
   const target = await readSiteSweepTarget(message.watchId);
   if (target === null) {
     console.log(
@@ -101,9 +88,7 @@ async function collectWatch(
   return "failed";
 }
 
-export async function handleFetchSweepBatch(
-  batch: MessageBatch,
-): Promise<FetchSweepOutcome[]> {
+export async function handleFetchSweepBatch(batch: MessageBatch): Promise<FetchSweepOutcome[]> {
   const plannedAt = new Date().toISOString();
   const results: FetchSweepOutcome[] = [];
   for (const item of batch.messages) {

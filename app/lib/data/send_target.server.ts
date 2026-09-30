@@ -57,17 +57,11 @@ interface TargetDb {
   };
 }
 
-export async function writeUnsubscribeToken(
-  db: D1Database,
-  input: { targetId: string; token: string },
-): Promise<void> {
+export async function writeUnsubscribeToken(db: D1Database, input: { targetId: string; token: string }): Promise<void> {
   await db.prepare(WRITE_UNSUBSCRIBE_TOKEN).bind(input.token, input.targetId).run();
 }
 
-export async function ensureOwnerEmailTarget(
-  db: TargetDb,
-  input: { workspaceId: string; now: string },
-): Promise<void> {
+export async function ensureOwnerEmailTarget(db: TargetDb, input: { workspaceId: string; now: string }): Promise<void> {
   await db.prepare(INSERT_OWNER_EMAIL_TARGET).bind(input.now, input.workspaceId).run();
 }
 
@@ -90,27 +84,15 @@ export async function writeVerifyToken(
   await db.prepare(WRITE_VERIFY_TOKEN).bind(tokenHash, input.expiresAt, input.workspaceId).run();
 }
 
-export async function markEmailTargetVerified(
-  db: TargetDb,
-  input: { workspaceId: string },
-): Promise<void> {
+export async function markEmailTargetVerified(db: TargetDb, input: { workspaceId: string }): Promise<void> {
   await db.prepare(MARK_EMAIL_TARGET_VERIFIED).bind(input.workspaceId).run();
 }
 
-export async function changeEmailTarget(
-  db: TargetDb,
-  input: { workspaceId: string; address: string },
-): Promise<void> {
-  await db
-    .prepare(CHANGE_EMAIL_TARGET)
-    .bind(input.address, input.workspaceId, input.address)
-    .run();
+export async function changeEmailTarget(db: TargetDb, input: { workspaceId: string; address: string }): Promise<void> {
+  await db.prepare(CHANGE_EMAIL_TARGET).bind(input.address, input.workspaceId, input.address).run();
 }
 
-export async function confirmEmailTargetByToken(
-  db: TargetDb,
-  input: { token: string; now: string },
-): Promise<void> {
+export async function confirmEmailTargetByToken(db: TargetDb, input: { token: string; now: string }): Promise<void> {
   const tokenHash = await sha256Hex(input.token);
   await db.prepare(CONFIRM_EMAIL_TARGET_BY_TOKEN).bind(tokenHash, input.now).run();
 }

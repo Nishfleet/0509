@@ -33,9 +33,7 @@ afterEach(() => {
 describe("upgrade checkout (J13)", () => {
   it("creates a Dodo test-mode checkout session for the plan and redirects to its url", async () => {
     await seedOwner();
-    const fetchSpy = vi
-      .spyOn(globalThis, "fetch")
-      .mockResolvedValue(Response.json(checkoutSession, { status: 200 }));
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(Response.json(checkoutSession, { status: 200 }));
 
     const result = await action(upgradeRequest("starter"));
 

@@ -295,9 +295,7 @@ describe("login form action access pre-clearance", () => {
     const logged = vi.spyOn(console, "error").mockImplementation(() => undefined);
     try {
       const result = await loginAction({ request: loginFormPost(`CF_Authorization=${assertion}`) });
-      expect(result).toEqual(
-        data({ error: "We couldn't send the link. Try again in a minute." }, { status: 503 }),
-      );
+      expect(result).toEqual(data({ error: "We couldn't send the link. Try again in a minute." }, { status: 503 }));
       const text = logged.mock.calls.map((call) => String(call[0])).join("\n");
       expect(text).toContain("account daily sending quota exceeded");
       expect(text).toContain("[redacted]");
