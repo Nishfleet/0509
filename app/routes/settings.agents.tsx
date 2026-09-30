@@ -9,6 +9,10 @@ import { oauthHelpersContext } from "../lib/agent/context.server";
 import { MCP_PATH } from "../lib/agent/paths";
 import { requireFreshSession } from "../lib/require-session.server";
 
+export function meta() {
+  return [{ title: "Agents and API · Five to Nine" }];
+}
+
 export function headers() {
   return { "cache-control": "no-store" };
 }

@@ -25,6 +25,10 @@ export function headers({ loaderHeaders }: Route.HeadersArgs) {
   return loaderHeaders;
 }
 
+export function meta() {
+  return [{ title: "Confirm your card · Five to Nine" }];
+}
+
 export async function loader({ request }: Route.LoaderArgs) {
   const timings = createTimings();
   const { raw, subject, taken, landing, workspaceId, userId } = await readSubjectAccess(request, timings);
