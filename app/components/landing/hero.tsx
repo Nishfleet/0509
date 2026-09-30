@@ -1,4 +1,4 @@
-import { type CoverageId, isLive, WATCHED_NOUNS } from "../../lib/coverage";
+import { type CoverageId, isLive } from "../../lib/coverage";
 import { cn } from "../../lib/utils";
 import { OneInput } from "../one-input";
 import { ExampleMark } from "./example-mark";
@@ -42,7 +42,7 @@ const EXAMPLES: readonly {
 
 const SHOWN = EXAMPLES.filter((example) => isLive(example.needs)).slice(0, 3);
 
-export function Hero() {
+export function Hero({ nouns }: { nouns: string }) {
   return (
     <section id="hero" aria-labelledby="hero-title">
       <div
@@ -54,8 +54,7 @@ export function Hero() {
             Know where you stand. And who’s gaining on you.
           </h1>
           <p className="mt-6 max-w-[38rem] text-[clamp(1.05rem,1.4vw,1.2rem)] leading-[1.55] text-ink-soft">
-            We watch {WATCHED_NOUNS} across your market, and we name the rivals for you, so you do not have to know
-            them.
+            We watch {nouns} across your market, and we name the rivals for you, so you do not have to know them.
           </p>
           <div className="max-w-[38rem]">
             <OneInput

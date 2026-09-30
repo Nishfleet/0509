@@ -1,6 +1,6 @@
 import type { DatabaseSync } from "node:sqlite";
 
-import { run, seedPreviewSession } from "./preview-session";
+import { run, seedPreviewSession } from "./inbox";
 
 // The ranked Home the moved /app specs read. The static /design/ranked-rows
 // route used to render a fixed three-row standing to anyone; 0509#5657 removed
@@ -184,6 +184,7 @@ function seedRankedHome({ db, suffix, userId }: { db: DatabaseSync; suffix: stri
   );
 }
 
-export function seedRankedHomeSession(prefix: string): Promise<string> {
-  return seedPreviewSession(prefix, seedRankedHome);
+export async function seedRankedHomeSession(prefix: string): Promise<string> {
+  const { cookie } = await seedPreviewSession(prefix, seedRankedHome);
+  return cookie;
 }

@@ -10,6 +10,7 @@ import {
   type NoulQuestion,
   type NoulVerdict,
 } from "../jev/client.server";
+import { ACT_AT, REJECT_AT } from "../jev/thresholds";
 import type { BreakageEvidence } from "./breakage-evidence";
 
 const JEV_JUDGMENTS_PER_BRAND_PER_DAY = 6;
@@ -23,9 +24,9 @@ const BREAKAGE_ALERT_P = 0.5;
 
 const BREAKAGE_CLEAR_P = 0.1;
 
-const PUBLISH_P = 0.9;
+const PUBLISH_P = ACT_AT;
 
-const DISCARD_P = 0.1;
+const DISCARD_P = REJECT_AT;
 
 const D3S_BREAKAGE_QID = "own_site_breakage";
 
@@ -33,21 +34,21 @@ const D3_NOTEWORTHY_QID = "noteworthy_change";
 
 const D3_KIND_QID = "change_kind";
 
-const D3S_BREAKAGE: NoulQuestion = {
+export const D3S_BREAKAGE: NoulQuestion = {
   id: D3S_BREAKAGE_QID,
   instructions: "Does this change make the brand own website look broken or unintentionally degraded for a visitor?",
   whenTrue: "The page looks broken or degraded for a visitor working normally.",
   whenFalse: "The change looks deliberate and the page looks fine for a visitor working normally.",
 };
 
-const D3_NOTEWORTHY: NoulQuestion = {
+export const D3_NOTEWORTHY: NoulQuestion = {
   id: D3_NOTEWORTHY_QID,
   instructions: "Is this change to the brand website worth telling a customer who tracks this brand?",
   whenTrue: "A customer tracking this brand would want to know about this change.",
   whenFalse: "Nothing here would matter to a customer tracking this brand.",
 };
 
-const D3_KIND: ChoiceQuestion = {
+export const D3_KIND: ChoiceQuestion = {
   id: D3_KIND_QID,
   instructions: "What kind of change is this?",
   options: {
@@ -83,16 +84,37 @@ export interface JudgedChange extends ChangeJudgment {
   verdictIds: readonly string[];
 }
 
-export interface JudgeInput {
-  workspaceId: string;
-  entityId: string;
-  signalId: string | null;
+export interface ChangeStateInput {
   isSelf: boolean;
   subject: { name: string | null; domain: string };
   pageUrl: string;
   pageRole: string | null;
   hunks: readonly { lines: readonly string[] }[];
   evidence: BreakageEvidence;
+}
+
+export interface ChangeState {
+  subject: { name: string | null; domain: string };
+  isSelf: boolean;
+  page: { url: string; role: string | null };
+  item: { hunks: readonly { lines: readonly string[] }[]; evidence: BreakageEvidence };
+  history_30d: readonly (string | null)[];
+}
+
+export interface JudgeInput extends ChangeStateInput {
+  workspaceId: string;
+  entityId: string;
+  signalId: string | null;
+}
+
+export function changeState(input: ChangeStateInput, history30d: readonly (string | null)[]): ChangeState {
+  return {
+    subject: input.subject,
+    isSelf: input.isSelf,
+    page: { url: input.pageUrl, role: input.pageRole },
+    item: { hunks: input.hunks, evidence: input.evidence },
+    history_30d: history30d,
+  };
 }
 
 interface HistoryRow {
@@ -163,13 +185,7 @@ export async function judgeChange(input: JudgeInput): Promise<JudgedChange> {
   }
 
   const history30d = await readHistory30d(input.entityId, daysBeforeIso(now, HISTORY_DAYS));
-  const state = {
-    subject: input.subject,
-    isSelf: input.isSelf,
-    page: { url: input.pageUrl, role: input.pageRole },
-    item: { hunks: input.hunks, evidence: input.evidence },
-    history_30d: history30d,
-  };
+  const state = changeState(input, history30d);
 
   const rows: VerdictRow[] = [];
   let selfBreakage: BreakageBand | null = null;

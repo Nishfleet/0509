@@ -71,11 +71,11 @@ beforeAll(async () => {
 });
 
 describe("an AI app signing in to 0509", () => {
-  it("names the app and where the user goes back to before asking", async () => {
+  it("leads with the address and marks the app's own name as unchecked", async () => {
     expect(await readConsent(helpers, new Request(authorizeUrl))).toEqual({
       kind: "ask",
-      appName: "Test App",
-      returnsTo: "app.example",
+      host: "app.example",
+      claimedName: "Test App",
     });
   });
 
@@ -132,7 +132,7 @@ describe("an AI app signing in to 0509", () => {
     expect(await mcp.json()).toEqual({ userId: "u_oauth", clientId });
 
     const grants = await helpers.listUserGrants("u_oauth");
-    expect(grants.items.map((grant) => grant.metadata)).toEqual([{ appName: "Test App" }]);
+    expect(grants.items.map((grant) => grant.metadata)).toEqual([{ appName: "app.example" }]);
     await helpers.revokeGrant(grants.items[0]?.id ?? "", "u_oauth");
     const revoked = await send(
       new Request(`${ORIGIN}/mcp`, { headers: { authorization: `Bearer ${tokens.access_token}` } }),

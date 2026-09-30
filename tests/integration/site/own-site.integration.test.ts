@@ -31,12 +31,17 @@ const site: {
   html: null,
 };
 
+const hostRobots = new Map<string, string>();
+
 const fetched: string[] = [];
 
 const respond = (input: RequestInfo | URL): Promise<Response> => {
   const requestUrl = new URL(input instanceof Request ? input.url : String(input));
   fetched.push(requestUrl.toString());
   if (site.apexDown && !requestUrl.hostname.startsWith("www.")) return Promise.reject(new Error("DNS lookup failed"));
+  if (requestUrl.pathname === "/robots.txt" && hostRobots.has(requestUrl.hostname)) {
+    return Promise.resolve(new Response(hostRobots.get(requestUrl.hostname), { status: 200 }));
+  }
   if (site.wwwDown && requestUrl.hostname.startsWith("www.") && requestUrl.pathname !== "/robots.txt") {
     return Promise.reject(new Error("DNS lookup failed"));
   }
@@ -115,6 +120,7 @@ describe("own-site check", () => {
     site.wwwDown = false;
     site.challenge = false;
     site.robots = null;
+    hostRobots.clear();
     site.html = null;
     fetched.length = 0;
     await env.DB.exec("UPDATE source SET is_enabled = 1 WHERE id = 'src_site_web'");
@@ -246,6 +252,15 @@ describe("own-site check", () => {
     expect(await runCheck("own-robots")).toEqual({ pages: 1, opened: 0, closed: 0, failed: 0 });
     expect(await incidents()).toEqual([]);
     expect(fetched.filter((u) => !u.endsWith("/robots.txt"))).toEqual([]);
+  });
+
+  it("never fetches the retry host's page when its robots.txt disallows FiveToNineBot", async () => {
+    site.apexDown = true;
+    hostRobots.set("www.mybrand.com", "User-agent: FiveToNineBot\nDisallow: /\n");
+    expect(await runCheck("own-robots-twin")).toEqual({ pages: 1, opened: 0, closed: 0, failed: 0 });
+    expect(await incidents()).toEqual([]);
+    expect(fetched).toContain("https://www.mybrand.com/robots.txt");
+    expect(fetched).not.toContain("https://www.mybrand.com/");
   });
 
   it("opens one incident when openIncident is called twice for the same page (0509#5401)", async () => {

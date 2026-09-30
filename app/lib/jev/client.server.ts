@@ -3,17 +3,13 @@ import { z } from "zod";
 
 import { readCachedChoice, readCachedNoul } from "../data/jev_verdict.server";
 import { sha256Hex } from "../sha256";
+import type { NoulQuestion } from "./thresholds";
+
+export type { NoulQuestion };
 
 const MODEL = "typesafe/jev";
 
 export const GATEWAY_ID = "default";
-
-export interface NoulQuestion {
-  id: string;
-  instructions: string;
-  whenTrue: string;
-  whenFalse: string;
-}
 
 export interface NoulVerdict {
   questionId: string;

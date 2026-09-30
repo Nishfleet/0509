@@ -57,7 +57,10 @@ export async function fillWorkspaceTimezone(db: WorkspaceDb, id: string, timezon
 
 export async function readWorkspaceR2Prefixes(workspaceId: string): Promise<string[]> {
   const { results } = await env.DB.prepare(SELECT_WORKSPACE_WATCHES).bind(workspaceId).all<{ id: string }>();
-  return [`card/${workspaceId}/`, ...results.map((row) => `snapshot/site/${row.id}/`)];
+  return [
+    `card/${workspaceId}/`,
+    ...results.flatMap((row) => [`snapshot/site/${row.id}/`, `snapshot/hiring/${row.id}/`]),
+  ];
 }
 
 export async function deleteWorkspace(workspaceId: string): Promise<void> {

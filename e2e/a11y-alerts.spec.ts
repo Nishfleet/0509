@@ -1,7 +1,7 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
 
-import { sessionStatePath } from "../playwright.config";
+import { onboardedStatePath } from "../playwright.config";
 
 // The Alerts page measured at each shape the product ships, the same production
 // lane and the same reason as e2e/a11y-competitors.spec.ts and
@@ -13,7 +13,15 @@ import { sessionStatePath } from "../playwright.config";
 // because it runs against production and a visit that wrote data would put a
 // row in a real workspace for a mailbox nobody owns. It signs in nowhere: it
 // reuses the shared per-run session the `session` project saved.
-test.use({ storageState: process.env.PLAYWRIGHT_TEST_BASE_URL ? sessionStatePath : undefined });
+test.use({
+  storageState: async ({}, use, testInfo) => {
+    await use(
+      process.env.PLAYWRIGHT_TEST_BASE_URL
+        ? onboardedStatePath(testInfo.project.name === "phone-390" ? "phone" : "desktop")
+        : undefined,
+    );
+  },
+});
 test.skip(
   !process.env.PLAYWRIGHT_TEST_BASE_URL,
   "the Alerts page needs a real session; the local preview Worker cannot mint one",

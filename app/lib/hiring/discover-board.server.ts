@@ -1,6 +1,6 @@
 import { getDomain, getSubdomain } from "tldts";
 
-import { fetchOutbound } from "../fetch/outbound.server";
+import { cappedText, fetchOutbound } from "../fetch/outbound.server";
 import { CRAWLER_USER_AGENT } from "../fetch/robots.server";
 import type { BoardPlatform } from "./listing";
 
@@ -220,13 +220,17 @@ function isScannablePage(body: string, contentType: string | null): boolean {
   return body.length >= MIN_LEAD_BYTES;
 }
 
+const MAX_PROBE_BYTES = 5 * 1024 * 1024;
+
 const defaultProbe = async (url: string): Promise<ProbeResponse> => {
   try {
     const response = await fetchOutbound(url, {
       headers: { "user-agent": CRAWLER_USER_AGENT },
       signal: AbortSignal.timeout(PROBE_TIMEOUT_MS),
     });
-    return { ok: response.ok, contentType: response.headers.get("content-type"), body: await response.text() };
+    const body = await cappedText(response, MAX_PROBE_BYTES);
+    if (body === null) return { ok: false, contentType: null, body: "" };
+    return { ok: response.ok, contentType: response.headers.get("content-type"), body };
   } catch (error) {
     console.error(JSON.stringify({ event: "hiring.board_probe_failed", error: String(error) }));
     return { ok: false, contentType: null, body: "" };

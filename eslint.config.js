@@ -188,14 +188,15 @@ const CRAWLER_USER_AGENT_BAN = {
     "The crawler User-Agent is typed once, in app/lib/fetch/robots.server.ts as CRAWLER_USER_AGENT (built from ROBOTS_AGENT, the token robots.txt is matched against); every module that fetches today imports it. A second literal is a second identity to change and a fetch that silently keeps the old one, which is how the same identity came to be typed in more than one place. The version is matched as /\\d/ so a bump is this edit, not a new literal. Modules that fetch without a User-Agent at all are 0509#5960. Source: 0509#5883.",
 };
 
-const USER_DATA_NAME = "^(email|emails|userId|ip|input|raw|prompt|password|token|subject)$";
+const USER_DATA_NAME =
+  "^(email|emails|userId|ip|input|raw|prompt|password|token|subject|term|url|urls|domain|registrable|slug|brandName|competitorName|displayName|robotsUrl|targetUrl)$";
 // The one operator id the message allows, so `input.workspaceId` stays clean.
 // Widen it only with a comment here naming why the new id is not user data.
 const LOGGABLE_OPERATOR_ID = "workspaceId";
 const LOG_OR_CAPTURE_CALL =
   "CallExpression:matches([callee.object.name='console'], [callee.name=/^(capture(Exception|Message|Event|Feedback)|set(Tag|Tags|Extra|Extras|Context|Attributes|User|ConversationId))$/], [callee.property.name=/^(capture(Exception|Message|Event|Feedback)|set(Tag|Tags|Extra|Extras|Context|Attributes|User|ConversationId))$/])";
 const NO_USER_DATA_IN_LOGS_MESSAGE =
-  "Logs and Sentry never carry customer data or prompt input: no email, user id, IP, raw input, prompt, subject, password or token, as a key, a value or a property read. Log the ids an operator needs (event, workspaceId) and an error message capped with .slice(0, 300). The selector matches names, so a renamed or aliased value is out of reach; review it. Privacy first (CLAUDE.md; workers/sentry.ts sendDefaultPii: false). Source: 0509#5776.";
+  "Logs and Sentry never carry customer data or prompt input: no email, user id, IP, raw input, prompt, subject, password, token, search term, URL, domain, slug or brand name, as a key, a value or a property read. Log the ids an operator needs (event, workspaceId) and an error message capped with .slice(0, 300). The selector matches names, so a renamed or aliased value is out of reach; review it. Privacy first (CLAUDE.md; workers/sentry.ts sendDefaultPii: false). Source: 0509#5776; term, URL, domain and slug added because name-cascade, resolve-domain, transport and robots logged the brand a customer typed and the competitor URLs they track (this PR).";
 const NO_USER_DATA_IN_LOGS = [
   {
     selector: `${LOG_OR_CAPTURE_CALL} :matches(Property[key.name=/${USER_DATA_NAME}/], Property[value.name=/${USER_DATA_NAME}/], MemberExpression[property.name=/${USER_DATA_NAME}/])`,

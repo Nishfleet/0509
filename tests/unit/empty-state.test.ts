@@ -6,8 +6,6 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
 import {
-  alertsEmpty,
-  competitorJustAdded,
   degradedSource,
   EmptyState,
   evidenceEmpty,
@@ -20,7 +18,7 @@ import {
  * Nishfleet/0509#4020. DESIGN.md 7: "Never 'No data'. Every empty state says
  * what will fill it and when, or gives the one action that fills it."
  *
- * Six of the seven surfaces DESIGN.md 7 names are rendered here through the
+ * Four of the seven surfaces DESIGN.md 7 names are rendered here through the
  * component that ships their copy. The seventh, Home's second zero, ships
  * through first-file-panel.tsx and takes its brief time from the real schedule
  * (tests/home/arrival-estimate.test.ts), so no factory here guesses a date.
@@ -76,22 +74,6 @@ describe("DESIGN.md 7 empty states", () => {
     const html = emptyState(sentence);
     expect(html).toContain("/pricing and /home");
     expect(html).toContain(`last at ${clock(lastChecked)}`);
-  });
-
-  it("a just-added competitor says when the first marks land", () => {
-    const { sentence } = competitorJustAdded();
-    const html = emptyState(sentence);
-    expect(html).toContain("The first mentions land in the nightly sweep");
-    expect(html).toContain("first mark comes tomorrow");
-    expect(html).not.toMatch(/\bads\b/);
-    expect(html).not.toContain("within the hour");
-  });
-
-  it("Alerts with nothing yet still says what would interrupt", () => {
-    const { sentence } = alertsEmpty();
-    const html = emptyState(sentence);
-    expect(html).toContain("Nothing has interrupted you.");
-    expect(html).toContain("everything else waits here");
   });
 
   it("a degraded source names itself and declines to round a gap into a count", () => {
@@ -173,11 +155,9 @@ describe("a bare empty sentence is impossible", () => {
       quietWeek(61, 2).sentence,
       fewerThanTwoOnBrands().sentence,
       evidenceEmpty(["/pricing", "/home"], shift(-1)).sentence,
-      competitorJustAdded().sentence,
-      alertsEmpty().sentence,
       degradedSource("X", "rate-limiting us since Friday").sentence,
     ];
-    expect(shipped).toHaveLength(6);
+    expect(shipped).toHaveLength(4);
     for (const sentence of shipped) {
       expect(() => emptyState(sentence)).not.toThrow();
     }
@@ -188,8 +168,6 @@ describe("a bare empty sentence is impossible", () => {
       quietWeek(61, 2),
       fewerThanTwoOnBrands(),
       evidenceEmpty(["/pricing", "/home"], shift(-1)),
-      competitorJustAdded(),
-      alertsEmpty(),
       degradedSource("X", "rate-limiting us since Friday"),
     ]) {
       expect(sentence.length).toBeGreaterThan("Nothing here".length);
@@ -249,5 +227,33 @@ describe("DESIGN.md 7 rows are tied to the factories that ship them (#5862)", ()
     expect(docTime).toBeDefined();
     expect(docTime).toBe(view.standing.briefAt);
     expect(html).toContain(`comes with the brief on ${String(docTime)}`);
+  });
+});
+
+describe("DESIGN.md 7 rows quote the strings customers can reach (#5963)", () => {
+  async function designRow(label: string): Promise<string> {
+    const doc = await readFile(path.join(REPO_ROOT, "DESIGN.md"), "utf8");
+    const row = doc
+      .split("\n")
+      .find((line) => line.startsWith(`| ${label}`))
+      ?.split("|")[2]
+      ?.trim();
+    expect(row).toBeDefined();
+    return String(row).replace(/^"|"$/g, "");
+  }
+
+  it("the just-added competitor row is the sentence the competitor page renders", async () => {
+    const { developmentsEmpty } = await import("../../app/components/competitor-frame");
+    expect(await designRow("Competitor page, just added")).toBe(developmentsEmpty(null));
+  });
+
+  it("the alerts row is the paragraph the alerts route renders", async () => {
+    const route = await readFile(path.join(REPO_ROOT, "app/routes/app.alerts.tsx"), "utf8");
+    expect(route).toContain(await designRow("Alerts, nothing yet"));
+  });
+
+  it("empty-state.tsx exports no copy factory the app does not import", async () => {
+    const source = await readFile(path.join(REPO_ROOT, "app/components/empty-state.tsx"), "utf8");
+    expect(source).not.toMatch(/export function (competitorJustAdded|alertsEmpty|homeSecondZero)\b/);
   });
 });

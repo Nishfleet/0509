@@ -26,7 +26,15 @@ function renderDocument(id: string): string {
         createElement(
           Layout,
           null,
-          createElement(Landing, { loaderData: { ticker: [], marks: [], sources: [], now: 0 } }),
+          createElement(Landing, {
+            loaderData: {
+              ticker: [],
+              marks: [],
+              sources: [],
+              claims: { nouns: "website changes", features: [] },
+              now: 0,
+            },
+          }),
         ),
     },
   ]);
