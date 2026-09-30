@@ -25,11 +25,12 @@ describe("deployed wrangler configs", () => {
     expect(unpinned).toEqual([]);
   });
 
-  it("schedules the snapshot-backup Workflow every night at 05:00 UTC", () => {
+  it("starts the snapshot-backup Workflow every night at 05:00 UTC from a Worker cron", () => {
     const { rawConfig } = experimental_readRawConfig({ config: "wrangler.jsonc" });
     const snapshotBackup = (rawConfig.workflows ?? []).find((workflow) => workflow.name === "snapshot-backup");
     expect(snapshotBackup).toBeDefined();
-    expect(snapshotBackup?.schedules).toEqual(["0 5 * * *"]);
+    expect(snapshotBackup?.schedules).toBeUndefined();
+    expect(rawConfig.triggers?.crons).toContain("0 5 * * *");
   });
 
   // The cost guard queries Cloudflare analytics for the same database and bucket

@@ -43,25 +43,20 @@ const DISPLAY_FONT = 'var(--display, var(--font-display, "Bricolage Grotesque", 
 const EMAIL_FONT_FAMILY = '"Bricolage Grotesque", ui-sans-serif, sans-serif';
 const screenshotUnavailable = "screenshot unavailable";
 
-export function Mark({
-  before,
-  after,
-  sourceUrl,
-  capturedAt,
-  size,
-  screenshotUrl,
-  capture,
-}: MarkProps): ReactElement | null {
+interface Resolved {
+  source: string;
+  captured: string;
+}
+
+function resolveMark({ before, after, sourceUrl, capturedAt }: MarkProps): Resolved | null {
   const source = httpUrl(sourceUrl);
   const captured = capturedInstant(capturedAt);
-  if (before.trim() === "" || after.trim() === "" || source === null || captured === null) {
-    return null;
-  }
+  if (before.trim() === "" || after.trim() === "" || source === null || captured === null) return null;
+  return { source, captured };
+}
 
-  const email = size === "email";
-  const colors = paint(email);
-  const shot = screenshotSrc(screenshotUrl, email);
-  const line: CSSProperties = {
+function lineStyle(email: boolean, size: MarkSize): CSSProperties {
+  return {
     margin: 0,
     fontFamily: email ? EMAIL_FONT_FAMILY : DISPLAY_FONT,
     fontWeight: 800,
@@ -70,62 +65,99 @@ export function Mark({
     lineHeight: 1.1,
     overflowWrap: "anywhere",
   };
+}
 
+function figureStyle(email: boolean, colors: Paint): CSSProperties {
+  return {
+    margin: 0,
+    color: colors.struck,
+    backgroundColor: email ? colors.ground : undefined,
+    padding: email ? "12px" : undefined,
+  };
+}
+
+function captionStyle(email: boolean): CSSProperties {
+  return {
+    margin: 0,
+    overflowWrap: "anywhere",
+    fontFamily: email
+      ? '"IBM Plex Mono", ui-monospace, monospace'
+      : 'var(--mono, var(--font-mono, "IBM Plex Mono", ui-monospace, monospace))',
+    fontSize: "0.68rem",
+    letterSpacing: "0.06em",
+  };
+}
+
+function CaptureSlot({
+  capture,
+  shot,
+  capturedAt,
+}: {
+  capture: ReactNode;
+  shot: string | null;
+  capturedAt: string;
+}): ReactNode {
+  if (capture !== undefined && capture !== null) return capture;
+  if (shot === null) return <p style={{ margin: 0 }}>{screenshotUnavailable}</p>;
+  return <img src={shot} alt={`Capture, ${capturedAt.trim()}`} width={104} height={74} />;
+}
+
+function MarkLine({
+  before,
+  after,
+  colors,
+  style,
+}: {
+  before: string;
+  after: string;
+  colors: Paint;
+  style: CSSProperties;
+}) {
   return (
-    <figure
-      data-size={size}
-      style={{
-        margin: 0,
-        color: colors.struck,
-        backgroundColor: email ? colors.ground : undefined,
-        padding: email ? "12px" : undefined,
-      }}
-    >
-      {capture ??
-        (shot === null ? (
-          <p style={{ margin: 0 }}>{screenshotUnavailable}</p>
-        ) : (
-          <img src={shot} alt={`Capture, ${capturedAt.trim()}`} width={104} height={74} />
-        ))}
-      <p style={line}>
-        <s
-          style={{
-            color: colors.struck,
-            textDecorationLine: "line-through",
-            textDecorationColor: colors.strike,
-            textDecorationThickness: "0.09em",
-          }}
-        >
-          {before.trim()}
-        </s>{" "}
-        <ins
-          style={{
-            backgroundColor: colors.marker,
-            color: colors.onMarker,
-            textDecoration: "none",
-            padding: "0 0.14em",
-            boxDecorationBreak: "clone",
-            WebkitBoxDecorationBreak: "clone",
-          }}
-        >
-          {after.trim()}
-        </ins>
-      </p>
-      <figcaption
+    <p style={style}>
+      <s
         style={{
-          margin: 0,
-          overflowWrap: "anywhere",
-          fontFamily: email
-            ? '"IBM Plex Mono", ui-monospace, monospace'
-            : 'var(--mono, var(--font-mono, "IBM Plex Mono", ui-monospace, monospace))',
-          fontSize: "0.68rem",
-          letterSpacing: "0.06em",
+          color: colors.struck,
+          textDecorationLine: "line-through",
+          textDecorationColor: colors.strike,
+          textDecorationThickness: "0.09em",
         }}
       >
-        <a href={source} style={{ color: "inherit" }}>
-          {source}
+        {before.trim()}
+      </s>{" "}
+      <ins
+        style={{
+          backgroundColor: colors.marker,
+          color: colors.onMarker,
+          textDecoration: "none",
+          padding: "0 0.14em",
+          boxDecorationBreak: "clone",
+          WebkitBoxDecorationBreak: "clone",
+        }}
+      >
+        {after.trim()}
+      </ins>
+    </p>
+  );
+}
+
+export function Mark(props: MarkProps): ReactElement | null {
+  const { before, after, capturedAt, size, screenshotUrl, capture } = props;
+  const resolved = resolveMark(props);
+  if (resolved === null) return null;
+
+  const email = size === "email";
+  const colors = paint(email);
+
+  return (
+    <figure data-size={size} style={figureStyle(email, colors)}>
+      <CaptureSlot capture={capture} shot={screenshotSrc(screenshotUrl, email)} capturedAt={capturedAt} />
+      <MarkLine before={before} after={after} colors={colors} style={lineStyle(email, size)} />
+      <figcaption style={captionStyle(email)}>
+        <a href={resolved.source} style={{ color: "inherit" }}>
+          {resolved.source}
         </a>
-        <time dateTime={captured} style={{ marginLeft: "8px" }}>
+        <time dateTime={resolved.captured} style={{ marginLeft: "8px" }}>
           {capturedAt.trim()}
         </time>
       </figcaption>

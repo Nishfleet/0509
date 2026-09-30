@@ -39,6 +39,34 @@ export async function action({ request }: Route.ActionArgs) {
   return { saved: true };
 }
 
+function BriefSendFailed({ failed }: { failed: { id: string; reason: string } }) {
+  return (
+    <p role="alert" data-alert="brief-send-failed" className="mt-4 leading-[1.65]">
+      We could not send your brief ({failed.reason}).{" "}
+      <Link className="underline decoration-1 underline-offset-4" to={`/app/brief/${failed.id}`}>
+        Here it is in the app
+      </Link>
+      .
+    </p>
+  );
+}
+
+function OwnSiteIncident({ incident }: { incident: Route.ComponentProps["loaderData"]["incidents"][number] }) {
+  return (
+    <article id={incident.id} data-testid="own-site-incident" className="mt-8 border-t border-line pt-6">
+      <h2 className="font-display text-row-name font-bold [overflow-wrap:anywhere]">{incident.title}</h2>
+      <p className="mt-2 leading-[1.65]">
+        {incident.fixed === null
+          ? "We check it again every hour and email you once it's fixed."
+          : `Fixed ${incident.fixed}.`}
+      </p>
+      <time dateTime={incident.created_at} className={WHEN_CLASS}>
+        {incident.when}
+      </time>
+    </article>
+  );
+}
+
 export default function Page({ loaderData }: Route.ComponentProps) {
   return (
     <main className={PAGE}>
@@ -46,15 +74,7 @@ export default function Page({ loaderData }: Route.ComponentProps) {
       <p data-testid="alerts-contract" className="mt-2 leading-[1.65] text-ink-soft">
         One thing here interrupted you by email: your own site.
       </p>
-      {loaderData.failedBrief === null ? null : (
-        <p role="alert" data-alert="brief-send-failed" className="mt-4 leading-[1.65]">
-          We could not send your brief ({loaderData.failedBrief.reason}).{" "}
-          <Link className="underline decoration-1 underline-offset-4" to={`/app/brief/${loaderData.failedBrief.id}`}>
-            Here it is in the app
-          </Link>
-          .
-        </p>
-      )}
+      {loaderData.failedBrief === null ? null : <BriefSendFailed failed={loaderData.failedBrief} />}
       <IncidentSlot incident={loaderData.openIncident} />
       {loaderData.sources.length > 0 ? (
         <p data-testid="alerts-sources" className="mt-4 flex flex-wrap gap-2">
@@ -64,22 +84,7 @@ export default function Page({ loaderData }: Route.ComponentProps) {
         </p>
       ) : null}
       {loaderData.incidents.map((incident) => (
-        <article
-          key={incident.id}
-          id={incident.id}
-          data-testid="own-site-incident"
-          className="mt-8 border-t border-line pt-6"
-        >
-          <h2 className="font-display text-row-name font-bold [overflow-wrap:anywhere]">{incident.title}</h2>
-          <p className="mt-2 leading-[1.65]">
-            {incident.fixed === null
-              ? "We check it again every hour and email you once it's fixed."
-              : `Fixed ${incident.fixed}.`}
-          </p>
-          <time dateTime={incident.created_at} className={WHEN_CLASS}>
-            {incident.when}
-          </time>
-        </article>
+        <OwnSiteIncident key={incident.id} incident={incident} />
       ))}
       <AlertChips chip={loaderData.chip} counts={loaderData.chipCounts} hiringCapped={loaderData.hiringCapped} />
       {loaderData.chipCounts.all === 0 && loaderData.openIncident === null ? (
