@@ -30,8 +30,7 @@ export async function robotsAllows(url: string): Promise<boolean> {
     console.log(
       JSON.stringify({
         event: "robots.read_failed",
-        url: robotsUrl,
-        error: error instanceof Error ? error.message : String(error),
+        error: error instanceof Error ? error.name : typeof error,
       }),
     );
     return true;

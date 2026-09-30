@@ -112,11 +112,10 @@ function readField(value: unknown, key: string): unknown {
   return (value as Record<string, unknown>)[key];
 }
 
-function logEscalation(url: string, browserMsUsed: number | null, reason: EscalationReason) {
+function logEscalation(browserMsUsed: number | null, reason: EscalationReason) {
   console.log(
     JSON.stringify({
       event: "browser-escalation",
-      url,
       browserMsUsed,
       reason,
     }),
@@ -158,7 +157,9 @@ export async function readUrl(url: string, options: ReadUrlOptions = {}): Promis
   try {
     target = new URL(url);
   } catch (error) {
-    console.error(JSON.stringify({ event: "fetch.url_parse_failed", error: String(error) }));
+    console.error(
+      JSON.stringify({ event: "fetch.url_parse_failed", error: error instanceof Error ? error.name : typeof error }),
+    );
     return { ok: false, reason: "invalid-url", detail: `not a URL: ${url}` };
   }
   const refusal = targetRefusal(target);
@@ -238,13 +239,13 @@ async function escalate(
 ): Promise<{ result: ReadUrlSuccess | null; cause: string }> {
   const content = await browserContent(url);
   if (!content.ok) {
-    if (content.kind === "threw") logEscalation(url, null, reason);
+    if (content.kind === "threw") logEscalation(null, reason);
     return { result: null, cause: content.cause };
   }
   const res = content.res;
 
   const browserMsUsed = parseBrowserMs(res);
-  logEscalation(url, browserMsUsed, reason);
+  logEscalation(browserMsUsed, reason);
 
   if (!res.ok) return { result: null, cause: `browser answered ${String(res.status)}` };
 

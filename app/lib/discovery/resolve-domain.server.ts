@@ -49,13 +49,12 @@ function slugOf(s: string): string {
     .replace(/[^a-z0-9]+/g, "");
 }
 
-function logLookupFailure(step: "wikidata" | "slug", url: string, error: unknown): void {
+function logLookupFailure(step: "wikidata" | "slug", error: unknown): void {
   console.error(
     JSON.stringify({
       event: "discovery.resolve_failed",
       step,
-      url,
-      error: error instanceof Error ? error.message : String(error),
+      error: error instanceof Error ? error.name : typeof error,
     }),
   );
 }
@@ -67,12 +66,12 @@ async function wikidataGet(url: string): Promise<unknown> {
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     });
     if (!res.ok) {
-      logLookupFailure("wikidata", url, new Error(`status ${String(res.status)}`));
+      logLookupFailure("wikidata", new Error(`status ${String(res.status)}`));
       return null;
     }
     return await cappedJson(res, MAX_JSON_BYTES);
   } catch (error) {
-    logLookupFailure("wikidata", url, error);
+    logLookupFailure("wikidata", error);
     return null;
   }
 }
@@ -124,7 +123,7 @@ async function slugDomain(name: string): Promise<string | null> {
     }
     return null;
   } catch (error) {
-    logLookupFailure("slug", `https://${slug}.com/`, error);
+    logLookupFailure("slug", error);
     return null;
   }
 }
