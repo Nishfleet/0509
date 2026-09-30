@@ -4,7 +4,7 @@ import { PENDING_LINE, POSSIBLY_LINE, UNREVIEWED_LINE, type MentionRowModel } fr
 import { WhyFlaggedSheet } from "./why-flagged";
 
 const WHEN_CLASS = "mt-2 block font-mono text-meta text-ink-soft uppercase";
-const TITLE = "font-display text-lg font-semibold [overflow-wrap:anywhere]";
+const TITLE = "font-display text-row-name font-bold [overflow-wrap:anywhere]";
 const LINK = "underline decoration-1 underline-offset-4";
 const PILL =
   "inline-flex max-w-full border border-line px-2 py-1 font-mono text-pill [overflow-wrap:anywhere] text-ink-soft uppercase";
