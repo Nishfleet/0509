@@ -295,11 +295,6 @@
       "count": 1
     }
   },
-  "app/lib/onboarding-screen.server.ts": {
-    "max-lines-per-function": {
-      "count": 1
-    }
-  },
   "app/lib/onboarding/timings.ts": {
     "complexity": {
       "count": 1
