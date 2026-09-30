@@ -14,7 +14,12 @@ interface BackupTotals {
   present: number;
 }
 
-async function copyPages(step: WorkflowStep, page: number, cursor: string | null, totals: BackupTotals): Promise<BackupTotals> {
+async function copyPages(
+  step: WorkflowStep,
+  page: number,
+  cursor: string | null,
+  totals: BackupTotals,
+): Promise<BackupTotals> {
   const result = await step.do(`copy page ${String(page)}`, RETRY, () => copyMissingPage(cursor ?? undefined));
   const sum: BackupTotals = {
     listed: totals.listed + result.listed,

@@ -17,8 +17,8 @@ updates:
     # typescript 7 needs typescript-eslint to peer >=6.1 and vitest 5 needs a
     # pool that peers 5.x; neither exists (0509#4913, 0509#4915).
     ignore:
-      - dependency-name: '*'
-        update-types: ['version-update:semver-major']
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
   - package-ecosystem: github-actions
     directory: /
     schedule:

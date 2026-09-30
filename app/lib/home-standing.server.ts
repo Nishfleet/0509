@@ -54,11 +54,11 @@ const homeRow = z.object({
 
 const homeRows = z.array(homeRow);
 
-const historyRows = z.array(
-  z.object({ entity_id: z.string(), week_start_at: z.string(), rank: z.number().int() }),
-);
+const historyRows = z.array(z.object({ entity_id: z.string(), week_start_at: z.string(), rank: z.number().int() }));
 
-const sourceRows = z.array(z.object({ key: z.string(), kind: z.enum(["site", "ads", "mentions", "hiring"]), platform: z.string() }));
+const sourceRows = z.array(
+  z.object({ key: z.string(), kind: z.enum(["site", "ads", "mentions", "hiring"]), platform: z.string() }),
+);
 
 const countRows = z.array(z.object({ entity_id: z.string(), source_key: z.string(), n: z.number().int() }));
 
@@ -72,22 +72,13 @@ export interface HomeStandingInputs {
 }
 
 function entityFrom(row: z.infer<typeof homeRow>): HomeEntity | null {
-  if (
-    row.entity_id === null ||
-    row.role === null ||
-    row.domain === null ||
-    row.name === null ||
-    row.state === null
-  ) {
+  if (row.entity_id === null || row.role === null || row.domain === null || row.name === null || row.state === null) {
     return null;
   }
   return { id: row.entity_id, role: row.role, domain: row.domain, name: row.name, state: row.state };
 }
 
-export async function readHomeStandingInputs(
-  db: D1Database,
-  ownerUserId: string,
-): Promise<HomeStandingInputs | null> {
+export async function readHomeStandingInputs(db: D1Database, ownerUserId: string): Promise<HomeStandingInputs | null> {
   const rows = homeRows.parse((await db.prepare(SELECT_HOME_STANDING).bind(ownerUserId).all()).results);
   const first = rows[0];
   if (first === undefined) return null;
@@ -98,7 +89,9 @@ export async function readHomeStandingInputs(
   ]);
   const history = historyRows.parse(historyResult?.results);
   const sources = sourceRows.parse(sourcesResult?.results);
-  const counts = countRows.parse(countsResult?.results).map((row) => ({ entityId: row.entity_id, sourceKey: row.source_key, count: row.n }));
+  const counts = countRows
+    .parse(countsResult?.results)
+    .map((row) => ({ entityId: row.entity_id, sourceKey: row.source_key, count: row.n }));
   return {
     schedule: { timezone: first.timezone, weekday: first.brief_weekday, hour: first.brief_hour },
     entities: rows.flatMap((row) => {

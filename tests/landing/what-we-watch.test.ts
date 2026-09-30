@@ -37,7 +37,11 @@ describe("landing what we watch", () => {
     const html = markup([
       entry({ source: { key: "gdelt.doc", name: "gdelt.doc", platform: "gdelt", is_enabled: 1 }, snapshot: LIVE }),
       entry({ source: { key: "hn.algolia", name: "hn.algolia", platform: "hn", is_enabled: 1 }, snapshot: LIVE }),
-      entry({ kind: "site", source: { key: "site.web", name: "site.page", platform: "web", is_enabled: 1 }, snapshot: LIVE }),
+      entry({
+        kind: "site",
+        source: { key: "site.web", name: "site.page", platform: "web", is_enabled: 1 },
+        snapshot: LIVE,
+      }),
     ]);
     expect(html).toContain("gdelt.doc");
     expect(html).toContain("hn.algolia");
@@ -96,7 +100,7 @@ describe("landing what we watch", () => {
     expect(html).toContain("degraded: not answering");
   });
 
-  it("replaces the pill row with the one rebuilding line when every visible source is degraded", () => {
+  it("replaces the pill row with the one rebuilding line when every visible mentions source is degraded and site changes are live", () => {
     const html = markup([
       entry({
         source: {
@@ -109,7 +113,11 @@ describe("landing what we watch", () => {
         },
         snapshot: LIVE,
       }),
-      entry({ source: { key: "site.web", name: "site.page", platform: "web", is_enabled: 1 }, snapshot: null }),
+      entry({
+        kind: "site",
+        source: { key: "site.web", name: "site.page", platform: "web", is_enabled: 1 },
+        snapshot: LIVE,
+      }),
     ]);
     const text = decoded(html);
     expect(text).toContain(
@@ -117,6 +125,25 @@ describe("landing what we watch", () => {
     );
     expect(html).not.toContain("data-state=");
     expect(html).not.toContain("last good");
+  });
+
+  it("keeps the dimmed rows with their reasons when site changes are degraded too", () => {
+    const html = markup([
+      entry({
+        source: { key: "gdelt.doc", name: "gdelt.doc", platform: "gdelt", is_enabled: 1, degraded_reason: "timed out" },
+        snapshot: LIVE,
+      }),
+      entry({
+        kind: "site",
+        source: { key: "site.web", name: "site.page", platform: "web", is_enabled: 1 },
+        snapshot: null,
+      }),
+    ]);
+    const text = decoded(html);
+    expect(text).not.toContain("We're rebuilding coverage of news mentions");
+    expect(html.match(/data-state="degraded"/g)).toHaveLength(2);
+    expect(html).toContain("degraded: timed out");
+    expect(html).toContain("degraded: no fresh data");
   });
 
   it("keeps the degraded pills, with their reasons, when a live source is visible too", () => {
@@ -142,7 +169,13 @@ describe("landing what we watch", () => {
   it("keeps a degraded pill when a none-state source is visible too", () => {
     const html = markup([
       entry({
-        source: { key: "gdelt.doc", name: "gdelt.doc", platform: "gdelt", is_enabled: 1, degraded_reason: "not answering" },
+        source: {
+          key: "gdelt.doc",
+          name: "gdelt.doc",
+          platform: "gdelt",
+          is_enabled: 1,
+          degraded_reason: "not answering",
+        },
         snapshot: LIVE,
       }),
       entry({
@@ -172,8 +205,16 @@ describe("landing what we watch", () => {
   it("says what we watch from the registry kinds it is given, not a list written into the component", () => {
     const html = markup([
       entry({ source: { key: "hn.algolia", name: "hn.algolia", platform: "hn", is_enabled: 1 }, snapshot: LIVE }),
-      entry({ kind: "site", source: { key: "site.web", name: "site.page", platform: "web", is_enabled: 1 }, snapshot: LIVE }),
-      entry({ kind: "hiring", source: { key: "hiring.lever", name: "hiring.board", platform: "lever", is_enabled: 1 }, snapshot: LIVE }),
+      entry({
+        kind: "site",
+        source: { key: "site.web", name: "site.page", platform: "web", is_enabled: 1 },
+        snapshot: LIVE,
+      }),
+      entry({
+        kind: "hiring",
+        source: { key: "hiring.lever", name: "hiring.board", platform: "lever", is_enabled: 1 },
+        snapshot: LIVE,
+      }),
     ]);
     expect(html).toContain("We read mentions, site checks, and job posts.");
     expect(html).not.toContain("ads");

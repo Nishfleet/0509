@@ -13,7 +13,8 @@ const LEVER_BOARD_URL = "https://jobs.lever.co/palantir";
 const ASHBY_BOARD_URL = "https://jobs.ashbyhq.com/linear";
 const WORKABLE_BOARD_URL = "https://apply.workable.com/huggingface";
 const SMARTRECRUITERS_BOARD_URL = "https://jobs.smartrecruiters.com/ServiceNow";
-const SMARTRECRUITERS_LISTING_URL = "https://api.smartrecruiters.com/v1/companies/ServiceNow/postings?limit=100&offset=0";
+const SMARTRECRUITERS_LISTING_URL =
+  "https://api.smartrecruiters.com/v1/companies/ServiceNow/postings?limit=100&offset=0";
 
 function fixture(name: string): string {
   return readFileSync(join(FIXTURES, name), "utf8");
@@ -202,7 +203,13 @@ describe("parseListing", () => {
   it("joins Workable city and country and leaves location null when both are missing", () => {
     const body = JSON.stringify({
       jobs: [
-        { shortcode: "paris", title: "Paris job", url: "https://apply.workable.com/j/paris", city: "Paris", country: "France" },
+        {
+          shortcode: "paris",
+          title: "Paris job",
+          url: "https://apply.workable.com/j/paris",
+          city: "Paris",
+          country: "France",
+        },
         { shortcode: "nowhere", title: "Nowhere job", url: "https://apply.workable.com/j/nowhere" },
       ],
     });
@@ -215,9 +222,7 @@ describe("parseListing", () => {
   });
 
   it("throws ListingError when a SmartRecruiters body has the wrong shape", () => {
-    expect(() => parseListing("smartrecruiters", "{}", "https://jobs.smartrecruiters.com/acme")).toThrow(
-      ListingError,
-    );
+    expect(() => parseListing("smartrecruiters", "{}", "https://jobs.smartrecruiters.com/acme")).toThrow(ListingError);
   });
 });
 
@@ -327,15 +332,11 @@ describe("nextListingUrl", () => {
   });
 
   it("throws ListingError when the body is not JSON", () => {
-    expect(() => nextListingUrl("smartrecruiters", SMARTRECRUITERS_LISTING_URL, "<html>")).toThrow(
-      ListingError,
-    );
+    expect(() => nextListingUrl("smartrecruiters", SMARTRECRUITERS_LISTING_URL, "<html>")).toThrow(ListingError);
   });
 
   it("throws ListingError when the body has the wrong shape", () => {
-    expect(() => nextListingUrl("smartrecruiters", SMARTRECRUITERS_LISTING_URL, "{}")).toThrow(
-      ListingError,
-    );
+    expect(() => nextListingUrl("smartrecruiters", SMARTRECRUITERS_LISTING_URL, "{}")).toThrow(ListingError);
   });
 
   it.each(["greenhouse", "lever", "ashby", "workable"] as const)(

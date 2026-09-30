@@ -60,24 +60,8 @@ describe("brief reads (0509#5145)", () => {
       '{"n":1}',
       "2026-09-14T08:00:05.000Z",
     );
-    await seedDigest(
-      "dg-a-2",
-      WS_A,
-      "2026-09-14T08:00:00.000Z",
-      "2026-09-21T08:00:00.000Z",
-      "failed",
-      '{"n":2}',
-      null,
-    );
-    await seedDigest(
-      "dg-b-1",
-      WS_B,
-      "2026-09-14T08:00:00.000Z",
-      "2026-09-21T08:00:00.000Z",
-      "pending",
-      "{}",
-      null,
-    );
+    await seedDigest("dg-a-2", WS_A, "2026-09-14T08:00:00.000Z", "2026-09-21T08:00:00.000Z", "failed", '{"n":2}', null);
+    await seedDigest("dg-b-1", WS_B, "2026-09-14T08:00:00.000Z", "2026-09-21T08:00:00.000Z", "pending", "{}", null);
   });
 
   it("lists a workspace's weekly briefs newest first", async () => {

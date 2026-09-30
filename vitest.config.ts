@@ -60,12 +60,14 @@ export default defineConfig({
             "tests/integration/migration-rollback.test.ts",
             // #3994's acceptance names this file verbatim.
             "tests/integration/identity/tail.test.ts",
+            // #4047's acceptance names this file verbatim.
+            "tests/integration/site/recheck.test.ts",
             "tests/unit/site/**/*.test.ts",
             "tests/perf/**/*.test.ts",
           ],
           // Applies the chain itself, in two steps, so it can seed rows
           // before 0021. The workers setup would apply 0021 first.
-          exclude: ["tests/integration/entity-workspace-fk.integration.test.ts"],
+          exclude: ["tests/integration/entity-workspace-fk*.integration.test.ts"],
           setupFiles: ["./tests/integration/apply-migrations.ts"],
           testTimeout: 30_000,
         },
@@ -84,7 +86,7 @@ export default defineConfig({
         ],
         test: {
           name: "entity-fk",
-          include: ["tests/integration/entity-workspace-fk.integration.test.ts"],
+          include: ["tests/integration/entity-workspace-fk*.integration.test.ts"],
           testTimeout: 60_000,
         },
       },

@@ -1,12 +1,13 @@
 import type { ShouldRevalidateFunctionArgs } from "react-router";
 import type { Route } from "./+types/onboarding.identity";
 
-import { redirect } from "react-router";
+import { data, redirect } from "react-router";
 
 import { IdentityCard } from "../components/identity-card";
 import { OnboardingFrame } from "../components/onboarding-frame";
 import { OneInput } from "../components/one-input";
 import { isTakenDown } from "../lib/data/takedown.server";
+import { startOnboardingRun } from "../lib/data/onboarding_run.server";
 import { readWorkspaceIdForOwner } from "../lib/data/workspace.server";
 import { creatorRows, editedFields, isDraftSave } from "../lib/identity/card-fields";
 import { applyDraftIntent, readDraft } from "../lib/identity/card-draft.server";
@@ -15,47 +16,56 @@ import { confirmCard } from "../lib/identity/confirm.server";
 import { normaliseSubject } from "../lib/identity/normalise";
 import { screenOnboardingSubject } from "../lib/onboarding-screen.server";
 import { timeCard } from "../lib/onboarding/card-timing.server";
-import { requireSession } from "../lib/require-session.server";
+import { requireFreshSession, requireSession } from "../lib/require-session.server";
+import { createTimings } from "../lib/server-timing.server";
 import { workspaceLandingForRequest } from "../lib/workspace.server";
 
 export async function loader({ request }: Route.LoaderArgs) {
-  const session = await requireSession(request);
-  const landing = await workspaceLandingForRequest(request, session.user.id);
+  const timings = createTimings();
+  const session = await timings.measure("session", requireSession(request));
+  const landing = await timings.measure("landing", workspaceLandingForRequest(request, session.user));
   if (!landing) throw redirect("/app");
   const raw = new URL(request.url).searchParams.get("subject") ?? "";
   const normalised = normaliseSubject(raw);
   if (!normalised.ok) return { card: null, limited: false };
   const { subject } = normalised;
-  if (await isTakenDown(subject.registrable)) throw redirect("/onboarding");
-  const workspaceId = await readWorkspaceIdForOwner(session.user.id);
-  if (workspaceId === null) throw redirect("/onboarding");
-  const screened = await screenOnboardingSubject({
-    workspaceId,
-    userId: session.user.id,
-    subject,
-    raw,
-    answer: null,
-    now: new Date().toISOString(),
-  });
+  const [taken, workspaceId] = await Promise.all([
+    isTakenDown(subject.registrable),
+    readWorkspaceIdForOwner(session.user.id),
+  ]);
+  if (taken || workspaceId === null) throw redirect("/onboarding");
+  const now = new Date().toISOString();
+  const screened = await timings.measure(
+    "screen",
+    screenOnboardingSubject({ workspaceId, userId: session.user.id, subject, raw, answer: null, now }),
+  );
   if (screened.kind !== "proceed") throw redirect("/onboarding");
-  if (!(await withinProbeLimit(session.user.id))) return { card: null, limited: true };
+  const [, withinLimit, draft] = await Promise.all([
+    timings.measure("run", startOnboardingRun({ workspaceId, userId: session.user.id, inputRaw: raw, startedAt: now })),
+    withinProbeLimit(session.user.id),
+    readDraft(workspaceId, subject.registrable),
+  ]);
+  if (!withinLimit) return { card: null, limited: true };
   const shown = subject.kind === "domain" ? subject.registrable : (subject.url ?? `@${subject.registrable}`);
-  const draft = await readDraft(workspaceId, subject.registrable);
-  return {
-    card: {
-      subject: raw,
-      creator: creatorRows(subject),
-      domain: shown,
-      ...timeCard(workspaceId, startCard(workspaceId, subject, editedFields(draft))),
-      draft,
+  return data(
+    {
+      card: {
+        subject: raw,
+        creator: creatorRows(subject),
+        domain: shown,
+        ...timeCard(workspaceId, startCard(workspaceId, subject, editedFields(draft))),
+        draft,
+      },
+      limited: false,
     },
-    limited: false,
-  };
+    { headers: timings.header() },
+  );
 }
 
 export async function action({ request }: Route.ActionArgs) {
-  const session = await requireSession(request);
-  const workspaceId = await readWorkspaceIdForOwner(session.user.id);
+  const timings = createTimings();
+  const session = await timings.measure("session", requireFreshSession(request));
+  const workspaceId = await timings.measure("workspace", readWorkspaceIdForOwner(session.user.id));
   if (workspaceId === null) throw redirect("/onboarding");
   const form = await request.formData();
   if (await applyDraftIntent(workspaceId, form)) return null;
@@ -63,18 +73,23 @@ export async function action({ request }: Route.ActionArgs) {
   if (typeof rawSubject === "string") {
     const normalised = normaliseSubject(rawSubject);
     if (normalised.ok) {
-      const screened = await screenOnboardingSubject({
-        workspaceId,
-        userId: session.user.id,
-        subject: normalised.subject,
-        raw: rawSubject,
-        answer: null,
-        now: new Date().toISOString(),
-      });
+      const screened = await timings.measure(
+        "screen",
+        screenOnboardingSubject({
+          workspaceId,
+          userId: session.user.id,
+          subject: normalised.subject,
+          raw: rawSubject,
+          answer: null,
+          now: new Date().toISOString(),
+        }),
+      );
       if (screened.kind !== "proceed") throw redirect("/onboarding");
     }
   }
-  if (await confirmCard(workspaceId, session.user.id, form)) throw redirect("/onboarding/competitors");
+  if (await timings.measure("confirm", confirmCard(workspaceId, session.user.id, form))) {
+    throw redirect("/onboarding/competitors", { headers: timings.header() });
+  }
   return { message: "Add your brand's name, then tap That's me." };
 }
 
@@ -88,7 +103,8 @@ export default function Page({ loaderData, actionData }: Route.ComponentProps) {
     ? "That's a lot of lookups in a minute. Wait a minute, then try again."
     : "We couldn't find anything for that, try the main website.";
   return (
-    <OnboardingFrame step={2}
+    <OnboardingFrame
+      step={2}
       heading={card === null ? "Start with your website or a handle" : "This is you. Fix anything we got wrong."}
       hideHeading={card === null}
     >

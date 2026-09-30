@@ -8,12 +8,12 @@ import { BLIND_REASON } from "../observability/pipeline-health";
 const ENABLED_SOURCE_ID = `SELECT id FROM source WHERE key = ?1 AND is_enabled = 1`;
 
 const SELECT_ENTITY_SOURCES =
-  "SELECT s.key, s.platform, s.kind, s.is_enabled, s.config_json, (SELECT MAX(sn.fetched_at) FROM snapshot sn JOIN watch w2 ON w2.id = sn.watch_id WHERE w2.entity_id = ?2 AND w2.source_id = s.id) AS fetched_at, (SELECT sn.item_count FROM snapshot sn JOIN watch w2 ON w2.id = sn.watch_id WHERE w2.entity_id = ?2 AND w2.source_id = s.id ORDER BY sn.fetched_at DESC LIMIT 1) AS item_count, (SELECT w3.config_json FROM watch w3 WHERE w3.entity_id = ?2 AND w3.source_id = s.id AND w3.is_active = 1 ORDER BY CASE WHEN json_extract(w3.config_json, '$.degraded.state') = 'degraded' THEN 0 ELSE 1 END, w3.last_polled_at DESC LIMIT 1) AS watch_config_json FROM source s WHERE s.id IN (SELECT w.source_id FROM watch w JOIN entity e ON e.id = w.entity_id WHERE e.workspace_id = ?1 AND e.id = ?2) ORDER BY s.kind, s.key";
+  "SELECT s.key, s.platform, s.kind, s.is_enabled, s.config_json, (SELECT MAX(sn.fetched_at) FROM snapshot sn JOIN watch w2 ON w2.id = sn.watch_id WHERE w2.entity_id = ?2 AND w2.source_id = s.id) AS fetched_at, (SELECT sn.item_count FROM snapshot sn JOIN watch w2 ON w2.id = sn.watch_id WHERE w2.entity_id = ?2 AND w2.source_id = s.id ORDER BY sn.fetched_at DESC LIMIT 1) AS item_count, (SELECT w3.config_json FROM watch w3 WHERE w3.entity_id = ?2 AND w3.source_id = s.id AND w3.is_active = 1 ORDER BY CASE WHEN 'degraded' IN (json_extract(w3.config_json, '$.degraded.state'), json_extract(w3.config_json, '$.noChannel.state')) THEN 0 ELSE 1 END, w3.last_polled_at DESC LIMIT 1) AS watch_config_json FROM source s WHERE s.id IN (SELECT w.source_id FROM watch w JOIN entity e ON e.id = w.entity_id WHERE e.workspace_id = ?1 AND e.id = ?2) ORDER BY s.kind, s.key";
 
 const LATEST_SNAPSHOT_COLUMN = (column: string) =>
   `(SELECT sn.${column} FROM snapshot sn JOIN watch w2 ON w2.id = sn.watch_id JOIN entity e2 ON e2.id = w2.entity_id WHERE e2.workspace_id = ?1 AND w2.source_id = s.id ORDER BY sn.fetched_at DESC LIMIT 1) AS ${column}`;
 
-const SELECT_WORKSPACE_MENTION_SOURCES = `SELECT s.key, s.platform, s.kind, s.is_enabled, s.config_json, s.degraded_reason, s.last_good_at, ${LATEST_SNAPSHOT_COLUMN("fetched_at")}, ${LATEST_SNAPSHOT_COLUMN("item_count")}, ${LATEST_SNAPSHOT_COLUMN("canary_count")} FROM source s WHERE (s.kind = 'mentions' OR s.degraded_reason IS NOT NULL) AND s.id IN (SELECT w.source_id FROM watch w JOIN entity e ON e.id = w.entity_id WHERE e.workspace_id = ?1 AND w.is_active = 1) ORDER BY s.key`;
+const SELECT_WORKSPACE_MENTION_SOURCES = `SELECT s.key, s.platform, s.kind, s.is_enabled, s.config_json, s.degraded_reason, s.last_good_at, ${LATEST_SNAPSHOT_COLUMN("fetched_at")}, ${LATEST_SNAPSHOT_COLUMN("item_count")}, ${LATEST_SNAPSHOT_COLUMN("canary_count")}, (SELECT w3.config_json FROM watch w3 JOIN entity e3 ON e3.id = w3.entity_id WHERE e3.workspace_id = ?1 AND w3.source_id = s.id AND w3.is_active = 1 ORDER BY CASE WHEN 'degraded' IN (json_extract(w3.config_json, '$.degraded.state'), json_extract(w3.config_json, '$.noChannel.state')) THEN 0 ELSE 1 END, w3.last_polled_at DESC LIMIT 1) AS watch_config_json FROM source s WHERE (s.kind = 'mentions' OR s.degraded_reason IS NOT NULL) AND s.id IN (SELECT w.source_id FROM watch w JOIN entity e ON e.id = w.entity_id WHERE e.workspace_id = ?1 AND w.is_active = 1) ORDER BY s.key`;
 
 const SELECT_SOURCE_TICKS = `SELECT source_id, source_key, kind, platform, watch_id, fetched_at, item_count FROM (SELECT s.id AS source_id, s.key AS source_key, s.kind, s.platform, w.id AS watch_id, sn.fetched_at, sn.item_count, ROW_NUMBER() OVER (PARTITION BY w.id ORDER BY sn.fetched_at DESC) AS rn FROM snapshot sn JOIN watch w ON w.id = sn.watch_id JOIN source s ON s.id = w.source_id WHERE s.is_enabled = 1 AND w.is_active = 1) WHERE rn <= 2 ORDER BY source_key, watch_id, fetched_at DESC`;
 
@@ -75,6 +75,7 @@ interface WorkspaceMentionSourceRow {
   fetched_at: string | null;
   item_count: number | null;
   canary_count: number | null;
+  watch_config_json: string | null;
 }
 
 export async function readEnabledSourceId(key: string): Promise<string | null> {
@@ -104,15 +105,10 @@ const MARK_CANARY_BAD = `UPDATE source SET degraded_reason = 'not answering' WHE
 
 const MARK_SOURCE_BLOCKED = "UPDATE source SET degraded_reason = ?2 WHERE id = ?1";
 
-const RECORD_SOURCE_LATEST_SNAPSHOT = `UPDATE source SET latest_fetched_at = ?2, latest_item_count = ?3, latest_canary_count = ?4 WHERE id = (SELECT w.source_id FROM watch w WHERE w.id = ?1) AND (latest_fetched_at IS NULL OR latest_fetched_at < ?2)`;
+const RECORD_SOURCE_LATEST_SNAPSHOT = `UPDATE source SET latest_fetched_at = sn.fetched_at, latest_item_count = sn.item_count, latest_canary_count = sn.canary_count FROM snapshot sn WHERE sn.id = ?1 AND source.id = (SELECT w.source_id FROM watch w WHERE w.id = sn.watch_id) AND (source.latest_fetched_at IS NULL OR source.latest_fetched_at < sn.fetched_at)`;
 
-export function recordSourceLatestSnapshot(row: {
-  watchId: string;
-  fetchedAt: string;
-  itemCount: number;
-  canaryCount: number | null;
-}): D1PreparedStatement {
-  return env.DB.prepare(RECORD_SOURCE_LATEST_SNAPSHOT).bind(row.watchId, row.fetchedAt, row.itemCount, row.canaryCount);
+export function recordSourceLatestSnapshot(snapshotId: string): D1PreparedStatement {
+  return env.DB.prepare(RECORD_SOURCE_LATEST_SNAPSHOT).bind(snapshotId);
 }
 
 export interface CanarySource {
@@ -137,11 +133,7 @@ export async function readCanarySources(): Promise<CanarySource[]> {
   }));
 }
 
-export async function recordSourceCanary(
-  sourceId: string,
-  canaryCount: number,
-  now: string,
-): Promise<void> {
+export async function recordSourceCanary(sourceId: string, canaryCount: number, now: string): Promise<void> {
   if (canaryCount > 0) {
     await env.DB.prepare(MARK_CANARY_GOOD).bind(sourceId, now).run();
     return;
@@ -187,22 +179,15 @@ export async function markSourceBlind(sourceId: string): Promise<void> {
 }
 
 export async function clearSourceBlind(blindIds: readonly string[]): Promise<void> {
-  await env.DB.prepare(CLEAR_SOURCE_BLIND)
-    .bind(BLIND_REASON, JSON.stringify(blindIds))
-    .run();
+  await env.DB.prepare(CLEAR_SOURCE_BLIND).bind(BLIND_REASON, JSON.stringify(blindIds)).run();
 }
 
 export async function markSourceTimedOut(sourceId: string): Promise<void> {
   await env.DB.prepare(MARK_SOURCE_BLOCKED).bind(sourceId, "timed out").run();
 }
 
-export async function readEntitySources(
-  workspaceId: string,
-  entityId: string,
-): Promise<readonly EntitySource[]> {
-  const { results } = await env.DB.prepare(SELECT_ENTITY_SOURCES)
-    .bind(workspaceId, entityId)
-    .all<EntitySourceRow>();
+export async function readEntitySources(workspaceId: string, entityId: string): Promise<readonly EntitySource[]> {
+  const { results } = await env.DB.prepare(SELECT_ENTITY_SOURCES).bind(workspaceId, entityId).all<EntitySourceRow>();
   return results.map((row) => ({
     source: {
       key: row.key,
@@ -212,16 +197,11 @@ export async function readEntitySources(
       config_json: row.config_json,
       watch_config_json: row.watch_config_json,
     },
-    snapshot:
-      row.fetched_at === null
-        ? null
-        : { item_count: row.item_count ?? 0, fetched_at: row.fetched_at },
+    snapshot: row.fetched_at === null ? null : { item_count: row.item_count ?? 0, fetched_at: row.fetched_at },
   }));
 }
 
-export async function readWorkspaceMentionSources(
-  workspaceId: string,
-): Promise<readonly FreshnessSource[]> {
+export async function readWorkspaceMentionSources(workspaceId: string): Promise<readonly FreshnessSource[]> {
   const { results } = await env.DB.prepare(SELECT_WORKSPACE_MENTION_SOURCES)
     .bind(workspaceId)
     .all<WorkspaceMentionSourceRow>();
@@ -234,6 +214,7 @@ export async function readWorkspaceMentionSources(
       config_json: row.config_json,
       degraded_reason: row.degraded_reason,
       last_good_at: row.last_good_at,
+      watch_config_json: row.watch_config_json,
     },
     snapshot:
       row.fetched_at === null
@@ -246,7 +227,7 @@ export async function readWorkspaceMentionSources(
   }));
 }
 
-const SELECT_REGISTRY_SOURCES = `SELECT s.key, s.plugin_key, s.platform, s.kind, s.is_enabled, s.config_json, s.degraded_reason, s.last_good_at, (SELECT MAX(sn.fetched_at) FROM snapshot sn JOIN watch w ON w.id = sn.watch_id WHERE w.source_id = s.id) AS fetched_at, (SELECT sn.item_count FROM snapshot sn JOIN watch w ON w.id = sn.watch_id WHERE w.source_id = s.id ORDER BY sn.fetched_at DESC LIMIT 1) AS item_count, (SELECT sn.canary_count FROM snapshot sn JOIN watch w ON w.id = sn.watch_id WHERE w.source_id = s.id ORDER BY sn.fetched_at DESC LIMIT 1) AS canary_count FROM source s ORDER BY s.kind, s.key`;
+export const SELECT_REGISTRY_SOURCES = `SELECT s.key, s.plugin_key, s.platform, s.kind, s.is_enabled, s.config_json, s.degraded_reason, s.last_good_at, s.latest_fetched_at AS fetched_at, s.latest_item_count AS item_count, s.latest_canary_count AS canary_count FROM source s ORDER BY s.kind, s.key`;
 
 interface RegistrySourceRow {
   key: string;
@@ -274,6 +255,7 @@ export async function readRegistrySources(): Promise<readonly FreshnessSource[]>
       config_json: row.config_json,
       degraded_reason: row.degraded_reason,
       last_good_at: row.last_good_at,
+      watch_config_json: null,
     },
     snapshot:
       row.fetched_at === null

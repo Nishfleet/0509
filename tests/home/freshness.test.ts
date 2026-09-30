@@ -41,10 +41,7 @@ describe("freshness entries", () => {
 
   it("hides a disabled source", () => {
     expect(
-      freshnessEntries(
-        [{ kind: "mentions", source: { ...reddit, is_enabled: 0 }, snapshot: freshSnapshot }],
-        NOW,
-      ),
+      freshnessEntries([{ kind: "mentions", source: { ...reddit, is_enabled: 0 }, snapshot: freshSnapshot }], NOW),
     ).toEqual([]);
   });
 
@@ -52,8 +49,7 @@ describe("freshness entries", () => {
     const entry = entryFor(
       {
         ...reddit,
-        config_json:
-          '{"state":"degraded","reason":"blocked by login wall","last_good_at":"2026-09-20T06:00:00.000Z"}',
+        config_json: '{"state":"degraded","reason":"blocked by login wall","last_good_at":"2026-09-20T06:00:00.000Z"}',
       },
       freshSnapshot,
     );

@@ -13,7 +13,7 @@ import { readWorkspaceIdForOwner } from "../lib/data/workspace.server";
 import { requireSession } from "../lib/require-session.server";
 
 const PREVIOUS_LIST = "mt-10 border-t border-line pt-6";
-const PREVIOUS_HEADING = "font-display text-lg font-semibold";
+const PREVIOUS_HEADING = "font-display text-row-name font-bold [overflow-wrap:anywhere]";
 const PREVIOUS_LINK = "underline decoration-1 underline-offset-4";
 const BRIEF_LINE = "mt-2 font-mono text-[0.75rem] tracking-[0.04em] text-ink-soft uppercase";
 const FALLBACK = "This brief could not be shown here.";

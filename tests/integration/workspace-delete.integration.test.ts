@@ -3,10 +3,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 
 import { cancelPendingDigests } from "../../app/lib/data/digest.server";
 import { suppressWorkspaceTargets } from "../../app/lib/data/email_suppression.server";
-import {
-  deleteWorkspace,
-  readWorkspaceR2Prefixes,
-} from "../../app/lib/data/workspace.server";
+import { deleteWorkspace, readWorkspaceR2Prefixes } from "../../app/lib/data/workspace.server";
 
 const NOW = "2026-09-24T00:00:00Z";
 
@@ -29,9 +26,7 @@ async function seedWorkspace(id: string, ownerUserId: string): Promise<void> {
 }
 
 async function seedChannel(id: string, key: string): Promise<void> {
-  await env.DB.prepare(
-    `INSERT INTO channel (id, key, is_enabled, config_json) VALUES (?, ?, 1, '{}')`,
-  )
+  await env.DB.prepare(`INSERT INTO channel (id, key, is_enabled, config_json) VALUES (?, ?, 1, '{}')`)
     .bind(id, key)
     .run();
 }
@@ -151,17 +146,13 @@ describe("workspace deletion", () => {
       ["send_target", "id", "tgt-del"],
       ["digest", "id", "dig-del"],
     ]) {
-      const row = await env.DB.prepare(
-        `SELECT count(*) AS n FROM ${table} WHERE ${where} = ?`,
-      )
+      const row = await env.DB.prepare(`SELECT count(*) AS n FROM ${table} WHERE ${where} = ?`)
         .bind(value)
         .first<{ n: number }>();
       expect(row, `${table} rows survive the cascade`).toEqual({ n: 0 });
     }
 
-    const kept = await env.DB.prepare(
-      "SELECT id FROM entity WHERE workspace_id = 'ws-keep'",
-    ).first<{ id: string }>();
+    const kept = await env.DB.prepare("SELECT id FROM entity WHERE workspace_id = 'ws-keep'").first<{ id: string }>();
     expect(kept).toEqual({ id: "ent-keep" });
   });
 });

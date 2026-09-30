@@ -3,12 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { MemoryRouter } from "react-router";
 import { describe, expect, it } from "vitest";
 
-import {
-  BrandChip,
-  BrandChipRow,
-  brandMonogram,
-  type BrandChipBrand,
-} from "../../app/components/brand-chip";
+import { BrandChip, BrandChipRow, brandMonogram, type BrandChipBrand } from "../../app/components/brand-chip";
 
 function render(element: ReactElement): string {
   return renderToStaticMarkup(createElement(MemoryRouter, null, element));

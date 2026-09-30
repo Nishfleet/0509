@@ -72,7 +72,9 @@ export const LIVE_COVERAGE: readonly CoverageKind[] = COVERAGE.flatMap((group: C
   return sources.length === 0 ? [] : [{ ...group, sources }];
 });
 
-const LIVE_IDS: ReadonlySet<string> = new Set(LIVE_COVERAGE.flatMap((group) => group.sources.map((source) => source.id)));
+const LIVE_IDS: ReadonlySet<string> = new Set(
+  LIVE_COVERAGE.flatMap((group) => group.sources.map((source) => source.id)),
+);
 
 export function isLive(id: CoverageId): boolean {
   return LIVE_IDS.has(id);
