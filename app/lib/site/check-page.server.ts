@@ -70,7 +70,7 @@ async function storedKey(key: string): Promise<string | null> {
   return (await env.SNAPSHOTS.head(key)) === null ? null : key;
 }
 
-export async function checkPage(input: {
+interface CheckPageInput {
   watchId: string;
   pageId: string;
   url: string;
@@ -78,7 +78,33 @@ export async function checkPage(input: {
   before?: string;
   read?: ReadUrlResult;
   mayScreenshot?: () => Promise<boolean>;
-}): Promise<CheckPageResult> {
+}
+
+async function storeNewSnapshot(
+  input: CheckPageInput,
+  extracted: { text: string; hash: string },
+  stamp: { id: string; fetchedAt: string },
+): Promise<{ textKey: string; screenshotKey: string | null }> {
+  const { id, fetchedAt } = stamp;
+  const textKey = `snapshot/site/${input.watchId}/${id}.txt`;
+  await env.SNAPSHOTS.put(textKey, extracted.text);
+  const screenshotKey = await captureScreenshot(
+    input.url,
+    `snapshot/site/${input.watchId}/${id}.png`,
+    input.mayScreenshot,
+  );
+  await insertSnapshot({
+    id,
+    watchId: input.watchId,
+    pageId: input.pageId,
+    fetchedAt,
+    r2Key: textKey,
+    hash: extracted.hash,
+  });
+  return { textKey, screenshotKey };
+}
+
+export async function checkPage(input: CheckPageInput): Promise<CheckPageResult> {
   const read = input.read ?? (await readUrl(input.url));
   if (!read.ok) {
     return { outcome: "failed", reason: read.reason, detail: read.detail };
@@ -101,21 +127,7 @@ export async function checkPage(input: {
     return { outcome: "unchanged", snapshotId: id };
   }
 
-  const textKey = `snapshot/site/${input.watchId}/${id}.txt`;
-  await env.SNAPSHOTS.put(textKey, extracted.text);
-  const screenshotKey = await captureScreenshot(
-    input.url,
-    `snapshot/site/${input.watchId}/${id}.png`,
-    input.mayScreenshot,
-  );
-  await insertSnapshot({
-    id,
-    watchId: input.watchId,
-    pageId: input.pageId,
-    fetchedAt,
-    r2Key: textKey,
-    hash: extracted.hash,
-  });
+  const { textKey, screenshotKey } = await storeNewSnapshot(input, extracted, { id, fetchedAt });
 
   if (previous?.payload_r2_key == null) {
     return { outcome: "first", snapshotId: id, textKey, screenshotKey };
