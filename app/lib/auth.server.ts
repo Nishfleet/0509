@@ -53,10 +53,6 @@ export function createAuth(env: AuthEnv, options?: { captcha?: boolean; validate
     advanced: {
       cookiePrefix: COOKIE_PREFIX,
       ipAddress: { ipAddressHeaders: [CLIENT_IP_HEADER] },
-      // joins: the Kysely SQLite dialect does them natively, and /get-session
-      // runs on every request (docs/REBUILD-STACK.md §2.3 point 2). Off by
-      // default; with it off the adapter strips the join clause and the
-      // related rows are fetched by a second query instead.
       database: { joins: true, validateSchema: options?.validateSchema ?? false },
     },
     session: { freshAge: FRESH_SESSION_SECONDS },
