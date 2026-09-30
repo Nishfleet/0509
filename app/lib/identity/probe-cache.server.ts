@@ -26,12 +26,19 @@ export function probeKey(subject: Subject, probe: ProbeName): string {
   return `identity:${cacheSubject(subject)}:${probe}`;
 }
 
-export async function readThrough<T>(
-  key: string,
-  schema: z.ZodType<T>,
-  ttlSeconds: number,
-  run: () => Promise<T>,
-): Promise<T> {
+export interface ReadThroughOptions<T> {
+  key: string;
+  schema: z.ZodType<T>;
+  ttlSeconds: number;
+  run: () => Promise<T>;
+}
+
+export interface ProbeLoader<T> {
+  schema: z.ZodType<T>;
+  run: () => Promise<T>;
+}
+
+export async function readThrough<T>({ key, schema, ttlSeconds, run }: ReadThroughOptions<T>): Promise<T> {
   const hit = await env.IDENTITY_CACHE.get(key, "json");
   const parsed = hit === null ? null : schema.safeParse(hit);
   if (parsed?.success) {
@@ -43,11 +50,6 @@ export async function readThrough<T>(
   return value;
 }
 
-export async function cachedProbe<T>(
-  subject: Subject,
-  probe: ProbeName,
-  schema: z.ZodType<T>,
-  run: () => Promise<T>,
-): Promise<T> {
-  return readThrough(probeKey(subject, probe), schema, PROBE_TTL_SECONDS, run);
+export async function cachedProbe<T>(subject: Subject, probe: ProbeName, { schema, run }: ProbeLoader<T>): Promise<T> {
+  return readThrough({ key: probeKey(subject, probe), schema, ttlSeconds: PROBE_TTL_SECONDS, run });
 }

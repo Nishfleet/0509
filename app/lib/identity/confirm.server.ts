@@ -46,11 +46,10 @@ export async function confirmCard(workspaceId: string, userId: string, form: For
   return true;
 }
 
-export async function confirmCardLater(
-  workspaceId: string,
-  userId: string,
-  form: FormData,
-): Promise<(() => Promise<string>) | null> {
+type ConfirmedCard = z.infer<typeof confirmSchema>;
+type CachedValues = Awaited<ReturnType<typeof readCachedSiteValues>>;
+
+function parseConfirm(form: FormData): { card: ConfirmedCard; subject: Subject } | null {
   const parsed = confirmSchema.safeParse({
     subject: field(form, "subject"),
     name: field(form, "name"),
@@ -60,62 +59,81 @@ export async function confirmCardLater(
   if (!parsed.success) return null;
   const normalised = normaliseSubject(parsed.data.subject);
   if (!normalised.ok) return null;
-  const { subject } = normalised;
-  const card = parsed.data;
-  const id = crypto.randomUUID();
-  const [logo, cached] = await Promise.all([readLogo(subject.registrable), readCachedSiteValues(subject)]);
-  const logoUrl = logo !== null ? `/app/logos/${id}` : null;
-  const now = new Date();
-  const inserted = await insertSelfEntity({
-    id,
-    workspaceId,
-    domain: subject.registrable,
-    name: card.name,
-    identityJson: JSON.stringify({
-      kind: subject.kind,
-      platform: subject.platform ?? null,
-      url: subject.url,
-      description: card.description === "" ? null : card.description,
-      logoUrl,
-      socials: card.socials,
-    }),
-    now: now.toISOString(),
+  return { card: parsed.data, subject: normalised.subject };
+}
+
+function identityJson(subject: Subject, card: ConfirmedCard, logoUrl: string | null): string {
+  return JSON.stringify({
+    kind: subject.kind,
+    platform: subject.platform ?? null,
+    url: subject.url,
+    description: card.description === "" ? null : card.description,
+    logoUrl,
+    socials: card.socials,
   });
-  const entityId = inserted ? id : await readWorkspaceSelfId(workspaceId);
-  if (entityId === null) return null;
-  const candidates: { edit: FieldEdit; changed: boolean }[] =
-    !inserted || cached === null
-      ? []
-      : [
-          {
-            edit: { field: "name", from: cached.name, to: card.name },
-            changed: card.name !== cached.name,
-          },
-          {
-            edit: { field: "description", from: cached.description, to: card.description },
-            changed: (card.description === "" ? null : card.description) !== cached.description,
-          },
-        ];
-  const edits = insertFieldEdits(
-    candidates
-      .filter((candidate) => candidate.changed)
-      .map((candidate) => ({
-        workspaceId,
-        userId,
-        entityId,
-        edit: candidate.edit,
-        decidedAt: now.toISOString(),
-      })),
-  );
+}
+
+function changedEdits(card: ConfirmedCard, cached: CachedValues): FieldEdit[] {
+  if (cached === null) return [];
+  const candidates: { edit: FieldEdit; changed: boolean }[] = [
+    {
+      edit: { field: "name", from: cached.name, to: card.name },
+      changed: card.name !== cached.name,
+    },
+    {
+      edit: { field: "description", from: cached.description, to: card.description },
+      changed: (card.description === "" ? null : card.description) !== cached.description,
+    },
+  ];
+  return candidates.filter((candidate) => candidate.changed).map((candidate) => candidate.edit);
+}
+
+function tailParamsFor(
+  base: { workspaceId: string; entityId: string },
+  subject: Subject,
+  card: ConfirmedCard,
+): Parameters<typeof startIdentityTail>[0] {
   const site = subject.kind === "domain" ? null : creatorSite(card.socials);
-  const tailParams = {
-    workspaceId,
-    entityId,
+  return {
+    ...base,
     name: card.name,
     domain: site?.registrable ?? subject.registrable,
     homepageUrl: subject.kind === "domain" ? subject.url : (site?.url ?? null),
     ...(subject.kind === "domain" ? {} : { handle: subject.registrable }),
   };
+}
+
+export async function confirmCardLater(
+  workspaceId: string,
+  userId: string,
+  form: FormData,
+): Promise<(() => Promise<string>) | null> {
+  const confirmed = parseConfirm(form);
+  if (confirmed === null) return null;
+  const { card, subject } = confirmed;
+  const id = crypto.randomUUID();
+  const [logo, cached] = await Promise.all([readLogo(subject.registrable), readCachedSiteValues(subject)]);
+  const now = new Date().toISOString();
+  const inserted = await insertSelfEntity({
+    id,
+    workspaceId,
+    domain: subject.registrable,
+    name: card.name,
+    identityJson: identityJson(subject, card, logo !== null ? `/app/logos/${id}` : null),
+    now,
+  });
+  const entityId = inserted ? id : await readWorkspaceSelfId(workspaceId);
+  if (entityId === null) return null;
+  const edits = insertFieldEdits(
+    (inserted ? changedEdits(card, cached) : []).map((edit) => ({
+      workspaceId,
+      userId,
+      entityId,
+      edit,
+      decidedAt: now,
+    })),
+  );
+  const tailParams = tailParamsFor({ workspaceId, entityId }, subject, card);
   await edits;
   return () => startIdentityTail(tailParams);
 }

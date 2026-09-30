@@ -44,12 +44,12 @@ describe("screenPublicSubject", () => {
     const run = vi.fn(() => Promise.resolve({ answers: { public_subject: { type: "noul", noul: 0.95 } } }));
     Reflect.set(env, "AI", { run });
 
-    const { outcome, verdict } = await screenPublicSubject(
+    const { outcome, verdict } = await screenPublicSubject({
       workspaceId,
-      subject("domain", "alphaleteathletics.com"),
-      "alphaleteathletics.com",
-      NOW,
-    );
+      subject: subject("domain", "alphaleteathletics.com"),
+      raw: "alphaleteathletics.com",
+      now: NOW,
+    });
 
     expect(outcome).toBe<PublicSubjectOutcome>("proceed");
     expect(verdict).toMatchObject({ questionId: "public_subject", p: 0.95, cached: false });
@@ -70,12 +70,12 @@ describe("screenPublicSubject", () => {
     const run = vi.fn(() => Promise.resolve({ answers: { public_subject: { type: "noul", noul: 0.5 } } }));
     Reflect.set(env, "AI", { run });
 
-    const { outcome, verdict } = await screenPublicSubject(
+    const { outcome, verdict } = await screenPublicSubject({
       workspaceId,
-      subject("handle", "smallbaker"),
-      "@smallbaker",
-      NOW,
-    );
+      subject: subject("handle", "smallbaker"),
+      raw: "@smallbaker",
+      now: NOW,
+    });
 
     expect(outcome).toBe<PublicSubjectOutcome>("ask");
     expect(verdict.p).toBe(0.5);
@@ -86,12 +86,12 @@ describe("screenPublicSubject", () => {
     const run = vi.fn(() => Promise.resolve({ answers: { public_subject: { type: "noul", noul: 0.05 } } }));
     Reflect.set(env, "AI", { run });
 
-    const { outcome, verdict } = await screenPublicSubject(
+    const { outcome, verdict } = await screenPublicSubject({
       workspaceId,
-      subject("channel", "personpage"),
-      "https://www.youtube.com/@personpage",
-      NOW,
-    );
+      subject: subject("channel", "personpage"),
+      raw: "https://www.youtube.com/@personpage",
+      now: NOW,
+    });
 
     expect(outcome).toBe<PublicSubjectOutcome>("refuse");
     expect(verdict.p).toBe(0.05);
@@ -102,12 +102,12 @@ describe("screenPublicSubject", () => {
     const run = vi.fn(() => Promise.resolve({ answers: { public_subject: { type: "noul", noul: 0.95 } } }));
     Reflect.set(env, "AI", { run });
 
-    const first = await screenPublicSubject(
+    const first = await screenPublicSubject({
       workspaceId,
-      subject("domain", "alphaleteathletics.com"),
-      "alphaleteathletics.com",
-      NOW,
-    );
+      subject: subject("domain", "alphaleteathletics.com"),
+      raw: "alphaleteathletics.com",
+      now: NOW,
+    });
     expect(first.verdict.cached).toBe(false);
 
     const rows = await env.DB.prepare(
@@ -117,12 +117,12 @@ describe("screenPublicSubject", () => {
       .first<{ n: number }>();
     expect(rows?.n).toBe(1);
 
-    const second = await screenPublicSubject(
+    const second = await screenPublicSubject({
       workspaceId,
-      subject("domain", "alphaleteathletics.com"),
-      "alphaleteathletics.com",
-      NOW,
-    );
+      subject: subject("domain", "alphaleteathletics.com"),
+      raw: "alphaleteathletics.com",
+      now: NOW,
+    });
 
     expect(second.verdict.cached).toBe(true);
     expect(run).toHaveBeenCalledTimes(1);
@@ -134,7 +134,12 @@ describe("screenPublicSubject", () => {
     Reflect.set(env, "AI", { run });
 
     await expect(
-      screenPublicSubject(workspaceId, subject("domain", "alphaleteathletics.com"), "alphaleteathletics.com", NOW),
+      screenPublicSubject({
+        workspaceId,
+        subject: subject("domain", "alphaleteathletics.com"),
+        raw: "alphaleteathletics.com",
+        now: NOW,
+      }),
     ).rejects.toThrow(JevUnavailableError);
   });
 });

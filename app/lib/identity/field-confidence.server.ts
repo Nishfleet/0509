@@ -76,13 +76,21 @@ const FIELD_BY_QUESTION: ReadonlyMap<string, keyof CardReview> = new Map([
   [SOCIALS_QUESTION.id, "socials"],
 ]);
 
-export async function reviewFields(
-  workspaceId: string,
-  subject: Subject,
-  fields: CardValues,
-  edited: readonly DraftField[],
-  now: string,
-): Promise<CardReview> {
+export interface ReviewFieldsInput {
+  workspaceId: string;
+  subject: Subject;
+  fields: CardValues;
+  edited: readonly DraftField[];
+  now: string;
+}
+
+export async function reviewFields({
+  workspaceId,
+  subject,
+  fields,
+  edited,
+  now,
+}: ReviewFieldsInput): Promise<CardReview> {
   const questions = buildQuestions(fields, edited);
   if (questions.length === 0) return withEdited(reviewValued(fields, "empty"), edited);
   let verdicts: NoulVerdict[];

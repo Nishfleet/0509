@@ -34,12 +34,19 @@ async function pageHash(page: NavPage): Promise<string> {
   return sha256Hex(JSON.stringify({ url: page.url, title: page.title }));
 }
 
-export async function classifyNavPages(
-  workspaceId: string,
-  entity: { id: string; domain: string },
-  pages: readonly NavPage[],
-  now: string,
-): Promise<readonly JudgedPage[]> {
+export interface ClassifyNavPagesInput {
+  workspaceId: string;
+  entity: { id: string; domain: string };
+  pages: readonly NavPage[];
+  now: string;
+}
+
+export async function classifyNavPages({
+  workspaceId,
+  entity,
+  pages,
+  now,
+}: ClassifyNavPagesInput): Promise<readonly JudgedPage[]> {
   const hashes = await readPageHashes(entity.id);
   const targets = await Promise.all(pages.map(async (page) => ({ page, hash: await pageHash(page) })));
   const stale = targets.filter((target) => hashes.get(target.page.url) !== target.hash);

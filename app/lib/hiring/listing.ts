@@ -131,123 +131,126 @@ const workableRowSchema = z.object({
   published_on: z.string().nullish(),
 });
 
-export function parseListing(platform: BoardPlatform, body: string, boardUrl: string): OpenRole[] {
-  const parsed = parseBody(platform, body);
+type RoleParser = (parsed: unknown, boardUrl: string) => OpenRole[];
 
-  if (platform === "smartrecruiters") {
-    const top = smartRecruitersTopSchema.safeParse(parsed);
-    if (!top.success) throw new ListingError(platform, "unexpected listing shape");
-    const slug = boardSlug(boardUrl);
-    return top.data.content.flatMap((row) => {
-      const rowParsed = smartRecruitersRowSchema.safeParse(row);
-      if (!rowParsed.success) return [];
-      const r = rowParsed.data;
-      const t = title(r.name) ?? title(r.title);
-      if (t === null) return [];
-      const location = [text(r.location?.city), text(r.location?.country)].filter((part) => part !== null);
-      return [
-        {
-          id: r.id,
-          title: t,
-          url:
-            slug === null
-              ? boardUrl
-              : httpsUrl(`${SMARTRECRUITERS_JOBS_ORIGIN}/${slug}/${encodeURIComponent(r.id)}`, boardUrl),
-          location: location.length === 0 ? null : location.join(", "),
-          team: text(r.department?.label),
-          postedAt: isoDate(r.releasedDate),
-        },
-      ];
-    });
-  }
-
-  if (platform === "greenhouse") {
-    const top = greenhouseTopSchema.safeParse(parsed);
-    if (!top.success) throw new ListingError(platform, "unexpected listing shape");
-    return top.data.jobs.flatMap((row) => {
-      const rowParsed = greenhouseRowSchema.safeParse(row);
-      if (!rowParsed.success) return [];
-      const r = rowParsed.data;
-      const t = title(r.title);
-      if (t === null) return [];
-      return [
-        {
-          id: String(r.id),
-          title: t,
-          url: httpsUrl(r.absolute_url, boardUrl),
-          location: text(r.location?.name),
-          team: null,
-          postedAt: isoDate(r.first_published),
-        },
-      ];
-    });
-  }
-
-  if (platform === "ashby") {
-    const top = ashbyTopSchema.safeParse(parsed);
-    if (!top.success) throw new ListingError(platform, "unexpected listing shape");
-    return top.data.jobs.flatMap((row) => {
-      const rowParsed = ashbyRowSchema.safeParse(row);
-      if (!rowParsed.success) return [];
-      const r = rowParsed.data;
-      if (r.isListed === false) return [];
-      const t = title(r.title);
-      if (t === null) return [];
-      return [
-        {
-          id: r.id ?? r.jobUrl,
-          title: t,
-          url: httpsUrl(r.jobUrl, boardUrl),
-          location: text(r.location),
-          team: text(r.team) ?? text(r.department),
-          postedAt: isoDate(r.publishedAt),
-        },
-      ];
-    });
-  }
-
-  if (platform === "workable") {
-    const top = workableTopSchema.safeParse(parsed);
-    if (!top.success) throw new ListingError(platform, "unexpected listing shape");
-    return top.data.jobs.flatMap((row) => {
-      const rowParsed = workableRowSchema.safeParse(row);
-      if (!rowParsed.success) return [];
-      const r = rowParsed.data;
-      const t = title(r.title);
-      if (t === null) return [];
-      const location = [text(r.city), text(r.country)].filter((part) => part !== null);
-      return [
-        {
-          id: r.shortcode,
-          title: t,
-          url: httpsUrl(r.url ?? r.shortlink, boardUrl),
-          location: location.length === 0 ? null : location.join(", "),
-          team: text(r.department),
-          postedAt: isoDate(r.published_on),
-        },
-      ];
-    });
-  }
-
-  const top = leverTopSchema.safeParse(parsed);
-  if (!top.success) throw new ListingError(platform, "unexpected listing shape");
-  return top.data.flatMap((row) => {
-    const rowParsed = leverRowSchema.safeParse(row);
+function rolesFrom<R>(
+  rows: readonly unknown[],
+  rowSchema: z.ZodType<R>,
+  toRole: (row: R) => OpenRole | null,
+): OpenRole[] {
+  return rows.flatMap((row) => {
+    const rowParsed = rowSchema.safeParse(row);
     if (!rowParsed.success) return [];
-    const r = rowParsed.data;
-    const t = title(r.text);
-    if (t === null) return [];
-    return [
-      {
-        id: r.id,
-        title: t,
-        url: httpsUrl(r.hostedUrl, boardUrl),
-        location: text(r.categories?.location),
-        team: text(r.categories?.team),
-        postedAt: isoDate(r.createdAt),
-      },
-    ];
+    const role = toRole(rowParsed.data);
+    return role === null ? [] : [role];
   });
+}
+
+function joinedLocation(parts: readonly (string | null)[]): string | null {
+  const present = parts.filter((part) => part !== null);
+  return present.length === 0 ? null : present.join(", ");
+}
+
+const parseSmartRecruiters: RoleParser = (parsed, boardUrl) => {
+  const top = smartRecruitersTopSchema.safeParse(parsed);
+  if (!top.success) throw new ListingError("smartrecruiters", "unexpected listing shape");
+  const slug = boardSlug(boardUrl);
+  return rolesFrom(top.data.content, smartRecruitersRowSchema, (r) => {
+    const t = title(r.name) ?? title(r.title);
+    if (t === null) return null;
+    return {
+      id: r.id,
+      title: t,
+      url:
+        slug === null
+          ? boardUrl
+          : httpsUrl(`${SMARTRECRUITERS_JOBS_ORIGIN}/${slug}/${encodeURIComponent(r.id)}`, boardUrl),
+      location: joinedLocation([text(r.location?.city), text(r.location?.country)]),
+      team: text(r.department?.label),
+      postedAt: isoDate(r.releasedDate),
+    };
+  });
+};
+
+const parseGreenhouse: RoleParser = (parsed, boardUrl) => {
+  const top = greenhouseTopSchema.safeParse(parsed);
+  if (!top.success) throw new ListingError("greenhouse", "unexpected listing shape");
+  return rolesFrom(top.data.jobs, greenhouseRowSchema, (r) => {
+    const t = title(r.title);
+    if (t === null) return null;
+    return {
+      id: String(r.id),
+      title: t,
+      url: httpsUrl(r.absolute_url, boardUrl),
+      location: text(r.location?.name),
+      team: null,
+      postedAt: isoDate(r.first_published),
+    };
+  });
+};
+
+const parseAshby: RoleParser = (parsed, boardUrl) => {
+  const top = ashbyTopSchema.safeParse(parsed);
+  if (!top.success) throw new ListingError("ashby", "unexpected listing shape");
+  return rolesFrom(top.data.jobs, ashbyRowSchema, (r) => {
+    if (r.isListed === false) return null;
+    const t = title(r.title);
+    if (t === null) return null;
+    return {
+      id: r.id ?? r.jobUrl,
+      title: t,
+      url: httpsUrl(r.jobUrl, boardUrl),
+      location: text(r.location),
+      team: text(r.team) ?? text(r.department),
+      postedAt: isoDate(r.publishedAt),
+    };
+  });
+};
+
+const parseWorkable: RoleParser = (parsed, boardUrl) => {
+  const top = workableTopSchema.safeParse(parsed);
+  if (!top.success) throw new ListingError("workable", "unexpected listing shape");
+  return rolesFrom(top.data.jobs, workableRowSchema, (r) => {
+    const t = title(r.title);
+    if (t === null) return null;
+    return {
+      id: r.shortcode,
+      title: t,
+      url: httpsUrl(r.url ?? r.shortlink, boardUrl),
+      location: joinedLocation([text(r.city), text(r.country)]),
+      team: text(r.department),
+      postedAt: isoDate(r.published_on),
+    };
+  });
+};
+
+const parseLever: RoleParser = (parsed, boardUrl) => {
+  const top = leverTopSchema.safeParse(parsed);
+  if (!top.success) throw new ListingError("lever", "unexpected listing shape");
+  return rolesFrom(top.data, leverRowSchema, (r) => {
+    const t = title(r.text);
+    if (t === null) return null;
+    return {
+      id: r.id,
+      title: t,
+      url: httpsUrl(r.hostedUrl, boardUrl),
+      location: text(r.categories?.location),
+      team: text(r.categories?.team),
+      postedAt: isoDate(r.createdAt),
+    };
+  });
+};
+
+const ROLE_PARSERS: Record<BoardPlatform, RoleParser> = {
+  smartrecruiters: parseSmartRecruiters,
+  greenhouse: parseGreenhouse,
+  ashby: parseAshby,
+  workable: parseWorkable,
+  lever: parseLever,
+};
+
+export function parseListing(platform: BoardPlatform, body: string, boardUrl: string): OpenRole[] {
+  return ROLE_PARSERS[platform](parseBody(platform, body), boardUrl);
 }
 
 export function nextListingUrl(platform: BoardPlatform, listingUrl: string, body: string): string | null {
