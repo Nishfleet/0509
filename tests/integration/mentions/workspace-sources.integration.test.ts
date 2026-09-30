@@ -3,7 +3,11 @@ import { describe, expect, it } from "vitest";
 import { RouterContextProvider } from "react-router";
 
 import { loader as landingLoader } from "../../../app/routes/landing";
-import { readEntitySources, readRegistrySources, readWorkspaceMentionSources } from "../../../app/lib/data/source.server";
+import {
+  readEntitySources,
+  readRegistrySources,
+  readWorkspaceMentionSources,
+} from "../../../app/lib/data/source.server";
 import { sourcePillStatus } from "../../../app/components/source-pill";
 import { NO_CHANNEL_REASON } from "../../../app/lib/mentions/youtube-channel";
 
@@ -242,9 +246,7 @@ describe("alerts mentions source pills (#4003 4/6)", () => {
       // A malformed watch config must not shadow a recorded source-level
       // reason: sourcePillStatus reads s.degraded_reason before the watch
       // config, and the guard only changes which watch the subquery picks.
-      await env.DB.prepare("UPDATE source SET degraded_reason = 'not answering' WHERE id = ?")
-        .bind(YOUTUBE_SRC)
-        .run();
+      await env.DB.prepare("UPDATE source SET degraded_reason = 'not answering' WHERE id = ?").bind(YOUTUBE_SRC).run();
       const flagged = await readWorkspaceMentionSources(WS);
       const flaggedYoutube = flagged.find((entry) => entry.source.key === "youtube.channel_rss");
       if (!flaggedYoutube) throw new Error("the flagged mentions source must be read");
@@ -283,9 +285,7 @@ describe("alerts mentions source pills (#4003 4/6)", () => {
       1,
       JSON.stringify({ degraded: { state: "degraded", reason: NO_CHANNEL_REASON, at: NOW } }),
     );
-    await env.DB.prepare("UPDATE watch SET last_polled_at = ? WHERE id = ?")
-      .bind(NOW, `watch-${COMP}-yt-broken`)
-      .run();
+    await env.DB.prepare("UPDATE watch SET last_polled_at = ? WHERE id = ?").bind(NOW, `watch-${COMP}-yt-broken`).run();
     await env.DB.prepare("UPDATE watch SET last_polled_at = ? WHERE id = ?")
       .bind("2026-09-25T09:00:00.000Z", `watch-${COMP}-yt-flag`)
       .run();
