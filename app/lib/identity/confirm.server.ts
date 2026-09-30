@@ -72,35 +72,32 @@ export async function confirmCard(workspaceId: string, userId: string, form: For
   });
   const entityId = await readWorkspaceSelfId(workspaceId);
   if (entityId === null) return false;
-  if (inserted && cached !== null) {
-    const candidates: { edit: FieldEdit; changed: boolean }[] = [
-      {
-        edit: { field: "name", from: cached.name, to: card.name },
-        changed: card.name !== cached.name,
-      },
-      {
-        edit: {
-          field: "description",
-          from: cached.description,
-          to: card.description,
-        },
-        changed: (card.description === "" ? null : card.description) !== cached.description,
-      },
-    ];
-    await insertFieldEdits(
-      candidates
-        .filter((candidate) => candidate.changed)
-        .map((candidate) => ({
-          workspaceId,
-          userId,
-          entityId,
-          edit: candidate.edit,
-          decidedAt: now.toISOString(),
-        })),
-    );
-  }
+  const candidates: { edit: FieldEdit; changed: boolean }[] =
+    !inserted || cached === null
+      ? []
+      : [
+          {
+            edit: { field: "name", from: cached.name, to: card.name },
+            changed: card.name !== cached.name,
+          },
+          {
+            edit: { field: "description", from: cached.description, to: card.description },
+            changed: (card.description === "" ? null : card.description) !== cached.description,
+          },
+        ];
+  const edits = insertFieldEdits(
+    candidates
+      .filter((candidate) => candidate.changed)
+      .map((candidate) => ({
+        workspaceId,
+        userId,
+        entityId,
+        edit: candidate.edit,
+        decidedAt: now.toISOString(),
+      })),
+  );
   const site = subject.kind === "domain" ? null : creatorSite(card.socials);
-  await startIdentityTail({
+  const tail = startIdentityTail({
     workspaceId,
     entityId,
     name: card.name,
@@ -108,5 +105,6 @@ export async function confirmCard(workspaceId: string, userId: string, form: For
     homepageUrl: subject.kind === "domain" ? subject.url : (site?.url ?? null),
     ...(subject.kind === "domain" ? {} : { handle: subject.registrable }),
   });
+  await Promise.all([edits, tail]);
   return true;
 }

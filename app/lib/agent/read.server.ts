@@ -5,6 +5,8 @@ import { readBriefPayload } from "../brief-payload";
 import { readCompetitorPage } from "../competitor-page.server";
 import { readDeliveryFailures, readTakedownNotes } from "../data/alert.server";
 import { readOnboardingCompetitors } from "../data/entity.server";
+import { readMentionFeed } from "../data/mention.server";
+import { PENDING_LINE, POSSIBLY_LINE, showInFeed, UNREVIEWED_LINE, type MentionRowModel } from "../mention-feed";
 import type { SiteChangeView } from "../site-change";
 import { daysBefore, readSiteChangeViews } from "../site-changes.server";
 import type { AlertsResult, BriefResult, CompetitorResult, CompetitorsResult, StandingResult } from "./schemas";
@@ -133,11 +135,25 @@ export async function readAgentCompetitor(
   };
 }
 
+const MENTION_LINES: Partial<Record<MentionRowModel["treatment"], string>> = {
+  possibly: POSSIBLY_LINE,
+  unreviewed: UNREVIEWED_LINE,
+  pending: PENDING_LINE,
+};
+
+function mentionBody(mention: MentionRowModel): string {
+  return [MENTION_LINES[mention.treatment], mention.sourceName, mention.url]
+    .filter((part) => part !== undefined && part !== "")
+    .join(" ");
+}
+
 export async function readAgentAlerts(workspaceId: string): Promise<AlertsResult> {
-  const [failures, notes, changes] = await Promise.all([
+  const now = new Date();
+  const [failures, notes, changes, mentions] = await Promise.all([
     readDeliveryFailures(env.DB, workspaceId),
     readTakedownNotes(env.DB, workspaceId),
-    readSiteChangeViews({ workspaceId, entityId: null, since: daysBefore(new Date(), 30), limit: 30 }),
+    readSiteChangeViews({ workspaceId, entityId: null, since: daysBefore(now, 30), limit: 30 }),
+    readMentionFeed(workspaceId, now),
   ]);
   const alerts = [
     ...failures.map((row) => ({
@@ -161,6 +177,15 @@ export async function readAgentAlerts(workspaceId: string): Promise<AlertsResult
       body: changeBody(change),
       createdAt: change.observedAt,
     })),
+    ...mentions
+      .filter((mention) => showInFeed({ kind: "mention", mention }, false))
+      .map((mention) => ({
+        id: mention.id,
+        kind: "mention" as const,
+        title: mention.title,
+        body: mentionBody(mention),
+        createdAt: mention.publishedAt ?? mention.observedAt,
+      })),
   ];
   return { alerts: [...alerts].sort((a, b) => b.createdAt.localeCompare(a.createdAt)) };
 }

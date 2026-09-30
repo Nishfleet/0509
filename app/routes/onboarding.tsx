@@ -33,14 +33,16 @@ export async function action({ request }: Route.ActionArgs) {
   const rawSubject = typeof raw === "string" ? raw : null;
   const answer = formData.get("answer");
   const normalised = rawSubject === null ? null : normaliseSubject(rawSubject);
-  if (normalised?.ok && (await isTakenDown(normalised.subject.registrable))) {
+  const [taken, workspaceId] = normalised?.ok
+    ? await Promise.all([isTakenDown(normalised.subject.registrable), readWorkspaceIdForOwner(session.user.id)])
+    : [false, null];
+  if (taken) {
     return {
       message: "This brand asked not to be tracked, so we can't set it up. Try your own website.",
       confirm: null,
     };
   }
   if (normalised?.ok && rawSubject !== null) {
-    const workspaceId = await readWorkspaceIdForOwner(session.user.id);
     if (workspaceId === null) throw redirect("/app");
     const now = new Date().toISOString();
     const result = await screenOnboardingSubject({

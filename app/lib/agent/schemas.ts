@@ -121,7 +121,7 @@ export const competitorResultSchema = z.object({
 const alertSchema = z
   .object({
     id: z.string(),
-    kind: z.enum(["delivery_failed", "takedown", "site_change"]),
+    kind: z.enum(["delivery_failed", "takedown", "site_change", "mention"]),
     title: z.string(),
     body: z.string().nullable(),
     createdAt: isoTime,
