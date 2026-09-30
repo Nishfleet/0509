@@ -20,6 +20,7 @@
   // public internet so a client_id can never reach this zone's own origin.
   "compatibility_flags": ["global_fetch_strictly_public"],
   "main": "./workers/app.ts",
+  "placement": { "mode": "smart" },
   "observability": {
     // p95 request duration per route comes from here, which is how
     // docs/REBUILD-DONE.md's performance gate gets measured without a load
