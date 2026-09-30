@@ -69,6 +69,8 @@ function redirectTarget(location: string, base: string, schemes: readonly Outbou
 }
 
 export async function fetchOutbound(url: string, init: OutboundInit): Promise<Response> {
+  const refusal = targetRefusal(new URL(url), init.schemes);
+  if (refusal !== null) throw new BlockedRedirectError(`request refused: ${refusal}`);
   const signal = init.signal ?? AbortSignal.timeout(FETCH_TIMEOUT_MS);
   let request: OutboundRequest = { url, method: init.method ?? "GET", headers: init.headers, body: init.body };
   for (let hop = 0; hop <= MAX_REDIRECTS; hop += 1) {

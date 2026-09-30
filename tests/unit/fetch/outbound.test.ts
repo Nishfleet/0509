@@ -45,4 +45,13 @@ describe("fetchOutbound", () => {
     redirecting(302, "http://169.254.169.254/");
     await expect(fetchOutbound("https://example.com/", { headers: {} })).rejects.toBeInstanceOf(BlockedRedirectError);
   });
+
+  it("refuses a non-public first hop without calling fetch", async () => {
+    const fetchMock = redirecting(200, "");
+    await expect(fetchOutbound("http://169.254.169.254/latest", { headers: {} })).rejects.toBeInstanceOf(
+      BlockedRedirectError,
+    );
+    await expect(fetchOutbound("https://foo.localhost/", { headers: {} })).rejects.toBeInstanceOf(BlockedRedirectError);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
 });
