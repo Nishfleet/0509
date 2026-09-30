@@ -3,9 +3,19 @@
 // LITELLM_JEV_KEY that never enters the repo. Run them with `npm run eval`.
 // The eval project also re-reads cases/ on every run and its numbers are a
 // measurement, not a gate, so a failed Jev call must not turn a PR red.
+import { fileURLToPath } from "node:url";
+
 import { defineConfig } from "vitest/config";
 
+// The eval imports the real state builders out of app/, and those modules reach
+// `env` from cloudflare:workers at import time. The eval never calls a binding:
+// the live Jev call goes over HTTP from makeNoulAsk/makeChoiceAsk. An empty
+// `env` is the whole runtime those builders need.
+const WORKERS_ENV_ALIAS = "cloudflare:workers";
+const WORKERS_ENV_STUB = fileURLToPath(new URL("./tests/evals/workers-env-stub.ts", import.meta.url));
+
 export default defineConfig({
+  resolve: { alias: { [WORKERS_ENV_ALIAS]: WORKERS_ENV_STUB } },
   test: {
     name: "evals",
     environment: "node",

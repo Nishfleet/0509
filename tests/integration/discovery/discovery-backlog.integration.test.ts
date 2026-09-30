@@ -112,4 +112,21 @@ describe("discovery_backlog", () => {
       .first<{ n: number }>();
     expect(count?.n).toBe(1);
   });
+
+  it("writes nothing when the workspace was deleted mid-run instead of failing the foreign key", async () => {
+    const workspaceId = await seedWorkspace();
+    await env.DB.prepare("DELETE FROM workspace WHERE id = ?").bind(workspaceId).run();
+
+    await writeBacklog(
+      workspaceId,
+      [{ nameKey: "nike", name: "Nike", domain: "nike.com", evidence: [evidence("https://a.example", "one")] }],
+      [],
+      FIRST,
+    );
+
+    const count = await env.DB.prepare("SELECT COUNT(*) AS n FROM discovery_backlog WHERE workspace_id = ?")
+      .bind(workspaceId)
+      .first<{ n: number }>();
+    expect(count).toEqual({ n: 0 });
+  });
 });

@@ -119,3 +119,13 @@ export async function cappedBody(res: Response, capBytes: number): Promise<Uint8
   }
   return bytes;
 }
+
+export async function cappedText(res: Response, capBytes: number): Promise<string | null> {
+  const bytes = await cappedBody(res, capBytes);
+  return bytes === null ? null : new TextDecoder().decode(bytes);
+}
+
+export async function cappedJson(res: Response, capBytes: number): Promise<unknown> {
+  const text = await cappedText(res, capBytes);
+  return text === null ? null : (JSON.parse(text) as unknown);
+}

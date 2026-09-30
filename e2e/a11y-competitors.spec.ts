@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-import { sessionStatePath } from "../playwright.config";
+import { onboardedStatePath } from "../playwright.config";
 
 // The Competitors page measured once at each shape the product ships, the same
 // lane as `app-nav.spec.ts`: the preview Worker has no EMAIL binding and no
@@ -10,7 +10,15 @@ import { sessionStatePath } from "../playwright.config";
 // The spec reads. It toggles no switch and submits no form, because it runs
 // against production and a visit that wrote data would put a row in a real
 // workspace for a mailbox nobody owns.
-test.use({ storageState: process.env.PLAYWRIGHT_TEST_BASE_URL ? sessionStatePath : undefined });
+test.use({
+  storageState: async ({}, use, testInfo) => {
+    await use(
+      process.env.PLAYWRIGHT_TEST_BASE_URL
+        ? onboardedStatePath(testInfo.project.name === "phone-390" ? "phone" : "desktop")
+        : undefined,
+    );
+  },
+});
 test.skip(
   !process.env.PLAYWRIGHT_TEST_BASE_URL,
   "the Competitors page needs a real session; the local preview Worker cannot mint one",

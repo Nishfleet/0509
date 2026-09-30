@@ -78,7 +78,7 @@ async function collectWatch(message: FetchSweepMessage, tick: SweepTick): Promis
         event: "fetch-sweep.collect_failed",
         queue: FETCH_SWEEP_QUEUE,
         watchId: message.watchId,
-        url: target.url,
+        pageId: target.pageId,
         reason: result.reason,
         detail: result.detail,
       }),

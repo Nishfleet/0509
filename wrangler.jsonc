@@ -20,6 +20,7 @@
   // public internet so a client_id can never reach this zone's own origin.
   "compatibility_flags": ["global_fetch_strictly_public"],
   "main": "./workers/app.ts",
+  "placement": { "mode": "smart" },
   "observability": {
     // p95 request duration per route comes from here, which is how
     // docs/REBUILD-DONE.md's performance gate gets measured without a load
@@ -205,6 +206,8 @@
     { "name": "AGENT_REGISTER_LIMIT", "namespace_id": "5094", "simple": { "limit": 10, "period": 60 } },
     // Onboarding identity probes, per user; each probe is a site fetch and possibly a Browser Rendering session.
     { "name": "PROBE_LIMIT", "namespace_id": "5095", "simple": { "limit": 10, "period": 60 } },
+    // Sign-in email change requests, per user and per new address (hashed): each one mails two inboxes.
+    { "name": "CHANGE_EMAIL_LIMIT", "namespace_id": "5096", "simple": { "limit": 3, "period": 60 } },
   ],
 
   // Browser Rendering: brand pages bot-gate a plain workerd fetch, so every

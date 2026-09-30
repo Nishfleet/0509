@@ -131,10 +131,11 @@ jobs:
         run: tail -n +1 test-results/*/error-context.md
   j8:
     name: j8
-    # One break of j8.fixture.0509.in per dispatch, journey j8-hard or j8-soft,
+    # One break of j8-hard.fixture.0509.in or j8-soft.fixture.0509.in per dispatch, journey j8-hard or j8-soft,
     # each with its own account (0509#4124). Both modes together would run past
-    # the 6 hour cap, so they are two dispatches; the fixture is one host, so
-    # both share the j8 concurrency group and never overlap. Dispatch only: a
+    # the 6 hour cap, so they are two dispatches; each mode has its own fixture
+    # host (the incident email is once per site per day), and they still share the
+    # j8 concurrency group so the mail inbox is read by one run at a time. Dispatch only: a
     # run is hours long and sends real mail. No trace is uploaded: the repo is
     # public and a trace can hold the Access cookie (0509#5999); a failure is
     # read from the job log. 350 minutes is the most a hosted job may run under
@@ -172,7 +173,11 @@ jobs:
         # kills the runner before it can.
         if: always()
         run: |
-          curl --fail --silent --show-error --request POST --header "authorization: Bearer $FIXTURE_SITE_TOKEN" "https://j8.fixture.0509.in/__break?mode=off"
+          rc=0
+          for host in j8-hard.fixture.0509.in j8-soft.fixture.0509.in; do
+            curl --fail --silent --show-error --request POST --header "authorization: Bearer $FIXTURE_SITE_TOKEN" "https://$host/__break?mode=off" || rc=1
+          done
+          exit $rc
         env:
           FIXTURE_SITE_TOKEN: ${{ secrets.FIXTURE_SITE_TOKEN }}
       - name: Print what the page showed when it failed

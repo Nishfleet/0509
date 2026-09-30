@@ -95,6 +95,27 @@ describe("writeDiscoveryResults", () => {
     expect(on.map((row) => row.domain)).toEqual(["nike.com"]);
     expect(maybes).toEqual([]);
   });
+
+  it("writes nothing when the workspace was deleted mid-run instead of failing the foreign key", async () => {
+    const workspaceId = await seedWorkspace();
+    await env.DB.prepare("DELETE FROM workspace WHERE id = ?").bind(workspaceId).run();
+
+    await writeDiscoveryResults(
+      workspaceId,
+      [
+        { ...candidate("Alphalete", "alphaleteathletics.com"), verdict: verdict(0.93) },
+        { ...candidate("Lululemon", "lululemon.com"), verdict: verdict(0.5) },
+      ],
+      NOW,
+    );
+
+    for (const table of ["suggestion", "entity", "jev_verdict"]) {
+      const row = await env.DB.prepare(`SELECT COUNT(*) AS n FROM ${table} WHERE workspace_id = ?`)
+        .bind(workspaceId)
+        .first<{ n: number }>();
+      expect(row).toEqual({ n: 0 });
+    }
+  });
 });
 
 describe("resolveShortlist", () => {

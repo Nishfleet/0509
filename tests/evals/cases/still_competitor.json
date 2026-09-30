@@ -1,0 +1,2198 @@
+[
+  {
+    "id": "notion-clickup",
+    "split": "train",
+    "kind": "domain",
+    "self": {
+      "name": "Notion",
+      "domain": "notion.so",
+      "description": "all-in-one workspace app"
+    },
+    "competitors": [
+      {
+        "name": "Coda",
+        "domain": "coda.io"
+      },
+      {
+        "name": "Airtable",
+        "domain": "airtable.com"
+      }
+    ],
+    "subject": {
+      "name": "ClickUp",
+      "domain": "clickup.com"
+    },
+    "history": [
+      {
+        "kind": "change",
+        "title": "ClickUp ships Brain MAX update",
+        "summary": "Release notes describe new AI agents for docs and tasks.",
+        "url": "https://clickup.com/blog/brain-max-update/",
+        "aspect": null,
+        "observedAt": "2026-09-21T10:00:00.000Z"
+      },
+      {
+        "kind": "hiring",
+        "title": "ClickUp posts 30 open roles",
+        "summary": "Careers page lists sales and engineering openings.",
+        "url": "https://clickup.com/careers",
+        "aspect": null,
+        "observedAt": "2026-09-15T09:00:00.000Z"
+      }
+    ],
+    "label": true,
+    "labelChoice": "active",
+    "why": "shipping releases and hiring through September"
+  },
+  {
+    "id": "notion-airtable",
+    "split": "train",
+    "kind": "domain",
+    "self": {
+      "name": "Notion",
+      "domain": "notion.so",
+      "description": "team docs and database workspace"
+    },
+    "competitors": [
+      {
+        "name": "Coda",
+        "domain": "coda.io"
+      },
+      {
+        "name": "Smartsheet",
+        "domain": "smartsheet.com"
+      }
+    ],
+    "subject": {
+      "name": "Airtable",
+      "domain": "airtable.com"
+    },
+    "history": [
+      {
+        "kind": "change",
+        "title": "Airtable launches AI app builder",
+        "summary": "New tier turns bases into internal apps without code.",
+        "url": "https://www.airtable.com/blog/ai-app-builder",
+        "aspect": null,
+        "observedAt": "2026-09-23T11:00:00.000Z"
+      },
+      {
+        "kind": "ad",
+        "title": "Airtable runs paid search on workspace terms",
+        "summary": "Sponsored placements pushing team plans ahead of rivals.",
+        "url": "https://www.airtable.com/pricing",
+        "aspect": null,
+        "observedAt": "2026-09-08T07:30:00.000Z"
+      }
+    ],
+    "label": true,
+    "labelChoice": "active",
+    "why": "launching new tiers and buying search ads"
+  },
+  {
+    "id": "notion-miro",
+    "split": "train",
+    "kind": "domain",
+    "self": {
+      "name": "Notion",
+      "domain": "notion.so",
+      "description": "docs, wiki and project workspace"
+    },
+    "competitors": [
+      {
+        "name": "Mural",
+        "domain": "mural.co"
+      },
+      {
+        "name": "Asana",
+        "domain": "asana.com"
+      }
+    ],
+    "subject": {
+      "name": "Miro",
+      "domain": "miro.com"
+    },
+    "history": [
+      {
+        "kind": "change",
+        "title": "Miro ships AI canvas summaries",
+        "summary": "Canvas recaps and task extraction arrive for all paid plans.",
+        "url": "https://miro.com/blog/ai-canvas-summaries/",
+        "aspect": null,
+        "observedAt": "2026-09-19T12:00:00.000Z"
+      },
+      {
+        "kind": "hiring",
+        "title": "Miro opens 40 roles",
+        "summary": "Careers page shows openings across product and sales.",
+        "url": "https://miro.com/careers/",
+        "aspect": null,
+        "observedAt": "2026-09-11T09:00:00.000Z"
+      }
+    ],
+    "label": true,
+    "labelChoice": "active",
+    "why": "still shipping features and expanding headcount"
+  },
+  {
+    "id": "notion-monday",
+    "split": "train",
+    "kind": "domain",
+    "self": {
+      "name": "Notion",
+      "domain": "notion.so",
+      "description": "connected workspace for teams"
+    },
+    "competitors": [
+      {
+        "name": "ClickUp",
+        "domain": "clickup.com"
+      },
+      {
+        "name": "Smartsheet",
+        "domain": "smartsheet.com"
+      }
+    ],
+    "subject": {
+      "name": "Monday.com",
+      "domain": "monday.com"
+    },
+    "history": [
+      {
+        "kind": "change",
+        "title": "monday.com launches AI blocks",
+        "summary": "Building blocks add agents to boards and docs.",
+        "url": "https://monday.com/blog/product/ai-blocks/",
+        "aspect": null,
+        "observedAt": "2026-09-24T13:00:00.000Z"
+      },
+      {
+        "kind": "ad",
+        "title": "monday.com buys running-season ad slots",
+        "summary": "New brand campaign across streaming and podcasts.",
+        "url": "https://www.adweek.com/brand-marketing/monday-com-campaign/",
+        "aspect": null,
+        "observedAt": "2026-09-09T08:00:00.000Z"
+      }
+    ],
+    "label": true,
+    "labelChoice": "active",
+    "why": "new product blocks and an active ad push"
+  },
+  {
+    "id": "notion-bear",
+    "split": "train",
+    "kind": "domain",
+    "self": {
+      "name": "Notion",
+      "domain": "notion.so",
+      "description": "notes and writing workspace"
+    },
+    "competitors": [
+      {
+        "name": "Obsidian",
+        "domain": "obsidian.md"
+      },
+      {
+        "name": "Craft",
+        "domain": "craft.do"
+      }
+    ],
+    "subject": {
+      "name": "Bear",
+      "domain": "bear.app"
+    },
+    "history": [
+      {
+        "kind": "mention",
+        "title": "Bear release notes unchanged since spring",
+        "summary": "The blog's latest entry is a spring maintenance build.",
+        "url": "https://bear.app/blog/bear-2-3/",
+        "aspect": null,
+        "observedAt": "2026-09-02T08:00:00.000Z"
+      }
+    ],
+    "label": true,
+    "labelChoice": "dormant",
+    "why": "app still supported but nothing new for months"
+  },
+  {
+    "id": "notion-craft",
+    "split": "train",
+    "kind": "domain",
+    "self": {
+      "name": "Notion",
+      "domain": "notion.so",
+      "description": "documents and team wiki app"
+    },
+    "competitors": [
+      {
+        "name": "Bear",
+        "domain": "bear.app"
+      },
+      {
+        "name": "Slite",
+        "domain": "slite.com"
+      }
+    ],
+    "subject": {
+      "name": "Craft",
+      "domain": "craft.do"
+    },
+    "history": [
+      {
+        "kind": "site",
+        "title": "Craft changelog stops at June",
+        "summary": "Latest changelog entry is dated June and nothing newer is listed.",
+        "url": "https://www.craft.do/changelog",
+        "aspect": null,
+        "observedAt": "2026-09-04T10:00:00.000Z"
+      },
+      {
+        "kind": "mention",
+        "title": "Only recent coverage is a spring review",
+        "summary": "No launch coverage since a spring product review.",
+        "url": "https://www.macstories.net/reviews/craft-3-1/",
+        "aspect": null,
+        "observedAt": "2026-09-06T10:00:00.000Z"
+      }
+    ],
+    "label": true,
+    "labelChoice": "dormant",
+    "why": "still selling but the changelog has gone quiet"
+  },
+  {
+    "id": "notion-nuclino",
+    "split": "train",
+    "kind": "domain",
+    "self": {
+      "name": "Notion",
+      "domain": "notion.so",
+      "description": "team knowledge base"
+    },
+    "competitors": [
+      {
+        "name": "Slite",
+        "domain": "slite.com"
+      },
+      {
+        "name": "Fibery",
+        "domain": "fibery.io"
+      }
+    ],
+    "subject": {
+      "name": "Nuclino",
+      "domain": "nuclino.com"
+    },
+    "history": [
+      {
+        "kind": "site",
+        "title": "Nuclino pricing page unchanged",
+        "summary": "No new plans or features listed on the pricing page this year.",
+        "url": "https://www.nuclino.com/pricing",
+        "aspect": null,
+        "observedAt": "2026-09-03T09:30:00.000Z"
+      }
+    ],
+    "label": true,
+    "labelChoice": "dormant",
+    "why": "pages and plans untouched, no recent releases"
+  },
+  {
+    "id": "notion-trello",
+    "split": "train",
+    "kind": "domain",
+    "self": {
+      "name": "Notion",
+      "domain": "notion.so",
+      "description": "workspace for docs and tasks"
+    },
+    "competitors": [
+      {
+        "name": "Asana",
+        "domain": "asana.com"
+      },
+      {
+        "name": "ClickUp",
+        "domain": "clickup.com"
+      }
+    ],
+    "subject": {
+      "name": "Trello",
+      "domain": "trello.com"
+    },
+    "history": [
+      {
+        "kind": "change",
+        "title": "Atlassian completes Trello suite integration",
+        "summary": "Trello is now sold and supported as part of Atlassian's stack.",
+        "url": "https://www.atlassian.com/blog/trello-suite-integration",
+        "aspect": null,
+        "observedAt": "2026-09-12T14:00:00.000Z"
+      }
+    ],
+    "label": false,
+    "labelChoice": "acquired",
+    "why": "absorbed into Atlassian's suite"
+  },
+  {
+    "id": "notion-mural",
+    "split": "train",
+    "kind": "domain",
+    "self": {
+      "name": "Notion",
+      "domain": "notion.so",
+      "description": "collaborative workspace app"
+    },
+    "competitors": [
+      {
+        "name": "Miro",
+        "domain": "miro.com"
+      },
+      {
+        "name": "Airtable",
+        "domain": "airtable.com"
+      }
+    ],
+    "subject": {
+      "name": "Mural",
+      "domain": "mural.co"
+    },
+    "history": [
+      {
+        "kind": "change",
+        "title": "Canva closes Mural acquisition",
+        "summary": "Mural becomes part of Canva's visual work suite.",
+        "url": "https://www.canva.com/newsroom/news/mural-acquisition/",
+        "aspect": null,
+        "observedAt": "2026-09-16T12:00:00.000Z"
+      }
+    ],
+    "label": false,
+    "labelChoice": "acquired",
+    "why": "bought by Canva and rolled into its suite"
+  },
+  {
+    "id": "notion-quip",
+    "split": "train",
+    "kind": "domain",
+    "self": {
+      "name": "Notion",
+      "domain": "notion.so",
+      "description": "team collaboration workspace"
+    },
+    "competitors": [
+      {
+        "name": "Confluence",
+        "domain": "atlassian.com"
+      },
+      {
+        "name": "Coda",
+        "domain": "coda.io"
+      }
+    ],
+    "subject": {
+      "name": "Quip",
+      "domain": "quip.com"
+    },
+    "history": [
+      {
+        "kind": "site",
+        "title": "Quip sign-up page shows maintenance notice",
+        "summary": "New signups are closed and existing workspaces are read-only.",
+        "url": "https://quip.com/",
+        "aspect": null,
+        "observedAt": "2026-09-05T09:00:00.000Z"
+      }
+    ],
+    "label": false,
+    "labelChoice": "shut_down",
+    "why": "Salesforce wound the product down"
+  },
+  {
+    "id": "notion-height",
+    "split": "train",
+    "kind": "domain",
+    "self": {
+      "name": "Notion",
+      "domain": "notion.so",
+      "description": "project and docs workspace"
+    },
+    "competitors": [
+      {
+        "name": "Linear",
+        "domain": "linear.app"
+      },
+      {
+        "name": "Asana",
+        "domain": "asana.com"
+      }
+    ],
+    "subject": {
+      "name": "Height",
+      "domain": "height.app"
+    },
+    "history": [
+      {
+        "kind": "change",
+        "title": "Height announces end of service",
+        "summary": "Team says the service closes at the end of the year.",
+        "url": "https://height.app/blog/winding-down",
+        "aspect": null,
+        "observedAt": "2026-09-10T15:00:00.000Z"
+      }
+    ],
+    "label": false,
+    "labelChoice": "shut_down",
+    "why": "product is winding down and closed to new teams"
+  },
+  {
+    "id": "notion-evernote",
+    "split": "train",
+    "kind": "domain",
+    "self": {
+      "name": "Notion",
+      "domain": "notion.so",
+      "description": "team docs and workspace app"
+    },
+    "competitors": [
+      {
+        "name": "Obsidian",
+        "domain": "obsidian.md"
+      },
+      {
+        "name": "Bear",
+        "domain": "bear.app"
+      }
+    ],
+    "subject": {
+      "name": "Evernote",
+      "domain": "evernote.com"
+    },
+    "history": [
+      {
+        "kind": "change",
+        "title": "Evernote relaunches as AI personal app",
+        "summary": "Positioning moved from team notes to a personal AI assistant.",
+        "url": "https://evernote.com/blog/ai-personal-app",
+        "aspect": null,
+        "observedAt": "2026-09-14T11:00:00.000Z"
+      }
+    ],
+    "label": false,
+    "labelChoice": "pivoted",
+    "why": "repositioned as a personal AI app"
+  },
+  {
+    "id": "notion-slite",
+    "split": "train",
+    "kind": "domain",
+    "self": {
+      "name": "Notion",
+      "domain": "notion.so",
+      "description": "knowledge and docs workspace"
+    },
+    "competitors": [
+      {
+        "name": "Nuclino",
+        "domain": "nuclino.com"
+      },
+      {
+        "name": "Confluence",
+        "domain": "atlassian.com"
+      }
+    ],
+    "subject": {
+      "name": "Slite",
+      "domain": "slite.com"
+    },
+    "history": [
+      {
+        "kind": "change",
+        "title": "Slite rebrands as enterprise knowledge agent",
+        "summary": "Marketing and pricing now target enterprise knowledge search.",
+        "url": "https://slite.com/blog/knowledge-agent",
+        "aspect": null,
+        "observedAt": "2026-09-17T10:30:00.000Z"
+      }
+    ],
+    "label": false,
+    "labelChoice": "pivoted",
+    "why": "now sells an enterprise knowledge agent instead"
+  },
+  {
+    "id": "allbirds-on",
+    "split": "train",
+    "kind": "domain",
+    "self": {
+      "name": "Allbirds",
+      "domain": "allbirds.com",
+      "description": "sustainable footwear brand"
+    },
+    "competitors": [
+      {
+        "name": "Hoka",
+        "domain": "hoka.com"
+      },
+      {
+        "name": "Veja",
+        "domain": "veja-store.com"
+      }
+    ],
+    "subject": {
+      "name": "On",
+      "domain": "on-running.com"
+    },
+    "history": [
+      {
+        "kind": "change",
+        "title": "On launches Cloudsurfer 3",
+        "summary": "New daily trainer lands in stores and online.",
+        "url": "https://www.on-running.com/en-us/blog/cloudsurfer-3",
+        "aspect": null,
+        "observedAt": "2026-09-22T08:00:00.000Z"
+      },
+      {
+        "kind": "hiring",
+        "title": "On posts 50 open roles",
+        "summary": "Careers page lists openings in retail, design and supply chain.",
+        "url": "https://www.on-running.com/en-us/careers",
+        "aspect": null,
+        "observedAt": "2026-09-13T09:00:00.000Z"
+      }
+    ],
+    "label": true,
+    "labelChoice": "active",
+    "why": "launching new shoes and hiring at pace"
+  },
+  {
+    "id": "allbirds-hoka",
+    "split": "train",
+    "kind": "domain",
+    "self": {
+      "name": "Allbirds",
+      "domain": "allbirds.com",
+      "description": "eco-focused sneaker brand"
+    },
+    "competitors": [
+      {
+        "name": "Brooks",
+        "domain": "brooksrunning.com"
+      },
+      {
+        "name": "Saucony",
+        "domain": "saucony.com"
+      }
+    ],
+    "subject": {
+      "name": "Hoka",
+      "domain": "hoka.com"
+    },
+    "history": [
+      {
+        "kind": "ad",
+        "title": "Hoka buys prime running-season ad slots",
+        "summary": "New campaign across streaming and race events.",
+        "url": "https://www.adweek.com/brand-marketing/hoka-run-further-campaign/",
+        "aspect": null,
+        "observedAt": "2026-09-18T07:00:00.000Z"
+      },
+      {
+        "kind": "mention",
+        "title": "Hoka parent lifts full-year outlook",
+        "summary": "Executives point to strong sell-through in specialty running.",
+        "url": "https://www.reuters.com/business/retail-consumer/hoka-outlook/",
+        "aspect": null,
+        "observedAt": "2026-09-26T12:00:00.000Z"
+      }
+    ],
+    "label": true,
+    "labelChoice": "active",
+    "why": "advertising hard with rising sell-through"
+  },
+  {
+    "id": "allbirds-rothys",
+    "split": "train",
+    "kind": "domain",
+    "self": {
+      "name": "Allbirds",
+      "domain": "allbirds.com",
+      "description": "wool and plant-based shoe brand"
+    },
+    "competitors": [
+      {
+        "name": "Veja",
+        "domain": "veja-store.com"
+      },
+      {
+        "name": "Cariuma",
+        "domain": "cariuma.com"
+      }
+    ],
+    "subject": {
+      "name": "Rothy's",
+      "domain": "rothys.com"
+    },
+    "history": [
+      {
+        "kind": "change",
+        "title": "Rothy's launches recycled-knit collection",
+        "summary": "New flats and sneakers use a higher share of recycled yarn.",
+        "url": "https://rothys.com/blog/recycled-knit",
+        "aspect": null,
+        "observedAt": "2026-09-20T09:00:00.000Z"
+      },
+      {
+        "kind": "hiring",
+        "title": "Rothy's hiring retail staff",
+        "summary": "Careers page lists store and e-commerce roles.",
+        "url": "https://rothys.com/careers",
+        "aspect": null,
+        "observedAt": "2026-09-08T09:30:00.000Z"
+      }
+    ],
+    "label": true,
+    "labelChoice": "active",
+    "why": "new collection plus active store hiring"
+  },
+  {
+    "id": "allbirds-veja",
+    "split": "train",
+    "kind": "domain",
+    "self": {
+      "name": "Allbirds",
+      "domain": "allbirds.com",
+      "description": "natural-material footwear brand"
+    },
+    "competitors": [
+      {
+        "name": "Cariuma",
+        "domain": "cariuma.com"
+      },
+      {
+        "name": "Superga",
+        "domain": "superga.co.uk"
+      }
+    ],
+    "subject": {
+      "name": "Veja",
+      "domain": "veja-store.com"
+    },
+    "history": [
+      {
+        "kind": "site",
+        "title": "Veja drops page unchanged since spring",
+        "summary": "No new colourways or models listed since the spring drop.",
+        "url": "https://www.veja-store.com/en/",
+        "aspect": null,
+        "observedAt": "2026-09-04T10:00:00.000Z"
+      }
+    ],
+    "label": true,
+    "labelChoice": "dormant",
+    "why": "still selling but no new drop for months"
+  },
+  {
+    "id": "allbirds-cariuma",
+    "split": "train",
+    "kind": "domain",
+    "self": {
+      "name": "Allbirds",
+      "domain": "allbirds.com",
+      "description": "sustainable sneaker company"
+    },
+    "competitors": [
+      {
+        "name": "Rothy's",
+        "domain": "rothys.com"
+      },
+      {
+        "name": "Vessi",
+        "domain": "vessi.com"
+      }
+    ],
+    "subject": {
+      "name": "Cariuma",
+      "domain": "cariuma.com"
+    },
+    "history": [
+      {
+        "kind": "mention",
+        "title": "Cariuma restock post repeats spring styles",
+        "summary": "Latest journal entry is a restock note for a spring colourway.",
+        "url": "https://cariuma.com/blogs/news",
+        "aspect": null,
+        "observedAt": "2026-09-02T09:00:00.000Z"
+      }
+    ],
+    "label": true,
+    "labelChoice": "dormant",
+    "why": "shop open but only old styles being restocked"
+  },
+  {
+    "id": "allbirds-vessi",
+    "split": "train",
+    "kind": "domain",
+    "self": {
+      "name": "Allbirds",
+      "domain": "allbirds.com",
+      "description": "everyday sustainable shoes"
+    },
+    "competitors": [
+      {
+        "name": "Cariuma",
+        "domain": "cariuma.com"
+      },
+      {
+        "name": "Gola",
+        "domain": "gola.co.uk"
+      }
+    ],
+    "subject": {
+      "name": "Vessi",
+      "domain": "vessi.com"
+    },
+    "history": [
+      {
+        "kind": "site",
+        "title": "Vessi new arrivals page static",
+        "summary": "The same handful of styles has been listed since May.",
+        "url": "https://vessi.com/collections/new-arrivals",
+        "aspect": null,
+        "observedAt": "2026-09-06T11:00:00.000Z"
+      }
+    ],
+    "label": true,
+    "labelChoice": "dormant",
+    "why": "still trading with no new styles since spring"
+  },
+  {
+    "id": "allbirds-skechers",
+    "split": "train",
+    "kind": "domain",
+    "self": {
+      "name": "Allbirds",
+      "domain": "allbirds.com",
+      "description": "casual footwear brand"
+    },
+    "competitors": [
+      {
+        "name": "New Balance",
+        "domain": "newbalance.com"
+      },
+      {
+        "name": "Fila",
+        "domain": "fila.com"
+      }
+    ],
+    "subject": {
+      "name": "Skechers",
+      "domain": "skechers.com"
+    },
+    "history": [
+      {
+        "kind": "change",
+        "title": "3G Capital completes Skechers take-private",
+        "summary": "Skechers now sits inside 3G Capital's portfolio.",
+        "url": "https://www.reuters.com/markets/deals/skechers-3g-capital/",
+        "aspect": null,
+        "observedAt": "2026-09-09T13:00:00.000Z"
+      }
+    ],
+    "label": false,
+    "labelChoice": "acquired",
+    "why": "taken private by 3G Capital"
+  },
+  {
+    "id": "allbirds-timberland",
+    "split": "train",
+    "kind": "domain",
+    "self": {
+      "name": "Allbirds",
+      "domain": "allbirds.com",
+      "description": "sustainable everyday footwear"
+    },
+    "competitors": [
+      {
+        "name": "Wolverine",
+        "domain": "wolverine.com"
+      },
+      {
+        "name": "Keen",
+        "domain": "keenfootwear.com"
+      }
+    ],
+    "subject": {
+      "name": "Timberland",
+      "domain": "timberland.com"
+    },
+    "history": [
+      {
+        "kind": "change",
+        "title": "VF folds Timberland into outdoor platform",
+        "summary": "Brand now reports inside VF's outdoor segment.",
+        "url": "https://www.vfc.com/news/timberland-outdoor-platform",
+        "aspect": null,
+        "observedAt": "2026-09-15T12:30:00.000Z"
+      }
+    ],
+    "label": false,
+    "labelChoice": "acquired",
+    "why": "owned and managed inside VF Corporation"
+  },
+  {
+    "id": "allbirds-gola",
+    "split": "train",
+    "kind": "domain",
+    "self": {
+      "name": "Allbirds",
+      "domain": "allbirds.com",
+      "description": "wool sneaker brand"
+    },
+    "competitors": [
+      {
+        "name": "Superga",
+        "domain": "superga.co.uk"
+      },
+      {
+        "name": "Diadora",
+        "domain": "diadora.com"
+      }
+    ],
+    "subject": {
+      "name": "Gola",
+      "domain": "gola.co.uk"
+    },
+    "history": [
+      {
+        "kind": "site",
+        "title": "Gola site returns a closed notice",
+        "summary": "Storefront closed; orders are no longer accepted.",
+        "url": "https://www.gola.co.uk/",
+        "aspect": null,
+        "observedAt": "2026-09-07T10:00:00.000Z"
+      }
+    ],
+    "label": false,
+    "labelChoice": "shut_down",
+    "why": "storefront dark and no orders being taken"
+  },
+  {
+    "id": "allbirds-superga",
+    "split": "train",
+    "kind": "domain",
+    "self": {
+      "name": "Allbirds",
+      "domain": "allbirds.com",
+      "description": "minimalist shoe brand"
+    },
+    "competitors": [
+      {
+        "name": "Gola",
+        "domain": "gola.co.uk"
+      },
+      {
+        "name": "Teva",
+        "domain": "teva.com"
+      }
+    ],
+    "subject": {
+      "name": "Superga",
+      "domain": "superga.co.uk"
+    },
+    "history": [
+      {
+        "kind": "mention",
+        "title": "Superga confirms US shutdown",
+        "summary": "Retail and wholesale in the US wound down during September.",
+        "url": "https://footwearnews.com/business/superga-closes-us/",
+        "aspect": null,
+        "observedAt": "2026-09-12T09:00:00.000Z"
+      }
+    ],
+    "label": false,
+    "labelChoice": "shut_down",
+    "why": "US business closed and stock liquidated"
+  },
+  {
+    "id": "allbirds-fila",
+    "split": "train",
+    "kind": "domain",
+    "self": {
+      "name": "Allbirds",
+      "domain": "allbirds.com",
+      "description": "everyday sneaker company"
+    },
+    "competitors": [
+      {
+        "name": "Diadora",
+        "domain": "diadora.com"
+      },
+      {
+        "name": "K-Swiss",
+        "domain": "kswiss.com"
+      }
+    ],
+    "subject": {
+      "name": "Fila",
+      "domain": "fila.com"
+    },
+    "history": [
+      {
+        "kind": "change",
+        "title": "Fila drops performance running line",
+        "summary": "Product mix shifts to fashion collaborations and court styles.",
+        "url": "https://www.fila.com/blog/brand-refresh",
+        "aspect": null,
+        "observedAt": "2026-09-19T10:00:00.000Z"
+      }
+    ],
+    "label": false,
+    "labelChoice": "pivoted",
+    "why": "now sells fashion lifestyle ranges instead"
+  },
+  {
+    "id": "allbirds-diadora",
+    "split": "train",
+    "kind": "domain",
+    "self": {
+      "name": "Allbirds",
+      "domain": "allbirds.com",
+      "description": "comfort-focused sneaker maker"
+    },
+    "competitors": [
+      {
+        "name": "K-Swiss",
+        "domain": "kswiss.com"
+      },
+      {
+        "name": "Fila",
+        "domain": "fila.com"
+      }
+    ],
+    "subject": {
+      "name": "Diadora",
+      "domain": "diadora.com"
+    },
+    "history": [
+      {
+        "kind": "change",
+        "title": "Diadora ends performance running range",
+        "summary": "Catalogue now leads with lifestyle and football product.",
+        "url": "https://www.diadora.com/en/blog/heritage-focus",
+        "aspect": null,
+        "observedAt": "2026-09-21T09:30:00.000Z"
+      }
+    ],
+    "label": false,
+    "labelChoice": "pivoted",
+    "why": "repositioned to heritage lifestyle and football"
+  },
+  {
+    "id": "allbirds-kswiss",
+    "split": "train",
+    "kind": "domain",
+    "self": {
+      "name": "Allbirds",
+      "domain": "allbirds.com",
+      "description": "direct-to-consumer shoe brand"
+    },
+    "competitors": [
+      {
+        "name": "Diadora",
+        "domain": "diadora.com"
+      },
+      {
+        "name": "Fila",
+        "domain": "fila.com"
+      }
+    ],
+    "subject": {
+      "name": "K-Swiss",
+      "domain": "kswiss.com"
+    },
+    "history": [
+      {
+        "kind": "change",
+        "title": "K-Swiss shifts marketing to pickleball",
+        "summary": "New campaign targets court sports rather than runners.",
+        "url": "https://www.kswiss.com/blogs/news/pickleball",
+        "aspect": null,
+        "observedAt": "2026-09-23T10:00:00.000Z"
+      }
+    ],
+    "label": false,
+    "labelChoice": "pivoted",
+    "why": "now sells court and pickleball gear instead"
+  },
+  {
+    "id": "headspace-calm",
+    "split": "test",
+    "kind": "domain",
+    "self": {
+      "name": "Headspace",
+      "domain": "headspace.com",
+      "description": "meditation app"
+    },
+    "competitors": [
+      {
+        "name": "Insight Timer",
+        "domain": "insighttimer.com"
+      },
+      {
+        "name": "BetterSleep",
+        "domain": "bettersleep.com"
+      }
+    ],
+    "subject": {
+      "name": "Calm",
+      "domain": "calm.com"
+    },
+    "history": [
+      {
+        "kind": "mention",
+        "title": "Calm ships AI sleep coaching",
+        "summary": "Coverage of the new AI wind-down feature.",
+        "url": "https://techcrunch.com/2026/09/09/calm-ai-sleep-coaching/",
+        "aspect": null,
+        "observedAt": "2026-09-09T14:00:00.000Z"
+      },
+      {
+        "kind": "ad",
+        "title": "Calm runs a fall campaign on streaming",
+        "summary": "New spot tied to the sleep-content push.",
+        "url": "https://adage.com/2026/09/15/calm-fall-campaign/",
+        "aspect": null,
+        "observedAt": "2026-09-15T10:00:00.000Z"
+      }
+    ],
+    "label": true,
+    "labelChoice": "active",
+    "why": "shipping product and buying ads this month"
+  },
+  {
+    "id": "headspace-insight-timer",
+    "split": "test",
+    "kind": "domain",
+    "self": {
+      "name": "Headspace",
+      "domain": "headspace.com",
+      "description": "meditation app"
+    },
+    "competitors": [
+      {
+        "name": "Calm",
+        "domain": "calm.com"
+      },
+      {
+        "name": "Muse",
+        "domain": "choosemuse.com"
+      }
+    ],
+    "subject": {
+      "name": "Insight Timer",
+      "domain": "insighttimer.com"
+    },
+    "history": [
+      {
+        "kind": "hiring",
+        "title": "Insight Timer opens a London office",
+        "summary": "Careers page lists 14 roles across product and engineering.",
+        "url": "https://insighttimer.com/jobs",
+        "aspect": null,
+        "observedAt": "2026-09-04T09:00:00.000Z"
+      },
+      {
+        "kind": "mention",
+        "title": "Insight Timer expands live teacher events",
+        "summary": "New scheduling tools for paid live sessions.",
+        "url": "https://meditationdaily.co/2026/09/12/insight-timer-live-events/",
+        "aspect": null,
+        "observedAt": "2026-09-12T11:00:00.000Z"
+      }
+    ],
+    "label": true,
+    "labelChoice": "active",
+    "why": "headcount and a live-events roadmap keep moving"
+  },
+  {
+    "id": "headspace-oura",
+    "split": "test",
+    "kind": "domain",
+    "self": {
+      "name": "Headspace",
+      "domain": "headspace.com",
+      "description": "meditation app"
+    },
+    "competitors": [
+      {
+        "name": "Whoop",
+        "domain": "whoop.com"
+      },
+      {
+        "name": "Garmin",
+        "domain": "garmin.com"
+      }
+    ],
+    "subject": {
+      "name": "Oura",
+      "domain": "ouraring.com"
+    },
+    "history": [
+      {
+        "kind": "mention",
+        "title": "Oura announces the Ring 5",
+        "summary": "Hardware refresh with pre-orders opening this month.",
+        "url": "https://www.theverge.com/2026/09/04/oura-ring-5/",
+        "aspect": null,
+        "observedAt": "2026-09-04T13:00:00.000Z"
+      },
+      {
+        "kind": "hiring",
+        "title": "Oura hires for 15 hardware roles",
+        "summary": "Careers page adds sensor and firmware positions.",
+        "url": "https://ouraring.com/careers",
+        "aspect": null,
+        "observedAt": "2026-09-20T08:00:00.000Z"
+      }
+    ],
+    "label": true,
+    "labelChoice": "active",
+    "why": "a hardware launch plus open hardware roles"
+  },
+  {
+    "id": "headspace-whoop",
+    "split": "test",
+    "kind": "domain",
+    "self": {
+      "name": "Headspace",
+      "domain": "headspace.com",
+      "description": "meditation app"
+    },
+    "competitors": [
+      {
+        "name": "Oura",
+        "domain": "ouraring.com"
+      },
+      {
+        "name": "Peloton",
+        "domain": "peloton.com"
+      }
+    ],
+    "subject": {
+      "name": "Whoop",
+      "domain": "whoop.com"
+    },
+    "history": [
+      {
+        "kind": "mention",
+        "title": "Whoop closes a new funding round",
+        "summary": "Round earmarked for the screenless band line.",
+        "url": "https://www.bloomberg.com/2026/09/11/whoop-funding/",
+        "aspect": null,
+        "observedAt": "2026-09-11T12:00:00.000Z"
+      },
+      {
+        "kind": "ad",
+        "title": "Whoop airs a recovery-focused campaign",
+        "summary": "Broadcast spots during sports programming.",
+        "url": "https://adage.com/2026/09/19/whoop-recovery-campaign/",
+        "aspect": null,
+        "observedAt": "2026-09-19T09:00:00.000Z"
+      }
+    ],
+    "label": true,
+    "labelChoice": "active",
+    "why": "fresh capital and a live ad campaign"
+  },
+  {
+    "id": "headspace-aura",
+    "split": "test",
+    "kind": "domain",
+    "self": {
+      "name": "Headspace",
+      "domain": "headspace.com",
+      "description": "meditation app"
+    },
+    "competitors": [
+      {
+        "name": "Calm",
+        "domain": "calm.com"
+      },
+      {
+        "name": "Insight Timer",
+        "domain": "insighttimer.com"
+      }
+    ],
+    "subject": {
+      "name": "Aura",
+      "domain": "aurahealth.io"
+    },
+    "history": [
+      {
+        "kind": "change",
+        "title": "Store notes show only minor bug fixes",
+        "summary": "Last three releases are patch-level with no feature lines.",
+        "url": "https://apps.apple.com/us/app/aura/id1117771976",
+        "aspect": null,
+        "observedAt": "2026-09-06T10:00:00.000Z"
+      },
+      {
+        "kind": "site",
+        "title": "Careers page unchanged since June",
+        "summary": "Same two listings have been posted all summer.",
+        "url": "https://www.aurahealth.io/careers",
+        "aspect": null,
+        "observedAt": "2026-09-12T09:00:00.000Z"
+      }
+    ],
+    "label": true,
+    "labelChoice": "dormant",
+    "why": "still in the stores but quiet since spring"
+  },
+  {
+    "id": "headspace-muse",
+    "split": "test",
+    "kind": "domain",
+    "self": {
+      "name": "Headspace",
+      "domain": "headspace.com",
+      "description": "meditation app"
+    },
+    "competitors": [
+      {
+        "name": "Insight Timer",
+        "domain": "insighttimer.com"
+      },
+      {
+        "name": "BetterSleep",
+        "domain": "bettersleep.com"
+      }
+    ],
+    "subject": {
+      "name": "Muse",
+      "domain": "choosemuse.com"
+    },
+    "history": [
+      {
+        "kind": "change",
+        "title": "Firmware release notes unchanged since July",
+        "summary": "No new build or changelog entry this quarter.",
+        "url": "https://choosemuse.com/release-notes/",
+        "aspect": null,
+        "observedAt": "2026-09-08T09:00:00.000Z"
+      },
+      {
+        "kind": "site",
+        "title": "Support forum shows sparse activity",
+        "summary": "Most recent threads are unanswered for weeks.",
+        "url": "https://choosemuse.com/support/",
+        "aspect": null,
+        "observedAt": "2026-09-14T10:00:00.000Z"
+      }
+    ],
+    "label": true,
+    "labelChoice": "dormant",
+    "why": "still selling but no signs of life since summer"
+  },
+  {
+    "id": "headspace-bettersleep",
+    "split": "test",
+    "kind": "domain",
+    "self": {
+      "name": "Headspace",
+      "domain": "headspace.com",
+      "description": "meditation app"
+    },
+    "competitors": [
+      {
+        "name": "Aura",
+        "domain": "aurahealth.io"
+      },
+      {
+        "name": "Muse",
+        "domain": "choosemuse.com"
+      }
+    ],
+    "subject": {
+      "name": "BetterSleep",
+      "domain": "bettersleep.com"
+    },
+    "history": [
+      {
+        "kind": "mention",
+        "title": "BetterSleep appears only in evergreen roundups",
+        "summary": "Listicles carry no fresh product news for the quarter.",
+        "url": "https://lifehacker.com/best-sleep-apps/",
+        "aspect": null,
+        "observedAt": "2026-09-10T08:00:00.000Z"
+      },
+      {
+        "kind": "site",
+        "title": "Careers page lists a single legacy role",
+        "summary": "One stale requisition has been open since June.",
+        "url": "https://bettersleep.com/careers/",
+        "aspect": null,
+        "observedAt": "2026-09-16T09:00:00.000Z"
+      }
+    ],
+    "label": true,
+    "labelChoice": "dormant",
+    "why": "app still sold, but nothing new all quarter"
+  },
+  {
+    "id": "headspace-fabulous",
+    "split": "test",
+    "kind": "domain",
+    "self": {
+      "name": "Headspace",
+      "domain": "headspace.com",
+      "description": "meditation app"
+    },
+    "competitors": [
+      {
+        "name": "Calm",
+        "domain": "calm.com"
+      },
+      {
+        "name": "Aura",
+        "domain": "aurahealth.io"
+      }
+    ],
+    "subject": {
+      "name": "Fabulous",
+      "domain": "fabulous.to"
+    },
+    "history": [
+      {
+        "kind": "mention",
+        "title": "Fabulous acquired by European wellness platform",
+        "summary": "Deal folds the habit app into a larger subscription bundle.",
+        "url": "https://techcrunch.com/2026/09/03/fabulous-acquired/",
+        "aspect": null,
+        "observedAt": "2026-09-03T14:00:00.000Z"
+      },
+      {
+        "kind": "mention",
+        "title": "Founder exits as app joins parent bundle",
+        "summary": "Standalone roadmap handed to the acquirer.",
+        "url": "https://www.businessinsider.com/2026/09/17/fabulous-founder-exit/",
+        "aspect": null,
+        "observedAt": "2026-09-17T10:00:00.000Z"
+      }
+    ],
+    "label": false,
+    "labelChoice": "acquired",
+    "why": "absorbed into a larger wellness bundle"
+  },
+  {
+    "id": "headspace-meditopia",
+    "split": "test",
+    "kind": "domain",
+    "self": {
+      "name": "Headspace",
+      "domain": "headspace.com",
+      "description": "meditation app"
+    },
+    "competitors": [
+      {
+        "name": "Insight Timer",
+        "domain": "insighttimer.com"
+      },
+      {
+        "name": "Aura",
+        "domain": "aurahealth.io"
+      }
+    ],
+    "subject": {
+      "name": "Meditopia",
+      "domain": "meditopia.com"
+    },
+    "history": [
+      {
+        "kind": "mention",
+        "title": "Meditopia acquired by mobile-gaming publisher",
+        "summary": "Buyer says the app will anchor its new wellness unit.",
+        "url": "https://tech.eu/2026/09/05/meditopia-acquisition/",
+        "aspect": null,
+        "observedAt": "2026-09-05T11:00:00.000Z"
+      },
+      {
+        "kind": "mention",
+        "title": "Standalone roadmap frozen under new owner",
+        "summary": "Team reassigned to the parent's shared app platform.",
+        "url": "https://mobilegamer.biz/2026/09/18/meditopia-roadmap/",
+        "aspect": null,
+        "observedAt": "2026-09-18T09:00:00.000Z"
+      }
+    ],
+    "label": false,
+    "labelChoice": "acquired",
+    "why": "owned and absorbed by a gaming publisher"
+  },
+  {
+    "id": "headspace-open",
+    "split": "test",
+    "kind": "domain",
+    "self": {
+      "name": "Headspace",
+      "domain": "headspace.com",
+      "description": "meditation app"
+    },
+    "competitors": [
+      {
+        "name": "Calm",
+        "domain": "calm.com"
+      },
+      {
+        "name": "Muse",
+        "domain": "choosemuse.com"
+      }
+    ],
+    "subject": {
+      "name": "Open",
+      "domain": "withopen.com"
+    },
+    "history": [
+      {
+        "kind": "mention",
+        "title": "Open acquired by hospitality group",
+        "summary": "Brand to anchor the buyer's in-person wellness venues.",
+        "url": "https://www.wellandgood.com/2026/09/09/open-acquired/",
+        "aspect": null,
+        "observedAt": "2026-09-09T12:00:00.000Z"
+      },
+      {
+        "kind": "site",
+        "title": "Standalone app listing marked unavailable",
+        "summary": "Store page says the app is no longer offered separately.",
+        "url": "https://apps.apple.com/us/app/open/id1513594601",
+        "aspect": null,
+        "observedAt": "2026-09-21T09:00:00.000Z"
+      }
+    ],
+    "label": false,
+    "labelChoice": "acquired",
+    "why": "folded into a hospitality group's venues"
+  },
+  {
+    "id": "headspace-liberate",
+    "split": "test",
+    "kind": "domain",
+    "self": {
+      "name": "Headspace",
+      "domain": "headspace.com",
+      "description": "meditation app"
+    },
+    "competitors": [
+      {
+        "name": "Insight Timer",
+        "domain": "insighttimer.com"
+      },
+      {
+        "name": "Calm",
+        "domain": "calm.com"
+      }
+    ],
+    "subject": {
+      "name": "Liberate",
+      "domain": "liberatemeditation.com"
+    },
+    "history": [
+      {
+        "kind": "mention",
+        "title": "Liberate announces it is shutting down",
+        "summary": "Founders cite funding shortfall and sunset the service.",
+        "url": "https://www.theverge.com/2026/09/12/liberate-shutting-down/",
+        "aspect": null,
+        "observedAt": "2026-09-12T13:00:00.000Z"
+      },
+      {
+        "kind": "site",
+        "title": "Domain resolves to a farewell notice",
+        "summary": "Homepage replaced with a shutdown message and export instructions.",
+        "url": "https://liberatemeditation.com/",
+        "aspect": null,
+        "observedAt": "2026-09-24T10:00:00.000Z"
+      }
+    ],
+    "label": false,
+    "labelChoice": "shut_down",
+    "why": "wound down and offline this month"
+  },
+  {
+    "id": "headspace-spacetimes",
+    "split": "test",
+    "kind": "domain",
+    "self": {
+      "name": "Headspace",
+      "domain": "headspace.com",
+      "description": "meditation app"
+    },
+    "competitors": [
+      {
+        "name": "Muse",
+        "domain": "choosemuse.com"
+      },
+      {
+        "name": "Aura",
+        "domain": "aurahealth.io"
+      }
+    ],
+    "subject": {
+      "name": "Spacetimes",
+      "domain": "spacetimes.io"
+    },
+    "history": [
+      {
+        "kind": "mention",
+        "title": "Spacetimes ceases operations",
+        "summary": "Team confirms the service is closed after a failed raise.",
+        "url": "https://sifted.eu/2026/09/08/spacetimes-operations-cease/",
+        "aspect": null,
+        "observedAt": "2026-09-08T11:00:00.000Z"
+      },
+      {
+        "kind": "site",
+        "title": "Site now a registrar parking page",
+        "summary": "Product pages and pricing no longer resolve.",
+        "url": "https://spacetimes.io/",
+        "aspect": null,
+        "observedAt": "2026-09-19T09:00:00.000Z"
+      }
+    ],
+    "label": false,
+    "labelChoice": "shut_down",
+    "why": "closed after a failed raise, site is parked"
+  },
+  {
+    "id": "headspace-noom",
+    "split": "test",
+    "kind": "domain",
+    "self": {
+      "name": "Headspace",
+      "domain": "headspace.com",
+      "description": "meditation app"
+    },
+    "competitors": [
+      {
+        "name": "Calm",
+        "domain": "calm.com"
+      },
+      {
+        "name": "Wysa",
+        "domain": "wysa.com"
+      }
+    ],
+    "subject": {
+      "name": "Noom",
+      "domain": "noom.com"
+    },
+    "history": [
+      {
+        "kind": "mention",
+        "title": "Noom repositions around GLP-1 telehealth",
+        "summary": "Weight-loss medicine becomes the core offer.",
+        "url": "https://www.statnews.com/2026/09/07/noom-glp1-pivot/",
+        "aspect": null,
+        "observedAt": "2026-09-07T12:00:00.000Z"
+      },
+      {
+        "kind": "change",
+        "title": "Meditation library moved behind the weight-loss tier",
+        "summary": "Mindfulness content is no longer sold as a standalone product.",
+        "url": "https://www.noom.com/pricing/",
+        "aspect": null,
+        "observedAt": "2026-09-15T09:00:00.000Z"
+      }
+    ],
+    "label": false,
+    "labelChoice": "pivoted",
+    "why": "now sells GLP-1 telehealth, not meditation"
+  },
+  {
+    "id": "webflow-framer",
+    "split": "test",
+    "kind": "domain",
+    "self": {
+      "name": "Webflow",
+      "domain": "webflow.com",
+      "description": "visual website builder"
+    },
+    "competitors": [
+      {
+        "name": "Wix",
+        "domain": "wix.com"
+      },
+      {
+        "name": "Duda",
+        "domain": "duda.co"
+      }
+    ],
+    "subject": {
+      "name": "Framer",
+      "domain": "framer.com"
+    },
+    "history": [
+      {
+        "kind": "mention",
+        "title": "Framer launches localization",
+        "summary": "Multi-locale publishing ships alongside a desktop-app beta.",
+        "url": "https://techcrunch.com/2026/09/03/framer-localization/",
+        "aspect": null,
+        "observedAt": "2026-09-03T14:00:00.000Z"
+      },
+      {
+        "kind": "hiring",
+        "title": "Framer opens 12 engineering roles",
+        "summary": "Careers page adds platform and infra positions across two offices.",
+        "url": "https://www.framer.com/careers/",
+        "aspect": null,
+        "observedAt": "2026-09-17T09:00:00.000Z"
+      }
+    ],
+    "label": true,
+    "labelChoice": "active",
+    "why": "a major launch plus open engineering roles"
+  },
+  {
+    "id": "webflow-ghost",
+    "split": "test",
+    "kind": "domain",
+    "self": {
+      "name": "Webflow",
+      "domain": "webflow.com",
+      "description": "visual website builder"
+    },
+    "competitors": [
+      {
+        "name": "WordPress",
+        "domain": "wordpress.org"
+      },
+      {
+        "name": "Squarespace",
+        "domain": "squarespace.com"
+      }
+    ],
+    "subject": {
+      "name": "Ghost",
+      "domain": "ghost.org"
+    },
+    "history": [
+      {
+        "kind": "mention",
+        "title": "Ghost ships the 6.0 editor",
+        "summary": "Release brings a rewritten block editor and faster publishing.",
+        "url": "https://thenewstack.io/2026/09/05/ghost-6-editor/",
+        "aspect": null,
+        "observedAt": "2026-09-05T11:00:00.000Z"
+      },
+      {
+        "kind": "change",
+        "title": "Changelog shows weekly releases through September",
+        "summary": "Six shipped releases so far this month.",
+        "url": "https://ghost.org/changelog/",
+        "aspect": null,
+        "observedAt": "2026-09-16T09:00:00.000Z"
+      }
+    ],
+    "label": true,
+    "labelChoice": "active",
+    "why": "steady weekly releases and a major editor ship"
+  },
+  {
+    "id": "webflow-wix",
+    "split": "test",
+    "kind": "domain",
+    "self": {
+      "name": "Webflow",
+      "domain": "webflow.com",
+      "description": "visual website builder"
+    },
+    "competitors": [
+      {
+        "name": "Squarespace",
+        "domain": "squarespace.com"
+      },
+      {
+        "name": "Shopify",
+        "domain": "shopify.com"
+      }
+    ],
+    "subject": {
+      "name": "Wix",
+      "domain": "wix.com"
+    },
+    "history": [
+      {
+        "kind": "ad",
+        "title": "Wix airs a national small-business campaign",
+        "summary": "Broadcast and streaming spots for the AI site builder.",
+        "url": "https://adage.com/2026/09/10/wix-ai-campaign/",
+        "aspect": null,
+        "observedAt": "2026-09-10T10:00:00.000Z"
+      },
+      {
+        "kind": "mention",
+        "title": "Wix adds an AI checkout flow to Wix Stores",
+        "summary": "Commerce release rolled out to all new stores.",
+        "url": "https://www.wix.com/blog/2026/09/22/ai-checkout/",
+        "aspect": null,
+        "observedAt": "2026-09-22T09:00:00.000Z"
+      }
+    ],
+    "label": true,
+    "labelChoice": "active",
+    "why": "buying media and shipping commerce features monthly"
+  },
+  {
+    "id": "webflow-webstudio",
+    "split": "test",
+    "kind": "domain",
+    "self": {
+      "name": "Webflow",
+      "domain": "webflow.com",
+      "description": "visual website builder"
+    },
+    "competitors": [
+      {
+        "name": "Framer",
+        "domain": "framer.com"
+      },
+      {
+        "name": "Bootstrap Studio",
+        "domain": "bootstrapstudio.io"
+      }
+    ],
+    "subject": {
+      "name": "Webstudio",
+      "domain": "webstudio.is"
+    },
+    "history": [
+      {
+        "kind": "change",
+        "title": "Changelog shows no releases since July",
+        "summary": "Last entry is a two-month-old patch note.",
+        "url": "https://webstudio.is/changelog",
+        "aspect": null,
+        "observedAt": "2026-09-09T09:00:00.000Z"
+      },
+      {
+        "kind": "site",
+        "title": "Careers page still says coming soon",
+        "summary": "Page unchanged for months with no roles listed.",
+        "url": "https://webstudio.is/careers",
+        "aspect": null,
+        "observedAt": "2026-09-15T10:00:00.000Z"
+      }
+    ],
+    "label": true,
+    "labelChoice": "dormant",
+    "why": "still hosted but no releases since July"
+  },
+  {
+    "id": "webflow-bootstrap-studio",
+    "split": "test",
+    "kind": "domain",
+    "self": {
+      "name": "Webflow",
+      "domain": "webflow.com",
+      "description": "visual website builder"
+    },
+    "competitors": [
+      {
+        "name": "Webstudio",
+        "domain": "webstudio.is"
+      },
+      {
+        "name": "Umbraco",
+        "domain": "umbraco.com"
+      }
+    ],
+    "subject": {
+      "name": "Bootstrap Studio",
+      "domain": "bootstrapstudio.io"
+    },
+    "history": [
+      {
+        "kind": "change",
+        "title": "Patch release is the only activity this quarter",
+        "summary": "One minor version bump with two-line notes.",
+        "url": "https://bootstrapstudio.io/releases",
+        "aspect": null,
+        "observedAt": "2026-09-11T09:00:00.000Z"
+      },
+      {
+        "kind": "mention",
+        "title": "Roundups mention Bootstrap Studio only in legacy lists",
+        "summary": "Coverage frames it as a tool people already own.",
+        "url": "https://www.sitepoint.com/best-web-design-tools/",
+        "aspect": null,
+        "observedAt": "2026-09-18T10:00:00.000Z"
+      }
+    ],
+    "label": true,
+    "labelChoice": "dormant",
+    "why": "one patch since spring, no momentum"
+  },
+  {
+    "id": "webflow-umbraco",
+    "split": "test",
+    "kind": "domain",
+    "self": {
+      "name": "Webflow",
+      "domain": "webflow.com",
+      "description": "visual website builder"
+    },
+    "competitors": [
+      {
+        "name": "Sitecore",
+        "domain": "sitecore.com"
+      },
+      {
+        "name": "Kentico",
+        "domain": "kentico.com"
+      }
+    ],
+    "subject": {
+      "name": "Umbraco",
+      "domain": "umbraco.com"
+    },
+    "history": [
+      {
+        "kind": "change",
+        "title": "Release notes list only maintenance builds",
+        "summary": "No feature releases or roadmap posts this month.",
+        "url": "https://umbraco.com/release-notes/",
+        "aspect": null,
+        "observedAt": "2026-09-08T09:00:00.000Z"
+      },
+      {
+        "kind": "site",
+        "title": "Careers page unchanged since June",
+        "summary": "Same three listings posted all summer.",
+        "url": "https://umbraco.com/careers/",
+        "aspect": null,
+        "observedAt": "2026-09-20T10:00:00.000Z"
+      }
+    ],
+    "label": true,
+    "labelChoice": "dormant",
+    "why": "maintenance-only releases and a frozen careers page"
+  },
+  {
+    "id": "webflow-teachable",
+    "split": "test",
+    "kind": "domain",
+    "self": {
+      "name": "Webflow",
+      "domain": "webflow.com",
+      "description": "visual website builder"
+    },
+    "competitors": [
+      {
+        "name": "Kajabi",
+        "domain": "kajabi.com"
+      },
+      {
+        "name": "HubSpot",
+        "domain": "hubspot.com"
+      }
+    ],
+    "subject": {
+      "name": "Teachable",
+      "domain": "teachable.com"
+    },
+    "history": [
+      {
+        "kind": "mention",
+        "title": "Teachable acquired by Hotmart",
+        "summary": "Deal merges the course platform into the buyer's creator stack.",
+        "url": "https://techcrunch.com/2026/09/04/teachable-hotmart/",
+        "aspect": null,
+        "observedAt": "2026-09-04T13:00:00.000Z"
+      },
+      {
+        "kind": "mention",
+        "title": "Course roadmap folded into parent platform",
+        "summary": "Standalone feature plan replaced by the parent's roadmap.",
+        "url": "https://www.hotmart.com/en/blog/teachable-joins-hotmart/",
+        "aspect": null,
+        "observedAt": "2026-09-16T10:00:00.000Z"
+      }
+    ],
+    "label": false,
+    "labelChoice": "acquired",
+    "why": "bought and merged into a creator-commerce stack"
+  },
+  {
+    "id": "webflow-unbounce",
+    "split": "test",
+    "kind": "domain",
+    "self": {
+      "name": "Webflow",
+      "domain": "webflow.com",
+      "description": "visual website builder"
+    },
+    "competitors": [
+      {
+        "name": "Instapage",
+        "domain": "instapage.com"
+      },
+      {
+        "name": "Kajabi",
+        "domain": "kajabi.com"
+      }
+    ],
+    "subject": {
+      "name": "Unbounce",
+      "domain": "unbounce.com"
+    },
+    "history": [
+      {
+        "kind": "mention",
+        "title": "Unbounce and Leadpages confirm a merger",
+        "summary": "Both brands move under one holding company.",
+        "url": "https://betanews.com/2026/09/10/unbounce-leadpages-merger/",
+        "aspect": null,
+        "observedAt": "2026-09-10T12:00:00.000Z"
+      },
+      {
+        "kind": "site",
+        "title": "Both brands now point to a shared pricing page",
+        "summary": "Standalone pricing URLs redirect to the combined company.",
+        "url": "https://unbounce.com/pricing/",
+        "aspect": null,
+        "observedAt": "2026-09-23T09:00:00.000Z"
+      }
+    ],
+    "label": false,
+    "labelChoice": "acquired",
+    "why": "merged into a holding company with a rival"
+  },
+  {
+    "id": "webflow-instapage",
+    "split": "test",
+    "kind": "domain",
+    "self": {
+      "name": "Webflow",
+      "domain": "webflow.com",
+      "description": "visual website builder"
+    },
+    "competitors": [
+      {
+        "name": "Unbounce",
+        "domain": "unbounce.com"
+      },
+      {
+        "name": "PageFly",
+        "domain": "pagefly.io"
+      }
+    ],
+    "subject": {
+      "name": "Instapage",
+      "domain": "instapage.com"
+    },
+    "history": [
+      {
+        "kind": "mention",
+        "title": "Instapage acquired by enterprise martech suite",
+        "summary": "Product to be resold as a module of the buyer's platform.",
+        "url": "https://martech.org/2026/09/06/instapage-acquired/",
+        "aspect": null,
+        "observedAt": "2026-09-06T11:00:00.000Z"
+      },
+      {
+        "kind": "change",
+        "title": "Standalone signup closed to new customers",
+        "summary": "Pricing page now routes buyers to the parent suite.",
+        "url": "https://instapage.com/pricing",
+        "aspect": null,
+        "observedAt": "2026-09-19T09:00:00.000Z"
+      }
+    ],
+    "label": false,
+    "labelChoice": "acquired",
+    "why": "sold off as a module of a martech suite"
+  },
+  {
+    "id": "webflow-pagefly",
+    "split": "test",
+    "kind": "domain",
+    "self": {
+      "name": "Webflow",
+      "domain": "webflow.com",
+      "description": "visual website builder"
+    },
+    "competitors": [
+      {
+        "name": "Elementor",
+        "domain": "elementor.com"
+      },
+      {
+        "name": "Instapage",
+        "domain": "instapage.com"
+      }
+    ],
+    "subject": {
+      "name": "PageFly",
+      "domain": "pagefly.io"
+    },
+    "history": [
+      {
+        "kind": "mention",
+        "title": "PageFly shuts down with two weeks' notice",
+        "summary": "Announcement cites unsustainable costs for the page builder.",
+        "url": "https://ecommercenext.org/2026/09/09/pagefly-shuts-down/",
+        "aspect": null,
+        "observedAt": "2026-09-09T12:00:00.000Z"
+      },
+      {
+        "kind": "site",
+        "title": "Support docs now return 404s",
+        "summary": "Help center and template gallery are gone.",
+        "url": "https://pagefly.io/docs",
+        "aspect": null,
+        "observedAt": "2026-09-23T10:00:00.000Z"
+      }
+    ],
+    "label": false,
+    "labelChoice": "shut_down",
+    "why": "closed this month with docs offline"
+  },
+  {
+    "id": "webflow-shopify-hydrogen",
+    "split": "test",
+    "kind": "domain",
+    "self": {
+      "name": "Webflow",
+      "domain": "webflow.com",
+      "description": "visual website builder"
+    },
+    "competitors": [
+      {
+        "name": "Framer",
+        "domain": "framer.com"
+      },
+      {
+        "name": "WordPress",
+        "domain": "wordpress.org"
+      }
+    ],
+    "subject": {
+      "name": "Shopify Hydrogen",
+      "domain": "shopify.dev"
+    },
+    "history": [
+      {
+        "kind": "mention",
+        "title": "Shopify sunsets Hydrogen as a standalone framework",
+        "summary": "Storefront hosting moves into the core platform.",
+        "url": "https://techcrunch.com/2026/09/02/shopify-hydrogen-sunset/",
+        "aspect": null,
+        "observedAt": "2026-09-02T13:00:00.000Z"
+      },
+      {
+        "kind": "site",
+        "title": "Hydrogen docs redirect to a deprecation notice",
+        "summary": "Framework docs replaced with a migration guide.",
+        "url": "https://shopify.dev/docs/hydrogen",
+        "aspect": null,
+        "observedAt": "2026-09-17T09:00:00.000Z"
+      }
+    ],
+    "label": false,
+    "labelChoice": "shut_down",
+    "why": "sunset as a standalone product this month"
+  },
+  {
+    "id": "webflow-wordpress",
+    "split": "test",
+    "kind": "domain",
+    "self": {
+      "name": "Webflow",
+      "domain": "webflow.com",
+      "description": "visual website builder"
+    },
+    "competitors": [
+      {
+        "name": "Ghost",
+        "domain": "ghost.org"
+      },
+      {
+        "name": "Squarespace",
+        "domain": "squarespace.com"
+      }
+    ],
+    "subject": {
+      "name": "WordPress",
+      "domain": "wordpress.org"
+    },
+    "history": [
+      {
+        "kind": "mention",
+        "title": "Project roadmap centers enterprise hosting deals",
+        "summary": "Governance post frames the project around large hosting partners.",
+        "url": "https://thenewstack.io/2026/09/08/wordpress-enterprise-roadmap/",
+        "aspect": null,
+        "observedAt": "2026-09-08T11:00:00.000Z"
+      },
+      {
+        "kind": "change",
+        "title": "Directory curation shifts to enterprise partners",
+        "summary": "Featured listings now favor approved partner solutions.",
+        "url": "https://wordpress.org/plugins/",
+        "aspect": null,
+        "observedAt": "2026-09-21T09:00:00.000Z"
+      }
+    ],
+    "label": false,
+    "labelChoice": "pivoted",
+    "why": "now an enterprise hosting play, not an indie builder"
+  },
+  {
+    "id": "webflow-hubspot",
+    "split": "test",
+    "kind": "domain",
+    "self": {
+      "name": "Webflow",
+      "domain": "webflow.com",
+      "description": "visual website builder"
+    },
+    "competitors": [
+      {
+        "name": "Contentful",
+        "domain": "contentful.com"
+      },
+      {
+        "name": "Sitecore",
+        "domain": "sitecore.com"
+      }
+    ],
+    "subject": {
+      "name": "HubSpot",
+      "domain": "hubspot.com"
+    },
+    "history": [
+      {
+        "kind": "mention",
+        "title": "HubSpot rebrands the CMS under an AI CRM suite",
+        "summary": "Site tools repositioned as a CRM attachment.",
+        "url": "https://www.cmswire.com/2026/09/12/hubspot-ai-crm-suite/",
+        "aspect": null,
+        "observedAt": "2026-09-12T12:00:00.000Z"
+      },
+      {
+        "kind": "change",
+        "title": "Site-builder pricing folded into CRM tiers",
+        "summary": "Standalone CMS plans are gone from the pricing page.",
+        "url": "https://www.hubspot.com/pricing/",
+        "aspect": null,
+        "observedAt": "2026-09-24T09:00:00.000Z"
+      }
+    ],
+    "label": false,
+    "labelChoice": "pivoted",
+    "why": "site builder demoted to a CRM add-on"
+  }
+]

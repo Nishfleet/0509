@@ -1,3 +1,10 @@
+export interface NoulQuestion {
+  id: string;
+  instructions: string;
+  whenTrue: string;
+  whenFalse: string;
+}
+
 export type NoulAction = "act" | "maybe" | "reject";
 
 export const ACT_AT = 0.9;

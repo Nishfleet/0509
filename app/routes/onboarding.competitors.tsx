@@ -29,6 +29,10 @@ async function workspaceFor(request: Request, fresh = false): Promise<string> {
   return workspaceId;
 }
 
+export function meta() {
+  return [{ title: "Who you're up against · Five to Nine" }];
+}
+
 export async function loader({ request }: Route.LoaderArgs) {
   const timings = createTimings();
   const workspaceId = await timings.measure("workspace", workspaceFor(request));

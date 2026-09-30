@@ -4,26 +4,41 @@ import { noulAction } from "../jev/thresholds";
 import type { CardReview, CardValues, DraftField, FieldReview } from "./card-fields";
 import type { Subject } from "./normalise";
 
-const NAME_QUESTION: NoulQuestion = {
+export const NAME_QUESTION: NoulQuestion = {
   id: "identity_field_confidence.name",
   instructions: "Is `fields.name` the right brand name for the brand at `subject`?",
   whenTrue: "It is this brand's own name.",
-  whenFalse: "It is wrong, generic, or belongs to someone else.",
+  whenFalse:
+    "It is wrong, generic, belongs to someone else, or is a related form that is not the brand's name: a product line, a sub-brand, a founder's or owner's personal name, a slogan, a legal-entity suffix the brand does not use in its name, or a name the same brand uses in another market.",
 };
 
-const DESCRIPTION_QUESTION: NoulQuestion = {
+export const DESCRIPTION_QUESTION: NoulQuestion = {
   id: "identity_field_confidence.description",
   instructions: "Is `fields.description` the right one-line description for the brand at `subject`?",
   whenTrue: "It is this brand's own one-line description.",
   whenFalse: "It is wrong, generic, or belongs to someone else.",
 };
 
-const SOCIALS_QUESTION: NoulQuestion = {
+export const SOCIALS_QUESTION: NoulQuestion = {
   id: "identity_field_confidence.socials",
   instructions: "Are the items in `fields.socials` the list of official social profiles for the brand at `subject`?",
-  whenTrue: "It is this brand's own list of official social profiles.",
-  whenFalse: "It is wrong, generic, or belongs to someone else.",
+  whenTrue: "Every listed profile is one the brand itself runs, on the platform the link names.",
+  whenFalse:
+    "At least one listed profile is run by someone else: a fan, an employee's personal account, a reseller, a parody, a squatter, or a competitor, even when the handle looks like the brand's own.",
 };
+
+export function fieldConfidenceState(
+  subject: Subject,
+  fields: CardValues,
+  edited: readonly DraftField[],
+): Record<string, unknown> {
+  return {
+    subject: { registrable: subject.registrable, url: subject.url, kind: subject.kind },
+    fields: { name: fields.name, description: fields.description, socials: fields.socials },
+    user_memory: { edited_fields: edited },
+    reliability: "best_effort",
+  };
+}
 
 function reviewFor(p: number): FieldReview {
   const action = noulAction(p);
@@ -72,12 +87,7 @@ export async function reviewFields(
   if (questions.length === 0) return withEdited(reviewValued(fields, "empty"), edited);
   let verdicts: NoulVerdict[];
   try {
-    verdicts = await askNouls(workspaceId, questions, {
-      subject: { registrable: subject.registrable, url: subject.url, kind: subject.kind },
-      fields: { name: fields.name, description: fields.description, socials: fields.socials },
-      user_memory: { edited_fields: edited },
-      reliability: "best_effort",
-    });
+    verdicts = await askNouls(workspaceId, questions, fieldConfidenceState(subject, fields, edited));
   } catch (error) {
     if (error instanceof JevUnavailableError) return withEdited(reviewValued(fields, "check"), edited);
     throw error;

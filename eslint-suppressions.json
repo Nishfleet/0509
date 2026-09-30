@@ -255,9 +255,6 @@
     }
   },
   "app/lib/identity/field-confidence.server.ts": {
-    "max-lines-per-function": {
-      "count": 1
-    },
     "max-params": {
       "count": 1
     }
@@ -292,11 +289,6 @@
   },
   "app/lib/jev/public-subject.server.ts": {
     "max-params": {
-      "count": 1
-    }
-  },
-  "app/lib/onboarding-screen.server.ts": {
-    "max-lines-per-function": {
       "count": 1
     }
   },

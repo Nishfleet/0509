@@ -684,13 +684,13 @@ describe("readUrl", () => {
       install(browser);
       await readUrl("https://gated.example.com/", { mayEscalate: async () => true });
       const escalation = lines
-        .map((line) => JSON.parse(line) as { event?: string; url?: string; browserMsUsed?: number })
+        .map((line) => JSON.parse(line) as { event?: string; browserMsUsed?: number })
         .find((row) => row.event === "browser-escalation");
       expect(escalation).toMatchObject({
         event: "browser-escalation",
-        url: "https://gated.example.com/",
         browserMsUsed: 4123,
       });
+      expect(JSON.stringify(escalation)).not.toContain("gated.example.com");
     } finally {
       spy.mockRestore();
       stub.restore();
