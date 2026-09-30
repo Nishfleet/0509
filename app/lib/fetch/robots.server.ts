@@ -1,8 +1,10 @@
 import robotsParser from "robots-parser";
 
-import { fetchOutbound } from "./outbound.server";
+import { cappedText, fetchOutbound } from "./outbound.server";
 
 const ROBOTS_TIMEOUT_MS = 5_000;
+
+const MAX_ROBOTS_BYTES = 256 * 1024;
 
 const ROBOTS_AGENT = "FiveToNineBot";
 
@@ -21,14 +23,14 @@ export async function robotsAllows(url: string): Promise<boolean> {
       await response.body?.cancel();
       return true;
     }
-    const body = await response.text();
+    const body = await cappedText(response, MAX_ROBOTS_BYTES);
+    if (body === null) return true;
     return robotsParser(robotsUrl, body).isDisallowed(url, ROBOTS_AGENT) !== true;
   } catch (error) {
     console.log(
       JSON.stringify({
         event: "robots.read_failed",
-        url: robotsUrl,
-        error: error instanceof Error ? error.message : String(error),
+        error: error instanceof Error ? error.name : typeof error,
       }),
     );
     return true;

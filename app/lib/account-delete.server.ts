@@ -36,12 +36,19 @@ export async function deleteAccount(
 }
 
 async function revokeGrants(helpers: Pick<OAuthHelpers, "listUserGrants" | "revokeGrant">, userId: string) {
+  let failed = 0;
+  let cursor: string | undefined;
   try {
-    const grants = await helpers.listUserGrants(userId, { limit: 100 });
-    await Promise.all(grants.items.map((grant) => helpers.revokeGrant(grant.id, userId)));
-  } catch (error) {
-    console.error(JSON.stringify({ event: "account_delete.grant_revoke_failed", error: String(error) }));
+    do {
+      const grants = await helpers.listUserGrants(userId, { limit: 100, cursor });
+      const settled = await Promise.allSettled(grants.items.map((grant) => helpers.revokeGrant(grant.id, userId)));
+      failed += settled.filter((result) => result.status === "rejected").length;
+      cursor = grants.cursor;
+    } while (cursor !== undefined);
+  } catch {
+    failed += 1;
   }
+  if (failed > 0) console.error(JSON.stringify({ event: "account_delete.grant_revoke_failed", failed }));
 }
 
 function deleteInstanceCookie() {
@@ -70,11 +77,19 @@ export async function readAccountDeleteInstanceId(request: Request): Promise<str
   return typeof parsed === "string" && parsed.length > 0 ? parsed : null;
 }
 
-export async function deleteStoredPage(prefix: string): Promise<{ deleted: number; more: boolean }> {
-  const listed = await env.SNAPSHOTS.list({ prefix, limit: PAGE_SIZE });
+async function deletePage(bucket: R2Bucket, prefix: string): Promise<{ deleted: number; more: boolean }> {
+  const listed = await bucket.list({ prefix, limit: PAGE_SIZE });
   const keys = listed.objects.map((object) => object.key);
-  if (keys.length > 0) await env.SNAPSHOTS.delete(keys);
+  if (keys.length > 0) await bucket.delete(keys);
   return { deleted: keys.length, more: listed.truncated };
+}
+
+export async function deleteStoredPage(prefix: string): Promise<{ deleted: number; more: boolean }> {
+  return deletePage(env.SNAPSHOTS, prefix);
+}
+
+export async function deleteBackupPage(prefix: string): Promise<{ deleted: number; more: boolean }> {
+  return deletePage(env.SNAPSHOTS_BACKUP, prefix);
 }
 
 function isAccountDeleteInstanceMissing(error: unknown): boolean {

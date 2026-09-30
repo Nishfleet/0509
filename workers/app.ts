@@ -8,6 +8,7 @@ import { deleteExpiredAuthRows } from "../app/lib/data/auth_expiry.server";
 import { stampFirstSignals } from "../app/lib/data/onboarding_run.server";
 import { startNightlyDiscovery, startWeeklyRefresh, WEEKLY_REFRESH_CRON } from "../app/lib/discovery/start.server";
 import { assertWorkerEnv, WorkerEnvError, workerEnvFailureResponse } from "../app/lib/env.server";
+import { withTransportSecurityHeaders } from "../app/lib/security-headers";
 import { pingLiveness } from "../app/lib/liveness-ping.server";
 import { cronMonitor } from "./cron-monitors";
 import { handleBatch } from "./delivery/consumer";
@@ -53,7 +54,7 @@ const handler = {
       if (error instanceof WorkerEnvError) return workerEnvFailureResponse(error);
       throw error;
     }
-    return oauth.fetch(request, env, ctx);
+    return withTransportSecurityHeaders(await oauth.fetch(request, env, ctx));
   },
 
   async scheduled(controller, env, ctx) {

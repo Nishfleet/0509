@@ -164,8 +164,7 @@ describe("resolveDomain", () => {
       step: "wikidata",
       error: "status 429",
     });
-    expect(entry.url).toContain("wbsearchentities");
-    expect(entry.url).toContain("search=Throttled%20Brand%200509");
+    expect(JSON.stringify(entry)).not.toContain("Throttled");
   });
 
   it("identifies both of resolve-domain's outbound fetches as the one crawler User-Agent (0509#5883)", async () => {

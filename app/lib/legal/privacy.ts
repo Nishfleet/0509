@@ -1,4 +1,4 @@
-import { ACCOUNT_DELETION_DAYS, MINIMUM_AGE, OPERATOR, type LegalDocument } from "./document";
+import { MINIMUM_AGE, OPERATOR, type LegalDocument } from "./document";
 
 export const PRIVACY: LegalDocument = {
   path: "/privacy",
@@ -37,9 +37,9 @@ export const PRIVACY: LegalDocument = {
         "Your sessions: when you signed in, and the IP address and browser you used, so you stay signed in and we can spot someone else using your account.",
         "Your workspace: your brand, the competitors you watch, your settings and time zone, and the choices you make, such as dismissing a suggestion or turning a brand off.",
         "Your agent access: the apps you approved, and a scrambled copy of each key you create, with when it was last used.",
-        "Billing: your plan and whether it is paid. Your card details go to our payment provider and never reach us.",
+        "Billing: your plan and whether it is paid. Your card details go to Dodo Payments and never reach us.",
         "Emails you send us, so we can answer them.",
-        "Page views, counted without cookies and without identifying you, and error reports with personal details removed, so we can keep 0509 fast and working.",
+        "Error reports with personal details removed, and server logs of each request, so we can keep 0509 fast and working.",
       ],
     },
     {
@@ -70,27 +70,20 @@ export const PRIVACY: LegalDocument = {
       id: "who-helps",
       heading: "Who helps us run 0509",
       paragraphs: [
-        "A few companies do part of the work for us. Each gets only what its job needs, and handles it under its own data protection terms.",
+        "These companies do part of the work for us. Each gets only what its job needs, and handles it under its own data protection terms. We change this list when it changes.",
       ],
       entries: [
         {
           term: "Cloudflare",
           details: [
-            "Hosting, the database, file storage, screenshots, sending email, page-view counts, and small AI tasks such as reading text off an image.",
-            "Sees everything 0509 stores, because 0509 runs on it.",
+            "Hosting, the database, file storage, screenshots, sending email, the sign-in check that keeps bots out (Turnstile), and Workers AI, which runs the AI models that decide which changes matter and why, and read text off an image.",
+            "Sees everything 0509 stores, because 0509 runs on it. The AI models see the public material we collected and the names of your brand and competitors, never your email or payment details.",
           ],
         },
         {
-          term: "AI model providers",
+          term: "Dodo Payments",
           details: [
-            "Deciding which changes matter and why.",
-            "See the public material we collected and the names of your brand and competitors. Never your email or payment details.",
-          ],
-        },
-        {
-          term: "Our payment provider",
-          details: [
-            "Taking payment, charging tax, and sending receipts, once paid plans open.",
+            "Takes payment, charges tax, and sends receipts, once paid plans open.",
             "Sees your billing details.",
           ],
         },
@@ -107,7 +100,17 @@ export const PRIVACY: LegalDocument = {
         },
         {
           term: "GitHub",
-          details: ["Our work tracker.", "Sees a note that a report arrived, never what it says."],
+          details: [
+            "Our work tracker.",
+            "Sees a report number, the time, the 0509 pages you mention and the name of your mail app. Never what the email says.",
+          ],
+        },
+        {
+          term: "Public sources we read",
+          details: [
+            "GDELT, Hacker News, Reddit, YouTube, Wikidata, public job boards, and the public sites of the brands we track.",
+            "They see that we asked for a public page. They get nothing about you.",
+          ],
         },
       ],
       closing: [
@@ -133,10 +136,13 @@ export const PRIVACY: LegalDocument = {
     {
       id: "cookies",
       heading: "Cookies",
-      paragraphs: [
-        "We set two small cookies: one keeps you signed in, and one remembers your time zone so the brief arrives on your Monday morning.",
-        "We use no advertising or tracking cookies, and our page-view counts use none, so there is no cookie banner.",
+      paragraphs: ["We set only the cookies 0509 needs to work:"],
+      list: [
+        "A session cookie that keeps you signed in, and a short-lived copy of your session that saves a database lookup.",
+        "A time zone cookie, so the brief arrives on your Monday morning.",
+        "A short-lived cookie set while you delete your account, so the sign-in page can show when your files are gone.",
       ],
+      closing: ["We use no advertising or tracking cookies, so there is no cookie banner."],
     },
     {
       id: "how-long",
@@ -144,9 +150,7 @@ export const PRIVACY: LegalDocument = {
       entries: [
         {
           term: "Your account and workspace",
-          details: [
-            `While your account is open, and deleted within ${String(ACCOUNT_DELETION_DAYS)} days of closing it.`,
-          ],
+          details: ["While your account is open, and removed when you delete it in Settings."],
         },
         {
           term: "Sign-in links",
@@ -166,7 +170,25 @@ export const PRIVACY: LegalDocument = {
         },
         {
           term: "Incident records for your own site",
-          details: ["One year."],
+          details: ["While your account is open, and removed when you delete it."],
+        },
+        {
+          term: "Server logs and error reports",
+          details: [
+            "They age out on Cloudflare's and Sentry's own schedules. They hold the addresses of pages requested, and no account content.",
+          ],
+        },
+        {
+          term: "Do-not-email record",
+          details: [
+            "When you unsubscribe, or delete your account, we keep the email address and the reason on a do-not-email list, so we never email it again. It holds nothing else.",
+          ],
+        },
+        {
+          term: "Backup copy of stored files",
+          details: [
+            'We keep a second copy of stored screenshots and page copies in case we lose the first. Deleting your account, or a competitor with "remove and forget", removes that copy too. We do not yet expire the rest of it on a schedule.',
+          ],
         },
         {
           term: "Billing records",
@@ -178,7 +200,7 @@ export const PRIVACY: LegalDocument = {
       id: "deletion",
       heading: "Deleting your data",
       paragraphs: [
-        "Ask us by email to close your account, and we delete it. Deleting a workspace deletes every record it owns and every file it stored, in one run, and stops every email.",
+        "To close your account, open Settings and choose Delete your account. You may be asked to sign in again first. It takes effect at once: your account and every record your workspace owns are removed, every email stops, and a background job then removes the files it stored.",
         'Removing a competitor keeps its history, unless you choose "remove and forget", which deletes what we collected about that competitor for your workspace.',
       ],
     },
