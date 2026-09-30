@@ -4,11 +4,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { readOpenBreakageBaselines } from "../../../app/lib/data/incident.server";
 import { nextOwnSiteCheck } from "../../../app/lib/incident-recheck";
-import { computeBreakageEvidence } from "../../../app/lib/site/breakage-evidence";
 import { checkPage } from "../../../app/lib/site/check-page.server";
-import { judgeChange } from "../../../app/lib/site/judge.server";
-import { publishChange } from "../../../app/lib/site/publish.server";
-import { planSiteSweep } from "../../../app/lib/site/sweep.server";
+import { planSiteSweep, publishSiteChange } from "../../../app/lib/site/sweep.server";
 import { formatDate } from "../../../workers/delivery/brief-template";
 import { deliverIncident } from "../../../workers/delivery/consumer";
 import fixtureWorker from "../../../workers/fixture-site";
@@ -17,7 +14,7 @@ import fixtureWorker from "../../../workers/fixture-site";
  * 0509#4047's acceptance, verbatim: a real round-trip on the fixture Worker.
  * Break fixture.0509.in soft (a 200 that lost its pricing section), let the
  * paved open path (real snapshot read, code-computed evidence, D3s verdict,
- * publishChange) raise the incident, let the real own-site-check Workflow hold
+ * publishSiteChange) raise the incident, let the real own-site-check Workflow hold
  * it open while the evidence is still bad, repair the fixture, and watch the
  * Workflow set closed_at and enqueue the one fixed notice.
  *
@@ -272,67 +269,16 @@ describe("own-site incident re-check round-trip on the fixture Worker (0509#4047
       throw new Error("expected the baseline screenshot key to resolve");
     }
 
-    // The paved open leg: code-computed evidence plus the D3s verdict, then
-    // publishChange writes the incident, the pinned alert and the queue item.
-    const [beforeText, afterText, subject] = await Promise.all([
-      env.SNAPSHOTS.get(changed.previousTextKey).then((o) => o?.text() ?? ""),
-      env.SNAPSHOTS.get(changed.textKey).then((o) => o?.text() ?? ""),
-      env.DB.prepare("SELECT name, domain FROM entity WHERE id = ?")
-        .bind(SELF)
-        .first<{ name: string | null; domain: string }>(),
-    ]);
-    if (subject === null) throw new Error("missing entity");
-    const judgment = await judgeChange({
-      workspaceId: self.workspaceId,
-      entityId: self.entityId,
-      signalId: null,
-      isSelf: true,
-      subject,
-      pageUrl: self.url,
-      pageRole: self.pageRole,
-      hunks: [],
-      evidence: computeBreakageEvidence({ status: changed.status, beforeText, afterText }),
-    });
-    expect(judgment.selfBreakage).toEqual({ p: 0.8, band: "alert" });
-
-    const published = await publishChange({
-      workspaceId: self.workspaceId,
-      entityId: self.entityId,
-      sourceId: self.sourceId,
-      watchId: self.watchId,
-      pageId: self.pageId,
-      snapshotId: changed.snapshotId,
-      url: self.url,
-      judgment,
-      textKey: changed.textKey,
-      previousTextKey: changed.previousTextKey,
-      screenshotKey: changed.screenshotKey,
-      previousScreenshotKey: changed.previousScreenshotKey,
-    });
-    if (published.incidentId === null) throw new Error("expected the breakage incident to open");
-    expect(send).toHaveBeenCalledTimes(1);
-    expect(send).toHaveBeenCalledWith({ incident_id: published.incidentId });
-
+    await publishSiteChange(self, changed);
     const [incident] = await readIncident();
     if (incident === undefined) throw new Error("expected one open incident");
+    expect(send).toHaveBeenCalledTimes(1);
+    expect(send).toHaveBeenCalledWith({ incident_id: incident.id });
+
     expect(incident).toMatchObject({ kind: "breakage", closed_at: null });
     expect(incident.opened_at).toMatch(ISO_UTC);
-    expect(incident.id).toBe(published.incidentId);
 
-    // The open notice's re-check time is the Workflow's real next tick, read
-    // from the signal payload publishChange wrote — never the word "soon".
-    const signal = await env.DB.prepare(
-      `SELECT s.payload_json FROM signal s
-       JOIN alert a ON a.signal_id = s.id WHERE a.incident_id = ?`,
-    )
-      .bind(incident.id)
-      .first<{ payload_json: string }>();
-    if (signal === null) throw new Error("expected the incident's signal");
-    const payload = JSON.parse(signal.payload_json) as { seenAt: string; recheckAt: string };
-    expect(payload.seenAt).toMatch(ISO_UTC);
-    // The promised re-check is the Workflow's own next hourly tick, derived in
-    // code — not prose, and never "soon".
-    expect(payload.recheckAt).toBe(nextOwnSiteCheck(new Date(incident.opened_at)));
+    const recheckAt = nextOwnSiteCheck(new Date(incident.opened_at));
 
     // The baseline the close lane resolves is the one the paved opener stored
     // as previousTextKey (the shape COALESCE now reads on either dialect).
@@ -346,7 +292,7 @@ describe("own-site incident re-check round-trip on the fixture Worker (0509#4047
     expect(openDelivery.idempotency_key).toBe(`incident:${incident.id}:open`);
     expect(rec.sent).toHaveLength(1);
     expect(rec.sent[0].subject).toBe("fixture.0509.in looks broken: breakage");
-    const promised = formatDate(payload.recheckAt, "UTC", true);
+    const promised = formatDate(recheckAt, "UTC", true);
     expect(rec.sent[0].text).toContain(`We re-check at ${promised} and email you once when it is fixed.`);
     expect(rec.sent[0].text).not.toContain("soon");
 
@@ -405,7 +351,7 @@ describe("own-site incident re-check round-trip on the fixture Worker (0509#4047
         opened_at: incident.opened_at,
         closed_at: closed.closed_at,
         incident_notice_ids: notices.map((row) => row.id),
-        recheck_at: payload.recheckAt,
+        recheck_at: recheckAt,
       }),
     );
   });

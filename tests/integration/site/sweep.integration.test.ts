@@ -1,4 +1,5 @@
 import { env, introspectWorkflowInstance } from "cloudflare:test";
+import { env as workerEnv } from "cloudflare:workers";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type * as JudgeModule from "../../../app/lib/site/judge.server";
@@ -38,6 +39,9 @@ const WS = "ws-site-sweep";
 const NOW = "2026-09-24T02:00:00Z";
 
 const BEFORE_HTML = `<!doctype html><html><body><h1>Rival</h1><p>Plans start at ten dollars a month.</p><p>${PAD}</p></body></html>`;
+const SELF_BEFORE_HTML = `<!doctype html><html><body><h1>MyBrand</h1><p>Plans start at $29 a month and $99 a month for growth teams.</p><p>${PAD}</p></body></html>`;
+const SELF_BROKEN_HTML = `<!doctype html><html><body><h1>MyBrand</h1><p>Something went wrong, please try again later.</p><p>${PAD}</p></body></html>`;
+const SELF_BROKEN_AGAIN_HTML = `<!doctype html><html><body><h1>MyBrand</h1><p>Still nothing to see here, please try again later.</p><p>${PAD}</p></body></html>`;
 const AFTER_HTML = `<!doctype html><html><body><h1>Rival</h1><p>Plans start at twelve dollars a month. New: team seats.</p><p>${PAD}</p></body></html>`;
 
 const nextTick = async (name: string) => {
@@ -103,6 +107,8 @@ const signals = async () => {
 
 const resetTenant = async () => {
   await env.DB.exec("DELETE FROM sweep_run");
+  await env.DB.exec("DELETE FROM alert");
+  await env.DB.exec("DELETE FROM incident");
   await env.DB.exec("DELETE FROM signal");
   await env.DB.exec("DELETE FROM snapshot");
   await env.DB.exec("DELETE FROM watch");
@@ -442,6 +448,139 @@ describe("nightly site sweep", () => {
     if (run === null) throw new Error("finished sweep wrote no sweep_run row");
     expect(run).toMatchObject({ kind: "site", pages: 2, failed: 0 });
     expect(run.wall_ms).toBe(Date.parse(run.finished_at) - Date.parse(run.planned_at));
+  });
+
+  describe("the customer's own page", () => {
+    const installJev = (breakageP: number) => {
+      const asked: string[] = [];
+      Reflect.set(env, "AI", {
+        async run(_model: string, request: { questions: Record<string, { type: string }> }) {
+          const answers: Record<string, { type: "noul"; noul: number } | { type: "choice"; choice: string }> = {};
+          for (const [id, question] of Object.entries(request.questions)) {
+            asked.push(id);
+            if (id === "own_site_breakage") answers[id] = { type: "noul", noul: breakageP };
+            else
+              answers[id] =
+                question.type === "noul" ? { type: "noul", noul: 0.95 } : { type: "choice", choice: "copy" };
+          }
+          return { answers };
+        },
+      });
+      return asked;
+    };
+
+    const changeOnce = async (entityId: string, html: string, name: string) => {
+      const target = (await planSiteSweep(NOW)).find((t) => t.entityId === entityId);
+      if (target === undefined) throw new Error(`expected the ${entityId} homepage`);
+      readHolder.html = html;
+      const changed = await checkSitePage(target, await nextTick(name));
+      if (changed.outcome !== "changed") throw new Error("expected a change");
+      await publishSiteChange(target, changed);
+      return target;
+    };
+
+    const baseline = async (entityId: string, html: string) => {
+      const target = (await planSiteSweep(NOW)).find((t) => t.entityId === entityId);
+      if (target === undefined) throw new Error(`expected the ${entityId} homepage`);
+      readHolder.html = html;
+      await checkSitePage(target, await nextTick(`base-${entityId}`));
+    };
+
+    const rows = async () => {
+      const [signalRows, incidents, alerts] = await Promise.all([
+        env.DB.prepare("SELECT aspect, summary FROM signal WHERE entity_id = 'ent-self' ORDER BY observed_at").all<{
+          aspect: string;
+          summary: string | null;
+        }>(),
+        env.DB.prepare("SELECT id, kind, closed_at FROM incident").all<{
+          id: string;
+          kind: string;
+          closed_at: string | null;
+        }>(),
+        env.DB.prepare("SELECT incident_id, severity, body FROM alert").all<{
+          incident_id: string | null;
+          severity: string;
+          body: string | null;
+        }>(),
+      ]);
+      return { signals: signalRows.results, incidents: incidents.results, alerts: alerts.results };
+    };
+
+    let send: ReturnType<typeof vi.spyOn>;
+
+    beforeEach(async () => {
+      await env.DB.exec("DELETE FROM jev_verdict");
+      send = vi.spyOn(workerEnv.SEND_EMAIL, "send").mockResolvedValue(undefined);
+    });
+
+    afterEach(() => {
+      Reflect.deleteProperty(env, "AI");
+      vi.restoreAllMocks();
+    });
+
+    it("opens a breakage incident, a pinned high alert and one queued email when D3s says alert", async () => {
+      installJev(0.8);
+      await baseline("ent-self", SELF_BEFORE_HTML);
+      await changeOnce("ent-self", SELF_BROKEN_HTML, "self-broken");
+
+      const filed = await rows();
+      expect(filed.signals).toEqual([{ aspect: "breakage", summary: null }]);
+      expect(filed.incidents).toEqual([{ id: expect.any(String), kind: "breakage", closed_at: null }]);
+      const incidentId = filed.incidents[0]?.id;
+      expect(filed.alerts).toEqual([{ incident_id: incidentId, severity: "high", body: null }]);
+      expect(send).toHaveBeenCalledTimes(1);
+      expect(send).toHaveBeenCalledWith({ incident_id: incidentId });
+      const unlinked = await env.DB.prepare("SELECT COUNT(*) AS n FROM jev_verdict WHERE signal_id IS NULL").first<{
+        n: number;
+      }>();
+      expect(unlinked?.n).toBe(0);
+    });
+
+    it("opens the incident and a normal alert, and sends nothing, when D3s says check", async () => {
+      installJev(0.3);
+      await baseline("ent-self", SELF_BEFORE_HTML);
+      await changeOnce("ent-self", SELF_BROKEN_HTML, "self-check");
+
+      const filed = await rows();
+      expect(filed.incidents).toHaveLength(1);
+      expect(filed.alerts).toEqual([{ incident_id: filed.incidents[0]?.id, severity: "normal", body: null }]);
+      expect(send).not.toHaveBeenCalled();
+    });
+
+    it("opens no incident when D3s says clear, and files the signal as any other change", async () => {
+      installJev(0.05);
+      await baseline("ent-self", SELF_BEFORE_HTML);
+      await changeOnce("ent-self", SELF_BROKEN_HTML, "self-clear");
+
+      const filed = await rows();
+      expect(filed.incidents).toEqual([]);
+      expect(filed.alerts).toEqual([]);
+      expect(filed.signals).toHaveLength(1);
+      expect(filed.signals[0]?.aspect).toBe("copy");
+      expect(send).not.toHaveBeenCalled();
+    });
+
+    it("never asks D3s about a competitor page", async () => {
+      const asked = installJev(0.8);
+      await baseline("ent-rival", BEFORE_HTML);
+      await changeOnce("ent-rival", AFTER_HTML, "rival-change");
+
+      expect(asked).not.toContain("own_site_breakage");
+      expect((await rows()).incidents).toEqual([]);
+      expect(send).not.toHaveBeenCalled();
+    });
+
+    it("opens no second incident and sends nothing on a second run while the incident is open", async () => {
+      installJev(0.8);
+      await baseline("ent-self", SELF_BEFORE_HTML);
+      await changeOnce("ent-self", SELF_BROKEN_HTML, "self-first");
+      await changeOnce("ent-self", SELF_BROKEN_AGAIN_HTML, "self-second");
+
+      const filed = await rows();
+      expect(filed.incidents).toHaveLength(1);
+      expect(filed.alerts).toHaveLength(1);
+      expect(send).toHaveBeenCalledTimes(1);
+    });
   });
 });
 
