@@ -38,13 +38,17 @@ describe("requireOnboarded", () => {
 
   it("resolves when the workspace has no resume point", async () => {
     landing.value = null;
-    await expect(
-      requireOnboarded({ request: new Request("https://0509.io/app/alerts") }),
-    ).resolves.toBeUndefined();
+    await expect(requireOnboarded({ request: new Request("https://0509.io/app/alerts") })).resolves.toBeUndefined();
   });
 });
 
-const SETTINGS_PATHS = ["app/settings", "app/settings/agents", "app/settings/brief-pause"];
+const SETTINGS_PATHS = [
+  "app/settings",
+  "app/settings/agents",
+  "app/settings/billing",
+  "app/settings/brief-pause",
+  "app/settings/export",
+];
 
 const childPathsOf = (layoutFile: string) =>
   routes

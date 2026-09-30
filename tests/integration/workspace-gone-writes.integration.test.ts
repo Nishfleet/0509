@@ -160,12 +160,7 @@ describe("an account deleted mid-request", () => {
     const verdicts = await countRows("jev_verdict", workspaceId);
     const decisions = await countRows("user_decision", workspaceId);
 
-    const screened = await screenPublicSubject(
-      workspaceId,
-      domainSubject("livebrand.com"),
-      "livebrand.com",
-      NOW,
-    );
+    const screened = await screenPublicSubject(workspaceId, domainSubject("livebrand.com"), "livebrand.com", NOW);
     expect(screened.outcome).toBe("refuse");
 
     const result = await screenOnboardingSubject({

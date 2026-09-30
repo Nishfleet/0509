@@ -5,7 +5,7 @@ import { z } from "zod";
 
 import { insertSelfEntity, readWorkspaceSelfId } from "../../../app/lib/data/entity.server";
 import { readJudgedPricingUrl, upsertJudgedPages } from "../../../app/lib/data/page.server";
-import { confirmCard } from "../../../app/lib/identity/confirm.server";
+import { confirmCard, confirmCardLater } from "../../../app/lib/identity/confirm.server";
 import { extractIdentity } from "../../../app/lib/identity/extract";
 import { normaliseSubject } from "../../../app/lib/identity/normalise";
 import { probeKey } from "../../../app/lib/identity/probe-cache.server";
@@ -32,9 +32,7 @@ const outcomeSchema = z.object({
   r2Keys: z.array(z.string()),
 });
 
-const watchSchema = z.array(
-  z.object({ id: z.string(), source_key: z.string(), target_key: z.string() }),
-);
+const watchSchema = z.array(z.object({ id: z.string(), source_key: z.string(), target_key: z.string() }));
 
 let runs = 0;
 let userId = "";
@@ -59,9 +57,7 @@ async function seed(): Promise<void> {
   )
     .bind(userId, `${userId}@0509.io`, now)
     .run();
-  await env.DB.prepare(
-    `INSERT INTO workspace (id, name, owner_user_id, created_at) VALUES (?1, 'Owner', ?2, ?3)`,
-  )
+  await env.DB.prepare(`INSERT INTO workspace (id, name, owner_user_id, created_at) VALUES (?1, 'Owner', ?2, ?3)`)
     .bind(workspaceId, userId, now)
     .run();
   await env.DB.prepare(
@@ -129,11 +125,7 @@ describe("IdentityTailWorkflow", () => {
     await using introspector = await introspectWorkflow(env.IDENTITY_TAIL);
     const day = new Date().toISOString().slice(0, 10);
     expect(
-      await confirmCard(
-        workspaceId,
-        userId,
-        form({ subject: DOMAIN, name: "Gymshark", description: "Gym clothes" }),
-      ),
+      await confirmCard(workspaceId, userId, form({ subject: DOMAIN, name: "Gymshark", description: "Gym clothes" })),
     ).toBe(true);
 
     const entityId = await env.DB.prepare("SELECT id FROM entity WHERE workspace_id = ?1 AND role = 'self'")
@@ -164,9 +156,7 @@ describe("IdentityTailWorkflow", () => {
       "youtube.channel_rss Gymshark",
     ]);
 
-    const pages = await env.DB.prepare(
-      "SELECT role, url FROM page WHERE entity_id = ?1 ORDER BY role, url",
-    )
+    const pages = await env.DB.prepare("SELECT role, url FROM page WHERE entity_id = ?1 ORDER BY role, url")
       .bind(entityId.id)
       .all<{ role: string; url: string }>();
     expect(pages.results).toEqual([{ role: "home", url: "https://gymshark.com/" }]);
@@ -196,14 +186,12 @@ describe("IdentityTailWorkflow", () => {
       }
       return new Response("", { status: 200 });
     });
-    const run = vi.fn(() =>
-      Promise.resolve({ answers: { page_role: { type: "choice", choice: "pricing" } } }),
-    );
+    const run = vi.fn(() => Promise.resolve({ answers: { page_role: { type: "choice", choice: "pricing" } } }));
     Reflect.set(env, "AI", { run });
 
-    expect(
-      await confirmCard(workspaceId, userId, form({ subject: DOMAIN, name: "Gymshark", description: "" })),
-    ).toBe(true);
+    expect(await confirmCard(workspaceId, userId, form({ subject: DOMAIN, name: "Gymshark", description: "" }))).toBe(
+      true,
+    );
     const entityId = await readWorkspaceSelfId(workspaceId);
     if (entityId === null) throw new Error("confirmed card was not stored");
 
@@ -227,9 +215,7 @@ describe("IdentityTailWorkflow", () => {
     )
       .bind(entityId)
       .all<{ url: string; role: string }>();
-    expect(new Set(judged.results.map((row) => row.url))).toEqual(
-      new Set(expected.map((page) => page.url)),
-    );
+    expect(new Set(judged.results.map((row) => row.url))).toEqual(new Set(expected.map((page) => page.url)));
     for (const row of judged.results) expect(row.role).toBe("pricing");
 
     const pricing = await readJudgedPricingUrl(entityId);
@@ -244,11 +230,7 @@ describe("IdentityTailWorkflow", () => {
     await seed();
     await using introspector = await introspectWorkflow(env.IDENTITY_TAIL);
     expect(
-      await confirmCard(
-        workspaceId,
-        userId,
-        form({ subject: DOMAIN, name: "Gymshark", description: "Gym clothes" }),
-      ),
+      await confirmCard(workspaceId, userId, form({ subject: DOMAIN, name: "Gymshark", description: "Gym clothes" })),
     ).toBe(true);
 
     const entityId = await readWorkspaceSelfId(workspaceId);
@@ -263,6 +245,36 @@ describe("IdentityTailWorkflow", () => {
       }),
     ).resolves.toBe(identityTailInstanceId(entityId));
     expect(await introspector.get()).toHaveLength(1);
+  });
+
+  it("confirms first and starts the one tail instance only when the caller asks", async () => {
+    await seed();
+    await using introspector = await introspectWorkflow(env.IDENTITY_TAIL);
+    const startTail = await confirmCardLater(
+      workspaceId,
+      userId,
+      form({ subject: DOMAIN, name: "Gymshark", description: "Gym clothes" }),
+    );
+    if (startTail === null) throw new Error("the confirm did not store the card");
+
+    expect(await introspector.get()).toHaveLength(0);
+    await startTail();
+    expect(await introspector.get()).toHaveLength(1);
+  });
+
+  it("lets a failed tail start surface to the caller after the card is stored", async () => {
+    await seed();
+    const failure = new Error("workflow binding unavailable");
+    vi.spyOn(env.IDENTITY_TAIL, "createBatch").mockRejectedValueOnce(failure);
+    const startTail = await confirmCardLater(
+      workspaceId,
+      userId,
+      form({ subject: DOMAIN, name: "Gymshark", description: "" }),
+    );
+    if (startTail === null) throw new Error("the confirm did not store the card");
+
+    expect(await readWorkspaceSelfId(workspaceId)).not.toBeNull();
+    await expect(startTail()).rejects.toBe(failure);
   });
 
   it("watches the page Jev judged pricing, not a /pricing path", async () => {
@@ -385,9 +397,7 @@ describe("IdentityTailWorkflow", () => {
     vi.stubGlobal("fetch", (input: RequestInfo | URL) => {
       const url = input instanceof Request ? input.url : String(input);
       if (url === "https://veritasium.com/") {
-        return Promise.resolve(
-          new Response(siteHtml, { status: 200, headers: { "content-type": "text/html" } }),
-        );
+        return Promise.resolve(new Response(siteHtml, { status: 200, headers: { "content-type": "text/html" } }));
       }
       if (url === GREENHOUSE_JOBS) {
         return Promise.resolve(
@@ -429,9 +439,7 @@ describe("IdentityTailWorkflow", () => {
     await instance.getOutput();
     const siteSubject = normaliseSubject("veritasium.com");
     if (!siteSubject.ok) throw new Error("veritasium.com must normalise");
-    expect(
-      await env.IDENTITY_CACHE.get(probeKey(siteSubject.subject, "homepage"), "json"),
-    ).not.toBeNull();
+    expect(await env.IDENTITY_CACHE.get(probeKey(siteSubject.subject, "homepage"), "json")).not.toBeNull();
   });
 
   it("seeds a creator with no website without any site, ads or hiring watch", async () => {
@@ -470,9 +478,9 @@ describe("IdentityTailWorkflow", () => {
       await modifier.disableRetryDelays();
       await modifier.mockStepError({ name: "enqueue-first-sweep" }, new Error("forced step retry"), 1);
     });
-    expect(
-      await confirmCard(workspaceId, userId, form({ subject: DOMAIN, name: "Gymshark", description: "" })),
-    ).toBe(true);
+    expect(await confirmCard(workspaceId, userId, form({ subject: DOMAIN, name: "Gymshark", description: "" }))).toBe(
+      true,
+    );
     const [instance] = await introspector.get();
     if (instance === undefined) throw new Error("tail instance was not started");
     await instance.waitForStatus("complete");
@@ -492,9 +500,9 @@ describe("IdentityTailWorkflow", () => {
       await modifier.disableRetryDelays();
       await modifier.mockStepError({ name: "persist" }, new Error("forced step retry"), 4);
     });
-    expect(
-      await confirmCard(workspaceId, userId, form({ subject: DOMAIN, name: "Gymshark", description: "" })),
-    ).toBe(true);
+    expect(await confirmCard(workspaceId, userId, form({ subject: DOMAIN, name: "Gymshark", description: "" }))).toBe(
+      true,
+    );
     const [instance] = await introspector.get();
     if (instance === undefined) throw new Error("tail instance was not started");
     await instance.waitForStatus("errored");
@@ -522,8 +530,6 @@ describe("IdentityTailWorkflow", () => {
     const [instance] = await introspector.get();
     if (instance === undefined) throw new Error("tail instance was not started");
     await instance.waitForStatus("errored");
-    expect((await instance.getError()).message).toContain(
-      "a step threw an NonRetryableError and it was not handled",
-    );
+    expect((await instance.getError()).message).toContain("a step threw an NonRetryableError and it was not handled");
   });
 });

@@ -110,9 +110,7 @@ describe("X as a disabled mentions source row (#3977)", () => {
     // tick, and snapshot reaches source through its watch, so all three counts
     // must be zero for the row.
     const id = "src_mentions_x";
-    const watches = await env.DB.prepare(
-      "SELECT count(*) AS n FROM watch WHERE source_id = ?",
-    )
+    const watches = await env.DB.prepare("SELECT count(*) AS n FROM watch WHERE source_id = ?")
       .bind(id)
       .first<{ n: number }>();
     expect(watches?.n, "a disabled source must have no watch and so cannot be polled").toBe(0);
@@ -160,9 +158,7 @@ describe("X as a disabled mentions source row (#3977)", () => {
 
     // Copy config_json straight from the shipped row, so the control flips the
     // same bytes the decision rests on.
-    const source = await env.DB.prepare(
-      "SELECT config_json FROM source WHERE id = ?",
-    )
+    const source = await env.DB.prepare("SELECT config_json FROM source WHERE id = ?")
       .bind("src_mentions_x")
       .first<{ config_json: string }>();
     expect(source?.config_json, "the shipped row must exist to copy from").toBeTruthy();
@@ -175,15 +171,11 @@ describe("X as a disabled mentions source row (#3977)", () => {
       .run();
 
     try {
-      const disabled = (await env.DB.prepare(MENTIONS_ELIGIBILITY_SELECT).all<{ id: string }>())
-        .results ?? [];
+      const disabled = (await env.DB.prepare(MENTIONS_ELIGIBILITY_SELECT).all<{ id: string }>()).results ?? [];
       expect(disabled.map((r) => r.id)).not.toContain(controlId);
 
-      await env.DB.prepare("UPDATE source SET is_enabled = 1 WHERE id = ?")
-        .bind(controlId)
-        .run();
-      const enabled = (await env.DB.prepare(MENTIONS_ELIGIBILITY_SELECT).all<{ id: string }>())
-        .results ?? [];
+      await env.DB.prepare("UPDATE source SET is_enabled = 1 WHERE id = ?").bind(controlId).run();
+      const enabled = (await env.DB.prepare(MENTIONS_ELIGIBILITY_SELECT).all<{ id: string }>()).results ?? [];
       expect(enabled.map((r) => r.id)).toContain(controlId);
 
       // The shipped row was unmoved by that flip: enabling is per-row.
@@ -192,8 +184,7 @@ describe("X as a disabled mentions source row (#3977)", () => {
       await env.DB.prepare("DELETE FROM source WHERE id = ?").bind(controlId).run();
     }
 
-    const after = (await env.DB.prepare(MENTIONS_ELIGIBILITY_SELECT).all<{ id: string }>())
-      .results ?? [];
+    const after = (await env.DB.prepare(MENTIONS_ELIGIBILITY_SELECT).all<{ id: string }>()).results ?? [];
     expect(after.map((r) => r.id)).not.toContain(controlId);
   });
 });

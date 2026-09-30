@@ -61,9 +61,7 @@ export interface HowRanked {
 }
 
 const bucketIndex = new Map(scoreBucketSchema.options.map((bucket, index) => [bucket, index]));
-const reliabilityIndex = new Map(
-  reliabilitySchema.options.map((reliability, index) => [reliability, index]),
-);
+const reliabilityIndex = new Map(reliabilitySchema.options.map((reliability, index) => [reliability, index]));
 
 const orderOf = (index: ReadonlyMap<string, number>, key: string): number => index.get(key) ?? 0;
 
@@ -81,13 +79,11 @@ export function howRanked(input: {
     weight: weightOf(weights, key),
   }));
 
-  const multiplierEntries: readonly HowRankedMultiplier[] = reliabilitySchema.options.map(
-    (reliability) => ({
-      reliability,
-      label: RELIABILITY_LABELS[reliability],
-      value: weightOf(weights, `reliability_${reliability}`),
-    }),
-  );
+  const multiplierEntries: readonly HowRankedMultiplier[] = reliabilitySchema.options.map((reliability) => ({
+    reliability,
+    label: RELIABILITY_LABELS[reliability],
+    value: weightOf(weights, `reliability_${reliability}`),
+  }));
 
   const countsByEntity = new Map(
     [...new Set(input.counts.map((count) => count.entity_id))].map((entityId) => [

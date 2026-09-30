@@ -1,6 +1,5 @@
 import { SUPPORT_ADDRESS } from "../components/footer";
 import { PLANS } from "./billing/plans";
-import { FEATURES } from "./coverage";
 import type { FaqEntry } from "./faq";
 
 export const SITE_URL = "https://0509.io";
@@ -33,14 +32,14 @@ export function websiteJsonLd() {
   };
 }
 
-export function softwareApplicationJsonLd() {
+export function softwareApplicationJsonLd(features: readonly string[]) {
   return {
     "@type": "SoftwareApplication",
     name: "Five to Nine",
     url: SITE_URL,
     applicationCategory: "BusinessApplication",
     operatingSystem: "Web",
-    featureList: FEATURES,
+    featureList: features,
     publisher: { "@id": ORGANIZATION_ID },
     offers: PLANS.map((plan) => ({
       "@type": "Offer",

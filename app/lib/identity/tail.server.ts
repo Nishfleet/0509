@@ -7,8 +7,9 @@ import type { NewPage } from "../data/page.server";
 import { readEnabledSourceId, readEnabledSources } from "../data/source.server";
 import { insertWatches, readEntityWatches } from "../data/watch.server";
 import type { EntityWatch, NewWatch } from "../data/watch.server";
-import { readUrl } from "../fetch/transport.server";
-import { discoverBoard } from "../hiring/discover-board";
+import { readUrl, probeFailureReason } from "../fetch/transport.server";
+import { discoverBoard } from "../hiring/discover-board.server";
+import { sha256Hex } from "../sha256";
 import { brandBudget, readCachedSiteProof, readSiteCard } from "./card.server";
 import { extractIdentity } from "./extract";
 import { normaliseSubject, type Subject } from "./normalise";
@@ -43,11 +44,6 @@ export function identityTailInstanceId(entityId: string): string {
 
 export async function startIdentityTail(params: IdentityTailParams): Promise<string> {
   const id = identityTailInstanceId(params.entityId);
-  const exists = await env.IDENTITY_TAIL.get(id).then(
-    () => true,
-    () => false,
-  );
-  if (exists) return id;
   await env.IDENTITY_TAIL.createBatch([{ id, params }]);
   return id;
 }
@@ -55,9 +51,7 @@ export async function startIdentityTail(params: IdentityTailParams): Promise<str
 export async function persistTail(params: IdentityTailParams): Promise<{ entityId: string }> {
   const entityId = await readSelfEntityId(params.workspaceId, params.entityId);
   if (entityId === null) {
-    throw new NonRetryableError(
-      `self entity ${params.entityId} is not in workspace ${params.workspaceId}`,
-    );
+    throw new NonRetryableError(`self entity ${params.entityId} is not in workspace ${params.workspaceId}`);
   }
   return { entityId };
 }
@@ -67,21 +61,28 @@ export async function classifyTailPages(params: IdentityTailParams, now: string)
   try {
     const page = await readUrl(params.homepageUrl, { mayEscalate: brandBudget(params.workspaceId, params.domain) });
     if (!page.ok) {
+      const subjectSha256 = await sha256Hex(params.domain);
       console.log(
-        JSON.stringify({ event: "identity-page-role-skipped", workspaceId: params.workspaceId, error: page.detail }),
+        JSON.stringify({
+          event: "identity-page-role-skipped",
+          workspaceId: params.workspaceId,
+          reason: page.reason,
+          subjectSha256,
+        }),
       );
       return;
     }
     const extract = await extractIdentity(page.html, params.homepageUrl);
-    await classifyNavPages(
-      params.workspaceId,
-      { id: params.entityId, domain: params.domain },
-      extract.navPages,
-      now,
-    );
+    await classifyNavPages(params.workspaceId, { id: params.entityId, domain: params.domain }, extract.navPages, now);
   } catch (error) {
+    const subjectSha256 = await sha256Hex(params.domain);
     console.log(
-      JSON.stringify({ event: "identity-page-role-skipped", workspaceId: params.workspaceId, error: String(error) }),
+      JSON.stringify({
+        event: "identity-page-role-skipped",
+        workspaceId: params.workspaceId,
+        reason: probeFailureReason(error),
+        subjectSha256,
+      }),
     );
   }
 }

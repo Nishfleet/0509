@@ -7,8 +7,8 @@ import { takenDownAmong } from "../data/takedown.server";
 import type { NoulQuestion, NoulVerdict } from "../jev/client.server";
 import { askNoul, JevUnavailableError } from "../jev/client.server";
 import { evidenceLine } from "./evidence-line";
-import { hnGenerator } from "./generators/hn";
-import { newsGenerator } from "./generators/news";
+import { aiGenerator } from "./generators/ai.server";
+import { hnGenerator } from "./generators/hn.server";
 import { resolveDomain } from "./resolve-domain.server";
 import { nameKey, partitionShortlist } from "./shortlist";
 import type { ShortlistEntry } from "./shortlist";
@@ -31,7 +31,7 @@ export interface ResolvedCandidate {
   line: string;
 }
 
-const IS_COMPETITOR: NoulQuestion = {
+export const IS_COMPETITOR: NoulQuestion = {
   id: "is_competitor",
   instructions:
     "Is `item` a real competitor of `self`: a company or brand that sells a substitute to the same kind of customer, so the owner of `self` would want to watch what it does? `item.evidence` is where the two were named together. Judge the business relationship the evidence shows. If `item` sells, stocks, lists, supplies, funds, owns, reports on or partners with `self`, it is not a competitor, even when it is in the same industry.",
@@ -41,22 +41,22 @@ const IS_COMPETITOR: NoulQuestion = {
     "It is a publisher, retailer, marketplace, supplier, partner, investor, a product line of `self`, `self` itself, or an unrelated company that only shares a headline.",
 };
 
-const IS_CREATOR_RIVAL: NoulQuestion = {
+export const IS_CREATOR_RIVAL: NoulQuestion = {
   id: "is_creator_rival",
   instructions:
-    "Is `item` a real rival of `self`, a creator: another creator, channel or media brand competing for the same audience's attention, or a brand in the category `self` sells into, so `self` would want to watch what it does? `item.evidence` is where the two were named together.",
+    "Is `item` a real rival of `self`, a creator? A rival is a peer a viewer could watch instead of `self`: another creator or channel on the same platform courting the same audience, or a brand selling into the category `self` sells into. `item.evidence` is where the two were named together. Judge that from the evidence: an item that only carries, hosts, reports on, or sponsors `self` is a false case, while an item whose own audience or catalogue points at the same fans or buyers as `self` is a true case.",
   whenTrue: "It competes with `self` for the same audience or sells into the same category as `self`.",
   whenFalse:
     "It is a platform, publisher, sponsor, retailer, a product of `self`, `self` itself, or an unrelated name that only shares a headline.",
 };
 
 const GENERATORS = [
-  { name: "news", run: newsGenerator },
   { name: "hn", run: hnGenerator },
+  { name: "ai", run: aiGenerator },
 ] as const;
 
 async function settledCandidates(self: DiscoverySelf): Promise<Candidate[]> {
-  const subject = { name: self.name, domain: self.domain };
+  const subject = { name: self.name, domain: self.domain, description: self.description };
   const runs = await Promise.allSettled(GENERATORS.map((generator) => generator.run(subject)));
   return runs.flatMap((run, index) => {
     if (run.status === "fulfilled") return run.value;
@@ -77,11 +77,7 @@ export function withBacklog(
 ): { entries: ShortlistEntry[]; rest: BacklogRow[]; promoted: string[] } {
   const { entries, rest } = partitionShortlist([...backlog, ...fresh]);
   const placed = new Set(entries.flatMap((entry) => entry.nameKeys));
-  const promoted = [
-    ...new Set(
-      backlog.map((candidate) => nameKey(candidate.name)).filter((key) => placed.has(key)),
-    ),
-  ];
+  const promoted = [...new Set(backlog.map((candidate) => nameKey(candidate.name)).filter((key) => placed.has(key)))];
   return {
     entries,
     rest: rest.map((candidate) => ({
@@ -136,7 +132,7 @@ export async function resolveShortlist(
   return resolved;
 }
 
-function competitorState(context: DiscoveryContext, candidate: ResolvedCandidate): unknown {
+export function competitorState(context: DiscoveryContext, candidate: ResolvedCandidate): unknown {
   return {
     self: {
       name: context.self.name,
@@ -150,7 +146,7 @@ function competitorState(context: DiscoveryContext, candidate: ResolvedCandidate
       evidence: candidate.evidence.map((item) => ({ source: item.sourceUrl, excerpt: item.excerpt })),
     },
     user_memory: { dismissed_domains: context.dismissedDomains },
-    reliability: { news: "rss", hn: "best_effort" },
+    reliability: { hn: "best_effort" },
   };
 }
 

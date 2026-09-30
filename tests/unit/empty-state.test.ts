@@ -1,15 +1,15 @@
 import { createElement } from "react";
+import { readFile } from "node:fs/promises";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
 import {
-  alertsEmpty,
-  competitorJustAdded,
   degradedSource,
   EmptyState,
   evidenceEmpty,
   fewerThanTwoOnBrands,
-  homeSecondZero,
   quietWeek,
   type EmptyStateAction,
 } from "../../app/components/empty-state";
@@ -18,21 +18,22 @@ import {
  * Nishfleet/0509#4020. DESIGN.md 7: "Never 'No data'. Every empty state says
  * what will fill it and when, or gives the one action that fills it."
  *
- * These rows are the seven surfaces DESIGN.md 7 names, rendered through the
- * component that ships their copy. Two of them compute a real time from a
- * Date, because a hardcoded clock is the lie 7 rules out ("a real Workflow
- * time, never 'soon'").
+ * Four of the seven surfaces DESIGN.md 7 names are rendered here through the
+ * component that ships their copy. The seventh, Home's second zero, ships
+ * through first-file-panel.tsx and takes its brief time from the real schedule
+ * (tests/home/arrival-estimate.test.ts), so no factory here guesses a date.
  */
 
 const NOW = new Date(2026, 8, 24, 10, 0, 0, 0);
 const DAY_MS = 86_400_000;
+
+const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 
 function shift(days: number): Date {
   return new Date(NOW.getTime() + days * DAY_MS);
 }
 
 const CLOCK = new Intl.DateTimeFormat("en-GB", { hour: "2-digit", minute: "2-digit" });
-const DAY_NAME = new Intl.DateTimeFormat("en-GB", { weekday: "long" });
 
 function clock(at: Date): string {
   return CLOCK.format(at);
@@ -47,26 +48,12 @@ function links(html: string): string[] {
 }
 
 describe("DESIGN.md 7 empty states", () => {
-  it("Home's second zero carries a real Workflow arrival time, never 'soon'", () => {
-    const { sentence, action } = homeSecondZero(NOW);
-    const html = emptyState(sentence, action);
-    expect(html).toContain(`${DAY_NAME.format(shift(6))} ${clock(shift(6))}`);
-    expect(html).not.toContain("today");
-    expect(html).not.toContain("soon");
-  });
-
-  it("the arrival time follows the clock rather than being frozen into the copy", () => {
-    const early = homeSecondZero(new Date(2026, 8, 24, 8, 0, 0, 0)).sentence;
-    const late = homeSecondZero(new Date(2026, 8, 24, 19, 30, 0, 0)).sentence;
-    expect(early).not.toBe(late);
-  });
-
   it("a quiet week keeps its counts and makes them tappable", () => {
-    const { sentence, action } = quietWeek(61, 2, 0);
+    const { sentence, action } = quietWeek(61, 2);
     const html = emptyState(sentence, action);
     expect(html).toContain("61 mentions");
     expect(html).toContain("2 site changes");
-    expect(html).toContain("0 new ads checked");
+    expect(html).not.toMatch(/\bads\b/);
     expect(links(html)).toHaveLength(1);
     expect(links(html)[0]).toContain('href="/app"');
   });
@@ -89,22 +76,6 @@ describe("DESIGN.md 7 empty states", () => {
     expect(html).toContain(`last at ${clock(lastChecked)}`);
   });
 
-  it("a just-added competitor says when the first marks land", () => {
-    const { sentence } = competitorJustAdded();
-    const html = emptyState(sentence);
-    expect(html).toContain("The first mentions land in the nightly sweep");
-    expect(html).toContain("first mark comes tomorrow");
-    expect(html).not.toMatch(/\bads\b/);
-    expect(html).not.toContain("within the hour");
-  });
-
-  it("Alerts with nothing yet still says what would interrupt", () => {
-    const { sentence } = alertsEmpty();
-    const html = emptyState(sentence);
-    expect(html).toContain("Nothing has interrupted you.");
-    expect(html).toContain("everything else waits here");
-  });
-
   it("a degraded source names itself and declines to round a gap into a count", () => {
     const { sentence } = degradedSource("X", "rate-limiting us since Friday");
     const html = emptyState(sentence);
@@ -113,7 +84,7 @@ describe("DESIGN.md 7 empty states", () => {
   });
 
   it("a surface with some truth shows that truth at whatever size it is", () => {
-    const { sentence } = quietWeek(61, 2, 0);
+    const { sentence } = quietWeek(61, 2);
     const html = emptyState(sentence);
     expect(html).toContain("61 mentions");
     expect(html).toContain("2 site changes");
@@ -134,7 +105,7 @@ describe("the component renders a sentence and at most one action, nothing else"
   });
 
   it("renders exactly one link when given a link action", () => {
-    const { sentence, action } = quietWeek(61, 2, 0);
+    const { sentence, action } = quietWeek(61, 2);
     const html = emptyState(sentence, action);
     expect(links(html)).toHaveLength(1);
     expect(html).toContain(">Open the counts</a>");
@@ -148,21 +119,27 @@ describe("the component renders a sentence and at most one action, nothing else"
   });
 
   it("an action href must be a same-site path", () => {
-    expect(() => emptyState("Add a competitor to see where you stand.", {
-      kind: "link",
-      label: "Add",
-      href: "javascript:alert(1)",
-    })).toThrow(/same-site path/);
-    expect(() => emptyState("Add a competitor to see where you stand.", {
-      kind: "link",
-      label: "Add",
-      href: "https://example.com",
-    })).toThrow(/same-site path/);
-    expect(() => emptyState("Add a competitor to see where you stand.", {
-      kind: "link",
-      label: "Add",
-      href: "/app/competitors",
-    })).not.toThrow();
+    expect(() =>
+      emptyState("Add a competitor to see where you stand.", {
+        kind: "link",
+        label: "Add",
+        href: "javascript:alert(1)",
+      }),
+    ).toThrow(/same-site path/);
+    expect(() =>
+      emptyState("Add a competitor to see where you stand.", {
+        kind: "link",
+        label: "Add",
+        href: "https://example.com",
+      }),
+    ).toThrow(/same-site path/);
+    expect(() =>
+      emptyState("Add a competitor to see where you stand.", {
+        kind: "link",
+        label: "Add",
+        href: "/app/competitors",
+      }),
+    ).not.toThrow();
   });
 });
 
@@ -175,15 +152,12 @@ describe("a bare empty sentence is impossible", () => {
 
   it("every sentence the component ships renders", () => {
     const shipped = [
-      homeSecondZero(NOW).sentence,
-      quietWeek(61, 2, 0).sentence,
+      quietWeek(61, 2).sentence,
       fewerThanTwoOnBrands().sentence,
       evidenceEmpty(["/pricing", "/home"], shift(-1)).sentence,
-      competitorJustAdded().sentence,
-      alertsEmpty().sentence,
       degradedSource("X", "rate-limiting us since Friday").sentence,
     ];
-    expect(shipped).toHaveLength(7);
+    expect(shipped).toHaveLength(4);
     for (const sentence of shipped) {
       expect(() => emptyState(sentence)).not.toThrow();
     }
@@ -191,15 +165,95 @@ describe("a bare empty sentence is impossible", () => {
 
   it("each shipped sentence names something a user can act on", () => {
     for (const { sentence } of [
-      homeSecondZero(NOW),
-      quietWeek(61, 2, 0),
+      quietWeek(61, 2),
       fewerThanTwoOnBrands(),
       evidenceEmpty(["/pricing", "/home"], shift(-1)),
-      competitorJustAdded(),
-      alertsEmpty(),
       degradedSource("X", "rate-limiting us since Friday"),
     ]) {
       expect(sentence.length).toBeGreaterThan("Nothing here".length);
     }
+  });
+});
+
+/**
+ * Nishfleet/0509#5862. DESIGN.md 7's "Home, second zero" row used to be
+ * served by a dead `homeSecondZero()` factory in empty-state.tsx that guessed
+ * the brief time as `shift(now, 6)` with no timeZone. Nothing rendered it —
+ * the shipped second zero is first-file-panel.tsx, which takes the brief time
+ * from the real schedule. This gate is the anti-drift: the DESIGN.md row must
+ * name a copy the SHIPPED factory can actually produce, and no copy factory in
+ * empty-state.tsx may be exported without a caller.
+ */
+describe("DESIGN.md 7 rows are tied to the factories that ship them (#5862)", () => {
+  it("the Home second-zero copy is produced by the shipped FirstFilePanel from a real brief time", async () => {
+    const { FirstFilePanel } = await import("../../app/components/first-file-panel");
+    const { homeView } = await import("../../app/lib/home-standing");
+    const doc = await readFile(path.join(REPO_ROOT, "DESIGN.md"), "utf8");
+    const row = doc
+      .split("\n")
+      .find((line) => line.startsWith("| Home, second zero"))
+      ?.split("|")[2]
+      ?.trim();
+    expect(row).toBeDefined();
+
+    const view = homeView({
+      payload: null,
+      entities: [
+        { id: "ent_self", role: "self", domain: "own.example", name: "Own Brand", state: "on" },
+        { id: "ent_kindred", role: "competitor", domain: "kindred.example", name: "Kindred", state: "on" },
+      ],
+      schedule: { timezone: "Europe/London", weekday: 1, hour: 8 },
+      history: [],
+      sources: [],
+      counts: [],
+      moves: [],
+      now: new Date("2026-09-24T06:30:00.000Z"),
+    });
+    expect(view.standing.kind).toBe("gathering");
+    if (view.standing.kind !== "gathering") return;
+
+    const html = renderToStaticMarkup(
+      createElement(FirstFilePanel, {
+        brands: view.standing.brands,
+        firstSweepAt: view.standing.firstSweepAt,
+        briefAt: view.standing.briefAt,
+      }),
+    );
+    // The row's copy names a day/time; the real schedule must produce exactly
+    // that one, and the shipped factory must render it. A row that names a day
+    // the schedule cannot emit (the shift(now, 6) lie) fails here instead of
+    // drifting back in.
+    const docTime = row?.match(/brief on ([A-Z][a-z]+ \d{2}:\d{2})/)?.[1];
+    expect(docTime).toBeDefined();
+    expect(docTime).toBe(view.standing.briefAt);
+    expect(html).toContain(`comes with the brief on ${String(docTime)}`);
+  });
+});
+
+describe("DESIGN.md 7 rows quote the strings customers can reach (#5963)", () => {
+  async function designRow(label: string): Promise<string> {
+    const doc = await readFile(path.join(REPO_ROOT, "DESIGN.md"), "utf8");
+    const row = doc
+      .split("\n")
+      .find((line) => line.startsWith(`| ${label}`))
+      ?.split("|")[2]
+      ?.trim();
+    expect(row).toBeDefined();
+    return String(row).replace(/^"|"$/g, "");
+  }
+
+  it("the just-added competitor row is the sentence the competitor page renders", async () => {
+    const { developmentsEmpty } = await import("../../app/components/competitor-frame");
+    expect(await designRow("Competitor page, just added")).toBe(developmentsEmpty(null));
+  });
+
+  it("the alerts row is the paragraph the alerts route renders", async () => {
+    const route = await readFile(path.join(REPO_ROOT, "app/routes/app.alerts.tsx"), "utf8");
+    expect(route).toContain(await designRow("Alerts, nothing yet"));
+  });
+
+  it("empty-state.tsx exports no copy factory the app does not import", async () => {
+    const source = await readFile(path.join(REPO_ROOT, "app/components/empty-state.tsx"), "utf8");
+    expect(source).not.toMatch(/export function (competitorJustAdded|alertsEmpty|homeSecondZero)\b/);
   });
 });

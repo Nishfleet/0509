@@ -1,11 +1,7 @@
 import { env, type D1Migration } from "cloudflare:test";
 import { beforeEach, describe, expect, it } from "vitest";
 
-import {
-  insertSnapshot,
-  insertBoardSnapshot,
-  insertWatchSnapshot,
-} from "../../app/lib/data/snapshot.server";
+import { insertSnapshot, insertBoardSnapshot, insertWatchSnapshot } from "../../app/lib/data/snapshot.server";
 import { readRegistrySources } from "../../app/lib/data/source.server";
 
 const MIGRATION = "0028_source_latest_snapshot.sql";
@@ -39,9 +35,7 @@ const latestFacts = async (sourceId: string): Promise<LatestFacts> => {
 };
 
 const seedWatch = async (watchId: string, sourceId: string, targetKey = "acme"): Promise<void> => {
-  await env.DB.prepare(
-    "INSERT INTO watch (id, entity_id, source_id, target_key, is_active) VALUES (?1, ?2, ?3, ?4, 1)",
-  )
+  await env.DB.prepare("INSERT INTO watch (id, entity_id, source_id, target_key, is_active) VALUES (?1, ?2, ?3, ?4, 1)")
     .bind(watchId, ENTITY, sourceId, targetKey)
     .run();
 };
@@ -237,6 +231,29 @@ describe("source latest snapshot facts (0509#5724)", () => {
     await insertSnapshot(row);
     await insertSnapshot(row);
 
+    expect(await latestFacts(SOURCE)).toEqual({
+      latest_fetched_at: "2026-09-25T05:00:00Z",
+      latest_item_count: 1,
+      latest_canary_count: null,
+    });
+  });
+
+  it("a retried write whose caller recomputes fetchedAt keeps the stored snapshot's facts", async () => {
+    await seedSource(SOURCE, WATCH);
+    const row = {
+      id: "snap-site-recomputed",
+      watchId: WATCH,
+      pageId: PAGE,
+      r2Key: "snapshot/site/watch-src-latest/snap-site-recomputed.txt",
+      hash: "hash-site-recomputed",
+    };
+    await insertSnapshot({ ...row, fetchedAt: "2026-09-25T05:00:00Z" });
+    await insertSnapshot({ ...row, fetchedAt: "2026-09-25T05:00:09Z" });
+
+    const stored = await env.DB.prepare("SELECT fetched_at FROM snapshot WHERE id = ?1")
+      .bind(row.id)
+      .first<{ fetched_at: string }>();
+    expect(stored?.fetched_at).toBe("2026-09-25T05:00:00Z");
     expect(await latestFacts(SOURCE)).toEqual({
       latest_fetched_at: "2026-09-25T05:00:00Z",
       latest_item_count: 1,

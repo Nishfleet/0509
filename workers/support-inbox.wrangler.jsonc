@@ -10,14 +10,14 @@
   "main": "./support-inbox.ts",
   "compatibility_date": "2026-09-16",
   "observability": {
-    "enabled": true
+    "enabled": true,
   },
   "d1_databases": [
     {
       "binding": "DB",
       "database_name": "0509",
-      "database_id": "746c6e3d-782e-443a-82d6-28ca93a16294"
-    }
+      "database_id": "746c6e3d-782e-443a-82d6-28ca93a16294",
+    },
   ],
-  "triggers": { "crons": ["17 3 * * *"] }
+  "triggers": { "crons": ["17 3 * * *"] },
 }

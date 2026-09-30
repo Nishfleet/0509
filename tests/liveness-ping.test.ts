@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { pingLiveness } from "../app/lib/liveness-ping.server";
 
-const PING_URL = "https://monitor.example/ping";
+const PING_URL = "https://monitor.example.com/ping";
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -41,10 +41,7 @@ describe("pingLiveness", () => {
     expect(signal?.reason).toBeInstanceOf(DOMException);
     expect((signal?.reason as DOMException).name).toBe("TimeoutError");
 
-    const settled = await Promise.race([
-      pending?.then(() => "resolved"),
-      Promise.resolve("still-pending"),
-    ]);
+    const settled = await Promise.race([pending?.then(() => "resolved"), Promise.resolve("still-pending")]);
     expect(settled).toBe("still-pending");
   }, 30_000);
 

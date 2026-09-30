@@ -3,17 +3,13 @@ import { z } from "zod";
 
 import { readCachedChoice, readCachedNoul } from "../data/jev_verdict.server";
 import { sha256Hex } from "../sha256";
+import type { NoulQuestion } from "./thresholds";
+
+export type { NoulQuestion };
 
 const MODEL = "typesafe/jev";
 
-const GATEWAY_ID = "default";
-
-export interface NoulQuestion {
-  id: string;
-  instructions: string;
-  whenTrue: string;
-  whenFalse: string;
-}
+export const GATEWAY_ID = "default";
 
 export interface NoulVerdict {
   questionId: string;
@@ -44,10 +40,7 @@ interface NoulAsk {
 }
 
 const answerSchema = z.object({
-  answers: z.record(
-    z.string(),
-    z.object({ type: noulType, noul: z.number().min(0).max(1) }),
-  ),
+  answers: z.record(z.string(), z.object({ type: noulType, noul: z.number().min(0).max(1) })),
 });
 
 type NoulAnswers = z.infer<typeof answerSchema>["answers"];
@@ -214,11 +207,7 @@ async function runChoice(question: ChoiceQuestion, state: unknown): Promise<stri
   return answer.choice;
 }
 
-export async function askChoice(
-  workspaceId: string,
-  question: ChoiceQuestion,
-  state: unknown,
-): Promise<ChoiceVerdict> {
+export async function askChoice(workspaceId: string, question: ChoiceQuestion, state: unknown): Promise<ChoiceVerdict> {
   const hash = await sha256Hex(
     JSON.stringify({
       workspace: workspaceId,

@@ -25,13 +25,7 @@ function markBlock(mark: BriefPayload["read_this_first"][number]): ReactElement 
         </p>
       )
     ) : (
-      <Mark
-        before={mark.before}
-        after={mark.after}
-        sourceUrl={mark.url}
-        capturedAt={mark.observed_at}
-        size="md"
-      />
+      <Mark before={mark.before} after={mark.after} sourceUrl={mark.url} capturedAt={mark.observed_at} size="md" />
     );
   return (
     <Fragment key={mark.signal_id}>

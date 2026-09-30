@@ -15,4 +15,16 @@ describe("legal page meta", () => {
       expect(robots).toEqual([{ name: "robots", content: "index, follow" }]);
     }
   });
+
+  it("gives both pages a social card that matches their own title, description and url", () => {
+    for (const doc of [PRIVACY, TERMS]) {
+      const tags = legalMeta(doc);
+      const og = (property: string) => tags.find((entry) => entry.property === property)?.content;
+      expect(og("og:title")).toBe(`${doc.title} · Five to Nine`);
+      expect(og("og:description")).toBe(doc.description);
+      expect(og("og:url")).toBe(`https://0509.io${doc.path}`);
+      expect(og("og:image")).toBe("https://0509.io/og.png");
+      expect(tags).toContainEqual({ name: "twitter:card", content: "summary_large_image" });
+    }
+  });
 });

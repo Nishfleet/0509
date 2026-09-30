@@ -13,7 +13,10 @@ import { UNJUDGED_WEEK_LINE } from "../../app/lib/read-this-first";
 import { shareCard } from "../../app/lib/share-card";
 import { renderBrief } from "../../workers/delivery/brief-template";
 
-const CONTEXT = { unsubscribe_url: "https://0509.io/u/opaque-token", asset_base_url: "https://assets.0509.io" } as const;
+const CONTEXT = {
+  unsubscribe_url: "https://0509.io/u/opaque-token",
+  asset_base_url: "https://assets.0509.io",
+} as const;
 const SCHEDULE: BriefSchedule = { timezone: "Europe/London", weekday: 1, hour: 8 };
 const NOW = new Date("2026-09-24T06:30:00.000Z");
 
@@ -116,7 +119,9 @@ describe("unjudged week readers", () => {
 
     const email = renderBrief(payload, CONTEXT);
     const brief = renderToStaticMarkup(createElement(BriefView, { payload }));
-    const first = renderToStaticMarkup(createElement(ReadThisFirst, { marks: payload.read_this_first, unjudged: true }));
+    const first = renderToStaticMarkup(
+      createElement(ReadThisFirst, { marks: payload.read_this_first, unjudged: true }),
+    );
     const standing = homeStanding({
       payload,
       entities: ENTITIES,

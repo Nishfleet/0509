@@ -1,14 +1,8 @@
-import { readdirSync, readFileSync } from "node:fs";
-import { DatabaseSync } from "node:sqlite";
-import { join } from "node:path";
-
-import { betterAuth } from "better-auth";
-import { magicLink } from "better-auth/plugins";
 import { expect, test, type Locator, type Page } from "@playwright/test";
 
-import { consoleFailures, isLocalLane, laneOrigin, watchConsole } from "./inbox";
+import { consoleFailures, isLocalLane, run, seedPreviewSession, watchConsole } from "./inbox";
 
-// Preview-lane proof for #5441: Enter saves and closes the identity card
+// Preview-lane proof for #5441 and #5557: Enter saves and closes the identity card
 // editor, Escape saves and closes, and Base UI returns focus to the trigger.
 // `e2e/onboarding-identity.spec.ts` keeps the production walk on the same
 // component, but its signed-in describe skips in this lane (no inbox), so
@@ -22,85 +16,13 @@ import { consoleFailures, isLocalLane, laneOrigin, watchConsole } from "./inbox"
 // returns the unfound card — empty fields, every `EditRow` openable — and the
 // keyboard paths the packet specifies are reachable without any network.
 //
-// The 390 lane runs and is marked expected-to-fail rather than skipped: on an
-// unread card, `Row` puts the fixed `w-20 shrink-0` label and the "we'll fill
-// this on the first crawl" line beside the `min-w-0 flex-1` trigger, and the
-// trigger measures 0px wide at 390, so Playwright never sees it. 0509#5557
-// probed that row — 316px across, the 80px label, the 204px empty line and the
-// two `gap-4` taking the 32px — and owns the fix, which deletes this file's
-// expected failure rather than this packet's slice.
-test.skip(
-  !isLocalLane(),
-  "production signs in through the magic-link inbox; the local preview D1 carries the seed",
-);
-
-function authSecret(): string {
-  const line = readFileSync(".dev.vars.example", "utf8")
-    .split("\n")
-    .find((entry) => entry.startsWith("BETTER_AUTH_SECRET="));
-  if (line === undefined || line.length <= "BETTER_AUTH_SECRET=".length) {
-    throw new Error("BETTER_AUTH_SECRET missing from .dev.vars.example");
-  }
-  return line.slice("BETTER_AUTH_SECRET=".length);
-}
-
-function previewDatabasePath(): string {
-  const root = ".wrangler/state";
-  const files = readdirSync(root, { recursive: true, encoding: "utf8" }).filter((name) => name.endsWith(".sqlite"));
-  for (const name of files) {
-    const file = join(root, name);
-    const probe = new DatabaseSync(file, { readOnly: true, timeout: 15_000 });
-    try {
-      const row = probe.prepare("SELECT 1 AS ok FROM sqlite_master WHERE type = 'table' AND name = 'entity'").get();
-      if (row !== undefined) return file;
-    } finally {
-      probe.close();
-    }
-  }
-  throw new Error("local preview D1 has no entity table");
-}
-
-function run(db: DatabaseSync, sql: string, ...values: (string | number | null)[]): void {
-  db.prepare(sql).run(...values);
-}
+// At 390 the `Row` now wraps the empty-line span under the trigger,
+// giving the edit name/about triggers a non-zero bounding box on the unread card.
+// 0509#5557 owns this fix; the 390 lane asserts the triggers are clickable.
+test.skip(!isLocalLane(), "production signs in through the magic-link inbox; the local preview D1 carries the seed");
 
 async function seedCardSession(registrable: string): Promise<string> {
-  const suffix = crypto.randomUUID().slice(0, 8);
-  const email = `card-keyboard-${suffix}@0509.io`;
-  const db = new DatabaseSync(previewDatabasePath(), { timeout: 15_000 });
-  db.exec("PRAGMA busy_timeout = 15000");
-  db.exec("PRAGMA foreign_keys = ON");
-  const links: string[] = [];
-  const auth = betterAuth({
-    database: db,
-    secret: authSecret(),
-    // The app runs --var BETTER_AUTH_URL on this lane's http origin, and
-    // better-auth prefixes the session cookie __Secure- only for https:
-    // seeding on the same origin mints the cookie name the app reads.
-    baseURL: laneOrigin(),
-    advanced: { cookiePrefix: "better-auth" },
-    plugins: [
-      magicLink({
-        expiresIn: 300,
-        sendMagicLink: ({ url }) => {
-          links.push(url);
-          return Promise.resolve();
-        },
-      }),
-    ],
-  });
-  try {
-    await auth.api.signInMagicLink({ body: { email }, headers: new Headers() });
-    const link = links.at(-1);
-    if (link === undefined) throw new Error("magic link was not issued");
-    const response = await auth.handler(new Request(link, { redirect: "manual" }));
-    const cookie = response.headers
-      .getSetCookie()
-      .map((header) => header.split(";")[0])
-      .join("; ");
-    if (cookie === "") throw new Error("magic link created no session cookie");
-    const userId = db.prepare('SELECT id FROM "user" WHERE email = ?').get(email)?.id;
-    if (typeof userId !== "string") throw new Error("magic link created no user");
+  const { cookie } = await seedPreviewSession("card-keyboard", ({ db, suffix, userId }) => {
     const workspaceId = `ws-${suffix}`;
     const stamp = "2026-09-25T00:00:00.000Z";
     run(
@@ -120,11 +42,8 @@ async function seedCardSession(registrable: string): Promise<string> {
       registrable,
       stamp,
     );
-    db.exec("PRAGMA wal_checkpoint(PASSIVE)");
-    return cookie;
-  } finally {
-    db.close();
-  }
+  });
+  return cookie;
 }
 
 const TRIGGERS: Record<"name" | "about", RegExp> = {
@@ -132,12 +51,15 @@ const TRIGGERS: Record<"name" | "about", RegExp> = {
   about: /^edit about\b/,
 };
 
-const PHONE_390_DEFECT =
-  "the unfound card's 0px trigger at 390 is filed separately; the keyboard contract does not vary by viewport, 0509#5557";
-
 async function openEditor(page: Page, field: "name" | "about"): Promise<Locator> {
   const trigger = page.getByRole("button", { name: TRIGGERS[field] });
   await expect(trigger).toBeVisible({ timeout: 30_000 });
+  const box = await trigger.boundingBox();
+  if (box === null) throw new Error(`the edit ${field} trigger has no bounding box`);
+  // 0509#5557: an empty-line span beside the `min-w-0 flex-1` trigger used to
+  // starve it to 0px wide on the unread card at 390; this keeps that from
+  // returning silently.
+  expect(box.width, `edit ${field} trigger has zero width`).toBeGreaterThan(0);
   await trigger.click();
   const editor = page.getByRole("textbox", { name: field });
   await expect(editor).toBeVisible({ timeout: 5_000 });
@@ -154,9 +76,10 @@ function watchDraftPosts(page: Page): string[] {
   return posts;
 }
 
-test("the identity card editor saves and closes on Enter, with focus back on the trigger", async ({ page }, testInfo) => {
+test("the identity card editor saves and closes on Enter, with focus back on the trigger", async ({
+  page,
+}, testInfo) => {
   test.setTimeout(90_000);
-  test.fail(testInfo.project.name === "phone-390", PHONE_390_DEFECT);
   const watched = watchConsole(page);
   const draftPosts = watchDraftPosts(page);
   const subject = "nope-card-keyboard-enter.example.com";
@@ -170,7 +93,8 @@ test("the identity card editor saves and closes on Enter, with focus back on the
   const name = await openEditor(page, "name");
   await name.fill("Brand One");
   const saveResponse = page.waitForResponse(
-    (response) => response.request().method() === "POST" && new URL(response.url()).pathname === "/onboarding/identity.data",
+    (response) =>
+      response.request().method() === "POST" && new URL(response.url()).pathname === "/onboarding/identity.data",
   );
   await name.press("Enter");
 
@@ -181,7 +105,7 @@ test("the identity card editor saves and closes on Enter, with focus back on the
   // a zero read taken before the request went out; a second `onSave` from that
   // same keydown task would be dispatched, and observed by `watchDraftPosts`,
   // before this response returns.
-  await saveResponse;
+  expect((await saveResponse).status()).toBe(200);
   expect(draftPosts).toHaveLength(1);
   await expect(name).toHaveCount(0);
   await expect(trigger).toBeFocused();
@@ -190,9 +114,58 @@ test("the identity card editor saves and closes on Enter, with focus back on the
   expect(await consoleFailures(page, watched, testInfo), testInfo.project.name).toEqual([]);
 });
 
-test("the identity card editor saves and closes on Escape, with focus back on the trigger", async ({ page }, testInfo) => {
+test("the identity card editor ignores the Enter that confirms an IME composition", async ({ page }, testInfo) => {
   test.setTimeout(90_000);
-  test.fail(testInfo.project.name === "phone-390", PHONE_390_DEFECT);
+  const watched = watchConsole(page);
+  const draftPosts = watchDraftPosts(page);
+  const subject = "nope-card-keyboard-ime.example.com";
+  await page.setExtraHTTPHeaders({ cookie: await seedCardSession("example.com") });
+
+  const response = await page.goto(`/onboarding/identity?subject=${subject}`);
+  expect(response?.status()).toBe(200);
+  await expect(page.getByRole("heading", { name: "This is you. Fix anything we got wrong." })).toBeVisible();
+
+  const trigger = page.getByRole("button", { name: TRIGGERS.name });
+  const name = await openEditor(page, "name");
+  await name.fill("ニホン");
+
+  // An IME composition in progress delivers the candidate-confirming Enter as a
+  // keydown with isComposing true. The handler must return before preventDefault,
+  // leaving the editor open and saving nothing, so the customer can finish
+  // converting instead of losing the value to a half-converted save.
+  const composingEnter = await name.evaluate((element) => {
+    const event = new KeyboardEvent("keydown", {
+      key: "Enter",
+      bubbles: true,
+      cancelable: true,
+      isComposing: true,
+    });
+    element.dispatchEvent(event);
+    return event.defaultPrevented;
+  });
+  expect(composingEnter).toBe(false);
+  await expect(name).toHaveCount(1);
+  await expect(name).toHaveValue("ニホン");
+  expect(draftPosts).toHaveLength(0);
+
+  // The Enter after the composition ends still saves and closes.
+  const saveResponse = page.waitForResponse(
+    (response) =>
+      response.request().method() === "POST" && new URL(response.url()).pathname === "/onboarding/identity.data",
+  );
+  await name.press("Enter");
+  await saveResponse;
+  expect(draftPosts).toHaveLength(1);
+  await expect(name).toHaveCount(0);
+  await expect(trigger).toBeFocused();
+  await expect(trigger).toContainText("ニホン");
+  expect(await consoleFailures(page, watched, testInfo), testInfo.project.name).toEqual([]);
+});
+
+test("the identity card editor saves and closes on Escape, with focus back on the trigger", async ({
+  page,
+}, testInfo) => {
+  test.setTimeout(90_000);
   const watched = watchConsole(page);
   const draftPosts = watchDraftPosts(page);
   const subject = "nope-card-keyboard-escape.example.com";
@@ -206,11 +179,12 @@ test("the identity card editor saves and closes on Escape, with focus back on th
   const about = await openEditor(page, "about");
   await about.fill("one line on what we do");
   const saveResponse = page.waitForResponse(
-    (response) => response.request().method() === "POST" && new URL(response.url()).pathname === "/onboarding/identity.data",
+    (response) =>
+      response.request().method() === "POST" && new URL(response.url()).pathname === "/onboarding/identity.data",
   );
   await about.press("Escape");
 
-  await saveResponse;
+  expect((await saveResponse).status()).toBe(200);
   expect(draftPosts).toHaveLength(1);
   await expect(about).toHaveCount(0);
   await expect(trigger).toBeFocused();

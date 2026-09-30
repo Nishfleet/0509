@@ -18,9 +18,7 @@ describe("briefSendLine", () => {
   });
 
   it("words a paused brief as one the owner paused that week", () => {
-    expect(briefSendLine({ status: "paused", sent_at: null })).toBe(
-      "Not sent: your brief was paused that week.",
-    );
+    expect(briefSendLine({ status: "paused", sent_at: null })).toBe("Not sent: your brief was paused that week.");
   });
 
   it("words a cancelled brief as one cancelled before it went out", () => {

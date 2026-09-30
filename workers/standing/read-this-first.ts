@@ -1,22 +1,17 @@
 import { z } from "zod";
 
 import { insertVerdict } from "../../app/lib/data/jev_verdict.server";
-import type { NoulQuestion, NoulVerdict } from "../../app/lib/jev/client.server";
+import type { NoulVerdict } from "../../app/lib/jev/client.server";
 import { askNoul, JevUnavailableError } from "../../app/lib/jev/client.server";
+import { ACT_AT } from "../../app/lib/jev/thresholds";
 import type { D4Verdict } from "../../app/lib/read-this-first";
-import { D4_QUESTION_ID, pickReadThisFirst } from "../../app/lib/read-this-first";
+import { pickReadThisFirst, READ_THIS_FIRST, readThisFirstState } from "../../app/lib/read-this-first";
 import { D3_QUESTION_ID, D6_QUESTION_ID } from "../../app/lib/standing-score";
 import { countUnjudgedInputs } from "../../app/lib/standing-score.server";
 
 const JUDGE_CHUNK = 10;
 
-export const READ_THIS_FIRST: NoulQuestion = {
-  id: D4_QUESTION_ID,
-  instructions:
-    "Does this item belong in the three things this brand's owner should read first this week?",
-  whenTrue: "It would change what the owner does or thinks about a competitor this week.",
-  whenFalse: "It is routine and can wait for the full list.",
-};
+export { READ_THIS_FIRST } from "../../app/lib/read-this-first";
 
 const WEEK_ITEMS = `SELECT s.id AS signal_id, s.entity_id AS entity_id, s.kind AS kind, s.title AS title, s.summary AS summary,
        s.url AS url, s.aspect AS aspect, s.observed_at AS observed_at
@@ -24,7 +19,7 @@ FROM signal s
 JOIN entity e ON e.id = s.entity_id AND e.workspace_id = ?1 AND e.state = 'on'
 WHERE s.workspace_id = ?1 AND s.observed_at >= ?2 AND s.observed_at < ?3 AND s.is_tombstoned = 0
   AND NOT EXISTS (SELECT 1 FROM signal_delivery d WHERE d.signal_id = s.id)
-  AND EXISTS (SELECT 1 FROM jev_verdict v WHERE v.signal_id = s.id AND v.question_id IN (?4, ?5) AND v.p >= 0.9)
+  AND EXISTS (SELECT 1 FROM jev_verdict v WHERE v.signal_id = s.id AND v.question_id IN (?4, ?5) AND v.p >= ${String(ACT_AT)})
 ORDER BY s.observed_at DESC, s.id ASC
 LIMIT 50`;
 
@@ -73,26 +68,13 @@ interface LocatedItem {
   entity: EntityRow;
 }
 
-function subjectOf(entity: EntityRow): { name: string; domain: string } {
-  return { name: entity.name, domain: entity.domain };
-}
-
-function competitorSet(entities: readonly EntityRow[], entityId: string): string[] {
-  return entities
-    .filter((entity) => entity.role === "competitor" && entity.id !== entityId)
-    .map((entity) => entity.domain);
-}
-
 function packFor(
   located: LocatedItem,
   self: { name: string; domain: string } | null,
   entities: readonly EntityRow[],
 ): unknown {
   const { item, entity } = located;
-  return {
-    self,
-    subject: subjectOf(entity),
-    competitor_set: competitorSet(entities, item.entity_id),
+  return readThisFirstState({
     item: {
       kind: item.kind,
       title: item.title,
@@ -101,18 +83,16 @@ function packFor(
       aspect: item.aspect,
       observed_at: item.observed_at,
     },
-  };
+    itemEntityId: item.entity_id,
+    entity,
+    self,
+    entities,
+  });
 }
 
 export async function judgeWeek(db: D1Database, input: JudgeWeekInput): Promise<JudgedWeek> {
   const [weekItemResult, entityResult] = await db.batch([
-    db.prepare(WEEK_ITEMS).bind(
-      input.workspaceId,
-      input.startsAt,
-      input.closesAt,
-      D3_QUESTION_ID,
-      D6_QUESTION_ID,
-    ),
+    db.prepare(WEEK_ITEMS).bind(input.workspaceId, input.startsAt, input.closesAt, D3_QUESTION_ID, D6_QUESTION_ID),
     db.prepare(ON_ENTITIES).bind(input.workspaceId),
   ]);
   const items = weekItemRows.parse(weekItemResult.results);
@@ -131,7 +111,7 @@ export async function judgeWeek(db: D1Database, input: JudgeWeekInput): Promise<
     return entity === undefined ? [] : [{ item, entity }];
   });
   const selfEntity = entities.find((entity) => entity.role === "self");
-  const self = selfEntity === undefined ? null : subjectOf(selfEntity);
+  const self = selfEntity === undefined ? null : { name: selfEntity.name, domain: selfEntity.domain };
 
   let collected: D4Verdict[] = [];
   try {

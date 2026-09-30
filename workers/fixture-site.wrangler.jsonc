@@ -17,6 +17,11 @@
 // every later deploy still reports success. End every round-trip with
 // `POST /__break?mode=off`.
 //
+// State is per hostname (0509#4124), so J8 hard on j8-hard.fixture.0509.in and
+// J8 soft on j8-soft.fixture.0509.in never disturb each other or J5/J7 on
+// fixture.0509.in. Each has its own host because an own-site incident email is
+// once per site per day: one shared host let one mode spend the other's email.
+//
 // The Worker also needs the `FIXTURE_SITE_TOKEN` Worker secret. Without it every
 // flip answers 503 and the fixture stays healthy forever, which is why the
 // Worker fails loudly rather than reading healthy by default.
@@ -26,11 +31,15 @@
   "main": "./fixture-site.ts",
   "compatibility_date": "2026-09-16",
   "observability": {
-    "enabled": true
+    "enabled": true,
   },
   "durable_objects": {
-    "bindings": [{ "name": "STATE", "class_name": "FixtureState" }]
+    "bindings": [{ "name": "STATE", "class_name": "FixtureState" }],
   },
   "migrations": [{ "tag": "v1", "new_sqlite_classes": ["FixtureState"] }],
-  "routes": [{ "pattern": "fixture.0509.in", "custom_domain": true }]
+  "routes": [
+    { "pattern": "fixture.0509.in", "custom_domain": true },
+    { "pattern": "j8-hard.fixture.0509.in", "custom_domain": true },
+    { "pattern": "j8-soft.fixture.0509.in", "custom_domain": true },
+  ],
 }

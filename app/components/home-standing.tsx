@@ -57,7 +57,7 @@ export function HomeStanding({
     <section data-home="standing" className="min-w-0 break-words">
       {showEyebrow ? <p className={EYEBROW}>{view.eyebrow}</p> : null}
       {greeting(view)}
-      <div className="mt-4">{chips(view)}</div>
+      {chips(view)}
       {body(view, howRanked, onSwitch, openId, evidence)}
     </section>
   );
@@ -65,7 +65,11 @@ export function HomeStanding({
 
 function chips(view: HomeView): ReactElement | null {
   if (view.standing.kind !== "gathering") return null;
-  return <BrandChipRow brands={view.chips} />;
+  return (
+    <div className="mt-4">
+      <BrandChipRow brands={view.chips} />
+    </div>
+  );
 }
 
 function greeting(view: HomeView): ReactElement {

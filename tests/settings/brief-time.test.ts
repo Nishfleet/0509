@@ -33,13 +33,8 @@ describe("formatBriefAt", () => {
   });
 
   it("renders the next brief of a schedule", () => {
-    const next = nextBriefAt(
-      { timezone: "America/New_York", weekday: 1, hour: 8 },
-      new Date("2026-09-24T12:00:00Z"),
-    );
-    expect(formatBriefAt(next, "America/New_York")).toBe(
-      "Monday 28 September 2026, 08:00 America/New_York",
-    );
+    const next = nextBriefAt({ timezone: "America/New_York", weekday: 1, hour: 8 }, new Date("2026-09-24T12:00:00Z"));
+    expect(formatBriefAt(next, "America/New_York")).toBe("Monday 28 September 2026, 08:00 America/New_York");
   });
 });
 

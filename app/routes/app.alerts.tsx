@@ -13,7 +13,7 @@ import { parseAlertChip } from "../lib/alert-chips";
 import { briefSendLine } from "../lib/brief-state";
 import { listBriefs } from "../lib/data/digest.server";
 import { readWorkspaceIdForOwner } from "../lib/data/workspace.server";
-import { requireSession } from "../lib/require-session.server";
+import { requireFreshSession, requireSession } from "../lib/require-session.server";
 
 export function meta() {
   return [{ title: "Alerts · Five to Nine" }];
@@ -31,7 +31,7 @@ export async function loader({ request }: Route.LoaderArgs) {
 }
 
 export async function action({ request }: Route.ActionArgs) {
-  const session = await requireSession(request);
+  const session = await requireFreshSession(request);
   const form = await request.formData();
   const alertId = form.get("alertId");
   if (form.get("intent") !== "acknowledge" || typeof alertId !== "string") return { saved: false };
@@ -59,12 +59,7 @@ export default function Page({ loaderData }: Route.ComponentProps) {
       {loaderData.sources.length > 0 ? (
         <p data-testid="alerts-sources" className="mt-4 flex flex-wrap gap-2">
           {loaderData.sources.map((entry) => (
-            <SourcePill
-              key={entry.source.key}
-              source={entry.source}
-              snapshot={entry.snapshot}
-              now={loaderData.now}
-            />
+            <SourcePill key={entry.source.key} source={entry.source} snapshot={entry.snapshot} now={loaderData.now} />
           ))}
         </p>
       ) : null}
@@ -75,9 +70,7 @@ export default function Page({ loaderData }: Route.ComponentProps) {
           data-testid="own-site-incident"
           className="mt-8 border-t border-line pt-6"
         >
-          <h2 className="font-display text-row-name font-bold [overflow-wrap:anywhere]">
-            {incident.title}
-          </h2>
+          <h2 className="font-display text-row-name font-bold [overflow-wrap:anywhere]">{incident.title}</h2>
           <p className="mt-2 leading-[1.65]">
             {incident.fixed === null
               ? "We check it again every hour and email you once it's fixed."
@@ -96,10 +89,7 @@ export default function Page({ loaderData }: Route.ComponentProps) {
       ) : null}
       <AlertFeed groups={loaderData.groups} />
       {loaderData.offLine === null ? null : (
-        <p
-          data-testid="alerts-off-footer"
-          className="mt-10 border-t border-line pt-6 leading-[1.65] text-ink-soft"
-        >
+        <p data-testid="alerts-off-footer" className="mt-10 border-t border-line pt-6 leading-[1.65] text-ink-soft">
           {loaderData.offLine}
         </p>
       )}

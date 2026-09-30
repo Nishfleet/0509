@@ -22,22 +22,16 @@ const SITE_FILL_WAIT = "1 hour";
 export class IdentityTail extends WorkflowEntrypoint<Env, IdentityTailParams> {
   async run(event: WorkflowEvent<IdentityTailParams>, step: WorkflowStep): Promise<IdentityTailOutcome> {
     const params = event.payload;
-    const entityId = (
-      await step.do("persist", RETRY, () => persistTail(params))
-    ).entityId;
+    const entityId = (await step.do("persist", RETRY, () => persistTail(params))).entityId;
     const discoveryInstanceId = await step.do("start-discovery", RETRY, () =>
       startDiscovery(params.workspaceId, event.timestamp),
     );
     await step.do("classify-pages", RETRY, () => classifyTailPages(params, event.timestamp.toISOString()));
     await step.do("warm-site-card", RETRY, () => warmTailSiteCard(params));
-    const watches = await step.do("seed-watches", RETRY, () =>
-      seedTailWatches(params, event.timestamp.toISOString()),
-    );
+    const watches = await step.do("seed-watches", RETRY, () => seedTailWatches(params, event.timestamp.toISOString()));
     const queued = await step.do("enqueue-first-sweep", RETRY, () => enqueueFirstSweep(entityId, watches));
     const siteFill =
-      params.homepageUrl === null
-        ? null
-        : await this.fillSite(step, params.workspaceId, entityId, params.homepageUrl);
+      params.homepageUrl === null ? null : await this.fillSite(step, params.workspaceId, entityId, params.homepageUrl);
     return {
       entityId,
       watches: watches.map((watch) => ({

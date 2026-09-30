@@ -15,8 +15,7 @@ export async function runCostGuard(
 }> {
   const usage = await fetchDailyUsage(day, apiToken);
   const row = await db
-    .prepare("SELECT COUNT(*) AS n FROM entity WHERE state = ?")
-    .bind("on")
+    .prepare("SELECT COUNT(*) AS n FROM entity WHERE role = 'competitor' AND state = 'on'")
     .first<{ n: number }>();
   const onBrands = row?.n ?? 0;
   const breaches = evaluateCost(usage, onBrands);

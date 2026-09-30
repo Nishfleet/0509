@@ -47,10 +47,9 @@ async function parkedSeedFile(): Promise<string> {
       seeding.push(name);
     }
   }
-  expect(
-    seeding,
-    "exactly one migration seeds the five parked ad rows; found " + JSON.stringify(seeding),
-  ).toHaveLength(1);
+  expect(seeding, "exactly one migration seeds the five parked ad rows; found " + JSON.stringify(seeding)).toHaveLength(
+    1,
+  );
   return seeding[0];
 }
 
@@ -151,7 +150,9 @@ describe("migration file discipline", () => {
       const block = blockFor(id);
       // The row tuple: kind, platform and is_enabled live in the same block.
       const platform = id.replace(/^src_ads_|_parked$/g, "");
-      expect(block).toContain(`'ads.${platform}_parked', 'ads', '${platform}', 'ads.${platform}_parked', 'best_effort', 0`);
+      expect(block).toContain(
+        `'ads.${platform}_parked', 'ads', '${platform}', 'ads.${platform}_parked', 'best_effort', 0`,
+      );
       // Exact (url, status) pair as it appears in the SQL's JSON, inside this
       // row's slice. Quoting the status so a JSON number is matched for 200/404
       // and a JSON string for "NXDOMAIN", which is how the SQL writes it.

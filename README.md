@@ -1,6 +1,6 @@
 # Five to Nine
 
-Five to Nine watches your competitors' websites, ads and mentions, and emails
+Five to Nine watches your competitors' websites and mentions, and emails
 you a weekly brief with screenshot proof of what changed. `0509.io` is its
 domain (05:09 = five to nine).
 
@@ -29,14 +29,14 @@ Deploys go through CI: every push to `main` deploys via
 
 ## Where things are
 
-| Path | What |
-|---|---|
-| `app/routes.ts` | Every route; a route not listed here cannot be reached |
-| `app/routes/` | Route modules |
-| `app/lib/` | Shared logic; `*.server.ts` is server-only |
-| `workers/` | The Worker entry, cron, queue and email handlers |
-| `migrations/` | Numbered D1 migrations |
-| `tests/`, `e2e/` | vitest and Playwright |
+| Path             | What                                                   |
+| ---------------- | ------------------------------------------------------ |
+| `app/routes.ts`  | Every route; a route not listed here cannot be reached |
+| `app/routes/`    | Route modules                                          |
+| `app/lib/`       | Shared logic; `*.server.ts` is server-only             |
+| `workers/`       | The Worker entry, cron, queue and email handlers       |
+| `migrations/`    | Numbered D1 migrations                                 |
+| `tests/`, `e2e/` | vitest and Playwright                                  |
 
 ## Read next
 

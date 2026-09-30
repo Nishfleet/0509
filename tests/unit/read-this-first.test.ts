@@ -5,7 +5,9 @@ import { describe, expect, it } from "vitest";
 import { ReadThisFirst } from "../../app/components/read-this-first";
 import type { BriefPayload } from "../../app/lib/brief-payload";
 
-function mark(overrides: Partial<BriefPayload["read_this_first"][number]> = {}): BriefPayload["read_this_first"][number] {
+function mark(
+  overrides: Partial<BriefPayload["read_this_first"][number]> = {},
+): BriefPayload["read_this_first"][number] {
   return {
     signal_id: "sig_1",
     entity_id: "ent_kindred",

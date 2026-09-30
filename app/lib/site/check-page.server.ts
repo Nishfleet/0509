@@ -25,12 +25,14 @@ export type CheckPageResult =
 
 const NO_CUTOFF = "9999-12-31T23:59:59.999Z";
 
-function logScreenshotMiss(url: string, cause: string): void {
-  console.log(JSON.stringify({
-    event: "screenshot-miss",
-    url,
-    cause,
-  }));
+function logScreenshotMiss(key: string, cause: string): void {
+  console.log(
+    JSON.stringify({
+      event: "screenshot-miss",
+      key,
+      cause,
+    }),
+  );
 }
 
 async function captureScreenshot(
@@ -41,16 +43,16 @@ async function captureScreenshot(
   const existing = await storedKey(key);
   if (existing !== null) return existing;
   if (mayScreenshot === undefined) {
-    logScreenshotMiss(url, "no screenshot budget granted");
+    logScreenshotMiss(key, "no screenshot budget granted");
     return null;
   }
   if (!(await mayScreenshot())) {
-    logScreenshotMiss(url, "browser budget exhausted");
+    logScreenshotMiss(key, "browser budget exhausted");
     return null;
   }
   const shot = await browserScreenshot(url);
   if (!shot.ok) {
-    logScreenshotMiss(url, shot.cause);
+    logScreenshotMiss(key, shot.cause);
     return null;
   }
   try {
@@ -58,7 +60,7 @@ async function captureScreenshot(
       httpMetadata: { contentType: "image/png" },
     });
   } catch (err) {
-    logScreenshotMiss(url, err instanceof Error ? err.message : String(err));
+    logScreenshotMiss(key, err instanceof Error ? err.name : "unknown");
     return null;
   }
   return key;

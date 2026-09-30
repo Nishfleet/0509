@@ -1,7 +1,12 @@
 import { addManualCompetitor, setCompetitorState } from "./data/entity.server";
 import { nextPlan, type PlanId } from "./billing/plans";
 import { readEntitlements, readPlanTier } from "./data/plan.server";
-import { acceptSuggestion, confirmRetireSuggestion, dismissSuggestion, keepFromRetireSuggestion } from "./data/suggestion.server";
+import {
+  acceptSuggestion,
+  confirmRetireSuggestion,
+  dismissSuggestion,
+  keepFromRetireSuggestion,
+} from "./data/suggestion.server";
 import { isTakenDown } from "./data/takedown.server";
 import { resolveDomain } from "./discovery/resolve-domain.server";
 import { normaliseSubject } from "./identity/normalise";
@@ -47,7 +52,14 @@ async function addCompetitor(workspaceId: string, raw: string, now: string): Pro
 
   if (await isTakenDown(domain)) return { message: "That brand asked not to be tracked, so we can't add it." };
   const cap = (await readEntitlements(workspaceId)).competitors;
-  const outcome = await addManualCompetitor({ workspaceId, domain, name, now, cap });
+  const outcome = await addManualCompetitor({
+    workspaceId,
+    domain,
+    name,
+    url: normalised.ok ? normalised.subject.url : null,
+    now,
+    cap,
+  });
   if (outcome === "at_cap") {
     return {
       message: `Your plan watches up to ${String(cap)} competitors. Switch one off to add another.`,

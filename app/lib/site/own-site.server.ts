@@ -1,18 +1,23 @@
 import { env } from "cloudflare:workers";
 
 import { insertIncidentAlertStatement } from "../data/alert.server";
-import { closeIncident, closeIncidentsOutside, openIncident, readOpenBreakageBaselines, readOpenIncidents } from "../data/incident.server";
+import {
+  closeIncident,
+  closeIncidentsOutside,
+  openIncident,
+  readOpenBreakageBaselines,
+  readOpenIncidents,
+} from "../data/incident.server";
 import type { OwnSitePage } from "../data/page.server";
 import { readOwnSitePages } from "../data/page.server";
+import { BlockedRedirectError, cappedText, fetchOutbound } from "../fetch/outbound.server";
+import { CRAWLER_USER_AGENT, robotsAllows } from "../fetch/robots.server";
 import { computeBreakageEvidence } from "./breakage-evidence";
 import { extractPageText } from "./extract-text";
 import { ensureHomePages } from "./sweep.server";
-import { robotsAllows } from "../fetch/robots.server";
 
 export type OwnSiteHealth =
-  | { state: "healthy" }
-  | { state: "unknown"; reason: string }
-  | { state: "broken"; kind: string };
+  { state: "healthy" } | { state: "unknown"; reason: string } | { state: "broken"; kind: string };
 
 export interface OwnSitePlan {
   pages: OwnSitePage[];
@@ -22,14 +27,16 @@ export interface OwnSitePlan {
 
 const PROBE_TIMEOUT_MS = 10_000;
 
+const MAX_PAGE_BYTES = 5 * 1024 * 1024;
+
 const PROBE_HEADERS = {
   accept: "text/html,application/xhtml+xml",
-  "user-agent": "FiveToNineBot/1.0 (+https://0509.io)",
+  "user-agent": CRAWLER_USER_AGENT,
 } as const;
 
 async function fetchStatus(url: string): Promise<Response | Error> {
   try {
-    const response = await fetch(url, {
+    const response = await fetchOutbound(url, {
       headers: PROBE_HEADERS,
       signal: AbortSignal.timeout(PROBE_TIMEOUT_MS),
     });
@@ -42,7 +49,13 @@ async function fetchStatus(url: string): Promise<Response | Error> {
 
 function wwwVariant(url: string): string {
   const parsed = new URL(url);
-  return `${parsed.protocol}//www.${parsed.hostname}${parsed.pathname}`;
+  const host = parsed.hostname.startsWith("www.") ? parsed.hostname.slice("www.".length) : `www.${parsed.hostname}`;
+  return `${parsed.protocol}//${host}${parsed.pathname}`;
+}
+
+async function fetchTwin(url: string): Promise<Response | Error | "robots"> {
+  const twin = wwwVariant(url);
+  return (await robotsAllows(twin)) ? fetchStatus(twin) : "robots";
 }
 
 export function pageHost(url: string): string {
@@ -52,7 +65,13 @@ export function pageHost(url: string): string {
 export async function probeOwnSite(url: string): Promise<OwnSiteHealth> {
   if (!(await robotsAllows(url))) return { state: "unknown", reason: "robots" };
   const first = await fetchStatus(url);
-  const response = first instanceof Error ? await fetchStatus(wwwVariant(url)) : first;
+  if (first instanceof BlockedRedirectError) return { state: "unknown", reason: "redirect refused" };
+  const response = first instanceof Error ? await fetchTwin(url) : first;
+  if (response === "robots") return { state: "unknown", reason: "robots" };
+  return classify(response);
+}
+
+function classify(response: Response | Error): OwnSiteHealth {
   if (response instanceof Error) return { state: "broken", kind: "not loading" };
   if (response.headers.get("cf-mitigated") === "challenge") return { state: "unknown", reason: "challenge" };
   if (response.status >= 500 || response.status === 404 || response.status === 410) {
@@ -66,19 +85,22 @@ export async function breakageRepaired(url: string, beforeKey: string | null): P
   if (beforeKey === null) return false;
   let response: Response;
   try {
-    response = await fetch(url, {
+    response = await fetchOutbound(url, {
       headers: PROBE_HEADERS,
       signal: AbortSignal.timeout(PROBE_TIMEOUT_MS),
     });
   } catch (error) {
-    console.error(JSON.stringify({
-      event: "site.own_check_verify_failed",
-      url,
-      error: error instanceof Error ? error.message : String(error),
-    }));
+    console.error(
+      JSON.stringify({
+        event: "site.own_check_verify_failed",
+        error: error instanceof Error ? error.name : "unknown",
+      }),
+    );
     return false;
   }
-  const afterText = (await extractPageText(await response.text())).text;
+  const html = await cappedText(response, MAX_PAGE_BYTES);
+  if (html === null) return false;
+  const afterText = (await extractPageText(html)).text;
   const before = await env.SNAPSHOTS.get(beforeKey);
   if (before === null) return false;
   const e = computeBreakageEvidence({

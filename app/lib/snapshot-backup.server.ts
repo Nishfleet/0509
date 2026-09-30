@@ -20,6 +20,10 @@ export async function copyMissingPage(cursor?: string): Promise<BackupPage> {
       const source = await env.SNAPSHOTS.get(object.key);
       if (source === null) return soFar;
       await env.SNAPSHOTS_BACKUP.put(object.key, source.body, { httpMetadata: source.httpMetadata });
+      if ((await env.SNAPSHOTS.head(object.key)) === null) {
+        await env.SNAPSHOTS_BACKUP.delete(object.key);
+        return soFar;
+      }
       return { ...soFar, copied: soFar.copied + 1 };
     },
     Promise.resolve({ copied: 0, present: 0 }),

@@ -82,7 +82,16 @@ async function seedChange(input: {
        payload_json, dedup_key, observed_at, last_seen_at)
      VALUES (?1, ?2, ?3, 'src_site_web', ?4, ?5, 'change', 'home', ?6, ?6, ?7, ?5, ?8, ?8)`,
   )
-    .bind(input.signal, input.ws, input.entity, watch, `${input.signal}-after`, url, JSON.stringify(payload), input.observedAt)
+    .bind(
+      input.signal,
+      input.ws,
+      input.entity,
+      watch,
+      `${input.signal}-after`,
+      url,
+      JSON.stringify(payload),
+      input.observedAt,
+    )
     .run();
   await env.SNAPSHOTS.put(`${prefix}/${input.signal}-before.png`, `before-${input.signal}`, {
     httpMetadata: { contentType: "image/png" },
@@ -108,10 +117,42 @@ describe("site changes a customer can see", () => {
 
     await seedWorkspace("ws-mine", "user-mine");
     await seedWorkspace("ws-other", "user-other");
-    await seedChange({ ws: "ws-mine", entity: "rival", name: "Rival", role: "competitor", state: "on", signal: "sig-rival", observedAt: "2026-09-24T02:10:00.000Z" });
-    await seedChange({ ws: "ws-mine", entity: "paused", name: "Paused", role: "competitor", state: "off", signal: "sig-paused", observedAt: "2026-09-23T02:10:00.000Z" });
-    await seedChange({ ws: "ws-mine", entity: "mine", name: "Mine", role: "self", state: "on", signal: "sig-mine", observedAt: "2026-09-20T02:10:00.000Z" });
-    await seedChange({ ws: "ws-other", entity: "theirs", name: "Theirs", role: "competitor", state: "on", signal: "sig-theirs", observedAt: "2026-09-24T03:10:00.000Z" });
+    await seedChange({
+      ws: "ws-mine",
+      entity: "rival",
+      name: "Rival",
+      role: "competitor",
+      state: "on",
+      signal: "sig-rival",
+      observedAt: "2026-09-24T02:10:00.000Z",
+    });
+    await seedChange({
+      ws: "ws-mine",
+      entity: "paused",
+      name: "Paused",
+      role: "competitor",
+      state: "off",
+      signal: "sig-paused",
+      observedAt: "2026-09-23T02:10:00.000Z",
+    });
+    await seedChange({
+      ws: "ws-mine",
+      entity: "mine",
+      name: "Mine",
+      role: "self",
+      state: "on",
+      signal: "sig-mine",
+      observedAt: "2026-09-20T02:10:00.000Z",
+    });
+    await seedChange({
+      ws: "ws-other",
+      entity: "theirs",
+      name: "Theirs",
+      role: "competitor",
+      state: "on",
+      signal: "sig-theirs",
+      observedAt: "2026-09-24T03:10:00.000Z",
+    });
   });
 
   it("lists the workspace's on brands and its own site, newest first, with the mark and both captures", async () => {
@@ -154,7 +195,9 @@ describe("site changes a customer can see", () => {
 
   it("never shows another workspace's competitor, its changes or its screenshots", async () => {
     expect(await readCompetitorPage("ws-mine", "theirs", NOW)).toBeNull();
-    expect(await readSiteChangeViews({ workspaceId: "ws-mine", entityId: "theirs", since: SINCE, limit: 30 })).toEqual([]);
+    expect(await readSiteChangeViews({ workspaceId: "ws-mine", entityId: "theirs", since: SINCE, limit: 30 })).toEqual(
+      [],
+    );
     expect(await readChangeShot("ws-mine", "sig-theirs", "after")).toBeNull();
     expect(await readCompetitorPage("ws-mine", "mine", NOW)).toBeNull();
   });

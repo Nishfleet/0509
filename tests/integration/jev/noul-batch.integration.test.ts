@@ -144,9 +144,7 @@ describe("askNouls", () => {
     const run = vi.fn(() => Promise.resolve(allFreshAnswers()));
     Reflect.set(env, "AI", { run });
 
-    const seeded = await Promise.all(
-      questions.map((question) => askNoul(workspaceId, question, state)),
-    );
+    const seeded = await Promise.all(questions.map((question) => askNoul(workspaceId, question, state)));
     await env.DB.batch(
       seeded.map((verdict, index) =>
         insertVerdict({

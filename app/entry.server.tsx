@@ -42,7 +42,8 @@ export const handleError: HandleErrorFunction = (error, { request, params }) => 
   if (request.signal.aborted) return;
   console.error(error);
   if (isRouteErrorResponse(error) && error.status < 500) return;
-  captureException(error, { tags: { route: routePattern(new URL(request.url).pathname, params) } });
+  const { pathname } = new URL(request.url);
+  captureException(error, { tags: { route: routePattern(pathname, params) } });
 };
 
 export default async function handleRequest(
@@ -63,17 +64,14 @@ export default async function handleRequest(
   let shellRendered = false;
   const userAgent = request.headers.get("user-agent");
 
-  const body = await renderToReadableStream(
-    <ServerRouter context={routerContext} url={request.url} nonce={nonce} />,
-    {
-      nonce,
-      signal: AbortSignal.timeout(streamTimeout + 1000),
-      onError(error: unknown) {
-        status = 500;
-        if (shellRendered) console.error(error);
-      },
+  const body = await renderToReadableStream(<ServerRouter context={routerContext} url={request.url} nonce={nonce} />, {
+    nonce,
+    signal: AbortSignal.timeout(streamTimeout + 1000),
+    onError(error: unknown) {
+      status = 500;
+      if (shellRendered) console.error(error);
     },
-  );
+  });
   shellRendered = true;
 
   if ((userAgent && isbot(userAgent)) || routerContext.isSpaMode) {

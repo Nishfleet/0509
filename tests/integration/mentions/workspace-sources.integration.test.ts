@@ -1,8 +1,15 @@
 import { env } from "cloudflare:workers";
 import { describe, expect, it } from "vitest";
+import { RouterContextProvider } from "react-router";
 
-import { readWorkspaceMentionSources } from "../../../app/lib/data/source.server";
+import { loader as landingLoader } from "../../../app/routes/landing";
+import {
+  readEntitySources,
+  readRegistrySources,
+  readWorkspaceMentionSources,
+} from "../../../app/lib/data/source.server";
 import { sourcePillStatus } from "../../../app/components/source-pill";
+import { NO_CHANNEL_REASON } from "../../../app/lib/mentions/youtube-channel";
 
 const WS = "ws-mention-sources";
 const WS_OTHER = "ws-mention-sources-other";
@@ -16,6 +23,10 @@ const NOW_MS = Date.parse(NOW);
 
 const GDELT_SRC = "src_mentions_gdelt";
 const HN_SRC = "src_mentions_hn";
+const YOUTUBE_SRC = "src_mentions_youtube";
+// A truncated write: the value a cut-off JSON.stringify leaves behind. Not
+// valid JSON, so a bare json_extract raises and aborts the whole statement.
+const MALFORMED_WATCH_CONFIG = '{"degraded":';
 
 async function seedOwner(id: string, workspaceId: string, entityId: string): Promise<void> {
   await env.DB.prepare(
@@ -38,12 +49,18 @@ async function seedOwner(id: string, workspaceId: string, entityId: string): Pro
     .run();
 }
 
-async function seedWatch(id: string, entityId: string, sourceId: string, active: number): Promise<void> {
+async function seedWatch(
+  id: string,
+  entityId: string,
+  sourceId: string,
+  active: number,
+  configJson = "{}",
+): Promise<void> {
   await env.DB.prepare(
     `INSERT INTO watch (id, entity_id, source_id, target_key, is_active, config_json)
-     VALUES (?, ?, ?, ?, ?, '{}')`,
+     VALUES (?, ?, ?, ?, ?, ?)`,
   )
-    .bind(id, entityId, sourceId, `mentions:${id}`, active)
+    .bind(id, entityId, sourceId, `mentions:${id}`, active, configJson)
     .run();
 }
 
@@ -118,6 +135,239 @@ describe("alerts mentions source pills (#4003 4/6)", () => {
       await clearOwner(USER, WS, COMP);
       await clearOwner(`${USER}-other`, WS_OTHER, COMP_OTHER);
       await clearOwner(`${USER}-inactive`, WS_INACTIVE, COMP_INACTIVE);
+    }
+  });
+
+  it("surfaces the per-watch no-channel reason instead of 'no fresh data' (#5827)", async () => {
+    await seedOwner(USER, WS, COMP);
+    // The nightly sweep flagged this watch: the confirmed card carries no
+    // YouTube URL, so no snapshot will ever land. The pill has to say that,
+    // not fall through to the freshness "no fresh data" default.
+    await seedWatch(
+      `watch-${COMP}-youtube`,
+      COMP,
+      YOUTUBE_SRC,
+      1,
+      JSON.stringify({
+        degraded: { state: "degraded", reason: NO_CHANNEL_REASON, at: NOW },
+      }),
+    );
+
+    try {
+      const entries = await readWorkspaceMentionSources(WS);
+      expect(entries.map((entry) => entry.source.key)).toEqual(["youtube.channel_rss"]);
+      const youtube = entries[0];
+      if (!youtube) throw new Error("the watched YouTube mentions source must be read");
+      expect(youtube.snapshot).toBeNull();
+      expect(youtube.source.degraded_reason).toBeNull();
+      const status = sourcePillStatus(youtube.source, youtube.snapshot, NOW_MS);
+      expect(status.state).toBe("degraded");
+      expect(status.reason).toBe(NO_CHANNEL_REASON);
+
+      const registry = (await readRegistrySources()).filter((item) => item.source.key === "youtube.channel_rss");
+      const registryYoutube = registry[0];
+      if (!registryYoutube) throw new Error("the enabled YouTube source must be in the registry");
+      expect(registryYoutube.snapshot).toBeNull();
+      expect(registryYoutube.source.watch_config_json).toBeNull();
+      const registryStatus = sourcePillStatus(registryYoutube.source, registryYoutube.snapshot, NOW_MS);
+      expect(registryStatus.state).toBe("degraded");
+      expect(registryStatus.reason).toBe("no fresh data");
+    } finally {
+      await clearOwner(USER, WS, COMP);
+    }
+  });
+
+  it("carries no tenant watch config into the landing loader output (#5827)", async () => {
+    await seedOwner(USER, WS, COMP);
+    await seedWatch(
+      `watch-${COMP}-youtube`,
+      COMP,
+      YOUTUBE_SRC,
+      1,
+      JSON.stringify({
+        degraded: { state: "degraded", reason: NO_CHANNEL_REASON, at: NOW },
+      }),
+    );
+
+    try {
+      const { sources } = await landingLoader({
+        request: new Request("https://fivetonine.test/"),
+        url: new URL("https://fivetonine.test/"),
+        params: {},
+        pattern: "/",
+        context: new RouterContextProvider(),
+      });
+      expect(sources.length).toBeGreaterThan(0);
+      for (const entry of sources) {
+        expect(entry.source).not.toHaveProperty("watch_config_json");
+        expect(entry.source).not.toHaveProperty("config_json");
+      }
+      const youtube = sources.find((entry) => entry.source.key === "youtube.channel_rss");
+      if (!youtube) throw new Error("the enabled YouTube source must reach the landing loader");
+      expect(sourcePillStatus(youtube.source, youtube.snapshot, NOW_MS).reason).toBe("no fresh data");
+    } finally {
+      await clearOwner(USER, WS, COMP);
+    }
+  });
+
+  it("reads a malformed watch config_json instead of aborting the source rail (#5935)", async () => {
+    await seedOwner(USER, WS, COMP);
+    // A truncated write leaves watch.config_json invalid JSON. A bare
+    // json_extract over that column raises "malformed JSON" and SQLite
+    // aborts the whole statement. The guard now uses CASE
+    // WHEN json_valid(w3.config_json) THEN w3.config_json ELSE '{}' END
+    // around the extraction, which makes the guard unconditionally safe
+    // regardless of SQLite expression evaluation order. These tests
+    // verify the guard works on real D1 (real miniflare SQLite) and
+    // that the "watch config is unreadable" rendering path renders.
+    await seedWatch(`watch-${COMP}-yt-broken`, COMP, YOUTUBE_SRC, 1, MALFORMED_WATCH_CONFIG);
+    await env.DB.prepare("UPDATE watch SET last_polled_at = ? WHERE id = ?")
+      .bind("2026-09-25T09:00:00.000Z", `watch-${COMP}-yt-broken`)
+      .run();
+
+    try {
+      const entries = await readWorkspaceMentionSources(WS);
+      const youtube = entries.find((entry) => entry.source.key === "youtube.channel_rss");
+      if (!youtube) throw new Error("the malformed watch must not abort the workspace read");
+      expect(youtube.source.watch_config_json).toBe(MALFORMED_WATCH_CONFIG);
+      expect(sourcePillStatus(youtube.source, youtube.snapshot, NOW_MS)).toEqual({
+        state: "degraded",
+        reason: "watch config is unreadable",
+        lastGoodAt: null,
+      });
+
+      const rail = await readEntitySources(WS, COMP);
+      const railYoutube = rail.find((entry) => entry.source.key === "youtube.channel_rss");
+      if (!railYoutube) throw new Error("the malformed watch must not abort the entity read");
+      expect(railYoutube.source.watch_config_json).toBe(MALFORMED_WATCH_CONFIG);
+      expect(sourcePillStatus(railYoutube.source, railYoutube.snapshot, NOW_MS).reason).toBe(
+        "watch config is unreadable",
+      );
+
+      // A malformed watch config must not shadow a recorded source-level
+      // reason: sourcePillStatus reads s.degraded_reason before the watch
+      // config, and the guard only changes which watch the subquery picks.
+      await env.DB.prepare("UPDATE source SET degraded_reason = 'not answering' WHERE id = ?").bind(YOUTUBE_SRC).run();
+      const flagged = await readWorkspaceMentionSources(WS);
+      const flaggedYoutube = flagged.find((entry) => entry.source.key === "youtube.channel_rss");
+      if (!flaggedYoutube) throw new Error("the flagged mentions source must be read");
+      const flaggedStatus = sourcePillStatus(flaggedYoutube.source, flaggedYoutube.snapshot, NOW_MS);
+      expect(flaggedStatus.state).toBe("degraded");
+      expect(flaggedStatus.reason).toBe("not answering");
+
+      // The registry and the anonymous landing read the source table only,
+      // so a malformed watch row must not take either of them down either.
+      const registry = (await readRegistrySources()).find((item) => item.source.key === "youtube.channel_rss");
+      if (!registry) throw new Error("the enabled YouTube source must be in the registry");
+      const { sources } = await landingLoader({
+        request: new Request("https://fivetonine.test/"),
+        url: new URL("https://fivetonine.test/"),
+        params: {},
+        pattern: "/",
+        context: new RouterContextProvider(),
+      });
+      expect(sources.find((entry) => entry.source.key === "youtube.channel_rss")).toBeDefined();
+    } finally {
+      await env.DB.prepare("UPDATE source SET degraded_reason = NULL WHERE id = ?").bind(YOUTUBE_SRC).run();
+      await clearOwner(USER, WS, COMP);
+    }
+  });
+
+  it("still ranks a valid degraded watch above a malformed one (#5935)", async () => {
+    await seedOwner(USER, WS, COMP);
+    // The guard sorts an unreadable config into the not-degraded bucket rather
+    // than aborting. A readable degraded flag must keep winning the subquery,
+    // or the rail would report "unreadable" while a known cause goes unnamed.
+    await seedWatch(`watch-${COMP}-yt-broken`, COMP, YOUTUBE_SRC, 1, MALFORMED_WATCH_CONFIG);
+    await seedWatch(
+      `watch-${COMP}-yt-flag`,
+      COMP,
+      YOUTUBE_SRC,
+      1,
+      JSON.stringify({ degraded: { state: "degraded", reason: NO_CHANNEL_REASON, at: NOW } }),
+    );
+    await env.DB.prepare("UPDATE watch SET last_polled_at = ? WHERE id = ?").bind(NOW, `watch-${COMP}-yt-broken`).run();
+    await env.DB.prepare("UPDATE watch SET last_polled_at = ? WHERE id = ?")
+      .bind("2026-09-25T09:00:00.000Z", `watch-${COMP}-yt-flag`)
+      .run();
+
+    try {
+      const entries = await readWorkspaceMentionSources(WS);
+      const youtube = entries.find((entry) => entry.source.key === "youtube.channel_rss");
+      if (!youtube) throw new Error("the watched YouTube mentions source must be read");
+      expect(JSON.parse(youtube.source.watch_config_json ?? "{}")).toEqual({
+        degraded: { state: "degraded", reason: NO_CHANNEL_REASON, at: NOW },
+      });
+      expect(sourcePillStatus(youtube.source, youtube.snapshot, NOW_MS).reason).toBe(NO_CHANNEL_REASON);
+    } finally {
+      await clearOwner(USER, WS, COMP);
+    }
+  });
+
+  it("prefers the flagged watch's config over a healthier watch polled more recently (#5827)", async () => {
+    await seedOwner(USER, WS, COMP);
+    await seedWatch(
+      `watch-${COMP}-yt-flag`,
+      COMP,
+      YOUTUBE_SRC,
+      1,
+      JSON.stringify({
+        degraded: { state: "degraded", reason: NO_CHANNEL_REASON, at: NOW },
+      }),
+    );
+    await seedWatch(`watch-${COMP}-yt-ok`, COMP, YOUTUBE_SRC, 1);
+    await env.DB.prepare("UPDATE watch SET last_polled_at = ? WHERE id = ?")
+      .bind("2026-09-25T09:00:00.000Z", `watch-${COMP}-yt-flag`)
+      .run();
+    await env.DB.prepare("UPDATE watch SET last_polled_at = ? WHERE id = ?").bind(NOW, `watch-${COMP}-yt-ok`).run();
+
+    try {
+      const entries = await readWorkspaceMentionSources(WS);
+      const youtube = entries.find((entry) => entry.source.key === "youtube.channel_rss");
+      if (!youtube) throw new Error("the watched YouTube mentions source must be read");
+      expect(JSON.parse(youtube.source.watch_config_json ?? "{}")).toEqual({
+        degraded: { state: "degraded", reason: NO_CHANNEL_REASON, at: NOW },
+      });
+    } finally {
+      await clearOwner(USER, WS, COMP);
+    }
+  });
+
+  it("prefers the no-channel reason over a fresh snapshot from a healthier watch (#5827)", async () => {
+    await seedOwner(USER, WS, COMP);
+    await seedWatch(
+      `watch-${COMP}-yt-flag`,
+      COMP,
+      YOUTUBE_SRC,
+      1,
+      JSON.stringify({
+        degraded: { state: "degraded", reason: NO_CHANNEL_REASON, at: NOW },
+      }),
+    );
+    await seedWatch(`watch-${COMP}-yt-ok`, COMP, YOUTUBE_SRC, 1);
+    await env.DB.prepare("UPDATE watch SET last_polled_at = ? WHERE id = ?")
+      .bind("2026-09-24T00:00:00.000Z", `watch-${COMP}-yt-flag`)
+      .run();
+    await env.DB.prepare("UPDATE watch SET last_polled_at = ? WHERE id = ?").bind(NOW, `watch-${COMP}-yt-ok`).run();
+    await seedSnapshot(`snap-${COMP}-yt-ok`, `watch-${COMP}-yt-ok`, 4, 1);
+
+    try {
+      const entries = await readWorkspaceMentionSources(WS);
+      const youtube = entries.find((entry) => entry.source.key === "youtube.channel_rss");
+      if (!youtube) throw new Error("the watched YouTube mentions source must be read");
+      // One source row carries a source-level snapshot and a watch-level
+      // config. The pill's own order decides what a visitor reads, so pin it:
+      // the watch reason wins over the fresh snapshot, and the snapshot shown
+      // is the healthy watch's.
+      expect(JSON.parse(youtube.source.watch_config_json ?? "{}")).toEqual({
+        degraded: { state: "degraded", reason: NO_CHANNEL_REASON, at: NOW },
+      });
+      expect(youtube.snapshot?.item_count).toBe(4);
+      const status = sourcePillStatus(youtube.source, youtube.snapshot, NOW_MS);
+      expect(status.state).toBe("degraded");
+      expect(status.reason).toBe(NO_CHANNEL_REASON);
+    } finally {
+      await clearOwner(USER, WS, COMP);
     }
   });
 

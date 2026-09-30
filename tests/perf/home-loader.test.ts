@@ -78,30 +78,26 @@ describe("home loader", () => {
     console.log(`home-loader explain utc=${new Date().toISOString()} ${details.join(" | ")}`);
   });
 
-  it(
-    "stays under 500 ms at p95 over 100 loads of four ON brands and two rollovers",
-    async () => {
-      const samples: number[] = [];
-      let readOk = true;
-      for (let i = 0; i < 100; i++) {
-        const started = performance.now();
-        const inputs = await readHomeStandingInputs(env.DB, USER);
-        samples.push(performance.now() - started);
-        readOk =
-          readOk &&
-          inputs !== null &&
-          inputs.entities.length === 4 &&
-          inputs.entities.every((entity) => entity.state === "on") &&
-          inputs.payload?.headline_rank === 1;
-      }
-      expect(readOk).toBe(true);
-      const p95 = percentile(samples, 95);
-      const utc = new Date().toISOString();
-      console.log(
-        `home-loader p95_ms=${p95.toFixed(3)} n=100 utc=${utc} timings_ms=${samples.map((sample) => sample.toFixed(3)).join(",")}`,
-      );
-      expect(p95).toBeLessThan(500);
-    },
-    60_000,
-  );
+  it("stays under 500 ms at p95 over 100 loads of four ON brands and two rollovers", async () => {
+    const samples: number[] = [];
+    let readOk = true;
+    for (let i = 0; i < 100; i++) {
+      const started = performance.now();
+      const inputs = await readHomeStandingInputs(env.DB, USER);
+      samples.push(performance.now() - started);
+      readOk =
+        readOk &&
+        inputs !== null &&
+        inputs.entities.length === 4 &&
+        inputs.entities.every((entity) => entity.state === "on") &&
+        inputs.payload?.headline_rank === 1;
+    }
+    expect(readOk).toBe(true);
+    const p95 = percentile(samples, 95);
+    const utc = new Date().toISOString();
+    console.log(
+      `home-loader p95_ms=${p95.toFixed(3)} n=100 utc=${utc} timings_ms=${samples.map((sample) => sample.toFixed(3)).join(",")}`,
+    );
+    expect(p95).toBeLessThan(500);
+  }, 60_000);
 });

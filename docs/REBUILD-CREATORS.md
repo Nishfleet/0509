@@ -2,7 +2,7 @@
 
 Issue #3880 / umbrella #3842. Written by the Opus deputy, **2026-09-21**. Research only, no code.
 
-**Scope** (Nish, 2026-09-21): creators and influencers are the same product with the same single input — a handle or a channel instead of a domain. *"See where you stand, and who is gaining on you."* Tracking runs **regardless of what a platform's terms allow**, with standing guardrails: dedicated throwaway identities only, never Nish's accounts or a logged-in fleet session; egress from the VPS or Cloudflare, never the Mac; **no payment without Nish**.
+**Scope** (Nish, 2026-09-21): creators and influencers are the same product with the same single input — a handle or a channel instead of a domain. _"See where you stand, and who is gaining on you."_ Tracking runs **regardless of what a platform's terms allow**, with standing guardrails: dedicated throwaway identities only, never Nish's accounts or a logged-in fleet session; egress from the VPS or Cloudflare, never the Mac; **no payment without Nish**.
 
 **Inherited, not re-probed** (`docs/REBUILD-MENTIONS.md`, same date, same host): Reddit `search.rss` open / `search.json` 403; Bluesky public XRPC 403; Substack search silently blocked while publication `/feed` works; every zero-spend X route closed including the SuperGrok seat; Google News RSS, HN Algolia, Medium tag feeds and DuckDuckGo HTML all open. And from `docs/REBUILD-KEEPLIST.md`: plain `fetch` from workerd is bot-gated by large sites that answer `curl` with 200.
 
@@ -17,31 +17,31 @@ Every probe ran from **this VPS (netcup, datacenter IP)** with `curl`, on **2026
 
 **Robustness ranking**, used in every table below:
 
-| Rank | Meaning |
-|---|---|
-| **A** | Documented API or feed. Breaks only on a versioned deprecation. |
-| **B** | Undocumented but stable endpoint (oEmbed, public RSS). Breaks rarely, loudly. |
+| Rank  | Meaning                                                                                           |
+| ----- | ------------------------------------------------------------------------------------------------- |
+| **A** | Documented API or feed. Breaks only on a versioned deprecation.                                   |
+| **B** | Undocumented but stable endpoint (oEmbed, public RSS). Breaks rarely, loudly.                     |
 | **C** | Server-rendered markup. Breaks whenever the vendor reorganises the page, and breaks **silently**. |
-| **D** | JS-rendered page. Needs a browser; costs browser-seconds; breaks silently. |
-| **X** | Closed from our vantage, or closed by terms. |
+| **D** | JS-rendered page. Needs a browser; costs browser-seconds; breaks silently.                        |
+| **X** | Closed from our vantage, or closed by terms.                                                      |
 
 ---
 
 ## The scoreboard
 
-| Platform | Best zero-spend route | Rank | Sees other accounts? | Proven here |
-|---|---|---|---|---|
-| YouTube | `feeds/videos.xml?channel_id=` | **A** | yes, any public channel | **yes** |
-| TikTok | DuckDuckGo `site:tiktok.com` → `tiktok.com/oembed` | **B** | yes, any public video | **yes, end to end** |
-| Instagram | logged-out profile HTML → `og:description` | **C** | yes, profile counts only | **yes** |
-| X | none | **X** | — | all routes closed |
-| Threads | logged-out profile HTML | **C** | profile only | yes (mentions doc) |
-| Substack | publication `/feed` | **A** | yes, once known | yes (mentions doc) |
-| Bluesky | authenticated `searchPosts` (app password) | **A** | yes, all public posts | **no** — 403 unauth, auth route unproven |
-| Twitch | Helix API (free client id) | **A** | yes, any channel | **no** — 401 unauth; page HTML proven instead |
-| Patreon | none | **X** | — | 403 challenge, 401 API, 404 RSS |
-| LinkedIn | logged-out company page | **C** | company pages only | **yes** |
-| Pinterest | `<handle>/feed.rss` | **B** | yes, any public profile | yes (mentions doc) |
+| Platform  | Best zero-spend route                              | Rank  | Sees other accounts?     | Proven here                                   |
+| --------- | -------------------------------------------------- | ----- | ------------------------ | --------------------------------------------- |
+| YouTube   | `feeds/videos.xml?channel_id=`                     | **A** | yes, any public channel  | **yes**                                       |
+| TikTok    | DuckDuckGo `site:tiktok.com` → `tiktok.com/oembed` | **B** | yes, any public video    | **yes, end to end**                           |
+| Instagram | logged-out profile HTML → `og:description`         | **C** | yes, profile counts only | **yes**                                       |
+| X         | none                                               | **X** | —                        | all routes closed                             |
+| Threads   | logged-out profile HTML                            | **C** | profile only             | yes (mentions doc)                            |
+| Substack  | publication `/feed`                                | **A** | yes, once known          | yes (mentions doc)                            |
+| Bluesky   | authenticated `searchPosts` (app password)         | **A** | yes, all public posts    | **no** — 403 unauth, auth route unproven      |
+| Twitch    | Helix API (free client id)                         | **A** | yes, any channel         | **no** — 401 unauth; page HTML proven instead |
+| Patreon   | none                                               | **X** | —                        | 403 challenge, 401 API, 404 RSS               |
+| LinkedIn  | logged-out company page                            | **C** | company pages only       | **yes**                                       |
+| Pinterest | `<handle>/feed.rss`                                | **B** | yes, any public profile  | yes (mentions doc)                            |
 
 ---
 
@@ -61,18 +61,18 @@ author:     Gymshark
 
 **This is the single best route in this document**: a documented feed, any public channel, no credential, no rate limit we can hit, no terms problem. It sees **other** accounts fully.
 
-| Route | Rank | Scope | Cost |
-|---|---|---|---|
-| `feeds/videos.xml` | **A** | any public channel, latest 15, no history, no pagination | free |
-| YouTube Data API v3 `channels.list` / `videos.list` | **A** | any public channel, with statistics and full history | 1 quota unit per call against a default 10,000/day |
-| YouTube Data API v3 `search.list` | **A** | discovery — other people's videos about a creator | **capped at 100 calls/day**, a separate allocation from the 10,000-unit pool |
-| Scraping `youtube.com/@handle` | **D** | — | rejected; the feed exists |
+| Route                                               | Rank  | Scope                                                    | Cost                                                                         |
+| --------------------------------------------------- | ----- | -------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| `feeds/videos.xml`                                  | **A** | any public channel, latest 15, no history, no pagination | free                                                                         |
+| YouTube Data API v3 `channels.list` / `videos.list` | **A** | any public channel, with statistics and full history     | 1 quota unit per call against a default 10,000/day                           |
+| YouTube Data API v3 `search.list`                   | **A** | discovery — other people's videos about a creator        | **capped at 100 calls/day**, a separate allocation from the 10,000-unit pool |
+| Scraping `youtube.com/@handle`                      | **D** | —                                                        | rejected; the feed exists                                                    |
 
 **The channel-id resolution trap, and it is real.** A stale id does not return an empty feed — it returns **404 with 1,613 B of Google's HTML error page** (probed 12:00:46 UTC with a carried-over id). I recovered the correct id by fetching `https://www.youtube.com/@Gymshark/about` with a browser UA (200, **2,068,147 B**) and taking the most frequent `UC…` token: 182 occurrences against 7 for the runner-up.
 
 So: **resolve handle → channel id once, cache it on the entity, never per poll**, and treat a feed 404 as a source failure rather than "no videos". That 2 MB bot-gated page is a Browser Run job, not a plain `fetch` (keep-list finding 6).
 
-**The split that decides the tier:** the feed gives *what this creator published*. Finding *what others published about them* needs `search.list` or the SERP. Read the current quota table carefully, because the widely-repeated "search costs 100 units" figure is not what it says today: `search.list` has its **own 100-calls-per-day allocation**, separate from the 10,000 units/day that cover `channels.list`, `videos.list` and `commentThreads.list` at **1 unit each**. So enrichment-by-id is effectively free and **discovery is the scarce resource** — 100 searches a day does not stretch across 100 creators, and the SERP has to carry it.
+**The split that decides the tier:** the feed gives _what this creator published_. Finding _what others published about them_ needs `search.list` or the SERP. Read the current quota table carefully, because the widely-repeated "search costs 100 units" figure is not what it says today: `search.list` has its **own 100-calls-per-day allocation**, separate from the 10,000 units/day that cover `channels.list`, `videos.list` and `commentThreads.list` at **1 unit each**. So enrichment-by-id is effectively free and **discovery is the scarce resource** — 100 searches a day does not stretch across 100 creators, and the SERP has to carry it.
 
 ---
 
@@ -110,15 +110,15 @@ I grepped that 372 KB for `"id":"7…"` and `video/7…` and found **nothing**. 
 
 **The honest limit: oEmbed enriches, it does not discover.** It needs a video URL you already have. Discovery is the SERP, and the SERP is indexed rather than live — days of lag, not minutes. A control probe confirmed the oEmbed endpoint rejects a made-up id (`400, 45 B, {"message":"Something went wrong","code":400}` at 12:08:55), so the URL must be real.
 
-| Route | Rank | Scope | Cost |
-|---|---|---|---|
-| DDG `site:tiktok.com` → oEmbed | **B** | any public video, caption + author | free |
-| Browser Run on `@handle` | **D** | full profile grid | browser-seconds; **unproven here** |
-| TikTok Display API | **A** | **own account only** — useless for competitors | free, OAuth |
-| TikTok Research API | **A** | broad, but restricted | applicant-gated; see below |
-| TikTok Commercial Content Library | **A** | ads, not organic | free — and it is an **ads** source, filed under the ads engine |
+| Route                             | Rank  | Scope                                          | Cost                                                                  |
+| --------------------------------- | ----- | ---------------------------------------------- | --------------------------------------------------------------------- |
+| DDG `site:tiktok.com` → oEmbed    | **B** | any public video, caption + author             | free                                                                  |
+| Browser Run on `@handle`          | **D** | full profile grid                              | browser-seconds; **unproven here**                                    |
+| TikTok Display API                | **A** | **own account only** — useless for competitors | free, OAuth                                                           |
+| TikTok Research API               | **A** | broad, but restricted                          | applicant-gated; see below                                            |
+| TikTok Commercial Content Library | **A** | ads, not organic                               | free — and it is an **ads** source, out of scope (ads dropped, #3974) |
 
-**On the Research API: confirmed closed to us.** Eligibility, read on developers.tiktok.com today, is academic institutions in the US, EEA, UK, Canada and Switzerland; EU not-for-profit research organisations; and Brazilian academic or non-profit youth-safety research — all *"on a not-for-profit basis"*, with a defined proposal, ethics approval and data-security commitments, plus EU DSA Vetted Researchers. A commercial product does not qualify. Not a maybe.
+**On the Research API: confirmed closed to us.** Eligibility, read on developers.tiktok.com today, is academic institutions in the US, EEA, UK, Canada and Switzerland; EU not-for-profit research organisations; and Brazilian academic or non-profit youth-safety research — all _"on a not-for-profit basis"_, with a defined proposal, ethics approval and data-security commitments, plus EU DSA Vetted Researchers. A commercial product does not qualify. Not a maybe.
 
 ---
 
@@ -149,20 +149,20 @@ GET https://graph.facebook.com/v21.0/instagram_oembed?url=<a made-up post URL>
 
 A **media-not-found** error, not an auth error. The endpoint accepted the unauthenticated request and rejected the fake URL. I did not have a real Instagram post URL to complete the test, so **whether `instagram_oembed` serves real media without an app token is unproven** — and it is a ten-second test for P3 with any real `/p/` URL. If it works, Instagram gets the same discover-then-enrich chain TikTok has.
 
-| Route | Rank | Scope | Cost |
-|---|---|---|---|
-| Logged-out profile `og:description` | **C** | any public profile: followers, following, posts | free |
-| `instagram_oembed` (tokenless) | **B?** | one post's caption and author | free — **unproven** |
-| DDG `site:instagram.com` → oEmbed | **B?** | discovery, same chain as TikTok | free — **unproven** |
-| Instagram Graph API `business_discovery` | **A** | **another** business/creator account's counts and recent media | free, but needs a Facebook app, a connected IG Business account and App Review |
-| Browser Run on the profile | **D** | the grid | browser-seconds; **unproven here** |
+| Route                                    | Rank   | Scope                                                          | Cost                                                                           |
+| ---------------------------------------- | ------ | -------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| Logged-out profile `og:description`      | **C**  | any public profile: followers, following, posts                | free                                                                           |
+| `instagram_oembed` (tokenless)           | **B?** | one post's caption and author                                  | free — **unproven**                                                            |
+| DDG `site:instagram.com` → oEmbed        | **B?** | discovery, same chain as TikTok                                | free — **unproven**                                                            |
+| Instagram Graph API `business_discovery` | **A**  | **another** business/creator account's counts and recent media | free, but needs a Facebook app, a connected IG Business account and App Review |
+| Browser Run on the profile               | **D**  | the grid                                                       | browser-seconds; **unproven here**                                             |
 
 **`business_discovery` is the one official route that sees other accounts** — it returns another Business/Creator account's `followers_count`, `media_count`, profile fields and `/media` edge with like and comment counts. Two conditions decide whether we can use it, both read today:
 
-- It lives on **"Instagram API with Facebook Login for Business"** — the Page-linked configuration. The newer *Business Login for Instagram* flavour does **not** carry it, so choosing the wrong login flavour silently forecloses the feature.
+- It lives on **"Instagram API with Facebook Login for Business"** — the Page-linked configuration. The newer _Business Login for Instagram_ flavour does **not** carry it, so choosing the wrong login flavour silently forecloses the feature.
 - It is **exempt from the impressions-scaled business rate limit** (`4800 × impressions / 24 h`) and bound by the app-level platform cap instead, which is what makes it viable for polling accounts we have no relationship with. Age-gated accounts return nothing.
 
-It needs an approved Facebook app with a connected Instagram Business account: a real onboarding cost and a real review, not a signup. **It is the right P3 upgrade and the wrong MVP** — and it is the only route to an *exact* follower count, against the logged-out page's rounded "9M".
+It needs an approved Facebook app with a connected Instagram Business account: a real onboarding cost and a real review, not a signup. **It is the right P3 upgrade and the wrong MVP** — and it is the only route to an _exact_ follower count, against the logged-out page's rounded "9M".
 
 **Rank C is a warning, not a footnote.** Parsing `og:description` for "9M Followers" is markup-dependent and will break silently. Two mitigations, both cheap: parse defensively and treat a parse failure as a source failure; and note that "9M" is **rounded** — Instagram's logged-out page does not expose an exact count, so week-over-week deltas below a million are invisible on this route. For a creator with 40k followers the rounding is fine; for Gymshark it is useless. That is a product-level limitation, not a bug.
 
@@ -180,10 +180,10 @@ Fully covered in `docs/REBUILD-MENTIONS.md` §10 and not re-probed. Summary: `x.
 
 Covered in the mentions doc §9: `threads.com/@gymshark` returns **200** with server-rendered markup (279,358–612,489 B across two fetches minutes apart — Meta varies the payload, so an adapter must not assume a stable shape). The official Threads API is **own-account only** by design.
 
-| Route | Rank | Scope |
-|---|---|---|
-| Logged-out profile HTML | **C** | profile and recent posts, brittle |
-| Threads API (`graph.threads.net`) | **A** | **own account only** |
+| Route                             | Rank  | Scope                             |
+| --------------------------------- | ----- | --------------------------------- |
+| Logged-out profile HTML           | **C** | profile and recent posts, brittle |
+| Threads API (`graph.threads.net`) | **A** | **own account only**              |
 
 **Recommendation: own-account via the official API, competitors not at all.** For a creator tracking themselves this is the correct route and it is free. For tracking a rival, a 600 KB brittle scrape is the worst trade available; leave Threads out of the competitor set and say so in the UI rather than shipping a number that silently stops updating.
 
@@ -193,11 +193,11 @@ Covered in the mentions doc §9: `threads.com/@gymshark` returns **200** with se
 
 Covered in the mentions doc §7. `substack.com/api/v1/post/search` returns **200 with zero results for every query including a `nike` control** — a silent block. A known publication's `/feed` works: `https://www.bigtechnology.com/feed` → **200, 314,977 B** (12:02:12 UTC).
 
-| Route | Rank | Scope |
-|---|---|---|
-| Publication `/feed` | **A** | full post feed of any public publication |
-| `api/v1/post/search` | **X** | silently blocked from this vantage |
-| DDG `site:substack.com` | **B** | discovery |
+| Route                   | Rank  | Scope                                    |
+| ----------------------- | ----- | ---------------------------------------- |
+| Publication `/feed`     | **A** | full post feed of any public publication |
+| `api/v1/post/search`    | **X** | silently blocked from this vantage       |
+| DDG `site:substack.com` | **B** | discovery                                |
 
 **Substack is the easiest platform in this document once you know the publication, and one of the hardest before that.** Resolution is a SERP job, done once per tracked creator, cached. After that it is the same feed adapter as any blog.
 
@@ -205,15 +205,15 @@ Covered in the mentions doc §7. `substack.com/api/v1/post/search` returns **200
 
 ## 7. Bluesky
 
-Covered in the mentions doc §8: both `public.api.bsky.app` and `api.bsky.app` return **403** to `app.bsky.feed.searchPosts` from this IP — the first an HTML challenge page (2,334 B), the second *"Request forbidden by administrative rules."* (94 B). This is a **vantage-point** block; the same endpoint is open from a residential IP.
+Covered in the mentions doc §8: both `public.api.bsky.app` and `api.bsky.app` return **403** to `app.bsky.feed.searchPosts` from this IP — the first an HTML challenge page (2,334 B), the second _"Request forbidden by administrative rules."_ (94 B). This is a **vantage-point** block; the same endpoint is open from a residential IP.
 
 The fix costs nothing but a credential: an **app password** on a dedicated throwaway handle → `com.atproto.server.createSession` → authenticated `searchPosts`. Per the charter guardrails, a throwaway identity, never Nish's account.
 
-| Route | Rank | Scope | Cost |
-|---|---|---|---|
+| Route                                     | Rank  | Scope                            | Cost                     |
+| ----------------------------------------- | ----- | -------------------------------- | ------------------------ |
 | Authenticated `app.bsky.feed.searchPosts` | **A** | all public posts, near-real-time | free — **unproven here** |
-| `app.bsky.feed.getAuthorFeed` | **A** | any public account's posts | free — unproven |
-| Unauthenticated public XRPC | **X** | 403 from our egress | — |
+| `app.bsky.feed.getAuthorFeed`             | **A** | any public account's posts       | free — unproven          |
+| Unauthenticated public XRPC               | **X** | 403 from our egress              | —                        |
 
 **Bluesky is the highest-value unproven route in this document.** It is a documented, open, rank-A API over the whole public network, and the only thing between us and it is a signup. It should be P3's first probe.
 
@@ -237,10 +237,10 @@ GET https://www.twitch.tv/ninja
 
 **Twitch is the cleanest official story here.** Helix is free, covers other channels fully, and needs only a client id plus an **app access token** (client-credentials — no user, no OAuth dance, no review). `/helix/users`, `/helix/channels`, `/helix/videos`, `/helix/clips` and `/helix/streams` all take a login or broadcaster id and return another channel's public data.
 
-| Route | Rank | Scope | Cost |
-|---|---|---|---|
-| Helix + app access token | **A** | any channel: profile, streams, videos, clips, schedule | free — **unproven here** (401 without a token) |
-| Public channel page `og:` | **C** | username, bio, avatar | free — **proven** |
+| Route                     | Rank  | Scope                                                  | Cost                                           |
+| ------------------------- | ----- | ------------------------------------------------------ | ---------------------------------------------- |
+| Helix + app access token  | **A** | any channel: profile, streams, videos, clips, schedule | free — **unproven here** (401 without a token) |
+| Public channel page `og:` | **C** | username, bio, avatar                                  | free — **proven**                              |
 
 **Unproven, and stated as such:** I did not register a Twitch application, so the Helix route carries no live proof in this document. The 401 is proven; the fix is not. It is a signup, and it is pre-approved under Nish's standing authorization — it just has not happened.
 
@@ -260,12 +260,12 @@ GET https://www.patreon.com/rss/mkbhd                → 404, 161,556 B     (12:
 
 Three shapes of no: a Cloudflare bot challenge on the public page (with **both** user agents — unlike DuckDuckGo, the honest UA does not help), a bare 401 on the v2 API, and a 404 on the RSS path. Patreon's API v2 is **own-account only** by design: it authorises a creator to read their own campaign, not to inspect somebody else's.
 
-| Route | Rank | Scope |
-|---|---|---|
-| Public creator page | **X** | 403 Cloudflare challenge from our egress |
-| API v2 | **A**, but **own account only** | the authenticated creator's own campaign |
-| RSS | **X** | 404 |
-| Browser Run on the page | **D?** | **unproven** — a Cloudflare challenge may or may not clear under a real browser |
+| Route                   | Rank                            | Scope                                                                           |
+| ----------------------- | ------------------------------- | ------------------------------------------------------------------------------- |
+| Public creator page     | **X**                           | 403 Cloudflare challenge from our egress                                        |
+| API v2                  | **A**, but **own account only** | the authenticated creator's own campaign                                        |
+| RSS                     | **X**                           | 404                                                                             |
+| Browser Run on the page | **D?**                          | **unproven** — a Cloudflare challenge may or may not clear under a real browser |
 
 **Recommendation: Patreon is out.** Patron counts and paid-tier data are the least public data on the internet and the most defended. It is not an MVP source and probably never a competitor source; own-account via API v2 is the only honest offering.
 
@@ -284,11 +284,11 @@ GET https://www.linkedin.com/company/gymshark/
 
 The logged-out **company** page is server-rendered and carries a real, **exact** follower count — 409,115, not "409K". That is better fidelity than Instagram's rounded number, on a platform that is otherwise the most closed here.
 
-| Route | Rank | Scope |
-|---|---|---|
-| Logged-out company page | **C** | company name, exact followers, about, industry, size |
-| Logged-out personal profile | **C?** | **unproven** — LinkedIn gates personal profiles far harder than company pages |
-| LinkedIn Marketing/Community APIs | **A** | partner-gated; own-organisation only for non-partners |
+| Route                             | Rank   | Scope                                                                         |
+| --------------------------------- | ------ | ----------------------------------------------------------------------------- |
+| Logged-out company page           | **C**  | company name, exact followers, about, industry, size                          |
+| Logged-out personal profile       | **C?** | **unproven** — LinkedIn gates personal profiles far harder than company pages |
+| LinkedIn Marketing/Community APIs | **A**  | partner-gated; own-organisation only for non-partners                         |
 
 **LinkedIn is a company-page source, not a creator source.** For the creator customer it is mostly irrelevant; for the brand customer it is a cheap follower-count row. Note also that it redirected to `uk.linkedin.com` — the adapter must follow the country redirect and canonicalise back to `www.linkedin.com/company/<slug>` or the same company will appear under several URLs.
 
@@ -306,12 +306,12 @@ Publishing feed only — there is no zero-spend route to "who pinned my product"
 
 Four routes, all proven here today, all free, all seeing **other** accounts:
 
-| Platform | Route | Proven | Rank |
-|---|---|---|---|
-| YouTube | channel feed | yes | A |
-| TikTok | DDG discovery → oEmbed | yes, end to end | B |
-| Instagram | logged-out profile counts | yes | C |
-| Pinterest | user RSS | yes | B |
+| Platform  | Route                     | Proven          | Rank |
+| --------- | ------------------------- | --------------- | ---- |
+| YouTube   | channel feed              | yes             | A    |
+| TikTok    | DDG discovery → oEmbed    | yes, end to end | B    |
+| Instagram | logged-out profile counts | yes             | C    |
+| Pinterest | user RSS                  | yes             | B    |
 
 Plus the mentions engine's six sources (`REBUILD-MENTIONS.md`), which are platform-agnostic and cover "who is talking about this creator" across news, Reddit, HN, Medium and the SERP.
 
@@ -350,15 +350,15 @@ So EnsembleData at 1,000 posts = **100 units**, not 1,000. That is an order of m
 
 ### Per-record prices
 
-| Provider | Tier | Monthly USD | Billing unit | Derived cost | Other accounts? |
-|---|---|---|---|---|---|
-| **EnsembleData** <br><https://ensembledata.com/pricing> | Wood / Bronze / Silver / Gold / Platinum | **$100** (1,500 units/day) / **$200** (5,000) / **$400** (11,000) / **$800** (25,000) / **$1,400** (50,000) | units, **quota resets daily at 00:00 UTC**; 1 unit = 10 posts | $2.22 → $0.93 per 1,000 **units** = **$0.22 → $0.09 per 1,000 posts** | **yes**, arbitrary usernames |
-| **ScrapeCreators** <br><https://scrapecreators.com/#pricing> | Free / Freelance / Business / Enterprise | $0 (100 credits) / **$47** (25,000) / **$497** (500,000) / custom | credits = **requests**; never expire; pay-as-you-go, not a subscription | **$1.88 → $0.99 per 1,000 requests**; per record, lower | **yes**, by handle or URL |
-| **Bright Data** <br><https://brightdata.com/pricing/web-scraper> | Free / PAYG / Scale / Enterprise | $0 (5K records/mo) / usage / **$499** (384,000 records incl.) / custom | records | **$1.50 / 1K** PAYG, **$1.30 / 1K** additional on Scale. Datasets: **$250 / 100K = $2.50 / 1K** | **yes** |
-| **Apify** <br><https://apify.com/pricing> | Free / Starter / Scale / Business | $0 / **$19** / **$199** / **$999** — the fee is a **usage credit**, and unused credit expires at cycle end | per actor, pay-per-event | Instagram **$2.70** (Free) / **$2.30** (Starter) / **$1.50** (Scale+) per 1K results; TikTok from **$1.70**; YouTube **$2.40–$5.00** (the actor page contradicts itself — budget $5.00); **X `apidojo/tweet-scraper` $0.40 per 1,000 tweets** | **yes** |
-| **CreatorDB** <br><https://creatordb.app/pricing> | Free / Pro / Premium / Enterprise | $0 / **$79** (3,160 credits) / **$249** (12,450) / **$749** (74,900) | credits; a profile is 2, a verified email 15 | **$20 → $80 per 1,000 profiles** | yes |
-| **Modash** <br><https://www.modash.io/pricing> | Essentials / Performance / Enterprise | **$199** (300 opened profiles) / **$499** (800) / "Starts at $14,700 Yearly" | opened profiles | **~$663 per 1,000 profiles** | yes — but this is a discovery tool, not a data pipe |
-| **Phyllo** <br><https://getphyllo.com/pricing> | — | **not published** — "Get a Quote" only | — | — | — |
+| Provider                                                         | Tier                                     | Monthly USD                                                                                                 | Billing unit                                                            | Derived cost                                                                                                                                                                                                                                  | Other accounts?                                     |
+| ---------------------------------------------------------------- | ---------------------------------------- | ----------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------- |
+| **EnsembleData** <br><https://ensembledata.com/pricing>          | Wood / Bronze / Silver / Gold / Platinum | **$100** (1,500 units/day) / **$200** (5,000) / **$400** (11,000) / **$800** (25,000) / **$1,400** (50,000) | units, **quota resets daily at 00:00 UTC**; 1 unit = 10 posts           | $2.22 → $0.93 per 1,000 **units** = **$0.22 → $0.09 per 1,000 posts**                                                                                                                                                                         | **yes**, arbitrary usernames                        |
+| **ScrapeCreators** <br><https://scrapecreators.com/#pricing>     | Free / Freelance / Business / Enterprise | $0 (100 credits) / **$47** (25,000) / **$497** (500,000) / custom                                           | credits = **requests**; never expire; pay-as-you-go, not a subscription | **$1.88 → $0.99 per 1,000 requests**; per record, lower                                                                                                                                                                                       | **yes**, by handle or URL                           |
+| **Bright Data** <br><https://brightdata.com/pricing/web-scraper> | Free / PAYG / Scale / Enterprise         | $0 (5K records/mo) / usage / **$499** (384,000 records incl.) / custom                                      | records                                                                 | **$1.50 / 1K** PAYG, **$1.30 / 1K** additional on Scale. Datasets: **$250 / 100K = $2.50 / 1K**                                                                                                                                               | **yes**                                             |
+| **Apify** <br><https://apify.com/pricing>                        | Free / Starter / Scale / Business        | $0 / **$19** / **$199** / **$999** — the fee is a **usage credit**, and unused credit expires at cycle end  | per actor, pay-per-event                                                | Instagram **$2.70** (Free) / **$2.30** (Starter) / **$1.50** (Scale+) per 1K results; TikTok from **$1.70**; YouTube **$2.40–$5.00** (the actor page contradicts itself — budget $5.00); **X `apidojo/tweet-scraper` $0.40 per 1,000 tweets** | **yes**                                             |
+| **CreatorDB** <br><https://creatordb.app/pricing>                | Free / Pro / Premium / Enterprise        | $0 / **$79** (3,160 credits) / **$249** (12,450) / **$749** (74,900)                                        | credits; a profile is 2, a verified email 15                            | **$20 → $80 per 1,000 profiles**                                                                                                                                                                                                              | yes                                                 |
+| **Modash** <br><https://www.modash.io/pricing>                   | Essentials / Performance / Enterprise    | **$199** (300 opened profiles) / **$499** (800) / "Starts at $14,700 Yearly"                                | opened profiles                                                         | **~$663 per 1,000 profiles**                                                                                                                                                                                                                  | yes — but this is a discovery tool, not a data pipe |
+| **Phyllo** <br><https://getphyllo.com/pricing>                   | —                                        | **not published** — "Get a Quote" only                                                                      | —                                                                       | —                                                                                                                                                                                                                                             | —                                                   |
 
 **RapidAPI** hosts hundreds of resold social scrapers on a standard `BASIC / PRO / ULTRA / MEGA` ladder. Its `/pricing` pages render tier prices client-side and returned **HTTP 200 with no price in the served HTML** from this host, so no figure is quoted. It is a marketplace of individually-maintained listings, not a vendor you can evaluate — named so the category is not mistaken for an unexplored option.
 
@@ -366,30 +366,30 @@ So EnsembleData at 1,000 posts = **100 units**, not 1,000. That is an order of m
 
 Model: 100 creators × 4 platforms × 1 poll/day × ~10 records = **4,000 records/day ≈ 120,000 records/month**.
 
-| Provider | Cost at 120k records/month | Note |
-|---|---|---|
-| **EnsembleData** | **$100/mo (Wood)** | 120k posts = 12,000 units/month = 400/day, well inside Wood's 1,500/day |
-| **ScrapeCreators** | **~$119 of credit** at the Business rate | and credits never expire, so $497 buys roughly four months |
-| **Bright Data** PAYG | **~$180/mo** | Scale at $499 gives 3× headroom |
-| **Apify** | **~$204–$600/mo** | depends entirely on which actor; Instagram and YouTube are the expensive ones |
-| **CreatorDB / Modash** | **$2,400 / $79,000** | profile-priced tools; wrong shape for per-post polling |
+| Provider               | Cost at 120k records/month               | Note                                                                          |
+| ---------------------- | ---------------------------------------- | ----------------------------------------------------------------------------- |
+| **EnsembleData**       | **$100/mo (Wood)**                       | 120k posts = 12,000 units/month = 400/day, well inside Wood's 1,500/day       |
+| **ScrapeCreators**     | **~$119 of credit** at the Business rate | and credits never expire, so $497 buys roughly four months                    |
+| **Bright Data** PAYG   | **~$180/mo**                             | Scale at $499 gives 3× headroom                                               |
+| **Apify**              | **~$204–$600/mo**                        | depends entirely on which actor; Instagram and YouTube are the expensive ones |
+| **CreatorDB / Modash** | **$2,400 / $79,000**                     | profile-priced tools; wrong shape for per-post polling                        |
 
 **The finding the packet asked for.** The per-record vendors land at **$1.50–$5.00 per 1,000 records**, which is **$1.80–$6.00 per tracked creator per month** before a single Worker request. A plan letting a customer track ten competitors at under ~$20/month is underwater on data alone **on those vendors**. EnsembleData's post-packing changes that picture materially — roughly **$1.00 per 100 creators per month** — which is the one number in this section worth a second look before any decision is made.
 
-### Official APIs — what they actually give you about *other* accounts
+### Official APIs — what they actually give you about _other_ accounts
 
-| Platform | Route | Other accounts? | Price | Binding constraint |
-|---|---|---|---|---|
-| **Twitch** | Helix + **app access token** (client id + secret, client-credentials — no user OAuth) | **yes, fully.** `/helix/users`, `/channels`, `/videos`, `/clips`, `/streams` all documented as "Requires an app access token or user access token" | **free**, no fee published | token-bucket, 1 point/request, separate app and user buckets. The guide's `Ratelimit-Limit: 800` is a **worked example, not a documented ceiling** — read the header at runtime |
-| **YouTube** | Data API v3 | yes, any public channel or video | free | **`search.list` is capped at 100 calls/day**, separate from the 10,000-unit pool that covers `channels.list` / `videos.list` / `commentThreads.list` at **1 unit each**. Discovery is the scarce thing; enrichment by id is effectively free |
-| **Instagram** | Graph API **`business_discovery`** | **yes** — another Business/Creator account's `followers_count`, `media_count`, profile and `/media` with like and comment counts | free | Available **only on "Instagram API with Facebook Login for Business"** — the Page-linked configuration. The newer Business-Login-for-Instagram flavour does not carry it. Age-gated accounts return nothing. Notably it is exempt from the impressions-scaled business rate limit (`4800 × impressions / 24 h`) and bound by the app-level platform cap instead |
-| **TikTok** | Display API | **no — own account only** (`user.info.basic`, `video.list` under the creator's OAuth) | free | — |
-| **TikTok** | Research API | yes, broadly | free | **Closed to us.** Eligibility is academic institutions in the US/EEA/UK/Canada/Switzerland, EU non-profits, and Brazilian academic/non-profit youth-safety research, all on a **not-for-profit basis**, with ethics approval. A commercial product does not qualify |
-| **TikTok** | Commercial Content API | yes, ads only | free, by application (~2 working days) | **EU-country ad data only** in the current phase. This is an **ads** source and belongs to the ads engine, not here |
-| **Patreon** | API v2 | **no — own account only.** No documented route returns another creator's campaign data without their authorization | not published | 100 req / 2 s per client, 100 req / min per token |
-| **LinkedIn** | self-serve (Sign In with LinkedIn / Share / Plugins) | **no** — the authenticated member's own basic profile only. Everything else is partner-gated by application | not published | no public people-search or profile-lookup exists on the self-serve track |
+| Platform      | Route                                                                                 | Other accounts?                                                                                                                                    | Price                                  | Binding constraint                                                                                                                                                                                                                                                                                                                                              |
+| ------------- | ------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Twitch**    | Helix + **app access token** (client id + secret, client-credentials — no user OAuth) | **yes, fully.** `/helix/users`, `/channels`, `/videos`, `/clips`, `/streams` all documented as "Requires an app access token or user access token" | **free**, no fee published             | token-bucket, 1 point/request, separate app and user buckets. The guide's `Ratelimit-Limit: 800` is a **worked example, not a documented ceiling** — read the header at runtime                                                                                                                                                                                 |
+| **YouTube**   | Data API v3                                                                           | yes, any public channel or video                                                                                                                   | free                                   | **`search.list` is capped at 100 calls/day**, separate from the 10,000-unit pool that covers `channels.list` / `videos.list` / `commentThreads.list` at **1 unit each**. Discovery is the scarce thing; enrichment by id is effectively free                                                                                                                    |
+| **Instagram** | Graph API **`business_discovery`**                                                    | **yes** — another Business/Creator account's `followers_count`, `media_count`, profile and `/media` with like and comment counts                   | free                                   | Available **only on "Instagram API with Facebook Login for Business"** — the Page-linked configuration. The newer Business-Login-for-Instagram flavour does not carry it. Age-gated accounts return nothing. Notably it is exempt from the impressions-scaled business rate limit (`4800 × impressions / 24 h`) and bound by the app-level platform cap instead |
+| **TikTok**    | Display API                                                                           | **no — own account only** (`user.info.basic`, `video.list` under the creator's OAuth)                                                              | free                                   | —                                                                                                                                                                                                                                                                                                                                                               |
+| **TikTok**    | Research API                                                                          | yes, broadly                                                                                                                                       | free                                   | **Closed to us.** Eligibility is academic institutions in the US/EEA/UK/Canada/Switzerland, EU non-profits, and Brazilian academic/non-profit youth-safety research, all on a **not-for-profit basis**, with ethics approval. A commercial product does not qualify                                                                                             |
+| **TikTok**    | Commercial Content API                                                                | yes, ads only                                                                                                                                      | free, by application (~2 working days) | **EU-country ad data only** in the current phase. This is an **ads** source, out of scope (ads dropped, #3974), not here                                                                                                                                                                                                                                        |
+| **Patreon**   | API v2                                                                                | **no — own account only.** No documented route returns another creator's campaign data without their authorization                                 | not published                          | 100 req / 2 s per client, 100 req / min per token                                                                                                                                                                                                                                                                                                               |
+| **LinkedIn**  | self-serve (Sign In with LinkedIn / Share / Plugins)                                  | **no** — the authenticated member's own basic profile only. Everything else is partner-gated by application                                        | not published                          | no public people-search or profile-lookup exists on the self-serve track                                                                                                                                                                                                                                                                                        |
 
-**Two official routes are genuinely open to other accounts, and one of them is free and unblocked: Twitch Helix.** The other, Instagram `business_discovery`, is free but needs an approved Facebook app in a specific login configuration — a real onboarding cost, and the only official path to another account's *exact* follower count (as against the rounded "9M" the logged-out page gives).
+**Two official routes are genuinely open to other accounts, and one of them is free and unblocked: Twitch Helix.** The other, Instagram `business_discovery`, is free but needs an approved Facebook app in a specific login configuration — a real onboarding cost, and the only official path to another account's _exact_ follower count (as against the rounded "9M" the logged-out page gives).
 
 ### Recommendation on spend
 
@@ -398,7 +398,7 @@ Model: 100 creators × 4 platforms × 1 poll/day × ~10 records = **4,000 record
 **If and when a provider is bought**, the shape of the decision is:
 
 - **EnsembleData is the cheapest real bulk creator data by roughly 10×**, because it packs 10 posts into a unit. Its risks are real and both are about shape, not price: the quota is **per day** so a backfill cannot borrow from tomorrow, and its 8 platforms exclude LinkedIn and Pinterest.
-- **ScrapeCreators** is the breadth buy — 37+ APIs, the only vendor covering Threads *and* Bluesky *and* the ad libraries, credits that never expire, and it bills per request rather than per record.
+- **ScrapeCreators** is the breadth buy — 37+ APIs, the only vendor covering Threads _and_ Bluesky _and_ the ad libraries, credits that never expire, and it bills per request rather than per record.
 - **Bright Data** is the predictability buy — flat per-record pricing, no charge for failed deliveries, an SLA, and the only real LinkedIn coverage.
 - **Apify** is worth exactly one thing: **X at $0.40 per 1,000 tweets** via `apidojo/tweet-scraper`, the best X price found anywhere in this research. Its Instagram and YouTube rates are the most expensive here.
 - **CreatorDB and Modash** are profile-priced discovery tools at $20–$663 per 1,000 profiles. Wrong shape for daily polling; possibly right for the one-time "who are this creator's rivals" question.

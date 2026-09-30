@@ -16,10 +16,7 @@ export interface DeliveryFailedAlert {
   created_at: string;
 }
 
-export async function insertDeliveryFailedAlert(
-  db: D1Database,
-  alert: DeliveryFailedAlert,
-): Promise<void> {
+export async function insertDeliveryFailedAlert(db: D1Database, alert: DeliveryFailedAlert): Promise<void> {
   await db
     .prepare(INSERT_DELIVERY_FAILED)
     .bind(
@@ -60,10 +57,7 @@ WHERE a.workspace_id = ? AND a.kind = 'delivery_failed'
 ORDER BY a.created_at DESC
 LIMIT 20`;
 
-export async function readDeliveryFailures(
-  db: D1Database,
-  workspaceId: string,
-): Promise<DeliveryFailureRow[]> {
+export async function readDeliveryFailures(db: D1Database, workspaceId: string): Promise<DeliveryFailureRow[]> {
   const { results } = await db.prepare(SELECT_DELIVERY_FAILURES).bind(workspaceId).all<AlertJoinRow>();
   return results.map((row) => ({
     id: row.id,
@@ -86,10 +80,7 @@ WHERE workspace_id = ? AND kind = 'takedown'
 ORDER BY created_at DESC
 LIMIT 20`;
 
-export async function readTakedownNotes(
-  db: D1Database,
-  workspaceId: string,
-): Promise<TakedownNote[]> {
+export async function readTakedownNotes(db: D1Database, workspaceId: string): Promise<TakedownNote[]> {
   const { results } = await db.prepare(SELECT_TAKEDOWN_NOTES).bind(workspaceId).all<TakedownNote>();
   return results;
 }
@@ -114,21 +105,19 @@ WHERE EXISTS (SELECT 1 FROM incident WHERE id = ?11)
 ON CONFLICT(id) DO NOTHING`;
 
 export function insertIncidentAlertStatement(row: OwnSiteBreakageAlertRow): D1PreparedStatement {
-  return env.DB
-    .prepare(INSERT_OWN_SITE_BREAKAGE_ALERT)
-    .bind(
-      row.id,
-      row.workspaceId,
-      row.entityId,
-      row.signalId,
-      row.pageId,
-      row.incidentId,
-      row.severity,
-      row.title,
-      row.body,
-      row.createdAt,
-      row.incidentId,
-    );
+  return env.DB.prepare(INSERT_OWN_SITE_BREAKAGE_ALERT).bind(
+    row.id,
+    row.workspaceId,
+    row.entityId,
+    row.signalId,
+    row.pageId,
+    row.incidentId,
+    row.severity,
+    row.title,
+    row.body,
+    row.createdAt,
+    row.incidentId,
+  );
 }
 
 export interface OwnSiteIncidentNote {
@@ -145,14 +134,8 @@ WHERE a.workspace_id = ? AND a.kind = 'own_site_broken'
 ORDER BY a.created_at DESC
 LIMIT 20`;
 
-export async function readOwnSiteIncidents(
-  db: D1Database,
-  workspaceId: string,
-): Promise<OwnSiteIncidentNote[]> {
-  const { results } = await db
-    .prepare(SELECT_OWN_SITE_INCIDENTS)
-    .bind(workspaceId)
-    .all<OwnSiteIncidentNote>();
+export async function readOwnSiteIncidents(db: D1Database, workspaceId: string): Promise<OwnSiteIncidentNote[]> {
+  const { results } = await db.prepare(SELECT_OWN_SITE_INCIDENTS).bind(workspaceId).all<OwnSiteIncidentNote>();
   return results;
 }
 
@@ -166,14 +149,8 @@ export interface OpenIncidentBlock {
 
 const SELECT_OPEN_INCIDENT_BLOCK = `SELECT a.id AS alert_id, a.title, i.kind, p.url, i.opened_at FROM alert a JOIN incident i ON i.id = a.incident_id JOIN page p ON p.id = i.page_id WHERE a.workspace_id = ?1 AND a.kind = 'own_site_broken' AND i.closed_at IS NULL AND a.status <> 'acknowledged' ORDER BY i.opened_at DESC LIMIT 1`;
 
-export async function readOpenIncidentBlock(
-  db: D1Database,
-  workspaceId: string,
-): Promise<OpenIncidentBlock | null> {
-  const row = await db
-    .prepare(SELECT_OPEN_INCIDENT_BLOCK)
-    .bind(workspaceId)
-    .first<OpenIncidentBlock>();
+export async function readOpenIncidentBlock(db: D1Database, workspaceId: string): Promise<OpenIncidentBlock | null> {
+  const row = await db.prepare(SELECT_OPEN_INCIDENT_BLOCK).bind(workspaceId).first<OpenIncidentBlock>();
   return row ?? null;
 }
 
@@ -185,34 +162,36 @@ export async function acknowledgeIncidentAlert(
   alertId: string,
   at: string,
 ): Promise<void> {
-  await db
-    .prepare(ACKNOWLEDGE_INCIDENT_ALERT)
-    .bind(workspaceId, alertId, at)
-    .run();
+  await db.prepare(ACKNOWLEDGE_INCIDENT_ALERT).bind(workspaceId, alertId, at).run();
 }
 
 const INSERT_SIGNAL_ALERT = `INSERT INTO alert (id, workspace_id, entity_id, signal_id, kind, severity, title, body, status, created_at)
 VALUES (?1, ?2, ?3, ?4, ?5, 'normal', ?6, ?7, 'unread', ?8) ON CONFLICT(id) DO NOTHING`;
 
-export function insertSignalAlert(db: D1Database, alert: {
-  workspaceId: string;
-  entityId: string;
-  signalId: string;
-  kind: "mention" | "ad";
-  title: string;
-  body: string | null;
-  createdAt: string;
-}): D1PreparedStatement {
-  return db.prepare(INSERT_SIGNAL_ALERT).bind(
-    `${alert.kind}-${alert.signalId}`,
-    alert.workspaceId,
-    alert.entityId,
-    alert.signalId,
-    alert.kind,
-    alert.title,
-    alert.body,
-    alert.createdAt,
-  );
+export function insertSignalAlert(
+  db: D1Database,
+  alert: {
+    workspaceId: string;
+    entityId: string;
+    signalId: string;
+    kind: "mention" | "ad";
+    title: string;
+    body: string | null;
+    createdAt: string;
+  },
+): D1PreparedStatement {
+  return db
+    .prepare(INSERT_SIGNAL_ALERT)
+    .bind(
+      `${alert.kind}-${alert.signalId}`,
+      alert.workspaceId,
+      alert.entityId,
+      alert.signalId,
+      alert.kind,
+      alert.title,
+      alert.body,
+      alert.createdAt,
+    );
 }
 
 export interface SignalAlert {
@@ -238,7 +217,7 @@ export async function readSignalAlerts(db: D1Database, workspaceId: string): Pro
 }
 
 const INSERT_COMPETITOR_RETIRED_ALERT =
-  "INSERT INTO alert (id, workspace_id, entity_id, kind, title, body, created_at) VALUES (?, ?, ?, 'competitor_retired', ?, ?, ?)";
+  "INSERT INTO alert (id, workspace_id, entity_id, kind, title, body, created_at) SELECT ?1, ?2, ?3, 'competitor_retired', ?4, ?5, ?6 WHERE EXISTS (SELECT 1 FROM workspace WHERE id = ?2)";
 
 export function insertCompetitorRetiredAlert(
   db: D1Database,
@@ -250,14 +229,16 @@ export function insertCompetitorRetiredAlert(
     now: string;
   },
 ): D1PreparedStatement {
-  return db.prepare(INSERT_COMPETITOR_RETIRED_ALERT).bind(
-    crypto.randomUUID(),
-    input.workspaceId,
-    input.entityId,
-    `Stopped tracking ${input.name}`,
-    `${input.line}. Its history is kept, and you can turn it back on in Competitors.`,
-    input.now,
-  );
+  return db
+    .prepare(INSERT_COMPETITOR_RETIRED_ALERT)
+    .bind(
+      crypto.randomUUID(),
+      input.workspaceId,
+      input.entityId,
+      `Stopped tracking ${input.name}`,
+      `${input.line}. Its history is kept, and you can turn it back on in Competitors.`,
+      input.now,
+    );
 }
 
 const INSERT_SOURCE_BLIND_ALERT = `INSERT INTO alert (id, workspace_id, kind, severity, title, body, status, created_at) VALUES (?1, ?2, 'source_blind', 'high', ?3, ?4, 'unread', ?5) ON CONFLICT(id) DO NOTHING`;

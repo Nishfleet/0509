@@ -12,7 +12,12 @@ const SPACING_PX = 4;
 const TAP_TARGET_PX = 44;
 
 const MAYBES = [
-  { suggestionId: "s-1", name: "Northwind", domain: "northwind.example", reason: "Named alongside you by 3 publishers" },
+  {
+    suggestionId: "s-1",
+    name: "Northwind",
+    domain: "northwind.example",
+    reason: "Named alongside you by 3 publishers",
+  },
 ];
 
 // A data router renders a <Form>; MemoryRouter's absence of the actions/loaders

@@ -20,7 +20,9 @@ test.skip(
   "the onboarding screens need a signed-in session; the preview lane cannot read the magic-link inbox",
 );
 
-test("the three onboarding screens pass axe at WCAG 2.2 AA in both themes and at both widths (#4149) @own-signin", async ({ page }, testInfo) => {
+test("the three onboarding screens pass axe at WCAG 2.2 AA in both themes and at both widths (#4149) @own-signin", async ({
+  page,
+}, testInfo) => {
   const token = requireInboxToken();
   const email = `e2e+${crypto.randomUUID().replaceAll("-", "").slice(0, 12)}@0509.io`;
   createdEmail = email;
@@ -67,8 +69,12 @@ test("the three onboarding screens pass axe at WCAG 2.2 AA in both themes and at
 
   await page.emulateMedia({ colorScheme: "light" });
   await page.setViewportSize({ width: 1440, height: 900 });
+  await page.getByRole("button", { name: "edit name" }).click();
+  const name = page.getByRole("textbox", { name: "name" });
+  await name.fill("Nike");
+  await name.press("Escape");
   await page.getByRole("button", { name: "That's me" }).click();
-  await expect(page).toHaveURL(/\/onboarding\/competitors$/);
+  await expect(page).toHaveURL(/\/onboarding\/competitors$/, { timeout: 10_000 });
 
   for (const colorScheme of ["light", "dark"] as const) {
     for (const width of [1440, 390]) {

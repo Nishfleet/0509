@@ -100,9 +100,7 @@ describe("markCompetitorsReady", () => {
     await markCompetitorsReady(workspaceId, "2026-09-25T06:00:50.000Z");
     await markCompetitorsReady(workspaceId, "2026-09-25T06:01:30.000Z");
 
-    const row = await env.DB.prepare(
-      "SELECT competitors_ready_at FROM onboarding_run WHERE workspace_id = ?",
-    )
+    const row = await env.DB.prepare("SELECT competitors_ready_at FROM onboarding_run WHERE workspace_id = ?")
       .bind(workspaceId)
       .first<{ competitors_ready_at: string | null }>();
 
@@ -122,9 +120,7 @@ describe("markCardReady", () => {
     await markCardReady(workspaceId, "2026-09-25T06:00:20.000Z");
     await markCardReady(workspaceId, "2026-09-25T06:00:40.000Z");
 
-    const row = await env.DB.prepare(
-      "SELECT card_ready_at FROM onboarding_run WHERE workspace_id = ?",
-    )
+    const row = await env.DB.prepare("SELECT card_ready_at FROM onboarding_run WHERE workspace_id = ?")
       .bind(workspaceId)
       .first<{ card_ready_at: string | null }>();
 
@@ -145,9 +141,7 @@ describe("markCardReady", () => {
     });
 
     await expect(card.logo).resolves.toBe("data:x");
-    const row = await env.DB.prepare(
-      "SELECT card_ready_at FROM onboarding_run WHERE workspace_id = ?",
-    )
+    const row = await env.DB.prepare("SELECT card_ready_at FROM onboarding_run WHERE workspace_id = ?")
       .bind(workspaceId)
       .first<{ card_ready_at: string | null }>();
 
@@ -170,9 +164,7 @@ describe("markCardReady", () => {
     });
 
     await expect(card.logo).resolves.toBe("data:x");
-    const row = await env.DB.prepare(
-      "SELECT card_ready_at FROM onboarding_run WHERE workspace_id = ?",
-    )
+    const row = await env.DB.prepare("SELECT card_ready_at FROM onboarding_run WHERE workspace_id = ?")
       .bind(workspaceId)
       .first<{ card_ready_at: string | null }>();
 
@@ -197,12 +189,8 @@ describe("markCardReady", () => {
 
       await expect(card.logo).resolves.toBe("data:x");
       expect(cardReadyMock.calls).toBe(1);
-      expect(error).toHaveBeenCalledWith(
-        expect.stringContaining('"event":"onboarding.card_ready_mark_failed"'),
-      );
-      const row = await env.DB.prepare(
-        "SELECT card_ready_at FROM onboarding_run WHERE workspace_id = ?",
-      )
+      expect(error).toHaveBeenCalledWith(expect.stringContaining('"event":"onboarding.card_ready_mark_failed"'));
+      const row = await env.DB.prepare("SELECT card_ready_at FROM onboarding_run WHERE workspace_id = ?")
         .bind(workspaceId)
         .first<{ card_ready_at: string | null }>();
 
@@ -237,9 +225,7 @@ describe("markCardReady", () => {
     settleSite(FIELDS);
     await expect(card.logo).resolves.toBe("data:x");
     expect(cardReadyMock.calls).toBe(1);
-    const row = await env.DB.prepare(
-      "SELECT card_ready_at FROM onboarding_run WHERE workspace_id = ?",
-    )
+    const row = await env.DB.prepare("SELECT card_ready_at FROM onboarding_run WHERE workspace_id = ?")
       .bind(workspaceId)
       .first<{ card_ready_at: string | null }>();
 
@@ -317,9 +303,7 @@ describe("markWatchingStarted", () => {
 
     await markWatchingStarted(workspaceId, "2026-09-25T06:01:00.000Z");
 
-    const row = await env.DB.prepare(
-      "SELECT watching_started_at FROM onboarding_run WHERE workspace_id = ?",
-    )
+    const row = await env.DB.prepare("SELECT watching_started_at FROM onboarding_run WHERE workspace_id = ?")
       .bind(workspaceId)
       .first<{ watching_started_at: string | null }>();
 
@@ -337,9 +321,7 @@ describe("markWatchingStarted", () => {
     await markWatchingStarted(workspaceId, "2026-09-25T06:01:00.000Z");
     await markWatchingStarted(workspaceId, "2026-09-25T07:00:00.000Z");
 
-    const row = await env.DB.prepare(
-      "SELECT watching_started_at FROM onboarding_run WHERE workspace_id = ?",
-    )
+    const row = await env.DB.prepare("SELECT watching_started_at FROM onboarding_run WHERE workspace_id = ?")
       .bind(workspaceId)
       .first<{ watching_started_at: string | null }>();
 
@@ -349,9 +331,7 @@ describe("markWatchingStarted", () => {
   it("creates no run row for a workspace that has none", async () => {
     await markWatchingStarted(workspaceId, "2026-09-25T06:01:00.000Z");
 
-    const row = await env.DB.prepare(
-      "SELECT count(*) AS n FROM onboarding_run WHERE workspace_id = ?",
-    )
+    const row = await env.DB.prepare("SELECT count(*) AS n FROM onboarding_run WHERE workspace_id = ?")
       .bind(workspaceId)
       .first<{ n: number }>();
 

@@ -30,10 +30,8 @@ test.describe("a watched competitor page leads with the switch and its consequen
     !process.env.PLAYWRIGHT_TEST_BASE_URL,
     "the competitor page needs a real session; the local preview Worker cannot mint one",
   );
-  // Playwright's fixture validator requires an object destructuring pattern
-  // here, and no-empty-pattern bans `({})`: the ignored binding is the price.
   test.use({
-    storageState: async ({ browserName: _browserName }, use, testInfo) => {
+    storageState: async ({}, use, testInfo) => {
       await use(onboardedStatePath(testInfo.project.name === "phone-390" ? "phone" : "desktop"));
     },
   });
@@ -55,8 +53,8 @@ test.describe("a watched competitor page leads with the switch and its consequen
     await expect(sentence).toBeVisible();
 
     // Exactly one switch on the detail page — the watched competitor's own, whose
-    // aria-label is "<brand> tracking" (app/components/brand-switch.tsx).
-    const toggle = page.getByRole("switch", { name: / tracking$/ });
+    // accessible name is "<brand> tracking ON|OFF" (app/components/brand-switch.tsx).
+    const toggle = page.getByRole("switch", { name: / tracking (ON|OFF)$/ });
     await expect(toggle).toBeVisible();
     await expect(toggle).toHaveAttribute("aria-checked", "true");
 

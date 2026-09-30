@@ -96,11 +96,31 @@ function choice(domain: string, picked: string): ChoiceVerdict {
 
 function buildResults(targets: Map<string, RefreshTarget>): StillCompetitorResult[] {
   return [
-    { target: targetOf(targets, "alpha.example"), verdict: noul("alpha.example", 0.05), reason: choice("alpha.example", "shut_down") },
-    { target: targetOf(targets, "beta.example"), verdict: noul("beta.example", 0.05), reason: choice("beta.example", "acquired") },
-    { target: targetOf(targets, "gamma.example"), verdict: noul("gamma.example", 0.95), reason: choice("gamma.example", "dormant") },
-    { target: targetOf(targets, "delta.example"), verdict: noul("delta.example", 0.95), reason: choice("delta.example", "active") },
-    { target: targetOf(targets, "epsilon.example"), verdict: noul("epsilon.example", 0.5), reason: choice("epsilon.example", "active") },
+    {
+      target: targetOf(targets, "alpha.example"),
+      verdict: noul("alpha.example", 0.05),
+      reason: choice("alpha.example", "shut_down"),
+    },
+    {
+      target: targetOf(targets, "beta.example"),
+      verdict: noul("beta.example", 0.05),
+      reason: choice("beta.example", "acquired"),
+    },
+    {
+      target: targetOf(targets, "gamma.example"),
+      verdict: noul("gamma.example", 0.95),
+      reason: choice("gamma.example", "dormant"),
+    },
+    {
+      target: targetOf(targets, "delta.example"),
+      verdict: noul("delta.example", 0.95),
+      reason: choice("delta.example", "active"),
+    },
+    {
+      target: targetOf(targets, "epsilon.example"),
+      verdict: noul("epsilon.example", 0.5),
+      reason: choice("epsilon.example", "active"),
+    },
     { target: targetOf(targets, "zeta.example"), verdict: null, reason: null },
   ];
 }
@@ -140,14 +160,7 @@ async function verdictCount(workspaceId: string): Promise<number> {
 describe("stillCompetitorAction", () => {
   it("retires only a sure-dead auto brand, keeps the sure-active one, and asks about the rest", async () => {
     const { targets } = await seedWorkspace();
-    expect(buildResults(targets).map(stillCompetitorAction)).toEqual([
-      "retire",
-      "ask",
-      "ask",
-      "keep",
-      "ask",
-      "none",
-    ]);
+    expect(buildResults(targets).map(stillCompetitorAction)).toEqual(["retire", "ask", "ask", "keep", "ask", "none"]);
   });
 });
 
@@ -223,6 +236,21 @@ describe("writeStillCompetitorResults", () => {
     });
     expect((await entityState(workspaceId, "beta.example"))?.state).toBe("on");
     expect((await entityState(workspaceId, "alpha.example"))?.state).toBe("off");
+  });
+
+  it("writes nothing when the workspace was deleted after the context read instead of failing the foreign key", async () => {
+    const { workspaceId, targets } = await seedWorkspace();
+    const results = buildResults(targets);
+    await env.DB.prepare("DELETE FROM workspace WHERE id = ?").bind(workspaceId).run();
+
+    await expect(writeStillCompetitorResults(workspaceId, results, NOW)).resolves.toBeUndefined();
+
+    for (const table of ["suggestion", "alert", "jev_verdict"]) {
+      const row = await env.DB.prepare(`SELECT COUNT(*) AS n FROM ${table} WHERE workspace_id = ?`)
+        .bind(workspaceId)
+        .first<{ n: number }>();
+      expect(row).toEqual({ n: 0 });
+    }
   });
 
   it("does nothing at all when no brand was judged", async () => {

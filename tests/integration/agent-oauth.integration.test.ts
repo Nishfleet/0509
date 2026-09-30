@@ -29,7 +29,10 @@ function send(request: Request): Promise<Response> {
 
 async function challenge(): Promise<string> {
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(VERIFIER));
-  return btoa(String.fromCharCode(...new Uint8Array(digest))).replaceAll("+", "-").replaceAll("/", "_").replace(/=+$/, "");
+  return btoa(String.fromCharCode(...new Uint8Array(digest)))
+    .replaceAll("+", "-")
+    .replaceAll("/", "_")
+    .replace(/=+$/, "");
 }
 
 let helpers: OAuthHelpers;
@@ -58,22 +61,21 @@ beforeAll(async () => {
   authorizeUrl = `${ORIGIN}/oauth/authorize?${query.toString()}`;
   const now = new Date().toISOString();
   await env.DB.batch([
-    env.DB.prepare('INSERT INTO "user" (id, name, email, "emailVerified", "createdAt", "updatedAt") VALUES (?1, ?2, ?3, 1, ?4, ?4)').bind(
-      "u_oauth",
-      "OAuth Owner",
-      "oauth@test.dev",
-      now,
-    ),
-    env.DB.prepare("INSERT INTO workspace (id, name, owner_user_id, timezone, created_at) VALUES ('ws_oauth', 'oauth', 'u_oauth', 'UTC', ?1)").bind(now),
+    env.DB.prepare(
+      'INSERT INTO "user" (id, name, email, "emailVerified", "createdAt", "updatedAt") VALUES (?1, ?2, ?3, 1, ?4, ?4)',
+    ).bind("u_oauth", "OAuth Owner", "oauth@test.dev", now),
+    env.DB.prepare(
+      "INSERT INTO workspace (id, name, owner_user_id, timezone, created_at) VALUES ('ws_oauth', 'oauth', 'u_oauth', 'UTC', ?1)",
+    ).bind(now),
   ]);
 });
 
 describe("an AI app signing in to 0509", () => {
-  it("names the app and where the user goes back to before asking", async () => {
+  it("leads with the address and marks the app's own name as unchecked", async () => {
     expect(await readConsent(helpers, new Request(authorizeUrl))).toEqual({
       kind: "ask",
-      appName: "Test App",
-      returnsTo: "app.example",
+      host: "app.example",
+      claimedName: "Test App",
     });
   });
 
@@ -123,14 +125,18 @@ describe("an AI app signing in to 0509", () => {
     const tokens: { access_token: string; scope: string } = await token.json();
     expect(tokens.scope).toBe("read");
 
-    const mcp = await send(new Request(`${ORIGIN}/mcp`, { headers: { authorization: `Bearer ${tokens.access_token}` } }));
+    const mcp = await send(
+      new Request(`${ORIGIN}/mcp`, { headers: { authorization: `Bearer ${tokens.access_token}` } }),
+    );
     expect(mcp.status).toBe(200);
     expect(await mcp.json()).toEqual({ userId: "u_oauth", clientId });
 
     const grants = await helpers.listUserGrants("u_oauth");
-    expect(grants.items.map((grant) => grant.metadata)).toEqual([{ appName: "Test App" }]);
+    expect(grants.items.map((grant) => grant.metadata)).toEqual([{ appName: "app.example" }]);
     await helpers.revokeGrant(grants.items[0]?.id ?? "", "u_oauth");
-    const revoked = await send(new Request(`${ORIGIN}/mcp`, { headers: { authorization: `Bearer ${tokens.access_token}` } }));
+    const revoked = await send(
+      new Request(`${ORIGIN}/mcp`, { headers: { authorization: `Bearer ${tokens.access_token}` } }),
+    );
     expect(revoked.status).toBe(401);
   });
 
@@ -155,7 +161,11 @@ describe("an AI app signing in to 0509", () => {
         new Request(`${ORIGIN}/oauth/register`, {
           method: "POST",
           headers: { "content-type": "application/json", "cf-connecting-ip": "198.51.100.77" },
-          body: JSON.stringify({ redirect_uris: [REDIRECT], client_name: `Flood ${String(attempt)}`, token_endpoint_auth_method: "none" }),
+          body: JSON.stringify({
+            redirect_uris: [REDIRECT],
+            client_name: `Flood ${String(attempt)}`,
+            token_endpoint_auth_method: "none",
+          }),
         }),
       );
       statuses.push(response.status);

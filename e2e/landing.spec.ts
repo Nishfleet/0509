@@ -33,7 +33,10 @@ test("the landing renders its sections in order under one headline @smoke", asyn
   expect(order).toEqual(["hero", "mark", "how-it-works", "what-we-watch", "agents", "price", "faq"]);
 });
 
-test("the landing route data and document carry no disabled source's internal notes @smoke", async ({ page, request }) => {
+test("the landing route data and document carry no disabled source's internal notes @smoke", async ({
+  page,
+  request,
+}) => {
   const response = await page.goto(PATH);
   expect(response?.status()).toBe(200);
 
@@ -77,7 +80,11 @@ test("the landing never leads with a full row of dimmed sources @smoke", async (
   const degraded = await watch.locator('[data-state="degraded"]').count();
   const row = await watch.locator("ul").count();
   expect(pills > 0).toBe(row > 0);
-  expect(degraded === pills && pills > 0).toBe(false);
+  // The all-degraded gate counts mentions sources only (#6064): when the site
+  // source (site.page) is itself degraded the normal dimmed rows render, so a
+  // fully dimmed row is allowed only then and never otherwise.
+  const siteDegraded = await watch.locator('[data-state="degraded"]', { hasText: "site.page" }).count();
+  expect(degraded === pills && pills > 0 && siteDegraded === 0).toBe(false);
   if (row === 0) {
     // The gate leaves the one rebuilding line where the row was; a bare section
     // with neither row nor line is the regression this guards.
@@ -126,7 +133,9 @@ test("how it works reads as three ruled steps in order, wide and narrow @smoke",
   });
 });
 
-test("the agents section hands a visitor's agent the MCP address and the API docs @smoke", async ({ page }, testInfo) => {
+test("the agents section hands a visitor's agent the MCP address and the API docs @smoke", async ({
+  page,
+}, testInfo) => {
   const watched = watchConsole(page);
 
   await page.goto(PATH);
@@ -136,10 +145,7 @@ test("the agents section hands a visitor's agent the MCP address and the API doc
   for (const name of ["Claude", "Cursor", "ChatGPT"]) {
     await expect(agents.getByText(name, { exact: true })).toBeVisible();
   }
-  await expect(agents.getByRole("link", { name: "Read the API docs" })).toHaveAttribute(
-    "href",
-    "/api/v1/openapi.json",
-  );
+  await expect(agents.getByRole("link", { name: "Read the API docs" })).toHaveAttribute("href", "/api/v1/openapi.json");
   expect(await consoleFailures(page, watched, testInfo), testInfo.project.name).toEqual([]);
 
   await testInfo.attach(`agents-${testInfo.project.name}`, {
@@ -246,7 +252,10 @@ test("the hero's first viewport holds the outcome and the one priced input @smok
 test("the hero input carries what you typed to sign-in @smoke", async ({ page }) => {
   await page.goto(PATH);
   await page.locator("#hero").getByRole("textbox", { name: "your website, or a handle" }).fill("example.com");
-  await page.locator("#hero").getByRole("button", { name: /€\d+\/mo/ }).click();
+  await page
+    .locator("#hero")
+    .getByRole("button", { name: /€\d+\/mo/ })
+    .click();
   await expect(page).toHaveURL(/\/login\?subject=example\.com$/);
 });
 

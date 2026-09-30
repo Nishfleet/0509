@@ -8,7 +8,7 @@ const READ_BACKLOG =
   "SELECT name, domain, evidence_json FROM discovery_backlog WHERE workspace_id = ?1 AND promoted_at IS NULL ORDER BY first_seen_at, name_key";
 
 const UPSERT_ROW =
-  "INSERT INTO discovery_backlog (workspace_id, name_key, name, domain, evidence_json, evidence_count, first_seen_at, updated_at, promoted_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?7, NULL) ON CONFLICT (workspace_id, name_key) DO UPDATE SET name = excluded.name, domain = COALESCE(excluded.domain, discovery_backlog.domain), evidence_json = excluded.evidence_json, evidence_count = excluded.evidence_count, updated_at = excluded.updated_at, promoted_at = NULL";
+  "INSERT INTO discovery_backlog (workspace_id, name_key, name, domain, evidence_json, evidence_count, first_seen_at, updated_at, promoted_at) SELECT ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?7, NULL WHERE EXISTS (SELECT 1 FROM workspace WHERE id = ?1) ON CONFLICT (workspace_id, name_key) DO UPDATE SET name = excluded.name, domain = COALESCE(excluded.domain, discovery_backlog.domain), evidence_json = excluded.evidence_json, evidence_count = excluded.evidence_count, updated_at = excluded.updated_at, promoted_at = NULL";
 
 const PROMOTE_ROW =
   "UPDATE discovery_backlog SET promoted_at = ?1, updated_at = ?1 WHERE workspace_id = ?2 AND name_key = ?3 AND promoted_at IS NULL";
@@ -24,7 +24,7 @@ const backlogRows = z.array(
 const evidenceSchema = z.object({
   sourceUrl: z.string(),
   excerpt: z.string(),
-  generator: z.enum(["news", "hn", "ads"] satisfies GeneratorKey[]),
+  generator: z.enum(["news", "hn", "ads", "ai"] satisfies GeneratorKey[]),
 });
 
 const evidenceEnvelopeSchema = z.object({ evidence: z.array(evidenceSchema) });
