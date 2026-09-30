@@ -238,6 +238,21 @@ describe("writeStillCompetitorResults", () => {
     expect((await entityState(workspaceId, "alpha.example"))?.state).toBe("off");
   });
 
+  it("writes nothing when the workspace was deleted after the context read instead of failing the foreign key", async () => {
+    const { workspaceId, targets } = await seedWorkspace();
+    const results = buildResults(targets);
+    await env.DB.prepare("DELETE FROM workspace WHERE id = ?").bind(workspaceId).run();
+
+    await expect(writeStillCompetitorResults(workspaceId, results, NOW)).resolves.toBeUndefined();
+
+    for (const table of ["suggestion", "alert", "jev_verdict"]) {
+      const row = await env.DB.prepare(`SELECT COUNT(*) AS n FROM ${table} WHERE workspace_id = ?`)
+        .bind(workspaceId)
+        .first<{ n: number }>();
+      expect(row).toEqual({ n: 0 });
+    }
+  });
+
   it("does nothing at all when no brand was judged", async () => {
     const { workspaceId, targets } = await seedWorkspace();
     const batch = vi.spyOn(env.DB, "batch");
