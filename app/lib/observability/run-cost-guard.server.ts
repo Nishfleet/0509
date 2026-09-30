@@ -1,4 +1,5 @@
 import { insertCostAlerts } from "../data/cost_alert.server";
+import { readBrowserMsForDay } from "../site/browser-budget.server";
 import { fetchDailyUsage } from "./cost-analytics.server";
 import { evaluateCost } from "./cost-guard";
 import type { CostBreach, DailyUsage } from "./cost-guard";
@@ -13,7 +14,8 @@ export async function runCostGuard(
   breaches: readonly CostBreach[];
   alertIds: readonly string[];
 }> {
-  const usage = await fetchDailyUsage(day, apiToken);
+  const [cloudflare, browserMs] = await Promise.all([fetchDailyUsage(day, apiToken), readBrowserMsForDay(day)]);
+  const usage: DailyUsage = { ...cloudflare, browserMs };
   const row = await db
     .prepare("SELECT COUNT(*) AS n FROM entity WHERE role = 'competitor' AND state = 'on'")
     .first<{ n: number }>();
