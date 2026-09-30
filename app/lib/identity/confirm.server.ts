@@ -70,7 +70,7 @@ export async function confirmCard(workspaceId: string, userId: string, form: For
     }),
     now: now.toISOString(),
   });
-  const entityId = await readWorkspaceSelfId(workspaceId);
+  const entityId = inserted ? id : await readWorkspaceSelfId(workspaceId);
   if (entityId === null) return false;
   const candidates: { edit: FieldEdit; changed: boolean }[] =
     !inserted || cached === null
