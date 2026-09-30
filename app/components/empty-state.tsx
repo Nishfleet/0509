@@ -95,19 +95,6 @@ export function evidenceEmpty(paths: readonly string[], lastCheckedAt: Date): { 
   };
 }
 
-export function competitorJustAdded(): { sentence: string } {
-  return {
-    sentence:
-      "Watching from today. The first mentions land in the nightly sweep; site changes need a second snapshot, so the first mark comes tomorrow.",
-  };
-}
-
-export function alertsEmpty(): { sentence: string } {
-  return {
-    sentence: "Nothing has interrupted you. When your own site breaks you'll get an email; everything else waits here.",
-  };
-}
-
 export function degradedSource(source: string, since: string): { sentence: string } {
   return {
     sentence: `${source} has been ${since}. We show it as degraded rather than pretend the count is complete.`,
