@@ -533,7 +533,7 @@ export async function signInWithMagicLink(
 // behind — signed out, row still there — and this helper cannot tell the
 // two apart, so that leak is a named gap (#5733), not a solved case.
 
-// 0509#5688 (fleet-manager): the journey specs keep these five accounts on
+// 0509#5688 (fleet-manager): the journey specs keep these six accounts on
 // purpose; the recurring teardown must never delete them. Match these exact
 // addresses, never a pattern. The one-time purge (0509#5730) kept four
 // of them (not e2e+j8-hard, added by J8, 0509#4124); a later purge may still take them — once the kept-account journey
@@ -544,6 +544,7 @@ const KEPT_JOURNEY_ACCOUNTS: readonly string[] = [
   "e2e+j8-soft@0509.io",
   "e2e+j9-mentions@0509.io",
   "e2e+j12-rollovers@0509.io",
+  "e2e+soak@0509.io",
 ];
 
 export async function deleteCreatedAccount(page: Page, email: string): Promise<void> {
