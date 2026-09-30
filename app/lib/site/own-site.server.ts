@@ -50,6 +50,11 @@ function wwwVariant(url: string): string {
   return `${parsed.protocol}//www.${parsed.hostname}${parsed.pathname}`;
 }
 
+async function fetchTwin(url: string): Promise<Response | Error | "robots"> {
+  const twin = wwwVariant(url);
+  return (await robotsAllows(twin)) ? fetchStatus(twin) : "robots";
+}
+
 export function pageHost(url: string): string {
   return new URL(url).hostname;
 }
@@ -58,7 +63,12 @@ export async function probeOwnSite(url: string): Promise<OwnSiteHealth> {
   if (!(await robotsAllows(url))) return { state: "unknown", reason: "robots" };
   const first = await fetchStatus(url);
   if (first instanceof BlockedRedirectError) return { state: "unknown", reason: "redirect refused" };
-  const response = first instanceof Error ? await fetchStatus(wwwVariant(url)) : first;
+  const response = first instanceof Error ? await fetchTwin(url) : first;
+  if (response === "robots") return { state: "unknown", reason: "robots" };
+  return classify(response);
+}
+
+function classify(response: Response | Error): OwnSiteHealth {
   if (response instanceof Error) return { state: "broken", kind: "not loading" };
   if (response.headers.get("cf-mitigated") === "challenge") return { state: "unknown", reason: "challenge" };
   if (response.status >= 500 || response.status === 404 || response.status === 410) {
