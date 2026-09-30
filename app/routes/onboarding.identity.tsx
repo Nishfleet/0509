@@ -22,6 +22,10 @@ import { requireFreshSession, requireSession } from "../lib/require-session.serv
 import { createTimings } from "../lib/server-timing.server";
 import { workspaceLandingForRequest } from "../lib/workspace.server";
 
+export function meta() {
+  return [{ title: "Confirm your card · Five to Nine" }];
+}
+
 export async function loader({ request }: Route.LoaderArgs) {
   const timings = createTimings();
   const session = await timings.measure("session", requireSession(request));
