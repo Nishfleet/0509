@@ -69,25 +69,21 @@ async function addCompetitor(workspaceId: string, raw: string, now: string): Pro
   return DONE;
 }
 
+const SUGGESTION_INTENTS = new Map([
+  ["accept", acceptSuggestion],
+  ["stop", confirmRetireSuggestion],
+  ["keep", keepFromRetireSuggestion],
+  ["dismiss", dismissSuggestion],
+]);
+
 export async function handleCompetitorIntent(workspaceId: string, form: FormData): Promise<CompetitorActionResult> {
   const now = new Date().toISOString();
   const intent = text(form, "intent");
   const suggestionId = text(form, "suggestionId");
   const entityId = text(form, "entityId");
-  if (intent === "accept" && suggestionId !== "") {
-    await acceptSuggestion({ workspaceId, suggestionId, now });
-    return DONE;
-  }
-  if (intent === "stop" && suggestionId !== "") {
-    await confirmRetireSuggestion({ workspaceId, suggestionId, now });
-    return DONE;
-  }
-  if (intent === "keep" && suggestionId !== "") {
-    await keepFromRetireSuggestion({ workspaceId, suggestionId, now });
-    return DONE;
-  }
-  if (intent === "dismiss" && suggestionId !== "") {
-    await dismissSuggestion({ workspaceId, suggestionId, now });
+  const suggestionAction = SUGGESTION_INTENTS.get(intent);
+  if (suggestionAction !== undefined && suggestionId !== "") {
+    await suggestionAction({ workspaceId, suggestionId, now });
     return DONE;
   }
   if ((intent === "on" || intent === "off") && entityId !== "") {

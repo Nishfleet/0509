@@ -11,7 +11,7 @@ const authSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("bearer"), secretEnv: z.string().min(1) }),
 ]);
 
-export const adsSourceDescriptorSchema = z
+const descriptorShape = z
   .object({
     transport: z.enum(["api", "browser"]),
 
@@ -28,77 +28,84 @@ export const adsSourceDescriptorSchema = z
     rateLimitPerMinute: z.number().int().positive(),
     reliability: z.enum(RELIABILITY),
   })
-  .strict()
-  .check((ctx) => {
-    const d = ctx.value;
-    const templated = [d.endpoint, ...Object.values(d.params)];
-    const hasTarget = templated.some((t) => t.includes(TARGET_TOKEN));
-    const hasCursor = templated.some((t) => t.includes(CURSOR_TOKEN));
+  .strict();
 
-    if (!hasTarget) {
-      ctx.issues.push({
-        code: "custom",
-        message: `descriptor must address a target: ${TARGET_TOKEN} is required in endpoint or a params value`,
-        path: ["endpoint"],
-        input: d.endpoint,
-      });
-    }
-    if (d.waitForSelector !== undefined && d.transport !== "browser") {
-      ctx.issues.push({
-        code: "custom",
-        message: "waitForSelector is only meaningful on the browser transport",
-        path: ["waitForSelector"],
-        input: d.waitForSelector,
-      });
-    }
-    if (d.paginationCursorPath !== undefined && d.transport !== "api") {
-      ctx.issues.push({
-        code: "custom",
-        message: "paginationCursorPath is only meaningful on the api transport",
-        path: ["paginationCursorPath"],
-        input: d.paginationCursorPath,
-      });
-    }
-    if (d.paginationCursorPath !== undefined && !hasCursor) {
-      ctx.issues.push({
-        code: "custom",
-        message: `paginationCursorPath is set but nothing asks for a page: ${CURSOR_TOKEN} is required in endpoint or a params value`,
-        path: ["paginationCursorPath"],
-        input: d.paginationCursorPath,
-      });
-    }
-    if (d.paginationCursorPath === undefined && hasCursor) {
-      ctx.issues.push({
-        code: "custom",
-        message: `${CURSOR_TOKEN} is used but paginationCursorPath is not set`,
-        path: ["endpoint"],
-        input: d.endpoint,
-      });
-    }
+type DescriptorFields = z.output<typeof descriptorShape>;
 
-    try {
-      const rendered = renderDescriptorTemplate(d.endpoint, {
-        target: "probe",
-        cursor: "",
-      });
-      if (new URL(rendered).protocol !== "https:") {
-        ctx.issues.push({
-          code: "custom",
-          message: "endpoint must render to an https URL",
-          path: ["endpoint"],
-          input: d.endpoint,
-        });
-      }
-    } catch (error) {
-      console.error(JSON.stringify({ event: "ads.endpoint_render_failed", error: String(error) }));
-      ctx.issues.push({
-        code: "custom",
-        message: "endpoint does not render to a valid URL",
-        path: ["endpoint"],
-        input: d.endpoint,
-      });
+function customIssue(path: string, message: string, input: unknown) {
+  return { code: "custom" as const, message, path: [path], input };
+}
+
+function transportIssues(d: DescriptorFields) {
+  const issues = [];
+  if (d.waitForSelector !== undefined && d.transport !== "browser") {
+    issues.push(
+      customIssue("waitForSelector", "waitForSelector is only meaningful on the browser transport", d.waitForSelector),
+    );
+  }
+  if (d.paginationCursorPath !== undefined && d.transport !== "api") {
+    issues.push(
+      customIssue(
+        "paginationCursorPath",
+        "paginationCursorPath is only meaningful on the api transport",
+        d.paginationCursorPath,
+      ),
+    );
+  }
+  return issues;
+}
+
+function cursorIssues(d: DescriptorFields, hasCursor: boolean) {
+  if (d.paginationCursorPath !== undefined && !hasCursor) {
+    return [
+      customIssue(
+        "paginationCursorPath",
+        `paginationCursorPath is set but nothing asks for a page: ${CURSOR_TOKEN} is required in endpoint or a params value`,
+        d.paginationCursorPath,
+      ),
+    ];
+  }
+  if (d.paginationCursorPath === undefined && hasCursor) {
+    return [customIssue("endpoint", `${CURSOR_TOKEN} is used but paginationCursorPath is not set`, d.endpoint)];
+  }
+  return [];
+}
+
+function endpointIssues(d: DescriptorFields) {
+  try {
+    const rendered = renderDescriptorTemplate(d.endpoint, {
+      target: "probe",
+      cursor: "",
+    });
+    if (new URL(rendered).protocol !== "https:") {
+      return [customIssue("endpoint", "endpoint must render to an https URL", d.endpoint)];
     }
-  });
+    return [];
+  } catch (error) {
+    console.error(JSON.stringify({ event: "ads.endpoint_render_failed", error: String(error) }));
+    return [customIssue("endpoint", "endpoint does not render to a valid URL", d.endpoint)];
+  }
+}
+
+function descriptorIssues(d: DescriptorFields) {
+  const templated = [d.endpoint, ...Object.values(d.params)];
+  const hasTarget = templated.some((t) => t.includes(TARGET_TOKEN));
+  const hasCursor = templated.some((t) => t.includes(CURSOR_TOKEN));
+  const targetIssues = hasTarget
+    ? []
+    : [
+        customIssue(
+          "endpoint",
+          `descriptor must address a target: ${TARGET_TOKEN} is required in endpoint or a params value`,
+          d.endpoint,
+        ),
+      ];
+  return [...targetIssues, ...transportIssues(d), ...cursorIssues(d, hasCursor), ...endpointIssues(d)];
+}
+
+export const adsSourceDescriptorSchema = descriptorShape.check((ctx) => {
+  ctx.issues.push(...descriptorIssues(ctx.value));
+});
 
 export type AdsSourceDescriptor = z.output<typeof adsSourceDescriptorSchema>;
 

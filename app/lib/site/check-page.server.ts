@@ -81,43 +81,12 @@ interface CheckPageInput {
   mayScreenshot?: () => Promise<boolean>;
 }
 
-export async function checkPage(input: CheckPageInput): Promise<CheckPageResult> {
-  const read = input.read ?? (await readUrl(input.url));
-  if (!read.ok) {
-    return { outcome: "failed", reason: read.reason, detail: read.detail };
-  }
-
-  const extracted = await extractPageText(read.html);
-  const fetchedAt = new Date().toISOString();
-  const previous = await latestSiteSnapshot(input.watchId, input.pageId, input.before ?? NO_CUTOFF);
-  const id = input.snapshotId ?? crypto.randomUUID();
-
-  if (previous !== null && previous.payload_hash === extracted.hash) {
-    const stored = await insertSnapshot({
-      id,
-      watchId: input.watchId,
-      pageId: input.pageId,
-      fetchedAt,
-      r2Key: previous.payload_r2_key,
-      hash: extracted.hash,
-    });
-    return stored ? { outcome: "unchanged", snapshotId: id } : { outcome: "gone" };
-  }
-
-  return recordNewText(input, { id, fetchedAt, extracted, previous, read });
-}
-
-async function recordNewText(
+async function storeNewSnapshot(
   input: CheckPageInput,
-  checked: {
-    id: string;
-    fetchedAt: string;
-    extracted: Awaited<ReturnType<typeof extractPageText>>;
-    previous: Awaited<ReturnType<typeof latestSiteSnapshot>>;
-    read: Extract<ReadUrlResult, { ok: true }>;
-  },
-): Promise<CheckPageResult> {
-  const { id, fetchedAt, extracted, previous, read } = checked;
+  extracted: { text: string; hash: string },
+  stamp: { id: string; fetchedAt: string },
+): Promise<{ textKey: string; screenshotKey: string | null } | null> {
+  const { id, fetchedAt } = stamp;
   const textKey = `snapshot/site/${input.watchId}/${id}.txt`;
   await env.SNAPSHOTS.put(textKey, extracted.text);
   const screenshotKey = await captureScreenshot(
@@ -135,8 +104,44 @@ async function recordNewText(
   });
   if (!stored) {
     await env.SNAPSHOTS.delete(screenshotKey === null ? [textKey] : [textKey, screenshotKey]);
-    return { outcome: "gone" };
+    return null;
   }
+  return { textKey, screenshotKey };
+}
+
+async function recordUnchanged(
+  input: CheckPageInput,
+  unchanged: { id: string; fetchedAt: string; hash: string; r2Key: string | null },
+): Promise<CheckPageResult> {
+  const stored = await insertSnapshot({
+    id: unchanged.id,
+    watchId: input.watchId,
+    pageId: input.pageId,
+    fetchedAt: unchanged.fetchedAt,
+    r2Key: unchanged.r2Key,
+    hash: unchanged.hash,
+  });
+  return stored ? { outcome: "unchanged", snapshotId: unchanged.id } : { outcome: "gone" };
+}
+
+export async function checkPage(input: CheckPageInput): Promise<CheckPageResult> {
+  const read = input.read ?? (await readUrl(input.url));
+  if (!read.ok) {
+    return { outcome: "failed", reason: read.reason, detail: read.detail };
+  }
+
+  const extracted = await extractPageText(read.html);
+  const fetchedAt = new Date().toISOString();
+  const previous = await latestSiteSnapshot(input.watchId, input.pageId, input.before ?? NO_CUTOFF);
+  const id = input.snapshotId ?? crypto.randomUUID();
+
+  if (previous !== null && previous.payload_hash === extracted.hash) {
+    return recordUnchanged(input, { id, fetchedAt, hash: extracted.hash, r2Key: previous.payload_r2_key });
+  }
+
+  const storedKeys = await storeNewSnapshot(input, extracted, { id, fetchedAt });
+  if (storedKeys === null) return { outcome: "gone" };
+  const { textKey, screenshotKey } = storedKeys;
 
   if (previous?.payload_r2_key == null) {
     return { outcome: "first", snapshotId: id, textKey, screenshotKey };
