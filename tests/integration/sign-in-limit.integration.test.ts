@@ -22,11 +22,7 @@ function authSending(sent: string[]) {
   });
 }
 
-function requestLink(
-  auth: ReturnType<typeof createAuth>,
-  email: string,
-  ip: string | null,
-): Promise<Response> {
+function requestLink(auth: ReturnType<typeof createAuth>, email: string, ip: string | null): Promise<Response> {
   const headers: Record<string, string> = {
     "content-type": "application/json",
     origin: ORIGIN,
