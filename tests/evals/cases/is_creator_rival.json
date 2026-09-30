@@ -1,0 +1,1152 @@
+[
+  {
+    "id": "mkbhd-linustechtips",
+    "split": "train",
+    "kind": "creator",
+    "self": {
+      "name": "Marques Brownlee",
+      "domain": "mkbhd.com",
+      "description": "tech review creator"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Linus Tech Tips",
+      "domain": "linustechtips.com",
+      "evidence": [
+        {
+          "source": "youtube.com",
+          "excerpt": "MKBHD and Linus Tech Tips both reviewed the new phone on launch day."
+        }
+      ]
+    },
+    "label": true,
+    "why": "tech-review channel competing for the same viewer attention"
+  },
+  {
+    "id": "mkbhd-dave2d",
+    "split": "train",
+    "kind": "creator",
+    "self": {
+      "name": "Marques Brownlee",
+      "domain": "mkbhd.com",
+      "description": "tech review creator"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Dave2D",
+      "domain": "dave2d.com",
+      "evidence": [
+        {
+          "source": " reddit.com",
+          "excerpt": "Dave2D or MKBHD for laptop reviews? Both drop the same week."
+        }
+      ]
+    },
+    "label": true,
+    "why": "same-niche reviewer whose audience overlaps self's"
+  },
+  {
+    "id": "mkbhd-jerryrig",
+    "split": "train",
+    "kind": "creator",
+    "self": {
+      "name": "Marques Brownlee",
+      "domain": "mkbhd.com",
+      "description": "tech review creator"
+    },
+    "competitors": [],
+    "item": {
+      "name": "JerryRigEverything",
+      "domain": "youtube.com",
+      "evidence": [
+        {
+          "source": "youtube.com",
+          "excerpt": "JerryRigEverything and MKBHD both covered the phone's repairability."
+        }
+      ]
+    },
+    "label": true,
+    "why": "tech channel courting the same audience"
+  },
+  {
+    "id": "mkbhd-unboxtherapy",
+    "split": "train",
+    "kind": "creator",
+    "self": {
+      "name": "Marques Brownlee",
+      "domain": "mkbhd.com",
+      "description": "tech review creator"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Unbox Therapy",
+      "domain": "youtube.com",
+      "evidence": [
+        {
+          "source": "youtube.com",
+          "excerpt": "Unbox Therapy and MKBHD compete for the same launch-day review views."
+        }
+      ]
+    },
+    "label": true,
+    "why": "consumer-tech channel with the same audience"
+  },
+  {
+    "id": "mkbhd-theverge",
+    "split": "train",
+    "kind": "creator",
+    "self": {
+      "name": "Marques Brownlee",
+      "domain": "mkbhd.com",
+      "description": "tech review creator"
+    },
+    "competitors": [],
+    "item": {
+      "name": "The Verge",
+      "domain": "theverge.com",
+      "evidence": [
+        {
+          "source": "theverge.com",
+          "excerpt": "The Verge interviews MKBHD about the state of tech reviews."
+        }
+      ]
+    },
+    "label": false,
+    "why": "publisher that interviews self, on the false list"
+  },
+  {
+    "id": "mkbhd-youtube",
+    "split": "train",
+    "kind": "creator",
+    "self": {
+      "name": "Marques Brownlee",
+      "domain": "mkbhd.com",
+      "description": "tech review creator"
+    },
+    "competitors": [],
+    "item": {
+      "name": "YouTube",
+      "domain": "youtube.com",
+      "evidence": [
+        {
+          "source": "youtube.com",
+          "excerpt": "MKBHD publishes every review on YouTube."
+        }
+      ]
+    },
+    "label": false,
+    "why": "platform self publishes on, on the false list"
+  },
+  {
+    "id": "mkbhd-ridge",
+    "split": "train",
+    "kind": "creator",
+    "self": {
+      "name": "Marques Brownlee",
+      "domain": "mkbhd.com",
+      "description": "tech review creator"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Ridge",
+      "domain": "ridge.com",
+      "evidence": [
+        {
+          "source": "youtube.com",
+          "excerpt": "This video is sponsored by Ridge, whose wallets MKBHD uses."
+        }
+      ]
+    },
+    "label": false,
+    "why": "sponsor of self, on the false list"
+  },
+  {
+    "id": "mkbhd-waveform",
+    "split": "train",
+    "kind": "creator",
+    "self": {
+      "name": "Marques Brownlee",
+      "domain": "mkbhd.com",
+      "description": "tech review creator"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Waveform",
+      "domain": "youtube.com",
+      "evidence": [
+        {
+          "source": "youtube.com",
+          "excerpt": "Waveform is the podcast hosted by MKBHD and Andrew Manganelli."
+        }
+      ]
+    },
+    "label": false,
+    "why": "a product of self, on the false list"
+  },
+  {
+    "id": "caseyneistat-samkolder",
+    "split": "train",
+    "kind": "creator",
+    "self": {
+      "name": "Casey Neistat",
+      "domain": "caseyneistat.com",
+      "description": "vlogger and filmmaker"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Sam Kolder",
+      "domain": "youtube.com",
+      "evidence": [
+        {
+          "source": "youtube.com",
+          "excerpt": "Sam Kolder and Casey Neistat both build vlogs around cinematic travel."
+        }
+      ]
+    },
+    "label": true,
+    "why": "filmmaking vlogger competing for the same audience"
+  },
+  {
+    "id": "caseyneistat-petermckinnon",
+    "split": "train",
+    "kind": "creator",
+    "self": {
+      "name": "Casey Neistat",
+      "domain": "caseyneistat.com",
+      "description": "vlogger and filmmaker"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Peter McKinnon",
+      "domain": "petermckinnon.com",
+      "evidence": [
+        {
+          "source": "youtube.com",
+          "excerpt": "Peter McKinnon and Casey Neistat both teach and show cinematic video making."
+        }
+      ]
+    },
+    "label": true,
+    "why": "same audience for filmmaking content"
+  },
+  {
+    "id": "caseyneistat-nike",
+    "split": "train",
+    "kind": "creator",
+    "self": {
+      "name": "Casey Neistat",
+      "domain": "caseyneistat.com",
+      "description": "vlogger and filmmaker"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Nike",
+      "domain": "nike.com",
+      "evidence": [
+        {
+          "source": "nike.com",
+          "excerpt": "Nike partners with Casey Neistat on a running campaign."
+        }
+      ]
+    },
+    "label": false,
+    "why": "sponsor and partner of self, on the false list"
+  },
+  {
+    "id": "caseyneistat-368",
+    "split": "train",
+    "kind": "creator",
+    "self": {
+      "name": "Casey Neistat",
+      "domain": "caseyneistat.com",
+      "description": "vlogger and filmmaker"
+    },
+    "competitors": [],
+    "item": {
+      "name": "368",
+      "domain": "368.com",
+      "evidence": [
+        {
+          "source": "368.com",
+          "excerpt": "368 is the creative studio founded by Casey Neistat."
+        }
+      ]
+    },
+    "label": false,
+    "why": "a company owned by self, on the product-of-self false list"
+  },
+  {
+    "id": "caseyneistat-beme",
+    "split": "train",
+    "kind": "creator",
+    "self": {
+      "name": "Casey Neistat",
+      "domain": "caseyneistat.com",
+      "description": "vlogger and filmmaker"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Beme",
+      "domain": "beme.com",
+      "evidence": [
+        {
+          "source": "techcrunch.com",
+          "excerpt": "Beme was the app Casey Neistat founded before joining CNN."
+        }
+      ]
+    },
+    "label": false,
+    "why": "a former product of self, not a rival creator"
+  },
+  {
+    "id": "pewdiepie-jacksepticeye",
+    "split": "train",
+    "kind": "creator",
+    "self": {
+      "name": "PewDiePie",
+      "domain": "youtube.com",
+      "description": "gaming and commentary creator"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Jacksepticeye",
+      "domain": "youtube.com",
+      "evidence": [
+        {
+          "source": "youtube.com",
+          "excerpt": "Jacksepticeye and PewDiePie are the two biggest gaming commentary channels."
+        }
+      ]
+    },
+    "label": true,
+    "why": "gaming creator competing for the same subscriber attention"
+  },
+  {
+    "id": "pewdiepie-markiplier",
+    "split": "train",
+    "kind": "creator",
+    "self": {
+      "name": "PewDiePie",
+      "domain": "youtube.com",
+      "description": "gaming and commentary creator"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Markiplier",
+      "domain": "youtube.com",
+      "evidence": [
+        {
+          "source": "youtube.com",
+          "excerpt": "Markiplier and PewDiePie trade the top gaming-creator charts."
+        }
+      ]
+    },
+    "label": true,
+    "why": "same gaming audience, direct attention rival"
+  },
+  {
+    "id": "pewdiepie-mrbeast",
+    "split": "train",
+    "kind": "creator",
+    "self": {
+      "name": "PewDiePie",
+      "domain": "youtube.com",
+      "description": "gaming and commentary creator"
+    },
+    "competitors": [],
+    "item": {
+      "name": "MrBeast",
+      "domain": "youtube.com",
+      "evidence": [
+        {
+          "source": "youtube.com",
+          "excerpt": "MrBeast and PewDiePie have both held the most-subscribed creator spot."
+        }
+      ]
+    },
+    "label": true,
+    "why": "creator competing for the same platform-wide audience attention"
+  },
+  {
+    "id": "pewdiepie-gfuel",
+    "split": "train",
+    "kind": "creator",
+    "self": {
+      "name": "PewDiePie",
+      "domain": "youtube.com",
+      "description": "gaming and commentary creator"
+    },
+    "competitors": [],
+    "item": {
+      "name": "G FUEL",
+      "domain": "gfuel.com",
+      "evidence": [
+        {
+          "source": "gfuel.com",
+          "excerpt": "G FUEL launches a PewDiePie flavour as a long-running partner."
+        }
+      ]
+    },
+    "label": false,
+    "why": "sponsor and partner of self, on the false list"
+  },
+  {
+    "id": "pewdiepie-twitch",
+    "split": "train",
+    "kind": "creator",
+    "self": {
+      "name": "PewDiePie",
+      "domain": "youtube.com",
+      "description": "gaming and commentary creator"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Twitch",
+      "domain": "twitch.tv",
+      "evidence": [
+        {
+          "source": "twitch.tv",
+          "excerpt": "PewDiePie streamed a one-off broadcast on Twitch."
+        }
+      ]
+    },
+    "label": false,
+    "why": "platform self broadcasts on, on the false list"
+  },
+  {
+    "id": "pewdiepie-polygon",
+    "split": "train",
+    "kind": "creator",
+    "self": {
+      "name": "PewDiePie",
+      "domain": "youtube.com",
+      "description": "gaming and commentary creator"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Polygon",
+      "domain": "polygon.com",
+      "evidence": [
+        {
+          "source": "polygon.com",
+          "excerpt": "Polygon reports on PewDiePie's latest video."
+        }
+      ]
+    },
+    "label": false,
+    "why": "publisher reporting on self, on the false list"
+  },
+  {
+    "id": "emmachamberlain-alixearle",
+    "split": "train",
+    "kind": "creator",
+    "self": {
+      "name": "Emma Chamberlain",
+      "domain": "youtube.com",
+      "description": "lifestyle creator"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Alix Earle",
+      "domain": "youtube.com",
+      "evidence": [
+        {
+          "source": "youtube.com",
+          "excerpt": "Alix Earle and Emma Chamberlain both lead the Gen-Z lifestyle category."
+        }
+      ]
+    },
+    "label": true,
+    "why": "lifestyle creator competing for the same young audience"
+  },
+  {
+    "id": "emmachamberlain-chamberlaincoffee",
+    "split": "train",
+    "kind": "creator",
+    "self": {
+      "name": "Emma Chamberlain",
+      "domain": "youtube.com",
+      "description": "lifestyle creator"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Chamberlain Coffee",
+      "domain": "chamberlaincoffee.com",
+      "evidence": [
+        {
+          "source": "chamberlaincoffee.com",
+          "excerpt": "Chamberlain Coffee is the coffee brand founded by Emma Chamberlain."
+        }
+      ]
+    },
+    "label": false,
+    "why": "a company founded by self, on the product-of-self false list"
+  },
+  {
+    "id": "emmachamberlain-verve",
+    "split": "train",
+    "kind": "creator",
+    "self": {
+      "name": "Emma Chamberlain",
+      "domain": "youtube.com",
+      "description": "lifestyle creator"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Verve Coffee Roasters",
+      "domain": "vervecoffee.com",
+      "evidence": [
+        {
+          "source": "vervecoffee.com",
+          "excerpt": "Verve Coffee and Chamberlain Coffee compete for the same specialty coffee drinkers."
+        }
+      ]
+    },
+    "label": true,
+    "why": "a brand in the coffee category self sells into, per the whenTrue clause"
+  },
+  {
+    "id": "emmachamberlain-vogue",
+    "split": "train",
+    "kind": "creator",
+    "self": {
+      "name": "Emma Chamberlain",
+      "domain": "youtube.com",
+      "description": "lifestyle creator"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Vogue",
+      "domain": "vogue.com",
+      "evidence": [
+        {
+          "source": "vogue.com",
+          "excerpt": "Vogue profiles Emma Chamberlain on the Met Gala carpet."
+        }
+      ]
+    },
+    "label": false,
+    "why": "publisher covering self, on the false list"
+  },
+  {
+    "id": "emmachamberlain-spotify",
+    "split": "train",
+    "kind": "creator",
+    "self": {
+      "name": "Emma Chamberlain",
+      "domain": "youtube.com",
+      "description": "lifestyle creator"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Spotify",
+      "domain": "spotify.com",
+      "evidence": [
+        {
+          "source": "spotify.com",
+          "excerpt": "Emma Chamberlain's podcast is distributed on Spotify."
+        }
+      ]
+    },
+    "label": false,
+    "why": "distribution platform for self, on the false list"
+  },
+  {
+    "id": "test-dude-perfect",
+    "split": "test",
+    "kind": "creator",
+    "self": {
+      "name": "MrBeast",
+      "domain": "youtube.com",
+      "description": "challenge-video creator"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Dude Perfect",
+      "domain": "youtube.com",
+      "evidence": [
+        {
+          "source": "youtube.com",
+          "excerpt": "Dude Perfect and MrBeast trade the most-viewed challenge videos."
+        }
+      ]
+    },
+    "label": true,
+    "why": "challenge creator competing for the same audience"
+  },
+  {
+    "id": "test-ryan-trahan",
+    "split": "test",
+    "kind": "creator",
+    "self": {
+      "name": "MrBeast",
+      "domain": "youtube.com",
+      "description": "challenge-video creator"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Ryan Trahan",
+      "domain": "youtube.com",
+      "evidence": [
+        {
+          "source": "youtube.com",
+          "excerpt": "The Ryan Trahan challenge series rivals MrBeast in views."
+        }
+      ]
+    },
+    "label": true,
+    "why": "same-niche challenge creator"
+  },
+  {
+    "id": "test-feastables",
+    "split": "test",
+    "kind": "creator",
+    "self": {
+      "name": "MrBeast",
+      "domain": "youtube.com",
+      "description": "challenge-video creator"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Feastables",
+      "domain": "feastables.com",
+      "evidence": [
+        {
+          "source": "feastables.com",
+          "excerpt": "Feastables is the chocolate brand launched by MrBeast."
+        }
+      ]
+    },
+    "label": false,
+    "why": "a company owned by self"
+  },
+  {
+    "id": "test-youtube",
+    "split": "test",
+    "kind": "creator",
+    "self": {
+      "name": "MrBeast",
+      "domain": "youtube.com",
+      "description": "challenge-video creator"
+    },
+    "competitors": [],
+    "item": {
+      "name": "YouTube",
+      "domain": "youtube.com",
+      "evidence": [
+        {
+          "source": "youtube.com",
+          "excerpt": "MrBeast publishes every challenge on YouTube."
+        }
+      ]
+    },
+    "label": false,
+    "why": "the platform self publishes on"
+  },
+  {
+    "id": "test-shopify",
+    "split": "test",
+    "kind": "creator",
+    "self": {
+      "name": "MrBeast",
+      "domain": "youtube.com",
+      "description": "challenge-video creator"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Shopify",
+      "domain": "shopify.com",
+      "evidence": [
+        {
+          "source": "shopify.com",
+          "excerpt": "The MrBeast store runs on Shopify."
+        }
+      ]
+    },
+    "label": false,
+    "why": "platform supplier to self"
+  },
+  {
+    "id": "test-variety",
+    "split": "test",
+    "kind": "creator",
+    "self": {
+      "name": "MrBeast",
+      "domain": "youtube.com",
+      "description": "challenge-video creator"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Variety",
+      "domain": "variety.com",
+      "evidence": [
+        {
+          "source": "variety.com",
+          "excerpt": "Variety reports on the MrBeast production deal."
+        }
+      ]
+    },
+    "label": false,
+    "why": "publisher reporting on self"
+  },
+  {
+    "id": "test-honey",
+    "split": "test",
+    "kind": "creator",
+    "self": {
+      "name": "MrBeast",
+      "domain": "youtube.com",
+      "description": "challenge-video creator"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Honey",
+      "domain": "honey.com",
+      "evidence": [
+        {
+          "source": "youtube.com",
+          "excerpt": "This MrBeast video is sponsored by Honey."
+        }
+      ]
+    },
+    "label": false,
+    "why": "sponsor of self"
+  },
+  {
+    "id": "test-asmongold",
+    "split": "test",
+    "kind": "creator",
+    "self": {
+      "name": "HasanAbi",
+      "domain": "twitch.tv",
+      "description": "political commentary streamer"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Asmongold",
+      "domain": "twitch.tv",
+      "evidence": [
+        {
+          "source": "twitch.tv",
+          "excerpt": "Asmongold and HasanAbi are the two biggest commentary streamers."
+        }
+      ]
+    },
+    "label": true,
+    "why": "commentary streamer competing for the same viewer"
+  },
+  {
+    "id": "test-destiny",
+    "split": "test",
+    "kind": "creator",
+    "self": {
+      "name": "HasanAbi",
+      "domain": "twitch.tv",
+      "description": "political commentary streamer"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Destiny",
+      "domain": "youtube.com",
+      "evidence": [
+        {
+          "source": "youtube.com",
+          "excerpt": "Destiny debates HasanAbi on stream."
+        }
+      ]
+    },
+    "label": true,
+    "why": "political-commentary creator with an overlapping audience"
+  },
+  {
+    "id": "test-twitch",
+    "split": "test",
+    "kind": "creator",
+    "self": {
+      "name": "HasanAbi",
+      "domain": "twitch.tv",
+      "description": "political commentary streamer"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Twitch",
+      "domain": "twitch.tv",
+      "evidence": [
+        {
+          "source": "twitch.tv",
+          "excerpt": "HasanAbi streams daily on Twitch."
+        }
+      ]
+    },
+    "label": false,
+    "why": "platform self streams on"
+  },
+  {
+    "id": "test-nordvpn",
+    "split": "test",
+    "kind": "creator",
+    "self": {
+      "name": "HasanAbi",
+      "domain": "twitch.tv",
+      "description": "political commentary streamer"
+    },
+    "competitors": [],
+    "item": {
+      "name": "NordVPN",
+      "domain": "nordvpn.com",
+      "evidence": [
+        {
+          "source": "twitch.tv",
+          "excerpt": "NordVPN sponsors the HasanAbi stream."
+        }
+      ]
+    },
+    "label": false,
+    "why": "sponsor of self"
+  },
+  {
+    "id": "test-hasanabi-highlights",
+    "split": "test",
+    "kind": "creator",
+    "self": {
+      "name": "HasanAbi",
+      "domain": "twitch.tv",
+      "description": "political commentary streamer"
+    },
+    "competitors": [],
+    "item": {
+      "name": "HasanAbi Highlights",
+      "domain": "youtube.com",
+      "evidence": [
+        {
+          "source": "youtube.com",
+          "excerpt": "The HasanAbi Highlights channel reposts clips from his stream."
+        }
+      ]
+    },
+    "label": false,
+    "why": "a channel of self's own content"
+  },
+  {
+    "id": "test-politico",
+    "split": "test",
+    "kind": "creator",
+    "self": {
+      "name": "HasanAbi",
+      "domain": "twitch.tv",
+      "description": "political commentary streamer"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Politico",
+      "domain": "politico.com",
+      "evidence": [
+        {
+          "source": "politico.com",
+          "excerpt": "Politico quotes HasanAbi on the election stream."
+        }
+      ]
+    },
+    "label": false,
+    "why": "publisher quoting self"
+  },
+  {
+    "id": "test-ba-test-kitchen",
+    "split": "test",
+    "kind": "creator",
+    "self": {
+      "name": "Bon Appetit",
+      "domain": "bonappetit.com",
+      "description": "food media brand"
+    },
+    "competitors": [],
+    "item": {
+      "name": "BA Test Kitchen",
+      "domain": "bonappetit.com",
+      "evidence": [
+        {
+          "source": "bonappetit.com",
+          "excerpt": "BA Test Kitchen is the Bon Appetit video series."
+        }
+      ]
+    },
+    "label": false,
+    "why": "a series of self"
+  },
+  {
+    "id": "test-nyt-cooking",
+    "split": "test",
+    "kind": "creator",
+    "self": {
+      "name": "Bon Appetit",
+      "domain": "bonappetit.com",
+      "description": "food media brand"
+    },
+    "competitors": [],
+    "item": {
+      "name": "NYT Cooking",
+      "domain": "cooking.nytimes.com",
+      "evidence": [
+        {
+          "source": "cooking.nytimes.com",
+          "excerpt": "NYT Cooking and Bon Appetit chase the same home cooks."
+        }
+      ]
+    },
+    "label": true,
+    "why": "food media brand selling into the same category"
+  },
+  {
+    "id": "test-serious-eats",
+    "split": "test",
+    "kind": "creator",
+    "self": {
+      "name": "Bon Appetit",
+      "domain": "bonappetit.com",
+      "description": "food media brand"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Serious Eats",
+      "domain": "seriouseats.com",
+      "evidence": [
+        {
+          "source": "seriouseats.com",
+          "excerpt": "Serious Eats competes with Bon Appetit for recipe readers."
+        }
+      ]
+    },
+    "label": true,
+    "why": "recipe media brand for the same audience"
+  },
+  {
+    "id": "test-conde-nast",
+    "split": "test",
+    "kind": "creator",
+    "self": {
+      "name": "Bon Appetit",
+      "domain": "bonappetit.com",
+      "description": "food media brand"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Conde Nast",
+      "domain": "condenast.com",
+      "evidence": [
+        {
+          "source": "condenast.com",
+          "excerpt": "Bon Appetit is published by Conde Nast."
+        }
+      ]
+    },
+    "label": false,
+    "why": "the publisher that owns self"
+  },
+  {
+    "id": "test-hellofresh",
+    "split": "test",
+    "kind": "creator",
+    "self": {
+      "name": "Bon Appetit",
+      "domain": "bonappetit.com",
+      "description": "food media brand"
+    },
+    "competitors": [],
+    "item": {
+      "name": "HelloFresh",
+      "domain": "hellofresh.com",
+      "evidence": [
+        {
+          "source": "hellofresh.com",
+          "excerpt": "HelloFresh advertises across Bon Appetit."
+        }
+      ]
+    },
+    "label": false,
+    "why": "sponsor of self"
+  },
+  {
+    "id": "test-epicurious",
+    "split": "test",
+    "kind": "creator",
+    "self": {
+      "name": "Bon Appetit",
+      "domain": "bonappetit.com",
+      "description": "food media brand"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Epicurious",
+      "domain": "epicurious.com",
+      "evidence": [
+        {
+          "source": "epicurious.com",
+          "excerpt": "Epicurious and Bon Appetit are the two big recipe brands."
+        }
+      ]
+    },
+    "label": true,
+    "why": "recipe brand selling into the same category as self"
+  },
+  {
+    "id": "test-instagram",
+    "split": "test",
+    "kind": "creator",
+    "self": {
+      "name": "Bon Appetit",
+      "domain": "bonappetit.com",
+      "description": "food media brand"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Instagram",
+      "domain": "instagram.com",
+      "evidence": [
+        {
+          "source": "instagram.com",
+          "excerpt": "Bon Appetit publishes clips on Instagram."
+        }
+      ]
+    },
+    "label": false,
+    "why": "distribution platform for self"
+  },
+  {
+    "id": "test-veritasium",
+    "split": "test",
+    "kind": "creator",
+    "self": {
+      "name": "Kurzgesagt",
+      "domain": "kurzgesagt.org",
+      "description": "science explainer channel"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Veritasium",
+      "domain": "veritasium.com",
+      "evidence": [
+        {
+          "source": "veritasium.com",
+          "excerpt": "Veritasium and Kurzgesagt both explain science to the same curious viewers."
+        }
+      ]
+    },
+    "label": true,
+    "why": "science-explainer channel for the same audience"
+  },
+  {
+    "id": "test-ted",
+    "split": "test",
+    "kind": "creator",
+    "self": {
+      "name": "Kurzgesagt",
+      "domain": "kurzgesagt.org",
+      "description": "science explainer channel"
+    },
+    "competitors": [],
+    "item": {
+      "name": "TED",
+      "domain": "ted.com",
+      "evidence": [
+        {
+          "source": "ted.com",
+          "excerpt": "A Kurzgesagt talk appears in a TED collection."
+        }
+      ]
+    },
+    "label": false,
+    "why": "platform that curates the talk"
+  },
+  {
+    "id": "test-kurzgesagt-3blue1brown",
+    "split": "test",
+    "kind": "creator",
+    "self": {
+      "name": "Kurzgesagt",
+      "domain": "kurzgesagt.org",
+      "description": "science explainer channel"
+    },
+    "competitors": [],
+    "item": {
+      "name": "3Blue1Brown",
+      "domain": "youtube.com",
+      "evidence": [
+        {
+          "source": "youtube.com",
+          "excerpt": "3Blue1Brown and Kurzgesagt both hold the top science-education spots."
+        }
+      ]
+    },
+    "label": true,
+    "why": "science-education channel for the same curious audience"
+  },
+  {
+    "id": "test-kurzgesagt-brilliant",
+    "split": "test",
+    "kind": "creator",
+    "self": {
+      "name": "Kurzgesagt",
+      "domain": "kurzgesagt.org",
+      "description": "science explainer channel"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Brilliant",
+      "domain": "brilliant.org",
+      "evidence": [
+        {
+          "source": "brilliant.org",
+          "excerpt": "Brilliant sponsors the Kurzgesagt channel every month."
+        }
+      ]
+    },
+    "label": false,
+    "why": "sponsor of self"
+  },
+  {
+    "id": "test-emmachamberlain-gracehelbig",
+    "split": "test",
+    "kind": "creator",
+    "self": {
+      "name": "Emma Chamberlain",
+      "domain": "youtube.com",
+      "description": "lifestyle creator"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Hannah Hart",
+      "domain": "youtube.com",
+      "evidence": [
+        {
+          "source": "youtube.com",
+          "excerpt": "Hannah Hart and Emma Chamberlain both made their names on lifestyle vlogs."
+        }
+      ]
+    },
+    "label": true,
+    "why": "lifestyle creator in the same category of attention"
+  },
+  {
+    "id": "test-mkbhd-microsoft",
+    "split": "test",
+    "kind": "creator",
+    "self": {
+      "name": "Marques Brownlee",
+      "domain": "mkbhd.com",
+      "description": "tech review creator"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Microsoft",
+      "domain": "microsoft.com",
+      "evidence": [
+        {
+          "source": "microsoft.com",
+          "excerpt": "Marques Brownlee interviews Microsoft executives at launch events."
+        }
+      ]
+    },
+    "label": false,
+    "why": "a company self covers and interviews, not a rival creator"
+  }
+]
