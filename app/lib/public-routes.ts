@@ -8,6 +8,7 @@ import { registeredToolDescriptors } from "./agent/mcp-tools";
 import { PLANS, TRIAL_TERMS } from "./billing/plans";
 import { LIVE_COVERAGE, PLAN_NOTE, WATCHED_NOUNS } from "./coverage";
 import { FAQ } from "./faq";
+import { LEGAL_UPDATED } from "./legal/document";
 import { SITE_URL } from "./structured-data";
 
 export interface LlmsTxtSource {
@@ -17,6 +18,10 @@ export interface LlmsTxtSource {
 
 export const PUBLIC_PATHS = ["/privacy", "/terms"] as const;
 export const SITEMAP_PATHS = ["/privacy", "/terms", "/llms.txt"] as const;
+export const SITEMAP_LASTMOD: Readonly<Record<string, string>> = {
+  "/privacy": LEGAL_UPDATED,
+  "/terms": LEGAL_UPDATED,
+};
 export const DISALLOWED_PREFIXES = [
   "/app",
   "/api",
@@ -42,7 +47,11 @@ const PAGE_SUMMARIES: Record<(typeof PUBLIC_PATHS)[number], { title: string; sum
   },
 };
 
-export function sitemapXml(origin: string, paths: readonly string[]): string {
+export function sitemapXml(
+  origin: string,
+  paths: readonly string[],
+  lastmod: Readonly<Record<string, string>> = {},
+): string {
   const rows = paths.map((path) => {
     const loc = `${origin}${path}`
       .replace(/&/g, "&amp;")
@@ -50,7 +59,8 @@ export function sitemapXml(origin: string, paths: readonly string[]): string {
       .replace(/>/g, "&gt;")
       .replace(/"/g, "&quot;")
       .replace(/'/g, "&apos;");
-    return `  <url><loc>${loc}</loc></url>\n`;
+    const modified = lastmod[path];
+    return `  <url><loc>${loc}</loc>${modified === undefined ? "" : `<lastmod>${modified}</lastmod>`}</url>\n`;
   });
   return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${rows.join("")}</urlset>\n`;
 }
