@@ -34,7 +34,7 @@ export function IncidentBlock({
       className="mt-8 border border-ink p-6 shadow-[5px_5px_0_0_var(--color-red)]"
     >
       <p className="font-mono text-[0.75rem] tracking-[0.04em]">OPEN INCIDENT</p>
-      <h2 id="incident-block-title" className="mt-2 font-display text-lg font-semibold">
+      <h2 id="incident-block-title" className="mt-2 font-display text-row-name font-bold [overflow-wrap:anywhere]">
         {title}
       </h2>
       <p className="mt-2 leading-[1.65]">

@@ -37,6 +37,14 @@ describe("the incident block", () => {
     expect(html).toContain("Why we flagged this");
   });
 
+  it("keeps the eyebrow above a title in the house row-name type", () => {
+    const html = render();
+    expect(html).toContain(
+      '<h2 id="incident-block-title" class="mt-2 font-display text-row-name font-bold [overflow-wrap:anywhere]">',
+    );
+    expect(html).not.toContain("text-lg font-semibold");
+  });
+
   it("uses a plain form so it renders without a router", () => {
     const html = render();
     expect(html).toContain("<form");

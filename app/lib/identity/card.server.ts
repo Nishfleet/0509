@@ -50,6 +50,16 @@ const UNREACHED: SiteCard = {
   navLinks: [],
 };
 
+class BudgetDeferredError extends Error {}
+
+function readFailure(page: { reason: string; detail: string }): Error {
+  return page.reason === "deferred" ? new BudgetDeferredError(page.detail) : new Error(page.detail);
+}
+
+function unreachedEvent(scope: "site" | "creator", error: unknown): string {
+  return error instanceof BudgetDeferredError ? `identity-${scope}-deferred` : `identity-${scope}-unreached`;
+}
+
 type MayEscalate = NonNullable<ReadUrlOptions["mayEscalate"]>;
 
 export function brandBudget(workspaceId: string, registrable: string): MayEscalate {
@@ -63,7 +73,7 @@ function wikidataTerm(subject: Subject): string {
 async function probeSite(subject: Subject, mayEscalate: MayEscalate): Promise<SiteCard> {
   if (subject.url === null) throw new Error("no site to read");
   const page = await readUrl(subject.url, { mayEscalate });
-  if (!page.ok) throw new Error(page.detail);
+  if (!page.ok) throw readFailure(page);
   const extract = await extractIdentity(page.html, subject.url);
   const name = await resolveBrandName(extract.nameSources, wikidataTerm(subject));
   const card: SiteCard = {
@@ -87,7 +97,7 @@ async function probeSite(subject: Subject, mayEscalate: MayEscalate): Promise<Si
 async function probeProfile(subject: Subject, mayEscalate: MayEscalate): Promise<SiteCard> {
   if (subject.url === null) throw new Error("no profile to read");
   const page = await readUrl(subject.url, { mayEscalate });
-  if (!page.ok) throw new Error(page.detail);
+  if (!page.ok) throw readFailure(page);
   const extract = await extractIdentity(page.html, subject.url);
   return {
     name: extract.nameSources.title,
@@ -132,7 +142,7 @@ export async function readSiteCard(
       );
       return { card, reached: true };
     } catch (error) {
-      console.log(JSON.stringify({ event: "identity-creator-unreached", error: String(error) }));
+      console.log(JSON.stringify({ event: unreachedEvent("creator", error), error: String(error) }));
       return { card: UNREACHED, reached: false };
     }
   }
@@ -142,7 +152,7 @@ export async function readSiteCard(
       reached: true,
     };
   } catch (error) {
-    console.log(JSON.stringify({ event: "identity-site-unreached", error: String(error) }));
+    console.log(JSON.stringify({ event: unreachedEvent("site", error), error: String(error) }));
     return { card: UNREACHED, reached: false };
   }
 }
