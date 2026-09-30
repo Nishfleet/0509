@@ -42,6 +42,22 @@ type ReadUrlFailure =
 
 export type ReadUrlResult = ReadUrlSuccess | ReadUrlFailure;
 
+export type ReadUrlFailureReason = ReadUrlFailure["reason"];
+
+export class ReadUrlError extends Error {
+  readonly reason: ReadUrlFailureReason;
+
+  constructor(reason: ReadUrlFailureReason) {
+    super(reason);
+    this.name = "ReadUrlError";
+    this.reason = reason;
+  }
+}
+
+export function probeFailureReason(error: unknown): string {
+  return error instanceof ReadUrlError ? error.reason : "probe-failed";
+}
+
 const CHALLENGE_MARKERS = [
   "cf-browser-verification",
   "cf_chl_opt",

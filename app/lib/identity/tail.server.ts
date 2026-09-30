@@ -7,8 +7,9 @@ import type { NewPage } from "../data/page.server";
 import { readEnabledSourceId, readEnabledSources } from "../data/source.server";
 import { insertWatches, readEntityWatches } from "../data/watch.server";
 import type { EntityWatch, NewWatch } from "../data/watch.server";
-import { readUrl } from "../fetch/transport.server";
+import { readUrl, probeFailureReason } from "../fetch/transport.server";
 import { discoverBoard } from "../hiring/discover-board";
+import { sha256Hex } from "../sha256";
 import { brandBudget, readCachedSiteProof, readSiteCard } from "./card.server";
 import { extractIdentity } from "./extract";
 import { normaliseSubject, type Subject } from "./normalise";
@@ -64,11 +65,12 @@ export async function persistTail(params: IdentityTailParams): Promise<{ entityI
 
 export async function classifyTailPages(params: IdentityTailParams, now: string): Promise<void> {
   if (params.handle !== undefined || params.homepageUrl === null) return;
+  const subjectSha256 = await sha256Hex(params.domain);
   try {
     const page = await readUrl(params.homepageUrl, { mayEscalate: brandBudget(params.workspaceId, params.domain) });
     if (!page.ok) {
       console.log(
-        JSON.stringify({ event: "identity-page-role-skipped", workspaceId: params.workspaceId, error: page.detail }),
+        JSON.stringify({ event: "identity-page-role-skipped", workspaceId: params.workspaceId, reason: page.reason, subjectSha256 }),
       );
       return;
     }
@@ -81,7 +83,7 @@ export async function classifyTailPages(params: IdentityTailParams, now: string)
     );
   } catch (error) {
     console.log(
-      JSON.stringify({ event: "identity-page-role-skipped", workspaceId: params.workspaceId, error: String(error) }),
+      JSON.stringify({ event: "identity-page-role-skipped", workspaceId: params.workspaceId, reason: probeFailureReason(error), subjectSha256 }),
     );
   }
 }
