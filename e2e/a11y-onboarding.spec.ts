@@ -68,7 +68,7 @@ test("the three onboarding screens pass axe at WCAG 2.2 AA in both themes and at
   await page.emulateMedia({ colorScheme: "light" });
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.getByRole("button", { name: "That's me" }).click();
-  await expect(page).toHaveURL(/\/onboarding\/competitors$/, { timeout: 30_000 });
+  await expect(page).toHaveURL(/\/onboarding\/competitors$/, { timeout: 10_000 });
 
   for (const colorScheme of ["light", "dark"] as const) {
     for (const width of [1440, 390]) {
