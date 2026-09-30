@@ -153,6 +153,19 @@ function seedRankedHome({ db, suffix, userId }: { db: DatabaseSync; suffix: stri
     `INSERT INTO standing (id, workspace_id, entity_id, week_start_at, score, rank, computed_at) VALUES ${standingValues.join(", ")}`,
   );
 
+  run(
+    db,
+    `INSERT INTO watch (id, entity_id, source_id, target_key) VALUES
+       (?1, ?2, 'src_site_web', 'https://kindred.example/'),
+       (?3, ?2, 'src_mentions_gdelt', 'kindred'),
+       (?4, ?2, 'src_mentions_hn', 'kindred'),
+       (?5, ?2, 'src_mentions_youtube', 'kindred')`,
+    `watch_site-${suffix}`,
+    kindredId,
+    `watch_gdelt-${suffix}`,
+    `watch_hn-${suffix}`,
+    `watch_youtube-${suffix}`,
+  );
   // Kindred's week: three signals since the period's start, so its row's pills
   // read site checks 2 live, news 1 live, Hacker News degraded and YouTube
   // none, and its opened row carries the Site changes 2 / Mentions 1 tabs.
