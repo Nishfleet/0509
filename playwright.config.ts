@@ -110,7 +110,7 @@ export default defineConfig({
         // link at this origin so the preview lane can follow it, and wrangler's
         // simulated send_email writes the message under .wrangler/tmp/email/
         // for e2e/inbox.ts to read instead of the inbox Worker (0509#6092).
-        command: `npx wrangler d1 migrations apply 0509 --local </dev/null && npx wrangler dev --env-file .dev.vars.example --port ${localPort} --local --var "BETTER_AUTH_URL:http://127.0.0.1:${localPort}" --var "DODO_PRODUCT_STARTER:pdt_preview_starter"`,
+        command: `npx wrangler d1 migrations apply 0509 --local </dev/null && npx wrangler dev --env-file .dev.vars.example --port ${localPort} --local --test-scheduled --var "BETTER_AUTH_URL:http://127.0.0.1:${localPort}" --var "DODO_PRODUCT_STARTER:pdt_preview_starter"`,
         url: `http://127.0.0.1:${localPort}/api/health`,
         reuseExistingServer: false,
         timeout: 120_000,
