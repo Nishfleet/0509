@@ -53,8 +53,8 @@ test.describe("a watched competitor page leads with the switch and its consequen
     await expect(sentence).toBeVisible();
 
     // Exactly one switch on the detail page — the watched competitor's own, whose
-    // aria-label is "<brand> tracking" (app/components/brand-switch.tsx).
-    const toggle = page.getByRole("switch", { name: / tracking$/ });
+    // accessible name is "<brand> tracking ON|OFF" (app/components/brand-switch.tsx).
+    const toggle = page.getByRole("switch", { name: / tracking (ON|OFF)$/ });
     await expect(toggle).toBeVisible();
     await expect(toggle).toHaveAttribute("aria-checked", "true");
 

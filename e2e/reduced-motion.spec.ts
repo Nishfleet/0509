@@ -225,7 +225,7 @@ test.describe("the watched-competitor page's brand switch and its motion @own-si
     await page.emulateMedia({ reducedMotion: "reduce" });
     await openWatchedCompetitor(page);
 
-    const toggle = page.getByRole("switch", { name: / tracking$/ });
+    const toggle = page.getByRole("switch", { name: / tracking (ON|OFF)$/ });
     await expect(toggle).toHaveAttribute("aria-checked", "true");
 
     await toggle.click();
