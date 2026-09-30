@@ -3,6 +3,7 @@ import { z } from "zod";
 import { insertVerdict } from "../../app/lib/data/jev_verdict.server";
 import type { NoulQuestion, NoulVerdict } from "../../app/lib/jev/client.server";
 import { askNoul, JevUnavailableError } from "../../app/lib/jev/client.server";
+import { ACT_AT } from "../../app/lib/jev/thresholds";
 import type { D4Verdict } from "../../app/lib/read-this-first";
 import { D4_QUESTION_ID, pickReadThisFirst } from "../../app/lib/read-this-first";
 import { D3_QUESTION_ID, D6_QUESTION_ID } from "../../app/lib/standing-score";
@@ -24,7 +25,7 @@ FROM signal s
 JOIN entity e ON e.id = s.entity_id AND e.workspace_id = ?1 AND e.state = 'on'
 WHERE s.workspace_id = ?1 AND s.observed_at >= ?2 AND s.observed_at < ?3 AND s.is_tombstoned = 0
   AND NOT EXISTS (SELECT 1 FROM signal_delivery d WHERE d.signal_id = s.id)
-  AND EXISTS (SELECT 1 FROM jev_verdict v WHERE v.signal_id = s.id AND v.question_id IN (?4, ?5) AND v.p >= 0.9)
+  AND EXISTS (SELECT 1 FROM jev_verdict v WHERE v.signal_id = s.id AND v.question_id IN (?4, ?5) AND v.p >= ${String(ACT_AT)})
 ORDER BY s.observed_at DESC, s.id ASC
 LIMIT 50`;
 

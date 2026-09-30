@@ -1,12 +1,13 @@
 import { z } from "zod";
 
+import { ACT_AT, REJECT_AT } from "./jev/thresholds";
 import { D3_QUESTION_ID, D6_QUESTION_ID, reliabilitySchema, scoreBucketSchema } from "./standing-score";
 
 export const COUNT_BUCKETS = `SELECT s.entity_id AS entity_id,
   CASE
-    WHEN s.kind = 'mention' AND v.p >= 0.9 THEN 'mention_matters'
-    WHEN s.kind = 'mention' AND v.p > 0.1 THEN 'mention_normal'
-    WHEN s.kind = 'change' AND v.p >= 0.9 THEN 'site_change_noteworthy'
+    WHEN s.kind = 'mention' AND v.p >= ${String(ACT_AT)} THEN 'mention_matters'
+    WHEN s.kind = 'mention' AND v.p > ${String(REJECT_AT)} THEN 'mention_normal'
+    WHEN s.kind = 'change' AND v.p >= ${String(ACT_AT)} THEN 'site_change_noteworthy'
     WHEN s.kind = 'ad' AND s.aspect IS NOT NULL THEN 'ad_copy_change'
     WHEN s.kind = 'ad' AND s.published_at >= ?2 AND s.published_at < ?3 THEN 'ad_new_creative'
     WHEN s.kind = 'hiring' THEN 'hiring_new_role'
