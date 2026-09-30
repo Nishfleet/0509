@@ -2,7 +2,7 @@ import { env } from "cloudflare:test";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { readEntityIdentityJson } from "../../../app/lib/data/entity.server";
-import { LOST_CHANNEL_REASON } from "../../../app/lib/mentions/youtube-channel";
+import { LOST_CHANNEL_REASON, NO_CHANNEL_REASON } from "../../../app/lib/mentions/youtube-channel";
 import type { WatchRow } from "../../../app/lib/data/watch.server";
 import { readWatchConfigJson, writeWatchConfigJson } from "../../../app/lib/data/watch.server";
 import { sweepTarget } from "../../../workers/mentions/sweep";
@@ -112,7 +112,7 @@ afterEach(async () => {
 });
 
 describe("YouTube sweep stale channel", () => {
-  it("does not flag a brand that was never resolved and has no channel URL", async () => {
+  it("flags a brand whose confirmed card has no channel URL with the no-channel reason", async () => {
     const { watchId, watch } = await seed('{"description":"no socials"}', "{}");
     stubFeeds();
 
@@ -123,8 +123,45 @@ describe("YouTube sweep stale channel", () => {
     );
 
     expect(outcome).toEqual({ items: 0, stored: 0, unjudged: 0, skipped: 0 });
-    expect(JSON.parse(await configOf(watchId))).toEqual({});
+    expect(JSON.parse(await configOf(watchId))).toEqual({
+      noChannel: { state: "degraded", reason: NO_CHANNEL_REASON, at: NOW },
+    });
     expect(await snapshotCount(watchId)).toBe(0);
+  });
+
+  it("replaces a stale no-channel flag with the lost-channel flag once the card gains a YouTube URL that does not resolve", async () => {
+    const identity = JSON.stringify({ socials: [{ platform: "youtube", url: "https://www.youtube.com/@renamed" }] });
+    const stale = { noChannel: { state: "degraded", reason: NO_CHANNEL_REASON, at: "2026-09-23T00:00:00.000Z" } };
+    const { watchId, watch } = await seed(identity, JSON.stringify(stale));
+    stubFeeds({
+      "https://www.youtube.com/@renamed": { status: 404, body: "<html>missing</html>", type: "text/html" },
+    });
+
+    await sweepTarget(
+      { sourceId: watch.source_id, pluginKey: watch.plugin_key, query: watch.target_key, watches: [watch] },
+      NOW,
+      null,
+    );
+
+    expect(JSON.parse(await configOf(watchId))).toEqual({
+      degraded: { state: "degraded", reason: LOST_CHANNEL_REASON, at: NOW },
+    });
+  });
+
+  it("replaces a stale lost-channel flag with the no-channel flag once the card loses its YouTube URL", async () => {
+    const stale = { degraded: { state: "degraded", reason: LOST_CHANNEL_REASON, at: "2026-09-23T00:00:00.000Z" } };
+    const { watchId, watch } = await seed('{"description":"no socials"}', JSON.stringify(stale));
+    stubFeeds();
+
+    await sweepTarget(
+      { sourceId: watch.source_id, pluginKey: watch.plugin_key, query: watch.target_key, watches: [watch] },
+      NOW,
+      null,
+    );
+
+    expect(JSON.parse(await configOf(watchId))).toEqual({
+      noChannel: { state: "degraded", reason: NO_CHANNEL_REASON, at: NOW },
+    });
   });
 
   it("flags a stored channel whose feed is the 404 HTML page and writes no snapshot", async () => {

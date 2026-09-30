@@ -48,11 +48,7 @@ function asWorkspaceDb(database: DatabaseSync): WorkspaceDb {
       const statement = database.prepare(query);
       return {
         bind(...values: unknown[]) {
-          const params = values.map((value) => (value === undefined ? null : value)) as (
-            | string
-            | number
-            | null
-          )[];
+          const params = values.map((value) => (value === undefined ? null : value)) as (string | number | null)[];
           return {
             async first<T>() {
               const row = statement.get(...params) as T | undefined;
@@ -260,8 +256,15 @@ describe("ensureWorkspace", () => {
       ensureWorkspaceForSignIn(asWorkspaceDb(database), { userId: "user-1", request, now: "2026-09-22T12:00:00.000Z" });
     await signIn();
     await signIn();
-    expect(database.prepare("SELECT workspace_id, channel_id, target_value, is_verified FROM send_target").all()).toEqual([
-      { workspace_id: firstWorkspaceId("user-1"), channel_id: "chan-email", target_value: "ada@example.com", is_verified: 1 },
+    expect(
+      database.prepare("SELECT workspace_id, channel_id, target_value, is_verified FROM send_target").all(),
+    ).toEqual([
+      {
+        workspace_id: firstWorkspaceId("user-1"),
+        channel_id: "chan-email",
+        target_value: "ada@example.com",
+        is_verified: 1,
+      },
     ]);
   });
 

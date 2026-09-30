@@ -25,7 +25,10 @@ export function CompetitorMaybes({ maybes }: { maybes: readonly Maybe[] }): Reac
       <p className="mt-1 text-body-sm text-ink-soft">We weren't sure about these. Watch the ones that matter.</p>
       <ul aria-label="Maybe" className="mt-3 border-b border-line">
         {maybes.map((maybe) => (
-          <li key={maybe.suggestionId} className="flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-line py-4">
+          <li
+            key={maybe.suggestionId}
+            className="flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-line py-4"
+          >
             <div className="flex min-w-0 flex-1 items-start gap-3">
               <Monogram name={maybe.name} off />
               <div className="min-w-0">

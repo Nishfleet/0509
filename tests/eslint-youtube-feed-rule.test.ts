@@ -48,9 +48,7 @@ describe("youtube feed rules (#4051)", () => {
 
   it("lets the youtube adapter build feedState", { timeout: 60_000 }, async () => {
     const eslint = new ESLint({ cwd: REPO_ROOT });
-    const results = await eslint.lintFiles([
-      path.join(REPO_ROOT, "workers/sources/mentions/youtube.ts"),
-    ]);
+    const results = await eslint.lintFiles([path.join(REPO_ROOT, "workers/sources/mentions/youtube.ts")]);
     const messages = results.flatMap((result) => result.messages.map((message) => message.message));
     expect(messages.some((message) => message.includes(FEED_STATE_MESSAGE))).toBe(false);
     expect(messages.some((message) => message.includes(XML_PARSER_MESSAGE))).toBe(false);

@@ -4,12 +4,7 @@ import { describe, expect, it } from "vitest";
 
 import { WhyFlaggedSheet } from "../../app/components/why-flagged";
 import { Dialog, DialogContent } from "../../app/components/ui/dialog";
-import {
-  whyFlagged,
-  type WhyFlagged,
-  type WhyFlaggedDecision,
-  type WhyFlaggedField,
-} from "../../app/lib/why-flagged";
+import { whyFlagged, type WhyFlagged, type WhyFlaggedDecision, type WhyFlaggedField } from "../../app/lib/why-flagged";
 
 const COMPARED: readonly WhyFlaggedField[] = [
   { label: "Last week", value: "$49" },
@@ -57,9 +52,7 @@ function contentBody(why: WhyFlagged = WHY): string {
   const content = sheetContent(why);
   // DialogTitle reads Base UI's root context, so the children render inside
   // the root the component already supplies.
-  return renderToStaticMarkup(
-    createElement(Dialog, null, createElement("div", null, content.props.children)),
-  );
+  return renderToStaticMarkup(createElement(Dialog, null, createElement("div", null, content.props.children)));
 }
 
 describe("whyFlagged", () => {
@@ -92,6 +85,12 @@ describe("WhyFlaggedSheet", () => {
     const html = renderSheet();
     expect(html).toContain("Why we flagged this");
     expect(html).toContain("min-h-11");
+  });
+
+  it("titles the sheet in the house row-name type, never the old text-lg font-semibold", () => {
+    const body = contentBody();
+    expect(body).toContain('class="font-display text-row-name font-bold"');
+    expect(body).not.toContain("text-lg font-semibold");
   });
 
   it("turns the dialog it renders into a bottom sheet below 860px and a panel above", () => {

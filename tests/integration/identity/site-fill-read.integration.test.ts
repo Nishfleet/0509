@@ -41,9 +41,7 @@ async function seed(): Promise<void> {
   )
     .bind(userId, `${userId}@0509.io`, NOW)
     .run();
-  await env.DB.prepare(
-    `INSERT INTO workspace (id, name, owner_user_id, created_at) VALUES (?1, 'Owner', ?2, ?3)`,
-  )
+  await env.DB.prepare(`INSERT INTO workspace (id, name, owner_user_id, created_at) VALUES (?1, 'Owner', ?2, ?3)`)
     .bind(workspaceId, userId, NOW)
     .run();
   await insertSelfEntity({
@@ -59,9 +57,7 @@ async function seed(): Promise<void> {
   )
     .bind(`${userId}-b`, `${userId}-b@0509.io`, NOW)
     .run();
-  await env.DB.prepare(
-    `INSERT INTO workspace (id, name, owner_user_id, created_at) VALUES (?1, 'Owner', ?2, ?3)`,
-  )
+  await env.DB.prepare(`INSERT INTO workspace (id, name, owner_user_id, created_at) VALUES (?1, 'Owner', ?2, ?3)`)
     .bind(otherWorkspaceId, `${userId}-b`, NOW)
     .run();
   await insertSelfEntity({
@@ -122,9 +118,7 @@ describe("readSelfSiteFill", () => {
     expect(await markSelfSiteFill(workspaceId, otherId, "gave_up")).toBe(false);
     expect(await readEntityIdentityJson(otherWorkspaceId, otherId)).toBe(theirs);
     expect(await readSelfSiteFill(otherWorkspaceId)).toBe(null);
-    expect(await readEntityIdentityJson(workspaceId, selfId)).toBe(
-      JSON.stringify({ description: null, socials: [] }),
-    );
+    expect(await readEntityIdentityJson(workspaceId, selfId)).toBe(JSON.stringify({ description: null, socials: [] }));
   });
 
   it("tells a caller that paired the wrong workspace, instead of doing nothing quietly", async () => {
@@ -139,8 +133,6 @@ describe("readSelfSiteFill", () => {
     expect(await readEntityIdentityJson(otherWorkspaceId, otherId)).toBe(
       JSON.stringify({ description: "Theirs", socials: [] }),
     );
-    expect(await readEntityIdentityJson(workspaceId, selfId)).toBe(
-      JSON.stringify({ description: null, socials: [] }),
-    );
+    expect(await readEntityIdentityJson(workspaceId, selfId)).toBe(JSON.stringify({ description: null, socials: [] }));
   });
 });

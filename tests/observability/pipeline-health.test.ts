@@ -44,9 +44,7 @@ describe("blindSources", () => {
   });
 
   it("does not flag a watch with only one tick at 0", () => {
-    const ticks: SourceTick[] = [
-      tick({ itemCount: 0, fetchedAt: "2026-09-22T00:00:00.000Z" }),
-    ];
+    const ticks: SourceTick[] = [tick({ itemCount: 0, fetchedAt: "2026-09-22T00:00:00.000Z" })];
     expect(blindSources(ticks, new Map())).toEqual([]);
   });
 
@@ -110,15 +108,9 @@ describe("blindSources", () => {
 
 describe("blindAlertId", () => {
   it("is one id per source, workspace and UTC day", () => {
-    expect(blindAlertId("src1", "ws1", new Date("2026-09-25T03:00:00Z"))).toBe(
-      "source-blind-src1-ws1-2026-09-25",
-    );
-    expect(blindAlertId("src1", "ws1", new Date("2026-09-25T23:59:00Z"))).toBe(
-      "source-blind-src1-ws1-2026-09-25",
-    );
-    expect(blindAlertId("src1", "ws1", new Date("2026-09-26T00:00:00Z"))).toBe(
-      "source-blind-src1-ws1-2026-09-26",
-    );
+    expect(blindAlertId("src1", "ws1", new Date("2026-09-25T03:00:00Z"))).toBe("source-blind-src1-ws1-2026-09-25");
+    expect(blindAlertId("src1", "ws1", new Date("2026-09-25T23:59:00Z"))).toBe("source-blind-src1-ws1-2026-09-25");
+    expect(blindAlertId("src1", "ws1", new Date("2026-09-26T00:00:00Z"))).toBe("source-blind-src1-ws1-2026-09-26");
   });
 });
 

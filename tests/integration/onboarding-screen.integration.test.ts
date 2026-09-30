@@ -34,18 +34,14 @@ function stubRun(p: number) {
 }
 
 async function decisionCount(workspaceId: string, verdict: string): Promise<number> {
-  const row = await env.DB.prepare(
-    "SELECT COUNT(*) AS n FROM user_decision WHERE workspace_id = ? AND verdict = ?",
-  )
+  const row = await env.DB.prepare("SELECT COUNT(*) AS n FROM user_decision WHERE workspace_id = ? AND verdict = ?")
     .bind(workspaceId, verdict)
     .first<{ n: number }>();
   return row?.n ?? 0;
 }
 
 async function subjectRows(workspaceId: string, subject: string): Promise<{ entities: number; watches: number }> {
-  const entities = await env.DB.prepare(
-    "SELECT COUNT(*) AS n FROM entity WHERE workspace_id = ? AND domain = ?",
-  )
+  const entities = await env.DB.prepare("SELECT COUNT(*) AS n FROM entity WHERE workspace_id = ? AND domain = ?")
     .bind(workspaceId, subject)
     .first<{ n: number }>();
   const watches = await env.DB.prepare(

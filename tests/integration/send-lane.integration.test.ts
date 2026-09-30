@@ -1,5 +1,5 @@
 import { env } from "cloudflare:test";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { deliver, handleBatch, type DeliveryMessage } from "../../workers/delivery/consumer";
 import { sendOrThrow } from "../../workers/delivery/send";
@@ -39,9 +39,7 @@ const seedWorkspace = async () => {
 };
 
 const seedChannel = async () => {
-  await env.DB.prepare(
-    `INSERT INTO channel (id, key, is_enabled, config_json) VALUES (?, 'email', 1, '{}')`,
-  )
+  await env.DB.prepare(`INSERT INTO channel (id, key, is_enabled, config_json) VALUES (?, 'email', 1, '{}')`)
     .bind(CHANNEL)
     .run();
   await env.DB.prepare(
@@ -405,11 +403,25 @@ describe("send lane (0509#3979)", () => {
     expect(await readAttempts()).toHaveLength(0);
   });
 
+  it.each([
+    ["no_row", "DELETE FROM send_target"],
+    ["unverified", "UPDATE send_target SET is_verified = 0"],
+    ["channel_disabled", "UPDATE channel SET is_enabled = 0"],
+  ])("logs delivery.no_target with reason %s", async (reason, statement) => {
+    await env.DB.exec(statement);
+    const digestId = await seedDigest("pending");
+    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
+
+    await deliver(envWith(bindingFor(recorder())), message(digestId));
+
+    const lines = log.mock.calls.map((call) => JSON.parse(String(call[0])) as Record<string, unknown>);
+    log.mockRestore();
+    expect(lines).toContainEqual({ event: "delivery.no_target", digest_id: digestId, workspace_id: WS, reason });
+  });
+
   it("reports no_target when the only email target is unverified", async () => {
     const rec = recorder();
-    await env.DB.prepare(`UPDATE send_target SET is_verified = 0 WHERE id = ?`)
-      .bind(TARGET_ID)
-      .run();
+    await env.DB.prepare(`UPDATE send_target SET is_verified = 0 WHERE id = ?`).bind(TARGET_ID).run();
     const digestId = await seedDigest("pending");
 
     const result = await deliver(envWith(bindingFor(rec)), message(digestId));
@@ -476,9 +488,9 @@ describe("send lane (0509#3979)", () => {
     const first = await deliver(envWith(bindingFor(rec)), message(firstId));
     expect(first.outcome).toBe("sent");
 
-    const stored = await env.DB.prepare(
-      `SELECT unsubscribe_token FROM send_target WHERE id = 'reader-target'`,
-    ).first<{ unsubscribe_token: string | null }>();
+    const stored = await env.DB.prepare(`SELECT unsubscribe_token FROM send_target WHERE id = 'reader-target'`).first<{
+      unsubscribe_token: string | null;
+    }>();
     const token = stored?.unsubscribe_token ?? "";
     expect(token).toMatch(/^[0-9a-f]{64}$/);
     expect(rec.sent[0].headers).toEqual({

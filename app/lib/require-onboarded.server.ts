@@ -5,6 +5,6 @@ import { workspaceLandingForRequest } from "./workspace.server";
 
 export async function requireOnboarded({ request }: { request: Request }): Promise<void> {
   const session = await requireSession(request);
-  const landing = await workspaceLandingForRequest(request, session.user.id);
+  const landing = await workspaceLandingForRequest(request, session.user);
   if (landing !== null) throw redirect(landing);
 }

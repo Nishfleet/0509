@@ -15,14 +15,14 @@ import type { CompetitorRow } from "../lib/data/entity.server";
 import { readCompetitors } from "../lib/data/entity.server";
 import { readPlanTier } from "../lib/data/plan.server";
 import { readWorkspaceIdForOwner } from "../lib/data/workspace.server";
-import { requireSession } from "../lib/require-session.server";
+import { requireFreshSession, requireSession } from "../lib/require-session.server";
 
 export function meta() {
   return [{ title: "Competitors · Five to Nine" }];
 }
 
-async function workspaceFor(request: Request): Promise<string> {
-  const session = await requireSession(request);
+async function workspaceFor(request: Request, fresh = false): Promise<string> {
+  const session = await (fresh ? requireFreshSession(request) : requireSession(request));
   const workspaceId = await readWorkspaceIdForOwner(session.user.id);
   if (workspaceId === null) throw redirect("/onboarding");
   return workspaceId;
@@ -31,15 +31,12 @@ async function workspaceFor(request: Request): Promise<string> {
 export async function loader({ request }: Route.LoaderArgs) {
   const workspaceId = await workspaceFor(request);
   const wanted = new URL(request.url).searchParams.get("upgraded");
-  return {
-    ...(await readCompetitors(workspaceId)),
-    tier: await readPlanTier(workspaceId),
-    wanted: isPlanId(wanted) ? wanted : null,
-  };
+  const [competitors, tier] = await Promise.all([readCompetitors(workspaceId), readPlanTier(workspaceId)]);
+  return { ...competitors, tier, wanted: isPlanId(wanted) ? wanted : null };
 }
 
 export async function action({ request }: Route.ActionArgs) {
-  const workspaceId = await workspaceFor(request);
+  const workspaceId = await workspaceFor(request, true);
   return handleCompetitorIntent(workspaceId, await request.formData());
 }
 
@@ -50,13 +47,11 @@ function CompetitorItem({ competitor }: { competitor: CompetitorRow }) {
   const off = state === "off";
   return (
     <li className="flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-line py-4">
-      <div className="flex min-w-0 flex-1 items-start gap-3">
+      <div className="flex min-w-0 flex-[1_1_16rem] items-start gap-3">
         <BrandChip name={competitor.name} href={`/app/competitors/${competitor.entityId}`} off={off} />
         <div className="min-w-0">
           <p className="truncate text-body-sm text-ink-soft">{competitor.domain}</p>
-          {competitor.reason === null ? null : (
-            <p className="mt-1 text-body-sm text-ink-soft">{competitor.reason}</p>
-          )}
+          {competitor.reason === null ? null : <p className="mt-1 text-body-sm text-ink-soft">{competitor.reason}</p>}
         </div>
       </div>
       <BrandSwitchField

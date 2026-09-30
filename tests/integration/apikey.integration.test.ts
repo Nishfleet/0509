@@ -113,9 +113,7 @@ describe("apikey plugin against the shipped schema", () => {
     expect((await auth.api.verifyApiKey({ body: { key: created.key } })).valid).toBe(true);
     expect((await auth.api.verifyApiKey({ body: { key: created.key } })).valid).toBe(false);
 
-    const row = await env.DB.prepare("SELECT id FROM apikey WHERE id = ?")
-      .bind(created.id)
-      .first();
+    const row = await env.DB.prepare("SELECT id FROM apikey WHERE id = ?").bind(created.id).first();
     expect(row, "the plugin deletes an exhausted key — it will vanish from key lists").toBeNull();
   });
 

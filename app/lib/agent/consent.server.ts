@@ -5,9 +5,7 @@ import { redirect } from "react-router";
 import { readWorkspaceIdForOwner } from "../data/workspace.server";
 import { READ_SCOPE } from "./paths";
 
-export type ConsentView =
-  | { kind: "error"; message: string }
-  | { kind: "ask"; appName: string; returnsTo: string };
+export type ConsentView = { kind: "error"; message: string } | { kind: "ask"; appName: string; returnsTo: string };
 
 function withParams(target: string, params: Record<string, string | undefined>): string {
   const set = Object.entries(params).filter((entry): entry is [string, string] => Boolean(entry[1]));

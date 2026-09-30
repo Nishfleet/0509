@@ -4,21 +4,37 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { readDeliveryAddress, saveDeliveryAddress } from "../../app/lib/delivery-address.server";
 import { ensureWorkspaceForSignIn, firstWorkspaceId } from "../../app/lib/workspace.server";
 
-const USER_ID = "user-da";
+let USER_ID = "user-da";
 const SIGN_IN_EMAIL = "owner@0509.io";
 const NOW = "2026-09-24T00:00:00Z";
+
+interface Recorder {
+  sent: EmailMessageBuilder[];
+  fail: Error | null;
+}
+
+const recorder = (): Recorder => ({ sent: [], fail: null });
+
+const bindingFor = (rec: Recorder): SendEmail => ({
+  send(message: EmailMessageBuilder) {
+    if (rec.fail) throw rec.fail;
+    rec.sent.push(message);
+    return Promise.resolve({ messageId: "test-message" });
+  },
+});
 
 interface TargetRow {
   workspace_id: string;
   target_value: string;
   is_verified: number;
   unsubscribe_token: string | null;
+  verify_token: string | null;
 }
 
 const allTargets = async (workspaceId: string): Promise<TargetRow[]> =>
   (
     await env.DB.prepare(
-      `SELECT workspace_id, target_value, is_verified, unsubscribe_token
+      `SELECT workspace_id, target_value, is_verified, unsubscribe_token, verify_token
          FROM send_target
         WHERE workspace_id = ?
         ORDER BY target_value ASC`,
@@ -43,14 +59,13 @@ interface SuppressionRow {
 }
 
 const suppressionRow = async (address: string): Promise<SuppressionRow | null> =>
-  env.DB.prepare(
-    `SELECT address, reason FROM email_suppression WHERE address = ?`,
-  )
+  env.DB.prepare(`SELECT address, reason FROM email_suppression WHERE address = ?`)
     .bind(address)
     .first<SuppressionRow>();
 
 describe("change the workspace's email address (0509#4779)", () => {
   beforeEach(async () => {
+    USER_ID = `user-da-${crypto.randomUUID()}`;
     await env.DB.exec("DELETE FROM email_suppression");
     await env.DB.exec("DELETE FROM send_target");
     await env.DB.exec("DELETE FROM channel");
@@ -66,9 +81,7 @@ describe("change the workspace's email address (0509#4779)", () => {
       .bind(USER_ID, SIGN_IN_EMAIL, NOW, NOW)
       .run();
     await ensureWorkspaceForSignIn(env.DB, { userId: USER_ID, request: null, now: NOW });
-    await env.DB.prepare(
-      `UPDATE send_target SET unsubscribe_token = 'old-token' WHERE workspace_id = ?`,
-    )
+    await env.DB.prepare(`UPDATE send_target SET unsubscribe_token = 'old-token' WHERE workspace_id = ?`)
       .bind(firstWorkspaceId(USER_ID))
       .run();
   });
@@ -79,6 +92,7 @@ describe("change the workspace's email address (0509#4779)", () => {
     const first = await saveDeliveryAddress({
       userId: USER_ID,
       signInEmail: SIGN_IN_EMAIL,
+      email: bindingFor(recorder()),
       address: " new@0509.io ",
       resume: false,
     });
@@ -95,6 +109,7 @@ describe("change the workspace's email address (0509#4779)", () => {
     const second = await saveDeliveryAddress({
       userId: USER_ID,
       signInEmail: SIGN_IN_EMAIL,
+      email: bindingFor(recorder()),
       address: "other@0509.io",
       resume: false,
     });
@@ -117,6 +132,7 @@ describe("change the workspace's email address (0509#4779)", () => {
     const result = await saveDeliveryAddress({
       userId: USER_ID,
       signInEmail: SIGN_IN_EMAIL,
+      email: bindingFor(recorder()),
       address: SIGN_IN_EMAIL,
       resume: false,
     });
@@ -140,6 +156,7 @@ describe("change the workspace's email address (0509#4779)", () => {
     const blocked = await saveDeliveryAddress({
       userId: USER_ID,
       signInEmail: SIGN_IN_EMAIL,
+      email: bindingFor(recorder()),
       address: "gone@0509.io",
       resume: false,
     });
@@ -154,6 +171,7 @@ describe("change the workspace's email address (0509#4779)", () => {
     const resumed = await saveDeliveryAddress({
       userId: USER_ID,
       signInEmail: SIGN_IN_EMAIL,
+      email: bindingFor(recorder()),
       address: "gone@0509.io",
       resume: true,
     });
@@ -168,6 +186,7 @@ describe("change the workspace's email address (0509#4779)", () => {
     const result = await saveDeliveryAddress({
       userId: USER_ID,
       signInEmail: SIGN_IN_EMAIL,
+      email: bindingFor(recorder()),
       address: "not-an-address",
       resume: false,
     });
@@ -186,6 +205,7 @@ describe("change the workspace's email address (0509#4779)", () => {
     const result = await saveDeliveryAddress({
       userId: USER_ID,
       signInEmail: SIGN_IN_EMAIL,
+      email: bindingFor(recorder()),
       address: "new@0509.io",
       resume: false,
     });
@@ -200,16 +220,17 @@ describe("change the workspace's email address (0509#4779)", () => {
     await env.DB.exec("DELETE FROM send_target");
 
     const beforeStored = await readDeliveryAddress(USER_ID, SIGN_IN_EMAIL);
-    expect(beforeStored).toBe(SIGN_IN_EMAIL);
+    expect(beforeStored).toEqual({ address: SIGN_IN_EMAIL, verified: true });
 
     await saveDeliveryAddress({
       userId: USER_ID,
       signInEmail: SIGN_IN_EMAIL,
+      email: bindingFor(recorder()),
       address: "new@0509.io",
       resume: false,
     });
 
     const afterStored = await readDeliveryAddress(USER_ID, SIGN_IN_EMAIL);
-    expect(afterStored).toBe("new@0509.io");
+    expect(afterStored).toEqual({ address: "new@0509.io", verified: false });
   });
 });

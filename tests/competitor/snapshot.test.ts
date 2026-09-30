@@ -113,9 +113,7 @@ describe("snapshotCells", () => {
   });
 
   it("dashes a kind no source watches and says so", () => {
-    const cells = snapshotCells(
-      input({ sources: [{ kind: "ads", name: "Meta ads library", answered: true }] }),
-    );
+    const cells = snapshotCells(input({ sources: [{ kind: "ads", name: "Meta ads library", answered: true }] }));
     expect(cellOf(cells, "site_changes")).toEqual({
       key: "site_changes",
       label: "Noteworthy site changes",

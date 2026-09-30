@@ -4,6 +4,7 @@ import { claimSendAttempt, resolveSendAttempt } from "../../app/lib/data/send_at
 import { writeUnsubscribeToken } from "../../app/lib/data/send_target.server";
 import type { BriefPayload } from "../../app/lib/brief-payload";
 import { parseBriefPayload } from "../../app/lib/brief-payload";
+import { nextOwnSiteCheck } from "../../app/lib/incident-recheck";
 import { pageHost } from "../../app/lib/site/own-site.server";
 
 import { renderBrief } from "./brief-template";
@@ -44,15 +45,7 @@ export interface IncidentMessage {
 export type DeliveryMessage = DigestMessage | IncidentMessage;
 
 type DeliveryOutcome =
-  | "sent"
-  | "failed"
-  | "suppressed"
-  | "duplicate"
-  | "no_target"
-  | "no_digest"
-  | "no_incident"
-  | "not_self"
-  | "muted";
+  "sent" | "failed" | "suppressed" | "duplicate" | "no_target" | "no_digest" | "no_incident" | "not_self" | "muted";
 
 interface DeliveryResult {
   outcome: DeliveryOutcome;
@@ -62,7 +55,6 @@ interface DeliveryResult {
 
 const EMAIL_CHANNEL_KEY = "email";
 const INCIDENT_LINK = "https://0509.io/app/alerts";
-const RECHECK_AFTER_MS = 3_600_000;
 
 async function readDigest(env: Env, digestId: string): Promise<MessageRow | null> {
   return env.DB.prepare(
@@ -124,10 +116,30 @@ async function readTarget(env: Env, workspaceId: string): Promise<TargetRow | nu
     .first<TargetRow>();
 }
 
-async function isSuppressed(env: Env, address: string): Promise<boolean> {
+type NoTargetReason = "no_row" | "channel_disabled" | "unverified";
+
+async function noTarget(
+  env: Env,
+  workspaceId: string,
+  item: { digest_id: string } | { incident_id: string },
+): Promise<DeliveryResult> {
   const row = await env.DB.prepare(
-    `SELECT address FROM email_suppression WHERE address = ?`,
+    `SELECT st.is_verified, c.is_enabled
+       FROM send_target st
+       JOIN channel c ON c.id = st.channel_id
+      WHERE st.workspace_id = ? AND c.key = ?
+      ORDER BY st.created_at ASC
+      LIMIT 1`,
   )
+    .bind(workspaceId, EMAIL_CHANNEL_KEY)
+    .first<{ is_verified: number; is_enabled: number }>();
+  const reason: NoTargetReason = row === null ? "no_row" : row.is_enabled === 0 ? "channel_disabled" : "unverified";
+  console.log(JSON.stringify({ event: "delivery.no_target", ...item, workspace_id: workspaceId, reason }));
+  return { outcome: "no_target", attempt_id: null, idempotency_key: null };
+}
+
+async function isSuppressed(env: Env, address: string): Promise<boolean> {
+  const row = await env.DB.prepare(`SELECT address FROM email_suppression WHERE address = ?`)
     .bind(address)
     .first<{ address: string }>();
   return row !== null;
@@ -142,9 +154,7 @@ function newUnsubscribeToken(): string {
 async function ensureUnsubscribeToken(env: Env, target: TargetRow): Promise<string> {
   if (target.unsubscribe_token !== null) return target.unsubscribe_token;
   await writeUnsubscribeToken(env.DB, { targetId: target.id, token: newUnsubscribeToken() });
-  const row = await env.DB.prepare(
-    `SELECT unsubscribe_token FROM send_target WHERE id = ?`,
-  )
+  const row = await env.DB.prepare(`SELECT unsubscribe_token FROM send_target WHERE id = ?`)
     .bind(target.id)
     .first<{ unsubscribe_token: string | null }>();
   if (row?.unsubscribe_token == null) {
@@ -188,10 +198,7 @@ interface SendAndResolveInput {
   onSent?: () => Promise<void>;
 }
 
-async function sendAndResolve(
-  env: Env,
-  input: SendAndResolveInput,
-): Promise<DeliveryResult> {
+async function sendAndResolve(env: Env, input: SendAndResolveInput): Promise<DeliveryResult> {
   const { claimId, idempotencyKey, send, onSent } = input;
   let sent = false;
   try {
@@ -217,7 +224,7 @@ export async function deliver(env: Env, message: DigestMessage): Promise<Deliver
 
   const target = await readTarget(env, digest.workspace_id);
   if (!target) {
-    return { outcome: "no_target", attempt_id: null, idempotency_key: null };
+    return noTarget(env, digest.workspace_id, { digest_id: digest.id });
   }
 
   if (await isSuppressed(env, target.target_value)) {
@@ -247,10 +254,7 @@ export async function deliver(env: Env, message: DigestMessage): Promise<Deliver
   });
 }
 
-export async function deliverIncident(
-  env: Env,
-  message: IncidentMessage,
-): Promise<DeliveryResult> {
+export async function deliverIncident(env: Env, message: IncidentMessage): Promise<DeliveryResult> {
   const incident = await readIncident(env, message.incident_id);
   if (!incident) {
     return { outcome: "no_incident", attempt_id: null, idempotency_key: null };
@@ -265,7 +269,7 @@ export async function deliverIncident(
 
   const target = await readTarget(env, incident.workspace_id);
   if (!target) {
-    return { outcome: "no_target", attempt_id: null, idempotency_key: null };
+    return noTarget(env, incident.workspace_id, { incident_id: incident.id });
   }
 
   if (await isSuppressed(env, target.target_value)) {
@@ -306,7 +310,7 @@ export async function deliverIncident(
               site,
               kind: incident.kind,
               opened_at: incident.opened_at,
-              recheck_at: new Date(Date.parse(incident.opened_at) + RECHECK_AFTER_MS).toISOString(),
+              recheck_at: nextOwnSiteCheck(new Date(incident.opened_at)),
               mark: incident.mark,
               link: INCIDENT_LINK,
               timezone: incident.timezone,
@@ -329,10 +333,7 @@ export async function deliverIncident(
   });
 }
 
-export async function handleBatch(
-  env: Env,
-  batch: MessageBatch,
-): Promise<DeliveryResult[]> {
+export async function handleBatch(env: Env, batch: MessageBatch): Promise<DeliveryResult[]> {
   const results: DeliveryResult[] = [];
   for (const item of batch.messages) {
     const parsed = parseMessage(item.body);
@@ -341,8 +342,7 @@ export async function handleBatch(
       results.push({ outcome: "no_digest", attempt_id: null, idempotency_key: null });
       continue;
     }
-    const result =
-      "incident_id" in parsed ? await deliverIncident(env, parsed) : await deliver(env, parsed);
+    const result = "incident_id" in parsed ? await deliverIncident(env, parsed) : await deliver(env, parsed);
     if (result.outcome === "failed") {
       item.retry();
     } else {

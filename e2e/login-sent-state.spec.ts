@@ -6,6 +6,7 @@ let createdEmail = "";
 test.afterEach(async ({ page }, testInfo) => {
   if (createdEmail === "") return;
   testInfo.setTimeout(testInfo.timeout + 60_000);
+  await page.clock.resume();
   // The delete failing is a test failure, not a reason to keep the address:
   // clearing in finally means the next test in this worker cannot try to
   // delete an account that is already gone.
@@ -17,7 +18,9 @@ test.afterEach(async ({ page }, testInfo) => {
 });
 
 // #4015, DESIGN.md §2.2: the sent state lands in place and the resend counts down for 30 s.
-test("the sent state lands in place and the resend waits 30 seconds with a visible count @own-signin", async ({ page }, testInfo) => {
+test("the sent state lands in place and the resend waits 30 seconds with a visible count @own-signin", async ({
+  page,
+}, testInfo) => {
   const watched = watchConsole(page);
 
   await page.clock.install();

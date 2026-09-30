@@ -3,11 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { readSelfWorkspaceIds } from "../../../app/lib/data/entity.server";
 import type { DiscoveryParams } from "../../../app/lib/discovery/start.server";
-import {
-  startDiscovery,
-  startWeeklyRefresh,
-  WEEKLY_REFRESH_CRON,
-} from "../../../app/lib/discovery/start.server";
+import { startDiscovery, startWeeklyRefresh, WEEKLY_REFRESH_CRON } from "../../../app/lib/discovery/start.server";
 
 const NOW = "2026-09-28T04:00:00.000Z";
 const DATE = "2026-09-28";

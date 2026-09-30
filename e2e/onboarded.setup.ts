@@ -22,7 +22,8 @@ setup.setTimeout(480_000);
 async function addCompetitor(page: Page, domain: string): Promise<void> {
   await page.locator("#add-competitor").fill(domain);
   await page.getByRole("button", { name: "Add" }).click();
-  await expect(page.getByRole("switch", { name: `${domain} tracking` })).toBeChecked();
+  const row = page.getByRole("list", { name: "Competitors" }).getByRole("listitem").filter({ hasText: domain });
+  await expect(row.getByRole("switch")).toBeChecked({ timeout: 30_000 });
 }
 
 setup("mint one onboarded session per viewport lane", async ({ browser }) => {
@@ -30,6 +31,11 @@ setup("mint one onboarded session per viewport lane", async ({ browser }) => {
   for (const lane of LANES) {
     const context = await browser.newContext({ storageState: accessStatePath });
     const page = await context.newPage();
+    page.on("response", (response) => {
+      const timing = response.headers()["server-timing"];
+      if (timing === undefined) return;
+      console.log(`server-timing ${lane} ${new URL(response.url()).pathname} ${String(response.status())} ${timing}`);
+    });
     try {
       const email = `e2e+onboarded-${lane}-${crypto.randomUUID().replaceAll("-", "").slice(0, 12)}@0509.io`;
       await signInWithMagicLink(page, email, token);
@@ -49,18 +55,21 @@ setup("mint one onboarded session per viewport lane", async ({ browser }) => {
       await expect(page.getByRole("button", { name: "edit name" })).toBeVisible({ timeout: 30_000 });
       await expect(page.getByText("looking on the site")).toHaveCount(0, { timeout: 30_000 });
       await page.getByRole("button", { name: "That's me" }).click();
-      await expect(page).toHaveURL(/\/onboarding\/competitors$/, { timeout: 30_000 });
+      await expect(page).toHaveURL(/\/onboarding\/competitors$/, { timeout: 10_000 });
 
       const watching = page.getByRole("list", { name: "Watching" }).getByRole("listitem");
-      await expect(
-        watching.first().or(page.getByRole("button", { name: /^Watch / }).first()),
-      ).toBeVisible({ timeout: 60_000 });
+      await expect(watching.first().or(page.getByRole("button", { name: /^Watch / }).first())).toBeVisible({
+        timeout: 60_000,
+      });
       if ((await watching.count()) === 0) {
-        await page.getByRole("button", { name: /^Watch / }).first().click();
+        await page
+          .getByRole("button", { name: /^Watch / })
+          .first()
+          .click();
         await expect(watching.first()).toBeVisible();
       }
       await page.getByRole("button", { name: "Start watching" }).click();
-      await expect(page).toHaveURL(/\/app$/);
+      await expect(page).toHaveURL(/\/app$/, { timeout: 30_000 });
 
       await page.goto("/app/competitors");
       await addCompetitor(page, "nike.com");

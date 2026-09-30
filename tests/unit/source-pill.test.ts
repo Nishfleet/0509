@@ -2,12 +2,7 @@ import { createElement, type ReactElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
-import {
-  SourcePill,
-  sourcePillStatus,
-  type SourceRow,
-  type SourceSnapshot,
-} from "../../app/components/source-pill";
+import { SourcePill, sourcePillStatus, type SourceRow, type SourceSnapshot } from "../../app/components/source-pill";
 
 const NOW = Date.parse("2026-09-22T12:00:00.000Z");
 
@@ -142,12 +137,8 @@ describe("the source pill", () => {
     expect(pill(parked, liveSnapshot)).toBe("");
     expect(pill({ ...reddit, is_enabled: 0 }, liveSnapshot)).toBe("");
     expect(pill({ ...reddit, is_enabled: false }, liveSnapshot)).toBe("");
-    expect(
-      pill({ ...reddit, is_enabled: 1, config_json: '{"state":"disabled"}' }, liveSnapshot),
-    ).toBe("");
-    expect(
-      pill({ ...reddit, is_enabled: 1, config_json: '{"state":"parked"}' }, liveSnapshot),
-    ).toBe("");
+    expect(pill({ ...reddit, is_enabled: 1, config_json: '{"state":"disabled"}' }, liveSnapshot)).toBe("");
+    expect(pill({ ...reddit, is_enabled: 1, config_json: '{"state":"parked"}' }, liveSnapshot)).toBe("");
     expect(sourcePillStatus(parked, liveSnapshot, NOW).state).toBe("disabled");
     expect(
       sourcePillStatus({ ...reddit, is_enabled: 1, config_json: '{"state":"parked"}' }, liveSnapshot, NOW).state,
@@ -221,7 +212,8 @@ describe("the source pill", () => {
     const html = pill(source, quietSnapshot);
     expect(html).toContain('data-state="degraded"');
     expect(html).toContain("we lost the channel, re-resolving");
-    expect(html).toContain("last good 2026-09-24 23:01 UTC");
+    expect(html).toContain("last good unknown");
+    expect(html).not.toContain("last good 2026-09-24 23:01 UTC");
     expect(html).not.toContain("— none");
     expect(sourcePillStatus(source, quietSnapshot, NOW).state).toBe("degraded");
     expect(sourcePillStatus(reddit, quietSnapshot, NOW).state).toBe("none");
@@ -232,6 +224,26 @@ describe("the source pill", () => {
     expect(brokenHtml).not.toContain("— none");
   });
 
+  it("shows a watch-degraded source's own last-good time, never the flag's write time (#5936)", () => {
+    const source: SourceRow = {
+      ...reddit,
+      key: "youtube.channel_rss",
+      platform: "youtube",
+      last_good_at: "2026-09-19T06:02:00.000Z",
+      watch_config_json: JSON.stringify({
+        degraded: {
+          state: "degraded",
+          reason: "we lost the channel, re-resolving",
+          at: "2026-09-24T23:01:56.000Z",
+        },
+      }),
+    };
+    expect(sourcePillStatus(source, quietSnapshot, NOW).lastGoodAt).toBe("2026-09-19T06:02:00.000Z");
+    const html = pill(source, quietSnapshot);
+    expect(html).toContain("last good 2026-09-19 06:02 UTC");
+    expect(html).not.toContain("2026-09-24 23:01");
+  });
+
   it("survives malformed config_json and falls back to the row key for a name", () => {
     for (const raw of ["not json", "[1,2]", "null", "42", '["degraded"]']) {
       const source: SourceRow = { ...reddit, config_json: raw };
@@ -239,8 +251,8 @@ describe("the source pill", () => {
     }
     const nameless: SourceRow = { key: "reddit.search_rss", platform: "  ", is_enabled: 1 };
     expect(pill(nameless, liveSnapshot)).toContain("reddit.search_rss");
-    expect(
-      pill({ ...reddit, last_good_at: "not a date", degraded_reason: "broke" }, liveSnapshot),
-    ).toContain("last good not a date");
+    expect(pill({ ...reddit, last_good_at: "not a date", degraded_reason: "broke" }, liveSnapshot)).toContain(
+      "last good not a date",
+    );
   });
 });

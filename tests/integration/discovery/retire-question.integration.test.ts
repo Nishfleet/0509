@@ -3,10 +3,7 @@ import { describe, expect, it } from "vitest";
 
 import { handleCompetitorIntent } from "../../../app/lib/competitors.server";
 import { readCompetitors } from "../../../app/lib/data/entity.server";
-import {
-  confirmRetireSuggestion,
-  keepFromRetireSuggestion,
-} from "../../../app/lib/data/suggestion.server";
+import { confirmRetireSuggestion, keepFromRetireSuggestion } from "../../../app/lib/data/suggestion.server";
 
 const NOW = "2026-09-24T06:00:00.000Z";
 
@@ -44,11 +41,7 @@ async function seedWorkspace(name: string): Promise<string> {
   return workspaceId;
 }
 
-async function seedCompetitor(
-  workspaceId: string,
-  domain: string,
-  name: string,
-): Promise<string> {
+async function seedCompetitor(workspaceId: string, domain: string, name: string): Promise<string> {
   const entityId = `${workspaceId}-${domain}`;
   await env.DB.prepare(
     "INSERT INTO entity (id, workspace_id, role, domain, name, state, created_at) VALUES (?1, ?2, 'competitor', ?3, ?4, 'on', ?5)",
@@ -86,9 +79,7 @@ async function seedAddSuggestion(workspaceId: string, domain: string, name: stri
 }
 
 async function entityRow(entityId: string): Promise<EntityRow | null> {
-  return env.DB.prepare(
-    "SELECT id, domain, state, state_changed_by FROM entity WHERE id = ?",
-  )
+  return env.DB.prepare("SELECT id, domain, state, state_changed_by FROM entity WHERE id = ?")
     .bind(entityId)
     .first<EntityRow>();
 }
@@ -174,7 +165,12 @@ describe("retire questions in readCompetitors", () => {
     const other = await seedWorkspace("Otherws");
     const entityId = await seedCompetitor(owner, "cross-owner.example", "Cross Owner");
     const otherEntityId = await seedCompetitor(other, "cross-other.example", "Cross Other");
-    const foreign = await seedRetireSuggestion(other, otherEntityId, "cross-other.example", "Quiet for the last 30 days");
+    const foreign = await seedRetireSuggestion(
+      other,
+      otherEntityId,
+      "cross-other.example",
+      "Quiet for the last 30 days",
+    );
 
     await handleCompetitorIntent(owner, intentForm({ intent: "stop", suggestionId: foreign }));
 

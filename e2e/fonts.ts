@@ -54,7 +54,5 @@ export function expectFaceLoaded(page: Page, family: string, weight?: number) {
 // Element-anchored: the face the element's computed style resolves to (first
 // family at the used weight) must be the loaded one.
 export function expectElementFaceLoaded(page: Page, selector: string) {
-  return expect
-    .poll(() => page.evaluate(faceProbe, { selector }), { message: `${selector} resolved face` })
-    .toBe(true);
+  return expect.poll(() => page.evaluate(faceProbe, { selector }), { message: `${selector} resolved face` }).toBe(true);
 }

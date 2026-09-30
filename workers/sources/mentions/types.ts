@@ -1,18 +1,21 @@
 import { z } from "zod";
 
+import { fetchOutbound } from "../../../app/lib/fetch/outbound.server";
+import { CRAWLER_USER_AGENT } from "../../../app/lib/fetch/robots.server";
+
 export const mentionItemSchema = z.object({
-	dedupKey: z.string().min(1),
-	url: z.url({ protocol: /^https?$/ }),
-	title: z.string(),
-	publishedAt: z.string().nullable(),
-	publisher: z.string().nullable().optional(),
+  dedupKey: z.string().min(1),
+  url: z.url({ protocol: /^https?$/ }),
+  title: z.string(),
+  publishedAt: z.string().nullable(),
+  publisher: z.string().nullable().optional(),
 });
 
 export const mentionsResultSchema = z.object({
-	items: z.array(mentionItemSchema),
-	canaryCount: z.number().int().nonnegative(),
-	rawBody: z.string(),
-	feedState: z.enum(["ok", "stale", "error"]).optional(),
+  items: z.array(mentionItemSchema),
+  canaryCount: z.number().int().nonnegative(),
+  rawBody: z.string(),
+  feedState: z.enum(["ok", "stale", "error"]).optional(),
 });
 
 export type MentionsResult = z.infer<typeof mentionsResultSchema>;
@@ -20,50 +23,46 @@ export type MentionsResult = z.infer<typeof mentionsResultSchema>;
 export type MentionItem = z.infer<typeof mentionItemSchema>;
 
 export interface MentionsTarget {
-	readonly query: string;
+  readonly query: string;
 }
 
 export type MentionsCursor = string | null;
 
-export type MentionsAdapter = (
-	target: MentionsTarget,
-	cursor: MentionsCursor,
-) => Promise<MentionsResult>;
+export type MentionsAdapter = (target: MentionsTarget, cursor: MentionsCursor) => Promise<MentionsResult>;
 
 export const BLOCKING_STATUSES: ReadonlySet<number> = new Set([202, 403, 429]);
 
 export const SOURCE_SETTINGS = {
-	"gdelt.doc": { timeoutMs: 24_000, timeoutRetries: 1, retryBackoffMs: 1_000 },
+  "gdelt.doc": { timeoutMs: 24_000, timeoutRetries: 1, retryBackoffMs: 1_000 },
 } as const;
 
 export class UpstreamBlockedError extends Error {
-	constructor(readonly status: number) {
-		super(`upstream blocked: HTTP ${String(status)}`);
-		this.name = "UpstreamBlockedError";
-	}
+  constructor(readonly status: number) {
+    super(`upstream blocked: HTTP ${String(status)}`);
+    this.name = "UpstreamBlockedError";
+  }
 }
 
 export function isUpstreamTimeout(error: unknown): boolean {
-	return (
-		typeof error === "object" &&
-		error !== null &&
-		(error as { name: unknown }).name === "TimeoutError"
-	);
+  return typeof error === "object" && error !== null && (error as { name: unknown }).name === "TimeoutError";
 }
 
 export async function fetchUpstream(
-	url: string,
-	timeoutMs = 8000,
-	{ retries = 0, backoffMs = 0 }: { retries?: number; backoffMs?: number } = {},
+  url: string,
+  timeoutMs = 8000,
+  { retries = 0, backoffMs = 0 }: { retries?: number; backoffMs?: number } = {},
 ): Promise<Response> {
-	for (let attempt = 0; ; attempt += 1) {
-		try {
-			const response = await fetch(url, { signal: AbortSignal.timeout(timeoutMs) });
-			if (BLOCKING_STATUSES.has(response.status)) throw new UpstreamBlockedError(response.status);
-			return response;
-		} catch (error) {
-			if (!isUpstreamTimeout(error) || attempt >= retries) throw error;
-			await new Promise((resolve) => setTimeout(resolve, backoffMs));
-		}
-	}
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      const response = await fetchOutbound(url, {
+        headers: { "user-agent": CRAWLER_USER_AGENT },
+        signal: AbortSignal.timeout(timeoutMs),
+      });
+      if (BLOCKING_STATUSES.has(response.status)) throw new UpstreamBlockedError(response.status);
+      return response;
+    } catch (error) {
+      if (!isUpstreamTimeout(error) || attempt >= retries) throw error;
+      await new Promise((resolve) => setTimeout(resolve, backoffMs));
+    }
+  }
 }

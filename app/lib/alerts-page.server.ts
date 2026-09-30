@@ -1,15 +1,7 @@
 import { env } from "cloudflare:workers";
 
-import {
-  type DeliveryFailureItem,
-  type SignalAlertItem,
-  type TakedownNoteItem,
-} from "../components/alert-row";
-import {
-  type AlertChipKey,
-  countAlertChips,
-  itemInChip,
-} from "./alert-chips";
+import { type DeliveryFailureItem, type SignalAlertItem, type TakedownNoteItem } from "../components/alert-row";
+import { type AlertChipKey, countAlertChips, itemInChip } from "./alert-chips";
 import { groupByDay } from "./alert-day";
 import {
   acknowledgeIncidentAlert,
@@ -98,7 +90,11 @@ export async function loadAlertsPage(userId: string, chip: AlertChipKey) {
       items.map((item) => item.kind),
       incidents.length,
     ),
-    groups: groupByDay(items.filter((item) => itemInChip(item.kind, chip)), now, timeZone),
+    groups: groupByDay(
+      items.filter((item) => itemInChip(item.kind, chip)),
+      now,
+      timeZone,
+    ),
     sources,
     now: now.getTime(),
     openIncident:

@@ -27,8 +27,7 @@ interface SourceGroup {
   watches: Map<string, SourceTick[]>;
 }
 
-const byFetchedAtDesc = (a: SourceTick, b: SourceTick): number =>
-  Date.parse(b.fetchedAt) - Date.parse(a.fetchedAt);
+const byFetchedAtDesc = (a: SourceTick, b: SourceTick): number => Date.parse(b.fetchedAt) - Date.parse(a.fetchedAt);
 
 export function blindSources(
   ticks: readonly SourceTick[],

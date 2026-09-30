@@ -35,9 +35,7 @@ async function judgeAndWriteBatches(
 ): Promise<DiscoveryResult[]> {
   const batches = await Promise.all(
     judgeBatches(resolved).map(async (batch, index) => {
-      const judgedBatch = await step.do(`judge-${String(index)}`, RETRY, () =>
-        judgeCandidates(context, batch),
-      );
+      const judgedBatch = await step.do(`judge-${String(index)}`, RETRY, () => judgeCandidates(context, batch));
       await step.do(`write-${String(index)}`, RETRY, () =>
         writeDiscoveryResults(context.self.workspaceId, judgedBatch, new Date().toISOString()),
       );
@@ -58,16 +56,12 @@ export class Discovery extends WorkflowEntrypoint<Env, DiscoveryParams> {
     if (event.payload.mode === "refresh") {
       const now = event.timestamp.toISOString();
       const targets = await step.do("refresh-targets", RETRY, () => readRefreshTargets(workspaceId));
-      const results = await step.do("refresh-judge", RETRY, () =>
-        judgeStillCompetitors(context, targets, now),
-      );
+      const results = await step.do("refresh-judge", RETRY, () => judgeStillCompetitors(context, targets, now));
       await step.do("refresh-write", RETRY, () => writeStillCompetitorResults(workspaceId, results, now));
       const judged = results.filter((result) => result.verdict !== null).length;
       const retired = results.filter((result) => stillCompetitorAction(result) === "retire").length;
       const asked = results.filter((result) => stillCompetitorAction(result) === "ask").length;
-      console.log(
-        JSON.stringify({ event: "discovery.refresh", workspaceId, judged, retired, asked }),
-      );
+      console.log(JSON.stringify({ event: "discovery.refresh", workspaceId, judged, retired, asked }));
       return { workspaceId, shortlisted: 0, queued: 0, promoted: 0, written: 0, judged };
     }
 

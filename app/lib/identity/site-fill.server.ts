@@ -39,11 +39,7 @@ export async function attemptSiteFill(
   return "filled";
 }
 
-export async function markSiteFill(
-  workspaceId: string,
-  entityId: string,
-  state: SiteFillState,
-): Promise<void> {
+export async function markSiteFill(workspaceId: string, entityId: string, state: SiteFillState): Promise<void> {
   const marked = await markSelfSiteFill(workspaceId, entityId, state);
   if (!marked) throw notInWorkspace(entityId, workspaceId);
 }
