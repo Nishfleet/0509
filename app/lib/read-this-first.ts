@@ -15,12 +15,9 @@ export const UNJUDGED_WEEK_LINE = "We couldn't judge this week's changes yet.";
 
 export const READ_THIS_FIRST: NoulQuestion = {
   id: D4_QUESTION_ID,
-  instructions:
-    "Does this item belong in the three things this brand's owner should read first this week? It is about `subject`, a company the owner watches.",
-  whenTrue:
-    "It reports a move a competitor made that the owner would act on or bring up this week: a launch, a price or offer change, funding, a deal, an acquisition, a top hire or exit, an expansion, a campaign, a controversy, or a big review.",
-  whenFalse:
-    "It is routine or background: a small site or copy tweak, a minor hire, a low-reach ad variant, a passing or listicle mention, old news retold, or a routine content update.",
+  instructions: "Does this item belong in the three things this brand's owner should read first this week?",
+  whenTrue: "It would change what the owner does or thinks about a competitor this week.",
+  whenFalse: "It is routine and can wait for the full list.",
 };
 
 /** One located signal: the week's item plus the entity it belongs to. */
