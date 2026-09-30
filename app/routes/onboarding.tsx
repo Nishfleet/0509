@@ -14,6 +14,7 @@ import { readWorkspaceIdForOwner } from "../lib/data/workspace.server";
 import { normaliseSubject } from "../lib/identity/normalise";
 import { screenOnboardingSubject } from "../lib/onboarding-screen.server";
 import { startOnboardingRun } from "../lib/data/onboarding_run.server";
+import { createTimings } from "../lib/server-timing.server";
 
 export function meta() {
   return [{ title: "Start with your website or a handle · Five to Nine" }];
@@ -27,14 +28,18 @@ export async function loader({ request }: Route.LoaderArgs) {
 }
 
 export async function action({ request }: Route.ActionArgs) {
-  const session = await requireFreshSession(request);
+  const timings = createTimings();
+  const session = await timings.measure("session", requireFreshSession(request));
   const formData = await request.formData();
   const raw = formData.get("subject");
   const rawSubject = typeof raw === "string" ? raw : null;
   const answer = formData.get("answer");
   const normalised = rawSubject === null ? null : normaliseSubject(rawSubject);
   const [taken, workspaceId] = normalised?.ok
-    ? await Promise.all([isTakenDown(normalised.subject.registrable), readWorkspaceIdForOwner(session.user.id)])
+    ? await timings.measure(
+        "workspace",
+        Promise.all([isTakenDown(normalised.subject.registrable), readWorkspaceIdForOwner(session.user.id)]),
+      )
     : [false, null];
   if (taken) {
     return {
@@ -45,20 +50,26 @@ export async function action({ request }: Route.ActionArgs) {
   if (normalised?.ok && rawSubject !== null) {
     if (workspaceId === null) throw redirect("/app");
     const now = new Date().toISOString();
-    const result = await screenOnboardingSubject({
-      workspaceId,
-      userId: session.user.id,
-      subject: normalised.subject,
-      raw: rawSubject,
-      answer: typeof answer === "string" ? answer : null,
-      now,
-    });
+    const result = await timings.measure(
+      "screen",
+      screenOnboardingSubject({
+        workspaceId,
+        userId: session.user.id,
+        subject: normalised.subject,
+        raw: rawSubject,
+        answer: typeof answer === "string" ? answer : null,
+        now,
+      }),
+    );
     if (result.kind === "refuse") return { message: result.message, confirm: null };
     if (result.kind === "ask") return { message: null, confirm: { subject: result.subject, raw: rawSubject } };
-    await startOnboardingRun({ workspaceId, userId: session.user.id, inputRaw: rawSubject, startedAt: now });
+    await timings.measure(
+      "run",
+      startOnboardingRun({ workspaceId, userId: session.user.id, inputRaw: rawSubject, startedAt: now }),
+    );
   }
   const target = subjectRedirect(raw);
-  if (target) throw redirect(target);
+  if (target) throw redirect(target, { headers: timings.header() });
   return { message: "We couldn't find anything for that, try the main website.", confirm: null };
 }
 
