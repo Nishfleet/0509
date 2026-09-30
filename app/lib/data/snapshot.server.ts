@@ -9,7 +9,8 @@ ORDER BY fetched_at DESC LIMIT 1`;
 
 const INSERT_SNAPSHOT = `INSERT INTO snapshot
   (id, watch_id, page_id, fetched_at, payload_r2_key, payload_hash, item_count)
-VALUES (?, ?, ?, ?, ?, ?, 1)
+SELECT ?1, ?2, ?3, ?4, ?5, ?6, 1
+WHERE EXISTS (SELECT 1 FROM watch WHERE id = ?2) AND EXISTS (SELECT 1 FROM page WHERE id = ?3)
 ON CONFLICT (id) DO NOTHING`;
 
 interface SiteSnapshotRow {
