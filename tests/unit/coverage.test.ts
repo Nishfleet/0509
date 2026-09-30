@@ -60,7 +60,7 @@ describe("coverage", () => {
     const copy = [
       ...FAQ.flatMap((entry) => [entry.question, entry.answer]),
       llmsTxt("https://0509.io", []),
-      JSON.stringify(softwareApplicationJsonLd()),
+      JSON.stringify(softwareApplicationJsonLd(FEATURES)),
     ].join("\n");
     for (const group of notLive) {
       for (const phrase of [group.kind, group.noun ?? group.kind]) {
@@ -70,7 +70,7 @@ describe("coverage", () => {
   });
 
   it("lists every live source in the JSON-LD featureList", () => {
-    expect(softwareApplicationJsonLd().featureList).toEqual(FEATURES);
+    expect(softwareApplicationJsonLd(FEATURES).featureList).toEqual(FEATURES);
     expect(FEATURES).toHaveLength(LIVE_COVERAGE.flatMap((group) => group.sources).length);
   });
 });

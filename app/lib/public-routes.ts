@@ -6,9 +6,10 @@ import {
 } from "../components/source-pill";
 import { registeredToolDescriptors } from "./agent/mcp-tools";
 import { PLANS, TRIAL_TERMS } from "./billing/plans";
-import { LIVE_COVERAGE, PLAN_NOTE, WATCHED_NOUNS } from "./coverage";
+import { LIVE_COVERAGE, PLAN_NOTE } from "./coverage";
 import { FAQ } from "./faq";
 import { SITE_URL } from "./structured-data";
+import { watchedClaims } from "./watched-claims";
 
 export interface LlmsTxtSource {
   source: SourceRow;
@@ -73,7 +74,7 @@ export function llmsTxt(origin: string, sources: readonly LlmsTxtSource[], now: 
     [
       "# Five to Nine",
       "",
-      `> Five to Nine (0509.io) is a competitor tracker for founders, brands and creators. It finds your competitors for you, watches their ${WATCHED_NOUNS} from public sources, ranks you against them every week, and emails one brief every Monday with a screenshot behind every change.`,
+      `> Five to Nine (0509.io) is a competitor tracker for founders, brands and creators. It finds your competitors for you, watches their ${watchedClaims(sources, now).nouns} from public sources, ranks you against them every week, and emails one brief every Monday with a screenshot behind every change.`,
       "",
       `- Plans: ${prices}. ${TRIAL_TERMS}`,
       `- Agents: every plan includes a read-only API and an MCP server at ${MCP_URL}.`,
