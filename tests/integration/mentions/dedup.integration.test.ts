@@ -115,11 +115,13 @@ afterEach(() => {
   Reflect.deleteProperty(env, "AI");
 });
 
+const hostOf = (url: string): string => new URL(url).host.replace(/^www\./, "");
+
 describe("D8 duplicate_signal", () => {
   it("collapses at p >= 0.9, keeps both rows, stores the verdict on the newer row", async () => {
     const { workspaceId, run, all } = await firstThenSecond(0.96);
-    const older = all.find((row) => row.canonical_url.includes("news.example.com"));
-    const newer = all.find((row) => row.canonical_url.includes("syndicator"));
+    const older = all.find((row) => hostOf(row.canonical_url) === "news.example.com");
+    const newer = all.find((row) => hostOf(row.canonical_url) === "syndicator.example.org");
     expect(all).toHaveLength(2);
     expect(older?.duplicate_of).toBeNull();
     expect(newer?.duplicate_of).toBe(older?.id);
