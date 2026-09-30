@@ -67,9 +67,9 @@ export async function readCompetitorSnapshot(workspaceId: string, entityId: stri
     env.DB.prepare(SELECT_COMPETITOR_COVERAGE).bind(workspaceId, entityId, since, until),
   ]);
 
-  const [counts] = countRows.parse(required(countsResult).results);
-  const standing = standingRows.parse(required(standingResult).results)[0];
-  const sources = coverageRows.parse(required(coverageResult).results);
+  const [counts] = countRows.parse(required(countsResult, "competitor-snapshot.counts").results);
+  const standing = standingRows.parse(required(standingResult, "competitor-snapshot.standing").results)[0];
+  const sources = coverageRows.parse(required(coverageResult, "competitor-snapshot.coverage").results);
 
   return {
     standing: standing === undefined ? null : { rank: standing.rank, movement: standing.movement },

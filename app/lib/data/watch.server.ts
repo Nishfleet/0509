@@ -159,7 +159,7 @@ ORDER BY p.url LIMIT 1`;
 export async function readSiteSweepTarget(watchId: string): Promise<SiteSweepTarget | null> {
   const row = await env.DB.prepare(SITE_SWEEP_TARGET_BY_WATCH).bind(watchId).first();
   if (row === null) return null;
-  return toSiteSweepTarget(required(targetRows.parse([row])[0]));
+  return toSiteSweepTarget(required(targetRows.parse([row])[0], "watch.site-sweep-target"));
 }
 
 const ENSURE_WATCHES = `INSERT INTO watch (id, entity_id, source_id, target_key)

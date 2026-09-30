@@ -39,9 +39,9 @@ export async function freezeWeek(
     db.prepare(PREVIOUS_RANKS).bind(input.workspaceId, input.weekStartAt),
   ]);
   const previousRanks = new Map(
-    previousRankRows.parse(required(previous).results).map((row) => [row.entity_id, row.rank]),
+    previousRankRows.parse(required(previous, "freeze.previous").results).map((row) => [row.entity_id, row.rank]),
   );
-  const ranked = rankWeek(weekScoreRows.parse(required(scores).results), previousRanks);
+  const ranked = rankWeek(weekScoreRows.parse(required(scores, "freeze.scores").results), previousRanks);
   await freezeStandingRanks(
     db,
     ranked.map((row) => ({

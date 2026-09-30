@@ -138,7 +138,7 @@ function quietWeekLine(mentions: number, siteChanges: number, newAds: number): s
 
 export function pausedSentence(names: readonly string[]): string | null {
   if (names.length === 0) return null;
-  const last = required(names.at(-1));
+  const last = required(names.at(-1), "compose-brief.paused-names");
   if (names.length === 1) return `${last} paused, so every brand below it moved up.`;
   return `${names.slice(0, -1).join(", ")} and ${last} paused, so every brand below them moved up.`;
 }
@@ -157,13 +157,21 @@ export async function composeBrief(db: D1Database, input: ComposeInput): Promise
     db.prepare(PICKED_SIGNALS).bind(input.workspaceId, JSON.stringify(readThisFirst.picks)),
   ]);
 
-  const brands = rankedBrandRows.parse(required(ranked).results);
-  const hadPreviousWeek = frozenWeekRows.parse(required(frozen).results).some((row) => row.weeks > 0);
-  const countsByEntity = new Map(signalCountRows.parse(required(counts).results).map((row) => [row.entity_id, row]));
-  const sources = sourceCoverageRows.parse(required(coverage).results);
-  const ownSite = incidentRows.parse(required(incidents).results);
-  const pausedNames = pausedCompetitorRows.parse(required(pausedRows).results).map((row) => row.name);
-  const pickedById = new Map(pickedSignalRows.parse(required(pickedRows).results).map((row) => [row.signal_id, row]));
+  const brands = rankedBrandRows.parse(required(ranked, "compose-brief.ranked").results);
+  const hadPreviousWeek = frozenWeekRows
+    .parse(required(frozen, "compose-brief.frozen").results)
+    .some((row) => row.weeks > 0);
+  const countsByEntity = new Map(
+    signalCountRows.parse(required(counts, "compose-brief.counts").results).map((row) => [row.entity_id, row]),
+  );
+  const sources = sourceCoverageRows.parse(required(coverage, "compose-brief.coverage").results);
+  const ownSite = incidentRows.parse(required(incidents, "compose-brief.incidents").results);
+  const pausedNames = pausedCompetitorRows
+    .parse(required(pausedRows, "compose-brief.pausedRows").results)
+    .map((row) => row.name);
+  const pickedById = new Map(
+    pickedSignalRows.parse(required(pickedRows, "compose-brief.pickedRows").results).map((row) => [row.signal_id, row]),
+  );
   const marks = readThisFirst.picks.flatMap((signalId) => {
     const row = pickedById.get(signalId);
     if (row === undefined) return [];

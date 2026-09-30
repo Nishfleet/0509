@@ -29,9 +29,9 @@ export async function refreshWorkspaceScores(
       .prepare(COUNT_BUCKETS)
       .bind(input.workspaceId, input.windowStartAt, input.windowEndAt, D6_QUESTION_ID, D3_QUESTION_ID),
   ]);
-  const entityIds = entityIdRows.parse(required(reads[0]).results).map((row) => row.id);
-  const weights = weightsAsOf(weightRows.parse(required(reads[1]).results), input.weekStartAt);
-  const counts = bucketCountRows.parse(required(reads[2]).results);
+  const entityIds = entityIdRows.parse(required(reads[0], "refresh.entities").results).map((row) => row.id);
+  const weights = weightsAsOf(weightRows.parse(required(reads[1], "refresh.weights").results), input.weekStartAt);
+  const counts = bucketCountRows.parse(required(reads[2], "refresh.counts").results);
   const scores = scoreByEntity(counts, weights);
   const rows: StandingScore[] = entityIds.map((entity_id) => ({
     workspace_id: input.workspaceId,

@@ -17,5 +17,8 @@ export async function deleteExpiredAuthRows(db: D1Database, now: Date): Promise<
     db.prepare(DELETE_EXPIRED_VERIFICATIONS).bind(cutoff),
   ]);
 
-  return { sessions: required(sessions).meta.changes, verifications: required(verifications).meta.changes };
+  return {
+    sessions: required(sessions, "auth_expiry.sessions").meta.changes,
+    verifications: required(verifications, "auth_expiry.verifications").meta.changes,
+  };
 }

@@ -22,8 +22,8 @@ export async function readHowRankedInputs(
     db.prepare(COUNT_BUCKETS).bind(workspaceId, weekStartAt, weekEndAt, D6_QUESTION_ID, D3_QUESTION_ID),
   ]);
   return {
-    weightRows: weightRows.parse(required(reads[0]).results),
-    counts: bucketCountRows.parse(required(reads[1]).results),
+    weightRows: weightRows.parse(required(reads[0], "how-ranked.weights").results),
+    counts: bucketCountRows.parse(required(reads[1], "how-ranked.counts").results),
   };
 }
 
