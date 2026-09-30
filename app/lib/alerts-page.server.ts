@@ -23,6 +23,8 @@ import { withoutMentionAlerts } from "./mention-feed";
 import { offBrandsSentence } from "./off-brands";
 import { daysBefore, readSiteChangeViews } from "./site-changes.server";
 
+const HIRING_LIMIT = 100;
+
 export async function loadAlertsPage(userId: string, chip: AlertChipKey) {
   const now = new Date();
   const workspaceId = await readWorkspaceIdForOwner(userId);
@@ -32,7 +34,7 @@ export async function loadAlertsPage(userId: string, chip: AlertChipKey) {
   const incidents = workspaceId === null ? [] : await readOwnSiteIncidents(env.DB, workspaceId);
   const signals = workspaceId === null ? [] : await readSignalAlerts(env.DB, workspaceId);
   const mentions = workspaceId === null ? [] : await readMentionFeed(workspaceId, now);
-  const hiring = workspaceId === null ? [] : await readWorkspaceHiring(workspaceId, daysBefore(now, 30), 30);
+  const hiring = workspaceId === null ? [] : await readWorkspaceHiring(workspaceId, daysBefore(now, 30), HIRING_LIMIT);
   const sources = workspaceId === null ? [] : await readWorkspaceMentionSources(workspaceId);
   const changes =
     workspaceId === null
@@ -103,6 +105,7 @@ export async function loadAlertsPage(userId: string, chip: AlertChipKey) {
         fixed: incident.closed_at === null ? null : daysAgoLabel(incident.closed_at, now),
       })),
     chip,
+    hiringCapped: hiring.length === HIRING_LIMIT,
     chipCounts: countAlertChips(
       items.map((item) => item.kind),
       incidents.length,

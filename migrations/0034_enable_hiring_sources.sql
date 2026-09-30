@@ -1,4 +1,4 @@
--- 0033_enable_hiring_sources.sql — switch the five job-board sources on.
+-- 0034_enable_hiring_sources.sql — switch the five job-board sources on.
 --
 -- 0020 seeded them disabled because nothing polled a board. The nightly
 -- hiring-sweep Workflow (docs/engines/hiring.md) now finds each brand's board,

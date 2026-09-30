@@ -81,7 +81,7 @@ export default function Page({ loaderData }: Route.ComponentProps) {
           </time>
         </article>
       ))}
-      <AlertChips chip={loaderData.chip} counts={loaderData.chipCounts} />
+      <AlertChips chip={loaderData.chip} counts={loaderData.chipCounts} hiringCapped={loaderData.hiringCapped} />
       {loaderData.chipCounts.all === 0 && loaderData.openIncident === null ? (
         <p className="mt-8 leading-[1.65]">
           Nothing has interrupted you. When your own site breaks you'll get an email; everything else waits here.
