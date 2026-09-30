@@ -25,6 +25,8 @@ export interface CostBreach {
   onBrands: number;
 }
 
+export const BROWSER_ONLY_LINES: readonly CostLine[] = ["browser_ms_0509"];
+
 const LINES: readonly CostLine[] = ["d1_rows_written", "r2_class_a_ops", "browser_ms_0509"];
 
 const MEASURED: Readonly<Record<CostLine, (usage: DailyUsage) => number>> = {
@@ -33,13 +35,19 @@ const MEASURED: Readonly<Record<CostLine, (usage: DailyUsage) => number>> = {
   browser_ms_0509: (usage) => usage.browserMs,
 };
 
-export function evaluateCost(usage: DailyUsage, onBrands: number): readonly CostBreach[] {
+export function evaluateCost(
+  usage: DailyUsage,
+  onBrands: number,
+  lines: readonly CostLine[] = LINES,
+): readonly CostBreach[] {
   const divisor = Math.max(onBrands, 1);
-  return LINES.map((line) => ({
-    day: usage.day,
-    line,
-    measuredPerBrand: MEASURED[line](usage) / divisor,
-    expectedPerBrand: EXPECTED_PER_BRAND_DAY[line],
-    onBrands,
-  })).filter((breach) => breach.measuredPerBrand > COST_GUARD_FACTOR * breach.expectedPerBrand);
+  return lines
+    .map((line) => ({
+      day: usage.day,
+      line,
+      measuredPerBrand: MEASURED[line](usage) / divisor,
+      expectedPerBrand: EXPECTED_PER_BRAND_DAY[line],
+      onBrands,
+    }))
+    .filter((breach) => breach.measuredPerBrand > COST_GUARD_FACTOR * breach.expectedPerBrand);
 }
