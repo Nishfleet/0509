@@ -1061,9 +1061,7 @@ export const document = createDocument({
     "/api/competitors": {
       get: {
         responses: {
-          "200": {
-            /* zod schema */
-          },
+          "200": {/* zod schema */},
         },
       },
     },
