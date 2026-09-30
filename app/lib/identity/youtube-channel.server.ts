@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import { BlockedRedirectError, fetchOutbound } from "../fetch/outbound.server";
+import { CRAWLER_USER_AGENT } from "../fetch/robots.server";
 import {
   channelIdFromHtml,
   channelIdFromUrl,
@@ -28,7 +29,7 @@ async function readYoutubeChannelPage(pageUrl: string): Promise<{ channelId: str
   let response: Response;
   try {
     response = await fetchOutbound(pageUrl, {
-      headers: {},
+      headers: { "user-agent": CRAWLER_USER_AGENT },
       signal: AbortSignal.timeout(8_000),
     });
   } catch (error) {
