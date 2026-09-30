@@ -76,16 +76,21 @@ export function stillCompetitorAction(result: StillCompetitorResult): StillCompe
   return "ask";
 }
 
-function statementsForStillCompetitor(
-  workspaceId: string,
-  result: StillCompetitorResult,
-  action: Exclude<StillCompetitorAction, "none">,
-  now: string,
-): D1PreparedStatement[] {
-  const { target, verdict, reason } = result;
-  if (verdict === null || reason === null) return [];
-  const line = retireReasonLine(reason.choice);
-  const verdicts = [
+interface StillCompetitorWrite {
+  workspaceId: string;
+  now: string;
+}
+
+interface JudgedStillCompetitor {
+  target: RefreshTarget;
+  verdict: NoulVerdict;
+  reason: ChoiceVerdict;
+}
+
+function verdictStatements(write: StillCompetitorWrite, judged: JudgedStillCompetitor): D1PreparedStatement[] {
+  const { workspaceId, now } = write;
+  const { target, verdict, reason } = judged;
+  return [
     ...(verdict.cached
       ? []
       : [
@@ -117,6 +122,18 @@ function statementsForStillCompetitor(
           }),
         ]),
   ];
+}
+
+function statementsForStillCompetitor(
+  write: StillCompetitorWrite,
+  result: StillCompetitorResult,
+  action: Exclude<StillCompetitorAction, "none">,
+): D1PreparedStatement[] {
+  const { workspaceId, now } = write;
+  const { target, verdict, reason } = result;
+  if (verdict === null || reason === null) return [];
+  const line = retireReasonLine(reason.choice);
+  const verdicts = verdictStatements(write, { target, verdict, reason });
   if (action === "retire") {
     return [
       ...verdicts,
@@ -161,10 +178,27 @@ export async function writeStillCompetitorResults(
   for (const result of results) {
     const action = stillCompetitorAction(result);
     if (action === "none") continue;
-    statements.push(...statementsForStillCompetitor(workspaceId, result, action, now));
+    statements.push(...statementsForStillCompetitor({ workspaceId, now }, result, action));
   }
   if (statements.length === 0) return;
   await env.DB.batch(statements);
+}
+
+async function askStillCompetitor(
+  context: DiscoveryContext,
+  state: unknown,
+): Promise<{ verdict: NoulVerdict; reason: ChoiceVerdict } | null> {
+  try {
+    const [verdict, reason] = await Promise.all([
+      askNoul(context.self.workspaceId, STILL_COMPETITOR, state),
+      askChoice(context.self.workspaceId, STILL_COMPETITOR_REASON, state),
+    ]);
+    return { verdict, reason };
+  } catch (error) {
+    if (!(error instanceof JevUnavailableError)) throw error;
+    console.error(JSON.stringify({ event: "refresh.jev_unavailable", message: error.message }));
+    return null;
+  }
 }
 
 export async function judgeStillCompetitors(
@@ -177,22 +211,11 @@ export async function judgeStillCompetitors(
   let available = true;
   for (const target of targets) {
     const history = await readRecentSignals(target.entityId, since);
-    let verdict: NoulVerdict | null = null;
-    let reason: ChoiceVerdict | null = null;
-    if (available) {
-      const state = stillCompetitorState(context, target, history);
-      try {
-        [verdict, reason] = await Promise.all([
-          askNoul(context.self.workspaceId, STILL_COMPETITOR, state),
-          askChoice(context.self.workspaceId, STILL_COMPETITOR_REASON, state),
-        ]);
-      } catch (error) {
-        if (!(error instanceof JevUnavailableError)) throw error;
-        console.error(JSON.stringify({ event: "refresh.jev_unavailable", message: error.message }));
-        available = false;
-      }
-    }
-    results.push({ target, verdict, reason });
+    const answer: Awaited<ReturnType<typeof askStillCompetitor>> = available
+      ? await askStillCompetitor(context, stillCompetitorState(context, target, history))
+      : null;
+    available = answer !== null;
+    results.push({ target, verdict: answer?.verdict ?? null, reason: answer?.reason ?? null });
   }
   return results;
 }

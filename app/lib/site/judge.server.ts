@@ -175,51 +175,43 @@ async function storeVerdicts(rows: readonly VerdictRow[]): Promise<readonly stri
   return readVerdictIds(rows);
 }
 
-export async function judgeChange(input: JudgeInput): Promise<JudgedChange> {
-  const now = new Date();
-  const decidedAt = now.toISOString();
+type ChangeStateValue = ReturnType<typeof changeState>;
 
-  const usedToday = await countVerdictsSince(input.entityId, todayStartIso(now));
-  if (usedToday >= JEV_JUDGMENTS_PER_BRAND_PER_DAY) {
-    return { deferred: true, selfBreakage: null, noteworthy: null, verdictIds: [] };
+function deferredResult(selfBreakage: BreakageBand | null): JudgedChange {
+  return { deferred: true, selfBreakage, noteworthy: null, verdictIds: [] };
+}
+
+async function judgeSelfBreakage(
+  input: JudgeInput,
+  state: ChangeStateValue,
+  decidedAt: string,
+): Promise<{ selfBreakage: BreakageBand; row: VerdictRow } | null> {
+  let breakage: NoulVerdict;
+  try {
+    breakage = await askNoul(input.workspaceId, D3S_BREAKAGE, state);
+  } catch (error) {
+    if (error instanceof JevUnavailableError) return null;
+    throw error;
   }
+  const p = breakage.p;
+  const row = verdictRow({
+    workspaceId: input.workspaceId,
+    entityId: input.entityId,
+    signalId: input.signalId,
+    questionId: D3S_BREAKAGE_QID,
+    inputHash: breakage.inputHash,
+    p,
+    choice: null,
+    decidedAt,
+  });
+  return { selfBreakage: { p, band: breakageBandOf(p) }, row };
+}
 
-  const history30d = await readHistory30d(input.entityId, daysBeforeIso(now, HISTORY_DAYS));
-  const state = changeState(input, history30d);
-
-  const rows: VerdictRow[] = [];
-  let selfBreakage: BreakageBand | null = null;
-
-  if (input.isSelf) {
-    let breakage: NoulVerdict;
-    try {
-      breakage = await askNoul(input.workspaceId, D3S_BREAKAGE, state);
-    } catch (error) {
-      if (error instanceof JevUnavailableError) {
-        return { deferred: true, selfBreakage: null, noteworthy: null, verdictIds: [] };
-      }
-      throw error;
-    }
-    const p = breakage.p;
-    const band = breakageBandOf(p);
-    rows.push(
-      verdictRow({
-        workspaceId: input.workspaceId,
-        entityId: input.entityId,
-        signalId: input.signalId,
-        questionId: D3S_BREAKAGE_QID,
-        inputHash: breakage.inputHash,
-        p,
-        choice: null,
-        decidedAt,
-      }),
-    );
-    selfBreakage = { p, band };
-    if (band !== "clear") {
-      return { deferred: false, selfBreakage, noteworthy: null, verdictIds: await storeVerdicts(rows) };
-    }
-  }
-
+async function judgeNoteworthy(
+  input: JudgeInput,
+  state: ChangeStateValue,
+  decidedAt: string,
+): Promise<{ noteworthy: NonNullable<JudgedChange["noteworthy"]>; rows: VerdictRow[] } | null> {
   let noul: NoulVerdict;
   let choice: ChoiceVerdict;
   try {
@@ -228,39 +220,46 @@ export async function judgeChange(input: JudgeInput): Promise<JudgedChange> {
       askChoice(input.workspaceId, D3_KIND, state),
     ]);
   } catch (error) {
-    if (error instanceof JevUnavailableError) {
-      return { deferred: true, selfBreakage, noteworthy: null, verdictIds: [] };
-    }
+    if (error instanceof JevUnavailableError) return null;
     throw error;
   }
   const p = noul.p;
   const kind = choice.choice;
+  const base = { workspaceId: input.workspaceId, entityId: input.entityId, signalId: input.signalId, decidedAt };
+  return {
+    noteworthy: { p, kind, band: noteworthyBandOf(p, kind) },
+    rows: [
+      verdictRow({ ...base, questionId: D3_NOTEWORTHY_QID, inputHash: noul.inputHash, p, choice: null }),
+      verdictRow({ ...base, questionId: D3_KIND_QID, inputHash: choice.inputHash, p: null, choice: kind }),
+    ],
+  };
+}
 
-  const band = noteworthyBandOf(p, kind);
-  rows.push(
-    verdictRow({
-      workspaceId: input.workspaceId,
-      entityId: input.entityId,
-      signalId: input.signalId,
-      questionId: D3_NOTEWORTHY_QID,
-      inputHash: noul.inputHash,
-      p,
-      choice: null,
-      decidedAt,
-    }),
-  );
-  rows.push(
-    verdictRow({
-      workspaceId: input.workspaceId,
-      entityId: input.entityId,
-      signalId: input.signalId,
-      questionId: D3_KIND_QID,
-      inputHash: choice.inputHash,
-      p: null,
-      choice: kind,
-      decidedAt,
-    }),
-  );
+export async function judgeChange(input: JudgeInput): Promise<JudgedChange> {
+  const now = new Date();
+  const decidedAt = now.toISOString();
 
-  return { deferred: false, selfBreakage, noteworthy: { p, kind, band }, verdictIds: await storeVerdicts(rows) };
+  const usedToday = await countVerdictsSince(input.entityId, todayStartIso(now));
+  if (usedToday >= JEV_JUDGMENTS_PER_BRAND_PER_DAY) return deferredResult(null);
+
+  const history30d = await readHistory30d(input.entityId, daysBeforeIso(now, HISTORY_DAYS));
+  const state = changeState(input, history30d);
+
+  const self = input.isSelf ? await judgeSelfBreakage(input, state, decidedAt) : undefined;
+  if (self === null) return deferredResult(null);
+  if (self !== undefined && self.selfBreakage.band !== "clear") {
+    return {
+      deferred: false,
+      selfBreakage: self.selfBreakage,
+      noteworthy: null,
+      verdictIds: await storeVerdicts([self.row]),
+    };
+  }
+  const selfBreakage = self?.selfBreakage ?? null;
+
+  const judged = await judgeNoteworthy(input, state, decidedAt);
+  if (judged === null) return deferredResult(selfBreakage);
+
+  const rows = self === undefined ? judged.rows : [self.row, ...judged.rows];
+  return { deferred: false, selfBreakage, noteworthy: judged.noteworthy, verdictIds: await storeVerdicts(rows) };
 }

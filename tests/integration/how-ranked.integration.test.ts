@@ -226,7 +226,10 @@ function payloadFor(seeded: Seeded): BriefPayload {
 describe("readHowRankedInputs against real D1", () => {
   it("returns the window's bucket counts and drops a signal outside it", async () => {
     const seeded = await seed();
-    const { counts } = await readHowRankedInputs(env.DB, seeded.workspaceId, WINDOW_START, WINDOW_END);
+    const { counts } = await readHowRankedInputs(env.DB, seeded.workspaceId, {
+      weekStartAt: WINDOW_START,
+      weekEndAt: WINDOW_END,
+    });
 
     const byKey = (a: BucketCount, b: BucketCount) =>
       `${a.entity_id}\u0000${a.bucket}\u0000${a.reliability}`.localeCompare(
@@ -249,7 +252,10 @@ describe("readHowRankedInputs against real D1", () => {
       .bind("how-ranked-t-sw-mm", "mention_matters", 100, "2099-01-01T00:00:00.000Z")
       .run();
 
-    const { weightRows } = await readHowRankedInputs(env.DB, seeded.workspaceId, WINDOW_START, WINDOW_END);
+    const { weightRows } = await readHowRankedInputs(env.DB, seeded.workspaceId, {
+      weekStartAt: WINDOW_START,
+      weekEndAt: WINDOW_END,
+    });
 
     expect(weightRows).toEqual(
       expect.arrayContaining(v1Weights.map(([key, weight]) => ({ key, weight, effective_from: SEED_WEEK }))),
@@ -262,7 +268,10 @@ describe("readHowRankedInputs against real D1", () => {
   });
 
   it("returns no counts for a workspace with no entities", async () => {
-    const { counts } = await readHowRankedInputs(env.DB, "how-ranked-t-ws-empty", WINDOW_START, WINDOW_END);
+    const { counts } = await readHowRankedInputs(env.DB, "how-ranked-t-ws-empty", {
+      weekStartAt: WINDOW_START,
+      weekEndAt: WINDOW_END,
+    });
 
     expect(counts).toEqual([]);
   });
