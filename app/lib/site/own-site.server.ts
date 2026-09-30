@@ -65,6 +65,10 @@ export async function probeOwnSite(url: string): Promise<OwnSiteHealth> {
     response = await fetchStatus(alternate);
   }
   if (response instanceof Error) return { state: "broken", kind: "not loading" };
+  return healthForResponse(response);
+}
+
+function healthForResponse(response: Response): OwnSiteHealth {
   if (response.headers.get("cf-mitigated") === "challenge") return { state: "unknown", reason: "challenge" };
   if (response.status >= 500 || response.status === 404 || response.status === 410) {
     return { state: "broken", kind: `error ${String(response.status)}` };
