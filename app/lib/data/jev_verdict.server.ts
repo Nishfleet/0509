@@ -10,8 +10,15 @@ const COUNT_VERDICTS =
 const SELECT_LAST_STILL_COMPETITOR =
   "SELECT choice, decided_at FROM jev_verdict WHERE workspace_id = ?1 AND entity_id = ?2 AND question_id = 'still_competitor_reason' AND choice IS NOT NULL ORDER BY decided_at DESC LIMIT 1";
 
-const INSERT_VERDICT =
-  "INSERT INTO jev_verdict (id, workspace_id, question_id, input_hash, signal_id, entity_id, p, choice, reason, decided_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10) ON CONFLICT (question_id, input_hash) DO NOTHING";
+// The EXISTS arm keeps a verdict from FK-failing when the workspace is deleted
+// while the request is in flight (an account delete cascades it away, and
+// better-auth's session table has no FK to user, so the request keeps running).
+// Skipping the row is correct: the workspace is gone, so there is nothing to
+// cache the verdict for. Same shape as onboarding_run's INSERT.
+const INSERT_VERDICT = `INSERT INTO jev_verdict (id, workspace_id, question_id, input_hash, signal_id, entity_id, p, choice, reason, decided_at)
+SELECT ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10
+WHERE EXISTS (SELECT 1 FROM workspace WHERE id = ?2)
+ON CONFLICT (question_id, input_hash) DO NOTHING`;
 
 export interface StillCompetitorVerdict {
   choice: string;
