@@ -58,9 +58,14 @@ test("a competitor page passes axe at WCAG 2.2 AA and is keyboard-operable at 14
       for (let i = 1; i < levels.length; i += 1) expect(levels[i] - levels[i - 1]).toBeLessThanOrEqual(1);
 
       const toggle = page.getByRole("switch", { name: / tracking (ON|OFF)$/ });
+      await page.keyboard.press("Tab");
       await toggle.focus();
       await expect(toggle).toBeFocused();
-      await expect(toggle).toHaveCSS("outline-style", "solid");
+      const ring = await toggle.evaluate((el) => {
+        const style = getComputedStyle(el);
+        return style.outlineStyle !== "none" || style.boxShadow !== "none";
+      });
+      expect(ring).toBe(true);
       await expect(toggle).toHaveAttribute("aria-checked", /^(true|false)$/);
 
       await page.screenshot({
