@@ -1,6 +1,7 @@
 import { env } from "cloudflare:workers";
 
 import { type DeliveryFailureItem, type SignalAlertItem, type TakedownNoteItem } from "../components/alert-row";
+import { type HiringAlertItem } from "../components/hiring-row";
 import { type AlertChipKey, countAlertChips, itemInChip } from "./alert-chips";
 import { groupByDay } from "./alert-day";
 import {
@@ -11,6 +12,7 @@ import {
   readSignalAlerts,
   readTakedownNotes,
 } from "./data/alert.server";
+import { readWorkspaceHiring } from "./data/signal.server";
 import { readCompetitors } from "./data/entity.server";
 import { readMentionFeed } from "./data/mention.server";
 import { readWorkspaceMentionSources } from "./data/source.server";
@@ -30,6 +32,7 @@ export async function loadAlertsPage(userId: string, chip: AlertChipKey) {
   const incidents = workspaceId === null ? [] : await readOwnSiteIncidents(env.DB, workspaceId);
   const signals = workspaceId === null ? [] : await readSignalAlerts(env.DB, workspaceId);
   const mentions = workspaceId === null ? [] : await readMentionFeed(workspaceId, now);
+  const hiring = workspaceId === null ? [] : await readWorkspaceHiring(workspaceId, daysBefore(now, 30), 30);
   const sources = workspaceId === null ? [] : await readWorkspaceMentionSources(workspaceId);
   const changes =
     workspaceId === null
@@ -69,6 +72,20 @@ export async function loadAlertsPage(userId: string, chip: AlertChipKey) {
         created_at: signal.created_at,
         when: daysAgoLabel(signal.created_at, now),
       } satisfies SignalAlertItem,
+    })),
+    ...hiring.map((post) => ({
+      kind: "hiring" as const,
+      id: post.id,
+      at: post.published_at ?? post.observed_at,
+      hiring: {
+        id: post.id,
+        title: post.title,
+        brand: post.brand,
+        detail: post.summary,
+        url: post.url,
+        at: post.published_at ?? post.observed_at,
+        when: daysAgoLabel(post.published_at ?? post.observed_at, now),
+      } satisfies HiringAlertItem,
     })),
     ...mentions.map((mention) => ({
       kind: "mention" as const,

@@ -25,7 +25,7 @@ const MONITOR = {
   timezone: "UTC",
 } as const;
 
-type PageOutcome = "failed" | "first" | "unchanged" | "changed";
+type PageOutcome = "failed" | "gone" | "first" | "unchanged" | "changed";
 
 export type SiteSweepOutcome = Record<PageOutcome, number> & {
   pages: number;
@@ -140,6 +140,7 @@ export class SiteSweep extends WorkflowEntrypoint<Env & { SITE_SWEEP_PING_URL?: 
     const summary: SiteSweepOutcome = {
       pages,
       failed,
+      gone: count("gone"),
       first: count("first"),
       unchanged: count("unchanged"),
       changed: count("changed"),

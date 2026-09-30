@@ -1,5 +1,5 @@
 import { fetchOutbound } from "../fetch/outbound.server";
-import type { DailyUsage } from "./cost-guard";
+import type { CloudflareUsage } from "./cost-guard";
 
 export const ACCOUNT_TAG = "f670a698e17bf160c8e4679823e68916";
 
@@ -37,9 +37,6 @@ export const USAGE_QUERY = `query ($accountTag: string!, $databaseId: string!, $
       }
       r2: r2OperationsAdaptiveGroups(limit: ${String(GROUP_LIMIT)}, filter: { date: $date, bucketName: $bucket, actionType_in: $actions }) {
         sum { requests }
-      }
-      browser: browserRenderingBrowserTimeUsageAdaptiveGroups(limit: ${String(GROUP_LIMIT)}, filter: { date: $date }) {
-        sum { totalSessionDurationMs }
       }
     }
   }
@@ -96,7 +93,7 @@ function sumRows(rows: unknown, alias: string, field: string): number {
   return total;
 }
 
-export function parseUsageResponse(day: string, body: unknown): DailyUsage {
+export function parseUsageResponse(day: string, body: unknown): CloudflareUsage {
   throwIfGraphqlErrors(body);
   const account = firstAccount(body);
   if (account === null) throw new Error("cloudflare graphql: missing account");
@@ -104,11 +101,10 @@ export function parseUsageResponse(day: string, body: unknown): DailyUsage {
     day,
     d1RowsWritten: sumRows(account.d1, "d1", "rowsWritten"),
     r2ClassAOps: sumRows(account.r2, "r2", "requests"),
-    browserMs: sumRows(account.browser, "browser", "totalSessionDurationMs"),
   };
 }
 
-export async function fetchDailyUsage(day: string, apiToken: string): Promise<DailyUsage> {
+export async function fetchDailyUsage(day: string, apiToken: string): Promise<CloudflareUsage> {
   const res = await fetchOutbound(GRAPHQL_URL, {
     method: "POST",
     headers: {
