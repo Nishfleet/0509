@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 import { insertSelfEntity, readWorkspaceSelfId } from "../data/entity.server";
-import { insertFieldEdits } from "../data/user_decision.server";
+import { insertFieldEdits, type FieldEdit } from "../data/user_decision.server";
 import { readCachedSiteValues } from "./card.server";
 import { readLogo } from "./logo-store.server";
 import { normaliseSubject, type Subject } from "./normalise";
@@ -72,29 +72,30 @@ export async function confirmCard(workspaceId: string, userId: string, form: For
   });
   const entityId = await readWorkspaceSelfId(workspaceId);
   if (entityId === null) return false;
-  const edits =
+  const candidates: { edit: FieldEdit; changed: boolean }[] =
     cached === null
-      ? Promise.resolve()
-      : insertFieldEdits(
-          [
-            {
-              edit: { field: "name", from: cached.name, to: card.name },
-              changed: card.name !== cached.name,
-            },
-            {
-              edit: { field: "description", from: cached.description, to: card.description },
-              changed: (card.description === "" ? null : card.description) !== cached.description,
-            },
-          ]
-            .filter((candidate) => candidate.changed)
-            .map((candidate) => ({
-              workspaceId,
-              userId,
-              entityId,
-              edit: candidate.edit,
-              decidedAt: now.toISOString(),
-            })),
-        );
+      ? []
+      : [
+          {
+            edit: { field: "name", from: cached.name, to: card.name },
+            changed: card.name !== cached.name,
+          },
+          {
+            edit: { field: "description", from: cached.description, to: card.description },
+            changed: (card.description === "" ? null : card.description) !== cached.description,
+          },
+        ];
+  const edits = insertFieldEdits(
+    candidates
+      .filter((candidate) => candidate.changed)
+      .map((candidate) => ({
+        workspaceId,
+        userId,
+        entityId,
+        edit: candidate.edit,
+        decidedAt: now.toISOString(),
+      })),
+  );
   const site = subject.kind === "domain" ? null : creatorSite(card.socials);
   const tail = startIdentityTail({
     workspaceId,
