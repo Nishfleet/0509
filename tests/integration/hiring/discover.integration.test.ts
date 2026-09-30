@@ -146,6 +146,16 @@ describe("nightly hiring sweep", () => {
     expect((await listWatches()).results.filter((row) => row.entity_id === "ent-rival")).toHaveLength(1);
   });
 
+  it("reports a homepage the browser budget deferred as not watched, and caches nothing so the next sweep retries", async () => {
+    vi.stubGlobal("fetch", () => Promise.resolve(new Response("blocked", { status: 403 })));
+
+    const result = await findBoard({ id: "ent-rival", domain: "rival.com" });
+
+    expect(result).toEqual({ entityId: "ent-rival", platform: "none", boardUrl: null, watched: false });
+    expect(await listIdentityCache("hiring:rival.com:")).toEqual([]);
+    expect((await listWatches()).results.filter((row) => row.entity_id === "ent-rival")).toHaveLength(0);
+  });
+
   it("returns watched=false for a non-registrable domain without fetching", async () => {
     const before = calls.length;
     const result = await findBoard({ id: "x", domain: "somecreator" });

@@ -10,6 +10,21 @@ const ROW_NAME_TITLE = '<h3 class="font-display text-row-name font-bold [overflo
 const META_WHEN = 'class="mt-2 block font-mono text-meta text-ink-soft uppercase"';
 const READ_BRIEF_CLASS = buttonVariants({ variant: "tertiary", className: "cursor-pointer" });
 
+const HIRING_ITEM: AlertFeedItem = {
+  kind: "hiring",
+  id: "sig_hiring_1",
+  at: "2026-09-25T09:00:00Z",
+  hiring: {
+    id: "sig_hiring_1",
+    title: "Senior Backend Engineer",
+    brand: "Zephyrwear",
+    detail: "Berlin · Platform",
+    url: "https://boards.greenhouse.io/zephyr/jobs/1",
+    at: "2026-09-25T09:00:00Z",
+    when: "yesterday",
+  },
+};
+
 const NOTE_ITEM: AlertFeedItem = {
   kind: "note",
   id: "alert_note_1",
@@ -162,5 +177,24 @@ describe("an alert feed row", () => {
   it("never renders a question id, a probability or a confidence label", () => {
     const html = `${render(NOTE_ITEM)}${render(FAILURE_ITEM)}${render(SIGNAL_ITEM)}`;
     expect(html).not.toMatch(/probability|confidence|question/i);
+  });
+});
+
+describe("hiring row", () => {
+  it("links the role out safely, names the brand with its place and team, and shows the age", () => {
+    const html = renderToStaticMarkup(createElement(AlertFeedRow, { item: HIRING_ITEM, eager: false }));
+    expect(html).toContain('data-testid="hiring-row"');
+    expect(html).toContain('href="https://boards.greenhouse.io/zephyr/jobs/1"');
+    expect(html).toContain('rel="noopener noreferrer nofollow"');
+    expect(html).toContain("Senior Backend Engineer");
+    expect(html).toContain("Zephyrwear is hiring · Berlin · Platform");
+    expect(html).toContain("yesterday");
+  });
+
+  it("leaves out the place and team when the posting has none", () => {
+    const item: AlertFeedItem =
+      HIRING_ITEM.kind === "hiring" ? { ...HIRING_ITEM, hiring: { ...HIRING_ITEM.hiring, detail: null } } : HIRING_ITEM;
+    const html = renderToStaticMarkup(createElement(AlertFeedRow, { item, eager: false }));
+    expect(html).toContain("Zephyrwear is hiring<");
   });
 });

@@ -1,6 +1,7 @@
 import { env } from "cloudflare:workers";
 
 import { type DeliveryFailureItem, type SignalAlertItem, type TakedownNoteItem } from "../components/alert-row";
+import { type HiringAlertItem } from "../components/hiring-row";
 import { type AlertChipKey, countAlertChips, itemInChip } from "./alert-chips";
 import { groupByDay } from "./alert-day";
 import {
@@ -11,6 +12,7 @@ import {
   readSignalAlerts,
   readTakedownNotes,
 } from "./data/alert.server";
+import { readWorkspaceHiring } from "./data/signal.server";
 import { readCompetitors } from "./data/entity.server";
 import { readMentionFeed } from "./data/mention.server";
 import { readWorkspaceMentionSources } from "./data/source.server";
@@ -28,11 +30,12 @@ async function readWorkspaceAlertInputs(workspaceId: string, now: Date) {
   const incidents = await readOwnSiteIncidents(env.DB, workspaceId);
   const signals = await readSignalAlerts(env.DB, workspaceId);
   const mentions = await readMentionFeed(workspaceId, now);
+  const hiring = await readWorkspaceHiring(workspaceId, daysBefore(now, 30), 30);
   const sources = await readWorkspaceMentionSources(workspaceId);
   const changes = await readSiteChangeViews({ workspaceId, entityId: null, since: daysBefore(now, 30), limit: 30 });
   const timeZone = await readWorkspaceTimezone(workspaceId);
   const open = await readOpenIncidentBlock(env.DB, workspaceId);
-  return { competitors, failures, notes, incidents, signals, mentions, sources, changes, timeZone, open };
+  return { competitors, failures, notes, incidents, signals, mentions, hiring, sources, changes, timeZone, open };
 }
 
 type AlertInputs = Awaited<ReturnType<typeof readWorkspaceAlertInputs>>;
@@ -44,6 +47,7 @@ const EMPTY_ALERT_INPUTS: AlertInputs = {
   incidents: [],
   signals: [],
   mentions: [],
+  hiring: [],
   sources: [],
   changes: [],
   timeZone: "UTC",
@@ -56,7 +60,7 @@ async function readAlertInputs(workspaceId: string | null, now: Date): Promise<A
 }
 
 function buildAlertItems(inputs: AlertInputs, now: Date) {
-  const { changes, notes, failures, signals, mentions } = inputs;
+  const { changes, notes, failures, signals, mentions, hiring } = inputs;
   return [
     ...changes.map((change) => ({
       kind: "change" as const,
@@ -88,6 +92,20 @@ function buildAlertItems(inputs: AlertInputs, now: Date) {
         created_at: signal.created_at,
         when: daysAgoLabel(signal.created_at, now),
       } satisfies SignalAlertItem,
+    })),
+    ...hiring.map((post) => ({
+      kind: "hiring" as const,
+      id: post.id,
+      at: post.published_at ?? post.observed_at,
+      hiring: {
+        id: post.id,
+        title: post.title,
+        brand: post.brand,
+        detail: post.summary,
+        url: post.url,
+        at: post.published_at ?? post.observed_at,
+        when: daysAgoLabel(post.published_at ?? post.observed_at, now),
+      } satisfies HiringAlertItem,
     })),
     ...mentions.map((mention) => ({
       kind: "mention" as const,

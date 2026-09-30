@@ -99,7 +99,8 @@ export default function Page({ loaderData, actionData }: Route.ComponentProps) {
         changes={loaderData.changes}
         developments={loaderData.developments}
         weekCount={loaderData.weekCount}
-        biggestId={loaderData.biggestId}
+        biggestMove={loaderData.biggestMove}
+        quiet={loaderData.quiet}
         pages={loaderData.watch.pages}
         lastChecked={loaderData.lastChecked}
         pausedOn={pausedAt === null ? null : DAY_MONTH.format(new Date(pausedAt))}
