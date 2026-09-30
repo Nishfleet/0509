@@ -1,7 +1,6 @@
 import type { ReactNode } from "react";
 
 const CLOCK = new Intl.DateTimeFormat("en-GB", { hour: "2-digit", minute: "2-digit" });
-const DAY_NAME = new Intl.DateTimeFormat("en-GB", { weekday: "long" });
 
 const BARE_SENTENCES = new Set(["no data", "nothing here"]);
 
@@ -66,19 +65,6 @@ function bareSentence(sentence: string): string {
     .toLowerCase();
 }
 
-export interface HomeSecondZero {
-  sentence: string;
-  action: EmptyStateAction;
-}
-
-export function homeSecondZero(now: Date): HomeSecondZero {
-  const brief = shift(now, 6);
-  return {
-    sentence: `We're gathering the first week. Your first read-this-first comes with the brief on ${weekday(brief)} ${clock(brief)}.`,
-    action: { kind: "link", label: "Add a competitor", href: "/app/competitors" },
-  };
-}
-
 export interface QuietWeek {
   sentence: string;
   action: EmptyStateAction;
@@ -128,16 +114,6 @@ export function degradedSource(source: string, since: string): { sentence: strin
   };
 }
 
-const DAY_MS = 86_400_000;
-
-function shift(now: Date, days: number): Date {
-  return new Date(now.getTime() + days * DAY_MS);
-}
-
 function clock(at: Date): string {
   return CLOCK.format(at);
-}
-
-function weekday(at: Date): string {
-  return DAY_NAME.format(at);
 }
