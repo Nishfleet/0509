@@ -1,6 +1,6 @@
 import type { Route } from "./+types/app.settings";
 
-import { DeleteAccount } from "../components/account-settings";
+import { DeleteAccount, ExportData } from "../components/account-settings";
 import { DismissedBrands } from "../components/dismissed-brands";
 import { OwnSiteAlertsSetting } from "../components/own-site-alerts-setting";
 import { PAGE, PageHeading } from "../components/page-heading";
@@ -36,6 +36,7 @@ export default function Page({ loaderData, actionData }: Route.ComponentProps) {
         deliveryError={actionData?.deliveryError ?? null}
         deliverySuppressed={actionData?.deliverySuppressed ?? false}
       />
+      <ExportData />
       <DeleteAccount email={loaderData.email} error={actionData?.deleteError ?? null} />
     </main>
   );
