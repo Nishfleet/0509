@@ -39,7 +39,7 @@ export interface MentionSubject {
 export interface MentionItemInput {
   title: string;
   url: string;
-  publishedAt: string;
+  publishedAt: string | null;
   publisher?: string | null;
 }
 
@@ -53,7 +53,7 @@ export interface MentionSelf {
 export function mentionItemState(
   item: MentionItemInput,
   reliability: string,
-): { title: string; publisher: string | null; url: string; published_at: string; reliability: string } {
+): { title: string; publisher: string | null; url: string; published_at: string | null; reliability: string } {
   return {
     title: item.title,
     publisher: item.publisher ?? null,
