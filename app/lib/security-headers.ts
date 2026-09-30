@@ -35,10 +35,7 @@ export function withDocumentSecurityHeaders(headers: Headers, nonce: string): He
   for (const [name, value] of Object.entries(documentSecurityHeaders(nonce))) {
     if (!merged.has(name)) merged.set(name, value);
   }
-  const cacheControl = merged.get("Cache-Control");
-  if (cacheControl === null) merged.set("Cache-Control", "no-transform");
-  else if (!/(^|,)\s*no-transform\s*(,|$)/i.test(cacheControl))
-    merged.set("Cache-Control", `${cacheControl}, no-transform`);
+  if (!merged.has("Cache-Control")) merged.set("Cache-Control", "no-transform");
   return merged;
 }
 
