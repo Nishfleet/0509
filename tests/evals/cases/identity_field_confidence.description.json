@@ -243,7 +243,7 @@
   },
   {
     "id": "slack-handle-messaging",
-    "split": "train",
+    "split": "test",
     "label": true,
     "why": "Matches Slack's own framing as a workplace messaging and workflow tool",
     "subject": {
@@ -487,7 +487,7 @@
   },
   {
     "id": "asana-atlassian-credit",
-    "split": "train",
+    "split": "test",
     "label": false,
     "why": "Asana is independent software; the Atlassian credit is not its own",
     "subject": {
@@ -752,7 +752,7 @@
   },
   {
     "id": "rivian-electric-adventure",
-    "split": "test",
+    "split": "train",
     "label": true,
     "why": "Matches Rivian's own framing: electric adventure vehicles plus charging",
     "subject": {
@@ -1039,7 +1039,7 @@
   },
   {
     "id": "lululemon-yoga-leggings",
-    "split": "test",
+    "split": "train",
     "label": false,
     "why": "True of the category and its best seller, but not the brand's own line",
     "subject": {

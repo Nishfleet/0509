@@ -8,7 +8,8 @@ export const NAME_QUESTION: NoulQuestion = {
   id: "identity_field_confidence.name",
   instructions: "Is `fields.name` the right brand name for the brand at `subject`?",
   whenTrue: "It is this brand's own name.",
-  whenFalse: "It is wrong, generic, or belongs to someone else.",
+  whenFalse:
+    "It is wrong, generic, belongs to someone else, or is a related form that is not the brand's name: a product line, a sub-brand, a founder's or owner's personal name, a slogan, a legal-entity suffix the brand does not use in its name, or a name the same brand uses in another market.",
 };
 
 export const DESCRIPTION_QUESTION: NoulQuestion = {
@@ -21,8 +22,9 @@ export const DESCRIPTION_QUESTION: NoulQuestion = {
 export const SOCIALS_QUESTION: NoulQuestion = {
   id: "identity_field_confidence.socials",
   instructions: "Are the items in `fields.socials` the list of official social profiles for the brand at `subject`?",
-  whenTrue: "It is this brand's own list of official social profiles.",
-  whenFalse: "It is wrong, generic, or belongs to someone else.",
+  whenTrue: "Every listed profile is one the brand itself runs, on the platform the link names.",
+  whenFalse:
+    "At least one listed profile is run by someone else: a fan, an employee's personal account, a reseller, a parody, a squatter, or a competitor, even when the handle looks like the brand's own.",
 };
 
 export function fieldConfidenceState(
