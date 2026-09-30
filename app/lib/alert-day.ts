@@ -8,8 +8,7 @@ function localDay(at: Date, timeZone: string): string {
 
 export function alertDayGroup(at: string, now: Date, timeZone: string): DayGroup {
   const today = localDay(now, timeZone);
-  const [year, month, day] = today.split("-").map(Number);
-  const yesterday = new Date(Date.UTC(year, month - 1, day - 1)).toISOString().slice(0, 10);
+  const yesterday = new Date(Date.parse(`${today}T00:00:00Z`) - 86_400_000).toISOString().slice(0, 10);
   const atDay = localDay(new Date(at), timeZone);
   if (atDay >= today) return "New";
   if (atDay === yesterday) return "Yesterday";

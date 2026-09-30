@@ -7,6 +7,7 @@ import { UNJUDGED_WEEK_LINE, readThisFirstLine } from "../../app/lib/read-this-f
 import { sourceName } from "../../app/lib/source-name";
 import { countPhrase } from "../delivery/brief-template";
 import type { JudgedWeek } from "./read-this-first";
+import { required } from "../../app/lib/required";
 
 const RANKED_BRANDS = `SELECT s.entity_id AS entity_id,
        COALESCE(e.name, e.domain) AS name,
@@ -137,8 +138,9 @@ function quietWeekLine(mentions: number, siteChanges: number, newAds: number): s
 
 export function pausedSentence(names: readonly string[]): string | null {
   if (names.length === 0) return null;
-  if (names.length === 1) return `${names[0]} paused, so every brand below it moved up.`;
-  return `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]} paused, so every brand below them moved up.`;
+  const last = required(names.at(-1), "compose-brief.paused-names");
+  if (names.length === 1) return `${last} paused, so every brand below it moved up.`;
+  return `${names.slice(0, -1).join(", ")} and ${last} paused, so every brand below them moved up.`;
 }
 
 export async function composeBrief(db: D1Database, input: ComposeInput): Promise<BriefPayload> {
@@ -155,13 +157,21 @@ export async function composeBrief(db: D1Database, input: ComposeInput): Promise
     db.prepare(PICKED_SIGNALS).bind(input.workspaceId, JSON.stringify(readThisFirst.picks)),
   ]);
 
-  const brands = rankedBrandRows.parse(ranked.results);
-  const hadPreviousWeek = frozenWeekRows.parse(frozen.results).some((row) => row.weeks > 0);
-  const countsByEntity = new Map(signalCountRows.parse(counts.results).map((row) => [row.entity_id, row]));
-  const sources = sourceCoverageRows.parse(coverage.results);
-  const ownSite = incidentRows.parse(incidents.results);
-  const pausedNames = pausedCompetitorRows.parse(pausedRows.results).map((row) => row.name);
-  const pickedById = new Map(pickedSignalRows.parse(pickedRows.results).map((row) => [row.signal_id, row]));
+  const brands = rankedBrandRows.parse(required(ranked, "compose-brief.ranked").results);
+  const hadPreviousWeek = frozenWeekRows
+    .parse(required(frozen, "compose-brief.frozen").results)
+    .some((row) => row.weeks > 0);
+  const countsByEntity = new Map(
+    signalCountRows.parse(required(counts, "compose-brief.counts").results).map((row) => [row.entity_id, row]),
+  );
+  const sources = sourceCoverageRows.parse(required(coverage, "compose-brief.coverage").results);
+  const ownSite = incidentRows.parse(required(incidents, "compose-brief.incidents").results);
+  const pausedNames = pausedCompetitorRows
+    .parse(required(pausedRows, "compose-brief.pausedRows").results)
+    .map((row) => row.name);
+  const pickedById = new Map(
+    pickedSignalRows.parse(required(pickedRows, "compose-brief.pickedRows").results).map((row) => [row.signal_id, row]),
+  );
   const marks = readThisFirst.picks.flatMap((signalId) => {
     const row = pickedById.get(signalId);
     if (row === undefined) return [];
