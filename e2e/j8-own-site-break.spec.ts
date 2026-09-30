@@ -5,19 +5,19 @@ import { decodedBodies, InboxReadError, readRawMessage, requireInboxToken, signI
 
 test.skip(
   !process.env.PLAYWRIGHT_TEST_BASE_URL,
-  "J8 needs the production fixture Worker, the hourly own-site check and the mail inbox; the preview lane has none of them",
+  "J8 needs the production fixture Worker on j8.fixture.0509.in, the hourly own-site check and the mail inbox; the preview lane has none of them",
 );
 
-const FIXTURE = "https://fixture.0509.in";
-const FIXTURE_HOST = "fixture.0509.in";
+const FIXTURE_HOST = "j8.fixture.0509.in";
+const FIXTURE = `https://${FIXTURE_HOST}`;
 const POLL_INTERVAL_MS = 30_000;
 const TICK_WAIT_MS = 75 * 60_000;
 const SWEEP_WAIT_MS = 90 * 60_000;
 const OPEN_BUDGET_MS = 70 * 60_000;
 
 const MODES = [
-  { mode: "hard", kind: "error 500", waitMs: TICK_WAIT_MS },
-  { mode: "soft", kind: "breakage", waitMs: SWEEP_WAIT_MS },
+  { mode: "hard", kind: "error 500", waitMs: TICK_WAIT_MS, account: FIXTURE_ACCOUNTS.j8Hard },
+  { mode: "soft", kind: "breakage", waitMs: SWEEP_WAIT_MS, account: FIXTURE_ACCOUNTS.j8Soft },
 ] as const;
 
 type Mode = "off" | (typeof MODES)[number]["mode"];
@@ -82,13 +82,17 @@ async function waitForMail(
   return raw;
 }
 
-async function signInAndWatchFixture(page: Page, email: string, token: string): Promise<void> {
-  await signInWithMagicLink(page, email, token, /\/(app|onboarding)/);
+async function signInAndWatchFixture(
+  page: Page,
+  account: { email: string; maxCompetitors: number },
+  token: string,
+): Promise<void> {
+  await signInWithMagicLink(page, account.email, token, /\/(app|onboarding)/);
   if (page.url().includes("/onboarding")) {
     const input = page.getByRole("textbox", { name: "your website, or a handle" });
     await input.fill(FIXTURE_HOST);
     await input.press("Enter");
-    await expect(page).toHaveURL(/\/onboarding\/identity\?subject=fixture\.0509\.in$/);
+    await expect(page).toHaveURL(/\/onboarding\/identity\?subject=j8\.fixture\.0509\.in$/);
     await page.getByRole("button", { name: "edit name" }).click();
     const name = page.getByRole("textbox", { name: "name" });
     await name.fill("Fixture Brand");
@@ -100,28 +104,28 @@ async function signInAndWatchFixture(page: Page, email: string, token: string): 
   }
   await page.goto("/app/competitors");
   const items = page.getByRole("list", { name: "Competitors" }).getByRole("listitem");
-  expect(await items.count(), "the j8-soft account holds a competitor its journey never adds").toBeLessThanOrEqual(
-    FIXTURE_ACCOUNTS.j8Soft.maxCompetitors,
+  expect(await items.count(), "the J8 account holds a competitor its journey never adds").toBeLessThanOrEqual(
+    account.maxCompetitors,
   );
 }
 
 test.describe.configure({ mode: "serial" });
 
-for (const { mode, kind, waitMs } of MODES) {
+for (const { mode, kind, waitMs, account } of MODES) {
   test(`J8 your own site breaks ${mode}: one incident email, then fixed, then no second email that day @scheduled`, async ({
     page,
   }, testInfo) => {
     test.setTimeout(5 * 60 * 60_000);
-    test.skip(testInfo.project.name === "phone-390", "one production run per break; the fixture is a single shared site");
+    test.skip(testInfo.project.name === "phone-390", "one production run per break; the fixture host is shared");
 
     const token = requireInboxToken();
-    const email = FIXTURE_ACCOUNTS.j8Soft.email;
+    const { email } = account;
     const openSubject = `${FIXTURE_HOST} looks broken: ${kind}`;
     const fixedSubject = `${FIXTURE_HOST} looks fixed: ${kind}`;
 
     try {
       await setMode("off");
-      await signInAndWatchFixture(page, email, token);
+      await signInAndWatchFixture(page, account, token);
 
       const brokenAt = new Date();
       await setMode(mode);
@@ -132,7 +136,9 @@ for (const { mode, kind, waitMs } of MODES) {
       expect(openBody).toContain("We re-check at");
       expect(openBody).toContain("https://0509.io/app/alerts");
       if (mode === "hard") {
-        expect(openSentAt.getTime() - brokenAt.getTime(), "hard break email within one tick").toBeLessThan(OPEN_BUDGET_MS);
+        expect(openSentAt.getTime() - brokenAt.getTime(), "hard break email within one tick").toBeLessThan(
+          OPEN_BUDGET_MS,
+        );
       }
       const openId = header(openRaw, MESSAGE_ID);
       expect(openId).not.toBe("");
@@ -145,9 +151,7 @@ for (const { mode, kind, waitMs } of MODES) {
       expect(decodedBodies(fixedRaw).join("\n")).toContain("it looks fixed");
 
       await page.goto("/app/alerts");
-      const openIncidents = page
-        .getByTestId("own-site-incident")
-        .filter({ hasText: "We check it again every hour" });
+      const openIncidents = page.getByTestId("own-site-incident").filter({ hasText: "We check it again every hour" });
       await expect(openIncidents).toHaveCount(0);
 
       const openDay = openSentAt.toISOString().slice(0, 10);
@@ -165,9 +169,10 @@ for (const { mode, kind, waitMs } of MODES) {
           },
         )
         .toBe(1);
-      expect(new Date().toISOString().slice(0, 10), "the second break opened on the same UTC day as the first email").toBe(
-        openDay,
-      );
+      expect(
+        new Date().toISOString().slice(0, 10),
+        "the second break opened on the same UTC day as the first email",
+      ).toBe(openDay);
 
       const later = await readRawMessage(email, token);
       expect(header(later, MESSAGE_ID), "the second incident sent no second open email that day").toBe(fixedId);

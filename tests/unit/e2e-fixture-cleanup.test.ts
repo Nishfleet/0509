@@ -17,10 +17,11 @@ const HELPER = /deleteCreatedAccount/;
 // cannot call the helper; it is the flow's proof.
 const ALLOWED = new Set(["e2e/j14-delete-workspace.spec.ts"]);
 
-// The four accounts the journey specs keep on purpose (0509#5688,
+// The five accounts the journey specs keep on purpose (0509#5688,
 // fleet-manager): exact addresses, never a pattern.
 const KEPT_JOURNEY_ACCOUNTS = [
   "e2e+j7@0509.io",
+  "e2e+j8-hard@0509.io",
   "e2e+j8-soft@0509.io",
   "e2e+j9-mentions@0509.io",
   "e2e+j12-rollovers@0509.io",

@@ -17,7 +17,7 @@ on:
       journey:
         description: Journey to run now
         type: choice
-        options: [none, j12, suite, signin]
+        options: [none, j12, suite, signin, j8]
         default: none
       spec:
         description: 'One spec or a filter to run now against https://0509.io, e.g. e2e/j3-onboard-domain.spec.ts (0509 sign-up verdict, 2026-09-28)'
@@ -28,7 +28,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: e2e-scheduled-${{ inputs.spec && 'spec' || inputs.journey == 'suite' && 'suite' || github.event.schedule == '17 4 * * *' && 'signin' || inputs.journey == 'signin' && 'signin' || 'j12' }}
+  group: e2e-scheduled-${{ inputs.spec && 'spec' || inputs.journey == 'suite' && 'suite' || github.event.schedule == '17 4 * * *' && 'signin' || inputs.journey == 'signin' && 'signin' || inputs.journey == 'j8' && 'j8' || 'j12' }}
   cancel-in-progress: false
 
 jobs:
@@ -126,6 +126,52 @@ jobs:
           CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
           CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
           E2E_INBOX_TOKEN: ${{ secrets.E2E_INBOX_TOKEN }}
+      - name: Print what the page showed when it failed
+        if: failure()
+        run: tail -n +1 test-results/*/error-context.md
+  j8:
+    name: j8
+    # Hard then soft break of j8.fixture.0509.in, each with its own account, so
+    # both open emails land on one UTC day (0509#4124). Dispatch only: a run is
+    # hours long and sends real mail. No trace is uploaded: the repo is public
+    # and a trace can hold the Access cookie (0509#5999); a failure is read
+    # from the job log. 350 minutes is the most a hosted job may run under the
+    # 6 hour cap.
+    if: inputs.journey == 'j8' && inputs.spec == ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - name: Exchange the Access service token for its cookie
+        run: npm run e2e -- --project=setup --retries=0 --reporter=github,list
+        env:
+          PLAYWRIGHT_TEST_BASE_URL: https://0509.io
+          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+      - name: Run J8 against production
+        run: npm run e2e -- e2e/j8-own-site-break.spec.ts --project=desktop-1440 --no-deps --retries=0 --workers=1 --reporter=github,list
+        env:
+          PLAYWRIGHT_TEST_BASE_URL: https://0509.io
+          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+          E2E_INBOX_TOKEN: ${{ secrets.E2E_INBOX_TOKEN }}
+          FIXTURE_SITE_TOKEN: ${{ secrets.FIXTURE_SITE_TOKEN }}
+      - name: Leave the fixture unbroken
+        # The spec resets the break in a finally block; a cancel or a timeout
+        # kills the runner before it can.
+        if: always()
+        run: |
+          curl --fail --silent --show-error --request POST --header "authorization: Bearer $FIXTURE_SITE_TOKEN" "https://j8.fixture.0509.in/__break?mode=off"
+        env:
+          FIXTURE_SITE_TOKEN: ${{ secrets.FIXTURE_SITE_TOKEN }}
       - name: Print what the page showed when it failed
         if: failure()
         run: tail -n +1 test-results/*/error-context.md
