@@ -55,7 +55,7 @@ export function createAuth(env: AuthEnv, options?: { captcha?: boolean; validate
     advanced: {
       cookiePrefix: COOKIE_PREFIX,
       ipAddress: { ipAddressHeaders: [CLIENT_IP_HEADER] },
-      database: { validateSchema: options?.validateSchema ?? false },
+      database: { joins: true, validateSchema: options?.validateSchema ?? false },
     },
     session: {
       freshAge: FRESH_SESSION_SECONDS,
