@@ -4,52 +4,7 @@
       "count": 1
     }
   },
-  "app/lib/ads/descriptor.ts": {
-    "complexity": {
-      "count": 1
-    },
-    "max-lines-per-function": {
-      "count": 1
-    }
-  },
-  "app/lib/ads/transport-api.ts": {
-    "complexity": {
-      "count": 1
-    },
-    "max-lines-per-function": {
-      "count": 1
-    }
-  },
-  "app/lib/ads/transport-browser.ts": {
-    "complexity": {
-      "count": 1
-    },
-    "max-depth": {
-      "count": 1
-    },
-    "max-lines-per-function": {
-      "count": 1
-    }
-  },
-  "app/lib/agent/mcp.server.ts": {
-    "max-lines-per-function": {
-      "count": 1
-    }
-  },
-  "app/lib/agent/read.server.ts": {
-    "max-lines-per-function": {
-      "count": 1
-    }
-  },
-  "app/lib/agent/serve.server.ts": {
-    "max-params": {
-      "count": 1
-    }
-  },
   "app/lib/alerts-page.server.ts": {
-    "complexity": {
-      "count": 1
-    },
     "max-lines-per-function": {
       "count": 1
     }
@@ -61,11 +16,6 @@
   },
   "app/lib/auth/login-magic-link.server.ts": {
     "max-params": {
-      "count": 1
-    }
-  },
-  "app/lib/competitors.server.ts": {
-    "complexity": {
       "count": 1
     }
   },
@@ -89,30 +39,6 @@
       "count": 1
     }
   },
-  "app/lib/discovery/refresh.server.ts": {
-    "max-depth": {
-      "count": 1
-    },
-    "max-lines-per-function": {
-      "count": 1
-    },
-    "max-params": {
-      "count": 1
-    }
-  },
-  "app/lib/discovery/run.server.ts": {
-    "max-depth": {
-      "count": 1
-    }
-  },
-  "app/lib/fetch/transport.server.ts": {
-    "complexity": {
-      "count": 1
-    },
-    "max-lines-per-function": {
-      "count": 1
-    }
-  },
   "app/lib/hiring/discover-board.server.ts": {
     "complexity": {
       "count": 1
@@ -122,16 +48,6 @@
     }
   },
   "app/lib/hiring/listing.ts": {
-    "max-lines-per-function": {
-      "count": 1
-    }
-  },
-  "app/lib/how-ranked.server.ts": {
-    "max-params": {
-      "count": 1
-    }
-  },
-  "app/lib/how-ranked.ts": {
     "max-lines-per-function": {
       "count": 1
     }
@@ -194,16 +110,6 @@
   },
   "app/lib/onboarding/timings.ts": {
     "complexity": {
-      "count": 1
-    }
-  },
-  "app/lib/site-changes.server.ts": {
-    "max-params": {
-      "count": 1
-    }
-  },
-  "app/lib/site/judge.server.ts": {
-    "max-lines-per-function": {
       "count": 1
     }
   }

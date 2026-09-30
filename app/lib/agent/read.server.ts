@@ -18,6 +18,33 @@ LIMIT 1`;
 
 const SELECT_OFF_ENTITIES = `SELECT id FROM entity WHERE workspace_id = ? AND state = 'off'`;
 
+function briefReadFirst(payload: BriefPayload): NonNullable<BriefResult["brief"]>["readThisFirst"] {
+  return payload.read_this_first.map((mark) => ({
+    competitor: mark.entity_name,
+    title: mark.title,
+    source: mark.source,
+    observedAt: mark.observed_at,
+    url: mark.url,
+    before: mark.before,
+    after: mark.after,
+    why: mark.jev_reason,
+  }));
+}
+
+function briefStanding(payload: BriefPayload): NonNullable<BriefResult["brief"]>["standing"] {
+  return payload.brands.map((line) => ({
+    competitorId: line.entity_id,
+    name: line.name,
+    rank: line.rank,
+    movement: line.movement,
+    isNew: line.is_new,
+    biggestMove: line.biggest_move,
+    newAds: line.ad_delta,
+    newMentions: line.mention_delta,
+    siteChanges: line.site_change_count,
+  }));
+}
+
 function toBrief(payload: BriefPayload): NonNullable<BriefResult["brief"]> {
   return {
     periodStart: payload.period_start,
@@ -31,27 +58,8 @@ function toBrief(payload: BriefPayload): NonNullable<BriefResult["brief"]> {
       why: payload.why_line,
     },
     quietWeek: payload.is_quiet_week,
-    readThisFirst: payload.read_this_first.map((mark) => ({
-      competitor: mark.entity_name,
-      title: mark.title,
-      source: mark.source,
-      observedAt: mark.observed_at,
-      url: mark.url,
-      before: mark.before,
-      after: mark.after,
-      why: mark.jev_reason,
-    })),
-    standing: payload.brands.map((line) => ({
-      competitorId: line.entity_id,
-      name: line.name,
-      rank: line.rank,
-      movement: line.movement,
-      isNew: line.is_new,
-      biggestMove: line.biggest_move,
-      newAds: line.ad_delta,
-      newMentions: line.mention_delta,
-      siteChanges: line.site_change_count,
-    })),
+    readThisFirst: briefReadFirst(payload),
+    standing: briefStanding(payload),
     ownSite: {
       status: payload.own_site.status,
       incidents: payload.own_site.incidents.map((incident) => ({
