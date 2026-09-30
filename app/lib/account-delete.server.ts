@@ -77,11 +77,19 @@ export async function readAccountDeleteInstanceId(request: Request): Promise<str
   return typeof parsed === "string" && parsed.length > 0 ? parsed : null;
 }
 
-export async function deleteStoredPage(prefix: string): Promise<{ deleted: number; more: boolean }> {
-  const listed = await env.SNAPSHOTS.list({ prefix, limit: PAGE_SIZE });
+async function deletePage(bucket: R2Bucket, prefix: string): Promise<{ deleted: number; more: boolean }> {
+  const listed = await bucket.list({ prefix, limit: PAGE_SIZE });
   const keys = listed.objects.map((object) => object.key);
-  if (keys.length > 0) await env.SNAPSHOTS.delete(keys);
+  if (keys.length > 0) await bucket.delete(keys);
   return { deleted: keys.length, more: listed.truncated };
+}
+
+export async function deleteStoredPage(prefix: string): Promise<{ deleted: number; more: boolean }> {
+  return deletePage(env.SNAPSHOTS, prefix);
+}
+
+export async function deleteBackupPage(prefix: string): Promise<{ deleted: number; more: boolean }> {
+  return deletePage(env.SNAPSHOTS_BACKUP, prefix);
 }
 
 function isAccountDeleteInstanceMissing(error: unknown): boolean {

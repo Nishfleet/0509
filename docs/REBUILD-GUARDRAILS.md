@@ -30,7 +30,7 @@ Umbrella #3842. Author: Fable. Checked by the Opus deputy. Nish's decisions stan
 
 ## Deletion
 
-- Deleting a workspace deletes every owned row (ownership manifest) and every R2 object under its prefix, within one Workflow run, and stops every email. J14 in docs/REBUILD-DONE.md proves it. The `0509-snapshots-backup` copy is not part of that run: the source objects go and the copies stay until the copy's own rule removes them, so the copy's missing rules are the deletion gap recorded in the retention section above (#5950). The promise's wording, here and on `/privacy`, is #5901.
+- Deleting a workspace deletes every owned row (ownership manifest) and every R2 object under its prefix, within one Workflow run, and stops every email. J14 in docs/REBUILD-DONE.md proves it. The same Workflow run also deletes those prefixes from `0509-snapshots-backup` (one step per prefix page, #5901); the copy's objects for other workspaces age out only by the copy's own rules, whose absence is the gap recorded in the retention section above (#5950).
 - A user removing a competitor keeps history (product rule) unless they choose "remove and forget", which deletes that entity's signals for that workspace.
 
 ## Takedown

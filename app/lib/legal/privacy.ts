@@ -187,7 +187,7 @@ export const PRIVACY: LegalDocument = {
         {
           term: "Backup copy of stored files",
           details: [
-            "We keep a second copy of stored screenshots and page copies in case we lose the first. Deleting your account does not remove that copy yet, and we do not yet expire it on a schedule.",
+            'We keep a second copy of stored screenshots and page copies in case we lose the first. Deleting your account, your workspace, or a competitor with "remove and forget" removes that copy too. We do not yet expire the rest of it on a schedule.',
           ],
         },
         {
@@ -200,7 +200,7 @@ export const PRIVACY: LegalDocument = {
       id: "deletion",
       heading: "Deleting your data",
       paragraphs: [
-        "To close your account, open Settings and choose Delete your account. You may be asked to sign in again first. It takes effect at once: your account and every record your workspace owns are removed, every email stops, and a background job then removes the files it stored. The backup copy described above is the one exception.",
+        "To close your account, open Settings and choose Delete your account. You may be asked to sign in again first. It takes effect at once: your account and every record your workspace owns are removed, every email stops, and a background job then removes the files it stored.",
         'Removing a competitor keeps its history, unless you choose "remove and forget", which deletes what we collected about that competitor for your workspace.',
       ],
     },

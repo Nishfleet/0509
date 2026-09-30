@@ -117,6 +117,10 @@ describe("delete my account", () => {
     await env.SNAPSHOTS.put("snapshot/site/watch-staying/1.txt", "d");
     await env.SNAPSHOTS.put("snapshot/hiring/watch-leaving/1.json", "e");
     await env.SNAPSHOTS.put("snapshot/hiring/watch-staying/1.json", "f");
+    await env.SNAPSHOTS_BACKUP.put("card/ws-leaving/share.png", "a");
+    await env.SNAPSHOTS_BACKUP.put("snapshot/site/watch-leaving/1.png", "c");
+    await env.SNAPSHOTS_BACKUP.put("snapshot/site/watch-staying/1.txt", "d");
+    await env.SNAPSHOTS_BACKUP.put("snapshot/hiring/watch-staying/1.json", "f");
 
     const id = "account-delete-test";
     await using introspector = await introspectWorkflowInstance(env.ACCOUNT_DELETE, id);
@@ -129,6 +133,11 @@ describe("delete my account", () => {
     expect(await introspector.getOutput()).toEqual({ deleted: 4 });
     const left = await env.SNAPSHOTS.list();
     expect(left.objects.map((object) => object.key)).toEqual([
+      "snapshot/hiring/watch-staying/1.json",
+      "snapshot/site/watch-staying/1.txt",
+    ]);
+    const backedUp = await env.SNAPSHOTS_BACKUP.list();
+    expect(backedUp.objects.map((object) => object.key)).toEqual([
       "snapshot/hiring/watch-staying/1.json",
       "snapshot/site/watch-staying/1.txt",
     ]);
