@@ -38,11 +38,7 @@ async function readWorkspace(db: WorkspaceDb, userId: string): Promise<Workspace
   return db.prepare(SELECT_WORKSPACE).bind(userId).first<WorkspaceRow>();
 }
 
-async function withCapturedTimezone(
-  db: WorkspaceDb,
-  row: WorkspaceRow,
-  timezone: string,
-): Promise<WorkspaceRow> {
+async function withCapturedTimezone(db: WorkspaceDb, row: WorkspaceRow, timezone: string): Promise<WorkspaceRow> {
   if (row.timezone !== "UTC" || timezone === "UTC") return row;
   await fillWorkspaceTimezone(db, row.id, timezone);
   return { ...row, timezone };
@@ -94,7 +90,8 @@ export async function ensureWorkspaceForSignIn(
 
 export const ONBOARDING_COMPETITORS = "/onboarding/competitors";
 
-const SELECT_RUN = "SELECT input_raw, watching_started_at FROM onboarding_run WHERE workspace_id = ? ORDER BY started_at ASC LIMIT 1";
+export const SELECT_RUN =
+  "SELECT input_raw, watching_started_at FROM onboarding_run WHERE workspace_id = ? ORDER BY started_at ASC LIMIT 1";
 
 interface RunRow {
   input_raw: string;
@@ -119,13 +116,14 @@ export async function workspaceLanding(
   return resumePoint(selfId !== null, run);
 }
 
-export async function workspaceLandingForRequest(request: Request, userId: string): Promise<string | null> {
-  const header = request.headers.get("cookie");
-  const user = await env.DB.prepare('SELECT email FROM "user" WHERE id = ?').bind(userId).first<{ email: string }>();
-  if (!user?.email) return "/onboarding";
+export async function workspaceLandingForRequest(
+  request: Request,
+  user: { id: string; email: string },
+): Promise<string | null> {
+  if (!user.email) return "/onboarding";
   return workspaceLanding(env.DB, {
-    userId,
+    userId: user.id,
     email: user.email,
-    timezone: await timezoneCookieValue(header),
+    timezone: await timezoneCookieValue(request.headers.get("cookie")),
   });
 }

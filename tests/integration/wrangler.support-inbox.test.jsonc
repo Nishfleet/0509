@@ -7,5 +7,5 @@
   "compatibility_date": "2026-09-16",
   "main": "../../workers/support-inbox.ts",
   "d1_databases": [{ "binding": "DB", "database_name": "0509-test", "database_id": "test" }],
-  "vars": { "SUPPORT_INBOX_GITHUB_TOKEN": "integration-token" }
+  "vars": { "SUPPORT_INBOX_GITHUB_TOKEN": "integration-token" },
 }

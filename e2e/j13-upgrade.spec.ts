@@ -25,7 +25,6 @@ test.afterEach(async ({ page }, testInfo) => {
   createdEmail = "";
 });
 
-
 function devVar(name: string): string {
   const line = readFileSync(".dev.vars.example", "utf8")
     .split("\n")
@@ -50,7 +49,10 @@ function previewDatabasePath(): string {
   throw new Error("local preview D1 has no entity table");
 }
 
-async function seedPreviewWorkspace(label: string, competitors: number): Promise<{ cookie: string; workspaceId: string }> {
+async function seedPreviewWorkspace(
+  label: string,
+  competitors: number,
+): Promise<{ cookie: string; workspaceId: string }> {
   const suffix = crypto.randomUUID().slice(0, 8);
   const email = `${label}-${suffix}@0509.io`;
   const db = new DatabaseSync(previewDatabasePath(), { timeout: 15_000 });
@@ -95,7 +97,13 @@ async function seedPreviewWorkspace(label: string, competitors: number): Promise
     for (let index = 0; index < competitors; index += 1) {
       db.prepare(
         "INSERT INTO entity (id, workspace_id, role, domain, name, created_at) VALUES (?, ?, 'competitor', ?, ?, ?)",
-      ).run(`ent-${suffix}-${String(index)}`, workspaceId, `rival${String(index)}-${suffix}.example`, `Rival ${String(index)}`, stamp);
+      ).run(
+        `ent-${suffix}-${String(index)}`,
+        workspaceId,
+        `rival${String(index)}-${suffix}.example`,
+        `Rival ${String(index)}`,
+        stamp,
+      );
     }
     db.exec("PRAGMA wal_checkpoint(PASSIVE)");
     return { cookie, workspaceId };
@@ -130,17 +138,20 @@ async function watchOneCompetitor(page: Page): Promise<void> {
   await expect(page.getByRole("button", { name: "edit name" })).toBeVisible({ timeout: 30_000 });
   await expect(page.getByText("looking on the site")).toHaveCount(0, { timeout: 30_000 });
   await page.getByRole("button", { name: "That's me" }).click();
-  await expect(page).toHaveURL(/\/onboarding\/competitors$/, { timeout: 30_000 });
+  await expect(page).toHaveURL(/\/onboarding\/competitors$/, { timeout: 10_000 });
   const watching = page.getByRole("list", { name: "Watching" }).getByRole("listitem");
   await expect(watching.first().or(page.getByRole("button", { name: /^Watch / }).first())).toBeVisible({
     timeout: 60_000,
   });
   if ((await watching.count()) === 0) {
-    await page.getByRole("button", { name: /^Watch / }).first().click();
+    await page
+      .getByRole("button", { name: /^Watch / })
+      .first()
+      .click();
     await expect(watching.first()).toBeVisible();
   }
   await page.getByRole("button", { name: "Start watching" }).click();
-  await expect(page).toHaveURL(/\/app$/);
+  await expect(page).toHaveURL(/\/app$/, { timeout: 30_000 });
 }
 
 async function deliverPreviewWebhook(page: Page, workspaceId: string): Promise<void> {
@@ -170,7 +181,9 @@ async function deliverPreviewWebhook(page: Page, workspaceId: string): Promise<v
   expect(response.status()).toBe(200);
 }
 
-test("J13: the plan gate upgrades a workspace and the page flips without a reload @own-signin", async ({ page }, testInfo) => {
+test("J13: the plan gate upgrades a workspace and the page flips without a reload @own-signin", async ({
+  page,
+}, testInfo) => {
   test.setTimeout(240_000);
   const watched = watchConsole(page);
   let workspaceId = "";

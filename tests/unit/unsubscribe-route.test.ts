@@ -33,17 +33,13 @@ function renderBoundary(error: unknown): string {
 }
 
 function renderConfirm(unsubscribed: boolean): string {
-  const Stub = createRoutesStub([
-    { id: "routes/u.$token", path: "/u/:token", Component: Unsubscribe },
-  ]);
+  const Stub = createRoutesStub([{ id: "routes/u.$token", path: "/u/:token", Component: Unsubscribe }]);
   return renderToStaticMarkup(
     createElement(Stub, {
       initialEntries: ["/u/t"],
       hydrationData: {
         loaderData: { "routes/u.$token": { link: "confirm" } },
-        ...(unsubscribed
-          ? { actionData: { "routes/u.$token": { unsubscribed: true } } }
-          : {}),
+        ...(unsubscribed ? { actionData: { "routes/u.$token": { unsubscribed: true } } } : {}),
       },
     }),
   );

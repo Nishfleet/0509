@@ -30,6 +30,7 @@ function row(overrides: Partial<MentionReadRow> & Pick<MentionReadRow, "id" | "p
       overrides.verdictDecidedAt === undefined ? "2026-09-25T09:00:00.000Z" : overrides.verdictDecidedAt,
     id: overrides.id,
     p: overrides.p,
+    state: overrides.state ?? null,
   };
 }
 

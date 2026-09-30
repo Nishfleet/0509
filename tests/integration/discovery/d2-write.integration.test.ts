@@ -96,11 +96,31 @@ function choice(domain: string, picked: string): ChoiceVerdict {
 
 function buildResults(targets: Map<string, RefreshTarget>): StillCompetitorResult[] {
   return [
-    { target: targetOf(targets, "alpha.example"), verdict: noul("alpha.example", 0.05), reason: choice("alpha.example", "shut_down") },
-    { target: targetOf(targets, "beta.example"), verdict: noul("beta.example", 0.05), reason: choice("beta.example", "acquired") },
-    { target: targetOf(targets, "gamma.example"), verdict: noul("gamma.example", 0.95), reason: choice("gamma.example", "dormant") },
-    { target: targetOf(targets, "delta.example"), verdict: noul("delta.example", 0.95), reason: choice("delta.example", "active") },
-    { target: targetOf(targets, "epsilon.example"), verdict: noul("epsilon.example", 0.5), reason: choice("epsilon.example", "active") },
+    {
+      target: targetOf(targets, "alpha.example"),
+      verdict: noul("alpha.example", 0.05),
+      reason: choice("alpha.example", "shut_down"),
+    },
+    {
+      target: targetOf(targets, "beta.example"),
+      verdict: noul("beta.example", 0.05),
+      reason: choice("beta.example", "acquired"),
+    },
+    {
+      target: targetOf(targets, "gamma.example"),
+      verdict: noul("gamma.example", 0.95),
+      reason: choice("gamma.example", "dormant"),
+    },
+    {
+      target: targetOf(targets, "delta.example"),
+      verdict: noul("delta.example", 0.95),
+      reason: choice("delta.example", "active"),
+    },
+    {
+      target: targetOf(targets, "epsilon.example"),
+      verdict: noul("epsilon.example", 0.5),
+      reason: choice("epsilon.example", "active"),
+    },
     { target: targetOf(targets, "zeta.example"), verdict: null, reason: null },
   ];
 }
@@ -140,14 +160,7 @@ async function verdictCount(workspaceId: string): Promise<number> {
 describe("stillCompetitorAction", () => {
   it("retires only a sure-dead auto brand, keeps the sure-active one, and asks about the rest", async () => {
     const { targets } = await seedWorkspace();
-    expect(buildResults(targets).map(stillCompetitorAction)).toEqual([
-      "retire",
-      "ask",
-      "ask",
-      "keep",
-      "ask",
-      "none",
-    ]);
+    expect(buildResults(targets).map(stillCompetitorAction)).toEqual(["retire", "ask", "ask", "keep", "ask", "none"]);
   });
 });
 

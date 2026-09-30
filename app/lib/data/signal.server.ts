@@ -5,12 +5,7 @@ import type { ScoredSignal } from "../biggest-move";
 import { isFeedKind, type DevelopmentItem } from "../developments";
 import type { WeekEvidence } from "../home-standing";
 import { ACT_AT, REJECT_AT } from "../jev/thresholds";
-import {
-  D3_QUESTION_ID,
-  D6_QUESTION_ID,
-  reliabilitySchema,
-  scoreBucketSchema,
-} from "../standing-score";
+import { D3_QUESTION_ID, D6_QUESTION_ID, reliabilitySchema, scoreBucketSchema } from "../standing-score";
 import type { HiringSignalState, HiringSignalUpdate } from "../hiring/role-lifecycle";
 
 export interface ChangeSignalRow {
@@ -82,9 +77,7 @@ export async function insertHiringSignals(rows: readonly NewHiringSignal[]): Pro
     const chunk = rows.slice(offset, offset + HIRING_BATCH);
     await env.DB.batch(
       chunk.map((row) => {
-        const summaryParts = [row.location, row.team].filter(
-          (part) => part !== null && part !== "",
-        );
+        const summaryParts = [row.location, row.team].filter((part) => part !== null && part !== "");
         const summary = summaryParts.length > 0 ? summaryParts.join(" · ") : null;
         const dedupKey = `${row.watchId}:${row.roleId}`;
         return env.DB.prepare(INSERT_HIRING).bind(
@@ -107,7 +100,7 @@ export async function insertHiringSignals(rows: readonly NewHiringSignal[]): Pro
   }
 }
 
-const SELECT_HIRING_SIGNAL_STATES = `SELECT id, dedup_key, last_seen_at, payload_json FROM signal
+export const SELECT_HIRING_SIGNAL_STATES = `SELECT id, dedup_key, last_seen_at, payload_json FROM signal
 WHERE kind = 'hiring' AND watch_id = ?1 AND is_tombstoned = 0`;
 
 const hiringSignalStateRows = z.array(
@@ -152,11 +145,12 @@ export async function applyHiringLifecycle(updates: readonly HiringSignalUpdate[
 
 const INSERT_MENTION = `INSERT INTO signal
   (id, workspace_id, entity_id, source_id, watch_id, snapshot_id, kind, title, url, canonical_url, url_hash,
-   author, engagement_json, payload_json, dedup_key, published_at, observed_at, last_seen_at, is_tombstoned)
-VALUES (?1, ?2, ?3, ?4, ?5, ?6, 'mention', ?7, ?8, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?15, ?16)
+   author, engagement_json, payload_json, dedup_key, published_at, observed_at, last_seen_at, is_tombstoned, state)
+VALUES (?1, ?2, ?3, ?4, ?5, ?6, 'mention', ?7, ?8, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?15, ?16, ?17)
 ON CONFLICT (source_id, dedup_key) DO NOTHING`;
 
-const SEEN_KEYS = "SELECT dedup_key FROM signal WHERE source_id = ?1 AND dedup_key IN (SELECT value FROM json_each(?2))";
+const SEEN_KEYS =
+  "SELECT dedup_key FROM signal WHERE source_id = ?1 AND dedup_key IN (SELECT value FROM json_each(?2))";
 
 export interface MentionSignal {
   id: string;
@@ -175,6 +169,7 @@ export interface MentionSignal {
   publishedAt: string | null;
   observedAt: string;
   isNotAboutBrand: boolean;
+  state: "judged" | "unjudged";
 }
 
 export async function readSeenDedupKeys(sourceId: string, keys: readonly string[]): Promise<Set<string>> {
@@ -201,7 +196,50 @@ export function insertMention(signal: MentionSignal): D1PreparedStatement {
     signal.publishedAt,
     signal.observedAt,
     signal.isNotAboutBrand ? 1 : 0,
+    signal.state,
   );
+}
+
+const SELECT_UNJUDGED_MENTIONS = `SELECT id, title, canonical_url, published_at, payload_json FROM signal
+WHERE watch_id = ?1 AND kind = 'mention' AND state = 'unjudged'
+ORDER BY observed_at, id LIMIT ?2`;
+
+const RESOLVE_UNJUDGED_MENTION = `UPDATE signal SET state = 'judged', is_tombstoned = ?2
+WHERE id = ?1 AND kind = 'mention' AND state = 'unjudged'`;
+
+const unjudgedMentionRows = z.array(
+  z.object({
+    id: z.string(),
+    title: z.string(),
+    canonical_url: z.string(),
+    published_at: z.string().nullable(),
+    payload_json: z.string(),
+  }),
+);
+
+const mentionPayload = z.object({ publisher: z.string().optional() });
+
+export interface UnjudgedMention {
+  id: string;
+  title: string;
+  url: string;
+  publishedAt: string | null;
+  publisher: string | null;
+}
+
+export async function readUnjudgedMentions(watchId: string, limit: number): Promise<UnjudgedMention[]> {
+  const rows = await env.DB.prepare(SELECT_UNJUDGED_MENTIONS).bind(watchId, limit).all();
+  return unjudgedMentionRows.parse(rows.results).map((row) => ({
+    id: row.id,
+    title: row.title,
+    url: row.canonical_url,
+    publishedAt: row.published_at,
+    publisher: mentionPayload.parse(JSON.parse(row.payload_json)).publisher ?? null,
+  }));
+}
+
+export function resolveUnjudgedMention(id: string, tombstoned: boolean): D1PreparedStatement {
+  return env.DB.prepare(RESOLVE_UNJUDGED_MENTION).bind(id, tombstoned ? 1 : 0);
 }
 
 export interface RecentSignal {
@@ -347,7 +385,16 @@ export async function readEntityDevelopments(input: {
     .all<DevelopmentRow>();
   return results.flatMap((row) =>
     isFeedKind(row.kind)
-      ? [{ id: row.id, kind: row.kind, title: row.title, summary: row.summary, url: row.url, observedAt: row.observed_at }]
+      ? [
+          {
+            id: row.id,
+            kind: row.kind,
+            title: row.title,
+            summary: row.summary,
+            url: row.url,
+            observedAt: row.observed_at,
+          },
+        ]
       : [],
   );
 }
@@ -425,14 +472,7 @@ export async function readScoredSignals(input: {
   until: string;
 }): Promise<ScoredSignal[]> {
   const { results } = await env.DB.prepare(SELECT_SCORED_SIGNALS)
-    .bind(
-      input.workspaceId,
-      input.entityId,
-      input.since,
-      input.until,
-      D6_QUESTION_ID,
-      D3_QUESTION_ID,
-    )
+    .bind(input.workspaceId, input.entityId, input.since, input.until, D6_QUESTION_ID, D3_QUESTION_ID)
     .all();
   return scoredSignalRows.parse(results).flatMap((row) =>
     isFeedKind(row.kind)

@@ -1,11 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import {
-  scoreByEntity,
-  weightsAsOf,
-  type BucketCount,
-  type WeightRow,
-} from "../../app/lib/standing-score";
+import { scoreByEntity, weightsAsOf, type BucketCount, type WeightRow } from "../../app/lib/standing-score";
 import {
   howRanked,
   type HowRanked,
@@ -111,9 +106,7 @@ describe("howRanked", () => {
       brands: [...BRANDS, { entity_id: "c", name: "Gamma" }],
     });
 
-    const gamma: HowRankedBrand | undefined = result.brands.find(
-      (brand) => brand.entityId === "c",
-    );
+    const gamma: HowRankedBrand | undefined = result.brands.find((brand) => brand.entityId === "c");
     expect(gamma?.lines).toEqual([]);
     expect(gamma?.total).toBe(0);
   });

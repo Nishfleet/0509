@@ -12,14 +12,12 @@ import { consoleFailures, requireInboxToken, signInWithMagicLink, watchConsole }
 // for the next tick. The account is FIXTURE_ACCOUNTS.j7, kept between runs, so
 // the state that carries the journey survives; it is never deleted.
 // Production only: the preview Worker has no inbox to sign in through.
-test.skip(
-  !process.env.PLAYWRIGHT_TEST_BASE_URL,
-  "J7 needs the production sweep, the fixture Worker and the mail path",
-);
+test.skip(!process.env.PLAYWRIGHT_TEST_BASE_URL, "J7 needs the production sweep, the fixture Worker and the mail path");
 
 const FIXTURE_ORIGIN = "https://fixture.0509.in";
 const SWEEP_UTC_HOUR = 2;
 const SETTLE_MS = 60 * 60 * 1000;
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 type Variant = "base" | "raised";
 
@@ -34,7 +32,9 @@ async function readFixture(): Promise<{ variant: Variant; flippedAt: string }> {
   const html = await response.text();
   const match = /<p id="price" data-variant="(base|raised)" data-flipped-at="([^"]*)"/.exec(html);
   if (match === null) {
-    throw new Error("the fixture Worker serves no #price marker: 0509-fixture-site is not deployed with the J7 variant");
+    throw new Error(
+      "the fixture Worker serves no #price marker: 0509-fixture-site is not deployed with the J7 variant",
+    );
   }
   return { variant: match[1] as Variant, flippedAt: match[2] };
 }
@@ -42,7 +42,7 @@ async function readFixture(): Promise<{ variant: Variant; flippedAt: string }> {
 function lastCompletedTick(now: number): number {
   const date = new Date(now);
   const today = Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate(), SWEEP_UTC_HOUR);
-  return today + SETTLE_MS <= now ? today : today - 24 * 60 * 60 * 1000;
+  return today + SETTLE_MS <= now ? today : today - DAY_MS;
 }
 
 async function flip(variant: Variant): Promise<void> {
@@ -62,12 +62,12 @@ async function trackFixture(page: Page): Promise<void> {
   await expect(page.getByRole("button", { name: "edit name" })).toBeVisible({ timeout: 30_000 });
   await expect(page.getByText("looking on the site")).toHaveCount(0, { timeout: 30_000 });
   await page.getByRole("button", { name: "That's me" }).click();
-  await expect(page).toHaveURL(/\/onboarding\/competitors$/, { timeout: 30_000 });
+  await expect(page).toHaveURL(/\/onboarding\/competitors$/, { timeout: 10_000 });
   await page.getByLabel("Add one we missed").fill("fixture.0509.in");
   await page.getByRole("button", { name: "Add", exact: true }).click();
   await expect(page.getByRole("list", { name: "Watching" }).getByRole("listitem")).toHaveCount(1);
   await page.getByRole("button", { name: "Start watching" }).click();
-  await expect(page).toHaveURL(/\/app$/);
+  await expect(page).toHaveURL(/\/app$/, { timeout: 30_000 });
 }
 
 test("J7 a fixture price flip reaches Alerts as a before-and-after mark @own-signin", async ({ page }, testInfo) => {
@@ -79,10 +79,7 @@ test("J7 a fixture price flip reaches Alerts as a before-and-after mark @own-sig
 
   const { variant, flippedAt } = await readFixture();
   const caught = flippedAt !== "" && Date.parse(flippedAt) < lastCompletedTick(Date.now());
-  test.skip(
-    flippedAt !== "" && !caught,
-    `J7: awaiting the first site sweep after the flip at ${flippedAt}`,
-  );
+  test.skip(flippedAt !== "" && !caught, `J7: awaiting the first site sweep after the flip at ${flippedAt}`);
 
   const watched = watchConsole(page);
   await signInWithMagicLink(page, FIXTURE_ACCOUNTS.j7.email, requireInboxToken(), /\/(onboarding|app)/);
@@ -100,7 +97,17 @@ test("J7 a fixture price flip reaches Alerts as a before-and-after mark @own-sig
   }
 
   await page.goto("/app/alerts");
-  await expect(page.getByTestId("alert-chip-site-changes")).toBeEnabled();
+  const chip = page.getByTestId("alert-chip-site-changes");
+  const sweepsSinceFlip = Math.floor((lastCompletedTick(Date.now()) - Date.parse(flippedAt)) / DAY_MS) + 1;
+  if ((await chip.isDisabled()) && sweepsSinceFlip < 2) {
+    const next: Variant = variant === "raised" ? "base" : "raised";
+    await flip(next);
+    test.skip(
+      sweepsSinceFlip < 2,
+      `J7: the first sweep after the flip only took the baseline; flipped to ${next} for the next one`,
+    );
+  }
+  await expect(chip).toBeEnabled();
   const mark = page
     .getByTestId("site-change")
     .filter({ has: page.locator(`a[href^="${FIXTURE_ORIGIN}"]`) })

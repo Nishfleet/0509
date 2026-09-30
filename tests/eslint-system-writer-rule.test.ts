@@ -67,15 +67,11 @@ async function lintProbe(rel: string, code: string): Promise<{ ignored: boolean;
 
 describe("eslint unscoped system writer route rule (#4705/#5125)", () => {
   for (const module of WRITER_MODULES) {
-    it(
-      `rejects a route importing ${module}.server`,
-      { timeout: 60_000 },
-      async () => {
-        const result = await lintProbe("app/routes/probe-system-writer-tmp.tsx", RELATIVE_IMPORT(module));
-        expect(result.ignored).toBe(false);
-        expect(result.messages.some((m) => m.includes(MARKER))).toBe(true);
-      },
-    );
+    it(`rejects a route importing ${module}.server`, { timeout: 60_000 }, async () => {
+      const result = await lintProbe("app/routes/probe-system-writer-tmp.tsx", RELATIVE_IMPORT(module));
+      expect(result.ignored).toBe(false);
+      expect(result.messages.some((m) => m.includes(MARKER))).toBe(true);
+    });
   }
 
   it("rejects the ~/ alias form too", { timeout: 60_000 }, async () => {

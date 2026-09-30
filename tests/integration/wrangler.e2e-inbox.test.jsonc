@@ -7,8 +7,8 @@
   "compatibility_date": "2026-09-16",
   "main": "../../workers/e2e-inbox.ts",
   "durable_objects": {
-    "bindings": [{ "name": "INBOX", "class_name": "InboxMailbox" }]
+    "bindings": [{ "name": "INBOX", "class_name": "InboxMailbox" }],
   },
   "migrations": [{ "tag": "v1", "new_sqlite_classes": ["InboxMailbox"] }],
-  "vars": { "E2E_INBOX_TOKEN": "integration-token" }
+  "vars": { "E2E_INBOX_TOKEN": "integration-token" },
 }

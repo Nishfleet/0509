@@ -146,10 +146,34 @@ async function compileAppCss(): Promise<string> {
     // is explicit on purpose: the served bundle tree-shakes any utility no
     // surface uses, which would make an unused token invisible here — a token
     // whose utility is never generated anywhere is itself a drift.
-    ...["bone", "card", "ink", "ink-soft", "ink-faint", "line", "green", "green-ink", "green-wash", "red", "on-green"]
-      .flatMap((token) => [`bg-${token}`, `text-${token}`, `border-${token}`]),
-    ...["display-1", "display-2", "display-3", "mark-lg", "mark-md", "mark-sm", "title", "row-name", "body", "body-sm", "eyebrow", "pill", "meta"]
-      .map((token) => `text-${token}`),
+    ...[
+      "bone",
+      "card",
+      "ink",
+      "ink-soft",
+      "ink-faint",
+      "line",
+      "green",
+      "green-ink",
+      "green-wash",
+      "red",
+      "on-green",
+    ].flatMap((token) => [`bg-${token}`, `text-${token}`, `border-${token}`]),
+    ...[
+      "display-1",
+      "display-2",
+      "display-3",
+      "mark-lg",
+      "mark-md",
+      "mark-sm",
+      "title",
+      "row-name",
+      "body",
+      "body-sm",
+      "eyebrow",
+      "pill",
+      "meta",
+    ].map((token) => `text-${token}`),
     "ease-push",
     "ease-fade",
     "duration-push",
@@ -189,7 +213,7 @@ const darkMediaDecls = declarationsIn(
   compiled,
   (s) =>
     (s.startsWith("@media") && s.includes("prefers-color-scheme: dark")) ||
-    (s.includes(":not([data-theme=\"light\"])") && s.includes(":root")),
+    (s.includes(':not([data-theme="light"])') && s.includes(":root")),
 );
 const darkAttrDecls = declarationsIn(compiled, (s) => s.includes('[data-theme="dark"]'));
 
@@ -320,7 +344,9 @@ function curves(sectionText: string): Map<string, string> {
 // literally would fail on formatting alone, so the doc side is normalised to
 // the CSS spelling — the same reason `ascii()` exists for the minus sign.
 function normaliseCurve(curve: string): string {
-  return curve.replace(/,\s*/g, ", ");
+  return curve
+    .replace(/,\s*/g, ", ")
+    .replace(/(^|[^\d])\.(\d)/g, (_match, before: string, digit: string) => `${before}0.${digit}`);
 }
 
 // A curve used inside `new RegExp` must have its metacharacters escaped, or the
@@ -377,7 +403,9 @@ describe("motion tokens resolve to DESIGN.md §9 (#3984)", () => {
       // reaches the canonical token. Both halves, same as the colour suite.
       expect(compiled, `no .duration-${utility} rule`).toMatch(new RegExp(`\\.duration-${utility}\\s*\\{`));
       expect(compiled, `no .duration-${utility} rule using the --transition-duration-* name`).toMatch(
-        new RegExp(`\\.duration-${utility}\\s*\\{[^}]*transition-duration:\\s*var\\(--transition-duration-${utility}\\)`),
+        new RegExp(
+          `\\.duration-${utility}\\s*\\{[^}]*transition-duration:\\s*var\\(--transition-duration-${utility}\\)`,
+        ),
       );
     }
     // The fade is what §9 gives `linear`; asserting it is what stops the six
@@ -456,7 +484,13 @@ describe("the one stylesheet stays the one stylesheet (#3984)", () => {
     // hex the moment someone edits one of the two. ASSERTING THE NAMES, not the
     // hexes: the hexes are already pinned to §4 above.
     const css = await readFile(path.join(REPO_ROOT, "app/app.css"), "utf8");
-    for (const legacy of ["--color-accent", "--color-accent-ink", "--color-accent-wash", "--color-strike", "--color-on-accent"]) {
+    for (const legacy of [
+      "--color-accent",
+      "--color-accent-ink",
+      "--color-accent-wash",
+      "--color-strike",
+      "--color-on-accent",
+    ]) {
       expect(css, `${legacy} is a second name for a §4 colour`).not.toContain(legacy);
     }
   });

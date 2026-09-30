@@ -16,7 +16,7 @@ const TRIPWIRE =
   "SELECT workspace_id, channel_id, COUNT(*) AS targets FROM send_target GROUP BY workspace_id, channel_id HAVING COUNT(*) > 1";
 
 const violations = async () =>
-  ((await env.DB.prepare(TRIPWIRE).all<{ workspace_id: string; channel_id: string; targets: number }>()).results ?? []);
+  (await env.DB.prepare(TRIPWIRE).all<{ workspace_id: string; channel_id: string; targets: number }>()).results ?? [];
 
 describe("recipient tripwire (0509#4063)", () => {
   beforeEach(async () => {
@@ -35,7 +35,9 @@ describe("recipient tripwire (0509#4063)", () => {
       `INSERT INTO workspace (id, name, owner_user_id, timezone, brief_weekday, brief_hour, created_at)
        VALUES ('ws-trip', 'Trip wire', 'user-trip', 'UTC', 1, 8, '2026-09-22T00:00:00Z')`,
     ).run();
-    await env.DB.prepare(`INSERT INTO channel (id, key, is_enabled, config_json) VALUES ('chan-trip', 'email', 1, '{}')`).run();
+    await env.DB.prepare(
+      `INSERT INTO channel (id, key, is_enabled, config_json) VALUES ('chan-trip', 'email', 1, '{}')`,
+    ).run();
     await env.DB.prepare(
       `INSERT INTO send_target (id, workspace_id, channel_id, target_value, is_verified, created_at)
        VALUES ('target-1', 'ws-trip', 'chan-trip', 'one@0509.io', 1, '2026-09-22T00:00:01Z')`,

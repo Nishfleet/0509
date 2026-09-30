@@ -13,9 +13,30 @@ const EXAMPLES: readonly {
   after: string;
   own: boolean;
 }[] = [
-  { needs: "site.pricing", who: "A rival", where: "pricing page", before: "20% off annual", after: "30% off annual", own: false },
-  { needs: "ads.meta", who: "A rival", where: "3 new Meta ads", before: "“Built for serious teams”", after: "“Affordable”", own: false },
-  { needs: "site.home", who: "A rival", where: "homepage", before: "“Built for serious teams”", after: "“Built for everyone”", own: false },
+  {
+    needs: "site.pricing",
+    who: "A rival",
+    where: "pricing page",
+    before: "20% off annual",
+    after: "30% off annual",
+    own: false,
+  },
+  {
+    needs: "ads.meta",
+    who: "A rival",
+    where: "3 new Meta ads",
+    before: "“Built for serious teams”",
+    after: "“Affordable”",
+    own: false,
+  },
+  {
+    needs: "site.home",
+    who: "A rival",
+    where: "homepage",
+    before: "“Built for serious teams”",
+    after: "“Built for everyone”",
+    own: false,
+  },
   { needs: "own.breakage", who: "Your site", where: "homepage", before: "Page loads", after: "Error 503", own: true },
 ];
 
@@ -56,6 +77,7 @@ export function Hero() {
           <p id="hero-proof" className={`${eyebrow} text-green-ink`}>
             How a change reads
           </p>
+          <p className="mt-2 font-mono text-meta text-ink-soft">Worked examples, not live marks.</p>
           <ul className="mt-4 grid gap-3">
             {SHOWN.map((example) => (
               <li
@@ -67,7 +89,9 @@ export function Hero() {
                 </p>
                 <ExampleMark before={example.before} after={example.after} className="mt-3 text-mark-md" />
                 {example.own ? (
-                  <p className="mt-3 font-mono text-meta text-ink-soft">This one is emailed to you the moment we see it.</p>
+                  <p className="mt-3 font-mono text-meta text-ink-soft">
+                    This one is emailed to you the moment we see it.
+                  </p>
                 ) : null}
               </li>
             ))}

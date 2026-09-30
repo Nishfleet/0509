@@ -25,9 +25,7 @@ interface OnboardingTimesRow {
 }
 
 export async function readOnboardingTimes(workspaceId: string): Promise<OnboardingTimes | null> {
-  const row = await env.DB.prepare(SELECT_ONBOARDING_TIMES)
-    .bind(workspaceId)
-    .first<OnboardingTimesRow>();
+  const row = await env.DB.prepare(SELECT_ONBOARDING_TIMES).bind(workspaceId).first<OnboardingTimesRow>();
   if (row === null) return null;
   return {
     startedAt: row.started_at,

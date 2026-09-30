@@ -40,7 +40,8 @@ describe("extractPageText", () => {
   });
 
   it("keeps reading after a hidden void element and separates text nodes", async () => {
-    const html = "<p>before</p><img aria-hidden='true'><br aria-hidden='true'><p>after</p><div>Alpha</div><div>Beta</div>";
+    const html =
+      "<p>before</p><img aria-hidden='true'><br aria-hidden='true'><p>after</p><div>Alpha</div><div>Beta</div>";
     const nested = "<div aria-hidden='true'><img aria-hidden='true'>hidden</div><p>kept</p>";
 
     const extracted = await extractPageText(html);

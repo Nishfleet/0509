@@ -2,6 +2,7 @@
 title: lighthouse red on main
 labels: agent-ready, critical-path
 ---
+
 Run: {{ env.RUN_URL }}
 Head: {{ env.SHA }}
 Budgets: lighthouse-budget.json

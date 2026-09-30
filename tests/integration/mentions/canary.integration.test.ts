@@ -97,7 +97,10 @@ describe("per-source canary in the mentions sweep (#4003 slice 2/6)", () => {
 
   it("case A: a body with one article is a green canary and clears the degraded reason", async () => {
     const source = await seedCanarySource("a");
-    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify(ONE_ARTICLE))));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response(JSON.stringify(ONE_ARTICLE))),
+    );
 
     try {
       const count = await runCanary(source, NOW);
@@ -113,7 +116,10 @@ describe("per-source canary in the mentions sweep (#4003 slice 2/6)", () => {
 
   it("case B: an empty 200 body is a zero canary that degrades the source and leaves last_good_at", async () => {
     const source = await seedCanarySource("b");
-    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ articles: [] }))));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response(JSON.stringify({ articles: [] }))),
+    );
 
     try {
       const count = await runCanary(source, NOW);
@@ -129,7 +135,10 @@ describe("per-source canary in the mentions sweep (#4003 slice 2/6)", () => {
 
   it("case B2: an adapter that throws is a zero canary, never a green one", async () => {
     const source = await seedCanarySource("b2");
-    vi.stubGlobal("fetch", vi.fn(async () => new Response("not json", { status: 200 })));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response("not json", { status: 200 })),
+    );
 
     try {
       const count = await runCanary(source, NOW);
@@ -144,7 +153,10 @@ describe("per-source canary in the mentions sweep (#4003 slice 2/6)", () => {
 
   it("case C: the sweep writes the canary count it was handed onto every snapshot row", async () => {
     const { competitorId, brand } = await seedWorkspace();
-    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify(ONE_ARTICLE))));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response(JSON.stringify(ONE_ARTICLE))),
+    );
     Reflect.set(env, "AI", {
       run: vi.fn((_model: string, input: { questions: Record<string, unknown> }) => {
         const [questionId] = Object.keys(input.questions);
@@ -171,7 +183,10 @@ describe("per-source canary in the mentions sweep (#4003 slice 2/6)", () => {
 describe("mentions sweep telemetry (#4003 slice 3/6)", () => {
   it("case D: each swept source emits exactly one MENTIONS_SOURCES point with its item and canary counts", async () => {
     const { brand } = await seedWorkspace();
-    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify(ONE_ARTICLE))));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response(JSON.stringify(ONE_ARTICLE))),
+    );
     const spy = vi.spyOn(workerEnv.MENTIONS_SOURCES, "writeDataPoint");
 
     try {
@@ -186,10 +201,7 @@ describe("mentions sweep telemetry (#4003 slice 3/6)", () => {
       const call = spy.mock.calls[0];
       if (!call || !call[0]) throw new Error("expected one MENTIONS_SOURCES point");
       const point = call[0];
-      const blobsAndIndexes: (string | ArrayBuffer | null)[] = [
-        ...(point.blobs ?? []),
-        ...(point.indexes ?? []),
-      ];
+      const blobsAndIndexes: (string | ArrayBuffer | null)[] = [...(point.blobs ?? []), ...(point.indexes ?? [])];
       for (const value of blobsAndIndexes) {
         if (typeof value !== "string") continue;
         expect(value).not.toContain(target.query);

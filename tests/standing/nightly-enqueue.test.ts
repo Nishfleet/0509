@@ -28,7 +28,10 @@ function scheduleRow(id: string) {
   };
 }
 
-function fakeDb(schedules: ReturnType<typeof scheduleRow>[], unranked: { workspace_id: string; week_start_at: string }[]) {
+function fakeDb(
+  schedules: ReturnType<typeof scheduleRow>[],
+  unranked: { workspace_id: string; week_start_at: string }[],
+) {
   const prepares: string[] = [];
   return {
     prepares,
@@ -81,11 +84,7 @@ describe("nightly standing enqueue (0509#5753)", () => {
     const week = openWeek(UTC_MONDAY, NOW);
     const justClosed = new Date(week.startsAt.getTime() + 1_000);
     const closedWeekStart = previousBriefAt(UTC_MONDAY, week.startsAt).toISOString();
-    const { catchUpAt } = planRollovers(
-      [workspace(WS)],
-      new Set([unrankedWeekKey(WS, closedWeekStart)]),
-      justClosed,
-    );
+    const { catchUpAt } = planRollovers([workspace(WS)], new Set([unrankedWeekKey(WS, closedWeekStart)]), justClosed);
     expect(catchUpAt).toEqual([]);
   });
 

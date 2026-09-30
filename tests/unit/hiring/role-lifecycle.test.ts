@@ -35,7 +35,13 @@ function lifecycleOf(update: HiringSignalUpdate): unknown {
 
 describe("readLifecycle", () => {
   it("reads a valid lifecycle out of the payload object", () => {
-    const lifecycle: Lifecycle = { state: "closed", missed: 0, closedAt: FIRST_CLOSED_AT, reopenedAt: TICK, reopenCount: 2 };
+    const lifecycle: Lifecycle = {
+      state: "closed",
+      missed: 0,
+      closedAt: FIRST_CLOSED_AT,
+      reopenedAt: TICK,
+      reopenCount: 2,
+    };
 
     expect(readLifecycle(JSON.stringify({ platform: "greenhouse", lifecycle }))).toEqual(lifecycle);
   });
@@ -86,7 +92,13 @@ describe("planRoleLifecycle", () => {
 
     expect(updates).toHaveLength(1);
     expect(updates[0].lastSeenAt).toBe(EARLIER_TICK);
-    expect(lifecycleOf(updates[0])).toEqual({ state: "closed", missed: 0, closedAt: TICK, reopenedAt: null, reopenCount: 0 });
+    expect(lifecycleOf(updates[0])).toEqual({
+      state: "closed",
+      missed: 0,
+      closedAt: TICK,
+      reopenedAt: null,
+      reopenCount: 0,
+    });
   });
 
   it("reopens a closed role that reappears, keeping the last closure", () => {

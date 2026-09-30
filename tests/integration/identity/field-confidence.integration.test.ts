@@ -27,7 +27,7 @@ beforeEach(async () => {
   const userId = `u-field-confidence-${String(runs)}`;
   await env.DB.batch([
     env.DB.prepare("DELETE FROM jev_verdict"),
-    env.DB.prepare('DELETE FROM workspace WHERE id = ?1').bind(WS_ID),
+    env.DB.prepare("DELETE FROM workspace WHERE id = ?1").bind(WS_ID),
     env.DB.prepare('DELETE FROM "user" WHERE id = ?1').bind(userId),
   ]);
   await env.DB.batch([
@@ -60,9 +60,7 @@ function askedIds(run: ReturnType<typeof stubAi>): string[][] {
 function runAnswer(p: Record<string, number>) {
   return (_model: string, _input: unknown) =>
     Promise.resolve({
-      answers: Object.fromEntries(
-        Object.entries(p).map(([id, value]) => [id, { type: "noul", noul: value }] as const),
-      ),
+      answers: Object.fromEntries(Object.entries(p).map(([id, value]) => [id, { type: "noul", noul: value }] as const)),
     });
 }
 

@@ -31,11 +31,8 @@ async function workspaceFor(request: Request): Promise<string> {
 export async function loader({ request }: Route.LoaderArgs) {
   const workspaceId = await workspaceFor(request);
   const wanted = new URL(request.url).searchParams.get("upgraded");
-  return {
-    ...(await readCompetitors(workspaceId)),
-    tier: await readPlanTier(workspaceId),
-    wanted: isPlanId(wanted) ? wanted : null,
-  };
+  const [competitors, tier] = await Promise.all([readCompetitors(workspaceId), readPlanTier(workspaceId)]);
+  return { ...competitors, tier, wanted: isPlanId(wanted) ? wanted : null };
 }
 
 export async function action({ request }: Route.ActionArgs) {
@@ -54,9 +51,7 @@ function CompetitorItem({ competitor }: { competitor: CompetitorRow }) {
         <BrandChip name={competitor.name} href={`/app/competitors/${competitor.entityId}`} off={off} />
         <div className="min-w-0">
           <p className="truncate text-body-sm text-ink-soft">{competitor.domain}</p>
-          {competitor.reason === null ? null : (
-            <p className="mt-1 text-body-sm text-ink-soft">{competitor.reason}</p>
-          )}
+          {competitor.reason === null ? null : <p className="mt-1 text-body-sm text-ink-soft">{competitor.reason}</p>}
         </div>
       </div>
       <BrandSwitchField
