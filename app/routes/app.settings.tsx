@@ -4,6 +4,7 @@ import { DeleteAccount, ExportData } from "../components/account-settings";
 import { DismissedBrands } from "../components/dismissed-brands";
 import { Footer } from "../components/footer";
 import { OwnSiteAlertsSetting } from "../components/own-site-alerts-setting";
+import { PlanSection } from "../components/plan-settings";
 import { PAGE, PageHeading } from "../components/page-heading";
 import { AccountSection, AgentsSection, BriefSection } from "../components/settings-sections";
 import { requireFreshSession, requireSession } from "../lib/require-session.server";
@@ -31,6 +32,7 @@ export default function Page({ loaderData, actionData }: Route.ComponentProps) {
       <OwnSiteAlertsSetting on={loaderData.ownSiteAlerts} />
       <DismissedBrands dismissed={loaderData.dismissed} />
       <AgentsSection />
+      <PlanSection plan={loaderData.plan} />
       <AccountSection email={loaderData.email} delivery={loaderData.delivery} result={actionData} />
       <ExportData />
       <DeleteAccount email={loaderData.email} error={actionData?.deleteError ?? null} />
