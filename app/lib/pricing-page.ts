@@ -46,7 +46,7 @@ export function pricingMeta() {
           { name: "Five to Nine", path: "/" },
           { name: "Pricing", path: PRICING_PATH },
         ]),
-        softwareApplicationJsonLd(),
+        softwareApplicationJsonLd([]),
       ]),
     },
   ];
