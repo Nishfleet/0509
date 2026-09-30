@@ -36,12 +36,7 @@ export async function insertSnapshot(row: {
 }): Promise<void> {
   await env.DB.batch([
     env.DB.prepare(INSERT_SNAPSHOT).bind(row.id, row.watchId, row.pageId, row.fetchedAt, row.r2Key, row.hash),
-    recordSourceLatestSnapshot({
-      watchId: row.watchId,
-      fetchedAt: row.fetchedAt,
-      itemCount: 1,
-      canaryCount: null,
-    }),
+    recordSourceLatestSnapshot(row.id),
   ]);
 }
 
@@ -68,12 +63,7 @@ export function insertWatchSnapshot(row: {
       row.itemCount,
       row.canaryCount,
     ),
-    recordSourceLatestSnapshot({
-      watchId: row.watchId,
-      fetchedAt: row.fetchedAt,
-      itemCount: row.itemCount,
-      canaryCount: row.canaryCount,
-    }),
+    recordSourceLatestSnapshot(row.id),
   ];
 }
 
@@ -122,12 +112,7 @@ export async function insertBoardSnapshot(row: {
 }): Promise<void> {
   await env.DB.batch([
     env.DB.prepare(INSERT_BOARD_SNAPSHOT).bind(row.id, row.watchId, row.fetchedAt, row.r2Key, row.hash, row.itemCount),
-    recordSourceLatestSnapshot({
-      watchId: row.watchId,
-      fetchedAt: row.fetchedAt,
-      itemCount: row.itemCount,
-      canaryCount: null,
-    }),
+    recordSourceLatestSnapshot(row.id),
   ]);
 }
 
