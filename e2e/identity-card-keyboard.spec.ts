@@ -114,6 +114,54 @@ test("the identity card editor saves and closes on Enter, with focus back on the
   expect(await consoleFailures(page, watched, testInfo), testInfo.project.name).toEqual([]);
 });
 
+test("the identity card editor ignores the Enter that confirms an IME composition", async ({ page }, testInfo) => {
+  test.setTimeout(90_000);
+  const watched = watchConsole(page);
+  const draftPosts = watchDraftPosts(page);
+  const subject = "nope-card-keyboard-ime.example.com";
+  await page.setExtraHTTPHeaders({ cookie: await seedCardSession("example.com") });
+
+  const response = await page.goto(`/onboarding/identity?subject=${subject}`);
+  expect(response?.status()).toBe(200);
+  await expect(page.getByRole("heading", { name: "This is you. Fix anything we got wrong." })).toBeVisible();
+
+  const trigger = page.getByRole("button", { name: TRIGGERS.name });
+  const name = await openEditor(page, "name");
+  await name.fill("ニホン");
+
+  // An IME composition in progress delivers the candidate-confirming Enter as a
+  // keydown with isComposing true. The handler must return before preventDefault,
+  // leaving the editor open and saving nothing, so the customer can finish
+  // converting instead of losing the value to a half-converted save.
+  const composingEnter = await name.evaluate((element) => {
+    const event = new KeyboardEvent("keydown", {
+      key: "Enter",
+      bubbles: true,
+      cancelable: true,
+      isComposing: true,
+    });
+    element.dispatchEvent(event);
+    return event.defaultPrevented;
+  });
+  expect(composingEnter).toBe(false);
+  await expect(name).toHaveCount(1);
+  await expect(name).toHaveValue("ニホン");
+  expect(draftPosts).toHaveLength(0);
+
+  // The Enter after the composition ends still saves and closes.
+  const saveResponse = page.waitForResponse(
+    (response) =>
+      response.request().method() === "POST" && new URL(response.url()).pathname === "/onboarding/identity.data",
+  );
+  await name.press("Enter");
+  await saveResponse;
+  expect(draftPosts).toHaveLength(1);
+  await expect(name).toHaveCount(0);
+  await expect(trigger).toBeFocused();
+  await expect(trigger).toContainText("ニホン");
+  expect(await consoleFailures(page, watched, testInfo), testInfo.project.name).toEqual([]);
+});
+
 test("the identity card editor saves and closes on Escape, with focus back on the trigger", async ({
   page,
 }, testInfo) => {
