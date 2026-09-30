@@ -1,211 +1,422 @@
 [
-  { "id": "stripe-home", "split": "train", "label": "home",
+  {
+    "id": "stripe-home",
+    "split": "train",
+    "label": "home",
     "why": "stripe.com's front page lives at the root URL",
     "subject": { "domain": "stripe.com" },
-    "page": { "url": "https://stripe.com/", "title": "Stripe | Financial Infrastructure to Grow Your Revenue" } },
-  { "id": "stripe-pricing", "split": "train", "label": "pricing",
+    "page": { "url": "https://stripe.com/", "title": "Stripe | Financial Infrastructure to Grow Your Revenue" }
+  },
+  {
+    "id": "stripe-pricing",
+    "split": "train",
+    "label": "pricing",
     "why": "Stripe's /pricing page lists its plans and fees",
     "subject": { "domain": "stripe.com" },
-    "page": { "url": "https://stripe.com/pricing", "title": "Pricing & Fees | Stripe" } },
-  { "id": "stripe-docs", "split": "train", "label": "other",
+    "page": { "url": "https://stripe.com/pricing", "title": "Pricing & Fees | Stripe" }
+  },
+  {
+    "id": "stripe-docs",
+    "split": "train",
+    "label": "other",
     "why": "developer documentation is none of the six named roles",
     "subject": { "domain": "stripe.com" },
-    "page": { "url": "https://stripe.com/docs", "title": "Stripe Documentation" } },
-  { "id": "stripe-jobs", "split": "train", "label": "careers",
+    "page": { "url": "https://stripe.com/docs", "title": "Stripe Documentation" }
+  },
+  {
+    "id": "stripe-jobs",
+    "split": "train",
+    "label": "careers",
     "why": "Stripe's /jobs page carries open roles and working at the company",
     "subject": { "domain": "stripe.com" },
-    "page": { "url": "https://stripe.com/jobs", "title": "Jobs at Stripe" } },
-  { "id": "stripe-services-agreement", "split": "train", "label": "legal",
+    "page": { "url": "https://stripe.com/jobs", "title": "Jobs at Stripe" }
+  },
+  {
+    "id": "stripe-services-agreement",
+    "split": "train",
+    "label": "legal",
     "why": "a services agreement is contract terms, the legal role",
     "subject": { "domain": "stripe.com" },
-    "page": { "url": "https://stripe.com/legal/ssa", "title": "Stripe Services Agreement" } },
-  { "id": "stripe-blog", "split": "train", "label": "blog",
+    "page": { "url": "https://stripe.com/legal/ssa", "title": "Stripe Services Agreement" }
+  },
+  {
+    "id": "stripe-blog",
+    "split": "train",
+    "label": "blog",
     "why": "Stripe's blog publishes articles and product news",
     "subject": { "domain": "stripe.com" },
-    "page": { "url": "https://stripe.com/blog", "title": "Stripe Blog" } },
-  { "id": "stripe-newsroom", "split": "train", "label": "blog",
+    "page": { "url": "https://stripe.com/blog", "title": "Stripe Blog" }
+  },
+  {
+    "id": "stripe-newsroom",
+    "split": "train",
+    "label": "blog",
     "why": "a newsroom is a news feed of articles and press posts",
     "subject": { "domain": "stripe.com" },
-    "page": { "url": "https://stripe.com/newsroom", "title": "Stripe Newsroom" } },
-  { "id": "stripe-atlas", "split": "train", "label": "product",
+    "page": { "url": "https://stripe.com/newsroom", "title": "Stripe Newsroom" }
+  },
+  {
+    "id": "stripe-atlas",
+    "split": "train",
+    "label": "product",
     "why": "Atlas is one specific Stripe product, own page deep in the site",
     "subject": { "domain": "stripe.com" },
-    "page": { "url": "https://stripe.com/atlas", "title": "Stripe Atlas" } },
-  { "id": "figma-home", "split": "train", "label": "home",
+    "page": { "url": "https://stripe.com/atlas", "title": "Stripe Atlas" }
+  },
+  {
+    "id": "figma-home",
+    "split": "train",
+    "label": "home",
     "why": "figma.com's front page sits at the root URL",
     "subject": { "domain": "figma.com" },
-    "page": { "url": "https://www.figma.com/", "title": "Figma: The Collaborative Interface Design Tool" } },
-  { "id": "figma-pricing", "split": "train", "label": "pricing",
+    "page": { "url": "https://www.figma.com/", "title": "Figma: The Collaborative Interface Design Tool" }
+  },
+  {
+    "id": "figma-pricing",
+    "split": "train",
+    "label": "pricing",
     "why": "Figma's /pricing page lists seat plans and prices",
     "subject": { "domain": "figma.com" },
-    "page": { "url": "https://www.figma.com/pricing/", "title": "Figma Pricing" } },
-  { "id": "figma-community", "split": "train", "label": "other",
+    "page": { "url": "https://www.figma.com/pricing/", "title": "Figma Pricing" }
+  },
+  {
+    "id": "figma-community",
+    "split": "train",
+    "label": "other",
     "why": "a public file gallery is a community page, not a named role",
     "subject": { "domain": "figma.com" },
-    "page": { "url": "https://www.figma.com/community", "title": "Figma Community" } },
-  { "id": "figma-careers", "split": "train", "label": "careers",
+    "page": { "url": "https://www.figma.com/community", "title": "Figma Community" }
+  },
+  {
+    "id": "figma-careers",
+    "split": "train",
+    "label": "careers",
     "why": "Figma's careers page carries open roles and working-at info",
     "subject": { "domain": "figma.com" },
-    "page": { "url": "https://www.figma.com/careers/", "title": "Figma Careers" } },
-  { "id": "figma-blog", "split": "train", "label": "blog",
+    "page": { "url": "https://www.figma.com/careers/", "title": "Figma Careers" }
+  },
+  {
+    "id": "figma-blog",
+    "split": "train",
+    "label": "blog",
     "why": "Figma posts articles on its blog",
     "subject": { "domain": "figma.com" },
-    "page": { "url": "https://www.figma.com/blog/", "title": "Figma Blog" } },
-  { "id": "figma-legal", "split": "train", "label": "legal",
+    "page": { "url": "https://www.figma.com/blog/", "title": "Figma Blog" }
+  },
+  {
+    "id": "figma-legal",
+    "split": "train",
+    "label": "legal",
     "why": "a legal hub holds terms and policies, the legal role",
     "subject": { "domain": "figma.com" },
-    "page": { "url": "https://www.figma.com/legal/", "title": "Legal | Figma" } },
-  { "id": "apple-home", "split": "train", "label": "home",
+    "page": { "url": "https://www.figma.com/legal/", "title": "Legal | Figma" }
+  },
+  {
+    "id": "apple-home",
+    "split": "train",
+    "label": "home",
     "why": "apple.com's front page sits at the root URL",
     "subject": { "domain": "apple.com" },
-    "page": { "url": "https://www.apple.com/", "title": "Apple" } },
-  { "id": "apple-buy-iphone-15", "split": "train", "label": "product",
+    "page": { "url": "https://www.apple.com/", "title": "Apple" }
+  },
+  {
+    "id": "apple-buy-iphone-15",
+    "split": "train",
+    "label": "product",
     "why": "the buy page for one iPhone model is a single product page",
     "subject": { "domain": "apple.com" },
-    "page": { "url": "https://www.apple.com/shop/buy-iphone/iphone-15", "title": "Buy iPhone 15" } },
-  { "id": "apple-buy-macbook-air", "split": "train", "label": "product",
+    "page": { "url": "https://www.apple.com/shop/buy-iphone/iphone-15", "title": "Buy iPhone 15" }
+  },
+  {
+    "id": "apple-buy-macbook-air",
+    "split": "train",
+    "label": "product",
     "why": "the buy page for one Mac model is a single product page",
     "subject": { "domain": "apple.com" },
-    "page": { "url": "https://www.apple.com/shop/buy-mac/macbook-air", "title": "Buy MacBook Air" } },
-  { "id": "apple-newsroom", "split": "train", "label": "blog",
+    "page": { "url": "https://www.apple.com/shop/buy-mac/macbook-air", "title": "Buy MacBook Air" }
+  },
+  {
+    "id": "apple-newsroom",
+    "split": "train",
+    "label": "blog",
     "why": "Apple Newsroom is a news feed of articles and press posts",
     "subject": { "domain": "apple.com" },
-    "page": { "url": "https://www.apple.com/newsroom/", "title": "Apple Newsroom" } },
-  { "id": "apple-privacy", "split": "train", "label": "legal",
+    "page": { "url": "https://www.apple.com/newsroom/", "title": "Apple Newsroom" }
+  },
+  {
+    "id": "apple-privacy",
+    "split": "train",
+    "label": "legal",
     "why": "a privacy policy is named in the legal option",
     "subject": { "domain": "apple.com" },
-    "page": { "url": "https://www.apple.com/legal/privacy/", "title": "Apple Privacy Policy" } },
-  { "id": "tesla-model3", "split": "train", "label": "product",
+    "page": { "url": "https://www.apple.com/legal/privacy/", "title": "Apple Privacy Policy" }
+  },
+  {
+    "id": "tesla-model3",
+    "split": "train",
+    "label": "product",
     "why": "Model 3's own page describes one product",
     "subject": { "domain": "tesla.com" },
-    "page": { "url": "https://www.tesla.com/model3", "title": "Model 3" } },
-  { "id": "tesla-modely", "split": "train", "label": "product",
+    "page": { "url": "https://www.tesla.com/model3", "title": "Model 3" }
+  },
+  {
+    "id": "tesla-modely",
+    "split": "train",
+    "label": "product",
     "why": "Model Y's own page describes one product",
     "subject": { "domain": "tesla.com" },
-    "page": { "url": "https://www.tesla.com/modely", "title": "Model Y" } },
-  { "id": "tesla-careers", "split": "train", "label": "careers",
+    "page": { "url": "https://www.tesla.com/modely", "title": "Model Y" }
+  },
+  {
+    "id": "tesla-careers",
+    "split": "train",
+    "label": "careers",
     "why": "Tesla's careers page carries open roles and working-at info",
     "subject": { "domain": "tesla.com" },
-    "page": { "url": "https://www.tesla.com/careers", "title": "Tesla Careers" } },
-  { "id": "shopify-home", "split": "train", "label": "home",
+    "page": { "url": "https://www.tesla.com/careers", "title": "Tesla Careers" }
+  },
+  {
+    "id": "shopify-home",
+    "split": "train",
+    "label": "home",
     "why": "shopify.com's front page sits at the root URL",
     "subject": { "domain": "shopify.com" },
-    "page": { "url": "https://www.shopify.com/", "title": "Shopify" } },
-  { "id": "shopify-pricing", "split": "train", "label": "pricing",
+    "page": { "url": "https://www.shopify.com/", "title": "Shopify" }
+  },
+  {
+    "id": "shopify-pricing",
+    "split": "train",
+    "label": "pricing",
     "why": "Shopify's pricing page lists its plans and prices",
     "subject": { "domain": "shopify.com" },
-    "page": { "url": "https://www.shopify.com/pricing", "title": "Shopify Pricing" } },
-  { "id": "dropbox-plans", "split": "train", "label": "pricing",
+    "page": { "url": "https://www.shopify.com/pricing", "title": "Shopify Pricing" }
+  },
+  {
+    "id": "dropbox-plans",
+    "split": "train",
+    "label": "pricing",
     "why": "the /plans page compares Dropbox's personal and business plans",
     "subject": { "domain": "dropbox.com" },
-    "page": { "url": "https://www.dropbox.com/plans", "title": "Dropbox Plans" } },
-  { "id": "dropbox-about", "split": "train", "label": "other",
+    "page": { "url": "https://www.dropbox.com/plans", "title": "Dropbox Plans" }
+  },
+  {
+    "id": "dropbox-about",
+    "split": "train",
+    "label": "other",
     "why": "an about page is company information, not a jobs page",
     "subject": { "domain": "dropbox.com" },
-    "page": { "url": "https://www.dropbox.com/about", "title": "About Dropbox" } },
+    "page": { "url": "https://www.dropbox.com/about", "title": "About Dropbox" }
+  },
 
-  { "id": "vercel-home", "split": "test", "label": "home",
+  {
+    "id": "vercel-home",
+    "split": "test",
+    "label": "home",
     "why": "vercel.com's front page sits at the root URL",
     "subject": { "domain": "vercel.com" },
-    "page": { "url": "https://vercel.com/", "title": "Vercel: Build and deploy the best web experiences" } },
-  { "id": "vercel-pricing", "split": "test", "label": "pricing",
+    "page": { "url": "https://vercel.com/", "title": "Vercel: Build and deploy the best web experiences" }
+  },
+  {
+    "id": "vercel-pricing",
+    "split": "test",
+    "label": "pricing",
     "why": "Vercel's pricing page lists its plans and prices",
     "subject": { "domain": "vercel.com" },
-    "page": { "url": "https://vercel.com/pricing", "title": "Pricing – Vercel" } },
-  { "id": "vercel-blog", "split": "test", "label": "blog",
+    "page": { "url": "https://vercel.com/pricing", "title": "Pricing – Vercel" }
+  },
+  {
+    "id": "vercel-blog",
+    "split": "test",
+    "label": "blog",
     "why": "Vercel's blog publishes articles and product news",
     "subject": { "domain": "vercel.com" },
-    "page": { "url": "https://vercel.com/blog", "title": "Vercel Blog" } },
-  { "id": "vercel-changelog", "split": "test", "label": "blog",
+    "page": { "url": "https://vercel.com/blog", "title": "Vercel Blog" }
+  },
+  {
+    "id": "vercel-changelog",
+    "split": "test",
+    "label": "blog",
     "why": "a changelog is a dated feed of product journal posts",
     "subject": { "domain": "vercel.com" },
-    "page": { "url": "https://vercel.com/changelog", "title": "Changelog – Vercel" } },
-  { "id": "vercel-careers", "split": "test", "label": "careers",
+    "page": { "url": "https://vercel.com/changelog", "title": "Changelog – Vercel" }
+  },
+  {
+    "id": "vercel-careers",
+    "split": "test",
+    "label": "careers",
     "why": "Vercel's careers page carries open roles and working-at info",
     "subject": { "domain": "vercel.com" },
-    "page": { "url": "https://vercel.com/careers", "title": "Careers – Vercel" } },
-  { "id": "vercel-terms", "split": "test", "label": "legal",
+    "page": { "url": "https://vercel.com/careers", "title": "Careers – Vercel" }
+  },
+  {
+    "id": "vercel-terms",
+    "split": "test",
+    "label": "legal",
     "why": "the terms of service page is the legal role",
     "subject": { "domain": "vercel.com" },
-    "page": { "url": "https://vercel.com/legal/terms", "title": "Terms of Service – Vercel" } },
-  { "id": "vercel-contact", "split": "test", "label": "other",
+    "page": { "url": "https://vercel.com/legal/terms", "title": "Terms of Service – Vercel" }
+  },
+  {
+    "id": "vercel-contact",
+    "split": "test",
+    "label": "other",
     "why": "a contact page is none of the six named roles",
     "subject": { "domain": "vercel.com" },
-    "page": { "url": "https://vercel.com/contact", "title": "Contact – Vercel" } },
-  { "id": "github-pricing", "split": "test", "label": "pricing",
+    "page": { "url": "https://vercel.com/contact", "title": "Contact – Vercel" }
+  },
+  {
+    "id": "github-pricing",
+    "split": "test",
+    "label": "pricing",
     "why": "GitHub's pricing page lists its plans and prices",
     "subject": { "domain": "github.com" },
-    "page": { "url": "https://github.com/pricing", "title": "Pricing · GitHub" } },
-  { "id": "github-about", "split": "test", "label": "other",
+    "page": { "url": "https://github.com/pricing", "title": "Pricing · GitHub" }
+  },
+  {
+    "id": "github-about",
+    "split": "test",
+    "label": "other",
     "why": "an about page is company information, not a jobs page",
     "subject": { "domain": "github.com" },
-    "page": { "url": "https://github.com/about", "title": "About GitHub · GitHub" } },
-  { "id": "github-privacy", "split": "test", "label": "legal",
+    "page": { "url": "https://github.com/about", "title": "About GitHub · GitHub" }
+  },
+  {
+    "id": "github-privacy",
+    "split": "test",
+    "label": "legal",
     "why": "a privacy statement is named in the legal option",
     "subject": { "domain": "github.com" },
-    "page": { "url": "https://github.com/site/privacy", "title": "GitHub Privacy Statement" } },
-  { "id": "github-careers", "split": "test", "label": "careers",
+    "page": { "url": "https://github.com/site/privacy", "title": "GitHub Privacy Statement" }
+  },
+  {
+    "id": "github-careers",
+    "split": "test",
+    "label": "careers",
     "why": "this page under /about still lists open roles: jobs",
     "subject": { "domain": "github.com" },
-    "page": { "url": "https://github.com/about/careers", "title": "GitHub Careers" } },
-  { "id": "cloudflare-home", "split": "test", "label": "home",
+    "page": { "url": "https://github.com/about/careers", "title": "GitHub Careers" }
+  },
+  {
+    "id": "cloudflare-home",
+    "split": "test",
+    "label": "home",
     "why": "cloudflare.com's front page sits at the root URL",
     "subject": { "domain": "cloudflare.com" },
-    "page": { "url": "https://www.cloudflare.com/", "title": "Cloudflare: The Web Performance & Security Company" } },
-  { "id": "cloudflare-plans", "split": "test", "label": "pricing",
+    "page": { "url": "https://www.cloudflare.com/", "title": "Cloudflare: The Web Performance & Security Company" }
+  },
+  {
+    "id": "cloudflare-plans",
+    "split": "test",
+    "label": "pricing",
     "why": "the /plans page lists Cloudflare's plans and prices",
     "subject": { "domain": "cloudflare.com" },
-    "page": { "url": "https://www.cloudflare.com/plans/", "title": "Cloudflare Plans" } },
-  { "id": "cloudflare-blog", "split": "test", "label": "blog",
+    "page": { "url": "https://www.cloudflare.com/plans/", "title": "Cloudflare Plans" }
+  },
+  {
+    "id": "cloudflare-blog",
+    "split": "test",
+    "label": "blog",
     "why": "the blog lives on its own subdomain and publishes articles",
     "subject": { "domain": "cloudflare.com" },
-    "page": { "url": "https://blog.cloudflare.com/", "title": "The Cloudflare Blog" } },
-  { "id": "notion-home", "split": "test", "label": "home",
+    "page": { "url": "https://blog.cloudflare.com/", "title": "The Cloudflare Blog" }
+  },
+  {
+    "id": "notion-home",
+    "split": "test",
+    "label": "home",
     "why": "notion.so's front page sits at the root URL",
     "subject": { "domain": "notion.so" },
-    "page": { "url": "https://www.notion.so/", "title": "Notion – Your connected workspace" } },
-  { "id": "notion-pricing", "split": "test", "label": "pricing",
+    "page": { "url": "https://www.notion.so/", "title": "Notion – Your connected workspace" }
+  },
+  {
+    "id": "notion-pricing",
+    "split": "test",
+    "label": "pricing",
     "why": "Notion's pricing page lists its plans and prices",
     "subject": { "domain": "notion.so" },
-    "page": { "url": "https://www.notion.so/pricing", "title": "Notion Pricing" } },
-  { "id": "notion-help", "split": "test", "label": "other",
+    "page": { "url": "https://www.notion.so/pricing", "title": "Notion Pricing" }
+  },
+  {
+    "id": "notion-help",
+    "split": "test",
+    "label": "other",
     "why": "a help center is none of the six named roles",
     "subject": { "domain": "notion.so" },
-    "page": { "url": "https://www.notion.so/help", "title": "Notion Help Center" } },
-  { "id": "notion-careers", "split": "test", "label": "careers",
+    "page": { "url": "https://www.notion.so/help", "title": "Notion Help Center" }
+  },
+  {
+    "id": "notion-careers",
+    "split": "test",
+    "label": "careers",
     "why": "Notion's careers page carries open roles and working-at info",
     "subject": { "domain": "notion.so" },
-    "page": { "url": "https://www.notion.so/careers", "title": "Notion Careers" } },
-  { "id": "airbnb-terms", "split": "test", "label": "legal",
+    "page": { "url": "https://www.notion.so/careers", "title": "Notion Careers" }
+  },
+  {
+    "id": "airbnb-terms",
+    "split": "test",
+    "label": "legal",
     "why": "the terms of service page is the legal role",
     "subject": { "domain": "airbnb.com" },
-    "page": { "url": "https://www.airbnb.com/terms", "title": "Airbnb Terms of Service" } },
-  { "id": "airbnb-jobs", "split": "test", "label": "careers",
+    "page": { "url": "https://www.airbnb.com/terms", "title": "Airbnb Terms of Service" }
+  },
+  {
+    "id": "airbnb-jobs",
+    "split": "test",
+    "label": "careers",
     "why": "this jobs subdomain lists Airbnb's open roles",
     "subject": { "domain": "airbnb.com" },
-    "page": { "url": "https://careers.airbnb.com/", "title": "Airbnb Careers" } },
-  { "id": "netflix-jobs", "split": "test", "label": "careers",
+    "page": { "url": "https://careers.airbnb.com/", "title": "Airbnb Careers" }
+  },
+  {
+    "id": "netflix-jobs",
+    "split": "test",
+    "label": "careers",
     "why": "this jobs subdomain lists Netflix's open roles",
     "subject": { "domain": "netflix.com" },
-    "page": { "url": "https://jobs.netflix.com/", "title": "Netflix Jobs" } },
-  { "id": "steam-counterstrike", "split": "test", "label": "product",
+    "page": { "url": "https://jobs.netflix.com/", "title": "Netflix Jobs" }
+  },
+  {
+    "id": "steam-counterstrike",
+    "split": "test",
+    "label": "product",
     "why": "a Steam store app page is one product's own page",
     "subject": { "domain": "store.steampowered.com" },
-    "page": { "url": "https://store.steampowered.com/app/730/Counter-Strike_2/", "title": "Counter-Strike 2 on Steam" } },
-  { "id": "steam-dota2", "split": "test", "label": "product",
+    "page": { "url": "https://store.steampowered.com/app/730/Counter-Strike_2/", "title": "Counter-Strike 2 on Steam" }
+  },
+  {
+    "id": "steam-dota2",
+    "split": "test",
+    "label": "product",
     "why": "a Steam store app page is one product's own page",
     "subject": { "domain": "store.steampowered.com" },
-    "page": { "url": "https://store.steampowered.com/app/570/Dota_2/", "title": "Dota 2 on Steam" } },
-  { "id": "ikea-bookcase", "split": "test", "label": "product",
+    "page": { "url": "https://store.steampowered.com/app/570/Dota_2/", "title": "Dota 2 on Steam" }
+  },
+  {
+    "id": "ikea-bookcase",
+    "split": "test",
+    "label": "product",
     "why": "an IKEA product page covers one product, not a catalogue",
     "subject": { "domain": "ikea.com" },
-    "page": { "url": "https://www.ikea.com/us/en/p/billy-bookcase-white-00263850/", "title": "BILLY bookcase, white, 80x28x202 cm - IKEA" } },
-  { "id": "duckduckgo-home", "split": "test", "label": "home",
+    "page": {
+      "url": "https://www.ikea.com/us/en/p/billy-bookcase-white-00263850/",
+      "title": "BILLY bookcase, white, 80x28x202 cm - IKEA"
+    }
+  },
+  {
+    "id": "duckduckgo-home",
+    "split": "test",
+    "label": "home",
     "why": "the front page at the root URL is the site's home",
     "subject": { "domain": "duckduckgo.com" },
-    "page": { "url": "https://duckduckgo.com/", "title": "DuckDuckGo — Privacy, simplified." } },
-  { "id": "duckduckgo-about", "split": "test", "label": "other",
+    "page": { "url": "https://duckduckgo.com/", "title": "DuckDuckGo — Privacy, simplified." }
+  },
+  {
+    "id": "duckduckgo-about",
+    "split": "test",
+    "label": "other",
     "why": "an about page is company information, not a jobs page",
     "subject": { "domain": "duckduckgo.com" },
-    "page": { "url": "https://duckduckgo.com/about", "title": "About DuckDuckGo" } }
+    "page": { "url": "https://duckduckgo.com/about", "title": "About DuckDuckGo" }
+  }
 ]

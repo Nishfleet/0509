@@ -1,262 +1,852 @@
 [
-  { "id": "duolingo-socials", "split": "train", "label": true, "why": "Duolingo's own accounts on all three platforms",
+  {
+    "id": "duolingo-socials",
+    "split": "train",
+    "label": true,
+    "why": "Duolingo's own accounts on all three platforms",
     "subject": { "registrable": "duolingo.com", "kind": "domain", "url": "https://www.duolingo.com" },
-    "fields": { "name": "Duolingo", "description": "Language-learning app",
-      "socials": [ { "platform": "x", "url": "https://x.com/duolingo" }, { "platform": "instagram", "url": "https://www.instagram.com/duolingo" }, { "platform": "tiktok", "url": "https://www.tiktok.com/@duolingo" } ] },
-    "edited": [] },
-  { "id": "gymshark-socials", "split": "train", "label": true, "why": "Every handle here is Gymshark's own, TikTok included",
+    "fields": {
+      "name": "Duolingo",
+      "description": "Language-learning app",
+      "socials": [
+        { "platform": "x", "url": "https://x.com/duolingo" },
+        { "platform": "instagram", "url": "https://www.instagram.com/duolingo" },
+        { "platform": "tiktok", "url": "https://www.tiktok.com/@duolingo" }
+      ]
+    },
+    "edited": []
+  },
+  {
+    "id": "gymshark-socials",
+    "split": "train",
+    "label": true,
+    "why": "Every handle here is Gymshark's own, TikTok included",
     "subject": { "registrable": "gymshark.com", "kind": "domain", "url": "https://www.gymshark.com" },
-    "fields": { "name": "Gymshark", "description": "British fitness apparel brand",
-      "socials": [ { "platform": "instagram", "url": "https://www.instagram.com/gymshark" }, { "platform": "x", "url": "https://x.com/gymshark" }, { "platform": "tiktok", "url": "https://www.tiktok.com/@gymshark" } ] },
-    "edited": [] },
-  { "id": "stripe-socials", "split": "train", "label": true, "why": "Stripe's three accounts carry the bare company name",
+    "fields": {
+      "name": "Gymshark",
+      "description": "British fitness apparel brand",
+      "socials": [
+        { "platform": "instagram", "url": "https://www.instagram.com/gymshark" },
+        { "platform": "x", "url": "https://x.com/gymshark" },
+        { "platform": "tiktok", "url": "https://www.tiktok.com/@gymshark" }
+      ]
+    },
+    "edited": []
+  },
+  {
+    "id": "stripe-socials",
+    "split": "train",
+    "label": true,
+    "why": "Stripe's three accounts carry the bare company name",
     "subject": { "registrable": "stripe.com", "kind": "domain", "url": "https://stripe.com" },
-    "fields": { "name": "Stripe", "description": "Payments infrastructure for the internet",
-      "socials": [ { "platform": "x", "url": "https://x.com/stripe" }, { "platform": "instagram", "url": "https://www.instagram.com/stripe" }, { "platform": "youtube", "url": "https://www.youtube.com/@Stripe" } ] },
-    "edited": [] },
-  { "id": "spotify-socials", "split": "train", "label": true, "why": "All three are Spotify's own accounts",
+    "fields": {
+      "name": "Stripe",
+      "description": "Payments infrastructure for the internet",
+      "socials": [
+        { "platform": "x", "url": "https://x.com/stripe" },
+        { "platform": "instagram", "url": "https://www.instagram.com/stripe" },
+        { "platform": "youtube", "url": "https://www.youtube.com/@Stripe" }
+      ]
+    },
+    "edited": []
+  },
+  {
+    "id": "spotify-socials",
+    "split": "train",
+    "label": true,
+    "why": "All three are Spotify's own accounts",
     "subject": { "registrable": "spotify.com", "kind": "domain", "url": "https://www.spotify.com" },
-    "fields": { "name": "Spotify", "description": "Music and podcast streaming service",
-      "socials": [ { "platform": "x", "url": "https://x.com/Spotify" }, { "platform": "instagram", "url": "https://www.instagram.com/spotify" }, { "platform": "youtube", "url": "https://www.youtube.com/@Spotify" } ] },
-    "edited": [] },
-  { "id": "adidas-socials", "split": "train", "label": true, "why": "adidas runs all three accounts itself",
+    "fields": {
+      "name": "Spotify",
+      "description": "Music and podcast streaming service",
+      "socials": [
+        { "platform": "x", "url": "https://x.com/Spotify" },
+        { "platform": "instagram", "url": "https://www.instagram.com/spotify" },
+        { "platform": "youtube", "url": "https://www.youtube.com/@Spotify" }
+      ]
+    },
+    "edited": []
+  },
+  {
+    "id": "adidas-socials",
+    "split": "train",
+    "label": true,
+    "why": "adidas runs all three accounts itself",
     "subject": { "registrable": "adidas.com", "kind": "domain", "url": "https://www.adidas.com" },
-    "fields": { "name": "adidas", "description": "Sportswear and footwear company",
-      "socials": [ { "platform": "instagram", "url": "https://www.instagram.com/adidas" }, { "platform": "x", "url": "https://x.com/adidas" }, { "platform": "tiktok", "url": "https://www.tiktok.com/@adidas" } ] },
-    "edited": [] },
-  { "id": "lego-socials", "split": "train", "label": true, "why": "The LEGO accounts on these three platforms are the company's",
+    "fields": {
+      "name": "adidas",
+      "description": "Sportswear and footwear company",
+      "socials": [
+        { "platform": "instagram", "url": "https://www.instagram.com/adidas" },
+        { "platform": "x", "url": "https://x.com/adidas" },
+        { "platform": "tiktok", "url": "https://www.tiktok.com/@adidas" }
+      ]
+    },
+    "edited": []
+  },
+  {
+    "id": "lego-socials",
+    "split": "train",
+    "label": true,
+    "why": "The LEGO accounts on these three platforms are the company's",
     "subject": { "registrable": "lego.com", "kind": "domain", "url": "https://www.lego.com" },
-    "fields": { "name": "LEGO", "description": "Toy brick construction company",
-      "socials": [ { "platform": "instagram", "url": "https://www.instagram.com/lego" }, { "platform": "x", "url": "https://x.com/lego" }, { "platform": "youtube", "url": "https://www.youtube.com/@LEGO" } ] },
-    "edited": [] },
-  { "id": "patagonia-socials", "split": "train", "label": true, "why": "Both handles belong to Patagonia itself",
+    "fields": {
+      "name": "LEGO",
+      "description": "Toy brick construction company",
+      "socials": [
+        { "platform": "instagram", "url": "https://www.instagram.com/lego" },
+        { "platform": "x", "url": "https://x.com/lego" },
+        { "platform": "youtube", "url": "https://www.youtube.com/@LEGO" }
+      ]
+    },
+    "edited": []
+  },
+  {
+    "id": "patagonia-socials",
+    "split": "train",
+    "label": true,
+    "why": "Both handles belong to Patagonia itself",
     "subject": { "registrable": "patagonia.com", "kind": "domain", "url": "https://www.patagonia.com" },
-    "fields": { "name": "Patagonia", "description": "Outdoor clothing and gear",
-      "socials": [ { "platform": "instagram", "url": "https://www.instagram.com/patagonia" }, { "platform": "x", "url": "https://x.com/patagonia" } ] },
-    "edited": [] },
-  { "id": "notion-socials", "split": "train", "label": true, "why": "Notion's accounts are @NotionHQ, not the bare @notion",
+    "fields": {
+      "name": "Patagonia",
+      "description": "Outdoor clothing and gear",
+      "socials": [
+        { "platform": "instagram", "url": "https://www.instagram.com/patagonia" },
+        { "platform": "x", "url": "https://x.com/patagonia" }
+      ]
+    },
+    "edited": []
+  },
+  {
+    "id": "notion-socials",
+    "split": "train",
+    "label": true,
+    "why": "Notion's accounts are @NotionHQ, not the bare @notion",
     "subject": { "registrable": "notion.so", "kind": "domain", "url": "https://www.notion.so" },
-    "fields": { "name": "Notion", "description": "Workspace and note-taking app",
-      "socials": [ { "platform": "x", "url": "https://x.com/NotionHQ" }, { "platform": "youtube", "url": "https://www.youtube.com/@NotionHQ" } ] },
-    "edited": [] },
-  { "id": "formula1-socials", "split": "train", "label": true, "why": "F1, formula1 and Formula1 are the championship's own handles",
+    "fields": {
+      "name": "Notion",
+      "description": "Workspace and note-taking app",
+      "socials": [
+        { "platform": "x", "url": "https://x.com/NotionHQ" },
+        { "platform": "youtube", "url": "https://www.youtube.com/@NotionHQ" }
+      ]
+    },
+    "edited": []
+  },
+  {
+    "id": "formula1-socials",
+    "split": "train",
+    "label": true,
+    "why": "F1, formula1 and Formula1 are the championship's own handles",
     "subject": { "registrable": "formula1.com", "kind": "domain", "url": "https://www.formula1.com" },
-    "fields": { "name": "Formula 1", "description": "Motor racing championship",
-      "socials": [ { "platform": "x", "url": "https://x.com/F1" }, { "platform": "instagram", "url": "https://www.instagram.com/formula1" }, { "platform": "youtube", "url": "https://www.youtube.com/@Formula1" } ] },
-    "edited": [] },
-  { "id": "mkbhd-socials", "split": "train", "label": true, "why": "All three accounts are the same creator's, @mkbhd",
+    "fields": {
+      "name": "Formula 1",
+      "description": "Motor racing championship",
+      "socials": [
+        { "platform": "x", "url": "https://x.com/F1" },
+        { "platform": "instagram", "url": "https://www.instagram.com/formula1" },
+        { "platform": "youtube", "url": "https://www.youtube.com/@Formula1" }
+      ]
+    },
+    "edited": []
+  },
+  {
+    "id": "mkbhd-socials",
+    "split": "train",
+    "label": true,
+    "why": "All three accounts are the same creator's, @mkbhd",
     "subject": { "registrable": "mkbhd.com", "kind": "domain", "url": "https://mkbhd.com" },
-    "fields": { "name": "MKBHD", "description": "Tech review channel and media brand",
-      "socials": [ { "platform": "youtube", "url": "https://www.youtube.com/@mkbhd" }, { "platform": "x", "url": "https://x.com/mkbhd" }, { "platform": "instagram", "url": "https://www.instagram.com/mkbhd" } ] },
-    "edited": [] },
-  { "id": "mrbeast-socials", "split": "train", "label": true, "why": "The creator's own accounts on all three platforms",
+    "fields": {
+      "name": "MKBHD",
+      "description": "Tech review channel and media brand",
+      "socials": [
+        { "platform": "youtube", "url": "https://www.youtube.com/@mkbhd" },
+        { "platform": "x", "url": "https://x.com/mkbhd" },
+        { "platform": "instagram", "url": "https://www.instagram.com/mkbhd" }
+      ]
+    },
+    "edited": []
+  },
+  {
+    "id": "mrbeast-socials",
+    "split": "train",
+    "label": true,
+    "why": "The creator's own accounts on all three platforms",
     "subject": { "registrable": "mrbeast.com", "kind": "domain", "url": "https://www.mrbeast.com" },
-    "fields": { "name": "MrBeast", "description": "YouTube creator and media company",
-      "socials": [ { "platform": "youtube", "url": "https://www.youtube.com/@MrBeast" }, { "platform": "x", "url": "https://x.com/MrBeast" }, { "platform": "instagram", "url": "https://www.instagram.com/mrbeast" } ] },
-    "edited": [] },
-  { "id": "nasa-socials", "split": "train", "label": true, "why": "NASA's accounts on all three platforms",
+    "fields": {
+      "name": "MrBeast",
+      "description": "YouTube creator and media company",
+      "socials": [
+        { "platform": "youtube", "url": "https://www.youtube.com/@MrBeast" },
+        { "platform": "x", "url": "https://x.com/MrBeast" },
+        { "platform": "instagram", "url": "https://www.instagram.com/mrbeast" }
+      ]
+    },
+    "edited": []
+  },
+  {
+    "id": "nasa-socials",
+    "split": "train",
+    "label": true,
+    "why": "NASA's accounts on all three platforms",
     "subject": { "registrable": "nasa.gov", "kind": "domain", "url": "https://www.nasa.gov" },
-    "fields": { "name": "NASA", "description": "US space agency",
-      "socials": [ { "platform": "x", "url": "https://x.com/NASA" }, { "platform": "instagram", "url": "https://www.instagram.com/nasa" }, { "platform": "youtube", "url": "https://www.youtube.com/@NASA" } ] },
-    "edited": [] },
-  { "id": "nike-socials", "split": "train", "label": true, "why": "Nike's own accounts on all three platforms",
+    "fields": {
+      "name": "NASA",
+      "description": "US space agency",
+      "socials": [
+        { "platform": "x", "url": "https://x.com/NASA" },
+        { "platform": "instagram", "url": "https://www.instagram.com/nasa" },
+        { "platform": "youtube", "url": "https://www.youtube.com/@NASA" }
+      ]
+    },
+    "edited": []
+  },
+  {
+    "id": "nike-socials",
+    "split": "train",
+    "label": true,
+    "why": "Nike's own accounts on all three platforms",
     "subject": { "registrable": "nike.com", "kind": "domain", "url": "https://www.nike.com" },
-    "fields": { "name": "Nike", "description": "Sportswear and footwear brand",
-      "socials": [ { "platform": "instagram", "url": "https://www.instagram.com/nike" }, { "platform": "x", "url": "https://x.com/nike" }, { "platform": "youtube", "url": "https://www.youtube.com/@nike" } ] },
-    "edited": [ "name" ] },
-  { "id": "lululemon-fan-tiktok", "split": "train", "label": false, "why": "Lululemon's TikTok is @lululemon; the fan page is not the brand's",
+    "fields": {
+      "name": "Nike",
+      "description": "Sportswear and footwear brand",
+      "socials": [
+        { "platform": "instagram", "url": "https://www.instagram.com/nike" },
+        { "platform": "x", "url": "https://x.com/nike" },
+        { "platform": "youtube", "url": "https://www.youtube.com/@nike" }
+      ]
+    },
+    "edited": ["name"]
+  },
+  {
+    "id": "lululemon-fan-tiktok",
+    "split": "train",
+    "label": false,
+    "why": "Lululemon's TikTok is @lululemon; the fan page is not the brand's",
     "subject": { "registrable": "lululemon.com", "kind": "domain", "url": "https://shop.lululemon.com" },
-    "fields": { "name": "lululemon", "description": "Athletic apparel and yoga brand",
-      "socials": [ { "platform": "instagram", "url": "https://www.instagram.com/lululemon" }, { "platform": "tiktok", "url": "https://www.tiktok.com/@lululemonfanclub" } ] },
-    "edited": [] },
-  { "id": "berkshire-hathaway-accounts", "split": "train", "label": false, "why": "The company runs no accounts of its own; both handles are other people's",
+    "fields": {
+      "name": "lululemon",
+      "description": "Athletic apparel and yoga brand",
+      "socials": [
+        { "platform": "instagram", "url": "https://www.instagram.com/lululemon" },
+        { "platform": "tiktok", "url": "https://www.tiktok.com/@lululemonfanclub" }
+      ]
+    },
+    "edited": []
+  },
+  {
+    "id": "berkshire-hathaway-accounts",
+    "split": "train",
+    "label": false,
+    "why": "The company runs no accounts of its own; both handles are other people's",
     "subject": { "registrable": "berkshirehathaway.com", "kind": "domain", "url": "https://www.berkshirehathaway.com" },
-    "fields": { "name": "Berkshire Hathaway", "description": "Insurance, rail and energy conglomerate",
-      "socials": [ { "platform": "x", "url": "https://x.com/BerkshireHathaway" }, { "platform": "instagram", "url": "https://www.instagram.com/berkshire_hathaway" } ] },
-    "edited": [] },
-  { "id": "apple-music-socials", "split": "train", "label": false, "why": "@AppleMusic is Apple Music's; @spotify is Spotify's",
+    "fields": {
+      "name": "Berkshire Hathaway",
+      "description": "Insurance, rail and energy conglomerate",
+      "socials": [
+        { "platform": "x", "url": "https://x.com/BerkshireHathaway" },
+        { "platform": "instagram", "url": "https://www.instagram.com/berkshire_hathaway" }
+      ]
+    },
+    "edited": []
+  },
+  {
+    "id": "apple-music-socials",
+    "split": "train",
+    "label": false,
+    "why": "@AppleMusic is Apple Music's; @spotify is Spotify's",
     "subject": { "registrable": "apple.com", "kind": "domain", "url": "https://www.apple.com/apple-music" },
-    "fields": { "name": "Apple Music", "description": "Music and audio streaming service by Apple",
-      "socials": [ { "platform": "x", "url": "https://x.com/AppleMusic" }, { "platform": "instagram", "url": "https://www.instagram.com/applemusic" }, { "platform": "x", "url": "https://x.com/spotify" } ] },
-    "edited": [] },
-  { "id": "hubspot-socials", "split": "train", "label": false, "why": "@hubspot is HubSpot's; @salesforce is Salesforce's",
+    "fields": {
+      "name": "Apple Music",
+      "description": "Music and audio streaming service by Apple",
+      "socials": [
+        { "platform": "x", "url": "https://x.com/AppleMusic" },
+        { "platform": "instagram", "url": "https://www.instagram.com/applemusic" },
+        { "platform": "x", "url": "https://x.com/spotify" }
+      ]
+    },
+    "edited": []
+  },
+  {
+    "id": "hubspot-socials",
+    "split": "train",
+    "label": false,
+    "why": "@hubspot is HubSpot's; @salesforce is Salesforce's",
     "subject": { "registrable": "hubspot.com", "kind": "domain", "url": "https://www.hubspot.com" },
-    "fields": { "name": "HubSpot", "description": "CRM and marketing platform",
-      "socials": [ { "platform": "x", "url": "https://x.com/hubspot" }, { "platform": "instagram", "url": "https://www.instagram.com/salesforce" } ] },
-    "edited": [ "name" ] },
-  { "id": "medium-socials", "split": "train", "label": false, "why": "@Medium is the publisher's; @substack is Substack's",
+    "fields": {
+      "name": "HubSpot",
+      "description": "CRM and marketing platform",
+      "socials": [
+        { "platform": "x", "url": "https://x.com/hubspot" },
+        { "platform": "instagram", "url": "https://www.instagram.com/salesforce" }
+      ]
+    },
+    "edited": ["name"]
+  },
+  {
+    "id": "medium-socials",
+    "split": "train",
+    "label": false,
+    "why": "@Medium is the publisher's; @substack is Substack's",
     "subject": { "registrable": "medium.com", "kind": "domain", "url": "https://medium.com" },
-    "fields": { "name": "Medium", "description": "Publishing platform for writers",
-      "socials": [ { "platform": "x", "url": "https://x.com/Medium" }, { "platform": "x", "url": "https://x.com/substack" } ] },
-    "edited": [] },
-  { "id": "rivian-socials", "split": "train", "label": false, "why": "Rivian's accounts are @rivian; @Tesla is the carmaker's",
+    "fields": {
+      "name": "Medium",
+      "description": "Publishing platform for writers",
+      "socials": [
+        { "platform": "x", "url": "https://x.com/Medium" },
+        { "platform": "x", "url": "https://x.com/substack" }
+      ]
+    },
+    "edited": []
+  },
+  {
+    "id": "rivian-socials",
+    "split": "train",
+    "label": false,
+    "why": "Rivian's accounts are @rivian; @Tesla is the carmaker's",
     "subject": { "registrable": "rivian.com", "kind": "domain", "url": "https://rivian.com" },
-    "fields": { "name": "Rivian", "description": "Electric vehicle maker",
-      "socials": [ { "platform": "instagram", "url": "https://www.instagram.com/rivian" }, { "platform": "x", "url": "https://x.com/Tesla" } ] },
-    "edited": [] },
-  { "id": "pepsi-socials", "split": "train", "label": false, "why": "The drinks company's own accounts use @Pepsi, not @coca-cola",
+    "fields": {
+      "name": "Rivian",
+      "description": "Electric vehicle maker",
+      "socials": [
+        { "platform": "instagram", "url": "https://www.instagram.com/rivian" },
+        { "platform": "x", "url": "https://x.com/Tesla" }
+      ]
+    },
+    "edited": []
+  },
+  {
+    "id": "pepsi-socials",
+    "split": "train",
+    "label": false,
+    "why": "The drinks company's own accounts use @Pepsi, not @coca-cola",
     "subject": { "registrable": "pepsi.com", "kind": "domain", "url": "https://www.pepsi.com" },
-    "fields": { "name": "Pepsi", "description": "Soft drinks and snacks company",
-      "socials": [ { "platform": "x", "url": "https://x.com/Pepsi" }, { "platform": "instagram", "url": "https://www.instagram.com/coca-cola" } ] },
-    "edited": [] },
-  { "id": "mcdonalds-socials", "split": "train", "label": false, "why": "McDonald's TikTok is @mcdonalds; @burgerking is the rival's",
+    "fields": {
+      "name": "Pepsi",
+      "description": "Soft drinks and snacks company",
+      "socials": [
+        { "platform": "x", "url": "https://x.com/Pepsi" },
+        { "platform": "instagram", "url": "https://www.instagram.com/coca-cola" }
+      ]
+    },
+    "edited": []
+  },
+  {
+    "id": "mcdonalds-socials",
+    "split": "train",
+    "label": false,
+    "why": "McDonald's TikTok is @mcdonalds; @burgerking is the rival's",
     "subject": { "registrable": "mcdonalds.com", "kind": "domain", "url": "https://www.mcdonalds.com" },
-    "fields": { "name": "McDonald's", "description": "Fast-food restaurant chain",
-      "socials": [ { "platform": "tiktok", "url": "https://www.tiktok.com/@mcdonalds" }, { "platform": "tiktok", "url": "https://www.tiktok.com/@burgerking" } ] },
-    "edited": [] },
-  { "id": "xai-socials", "split": "train", "label": false, "why": "xAI's account is @xai; @elonmusk is the founder's personal account",
+    "fields": {
+      "name": "McDonald's",
+      "description": "Fast-food restaurant chain",
+      "socials": [
+        { "platform": "tiktok", "url": "https://www.tiktok.com/@mcdonalds" },
+        { "platform": "tiktok", "url": "https://www.tiktok.com/@burgerking" }
+      ]
+    },
+    "edited": []
+  },
+  {
+    "id": "xai-socials",
+    "split": "train",
+    "label": false,
+    "why": "xAI's account is @xai; @elonmusk is the founder's personal account",
     "subject": { "registrable": "x.ai", "kind": "domain", "url": "https://x.ai" },
-    "fields": { "name": "xAI", "description": "Artificial-intelligence research company",
-      "socials": [ { "platform": "x", "url": "https://x.com/xai" }, { "platform": "x", "url": "https://x.com/elonmusk" } ] },
-    "edited": [] },
-  { "id": "x-platform-socials", "split": "train", "label": false, "why": "@X is the platform's; @tweeted is a long-running parody account",
+    "fields": {
+      "name": "xAI",
+      "description": "Artificial-intelligence research company",
+      "socials": [
+        { "platform": "x", "url": "https://x.com/xai" },
+        { "platform": "x", "url": "https://x.com/elonmusk" }
+      ]
+    },
+    "edited": []
+  },
+  {
+    "id": "x-platform-socials",
+    "split": "train",
+    "label": false,
+    "why": "@X is the platform's; @tweeted is a long-running parody account",
     "subject": { "registrable": "x.com", "kind": "domain", "url": "https://x.com" },
-    "fields": { "name": "X", "description": "Social network operated by X Corp",
-      "socials": [ { "platform": "x", "url": "https://x.com/X" }, { "platform": "x", "url": "https://x.com/tweeted" } ] },
-    "edited": [] },
-  { "id": "vsauce-socials", "split": "train", "label": false, "why": "@Vsauce is the channel's; @Veritasium is another creator's channel",
+    "fields": {
+      "name": "X",
+      "description": "Social network operated by X Corp",
+      "socials": [
+        { "platform": "x", "url": "https://x.com/X" },
+        { "platform": "x", "url": "https://x.com/tweeted" }
+      ]
+    },
+    "edited": []
+  },
+  {
+    "id": "vsauce-socials",
+    "split": "train",
+    "label": false,
+    "why": "@Vsauce is the channel's; @Veritasium is another creator's channel",
     "subject": { "registrable": "vsauce", "kind": "handle", "url": null, "platform": "youtube" },
-    "fields": { "name": "Vsauce", "description": "Educational science YouTube channel",
-      "socials": [ { "platform": "youtube", "url": "https://www.youtube.com/@Vsauce" }, { "platform": "x", "url": "https://x.com/Veritasium" } ] },
-    "edited": [] },
-  { "id": "appsignal-socials", "split": "train", "label": false, "why": "@appsignal is AppSignal's; @signalapp is Signal Messenger's",
+    "fields": {
+      "name": "Vsauce",
+      "description": "Educational science YouTube channel",
+      "socials": [
+        { "platform": "youtube", "url": "https://www.youtube.com/@Vsauce" },
+        { "platform": "x", "url": "https://x.com/Veritasium" }
+      ]
+    },
+    "edited": []
+  },
+  {
+    "id": "appsignal-socials",
+    "split": "train",
+    "label": false,
+    "why": "@appsignal is AppSignal's; @signalapp is Signal Messenger's",
     "subject": { "registrable": "appsignal.com", "kind": "domain", "url": "https://www.appsignal.com" },
-    "fields": { "name": "AppSignal", "description": "Application performance monitoring service",
-      "socials": [ { "platform": "x", "url": "https://x.com/appsignal" }, { "platform": "x", "url": "https://x.com/signalapp" } ] },
-    "edited": [] },
-  { "id": "icrc-socials", "split": "train", "label": false, "why": "@icrc is the ICRC's; @redcross is the American Red Cross",
+    "fields": {
+      "name": "AppSignal",
+      "description": "Application performance monitoring service",
+      "socials": [
+        { "platform": "x", "url": "https://x.com/appsignal" },
+        { "platform": "x", "url": "https://x.com/signalapp" }
+      ]
+    },
+    "edited": []
+  },
+  {
+    "id": "icrc-socials",
+    "split": "train",
+    "label": false,
+    "why": "@icrc is the ICRC's; @redcross is the American Red Cross",
     "subject": { "registrable": "icrc.org", "kind": "domain", "url": "https://www.icrc.org" },
-    "fields": { "name": "International Committee of the Red Cross", "description": "Humanitarian organisation",
-      "socials": [ { "platform": "x", "url": "https://x.com/icrc" }, { "platform": "instagram", "url": "https://www.instagram.com/redcross" } ] },
-    "edited": [] },
-  { "id": "openai-socials", "split": "test", "label": true, "why": "Both accounts are OpenAI's own",
+    "fields": {
+      "name": "International Committee of the Red Cross",
+      "description": "Humanitarian organisation",
+      "socials": [
+        { "platform": "x", "url": "https://x.com/icrc" },
+        { "platform": "instagram", "url": "https://www.instagram.com/redcross" }
+      ]
+    },
+    "edited": []
+  },
+  {
+    "id": "openai-socials",
+    "split": "test",
+    "label": true,
+    "why": "Both accounts are OpenAI's own",
     "subject": { "registrable": "openai.com", "kind": "domain", "url": "https://openai.com" },
-    "fields": { "name": "OpenAI", "description": "AI research and products company",
-      "socials": [ { "platform": "x", "url": "https://x.com/OpenAI" }, { "platform": "youtube", "url": "https://www.youtube.com/@OpenAI" } ] },
-    "edited": [] },
-  { "id": "github-socials", "split": "test", "label": true, "why": "The platform's own accounts on X and YouTube",
+    "fields": {
+      "name": "OpenAI",
+      "description": "AI research and products company",
+      "socials": [
+        { "platform": "x", "url": "https://x.com/OpenAI" },
+        { "platform": "youtube", "url": "https://www.youtube.com/@OpenAI" }
+      ]
+    },
+    "edited": []
+  },
+  {
+    "id": "github-socials",
+    "split": "test",
+    "label": true,
+    "why": "The platform's own accounts on X and YouTube",
     "subject": { "registrable": "github.com", "kind": "domain", "url": "https://github.com" },
-    "fields": { "name": "GitHub", "description": "Code hosting and collaboration platform",
-      "socials": [ { "platform": "x", "url": "https://x.com/github" }, { "platform": "youtube", "url": "https://www.youtube.com/@github" } ] },
-    "edited": [] },
-  { "id": "ted-socials", "split": "test", "label": true, "why": "The talks organisation runs all three itself",
+    "fields": {
+      "name": "GitHub",
+      "description": "Code hosting and collaboration platform",
+      "socials": [
+        { "platform": "x", "url": "https://x.com/github" },
+        { "platform": "youtube", "url": "https://www.youtube.com/@github" }
+      ]
+    },
+    "edited": []
+  },
+  {
+    "id": "ted-socials",
+    "split": "test",
+    "label": true,
+    "why": "The talks organisation runs all three itself",
     "subject": { "registrable": "ted.com", "kind": "domain", "url": "https://www.ted.com" },
-    "fields": { "name": "TED", "description": "Conference and media organisation for ideas",
-      "socials": [ { "platform": "x", "url": "https://x.com/TED" }, { "platform": "youtube", "url": "https://www.youtube.com/@TED" }, { "platform": "instagram", "url": "https://www.instagram.com/ted" } ] },
-    "edited": [] },
-  { "id": "red-bull-socials", "split": "test", "label": true, "why": "The drinks brand's own accounts on all three",
+    "fields": {
+      "name": "TED",
+      "description": "Conference and media organisation for ideas",
+      "socials": [
+        { "platform": "x", "url": "https://x.com/TED" },
+        { "platform": "youtube", "url": "https://www.youtube.com/@TED" },
+        { "platform": "instagram", "url": "https://www.instagram.com/ted" }
+      ]
+    },
+    "edited": []
+  },
+  {
+    "id": "red-bull-socials",
+    "split": "test",
+    "label": true,
+    "why": "The drinks brand's own accounts on all three",
     "subject": { "registrable": "redbull.com", "kind": "domain", "url": "https://www.redbull.com" },
-    "fields": { "name": "Red Bull", "description": "Energy drinks and motorsport company",
-      "socials": [ { "platform": "instagram", "url": "https://www.instagram.com/redbull" }, { "platform": "x", "url": "https://x.com/RedBull" }, { "platform": "tiktok", "url": "https://www.tiktok.com/@redbull" } ] },
-    "edited": [] },
-  { "id": "canva-socials", "split": "test", "label": true, "why": "Canva runs these three accounts itself",
+    "fields": {
+      "name": "Red Bull",
+      "description": "Energy drinks and motorsport company",
+      "socials": [
+        { "platform": "instagram", "url": "https://www.instagram.com/redbull" },
+        { "platform": "x", "url": "https://x.com/RedBull" },
+        { "platform": "tiktok", "url": "https://www.tiktok.com/@redbull" }
+      ]
+    },
+    "edited": []
+  },
+  {
+    "id": "canva-socials",
+    "split": "test",
+    "label": true,
+    "why": "Canva runs these three accounts itself",
     "subject": { "registrable": "canva.com", "kind": "domain", "url": "https://www.canva.com" },
-    "fields": { "name": "Canva", "description": "Online graphic-design platform",
-      "socials": [ { "platform": "x", "url": "https://x.com/canva" }, { "platform": "instagram", "url": "https://www.instagram.com/canva" }, { "platform": "youtube", "url": "https://www.youtube.com/@canva" } ] },
-    "edited": [] },
-  { "id": "figma-socials", "split": "test", "label": true, "why": "All three are Figma's own accounts",
+    "fields": {
+      "name": "Canva",
+      "description": "Online graphic-design platform",
+      "socials": [
+        { "platform": "x", "url": "https://x.com/canva" },
+        { "platform": "instagram", "url": "https://www.instagram.com/canva" },
+        { "platform": "youtube", "url": "https://www.youtube.com/@canva" }
+      ]
+    },
+    "edited": []
+  },
+  {
+    "id": "figma-socials",
+    "split": "test",
+    "label": true,
+    "why": "All three are Figma's own accounts",
     "subject": { "registrable": "figma.com", "kind": "domain", "url": "https://www.figma.com" },
-    "fields": { "name": "Figma", "description": "Collaborative interface design tool",
-      "socials": [ { "platform": "x", "url": "https://x.com/figma" }, { "platform": "instagram", "url": "https://www.instagram.com/figma" }, { "platform": "youtube", "url": "https://www.youtube.com/@Figma" } ] },
-    "edited": [] },
-  { "id": "vercel-socials", "split": "test", "label": true, "why": "Both handles are the platform's own",
+    "fields": {
+      "name": "Figma",
+      "description": "Collaborative interface design tool",
+      "socials": [
+        { "platform": "x", "url": "https://x.com/figma" },
+        { "platform": "instagram", "url": "https://www.instagram.com/figma" },
+        { "platform": "youtube", "url": "https://www.youtube.com/@Figma" }
+      ]
+    },
+    "edited": []
+  },
+  {
+    "id": "vercel-socials",
+    "split": "test",
+    "label": true,
+    "why": "Both handles are the platform's own",
     "subject": { "registrable": "vercel.com", "kind": "domain", "url": "https://vercel.com" },
-    "fields": { "name": "Vercel", "description": "Frontend cloud platform",
-      "socials": [ { "platform": "x", "url": "https://x.com/vercel" }, { "platform": "instagram", "url": "https://www.instagram.com/vercel" } ] },
-    "edited": [ "name" ] },
-  { "id": "supabase-socials", "split": "test", "label": true, "why": "Both are the database platform's own accounts",
+    "fields": {
+      "name": "Vercel",
+      "description": "Frontend cloud platform",
+      "socials": [
+        { "platform": "x", "url": "https://x.com/vercel" },
+        { "platform": "instagram", "url": "https://www.instagram.com/vercel" }
+      ]
+    },
+    "edited": ["name"]
+  },
+  {
+    "id": "supabase-socials",
+    "split": "test",
+    "label": true,
+    "why": "Both are the database platform's own accounts",
     "subject": { "registrable": "supabase.com", "kind": "domain", "url": "https://supabase.com" },
-    "fields": { "name": "Supabase", "description": "Open-source database platform",
-      "socials": [ { "platform": "x", "url": "https://x.com/supabase" }, { "platform": "instagram", "url": "https://www.instagram.com/supabase" } ] },
-    "edited": [] },
-  { "id": "aliabdaal-socials", "split": "test", "label": true, "why": "One creator's own accounts on all three platforms",
+    "fields": {
+      "name": "Supabase",
+      "description": "Open-source database platform",
+      "socials": [
+        { "platform": "x", "url": "https://x.com/supabase" },
+        { "platform": "instagram", "url": "https://www.instagram.com/supabase" }
+      ]
+    },
+    "edited": []
+  },
+  {
+    "id": "aliabdaal-socials",
+    "split": "test",
+    "label": true,
+    "why": "One creator's own accounts on all three platforms",
     "subject": { "registrable": "aliabdaal.com", "kind": "domain", "url": "https://aliabdaal.com" },
-    "fields": { "name": "Ali Abdaal", "description": "Creator and productivity author",
-      "socials": [ { "platform": "youtube", "url": "https://www.youtube.com/@aliabdaal" }, { "platform": "x", "url": "https://x.com/AliAbdaal" }, { "platform": "instagram", "url": "https://www.instagram.com/aliabdaal" } ] },
-    "edited": [] },
-  { "id": "khan-academy-socials", "split": "test", "label": true, "why": "The nonprofit's own accounts on all three platforms",
+    "fields": {
+      "name": "Ali Abdaal",
+      "description": "Creator and productivity author",
+      "socials": [
+        { "platform": "youtube", "url": "https://www.youtube.com/@aliabdaal" },
+        { "platform": "x", "url": "https://x.com/AliAbdaal" },
+        { "platform": "instagram", "url": "https://www.instagram.com/aliabdaal" }
+      ]
+    },
+    "edited": []
+  },
+  {
+    "id": "khan-academy-socials",
+    "split": "test",
+    "label": true,
+    "why": "The nonprofit's own accounts on all three platforms",
     "subject": { "registrable": "khanacademy.org", "kind": "domain", "url": "https://www.khanacademy.org" },
-    "fields": { "name": "Khan Academy", "description": "Free online education nonprofit",
-      "socials": [ { "platform": "x", "url": "https://x.com/khanacademy" }, { "platform": "youtube", "url": "https://www.youtube.com/@khanacademy" }, { "platform": "instagram", "url": "https://www.instagram.com/khanacademy" } ] },
-    "edited": [] },
-  { "id": "signal-messenger-socials", "split": "test", "label": true, "why": "Signal Messenger's handles are @signalapp on both",
+    "fields": {
+      "name": "Khan Academy",
+      "description": "Free online education nonprofit",
+      "socials": [
+        { "platform": "x", "url": "https://x.com/khanacademy" },
+        { "platform": "youtube", "url": "https://www.youtube.com/@khanacademy" },
+        { "platform": "instagram", "url": "https://www.instagram.com/khanacademy" }
+      ]
+    },
+    "edited": []
+  },
+  {
+    "id": "signal-messenger-socials",
+    "split": "test",
+    "label": true,
+    "why": "Signal Messenger's handles are @signalapp on both",
     "subject": { "registrable": "signal.org", "kind": "domain", "url": "https://signal.org" },
-    "fields": { "name": "Signal Messenger", "description": "Private messaging app",
-      "socials": [ { "platform": "x", "url": "https://x.com/signalapp" }, { "platform": "instagram", "url": "https://www.instagram.com/signalapp" } ] },
-    "edited": [] },
-  { "id": "raspberry-pi-socials", "split": "test", "label": true, "why": "The Pi accounts are @Raspberry_Pi and @raspberrypi",
+    "fields": {
+      "name": "Signal Messenger",
+      "description": "Private messaging app",
+      "socials": [
+        { "platform": "x", "url": "https://x.com/signalapp" },
+        { "platform": "instagram", "url": "https://www.instagram.com/signalapp" }
+      ]
+    },
+    "edited": []
+  },
+  {
+    "id": "raspberry-pi-socials",
+    "split": "test",
+    "label": true,
+    "why": "The Pi accounts are @Raspberry_Pi and @raspberrypi",
     "subject": { "registrable": "raspberrypi.com", "kind": "domain", "url": "https://www.raspberrypi.com" },
-    "fields": { "name": "Raspberry Pi", "description": "Single-board computer maker",
-      "socials": [ { "platform": "x", "url": "https://x.com/Raspberry_Pi" }, { "platform": "instagram", "url": "https://www.instagram.com/raspberrypi" } ] },
-    "edited": [] },
-  { "id": "dominos-socials", "split": "test", "label": true, "why": "Domino's Instagram is @dominospizza, not @dominos",
+    "fields": {
+      "name": "Raspberry Pi",
+      "description": "Single-board computer maker",
+      "socials": [
+        { "platform": "x", "url": "https://x.com/Raspberry_Pi" },
+        { "platform": "instagram", "url": "https://www.instagram.com/raspberrypi" }
+      ]
+    },
+    "edited": []
+  },
+  {
+    "id": "dominos-socials",
+    "split": "test",
+    "label": true,
+    "why": "Domino's Instagram is @dominospizza, not @dominos",
     "subject": { "registrable": "dominos.com", "kind": "domain", "url": "https://www.dominos.com" },
-    "fields": { "name": "Domino's", "description": "Pizza delivery chain",
-      "socials": [ { "platform": "instagram", "url": "https://www.instagram.com/dominospizza" }, { "platform": "x", "url": "https://x.com/Dominos" } ] },
-    "edited": [] },
-  { "id": "tesla-socials", "split": "test", "label": false, "why": "@Tesla is the carmaker's; @Ford is Ford's",
+    "fields": {
+      "name": "Domino's",
+      "description": "Pizza delivery chain",
+      "socials": [
+        { "platform": "instagram", "url": "https://www.instagram.com/dominospizza" },
+        { "platform": "x", "url": "https://x.com/Dominos" }
+      ]
+    },
+    "edited": []
+  },
+  {
+    "id": "tesla-socials",
+    "split": "test",
+    "label": false,
+    "why": "@Tesla is the carmaker's; @Ford is Ford's",
     "subject": { "registrable": "tesla.com", "kind": "domain", "url": "https://www.tesla.com" },
-    "fields": { "name": "Tesla", "description": "Electric vehicle and energy company",
-      "socials": [ { "platform": "x", "url": "https://x.com/Tesla" }, { "platform": "x", "url": "https://x.com/Ford" } ] },
-    "edited": [] },
-  { "id": "netlify-socials", "split": "test", "label": false, "why": "Netlify's account is @Netlify; @vercel is Vercel's",
+    "fields": {
+      "name": "Tesla",
+      "description": "Electric vehicle and energy company",
+      "socials": [
+        { "platform": "x", "url": "https://x.com/Tesla" },
+        { "platform": "x", "url": "https://x.com/Ford" }
+      ]
+    },
+    "edited": []
+  },
+  {
+    "id": "netlify-socials",
+    "split": "test",
+    "label": false,
+    "why": "Netlify's account is @Netlify; @vercel is Vercel's",
     "subject": { "registrable": "netlify.com", "kind": "domain", "url": "https://www.netlify.com" },
-    "fields": { "name": "Netlify", "description": "Web hosting and platform company",
-      "socials": [ { "platform": "x", "url": "https://x.com/Netlify" }, { "platform": "x", "url": "https://x.com/vercel" } ] },
-    "edited": [] },
-  { "id": "calm-socials", "split": "test", "label": false, "why": "Calm's account is @calm; @headspace is Headspace's",
+    "fields": {
+      "name": "Netlify",
+      "description": "Web hosting and platform company",
+      "socials": [
+        { "platform": "x", "url": "https://x.com/Netlify" },
+        { "platform": "x", "url": "https://x.com/vercel" }
+      ]
+    },
+    "edited": []
+  },
+  {
+    "id": "calm-socials",
+    "split": "test",
+    "label": false,
+    "why": "Calm's account is @calm; @headspace is Headspace's",
     "subject": { "registrable": "calm.com", "kind": "domain", "url": "https://www.calm.com" },
-    "fields": { "name": "Calm", "description": "Sleep and meditation app",
-      "socials": [ { "platform": "x", "url": "https://x.com/calm" }, { "platform": "instagram", "url": "https://www.instagram.com/headspace" } ] },
-    "edited": [] },
-  { "id": "adyen-socials", "split": "test", "label": false, "why": "Adyen's own accounts use @adyen, not @paypal",
+    "fields": {
+      "name": "Calm",
+      "description": "Sleep and meditation app",
+      "socials": [
+        { "platform": "x", "url": "https://x.com/calm" },
+        { "platform": "instagram", "url": "https://www.instagram.com/headspace" }
+      ]
+    },
+    "edited": []
+  },
+  {
+    "id": "adyen-socials",
+    "split": "test",
+    "label": false,
+    "why": "Adyen's own accounts use @adyen, not @paypal",
     "subject": { "registrable": "adyen.com", "kind": "domain", "url": "https://www.adyen.com" },
-    "fields": { "name": "Adyen", "description": "Payments processor",
-      "socials": [ { "platform": "x", "url": "https://x.com/adyen" }, { "platform": "instagram", "url": "https://www.instagram.com/paypal" } ] },
-    "edited": [] },
-  { "id": "slack-socials", "split": "test", "label": false, "why": "@slack is Slack's; @discord is Discord's",
+    "fields": {
+      "name": "Adyen",
+      "description": "Payments processor",
+      "socials": [
+        { "platform": "x", "url": "https://x.com/adyen" },
+        { "platform": "instagram", "url": "https://www.instagram.com/paypal" }
+      ]
+    },
+    "edited": []
+  },
+  {
+    "id": "slack-socials",
+    "split": "test",
+    "label": false,
+    "why": "@slack is Slack's; @discord is Discord's",
     "subject": { "registrable": "slack.com", "kind": "domain", "url": "https://slack.com" },
-    "fields": { "name": "Slack", "description": "Workplace messaging platform",
-      "socials": [ { "platform": "x", "url": "https://x.com/slack" }, { "platform": "x", "url": "https://x.com/discord" } ] },
-    "edited": [] },
-  { "id": "bose-socials", "split": "test", "label": false, "why": "The audio maker's own accounts use @bose, not @sonos",
+    "fields": {
+      "name": "Slack",
+      "description": "Workplace messaging platform",
+      "socials": [
+        { "platform": "x", "url": "https://x.com/slack" },
+        { "platform": "x", "url": "https://x.com/discord" }
+      ]
+    },
+    "edited": []
+  },
+  {
+    "id": "bose-socials",
+    "split": "test",
+    "label": false,
+    "why": "The audio maker's own accounts use @bose, not @sonos",
     "subject": { "registrable": "bose.com", "kind": "domain", "url": "https://www.bose.com" },
-    "fields": { "name": "Bose", "description": "Audio equipment brand",
-      "socials": [ { "platform": "x", "url": "https://x.com/bose" }, { "platform": "instagram", "url": "https://www.instagram.com/sonos" } ] },
-    "edited": [] },
-  { "id": "moderna-socials", "split": "test", "label": false, "why": "Moderna's X handle is @ModernaTX; @pfizer is Pfizer's",
+    "fields": {
+      "name": "Bose",
+      "description": "Audio equipment brand",
+      "socials": [
+        { "platform": "x", "url": "https://x.com/bose" },
+        { "platform": "instagram", "url": "https://www.instagram.com/sonos" }
+      ]
+    },
+    "edited": []
+  },
+  {
+    "id": "moderna-socials",
+    "split": "test",
+    "label": false,
+    "why": "Moderna's X handle is @ModernaTX; @pfizer is Pfizer's",
     "subject": { "registrable": "modernatx.com", "kind": "domain", "url": "https://www.modernatx.com" },
-    "fields": { "name": "Moderna", "description": "Biotechnology and vaccine company",
-      "socials": [ { "platform": "x", "url": "https://x.com/ModernaTX" }, { "platform": "x", "url": "https://x.com/pfizer" } ] },
-    "edited": [] },
-  { "id": "nintendo-socials", "split": "test", "label": false, "why": "Nintendo's X account is @Nintendo; the TikTok entry is a community page",
+    "fields": {
+      "name": "Moderna",
+      "description": "Biotechnology and vaccine company",
+      "socials": [
+        { "platform": "x", "url": "https://x.com/ModernaTX" },
+        { "platform": "x", "url": "https://x.com/pfizer" }
+      ]
+    },
+    "edited": []
+  },
+  {
+    "id": "nintendo-socials",
+    "split": "test",
+    "label": false,
+    "why": "Nintendo's X account is @Nintendo; the TikTok entry is a community page",
     "subject": { "registrable": "nintendo.com", "kind": "domain", "url": "https://www.nintendo.com" },
-    "fields": { "name": "Nintendo", "description": "Video game company",
-      "socials": [ { "platform": "x", "url": "https://x.com/Nintendo" }, { "platform": "tiktok", "url": "https://www.tiktok.com/@nintendoceo" } ] },
-    "edited": [ "name" ] },
-  { "id": "levi-socials", "split": "test", "label": false, "why": "The jeans label's X account is @LeviStrauss, not @levis",
+    "fields": {
+      "name": "Nintendo",
+      "description": "Video game company",
+      "socials": [
+        { "platform": "x", "url": "https://x.com/Nintendo" },
+        { "platform": "tiktok", "url": "https://www.tiktok.com/@nintendoceo" }
+      ]
+    },
+    "edited": ["name"]
+  },
+  {
+    "id": "levi-socials",
+    "split": "test",
+    "label": false,
+    "why": "The jeans label's X account is @LeviStrauss, not @levis",
     "subject": { "registrable": "levi.com", "kind": "domain", "url": "https://www.levi.com" },
-    "fields": { "name": "Levi's", "description": "Denim apparel brand",
-      "socials": [ { "platform": "x", "url": "https://x.com/LeviStrauss" }, { "platform": "x", "url": "https://x.com/levis" } ] },
-    "edited": [] },
-  { "id": "webflow-socials", "split": "test", "label": false, "why": "Webflow's own accounts use @webflow, not @wix",
+    "fields": {
+      "name": "Levi's",
+      "description": "Denim apparel brand",
+      "socials": [
+        { "platform": "x", "url": "https://x.com/LeviStrauss" },
+        { "platform": "x", "url": "https://x.com/levis" }
+      ]
+    },
+    "edited": []
+  },
+  {
+    "id": "webflow-socials",
+    "split": "test",
+    "label": false,
+    "why": "Webflow's own accounts use @webflow, not @wix",
     "subject": { "registrable": "webflow.com", "kind": "domain", "url": "https://webflow.com" },
-    "fields": { "name": "Webflow", "description": "Website builder and design platform",
-      "socials": [ { "platform": "x", "url": "https://x.com/webflow" }, { "platform": "instagram", "url": "https://www.instagram.com/wix" } ] },
-    "edited": [] },
-  { "id": "make-socials", "split": "test", "label": false, "why": "Make's handle is @make_com; @zapier is Zapier's",
+    "fields": {
+      "name": "Webflow",
+      "description": "Website builder and design platform",
+      "socials": [
+        { "platform": "x", "url": "https://x.com/webflow" },
+        { "platform": "instagram", "url": "https://www.instagram.com/wix" }
+      ]
+    },
+    "edited": []
+  },
+  {
+    "id": "make-socials",
+    "split": "test",
+    "label": false,
+    "why": "Make's handle is @make_com; @zapier is Zapier's",
     "subject": { "registrable": "make.com", "kind": "domain", "url": "https://www.make.com" },
-    "fields": { "name": "Make", "description": "Workflow automation platform",
-      "socials": [ { "platform": "x", "url": "https://x.com/make_com" }, { "platform": "instagram", "url": "https://www.instagram.com/zapier" } ] },
-    "edited": [] },
-  { "id": "onlyfans-socials", "split": "test", "label": false, "why": "@OnlyFans is the platform's; @fansly is a rival's",
+    "fields": {
+      "name": "Make",
+      "description": "Workflow automation platform",
+      "socials": [
+        { "platform": "x", "url": "https://x.com/make_com" },
+        { "platform": "instagram", "url": "https://www.instagram.com/zapier" }
+      ]
+    },
+    "edited": []
+  },
+  {
+    "id": "onlyfans-socials",
+    "split": "test",
+    "label": false,
+    "why": "@OnlyFans is the platform's; @fansly is a rival's",
     "subject": { "registrable": "onlyfans.com", "kind": "domain", "url": "https://onlyfans.com" },
-    "fields": { "name": "OnlyFans", "description": "Creator subscription platform",
-      "socials": [ { "platform": "x", "url": "https://x.com/OnlyFans" }, { "platform": "x", "url": "https://x.com/fansly" } ] },
-    "edited": [] },
-  { "id": "walmart-socials", "split": "test", "label": false, "why": "The retailer's own accounts use @walmart, not @amazon",
+    "fields": {
+      "name": "OnlyFans",
+      "description": "Creator subscription platform",
+      "socials": [
+        { "platform": "x", "url": "https://x.com/OnlyFans" },
+        { "platform": "x", "url": "https://x.com/fansly" }
+      ]
+    },
+    "edited": []
+  },
+  {
+    "id": "walmart-socials",
+    "split": "test",
+    "label": false,
+    "why": "The retailer's own accounts use @walmart, not @amazon",
     "subject": { "registrable": "walmart.com", "kind": "domain", "url": "https://www.walmart.com" },
-    "fields": { "name": "Walmart", "description": "Retail chain",
-      "socials": [ { "platform": "x", "url": "https://x.com/Walmart" }, { "platform": "instagram", "url": "https://www.instagram.com/amazon" } ] },
-    "edited": [] }
+    "fields": {
+      "name": "Walmart",
+      "description": "Retail chain",
+      "socials": [
+        { "platform": "x", "url": "https://x.com/Walmart" },
+        { "platform": "instagram", "url": "https://www.instagram.com/amazon" }
+      ]
+    },
+    "edited": []
+  }
 ]

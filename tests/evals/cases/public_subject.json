@@ -1,158 +1,537 @@
 [
-  { "id": "figma", "split": "train", "label": true, "why": "Figma is a public software company; the domain presents its product.",
+  {
+    "id": "figma",
+    "split": "train",
+    "label": true,
+    "why": "Figma is a public software company; the domain presents its product.",
     "raw": "figma.com",
-    "subject": { "kind": "domain", "registrable": "figma.com", "url": "https://www.figma.com" } },
-  { "id": "raycast-product-site", "split": "train", "label": true, "why": "Standalone site for the Raycast app, a product sold to the public.",
+    "subject": { "kind": "domain", "registrable": "figma.com", "url": "https://www.figma.com" }
+  },
+  {
+    "id": "raycast-product-site",
+    "split": "train",
+    "label": true,
+    "why": "Standalone site for the Raycast app, a product sold to the public.",
     "raw": "raycast.com",
-    "subject": { "kind": "domain", "registrable": "raycast.com", "url": "https://www.raycast.com" } },
-  { "id": "bloom-coaching", "split": "train", "label": true, "why": "Personal-name domain whose page sells coaching sessions: a business.",
+    "subject": { "kind": "domain", "registrable": "raycast.com", "url": "https://www.raycast.com" }
+  },
+  {
+    "id": "bloom-coaching",
+    "split": "train",
+    "label": true,
+    "why": "Personal-name domain whose page sells coaching sessions: a business.",
     "raw": "bloomcoaching.co.uk",
-    "subject": { "kind": "domain", "registrable": "bloomcoaching.co.uk", "url": "https://bloomcoaching.co.uk" } },
-  { "id": "ava-photography", "split": "train", "label": true, "why": "Solo photographer's site with prices and bookings, a commercial practice.",
+    "subject": { "kind": "domain", "registrable": "bloomcoaching.co.uk", "url": "https://bloomcoaching.co.uk" }
+  },
+  {
+    "id": "ava-photography",
+    "split": "train",
+    "label": true,
+    "why": "Solo photographer's site with prices and bookings, a commercial practice.",
     "raw": "avaphotography.com",
-    "subject": { "kind": "domain", "registrable": "avaphotography.com", "url": "https://avaphotography.com" } },
-  { "id": "bell-and-birch", "split": "train", "label": true, "why": "Small local candle shop with an online store, a public business.",
+    "subject": { "kind": "domain", "registrable": "avaphotography.com", "url": "https://avaphotography.com" }
+  },
+  {
+    "id": "bell-and-birch",
+    "split": "train",
+    "label": true,
+    "why": "Small local candle shop with an online store, a public business.",
     "raw": "bellandbirch.co",
-    "subject": { "kind": "domain", "registrable": "bellandbirch.co", "url": "https://bellandbirch.co" } },
-  { "id": "moonlighters-archive", "split": "train", "label": true, "why": "Fan archive publishing articles about a band to an audience.",
+    "subject": { "kind": "domain", "registrable": "bellandbirch.co", "url": "https://bellandbirch.co" }
+  },
+  {
+    "id": "moonlighters-archive",
+    "split": "train",
+    "label": true,
+    "why": "Fan archive publishing articles about a band to an audience.",
     "raw": "moonlightersbandarchive.com",
-    "subject": { "kind": "domain", "registrable": "moonlightersbandarchive.com", "url": "https://moonlightersbandarchive.com" } },
-  { "id": "sunday-read", "split": "train", "label": true, "why": "Solo news blog publishing weekly articles to readers, no ads.",
+    "subject": {
+      "kind": "domain",
+      "registrable": "moonlightersbandarchive.com",
+      "url": "https://moonlightersbandarchive.com"
+    }
+  },
+  {
+    "id": "sunday-read",
+    "split": "train",
+    "label": true,
+    "why": "Solo news blog publishing weekly articles to readers, no ads.",
     "raw": "thesundayread.com",
-    "subject": { "kind": "domain", "registrable": "thesundayread.com", "url": "https://thesundayread.com" } },
-  { "id": "verdant-grove-parked", "split": "train", "label": false, "why": "Parked for-sale placeholder with no business or publisher behind it.",
+    "subject": { "kind": "domain", "registrable": "thesundayread.com", "url": "https://thesundayread.com" }
+  },
+  {
+    "id": "verdant-grove-parked",
+    "split": "train",
+    "label": false,
+    "why": "Parked for-sale placeholder with no business or publisher behind it.",
     "raw": "verdantgrove.com",
-    "subject": { "kind": "domain", "registrable": "verdantgrove.com", "url": "https://verdantgrove.com" } },
-  { "id": "northgate-parked", "split": "train", "label": false, "why": "Registrar for-sale parking page; nothing is presented to the public.",
+    "subject": { "kind": "domain", "registrable": "verdantgrove.com", "url": "https://verdantgrove.com" }
+  },
+  {
+    "id": "northgate-parked",
+    "split": "train",
+    "label": false,
+    "why": "Registrar for-sale parking page; nothing is presented to the public.",
     "raw": "northgateventures.com",
-    "subject": { "kind": "domain", "registrable": "northgateventures.com", "url": "https://northgateventures.com" } },
-  { "id": "david-marsh-homepage", "split": "train", "label": false, "why": "Private person's bare homepage; no business and no published work.",
+    "subject": { "kind": "domain", "registrable": "northgateventures.com", "url": "https://northgateventures.com" }
+  },
+  {
+    "id": "david-marsh-homepage",
+    "split": "train",
+    "label": false,
+    "why": "Private person's bare homepage; no business and no published work.",
     "raw": "davidmarsh.com",
-    "subject": { "kind": "domain", "registrable": "davidmarsh.com", "url": "https://davidmarsh.com" } },
-  { "id": "kim-and-tom-wedding", "split": "train", "label": false, "why": "Private family wedding page, not a public or commercial presence.",
+    "subject": { "kind": "domain", "registrable": "davidmarsh.com", "url": "https://davidmarsh.com" }
+  },
+  {
+    "id": "kim-and-tom-wedding",
+    "split": "train",
+    "label": false,
+    "why": "Private family wedding page, not a public or commercial presence.",
     "raw": "kimandtom2024.com",
-    "subject": { "kind": "domain", "registrable": "kimandtom2024.com", "url": "https://kimandtom2024.com" } },
-  { "id": "jordan-lee-contact", "split": "train", "label": false, "why": "Personal contact page only; no products and no published writing.",
+    "subject": { "kind": "domain", "registrable": "kimandtom2024.com", "url": "https://kimandtom2024.com" }
+  },
+  {
+    "id": "jordan-lee-contact",
+    "split": "train",
+    "label": false,
+    "why": "Personal contact page only; no products and no published writing.",
     "raw": "jordan-lee.io",
-    "subject": { "kind": "domain", "registrable": "jordan-lee.io", "url": "https://jordan-lee.io" } },
-  { "id": "sable-and-fox-blank", "split": "train", "label": false, "why": "Brand-sounding domain that is one private person's empty page.",
+    "subject": { "kind": "domain", "registrable": "jordan-lee.io", "url": "https://jordan-lee.io" }
+  },
+  {
+    "id": "sable-and-fox-blank",
+    "split": "train",
+    "label": false,
+    "why": "Brand-sounding domain that is one private person's empty page.",
     "raw": "sableandfox.com",
-    "subject": { "kind": "domain", "registrable": "sableandfox.com", "url": "https://sableandfox.com" } },
-  { "id": "marcus-builds", "split": "train", "label": true, "why": "Solo creator publishing woodworking videos to a large public audience.",
+    "subject": { "kind": "domain", "registrable": "sableandfox.com", "url": "https://sableandfox.com" }
+  },
+  {
+    "id": "marcus-builds",
+    "split": "train",
+    "label": true,
+    "why": "Solo creator publishing woodworking videos to a large public audience.",
     "raw": "@marcusbuilds",
-    "subject": { "kind": "handle", "registrable": "marcusbuilds", "url": "https://www.youtube.com/@marcusbuilds", "platform": "youtube" } },
-  { "id": "northloop-studio", "split": "train", "label": true, "why": "Handle of a design studio selling client work, a business.",
+    "subject": {
+      "kind": "handle",
+      "registrable": "marcusbuilds",
+      "url": "https://www.youtube.com/@marcusbuilds",
+      "platform": "youtube"
+    }
+  },
+  {
+    "id": "northloop-studio",
+    "split": "train",
+    "label": true,
+    "why": "Handle of a design studio selling client work, a business.",
     "raw": "@northloopstudio",
-    "subject": { "kind": "handle", "registrable": "northloopstudio", "url": "https://www.instagram.com/northloopstudio", "platform": "instagram" } },
-  { "id": "chef-renzo", "split": "train", "label": true, "why": "Creator publishing cooking videos to a public audience with sponsors.",
+    "subject": {
+      "kind": "handle",
+      "registrable": "northloopstudio",
+      "url": "https://www.instagram.com/northloopstudio",
+      "platform": "instagram"
+    }
+  },
+  {
+    "id": "chef-renzo",
+    "split": "train",
+    "label": true,
+    "why": "Creator publishing cooking videos to a public audience with sponsors.",
     "raw": "@chefrenzo",
-    "subject": { "kind": "handle", "registrable": "chefrenzo", "url": "https://www.tiktok.com/@chefrenzo", "platform": "tiktok" } },
-  { "id": "papertrail-app", "split": "train", "label": true, "why": "Official account of a commercial log-management product.",
+    "subject": {
+      "kind": "handle",
+      "registrable": "chefrenzo",
+      "url": "https://www.tiktok.com/@chefrenzo",
+      "platform": "tiktok"
+    }
+  },
+  {
+    "id": "papertrail-app",
+    "split": "train",
+    "label": true,
+    "why": "Official account of a commercial log-management product.",
     "raw": "@papertrailapp",
-    "subject": { "kind": "handle", "registrable": "papertrailapp", "url": "https://x.com/papertrailapp", "platform": "x" } },
-  { "id": "quiet-garden", "split": "train", "label": true, "why": "Channel publishing weekly gardening videos to a public audience.",
+    "subject": {
+      "kind": "handle",
+      "registrable": "papertrailapp",
+      "url": "https://x.com/papertrailapp",
+      "platform": "x"
+    }
+  },
+  {
+    "id": "quiet-garden",
+    "split": "train",
+    "label": true,
+    "why": "Channel publishing weekly gardening videos to a public audience.",
     "raw": "@thequietgarden",
-    "subject": { "kind": "handle", "registrable": "thequietgarden", "url": "https://www.youtube.com/@thequietgarden", "platform": "youtube" } },
-  { "id": "petal-press", "split": "train", "label": true, "why": "Account of a small flower-pressing supply shop, a business.",
+    "subject": {
+      "kind": "handle",
+      "registrable": "thequietgarden",
+      "url": "https://www.youtube.com/@thequietgarden",
+      "platform": "youtube"
+    }
+  },
+  {
+    "id": "petal-press",
+    "split": "train",
+    "label": true,
+    "why": "Account of a small flower-pressing supply shop, a business.",
     "raw": "@petalpressco",
-    "subject": { "kind": "handle", "registrable": "petalpressco", "url": "https://www.instagram.com/petalpressco", "platform": "instagram" } },
-  { "id": "mike-travels-private", "split": "train", "label": false, "why": "Private personal account with no posts, products, or business links.",
+    "subject": {
+      "kind": "handle",
+      "registrable": "petalpressco",
+      "url": "https://www.instagram.com/petalpressco",
+      "platform": "instagram"
+    }
+  },
+  {
+    "id": "mike-travels-private",
+    "split": "train",
+    "label": false,
+    "why": "Private personal account with no posts, products, or business links.",
     "raw": "@mike_travels_",
-    "subject": { "kind": "handle", "registrable": "mike_travels_", "url": "https://www.instagram.com/mike_travels_", "platform": "instagram" } },
-  { "id": "oak-and-ember-private", "split": "train", "label": false, "why": "Brand-sounding handle that is one private person's dormant account.",
+    "subject": {
+      "kind": "handle",
+      "registrable": "mike_travels_",
+      "url": "https://www.instagram.com/mike_travels_",
+      "platform": "instagram"
+    }
+  },
+  {
+    "id": "oak-and-ember-private",
+    "split": "train",
+    "label": false,
+    "why": "Brand-sounding handle that is one private person's dormant account.",
     "raw": "@oakandember",
-    "subject": { "kind": "handle", "registrable": "oakandember", "url": "https://x.com/oakandember", "platform": "x" } },
-  { "id": "life-with-kents", "split": "train", "label": false, "why": "Private family account; no products, brand, or public audience.",
+    "subject": { "kind": "handle", "registrable": "oakandember", "url": "https://x.com/oakandember", "platform": "x" }
+  },
+  {
+    "id": "life-with-kents",
+    "split": "train",
+    "label": false,
+    "why": "Private family account; no products, brand, or public audience.",
     "raw": "@lifewiththekents",
-    "subject": { "kind": "handle", "registrable": "lifewiththekents", "url": "https://www.instagram.com/lifewiththekents", "platform": "instagram" } },
-  { "id": "r-kowalski-dormant", "split": "train", "label": false, "why": "Dormant personal account with no posts and no business.",
+    "subject": {
+      "kind": "handle",
+      "registrable": "lifewiththekents",
+      "url": "https://www.instagram.com/lifewiththekents",
+      "platform": "instagram"
+    }
+  },
+  {
+    "id": "r-kowalski-dormant",
+    "split": "train",
+    "label": false,
+    "why": "Dormant personal account with no posts and no business.",
     "raw": "@r_kowalski77",
-    "subject": { "kind": "handle", "registrable": "r_kowalski77", "url": "https://x.com/r_kowalski77", "platform": "x" } },
-  { "id": "jess-and-boys", "split": "train", "label": false, "why": "Private personal account with no public posts or business.",
+    "subject": { "kind": "handle", "registrable": "r_kowalski77", "url": "https://x.com/r_kowalski77", "platform": "x" }
+  },
+  {
+    "id": "jess-and-boys",
+    "split": "train",
+    "label": false,
+    "why": "Private personal account with no public posts or business.",
     "raw": "@jessandtheboys",
-    "subject": { "kind": "handle", "registrable": "jessandtheboys", "url": "https://www.tiktok.com/@jessandtheboys", "platform": "tiktok" } },
-  { "id": "ben-carter-art-private", "split": "train", "label": false, "why": "Private personal art account; no shop, commissions, or public work.",
+    "subject": {
+      "kind": "handle",
+      "registrable": "jessandtheboys",
+      "url": "https://www.tiktok.com/@jessandtheboys",
+      "platform": "tiktok"
+    }
+  },
+  {
+    "id": "ben-carter-art-private",
+    "split": "train",
+    "label": false,
+    "why": "Private personal art account; no shop, commissions, or public work.",
     "raw": "@ben_carter_art",
-    "subject": { "kind": "handle", "registrable": "ben_carter_art", "url": "https://www.instagram.com/ben_carter_art", "platform": "instagram" } },
-  { "id": "hobbs-family", "split": "train", "label": false, "why": "Private family channel with no public audience or business.",
+    "subject": {
+      "kind": "handle",
+      "registrable": "ben_carter_art",
+      "url": "https://www.instagram.com/ben_carter_art",
+      "platform": "instagram"
+    }
+  },
+  {
+    "id": "hobbs-family",
+    "split": "train",
+    "label": false,
+    "why": "Private family channel with no public audience or business.",
     "raw": "@thehobbsfamily",
-    "subject": { "kind": "handle", "registrable": "thehobbsfamily", "url": "https://www.youtube.com/@thehobbsfamily", "platform": "youtube" } },
-  { "id": "notion", "split": "test", "label": true, "why": "Notion is a public software company; the domain presents its product.",
+    "subject": {
+      "kind": "handle",
+      "registrable": "thehobbsfamily",
+      "url": "https://www.youtube.com/@thehobbsfamily",
+      "platform": "youtube"
+    }
+  },
+  {
+    "id": "notion",
+    "split": "test",
+    "label": true,
+    "why": "Notion is a public software company; the domain presents its product.",
     "raw": "notion.so",
-    "subject": { "kind": "domain", "registrable": "notion.so", "url": "https://www.notion.so" } },
-  { "id": "arc-browser-site", "split": "test", "label": true, "why": "Standalone product site for the Arc browser, sold to the public.",
+    "subject": { "kind": "domain", "registrable": "notion.so", "url": "https://www.notion.so" }
+  },
+  {
+    "id": "arc-browser-site",
+    "split": "test",
+    "label": true,
+    "why": "Standalone product site for the Arc browser, sold to the public.",
     "raw": "arc.net",
-    "subject": { "kind": "domain", "registrable": "arc.net", "url": "https://arc.net" } },
-  { "id": "ella-marsden-law", "split": "test", "label": true, "why": "Personal-name domain of a law practice taking client enquiries.",
+    "subject": { "kind": "domain", "registrable": "arc.net", "url": "https://arc.net" }
+  },
+  {
+    "id": "ella-marsden-law",
+    "split": "test",
+    "label": true,
+    "why": "Personal-name domain of a law practice taking client enquiries.",
     "raw": "ellamarsdenlaw.co.uk",
-    "subject": { "kind": "domain", "registrable": "ellamarsdenlaw.co.uk", "url": "https://ellamarsdenlaw.co.uk" } },
-  { "id": "tom-reyes-dental", "split": "test", "label": true, "why": "Solo dentist's site with services and booking, a commercial practice.",
+    "subject": { "kind": "domain", "registrable": "ellamarsdenlaw.co.uk", "url": "https://ellamarsdenlaw.co.uk" }
+  },
+  {
+    "id": "tom-reyes-dental",
+    "split": "test",
+    "label": true,
+    "why": "Solo dentist's site with services and booking, a commercial practice.",
     "raw": "tomreyesdental.com",
-    "subject": { "kind": "domain", "registrable": "tomreyesdental.com", "url": "https://tomreyesdental.com" } },
-  { "id": "harbor-lane-books", "split": "test", "label": true, "why": "Small independent bookshop selling online, a public business.",
+    "subject": { "kind": "domain", "registrable": "tomreyesdental.com", "url": "https://tomreyesdental.com" }
+  },
+  {
+    "id": "harbor-lane-books",
+    "split": "test",
+    "label": true,
+    "why": "Small independent bookshop selling online, a public business.",
     "raw": "harborlanebooks.com",
-    "subject": { "kind": "domain", "registrable": "harborlanebooks.com", "url": "https://harborlanebooks.com" } },
-  { "id": "tori-amos-archive", "split": "test", "label": true, "why": "Fan archive publishing articles and images about a public musician.",
+    "subject": { "kind": "domain", "registrable": "harborlanebooks.com", "url": "https://harborlanebooks.com" }
+  },
+  {
+    "id": "tori-amos-archive",
+    "split": "test",
+    "label": true,
+    "why": "Fan archive publishing articles and images about a public musician.",
     "raw": "toryamosarchive.com",
-    "subject": { "kind": "domain", "registrable": "toryamosarchive.com", "url": "https://toryamosarchive.com" } },
-  { "id": "harbor-report", "split": "test", "label": true, "why": "Solo news blog publishing daily posts to readers, no ads.",
+    "subject": { "kind": "domain", "registrable": "toryamosarchive.com", "url": "https://toryamosarchive.com" }
+  },
+  {
+    "id": "harbor-report",
+    "split": "test",
+    "label": true,
+    "why": "Solo news blog publishing daily posts to readers, no ads.",
     "raw": "theharborreport.com",
-    "subject": { "kind": "domain", "registrable": "theharborreport.com", "url": "https://theharborreport.com" } },
-  { "id": "brightpath-parked", "split": "test", "label": false, "why": "For-sale parking page with no business or publisher behind it.",
+    "subject": { "kind": "domain", "registrable": "theharborreport.com", "url": "https://theharborreport.com" }
+  },
+  {
+    "id": "brightpath-parked",
+    "split": "test",
+    "label": false,
+    "why": "For-sale parking page with no business or publisher behind it.",
     "raw": "brightpathlabs.com",
-    "subject": { "kind": "domain", "registrable": "brightpathlabs.com", "url": "https://brightpathlabs.com" } },
-  { "id": "oakline-parked", "split": "test", "label": false, "why": "Registrar parking page with no content or business.",
+    "subject": { "kind": "domain", "registrable": "brightpathlabs.com", "url": "https://brightpathlabs.com" }
+  },
+  {
+    "id": "oakline-parked",
+    "split": "test",
+    "label": false,
+    "why": "Registrar parking page with no content or business.",
     "raw": "oaklinegroup.net",
-    "subject": { "kind": "domain", "registrable": "oaklinegroup.net", "url": "https://oaklinegroup.net" } },
-  { "id": "simon-vance-homepage", "split": "test", "label": false, "why": "Bare personal homepage with no business and no published work.",
+    "subject": { "kind": "domain", "registrable": "oaklinegroup.net", "url": "https://oaklinegroup.net" }
+  },
+  {
+    "id": "simon-vance-homepage",
+    "split": "test",
+    "label": false,
+    "why": "Bare personal homepage with no business and no published work.",
     "raw": "simonvance.com",
-    "subject": { "kind": "domain", "registrable": "simonvance.com", "url": "https://simonvance.com" } },
-  { "id": "our-little-nest", "split": "test", "label": false, "why": "Private family photo page, not a public or commercial presence.",
+    "subject": { "kind": "domain", "registrable": "simonvance.com", "url": "https://simonvance.com" }
+  },
+  {
+    "id": "our-little-nest",
+    "split": "test",
+    "label": false,
+    "why": "Private family photo page, not a public or commercial presence.",
     "raw": "ourlittlenest2025.com",
-    "subject": { "kind": "domain", "registrable": "ourlittlenest2025.com", "url": "https://ourlittlenest2025.com" } },
-  { "id": "naomi-frost-contact", "split": "test", "label": false, "why": "Personal contact page only; no products and no published writing.",
+    "subject": { "kind": "domain", "registrable": "ourlittlenest2025.com", "url": "https://ourlittlenest2025.com" }
+  },
+  {
+    "id": "naomi-frost-contact",
+    "split": "test",
+    "label": false,
+    "why": "Personal contact page only; no products and no published writing.",
     "raw": "naomifrost.dev",
-    "subject": { "kind": "domain", "registrable": "naomifrost.dev", "url": "https://naomifrost.dev" } },
-  { "id": "copper-and-vine-blank", "split": "test", "label": false, "why": "Brand-sounding domain that is one private person's empty page.",
+    "subject": { "kind": "domain", "registrable": "naomifrost.dev", "url": "https://naomifrost.dev" }
+  },
+  {
+    "id": "copper-and-vine-blank",
+    "split": "test",
+    "label": false,
+    "why": "Brand-sounding domain that is one private person's empty page.",
     "raw": "copperandvine.com",
-    "subject": { "kind": "domain", "registrable": "copperandvine.com", "url": "https://copperandvine.com" } },
-  { "id": "slow-stitch-studio", "split": "test", "label": true, "why": "Channel of a craft studio selling kits, a business.",
+    "subject": { "kind": "domain", "registrable": "copperandvine.com", "url": "https://copperandvine.com" }
+  },
+  {
+    "id": "slow-stitch-studio",
+    "split": "test",
+    "label": true,
+    "why": "Channel of a craft studio selling kits, a business.",
     "raw": "@slowstitchstudio",
-    "subject": { "kind": "handle", "registrable": "slowstitchstudio", "url": "https://www.youtube.com/@slowstitchstudio", "platform": "youtube" } },
-  { "id": "tomasz-makes", "split": "test", "label": true, "why": "Solo creator publishing build videos to a large public audience.",
+    "subject": {
+      "kind": "handle",
+      "registrable": "slowstitchstudio",
+      "url": "https://www.youtube.com/@slowstitchstudio",
+      "platform": "youtube"
+    }
+  },
+  {
+    "id": "tomasz-makes",
+    "split": "test",
+    "label": true,
+    "why": "Solo creator publishing build videos to a large public audience.",
     "raw": "@tomaszmakes",
-    "subject": { "kind": "handle", "registrable": "tomaszmakes", "url": "https://www.instagram.com/tomaszmakes", "platform": "instagram" } },
-  { "id": "plant-with-pia", "split": "test", "label": true, "why": "Creator publishing plant-care videos to a public audience.",
+    "subject": {
+      "kind": "handle",
+      "registrable": "tomaszmakes",
+      "url": "https://www.instagram.com/tomaszmakes",
+      "platform": "instagram"
+    }
+  },
+  {
+    "id": "plant-with-pia",
+    "split": "test",
+    "label": true,
+    "why": "Creator publishing plant-care videos to a public audience.",
     "raw": "@plantwithpia",
-    "subject": { "kind": "handle", "registrable": "plantwithpia", "url": "https://www.tiktok.com/@plantwithpia", "platform": "tiktok" } },
-  { "id": "lumen-analytics", "split": "test", "label": true, "why": "Official account of a small analytics company, a business.",
+    "subject": {
+      "kind": "handle",
+      "registrable": "plantwithpia",
+      "url": "https://www.tiktok.com/@plantwithpia",
+      "platform": "tiktok"
+    }
+  },
+  {
+    "id": "lumen-analytics",
+    "split": "test",
+    "label": true,
+    "why": "Official account of a small analytics company, a business.",
     "raw": "@lumenanalytics",
-    "subject": { "kind": "handle", "registrable": "lumenanalytics", "url": "https://x.com/lumenanalytics", "platform": "x" } },
-  { "id": "history-table", "split": "test", "label": true, "why": "Channel publishing weekly history episodes to a public audience.",
+    "subject": {
+      "kind": "handle",
+      "registrable": "lumenanalytics",
+      "url": "https://x.com/lumenanalytics",
+      "platform": "x"
+    }
+  },
+  {
+    "id": "history-table",
+    "split": "test",
+    "label": true,
+    "why": "Channel publishing weekly history episodes to a public audience.",
     "raw": "@thehistorytable",
-    "subject": { "kind": "handle", "registrable": "thehistorytable", "url": "https://www.youtube.com/@thehistorytable", "platform": "youtube" } },
-  { "id": "fern-and-fable", "split": "test", "label": true, "why": "Account of a small plant shop with an online store.",
+    "subject": {
+      "kind": "handle",
+      "registrable": "thehistorytable",
+      "url": "https://www.youtube.com/@thehistorytable",
+      "platform": "youtube"
+    }
+  },
+  {
+    "id": "fern-and-fable",
+    "split": "test",
+    "label": true,
+    "why": "Account of a small plant shop with an online store.",
     "raw": "@fernandfable",
-    "subject": { "kind": "handle", "registrable": "fernandfable", "url": "https://www.instagram.com/fernandfable", "platform": "instagram" } },
-  { "id": "peter-oyelaran-dormant", "split": "test", "label": false, "why": "Dormant private account with no posts and no business.",
+    "subject": {
+      "kind": "handle",
+      "registrable": "fernandfable",
+      "url": "https://www.instagram.com/fernandfable",
+      "platform": "instagram"
+    }
+  },
+  {
+    "id": "peter-oyelaran-dormant",
+    "split": "test",
+    "label": false,
+    "why": "Dormant private account with no posts and no business.",
     "raw": "@peter.oyelaran",
-    "subject": { "kind": "handle", "registrable": "peter.oyelaran", "url": "https://x.com/peter.oyelaran", "platform": "x" } },
-  { "id": "mercer-house-private", "split": "test", "label": false, "why": "Brand-sounding handle that is one private person's account.",
+    "subject": {
+      "kind": "handle",
+      "registrable": "peter.oyelaran",
+      "url": "https://x.com/peter.oyelaran",
+      "platform": "x"
+    }
+  },
+  {
+    "id": "mercer-house-private",
+    "split": "test",
+    "label": false,
+    "why": "Brand-sounding handle that is one private person's account.",
     "raw": "@themercerhouse",
-    "subject": { "kind": "handle", "registrable": "themercerhouse", "url": "https://www.instagram.com/themercerhouse", "platform": "instagram" } },
-  { "id": "kayla-on-the-move", "split": "test", "label": false, "why": "Private personal account; no public content or business.",
+    "subject": {
+      "kind": "handle",
+      "registrable": "themercerhouse",
+      "url": "https://www.instagram.com/themercerhouse",
+      "platform": "instagram"
+    }
+  },
+  {
+    "id": "kayla-on-the-move",
+    "split": "test",
+    "label": false,
+    "why": "Private personal account; no public content or business.",
     "raw": "@kayla_on_the_move",
-    "subject": { "kind": "handle", "registrable": "kayla_on_the_move", "url": "https://www.instagram.com/kayla_on_the_move", "platform": "instagram" } },
-  { "id": "g-whitfield-dormant", "split": "test", "label": false, "why": "Dormant personal account with no posts and no business.",
+    "subject": {
+      "kind": "handle",
+      "registrable": "kayla_on_the_move",
+      "url": "https://www.instagram.com/kayla_on_the_move",
+      "platform": "instagram"
+    }
+  },
+  {
+    "id": "g-whitfield-dormant",
+    "split": "test",
+    "label": false,
+    "why": "Dormant personal account with no posts and no business.",
     "raw": "@g_whitfield",
-    "subject": { "kind": "handle", "registrable": "g_whitfield", "url": "https://x.com/g_whitfield", "platform": "x" } },
-  { "id": "four-little-wrens", "split": "test", "label": false, "why": "Private family channel with no public audience or business.",
+    "subject": { "kind": "handle", "registrable": "g_whitfield", "url": "https://x.com/g_whitfield", "platform": "x" }
+  },
+  {
+    "id": "four-little-wrens",
+    "split": "test",
+    "label": false,
+    "why": "Private family channel with no public audience or business.",
     "raw": "@fourlittlewrens",
-    "subject": { "kind": "handle", "registrable": "fourlittlewrens", "url": "https://www.youtube.com/@fourlittlewrens", "platform": "youtube" } },
-  { "id": "theo-parker-music-private", "split": "test", "label": false, "why": "Private personal music handle; no releases, audience, or business.",
+    "subject": {
+      "kind": "handle",
+      "registrable": "fourlittlewrens",
+      "url": "https://www.youtube.com/@fourlittlewrens",
+      "platform": "youtube"
+    }
+  },
+  {
+    "id": "theo-parker-music-private",
+    "split": "test",
+    "label": false,
+    "why": "Private personal music handle; no releases, audience, or business.",
     "raw": "@theoparkermusic",
-    "subject": { "kind": "handle", "registrable": "theoparkermusic", "url": "https://www.instagram.com/theoparkermusic", "platform": "instagram" } },
-  { "id": "sarah-and-shelf", "split": "test", "label": false, "why": "Private personal account; no shop, brand, or public posting.",
+    "subject": {
+      "kind": "handle",
+      "registrable": "theoparkermusic",
+      "url": "https://www.instagram.com/theoparkermusic",
+      "platform": "instagram"
+    }
+  },
+  {
+    "id": "sarah-and-shelf",
+    "split": "test",
+    "label": false,
+    "why": "Private personal account; no shop, brand, or public posting.",
     "raw": "@sarahandtheshelf",
-    "subject": { "kind": "handle", "registrable": "sarahandtheshelf", "url": "https://www.tiktok.com/@sarahandtheshelf", "platform": "tiktok" } }
+    "subject": {
+      "kind": "handle",
+      "registrable": "sarahandtheshelf",
+      "url": "https://www.tiktok.com/@sarahandtheshelf",
+      "platform": "tiktok"
+    }
+  }
 ]

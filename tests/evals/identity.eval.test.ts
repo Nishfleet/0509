@@ -75,8 +75,7 @@ describe.skipIf(!jevKeyPresent())("eval: identity field confidence against Jev",
 describe.skipIf(!jevKeyPresent())("eval: public subject gate against Jev", () => {
   it("public_subject: scores the shipped text on both splits", async () => {
     const rows = await loadCases<PublicSubjectCase>("public_subject", ["raw", "subject"]);
-    const ask: Ask<PublicSubjectCase> = (row) =>
-      makeNoulAsk(PUBLIC_SUBJECT)(publicSubjectState(row.subject, row.raw));
+    const ask: Ask<PublicSubjectCase> = (row) => makeNoulAsk(PUBLIC_SUBJECT)(publicSubjectState(row.subject, row.raw));
     const report = await runEval("public_subject", rows, ask, noulScore);
     console.log(formatReport(report));
     expect(report.splits.length).toBeGreaterThan(0);
