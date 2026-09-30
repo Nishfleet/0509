@@ -21,6 +21,7 @@ import { saveBriefSchedule } from "./standing/reschedule.server";
 const MISMATCH = "That doesn't match your email. Type it exactly to delete your account.";
 const EMAIL_INVALID = "Enter an email address, like you@company.com.";
 const EMAIL_FAILED = "We couldn't send the link. For your safety, sign out and back in, then try again.";
+const EMAIL_LIMITED = "Too many tries. Wait a minute and try again.";
 const SIGN_IN_AGAIN = "For your safety, sign out and sign back in, then delete your account.";
 
 interface SettingsUser {
@@ -90,7 +91,9 @@ async function changeEmail(request: Request, form: FormData): Promise<SettingsRe
   const newEmail = typeof raw === "string" ? raw.trim() : "";
   if (!z.email().safeParse(newEmail).success) return result({ emailChangeError: EMAIL_INVALID });
   try {
-    await requestEmailChange(env, request, newEmail);
+    if ((await requestEmailChange(env, request, newEmail)) === "limited") {
+      return result({ emailChangeError: EMAIL_LIMITED });
+    }
   } catch (failed) {
     console.error(
       JSON.stringify({

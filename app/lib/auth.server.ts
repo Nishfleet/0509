@@ -8,6 +8,7 @@ import { API_KEY_PREFIX } from "./agent/paths";
 import { ensureWorkspaceForSignIn } from "./workspace.server";
 import { accessPrecleared } from "./auth/access-preclearance.server";
 import { changeEmailEmail } from "./auth/change-email-email";
+import { changeEmailAllowed } from "./auth/change-email-limit";
 import { MAGIC_LINK_TTL_SECONDS, magicLinkEmail } from "./auth/magic-link-email";
 import { MAGIC_LINK_PATH } from "./auth/magic-link-path";
 import { redactEmailShaped } from "./auth/redact-email-shaped";
@@ -48,6 +49,20 @@ export function hasSessionCookie(request: Request) {
   return header.split(";").some((part) => sessionCookieNames.has(part.trim().split("=")[0] ?? ""));
 }
 
+function sendChangeEmailMessage(
+  email: SendEmail,
+  input: { kind: "approve" | "confirm"; to: string; named: string; url: string },
+): Promise<void> {
+  const message = changeEmailEmail({ kind: input.kind, email: input.named, url: input.url });
+  return sendOrThrow(email, {
+    to: input.to,
+    from: { email: "hello@0509.io", name: "Five to Nine" },
+    subject: message.subject,
+    text: message.text,
+    html: message.html,
+  });
+}
+
 export function createAuth(env: AuthEnv, options?: { captcha?: boolean; validateSchema?: boolean }) {
   const origin = env.BETTER_AUTH_URL === undefined ? undefined : new URL(env.BETTER_AUTH_URL).origin;
   return betterAuth({
@@ -63,22 +78,23 @@ export function createAuth(env: AuthEnv, options?: { captcha?: boolean; validate
       freshAge: FRESH_SESSION_SECONDS,
       cookieCache: { enabled: true, maxAge: SESSION_COOKIE_CACHE_SECONDS },
     },
-    user: { deleteUser: { enabled: true }, changeEmail: { enabled: true } },
+    user: {
+      deleteUser: { enabled: true },
+      changeEmail: {
+        enabled: true,
+        updateEmailWithoutVerification: false,
+        sendChangeEmailConfirmation: ({ user, newEmail, url }) =>
+          sendChangeEmailMessage(env.EMAIL, { kind: "approve", to: user.email, named: newEmail, url }),
+      },
+    },
     emailVerification: {
       expiresIn: EMAIL_CHANGE_TTL_SECONDS,
-      sendVerificationEmail: async ({ user, url }) => {
-        const message = changeEmailEmail({ email: user.email, url });
-        await sendOrThrow(env.EMAIL, {
-          to: user.email,
-          from: { email: "hello@0509.io", name: "Five to Nine" },
-          subject: message.subject,
-          text: message.text,
-          html: message.html,
-        });
-      },
+      sendVerificationEmail: ({ user, url }) =>
+        sendChangeEmailMessage(env.EMAIL, { kind: "confirm", to: user.email, named: user.email, url }),
     },
     hooks: {
       before: createAuthMiddleware(async (ctx) => {
+        if (ctx.path === "/send-verification-email") throw new APIError("NOT_FOUND");
         if (ctx.path !== MAGIC_LINK_PATH) return;
         const ip = ctx.headers?.get(CLIENT_IP_HEADER) ?? null;
         if (!(await signInLinkAllowed(env, emailOf(ctx.body), ip))) {
@@ -171,10 +187,22 @@ export async function deleteSignedInUser(env: AuthEnv, request: Request, now: Da
   return headers;
 }
 
-export async function requestEmailChange(env: AuthEnv, request: Request, newEmail: string): Promise<void> {
-  await createAuth(env).api.changeEmail({
+export async function requestEmailChange(
+  env: AuthEnv & { CHANGE_EMAIL_LIMIT: RateLimit },
+  request: Request,
+  newEmail: string,
+): Promise<"sent" | "limited"> {
+  const auth = createAuth(env);
+  const session = await auth.api.getSession({ headers: request.headers, query: FRESH });
+  if (!session) throw new Error("no session");
+  if (Date.now() - new Date(session.session.createdAt).getTime() >= FRESH_SESSION_SECONDS * 1000) {
+    throw new Error("session not fresh");
+  }
+  if (!(await changeEmailAllowed(env.CHANGE_EMAIL_LIMIT, session.user.id, newEmail))) return "limited";
+  await auth.api.changeEmail({
     body: { newEmail, callbackURL: "/app/settings" },
     headers: request.headers,
     query: FRESH,
   });
+  return "sent";
 }
