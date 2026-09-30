@@ -144,111 +144,63 @@ function seed({
     JSON.stringify(payload),
   );
 
-  // 4 weeks of standing history for the four-week chart (matching old fixture: Loopwell 3,3,2,2; Kindred 2,1,1,1; Casetta 1,2,3,3)
-  // Weeks oldest → newest: 2026-08-24, 2026-08-31, 2026-09-07, 2026-09-14
+  // 4 weeks of standing history for the four-week chart (Loopwell 3,3,2,2;
+  // Kindred 2,1,1,1; Casetta 1,2,3,3), oldest first.
   const weeks = [
     "2026-08-24T07:00:00.000Z",
     "2026-08-31T07:00:00.000Z",
     "2026-09-07T07:00:00.000Z",
     "2026-09-14T07:00:00.000Z",
   ];
-  // Loopwell ranks: 3, 3, 2, 2
-  // Kindred ranks: 2, 1, 1, 1
-  // Casetta ranks: 1, 2, 3, 3
-  const selfRanks = [3, 3, 2, 2];
-  const kindredRanks = [2, 1, 1, 1];
-  const casettaRanks = [1, 2, 3, 3];
-
+  const chartRanks = [selfId, kindredId, casettaId].map((entityId) => {
+    if (entityId === selfId) return [3, 3, 2, 2];
+    if (entityId === kindredId) return [2, 1, 1, 1];
+    return [1, 2, 3, 3];
+  });
   const standingValues: string[] = [];
-  for (let i = 0; i < weeks.length; i++) {
-    const week = weeks[i];
-    standingValues.push(
-      `('${workspaceId}_stand_self_${i}', '${workspaceId}', '${selfId}', '${week}', 0, ${selfRanks[i]}, '${week}')`,
-      `('${workspaceId}_stand_kindred_${i}', '${workspaceId}', '${kindredId}', '${week}', 0, ${kindredRanks[i]}, '${week}')`,
-      `('${workspaceId}_stand_casetta_${i}', '${workspaceId}', '${casettaId}', '${week}', 0, ${casettaRanks[i]}, '${week}')`,
-    );
+  for (const [weekIndex, week] of weeks.entries()) {
+    for (const [entityIndex, entityId] of [selfId, kindredId, casettaId].entries()) {
+      const rank = chartRanks[entityIndex]?.[weekIndex] ?? 0;
+      standingValues.push(
+        `('${workspaceId}_stand_${entityIndex}_${weekIndex}', '${workspaceId}', '${entityId}', '${week}', 0, ${rank}, '${week}')`,
+      );
+    }
   }
-  run(db, `INSERT INTO standing (id, workspace_id, entity_id, week_start_at, score, rank, computed_at) VALUES ${standingValues.join(", ")}`);
-
-  // signal rows for Kindred's evidence (opened row) — site_change (2) and mention (1)
-  const periodStartDate = new Date(periodStart).toISOString();
   run(
     db,
-    `INSERT INTO signal (id, workspace_id, entity_id, source_id, kind, dedup_key, observed_at, is_tombstoned, title, summary, url, evidence_url, payload_json)
-     VALUES (?, ?, ?, 'src_site_web', 'change', ?, ?, 0, ?, ?, ?, ?, '{}')`,
+    `INSERT INTO standing (id, workspace_id, entity_id, week_start_at, score, rank, computed_at) VALUES ${standingValues.join(", ")}`,
+  );
+
+  // Kindred's week: three signals since the period's start, so its row's pills
+  // read site checks 2 live, news 1 live and every other source none, and its
+  // opened row carries the Site changes 2 / Mentions 1 tabs. kind 'change'
+  // needs an aspect and kind 'mention' needs a canonical_url and a url_hash;
+  // both are the schema's own CHECK constraints, not this spec's rules.
+  run(
+    db,
+    `INSERT INTO signal (id, workspace_id, entity_id, source_id, kind, aspect, dedup_key, observed_at, is_tombstoned, title, summary, url, evidence_url, payload_json) VALUES
+       (?1, ?2, ?3, 'src_site_web', 'change', 'home', ?4, ?5, 0, 'Pricing page rewrote its hero', NULL, 'https://kindred.example/pricing', NULL, '{}'),
+       (?6, ?2, ?3, 'src_site_web', 'change', 'home', ?7, ?8, 0, NULL, 'Docs link added to the nav', NULL, NULL, '{}')`,
     `sig_ev_1-${suffix}`,
     workspaceId,
     kindredId,
     `dedup_ev_1-${suffix}`,
-    periodStartDate,
-    "Pricing page rewrote its hero",
-    null,
-    "https://kindred.example/pricing",
-    "https://shots.example/ev-1.png",
-  );
-  run(
-    db,
-    `INSERT INTO signal (id, workspace_id, entity_id, source_id, kind, dedup_key, observed_at, is_tombstoned, title, summary, url, evidence_url, payload_json)
-     VALUES (?, ?, ?, 'src_site_web', 'change', ?, ?, 0, ?, ?, ?, ?, '{}')`,
+    "2026-09-20T10:00:00.000Z",
     `sig_ev_2-${suffix}`,
-    workspaceId,
-    kindredId,
     `dedup_ev_2-${suffix}`,
     "2026-09-19T09:00:00.000Z",
-    null,
-    "Docs link added to the nav",
-    null,
-    null,
-    "{}",
   );
   run(
     db,
-    `INSERT INTO signal (id, workspace_id, entity_id, source_id, kind, dedup_key, observed_at, is_tombstoned, title, summary, url, evidence_url, payload_json)
-     VALUES (?, ?, ?, 'src_mentions_gdelt', 'mention', ?, ?, 0, ?, ?, ?, ?, '{}')`,
+    `INSERT INTO signal (id, workspace_id, entity_id, source_id, kind, dedup_key, observed_at, is_tombstoned, title, canonical_url, url_hash, payload_json) VALUES
+       (?1, ?2, ?3, 'src_mentions_gdelt', 'mention', ?4, ?5, 0, 'Kindred mentioned on r/sysadmin', ?6, ?7, '{}')`,
     `sig_ev_3-${suffix}`,
     workspaceId,
     kindredId,
     `dedup_ev_3-${suffix}`,
     "2026-09-18T08:00:00.000Z",
-    "Kindred mentioned on r/sysadmin",
-    null,
     "https://www.reddit.com/r/sysadmin/comments/abc",
-    null,
-    "{}",
-  );
-
-  // signal rows for this week's counts (pills) — Kindred: site_change 2, mention 1; Casetta: 0
-  // These are separate from evidence rows; they are counted by readHomeStandingInputs's SELECT_HOME_COUNTS
-  // which filters observed_at >= period_start from the newest digest.
-  run(
-    db,
-    `INSERT INTO signal (id, workspace_id, entity_id, source_id, kind, dedup_key, observed_at, is_tombstoned)
-     VALUES (?, ?, ?, 'src_site_web', 'change', ?, ?, 0)`,
-    `sig_count_1-${suffix}`,
-    workspaceId,
-    kindredId,
-    `dedup_count_1-${suffix}`,
-    "2026-09-16T10:00:00.000Z",
-  );
-  run(
-    db,
-    `INSERT INTO signal (id, workspace_id, entity_id, source_id, kind, dedup_key, observed_at, is_tombstoned)
-     VALUES (?, ?, ?, 'src_site_web', 'change', ?, ?, 0)`,
-    `sig_count_2-${suffix}`,
-    workspaceId,
-    kindredId,
-    `dedup_count_2-${suffix}`,
-    "2026-09-17T10:00:00.000Z",
-  );
-  run(
-    db,
-    `INSERT INTO signal (id, workspace_id, entity_id, source_id, kind, dedup_key, observed_at, is_tombstoned)
-     VALUES (?, ?, ?, 'src_mentions_gdelt', 'mention', ?, ?, 0)`,
-    `sig_count_3-${suffix}`,
-    workspaceId,
-    kindredId,
-    `dedup_count_3-${suffix}`,
-    "2026-09-15T10:00:00.000Z",
+    `hash_ev_3-${suffix}`,
   );
 }
 

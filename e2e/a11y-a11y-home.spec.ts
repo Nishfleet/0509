@@ -169,33 +169,34 @@ function seed({
   );
 
   // Kindred's week evidence: two site changes and one mention, so the opened
-  // row carries the Site changes 2 / Mentions 1 tabs.
+  // row carries the Site changes 2 / Mentions 1 tabs. kind 'change' needs an
+  // aspect and kind 'mention' needs a canonical_url and a url_hash; both are
+  // the schema's own CHECK constraints, not this spec's rules.
   run(
     db,
-    "INSERT INTO signal (id, workspace_id, entity_id, source_id, kind, dedup_key, observed_at, is_tombstoned, title, summary, url, evidence_url, payload_json) VALUES (?, ?, ?, 'src_site_web', 'change', ?, ?, 0, 'Pricing page rewrote its hero', NULL, 'https://kindred.example/pricing', NULL, '{}')",
+    `INSERT INTO signal (id, workspace_id, entity_id, source_id, kind, aspect, dedup_key, observed_at, is_tombstoned, title, summary, url, evidence_url, payload_json) VALUES
+       (?1, ?2, ?3, 'src_site_web', 'change', 'home', ?4, ?5, 0, 'Pricing page rewrote its hero', NULL, 'https://kindred.example/pricing', NULL, '{}'),
+       (?6, ?2, ?3, 'src_site_web', 'change', 'home', ?7, ?8, 0, NULL, 'Docs link added to the nav', NULL, NULL, '{}')`,
     `sig_ev_1-${suffix}`,
     workspaceId,
     kindredId,
     `dedup_ev_1-${suffix}`,
     "2026-09-20T10:00:00.000Z",
-  );
-  run(
-    db,
-    "INSERT INTO signal (id, workspace_id, entity_id, source_id, kind, dedup_key, observed_at, is_tombstoned, title, summary, url, evidence_url, payload_json) VALUES (?, ?, ?, 'src_site_web', 'change', ?, ?, 0, NULL, 'Docs link added to the nav', NULL, NULL, '{}')",
     `sig_ev_2-${suffix}`,
-    workspaceId,
-    kindredId,
     `dedup_ev_2-${suffix}`,
     "2026-09-19T09:00:00.000Z",
   );
   run(
     db,
-    "INSERT INTO signal (id, workspace_id, entity_id, source_id, kind, dedup_key, observed_at, is_tombstoned, title, summary, url, evidence_url, payload_json) VALUES (?, ?, ?, 'src_mentions_gdelt', 'mention', ?, ?, 0, 'Kindred mentioned on r/sysadmin', NULL, 'https://www.reddit.com/r/sysadmin/comments/abc', NULL, '{}')",
+    `INSERT INTO signal (id, workspace_id, entity_id, source_id, kind, dedup_key, observed_at, is_tombstoned, title, canonical_url, url_hash, payload_json) VALUES
+       (?1, ?2, ?3, 'src_mentions_gdelt', 'mention', ?4, ?5, 0, 'Kindred mentioned on r/sysadmin', ?6, ?7, '{}')`,
     `sig_ev_3-${suffix}`,
     workspaceId,
     kindredId,
     `dedup_ev_3-${suffix}`,
     "2026-09-18T08:00:00.000Z",
+    "https://www.reddit.com/r/sysadmin/comments/abc",
+    `hash_ev_3-${suffix}`,
   );
 }
 
@@ -242,18 +243,19 @@ test("ranked home passes axe at WCAG 2.2 AA and is keyboard-operable at 1440 and
         if (active instanceof HTMLElement) active.blur();
       });
       const order: string[] = [];
-      // The app shell's nav is the first focusable content, so the walk runs
-      // the four places first, then the standing rows in rank order — the self
-      // row's switch is disabled and reads YOU, so it is skipped.
-      for (let i = 0; i < 9; i += 1) {
+      // The app shell's nav is the first focusable content, then Home's own
+      // **How this is ranked** button, then the standing rows in rank order —
+      // the self row's switch is disabled and reads YOU, so it is skipped.
+      for (let i = 0; i < 10; i += 1) {
         await page.keyboard.press("Tab");
         order.push(await page.evaluate(activeName));
       }
       expect(order).toEqual([
-        "Home",
-        "Competitors",
-        "Alerts",
-        "Settings",
+        "HOME",
+        "COMPETITORS",
+        "ALERTS",
+        "SETTINGS",
+        "HOW THIS IS RANKED",
         "Kindred kindred.example",
         "Kindred tracking",
         "Loopwell loopwell.example",
@@ -261,9 +263,11 @@ test("ranked home passes axe at WCAG 2.2 AA and is keyboard-operable at 1440 and
         "Casetta tracking",
       ]);
 
-      await page.mouse.click(1, 1);
-      for (let i = 0; i < 5; i += 1) await page.keyboard.press("Tab");
+      // The order walk ends on "Casetta tracking"; walking backward along the
+      // list it just asserted reaches the first row's toggle — no restart, so
+      // no dependence on where the browser resumes sequential focus.
       const toggle = page.locator('[data-testid="standing-row"]').first().locator('[data-slot="row-toggle"]');
+      for (let i = 0; i < 4; i += 1) await page.keyboard.press("Shift+Tab");
       await expect(toggle).toBeFocused();
       await expect(toggle).toHaveCSS("outline-style", "solid");
       await page.screenshot({
