@@ -29,22 +29,24 @@ export async function loader({ request }: Route.LoaderArgs) {
   const normalised = normaliseSubject(raw);
   if (!normalised.ok) return { card: null, limited: false };
   const { subject } = normalised;
-  if (await isTakenDown(subject.registrable)) throw redirect("/onboarding");
-  const workspaceId = await readWorkspaceIdForOwner(session.user.id);
-  if (workspaceId === null) throw redirect("/onboarding");
+  const [taken, workspaceId] = await Promise.all([
+    isTakenDown(subject.registrable),
+    readWorkspaceIdForOwner(session.user.id),
+  ]);
+  if (taken || workspaceId === null) throw redirect("/onboarding");
   const now = new Date().toISOString();
   const screened = await timings.measure(
     "screen",
     screenOnboardingSubject({ workspaceId, userId: session.user.id, subject, raw, answer: null, now }),
   );
   if (screened.kind !== "proceed") throw redirect("/onboarding");
-  await timings.measure(
-    "run",
-    startOnboardingRun({ workspaceId, userId: session.user.id, inputRaw: raw, startedAt: now }),
-  );
-  if (!(await withinProbeLimit(session.user.id))) return { card: null, limited: true };
+  const [, withinLimit, draft] = await Promise.all([
+    timings.measure("run", startOnboardingRun({ workspaceId, userId: session.user.id, inputRaw: raw, startedAt: now })),
+    withinProbeLimit(session.user.id),
+    readDraft(workspaceId, subject.registrable),
+  ]);
+  if (!withinLimit) return { card: null, limited: true };
   const shown = subject.kind === "domain" ? subject.registrable : (subject.url ?? `@${subject.registrable}`);
-  const draft = await readDraft(workspaceId, subject.registrable);
   return data(
     {
       card: {
