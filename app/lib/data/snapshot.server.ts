@@ -13,6 +13,8 @@ SELECT ?1, ?2, ?3, ?4, ?5, ?6, 1
 WHERE EXISTS (SELECT 1 FROM watch WHERE id = ?2) AND EXISTS (SELECT 1 FROM page WHERE id = ?3)
 ON CONFLICT (id) DO NOTHING`;
 
+const SNAPSHOT_EXISTS = `SELECT 1 FROM snapshot WHERE id = ?`;
+
 interface SiteSnapshotRow {
   id: string;
   payload_hash: string;
@@ -34,11 +36,13 @@ export async function insertSnapshot(row: {
   fetchedAt: string;
   r2Key: string | null;
   hash: string;
-}): Promise<void> {
-  await env.DB.batch([
+}): Promise<boolean> {
+  const [inserted] = await env.DB.batch([
     env.DB.prepare(INSERT_SNAPSHOT).bind(row.id, row.watchId, row.pageId, row.fetchedAt, row.r2Key, row.hash),
     recordSourceLatestSnapshot(row.id),
   ]);
+  if (inserted !== undefined && inserted.meta.changes > 0) return true;
+  return (await env.DB.prepare(SNAPSHOT_EXISTS).bind(row.id).first()) !== null;
 }
 
 const INSERT_WATCH_SNAPSHOT = `INSERT INTO snapshot

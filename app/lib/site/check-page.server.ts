@@ -7,6 +7,7 @@ import { extractPageText } from "./extract-text";
 
 export type CheckPageResult =
   | { outcome: "failed"; reason: string; detail: string }
+  | { outcome: "gone" }
   | { outcome: "unchanged"; snapshotId: string }
   | { outcome: "first"; snapshotId: string; textKey: string; screenshotKey: string | null }
   | {
@@ -90,7 +91,7 @@ export async function checkPage(input: {
   const id = input.snapshotId ?? crypto.randomUUID();
 
   if (previous !== null && previous.payload_hash === extracted.hash) {
-    await insertSnapshot({
+    const stored = await insertSnapshot({
       id,
       watchId: input.watchId,
       pageId: input.pageId,
@@ -98,7 +99,7 @@ export async function checkPage(input: {
       r2Key: previous.payload_r2_key,
       hash: extracted.hash,
     });
-    return { outcome: "unchanged", snapshotId: id };
+    return stored ? { outcome: "unchanged", snapshotId: id } : { outcome: "gone" };
   }
 
   const textKey = `snapshot/site/${input.watchId}/${id}.txt`;
@@ -108,7 +109,7 @@ export async function checkPage(input: {
     `snapshot/site/${input.watchId}/${id}.png`,
     input.mayScreenshot,
   );
-  await insertSnapshot({
+  const stored = await insertSnapshot({
     id,
     watchId: input.watchId,
     pageId: input.pageId,
@@ -116,6 +117,10 @@ export async function checkPage(input: {
     r2Key: textKey,
     hash: extracted.hash,
   });
+  if (!stored) {
+    await env.SNAPSHOTS.delete(screenshotKey === null ? [textKey] : [textKey, screenshotKey]);
+    return { outcome: "gone" };
+  }
 
   if (previous?.payload_r2_key == null) {
     return { outcome: "first", snapshotId: id, textKey, screenshotKey };
