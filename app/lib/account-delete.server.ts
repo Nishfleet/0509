@@ -7,6 +7,7 @@ import { readWorkspaceIdForOwner, readWorkspaceR2Prefixes } from "./data/workspa
 
 const PAGE_SIZE = 1000;
 const DELETE_INSTANCE_COOKIE = "account-delete";
+const STATUS_DEADLINE_MS = 3000;
 
 export interface AccountDeleteParams {
   prefixes: string[];
@@ -80,13 +81,33 @@ function isAccountDeleteInstanceMissing(error: unknown): boolean {
   return error instanceof Error && error.message.includes("instance.not_found");
 }
 
-export async function readAccountDeleteProgress(instanceId: string): Promise<AccountDeleteProgress | null> {
+async function lookupInstanceStatus(instanceId: string) {
   const lookup = await env.ACCOUNT_DELETE.get(instanceId).catch((error: unknown) => {
     if (isAccountDeleteInstanceMissing(error)) return null;
     throw error;
   });
-  if (lookup === null) return null;
-  const { status, output } = await lookup.status();
+  return lookup === null ? null : lookup.status();
+}
+
+async function withinDeadline<T>(work: Promise<T>): Promise<T | "timeout"> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const deadline = new Promise<"timeout">((resolve) => {
+    timer = setTimeout(() => {
+      resolve("timeout");
+    }, STATUS_DEADLINE_MS);
+  });
+  try {
+    return await Promise.race([work, deadline]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+export async function readAccountDeleteProgress(instanceId: string): Promise<AccountDeleteProgress | null> {
+  const found = await withinDeadline(lookupInstanceStatus(instanceId));
+  if (found === "timeout") return { rows: "removed", files: "removing", deleted: null };
+  if (found === null) return null;
+  const { status, output } = found;
   if (status === "complete") {
     const deleted =
       typeof output === "object" && output !== null && "deleted" in output && typeof output.deleted === "number"
