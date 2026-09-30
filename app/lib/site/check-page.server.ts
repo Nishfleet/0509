@@ -71,7 +71,7 @@ async function storedKey(key: string): Promise<string | null> {
   return (await env.SNAPSHOTS.head(key)) === null ? null : key;
 }
 
-export async function checkPage(input: {
+interface CheckPageInput {
   watchId: string;
   pageId: string;
   url: string;
@@ -79,7 +79,9 @@ export async function checkPage(input: {
   before?: string;
   read?: ReadUrlResult;
   mayScreenshot?: () => Promise<boolean>;
-}): Promise<CheckPageResult> {
+}
+
+export async function checkPage(input: CheckPageInput): Promise<CheckPageResult> {
   const read = input.read ?? (await readUrl(input.url));
   if (!read.ok) {
     return { outcome: "failed", reason: read.reason, detail: read.detail };
@@ -102,6 +104,20 @@ export async function checkPage(input: {
     return stored ? { outcome: "unchanged", snapshotId: id } : { outcome: "gone" };
   }
 
+  return recordNewText(input, { id, fetchedAt, extracted, previous, read });
+}
+
+async function recordNewText(
+  input: CheckPageInput,
+  checked: {
+    id: string;
+    fetchedAt: string;
+    extracted: Awaited<ReturnType<typeof extractPageText>>;
+    previous: Awaited<ReturnType<typeof latestSiteSnapshot>>;
+    read: Extract<ReadUrlResult, { ok: true }>;
+  },
+): Promise<CheckPageResult> {
+  const { id, fetchedAt, extracted, previous, read } = checked;
   const textKey = `snapshot/site/${input.watchId}/${id}.txt`;
   await env.SNAPSHOTS.put(textKey, extracted.text);
   const screenshotKey = await captureScreenshot(
