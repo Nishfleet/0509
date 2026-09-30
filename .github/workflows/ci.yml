@@ -108,7 +108,7 @@ jobs:
         run: npx vitest run tests/unit/feature-map-proof.test.ts
       - name: Test
         if: github.event_name == 'merge_group'
-        run: npm test
+        run: npx vitest run --coverage
       - name: Build
         if: github.event_name != 'deployment_status'
         run: npm run build

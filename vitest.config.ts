@@ -28,6 +28,11 @@ export default defineConfig({
       "**/wrangler*.jsonc",
       "**/tests/integration/apply-migrations.ts",
     ],
+    coverage: {
+      provider: "v8",
+      include: ["app/**", "workers/**"],
+      thresholds: { lines: 42, statements: 41, functions: 40, branches: 41 },
+    },
     projects: [
       {
         // Pure logic: no bindings, no workerd.
