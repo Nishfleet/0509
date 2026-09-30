@@ -7,6 +7,11 @@ import { noulAction } from "../../app/lib/jev/thresholds";
 import type { NoulAction } from "../../app/lib/jev/thresholds";
 import type { BreakageEvidence } from "../../app/lib/site/breakage-evidence";
 
+// The one eval harness. Every Jev question in this repo scores through it, so the
+// case loader, the live call, the cutoffs, the repeats and the report have exactly
+// one implementation. A question that wanted its own copy of any of those is the
+// second paved path docs/REBUILD-TRUST.md §C1(3) rules out.
+
 const REPEATS = 3;
 
 const CONCURRENCY = 8;
@@ -23,78 +28,139 @@ const JEV_KEY = process.env.LITELLM_JEV_KEY ?? "";
 
 type Split = "train" | "test";
 
+export interface EvalRow {
+  id: string;
+  split: Split;
+  why: string;
+}
+
 interface EvalEvidence {
   source: string;
   excerpt: string;
 }
 
-export interface EvalCase {
-  id: string;
-  split: Split;
+export interface DiscoveryCase extends EvalRow {
+  label: boolean;
   kind: "domain" | "creator";
   self: { name: string; domain: string; description: string | null };
   competitors: { name: string; domain: string }[];
   item: { name: string; domain: string; evidence: EvalEvidence[] };
-  label: boolean;
-  why: string;
 }
 
-export interface EvalQuestion {
+export interface NoulEvalRow extends EvalRow {
+  label: boolean;
+}
+
+export interface ChoiceEvalRow extends EvalRow {
+  label: string;
+}
+
+export interface NoulEvalQuestion {
   id: string;
   instructions: string;
   whenTrue: string;
   whenFalse: string;
 }
 
-export interface EvalChoiceQuestion {
+export interface ChoiceEvalQuestion {
   id: string;
   instructions: string;
-  options: Record<string, string>;
+  options: Readonly<Record<string, string>>;
 }
 
-interface JevAnswer {
-  type?: string;
-  noul?: number;
-  choice?: string;
+interface Call {
+  model: string;
+  p: number | null;
+  choice: string | null;
 }
 
-export type Ask = (row: EvalCase) => Promise<{ p: number; model: string }>;
+interface Outcome {
+  points: number;
+  uncertain: boolean;
+  key: string;
+}
 
-async function loadJson(questionId: string): Promise<unknown> {
-  const file = path.join(HERE, "cases", `${questionId}.json`);
+export type StateAsk = (state: unknown) => Promise<Call>;
+
+export type Ask<T extends EvalRow> = (row: T) => Promise<Call>;
+
+export type Score<T extends EvalRow> = (row: T, call: Call) => Outcome;
+
+interface JevResponse {
+  model?: string;
+  answers?: Record<string, { type?: string; noul?: number; choice?: string }>;
+}
+
+export async function loadCases<T extends EvalRow>(
+  questionId: string,
+  required: readonly (keyof T & string)[],
+  options: { file?: string; project?: (entry: unknown) => unknown } = {},
+): Promise<T[]> {
+  const file = path.join(HERE, "cases", `${options.file ?? questionId}.json`);
   if (!existsSync(file)) throw new Error(`eval cases missing: ${file}`);
-  return JSON.parse(await readFile(file, "utf8"));
-}
-
-function requireSplits(questionId: string, cases: readonly { split: Split }[]): void {
+  const parsed: unknown = JSON.parse(await readFile(file, "utf8"));
+  if (!Array.isArray(parsed)) throw new Error(`eval cases must be a JSON array: ${file}`);
+  const cases = parsed.map((raw, index) => {
+    const entry = options.project?.(raw) ?? raw;
+    const row = entry as EvalRow;
+    if (typeof row.id !== "string" || row.id === "") throw new Error(`case ${index} has no id`);
+    if (row.split !== "train" && row.split !== "test") throw new Error(`case ${row.id} has no split`);
+    if (typeof row.why !== "string" || row.why === "") throw new Error(`case ${row.id} has no why`);
+    for (const key of required) {
+      const value = Reflect.get(row, key);
+      if (value === undefined || value === null) throw new Error(`case ${row.id} has no ${key}`);
+    }
+    const label = Reflect.get(row, "label");
+    if (label !== undefined && typeof label !== "boolean" && typeof label !== "string") {
+      throw new Error(`case ${row.id} label must be a boolean or a string`);
+    }
+    return entry as T;
+  });
   if (cases.length < MIN_TOTAL) throw new Error(`${questionId} has ${cases.length} cases, needs ${MIN_TOTAL}`);
+  const ids = new Set(cases.map((row) => row.id));
+  if (ids.size !== cases.length) throw new Error(`${questionId} has duplicate case ids`);
   for (const split of ["train", "test"] as const) {
     const count = cases.filter((row) => row.split === split).length;
     if (count < MIN_PER_SPLIT)
       throw new Error(`${questionId} ${split} split has ${count} cases, needs ${MIN_PER_SPLIT}`);
   }
-}
-
-function validateCases(questionId: string, parsed: unknown): EvalCase[] {
-  if (!Array.isArray(parsed)) throw new Error(`eval cases must be a JSON array: ${questionId}`);
-  const cases = parsed.map((entry, index) => {
-    const row = entry as EvalCase;
-    if (typeof row.id !== "string" || row.id === "") throw new Error(`case ${index} has no id`);
-    if (row.split !== "train" && row.split !== "test") throw new Error(`case ${row.id} has no split`);
-    if (typeof row.label !== "boolean") throw new Error(`case ${row.id} has no boolean label`);
-    if (typeof row.why !== "string" || row.why === "") throw new Error(`case ${row.id} has no why`);
-    if (row.kind !== "domain" && row.kind !== "creator") throw new Error(`case ${row.id} has no kind`);
-    return row;
-  });
-  requireSplits(questionId, cases);
   return cases;
 }
 
-export async function loadCases(questionId: string): Promise<EvalCase[]> {
-  return validateCases(questionId, await loadJson(questionId));
+function selectedSplits(): Split[] {
+  const value = process.env.EVAL_SPLIT ?? "all";
+  if (value === "train") return ["train"];
+  if (value === "test") return ["test"];
+  if (value === "all") return ["train", "test"];
+  throw new Error(`EVAL_SPLIT must be train, test or all, got ${value}`);
 }
 
-export interface SiteChangeCase {
+const JEV_TIMEOUT_MS = 60_000;
+
+async function postJev(body: unknown): Promise<JevResponse> {
+  // The bearer token rides in a header, never a command line or a log line.
+  const response = await fetch(JEV_URL, {
+    method: "POST",
+    headers: { "content-type": "application/json", authorization: `Bearer ${JEV_KEY}` },
+    body: JSON.stringify(body),
+    signal: AbortSignal.timeout(JEV_TIMEOUT_MS),
+  });
+  if (!response.ok) {
+    const detail = (await response.text()).slice(0, 200);
+    throw new Error(`jev POST failed with ${String(response.status)}: ${detail}`);
+  }
+  const parsed = (await response.json()) as JevResponse;
+  if (typeof parsed.model !== "string") throw new Error("jev response carried no model version");
+  return parsed;
+}
+
+function answerOf(body: JevResponse, questionId: string): { type?: string; noul?: number; choice?: string } {
+  const answer = body.answers?.[questionId];
+  if (answer === undefined) throw new Error(`jev answer missing ${questionId}: ${JSON.stringify(body).slice(0, 300)}`);
+  return answer;
+}
+
+interface SiteChangeCase {
   id: string;
   split: Split;
   subject: { name: string | null; domain: string };
@@ -108,93 +174,56 @@ export interface SiteChangeCase {
   why: Record<string, string>;
 }
 
-export type SiteStateBuilder = (row: SiteChangeCase) => unknown;
+export type SiteRow<L extends boolean | string> = Omit<SiteChangeCase, "labels" | "why"> & {
+  label: L;
+  why: string;
+};
 
-function siteLabel(row: SiteChangeCase, questionId: string): boolean | string {
-  const label = row.labels[questionId];
-  if (typeof label === "boolean" || typeof label === "string") return label;
-  throw new Error(`site case ${row.id} has no label for ${questionId}`);
-}
-
-function validateSiteCases(questionId: string, parsed: unknown): SiteChangeCase[] {
-  if (!Array.isArray(parsed)) throw new Error(`site eval cases must be a JSON array: ${questionId}`);
-  const cases = parsed.map((entry, index) => {
-    const row = entry as SiteChangeCase;
-    if (typeof row.id !== "string" || row.id === "") throw new Error(`site case ${index} has no id`);
-    if (row.split !== "train" && row.split !== "test") throw new Error(`site case ${row.id} has no split`);
-    if (typeof row.subject?.domain !== "string") throw new Error(`site case ${row.id} has no subject domain`);
-    if (typeof row.isSelf !== "boolean") throw new Error(`site case ${row.id} has no isSelf`);
-    if (typeof row.pageUrl !== "string" || row.pageUrl === "") throw new Error(`site case ${row.id} has no pageUrl`);
-    if (!Array.isArray(row.hunks)) throw new Error(`site case ${row.id} has no hunks`);
-    if (typeof row.evidence?.status !== "number") throw new Error(`site case ${row.id} has no evidence`);
-    if (!Array.isArray(row.history_30d)) throw new Error(`site case ${row.id} has no history_30d`);
-    if (typeof row.labels !== "object" || row.labels === null) throw new Error(`site case ${row.id} has no labels`);
-    if (typeof row.why !== "object" || row.why === null) throw new Error(`site case ${row.id} has no why`);
-    siteLabel(row, questionId);
-    return row;
+// The three site questions judge one shared state, so they share one case
+// file; each question reads its own label and its own why out of it.
+export function loadSiteRows<L extends boolean | string>(caseFile: string, questionId: string): Promise<SiteRow<L>[]> {
+  return loadCases<SiteRow<L>>(questionId, ["subject", "pageUrl", "hunks", "evidence", "label"], {
+    file: caseFile,
+    project: (entry) => {
+      const { labels, why, ...rest } = entry as SiteChangeCase;
+      return { ...rest, label: labels[questionId], why: why[questionId] };
+    },
   });
-  requireSplits(questionId, cases);
-  return cases;
 }
 
-export async function loadSiteCases(caseFile: string): Promise<SiteChangeCase[]> {
-  return validateSiteCases(caseFile, await loadJson(caseFile));
-}
-
-function selectedSplits(): Split[] {
-  const value = process.env.EVAL_SPLIT ?? "all";
-  if (value === "train") return ["train"];
-  if (value === "test") return ["test"];
-  if (value === "all") return ["train", "test"];
-  throw new Error(`EVAL_SPLIT must be train, test or all, got ${value}`);
-}
-
-async function askJev(
-  question: EvalQuestion | EvalChoiceQuestion,
-  state: unknown,
-): Promise<{ answer: JevAnswer; model: string }> {
-  const asked =
-    "whenTrue" in question
-      ? {
-          type: "noul" as const,
+export function makeNoulAsk(question: NoulEvalQuestion): StateAsk {
+  return async (state) => {
+    const body = await postJev({
+      model: "jev-latest",
+      state,
+      questions: {
+        [question.id]: {
+          type: "noul",
           instructions: question.instructions,
           criteria: { true: question.whenTrue, false: question.whenFalse },
-        }
-      : { type: "choice" as const, instructions: question.instructions, criteria: question.options };
-  const response = await fetch(JEV_URL, {
-    method: "POST",
-    headers: { "content-type": "application/json", authorization: `Bearer ${JEV_KEY}` },
-    body: JSON.stringify({ model: "jev-latest", state, questions: { [question.id]: asked } }),
-  });
-  if (!response.ok) throw new Error(`jev POST failed with ${String(response.status)}: ${await response.text()}`);
-  const body = (await response.json()) as { model?: string; answers?: Record<string, JevAnswer> };
-  const answer = body.answers?.[question.id];
-  if (answer === undefined) throw new Error(`jev answer missing ${question.id}: ${JSON.stringify(body).slice(0, 300)}`);
-  if (typeof body.model !== "string") throw new Error("jev response carried no model version");
-  return { answer, model: body.model };
-}
-
-export async function makeAsk(
-  question: EvalQuestion,
-): Promise<(state: unknown) => Promise<{ p: number; model: string }>> {
-  return async (state) => {
-    const { answer, model } = await askJev(question, state);
-    if (typeof answer.noul !== "number") {
-      throw new Error(`jev answer for ${question.id} carried no noul: ${JSON.stringify(answer).slice(0, 200)}`);
-    }
-    return { p: answer.noul, model };
+        },
+      },
+    });
+    const answer = answerOf(body, question.id);
+    if (typeof answer.noul !== "number") throw new Error(`jev answer missing a noul: ${question.id}`);
+    return { model: body.model as string, p: answer.noul, choice: null };
   };
 }
 
-async function makeChoiceAsk(
-  question: EvalChoiceQuestion,
-): Promise<(state: unknown) => Promise<{ choice: string; model: string }>> {
+export function makeChoiceAsk(question: ChoiceEvalQuestion): StateAsk {
   return async (state) => {
-    const { answer, model } = await askJev(question, state);
-    if (typeof answer.choice !== "string") {
-      throw new Error(`jev answer for ${question.id} carried no choice: ${JSON.stringify(answer).slice(0, 200)}`);
+    const body = await postJev({
+      model: "jev-latest",
+      state,
+      questions: {
+        [question.id]: { type: "choice", instructions: question.instructions, criteria: question.options },
+      },
+    });
+    const answer = answerOf(body, question.id);
+    if (typeof answer.choice !== "string" || !Object.keys(question.options).includes(answer.choice)) {
+      throw new Error(`jev answer missing a known choice: ${question.id}`);
     }
-    return { choice: answer.choice, model };
+    return { model: body.model as string, p: null, choice: answer.choice };
   };
 }
 
@@ -203,9 +232,16 @@ function scoreAction(action: NoulAction, label: boolean): number {
   return (action === "act") === label ? 1 : 0;
 }
 
-function scoreChoice(choice: string, expected: string): number {
-  return choice === expected ? 1 : 0;
-}
+export const noulScore: Score<NoulEvalRow> = (row, call) => {
+  if (call.p === null) throw new Error(`noul score got a choice for ${row.id}`);
+  const action = noulAction(call.p);
+  return { points: scoreAction(action, row.label), uncertain: action === "maybe", key: action };
+};
+
+export const choiceScore: Score<ChoiceEvalRow> = (row, call) => {
+  if (call.choice === null) throw new Error(`choice score got a noul for ${row.id}`);
+  return { points: call.choice === row.label ? 1 : 0, uncertain: false, key: call.choice };
+};
 
 function mean(values: readonly number[]): number {
   return values.reduce((total, value) => total + value, 0) / values.length;
@@ -257,119 +293,73 @@ export interface EvalReport {
   splits: SplitScore[];
 }
 
-interface ScoredRow {
-  id: string;
-  actions: string[];
-  calls: number[];
-}
-
-function summarise(split: Split, caseCount: number, scored: readonly ScoredRow[]): SplitScore {
+async function scoreSplit<T extends EvalRow>(
+  split: Split,
+  rows: readonly T[],
+  ask: Ask<T>,
+  score: Score<T>,
+): Promise<{ score: SplitScore; models: Set<string> }> {
+  const models = new Set<string>();
+  const scored = await mapLimit(rows, CONCURRENCY, async (row) => {
+    const outcomes: Outcome[] = [];
+    const calls: number[] = [];
+    for (let repeat = 0; repeat < REPEATS; repeat += 1) {
+      const call = await ask(row);
+      models.add(call.model);
+      const outcome = score(row, call);
+      outcomes.push(outcome);
+      calls.push(outcome.points);
+    }
+    return { row, outcomes, calls };
+  });
   const calls = scored.flatMap((entry) => entry.calls);
-  const score = mean(calls);
+  if (models.size > 1) {
+    throw new Error(`${split} split mixed model versions across repeats: ${[...models].sort().join(", ")}`);
+  }
+  const value = mean(calls);
   const spread = 1.959963984540054 * (stdev(calls) / Math.sqrt(calls.length));
-  const wrongIds = scored.filter((entry) => entry.calls.some((value) => value === 0)).map((entry) => entry.id);
-  const maybeIds = scored.filter((entry) => entry.actions.includes("maybe")).map((entry) => entry.id);
-  const flippedIds = scored.filter((entry) => new Set(entry.actions).size > 1).map((entry) => entry.id);
+  const wrongIds = scored.filter((entry) => entry.calls.some((point) => point === 0)).map((entry) => entry.row.id);
+  const maybeIds = scored
+    .filter((entry) => entry.outcomes.some((outcome) => outcome.uncertain))
+    .map((entry) => entry.row.id);
+  const flippedIds = scored
+    .filter((entry) => new Set(entry.outcomes.map((outcome) => outcome.key)).size > 1)
+    .map((entry) => entry.row.id);
   return {
-    split,
-    cases: caseCount,
-    calls: calls.length,
-    score: Number(score.toFixed(4)),
-    low: Number(Math.max(0, score - spread).toFixed(4)),
-    high: Number(Math.min(1, score + spread).toFixed(4)),
-    wrong: wrongIds.length,
-    maybe: maybeIds.length,
-    flipped: flippedIds.length,
-    wrongIds,
-    maybeIds,
-    flippedIds,
+    score: {
+      split,
+      cases: rows.length,
+      calls: calls.length,
+      score: Number(value.toFixed(4)),
+      low: Number(Math.max(0, value - spread).toFixed(4)),
+      high: Number(Math.min(1, value + spread).toFixed(4)),
+      wrong: wrongIds.length,
+      maybe: maybeIds.length,
+      flipped: flippedIds.length,
+      wrongIds,
+      maybeIds,
+      flippedIds,
+    },
+    models,
   };
 }
 
-function reportOf(questionId: string, models: Set<string>, splits: SplitScore[]): EvalReport {
+export async function runEval<T extends EvalRow>(
+  questionId: string,
+  rows: readonly T[],
+  ask: Ask<T>,
+  score: Score<T>,
+): Promise<EvalReport> {
+  const models = new Set<string>();
+  const splits: SplitScore[] = [];
+  for (const split of selectedSplits()) {
+    const picked = rows.filter((row) => row.split === split);
+    if (picked.length === 0) throw new Error(`${questionId} has no ${split} cases to score`);
+    const scored = await scoreSplit(split, picked, ask, score);
+    for (const model of scored.models) models.add(model);
+    splits.push(scored.score);
+  }
   return { questionId, model: [...models].join(","), repeats: REPEATS, jevUrl: JEV_URL, splits };
-}
-
-export async function runEval(questionId: string, ask: Ask): Promise<EvalReport> {
-  const cases = await loadCases(questionId);
-  const models = new Set<string>();
-  const splits: SplitScore[] = [];
-  for (const split of selectedSplits()) {
-    const rows = cases.filter((row) => row.split === split);
-    const scored = await mapLimit(rows, CONCURRENCY, async (row) => {
-      const actions: NoulAction[] = [];
-      const calls: number[] = [];
-      for (let repeat = 0; repeat < REPEATS; repeat += 1) {
-        const { p, model } = await ask(row);
-        models.add(model);
-        const action = noulAction(p);
-        actions.push(action);
-        calls.push(scoreAction(action, row.label));
-      }
-      return { id: row.id, actions, calls };
-    });
-    splits.push(summarise(split, rows.length, scored));
-  }
-  return reportOf(questionId, models, splits);
-}
-
-export async function runSiteNoul(
-  caseFile: string,
-  question: EvalQuestion,
-  buildState: SiteStateBuilder,
-): Promise<EvalReport> {
-  const cases = await loadSiteCases(caseFile);
-  const questionId = question.id;
-  const ask = await makeAsk(question);
-  const models = new Set<string>();
-  const splits: SplitScore[] = [];
-  for (const split of selectedSplits()) {
-    const rows = cases.filter((row) => row.split === split);
-    const scored = await mapLimit(rows, CONCURRENCY, async (row) => {
-      const label = siteLabel(row, questionId);
-      const actions: NoulAction[] = [];
-      const calls: number[] = [];
-      for (let repeat = 0; repeat < REPEATS; repeat += 1) {
-        const { p, model } = await ask(buildState(row));
-        models.add(model);
-        const action = noulAction(p);
-        actions.push(action);
-        calls.push(scoreAction(action, typeof label === "boolean" ? label : false));
-      }
-      return { id: row.id, actions, calls };
-    });
-    splits.push(summarise(split, rows.length, scored));
-  }
-  return reportOf(questionId, models, splits);
-}
-
-export async function runSiteChoice(
-  caseFile: string,
-  question: EvalChoiceQuestion,
-  buildState: SiteStateBuilder,
-): Promise<EvalReport> {
-  const cases = await loadSiteCases(caseFile);
-  const questionId = question.id;
-  const ask = await makeChoiceAsk(question);
-  const models = new Set<string>();
-  const splits: SplitScore[] = [];
-  for (const split of selectedSplits()) {
-    const rows = cases.filter((row) => row.split === split);
-    const scored = await mapLimit(rows, CONCURRENCY, async (row) => {
-      const expected = String(siteLabel(row, questionId));
-      const actions: string[] = [];
-      const calls: number[] = [];
-      for (let repeat = 0; repeat < REPEATS; repeat += 1) {
-        const { choice, model } = await ask(buildState(row));
-        models.add(model);
-        actions.push(choice);
-        calls.push(scoreChoice(choice, expected));
-      }
-      return { id: row.id, actions, calls };
-    });
-    splits.push(summarise(split, rows.length, scored));
-  }
-  return reportOf(questionId, models, splits);
 }
 
 export function formatReport(report: EvalReport): string {
