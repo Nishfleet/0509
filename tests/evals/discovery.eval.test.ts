@@ -19,6 +19,7 @@ vi.mock("../../app/lib/discovery/resolve-domain.server", () => ({
 }));
 vi.mock("../../app/lib/discovery/generators/news", () => ({ newsGenerator: () => Promise.resolve([]) }));
 vi.mock("../../app/lib/discovery/generators/hn", () => ({ hnGenerator: () => Promise.resolve([]) }));
+vi.mock("../../app/lib/discovery/generators/ai", () => ({ aiGenerator: () => Promise.resolve([]) }));
 
 // The shipped production state builder, fed exactly what a ResolvedCandidate
 // carries in discovery, so the judged state is the state onboarding judges.

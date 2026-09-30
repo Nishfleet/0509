@@ -27,15 +27,35 @@ interface EvalEvidence {
   excerpt: string;
 }
 
-export interface EvalCase {
+export interface EvalCaseBase {
   id: string;
   split: Split;
   kind: "domain" | "creator";
   self: { name: string; domain: string; description: string | null };
   competitors: { name: string; domain: string }[];
-  item: { name: string; domain: string; evidence: EvalEvidence[] };
   label: boolean;
   why: string;
+}
+
+/** A discovery case: the candidate being judged, and the evidence naming it beside `self`. */
+export interface EvalCase extends EvalCaseBase {
+  item: { name: string; domain: string; evidence: EvalEvidence[] };
+}
+
+/** A still-competitor case: one subject re-judged, with the 30 days `history_30d` carries. */
+export interface StillCase extends EvalCaseBase {
+  subject: { name: string; domain: string };
+  history: EvalSignal[];
+  labelChoice: string;
+}
+
+export interface EvalSignal {
+  kind: string;
+  title: string | null;
+  summary: string | null;
+  url: string | null;
+  aspect: string | null;
+  observedAt: string;
 }
 
 export interface EvalQuestion {
@@ -45,25 +65,34 @@ export interface EvalQuestion {
   whenFalse: string;
 }
 
-interface JevResponse {
-  model?: string;
-  answers?: Record<string, { type?: string; noul?: number }>;
+export interface EvalChoiceQuestion {
+  id: string;
+  instructions: string;
+  options: Record<string, string>;
 }
 
-export type Ask = (row: EvalCase) => Promise<{ p: number; model: string }>;
+interface JevResponse {
+  model?: string;
+  answers?: Record<string, { type?: string; noul?: number; choice?: string }>;
+}
 
-export async function loadCases(questionId: string): Promise<EvalCase[]> {
+export type Ask = (row: EvalCaseBase) => Promise<{ p: number; model: string }>;
+export type ChoiceAsk = (row: StillCase) => Promise<{ choice: string; model: string }>;
+
+/** Reads a case file and checks the fields every case carries, plus the split floor. */
+async function loadRows<T extends EvalCaseBase>(questionId: string): Promise<T[]> {
   const file = path.join(HERE, "cases", `${questionId}.json`);
   if (!existsSync(file)) throw new Error(`eval cases missing: ${file}`);
   const parsed: unknown = JSON.parse(await readFile(file, "utf8"));
   if (!Array.isArray(parsed)) throw new Error(`eval cases must be a JSON array: ${file}`);
   const cases = parsed.map((entry, index) => {
-    const row = entry as EvalCase;
+    const row = entry as T;
     if (typeof row.id !== "string" || row.id === "") throw new Error(`case ${index} has no id`);
     if (row.split !== "train" && row.split !== "test") throw new Error(`case ${row.id} has no split`);
     if (typeof row.label !== "boolean") throw new Error(`case ${row.id} has no boolean label`);
     if (typeof row.why !== "string" || row.why === "") throw new Error(`case ${row.id} has no why`);
     if (row.kind !== "domain" && row.kind !== "creator") throw new Error(`case ${row.id} has no kind`);
+    if (!Array.isArray(row.competitors)) throw new Error(`case ${row.id} has no competitor set`);
     return row;
   });
   if (cases.length < MIN_TOTAL) throw new Error(`${questionId} has ${cases.length} cases, needs ${MIN_TOTAL}`);
@@ -71,6 +100,50 @@ export async function loadCases(questionId: string): Promise<EvalCase[]> {
     const count = cases.filter((row) => row.split === split).length;
     if (count < MIN_PER_SPLIT)
       throw new Error(`${questionId} ${split} split has ${count} cases, needs ${MIN_PER_SPLIT}`);
+  }
+  return cases;
+}
+
+export async function loadCases(questionId: string): Promise<EvalCase[]> {
+  const cases = await loadRows<EvalCase>(questionId);
+  for (const row of cases) {
+    if (typeof row.item?.name !== "string" || typeof row.item?.domain !== "string") {
+      throw new Error(`case ${row.id} has no item to judge`);
+    }
+    if (!Array.isArray(row.item.evidence) || row.item.evidence.length === 0) {
+      throw new Error(`case ${row.id} has an item with no evidence`);
+    }
+    for (const evidence of row.item.evidence) {
+      if (typeof evidence.source !== "string" || typeof evidence.excerpt !== "string") {
+        throw new Error(`case ${row.id} has evidence without a source and an excerpt`);
+      }
+    }
+  }
+  return cases;
+}
+
+/** Loads a still-competitor case file: one subject, its 30 days, its labelled choice. */
+export async function loadStillCases(questionId: string, choices?: readonly string[]): Promise<StillCase[]> {
+  const cases = await loadRows<StillCase>(questionId);
+  for (const row of cases) {
+    if (typeof row.subject?.name !== "string" || typeof row.subject?.domain !== "string") {
+      throw new Error(`case ${row.id} has no subject to judge`);
+    }
+    if (!Array.isArray(row.history) || row.history.length === 0) {
+      throw new Error(`case ${row.id} has a subject but no history_30d`);
+    }
+    for (const signal of row.history) {
+      if (typeof signal.kind !== "string" || signal.kind === "") throw new Error(`case ${row.id} has a signal with no kind`);
+      if (typeof signal.observedAt !== "string" || signal.observedAt === "") {
+        throw new Error(`case ${row.id} has a signal with no observedAt`);
+      }
+    }
+    if (typeof row.labelChoice !== "string" || row.labelChoice === "") {
+      throw new Error(`case ${row.id} has no labelChoice`);
+    }
+    if (choices !== undefined && !choices.includes(row.labelChoice)) {
+      throw new Error(`case ${row.id} has a labelChoice the question cannot answer: ${row.labelChoice}`);
+    }
   }
   return cases;
 }
@@ -108,6 +181,37 @@ export async function makeAsk(question: EvalQuestion): Promise<Ask> {
     }
     if (typeof body.model !== "string") throw new Error("jev response carried no model version");
     return { p: answer.noul, model: body.model };
+  };
+}
+
+export async function makeChoiceAsk(question: EvalChoiceQuestion): Promise<ChoiceAsk> {
+  return async (state) => {
+    const response = await fetch(JEV_URL, {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: `Bearer ${JEV_KEY}` },
+      body: JSON.stringify({
+        model: "jev-latest",
+        state,
+        questions: {
+          [question.id]: {
+            type: "choice",
+            instructions: question.instructions,
+            options: question.options,
+          },
+        },
+      }),
+    });
+    if (!response.ok) throw new Error(`jev POST failed with ${String(response.status)}: ${await response.text()}`);
+    const body = (await response.json()) as JevResponse;
+    const answer = body.answers?.[question.id];
+    if (answer === undefined || typeof answer.choice !== "string") {
+      throw new Error(`jev answer missing ${question.id}: ${JSON.stringify(body).slice(0, 300)}`);
+    }
+    if (!Object.keys(question.options).includes(answer.choice)) {
+      throw new Error(`jev answered ${question.id} with unknown option ${answer.choice}`);
+    }
+    if (typeof body.model !== "string") throw new Error("jev response carried no model version");
+    return { choice: answer.choice, model: body.model };
   };
 }
 
@@ -166,10 +270,76 @@ export interface EvalReport {
   splits: SplitScore[];
 }
 
-async function scoreSplit(
+async function scoreChoiceSplit(
   split: Split,
-  rows: readonly EvalCase[],
-  ask: Ask,
+  rows: readonly StillCase[],
+  ask: ChoiceAsk,
+): Promise<{ score: SplitScore; models: Set<string> }> {
+  const models = new Set<string>();
+  const scored = await mapLimit(rows, CONCURRENCY, async (row) => {
+    const choices: string[] = [];
+    const calls: number[] = [];
+    for (let repeat = 0; repeat < REPEATS; repeat += 1) {
+      const { choice, model } = await ask(row);
+      models.add(model);
+      choices.push(choice);
+      // A choice question has no maybe band: exact match is 1, anything else 0.
+      calls.push(choice === row.labelChoice ? 1 : 0);
+    }
+    return { row, choices, calls };
+  });
+  const calls = scored.flatMap((entry) => entry.calls);
+  const score = mean(calls);
+  const spread = 1.959963984540054 * (stdev(calls) / Math.sqrt(calls.length));
+  const wrongIds = scored.filter((entry) => entry.calls.some((value) => value === 0)).map((entry) => entry.row.id);
+  const maybeIds: string[] = [];
+  const flippedIds = scored.filter((entry) => new Set(entry.choices).size > 1).map((entry) => entry.row.id);
+  return {
+    score: {
+      split,
+      cases: rows.length,
+      calls: calls.length,
+      score: Number(score.toFixed(4)),
+      low: Number(Math.max(0, score - spread).toFixed(4)),
+      high: Number(Math.min(1, score + spread).toFixed(4)),
+      wrong: wrongIds.length,
+      maybe: maybeIds.length,
+      flipped: flippedIds.length,
+      wrongIds,
+      maybeIds,
+      flippedIds,
+    },
+    models,
+  };
+}
+
+export async function runChoiceEval(
+  questionId: string,
+  ask: ChoiceAsk,
+  choices?: readonly string[],
+): Promise<EvalReport> {
+  const cases = await loadStillCases(questionId, choices);
+  const models = new Set<string>();
+  const splits: SplitScore[] = [];
+  for (const split of selectedSplits()) {
+    const rows = cases.filter((row) => row.split === split);
+    const { score, models: splitModels } = await scoreChoiceSplit(split, rows, ask);
+    for (const model of splitModels) models.add(model);
+    splits.push(score);
+  }
+  return {
+    questionId,
+    model: [...models].join(","),
+    repeats: REPEATS,
+    jevUrl: JEV_URL,
+    splits,
+  };
+}
+
+async function scoreSplit<T extends EvalCaseBase>(
+  split: Split,
+  rows: readonly T[],
+  ask: (row: T) => Promise<{ p: number; model: string }>,
 ): Promise<{ score: SplitScore; models: Set<string> }> {
   const models = new Set<string>();
   const scored = await mapLimit(rows, CONCURRENCY, async (row) => {
@@ -211,6 +381,26 @@ async function scoreSplit(
 
 export async function runEval(questionId: string, ask: Ask): Promise<EvalReport> {
   const cases = await loadCases(questionId);
+  const models = new Set<string>();
+  const splits: SplitScore[] = [];
+  for (const split of selectedSplits()) {
+    const rows = cases.filter((row) => row.split === split);
+    const { score, models: splitModels } = await scoreSplit(split, rows, ask);
+    for (const model of splitModels) models.add(model);
+    splits.push(score);
+  }
+  return {
+    questionId,
+    model: [...models].join(","),
+    repeats: REPEATS,
+    jevUrl: JEV_URL,
+    splits,
+  };
+}
+
+/** Same noul scoring as {@link runEval}, over the still-competitor case shape. */
+export async function runStillEval(questionId: string, ask: Ask): Promise<EvalReport> {
+  const cases = await loadStillCases(questionId);
   const models = new Set<string>();
   const splits: SplitScore[] = [];
   for (const split of selectedSplits()) {

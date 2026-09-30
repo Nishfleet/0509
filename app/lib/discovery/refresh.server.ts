@@ -35,7 +35,7 @@ export const STILL_COMPETITOR_REASON: ChoiceQuestion = {
   },
 };
 
-function stillCompetitorState(
+export function stillCompetitorState(
   context: DiscoveryContext,
   target: RefreshTarget,
   history: readonly RecentSignal[],
