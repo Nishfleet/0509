@@ -9,6 +9,7 @@ import { stampFirstSignals } from "../app/lib/data/onboarding_run.server";
 import { startNightlyDiscovery, startWeeklyRefresh, WEEKLY_REFRESH_CRON } from "../app/lib/discovery/start.server";
 import { assertWorkerEnv, WorkerEnvError, workerEnvFailureResponse } from "../app/lib/env.server";
 import { withTransportSecurityHeaders } from "../app/lib/security-headers";
+import { runNightlyCostGuard } from "../app/lib/observability/run-cost-guard.server";
 import { pingLiveness } from "../app/lib/liveness-ping.server";
 import { cronMonitor } from "./cron-monitors";
 import { handleBatch } from "./delivery/consumer";
@@ -33,7 +34,7 @@ import { MentionsSweep } from "./workflows/mentions";
 import { StandingRollover } from "./workflows/standing-rollover";
 import { isWorkflowCron, startScheduledWorkflow } from "./workflow-crons";
 
-type WorkerEnv = Env & { SENTRY_DSN?: string; LIVENESS_PING_URL?: string };
+type WorkerEnv = Env & { SENTRY_DSN?: string; LIVENESS_PING_URL?: string; CLOUDFLARE_API_TOKEN?: string };
 type OAuthEnv = WorkerEnv & { OAUTH_PROVIDER?: OAuthHelpers };
 
 const requestHandler = createRequestHandler(() => import("virtual:react-router/server-build"), import.meta.env.MODE);
@@ -69,6 +70,7 @@ const handler = {
           startNightlyDiscovery(now),
           deleteExpiredAuthRows(env.DB, now),
           stampFirstSignals(),
+          runNightlyCostGuard(env.DB, env.CLOUDFLARE_API_TOKEN, controller.scheduledTime),
         ]);
         results.forEach((result) => {
           if (result.status === "rejected") captureException(result.reason);

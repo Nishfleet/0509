@@ -2,7 +2,7 @@ import { env } from "cloudflare:test";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import fixture from "../fixtures/cf-graphql-usage.json";
-import { runCostGuard } from "../../app/lib/observability/run-cost-guard.server";
+import { runCostGuard, runNightlyCostGuard } from "../../app/lib/observability/run-cost-guard.server";
 
 /**
  * cost_alert writer + runCostGuard (0509#4432).
@@ -246,5 +246,66 @@ describe("runCostGuard (0509#4432)", () => {
       r2ClassAOps: 13,
       browserMs: 0,
     });
+  });
+});
+
+describe("runNightlyCostGuard", () => {
+  beforeEach(async () => {
+    await env.DB.exec("DELETE FROM cost_alert");
+    await clearBrands();
+  });
+
+  afterEach(async () => {
+    await clearBrands();
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  const at = Date.UTC(2026, 8, 29, 3, 0, 0);
+
+  it("guards the previous UTC day from the scheduled instant", async () => {
+    await seedBrands();
+    await env.BROWSER_BUDGET.get(env.BROWSER_BUDGET.idFromName("browser-ms:2026-09-28")).addMs(150_000);
+    stubUsage(usageBody(0, 0));
+    const result = await runNightlyCostGuard(env.DB, "t", at);
+    expect(result.usage.day).toBe("2026-09-28");
+    expect(result.breaches.map((breach) => breach.line)).toEqual(["browser_ms_0509"]);
+    expect(await countAlerts("2026-09-28")).toBe(1);
+  });
+
+  it("without a token evaluates the browser line only and never calls the analytics API", async () => {
+    await seedBrands();
+    await env.BROWSER_BUDGET.get(env.BROWSER_BUDGET.idFromName("browser-ms:2026-09-28")).addMs(150_000);
+    const fetchSpy = vi.fn(async () => new Response("{}", { status: 500 }));
+    vi.stubGlobal("fetch", fetchSpy);
+    const result = await runNightlyCostGuard(env.DB, undefined, at);
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(result.breaches.map((breach) => breach.line)).toEqual(["browser_ms_0509"]);
+    expect(result.alertIds).toHaveLength(1);
+  });
+
+  it("treats an empty token as absent", async () => {
+    await seedBrands();
+    const fetchSpy = vi.fn(async () => new Response("{}", { status: 500 }));
+    vi.stubGlobal("fetch", fetchSpy);
+    await runNightlyCostGuard(env.DB, "", at);
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it("without a token ignores a D1 figure that would breach with one", async () => {
+    await seedBrands();
+    stubUsage(usageBody(5000, 0));
+    const result = await runNightlyCostGuard(env.DB, undefined, Date.UTC(2026, 8, 30, 3, 0, 0));
+    expect(result.breaches).toEqual([]);
+  });
+
+  it("stays silent when the browser line is under threshold", async () => {
+    await seedBrands();
+    await env.BROWSER_BUDGET.get(env.BROWSER_BUDGET.idFromName("browser-ms:2026-10-01")).addMs(135_000);
+    const result = await runNightlyCostGuard(env.DB, undefined, Date.UTC(2026, 9, 2, 3, 0, 0));
+    expect(result.breaches).toEqual([]);
+    expect(await countAlerts("2026-10-01")).toBe(0);
   });
 });

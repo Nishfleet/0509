@@ -1,12 +1,12 @@
 import { insertCostAlerts } from "../data/cost_alert.server";
 import { readBrowserMsForDay } from "../site/browser-budget.server";
 import { fetchDailyUsage } from "./cost-analytics.server";
-import { evaluateCost } from "./cost-guard";
+import { BROWSER_ONLY_LINES, evaluateCost } from "./cost-guard";
 import type { CostBreach, DailyUsage } from "./cost-guard";
 
 export async function runCostGuard(
   db: D1Database,
-  apiToken: string,
+  apiToken: string | undefined,
   day: string,
 ): Promise<{
   usage: DailyUsage;
@@ -14,13 +14,21 @@ export async function runCostGuard(
   breaches: readonly CostBreach[];
   alertIds: readonly string[];
 }> {
-  const [cloudflare, browserMs] = await Promise.all([fetchDailyUsage(day, apiToken), readBrowserMsForDay(day)]);
+  const [cloudflare, browserMs] = await Promise.all([
+    apiToken === undefined ? { day, d1RowsWritten: 0, r2ClassAOps: 0 } : fetchDailyUsage(day, apiToken),
+    readBrowserMsForDay(day),
+  ]);
   const usage: DailyUsage = { ...cloudflare, browserMs };
   const row = await db
     .prepare("SELECT COUNT(*) AS n FROM entity WHERE role = 'competitor' AND state = 'on'")
     .first<{ n: number }>();
   const onBrands = row?.n ?? 0;
-  const breaches = evaluateCost(usage, onBrands);
+  const breaches = evaluateCost(usage, onBrands, apiToken === undefined ? BROWSER_ONLY_LINES : undefined);
   const alertIds = await insertCostAlerts(db, breaches);
   return { usage, onBrands, breaches, alertIds };
+}
+
+export function runNightlyCostGuard(db: D1Database, apiToken: string | undefined, scheduledTime: number) {
+  const day = new Date(scheduledTime - 86_400_000).toISOString().slice(0, 10);
+  return runCostGuard(db, apiToken === "" ? undefined : apiToken, day);
 }
