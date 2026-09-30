@@ -1,10 +1,9 @@
 import AxeBuilder from "@axe-core/playwright";
-import type { DatabaseSync } from "node:sqlite";
 
 import { expect, test } from "@playwright/test";
 
 import { isLocalLane } from "./inbox";
-import { run, seedPreviewSession } from "./preview-session";
+import { seedRankedHomeSession } from "./ranked-home";
 
 const TAGS = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"];
 
@@ -21,191 +20,12 @@ function activeName(): string {
   return el.innerText.replace(/\s+/g, " ").trim();
 }
 
-// The ranked standing the /app surface draws: three ON entities (Loopwell is
-// the self row, its switch disabled), a frozen weekly digest ranking Kindred
-// first, and four frozen weeks for the four-week chart.
-function seed({
-  db,
-  suffix,
-  userId,
-}: {
-  db: DatabaseSync;
-  suffix: string;
-  userId: string;
-}): void {
-  const workspaceId = `ws-${suffix}`;
-  const selfId = `ent_self-${suffix}`;
-  const kindredId = `ent_kindred-${suffix}`;
-  const casettaId = `ent_casetta-${suffix}`;
-  const stamp = "2026-09-25T00:00:00.000Z";
-
-  run(
-    db,
-    "INSERT INTO workspace (id, name, owner_user_id, timezone, brief_weekday, brief_hour, created_at) VALUES (?, ?, ?, 'Europe/London', 1, 8, ?)",
-    workspaceId,
-    "Ranked Home",
-    userId,
-    stamp,
-  );
-  run(
-    db,
-    "INSERT INTO entity (id, workspace_id, role, domain, name, state, created_at) VALUES (?, ?, 'self', 'loopwell.example', 'Loopwell', 'on', ?)",
-    selfId,
-    workspaceId,
-    stamp,
-  );
-  run(
-    db,
-    "INSERT INTO entity (id, workspace_id, role, domain, name, state, created_at) VALUES (?, ?, 'competitor', 'kindred.example', 'Kindred', 'on', ?)",
-    kindredId,
-    workspaceId,
-    stamp,
-  );
-  run(
-    db,
-    "INSERT INTO entity (id, workspace_id, role, domain, name, state, created_at) VALUES (?, ?, 'competitor', 'casetta.example', 'Casetta', 'on', ?)",
-    casettaId,
-    workspaceId,
-    stamp,
-  );
-
-  const periodStart = "2026-09-14T07:00:00.000Z";
-  const periodEnd = "2026-09-21T07:00:00.000Z";
-  const payload = {
-    workspace_id: workspaceId,
-    timezone: "Europe/London",
-    period_start: periodStart,
-    period_end: periodEnd,
-    headline_rank: 2,
-    headline_total: 3,
-    headline_movement: 1,
-    headline_is_new: false,
-    why_line: "Kindred is the mover: 3 new ads",
-    is_quiet_week: false,
-    is_unjudged: false,
-    read_this_first: [],
-    brands: [
-      {
-        entity_id: kindredId,
-        name: "Kindred",
-        rank: 1,
-        movement: 1,
-        is_new: false,
-        biggest_move: "Kindred launched 3 new ads",
-        ad_delta: 2,
-        mention_delta: 1,
-        site_change_count: 2,
-        new_roles: 0,
-      },
-      {
-        entity_id: selfId,
-        name: "Loopwell",
-        rank: 2,
-        movement: 0,
-        is_new: false,
-        biggest_move: null,
-        ad_delta: 1,
-        mention_delta: 0,
-        site_change_count: 0,
-        new_roles: 0,
-      },
-      {
-        entity_id: casettaId,
-        name: "Casetta",
-        rank: 3,
-        movement: null,
-        is_new: false,
-        biggest_move: null,
-        ad_delta: 0,
-        mention_delta: 0,
-        site_change_count: 0,
-        new_roles: 0,
-      },
-    ],
-    own_site: { status: "ok", incidents: [] },
-    checked: {
-      mention_count: 1,
-      site_change_count: 2,
-      new_ad_count: 0,
-      source_keys: ["site.web", "gdelt.doc"],
-      degraded_source_keys: [],
-      degraded_sources: [],
-    },
-    next_brief_at: null,
-  };
-  run(
-    db,
-    "INSERT INTO digest (id, workspace_id, kind, period_start, period_end, status, payload_json) VALUES (?, ?, 'weekly', ?, ?, 'sent', ?)",
-    `${workspaceId}_digest`,
-    workspaceId,
-    periodStart,
-    periodEnd,
-    JSON.stringify(payload),
-  );
-
-  const weeks = [
-    "2026-08-24T07:00:00.000Z",
-    "2026-08-31T07:00:00.000Z",
-    "2026-09-07T07:00:00.000Z",
-    "2026-09-14T07:00:00.000Z",
-  ];
-  const rows: string[] = [];
-  const ranks = [selfId, kindredId, casettaId].map((entityId) => {
-    if (entityId === selfId) return [3, 3, 2, 2];
-    if (entityId === kindredId) return [2, 1, 1, 1];
-    return [1, 2, 3, 3];
-  });
-  for (let weekIndex = 0; weekIndex < weeks.length; weekIndex += 1) {
-    for (const [entityIndex, entityId] of [selfId, kindredId, casettaId].entries()) {
-      const rank = ranks[entityIndex]?.[weekIndex] ?? 0;
-      rows.push(
-        `('${workspaceId}_stand_${entityIndex}_${weekIndex}', '${workspaceId}', '${entityId}', '${weeks[weekIndex]}', 0, ${rank}, '${weeks[weekIndex]}')`,
-      );
-    }
-  }
-  run(
-    db,
-    `INSERT INTO standing (id, workspace_id, entity_id, week_start_at, score, rank, computed_at) VALUES ${rows.join(", ")}`,
-  );
-
-  // Kindred's week evidence: two site changes and one mention, so the opened
-  // row carries the Site changes 2 / Mentions 1 tabs. kind 'change' needs an
-  // aspect and kind 'mention' needs a canonical_url and a url_hash; both are
-  // the schema's own CHECK constraints, not this spec's rules.
-  run(
-    db,
-    `INSERT INTO signal (id, workspace_id, entity_id, source_id, kind, aspect, dedup_key, observed_at, is_tombstoned, title, summary, url, evidence_url, payload_json) VALUES
-       (?1, ?2, ?3, 'src_site_web', 'change', 'home', ?4, ?5, 0, 'Pricing page rewrote its hero', NULL, 'https://kindred.example/pricing', NULL, '{}'),
-       (?6, ?2, ?3, 'src_site_web', 'change', 'home', ?7, ?8, 0, NULL, 'Docs link added to the nav', NULL, NULL, '{}')`,
-    `sig_ev_1-${suffix}`,
-    workspaceId,
-    kindredId,
-    `dedup_ev_1-${suffix}`,
-    "2026-09-20T10:00:00.000Z",
-    `sig_ev_2-${suffix}`,
-    `dedup_ev_2-${suffix}`,
-    "2026-09-19T09:00:00.000Z",
-  );
-  run(
-    db,
-    `INSERT INTO signal (id, workspace_id, entity_id, source_id, kind, dedup_key, observed_at, is_tombstoned, title, canonical_url, url_hash, payload_json) VALUES
-       (?1, ?2, ?3, 'src_mentions_gdelt', 'mention', ?4, ?5, 0, 'Kindred mentioned on r/sysadmin', ?6, ?7, '{}')`,
-    `sig_ev_3-${suffix}`,
-    workspaceId,
-    kindredId,
-    `dedup_ev_3-${suffix}`,
-    "2026-09-18T08:00:00.000Z",
-    "https://www.reddit.com/r/sysadmin/comments/abc",
-    `hash_ev_3-${suffix}`,
-  );
-}
-
 test("ranked home passes axe at WCAG 2.2 AA and is keyboard-operable at 1440 and 390 in light and dark (#4150) @smoke", async ({
   page,
 }, testInfo) => {
   test.skip(testInfo.project.name !== "desktop-1440", "this spec sets 1440 and 390 itself");
 
-  const cookie = await seedPreviewSession("a11y-ranked-home", seed);
+  const cookie = await seedRankedHomeSession("a11y-ranked-home");
   await page.setExtraHTTPHeaders({ cookie });
 
   for (const colorScheme of ["light", "dark"] as const) {
@@ -230,6 +50,11 @@ test("ranked home passes axe at WCAG 2.2 AA and is keyboard-operable at 1440 and
       await expect(ranks).toContainText("Kindred");
       await expect(ranks.getByRole("row").filter({ hasText: "YOU" }).getByRole("cell")).toHaveText(["3", "3", "2", "2"]);
       await expect(ranks.getByRole("row").filter({ hasText: "Kindred" }).getByRole("cell")).toHaveText(["2", "1", "1", "1"]);
+
+      // The degraded pill is part of what the scan covers: the seeded week
+      // leaves Hacker News unanswered, so its dashed, dimmed pill is on the
+      // page in both themes rather than only asserted by another spec.
+      await expect(page.locator('[data-slot="row-pills"] li[data-state="degraded"]').first()).toBeVisible();
 
       const closed = await new AxeBuilder({ page }).withTags(TAGS).analyze();
       await testInfo.attach(`axe-home-${colorScheme}-${String(width)}`, {
