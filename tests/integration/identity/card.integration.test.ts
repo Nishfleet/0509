@@ -434,6 +434,8 @@ describe("startCard", () => {
     const stub = stubBrowser(BOT_GATED_HTML);
     installBrowser(stub);
 
+    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
+
     const card = startCard("ws-1", subject, []);
 
     expect(await card.site).toEqual({
@@ -444,6 +446,9 @@ describe("startCard", () => {
       unfound: true,
     });
     expect(await card.logo).toBeNull();
+    const events = log.mock.calls.map(([line]) => (JSON.parse(String(line)) as { event: string }).event);
+    expect(events).toContain("identity-site-deferred");
+    expect(events).not.toContain("identity-site-unreached");
     expect(stub.calls).toEqual([]);
     expect(calls).toEqual(["https://botgatedspent.com/"]);
     expect((await env.IDENTITY_CACHE.list()).keys).toEqual([]);
