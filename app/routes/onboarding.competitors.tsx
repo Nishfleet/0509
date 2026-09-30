@@ -1,7 +1,7 @@
 import type { Route } from "./+types/onboarding.competitors";
 
 import { useEffect, useState } from "react";
-import { Form, redirect, useNavigation, useRevalidator } from "react-router";
+import { data, Form, redirect, useNavigation, useRevalidator } from "react-router";
 
 import { AddCompetitor, CompetitorMaybes } from "../components/competitor-maybes";
 import { Monogram } from "../components/monogram";
@@ -14,6 +14,7 @@ import { readWorkspaceIdForOwner } from "../lib/data/workspace.server";
 import { readDiscoveryState } from "../lib/discovery/start.server";
 import { discoveryNotice, type DiscoveryState } from "../lib/discovery/state";
 import { requireSession } from "../lib/require-session.server";
+import { createTimings } from "../lib/server-timing.server";
 import { ONBOARDING_COMPETITORS, workspaceLandingForRequest } from "../lib/workspace.server";
 
 const POLL_MS = 3000;
@@ -29,15 +30,16 @@ async function workspaceFor(request: Request): Promise<string> {
 }
 
 export async function loader({ request }: Route.LoaderArgs) {
-  const workspaceId = await workspaceFor(request);
-  const [competitors, discovery] = await Promise.all([
-    readOnboardingCompetitors(workspaceId),
-    readDiscoveryState(workspaceId, new Date()),
-  ]);
+  const timings = createTimings();
+  const workspaceId = await timings.measure("workspace", workspaceFor(request));
+  const [competitors, discovery] = await timings.measure(
+    "reads",
+    Promise.all([readOnboardingCompetitors(workspaceId), readDiscoveryState(workspaceId, new Date())]),
+  );
   if (competitors.on.length + competitors.maybes.length > 0) {
-    await markCompetitorsReady(workspaceId, new Date().toISOString());
+    await timings.measure("ready", markCompetitorsReady(workspaceId, new Date().toISOString()));
   }
-  return { ...competitors, discovery };
+  return data({ ...competitors, discovery }, { headers: timings.header() });
 }
 
 export async function action({ request }: Route.ActionArgs) {

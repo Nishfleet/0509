@@ -2,7 +2,7 @@ import type { Route } from "./+types/app.home";
 import { env } from "cloudflare:workers";
 
 import { useEffect } from "react";
-import { Link, redirect, useFetcher, useRevalidator } from "react-router";
+import { data, Link, redirect, useFetcher, useRevalidator } from "react-router";
 
 import { FreshnessLine } from "../components/freshness-line";
 import { HomePageFrame, HomeStanding } from "../components/home-standing";
@@ -18,6 +18,7 @@ import { freshnessEntries } from "../lib/freshness.server";
 import { onboardingTimingLines } from "../lib/onboarding/timings";
 import { readOnboardingTimes } from "../lib/data/onboarding_run.server";
 import { requireSession } from "../lib/require-session.server";
+import { createTimings } from "../lib/server-timing.server";
 import { readBiggestSiteChanges } from "../lib/site-changes.server";
 
 export function meta() {
@@ -25,35 +26,42 @@ export function meta() {
 }
 
 export async function loader({ request }: Route.LoaderArgs) {
-  const session = await requireSession(request);
-  const [inputs, workspaceId] = await Promise.all([
-    readHomeStandingInputs(env.DB, session.user.id),
-    readWorkspaceIdForOwner(session.user.id),
-  ]);
+  const timings = createTimings();
+  const session = await timings.measure("session", requireSession(request));
+  const [inputs, workspaceId] = await timings.measure(
+    "standing",
+    Promise.all([readHomeStandingInputs(env.DB, session.user.id), readWorkspaceIdForOwner(session.user.id)]),
+  );
   if (inputs === null) throw redirect("/onboarding");
   const payload = inputs.payload;
   const open = new URL(request.url).searchParams.get("open");
   const openId =
     open !== null && payload !== null && inputs.entities.some((entity) => entity.id === open) ? open : null;
-  const [sources, siteFill, howRanked, moves, times, evidence] = await Promise.all([
-    workspaceId === null ? [] : readWorkspaceMentionSources(workspaceId),
-    workspaceId === null ? null : readSelfSiteFill(workspaceId),
-    readHowRanked(env.DB, payload),
-    payload === null || workspaceId === null ? [] : readBiggestSiteChanges(workspaceId, payload.period_start),
-    workspaceId === null ? null : readOnboardingTimes(workspaceId),
-    openId !== null && payload !== null && workspaceId !== null
-      ? readWeekEvidence({ workspaceId, entityId: openId, since: payload.period_start })
-      : null,
-  ]);
-  return {
-    view: homeView({ ...inputs, moves, now: new Date() }),
-    open: openId,
-    evidence,
-    howRanked,
-    freshness: freshnessEntries(sources, Date.now()),
-    siteFill,
-    timings: times === null ? [] : onboardingTimingLines(times),
-  };
+  const [sources, siteFill, howRanked, moves, times, evidence] = await timings.measure(
+    "reads",
+    Promise.all([
+      workspaceId === null ? [] : readWorkspaceMentionSources(workspaceId),
+      workspaceId === null ? null : readSelfSiteFill(workspaceId),
+      readHowRanked(env.DB, payload),
+      payload === null || workspaceId === null ? [] : readBiggestSiteChanges(workspaceId, payload.period_start),
+      workspaceId === null ? null : readOnboardingTimes(workspaceId),
+      openId !== null && payload !== null && workspaceId !== null
+        ? readWeekEvidence({ workspaceId, entityId: openId, since: payload.period_start })
+        : null,
+    ]),
+  );
+  return data(
+    {
+      view: homeView({ ...inputs, moves, now: new Date() }),
+      open: openId,
+      evidence,
+      howRanked,
+      freshness: freshnessEntries(sources, Date.now()),
+      siteFill,
+      timings: times === null ? [] : onboardingTimingLines(times),
+    },
+    { headers: timings.header() },
+  );
 }
 
 function SiteFillLine({ state }: { state: "pending" | "gave_up" }) {
