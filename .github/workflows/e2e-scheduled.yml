@@ -173,9 +173,11 @@ jobs:
         # kills the runner before it can.
         if: always()
         run: |
+          rc=0
           for host in j8-hard.fixture.0509.in j8-soft.fixture.0509.in; do
-            curl --fail --silent --show-error --request POST --header "authorization: Bearer $FIXTURE_SITE_TOKEN" "https://$host/__break?mode=off"
+            curl --fail --silent --show-error --request POST --header "authorization: Bearer $FIXTURE_SITE_TOKEN" "https://$host/__break?mode=off" || rc=1
           done
+          exit $rc
         env:
           FIXTURE_SITE_TOKEN: ${{ secrets.FIXTURE_SITE_TOKEN }}
       - name: Print what the page showed when it failed
