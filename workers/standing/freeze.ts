@@ -3,6 +3,7 @@ import { z } from "zod";
 import { freezeStandingRanks } from "../../app/lib/data/standing.server";
 import { type RankedEntity, rankWeek } from "../../app/lib/standing-score";
 import { countUnjudgedInputs } from "../../app/lib/standing-score.server";
+import { required } from "../../app/lib/required";
 
 const WEEK_SCORES = `SELECT s.entity_id AS entity_id, s.score AS score
 FROM standing s
@@ -37,8 +38,10 @@ export async function freezeWeek(
     db.prepare(WEEK_SCORES).bind(input.workspaceId, input.weekStartAt),
     db.prepare(PREVIOUS_RANKS).bind(input.workspaceId, input.weekStartAt),
   ]);
-  const previousRanks = new Map(previousRankRows.parse(previous.results).map((row) => [row.entity_id, row.rank]));
-  const ranked = rankWeek(weekScoreRows.parse(scores.results), previousRanks);
+  const previousRanks = new Map(
+    previousRankRows.parse(required(previous, "freeze.previous").results).map((row) => [row.entity_id, row.rank]),
+  );
+  const ranked = rankWeek(weekScoreRows.parse(required(scores, "freeze.scores").results), previousRanks);
   await freezeStandingRanks(
     db,
     ranked.map((row) => ({

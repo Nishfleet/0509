@@ -17,8 +17,7 @@ export const gdeltResponseSchema = z.object({
 const SEENDATE_PATTERN = /^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})Z$/;
 
 export function gdeltSeendateToIso(seendate: string | null | undefined): string | null {
-  const match = SEENDATE_PATTERN.exec(seendate ?? "");
-  if (match === null) return null;
-  const [, year, month, day, hour, minute, second] = match;
-  return `${year}-${month}-${day}T${hour}:${minute}:${second}Z`;
+  const value = seendate ?? "";
+  if (!SEENDATE_PATTERN.test(value)) return null;
+  return value.replace(SEENDATE_PATTERN, "$1-$2-$3T$4:$5:$6Z");
 }

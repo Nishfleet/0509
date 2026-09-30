@@ -1,6 +1,8 @@
+import { env } from "cloudflare:workers";
 import { describe, expect, it } from "vitest";
 
 import {
+  readBrowserMsForDay,
   takeBrowserEscalation,
   takeBrowserScreenshot,
   takeBrowserShareImage,
@@ -59,5 +61,14 @@ describe("BrowserBudget (0509#5294)", () => {
     }
     expect(await takeBrowserShareImage("ws-share", "2026-09-25")).toBe(false);
     expect(await takeBrowserShareImage("ws-share", "2026-09-26")).toBe(true);
+  });
+
+  it("keeps a per-day browser millisecond total independent of the take counters", async () => {
+    expect(await readBrowserMsForDay("2026-09-28")).toBe(0);
+    const counter = env.BROWSER_BUDGET.get(env.BROWSER_BUDGET.idFromName("browser-ms:2026-09-28"));
+    await counter.addMs(2_000);
+    await counter.addMs(500);
+    expect(await readBrowserMsForDay("2026-09-28")).toBe(2_500);
+    expect(await readBrowserMsForDay("2026-09-29")).toBe(0);
   });
 });

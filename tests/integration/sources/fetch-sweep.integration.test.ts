@@ -1,4 +1,5 @@
 import { env } from "cloudflare:test";
+import { captureException } from "@sentry/cloudflare";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
@@ -20,6 +21,8 @@ interface BrowserStub {
   closed: number;
   quickAction(action: "content", options: { url: string }): Promise<Response>;
 }
+
+vi.mock("@sentry/cloudflare", () => ({ captureException: vi.fn() }));
 
 const browserHolder = vi.hoisted(() => ({ current: undefined as undefined | BrowserStub }));
 
@@ -167,6 +170,7 @@ const watchPolledAt = async () => {
 
 describe("fetch-sweep consumer (0509#5261)", () => {
   beforeEach(async () => {
+    vi.mocked(captureException).mockClear();
     await resetTenant();
     const listed = await env.SNAPSHOTS.list({ prefix: `snapshot/site/${WATCH}/` });
     await Promise.all(listed.objects.map((object) => env.SNAPSHOTS.delete(object.key)));
@@ -196,6 +200,7 @@ describe("fetch-sweep consumer (0509#5261)", () => {
     expect(results).toEqual(["failed"]);
     expect(stub.calls).toEqual([]);
     expect(stub.closed).toBe(0);
+    expect(captureException).not.toHaveBeenCalled();
   });
 
   it("collects the identity tail's message: first snapshot written, watch polled, acked", async () => {
