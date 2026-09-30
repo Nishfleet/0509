@@ -17,6 +17,7 @@ export default [
   layout("routes/app-settings-layout.tsx", [
     route("app/settings", "routes/app.settings.tsx"),
     route("app/settings/agents", "routes/settings.agents.tsx"),
+    route("app/settings/billing", "routes/settings.billing.ts"),
     route("app/settings/brief-pause", "routes/settings.brief-pause.ts"),
     route("app/settings/export", "routes/settings.export.ts"),
   ]),

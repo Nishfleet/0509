@@ -1,5 +1,7 @@
 import { env, introspectWorkflowInstance } from "cloudflare:test";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+import { copyMissingPage } from "../../app/lib/snapshot-backup.server";
 
 const seed = async () => {
   await env.SNAPSHOTS.put("snapshot/site/watch-1/1.txt", "a");
@@ -69,5 +71,21 @@ describe("nightly snapshot backup", () => {
     await introspector.waitForStatus("complete");
 
     expect(await introspector.getOutput()).toEqual({ listed: 0, copied: 0, present: 0 });
+  });
+
+  it("removes a copy whose source was deleted while the copy was running", async () => {
+    await env.SNAPSHOTS.put("snapshot/site/watch-gone/1.txt", "a");
+    const put = env.SNAPSHOTS_BACKUP.put.bind(env.SNAPSHOTS_BACKUP);
+    const spy = vi.spyOn(env.SNAPSHOTS_BACKUP, "put").mockImplementation(async (key, value, options) => {
+      const stored = await put(key, value, options);
+      await env.SNAPSHOTS.delete(key);
+      return stored;
+    });
+
+    const page = await copyMissingPage();
+    spy.mockRestore();
+
+    expect(page).toMatchObject({ listed: 1, copied: 0 });
+    expect((await env.SNAPSHOTS_BACKUP.list()).objects).toEqual([]);
   });
 });
