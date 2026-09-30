@@ -372,7 +372,7 @@ export async function settleSignInWidget(page: Page): Promise<void> {
   // never mounted. The local lane has no pre-clearance, so there the field
   // must carry the always-pass test token.
   if (process.env.CF_ACCESS_CLIENT_ID) {
-    await expect(field).toHaveCount(1);
+    await expect(field).toHaveCount(1, { timeout: 30_000 });
     return;
   }
   await expect(field).toHaveValue(/\S/);
