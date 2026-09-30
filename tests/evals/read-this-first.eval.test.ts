@@ -28,10 +28,26 @@ function parseReadThisFirstCase(raw: Record<string, unknown>, index: number): Re
   if (typeof row.subject?.name !== "string" || typeof row.subject?.domain !== "string") {
     throw new Error(`case ${index} has no subject`);
   }
+  if (typeof row.subject?.id !== "string" || typeof row.subject?.role !== "string") {
+    throw new Error(`case ${index} has no subject identity`);
+  }
   if (typeof row.item?.kind !== "string" || typeof row.item?.observed_at !== "string") {
     throw new Error(`case ${index} has no item`);
   }
+  if (row.item.title !== null && typeof row.item.title !== "string") {
+    throw new Error(`case ${index} has a malformed item.title`);
+  }
   if (!Array.isArray(row.competitors)) throw new Error(`case ${index} has no competitors`);
+  for (const [position, entity] of row.competitors.entries()) {
+    if (
+      typeof entity?.id !== "string" ||
+      typeof entity?.role !== "string" ||
+      typeof entity?.name !== "string" ||
+      typeof entity?.domain !== "string"
+    ) {
+      throw new Error(`case ${index} competitor ${position} is malformed`);
+    }
+  }
   if (row.self !== null && (typeof row.self?.name !== "string" || typeof row.self?.domain !== "string")) {
     throw new Error(`case ${index} has a malformed self`);
   }
@@ -47,6 +63,42 @@ function selfFor(row: ReadThisFirstCase): { name: string; domain: string } | nul
   if (self !== undefined) return { name: self.name, domain: self.domain };
   return row.self;
 }
+
+describe("read_this_first state builder", () => {
+  it("packs exactly the state the standing worker sends Jev", () => {
+    expect(
+      readThisFirstState({
+        item: {
+          kind: "change",
+          title: "Adidas raises flagship shoe prices 12%",
+          summary: "A 12% increase lands this week.",
+          url: "https://example.com/a",
+          aspect: null,
+          observed_at: "2026-09-20T10:00:00.000Z",
+        },
+        itemEntityId: "ent_adidas",
+        entity: { id: "ent_adidas", role: "competitor", name: "Adidas", domain: "adidas.com" },
+        self: { name: "Nike", domain: "nike.com" },
+        entities: [
+          { id: "ent_puma", role: "competitor", name: "Puma", domain: "puma.com" },
+          { id: "ent_adidas", role: "competitor", name: "Adidas", domain: "adidas.com" },
+        ],
+      }),
+    ).toEqual({
+      self: { name: "Nike", domain: "nike.com" },
+      subject: { name: "Adidas", domain: "adidas.com" },
+      competitor_set: ["puma.com"],
+      item: {
+        kind: "change",
+        title: "Adidas raises flagship shoe prices 12%",
+        summary: "A 12% increase lands this week.",
+        url: "https://example.com/a",
+        aspect: null,
+        observed_at: "2026-09-20T10:00:00.000Z",
+      },
+    });
+  });
+});
 
 describe.skipIf(!jevKeyPresent())("eval: read_this_first against Jev", () => {
   it("read_this_first: scores the shipped READ_THIS_FIRST text on both splits", async () => {

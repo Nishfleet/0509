@@ -29,17 +29,65 @@ interface MentionCase extends EvalCaseBase {
 
 function parseMentionCase(raw: Record<string, unknown>, index: number): MentionCase {
   const row = raw as unknown as MentionCase;
-  if (typeof row.self?.name !== "string") throw new Error(`case ${index} has no self.name`);
+  if (typeof row.self?.name !== "string" || typeof row.self?.domain !== "string") {
+    throw new Error(`case ${index} has no self`);
+  }
   if (typeof row.subject?.name !== "string" || typeof row.subject?.domain !== "string") {
     throw new Error(`case ${index} has no subject`);
   }
+  if (typeof row.subject?.role !== "string") throw new Error(`case ${index} has no subject.role`);
   if (typeof row.item?.title !== "string" || typeof row.item?.url !== "string") {
     throw new Error(`case ${index} has no item`);
   }
+  if (typeof row.item?.publishedAt !== "string") throw new Error(`case ${index} has no item.publishedAt`);
   if (!Array.isArray(row.competitors)) throw new Error(`case ${index} has no competitors`);
   if (typeof row.reliability !== "string") throw new Error(`case ${index} has no reliability`);
   return row;
 }
+
+describe("mention question state builders", () => {
+  it("aboutBrandState packs exactly the state the sweep sends Jev", () => {
+    expect(
+      aboutBrandState({
+        subject: { name: "Adidas", domain: "adidas.com", role: "competitor" },
+        item: { title: "Adidas raises prices", url: "https://example.com/a", publishedAt: "2026-09-20", publisher: null },
+        reliability: "rss",
+      }),
+    ).toEqual({
+      subject: { name: "Adidas", domain: "adidas.com", role: "competitor" },
+      item: {
+        title: "Adidas raises prices",
+        publisher: null,
+        url: "https://example.com/a",
+        published_at: "2026-09-20",
+        reliability: "rss",
+      },
+    });
+  });
+
+  it("mentionMattersState packs exactly the state the sweep sends Jev", () => {
+    expect(
+      mentionMattersState({
+        self: { name: "Nike", domain: "nike.com", description: "sportswear" },
+        subject: { name: "Adidas", domain: "adidas.com", role: "competitor" },
+        competitors: [{ name: "Puma", domain: "puma.com" }],
+        item: { title: "Adidas raises prices", url: "https://example.com/a", publishedAt: "2026-09-20", publisher: "gq.com" },
+        reliability: "rss",
+      }),
+    ).toEqual({
+      self: { name: "Nike", domain: "nike.com", description: "sportswear" },
+      subject: { name: "Adidas", domain: "adidas.com", role: "competitor" },
+      competitor_set: [{ name: "Puma", domain: "puma.com" }],
+      item: {
+        title: "Adidas raises prices",
+        publisher: "gq.com",
+        url: "https://example.com/a",
+        published_at: "2026-09-20",
+        reliability: "rss",
+      },
+    });
+  });
+});
 
 describe.skipIf(!jevKeyPresent())("eval: mention questions against Jev", () => {
   it("mention_is_about_brand: scores the shipped ABOUT_BRAND text on both splits", async () => {
