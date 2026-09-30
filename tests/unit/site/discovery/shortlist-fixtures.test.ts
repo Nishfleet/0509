@@ -44,28 +44,24 @@ describe("shortlist fixtures", () => {
     }
 
     const grouped = new Map(
-      [...new Set(combined.map((candidate) => candidate.name.toLowerCase()))].map(
-        (key): [string, Grouped] => {
-          const evidence = combined
-            .filter((item) => item.name.toLowerCase() === key)
-            .flatMap((item) => item.evidence);
-          const name = combined.find((item) => item.name.toLowerCase() === key)?.name ?? key;
-          return [
-            key,
-            {
-              name,
-              generators: new Set(evidence.map((item) => item.generator)),
-              publishers: new Set(
-                evidence.flatMap((item) => {
-                  if (item.generator !== "news") return [];
-                  const publisher = getDomain(item.sourceUrl);
-                  return publisher === null ? [] : [publisher];
-                }),
-              ),
-            },
-          ];
-        },
-      ),
+      [...new Set(combined.map((candidate) => candidate.name.toLowerCase()))].map((key): [string, Grouped] => {
+        const evidence = combined.filter((item) => item.name.toLowerCase() === key).flatMap((item) => item.evidence);
+        const name = combined.find((item) => item.name.toLowerCase() === key)?.name ?? key;
+        return [
+          key,
+          {
+            name,
+            generators: new Set(evidence.map((item) => item.generator)),
+            publishers: new Set(
+              evidence.flatMap((item) => {
+                if (item.generator !== "news") return [];
+                const publisher = getDomain(item.sourceUrl);
+                return publisher === null ? [] : [publisher];
+              }),
+            ),
+          },
+        ];
+      }),
     );
 
     const shortlistedNames = new Set(lowercaseNames);

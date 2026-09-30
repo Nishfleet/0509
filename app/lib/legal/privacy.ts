@@ -1,9 +1,4 @@
-import {
-  ACCOUNT_DELETION_DAYS,
-  MINIMUM_AGE,
-  OPERATOR,
-  type LegalDocument,
-} from "./document";
+import { ACCOUNT_DELETION_DAYS, MINIMUM_AGE, OPERATOR, type LegalDocument } from "./document";
 
 export const PRIVACY: LegalDocument = {
   path: "/privacy",
@@ -167,9 +162,7 @@ export const PRIVACY: LegalDocument = {
         },
         {
           term: "Screenshots and copies of public pages",
-          details: [
-            "One year. After that, only the before-and-after changes and summaries remain.",
-          ],
+          details: ["One year. After that, only the before-and-after changes and summaries remain."],
         },
         {
           term: "Incident records for your own site",

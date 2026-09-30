@@ -147,7 +147,13 @@ export async function readAgentAlerts(workspaceId: string): Promise<AlertsResult
       body: row.body,
       createdAt: row.created_at,
     })),
-    ...notes.map((row) => ({ id: row.id, kind: "takedown" as const, title: row.title, body: null, createdAt: row.created_at })),
+    ...notes.map((row) => ({
+      id: row.id,
+      kind: "takedown" as const,
+      title: row.title,
+      body: null,
+      createdAt: row.created_at,
+    })),
     ...changes.map((change) => ({
       id: change.id,
       kind: "site_change" as const,

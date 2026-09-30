@@ -4,10 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { publishChange } from "../../../app/lib/site/publish.server";
 import type { ChangeJudgment } from "../../../app/lib/site/judge.server";
-import {
-  acknowledgeIncidentAlert,
-  readOpenIncidentBlock,
-} from "../../../app/lib/data/alert.server";
+import { acknowledgeIncidentAlert, readOpenIncidentBlock } from "../../../app/lib/data/alert.server";
 
 const NOW = "2026-09-23T00:00:00.000Z";
 const USER = "user-publish";
@@ -60,17 +57,13 @@ async function seedSource(id: string): Promise<void> {
 }
 
 async function seedPage(id: string, entity: string, url: string): Promise<void> {
-  await env.DB.prepare(
-    `INSERT INTO page (id, entity_id, url, discovered_at) VALUES (?, ?, ?, ?)`,
-  )
+  await env.DB.prepare(`INSERT INTO page (id, entity_id, url, discovered_at) VALUES (?, ?, ?, ?)`)
     .bind(id, entity, url, NOW)
     .run();
 }
 
 async function seedWatch(id: string, entity: string, source: string, url: string): Promise<void> {
-  await env.DB.prepare(
-    `INSERT INTO watch (id, entity_id, source_id, target_key) VALUES (?, ?, ?, ?)`,
-  )
+  await env.DB.prepare(`INSERT INTO watch (id, entity_id, source_id, target_key) VALUES (?, ?, ?, ?)`)
     .bind(id, entity, source, url)
     .run();
 }
@@ -170,9 +163,14 @@ describe("publishChange (0509#4435)", () => {
       ),
     );
     expect(result).toEqual({ signalId: expect.any(String), incidentId: null, alertId: null });
-    const signals = await env.DB.prepare(
-      "SELECT id, kind, aspect, summary, payload_json, dedup_key FROM signal",
-    ).all<{ id: string; kind: string; aspect: string; summary: string | null; payload_json: string; dedup_key: string }>();
+    const signals = await env.DB.prepare("SELECT id, kind, aspect, summary, payload_json, dedup_key FROM signal").all<{
+      id: string;
+      kind: string;
+      aspect: string;
+      summary: string | null;
+      payload_json: string;
+      dedup_key: string;
+    }>();
     expect(signals.results).toEqual([
       {
         id: result.signalId,
@@ -214,9 +212,10 @@ describe("publishChange (0509#4435)", () => {
       ),
     );
     expect(result.signalId).toEqual(expect.any(String));
-    const signals = await env.DB.prepare(
-      "SELECT aspect, payload_json FROM signal",
-    ).all<{ aspect: string; payload_json: string }>();
+    const signals = await env.DB.prepare("SELECT aspect, payload_json FROM signal").all<{
+      aspect: string;
+      payload_json: string;
+    }>();
     expect(signals.results).toHaveLength(1);
     expect(signals.results[0].aspect).toBe("copy");
     expect(JSON.parse(signals.results[0].payload_json).band).toBe("uncertain");
@@ -312,9 +311,7 @@ describe("publishChange (0509#4435)", () => {
       opened_at: expect.any(String),
       closed_at: null,
     });
-    const alerts = await env.DB.prepare(
-      "SELECT id, kind, severity, incident_id, signal_id FROM alert",
-    ).all<{
+    const alerts = await env.DB.prepare("SELECT id, kind, severity, incident_id, signal_id FROM alert").all<{
       id: string;
       kind: string;
       severity: string;
@@ -380,9 +377,10 @@ describe("publishChange (0509#4435)", () => {
     expect(second.alertId).toBeNull();
     expect(send).toHaveBeenCalledTimes(1);
     expect(send).toHaveBeenCalledWith({ incident_id: first.incidentId });
-    const incidents = await env.DB.prepare(
-      "SELECT id, closed_at FROM incident",
-    ).all<{ id: string; closed_at: string | null }>();
+    const incidents = await env.DB.prepare("SELECT id, closed_at FROM incident").all<{
+      id: string;
+      closed_at: string | null;
+    }>();
     expect(incidents.results).toEqual([{ id: first.incidentId, closed_at: null }]);
     const alerts = await env.DB.prepare("SELECT id FROM alert WHERE kind = 'own_site_broken'").all<{ id: string }>();
     expect(alerts.results).toHaveLength(1);
@@ -411,18 +409,18 @@ describe("publishChange (0509#4435)", () => {
     );
     expect(result.incidentId).toEqual(expect.any(String));
     expect(result.alertId).toEqual(expect.any(String));
-    const incidents = await env.DB.prepare(
-      "SELECT id, kind, closed_at FROM incident",
-    ).all<{ id: string; kind: string; closed_at: string | null }>();
-    expect(incidents.results).toEqual([
-      { id: result.incidentId, kind: "breakage", closed_at: null },
-    ]);
-    const alerts = await env.DB.prepare(
-      "SELECT id, kind, severity FROM alert",
-    ).all<{ id: string; kind: string; severity: string }>();
-    expect(alerts.results).toEqual([
-      { id: result.alertId, kind: "own_site_broken", severity: "normal" },
-    ]);
+    const incidents = await env.DB.prepare("SELECT id, kind, closed_at FROM incident").all<{
+      id: string;
+      kind: string;
+      closed_at: string | null;
+    }>();
+    expect(incidents.results).toEqual([{ id: result.incidentId, kind: "breakage", closed_at: null }]);
+    const alerts = await env.DB.prepare("SELECT id, kind, severity FROM alert").all<{
+      id: string;
+      kind: string;
+      severity: string;
+    }>();
+    expect(alerts.results).toEqual([{ id: result.alertId, kind: "own_site_broken", severity: "normal" }]);
     expect(send).not.toHaveBeenCalled();
   });
 

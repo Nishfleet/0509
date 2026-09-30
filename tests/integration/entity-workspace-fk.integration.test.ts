@@ -113,9 +113,7 @@ describe("entity workspace foreign key (0509#4707)", () => {
     )
       .bind(SOURCE)
       .run();
-    await env.DB.prepare(
-      `INSERT INTO watch (id, entity_id, source_id, target_key) VALUES (?, ?, ?, 'fk-4707.example')`,
-    )
+    await env.DB.prepare(`INSERT INTO watch (id, entity_id, source_id, target_key) VALUES (?, ?, ?, 'fk-4707.example')`)
       .bind(WATCH, ENTITY, SOURCE)
       .run();
     await env.DB.prepare(
@@ -212,44 +210,37 @@ describe("entity workspace foreign key (0509#4707)", () => {
     expect(after).toEqual(before);
 
     expect(
-      await env.DB.prepare("SELECT title, workspace_id, entity_id FROM signal WHERE id = ?")
-        .bind(SIGNAL)
-        .first(),
+      await env.DB.prepare("SELECT title, workspace_id, entity_id FROM signal WHERE id = ?").bind(SIGNAL).first(),
     ).toEqual({ title: "Kept mention", workspace_id: WS, entity_id: ENTITY });
     expect(await env.DB.prepare("SELECT id FROM mention WHERE id = ?").bind(SIGNAL).first()).toEqual({
       id: SIGNAL,
     });
     expect(
-      await env.DB.prepare("SELECT signal_id, entity_id, reason FROM jev_verdict WHERE id = ?")
-        .bind(JEV)
-        .first(),
+      await env.DB.prepare("SELECT signal_id, entity_id, reason FROM jev_verdict WHERE id = ?").bind(JEV).first(),
     ).toEqual({ signal_id: SIGNAL, entity_id: ENTITY, reason: "kept" });
-    expect(
-      await env.DB.prepare("SELECT entity_id FROM jev_verdict WHERE id = ?").bind(JEV_NULL).first(),
-    ).toEqual({ entity_id: null });
+    expect(await env.DB.prepare("SELECT entity_id FROM jev_verdict WHERE id = ?").bind(JEV_NULL).first()).toEqual({
+      entity_id: null,
+    });
     expect(
       await env.DB.prepare("SELECT verdict, signal_id FROM user_decision WHERE id = ?").bind(DECISION).first(),
     ).toEqual({ verdict: "noteworthy", signal_id: SIGNAL });
-    expect(
-      await env.DB.prepare("SELECT signal_id FROM signal_delivery WHERE id = ?").bind(DELIVERY).first(),
-    ).toEqual({ signal_id: SIGNAL });
+    expect(await env.DB.prepare("SELECT signal_id FROM signal_delivery WHERE id = ?").bind(DELIVERY).first()).toEqual({
+      signal_id: SIGNAL,
+    });
     expect(
       await env.DB.prepare("SELECT title, entity_id, signal_id, incident_id FROM alert WHERE id = ?")
         .bind(ALERT)
         .first(),
     ).toEqual({ title: "Kept alert", entity_id: ENTITY, signal_id: SIGNAL, incident_id: INCIDENT });
+    expect(await env.DB.prepare("SELECT title, entity_id FROM alert WHERE id = ?").bind(ALERT_NULL).first()).toEqual({
+      title: "Kept null entity",
+      entity_id: null,
+    });
     expect(
-      await env.DB.prepare("SELECT title, entity_id FROM alert WHERE id = ?").bind(ALERT_NULL).first(),
-    ).toEqual({ title: "Kept null entity", entity_id: null });
-    expect(
-      await env.DB.prepare("SELECT incident_id, is_resolution FROM incident_notice WHERE id = ?")
-        .bind(NOTICE)
-        .first(),
+      await env.DB.prepare("SELECT incident_id, is_resolution FROM incident_notice WHERE id = ?").bind(NOTICE).first(),
     ).toEqual({ incident_id: INCIDENT, is_resolution: 0 });
     expect(
-      await env.DB.prepare("SELECT score, workspace_id, entity_id FROM standing WHERE id = ?")
-        .bind(STANDING)
-        .first(),
+      await env.DB.prepare("SELECT score, workspace_id, entity_id FROM standing WHERE id = ?").bind(STANDING).first(),
     ).toEqual({ score: 12, workspace_id: WS, entity_id: ENTITY });
 
     const holds = await env.DB.prepare(
@@ -332,9 +323,7 @@ describe("entity workspace foreign key (0509#4707)", () => {
       .bind(WS, NOW)
       .run();
     expect(
-      await env.DB.prepare(
-        "SELECT workspace_id, entity_id FROM alert WHERE id = 'alert-fk-4707-null-ok'",
-      ).first(),
+      await env.DB.prepare("SELECT workspace_id, entity_id FROM alert WHERE id = 'alert-fk-4707-null-ok'").first(),
     ).toEqual({ workspace_id: WS, entity_id: null });
 
     await env.DB.prepare(
@@ -344,9 +333,7 @@ describe("entity workspace foreign key (0509#4707)", () => {
       .bind(WS, NOW)
       .run();
     expect(
-      await env.DB.prepare(
-        "SELECT workspace_id, entity_id FROM jev_verdict WHERE id = 'jev-fk-4707-null-ok'",
-      ).first(),
+      await env.DB.prepare("SELECT workspace_id, entity_id FROM jev_verdict WHERE id = 'jev-fk-4707-null-ok'").first(),
     ).toEqual({ workspace_id: WS, entity_id: null });
   });
 });

@@ -139,9 +139,7 @@ export async function deleteSignedInUser(env: AuthEnv, request: Request, now: Da
   const age = now.getTime() - new Date(session.session.createdAt).getTime();
   if (age >= FRESH_SESSION_SECONDS * 1000) return null;
   const { apiKeys } = await auth.api.listApiKeys({ headers: request.headers });
-  await Promise.all(
-    apiKeys.map((key) => auth.api.deleteApiKey({ body: { keyId: key.id }, headers: request.headers })),
-  );
+  await Promise.all(apiKeys.map((key) => auth.api.deleteApiKey({ body: { keyId: key.id }, headers: request.headers })));
   const { headers } = await auth.api.deleteUser({ body: {}, headers: request.headers, returnHeaders: true });
   return headers;
 }

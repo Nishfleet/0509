@@ -84,11 +84,6 @@
       "count": 1
     }
   },
-  "app/components/retire-questions.tsx": {
-    "max-lines-per-function": {
-      "count": 1
-    }
-  },
   "app/components/row-evidence.tsx": {
     "max-lines-per-function": {
       "count": 1
@@ -346,14 +341,6 @@
       "count": 1
     }
   },
-  "app/routes/app.settings.tsx": {
-    "complexity": {
-      "count": 1
-    },
-    "max-lines-per-function": {
-      "count": 1
-    }
-  },
   "app/routes/login.tsx": {
     "max-lines-per-function": {
       "count": 1
@@ -401,11 +388,6 @@
     }
   },
   "workers/standing/read-this-first.ts": {
-    "max-lines-per-function": {
-      "count": 1
-    }
-  },
-  "workers/support-inbox.ts": {
     "max-lines-per-function": {
       "count": 1
     }

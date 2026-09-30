@@ -1,9 +1,4 @@
-import {
-  createExecutionContext,
-  env,
-  introspectWorkflowInstance,
-  waitOnExecutionContext,
-} from "cloudflare:test";
+import { createExecutionContext, env, introspectWorkflowInstance, waitOnExecutionContext } from "cloudflare:test";
 import { env as workerEnv } from "cloudflare:workers";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -49,11 +44,7 @@ const fixtureState = () => fixtureEnv().STATE.getByName("fixture");
 
 const fixtureCall = async (path: string, init?: RequestInit): Promise<Response> => {
   const ctx = createExecutionContext();
-  const res = await fixtureWorker.fetch(
-    new Request(`${FIXTURE_ORIGIN}${path}`, init),
-    fixtureEnv(),
-    ctx,
-  );
+  const res = await fixtureWorker.fetch(new Request(`${FIXTURE_ORIGIN}${path}`, init), fixtureEnv(), ctx);
   await waitOnExecutionContext(ctx);
   return res;
 };
@@ -80,10 +71,7 @@ const jevAnswers = { noul: new Map<string, number>(), choice: new Map<string, st
 function installJev(): void {
   Reflect.set(env, "AI", {
     async run(_model: string, request: { questions: Record<string, { type: string }> }) {
-      const answers: Record<
-        string,
-        { type: "noul"; noul: number } | { type: "choice"; choice: string }
-      > = {};
+      const answers: Record<string, { type: "noul"; noul: number } | { type: "choice"; choice: string }> = {};
       for (const [id, question] of Object.entries(request.questions)) {
         if (question.type === "noul") {
           const p = jevAnswers.noul.get(id);
@@ -204,9 +192,7 @@ describe("own-site incident re-check round-trip on the fixture Worker (0509#4047
     )
       .bind(WS, USER, NOW)
       .run();
-    await env.DB.prepare(
-      `INSERT INTO channel (id, key, is_enabled, config_json) VALUES (?, 'email', 1, '{}')`,
-    )
+    await env.DB.prepare(`INSERT INTO channel (id, key, is_enabled, config_json) VALUES (?, 'email', 1, '{}')`)
       .bind(CHANNEL)
       .run();
     await env.DB.prepare(
@@ -263,11 +249,7 @@ describe("own-site incident re-check round-trip on the fixture Worker (0509#4047
     // Soft break, set through the fixture's real token-gated route: a 200 page
     // whose pricing section is gone.
     expect((await flip("soft")).status).toBe(200);
-    const softRead = await fixtureWorker.fetch(
-      new Request(FIXTURE_URL),
-      fixtureEnv(),
-      createExecutionContext(),
-    );
+    const softRead = await fixtureWorker.fetch(new Request(FIXTURE_URL), fixtureEnv(), createExecutionContext());
     expect(softRead.status).toBe(200);
     const softHtml = await softRead.text();
     expect(softHtml).not.toContain('<section id="pricing"');

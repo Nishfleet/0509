@@ -6,12 +6,7 @@ import { fetchOutbound } from "../../fetch/outbound.server";
 import { CRAWLER_USER_AGENT } from "../../fetch/robots.server";
 import { GATEWAY_ID } from "../../jev/client.server";
 import { defaultFetchText } from "../fetch-text.server";
-import {
-  type Candidate,
-  type FetchText,
-  type Generator,
-  type Subject,
-} from "../types";
+import { type Candidate, type FetchText, type Generator, type Subject } from "../types";
 
 const MODEL = "@cf/meta/llama-3.3-70b-instruct-fp8-fast";
 
@@ -73,7 +68,10 @@ async function readSiteText(html: string): Promise<SiteText> {
     })
     .transform(new Response(html, { headers: { "content-type": "text/html;charset=utf-8" } }));
   await rewritten.arrayBuffer();
-  return { title: found.title.trim().slice(0, SNIPPET_LIMIT), description: found.description.trim().slice(0, SNIPPET_LIMIT) };
+  return {
+    title: found.title.trim().slice(0, SNIPPET_LIMIT),
+    description: found.description.trim().slice(0, SNIPPET_LIMIT),
+  };
 }
 
 async function siteTextOf(subject: Subject, fetchText: FetchText): Promise<SiteText> {
@@ -147,10 +145,16 @@ async function isLive(domain: string): Promise<boolean> {
 }
 
 function cleanName(value: string): string {
-  return value.replace(/\p{Cc}/gu, " ").replace(/\s+/g, " ").trim();
+  return value
+    .replace(/\p{Cc}/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
-async function liveCandidates(subject: Subject, proposals: readonly { name: string; domain: string }[]): Promise<Candidate[]> {
+async function liveCandidates(
+  subject: Subject,
+  proposals: readonly { name: string; domain: string }[],
+): Promise<Candidate[]> {
   const own = parse(subject.domain).domain;
   const seen = new Set<string>();
   const named = proposals.slice(0, MAX_PROPOSALS).flatMap((proposal) => {
@@ -161,11 +165,13 @@ async function liveCandidates(subject: Subject, proposals: readonly { name: stri
     return [{ name, domain }];
   });
   const live = await Promise.all(named.map((item) => isLive(item.domain)));
-  return named.filter((_, index) => live[index]).map((item) => ({
-    name: item.name,
-    domain: item.domain,
-    evidence: [{ sourceUrl: `https://${subject.domain}/`, excerpt: EXCERPT, generator: "ai" }],
-  }));
+  return named
+    .filter((_, index) => live[index])
+    .map((item) => ({
+      name: item.name,
+      domain: item.domain,
+      evidence: [{ sourceUrl: `https://${subject.domain}/`, excerpt: EXCERPT, generator: "ai" }],
+    }));
 }
 
 export const aiGenerator: Generator = async (subject: Subject, fetchText?: FetchText) => {

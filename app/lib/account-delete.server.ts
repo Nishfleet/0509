@@ -80,9 +80,7 @@ function isAccountDeleteInstanceMissing(error: unknown): boolean {
   return error instanceof Error && error.message.includes("instance.not_found");
 }
 
-export async function readAccountDeleteProgress(
-  instanceId: string,
-): Promise<AccountDeleteProgress | null> {
+export async function readAccountDeleteProgress(instanceId: string): Promise<AccountDeleteProgress | null> {
   const lookup = await env.ACCOUNT_DELETE.get(instanceId).catch((error: unknown) => {
     if (isAccountDeleteInstanceMissing(error)) return null;
     throw error;

@@ -6,7 +6,12 @@ vi.mock("cloudflare:workers", () => ({
 
 import { env } from "cloudflare:workers";
 
-import { createWorkerEnvCheck, landingWorkspaceId, WorkerEnvError, workerEnvFailureResponse } from "../app/lib/env.server";
+import {
+  createWorkerEnvCheck,
+  landingWorkspaceId,
+  WorkerEnvError,
+  workerEnvFailureResponse,
+} from "../app/lib/env.server";
 
 const KEYS = [
   "DB",

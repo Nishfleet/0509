@@ -38,15 +38,26 @@ afterEach(() => {
 
 describe("aiGenerator", () => {
   it("turns a valid list into evidence-tagged candidates and sends the homepage text through the gateway", async () => {
-    const run = proposes({ competitors: [{ name: "Alphalete", domain: "alphaleteathletics.com" }, { name: "Ryderwear", domain: "https://www.ryderwear.com/shop" }] });
+    const run = proposes({
+      competitors: [
+        { name: "Alphalete", domain: "alphaleteathletics.com" },
+        { name: "Ryderwear", domain: "https://www.ryderwear.com/shop" },
+      ],
+    });
     liveHosts("alphaleteathletics.com", "ryderwear.com");
     const candidates = await aiGenerator(SUBJECT, home());
     expect(candidates.map((candidate) => [candidate.name, candidate.domain])).toEqual([
       ["Alphalete", "alphaleteathletics.com"],
       ["Ryderwear", "ryderwear.com"],
     ]);
-    expect(candidates[0]?.evidence).toEqual([expect.objectContaining({ generator: "ai", sourceUrl: "https://gymshark.com/" })]);
-    const [model, input, options] = run.mock.calls[0] as [string, { messages: { content: string }[]; response_format: { type: string } }, unknown];
+    expect(candidates[0]?.evidence).toEqual([
+      expect.objectContaining({ generator: "ai", sourceUrl: "https://gymshark.com/" }),
+    ]);
+    const [model, input, options] = run.mock.calls[0] as [
+      string,
+      { messages: { content: string }[]; response_format: { type: string } },
+      unknown,
+    ];
     expect(model).toBe("@cf/meta/llama-3.3-70b-instruct-fp8-fast");
     expect(input.response_format.type).toBe("json_schema");
     expect(input.messages[1]?.content).toContain("Gymshark | Gymwear");
@@ -55,14 +66,25 @@ describe("aiGenerator", () => {
   });
 
   it("drops a hallucinated domain that does not resolve", async () => {
-    proposes({ competitors: [{ name: "Real Co", domain: "realco.com" }, { name: "Ghost", domain: "ghost-brand-xyz.com" }] });
+    proposes({
+      competitors: [
+        { name: "Real Co", domain: "realco.com" },
+        { name: "Ghost", domain: "ghost-brand-xyz.com" },
+      ],
+    });
     liveHosts("realco.com");
     const candidates = await aiGenerator(SUBJECT, home());
     expect(candidates.map((candidate) => candidate.name)).toEqual(["Real Co"]);
   });
 
   it("drops the subject's own domain and duplicate proposals", async () => {
-    proposes({ competitors: [{ name: "Gymshark", domain: "www.gymshark.com" }, { name: "A", domain: "a.com" }, { name: "A again", domain: "a.com" }] });
+    proposes({
+      competitors: [
+        { name: "Gymshark", domain: "www.gymshark.com" },
+        { name: "A", domain: "a.com" },
+        { name: "A again", domain: "a.com" },
+      ],
+    });
     liveHosts("www.gymshark.com", "a.com");
     const candidates = await aiGenerator(SUBJECT, home());
     expect(candidates.map((candidate) => candidate.domain)).toEqual(["a.com"]);
@@ -117,7 +139,13 @@ describe("aiGenerator", () => {
   });
 
   it("drops domains answering 404 or 5xx", async () => {
-    proposes({ competitors: [{ name: "Gone", domain: "gone.com" }, { name: "Broken", domain: "broken.com" }, { name: "Ok", domain: "ok.com" }] });
+    proposes({
+      competitors: [
+        { name: "Gone", domain: "gone.com" },
+        { name: "Broken", domain: "broken.com" },
+        { name: "Ok", domain: "ok.com" },
+      ],
+    });
     answering({
       "gone.com": new Response(null, { status: 404 }),
       "broken.com": new Response(null, { status: 503 }),
@@ -128,7 +156,11 @@ describe("aiGenerator", () => {
   });
 
   it("rejects IP literals, localhost and internal or local hosts without fetching them", async () => {
-    proposes({ competitors: ["10.0.0.1", "localhost", "db.internal", "printer.local", "http://169.254.169.254/"].map((domain) => ({ name: "X", domain })) });
+    proposes({
+      competitors: ["10.0.0.1", "localhost", "db.internal", "printer.local", "http://169.254.169.254/"].map(
+        (domain) => ({ name: "X", domain }),
+      ),
+    });
     const spy = vi.spyOn(globalThis, "fetch");
     await expect(aiGenerator(SUBJECT, home())).resolves.toEqual([]);
     expect(spy).not.toHaveBeenCalled();

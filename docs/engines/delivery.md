@@ -8,23 +8,23 @@ P3 step 7 of umbrella #3842. Written by the Opus deputy (second architect), **20
 
 Cloudflare Email Sending requires a `cf-bounce` subdomain carrying SPF, DKIM and MX, plus DMARC on the zone (`docs/REBUILD-STACK.md` §4.7). Queried **2026-09-21 12:44 UTC** through the VPS system resolver (`127.0.0.53`, systemd-resolved, upstreams `46.38.252.230` netcup and `100.100.100.100` Tailscale MagicDNS). Public resolvers are not reachable from this host — `@8.8.8.8` and `@1.1.1.1` both time out, consistent with the outbound-DNS firewall — so the system resolver is the only vantage available here, and every answer below is `NOERROR`:
 
-| Record | Answer |
-|---|---|
-| `0509.io` **MX** | `72 route1.mx.cloudflare.net`, `29 route2…`, `1 route3…` |
-| `0509.io` **TXT** | `v=spf1 include:_spf.mx.cloudflare.net -all` |
-| `_dmarc.0509.io` **TXT** | `v=DMARC1; p=reject; rua=mailto:dmarc@0509.io` |
-| `cf-bounce.0509.io` **MX** | `72 route1…`, `29 route2…`, `1 route3.mx.cloudflare.net` |
-| `cf-bounce.0509.io` **TXT** | `v=spf1 include:_spf.mx.cloudflare.net ~all` |
+| Record                                 | Answer                                                                                  |
+| -------------------------------------- | --------------------------------------------------------------------------------------- |
+| `0509.io` **MX**                       | `72 route1.mx.cloudflare.net`, `29 route2…`, `1 route3…`                                |
+| `0509.io` **TXT**                      | `v=spf1 include:_spf.mx.cloudflare.net -all`                                            |
+| `_dmarc.0509.io` **TXT**               | `v=DMARC1; p=reject; rua=mailto:dmarc@0509.io`                                          |
+| `cf-bounce.0509.io` **MX**             | `72 route1…`, `29 route2…`, `1 route3.mx.cloudflare.net`                                |
+| `cf-bounce.0509.io` **TXT**            | `v=spf1 include:_spf.mx.cloudflare.net ~all`                                            |
 | `cf-bounce._domainkey.0509.io` **TXT** | `v=DKIM1; h=sha256; k=rsa; p=MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8A…` (2048-bit, two strings) |
 
-**The domain is fully provisioned for Email Sending.** The DKIM selector is `cf-bounce._domainkey`, which is the *Sending* selector — Routing uses `cf2024-1._domainkey` — so this is Email Sending specifically, not merely inbound routing. Corroborated by production behaviour: the pre-wipe app sent **49 magic links a day** through this same `send_email` binding, from senders such as `status-canary@0509.io`.
+**The domain is fully provisioned for Email Sending.** The DKIM selector is `cf-bounce._domainkey`, which is the _Sending_ selector — Routing uses `cf2024-1._domainkey` — so this is Email Sending specifically, not merely inbound routing. Corroborated by production behaviour: the pre-wipe app sent **49 magic links a day** through this same `send_email` binding, from senders such as `status-canary@0509.io`.
 
-**Correcting my own earlier reading.** An earlier pass of this document reported all of these as `NXDOMAIN` and called the engine blocked. That was wrong. The tell was visible at the time and I did not chase it: `NXDOMAIN` means *the name does not exist*, so it cannot be the answer for a TXT query on a zone whose A record resolves in the same second — the correct answer for a missing record type on an existing name is `NOERROR` with no data. My control was `gmail.com MX`, which proved the resolver answered *some* mail query but nothing about this zone. **A negative DNS result needs a same-zone positive control**, and that is the rule this engine's probes follow from here.
+**Correcting my own earlier reading.** An earlier pass of this document reported all of these as `NXDOMAIN` and called the engine blocked. That was wrong. The tell was visible at the time and I did not chase it: `NXDOMAIN` means _the name does not exist_, so it cannot be the answer for a TXT query on a zone whose A record resolves in the same second — the correct answer for a missing record type on an existing name is `NOERROR` with no data. My control was `gmail.com MX`, which proved the resolver answered _some_ mail query but nothing about this zone. **A negative DNS result needs a same-zone positive control**, and that is the rule this engine's probes follow from here.
 
 **What actually remains, and it is a verification, not a blocker:**
 
 1. **Sender identity.** DNS authorises the domain; Email Service still requires the specific sender address to be a configured, verified identity. `brief@0509.io` and the incident sender are new addresses that the pre-wipe app did not use, so each needs confirming per the Email Service docs before its first send. That is P7.1's job and it is a check, not a build.
-2. **Email Service is Beta, Workers Paid only**, with 3,000 messages/month included and daily limits that *"begin conservatively and scale based on sending behavior"* — unpublished numbers. The prior app's 49/day establishes the domain has a sending history rather than a cold reputation, which helps, but the ramp is still unpublished. This is why §5 caps send concurrency at 2.
+2. **Email Service is Beta, Workers Paid only**, with 3,000 messages/month included and daily limits that _"begin conservatively and scale based on sending behavior"_ — unpublished numbers. The prior app's 49/day establishes the domain has a sending history rather than a cold reputation, which helps, but the ramp is still unpublished. This is why §5 caps send concurrency at 2.
 3. **SPF on the apex is `-all` (hard fail)** while `cf-bounce` is `~all`. A misconfigured sender does not degrade to a spam folder; it is rejected. That makes point 1 sharper than it sounds.
 
 The remaining upstream facts are cited from Cloudflare's docs rather than probed, because probing them means sending live mail; they are marked as cited in §3.
@@ -54,12 +54,12 @@ incident_notice  id, incident_id, page_id, sent_on, sent_at, is_resolution
 Three of those constraints are the contract, enforced by the database instead of by discipline, and that is exactly right:
 
 - **`send_attempt.idempotency_key UNIQUE`** is "delivered once".
-- **`incident_notice UNIQUE (page_id, sent_on, is_resolution)`** is *"never more than one open incident email per page per day, and never more than one resolution notice either"* — a constraint, not a convention, exactly as the contract demanded.
+- **`incident_notice UNIQUE (page_id, sent_on, is_resolution)`** is _"never more than one open incident email per page per day, and never more than one resolution notice either"_ — a constraint, not a convention, exactly as the contract demanded.
 - **`channel` as a table** is "adding a channel is never a migration".
 
-**The gap, recorded because a worker will otherwise hit it silently.** `docs/REBUILD-DELIVERY.md` requires *"a `delivery` record per item per channel per **recipient**, unique on that triple"*. The shipped `signal_delivery` is unique on the **pair** `(signal_id, channel_id)` — there is no recipient in the key. Today the product has one `send_target` per workspace, so pair and triple coincide and nothing is wrong. The moment a workspace has two email recipients, the second recipient's send is suppressed by a constraint that was meant to prevent a duplicate, not a delivery. That is a silent under-delivery, which is worse than a duplicate.
+**The gap, recorded because a worker will otherwise hit it silently.** `docs/REBUILD-DELIVERY.md` requires _"a `delivery` record per item per channel per **recipient**, unique on that triple"_. The shipped `signal_delivery` is unique on the **pair** `(signal_id, channel_id)` — there is no recipient in the key. Today the product has one `send_target` per workspace, so pair and triple coincide and nothing is wrong. The moment a workspace has two email recipients, the second recipient's send is suppressed by a constraint that was meant to prevent a duplicate, not a delivery. That is a silent under-delivery, which is worse than a duplicate.
 
-I am **not** widening the constraint in this engine. Settings in v1 offers exactly one "email address for delivery" (`docs/REBUILD-DELIVERY.md`), so the pair is correct for what ships. The gap is recorded here with its trigger — *the first time a second `send_target` exists for one workspace and channel* — and a packet pins it with a test that fails if a second target is ever added without the key being widened first. A constraint that will become wrong needs a tripwire, not a comment.
+I am **not** widening the constraint in this engine. Settings in v1 offers exactly one "email address for delivery" (`docs/REBUILD-DELIVERY.md`), so the pair is correct for what ships. The gap is recorded here with its trigger — _the first time a second `send_target` exists for one workspace and channel_ — and a packet pins it with a test that fails if a second target is ever added without the key being widened first. A constraint that will become wrong needs a tripwire, not a comment.
 
 ---
 
@@ -86,7 +86,7 @@ The rollover writes `digest` with `status = 'pending'` and completes (this is al
 - `max_concurrency` on the send queue is a real throttle against a Beta provider with unpublished daily limits — a config value, which is the shape Nish's standing rules want.
 - A stuck send is visible as `digest.status = 'pending'` in a table, not as a sleeping Workflow instance.
 - **Cost:** three Queue operations per message (write + read + delete) and a small amount of extra latency between "the week closed" and "the email left". For a weekly brief, minutes of latency are free.
-- **Weakness:** two mechanisms instead of one, and a `pending` row that nothing claims is a silent non-delivery — which is the failure the contract cares most about, because *"silence reads as 'the product stopped'"*.
+- **Weakness:** two mechanisms instead of one, and a `pending` row that nothing claims is a silent non-delivery — which is the failure the contract cares most about, because _"silence reads as 'the product stopped'"_.
 
 ### Screening, and the decision
 
@@ -95,7 +95,7 @@ The rollover writes `digest` with `status = 'pending'` and completes (this is al
 **Grafted from A, because A's real virtue was that nothing can be silently stuck:**
 
 1. **A pending sweeper on the nightly cron.** Any `digest` with `status = 'pending'` older than 6 hours, or any `send_attempt` left `pending` (claimed but never resolved, i.e. the Worker died mid-send), is re-enqueued. This is the same watchdog shape engine 6 uses for orphaned rollover instances, and for the same reason.
-2. **The brief is never skipped silently.** A `digest` that cannot be sent after its retries lands in the DLQ *and* surfaces in-app: Alerts shows "we could not send your brief" with the reason. The contract says a brief always sends; when it genuinely cannot, the user finds out from us rather than from the absence.
+2. **The brief is never skipped silently.** A `digest` that cannot be sent after its retries lands in the DLQ _and_ surfaces in-app: Alerts shows "we could not send your brief" with the reason. The contract says a brief always sends; when it genuinely cannot, the user finds out from us rather than from the absence.
 
 **Rejected from A, recorded so it is not re-litigated:** calling `EMAIL.send` from inside the rollover Workflow. If someone later argues for it on latency grounds, the number they must beat is zero rollovers stalled by mail throttling — Candidate A cannot offer that, because `step.do` retries block the instance by design.
 
@@ -106,7 +106,7 @@ Same discipline, smaller stakes. **Take a plain template module producing inline
 - `react-email` renders React to HTML and would be a second rendering path for a design system the app already renders with React Router and Tailwind 4 — and its output would need the same inline-styling pass anyway, because mail clients do not read `<style>` reliably and Tailwind 4 has no email build.
 - `mjml` is a compiler with its own markup language: a third syntax in a codebase that already has TSX and CSS.
 - The brief is **five fixed blocks** (`docs/REBUILD-DELIVERY.md`: headline, read-this-first, per-brand lines, own-site, footer). This is not the case where a layout library earns its bytes; it is the case where it adds a dependency to emit a table.
-- This is the one place in this engine where "nothing hand-rolled" and "no glue" point in opposite directions, so it is recorded explicitly rather than assumed: a template string is not glue when the alternative is a second rendering system for five blocks. A *diffing* or *scheduling* or *retry* helper would be glue; a template is content.
+- This is the one place in this engine where "nothing hand-rolled" and "no glue" point in opposite directions, so it is recorded explicitly rather than assumed: a template string is not glue when the alternative is a second rendering system for five blocks. A _diffing_ or _scheduling_ or _retry_ helper would be glue; a template is content.
 
 ---
 
@@ -116,7 +116,7 @@ Cited from `docs/REBUILD-STACK.md` §4.7, which read them from Cloudflare's docs
 
 ```jsonc
 // wrangler.jsonc — the key is `send_email`, and the field is `name`, not `binding`
-{ "send_email": [ { "name": "EMAIL", "remote": true } ] }
+{ "send_email": [{ "name": "EMAIL", "remote": true }] }
 ```
 
 ```ts
@@ -135,16 +135,16 @@ await env.EMAIL.send({
 
 Limits that shape the design, all from the same section:
 
-| Limit | Value | What it forces |
-|---|---|---|
-| Custom headers | **16 KB for all combined** | the unsubscribe URL must be short — an opaque token, not a signed blob (§4) |
-| Recipients per message | 50 | irrelevant: one recipient per message by contract |
-| Message size | 5 MiB | screenshots are **linked**, never attached or inlined as base64 |
-| Included quota | 3,000/month, then $0.35/1,000 | §6 |
-| Daily limits | *"begin conservatively and scale"* — unpublished | the send queue's `max_concurrency` is the throttle, and the ramp is discovered early on purpose |
-| Status | **Beta, Workers Paid only** | a degraded state has to exist (§7) |
+| Limit                  | Value                                            | What it forces                                                                                  |
+| ---------------------- | ------------------------------------------------ | ----------------------------------------------------------------------------------------------- |
+| Custom headers         | **16 KB for all combined**                       | the unsubscribe URL must be short — an opaque token, not a signed blob (§4)                     |
+| Recipients per message | 50                                               | irrelevant: one recipient per message by contract                                               |
+| Message size           | 5 MiB                                            | screenshots are **linked**, never attached or inlined as base64                                 |
+| Included quota         | 3,000/month, then $0.35/1,000                    | §6                                                                                              |
+| Daily limits           | _"begin conservatively and scale"_ — unpublished | the send queue's `max_concurrency` is the throttle, and the ramp is discovered early on purpose |
+| Status                 | **Beta, Workers Paid only**                      | a degraded state has to exist (§7)                                                              |
 
-**There are no delivery webhooks.** Cloudflare Email Service does not call back with bounces or opens; bounce data lives in the dashboard Activity log and the GraphQL API. So `send_attempt.status` records what *our* call returned — accepted or not — and never claims the message arrived. A UI that says "delivered" would be lying. It says "sent".
+**There are no delivery webhooks.** Cloudflare Email Service does not call back with bounces or opens; bounce data lives in the dashboard Activity log and the GraphQL API. So `send_attempt.status` records what _our_ call returned — accepted or not — and never claims the message arrived. A UI that says "delivered" would be lying. It says "sent".
 
 ---
 
@@ -161,7 +161,7 @@ Limits that shape the design, all from the same section:
 4. Render (§2 sub-decision), then `env.EMAIL.send`.
 5. Update `send_attempt.status` to `sent` or `failed` with `error`, set `digest.sent_at` and `status='sent'`, and insert one `signal_delivery` row per item quoted in the brief, unique on `(signal_id, channel_id)` — so a signal quoted this week is never quoted again next week.
 
-**Claim before send, not send before record.** This is the whole reliability argument and it is worth stating plainly. Send-then-record duplicates on retry; record-then-send can lose silently. Claiming with a `pending` row and resolving it afterwards makes a crashed send *visible* — a `pending` row older than the sweeper's threshold is a known unknown that gets re-enqueued, rather than an email that either did or did not go out.
+**Claim before send, not send before record.** This is the whole reliability argument and it is worth stating plainly. Send-then-record duplicates on retry; record-then-send can lose silently. Claiming with a `pending` row and resolving it afterwards makes a crashed send _visible_ — a `pending` row older than the sweeper's threshold is a known unknown that gets re-enqueued, rather than an email that either did or did not go out.
 
 ### The own-site incident email
 
@@ -186,10 +186,10 @@ Two absolute rules, enforced at query time:
 
 This engine **owns no decision** and must not call Jev. It is a transport: it consumes verdicts made upstream and renders them. Naming them here so a packet does not reach for the SDK.
 
-| Id | Owned by | What this engine consumes | Context-pack fields |
-|---|---|---|---|
+| Id                          | Owned by               | What this engine consumes                                                                          | Context-pack fields                                            |
+| --------------------------- | ---------------------- | -------------------------------------------------------------------------------------------------- | -------------------------------------------------------------- |
 | **D3s** `own_site_breakage` | engine 4 (site change) | the `p >= 0.5` verdict that opened the `incident` row, plus its one-line kind for the subject line | none — the verdict and its reason arrive on the `incident` row |
-| **D4** `read_this_first` | engine 6 (standing) | the top three items and the why-line, already in `digest.payload_json` | none — read from the row |
+| **D4** `read_this_first`    | engine 6 (standing)    | the top three items and the why-line, already in `digest.payload_json`                             | none — read from the row                                       |
 
 Two consequences. **The brief must never re-rank or re-judge**: if it reordered D4's picks, the email and Home would disagree, which is the failure `docs/REBUILD-STANDING.md` exists to prevent. And **Jev's one-line reasons are shown verbatim**, marked as Jev's read; `docs/REBUILD-JEV.md` bars generating longer copy, so every other sentence in the brief is a fixed template string filled with counts.
 
@@ -207,12 +207,12 @@ Two consequences. **The brief must never re-rank or re-judge**: if it reordered 
 }
 ```
 
-| Setting | Value | Why |
-|---|---|---|
-| `max_batch_size` | **1** | one message per delivery. Batching sends gains nothing (each is its own API call) and makes a partial batch failure ambiguous. |
-| `max_concurrency` | **2** | Email Service is Beta with unpublished, reputation-gated daily limits and a cold domain. Two concurrent sends clears a 25-workspace Monday in seconds and cannot look like a blast. This is a config value; raising it is a deliberate change with the ramp measured. |
-| `max_retries` | **5** | with `step`-style exponential backoff at the queue level. Past that, the DLQ plus an in-app alert (§2 graft 2). |
-| `dead_letter_queue` | **mandatory** | *"messages that reach the retry limit are deleted permanently."* A silently dropped brief is the exact failure the contract forbids. |
+| Setting             | Value         | Why                                                                                                                                                                                                                                                                   |
+| ------------------- | ------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `max_batch_size`    | **1**         | one message per delivery. Batching sends gains nothing (each is its own API call) and makes a partial batch failure ambiguous.                                                                                                                                        |
+| `max_concurrency`   | **2**         | Email Service is Beta with unpublished, reputation-gated daily limits and a cold domain. Two concurrent sends clears a 25-workspace Monday in seconds and cannot look like a blast. This is a config value; raising it is a deliberate change with the ramp measured. |
+| `max_retries`       | **5**         | with `step`-style exponential backoff at the queue level. Past that, the DLQ plus an in-app alert (§2 graft 2).                                                                                                                                                       |
+| `dead_letter_queue` | **mandatory** | _"messages that reach the retry limit are deleted permanently."_ A silently dropped brief is the exact failure the contract forbids.                                                                                                                                  |
 
 - **No cron of its own.** The brief is enqueued by the rollover (engine 6) and the incident by the site-change engine (engine 4). This engine is a consumer, not a scheduler — which is why it has no timezone logic at all. All of that lives in engine 6, once.
 - **The sweeper rides engine 6's `0 3 * * *` cron**: re-enqueue any `digest` pending over 6 hours and any `send_attempt` left `pending` over 1 hour.
@@ -226,26 +226,26 @@ Two consequences. **The brief must never re-rank or re-judge**: if it reordered 
 
 ### Per 1,000 messages
 
-| Resource | Units | Rate | Cost |
-|---|---|---|---|
-| **Email Service** | 1,000 | 3,000/mo included, then **$0.35/1,000** | **$0.00–$0.35** |
-| Queue operations (write + read + delete) | 3,000 | 1M/mo included, then $0.40/M | $0.00 |
-| D1 rows written (`send_attempt` + `digest` update + `signal_delivery` ×~10) | ~12,000 | 50M/mo included | $0.00 |
-| Workers requests | 1,000 | 10M/mo included | $0.00 |
-| R2 Class B (screenshot thumbnails read for the brief) | ~3,000 | 10M/mo included | $0.00 |
-| **Browser Rendering** | **0** | — | **$0.00** |
+| Resource                                                                    | Units   | Rate                                    | Cost            |
+| --------------------------------------------------------------------------- | ------- | --------------------------------------- | --------------- |
+| **Email Service**                                                           | 1,000   | 3,000/mo included, then **$0.35/1,000** | **$0.00–$0.35** |
+| Queue operations (write + read + delete)                                    | 3,000   | 1M/mo included, then $0.40/M            | $0.00           |
+| D1 rows written (`send_attempt` + `digest` update + `signal_delivery` ×~10) | ~12,000 | 50M/mo included                         | $0.00           |
+| Workers requests                                                            | 1,000   | 10M/mo included                         | $0.00           |
+| R2 Class B (screenshot thumbnails read for the brief)                       | ~3,000  | 10M/mo included                         | $0.00           |
+| **Browser Rendering**                                                       | **0**   | —                                       | **$0.00**       |
 
 ### Monthly at 100 brands
 
 100 brands across ~25 workspaces (`docs/REBUILD-DONE.md` J12's four-ON-brand shape):
 
-| Message | Volume/month | Note |
-|---|---|---|
-| Weekly brief | 25 × 4.3 = **108** | one per workspace per week, quiet weeks included |
-| Own-site incident + "fixed" | ~20 | two per incident; incidents are rare by design |
-| Magic-link sign-in | ~100 | onboarding and returning sessions |
-| **Total** | **~230** | **7.7% of the 3,000 included** |
-| **Email Service cost** | | **$0.00** |
+| Message                     | Volume/month       | Note                                             |
+| --------------------------- | ------------------ | ------------------------------------------------ |
+| Weekly brief                | 25 × 4.3 = **108** | one per workspace per week, quiet weeks included |
+| Own-site incident + "fixed" | ~20                | two per incident; incidents are rare by design   |
+| Magic-link sign-in          | ~100               | onboarding and returning sessions                |
+| **Total**                   | **~230**           | **7.7% of the 3,000 included**                   |
+| **Email Service cost**      |                    | **$0.00**                                        |
 
 Everything else — Queues, D1, R2, Workers — is inside included tiers by three orders of magnitude. **Total Cloudflare cost for delivery at 100 brands: $0.00.**
 
@@ -257,18 +257,18 @@ Everything else — Queues, D1, R2, Workers — is inside included tiers by thre
 
 ## 7. Failure modes and the degraded UI state
 
-| Failure | Detection | Degraded state |
-|---|---|---|
-| **Unverified sender address** | `EMAIL.send` rejects, or the message fails DMARC at the recipient | the domain is provisioned (§0) but each sender identity is separate, and the apex SPF is `-all`, so an unverified sender is rejected rather than soft-landed. Fails loud at P7.1: the send path is not green until a real message passes SPF, DKIM and DMARC in a real inbox. |
-| Email Service throttles or is down | `EMAIL.send` rejects | queue retries with backoff; after 5, DLQ **and** an in-app Alerts row: "we could not send your brief — here it is in the app". The DLQ consumer marks the digest `failed`, so neither the sweeper nor a late redelivery sends it again, and the alert says so in plain words; the provider's error goes to the log, never to the customer (#4375). The brief content is already in `digest.payload_json`, so the user loses the channel, not the information. |
-| Worker dies mid-send | `send_attempt` left `status='pending'` | the nightly sweeper re-enqueues after 1 hour. The claim row is what makes this detectable at all. |
-| `digest` written but never enqueued | `status='pending'` over 6 hours | nightly sweeper re-enqueues, for 7 days after the brief's period ends; after that the next brief has replaced it, so it is left alone (#4375). |
-| **Duplicate send** | `send_attempt.idempotency_key` UNIQUE conflict | the second consumer returns without sending. Not an error — the expected outcome of an at-least-once queue. |
-| **Second incident email same day** | `incident_notice UNIQUE (page_id, sent_on, is_resolution)` conflict on `is_resolution = 0` | dropped by the database, as the contract requires. |
-| **"Fixed" follow-up dropped** by that same constraint | — | **resolved by #4357**: `migrations/0004_incident_notice_resolution.sql` adds `is_resolution` to the key, so a same-day resolution is accepted while a second same-day open or resolution is still rejected. |
-| User unsubscribed | `email_suppression` hit before render | no send, no attempt row, no error. Alerts still shows everything in-app; unsubscribe is a channel opt-out, not an account opt-out. |
-| Bounce | **not detectable** — no delivery webhooks exist | `send_attempt.status` says `sent`, never `delivered`. Bounces are read from the dashboard Activity log out of band. The UI never claims arrival. |
-| Second `send_target` added for one workspace+channel | the tripwire test in P7.4 fails | build goes red before the under-delivery ships. |
+| Failure                                               | Detection                                                                                  | Degraded state                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| ----------------------------------------------------- | ------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Unverified sender address**                         | `EMAIL.send` rejects, or the message fails DMARC at the recipient                          | the domain is provisioned (§0) but each sender identity is separate, and the apex SPF is `-all`, so an unverified sender is rejected rather than soft-landed. Fails loud at P7.1: the send path is not green until a real message passes SPF, DKIM and DMARC in a real inbox.                                                                                                                                                                                 |
+| Email Service throttles or is down                    | `EMAIL.send` rejects                                                                       | queue retries with backoff; after 5, DLQ **and** an in-app Alerts row: "we could not send your brief — here it is in the app". The DLQ consumer marks the digest `failed`, so neither the sweeper nor a late redelivery sends it again, and the alert says so in plain words; the provider's error goes to the log, never to the customer (#4375). The brief content is already in `digest.payload_json`, so the user loses the channel, not the information. |
+| Worker dies mid-send                                  | `send_attempt` left `status='pending'`                                                     | the nightly sweeper re-enqueues after 1 hour. The claim row is what makes this detectable at all.                                                                                                                                                                                                                                                                                                                                                             |
+| `digest` written but never enqueued                   | `status='pending'` over 6 hours                                                            | nightly sweeper re-enqueues, for 7 days after the brief's period ends; after that the next brief has replaced it, so it is left alone (#4375).                                                                                                                                                                                                                                                                                                                |
+| **Duplicate send**                                    | `send_attempt.idempotency_key` UNIQUE conflict                                             | the second consumer returns without sending. Not an error — the expected outcome of an at-least-once queue.                                                                                                                                                                                                                                                                                                                                                   |
+| **Second incident email same day**                    | `incident_notice UNIQUE (page_id, sent_on, is_resolution)` conflict on `is_resolution = 0` | dropped by the database, as the contract requires.                                                                                                                                                                                                                                                                                                                                                                                                            |
+| **"Fixed" follow-up dropped** by that same constraint | —                                                                                          | **resolved by #4357**: `migrations/0004_incident_notice_resolution.sql` adds `is_resolution` to the key, so a same-day resolution is accepted while a second same-day open or resolution is still rejected.                                                                                                                                                                                                                                                   |
+| User unsubscribed                                     | `email_suppression` hit before render                                                      | no send, no attempt row, no error. Alerts still shows everything in-app; unsubscribe is a channel opt-out, not an account opt-out.                                                                                                                                                                                                                                                                                                                            |
+| Bounce                                                | **not detectable** — no delivery webhooks exist                                            | `send_attempt.status` says `sent`, never `delivered`. Bounces are read from the dashboard Activity log out of band. The UI never claims arrival.                                                                                                                                                                                                                                                                                                              |
+| Second `send_target` added for one workspace+channel  | the tripwire test in P7.4 fails                                                            | build goes red before the under-delivery ships.                                                                                                                                                                                                                                                                                                                                                                                                               |
 
 ---
 

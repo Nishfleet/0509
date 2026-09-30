@@ -28,17 +28,18 @@ async function seedPacedSource(configJson: string): Promise<{ sourceId: string; 
       `INSERT INTO source (id, key, kind, platform, plugin_key, reliability, is_enabled, config_json)
        VALUES (?1, ?2, 'mentions', ?3, 'gdelt.doc', 'official_api', 1, ?4)`,
     ).bind(sourceId, `pace.test.${String(runs)}`, `pace_${String(runs)}`, configJson),
-    env.DB.prepare(
-      "INSERT INTO watch (id, entity_id, source_id, target_key) VALUES (?1, ?2, ?3, ?4)",
-    ).bind(`w_pace_${String(runs)}`, entityId, sourceId, brand),
+    env.DB.prepare("INSERT INTO watch (id, entity_id, source_id, target_key) VALUES (?1, ?2, ?3, ?4)").bind(
+      `w_pace_${String(runs)}`,
+      entityId,
+      sourceId,
+      brand,
+    ),
   ]);
   return { sourceId, brand };
 }
 
 async function targetFor(brand: string, sourceId: string) {
-  const target = (await planTargets()).find(
-    (entry) => entry.query === brand && entry.sourceId === sourceId,
-  );
+  const target = (await planTargets()).find((entry) => entry.query === brand && entry.sourceId === sourceId);
   if (target === undefined) throw new Error(`no mentions target for ${brand} under ${sourceId}`);
   return target;
 }

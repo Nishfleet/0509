@@ -81,9 +81,7 @@ test.describe("signed in", () => {
       const started = Date.now();
       await input.press("Enter");
 
-      await expect(
-        page.getByRole("heading", { name: "This is you. Fix anything we got wrong." }),
-      ).toBeVisible();
+      await expect(page.getByRole("heading", { name: "This is you. Fix anything we got wrong." })).toBeVisible();
       const editName = page.getByRole("button", { name: "edit name" });
       await expect(editName).toBeVisible({ timeout: 30_000 });
       const firstField = Date.now() - started;
@@ -93,14 +91,14 @@ test.describe("signed in", () => {
 
       expect(firstField).toBeLessThan(30_000);
       expect(complete).toBeLessThan(30_000);
-      test.info().annotations.push(
-        { type: "input-to-first-field-ms", description: String(firstField) },
-        { type: "input-to-card-complete-ms", description: String(complete) },
-      );
+      test
+        .info()
+        .annotations.push(
+          { type: "input-to-first-field-ms", description: String(firstField) },
+          { type: "input-to-card-complete-ms", description: String(complete) },
+        );
 
-      await expect(
-        page.getByRole("heading", { name: "This is you. Fix anything we got wrong." }),
-      ).toBeInViewport();
+      await expect(page.getByRole("heading", { name: "This is you. Fix anything we got wrong." })).toBeInViewport();
       await expect(page.getByRole("button", { name: "edit name" })).toBeInViewport();
       await expect(page.getByText("logo", { exact: true })).toBeInViewport();
       await expect(page.getByRole("button", { name: "edit about" })).toBeInViewport();

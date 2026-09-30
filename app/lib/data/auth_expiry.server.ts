@@ -7,10 +7,7 @@ export interface AuthExpirySweep {
   verifications: number;
 }
 
-export async function deleteExpiredAuthRows(
-  db: D1Database,
-  now: Date,
-): Promise<AuthExpirySweep> {
+export async function deleteExpiredAuthRows(db: D1Database, now: Date): Promise<AuthExpirySweep> {
   const cutoff = now.toISOString();
 
   const [sessions, verifications] = await db.batch([

@@ -2,12 +2,7 @@ import { createElement, type ReactElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
-import {
-  SourcePill,
-  sourcePillStatus,
-  type SourceRow,
-  type SourceSnapshot,
-} from "../../app/components/source-pill";
+import { SourcePill, sourcePillStatus, type SourceRow, type SourceSnapshot } from "../../app/components/source-pill";
 
 const NOW = Date.parse("2026-09-22T12:00:00.000Z");
 
@@ -142,12 +137,8 @@ describe("the source pill", () => {
     expect(pill(parked, liveSnapshot)).toBe("");
     expect(pill({ ...reddit, is_enabled: 0 }, liveSnapshot)).toBe("");
     expect(pill({ ...reddit, is_enabled: false }, liveSnapshot)).toBe("");
-    expect(
-      pill({ ...reddit, is_enabled: 1, config_json: '{"state":"disabled"}' }, liveSnapshot),
-    ).toBe("");
-    expect(
-      pill({ ...reddit, is_enabled: 1, config_json: '{"state":"parked"}' }, liveSnapshot),
-    ).toBe("");
+    expect(pill({ ...reddit, is_enabled: 1, config_json: '{"state":"disabled"}' }, liveSnapshot)).toBe("");
+    expect(pill({ ...reddit, is_enabled: 1, config_json: '{"state":"parked"}' }, liveSnapshot)).toBe("");
     expect(sourcePillStatus(parked, liveSnapshot, NOW).state).toBe("disabled");
     expect(
       sourcePillStatus({ ...reddit, is_enabled: 1, config_json: '{"state":"parked"}' }, liveSnapshot, NOW).state,
@@ -239,8 +230,8 @@ describe("the source pill", () => {
     }
     const nameless: SourceRow = { key: "reddit.search_rss", platform: "  ", is_enabled: 1 };
     expect(pill(nameless, liveSnapshot)).toContain("reddit.search_rss");
-    expect(
-      pill({ ...reddit, last_good_at: "not a date", degraded_reason: "broke" }, liveSnapshot),
-    ).toContain("last good not a date");
+    expect(pill({ ...reddit, last_good_at: "not a date", degraded_reason: "broke" }, liveSnapshot)).toContain(
+      "last good not a date",
+    );
   });
 });

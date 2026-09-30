@@ -22,9 +22,7 @@ import {
 } from "../lib/account-delete.server";
 import { timezoneCookie } from "../lib/timezone";
 
-type LoginActionData =
-  | { error: string; sent?: never }
-  | { sent: { email: string; at: number }; error?: never };
+type LoginActionData = { error: string; sent?: never } | { sent: { email: string; at: number }; error?: never };
 
 function signInTarget(search: URLSearchParams): string {
   return safeReturnTo(search.get("next") ?? subjectRedirect(search.get("subject")));
@@ -55,9 +53,9 @@ export async function action({ request }: Route.ActionArgs) {
   const captchaField = form.get("cf-turnstile-response");
   const captcha = typeof captchaField === "string" ? captchaField.trim() : "";
   const callbackURL = signInTarget(new URL(request.url).searchParams);
-  const response = await (await createAuthForRequest(env, request)).handler(
-    formMagicLinkRequest(env.BETTER_AUTH_URL, request, email, captcha, callbackURL),
-  );
+  const response = await (
+    await createAuthForRequest(env, request)
+  ).handler(formMagicLinkRequest(env.BETTER_AUTH_URL, request, email, captcha, callbackURL));
   if (response.status === 200) return { sent: { email, at: Date.now() } };
   const detail = await response.text();
   if (response.status === 429) return { error: "Too many sign-in links. Wait a minute and try again." };
@@ -100,7 +98,9 @@ export default function Login() {
   }
 
   if (actionData?.sent) {
-    return <SignInSent key={actionData.sent.at} email={actionData.sent.email} turnstileSiteKey={deleted.turnstileSiteKey} />;
+    return (
+      <SignInSent key={actionData.sent.at} email={actionData.sent.email} turnstileSiteKey={deleted.turnstileSiteKey} />
+    );
   }
 
   return (

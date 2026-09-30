@@ -8,5 +8,5 @@
   "name": "0509-transport-test",
   "compatibility_date": "2026-09-16",
   "main": "../../workers/app.ts",
-  "browser": { "binding": "BROWSER" }
+  "browser": { "binding": "BROWSER" },
 }

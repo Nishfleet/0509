@@ -44,10 +44,7 @@ interface NoulAsk {
 }
 
 const answerSchema = z.object({
-  answers: z.record(
-    z.string(),
-    z.object({ type: noulType, noul: z.number().min(0).max(1) }),
-  ),
+  answers: z.record(z.string(), z.object({ type: noulType, noul: z.number().min(0).max(1) })),
 });
 
 type NoulAnswers = z.infer<typeof answerSchema>["answers"];
@@ -214,11 +211,7 @@ async function runChoice(question: ChoiceQuestion, state: unknown): Promise<stri
   return answer.choice;
 }
 
-export async function askChoice(
-  workspaceId: string,
-  question: ChoiceQuestion,
-  state: unknown,
-): Promise<ChoiceVerdict> {
+export async function askChoice(workspaceId: string, question: ChoiceQuestion, state: unknown): Promise<ChoiceVerdict> {
   const hash = await sha256Hex(
     JSON.stringify({
       workspace: workspaceId,

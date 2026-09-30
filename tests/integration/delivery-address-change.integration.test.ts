@@ -59,9 +59,7 @@ interface SuppressionRow {
 }
 
 const suppressionRow = async (address: string): Promise<SuppressionRow | null> =>
-  env.DB.prepare(
-    `SELECT address, reason FROM email_suppression WHERE address = ?`,
-  )
+  env.DB.prepare(`SELECT address, reason FROM email_suppression WHERE address = ?`)
     .bind(address)
     .first<SuppressionRow>();
 
@@ -82,9 +80,7 @@ describe("change the workspace's email address (0509#4779)", () => {
       .bind(USER_ID, SIGN_IN_EMAIL, NOW, NOW)
       .run();
     await ensureWorkspaceForSignIn(env.DB, { userId: USER_ID, request: null, now: NOW });
-    await env.DB.prepare(
-      `UPDATE send_target SET unsubscribe_token = 'old-token' WHERE workspace_id = ?`,
-    )
+    await env.DB.prepare(`UPDATE send_target SET unsubscribe_token = 'old-token' WHERE workspace_id = ?`)
       .bind(firstWorkspaceId(USER_ID))
       .run();
   });

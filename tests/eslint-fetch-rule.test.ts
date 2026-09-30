@@ -63,7 +63,11 @@ describe("eslint one-outbound-fetch rule (#4951)", () => {
   });
 
   it("rejects a bare fetch( in a file that was grandfathered before the migration", { timeout: 60_000 }, async () => {
-    for (const file of ["app/lib/discovery/probe-fetch-tmp.server.ts", "app/lib/hiring/probe-fetch-tmp.server.ts", "workers/sources/mentions/probe-fetch-tmp.ts"]) {
+    for (const file of [
+      "app/lib/discovery/probe-fetch-tmp.server.ts",
+      "app/lib/hiring/probe-fetch-tmp.server.ts",
+      "workers/sources/mentions/probe-fetch-tmp.ts",
+    ]) {
       const result = await lintProbe(file, BARE_FETCH_CALL);
       expect(result.messages.some((m) => m.includes(FETCH_MESSAGE))).toBe(true);
     }

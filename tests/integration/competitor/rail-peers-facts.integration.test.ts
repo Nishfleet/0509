@@ -126,9 +126,7 @@ async function seedRail(): Promise<Seed> {
     standingRow(`st_b_latest_${n}`, rows.wsB, rows.compB, WEEK_LATEST, 1),
   ]);
 
-  await env.DB.prepare(
-    "INSERT INTO source (id, key, kind, platform, plugin_key) VALUES (?1, ?2, 'site', 'test', ?3)",
-  )
+  await env.DB.prepare("INSERT INTO source (id, key, kind, platform, plugin_key) VALUES (?1, ?2, 'site', 'test', ?3)")
     .bind(rows.source, `rail-peers-${n}`, `rail-peers-${n}`)
     .run();
 

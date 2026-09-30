@@ -12,10 +12,7 @@ import { consoleFailures, requireInboxToken, signInWithMagicLink, watchConsole }
 // for the next tick. The account is FIXTURE_ACCOUNTS.j7, kept between runs, so
 // the state that carries the journey survives; it is never deleted.
 // Production only: the preview Worker has no inbox to sign in through.
-test.skip(
-  !process.env.PLAYWRIGHT_TEST_BASE_URL,
-  "J7 needs the production sweep, the fixture Worker and the mail path",
-);
+test.skip(!process.env.PLAYWRIGHT_TEST_BASE_URL, "J7 needs the production sweep, the fixture Worker and the mail path");
 
 const FIXTURE_ORIGIN = "https://fixture.0509.in";
 const SWEEP_UTC_HOUR = 2;
@@ -34,7 +31,9 @@ async function readFixture(): Promise<{ variant: Variant; flippedAt: string }> {
   const html = await response.text();
   const match = /<p id="price" data-variant="(base|raised)" data-flipped-at="([^"]*)"/.exec(html);
   if (match === null) {
-    throw new Error("the fixture Worker serves no #price marker: 0509-fixture-site is not deployed with the J7 variant");
+    throw new Error(
+      "the fixture Worker serves no #price marker: 0509-fixture-site is not deployed with the J7 variant",
+    );
   }
   return { variant: match[1] as Variant, flippedAt: match[2] };
 }
@@ -79,10 +78,7 @@ test("J7 a fixture price flip reaches Alerts as a before-and-after mark @own-sig
 
   const { variant, flippedAt } = await readFixture();
   const caught = flippedAt !== "" && Date.parse(flippedAt) < lastCompletedTick(Date.now());
-  test.skip(
-    flippedAt !== "" && !caught,
-    `J7: awaiting the first site sweep after the flip at ${flippedAt}`,
-  );
+  test.skip(flippedAt !== "" && !caught, `J7: awaiting the first site sweep after the flip at ${flippedAt}`);
 
   const watched = watchConsole(page);
   await signInWithMagicLink(page, FIXTURE_ACCOUNTS.j7.email, requireInboxToken(), /\/(onboarding|app)/);

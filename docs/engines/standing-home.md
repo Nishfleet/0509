@@ -26,11 +26,11 @@ workspace       …, timezone TEXT NOT NULL DEFAULT 'UTC',
 Four consequences, all load-bearing:
 
 1. **`UNIQUE (workspace_id, entity_id, week_start_at)`** makes a rollover idempotent by construction. A re-run is an upsert, not a duplicate. This is what lets the rollover be retried safely by a Workflow.
-2. **`rank` and `movement` are nullable.** "New this week" is therefore not a flag — it is `movement IS NULL` *and* the absence of a prior-week row. The contract's "a brand turned ON this week shows 'new'" is derivable, so no column is added.
+2. **`rank` and `movement` are nullable.** "New this week" is therefore not a flag — it is `movement IS NULL` _and_ the absence of a prior-week row. The contract's "a brand turned ON this week shows 'new'" is derivable, so no column is added.
 3. **`scoring_weight` is versioned by `effective_from`.** The contract says "weights live in one config table, not in code" and the schema goes further: changing a weight does not rewrite history, because a past week's score was computed under the weights effective then. A recomputation of an old week must read the weights as of that week or it will silently disagree with the email already sent.
-4. **The week anchor is `workspace.timezone` + `brief_weekday` + `brief_hour`**, stored per workspace. The schema comment in `0001_rebuild.sql` says it outright: *"rollover is per-workspace and moves across DST"*. That is the fork in §2.
+4. **The week anchor is `workspace.timezone` + `brief_weekday` + `brief_hour`**, stored per workspace. The schema comment in `0001_rebuild.sql` says it outright: _"rollover is per-workspace and moves across DST"_. That is the fork in §2.
 
-**One runtime fact that bites this engine specifically.** `docs/REBUILD-STACK.md` §5.9 records workerd's embedded tzdata lagging IANA — `Africa/Casablanca` still resolving to UTC+01:00 after the 2026-09-20 transition (workerd#7256), with the reporter's summary: *"The failure is silent. `Date` instants stay correct — only the wall-clock label is wrong."* A rollover anchored on a **wall-clock local hour** is exactly the thing that breaks. Mitigation is in §2 and §7, not left to be discovered.
+**One runtime fact that bites this engine specifically.** `docs/REBUILD-STACK.md` §5.9 records workerd's embedded tzdata lagging IANA — `Africa/Casablanca` still resolving to UTC+01:00 after the 2026-09-20 transition (workerd#7256), with the reporter's summary: _"The failure is silent. `Date` instants stay correct — only the wall-clock label is wrong."_ A rollover anchored on a **wall-clock local hour** is exactly the thing that breaks. Mitigation is in §2 and §7, not left to be discovered.
 
 ---
 
@@ -38,17 +38,17 @@ Four consequences, all load-bearing:
 
 From `docs/REBUILD-STANDING.md`, over the trailing 7 days, per ON brand:
 
-| `scoring_weight.key` | Counts | Weight | Source of the count |
-|---|---|---|---|
-| `mention_matters` | D6 `p >= 0.9` | 3 | `signal WHERE kind='mention'`, joined to its D6 `jev_verdict` |
-| `mention_normal` | D5 kept, D6 between | 1 | same |
-| `site_change_noteworthy` | D3 `p >= 0.9` | 4 | `signal WHERE kind='change'` |
-| `ad_new_creative` | first seen this week | 2 | `signal WHERE kind='ad'`, `published_at` inside the window |
-| `ad_copy_change` | — | 3 | `signal WHERE kind='ad'` with `aspect` set |
-| `hiring_new_role` | — | 1 | `signal WHERE kind='hiring'` |
-| `reliability_multiplier` | per item, 0.5–1.0 | — | `source.reliability` |
+| `scoring_weight.key`     | Counts               | Weight | Source of the count                                           |
+| ------------------------ | -------------------- | ------ | ------------------------------------------------------------- |
+| `mention_matters`        | D6 `p >= 0.9`        | 3      | `signal WHERE kind='mention'`, joined to its D6 `jev_verdict` |
+| `mention_normal`         | D5 kept, D6 between  | 1      | same                                                          |
+| `site_change_noteworthy` | D3 `p >= 0.9`        | 4      | `signal WHERE kind='change'`                                  |
+| `ad_new_creative`        | first seen this week | 2      | `signal WHERE kind='ad'`, `published_at` inside the window    |
+| `ad_copy_change`         | —                    | 3      | `signal WHERE kind='ad'` with `aspect` set                    |
+| `hiring_new_role`        | —                    | 1      | `signal WHERE kind='hiring'`                                  |
+| `reliability_multiplier` | per item, 0.5–1.0    | —      | `source.reliability`                                          |
 
-**Every input is ground truth and the score is code, not Jev.** The contract is explicit and it is the right call: a sum of counted rows times constants is arithmetic, and `docs/REBUILD-JEV.md` bars Jev from "anything with a ground truth the code can read: HTTP status, hash equality, date math, counts." Jev's only job in this engine is **D4 `read_this_first`**, which decides *what to say about* the standing, never the standing itself.
+**Every input is ground truth and the score is code, not Jev.** The contract is explicit and it is the right call: a sum of counted rows times constants is arithmetic, and `docs/REBUILD-JEV.md` bars Jev from "anything with a ground truth the code can read: HTTP status, hash equality, date math, counts." Jev's only job in this engine is **D4 `read_this_first`**, which decides _what to say about_ the standing, never the standing itself.
 
 The `reliability` multiplier maps from the registry column, and the mapping is itself a `scoring_weight` row per value — `reliability_official_api` = 1.0, `reliability_rss` = 0.9, `reliability_scraped_page` = 0.6, `reliability_best_effort` = 0.5. Put in code, these become the constants the contract just finished banning.
 
@@ -71,10 +71,10 @@ A single `scheduled` handler runs hourly. Each hour it selects the workspaces wh
 
 At onboarding, each workspace gets a `StandingWorkflow` instance. It computes its next rollover instant **once**, sleeps until it with `step.sleepUntil`, rolls the week over, writes the `standing` rows, hands off to the brief, then starts its successor instance and completes.
 
-- `docs/REBUILD-STACK.md` §4.1: *"A Workflow that is waiting on a response to an API call, paused as a result of calling `step.sleep`, or otherwise idle, does not incur CPU time."* Sleeping is free. Max sleep is 365 days; 50,000 concurrent instances on Paid. One sleeping instance per workspace is inside the platform's envelope by three orders of magnitude at our scale.
+- `docs/REBUILD-STACK.md` §4.1: _"A Workflow that is waiting on a response to an API call, paused as a result of calling `step.sleep`, or otherwise idle, does not incur CPU time."_ Sleeping is free. Max sleep is 365 days; 50,000 concurrent instances on Paid. One sleeping instance per workspace is inside the platform's envelope by three orders of magnitude at our scale.
 - The rollover instant is computed **once per week, in advance**, from the user's zone — so the DST and tzdata questions are answered once, at a moment when a wrong answer can be caught, rather than re-answered every hour in a query.
 - Durable by construction: the Workflow's own retry semantics cover a failed rollover. No missed-hour hole.
-- **Cost:** Workflow *steps* are the billing unit — 500,000 included, then $0.80/100k. A weekly instance with a handful of steps is ~5 steps × 100 workspaces × 4.3 weeks = ~2,150 steps/month. Negligible.
+- **Cost:** Workflow _steps_ are the billing unit — 500,000 included, then $0.80/100k. A weekly instance with a handful of steps is ~5 steps × 100 workspaces × 4.3 weeks = ~2,150 steps/month. Negligible.
 - **Weakness, and it is real:** 100 long-lived sleeping instances are 100 things that can be orphaned. Changing a user's brief time must cancel and recreate, or the old instance fires at the old time. And the 10,000-step-per-instance cap means an instance must not loop forever — it must spawn a successor and complete.
 - **Weakness:** completed Workflow state is retained 30 days, so the audit trail for "did week N roll over" cannot live only in the Workflow log. It has to be the `standing` row's `computed_at`.
 
@@ -84,10 +84,10 @@ At onboarding, each workspace gets a `StandingWorkflow` instance. It computes it
 
 They are not really competing, and treating them as one decision is what makes this hard. There are two distinct timed jobs hiding under "the Workflow that closes the day":
 
-- **The nightly score refresh** keeps Home fresh. It is idempotent, approximate-in-timing, and global. Its failure mode is "Home is a few hours stale", which is recoverable and invisible. **Candidate A's shape is right**: one cron, `0 3 * * *` UTC, recompute the current in-flight week's score for every ON brand in every workspace. No per-workspace timing needed, because this writes the *current* week's row, which has no boundary semantics.
+- **The nightly score refresh** keeps Home fresh. It is idempotent, approximate-in-timing, and global. Its failure mode is "Home is a few hours stale", which is recoverable and invisible. **Candidate A's shape is right**: one cron, `0 3 * * *` UTC, recompute the current in-flight week's score for every ON brand in every workspace. No per-workspace timing needed, because this writes the _current_ week's row, which has no boundary semantics.
 - **The weekly rollover** is the moment the week closes, the rank freezes, movement is computed, and the brief is generated from exactly those rows. Its failure mode is "the email and Home disagree", which is the specific thing the contract says must never happen, and a skipped one is unrecoverable without a manual backfill. **Candidate B's shape is right**: a per-workspace durable instant.
 
-**Grafted from A into B:** a **reconciliation pass on the nightly cron.** Every night the global cron checks for any workspace whose most recent `standing.week_start_at` is more than 8 days behind its current local week, and enqueues a catch-up rollover. This is the orphaned-instance answer: if a Workflow instance is lost, changed, or never respawned, the cron notices within 24 hours and repairs it. Candidate A's real virtue was that one global job is easy to verify; keeping it as the *watchdog* rather than the mechanism preserves that without paying its DST risk on the critical path.
+**Grafted from A into B:** a **reconciliation pass on the nightly cron.** Every night the global cron checks for any workspace whose most recent `standing.week_start_at` is more than 8 days behind its current local week, and enqueues a catch-up rollover. This is the orphaned-instance answer: if a Workflow instance is lost, changed, or never respawned, the cron notices within 24 hours and repairs it. Candidate A's real virtue was that one global job is easy to verify; keeping it as the _watchdog_ rather than the mechanism preserves that without paying its DST risk on the critical path.
 
 **Rejected from A, recorded:** computing the rollover set with an hourly timezone-window query. The number to beat is zero skipped weeks; the hourly-window approach cannot prove that property, and workerd's stale tzdata (workerd#7256) means it would fail silently in exactly the zones where a wall-clock label is wrong.
 
@@ -127,7 +127,7 @@ One loader, one D1 round trip per panel:
 - **Read this first** — up to three `signal` rows the last D4 ranked, with their `evidence_url` screenshots.
 - **Freshness** — the last `snapshot.fetched_at` per source, so a degraded source (engine 5 §7) says so here rather than masquerading as a quiet week.
 
-**A brand with zero signals ranks last, shown with a dash, never a score of zero** — a `standing` row is still written with `score = 0`, and the *renderer* shows the dash. Suppressing the row would break the four-week chart's continuity.
+**A brand with zero signals ranks last, shown with a dash, never a score of zero** — a `standing` row is still written with `score = 0`, and the _renderer_ shows the dash. Suppressing the row would break the four-week chart's continuity.
 
 ---
 
@@ -140,11 +140,11 @@ One loader, one D1 round trip per panel:
 ]
 ```
 
-| Job | Mechanism | Concurrency | Why that number |
-|---|---|---|---|
-| Nightly score refresh | cron `0 3 * * *` → D1 `batch()` per workspace | **serial over workspaces, one batch each** | It is pure D1. At 100 brands across ~25 workspaces this is ~25 batches; the 15-minute cron wall clock is not close to binding. Fanning out to a queue would add three Queue operations per workspace to save nothing. |
-| Weekly rollover | one `StandingRolloverWorkflow` instance per workspace | **1 per workspace, ~25 concurrent worst case** | Against the platform's 50,000 concurrent instances. Even at 1,000 workspaces this is 2% of the limit. |
-| Reconciliation | the same nightly cron | serial | Reads `MAX(week_start_at)` per workspace; enqueues a catch-up rollover for any more than 8 days stale. |
+| Job                   | Mechanism                                             | Concurrency                                    | Why that number                                                                                                                                                                                                       |
+| --------------------- | ----------------------------------------------------- | ---------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Nightly score refresh | cron `0 3 * * *` → D1 `batch()` per workspace         | **serial over workspaces, one batch each**     | It is pure D1. At 100 brands across ~25 workspaces this is ~25 batches; the 15-minute cron wall clock is not close to binding. Fanning out to a queue would add three Queue operations per workspace to save nothing. |
+| Weekly rollover       | one `StandingRolloverWorkflow` instance per workspace | **1 per workspace, ~25 concurrent worst case** | Against the platform's 50,000 concurrent instances. Even at 1,000 workspaces this is 2% of the limit.                                                                                                                 |
+| Reconciliation        | the same nightly cron                                 | serial                                         | Reads `MAX(week_start_at)` per workspace; enqueues a catch-up rollover for any more than 8 days stale.                                                                                                                |
 
 - **`0 3 * * *`** is deliberately not `0 0`, `0 2` or `17 2` — it sits after engine 5's mentions sweep (`17 2`) so the nightly score sees the night's mentions rather than yesterday's.
 - **Step budget per rollover instance: 5.** (1) final score, (2) freeze rank + movement, (3) D4 batch, (4) write digest, (5) spawn successor. Steps are the billing unit and the 1 MiB output cap is per step — a step returns ids and numbers, never rows.
@@ -157,8 +157,8 @@ One loader, one D1 round trip per panel:
 
 Only one decision belongs to this engine.
 
-| Id | When | Context-pack fields actually needed | Action |
-|---|---|---|---|
+| Id                       | When                                                        | Context-pack fields actually needed                                                                                                                                                          | Action                                                                                                                                                   |
+| ------------------------ | ----------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **D4** `read_this_first` | once per item per week at rollover, and on demand from Home | `self`, `subject`, `competitor_set` (so "who moved" is relative to the field), `item` (only items that already passed D3 or D6), `history_30d`, `user_memory` (prior "not noteworthy" marks) | Noul per item; code takes `p >= 0.5`, orders by the `Score importance` 0..10, shows the top three. None ⇒ "quiet week" with the count of items behind it |
 
 - **D4 never sees raw data.** Its input is the post-judgment set. Feeding it `signal` rows that failed D3/D6 would re-litigate decisions already made and is forbidden by the contract.
@@ -174,46 +174,46 @@ Only one decision belongs to this engine.
 
 ### Per 1,000 workspace-weeks
 
-| Resource | Units | Rate | Cost |
-|---|---|---|---|
-| D1 rows written (`standing`, ~6 ON brands/workspace, written nightly then frozen) | ~48,000 | 50M/mo included, then $1.00/M | $0.00 |
-| D1 rows written (`digest`, 1 per rollover) | 1,000 | same | $0.00 |
-| D1 rows read (the 7-day counting queries) | ~2–5M | 25 billion/mo included | $0.00 |
-| Workflow steps (5 per rollover + ~2 D4 batches) | ~7,000 | 500k/mo included, then $0.80/100k | $0.00 |
-| Workers requests (cron + Home loads) | ~10,000 | 10M/mo included | $0.00 |
-| **Browser Rendering** | **0** | — | **$0.00** |
-| Jev D4 calls | ~20,000 | seat cost | budgeted, batched 10/step |
+| Resource                                                                          | Units   | Rate                              | Cost                      |
+| --------------------------------------------------------------------------------- | ------- | --------------------------------- | ------------------------- |
+| D1 rows written (`standing`, ~6 ON brands/workspace, written nightly then frozen) | ~48,000 | 50M/mo included, then $1.00/M     | $0.00                     |
+| D1 rows written (`digest`, 1 per rollover)                                        | 1,000   | same                              | $0.00                     |
+| D1 rows read (the 7-day counting queries)                                         | ~2–5M   | 25 billion/mo included            | $0.00                     |
+| Workflow steps (5 per rollover + ~2 D4 batches)                                   | ~7,000  | 500k/mo included, then $0.80/100k | $0.00                     |
+| Workers requests (cron + Home loads)                                              | ~10,000 | 10M/mo included                   | $0.00                     |
+| **Browser Rendering**                                                             | **0**   | —                                 | **$0.00**                 |
+| Jev D4 calls                                                                      | ~20,000 | seat cost                         | budgeted, batched 10/step |
 
 ### Monthly at 100 brands
 
 100 brands across ~25 workspaces (4 brands each, per `docs/REBUILD-DONE.md` J12's "at least four ON brands"), 4.3 weeks:
 
-| Resource | Monthly | Against included | Cost |
-|---|---|---|---|
-| `standing` rows written | 100 brands × 30 nights = **3,000** | 0.006% of 50M | $0.00 |
-| `digest` rows | ~108 | negligible | $0.00 |
-| D1 rows read | tens of millions | ≤0.2% of 25 billion | $0.00 |
-| Workflow steps | ~750 | 0.15% of 500k | $0.00 |
-| **Browser Rendering** | **0 browser-seconds** | — | **$0.00** |
-| **Cloudflare total** | | | **$0.00** |
+| Resource                | Monthly                            | Against included    | Cost      |
+| ----------------------- | ---------------------------------- | ------------------- | --------- |
+| `standing` rows written | 100 brands × 30 nights = **3,000** | 0.006% of 50M       | $0.00     |
+| `digest` rows           | ~108                               | negligible          | $0.00     |
+| D1 rows read            | tens of millions                   | ≤0.2% of 25 billion | $0.00     |
+| Workflow steps          | ~750                               | 0.15% of 500k       | $0.00     |
+| **Browser Rendering**   | **0 browser-seconds**              | —                   | **$0.00** |
+| **Cloudflare total**    |                                    |                     | **$0.00** |
 
-**The number worth watching is D1 rows *read*, not written.** The 7-day counting query touches every `signal` row in the window for every brand, every night. `docs/REBUILD-STACK.md` §4.6 is blunt: *"Billing is on rows scanned, not returned, so an unindexed `WHERE` bills every row it touched."* At our scale the included 25 billion is unreachable, but the index on `signal (workspace_id, entity_id, observed_at)` is what keeps it that way, and its absence would be invisible until the bill. **A packet below makes the query plan a proof artifact, not an assumption.**
+**The number worth watching is D1 rows _read_, not written.** The 7-day counting query touches every `signal` row in the window for every brand, every night. `docs/REBUILD-STACK.md` §4.6 is blunt: _"Billing is on rows scanned, not returned, so an unindexed `WHERE` bills every row it touched."_ At our scale the included 25 billion is unreachable, but the index on `signal (workspace_id, entity_id, observed_at)` is what keeps it that way, and its absence would be invisible until the bill. **A packet below makes the query plan a proof artifact, not an assumption.**
 
 ---
 
 ## 7. Failure modes and the degraded UI state
 
-| Failure | Detection | Degraded UI state |
-|---|---|---|
-| **A rollover is missed** (instance orphaned, deploy ate it) | nightly reconciliation finds `MAX(week_start_at)` more than 8 days stale | catch-up rollover enqueued automatically. Home's four-week chart shows the gap explicitly as a break in the line, never as a zero — a zero is a real score and a gap is not. |
-| **The brief and Home disagree** | `digest.payload_json`'s rank differs from the `standing` row | Home is authoritative and says "updated since your brief". The `standing` row is never rewritten to match the email; the email was true when sent. |
-| Brief time changed while an instance sleeps | the pending instance is cancelled on the settings write | if cancellation fails, the stale instance fires, the upsert is idempotent, and the correct instance fires too. Double-fire is harmless by `UNIQUE`; this is why that constraint is load-bearing. |
-| **Workerd tzdata stale for a zone** (workerd#7256) | not detectable at runtime — it is silent by the issue's own description | the brief may arrive one hour off for one week in a recently transitioned zone. Instants stay correct so no week is skipped. Settings shows the resolved next-brief time as an absolute local string so the user can see it is wrong and correct it. |
-| Fewer than 2 ON brands | count | "add a competitor to see where you stand". No ranking, no empty chart, no "#1 of 1". |
-| A source is degraded (engine 5) | canary zero | Home must **not** say "quiet week". It says which sources are not answering and when they last landed. A quiet week claim while blind is the product lying. |
-| D4 returns nothing | no verdict above 0.5 | why-line falls back to the counts: "Quiet week: 61 mentions checked, 2 site changes, no new ads." This is a legitimate state, not an error. |
-| Jev budget exhausted at rollover | verdict absent | read-this-first shows "still reading this week's items", the brief still sends with the counts, and D4 retries next tick. The brief is **never skipped silently** — delivery contract rule. |
-| Weights changed | `scoring_weight.effective_from` | past weeks keep their scores. A recomputation that reads current weights for an old week is a **bug**, and a test pins it. |
+| Failure                                                     | Detection                                                                | Degraded UI state                                                                                                                                                                                                                                    |
+| ----------------------------------------------------------- | ------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **A rollover is missed** (instance orphaned, deploy ate it) | nightly reconciliation finds `MAX(week_start_at)` more than 8 days stale | catch-up rollover enqueued automatically. Home's four-week chart shows the gap explicitly as a break in the line, never as a zero — a zero is a real score and a gap is not.                                                                         |
+| **The brief and Home disagree**                             | `digest.payload_json`'s rank differs from the `standing` row             | Home is authoritative and says "updated since your brief". The `standing` row is never rewritten to match the email; the email was true when sent.                                                                                                   |
+| Brief time changed while an instance sleeps                 | the pending instance is cancelled on the settings write                  | if cancellation fails, the stale instance fires, the upsert is idempotent, and the correct instance fires too. Double-fire is harmless by `UNIQUE`; this is why that constraint is load-bearing.                                                     |
+| **Workerd tzdata stale for a zone** (workerd#7256)          | not detectable at runtime — it is silent by the issue's own description  | the brief may arrive one hour off for one week in a recently transitioned zone. Instants stay correct so no week is skipped. Settings shows the resolved next-brief time as an absolute local string so the user can see it is wrong and correct it. |
+| Fewer than 2 ON brands                                      | count                                                                    | "add a competitor to see where you stand". No ranking, no empty chart, no "#1 of 1".                                                                                                                                                                 |
+| A source is degraded (engine 5)                             | canary zero                                                              | Home must **not** say "quiet week". It says which sources are not answering and when they last landed. A quiet week claim while blind is the product lying.                                                                                          |
+| D4 returns nothing                                          | no verdict above 0.5                                                     | why-line falls back to the counts: "Quiet week: 61 mentions checked, 2 site changes, no new ads." This is a legitimate state, not an error.                                                                                                          |
+| Jev budget exhausted at rollover                            | verdict absent                                                           | read-this-first shows "still reading this week's items", the brief still sends with the counts, and D4 retries next tick. The brief is **never skipped silently** — delivery contract rule.                                                          |
+| Weights changed                                             | `scoring_weight.effective_from`                                          | past weeks keep their scores. A recomputation that reads current weights for an old week is a **bug**, and a test pins it.                                                                                                                           |
 
 ---
 

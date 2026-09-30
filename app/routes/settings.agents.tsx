@@ -4,12 +4,7 @@ import { Link } from "react-router";
 
 import { PAGE, PageHeading } from "../components/page-heading";
 import { AgentKeys, ConnectedApps, ConnectDetails } from "../components/agent-settings";
-import {
-  createAgentKey,
-  disconnectApp,
-  readAgentAccess,
-  revokeAgentKey,
-} from "../lib/agent/access.server";
+import { createAgentKey, disconnectApp, readAgentAccess, revokeAgentKey } from "../lib/agent/access.server";
 import { oauthHelpersContext } from "../lib/agent/context.server";
 import { MCP_PATH } from "../lib/agent/paths";
 import { requireSession } from "../lib/require-session.server";

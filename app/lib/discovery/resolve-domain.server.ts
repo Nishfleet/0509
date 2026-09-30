@@ -25,10 +25,7 @@ const wikidataSearchSchema = z.object({
 });
 
 const wikidataEntitiesSchema = z.object({
-  entities: z.record(
-    z.string(),
-    z.object({ claims: z.record(z.string(), z.array(z.unknown())) }),
-  ),
+  entities: z.record(z.string(), z.object({ claims: z.record(z.string(), z.array(z.unknown())) })),
 });
 
 const p856ClaimSchema = z.object({
@@ -36,11 +33,18 @@ const p856ClaimSchema = z.object({
 });
 
 function normaliseName(s: string): string {
-  return s.normalize("NFKC").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, "");
+  return s
+    .normalize("NFKC")
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, "");
 }
 
 function slugOf(s: string): string {
-  return s.normalize("NFKD").replace(/\p{M}/gu, "").toLowerCase().replace(/[^a-z0-9]+/g, "");
+  return s
+    .normalize("NFKD")
+    .replace(/\p{M}/gu, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "");
 }
 
 function logLookupFailure(step: "wikidata" | "slug", url: string, error: unknown): void {
@@ -83,8 +87,7 @@ async function wikidataDomain(name: string): Promise<string | null> {
 
   const entities = wikidataEntitiesSchema.safeParse(
     await wikidataGet(
-      "https://www.wikidata.org/w/api.php?action=wbgetentities&format=json&props=claims&ids=" +
-        encodeURIComponent(id),
+      "https://www.wikidata.org/w/api.php?action=wbgetentities&format=json&props=claims&ids=" + encodeURIComponent(id),
     ),
   );
   if (!entities.success) return null;

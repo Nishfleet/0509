@@ -1,6 +1,14 @@
 import { describe, expect, it } from "vitest";
 
-import { COVERAGE, FEATURES, LIVE_COVERAGE, WATCHED_NOUNS, WATCHED_ORIGINS, isLive, joinList } from "../../app/lib/coverage";
+import {
+  COVERAGE,
+  FEATURES,
+  LIVE_COVERAGE,
+  WATCHED_NOUNS,
+  WATCHED_ORIGINS,
+  isLive,
+  joinList,
+} from "../../app/lib/coverage";
 import { FAQ } from "../../app/lib/faq";
 import { llmsTxt } from "../../app/lib/public-routes";
 import { softwareApplicationJsonLd } from "../../app/lib/structured-data";

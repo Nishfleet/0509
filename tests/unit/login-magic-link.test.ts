@@ -18,11 +18,7 @@ vi.mock("../../app/lib/auth.server", () => ({
 
 import { action } from "../../app/routes/login";
 
-function formRequest(
-  fields: Record<string, string>,
-  headers?: HeadersInit,
-  url = "https://0509.io/login",
-): Request {
+function formRequest(fields: Record<string, string>, headers?: HeadersInit, url = "https://0509.io/login"): Request {
   const form = new FormData();
   for (const [key, value] of Object.entries(fields)) form.set(key, value);
   return new Request(url, { method: "POST", headers, body: form });
@@ -127,10 +123,10 @@ describe("login magic-link action", () => {
     const logged = vi.spyOn(console, "error").mockImplementation(() => undefined);
     try {
       handler.mockResolvedValue(new Response("account daily sending quota exceeded", { status: 500 }));
-      const result = await action({ request: formRequest({ email: "person@0509.io", "cf-turnstile-response": "token-1" }) });
-      expect(result).toEqual(
-        data({ error: "We couldn't send the link. Try again in a minute." }, { status: 503 }),
-      );
+      const result = await action({
+        request: formRequest({ email: "person@0509.io", "cf-turnstile-response": "token-1" }),
+      });
+      expect(result).toEqual(data({ error: "We couldn't send the link. Try again in a minute." }, { status: 503 }));
       expect(result).not.toHaveProperty("sent");
       const text = logged.mock.calls.map((call) => String(call[0])).join("\n");
       expect(text).toContain("login.magic_link_send_failed");
@@ -168,7 +164,9 @@ describe("login magic-link action", () => {
 
   it("names the rate limit when the handler is too busy", async () => {
     handler.mockResolvedValue(new Response("Too many sign-in links. Wait a minute and try again.", { status: 429 }));
-    const result = await action({ request: formRequest({ email: "person@0509.io", "cf-turnstile-response": "token-1" }) });
+    const result = await action({
+      request: formRequest({ email: "person@0509.io", "cf-turnstile-response": "token-1" }),
+    });
     expect(result).toEqual({ error: "Too many sign-in links. Wait a minute and try again." });
   });
 });

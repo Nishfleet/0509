@@ -10,15 +10,11 @@ vi.mock("../../app/lib/verify-delivery-address.server", () => ({
 import VerifyAddress, { action, headers, meta } from "../../app/routes/v.$token";
 
 function renderPage(confirmed: boolean): string {
-  const Stub = createRoutesStub([
-    { id: "routes/v.$token", path: "/v/:token", Component: VerifyAddress },
-  ]);
+  const Stub = createRoutesStub([{ id: "routes/v.$token", path: "/v/:token", Component: VerifyAddress }]);
   return renderToStaticMarkup(
     createElement(Stub, {
       initialEntries: ["/v/t"],
-      hydrationData: confirmed
-        ? { actionData: { "routes/v.$token": { confirmed: true } } }
-        : {},
+      hydrationData: confirmed ? { actionData: { "routes/v.$token": { confirmed: true } } } : {},
     }),
   );
 }

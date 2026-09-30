@@ -42,9 +42,7 @@ const countRow = z.object({
 
 const countRows = z.tuple([countRow]);
 
-const standingRows = z.array(
-  z.object({ rank: z.number().int(), movement: z.number().int().nullable() }),
-);
+const standingRows = z.array(z.object({ rank: z.number().int(), movement: z.number().int().nullable() }));
 
 const sourceKind = z.enum(["ads", "mentions", "site", "hiring"]);
 
@@ -57,23 +55,12 @@ const coverageRows = z.array(
   }),
 );
 
-export async function readCompetitorSnapshot(
-  workspaceId: string,
-  entityId: string,
-  now: Date,
-): Promise<SnapshotInput> {
+export async function readCompetitorSnapshot(workspaceId: string, entityId: string, now: Date): Promise<SnapshotInput> {
   const since = daysBefore(now, 7);
   const until = now.toISOString();
 
   const [countsResult, standingResult, coverageResult] = await env.DB.batch([
-    env.DB.prepare(SELECT_COMPETITOR_COUNTS).bind(
-      workspaceId,
-      entityId,
-      since,
-      until,
-      D6_QUESTION_ID,
-      D3_QUESTION_ID,
-    ),
+    env.DB.prepare(SELECT_COMPETITOR_COUNTS).bind(workspaceId, entityId, since, until, D6_QUESTION_ID, D3_QUESTION_ID),
     env.DB.prepare(SELECT_COMPETITOR_STANDING).bind(workspaceId, entityId),
     env.DB.prepare(SELECT_COMPETITOR_COVERAGE).bind(workspaceId, entityId, since, until),
   ]);
@@ -83,10 +70,7 @@ export async function readCompetitorSnapshot(
   const sources = coverageRows.parse(coverageResult.results);
 
   return {
-    standing:
-      standing === undefined
-        ? null
-        : { rank: standing.rank, movement: standing.movement },
+    standing: standing === undefined ? null : { rank: standing.rank, movement: standing.movement },
     counts: {
       newCreatives: counts.new_creatives,
       copyChanges: counts.copy_changes,

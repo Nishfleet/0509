@@ -8,12 +8,7 @@ const MAX_BODY_BYTES = 5_000_000;
 
 export type Transport = "fetch" | "browser";
 
-export type EscalationReason =
-  | "status"
-  | "challenge"
-  | "thin-text"
-  | "timeout"
-  | "learned";
+export type EscalationReason = "status" | "challenge" | "thin-text" | "timeout" | "learned";
 
 export interface ReadUrlOptions {
   startWith?: Transport;
@@ -117,17 +112,15 @@ function readField(value: unknown, key: string): unknown {
   return (value as Record<string, unknown>)[key];
 }
 
-function logEscalation(
-  url: string,
-  browserMsUsed: number | null,
-  reason: EscalationReason,
-) {
-  console.log(JSON.stringify({
-    event: "browser-escalation",
-    url,
-    browserMsUsed,
-    reason,
-  }));
+function logEscalation(url: string, browserMsUsed: number | null, reason: EscalationReason) {
+  console.log(
+    JSON.stringify({
+      event: "browser-escalation",
+      url,
+      browserMsUsed,
+      reason,
+    }),
+  );
 }
 
 function deferredByBudget(reason: EscalationReason): ReadUrlFailure {
@@ -158,10 +151,7 @@ async function cappedText(res: Response): Promise<string> {
   return new TextDecoder().decode(bytes);
 }
 
-export async function readUrl(
-  url: string,
-  options: ReadUrlOptions = {},
-): Promise<ReadUrlResult> {
+export async function readUrl(url: string, options: ReadUrlOptions = {}): Promise<ReadUrlResult> {
   const started = Date.now();
 
   let target: URL;
@@ -181,11 +171,13 @@ export async function readUrl(
       return deferredByBudget("learned");
     }
     const learned = await escalate(url, started, "learned");
-    return learned.result ?? {
-      ok: false,
-      reason: "escalation-failed",
-      detail: `learned browser transport; ${learned.cause}`,
-    };
+    return (
+      learned.result ?? {
+        ok: false,
+        reason: "escalation-failed",
+        detail: `learned browser transport; ${learned.cause}`,
+      }
+    );
   }
 
   let fetchStatus: number;
@@ -209,11 +201,13 @@ export async function readUrl(
       return deferredByBudget("timeout");
     }
     const escalation = await escalate(url, started, "timeout");
-    return escalation.result ?? {
-      ok: false,
-      reason: "escalation-failed",
-      detail: `${detail}; ${escalation.cause}`,
-    };
+    return (
+      escalation.result ?? {
+        ok: false,
+        reason: "escalation-failed",
+        detail: `${detail}; ${escalation.cause}`,
+      }
+    );
   }
 
   const refused = await refusalReason(fetchStatus, fetchHtml);

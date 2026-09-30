@@ -1,10 +1,7 @@
 import { env } from "cloudflare:test";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import {
-  findBoard,
-  planHiringSweep,
-} from "../../../app/lib/hiring/sweep.server";
+import { findBoard, planHiringSweep } from "../../../app/lib/hiring/sweep.server";
 
 const PAD =
   "Every plan includes unlimited projects, priority support, single sign-on, audit logs, and a named account manager who answers within one business day, with onboarding help for your whole team.";
@@ -26,7 +23,9 @@ const seedEntity = (id: string, domain: string, state: "on" | "off") =>
     .run();
 
 const listWatches = async () =>
-  env.DB.prepare("SELECT id, entity_id, source_id, target_key FROM watch WHERE entity_id IN ('ent-rival','ent-paused') ORDER BY target_key, id").all<{
+  env.DB.prepare(
+    "SELECT id, entity_id, source_id, target_key FROM watch WHERE entity_id IN ('ent-rival','ent-paused') ORDER BY target_key, id",
+  ).all<{
     id: string;
     entity_id: string;
     source_id: string;

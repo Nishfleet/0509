@@ -70,7 +70,12 @@ export default defineConfig({
     ...(process.env.LHCI_TEARDOWN ? [{ name: "lhci-teardown", testMatch: /lhci-teardown\.setup\.ts/ }] : []),
     ...(process.env.CF_ACCESS_CLIENT_ID
       ? [
-          { name: "onboarded-setup", testMatch: /onboarded\.setup\.ts/, dependencies: ["setup"], teardown: "onboarded-teardown" },
+          {
+            name: "onboarded-setup",
+            testMatch: /onboarded\.setup\.ts/,
+            dependencies: ["setup"],
+            teardown: "onboarded-teardown",
+          },
           { name: "onboarded-teardown", testMatch: /onboarded-teardown\.setup\.ts/ },
         ]
       : []),

@@ -10,15 +10,15 @@ Standing is the rank of every ON brand in the workspace (you included) by **atte
 
 For each ON brand, over the trailing 7 days, summed:
 
-| Signal | Count | Weight | Why |
-|---|---|---|---|
-| Mentions that matter (D6 p >= 0.9) | each | 3 | The core of "across the internet" |
-| Mentions, normal (D5 kept, D6 between) | each | 1 | Volume still counts, less |
-| Noteworthy site changes (D3 p >= 0.9) | each | 4 | A brand that moves is a brand to watch |
-| New ad creatives first seen this week | each | 2 | Spend is intent |
-| Ad copy or offer changes | each | 3 | The before-and-after marks |
-| Hiring: new roles | each | 1 | Momentum |
-| Source reliability | multiplier per item | 0.5 to 1.0 | Scraped and best-effort sources count less; from the source registry's `reliability` column |
+| Signal                                 | Count               | Weight     | Why                                                                                         |
+| -------------------------------------- | ------------------- | ---------- | ------------------------------------------------------------------------------------------- |
+| Mentions that matter (D6 p >= 0.9)     | each                | 3          | The core of "across the internet"                                                           |
+| Mentions, normal (D5 kept, D6 between) | each                | 1          | Volume still counts, less                                                                   |
+| Noteworthy site changes (D3 p >= 0.9)  | each                | 4          | A brand that moves is a brand to watch                                                      |
+| New ad creatives first seen this week  | each                | 2          | Spend is intent                                                                             |
+| Ad copy or offer changes               | each                | 3          | The before-and-after marks                                                                  |
+| Hiring: new roles                      | each                | 1          | Momentum                                                                                    |
+| Source reliability                     | multiplier per item | 0.5 to 1.0 | Scraped and best-effort sources count less; from the source registry's `reliability` column |
 
 Rank by the score, descending. Ties keep last week's order. Weights live in one config table, not in code, and are shown on the "how this is ranked" sheet.
 

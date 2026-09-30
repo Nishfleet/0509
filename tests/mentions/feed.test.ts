@@ -83,13 +83,7 @@ describe("mentions feed", () => {
       NOW,
     );
     expect(mentions.map((mention) => mention.id)).toEqual(["high", "mid", "low", "unjudged", "blank-reason"]);
-    expect(mentions.map((mention) => mention.treatment)).toEqual([
-      "shown",
-      "possibly",
-      "held",
-      "unreviewed",
-      "shown",
-    ]);
+    expect(mentions.map((mention) => mention.treatment)).toEqual(["shown", "possibly", "held", "unreviewed", "shown"]);
     expect(mentions.map((mention) => mention.sourceName)).toEqual([
       "News mentions",
       "Hacker News mentions",

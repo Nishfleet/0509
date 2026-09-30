@@ -23,8 +23,7 @@ const TOKEN = "integration-token";
 
 const state = () => env.STATE.getByName("fixture.0509.in");
 
-const get = () =>
-  worker.fetch(new Request("https://fixture.0509.in/"), env, createExecutionContext());
+const get = () => worker.fetch(new Request("https://fixture.0509.in/"), env, createExecutionContext());
 
 const flip = (mode: string, token: string | null = TOKEN, method = "POST") =>
   worker.fetch(

@@ -1,11 +1,7 @@
 import { env } from "cloudflare:test";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import {
-  readDiscoveryContext,
-  readRefreshTargets,
-  type EntityOrigin,
-} from "../../../app/lib/data/entity.server";
+import { readDiscoveryContext, readRefreshTargets, type EntityOrigin } from "../../../app/lib/data/entity.server";
 import { readRecentSignals } from "../../../app/lib/data/signal.server";
 import {
   judgeStillCompetitors,
@@ -126,9 +122,7 @@ describe("judgeStillCompetitors", () => {
     );
     const asked = new Set(requests.flatMap((request) => Object.keys(request.questions)));
     expect(asked).toEqual(new Set([STILL_COMPETITOR.id, STILL_COMPETITOR_REASON.id]));
-    const autoState = requests
-      .map((request) => request.state)
-      .find((state) => state.subject.domain === "auto.example");
+    const autoState = requests.map((request) => request.state).find((state) => state.subject.domain === "auto.example");
     expect(autoState).toBeDefined();
     if (autoState === undefined) return;
     expect(autoState.history_30d.map((signal) => signal.observedAt)).toEqual([RECENT_SIGNAL]);

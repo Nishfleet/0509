@@ -2,12 +2,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
-import {
-  CapturePlate,
-  shotSrc,
-  type CapturePlateProps,
-  type CaptureShot,
-} from "../../app/components/capture-plate";
+import { CapturePlate, shotSrc, type CapturePlateProps, type CaptureShot } from "../../app/components/capture-plate";
 
 const BEFORE: CaptureShot = { src: "/before.png", capturedAt: "2026-09-20" };
 const AFTER: CaptureShot = { src: "/after.png", capturedAt: "2026-09-21" };

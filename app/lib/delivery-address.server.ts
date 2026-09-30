@@ -14,8 +14,7 @@ import { readWorkspaceIdForOwner } from "./data/workspace.server";
 import { verifyAddressEmail } from "./verify-address-email";
 
 const INVALID = "Enter an email address, like you@company.com.";
-const SUPPRESSED =
-  'This address unsubscribed from the brief. Tick "Send to it again" and save to resume.';
+const SUPPRESSED = 'This address unsubscribed from the brief. Tick "Send to it again" and save to resume.';
 const NO_WORKSPACE = "Finish setting up first, then choose where the brief goes.";
 const VERIFY_TOKEN_TTL_MS = 24 * 60 * 60 * 1000;
 const SEND_FAILED = "We could not send the confirmation email. Save again to retry.";
@@ -33,11 +32,7 @@ function isUnchangedVerifiedTarget(
   return target !== null && target.target_value === address && target.is_verified === 1;
 }
 
-async function sendVerifyConfirmation(
-  email: SendEmail,
-  workspaceId: string,
-  address: string,
-): Promise<string | null> {
+async function sendVerifyConfirmation(email: SendEmail, workspaceId: string, address: string): Promise<string | null> {
   const token = newVerifyToken();
   const expiresAt = new Date(Date.now() + VERIFY_TOKEN_TTL_MS).toISOString();
   await writeVerifyToken(env.DB, { workspaceId, token, expiresAt });

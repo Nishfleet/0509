@@ -217,9 +217,7 @@ describe("alerts mentions source pills (#4003 4/6)", () => {
     await env.DB.prepare("UPDATE watch SET last_polled_at = ? WHERE id = ?")
       .bind("2026-09-25T09:00:00.000Z", `watch-${COMP}-yt-flag`)
       .run();
-    await env.DB.prepare("UPDATE watch SET last_polled_at = ? WHERE id = ?")
-      .bind(NOW, `watch-${COMP}-yt-ok`)
-      .run();
+    await env.DB.prepare("UPDATE watch SET last_polled_at = ? WHERE id = ?").bind(NOW, `watch-${COMP}-yt-ok`).run();
 
     try {
       const entries = await readWorkspaceMentionSources(WS);
@@ -248,9 +246,7 @@ describe("alerts mentions source pills (#4003 4/6)", () => {
     await env.DB.prepare("UPDATE watch SET last_polled_at = ? WHERE id = ?")
       .bind("2026-09-24T00:00:00.000Z", `watch-${COMP}-yt-flag`)
       .run();
-    await env.DB.prepare("UPDATE watch SET last_polled_at = ? WHERE id = ?")
-      .bind(NOW, `watch-${COMP}-yt-ok`)
-      .run();
+    await env.DB.prepare("UPDATE watch SET last_polled_at = ? WHERE id = ?").bind(NOW, `watch-${COMP}-yt-ok`).run();
     await seedSnapshot(`snap-${COMP}-yt-ok`, `watch-${COMP}-yt-ok`, 4, 1);
 
     try {
