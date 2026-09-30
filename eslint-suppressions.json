@@ -320,14 +320,6 @@
       "count": 1
     }
   },
-  "app/lib/site/publish.server.ts": {
-    "complexity": {
-      "count": 1
-    },
-    "max-lines-per-function": {
-      "count": 1
-    }
-  },
   "app/routes/app.alerts.tsx": {
     "max-lines-per-function": {
       "count": 1
