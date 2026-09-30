@@ -18,8 +18,9 @@ const INSERT_SUBJECT_DECISION = `INSERT INTO user_decision (id, workspace_id, us
 SELECT ?1, ?2, ?3, NULL, NULL, ?4, ?5, ?6
 WHERE EXISTS (SELECT 1 FROM workspace WHERE id = ?2) AND EXISTS (SELECT 1 FROM "user" WHERE id = ?3)`;
 
-const INSERT_FIELD_EDIT =
-  "INSERT INTO user_decision (id, workspace_id, user_id, signal_id, entity_id, verdict, note, decided_at) VALUES (?1, ?2, ?3, NULL, ?4, ?5, ?6, ?7)";
+const INSERT_FIELD_EDIT = `INSERT INTO user_decision (id, workspace_id, user_id, signal_id, entity_id, verdict, note, decided_at)
+SELECT ?1, ?2, ?3, NULL, ?4, ?5, ?6, ?7
+WHERE EXISTS (SELECT 1 FROM workspace WHERE id = ?2) AND EXISTS (SELECT 1 FROM "user" WHERE id = ?3)`;
 
 const SELECT_SUBJECT_DECISION = `SELECT verdict FROM user_decision
 WHERE workspace_id = ?1 AND note = ?2 AND verdict IN ('public_subject:confirmed','public_subject:refused')

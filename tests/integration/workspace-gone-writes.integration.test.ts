@@ -6,7 +6,7 @@
 import { env } from "cloudflare:test";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { insertSubjectDecision, readSubjectDecision } from "../../app/lib/data/user_decision.server";
+import { insertSubjectDecision, insertFieldEdits, readSubjectDecision } from "../../app/lib/data/user_decision.server";
 import { screenPublicSubject } from "../../app/lib/jev/public-subject.server";
 import { screenOnboardingSubject } from "../../app/lib/onboarding-screen.server";
 
@@ -48,8 +48,10 @@ function stubJev(p: number) {
   return run;
 }
 
-async function countRows(table: "jev_verdict" | "user_decision"): Promise<number> {
-  const row = await env.DB.prepare(`SELECT COUNT(*) AS n FROM ${table}`).first<{ n: number }>();
+async function countRows(table: "jev_verdict" | "user_decision", workspaceId: string): Promise<number> {
+  const row = await env.DB.prepare(`SELECT COUNT(*) AS n FROM ${table} WHERE workspace_id = ?`)
+    .bind(workspaceId)
+    .first<{ n: number }>();
   return row?.n ?? 0;
 }
 
@@ -61,7 +63,7 @@ describe("an account deleted mid-request", () => {
   it("records no verdict and raises nothing when the workspace is already gone", async () => {
     const { userId, workspaceId } = await seedWorkspace();
     stubJev(0.95);
-    const before = await countRows("jev_verdict");
+    const before = await countRows("jev_verdict", workspaceId);
 
     await deleteAccount(userId, workspaceId);
 
@@ -74,13 +76,13 @@ describe("an account deleted mid-request", () => {
 
     expect(outcome).toBe("proceed");
     expect(verdict.p).toBe(0.95);
-    expect(await countRows("jev_verdict")).toBe(before);
+    expect(await countRows("jev_verdict", workspaceId)).toBe(before);
   });
 
   it("refuses without a FK failure when the workspace is already gone", async () => {
     const { userId, workspaceId } = await seedWorkspace();
     stubJev(0.05);
-    const before = await countRows("user_decision");
+    const before = await countRows("user_decision", workspaceId);
 
     await deleteAccount(userId, workspaceId);
 
@@ -94,13 +96,13 @@ describe("an account deleted mid-request", () => {
     });
 
     expect(result).toEqual({ kind: "refuse", message: "we track brands and creators, not people" });
-    expect(await countRows("user_decision")).toBe(before);
+    expect(await countRows("user_decision", workspaceId)).toBe(before);
   });
 
   it("confirms without a FK failure when the workspace is already gone", async () => {
     const { userId, workspaceId } = await seedWorkspace();
     stubJev(0.5);
-    const before = await countRows("user_decision");
+    const before = await countRows("user_decision", workspaceId);
 
     await deleteAccount(userId, workspaceId);
 
@@ -114,13 +116,13 @@ describe("an account deleted mid-request", () => {
     });
 
     expect(result).toEqual({ kind: "proceed" });
-    expect(await countRows("user_decision")).toBe(before);
+    expect(await countRows("user_decision", workspaceId)).toBe(before);
   });
 
   it("insertSubjectDecision is a no-op once the workspace is gone", async () => {
     const { userId, workspaceId } = await seedWorkspace();
     await deleteAccount(userId, workspaceId);
-    const before = await countRows("user_decision");
+    const before = await countRows("user_decision", workspaceId);
 
     await insertSubjectDecision({
       workspaceId,
@@ -130,15 +132,33 @@ describe("an account deleted mid-request", () => {
       decidedAt: NOW,
     });
 
-    expect(await countRows("user_decision")).toBe(before);
+    expect(await countRows("user_decision", workspaceId)).toBe(before);
     expect(await readSubjectDecision(workspaceId, "alphaleteathletics.com")).toBeNull();
+  });
+
+  it("insertFieldEdits is a no-op once the workspace is gone", async () => {
+    const { userId, workspaceId } = await seedWorkspace();
+    await deleteAccount(userId, workspaceId);
+    const before = await countRows("user_decision", workspaceId);
+
+    await insertFieldEdits([
+      {
+        workspaceId,
+        userId,
+        entityId: "entity-ws-gone",
+        edit: { field: "name", from: "Alpha", to: "Alphalete" },
+        decidedAt: NOW,
+      },
+    ]);
+
+    expect(await countRows("user_decision", workspaceId)).toBe(before);
   });
 
   it("still writes both rows while the workspace is live", async () => {
     const { userId, workspaceId } = await seedWorkspace();
     stubJev(0.05);
-    const verdicts = await countRows("jev_verdict");
-    const decisions = await countRows("user_decision");
+    const verdicts = await countRows("jev_verdict", workspaceId);
+    const decisions = await countRows("user_decision", workspaceId);
 
     const screened = await screenPublicSubject(
       workspaceId,
@@ -159,8 +179,8 @@ describe("an account deleted mid-request", () => {
 
     expect(result).toEqual({ kind: "refuse", message: "we track brands and creators, not people" });
     // The refusal was recorded, so the same subject is not asked again.
-    expect(await countRows("jev_verdict")).toBe(verdicts + 1);
-    expect(await countRows("user_decision")).toBe(decisions + 1);
+    expect(await countRows("jev_verdict", workspaceId)).toBe(verdicts + 1);
+    expect(await countRows("user_decision", workspaceId)).toBe(decisions + 1);
     expect(await readSubjectDecision(workspaceId, "livebrand.com")).toBe("public_subject:refused");
   });
 });
