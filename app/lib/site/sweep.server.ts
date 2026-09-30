@@ -116,7 +116,7 @@ export async function checkSitePage(
     console.log(
       JSON.stringify({
         event: "site.check_failed",
-        url: target.url,
+        pageId: target.pageId,
         reason: "robots",
         detail: "disallowed by robots.txt",
       }),
@@ -140,7 +140,7 @@ export async function checkSitePage(
     console.log(
       JSON.stringify({
         event: "site.check_failed",
-        url: target.url,
+        pageId: target.pageId,
         reason: result.reason,
         detail: result.detail,
       }),
@@ -217,7 +217,7 @@ async function judgeUnlessFailed(change: SiteChangeInput, signalId: string | nul
     console.log(
       JSON.stringify({
         event: "site.change_judge_failed",
-        url: change.target.url,
+        pageId: change.target.pageId,
         error: error instanceof Error ? error.name : "unknown",
       }),
     );
@@ -352,7 +352,11 @@ async function fileUnlessDiscarded(change: SiteChangeInput, payloadJson: string,
   const competitorJudgment = await judgeCompetitorChange(change);
   if (competitorJudgment?.noteworthy?.band === "discard") {
     console.log(
-      JSON.stringify({ event: "site.change_discarded", url: target.url, kind: competitorJudgment.noteworthy.kind }),
+      JSON.stringify({
+        event: "site.change_discarded",
+        pageId: target.pageId,
+        kind: competitorJudgment.noteworthy.kind,
+      }),
     );
     return;
   }

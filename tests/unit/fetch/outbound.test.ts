@@ -1,6 +1,18 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { BlockedRedirectError, fetchOutbound } from "../../../app/lib/fetch/outbound.server";
+import { BlockedRedirectError, cappedJson, cappedText, fetchOutbound } from "../../../app/lib/fetch/outbound.server";
+
+function streamed(chunks: string[]): Response {
+  const encoder = new TextEncoder();
+  return new Response(
+    new ReadableStream<Uint8Array>({
+      start(controller) {
+        for (const chunk of chunks) controller.enqueue(encoder.encode(chunk));
+        controller.close();
+      },
+    }),
+  );
+}
 
 function redirecting(status: number, location: string) {
   const fetchMock = vi
@@ -53,5 +65,24 @@ describe("fetchOutbound", () => {
     );
     await expect(fetchOutbound("https://foo.localhost/", { headers: {} })).rejects.toBeInstanceOf(BlockedRedirectError);
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+});
+
+describe("cappedText and cappedJson", () => {
+  it("returns the decoded body when it is within the cap", async () => {
+    expect(await cappedText(new Response("héllo"), 64)).toBe("héllo");
+    expect(await cappedJson(new Response('{"a":1}'), 64)).toEqual({ a: 1 });
+  });
+
+  it("returns null when content-length declares more than the cap", async () => {
+    const res = new Response("small", { headers: { "content-length": "1000" } });
+    expect(await cappedText(res, 10)).toBeNull();
+    const json = new Response("{}", { headers: { "content-length": "1000" } });
+    expect(await cappedJson(json, 10)).toBeNull();
+  });
+
+  it("returns null when the stream exceeds the cap without a content-length", async () => {
+    expect(await cappedText(streamed(["aaaaaa", "bbbbbb"]), 10)).toBeNull();
+    expect(await cappedText(streamed(["aaaaa", "bbbbb"]), 10)).toBe("aaaaabbbbb");
   });
 });

@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { BlockedRedirectError, fetchOutbound } from "../fetch/outbound.server";
+import { BlockedRedirectError, cappedText, fetchOutbound } from "../fetch/outbound.server";
 import { CRAWLER_USER_AGENT } from "../fetch/robots.server";
 import {
   channelIdFromHtml,
@@ -18,6 +18,8 @@ const cachedChannel = z.object({
 
 export type YoutubeChannelLookup =
   { status: "id"; channelId: string } | { status: "no-url" } | { status: "unresolved" };
+
+const MAX_PAGE_BYTES = 5 * 1024 * 1024;
 
 class YoutubePageMiss extends Error {
   constructor(message: string) {
@@ -44,7 +46,9 @@ async function readYoutubeChannelPage(pageUrl: string): Promise<{ channelId: str
     throw error;
   }
   if (!response.ok) throw new YoutubePageMiss(`youtube page ${String(response.status)}`);
-  const id = channelIdFromHtml(await response.text());
+  const html = await cappedText(response, MAX_PAGE_BYTES);
+  if (html === null) throw new YoutubePageMiss("youtube page too large");
+  const id = channelIdFromHtml(html);
   if (id === null) throw new YoutubePageMiss("youtube page had no channel id");
   return { channelId: id };
 }

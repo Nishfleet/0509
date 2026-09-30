@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { fetchOutbound } from "../fetch/outbound.server";
+import { cappedJson, fetchOutbound } from "../fetch/outbound.server";
 import { CRAWLER_USER_AGENT } from "../fetch/robots.server";
 
 export interface NameSources {
@@ -13,6 +13,8 @@ export interface BrandName {
   name: string;
   source: "ld_organization" | "og_site_name" | "title" | "wikidata";
 }
+
+const MAX_JSON_BYTES = 1024 * 1024;
 
 const wikidataSearchSchema = z.object({
   search: z.array(z.object({ label: z.string() })),
@@ -45,16 +47,18 @@ export async function resolveBrandName(
       { headers: { "user-agent": CRAWLER_USER_AGENT }, schemes: ["https:"] },
     );
     if (!res.ok) {
-      console.error(JSON.stringify({ event: "identity.wikidata_failed", term, error: `status ${String(res.status)}` }));
+      console.error(JSON.stringify({ event: "identity.wikidata_failed", error: `status ${String(res.status)}` }));
       return null;
     }
-    const parsed = wikidataSearchSchema.safeParse(await res.json());
+    const parsed = wikidataSearchSchema.safeParse(await cappedJson(res, MAX_JSON_BYTES));
     if (!parsed.success) return null;
     const label = parsed.data.search[0]?.label.trim();
     if (!label) return null;
     return { name: label, source: "wikidata" };
   } catch (error) {
-    console.error(JSON.stringify({ event: "identity.wikidata_failed", term, error: String(error) }));
+    console.error(
+      JSON.stringify({ event: "identity.wikidata_failed", error: error instanceof Error ? error.name : typeof error }),
+    );
     return null;
   }
 }
