@@ -187,7 +187,7 @@ export const PRIVACY: LegalDocument = {
         {
           term: "Backup copy of stored files",
           details: [
-            'We keep a second copy of stored screenshots and page copies in case we lose the first. Deleting your account, your workspace, or a competitor with "remove and forget" removes that copy too. We do not yet expire the rest of it on a schedule.',
+            'We keep a second copy of stored screenshots and page copies in case we lose the first. Deleting your account, or a competitor with "remove and forget", removes that copy too. We do not yet expire the rest of it on a schedule.',
           ],
         },
         {
