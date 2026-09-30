@@ -22,13 +22,8 @@ const OUTCOME: Record<NoulAction, PublicSubjectOutcome> = {
   reject: "refuse",
 };
 
-export async function screenPublicSubject(
-  workspaceId: string,
-  subject: Subject,
-  raw: string,
-  now: string,
-): Promise<{ outcome: PublicSubjectOutcome; verdict: NoulVerdict }> {
-  const verdict = await askNoul(workspaceId, PUBLIC_SUBJECT, {
+export function publicSubjectState(subject: Subject, raw: string): Record<string, unknown> {
+  return {
     item: {
       input: raw,
       kind: subject.kind,
@@ -38,7 +33,16 @@ export async function screenPublicSubject(
     },
     self: null,
     reliability: "best_effort",
-  });
+  };
+}
+
+export async function screenPublicSubject(
+  workspaceId: string,
+  subject: Subject,
+  raw: string,
+  now: string,
+): Promise<{ outcome: PublicSubjectOutcome; verdict: NoulVerdict }> {
+  const verdict = await askNoul(workspaceId, PUBLIC_SUBJECT, publicSubjectState(subject, raw));
   if (!verdict.cached) {
     await insertVerdict({
       workspaceId,
