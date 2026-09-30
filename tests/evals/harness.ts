@@ -75,7 +75,7 @@ function requireSplits(questionId: string, cases: readonly { split: Split }[]): 
   }
 }
 
-export function validateCases(questionId: string, parsed: unknown): EvalCase[] {
+function validateCases(questionId: string, parsed: unknown): EvalCase[] {
   if (!Array.isArray(parsed)) throw new Error(`eval cases must be a JSON array: ${questionId}`);
   const cases = parsed.map((entry, index) => {
     const row = entry as EvalCase;
@@ -186,7 +186,7 @@ export async function makeAsk(
   };
 }
 
-export async function makeChoiceAsk(
+async function makeChoiceAsk(
   question: EvalChoiceQuestion,
 ): Promise<(state: unknown) => Promise<{ choice: string; model: string }>> {
   return async (state) => {

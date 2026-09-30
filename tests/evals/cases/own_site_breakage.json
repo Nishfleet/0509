@@ -52,11 +52,7 @@
     "pageUrl": "https://www.patagonia.com/",
     "hunks": [
       {
-        "lines": [
-          "@@ -1,1 +1,1 @@",
-          "-Patagonia",
-          "+Internal Server Error"
-        ]
+        "lines": ["@@ -1,1 +1,1 @@", "-Patagonia", "+Internal Server Error"]
       }
     ],
     "evidence": {
@@ -89,11 +85,7 @@
     "pageUrl": "https://www.patagonia.com/",
     "hunks": [
       {
-        "lines": [
-          "@@ -1,1 +1,1 @@",
-          "-Patagonia",
-          "+Access denied - you do not have permission to view this page"
-        ]
+        "lines": ["@@ -1,1 +1,1 @@", "-Patagonia", "+Access denied - you do not have permission to view this page"]
       }
     ],
     "evidence": {
@@ -126,13 +118,7 @@
     "pageUrl": "https://www.patagonia.com/",
     "hunks": [
       {
-        "lines": [
-          "@@ -1,4 +1,0 @@",
-          "-Better Sweater Jacket",
-          "-$179",
-          "-Add to cart",
-          "-Free shipping over $75"
-        ]
+        "lines": ["@@ -1,4 +1,0 @@", "-Better Sweater Jacket", "-$179", "-Add to cart", "-Free shipping over $75"]
       }
     ],
     "evidence": {
@@ -165,14 +151,7 @@
     "pageUrl": "https://www.patagonia.com/",
     "hunks": [
       {
-        "lines": [
-          "@@ -1,3 +1,4 @@",
-          "Wetsuits",
-          "+Outlet",
-          "+Sizing",
-          "  -$195",
-          "  -$245"
-        ]
+        "lines": ["@@ -1,3 +1,4 @@", "Wetsuits", "+Outlet", "+Sizing", "  -$195", "  -$245"]
       }
     ],
     "evidence": {
@@ -205,12 +184,7 @@
     "pageUrl": "https://www.patagonia.com/",
     "hunks": [
       {
-        "lines": [
-          "@@ -1,2 +1,3 @@",
-          "+Winter Sale: up to 40% off outerwear",
-          " Shop new arrivals",
-          " Shop bestsellers"
-        ]
+        "lines": ["@@ -1,2 +1,3 @@", "+Winter Sale: up to 40% off outerwear", " Shop new arrivals", " Shop bestsellers"]
       }
     ],
     "evidence": {
@@ -317,11 +291,7 @@
     "pageUrl": "https://www.patagonia.com/",
     "hunks": [
       {
-        "lines": [
-          "@@ -1,1 +1,1 @@",
-          "-Size guide",
-          "+Size guide unavailable right now"
-        ]
+        "lines": ["@@ -1,1 +1,1 @@", "-Size guide", "+Size guide unavailable right now"]
       }
     ],
     "evidence": {
@@ -394,13 +364,7 @@
     "pageUrl": "https://www.patagonia.com/",
     "hunks": [
       {
-        "lines": [
-          "@@ -1,2 +1,2 @@",
-          "-(sponsored) Winter Sale: up to 40% off",
-          "+Wetsuits",
-          "-$195",
-          "+€195"
-        ]
+        "lines": ["@@ -1,2 +1,2 @@", "-(sponsored) Winter Sale: up to 40% off", "+Wetsuits", "-$195", "+€195"]
       }
     ],
     "evidence": {
@@ -433,11 +397,7 @@
     "pageUrl": "https://www.patagonia.com/",
     "hunks": [
       {
-        "lines": [
-          "@@ -1,2 +1,1 @@",
-          "-Cart (0)",
-          "+Your cart is empty"
-        ]
+        "lines": ["@@ -1,2 +1,1 @@", "-Cart (0)", "+Your cart is empty"]
       }
     ],
     "evidence": {
@@ -470,11 +430,7 @@
     "pageUrl": "https://www.patagonia.com/",
     "hunks": [
       {
-        "lines": [
-          "@@ -1,1 +1,1 @@",
-          "-Shop women",
-          "+Shop womenn"
-        ]
+        "lines": ["@@ -1,1 +1,1 @@", "-Shop women", "+Shop womenn"]
       }
     ],
     "evidence": {
@@ -507,11 +463,7 @@
     "pageUrl": "https://www.patagonia.com/",
     "hunks": [
       {
-        "lines": [
-          "@@ -1,2 +1,2 @@",
-          "-Sizes: S M L XL",
-          "+Sizes: XS S M L XL XXL"
-        ]
+        "lines": ["@@ -1,2 +1,2 @@", "-Sizes: S M L XL", "+Sizes: XS S M L XL XXL"]
       }
     ],
     "evidence": {
@@ -544,11 +496,7 @@
     "pageUrl": "https://www.patagonia.com/",
     "hunks": [
       {
-        "lines": [
-          "@@ -1,1 +1,1 @@",
-          "-Sort: Featured",
-          "+Sort: Relevance"
-        ]
+        "lines": ["@@ -1,1 +1,1 @@", "-Sort: Featured", "+Sort: Relevance"]
       }
     ],
     "evidence": {
@@ -581,11 +529,7 @@
     "pageUrl": "https://www.patagonia.com/",
     "hunks": [
       {
-        "lines": [
-          "@@ -1,2 +1,1 @@",
-          "-<link rel=stylesheet href=/static/main.css>",
-          "+<style>body{}</style>"
-        ]
+        "lines": ["@@ -1,2 +1,1 @@", "-<link rel=stylesheet href=/static/main.css>", "+<style>body{}</style>"]
       }
     ],
     "evidence": {
@@ -655,11 +599,7 @@
     "pageUrl": "https://www.patagonia.com/",
     "hunks": [
       {
-        "lines": [
-          "@@ -1,1 +1,1 @@",
-          "-Free shipping over $75",
-          "+Free shipping over $75 on orders placed this week"
-        ]
+        "lines": ["@@ -1,1 +1,1 @@", "-Free shipping over $75", "+Free shipping over $75 on orders placed this week"]
       }
     ],
     "evidence": {
@@ -692,11 +632,7 @@
     "pageUrl": "https://www.patagonia.com/",
     "hunks": [
       {
-        "lines": [
-          "@@ -1,2 +1,1 @@",
-          "-Wetsuits from $195",
-          "-Jackets from $249"
-        ]
+        "lines": ["@@ -1,2 +1,1 @@", "-Wetsuits from $195", "-Jackets from $249"]
       }
     ],
     "evidence": {
@@ -768,11 +704,7 @@
     "pageUrl": "https://www.patagonia.com/",
     "hunks": [
       {
-        "lines": [
-          "@@ -1,2 +1,1 @@",
-          "-Nano Puff Jacket $299",
-          "+Page not found"
-        ]
+        "lines": ["@@ -1,2 +1,1 @@", "-Nano Puff Jacket $299", "+Page not found"]
       }
     ],
     "evidence": {
@@ -805,13 +737,7 @@
     "pageUrl": "https://www.patagonia.com/",
     "hunks": [
       {
-        "lines": [
-          "@@ -1,3 +1,2 @@",
-          " Cart (1)",
-          " $179",
-          "-Checkout",
-          "-Pay with card"
-        ]
+        "lines": ["@@ -1,3 +1,2 @@", " Cart (1)", " $179", "-Checkout", "-Pay with card"]
       }
     ],
     "evidence": {
@@ -844,11 +770,7 @@
     "pageUrl": "https://www.patagonia.com/",
     "hunks": [
       {
-        "lines": [
-          "@@ -1,1 +1,2 @@",
-          "+Field notes: rebuilding a trail bridge in Patagonia",
-          " Journal"
-        ]
+        "lines": ["@@ -1,1 +1,2 @@", "+Field notes: rebuilding a trail bridge in Patagonia", " Journal"]
       }
     ],
     "evidence": {
@@ -881,10 +803,7 @@
     "pageUrl": "https://www.patagonia.com/",
     "hunks": [
       {
-        "lines": [
-          "@@ -1,1 +1,0 @@",
-          "-Find a store near you"
-        ]
+        "lines": ["@@ -1,1 +1,0 @@", "-Find a store near you"]
       }
     ],
     "evidence": {
@@ -917,11 +836,7 @@
     "pageUrl": "https://www.patagonia.com/",
     "hunks": [
       {
-        "lines": [
-          "@@ -1,2 +1,2 @@",
-          "-<a href=/shop/men>Shop men</a>",
-          "+<a href=#>Shop men</a>"
-        ]
+        "lines": ["@@ -1,2 +1,2 @@", "-<a href=/shop/men>Shop men</a>", "+<a href=#>Shop men</a>"]
       }
     ],
     "evidence": {
@@ -954,11 +869,7 @@
     "pageUrl": "https://www.patagonia.com/",
     "hunks": [
       {
-        "lines": [
-          "@@ -1,1 +1,1 @@",
-          "-<h1>Patagonia</h1>",
-          "+<h1>404</h1>"
-        ]
+        "lines": ["@@ -1,1 +1,1 @@", "-<h1>Patagonia</h1>", "+<h1>404</h1>"]
       }
     ],
     "evidence": {
@@ -991,11 +902,7 @@
     "pageUrl": "https://www.patagonia.com/",
     "hunks": [
       {
-        "lines": [
-          "@@ -1,1 +1,1 @@",
-          "-Free returns within 30 days.",
-          "+Free returns within 60 days on unused items."
-        ]
+        "lines": ["@@ -1,1 +1,1 @@", "-Free returns within 30 days.", "+Free returns within 60 days on unused items."]
       }
     ],
     "evidence": {
@@ -1028,11 +935,7 @@
     "pageUrl": "https://www.patagonia.com/",
     "hunks": [
       {
-        "lines": [
-          "@@ -1,1 +1,2 @@",
-          "+<script src=https://cdn.example/px.js async>",
-          " <h1>Patagonia</h1>"
-        ]
+        "lines": ["@@ -1,1 +1,2 @@", "+<script src=https://cdn.example/px.js async>", " <h1>Patagonia</h1>"]
       }
     ],
     "evidence": {
@@ -1065,11 +968,7 @@
     "pageUrl": "https://www.patagonia.com/",
     "hunks": [
       {
-        "lines": [
-          "@@ -1,3 +1,2 @@",
-          "-Wetsuits | Jackets | Bags",
-          "+Wetsuits, Jackets, Bags"
-        ]
+        "lines": ["@@ -1,3 +1,2 @@", "-Wetsuits | Jackets | Bags", "+Wetsuits, Jackets, Bags"]
       }
     ],
     "evidence": {
@@ -1102,12 +1001,7 @@
     "pageUrl": "https://www.patagonia.com/",
     "hunks": [
       {
-        "lines": [
-          "@@ -1,1 +1,2 @@",
-          "+Out of stock",
-          " $179",
-          " Add to cart"
-        ]
+        "lines": ["@@ -1,1 +1,2 @@", "+Out of stock", " $179", " Add to cart"]
       }
     ],
     "evidence": {
@@ -1140,11 +1034,7 @@
     "pageUrl": "https://www.patagonia.com/",
     "hunks": [
       {
-        "lines": [
-          "@@ -1,1 +1,1 @@",
-          "-Cart (0)",
-          "+Redirecting to /cart/cart/cart"
-        ]
+        "lines": ["@@ -1,1 +1,1 @@", "-Cart (0)", "+Redirecting to /cart/cart/cart"]
       }
     ],
     "evidence": {
@@ -1177,11 +1067,7 @@
     "pageUrl": "https://www.patagonia.com/",
     "hunks": [
       {
-        "lines": [
-          "@@ -1,1 +1,1 @@",
-          "-Build the best gear in business",
-          "+The planet is our only shareholder"
-        ]
+        "lines": ["@@ -1,1 +1,1 @@", "-Build the best gear in business", "+The planet is our only shareholder"]
       }
     ],
     "evidence": {
@@ -1214,11 +1100,7 @@
     "pageUrl": "https://www.patagonia.com/",
     "hunks": [
       {
-        "lines": [
-          "@@ -1,1 +1,1 @@",
-          "-12 results for wetsuit",
-          "+No results for wetsuit"
-        ]
+        "lines": ["@@ -1,1 +1,1 @@", "-12 results for wetsuit", "+No results for wetsuit"]
       }
     ],
     "evidence": {
@@ -1251,11 +1133,7 @@
     "pageUrl": "https://www.patagonia.com/",
     "hunks": [
       {
-        "lines": [
-          "@@ -1,1 +1,1 @@",
-          "-Journal",
-          "+Journal has moved to our new platform, please check back soon"
-        ]
+        "lines": ["@@ -1,1 +1,1 @@", "-Journal", "+Journal has moved to our new platform, please check back soon"]
       }
     ],
     "evidence": {
@@ -1288,11 +1166,7 @@
     "pageUrl": "https://www.patagonia.com/",
     "hunks": [
       {
-        "lines": [
-          "@@ -1,1 +1,2 @@",
-          "+Download the Patagonia app",
-          " Shop new arrivals"
-        ]
+        "lines": ["@@ -1,1 +1,2 @@", "+Download the Patagonia app", " Shop new arrivals"]
       }
     ],
     "evidence": {
@@ -1325,11 +1199,7 @@
     "pageUrl": "https://www.patagonia.com/",
     "hunks": [
       {
-        "lines": [
-          "@@ -1,1 +1,1 @@",
-          "-$179",
-          "+$1799"
-        ]
+        "lines": ["@@ -1,1 +1,1 @@", "-$179", "+$1799"]
       }
     ],
     "evidence": {
