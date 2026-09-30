@@ -213,12 +213,12 @@ describe("alerts mentions source pills (#4003 4/6)", () => {
     await seedOwner(USER, WS, COMP);
     // A truncated write leaves watch.config_json invalid JSON. A bare
     // json_extract over that column raises "malformed JSON" and SQLite
-    // aborts the whole statement, so one bad row 500s the reads that select
-    // it. The guard has to let the row through so the pill renders the
-    // "watch config is unreadable" case the component already handles.
-    // json_valid(w3.config_json) AND json_extract(...) is load-bearing: SQLite
-    // evaluates the AND left to right, so the extract never runs on invalid
-    // JSON. These tests pin that ordering on real D1.
+    // aborts the whole statement. The guard now uses CASE
+    // WHEN json_valid(w3.config_json) THEN w3.config_json ELSE '{}' END
+    // around the extraction, which makes the guard unconditionally safe
+    // regardless of SQLite expression evaluation order. These tests
+    // verify the guard works on real D1 (real miniflare SQLite) and
+    // that the "watch config is unreadable" rendering path renders.
     await seedWatch(`watch-${COMP}-yt-broken`, COMP, YOUTUBE_SRC, 1, MALFORMED_WATCH_CONFIG);
     await env.DB.prepare("UPDATE watch SET last_polled_at = ? WHERE id = ?")
       .bind("2026-09-25T09:00:00.000Z", `watch-${COMP}-yt-broken`)
