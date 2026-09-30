@@ -10,7 +10,7 @@ const SELECT_LAST_STILL_COMPETITOR =
   "SELECT choice, decided_at FROM jev_verdict WHERE workspace_id = ?1 AND entity_id = ?2 AND question_id = 'still_competitor_reason' AND choice IS NOT NULL ORDER BY decided_at DESC LIMIT 1";
 
 const INSERT_VERDICT =
-  "INSERT INTO jev_verdict (id, workspace_id, question_id, input_hash, signal_id, entity_id, p, choice, reason, decided_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10) ON CONFLICT (question_id, input_hash) DO NOTHING";
+  "INSERT INTO jev_verdict (id, workspace_id, question_id, input_hash, signal_id, entity_id, p, choice, reason, decided_at) SELECT ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10 WHERE EXISTS (SELECT 1 FROM workspace WHERE id = ?2) ON CONFLICT (question_id, input_hash) DO NOTHING";
 
 const LINK_VERDICTS = `UPDATE jev_verdict SET signal_id = ?1
 WHERE workspace_id = ?2 AND signal_id IS NULL

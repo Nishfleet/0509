@@ -303,7 +303,7 @@ export async function addManualCompetitor(input: {
 }
 
 const INSERT_AUTO_COMPETITOR =
-  "INSERT INTO entity (id, workspace_id, role, domain, name, origin, state, state_changed_at, state_changed_by, created_at) SELECT ?1, ?2, 'competitor', ?3, ?4, 'auto', 'on', ?5, 'jev', ?5 WHERE EXISTS (SELECT 1 FROM suggestion WHERE workspace_id = ?2 AND candidate_domain = ?3 AND status = 'auto_on' AND entity_id IS NULL) ON CONFLICT (workspace_id, domain) DO NOTHING";
+  "INSERT INTO entity (id, workspace_id, role, domain, name, origin, state, state_changed_at, state_changed_by, created_at) SELECT ?1, ?2, 'competitor', ?3, ?4, 'auto', 'on', ?5, 'jev', ?5 WHERE EXISTS (SELECT 1 FROM workspace WHERE id = ?2) AND EXISTS (SELECT 1 FROM suggestion WHERE workspace_id = ?2 AND candidate_domain = ?3 AND status = 'auto_on' AND entity_id IS NULL) ON CONFLICT (workspace_id, domain) DO NOTHING";
 
 export function insertAutoCompetitor(input: {
   entityId: string;
