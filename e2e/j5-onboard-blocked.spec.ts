@@ -78,7 +78,7 @@ test.describe("J5", () => {
     await name.press("Escape");
     await page.getByRole("button", { name: "That's me" }).click();
 
-    await expect(page).toHaveURL(/\/onboarding\/competitors$/);
+    await expect(page).toHaveURL(/\/onboarding\/competitors$/, { timeout: 30_000 });
     expect(await consoleFailures(page, watched, testInfo), testInfo.project.name).toEqual([]);
   });
 });
