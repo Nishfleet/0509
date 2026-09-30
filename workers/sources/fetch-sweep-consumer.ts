@@ -71,6 +71,7 @@ async function collectWatch(message: FetchSweepMessage, tick: SweepTick): Promis
   }
   if (result.outcome !== "failed") return result.outcome;
   if (result.reason === "robots") return "disallowed";
+  if (result.reason === "deferred") return "failed";
 
   captureException(
     new Error(
