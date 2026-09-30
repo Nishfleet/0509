@@ -121,7 +121,8 @@ async function createServer(workspaceId: string): Promise<McpServer> {
     alerts.name,
     {
       title: alerts.title,
-      description: "Recent alerts for the user: weekly briefs that could not be delivered, and takedown notices.",
+      description:
+        "Recent alerts for the user: weekly briefs that could not be delivered, takedown notices, site changes, and mentions. A mention we were not sure about says so in its body.",
       outputSchema: alertsResultSchema,
       annotations: READ_ONLY,
     },
