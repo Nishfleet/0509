@@ -1,0 +1,1338 @@
+[
+  {
+    "id": "patagonia-ticker-outage",
+    "split": "train",
+    "subject": {
+      "name": "Patagonia",
+      "domain": "patagonia.com"
+    },
+    "isSelf": true,
+    "pageRole": "home",
+    "pageUrl": "https://www.patagonia.com/",
+    "hunks": [
+      {
+        "lines": [
+          "@@ -1,6 +1,2 @@",
+          "Shop new arrivals",
+          "Shop bestsellers",
+          "-Shop by activity",
+          "-Shop by feature",
+          "-Shop gift cards",
+          "  <h1>Patagonia</h1>"
+        ]
+      }
+    ],
+    "evidence": {
+      "status": 200,
+      "httpError": false,
+      "beforeChars": 18422,
+      "afterChars": 1204,
+      "textHalved": true,
+      "pricesBefore": 14,
+      "pricesAfter": 0,
+      "pricesVanished": true
+    },
+    "history_30d": [],
+    "labels": {
+      "own_site_breakage": true,
+      "noteworthy_change": true,
+      "change_kind": "breakage"
+    },
+    "why": {
+      "own_site_breakage": "the home page lost its nav, its category list and every price, so a visitor sees a near-empty shell: the text halved and all prices vanished",
+      "noteworthy_change": "the home page lost its navigation and every price, a customer would want to know the store is down",
+      "change_kind": "the page renders as a near-empty shell"
+    }
+  },
+  {
+    "id": "patagonia-500",
+    "split": "train",
+    "subject": {
+      "name": "Patagonia",
+      "domain": "patagonia.com"
+    },
+    "isSelf": true,
+    "pageRole": "home",
+    "pageUrl": "https://www.patagonia.com/",
+    "hunks": [
+      {
+        "lines": ["@@ -1,1 +1,1 @@", "-Patagonia", "+Internal Server Error"]
+      }
+    ],
+    "evidence": {
+      "status": 500,
+      "httpError": true,
+      "beforeChars": 18422,
+      "afterChars": 62,
+      "textHalved": true,
+      "pricesBefore": 14,
+      "pricesAfter": 0,
+      "pricesVanished": true
+    },
+    "history_30d": [],
+    "labels": {
+      "own_site_breakage": true,
+      "noteworthy_change": true,
+      "change_kind": "breakage"
+    },
+    "why": {
+      "own_site_breakage": "a 500 replaces the page: an error status with a one-line body, everything the visitor came for is gone",
+      "noteworthy_change": "the whole site returns an error, a customer cannot shop",
+      "change_kind": "an internal server error replaces the page"
+    }
+  },
+  {
+    "id": "patagonia-403-gdpr",
+    "split": "train",
+    "subject": {
+      "name": "Patagonia",
+      "domain": "patagonia.com"
+    },
+    "isSelf": true,
+    "pageRole": "home",
+    "pageUrl": "https://www.patagonia.com/",
+    "hunks": [
+      {
+        "lines": ["@@ -1,1 +1,1 @@", "-Patagonia", "+Access denied - you do not have permission to view this page"]
+      }
+    ],
+    "evidence": {
+      "status": 403,
+      "httpError": true,
+      "beforeChars": 18422,
+      "afterChars": 88,
+      "textHalved": true,
+      "pricesBefore": 14,
+      "pricesAfter": 0,
+      "pricesVanished": true
+    },
+    "history_30d": [],
+    "labels": {
+      "own_site_breakage": true,
+      "noteworthy_change": true,
+      "change_kind": "breakage"
+    },
+    "why": {
+      "own_site_breakage": "a 403 is the site refusing its own visitor: nothing of the page renders, the shopper cannot shop",
+      "noteworthy_change": "the site refuses its own visitor, nothing renders",
+      "change_kind": "an access-denied page replaces the store"
+    }
+  },
+  {
+    "id": "patagonia-empty-body",
+    "split": "train",
+    "subject": {
+      "name": "Patagonia",
+      "domain": "patagonia.com"
+    },
+    "isSelf": true,
+    "pageRole": "product",
+    "pageUrl": "https://www.patagonia.com/",
+    "hunks": [
+      {
+        "lines": ["@@ -1,4 +1,0 @@", "-Better Sweater Jacket", "-$179", "-Add to cart", "-Free shipping over $75"]
+      }
+    ],
+    "evidence": {
+      "status": 200,
+      "httpError": false,
+      "beforeChars": 9120,
+      "afterChars": 40,
+      "textHalved": true,
+      "pricesBefore": 2,
+      "pricesAfter": 0,
+      "pricesVanished": true
+    },
+    "history_30d": [],
+    "labels": {
+      "own_site_breakage": true,
+      "noteworthy_change": true,
+      "change_kind": "breakage"
+    },
+    "why": {
+      "own_site_breakage": "a 200 that renders no product at all: title, price and add-to-cart are gone, the product page is blank",
+      "noteworthy_change": "the product page is blank, a tracked product cannot be bought",
+      "change_kind": "a 200 renders no product at all"
+    }
+  },
+  {
+    "id": "patagonia-checkbox-stuck",
+    "split": "train",
+    "subject": {
+      "name": "Patagonia",
+      "domain": "patagonia.com"
+    },
+    "isSelf": true,
+    "pageRole": "pricing",
+    "pageUrl": "https://www.patagonia.com/",
+    "hunks": [
+      {
+        "lines": ["@@ -1,3 +1,4 @@", "Wetsuits", "+Outlet", "+Sizing", "  -$195", "  -$245"]
+      }
+    ],
+    "evidence": {
+      "status": 200,
+      "httpError": false,
+      "beforeChars": 8410,
+      "afterChars": 8560,
+      "textHalved": false,
+      "pricesBefore": 9,
+      "pricesAfter": 9,
+      "pricesVanished": false
+    },
+    "history_30d": [],
+    "labels": {
+      "own_site_breakage": false,
+      "noteworthy_change": false,
+      "change_kind": "noise"
+    },
+    "why": {
+      "own_site_breakage": "two filter labels appeared and every price still renders: a deliberate navigation improvement, the page works",
+      "noteworthy_change": "two filter labels changed, nothing a customer tracks",
+      "change_kind": "nothing meaningful changed for a shopper"
+    }
+  },
+  {
+    "id": "patagonia-winter-sale-banner",
+    "split": "train",
+    "subject": {
+      "name": "Patagonia",
+      "domain": "patagonia.com"
+    },
+    "isSelf": true,
+    "pageRole": "home",
+    "pageUrl": "https://www.patagonia.com/",
+    "hunks": [
+      {
+        "lines": ["@@ -1,2 +1,3 @@", "+Winter Sale: up to 40% off outerwear", " Shop new arrivals", " Shop bestsellers"]
+      }
+    ],
+    "evidence": {
+      "status": 200,
+      "httpError": false,
+      "beforeChars": 18422,
+      "afterChars": 18690,
+      "textHalved": false,
+      "pricesBefore": 14,
+      "pricesAfter": 14,
+      "pricesVanished": false
+    },
+    "history_30d": [],
+    "labels": {
+      "own_site_breakage": false,
+      "noteworthy_change": true,
+      "change_kind": "offer"
+    },
+    "why": {
+      "own_site_breakage": "a seasonal banner added at the top and all content below still renders: deliberate",
+      "noteworthy_change": "a 40% off sale is exactly what a customer tracking the brand wants",
+      "change_kind": "a new promotion banner was added"
+    }
+  },
+  {
+    "id": "patagonia-legal-copy-edit",
+    "split": "train",
+    "subject": {
+      "name": "Patagonia",
+      "domain": "patagonia.com"
+    },
+    "isSelf": true,
+    "pageRole": "legal",
+    "pageUrl": "https://www.patagonia.com/",
+    "hunks": [
+      {
+        "lines": [
+          "@@ -1,1 +1,1 @@",
+          "-We do not ship to PO boxes.",
+          "+We no longer ship to PO boxes. Check your address before ordering."
+        ]
+      }
+    ],
+    "evidence": {
+      "status": 200,
+      "httpError": false,
+      "beforeChars": 3021,
+      "afterChars": 3060,
+      "textHalved": false,
+      "pricesBefore": 0,
+      "pricesAfter": 0,
+      "pricesVanished": false
+    },
+    "history_30d": [],
+    "labels": {
+      "own_site_breakage": false,
+      "noteworthy_change": false,
+      "change_kind": "copy"
+    },
+    "why": {
+      "own_site_breakage": "one shipping sentence reworded on the returns page: deliberate copy, page length unchanged",
+      "noteworthy_change": "a PO box shipping sentence was reworded, no purchase condition changed",
+      "change_kind": "returns-policy wording was edited"
+    }
+  },
+  {
+    "id": "patagonia-images-404",
+    "split": "train",
+    "subject": {
+      "name": "Patagonia",
+      "domain": "patagonia.com"
+    },
+    "isSelf": true,
+    "pageRole": "product",
+    "pageUrl": "https://www.patagonia.com/",
+    "hunks": [
+      {
+        "lines": [
+          "@@ -1,2 +1,2 @@",
+          "-![Better Sweater Jacket](https://img.patagonia.com/better-sweater.jpg)",
+          "+![Better Sweater Jacket](https://img.patagonia.com/better-sweater-404.jpg)"
+        ]
+      }
+    ],
+    "evidence": {
+      "status": 200,
+      "httpError": false,
+      "beforeChars": 9120,
+      "afterChars": 9122,
+      "textHalved": false,
+      "pricesBefore": 2,
+      "pricesAfter": 2,
+      "pricesVanished": false
+    },
+    "history_30d": [],
+    "labels": {
+      "own_site_breakage": true,
+      "noteworthy_change": true,
+      "change_kind": "breakage"
+    },
+    "why": {
+      "own_site_breakage": "the product image URL now 404s: the text still renders, so a visitor sees the product with no picture at all",
+      "noteworthy_change": "product images are gone, the page looks broken",
+      "change_kind": "the product image URL 404s and the picture does not render"
+    }
+  },
+  {
+    "id": "patagonia-sizeguide-404",
+    "split": "train",
+    "subject": {
+      "name": "Patagonia",
+      "domain": "patagonia.com"
+    },
+    "isSelf": true,
+    "pageRole": "product",
+    "pageUrl": "https://www.patagonia.com/",
+    "hunks": [
+      {
+        "lines": ["@@ -1,1 +1,1 @@", "-Size guide", "+Size guide unavailable right now"]
+      }
+    ],
+    "evidence": {
+      "status": 200,
+      "httpError": false,
+      "beforeChars": 9120,
+      "afterChars": 9140,
+      "textHalved": false,
+      "pricesBefore": 2,
+      "pricesAfter": 2,
+      "pricesVanished": false
+    },
+    "history_30d": [],
+    "labels": {
+      "own_site_breakage": false,
+      "noteworthy_change": false,
+      "change_kind": "removal"
+    },
+    "why": {
+      "own_site_breakage": "the size guide link is gone but everything a buyer needs to purchase still renders: degraded, not broken",
+      "noteworthy_change": "the size guide link is gone but the product still sells",
+      "change_kind": "a supporting link was removed from the product page"
+    }
+  },
+  {
+    "id": "patagonia-add-to-cart-gone",
+    "split": "train",
+    "subject": {
+      "name": "Patagonia",
+      "domain": "patagonia.com"
+    },
+    "isSelf": true,
+    "pageRole": "product",
+    "pageUrl": "https://www.patagonia.com/",
+    "hunks": [
+      {
+        "lines": [
+          "@@ -1,3 +1,2 @@",
+          " Better Sweater Jacket",
+          " $179",
+          " Size: M",
+          "-Add to cart",
+          "-Notify me when available"
+        ]
+      }
+    ],
+    "evidence": {
+      "status": 200,
+      "httpError": false,
+      "beforeChars": 9120,
+      "afterChars": 8890,
+      "textHalved": false,
+      "pricesBefore": 2,
+      "pricesAfter": 2,
+      "pricesVanished": false
+    },
+    "history_30d": [],
+    "labels": {
+      "own_site_breakage": true,
+      "noteworthy_change": true,
+      "change_kind": "breakage"
+    },
+    "why": {
+      "own_site_breakage": "every buy control is gone from the product page: a visitor can read the page and cannot buy, which is the page broken",
+      "noteworthy_change": "a visitor can no longer buy the product",
+      "change_kind": "every buy control is missing from the page"
+    }
+  },
+  {
+    "id": "patagonia-price-in-currency-symbol",
+    "split": "train",
+    "subject": {
+      "name": "Patagonia",
+      "domain": "patagonia.com"
+    },
+    "isSelf": true,
+    "pageRole": "pricing",
+    "pageUrl": "https://www.patagonia.com/",
+    "hunks": [
+      {
+        "lines": ["@@ -1,2 +1,2 @@", "-(sponsored) Winter Sale: up to 40% off", "+Wetsuits", "-$195", "+€195"]
+      }
+    ],
+    "evidence": {
+      "status": 200,
+      "httpError": false,
+      "beforeChars": 8410,
+      "afterChars": 8400,
+      "textHalved": false,
+      "pricesBefore": 9,
+      "pricesAfter": 9,
+      "pricesVanished": false
+    },
+    "history_30d": [],
+    "labels": {
+      "own_site_breakage": false,
+      "noteworthy_change": true,
+      "change_kind": "pricing"
+    },
+    "why": {
+      "own_site_breakage": "a dollar price became a euro price and the ad line went away: a deliberate currency switch, prices still render",
+      "noteworthy_change": "prices switched currency, which changes what a customer pays",
+      "change_kind": "the displayed currency of the price changed"
+    }
+  },
+  {
+    "id": "patagonia-cart-page-gone",
+    "split": "train",
+    "subject": {
+      "name": "Patagonia",
+      "domain": "patagonia.com"
+    },
+    "isSelf": true,
+    "pageRole": "other",
+    "pageUrl": "https://www.patagonia.com/",
+    "hunks": [
+      {
+        "lines": ["@@ -1,2 +1,1 @@", "-Cart (0)", "+Your cart is empty"]
+      }
+    ],
+    "evidence": {
+      "status": 404,
+      "httpError": true,
+      "beforeChars": 2200,
+      "afterChars": 340,
+      "textHalved": true,
+      "pricesBefore": 0,
+      "pricesAfter": 0,
+      "pricesVanished": false
+    },
+    "history_30d": [],
+    "labels": {
+      "own_site_breakage": true,
+      "noteworthy_change": true,
+      "change_kind": "breakage"
+    },
+    "why": {
+      "own_site_breakage": "the cart URL 404s: a visitor who adds an item cannot reach the cart at all",
+      "noteworthy_change": "the cart is unreachable so no purchase can complete",
+      "change_kind": "the cart URL returns not-found"
+    }
+  },
+  {
+    "id": "patagonia-typo-nav",
+    "split": "train",
+    "subject": {
+      "name": "Patagonia",
+      "domain": "patagonia.com"
+    },
+    "isSelf": true,
+    "pageRole": "home",
+    "pageUrl": "https://www.patagonia.com/",
+    "hunks": [
+      {
+        "lines": ["@@ -1,1 +1,1 @@", "-Shop women", "+Shop womenn"]
+      }
+    ],
+    "evidence": {
+      "status": 200,
+      "httpError": false,
+      "beforeChars": 18422,
+      "afterChars": 18423,
+      "textHalved": false,
+      "pricesBefore": 14,
+      "pricesAfter": 14,
+      "pricesVanished": false
+    },
+    "history_30d": [],
+    "labels": {
+      "own_site_breakage": false,
+      "noteworthy_change": false,
+      "change_kind": "unintended"
+    },
+    "why": {
+      "own_site_breakage": "one nav label has a typo but every category still works: sloppy but not degraded for a visitor",
+      "noteworthy_change": "one nav label is misspelled, nothing broken enough to alert on",
+      "change_kind": "a typo no one intended to ship"
+    }
+  },
+  {
+    "id": "patagonia-new-size-run",
+    "split": "train",
+    "subject": {
+      "name": "Patagonia",
+      "domain": "patagonia.com"
+    },
+    "isSelf": true,
+    "pageRole": "product",
+    "pageUrl": "https://www.patagonia.com/",
+    "hunks": [
+      {
+        "lines": ["@@ -1,2 +1,2 @@", "-Sizes: S M L XL", "+Sizes: XS S M L XL XXL"]
+      }
+    ],
+    "evidence": {
+      "status": 200,
+      "httpError": false,
+      "beforeChars": 9120,
+      "afterChars": 9128,
+      "textHalved": false,
+      "pricesBefore": 2,
+      "pricesAfter": 2,
+      "pricesVanished": false
+    },
+    "history_30d": [],
+    "labels": {
+      "own_site_breakage": false,
+      "noteworthy_change": true,
+      "change_kind": "launch"
+    },
+    "why": {
+      "own_site_breakage": "two sizes added to the size list: a deliberate range extension, the page works normally",
+      "noteworthy_change": "new sizes are available, a tracked product changed",
+      "change_kind": "the size range was extended"
+    }
+  },
+  {
+    "id": "patagonia-all-products-unordered",
+    "split": "train",
+    "subject": {
+      "name": "Patagonia",
+      "domain": "patagonia.com"
+    },
+    "isSelf": true,
+    "pageRole": "product",
+    "pageUrl": "https://www.patagonia.com/",
+    "hunks": [
+      {
+        "lines": ["@@ -1,1 +1,1 @@", "-Sort: Featured", "+Sort: Relevance"]
+      }
+    ],
+    "evidence": {
+      "status": 200,
+      "httpError": false,
+      "beforeChars": 9120,
+      "afterChars": 9118,
+      "textHalved": false,
+      "pricesBefore": 2,
+      "pricesAfter": 2,
+      "pricesVanished": false
+    },
+    "history_30d": [],
+    "labels": {
+      "own_site_breakage": false,
+      "noteworthy_change": false,
+      "change_kind": "noise"
+    },
+    "why": {
+      "own_site_breakage": "a sort option renamed: a deliberate control change, nothing a visitor needs is missing",
+      "noteworthy_change": "a sort control was renamed, no customer decision changes",
+      "change_kind": "nothing a shopper tracks changed"
+    }
+  },
+  {
+    "id": "patagonia-broken-image-css",
+    "split": "train",
+    "subject": {
+      "name": "Patagonia",
+      "domain": "patagonia.com"
+    },
+    "isSelf": true,
+    "pageRole": "home",
+    "pageUrl": "https://www.patagonia.com/",
+    "hunks": [
+      {
+        "lines": ["@@ -1,2 +1,1 @@", "-<link rel=stylesheet href=/static/main.css>", "+<style>body{}</style>"]
+      }
+    ],
+    "evidence": {
+      "status": 200,
+      "httpError": false,
+      "beforeChars": 18422,
+      "afterChars": 18100,
+      "textHalved": false,
+      "pricesBefore": 14,
+      "pricesAfter": 14,
+      "pricesVanished": false
+    },
+    "history_30d": [],
+    "labels": {
+      "own_site_breakage": true,
+      "noteworthy_change": true,
+      "change_kind": "breakage"
+    },
+    "why": {
+      "own_site_breakage": "the stylesheet link is gone so the page renders as unstyled text: the text survives, the site does not",
+      "noteworthy_change": "the site renders unstyled, a customer sees a broken store",
+      "change_kind": "the stylesheet stopped loading"
+    }
+  },
+  {
+    "id": "patagonia-sitemap-text-dump",
+    "split": "train",
+    "subject": {
+      "name": "Patagonia",
+      "domain": "patagonia.com"
+    },
+    "isSelf": true,
+    "pageRole": "product",
+    "pageUrl": "https://www.patagonia.com/",
+    "hunks": [
+      {
+        "lines": [
+          "@@ -1,1 +1,1 @@",
+          "-Better Sweater Jacket $179 Add to cart",
+          "+https://patagonia.com/product/better-sweater-jacket https://patagonia.com/shop/men"
+        ]
+      }
+    ],
+    "evidence": {
+      "status": 200,
+      "httpError": false,
+      "beforeChars": 9120,
+      "afterChars": 8800,
+      "textHalved": false,
+      "pricesBefore": 2,
+      "pricesAfter": 0,
+      "pricesVanished": true
+    },
+    "history_30d": [],
+    "labels": {
+      "own_site_breakage": true,
+      "noteworthy_change": true,
+      "change_kind": "breakage"
+    },
+    "why": {
+      "own_site_breakage": "a product page now renders raw URLs instead of copy and prices: extraction caught a degraded render",
+      "noteworthy_change": "the product page shows raw URLs and no prices",
+      "change_kind": "extraction caught a degraded render of URLs instead of copy"
+    }
+  },
+  {
+    "id": "patagonia-slow-not-broken",
+    "split": "train",
+    "subject": {
+      "name": "Patagonia",
+      "domain": "patagonia.com"
+    },
+    "isSelf": true,
+    "pageRole": "home",
+    "pageUrl": "https://www.patagonia.com/",
+    "hunks": [
+      {
+        "lines": ["@@ -1,1 +1,1 @@", "-Free shipping over $75", "+Free shipping over $75 on orders placed this week"]
+      }
+    ],
+    "evidence": {
+      "status": 200,
+      "httpError": false,
+      "beforeChars": 18422,
+      "afterChars": 18444,
+      "textHalved": false,
+      "pricesBefore": 14,
+      "pricesAfter": 14,
+      "pricesVanished": false
+    },
+    "history_30d": [],
+    "labels": {
+      "own_site_breakage": false,
+      "noteworthy_change": true,
+      "change_kind": "offer"
+    },
+    "why": {
+      "own_site_breakage": "a shipping offer was refined: the page is complete and works for a visitor",
+      "noteworthy_change": "the free-shipping offer terms changed",
+      "change_kind": "a shipping promotion was reworded"
+    }
+  },
+  {
+    "id": "patagonia-pricing-to-none",
+    "split": "train",
+    "subject": {
+      "name": "Patagonia",
+      "domain": "patagonia.com"
+    },
+    "isSelf": true,
+    "pageRole": "pricing",
+    "pageUrl": "https://www.patagonia.com/",
+    "hunks": [
+      {
+        "lines": ["@@ -1,2 +1,1 @@", "-Wetsuits from $195", "-Jackets from $249"]
+      }
+    ],
+    "evidence": {
+      "status": 200,
+      "httpError": false,
+      "beforeChars": 8410,
+      "afterChars": 7100,
+      "textHalved": false,
+      "pricesBefore": 9,
+      "pricesAfter": 7,
+      "pricesVanished": false
+    },
+    "history_30d": [],
+    "labels": {
+      "own_site_breakage": false,
+      "noteworthy_change": true,
+      "change_kind": "removal"
+    },
+    "why": {
+      "own_site_breakage": "two category price lines dropped but seven prices still render and the page is over four fifths of its size: a catalogue edit, not a break",
+      "noteworthy_change": "two product lines left the catalogue",
+      "change_kind": "category listings were removed from the pricing page"
+    }
+  },
+  {
+    "id": "patagonia-cdp-cookie-wall",
+    "split": "train",
+    "subject": {
+      "name": "Patagonia",
+      "domain": "patagonia.com"
+    },
+    "isSelf": true,
+    "pageRole": "home",
+    "pageUrl": "https://www.patagonia.com/",
+    "hunks": [
+      {
+        "lines": [
+          "@@ -1,2 +1,3 @@",
+          "+We use cookies to improve your experience.",
+          "+Accept all",
+          "+Manage preferences",
+          " Shop new arrivals"
+        ]
+      }
+    ],
+    "evidence": {
+      "status": 200,
+      "httpError": false,
+      "beforeChars": 18422,
+      "afterChars": 18500,
+      "textHalved": false,
+      "pricesBefore": 14,
+      "pricesAfter": 14,
+      "pricesVanished": false
+    },
+    "history_30d": [],
+    "labels": {
+      "own_site_breakage": false,
+      "noteworthy_change": false,
+      "change_kind": "noise"
+    },
+    "why": {
+      "own_site_breakage": "a consent banner appeared and everything below still renders: deliberate, the page works",
+      "noteworthy_change": "a consent banner appeared, not a change a customer tracks",
+      "change_kind": "nothing meaningful changed"
+    }
+  },
+  {
+    "id": "allbirds-500",
+    "split": "train",
+    "subject": {
+      "name": "Allbirds",
+      "domain": "allbirds.com"
+    },
+    "isSelf": true,
+    "pageRole": "home",
+    "pageUrl": "https://www.allbirds.com/",
+    "hunks": [
+      {
+        "lines": ["@@ -1,1 +1,1 @@", "-Shop sneakers", "+Service Unavailable"]
+      }
+    ],
+    "evidence": {
+      "status": 503,
+      "httpError": true,
+      "beforeChars": 14100,
+      "afterChars": 50,
+      "textHalved": true,
+      "pricesBefore": 8,
+      "pricesAfter": 0,
+      "pricesVanished": true
+    },
+    "history_30d": ["New runner colourway added"],
+    "labels": {
+      "own_site_breakage": true,
+      "noteworthy_change": true,
+      "change_kind": "breakage"
+    },
+    "why": {
+      "own_site_breakage": "a 503 service page replaces the store: the visitor sees nothing to shop",
+      "noteworthy_change": "the store is down for every visitor",
+      "change_kind": "a service-unavailable error replaces the page"
+    }
+  },
+  {
+    "id": "allbirds-blank-pricing",
+    "split": "train",
+    "subject": {
+      "name": "Allbirds",
+      "domain": "allbirds.com"
+    },
+    "isSelf": true,
+    "pageRole": "pricing",
+    "pageUrl": "https://www.allbirds.com/collections/mens",
+    "hunks": [
+      {
+        "lines": ["@@ -1,2 +1,1 @@", "-Men's Wool Runners $110", "+Men's"]
+      }
+    ],
+    "evidence": {
+      "status": 200,
+      "httpError": false,
+      "beforeChars": 9600,
+      "afterChars": 4300,
+      "textHalved": true,
+      "pricesBefore": 12,
+      "pricesAfter": 0,
+      "pricesVanished": true
+    },
+    "history_30d": [],
+    "labels": {
+      "own_site_breakage": true,
+      "noteworthy_change": true,
+      "change_kind": "breakage"
+    },
+    "why": {
+      "own_site_breakage": "half the page is gone and every price vanished: a 200 that renders an empty listing",
+      "noteworthy_change": "the listing page lost its products and prices",
+      "change_kind": "a 200 renders an empty listing"
+    }
+  },
+  {
+    "id": "allbirds-checkout-error",
+    "split": "train",
+    "subject": {
+      "name": "Allbirds",
+      "domain": "allbirds.com"
+    },
+    "isSelf": true,
+    "pageRole": "other",
+    "pageUrl": "https://www.allbirds.com/cart",
+    "hunks": [
+      {
+        "lines": ["@@ -1,2 +1,1 @@", "-Checkout $110", "+Checkout is temporarily down"]
+      }
+    ],
+    "evidence": {
+      "status": 200,
+      "httpError": false,
+      "beforeChars": 2100,
+      "afterChars": 260,
+      "textHalved": true,
+      "pricesBefore": 1,
+      "pricesAfter": 0,
+      "pricesVanished": true
+    },
+    "history_30d": [],
+    "labels": {
+      "own_site_breakage": true,
+      "noteworthy_change": true,
+      "change_kind": "breakage"
+    },
+    "why": {
+      "own_site_breakage": "the checkout page lost its totals and controls: a shopper cannot pay",
+      "noteworthy_change": "no one can complete a purchase",
+      "change_kind": "the checkout page lost its totals and controls"
+    }
+  },
+  {
+    "id": "allbirds-email-banner",
+    "split": "train",
+    "subject": {
+      "name": "Allbirds",
+      "domain": "allbirds.com"
+    },
+    "isSelf": true,
+    "pageRole": "home",
+    "pageUrl": "https://www.allbirds.com/",
+    "hunks": [
+      {
+        "lines": ["@@ -1,1 +1,2 @@", "+Sign up for 10% off your first order", " Shop sneakers"]
+      }
+    ],
+    "evidence": {
+      "status": 200,
+      "httpError": false,
+      "beforeChars": 14100,
+      "afterChars": 14180,
+      "textHalved": false,
+      "pricesBefore": 8,
+      "pricesAfter": 8,
+      "pricesVanished": false
+    },
+    "history_30d": [],
+    "labels": {
+      "own_site_breakage": false,
+      "noteworthy_change": false,
+      "change_kind": "offer"
+    },
+    "why": {
+      "own_site_breakage": "a signup banner appeared and every product and price still renders: deliberate",
+      "noteworthy_change": "a signup discount banner is a promotion but a mild one",
+      "change_kind": "a first-order discount banner was added"
+    }
+  },
+  {
+    "id": "allbirds-sole-copy",
+    "split": "train",
+    "subject": {
+      "name": "Allbirds",
+      "domain": "allbirds.com"
+    },
+    "isSelf": true,
+    "pageRole": "product",
+    "pageUrl": "https://www.allbirds.com/products/wool-runner",
+    "hunks": [
+      {
+        "lines": [
+          "@@ -1,1 +1,1 @@",
+          "-Made with eucalyptus fibre",
+          "+Made with sweet Lombardy eucalyptus fibre from FSC-certified farms"
+        ]
+      }
+    ],
+    "evidence": {
+      "status": 200,
+      "httpError": false,
+      "beforeChars": 6800,
+      "afterChars": 6850,
+      "textHalved": false,
+      "pricesBefore": 1,
+      "pricesAfter": 1,
+      "pricesVanished": false
+    },
+    "history_30d": [],
+    "labels": {
+      "own_site_breakage": false,
+      "noteworthy_change": false,
+      "change_kind": "copy"
+    },
+    "why": {
+      "own_site_breakage": "a longer materials sentence on a fully rendered product page: deliberate copy",
+      "noteworthy_change": "a materials sentence was lengthened, no product change",
+      "change_kind": "product copy was edited"
+    }
+  },
+  {
+    "id": "allbirds-nav-gap",
+    "split": "train",
+    "subject": {
+      "name": "Allbirds",
+      "domain": "allbirds.com"
+    },
+    "isSelf": true,
+    "pageRole": "home",
+    "pageUrl": "https://www.allbirds.com/",
+    "hunks": [
+      {
+        "lines": ["@@ -1,2 +1,1 @@", "-Men Women", "+Women"]
+      }
+    ],
+    "evidence": {
+      "status": 200,
+      "httpError": false,
+      "beforeChars": 14100,
+      "afterChars": 13900,
+      "textHalved": false,
+      "pricesBefore": 8,
+      "pricesAfter": 8,
+      "pricesVanished": false
+    },
+    "history_30d": [],
+    "labels": {
+      "own_site_breakage": true,
+      "noteworthy_change": true,
+      "change_kind": "breakage"
+    },
+    "why": {
+      "own_site_breakage": "the men's nav entry is gone on a store that sells to men: half the catalogue is now unreachable from the home page",
+      "noteworthy_change": "half the catalogue became unreachable from the home page",
+      "change_kind": "a main navigation entry disappeared"
+    }
+  },
+  {
+    "id": "bombas-price-strip",
+    "split": "train",
+    "subject": {
+      "name": "Bombas",
+      "domain": "bombas.com"
+    },
+    "isSelf": true,
+    "pageRole": "pricing",
+    "pageUrl": "https://bombas.com/collections/socks",
+    "hunks": [
+      {
+        "lines": ["@@ -1,2 +1,1 @@", "-Ankle socks 6-pack $68", "+Ankle socks 6-pack"]
+      }
+    ],
+    "evidence": {
+      "status": 200,
+      "httpError": false,
+      "beforeChars": 7300,
+      "afterChars": 7240,
+      "textHalved": false,
+      "pricesBefore": 10,
+      "pricesAfter": 9,
+      "pricesVanished": false
+    },
+    "history_30d": ["New calf sock colour"],
+    "labels": {
+      "own_site_breakage": true,
+      "noteworthy_change": true,
+      "change_kind": "breakage"
+    },
+    "why": {
+      "own_site_breakage": "prices started disappearing from the listing: 10 became 9, the template that renders them is failing",
+      "noteworthy_change": "prices are disappearing from the listing",
+      "change_kind": "the template that renders prices is failing"
+    }
+  },
+  {
+    "id": "bombas-email-verify-stuck",
+    "split": "train",
+    "subject": {
+      "name": "Bombas",
+      "domain": "bombas.com"
+    },
+    "isSelf": true,
+    "pageRole": "other",
+    "pageUrl": "https://bombas.com/account",
+    "hunks": [
+      {
+        "lines": ["@@ -1,1 +1,1 @@", "-Your orders", "+Verifying your email, please wait"]
+      }
+    ],
+    "evidence": {
+      "status": 200,
+      "httpError": false,
+      "beforeChars": 3300,
+      "afterChars": 900,
+      "textHalved": true,
+      "pricesBefore": 0,
+      "pricesAfter": 0,
+      "pricesVanished": false
+    },
+    "history_30d": [],
+    "labels": {
+      "own_site_breakage": true,
+      "noteworthy_change": true,
+      "change_kind": "breakage"
+    },
+    "why": {
+      "own_site_breakage": "the account page is stuck on a verify interstitial: the visitor cannot see their orders",
+      "noteworthy_change": "a customer cannot reach their account or orders",
+      "change_kind": "the account page is stuck on a verify interstitial"
+    }
+  },
+  {
+    "id": "bombas-privacy-update",
+    "split": "train",
+    "subject": {
+      "name": "Bombas",
+      "domain": "bombas.com"
+    },
+    "isSelf": true,
+    "pageRole": "legal",
+    "pageUrl": "https://bombas.com/pages/privacy",
+    "hunks": [
+      {
+        "lines": [
+          "@@ -1,1 +1,1 @@",
+          "-We share data with our advertising partners",
+          "+We share data with our advertising partners only with your consent"
+        ]
+      }
+    ],
+    "evidence": {
+      "status": 200,
+      "httpError": false,
+      "beforeChars": 22000,
+      "afterChars": 22030,
+      "textHalved": false,
+      "pricesBefore": 0,
+      "pricesAfter": 0,
+      "pricesVanished": false
+    },
+    "history_30d": [],
+    "labels": {
+      "own_site_breakage": false,
+      "noteworthy_change": false,
+      "change_kind": "copy"
+    },
+    "why": {
+      "own_site_breakage": "a privacy sentence was updated on an intact legal page: deliberate",
+      "noteworthy_change": "a privacy sentence was clarified, no product or price changed",
+      "change_kind": "legal copy was edited"
+    }
+  },
+  {
+    "id": "bombas-menu-doubled",
+    "split": "train",
+    "subject": {
+      "name": "Bombas",
+      "domain": "bombas.com"
+    },
+    "isSelf": true,
+    "pageRole": "home",
+    "pageUrl": "https://bombas.com/",
+    "hunks": [
+      {
+        "lines": ["@@ -1,2 +1,4 @@", " Shop socks", " Shop socks", "-Shop apparel", "+Gift cards"]
+      }
+    ],
+    "evidence": {
+      "status": 200,
+      "httpError": false,
+      "beforeChars": 13000,
+      "afterChars": 13100,
+      "textHalved": false,
+      "pricesBefore": 7,
+      "pricesAfter": 7,
+      "pricesVanished": false
+    },
+    "history_30d": [],
+    "labels": {
+      "own_site_breakage": true,
+      "noteworthy_change": true,
+      "change_kind": "unintended"
+    },
+    "why": {
+      "own_site_breakage": "the same nav item rendered twice: a duplicated component is leaking markup, the page is degraded",
+      "noteworthy_change": "a broken nav is visible to every customer",
+      "change_kind": "a component rendered twice by accident"
+    }
+  },
+  {
+    "id": "bombas-gift-note",
+    "split": "train",
+    "subject": {
+      "name": "Bombas",
+      "domain": "bombas.com"
+    },
+    "isSelf": true,
+    "pageRole": "product",
+    "pageUrl": "https://bombas.com/products/ankle-socks",
+    "hunks": [
+      {
+        "lines": ["@@ -1,1 +1,2 @@", " Add gift note", "+Gift notes ship free", " $68"]
+      }
+    ],
+    "evidence": {
+      "status": 200,
+      "httpError": false,
+      "beforeChars": 6200,
+      "afterChars": 6240,
+      "textHalved": false,
+      "pricesBefore": 1,
+      "pricesAfter": 1,
+      "pricesVanished": false
+    },
+    "history_30d": [],
+    "labels": {
+      "own_site_breakage": false,
+      "noteworthy_change": false,
+      "change_kind": "copy"
+    },
+    "why": {
+      "own_site_breakage": "a line about free gift notes was added on an intact product page: deliberate",
+      "noteworthy_change": "a gift-note line was added, nothing a customer tracks changes",
+      "change_kind": "product copy was added"
+    }
+  },
+  {
+    "id": "peloton-bike-404",
+    "split": "train",
+    "subject": {
+      "name": "Peloton",
+      "domain": "onepeloton.com"
+    },
+    "isSelf": true,
+    "pageRole": "product",
+    "pageUrl": "https://www.onepeloton.com/bike",
+    "hunks": [
+      {
+        "lines": ["@@ -1,1 +1,1 @@", "-Bike+ from $1,995", "+The page you are looking for cannot be found"]
+      }
+    ],
+    "evidence": {
+      "status": 404,
+      "httpError": true,
+      "beforeChars": 8800,
+      "afterChars": 200,
+      "textHalved": true,
+      "pricesBefore": 2,
+      "pricesAfter": 0,
+      "pricesVanished": true
+    },
+    "history_30d": ["Tread+ page updated"],
+    "labels": {
+      "own_site_breakage": true,
+      "noteworthy_change": true,
+      "change_kind": "breakage"
+    },
+    "why": {
+      "own_site_breakage": "the flagship product page 404s: a visitor following any bike link lands nowhere",
+      "noteworthy_change": "the flagship product page is gone",
+      "change_kind": "the product URL returns not-found"
+    }
+  },
+  {
+    "id": "peloton-class-schedule-empty",
+    "split": "train",
+    "subject": {
+      "name": "Peloton",
+      "domain": "onepeloton.com"
+    },
+    "isSelf": true,
+    "pageRole": "other",
+    "pageUrl": "https://www.onepeloton.com/classes",
+    "hunks": [
+      {
+        "lines": ["@@ -1,1 +1,1 @@", "-214 live classes this week", "+0 live classes this week"]
+      }
+    ],
+    "evidence": {
+      "status": 200,
+      "httpError": false,
+      "beforeChars": 6600,
+      "afterChars": 6480,
+      "textHalved": false,
+      "pricesBefore": 0,
+      "pricesAfter": 0,
+      "pricesVanished": false
+    },
+    "history_30d": [],
+    "labels": {
+      "own_site_breakage": true,
+      "noteworthy_change": true,
+      "change_kind": "breakage"
+    },
+    "why": {
+      "own_site_breakage": "a schedule that listed 214 classes now lists zero: the listing stopped working",
+      "noteworthy_change": "a schedule that listed 214 classes lists zero",
+      "change_kind": "the listing stopped returning rows"
+    }
+  },
+  {
+    "id": "peloton-membership-plans",
+    "split": "train",
+    "subject": {
+      "name": "Peloton",
+      "domain": "onepeloton.com"
+    },
+    "isSelf": true,
+    "pageRole": "pricing",
+    "pageUrl": "https://www.onepeloton.com/membership",
+    "hunks": [
+      {
+        "lines": ["@@ -1,2 +1,2 @@", "-All-Access $44/mo", "-App+ $24/mo", "+All-Access $44/mo", "+App+ $19.99/mo"]
+      }
+    ],
+    "evidence": {
+      "status": 200,
+      "httpError": false,
+      "beforeChars": 5400,
+      "afterChars": 5420,
+      "textHalved": false,
+      "pricesBefore": 2,
+      "pricesAfter": 2,
+      "pricesVanished": false
+    },
+    "history_30d": [],
+    "labels": {
+      "own_site_breakage": false,
+      "noteworthy_change": true,
+      "change_kind": "pricing"
+    },
+    "why": {
+      "own_site_breakage": "a plan price was updated and both plans still render: deliberate",
+      "noteworthy_change": "a subscription price changed",
+      "change_kind": "a plan price was updated"
+    }
+  },
+  {
+    "id": "peloton-hero-video-fallback",
+    "split": "train",
+    "subject": {
+      "name": "Peloton",
+      "domain": "onepeloton.com"
+    },
+    "isSelf": true,
+    "pageRole": "home",
+    "pageUrl": "https://www.onepeloton.com/",
+    "hunks": [
+      {
+        "lines": ["@@ -1,1 +1,1 @@", "-<video src=/hero.mp4 autoplay>", "+<img src=/hero-poster.jpg>"]
+      }
+    ],
+    "evidence": {
+      "status": 200,
+      "httpError": false,
+      "beforeChars": 9900,
+      "afterChars": 9880,
+      "textHalved": false,
+      "pricesBefore": 2,
+      "pricesAfter": 2,
+      "pricesVanished": false
+    },
+    "history_30d": [],
+    "labels": {
+      "own_site_breakage": false,
+      "noteworthy_change": false,
+      "change_kind": "copy"
+    },
+    "why": {
+      "own_site_breakage": "the hero swapped from video to a poster image: a deliberate media change on a complete page",
+      "noteworthy_change": "the hero media swapped, nothing a customer tracks changes",
+      "change_kind": "the homepage hero media was replaced"
+    }
+  }
+]
