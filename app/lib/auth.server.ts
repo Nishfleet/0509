@@ -35,6 +35,8 @@ function emailOf(body: unknown): string {
 
 const COOKIE_PREFIX = "better-auth";
 const FRESH_SESSION_SECONDS = 60 * 60 * 24;
+const SESSION_COOKIE_CACHE_SECONDS = 5 * 60;
+const FRESH = { disableCookieCache: true };
 const SESSION_COOKIE = `${COOKIE_PREFIX}.session_token`;
 const sessionCookieNames = new Set([SESSION_COOKIE, `__Secure-${SESSION_COOKIE}`]);
 
@@ -53,9 +55,12 @@ export function createAuth(env: AuthEnv, options?: { captcha?: boolean; validate
     advanced: {
       cookiePrefix: COOKIE_PREFIX,
       ipAddress: { ipAddressHeaders: [CLIENT_IP_HEADER] },
-      database: { validateSchema: options?.validateSchema ?? false },
+      database: { joins: true, validateSchema: options?.validateSchema ?? false },
     },
-    session: { freshAge: FRESH_SESSION_SECONDS },
+    session: {
+      freshAge: FRESH_SESSION_SECONDS,
+      cookieCache: { enabled: true, maxAge: SESSION_COOKIE_CACHE_SECONDS },
+    },
     user: { deleteUser: { enabled: true } },
     hooks: {
       before: createAuthMiddleware(async (ctx) => {
@@ -134,12 +139,19 @@ export async function signOut(env: AuthEnv, request: Request): Promise<Headers> 
 
 export async function deleteSignedInUser(env: AuthEnv, request: Request, now: Date): Promise<Headers | null> {
   const auth = createAuth(env);
-  const session = await auth.api.getSession({ headers: request.headers });
+  const session = await auth.api.getSession({ headers: request.headers, query: FRESH });
   if (!session) return null;
   const age = now.getTime() - new Date(session.session.createdAt).getTime();
   if (age >= FRESH_SESSION_SECONDS * 1000) return null;
   const { apiKeys } = await auth.api.listApiKeys({ headers: request.headers });
-  await Promise.all(apiKeys.map((key) => auth.api.deleteApiKey({ body: { keyId: key.id }, headers: request.headers })));
-  const { headers } = await auth.api.deleteUser({ body: {}, headers: request.headers, returnHeaders: true });
+  await Promise.all(
+    apiKeys.map((key) => auth.api.deleteApiKey({ body: { keyId: key.id }, headers: request.headers, query: FRESH })),
+  );
+  const { headers } = await auth.api.deleteUser({
+    body: {},
+    headers: request.headers,
+    query: FRESH,
+    returnHeaders: true,
+  });
   return headers;
 }

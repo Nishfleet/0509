@@ -157,7 +157,7 @@ for (const { mode, kind, waitMs, account } of MODES) {
       expect(decodedBodies(fixedRaw).join("\n")).toContain("it looks fixed");
 
       await page.goto("/app/alerts");
-      const openIncidents = page.getByTestId("own-site-incident").filter({ hasText: "We check it again every hour" });
+      const openIncidents = page.getByTestId("incident-block");
       await expect(openIncidents).toHaveCount(0);
 
       const openDay = openSentAt.toISOString().slice(0, 10);

@@ -238,6 +238,29 @@ describe("source latest snapshot facts (0509#5724)", () => {
     });
   });
 
+  it("a retried write whose caller recomputes fetchedAt keeps the stored snapshot's facts", async () => {
+    await seedSource(SOURCE, WATCH);
+    const row = {
+      id: "snap-site-recomputed",
+      watchId: WATCH,
+      pageId: PAGE,
+      r2Key: "snapshot/site/watch-src-latest/snap-site-recomputed.txt",
+      hash: "hash-site-recomputed",
+    };
+    await insertSnapshot({ ...row, fetchedAt: "2026-09-25T05:00:00Z" });
+    await insertSnapshot({ ...row, fetchedAt: "2026-09-25T05:00:09Z" });
+
+    const stored = await env.DB.prepare("SELECT fetched_at FROM snapshot WHERE id = ?1")
+      .bind(row.id)
+      .first<{ fetched_at: string }>();
+    expect(stored?.fetched_at).toBe("2026-09-25T05:00:00Z");
+    expect(await latestFacts(SOURCE)).toEqual({
+      latest_fetched_at: "2026-09-25T05:00:00Z",
+      latest_item_count: 1,
+      latest_canary_count: null,
+    });
+  });
+
   it("an equal fetched_at is not newer: the first committed fact set stays", async () => {
     await seedSource(SOURCE, WATCH);
     await seedWatch(WATCH_TIE, SOURCE, "acme-campaign");
