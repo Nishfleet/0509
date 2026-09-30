@@ -13,7 +13,7 @@ import { parseAlertChip } from "../lib/alert-chips";
 import { briefSendLine } from "../lib/brief-state";
 import { listBriefs } from "../lib/data/digest.server";
 import { readWorkspaceIdForOwner } from "../lib/data/workspace.server";
-import { requireSession } from "../lib/require-session.server";
+import { requireFreshSession, requireSession } from "../lib/require-session.server";
 
 export function meta() {
   return [{ title: "Alerts · Five to Nine" }];
@@ -31,7 +31,7 @@ export async function loader({ request }: Route.LoaderArgs) {
 }
 
 export async function action({ request }: Route.ActionArgs) {
-  const session = await requireSession(request);
+  const session = await requireFreshSession(request);
   const form = await request.formData();
   const alertId = form.get("alertId");
   if (form.get("intent") !== "acknowledge" || typeof alertId !== "string") return { saved: false };

@@ -431,7 +431,7 @@ action that fills it.
 | Where                             | Copy                                                                                                                                    |
 | --------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
 | Home, second zero                 | "We're gathering the first week. Your first read-this-first comes with the brief on Monday 08:00." (a real Workflow time, never "soon") |
-| Read this first, quiet week       | "Quiet week. 61 mentions, 2 site changes and no new ads checked — nothing crossed the bar." with the counts tappable                    |
+| Read this first, quiet week       | "Quiet week. 61 mentions, 2 site changes checked — nothing crossed the bar." with the counts tappable                                   |
 | Fewer than two ON brands          | "Add a competitor to see where you stand." with the one input inline                                                                    |
 | A row's evidence tab with nothing | "No site changes this week. We checked /pricing and /home daily — last at 06:02."                                                       |
 | Competitor page, just added       | "Watching from today. We read the homepage every night at 02:00 UTC, and the first change shows here after the second read."            |

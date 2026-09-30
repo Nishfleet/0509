@@ -39,4 +39,23 @@ describe("lookupYoutubeChannel", () => {
     await expect(lookupYoutubeChannel(identityFor(handle))).resolves.toEqual({ status: "unresolved" });
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
+
+  it.each([
+    ["an http link", { platform: "youtube", url: "http://www.youtube.com/@plainhttp0509" }],
+    ["a link labelled otherwise", { platform: "video", url: "https://www.youtube.com/@otherlabel0509" }],
+  ])("reads %s to YouTube as unresolved, not as no channel", async (_label, social) => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    await expect(lookupYoutubeChannel(JSON.stringify({ socials: [social] }))).resolves.toEqual({
+      status: "unresolved",
+    });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["no socials", {}],
+    ["only non-YouTube socials", { socials: [{ platform: "x", url: "https://x.com/brand0509" }] }],
+  ])("reads a card with %s as no-url", async (_label, card) => {
+    await expect(lookupYoutubeChannel(JSON.stringify(card))).resolves.toEqual({ status: "no-url" });
+  });
 });

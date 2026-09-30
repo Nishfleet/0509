@@ -2,7 +2,7 @@ import type { Route } from "./+types/onboarding";
 
 import { Form, redirect } from "react-router";
 
-import { requireSession } from "../lib/require-session.server";
+import { requireFreshSession, requireSession } from "../lib/require-session.server";
 import { ONBOARDING_COMPETITORS, workspaceLandingForRequest } from "../lib/workspace.server";
 import { OneInput } from "../components/one-input";
 import { AddPasskey } from "../components/passkey-button";
@@ -27,7 +27,7 @@ export async function loader({ request }: Route.LoaderArgs) {
 }
 
 export async function action({ request }: Route.ActionArgs) {
-  const session = await requireSession(request);
+  const session = await requireFreshSession(request);
   const formData = await request.formData();
   const raw = formData.get("subject");
   const rawSubject = typeof raw === "string" ? raw : null;

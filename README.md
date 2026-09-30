@@ -1,6 +1,6 @@
 # Five to Nine
 
-Five to Nine watches your competitors' websites, ads and mentions, and emails
+Five to Nine watches your competitors' websites and mentions, and emails
 you a weekly brief with screenshot proof of what changed. `0509.io` is its
 domain (05:09 = five to nine).
 

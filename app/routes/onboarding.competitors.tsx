@@ -13,15 +13,15 @@ import { markCompetitorsReady, markWatchingStarted } from "../lib/data/onboardin
 import { readWorkspaceIdForOwner } from "../lib/data/workspace.server";
 import { readDiscoveryState } from "../lib/discovery/start.server";
 import { discoveryNotice, type DiscoveryState } from "../lib/discovery/state";
-import { requireSession } from "../lib/require-session.server";
+import { requireFreshSession, requireSession } from "../lib/require-session.server";
 import { createTimings } from "../lib/server-timing.server";
 import { ONBOARDING_COMPETITORS, workspaceLandingForRequest } from "../lib/workspace.server";
 
 const POLL_MS = 3000;
 const MAX_POLLS = 60;
 
-async function workspaceFor(request: Request): Promise<string> {
-  const session = await requireSession(request);
+async function workspaceFor(request: Request, fresh = false): Promise<string> {
+  const session = await (fresh ? requireFreshSession(request) : requireSession(request));
   const landing = await workspaceLandingForRequest(request, session.user);
   if (landing !== null && landing !== ONBOARDING_COMPETITORS) throw redirect(landing);
   const workspaceId = await readWorkspaceIdForOwner(session.user.id);
@@ -43,7 +43,7 @@ export async function loader({ request }: Route.LoaderArgs) {
 }
 
 export async function action({ request }: Route.ActionArgs) {
-  const workspaceId = await workspaceFor(request);
+  const workspaceId = await workspaceFor(request, true);
   const form = await request.formData();
   if (form.get("intent") === "start") {
     await markWatchingStarted(workspaceId, new Date().toISOString());

@@ -49,11 +49,11 @@ function links(html: string): string[] {
 
 describe("DESIGN.md 7 empty states", () => {
   it("a quiet week keeps its counts and makes them tappable", () => {
-    const { sentence, action } = quietWeek(61, 2, 0);
+    const { sentence, action } = quietWeek(61, 2);
     const html = emptyState(sentence, action);
     expect(html).toContain("61 mentions");
     expect(html).toContain("2 site changes");
-    expect(html).toContain("0 new ads checked");
+    expect(html).not.toMatch(/\bads\b/);
     expect(links(html)).toHaveLength(1);
     expect(links(html)[0]).toContain('href="/app"');
   });
@@ -84,7 +84,7 @@ describe("DESIGN.md 7 empty states", () => {
   });
 
   it("a surface with some truth shows that truth at whatever size it is", () => {
-    const { sentence } = quietWeek(61, 2, 0);
+    const { sentence } = quietWeek(61, 2);
     const html = emptyState(sentence);
     expect(html).toContain("61 mentions");
     expect(html).toContain("2 site changes");
@@ -105,7 +105,7 @@ describe("the component renders a sentence and at most one action, nothing else"
   });
 
   it("renders exactly one link when given a link action", () => {
-    const { sentence, action } = quietWeek(61, 2, 0);
+    const { sentence, action } = quietWeek(61, 2);
     const html = emptyState(sentence, action);
     expect(links(html)).toHaveLength(1);
     expect(html).toContain(">Open the counts</a>");
@@ -152,7 +152,7 @@ describe("a bare empty sentence is impossible", () => {
 
   it("every sentence the component ships renders", () => {
     const shipped = [
-      quietWeek(61, 2, 0).sentence,
+      quietWeek(61, 2).sentence,
       fewerThanTwoOnBrands().sentence,
       evidenceEmpty(["/pricing", "/home"], shift(-1)).sentence,
       degradedSource("X", "rate-limiting us since Friday").sentence,
@@ -165,7 +165,7 @@ describe("a bare empty sentence is impossible", () => {
 
   it("each shipped sentence names something a user can act on", () => {
     for (const { sentence } of [
-      quietWeek(61, 2, 0),
+      quietWeek(61, 2),
       fewerThanTwoOnBrands(),
       evidenceEmpty(["/pricing", "/home"], shift(-1)),
       degradedSource("X", "rate-limiting us since Friday"),

@@ -16,7 +16,7 @@ import { confirmCard } from "../lib/identity/confirm.server";
 import { normaliseSubject } from "../lib/identity/normalise";
 import { screenOnboardingSubject } from "../lib/onboarding-screen.server";
 import { timeCard } from "../lib/onboarding/card-timing.server";
-import { requireSession } from "../lib/require-session.server";
+import { requireFreshSession, requireSession } from "../lib/require-session.server";
 import { createTimings } from "../lib/server-timing.server";
 import { workspaceLandingForRequest } from "../lib/workspace.server";
 
@@ -64,7 +64,7 @@ export async function loader({ request }: Route.LoaderArgs) {
 
 export async function action({ request }: Route.ActionArgs) {
   const timings = createTimings();
-  const session = await timings.measure("session", requireSession(request));
+  const session = await timings.measure("session", requireFreshSession(request));
   const workspaceId = await timings.measure("workspace", readWorkspaceIdForOwner(session.user.id));
   if (workspaceId === null) throw redirect("/onboarding");
   const form = await request.formData();

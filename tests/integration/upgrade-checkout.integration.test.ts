@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import checkoutSession from "../fixtures/dodo/checkout-session-created.json";
 
 vi.mock("../../app/lib/require-session.server", () => ({
-  requireSession: async () => ({ user: { id: "user-upgrade", email: "upgrade@example.com" } }),
+  requireFreshSession: async () => ({ user: { id: "user-upgrade", email: "upgrade@example.com" } }),
 }));
 
 import { action } from "../../app/routes/app.upgrade";
