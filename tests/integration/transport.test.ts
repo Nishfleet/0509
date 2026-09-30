@@ -722,6 +722,50 @@ describe("readUrl", () => {
     }
   });
 
+  it("an unconfigured browser binding logs no cost line", async () => {
+    const stub = stubFetch({
+      "https://gated.example.com/": () => new Response("Forbidden", { status: 403 }),
+    });
+    const lines: string[] = [];
+    const spy = vi.spyOn(console, "log").mockImplementation((line) => {
+      lines.push(String(line));
+    });
+    try {
+      const result = await readUrl("https://gated.example.com/", { mayEscalate: async () => true });
+      expect(result.ok).toBe(false);
+      if (result.ok) return;
+      expect(result.reason).toBe("escalation-failed");
+      expect(result.detail).toContain("browser binding is not configured");
+      expect(lines.filter((line) => line.includes("browser-escalation"))).toEqual([]);
+    } finally {
+      spy.mockRestore();
+      stub.restore();
+    }
+  });
+
+  it("a browser call that throws still logs a null cost line", async () => {
+    const stub = stubFetch({
+      "https://gated.example.com/": () => new Response("Forbidden", { status: 403 }),
+    });
+    const lines: string[] = [];
+    const spy = vi.spyOn(console, "log").mockImplementation((line) => {
+      lines.push(String(line));
+    });
+    try {
+      install(fakeBrowser({ ok: false, throwOnCall: true }));
+      const result = await readUrl("https://gated.example.com/", { mayEscalate: async () => true });
+      expect(result.ok).toBe(false);
+      const rows = lines
+        .filter((line) => line.includes("browser-escalation"))
+        .map((line) => JSON.parse(line) as { browserMsUsed: number | null });
+      expect(rows).toHaveLength(1);
+      expect(rows[0]?.browserMsUsed).toBeNull();
+    } finally {
+      spy.mockRestore();
+      stub.restore();
+    }
+  });
+
   it("without a budget callback a refused fetch is deferred and the browser is never called", async () => {
     const stub = stubFetch({
       "https://gated.example.com/": () => new Response("Forbidden", { status: 403 }),
@@ -733,7 +777,7 @@ describe("readUrl", () => {
       expect(result.ok).toBe(false);
       if (result.ok) return;
       expect(result.reason).toBe("deferred");
-      expect(result.detail).toBe("browser budget refused escalation (status)");
+      expect(result.detail).toBe("no browser budget callback wired (status)");
       expect(browser.calls).toEqual([]);
     } finally {
       stub.restore();
@@ -752,6 +796,7 @@ describe("readUrl", () => {
       expect(result.ok).toBe(false);
       if (result.ok) return;
       expect(result.reason).toBe("deferred");
+      expect(result.detail).toBe("no browser budget callback wired (learned)");
       // The defer fires before either leg runs: no fetch, no browser call.
       expect(stub.seen).toEqual([]);
       expect(browser.calls).toEqual([]);
@@ -773,7 +818,7 @@ describe("readUrl", () => {
       expect(result.ok).toBe(false);
       if (result.ok) return;
       expect(result.reason).toBe("deferred");
-      expect(result.detail).toBe("browser budget refused escalation (timeout)");
+      expect(result.detail).toBe("no browser budget callback wired (timeout)");
       expect(browser.calls).toEqual([]);
     } finally {
       stub.restore();
