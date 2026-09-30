@@ -31,6 +31,7 @@ import { SiteSweep } from "./workflows/site-sweep";
 import { SnapshotBackup } from "./workflows/snapshot-backup";
 import { MentionsSweep } from "./workflows/mentions";
 import { StandingRollover } from "./workflows/standing-rollover";
+import { isWorkflowCron, startScheduledWorkflow } from "./workflow-crons";
 
 type WorkerEnv = Env & { SENTRY_DSN?: string; LIVENESS_PING_URL?: string };
 type OAuthEnv = WorkerEnv & { OAUTH_PROVIDER?: OAuthHelpers };
@@ -76,6 +77,10 @@ const handler = {
       }
       if (controller.cron === WEEKLY_REFRESH_CRON) {
         await startWeeklyRefresh(new Date(controller.scheduledTime));
+        return;
+      }
+      if (isWorkflowCron(controller.cron)) {
+        await startScheduledWorkflow(env, controller.cron, controller.scheduledTime);
         return;
       }
       const ping = pingLiveness(env.LIVENESS_PING_URL);

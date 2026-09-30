@@ -60,7 +60,7 @@ export function HomeStanding({
       {showEyebrow ? <p className={EYEBROW}>{view.eyebrow}</p> : null}
       {greeting(view)}
       {chips(view)}
-      {body(view, howRanked, onSwitch, openId, evidence)}
+      {body({ view, howRanked, onSwitch, openId, evidence })}
     </section>
   );
 }
@@ -86,13 +86,15 @@ function greeting(view: HomeView): ReactElement {
   );
 }
 
-function body(
-  view: HomeView,
-  howRanked: HowRanked | null | undefined,
-  onSwitch: ((entityId: string, checked: boolean) => void) | undefined,
-  openId: string | null,
-  evidence: readonly WeekEvidence[] | null,
-): ReactElement {
+interface BodyInput {
+  view: HomeView;
+  howRanked: HowRanked | null | undefined;
+  onSwitch: ((entityId: string, checked: boolean) => void) | undefined;
+  openId: string | null;
+  evidence: readonly WeekEvidence[] | null;
+}
+
+function body({ view, howRanked, onSwitch, openId, evidence }: BodyInput): ReactElement {
   const { standing } = view;
   if (standing.kind === "add-competitor") {
     return (

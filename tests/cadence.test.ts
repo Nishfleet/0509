@@ -2,32 +2,31 @@ import { experimental_readRawConfig } from "wrangler";
 import { describe, expect, it } from "vitest";
 
 import {
+  HIRING_SWEEP_CRON,
   MENTIONS_SWEEP_CRON,
   NIGHTLY_CRON,
   OWN_SITE_CHECK_CRON,
   SITE_SWEEP_CRON,
   SITE_SWEEP_UTC_HOUR,
+  SNAPSHOT_BACKUP_CRON,
   SITE_SWEEP_UTC_LABEL,
   WEEKLY_REFRESH_CRON,
 } from "../app/lib/cadence";
 
-// 0509#5823: the schedule constants live in app/lib/cadence.ts. The three
-// Workflow schedules and the two trigger crons below are asserted against the
+// 0509#5823: the schedule constants live in app/lib/cadence.ts. The
+// Workflow schedule and the trigger crons below are asserted against the
 // constants, never against a literal, so the gate reddens the day one of them
 // diverges from the constant it names.
 describe("cadence", () => {
-  it("schedules the site-sweep Workflow on SITE_SWEEP_CRON", () => {
+  it("leaves the four daily Workflows off `schedules` and starts them from triggers.crons", () => {
     const { rawConfig } = experimental_readRawConfig({ config: "wrangler.jsonc" });
-    const siteSweep = (rawConfig.workflows ?? []).find((workflow) => workflow.name === "site-sweep");
-    expect(siteSweep).toBeDefined();
-    expect(siteSweep?.schedules).toEqual([SITE_SWEEP_CRON]);
-  });
-
-  it("schedules the mentions-sweep Workflow on MENTIONS_SWEEP_CRON", () => {
-    const { rawConfig } = experimental_readRawConfig({ config: "wrangler.jsonc" });
-    const mentionsSweep = (rawConfig.workflows ?? []).find((workflow) => workflow.name === "mentions-sweep");
-    expect(mentionsSweep).toBeDefined();
-    expect(mentionsSweep?.schedules).toEqual([MENTIONS_SWEEP_CRON]);
+    const daily = ["site-sweep", "mentions-sweep", "hiring-sweep", "snapshot-backup"];
+    const workflows = (rawConfig.workflows ?? []).filter((workflow) => daily.includes(workflow.name));
+    expect(workflows).toHaveLength(4);
+    expect(workflows.map((workflow) => workflow.schedules)).toEqual([undefined, undefined, undefined, undefined]);
+    expect(rawConfig.triggers?.crons).toEqual(
+      expect.arrayContaining([SITE_SWEEP_CRON, MENTIONS_SWEEP_CRON, HIRING_SWEEP_CRON, SNAPSHOT_BACKUP_CRON]),
+    );
   });
 
   it("schedules the own-site-check Workflow on OWN_SITE_CHECK_CRON", () => {

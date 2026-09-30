@@ -107,67 +107,82 @@ export function ConnectedApps({ apps }: { apps: ConnectedApp[] }) {
   );
 }
 
+function keyDetail(key: AgentKey): string {
+  return [
+    `Made ${day(key.createdAt)}`,
+    key.lastUsedAt === null ? "never used" : `last used ${day(key.lastUsedAt)}`,
+    ...(key.rateLimitMax === null ? [] : [`up to ${String(key.rateLimitMax)} requests a minute`]),
+    ...(key.remaining === null ? [] : [`${String(key.remaining)} requests left`]),
+  ].join(" · ");
+}
+
+function NewKeyNotice({ newKey }: { newKey: string }) {
+  return (
+    <div role="status" className="mt-3 border-[1.5px] border-ink bg-green-wash p-4">
+      <p className="font-semibold text-green-ink">Copy your new key now. For your safety it won't be shown again.</p>
+      <code data-testid="new-api-key" className="mt-2 block font-mono text-[0.9rem] [overflow-wrap:anywhere]">
+        {newKey}
+      </code>
+      <CopyKey value={newKey} />
+    </div>
+  );
+}
+
+function KeyRow({ apiKey }: { apiKey: AgentKey }) {
+  return (
+    <li data-testid="api-key" className={ROW}>
+      <p className="min-w-0">
+        <span className="font-display font-bold">{apiKey.name}</span>{" "}
+        <span className="font-mono text-meta text-ink-soft">{apiKey.start ?? "key"}…</span>
+        <span className="block text-body-sm text-ink-soft">{keyDetail(apiKey)}</span>
+      </p>
+      <Form method="post">
+        <input type="hidden" name="intent" value="revoke-key" />
+        <input type="hidden" name="id" value={apiKey.id} />
+        <Button type="submit" variant="tertiary">
+          Delete
+        </Button>
+      </Form>
+    </li>
+  );
+}
+
+function CreateKeyForm() {
+  return (
+    <Form method="post" className="mt-6">
+      <input type="hidden" name="intent" value="create-key" />
+      <label htmlFor="key-name" className={BLOCK_HEADING}>
+        Name
+      </label>
+      <div className="mt-2 flex flex-col gap-2 sm:flex-row">
+        <Input id="key-name" name="name" maxLength={60} placeholder="My agent" className="sm:flex-1" />
+        <Button type="submit" variant="secondary" size="lg">
+          Make a key
+        </Button>
+      </div>
+    </Form>
+  );
+}
+
 export function AgentKeys({ keys, newKey }: { keys: AgentKey[]; newKey: string | null }) {
   return (
     <section aria-labelledby="agents-keys" className={BLOCK}>
       <h2 id="agents-keys" className={BLOCK_HEADING}>
         API keys
       </h2>
-      {newKey === null ? null : (
-        <div role="status" className="mt-3 border-[1.5px] border-ink bg-green-wash p-4">
-          <p className="font-semibold text-green-ink">
-            Copy your new key now. For your safety it won't be shown again.
-          </p>
-          <code data-testid="new-api-key" className="mt-2 block font-mono text-[0.9rem] [overflow-wrap:anywhere]">
-            {newKey}
-          </code>
-          <CopyKey value={newKey} />
-        </div>
-      )}
+      {newKey === null ? null : <NewKeyNotice newKey={newKey} />}
       {keys.length === 0 ? (
         <p className="mt-2 leading-[1.55] text-ink-soft">
           No keys yet. A key lets your own code read the same things an app can.
         </p>
       ) : (
         <ul className="mt-3 border-b border-line">
-          {keys.map((key) => {
-            const detail = [
-              `Made ${day(key.createdAt)}`,
-              key.lastUsedAt === null ? "never used" : `last used ${day(key.lastUsedAt)}`,
-              ...(key.rateLimitMax === null ? [] : [`up to ${String(key.rateLimitMax)} requests a minute`]),
-              ...(key.remaining === null ? [] : [`${String(key.remaining)} requests left`]),
-            ].join(" · ");
-            return (
-              <li key={key.id} data-testid="api-key" className={ROW}>
-                <p className="min-w-0">
-                  <span className="font-display font-bold">{key.name}</span>{" "}
-                  <span className="font-mono text-meta text-ink-soft">{key.start ?? "key"}…</span>
-                  <span className="block text-body-sm text-ink-soft">{detail}</span>
-                </p>
-                <Form method="post">
-                  <input type="hidden" name="intent" value="revoke-key" />
-                  <input type="hidden" name="id" value={key.id} />
-                  <Button type="submit" variant="tertiary">
-                    Delete
-                  </Button>
-                </Form>
-              </li>
-            );
-          })}
+          {keys.map((key) => (
+            <KeyRow key={key.id} apiKey={key} />
+          ))}
         </ul>
       )}
-      <Form method="post" className="mt-6">
-        <input type="hidden" name="intent" value="create-key" />
-        <label htmlFor="key-name" className={BLOCK_HEADING}>
-          Name
-        </label>
-        <div className="mt-2 flex flex-col gap-2 sm:flex-row">
-          <Input id="key-name" name="name" maxLength={60} placeholder="My agent" className="sm:flex-1" />
-          <Button type="submit" variant="secondary" size="lg">
-            Make a key
-          </Button>
-        </div>
-      </Form>
+      <CreateKeyForm />
     </section>
   );
 }

@@ -1,99 +1,4 @@
 {
-  "app/components/agent-settings.tsx": {
-    "max-lines-per-function": {
-      "count": 1
-    }
-  },
-  "app/components/alert-row.tsx": {
-    "max-lines-per-function": {
-      "count": 1
-    }
-  },
-  "app/components/brand-chip.tsx": {
-    "complexity": {
-      "count": 1
-    },
-    "max-lines-per-function": {
-      "count": 1
-    }
-  },
-  "app/components/brief-schedule-settings.tsx": {
-    "complexity": {
-      "count": 1
-    },
-    "max-lines-per-function": {
-      "count": 1
-    }
-  },
-  "app/components/competitor-frame.tsx": {
-    "max-lines-per-function": {
-      "count": 1
-    }
-  },
-  "app/components/delivery-address.tsx": {
-    "max-lines-per-function": {
-      "count": 1
-    }
-  },
-  "app/components/developments-feed.tsx": {
-    "max-lines-per-function": {
-      "count": 1
-    }
-  },
-  "app/components/four-week-line.tsx": {
-    "max-lines-per-function": {
-      "count": 1
-    }
-  },
-  "app/components/home-standing.tsx": {
-    "max-params": {
-      "count": 1
-    }
-  },
-  "app/components/identity-card.tsx": {
-    "complexity": {
-      "count": 1
-    },
-    "max-lines-per-function": {
-      "count": 3
-    }
-  },
-  "app/components/incident-block.tsx": {
-    "max-lines-per-function": {
-      "count": 1
-    }
-  },
-  "app/components/landing/hero.tsx": {
-    "max-lines-per-function": {
-      "count": 1
-    }
-  },
-  "app/components/mark.tsx": {
-    "complexity": {
-      "count": 1
-    },
-    "max-lines-per-function": {
-      "count": 1
-    }
-  },
-  "app/components/ranked-row.tsx": {
-    "complexity": {
-      "count": 1
-    },
-    "max-lines-per-function": {
-      "count": 1
-    }
-  },
-  "app/components/row-evidence.tsx": {
-    "max-lines-per-function": {
-      "count": 1
-    }
-  },
-  "app/components/source-pill.tsx": {
-    "complexity": {
-      "count": 2
-    }
-  },
   "app/entry.server.tsx": {
     "max-params": {
       "count": 1
@@ -145,11 +50,6 @@
   "app/lib/hiring/listing.ts": {
     "max-lines-per-function": {
       "count": 1
-    }
-  },
-  "app/lib/home-standing.ts": {
-    "max-params": {
-      "count": 2
     }
   },
   "app/lib/identity/card-draft.server.ts": {
@@ -209,29 +109,6 @@
     }
   },
   "app/lib/onboarding/timings.ts": {
-    "complexity": {
-      "count": 1
-    }
-  },
-  "app/routes/app.alerts.tsx": {
-    "max-lines-per-function": {
-      "count": 1
-    }
-  },
-  "app/routes/app.home.tsx": {
-    "complexity": {
-      "count": 1
-    },
-    "max-lines-per-function": {
-      "count": 1
-    }
-  },
-  "app/routes/login.tsx": {
-    "max-lines-per-function": {
-      "count": 1
-    }
-  },
-  "app/routes/onboarding.tsx": {
     "complexity": {
       "count": 1
     }

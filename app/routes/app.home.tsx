@@ -1,25 +1,20 @@
 import type { Route } from "./+types/app.home";
 import { env } from "cloudflare:workers";
 
-import { useEffect } from "react";
-import { data, Link, redirect, useFetcher, useRevalidator } from "react-router";
+import { data, Link, redirect, useFetcher } from "react-router";
 
 import { FreshnessLine } from "../components/freshness-line";
 import { HomePageFrame, HomeStanding } from "../components/home-standing";
 import { ShareButton } from "../components/share-button";
-import { readWorkspaceMentionSources } from "../lib/data/source.server";
-import { readSelfSiteFill } from "../lib/data/entity.server";
-import { readWeekEvidence } from "../lib/data/signal.server";
 import { readWorkspaceIdForOwner } from "../lib/data/workspace.server";
 import { homeView } from "../lib/home-standing";
+import { readHomeReads, resolveOpenId } from "../lib/home-page.server";
 import { readHomeStandingInputs } from "../lib/home-standing.server";
-import { readHowRanked } from "../lib/how-ranked.server";
 import { freshnessEntries } from "../lib/freshness.server";
 import { onboardingTimingLines } from "../lib/onboarding/timings";
-import { readOnboardingTimes } from "../lib/data/onboarding_run.server";
 import { requireSession } from "../lib/require-session.server";
 import { createTimings } from "../lib/server-timing.server";
-import { readBiggestSiteChanges } from "../lib/site-changes.server";
+import { useRevalidateOnVisible } from "../lib/use-revalidate-on-visible";
 
 export function meta() {
   return [{ title: "Home · Five to Nine" }];
@@ -34,21 +29,10 @@ export async function loader({ request }: Route.LoaderArgs) {
   );
   if (inputs === null) throw redirect("/onboarding");
   const payload = inputs.payload;
-  const open = new URL(request.url).searchParams.get("open");
-  const openId =
-    open !== null && payload !== null && inputs.entities.some((entity) => entity.id === open) ? open : null;
-  const [sources, siteFill, howRanked, moves, times, evidence] = await timings.measure(
+  const openId = resolveOpenId(new URL(request.url).searchParams.get("open"), payload, inputs.entities);
+  const { sources, siteFill, howRanked, moves, times, evidence } = await timings.measure(
     "reads",
-    Promise.all([
-      workspaceId === null ? [] : readWorkspaceMentionSources(workspaceId),
-      workspaceId === null ? null : readSelfSiteFill(workspaceId),
-      readHowRanked(env.DB, payload),
-      payload === null || workspaceId === null ? [] : readBiggestSiteChanges(workspaceId, payload.period_start),
-      workspaceId === null ? null : readOnboardingTimes(workspaceId),
-      openId !== null && payload !== null && workspaceId !== null
-        ? readWeekEvidence({ workspaceId, entityId: openId, since: payload.period_start })
-        : null,
-    ]),
+    readHomeReads(workspaceId, payload, openId),
   );
   return data(
     {
@@ -76,44 +60,35 @@ function SiteFillLine({ state }: { state: "pending" | "gave_up" }) {
   );
 }
 
+function HomeFooter({ line, timings }: { line: string; timings: readonly string[] }) {
+  return (
+    <>
+      <p className="font-mono text-eyebrow text-ink-soft">{line}</p>
+      <p className="mt-3">
+        <Link className="underline decoration-1 underline-offset-4" to="/app/brief">
+          Read this week's brief
+        </Link>
+      </p>
+      {timings.length > 0 ? (
+        <ul aria-label="Onboarding timings" className="mt-3">
+          {timings.map((timing) => (
+            <li key={timing} className="font-mono text-eyebrow text-ink-soft">
+              {timing}
+            </li>
+          ))}
+        </ul>
+      ) : null}
+    </>
+  );
+}
+
 export default function Page({ loaderData }: Route.ComponentProps) {
   const fetcher = useFetcher();
-  const revalidator = useRevalidator();
-  const standingKind = loaderData.view.standing.kind;
-  useEffect(() => {
-    if (standingKind === "ranked") return;
-    function onVisible(): void {
-      if (document.visibilityState !== "visible") return;
-      if (revalidator.state !== "idle") return;
-      void revalidator.revalidate();
-    }
-    document.addEventListener("visibilitychange", onVisible);
-    return () => {
-      document.removeEventListener("visibilitychange", onVisible);
-    };
-  }, [revalidator, standingKind]);
+  useRevalidateOnVisible(loaderData.view.standing.kind !== "ranked");
   return (
     <HomePageFrame
       eyebrow={loaderData.view.eyebrow}
-      footer={
-        <>
-          <p className="font-mono text-eyebrow text-ink-soft">{loaderData.view.footer}</p>
-          <p className="mt-3">
-            <Link className="underline decoration-1 underline-offset-4" to="/app/brief">
-              Read this week's brief
-            </Link>
-          </p>
-          {loaderData.timings.length > 0 ? (
-            <ul aria-label="Onboarding timings" className="mt-3">
-              {loaderData.timings.map((line) => (
-                <li key={line} className="font-mono text-eyebrow text-ink-soft">
-                  {line}
-                </li>
-              ))}
-            </ul>
-          ) : null}
-        </>
-      }
+      footer={<HomeFooter line={loaderData.view.footer} timings={loaderData.timings} />}
     >
       <HomeStanding
         view={loaderData.view}

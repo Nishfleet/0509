@@ -1,6 +1,8 @@
 import type { WorkflowEvent, WorkflowStep, WorkflowStepConfig } from "cloudflare:workers";
 import { WorkflowEntrypoint } from "cloudflare:workers";
 
+import { withMonitor } from "@sentry/cloudflare";
+
 import { readHiringTargets } from "../../app/lib/data/watch.server";
 import type { BoardResult } from "../../app/lib/hiring/read-board.server";
 import { readBoard } from "../../app/lib/hiring/read-board.server";
@@ -11,6 +13,12 @@ const RETRY: WorkflowStepConfig = {
   retries: { limit: 3, delay: "30 seconds", backoff: "exponential" },
   timeout: "5 minutes",
 };
+
+const MONITOR = {
+  schedule: { type: "crontab", value: "30 2 * * *" },
+  checkinMargin: 60,
+  timezone: "UTC",
+} as const;
 
 export interface HiringSweepOutcome {
   discovered: number;
@@ -39,6 +47,10 @@ async function settle<T>(label: string, run: () => Promise<T>): Promise<T | null
 
 export class HiringSweep extends WorkflowEntrypoint<Env> {
   async run(event: WorkflowEvent<unknown>, step: WorkflowStep): Promise<HiringSweepOutcome> {
+    return withMonitor("hiring-sweep", () => this.runSweep(event, step), MONITOR);
+  }
+
+  private async runSweep(event: WorkflowEvent<unknown>, step: WorkflowStep): Promise<HiringSweepOutcome> {
     const tick = { instanceId: event.instanceId, plannedAt: event.timestamp.toISOString() };
 
     const plan = await step.do("plan", RETRY, () => planHiringSweep());
