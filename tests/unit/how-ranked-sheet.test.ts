@@ -2,7 +2,9 @@ import { Children, createElement, isValidElement, type ReactElement, type ReactN
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
-import { HowRankedSheet, HowRankedTable } from "../../app/components/how-ranked-sheet";
+import { HowRankedDialog } from "../../app/components/how-ranked-dialog";
+import { HowRankedSheet } from "../../app/components/how-ranked-sheet";
+import { HowRankedTable } from "../../app/components/how-ranked-table";
 import { DialogContent } from "../../app/components/ui/dialog";
 import type { HowRanked } from "../../app/lib/how-ranked";
 
@@ -66,8 +68,8 @@ function findElement(node: ReactNode, type: unknown): ReactElement | null {
 }
 
 function sheetContent(): ReactElement<{ className?: string }> {
-  const content = findElement(HowRankedSheet({ howRanked: RANKED }), DialogContent);
-  if (content === null) throw new Error("HowRankedSheet rendered no DialogContent");
+  const content = findElement(HowRankedDialog({ howRanked: RANKED, onClose: () => undefined }), DialogContent);
+  if (content === null) throw new Error("HowRankedDialog rendered no DialogContent");
   return content;
 }
 
