@@ -5,6 +5,7 @@ import { readRegistrySources } from "../data/source.server";
 import { joinList } from "../../lib/coverage";
 import type { FreshnessSource } from "../../lib/freshness.server";
 import { sourceKindNoun } from "../../lib/source-name";
+import { namedTool } from "./mcp-tools";
 import {
   readAgentAlerts,
   readAgentBrief,
@@ -32,12 +33,7 @@ export async function toolResult<T extends Record<string, unknown>>(read: () => 
   try {
     return result(await read());
   } catch (error) {
-    console.error(
-      JSON.stringify({
-        event: "agent.mcp_tool_failed",
-        message: error instanceof Error ? error.message : String(error),
-      }),
-    );
+    console.error(JSON.stringify({ event: "agent.mcp_tool_failed", message: error instanceof Error ? error.message : String(error) }));
     return { content: [{ type: "text" as const, text: TOOL_FAILED }], isError: true };
   }
 }
@@ -62,22 +58,23 @@ async function createServer(workspaceId: string): Promise<McpServer> {
     },
   );
 
+  const standing = namedTool("get_standing");
   server.registerTool(
-    "get_standing",
+    standing.name,
     {
-      title: "This week's standing",
-      description:
-        "Where the user ranks against their tracked competitors this week, the movement since last week, the one-line why, and one line per competitor. Paused competitors are left out.",
+      title: standing.title,
+      description: "Where the user ranks against their tracked competitors this week, the movement since last week, the one-line why, and one line per competitor. Paused competitors are left out.",
       outputSchema: standingResultSchema,
       annotations: READ_ONLY,
     },
     async () => result(await readAgentStanding(workspaceId)),
   );
 
+  const brief = namedTool("get_brief");
   server.registerTool(
-    "get_brief",
+    brief.name,
     {
-      title: "This week's brief",
+      title: brief.title,
       description:
         "The latest weekly brief: where the user ranks against their competitors, the changes worth reading first and why each matters, per-competitor standing, and whether the user's own site had problems.",
       outputSchema: briefResultSchema,
@@ -86,22 +83,23 @@ async function createServer(workspaceId: string): Promise<McpServer> {
     async () => toolResult(() => readAgentBrief(workspaceId)),
   );
 
+  const competitors = namedTool("list_competitors");
   server.registerTool(
-    "list_competitors",
+    competitors.name,
     {
-      title: "Competitors",
-      description:
-        "The competitors the user tracks, plus the brands suggested as competitors that are waiting for the user's yes.",
+      title: competitors.title,
+      description: "The competitors the user tracks, plus the brands suggested as competitors that are waiting for the user's yes.",
       outputSchema: competitorsResultSchema,
       annotations: READ_ONLY,
     },
     async () => toolResult(() => readAgentCompetitors(workspaceId)),
   );
 
+  const competitor = namedTool("get_competitor");
   server.registerTool(
-    "get_competitor",
+    competitor.name,
     {
-      title: "One competitor",
+      title: competitor.title,
       description:
         "One tracked competitor: its state (on, or paused), how many of its pages are watched and when they were last checked, and its website changes from the last 90 days. Returns null for an id that is not one of the user's competitors.",
       inputSchema: competitorArgsSchema,
@@ -111,10 +109,11 @@ async function createServer(workspaceId: string): Promise<McpServer> {
     async ({ competitorId }) => result(await readAgentCompetitor(workspaceId, competitorId, new Date())),
   );
 
+  const alerts = namedTool("list_alerts");
   server.registerTool(
-    "list_alerts",
+    alerts.name,
     {
-      title: "Alerts",
+      title: alerts.title,
       description: "Recent alerts for the user: weekly briefs that could not be delivered, and takedown notices.",
       outputSchema: alertsResultSchema,
       annotations: READ_ONLY,

@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 
 import { consoleFailures, ownDocument404For, watchConsole } from "./inbox";
 
-test("an unknown path is a 404 page with one action", async ({ page }, testInfo) => {
+test("an unknown path is a 404 page with one action @smoke", async ({ page }, testInfo) => {
   const watched = watchConsole(page);
 
   const path = "/this-page-is-not-here";

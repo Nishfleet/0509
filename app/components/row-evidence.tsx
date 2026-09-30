@@ -39,7 +39,7 @@ export function RowEvidence({ evidence }: { evidence: readonly WeekEvidence[] })
                 setSelected(tab.kind);
               }}
               className={cn(
-                "border-line min-h-11 border px-2 py-1 font-mono text-eyebrow uppercase focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-solid focus-visible:outline-ink",
+                "min-h-11 border border-line px-2 py-1 font-mono text-eyebrow uppercase focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink focus-visible:outline-solid",
                 active ? "bg-green-wash text-ink" : "text-ink-soft",
               )}
             >
@@ -50,7 +50,7 @@ export function RowEvidence({ evidence }: { evidence: readonly WeekEvidence[] })
       </div>
       <div role="tabpanel" id={panelId} aria-labelledby={`${panelId}-${selected}`} className="pt-2">
         {rows.length === 0 ? (
-          <p className="text-ink-soft text-[0.88rem]">Nothing this week.</p>
+          <p className="text-[0.88rem] text-ink-soft">Nothing this week.</p>
         ) : (
           <ul className="flex min-w-0 flex-col gap-3">
             {rows.map((item) => {
@@ -68,7 +68,9 @@ export function RowEvidence({ evidence }: { evidence: readonly WeekEvidence[] })
                   )}
                   <span className="min-w-0">
                     <span className="block truncate">{item.title ?? item.summary ?? "Untitled"}</span>
-                    <span className="text-ink-soft block font-mono text-eyebrow">{shortUtc(item.observedAt)}</span>
+                    <span className="block font-mono text-eyebrow text-ink-soft">
+                      {shortUtc(item.observedAt)}
+                    </span>
                     {href === null ? null : (
                       <a href={href} target="_blank" rel="noreferrer" className="text-[0.88rem] underline">
                         Source

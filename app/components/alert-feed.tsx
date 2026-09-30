@@ -18,7 +18,7 @@ export function AlertFeed({ groups }: { groups: { group: string; items: AlertFee
         <button
           type="button"
           data-testid="mentions-show-all"
-          className="text-ink-soft mt-8 inline-flex min-h-11 items-center font-mono text-meta uppercase underline"
+          className="mt-8 inline-flex min-h-11 items-center font-mono text-meta text-ink-soft uppercase underline"
           onClick={() => {
             setShowAll(true);
           }}
@@ -28,7 +28,7 @@ export function AlertFeed({ groups }: { groups: { group: string; items: AlertFee
       ) : null}
       {visible.map((group, groupIndex) => (
         <section key={group.group} data-testid="alert-day">
-          <h2 className="text-ink-soft mt-10 font-mono text-[0.75rem] tracking-[0.04em] uppercase">{group.group}</h2>
+          <h2 className="mt-10 font-mono text-[0.75rem] tracking-[0.04em] text-ink-soft uppercase">{group.group}</h2>
           {group.items.map((item, index) => (
             <AlertFeedRow key={item.id} item={item} eager={groupIndex === 0 && index === 0} />
           ))}

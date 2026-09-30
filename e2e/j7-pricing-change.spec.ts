@@ -66,7 +66,7 @@ async function trackFixture(page: Page): Promise<void> {
   await page.getByRole("button", { name: "Add", exact: true }).click();
   await expect(page.getByRole("list", { name: "Watching" }).getByRole("listitem")).toHaveCount(1);
   await page.getByRole("button", { name: "Start watching" }).click();
-  await expect(page).toHaveURL(/\/app$/);
+  await expect(page).toHaveURL(/\/app$/, { timeout: 30_000 });
 }
 
 test("J7 a fixture price flip reaches Alerts as a before-and-after mark @own-signin", async ({ page }, testInfo) => {

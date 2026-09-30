@@ -63,7 +63,7 @@ export async function action({ request }: Route.ActionArgs) {
 export default function Page({ loaderData, actionData }: Route.ComponentProps) {
   return (
     <OnboardingFrame step={1} heading="Start with your website or a handle" hideHeading>
-      <p className="text-ink-soft mt-3 max-w-prose leading-[1.55]">
+      <p className="mt-3 max-w-prose leading-[1.55] text-ink-soft">
         We read it and draw your card, then find who you're up against. A handle like @yourbrand works too.
       </p>
       <OneInput
@@ -88,7 +88,7 @@ export default function Page({ loaderData, actionData }: Route.ComponentProps) {
           </div>
         </Form>
       ) : null}
-      <footer className="border-line text-ink-soft mt-16 flex flex-wrap items-center gap-x-4 border-t pt-4 font-mono text-meta">
+      <footer className="mt-16 flex flex-wrap items-center gap-x-4 border-t border-line pt-4 font-mono text-meta text-ink-soft">
         <p className="[overflow-wrap:anywhere]">Signed in as {loaderData.email}</p>
         <AddPasskey />
       </footer>

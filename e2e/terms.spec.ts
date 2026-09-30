@@ -12,7 +12,7 @@ import { consoleFailures, watchConsole } from "./inbox";
 // link to /privacy, and the footer address. No plan name or price is pinned:
 // billing is undecided, and prices live in app/lib/billing/plans.ts.
 
-test("the terms page renders its heading and date", async ({ page }) => {
+test("the terms page renders its heading and date @smoke", async ({ page }) => {
   const response = await page.goto("/terms");
   expect(response?.status()).toBe(200);
 
@@ -22,7 +22,7 @@ test("the terms page renders its heading and date", async ({ page }) => {
   await expect(page.locator("main time")).toHaveAttribute("datetime", /^\d{4}-\d{2}-\d{2}$/);
 });
 
-test("the terms page states who can use 0509 and what it does", async ({ page }) => {
+test("the terms page states who can use 0509 and what it does @smoke", async ({ page }) => {
   await page.goto("/terms");
 
   const main = page.locator("main");
@@ -33,7 +33,7 @@ test("the terms page states who can use 0509 and what it does", async ({ page })
   await expect(main).toContainText(/not legal, financial or professional advice/i);
 });
 
-test("the terms page covers agents, sharing, plans and cancelling", async ({ page }) => {
+test("the terms page covers agents, sharing, plans and cancelling @smoke", async ({ page }) => {
   await page.goto("/terms");
 
   const main = page.locator("main");
@@ -44,7 +44,7 @@ test("the terms page covers agents, sharing, plans and cancelling", async ({ pag
   await expect(main).not.toContainText(/€|EUR/);
 });
 
-test("the terms page caps liability and names the governing law", async ({ page }) => {
+test("the terms page caps liability and names the governing law @smoke", async ({ page }) => {
   await page.goto("/terms");
 
   const main = page.locator("main");
@@ -53,7 +53,7 @@ test("the terms page caps liability and names the governing law", async ({ page 
   await expect(main).not.toContainText(/!/);
 });
 
-test("the terms page links privacy and the contents list reaches every section", async ({ page }) => {
+test("the terms page links privacy and the contents list reaches every section @smoke", async ({ page }) => {
   await page.goto("/terms");
 
   await expect(page.locator('main section a[href="/privacy"]')).toBeVisible();
@@ -64,7 +64,7 @@ test("the terms page links privacy and the contents list reaches every section",
   }
 });
 
-test("the terms footer carries the support address and both legal links", async ({ page }) => {
+test("the terms footer carries the support address and both legal links @smoke", async ({ page }) => {
   await page.goto("/terms");
 
   const footer = page.locator("footer");
@@ -73,7 +73,7 @@ test("the terms footer carries the support address and both legal links", async 
   await expect(footer.locator('a[href="/terms"]')).toBeVisible();
 });
 
-test("the terms page does not scroll horizontally", async ({ page }) => {
+test("the terms page does not scroll horizontally @smoke", async ({ page }) => {
   await page.goto("/terms");
   const overflow = await page.evaluate(
     () => document.documentElement.scrollWidth > document.documentElement.clientWidth,
@@ -81,7 +81,7 @@ test("the terms page does not scroll horizontally", async ({ page }) => {
   expect(overflow).toBe(false);
 });
 
-test("the terms page reaches first paint with no console errors", async ({ page }, testInfo) => {
+test("the terms page reaches first paint with no console errors @smoke", async ({ page }, testInfo) => {
   const watched = watchConsole(page);
 
   await page.goto("/terms");
@@ -90,7 +90,9 @@ test("the terms page reaches first paint with no console errors", async ({ page 
   expect(await consoleFailures(page, watched, testInfo), testInfo.project.name).toEqual([]);
 });
 
-test("the terms page serves one ld+json graph naming the organization and breadcrumbs", async ({ page }) => {
+test("the terms page serves one ld+json graph naming the organization and breadcrumbs @smoke", async ({
+  page,
+}) => {
   await page.goto("/terms");
 
   const scripts = page.locator('script[type="application/ld+json"]');

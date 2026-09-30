@@ -46,8 +46,8 @@ export async function loader({ request }: Route.LoaderArgs) {
   const workspaceId = await readWorkspaceIdForOwner(session.user.id);
   const ownSiteAlerts = workspaceId === null ? true : await readOwnSiteAlerts(workspaceId);
   const dismissed = workspaceId === null ? [] : await readUserDismissed(workspaceId);
-  const deliveryAddress = await readDeliveryAddress(session.user.id, session.user.email);
-  return { email: session.user.email, schedule, ownSiteAlerts, dismissed, deliveryAddress };
+  const delivery = await readDeliveryAddress(session.user.id, session.user.email);
+  return { email: session.user.email, schedule, ownSiteAlerts, dismissed, delivery };
 }
 
 export async function action({ request, context }: Route.ActionArgs) {
@@ -71,6 +71,7 @@ export async function action({ request, context }: Route.ActionArgs) {
     const saved = await saveDeliveryAddress({
       userId: session.user.id,
       signInEmail: session.user.email,
+      email: env.EMAIL,
       address: typeof address === "string" ? address : "",
       resume: form.get("resume") === "yes",
     });
@@ -105,7 +106,7 @@ export async function action({ request, context }: Route.ActionArgs) {
   return { saved: true, deleteError: null, deliveryError: null, deliverySuppressed: false };
 }
 
-const BLOCK = "border-line mt-10 border-t pt-4";
+const BLOCK = "mt-10 border-t border-line pt-4";
 
 export default function Page({ loaderData, actionData }: Route.ComponentProps) {
   return (
@@ -132,7 +133,7 @@ export default function Page({ loaderData, actionData }: Route.ComponentProps) {
         <Link
           to="/app/settings/agents"
           prefetch="intent"
-          className="font-display mt-3 inline-flex min-h-11 items-center gap-2 font-bold underline decoration-1 underline-offset-4"
+          className="mt-3 inline-flex min-h-11 items-center gap-2 font-display font-bold underline decoration-1 underline-offset-4"
         >
           Connect an agent <span aria-hidden="true">→</span>
         </Link>
@@ -145,7 +146,7 @@ export default function Page({ loaderData, actionData }: Route.ComponentProps) {
           Signed in as <strong className="font-semibold">{loaderData.email}</strong>
         </p>
         <DeliveryAddress
-          address={loaderData.deliveryAddress}
+          delivery={loaderData.delivery}
           error={actionData?.deliveryError ?? null}
           suppressed={actionData?.deliverySuppressed ?? false}
         />

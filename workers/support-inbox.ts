@@ -3,12 +3,13 @@ import {
   deleteExpiredSupportReports,
   insertSupportReport,
 } from "../app/lib/data/support_report.server";
+import { fetchOutbound } from "../app/lib/fetch/outbound.server";
 import { sha256Hex } from "../app/lib/sha256";
 
 const FORWARD_TO = "nishant345@gmail.com";
 const ISSUES_URL = "https://api.github.com/repos/Nishfleet/0509/issues";
 const SITE_HOSTS = new Set(["0509.io", "www.0509.io"]);
-const TOKEN_PATH_PREFIXES = ["/u/", "/api/auth/"];
+const TOKEN_PATH_PREFIXES = ["/u/", "/v/", "/api/auth/"];
 const MAX_PATHS = 10;
 const MAX_UA = 200;
 const MAX_ISSUES_PER_DOMAIN_PER_DAY = 3;
@@ -67,7 +68,7 @@ export default {
       `paths: ${paths.length > 0 ? paths.join(", ") : "none"}`,
       `user agent: ${userAgent}`,
     ].join("\n");
-    const response = await fetch(ISSUES_URL, {
+    const response = await fetchOutbound(ISSUES_URL, {
       method: "POST",
       headers: {
         authorization: `Bearer ${token}`,

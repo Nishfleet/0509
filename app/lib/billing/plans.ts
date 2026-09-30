@@ -50,8 +50,18 @@ export const PLANS = [
 
 export type PlanId = (typeof PLANS)[number]["id"];
 
-export const TRIAL_TERMS =
-  "Every plan starts with a 7-day trial. Your card is taken up front and charged on day 8 unless you cancel.";
+export const TRIAL_DAYS = 7;
+
+export const TRIAL_TERMS = `Every plan starts with a ${String(TRIAL_DAYS)}-day trial. Your card is taken up front and charged on day ${String(TRIAL_DAYS + 1)} unless you cancel.`;
+
+export function isPlanId(value: unknown): value is PlanId {
+  return PLANS.some((plan) => plan.id === value);
+}
+
+export function nextPlan(tier: string): (typeof PLANS)[number] | null {
+  const index = PLANS.findIndex((plan) => plan.id === tier);
+  return index < 0 ? null : (PLANS[index + 1] ?? null);
+}
 
 export function monthlyPrice(eur: number): string {
   return `€${String(eur)}/mo`;

@@ -4,6 +4,7 @@ import { claimSendAttempt, resolveSendAttempt } from "../../app/lib/data/send_at
 import { writeUnsubscribeToken } from "../../app/lib/data/send_target.server";
 import type { BriefPayload } from "../../app/lib/brief-payload";
 import { parseBriefPayload } from "../../app/lib/brief-payload";
+import { nextOwnSiteCheck } from "../../app/lib/incident-recheck";
 import { pageHost } from "../../app/lib/site/own-site.server";
 
 import { renderBrief } from "./brief-template";
@@ -54,7 +55,6 @@ interface DeliveryResult {
 
 const EMAIL_CHANNEL_KEY = "email";
 const INCIDENT_LINK = "https://0509.io/app/alerts";
-const RECHECK_AFTER_MS = 3_600_000;
 
 async function readDigest(env: Env, digestId: string): Promise<MessageRow | null> {
   return env.DB.prepare(
@@ -288,7 +288,7 @@ export async function deliverIncident(env: Env, message: IncidentMessage): Promi
               site,
               kind: incident.kind,
               opened_at: incident.opened_at,
-              recheck_at: new Date(Date.parse(incident.opened_at) + RECHECK_AFTER_MS).toISOString(),
+              recheck_at: nextOwnSiteCheck(new Date(incident.opened_at)),
               mark: incident.mark,
               link: INCIDENT_LINK,
               timezone: incident.timezone,

@@ -1,9 +1,5 @@
-import {
-  sourcePillStatus,
-  type SourcePillStatus,
-  type SourceRow,
-  type SourceSnapshot,
-} from "../components/source-pill";
+import { sourcePillStatus, type SourcePillStatus, type SourceRow, type SourceSnapshot } from "../components/source-pill";
+import { registeredToolDescriptors } from "./agent/mcp-tools";
 import { PLANS, TRIAL_TERMS } from "./billing/plans";
 import { LIVE_COVERAGE, PLAN_NOTE, WATCHED_NOUNS } from "./coverage";
 import { FAQ } from "./faq";
@@ -15,16 +11,8 @@ export interface LlmsTxtSource {
 }
 
 export const PUBLIC_PATHS = ["/privacy", "/terms"] as const;
-export const DISALLOWED_PREFIXES = [
-  "/app",
-  "/api",
-  "/mcp",
-  "/u",
-  "/login",
-  "/onboarding",
-  "/oauth",
-  "/design",
-] as const;
+export const SITEMAP_PATHS = ["/privacy", "/terms", "/llms.txt"] as const;
+export const DISALLOWED_PREFIXES = ["/app", "/api", "/mcp", "/u", "/v", "/login", "/onboarding", "/oauth", "/design"] as const;
 export const MCP_URL = `${SITE_URL}/mcp`;
 
 const PAGE_SUMMARIES: Record<(typeof PUBLIC_PATHS)[number], { title: string; summary: string }> = {
@@ -34,8 +22,7 @@ const PAGE_SUMMARIES: Record<(typeof PUBLIC_PATHS)[number], { title: string; sum
   },
   "/terms": {
     title: "Terms",
-    summary:
-      "who can use 0509, fair use, agent access, plans and cancelling, and how either side can end the agreement",
+    summary: "who can use 0509, fair use, agent access, plans and cancelling, and how either side can end the agreement",
   },
 };
 
@@ -80,14 +67,13 @@ export function llmsTxt(origin: string, sources: readonly LlmsTxtSource[], now: 
       ...FAQ.flatMap((entry) => [`**${entry.question}** ${entry.answer}`, ""]),
       "## Agents",
       "",
-      `- [MCP server](${MCP_URL}): add it as a connector in Claude, ChatGPT or Cursor and sign in; read-only tools get_brief, list_competitors and list_alerts, limited to your own workspace`,
+      `- [MCP server](${MCP_URL}): add it as a connector in Claude, ChatGPT or Cursor and sign in; read-only, limited to your own workspace`,
+      ...Object.entries(registeredToolDescriptors).map(([name, tool]) => `- ${name}: ${tool.title}`),
       `- [API reference](${origin}/api/v1/openapi.json): OpenAPI 3.1 for the read-only REST API; send an API key from Settings as a Bearer token`,
       "",
       "## Pages",
       "",
-      ...PUBLIC_PATHS.map(
-        (path) => `- [${PAGE_SUMMARIES[path].title}](${origin}${path}): ${PAGE_SUMMARIES[path].summary}`,
-      ),
+      ...PUBLIC_PATHS.map((path) => `- [${PAGE_SUMMARIES[path].title}](${origin}${path}): ${PAGE_SUMMARIES[path].summary}`),
     ].join("\n") + "\n"
   );
 }
@@ -151,5 +137,11 @@ function llmsWatchesBlock(sources: readonly LlmsTxtSource[], now: number): reado
   if (!degraded) {
     return ["What it watches today:", "", ...lines];
   }
-  return ["What it watches today:", "", "Some sources are not answering today; those lines say so.", "", ...lines];
+  return [
+    "What it watches today:",
+    "",
+    "Some sources are not answering today; those lines say so.",
+    "",
+    ...lines,
+  ];
 }

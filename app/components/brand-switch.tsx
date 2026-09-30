@@ -76,7 +76,7 @@ export function BrandSwitch({
         aria-label={`${brandName} tracking`}
         aria-describedby={describedBy}
         onCheckedChange={(checked) => onCheckedChange?.(checked)}
-        className="h-[22px] w-[38px] shrink-0 rounded-none border-[1.5px] border-ink bg-card data-checked:bg-green data-disabled:bg-green-wash data-disabled:opacity-100 [&_[data-slot=switch-thumb]]:size-4 [&_[data-slot=switch-thumb]]:rounded-none [&_[data-slot=switch-thumb]]:bg-ink [&_[data-slot=switch-thumb]]:transition-transform [&_[data-slot=switch-thumb]]:duration-180 [&_[data-slot=switch-thumb]]:translate-x-[1.5px] data-checked:[&_[data-slot=switch-thumb]]:translate-x-[17.5px] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink focus-visible:outline-solid"
+        className="h-[22px] w-[38px] shrink-0 rounded-none border-[1.5px] border-ink bg-card focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink focus-visible:outline-solid data-checked:bg-green data-disabled:bg-green-wash data-disabled:opacity-100 [&_[data-slot=switch-thumb]]:size-4 [&_[data-slot=switch-thumb]]:translate-x-[1.5px] [&_[data-slot=switch-thumb]]:rounded-none [&_[data-slot=switch-thumb]]:bg-ink [&_[data-slot=switch-thumb]]:transition-transform [&_[data-slot=switch-thumb]]:duration-180 data-checked:[&_[data-slot=switch-thumb]]:translate-x-[17.5px]"
       />
       <span>{STATE_TEXT[state]}</span>
     </label>

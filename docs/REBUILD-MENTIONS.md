@@ -393,7 +393,7 @@ Five sources. Every one of them returned real data from this VPS today, on every
 | Bing RSS        | terms forbid commercial, non-aggregator use (§11).                                                                                                                                                                              |
 | DuckDuckGo HTML | **intermittent** — 200-with-results and 202-with-nothing both reproduced from this host the same day (§11). A 202 is a success status carrying an empty set, so it fails silently. Needs a proper probe matrix before it ships. |
 
-**Cost at 100 tracked brands, daily.** Five polls per brand per day = 500 fetches/day ≈ 15,000/month. Against the Workers Paid allowance of 10M requests/month that is **0.15%**, and no source charges anything. Per `REBUILD-SCHEMA.md` this writes **one `snapshot` row per watch per tick** — 500 D1 rows/day, ~15,000/month against 50M included rows-written — plus `signal` rows only for items that survive judgment. The bodies go to R2. Nothing here approaches the 2026-09-17 rows-written anti-pattern.
+**Cost at 100 tracked brands, daily.** Five polls per brand per day = 500 fetches/day ≈ 15,000/month. Against the Workers Paid allowance of 10M requests/month that is **0.15%**, and no source charges anything. Per `REBUILD-SCHEMA.md` this writes **one `snapshot` row per watch per tick plus its paired `source` latest-facts update** — 1,000 D1 rows/day, ~30,000/month against 50M included rows-written — plus `signal` rows only for items that survive judgment. The bodies go to R2. Nothing here approaches the 2026-09-17 rows-written anti-pattern.
 
 **The real budget is rate limits and bot-gating, not money.** Reddit 429s on a second request within fifteen seconds; GDELT 429s at twelve-second spacing; DuckDuckGo challenges unpredictably. Two engineering consequences:
 
@@ -406,7 +406,7 @@ Five sources. Every one of them returned real data from this VPS today, on every
 
 Aligned to `docs/REBUILD-SCHEMA.md` on main. **A mention is not its own table.** It is a `signal` row with `kind = 'mentions'`, and `mention` is a view over `signal` — so the vocabulary in the issue maps to a real schema object without a second store.
 
-**What the poll writes** (the cost boundary, `REBUILD-SCHEMA.md`): one `snapshot` row per `watch` per tick — `payload_r2_key`, `payload_hash`, `item_count`, `fetched_at` — with the raw feed body in R2. An unchanged feed is a hash comparison, not a write.
+**What the poll writes** (the cost boundary, `REBUILD-SCHEMA.md`): one `snapshot` row per `watch` per tick, paired in the same `batch()` with the `source` row's latest-facts update — `payload_r2_key`, `payload_hash`, `item_count`, `fetched_at` — with the raw feed body in R2. An unchanged feed still commits its snapshot row and its paired `source` update.
 
 **What survives judgment (D5) becomes a `signal` row.** The per-kind CHECK on the spine already requires `canonical_url` and `url_hash` for `kind = 'mentions'`. The shape each adapter must produce:
 

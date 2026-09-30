@@ -9,7 +9,7 @@ export function CompetitorSnapshot({ cells }: { cells: readonly SnapshotCell[] }
       <dl className="grid grid-cols-2 divide-x divide-y divide-line sm:grid-cols-3 lg:grid-cols-6">
         {cells.map((cell) => (
           <div key={cell.key} className="flex flex-col gap-1 p-4" data-cell={cell.key}>
-            <dt className="font-mono text-eyebrow uppercase text-ink-soft">{cell.label}</dt>
+            <dt className="font-mono text-eyebrow text-ink-soft uppercase">{cell.label}</dt>
             <dd>
               {cell.value === null ? (
                 <details>

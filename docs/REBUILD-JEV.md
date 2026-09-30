@@ -58,6 +58,7 @@ Rules per decision:
 ## What Jev is not used for
 
 - Anything with a ground truth the code can read: HTTP status, hash equality, date math, counts.
+- Generating anything. Jev judges and never generates: it has no list or free-text primitive, so candidate proposal (for example a shortlist of likely competitors read from the user's own site) uses a stock Workers AI model with JSON Mode (`docs/engines/competitor-discovery.md`, "The `ai` proposer"), and Jev then judges every proposed name through D1 like any other candidate.
 - Free-text generation for the user. The one-liners Jev returns as reasons are shown verbatim, marked as Jev's read; longer copy is not generated.
 
 ## Proof required in every engine packet that calls Jev

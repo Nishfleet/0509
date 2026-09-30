@@ -151,7 +151,8 @@ describe("HowRankedSheet", () => {
 
   it("turns the dialog it renders into a bottom sheet below 860px", () => {
     const className = sheetContent().props.className ?? "";
-    expect(className).toContain("max-h-[85dvh] overflow-y-auto sm:max-w-lg");
+    expect(className).toContain("max-h-[85dvh] overflow-y-auto");
+    expect(className).toContain("sm:max-w-lg");
     expect(className).toContain("max-[859px]:top-auto max-[859px]:bottom-0");
     expect(className).toContain(
       "max-[859px]:left-0 max-[859px]:max-w-none max-[859px]:translate-x-0 max-[859px]:translate-y-0 max-[859px]:rounded-b-none",

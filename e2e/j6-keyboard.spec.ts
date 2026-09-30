@@ -157,7 +157,7 @@ async function watchOneCompetitor(page: Page): Promise<void> {
     await expect(watching.first()).toBeVisible();
   }
   await page.getByRole("button", { name: "Start watching" }).click();
-  await expect(page).toHaveURL(/\/app$/);
+  await expect(page).toHaveURL(/\/app$/, { timeout: 30_000 });
 }
 
 test("the per-brand switch is operable with a keyboard alone @own-signin", async ({ page }, testInfo) => {

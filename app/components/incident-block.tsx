@@ -31,10 +31,10 @@ export function IncidentBlock({
     <section
       data-testid="incident-block"
       aria-labelledby="incident-block-title"
-      className="border-ink mt-8 border p-6 shadow-[5px_5px_0_0_var(--color-red)]"
+      className="mt-8 border border-ink p-6 shadow-[5px_5px_0_0_var(--color-red)]"
     >
       <p className="font-mono text-[0.75rem] tracking-[0.04em]">OPEN INCIDENT</p>
-      <h2 id="incident-block-title" className="font-display mt-2 text-lg font-semibold">
+      <h2 id="incident-block-title" className="mt-2 font-display text-lg font-semibold">
         {title}
       </h2>
       <p className="mt-2 leading-[1.65]">
@@ -56,7 +56,7 @@ export function IncidentBlock({
         <form method="post">
           <input type="hidden" name="intent" value="acknowledge" />
           <input type="hidden" name="alertId" value={alertId} />
-          <button type="submit" className="border-ink border px-4 py-2">
+          <button type="submit" className="border border-ink px-4 py-2">
             I meant to do this
           </button>
         </form>

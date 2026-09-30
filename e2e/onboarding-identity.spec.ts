@@ -10,7 +10,7 @@ test.afterEach(async ({ page }, testInfo) => {
   createdEmail = "";
 });
 
-test("the card screen sends a signed-out visitor to the login page", async ({ page }) => {
+test("the card screen sends a signed-out visitor to the login page @smoke", async ({ page }) => {
   await page.goto("/onboarding/identity?subject=gymshark.com");
   await expect(page).toHaveURL(/\/login/);
 });

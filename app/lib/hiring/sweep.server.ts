@@ -6,8 +6,8 @@ import { insertWatches, readEntitiesWithoutHiringWatch, readHiringTargets } from
 import { readEnabledSourceId } from "../data/source.server";
 import { readThrough } from "../identity/probe-cache.server";
 import { readUrl } from "../fetch/transport.server";
-import { discoverBoard } from "./discover-board";
-import type { DiscoveredBoard } from "./discover-board";
+import { discoverBoard } from "./discover-board.server";
+import type { DiscoveredBoard } from "./discover-board.server";
 
 const BOARD_SCHEMA = z.object({
   platform: z.enum(["greenhouse", "lever", "ashby", "workable", "smartrecruiters", "none"]),

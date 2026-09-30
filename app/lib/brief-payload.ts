@@ -99,6 +99,7 @@ const briefPayloadSchema = z.object({
   headline_is_new: flag,
   why_line: text,
   is_quiet_week: flag,
+  is_unjudged: flag,
   read_this_first: keepValid(markSchema),
   brands: keepValid(brandLineSchema),
   own_site: ownSiteSchema,

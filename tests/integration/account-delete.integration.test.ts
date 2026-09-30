@@ -1,9 +1,16 @@
+import type { OAuthHelpers } from "@cloudflare/workers-oauth-provider";
 import { env, introspectWorkflowInstance } from "cloudflare:test";
+import { RouterContextProvider } from "react-router";
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { createAuth, deleteSignedInUser } from "../../app/lib/auth.server";
 import { firstWorkspaceId } from "../../app/lib/workspace.server";
-import { readAccountDeleteProgress } from "../../app/lib/account-delete.server";
+import {
+  deleteAccount,
+  readAccountDeleteProgress,
+  sealAccountDeleteInstanceId,
+} from "../../app/lib/account-delete.server";
+import { loader as loginLoader } from "../../app/routes/login";
 
 const ORIGIN = "http://localhost:8787";
 const ADDRESS = "leaving@0509.io";
@@ -22,7 +29,7 @@ const authEnv = {
   SIGN_IN_IP_LIMIT: env.SIGN_IN_IP_LIMIT,
   TURNSTILE_SECRET_KEY: "1x0000000000000000000000000000000AA",
   BETTER_AUTH_SECRET: "integration-test-secret",
-  BETTER_AUTH_URL: ORIGIN,
+  BETTER_AUTH_URL: env.BETTER_AUTH_URL,
 };
 
 const auth = createAuth(authEnv);
@@ -43,6 +50,19 @@ async function signIn(): Promise<{ cookie: string; userId: string }> {
 
 const settingsRequest = (cookie: string) =>
   new Request(`${ORIGIN}/app/settings`, { method: "POST", headers: { cookie, origin: ORIGIN } });
+
+const loginArgs = (request: Request): Parameters<typeof loginLoader>[0] => ({
+  request,
+  url: new URL(request.url),
+  params: {},
+  pattern: "/login",
+  context: new RouterContextProvider(),
+});
+
+const loginPage = async (request: Request) => {
+  const result = await loginLoader(loginArgs(request));
+  return { body: result.data, setCookie: new Headers(result.init?.headers).get("set-cookie") };
+};
 
 const count = async (sql: string, ...values: unknown[]) =>
   (
@@ -174,5 +194,119 @@ describe("delete my account", () => {
     await introspector.waitForStatus("terminated");
 
     expect(await readAccountDeleteProgress(id)).toEqual({ rows: "removed", files: "failed", deleted: null });
+  });
+
+  it("shows the instance status only to the browser the delete ran in", async () => {
+    await env.SNAPSHOTS.put("card/ws-leaving/share.png", "a");
+    const id = "account-delete-sealed";
+    await using introspector = await introspectWorkflowInstance(env.ACCOUNT_DELETE, id);
+    await env.ACCOUNT_DELETE.create({
+      id,
+      params: { prefixes: ["card/ws-leaving/"] },
+    });
+    await introspector.waitForStatus("complete");
+
+    const page = `${ORIGIN}/login?deleted=${id}`;
+    const anonymous = (await loginPage(new Request(page))).body;
+    expect(anonymous).toMatchObject({ id: null, progress: null });
+
+    const forged = (await loginPage(new Request(page, { headers: { cookie: `account-delete=${id}` } }))).body;
+    expect(forged).toMatchObject({ id: null, progress: null });
+
+    const other = (await sealAccountDeleteInstanceId("a-different-instance")).split(";")[0];
+    const wrongSeal = (await loginPage(new Request(page, { headers: { cookie: other } }))).body;
+    expect(wrongSeal).toMatchObject({ id: null, progress: null });
+
+    const sealed = (await sealAccountDeleteInstanceId(id)).split(";")[0];
+    const owned = await loginPage(new Request(page, { headers: { cookie: sealed } }));
+    expect(owned.body.id).toBe(id);
+    expect(owned.body.progress).toEqual({ rows: "removed", files: "removed", deleted: 1 });
+    expect(owned.setCookie).toContain("account-delete=");
+    expect(owned.setCookie).toContain("Max-Age=0");
+    expect(owned.setCookie).toContain("Path=/login");
+  });
+
+  it("seals the Workflow instance id on the headers the deleting browser leaves with", async () => {
+    const { cookie, userId } = await signIn();
+    const helpers: Pick<OAuthHelpers, "listUserGrants" | "revokeGrant"> = {
+      listUserGrants: async () => ({ items: [] }),
+      revokeGrant: async () => undefined,
+    };
+
+    const deleted = await deleteAccount(helpers, settingsRequest(cookie), userId);
+
+    if (deleted === null) throw new Error("deleteAccount refused a fresh session");
+    const baked = deleted.headers.getSetCookie().find((header) => header.startsWith("account-delete="));
+    if (baked === undefined) throw new Error("no account-delete cookie on the delete headers");
+    expect(baked).toContain("HttpOnly");
+    expect(baked).toContain("Max-Age=3600");
+    expect(baked).toContain("Path=/login");
+    expect(baked).toContain("SameSite=Lax");
+
+    expect(baked).toContain("Secure");
+
+    const pair = baked.split(";")[0];
+    if (!pair) throw new Error("the account-delete cookie carried no pair");
+    const page = `${ORIGIN}/login?deleted=${deleted.instanceId}`;
+    const shown = await loginPage(new Request(page, { headers: { cookie: pair } }));
+    expect(shown.body.id).toBe(deleted.instanceId);
+    expect(shown.body.progress).toMatchObject({ rows: "removed" });
+  });
+
+  it("rejects a cookie whose signature was tampered with", async () => {
+    const id = "account-delete-tampered";
+    const page = `${ORIGIN}/login?deleted=${id}`;
+    const pair = (await sealAccountDeleteInstanceId(id)).split(";")[0];
+    if (!pair) throw new Error("the sealed cookie carried no pair");
+    const flipped = `${pair.slice(0, pair.lastIndexOf(".") + 1)}${"A".repeat(43)}`;
+
+    const shown = await loginPage(new Request(page, { headers: { cookie: flipped } }));
+
+    expect(shown.body).toMatchObject({ id: null, progress: null });
+    expect(shown.setCookie).toBeNull();
+  });
+
+  it("deletes nothing when the cookie secret is missing", async () => {
+    const { cookie, userId } = await signIn();
+    const helpers: Pick<OAuthHelpers, "listUserGrants" | "revokeGrant"> = {
+      listUserGrants: async () => ({ items: [] }),
+      revokeGrant: async () => undefined,
+    };
+    const held = env.BETTER_AUTH_SECRET;
+    const created: unknown[] = [];
+    const create = env.ACCOUNT_DELETE.create.bind(env.ACCOUNT_DELETE);
+    env.ACCOUNT_DELETE.create = (async (options: never) => {
+      created.push(options);
+      return create(options);
+    }) as typeof env.ACCOUNT_DELETE.create;
+    env.BETTER_AUTH_SECRET = "";
+    try {
+      await expect(deleteAccount(helpers, settingsRequest(cookie), userId)).rejects.toThrow(
+        "BETTER_AUTH_SECRET is not configured",
+      );
+    } finally {
+      env.BETTER_AUTH_SECRET = held;
+      env.ACCOUNT_DELETE.create = create as typeof env.ACCOUNT_DELETE.create;
+    }
+
+    expect(created).toEqual([]);
+    expect(await count('SELECT COUNT(*) AS n FROM "user" WHERE id = ?', userId)).toBe(1);
+    expect(await count("SELECT COUNT(*) AS n FROM session WHERE userId = ?", userId)).toBe(1);
+  });
+
+  it("still hands back the headers and cookie when revoking a grant fails", async () => {
+    const { cookie, userId } = await signIn();
+    const helpers: Pick<OAuthHelpers, "listUserGrants" | "revokeGrant"> = {
+      listUserGrants: async () => ({ items: [{ id: "grant-1" }] }) as Awaited<ReturnType<OAuthHelpers["listUserGrants"]>>,
+      revokeGrant: async () => {
+        throw new Error("KV is down");
+      },
+    };
+
+    const deleted = await deleteAccount(helpers, settingsRequest(cookie), userId);
+
+    if (deleted === null) throw new Error("deleteAccount refused a fresh session");
+    expect(await count('SELECT COUNT(*) AS n FROM "user" WHERE id = ?', userId)).toBe(0);
+    expect(deleted.headers.getSetCookie().some((header) => header.startsWith("account-delete="))).toBe(true);
   });
 });

@@ -23,7 +23,7 @@ function renderDocument(id: string): string {
       id,
       path: "/",
       Component: () =>
-        createElement(Layout, null, createElement(Landing, { loaderData: { ticker: [], sources: [], now: 0 } })),
+        createElement(Layout, null, createElement(Landing, { loaderData: { ticker: [], marks: [], sources: [], now: 0 } })),
     },
   ]);
   return renderToStaticMarkup(createElement(Stub, { initialEntries: ["/"] }));

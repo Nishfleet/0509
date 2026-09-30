@@ -98,7 +98,7 @@ export interface OwnSitePage {
   url: string;
 }
 
-const ENTITIES_WITHOUT_HOME = `SELECT e.id AS id, e.domain AS domain
+const ENTITIES_WITHOUT_HOME = `SELECT e.id AS id, e.domain AS domain, json_extract(e.identity_json, '$.url') AS url
 FROM entity e
 WHERE e.state = 'on'
   AND NOT EXISTS (SELECT 1 FROM page p WHERE p.entity_id = e.id AND p.role = 'home')
@@ -113,7 +113,9 @@ JOIN page p ON p.entity_id = e.id AND p.role = 'home'
 WHERE e.role = 'self' AND e.state = 'on'
 ORDER BY e.workspace_id, p.id`;
 
-const entityRows = z.array(z.object({ id: z.string(), domain: z.string() }));
+const entityRows = z.array(z.object({ id: z.string(), domain: z.string(), url: z.string().nullable() }));
+
+export type EntityWithoutHomePage = z.infer<typeof entityRows>[number];
 
 const ownSiteRows = z.array(
   z.object({
@@ -124,7 +126,7 @@ const ownSiteRows = z.array(
   }),
 );
 
-export async function readEntitiesWithoutHomePage(): Promise<readonly { id: string; domain: string }[]> {
+export async function readEntitiesWithoutHomePage(): Promise<readonly EntityWithoutHomePage[]> {
   const rows = await env.DB.prepare(ENTITIES_WITHOUT_HOME).all();
   return entityRows.parse(rows.results);
 }

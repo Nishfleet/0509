@@ -10,7 +10,7 @@ import { consoleFailures, watchConsole } from "./inbox";
 
 const PATH = "/design/landing";
 
-test("the landing document paints without a module graph", async ({ page }) => {
+test("the landing document paints without a module graph @smoke", async ({ page }) => {
   const response = await page.goto(PATH);
   expect(response?.status()).toBe(200);
   const html = (await response?.text()) ?? "";
@@ -22,7 +22,7 @@ test("the landing document paints without a module graph", async ({ page }) => {
   expect(head).not.toContain('type="module"');
 });
 
-test("the landing renders its sections in order under one headline", async ({ page }) => {
+test("the landing renders its sections in order under one headline @smoke", async ({ page }) => {
   const response = await page.goto(PATH);
   expect(response?.status()).toBe(200);
 
@@ -33,7 +33,7 @@ test("the landing renders its sections in order under one headline", async ({ pa
   expect(order).toEqual(["hero", "mark", "how-it-works", "what-we-watch", "agents", "price", "faq"]);
 });
 
-test("the landing route data and document carry no disabled source's internal notes", async ({ page, request }) => {
+test("the landing route data and document carry no disabled source's internal notes @smoke", async ({ page, request }) => {
   const response = await page.goto(PATH);
   expect(response?.status()).toBe(200);
 
@@ -61,7 +61,7 @@ test("the landing route data and document carry no disabled source's internal no
   }
 });
 
-test("the landing never leads with a full row of dimmed sources", async ({ page }) => {
+test("the landing never leads with a full row of dimmed sources @smoke", async ({ page }) => {
   const response = await page.goto(PATH);
   expect(response?.status()).toBe(200);
 
@@ -85,7 +85,7 @@ test("the landing never leads with a full row of dimmed sources", async ({ page 
   }
 });
 
-test("how it works reads as three ruled steps in order, wide and narrow", async ({ page }, testInfo) => {
+test("how it works reads as three ruled steps in order, wide and narrow @smoke", async ({ page }, testInfo) => {
   const watched = watchConsole(page);
 
   await page.goto(PATH);
@@ -126,7 +126,7 @@ test("how it works reads as three ruled steps in order, wide and narrow", async 
   });
 });
 
-test("the agents section hands a visitor's agent the MCP address and the API docs", async ({ page }, testInfo) => {
+test("the agents section hands a visitor's agent the MCP address and the API docs @smoke", async ({ page }, testInfo) => {
   const watched = watchConsole(page);
 
   await page.goto(PATH);
@@ -145,7 +145,7 @@ test("the agents section hands a visitor's agent the MCP address and the API doc
   });
 });
 
-test("the landing's action names its price and leads to sign-in", async ({ page }) => {
+test("the landing's action names its price and leads to sign-in @smoke", async ({ page }) => {
   await page.goto(PATH);
   const hero = page.locator("#hero");
   await expect(hero.getByRole("button", { name: /€\d+\/mo/ })).toBeVisible();
@@ -154,7 +154,7 @@ test("the landing's action names its price and leads to sign-in", async ({ page 
   await expect(page.locator("#price").getByRole("link", { name: /€\d+\/mo/ })).toHaveAttribute("href", "/login");
 });
 
-test("the hero's first viewport holds the outcome and the one priced input", async ({ page }, testInfo) => {
+test("the hero's first viewport holds the outcome and the one priced input @smoke", async ({ page }, testInfo) => {
   const watched = watchConsole(page);
   const fullFace: string[] = [];
   page.on("request", (request) => {
@@ -240,7 +240,7 @@ test("the hero's first viewport holds the outcome and the one priced input", asy
   }
 });
 
-test("the hero input carries what you typed to sign-in", async ({ page }) => {
+test("the hero input carries what you typed to sign-in @smoke", async ({ page }) => {
   await page.goto(PATH);
   await page.locator("#hero").getByRole("textbox", { name: "your website, or a handle" }).fill("example.com");
   await page
@@ -250,7 +250,7 @@ test("the hero input carries what you typed to sign-in", async ({ page }) => {
   await expect(page).toHaveURL(/\/login\?subject=example\.com$/);
 });
 
-test("the landing carries its search metadata and structured data", async ({ page }) => {
+test("the landing carries its search metadata and structured data @smoke", async ({ page }) => {
   await page.goto(PATH);
   await expect(page).toHaveTitle(/\S/);
   await expect(page.locator('meta[name="description"]')).toHaveAttribute("content", /^.{50,160}$/);
@@ -275,7 +275,7 @@ test("the landing carries its search metadata and structured data", async ({ pag
   expect(graph["@graph"][3]?.mainEntity?.map((question) => question.name)).toEqual(visible);
 });
 
-test("the landing does not scroll horizontally", async ({ page }) => {
+test("the landing does not scroll horizontally @smoke", async ({ page }) => {
   await page.goto(PATH);
   const overflow = await page.evaluate(
     () => document.documentElement.scrollWidth > document.documentElement.clientWidth,
@@ -283,13 +283,13 @@ test("the landing does not scroll horizontally", async ({ page }) => {
   expect(overflow).toBe(false);
 });
 
-test("the social preview image is served", async ({ request }) => {
+test("the social preview image is served @smoke", async ({ request }) => {
   const response = await request.get("/og.png");
   expect(response.status()).toBe(200);
   expect(response.headers()["content-type"]).toBe("image/png");
 });
 
-test("the organization logo is served", async ({ request }) => {
+test("the organization logo is served @smoke", async ({ request }) => {
   const response = await request.get("/logo.svg");
   expect(response.status()).toBe(200);
   expect(response.headers()["content-type"].startsWith("image/svg+xml")).toBe(true);
@@ -301,7 +301,7 @@ test("the organization logo is served", async ({ request }) => {
 // shift layout, it stops for prefers-reduced-motion, and every item is a
 // distinct real signal row.
 
-test("the ticker sits above the page and reserves its height", async ({ page }) => {
+test("the ticker sits above the page and reserves its height @smoke", async ({ page }) => {
   await page.goto(PATH);
   const ticker = page.locator("#ticker");
   await expect(ticker).toBeVisible();
@@ -319,7 +319,7 @@ test("the ticker sits above the page and reserves its height", async ({ page }) 
   expect(mainFollowsTicker).toBe(true);
 });
 
-test("the ticker never scrolls the page sideways", async ({ page }) => {
+test("the ticker never scrolls the page sideways @smoke", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto(PATH);
   await expect(page.locator("#ticker")).toBeVisible();
@@ -337,7 +337,7 @@ test("the ticker never scrolls the page sideways", async ({ page }) => {
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(1440);
 });
 
-test("the ticker causes no layout shift", async ({ page }) => {
+test("the ticker causes no layout shift @smoke", async ({ page }) => {
   await page.addInitScript(() => {
     Reflect.set(window, "__cls", 0);
     new PerformanceObserver((list) => {
@@ -356,7 +356,7 @@ test("the ticker causes no layout shift", async ({ page }) => {
   expect(await page.evaluate(() => Reflect.get(window, "__cls"))).toBeLessThan(0.05);
 });
 
-test("the ticker stops under reduced motion", async ({ page }) => {
+test("the ticker stops under reduced motion @smoke", async ({ page }) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.goto(PATH);
   const animations = await page.evaluate(
@@ -365,7 +365,7 @@ test("the ticker stops under reduced motion", async ({ page }) => {
   expect(animations).toBe(0);
 });
 
-test("every ticker item is a real signal row, listed once", async ({ page }) => {
+test("every ticker item is a real signal row, listed once @smoke", async ({ page }) => {
   await page.goto(PATH);
   const ids = await page
     .locator("#ticker li[data-signal-id]")

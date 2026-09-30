@@ -8,8 +8,8 @@ import { readEnabledSourceId, readEnabledSources } from "../data/source.server";
 import { insertWatches, readEntityWatches } from "../data/watch.server";
 import type { EntityWatch, NewWatch } from "../data/watch.server";
 import { readUrl } from "../fetch/transport.server";
-import { discoverBoard } from "../hiring/discover-board";
-import { readCachedSiteProof, readSiteCard } from "./card.server";
+import { discoverBoard } from "../hiring/discover-board.server";
+import { brandBudget, readCachedSiteProof, readSiteCard } from "./card.server";
 import { extractIdentity } from "./extract";
 import { normaliseSubject, type Subject } from "./normalise";
 import { classifyNavPages } from "./page-role.server";
@@ -63,7 +63,7 @@ export async function persistTail(params: IdentityTailParams): Promise<{ entityI
 export async function classifyTailPages(params: IdentityTailParams, now: string): Promise<void> {
   if (params.handle !== undefined || params.homepageUrl === null) return;
   try {
-    const page = await readUrl(params.homepageUrl);
+    const page = await readUrl(params.homepageUrl, { mayEscalate: brandBudget(params.workspaceId, params.domain) });
     if (!page.ok) {
       console.log(
         JSON.stringify({ event: "identity-page-role-skipped", workspaceId: params.workspaceId, error: page.detail }),
@@ -83,7 +83,7 @@ export async function warmTailSiteCard(params: IdentityTailParams): Promise<void
   if (params.handle === undefined) return;
   const subject = subjectFor(params);
   if (subject?.kind !== "domain") return;
-  await readSiteCard(subject);
+  await readSiteCard(subject, brandBudget(params.workspaceId, subject.registrable));
 }
 
 export async function seedTailWatches(params: IdentityTailParams, discoveredAt: string): Promise<EntityWatch[]> {

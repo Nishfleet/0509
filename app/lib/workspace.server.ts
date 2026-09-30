@@ -38,7 +38,11 @@ async function readWorkspace(db: WorkspaceDb, userId: string): Promise<Workspace
   return db.prepare(SELECT_WORKSPACE).bind(userId).first<WorkspaceRow>();
 }
 
-async function withCapturedTimezone(db: WorkspaceDb, row: WorkspaceRow, timezone: string): Promise<WorkspaceRow> {
+async function withCapturedTimezone(
+  db: WorkspaceDb,
+  row: WorkspaceRow,
+  timezone: string,
+): Promise<WorkspaceRow> {
   if (row.timezone !== "UTC" || timezone === "UTC") return row;
   await fillWorkspaceTimezone(db, row.id, timezone);
   return { ...row, timezone };
@@ -90,8 +94,7 @@ export async function ensureWorkspaceForSignIn(
 
 export const ONBOARDING_COMPETITORS = "/onboarding/competitors";
 
-const SELECT_RUN =
-  "SELECT input_raw, watching_started_at FROM onboarding_run WHERE workspace_id = ? ORDER BY started_at ASC LIMIT 1";
+export const SELECT_RUN = "SELECT input_raw, watching_started_at FROM onboarding_run WHERE workspace_id = ? ORDER BY started_at ASC LIMIT 1";
 
 interface RunRow {
   input_raw: string;

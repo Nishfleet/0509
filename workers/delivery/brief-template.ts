@@ -1,5 +1,6 @@
 import type { BriefContext, BriefPayload, RenderedBrief } from "../../app/lib/brief-payload";
 import { escapeHtml } from "../../app/lib/html";
+import { UNJUDGED_WEEK_LINE } from "../../app/lib/read-this-first";
 import { EYEBROW, FONT, MONO, emailDocument } from "./email-shell";
 
 const COPY = {
@@ -16,6 +17,7 @@ const COPY = {
   new: "new",
   readThisFirst: "Read this first",
   nothingFirst: "Nothing this week needed reading first.",
+  unjudged: UNJUDGED_WEEK_LINE,
   yourBrands: "Your tracked brands",
   ownSiteOk: "Your site looks fine.",
   ownSiteBroken: (count: number) => `Your site looks broken (${count === 1 ? "1 page" : `${n(count)} pages`}):`,
@@ -99,6 +101,12 @@ function thumbnailSrc(r2Key: string | null, assetBaseUrl: string | null): string
 
 function renderHeadline(payload: BriefPayload, whyLine: string): { html: string; text: string } {
   const { headline_rank, headline_total, headline_movement } = payload;
+  if (payload.is_unjudged) {
+    return {
+      html: `<p style="margin:0;font-family:${FONT};font-size:20px;line-height:28px;font-weight:600;">${escapeHtml(COPY.unjudged)}</p>`,
+      text: COPY.unjudged,
+    };
+  }
   if (headline_rank === null || headline_total < 2) {
     return {
       html: `<p style="margin:0;font-family:${FONT};font-size:20px;line-height:28px;font-weight:600;">${escapeHtml(COPY.noRank)}</p>`,
@@ -168,6 +176,13 @@ function renderReadThisFirst(payload: BriefPayload, assetBaseUrl: string | null)
   const marks = payload.read_this_first.slice(0, 3);
 
   const heading = (text: string) => `<h2 class="brief-muted" style="${EYEBROW}">${escapeHtml(text)}</h2>`;
+
+  if (payload.is_unjudged) {
+    return {
+      html: `${heading(COPY.readThisFirst)}<p style="margin:0;font-family:${FONT};font-size:16px;line-height:24px;">${escapeHtml(COPY.unjudged)}</p>`,
+      text: `${COPY.readThisFirst}\n${COPY.unjudged}`,
+    };
+  }
 
   if (marks.length === 0) {
     return {
@@ -310,6 +325,7 @@ function renderFooter(payload: BriefPayload, unsubscribeUrl: string | null): { h
 
 function briefSubject(payload: BriefPayload): string {
   const { headline_rank, headline_total, headline_movement } = payload;
+  if (payload.is_unjudged) return COPY.unjudged;
   if (headline_rank === null || headline_total < 2) return COPY.noRankSubject;
   if (payload.headline_is_new || headline_movement === null || headline_movement === 0) {
     return COPY.subject(headline_rank, headline_total);

@@ -33,11 +33,12 @@ The remaining upstream facts are cited from Cloudflare's docs rather than probed
 
 ## 1. What the schema already decided, and one gap
 
-From `migrations/0001_rebuild.sql`, with `incident_notice` as widened by `migrations/0004_incident_notice_resolution.sql` (#4357):
+From `migrations/0001_rebuild.sql`, with `incident_notice` as widened by `migrations/0004_incident_notice_resolution.sql` (#4357), `send_target.unsubscribe_token` added by `migrations/0008_send_target_unsubscribe_token.sql`, and `send_target.verify_token` added by `migrations/0031_send_target_verify_token.sql` (#5811):
 
 ```
 channel          id, key UNIQUE, is_enabled, config_json
-send_target      id, workspace_id, channel_id, target_value, is_verified, created_at
+send_target      id, workspace_id, channel_id, target_value, is_verified,
+                 unsubscribe_token, verify_token, verify_token_expires_at, created_at
                  UNIQUE (workspace_id, channel_id, target_value)
 send_attempt     id, workspace_id, send_target_id, digest_id,
                  idempotency_key TEXT NOT NULL UNIQUE, status, error, attempted_at

@@ -22,7 +22,7 @@ export function freshnessText(entry: FreshnessEntry): string {
 export function FreshnessLine({ entries }: { entries: readonly FreshnessEntry[] }): ReactElement | null {
   if (entries.length === 0) return null;
   return (
-    <p data-home="freshness" className="font-mono text-eyebrow text-ink-soft mt-2">
+    <p data-home="freshness" className="mt-2 font-mono text-eyebrow text-ink-soft">
       {entries.flatMap((entry, index) =>
         index === 0
           ? [

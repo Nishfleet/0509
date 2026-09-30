@@ -1,24 +1,15 @@
-import { readFileSync } from "node:fs";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
-
 import { getDomain } from "tldts";
 import { describe, expect, it } from "vitest";
 
-import { hnGenerator } from "../../../app/lib/discovery/generators/hn";
-import { newsGenerator } from "../../../app/lib/discovery/generators/news";
-import { evidenceLine, shortlist } from "../../../app/lib/discovery/shortlist";
-import type { Candidate, FetchedText, Subject } from "../../../app/lib/discovery/types";
+import HN_FIXTURE from "../../../fixtures/hn-gymshark.json?raw";
+import { hnGenerator } from "../../../../app/lib/discovery/generators/hn.server";
+import { evidenceLine, shortlist } from "../../../../app/lib/discovery/shortlist";
+import type { Candidate, FetchedText, Subject } from "../../../../app/lib/discovery/types";
 
 const SUBJECT: Subject = { name: "Gymshark", domain: "gymshark.com" };
 
-const FIXTURES_DIR = join(dirname(fileURLToPath(import.meta.url)), "../../fixtures");
-
-const HN_FIXTURE = readFileSync(join(FIXTURES_DIR, "hn-gymshark.json"), "utf8");
-const NEWS_FIXTURE = readFileSync(join(FIXTURES_DIR, "gdelt-gymshark.json"), "utf8");
-
 function fetchTextWith(body: string): (url: string) => Promise<FetchedText> {
-  return (url) => Promise.resolve({ ok: true, url, contentType: null, body });
+  return (url) => Promise.resolve({ ok: true, status: 200, url, contentType: null, body });
 }
 
 interface Grouped {
@@ -38,9 +29,8 @@ interface Row {
 
 describe("shortlist fixtures", () => {
   it("builds a shortlist from real generator output and every entry has an evidence line", async () => {
-    const newsCandidates = await newsGenerator(SUBJECT, fetchTextWith(NEWS_FIXTURE));
     const hnCandidates = await hnGenerator(SUBJECT, fetchTextWith(HN_FIXTURE));
-    const combined: Candidate[] = [...newsCandidates, ...hnCandidates];
+    const combined: Candidate[] = hnCandidates;
     const entries = shortlist(combined);
 
     expect(entries.length).toBeGreaterThanOrEqual(1);

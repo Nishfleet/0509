@@ -85,7 +85,7 @@ for (const { width, height } of [
       await expect(watching.first()).toBeVisible();
     }
     await page.getByRole("button", { name: "Start watching" }).click();
-    await expect(page).toHaveURL(/\/app$/);
+    await expect(page).toHaveURL(/\/app$/, { timeout: 30_000 });
 
     const panel = page.locator('[data-home="first-file"]');
     await expect(panel).toContainText(

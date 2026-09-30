@@ -16,8 +16,8 @@ export function Monogram({
     <span
       aria-hidden="true"
       className={cn(
-        "font-display flex size-[26px] shrink-0 items-center justify-center border-[1.5px] text-[0.8rem] font-extrabold",
-        self ? "bg-green border-ink" : "bg-card",
+        "flex size-[26px] shrink-0 items-center justify-center border-[1.5px] font-display text-[0.8rem] font-extrabold",
+        self ? "border-ink bg-green" : "bg-card",
         off ? "border-line" : "border-ink",
       )}
     >

@@ -69,21 +69,22 @@ export class StandingRollover extends WorkflowEntrypoint<Env, RolloverParams> {
     const schedule = { timezone: closing.timezone, weekday: closing.weekday, hour: closing.hour };
 
     const rankedCount = await step.do("freeze-rank", RETRY, async () => {
-      const ranked = await freezeWeek(this.env.DB, workspaceId, closing.startsAt);
+      const ranked = await freezeWeek(this.env.DB, {
+        workspaceId,
+        weekStartAt: closing.startsAt,
+        weekEndAt: closesAt.toISOString(),
+      });
       return ranked.length;
     });
 
-    const readThisFirst =
-      rankedCount < 2
-        ? { picks: [], judged: 0 }
-        : await step.do("read-this-first", RETRY, async () =>
-            judgeWeek(this.env.DB, {
-              workspaceId,
-              startsAt: closing.startsAt,
-              closesAt: closesAt.toISOString(),
-              decidedAt: new Date().toISOString(),
-            }),
-          );
+    const readThisFirst = await step.do("read-this-first", RETRY, async () =>
+      judgeWeek(this.env.DB, {
+        workspaceId,
+        startsAt: closing.startsAt,
+        closesAt: closesAt.toISOString(),
+        decidedAt: new Date().toISOString(),
+      }),
+    );
 
     const writeDigest = async (): Promise<string> => {
       const id = `digest_${workspaceId}_${instantStamp(closesAt)}`;
@@ -104,7 +105,8 @@ export class StandingRollover extends WorkflowEntrypoint<Env, RolloverParams> {
       if (!closing.paused) await this.env.SEND_EMAIL.send({ digest_id: id });
       return id;
     };
-    const digestId = rankedCount < 2 ? null : await step.do("write-digest", RETRY, writeDigest);
+    const digestId =
+      rankedCount < 2 && !readThisFirst.unjudged ? null : await step.do("write-digest", RETRY, writeDigest);
 
     await step.do("spawn-successor", RETRY, async () =>
       createRollovers(this.env.STANDING_ROLLOVER, [

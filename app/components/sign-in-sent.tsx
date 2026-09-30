@@ -35,7 +35,7 @@ export function SignInSent({ email, turnstileSiteKey }: { email: string; turnsti
           Check your email
         </h1>
         <p className={SIGN_IN_LEDE}>
-          If <strong className="text-ink font-semibold">{email}</strong> can sign in, a link is on its way. It works
+          If <strong className="font-semibold text-ink">{email}</strong> can sign in, a link is on its way. It works
           once and expires in {minutes} minutes.
         </p>
         <TurnstileWidget siteKey={turnstileSiteKey} startOn="mount" />

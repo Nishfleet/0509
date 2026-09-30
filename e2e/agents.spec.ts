@@ -25,7 +25,7 @@ const MCP_INIT = {
 
 const MCP_HEADERS = { "content-type": "application/json", accept: "application/json, text/event-stream" };
 
-test("/mcp refuses an unsigned request with a challenge that points at its sign-in metadata", async ({ request }) => {
+test("/mcp refuses an unsigned request with a challenge that points at its sign-in metadata @smoke", async ({ request }) => {
   const response = await request.post("/mcp", { data: MCP_INIT, headers: MCP_HEADERS });
   expect(response.status()).toBe(401);
   expect(response.headers()["www-authenticate"]).toMatch(
@@ -33,7 +33,7 @@ test("/mcp refuses an unsigned request with a challenge that points at its sign-
   );
 });
 
-test("/mcp refuses a made-up bearer token", async ({ request }) => {
+test("/mcp refuses a made-up bearer token @smoke", async ({ request }) => {
   const response = await request.post("/mcp", {
     data: MCP_INIT,
     headers: { ...MCP_HEADERS, authorization: "Bearer 0509_not-a-real-key" },
@@ -41,7 +41,7 @@ test("/mcp refuses a made-up bearer token", async ({ request }) => {
   expect(response.status()).toBe(401);
 });
 
-test("the MCP server publishes its protected-resource and authorization-server metadata", async ({ request }) => {
+test("the MCP server publishes its protected-resource and authorization-server metadata @smoke", async ({ request }) => {
   const resource = await request.get("/.well-known/oauth-protected-resource/mcp");
   expect(resource.status()).toBe(200);
   const resourceBody: { resource: string; authorization_servers: string[]; scopes_supported: string[] } =
@@ -65,7 +65,7 @@ test("the MCP server publishes its protected-resource and authorization-server m
   expect(serverBody.client_id_metadata_document_supported).toBe(true);
 });
 
-test("the consent screen sends a signed-out visitor to sign in and back", async ({ request }) => {
+test("the consent screen sends a signed-out visitor to sign in and back @smoke", async ({ request }) => {
   const response = await request.get("/oauth/authorize?client_id=https%3A%2F%2Fexample.com%2Fclient.json", {
     maxRedirects: 0,
   });
@@ -75,7 +75,7 @@ test("the consent screen sends a signed-out visitor to sign in and back", async 
   expect(location.searchParams.get("next")).toMatch(/^\/oauth\/authorize\?/);
 });
 
-test("the REST API refuses a request without a key and never caches the answer", async ({ request }) => {
+test("the REST API refuses a request without a key and never caches the answer @smoke", async ({ request }) => {
   for (const path of [
     "/api/v1/brief",
     "/api/v1/competitors",
@@ -90,7 +90,7 @@ test("the REST API refuses a request without a key and never caches the answer",
   }
 });
 
-test("the API reference is public OpenAPI 3.1", async ({ request }) => {
+test("the API reference is public OpenAPI 3.1 @smoke", async ({ request }) => {
   const response = await request.get("/api/v1/openapi.json");
   expect(response.status()).toBe(200);
   const body: { openapi: string; paths: Record<string, unknown> } = await response.json();

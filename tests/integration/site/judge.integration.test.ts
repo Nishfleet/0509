@@ -1,48 +1,44 @@
 import { env } from "cloudflare:test";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-const jevAnswers = vi.hoisted(() => ({
+import { insertVerdict } from "../../../app/lib/data/jev_verdict.server";
+import { computeBreakageEvidence } from "../../../app/lib/site/breakage-evidence";
+import { judgeChange } from "../../../app/lib/site/judge.server";
+
+const jevAnswers = {
   noul: new Map<string, number>(),
   choice: new Map<string, string>(),
   calls: 0,
   states: [] as unknown[],
-}));
+};
 
-const jevFailures = vi.hoisted(() => ({ next: 0 }));
+const jevFailures = { next: 0 };
 
-vi.mock("../../../app/lib/jev/client.server", () => {
-  class JevUnavailableError extends Error {
-    constructor(cause: unknown) {
-      super(`jev unavailable: ${cause instanceof Error ? cause.message : String(cause)}`);
-      this.name = "JevUnavailableError";
-    }
-  }
-  return {
-    JevUnavailableError,
-    askNoul: async (workspaceId: string, question: { id: string }, state: unknown) => {
-      jevAnswers.states.push(state);
+function installJev(): void {
+  Reflect.set(env, "AI", {
+    async run(_model: string, request: { state: unknown; questions: Record<string, { type: string }> }) {
+      jevAnswers.states.push(request.state);
       jevAnswers.calls += 1;
       if (jevFailures.next > 0) {
         jevFailures.next -= 1;
-        throw new JevUnavailableError(new Error("gateway down"));
+        throw new Error("gateway down");
       }
-      const p = jevAnswers.noul.get(question.id);
-      if (p === undefined) throw new JevUnavailableError(new Error(`no answer for ${question.id}`));
-      return { questionId: question.id, inputHash: `noul-${workspaceId}-${question.id}`, p, cached: false };
+      const answers: Record<string, { type: "noul"; noul: number } | { type: "choice"; choice: string }> = {};
+      for (const [id, question] of Object.entries(request.questions)) {
+        if (question.type === "noul") {
+          const p = jevAnswers.noul.get(id);
+          if (p === undefined) throw new Error(`no answer for ${id}`);
+          answers[id] = { type: "noul", noul: p };
+        } else {
+          const choice = jevAnswers.choice.get(id);
+          if (choice === undefined) throw new Error(`no answer for ${id}`);
+          answers[id] = { type: "choice", choice };
+        }
+      }
+      return { answers };
     },
-    askChoice: async (workspaceId: string, question: { id: string }, state: unknown) => {
-      jevAnswers.states.push(state);
-      jevAnswers.calls += 1;
-      const choice = jevAnswers.choice.get(question.id);
-      if (choice === undefined) throw new JevUnavailableError(new Error(`no answer for ${question.id}`));
-      return { questionId: question.id, inputHash: `choice-${workspaceId}-${question.id}`, choice, cached: false };
-    },
-  };
-});
-
-import { computeBreakageEvidence } from "../../../app/lib/site/breakage-evidence";
-import { judgeChange } from "../../../app/lib/site/judge.server";
-import { insertVerdict } from "../../../app/lib/data/jev_verdict.server";
+  });
+}
 
 const NOW = new Date().toISOString();
 
@@ -88,6 +84,7 @@ function judgeInput(input: {
   return {
     workspaceId: input.ws ?? "ws-mine",
     entityId: input.entity,
+    signalId: null,
     isSelf: input.isSelf,
     subject: { name: input.subjectName ?? "Rival", domain: `${input.entity}.example` },
     pageUrl: `https://${input.entity}.example/`,
@@ -127,6 +124,7 @@ describe("judgeChange", () => {
     jevAnswers.calls = 0;
     jevAnswers.states.length = 0;
     jevFailures.next = 0;
+    installJev();
     await seedWorkspace("ws-mine");
     await seedWorkspace("ws-history");
     for (const [entity, role] of [
@@ -148,6 +146,10 @@ describe("judgeChange", () => {
         .bind(entity, `${entity}.example`, entity, NOW)
         .run();
     }
+  });
+
+  afterEach(() => {
+    Reflect.deleteProperty(env, "AI");
   });
 
   it("case a: a competitor change at 0.95 publishes with kind and two logged verdicts", async () => {
@@ -274,7 +276,7 @@ describe("judgeChange", () => {
 
     const judgment = await judgeChange(judgeInput({ entity: "over", isSelf: false, ws: "ws-history" }));
 
-    expect(judgment).toEqual({ deferred: true, selfBreakage: null, noteworthy: null });
+    expect(judgment).toEqual({ deferred: true, selfBreakage: null, noteworthy: null, verdictIds: [] });
     expect(jevAnswers.calls).toBe(0);
   });
 
@@ -337,7 +339,7 @@ describe("judgeChange", () => {
 
     const judgment = await judgeChange(judgeInput({ entity: "mine", isSelf: true }));
 
-    expect(judgment).toEqual({ deferred: true, selfBreakage: null, noteworthy: null });
+    expect(judgment).toEqual({ deferred: true, selfBreakage: null, noteworthy: null, verdictIds: [] });
     expect(await rowsFor("mine")).toEqual([]);
   });
 
@@ -354,8 +356,8 @@ describe("judgeChange", () => {
       .bind("rival")
       .all<{ question_id: string; input_hash: string }>();
     expect(rows.results).toEqual([
-      { question_id: "change_kind", input_hash: "choice-ws-mine-change_kind" },
-      { question_id: "noteworthy_change", input_hash: "noul-ws-mine-noteworthy_change" },
+      { question_id: "change_kind", input_hash: expect.stringMatching(/^[0-9a-f]{64}$/) },
+      { question_id: "noteworthy_change", input_hash: expect.stringMatching(/^[0-9a-f]{64}$/) },
     ]);
   });
 });

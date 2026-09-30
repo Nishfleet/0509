@@ -10,7 +10,7 @@ The decision that still matters from the pre-#4692 design is preserved below und
 
 ### Live sources
 
-- **GDELT DOC 2.0** (`gdelt.doc`), `official_api` reliability. The Google News RSS feed was the pre-#4692 source and is gone for two independent reasons: its `<copyright>` element limits use to _"personal, non-commercial use"_, which a paid product is not, and §0.1 below proves a Worker cannot obtain the publisher URL behind its link without a browser. The adapter was removed from `main` in **#5067**, so the shipped sources are GDELT and HN Algolia.
+- **GDELT DOC 2.0** (`gdelt.doc`), `official_api` reliability. The Google News RSS feed was the pre-#4692 source and is gone for two independent reasons: its `<copyright>` element limits use to *"personal, non-commercial use"*, which a paid product is not, and §0.1 below proves a Worker cannot obtain the publisher URL behind its link without a browser. The adapter was removed from `main` in **#5067**, so the shipped sources are GDELT and HN Algolia.
 - **Hacker News Algolia** (`hn.algolia`), `official_api` reliability. The HN `objectID` is the dedup key (`workers/sources/mentions/hn.ts`).
 - **YouTube** (`youtube.channel_rss`) and **Medium** (`medium.tag_rss`) adapters are registered in `workers/sources/registry.ts` and tested (`tests/mentions/youtube.test.ts`, `tests/mentions/medium.test.ts`). No `source` row carries these `plugin_key`s yet; the eligibility join (`source.is_enabled = 1`) hides them.
 
@@ -37,10 +37,10 @@ A target that throws is logged as `mentions.target_failed` and counted as `faile
   5. Writes the body to **R2** at `snapshot/mentions/<plugin_key>/<hash>` via `env.SNAPSHOTS.put` (unconditional; a re-poll with an unchanged body re-PUTs the same key).
   6. For each watch on this target, reads `readDiscoveryContext(workspace_id)` once per workspace and calls `statementsForWatch(...)`.
 - `statementsForWatch(...)`:
-  - Inserts exactly one `snapshot` row per watch per tick (`app/lib/data/snapshot.server.ts` `insertWatchSnapshot`).
+  - Inserts exactly one `snapshot` row per watch per tick (`app/lib/data/snapshot.server.ts` `insertWatchSnapshot`), and stages the source row's `latest_*` facts in the same batch.
   - Reads `readSeenDedupKeys(source_id, dedup_keys)` against `signal(source_id, dedup_key)` and drops known keys from the batch.
   - Caps the batch at **12** fresh items per watch per tick (`JUDGED_PER_WATCH = 12`).
-  - For each fresh item calls `judge(...)` which runs Jev (below), then stages `signal`, `jev_verdict` and optionally `alert` statements.
+  - For each fresh item calls `judge(...)` which runs Jev (below), then stages `signal`, `jev_verdict` and optionally `alert` statements. Once `judgeOrNull` reports Jev down, the rest of the batch stages the `signal` row alone with `state = 'unjudged'`.
   - Calls `markWatchPolled(watch_id, now)` after the D1 `batch()` lands.
 
 ### Judgment: D5 then D6
@@ -50,7 +50,7 @@ For each fresh item the sweep calls Jev via `app/lib/jev/client.server.ts` `askN
 - **D5** `mention_is_about_brand`. Threshold via `app/lib/jev/thresholds.ts` `noulAction(p)`: `act` at `p >= 0.9`, `reject` at `p <= 0.1`, otherwise `maybe`. A `reject` verdict is recorded on `jev_verdict` (UNIQUE on `(question_id, input_hash)`), and the `signal` row is written with `is_tombstoned = 1`. `readSeenDedupKeys` does **not** filter on `is_tombstoned`, so a one-time reject is never re-judged. Every read path filters `is_tombstoned = 0`.
 - **D6** `mention_matters` — only on a D5 keep. `act` writes an `alert` row via `app/lib/data/alert.server.ts` `insertSignalAlert`, `kind = 'mention'`, `title = "<watch.name>: <item.title>"`. The feed that renders these alerts sits elsewhere (engine 6, standing) and is not this engine's responsibility.
 
-A `JevUnavailableError` thrown by `askNoul` aborts the rest of the watch's batch: no further items are judged and the loop sets `unjudged = fresh.length - index`. The R2 body and the `snapshot` row for the watch are still written, and any item judged successfully before the failure is staged and written with it; only the failing item and the items after it are absent from `signal`. The next night's Workflow instance sees those unstored items again (`readSeenDedupKeys` did not find them) and retries them.
+A `JevUnavailableError` thrown by `askNoul` stops judging for the rest of the watch's batch: the failing item and the items after it are staged into `signal` with `state = 'unjudged'` and `is_tombstoned = 0` in the same D1 batch, and the loop counts them in `unjudged`. The R2 body and the `snapshot` row for the watch are still written, and any item judged successfully before the failure is staged and written with it (`state = 'judged'`). Nothing is dropped; an unjudged row's dedup key is in `signal`, so it is not re-fetched, and it carries no `jev_verdict` row. `state` does not distinguish an item Jev failed on from one the latch never asked; #6078 re-judges both from the stored row, not a re-fetch. At the start of each watch's sweep, `rejudgeUnjudged` reads that watch's `unjudged` rows (oldest first, within the 12-item judge cap, which fresh items share) and re-asks D5 and, when D5 keeps it, D6 from the stored row. A kept row is updated to `state = 'judged'` and gets its `jev_verdict` rows (and an alert on D6 `act`); a D5 reject is updated to `state = 'judged'`, `is_tombstoned = 1` with its `mention_is_about_brand` verdict. If Jev is still down the rows stay `unjudged` and the latch stores fresh items unjudged. Proven by `tests/integration/mentions/rejudge.integration.test.ts`.
 
 **No D8 runs.** Dedup is `(source_id, dedup_key)` on `signal` and `ON CONFLICT DO NOTHING` — string-equal in the DB, no judgment involved. The `dedup_key` stored is `"<entity_id>:<adapter dedupKey>"`, so one story is judged once per brand per source, and the UNIQUE constraint is what stops a second insert, not a verdict. The cross-source fan-in that the pre-#4692 design sketched is **not shipped**.
 
@@ -59,7 +59,7 @@ A `JevUnavailableError` thrown by `askNoul` aborts the rest of the watch's batch
 Code paths that exist on `main` today (verified with `git ls-files <path>`):
 
 ```
-workers/mentions/sweep.ts                          # planTargets / sweepTarget / statementsForWatch / judge
+workers/mentions/sweep.ts                          # planTargets / sweepTarget / statementsForWatch / judge / judgeOrNull
 workers/mentions/map.ts                            # toSignalRow: adapter item -> signal row (contract + tests)
 workers/workflows/mentions.ts                      # MentionsSweep Workflow class (one step per target)
 workers/app.ts                                     # exports the Workflow class bound to wrangler.jsonc MENTIONS
@@ -100,23 +100,24 @@ tests/integration/mentions/x-disabled-source.integration.test.ts   # disabled x.
 
 Per 1,000 polls (one source × one watch × one tick):
 
-| Resource                                            | Units                                           | Cloudflare cost |
-| --------------------------------------------------- | ----------------------------------------------- | --------------- |
-| Workers requests                                    | 1,000                                           | included        |
-| D1 rows written (`snapshot`)                        | 1,000                                           | included        |
-| D1 rows written (`signal`)                          | up to ~12 × fraction surviving D5               | included        |
-| D1 rows written (`alert` on D6 act)                 | up to ~12 × fraction with `p >= 0.9`            | included        |
-| R2 Class A (PUT body)                               | 1,000                                           | included        |
-| R2 storage (~50 KB / body, one-year snapshot/ rule) | ~50 MB                                          | included        |
-| Workflow steps                                      | 1 plan step + 1 step per target                 | included        |
-| Browser Rendering                                   | **0**                                           | **$0**          |
-| Jev                                                 | 1 D5 + 0–1 D6 per fresh item, capped 12 / watch | seat cost       |
+| Resource | Units | Cloudflare cost |
+|---|---|---|
+| Workers requests | 1,000 | included |
+| D1 rows written (`snapshot`) | 1,000 | included |
+| D1 rows written (`source` latest facts — one paired update per poll; the guard caps it at one per source per tick) | up to 1,000 | included |
+| D1 rows written (`signal`) | up to ~12 × fraction surviving D5 | included |
+| D1 rows written (`alert` on D6 act) | up to ~12 × fraction with `p >= 0.9` | included |
+| R2 Class A (PUT body) | 1,000 | included |
+| R2 storage (~50 KB / body, one-year snapshot/ rule) | ~50 MB | included |
+| Workflow steps | 1 plan step + 1 step per target | included |
+| Browser Rendering | **0** | **$0** |
+| Jev | 1 D5 + 0–1 D6 per fresh item, capped 12 / watch | seat cost |
 
 Monthly at 100 brands × 2 live sources × 1 tick × 30 days = **6,000 polls/month**. All inside included tiers, **$0.00 Cloudflare**. Jev is the only real cost.
 
 ### Failure modes
 
-- **Jev unavailable** — `JevUnavailableError` aborts the rest of the watch. The snapshot row and the R2 body are still written, as is any item judged successfully before the failure; the failing item and the items after it are not stored, so the next night's instance retries them. Proven by `tests/integration/mentions/sweep.integration.test.ts` "stores nothing unjudged when the AI is unavailable".
+- **Jev unavailable** — `JevUnavailableError` stops the watch's judging. The failing item and the items after it are stored with `state = 'unjudged'` in the same batch as the snapshot row, along with any item judged successfully before the failure; nothing is dropped. Proven by `tests/integration/mentions/sweep.integration.test.ts` "stores every item as unjudged when the AI is unavailable, so none are dropped".
 - **Adapter throw** — `sweepTarget`'s caller catches, logs `mentions.target_failed`, counts the target as failed and moves on. Other targets are not blocked.
 - **Same item twice** — `(source_id, dedup_key)` is `UNIQUE` on `signal`; `insertMention` uses `ON CONFLICT DO NOTHING`. Proven by the "does not judge or alert the same article twice" integration test.
 - **D5 reject** — stored with `is_tombstoned = 1`; never judged again (no tombstone filter in `readSeenDedupKeys`); hidden from every read path that filters `is_tombstoned = 0`.
@@ -130,14 +131,14 @@ Monthly at 100 brands × 2 live sources × 1 tick × 30 days = **6,000 polls/mon
 
 ### 0.1 Google News links cannot be resolved server-side. The contract's stated method does not work.
 
-`docs/REBUILD-MENTIONS.md` §3 says: _"That is a `fetch(link, { redirect: "manual" })` and reading `Location` — one extra request per new item."_ It is not. Four probes:
+`docs/REBUILD-MENTIONS.md` §3 says: *"That is a `fetch(link, { redirect: "manual" })` and reading `Location` — one extra request per new item."* It is not. Four probes:
 
-| Probe                                                        | Result                                                                                 |
-| ------------------------------------------------------------ | -------------------------------------------------------------------------------------- |
-| `GET <rss article link>`, no follow                          | **302 → `https://consent.google.com/m?continue=…&gl=DE&…`**                            |
-| same, with `Cookie: CONSENT=YES+cb.20220301-11-p0.en+FX+111` | **302 → consent.google.com**, unchanged                                                |
-| same, `&ucbcb=1` appended                                    | **302 → back to `news.google.com/rss/articles/…`** — consent cleared, still no article |
-| `curl -sL --max-redirs 8 "<link>&ucbcb=1"`                   | **200, 582,999 B**, final URL still `news.google.com/rss/articles/…`                   |
+| Probe | Result |
+|---|---|
+| `GET <rss article link>`, no follow | **302 → `https://consent.google.com/m?continue=…&gl=DE&…`** |
+| same, with `Cookie: CONSENT=YES+cb.20220301-11-p0.en+FX+111` | **302 → consent.google.com**, unchanged |
+| same, `&ucbcb=1` appended | **302 → back to `news.google.com/rss/articles/…`** — consent cleared, still no article |
+| `curl -sL --max-redirs 8 "<link>&ucbcb=1"` | **200, 582,999 B**, final URL still `news.google.com/rss/articles/…` |
 
 That 583 KB terminal document is an **Angular application shell**. `data-n-au` **absent**, `http-equiv="refresh"` **absent**, the publisher string `advertisinglaw` / `fkks` **absent**. There is no `Location` and no article URL in the markup; the hop is performed by JavaScript.
 
@@ -145,7 +146,7 @@ Decoding the `guid` directly gives 256 base64 characters decoding to 192 bytes o
 
 **Consequence, and why Google News is gone from the shipped engine:** a Worker cannot obtain a Google News item's real article URL without either running a browser or reverse-engineering Google's `batchexecute` endpoint. The second is forbidden (no glue); the first was Browser Run candidate A in the pre-#4692 screening, measured at **5.0 browser-hours/month at 100 brands** for zero new signal, and it was rejected in favour of dropping the source. The adapter was then removed from `main` in **#5067**. Combined with the feed's `<copyright>` limiting use to personal, non-commercial use, the source was dropped rather than resolved.
 
-**The text below documents what was rejected or replaced; none of it is the current design.** No path in the lines below is code; the _only_ paths named in the current design are listed above under `Files in this engine`. The full pre-#4692 probe table, design-it-twice screening, cost arithmetic and failure-mode table are in this file's git history, not in the text below.
+**The text below documents what was rejected or replaced; none of it is the current design.** No path in the lines below is code; the *only* paths named in the current design are listed above under `Files in this engine`. The full pre-#4692 probe table, design-it-twice screening, cost arithmetic and failure-mode table are in this file's git history, not in the text below.
 
 The pre-#4692 design proposed a producer triggered at `17 2 * * *` (off-the-hour from the other engines' schedules) that enqueued one message per eligible watch onto two rate-classed Queues: one concurrency-10 lane for the sub-second sources and one concurrency-1 lane for the rate-limited / headless sources (Reddit was assumed in the set, with an 18-second 429 measured on the second request). Each consumer was meant to write one `snapshot` row per watch per tick with the body in R2, and a downstream `MentionsJudgeWorkflow` was meant to consume those snapshots and run **D5 → D8 → D6** in that order. D8 (`duplicate_signal`) was supposed to be the cross-source fan-in, replacing the string-equal `url_hash` matching that the schema's `UNIQUE (source_id, dedup_key)` actually ships with. The MVP source set under that design was five sources (Google News, Reddit, HN Algolia, YouTube, Medium) plus DuckDuckGo as a disabled row. Resolving Google News's 583 KB Angular shell hop was **Browser Run candidate A**, priced at 5.0 browser-hours/month at 100 brands and rejected on cost; candidate B stored the Google URL and moved dedup to D8, and #4692 took neither candidate as written. The probes that drove the rewrite recorded three load-bearing findings: Google News links cannot be resolved server-side (no `Location` header, encrypted `guid`, no Angular markup), DuckDuckGo 202-challenges every request from a shared datacenter IP after a handful of probes, and Hacker News's first result for `"gymshark"` on 2026-09-21 was a `GameShark` retro-console cheat code story.
 

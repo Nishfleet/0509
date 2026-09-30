@@ -239,7 +239,9 @@ emits).
 Base: `@eslint/js` recommended, `typescript-eslint` **strict-type-checked** and
 **stylistic-type-checked**, `eslint-plugin-react-hooks` recommended on `app/**`
 and `workers/**`, `eslint-plugin-boundaries` 7.2.0 for element dependencies,
-and `eslint-plugin-import-x` 4.17.1 for cycles and named exports.
+`eslint-plugin-import-x` 4.17.1 for cycles and named exports, and
+`eslint-plugin-better-tailwindcss` 4.7.0 for the DESIGN.md token gate on
+`app/**` (0509#5871).
 
 Every boundary rule carries its provenance **in its own message**, so an agent
 that trips it reads the reason at the moment it matters:

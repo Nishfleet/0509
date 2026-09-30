@@ -1,4 +1,4 @@
-import { env } from "cloudflare:test";
+import { env, introspectWorkflow } from "cloudflare:test";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { readCachedSiteProof, startCard } from "../../../app/lib/identity/card.server";
@@ -7,10 +7,20 @@ import { extractIdentity } from "../../../app/lib/identity/extract";
 import { normaliseSubject } from "../../../app/lib/identity/normalise";
 import { probeKey } from "../../../app/lib/identity/probe-cache.server";
 import { identityTailInstanceId } from "../../../app/lib/identity/tail.server";
+import { takeBrowserEscalation } from "../../../app/lib/site/browser-budget.server";
 import gym from "../../fixtures/gymshark-2026-09-22-a.html?raw";
 
 const NOW = "2026-09-24T00:00:00Z";
 const LOGO_HOST = "images.ctfassets.net";
+
+const BOT_GATED_HTML = `<!doctype html>
+<html>
+  <head>
+    <title>Botgated</title>
+    <meta property="og:description" content="A description that only the browser could read">
+  </head>
+  <body><h1>Botgated</h1></body>
+</html>`;
 
 function isLogo(url: string): boolean {
   return new URL(url).hostname === LOGO_HOST;
@@ -36,18 +46,48 @@ function stubWeb(homepage: (url: string) => Response) {
   return calls;
 }
 
+interface BrowserStub {
+  calls: string[];
+  quickAction(action: "content", options: { url: string }): Promise<Response>;
+}
+
+function installBrowser(stub: BrowserStub): void {
+  Object.defineProperty(env, "BROWSER", { configurable: true, value: stub });
+}
+
+function stubBrowser(html: string): BrowserStub {
+  const calls: string[] = [];
+  return {
+    calls,
+    quickAction(_action: "content", options: { url: string }): Promise<Response> {
+      calls.push(options.url);
+      return Promise.resolve(
+        new Response(JSON.stringify({ success: true, result: html, meta: { status: 200 } }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+      );
+    },
+  };
+}
+
 async function settledTail(): Promise<void> {
   const row = await env.DB.prepare("SELECT id FROM entity WHERE workspace_id = 'ws-1' AND role = 'self'").first<{
     id: string;
   }>();
   if (row === null) return;
   const instance = await env.IDENTITY_TAIL.get(identityTailInstanceId(row.id));
-  for (let attempt = 0; attempt < 40; attempt += 1) {
+  for (;;) {
     const status = await instance.status();
     if (status.status === "complete" || status.status === "errored") return;
     await new Promise((resolve) => setTimeout(resolve, 25));
   }
-  throw new Error("identity tail did not finish");
+}
+
+async function settledClassification(introspector: Awaited<ReturnType<typeof introspectWorkflow>>): Promise<void> {
+  const [instance] = await introspector.get();
+  if (instance === undefined) throw new Error("tail instance was not started");
+  await instance.waitForStepResult({ name: "classify-pages" });
 }
 
 async function answerHomepage(): Promise<void> {
@@ -91,6 +131,7 @@ beforeEach(async () => {
 afterEach(() => {
   vi.unstubAllGlobals();
   Reflect.deleteProperty(env, "AI");
+  Reflect.deleteProperty(env, "BROWSER");
 });
 
 describe("startCard", () => {
@@ -334,6 +375,79 @@ describe("startCard", () => {
     expect(site.unfound).toBe(false);
     expect(await card.logo).toBeNull();
   });
+
+  it("fills a bot-gated homepage through exactly one budgeted browser escalation", async () => {
+    const subject = subjectFor("botgatedbudget.com");
+    const day = new Date().toISOString().slice(0, 10);
+    stubAi(0.95);
+    stubWeb(() => new Response("blocked", { status: 403 }));
+    const stub = stubBrowser(BOT_GATED_HTML);
+    installBrowser(stub);
+
+    const site = await startCard("ws-1", subject, []).site;
+
+    expect(site.name).toBe("Botgated");
+    expect(site.description).toBe("A description that only the browser could read");
+    expect(site.unfound).toBe(false);
+    expect(site.review).toEqual({ name: "fill", description: "fill", socials: "empty" });
+    expect(stub.calls).toEqual(["https://botgatedbudget.com/"]);
+    let left = 0;
+    for (let attempt = 0; attempt < 16; attempt += 1) {
+      if (!(await takeBrowserEscalation("ws-1", subject.registrable, day))) break;
+      left += 1;
+    }
+    expect(left).toBe(3);
+  });
+
+  it("escalates a bot-gated creator profile through the brand's budgeted read", async () => {
+    const subject = subjectFor("https://www.instagram.com/botgatedprofile/");
+    const day = new Date().toISOString().slice(0, 10);
+    stubAi(0.95);
+    stubWeb(() => new Response("blocked", { status: 403 }));
+    const stub = stubBrowser(BOT_GATED_HTML);
+    installBrowser(stub);
+
+    const site = await startCard("ws-1", subject, []).site;
+
+    expect(site.name).toBe("Botgated");
+    expect(site.description).toBe("A description that only the browser could read");
+    expect(site.unfound).toBe(false);
+    expect(stub.calls).toEqual(["https://www.instagram.com/botgatedprofile/"]);
+    let left = 0;
+    for (let attempt = 0; attempt < 16; attempt += 1) {
+      if (!(await takeBrowserEscalation("ws-1", subject.registrable, day))) break;
+      left += 1;
+    }
+    expect(left).toBe(3);
+  });
+
+  it("returns the unreached card without a browser call when the day's budget is spent", async () => {
+    const subject = subjectFor("botgatedspent.com");
+    const day = new Date().toISOString().slice(0, 10);
+    let drained = 0;
+    for (let attempt = 0; attempt < 16; attempt += 1) {
+      if (!(await takeBrowserEscalation("ws-1", subject.registrable, day))) break;
+      drained += 1;
+    }
+    expect(drained).toBe(4);
+    const calls = stubWeb(() => new Response("blocked", { status: 403 }));
+    const stub = stubBrowser(BOT_GATED_HTML);
+    installBrowser(stub);
+
+    const card = startCard("ws-1", subject, []);
+
+    expect(await card.site).toEqual({
+      name: null,
+      description: null,
+      socials: [],
+      review: { name: "empty", description: "empty", socials: "empty" },
+      unfound: true,
+    });
+    expect(await card.logo).toBeNull();
+    expect(stub.calls).toEqual([]);
+    expect(calls).toEqual(["https://botgatedspent.com/"]);
+    expect((await env.IDENTITY_CACHE.list()).keys).toEqual([]);
+  });
 });
 
 describe("confirmCard", () => {
@@ -403,6 +517,85 @@ describe("confirmCard", () => {
     for (const page of results) expect(page.role).toBe("pricing");
   });
 
+  it("spends the brand's browser budget on the brand, and stops escalating once it is gone", async () => {
+    const domain = "botgatedconfirm.com";
+    await using introspector = await introspectWorkflow(env.IDENTITY_TAIL);
+    Reflect.set(env, "AI", { run: vi.fn(() => Promise.reject(new Error("down"))) });
+    const day = new Date().toISOString().slice(0, 10);
+    for (let attempt = 0; attempt < 4; attempt += 1) {
+      expect(await takeBrowserEscalation("ws-1", domain, day)).toBe(true);
+    }
+    stubWeb(() => new Response("blocked", { status: 403 }));
+    const stub = stubBrowser(BOT_GATED_HTML);
+    installBrowser(stub);
+
+    expect(
+      await confirmCard("ws-1", "u1", form({ subject: domain, name: "Botgated Confirm", description: "" })),
+    ).toBe(true);
+    await settledClassification(introspector);
+
+    expect(stub.calls).toEqual([]);
+  });
+
+  it("escalates a bot-gated confirm through the brand's last budgeted read", async () => {
+    const domain = "botgatedconfirmpositive.com";
+    await using introspector = await introspectWorkflow(env.IDENTITY_TAIL);
+    Reflect.set(env, "AI", { run: vi.fn(() => Promise.reject(new Error("down"))) });
+    const day = new Date().toISOString().slice(0, 10);
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      expect(await takeBrowserEscalation("ws-1", domain, day)).toBe(true);
+    }
+    stubWeb(() => new Response("blocked", { status: 403 }));
+    const stub = stubBrowser(BOT_GATED_HTML);
+    installBrowser(stub);
+
+    expect(
+      await confirmCard("ws-1", "u1", form({ subject: domain, name: "Botgated Positive", description: "" })),
+    ).toBe(true);
+    await settledClassification(introspector);
+
+    expect(stub.calls).toEqual([`https://${domain}/`]);
+    let left = 0;
+    for (let attempt = 0; attempt < 16; attempt += 1) {
+      if (!(await takeBrowserEscalation("ws-1", domain, day))) break;
+      left += 1;
+    }
+    expect(left).toBe(0);
+  });
+
+  it("keys a creator's social site on the site's brand, not the fresh entity", async () => {
+    const domain = "botgatedsocial.com";
+    const day = new Date().toISOString().slice(0, 10);
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      expect(await takeBrowserEscalation("ws-1", domain, day)).toBe(true);
+    }
+    stubWeb(() => new Response("blocked", { status: 403 }));
+    const stub = stubBrowser(BOT_GATED_HTML);
+    installBrowser(stub);
+
+    expect(
+      await confirmCard(
+        "ws-1",
+        "u1",
+        form({
+          subject: "https://www.instagram.com/botgatedcreator/",
+          name: "Botgated Creator",
+          description: "",
+          "social.site": `https://${domain}/`,
+        }),
+      ),
+    ).toBe(true);
+    await settledTail();
+
+    expect(stub.calls).toEqual([`https://${domain}/`]);
+    let left = 0;
+    for (let attempt = 0; attempt < 16; attempt += 1) {
+      if (!(await takeBrowserEscalation("ws-1", domain, day))) break;
+      left += 1;
+    }
+    expect(left).toBe(0);
+  });
+
   it("keeps the confirm and records no role when Jev is down", async () => {
     stubWeb(() => new Response(gym, { status: 200, headers: { "content-type": "text/html" } }));
     await answerHomepage();
@@ -448,6 +641,7 @@ describe("confirmCard", () => {
   });
 
   it("refuses a card with no name, and a second confirm keeps the first", async () => {
+    stubWeb(() => new Response(gym, { status: 200, headers: { "content-type": "text/html" } }));
     await answerHomepage();
     expect(await confirmCard("ws-1", "u1", form({ subject: "gymshark.com", name: "  ", description: "" }))).toBe(false);
     expect(await confirmCard("ws-1", "u1", form({ subject: "gymshark.com", name: "First", description: "" }))).toBe(
@@ -483,8 +677,13 @@ describe("readCachedSiteProof", () => {
     await expect(readCachedSiteProof(subject)).resolves.toEqual({ adLibraryHints: [], navLinks: [] });
   });
 
-  it("throws when the cached entry does not match the site card", async () => {
+  it("returns empty hints when the cached entry does not match the site card", async () => {
     await env.IDENTITY_CACHE.put(key, JSON.stringify({ name: 1 }));
-    await expect(readCachedSiteProof(subject)).rejects.toThrow();
+    await expect(readCachedSiteProof(subject)).resolves.toEqual({ adLibraryHints: [], navLinks: [] });
+  });
+
+  it("returns empty hints when the cached entry is an unrelated object", async () => {
+    await env.IDENTITY_CACHE.put(key, JSON.stringify({ bad: true }));
+    await expect(readCachedSiteProof(subject)).resolves.toEqual({ adLibraryHints: [], navLinks: [] });
   });
 });

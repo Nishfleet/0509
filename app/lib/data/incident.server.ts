@@ -35,7 +35,8 @@ const CLOSE_UNWATCHED = `UPDATE incident SET closed_at = ?2
 WHERE closed_at IS NULL AND page_id NOT IN (SELECT value FROM json_each(?1))`;
 
 const OPEN_BREAKAGE_BASELINES = `SELECT i.page_id AS page_id,
-  (SELECT json_extract(s.payload_json, '$.before.textKey')
+  (SELECT COALESCE(json_extract(s.payload_json, '$.before.textKey'),
+                   json_extract(s.payload_json, '$.previousTextKey'))
    FROM alert a
    JOIN signal s ON s.id = a.signal_id
    WHERE a.incident_id = i.id

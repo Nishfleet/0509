@@ -6,7 +6,7 @@ import { sha256Hex } from "../sha256";
 
 const MODEL = "typesafe/jev";
 
-const GATEWAY_ID = "default";
+export const GATEWAY_ID = "default";
 
 export interface NoulQuestion {
   id: string;
