@@ -30,7 +30,7 @@ export interface SourcePillStatus {
 
 const MONO = 'var(--mono, var(--font-mono, "IBM Plex Mono", ui-monospace, monospace))';
 const INK_SOFT = "var(--ink-soft, var(--color-ink-soft))";
-const LINE = "var(--line, var(--color-line))";
+const LINE_FALLBACK = "var(--line, var(--color-line))";
 const ACCENT = "var(--green, var(--color-green))";
 const ACCENT_INK = "var(--green-ink, var(--color-green-ink))";
 const ACCENT_WASH = "var(--green-wash, var(--color-green-wash))";
@@ -49,13 +49,10 @@ export function sourcePillStatus(
   }
   const columnReason = blankToNull(source.degraded_reason);
   const configReason = configString(config, "reason");
-  const lastGoodAt =
-    blankToNull(source.last_good_at) ?? configString(config, "last_good_at");
+  const lastGoodAt = blankToNull(source.last_good_at) ?? configString(config, "last_good_at");
   if (columnReason !== null || configState === "degraded" || snapshot?.canary_count === 0) {
     const reason =
-      columnReason ??
-      configReason ??
-      (snapshot?.canary_count === 0 ? "not answering" : "no reason recorded");
+      columnReason ?? configReason ?? (snapshot?.canary_count === 0 ? "not answering" : "no reason recorded");
     return { state: "degraded", reason, lastGoodAt };
   }
   const watchConfig = readWatchConfig(source.watch_config_json);
@@ -100,7 +97,7 @@ export function SourcePill({
     margin: 0,
     padding: "0.14em 0.55em",
     border: "1px solid",
-    borderColor: live ? ACCENT : LINE,
+    borderColor: live ? ACCENT : LINE_FALLBACK,
     backgroundColor: live ? ACCENT_WASH : "transparent",
     color: live ? ACCENT_INK : INK_SOFT,
     fontFamily: MONO,
@@ -116,8 +113,7 @@ export function SourcePill({
       {status.state === "none" ? <span>— none</span> : null}
       {status.state === "degraded" ? (
         <span>
-          — degraded{status.reason === null ? "" : `: ${status.reason}`} · last good{" "}
-          {lastGood ?? "unknown"}
+          — degraded{status.reason === null ? "" : `: ${status.reason}`} · last good {lastGood ?? "unknown"}
         </span>
       ) : null}
     </span>

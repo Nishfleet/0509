@@ -1,7 +1,14 @@
 import { expect, test, type Page } from "@playwright/test";
 
 import { previousBriefAt } from "../app/lib/brief-schedule";
-import { decodedBodies, deleteCreatedAccount, readRawMessage, requireInboxToken, signInWithMagicLink } from "./inbox";
+import {
+  decodedBodies,
+  deleteCreatedAccount,
+  laneOrigin,
+  readRawMessage,
+  requireInboxToken,
+  signInWithMagicLink,
+} from "./inbox";
 
 let createdEmail = "";
 test.afterEach(async ({ page }, testInfo) => {
@@ -11,12 +18,13 @@ test.afterEach(async ({ page }, testInfo) => {
   createdEmail = "";
 });
 
-// J11 from docs/REBUILD-DONE.md §A. Production only: the preview Worker has
-// no EMAIL binding and no inbox. One project — the phone project would send a
-// second brief, and the check the contract asks for is the HTML at 600 px.
+// J11 from docs/REBUILD-DONE.md §A. Of the three lanes — local, merge-queue
+// Preview and production — J11 runs in production only. One project — the
+// phone project would send a second brief, and the check the contract asks
+// for is the HTML at 600 px.
 test.skip(
-  !process.env.PLAYWRIGHT_TEST_BASE_URL,
-  "J11 proves the production mail path; the local preview Worker can neither send nor receive email",
+  !process.env.PLAYWRIGHT_TEST_BASE_URL || laneOrigin() !== "https://0509.io",
+  "J11 proves the production mail path: the brief is sent by the send-email queue consumer on the production Worker. The local Worker cannot mail, and a merge-queue Preview cannot consume queues (https://developers.cloudflare.com/workers/previews/resources/#queue-consumers)",
 );
 
 const ON = ["linear.app", "notion.so", "figma.com"] as const;
@@ -76,10 +84,7 @@ function openingSlot(now: Date): { weekday: number; hour: number; timezone: stri
   return utc;
 }
 
-async function saveSchedule(
-  page: Page,
-  schedule: { weekday: number; hour: number; timezone: string },
-): Promise<void> {
+async function saveSchedule(page: Page, schedule: { weekday: number; hour: number; timezone: string }): Promise<void> {
   const response = await page.request.post("/app/settings", {
     form: { weekday: String(schedule.weekday), hour: String(schedule.hour), timezone: schedule.timezone },
   });
@@ -136,7 +141,9 @@ function assertOrder(text: string, markers: readonly string[]): void {
   }
 }
 
-test("the weekly brief arrives from the inbox, in order, and unsubscribe stops the next one @own-signin", async ({ page }, testInfo) => {
+test("the weekly brief arrives from the inbox, in order, and unsubscribe stops the next one @own-signin", async ({
+  page,
+}, testInfo) => {
   test.setTimeout(480_000);
   test.skip(testInfo.project.name === "phone-390", "one production brief; the HTML is checked at 600 px");
 
@@ -159,9 +166,9 @@ test("the weekly brief arrives from the inbox, in order, and unsubscribe stops t
   await name.fill(selfName);
   await name.press("Escape");
   await page.getByRole("button", { name: "That's me" }).click();
-  await expect(page).toHaveURL(/\/onboarding\/competitors$/);
+  await expect(page).toHaveURL(/\/onboarding\/competitors$/, { timeout: 10_000 });
   await page.getByRole("button", { name: "Start watching" }).click();
-  await expect(page).toHaveURL(/\/app$/);
+  await expect(page).toHaveURL(/\/app$/, { timeout: 30_000 });
 
   await page.goto("/app/competitors");
   for (const domain of [...ON, OFF]) await addCompetitor(page, domain);
@@ -188,7 +195,7 @@ test("the weekly brief arrives from the inbox, in order, and unsubscribe stops t
   expect(html, "the brief carries an HTML part").not.toBe("");
   await page.setViewportSize({ width: 600, height: 900 });
   await page.setContent(html);
-  const text = await page.locator("body").innerText();
+  const text = (await page.locator("body").textContent()) ?? "";
   const variant = text.includes("Quiet week:") ? "quiet" : "blind-source";
   expect(
     text.includes("Quiet week:") || text.includes("not a quiet week we can vouch for"),
@@ -198,7 +205,14 @@ test("the weekly brief arrives from the inbox, in order, and unsubscribe stops t
     "Read this first",
   );
 
-  const markers = ["You're #", "Your tracked brands", "Your site looks", "What was checked", "Next brief", "Unsubscribe"];
+  const markers = [
+    "You're #",
+    "Your tracked brands",
+    "Your site looks",
+    "What was checked",
+    "Next brief",
+    "Unsubscribe",
+  ];
   assertOrder(text, markers);
   const brands = text.slice(text.indexOf("Your tracked brands"), text.indexOf("Your site looks"));
   expect(brands).toContain(selfName);
@@ -206,9 +220,7 @@ test("the weekly brief arrives from the inbox, in order, and unsubscribe stops t
   expect(brands, "an off brand is absent, not a zeroed line").not.toContain(OFF);
   expect(text).not.toContain(OFF);
 
-  const fits = await page.evaluate(
-    () => document.documentElement.scrollWidth <= document.documentElement.clientWidth,
-  );
+  const fits = await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth);
   expect(fits, "rendered HTML at 600 px").toBe(true);
   await testInfo.attach("j11-brief-600", {
     body: await page.screenshot({ fullPage: true }),

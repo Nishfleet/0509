@@ -6,10 +6,10 @@ import { betterAuth } from "better-auth";
 import { magicLink } from "better-auth/plugins";
 import { expect, test, type Page } from "@playwright/test";
 
-import { consoleFailures, watchConsole } from "./inbox";
+import { consoleFailures, isLocalLane, laneOrigin, watchConsole } from "./inbox";
 
 test.skip(
-  Boolean(process.env.PLAYWRIGHT_TEST_BASE_URL),
+  !isLocalLane(),
   "the three treatments are rows in the local preview database; production signs in through the magic-link inbox and has no fixture workspace",
 );
 
@@ -53,7 +53,10 @@ async function seedSession(): Promise<{ cookie: string; workspaceId: string }> {
   const auth = betterAuth({
     database: db,
     secret: authSecret(),
-    baseURL: "https://0509.io",
+    // The app runs --var BETTER_AUTH_URL on this lane's http origin, and
+    // better-auth prefixes the session cookie __Secure- only for https:
+    // seeding on the same origin mints the cookie name the app reads.
+    baseURL: laneOrigin(),
     advanced: { cookiePrefix: "better-auth" },
     plugins: [
       magicLink({
@@ -238,7 +241,14 @@ async function seedSession(): Promise<{ cookie: string; workspaceId: string }> {
       "A roundup mention, not a move of its own.",
       "2026-09-25T07:00:00.000Z",
     );
-    verdict(`jev-held-${suffix}`, `sig-held-${suffix}`, onId, 0.05, "A ticker line, not a move.", "2026-09-25T06:00:00.000Z");
+    verdict(
+      `jev-held-${suffix}`,
+      `sig-held-${suffix}`,
+      onId,
+      0.05,
+      "A ticker line, not a move.",
+      "2026-09-25T06:00:00.000Z",
+    );
     verdict(`jev-off-${suffix}`, `sig-off-${suffix}`, offId, 0.99, "Paused brand reason.", "2026-09-25T06:00:00.000Z");
     run(
       db,

@@ -94,6 +94,7 @@ const VIEW: HomeView = {
     rank: 2,
     total: 3,
     whyLine: "Kindred is the mover: 3 new ads",
+    unjudged: false,
     readThisFirst: [],
     rows: ROWS,
     chart: {
@@ -117,12 +118,7 @@ export default function Page() {
       eyebrow={VIEW.eyebrow}
       footer={<p className="font-mono text-eyebrow text-ink-soft">{VIEW.footer}</p>}
     >
-      <HomeStanding
-        view={VIEW}
-        showEyebrow={false}
-        openId={open}
-        evidence={open === null ? null : EVIDENCE}
-      />
+      <HomeStanding view={VIEW} showEyebrow={false} openId={open} evidence={open === null ? null : EVIDENCE} />
     </HomePageFrame>
   );
 }

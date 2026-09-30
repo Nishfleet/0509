@@ -4,8 +4,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 
 import { insertSelfEntity, readWorkspaceSelfId } from "../../../app/lib/data/entity.server";
-import { upsertJudgedPages } from "../../../app/lib/data/page.server";
+import { readJudgedPricingUrl, upsertJudgedPages } from "../../../app/lib/data/page.server";
 import { confirmCard } from "../../../app/lib/identity/confirm.server";
+import { extractIdentity } from "../../../app/lib/identity/extract";
 import { normaliseSubject } from "../../../app/lib/identity/normalise";
 import { probeKey } from "../../../app/lib/identity/probe-cache.server";
 import {
@@ -14,6 +15,7 @@ import {
   seedTailWatches,
   startIdentityTail,
 } from "../../../app/lib/identity/tail.server";
+import gym from "../../fixtures/gymshark-2026-09-22-a.html?raw";
 
 const DOMAIN = "gymshark.com";
 const GREENHOUSE_JOBS = "https://boards-api.greenhouse.io/v1/boards/gymshark/jobs";
@@ -30,9 +32,7 @@ const outcomeSchema = z.object({
   r2Keys: z.array(z.string()),
 });
 
-const watchSchema = z.array(
-  z.object({ id: z.string(), source_key: z.string(), target_key: z.string() }),
-);
+const watchSchema = z.array(z.object({ id: z.string(), source_key: z.string(), target_key: z.string() }));
 
 let runs = 0;
 let userId = "";
@@ -57,9 +57,7 @@ async function seed(): Promise<void> {
   )
     .bind(userId, `${userId}@0509.io`, now)
     .run();
-  await env.DB.prepare(
-    `INSERT INTO workspace (id, name, owner_user_id, created_at) VALUES (?1, 'Owner', ?2, ?3)`,
-  )
+  await env.DB.prepare(`INSERT INTO workspace (id, name, owner_user_id, created_at) VALUES (?1, 'Owner', ?2, ?3)`)
     .bind(workspaceId, userId, now)
     .run();
   await env.DB.prepare(
@@ -114,6 +112,7 @@ beforeEach(() => {
 
 afterEach(async () => {
   vi.unstubAllGlobals();
+  Reflect.deleteProperty(env, "AI");
   await env.IDENTITY_CACHE.delete(probeKey(subject(), "homepage"));
   await env.DB.prepare('DELETE FROM "user" WHERE id = ?1').bind(userId).run();
   await env.DB.prepare("DELETE FROM source WHERE id = 'src_ads_meta_tail'").run();
@@ -126,11 +125,7 @@ describe("IdentityTailWorkflow", () => {
     await using introspector = await introspectWorkflow(env.IDENTITY_TAIL);
     const day = new Date().toISOString().slice(0, 10);
     expect(
-      await confirmCard(
-        workspaceId,
-        userId,
-        form({ subject: DOMAIN, name: "Gymshark", description: "Gym clothes" }),
-      ),
+      await confirmCard(workspaceId, userId, form({ subject: DOMAIN, name: "Gymshark", description: "Gym clothes" })),
     ).toBe(true);
 
     const entityId = await env.DB.prepare("SELECT id FROM entity WHERE workspace_id = ?1 AND role = 'self'")
@@ -161,9 +156,7 @@ describe("IdentityTailWorkflow", () => {
       "youtube.channel_rss Gymshark",
     ]);
 
-    const pages = await env.DB.prepare(
-      "SELECT role, url FROM page WHERE entity_id = ?1 ORDER BY role, url",
-    )
+    const pages = await env.DB.prepare("SELECT role, url FROM page WHERE entity_id = ?1 ORDER BY role, url")
       .bind(entityId.id)
       .all<{ role: string; url: string }>();
     expect(pages.results).toEqual([{ role: "home", url: "https://gymshark.com/" }]);
@@ -172,15 +165,72 @@ describe("IdentityTailWorkflow", () => {
     expect(instanceId).toBe(`identity-tail-${entityId.id}`);
   });
 
+  it("judges the homepage's nav pages off the request path, before it seeds watches", async () => {
+    await seed();
+    await using introspector = await introspectWorkflow(env.IDENTITY_TAIL);
+    let openHomepageRead: () => void = () => undefined;
+    const homepageRead = new Promise<void>((resolve) => {
+      openHomepageRead = resolve;
+    });
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL) => {
+      const url = input instanceof Request ? input.url : String(input);
+      if (url === `https://${DOMAIN}/`) {
+        await homepageRead;
+        return new Response(gym, { status: 200, headers: { "content-type": "text/html" } });
+      }
+      if (url === GREENHOUSE_JOBS) {
+        return new Response(JSON.stringify({ jobs: [] }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      return new Response("", { status: 200 });
+    });
+    const run = vi.fn(() => Promise.resolve({ answers: { page_role: { type: "choice", choice: "pricing" } } }));
+    Reflect.set(env, "AI", { run });
+
+    expect(await confirmCard(workspaceId, userId, form({ subject: DOMAIN, name: "Gymshark", description: "" }))).toBe(
+      true,
+    );
+    const entityId = await readWorkspaceSelfId(workspaceId);
+    if (entityId === null) throw new Error("confirmed card was not stored");
+
+    const onRequestPath = await env.DB.prepare(
+      "SELECT id FROM page WHERE entity_id = ?1 AND role_decided_for_hash IS NOT NULL",
+    )
+      .bind(entityId)
+      .all();
+    expect(onRequestPath.results).toEqual([]);
+
+    openHomepageRead();
+    const [instance] = await introspector.get();
+    if (instance === undefined) throw new Error("tail instance was not started");
+    await instance.waitForStatus("complete");
+    await instance.getOutput();
+
+    const expected = (await extractIdentity(gym, `https://${DOMAIN}/`)).navPages;
+    expect(expected.length).toBeGreaterThan(0);
+    const judged = await env.DB.prepare(
+      "SELECT url, role FROM page WHERE entity_id = ?1 AND role_decided_for_hash IS NOT NULL",
+    )
+      .bind(entityId)
+      .all<{ url: string; role: string }>();
+    expect(new Set(judged.results.map((row) => row.url))).toEqual(new Set(expected.map((page) => page.url)));
+    for (const row of judged.results) expect(row.role).toBe("pricing");
+
+    const pricing = await readJudgedPricingUrl(entityId);
+    expect(pricing).not.toBeNull();
+    expect(pricing).not.toBe(`https://${DOMAIN}/`);
+    expect((await watches()).map((row) => `${row.source_key} ${row.target_key}`)).toContain(
+      `site.web ${String(pricing)}`,
+    );
+  });
+
   it("starting the tail twice keeps one instance", async () => {
     await seed();
     await using introspector = await introspectWorkflow(env.IDENTITY_TAIL);
     expect(
-      await confirmCard(
-        workspaceId,
-        userId,
-        form({ subject: DOMAIN, name: "Gymshark", description: "Gym clothes" }),
-      ),
+      await confirmCard(workspaceId, userId, form({ subject: DOMAIN, name: "Gymshark", description: "Gym clothes" })),
     ).toBe(true);
 
     const entityId = await readWorkspaceSelfId(workspaceId);
@@ -235,6 +285,47 @@ describe("IdentityTailWorkflow", () => {
     expect(seeded.map((watch) => watch.targetKey)).not.toContain(PRICING);
   });
 
+  it("keeps going when the cached homepage card is bad", async () => {
+    await seed();
+    await env.IDENTITY_CACHE.put(probeKey(subject(), "homepage"), JSON.stringify({ bad: true }));
+    const entityId = `entity-bad-card-${String(runs)}`;
+    await insertSelfEntity({
+      id: entityId,
+      workspaceId,
+      domain: DOMAIN,
+      name: "Gymshark",
+      identityJson: "{}",
+      now: "2026-09-25T08:00:00Z",
+    });
+    await upsertJudgedPages([
+      {
+        id: crypto.randomUUID(),
+        entityId,
+        url: "https://www.gymshark.com/plans",
+        title: "Plans",
+        role: "pricing",
+        roleDecidedForHash: "h",
+        discoveredAt: "2026-09-25T08:00:00Z",
+      },
+    ]);
+
+    const seeded = await seedTailWatches(
+      {
+        workspaceId,
+        entityId,
+        name: "Gymshark",
+        domain: DOMAIN,
+        homepageUrl: "https://gymshark.com/",
+      },
+      "2026-09-25T08:00:00Z",
+    );
+
+    expect(seeded.map((watch) => watch.targetKey)).toContain("https://www.gymshark.com/plans");
+    expect(seeded.map((watch) => watch.sourceKey)).toContain("site.web");
+    expect(seeded.map((watch) => watch.sourceKey)).not.toContain("ads.meta");
+    expect(seeded.map((watch) => watch.sourceKey)).not.toContain("hiring.greenhouse");
+  });
+
   it("seeds a creator's handle mentions and its named website", async () => {
     await seed();
     await using introspector = await introspectWorkflow(env.IDENTITY_TAIL);
@@ -267,6 +358,58 @@ describe("IdentityTailWorkflow", () => {
       "site.web https://gymshark.com/",
       "youtube.channel_rss Gymshark",
     ]);
+  });
+
+  it("warms the creator's site card in the tail, off the confirm action", async () => {
+    await seed();
+    await using introspector = await introspectWorkflow(env.IDENTITY_TAIL);
+    const siteHtml = `<html><head><title>Veritasium</title></head><body>${"Veritasium makes science videos about physics, engineering and the world. ".repeat(4)}</body></html>`;
+    vi.stubGlobal("fetch", (input: RequestInfo | URL) => {
+      const url = input instanceof Request ? input.url : String(input);
+      if (url === "https://veritasium.com/") {
+        return Promise.resolve(new Response(siteHtml, { status: 200, headers: { "content-type": "text/html" } }));
+      }
+      if (url === GREENHOUSE_JOBS) {
+        return Promise.resolve(
+          new Response(JSON.stringify({ jobs: [] }), {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          }),
+        );
+      }
+      return Promise.resolve(new Response("", { status: 200 }));
+    });
+    Reflect.set(env, "AI", {
+      run: vi.fn(() =>
+        Promise.resolve({
+          answers: {
+            "identity_field_confidence.name": { type: "noul", noul: 0.95 },
+            "identity_field_confidence.description": { type: "noul", noul: 0.95 },
+            "identity_field_confidence.socials": { type: "noul", noul: 0.95 },
+          },
+        }),
+      ),
+    });
+    expect(
+      await confirmCard(
+        workspaceId,
+        userId,
+        form({
+          subject: "https://www.youtube.com/@gymshark",
+          name: "Gymshark",
+          description: "Gym clothes",
+          "social.youtube": "https://www.youtube.com/@gymshark",
+          "social.site": "https://veritasium.com/",
+        }),
+      ),
+    ).toBe(true);
+    const [instance] = await introspector.get();
+    if (instance === undefined) throw new Error("tail instance was not started");
+    await instance.waitForStatus("complete");
+    await instance.getOutput();
+    const siteSubject = normaliseSubject("veritasium.com");
+    if (!siteSubject.ok) throw new Error("veritasium.com must normalise");
+    expect(await env.IDENTITY_CACHE.get(probeKey(siteSubject.subject, "homepage"), "json")).not.toBeNull();
   });
 
   it("seeds a creator with no website without any site, ads or hiring watch", async () => {
@@ -305,9 +448,9 @@ describe("IdentityTailWorkflow", () => {
       await modifier.disableRetryDelays();
       await modifier.mockStepError({ name: "enqueue-first-sweep" }, new Error("forced step retry"), 1);
     });
-    expect(
-      await confirmCard(workspaceId, userId, form({ subject: DOMAIN, name: "Gymshark", description: "" })),
-    ).toBe(true);
+    expect(await confirmCard(workspaceId, userId, form({ subject: DOMAIN, name: "Gymshark", description: "" }))).toBe(
+      true,
+    );
     const [instance] = await introspector.get();
     if (instance === undefined) throw new Error("tail instance was not started");
     await instance.waitForStatus("complete");
@@ -327,9 +470,9 @@ describe("IdentityTailWorkflow", () => {
       await modifier.disableRetryDelays();
       await modifier.mockStepError({ name: "persist" }, new Error("forced step retry"), 4);
     });
-    expect(
-      await confirmCard(workspaceId, userId, form({ subject: DOMAIN, name: "Gymshark", description: "" })),
-    ).toBe(true);
+    expect(await confirmCard(workspaceId, userId, form({ subject: DOMAIN, name: "Gymshark", description: "" }))).toBe(
+      true,
+    );
     const [instance] = await introspector.get();
     if (instance === undefined) throw new Error("tail instance was not started");
     await instance.waitForStatus("errored");
@@ -357,8 +500,6 @@ describe("IdentityTailWorkflow", () => {
     const [instance] = await introspector.get();
     if (instance === undefined) throw new Error("tail instance was not started");
     await instance.waitForStatus("errored");
-    expect((await instance.getError()).message).toContain(
-      "a step threw an NonRetryableError and it was not handled",
-    );
+    expect((await instance.getError()).message).toContain("a step threw an NonRetryableError and it was not handled");
   });
 });

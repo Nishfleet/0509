@@ -83,7 +83,17 @@ async function seed(): Promise<Seeded> {
     ]),
     env.DB.prepare(
       "INSERT INTO signal (id, workspace_id, entity_id, source_id, kind, title, url, canonical_url, url_hash, dedup_key, observed_at, is_tombstoned) VALUES (?1, ?2, ?3, ?4, 'mention', ?5, ?6, ?6, ?7, ?8, ?9, 1)",
-    ).bind(signalTomb, workspaceId, entA, sourceOne, titleTomb, `https://tomb-${run}.example/post`, `d4-t-hash-tomb-${run}`, `d4-t-dedup-tomb-${run}`, "2026-09-18T10:00:00.000Z"),
+    ).bind(
+      signalTomb,
+      workspaceId,
+      entA,
+      sourceOne,
+      titleTomb,
+      `https://tomb-${run}.example/post`,
+      `d4-t-hash-tomb-${run}`,
+      `d4-t-dedup-tomb-${run}`,
+      "2026-09-18T10:00:00.000Z",
+    ),
     env.DB.prepare(
       "INSERT INTO jev_verdict (id, workspace_id, question_id, input_hash, signal_id, p, decided_at) VALUES (?1, ?2, 'noteworthy_change', ?3, ?4, 0.95, ?5)",
     ).bind(`d4-t-verdict-a-${run}`, workspaceId, `d4-t-ih-a-${run}`, signalA, DECIDED_AT),
@@ -125,12 +135,14 @@ describe("judgeWeek", () => {
 
     const result = await judgeWeek(env.DB, inputFor(seeded.workspaceId));
 
-    expect(result).toEqual({ picks: [seeded.signalA, seeded.signalB], judged: 2 });
+    expect(result).toEqual({ picks: [seeded.signalA, seeded.signalB], judged: 2, unjudged: true });
     expect(run).toHaveBeenCalledTimes(2);
     expect(askedTitles(run)).not.toContain(seeded.titleC);
     const written = await env.DB.prepare(
       "SELECT COUNT(*) AS n FROM jev_verdict WHERE question_id = ?1 AND signal_id IN (?2, ?3)",
-    ).bind(READ_THIS_FIRST.id, seeded.signalA, seeded.signalB).first<{ n: number }>();
+    )
+      .bind(READ_THIS_FIRST.id, seeded.signalA, seeded.signalB)
+      .first<{ n: number }>();
     expect(written?.n).toBe(2);
   });
 
@@ -158,7 +170,7 @@ describe("judgeWeek", () => {
 
     const result = await judgeWeek(env.DB, inputFor(seeded.workspaceId));
 
-    expect(result).toEqual({ picks: [], judged: 0 });
+    expect(result).toEqual({ picks: [], judged: 0, unjudged: true });
   });
 
   it("never sends a tombstoned signal even with a 0.95 verdict", async () => {

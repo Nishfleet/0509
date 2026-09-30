@@ -45,12 +45,7 @@ const WEEK_2 = {
   closesAt: new Date("2026-09-25T08:00:00.000Z"),
 };
 
-const seedDigest = async (
-  id: string,
-  payload: BriefPayload,
-  periodStart: string,
-  periodEnd: string,
-) => {
+const seedDigest = async (id: string, payload: BriefPayload, periodStart: string, periodEnd: string) => {
   await env.DB.prepare(
     `INSERT INTO digest (id, workspace_id, kind, period_start, period_end, status, subject, payload_json, sent_at)
      VALUES (?, ?, 'weekly', ?, ?, 'pending', NULL, ?, NULL)`,
@@ -68,11 +63,8 @@ const deliveryRow = (attemptId: string | null, signalId: string, deliveredAt: st
 
 const deliveries = async (): Promise<string[]> =>
   (
-    (
-      await env.DB.prepare(
-        "SELECT signal_id FROM signal_delivery ORDER BY signal_id",
-      ).all<{ signal_id: string }>()
-    ).results ?? []
+    (await env.DB.prepare("SELECT signal_id FROM signal_delivery ORDER BY signal_id").all<{ signal_id: string }>())
+      .results ?? []
   ).map((row) => row.signal_id);
 
 const stubJev = () => {
@@ -88,7 +80,7 @@ const weekOne = async () => {
     workspaceId: WS,
     schedule: MONDAY,
     week: WEEK_1,
-    readThisFirst: { picks: [SIG_A, SIG_B], judged: 2 },
+    readThisFirst: { picks: [SIG_A, SIG_B], judged: 2, unjudged: false },
   });
   await seedDigest("digest-w1", payload, "2026-09-14", "2026-09-21");
   return deliver(envWith(bindingFor(recorder())), { digest_id: "digest-w1" });
@@ -118,9 +110,9 @@ describe("delivered once across weeks (0509#4063)", () => {
         `INSERT INTO workspace (id, name, owner_user_id, timezone, brief_weekday, brief_hour, created_at)
          VALUES (?1, ?2, ?3, 'UTC', 1, 8, ?4)`,
       ).bind(WS, "Once Test", USER, "2026-09-14T00:00:00Z"),
-      env.DB.prepare(
-        `INSERT INTO channel (id, key, is_enabled, config_json) VALUES (?1, 'email', 1, '{}')`,
-      ).bind(CHANNEL),
+      env.DB.prepare(`INSERT INTO channel (id, key, is_enabled, config_json) VALUES (?1, 'email', 1, '{}')`).bind(
+        CHANNEL,
+      ),
       env.DB.prepare(
         `INSERT INTO send_target (id, workspace_id, channel_id, target_value, is_verified, created_at)
          VALUES (?1, ?2, ?3, ?4, 1, ?5)`,
@@ -178,14 +170,12 @@ describe("delivered once across weeks (0509#4063)", () => {
       deliveryRow(week1.attempt_id, SIG_B, "2026-09-21T08:00:00.000Z"),
     ]);
 
-    await env.DB.prepare(
-      "UPDATE signal SET last_seen_at = '2026-09-24T00:00:00.000Z' WHERE id IN (?1, ?2)",
-    )
+    await env.DB.prepare("UPDATE signal SET last_seen_at = '2026-09-24T00:00:00.000Z' WHERE id IN (?1, ?2)")
       .bind(SIG_A, SIG_B)
       .run();
 
     const judged = await judgeWeek(env.DB, weekTwoInput);
-    expect(judged).toEqual({ picks: [SIG_C], judged: 1 });
+    expect(judged).toEqual({ picks: [SIG_C], judged: 1, unjudged: false });
 
     const payload = await composeBrief(env.DB, {
       workspaceId: WS,

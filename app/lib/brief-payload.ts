@@ -51,9 +51,7 @@ const brandLineSchema = z
 const ownSiteSchema = z
   .object({
     status: z.enum(["ok", "broken"]).catch("ok"),
-    incidents: keepValid(
-      z.object({ page_url: loose, kind: loose, observed_at: loose, is_open: flag }),
-    ),
+    incidents: keepValid(z.object({ page_url: loose, kind: loose, observed_at: loose, is_open: flag })),
   })
   .catch({ status: "ok", incidents: [] });
 
@@ -101,6 +99,7 @@ const briefPayloadSchema = z.object({
   headline_is_new: flag,
   why_line: text,
   is_quiet_week: flag,
+  is_unjudged: flag,
   read_this_first: keepValid(markSchema),
   brands: keepValid(brandLineSchema),
   own_site: ownSiteSchema,

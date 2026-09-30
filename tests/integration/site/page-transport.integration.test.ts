@@ -1,10 +1,7 @@
 import { env } from "cloudflare:test";
 import { beforeEach, describe, expect, it } from "vitest";
 
-import {
-  markPageDeferred,
-  recordPageTransport,
-} from "../../../app/lib/data/page.server";
+import { markPageDeferred, recordPageTransport } from "../../../app/lib/data/page.server";
 import { readSiteSweepTargets } from "../../../app/lib/data/watch.server";
 
 const USER = "user-page-transport";
@@ -43,9 +40,7 @@ const seed = async () => {
 const insertPageAndWatch = async () => {
   const pageId = "page-rival-home";
   const watchId = "watch-rival-home";
-  const sourceId = await env.DB.prepare(
-    "SELECT id AS id FROM source WHERE key = 'site.web'",
-  ).first<{ id: string }>();
+  const sourceId = await env.DB.prepare("SELECT id AS id FROM source WHERE key = 'site.web'").first<{ id: string }>();
   if (sourceId === null) throw new Error("site.web source missing");
   await env.DB.prepare(
     `INSERT INTO page (id, entity_id, url, role, discovered_at)
@@ -78,9 +73,7 @@ describe("page row stores its learned transport and deferred-at (0509#5297)", ()
 
     await markPageDeferred(pageId, "2026-09-25T02:00:00Z");
 
-    const deferredRow = await env.DB.prepare(
-      "SELECT transport_reason, deferred_at FROM page WHERE id = ?",
-    )
+    const deferredRow = await env.DB.prepare("SELECT transport_reason, deferred_at FROM page WHERE id = ?")
       .bind(pageId)
       .first<{ transport_reason: string | null; deferred_at: string | null }>();
     expect(deferredRow).toEqual({ transport_reason: null, deferred_at: "2026-09-25T02:00:00Z" });
@@ -98,9 +91,7 @@ describe("page row stores its learned transport and deferred-at (0509#5297)", ()
     expect(updated.transport).toBe("browser");
     expect(updated.transportTestedAt).toBe("2026-09-25T02:00:00Z");
 
-    const writtenRow = await env.DB.prepare(
-      "SELECT transport_reason, deferred_at FROM page WHERE id = ?",
-    )
+    const writtenRow = await env.DB.prepare("SELECT transport_reason, deferred_at FROM page WHERE id = ?")
       .bind(pageId)
       .first<{ transport_reason: string | null; deferred_at: string | null }>();
     expect(writtenRow).toEqual({ transport_reason: "thin-text", deferred_at: null });

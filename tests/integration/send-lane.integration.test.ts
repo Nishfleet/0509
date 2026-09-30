@@ -39,9 +39,7 @@ const seedWorkspace = async () => {
 };
 
 const seedChannel = async () => {
-  await env.DB.prepare(
-    `INSERT INTO channel (id, key, is_enabled, config_json) VALUES (?, 'email', 1, '{}')`,
-  )
+  await env.DB.prepare(`INSERT INTO channel (id, key, is_enabled, config_json) VALUES (?, 'email', 1, '{}')`)
     .bind(CHANNEL)
     .run();
   await env.DB.prepare(
@@ -63,6 +61,7 @@ const brief = (headlineRank: number): BriefPayload => ({
   headline_is_new: false,
   why_line: "Quiet week: 3 mentions checked, no site changes, no new ads.",
   is_quiet_week: true,
+  is_unjudged: false,
   read_this_first: [],
   brands: [],
   own_site: { status: "ok", incidents: [] },
@@ -406,9 +405,7 @@ describe("send lane (0509#3979)", () => {
 
   it("reports no_target when the only email target is unverified", async () => {
     const rec = recorder();
-    await env.DB.prepare(`UPDATE send_target SET is_verified = 0 WHERE id = ?`)
-      .bind(TARGET_ID)
-      .run();
+    await env.DB.prepare(`UPDATE send_target SET is_verified = 0 WHERE id = ?`).bind(TARGET_ID).run();
     const digestId = await seedDigest("pending");
 
     const result = await deliver(envWith(bindingFor(rec)), message(digestId));
@@ -475,9 +472,9 @@ describe("send lane (0509#3979)", () => {
     const first = await deliver(envWith(bindingFor(rec)), message(firstId));
     expect(first.outcome).toBe("sent");
 
-    const stored = await env.DB.prepare(
-      `SELECT unsubscribe_token FROM send_target WHERE id = 'reader-target'`,
-    ).first<{ unsubscribe_token: string | null }>();
+    const stored = await env.DB.prepare(`SELECT unsubscribe_token FROM send_target WHERE id = 'reader-target'`).first<{
+      unsubscribe_token: string | null;
+    }>();
     const token = stored?.unsubscribe_token ?? "";
     expect(token).toMatch(/^[0-9a-f]{64}$/);
     expect(rec.sent[0].headers).toEqual({

@@ -4,12 +4,7 @@ import { Link } from "react-router";
 
 import { PAGE, PageHeading } from "../components/page-heading";
 import { AgentKeys, ConnectedApps, ConnectDetails } from "../components/agent-settings";
-import {
-  createAgentKey,
-  disconnectApp,
-  readAgentAccess,
-  revokeAgentKey,
-} from "../lib/agent/access.server";
+import { createAgentKey, disconnectApp, readAgentAccess, revokeAgentKey } from "../lib/agent/access.server";
 import { oauthHelpersContext } from "../lib/agent/context.server";
 import { MCP_PATH } from "../lib/agent/paths";
 import { requireSession } from "../lib/require-session.server";
@@ -48,7 +43,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 export default function Page({ loaderData, actionData }: Route.ComponentProps) {
   return (
     <main className={PAGE}>
-      <nav aria-label="Breadcrumb" className="text-ink-soft mb-4 font-mono text-meta uppercase">
+      <nav aria-label="Breadcrumb" className="mb-4 font-mono text-meta text-ink-soft uppercase">
         <Link to="/app/settings" prefetch="intent" className="underline decoration-1 underline-offset-4">
           Settings
         </Link>

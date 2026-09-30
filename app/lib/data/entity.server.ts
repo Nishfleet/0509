@@ -89,10 +89,7 @@ function displayName(name: string | null, domain: string): string {
   return domain;
 }
 
-export async function readCompetitor(
-  workspaceId: string,
-  entityId: string,
-): Promise<CompetitorEntity | null> {
+export async function readCompetitor(workspaceId: string, entityId: string): Promise<CompetitorEntity | null> {
   const row = await env.DB.prepare(SELECT_COMPETITOR).bind(entityId, workspaceId).first<Row>();
   if (row === null) return null;
   return {
@@ -116,9 +113,7 @@ export async function setCompetitorState(
   state: CompetitorState,
   now: string,
 ): Promise<boolean> {
-  const result = await env.DB.prepare(SET_COMPETITOR_STATE)
-    .bind(state, now, entityId, workspaceId, state)
-    .run();
+  const result = await env.DB.prepare(SET_COMPETITOR_STATE).bind(state, now, entityId, workspaceId, state).run();
   return result.meta.changes === 1;
 }
 
@@ -157,9 +152,12 @@ export function insertCompetitorFromSuggestion(input: {
   suggestionId: string;
   workspaceId: string;
 }): D1PreparedStatement {
-  return env.DB
-    .prepare(INSERT_COMPETITOR_FROM_SUGGESTION)
-    .bind(input.entityId, input.now, input.suggestionId, input.workspaceId);
+  return env.DB.prepare(INSERT_COMPETITOR_FROM_SUGGESTION).bind(
+    input.entityId,
+    input.now,
+    input.suggestionId,
+    input.workspaceId,
+  );
 }
 
 const INSERT_SELF =
@@ -180,8 +178,7 @@ export async function insertSelfEntity(input: {
 
 const SELECT_WORKSPACE_SELF_ID = "SELECT id FROM entity WHERE workspace_id = ?1 AND role = 'self'";
 
-const SELECT_SELF_BY_ID =
-  "SELECT id FROM entity WHERE id = ?1 AND workspace_id = ?2 AND role = 'self'";
+const SELECT_SELF_BY_ID = "SELECT id FROM entity WHERE id = ?1 AND workspace_id = ?2 AND role = 'self'";
 
 export async function readWorkspaceSelfId(workspaceId: string): Promise<string | null> {
   const row = await env.DB.prepare(SELECT_WORKSPACE_SELF_ID).bind(workspaceId).first<{ id: string }>();
@@ -282,7 +279,7 @@ export async function readRefreshTargets(workspaceId: string): Promise<RefreshTa
 }
 
 const INSERT_MANUAL_COMPETITOR =
-  "INSERT INTO entity (id, workspace_id, role, domain, name, origin, confirmed_at, state, state_changed_at, state_changed_by, created_at) SELECT ?1, ?2, 'competitor', ?3, ?4, 'manual', ?5, 'on', ?5, 'user', ?5 WHERE (SELECT count(*) FROM entity WHERE workspace_id = ?2 AND role = 'competitor' AND state = 'on' AND domain <> ?3) < ?6 ON CONFLICT (workspace_id, domain) DO UPDATE SET state = 'on', state_changed_at = excluded.state_changed_at, state_changed_by = 'user', state_reason = NULL WHERE entity.role = 'competitor'";
+  "INSERT INTO entity (id, workspace_id, role, domain, name, origin, confirmed_at, state, state_changed_at, state_changed_by, created_at, identity_json) SELECT ?1, ?2, 'competitor', ?3, ?4, 'manual', ?5, 'on', ?5, 'user', ?5, CASE WHEN ?7 IS NULL THEN '{}' ELSE json_object('url', ?7) END WHERE (SELECT count(*) FROM entity WHERE workspace_id = ?2 AND role = 'competitor' AND state = 'on' AND domain <> ?3) < ?6 ON CONFLICT (workspace_id, domain) DO UPDATE SET state = 'on', state_changed_at = excluded.state_changed_at, state_changed_by = 'user', state_reason = NULL, identity_json = CASE WHEN ?7 IS NULL THEN entity.identity_json ELSE json_set(entity.identity_json, '$.url', ?7) END WHERE entity.role = 'competitor'";
 
 const COUNT_OTHER_ON =
   "SELECT count(*) AS n FROM entity WHERE workspace_id = ? AND role = 'competitor' AND state = 'on' AND domain <> ?";
@@ -291,16 +288,15 @@ export async function addManualCompetitor(input: {
   workspaceId: string;
   domain: string;
   name: string | null;
+  url: string | null;
   now: string;
   cap: number;
 }): Promise<"added" | "at_cap"> {
   const result = await env.DB.prepare(INSERT_MANUAL_COMPETITOR)
-    .bind(crypto.randomUUID(), input.workspaceId, input.domain, input.name, input.now, input.cap)
+    .bind(crypto.randomUUID(), input.workspaceId, input.domain, input.name, input.now, input.cap, input.url)
     .run();
   if (result.meta.changes === 1) return "added";
-  const count = await env.DB.prepare(COUNT_OTHER_ON)
-    .bind(input.workspaceId, input.domain)
-    .first<{ n: number }>();
+  const count = await env.DB.prepare(COUNT_OTHER_ON).bind(input.workspaceId, input.domain).first<{ n: number }>();
   if (count !== null && count.n >= input.cap) return "at_cap";
   return "added";
 }
@@ -364,9 +360,7 @@ export function turnOffFromRetireSuggestion(input: {
   suggestionId: string;
   now: string;
 }): D1PreparedStatement {
-  return env.DB
-    .prepare(TURN_OFF_FROM_RETIRE_SUGGESTION)
-    .bind(input.now, input.workspaceId, input.suggestionId);
+  return env.DB.prepare(TURN_OFF_FROM_RETIRE_SUGGESTION).bind(input.now, input.workspaceId, input.suggestionId);
 }
 
 const RETIRE_COMPETITOR_BY_JEV =
@@ -378,17 +372,12 @@ export function retireCompetitorByJev(input: {
   reason: string;
   now: string;
 }): D1PreparedStatement {
-  return env.DB
-    .prepare(RETIRE_COMPETITOR_BY_JEV)
-    .bind(input.reason, input.now, input.entityId, input.workspaceId);
+  return env.DB.prepare(RETIRE_COMPETITOR_BY_JEV).bind(input.reason, input.now, input.entityId, input.workspaceId);
 }
 
 const READ_IDENTITY_JSON = "SELECT identity_json FROM entity WHERE id = ?1 AND workspace_id = ?2";
 
-export async function readEntityIdentityJson(
-  workspaceId: string,
-  entityId: string,
-): Promise<string | null> {
+export async function readEntityIdentityJson(workspaceId: string, entityId: string): Promise<string | null> {
   const row = await env.DB.prepare(READ_IDENTITY_JSON).bind(entityId, workspaceId).first<{
     identity_json: string;
   }>();
@@ -443,11 +432,7 @@ export async function fillSelfSiteFields(input: {
 const MARK_SELF_SITE_FILL =
   "UPDATE entity SET identity_json = json_set(identity_json, '$.siteFill', ?2) WHERE id = ?1 AND workspace_id = ?3 AND role = 'self'";
 
-export async function markSelfSiteFill(
-  workspaceId: string,
-  entityId: string,
-  state: SiteFillState,
-): Promise<boolean> {
+export async function markSelfSiteFill(workspaceId: string, entityId: string, state: SiteFillState): Promise<boolean> {
   const result = await env.DB.prepare(MARK_SELF_SITE_FILL).bind(entityId, state, workspaceId).run();
   return result.meta.changes === 1;
 }

@@ -51,9 +51,7 @@ test("the one input posts and redirects every non-empty value to the card @own-s
 
     await input.press("Enter");
     await expect(page).toHaveURL(/\/onboarding$/);
-    await expect(page.getByRole("status")).toContainText(
-      "find anything for that, try the main website",
-    );
+    await expect(page.getByRole("status")).toContainText("find anything for that, try the main website");
     await expect(input).toBeFocused();
 
     // The redirects' noise would land in this array; the emptiness proof is

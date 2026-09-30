@@ -12,9 +12,7 @@ async function seedWorkspace(id: string): Promise<void> {
   )
     .bind(`user-${id}`, "Owner", `${id}@0509.io`, NOW, NOW)
     .run();
-  await env.DB.prepare(
-    `INSERT INTO workspace (id, name, owner_user_id, created_at) VALUES (?, ?, ?, ?)`,
-  )
+  await env.DB.prepare(`INSERT INTO workspace (id, name, owner_user_id, created_at) VALUES (?, ?, ?, ?)`)
     .bind(id, "Owner", `user-${id}`, NOW)
     .run();
 }

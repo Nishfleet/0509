@@ -20,11 +20,24 @@ export interface HomeHistoryRow {
   rank: number;
 }
 
-export interface HomeSource { key: string; kind: "site" | "ads" | "mentions" | "hiring"; platform: string }
+export interface HomeSource {
+  key: string;
+  kind: "site" | "ads" | "mentions" | "hiring";
+  platform: string;
+}
 
-export interface HomeCount { entityId: string; sourceKey: string; count: number }
+export interface HomeCount {
+  entityId: string;
+  sourceKey: string;
+  count: number;
+}
 
-export interface HomePill { key: string; label: string; count: number; state: "live" | "none" | "degraded" }
+export interface HomePill {
+  key: string;
+  label: string;
+  count: number;
+  state: "live" | "none" | "degraded";
+}
 
 export interface HomeRow {
   entityId: string;
@@ -65,7 +78,17 @@ export interface FourWeekChart {
 export type HomeStanding =
   | { kind: "add-competitor" }
   | { kind: "gathering"; briefAt: string; firstSweepAt: string | null; brands: number }
-  | { kind: "ranked"; rank: number; total: number; whyLine: string; readThisFirst: BriefPayload["read_this_first"]; rows: readonly HomeRow[]; chart: FourWeekChart };
+  | { kind: "unjudged"; whyLine: string }
+  | {
+      kind: "ranked";
+      rank: number;
+      total: number;
+      whyLine: string;
+      unjudged: boolean;
+      readThisFirst: BriefPayload["read_this_first"];
+      rows: readonly HomeRow[];
+      chart: FourWeekChart;
+    };
 
 export interface HomeChip {
   name: string;
@@ -157,9 +180,15 @@ function rankedRows(
       const entity = byId.get(brand.entity_id);
       const activity = brand.ad_delta + brand.mention_delta + brand.site_change_count + brand.new_roles;
       const pills = sources.map((source) => {
-        const count = counts.find((entry) => entry.entityId === brand.entity_id && entry.sourceKey === source.key)?.count ?? 0;
+        const count =
+          counts.find((entry) => entry.entityId === brand.entity_id && entry.sourceKey === source.key)?.count ?? 0;
         const degraded = payload.checked.degraded_sources.some((item) => item.key === source.key);
-        return { key: source.key, label: sourceName(source.kind, source.platform), count, state: degraded ? "degraded" : count === 0 ? "none" : "live" } as const;
+        return {
+          key: source.key,
+          label: sourceName(source.kind, source.platform),
+          count,
+          state: degraded ? "degraded" : count === 0 ? "none" : "live",
+        } as const;
       });
       return {
         entityId: brand.entity_id,
@@ -205,7 +234,9 @@ function fourWeekChart(
   const ranksByEntityId = new Map(
     entityIds.map((entityId) => [
       entityId,
-      weeks.map((week) => history.find((entry) => entry.entity_id === entityId && entry.week_start_at === week)?.rank ?? null),
+      weeks.map(
+        (week) => history.find((entry) => entry.entity_id === entityId && entry.week_start_at === week)?.rank ?? null,
+      ),
     ]),
   );
   return {
@@ -221,7 +252,7 @@ function fourWeekChart(
   };
 }
 
-export function homeStanding(input: {
+interface HomeStandingInput {
   payload: BriefPayload | null;
   entities: readonly HomeEntity[];
   schedule: BriefSchedule;
@@ -230,19 +261,26 @@ export function homeStanding(input: {
   counts: readonly HomeCount[];
   moves: readonly SiteChangeView[];
   now: Date;
-}): HomeStanding {
-  const onBrands = input.entities.filter((entity) => entity.state === "on").length;
-  if (onBrands < 2) return { kind: "add-competitor" };
+}
+
+function gatheringStanding(input: HomeStandingInput, onBrands: number): HomeStanding {
+  const at = firstSiteSweepAt({ now: input.now, sources: input.sources });
+  return {
+    kind: "gathering",
+    briefAt: dayAndTime(input.schedule.timezone, nextBriefAt(input.schedule, input.now)),
+    firstSweepAt: at === null ? null : dayAndTime(input.schedule.timezone, at),
+    brands: onBrands,
+  };
+}
+
+function rankedOrWaiting(input: HomeStandingInput, onBrands: number): HomeStanding {
   const payload = input.payload;
   const rank = payload?.headline_rank ?? null;
+  if (payload !== null && payload.is_unjudged && (rank === null || payload.headline_total < 2)) {
+    return { kind: "unjudged", whyLine: payload.why_line };
+  }
   if (payload === null || rank === null || payload.headline_total < 2) {
-    const at = firstSiteSweepAt({ now: input.now, sources: input.sources });
-    return {
-      kind: "gathering",
-      briefAt: dayAndTime(input.schedule.timezone, nextBriefAt(input.schedule, input.now)),
-      firstSweepAt: at === null ? null : dayAndTime(input.schedule.timezone, at),
-      brands: onBrands,
-    };
+    return gatheringStanding(input, onBrands);
   }
   const rows = rankedRows(payload, input.entities, input.sources, input.counts, input.moves);
   return {
@@ -250,10 +288,17 @@ export function homeStanding(input: {
     rank,
     total: payload.headline_total,
     whyLine: payload.why_line,
+    unjudged: payload.is_unjudged,
     readThisFirst: payload.read_this_first.slice(0, 3),
     rows,
     chart: fourWeekChart(input.history, rows, input.entities, input.schedule.timezone),
   };
+}
+
+export function homeStanding(input: HomeStandingInput): HomeStanding {
+  const onBrands = input.entities.filter((entity) => entity.state === "on").length;
+  if (onBrands < 2) return { kind: "add-competitor" };
+  return rankedOrWaiting(input, onBrands);
 }
 
 function chipHref(entity: HomeEntity): string {
@@ -272,16 +317,7 @@ export function homeChips(entities: readonly HomeEntity[]): readonly HomeChip[] 
   }));
 }
 
-export function homeView(input: {
-  payload: BriefPayload | null;
-  entities: readonly HomeEntity[];
-  schedule: BriefSchedule;
-  history: readonly HomeHistoryRow[];
-  sources: readonly HomeSource[];
-  counts: readonly HomeCount[];
-  moves: readonly SiteChangeView[];
-  now: Date;
-}): HomeView {
+export function homeView(input: HomeStandingInput): HomeView {
   const onCount = input.entities.filter((entity) => entity.state === "on").length;
   const brandWord = onCount === 1 ? "brand" : "brands";
   const recheckTime = hourAndMinute(input.schedule.timezone, nextHour(input.now));

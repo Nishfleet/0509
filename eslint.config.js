@@ -1,4 +1,5 @@
 import js from "@eslint/js";
+import betterTailwindcss from "eslint-plugin-better-tailwindcss";
 import boundaries from "eslint-plugin-boundaries";
 import importX, { createNodeResolver } from "eslint-plugin-import-x";
 import reactHooks from "eslint-plugin-react-hooks";
@@ -20,7 +21,7 @@ const CLOUDFLARE_WORKERS_IMPORT = {
 const FULL_ZOD_IMPORT = {
   name: "zod",
   message:
-    "app/components/ ships to the browser; full zod costs about 13 KB gzipped per object schema there. Import from \"zod/mini\" instead (docs/REBUILD-STACK.md, zod). Source: 0509#4134.",
+    'app/components/ ships to the browser; full zod costs about 13 KB gzipped per object schema there. Import from "zod/mini" instead (docs/REBUILD-STACK.md, zod). Source: 0509#4134.',
 };
 
 const PAVED_PATH_PATTERNS = [
@@ -119,20 +120,18 @@ const SUPPORT_ADDRESS_BAN = {
 // A catch whose only statement is `return null` swallows the error: a thrown
 // fetch, a bug, and a genuine "not found" all reach the caller as the same
 // null, so the failure leaves no trace. Match the block shape, not a promise
-// `.catch(() => null)` callback. The named clause in
-// app/lib/identity/name-cascade.ts is grandfathered by name (see the
-// exemption block) until the cascade grows a logged failure path. Source:
-// 0509#4462 (REBUILD-TRUST.md C1 Q1 — the D grade on PR #4457).
+// `.catch(() => null)` callback. The clause in
+// app/lib/identity/name-cascade.server.ts logs via console.error before its
+// `return null`, so it holds two statements and does not match this shape.
+// Source: 0509#4462 (REBUILD-TRUST.md C1 Q1 — the D grade on PR #4457).
 const CATCH_RETURNS_NULL = {
-  selector:
-    "CatchClause > BlockStatement[body.length=1] > ReturnStatement[argument.value=null]",
+  selector: "CatchClause > BlockStatement[body.length=1] > ReturnStatement[argument.value=null]",
   message:
     "A catch whose only statement is `return null` swallows the error, so a thrown fetch or a bug fails as silently as a real 'not found'. Give the clause an error binding and a logged failure path (or rethrow). Source: 0509#4462.",
 };
 
 const FEED_STATE_LITERAL = {
-  selector:
-    "ObjectExpression > Property[key.name='feedState'][value.value=/^(ok|stale|error)$/]",
+  selector: "ObjectExpression > Property[key.name='feedState'][value.value=/^(ok|stale|error)$/]",
   message:
     "Only workers/sources/mentions/youtube.ts may build a YouTube feedState. commitYoutubeFeed accepts OkYoutubeFeed alone, so a stale or error feed cannot be stored as zero videos. Source: 0509#4051.",
 };
@@ -158,12 +157,35 @@ const DOMAIN_HOSTNAME_BAN = {
     "URL-to-domain extraction is owned by the identity engine in app/lib/identity/ — `normaliseSubject` in app/lib/identity/normalise.ts. Reading `.hostname` anywhere else is a second domain normaliser that will drift from the engine's rules; the same shape on any URL argument, any binding name. Reuse the engine (or, for a non-identity host read, get the file added to the exemption block below). Source: 0509#4371.",
 };
 
+// The one outbound-fetch path. app/lib/fetch/outbound.server.ts owns the
+// public-host check (targetRefusal, URL + scheme policy), the redirect walk
+// that re-checks every hop, the 8 s deadline (fetchOutbound) and the capped
+// body reader (cappedBody); the crawler User-Agent is CRAWLER_USER_AGENT in
+// robots.server.ts. A bare fetch( outside it is a second transport: the logo
+// store's copy was the instance that raised this (its https-only rule and
+// byte cap had already drifted from readUrl's). Call sites that predate the
+// rule sit in the exemption blocks below, the same shape as
+// DOMAIN_HOSTNAME_BAN's grandfather list.
+const BARE_FETCH = {
+  selector: "CallExpression[callee.name='fetch']",
+  message:
+    "Outbound fetch is owned by app/lib/fetch/: fetchOutbound refuses non-public hosts and re-checks every redirect hop under an 8 s deadline, and cappedBody bounds the body. A bare fetch( anywhere else in server code is a second transport that drifts from all three. Client code is exempt: a browser fetch goes to our own origin and SSRF is a server-side risk. Source: 0509#4951, 0509#6212.",
+};
+
 // DESIGN.md: fonts are self-hosted. A Google Fonts <link> put LCP at 2021 ms against the
 // 1500 ms budget (CI run 35635617508, main 5166ebb81; fixed in fd1457288).
 const GOOGLE_FONTS_BAN = {
-  selector: "Literal[value=/fonts\\.(googleapis|gstatic)\\.com/], TemplateElement[value.raw=/fonts\\.(googleapis|gstatic)\\.com/]",
+  selector:
+    "Literal[value=/fonts\\.(googleapis|gstatic)\\.com/], TemplateElement[value.raw=/fonts\\.(googleapis|gstatic)\\.com/]",
   message:
     "Fonts are self-hosted (DESIGN.md). A Google Fonts link is render-blocking and broke the 1500 ms LCP budget once (fd1457288). Add the font file under public/ and an @font-face instead.",
+};
+
+const CRAWLER_USER_AGENT_BAN = {
+  selector:
+    "Literal[value=/FiveToNineBot\\/\\d|0509\\.io\\/\\d/], TemplateElement[value.raw=/FiveToNineBot\\/\\d|0509\\.io\\/\\d/]",
+  message:
+    "The crawler User-Agent is typed once, in app/lib/fetch/robots.server.ts as CRAWLER_USER_AGENT (built from ROBOTS_AGENT, the token robots.txt is matched against); every module that fetches today imports it. A second literal is a second identity to change and a fetch that silently keeps the old one, which is how the same identity came to be typed in more than one place. The version is matched as /\\d/ so a bump is this edit, not a new literal. Modules that fetch without a User-Agent at all are 0509#5960. Source: 0509#5883.",
 };
 
 const USER_DATA_NAME = "^(email|emails|userId|ip|input|raw|prompt|password|token|subject)$";
@@ -179,15 +201,27 @@ const NO_USER_DATA_IN_LOGS = [
     selector: `${LOG_OR_CAPTURE_CALL} :matches(Property[key.name=/${USER_DATA_NAME}/], Property[value.name=/${USER_DATA_NAME}/], MemberExpression[property.name=/${USER_DATA_NAME}/])`,
     message: NO_USER_DATA_IN_LOGS_MESSAGE,
   },
-  { selector: `${LOG_OR_CAPTURE_CALL} > Identifier.arguments[name=/${USER_DATA_NAME}/]`, message: NO_USER_DATA_IN_LOGS_MESSAGE },
+  {
+    selector: `${LOG_OR_CAPTURE_CALL} > Identifier.arguments[name=/${USER_DATA_NAME}/]`,
+    message: NO_USER_DATA_IN_LOGS_MESSAGE,
+  },
   // The first two cover a named key and a named value. These four close the
   // shapes the message promises but a name-only match misses: the `email` in
   // `console.log(`user ${email}`)`, the `subject` in `JSON.stringify(subject)`,
   // the `subject` in `{ ...subject }`, and the `subject` in
   // `console.log(subject.registrable)`. 0509#5786.
-  { selector: `${LOG_OR_CAPTURE_CALL} TemplateLiteral > Identifier[name=/${USER_DATA_NAME}/]`, message: NO_USER_DATA_IN_LOGS_MESSAGE },
-  { selector: `${LOG_OR_CAPTURE_CALL} CallExpression > Identifier[name=/${USER_DATA_NAME}/]`, message: NO_USER_DATA_IN_LOGS_MESSAGE },
-  { selector: `${LOG_OR_CAPTURE_CALL} SpreadElement > Identifier[name=/${USER_DATA_NAME}/]`, message: NO_USER_DATA_IN_LOGS_MESSAGE },
+  {
+    selector: `${LOG_OR_CAPTURE_CALL} TemplateLiteral > Identifier[name=/${USER_DATA_NAME}/]`,
+    message: NO_USER_DATA_IN_LOGS_MESSAGE,
+  },
+  {
+    selector: `${LOG_OR_CAPTURE_CALL} CallExpression > Identifier[name=/${USER_DATA_NAME}/]`,
+    message: NO_USER_DATA_IN_LOGS_MESSAGE,
+  },
+  {
+    selector: `${LOG_OR_CAPTURE_CALL} SpreadElement > Identifier[name=/${USER_DATA_NAME}/]`,
+    message: NO_USER_DATA_IN_LOGS_MESSAGE,
+  },
   // The identifier wrapped in one expression: `"ip " + ip`, `[email]`,
   // `email ?? ""`, `flag ? email : "x"`. 0509#5786.
   {
@@ -209,17 +243,19 @@ const NO_USER_DATA_IN_LOGS = [
 const BANNED_SYNTAX = [
   SUPPORT_ADDRESS_BAN,
   GOOGLE_FONTS_BAN,
+  CRAWLER_USER_AGENT_BAN,
   CATCH_RETURNS_NULL,
   XML_PARSER_CONSTRUCTOR,
   DOMAIN_HOSTNAME_BAN,
+  BARE_FETCH,
   {
-    selector: "NewExpression[callee.name='RegExp'] > Literal.arguments, NewExpression[callee.name='RegExp'] > TemplateLiteral",
+    selector:
+      "NewExpression[callee.name='RegExp'] > Literal.arguments, NewExpression[callee.name='RegExp'] > TemplateLiteral",
     message:
       "A regex built from a string cannot be shown to escape that string's metacharacters, so a '.' matches any host and an unexpected '\\' breaks the pattern. Two live alerts on 0509#4172 came from exactly this shape (CodeQL js/incomplete-hostname-regexp, 8 high alerts) plus a fan-out that probed once per match instead of once per board. Extract the candidate out of the text and parse it with `new URL()`, then match the hostname against a table with an exact comparison. Source: 0509#4172, commit sequence ending bdca157.",
   },
   {
-    selector:
-      "MemberExpression[object.name='context'][property.name='cloudflare']",
+    selector: "MemberExpression[object.name='context'][property.name='cloudflare']",
     message:
       "context.cloudflare is the React Router 7 shape and does not exist here; this app provides no getLoadContext, so reading it throws and the route 500s. Bindings come from `import { env } from 'cloudflare:workers'`. Source: commit 7727bf787 / #3918 (production regression: /api/auth, /app and the magic-link POST all 500d).",
   },
@@ -240,7 +276,7 @@ const BANNED_SYNTAX = [
 // Full DML write shapes, strict enough to run unanchored: UPDATE needs the
 // `SET col =` tail so prose like "the update was set" cannot match.
 const DML_WRITE_SHAPE =
-  "INSERT(\\s+OR\\s+\\w+)?\\s+INTO|REPLACE\\s+INTO|UPDATE\\s+[\\w\".]+\\s+SET\\s+[\\w\".]+\\s*=|DELETE\\s+FROM";
+  'INSERT(\\s+OR\\s+\\w+)?\\s+INTO|REPLACE\\s+INTO|UPDATE\\s+[\\w".]+\\s+SET\\s+[\\w".]+\\s*=|DELETE\\s+FROM';
 
 // The same shapes anchored at statement start, plus `WITH`-led writes (a CTE
 // can head INSERT/UPDATE/DELETE; a `WITH … SELECT` read stays allowed because
@@ -265,8 +301,7 @@ const RAW_DML_WRITER = {
 
 const ENV_DB_IN_ROUTES = {
   selector: "CallExpression[callee.object.name='env'][callee.property.name='DB']",
-  message:
-    "Routes do not touch env.DB. Go through the one data layer in app/lib/data/. docs/REBUILD-TRUST.md C4.",
+  message: "Routes do not touch env.DB. Go through the one data layer in app/lib/data/. docs/REBUILD-TRUST.md C4.",
 };
 
 const STATIC_HOME_HTML_PARSER = {
@@ -325,8 +360,7 @@ const STATIC_HOME_FONT_PRELOAD = {
         const scriptEnd = scriptAt < 0 ? -1 : text.indexOf("</script>", scriptAt);
         const script = scriptAt >= 0 && scriptEnd > scriptAt ? text.slice(scriptAt, scriptEnd) : "";
         const asksAfterLoad =
-          script.includes('addEventListener("load"') &&
-          script.includes('faces.href = "/home-faces.css"');
+          script.includes('addEventListener("load"') && script.includes('faces.href = "/home-faces.css"');
         if (mainEnd < 0 || scriptAt < mainEnd || !asksAfterLoad) {
           context.report({ node, messageId: "lateFaces" });
         }
@@ -334,6 +368,77 @@ const STATIC_HOME_FONT_PRELOAD = {
     };
   },
 };
+
+// DESIGN.md rule 8: "The accent is one colour. Green marker. Red exists only as
+// the strike on a 'before' and the rule on an open incident. Nothing else is
+// coloured, ever." These two restricted-class patterns make a second colour a
+// diff the lint rejects instead of a review comment.
+const TAILWIND_ARBITRARY_COLOUR = {
+  pattern:
+    "^(?:[^\\s]*:)*(?:bg|text|border|fill|stroke|ring|from|via|to|decoration|accent|caret|divide|outline|placeholder|shadow)-(?:\\[(?:#|rgb|hsl|oklch|oklab|lab|lch|color-mix|var\\()|\\(--)",
+  message:
+    "Arbitrary colour values are banned: every colour is a @theme token in app/app.css and the accent is one colour (DESIGN.md rule 8). Source: 0509#5871.",
+};
+
+const TAILWIND_DEFAULT_PALETTE = {
+  pattern:
+    "^(?:[^\\s]*:)*(?:bg|text|border|fill|stroke|ring|from|via|to|decoration|accent|caret|divide|outline|placeholder|shadow)-(?:slate|gray|zinc|neutral|stone|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose)-[0-9]",
+  message:
+    "The Tailwind default palette is banned: every colour is a @theme token in app/app.css (bg-green is the one accent, DESIGN.md rule 8). Source: 0509#5871.",
+};
+
+const SHADCN_STOCK_TOKEN_CLASSES =
+  "(?:^|:)(?:bg|text|border|ring|fill|stroke)-(?:background|foreground|muted|muted-foreground|primary|primary-foreground|secondary|secondary-foreground|destructive|border|input|ring|popover|popover-foreground)(?:/[0-9]+)?$";
+
+const TW_ANIMATE_STOCK_CLASSES =
+  "(?:^|:)(?:animate-in|animate-out|fade-in-0|fade-out-0|zoom-in-95|zoom-out-95|slide-in-from-(?:top|bottom|left|right)-2)$";
+
+// The plugin lints a `const X = "..."` class list only when it has been told
+// the name: its own defaults are `className`, `classNames`, `classes` and
+// `styles`, and this repo's convention is a bare SHOUTY name instead (ROW,
+// WHEN_CLASS, BLOCK, TITLE, …). The list below is every class-list constant on
+// main, so a colour smuggled into one of them is red, not green — without it
+// `const ROW = "bg-[#ff0000]"` passed all three rules. A new class-list
+// constant must add its name here; a name that is already used for a string
+// that is not a class list (a `<title>`, a CSS custom property fallback) will
+// report the words of that string as unknown classes, which is why the two
+// such constants on main are named PAGE_TITLE (app/routes/landing.tsx) and
+// LINE_FALLBACK (app/components/source-pill.tsx).
+const TAILWIND_CLASS_VARIABLES = [
+  // The plugin's own defaults, kept so setting this list does not drop them.
+  "^classNames?$",
+  "^classes$",
+  "^styles?$",
+  "^BLOCK$",
+  "^BODY$",
+  "^BRIEF$",
+  "^BRIEF_LINE$",
+  "^CARD$",
+  "^DETAILS$",
+  "^EYEBROW$",
+  "^FIELD$",
+  "^GREETING$",
+  "^HEAD$",
+  "^HEADING$",
+  "^HEADING_CLASS$",
+  "^LABEL$",
+  "^LABEL_CLASS$",
+  "^LINE$",
+  "^LINK$",
+  "^MARKER$",
+  "^NOTE$",
+  "^OFF$",
+  "^PILL$",
+  "^PREVIOUS_HEADING$",
+  "^PREVIOUS_LINK$",
+  "^PREVIOUS_LIST$",
+  "^ROW$",
+  "^ROW_CLASS$",
+  "^SECTION$",
+  "^SUMMARY$",
+  "^TITLE$",
+  "^WHEN_CLASS$",
+];
 
 const WORKAROUND_TERMS = [
   "todo",
@@ -396,19 +501,13 @@ export default tseslint.config(
   {
     files: ["**/*.{ts,tsx}"],
     rules: {
-      "@typescript-eslint/consistent-type-imports": [
-        "error",
-        { fixStyle: "separate-type-imports" },
-      ],
+      "@typescript-eslint/consistent-type-imports": ["error", { fixStyle: "separate-type-imports" }],
       "@typescript-eslint/no-unnecessary-condition": "off",
       "@typescript-eslint/no-unused-vars": [
         "error",
         { argsIgnorePattern: "^_", varsIgnorePattern: "^_", caughtErrorsIgnorePattern: "^_" },
       ],
-      "@typescript-eslint/only-throw-error": [
-        "error",
-        { allow: [{ from: "lib", name: "Response" }] },
-      ],
+      "@typescript-eslint/only-throw-error": ["error", { allow: [{ from: "lib", name: "Response" }] }],
     },
   },
 
@@ -417,15 +516,9 @@ export default tseslint.config(
     plugins: { "react-hooks": reactHooks, "no-comments": noComments },
     rules: {
       ...reactHooks.configs.recommended.rules,
-      "no-comments/disallowComments": [
-        "error",
-        { allow: ["eslint", "global"] },
-      ],
+      "no-comments/disallowComments": ["error", { allow: ["eslint", "global"] }],
       "no-inline-comments": "error",
-      "no-warning-comments": [
-        "error",
-        { terms: WORKAROUND_TERMS, location: "anywhere" },
-      ],
+      "no-warning-comments": ["error", { terms: WORKAROUND_TERMS, location: "anywhere" }],
       "no-restricted-syntax": ["error", ...BANNED_SYNTAX, ...NO_USER_DATA_IN_LOGS, FEED_STATE_LITERAL],
     },
   },
@@ -480,7 +573,7 @@ export default tseslint.config(
     files: [
       "app/lib/identity/**/*.{ts,tsx}",
       "app/lib/fetch/transport.server.ts",
-      "app/lib/hiring/discover-board.ts",
+      "app/lib/hiring/discover-board.server.ts",
       "app/lib/site/own-site.server.ts",
       "workers/support-inbox.ts",
     ],
@@ -488,6 +581,41 @@ export default tseslint.config(
       "no-restricted-syntax": [
         "error",
         ...BANNED_SYNTAX.filter((rule) => rule !== DOMAIN_HOSTNAME_BAN),
+        ...NO_USER_DATA_IN_LOGS,
+        RAW_DML_WRITER,
+        FEED_STATE_LITERAL,
+      ],
+    },
+  },
+
+  {
+    // BARE_FETCH is a server-side rule: a browser fetch goes to our own origin,
+    // and SSRF needs a server making the request. Server code is app/lib/**,
+    // app/routes/** (loaders and actions), *.server.ts and workers/**; the rest of
+    // app/ (components, root, entries) is client and exempt. The array restates
+    // the shared list because a later matching block's no-restricted-syntax entry
+    // replaces the earlier one wholesale. 0509#4951, 0509#6212.
+    ignores: ["app/lib/**", "app/routes/**", "app/**/*.server.ts", "app/components/footer.tsx"],
+    files: ["app/**/*.{ts,tsx}"],
+    rules: {
+      "no-restricted-syntax": [
+        "error",
+        ...BANNED_SYNTAX.filter((rule) => rule !== BARE_FETCH),
+        ...NO_USER_DATA_IN_LOGS,
+        RAW_DML_WRITER,
+        FEED_STATE_LITERAL,
+      ],
+    },
+  },
+
+  {
+    // The fetch paved path itself, where the guard's host check and the
+    // wrapped call live by definition; its .hostname reads stay allowed too.
+    files: ["app/lib/fetch/**"],
+    rules: {
+      "no-restricted-syntax": [
+        "error",
+        ...BANNED_SYNTAX.filter((rule) => rule !== BARE_FETCH && rule !== DOMAIN_HOSTNAME_BAN),
         ...NO_USER_DATA_IN_LOGS,
         RAW_DML_WRITER,
         FEED_STATE_LITERAL,
@@ -515,16 +643,9 @@ export default tseslint.config(
 
   {
     files: ["app/**/*.{ts,tsx}", "workers/**/*.ts"],
-    ignores: [
-      "app/lib/auth.server.ts",
-      "app/lib/auth-client.ts",
-      "app/components/toaster.tsx",
-    ],
+    ignores: ["app/lib/auth.server.ts", "app/lib/auth-client.ts", "app/components/toaster.tsx"],
     rules: {
-      "no-restricted-imports": [
-        "error",
-        { paths: ONE_PAVED_PATH_IMPORTS, patterns: PAVED_PATH_PATTERNS },
-      ],
+      "no-restricted-imports": ["error", { paths: ONE_PAVED_PATH_IMPORTS, patterns: PAVED_PATH_PATTERNS }],
     },
   },
 
@@ -704,10 +825,7 @@ export default tseslint.config(
             {
               from: { file: { categories: "entry" } },
               allow: {
-                to: [
-                  { element: { type: "component" } },
-                  { file: { categories: "server-module" } },
-                ],
+                to: [{ element: { type: "component" } }, { file: { categories: "server-module" } }],
               },
             },
             {
@@ -750,6 +868,12 @@ export default tseslint.config(
             {
               from: { element: { type: "worker" } },
               allow: { to: { file: { categories: "server-module" } } },
+            },
+            {
+              from: { file: { path: "app/lib/delivery-address.server.ts" } },
+              allow: { to: { file: { path: "workers/delivery/send.ts" } } },
+              message:
+                "The delivery-address save is the second app-side sender after app/lib/auth.server.ts, and it goes through the one paved path (workers/delivery/send.ts) instead of calling env.EMAIL.send a second time. Only that one file reaches the worker; every other server leaf keeps the boundary. Source: 0509#5811.",
             },
           ],
         },
@@ -864,6 +988,47 @@ export default tseslint.config(
     },
     rules: {
       "static-home/no-font-preload": "error",
+    },
+  },
+
+  // The DESIGN.md colour gate (0509#5871). The parent issue says
+  // `no-unregistered-classes`; the rule shipped in 4.7.0 is named
+  // `no-unknown-classes`, so that is the name here. Both patterns open with
+  // `(?:[^\s]*:)*` because a variant prefix is not always one word: this repo
+  // writes `max-[859px]:`, `aria-[current=page]:` and `[&:hover]:`, and a
+  // prefix pattern of `[a-z0-9-]+` let a banned colour hide behind all three.
+  // The `ui/` ignore list covers stock shadcn semantic tokens and
+  // tw-animate-css classes that are dead on main: the tokens are not in
+  // `@theme`, and registering them would start painting, a design change out
+  // of scope for this slice. 81 hits were probed on a74ad41 — 80 in
+  // app/components/ui/, one `cf-turnstile` in
+  // app/components/turnstile-widget.tsx, which is Cloudflare's widget class,
+  // never a Tailwind class. The `ui/` override is a later matching block
+  // because flat config replaces a rule's options per matching block: it
+  // widens `no-unknown-classes` only, and the strict block's
+  // restricted-classes and class-order settings stay in force there.
+  {
+    files: ["app/**/*.{ts,tsx}"],
+    plugins: { "better-tailwindcss": betterTailwindcss },
+    settings: {
+      "better-tailwindcss": { entryPoint: "app/app.css", variables: TAILWIND_CLASS_VARIABLES },
+    },
+    rules: {
+      "better-tailwindcss/no-unknown-classes": ["error", { ignore: ["^cf-turnstile$"] }],
+      "better-tailwindcss/no-restricted-classes": [
+        "error",
+        { restrict: [TAILWIND_ARBITRARY_COLOUR, TAILWIND_DEFAULT_PALETTE] },
+      ],
+      "better-tailwindcss/enforce-consistent-class-order": "error",
+    },
+  },
+  {
+    files: ["app/components/ui/**/*.tsx"],
+    rules: {
+      "better-tailwindcss/no-unknown-classes": [
+        "error",
+        { ignore: [SHADCN_STOCK_TOKEN_CLASSES, TW_ANIMATE_STOCK_CLASSES] },
+      ],
     },
   },
 );

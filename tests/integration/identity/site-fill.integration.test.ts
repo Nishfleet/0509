@@ -5,14 +5,19 @@ import { insertSelfEntity, readEntityIdentityJson } from "../../../app/lib/data/
 import { insertFieldEdits } from "../../../app/lib/data/user_decision.server";
 import { normaliseSubject } from "../../../app/lib/identity/normalise";
 import { probeKey } from "../../../app/lib/identity/probe-cache.server";
-import {
-  attemptSiteFill,
-  markSiteFill,
-  siteWasReached,
-} from "../../../app/lib/identity/site-fill.server";
+import { attemptSiteFill, markSiteFill, siteWasReached } from "../../../app/lib/identity/site-fill.server";
+import { takeBrowserEscalation } from "../../../app/lib/site/browser-budget.server";
 
 const NOW = "2026-09-25T08:00:00Z";
 const HOMEPAGE = "https://gymshark.com/";
+const BOT_GATED_HTML = `<!doctype html>
+<html>
+  <head>
+    <title>Botgated</title>
+    <meta property="og:description" content="A description that only the browser could read">
+  </head>
+  <body><h1>Botgated</h1></body>
+</html>`;
 const SOCIAL = { platform: "instagram", url: "https://instagram.com/gymshark" };
 const CARD = {
   name: "Gymshark",
@@ -34,15 +39,29 @@ function key(): string {
   return probeKey(normalised.subject, "homepage");
 }
 
+function browserStub(html: string) {
+  const calls: string[] = [];
+  return {
+    calls,
+    quickAction(_action: "content", options: { url: string }): Promise<Response> {
+      calls.push(options.url);
+      return Promise.resolve(
+        new Response(JSON.stringify({ success: true, result: html, meta: { status: 200 } }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+      );
+    },
+  };
+}
+
 async function seed(identity: Record<string, unknown>): Promise<void> {
   await env.DB.prepare(
     `INSERT INTO "user" (id, name, email, emailVerified, createdAt, updatedAt) VALUES (?1, 'Owner', ?2, 0, ?3, ?3)`,
   )
     .bind(userId, `${userId}@0509.io`, NOW)
     .run();
-  await env.DB.prepare(
-    `INSERT INTO workspace (id, name, owner_user_id, created_at) VALUES (?1, 'Owner', ?2, ?3)`,
-  )
+  await env.DB.prepare(`INSERT INTO workspace (id, name, owner_user_id, created_at) VALUES (?1, 'Owner', ?2, ?3)`)
     .bind(workspaceId, userId, NOW)
     .run();
   await insertSelfEntity({
@@ -58,9 +77,7 @@ async function seed(identity: Record<string, unknown>): Promise<void> {
   )
     .bind(`${userId}-b`, `${userId}-b@0509.io`, NOW)
     .run();
-  await env.DB.prepare(
-    `INSERT INTO workspace (id, name, owner_user_id, created_at) VALUES (?1, 'Owner', ?2, ?3)`,
-  )
+  await env.DB.prepare(`INSERT INTO workspace (id, name, owner_user_id, created_at) VALUES (?1, 'Owner', ?2, ?3)`)
     .bind(otherWorkspaceId, `${userId}-b`, NOW)
     .run();
 }
@@ -81,6 +98,7 @@ beforeEach(() => {
 
 afterEach(async () => {
   vi.unstubAllGlobals();
+  Reflect.deleteProperty(env, "BROWSER");
   await env.IDENTITY_CACHE.delete(key());
   await env.DB.prepare('DELETE FROM "user" WHERE id = ?1 OR id = ?2').bind(userId, `${userId}-b`).run();
 });
@@ -150,12 +168,23 @@ describe("site fill", () => {
 
   it("ignores a field edit recorded in another workspace", async () => {
     await seed({ description: null, socials: [] });
-    // user_decision.entity_id is a bare entity FK until 0509#4965 lands the composite key.
+    // Since 0509#4965 a user_decision row cannot point at another workspace's
+    // entity, so the other workspace's edit is recorded on its own entity for
+    // the same domain.
+    const otherEntityId = `entity-site-fill-other-${crypto.randomUUID()}`;
+    await insertSelfEntity({
+      id: otherEntityId,
+      workspaceId: otherWorkspaceId,
+      domain: "gymshark.com",
+      name: "Gymshark",
+      identityJson: "{}",
+      now: NOW,
+    });
     await insertFieldEdits([
       {
         workspaceId: otherWorkspaceId,
         userId: `${userId}-b`,
-        entityId,
+        entityId: otherEntityId,
         edit: { field: "description", from: "Gym clothes", to: "" },
         decidedAt: NOW,
       },
@@ -176,6 +205,42 @@ describe("site fill", () => {
     vi.stubGlobal("fetch", () => Promise.reject(new Error("refused")));
 
     expect(await attemptSiteFill(workspaceId, entityId, HOMEPAGE)).toBe("pending");
+    expect(await readEntityIdentityJson(workspaceId, entityId)).toBe(before);
+  });
+
+  it("escalates a bot-gated homepage through the brand's last budgeted read", async () => {
+    await seed({ description: null, socials: [] });
+    const day = new Date().toISOString().slice(0, 10);
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      expect(await takeBrowserEscalation(workspaceId, "gymshark.com", day)).toBe(true);
+    }
+    vi.stubGlobal("fetch", () => Promise.resolve(new Response("blocked", { status: 403 })));
+    const stub = browserStub(BOT_GATED_HTML);
+    Object.defineProperty(env, "BROWSER", { configurable: true, get: () => stub });
+
+    expect(await attemptSiteFill(workspaceId, entityId, HOMEPAGE)).toBe("filled");
+    expect(await identity()).toEqual({
+      description: "A description that only the browser could read",
+      socials: [],
+      siteFill: "filled",
+    });
+    expect(stub.calls).toEqual([HOMEPAGE]);
+    expect(await takeBrowserEscalation(workspaceId, "gymshark.com", day)).toBe(false);
+  });
+
+  it("does not escalate a bot-gated homepage once the brand's day budget is spent", async () => {
+    await seed({ description: null, socials: [] });
+    const day = new Date().toISOString().slice(0, 10);
+    for (let attempt = 0; attempt < 4; attempt += 1) {
+      expect(await takeBrowserEscalation(workspaceId, "gymshark.com", day)).toBe(true);
+    }
+    vi.stubGlobal("fetch", () => Promise.resolve(new Response("blocked", { status: 403 })));
+    const stub = browserStub(BOT_GATED_HTML);
+    Object.defineProperty(env, "BROWSER", { configurable: true, get: () => stub });
+    const before = await readEntityIdentityJson(workspaceId, entityId);
+
+    expect(await attemptSiteFill(workspaceId, entityId, HOMEPAGE)).toBe("pending");
+    expect(stub.calls).toEqual([]);
     expect(await readEntityIdentityJson(workspaceId, entityId)).toBe(before);
   });
 

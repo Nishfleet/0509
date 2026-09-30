@@ -3,7 +3,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { parseBriefPayload } from "../../../app/lib/brief-payload";
 import type { BriefSchedule } from "../../../app/lib/brief-schedule";
-import { instantStamp, nextBriefAt, openWeek, previousBriefAt, rolloverInstance } from "../../../app/lib/brief-schedule";
+import {
+  instantStamp,
+  nextBriefAt,
+  openWeek,
+  previousBriefAt,
+  rolloverInstance,
+} from "../../../app/lib/brief-schedule";
 import { runNightlyStanding } from "../../../workers/standing/nightly";
 
 /**
@@ -63,7 +69,16 @@ async function seedMention(slug: string, entity: string, observedAt: Date, p: nu
   await env.DB.batch([
     env.DB.prepare(
       "INSERT INTO signal (id, workspace_id, entity_id, source_id, kind, canonical_url, url_hash, dedup_key, observed_at) VALUES (?1, ?2, ?3, ?4, 'mention', ?5, ?6, ?7, ?8)",
-    ).bind(id, WS, entityId, SOURCE, `https://news.example/${id}`, `hash-${id}`, `dedup-${id}`, observedAt.toISOString()),
+    ).bind(
+      id,
+      WS,
+      entityId,
+      SOURCE,
+      `https://news.example/${id}`,
+      `hash-${id}`,
+      `dedup-${id}`,
+      observedAt.toISOString(),
+    ),
     env.DB.prepare(
       "INSERT INTO jev_verdict (id, workspace_id, question_id, input_hash, signal_id, p, decided_at) VALUES (?1, ?2, 'mention_matters', ?3, ?4, ?5, ?6)",
     ).bind(`verdict-${id}`, WS, `input-${id}`, id, p, observedAt.toISOString()),
@@ -76,7 +91,17 @@ async function seedTitledNotable(slug: string, entity: string, title: string, ob
   await env.DB.batch([
     env.DB.prepare(
       "INSERT INTO signal (id, workspace_id, entity_id, source_id, kind, title, canonical_url, url_hash, dedup_key, observed_at) VALUES (?1, ?2, ?3, ?4, 'mention', ?5, ?6, ?7, ?8, ?9)",
-    ).bind(id, WS, entityId, SOURCE, title, `https://news.example/${id}`, `hash-${id}`, `dedup-${id}`, observedAt.toISOString()),
+    ).bind(
+      id,
+      WS,
+      entityId,
+      SOURCE,
+      title,
+      `https://news.example/${id}`,
+      `hash-${id}`,
+      `dedup-${id}`,
+      observedAt.toISOString(),
+    ),
     env.DB.prepare(
       "INSERT INTO jev_verdict (id, workspace_id, question_id, input_hash, signal_id, p, reason, decided_at) VALUES (?1, ?2, 'noteworthy_change', ?3, ?4, 0.95, NULL, ?5)",
     ).bind(`verdict-${id}`, WS, `input-${id}`, id, observedAt.toISOString()),
@@ -187,7 +212,9 @@ describe("the weekly rollover Workflow (0509#4004)", () => {
     expect(brief.brands.find((line) => line.name === "Rival C")?.is_new).toBe(true);
     expect(brief.brands.find((line) => line.name === "Rival B")?.mention_delta).toBe(2);
     expect(brief.checked.mention_count).toBe(3);
-    expect(brief.why_line).toBe("Quiet week: 3 mentions checked, no site changes, no new ads.");
+    expect(brief.why_line).toBe("We couldn't judge this week's changes yet.");
+    expect(brief.is_unjudged).toBe(true);
+    expect(brief.is_quiet_week).toBe(false);
     expect(brief.next_brief_at).toBe(nextBriefAt(schedule, closesAt).toISOString());
 
     const successor = rolloverInstance(WS, nextBriefAt(schedule, closesAt), "scheduled");
@@ -365,7 +392,7 @@ describe("the weekly rollover Workflow (0509#4004)", () => {
     expect(brief.is_quiet_week).toBe(false);
   });
 
-  it("falls back to the quiet-week brief when the D4 judge is unavailable", async () => {
+  it("writes the not-judged brief when the D4 judge is unavailable", async () => {
     const schedule = scheduleOffsetFromToday(3);
     await seedWorkspace(schedule);
     const closesAt = nextBriefAt(schedule, new Date());
@@ -397,14 +424,17 @@ describe("the weekly rollover Workflow (0509#4004)", () => {
     const brief = parseBriefPayload(digest?.payload_json ?? "");
 
     expect(brief.read_this_first).toEqual([]);
-    expect(brief.why_line.startsWith("Quiet week:")).toBe(true);
-    expect(brief.is_quiet_week).toBe(true);
+    expect(brief.why_line).toBe("We couldn't judge this week's changes yet.");
+    expect(brief.is_quiet_week).toBe(false);
+    expect(brief.is_unjudged).toBe(true);
   });
 
   it("writes no brief when only the own brand is on, and still schedules next week", async () => {
     const schedule = scheduleOffsetFromToday(3);
     await seedWorkspace(schedule);
-    await env.DB.prepare("UPDATE entity SET state = 'off' WHERE workspace_id = ?1 AND role = 'competitor'").bind(WS).run();
+    await env.DB.prepare("UPDATE entity SET state = 'off' WHERE workspace_id = ?1 AND role = 'competitor'")
+      .bind(WS)
+      .run();
     const closesAt = nextBriefAt(schedule, new Date());
     const instance = rolloverInstance(WS, closesAt, "scheduled");
 
@@ -424,6 +454,65 @@ describe("the weekly rollover Workflow (0509#4004)", () => {
       rolloverInstance(WS, nextBriefAt(schedule, closesAt), "scheduled").id,
     );
     expect(["queued", "running", "waiting"]).toContain((await successor.status()).status);
+  });
+
+  it("does not freeze rank when change signals have no verdict, and writes the not-judged brief", async () => {
+    const schedule = scheduleOffsetFromToday(3);
+    await seedWorkspace(schedule);
+    const closesAt = nextBriefAt(schedule, new Date());
+    const startsAt = previousBriefAt(schedule, closesAt);
+    const lastWeek = previousBriefAt(schedule, startsAt).toISOString();
+    await seedFrozenWeek(lastWeek, [
+      [SELF, 1],
+      [RIVAL_A, 2],
+      [RIVAL_B, 3],
+    ]);
+    const during = new Date(startsAt.getTime() + hour).toISOString();
+    const signalId = `${WS}_unjudged_change`;
+    await env.DB.prepare(
+      "INSERT INTO signal (id, workspace_id, entity_id, source_id, kind, aspect, canonical_url, url_hash, dedup_key, observed_at) VALUES (?1, ?2, ?3, ?4, 'change', 'home', ?5, ?6, ?7, ?8)",
+    )
+      .bind(
+        signalId,
+        WS,
+        `${WS}_${RIVAL_A}`,
+        SOURCE,
+        `https://a.example/${signalId}`,
+        `hash-${signalId}`,
+        `dedup-${signalId}`,
+        during,
+      )
+      .run();
+
+    const instance = rolloverInstance(WS, closesAt, "scheduled");
+    await using introspector = await introspectWorkflowInstance(env.STANDING_ROLLOVER, instance.id);
+    await introspector.modify(async (m) => {
+      await m.disableSleeps();
+    });
+    await env.STANDING_ROLLOVER.create(instance);
+    await introspector.waitForStatus("complete");
+
+    const digestId = `digest_${WS}_${instantStamp(closesAt)}`;
+    expect(await introspector.getOutput()).toEqual({
+      workspaceId: WS,
+      closesAt: closesAt.toISOString(),
+      digestId,
+      skipped: null,
+    });
+    expect(await standingFor(startsAt.toISOString())).toEqual([
+      { entity_id: RIVAL_A, score: 0, rank: null, movement: null },
+      { entity_id: RIVAL_B, score: 0, rank: null, movement: null },
+      { entity_id: RIVAL_C, score: 0, rank: null, movement: null },
+      { entity_id: SELF, score: 0, rank: null, movement: null },
+    ]);
+    const digest = await env.DB.prepare("SELECT payload_json FROM digest WHERE id = ?1")
+      .bind(digestId)
+      .first<{ payload_json: string }>();
+    const brief = parseBriefPayload(digest?.payload_json ?? "");
+    expect(brief.is_unjudged).toBe(true);
+    expect(brief.is_quiet_week).toBe(false);
+    expect(brief.headline_rank).toBeNull();
+    expect(brief.why_line).toBe("We couldn't judge this week's changes yet.");
   });
 });
 

@@ -45,6 +45,7 @@ function payload(overrides: Partial<BriefPayload> = {}): BriefPayload {
     headline_is_new: false,
     why_line: "Kindred is the mover: 3 new ads and the loudest mention spike",
     is_quiet_week: false,
+    is_unjudged: false,
     read_this_first: [],
     brands: [brand("ent_casetta", "Casetta", 3), brand("ent_self", "Own Brand", 2), brand("ent_kindred", "Kindred", 1)],
     own_site: { status: "ok", incidents: [] },
@@ -113,7 +114,9 @@ describe("share image render", () => {
     try {
       const bytes = await renderShareImage("<p>hi</p>");
       expect(bytes).toBeNull();
-      expect(log).toHaveBeenCalledWith(JSON.stringify({ event: "share-image-miss", cause: "no browser budget granted" }));
+      expect(log).toHaveBeenCalledWith(
+        JSON.stringify({ event: "share-image-miss", cause: "no browser budget granted" }),
+      );
     } finally {
       log.mockRestore();
     }
@@ -124,7 +127,9 @@ describe("share image render", () => {
     try {
       const bytes = await renderShareImage("<p>hi</p>", async () => false);
       expect(bytes).toBeNull();
-      expect(log).toHaveBeenCalledWith(JSON.stringify({ event: "share-image-miss", cause: "browser budget exhausted" }));
+      expect(log).toHaveBeenCalledWith(
+        JSON.stringify({ event: "share-image-miss", cause: "browser budget exhausted" }),
+      );
     } finally {
       log.mockRestore();
     }

@@ -5,16 +5,19 @@ name: e2e-scheduled
 # production suite, `journey=suite` (the `e2e-production` job below): it runs
 # everything except @scheduled, on demand, off the deploy path because its
 # sign-ins send real emails against the daily quota (0509#6033, 0509#6034).
+# `signin` is the one real sign-in smoke a day (0509#6093): the only production
+# run that sends a real email besides the suite, once, at 04:17 UTC.
 # Not a required check.
 on:
   schedule:
     - cron: "5 10 * * 3"
+    - cron: "17 4 * * *"
   workflow_dispatch:
     inputs:
       journey:
         description: Journey to run now
         type: choice
-        options: [none, j12, suite]
+        options: [none, j12, suite, signin]
         default: none
       spec:
         description: 'One spec or a filter to run now against https://0509.io, e.g. e2e/j3-onboard-domain.spec.ts (0509 sign-up verdict, 2026-09-28)'
@@ -25,7 +28,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: e2e-scheduled-${{ inputs.spec && 'spec' || inputs.journey == 'suite' && 'suite' || 'j12' }}
+  group: e2e-scheduled-${{ inputs.spec && 'spec' || inputs.journey == 'suite' && 'suite' || github.event.schedule == '17 4 * * *' && 'signin' || inputs.journey == 'signin' && 'signin' || 'j12' }}
   cancel-in-progress: false
 
 jobs:
@@ -83,9 +86,47 @@ jobs:
           CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
           CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
           E2E_INBOX_TOKEN: ${{ secrets.E2E_INBOX_TOKEN }}
+          FIXTURE_SITE_TOKEN: ${{ secrets.FIXTURE_SITE_TOKEN }}
       - name: Print what the page showed when it failed
         # Playwright writes the page snapshot next to each failure; printing it
         # is how a failure is read, since nothing is uploaded.
+        if: failure()
+        run: tail -n +1 test-results/*/error-context.md
+  signin:
+    name: signin
+    # One sign-in, one real email against the Email Service daily quota
+    # (0509#6033, 0509#6093): no retries, no loop, no other spec. No trace is
+    # uploaded: the repo is public and a trace can hold the Access cookie
+    # (0509#5999); a failure is read from the job log.
+    if: github.event.schedule == '17 4 * * *' || (inputs.journey == 'signin' && inputs.spec == '')
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - name: Exchange the Access service token for its cookie
+        # The setup project sends no email; the desktop project's other
+        # dependencies each sign in, so the next step runs without them.
+        run: npm run e2e -- --project=setup --retries=0 --reporter=github,list
+        env:
+          PLAYWRIGHT_TEST_BASE_URL: https://0509.io
+          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+      - name: Sign in once against production
+        run: npm run e2e -- e2e/j1-magic-link.spec.ts --project=desktop-1440 --no-deps --retries=0 --workers=1 --reporter=github,list
+        env:
+          PLAYWRIGHT_TEST_BASE_URL: https://0509.io
+          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+          E2E_INBOX_TOKEN: ${{ secrets.E2E_INBOX_TOKEN }}
+      - name: Print what the page showed when it failed
         if: failure()
         run: tail -n +1 test-results/*/error-context.md
   production-sha:

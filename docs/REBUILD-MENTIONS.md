@@ -11,6 +11,7 @@ Every probe ran from **this VPS (netcup, a datacenter IP)** with `curl`, on **20
 That vantage point is not incidental — it is the same one workerd egresses from, and it is what separates "this API is open" from "this API is open to a browser". Where a route behaves differently from a datacenter IP than the docs imply, the row says so with the status code and what the body actually was.
 
 **Two conventions:**
+
 - A route with no live response is reported as **unproven**, never as working.
 - A **200 with an empty result set** is recorded as a block, not as "no mentions". Substack is exactly this case, and it is the most dangerous failure mode in this document.
 
@@ -18,28 +19,28 @@ That vantage point is not incidental — it is the same one workerd egresses fro
 
 Status and byte counts are from my probes; a record id or URL is quoted for every route that returned data.
 
-| # | Source | Route probed | Status | Verdict |
-|---|---|---|---|---|
-| 1 | Hacker News | `hn.algolia.com/api/v1/search_by_date` | **200**, 4,693 B | **WORKS**, no key |
-| 2 | Reddit | `reddit.com/search.rss` (unauth) | **200**, 76,579 B, 25 entries | **WORKS**, no key — but rate-limited |
-| 2b | Reddit | `reddit.com/search.json` (unauth) | **403**, 189,908 B of HTML | **BLOCKED** |
-| 2c | Reddit | `reddit.com/r/Gymshark/new.rss`, 2nd request in ~15 s | **429**, 0 B | **RATE-LIMITED** |
-| 3 | Mainstream media | `news.google.com/rss/search` | **200**, 125,875 B, **100 items** | **WORKS**, no key |
-| 4 | Blogs (Medium) | `medium.com/feed/tag/gymshark` | **200**, 17,155 B, 10 items | **WORKS**, no key |
-| 5 | Pinterest | `pinterest.com/gymshark/feed.rss` | **200**, 23,333 B, 25 items | **WORKS**, own account only |
-| 6 | YouTube | `youtube.com/feeds/videos.xml?channel_id=…` | **200**, 22,556 B, 15 entries | **WORKS**, no key, own channel only |
-| 7 | Substack | `substack.com/api/v1/post/search` | **200**, 89 B, **zero results for every query** | **SILENTLY BLOCKED** |
-| 7b | Substack | a known publication's `/feed` | **200**, 314,977 B | **WORKS** once you know the publication |
-| 8 | Bluesky | `public.api.bsky.app/xrpc/app.bsky.feed.searchPosts` | **403**, 2,334 B HTML block page | **BLOCKED** from a datacenter IP |
-| 8b | Bluesky | `api.bsky.app/xrpc/…` | **403**, 94 B, *"Request forbidden by administrative rules."* | **BLOCKED** |
-| 9 | Threads | `threads.com/@gymshark` | **200**, 279,358–612,489 B HTML | **READABLE**, server-rendered, own profile only |
-| 10 | X | `x.com/gymshark` | **200**, 185,800 B — a JS shell | **NOT USABLE** as-is |
-| 10b | X | `syndication.twitter.com/srv/timeline-profile/screen-name/gymshark` | **429**, 20 B, `Rate limit exceeded` | **BLOCKED** |
-| 10c | X | `nitter.poast.org/search` | **000** — connection failed | **DEAD** |
-| 10d | X | the SuperGrok seat | **not wired** — see §10 | **DEAD** |
-| 11 | SERP (DuckDuckGo) | `html.duckduckgo.com/html/` | **200**, 42,890 B, 10 links *and* **202**, ~14 KB, 0 links | **INTERMITTENT** — both outcomes reproduced from this VPS |
-| 11b | SERP (Bing) | `bing.com/search?format=rss` | **200**, 4,973 B | **WORKS technically, blocked by its own terms** |
-| 12 | GDELT | `api.gdeltproject.org/api/v2/doc/doc` | **429** | **PACED-CRON ONLY** |
+| #   | Source            | Route probed                                                        | Status                                                        | Verdict                                                   |
+| --- | ----------------- | ------------------------------------------------------------------- | ------------------------------------------------------------- | --------------------------------------------------------- |
+| 1   | Hacker News       | `hn.algolia.com/api/v1/search_by_date`                              | **200**, 4,693 B                                              | **WORKS**, no key                                         |
+| 2   | Reddit            | `reddit.com/search.rss` (unauth)                                    | **200**, 76,579 B, 25 entries                                 | **WORKS**, no key — but rate-limited                      |
+| 2b  | Reddit            | `reddit.com/search.json` (unauth)                                   | **403**, 189,908 B of HTML                                    | **BLOCKED**                                               |
+| 2c  | Reddit            | `reddit.com/r/Gymshark/new.rss`, 2nd request in ~15 s               | **429**, 0 B                                                  | **RATE-LIMITED**                                          |
+| 3   | Mainstream media  | `news.google.com/rss/search`                                        | **200**, 125,875 B, **100 items**                             | **WORKS**, no key                                         |
+| 4   | Blogs (Medium)    | `medium.com/feed/tag/gymshark`                                      | **200**, 17,155 B, 10 items                                   | **WORKS**, no key                                         |
+| 5   | Pinterest         | `pinterest.com/gymshark/feed.rss`                                   | **200**, 23,333 B, 25 items                                   | **WORKS**, own account only                               |
+| 6   | YouTube           | `youtube.com/feeds/videos.xml?channel_id=…`                         | **200**, 22,556 B, 15 entries                                 | **WORKS**, no key, own channel only                       |
+| 7   | Substack          | `substack.com/api/v1/post/search`                                   | **200**, 89 B, **zero results for every query**               | **SILENTLY BLOCKED**                                      |
+| 7b  | Substack          | a known publication's `/feed`                                       | **200**, 314,977 B                                            | **WORKS** once you know the publication                   |
+| 8   | Bluesky           | `public.api.bsky.app/xrpc/app.bsky.feed.searchPosts`                | **403**, 2,334 B HTML block page                              | **BLOCKED** from a datacenter IP                          |
+| 8b  | Bluesky           | `api.bsky.app/xrpc/…`                                               | **403**, 94 B, _"Request forbidden by administrative rules."_ | **BLOCKED**                                               |
+| 9   | Threads           | `threads.com/@gymshark`                                             | **200**, 279,358–612,489 B HTML                               | **READABLE**, server-rendered, own profile only           |
+| 10  | X                 | `x.com/gymshark`                                                    | **200**, 185,800 B — a JS shell                               | **NOT USABLE** as-is                                      |
+| 10b | X                 | `syndication.twitter.com/srv/timeline-profile/screen-name/gymshark` | **429**, 20 B, `Rate limit exceeded`                          | **BLOCKED**                                               |
+| 10c | X                 | `nitter.poast.org/search`                                           | **000** — connection failed                                   | **DEAD**                                                  |
+| 10d | X                 | the SuperGrok seat                                                  | **not wired** — see §10                                       | **DEAD**                                                  |
+| 11  | SERP (DuckDuckGo) | `html.duckduckgo.com/html/`                                         | **200**, 42,890 B, 10 links _and_ **202**, ~14 KB, 0 links    | **INTERMITTENT** — both outcomes reproduced from this VPS |
+| 11b | SERP (Bing)       | `bing.com/search?format=rss`                                        | **200**, 4,973 B                                              | **WORKS technically, blocked by its own terms**           |
+| 12  | GDELT             | `api.gdeltproject.org/api/v2/doc/doc`                               | **429**                                                       | **PACED-CRON ONLY**                                       |
 
 ---
 
@@ -77,7 +78,7 @@ updated: 2015-11-16T05:09:06+00:00
 
 **Two things that record teaches, and both are load-bearing.**
 
-1. **`search.rss` mixes subreddits (`t5_`) into post results (`t3_`).** The top hit is the *subreddit* r/Gymshark from 2015, not a mention. A mentions poll must filter on the `t3_` prefix in `<id>` or it will ingest a decade-old community page as today's news. I tried `&type=link` to filter server-side: it returns **0 entries**, so the parameter is not supported on the RSS endpoint. The filter is ours, client-side, on the id prefix.
+1. **`search.rss` mixes subreddits (`t5_`) into post results (`t3_`).** The top hit is the _subreddit_ r/Gymshark from 2015, not a mention. A mentions poll must filter on the `t3_` prefix in `<id>` or it will ingest a decade-old community page as today's news. I tried `&type=link` to filter server-side: it returns **0 entries**, so the parameter is not supported on the RSS endpoint. The filter is ours, client-side, on the id prefix.
 2. **`sort=new` does not fully order the feed.** A 2015 entry came back first under `sort=new`. Sort by the parsed `<updated>` yourself.
 
 **Rate limiting is the real constraint.** My second Reddit request in about fifteen seconds — `https://www.reddit.com/r/Gymshark/new.rss` at 12:01:40 UTC — returned **429 with a zero-byte body**. From a datacenter IP, Reddit's unauthenticated RSS tolerates roughly one request at a time and no burst. Design for it: one Reddit poll per tick for the whole workspace, spaced, through a Queue consumer with `max_concurrency: 1` — not one fetch per tracked brand fired in parallel.
@@ -109,14 +110,14 @@ That single item is the argument for this source: a class action over influencer
 
 - **Key:** none. **Cost:** free. **Freshness:** minutes to a couple of hours.
 - **Quoting matters.** `q="Gymshark"` with the quotes is what keeps "gym shark" and "gym sharks" out. Unquoted, precision collapses for any brand whose name is two common words.
-- **Record shape:** `title` (which carries ` - <Publisher>` as a suffix — split on the last ` - ` to get the publisher), `link`, `guid` (opaque but stable), `pubDate`, `source` element with `url`.
+- **Record shape:** `title` (which carries ` - <Publisher>` as a suffix — split on the last `-` to get the publisher), `link`, `guid` (opaque but stable), `pubDate`, `source` element with `url`.
 - **Cursor:** max `pubDate`. Dedup on `guid`.
 
 **The one real problem: `link` is a Google redirect, not the article.** The `guid` is a base64-ish blob, not a URL.
 
-**Rule: the opaque `news.google.com/rss/articles/…` URL is never stored as `canonical_url`.** Two different Google News queries produce two different opaque URLs for the *same* article. Store either one and `url_hash` stops being a dedup key — the same story lands twice for one brand, and a story found by both Google News and any other source lands twice again. `REBUILD-SCHEMA.md` requires every mention to carry `canonical_url` and `url_hash`, so a Google News item **is not a storable mention until its real URL is resolved**.
+**Rule: the opaque `news.google.com/rss/articles/…` URL is never stored as `canonical_url`.** Two different Google News queries produce two different opaque URLs for the _same_ article. Store either one and `url_hash` stops being a dedup key — the same story lands twice for one brand, and a story found by both Google News and any other source lands twice again. `REBUILD-SCHEMA.md` requires every mention to carry `canonical_url` and `url_hash`, so a Google News item **is not a storable mention until its real URL is resolved**.
 
-**How it is resolved is not this document's call.** Resolution is a real engine step with real cost — one request per *new* item that survives `guid` dedup, not one per poll — and it belongs to **D8** in the architect's engine design, which owns fetching, retries and the Browser Run fallback for items a plain `fetch` cannot follow. This document's contribution is the constraint, not the mechanism: no canonical, no signal row.
+**How it is resolved is not this document's call.** Resolution is a real engine step with real cost — one request per _new_ item that survives `guid` dedup, not one per poll — and it belongs to **D8** in the architect's engine design, which owns fetching, retries and the Browser Run fallback for items a plain `fetch` cannot follow. This document's contribution is the constraint, not the mechanism: no canonical, no signal row.
 
 ---
 
@@ -186,7 +187,7 @@ So resolution is: handle → channel page → `UC…` id, **once**, cached on th
 - **Key:** none for the feed. **Cost:** free. **Depth:** 15 entries, no pagination, no history.
 - **Freshness:** minutes.
 - **Record shape:** `yt:videoId` (canonical id), `title`, `published`, `updated`, `author/name`, `media:group` with description, thumbnail and `media:statistics`.
-- **Mentions vs. own-channel.** The feed is own-channel only. Finding *other people's* videos about a brand needs the YouTube Data API `search.list` (an API key, 100 quota units per search against a default 10,000/day — so ~100 searches/day) or the SERP. The feed is the free half; the keyed half is a later upgrade.
+- **Mentions vs. own-channel.** The feed is own-channel only. Finding _other people's_ videos about a brand needs the YouTube Data API `search.list` (an API key, 100 quota units per search against a default 10,000/day — so ~100 searches/day) or the SERP. The feed is the free half; the keyed half is a later upgrade.
 
 ---
 
@@ -212,7 +213,7 @@ GET https://www.bigtechnology.com/feed  → 200, 314,977 bytes, RSS 2.0
 
 Probed 12:02:12 UTC. Every Substack publication serves `/feed` at its custom domain or `<name>.substack.com/feed`, and `@extractus/feed-extractor` parses it with no special case.
 
-**So Substack splits in two:** *discovery* of which publications mention a brand is blocked from this vantage point and falls back to the SERP (§11); *tracking* a publication once known is free, open RSS and shares the blog adapter. For the MVP, Substack is the blog adapter with Substack domains in it — not a source of its own.
+**So Substack splits in two:** _discovery_ of which publications mention a brand is blocked from this vantage point and falls back to the SERP (§11); _tracking_ a publication once known is free, open RSS and shares the blog adapter. For the MVP, Substack is the blog adapter with Substack domains in it — not a source of its own.
 
 ---
 
@@ -255,7 +256,7 @@ The profile page **is** server-rendered — the markup carries Instagram CDN ass
 
 - **Key:** none for the public profile. **Cost:** free, but this is a **markup-dependent route** and therefore the least robust in this document. It breaks whenever Meta reorganises its payload, and it breaks silently.
 - **Scope:** own profile only. There is no public mentions search.
-- **The official route** is the Threads API (`graph.threads.net`), which is **own-account only** — it authorises a user to read their own Threads data, not to search other people's. For competitor tracking it is useless by design; for the creator's *own* account it is the correct route (see `REBUILD-CREATORS.md`).
+- **The official route** is the Threads API (`graph.threads.net`), which is **own-account only** — it authorises a user to read their own Threads data, not to search other people's. For competitor tracking it is useless by design; for the creator's _own_ account it is the correct route (see `REBUILD-CREATORS.md`).
 
 **Recommendation: Threads is out of the MVP mentions set.** A brittle markup scrape of a 600 KB page, for own-profile posts we can get from the official API, is the worst trade in this document.
 
@@ -322,7 +323,7 @@ five requests, three seconds apart, browser UA
 
 **Verdict: INTERMITTENT, and therefore out of the MVP.** Intermittence is worse than consistent failure here, and the reason is the failure shape: a 202 is a **success status carrying an empty result set**. A one-off check passes, the adapter ships, and then it returns nothing for days without ever erroring. That is the same class of failure as Substack's 200-with-zero-results (§7) — the most expensive kind, because nobody goes looking.
 
-**On the User-Agent, precisely, because the pattern is suggestive and the sample is small.** Across all eight observations the correlation is clean: honest identifying UA → 200 with results (2 of 2); spoofed browser UA → 202 challenge (6 of 6). So "do not spoof a browser UA on the SERP route" is a good working hypothesis and the opposite of the usual scraping instinct. It is **not proven**, for two reasons: eight probes inside four minutes is not a sample, and my one browser-UA failure also carried a *quoted, two-term* query while both successes were a single bare term — so query shape is an uncontrolled second variable. Anyone who wants to promote DuckDuckGo to the MVP owes a proper matrix: both UAs × both query shapes × several hours apart.
+**On the User-Agent, precisely, because the pattern is suggestive and the sample is small.** Across all eight observations the correlation is clean: honest identifying UA → 200 with results (2 of 2); spoofed browser UA → 202 challenge (6 of 6). So "do not spoof a browser UA on the SERP route" is a good working hypothesis and the opposite of the usual scraping instinct. It is **not proven**, for two reasons: eight probes inside four minutes is not a sample, and my one browser-UA failure also carried a _quoted, two-term_ query while both successes were a single bare term — so query shape is an uncontrolled second variable. Anyone who wants to promote DuckDuckGo to the MVP owes a proper matrix: both UAs × both query shapes × several hours apart.
 
 This does correct the inherited claim that `html.duckduckgo.com` flatly 202-challenges from a datacenter IP — it does not always. It just cannot be relied on to not.
 
@@ -340,7 +341,7 @@ GET https://www.bing.com/search?q=%22gymshark%22&format=rss&count=5
 
 Real results, first item `https://de.gymshark.com/`. But the feed ships its own `<copyright>` element, and it is not boilerplate:
 
-> *"Diese XML-Ergebnisse dürfen ausschließlich zum privaten und nichtkommerziellen Gebrauch auf die Art und Weise und zu dem Zweck verwendet … dass die Ergebnisse von Bing innerhalb eines RSS-Aggregators übertragen werden. Jegliche andere Nutzung dieser Ergebnisse bedarf der ausdrücklichen schriftlichen Genehmigung von Microsoft Corporation."*
+> _"Diese XML-Ergebnisse dürfen ausschließlich zum privaten und nichtkommerziellen Gebrauch auf die Art und Weise und zu dem Zweck verwendet … dass die Ergebnisse von Bing innerhalb eines RSS-Aggregators übertragen werden. Jegliche andere Nutzung dieser Ergebnisse bedarf der ausdrücklichen schriftlichen Genehmigung von Microsoft Corporation."_
 
 Private and non-commercial use, inside an RSS aggregator, only. Anything else needs Microsoft's express written permission. **0509 is a commercial product and is not an RSS aggregator**, so this route is closed by terms, not by technology. Recorded in full because "it returns 200" would otherwise make it look like the best SERP option available.
 
@@ -371,28 +372,28 @@ Same result the keep-list got on two attempts twelve seconds apart. The 5-second
 
 Five sources. Every one of them returned real data from this VPS today, on every attempt, needs no key, and costs nothing.
 
-| Source | Plugin key | Reliability (per `REBUILD-SCHEMA.md`) | Cadence |
-|---|---|---|---|
-| Google News RSS | `news.google_rss` | `rss` | daily |
-| Reddit `search.rss` | `reddit.search_rss` | `rss` | daily, concurrency 1 |
-| Hacker News Algolia | `hn.algolia` | `official_api` | daily |
-| YouTube channel feed | `youtube.channel_rss` | `rss` | daily |
-| Medium tag feed | `medium.tag_rss` | `rss` | daily |
-Plus **Pinterest `pinterest.user_rss`** where the brand has a handle — filed as competitor activity, not mentions (§5).
+| Source                                                                                                                  | Plugin key            | Reliability (per `REBUILD-SCHEMA.md`) | Cadence              |
+| ----------------------------------------------------------------------------------------------------------------------- | --------------------- | ------------------------------------- | -------------------- |
+| Google News RSS                                                                                                         | `news.google_rss`     | `rss`                                 | daily                |
+| Reddit `search.rss`                                                                                                     | `reddit.search_rss`   | `rss`                                 | daily, concurrency 1 |
+| Hacker News Algolia                                                                                                     | `hn.algolia`          | `official_api`                        | daily                |
+| YouTube channel feed                                                                                                    | `youtube.channel_rss` | `rss`                                 | daily                |
+| Medium tag feed                                                                                                         | `medium.tag_rss`      | `rss`                                 | daily                |
+| Plus **Pinterest `pinterest.user_rss`** where the brand has a handle — filed as competitor activity, not mentions (§5). |
 
 **Deliberately out of the MVP, each for a stated reason:**
 
-| Out | Because |
-|---|---|
-| X | every zero-spend route is closed and the SuperGrok seat is dead (§10). Money decision. |
-| Bluesky | 403 from our egress; needs a throwaway app password, unproven here (§8). First thing to fix in P3. |
-| Threads | markup-dependent scrape of a 600 KB page for own-profile data the official API already gives (§9). |
-| Substack | search is silently blocked; tracking is just the blog adapter (§7). |
-| GDELT | 429-prone; overlaps Google News (§12). |
-| Bing RSS | terms forbid commercial, non-aggregator use (§11). |
+| Out             | Because                                                                                                                                                                                                                         |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| X               | every zero-spend route is closed and the SuperGrok seat is dead (§10). Money decision.                                                                                                                                          |
+| Bluesky         | 403 from our egress; needs a throwaway app password, unproven here (§8). First thing to fix in P3.                                                                                                                              |
+| Threads         | markup-dependent scrape of a 600 KB page for own-profile data the official API already gives (§9).                                                                                                                              |
+| Substack        | search is silently blocked; tracking is just the blog adapter (§7).                                                                                                                                                             |
+| GDELT           | 429-prone; overlaps Google News (§12).                                                                                                                                                                                          |
+| Bing RSS        | terms forbid commercial, non-aggregator use (§11).                                                                                                                                                                              |
 | DuckDuckGo HTML | **intermittent** — 200-with-results and 202-with-nothing both reproduced from this host the same day (§11). A 202 is a success status carrying an empty set, so it fails silently. Needs a proper probe matrix before it ships. |
 
-**Cost at 100 tracked brands, daily.** Five polls per brand per day = 500 fetches/day ≈ 15,000/month. Against the Workers Paid allowance of 10M requests/month that is **0.15%**, and no source charges anything. Per `REBUILD-SCHEMA.md` this writes **one `snapshot` row per watch per tick** — 500 D1 rows/day, ~15,000/month against 50M included rows-written — plus `signal` rows only for items that survive judgment. The bodies go to R2. Nothing here approaches the 2026-09-17 rows-written anti-pattern.
+**Cost at 100 tracked brands, daily.** Five polls per brand per day = 500 fetches/day ≈ 15,000/month. Against the Workers Paid allowance of 10M requests/month that is **0.15%**, and no source charges anything. Per `REBUILD-SCHEMA.md` this writes **one `snapshot` row per watch per tick plus its paired `source` latest-facts update** — 1,000 D1 rows/day, ~30,000/month against 50M included rows-written — plus `signal` rows only for items that survive judgment. The bodies go to R2. Nothing here approaches the 2026-09-17 rows-written anti-pattern.
 
 **The real budget is rate limits and bot-gating, not money.** Reddit 429s on a second request within fifteen seconds; GDELT 429s at twelve-second spacing; DuckDuckGo challenges unpredictably. Two engineering consequences:
 
@@ -405,26 +406,26 @@ Plus **Pinterest `pinterest.user_rss`** where the brand has a handle — filed a
 
 Aligned to `docs/REBUILD-SCHEMA.md` on main. **A mention is not its own table.** It is a `signal` row with `kind = 'mentions'`, and `mention` is a view over `signal` — so the vocabulary in the issue maps to a real schema object without a second store.
 
-**What the poll writes** (the cost boundary, `REBUILD-SCHEMA.md`): one `snapshot` row per `watch` per tick — `payload_r2_key`, `payload_hash`, `item_count`, `fetched_at` — with the raw feed body in R2. An unchanged feed is a hash comparison, not a write.
+**What the poll writes** (the cost boundary, `REBUILD-SCHEMA.md`): one `snapshot` row per `watch` per tick, paired in the same `batch()` with the `source` row's latest-facts update — `payload_r2_key`, `payload_hash`, `item_count`, `fetched_at` — with the raw feed body in R2. An unchanged feed still commits its snapshot row and its paired `source` update.
 
 **What survives judgment (D5) becomes a `signal` row.** The per-kind CHECK on the spine already requires `canonical_url` and `url_hash` for `kind = 'mentions'`. The shape each adapter must produce:
 
-| Field | Type | Meaning | Per-source source of truth |
-|---|---|---|---|
-| `source_id` | FK → `source` | the registry row; `platform` + `kind` + `plugin_key` | — |
-| `external_id` | TEXT | the platform's own stable id — **never a URL** | HN `objectID`; Reddit `<id>` (`t3_…`); Google News `guid`; Medium `guid`; Pinterest pin id; YouTube `yt:videoId`; Bluesky AT-URI; DDG none → derive from `url_hash` |
-| `canonical_url` | TEXT | the resolved, tracking-stripped public URL | **Google News: after following the redirect.** Medium: `guid`, not `link`. DDG: the decoded `uddg` value. |
-| `url_hash` | TEXT | hash of `canonical_url` | the dedup key across sources — one article found by both Google News and the SERP is **one** signal |
-| `occurred_at` | TEXT ISO-8601 | when the item was published upstream | HN `created_at_i`; Reddit `<updated>`; RSS `pubDate`; YouTube `published`; Bluesky `record.createdAt`; **DDG: unknown — see below** |
-| `observed_at` | TEXT ISO-8601 | when we fetched it | ours |
-| `title` | TEXT | — | — |
-| `body_text` | TEXT | the mention text, plain | via `HTMLRewriter` for HTML sources (`REBUILD-STACK.md` §5.1) |
-| `author_handle` | TEXT | `/u/NOU_TURN`, `@gymshark`, `Startuporigins` | null where the source has no author |
-| `publisher` | TEXT | outlet or community | Google News: the ` - <Publisher>` suffix. Reddit: the `<category term>` subreddit. |
-| `lang` | TEXT | BCP-47 | — |
-| `metrics_json` | TEXT | engagement, per source | HN `points`/`num_comments`; Reddit none on RSS; Bluesky like/repost/reply; YouTube `media:statistics` |
-| `payload_r2_key` | TEXT | the snapshot this came from | proof trail |
-| `snapshot_id` | FK → `snapshot` | — | — |
+| Field            | Type            | Meaning                                              | Per-source source of truth                                                                                                                                          |
+| ---------------- | --------------- | ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `source_id`      | FK → `source`   | the registry row; `platform` + `kind` + `plugin_key` | —                                                                                                                                                                   |
+| `external_id`    | TEXT            | the platform's own stable id — **never a URL**       | HN `objectID`; Reddit `<id>` (`t3_…`); Google News `guid`; Medium `guid`; Pinterest pin id; YouTube `yt:videoId`; Bluesky AT-URI; DDG none → derive from `url_hash` |
+| `canonical_url`  | TEXT            | the resolved, tracking-stripped public URL           | **Google News: after following the redirect.** Medium: `guid`, not `link`. DDG: the decoded `uddg` value.                                                           |
+| `url_hash`       | TEXT            | hash of `canonical_url`                              | the dedup key across sources — one article found by both Google News and the SERP is **one** signal                                                                 |
+| `occurred_at`    | TEXT ISO-8601   | when the item was published upstream                 | HN `created_at_i`; Reddit `<updated>`; RSS `pubDate`; YouTube `published`; Bluesky `record.createdAt`; **DDG: unknown — see below**                                 |
+| `observed_at`    | TEXT ISO-8601   | when we fetched it                                   | ours                                                                                                                                                                |
+| `title`          | TEXT            | —                                                    | —                                                                                                                                                                   |
+| `body_text`      | TEXT            | the mention text, plain                              | via `HTMLRewriter` for HTML sources (`REBUILD-STACK.md` §5.1)                                                                                                       |
+| `author_handle`  | TEXT            | `/u/NOU_TURN`, `@gymshark`, `Startuporigins`         | null where the source has no author                                                                                                                                 |
+| `publisher`      | TEXT            | outlet or community                                  | Google News: the ` - <Publisher>` suffix. Reddit: the `<category term>` subreddit.                                                                                  |
+| `lang`           | TEXT            | BCP-47                                               | —                                                                                                                                                                   |
+| `metrics_json`   | TEXT            | engagement, per source                               | HN `points`/`num_comments`; Reddit none on RSS; Bluesky like/repost/reply; YouTube `media:statistics`                                                               |
+| `payload_r2_key` | TEXT            | the snapshot this came from                          | proof trail                                                                                                                                                         |
+| `snapshot_id`    | FK → `snapshot` | —                                                    | —                                                                                                                                                                   |
 
 **Three rules the adapters must share, each earned from a probe above:**
 

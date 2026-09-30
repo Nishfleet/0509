@@ -113,7 +113,7 @@ async function ownedTables(): Promise<string[]> {
     }
   }
   const owned = new Set<string>(["workspace"]);
-  for (let added = true; added; ) {
+  for (let added = true; added;) {
     added = false;
     for (const { child, parent } of edges) {
       if (owned.has(parent) && !owned.has(child)) {

@@ -2,12 +2,15 @@ import { env } from "cloudflare:workers";
 import { z } from "zod";
 
 import { readUrl } from "../fetch/transport.server";
+import type { ReadUrlOptions } from "../fetch/transport.server";
+import { takeBrowserEscalation } from "../site/browser-budget.server";
 import type { CardReview, CardValues, DraftField, SiteFields } from "./card-fields";
 import { extractIdentity } from "./extract";
 import { reviewFields } from "./field-confidence.server";
 import { readLogo, storeLogo } from "./logo-store.server";
-import { resolveLogo } from "./logo-cascade";
-import { resolveBrandName } from "./name-cascade";
+import { logoCandidateUrls } from "./logo-cascade";
+import type { LogoCandidates } from "./logo-cascade";
+import { resolveBrandName } from "./name-cascade.server";
 import type { Subject } from "./normalise";
 import { cachedProbe, probeKey } from "./probe-cache.server";
 
@@ -34,7 +37,9 @@ function hasIdentity(card: SiteCard): boolean {
 
 const readSiteCardSchema = siteCardSchema.refine(hasIdentity);
 
-const logoSchema = z.object({ url: z.string().nullable() });
+const ICON_PROBE_V = 2;
+
+const logoSchema = z.object({ v: z.literal(ICON_PROBE_V), url: z.string().nullable() });
 
 const UNREACHED: SiteCard = {
   name: null,
@@ -45,13 +50,19 @@ const UNREACHED: SiteCard = {
   navLinks: [],
 };
 
+type MayEscalate = NonNullable<ReadUrlOptions["mayEscalate"]>;
+
+export function brandBudget(workspaceId: string, registrable: string): MayEscalate {
+  return () => takeBrowserEscalation(workspaceId, registrable, new Date().toISOString().slice(0, 10));
+}
+
 function wikidataTerm(subject: Subject): string {
   return subject.registrable.split(".")[0] ?? subject.registrable;
 }
 
-async function probeSite(subject: Subject): Promise<SiteCard> {
+async function probeSite(subject: Subject, mayEscalate: MayEscalate): Promise<SiteCard> {
   if (subject.url === null) throw new Error("no site to read");
-  const page = await readUrl(subject.url);
+  const page = await readUrl(subject.url, { mayEscalate });
   if (!page.ok) throw new Error(page.detail);
   const extract = await extractIdentity(page.html, subject.url);
   const name = await resolveBrandName(extract.nameSources, wikidataTerm(subject));
@@ -73,9 +84,9 @@ async function probeSite(subject: Subject): Promise<SiteCard> {
   return card;
 }
 
-async function probeProfile(subject: Subject): Promise<SiteCard> {
+async function probeProfile(subject: Subject, mayEscalate: MayEscalate): Promise<SiteCard> {
   if (subject.url === null) throw new Error("no profile to read");
-  const page = await readUrl(subject.url);
+  const page = await readUrl(subject.url, { mayEscalate });
   if (!page.ok) throw new Error(page.detail);
   const extract = await extractIdentity(page.html, subject.url);
   return {
@@ -103,12 +114,15 @@ function filledProfileFields(card: SiteCard): string[] {
   return filled;
 }
 
-export async function readSiteCard(subject: Subject): Promise<{ card: SiteCard; reached: boolean }> {
+export async function readSiteCard(
+  subject: Subject,
+  mayEscalate: MayEscalate,
+): Promise<{ card: SiteCard; reached: boolean }> {
   if (subject.kind !== "domain") {
     const probe = profileProbe(subject);
     if (probe === null || subject.url === null) return { card: UNREACHED, reached: false };
     try {
-      const card = await cachedProbe(subject, probe, siteCardSchema, () => probeProfile(subject));
+      const card = await cachedProbe(subject, probe, siteCardSchema, () => probeProfile(subject, mayEscalate));
       console.log(
         JSON.stringify({
           event: "identity-creator-card",
@@ -118,14 +132,15 @@ export async function readSiteCard(subject: Subject): Promise<{ card: SiteCard; 
       );
       return { card, reached: true };
     } catch (error) {
-      console.log(
-        JSON.stringify({ event: "identity-creator-unreached", error: String(error) }),
-      );
+      console.log(JSON.stringify({ event: "identity-creator-unreached", error: String(error) }));
       return { card: UNREACHED, reached: false };
     }
   }
   try {
-    return { card: await cachedProbe(subject, "homepage", readSiteCardSchema, () => probeSite(subject)), reached: true };
+    return {
+      card: await cachedProbe(subject, "homepage", readSiteCardSchema, () => probeSite(subject, mayEscalate)),
+      reached: true,
+    };
   } catch (error) {
     console.log(JSON.stringify({ event: "identity-site-unreached", error: String(error) }));
     return { card: UNREACHED, reached: false };
@@ -155,59 +170,77 @@ function applyReview(fields: CardValues, review: CardReview): Omit<SiteFields, "
   };
 }
 
-export function startCard(
-  workspaceId: string,
-  subject: Subject,
-  edited: readonly DraftField[],
-): { site: Promise<SiteFields>; logo: Promise<string | null> } {
-  const read = readSiteCard(subject);
-  const site = read.then(async ({ card, reached }): Promise<SiteFields> => {
-    const values: CardValues = {
-      name: card.name ?? (subject.kind === "domain" ? null : `@${subject.registrable}`),
-      description: card.description,
-      socials: subject.url !== null && subject.kind !== "domain"
+async function firstStorableLogoUrl(candidates: LogoCandidates): Promise<string | null> {
+  const registrable = candidates.registrableDomain;
+  for (const url of logoCandidateUrls(candidates)) {
+    const stored = await storeLogo(registrable, url);
+    if (stored !== null) return url;
+  }
+  return null;
+}
+
+function cardValues(subject: Subject, card: SiteCard): CardValues {
+  return {
+    name: card.name ?? (subject.kind === "domain" ? null : `@${subject.registrable}`),
+    description: card.description,
+    socials:
+      subject.url !== null && subject.kind !== "domain"
         ? [
             { platform: subject.platform ?? "site", url: subject.url },
             ...card.socials.filter((social) => social.platform !== subject.platform),
           ]
         : card.socials,
-    };
+  };
+}
+
+async function logoDataUrl(subject: Subject, card: SiteCard): Promise<string | null> {
+  const cached = await cachedProbe(subject, "icon", logoSchema, async () => {
+    const url = await firstStorableLogoUrl({
+      ...card.logoCandidates,
+      registrableDomain: subject.registrable,
+    });
+    return { v: ICON_PROBE_V, url };
+  });
+  const url = cached.url;
+  if (url === null) return null;
+  const kept = await readLogo(subject.registrable);
+  if (kept !== null) {
+    const contentType = kept.httpMetadata?.contentType ?? "image/png";
+    const bytes = new Uint8Array(await kept.arrayBuffer());
+    return toDataUrl(contentType, bytes);
+  }
+  const stored = await storeLogo(subject.registrable, url);
+  if (stored === null) return null;
+  return toDataUrl(stored.contentType, stored.bytes);
+}
+
+export function startCard(
+  workspaceId: string,
+  subject: Subject,
+  edited: readonly DraftField[],
+): { site: Promise<SiteFields>; logo: Promise<string | null> } {
+  const read = readSiteCard(subject, brandBudget(workspaceId, subject.registrable));
+  const site = read.then(async ({ card, reached }): Promise<SiteFields> => {
+    const values = cardValues(subject, card);
     const review: CardReview = reached
       ? await reviewFields(workspaceId, subject, values, edited, new Date().toISOString())
       : fillReview(values);
     return { ...applyReview(values, review), unfound: subject.kind === "domain" && !reached };
   });
-  const logo = read.then(async ({ card, reached }) => {
-    if (!reached) return null;
-    const cached = await cachedProbe(subject, "icon", logoSchema, async () => {
-      const result = await resolveLogo({ ...card.logoCandidates, registrableDomain: subject.registrable });
-      return { url: result.ok ? result.url : null };
+  const logo = read
+    .then(({ card, reached }) => (reached ? logoDataUrl(subject, card) : null))
+    .catch((error: unknown) => {
+      console.log(JSON.stringify({ event: "identity-logo-failed", workspaceId, error: String(error) }));
+      return null;
     });
-    const url = cached.url;
-    if (url === null) return null;
-    const kept = await readLogo(subject.registrable);
-    if (kept !== null) {
-      const contentType = kept.httpMetadata?.contentType ?? "image/png";
-      const bytes = new Uint8Array(await kept.arrayBuffer());
-      return toDataUrl(contentType, bytes);
-    }
-    const stored = await storeLogo(subject.registrable, url);
-    if (stored === null) return null;
-    return toDataUrl(stored.contentType, stored.bytes);
-  }).catch((error: unknown) => {
-    console.log(JSON.stringify({ event: "identity-logo-failed", workspaceId, error: String(error) }));
-    return null;
-  });
   return { site, logo };
 }
 
-export async function readCachedSiteProof(
-  subject: Subject,
-): Promise<{ adLibraryHints: string[]; navLinks: string[] }> {
+export async function readCachedSiteProof(subject: Subject): Promise<{ adLibraryHints: string[]; navLinks: string[] }> {
   const hit = await env.IDENTITY_CACHE.get(probeKey(subject, "homepage"), "json");
-  if (hit === null) return { adLibraryHints: [], navLinks: [] };
-  const parsed = siteCardSchema.parse(hit);
-  return { adLibraryHints: parsed.adLibraryHints, navLinks: parsed.navLinks };
+  const parsed = siteCardSchema.safeParse(hit);
+  if (!parsed.success) return { adLibraryHints: [], navLinks: [] };
+  return { adLibraryHints: parsed.data.adLibraryHints, navLinks: parsed.data.navLinks };
 }
 
 export async function readCachedSiteValues(

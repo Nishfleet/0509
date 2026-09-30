@@ -1,13 +1,13 @@
 import type { ReactElement } from "react";
 
-import { POSSIBLY_LINE, UNREVIEWED_LINE, type MentionRowModel } from "../lib/mention-feed";
+import { PENDING_LINE, POSSIBLY_LINE, UNREVIEWED_LINE, type MentionRowModel } from "../lib/mention-feed";
 import { WhyFlaggedSheet } from "./why-flagged";
 
-const WHEN_CLASS = "text-ink-soft mt-2 block font-mono text-meta uppercase";
+const WHEN_CLASS = "mt-2 block font-mono text-meta text-ink-soft uppercase";
 const TITLE = "font-display text-lg font-semibold [overflow-wrap:anywhere]";
 const LINK = "underline decoration-1 underline-offset-4";
 const PILL =
-  "border-line text-ink-soft inline-flex max-w-full border px-2 py-1 font-mono text-pill uppercase [overflow-wrap:anywhere]";
+  "inline-flex max-w-full border border-line px-2 py-1 font-mono text-pill [overflow-wrap:anywhere] text-ink-soft uppercase";
 
 export function MentionRow({ mention }: { mention: MentionRowModel }): ReactElement {
   const card = mention.treatment === "shown";
@@ -16,7 +16,7 @@ export function MentionRow({ mention }: { mention: MentionRowModel }): ReactElem
       id={mention.id}
       data-testid="mention-row"
       data-treatment={mention.treatment}
-      className={card ? "border-line bg-card mt-8 min-w-0 border-t pt-6" : "bg-bone mt-8 min-w-0 py-6"}
+      className={card ? "mt-8 min-w-0 border-t border-line bg-card pt-6" : "mt-8 min-w-0 bg-bone py-6"}
     >
       <h3 className={TITLE}>
         <a href={mention.url} rel="noopener noreferrer nofollow" target="_blank" className={LINK}>
@@ -25,6 +25,7 @@ export function MentionRow({ mention }: { mention: MentionRowModel }): ReactElem
       </h3>
       {mention.treatment === "possibly" ? <p className="mt-2 leading-[1.65]">{POSSIBLY_LINE}</p> : null}
       {mention.treatment === "unreviewed" ? <p className="mt-2 leading-[1.65]">{UNREVIEWED_LINE}</p> : null}
+      {mention.treatment === "pending" ? <p className="mt-2 leading-[1.65]">{PENDING_LINE}</p> : null}
       <p className="mt-2 flex min-w-0 flex-wrap items-baseline gap-x-3 gap-y-1">
         <span data-testid="mention-source" className={PILL}>
           {mention.sourceName}

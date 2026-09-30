@@ -1,18 +1,23 @@
 import { env } from "cloudflare:workers";
 
 import { insertIncidentAlertStatement } from "../data/alert.server";
-import { closeIncident, closeIncidentsOutside, openIncident, readOpenBreakageBaselines, readOpenIncidents } from "../data/incident.server";
+import {
+  closeIncident,
+  closeIncidentsOutside,
+  openIncident,
+  readOpenBreakageBaselines,
+  readOpenIncidents,
+} from "../data/incident.server";
 import type { OwnSitePage } from "../data/page.server";
 import { readOwnSitePages } from "../data/page.server";
+import { BlockedRedirectError, fetchOutbound } from "../fetch/outbound.server";
+import { CRAWLER_USER_AGENT, robotsAllows } from "../fetch/robots.server";
 import { computeBreakageEvidence } from "./breakage-evidence";
 import { extractPageText } from "./extract-text";
 import { ensureHomePages } from "./sweep.server";
-import { robotsAllows } from "../fetch/robots.server";
 
 export type OwnSiteHealth =
-  | { state: "healthy" }
-  | { state: "unknown"; reason: string }
-  | { state: "broken"; kind: string };
+  { state: "healthy" } | { state: "unknown"; reason: string } | { state: "broken"; kind: string };
 
 export interface OwnSitePlan {
   pages: OwnSitePage[];
@@ -24,12 +29,12 @@ const PROBE_TIMEOUT_MS = 10_000;
 
 const PROBE_HEADERS = {
   accept: "text/html,application/xhtml+xml",
-  "user-agent": "FiveToNineBot/1.0 (+https://0509.io)",
+  "user-agent": CRAWLER_USER_AGENT,
 } as const;
 
 async function fetchStatus(url: string): Promise<Response | Error> {
   try {
-    const response = await fetch(url, {
+    const response = await fetchOutbound(url, {
       headers: PROBE_HEADERS,
       signal: AbortSignal.timeout(PROBE_TIMEOUT_MS),
     });
@@ -52,6 +57,7 @@ export function pageHost(url: string): string {
 export async function probeOwnSite(url: string): Promise<OwnSiteHealth> {
   if (!(await robotsAllows(url))) return { state: "unknown", reason: "robots" };
   const first = await fetchStatus(url);
+  if (first instanceof BlockedRedirectError) return { state: "unknown", reason: "redirect refused" };
   const response = first instanceof Error ? await fetchStatus(wwwVariant(url)) : first;
   if (response instanceof Error) return { state: "broken", kind: "not loading" };
   if (response.headers.get("cf-mitigated") === "challenge") return { state: "unknown", reason: "challenge" };
@@ -66,16 +72,18 @@ export async function breakageRepaired(url: string, beforeKey: string | null): P
   if (beforeKey === null) return false;
   let response: Response;
   try {
-    response = await fetch(url, {
+    response = await fetchOutbound(url, {
       headers: PROBE_HEADERS,
       signal: AbortSignal.timeout(PROBE_TIMEOUT_MS),
     });
   } catch (error) {
-    console.error(JSON.stringify({
-      event: "site.own_check_verify_failed",
-      url,
-      error: error instanceof Error ? error.message : String(error),
-    }));
+    console.error(
+      JSON.stringify({
+        event: "site.own_check_verify_failed",
+        url,
+        error: error instanceof Error ? error.message : String(error),
+      }),
+    );
     return false;
   }
   const afterText = (await extractPageText(await response.text())).text;

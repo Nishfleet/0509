@@ -2,10 +2,7 @@ import type { startCard } from "../identity/card.server";
 
 import { markCardReady } from "../data/onboarding_run.server";
 
-export function timeCard(
-  workspaceId: string,
-  card: ReturnType<typeof startCard>,
-): ReturnType<typeof startCard> {
+export function timeCard(workspaceId: string, card: ReturnType<typeof startCard>): ReturnType<typeof startCard> {
   return {
     site: card.site,
     logo: card.logo.then(async (logo) => {

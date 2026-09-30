@@ -1,20 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-import { deleteCreatedAccount, requireInboxToken, signInWithMagicLink } from "./inbox";
-
-let createdEmail = "";
-test.afterEach(async ({ page }, testInfo) => {
-  if (createdEmail === "") return;
-  testInfo.setTimeout(testInfo.timeout + 60_000);
-  // The delete failing is a test failure, not a reason to keep the address:
-  // clearing in finally means the next test in this worker cannot try to
-  // delete an account that is already gone.
-  try {
-    await deleteCreatedAccount(page, createdEmail);
-  } finally {
-    createdEmail = "";
-  }
-});
+import { sessionStatePath } from "../playwright.config";
 
 // The Competitors page measured once at each shape the product ships, the same
 // lane as `app-nav.spec.ts`: the preview Worker has no EMAIL binding and no
@@ -24,6 +10,7 @@ test.afterEach(async ({ page }, testInfo) => {
 // The spec reads. It toggles no switch and submits no form, because it runs
 // against production and a visit that wrote data would put a row in a real
 // workspace for a mailbox nobody owns.
+test.use({ storageState: process.env.PLAYWRIGHT_TEST_BASE_URL ? sessionStatePath : undefined });
 test.skip(
   !process.env.PLAYWRIGHT_TEST_BASE_URL,
   "the Competitors page needs a real session; the local preview Worker cannot mint one",
@@ -32,10 +19,6 @@ test.skip(
 test("the Competitors page is landmarked, ordered and keyboard-operable at 1440 and 390 in light and dark", async ({
   page,
 }) => {
-  const email = `e2e+${crypto.randomUUID().replaceAll("-", "").slice(0, 12)}@0509.io`;
-  createdEmail = email;
-  await signInWithMagicLink(page, email, requireInboxToken());
-
   for (const viewport of [
     { width: 1440, height: 900 },
     { width: 390, height: 844 },
@@ -63,9 +46,9 @@ test("the Competitors page is landmarked, ordered and keyboard-operable at 1440 
       // Nothing wider than the viewport, at both shapes: the nav is a fixed
       // bottom bar below 860px and a rail above it, and the add-control column
       // stacks below the same point.
-      expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBe(
-        0,
-      );
+      expect(
+        await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth),
+      ).toBe(0);
 
       // Focus order from a fresh load: a reload pins the count from the top of
       // the document, so the four Places follow each other before any content

@@ -23,7 +23,11 @@ function renderDocument(id: string): string {
       id,
       path: "/",
       Component: () =>
-        createElement(Layout, null, createElement(Landing, { loaderData: { ticker: [], sources: [], now: 0 } })),
+        createElement(
+          Layout,
+          null,
+          createElement(Landing, { loaderData: { ticker: [], marks: [], sources: [], now: 0 } }),
+        ),
     },
   ]);
   return renderToStaticMarkup(createElement(Stub, { initialEntries: ["/"] }));
@@ -35,10 +39,18 @@ describe("landing LCP critical path", () => {
     expect(html).toContain("Know where you stand.");
     expect(html).toContain('rel="preload"');
     expect(html).toContain("/fonts/bricolage-hero.woff2");
+    expect(html).toContain("/fonts/instrument-sans-latin.woff2");
     expect(html).not.toContain("bricolage-grotesque-latin");
-    expect(html).not.toContain("instrument-sans");
     expect(html).not.toContain('type="module"');
     expect(html).not.toContain("modulepreload");
+  });
+
+  it("preloads both above-the-fold faces on the landing at high priority", () => {
+    const preloads = renderDocument("routes/landing").match(/<link rel="preload"[^>]*>/g) ?? [];
+    expect(preloads).toEqual([
+      '<link rel="preload" href="/fonts/bricolage-hero.woff2" as="font" type="font/woff2" crossorigin="anonymous" fetchPriority="high"/>',
+      '<link rel="preload" href="/fonts/instrument-sans-latin.woff2" as="font" type="font/woff2" crossorigin="anonymous" fetchPriority="high"/>',
+    ]);
   });
 
   it("leaves the module graph off the legal documents", () => {
@@ -46,7 +58,9 @@ describe("landing LCP critical path", () => {
       const html = renderDocument(id);
       expect(html).not.toContain('type="module"');
       expect(html).not.toContain("modulepreload");
-      expect(html).toContain("/fonts/instrument-sans-latin.woff2");
+      expect(html).toContain(
+        '<link rel="preload" href="/fonts/instrument-sans-latin.woff2" as="font" type="font/woff2" crossorigin="anonymous"/>',
+      );
       expect(html).toContain("/fonts/bricolage-hero.woff2");
     }
   });

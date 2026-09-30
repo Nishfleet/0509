@@ -57,13 +57,7 @@ function chipLink(href: string): ReactElement {
   return <a href={href} rel="noreferrer" />;
 }
 
-export function BrandChip({
-  name,
-  href,
-  logoUrl,
-  self = false,
-  off = false,
-}: BrandChipBrand): ReactElement | null {
+export function BrandChip({ name, href, logoUrl, self = false, off = false }: BrandChipBrand): ReactElement | null {
   const trimmed = name.trim();
   const monogram = brandMonogram(trimmed);
   const to = safeHref(href);
@@ -79,7 +73,7 @@ export function BrandChip({
       data-self={self ? "" : undefined}
       data-off={off ? "" : undefined}
       className={cn(
-        "h-auto max-w-full min-h-11 min-w-0 shrink gap-[7px] rounded-none border-[1.5px] border-line bg-card py-[5px] pr-[11px] pl-[5px] text-[0.85rem] font-medium text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink",
+        "h-auto min-h-11 max-w-full min-w-0 shrink gap-[7px] rounded-none border-[1.5px] border-line bg-card py-[5px] pr-[11px] pl-[5px] text-[0.85rem] font-medium text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink",
         self && "border-ink font-semibold",
         off && "border-dashed text-ink-soft",
       )}
@@ -129,7 +123,7 @@ export function BrandChipRow({
   return (
     <div
       aria-label="Your set"
-      className="flex w-full min-w-0 max-w-full flex-wrap gap-2"
+      className="flex w-full max-w-full min-w-0 flex-wrap gap-2"
       data-slot="brand-chip-row"
       role="group"
     >

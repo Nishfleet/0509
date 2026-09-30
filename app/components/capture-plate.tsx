@@ -88,18 +88,13 @@ function PairFigure({ caption, shot }: { caption: string; shot: CaptureShot }): 
   );
 }
 
-export function CapturePlate({
-  label,
-  before,
-  after,
-  eager = false,
-}: CapturePlateProps): ReactElement {
+export function CapturePlate({ label, before, after, eager = false }: CapturePlateProps): ReactElement {
   return (
     <Dialog>
       <DialogTrigger
         render={<button type="button" />}
         aria-label={`Open before and after: ${label}`}
-        className="relative block shrink-0 overflow-hidden rounded-none border-[1.5px] border-line bg-card w-[104px] h-[74px] max-[859px]:w-[76px] max-[859px]:h-[56px]"
+        className="relative block h-[74px] w-[104px] shrink-0 overflow-hidden rounded-none border-[1.5px] border-line bg-card max-[859px]:h-[56px] max-[859px]:w-[76px]"
         data-slot="capture-plate"
       >
         {"src" in after ? (
@@ -116,7 +111,7 @@ export function CapturePlate({
         )}
       </DialogTrigger>
       <DialogContent
-        className="rounded-none bg-card text-ink max-h-[90dvh] overflow-y-auto min-[860px]:max-w-[960px] max-[859px]:top-auto max-[859px]:bottom-0 max-[859px]:left-0 max-[859px]:w-full max-[859px]:max-w-none max-[859px]:translate-x-0 max-[859px]:translate-y-0"
+        className="max-h-[90dvh] overflow-y-auto rounded-none bg-card text-ink max-[859px]:top-auto max-[859px]:bottom-0 max-[859px]:left-0 max-[859px]:w-full max-[859px]:max-w-none max-[859px]:translate-x-0 max-[859px]:translate-y-0 min-[860px]:max-w-[960px]"
         data-slot="capture-pair"
       >
         <DialogTitle>{label}</DialogTitle>

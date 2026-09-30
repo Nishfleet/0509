@@ -4,7 +4,7 @@ import { NonRetryableError } from "cloudflare:workflows";
 import { fillSelfSiteFields, markSelfSiteFill } from "../data/entity.server";
 import type { SiteFillState } from "../data/entity.server";
 import { readEditedFields } from "../data/user_decision.server";
-import { readSiteCard } from "./card.server";
+import { brandBudget, readSiteCard } from "./card.server";
 import { normaliseSubject } from "./normalise";
 import { probeKey } from "./probe-cache.server";
 
@@ -25,7 +25,8 @@ export async function attemptSiteFill(
 ): Promise<"filled" | "pending"> {
   const normalised = normaliseSubject(homepageUrl);
   if (!normalised.ok) return "pending";
-  const { card, reached } = await readSiteCard(normalised.subject);
+  const { subject } = normalised;
+  const { card, reached } = await readSiteCard(subject, brandBudget(workspaceId, subject.registrable));
   if (!reached) return "pending";
   const edited = await readEditedFields(workspaceId, entityId);
   const filled = await fillSelfSiteFields({
@@ -38,11 +39,7 @@ export async function attemptSiteFill(
   return "filled";
 }
 
-export async function markSiteFill(
-  workspaceId: string,
-  entityId: string,
-  state: SiteFillState,
-): Promise<void> {
+export async function markSiteFill(workspaceId: string, entityId: string, state: SiteFillState): Promise<void> {
   const marked = await markSelfSiteFill(workspaceId, entityId, state);
   if (!marked) throw notInWorkspace(entityId, workspaceId);
 }

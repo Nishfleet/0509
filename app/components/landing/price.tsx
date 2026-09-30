@@ -46,16 +46,19 @@ export function Price() {
         {PLANS.map((plan) => (
           <li
             key={plan.id}
-            className={cn("min-w-0 border-[1.5px] p-6", plan.id === "starter" ? "border-ink bg-card" : "border-line bg-card")}
+            className={cn(
+              "min-w-0 border-[1.5px] p-6",
+              plan.id === "starter" ? "border-ink bg-card" : "border-line bg-card",
+            )}
           >
             <h3 className={`${eyebrow} text-ink-soft`}>{plan.name}</h3>
-            <p className="font-display mt-3 text-[2.4rem] leading-none font-extrabold tracking-[-0.03em]">
+            <p className="mt-3 font-display text-[2.4rem] leading-none font-extrabold tracking-[-0.03em]">
               €{String(plan.monthlyPriceEur)}
-              <span className="font-mono text-meta text-ink-soft ml-1 font-normal tracking-[0.06em]">/month</span>
+              <span className="ml-1 font-mono text-meta font-normal tracking-[0.06em] text-ink-soft">/month</span>
             </p>
-            <ul className="border-line mt-5 border-t">
+            <ul className="mt-5 border-t border-line">
               {includes(plan.id).map((line) => (
-                <li key={line} className="border-line border-b py-2.5 text-body-sm">
+                <li key={line} className="border-b border-line py-2.5 text-body-sm">
                   {line}
                 </li>
               ))}
@@ -65,7 +68,7 @@ export function Price() {
       </ul>
       <div className="mt-10 flex flex-col gap-4 sm:flex-row sm:items-center sm:gap-6">
         <StartButton />
-        <p className="font-mono text-meta text-ink-soft max-w-[36rem]">
+        <p className="max-w-[36rem] font-mono text-meta text-ink-soft">
           {TRIAL_TERMS} Change plan any time from Settings.
         </p>
       </div>

@@ -57,26 +57,24 @@ const seed = async () => {
     .bind(SOURCE_ID, SOURCE_ID)
     .run();
   await env.DB.batch([
-    env.DB.prepare(
-      "INSERT INTO watch (id, entity_id, source_id, target_key) VALUES ('W', 'ent-1', ?, ?)",
-    ).bind(SOURCE_ID, TARGET_KEY),
-    env.DB.prepare(
-      "INSERT INTO watch (id, entity_id, source_id, target_key) VALUES ('other', 'ent-1', ?, ?)",
-    ).bind(SOURCE_ID, `${TARGET_KEY}/other`),
+    env.DB.prepare("INSERT INTO watch (id, entity_id, source_id, target_key) VALUES ('W', 'ent-1', ?, ?)").bind(
+      SOURCE_ID,
+      TARGET_KEY,
+    ),
+    env.DB.prepare("INSERT INTO watch (id, entity_id, source_id, target_key) VALUES ('other', 'ent-1', ?, ?)").bind(
+      SOURCE_ID,
+      `${TARGET_KEY}/other`,
+    ),
   ]);
 };
 
 const signalRow = (id: string) =>
-  env.DB.prepare(
-    `SELECT last_seen_at, payload_json, is_tombstoned FROM signal WHERE id = ?1`,
-  )
+  env.DB.prepare(`SELECT last_seen_at, payload_json, is_tombstoned FROM signal WHERE id = ?1`)
     .bind(id)
     .first<{ last_seen_at: string | null; payload_json: string; is_tombstoned: number }>();
 
 const signalCount = async () => {
-  const row = await env.DB.prepare(
-    `SELECT COUNT(*) AS n FROM signal WHERE kind = 'hiring'`,
-  ).first<{ n: number }>();
+  const row = await env.DB.prepare(`SELECT COUNT(*) AS n FROM signal WHERE kind = 'hiring'`).first<{ n: number }>();
   return row?.n ?? 0;
 };
 

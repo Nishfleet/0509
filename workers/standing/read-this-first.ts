@@ -6,13 +6,13 @@ import { askNoul, JevUnavailableError } from "../../app/lib/jev/client.server";
 import type { D4Verdict } from "../../app/lib/read-this-first";
 import { D4_QUESTION_ID, pickReadThisFirst } from "../../app/lib/read-this-first";
 import { D3_QUESTION_ID, D6_QUESTION_ID } from "../../app/lib/standing-score";
+import { countUnjudgedInputs } from "../../app/lib/standing-score.server";
 
 const JUDGE_CHUNK = 10;
 
 export const READ_THIS_FIRST: NoulQuestion = {
   id: D4_QUESTION_ID,
-  instructions:
-    "Does this item belong in the three things this brand's owner should read first this week?",
+  instructions: "Does this item belong in the three things this brand's owner should read first this week?",
   whenTrue: "It would change what the owner does or thinks about a competitor this week.",
   whenFalse: "It is routine and can wait for the full list.",
 };
@@ -64,6 +64,7 @@ export interface JudgeWeekInput {
 export interface JudgedWeek {
   picks: string[];
   judged: number;
+  unjudged: boolean;
 }
 
 interface LocatedItem {
@@ -104,19 +105,18 @@ function packFor(
 
 export async function judgeWeek(db: D1Database, input: JudgeWeekInput): Promise<JudgedWeek> {
   const [weekItemResult, entityResult] = await db.batch([
-    db.prepare(WEEK_ITEMS).bind(
-      input.workspaceId,
-      input.startsAt,
-      input.closesAt,
-      D3_QUESTION_ID,
-      D6_QUESTION_ID,
-    ),
+    db.prepare(WEEK_ITEMS).bind(input.workspaceId, input.startsAt, input.closesAt, D3_QUESTION_ID, D6_QUESTION_ID),
     db.prepare(ON_ENTITIES).bind(input.workspaceId),
   ]);
   const items = weekItemRows.parse(weekItemResult.results);
   const entities = entityRows.parse(entityResult.results);
+  const unjudgedInputs = await countUnjudgedInputs(db, {
+    workspaceId: input.workspaceId,
+    windowStartAt: input.startsAt,
+    windowEndAt: input.closesAt,
+  });
   if (items.length === 0) {
-    return { picks: [], judged: 0 };
+    return { picks: [], judged: 0, unjudged: unjudgedInputs > 0 };
   }
   const byId = new Map(entities.map((entity) => [entity.id, entity]));
   const located = items.flatMap((item) => {
@@ -164,9 +164,9 @@ export async function judgeWeek(db: D1Database, input: JudgeWeekInput): Promise<
     }
   } catch (error) {
     if (error instanceof JevUnavailableError) {
-      return { picks: [], judged: 0 };
+      return { picks: [], judged: 0, unjudged: true };
     }
     throw error;
   }
-  return { picks: pickReadThisFirst(collected), judged: items.length };
+  return { picks: pickReadThisFirst(collected), judged: items.length, unjudged: unjudgedInputs > 0 };
 }

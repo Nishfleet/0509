@@ -51,9 +51,7 @@ afterEach(() => {
 
 describe("judgeCandidates question choice", () => {
   it("asks the creator-rival question and never the company-competitor one when the self is a creator", async () => {
-    const workspaceId = await seedWorkspace(
-      '{"kind":"channel","platform":"youtube","description":"Fitness classes"}',
-    );
+    const workspaceId = await seedWorkspace('{"kind":"channel","platform":"youtube","description":"Fitness classes"}');
     const context = await readDiscoveryContext(workspaceId);
     if (context === null) throw new Error("seed failed");
     expect(context.self.kind).toBe("creator");

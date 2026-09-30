@@ -39,17 +39,12 @@ export function parseFeedFilter(value: string | null): FeedFilter {
   return "all";
 }
 
-export function filterFeed<T extends { kind: FeedKind }>(
-  items: readonly T[],
-  filter: FeedFilter,
-): T[] {
+export function filterFeed<T extends { kind: FeedKind }>(items: readonly T[], filter: FeedFilter): T[] {
   if (filter === "all") return items.slice();
   return items.filter((item) => item.kind === filter);
 }
 
-export function countByKind(
-  items: readonly { kind: FeedKind }[],
-): Record<FeedFilter, number> {
+export function countByKind(items: readonly { kind: FeedKind }[]): Record<FeedFilter, number> {
   const totals: Record<FeedFilter, number> = { all: items.length, ad: 0, change: 0, mention: 0, hiring: 0 };
   return items.reduce((counts, item) => {
     const next: Record<FeedFilter, number> = { ...counts, [item.kind]: counts[item.kind] + 1 };

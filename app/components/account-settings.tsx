@@ -17,15 +17,12 @@ export function SignOut() {
 
 export function DeleteAccount({ email, error }: { email: string; error: string | null }) {
   return (
-    <section aria-labelledby="delete-account" className="border-line mt-10 border-t pt-4">
+    <section aria-labelledby="delete-account" className="mt-10 border-t border-line pt-4">
       <h2 id="delete-account" className={BLOCK_HEADING}>
         Delete your account
       </h2>
       <p className="mt-2 max-w-prose leading-[1.55]">Deleting your account removes, for good:</p>
-      <ul
-        data-delete="removes"
-        className="mt-2 flex max-w-prose list-disc flex-col gap-1 pl-5 leading-[1.55]"
-      >
+      <ul data-delete="removes" className="mt-2 flex max-w-prose list-disc flex-col gap-1 pl-5 leading-[1.55]">
         <li>Every brand you track, yours included</li>
         <li>Every signal: site changes, ads, mentions and roles</li>
         <li>Every site snapshot</li>
@@ -54,7 +51,7 @@ export function DeleteAccount({ email, error }: { email: string; error: string |
             {error}
           </p>
         )}
-        <Button type="submit" variant="secondary" size="lg" className="border-red self-start">
+        <Button type="submit" variant="secondary" size="lg" className="self-start border-red">
           Delete my account
         </Button>
       </Form>

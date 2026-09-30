@@ -24,6 +24,7 @@ export interface MentionsOutcome {
   failed: number;
   stored: number;
   unjudged: number;
+  skipped: number;
 }
 
 export class MentionsSweep extends WorkflowEntrypoint<Env> {
@@ -31,19 +32,13 @@ export class MentionsSweep extends WorkflowEntrypoint<Env> {
     return withMonitor("mentions-sweep", () => this.runMentions(event, step), MONITOR);
   }
 
-  private async runMentions(
-    event: WorkflowEvent<unknown>,
-    step: WorkflowStep,
-  ): Promise<MentionsOutcome> {
+  private async runMentions(event: WorkflowEvent<unknown>, step: WorkflowStep): Promise<MentionsOutcome> {
     const now = event.timestamp.toISOString();
     const targets = await step.do("plan", RETRY, () => planTargets());
     const canarySources = await step.do("canary plan", RETRY, () => readCanarySources());
     const canaryEntries: [string, number][] = [];
     for (const source of canarySources) {
-      canaryEntries.push([
-        source.id,
-        await step.do(`canary ${source.pluginKey}`, RETRY, () => runCanary(source, now)),
-      ]);
+      canaryEntries.push([source.id, await step.do(`canary ${source.pluginKey}`, RETRY, () => runCanary(source, now))]);
       if (source.minIntervalSeconds > 0) {
         await step.sleep(`pace canary ${source.pluginKey}`, source.minIntervalSeconds * 1000);
       }
@@ -74,6 +69,7 @@ export class MentionsSweep extends WorkflowEntrypoint<Env> {
       failed: outcomes.length - done.length,
       stored: done.reduce((sum, outcome) => sum + outcome.stored, 0),
       unjudged: done.reduce((sum, outcome) => sum + outcome.unjudged, 0),
+      skipped: done.reduce((sum, outcome) => sum + outcome.skipped, 0),
     };
     console.log(JSON.stringify({ event: "mentions.sweep", ...result }));
     return result;

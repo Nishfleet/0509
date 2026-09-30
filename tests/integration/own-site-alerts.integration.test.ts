@@ -1,11 +1,7 @@
 import { env } from "cloudflare:test";
 import { beforeEach, describe, expect, it } from "vitest";
 
-import {
-  readOwnSiteAlerts,
-  readWorkspaceIdForOwner,
-  setOwnSiteAlerts,
-} from "../../app/lib/data/workspace.server";
+import { readOwnSiteAlerts, readWorkspaceIdForOwner, setOwnSiteAlerts } from "../../app/lib/data/workspace.server";
 
 const OWNER = "user-own-site-alerts";
 const WORKSPACE = "ws-own-site-alerts";

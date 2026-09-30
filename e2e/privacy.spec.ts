@@ -13,7 +13,7 @@ import { consoleFailures, watchConsole } from "./inbox";
 // list, and the footer address. The thirty-day feed rule is absent on purpose:
 // it is an R2 lifecycle rule not yet shown live.
 
-test("the privacy page renders its heading", async ({ page }) => {
+test("the privacy page renders its heading @smoke", async ({ page }) => {
   const response = await page.goto("/privacy");
   expect(response?.status()).toBe(200);
 
@@ -22,7 +22,7 @@ test("the privacy page renders its heading", async ({ page }) => {
   await expect(heading).not.toBeEmpty();
 });
 
-test("the privacy page states who we track and what we refuse", async ({ page }) => {
+test("the privacy page states who we track and what we refuse @smoke", async ({ page }) => {
   await page.goto("/privacy");
 
   const main = page.locator("main");
@@ -33,7 +33,7 @@ test("the privacy page states who we track and what we refuse", async ({ page })
   await expect(main).toContainText(/behind a login/i);
 });
 
-test("the privacy page states what we collect about customers and brands", async ({ page }) => {
+test("the privacy page states what we collect about customers and brands @smoke", async ({ page }) => {
   await page.goto("/privacy");
 
   const main = page.locator("main");
@@ -46,14 +46,21 @@ test("the privacy page states what we collect about customers and brands", async
   await expect(main).toContainText(/never sell/i);
 });
 
-test("the privacy page names who helps run 0509", async ({ page }) => {
+test("the privacy page names who helps run 0509 @smoke", async ({ page }) => {
   await page.goto("/privacy");
 
   const helpers = page.locator("section", { has: page.locator("#who-helps") }).locator("dt");
-  await expect(helpers).toContainText(["Cloudflare", "AI model providers", "payment provider", "Sentry", "Gmail", "GitHub"]);
+  await expect(helpers).toContainText([
+    "Cloudflare",
+    "AI model providers",
+    "payment provider",
+    "Sentry",
+    "Gmail",
+    "GitHub",
+  ]);
 });
 
-test("the privacy page says sharing is a picture and there are no public pages", async ({ page }) => {
+test("the privacy page says sharing is a picture and there are no public pages @smoke", async ({ page }) => {
   await page.goto("/privacy");
 
   const main = page.locator("main");
@@ -63,9 +70,7 @@ test("the privacy page says sharing is a picture and there are no public pages",
   await expect(main).toContainText(/no cookie banner/i);
 });
 
-test("the privacy page states retention, deletion, rights, and the 72-hour removal", async ({
-  page,
-}) => {
+test("the privacy page states retention, deletion, rights, and the 72-hour removal @smoke", async ({ page }) => {
   await page.goto("/privacy");
 
   const main = page.locator("main");
@@ -78,7 +83,7 @@ test("the privacy page states retention, deletion, rights, and the 72-hour remov
   await expect(main).not.toContainText(/!/);
 });
 
-test("the privacy contents list links every section", async ({ page }) => {
+test("the privacy contents list links every section @smoke", async ({ page }) => {
   await page.goto("/privacy");
 
   const links = page.getByRole("navigation", { name: "On this page" }).getByRole("link");
@@ -89,7 +94,7 @@ test("the privacy contents list links every section", async ({ page }) => {
   }
 });
 
-test("the privacy footer carries the takedown address", async ({ page }) => {
+test("the privacy footer carries the takedown address @smoke", async ({ page }) => {
   await page.goto("/privacy");
 
   const takedown = page.locator('footer a[href="mailto:support@0509.io"]');
@@ -97,7 +102,7 @@ test("the privacy footer carries the takedown address", async ({ page }) => {
   await expect(takedown).toHaveAccessibleName(/\S/);
 });
 
-test("the privacy wordmark loads the landing page", async ({ page }) => {
+test("the privacy wordmark loads the landing page @smoke", async ({ page }) => {
   await page.goto("/privacy");
   await page.locator('a[href="/"]').click();
   await expect(page).toHaveURL(/\/$/);
@@ -105,7 +110,7 @@ test("the privacy wordmark loads the landing page", async ({ page }) => {
   await expect(page.locator('a[href="mailto:support@0509.io"]')).toBeVisible();
 });
 
-test("the privacy page does not scroll horizontally", async ({ page }) => {
+test("the privacy page does not scroll horizontally @smoke", async ({ page }) => {
   await page.goto("/privacy");
   const width = page.viewportSize()?.width ?? 0;
   const edges = await page.evaluate(() => {
@@ -124,7 +129,7 @@ test("the privacy page does not scroll horizontally", async ({ page }) => {
   }
 });
 
-test("the privacy page reaches first paint with no console errors", async ({ page }, testInfo) => {
+test("the privacy page reaches first paint with no console errors @smoke", async ({ page }, testInfo) => {
   const watched = watchConsole(page);
 
   await page.goto("/privacy");
@@ -133,9 +138,7 @@ test("the privacy page reaches first paint with no console errors", async ({ pag
   expect(await consoleFailures(page, watched, testInfo), testInfo.project.name).toEqual([]);
 });
 
-test("the privacy page serves one ld+json graph naming the organization and breadcrumbs", async ({
-  page,
-}) => {
+test("the privacy page serves one ld+json graph naming the organization and breadcrumbs @smoke", async ({ page }) => {
   await page.goto("/privacy");
 
   const scripts = page.locator('script[type="application/ld+json"]');

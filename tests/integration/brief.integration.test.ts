@@ -1,10 +1,7 @@
 import { env } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
 
-import {
-  BRAND_LINES_QUERY,
-  parseBriefPayload,
-} from "../../app/lib/brief-payload";
+import { BRAND_LINES_QUERY, parseBriefPayload } from "../../app/lib/brief-payload";
 import { renderBrief } from "../../workers/delivery/brief-template";
 import { composeBrief } from "../../workers/standing/compose-brief";
 import { refreshWorkspaceScores } from "../../workers/standing/refresh";
@@ -180,13 +177,37 @@ async function seedHiring(): Promise<{ workspaceId: string; hiredEntity: string 
   await env.DB.batch([
     env.DB.prepare(
       "INSERT INTO signal (id, workspace_id, entity_id, source_id, kind, title, dedup_key, observed_at) VALUES (?1, ?2, ?3, ?4, 'hiring', ?5, ?6, ?7)",
-    ).bind(`sig_hiring_a_${run}`, workspaceId, hiredEntity, hiringSourceId, "Senior Accountant", `hiring-a-${run}`, "2026-09-15T10:00:00.000Z"),
+    ).bind(
+      `sig_hiring_a_${run}`,
+      workspaceId,
+      hiredEntity,
+      hiringSourceId,
+      "Senior Accountant",
+      `hiring-a-${run}`,
+      "2026-09-15T10:00:00.000Z",
+    ),
     env.DB.prepare(
       "INSERT INTO signal (id, workspace_id, entity_id, source_id, kind, title, dedup_key, observed_at) VALUES (?1, ?2, ?3, ?4, 'hiring', ?5, ?6, ?7)",
-    ).bind(`sig_hiring_b_${run}`, workspaceId, hiredEntity, hiringSourceId, "Growth Lead", `hiring-b-${run}`, "2026-09-18T10:00:00.000Z"),
+    ).bind(
+      `sig_hiring_b_${run}`,
+      workspaceId,
+      hiredEntity,
+      hiringSourceId,
+      "Growth Lead",
+      `hiring-b-${run}`,
+      "2026-09-18T10:00:00.000Z",
+    ),
     env.DB.prepare(
       "INSERT INTO signal (id, workspace_id, entity_id, source_id, kind, title, dedup_key, observed_at) VALUES (?1, ?2, ?3, ?4, 'hiring', ?5, ?6, ?7)",
-    ).bind(`sig_hiring_old_${run}`, workspaceId, hiredEntity, hiringSourceId, "Filled last month", `hiring-old-${run}`, "2026-09-01T10:00:00.000Z"),
+    ).bind(
+      `sig_hiring_old_${run}`,
+      workspaceId,
+      hiredEntity,
+      hiringSourceId,
+      "Filled last month",
+      `hiring-old-${run}`,
+      "2026-09-01T10:00:00.000Z",
+    ),
   ]);
 
   return { workspaceId, hiredEntity };
@@ -202,7 +223,7 @@ describe("new job posts reach the brief's brand line, through real D1", () => {
       workspaceId,
       schedule: { timezone: "UTC", weekday: 1, hour: 8 },
       week: { startsAt: new Date("2026-09-14T12:00:00.000Z"), closesAt: new Date("2026-09-21T12:00:00.000Z") },
-      readThisFirst: { picks: [], judged: 0 },
+      readThisFirst: { picks: [], judged: 0, unjudged: false },
     });
 
     const hiring = payload.brands.find((b) => b.entity_id.startsWith("ent_hiring_"));
@@ -215,7 +236,7 @@ describe("new job posts reach the brief's brand line, through real D1", () => {
       workspaceId,
       schedule: { timezone: "UTC", weekday: 1, hour: 8 },
       week: { startsAt: new Date("2026-09-14T12:00:00.000Z"), closesAt: new Date("2026-09-21T12:00:00.000Z") },
-      readThisFirst: { picks: [], judged: 0 },
+      readThisFirst: { picks: [], judged: 0, unjudged: false },
     });
 
     const { text } = renderBrief(parseBriefPayload(JSON.stringify(payload)), {
@@ -233,7 +254,7 @@ describe("new job posts reach the brief's brand line, through real D1", () => {
       workspaceId,
       schedule: { timezone: "UTC", weekday: 1, hour: 8 },
       week: { startsAt: new Date("2026-09-14T12:00:00.000Z"), closesAt: new Date("2026-09-21T12:00:00.000Z") },
-      readThisFirst: { picks: [], judged: 0 },
+      readThisFirst: { picks: [], judged: 0, unjudged: false },
     });
 
     const { text } = renderBrief(parseBriefPayload(JSON.stringify(payload)), {
@@ -320,7 +341,7 @@ describe("a zero canary never counts as a source answering, through real D1", ()
       workspaceId: zero.workspaceId,
       schedule: { timezone: "UTC", weekday: 1, hour: 8 },
       week: { startsAt: new Date("2026-09-14T12:00:00.000Z"), closesAt: new Date("2026-09-21T12:00:00.000Z") },
-      readThisFirst: { picks: [], judged: 0 },
+      readThisFirst: { picks: [], judged: 0, unjudged: false },
     });
     expect(zeroPayload.checked.degraded_source_keys).toContain(zero.sourceKey);
 
@@ -329,7 +350,7 @@ describe("a zero canary never counts as a source answering, through real D1", ()
       workspaceId: healthy.workspaceId,
       schedule: { timezone: "UTC", weekday: 1, hour: 8 },
       week: { startsAt: new Date("2026-09-14T12:00:00.000Z"), closesAt: new Date("2026-09-21T12:00:00.000Z") },
-      readThisFirst: { picks: [], judged: 0 },
+      readThisFirst: { picks: [], judged: 0, unjudged: false },
     });
     expect(healthyPayload.checked.degraded_source_keys).toEqual([]);
   });

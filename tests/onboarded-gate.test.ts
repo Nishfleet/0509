@@ -38,9 +38,7 @@ describe("requireOnboarded", () => {
 
   it("resolves when the workspace has no resume point", async () => {
     landing.value = null;
-    await expect(
-      requireOnboarded({ request: new Request("https://0509.io/app/alerts") }),
-    ).resolves.toBeUndefined();
+    await expect(requireOnboarded({ request: new Request("https://0509.io/app/alerts") })).resolves.toBeUndefined();
   });
 });
 
@@ -59,6 +57,7 @@ describe("app layout middleware", () => {
       "app",
       "app/competitors",
       "app/competitors/:entityId",
+      "app/upgrade",
       "app/alerts",
       "app/brief/:digestId?",
     ]);

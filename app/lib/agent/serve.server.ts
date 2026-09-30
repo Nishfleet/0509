@@ -14,7 +14,8 @@ function problem(status: number, error: string, description: string, headers: Re
 
 async function workspaceFor(props: AgentProps): Promise<string | Response> {
   const { success } = await env.AGENT_LIMIT.limit({ key: props.userId });
-  if (!success) return problem(429, "rate_limited", "Too many requests. Slow down and retry in a minute.", { "retry-after": "60" });
+  if (!success)
+    return problem(429, "rate_limited", "Too many requests. Slow down and retry in a minute.", { "retry-after": "60" });
   const workspaceId = await readWorkspaceIdForOwner(props.userId);
   if (workspaceId === null) return problem(403, "no_workspace", "Finish signing up at 0509.io first.");
   return workspaceId;

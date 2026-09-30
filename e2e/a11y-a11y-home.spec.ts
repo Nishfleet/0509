@@ -11,7 +11,7 @@ function activeName(): string {
   return el.innerText.replace(/\s+/g, " ").trim();
 }
 
-test("ranked home passes axe at WCAG 2.2 AA and is keyboard-operable at 1440 and 390 in light and dark (#4150)", async ({
+test("ranked home passes axe at WCAG 2.2 AA and is keyboard-operable at 1440 and 390 in light and dark (#4150) @smoke", async ({
   page,
 }, testInfo) => {
   test.skip(testInfo.project.name !== "desktop-1440", "this spec sets 1440 and 390 itself");
@@ -36,8 +36,18 @@ test("ranked home passes axe at WCAG 2.2 AA and is keyboard-operable at 1440 and
       const ranks = page.getByRole("table", { name: "Four-week ranks" });
       await expect(ranks).toContainText("YOU");
       await expect(ranks).toContainText("Kindred");
-      await expect(ranks.getByRole("row").filter({ hasText: "YOU" }).getByRole("cell")).toHaveText(["3", "3", "2", "2"]);
-      await expect(ranks.getByRole("row").filter({ hasText: "Kindred" }).getByRole("cell")).toHaveText(["2", "1", "1", "1"]);
+      await expect(ranks.getByRole("row").filter({ hasText: "YOU" }).getByRole("cell")).toHaveText([
+        "3",
+        "3",
+        "2",
+        "2",
+      ]);
+      await expect(ranks.getByRole("row").filter({ hasText: "Kindred" }).getByRole("cell")).toHaveText([
+        "2",
+        "1",
+        "1",
+        "1",
+      ]);
 
       const closed = await new AxeBuilder({ page }).withTags(TAGS).analyze();
       await testInfo.attach(`axe-home-${colorScheme}-${String(width)}`, {

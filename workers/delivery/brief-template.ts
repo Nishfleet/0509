@@ -1,5 +1,6 @@
 import type { BriefContext, BriefPayload, RenderedBrief } from "../../app/lib/brief-payload";
 import { escapeHtml } from "../../app/lib/html";
+import { UNJUDGED_WEEK_LINE } from "../../app/lib/read-this-first";
 import { EYEBROW, FONT, MONO, emailDocument } from "./email-shell";
 
 const COPY = {
@@ -16,10 +17,10 @@ const COPY = {
   new: "new",
   readThisFirst: "Read this first",
   nothingFirst: "Nothing this week needed reading first.",
+  unjudged: UNJUDGED_WEEK_LINE,
   yourBrands: "Your tracked brands",
   ownSiteOk: "Your site looks fine.",
-  ownSiteBroken: (count: number) =>
-    `Your site looks broken (${count === 1 ? "1 page" : `${n(count)} pages`}):`,
+  ownSiteBroken: (count: number) => `Your site looks broken (${count === 1 ? "1 page" : `${n(count)} pages`}):`,
   stillBroken: "still broken",
   fixed: "fixed",
   footerTitle: "What was checked",
@@ -33,8 +34,7 @@ const COPY = {
   sources: (count: number) => (count === 1 ? "1 source" : `${n(count)} sources`),
   blind: (source: string, when: string) =>
     `${source} has not answered since ${when}, so this is not a quiet week we can vouch for.`,
-  blindNever: (source: string) =>
-    `${source} has not answered yet, so this is not a quiet week we can vouch for.`,
+  blindNever: (source: string) => `${source} has not answered yet, so this is not a quiet week we can vouch for.`,
 } as const;
 
 function n(value: number): string {
@@ -57,7 +57,13 @@ export function formatDate(iso: string, timezone: string, withTime: boolean): st
     return new Intl.DateTimeFormat("en-GB", {
       timeZone: timezone,
       ...(withTime
-        ? { weekday: "short" as const, day: "numeric" as const, month: "short" as const, hour: "2-digit" as const, minute: "2-digit" as const }
+        ? {
+            weekday: "short" as const,
+            day: "numeric" as const,
+            month: "short" as const,
+            hour: "2-digit" as const,
+            minute: "2-digit" as const,
+          }
         : { weekday: "long" as const, day: "numeric" as const, month: "long" as const }),
     }).format(date);
   } catch (error) {
@@ -95,6 +101,12 @@ function thumbnailSrc(r2Key: string | null, assetBaseUrl: string | null): string
 
 function renderHeadline(payload: BriefPayload, whyLine: string): { html: string; text: string } {
   const { headline_rank, headline_total, headline_movement } = payload;
+  if (payload.is_unjudged) {
+    return {
+      html: `<p style="margin:0;font-family:${FONT};font-size:20px;line-height:28px;font-weight:600;">${escapeHtml(COPY.unjudged)}</p>`,
+      text: COPY.unjudged,
+    };
+  }
   if (headline_rank === null || headline_total < 2) {
     return {
       html: `<p style="margin:0;font-family:${FONT};font-size:20px;line-height:28px;font-weight:600;">${escapeHtml(COPY.noRank)}</p>`,
@@ -114,11 +126,7 @@ function renderHeadline(payload: BriefPayload, whyLine: string): { html: string;
     `<p style="margin:14px 0 0;font-family:${FONT};font-size:16px;line-height:24px;">${escapeHtml(whyLine)}</p>`,
   ].join("");
 
-  const text = [
-    `${COPY.headline(headline_rank, headline_total)} — ${movement}`,
-    period,
-    whyLine,
-  ].join("\n");
+  const text = [`${COPY.headline(headline_rank, headline_total)} — ${movement}`, period, whyLine].join("\n");
 
   return { html, text };
 }
@@ -139,9 +147,7 @@ function renderMark(
     `<p class="brief-muted" style="margin:0;font-family:${FONT};font-size:13px;line-height:18px;">${escapeHtml(label)}</p>`,
     `<p class="brief-muted" style="margin:2px 0 0;font-family:${FONT};font-size:14px;line-height:20px;">${escapeHtml(when)}</p>`,
     `<p style="margin:6px 0 0;font-family:${FONT};font-size:16px;line-height:24px;">`,
-    href === null
-      ? escapeHtml(title)
-      : `<a class="brief-ink" href="${href}">${escapeHtml(title)}</a>`,
+    href === null ? escapeHtml(title) : `<a class="brief-ink" href="${href}">${escapeHtml(title)}</a>`,
     `</p>`,
     mark.before !== null && mark.after !== null
       ? `<p style="margin:8px 0 0;font-family:${FONT};font-size:18px;line-height:26px;font-weight:700;"><s class="brief-strike">${escapeHtml(mark.before)}</s> → <span class="brief-marker" style="padding:0 4px;">${escapeHtml(mark.after)}</span></p>`
@@ -166,13 +172,17 @@ function renderMark(
   return { html, text };
 }
 
-function renderReadThisFirst(
-  payload: BriefPayload,
-  assetBaseUrl: string | null,
-): { html: string; text: string } {
+function renderReadThisFirst(payload: BriefPayload, assetBaseUrl: string | null): { html: string; text: string } {
   const marks = payload.read_this_first.slice(0, 3);
 
   const heading = (text: string) => `<h2 class="brief-muted" style="${EYEBROW}">${escapeHtml(text)}</h2>`;
+
+  if (payload.is_unjudged) {
+    return {
+      html: `${heading(COPY.readThisFirst)}<p style="margin:0;font-family:${FONT};font-size:16px;line-height:24px;">${escapeHtml(COPY.unjudged)}</p>`,
+      text: `${COPY.readThisFirst}\n${COPY.unjudged}`,
+    };
+  }
 
   if (marks.length === 0) {
     return {
@@ -181,10 +191,9 @@ function renderReadThisFirst(
     };
   }
 
-  const html = [
-    heading(COPY.readThisFirst),
-    ...marks.map((mark) => renderMark(mark, payload, assetBaseUrl).html),
-  ].join("");
+  const html = [heading(COPY.readThisFirst), ...marks.map((mark) => renderMark(mark, payload, assetBaseUrl).html)].join(
+    "",
+  );
 
   const rendered = marks.map((mark) => renderMark(mark, payload, assetBaseUrl));
   const text = [COPY.readThisFirst, ...rendered.map((r) => r.text)].join("\n\n");
@@ -197,9 +206,7 @@ function renderBrandLine(line: BriefPayload["brands"][number]): { html: string; 
     countPhrase(line.ad_delta, "new ad", "new ads"),
     countPhrase(line.mention_delta, "mention", "mentions"),
     countPhrase(line.site_change_count, "site change", "site changes"),
-    ...(line.new_roles > 0
-      ? [countPhrase(line.new_roles, "new job post", "new job posts")]
-      : []),
+    ...(line.new_roles > 0 ? [countPhrase(line.new_roles, "new job post", "new job posts")] : []),
   ];
 
   const rankLabel = line.rank === null ? "unranked" : `#${n(line.rank)}`;
@@ -218,11 +225,7 @@ function renderBrandLine(line: BriefPayload["brands"][number]): { html: string; 
     `</div>`,
   ].join("");
 
-  const text = [
-    `${line.name} — ${rankLabel}, ${movement}`,
-    line.biggest_move,
-    counts.join(" · "),
-  ]
+  const text = [`${line.name} — ${rankLabel}, ${movement}`, line.biggest_move, counts.join(" · ")]
     .filter((v): v is string => v !== null)
     .join("\n");
 
@@ -322,6 +325,7 @@ function renderFooter(payload: BriefPayload, unsubscribeUrl: string | null): { h
 
 function briefSubject(payload: BriefPayload): string {
   const { headline_rank, headline_total, headline_movement } = payload;
+  if (payload.is_unjudged) return COPY.unjudged;
   if (headline_rank === null || headline_total < 2) return COPY.noRankSubject;
   if (payload.headline_is_new || headline_movement === null || headline_movement === 0) {
     return COPY.subject(headline_rank, headline_total);
@@ -347,18 +351,13 @@ export function renderBrief(payload: BriefPayload, context: BriefContext): Rende
 
   const subject = briefSubject(payload);
 
-  const block = (inner: string) =>
-    `<div class="brief-rule" style="padding:20px 0;">${inner}</div>`;
+  const block = (inner: string) => `<div class="brief-rule" style="padding:20px 0;">${inner}</div>`;
 
   const html = emailDocument(
     subject,
-    [
-      headline.html,
-      ...(quiet ? [] : [block(marks.html)]),
-      block(brands.html),
-      block(ownSite.html),
-      footer.html,
-    ].join(""),
+    [headline.html, ...(quiet ? [] : [block(marks.html)]), block(brands.html), block(ownSite.html), footer.html].join(
+      "",
+    ),
   );
 
   const text = [

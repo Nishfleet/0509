@@ -44,42 +44,47 @@ export class StandingRollover extends WorkflowEntrypoint<Env, RolloverParams> {
       await step.sleepUntil("until-brief", closesAt);
     }
 
-    const closing = await step.do("final-score", RETRY, async (): Promise<ClosingWeek | "workspace_gone" | "schedule_moved"> => {
-      const workspace = await readWorkspaceSchedule(this.env.DB, workspaceId);
-      if (workspace === null) return "workspace_gone";
-      const due = nextBriefAt(workspace.schedule, new Date(closesAt.getTime() - 1));
-      if (due.getTime() !== closesAt.getTime()) return "schedule_moved";
-      const week = weekClosingAt(workspace.schedule, closesAt);
-      const startsAt = week.startsAt.toISOString();
-      await refreshWorkspaceScores(this.env.DB, {
-        workspaceId,
-        weekStartAt: startsAt,
-        windowStartAt: startsAt,
-        windowEndAt: closesAt.toISOString(),
-        computedAt: new Date().toISOString(),
-      });
-      return { ...workspace.schedule, startsAt, paused: workspace.briefPausedAt !== null };
-    });
+    const closing = await step.do(
+      "final-score",
+      RETRY,
+      async (): Promise<ClosingWeek | "workspace_gone" | "schedule_moved"> => {
+        const workspace = await readWorkspaceSchedule(this.env.DB, workspaceId);
+        if (workspace === null) return "workspace_gone";
+        const due = nextBriefAt(workspace.schedule, new Date(closesAt.getTime() - 1));
+        if (due.getTime() !== closesAt.getTime()) return "schedule_moved";
+        const week = weekClosingAt(workspace.schedule, closesAt);
+        const startsAt = week.startsAt.toISOString();
+        await refreshWorkspaceScores(this.env.DB, {
+          workspaceId,
+          weekStartAt: startsAt,
+          windowStartAt: startsAt,
+          windowEndAt: closesAt.toISOString(),
+          computedAt: new Date().toISOString(),
+        });
+        return { ...workspace.schedule, startsAt, paused: workspace.briefPausedAt !== null };
+      },
+    );
     if (closing === "workspace_gone" || closing === "schedule_moved") return outcome(null, closing);
 
     const schedule = { timezone: closing.timezone, weekday: closing.weekday, hour: closing.hour };
 
     const rankedCount = await step.do("freeze-rank", RETRY, async () => {
-      const ranked = await freezeWeek(this.env.DB, workspaceId, closing.startsAt);
+      const ranked = await freezeWeek(this.env.DB, {
+        workspaceId,
+        weekStartAt: closing.startsAt,
+        weekEndAt: closesAt.toISOString(),
+      });
       return ranked.length;
     });
 
-    const readThisFirst =
-      rankedCount < 2
-        ? { picks: [], judged: 0 }
-        : await step.do("read-this-first", RETRY, async () =>
-            judgeWeek(this.env.DB, {
-              workspaceId,
-              startsAt: closing.startsAt,
-              closesAt: closesAt.toISOString(),
-              decidedAt: new Date().toISOString(),
-            }),
-          );
+    const readThisFirst = await step.do("read-this-first", RETRY, async () =>
+      judgeWeek(this.env.DB, {
+        workspaceId,
+        startsAt: closing.startsAt,
+        closesAt: closesAt.toISOString(),
+        decidedAt: new Date().toISOString(),
+      }),
+    );
 
     const writeDigest = async (): Promise<string> => {
       const id = `digest_${workspaceId}_${instantStamp(closesAt)}`;
@@ -100,7 +105,8 @@ export class StandingRollover extends WorkflowEntrypoint<Env, RolloverParams> {
       if (!closing.paused) await this.env.SEND_EMAIL.send({ digest_id: id });
       return id;
     };
-    const digestId = rankedCount < 2 ? null : await step.do("write-digest", RETRY, writeDigest);
+    const digestId =
+      rankedCount < 2 && !readThisFirst.unjudged ? null : await step.do("write-digest", RETRY, writeDigest);
 
     await step.do("spawn-successor", RETRY, async () =>
       createRollovers(this.env.STANDING_ROLLOVER, [

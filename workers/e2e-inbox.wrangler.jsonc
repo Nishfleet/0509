@@ -13,11 +13,11 @@
   "main": "./e2e-inbox.ts",
   "compatibility_date": "2026-09-16",
   "observability": {
-    "enabled": true
+    "enabled": true,
   },
   "durable_objects": {
-    "bindings": [{ "name": "INBOX", "class_name": "InboxMailbox" }]
+    "bindings": [{ "name": "INBOX", "class_name": "InboxMailbox" }],
   },
   "migrations": [{ "tag": "v1", "new_sqlite_classes": ["InboxMailbox"] }],
-  "routes": [{ "pattern": "e2e-inbox.0509.io", "custom_domain": true }]
+  "routes": [{ "pattern": "e2e-inbox.0509.io", "custom_domain": true }],
 }

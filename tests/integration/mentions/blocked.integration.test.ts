@@ -140,7 +140,7 @@ describe("a blocking upstream degrades the source and ends the step (0509#5159)"
     }
   });
 
-  it("case E: an upstream timeout retries the request once, degrades the source and the sweep step rejects without retrying (0509#5106, 0509#6079)", async () => {
+  it("case E: an upstream timeout retries once, then the step returns a partial result naming the skipped watches (0509#5106, 0509#6079, 0509#6080)", async () => {
     const { sourceId, brand } = await seedBlockedSource("e", { enabled: true });
     const timeoutError = new DOMException("The operation was aborted due to timeout", "TimeoutError");
     const fetchMock = vi.fn(async () => {
@@ -150,11 +150,31 @@ describe("a blocking upstream degrades the source and ends the step (0509#5159)"
 
     try {
       const target = await gdeltTargetFor(sourceId, brand);
+      expect(target.watches.length).toBeGreaterThan(0);
 
-      await expect(sweepTarget(target, NOW, null)).rejects.toThrow(NonRetryableError);
+      const outcome = await sweepTarget(target, NOW, null);
 
+      expect(outcome).toEqual({
+        items: 0,
+        stored: 0,
+        unjudged: 0,
+        skipped: target.watches.length,
+      });
       expect(await readReason(sourceId)).toBe("timed out");
       expect(fetchMock).toHaveBeenCalledTimes(2);
+
+      const snapshots = await env.DB.prepare(
+        "SELECT COUNT(*) AS n FROM snapshot sn JOIN watch w ON w.id = sn.watch_id WHERE w.source_id = ?",
+      )
+        .bind(sourceId)
+        .first<{ n: number }>();
+      expect(snapshots?.n).toBe(0);
+      const polled = await env.DB.prepare(
+        "SELECT COUNT(*) AS n FROM watch WHERE source_id = ? AND last_polled_at IS NOT NULL",
+      )
+        .bind(sourceId)
+        .first<{ n: number }>();
+      expect(polled?.n).toBe(0);
     } finally {
       await env.DB.prepare("DELETE FROM source WHERE id = ?").bind(sourceId).run();
     }
@@ -165,11 +185,17 @@ describe("a blocking upstream degrades the source and ends the step (0509#5159)"
     const source: CanarySource = { id: sourceId, pluginKey: "gdelt.doc", canaryQuery: "google" };
 
     try {
-      vi.stubGlobal("fetch", vi.fn(async () => new Response("", { status: 403 })));
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async () => new Response("", { status: 403 })),
+      );
       expect(await runCanary(source, NOW)).toBe(0);
       expect(await readReason(sourceId)).toBe("blocked: HTTP 403");
 
-      vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify(ONE_ARTICLE))));
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async () => new Response(JSON.stringify(ONE_ARTICLE))),
+      );
       expect(await runCanary(source, NOW)).toBe(1);
       expect(await readReason(sourceId)).toBeNull();
     } finally {

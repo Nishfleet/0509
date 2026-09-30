@@ -12,7 +12,10 @@ import { pausedSentence } from "../../workers/standing/compose-brief";
  * the blind sources and when they last landed, per docs/engines/standing-home.md §7.
  */
 
-const CONTEXT = { unsubscribe_url: "https://0509.io/u/opaque-token", asset_base_url: "https://assets.0509.io" } as const;
+const CONTEXT = {
+  unsubscribe_url: "https://0509.io/u/opaque-token",
+  asset_base_url: "https://assets.0509.io",
+} as const;
 
 function quiet(overrides: Partial<BriefPayload> = {}): BriefPayload {
   return {
@@ -26,6 +29,7 @@ function quiet(overrides: Partial<BriefPayload> = {}): BriefPayload {
     headline_is_new: false,
     why_line: "Quiet week: 61 mentions checked, 14 site changes, no new ads.",
     is_quiet_week: true,
+    is_unjudged: false,
     read_this_first: [],
     brands: [
       {

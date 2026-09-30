@@ -84,11 +84,6 @@
       "count": 1
     }
   },
-  "app/components/retire-questions.tsx": {
-    "max-lines-per-function": {
-      "count": 1
-    }
-  },
   "app/components/row-evidence.tsx": {
     "max-lines-per-function": {
       "count": 1
@@ -189,11 +184,6 @@
       "count": 1
     }
   },
-  "app/lib/discovery/co-mentions.ts": {
-    "complexity": {
-      "count": 1
-    }
-  },
   "app/lib/discovery/refresh.server.ts": {
     "max-depth": {
       "count": 1
@@ -218,7 +208,7 @@
       "count": 1
     }
   },
-  "app/lib/hiring/discover-board.ts": {
+  "app/lib/hiring/discover-board.server.ts": {
     "complexity": {
       "count": 1
     },
@@ -257,9 +247,6 @@
     },
     "max-lines-per-function": {
       "count": 1
-    },
-    "max-params": {
-      "count": 1
     }
   },
   "app/lib/identity/extract.ts": {
@@ -275,12 +262,7 @@
       "count": 1
     }
   },
-  "app/lib/identity/logo-store.server.ts": {
-    "complexity": {
-      "count": 1
-    }
-  },
-  "app/lib/identity/name-cascade.ts": {
+  "app/lib/identity/name-cascade.server.ts": {
     "complexity": {
       "count": 1
     }
@@ -346,11 +328,6 @@
       "count": 1
     }
   },
-  "app/lib/site/sweep.server.ts": {
-    "max-lines-per-function": {
-      "count": 1
-    }
-  },
   "app/routes/app.alerts.tsx": {
     "max-lines-per-function": {
       "count": 1
@@ -364,20 +341,7 @@
       "count": 1
     }
   },
-  "app/routes/app.settings.tsx": {
-    "complexity": {
-      "count": 1
-    },
-    "max-lines-per-function": {
-      "count": 1
-    }
-  },
   "app/routes/login.tsx": {
-    "max-lines-per-function": {
-      "count": 1
-    }
-  },
-  "app/routes/onboarding.competitors.tsx": {
     "max-lines-per-function": {
       "count": 1
     }
@@ -403,9 +367,6 @@
     }
   },
   "workers/mentions/sweep.ts": {
-    "complexity": {
-      "count": 1
-    },
     "max-lines-per-function": {
       "count": 1
     },
@@ -427,11 +388,6 @@
     }
   },
   "workers/standing/read-this-first.ts": {
-    "max-lines-per-function": {
-      "count": 1
-    }
-  },
-  "workers/support-inbox.ts": {
     "max-lines-per-function": {
       "count": 1
     }

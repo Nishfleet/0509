@@ -6,11 +6,7 @@ import { Toaster } from "./components/toaster";
 import { hasSessionCookie } from "./lib/auth.server";
 import "./app.css";
 
-const SERVER_ONLY_ROUTES: ReadonlySet<string> = new Set([
-  "routes/landing",
-  "routes/privacy",
-  "routes/terms",
-]);
+const SERVER_ONLY_ROUTES: ReadonlySet<string> = new Set(["routes/landing", "routes/privacy", "routes/terms"]);
 
 export function Layout({ children }: { children: React.ReactNode }) {
   const matches = useMatches();
@@ -29,9 +25,14 @@ export function Layout({ children }: { children: React.ReactNode }) {
           crossOrigin="anonymous"
           fetchPriority="high"
         />
-        {landing ? null : (
-          <link rel="preload" href="/fonts/instrument-sans-latin.woff2" as="font" type="font/woff2" crossOrigin="anonymous" />
-        )}
+        <link
+          rel="preload"
+          href="/fonts/instrument-sans-latin.woff2"
+          as="font"
+          type="font/woff2"
+          crossOrigin="anonymous"
+          fetchPriority={landing ? "high" : undefined}
+        />
         <Meta />
         <Links />
       </head>

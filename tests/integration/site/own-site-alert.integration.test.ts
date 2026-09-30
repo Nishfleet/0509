@@ -2,42 +2,6 @@ import { env } from "cloudflare:test";
 import { env as workerEnv } from "cloudflare:workers";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const jevAnswers = vi.hoisted(() => ({
-  noul: new Map<string, number>(),
-  choice: new Map<string, string>(),
-  calls: 0,
-}));
-
-const jevFailures = vi.hoisted(() => ({ next: 0 }));
-
-vi.mock("../../../app/lib/jev/client.server", () => {
-  class JevUnavailableError extends Error {
-    constructor(cause: unknown) {
-      super(`jev unavailable: ${cause instanceof Error ? cause.message : String(cause)}`);
-      this.name = "JevUnavailableError";
-    }
-  }
-  return {
-    JevUnavailableError,
-    askNoul: async (workspaceId: string, question: { id: string }) => {
-      jevAnswers.calls += 1;
-      if (jevFailures.next > 0) {
-        jevFailures.next -= 1;
-        throw new JevUnavailableError(new Error("gateway down"));
-      }
-      const p = jevAnswers.noul.get(question.id);
-      if (p === undefined) throw new JevUnavailableError(new Error(`no answer for ${question.id}`));
-      return { questionId: question.id, inputHash: `noul-${workspaceId}-${question.id}`, p, cached: false };
-    },
-    askChoice: async (workspaceId: string, question: { id: string }) => {
-      jevAnswers.calls += 1;
-      const choice = jevAnswers.choice.get(question.id);
-      if (choice === undefined) throw new JevUnavailableError(new Error(`no answer for ${question.id}`));
-      return { questionId: question.id, inputHash: `choice-${workspaceId}-${question.id}`, choice, cached: false };
-    },
-  };
-});
-
 import type { SiteSweepTarget } from "../../../app/lib/data/watch.server";
 import { computeBreakageEvidence } from "../../../app/lib/site/breakage-evidence";
 import type { CheckPageResult } from "../../../app/lib/site/check-page.server";
@@ -45,6 +9,39 @@ import { diffPageText } from "../../../app/lib/site/diff";
 import { judgeChange } from "../../../app/lib/site/judge.server";
 import { publishChange } from "../../../app/lib/site/publish.server";
 import { checkSitePage, planSiteSweep, type SweepTick } from "../../../app/lib/site/sweep.server";
+
+const jevAnswers = {
+  noul: new Map<string, number>(),
+  choice: new Map<string, string>(),
+  calls: 0,
+};
+
+const jevFailures = { next: 0 };
+
+function installJev(): void {
+  Reflect.set(env, "AI", {
+    async run(_model: string, request: { questions: Record<string, { type: string }> }) {
+      jevAnswers.calls += 1;
+      if (jevFailures.next > 0) {
+        jevFailures.next -= 1;
+        throw new Error("gateway down");
+      }
+      const answers: Record<string, { type: "noul"; noul: number } | { type: "choice"; choice: string }> = {};
+      for (const [id, question] of Object.entries(request.questions)) {
+        if (question.type === "noul") {
+          const p = jevAnswers.noul.get(id);
+          if (p === undefined) throw new Error(`no answer for ${id}`);
+          answers[id] = { type: "noul", noul: p };
+        } else {
+          const choice = jevAnswers.choice.get(id);
+          if (choice === undefined) throw new Error(`no answer for ${id}`);
+          answers[id] = { type: "choice", choice };
+        }
+      }
+      return { answers };
+    },
+  });
+}
 
 const USER = "user-own-site-alert";
 const WS = "ws-own-site-alert";
@@ -135,6 +132,7 @@ const sweepOnePage = async (target: SiteSweepTarget, at: SweepTick): Promise<Che
   const judgment = await judgeChange({
     workspaceId: target.workspaceId,
     entityId: target.entityId,
+    signalId: null,
     isSelf: target.entityRole === "self",
     subject,
     pageUrl: target.url,
@@ -202,6 +200,7 @@ describe("own-site alert in one sweep pass", () => {
     jevAnswers.noul.set("own_site_breakage", 0.8);
     jevAnswers.noul.set("noteworthy_change", 0.95);
     jevAnswers.choice.set("change_kind", "breakage");
+    installJev();
 
     holder.html = BEFORE_HTML;
     installBrowser();
@@ -219,6 +218,7 @@ describe("own-site alert in one sweep pass", () => {
 
   afterEach(() => {
     browserHolder.current = undefined;
+    Reflect.deleteProperty(env, "AI");
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
   });
@@ -234,9 +234,7 @@ describe("own-site alert in one sweep pass", () => {
     const broken = await sweepOnePage(self, await tick("broken-self"));
     expect(broken.outcome).toBe("changed");
 
-    const verdicts = await env.DB.prepare(
-      "SELECT question_id, p, entity_id FROM jev_verdict WHERE workspace_id = ?",
-    )
+    const verdicts = await env.DB.prepare("SELECT question_id, p, entity_id FROM jev_verdict WHERE workspace_id = ?")
       .bind(WS)
       .all<{ question_id: string; p: number | null; entity_id: string }>();
     expect(verdicts.results).toEqual([{ question_id: "own_site_breakage", p: 0.8, entity_id: SELF }]);
@@ -252,9 +250,7 @@ describe("own-site alert in one sweep pass", () => {
     const incident = incidents.results[0];
     if (incident === undefined) throw new Error("expected one open incident");
 
-    const alerts = await env.DB.prepare(
-      "SELECT incident_id, kind, severity FROM alert WHERE workspace_id = ?",
-    )
+    const alerts = await env.DB.prepare("SELECT incident_id, kind, severity FROM alert WHERE workspace_id = ?")
       .bind(WS)
       .all<{ incident_id: string | null; kind: string; severity: string }>();
     expect(alerts.results).toEqual([{ incident_id: incident.id, kind: "own_site_broken", severity: "high" }]);

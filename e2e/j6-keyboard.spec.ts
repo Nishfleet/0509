@@ -6,7 +6,15 @@ import { betterAuth } from "better-auth";
 import { magicLink } from "better-auth/plugins";
 import { expect, test, type Page } from "@playwright/test";
 
-import { consoleFailures, deleteCreatedAccount, requireInboxToken, signInWithMagicLink, watchConsole } from "./inbox";
+import {
+  consoleFailures,
+  deleteCreatedAccount,
+  isLocalLane,
+  laneOrigin,
+  requireInboxToken,
+  signInWithMagicLink,
+  watchConsole,
+} from "./inbox";
 
 let createdEmail = "";
 test.afterEach(async ({ page }, testInfo) => {
@@ -76,7 +84,10 @@ async function seedSession(): Promise<string> {
   const auth = betterAuth({
     database: db,
     secret: authSecret(),
-    baseURL: "https://0509.io",
+    // The app runs --var BETTER_AUTH_URL on this lane's http origin, and
+    // better-auth prefixes the session cookie __Secure- only for https:
+    // seeding on the same origin mints the cookie name the app reads.
+    baseURL: laneOrigin(),
     advanced: { cookiePrefix: "better-auth" },
     plugins: [
       magicLink({
@@ -132,25 +143,28 @@ async function watchOneCompetitor(page: Page): Promise<void> {
   await expect(page.getByRole("button", { name: "edit name" })).toBeVisible({ timeout: 30_000 });
   await expect(page.getByText("looking on the site")).toHaveCount(0, { timeout: 30_000 });
   await page.getByRole("button", { name: "That's me" }).click();
-  await expect(page).toHaveURL(/\/onboarding\/competitors$/, { timeout: 30_000 });
+  await expect(page).toHaveURL(/\/onboarding\/competitors$/, { timeout: 10_000 });
 
   const watching = page.getByRole("list", { name: "Watching" }).getByRole("listitem");
-  await expect(
-    watching.first().or(page.getByRole("button", { name: /^Watch / }).first()),
-  ).toBeVisible({ timeout: 60_000 });
+  await expect(watching.first().or(page.getByRole("button", { name: /^Watch / }).first())).toBeVisible({
+    timeout: 60_000,
+  });
   if ((await watching.count()) === 0) {
-    await page.getByRole("button", { name: /^Watch / }).first().click();
+    await page
+      .getByRole("button", { name: /^Watch / })
+      .first()
+      .click();
     await expect(watching.first()).toBeVisible();
   }
   await page.getByRole("button", { name: "Start watching" }).click();
-  await expect(page).toHaveURL(/\/app$/);
+  await expect(page).toHaveURL(/\/app$/, { timeout: 30_000 });
 }
 
 test("the per-brand switch is operable with a keyboard alone @own-signin", async ({ page }, testInfo) => {
   test.setTimeout(150_000);
   const watched = watchConsole(page);
 
-  if (process.env.PLAYWRIGHT_TEST_BASE_URL) {
+  if (!isLocalLane()) {
     await watchOneCompetitor(page);
   } else {
     await page.setExtraHTTPHeaders({ cookie: await seedSession() });

@@ -5,6 +5,7 @@ import { DAY_MONTH } from "./competitor-header";
 import { EmptyState } from "./empty-state";
 import { SourcePill } from "./source-pill";
 import type { SourceRow, SourceSnapshot } from "./source-pill";
+import { SITE_SWEEP_UTC_LABEL } from "../lib/cadence";
 
 const HEADING = "mb-3 font-mono text-eyebrow text-ink-soft uppercase";
 const ROW = "min-w-0";
@@ -104,9 +105,7 @@ function Peers({ entityId, peers }: { entityId: string; peers: readonly RailPeer
 }
 
 function Facts({ facts }: { facts: readonly RailFact[] }): ReactElement {
-  const labelled = facts
-    .map((fact) => factLabel(fact.kind, fact.count))
-    .filter((label) => label !== null);
+  const labelled = facts.map((fact) => factLabel(fact.kind, fact.count)).filter((label) => label !== null);
   if (labelled.length === 0) {
     return <EmptyState sentence="Nothing new from them in the last 30 days." />;
   }
@@ -134,7 +133,7 @@ function Sources({
         <p className="font-display text-[1.02rem]">Website</p>
         <p className="text-meta text-ink-soft">
           {lastChecked === null
-            ? "Homepage, read every night. First read tonight at 02:00 UTC."
+            ? `Homepage, read every night. First read tonight at ${SITE_SWEEP_UTC_LABEL}.`
             : `Homepage, read every night. Last read ${lastChecked}.`}
         </p>
       </>
@@ -154,16 +153,12 @@ function Sources({
 function StillCompetitor({ verdict }: { verdict: RailVerdict | null }): ReactElement {
   const words = verdict === null ? null : verdictWords(verdict.choice);
   if (verdict === null || words === null) {
-    return (
-      <EmptyState sentence="We ask this every week. The first answer lands after a week of watching." />
-    );
+    return <EmptyState sentence="We ask this every week. The first answer lands after a week of watching." />;
   }
   return (
     <>
       <p className="font-display text-[1.02rem]">{words}</p>
-      <p className="text-meta text-ink-soft">
-        Checked {DAY_MONTH.format(new Date(verdict.decidedAt))}
-      </p>
+      <p className="text-meta text-ink-soft">Checked {DAY_MONTH.format(new Date(verdict.decidedAt))}</p>
     </>
   );
 }

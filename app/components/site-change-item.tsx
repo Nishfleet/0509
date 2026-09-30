@@ -8,7 +8,7 @@ import { WhyFlaggedSheet } from "./why-flagged";
 
 export type SiteChangeItemData = SiteChangeView & { when: string };
 
-const WHEN_CLASS = "text-ink-soft mt-2 block font-mono text-meta uppercase";
+const WHEN_CLASS = "mt-2 block font-mono text-meta text-ink-soft uppercase";
 
 function OneSided({ added, removed }: { added: string | null; removed: string | null }): ReactElement | null {
   const text = added ?? removed;
@@ -30,13 +30,11 @@ export function SiteChangeItem({
   size?: Exclude<MarkSize, "email">;
   eager?: boolean;
 }): ReactElement {
-  const plate = (
-    <CapturePlate label={change.headline} before={change.before} after={change.after} eager={eager} />
-  );
+  const plate = <CapturePlate label={change.headline} before={change.before} after={change.after} eager={eager} />;
   const removed = change.mark?.removed ?? null;
   const added = change.mark?.added ?? null;
   return (
-    <article id={change.id} data-testid="site-change" className="border-line mt-8 min-w-0 border-t pt-6">
+    <article id={change.id} data-testid="site-change" className="mt-8 min-w-0 border-t border-line pt-6">
       <h3 className="font-display text-row-name font-bold [overflow-wrap:anywhere]">{change.headline}</h3>
       <div className="mt-3 flex min-w-0 flex-col gap-3">
         {removed !== null && added !== null ? (

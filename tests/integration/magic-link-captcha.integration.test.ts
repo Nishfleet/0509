@@ -1,4 +1,5 @@
 import { env } from "cloudflare:test";
+import { data } from "react-router";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { createAuth, createAuthForRequest } from "../../app/lib/auth.server";
@@ -48,6 +49,31 @@ describe("magic-link captcha", () => {
     expect(sent).toHaveLength(1);
   });
 
+  it("does not put the provider error or address in the magic-link API body", async () => {
+    const failing = {
+      ...authEnv([]),
+      EMAIL: {
+        send: async () => {
+          throw new Error("account daily sending quota exceeded for captcha@test.dev");
+        },
+      },
+    };
+    const logged = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    try {
+      const response = await createAuth(failing).handler(magicLinkPost(PASSING_TOKEN));
+      const body = await response.text();
+      expect(response.status).toBe(503);
+      expect(body).not.toContain("captcha@test.dev");
+      expect(body).not.toContain("account daily sending quota exceeded");
+      const text = logged.mock.calls.map((call) => String(call[0])).join("\n");
+      expect(text).toContain("account daily sending quota exceeded");
+      expect(text).toContain("[redacted]");
+      expect(text).not.toContain("captcha@test.dev");
+    } finally {
+      logged.mockRestore();
+    }
+  });
+
   it("refuses a token the secret rejects", async () => {
     const sent: string[] = [];
     const response = await createAuth(authEnv(sent, "2x0000000000000000000000000000000AA")).handler(
@@ -79,11 +105,7 @@ function b64u(input: string | Uint8Array): string {
 async function mintAccessJwt(key: CryptoKey, claims: Record<string, unknown>, kid = "test-kid"): Promise<string> {
   const head = b64u(JSON.stringify({ alg: "RS256", kid, typ: "JWT" }));
   const body = b64u(JSON.stringify(claims));
-  const signature = await crypto.subtle.sign(
-    "RSASSA-PKCS1-v1_5",
-    key,
-    new TextEncoder().encode(`${head}.${body}`),
-  );
+  const signature = await crypto.subtle.sign("RSASSA-PKCS1-v1_5", key, new TextEncoder().encode(`${head}.${body}`));
   return `${head}.${body}.${b64u(new Uint8Array(signature))}`;
 }
 
@@ -226,15 +248,19 @@ describe("login form action access pre-clearance", () => {
     stubAccessJwks(iss, jwk);
     return {
       iss,
-      assertion: await mintAccessJwt(pair.privateKey, {
-        type: "app",
-        iss,
-        aud: ACCESS_AUD,
-        sub: "",
-        common_name: "19148d8d2392dad85a35d1d02591c769.access",
-        iat: Math.floor(Date.now() / 1000),
-        exp: Math.floor(Date.now() / 1000) + 3600,
-      }, kid),
+      assertion: await mintAccessJwt(
+        pair.privateKey,
+        {
+          type: "app",
+          iss,
+          aud: ACCESS_AUD,
+          sub: "",
+          common_name: "19148d8d2392dad85a35d1d02591c769.access",
+          iat: Math.floor(Date.now() / 1000),
+          exp: Math.floor(Date.now() / 1000) + 3600,
+        },
+        kid,
+      ),
     };
   }
 
@@ -256,6 +282,29 @@ describe("login form action access pre-clearance", () => {
     expect(sent).toHaveLength(1);
   });
 
+  it("returns 503 and the send-failed copy when the provider rejects the send", async () => {
+    const { assertion, iss } = await serviceTokenAssertion();
+    for (const key of keys) if (!saved.has(key)) saved.set(key, Reflect.get(env, key));
+    Reflect.set(env, "ACCESS_TEAM_DOMAIN", iss);
+    Reflect.set(env, "ACCESS_AUD", ACCESS_AUD);
+    Reflect.set(env, "EMAIL", {
+      send: async () => {
+        throw new Error("account daily sending quota exceeded for cookie-precleared@test.dev");
+      },
+    });
+    const logged = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    try {
+      const result = await loginAction({ request: loginFormPost(`CF_Authorization=${assertion}`) });
+      expect(result).toEqual(data({ error: "We couldn't send the link. Try again in a minute." }, { status: 503 }));
+      const text = logged.mock.calls.map((call) => String(call[0])).join("\n");
+      expect(text).toContain("account daily sending quota exceeded");
+      expect(text).toContain("[redacted]");
+      expect(text).not.toContain("cookie-precleared@test.dev");
+    } finally {
+      logged.mockRestore();
+    }
+  });
+
   it("still refuses a form post with a forged cookie assertion and empty captcha", async () => {
     const iss = freshAccessIssuer();
     const published = await crypto.subtle.generateKey(
@@ -272,15 +321,19 @@ describe("login form action access pre-clearance", () => {
       true,
       ["sign", "verify"],
     );
-    const assertion = await mintAccessJwt(attacker.privateKey, {
-      type: "app",
-      iss,
-      aud: ACCESS_AUD,
-      sub: "",
-      common_name: "19148d8d2392dad85a35d1d02591c769.access",
-      iat: Math.floor(Date.now() / 1000),
-      exp: Math.floor(Date.now() / 1000) + 3600,
-    }, kid);
+    const assertion = await mintAccessJwt(
+      attacker.privateKey,
+      {
+        type: "app",
+        iss,
+        aud: ACCESS_AUD,
+        sub: "",
+        common_name: "19148d8d2392dad85a35d1d02591c769.access",
+        iat: Math.floor(Date.now() / 1000),
+        exp: Math.floor(Date.now() / 1000) + 3600,
+      },
+      kid,
+    );
 
     const sent: string[] = [];
     actionEnv(sent, iss);
@@ -300,15 +353,19 @@ describe("login form action access pre-clearance", () => {
     const kid = `kid-${crypto.randomUUID()}`;
     jwk.kid = kid;
     stubAccessJwks(iss, jwk);
-    const assertion = await mintAccessJwt(pair.privateKey, {
-      type: "app",
-      iss,
-      aud: ACCESS_AUD,
-      sub: "3f5a6c1e-0000-4a0b-9c1d-useruuid",
-      email: "person@0509.io",
-      iat: Math.floor(Date.now() / 1000),
-      exp: Math.floor(Date.now() / 1000) + 3600,
-    }, kid);
+    const assertion = await mintAccessJwt(
+      pair.privateKey,
+      {
+        type: "app",
+        iss,
+        aud: ACCESS_AUD,
+        sub: "3f5a6c1e-0000-4a0b-9c1d-useruuid",
+        email: "person@0509.io",
+        iat: Math.floor(Date.now() / 1000),
+        exp: Math.floor(Date.now() / 1000) + 3600,
+      },
+      kid,
+    );
 
     const sent: string[] = [];
     actionEnv(sent, iss);

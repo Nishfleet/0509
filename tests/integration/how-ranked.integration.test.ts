@@ -82,10 +82,20 @@ async function seed(): Promise<Seeded> {
     ).bind(entityD, workspaceId, `d-${run}.example`, "Brand D", SEEDED_AT),
     env.DB.prepare(
       "INSERT INTO source (id, key, kind, platform, plugin_key, reliability) VALUES (?1, ?2, 'mentions', ?3, ?4, 'official_api')",
-    ).bind(sourceMentions, `how-ranked-t-src-mentions-${run}`, `how-ranked-t-pf-mentions-${run}`, `how-ranked-t-pl-mentions-${run}`),
+    ).bind(
+      sourceMentions,
+      `how-ranked-t-src-mentions-${run}`,
+      `how-ranked-t-pf-mentions-${run}`,
+      `how-ranked-t-pl-mentions-${run}`,
+    ),
     env.DB.prepare(
       "INSERT INTO source (id, key, kind, platform, plugin_key, reliability) VALUES (?1, ?2, 'hiring', ?3, ?4, 'rss')",
-    ).bind(sourceHiring, `how-ranked-t-src-hiring-${run}`, `how-ranked-t-pf-hiring-${run}`, `how-ranked-t-pl-hiring-${run}`),
+    ).bind(
+      sourceHiring,
+      `how-ranked-t-src-hiring-${run}`,
+      `how-ranked-t-pf-hiring-${run}`,
+      `how-ranked-t-pl-hiring-${run}`,
+    ),
     env.DB.prepare(
       "INSERT INTO source (id, key, kind, platform, plugin_key, reliability) VALUES (?1, ?2, 'site', ?3, ?4, 'scraped_page')",
     ).bind(sourceSite, `how-ranked-t-src-site-${run}`, `how-ranked-t-pf-site-${run}`, `how-ranked-t-pl-site-${run}`),
@@ -94,25 +104,79 @@ async function seed(): Promise<Seeded> {
     ).bind(sourceAds, `how-ranked-t-src-ads-${run}`, `how-ranked-t-pf-ads-${run}`, `how-ranked-t-pl-ads-${run}`),
     env.DB.prepare(
       "INSERT INTO signal (id, workspace_id, entity_id, source_id, kind, canonical_url, url_hash, dedup_key, observed_at) VALUES (?1, ?2, ?3, ?4, 'mention', ?5, ?6, ?7, ?8)",
-    ).bind(signalMentionHigh, workspaceId, entityA, sourceMentions, `https://example.test/high-${run}`, `how-ranked-t-hash-high-${run}`, `how-ranked-t-dedup-high-${run}`, "2026-09-16T10:00:00.000Z"),
+    ).bind(
+      signalMentionHigh,
+      workspaceId,
+      entityA,
+      sourceMentions,
+      `https://example.test/high-${run}`,
+      `how-ranked-t-hash-high-${run}`,
+      `how-ranked-t-dedup-high-${run}`,
+      "2026-09-16T10:00:00.000Z",
+    ),
     env.DB.prepare(
       "INSERT INTO signal (id, workspace_id, entity_id, source_id, kind, canonical_url, url_hash, dedup_key, observed_at) VALUES (?1, ?2, ?3, ?4, 'mention', ?5, ?6, ?7, ?8)",
-    ).bind(signalMentionLow, workspaceId, entityA, sourceMentions, `https://example.test/low-${run}`, `how-ranked-t-hash-low-${run}`, `how-ranked-t-dedup-low-${run}`, "2026-09-17T10:00:00.000Z"),
+    ).bind(
+      signalMentionLow,
+      workspaceId,
+      entityA,
+      sourceMentions,
+      `https://example.test/low-${run}`,
+      `how-ranked-t-hash-low-${run}`,
+      `how-ranked-t-dedup-low-${run}`,
+      "2026-09-17T10:00:00.000Z",
+    ),
     env.DB.prepare(
       "INSERT INTO signal (id, workspace_id, entity_id, source_id, kind, dedup_key, observed_at) VALUES (?1, ?2, ?3, ?4, 'hiring', ?5, ?6)",
-    ).bind(signalHiring, workspaceId, entityA, sourceHiring, `how-ranked-t-dedup-hiring-${run}`, "2026-09-18T10:00:00.000Z"),
+    ).bind(
+      signalHiring,
+      workspaceId,
+      entityA,
+      sourceHiring,
+      `how-ranked-t-dedup-hiring-${run}`,
+      "2026-09-18T10:00:00.000Z",
+    ),
     env.DB.prepare(
       "INSERT INTO signal (id, workspace_id, entity_id, source_id, kind, dedup_key, observed_at) VALUES (?1, ?2, ?3, ?4, 'hiring', ?5, ?6)",
-    ).bind(signalHiringOutside, workspaceId, entityA, sourceHiring, `how-ranked-t-dedup-hiring-old-${run}`, "2026-09-10T10:00:00.000Z"),
+    ).bind(
+      signalHiringOutside,
+      workspaceId,
+      entityA,
+      sourceHiring,
+      `how-ranked-t-dedup-hiring-old-${run}`,
+      "2026-09-10T10:00:00.000Z",
+    ),
     env.DB.prepare(
       "INSERT INTO signal (id, workspace_id, entity_id, source_id, kind, aspect, dedup_key, observed_at) VALUES (?1, ?2, ?3, ?4, 'change', 'copy', ?5, ?6)",
-    ).bind(signalChange, workspaceId, entityB, sourceSite, `how-ranked-t-dedup-change-${run}`, "2026-09-19T10:00:00.000Z"),
+    ).bind(
+      signalChange,
+      workspaceId,
+      entityB,
+      sourceSite,
+      `how-ranked-t-dedup-change-${run}`,
+      "2026-09-19T10:00:00.000Z",
+    ),
     env.DB.prepare(
       "INSERT INTO signal (id, workspace_id, entity_id, source_id, kind, dedup_key, published_at, observed_at) VALUES (?1, ?2, ?3, ?4, 'ad', ?5, ?6, ?7)",
-    ).bind(signalAd, workspaceId, entityB, sourceAds, `how-ranked-t-dedup-ad-${run}`, "2026-09-16T10:00:00.000Z", "2026-09-20T10:00:00.000Z"),
+    ).bind(
+      signalAd,
+      workspaceId,
+      entityB,
+      sourceAds,
+      `how-ranked-t-dedup-ad-${run}`,
+      "2026-09-16T10:00:00.000Z",
+      "2026-09-20T10:00:00.000Z",
+    ),
     env.DB.prepare(
       "INSERT INTO signal (id, workspace_id, entity_id, source_id, kind, dedup_key, observed_at) VALUES (?1, ?2, ?3, ?4, 'hiring', ?5, ?6)",
-    ).bind(signalHiringOffOff, workspaceId, entityD, sourceHiring, `how-ranked-t-dedup-hiring-off-${run}`, "2026-09-17T10:00:00.000Z"),
+    ).bind(
+      signalHiringOffOff,
+      workspaceId,
+      entityD,
+      sourceHiring,
+      `how-ranked-t-dedup-hiring-off-${run}`,
+      "2026-09-17T10:00:00.000Z",
+    ),
     env.DB.prepare(
       "INSERT INTO jev_verdict (id, workspace_id, question_id, input_hash, signal_id, p, decided_at) VALUES (?1, ?2, 'mention_matters', ?3, ?4, 0.95, ?5)",
     ).bind(`how-ranked-t-jev-high-${run}`, workspaceId, `how-ranked-t-ih-high-${run}`, signalMentionHigh, SEEDED_AT),
@@ -128,9 +192,12 @@ async function seed(): Promise<Seeded> {
     weightsSeeded = true;
     await env.DB.batch(
       v1Weights.map(([key, weight]) =>
-        env.DB.prepare(
-          "INSERT INTO scoring_weight (id, key, weight, effective_from) VALUES (?1, ?2, ?3, ?4)",
-        ).bind(`how-ranked-t-weight-${key}`, key, weight, SEED_WEEK),
+        env.DB.prepare("INSERT INTO scoring_weight (id, key, weight, effective_from) VALUES (?1, ?2, ?3, ?4)").bind(
+          `how-ranked-t-weight-${key}`,
+          key,
+          weight,
+          SEED_WEEK,
+        ),
       ),
     );
   }
@@ -159,12 +226,7 @@ function payloadFor(seeded: Seeded): BriefPayload {
 describe("readHowRankedInputs against real D1", () => {
   it("returns the window's bucket counts and drops a signal outside it", async () => {
     const seeded = await seed();
-    const { counts } = await readHowRankedInputs(
-      env.DB,
-      seeded.workspaceId,
-      WINDOW_START,
-      WINDOW_END,
-    );
+    const { counts } = await readHowRankedInputs(env.DB, seeded.workspaceId, WINDOW_START, WINDOW_END);
 
     const byKey = (a: BucketCount, b: BucketCount) =>
       `${a.entity_id}\u0000${a.bucket}\u0000${a.reliability}`.localeCompare(
@@ -183,18 +245,11 @@ describe("readHowRankedInputs against real D1", () => {
 
   it("returns every scoring_weight row unfiltered by date", async () => {
     const seeded = await seed();
-    await env.DB.prepare(
-      "INSERT INTO scoring_weight (id, key, weight, effective_from) VALUES (?1, ?2, ?3, ?4)",
-    )
+    await env.DB.prepare("INSERT INTO scoring_weight (id, key, weight, effective_from) VALUES (?1, ?2, ?3, ?4)")
       .bind("how-ranked-t-sw-mm", "mention_matters", 100, "2099-01-01T00:00:00.000Z")
       .run();
 
-    const { weightRows } = await readHowRankedInputs(
-      env.DB,
-      seeded.workspaceId,
-      WINDOW_START,
-      WINDOW_END,
-    );
+    const { weightRows } = await readHowRankedInputs(env.DB, seeded.workspaceId, WINDOW_START, WINDOW_END);
 
     expect(weightRows).toEqual(
       expect.arrayContaining(v1Weights.map(([key, weight]) => ({ key, weight, effective_from: SEED_WEEK }))),
@@ -207,12 +262,7 @@ describe("readHowRankedInputs against real D1", () => {
   });
 
   it("returns no counts for a workspace with no entities", async () => {
-    const { counts } = await readHowRankedInputs(
-      env.DB,
-      "how-ranked-t-ws-empty",
-      WINDOW_START,
-      WINDOW_END,
-    );
+    const { counts } = await readHowRankedInputs(env.DB, "how-ranked-t-ws-empty", WINDOW_START, WINDOW_END);
 
     expect(counts).toEqual([]);
   });

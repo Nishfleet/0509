@@ -28,7 +28,7 @@ The submit action enqueues one message per source on a queue. Each consumer invo
 
 **The deciding question is what durability is actually worth here**, because both shapes satisfy the onboarding contract's visible behaviour.
 
-The work being protected is 6–10 HTTP probes that take about a second each and cost nothing. Candidate B spends a Durable Object, a queue, a WebSocket and roughly 30 queue operations per onboarding to protect eight seconds of work that can simply be repeated. Worse, it puts the *interactive* path behind the same queue mechanism the sweeps use, which is exactly where the browser-concurrency cap lives — the first customer-facing screen in the product would be queued behind competitor sweeps.
+The work being protected is 6–10 HTTP probes that take about a second each and cost nothing. Candidate B spends a Durable Object, a queue, a WebSocket and roughly 30 queue operations per onboarding to protect eight seconds of work that can simply be repeated. Worse, it puts the _interactive_ path behind the same queue mechanism the sweeps use, which is exactly where the browser-concurrency cap lives — the first customer-facing screen in the product would be queued behind competitor sweeps.
 
 **Where B is genuinely better:** resume. A user who reloads mid-build in Candidate A re-runs every probe.
 
@@ -52,25 +52,28 @@ The work being protected is 6–10 HTTP probes that take about a second each and
 
 All run from this VPS on **2026-09-21**, times UTC.
 
-| # | Upstream | Call | Result |
-|---|---|---|---|
-| 1 | Brand homepage | `GET https://www.gymshark.com/` (Chrome UA) | **200**, 1,608,007 B, **1.07 s**, at **12:12:39Z** |
-| 2 | Same, no UA header | `GET https://www.gymshark.com/` | **200**, 1,607,995 B — the origin does not gate on a missing UA from this egress |
-| 3 | Web app manifest | `GET /site.webmanifest` | **200**, 298 B, at **12:14:11Z** — `"name": ""`, `"short_name": ""`, one 192×192 icon |
-| 4 | Icon fallback | `GET https://icons.duckduckgo.com/ip3/gymshark.com.ico` | **200**, `image/png`, 1,313 B |
-| 5 | Wikidata search | `wbsearchentities?search=Gymshark` | **200**, 527 B, → **Q56246099**, at **12:14:13Z** |
-| 6 | Wikidata claims | `wbgetentities?ids=Q56246099&props=claims` | **200**, 25,597 B, **0.36 s**, at **12:22:33Z** |
-| 7 | Browser Rendering REST | `POST /accounts/<id>/browser-rendering/markdown` | **401 Authentication error**, at **12:15:10Z** and **12:15:20Z** — see the finding below |
-| 8 | Jev (D7 shape) | `POST 127.0.0.1:4000/jev` | **200**, **0.78 s**, at **12:18:48Z** |
+| #   | Upstream               | Call                                                    | Result                                                                                   |
+| --- | ---------------------- | ------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| 1   | Brand homepage         | `GET https://www.gymshark.com/` (Chrome UA)             | **200**, 1,608,007 B, **1.07 s**, at **12:12:39Z**                                       |
+| 2   | Same, no UA header     | `GET https://www.gymshark.com/`                         | **200**, 1,607,995 B — the origin does not gate on a missing UA from this egress         |
+| 3   | Web app manifest       | `GET /site.webmanifest`                                 | **200**, 298 B, at **12:14:11Z** — `"name": ""`, `"short_name": ""`, one 192×192 icon    |
+| 4   | Icon fallback          | `GET https://icons.duckduckgo.com/ip3/gymshark.com.ico` | **200**, `image/png`, 1,313 B                                                            |
+| 5   | Wikidata search        | `wbsearchentities?search=Gymshark`                      | **200**, 527 B, → **Q56246099**, at **12:14:13Z**                                        |
+| 6   | Wikidata claims        | `wbgetentities?ids=Q56246099&props=claims`              | **200**, 25,597 B, **0.36 s**, at **12:22:33Z**                                          |
+| 7   | Browser Rendering REST | `POST /accounts/<id>/browser-rendering/markdown`        | **401 Authentication error**, at **12:15:10Z** and **12:15:20Z** — see the finding below |
+| 8   | Jev (D7 shape)         | `POST 127.0.0.1:4000/jev`                               | **200**, **0.78 s**, at **12:18:48Z**                                                    |
 
 **Probe 1, response excerpt** (what the extractor gets, verbatim from the fetched HTML):
 
 ```html
-<meta property="og:site_name" content="Gymshark" data-next-head=""/>
-<meta property="og:title" content="Gymshark Official Store - Gym Clothes &amp; Workout Clothes" data-next-head=""/>
-<meta property="og:image" content="http://cdn.shopify.com/s/files/1/0098/8822/files/gymshark_social_banner_1200x1200.jpg?v=1549554764"/>
-<link rel="apple-touch-icon" sizes="120x120" href="/apple-touch-icon-120x120.png"/>
-<link rel="manifest" href="/site.webmanifest"/>
+<meta property="og:site_name" content="Gymshark" data-next-head="" />
+<meta property="og:title" content="Gymshark Official Store - Gym Clothes &amp; Workout Clothes" data-next-head="" />
+<meta
+  property="og:image"
+  content="http://cdn.shopify.com/s/files/1/0098/8822/files/gymshark_social_banner_1200x1200.jpg?v=1549554764"
+/>
+<link rel="apple-touch-icon" sizes="120x120" href="/apple-touch-icon-120x120.png" />
+<link rel="manifest" href="/site.webmanifest" />
 ```
 
 and one `application/ld+json` block of `"@type":"Organization"`:
@@ -127,23 +130,23 @@ Everything from step 3 to step 9 is **one `db.batch()`** — about 20 rows for a
 
 ## Workflow / Queue / cron layout
 
-| Piece | Where | Number |
-|---|---|---|
-| Probes | The identity route's loader, streamed with `<Await>` | 6–10 parallel, 8 s deadline each |
-| Browser escalation | `env.BROWSER.quickAction("content", …)` called **directly**, never through a queue | at most 1 per onboarding; uses the 2 browser slots reserved off the sweep cap |
-| Jev | one batched call after the probes settle | 1 |
-| The durable tail | `IdentityTailWorkflow`, one instance per confirmed card | steps: `persist` → `seed-watches` → `start-discovery` → `enqueue-first-sweep` |
-| Cron | **none** | onboarding is user-triggered by definition |
+| Piece              | Where                                                                              | Number                                                                                                              |
+| ------------------ | ---------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| Probes             | The identity route's loader, streamed with `<Await>`                               | 6–10 parallel, 8 s deadline each                                                                                    |
+| Browser escalation | `env.BROWSER.quickAction("content", …)` called **directly**, never through a queue | at most 1 per onboarding; uses the 2 browser slots reserved off the sweep cap                                       |
+| Jev                | one batched call after the probes settle                                           | 1                                                                                                                   |
+| The durable tail   | `IdentityTailWorkflow`, one instance per confirmed card                            | steps: `persist` → `classify-pages` → `warm-site-card` → `seed-watches` → `start-discovery` → `enqueue-first-sweep` |
+| Cron               | **none**                                                                           | onboarding is user-triggered by definition                                                                          |
 
 **The browser cap, as a config value.** `wrangler.jsonc` carries `"vars": { "BROWSER_CONCURRENCY_CAP": "10" }` and the two sweep queues carry `max_concurrency: 8` and `max_concurrency: 20` (the second never touches a browser). Eight capped sweep slots plus two interactive slots is the whole cap; onboarding's escalation uses the reserved two so a customer's first screen never waits behind a sweep. Raising the cap costs $2.00 per additional concurrent browser per month and needs Nish's recorded yes (`REBUILD-COST.md`, Nish's standing rule of 2026-09-21).
 
 ## Jev decisions used
 
-| Id | Where | Context pack fields it needs |
-|---|---|---|
-| **D7** `identity_field_confidence` | one boolean per field — name, logo, description, category, country, socials, pricing page — all in one request | `item` (the extracted value and which probe produced it), `reliability` (the source's registry row), `subject` (whatever is known so far) |
-| **D7+** `public_subject` | same request, one extra boolean | `item` (the input and the homepage excerpt), `self` — required by `REBUILD-GUARDRAILS.md`: below 0.1 the input is refused with "we track brands and creators, not people"; between, the user is asked |
-| **D9** `page_role` | one choice per page found in the nav, cached by URL + title hash | `subject`, `item` (URL and title) |
+| Id                                 | Where                                                                                                          | Context pack fields it needs                                                                                                                                                                          |
+| ---------------------------------- | -------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **D7** `identity_field_confidence` | one boolean per field — name, logo, description, category, country, socials, pricing page — all in one request | `item` (the extracted value and which probe produced it), `reliability` (the source's registry row), `subject` (whatever is known so far)                                                             |
+| **D7+** `public_subject`           | same request, one extra boolean                                                                                | `item` (the input and the homepage excerpt), `self` — required by `REBUILD-GUARDRAILS.md`: below 0.1 the input is refused with "we track brands and creators, not people"; between, the user is asked |
+| **D9** `page_role`                 | one choice per page found in the nav, cached by URL + title hash                                               | `subject`, `item` (URL and title)                                                                                                                                                                     |
 
 The D9 shape is proven live: at **12:19:10Z**, `{"url":"https://www.gymshark.com/collections/all-products","title":"All Products | Gymshark"}` returned `{"choice":"pricing","probabilities":{"pricing":0.81,"other":0.16,"product":0.02,"home":0.01,...}}` with `providerMetadata.typesafe.confidence.page_role = 0.78`, in **0.33 s**. A URL regex would have called that page `other`; this is why D9 exists.
 
@@ -153,28 +156,28 @@ Per the contract, **a Choice is recorded and displayed, never acted on automatic
 
 Priced from `docs/REBUILD-COST.md` (read 2026-09-21). One identity build:
 
-| Leg | Units | Per 1,000 builds |
-|---|---|---|
-| Probe fetches (6–10, sub-second, no browser) | Workers requests + subrequests | ~8,000 subrequests, inside the 10M included |
-| Browser escalation (only when the fetch is refused; assume 25%) | browser-seconds | 250 × 8 s = **0.56 browser-hours** |
-| KV | 8 reads + 8 writes per build | 8k reads ($0.004), 8k writes ($0.04) |
-| Jev | 1 batched call, 380 in / 23 out measured | $0 on the system seat; **$0.016** at the measured market rate of $0.00001596/call |
-| D1 | ~20 rows in one `batch()` | 20,000 rows written — **0.04% of the 50M included** |
-| R2 | 1 PUT (homepage snapshot ~1.6 MB raw, ~200 KB extracted) | 1,000 Class A ($0.0045), ~0.2 GB-mo ($0.003) |
+| Leg                                                             | Units                                                    | Per 1,000 builds                                                                  |
+| --------------------------------------------------------------- | -------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| Probe fetches (6–10, sub-second, no browser)                    | Workers requests + subrequests                           | ~8,000 subrequests, inside the 10M included                                       |
+| Browser escalation (only when the fetch is refused; assume 25%) | browser-seconds                                          | 250 × 8 s = **0.56 browser-hours**                                                |
+| KV                                                              | 8 reads + 8 writes per build                             | 8k reads ($0.004), 8k writes ($0.04)                                              |
+| Jev                                                             | 1 batched call, 380 in / 23 out measured                 | $0 on the system seat; **$0.016** at the measured market rate of $0.00001596/call |
+| D1                                                              | ~20 rows in one `batch()`                                | 20,000 rows written — **0.04% of the 50M included**                               |
+| R2                                                              | 1 PUT (homepage snapshot ~1.6 MB raw, ~200 KB extracted) | 1,000 Class A ($0.0045), ~0.2 GB-mo ($0.003)                                      |
 
 **Monthly at 100 brands: $0.00.** Onboarding happens once per brand — 100 builds a month is 0.06 browser-hours, 2,000 D1 rows and 100 Jev calls, every line inside the included tier. The recurring cost of a tracked brand belongs to the sweep engines, not here.
 
 ## Failure modes and the degraded state the UI shows
 
-| Failure | Detection | What the user sees |
-|---|---|---|
-| Homepage refuses the plain fetch | non-2xx, or extracted text under 200 characters | nothing — the browser escalation runs silently; the `page` row is marked `transport='browser'` so later sweeps skip the wasted fetch |
-| Homepage refuses the browser too | quick action error or empty content | the card still appears from Wikidata, socials and ad libraries; the site fields read "we'll fill this on the first crawl, within the hour" and `IdentityTailWorkflow` retries hourly for 24 h |
-| A single probe times out at 8 s | the deadline | that field reads "still looking" and fills from the tail Workflow; the card is never held |
-| Jev unreachable or slow | HTTP error or 8 s deadline | every field renders as extracted, outlined as "check this"; the items are `unreviewed` and the tail Workflow re-judges. The UI never waits on Jev (`REBUILD-JEV.md` principle 4) |
-| `public_subject` below 0.1 | D7+ verdict | the input is refused with the guardrails line, the input stays focused, and the refusal is recorded |
-| Subject on the takedown list | `takedown` row lookup before any probe | refused with the same line; no probe is made at all |
-| Nothing found anywhere | all probes empty | "we couldn't find anything for that, try the main website" — one line, no error page |
+| Failure                          | Detection                                       | What the user sees                                                                                                                                                                            |
+| -------------------------------- | ----------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Homepage refuses the plain fetch | non-2xx, or extracted text under 200 characters | nothing — the browser escalation runs silently; the `page` row is marked `transport='browser'` so later sweeps skip the wasted fetch                                                          |
+| Homepage refuses the browser too | quick action error or empty content             | the card still appears from Wikidata, socials and ad libraries; the site fields read "we'll fill this on the first crawl, within the hour" and `IdentityTailWorkflow` retries hourly for 24 h |
+| A single probe times out at 8 s  | the deadline                                    | that field reads "still looking" and fills from the tail Workflow; the card is never held                                                                                                     |
+| Jev unreachable or slow          | HTTP error or 8 s deadline                      | every field renders as extracted, outlined as "check this"; the items are `unreviewed` and the tail Workflow re-judges. The UI never waits on Jev (`REBUILD-JEV.md` principle 4)              |
+| `public_subject` below 0.1       | D7+ verdict                                     | the input is refused with the guardrails line, the input stays focused, and the refusal is recorded                                                                                           |
+| Subject on the takedown list     | `takedown` row lookup before any probe          | refused with the same line; no probe is made at all                                                                                                                                           |
+| Nothing found anywhere           | all probes empty                                | "we couldn't find anything for that, try the main website" — one line, no error page                                                                                                          |
 
 The card never shows a spinner in place of a field. Every empty field says what will fill it and when, per the onboarding contract.
 

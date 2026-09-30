@@ -1,7 +1,9 @@
-import { readdirSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 
 import { experimental_readRawConfig } from "wrangler";
 import { describe, expect, it } from "vitest";
+
+import { D1_DATABASE_ID, SNAPSHOT_BUCKET } from "../app/lib/observability/cost-analytics.server";
 
 // #4631, and 225c3eb before it: the production CLOUDFLARE_API_TOKEN cannot reach
 // the KV namespaces endpoint, so a KV binding without an id sends wrangler to
@@ -28,6 +30,17 @@ describe("deployed wrangler configs", () => {
     const snapshotBackup = (rawConfig.workflows ?? []).find((workflow) => workflow.name === "snapshot-backup");
     expect(snapshotBackup).toBeDefined();
     expect(snapshotBackup?.schedules).toEqual(["0 5 * * *"]);
+  });
+
+  // The cost guard queries Cloudflare analytics for the same database and bucket
+  // wrangler deploys; the constants in cost-analytics.server.ts must not drift
+  // from the config or the guard silently reads a different resource.
+  it("keeps the cost-guard constants equal to the deployed DB and bucket", () => {
+    const { rawConfig } = experimental_readRawConfig({ config: "wrangler.jsonc" });
+    const db = (rawConfig.d1_databases ?? []).find((database) => database.binding === "DB");
+    const bucket = (rawConfig.r2_buckets ?? []).find((b) => b.binding === "SNAPSHOTS");
+    expect(db?.database_id).toBe(D1_DATABASE_ID);
+    expect(bucket?.bucket_name).toBe(SNAPSHOT_BUCKET);
   });
 
   // 0509#5758. Without these the paid defaults apply: 30,000 ms of CPU and
@@ -73,5 +86,38 @@ describe("deployed wrangler configs", () => {
     expect(rawConfig.observability?.logs?.head_sampling_rate).toBe(1);
     expect(rawConfig.observability?.logs?.invocation_logs).toBe(true);
     expect(rawConfig.observability?.logs?.persist).toBe(true);
+  });
+
+  // 0509#5261. The identity tail produces onto fetch-sweep; without a consumer
+  // a confirmed card's first collection sits until it expires, and without a
+  // dead_letter_queue a message that exhausts its retries is deleted rather
+  // than parked. Both shapes are pinned here so removing either turns red.
+  it("consumes fetch-sweep and dead-letters it (0509#5261)", () => {
+    const { rawConfig } = experimental_readRawConfig({ config: "wrangler.jsonc" });
+    const consumer = (rawConfig.queues?.consumers ?? []).find((queue) => queue.queue === "fetch-sweep");
+    expect(consumer).toBeDefined();
+    expect(consumer?.dead_letter_queue).toBe("fetch-sweep-dlq");
+    // docs/engines/README.md "What the four share": no browser on this lane.
+    expect(consumer?.max_concurrency).toBe(20);
+    expect(consumer?.max_retries).toBe(3);
+    const dlq = (rawConfig.queues?.consumers ?? []).find((queue) => queue.queue === "fetch-sweep-dlq");
+    expect(dlq).toBeDefined();
+  });
+
+  it("routes every consumer queue in wrangler.jsonc to its own branch in queue()", () => {
+    const { rawConfig } = experimental_readRawConfig({ config: "wrangler.jsonc" });
+    const consumers = (rawConfig.queues?.consumers ?? []).map((queue) => queue.queue);
+    const constants = Object.fromEntries(
+      [
+        ...readFileSync("workers/sources/fetch-sweep-consumer.ts", "utf8").matchAll(/export const (\w+) = "([^"]+)"/g),
+      ].map((match) => [match[1], match[2]]),
+    );
+    const source = readFileSync("workers/app.ts", "utf8");
+    const branched = [...source.matchAll(/batch\.queue === (?:"([^"]+)"|(\w+))/g)].map(
+      (match) => match[1] ?? constants[match[2] ?? ""],
+    );
+    const fallthrough = "send-email";
+    expect(consumers).toContain(fallthrough);
+    expect(consumers.filter((queue) => queue !== fallthrough).sort()).toEqual([...branched].sort());
   });
 });

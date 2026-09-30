@@ -37,9 +37,7 @@ const FIXED: IncidentFixedContext = {
 
 describe("open incident email", () => {
   it("subjects it as the site plus what broke", () => {
-    expect(renderIncidentOpen(OPEN).subject).toBe(
-      "shop.example looks broken: pricing section missing",
-    );
+    expect(renderIncidentOpen(OPEN).subject).toBe("shop.example looks broken: pricing section missing");
   });
 
   it("says when it was seen and when the re-check lands", () => {
@@ -49,12 +47,8 @@ describe("open incident email", () => {
   });
 
   it("carries the before-and-after mark only when there is one", () => {
-    expect(renderIncidentOpen(OPEN).text).toContain(
-      "What changed: Pricing heading present → absent",
-    );
-    expect(renderIncidentOpen({ ...OPEN, mark: null }).text).not.toContain(
-      "What changed",
-    );
+    expect(renderIncidentOpen(OPEN).text).toContain("What changed: Pricing heading present → absent");
+    expect(renderIncidentOpen({ ...OPEN, mark: null }).text).not.toContain("What changed");
   });
 
   it("escapes the mark in html too, not only the site", () => {
@@ -71,34 +65,26 @@ describe("open incident email", () => {
 
   it("links the dashboard url in the html body", () => {
     const { html } = renderIncidentOpen(OPEN);
-    expect(html).toContain(
-      '<a class="brief-ink" href="https://0509.io/site/inc_1">https://0509.io/site/inc_1</a>',
-    );
+    expect(html).toContain('<a class="brief-ink" href="https://0509.io/site/inc_1">https://0509.io/site/inc_1</a>');
     expect(html).toContain("See it in Five to Nine: ");
   });
 });
 
 describe("fixed incident email", () => {
   it("subjects it as the site plus what is fixed", () => {
-    expect(renderIncidentFixed(FIXED).subject).toBe(
-      "shop.example looks fixed: pricing section missing",
-    );
+    expect(renderIncidentFixed(FIXED).subject).toBe("shop.example looks fixed: pricing section missing");
   });
 
   it("is a single line of text", () => {
     const { text } = renderIncidentFixed(FIXED);
     expect(text).not.toContain("\n");
-    expect(text).toContain(
-      "We re-checked shop.example at Wed 23 Sept, 05:52 and it looks fixed.",
-    );
+    expect(text).toContain("We re-checked shop.example at Wed 23 Sept, 05:52 and it looks fixed.");
     expect(text).toContain("https://0509.io/site/inc_1");
   });
 
   it("links the same url in the html", () => {
     const { html } = renderIncidentFixed(FIXED);
-    expect(html).toContain(
-      '<a class="brief-ink" href="https://0509.io/site/inc_1">https://0509.io/site/inc_1</a>',
-    );
+    expect(html).toContain('<a class="brief-ink" href="https://0509.io/site/inc_1">https://0509.io/site/inc_1</a>');
   });
 });
 
@@ -128,12 +114,12 @@ describe("the workspace's own clock (0509#4751)", () => {
   });
 
   it("shows the fixed follow-up in the workspace's clock too", () => {
-    expect(
-      renderIncidentFixed({ ...FIXED, closed_at: AT, timezone: "Asia/Kolkata" }).text,
-    ).toContain("We re-checked shop.example at Thu 17 Sept, 06:00");
-    expect(
-      renderIncidentFixed({ ...FIXED, closed_at: AT, timezone: "UTC" }).text,
-    ).toContain("We re-checked shop.example at Thu 17 Sept, 00:30");
+    expect(renderIncidentFixed({ ...FIXED, closed_at: AT, timezone: "Asia/Kolkata" }).text).toContain(
+      "We re-checked shop.example at Thu 17 Sept, 06:00",
+    );
+    expect(renderIncidentFixed({ ...FIXED, closed_at: AT, timezone: "UTC" }).text).toContain(
+      "We re-checked shop.example at Thu 17 Sept, 00:30",
+    );
   });
 
   it("renders the same local moment in the html body as in the text", () => {

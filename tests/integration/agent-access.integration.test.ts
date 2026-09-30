@@ -6,6 +6,7 @@ import { clientIp, withinLimit } from "../../app/lib/agent/client-limit.server";
 import { propsForApiKey } from "../../app/lib/agent/keys.server";
 import { createOAuthProvider } from "../../app/lib/agent/oauth.server";
 import { toolResult } from "../../app/lib/agent/mcp.server";
+import { registeredToolDescriptors } from "../../app/lib/agent/mcp-tools";
 import {
   readAgentAlerts,
   readAgentBrief,
@@ -42,6 +43,7 @@ const PAYLOAD = {
   headline_is_new: false,
   why_line: "You climbed one place on new ads.",
   is_quiet_week: false,
+  is_unjudged: false,
   read_this_first: [
     {
       signal_id: "sig_1",
@@ -57,9 +59,29 @@ const PAYLOAD = {
       jev_reason: "They raised prices.",
     },
   ],
-  brands: [{ entity_id: "ent_agent_a", name: "Rival A", rank: 1, movement: 0, is_new: false, biggest_move: null, ad_delta: 2, mention_delta: 0, site_change_count: 1, new_roles: 0 }],
+  brands: [
+    {
+      entity_id: "ent_agent_a",
+      name: "Rival A",
+      rank: 1,
+      movement: 0,
+      is_new: false,
+      biggest_move: null,
+      ad_delta: 2,
+      mention_delta: 0,
+      site_change_count: 1,
+      new_roles: 0,
+    },
+  ],
   own_site: { status: "ok", incidents: [] },
-  checked: { mention_count: 0, site_change_count: 1, new_ad_count: 2, source_keys: [], degraded_source_keys: [], degraded_sources: [] },
+  checked: {
+    mention_count: 0,
+    site_change_count: 1,
+    new_ad_count: 2,
+    source_keys: [],
+    degraded_source_keys: [],
+    degraded_sources: [],
+  },
   next_brief_at: "2026-09-28T07:00:00.000Z",
 };
 
@@ -67,18 +89,12 @@ async function seedWorkspace(suffix: string) {
   const userId = `u_agent_${suffix}`;
   const workspaceId = `ws_agent_${suffix}`;
   await env.DB.batch([
-    env.DB.prepare('INSERT INTO "user" (id, name, email, "emailVerified", "createdAt", "updatedAt") VALUES (?1, ?2, ?3, 1, ?4, ?4)').bind(
-      userId,
-      "Agent Owner",
-      `agent-${suffix}@test.dev`,
-      NOW,
-    ),
-    env.DB.prepare("INSERT INTO workspace (id, name, owner_user_id, timezone, created_at) VALUES (?1, ?2, ?3, 'UTC', ?4)").bind(
-      workspaceId,
-      suffix,
-      userId,
-      NOW,
-    ),
+    env.DB.prepare(
+      'INSERT INTO "user" (id, name, email, "emailVerified", "createdAt", "updatedAt") VALUES (?1, ?2, ?3, 1, ?4, ?4)',
+    ).bind(userId, "Agent Owner", `agent-${suffix}@test.dev`, NOW),
+    env.DB.prepare(
+      "INSERT INTO workspace (id, name, owner_user_id, timezone, created_at) VALUES (?1, ?2, ?3, 'UTC', ?4)",
+    ).bind(workspaceId, suffix, userId, NOW),
     env.DB.prepare(
       "INSERT INTO entity (id, workspace_id, role, domain, name, state, created_at) VALUES (?1, ?2, 'competitor', ?3, ?4, 'on', ?5)",
     ).bind(`ent_agent_${suffix}`, workspaceId, `rival-${suffix}.example`, `Rival ${suffix.toUpperCase()}`, NOW),
@@ -104,12 +120,9 @@ async function seedCompetitorChange(workspaceId: string) {
     wordsRemoved: 2,
   };
   await env.DB.batch([
-    env.DB.prepare("INSERT INTO page (id, entity_id, url, role, discovered_at) VALUES (?1, ?2, ?3, 'pricing', ?4)").bind(
-      pageId,
-      "ent_agent_a",
-      SITE_CHANGE_URL,
-      NOW,
-    ),
+    env.DB.prepare(
+      "INSERT INTO page (id, entity_id, url, role, discovered_at) VALUES (?1, ?2, ?3, 'pricing', ?4)",
+    ).bind(pageId, "ent_agent_a", SITE_CHANGE_URL, NOW),
     env.DB.prepare(
       "INSERT INTO watch (id, entity_id, source_id, target_key, last_polled_at) VALUES (?1, 'ent_agent_a', 'src_site_web', ?2, ?3)",
     ).bind(watchId, SITE_CHANGE_URL, NOW),
@@ -123,7 +136,15 @@ async function seedCompetitorChange(workspaceId: string) {
       `INSERT INTO signal (id, workspace_id, entity_id, source_id, watch_id, snapshot_id, kind, aspect, url, evidence_url,
          payload_json, dedup_key, observed_at, last_seen_at)
        VALUES (?1, ?2, 'ent_agent_a', 'src_site_web', ?3, ?4, 'change', 'pricing', ?5, ?5, ?6, ?4, ?7, ?7)`,
-    ).bind(SITE_CHANGE_ID, workspaceId, watchId, afterSnapshotId, SITE_CHANGE_URL, JSON.stringify(payload), CHANGE_SEEN_AT),
+    ).bind(
+      SITE_CHANGE_ID,
+      workspaceId,
+      watchId,
+      afterSnapshotId,
+      SITE_CHANGE_URL,
+      JSON.stringify(payload),
+      CHANGE_SEEN_AT,
+    ),
   ]);
   await env.SNAPSHOTS.put(
     SITE_CHANGE_DIFF_KEY,
@@ -183,7 +204,13 @@ describe("agent access, scoped to one workspace", () => {
 
   it("reads the brief in customer terms and never leaks storage keys", async () => {
     const { brief } = await readAgentBrief(a.workspaceId);
-    expect(brief?.headline).toEqual({ rank: 2, of: 3, movement: 1, isNew: false, why: "You climbed one place on new ads." });
+    expect(brief?.headline).toEqual({
+      rank: 2,
+      of: 3,
+      movement: 1,
+      isNew: false,
+      why: "You climbed one place on new ads.",
+    });
     expect(brief?.readThisFirst[0]).toMatchObject({ competitor: "Rival A", why: "They raised prices." });
     expect(JSON.stringify(brief)).not.toContain("snapshot/site");
     expect(await readAgentBrief(b.workspaceId)).toEqual({ brief: null });
@@ -231,14 +258,14 @@ describe("agent access, scoped to one workspace", () => {
   it("serves the MCP tools as read-only, and a call reads only the caller's workspace", async () => {
     const listed = await mcpResponse(jsonRpc("tools/list"), { userId: a.userId, clientId: "test" });
     expect(listed.status).toBe(200);
-    const list = await rpcResult<{ tools: { name: string; annotations: { readOnlyHint: boolean } }[] }>(listed);
-    expect(list.tools.map((tool) => tool.name).sort()).toEqual([
-      "get_brief",
-      "get_competitor",
-      "get_standing",
-      "list_alerts",
-      "list_competitors",
-    ]);
+    const list = await rpcResult<{ tools: { name: string; title?: string; annotations: { readOnlyHint: boolean } }[] }>(
+      listed,
+    );
+    expect(list.tools.map((tool) => [tool.name, tool.title]).sort()).toEqual(
+      Object.entries(registeredToolDescriptors)
+        .map(([name, tool]) => [name, tool.title])
+        .sort(),
+    );
     expect(list.tools.every((tool) => tool.annotations.readOnlyHint)).toBe(true);
 
     const called = await mcpResponse(jsonRpc("tools/call", { name: "list_competitors", arguments: {} }), {
@@ -268,7 +295,8 @@ describe("agent access, scoped to one workspace", () => {
         page: "pricing page",
         url: SITE_CHANGE_URL,
         observedAt: CHANGE_SEEN_AT,
-        summary: '3 words added, 2 removed. Was: "Plans from $10." Now: "Plans from $12." https://rival-a.example/pricing',
+        summary:
+          '3 words added, 2 removed. Was: "Plans from $10." Now: "Plans from $12." https://rival-a.example/pricing',
       },
     ]);
     expect(await readAgentCompetitor(b.workspaceId, "ent_agent_a", new Date(NOW))).toEqual({ competitor: null });
@@ -312,7 +340,9 @@ describe("agent access, scoped to one workspace", () => {
     });
     const call = () =>
       apiResponse(
-        new Request("http://localhost/api/v1/brief", { headers: { authorization: `Bearer ${key}`, "cf-connecting-ip": "203.0.113.201" } }),
+        new Request("http://localhost/api/v1/brief", {
+          headers: { authorization: `Bearer ${key}`, "cf-connecting-ip": "203.0.113.201" },
+        }),
         readAgentBrief,
       );
     expect((await call()).status).toBe(200);
@@ -323,11 +353,19 @@ describe("agent access, scoped to one workspace", () => {
 
   it("answers a key over its own limit with 429 on the MCP bearer path too", async () => {
     const { key } = await auth.api.createApiKey({
-      body: { userId: a.userId, name: "limited-mcp", rateLimitEnabled: true, rateLimitMax: 1, rateLimitTimeWindow: 60_000 },
+      body: {
+        userId: a.userId,
+        name: "limited-mcp",
+        rateLimitEnabled: true,
+        rateLimitMax: 1,
+        rateLimitTimeWindow: 60_000,
+      },
     });
     const call = () =>
       oauthBearerMcp(
-        new Request("http://localhost/mcp", { headers: { authorization: `Bearer ${key}`, "cf-connecting-ip": "203.0.113.202" } }),
+        new Request("http://localhost/mcp", {
+          headers: { authorization: `Bearer ${key}`, "cf-connecting-ip": "203.0.113.202" },
+        }),
       );
     expect((await call()).status).toBe(200);
     const limited = await call();

@@ -9,8 +9,9 @@ import { ensureWorkspaceForSignIn } from "./workspace.server";
 import { accessPrecleared } from "./auth/access-preclearance.server";
 import { MAGIC_LINK_TTL_SECONDS, magicLinkEmail } from "./auth/magic-link-email";
 import { MAGIC_LINK_PATH } from "./auth/magic-link-path";
+import { redactEmailShaped } from "./auth/redact-email-shaped";
 import { signInLinkAllowed } from "./auth/sign-in-limit";
-import { sendOrThrow } from "../../workers/delivery/send";
+import { errorText, sendOrThrow } from "../../workers/delivery/send";
 
 interface AuthEnv {
   DB: D1Database;
@@ -94,13 +95,21 @@ export function createAuth(env: AuthEnv, options?: { captcha?: boolean; validate
         storeToken: "hashed",
         sendMagicLink: async ({ email, url }) => {
           const message = magicLinkEmail({ email, url });
-          await sendOrThrow(env.EMAIL, {
-            to: email,
-            from: { email: "hello@0509.io", name: "Five to Nine" },
-            subject: message.subject,
-            text: message.text,
-            html: message.html,
-          });
+          try {
+            await sendOrThrow(env.EMAIL, {
+              to: email,
+              from: { email: "hello@0509.io", name: "Five to Nine" },
+              subject: message.subject,
+              text: message.text,
+              html: message.html,
+            });
+          } catch (failed) {
+            const detail = redactEmailShaped(errorText(failed)).slice(0, 200);
+            console.error(JSON.stringify({ event: "login.magic_link_send_failed", error: detail }));
+            throw new APIError("SERVICE_UNAVAILABLE", {
+              message: "We couldn't send the link. Try again in a minute.",
+            });
+          }
         },
       }),
       passkey({ rpName: "Five to Nine", origin }),
@@ -130,9 +139,7 @@ export async function deleteSignedInUser(env: AuthEnv, request: Request, now: Da
   const age = now.getTime() - new Date(session.session.createdAt).getTime();
   if (age >= FRESH_SESSION_SECONDS * 1000) return null;
   const { apiKeys } = await auth.api.listApiKeys({ headers: request.headers });
-  await Promise.all(
-    apiKeys.map((key) => auth.api.deleteApiKey({ body: { keyId: key.id }, headers: request.headers })),
-  );
+  await Promise.all(apiKeys.map((key) => auth.api.deleteApiKey({ body: { keyId: key.id }, headers: request.headers })));
   const { headers } = await auth.api.deleteUser({ body: {}, headers: request.headers, returnHeaders: true });
   return headers;
 }

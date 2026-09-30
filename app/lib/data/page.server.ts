@@ -38,9 +38,7 @@ const pageHashes = z.array(z.object({ url: z.string(), role_decided_for_hash: z.
 export async function insertPages(rows: readonly NewPage[]): Promise<void> {
   if (rows.length === 0) return;
   await env.DB.batch(
-    rows.map((row) =>
-      env.DB.prepare(INSERT_PAGE).bind(row.id, row.entityId, row.url, row.role, row.discoveredAt),
-    ),
+    rows.map((row) => env.DB.prepare(INSERT_PAGE).bind(row.id, row.entityId, row.url, row.role, row.discoveredAt)),
   );
 }
 
@@ -48,9 +46,15 @@ export async function upsertJudgedPages(rows: readonly JudgedPage[]): Promise<vo
   if (rows.length === 0) return;
   await env.DB.batch(
     rows.map((row) =>
-      env.DB
-        .prepare(UPSERT_JUDGED_PAGE)
-        .bind(row.id, row.entityId, row.url, row.title, row.role, row.roleDecidedForHash, row.discoveredAt),
+      env.DB.prepare(UPSERT_JUDGED_PAGE).bind(
+        row.id,
+        row.entityId,
+        row.url,
+        row.title,
+        row.role,
+        row.roleDecidedForHash,
+        row.discoveredAt,
+      ),
     ),
   );
 }
@@ -69,7 +73,8 @@ export async function readJudgedPricingUrl(entityId: string): Promise<string | n
   return row?.url ?? null;
 }
 
-const RECORD_TRANSPORT = "UPDATE page SET transport = ?2, transport_reason = ?3, transport_tested_at = ?4, deferred_at = NULL WHERE id = ?1";
+const RECORD_TRANSPORT =
+  "UPDATE page SET transport = ?2, transport_reason = ?3, transport_tested_at = ?4, deferred_at = NULL WHERE id = ?1";
 
 const MARK_DEFERRED = "UPDATE page SET deferred_at = ?2 WHERE id = ?1";
 
@@ -79,9 +84,7 @@ export async function recordPageTransport(input: {
   reason: string | null;
   testedAt: string;
 }): Promise<void> {
-  await env.DB.prepare(RECORD_TRANSPORT)
-    .bind(input.pageId, input.transport, input.reason, input.testedAt)
-    .run();
+  await env.DB.prepare(RECORD_TRANSPORT).bind(input.pageId, input.transport, input.reason, input.testedAt).run();
 }
 
 export async function markPageDeferred(pageId: string, at: string): Promise<void> {
@@ -95,7 +98,7 @@ export interface OwnSitePage {
   url: string;
 }
 
-const ENTITIES_WITHOUT_HOME = `SELECT e.id AS id, e.domain AS domain
+const ENTITIES_WITHOUT_HOME = `SELECT e.id AS id, e.domain AS domain, json_extract(e.identity_json, '$.url') AS url
 FROM entity e
 WHERE e.state = 'on'
   AND NOT EXISTS (SELECT 1 FROM page p WHERE p.entity_id = e.id AND p.role = 'home')
@@ -110,7 +113,9 @@ JOIN page p ON p.entity_id = e.id AND p.role = 'home'
 WHERE e.role = 'self' AND e.state = 'on'
 ORDER BY e.workspace_id, p.id`;
 
-const entityRows = z.array(z.object({ id: z.string(), domain: z.string() }));
+const entityRows = z.array(z.object({ id: z.string(), domain: z.string(), url: z.string().nullable() }));
+
+export type EntityWithoutHomePage = z.infer<typeof entityRows>[number];
 
 const ownSiteRows = z.array(
   z.object({
@@ -121,7 +126,7 @@ const ownSiteRows = z.array(
   }),
 );
 
-export async function readEntitiesWithoutHomePage(): Promise<readonly { id: string; domain: string }[]> {
+export async function readEntitiesWithoutHomePage(): Promise<readonly EntityWithoutHomePage[]> {
   const rows = await env.DB.prepare(ENTITIES_WITHOUT_HOME).all();
   return entityRows.parse(rows.results);
 }

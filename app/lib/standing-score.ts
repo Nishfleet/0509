@@ -31,17 +31,10 @@ export interface BucketCount {
   n: number;
 }
 
-export function weightsAsOf(
-  rows: readonly WeightRow[],
-  weekStartAt: string,
-): ReadonlyMap<string, number> {
+export function weightsAsOf(rows: readonly WeightRow[], weekStartAt: string): ReadonlyMap<string, number> {
   const eligible = rows.filter((row) => row.effective_from <= weekStartAt);
   const sorted = [...eligible].sort((left, right) =>
-    left.effective_from < right.effective_from
-      ? -1
-      : left.effective_from > right.effective_from
-        ? 1
-        : 0,
+    left.effective_from < right.effective_from ? -1 : left.effective_from > right.effective_from ? 1 : 0,
   );
   return new Map(sorted.map((row) => [row.key, row.weight]));
 }
@@ -66,10 +59,7 @@ export function scoreByEntity(
         .filter((count) => count.entity_id === entityId)
         .reduce(
           (total, count) =>
-            total +
-            count.n *
-              weightOf(weights, count.bucket) *
-              weightOf(weights, `reliability_${count.reliability}`),
+            total + count.n * weightOf(weights, count.bucket) * weightOf(weights, `reliability_${count.reliability}`),
           0,
         ),
     ]),
@@ -87,11 +77,7 @@ export interface RankedEntity {
   movement: number | null;
 }
 
-function previousRankOrder(
-  previousRanks: ReadonlyMap<string, number>,
-  left: string,
-  right: string,
-): number {
+function previousRankOrder(previousRanks: ReadonlyMap<string, number>, left: string, right: string): number {
   const leftRank = previousRanks.get(left);
   const rightRank = previousRanks.get(right);
   if (leftRank === rightRank) return 0;

@@ -2,6 +2,7 @@ import { Suspense, useId, useState, type KeyboardEvent, type ReactNode } from "r
 import { Await, Form, useFetcher } from "react-router";
 
 import type { CardDraft, CreatorRows, DraftField, SiteFields } from "../lib/identity/card-fields";
+import { cn } from "../lib/utils";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
@@ -12,23 +13,27 @@ function Row({
   label,
   check,
   checkId,
+  wrap,
   children,
 }: {
   label: string;
   check?: boolean;
   checkId?: string;
+  wrap?: boolean;
   children: ReactNode;
 }) {
   return (
     <div
-      className={`border-line flex items-baseline gap-4 border-b py-3${
-        check === true ? " bg-green-wash text-green-ink px-2" : ""
-      }`}
+      className={cn(
+        "flex items-baseline gap-4 border-b border-line py-3",
+        wrap === true && "max-sm:flex-wrap",
+        check === true && "bg-green-wash px-2 text-green-ink",
+      )}
     >
-      <span className="text-ink-soft w-20 shrink-0 font-mono text-[0.75rem] uppercase">{label}</span>
+      <span className="w-20 shrink-0 font-mono text-[0.75rem] text-ink-soft uppercase">{label}</span>
       {children}
       {check === true ? (
-        <span id={checkId} className="text-green-ink font-mono text-[0.7rem] uppercase">
+        <span id={checkId} className="font-mono text-[0.7rem] text-green-ink uppercase">
           check this
         </span>
       ) : null}
@@ -39,7 +44,7 @@ function Row({
 function Pending({ label, fill }: { label: string; fill: string }) {
   return (
     <Row label={label}>
-      <span className="text-ink-soft text-[0.95rem]">{fill}</span>
+      <span className="text-[0.95rem] text-ink-soft">{fill}</span>
     </Row>
   );
 }
@@ -105,7 +110,7 @@ function EditRow({
       />
     );
   return (
-    <Row label={label} check={check} checkId={checkId}>
+    <Row label={label} check={check} checkId={checkId} wrap={empty === true}>
       <Popover
         open={open}
         onOpenChange={(next) => {
@@ -124,22 +129,18 @@ function EditRow({
       </Popover>
       {edited ? (
         <>
-          <span className="text-ink-soft font-mono text-[0.7rem] uppercase">edited by you</span>
-          <button
-            type="button"
-            className="text-ink-soft text-[0.88rem] underline"
-            onClick={onRevert}
-          >
+          <span className="font-mono text-[0.7rem] text-ink-soft uppercase">edited by you</span>
+          <button type="button" className="text-[0.88rem] text-ink-soft underline" onClick={onRevert}>
             use what we found
           </button>
         </>
       ) : reverted ? (
-        <span role="status" className="text-ink-soft text-[0.88rem]">
+        <span role="status" className="text-[0.88rem] text-ink-soft">
           back to what we found, we will check it again
         </span>
       ) : null}
       <input type="hidden" name={name} value={value} />
-      {empty === true ? <span className="text-ink-soft text-[0.88rem]">{emptyLine}</span> : null}
+      {empty === true ? <span className="text-[0.88rem] text-ink-soft max-sm:basis-full">{emptyLine}</span> : null}
     </Row>
   );
 }
@@ -151,7 +152,7 @@ function Logo({ logo }: { logo: Promise<string | null> }) {
         {(url) => (
           <Row label="logo">
             {url === null ? (
-              <span className="text-ink-soft text-[0.95rem]">none found on the site</span>
+              <span className="text-[0.95rem] text-ink-soft">none found on the site</span>
             ) : (
               <img src={url} alt="your logo, as found on the site" className="h-10 w-10 object-contain" />
             )}
@@ -200,15 +201,12 @@ export function Fields({
         }}
         onSave={(value) => {
           setReverted(null);
-          void fetcher.submit(
-            { intent: "draft", subject, field: "name", value },
-            { method: "post" },
-          );
+          void fetcher.submit({ intent: "draft", subject, field: "name", value }, { method: "post" });
         }}
       />
       {site.unfound ? (
         <Row label="logo">
-          <span className="text-ink-soft text-[0.88rem]">{UNREAD_LINE}</span>
+          <span className="text-[0.88rem] text-ink-soft">{UNREAD_LINE}</span>
         </Row>
       ) : (
         <Logo logo={logo} />
@@ -227,22 +225,16 @@ export function Fields({
         reverted={reverted === "description"}
         onRevert={() => {
           setReverted("description");
-          void fetcher.submit(
-            { intent: "revert", subject, field: "description" },
-            { method: "post" },
-          );
+          void fetcher.submit({ intent: "revert", subject, field: "description" }, { method: "post" });
         }}
         onSave={(value) => {
           setReverted(null);
-          void fetcher.submit(
-            { intent: "draft", subject, field: "description", value },
-            { method: "post" },
-          );
+          void fetcher.submit({ intent: "draft", subject, field: "description", value }, { method: "post" });
         }}
       />
       <Row label="socials" check={site.review.socials === "check"}>
         {site.review.socials === "empty" ? (
-          <span className="text-ink-soft text-[0.88rem]">{emptyLine}</span>
+          <span className="text-[0.88rem] text-ink-soft">{emptyLine}</span>
         ) : site.review.socials === "check" ? (
           <ul className="min-w-0 flex-1 text-[0.95rem]">
             {site.socials.map((social) => (
@@ -260,7 +252,7 @@ export function Fields({
             ))}
           </ul>
         ) : site.socials.length === 0 ? (
-          <span className="text-ink-soft text-[0.95rem]">none found on the site</span>
+          <span className="text-[0.95rem] text-ink-soft">none found on the site</span>
         ) : (
           <ul className="min-w-0 flex-1 text-[0.95rem]">
             {site.socials.map((social) => (
@@ -311,12 +303,12 @@ export function IdentityCard({
   message: string | undefined;
 }) {
   return (
-    <Form method="post" className="border-ink bg-card mt-8 max-w-xl border-[1.5px] px-4">
+    <Form method="post" className="mt-8 max-w-xl border-[1.5px] border-ink bg-card px-4">
       <input type="hidden" name="subject" value={subject} />
       <Row label="site">
         <span className="truncate text-[0.95rem]">{domain}</span>
       </Row>
-      <p role="status" className="text-ink-soft text-[0.88rem]">
+      <p role="status" className="text-[0.88rem] text-ink-soft">
         <Suspense fallback={null}>
           <Await resolve={site}>{(fields) => <ArrivalLine fields={fields} />}</Await>
         </Suspense>
@@ -345,7 +337,11 @@ export function IdentityCard({
           {(fields) => (
             <>
               <Fields subject={subject} site={fields} logo={logo} draft={draft} />
-              {message ? <p role="alert" className="pt-3 text-[0.88rem]">{message}</p> : null}
+              {message ? (
+                <p role="alert" className="pt-3 text-[0.88rem]">
+                  {message}
+                </p>
+              ) : null}
               <Button type="submit" size="lg" className="my-5">
                 That&apos;s me
               </Button>

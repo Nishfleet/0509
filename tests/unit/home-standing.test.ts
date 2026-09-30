@@ -95,6 +95,7 @@ function payload(overrides: Partial<BriefPayload> = {}): BriefPayload {
     headline_is_new: false,
     why_line: "Kindred is the mover: 3 new ads and the loudest mention spike",
     is_quiet_week: false,
+    is_unjudged: false,
     read_this_first: [],
     brands: [
       brand("ent_casetta", "Casetta", 3, -1),
@@ -240,7 +241,9 @@ describe("Home standing", () => {
 
   it("puts an unranked brand last with a dash, never a zero", () => {
     const standing = homeStanding({
-      payload: payload({ brands: [brand("ent_casetta", "Casetta", null, null), brand("ent_self", "Own Brand", 1, null)] }),
+      payload: payload({
+        brands: [brand("ent_casetta", "Casetta", null, null), brand("ent_self", "Own Brand", 1, null)],
+      }),
       entities: ENTITIES,
       schedule: SCHEDULE,
       history: [],
@@ -315,7 +318,16 @@ describe("Home standing", () => {
       { id: "ent_kindred", role: "competitor", domain: "kindred.example", name: "Kindred", state: "on" },
       { id: "ent_off", role: "competitor", domain: "off.example", name: "Off Brand", state: "off" },
     ];
-    const view = homeView({ payload: null, entities, schedule: SCHEDULE, history: [], sources: SITE_SOURCES, counts: [], moves: [], now: THURSDAY_MORNING });
+    const view = homeView({
+      payload: null,
+      entities,
+      schedule: SCHEDULE,
+      history: [],
+      sources: SITE_SOURCES,
+      counts: [],
+      moves: [],
+      now: THURSDAY_MORNING,
+    });
     expect(view.chips).toEqual([
       { name: "Own Brand", href: "/app/settings", self: true, off: false },
       { name: "Kindred", href: "/app/competitors/ent_kindred", self: false, off: false },
@@ -325,6 +337,7 @@ describe("Home standing", () => {
     const gathering = render({ payload: null, entities });
     expect(gathering).toContain('role="group"');
     expect(gathering).toContain('aria-label="Your set"');
+    expect(gathering).toContain('class="mt-4"');
     expect(gathering).toContain('href="/app/settings"');
     expect(gathering).toContain('href="/app/competitors/ent_kindred"');
     expect(gathering).toContain("You · Own Brand");
@@ -335,6 +348,18 @@ describe("Home standing", () => {
 
     const ranked = render({ payload: payload(), entities });
     expect(ranked).not.toContain('aria-label="Your set"');
+    expect(ranked).not.toContain('class="mt-4"');
+
+    const quiet = render({ payload: payload({ is_unjudged: true, headline_rank: null }), entities });
+    expect(quiet).not.toContain('aria-label="Your set"');
+    expect(quiet).not.toContain('class="mt-4"');
+
+    const addCompetitor = render({
+      payload: payload(),
+      entities: [SELF, { id: "ent_off", role: "competitor", domain: "off.example", name: "Off Brand", state: "off" }],
+    });
+    expect(addCompetitor).not.toContain('aria-label="Your set"');
+    expect(addCompetitor).not.toContain('class="mt-4"');
   });
 
   it("lands the first site sweep on the next 02:00Z strictly after now", () => {
@@ -355,7 +380,9 @@ describe("Home standing", () => {
   });
 
   it("gives the view the same first sweep, so Home keeps one answer for it", () => {
-    expect(homeView({ ...GATHERING_INPUT, sources: [] }).standing).toEqual(homeStanding({ ...GATHERING_INPUT, sources: [] }));
+    expect(homeView({ ...GATHERING_INPUT, sources: [] }).standing).toEqual(
+      homeStanding({ ...GATHERING_INPUT, sources: [] }),
+    );
     const standing = homeStanding(GATHERING_INPUT);
     if (standing.kind !== "gathering") throw new Error("expected a gathering standing");
     expect(standing.firstSweepAt).toBe("Friday 03:00");
@@ -390,10 +417,28 @@ describe("Home standing", () => {
       { id: "ent_casetta", role: "competitor", domain: "casetta.example", name: "Casetta", state: "on" },
       { id: "ent_hollow", role: "competitor", domain: "hollow.example", name: "Hollow", state: "on" },
     ];
-    const four = homeView({ payload: payload(), entities: fourOn, schedule: amsterdamSchedule, history: [], sources: SITE_SOURCES, counts: [], moves: [], now });
+    const four = homeView({
+      payload: payload(),
+      entities: fourOn,
+      schedule: amsterdamSchedule,
+      history: [],
+      sources: SITE_SOURCES,
+      counts: [],
+      moves: [],
+      now,
+    });
     expect(four.footer).toBe("Checked 4 brands this week · brief Monday 08:00 · your site re-checked at 13:00");
 
-    const one = homeView({ payload: payload(), entities: [SELF], schedule: amsterdamSchedule, history: [], sources: SITE_SOURCES, counts: [], moves: [], now });
+    const one = homeView({
+      payload: payload(),
+      entities: [SELF],
+      schedule: amsterdamSchedule,
+      history: [],
+      sources: SITE_SOURCES,
+      counts: [],
+      moves: [],
+      now,
+    });
     expect(one.footer).toBe("Checked 1 brand this week · brief Monday 08:00 · your site re-checked at 13:00");
   });
 });
@@ -459,7 +504,16 @@ describe("Home chips", () => {
       { id: "ent_off", role: "competitor", domain: "off.example", name: "Off Brand", state: "off" },
       SELF,
     ];
-    const view = homeView({ payload: null, entities, schedule: SCHEDULE, history: [], sources: SITE_SOURCES, counts: [], moves: [], now: THURSDAY_MORNING });
+    const view = homeView({
+      payload: null,
+      entities,
+      schedule: SCHEDULE,
+      history: [],
+      sources: SITE_SOURCES,
+      counts: [],
+      moves: [],
+      now: THURSDAY_MORNING,
+    });
     expect(view.chips).toEqual(homeChips(entities));
     expect(view.chips[0]?.self).toBe(true);
   });

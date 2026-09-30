@@ -12,13 +12,7 @@ export interface WatchedSource {
 const REBUILDING =
   "We're rebuilding coverage of news mentions. Briefs and standing still arrive from site changes; mentions resume as their sources come back.";
 
-export function WhatWeWatch({
-  sources,
-  now,
-}: {
-  sources: readonly WatchedSource[];
-  now?: number;
-}) {
+export function WhatWeWatch({ sources, now }: { sources: readonly WatchedSource[]; now?: number }) {
   const statuses = sources.map((entry) => ({
     entry,
     status: sourcePillStatus(entry.source, entry.snapshot, now),
@@ -30,7 +24,7 @@ export function WhatWeWatch({
   return (
     <Section id="what-we-watch" kicker="Public sources only" title="What we watch" lead={lead}>
       {allDegraded ? (
-        <p className="text-ink-soft max-w-[42rem] text-[1.05rem] leading-[1.6]">{REBUILDING}</p>
+        <p className="max-w-[42rem] text-[1.05rem] leading-[1.6] text-ink-soft">{REBUILDING}</p>
       ) : (
         <ul className="flex flex-wrap gap-2">
           {shown.map(({ entry }) => (

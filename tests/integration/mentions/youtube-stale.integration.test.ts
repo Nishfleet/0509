@@ -2,7 +2,7 @@ import { env } from "cloudflare:test";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { readEntityIdentityJson } from "../../../app/lib/data/entity.server";
-import { LOST_CHANNEL_REASON } from "../../../app/lib/mentions/youtube-channel";
+import { LOST_CHANNEL_REASON, NO_CHANNEL_REASON } from "../../../app/lib/mentions/youtube-channel";
 import type { WatchRow } from "../../../app/lib/data/watch.server";
 import { readWatchConfigJson, writeWatchConfigJson } from "../../../app/lib/data/watch.server";
 import { sweepTarget } from "../../../workers/mentions/sweep";
@@ -112,7 +112,7 @@ afterEach(async () => {
 });
 
 describe("YouTube sweep stale channel", () => {
-  it("does not flag a brand that was never resolved and has no channel URL", async () => {
+  it("flags a brand whose confirmed card has no channel URL with the no-channel reason", async () => {
     const { watchId, watch } = await seed('{"description":"no socials"}', "{}");
     stubFeeds();
 
@@ -122,8 +122,10 @@ describe("YouTube sweep stale channel", () => {
       null,
     );
 
-    expect(outcome).toEqual({ items: 0, stored: 0, unjudged: 0 });
-    expect(JSON.parse(await configOf(watchId))).toEqual({});
+    expect(outcome).toEqual({ items: 0, stored: 0, unjudged: 0, skipped: 0 });
+    expect(JSON.parse(await configOf(watchId))).toEqual({
+      degraded: { state: "degraded", reason: NO_CHANNEL_REASON, at: NOW },
+    });
     expect(await snapshotCount(watchId)).toBe(0);
   });
 
@@ -174,7 +176,7 @@ describe("YouTube sweep stale channel", () => {
       4,
     );
 
-    expect(outcome).toEqual({ items: 0, stored: 0, unjudged: 0 });
+    expect(outcome).toEqual({ items: 0, stored: 0, unjudged: 0, skipped: 0 });
     expect(JSON.parse(await configOf(resolved.watchId))).toEqual({
       channelId: LOST_ID,
       pendingChannelId: LIVE_ID,
@@ -193,7 +195,7 @@ describe("YouTube sweep stale channel", () => {
       4,
     );
 
-    expect(confirmed).toEqual({ items: 0, stored: 0, unjudged: 0 });
+    expect(confirmed).toEqual({ items: 0, stored: 0, unjudged: 0, skipped: 0 });
     expect(JSON.parse(await configOf(resolved.watchId))).toEqual({ channelId: LIVE_ID });
     expect(await snapshotCount(resolved.watchId)).toBe(1);
     const snapshot = await env.DB.prepare(
@@ -223,7 +225,7 @@ describe("YouTube sweep stale channel", () => {
       null,
     );
 
-    expect(outcome).toEqual({ items: 0, stored: 0, unjudged: 0 });
+    expect(outcome).toEqual({ items: 0, stored: 0, unjudged: 0, skipped: 0 });
     expect(JSON.parse(await configOf(watchId))).toEqual({
       channelId: LOST_ID,
       pendingChannelId: LIVE_ID,
@@ -242,7 +244,7 @@ describe("YouTube sweep stale channel", () => {
       null,
     );
 
-    expect(confirmed).toEqual({ items: 0, stored: 0, unjudged: 0 });
+    expect(confirmed).toEqual({ items: 0, stored: 0, unjudged: 0, skipped: 0 });
     expect(JSON.parse(await configOf(watchId))).toEqual({ channelId: LIVE_ID });
     expect(await snapshotCount(watchId)).toBe(1);
     expect(fakeFetch.mock.calls.map((call) => String(call[0]))).toEqual([
@@ -306,7 +308,7 @@ describe("YouTube sweep stale channel", () => {
       4,
     );
 
-    expect(outcome).toEqual({ items: 0, stored: 0, unjudged: 0 });
+    expect(outcome).toEqual({ items: 0, stored: 0, unjudged: 0, skipped: 0 });
     expect(JSON.parse(await configOf(watchId))).toEqual({ channelId: LIVE_ID });
     expect(await snapshotCount(watchId)).toBe(1);
   });
@@ -330,7 +332,7 @@ describe("YouTube sweep stale channel", () => {
       null,
     );
 
-    expect(outcome).toEqual({ items: 0, stored: 0, unjudged: 0 });
+    expect(outcome).toEqual({ items: 0, stored: 0, unjudged: 0, skipped: 0 });
     expect(JSON.parse(await configOf(watchId))).toEqual({
       degraded: { state: "degraded", reason: LOST_CHANNEL_REASON, at: NOW },
     });
@@ -415,7 +417,7 @@ describe("YouTube sweep stale channel", () => {
       null,
     );
 
-    expect(outcome).toEqual({ items: 0, stored: 0, unjudged: 0 });
+    expect(outcome).toEqual({ items: 0, stored: 0, unjudged: 0, skipped: 0 });
     expect(JSON.parse(await configOf(watchId))).toEqual({
       degraded: { state: "degraded", reason: LOST_CHANNEL_REASON, at: NOW },
     });

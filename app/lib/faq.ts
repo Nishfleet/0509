@@ -11,8 +11,7 @@ const priceList = PLANS.map((plan) => `${plan.name} €${String(plan.monthlyPric
 export const FAQ: readonly FaqEntry[] = [
   {
     question: "What is Five to Nine?",
-    answer:
-      `Five to Nine is a competitor tracker for founders, brands and creators. It watches your rivals' ${WATCHED_NOUNS}, ranks you against them every week, and emails you one brief on Monday with a screenshot behind every change.`,
+    answer: `Five to Nine is a competitor tracker for founders, brands and creators. It watches your rivals' ${WATCHED_NOUNS}, ranks you against them every week, and emails you one brief on Monday with a screenshot behind every change.`,
   },
   {
     question: "Do I need to know who my competitors are?",

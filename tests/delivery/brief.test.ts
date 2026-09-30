@@ -1,10 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import {
-  BRAND_LINES_QUERY,
-  parseBriefPayload,
-  type BriefPayload,
-} from "../../app/lib/brief-payload";
+import { BRAND_LINES_QUERY, parseBriefPayload, type BriefPayload } from "../../app/lib/brief-payload";
 import { renderBrief } from "../../workers/delivery/brief-template";
 
 /**
@@ -17,7 +13,10 @@ import { renderBrief } from "../../workers/delivery/brief-template";
  * constraint are the other three P7.x packets, and their proofs are theirs.
  */
 
-const CONTEXT = { unsubscribe_url: "https://0509.io/u/opaque-token", asset_base_url: "https://assets.0509.io" } as const;
+const CONTEXT = {
+  unsubscribe_url: "https://0509.io/u/opaque-token",
+  asset_base_url: "https://assets.0509.io",
+} as const;
 
 function payload(overrides: Partial<BriefPayload> = {}): BriefPayload {
   return {
@@ -31,6 +30,7 @@ function payload(overrides: Partial<BriefPayload> = {}): BriefPayload {
     headline_is_new: false,
     why_line: "Kindred is the mover: 3 new ads and the loudest mention spike",
     is_quiet_week: false,
+    is_unjudged: false,
     read_this_first: [
       {
         signal_id: "sig_1",
@@ -151,10 +151,7 @@ describe("brief block order", () => {
   });
 
   it("says a brand-new workspace has no last week to compare", () => {
-    const { html, text } = renderBrief(
-      payload({ headline_movement: null, headline_is_new: true }),
-      CONTEXT,
-    );
+    const { html, text } = renderBrief(payload({ headline_movement: null, headline_is_new: true }), CONTEXT);
     expect(html).toContain("new");
     expect(text).toContain("You're #3 of 8 this week — new");
   });
@@ -169,7 +166,9 @@ describe("off brands are absent, not zeroed", () => {
 
   it("never renders a zeroed counts line for a brand that is not on the payload", () => {
     const { html, text } = renderBrief(
-      payload({ brands: [{ ...payload().brands[0], ad_delta: 0, mention_delta: 0, site_change_count: 0, new_roles: 0 }] }),
+      payload({
+        brands: [{ ...payload().brands[0], ad_delta: 0, mention_delta: 0, site_change_count: 0, new_roles: 0 }],
+      }),
       CONTEXT,
     );
     expect(text).not.toContain("0 new ads");
@@ -212,19 +211,13 @@ describe("new job posts ride the brand line", () => {
   });
 
   it("says one job post in the singular", () => {
-    const { text } = renderBrief(
-      payload({ brands: [{ ...payload().brands[0], new_roles: 1 }] }),
-      CONTEXT,
-    );
+    const { text } = renderBrief(payload({ brands: [{ ...payload().brands[0], new_roles: 1 }] }), CONTEXT);
     expect(text).toContain("1 new job post");
     expect(text).not.toContain("1 new job posts");
   });
 
   it("omits the phrase entirely for a brand with no hiring", () => {
-    const { html, text } = renderBrief(
-      payload({ brands: [{ ...payload().brands[0], new_roles: 0 }] }),
-      CONTEXT,
-    );
+    const { html, text } = renderBrief(payload({ brands: [{ ...payload().brands[0], new_roles: 0 }] }), CONTEXT);
     expect(text).not.toContain("job post");
     expect(html).not.toContain("job post");
     expect(text).toContain("3 new ads · 12 mentions · 1 site change");
@@ -293,9 +286,7 @@ describe("screenshots are linked, never inlined", () => {
   it("keeps an already percent-encoded key byte-for-byte, never re-encoding it", () => {
     const { html } = renderBrief(
       payload({
-        read_this_first: [
-          { ...payload().read_this_first[0], thumbnail_r2_key: "captures/ws_1/a%20b/x+y.png" },
-        ],
+        read_this_first: [{ ...payload().read_this_first[0], thumbnail_r2_key: "captures/ws_1/a%20b/x+y.png" }],
       }),
       CONTEXT,
     );
@@ -371,7 +362,12 @@ describe("per-brand line and own-site status", () => {
         own_site: {
           status: "broken",
           incidents: [
-            { page_url: "https://0509.io/pricing", kind: "checkout section removed", observed_at: "2026-09-18T10:00:00.000Z", is_open: true },
+            {
+              page_url: "https://0509.io/pricing",
+              kind: "checkout section removed",
+              observed_at: "2026-09-18T10:00:00.000Z",
+              is_open: true,
+            },
           ],
         },
       }),
@@ -490,7 +486,18 @@ describe("inline-styled html, and the voice", () => {
   it("keeps both palettes to DESIGN.md §4's tokens, not a third set", () => {
     const { html } = renderBrief(payload(), CONTEXT);
     const style = html.slice(html.indexOf("<style>"), html.indexOf("</style>"));
-    for (const hex of ["#f4f1e8", "#fffdf6", "#0e0d0a", "#55524a", "#ddd6c6", "#14130f", "#1c1a15", "#f2efe4", "#a9a294", "#322e25"]) {
+    for (const hex of [
+      "#f4f1e8",
+      "#fffdf6",
+      "#0e0d0a",
+      "#55524a",
+      "#ddd6c6",
+      "#14130f",
+      "#1c1a15",
+      "#f2efe4",
+      "#a9a294",
+      "#322e25",
+    ]) {
       expect(style).toContain(hex);
     }
   });
@@ -540,14 +547,12 @@ describe("parseBriefPayload", () => {
   });
 
   it("skips a malformed brand row rather than dropping the whole brief", () => {
-    const withJunk = { ...JSON.parse(stored), brands: [{ entity_id: "ent_junk" }, { nope: true }, ...payload().brands] };
+    const withJunk = {
+      ...JSON.parse(stored),
+      brands: [{ entity_id: "ent_junk" }, { nope: true }, ...payload().brands],
+    };
     const parsed = parseBriefPayload(JSON.stringify(withJunk));
-    expect(parsed.brands.map((b) => b.entity_id)).toEqual([
-      "ent_junk",
-      "ent_kindred",
-      "ent_self",
-      "ent_casetta",
-    ]);
+    expect(parsed.brands.map((b) => b.entity_id)).toEqual(["ent_junk", "ent_kindred", "ent_self", "ent_casetta"]);
   });
 
   it("ignores a bad movement instead of rendering NaN", () => {

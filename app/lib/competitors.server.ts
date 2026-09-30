@@ -1,12 +1,19 @@
 import { addManualCompetitor, setCompetitorState } from "./data/entity.server";
-import { readEntitlements } from "./data/plan.server";
-import { acceptSuggestion, confirmRetireSuggestion, dismissSuggestion, keepFromRetireSuggestion } from "./data/suggestion.server";
+import { nextPlan, type PlanId } from "./billing/plans";
+import { readEntitlements, readPlanTier } from "./data/plan.server";
+import {
+  acceptSuggestion,
+  confirmRetireSuggestion,
+  dismissSuggestion,
+  keepFromRetireSuggestion,
+} from "./data/suggestion.server";
 import { isTakenDown } from "./data/takedown.server";
 import { resolveDomain } from "./discovery/resolve-domain.server";
 import { normaliseSubject } from "./identity/normalise";
 
 export interface CompetitorActionResult {
   message: string | null;
+  upgradePlanId?: PlanId | null;
 }
 
 const DONE: CompetitorActionResult = { message: null };
@@ -20,6 +27,11 @@ const UNRESOLVED: CompetitorActionResult = {
 function text(form: FormData, name: string): string {
   const value = form.get(name);
   return typeof value === "string" ? value.trim() : "";
+}
+
+async function upgradePlanIdFor(workspaceId: string): Promise<PlanId | null> {
+  const next = nextPlan(await readPlanTier(workspaceId));
+  return next === null ? null : next.id;
 }
 
 async function addCompetitor(workspaceId: string, raw: string, now: string): Promise<CompetitorActionResult> {
@@ -40,9 +52,19 @@ async function addCompetitor(workspaceId: string, raw: string, now: string): Pro
 
   if (await isTakenDown(domain)) return { message: "That brand asked not to be tracked, so we can't add it." };
   const cap = (await readEntitlements(workspaceId)).competitors;
-  const outcome = await addManualCompetitor({ workspaceId, domain, name, now, cap });
+  const outcome = await addManualCompetitor({
+    workspaceId,
+    domain,
+    name,
+    url: normalised.ok ? normalised.subject.url : null,
+    now,
+    cap,
+  });
   if (outcome === "at_cap") {
-    return { message: `Your plan watches up to ${String(cap)} competitors. Switch one off to add another.` };
+    return {
+      message: `Your plan watches up to ${String(cap)} competitors. Switch one off to add another.`,
+      upgradePlanId: await upgradePlanIdFor(workspaceId),
+    };
   }
   return DONE;
 }

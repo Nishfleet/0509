@@ -14,9 +14,7 @@ export function hourLabel(hour: number): string {
 }
 
 const numberField = (minimum: number, maximum: number) =>
-  z
-    .union([z.number(), z.string().trim().min(1)])
-    .pipe(z.coerce.number<number>().int().min(minimum).max(maximum));
+  z.union([z.number(), z.string().trim().min(1)]).pipe(z.coerce.number<number>().int().min(minimum).max(maximum));
 
 const briefScheduleInput = z.object({
   weekday: numberField(0, 6),

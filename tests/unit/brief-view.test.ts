@@ -17,6 +17,7 @@ function payload(): BriefPayload {
     headline_is_new: false,
     why_line: "Kindred is the mover: 3 new ads and the loudest mention spike",
     is_quiet_week: false,
+    is_unjudged: false,
     read_this_first: [
       {
         signal_id: "sig_1",
@@ -107,9 +108,7 @@ describe("the brief view", () => {
     expect(blocks(render())).toEqual(["headline", "read-this-first", "brands", "own-site", "checked"]);
     const html = render();
     expect(html).toContain("You&#x27;re #2 of 6 this week");
-    expect(html).toContain(
-      "12 mentions · 3 site changes · 4 new ads",
-    );
+    expect(html).toContain("12 mentions · 3 site changes · 4 new ads");
     expect(html).toContain("cart 500s on https://drylight.example/ — still broken");
     expect(html).toContain("Oaks — #1 Oaks shipped a 2026 pricing page");
     expect(html).toContain("Drylight — unranked");
@@ -130,17 +129,13 @@ describe("the brief view", () => {
       "checked",
     ]);
     expect(render({ brands: [] })).toContain("Add a competitor to see where you stand");
-    expect(
-      render({ own_site: { status: "ok", incidents: [] } }),
-    ).toContain("Your site looks fine.");
+    expect(render({ own_site: { status: "ok", incidents: [] } })).toContain("Your site looks fine.");
   });
 
   it("keeps an unsafe read-this-first URL out of the markup", () => {
     const html = render({
       read_this_first: payload().read_this_first.map((mark) =>
-        mark.before === null
-          ? { ...mark, title: "Unsafe read-this-first link", url: "javascript:alert(1)" }
-          : mark,
+        mark.before === null ? { ...mark, title: "Unsafe read-this-first link", url: "javascript:alert(1)" } : mark,
       ),
     });
 
@@ -155,9 +150,7 @@ describe("the brief view", () => {
   });
 
   it("keeps the placeholder headline without a rank and never ships email-only lines", () => {
-    expect(render({ headline_rank: null, headline_total: 0 })).toContain(
-      "Add a competitor to see where you stand",
-    );
+    expect(render({ headline_rank: null, headline_total: 0 })).toContain("Add a competitor to see where you stand");
     const html = render();
     expect(html).not.toContain("delivered");
     expect(html).not.toContain("Unsubscribe");

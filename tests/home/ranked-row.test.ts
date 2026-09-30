@@ -7,14 +7,7 @@ import { HomeStanding } from "../../app/components/home-standing";
 import { RankedRow } from "../../app/components/ranked-row";
 import type { BriefPayload } from "../../app/lib/brief-payload";
 import type { BriefSchedule } from "../../app/lib/brief-schedule";
-import type {
-  HomeCount,
-  HomeEntity,
-  HomePill,
-  HomeRow,
-  HomeSource,
-  WeekEvidence,
-} from "../../app/lib/home-standing";
+import type { HomeCount, HomeEntity, HomePill, HomeRow, HomeSource, WeekEvidence } from "../../app/lib/home-standing";
 import { homeStanding, homeView } from "../../app/lib/home-standing";
 import type { SiteChangeView } from "../../app/lib/site-change";
 
@@ -60,6 +53,7 @@ const PAYLOAD: BriefPayload = {
   headline_is_new: false,
   why_line: "Kindred is the mover: 3 new ads",
   is_quiet_week: false,
+  is_unjudged: false,
   read_this_first: [],
   brands: [
     brand("ent_self", "Own Brand", 2, null),
@@ -239,9 +233,7 @@ describe("a ranked row expands in place to the week's evidence", () => {
         createElement(
           "ol",
           null,
-          rowsFor(PAYLOAD).map((row) =>
-            createElement(RankedRow, { key: row.entityId, row, openId, evidence }),
-          ),
+          rowsFor(PAYLOAD).map((row) => createElement(RankedRow, { key: row.entityId, row, openId, evidence })),
         ),
       ),
     );

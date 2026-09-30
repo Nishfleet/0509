@@ -19,20 +19,18 @@ export function RetireQuestions({ questions }: { questions: readonly RetireQuest
       <h2 id="retire-questions-heading" className={BLOCK_HEADING}>
         Still competing?
       </h2>
-      <ul aria-label="Still competing?" className="border-line mt-3 border-b">
+      <ul aria-label="Still competing?" className="mt-3 border-b border-line">
         {questions.map((question) => (
           <li
             key={question.suggestionId}
-            className="border-line flex flex-wrap items-center gap-x-4 gap-y-2 border-t py-4"
+            className="flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-line py-4"
           >
             <div className="flex min-w-0 flex-1 items-start gap-3">
               <Monogram name={question.name} off />
               <div className="min-w-0">
-                <p className="font-display text-row-name truncate font-bold">{question.name}</p>
-                <p className="text-ink-soft truncate text-body-sm">{question.domain}</p>
-                {question.reason === null ? null : (
-                  <p className="text-ink-soft mt-1 text-body-sm">{question.reason}</p>
-                )}
+                <p className="truncate font-display text-row-name font-bold">{question.name}</p>
+                <p className="truncate text-body-sm text-ink-soft">{question.domain}</p>
+                {question.reason === null ? null : <p className="mt-1 text-body-sm text-ink-soft">{question.reason}</p>}
               </div>
             </div>
             <Form method="post" className="flex gap-2">

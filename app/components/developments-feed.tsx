@@ -3,14 +3,7 @@ import type { ReactElement } from "react";
 import { useSearchParams } from "react-router";
 
 import type { DevelopmentItem } from "../lib/developments";
-import {
-  FEED_FILTERS,
-  FEED_PARAM,
-  SOURCE_LABEL,
-  countByKind,
-  filterFeed,
-  parseFeedFilter,
-} from "../lib/developments";
+import { FEED_FILTERS, FEED_PARAM, SOURCE_LABEL, countByKind, filterFeed, parseFeedFilter } from "../lib/developments";
 import { EmptyState } from "./empty-state";
 import { SiteChangeItem, type SiteChangeItemData } from "./site-change-item";
 import { ToggleGroup, ToggleGroupItem } from "./ui/toggle-group";
@@ -63,21 +56,13 @@ export function DevelopmentsFeed({
             return (
               <li key={item.id} data-kind={item.kind}>
                 {change === undefined ? (
-                  <article
-                    data-testid="development"
-                    className="border-line mt-8 min-w-0 border-t pt-6"
-                  >
-                    <h3 className="font-display text-row-name font-bold [overflow-wrap:anywhere]">
-                      {heading}
-                    </h3>
+                  <article data-testid="development" className="mt-8 min-w-0 border-t border-line pt-6">
+                    <h3 className="font-display text-row-name font-bold [overflow-wrap:anywhere]">{heading}</h3>
                     {item.title !== null && item.summary !== null ? (
                       <p className="leading-[1.65] [overflow-wrap:anywhere]">{item.summary}</p>
                     ) : null}
                     <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1">
-                      <span
-                        data-slot="source-pill"
-                        className="border border-line px-1.5 font-mono text-pill uppercase"
-                      >
+                      <span data-slot="source-pill" className="border border-line px-1.5 font-mono text-pill uppercase">
                         {SOURCE_LABEL[item.kind]}
                       </span>
                       <span className="font-mono text-meta text-ink-soft uppercase">{item.when}</span>

@@ -7,7 +7,7 @@ import { buttonVariants } from "../../app/components/ui/button";
 import type { BriefPayload } from "../../app/lib/brief-payload";
 
 const ROW_NAME_TITLE = '<h3 class="font-display text-row-name font-bold [overflow-wrap:anywhere]">';
-const META_WHEN = 'class="text-ink-soft mt-2 block font-mono text-meta uppercase"';
+const META_WHEN = 'class="mt-2 block font-mono text-meta text-ink-soft uppercase"';
 const READ_BRIEF_CLASS = buttonVariants({ variant: "tertiary", className: "cursor-pointer" });
 
 const NOTE_ITEM: AlertFeedItem = {
@@ -63,6 +63,7 @@ const BRIEF: BriefPayload = {
   headline_is_new: false,
   why_line: "Nothing crossed the bar this week.",
   is_quiet_week: true,
+  is_unjudged: false,
   read_this_first: [],
   brands: [],
   own_site: { status: "ok", incidents: [] },
@@ -123,9 +124,7 @@ describe("an alert feed row", () => {
   it("renders a delivery failure title in the house row-name type and omits a missing brief", () => {
     const html = render(FAILURE_ITEM);
     expect(html).toContain('data-testid="delivery-failure"');
-    expect(html).toContain(
-      `${ROW_NAME_TITLE}We stopped trying to send your brief</h3>`,
-    );
+    expect(html).toContain(`${ROW_NAME_TITLE}We stopped trying to send your brief</h3>`);
     expect(html).toContain("The brief did not go out. We will not try again.");
     expect(html).toContain("4 days ago");
     expect(html).not.toContain("Read the brief");

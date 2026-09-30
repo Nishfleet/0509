@@ -9,7 +9,7 @@ import { expect, test } from "@playwright/test";
 // `--ink` / `--ink-soft` so neither route paints meaningful text in
 // `--ink-faint`.
 for (const path of ["/privacy", "/terms"]) {
-  test(`${path} passes axe at WCAG 2.2 AA and is keyboard-operable at 1440 and 390 in light and dark (#4156)`, async ({
+  test(`${path} passes axe at WCAG 2.2 AA and is keyboard-operable at 1440 and 390 in light and dark (#4156) @smoke`, async ({
     page,
   }, testInfo) => {
     for (const colorScheme of ["light", "dark"] as const) {
@@ -40,15 +40,11 @@ for (const path of ["/privacy", "/terms"]) {
           expect(levels[i] - levels[i - 1]).toBeLessThanOrEqual(1);
         }
 
-        const takedown = page
-          .getByRole("contentinfo")
-          .getByRole("link", { name: "support@0509.io" });
+        const takedown = page.getByRole("contentinfo").getByRole("link", { name: "support@0509.io" });
         await expect(takedown).toBeVisible();
         await expect(takedown).toHaveAttribute("href", "mailto:support@0509.io");
 
-        const hrefs = await page
-          .locator("a[href]")
-          .evaluateAll((els) => els.map((el) => el.getAttribute("href")));
+        const hrefs = await page.locator("a[href]").evaluateAll((els) => els.map((el) => el.getAttribute("href")));
         await page.mouse.click(1, 1);
         const visited: (string | null)[] = [];
         for (const _ of hrefs) {
