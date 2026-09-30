@@ -344,7 +344,9 @@ function curves(sectionText: string): Map<string, string> {
 // literally would fail on formatting alone, so the doc side is normalised to
 // the CSS spelling — the same reason `ascii()` exists for the minus sign.
 function normaliseCurve(curve: string): string {
-  return curve.replace(/,\s*/g, ", ");
+  return curve
+    .replace(/,\s*/g, ", ")
+    .replace(/(^|[^\d])\.(\d)/g, (_match, before: string, digit: string) => `${before}0.${digit}`);
 }
 
 // A curve used inside `new RegExp` must have its metacharacters escaped, or the
