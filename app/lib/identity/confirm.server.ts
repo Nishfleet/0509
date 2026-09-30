@@ -1,4 +1,3 @@
-import { captureException } from "@sentry/cloudflare";
 import { z } from "zod";
 
 import { insertSelfEntity, readWorkspaceSelfId } from "../data/entity.server";
@@ -40,21 +39,27 @@ function creatorSite(socials: { platform: string; url: string }[]): Subject | nu
   return normalised.subject;
 }
 
-export async function confirmCard(
+export async function confirmCard(workspaceId: string, userId: string, form: FormData): Promise<boolean> {
+  const startTail = await confirmCardLater(workspaceId, userId, form);
+  if (startTail === null) return false;
+  await startTail();
+  return true;
+}
+
+export async function confirmCardLater(
   workspaceId: string,
   userId: string,
   form: FormData,
-  waitUntil?: (work: Promise<unknown>) => void,
-): Promise<boolean> {
+): Promise<(() => Promise<string>) | null> {
   const parsed = confirmSchema.safeParse({
     subject: field(form, "subject"),
     name: field(form, "name"),
     description: field(form, "description"),
     socials: socials(form),
   });
-  if (!parsed.success) return false;
+  if (!parsed.success) return null;
   const normalised = normaliseSubject(parsed.data.subject);
-  if (!normalised.ok) return false;
+  if (!normalised.ok) return null;
   const { subject } = normalised;
   const card = parsed.data;
   const id = crypto.randomUUID();
@@ -77,7 +82,7 @@ export async function confirmCard(
     now: now.toISOString(),
   });
   const entityId = inserted ? id : await readWorkspaceSelfId(workspaceId);
-  if (entityId === null) return false;
+  if (entityId === null) return null;
   const candidates: { edit: FieldEdit; changed: boolean }[] =
     !inserted || cached === null
       ? []
@@ -111,15 +116,6 @@ export async function confirmCard(
     homepageUrl: subject.kind === "domain" ? subject.url : (site?.url ?? null),
     ...(subject.kind === "domain" ? {} : { handle: subject.registrable }),
   };
-  if (waitUntil === undefined) {
-    await Promise.all([edits, startIdentityTail(tailParams)]);
-    return true;
-  }
   await edits;
-  waitUntil(
-    startIdentityTail(tailParams).catch((error: unknown) => {
-      captureException(error, { tags: { step: "identity-tail-start" } });
-    }),
-  );
-  return true;
+  return () => startIdentityTail(tailParams);
 }

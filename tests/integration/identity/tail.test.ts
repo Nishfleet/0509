@@ -1,12 +1,11 @@
 import { env, introspectWorkflow } from "cloudflare:test";
 import { NonRetryableError } from "cloudflare:workflows";
-import { captureException } from "@sentry/cloudflare";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 
 import { insertSelfEntity, readWorkspaceSelfId } from "../../../app/lib/data/entity.server";
 import { readJudgedPricingUrl, upsertJudgedPages } from "../../../app/lib/data/page.server";
-import { confirmCard } from "../../../app/lib/identity/confirm.server";
+import { confirmCard, confirmCardLater } from "../../../app/lib/identity/confirm.server";
 import { extractIdentity } from "../../../app/lib/identity/extract";
 import { normaliseSubject } from "../../../app/lib/identity/normalise";
 import { probeKey } from "../../../app/lib/identity/probe-cache.server";
@@ -17,11 +16,6 @@ import {
   startIdentityTail,
 } from "../../../app/lib/identity/tail.server";
 import gym from "../../fixtures/gymshark-2026-09-22-a.html?raw";
-
-vi.mock("@sentry/cloudflare", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("@sentry/cloudflare")>()),
-  captureException: vi.fn(),
-}));
 
 const DOMAIN = "gymshark.com";
 const GREENHOUSE_JOBS = "https://boards-api.greenhouse.io/v1/boards/gymshark/jobs";
@@ -253,40 +247,34 @@ describe("IdentityTailWorkflow", () => {
     expect(await introspector.get()).toHaveLength(1);
   });
 
-  it("hands the tail start to waitUntil and still starts one instance", async () => {
+  it("confirms first and starts the one tail instance only when the caller asks", async () => {
     await seed();
     await using introspector = await introspectWorkflow(env.IDENTITY_TAIL);
-    const deferred: Promise<unknown>[] = [];
-    expect(
-      await confirmCard(
-        workspaceId,
-        userId,
-        form({ subject: DOMAIN, name: "Gymshark", description: "Gym clothes" }),
-        (work) => deferred.push(work),
-      ),
-    ).toBe(true);
+    const startTail = await confirmCardLater(
+      workspaceId,
+      userId,
+      form({ subject: DOMAIN, name: "Gymshark", description: "Gym clothes" }),
+    );
+    if (startTail === null) throw new Error("the confirm did not store the card");
 
-    expect(deferred).toHaveLength(1);
-    await Promise.all(deferred);
+    expect(await introspector.get()).toHaveLength(0);
+    await startTail();
     expect(await introspector.get()).toHaveLength(1);
   });
 
-  it("reports a tail start that fails after the response and does not fail the confirm", async () => {
+  it("lets a failed tail start surface to the caller after the card is stored", async () => {
     await seed();
     const failure = new Error("workflow binding unavailable");
     vi.spyOn(env.IDENTITY_TAIL, "createBatch").mockRejectedValueOnce(failure);
-    const deferred: Promise<unknown>[] = [];
-    expect(
-      await confirmCard(
-        workspaceId,
-        userId,
-        form({ subject: DOMAIN, name: "Gymshark", description: "Gym clothes" }),
-        (work) => deferred.push(work),
-      ),
-    ).toBe(true);
+    const startTail = await confirmCardLater(
+      workspaceId,
+      userId,
+      form({ subject: DOMAIN, name: "Gymshark", description: "" }),
+    );
+    if (startTail === null) throw new Error("the confirm did not store the card");
 
-    await expect(Promise.all(deferred)).resolves.toBeDefined();
-    expect(captureException).toHaveBeenCalledWith(failure, { tags: { step: "identity-tail-start" } });
+    expect(await readWorkspaceSelfId(workspaceId)).not.toBeNull();
+    await expect(startTail()).rejects.toBe(failure);
   });
 
   it("watches the page Jev judged pricing, not a /pricing path", async () => {
