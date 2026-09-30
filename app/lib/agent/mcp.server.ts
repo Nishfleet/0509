@@ -73,7 +73,7 @@ async function createServer(workspaceId: string): Promise<McpServer> {
       outputSchema: standingResultSchema,
       annotations: READ_ONLY,
     },
-    async () => result(await readAgentStanding(workspaceId)),
+    async () => toolResult(() => readAgentStanding(workspaceId)),
   );
 
   const brief = namedTool("get_brief");
