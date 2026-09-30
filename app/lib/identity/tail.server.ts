@@ -43,11 +43,6 @@ export function identityTailInstanceId(entityId: string): string {
 
 export async function startIdentityTail(params: IdentityTailParams): Promise<string> {
   const id = identityTailInstanceId(params.entityId);
-  const exists = await env.IDENTITY_TAIL.get(id).then(
-    () => true,
-    () => false,
-  );
-  if (exists) return id;
   await env.IDENTITY_TAIL.createBatch([{ id, params }]);
   return id;
 }
