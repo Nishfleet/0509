@@ -104,7 +104,12 @@ export async function loadCases<T extends EvalRow>(
     if (row.split !== "train" && row.split !== "test") throw new Error(`case ${row.id} has no split`);
     if (typeof row.why !== "string" || row.why === "") throw new Error(`case ${row.id} has no why`);
     for (const key of required) {
-      if (Reflect.get(row, key) === undefined) throw new Error(`case ${row.id} has no ${key}`);
+      const value = Reflect.get(row, key);
+      if (value === undefined || value === null) throw new Error(`case ${row.id} has no ${key}`);
+    }
+    const label = Reflect.get(row, "label");
+    if (label !== undefined && typeof label !== "boolean" && typeof label !== "string") {
+      throw new Error(`case ${row.id} label must be a boolean or a string`);
     }
     return entry as T;
   });
@@ -127,13 +132,20 @@ function selectedSplits(): Split[] {
   throw new Error(`EVAL_SPLIT must be train, test or all, got ${value}`);
 }
 
+const JEV_TIMEOUT_MS = 60_000;
+
 async function postJev(body: unknown): Promise<JevResponse> {
+  // The bearer token rides in a header, never a command line or a log line.
   const response = await fetch(JEV_URL, {
     method: "POST",
     headers: { "content-type": "application/json", authorization: `Bearer ${JEV_KEY}` },
     body: JSON.stringify(body),
+    signal: AbortSignal.timeout(JEV_TIMEOUT_MS),
   });
-  if (!response.ok) throw new Error(`jev POST failed with ${String(response.status)}: ${await response.text()}`);
+  if (!response.ok) {
+    const detail = (await response.text()).slice(0, 200);
+    throw new Error(`jev POST failed with ${String(response.status)}: ${detail}`);
+  }
   const parsed = (await response.json()) as JevResponse;
   if (typeof parsed.model !== "string") throw new Error("jev response carried no model version");
   return parsed;
@@ -267,6 +279,9 @@ async function scoreSplit<T extends EvalRow>(
     return { row, outcomes, calls };
   });
   const calls = scored.flatMap((entry) => entry.calls);
+  if (models.size > 1) {
+    throw new Error(`${split} split mixed model versions across repeats: ${[...models].sort().join(", ")}`);
+  }
   const value = mean(calls);
   const spread = 1.959963984540054 * (stdev(calls) / Math.sqrt(calls.length));
   const wrongIds = scored.filter((entry) => entry.calls.some((point) => point === 0)).map((entry) => entry.row.id);
@@ -305,6 +320,7 @@ export async function runEval<T extends EvalRow>(
   const splits: SplitScore[] = [];
   for (const split of selectedSplits()) {
     const picked = rows.filter((row) => row.split === split);
+    if (picked.length === 0) throw new Error(`${questionId} has no ${split} cases to score`);
     const scored = await scoreSplit(split, picked, ask, score);
     for (const model of scored.models) models.add(model);
     splits.push(scored.score);
