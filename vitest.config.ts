@@ -35,7 +35,7 @@ export default defineConfig({
           name: "node",
           environment: "node",
           include: ["tests/**/*.test.ts"],
-          exclude: ["tests/bundle/**", "tests/integration/**", "tests/unit/site/**", "tests/perf/**"],
+          exclude: ["tests/bundle/**", "tests/integration/**", "tests/unit/site/**", "tests/perf/**", "tests/evals/**"],
         },
       },
       {

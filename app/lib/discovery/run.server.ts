@@ -31,7 +31,7 @@ export interface ResolvedCandidate {
   line: string;
 }
 
-const IS_COMPETITOR: NoulQuestion = {
+export const IS_COMPETITOR: NoulQuestion = {
   id: "is_competitor",
   instructions:
     "Is `item` a real competitor of `self`: a company or brand that sells a substitute to the same kind of customer, so the owner of `self` would want to watch what it does? `item.evidence` is where the two were named together. Judge the business relationship the evidence shows. If `item` sells, stocks, lists, supplies, funds, owns, reports on or partners with `self`, it is not a competitor, even when it is in the same industry.",
@@ -41,7 +41,7 @@ const IS_COMPETITOR: NoulQuestion = {
     "It is a publisher, retailer, marketplace, supplier, partner, investor, a product line of `self`, `self` itself, or an unrelated company that only shares a headline.",
 };
 
-const IS_CREATOR_RIVAL: NoulQuestion = {
+export const IS_CREATOR_RIVAL: NoulQuestion = {
   id: "is_creator_rival",
   instructions:
     "Is `item` a real rival of `self`, a creator: another creator, channel or media brand competing for the same audience's attention, or a brand in the category `self` sells into, so `self` would want to watch what it does? `item.evidence` is where the two were named together.",
@@ -136,7 +136,7 @@ export async function resolveShortlist(
   return resolved;
 }
 
-function competitorState(context: DiscoveryContext, candidate: ResolvedCandidate): unknown {
+export function competitorState(context: DiscoveryContext, candidate: ResolvedCandidate): unknown {
   return {
     self: {
       name: context.self.name,
