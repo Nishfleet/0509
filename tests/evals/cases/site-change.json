@@ -1334,5 +1334,1226 @@
       "noteworthy_change": "the hero media swapped, nothing a customer tracks changes",
       "change_kind": "the homepage hero media was replaced"
     }
+  },
+  {
+    "id": "gymshark-pdp-blank",
+    "split": "test",
+    "subject": {
+      "name": "Gymshark",
+      "domain": "gymshark.com"
+    },
+    "isSelf": true,
+    "pageRole": "product",
+    "pageUrl": "https://www.gymshark.com/products/gymshark-training-shorts-black",
+    "hunks": [
+      {
+        "lines": [
+          "@@ -1,4 +1,1 @@",
+          "-Gymshark Training Shorts",
+          "-$60",
+          "-Add to bag",
+          "-Free returns on all orders",
+          "+Loading..."
+        ]
+      }
+    ],
+    "evidence": {
+      "status": 200,
+      "httpError": false,
+      "beforeChars": 9240,
+      "afterChars": 320,
+      "textHalved": true,
+      "pricesBefore": 2,
+      "pricesAfter": 0,
+      "pricesVanished": true
+    },
+    "history_30d": [],
+    "labels": {
+      "own_site_breakage": true,
+      "noteworthy_change": true,
+      "change_kind": "breakage"
+    },
+    "why": {
+      "own_site_breakage": "a 200 that renders only a Loading line: title, price and buy controls never appear, the page is a shell",
+      "noteworthy_change": "a tracked product page shows nothing to buy, a customer tracking Gymshark would want to know",
+      "change_kind": "the product page renders as an empty loading shell"
+    }
+  },
+  {
+    "id": "dyson-checkout-500",
+    "split": "test",
+    "subject": {
+      "name": "Dyson",
+      "domain": "dyson.com"
+    },
+    "isSelf": true,
+    "pageRole": "other",
+    "pageUrl": "https://www.dyson.com/checkout",
+    "hunks": [
+      {
+        "lines": ["@@ -1,2 +1,1 @@", "-Review your basket", "+Internal Server Error"]
+      }
+    ],
+    "evidence": {
+      "status": 500,
+      "httpError": true,
+      "beforeChars": 5100,
+      "afterChars": 40,
+      "textHalved": true,
+      "pricesBefore": 3,
+      "pricesAfter": 0,
+      "pricesVanished": true
+    },
+    "history_30d": [],
+    "labels": {
+      "own_site_breakage": true,
+      "noteworthy_change": true,
+      "change_kind": "breakage"
+    },
+    "why": {
+      "own_site_breakage": "a 500 replaces the checkout, the one page every buyer must pass through is an error",
+      "noteworthy_change": "the checkout is down so no basket can be completed, a tracking customer must be told",
+      "change_kind": "a server error replaces the checkout page"
+    }
+  },
+  {
+    "id": "ikea-pricing-403",
+    "split": "test",
+    "subject": {
+      "name": "IKEA",
+      "domain": "ikea.com"
+    },
+    "isSelf": true,
+    "pageRole": "pricing",
+    "pageUrl": "https://www.ikea.com/us/en/cat/sofas-fu003/",
+    "hunks": [
+      {
+        "lines": ["@@ -1,1 +1,1 @@", "-Sofas - IKEA", "+Access denied - you do not have permission to view this page"]
+      }
+    ],
+    "evidence": {
+      "status": 403,
+      "httpError": true,
+      "beforeChars": 26800,
+      "afterChars": 90,
+      "textHalved": true,
+      "pricesBefore": 14,
+      "pricesAfter": 0,
+      "pricesVanished": true
+    },
+    "history_30d": [],
+    "labels": {
+      "own_site_breakage": true,
+      "noteworthy_change": true,
+      "change_kind": "breakage"
+    },
+    "why": {
+      "own_site_breakage": "a 403 access-denied page replaces the sofa price list, nothing renders for the visitor",
+      "noteworthy_change": "no prices render at all on the page a shopper checks before buying, a customer would want to know",
+      "change_kind": "an access-denied page replaces the price list"
+    }
+  },
+  {
+    "id": "nike-nav-dead-links",
+    "split": "test",
+    "subject": {
+      "name": "Nike",
+      "domain": "nike.com"
+    },
+    "isSelf": true,
+    "pageRole": "home",
+    "pageUrl": "https://www.nike.com/",
+    "hunks": [
+      {
+        "lines": [
+          "@@ -1,5 +1,5 @@",
+          "-<a href=/w>New & Featured</a>",
+          "-<a href=/men>Men</a>",
+          "-<a href=/women>Women</a>",
+          "-<a href=/kids>Kids</a>",
+          "-<a href=/sale>Sale</a>",
+          "+<a href=#>New & Featured</a>",
+          "+<a href=#>Men</a>",
+          "+<a href=#>Women</a>",
+          "+<a href=#>Kids</a>",
+          "+<a href=#>Sale</a>"
+        ]
+      }
+    ],
+    "evidence": {
+      "status": 200,
+      "httpError": false,
+      "beforeChars": 21000,
+      "afterChars": 20982,
+      "textHalved": false,
+      "pricesBefore": 16,
+      "pricesAfter": 16,
+      "pricesVanished": false
+    },
+    "history_30d": [],
+    "labels": {
+      "own_site_breakage": true,
+      "noteworthy_change": true,
+      "change_kind": "breakage"
+    },
+    "why": {
+      "own_site_breakage": "all five top-nav links now point at #, the menu renders but goes nowhere when clicked",
+      "noteworthy_change": "the store's main navigation is dead so no category is reachable, a customer must be told",
+      "change_kind": "the main navigation no longer navigates"
+    }
+  },
+  {
+    "id": "revolut-plan-cards-loading",
+    "split": "test",
+    "subject": {
+      "name": "Revolut",
+      "domain": "revolut.com"
+    },
+    "isSelf": true,
+    "pageRole": "pricing",
+    "pageUrl": "https://www.revolut.com/pricing/",
+    "hunks": [
+      {
+        "lines": [
+          "@@ -1,4 +1,4 @@",
+          "-Standard - Free",
+          "-Plus - £3.99 a month",
+          "-Premium - £7.99 a month",
+          "-Metal - £14.99 a month",
+          "+Loading plans...",
+          "+Loading plans...",
+          "+Loading plans...",
+          "+Loading plans..."
+        ]
+      }
+    ],
+    "evidence": {
+      "status": 200,
+      "httpError": false,
+      "beforeChars": 8900,
+      "afterChars": 4100,
+      "textHalved": true,
+      "pricesBefore": 8,
+      "pricesAfter": 0,
+      "pricesVanished": true
+    },
+    "history_30d": [],
+    "labels": {
+      "own_site_breakage": true,
+      "noteworthy_change": true,
+      "change_kind": "breakage"
+    },
+    "why": {
+      "own_site_breakage": "every plan card renders as a loading placeholder, no plan name or price survives",
+      "noteworthy_change": "the pricing page shows no plans at all, a customer comparing tiers cannot see any",
+      "change_kind": "loading placeholders replace every plan card"
+    }
+  },
+  {
+    "id": "zara-search-client-error",
+    "split": "test",
+    "subject": {
+      "name": "Zara",
+      "domain": "zara.com"
+    },
+    "isSelf": true,
+    "pageRole": "other",
+    "pageUrl": "https://www.zara.com/us/en/search?searchTerm=coat",
+    "hunks": [
+      {
+        "lines": [
+          "@@ -1,3 +1,1 @@",
+          "-Coats for Women",
+          "-12 products",
+          "+Application error: a client-side exception has occurred"
+        ]
+      }
+    ],
+    "evidence": {
+      "status": 200,
+      "httpError": false,
+      "beforeChars": 6400,
+      "afterChars": 380,
+      "textHalved": true,
+      "pricesBefore": 10,
+      "pricesAfter": 0,
+      "pricesVanished": true
+    },
+    "history_30d": [],
+    "labels": {
+      "own_site_breakage": true,
+      "noteworthy_change": true,
+      "change_kind": "breakage"
+    },
+    "why": {
+      "own_site_breakage": "the search page renders a client-side exception instead of results, every product and price gone",
+      "noteworthy_change": "searching the store errors out so no product can be found, a customer would want to know",
+      "change_kind": "a client-side exception replaces the search results"
+    }
+  },
+  {
+    "id": "notion-app-shell-empty",
+    "split": "test",
+    "subject": {
+      "name": "Notion",
+      "domain": "notion.com"
+    },
+    "isSelf": true,
+    "pageRole": "home",
+    "pageUrl": "https://www.notion.com/",
+    "hunks": [
+      {
+        "lines": [
+          "@@ -1,3 +1,2 @@",
+          "-<h1>Notion - the connected workspace</h1>",
+          "-<a href=/pricing>Get started free</a>",
+          "+<div id=app-root></div>",
+          "+<noscript>Enable JavaScript to run this app</noscript>"
+        ]
+      }
+    ],
+    "evidence": {
+      "status": 200,
+      "httpError": false,
+      "beforeChars": 15800,
+      "afterChars": 240,
+      "textHalved": true,
+      "pricesBefore": 0,
+      "pricesAfter": 0,
+      "pricesVanished": false
+    },
+    "history_30d": [],
+    "labels": {
+      "own_site_breakage": true,
+      "noteworthy_change": true,
+      "change_kind": "breakage"
+    },
+    "why": {
+      "own_site_breakage": "the page ships an empty app shell and a noscript note, no headline or content renders at all",
+      "noteworthy_change": "the brand's home page renders nothing for a visitor, the front door is shut",
+      "change_kind": "an empty app shell replaces the rendered home page"
+    }
+  },
+  {
+    "id": "figma-home-unstyled",
+    "split": "test",
+    "subject": {
+      "name": "Figma",
+      "domain": "figma.com"
+    },
+    "isSelf": true,
+    "pageRole": "home",
+    "pageUrl": "https://www.figma.com/",
+    "hunks": [
+      {
+        "lines": [
+          "@@ -1,1 +1,1 @@",
+          "-<link rel=stylesheet href=/css/app.min.css>",
+          "+<link rel=stylesheet href=/css/app.9f3c.css>"
+        ]
+      }
+    ],
+    "evidence": {
+      "status": 200,
+      "httpError": false,
+      "beforeChars": 19300,
+      "afterChars": 19301,
+      "textHalved": false,
+      "pricesBefore": 0,
+      "pricesAfter": 0,
+      "pricesVanished": false
+    },
+    "history_30d": ["Hero illustration swapped for the Config 2026 promo"],
+    "labels": {
+      "own_site_breakage": true,
+      "noteworthy_change": true,
+      "change_kind": "breakage"
+    },
+    "why": {
+      "own_site_breakage": "the stylesheet now points at a missing file, the home page renders as unstyled text",
+      "noteworthy_change": "the brand's front page renders unstyled for every visitor, that is worth a heads-up",
+      "change_kind": "the home page renders unstyled text"
+    }
+  },
+  {
+    "id": "kroger-pricing-500",
+    "split": "test",
+    "subject": {
+      "name": "Kroger",
+      "domain": "kroger.com"
+    },
+    "isSelf": false,
+    "pageRole": "pricing",
+    "pageUrl": "https://www.kroger.com/weeklyad",
+    "hunks": [
+      {
+        "lines": ["@@ -1,2 +1,1 @@", "-Weekly Ad & Prices", "+Service Unavailable"]
+      }
+    ],
+    "evidence": {
+      "status": 503,
+      "httpError": true,
+      "beforeChars": 14200,
+      "afterChars": 180,
+      "textHalved": true,
+      "pricesBefore": 11,
+      "pricesAfter": 0,
+      "pricesVanished": true
+    },
+    "history_30d": ["Weekly ad reset to a new cycle last Tuesday"],
+    "labels": {
+      "own_site_breakage": true,
+      "noteworthy_change": true,
+      "change_kind": "breakage"
+    },
+    "why": {
+      "own_site_breakage": "a 503 service-unavailable body replaces the weekly ad, no price renders at all",
+      "noteworthy_change": "the tracked brand's price page is down, a customer watching Kroger prices would want to know",
+      "change_kind": "a service-unavailable error replaces the price page"
+    }
+  },
+  {
+    "id": "kroger-category-no-images",
+    "split": "test",
+    "subject": {
+      "name": "Kroger",
+      "domain": "kroger.com"
+    },
+    "isSelf": true,
+    "pageRole": "product",
+    "pageUrl": "https://www.kroger.com/pl/produce",
+    "hunks": [
+      {
+        "lines": [
+          "@@ -1,2 +1,2 @@",
+          "-<img src=/img/produce/basil.jpg alt=\"Fresh basil\">",
+          "+<img src=/img/produce/basil-missing.jpg alt=\"Fresh basil\">"
+        ]
+      }
+    ],
+    "evidence": {
+      "status": 200,
+      "httpError": false,
+      "beforeChars": 16800,
+      "afterChars": 16808,
+      "textHalved": false,
+      "pricesBefore": 12,
+      "pricesAfter": 12,
+      "pricesVanished": false
+    },
+    "history_30d": [],
+    "labels": {
+      "own_site_breakage": true,
+      "noteworthy_change": false,
+      "change_kind": "breakage"
+    },
+    "why": {
+      "own_site_breakage": "every product image src now 404s, the grid renders names and prices with no pictures at all",
+      "noteworthy_change": "names and prices all still render and the page works, missing thumbnails are not customer news",
+      "change_kind": "the category page renders with every image missing"
+    }
+  },
+  {
+    "id": "notion-careers-500",
+    "split": "test",
+    "subject": {
+      "name": "Notion",
+      "domain": "notion.com"
+    },
+    "isSelf": true,
+    "pageRole": "careers",
+    "pageUrl": "https://www.notion.com/careers",
+    "hunks": [
+      {
+        "lines": ["@@ -1,1 +1,1 @@", "-Build the future of work with us", "+We're sorry - something went wrong"]
+      }
+    ],
+    "evidence": {
+      "status": 500,
+      "httpError": true,
+      "beforeChars": 6100,
+      "afterChars": 150,
+      "textHalved": true,
+      "pricesBefore": 0,
+      "pricesAfter": 0,
+      "pricesVanished": false
+    },
+    "history_30d": [],
+    "labels": {
+      "own_site_breakage": true,
+      "noteworthy_change": false,
+      "change_kind": "breakage"
+    },
+    "why": {
+      "own_site_breakage": "the careers page returns a 500 error body, the page is broken for any visitor",
+      "noteworthy_change": "a hiring-page outage changes nothing for customers tracking the product itself",
+      "change_kind": "a server error replaces the careers page"
+    }
+  },
+  {
+    "id": "lush-menu-doubled",
+    "split": "test",
+    "subject": {
+      "name": "Lush",
+      "domain": "lush.com"
+    },
+    "isSelf": true,
+    "pageRole": "home",
+    "pageUrl": "https://www.lush.com/us/en/",
+    "hunks": [
+      {
+        "lines": ["@@ -1,3 +1,5 @@", " Bath Bombs", "+Shower", "+Shower", " Gifts"]
+      }
+    ],
+    "evidence": {
+      "status": 200,
+      "httpError": false,
+      "beforeChars": 17200,
+      "afterChars": 17220,
+      "textHalved": false,
+      "pricesBefore": 10,
+      "pricesAfter": 10,
+      "pricesVanished": false
+    },
+    "history_30d": [],
+    "labels": {
+      "own_site_breakage": true,
+      "noteworthy_change": false,
+      "change_kind": "unintended"
+    },
+    "why": {
+      "own_site_breakage": "the navigation renders its items twice, a visibly degraded menu a visitor did nothing to cause",
+      "noteworthy_change": "the shop still works end to end, a doubled menu is not something a customer must be told",
+      "change_kind": "the menu renders duplicated items"
+    }
+  },
+  {
+    "id": "anker-terms-mojibake",
+    "split": "test",
+    "subject": {
+      "name": "Anker",
+      "domain": "anker.com"
+    },
+    "isSelf": true,
+    "pageRole": "legal",
+    "pageUrl": "https://www.anker.com/terms",
+    "hunks": [
+      {
+        "lines": [
+          "@@ -1,2 +1,2 @@",
+          "-\"© 2026 Anker Innovations. All rights reserved.\"",
+          "+\"Â© 2026 Anker Innovations. Ãll rights reserved.\""
+        ]
+      }
+    ],
+    "evidence": {
+      "status": 200,
+      "httpError": false,
+      "beforeChars": 9400,
+      "afterChars": 9401,
+      "textHalved": false,
+      "pricesBefore": 0,
+      "pricesAfter": 0,
+      "pricesVanished": false
+    },
+    "history_30d": [],
+    "labels": {
+      "own_site_breakage": true,
+      "noteworthy_change": false,
+      "change_kind": "unintended"
+    },
+    "why": {
+      "own_site_breakage": "encoding artifacts like Â© bleed through the terms text, an unintentionally corrupted render",
+      "noteworthy_change": "the terms stay readable and no right or fee moved, nothing a customer needs to hear",
+      "change_kind": "character-encoding artifacts corrupt the page text"
+    }
+  },
+  {
+    "id": "nike-result-count-mismatch",
+    "split": "test",
+    "subject": {
+      "name": "Nike",
+      "domain": "nike.com"
+    },
+    "isSelf": true,
+    "pageRole": "product",
+    "pageUrl": "https://www.nike.com/w/running-shoes-37v7j",
+    "hunks": [
+      {
+        "lines": ["@@ -1,2 +1,2 @@", "-246 Results", "+0 Results", " Air Zoom Pegasus 41 $140"]
+      }
+    ],
+    "evidence": {
+      "status": 200,
+      "httpError": false,
+      "beforeChars": 24800,
+      "afterChars": 24798,
+      "textHalved": false,
+      "pricesBefore": 18,
+      "pricesAfter": 18,
+      "pricesVanished": false
+    },
+    "history_30d": [],
+    "labels": {
+      "own_site_breakage": true,
+      "noteworthy_change": false,
+      "change_kind": "unintended"
+    },
+    "why": {
+      "own_site_breakage": "the header says 0 results above a grid of 246 products, the page contradicts itself",
+      "noteworthy_change": "every product and price still renders below the wrong header, a counter bug is not customer news",
+      "change_kind": "a result counter shows 0 above a full grid"
+    }
+  },
+  {
+    "id": "figma-draft-banner",
+    "split": "test",
+    "subject": {
+      "name": "Figma",
+      "domain": "figma.com"
+    },
+    "isSelf": true,
+    "pageRole": "blog",
+    "pageUrl": "https://www.figma.com/blog/",
+    "hunks": [
+      {
+        "lines": [
+          "@@ -1,1 +1,3 @@",
+          " Design Systems at Scale",
+          "+DRAFT - do not publish",
+          "+Lorem ipsum placeholder copy"
+        ]
+      }
+    ],
+    "evidence": {
+      "status": 200,
+      "httpError": false,
+      "beforeChars": 8800,
+      "afterChars": 8850,
+      "textHalved": false,
+      "pricesBefore": 0,
+      "pricesAfter": 0,
+      "pricesVanished": false
+    },
+    "history_30d": [],
+    "labels": {
+      "own_site_breakage": true,
+      "noteworthy_change": false,
+      "change_kind": "unintended"
+    },
+    "why": {
+      "own_site_breakage": "an internal DRAFT banner and placeholder copy render on the public blog, an accidental publish state",
+      "noteworthy_change": "the leaked draft carries placeholder copy with no real announcement, nothing for a customer to act on",
+      "change_kind": "an unpublished draft state shows on the public blog"
+    }
+  },
+  {
+    "id": "ikea-price-rise",
+    "split": "test",
+    "subject": {
+      "name": "IKEA",
+      "domain": "ikea.com"
+    },
+    "isSelf": true,
+    "pageRole": "pricing",
+    "pageUrl": "https://www.ikea.com/us/en/cat/sofas-fu003/",
+    "hunks": [
+      {
+        "lines": [
+          "@@ -1,4 +1,4 @@",
+          "-KIVIK sofa $499",
+          "+KIVIK sofa $549",
+          "-EKTORP sofa $499",
+          "+EKTORP sofa $529",
+          " LANDSKRONA sofa $799",
+          "-GRÖNLID sofa $899",
+          "+GRÖNLID sofa $949"
+        ]
+      }
+    ],
+    "evidence": {
+      "status": 200,
+      "httpError": false,
+      "beforeChars": 26400,
+      "afterChars": 26400,
+      "textHalved": false,
+      "pricesBefore": 14,
+      "pricesAfter": 14,
+      "pricesVanished": false
+    },
+    "history_30d": ["Delivery fees rose across the US webshop last month"],
+    "labels": {
+      "own_site_breakage": false,
+      "noteworthy_change": true,
+      "change_kind": "pricing"
+    },
+    "why": {
+      "own_site_breakage": "four listed sofa prices were raised in place and the page renders normally, a deliberate repricing",
+      "noteworthy_change": "the sofas a tracking customer watches all moved up $50, exactly the change they follow",
+      "change_kind": "list prices rose across the price page"
+    }
+  },
+  {
+    "id": "hellofresh-plan-launch-banner",
+    "split": "test",
+    "subject": {
+      "name": "HelloFresh",
+      "domain": "hellofresh.com"
+    },
+    "isSelf": true,
+    "pageRole": "home",
+    "pageUrl": "https://www.hellofresh.com/",
+    "hunks": [
+      {
+        "lines": [
+          "@@ -1,2 +1,3 @@",
+          "+New: the Family Plan - 4 recipes a week from $7.49 per serving",
+          " Meal plans for two or four",
+          " Cook from $3.32 per serving"
+        ]
+      }
+    ],
+    "evidence": {
+      "status": 200,
+      "httpError": false,
+      "beforeChars": 19100,
+      "afterChars": 19160,
+      "textHalved": false,
+      "pricesBefore": 6,
+      "pricesAfter": 7,
+      "pricesVanished": false
+    },
+    "history_30d": ["Easter promo banner came down last week"],
+    "labels": {
+      "own_site_breakage": false,
+      "noteworthy_change": true,
+      "change_kind": "launch"
+    },
+    "why": {
+      "own_site_breakage": "a launch banner was added above an intact page, a deliberate campaign with no loss of content",
+      "noteworthy_change": "a new subscription plan with a new per-serving price, customers tracking meal kits would want to know",
+      "change_kind": "a banner announces a new plan launch"
+    }
+  },
+  {
+    "id": "dyson-v11-discontinued",
+    "split": "test",
+    "subject": {
+      "name": "Dyson",
+      "domain": "dyson.com"
+    },
+    "isSelf": true,
+    "pageRole": "product",
+    "pageUrl": "https://www.dyson.com/vacuum-cleaners/cordless",
+    "hunks": [
+      {
+        "lines": [
+          "@@ -1,2 +1,1 @@",
+          "-Dyson V11 Torque Drive $599",
+          "-Add to basket",
+          "+Dyson V11 has been discontinued. Explore the V15 range."
+        ]
+      }
+    ],
+    "evidence": {
+      "status": 200,
+      "httpError": false,
+      "beforeChars": 9300,
+      "afterChars": 8740,
+      "textHalved": false,
+      "pricesBefore": 2,
+      "pricesAfter": 1,
+      "pricesVanished": false
+    },
+    "history_30d": [],
+    "labels": {
+      "own_site_breakage": false,
+      "noteworthy_change": true,
+      "change_kind": "removal"
+    },
+    "why": {
+      "own_site_breakage": "one product row became a discontinuation notice while the page and other products render normally",
+      "noteworthy_change": "a tracked vacuum is discontinued and steered to a successor, a customer watching Dyson would care",
+      "change_kind": "a product was removed and replaced with a notice"
+    }
+  },
+  {
+    "id": "gymshark-shorts-price-drop",
+    "split": "test",
+    "subject": {
+      "name": "Gymshark",
+      "domain": "gymshark.com"
+    },
+    "isSelf": false,
+    "pageRole": "product",
+    "pageUrl": "https://www.gymshark.com/products/gymshark-training-shorts-black",
+    "hunks": [
+      {
+        "lines": ["@@ -1,1 +1,1 @@", "-$60", "+$45"]
+      }
+    ],
+    "evidence": {
+      "status": 200,
+      "httpError": false,
+      "beforeChars": 9240,
+      "afterChars": 9240,
+      "textHalved": false,
+      "pricesBefore": 2,
+      "pricesAfter": 2,
+      "pricesVanished": false
+    },
+    "history_30d": ["Gymshark emailed a mid-season promo code last week"],
+    "labels": {
+      "own_site_breakage": false,
+      "noteworthy_change": true,
+      "change_kind": "pricing"
+    },
+    "why": {
+      "own_site_breakage": "a listed price moved down in place, the page renders normally, a deliberate markdown",
+      "noteworthy_change": "a tracked bestseller dropped 25 percent, the kind of move a price-watching customer wants told",
+      "change_kind": "a product price was cut"
+    }
+  },
+  {
+    "id": "zara-capsule-launch",
+    "split": "test",
+    "subject": {
+      "name": "Zara",
+      "domain": "zara.com"
+    },
+    "isSelf": false,
+    "pageRole": "home",
+    "pageUrl": "https://www.zara.com/us/",
+    "hunks": [
+      {
+        "lines": ["@@ -1,2 +1,3 @@", "+New in: the Studio Capsule - now in stores", " Winter Icons", " Featured"]
+      }
+    ],
+    "evidence": {
+      "status": 200,
+      "httpError": false,
+      "beforeChars": 22000,
+      "afterChars": 22040,
+      "textHalved": false,
+      "pricesBefore": 12,
+      "pricesAfter": 12,
+      "pricesVanished": false
+    },
+    "history_30d": [],
+    "labels": {
+      "own_site_breakage": false,
+      "noteworthy_change": true,
+      "change_kind": "launch"
+    },
+    "why": {
+      "own_site_breakage": "a collection banner was added at the top of an intact page, deliberate merchandising",
+      "noteworthy_change": "a new collection just landed at a tracked brand, customers following Zara would want to know",
+      "change_kind": "a banner announces a new collection"
+    }
+  },
+  {
+    "id": "lush-shipping-threshold",
+    "split": "test",
+    "subject": {
+      "name": "Lush",
+      "domain": "lush.com"
+    },
+    "isSelf": true,
+    "pageRole": "product",
+    "pageUrl": "https://www.lush.com/us/en/p/bath-bomb",
+    "hunks": [
+      {
+        "lines": ["@@ -1,1 +1,1 @@", "-Free shipping on orders over $45", "+Free shipping on orders over $60"]
+      }
+    ],
+    "evidence": {
+      "status": 200,
+      "httpError": false,
+      "beforeChars": 9100,
+      "afterChars": 9100,
+      "textHalved": false,
+      "pricesBefore": 2,
+      "pricesAfter": 2,
+      "pricesVanished": false
+    },
+    "history_30d": [],
+    "labels": {
+      "own_site_breakage": false,
+      "noteworthy_change": true,
+      "change_kind": "offer"
+    },
+    "why": {
+      "own_site_breakage": "the free-shipping threshold moved in place, deliberate offer copy on a fully working page",
+      "noteworthy_change": "free shipping now starts $15 higher, customers ordering Lush pay more and would want to know",
+      "change_kind": "an offer term was changed"
+    }
+  },
+  {
+    "id": "ikea-home-redesign-shrink",
+    "split": "test",
+    "subject": {
+      "name": "IKEA",
+      "domain": "ikea.com"
+    },
+    "isSelf": true,
+    "pageRole": "home",
+    "pageUrl": "https://www.ikea.com/us/en/",
+    "hunks": [
+      {
+        "lines": [
+          "@@ -1,8 +1,2 @@",
+          "-Save on sleep: bedroom deals through Sunday",
+          "-Design your own PAX wardrobe",
+          "-IKEA Family: join free",
+          "-Assembly, delivery and financing",
+          "-Everyday sustainable choices",
+          "-Last chance to buy",
+          " Shop new arrivals",
+          " <h1>Make home happen</h1>"
+        ]
+      }
+    ],
+    "evidence": {
+      "status": 200,
+      "httpError": false,
+      "beforeChars": 34800,
+      "afterChars": 15400,
+      "textHalved": true,
+      "pricesBefore": 14,
+      "pricesAfter": 13,
+      "pricesVanished": false
+    },
+    "history_30d": [],
+    "labels": {
+      "own_site_breakage": false,
+      "noteworthy_change": false,
+      "change_kind": "copy"
+    },
+    "why": {
+      "own_site_breakage": "the home page was redesigned slimmer: navigation, product grid and 13 prices still render, deliberate",
+      "noteworthy_change": "a cosmetic refresh with no product, price or promotion moved, nothing to tell a customer",
+      "change_kind": "the page copy was redesigned and trimmed"
+    }
+  },
+  {
+    "id": "notion-legal-trim",
+    "split": "test",
+    "subject": {
+      "name": "Notion",
+      "domain": "notion.com"
+    },
+    "isSelf": true,
+    "pageRole": "legal",
+    "pageUrl": "https://www.notion.com/terms",
+    "hunks": [
+      {
+        "lines": [
+          "@@ -1,5 +1,2 @@",
+          "-\"Using our services does not give you ownership of any intellectual property rights.\"",
+          "-\"We may change or discontinue any part of the services at any time.\"",
+          "-\"You are responsible for keeping your password confidential.\"",
+          "-\"We may update these terms from time to time.\"",
+          "+\"Our terms of service were reorganized into plain language.\""
+        ]
+      }
+    ],
+    "evidence": {
+      "status": 200,
+      "httpError": false,
+      "beforeChars": 12400,
+      "afterChars": 5300,
+      "textHalved": true,
+      "pricesBefore": 0,
+      "pricesAfter": 0,
+      "pricesVanished": false
+    },
+    "history_30d": [],
+    "labels": {
+      "own_site_breakage": false,
+      "noteworthy_change": false,
+      "change_kind": "copy"
+    },
+    "why": {
+      "own_site_breakage": "the policy was deliberately rewritten half as long on a page that renders intact",
+      "noteworthy_change": "the described data practices are unchanged, only the wording shrank, nothing to tell a customer",
+      "change_kind": "a wording rewrite shrank the page"
+    }
+  },
+  {
+    "id": "zara-seasonal-hero-swap",
+    "split": "test",
+    "subject": {
+      "name": "Zara",
+      "domain": "zara.com"
+    },
+    "isSelf": true,
+    "pageRole": "home",
+    "pageUrl": "https://www.zara.com/us/",
+    "hunks": [
+      {
+        "lines": ["@@ -1,2 +1,2 @@", "-Winter Icons: coats and knitwear", "+Spring New In: light layers", " Featured"]
+      }
+    ],
+    "evidence": {
+      "status": 200,
+      "httpError": false,
+      "beforeChars": 22100,
+      "afterChars": 22089,
+      "textHalved": false,
+      "pricesBefore": 12,
+      "pricesAfter": 12,
+      "pricesVanished": false
+    },
+    "history_30d": [
+      "Hero swapped to the Winter Icons edit",
+      "Winter Icons edit replaced the autumn capsule",
+      "Autumn capsule replaced the summer campaign"
+    ],
+    "labels": {
+      "own_site_breakage": false,
+      "noteworthy_change": false,
+      "change_kind": "noise"
+    },
+    "why": {
+      "own_site_breakage": "the hero campaign rotated to the spring edit with the grid and prices below untouched",
+      "noteworthy_change": "the history shows the same seasonal rotation repeating, routine and not worth a customer note",
+      "change_kind": "nothing meaningful changed, the seasonal content rotated"
+    }
+  },
+  {
+    "id": "dyson-sort-flipflop",
+    "split": "test",
+    "subject": {
+      "name": "Dyson",
+      "domain": "dyson.com"
+    },
+    "isSelf": true,
+    "pageRole": "product",
+    "pageUrl": "https://www.dyson.com/vacuum-cleaners",
+    "hunks": [
+      {
+        "lines": ["@@ -1,1 +1,1 @@", "-Sort: Relevance", "+Sort: Featured"]
+      }
+    ],
+    "evidence": {
+      "status": 200,
+      "httpError": false,
+      "beforeChars": 26100,
+      "afterChars": 26098,
+      "textHalved": false,
+      "pricesBefore": 10,
+      "pricesAfter": 10,
+      "pricesVanished": false
+    },
+    "history_30d": [
+      "Sort on the vacuum lineup flipped from Featured to Relevance",
+      "Sort on the vacuum lineup switched back to Featured",
+      "Sort on the vacuum lineup flipped from Featured to Relevance"
+    ],
+    "labels": {
+      "own_site_breakage": false,
+      "noteworthy_change": false,
+      "change_kind": "noise"
+    },
+    "why": {
+      "own_site_breakage": "the default sort label flipped back with all ten prices and the grid rendering as before",
+      "noteworthy_change": "the history shows this sort control flipping weekly, background jitter a customer need not hear",
+      "change_kind": "nothing meaningful changed, a control label flips back and forth"
+    }
+  },
+  {
+    "id": "figma-hero-copy-tweak",
+    "split": "test",
+    "subject": {
+      "name": "Figma",
+      "domain": "figma.com"
+    },
+    "isSelf": true,
+    "pageRole": "home",
+    "pageUrl": "https://www.figma.com/",
+    "hunks": [
+      {
+        "lines": ["@@ -1,1 +1,1 @@", "-Thoughts made real, together", "+Think bigger, build together"]
+      }
+    ],
+    "evidence": {
+      "status": 200,
+      "httpError": false,
+      "beforeChars": 19300,
+      "afterChars": 19300,
+      "textHalved": false,
+      "pricesBefore": 0,
+      "pricesAfter": 0,
+      "pricesVanished": false
+    },
+    "history_30d": [],
+    "labels": {
+      "own_site_breakage": false,
+      "noteworthy_change": false,
+      "change_kind": "copy"
+    },
+    "why": {
+      "own_site_breakage": "the hero headline was reworded in place on a fully rendered page, deliberate positioning copy",
+      "noteworthy_change": "a tagline reword with no product, price or feature change, nothing a customer tracks",
+      "change_kind": "a messaging and positioning line changed"
+    }
+  },
+  {
+    "id": "revolut-faq-typo",
+    "split": "test",
+    "subject": {
+      "name": "Revolut",
+      "domain": "revolut.com"
+    },
+    "isSelf": true,
+    "pageRole": "pricing",
+    "pageUrl": "https://www.revolut.com/pricing/",
+    "hunks": [
+      {
+        "lines": ["@@ -1,1 +1,1 @@", "-How do I cancel my account?", "+How do I cancel my acount?"]
+      }
+    ],
+    "evidence": {
+      "status": 200,
+      "httpError": false,
+      "beforeChars": 7700,
+      "afterChars": 7699,
+      "textHalved": false,
+      "pricesBefore": 8,
+      "pricesAfter": 8,
+      "pricesVanished": false
+    },
+    "history_30d": [],
+    "labels": {
+      "own_site_breakage": false,
+      "noteworthy_change": false,
+      "change_kind": "unintended"
+    },
+    "why": {
+      "own_site_breakage": "one FAQ question gained a typo while every plan and price still renders",
+      "noteworthy_change": "a typo in a help answer with no plan or fee moved, nothing to tell a customer",
+      "change_kind": "an accidental typo was introduced"
+    }
+  },
+  {
+    "id": "gymshark-slogan-tweak",
+    "split": "test",
+    "subject": {
+      "name": "Gymshark",
+      "domain": "gymshark.com"
+    },
+    "isSelf": false,
+    "pageRole": "home",
+    "pageUrl": "https://www.gymshark.com/",
+    "hunks": [
+      {
+        "lines": ["@@ -1,1 +1,1 @@", "-Be all that you can be", "+Relentless is a choice"]
+      }
+    ],
+    "evidence": {
+      "status": 200,
+      "httpError": false,
+      "beforeChars": 20800,
+      "afterChars": 20800,
+      "textHalved": false,
+      "pricesBefore": 16,
+      "pricesAfter": 16,
+      "pricesVanished": false
+    },
+    "history_30d": [],
+    "labels": {
+      "own_site_breakage": false,
+      "noteworthy_change": false,
+      "change_kind": "copy"
+    },
+    "why": {
+      "own_site_breakage": "the hero slogan was reworded on a fully rendered competitor page, deliberate brand copy",
+      "noteworthy_change": "a competitor tagline change with no product or price moved, not worth a customer note",
+      "change_kind": "a messaging and positioning line changed"
+    }
+  },
+  {
+    "id": "figma-changelog-routine",
+    "split": "test",
+    "subject": {
+      "name": "Figma",
+      "domain": "figma.com"
+    },
+    "isSelf": false,
+    "pageRole": "blog",
+    "pageUrl": "https://www.figma.com/changelog/",
+    "hunks": [
+      {
+        "lines": [
+          "@@ -1,1 +1,3 @@",
+          "+May 14: minor bug fixes and performance improvements",
+          "+May 7: fixed a copy-paste bug in the colour picker",
+          " April 30: new auto-layout options"
+        ]
+      }
+    ],
+    "evidence": {
+      "status": 200,
+      "httpError": false,
+      "beforeChars": 9400,
+      "afterChars": 9560,
+      "textHalved": false,
+      "pricesBefore": 0,
+      "pricesAfter": 0,
+      "pricesVanished": false
+    },
+    "history_30d": ["April 30 changelog entry added a week ago"],
+    "labels": {
+      "own_site_breakage": false,
+      "noteworthy_change": false,
+      "change_kind": "noise"
+    },
+    "why": {
+      "own_site_breakage": "two routine bug-fix entries were prepended to a changelog that renders normally",
+      "noteworthy_change": "routine bug fixes with no new feature or price, not worth telling a customer tracking Figma",
+      "change_kind": "nothing meaningful changed, routine bug-fix notes were added"
+    }
+  },
+  {
+    "id": "hellofresh-plan-rows-reorder",
+    "split": "test",
+    "subject": {
+      "name": "HelloFresh",
+      "domain": "hellofresh.com"
+    },
+    "isSelf": true,
+    "pageRole": "pricing",
+    "pageUrl": "https://www.hellofresh.com/plans",
+    "hunks": [
+      {
+        "lines": [
+          "@@ -1,2 +1,2 @@",
+          "-Meat & Veggies | Veggies | Family Friendly",
+          "+Veggies | Meat & Veggies | Family Friendly",
+          " From $3.32 per serving"
+        ]
+      }
+    ],
+    "evidence": {
+      "status": 200,
+      "httpError": false,
+      "beforeChars": 14200,
+      "afterChars": 14200,
+      "textHalved": false,
+      "pricesBefore": 6,
+      "pricesAfter": 6,
+      "pricesVanished": false
+    },
+    "history_30d": [],
+    "labels": {
+      "own_site_breakage": false,
+      "noteworthy_change": false,
+      "change_kind": "noise"
+    },
+    "why": {
+      "own_site_breakage": "the plan tabs swapped order, every plan and the per-serving price render unchanged",
+      "noteworthy_change": "the same plans in a new order, no plan, price or serving count moved",
+      "change_kind": "nothing meaningful changed, only the display order"
+    }
   }
 ]
