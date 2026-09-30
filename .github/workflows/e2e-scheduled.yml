@@ -323,23 +323,25 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_REPO: ${{ github.repository }}
-          SOAK_WORKSPACE_ID: ${{ vars.SOAK_WORKSPACE_ID }}
         run: |
           set -euo pipefail
           since=$(date -u -d '24 hours ago' +%Y-%m-%dT%H:%M:%SZ)
-          scope=""
-          label="all workspaces"
-          if [ -n "$SOAK_WORKSPACE_ID" ]; then
-            [[ "$SOAK_WORKSPACE_ID" =~ ^[A-Za-z0-9_-]+$ ]] || { echo "SOAK_WORKSPACE_ID has unexpected characters"; exit 1; }
-            scope=" AND workspace_id = '$SOAK_WORKSPACE_ID'"
-            label="soak workspace"
-          fi
+          scope=" AND workspace_id IN (SELECT id FROM workspace WHERE owner_user_id IN (SELECT id FROM user WHERE email = 'e2e+soak@0509.io'))"
+          label="soak workspace"
           sends=$(npx wrangler d1 execute 0509 --remote --json --command "SELECT CASE WHEN digest_id IS NULL THEN 'other (no digest)' ELSE 'brief' END AS kind, status, COUNT(*) AS n FROM send_attempt WHERE attempted_at >= '$since'$scope GROUP BY 1, 2 ORDER BY 1, 2" | jq -r '.[0].results | if length == 0 then "none" else map("\(.kind) \(.status): \(.n)") | join(", ") end')
           sweeps=$(npx wrangler d1 execute 0509 --remote --json --command "SELECT COUNT(*) AS runs, COALESCE(SUM(pages), 0) AS pages, COALESCE(SUM(failed), 0) AS failed FROM sweep_run WHERE finished_at >= '$since'" | jq -r '.[0].results[0] | "\(.runs) finished, \(.pages) pages, \(.failed) failed pages"')
           instances() {
-            curl -sS --fail-with-body -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
-              "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workflows/$1/instances?per_page=100&date_start=$since" \
-              | jq -r '.result | if length == 0 then "no instances" else (group_by(.status) | map("\(.[0].status): \(length)") | join(", ")) end'
+            page=1
+            rows=""
+            while :; do
+              batch=$(curl -sS --fail-with-body -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+                "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workflows/$1/instances?per_page=100&page=$page&date_start=$since" \
+                | jq -c '.result')
+              rows="$rows$batch"$'\n'
+              [ "$(jq 'length' <<< "$batch")" -eq 100 ] || break
+              page=$((page + 1))
+            done
+            jq -s -r 'add | if length == 0 then "no instances" else (group_by(.status) | map("\(.[0].status): \(length)") | join(", ")) end' <<< "$rows"
           }
           {
             echo "Soak report for the 24 hours before $(date -u +%Y-%m-%dT%H:%MZ) (send counts: $label)."
