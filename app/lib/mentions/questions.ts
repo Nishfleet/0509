@@ -74,3 +74,49 @@ export function mentionMattersState(input: {
     item: mentionItemState(input.item, input.reliability),
   };
 }
+
+export const DUPLICATE_SIGNAL: NoulQuestion = {
+  id: "duplicate_signal",
+  instructions:
+    "Are `a` and `b` the same event seen twice, such as a syndicated copy, a repost or a re-crawl of the same story about `subject`, and not two separate stories?",
+  whenTrue: "They report the same event and one is a copy of the other.",
+  whenFalse: "They are different events or different stories, even if the wording is close.",
+};
+
+export interface DuplicateSide {
+  id: string;
+  title: string;
+  url: string;
+  publishedAt: string | null;
+  publisher: string | null;
+  source: string;
+}
+
+function duplicateSideState(side: DuplicateSide): {
+  title: string;
+  publisher: string | null;
+  url: string;
+  published_at: string | null;
+  source: string;
+} {
+  return {
+    title: side.title,
+    publisher: side.publisher,
+    url: side.url,
+    published_at: side.publishedAt,
+    source: side.source,
+  };
+}
+
+export function duplicateSignalState(input: {
+  subject: Pick<MentionSubject, "name" | "domain">;
+  first: DuplicateSide;
+  second: DuplicateSide;
+}): unknown {
+  const [a, b] = input.first.id <= input.second.id ? [input.first, input.second] : [input.second, input.first];
+  return {
+    subject: { name: input.subject.name, domain: input.subject.domain },
+    a: duplicateSideState(a),
+    b: duplicateSideState(b),
+  };
+}

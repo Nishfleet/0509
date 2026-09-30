@@ -205,7 +205,7 @@ export interface SignalAlert {
 
 const SELECT_SIGNAL_ALERTS = `SELECT a.id, a.kind, a.title, a.body, s.url, a.created_at
 FROM alert a
-JOIN signal s ON s.id = a.signal_id AND s.is_tombstoned = 0
+JOIN signal s ON s.id = a.signal_id AND s.is_tombstoned = 0 AND s.duplicate_of IS NULL
 JOIN entity e ON e.id = a.entity_id AND e.state = 'on'
 WHERE a.workspace_id = ? AND a.kind IN ('mention', 'ad')
 ORDER BY a.created_at DESC

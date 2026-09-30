@@ -18,6 +18,7 @@ export interface MentionReadRow {
   verdictId: string | null;
   verdictDecidedAt: string | null;
   state: "judged" | "unjudged" | null;
+  alsoCount: number;
 }
 
 export interface MentionRowModel {
@@ -31,6 +32,7 @@ export interface MentionRowModel {
   when: string;
   why: string | null;
   whyFlagged: WhyFlagged | null;
+  alsoCount: number;
 }
 
 const FOUND_TODAY = "found today";
@@ -41,6 +43,10 @@ export const UNREVIEWED_LINE = "Unreviewed. We have not reviewed this yet, so it
 
 export const PENDING_LINE =
   "Pending. This one is still waiting for judgment, so it sits here rather than in your brief.";
+
+export function alsoReportedLine(count: number): string {
+  return `Also reported by ${String(count)} other ${count === 1 ? "source" : "sources"}`;
+}
 
 export function mentionTreatment(p: number): MentionTreatment {
   const action = noulAction(p);
@@ -75,6 +81,7 @@ export function mentionsFromRows(rows: readonly MentionReadRow[], now: Date): Me
         observedAt: row.observedAt,
         treatment,
         when: mentionWhen(row.publishedAt, now),
+        alsoCount: row.alsoCount,
         why: storedReason(row.reason),
         whyFlagged: whyFlagged({
           verdictId: row.verdictId,

@@ -31,6 +31,7 @@ function row(overrides: Partial<MentionReadRow> & Pick<MentionReadRow, "id" | "p
     id: overrides.id,
     p: overrides.p,
     state: overrides.state ?? null,
+    alsoCount: overrides.alsoCount ?? 0,
   };
 }
 

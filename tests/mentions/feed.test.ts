@@ -6,6 +6,7 @@ import { AlertFeed } from "../../app/components/alert-feed";
 import type { AlertFeedItem } from "../../app/components/alert-row";
 import { MentionRow } from "../../app/components/mention-row";
 import {
+  alsoReportedLine,
   mentionsFromRows,
   mentionTreatment,
   mentionWhen,
@@ -35,6 +36,7 @@ function row(overrides: Partial<MentionReadRow> & Pick<MentionReadRow, "id" | "p
     id: overrides.id,
     p: overrides.p,
     state: overrides.state ?? null,
+    alsoCount: overrides.alsoCount ?? 0,
   };
 }
 
@@ -238,5 +240,22 @@ describe("mentions feed", () => {
     const html = renderToStaticMarkup(createElement(MentionRow, { mention: mentions[0] }));
     expect(html).toContain('<h3 class="font-display text-row-name font-bold [overflow-wrap:anywhere]">');
     expect(html).not.toContain("text-lg font-semibold");
+  });
+
+  it("shows also reported by N other sources only when a collapsed copy exists, never a probability", () => {
+    const [none] = mentionsFromRows([row({ id: "m1", p: 0.95 })], NOW);
+    const [one] = mentionsFromRows([row({ id: "m2", p: 0.95, alsoCount: 1 })], NOW);
+    const [two] = mentionsFromRows([row({ id: "m3", p: 0.95, alsoCount: 2 })], NOW);
+    expect(none?.alsoCount).toBe(0);
+    expect(renderToStaticMarkup(createElement(MentionRow, { mention: none as MentionRowModel }))).not.toContain(
+      "Also reported",
+    );
+    expect(renderToStaticMarkup(createElement(MentionRow, { mention: one as MentionRowModel }))).toContain(
+      "Also reported by 1 other source<",
+    );
+    expect(alsoReportedLine(2)).toBe("Also reported by 2 other sources");
+    const html = renderToStaticMarkup(createElement(MentionRow, { mention: two as MentionRowModel }));
+    expect(html).toContain("Also reported by 2 other sources");
+    expect(html).not.toMatch(BANNED);
   });
 });
