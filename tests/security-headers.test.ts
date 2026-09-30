@@ -26,4 +26,10 @@ describe("document security headers", () => {
     expect(merged.get("content-security-policy")).toContain("'nonce-n1'");
     expect(route.has("content-security-policy")).toBe(false);
   });
+
+  it("keeps the edge from injecting its analytics module into a Worker-rendered document", () => {
+    expect(withDocumentSecurityHeaders(new Headers(), "n1").get("cache-control")).toBe("no-transform");
+    const cached = new Headers({ "Cache-Control": "public, max-age=300" });
+    expect(withDocumentSecurityHeaders(cached, "n1").get("cache-control")).toBe("public, max-age=300");
+  });
 });

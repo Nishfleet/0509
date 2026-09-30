@@ -307,8 +307,8 @@
       "binding": "DISCOVERY",
       "class_name": "DiscoveryWorkflow",
     },
-    // The nightly website sweep (docs/engines/site-change.md). The Workflow's
-    // own schedule creates one instance a night, at 02:00 UTC so the changes
+    // The nightly website sweep (docs/engines/site-change.md). The `scheduled`
+    // handler creates one instance a night (triggers.crons), at 02:00 UTC so the changes
     // it files land before the 03:00 standing refresh counts them. Each page
     // is its own retried step; a page that cannot be read fails alone.
     // Nothing to provision: deploy creates the Workflow, unlike a queue.
@@ -316,7 +316,6 @@
       "name": "site-sweep",
       "binding": "SITE_SWEEP",
       "class_name": "SiteSweepWorkflow",
-      "schedules": ["0 2 * * *"],
     },
     // The nightly hiring sweep (docs/engines/hiring.md): finds each tracked
     // brand's job board, then reads every watched board. 02:30 UTC — after
@@ -327,7 +326,6 @@
       "name": "hiring-sweep",
       "binding": "HIRING_SWEEP",
       "class_name": "HiringSweepWorkflow",
-      "schedules": ["30 2 * * *"],
     },
     // The nightly snapshot backup (0509#5802): copies every object in
     // 0509-snapshots that 0509-snapshots-backup does not yet hold, one
@@ -341,7 +339,6 @@
       "name": "snapshot-backup",
       "binding": "SNAPSHOT_BACKUP",
       "class_name": "SnapshotBackupWorkflow",
-      "schedules": ["0 5 * * *"],
     },
     // The own-site watch: every hour, each customer's own homepage is
     // probed once with a plain fetch. A 5xx, 404 or no answer is probed
@@ -371,7 +368,6 @@
       "name": "mentions-sweep",
       "binding": "MENTIONS",
       "class_name": "MentionsWorkflow",
-      "schedules": ["0 1 * * *"],
     },
     // The durable tail of a confirmed identity card: persist, seed watches,
     // start discovery, enqueue the first collection. That collection is
@@ -389,7 +385,15 @@
     // itself. Also the nightly delivery sweeper, which re-enqueues stale
     // pending digests and claims, and the Monday 04:00 UTC D2 competitor
     // refresh.
-    "crons": ["*/5 * * * *", "0 3 * * *", "0 4 * * 1"],
+    //
+    // Also the four daily Workflow starts: 01:00 mentions-sweep, 02:00
+    // site-sweep, 02:30 hiring-sweep, 05:00 snapshot-backup (0509#6289). The
+    // Workflow-level `schedules` bind was skipped around redeploys (this Worker
+    // deploys 20-90 times a day; snapshot-backup's never fired), so the
+    // `scheduled` handler creates each instance with createBatch under the id
+    // `<name>-<scheduled instant>`, which skips an id that already exists.
+    // own-site-check stays on `schedules`: hourly, it loses one hour at most.
+    "crons": ["*/5 * * * *", "0 1 * * *", "0 2 * * *", "30 2 * * *", "0 3 * * *", "0 4 * * 1", "0 5 * * *"],
   },
 
   "routes": [

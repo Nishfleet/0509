@@ -8,6 +8,7 @@ import type { D4Verdict } from "../../app/lib/read-this-first";
 import { pickReadThisFirst, READ_THIS_FIRST, readThisFirstState } from "../../app/lib/read-this-first";
 import { D3_QUESTION_ID, D6_QUESTION_ID } from "../../app/lib/standing-score";
 import { countUnjudgedInputs } from "../../app/lib/standing-score.server";
+import { required } from "../../app/lib/required";
 
 const JUDGE_CHUNK = 10;
 
@@ -95,8 +96,8 @@ export async function judgeWeek(db: D1Database, input: JudgeWeekInput): Promise<
     db.prepare(WEEK_ITEMS).bind(input.workspaceId, input.startsAt, input.closesAt, D3_QUESTION_ID, D6_QUESTION_ID),
     db.prepare(ON_ENTITIES).bind(input.workspaceId),
   ]);
-  const items = weekItemRows.parse(weekItemResult.results);
-  const entities = entityRows.parse(entityResult.results);
+  const items = weekItemRows.parse(required(weekItemResult, "read-this-first.items").results);
+  const entities = entityRows.parse(required(entityResult, "read-this-first.entities").results);
   const unjudgedInputs = await countUnjudgedInputs(db, {
     workspaceId: input.workspaceId,
     windowStartAt: input.startsAt,
@@ -121,7 +122,7 @@ export async function judgeWeek(db: D1Database, input: JudgeWeekInput): Promise<
         chunk.map((entry) => askNoul(input.workspaceId, READ_THIS_FIRST, packFor(entry, self, entities))),
       );
       const statements = chunk.flatMap((entry, position) => {
-        const verdict = verdicts[position];
+        const verdict = required(verdicts[position], "read-this-first.verdict");
         if (verdict.cached) return [];
         return [
           insertVerdict({
@@ -144,7 +145,7 @@ export async function judgeWeek(db: D1Database, input: JudgeWeekInput): Promise<
         ...collected,
         ...chunk.map((entry, position) => ({
           signalId: entry.item.signal_id,
-          p: verdicts[position].p,
+          p: required(verdicts[position], "read-this-first.verdict").p,
           observedAt: entry.item.observed_at,
         })),
       ];

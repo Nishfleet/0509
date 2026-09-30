@@ -20,7 +20,6 @@ const DAY = {
   day: "2026-09-22",
   d1RowsWritten: 4677,
   r2ClassAOps: 13,
-  browserMs: 157107,
 };
 
 afterEach(() => {
@@ -43,20 +42,19 @@ describe("parseUsageResponse", () => {
   it("sums an empty row list to zero", () => {
     expect(
       parseUsageResponse("2026-09-22", {
-        data: { viewer: { accounts: [{ d1: [], r2: [], browser: [] }] } },
+        data: { viewer: { accounts: [{ d1: [], r2: [] }] } },
       }),
     ).toEqual({
       day: "2026-09-22",
       d1RowsWritten: 0,
       r2ClassAOps: 0,
-      browserMs: 0,
     });
   });
 
   it("throws when an alias is not an array", () => {
     expect(() =>
       parseUsageResponse("2026-09-22", {
-        data: { viewer: { accounts: [{ d1: null, r2: [], browser: [] }] } },
+        data: { viewer: { accounts: [{ d1: null, r2: [] }] } },
       }),
     ).toThrow(/cloudflare graphql: d1 is not an array/);
   });
@@ -64,7 +62,7 @@ describe("parseUsageResponse", () => {
   it("throws when a row has no sum", () => {
     expect(() =>
       parseUsageResponse("2026-09-22", {
-        data: { viewer: { accounts: [{ d1: [{}], r2: [], browser: [] }] } },
+        data: { viewer: { accounts: [{ d1: [{}], r2: [] }] } },
       }),
     ).toThrow(/cloudflare graphql: d1 row has no sum/);
   });
@@ -74,7 +72,7 @@ describe("parseUsageResponse", () => {
       parseUsageResponse("2026-09-22", {
         data: {
           viewer: {
-            accounts: [{ d1: [{ sum: { rowsWritten: "4677" } }], r2: [], browser: [] }],
+            accounts: [{ d1: [{ sum: { rowsWritten: "4677" } }], r2: [] }],
           },
         },
       }),
@@ -91,7 +89,7 @@ describe("parseUsageResponse", () => {
     const rows = Array.from({ length: 10000 }, () => ({ sum: { rowsWritten: 0 } }));
     expect(() =>
       parseUsageResponse("2026-09-22", {
-        data: { viewer: { accounts: [{ d1: rows, r2: [], browser: [] }] } },
+        data: { viewer: { accounts: [{ d1: rows, r2: [] }] } },
       }),
     ).toThrow(/cloudflare graphql: d1 hit group limit/);
   });

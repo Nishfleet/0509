@@ -200,6 +200,20 @@ describe("source latest snapshot facts (0509#5724)", () => {
     });
   });
 
+  it("site path: a watch or page deleted mid-check inserts nothing instead of failing on a foreign key", async () => {
+    await seedSource(SOURCE, WATCH);
+    const base = { fetchedAt: "2026-09-25T04:00:00Z", r2Key: null, hash: "hash-gone" };
+
+    const watchGone = await insertSnapshot({ ...base, id: "snap-watch-gone", watchId: "watch-deleted", pageId: PAGE });
+    const pageGone = await insertSnapshot({ ...base, id: "snap-page-gone", watchId: WATCH, pageId: "page-deleted" });
+    expect([watchGone, pageGone]).toEqual([false, false]);
+
+    const { results } = await env.DB.prepare(
+      "SELECT id FROM snapshot WHERE id IN ('snap-watch-gone','snap-page-gone')",
+    ).all();
+    expect(results).toEqual([]);
+  });
+
   it("hiring path: insertBoardSnapshot writes the board item count and a null canary count", async () => {
     await seedSource(SOURCE, WATCH);
     await insertBoardSnapshot({
