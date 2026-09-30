@@ -29,6 +29,7 @@ const KEYS = [
   "SIGN_IN_IP_LIMIT",
   "AGENT_REGISTER_LIMIT",
   "PROBE_LIMIT",
+  "DELIVERY_ADDRESS_LIMIT",
   "LIVENESS_PING_URL",
   "SITE_SWEEP_PING_URL",
 ] as const;
@@ -50,6 +51,7 @@ function configured() {
     SIGN_IN_IP_LIMIT: { limit: () => ({ success: true }) },
     AGENT_REGISTER_LIMIT: { limit: () => ({ success: true }) },
     PROBE_LIMIT: { limit: () => ({ success: true }) },
+    DELIVERY_ADDRESS_LIMIT: { limit: () => ({ success: true }) },
   };
 }
 
@@ -167,6 +169,7 @@ describe("worker env", () => {
       "SIGN_IN_IP_LIMIT",
       "AGENT_REGISTER_LIMIT",
       "PROBE_LIMIT",
+      "DELIVERY_ADDRESS_LIMIT",
     ]);
   });
 

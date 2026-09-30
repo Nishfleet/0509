@@ -1,6 +1,7 @@
 import { env } from "cloudflare:workers";
 
 import { sendMessage } from "../../workers/delivery/send";
+import { deliveryAddressSendAllowed } from "./auth/delivery-address-limit";
 import { redactEmailShaped } from "./auth/redact-email-shaped";
 import { clearSuppression, isAddressSuppressed } from "./data/email_suppression.server";
 import {
@@ -16,6 +17,7 @@ import { verifyAddressEmail } from "./verify-address-email";
 const INVALID = "Enter an email address, like you@company.com.";
 const SUPPRESSED = 'This address unsubscribed from the brief. Tick "Send to it again" and save to resume.';
 const NO_WORKSPACE = "Finish setting up first, then choose where the brief goes.";
+const RATE_LIMITED = "Too many confirmations. Wait a minute and save again.";
 const VERIFY_TOKEN_TTL_MS = 24 * 60 * 60 * 1000;
 const SEND_FAILED = "We could not send the confirmation email. Save again to retry.";
 
@@ -82,6 +84,10 @@ export async function saveDeliveryAddress(input: {
 
   const workspaceId = await readWorkspaceIdForOwner(input.userId);
   if (workspaceId === null) return { error: NO_WORKSPACE, suppressed: false };
+
+  if (!(await deliveryAddressSendAllowed(env, workspaceId))) {
+    return { error: RATE_LIMITED, suppressed: false };
+  }
 
   if (await isAddressSuppressed(address)) {
     if (!input.resume) return { error: SUPPRESSED, suppressed: true };

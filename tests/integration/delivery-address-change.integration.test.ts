@@ -4,7 +4,12 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { readDeliveryAddress, saveDeliveryAddress } from "../../app/lib/delivery-address.server";
 import { ensureWorkspaceForSignIn, firstWorkspaceId } from "../../app/lib/workspace.server";
 
-const USER_ID = "user-da";
+// The delivery-address cap keys its bucket per workspace (0509#5940) and a
+// rate-limit binding keeps its counters for the whole file, so each test gets
+// its own owner — and so its own bucket — instead of sharing one workspace.
+const USER_ID_SEED = "user-da";
+let userSeq = 0;
+let USER_ID = USER_ID_SEED;
 const SIGN_IN_EMAIL = "owner@0509.io";
 const NOW = "2026-09-24T00:00:00Z";
 
@@ -65,6 +70,8 @@ const suppressionRow = async (address: string): Promise<SuppressionRow | null> =
 
 describe("change the workspace's email address (0509#4779)", () => {
   beforeEach(async () => {
+    userSeq += 1;
+    USER_ID = `${USER_ID_SEED}-${String(userSeq)}`;
     await env.DB.exec("DELETE FROM email_suppression");
     await env.DB.exec("DELETE FROM send_target");
     await env.DB.exec("DELETE FROM channel");

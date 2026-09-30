@@ -5,10 +5,19 @@ import { readDeliveryAddress, saveDeliveryAddress } from "../../app/lib/delivery
 import { confirmDeliveryAddress } from "../../app/lib/verify-delivery-address.server";
 import { ensureWorkspaceForSignIn, firstWorkspaceId } from "../../app/lib/workspace.server";
 
-const USER_ID = "user-dav";
+const USER_ID_SEED = "user-dav";
 const SIGN_IN_EMAIL = "owner@0509.io";
 const NOW = "2026-09-28T00:00:00Z";
 const NEW_ADDRESS = "new@0509.io";
+
+// Values from tests/integration/wrangler.test.jsonc:96.
+const DELIVERY_ADDRESS_LIMIT_PER_WINDOW = 5;
+
+// The delivery-address cap keys its bucket per workspace (0509#5940) and a
+// rate-limit binding keeps its counters for the whole file, so each test gets
+// its own owner — and so its own bucket — instead of sharing one workspace.
+let userSeq = 0;
+let USER_ID = USER_ID_SEED;
 
 interface Recorder {
   sent: EmailMessageBuilder[];
@@ -71,6 +80,8 @@ const save = (rec: Recorder, address: string) =>
 
 describe("confirm a changed delivery address (0509#5811)", () => {
   beforeEach(async () => {
+    userSeq += 1;
+    USER_ID = `${USER_ID_SEED}-${String(userSeq)}`;
     await env.DB.exec("DELETE FROM email_suppression");
     await env.DB.exec("DELETE FROM send_target");
     await env.DB.exec("DELETE FROM channel");
@@ -253,6 +264,29 @@ describe("confirm a changed delivery address (0509#5811)", () => {
     await confirmDeliveryAddress("");
     await confirmDeliveryAddress(undefined);
 
+    expect(await onlyTarget(workspaceId)).toEqual(before);
+  });
+
+  it("(f) caps confirmation resends per workspace: the save past the cap writes nothing and sends nothing (0509#5940)", async () => {
+    const workspaceId = firstWorkspaceId(USER_ID);
+    const allowed = recorder();
+    for (let attempt = 0; attempt < DELIVERY_ADDRESS_LIMIT_PER_WINDOW; attempt += 1) {
+      expect(await save(allowed, NEW_ADDRESS)).toEqual({ error: null, suppressed: false });
+    }
+    expect(allowed.sent).toHaveLength(DELIVERY_ADDRESS_LIMIT_PER_WINDOW);
+    const before = await onlyTarget(workspaceId);
+    expect(before.verify_token).toMatch(/^[0-9a-f]{64}$/);
+
+    const capped = recorder();
+    const result = await save(capped, NEW_ADDRESS);
+
+    // The same shape the suppressed branch returns; suppressed stays false so
+    // the form shows the line and no "Send to it again" affordance.
+    expect(result).toEqual({
+      error: "Too many confirmations. Wait a minute and save again.",
+      suppressed: false,
+    });
+    expect(capped.sent).toHaveLength(0);
     expect(await onlyTarget(workspaceId)).toEqual(before);
   });
 });
