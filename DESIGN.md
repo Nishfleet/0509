@@ -35,7 +35,8 @@ competitor, alerts — rendered at 1440 and 390).
 7. **Honesty is a design element.** A degraded source says so on the row. A low-confidence
    judgment sits low and says "possibly". A paused brand shows the date it was paused.
    We never round a gap up into a clean number. The one place a degraded row is replaced
-   rather than shown is the landing's all-degraded gate (§2.1), and there it is replaced
+   rather than shown is the landing's all-degraded gate (§2.1), which fires only when every
+   visible mentions source is degraded and site changes are not, and there it is replaced
    by a line that says coverage is rebuilding and what still arrives — never by silence.
 8. **The accent is one colour.** Green marker. Red exists only as the strike on a
    "before" and the rule on an open incident. Nothing else is coloured, ever.
@@ -78,9 +79,9 @@ who’s gaining on you."**). No exclamation marks anywhere on the page.
   weekly (the share image, §2.8). It is never sample data and never says "sample".
 - "What we watch" is a wrapped pill row, not a card grid. Sources we cannot currently
   reach are shown dimmed with the reason, on the landing as in the app. The one exception
-  is the prospect: when every visible source is degraded, the landing replaces the whole
-  row with a single rebuilding line, because a page that leads with unknowns sells
-  nothing (0509#5674, #5987).
+  is the prospect: when every visible mentions source is degraded and site changes are
+  live or none, the landing replaces the whole row with a single rebuilding line, because a
+  page that leads with unknowns sells nothing (0509#5674, #5987).
 - Exactly one filled button per viewport. The section CTA repeats the hero's.
 
 ### 2.2 Sign in (`/login`)
@@ -445,7 +446,8 @@ Home and in the share image.
 | Identity card, field pending | "logo: looking on your site" / "we'll fill this on the first crawl, within the hour" |
 
 The landing's all-degraded gate is the one exception (§2.1): with no session to show a
-source's history and every visible source degraded, the public page replaces the pill row
+source's history and every visible mentions source degraded (site changes live or none),
+the public page replaces the pill row
 with the one rebuilding line. Every signed-in surface keeps the degraded row and its reason.
 
 ---
