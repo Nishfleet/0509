@@ -1,8 +1,9 @@
 import { env } from "cloudflare:workers";
 import { z } from "zod";
 
-import { readUrl } from "../fetch/transport.server";
-import type { ReadUrlOptions } from "../fetch/transport.server";
+import { readUrl, probeFailureReason, ReadUrlError } from "../fetch/transport.server";
+import type { ReadUrlFailureReason, ReadUrlOptions } from "../fetch/transport.server";
+import { sha256Hex } from "../sha256";
 import { takeBrowserEscalation } from "../site/browser-budget.server";
 import type { CardReview, CardValues, DraftField, SiteFields } from "./card-fields";
 import { extractIdentity } from "./extract";
@@ -50,10 +51,15 @@ const UNREACHED: SiteCard = {
   navLinks: [],
 };
 
-class BudgetDeferredError extends Error {}
+class BudgetDeferredError extends ReadUrlError {
+  constructor() {
+    super("deferred");
+    this.name = "BudgetDeferredError";
+  }
+}
 
-function readFailure(page: { reason: string; detail: string }): Error {
-  return page.reason === "deferred" ? new BudgetDeferredError(page.detail) : new Error(page.detail);
+function readFailure(page: { reason: ReadUrlFailureReason }): Error {
+  return page.reason === "deferred" ? new BudgetDeferredError() : new ReadUrlError(page.reason);
 }
 
 function unreachedEvent(scope: "site" | "creator", error: unknown): string {
@@ -142,7 +148,15 @@ export async function readSiteCard(
       );
       return { card, reached: true };
     } catch (error) {
-      console.log(JSON.stringify({ event: unreachedEvent("creator", error), error: String(error) }));
+      const subjectSha256 = await sha256Hex(subject.registrable);
+      console.log(
+        JSON.stringify({
+          event: unreachedEvent("creator", error),
+          probe,
+          reason: probeFailureReason(error),
+          subjectSha256,
+        }),
+      );
       return { card: UNREACHED, reached: false };
     }
   }
@@ -152,7 +166,14 @@ export async function readSiteCard(
       reached: true,
     };
   } catch (error) {
-    console.log(JSON.stringify({ event: unreachedEvent("site", error), error: String(error) }));
+    const subjectSha256 = await sha256Hex(subject.registrable);
+    console.log(
+      JSON.stringify({
+        event: unreachedEvent("site", error),
+        reason: probeFailureReason(error),
+        subjectSha256,
+      }),
+    );
     return { card: UNREACHED, reached: false };
   }
 }

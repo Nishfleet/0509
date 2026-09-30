@@ -7,8 +7,9 @@ import type { NewPage } from "../data/page.server";
 import { readEnabledSourceId, readEnabledSources } from "../data/source.server";
 import { insertWatches, readEntityWatches } from "../data/watch.server";
 import type { EntityWatch, NewWatch } from "../data/watch.server";
-import { readUrl } from "../fetch/transport.server";
+import { readUrl, probeFailureReason } from "../fetch/transport.server";
 import { discoverBoard } from "../hiring/discover-board.server";
+import { sha256Hex } from "../sha256";
 import { brandBudget, readCachedSiteProof, readSiteCard } from "./card.server";
 import { extractIdentity } from "./extract";
 import { normaliseSubject, type Subject } from "./normalise";
@@ -60,16 +61,28 @@ export async function classifyTailPages(params: IdentityTailParams, now: string)
   try {
     const page = await readUrl(params.homepageUrl, { mayEscalate: brandBudget(params.workspaceId, params.domain) });
     if (!page.ok) {
+      const subjectSha256 = await sha256Hex(params.domain);
       console.log(
-        JSON.stringify({ event: "identity-page-role-skipped", workspaceId: params.workspaceId, error: page.detail }),
+        JSON.stringify({
+          event: "identity-page-role-skipped",
+          workspaceId: params.workspaceId,
+          reason: page.reason,
+          subjectSha256,
+        }),
       );
       return;
     }
     const extract = await extractIdentity(page.html, params.homepageUrl);
     await classifyNavPages(params.workspaceId, { id: params.entityId, domain: params.domain }, extract.navPages, now);
   } catch (error) {
+    const subjectSha256 = await sha256Hex(params.domain);
     console.log(
-      JSON.stringify({ event: "identity-page-role-skipped", workspaceId: params.workspaceId, error: String(error) }),
+      JSON.stringify({
+        event: "identity-page-role-skipped",
+        workspaceId: params.workspaceId,
+        reason: probeFailureReason(error),
+        subjectSha256,
+      }),
     );
   }
 }
