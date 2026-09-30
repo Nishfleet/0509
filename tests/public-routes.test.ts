@@ -6,11 +6,13 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 import routes from "../app/routes";
+import { LEGAL_UPDATED } from "../app/lib/legal/document";
 import type { SourceRow, SourceSnapshot } from "../app/components/source-pill";
 import {
   DISALLOWED_PREFIXES,
   MCP_URL,
   PUBLIC_PATHS,
+  SITEMAP_LASTMOD,
   SITEMAP_PATHS,
   llmsTxt,
   robotsTxt,
@@ -75,6 +77,14 @@ describe("public-route manifest", () => {
       const classified = (PUBLIC_PATHS as readonly string[]).includes(urlPath) || isDisallowed(urlPath);
       expect(classified, `route "${path}" is not classified in app/lib/public-routes.ts`).toBe(true);
     }
+  });
+
+  it("sitemap.xml dates the legal pages by their last update and leaves other urls undated", () => {
+    const body = sitemapXml("https://0509.io", SITEMAP_PATHS, SITEMAP_LASTMOD);
+    for (const path of ["/privacy", "/terms"]) {
+      expect(body).toContain(`<loc>https://0509.io${path}</loc><lastmod>${LEGAL_UPDATED}</lastmod>`);
+    }
+    expect(body).toContain("<loc>https://0509.io/llms.txt</loc></url>");
   });
 
   it("robots.txt disallows the manifest prefixes and names the sitemap", () => {

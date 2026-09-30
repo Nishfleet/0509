@@ -17,7 +17,7 @@ const JEV_JUDGMENTS_PER_BRAND_PER_DAY = 6;
 const HISTORY_DAYS = 30;
 
 const HISTORY_SQL =
-  "SELECT summary FROM signal WHERE entity_id = ?1 AND kind = 'change' AND observed_at >= ?2 ORDER BY observed_at DESC LIMIT 20";
+  "SELECT COALESCE(summary, title) AS summary FROM signal WHERE entity_id = ?1 AND kind = 'change' AND observed_at >= ?2 AND COALESCE(summary, title) IS NOT NULL ORDER BY observed_at DESC LIMIT 20";
 
 const BREAKAGE_ALERT_P = 0.5;
 

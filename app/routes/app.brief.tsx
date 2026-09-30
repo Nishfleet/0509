@@ -59,7 +59,9 @@ export default function Page({ loaderData }: Route.ComponentProps) {
     <main className={PAGE}>
       <PageHeading title="Your weekly brief" />
       {selected === null ? (
-        <EmptyState sentence={EMPTY_SENTENCE} />
+        <div className="mt-6">
+          <EmptyState sentence={EMPTY_SENTENCE} />
+        </div>
       ) : (
         <>
           <p data-brief-state={selected.status} className={BRIEF_LINE}>
