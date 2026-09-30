@@ -26,6 +26,10 @@ export const PAGE_ROLE: ChoiceQuestion = {
 
 const pageRole = z.enum(["home", "pricing", "product", "blog", "careers", "legal", "other"]);
 
+export function pageRoleState(domain: string, page: NavPage): Record<string, unknown> {
+  return { subject: { domain }, item: { url: page.url, title: page.title } };
+}
+
 async function pageHash(page: NavPage): Promise<string> {
   return sha256Hex(JSON.stringify({ url: page.url, title: page.title }));
 }
@@ -42,12 +46,7 @@ export async function classifyNavPages(
   if (stale.length === 0) return [];
 
   const verdicts = await Promise.all(
-    stale.map(({ page }) =>
-      askChoice(workspaceId, PAGE_ROLE, {
-        subject: { domain: entity.domain },
-        item: { url: page.url, title: page.title },
-      }),
-    ),
+    stale.map(({ page }) => askChoice(workspaceId, PAGE_ROLE, pageRoleState(entity.domain, page))),
   );
 
   const rows: JudgedPage[] = stale.map(({ page, hash }, index) => ({
