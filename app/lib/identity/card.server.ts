@@ -179,6 +179,41 @@ async function firstStorableLogoUrl(candidates: LogoCandidates): Promise<string 
   return null;
 }
 
+function cardValues(subject: Subject, card: SiteCard): CardValues {
+  return {
+    name: card.name ?? (subject.kind === "domain" ? null : `@${subject.registrable}`),
+    description: card.description,
+    socials:
+      subject.url !== null && subject.kind !== "domain"
+        ? [
+            { platform: subject.platform ?? "site", url: subject.url },
+            ...card.socials.filter((social) => social.platform !== subject.platform),
+          ]
+        : card.socials,
+  };
+}
+
+async function logoDataUrl(subject: Subject, card: SiteCard): Promise<string | null> {
+  const cached = await cachedProbe(subject, "icon", logoSchema, async () => {
+    const url = await firstStorableLogoUrl({
+      ...card.logoCandidates,
+      registrableDomain: subject.registrable,
+    });
+    return { v: ICON_PROBE_V, url };
+  });
+  const url = cached.url;
+  if (url === null) return null;
+  const kept = await readLogo(subject.registrable);
+  if (kept !== null) {
+    const contentType = kept.httpMetadata?.contentType ?? "image/png";
+    const bytes = new Uint8Array(await kept.arrayBuffer());
+    return toDataUrl(contentType, bytes);
+  }
+  const stored = await storeLogo(subject.registrable, url);
+  if (stored === null) return null;
+  return toDataUrl(stored.contentType, stored.bytes);
+}
+
 export function startCard(
   workspaceId: string,
   subject: Subject,
@@ -186,44 +221,14 @@ export function startCard(
 ): { site: Promise<SiteFields>; logo: Promise<string | null> } {
   const read = readSiteCard(subject, brandBudget(workspaceId, subject.registrable));
   const site = read.then(async ({ card, reached }): Promise<SiteFields> => {
-    const values: CardValues = {
-      name: card.name ?? (subject.kind === "domain" ? null : `@${subject.registrable}`),
-      description: card.description,
-      socials:
-        subject.url !== null && subject.kind !== "domain"
-          ? [
-              { platform: subject.platform ?? "site", url: subject.url },
-              ...card.socials.filter((social) => social.platform !== subject.platform),
-            ]
-          : card.socials,
-    };
+    const values = cardValues(subject, card);
     const review: CardReview = reached
       ? await reviewFields(workspaceId, subject, values, edited, new Date().toISOString())
       : fillReview(values);
     return { ...applyReview(values, review), unfound: subject.kind === "domain" && !reached };
   });
   const logo = read
-    .then(async ({ card, reached }) => {
-      if (!reached) return null;
-      const cached = await cachedProbe(subject, "icon", logoSchema, async () => {
-        const url = await firstStorableLogoUrl({
-          ...card.logoCandidates,
-          registrableDomain: subject.registrable,
-        });
-        return { v: ICON_PROBE_V, url };
-      });
-      const url = cached.url;
-      if (url === null) return null;
-      const kept = await readLogo(subject.registrable);
-      if (kept !== null) {
-        const contentType = kept.httpMetadata?.contentType ?? "image/png";
-        const bytes = new Uint8Array(await kept.arrayBuffer());
-        return toDataUrl(contentType, bytes);
-      }
-      const stored = await storeLogo(subject.registrable, url);
-      if (stored === null) return null;
-      return toDataUrl(stored.contentType, stored.bytes);
-    })
+    .then(({ card, reached }) => (reached ? logoDataUrl(subject, card) : null))
     .catch((error: unknown) => {
       console.log(JSON.stringify({ event: "identity-logo-failed", workspaceId, error: String(error) }));
       return null;
