@@ -87,6 +87,12 @@ describe("WhyFlaggedSheet", () => {
     expect(html).toContain("min-h-11");
   });
 
+  it("titles the sheet in the house row-name type, never the old text-lg font-semibold", () => {
+    const body = contentBody();
+    expect(body).toContain('class="font-display text-row-name font-bold"');
+    expect(body).not.toContain("text-lg font-semibold");
+  });
+
   it("turns the dialog it renders into a bottom sheet below 860px and a panel above", () => {
     const className = sheetContent().props.className ?? "";
     expect(className).toContain("max-[859px]:top-auto max-[859px]:bottom-0");

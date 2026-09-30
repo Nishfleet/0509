@@ -5,7 +5,7 @@ import { z } from "zod";
 
 import { insertSelfEntity, readWorkspaceSelfId } from "../../../app/lib/data/entity.server";
 import { readJudgedPricingUrl, upsertJudgedPages } from "../../../app/lib/data/page.server";
-import { confirmCard } from "../../../app/lib/identity/confirm.server";
+import { confirmCard, confirmCardLater } from "../../../app/lib/identity/confirm.server";
 import { extractIdentity } from "../../../app/lib/identity/extract";
 import { normaliseSubject } from "../../../app/lib/identity/normalise";
 import { probeKey } from "../../../app/lib/identity/probe-cache.server";
@@ -245,6 +245,36 @@ describe("IdentityTailWorkflow", () => {
       }),
     ).resolves.toBe(identityTailInstanceId(entityId));
     expect(await introspector.get()).toHaveLength(1);
+  });
+
+  it("confirms first and starts the one tail instance only when the caller asks", async () => {
+    await seed();
+    await using introspector = await introspectWorkflow(env.IDENTITY_TAIL);
+    const startTail = await confirmCardLater(
+      workspaceId,
+      userId,
+      form({ subject: DOMAIN, name: "Gymshark", description: "Gym clothes" }),
+    );
+    if (startTail === null) throw new Error("the confirm did not store the card");
+
+    expect(await introspector.get()).toHaveLength(0);
+    await startTail();
+    expect(await introspector.get()).toHaveLength(1);
+  });
+
+  it("lets a failed tail start surface to the caller after the card is stored", async () => {
+    await seed();
+    const failure = new Error("workflow binding unavailable");
+    vi.spyOn(env.IDENTITY_TAIL, "createBatch").mockRejectedValueOnce(failure);
+    const startTail = await confirmCardLater(
+      workspaceId,
+      userId,
+      form({ subject: DOMAIN, name: "Gymshark", description: "" }),
+    );
+    if (startTail === null) throw new Error("the confirm did not store the card");
+
+    expect(await readWorkspaceSelfId(workspaceId)).not.toBeNull();
+    await expect(startTail()).rejects.toBe(failure);
   });
 
   it("watches the page Jev judged pricing, not a /pricing path", async () => {

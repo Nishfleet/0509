@@ -1,11 +1,12 @@
 import type { Route } from "./+types/app.settings";
 
-import { DeleteAccount } from "../components/account-settings";
+import { DeleteAccount, ExportData } from "../components/account-settings";
 import { DismissedBrands } from "../components/dismissed-brands";
+import { Footer } from "../components/footer";
 import { OwnSiteAlertsSetting } from "../components/own-site-alerts-setting";
 import { PAGE, PageHeading } from "../components/page-heading";
 import { AccountSection, AgentsSection, BriefSection } from "../components/settings-sections";
-import { requireSession } from "../lib/require-session.server";
+import { requireFreshSession, requireSession } from "../lib/require-session.server";
 import { readSettings, runSettingsIntent } from "../lib/settings.server";
 
 export function meta() {
@@ -18,7 +19,7 @@ export async function loader({ request }: Route.LoaderArgs) {
 }
 
 export async function action({ request, context }: Route.ActionArgs) {
-  const session = await requireSession(request);
+  const session = await requireFreshSession(request);
   return runSettingsIntent(session.user, request, context);
 }
 
@@ -30,13 +31,10 @@ export default function Page({ loaderData, actionData }: Route.ComponentProps) {
       <OwnSiteAlertsSetting on={loaderData.ownSiteAlerts} />
       <DismissedBrands dismissed={loaderData.dismissed} />
       <AgentsSection />
-      <AccountSection
-        email={loaderData.email}
-        delivery={loaderData.delivery}
-        deliveryError={actionData?.deliveryError ?? null}
-        deliverySuppressed={actionData?.deliverySuppressed ?? false}
-      />
+      <AccountSection email={loaderData.email} delivery={loaderData.delivery} result={actionData} />
+      <ExportData />
       <DeleteAccount email={loaderData.email} error={actionData?.deleteError ?? null} />
+      <Footer />
     </main>
   );
 }

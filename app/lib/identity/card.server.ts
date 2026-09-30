@@ -1,8 +1,9 @@
 import { env } from "cloudflare:workers";
 import { z } from "zod";
 
-import { readUrl } from "../fetch/transport.server";
-import type { ReadUrlOptions } from "../fetch/transport.server";
+import { readUrl, probeFailureReason, ReadUrlError } from "../fetch/transport.server";
+import type { ReadUrlFailureReason, ReadUrlOptions } from "../fetch/transport.server";
+import { sha256Hex } from "../sha256";
 import { takeBrowserEscalation } from "../site/browser-budget.server";
 import type { CardReview, CardValues, DraftField, SiteFields } from "./card-fields";
 import { extractIdentity } from "./extract";
@@ -50,6 +51,21 @@ const UNREACHED: SiteCard = {
   navLinks: [],
 };
 
+class BudgetDeferredError extends ReadUrlError {
+  constructor() {
+    super("deferred");
+    this.name = "BudgetDeferredError";
+  }
+}
+
+function readFailure(page: { reason: ReadUrlFailureReason }): Error {
+  return page.reason === "deferred" ? new BudgetDeferredError() : new ReadUrlError(page.reason);
+}
+
+function unreachedEvent(scope: "site" | "creator", error: unknown): string {
+  return error instanceof BudgetDeferredError ? `identity-${scope}-deferred` : `identity-${scope}-unreached`;
+}
+
 type MayEscalate = NonNullable<ReadUrlOptions["mayEscalate"]>;
 
 export function brandBudget(workspaceId: string, registrable: string): MayEscalate {
@@ -63,7 +79,7 @@ function wikidataTerm(subject: Subject): string {
 async function probeSite(subject: Subject, mayEscalate: MayEscalate): Promise<SiteCard> {
   if (subject.url === null) throw new Error("no site to read");
   const page = await readUrl(subject.url, { mayEscalate });
-  if (!page.ok) throw new Error(page.detail);
+  if (!page.ok) throw readFailure(page);
   const extract = await extractIdentity(page.html, subject.url);
   const name = await resolveBrandName(extract.nameSources, wikidataTerm(subject));
   const card: SiteCard = {
@@ -87,7 +103,7 @@ async function probeSite(subject: Subject, mayEscalate: MayEscalate): Promise<Si
 async function probeProfile(subject: Subject, mayEscalate: MayEscalate): Promise<SiteCard> {
   if (subject.url === null) throw new Error("no profile to read");
   const page = await readUrl(subject.url, { mayEscalate });
-  if (!page.ok) throw new Error(page.detail);
+  if (!page.ok) throw readFailure(page);
   const extract = await extractIdentity(page.html, subject.url);
   return {
     name: extract.nameSources.title,
@@ -132,7 +148,15 @@ export async function readSiteCard(
       );
       return { card, reached: true };
     } catch (error) {
-      console.log(JSON.stringify({ event: "identity-creator-unreached", error: String(error) }));
+      const subjectSha256 = await sha256Hex(subject.registrable);
+      console.log(
+        JSON.stringify({
+          event: unreachedEvent("creator", error),
+          probe,
+          reason: probeFailureReason(error),
+          subjectSha256,
+        }),
+      );
       return { card: UNREACHED, reached: false };
     }
   }
@@ -142,7 +166,14 @@ export async function readSiteCard(
       reached: true,
     };
   } catch (error) {
-    console.log(JSON.stringify({ event: "identity-site-unreached", error: String(error) }));
+    const subjectSha256 = await sha256Hex(subject.registrable);
+    console.log(
+      JSON.stringify({
+        event: unreachedEvent("site", error),
+        reason: probeFailureReason(error),
+        subjectSha256,
+      }),
+    );
     return { card: UNREACHED, reached: false };
   }
 }

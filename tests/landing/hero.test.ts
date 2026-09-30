@@ -10,7 +10,7 @@ const SENTENCE = `We watch ${WATCHED_NOUNS} across your market, and we name the 
 const MICROCOPY = "One input. Sixty seconds to who’s gaining on you.";
 
 function markup(): string {
-  return renderToStaticMarkup(createElement(Hero));
+  return renderToStaticMarkup(createElement(Hero, { nouns: WATCHED_NOUNS }));
 }
 
 describe("landing hero", () => {

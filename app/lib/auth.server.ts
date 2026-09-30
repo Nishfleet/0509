@@ -7,10 +7,12 @@ import { passkey } from "@better-auth/passkey";
 import { API_KEY_PREFIX } from "./agent/paths";
 import { ensureWorkspaceForSignIn } from "./workspace.server";
 import { accessPrecleared } from "./auth/access-preclearance.server";
+import { changeEmailEmail } from "./auth/change-email-email";
+import { changeEmailAllowed } from "./auth/change-email-limit";
 import { MAGIC_LINK_TTL_SECONDS, magicLinkEmail } from "./auth/magic-link-email";
 import { MAGIC_LINK_PATH } from "./auth/magic-link-path";
 import { redactEmailShaped } from "./auth/redact-email-shaped";
-import { signInLinkAllowed } from "./auth/sign-in-limit";
+import { signInLinkAllowed } from "./auth/sign-in-limit.server";
 import { errorText, sendOrThrow } from "../../workers/delivery/send";
 
 interface AuthEnv {
@@ -35,6 +37,9 @@ function emailOf(body: unknown): string {
 
 const COOKIE_PREFIX = "better-auth";
 const FRESH_SESSION_SECONDS = 60 * 60 * 24;
+const EMAIL_CHANGE_TTL_SECONDS = 60 * 60;
+const SESSION_COOKIE_CACHE_SECONDS = 5 * 60;
+const FRESH = { disableCookieCache: true };
 const SESSION_COOKIE = `${COOKIE_PREFIX}.session_token`;
 const sessionCookieNames = new Set([SESSION_COOKIE, `__Secure-${SESSION_COOKIE}`]);
 
@@ -42,6 +47,20 @@ export function hasSessionCookie(request: Request) {
   const header = request.headers.get("cookie");
   if (!header) return false;
   return header.split(";").some((part) => sessionCookieNames.has(part.trim().split("=")[0] ?? ""));
+}
+
+function sendChangeEmailMessage(
+  email: SendEmail,
+  input: { kind: "approve" | "confirm"; to: string; named: string; url: string },
+): Promise<void> {
+  const message = changeEmailEmail({ kind: input.kind, email: input.named, url: input.url });
+  return sendOrThrow(email, {
+    to: input.to,
+    from: { email: "hello@0509.io", name: "Five to Nine" },
+    subject: message.subject,
+    text: message.text,
+    html: message.html,
+  });
 }
 
 export function createAuth(env: AuthEnv, options?: { captcha?: boolean; validateSchema?: boolean }) {
@@ -53,12 +72,29 @@ export function createAuth(env: AuthEnv, options?: { captcha?: boolean; validate
     advanced: {
       cookiePrefix: COOKIE_PREFIX,
       ipAddress: { ipAddressHeaders: [CLIENT_IP_HEADER] },
-      database: { validateSchema: options?.validateSchema ?? false },
+      database: { joins: true, validateSchema: options?.validateSchema ?? false },
     },
-    session: { freshAge: FRESH_SESSION_SECONDS },
-    user: { deleteUser: { enabled: true } },
+    session: {
+      freshAge: FRESH_SESSION_SECONDS,
+      cookieCache: { enabled: true, maxAge: SESSION_COOKIE_CACHE_SECONDS },
+    },
+    user: {
+      deleteUser: { enabled: true },
+      changeEmail: {
+        enabled: true,
+        updateEmailWithoutVerification: false,
+        sendChangeEmailConfirmation: ({ user, newEmail, url }) =>
+          sendChangeEmailMessage(env.EMAIL, { kind: "approve", to: user.email, named: newEmail, url }),
+      },
+    },
+    emailVerification: {
+      expiresIn: EMAIL_CHANGE_TTL_SECONDS,
+      sendVerificationEmail: ({ user, url }) =>
+        sendChangeEmailMessage(env.EMAIL, { kind: "confirm", to: user.email, named: user.email, url }),
+    },
     hooks: {
       before: createAuthMiddleware(async (ctx) => {
+        if (ctx.path === "/send-verification-email") throw new APIError("NOT_FOUND");
         if (ctx.path !== MAGIC_LINK_PATH) return;
         const ip = ctx.headers?.get(CLIENT_IP_HEADER) ?? null;
         if (!(await signInLinkAllowed(env, emailOf(ctx.body), ip))) {
@@ -134,12 +170,39 @@ export async function signOut(env: AuthEnv, request: Request): Promise<Headers> 
 
 export async function deleteSignedInUser(env: AuthEnv, request: Request, now: Date): Promise<Headers | null> {
   const auth = createAuth(env);
-  const session = await auth.api.getSession({ headers: request.headers });
+  const session = await auth.api.getSession({ headers: request.headers, query: FRESH });
   if (!session) return null;
   const age = now.getTime() - new Date(session.session.createdAt).getTime();
   if (age >= FRESH_SESSION_SECONDS * 1000) return null;
   const { apiKeys } = await auth.api.listApiKeys({ headers: request.headers });
-  await Promise.all(apiKeys.map((key) => auth.api.deleteApiKey({ body: { keyId: key.id }, headers: request.headers })));
-  const { headers } = await auth.api.deleteUser({ body: {}, headers: request.headers, returnHeaders: true });
+  await Promise.all(
+    apiKeys.map((key) => auth.api.deleteApiKey({ body: { keyId: key.id }, headers: request.headers, query: FRESH })),
+  );
+  const { headers } = await auth.api.deleteUser({
+    body: {},
+    headers: request.headers,
+    query: FRESH,
+    returnHeaders: true,
+  });
   return headers;
+}
+
+export async function requestEmailChange(
+  env: AuthEnv & { CHANGE_EMAIL_LIMIT: RateLimit },
+  request: Request,
+  newEmail: string,
+): Promise<"sent" | "limited"> {
+  const auth = createAuth(env);
+  const session = await auth.api.getSession({ headers: request.headers, query: FRESH });
+  if (!session) throw new Error("no session");
+  if (Date.now() - new Date(session.session.createdAt).getTime() >= FRESH_SESSION_SECONDS * 1000) {
+    throw new Error("session not fresh");
+  }
+  if (!(await changeEmailAllowed(env.CHANGE_EMAIL_LIMIT, session.user.id, newEmail))) return "limited";
+  await auth.api.changeEmail({
+    body: { newEmail, callbackURL: "/app/settings" },
+    headers: request.headers,
+    query: FRESH,
+  });
+  return "sent";
 }

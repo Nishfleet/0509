@@ -1,10 +1,11 @@
 import { env } from "cloudflare:workers";
 import { redirect } from "react-router";
+import { z } from "zod";
 import type { RouterContextProvider } from "react-router";
 
 import { deleteAccount } from "./account-delete.server";
 import { oauthHelpersContext } from "./agent/context.server";
-import { signOut } from "./auth.server";
+import { requestEmailChange, signOut } from "./auth.server";
 import { nextBriefAt } from "./brief-schedule";
 import { formatBriefAt, parseBriefSchedule } from "./brief-settings";
 import { readUserDismissed, restoreSuggestion } from "./data/suggestion.server";
@@ -18,6 +19,9 @@ import { readDeliveryAddress, saveDeliveryAddress } from "./delivery-address.ser
 import { saveBriefSchedule } from "./standing/reschedule.server";
 
 const MISMATCH = "That doesn't match your email. Type it exactly to delete your account.";
+const EMAIL_INVALID = "Enter an email address, like you@company.com.";
+const EMAIL_FAILED = "We couldn't send the link. For your safety, sign out and back in, then try again.";
+const EMAIL_LIMITED = "Too many tries. Wait a minute and try again.";
 const SIGN_IN_AGAIN = "For your safety, sign out and sign back in, then delete your account.";
 
 interface SettingsUser {
@@ -30,10 +34,20 @@ export interface SettingsResult {
   deleteError: string | null;
   deliveryError: string | null;
   deliverySuppressed: boolean;
+  emailChangeSent: boolean;
+  emailChangeError: string | null;
 }
 
 function result(fields: Partial<SettingsResult>): SettingsResult {
-  return { saved: null, deleteError: null, deliveryError: null, deliverySuppressed: false, ...fields };
+  return {
+    saved: null,
+    deleteError: null,
+    deliveryError: null,
+    deliverySuppressed: false,
+    emailChangeSent: false,
+    emailChangeError: null,
+    ...fields,
+  };
 }
 
 export async function readSettings(user: SettingsUser) {
@@ -70,6 +84,26 @@ async function saveAddress(user: SettingsUser, form: FormData): Promise<Settings
     resume: form.get("resume") === "yes",
   });
   return result({ deliveryError: saved.error, deliverySuppressed: saved.suppressed });
+}
+
+async function changeEmail(request: Request, form: FormData): Promise<SettingsResult> {
+  const raw = form.get("newEmail");
+  const newEmail = typeof raw === "string" ? raw.trim() : "";
+  if (!z.email().safeParse(newEmail).success) return result({ emailChangeError: EMAIL_INVALID });
+  try {
+    if ((await requestEmailChange(env, request, newEmail)) === "limited") {
+      return result({ emailChangeError: EMAIL_LIMITED });
+    }
+  } catch (failed) {
+    console.error(
+      JSON.stringify({
+        event: "settings.email_change_failed",
+        error: failed instanceof Error ? failed.name : "unknown",
+      }),
+    );
+    return result({ emailChangeError: EMAIL_FAILED });
+  }
+  return result({ emailChangeSent: true });
 }
 
 async function removeAccount(
@@ -115,6 +149,7 @@ export async function runSettingsIntent(
   if (intent === "own-site-alerts") return saveOwnSiteAlerts(user.id, form);
   if (intent === "sign-out") throw redirect("/login", { headers: await signOut(env, request) });
   if (intent === "delivery-address") return saveAddress(user, form);
+  if (intent === "change-email") return changeEmail(request, form);
   if (intent === "delete-account") return removeAccount(user, form, { request, context });
   if (intent === "restore-suggestion") return restore(user.id, form);
   return saveSchedule(user.id, form);

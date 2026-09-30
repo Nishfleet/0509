@@ -28,6 +28,16 @@ export const FAQ: readonly FaqEntry[] = [
     answer: `Public sources only: ${WATCHED_ORIGINS}. We never log in anywhere, never track private individuals, and never buy personal data.`,
   },
   {
+    question: "Why not just check my competitors by hand?",
+    answer:
+      "You can, and for one rival it works. Five to Nine does it for every rival at once, keeps the before and after screenshot as proof, and ranks who moved most, so one Monday email replaces the tab-checking.",
+  },
+  {
+    question: "Is my data private?",
+    answer:
+      "Yes. Nothing about your workspace sits on a public page, we never sell your data, and you can ask for a copy or for deletion at any time. Any brand can also ask to be removed from tracking.",
+  },
+  {
     question: "How much does it cost?",
     answer: `${priceList}. ${TRIAL_TERMS}`,
   },

@@ -42,7 +42,8 @@ export const handleError: HandleErrorFunction = (error, { request, params }) => 
   if (request.signal.aborted) return;
   console.error(error);
   if (isRouteErrorResponse(error) && error.status < 500) return;
-  captureException(error, { tags: { route: routePattern(new URL(request.url).pathname, params) } });
+  const { pathname } = new URL(request.url);
+  captureException(error, { tags: { route: routePattern(pathname, params) } });
 };
 
 export default async function handleRequest(

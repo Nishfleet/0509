@@ -10,6 +10,7 @@ import {
   type NoulQuestion,
   type NoulVerdict,
 } from "../jev/client.server";
+import { ACT_AT, REJECT_AT } from "../jev/thresholds";
 import type { BreakageEvidence } from "./breakage-evidence";
 
 const JEV_JUDGMENTS_PER_BRAND_PER_DAY = 6;
@@ -17,15 +18,15 @@ const JEV_JUDGMENTS_PER_BRAND_PER_DAY = 6;
 const HISTORY_DAYS = 30;
 
 const HISTORY_SQL =
-  "SELECT summary FROM signal WHERE entity_id = ?1 AND kind = 'change' AND observed_at >= ?2 ORDER BY observed_at DESC LIMIT 20";
+  "SELECT COALESCE(summary, title) AS summary FROM signal WHERE entity_id = ?1 AND kind = 'change' AND observed_at >= ?2 AND COALESCE(summary, title) IS NOT NULL ORDER BY observed_at DESC LIMIT 20";
 
 const BREAKAGE_ALERT_P = 0.5;
 
 const BREAKAGE_CLEAR_P = 0.1;
 
-const PUBLISH_P = 0.9;
+const PUBLISH_P = ACT_AT;
 
-const DISCARD_P = 0.1;
+const DISCARD_P = REJECT_AT;
 
 const D3S_BREAKAGE_QID = "own_site_breakage";
 

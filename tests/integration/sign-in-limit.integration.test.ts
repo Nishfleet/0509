@@ -22,16 +22,17 @@ function authSending(sent: string[]) {
   });
 }
 
-function requestLink(auth: ReturnType<typeof createAuth>, email: string, ip: string) {
+function requestLink(auth: ReturnType<typeof createAuth>, email: string, ip: string | null): Promise<Response> {
+  const headers: Record<string, string> = {
+    "content-type": "application/json",
+    origin: ORIGIN,
+    "x-captcha-response": "XXXX.DUMMY.TOKEN.XXXX",
+  };
+  if (ip !== null) headers["cf-connecting-ip"] = ip;
   return auth.handler(
     new Request(`${ORIGIN}/api/auth/sign-in/magic-link`, {
       method: "POST",
-      headers: {
-        "content-type": "application/json",
-        origin: ORIGIN,
-        "cf-connecting-ip": ip,
-        "x-captcha-response": "XXXX.DUMMY.TOKEN.XXXX",
-      },
+      headers,
       body: JSON.stringify({ email, callbackURL: "/app" }),
     }),
   );
@@ -74,6 +75,28 @@ describe("sign-in link limits", () => {
     expect(statuses.slice(0, first429).every((status) => status === 200)).toBe(true);
     expect(first429).toBeLessThan(maxAttempts);
     expect(sent).toHaveLength(first429);
+  });
+
+  it("stops the unidentified sender the edge could not place an IP on", async () => {
+    const sent: string[] = [];
+    const auth = authSending(sent);
+    const statuses: number[] = [];
+    const maxAttempts = IP_LIMIT_PER_WINDOW * 2;
+    for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+      const response = await requestLink(auth, `unidentified-${String(attempt)}@test.dev`, null);
+      statuses.push(response.status);
+      if (response.status === 429) break;
+    }
+    const first429 = statuses.indexOf(429);
+    expect(first429).toBeGreaterThanOrEqual(IP_LIMIT_PER_WINDOW);
+    expect(statuses.slice(0, first429).every((status) => status === 200)).toBe(true);
+    expect(first429).toBeLessThan(maxAttempts);
+    expect(sent).toHaveLength(first429);
+
+    // The edge-identified caller keeps its own bucket and is unaffected by the
+    // shared bucket the unidentified spray emptied above.
+    const identified = await requestLink(auth, "identified-again@test.dev", "203.0.113.11");
+    expect(identified.status).toBe(200);
   });
 
   it("keeps only a hash of the link's token", async () => {

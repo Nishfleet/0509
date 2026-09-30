@@ -1,9 +1,11 @@
 import { z } from "zod";
 
-import { BlockedRedirectError, fetchOutbound } from "../fetch/outbound.server";
+import { BlockedRedirectError, cappedText, fetchOutbound } from "../fetch/outbound.server";
+import { CRAWLER_USER_AGENT } from "../fetch/robots.server";
 import {
   channelIdFromHtml,
   channelIdFromUrl,
+  identityHasYoutubeUrl,
   isYoutubeChannelId,
   youtubeUrlFromIdentity,
 } from "../mentions/youtube-channel";
@@ -17,6 +19,8 @@ const cachedChannel = z.object({
 export type YoutubeChannelLookup =
   { status: "id"; channelId: string } | { status: "no-url" } | { status: "unresolved" };
 
+const MAX_PAGE_BYTES = 5 * 1024 * 1024;
+
 class YoutubePageMiss extends Error {
   constructor(message: string) {
     super(message);
@@ -28,7 +32,7 @@ async function readYoutubeChannelPage(pageUrl: string): Promise<{ channelId: str
   let response: Response;
   try {
     response = await fetchOutbound(pageUrl, {
-      headers: {},
+      headers: { "user-agent": CRAWLER_USER_AGENT },
       signal: AbortSignal.timeout(8_000),
     });
   } catch (error) {
@@ -42,14 +46,16 @@ async function readYoutubeChannelPage(pageUrl: string): Promise<{ channelId: str
     throw error;
   }
   if (!response.ok) throw new YoutubePageMiss(`youtube page ${String(response.status)}`);
-  const id = channelIdFromHtml(await response.text());
+  const html = await cappedText(response, MAX_PAGE_BYTES);
+  if (html === null) throw new YoutubePageMiss("youtube page too large");
+  const id = channelIdFromHtml(html);
   if (id === null) throw new YoutubePageMiss("youtube page had no channel id");
   return { channelId: id };
 }
 
 export async function lookupYoutubeChannel(identityJson: string): Promise<YoutubeChannelLookup> {
   const url = youtubeUrlFromIdentity(identityJson);
-  if (url === null) return { status: "no-url" };
+  if (url === null) return { status: identityHasYoutubeUrl(identityJson) ? "unresolved" : "no-url" };
   const fromUrl = channelIdFromUrl(url);
   if (fromUrl !== null) return { status: "id", channelId: fromUrl };
   const normalised = normaliseSubject(url);

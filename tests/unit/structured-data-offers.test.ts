@@ -6,7 +6,7 @@ import { faqPageJsonLd, softwareApplicationJsonLd, websiteJsonLd } from "../../a
 
 describe("softwareApplicationJsonLd", () => {
   it("prices one Offer per plan from the plan module", () => {
-    const node = softwareApplicationJsonLd();
+    const node = softwareApplicationJsonLd([]);
     expect(node.offers).toHaveLength(PLANS.length);
     node.offers.forEach((offer, index) => {
       expect(offer.name).toBe(PLANS[index]?.name);
@@ -17,7 +17,7 @@ describe("softwareApplicationJsonLd", () => {
   });
 
   it("claims no rating or review", () => {
-    const node = softwareApplicationJsonLd();
+    const node = softwareApplicationJsonLd([]);
     expect(node).not.toHaveProperty("aggregateRating");
     expect(node).not.toHaveProperty("review");
   });

@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { readDeliveryAddress, saveDeliveryAddress } from "../../app/lib/delivery-address.server";
 import { ensureWorkspaceForSignIn, firstWorkspaceId } from "../../app/lib/workspace.server";
 
-const USER_ID = "user-da";
+let USER_ID = "user-da";
 const SIGN_IN_EMAIL = "owner@0509.io";
 const NOW = "2026-09-24T00:00:00Z";
 
@@ -65,6 +65,7 @@ const suppressionRow = async (address: string): Promise<SuppressionRow | null> =
 
 describe("change the workspace's email address (0509#4779)", () => {
   beforeEach(async () => {
+    USER_ID = `user-da-${crypto.randomUUID()}`;
     await env.DB.exec("DELETE FROM email_suppression");
     await env.DB.exec("DELETE FROM send_target");
     await env.DB.exec("DELETE FROM channel");

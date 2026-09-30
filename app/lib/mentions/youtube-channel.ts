@@ -40,6 +40,8 @@ type WatchConfigRead =
       channelId: string | null;
       pendingChannelId: string | null;
       degraded: LostChannelFlag | null;
+      noChannel: LostChannelFlag | null;
+      lostChannel: LostChannelFlag | null;
       record: Record<string, unknown>;
     };
 
@@ -76,7 +78,15 @@ function readChannelField(
 
 export function readWatchConfig(raw: string | null | undefined): WatchConfigRead {
   if (raw == null || raw.trim() === "") {
-    return { status: "ok", channelId: null, pendingChannelId: null, degraded: null, record: {} };
+    return {
+      status: "ok",
+      channelId: null,
+      pendingChannelId: null,
+      degraded: null,
+      noChannel: null,
+      lostChannel: null,
+      record: {},
+    };
   }
   let value: unknown;
   try {
@@ -92,20 +102,41 @@ export function readWatchConfig(raw: string | null | undefined): WatchConfigRead
   const pendingChannelId = readChannelField(record.data, "pendingChannelId");
   if (!channelId.ok || !pendingChannelId.ok) return { status: "unreadable" };
 
-  let degraded: LostChannelFlag | null = null;
-  if (Object.hasOwn(record.data, "degraded")) {
-    const parsed = degradedSchema.safeParse(record.data.degraded);
-    if (!parsed.success) return { status: "unreadable" };
-    degraded = { reason: parsed.data.reason, at: parsed.data.at };
-  }
+  const flags = readFlags(record.data);
+  if (flags === null) return { status: "unreadable" };
 
   return {
     status: "ok",
     channelId: channelId.value,
     pendingChannelId: pendingChannelId.value,
-    degraded,
+    degraded: flags.lostChannel ?? flags.noChannel,
+    noChannel: flags.noChannel,
+    lostChannel: flags.lostChannel,
     record: record.data,
   };
+}
+
+function readFlags(
+  record: Record<string, unknown>,
+): { noChannel: LostChannelFlag | null; lostChannel: LostChannelFlag | null } | null {
+  const legacy = readFlagSlot(record, "degraded");
+  const dedicated = readFlagSlot(record, "noChannel");
+  if (!legacy.ok || !dedicated.ok) return null;
+  const legacyIsNoChannel = legacy.flag?.reason === NO_CHANNEL_REASON;
+  return {
+    lostChannel: legacyIsNoChannel ? null : legacy.flag,
+    noChannel: dedicated.flag ?? (legacyIsNoChannel ? legacy.flag : null),
+  };
+}
+
+function readFlagSlot(
+  record: Record<string, unknown>,
+  key: string,
+): { ok: true; flag: LostChannelFlag | null } | { ok: false } {
+  if (!Object.hasOwn(record, key)) return { ok: true, flag: null };
+  const parsed = degradedSchema.safeParse(record[key]);
+  if (!parsed.success) return { ok: false };
+  return { ok: true, flag: { reason: parsed.data.reason, at: parsed.data.at } };
 }
 
 export function youtubeUrlFromIdentity(raw: string): string | null {
@@ -117,28 +148,62 @@ export function youtubeUrlFromIdentity(raw: string): string | null {
   return null;
 }
 
+export function identityHasYoutubeUrl(raw: string): boolean {
+  const value: unknown = JSON.parse(raw);
+  const card = identitySchema.parse(value);
+  return (card.socials ?? []).some((social) => {
+    const normalised = normaliseSubject(social.url);
+    return normalised.ok && normalised.subject.platform === "youtube";
+  });
+}
+
 export function channelIdFromIdentity(raw: string): string | null {
   const url = youtubeUrlFromIdentity(raw);
   if (url === null) return null;
   return channelIdFromUrl(url);
 }
 
-function withDegradedReason(raw: string, reason: string, at: string): string {
-  const read = readWatchConfig(raw);
-  if (read.status !== "ok") throw new Error("watch config_json is unreadable");
-  if (read.degraded !== null) return raw;
+function withFlags(
+  record: Record<string, unknown>,
+  lostChannel: LostChannelFlag | null,
+  noChannel: LostChannelFlag | null,
+): string {
+  const next: Record<string, unknown> = { ...record };
+  delete next.degraded;
+  delete next.noChannel;
   return JSON.stringify({
-    ...read.record,
-    degraded: { state: "degraded", reason, at },
+    ...next,
+    ...(lostChannel === null ? {} : { degraded: { state: "degraded", ...lostChannel } }),
+    ...(noChannel === null ? {} : { noChannel: { state: "degraded", ...noChannel } }),
   });
 }
 
 export function withLostChannel(raw: string, at: string): string {
-  return withDegradedReason(raw, LOST_CHANNEL_REASON, at);
+  const read = readWatchConfig(raw);
+  if (read.status !== "ok") throw new Error("watch config_json is unreadable");
+  if (read.lostChannel !== null) return raw;
+  return withFlags(read.record, { reason: LOST_CHANNEL_REASON, at }, read.noChannel);
 }
 
 export function withNoChannel(raw: string, at: string): string {
-  return withDegradedReason(raw, NO_CHANNEL_REASON, at);
+  const read = readWatchConfig(raw);
+  if (read.status !== "ok") throw new Error("watch config_json is unreadable");
+  if (read.noChannel !== null) return raw;
+  return withFlags(read.record, read.lostChannel, { reason: NO_CHANNEL_REASON, at });
+}
+
+export function withoutLostChannel(raw: string): string {
+  const read = readWatchConfig(raw);
+  if (read.status !== "ok") throw new Error("watch config_json is unreadable");
+  if (read.lostChannel === null) return raw;
+  return withFlags(read.record, null, read.noChannel);
+}
+
+export function withoutNoChannel(raw: string): string {
+  const read = readWatchConfig(raw);
+  if (read.status !== "ok") throw new Error("watch config_json is unreadable");
+  if (read.noChannel === null) return raw;
+  return withFlags(read.record, read.lostChannel, null);
 }
 
 export function withResolvedChannel(raw: string, channelId: string): string {
@@ -146,6 +211,7 @@ export function withResolvedChannel(raw: string, channelId: string): string {
   if (read.status !== "ok") throw new Error("watch config_json is unreadable");
   const next: Record<string, unknown> = { ...read.record, channelId };
   delete next.degraded;
+  delete next.noChannel;
   delete next.pendingChannelId;
   return JSON.stringify(next);
 }

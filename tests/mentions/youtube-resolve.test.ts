@@ -15,6 +15,8 @@ import {
   withNoChannel,
   withPendingChannel,
   withResolvedChannel,
+  withoutLostChannel,
+  withoutNoChannel,
   withoutPendingChannel,
   youtubeUrlFromIdentity,
 } from "../../app/lib/mentions/youtube-channel";
@@ -109,7 +111,7 @@ describe("stale YouTube channel", () => {
     const flagged = withNoChannel('{"kept":true}', at);
     expect(JSON.parse(flagged)).toEqual({
       kept: true,
-      degraded: { state: "degraded", reason: NO_CHANNEL_REASON, at },
+      noChannel: { state: "degraded", reason: NO_CHANNEL_REASON, at },
     });
     expect(withNoChannel(flagged, "2026-09-25T00:00:00.000Z")).toBe(flagged);
     const flaggedRead = readWatchConfig(flagged);
@@ -121,6 +123,48 @@ describe("stale YouTube channel", () => {
     const resolvedRead = readWatchConfig(resolved);
     expect(resolvedRead.status).toBe("ok");
     if (resolvedRead.status === "ok") expect(resolvedRead.degraded).toBeNull();
+  });
+
+  it("keeps one flag slot per reason, so a stale reason is replaced by the reason true now in both directions", () => {
+    const at = "2026-09-24T23:01:56.000Z";
+    const later = "2026-09-25T00:00:00.000Z";
+    const noChannel = withNoChannel("{}", at);
+    const both = withLostChannel(noChannel, later);
+    const bothRead = readWatchConfig(both);
+    expect(bothRead.status).toBe("ok");
+    if (bothRead.status === "ok") {
+      expect(bothRead.noChannel).toEqual({ reason: NO_CHANNEL_REASON, at });
+      expect(bothRead.lostChannel).toEqual({ reason: LOST_CHANNEL_REASON, at: later });
+      expect(bothRead.degraded?.reason).toBe(LOST_CHANNEL_REASON);
+    }
+    const lostOnly = withoutNoChannel(both);
+    expect(JSON.parse(lostOnly)).toEqual({ degraded: { state: "degraded", reason: LOST_CHANNEL_REASON, at: later } });
+    const noChannelOnly = withoutLostChannel(both);
+    expect(JSON.parse(noChannelOnly)).toEqual({ noChannel: { state: "degraded", reason: NO_CHANNEL_REASON, at } });
+    expect(JSON.parse(withNoChannel(lostOnly, later))).toEqual({
+      degraded: { state: "degraded", reason: LOST_CHANNEL_REASON, at: later },
+      noChannel: { state: "degraded", reason: NO_CHANNEL_REASON, at: later },
+    });
+    expect(JSON.parse(withoutNoChannel(noChannel))).toEqual({});
+    expect(withoutNoChannel(lostOnly)).toBe(lostOnly);
+    expect(withoutLostChannel(noChannelOnly)).toBe(noChannelOnly);
+    expect(JSON.parse(withResolvedChannel(both, CHANNEL_ID))).toEqual({ channelId: CHANNEL_ID });
+  });
+
+  it("reads a no-channel reason stored in the degraded slot by an earlier sweep as the no-channel flag", () => {
+    const at = "2026-09-24T23:01:56.000Z";
+    const legacy = JSON.stringify({ degraded: { state: "degraded", reason: NO_CHANNEL_REASON, at } });
+    const read = readWatchConfig(legacy);
+    expect(read.status).toBe("ok");
+    if (read.status === "ok") {
+      expect(read.noChannel).toEqual({ reason: NO_CHANNEL_REASON, at });
+      expect(read.lostChannel).toBeNull();
+      expect(read.degraded?.reason).toBe(NO_CHANNEL_REASON);
+    }
+    expect(JSON.parse(withLostChannel(legacy, "2026-09-25T00:00:00.000Z"))).toEqual({
+      degraded: { state: "degraded", reason: LOST_CHANNEL_REASON, at: "2026-09-25T00:00:00.000Z" },
+      noChannel: { state: "degraded", reason: NO_CHANNEL_REASON, at },
+    });
   });
 
   it("marks a watch degraded once, then clears that flag when a channel id is saved", () => {

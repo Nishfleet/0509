@@ -232,4 +232,11 @@ describe("mentions feed", () => {
     expect(showInFeed(item(mentions[1] as MentionRowModel), true)).toBe(true);
     expect(html).not.toMatch(BANNED);
   });
+
+  it("renders mention titles in the house row-name type, never the old text-lg font-semibold", () => {
+    const mentions = mentionsFromRows([row({ id: "shown-1", p: 0.95 })], NOW);
+    const html = renderToStaticMarkup(createElement(MentionRow, { mention: mentions[0] }));
+    expect(html).toContain('<h3 class="font-display text-row-name font-bold [overflow-wrap:anywhere]">');
+    expect(html).not.toContain("text-lg font-semibold");
+  });
 });

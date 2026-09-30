@@ -430,7 +430,7 @@ describe("nightly site sweep", () => {
     await env.SITE_SWEEP.create({ id });
     await introspector.waitForStatus("complete");
 
-    expect(calls.filter((call) => call === "POST https://hc-ping.example/site-sweep")).toHaveLength(1);
+    expect(calls.filter((call) => call === "POST https://hc-ping.example.com/site-sweep")).toHaveLength(1);
     expect(await introspector.getOutput()).toMatchObject({ pages: 2, recorded: true });
 
     const run = await env.DB.prepare(

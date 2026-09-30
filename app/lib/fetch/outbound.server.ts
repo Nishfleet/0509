@@ -69,6 +69,8 @@ function redirectTarget(location: string, base: string, schemes: readonly Outbou
 }
 
 export async function fetchOutbound(url: string, init: OutboundInit): Promise<Response> {
+  const refusal = targetRefusal(new URL(url), init.schemes);
+  if (refusal !== null) throw new BlockedRedirectError(`request refused: ${refusal}`);
   const signal = init.signal ?? AbortSignal.timeout(FETCH_TIMEOUT_MS);
   let request: OutboundRequest = { url, method: init.method ?? "GET", headers: init.headers, body: init.body };
   for (let hop = 0; hop <= MAX_REDIRECTS; hop += 1) {
@@ -116,4 +118,14 @@ export async function cappedBody(res: Response, capBytes: number): Promise<Uint8
     offset += chunk.byteLength;
   }
   return bytes;
+}
+
+export async function cappedText(res: Response, capBytes: number): Promise<string | null> {
+  const bytes = await cappedBody(res, capBytes);
+  return bytes === null ? null : new TextDecoder().decode(bytes);
+}
+
+export async function cappedJson(res: Response, capBytes: number): Promise<unknown> {
+  const text = await cappedText(res, capBytes);
+  return text === null ? null : (JSON.parse(text) as unknown);
 }

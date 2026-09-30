@@ -3,7 +3,7 @@
   "compatibility_date": "2026-09-16",
   "compatibility_flags": ["global_fetch_strictly_public"],
   "vars": {
-    "SITE_SWEEP_PING_URL": "https://hc-ping.example/site-sweep",
+    "SITE_SWEEP_PING_URL": "https://hc-ping.example.com/site-sweep",
     "BETTER_AUTH_URL": "https://0509.io",
     "BETTER_AUTH_SECRET": "integration-test-secret",
     "TURNSTILE_SITE_KEY": "1x00000000000000000000BB",
@@ -93,5 +93,6 @@
     { "name": "SIGN_IN_IP_LIMIT", "namespace_id": "5093", "simple": { "limit": 20, "period": 60 } },
     { "name": "AGENT_REGISTER_LIMIT", "namespace_id": "5094", "simple": { "limit": 10, "period": 60 } },
     { "name": "PROBE_LIMIT", "namespace_id": "5095", "simple": { "limit": 10, "period": 60 } },
+    { "name": "CHANGE_EMAIL_LIMIT", "namespace_id": "5096", "simple": { "limit": 3, "period": 60 } },
   ],
 }

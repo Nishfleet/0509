@@ -6,7 +6,8 @@ import { confirmCard } from "../../../app/lib/identity/confirm.server";
 import { extractIdentity } from "../../../app/lib/identity/extract";
 import { normaliseSubject } from "../../../app/lib/identity/normalise";
 import { probeKey } from "../../../app/lib/identity/probe-cache.server";
-import { identityTailInstanceId } from "../../../app/lib/identity/tail.server";
+import { classifyTailPages, identityTailInstanceId } from "../../../app/lib/identity/tail.server";
+import { sha256Hex } from "../../../app/lib/sha256";
 import { takeBrowserEscalation } from "../../../app/lib/site/browser-budget.server";
 import gym from "../../fixtures/gymshark-2026-09-22-a.html?raw";
 
@@ -434,6 +435,8 @@ describe("startCard", () => {
     const stub = stubBrowser(BOT_GATED_HTML);
     installBrowser(stub);
 
+    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
+
     const card = startCard("ws-1", subject, []);
 
     expect(await card.site).toEqual({
@@ -444,9 +447,95 @@ describe("startCard", () => {
       unfound: true,
     });
     expect(await card.logo).toBeNull();
+    const events = log.mock.calls.map(([line]) => (JSON.parse(String(line)) as { event: string }).event);
+    expect(events).toContain("identity-site-deferred");
+    expect(events).not.toContain("identity-site-unreached");
     expect(stub.calls).toEqual([]);
     expect(calls).toEqual(["https://botgatedspent.com/"]);
     expect((await env.IDENTITY_CACHE.list()).keys).toEqual([]);
+  });
+});
+
+// The four unreached lines carry the subject's hash, never the subject itself:
+// #5786 took the `subject` key out, and the registrable domain still reached
+// the same lines through the error message (0509#5847).
+describe("the unreached log lines", () => {
+  async function logged(run: () => Promise<unknown>): Promise<Record<string, unknown>[]> {
+    const lines: string[] = [];
+    const spy = vi.spyOn(console, "log").mockImplementation((line) => {
+      lines.push(String(line));
+    });
+    try {
+      await run();
+    } finally {
+      spy.mockRestore();
+    }
+    return lines.map((line) => JSON.parse(line) as Record<string, unknown>);
+  }
+
+  it("names the subject only as a hash, on a failed site probe", async () => {
+    // A host tldts is not ICANN for is an invalid-url failure whose detail is
+    // the hostname itself: the exact string #5786's name-based gate missed.
+    const domain = "unreachablenotin-icann.invalid";
+
+    const rows = await logged(() => startCard("ws-1", subjectFor(domain), []).site);
+
+    expect(rows.find((row) => row.event === "identity-site-unreached")).toEqual({
+      event: "identity-site-unreached",
+      reason: "invalid-url",
+      subjectSha256: await sha256Hex(domain),
+    });
+    expect(JSON.stringify(rows)).not.toContain(domain);
+  });
+
+  it("names the subject only as a hash, on a failed creator probe", async () => {
+    vi.stubGlobal("fetch", () => Promise.reject(new Error("connect ECONNREFUSED")));
+
+    const rows = await logged(
+      () => startCard("ws-1", subjectFor("https://www.instagram.com/unreachedcreator/"), []).site,
+    );
+
+    const unreached = rows.find((row) => row.event === "identity-creator-unreached");
+    expect(unreached?.reason).toBe("unreachable");
+    expect(unreached?.subjectSha256).toBe(await sha256Hex("unreachedcreator"));
+    expect(JSON.stringify(rows)).not.toContain("unreachedcreator");
+  });
+
+  it("names the subject only as a hash, on a skipped page-role read", async () => {
+    const domain = "skipper.invalid";
+
+    const rows = await logged(() =>
+      classifyTailPages(
+        { workspaceId: "ws-1", entityId: "e1", name: "Skipper", domain, homepageUrl: `https://${domain}/` },
+        NOW,
+      ),
+    );
+
+    expect(rows.find((row) => row.event === "identity-page-role-skipped")).toEqual({
+      event: "identity-page-role-skipped",
+      workspaceId: "ws-1",
+      reason: "invalid-url",
+      subjectSha256: await sha256Hex(domain),
+    });
+    expect(JSON.stringify(rows)).not.toContain(domain);
+  });
+
+  it("names the reason, never the message, when the probe throws something else", async () => {
+    // A readable page that carries no name, description or socials is not a
+    // readUrl failure, so probeSite throws a plain Error: the branch the
+    // reason classifier is there to name.
+    const domain = "throwselsewhere.com";
+    const anonymous = `<!doctype html>
+<html><head><meta name="generator" content="none"></head>
+<body><h1>Page</h1><p>${"This page is deliberately long enough to pass the thin-text refusal, ".repeat(6)}but names nobody, links to no social profile and carries no description for the card to read.</p></body></html>`;
+    vi.stubGlobal("fetch", () => Promise.resolve(new Response(anonymous, { status: 200 })));
+
+    const rows = await logged(() => startCard("ws-1", subjectFor(domain), []).site);
+
+    const unreached = rows.find((row) => row.event === "identity-site-unreached");
+    expect(unreached?.reason).toBe("probe-failed");
+    expect(unreached?.subjectSha256).toBe(await sha256Hex(domain));
+    expect(JSON.stringify(rows)).not.toContain(domain);
   });
 });
 

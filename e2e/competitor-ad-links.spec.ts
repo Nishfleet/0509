@@ -2,8 +2,7 @@ import type { DatabaseSync } from "node:sqlite";
 
 import { expect, test, type Page } from "@playwright/test";
 
-import { isLocalLane } from "./inbox";
-import { run, seedPreviewSession } from "./preview-session";
+import { isLocalLane, run, seedPreviewSession } from "./inbox";
 
 const BRAND = "Boots & Belle";
 const DOMAIN = "shop.boots-belle.example";
@@ -43,7 +42,7 @@ function seed({ db, suffix, userId }: { db: DatabaseSync; suffix: string; userId
 }
 
 async function openCompetitor(page: Page, width: number): Promise<void> {
-  const cookie = await seedPreviewSession("ad-links", (context) => {
+  const { cookie } = await seedPreviewSession("ad-links", (context) => {
     seed(context);
   });
   await page.setExtraHTTPHeaders({ cookie });

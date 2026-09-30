@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { pingLiveness } from "../app/lib/liveness-ping.server";
 
-const PING_URL = "https://monitor.example/ping";
+const PING_URL = "https://monitor.example.com/ping";
 
 afterEach(() => {
   vi.unstubAllGlobals();

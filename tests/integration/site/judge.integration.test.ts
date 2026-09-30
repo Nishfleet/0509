@@ -321,6 +321,25 @@ describe("judgeChange", () => {
     expect([...sent.history_30d].sort()).toEqual(["change 0", "change 1", "change 2"]);
   });
 
+  it("case g2: history_30d falls back to the title and leaves out rows with neither", async () => {
+    jevAnswers.noul.set("noteworthy_change", 0.95);
+    jevAnswers.choice.set("change_kind", "pricing");
+    const insert = env.DB.prepare(
+      `INSERT INTO signal (id, workspace_id, entity_id, source_id, kind, title, summary, aspect, url, dedup_key, observed_at, last_seen_at)
+       VALUES (?, 'ws-mine', 'rival', 'src_site_web', 'change', ?, ?, 'home', 'https://rival.example/', ?, ?, ?)`,
+    );
+    await env.DB.batch([
+      insert.bind("sig-t", "titled", null, "dedup-t", NOW, NOW),
+      insert.bind("sig-s", "ignored", "summed", "dedup-s", NOW, NOW),
+      insert.bind("sig-n", null, null, "dedup-n", NOW, NOW),
+    ]);
+
+    await judgeChange(judgeInput({ entity: "rival", isSelf: false }));
+
+    const sent = jevAnswers.states[0] as { history_30d: (string | null)[] };
+    expect([...sent.history_30d].sort()).toEqual(["summed", "titled"]);
+  });
+
   it("case h: Jev unavailable defers without writing verdicts", async () => {
     jevAnswers.noul.set("noteworthy_change", 0.95);
     jevAnswers.choice.set("change_kind", "pricing");
