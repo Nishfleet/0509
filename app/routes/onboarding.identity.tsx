@@ -23,7 +23,7 @@ import { workspaceLandingForRequest } from "../lib/workspace.server";
 export async function loader({ request }: Route.LoaderArgs) {
   const timings = createTimings();
   const session = await timings.measure("session", requireSession(request));
-  const landing = await timings.measure("landing", workspaceLandingForRequest(request, session.user.id));
+  const landing = await timings.measure("landing", workspaceLandingForRequest(request, session.user));
   if (!landing) throw redirect("/app");
   const raw = new URL(request.url).searchParams.get("subject") ?? "";
   const normalised = normaliseSubject(raw);
