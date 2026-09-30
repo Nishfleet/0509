@@ -9,13 +9,13 @@ export async function readSubjectAccess(request: Request, timings: ReturnType<ty
   const raw = new URL(request.url).searchParams.get("subject") ?? "";
   const normalised = normaliseSubject(raw);
   const subject: Subject | null = normalised.ok ? normalised.subject : null;
-  const [session, taken] = await Promise.all([
-    timings.measure("session", requireSession(request)),
+  const session = await timings.measure("session", requireSession(request));
+  const [taken, [landing, workspaceId]] = await Promise.all([
     subject === null ? false : timings.measure("takedown", isTakenDown(subject.registrable)),
+    timings.measure(
+      "workspace",
+      Promise.all([workspaceLandingForRequest(request, session.user), readWorkspaceIdForOwner(session.user.id)]),
+    ),
   ]);
-  const [landing, workspaceId] = await timings.measure(
-    "workspace",
-    Promise.all([workspaceLandingForRequest(request, session.user), readWorkspaceIdForOwner(session.user.id)]),
-  );
   return { raw, subject, taken, landing, workspaceId, userId: session.user.id };
 }
