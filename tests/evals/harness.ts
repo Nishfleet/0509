@@ -38,6 +38,14 @@ export interface EvalCase {
   why: string;
 }
 
+/** Common envelope every eval case must carry. */
+export interface EvalCaseBase {
+  id: string;
+  split: Split;
+  label: boolean;
+  why: string;
+}
+
 export interface EvalQuestion {
   id: string;
   instructions: string;
@@ -50,28 +58,61 @@ interface JevResponse {
   answers?: Record<string, { type?: string; noul?: number }>;
 }
 
-export type Ask = (row: EvalCase) => Promise<{ p: number; model: string }>;
+export type Ask<C extends EvalCaseBase = EvalCase> = (row: C) => Promise<{ p: number; model: string }>;
 
-export async function loadCases(questionId: string): Promise<EvalCase[]> {
+async function readCasesFile(questionId: string): Promise<unknown[]> {
   const file = path.join(HERE, "cases", `${questionId}.json`);
   if (!existsSync(file)) throw new Error(`eval cases missing: ${file}`);
   const parsed: unknown = JSON.parse(await readFile(file, "utf8"));
   if (!Array.isArray(parsed)) throw new Error(`eval cases must be a JSON array: ${file}`);
-  const cases = parsed.map((entry, index) => {
-    const row = entry as EvalCase;
-    if (typeof row.id !== "string" || row.id === "") throw new Error(`case ${index} has no id`);
-    if (row.split !== "train" && row.split !== "test") throw new Error(`case ${row.id} has no split`);
-    if (typeof row.label !== "boolean") throw new Error(`case ${row.id} has no boolean label`);
-    if (typeof row.why !== "string" || row.why === "") throw new Error(`case ${row.id} has no why`);
-    if (row.kind !== "domain" && row.kind !== "creator") throw new Error(`case ${row.id} has no kind`);
-    return row;
-  });
+  return parsed;
+}
+
+function checkEnvelope(row: Record<string, unknown>, index: number): void {
+  if (typeof row.id !== "string" || row.id === "") throw new Error(`case ${index} has no id`);
+  if (row.split !== "train" && row.split !== "test") throw new Error(`case ${String(row.id)} has no split`);
+  if (typeof row.label !== "boolean") throw new Error(`case ${String(row.id)} has no boolean label`);
+  if (typeof row.why !== "string" || row.why === "") throw new Error(`case ${String(row.id)} has no why`);
+}
+
+function checkCounts(questionId: string, cases: readonly { split: Split }[]): void {
   if (cases.length < MIN_TOTAL) throw new Error(`${questionId} has ${cases.length} cases, needs ${MIN_TOTAL}`);
   for (const split of ["train", "test"] as const) {
     const count = cases.filter((row) => row.split === split).length;
     if (count < MIN_PER_SPLIT)
       throw new Error(`${questionId} ${split} split has ${count} cases, needs ${MIN_PER_SPLIT}`);
   }
+}
+
+export async function loadCases(questionId: string): Promise<EvalCase[]> {
+  const parsed = await readCasesFile(questionId);
+  const cases = parsed.map((entry, index) => {
+    const row = entry as Record<string, unknown>;
+    checkEnvelope(row, index);
+    const typed = row as unknown as EvalCase;
+    if (typed.kind !== "domain" && typed.kind !== "creator") throw new Error(`case ${typed.id} has no kind`);
+    return typed;
+  });
+  checkCounts(questionId, cases);
+  return cases;
+}
+
+/**
+ * The same loader for a question whose state is not the discovery shape.
+ * `parse` turns one raw row into the case the eval test packs into Jev state;
+ * every rule above the parse (envelope, minimums, split sizes) is unchanged.
+ */
+export async function loadCasesAs<C extends EvalCaseBase>(
+  questionId: string,
+  parse: (row: Record<string, unknown>, index: number) => C,
+): Promise<C[]> {
+  const parsed = await readCasesFile(questionId);
+  const cases = parsed.map((entry, index) => {
+    const row = entry as Record<string, unknown>;
+    checkEnvelope(row, index);
+    return parse(row, index);
+  });
+  checkCounts(questionId, cases);
   return cases;
 }
 
@@ -83,7 +124,7 @@ function selectedSplits(): Split[] {
   throw new Error(`EVAL_SPLIT must be train, test or all, got ${value}`);
 }
 
-export async function makeAsk(question: EvalQuestion): Promise<Ask> {
+export function makeAsk(question: EvalQuestion): (state: unknown) => Promise<{ p: number; model: string }> {
   return async (state) => {
     const response = await fetch(JEV_URL, {
       method: "POST",
@@ -166,10 +207,10 @@ export interface EvalReport {
   splits: SplitScore[];
 }
 
-async function scoreSplit(
+async function scoreSplit<C extends EvalCaseBase>(
   split: Split,
-  rows: readonly EvalCase[],
-  ask: Ask,
+  rows: readonly C[],
+  ask: Ask<C>,
 ): Promise<{ score: SplitScore; models: Set<string> }> {
   const models = new Set<string>();
   const scored = await mapLimit(rows, CONCURRENCY, async (row) => {
@@ -209,8 +250,12 @@ async function scoreSplit(
   };
 }
 
-export async function runEval(questionId: string, ask: Ask): Promise<EvalReport> {
-  const cases = await loadCases(questionId);
+export async function runEval<C extends EvalCaseBase = EvalCase>(
+  questionId: string,
+  ask: Ask<C>,
+  loaded?: readonly C[],
+): Promise<EvalReport> {
+  const cases = loaded ?? (await loadCases(questionId));
   const models = new Set<string>();
   const splits: SplitScore[] = [];
   for (const split of selectedSplits()) {

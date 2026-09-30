@@ -20,15 +20,12 @@ import {
   readWatchConfigJson,
   writeWatchConfigJson,
 } from "../../app/lib/data/watch.server";
-import type { NoulQuestion, NoulVerdict } from "../../app/lib/jev/client.server";
+import type { NoulVerdict } from "../../app/lib/jev/client.server";
 import { askNoul, JevUnavailableError } from "../../app/lib/jev/client.server";
 import { lookupYoutubeChannel } from "../../app/lib/identity/youtube-channel.server";
 import { noulAction } from "../../app/lib/jev/thresholds";
-import {
-  mentionReasonLine,
-  MENTION_MATTERS_WHEN_FALSE,
-  MENTION_MATTERS_WHEN_TRUE,
-} from "../../app/lib/mentions/reason-customer";
+import { mentionReasonLine } from "../../app/lib/mentions/reason-customer";
+import { ABOUT_BRAND, aboutBrandState, MATTERS, mentionMattersState } from "../../app/lib/mentions/questions";
 import {
   readWatchConfig,
   withLostChannel,
@@ -64,22 +61,6 @@ export interface TargetOutcome {
   skipped: number;
 }
 
-const ABOUT_BRAND: NoulQuestion = {
-  id: "mention_is_about_brand",
-  instructions:
-    "Is `item` actually about `subject`, the brand named in `subject.name` with the website `subject.domain`, and not a different company, product, person or word that shares the name?",
-  whenTrue: "The headline is about this brand or its products, people or business.",
-  whenFalse: "It is about something else that shares or resembles the name.",
-};
-
-const MATTERS: NoulQuestion = {
-  id: "mention_matters",
-  instructions:
-    "Would the owner of `self` want to know about this mention of `subject` this week? It matters when it shows a move: a launch, a price or offer change, funding, a deal, a hire or exit at the top, an expansion, a campaign, a controversy or a big review.",
-  whenTrue: MENTION_MATTERS_WHEN_TRUE,
-  whenFalse: MENTION_MATTERS_WHEN_FALSE,
-};
-
 export async function planTargets(): Promise<MentionTarget[]> {
   const watches = await readActiveWatches("mentions");
   const byTarget = new Map<string, MentionTarget>();
@@ -103,33 +84,25 @@ function subjectOf(watch: WatchRow) {
 
 type JudgedItem = Pick<MentionItem, "title" | "url" | "publishedAt" | "publisher">;
 
-function itemOf(item: JudgedItem, reliability: string) {
-  return {
-    title: item.title,
-    publisher: item.publisher ?? null,
-    url: item.url,
-    published_at: item.publishedAt,
-    reliability,
-  };
-}
-
 async function judge(
   watch: WatchRow,
   context: DiscoveryContext,
   item: JudgedItem,
 ): Promise<{ about: NoulVerdict; matters: NoulVerdict | null }> {
   const subject = subjectOf(watch);
-  const about = await askNoul(watch.workspace_id, ABOUT_BRAND, {
-    subject,
-    item: itemOf(item, watch.reliability),
-  });
+  const about = await askNoul(watch.workspace_id, ABOUT_BRAND, aboutBrandState({ subject, item, reliability: watch.reliability }));
   if (noulAction(about.p) === "reject") return { about, matters: null };
-  const matters = await askNoul(watch.workspace_id, MATTERS, {
-    self: { name: context.self.name, domain: context.self.domain, description: context.self.description },
-    subject,
-    competitor_set: context.competitors,
-    item: itemOf(item, watch.reliability),
-  });
+  const matters = await askNoul(
+    watch.workspace_id,
+    MATTERS,
+    mentionMattersState({
+      self: { name: context.self.name, domain: context.self.domain, description: context.self.description },
+      subject,
+      competitors: context.competitors,
+      item,
+      reliability: watch.reliability,
+    }),
+  );
   return { about, matters };
 }
 
