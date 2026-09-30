@@ -79,12 +79,12 @@ describe("an account deleted mid-request", () => {
 
     await deleteAccount(userId, workspaceId);
 
-    const { outcome, verdict } = await screenPublicSubject(
+    const { outcome, verdict } = await screenPublicSubject({
       workspaceId,
-      domainSubject("alphaleteathletics.com"),
-      "alphaleteathletics.com",
-      NOW,
-    );
+      subject: domainSubject("alphaleteathletics.com"),
+      raw: "alphaleteathletics.com",
+      now: NOW,
+    });
 
     expect(outcome).toBe("proceed");
     expect(verdict.p).toBe(0.95);
@@ -207,7 +207,12 @@ describe("an account deleted mid-request", () => {
     const verdicts = await countRows("jev_verdict", workspaceId);
     const decisions = await countRows("user_decision", workspaceId);
 
-    const screened = await screenPublicSubject(workspaceId, domainSubject("livebrand.com"), "livebrand.com", NOW);
+    const screened = await screenPublicSubject({
+      workspaceId,
+      subject: domainSubject("livebrand.com"),
+      raw: "livebrand.com",
+      now: NOW,
+    });
     expect(screened.outcome).toBe("refuse");
 
     const result = await screenOnboardingSubject({
