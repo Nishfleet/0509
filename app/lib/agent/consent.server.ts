@@ -3,9 +3,11 @@ import { AuthorizationError } from "@cloudflare/workers-oauth-provider";
 import { redirect } from "react-router";
 
 import { readWorkspaceIdForOwner } from "../data/workspace.server";
+import { claimedNameFor } from "./client-label";
 import { READ_SCOPE } from "./paths";
 
-export type ConsentView = { kind: "error"; message: string } | { kind: "ask"; appName: string; returnsTo: string };
+export type ConsentView =
+  { kind: "error"; message: string } | { kind: "ask"; host: string; claimedName: string | null };
 
 function withParams(target: string, params: Record<string, string | undefined>): string {
   const set = Object.entries(params).filter((entry): entry is [string, string] => Boolean(entry[1]));
@@ -49,19 +51,14 @@ function hostOf(uri: string): string {
   return url.host === "" ? `${url.protocol}//` : url.host;
 }
 
-function appNameFor(clientName: string | undefined, redirectUri: string): string {
-  const name = clientName?.trim() ?? "";
-  return name === "" ? hostOf(redirectUri) : name;
-}
-
 export async function readConsent(helpers: OAuthHelpers, request: Request): Promise<ConsentView | Response> {
   const parsed = await parse(helpers, request);
   if (!("clientId" in parsed)) return parsed;
   const client = await helpers.lookupClient(parsed.clientId);
   return {
     kind: "ask",
-    appName: appNameFor(client?.clientName, parsed.redirectUri),
-    returnsTo: hostOf(parsed.redirectUri),
+    host: hostOf(parsed.redirectUri),
+    claimedName: claimedNameFor(client?.clientName),
   };
 }
 
@@ -83,11 +80,10 @@ export async function decideConsent(
       }),
     );
   }
-  const client = await helpers.lookupClient(parsed.clientId);
   const { redirectTo } = await helpers.completeAuthorization({
     request: parsed,
     userId: input.userId,
-    metadata: { appName: appNameFor(client?.clientName, parsed.redirectUri) },
+    metadata: { appName: hostOf(parsed.redirectUri) },
     scope: [READ_SCOPE],
     props: { userId: input.userId, clientId: parsed.clientId },
   });
