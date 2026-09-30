@@ -70,9 +70,9 @@ export interface QuietWeek {
   action: EmptyStateAction;
 }
 
-export function quietWeek(mentions: number, siteChanges: number, adsChecked: number): QuietWeek {
+export function quietWeek(mentions: number, siteChanges: number): QuietWeek {
   return {
-    sentence: `Quiet week. ${String(mentions)} mentions, ${String(siteChanges)} site changes and ${String(adsChecked)} new ads checked — nothing crossed the bar.`,
+    sentence: `Quiet week. ${String(mentions)} mentions, ${String(siteChanges)} site changes checked — nothing crossed the bar.`,
     action: { kind: "link", label: "Open the counts", href: "/app" },
   };
 }

@@ -7,7 +7,7 @@ import type { HomeCount, HomeEntity, HomeHistoryRow, HomeSource } from "./home-s
 
 const SELECT_HISTORY = `SELECT entity_id, week_start_at, rank FROM standing WHERE workspace_id = ?1 AND rank IS NOT NULL AND week_start_at IN (SELECT DISTINCT week_start_at FROM standing WHERE workspace_id = ?1 AND rank IS NOT NULL ORDER BY week_start_at DESC LIMIT 4) ORDER BY week_start_at ASC`;
 
-const SELECT_HOME_SOURCES = `SELECT key, kind, platform FROM source WHERE is_enabled = 1 ORDER BY kind ASC, key ASC`;
+const SELECT_HOME_SOURCES = `SELECT key, kind, platform FROM source WHERE is_enabled = 1 AND id IN (SELECT w.source_id FROM watch w JOIN entity e ON e.id = w.entity_id WHERE e.workspace_id = ?1) ORDER BY kind ASC, key ASC`;
 
 const SELECT_HOME_COUNTS = `SELECT s.entity_id, src.key AS source_key, COUNT(*) AS n FROM signal s JOIN source src ON src.id = s.source_id WHERE s.workspace_id = ?1 AND s.is_tombstoned = 0 AND s.observed_at >= (SELECT json_extract(payload_json, '$.period_start') FROM digest WHERE workspace_id = ?1 AND kind = 'weekly' ORDER BY period_end DESC LIMIT 1) GROUP BY s.entity_id, src.key`;
 
@@ -84,7 +84,7 @@ export async function readHomeStandingInputs(db: D1Database, ownerUserId: string
   if (first === undefined) return null;
   const [historyResult, sourcesResult, countsResult] = await db.batch([
     db.prepare(SELECT_HISTORY).bind(first.workspace_id),
-    db.prepare(SELECT_HOME_SOURCES),
+    db.prepare(SELECT_HOME_SOURCES).bind(first.workspace_id),
     db.prepare(SELECT_HOME_COUNTS).bind(first.workspace_id),
   ]);
   const history = historyRows.parse(historyResult?.results);

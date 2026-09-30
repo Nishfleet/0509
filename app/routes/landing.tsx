@@ -13,10 +13,10 @@ import { Price } from "../components/landing/price";
 import { pageWidth } from "../components/landing/section";
 import { Ticker } from "../components/landing/ticker";
 import { WhatWeWatch } from "../components/landing/what-we-watch";
-import { sourcePillStatus } from "../components/source-pill";
 import { readSiteChanges } from "../lib/data/signal.server";
 import { readRegistrySources } from "../lib/data/source.server";
 import { FAQ } from "../lib/faq";
+import { landingSources } from "../lib/landing-sources";
 import { daysBefore, readLandingMarks } from "../lib/site-changes.server";
 import {
   SITE_URL,
@@ -66,7 +66,7 @@ export function meta({ loaderData }: Route.MetaArgs) {
 export async function loader(_: Route.LoaderArgs) {
   const now = Date.now();
   const registry = await readRegistrySources();
-  const sources = registry.filter((entry) => sourcePillStatus(entry.source, entry.snapshot, now).state !== "disabled");
+  const sources = landingSources(registry, now);
   const claims = watchedClaims(registry, now);
   const marks = await readLandingMarks(new Date(now));
   const id: unknown = env.LANDING_WORKSPACE_ID;
