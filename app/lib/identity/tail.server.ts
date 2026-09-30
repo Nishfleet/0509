@@ -65,10 +65,10 @@ export async function persistTail(params: IdentityTailParams): Promise<{ entityI
 
 export async function classifyTailPages(params: IdentityTailParams, now: string): Promise<void> {
   if (params.handle !== undefined || params.homepageUrl === null) return;
-  const subjectSha256 = await sha256Hex(params.domain);
   try {
     const page = await readUrl(params.homepageUrl, { mayEscalate: brandBudget(params.workspaceId, params.domain) });
     if (!page.ok) {
+      const subjectSha256 = await sha256Hex(params.domain);
       console.log(
         JSON.stringify({ event: "identity-page-role-skipped", workspaceId: params.workspaceId, reason: page.reason, subjectSha256 }),
       );
@@ -82,6 +82,7 @@ export async function classifyTailPages(params: IdentityTailParams, now: string)
       now,
     );
   } catch (error) {
+    const subjectSha256 = await sha256Hex(params.domain);
     console.log(
       JSON.stringify({ event: "identity-page-role-skipped", workspaceId: params.workspaceId, reason: probeFailureReason(error), subjectSha256 }),
     );

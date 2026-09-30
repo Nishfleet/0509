@@ -494,7 +494,7 @@ describe("the unreached log lines", () => {
 
     const unreached = rows.find((row) => row.event === "identity-creator-unreached");
     expect(unreached?.reason).toBe("unreachable");
-    expect(unreached?.subjectSha256).toMatch(/^[0-9a-f]{64}$/);
+    expect(unreached?.subjectSha256).toBe(await sha256Hex("unreachedcreator"));
     expect(JSON.stringify(rows)).not.toContain("unreachedcreator");
   });
 
@@ -514,6 +514,24 @@ describe("the unreached log lines", () => {
       reason: "invalid-url",
       subjectSha256: await sha256Hex(domain),
     });
+    expect(JSON.stringify(rows)).not.toContain(domain);
+  });
+
+  it("names the reason, never the message, when the probe throws something else", async () => {
+    // A readable page that carries no name, description or socials is not a
+    // readUrl failure, so probeSite throws a plain Error: the branch the
+    // reason classifier is there to name.
+    const domain = "throwselsewhere.com";
+    const anonymous = `<!doctype html>
+<html><head><meta name="generator" content="none"></head>
+<body><h1>Page</h1><p>${"This page is deliberately long enough to pass the thin-text refusal, ".repeat(6)}but names nobody, links to no social profile and carries no description for the card to read.</p></body></html>`;
+    vi.stubGlobal("fetch", () => Promise.resolve(new Response(anonymous, { status: 200 })));
+
+    const rows = await logged(() => startCard("ws-1", subjectFor(domain), []).site);
+
+    const unreached = rows.find((row) => row.event === "identity-site-unreached");
+    expect(unreached?.reason).toBe("probe-failed");
+    expect(unreached?.subjectSha256).toBe(await sha256Hex(domain));
     expect(JSON.stringify(rows)).not.toContain(domain);
   });
 });
