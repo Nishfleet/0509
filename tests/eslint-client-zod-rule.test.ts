@@ -73,9 +73,7 @@ describe("eslint client zod rule (#4134)", () => {
 
   it("still bans cloudflare:workers at the same probe path", { timeout: 60_000 }, async () => {
     const result = await lintProbe(PROBE, WORKERS_MODULE);
-    expect(result.messages.some((m) => m.includes("cloudflare:workers is a Workers runtime module"))).toBe(
-      true,
-    );
+    expect(result.messages.some((m) => m.includes("cloudflare:workers is a Workers runtime module"))).toBe(true);
   });
 
   it("leaves app/components/toaster.tsx alone", { timeout: 60_000 }, async () => {

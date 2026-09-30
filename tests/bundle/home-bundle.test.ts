@@ -9,9 +9,7 @@ import { describe, expect, it } from "vitest";
 
 const HOME_ROUTES = ["app/routes/app-layout.tsx", "app/routes/app.home.tsx"];
 
-const manifest = JSON.parse(
-  readFileSync(path.join("build/client", ".vite", "manifest.json"), "utf8"),
-) as Manifest;
+const manifest = JSON.parse(readFileSync(path.join("build/client", ".vite", "manifest.json"), "utf8")) as Manifest;
 
 const startKeys = Object.keys(manifest).filter((key) => {
   const chunk = manifest[key];

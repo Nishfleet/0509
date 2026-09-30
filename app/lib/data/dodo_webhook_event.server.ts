@@ -14,9 +14,7 @@ export async function recordWebhookEvent(input: {
   payloadJson: string;
   receivedAt: string;
 }): Promise<"processed" | "pending"> {
-  await env.DB.prepare(RECORD_EVENT)
-    .bind(input.id, input.eventType, input.payloadJson, input.receivedAt)
-    .run();
+  await env.DB.prepare(RECORD_EVENT).bind(input.id, input.eventType, input.payloadJson, input.receivedAt).run();
   const row = await env.DB.prepare(SELECT_PROCESSED).bind(input.id).first<{ processed_at: string | null }>();
   return row !== null && row.processed_at !== null ? "processed" : "pending";
 }

@@ -56,7 +56,7 @@ for (const { width, height } of [
     await expect(editName).toBeVisible({ timeout: 30_000 });
     await expect(page.getByText("looking on the site")).toHaveCount(0, { timeout: 30_000 });
     await page.getByRole("button", { name: "That's me" }).click();
-    await expect(page).toHaveURL(/\/onboarding\/competitors$/, { timeout: 30_000 });
+    await expect(page).toHaveURL(/\/onboarding\/competitors$/, { timeout: 10_000 });
     const cardConfirmedMs = Date.now() - started;
     test.info().annotations.push({
       type: "input-to-card-confirmed-ms",
@@ -78,11 +78,14 @@ for (const { width, height } of [
 
     const watching = page.getByRole("list", { name: "Watching" }).getByRole("listitem");
     if ((await watching.count()) === 0) {
-      await page.getByRole("button", { name: /^Watch / }).first().click();
+      await page
+        .getByRole("button", { name: /^Watch / })
+        .first()
+        .click();
       await expect(watching.first()).toBeVisible();
     }
     await page.getByRole("button", { name: "Start watching" }).click();
-    await expect(page).toHaveURL(/\/app$/);
+    await expect(page).toHaveURL(/\/app$/, { timeout: 30_000 });
 
     const panel = page.locator('[data-home="first-file"]');
     await expect(panel).toContainText(

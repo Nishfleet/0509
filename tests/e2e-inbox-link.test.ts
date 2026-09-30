@@ -71,9 +71,7 @@ const MULTIPART_BASE64 = [
   "Content-Type: text/html; charset=utf-8",
   "Content-Transfer-Encoding: base64",
   "",
-  base64Part(
-    '<a href="https://0509.io/api/auth/magic-link/verify?token=abc123&amp;callbackURL=%2Fapp">Sign in</a>',
-  ),
+  base64Part('<a href="https://0509.io/api/auth/magic-link/verify?token=abc123&amp;callbackURL=%2Fapp">Sign in</a>'),
   "--bound4355--",
   "",
 ].join("\r\n");
@@ -244,10 +242,7 @@ describe("staleLinks", () => {
   });
 
   it("is empty when the stored message carries no verify link", async () => {
-    vi.stubGlobal(
-      "fetch",
-      () => Promise.resolve(new Response("Subject: hello\n\nno link here", { status: 200 })),
-    );
+    vi.stubGlobal("fetch", () => Promise.resolve(new Response("Subject: hello\n\nno link here", { status: 200 })));
     await expect(staleLinks("e2e+stale@0509.io", "token")).resolves.toEqual([]);
   });
 

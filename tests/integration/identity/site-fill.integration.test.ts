@@ -5,11 +5,7 @@ import { insertSelfEntity, readEntityIdentityJson } from "../../../app/lib/data/
 import { insertFieldEdits } from "../../../app/lib/data/user_decision.server";
 import { normaliseSubject } from "../../../app/lib/identity/normalise";
 import { probeKey } from "../../../app/lib/identity/probe-cache.server";
-import {
-  attemptSiteFill,
-  markSiteFill,
-  siteWasReached,
-} from "../../../app/lib/identity/site-fill.server";
+import { attemptSiteFill, markSiteFill, siteWasReached } from "../../../app/lib/identity/site-fill.server";
 import { takeBrowserEscalation } from "../../../app/lib/site/browser-budget.server";
 
 const NOW = "2026-09-25T08:00:00Z";
@@ -65,9 +61,7 @@ async function seed(identity: Record<string, unknown>): Promise<void> {
   )
     .bind(userId, `${userId}@0509.io`, NOW)
     .run();
-  await env.DB.prepare(
-    `INSERT INTO workspace (id, name, owner_user_id, created_at) VALUES (?1, 'Owner', ?2, ?3)`,
-  )
+  await env.DB.prepare(`INSERT INTO workspace (id, name, owner_user_id, created_at) VALUES (?1, 'Owner', ?2, ?3)`)
     .bind(workspaceId, userId, NOW)
     .run();
   await insertSelfEntity({
@@ -83,9 +77,7 @@ async function seed(identity: Record<string, unknown>): Promise<void> {
   )
     .bind(`${userId}-b`, `${userId}-b@0509.io`, NOW)
     .run();
-  await env.DB.prepare(
-    `INSERT INTO workspace (id, name, owner_user_id, created_at) VALUES (?1, 'Owner', ?2, ?3)`,
-  )
+  await env.DB.prepare(`INSERT INTO workspace (id, name, owner_user_id, created_at) VALUES (?1, 'Owner', ?2, ?3)`)
     .bind(otherWorkspaceId, `${userId}-b`, NOW)
     .run();
 }
@@ -176,12 +168,23 @@ describe("site fill", () => {
 
   it("ignores a field edit recorded in another workspace", async () => {
     await seed({ description: null, socials: [] });
-    // user_decision.entity_id is a bare entity FK until 0509#4965 lands the composite key.
+    // Since 0509#4965 a user_decision row cannot point at another workspace's
+    // entity, so the other workspace's edit is recorded on its own entity for
+    // the same domain.
+    const otherEntityId = `entity-site-fill-other-${crypto.randomUUID()}`;
+    await insertSelfEntity({
+      id: otherEntityId,
+      workspaceId: otherWorkspaceId,
+      domain: "gymshark.com",
+      name: "Gymshark",
+      identityJson: "{}",
+      now: NOW,
+    });
     await insertFieldEdits([
       {
         workspaceId: otherWorkspaceId,
         userId: `${userId}-b`,
-        entityId,
+        entityId: otherEntityId,
         edit: { field: "description", from: "Gym clothes", to: "" },
         decidedAt: NOW,
       },

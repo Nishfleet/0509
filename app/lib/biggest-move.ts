@@ -70,14 +70,9 @@ export function biggestMoveView(move: BiggestMove, now: Date): BiggestMoveView {
   };
 }
 
-export function quietWeekSentence(
-  checked: readonly string[],
-  lastChecked: string | null,
-): string {
+export function quietWeekSentence(checked: readonly string[], lastChecked: string | null): string {
   const list =
-    checked.length === 0
-      ? "its website"
-      : new Intl.ListFormat("en", { type: "conjunction" }).format(checked);
+    checked.length === 0 ? "its website" : new Intl.ListFormat("en", { type: "conjunction" }).format(checked);
   if (lastChecked === null) {
     return `Nothing scored for this brand in the last 7 days. We watch ${list}; the first read lands tonight at ${SITE_SWEEP_UTC_LABEL}.`;
   }

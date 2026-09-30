@@ -24,11 +24,7 @@ export async function runCanary(source: CanarySource, now: string): Promise<numb
   return count;
 }
 
-export function writeSourcePoint(
-  pluginKey: string,
-  itemCount: number,
-  canaryCount: number | null,
-): void {
+export function writeSourcePoint(pluginKey: string, itemCount: number, canaryCount: number | null): void {
   env.MENTIONS_SOURCES.writeDataPoint({
     blobs: [pluginKey],
     doubles: [itemCount, canaryCount ?? -1],

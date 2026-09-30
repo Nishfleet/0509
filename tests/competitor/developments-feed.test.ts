@@ -25,10 +25,11 @@ vi.mock("react-router", async (importOriginal) => {
   const actual = await importOriginal<ReactRouterModule>();
   return {
     ...actual,
-    useSearchParams: () => [
-      feedFilterHarness.params,
-      (next: URLSearchParamsInit, options?: unknown) => feedFilterHarness.setSearchParams?.(next, options),
-    ] as const,
+    useSearchParams: () =>
+      [
+        feedFilterHarness.params,
+        (next: URLSearchParamsInit, options?: unknown) => feedFilterHarness.setSearchParams?.(next, options),
+      ] as const,
   };
 });
 
@@ -48,11 +49,51 @@ vi.mock("../../app/components/ui/toggle-group", async (importOriginal) => {
 type FeedRow = DevelopmentItem & { when: string };
 
 const ROWS: readonly FeedRow[] = [
-  { id: "d1", kind: "hiring", title: "Staff engineer, billing", summary: null, url: null, observedAt: "2026-09-11T08:00:00Z", when: "14 Sept" },
-  { id: "d2", kind: "ad", title: "New creative: launch", summary: "Runs the compare-against-us line again.", url: "https://library.example/ad/1", observedAt: "2026-09-12T09:30:00Z", when: "13 Sept" },
-  { id: "d3", kind: "change", title: "Pricing copy moved", summary: null, url: null, observedAt: "2026-09-13T10:00:00Z", when: "12 Sept" },
-  { id: "d4", kind: "mention", title: "Designer role posted", summary: "Placeholder mention text", url: "https://forum.example/t/1", observedAt: "2026-09-14T11:00:00Z", when: "11 Sept" },
-  { id: "d5", kind: "hiring", title: "Designer", summary: null, url: null, observedAt: "2026-09-15T12:00:00Z", when: "10 Sept" },
+  {
+    id: "d1",
+    kind: "hiring",
+    title: "Staff engineer, billing",
+    summary: null,
+    url: null,
+    observedAt: "2026-09-11T08:00:00Z",
+    when: "14 Sept",
+  },
+  {
+    id: "d2",
+    kind: "ad",
+    title: "New creative: launch",
+    summary: "Runs the compare-against-us line again.",
+    url: "https://library.example/ad/1",
+    observedAt: "2026-09-12T09:30:00Z",
+    when: "13 Sept",
+  },
+  {
+    id: "d3",
+    kind: "change",
+    title: "Pricing copy moved",
+    summary: null,
+    url: null,
+    observedAt: "2026-09-13T10:00:00Z",
+    when: "12 Sept",
+  },
+  {
+    id: "d4",
+    kind: "mention",
+    title: "Designer role posted",
+    summary: "Placeholder mention text",
+    url: "https://forum.example/t/1",
+    observedAt: "2026-09-14T11:00:00Z",
+    when: "11 Sept",
+  },
+  {
+    id: "d5",
+    kind: "hiring",
+    title: "Designer",
+    summary: null,
+    url: null,
+    observedAt: "2026-09-15T12:00:00Z",
+    when: "10 Sept",
+  },
 ];
 
 const HIRING_FIRST: FeedRow = ROWS[0];

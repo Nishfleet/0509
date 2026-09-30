@@ -46,7 +46,9 @@ describe("feature map proof coverage", () => {
     const dead = [...new Set(map.match(SPEC_REF) ?? [])].filter((ref) => !onDisk.has(ref));
     expect(
       dead,
-      dead.map((ref) => `\`${ref}\` is named in a Proof column but no such file exists — fix or remove the reference`).join("\n"),
+      dead
+        .map((ref) => `\`${ref}\` is named in a Proof column but no such file exists — fix or remove the reference`)
+        .join("\n"),
     ).toEqual([]);
   });
 });

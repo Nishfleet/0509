@@ -16,10 +16,7 @@ function errorText(end: unknown): string {
 
 export { errorText };
 
-export async function sendMessage(
-  email: SendEmail,
-  message: EmailMessageBuilder,
-): Promise<SendResult> {
+export async function sendMessage(email: SendEmail, message: EmailMessageBuilder): Promise<SendResult> {
   try {
     await email.send(message);
   } catch (end) {
@@ -28,10 +25,7 @@ export async function sendMessage(
   return { outcome: "sent", error: null };
 }
 
-export async function sendOrThrow(
-  email: SendEmail,
-  message: EmailMessageBuilder,
-): Promise<void> {
+export async function sendOrThrow(email: SendEmail, message: EmailMessageBuilder): Promise<void> {
   const result = await sendMessage(email, message);
   if (result.outcome === "failed") {
     throw new Error(result.error ?? "send failed");

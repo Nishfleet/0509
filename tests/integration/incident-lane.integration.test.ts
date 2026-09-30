@@ -1,11 +1,7 @@
 import { env } from "cloudflare:test";
 import { beforeEach, describe, expect, it } from "vitest";
 
-import {
-  deliverIncident,
-  handleBatch,
-  type IncidentMessage,
-} from "../../workers/delivery/consumer";
+import { deliverIncident, handleBatch, type IncidentMessage } from "../../workers/delivery/consumer";
 
 interface Recorder {
   sent: EmailMessageBuilder[];
@@ -53,9 +49,7 @@ const seedUserAndWorkspace = async () => {
   )
     .bind(WS, USER)
     .run();
-  await env.DB.prepare(
-    `INSERT INTO channel (id, key, is_enabled, config_json) VALUES (?, 'email', 1, '{}')`,
-  )
+  await env.DB.prepare(`INSERT INTO channel (id, key, is_enabled, config_json) VALUES (?, 'email', 1, '{}')`)
     .bind(CHANNEL)
     .run();
   await env.DB.prepare(
@@ -130,9 +124,7 @@ const readNotices = async (pageId: string): Promise<NoticeRow[] | undefined> =>
   ).results;
 
 const closeIncident = async (id: string) => {
-  await env.DB.prepare(`UPDATE incident SET closed_at = ? WHERE id = ?`)
-    .bind("2026-09-23T09:00:00Z", id)
-    .run();
+  await env.DB.prepare(`UPDATE incident SET closed_at = ? WHERE id = ?`).bind("2026-09-23T09:00:00Z", id).run();
 };
 
 const message = (incidentId: string): IncidentMessage => ({ incident_id: incidentId });
@@ -254,7 +246,9 @@ describe("incident lane (0509#4364)", () => {
   it("(c2) still sends the fixed follow-up after the alert is acknowledged (0509#4115)", async () => {
     const rec = recorder();
     await deliverIncident(envWith(bindingFor(rec)), message(INCIDENT_A));
-    await env.DB.prepare("UPDATE alert SET status = 'acknowledged', read_at = '2026-09-23T08:00:00Z' WHERE id = 'alert-lane'").run();
+    await env.DB.prepare(
+      "UPDATE alert SET status = 'acknowledged', read_at = '2026-09-23T08:00:00Z' WHERE id = 'alert-lane'",
+    ).run();
     await closeIncident(INCIDENT_A);
 
     const result = await deliverIncident(envWith(bindingFor(rec)), message(INCIDENT_A));
@@ -340,7 +334,7 @@ describe("incident lane (0509#4364)", () => {
     expect(first.outcome).toBe("failed");
     expect(first.attempt_id).toBeTruthy();
     expect(failing.sent).toHaveLength(0);
-    expect((await readNotices(PAGE_A))).toHaveLength(1);
+    expect(await readNotices(PAGE_A)).toHaveLength(1);
     expect((await readAttempts())[0].status).toBe("failed");
     expect((await readAttempts())[0].error).toContain("boom");
 
@@ -350,7 +344,7 @@ describe("incident lane (0509#4364)", () => {
     expect(second.outcome).toBe("sent");
     expect(second.attempt_id).toBe(first.attempt_id);
     expect(good.sent).toHaveLength(1);
-    expect((await readNotices(PAGE_A))).toHaveLength(1);
+    expect(await readNotices(PAGE_A)).toHaveLength(1);
     const attempts = await readAttempts();
     expect(attempts).toHaveLength(1);
     expect(attempts[0].status).toBe("sent");
@@ -377,9 +371,7 @@ describe("incident lane (0509#4364)", () => {
   });
 
   it("(i) sends nothing when own-site alerts are off, and keeps the alert row", async () => {
-    await env.DB.prepare(`UPDATE workspace SET own_site_alerts = 0 WHERE id = ?`)
-      .bind(WS)
-      .run();
+    await env.DB.prepare(`UPDATE workspace SET own_site_alerts = 0 WHERE id = ?`).bind(WS).run();
     const rec = recorder();
 
     const result = await deliverIncident(envWith(bindingFor(rec)), message(INCIDENT_A));
@@ -422,9 +414,7 @@ describe("incident lane (0509#4364)", () => {
   });
 
   it("(j) reports no_target when the only email target is unverified", async () => {
-    await env.DB.prepare(`UPDATE send_target SET is_verified = 0 WHERE id = ?`)
-      .bind(TARGET_ID)
-      .run();
+    await env.DB.prepare(`UPDATE send_target SET is_verified = 0 WHERE id = ?`).bind(TARGET_ID).run();
     const rec = recorder();
 
     const result = await deliverIncident(envWith(bindingFor(rec)), message(INCIDENT_A));

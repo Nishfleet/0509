@@ -22,7 +22,7 @@ async function seed(): Promise<void> {
     env.DB.prepare("DELETE FROM page"),
     env.DB.prepare("DELETE FROM jev_verdict"),
     env.DB.prepare("DELETE FROM entity"),
-    env.DB.prepare('DELETE FROM workspace WHERE id = ?1').bind(workspaceId),
+    env.DB.prepare("DELETE FROM workspace WHERE id = ?1").bind(workspaceId),
     env.DB.prepare('DELETE FROM "user" WHERE id = ?1').bind(userId),
   ]);
   await env.DB.batch([
@@ -41,9 +41,7 @@ async function seed(): Promise<void> {
 }
 
 async function readPages(): Promise<Record<string, unknown>[]> {
-  const { results } = await env.DB.prepare(
-    "SELECT entity_id, url, title, role, role_decided_for_hash FROM page",
-  ).all();
+  const { results } = await env.DB.prepare("SELECT entity_id, url, title, role, role_decided_for_hash FROM page").all();
   return results;
 }
 
@@ -55,9 +53,7 @@ describe("classifyNavPages", () => {
   beforeEach(seed);
 
   it("asks Jev once per page and writes the judged page with its decision hash", async () => {
-    const run = vi.fn(() =>
-      Promise.resolve({ answers: { page_role: { type: "choice", choice: "pricing" } } }),
-    );
+    const run = vi.fn(() => Promise.resolve({ answers: { page_role: { type: "choice", choice: "pricing" } } }));
     Reflect.set(env, "AI", { run });
 
     const rows = await classifyNavPages(workspaceId, ENTITY, [PAGE], NOW);
@@ -90,9 +86,7 @@ describe("classifyNavPages", () => {
   });
 
   it("leaves an unchanged page alone and asks Jev nothing more", async () => {
-    const run = vi.fn(() =>
-      Promise.resolve({ answers: { page_role: { type: "choice", choice: "pricing" } } }),
-    );
+    const run = vi.fn(() => Promise.resolve({ answers: { page_role: { type: "choice", choice: "pricing" } } }));
     Reflect.set(env, "AI", { run });
 
     await classifyNavPages(workspaceId, ENTITY, [PAGE], NOW);
@@ -106,17 +100,13 @@ describe("classifyNavPages", () => {
   });
 
   it("re-judges a page whose title changed and rewrites the one row", async () => {
-    const run = vi.fn(() =>
-      Promise.resolve({ answers: { page_role: { type: "choice", choice: "pricing" } } }),
-    );
+    const run = vi.fn(() => Promise.resolve({ answers: { page_role: { type: "choice", choice: "pricing" } } }));
     Reflect.set(env, "AI", { run });
     await classifyNavPages(workspaceId, ENTITY, [PAGE], NOW);
     const firstHash = (await readPages())[0]?.role_decided_for_hash;
 
     Reflect.deleteProperty(env, "AI");
-    const secondRun = vi.fn(() =>
-      Promise.resolve({ answers: { page_role: { type: "choice", choice: "other" } } }),
-    );
+    const secondRun = vi.fn(() => Promise.resolve({ answers: { page_role: { type: "choice", choice: "other" } } }));
     Reflect.set(env, "AI", { run: secondRun });
 
     const second = await classifyNavPages(workspaceId, ENTITY, [{ url: PAGE_URL, title: "Sale" }], NOW);
@@ -158,18 +148,13 @@ describe("classifyNavPages", () => {
   });
 
   it("logs one uncached verdict per judged page and writes the page rows in one batch", async () => {
-    const run = vi.fn(() =>
-      Promise.resolve({ answers: { page_role: { type: "choice", choice: "blog" } } }),
-    );
+    const run = vi.fn(() => Promise.resolve({ answers: { page_role: { type: "choice", choice: "blog" } } }));
     Reflect.set(env, "AI", { run });
 
     await classifyNavPages(
       workspaceId,
       ENTITY,
-      [
-        PAGE,
-        { url: "https://www.gymshark.com/blogs/news/introducing-adapt", title: "Adapt" },
-      ],
+      [PAGE, { url: "https://www.gymshark.com/blogs/news/introducing-adapt", title: "Adapt" }],
       NOW,
     );
 
@@ -197,9 +182,7 @@ describe("classifyNavPages", () => {
     const run = vi.fn(() => Promise.reject(new Error("jev down")));
     Reflect.set(env, "AI", { run });
 
-    await expect(classifyNavPages(workspaceId, ENTITY, [PAGE], NOW)).rejects.toThrow(
-      /^jev unavailable: jev down$/,
-    );
+    await expect(classifyNavPages(workspaceId, ENTITY, [PAGE], NOW)).rejects.toThrow(/^jev unavailable: jev down$/);
     expect(await readPages()).toEqual([]);
     const { results } = await env.DB.prepare("SELECT id FROM jev_verdict").all();
     expect(results).toHaveLength(0);

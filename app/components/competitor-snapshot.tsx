@@ -13,10 +13,7 @@ export function CompetitorSnapshot({ cells }: { cells: readonly SnapshotCell[] }
             <dd>
               {cell.value === null ? (
                 <details>
-                  <summary
-                    className="cursor-pointer text-2xl text-ink-soft"
-                    aria-label={`No number: ${cell.reason}`}
-                  >
+                  <summary className="cursor-pointer text-2xl text-ink-soft" aria-label={`No number: ${cell.reason}`}>
                     —
                   </summary>
                   <p className="text-meta text-ink-soft">{cell.reason}</p>
@@ -26,9 +23,7 @@ export function CompetitorSnapshot({ cells }: { cells: readonly SnapshotCell[] }
                   {cell.key === "rank" ? "#" : null}
                   <span className="text-2xl font-semibold text-ink tabular-nums">{cell.value}</span>
                   {cell.key === "rank" && cell.movement !== null ? (
-                    <span className="font-mono text-eyebrow text-ink-soft">
-                      {movementLabel(cell.movement, false)}
-                    </span>
+                    <span className="font-mono text-eyebrow text-ink-soft">{movementLabel(cell.movement, false)}</span>
                   ) : null}
                 </>
               )}

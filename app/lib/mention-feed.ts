@@ -3,7 +3,7 @@ import { noulAction } from "./jev/thresholds";
 import { sourceName } from "./source-name";
 import { whyFlagged, type WhyFlagged } from "./why-flagged";
 
-export type MentionTreatment = "shown" | "possibly" | "held" | "unreviewed";
+export type MentionTreatment = "shown" | "possibly" | "held" | "unreviewed" | "pending";
 
 export interface MentionReadRow {
   id: string;
@@ -17,6 +17,7 @@ export interface MentionReadRow {
   reason: string | null;
   verdictId: string | null;
   verdictDecidedAt: string | null;
+  state: "judged" | "unjudged" | null;
 }
 
 export interface MentionRowModel {
@@ -34,11 +35,12 @@ export interface MentionRowModel {
 
 const FOUND_TODAY = "found today";
 
-export const POSSIBLY_LINE =
-  "Possibly. We were not sure this mattered, so it sits here rather than in your brief.";
+export const POSSIBLY_LINE = "Possibly. We were not sure this mattered, so it sits here rather than in your brief.";
 
-export const UNREVIEWED_LINE =
-  "Unreviewed. We have not reviewed this yet, so it sits here rather than in your brief.";
+export const UNREVIEWED_LINE = "Unreviewed. We have not reviewed this yet, so it sits here rather than in your brief.";
+
+export const PENDING_LINE =
+  "Pending. This one is still waiting for judgment, so it sits here rather than in your brief.";
 
 export function mentionTreatment(p: number): MentionTreatment {
   const action = noulAction(p);
@@ -61,8 +63,8 @@ export function mentionsFromRows(rows: readonly MentionReadRow[], now: Date): Me
   return rows.flatMap((row) => {
     const title = row.title?.trim() ?? "";
     if (title === "" || row.url === "") return [];
-    const treatment: MentionTreatment =
-      row.p === null || !Number.isFinite(row.p) ? "unreviewed" : mentionTreatment(row.p);
+    const judged: MentionTreatment | null = row.p === null || !Number.isFinite(row.p) ? null : mentionTreatment(row.p);
+    const treatment: MentionTreatment = row.state === "unjudged" ? "pending" : (judged ?? "unreviewed");
     return [
       {
         id: row.id,

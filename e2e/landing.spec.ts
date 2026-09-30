@@ -33,7 +33,10 @@ test("the landing renders its sections in order under one headline @smoke", asyn
   expect(order).toEqual(["hero", "mark", "how-it-works", "what-we-watch", "agents", "price", "faq"]);
 });
 
-test("the landing route data and document carry no disabled source's internal notes @smoke", async ({ page, request }) => {
+test("the landing route data and document carry no disabled source's internal notes @smoke", async ({
+  page,
+  request,
+}) => {
   const response = await page.goto(PATH);
   expect(response?.status()).toBe(200);
 
@@ -126,7 +129,9 @@ test("how it works reads as three ruled steps in order, wide and narrow @smoke",
   });
 });
 
-test("the agents section hands a visitor's agent the MCP address and the API docs @smoke", async ({ page }, testInfo) => {
+test("the agents section hands a visitor's agent the MCP address and the API docs @smoke", async ({
+  page,
+}, testInfo) => {
   const watched = watchConsole(page);
 
   await page.goto(PATH);
@@ -136,10 +141,7 @@ test("the agents section hands a visitor's agent the MCP address and the API doc
   for (const name of ["Claude", "Cursor", "ChatGPT"]) {
     await expect(agents.getByText(name, { exact: true })).toBeVisible();
   }
-  await expect(agents.getByRole("link", { name: "Read the API docs" })).toHaveAttribute(
-    "href",
-    "/api/v1/openapi.json",
-  );
+  await expect(agents.getByRole("link", { name: "Read the API docs" })).toHaveAttribute("href", "/api/v1/openapi.json");
   expect(await consoleFailures(page, watched, testInfo), testInfo.project.name).toEqual([]);
 
   await testInfo.attach(`agents-${testInfo.project.name}`, {
@@ -246,7 +248,10 @@ test("the hero's first viewport holds the outcome and the one priced input @smok
 test("the hero input carries what you typed to sign-in @smoke", async ({ page }) => {
   await page.goto(PATH);
   await page.locator("#hero").getByRole("textbox", { name: "your website, or a handle" }).fill("example.com");
-  await page.locator("#hero").getByRole("button", { name: /€\d+\/mo/ }).click();
+  await page
+    .locator("#hero")
+    .getByRole("button", { name: /€\d+\/mo/ })
+    .click();
   await expect(page).toHaveURL(/\/login\?subject=example\.com$/);
 });
 

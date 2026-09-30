@@ -39,15 +39,7 @@ async function seedEntity(input: {
     `INSERT INTO entity (id, workspace_id, role, domain, name, state, created_at)
      VALUES (?, ?, ?, ?, ?, ?, ?)`,
   )
-    .bind(
-      input.id,
-      input.workspaceId,
-      input.role,
-      input.domain,
-      input.domain,
-      input.state,
-      "2026-09-24T12:00:00.000Z",
-    )
+    .bind(input.id, input.workspaceId, input.role, input.domain, input.domain, input.state, "2026-09-24T12:00:00.000Z")
     .run();
 }
 
@@ -107,9 +99,7 @@ interface SuggestionRow {
 }
 
 async function suggestionRow(suggestionId: string): Promise<SuggestionRow | null> {
-  return env.DB.prepare(
-    "SELECT status, decided_by, decided_at, entity_id FROM suggestion WHERE id = ?",
-  )
+  return env.DB.prepare("SELECT status, decided_by, decided_at, entity_id FROM suggestion WHERE id = ?")
     .bind(suggestionId)
     .first<SuggestionRow>();
 }
@@ -305,9 +295,7 @@ describe("acceptSuggestion against migrations/0001_rebuild.sql", () => {
 
     await acceptSuggestion({ workspaceId, suggestionId, now: "2026-09-24T09:00:00.000Z" });
 
-    expect(await entityRows(workspaceId, domain)).toEqual([
-      expect.objectContaining({ role: "self", state: "on" }),
-    ]);
+    expect(await entityRows(workspaceId, domain)).toEqual([expect.objectContaining({ role: "self", state: "on" })]);
   });
 
   it("a suggestion id from another workspace changes nothing in either", async () => {

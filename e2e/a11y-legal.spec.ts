@@ -40,15 +40,11 @@ for (const path of ["/privacy", "/terms"]) {
           expect(levels[i] - levels[i - 1]).toBeLessThanOrEqual(1);
         }
 
-        const takedown = page
-          .getByRole("contentinfo")
-          .getByRole("link", { name: "support@0509.io" });
+        const takedown = page.getByRole("contentinfo").getByRole("link", { name: "support@0509.io" });
         await expect(takedown).toBeVisible();
         await expect(takedown).toHaveAttribute("href", "mailto:support@0509.io");
 
-        const hrefs = await page
-          .locator("a[href]")
-          .evaluateAll((els) => els.map((el) => el.getAttribute("href")));
+        const hrefs = await page.locator("a[href]").evaluateAll((els) => els.map((el) => el.getAttribute("href")));
         await page.mouse.click(1, 1);
         const visited: (string | null)[] = [];
         for (const _ of hrefs) {

@@ -8,7 +8,7 @@ import { readEnabledSourceId, readEnabledSources } from "../data/source.server";
 import { insertWatches, readEntityWatches } from "../data/watch.server";
 import type { EntityWatch, NewWatch } from "../data/watch.server";
 import { readUrl } from "../fetch/transport.server";
-import { discoverBoard } from "../hiring/discover-board";
+import { discoverBoard } from "../hiring/discover-board.server";
 import { brandBudget, readCachedSiteProof, readSiteCard } from "./card.server";
 import { extractIdentity } from "./extract";
 import { normaliseSubject, type Subject } from "./normalise";
@@ -55,9 +55,7 @@ export async function startIdentityTail(params: IdentityTailParams): Promise<str
 export async function persistTail(params: IdentityTailParams): Promise<{ entityId: string }> {
   const entityId = await readSelfEntityId(params.workspaceId, params.entityId);
   if (entityId === null) {
-    throw new NonRetryableError(
-      `self entity ${params.entityId} is not in workspace ${params.workspaceId}`,
-    );
+    throw new NonRetryableError(`self entity ${params.entityId} is not in workspace ${params.workspaceId}`);
   }
   return { entityId };
 }
@@ -73,12 +71,7 @@ export async function classifyTailPages(params: IdentityTailParams, now: string)
       return;
     }
     const extract = await extractIdentity(page.html, params.homepageUrl);
-    await classifyNavPages(
-      params.workspaceId,
-      { id: params.entityId, domain: params.domain },
-      extract.navPages,
-      now,
-    );
+    await classifyNavPages(params.workspaceId, { id: params.entityId, domain: params.domain }, extract.navPages, now);
   } catch (error) {
     console.log(
       JSON.stringify({ event: "identity-page-role-skipped", workspaceId: params.workspaceId, error: String(error) }),

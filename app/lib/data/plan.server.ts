@@ -12,8 +12,7 @@ interface PlanRow {
 
 const SELECT_PLAN = "SELECT tier, status, current_period_end, limits_json FROM plan WHERE workspace_id = ?";
 
-const SELECT_WORKSPACE_BY_SUBSCRIPTION =
-  "SELECT workspace_id FROM plan WHERE provider_subscription_id = ?";
+const SELECT_WORKSPACE_BY_SUBSCRIPTION = "SELECT workspace_id FROM plan WHERE provider_subscription_id = ?";
 
 const UPSERT_SUBSCRIPTION = `INSERT INTO plan
   (id, workspace_id, tier, status, provider_customer_id, provider_subscription_id, current_period_end, updated_at)

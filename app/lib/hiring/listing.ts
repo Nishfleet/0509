@@ -1,5 +1,8 @@
-import type { BoardPlatform } from "./discover-board";
 import { z } from "zod";
+
+export const BOARD_PLATFORMS = ["greenhouse", "lever", "ashby", "workable", "smartrecruiters"] as const;
+
+export type BoardPlatform = (typeof BOARD_PLATFORMS)[number];
 
 export interface OpenRole {
   id: string;
@@ -73,10 +76,12 @@ const leverRowSchema = z.object({
   text: z.string().nullish(),
   hostedUrl: z.string().nullish(),
   createdAt: z.number().nullish(),
-  categories: z.object({
-    location: z.string().nullish(),
-    team: z.string().nullish(),
-  }).nullish(),
+  categories: z
+    .object({
+      location: z.string().nullish(),
+      team: z.string().nullish(),
+    })
+    .nullish(),
 });
 
 const ashbyTopSchema = z.object({ jobs: z.array(z.unknown()) });
@@ -105,10 +110,12 @@ const smartRecruitersRowSchema = z.object({
   name: z.string().nullish(),
   title: z.string().nullish(),
   releasedDate: z.string().nullish(),
-  location: z.object({
-    city: z.string().nullish(),
-    country: z.string().nullish(),
-  }).nullish(),
+  location: z
+    .object({
+      city: z.string().nullish(),
+      country: z.string().nullish(),
+    })
+    .nullish(),
   department: z.object({ label: z.string().nullish() }).nullish(),
 });
 
@@ -138,14 +145,19 @@ export function parseListing(platform: BoardPlatform, body: string, boardUrl: st
       const t = title(r.name) ?? title(r.title);
       if (t === null) return [];
       const location = [text(r.location?.city), text(r.location?.country)].filter((part) => part !== null);
-      return [{
-        id: r.id,
-        title: t,
-        url: slug === null ? boardUrl : httpsUrl(`${SMARTRECRUITERS_JOBS_ORIGIN}/${slug}/${encodeURIComponent(r.id)}`, boardUrl),
-        location: location.length === 0 ? null : location.join(", "),
-        team: text(r.department?.label),
-        postedAt: isoDate(r.releasedDate),
-      }];
+      return [
+        {
+          id: r.id,
+          title: t,
+          url:
+            slug === null
+              ? boardUrl
+              : httpsUrl(`${SMARTRECRUITERS_JOBS_ORIGIN}/${slug}/${encodeURIComponent(r.id)}`, boardUrl),
+          location: location.length === 0 ? null : location.join(", "),
+          team: text(r.department?.label),
+          postedAt: isoDate(r.releasedDate),
+        },
+      ];
     });
   }
 
@@ -158,14 +170,16 @@ export function parseListing(platform: BoardPlatform, body: string, boardUrl: st
       const r = rowParsed.data;
       const t = title(r.title);
       if (t === null) return [];
-      return [{
-        id: String(r.id),
-        title: t,
-        url: httpsUrl(r.absolute_url, boardUrl),
-        location: text(r.location?.name),
-        team: null,
-        postedAt: isoDate(r.first_published),
-      }];
+      return [
+        {
+          id: String(r.id),
+          title: t,
+          url: httpsUrl(r.absolute_url, boardUrl),
+          location: text(r.location?.name),
+          team: null,
+          postedAt: isoDate(r.first_published),
+        },
+      ];
     });
   }
 
@@ -179,14 +193,16 @@ export function parseListing(platform: BoardPlatform, body: string, boardUrl: st
       if (r.isListed === false) return [];
       const t = title(r.title);
       if (t === null) return [];
-      return [{
-        id: r.id ?? r.jobUrl,
-        title: t,
-        url: httpsUrl(r.jobUrl, boardUrl),
-        location: text(r.location),
-        team: text(r.team) ?? text(r.department),
-        postedAt: isoDate(r.publishedAt),
-      }];
+      return [
+        {
+          id: r.id ?? r.jobUrl,
+          title: t,
+          url: httpsUrl(r.jobUrl, boardUrl),
+          location: text(r.location),
+          team: text(r.team) ?? text(r.department),
+          postedAt: isoDate(r.publishedAt),
+        },
+      ];
     });
   }
 
@@ -200,14 +216,16 @@ export function parseListing(platform: BoardPlatform, body: string, boardUrl: st
       const t = title(r.title);
       if (t === null) return [];
       const location = [text(r.city), text(r.country)].filter((part) => part !== null);
-      return [{
-        id: r.shortcode,
-        title: t,
-        url: httpsUrl(r.url ?? r.shortlink, boardUrl),
-        location: location.length === 0 ? null : location.join(", "),
-        team: text(r.department),
-        postedAt: isoDate(r.published_on),
-      }];
+      return [
+        {
+          id: r.shortcode,
+          title: t,
+          url: httpsUrl(r.url ?? r.shortlink, boardUrl),
+          location: location.length === 0 ? null : location.join(", "),
+          team: text(r.department),
+          postedAt: isoDate(r.published_on),
+        },
+      ];
     });
   }
 
@@ -219,14 +237,16 @@ export function parseListing(platform: BoardPlatform, body: string, boardUrl: st
     const r = rowParsed.data;
     const t = title(r.text);
     if (t === null) return [];
-    return [{
-      id: r.id,
-      title: t,
-      url: httpsUrl(r.hostedUrl, boardUrl),
-      location: text(r.categories?.location),
-      team: text(r.categories?.team),
-      postedAt: isoDate(r.createdAt),
-    }];
+    return [
+      {
+        id: r.id,
+        title: t,
+        url: httpsUrl(r.hostedUrl, boardUrl),
+        location: text(r.categories?.location),
+        team: text(r.categories?.team),
+        postedAt: isoDate(r.createdAt),
+      },
+    ];
   });
 }
 
