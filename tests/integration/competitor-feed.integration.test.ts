@@ -177,14 +177,29 @@ async function seed(): Promise<Fixture> {
       "2026-09-06T09:00:00.000Z",
     ),
   ]);
-  return { workspaceId, otherWorkspaceId, entityId, domain, priced, copy, hired, ad, mentioned, tombstoned, stale, foreign };
+  return {
+    workspaceId,
+    otherWorkspaceId,
+    entityId,
+    domain,
+    priced,
+    copy,
+    hired,
+    ad,
+    mentioned,
+    tombstoned,
+    stale,
+    foreign,
+  };
 }
 
 describe("competitor feed read", () => {
   afterEach(async () => {
     const row = created.pop();
     if (row === undefined) return;
-    await env.DB.prepare("DELETE FROM workspace WHERE id IN (?, ?)").bind(...row.workspaces).run();
+    await env.DB.prepare("DELETE FROM workspace WHERE id IN (?, ?)")
+      .bind(...row.workspaces)
+      .run();
   });
 
   it("mixes the four kinds on one entity, newest first, inside the window", async () => {

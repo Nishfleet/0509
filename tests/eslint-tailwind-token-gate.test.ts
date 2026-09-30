@@ -40,10 +40,7 @@ export function ProbeTwTmp() {
 `;
 }
 
-async function lintProbe(
-  rel: string,
-  code: string,
-): Promise<{ ignored: boolean; messages: string[] }> {
+async function lintProbe(rel: string, code: string): Promise<{ ignored: boolean; messages: string[] }> {
   const file = path.join(REPO_ROOT, rel);
   await mkdir(path.dirname(file), { recursive: true });
   await writeFile(file, code);

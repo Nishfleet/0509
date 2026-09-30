@@ -100,8 +100,8 @@ describe("eslint no-silent-catch rule (#4462)", () => {
     expect(result.messages.some((m) => m.includes(CATCH_NULL_MESSAGE))).toBe(true);
   });
 
-  it("leaves the named clause in app/lib/identity/name-cascade.ts alone", { timeout: 60_000 }, async () => {
-    const messages = await lintExisting("app/lib/identity/name-cascade.ts");
+  it("leaves the named clause in app/lib/identity/name-cascade.server.ts alone", { timeout: 60_000 }, async () => {
+    const messages = await lintExisting("app/lib/identity/name-cascade.server.ts");
     expect(messages.some((m) => m.includes(CATCH_NULL_MESSAGE))).toBe(false);
   });
 

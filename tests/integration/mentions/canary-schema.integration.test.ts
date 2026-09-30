@@ -134,9 +134,7 @@ describe("canary columns on source and snapshot (#4003 1/6)", () => {
         .bind("snap-canary-schema", watchId, NOW)
         .run();
 
-      const snap = await env.DB.prepare(
-        `SELECT item_count, canary_count FROM snapshot WHERE id = ?`,
-      )
+      const snap = await env.DB.prepare(`SELECT item_count, canary_count FROM snapshot WHERE id = ?`)
         .bind("snap-canary-schema")
         .first<{ item_count: number; canary_count: number }>();
       expect(snap?.item_count).toBe(3);
@@ -144,15 +142,11 @@ describe("canary columns on source and snapshot (#4003 1/6)", () => {
 
       // Degradation state on the source row: reason plus last-good timestamp,
       // the columns source-pill.tsx reads.
-      await env.DB.prepare(
-        `UPDATE source SET degraded_reason = 'canary zero', last_good_at = ? WHERE id = ?`,
-      )
+      await env.DB.prepare(`UPDATE source SET degraded_reason = 'canary zero', last_good_at = ? WHERE id = ?`)
         .bind(NOW, sourceId)
         .run();
 
-      const source = await env.DB.prepare(
-        `SELECT canary_query, degraded_reason, last_good_at FROM source WHERE id = ?`,
-      )
+      const source = await env.DB.prepare(`SELECT canary_query, degraded_reason, last_good_at FROM source WHERE id = ?`)
         .bind(sourceId)
         .first<{
           canary_query: string | null;
@@ -171,9 +165,7 @@ describe("canary columns on source and snapshot (#4003 1/6)", () => {
       )
         .bind("snap-canary-schema-null", watchId, NOW)
         .run();
-      const nullSnap = await env.DB.prepare(
-        `SELECT canary_count FROM snapshot WHERE id = ?`,
-      )
+      const nullSnap = await env.DB.prepare(`SELECT canary_count FROM snapshot WHERE id = ?`)
         .bind("snap-canary-schema-null")
         .first<{ canary_count: number | null }>();
       expect(nullSnap?.canary_count).toBeNull();
@@ -183,7 +175,7 @@ describe("canary columns on source and snapshot (#4003 1/6)", () => {
       await env.DB.prepare("DELETE FROM source WHERE id = ?").bind(sourceId).run();
       await env.DB.prepare("DELETE FROM entity WHERE id = ?").bind(entityId).run();
       await env.DB.prepare("DELETE FROM workspace WHERE id = ?").bind(workspaceId).run();
-      await env.DB.prepare("DELETE FROM \"user\" WHERE id = ?").bind(userId).run();
+      await env.DB.prepare('DELETE FROM "user" WHERE id = ?').bind(userId).run();
     }
   });
 });

@@ -1,3 +1,4 @@
+import { fetchOutbound } from "../fetch/outbound.server";
 import type { DailyUsage } from "./cost-guard";
 
 export const ACCOUNT_TAG = "f670a698e17bf160c8e4679823e68916";
@@ -108,7 +109,7 @@ export function parseUsageResponse(day: string, body: unknown): DailyUsage {
 }
 
 export async function fetchDailyUsage(day: string, apiToken: string): Promise<DailyUsage> {
-  const res = await fetch(GRAPHQL_URL, {
+  const res = await fetchOutbound(GRAPHQL_URL, {
     method: "POST",
     headers: {
       Authorization: "Bearer " + apiToken,

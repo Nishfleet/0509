@@ -3,8 +3,7 @@ import type { ReactElement } from "react";
 import { Dialog, DialogContent, DialogTitle, DialogTrigger } from "./ui/dialog";
 import type { WhyFlagged } from "../lib/why-flagged";
 
-const TRIGGER_CLASS =
-  "text-ink-soft font-mono text-eyebrow uppercase underline underline-offset-4 min-h-11";
+const TRIGGER_CLASS = "text-ink-soft font-mono text-eyebrow uppercase underline underline-offset-4 min-h-11";
 const CONTENT_CLASS =
   "max-h-[85dvh] overflow-y-auto sm:max-w-lg max-[859px]:top-auto max-[859px]:bottom-0 max-[859px]:left-0 max-[859px]:max-w-none max-[859px]:translate-x-0 max-[859px]:translate-y-0 max-[859px]:rounded-b-none";
 const ROW_CLASS = "border-b border-line py-2";
@@ -17,7 +16,7 @@ export function WhyFlaggedSheet({ why }: { why: WhyFlagged }): ReactElement {
         Why we flagged this
       </DialogTrigger>
       <DialogContent className={CONTENT_CLASS}>
-        <DialogTitle className="font-display text-lg font-semibold">Why we flagged this</DialogTitle>
+        <DialogTitle className="font-display text-row-name font-bold">Why we flagged this</DialogTitle>
         <dl data-testid="why-flagged" data-verdict-id={why.verdictId} className="mt-3 font-mono">
           {why.compared.map((field) => (
             <div className={ROW_CLASS} key={field.label}>

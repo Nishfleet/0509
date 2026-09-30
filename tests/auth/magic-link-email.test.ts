@@ -26,9 +26,7 @@ describe("magicLinkEmail", () => {
 
   it("html carries the escaped href, the card width and the dark-scheme block", () => {
     const { html } = magicLinkEmail({ email, url });
-    expect(html).toContain(
-      'href="https://0509.io/api/auth/magic-link/verify?token=abc123&amp;callbackURL=%2Fapp"',
-    );
+    expect(html).toContain('href="https://0509.io/api/auth/magic-link/verify?token=abc123&amp;callbackURL=%2Fapp"');
     expect(html).toContain("max-width:600px");
     expect(html).toContain("prefers-color-scheme: dark");
   });

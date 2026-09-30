@@ -158,7 +158,7 @@ jobs:
           persist-credentials: false
       # `semgrep ci` is the hosted mode and needs SEMGREP_APP_TOKEN, exiting 2
       # without one. `semgrep scan` is the local mode and needs nothing.
-      - run: semgrep scan --config p/typescript --config p/security-audit --config .semgrep/rollover-catch-up.yml --error
+      - run: semgrep scan --config p/typescript --config p/security-audit --config .semgrep/rollover-catch-up.yml --config https://raw.githubusercontent.com/Nishfleet/fleet-ops/main/.semgrep/no-glue.yml --error
         if: github.event_name != 'deployment_status'
       # Keep the local rule's fixture honest: --test fails if ruleid:/ok:
       # annotations in .semgrep/<rule>.ts stop matching what the rule fires on.

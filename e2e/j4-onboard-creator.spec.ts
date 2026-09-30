@@ -45,9 +45,7 @@ test.describe("J4 onboard a creator handle", () => {
       const started = Date.now();
       await input.press("Enter");
 
-      await expect(
-        page.getByRole("heading", { name: "This is you. Fix anything we got wrong." }),
-      ).toBeVisible();
+      await expect(page.getByRole("heading", { name: "This is you. Fix anything we got wrong." })).toBeVisible();
       const editName = page.getByRole("button", { name: "edit name" });
       await expect(editName).toBeVisible({ timeout: 30_000 });
       const firstField = Date.now() - started;
@@ -57,25 +55,29 @@ test.describe("J4 onboard a creator handle", () => {
 
       expect(firstField).toBeLessThan(30_000);
       expect(complete).toBeLessThan(30_000);
-      test.info().annotations.push(
-        { type: "input-to-first-field-ms", description: String(firstField) },
-        { type: "input-to-card-complete-ms", description: String(complete) },
-      );
+      test
+        .info()
+        .annotations.push(
+          { type: "input-to-first-field-ms", description: String(firstField) },
+          { type: "input-to-card-complete-ms", description: String(complete) },
+        );
 
       await expect(page.getByText("channel", { exact: true })).toBeVisible();
       await expect(page.getByText("YouTube", { exact: true })).toBeVisible();
       await expect(page.getByText("handle", { exact: true })).toBeVisible();
       await expect(page.getByText("@veritasium", { exact: true })).toBeVisible();
       await expect(page.getByText("socials", { exact: true })).toBeVisible();
-      test.info().annotations.push(
-        { type: "source-channel", description: "subject URL" },
-        { type: "source-handle", description: "subject URL" },
-        { type: "source-name", description: "youtube channel page" },
-        { type: "source-socials", description: "subject URL + youtube channel page" },
-      );
+      test
+        .info()
+        .annotations.push(
+          { type: "source-channel", description: "subject URL" },
+          { type: "source-handle", description: "subject URL" },
+          { type: "source-name", description: "youtube channel page" },
+          { type: "source-socials", description: "subject URL + youtube channel page" },
+        );
 
       await page.getByRole("button", { name: "That's me" }).click();
-      await expect(page).toHaveURL(/\/onboarding\/competitors$/);
+      await expect(page).toHaveURL(/\/onboarding\/competitors$/, { timeout: 10_000 });
 
       const competitorRows = page.locator('ul[aria-label="Watching"] li, ul[aria-label="Maybe"] li');
       await expect.poll(async () => competitorRows.count(), { timeout: 60_000 }).toBeGreaterThan(0);

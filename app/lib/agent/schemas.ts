@@ -46,9 +46,7 @@ const briefSchema = z
     standing: z.array(standingLineSchema),
     ownSite: z.object({
       status: z.enum(["ok", "broken"]),
-      incidents: z.array(
-        z.object({ pageUrl: z.string(), kind: z.string(), observedAt: isoTime, open: z.boolean() }),
-      ),
+      incidents: z.array(z.object({ pageUrl: z.string(), kind: z.string(), observedAt: isoTime, open: z.boolean() })),
     }),
     checked: z.object({
       mentions: z.number(),
@@ -60,8 +58,9 @@ const briefSchema = z
   })
   .meta({ id: "Brief" });
 
-export const briefResultSchema = z
-  .object({ brief: briefSchema.nullable().meta({ description: "Null until your first weekly brief is ready" }) });
+export const briefResultSchema = z.object({
+  brief: briefSchema.nullable().meta({ description: "Null until your first weekly brief is ready" }),
+});
 
 export const standingResultSchema = z.object({
   standing: z
@@ -85,11 +84,10 @@ const competitorSchema = z
   })
   .meta({ id: "Competitor" });
 
-export const competitorsResultSchema = z
-  .object({
-    tracked: z.array(competitorSchema),
-    suggested: z.array(competitorSchema).meta({ description: "Brands we think compete with you, waiting for your yes" }),
-  });
+export const competitorsResultSchema = z.object({
+  tracked: z.array(competitorSchema),
+  suggested: z.array(competitorSchema).meta({ description: "Brands we think compete with you, waiting for your yes" }),
+});
 
 export const competitorArgsSchema = z.object({
   competitorId: z.string().min(1).meta({ description: "A competitor id from list_competitors" }),
@@ -123,7 +121,7 @@ export const competitorResultSchema = z.object({
 const alertSchema = z
   .object({
     id: z.string(),
-    kind: z.enum(["delivery_failed", "takedown", "site_change"]),
+    kind: z.enum(["delivery_failed", "takedown", "site_change", "mention"]),
     title: z.string(),
     body: z.string().nullable(),
     createdAt: isoTime,

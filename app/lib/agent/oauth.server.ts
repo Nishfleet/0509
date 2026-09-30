@@ -30,7 +30,11 @@ export function createOAuthProvider<E>(handlers: Handlers<E>): OAuthProvider<E> 
     clientRegistrationTTL: 30 * DAY,
     clientRegistrationCallback: async ({ request }) => {
       if (await withinLimit(env.AGENT_REGISTER_LIMIT, clientIp(request))) return;
-      return { code: "temporarily_unavailable", description: "Too many app registrations. Retry in a minute.", status: 429 };
+      return {
+        code: "temporarily_unavailable",
+        description: "Too many app registrations. Retry in a minute.",
+        status: 429,
+      };
     },
     resolveExternalToken: async ({ token, request }) => {
       if (!(await withinLimit(env.AGENT_LIMIT, clientIp(request)))) {

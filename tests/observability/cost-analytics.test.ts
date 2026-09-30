@@ -33,15 +33,11 @@ describe("parseUsageResponse", () => {
   });
 
   it("throws the Cloudflare error message", () => {
-    expect(() => parseUsageResponse("2026-09-22", { errors: [{ message: "x" }] })).toThrow(
-      /cloudflare graphql: x/,
-    );
+    expect(() => parseUsageResponse("2026-09-22", { errors: [{ message: "x" }] })).toThrow(/cloudflare graphql: x/);
   });
 
   it("throws when the account row is missing", () => {
-    expect(() =>
-      parseUsageResponse("2026-09-22", { data: { viewer: { accounts: [] } } }),
-    ).toThrow();
+    expect(() => parseUsageResponse("2026-09-22", { data: { viewer: { accounts: [] } } })).toThrow();
   });
 
   it("sums an empty row list to zero", () => {
@@ -141,9 +137,7 @@ describe("fetchDailyUsage", () => {
   it("throws with the response body on a non-2xx reply", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn(() =>
-        Promise.resolve(new Response("Invalid access token", { status: 400 })),
-      ),
+      vi.fn(() => Promise.resolve(new Response("Invalid access token", { status: 400 }))),
     );
 
     await expect(fetchDailyUsage("2026-09-22", "test-token")).rejects.toThrow(

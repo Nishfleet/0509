@@ -40,16 +40,12 @@ async function schemaDump(): Promise<SchemaRow[]> {
 }
 
 async function appliedNames(): Promise<string[]> {
-  const { results } = await env.DB.prepare(
-    "SELECT name FROM d1_migrations ORDER BY name",
-  ).all<{ name: string }>();
+  const { results } = await env.DB.prepare("SELECT name FROM d1_migrations ORDER BY name").all<{ name: string }>();
   return (results ?? []).map((r) => r.name);
 }
 
 async function columnNames(table: string): Promise<string[]> {
-  const { results } = await env.DB.prepare(
-    `SELECT name FROM pragma_table_info('${table}')`,
-  ).all<{ name: string }>();
+  const { results } = await env.DB.prepare(`SELECT name FROM pragma_table_info('${table}')`).all<{ name: string }>();
   return (results ?? []).map((r) => r.name);
 }
 

@@ -4,7 +4,7 @@ import type { Candidate, Evidence, GeneratorKey } from "./types";
 
 export const SHORTLIST_TOP = 20;
 
-export const GENERATOR_ORDER: readonly GeneratorKey[] = ["news", "hn", "ads"];
+export const GENERATOR_ORDER: readonly GeneratorKey[] = ["news", "hn", "ads", "ai"];
 
 export interface ShortlistEntry {
   name: string;
@@ -66,8 +66,7 @@ function buildGroups(candidates: readonly Candidate[]): Group[] {
     if (key === "") continue;
     const domainKey = candidate.domain === undefined ? null : hostKey(candidate.domain);
     const matchIndex = groups.findIndex((group) => {
-      const byDomain =
-        domainKey !== null && group.domain !== undefined && hostKey(group.domain) === domainKey;
+      const byDomain = domainKey !== null && group.domain !== undefined && hostKey(group.domain) === domainKey;
       return byDomain || group.nameKeys.has(key);
     });
     const existing = matchIndex >= 0 ? groups[matchIndex] : undefined;
@@ -105,6 +104,10 @@ function toEntry(scored: Scored, slot: ShortlistEntry["slot"]): ShortlistEntry {
   };
 }
 
+function corroboration(generators: readonly GeneratorKey[]): number {
+  return generators.filter((key) => key !== "ai").length;
+}
+
 function isSoleGenerator(generators: GeneratorKey[], key: GeneratorKey): boolean {
   return generators.length === 1 && generators[0] === key;
 }
@@ -124,11 +127,10 @@ export function evidenceLine(entry: ShortlistEntry): string {
       return [`named by ${String(count)} news publisher${count !== 1 ? "s" : ""}`];
     }
     if (key === "hn") {
-      const urls = new Set(
-        entry.evidence.flatMap((item) => (item.generator === "hn" ? [item.sourceUrl] : [])),
-      );
+      const urls = new Set(entry.evidence.flatMap((item) => (item.generator === "hn" ? [item.sourceUrl] : [])));
       return [`mentioned in ${String(urls.size)} Hacker News thread${urls.size !== 1 ? "s" : ""}`];
     }
+    if (key === "ai") return ["suggested from your site, not yet seen elsewhere"];
     return ["advertises in the same category"];
   }).join(", ");
 }
@@ -144,6 +146,8 @@ export function partitionShortlist(candidates: readonly Candidate[]): {
   }));
 
   const sorted = [...scored].sort((a, b) => {
+    const byCorroboration = corroboration(b.generators) - corroboration(a.generators);
+    if (byCorroboration !== 0) return byCorroboration;
     if (b.generators.length !== a.generators.length) return b.generators.length - a.generators.length;
     if (b.publishers.length !== a.publishers.length) return b.publishers.length - a.publishers.length;
     return b.group.evidence.length - a.group.evidence.length;

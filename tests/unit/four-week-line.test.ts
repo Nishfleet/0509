@@ -34,7 +34,10 @@ describe("the four-week line", () => {
   it("shows first week under the labels when only one week is frozen", () => {
     const html = renderToStaticMarkup(
       createElement(FourWeekLine, {
-        chart: chart({ weeks: ["21 SEP"], lines: [{ entityId: "ent_self", label: "YOU", self: true, paused: false, ranks: [1] }] }),
+        chart: chart({
+          weeks: ["21 SEP"],
+          lines: [{ entityId: "ent_self", label: "YOU", self: true, paused: false, ranks: [1] }],
+        }),
       }),
     );
     expect(html).toContain("first week");

@@ -10,10 +10,7 @@ import { unsubscribe } from "../lib/unsubscribe.server";
 const INVALID_LINK = "This link is not valid";
 
 export function meta(_: Route.MetaArgs) {
-  return [
-    { title: "Unsubscribe — Five to Nine" },
-    { name: "robots", content: "noindex, nofollow" },
-  ];
+  return [{ title: "Unsubscribe — Five to Nine" }, { name: "robots", content: "noindex, nofollow" }];
 }
 
 export function headers(_: Route.HeadersArgs) {
@@ -49,8 +46,8 @@ export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
     <main className="mx-auto max-w-xl px-4 py-16">
       <h1 className="font-display text-2xl font-semibold tracking-[-0.02em]">{INVALID_LINK}</h1>
       <p className="mt-4 leading-[1.65] text-ink-soft">
-        The unsubscribe link in that email is expired or mistyped, so nothing was changed. Use the link in
-        the most recent brief to stop the weekly email, or email us and we will do it.
+        The unsubscribe link in that email is expired or mistyped, so nothing was changed. Use the link in the most
+        recent brief to stop the weekly email, or email us and we will do it.
       </p>
       <Footer />
     </main>
@@ -71,9 +68,7 @@ export default function Unsubscribe({ actionData }: Route.ComponentProps) {
   return (
     <main className="mx-auto max-w-xl px-4 py-16">
       <h1 className="font-display text-2xl font-semibold tracking-[-0.02em]">Stop the weekly brief?</h1>
-      <p className="mt-4 leading-[1.65] text-ink-soft">
-        This stops every email from Five to Nine to this address.
-      </p>
+      <p className="mt-4 leading-[1.65] text-ink-soft">This stops every email from Five to Nine to this address.</p>
       <Form method="post" className="mt-8">
         <Button type="submit" size="lg">
           Unsubscribe

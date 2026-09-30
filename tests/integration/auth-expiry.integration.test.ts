@@ -35,9 +35,9 @@ const seedVerification = async (id: string, expiresAt: string) => {
 };
 
 const remainingIds = async (table: "session" | "verification") =>
-  (
-    await env.DB.prepare(`SELECT id FROM "${table}" ORDER BY id ASC`).all<{ id: string }>()
-  ).results.map((row) => row.id);
+  (await env.DB.prepare(`SELECT id FROM "${table}" ORDER BY id ASC`).all<{ id: string }>()).results.map(
+    (row) => row.id,
+  );
 
 describe("auth expiry sweep (0509#4738)", () => {
   beforeEach(async () => {

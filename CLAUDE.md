@@ -25,7 +25,7 @@ to read it.
 5. **Style guide.** Only a human reviewer enforces this, and at our PR rate that
    is not enforcement. Anything that lives only here is a hole.
 
-Source: Lauren Tan, *What I learned from reviewing 2,500 agent PRs*, 15:38.
+Source: Lauren Tan, _What I learned from reviewing 2,500 agent PRs_, 15:38.
 Transcript in the vault, `00 Inbox/agent-drop/claude/vps/2026-09-21-poteto-2500-prs-talk-transcript.md`.
 
 The design that put this in place, with every rule's provenance and the
@@ -40,7 +40,7 @@ not so you can follow them from memory — lint will tell you.
   this app provides no `getLoadContext`, so that property does not exist and
   every route touching it 500s. Source: 7727bf787 / #3918.
 - **Routes use the framework's generated types.** `import type { Route } from
-  "./+types/<route>"`, then `Route.LoaderArgs` / `Route.ActionArgs` /
+"./+types/<route>"`, then `Route.LoaderArgs` / `Route.ActionArgs` /
   `Route.ComponentProps`. A hand-written object type on a loader parameter
   asserts a shape instead of checking it. Source: ce5fed17d.
 - **`*.server` modules are imported by route modules and other `*.server`
@@ -72,6 +72,7 @@ not so you can follow them from memory — lint will tell you.
   `test.fail()` stay allowed. The full enforced set is the two test-lint blocks
   in `eslint.config.js`. Source: 0509#5785.
 - **Immutability.** New objects, never mutation.
+- **Formatting is Prettier.** `npm run lint` runs `prettier --check .`; run `npm run format` before committing.
 
 ## Commands
 
@@ -79,7 +80,8 @@ not so you can follow them from memory — lint will tell you.
 npm run dev        # react-router dev
 npm run build      # react-router build
 npm run typecheck  # wrangler types && react-router typegen && tsc -b
-npm run lint       # eslint . && knip
+npm run lint       # eslint . && knip && jscpd && prettier --check .
+npm run format     # prettier --write .
 npm test           # vitest run
 npm run e2e        # playwright test
 npm run deploy     # wrangler deploy
@@ -154,7 +156,7 @@ Gitleaks   codex-node-checks   semgrep   preview-assert
 
 Renaming one of these is not cosmetic. A required check that never reports fails
 closed and nothing can merge again, including the PR that renamed it. A
-*skipped* required check counts as passing, so none of these four carries a
+_skipped_ required check counts as passing, so none of these four carries a
 job-level `if:` that can skip it: they report on every event, and on an event
 with nothing to do they pass through one explicit step. The merge queue tests
 the merge result, so a PR that would redden `main` never lands. There is no

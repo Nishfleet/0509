@@ -1,6 +1,5 @@
+import { SITE_SWEEP_UTC_HOUR } from "../cadence";
 import type { HomeSource } from "../home-standing";
-
-export const SITE_SWEEP_UTC_HOUR = 2;
 
 export function nextSiteSweepAt(now: Date): Date {
   const sweep = new Date(now.getTime());

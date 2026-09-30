@@ -3,12 +3,7 @@ import type { HowRanked } from "./how-ranked";
 import { howRanked } from "./how-ranked";
 import type { BucketCount, WeightRow } from "./standing-score";
 import { D3_QUESTION_ID, D6_QUESTION_ID } from "./standing-score";
-import {
-  ALL_WEIGHTS,
-  COUNT_BUCKETS,
-  bucketCountRows,
-  weightRows,
-} from "./standing-score.server";
+import { ALL_WEIGHTS, COUNT_BUCKETS, bucketCountRows, weightRows } from "./standing-score.server";
 
 export interface HowRankedInputs {
   weightRows: readonly WeightRow[];
@@ -31,10 +26,7 @@ export async function readHowRankedInputs(
   };
 }
 
-export async function readHowRanked(
-  db: D1Database,
-  payload: BriefPayload | null,
-): Promise<HowRanked | null> {
+export async function readHowRanked(db: D1Database, payload: BriefPayload | null): Promise<HowRanked | null> {
   if (payload === null) return null;
   if (payload.headline_rank === null) return null;
   const { weightRows: rows, counts } = await readHowRankedInputs(

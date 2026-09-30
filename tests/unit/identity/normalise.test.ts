@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { normaliseSubject, SubjectSchema, type NormaliseResult, type Subject } from "../../../app/lib/identity/normalise";
+import {
+  normaliseSubject,
+  SubjectSchema,
+  type NormaliseResult,
+  type Subject,
+} from "../../../app/lib/identity/normalise";
 
 const parsed: Subject = SubjectSchema.parse({
   kind: "domain",
@@ -13,15 +18,9 @@ const domain = (registrable: string, url: string): NormaliseResult => ({
   subject: { kind: "domain", registrable, url },
 });
 
-const handle = (
-  registrable: string,
-  url: string | null,
-  platform?: "instagram" | "tiktok" | "x",
-): NormaliseResult => ({
+const handle = (registrable: string, url: string | null, platform?: "instagram" | "tiktok" | "x"): NormaliseResult => ({
   ok: true,
-  subject: platform
-    ? { kind: "handle", registrable, url, platform }
-    : { kind: "handle", registrable, url },
+  subject: platform ? { kind: "handle", registrable, url, platform } : { kind: "handle", registrable, url },
 });
 
 const channel = (registrable: string, url: string): NormaliseResult => ({

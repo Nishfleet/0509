@@ -118,12 +118,7 @@ export default function Page() {
       eyebrow={VIEW.eyebrow}
       footer={<p className="font-mono text-eyebrow text-ink-soft">{VIEW.footer}</p>}
     >
-      <HomeStanding
-        view={VIEW}
-        showEyebrow={false}
-        openId={open}
-        evidence={open === null ? null : EVIDENCE}
-      />
+      <HomeStanding view={VIEW} showEyebrow={false} openId={open} evidence={open === null ? null : EVIDENCE} />
     </HomePageFrame>
   );
 }

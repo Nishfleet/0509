@@ -16,23 +16,26 @@ export function freshnessText(entry: FreshnessEntry): string {
       entry.lastLandedAt === null ? "never" : shortUtc(entry.lastLandedAt)
     }`;
   }
-  return `${entry.name} landed ${
-    entry.lastLandedAt === null ? "never" : shortUtc(entry.lastLandedAt)
-  }`;
+  return `${entry.name} landed ${entry.lastLandedAt === null ? "never" : shortUtc(entry.lastLandedAt)}`;
 }
 
-export function FreshnessLine({
-  entries,
-}: {
-  entries: readonly FreshnessEntry[];
-}): ReactElement | null {
+export function FreshnessLine({ entries }: { entries: readonly FreshnessEntry[] }): ReactElement | null {
   if (entries.length === 0) return null;
   return (
     <p data-home="freshness" className="mt-2 font-mono text-eyebrow text-ink-soft">
       {entries.flatMap((entry, index) =>
         index === 0
-          ? [<span key={entry.key} data-state={entry.state}>{freshnessText(entry)}</span>]
-          : [" · ", <span key={entry.key} data-state={entry.state}>{freshnessText(entry)}</span>],
+          ? [
+              <span key={entry.key} data-state={entry.state}>
+                {freshnessText(entry)}
+              </span>,
+            ]
+          : [
+              " · ",
+              <span key={entry.key} data-state={entry.state}>
+                {freshnessText(entry)}
+              </span>,
+            ],
       )}
     </p>
   );

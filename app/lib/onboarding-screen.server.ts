@@ -7,10 +7,7 @@ import { screenPublicSubject } from "./jev/public-subject.server";
 
 export const REFUSAL = "we track brands and creators, not people";
 
-export type ScreenResult =
-  | { kind: "proceed" }
-  | { kind: "refuse"; message: string }
-  | { kind: "ask"; subject: string };
+export type ScreenResult = { kind: "proceed" } | { kind: "refuse"; message: string } | { kind: "ask"; subject: string };
 
 const runJevOutcome = (input: {
   workspaceId: string;

@@ -67,9 +67,7 @@ async function seedTrackedEntity(row: {
 }
 
 async function count(table: "entity" | "watch" | "snapshot" | "signal" | "alert", id: string): Promise<number> {
-  const row = await env.DB.prepare(`SELECT COUNT(*) AS n FROM ${table} WHERE id = ?`)
-    .bind(id)
-    .first<{ n: number }>();
+  const row = await env.DB.prepare(`SELECT COUNT(*) AS n FROM ${table} WHERE id = ?`).bind(id).first<{ n: number }>();
   return row?.n ?? -1;
 }
 
@@ -85,8 +83,18 @@ beforeEach(async () => {
     .run();
   await seedWorkspace("workspace-a", "user-forget-a");
   await seedWorkspace("workspace-b", "user-forget-b");
-  await seedTrackedEntity({ id: "competitor-a", workspaceId: "workspace-a", role: "competitor", domain: "rival.example" });
-  await seedTrackedEntity({ id: "competitor-b", workspaceId: "workspace-b", role: "competitor", domain: "rival.example" });
+  await seedTrackedEntity({
+    id: "competitor-a",
+    workspaceId: "workspace-a",
+    role: "competitor",
+    domain: "rival.example",
+  });
+  await seedTrackedEntity({
+    id: "competitor-b",
+    workspaceId: "workspace-b",
+    role: "competitor",
+    domain: "rival.example",
+  });
   await seedTrackedEntity({ id: "self-a", workspaceId: "workspace-a", role: "self", domain: "own-brand.example" });
   await env.DB.prepare(
     `INSERT INTO alert (id, workspace_id, entity_id, kind, title, created_at)
@@ -143,9 +151,9 @@ describe("forgetCompetitor", () => {
     expect(await count("entity", "self-a")).toBe(1);
     expect(await count("snapshot", "snapshot-self-a")).toBe(1);
     expect(await count("signal", "signal-self-a")).toBe(1);
-    expect(
-      await env.DB.prepare("SELECT COUNT(*) AS n FROM workspace WHERE id = 'workspace-a'").first(),
-    ).toEqual({ n: 1 });
+    expect(await env.DB.prepare("SELECT COUNT(*) AS n FROM workspace WHERE id = 'workspace-a'").first()).toEqual({
+      n: 1,
+    });
   });
 
   it("remembers the no, so discovery cannot add the brand back", async () => {
@@ -190,9 +198,9 @@ describe("forgetCompetitor", () => {
     expect(await count("entity", "competitor-a")).toBe(1);
     expect(await count("signal", "signal-competitor-a")).toBe(1);
     expect(await count("snapshot", "snapshot-competitor-a")).toBe(1);
-    expect(
-      await env.DB.prepare("SELECT status FROM suggestion WHERE id = 'suggestion-competitor-a'").first(),
-    ).toEqual({ status: "accepted" });
+    expect(await env.DB.prepare("SELECT status FROM suggestion WHERE id = 'suggestion-competitor-a'").first()).toEqual({
+      status: "accepted",
+    });
     expect(create).not.toHaveBeenCalled();
   });
 

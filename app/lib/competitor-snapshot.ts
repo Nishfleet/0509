@@ -25,13 +25,7 @@ export interface SnapshotInput {
   sources: readonly SnapshotSource[];
 }
 
-export type SnapshotCellKey =
-  | "rank"
-  | "new_creatives"
-  | "copy_changes"
-  | "site_changes"
-  | "mentions"
-  | "new_roles";
+export type SnapshotCellKey = "rank" | "new_creatives" | "copy_changes" | "site_changes" | "mentions" | "new_roles";
 
 export type SnapshotCell =
   | {
@@ -110,9 +104,7 @@ function countCell(spec: CountCellSpec, input: SnapshotInput): SnapshotCell {
   if (ofKind.length === 0) {
     return { key: spec.key, label: spec.label, value: null, movement: null, reason: UNWATCHED_REASON };
   }
-  const silent = ofKind
-    .filter((source) => !source.answered)
-    .map((source) => source.name);
+  const silent = ofKind.filter((source) => !source.answered).map((source) => source.name);
   if (silent.length > 0) {
     const names = silent.join(", ");
     return {

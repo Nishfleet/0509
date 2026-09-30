@@ -1,9 +1,6 @@
 import { captureException } from "@sentry/cloudflare";
 
-import {
-  insertDeliveryFailedAlert,
-  type DeliveryFailedAlert,
-} from "../../app/lib/data/alert.server";
+import { insertDeliveryFailedAlert, type DeliveryFailedAlert } from "../../app/lib/data/alert.server";
 import { markDigestFailed } from "../../app/lib/data/digest.server";
 import { parseMessage } from "./consumer";
 
@@ -14,6 +11,8 @@ export const DELIVERY_FAILED_TITLE = "We could not send your brief — here it i
 
 export const DELIVERY_FAILED_BODY =
   "We tried several times and could not deliver this brief by email, so we have stopped trying. Everything in it is below. Your next brief goes out on its usual day.";
+
+export const SELECT_LATEST_ATTEMPT_ERROR = `SELECT error FROM send_attempt WHERE digest_id = ? ORDER BY attempted_at DESC LIMIT 1`;
 
 export const INCIDENT_UNDELIVERED_TITLE = "We could not email you about your site";
 
@@ -54,11 +53,7 @@ export function incidentUndeliveredAlert(input: {
   };
 }
 
-function incidentDeadLetterError(input: {
-  message_id: string;
-  incident_id: string;
-  reason: string;
-}): Error {
+function incidentDeadLetterError(input: { message_id: string; incident_id: string; reason: string }): Error {
   return new Error(
     JSON.stringify({
       event: "send-email-dlq.dead_lettered",
@@ -87,9 +82,7 @@ export async function handleDlqBatch(env: Env, batch: MessageBatch): Promise<str
       continue;
     }
 
-    const digest = await env.DB.prepare(
-      `SELECT workspace_id FROM digest WHERE id = ?`,
-    )
+    const digest = await env.DB.prepare(`SELECT workspace_id FROM digest WHERE id = ?`)
       .bind(parsed.digest_id)
       .first<{ workspace_id: string }>();
     if (!digest) {
@@ -98,9 +91,7 @@ export async function handleDlqBatch(env: Env, batch: MessageBatch): Promise<str
       continue;
     }
 
-    const attempt = await env.DB.prepare(
-      `SELECT error FROM send_attempt WHERE digest_id = ? ORDER BY attempted_at DESC LIMIT 1`,
-    )
+    const attempt = await env.DB.prepare(SELECT_LATEST_ATTEMPT_ERROR)
       .bind(parsed.digest_id)
       .first<{ error: string | null }>();
     console.error(
@@ -124,11 +115,7 @@ export async function handleDlqBatch(env: Env, batch: MessageBatch): Promise<str
   return ids;
 }
 
-async function deadLetteredIncident(
-  env: Env,
-  messageId: string,
-  incidentId: string,
-): Promise<string | null> {
+async function deadLetteredIncident(env: Env, messageId: string, incidentId: string): Promise<string | null> {
   const incident = await env.DB.prepare(`SELECT workspace_id FROM incident WHERE id = ?`)
     .bind(incidentId)
     .first<{ workspace_id: string }>();
@@ -150,10 +137,9 @@ async function deadLetteredIncident(
     .first<{ error: string | null }>();
   const reason = attempt?.error ?? "no send attempt recorded";
 
-  captureException(
-    incidentDeadLetterError({ message_id: messageId, incident_id: incidentId, reason }),
-    { tags: { queue: "send-email-dlq", incident_id: incidentId } },
-  );
+  captureException(incidentDeadLetterError({ message_id: messageId, incident_id: incidentId, reason }), {
+    tags: { queue: "send-email-dlq", incident_id: incidentId },
+  });
   console.error(
     JSON.stringify({
       event: "delivery.dead_lettered",

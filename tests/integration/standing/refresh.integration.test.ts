@@ -88,7 +88,12 @@ async function seed(): Promise<Seeded> {
     ).bind(entityD, workspaceId, `d-${run}.example`, "Brand D", SEEDED_AT),
     env.DB.prepare(
       "INSERT INTO source (id, key, kind, platform, plugin_key, reliability) VALUES (?1, ?2, 'mentions', ?3, ?4, 'official_api')",
-    ).bind(sourceMentions, `refresh-t-src-mentions-${run}`, `refresh-t-pf-mentions-${run}`, `refresh-t-pl-mentions-${run}`),
+    ).bind(
+      sourceMentions,
+      `refresh-t-src-mentions-${run}`,
+      `refresh-t-pf-mentions-${run}`,
+      `refresh-t-pl-mentions-${run}`,
+    ),
     env.DB.prepare(
       "INSERT INTO source (id, key, kind, platform, plugin_key, reliability) VALUES (?1, ?2, 'hiring', ?3, ?4, 'rss')",
     ).bind(sourceHiring, `refresh-t-src-hiring-${run}`, `refresh-t-pf-hiring-${run}`, `refresh-t-pl-hiring-${run}`),
@@ -100,25 +105,72 @@ async function seed(): Promise<Seeded> {
     ).bind(sourceAds, `refresh-t-src-ads-${run}`, `refresh-t-pf-ads-${run}`, `refresh-t-pl-ads-${run}`),
     env.DB.prepare(
       "INSERT INTO signal (id, workspace_id, entity_id, source_id, kind, canonical_url, url_hash, dedup_key, observed_at) VALUES (?1, ?2, ?3, ?4, 'mention', ?5, ?6, ?7, ?8)",
-    ).bind(signalMentionHigh, workspaceId, entityA, sourceMentions, `https://example.test/high-${run}`, `refresh-t-hash-high-${run}`, `refresh-t-dedup-high-${run}`, "2026-09-16T10:00:00.000Z"),
+    ).bind(
+      signalMentionHigh,
+      workspaceId,
+      entityA,
+      sourceMentions,
+      `https://example.test/high-${run}`,
+      `refresh-t-hash-high-${run}`,
+      `refresh-t-dedup-high-${run}`,
+      "2026-09-16T10:00:00.000Z",
+    ),
     env.DB.prepare(
       "INSERT INTO signal (id, workspace_id, entity_id, source_id, kind, canonical_url, url_hash, dedup_key, observed_at) VALUES (?1, ?2, ?3, ?4, 'mention', ?5, ?6, ?7, ?8)",
-    ).bind(signalMentionLow, workspaceId, entityA, sourceMentions, `https://example.test/low-${run}`, `refresh-t-hash-low-${run}`, `refresh-t-dedup-low-${run}`, "2026-09-17T10:00:00.000Z"),
+    ).bind(
+      signalMentionLow,
+      workspaceId,
+      entityA,
+      sourceMentions,
+      `https://example.test/low-${run}`,
+      `refresh-t-hash-low-${run}`,
+      `refresh-t-dedup-low-${run}`,
+      "2026-09-17T10:00:00.000Z",
+    ),
     env.DB.prepare(
       "INSERT INTO signal (id, workspace_id, entity_id, source_id, kind, dedup_key, observed_at) VALUES (?1, ?2, ?3, ?4, 'hiring', ?5, ?6)",
-    ).bind(signalHiring, workspaceId, entityA, sourceHiring, `refresh-t-dedup-hiring-${run}`, "2026-09-18T10:00:00.000Z"),
+    ).bind(
+      signalHiring,
+      workspaceId,
+      entityA,
+      sourceHiring,
+      `refresh-t-dedup-hiring-${run}`,
+      "2026-09-18T10:00:00.000Z",
+    ),
     env.DB.prepare(
       "INSERT INTO signal (id, workspace_id, entity_id, source_id, kind, dedup_key, observed_at) VALUES (?1, ?2, ?3, ?4, 'hiring', ?5, ?6)",
-    ).bind(signalHiringOutside, workspaceId, entityA, sourceHiring, `refresh-t-dedup-hiring-old-${run}`, "2026-09-10T10:00:00.000Z"),
+    ).bind(
+      signalHiringOutside,
+      workspaceId,
+      entityA,
+      sourceHiring,
+      `refresh-t-dedup-hiring-old-${run}`,
+      "2026-09-10T10:00:00.000Z",
+    ),
     env.DB.prepare(
       "INSERT INTO signal (id, workspace_id, entity_id, source_id, kind, aspect, dedup_key, observed_at) VALUES (?1, ?2, ?3, ?4, 'change', 'copy', ?5, ?6)",
     ).bind(signalChange, workspaceId, entityB, sourceSite, `refresh-t-dedup-change-${run}`, "2026-09-19T10:00:00.000Z"),
     env.DB.prepare(
       "INSERT INTO signal (id, workspace_id, entity_id, source_id, kind, dedup_key, published_at, observed_at) VALUES (?1, ?2, ?3, ?4, 'ad', ?5, ?6, ?7)",
-    ).bind(signalAd, workspaceId, entityB, sourceAds, `refresh-t-dedup-ad-${run}`, "2026-09-16T10:00:00.000Z", "2026-09-20T10:00:00.000Z"),
+    ).bind(
+      signalAd,
+      workspaceId,
+      entityB,
+      sourceAds,
+      `refresh-t-dedup-ad-${run}`,
+      "2026-09-16T10:00:00.000Z",
+      "2026-09-20T10:00:00.000Z",
+    ),
     env.DB.prepare(
       "INSERT INTO signal (id, workspace_id, entity_id, source_id, kind, dedup_key, observed_at) VALUES (?1, ?2, ?3, ?4, 'hiring', ?5, ?6)",
-    ).bind(signalHiringOff, workspaceId, entityD, sourceHiring, `refresh-t-dedup-hiring-off-${run}`, "2026-09-17T10:00:00.000Z"),
+    ).bind(
+      signalHiringOff,
+      workspaceId,
+      entityD,
+      sourceHiring,
+      `refresh-t-dedup-hiring-off-${run}`,
+      "2026-09-17T10:00:00.000Z",
+    ),
     env.DB.prepare(
       "INSERT INTO jev_verdict (id, workspace_id, question_id, input_hash, signal_id, p, decided_at) VALUES (?1, ?2, 'mention_matters', ?3, ?4, 0.95, ?5)",
     ).bind(`refresh-t-jev-high-${run}`, workspaceId, `refresh-t-ih-high-${run}`, signalMentionHigh, SEEDED_AT),
@@ -134,9 +186,12 @@ async function seed(): Promise<Seeded> {
     weightsSeeded = true;
     await env.DB.batch([
       ...v1Weights.map(([key, weight]) =>
-        env.DB.prepare(
-          "INSERT INTO scoring_weight (id, key, weight, effective_from) VALUES (?1, ?2, ?3, ?4)",
-        ).bind(`refresh-t-weight-${key}-${run}`, key, weight, SEED_WEEK),
+        env.DB.prepare("INSERT INTO scoring_weight (id, key, weight, effective_from) VALUES (?1, ?2, ?3, ?4)").bind(
+          `refresh-t-weight-${key}-${run}`,
+          key,
+          weight,
+          SEED_WEEK,
+        ),
       ),
       env.DB.prepare(
         "INSERT INTO scoring_weight (id, key, weight, effective_from) VALUES (?1, 'mention_matters', 100, ?2)",
@@ -160,10 +215,7 @@ function inputFor(seedRun: Seeded, computedAt: string): RefreshInput {
 describe("refreshWorkspaceScores against real D1", () => {
   it("scores every ON entity and leaves the OFF brand without a row", async () => {
     const seeded = await seed();
-    const scores = await refreshWorkspaceScores(
-      env.DB,
-      inputFor(seeded, "2026-09-21T06:00:00.000Z"),
-    );
+    const scores = await refreshWorkspaceScores(env.DB, inputFor(seeded, "2026-09-21T06:00:00.000Z"));
 
     expect(scores.size).toBe(3);
     expect(scores.get(seeded.entityA)).toBeCloseTo(3.9, 10);
@@ -171,9 +223,7 @@ describe("refreshWorkspaceScores against real D1", () => {
     expect(scores.get(seeded.entityC)).toBeCloseTo(0, 10);
     expect(scores.has(seeded.entityD)).toBe(false);
 
-    const rows = await env.DB.prepare(
-      "SELECT entity_id, score, rank, movement FROM standing WHERE workspace_id = ?1",
-    )
+    const rows = await env.DB.prepare("SELECT entity_id, score, rank, movement FROM standing WHERE workspace_id = ?1")
       .bind(seeded.workspaceId)
       .all<{ entity_id: string; score: number; rank: number | null; movement: number | null }>();
 
@@ -213,13 +263,7 @@ describe("refreshWorkspaceScores against real D1", () => {
 
   it("uses the signal index rather than scanning signal", async () => {
     const plan = await env.DB.prepare(`EXPLAIN QUERY PLAN ${COUNT_BUCKETS}`)
-      .bind(
-        "refresh-t-ws-plan",
-        WINDOW_START,
-        WINDOW_END,
-        D6_QUESTION_ID,
-        D3_QUESTION_ID,
-      )
+      .bind("refresh-t-ws-plan", WINDOW_START, WINDOW_END, D6_QUESTION_ID, D3_QUESTION_ID)
       .all<{ detail: string }>();
     const details = (plan.results ?? []).map((row) => row.detail);
     expect(details.some((detail) => /^SEARCH s /.test(detail))).toBe(true);

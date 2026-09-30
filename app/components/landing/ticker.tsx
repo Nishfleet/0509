@@ -1,7 +1,6 @@
 import { type TickerItem } from "../../lib/ticker";
 
-const listClass =
-  "flex shrink-0 items-center gap-10 pr-10 font-mono text-eyebrow uppercase whitespace-nowrap";
+const listClass = "flex shrink-0 items-center gap-10 pr-10 font-mono text-eyebrow uppercase whitespace-nowrap";
 
 export function Ticker({ items }: { items: readonly TickerItem[] }) {
   const animating = items.length > 0;

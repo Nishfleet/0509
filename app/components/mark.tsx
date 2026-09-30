@@ -39,8 +39,7 @@ const SCREEN_FONT = {
 } as const;
 
 const EMAIL_FONT = "22px";
-const DISPLAY_FONT =
-  'var(--display, var(--font-display, "Bricolage Grotesque", ui-sans-serif, sans-serif))';
+const DISPLAY_FONT = 'var(--display, var(--font-display, "Bricolage Grotesque", ui-sans-serif, sans-serif))';
 const EMAIL_FONT_FAMILY = '"Bricolage Grotesque", ui-sans-serif, sans-serif';
 const screenshotUnavailable = "screenshot unavailable";
 
@@ -82,11 +81,12 @@ export function Mark({
         padding: email ? "12px" : undefined,
       }}
     >
-      {capture ?? (shot === null ? (
-        <p style={{ margin: 0 }}>{screenshotUnavailable}</p>
-      ) : (
-        <img src={shot} alt={`Capture, ${capturedAt.trim()}`} width={104} height={74} />
-      ))}
+      {capture ??
+        (shot === null ? (
+          <p style={{ margin: 0 }}>{screenshotUnavailable}</p>
+        ) : (
+          <img src={shot} alt={`Capture, ${capturedAt.trim()}`} width={104} height={74} />
+        ))}
       <p style={line}>
         <s
           style={{

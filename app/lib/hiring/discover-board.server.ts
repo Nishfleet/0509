@@ -1,14 +1,7 @@
 import { getDomain, getSubdomain } from "tldts";
 
-export const BOARD_PLATFORMS = [
-  "greenhouse",
-  "lever",
-  "ashby",
-  "workable",
-  "smartrecruiters",
-] as const;
-
-export type BoardPlatform = (typeof BOARD_PLATFORMS)[number];
+import { fetchOutbound } from "../fetch/outbound.server";
+import type { BoardPlatform } from "./listing";
 
 export interface DiscoveredBoard {
   platform: BoardPlatform | "none";
@@ -170,7 +163,12 @@ export function listingForBoard(boardUrl: string): BoardListing | null {
   return { platform: documented.platform, slug, listingUrl: documented.listingUrl(slug, host) };
 }
 
-function boardCandidate(host: DocumentedHost, matchedAlias: string, slug: string, via: "nav" | "careers-page"): BoardCandidate {
+function boardCandidate(
+  host: DocumentedHost,
+  matchedAlias: string,
+  slug: string,
+  via: "nav" | "careers-page",
+): BoardCandidate {
   return {
     via,
     platform: host.platform,
@@ -223,7 +221,7 @@ function isScannablePage(body: string, contentType: string | null): boolean {
 
 const defaultProbe = async (url: string): Promise<ProbeResponse> => {
   try {
-    const response = await fetch(url, { signal: AbortSignal.timeout(PROBE_TIMEOUT_MS) });
+    const response = await fetchOutbound(url, { headers: {}, signal: AbortSignal.timeout(PROBE_TIMEOUT_MS) });
     return { ok: response.ok, contentType: response.headers.get("content-type"), body: await response.text() };
   } catch (error) {
     console.error(JSON.stringify({ event: "hiring.board_probe_failed", error: String(error) }));
