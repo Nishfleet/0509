@@ -33,6 +33,8 @@ import {
   readWatchConfig,
   withLostChannel,
   withNoChannel,
+  withoutLostChannel,
+  withoutNoChannel,
   withPendingChannel,
   withResolvedChannel,
   withoutPendingChannel,
@@ -331,13 +333,13 @@ async function requireEntityIdentityJson(workspaceId: string, entityId: string):
 
 async function flagLostChannel(watchId: string, now: string): Promise<void> {
   const current = await requireWatchConfigJson(watchId);
-  const flagged = withLostChannel(current, now);
+  const flagged = withLostChannel(withoutNoChannel(current), now);
   if (flagged !== current) await writeWatchConfigJson(watchId, flagged);
 }
 
 async function flagNoChannel(watchId: string, now: string): Promise<void> {
   const current = await requireWatchConfigJson(watchId);
-  const flagged = withNoChannel(current, now);
+  const flagged = withNoChannel(withoutLostChannel(current), now);
   if (flagged !== current) await writeWatchConfigJson(watchId, flagged);
 }
 
@@ -355,6 +357,7 @@ async function commitYoutubeFeed(
     currentConfig.status === "ok" &&
     (currentConfig.channelId !== channelId ||
       currentConfig.degraded !== null ||
+      currentConfig.noChannel !== null ||
       currentConfig.pendingChannelId !== null)
   ) {
     await writeWatchConfigJson(watch.watch_id, withResolvedChannel(current, channelId));
