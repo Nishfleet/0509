@@ -192,7 +192,8 @@ describe("alerts mentions source pills (#4003 4/6)", () => {
       });
       expect(sources.length).toBeGreaterThan(0);
       for (const entry of sources) {
-        expect(entry.source.watch_config_json).toBeNull();
+        expect(entry.source).not.toHaveProperty("watch_config_json");
+        expect(entry.source).not.toHaveProperty("config_json");
       }
       const youtube = sources.find((entry) => entry.source.key === "youtube.channel_rss");
       if (!youtube) throw new Error("the enabled YouTube source must reach the landing loader");
