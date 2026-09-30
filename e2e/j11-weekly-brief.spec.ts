@@ -195,7 +195,7 @@ test("the weekly brief arrives from the inbox, in order, and unsubscribe stops t
   expect(html, "the brief carries an HTML part").not.toBe("");
   await page.setViewportSize({ width: 600, height: 900 });
   await page.setContent(html);
-  const text = await page.locator("body").innerText();
+  const text = (await page.locator("body").textContent()) ?? "";
   const variant = text.includes("Quiet week:") ? "quiet" : "blind-source";
   expect(
     text.includes("Quiet week:") || text.includes("not a quiet week we can vouch for"),
