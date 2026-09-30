@@ -35,6 +35,8 @@ export default function Page({ loaderData, actionData }: Route.ComponentProps) {
         delivery={loaderData.delivery}
         deliveryError={actionData?.deliveryError ?? null}
         deliverySuppressed={actionData?.deliverySuppressed ?? false}
+        emailChangeSent={actionData?.emailChangeSent ?? false}
+        emailChangeError={actionData?.emailChangeError ?? null}
       />
       <DeleteAccount email={loaderData.email} error={actionData?.deleteError ?? null} />
     </main>

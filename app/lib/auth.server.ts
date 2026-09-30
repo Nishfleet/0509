@@ -7,6 +7,7 @@ import { passkey } from "@better-auth/passkey";
 import { API_KEY_PREFIX } from "./agent/paths";
 import { ensureWorkspaceForSignIn } from "./workspace.server";
 import { accessPrecleared } from "./auth/access-preclearance.server";
+import { changeEmailEmail } from "./auth/change-email-email";
 import { MAGIC_LINK_TTL_SECONDS, magicLinkEmail } from "./auth/magic-link-email";
 import { MAGIC_LINK_PATH } from "./auth/magic-link-path";
 import { redactEmailShaped } from "./auth/redact-email-shaped";
@@ -35,6 +36,7 @@ function emailOf(body: unknown): string {
 
 const COOKIE_PREFIX = "better-auth";
 const FRESH_SESSION_SECONDS = 60 * 60 * 24;
+const EMAIL_CHANGE_TTL_SECONDS = 60 * 60;
 const SESSION_COOKIE_CACHE_SECONDS = 5 * 60;
 const FRESH = { disableCookieCache: true };
 const SESSION_COOKIE = `${COOKIE_PREFIX}.session_token`;
@@ -61,7 +63,20 @@ export function createAuth(env: AuthEnv, options?: { captcha?: boolean; validate
       freshAge: FRESH_SESSION_SECONDS,
       cookieCache: { enabled: true, maxAge: SESSION_COOKIE_CACHE_SECONDS },
     },
-    user: { deleteUser: { enabled: true } },
+    user: { deleteUser: { enabled: true }, changeEmail: { enabled: true } },
+    emailVerification: {
+      expiresIn: EMAIL_CHANGE_TTL_SECONDS,
+      sendVerificationEmail: async ({ user, url }) => {
+        const message = changeEmailEmail({ email: user.email, url });
+        await sendOrThrow(env.EMAIL, {
+          to: user.email,
+          from: { email: "hello@0509.io", name: "Five to Nine" },
+          subject: message.subject,
+          text: message.text,
+          html: message.html,
+        });
+      },
+    },
     hooks: {
       before: createAuthMiddleware(async (ctx) => {
         if (ctx.path !== MAGIC_LINK_PATH) return;
@@ -154,4 +169,12 @@ export async function deleteSignedInUser(env: AuthEnv, request: Request, now: Da
     returnHeaders: true,
   });
   return headers;
+}
+
+export async function requestEmailChange(env: AuthEnv, request: Request, newEmail: string): Promise<void> {
+  await createAuth(env).api.changeEmail({
+    body: { newEmail, callbackURL: "/app/settings" },
+    headers: request.headers,
+    query: FRESH,
+  });
 }

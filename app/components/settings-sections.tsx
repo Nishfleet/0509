@@ -3,6 +3,7 @@ import { Link } from "react-router";
 import { BLOCK_HEADING } from "./page-heading";
 import { AddPasskey } from "./passkey-button";
 import { BriefScheduleSettings } from "./brief-schedule-settings";
+import { ChangeSignInEmail } from "./change-sign-in-email";
 import { DeliveryAddress } from "./delivery-address";
 import { SignOut } from "./account-settings";
 import type { ComponentProps } from "react";
@@ -46,11 +47,15 @@ export function AccountSection({
   delivery,
   deliveryError,
   deliverySuppressed,
+  emailChangeSent,
+  emailChangeError,
 }: {
   email: string;
   delivery: ComponentProps<typeof DeliveryAddress>["delivery"];
   deliveryError: string | null;
   deliverySuppressed: boolean;
+  emailChangeSent: boolean;
+  emailChangeError: string | null;
 }) {
   return (
     <section aria-labelledby="settings-account" className={BLOCK}>
@@ -60,6 +65,7 @@ export function AccountSection({
       <p className="mt-2 leading-[1.55] [overflow-wrap:anywhere]">
         Signed in as <strong className="font-semibold">{email}</strong>
       </p>
+      <ChangeSignInEmail sent={emailChangeSent} error={emailChangeError} />
       <DeliveryAddress delivery={delivery} error={deliveryError} suppressed={deliverySuppressed} />
       <div className="mt-2 flex flex-wrap items-start gap-x-6">
         <AddPasskey />
