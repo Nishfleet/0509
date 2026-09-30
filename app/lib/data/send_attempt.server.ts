@@ -37,9 +37,7 @@ export async function claimSendAttempt(
 
 export async function resolveSendAttempt(
   db: D1Database,
-  attemptId: string,
-  outcome: "sent" | "failed",
-  error: string | null,
+  input: { attemptId: string; outcome: "sent" | "failed"; error: string | null },
 ): Promise<void> {
-  await db.prepare(RESOLVE_ATTEMPT).bind(outcome, error, attemptId).run();
+  await db.prepare(RESOLVE_ATTEMPT).bind(input.outcome, input.error, input.attemptId).run();
 }

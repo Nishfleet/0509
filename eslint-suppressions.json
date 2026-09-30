@@ -3,40 +3,5 @@
     "max-params": {
       "count": 1
     }
-  },
-  "app/lib/alerts-page.server.ts": {
-    "max-lines-per-function": {
-      "count": 1
-    }
-  },
-  "app/lib/auth.server.ts": {
-    "max-lines-per-function": {
-      "count": 1
-    }
-  },
-  "app/lib/auth/login-magic-link.server.ts": {
-    "max-params": {
-      "count": 1
-    }
-  },
-  "app/lib/data/alert.server.ts": {
-    "max-params": {
-      "count": 1
-    }
-  },
-  "app/lib/data/discovery_backlog.server.ts": {
-    "max-params": {
-      "count": 1
-    }
-  },
-  "app/lib/data/entity.server.ts": {
-    "max-params": {
-      "count": 1
-    }
-  },
-  "app/lib/data/send_attempt.server.ts": {
-    "max-params": {
-      "count": 1
-    }
   }
 }

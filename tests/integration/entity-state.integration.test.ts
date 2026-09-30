@@ -82,7 +82,14 @@ describe("entity data layer", () => {
     expect(await readCompetitor(ws, "es2-self")).toBeNull();
     expect(await readCompetitor(ws, "es2-other")).toBeNull();
     expect(await readCompetitor(ws, "es2-missing")).toBeNull();
-    expect(await setCompetitorState(ws, "es2-missing", "off", "2026-09-23T09:00:00.000Z")).toBe(false);
+    expect(
+      await setCompetitorState({
+        workspaceId: ws,
+        entityId: "es2-missing",
+        state: "off",
+        now: "2026-09-23T09:00:00.000Z",
+      }),
+    ).toBe(false);
   });
 
   it("flips a competitor off, stamps the change, and no-ops on a repeat", async () => {
@@ -94,14 +101,30 @@ describe("entity data layer", () => {
       domain: "flip.example",
       name: "Flip Co",
     });
-    expect(await setCompetitorState(ws, "es3-comp", "off", "2026-09-23T09:00:00.000Z")).toBe(true);
+    expect(
+      await setCompetitorState({
+        workspaceId: ws,
+        entityId: "es3-comp",
+        state: "off",
+        now: "2026-09-23T09:00:00.000Z",
+      }),
+    ).toBe(true);
     expect(await readCompetitor(ws, "es3-comp")).toMatchObject({
       state: "off",
       stateChangedAt: "2026-09-23T09:00:00.000Z",
     });
     expect(await entityRow("es3-comp")).toMatchObject({ state_changed_by: "user" });
-    expect(await setCompetitorState(ws, "es3-comp", "off", "2026-09-23T09:01:00.000Z")).toBe(false);
-    expect(await setCompetitorState(ws, "es3-comp", "on", "2026-09-23T09:02:00.000Z")).toBe(true);
+    expect(
+      await setCompetitorState({
+        workspaceId: ws,
+        entityId: "es3-comp",
+        state: "off",
+        now: "2026-09-23T09:01:00.000Z",
+      }),
+    ).toBe(false);
+    expect(
+      await setCompetitorState({ workspaceId: ws, entityId: "es3-comp", state: "on", now: "2026-09-23T09:02:00.000Z" }),
+    ).toBe(true);
     expect(await entityRow("es3-comp")).toMatchObject({
       state: "on",
       state_changed_at: "2026-09-23T09:02:00.000Z",
@@ -125,9 +148,30 @@ describe("entity data layer", () => {
       role: "competitor",
       domain: "other.example",
     });
-    expect(await setCompetitorState(ws, "es4-dismissed", "off", "2026-09-23T09:00:00.000Z")).toBe(false);
-    expect(await setCompetitorState(ws, "es4-self", "off", "2026-09-23T09:00:00.000Z")).toBe(false);
-    expect(await setCompetitorState(ws, "es4-other", "off", "2026-09-23T09:00:00.000Z")).toBe(false);
+    expect(
+      await setCompetitorState({
+        workspaceId: ws,
+        entityId: "es4-dismissed",
+        state: "off",
+        now: "2026-09-23T09:00:00.000Z",
+      }),
+    ).toBe(false);
+    expect(
+      await setCompetitorState({
+        workspaceId: ws,
+        entityId: "es4-self",
+        state: "off",
+        now: "2026-09-23T09:00:00.000Z",
+      }),
+    ).toBe(false);
+    expect(
+      await setCompetitorState({
+        workspaceId: ws,
+        entityId: "es4-other",
+        state: "off",
+        now: "2026-09-23T09:00:00.000Z",
+      }),
+    ).toBe(false);
     expect(await entityRow("es4-dismissed")).toMatchObject({
       state: "dismissed",
       state_changed_at: null,

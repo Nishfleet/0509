@@ -158,11 +158,9 @@ const ACKNOWLEDGE_INCIDENT_ALERT = `UPDATE alert SET status = 'acknowledged', re
 
 export async function acknowledgeIncidentAlert(
   db: D1Database,
-  workspaceId: string,
-  alertId: string,
-  at: string,
+  input: { workspaceId: string; alertId: string; at: string },
 ): Promise<void> {
-  await db.prepare(ACKNOWLEDGE_INCIDENT_ALERT).bind(workspaceId, alertId, at).run();
+  await db.prepare(ACKNOWLEDGE_INCIDENT_ALERT).bind(input.workspaceId, input.alertId, input.at).run();
 }
 
 const INSERT_SIGNAL_ALERT = `INSERT INTO alert (id, workspace_id, entity_id, signal_id, kind, severity, title, body, status, created_at)

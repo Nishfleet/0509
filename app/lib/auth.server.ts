@@ -63,8 +63,67 @@ function sendChangeEmailMessage(
   });
 }
 
-export function createAuth(env: AuthEnv, options?: { captcha?: boolean; validateSchema?: boolean }) {
+function authHooks(env: AuthEnv) {
+  return {
+    before: createAuthMiddleware(async (ctx) => {
+      if (ctx.path === "/send-verification-email") throw new APIError("NOT_FOUND");
+      if (ctx.path !== MAGIC_LINK_PATH) return;
+      const ip = ctx.headers?.get(CLIENT_IP_HEADER) ?? null;
+      if (!(await signInLinkAllowed(env, emailOf(ctx.body), ip))) {
+        throw new APIError("TOO_MANY_REQUESTS", { message: "Too many sign-in links. Wait a minute and try again." });
+      }
+    }),
+  };
+}
+
+function sendMagicLinkEmail(env: AuthEnv) {
+  return async ({ email, url }: { email: string; url: string }) => {
+    const message = magicLinkEmail({ email, url });
+    try {
+      await sendOrThrow(env.EMAIL, {
+        to: email,
+        from: { email: "hello@0509.io", name: "Five to Nine" },
+        subject: message.subject,
+        text: message.text,
+        html: message.html,
+      });
+    } catch (failed) {
+      const detail = redactEmailShaped(errorText(failed)).slice(0, 200);
+      console.error(JSON.stringify({ event: "login.magic_link_send_failed", error: detail }));
+      throw new APIError("SERVICE_UNAVAILABLE", {
+        message: "We couldn't send the link. Try again in a minute.",
+      });
+    }
+  };
+}
+
+function authPlugins(env: AuthEnv, options?: { captcha?: boolean }) {
   const origin = env.BETTER_AUTH_URL === undefined ? undefined : new URL(env.BETTER_AUTH_URL).origin;
+  return [
+    ...(options?.captcha === false
+      ? []
+      : [
+          captcha({
+            provider: "cloudflare-turnstile",
+            secretKey: env.TURNSTILE_SECRET_KEY,
+            endpoints: [MAGIC_LINK_PATH],
+          }),
+        ]),
+    magicLink({
+      expiresIn: MAGIC_LINK_TTL_SECONDS,
+      storeToken: "hashed",
+      sendMagicLink: sendMagicLinkEmail(env),
+    }),
+    passkey({ rpName: "Five to Nine", origin }),
+    apiKey({
+      defaultPrefix: API_KEY_PREFIX,
+      maximumNameLength: 60,
+      rateLimit: { enabled: true, timeWindow: 60_000, maxRequests: 120 },
+    }),
+  ];
+}
+
+export function createAuth(env: AuthEnv, options?: { captcha?: boolean; validateSchema?: boolean }) {
   return betterAuth({
     database: env.DB,
     secret: env.BETTER_AUTH_SECRET,
@@ -92,16 +151,7 @@ export function createAuth(env: AuthEnv, options?: { captcha?: boolean; validate
       sendVerificationEmail: ({ user, url }) =>
         sendChangeEmailMessage(env.EMAIL, { kind: "confirm", to: user.email, named: user.email, url }),
     },
-    hooks: {
-      before: createAuthMiddleware(async (ctx) => {
-        if (ctx.path === "/send-verification-email") throw new APIError("NOT_FOUND");
-        if (ctx.path !== MAGIC_LINK_PATH) return;
-        const ip = ctx.headers?.get(CLIENT_IP_HEADER) ?? null;
-        if (!(await signInLinkAllowed(env, emailOf(ctx.body), ip))) {
-          throw new APIError("TOO_MANY_REQUESTS", { message: "Too many sign-in links. Wait a minute and try again." });
-        }
-      }),
-    },
+    hooks: authHooks(env),
     databaseHooks: {
       session: {
         create: {
@@ -116,45 +166,7 @@ export function createAuth(env: AuthEnv, options?: { captcha?: boolean; validate
         },
       },
     },
-    plugins: [
-      ...(options?.captcha === false
-        ? []
-        : [
-            captcha({
-              provider: "cloudflare-turnstile",
-              secretKey: env.TURNSTILE_SECRET_KEY,
-              endpoints: [MAGIC_LINK_PATH],
-            }),
-          ]),
-      magicLink({
-        expiresIn: MAGIC_LINK_TTL_SECONDS,
-        storeToken: "hashed",
-        sendMagicLink: async ({ email, url }) => {
-          const message = magicLinkEmail({ email, url });
-          try {
-            await sendOrThrow(env.EMAIL, {
-              to: email,
-              from: { email: "hello@0509.io", name: "Five to Nine" },
-              subject: message.subject,
-              text: message.text,
-              html: message.html,
-            });
-          } catch (failed) {
-            const detail = redactEmailShaped(errorText(failed)).slice(0, 200);
-            console.error(JSON.stringify({ event: "login.magic_link_send_failed", error: detail }));
-            throw new APIError("SERVICE_UNAVAILABLE", {
-              message: "We couldn't send the link. Try again in a minute.",
-            });
-          }
-        },
-      }),
-      passkey({ rpName: "Five to Nine", origin }),
-      apiKey({
-        defaultPrefix: API_KEY_PREFIX,
-        maximumNameLength: 60,
-        rateLimit: { enabled: true, timeWindow: 60_000, maxRequests: 120 },
-      }),
-    ],
+    plugins: authPlugins(env, options),
   });
 }
 

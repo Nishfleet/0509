@@ -61,6 +61,39 @@ async function readAlertInputs(workspaceId: string | null, now: Date): Promise<A
   return readWorkspaceAlertInputs(workspaceId, now);
 }
 
+function hiringItems(hiring: AlertInputs["hiring"], now: Date) {
+  return hiring.map((post) => ({
+    kind: "hiring" as const,
+    id: post.id,
+    at: post.published_at ?? post.observed_at,
+    hiring: {
+      id: post.id,
+      title: post.title,
+      brand: post.brand,
+      detail: post.summary,
+      url: post.url,
+      at: post.published_at ?? post.observed_at,
+      when: daysAgoLabel(post.published_at ?? post.observed_at, now),
+    } satisfies HiringAlertItem,
+  }));
+}
+
+function signalItems(signals: AlertInputs["signals"], now: Date) {
+  return withoutMentionAlerts(signals).map((signal) => ({
+    kind: "signal" as const,
+    id: signal.id,
+    at: signal.created_at,
+    signal: {
+      id: signal.id,
+      title: signal.title,
+      body: signal.body,
+      url: signal.url,
+      created_at: signal.created_at,
+      when: daysAgoLabel(signal.created_at, now),
+    } satisfies SignalAlertItem,
+  }));
+}
+
 function buildAlertItems(inputs: AlertInputs, now: Date) {
   const { changes, notes, failures, signals, mentions, hiring } = inputs;
   return [
@@ -82,33 +115,8 @@ function buildAlertItems(inputs: AlertInputs, now: Date) {
       at: failure.created_at,
       failure: { ...failure, when: daysAgoLabel(failure.created_at, now) } satisfies DeliveryFailureItem,
     })),
-    ...withoutMentionAlerts(signals).map((signal) => ({
-      kind: "signal" as const,
-      id: signal.id,
-      at: signal.created_at,
-      signal: {
-        id: signal.id,
-        title: signal.title,
-        body: signal.body,
-        url: signal.url,
-        created_at: signal.created_at,
-        when: daysAgoLabel(signal.created_at, now),
-      } satisfies SignalAlertItem,
-    })),
-    ...hiring.map((post) => ({
-      kind: "hiring" as const,
-      id: post.id,
-      at: post.published_at ?? post.observed_at,
-      hiring: {
-        id: post.id,
-        title: post.title,
-        brand: post.brand,
-        detail: post.summary,
-        url: post.url,
-        at: post.published_at ?? post.observed_at,
-        when: daysAgoLabel(post.published_at ?? post.observed_at, now),
-      } satisfies HiringAlertItem,
-    })),
+    ...signalItems(signals, now),
+    ...hiringItems(hiring, now),
     ...mentions.map((mention) => ({
       kind: "mention" as const,
       id: mention.id,
@@ -178,5 +186,5 @@ export async function loadAlertsPage(userId: string, chip: AlertChipKey) {
 export async function acknowledgeOwnSiteIncident(userId: string, alertId: string): Promise<void> {
   const workspaceId = await readWorkspaceIdForOwner(userId);
   if (workspaceId === null) return;
-  await acknowledgeIncidentAlert(env.DB, workspaceId, alertId, new Date().toISOString());
+  await acknowledgeIncidentAlert(env.DB, { workspaceId, alertId, at: new Date().toISOString() });
 }

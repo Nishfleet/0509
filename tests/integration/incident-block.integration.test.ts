@@ -139,7 +139,7 @@ describe("open incident block (0509#5142)", () => {
     await seedIncidentAlert(OPEN_INCIDENT, WS, ENTITY, PAGE, "Checkout 500", OPENED_AT);
     expect(await readOpenIncidentBlock(env.DB, WS)).not.toBeNull();
 
-    await acknowledgeIncidentAlert(env.DB, WS, `incident-${OPEN_INCIDENT}`, ACKED_AT);
+    await acknowledgeIncidentAlert(env.DB, { workspaceId: WS, alertId: `incident-${OPEN_INCIDENT}`, at: ACKED_AT });
 
     expect(await readOpenIncidentBlock(env.DB, WS)).toBeNull();
     const row = await env.DB.prepare(`SELECT status, read_at FROM alert WHERE id = ?`)
@@ -173,7 +173,7 @@ describe("open incident block (0509#5142)", () => {
   it("(e) acknowledging leaves the incident open, in the feed and on the re-check list (0509#4115)", async () => {
     await seedIncident(OPEN_INCIDENT, WS, ENTITY, PAGE, OPENED_AT, null);
     await seedIncidentAlert(OPEN_INCIDENT, WS, ENTITY, PAGE, "Checkout 500", OPENED_AT);
-    await acknowledgeIncidentAlert(env.DB, WS, `incident-${OPEN_INCIDENT}`, ACKED_AT);
+    await acknowledgeIncidentAlert(env.DB, { workspaceId: WS, alertId: `incident-${OPEN_INCIDENT}`, at: ACKED_AT });
 
     expect(await readOpenIncidentBlock(env.DB, WS)).toBeNull();
     const row = await env.DB.prepare(`SELECT closed_at FROM incident WHERE id = ?`)
