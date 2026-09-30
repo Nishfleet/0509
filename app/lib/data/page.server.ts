@@ -38,9 +38,7 @@ const pageHashes = z.array(z.object({ url: z.string(), role_decided_for_hash: z.
 export async function insertPages(rows: readonly NewPage[]): Promise<void> {
   if (rows.length === 0) return;
   await env.DB.batch(
-    rows.map((row) =>
-      env.DB.prepare(INSERT_PAGE).bind(row.id, row.entityId, row.url, row.role, row.discoveredAt),
-    ),
+    rows.map((row) => env.DB.prepare(INSERT_PAGE).bind(row.id, row.entityId, row.url, row.role, row.discoveredAt)),
   );
 }
 
@@ -48,9 +46,15 @@ export async function upsertJudgedPages(rows: readonly JudgedPage[]): Promise<vo
   if (rows.length === 0) return;
   await env.DB.batch(
     rows.map((row) =>
-      env.DB
-        .prepare(UPSERT_JUDGED_PAGE)
-        .bind(row.id, row.entityId, row.url, row.title, row.role, row.roleDecidedForHash, row.discoveredAt),
+      env.DB.prepare(UPSERT_JUDGED_PAGE).bind(
+        row.id,
+        row.entityId,
+        row.url,
+        row.title,
+        row.role,
+        row.roleDecidedForHash,
+        row.discoveredAt,
+      ),
     ),
   );
 }
@@ -69,7 +73,8 @@ export async function readJudgedPricingUrl(entityId: string): Promise<string | n
   return row?.url ?? null;
 }
 
-const RECORD_TRANSPORT = "UPDATE page SET transport = ?2, transport_reason = ?3, transport_tested_at = ?4, deferred_at = NULL WHERE id = ?1";
+const RECORD_TRANSPORT =
+  "UPDATE page SET transport = ?2, transport_reason = ?3, transport_tested_at = ?4, deferred_at = NULL WHERE id = ?1";
 
 const MARK_DEFERRED = "UPDATE page SET deferred_at = ?2 WHERE id = ?1";
 
@@ -79,9 +84,7 @@ export async function recordPageTransport(input: {
   reason: string | null;
   testedAt: string;
 }): Promise<void> {
-  await env.DB.prepare(RECORD_TRANSPORT)
-    .bind(input.pageId, input.transport, input.reason, input.testedAt)
-    .run();
+  await env.DB.prepare(RECORD_TRANSPORT).bind(input.pageId, input.transport, input.reason, input.testedAt).run();
 }
 
 export async function markPageDeferred(pageId: string, at: string): Promise<void> {

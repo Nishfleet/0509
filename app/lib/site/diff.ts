@@ -20,14 +20,8 @@ export function toSentenceLines(text: string): string {
 export function diffPageText(prev: ExtractedPageText, next: ExtractedPageText): PageDiff | null {
   if (!hasChanged(prev.hash, next.hash)) return null;
   const words = diffWords(prev.text, next.text);
-  const hunks = structuredPatch(
-    "before",
-    "after",
-    toSentenceLines(prev.text),
-    toSentenceLines(next.text),
-    "",
-    "",
-    { context: 1 },
-  ).hunks;
+  const hunks = structuredPatch("before", "after", toSentenceLines(prev.text), toSentenceLines(next.text), "", "", {
+    context: 1,
+  }).hunks;
   return { words, hunks, beforeHash: prev.hash, afterHash: next.hash };
 }

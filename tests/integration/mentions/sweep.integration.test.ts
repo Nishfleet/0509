@@ -2,6 +2,7 @@ import { env } from "cloudflare:test";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { readSignalAlerts } from "../../../app/lib/data/alert.server";
+import { mentionReasonLine } from "../../../app/lib/mentions/reason-customer";
 import { readMentionFeed } from "../../../app/lib/data/mention.server";
 import { planTargets, sweepTarget } from "../../../workers/mentions/sweep";
 import { SOURCE_SETTINGS } from "../../../workers/sources/mentions/types";
@@ -67,10 +68,7 @@ function stubSlowGdelt(delayMs: number) {
     vi.fn(
       (_input: unknown, init?: RequestInit) =>
         new Promise<Response>((resolve, reject) => {
-          const timer = setTimeout(
-            () => resolve(new Response(JSON.stringify({ articles: ARTICLES }))),
-            delayMs,
-          );
+          const timer = setTimeout(() => resolve(new Response(JSON.stringify({ articles: ARTICLES }))), delayMs);
           init?.signal?.addEventListener("abort", () => {
             clearTimeout(timer);
             reject(new DOMException("The operation was aborted due to timeout", "TimeoutError"));
@@ -117,11 +115,7 @@ describe("nightly mentions sweep", () => {
     // PR, alongside the homepage / llms / JSON-LD feature surface.
     const { brand } = await seedWorkspace();
     const targets = (await planTargets()).filter((entry) => entry.query === brand);
-    expect(targets.map((entry) => entry.pluginKey).sort()).toEqual([
-      "gdelt.doc",
-      "hn.algolia",
-      "youtube.channel_rss",
-    ]);
+    expect(targets.map((entry) => entry.pluginKey).sort()).toEqual(["gdelt.doc", "hn.algolia", "youtube.channel_rss"]);
   });
 
   it("alerts only on news that matters, hides look-alike names and keeps the proof", async () => {
@@ -204,15 +198,38 @@ describe("nightly mentions sweep", () => {
 
     await sweepTarget(await gdeltTargetFor(brand), NOW, null);
     const callsAfterFirst = run.mock.calls.length;
-    const second = await sweepTarget(
-      await gdeltTargetFor(brand),
-      "2026-09-25T03:00:00.000Z",
-      null,
-    );
+    const second = await sweepTarget(await gdeltTargetFor(brand), "2026-09-25T03:00:00.000Z", null);
 
     expect(run.mock.calls.length).toBe(callsAfterFirst);
     expect(second).toEqual({ items: 3, stored: 0, unjudged: 0, skipped: 0 });
     expect(await readSignalAlerts(env.DB, workspaceId)).toHaveLength(1);
+  });
+
+  it("stores a customer sentence on the D6 verdict, never a probability or a question id (0509#5121)", async () => {
+    const { workspaceId, brand } = await seedWorkspace();
+    stubGdelt();
+    Reflect.set(env, "AI", { run: jevAnswering() });
+
+    const outcome = await sweepTarget(await gdeltTargetFor(brand), NOW, null);
+    expect(outcome).toEqual({ items: 3, stored: 2, unjudged: 0, skipped: 0 });
+
+    const reasons = await env.DB.prepare(
+      "SELECT reason FROM jev_verdict WHERE workspace_id = ? AND question_id = 'mention_matters' ORDER BY reason",
+    )
+      .bind(workspaceId)
+      .all<{ reason: string | null }>();
+    const stored = reasons.results.map((row) => row.reason ?? "").sort();
+    expect(stored).toEqual([mentionReasonLine("act"), mentionReasonLine("maybe")].sort());
+    for (const reason of stored) {
+      expect(reason).not.toMatch(/probability|confidence|mention_matters|mention_is_about_brand|\b0\.\d/i);
+    }
+
+    const aboutReason = await env.DB.prepare(
+      "SELECT reason FROM jev_verdict WHERE workspace_id = ? AND question_id = 'mention_is_about_brand' ORDER BY decided_at DESC LIMIT 1",
+    )
+      .bind(workspaceId)
+      .first<{ reason: string | null }>();
+    expect(aboutReason?.reason).toBeNull();
   });
 
   it("stores every item as unjudged when the AI is unavailable, so none are dropped", async () => {
@@ -240,11 +257,9 @@ describe("nightly mentions sweep", () => {
     expect(view.results.map((row) => row.state)).toEqual(["unjudged", "unjudged", "unjudged"]);
 
     const feed = await readMentionFeed(workspaceId, new Date(NOW));
-    expect(feed.map((row) => row.treatment)).toEqual(["unreviewed", "unreviewed", "unreviewed"]);
+    expect(feed.map((row) => row.treatment)).toEqual(["pending", "pending", "pending"]);
 
-    const verdicts = await env.DB.prepare(
-      "SELECT COUNT(*) AS n FROM jev_verdict WHERE workspace_id = ?",
-    )
+    const verdicts = await env.DB.prepare("SELECT COUNT(*) AS n FROM jev_verdict WHERE workspace_id = ?")
       .bind(workspaceId)
       .first<{ n: number }>();
     expect(verdicts?.n).toBe(0);
@@ -301,9 +316,7 @@ describe("nightly mentions sweep", () => {
       ["Zephyr winds expected this weekend", "unjudged", 0],
       ["Zephyrwear opens a London flagship", "judged", 0],
     ]);
-    const verdicts = await env.DB.prepare(
-      "SELECT COUNT(*) AS n FROM jev_verdict WHERE workspace_id = ?",
-    )
+    const verdicts = await env.DB.prepare("SELECT COUNT(*) AS n FROM jev_verdict WHERE workspace_id = ?")
       .bind(workspaceId)
       .first<{ n: number }>();
     expect(verdicts?.n).toBe(2);

@@ -17,8 +17,7 @@ function secondsLine(label: string, seconds: number | null): string {
 }
 
 export function onboardingTimingLines(times: OnboardingTimes): string[] {
-  const inputToCardSeconds =
-    times.cardReadyAt !== null ? secondsBetween(times.startedAt, times.cardReadyAt) : null;
+  const inputToCardSeconds = times.cardReadyAt !== null ? secondsBetween(times.startedAt, times.cardReadyAt) : null;
   const cardToCompetitorsSeconds =
     times.cardReadyAt !== null && times.competitorsReadyAt !== null
       ? secondsBetween(times.cardReadyAt, times.competitorsReadyAt)
@@ -36,10 +35,7 @@ export function onboardingTimingLines(times: OnboardingTimes): string[] {
 
   const inputToCard = secondsLine("Input to card", inputToCardSeconds);
   const cardToCompetitors = secondsLine("Card to competitors", cardToCompetitorsSeconds);
-  const competitorsToFirstSignal = secondsLine(
-    "Competitors to first signal",
-    competitorsToFirstSignalSeconds,
-  );
+  const competitorsToFirstSignal = secondsLine("Competitors to first signal", competitorsToFirstSignalSeconds);
 
   return [
     `${inputToCard}${inputOverBudget ? " (over the 30s budget)" : ""}`,

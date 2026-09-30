@@ -9,6 +9,7 @@ import {
   mentionsFromRows,
   mentionTreatment,
   mentionWhen,
+  PENDING_LINE,
   showInFeed,
   withoutMentionAlerts,
   type MentionReadRow,
@@ -33,6 +34,7 @@ function row(overrides: Partial<MentionReadRow> & Pick<MentionReadRow, "id" | "p
       overrides.verdictDecidedAt === undefined ? "2026-09-25T09:00:00.000Z" : overrides.verdictDecidedAt,
     id: overrides.id,
     p: overrides.p,
+    state: overrides.state ?? null,
   };
 }
 
@@ -55,7 +57,7 @@ describe("mentions feed", () => {
     expect(mentionWhen("2026-09-23T00:00:00.000Z", NOW)).toBe("2 days ago");
   });
 
-  it("keeps unjudged rows as unreviewed, drops empty titles, and keeps the stored reason instead of the score", () => {
+  it("keeps unstated rows as unreviewed, drops empty titles, and keeps the stored reason instead of the score", () => {
     const mentions = mentionsFromRows(
       [
         row({ id: "high", p: 0.95, platform: "gdelt" }),
@@ -81,13 +83,7 @@ describe("mentions feed", () => {
       NOW,
     );
     expect(mentions.map((mention) => mention.id)).toEqual(["high", "mid", "low", "unjudged", "blank-reason"]);
-    expect(mentions.map((mention) => mention.treatment)).toEqual([
-      "shown",
-      "possibly",
-      "held",
-      "unreviewed",
-      "shown",
-    ]);
+    expect(mentions.map((mention) => mention.treatment)).toEqual(["shown", "possibly", "held", "unreviewed", "shown"]);
     expect(mentions.map((mention) => mention.sourceName)).toEqual([
       "News mentions",
       "Hacker News mentions",
@@ -196,6 +192,28 @@ describe("mentions feed", () => {
     expect(unjudged.whyFlagged).toBeNull();
   });
 
+  it("shows a judged mention and a pending one, the unjudged row labelled as waiting for judgment", () => {
+    const mentions = mentionsFromRows(
+      [
+        row({ id: "judged", p: 0.95, title: "Zephyrwear opens a London flagship", state: "judged" }),
+        row({ id: "unjudged", p: null, title: "Zephyrwear in a roundup", state: "unjudged", reason: null }),
+      ],
+      NOW,
+    );
+    expect(mentions.map((mention) => mention.treatment)).toEqual(["shown", "pending"]);
+    const html = renderToStaticMarkup(
+      createElement(AlertFeed, { groups: [{ group: "New", items: mentions.map(item) }] }),
+    );
+    expect(html.match(/data-testid="mention-row"/g)).toHaveLength(2);
+    expect(html).toContain('data-treatment="shown"');
+    expect(html).toContain('data-treatment="pending"');
+    expect(html).toContain(PENDING_LINE);
+    expect(html).toContain("waiting for judgment");
+    expect(html).toContain("bg-bone");
+    expect(html).not.toMatch(/data-treatment="pending"[^>]*bg-card/);
+    expect(html).not.toMatch(BANNED);
+  });
+
   it("keeps the low band out of the default feed until show all", () => {
     const mentions = mentionsFromRows(
       [
@@ -213,5 +231,12 @@ describe("mentions feed", () => {
     expect(showInFeed(item(mentions[1] as MentionRowModel), false)).toBe(false);
     expect(showInFeed(item(mentions[1] as MentionRowModel), true)).toBe(true);
     expect(html).not.toMatch(BANNED);
+  });
+
+  it("renders mention titles in the house row-name type, never the old text-lg font-semibold", () => {
+    const mentions = mentionsFromRows([row({ id: "shown-1", p: 0.95 })], NOW);
+    const html = renderToStaticMarkup(createElement(MentionRow, { mention: mentions[0] }));
+    expect(html).toContain('<h3 class="font-display text-row-name font-bold [overflow-wrap:anywhere]">');
+    expect(html).not.toContain("text-lg font-semibold");
   });
 });

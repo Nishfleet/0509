@@ -2,14 +2,14 @@
 
 One file per engine, in the P3 build order (umbrella #3842):
 
-| Order | Engine | Issue | File |
-|---|---|---|---|
-| 1 | Identity card | #3885 | [`identity-card.md`](identity-card.md) |
-| 2 | Competitor discovery | #3884 | [`competitor-discovery.md`](competitor-discovery.md) |
-| 3 | Ads, Meta first | #3891 | [`ads.md`](ads.md) |
-| 4 | Site-change tracking incl. own site | #3879 | [`site-change.md`](site-change.md) |
+| Order | Engine                              | Issue | File                                                 |
+| ----- | ----------------------------------- | ----- | ---------------------------------------------------- |
+| 1     | Identity card                       | #3885 | [`identity-card.md`](identity-card.md)               |
+| 2     | Competitor discovery                | #3884 | [`competitor-discovery.md`](competitor-discovery.md) |
+| 4     | Site-change tracking incl. own site | #3879 | [`site-change.md`](site-change.md)                   |
+| 5     | Hiring (job boards)                 | #4725 | [`hiring.md`](hiring.md)                             |
 
-Each carries two candidate shapes with the screening and the pick, the data flow against `docs/REBUILD-SCHEMA.md` tables by name, the Workflow/Queue/cron layout with concurrency numbers, the exact upstream calls with live probes on Gymshark, the Jev decision ids and their context-pack fields, the cost line, the failure modes with their degraded UI states, and worker packets sized for 45 minutes with no design choice left.
+The first four are the P3 design packets; each carries two candidate shapes with the screening and the pick, the data flow against `docs/REBUILD-SCHEMA.md` tables by name, the Workflow/Queue/cron layout with concurrency numbers, the exact upstream calls with live probes on Gymshark, the Jev decision ids and their context-pack fields, the cost line, the failure modes with their degraded UI states, and worker packets sized for 45 minutes with no design choice left.
 
 ## What the four share
 
@@ -48,13 +48,13 @@ Several questions per request is supported, which is what makes the onboarding c
 
 ## Stack corrections these designs make
 
-| Named in the issue or brief | What these designs use | Why |
-|---|---|---|
-| `pixelmatch` 7.2.0 as the site diff (#3879) | **`diff` 9.0.0 over extracted text**; screenshots are evidence only | measured: two fetches of the same unchanged page differ in raw bytes (A/B variant tokens) while the extracted text is identical — a pixel diff inherits that noise rendered |
-| `html-to-text` 10.0.1 (#3879) | **`HTMLRewriter`** | `REBUILD-STACK.md` §5.1: 46.4 KB gzip for word-wrapping a diff does not want, versus a platform primitive at 0 bytes |
-| "the SERP route" for alternatives (#3884) | **Google News RSS roundup harvest** | DuckDuckGo HTML answered **202** (challenge) and Reddit search **403** from our egress; a paid SERP provider is a money decision, not a design one |
-| Order Meta → Google → the rest (#3891) | **Meta → Reddit → Google → TikTok → LinkedIn**, five platforms parked | Reddit's ad library is the only one that answered a plain datacenter fetch; Snap, X, Pinterest, Amazon and Apple have no reachable search surface at the obvious URLs today |
-| `tldts` for domain normalisation (#3885) | same, at **7.4.13** — **a new row for `docs/REBUILD-STACK.md`** | not in the stack doc yet; the packet adds the row in its own PR |
+| Named in the issue or brief                 | What these designs use                                                | Why                                                                                                                                                                         |
+| ------------------------------------------- | --------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pixelmatch` 7.2.0 as the site diff (#3879) | **`diff` 9.0.0 over extracted text**; screenshots are evidence only   | measured: two fetches of the same unchanged page differ in raw bytes (A/B variant tokens) while the extracted text is identical — a pixel diff inherits that noise rendered |
+| `html-to-text` 10.0.1 (#3879)               | **`HTMLRewriter`**                                                    | `REBUILD-STACK.md` §5.1: 46.4 KB gzip for word-wrapping a diff does not want, versus a platform primitive at 0 bytes                                                        |
+| "the SERP route" for alternatives (#3884)   | **Google News RSS roundup harvest**                                   | DuckDuckGo HTML answered **202** (challenge) and Reddit search **403** from our egress; a paid SERP provider is a money decision, not a design one                          |
+| Order Meta → Google → the rest (#3891)      | **Meta → Reddit → Google → TikTok → LinkedIn**, five platforms parked | Reddit's ad library is the only one that answered a plain datacenter fetch; Snap, X, Pinterest, Amazon and Apple have no reachable search surface at the obvious URLs today |
+| `tldts` for domain normalisation (#3885)    | same, at **7.4.13** — **a new row for `docs/REBUILD-STACK.md`**       | not in the stack doc yet; the packet adds the row in its own PR                                                                                                             |
 
 ## Open for Nish
 

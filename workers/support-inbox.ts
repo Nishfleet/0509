@@ -3,6 +3,7 @@ import {
   deleteExpiredSupportReports,
   insertSupportReport,
 } from "../app/lib/data/support_report.server";
+import { fetchOutbound } from "../app/lib/fetch/outbound.server";
 import { sha256Hex } from "../app/lib/sha256";
 
 const FORWARD_TO = "nishant345@gmail.com";
@@ -24,10 +25,7 @@ function sitePaths(text: string): string[] {
     if (!token.startsWith("http")) continue;
     try {
       const url = new URL(token);
-      if (
-        SITE_HOSTS.has(url.hostname) &&
-        !TOKEN_PATH_PREFIXES.some((prefix) => url.pathname.startsWith(prefix))
-      ) {
+      if (SITE_HOSTS.has(url.hostname) && !TOKEN_PATH_PREFIXES.some((prefix) => url.pathname.startsWith(prefix))) {
         paths.add(url.pathname);
       }
     } catch (error) {
@@ -62,11 +60,7 @@ export default {
       console.error("support-inbox: issue cap reached", id);
       return;
     }
-    const userAgent = (
-      message.headers.get("user-agent") ??
-      message.headers.get("x-mailer") ??
-      "none"
-    ).slice(0, MAX_UA);
+    const userAgent = (message.headers.get("user-agent") ?? message.headers.get("x-mailer") ?? "none").slice(0, MAX_UA);
     const paths = sitePaths(raw);
     const body = [
       `report: ${id}`,
@@ -74,7 +68,7 @@ export default {
       `paths: ${paths.length > 0 ? paths.join(", ") : "none"}`,
       `user agent: ${userAgent}`,
     ].join("\n");
-    const response = await fetch(ISSUES_URL, {
+    const response = await fetchOutbound(ISSUES_URL, {
       method: "POST",
       headers: {
         authorization: `Bearer ${token}`,

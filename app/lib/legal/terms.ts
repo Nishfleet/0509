@@ -75,7 +75,7 @@ export const TERMS: LegalDocument = {
       id: "plans",
       heading: "Plans and payment",
       paragraphs: [
-        "0509 is a paid subscription. The price, what the plan includes, and any trial are shown before you pay. You pay in advance for each period through our payment provider, which adds tax where the law requires. Plans renew until you cancel.",
+        "0509 is a paid subscription. The price, what the plan includes, and any trial are shown before you pay. You pay in advance for each period through Dodo Payments, which adds tax where the law requires. Plans renew until you cancel.",
         "Cancel any time. Cancelling stops the next payment, and you keep access until the end of the period you already paid for. We do not refund part-used periods, except where the law requires it or we made a mistake.",
         `If we change a price, we tell you at least ${String(PRICE_NOTICE_DAYS)} days before it applies to you, and you can cancel before then.`,
       ],

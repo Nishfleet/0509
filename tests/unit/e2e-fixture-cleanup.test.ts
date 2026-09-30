@@ -17,10 +17,11 @@ const HELPER = /deleteCreatedAccount/;
 // cannot call the helper; it is the flow's proof.
 const ALLOWED = new Set(["e2e/j14-delete-workspace.spec.ts"]);
 
-// The four accounts the journey specs keep on purpose (0509#5688,
+// The five accounts the journey specs keep on purpose (0509#5688,
 // fleet-manager): exact addresses, never a pattern.
 const KEPT_JOURNEY_ACCOUNTS = [
   "e2e+j7@0509.io",
+  "e2e+j8-hard@0509.io",
   "e2e+j8-soft@0509.io",
   "e2e+j9-mentions@0509.io",
   "e2e+j12-rollovers@0509.io",
@@ -42,14 +43,14 @@ async function e2eSpecFiles(dir: string): Promise<string[]> {
 
 describe("e2e fixture teardown detector", () => {
   it("bites on a per-run mint", () => {
-    expect(MINT.test('const email = `e2e+${tag}@0509.io`;')).toBe(true);
+    expect(MINT.test("const email = `e2e+${tag}@0509.io`;")).toBe(true);
   });
 
   it("ignores the fixed journey addresses and a non-e2e seed", () => {
     for (const email of KEPT_JOURNEY_ACCOUNTS) expect(MINT.test(email)).toBe(false);
     // j6-keyboard.spec.ts's preview-lane seed: a j6-prefixed address against
     // local D1, never the e2e+ shape.
-    expect(MINT.test('const email = `j6-keyboard-${suffix}@0509.io`;')).toBe(false);
+    expect(MINT.test("const email = `j6-keyboard-${suffix}@0509.io`;")).toBe(false);
   });
 
   it("leaves no minting spec without a teardown call", async () => {

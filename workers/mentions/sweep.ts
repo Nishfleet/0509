@@ -5,18 +5,33 @@ import { insertSignalAlert } from "../../app/lib/data/alert.server";
 import type { DiscoveryContext } from "../../app/lib/data/entity.server";
 import { readDiscoveryContext, readEntityIdentityJson } from "../../app/lib/data/entity.server";
 import { insertVerdict } from "../../app/lib/data/jev_verdict.server";
-import { insertMention, readSeenDedupKeys, readUnjudgedMentions, resolveUnjudgedMention } from "../../app/lib/data/signal.server";
+import {
+  insertMention,
+  readSeenDedupKeys,
+  readUnjudgedMentions,
+  resolveUnjudgedMention,
+} from "../../app/lib/data/signal.server";
 import { insertWatchSnapshot } from "../../app/lib/data/snapshot.server";
 import { markSourceBlocked, markSourceTimedOut } from "../../app/lib/data/source.server";
 import type { WatchRow } from "../../app/lib/data/watch.server";
-import { markWatchPolled, readActiveWatches, readWatchConfigJson, writeWatchConfigJson } from "../../app/lib/data/watch.server";
-import type { NoulQuestion, NoulVerdict } from "../../app/lib/jev/client.server";
+import {
+  markWatchPolled,
+  readActiveWatches,
+  readWatchConfigJson,
+  writeWatchConfigJson,
+} from "../../app/lib/data/watch.server";
+import type { NoulVerdict } from "../../app/lib/jev/client.server";
 import { askNoul, JevUnavailableError } from "../../app/lib/jev/client.server";
 import { lookupYoutubeChannel } from "../../app/lib/identity/youtube-channel.server";
 import { noulAction } from "../../app/lib/jev/thresholds";
+import { mentionReasonLine } from "../../app/lib/mentions/reason-customer";
+import { ABOUT_BRAND, aboutBrandState, MATTERS, mentionMattersState } from "../../app/lib/mentions/questions";
 import {
   readWatchConfig,
   withLostChannel,
+  withNoChannel,
+  withoutLostChannel,
+  withoutNoChannel,
   withPendingChannel,
   withResolvedChannel,
   withoutPendingChannel,
@@ -46,22 +61,6 @@ export interface TargetOutcome {
   skipped: number;
 }
 
-const ABOUT_BRAND: NoulQuestion = {
-  id: "mention_is_about_brand",
-  instructions:
-    "Is `item` actually about `subject`, the brand named in `subject.name` with the website `subject.domain`, and not a different company, product, person or word that shares the name?",
-  whenTrue: "The headline is about this brand or its products, people or business.",
-  whenFalse: "It is about something else that shares or resembles the name.",
-};
-
-const MATTERS: NoulQuestion = {
-  id: "mention_matters",
-  instructions:
-    "Would the owner of `self` want to know about this mention of `subject` this week? It matters when it shows a move: a launch, a price or offer change, funding, a deal, a hire or exit at the top, an expansion, a campaign, a controversy or a big review.",
-  whenTrue: "It reports a move or an event a competitor-watcher would act on or bring up.",
-  whenFalse: "It is a passing mention, a listicle entry, a stock ticker line, or old news retold.",
-};
-
 export async function planTargets(): Promise<MentionTarget[]> {
   const watches = await readActiveWatches("mentions");
   const byTarget = new Map<string, MentionTarget>();
@@ -85,33 +84,29 @@ function subjectOf(watch: WatchRow) {
 
 type JudgedItem = Pick<MentionItem, "title" | "url" | "publishedAt" | "publisher">;
 
-function itemOf(item: JudgedItem, reliability: string) {
-  return {
-    title: item.title,
-    publisher: item.publisher ?? null,
-    url: item.url,
-    published_at: item.publishedAt,
-    reliability,
-  };
-}
-
 async function judge(
   watch: WatchRow,
   context: DiscoveryContext,
   item: JudgedItem,
 ): Promise<{ about: NoulVerdict; matters: NoulVerdict | null }> {
   const subject = subjectOf(watch);
-  const about = await askNoul(watch.workspace_id, ABOUT_BRAND, {
-    subject,
-    item: itemOf(item, watch.reliability),
-  });
+  const about = await askNoul(
+    watch.workspace_id,
+    ABOUT_BRAND,
+    aboutBrandState({ subject, item, reliability: watch.reliability }),
+  );
   if (noulAction(about.p) === "reject") return { about, matters: null };
-  const matters = await askNoul(watch.workspace_id, MATTERS, {
-    self: { name: context.self.name, domain: context.self.domain, description: context.self.description },
-    subject,
-    competitor_set: context.competitors,
-    item: itemOf(item, watch.reliability),
-  });
+  const matters = await askNoul(
+    watch.workspace_id,
+    MATTERS,
+    mentionMattersState({
+      self: { name: context.self.name, domain: context.self.domain, description: context.self.description },
+      subject,
+      competitors: context.competitors,
+      item,
+      reliability: watch.reliability,
+    }),
+  );
   return { about, matters };
 }
 
@@ -137,7 +132,7 @@ function judgedStatements(input: {
   now: string;
 }): D1PreparedStatement[] {
   const { watch, signalId, item, verdicts, now } = input;
-  const verdictRow = (verdict: NoulVerdict) =>
+  const verdictRow = (verdict: NoulVerdict, reason: string | null) =>
     insertVerdict({
       workspaceId: watch.workspace_id,
       questionId: verdict.questionId,
@@ -146,12 +141,12 @@ function judgedStatements(input: {
       entityId: watch.entity_id,
       p: verdict.p,
       choice: null,
-      reason: null,
+      reason,
       decidedAt: now,
     });
-  const statements = [verdictRow(verdicts.about)];
+  const statements = [verdictRow(verdicts.about, null)];
   if (verdicts.matters === null) return statements;
-  statements.push(verdictRow(verdicts.matters));
+  statements.push(verdictRow(verdicts.matters, mentionReasonLine(noulAction(verdicts.matters.p))));
   if (noulAction(verdicts.matters.p) === "act") {
     statements.push(
       insertSignalAlert(env.DB, {
@@ -271,10 +266,7 @@ async function statementsForWatch(input: {
   return { statements, stored, unjudged };
 }
 
-async function putMentionBody(
-  pluginKey: string,
-  rawBody: string,
-): Promise<{ r2Key: string; hash: string }> {
+async function putMentionBody(pluginKey: string, rawBody: string): Promise<{ r2Key: string; hash: string }> {
   const hash = await sha256Hex(rawBody);
   const r2Key = `snapshot/mentions/${pluginKey}/${hash}`;
   await env.SNAPSHOTS.put(r2Key, rawBody, { httpMetadata: { contentType: "application/octet-stream" } });
@@ -318,7 +310,13 @@ async function requireEntityIdentityJson(workspaceId: string, entityId: string):
 
 async function flagLostChannel(watchId: string, now: string): Promise<void> {
   const current = await requireWatchConfigJson(watchId);
-  const flagged = withLostChannel(current, now);
+  const flagged = withLostChannel(withoutNoChannel(current), now);
+  if (flagged !== current) await writeWatchConfigJson(watchId, flagged);
+}
+
+async function flagNoChannel(watchId: string, now: string): Promise<void> {
+  const current = await requireWatchConfigJson(watchId);
+  const flagged = withNoChannel(withoutLostChannel(current), now);
   if (flagged !== current) await writeWatchConfigJson(watchId, flagged);
 }
 
@@ -336,6 +334,7 @@ async function commitYoutubeFeed(
     currentConfig.status === "ok" &&
     (currentConfig.channelId !== channelId ||
       currentConfig.degraded !== null ||
+      currentConfig.noChannel !== null ||
       currentConfig.pendingChannelId !== null)
   ) {
     await writeWatchConfigJson(watch.watch_id, withResolvedChannel(current, channelId));
@@ -390,13 +389,16 @@ async function sweepOneYoutube(
 
   let channelId = config.channelId;
   if (channelId === null) {
-    const lookup = await lookupYoutubeChannel(
-      await requireEntityIdentityJson(watch.workspace_id, watch.entity_id),
-    );
-    if (lookup.status !== "id") {
-      if (lookup.status === "unresolved") await flagLostChannel(watch.watch_id, now);
-      await markWatchPolled(watch.watch_id, now);
-      return { items: 0, stored: 0, unjudged: 0, skipped: 0 };
+    const lookup = await lookupYoutubeChannel(await requireEntityIdentityJson(watch.workspace_id, watch.entity_id));
+    switch (lookup.status) {
+      case "no-url":
+        await flagNoChannel(watch.watch_id, now);
+        await markWatchPolled(watch.watch_id, now);
+        return { items: 0, stored: 0, unjudged: 0, skipped: 0 };
+      case "unresolved":
+        await flagLostChannel(watch.watch_id, now);
+        await markWatchPolled(watch.watch_id, now);
+        return { items: 0, stored: 0, unjudged: 0, skipped: 0 };
     }
     channelId = lookup.channelId;
   }
@@ -404,9 +406,7 @@ async function sweepOneYoutube(
   const first = await youtubeAdapter({ query: channelId }, null);
   if (first.feedState === "stale") {
     await flagLostChannel(watch.watch_id, now);
-    const lookup = await lookupYoutubeChannel(
-      await requireEntityIdentityJson(watch.workspace_id, watch.entity_id),
-    );
+    const lookup = await lookupYoutubeChannel(await requireEntityIdentityJson(watch.workspace_id, watch.entity_id));
     if (lookup.status === "id" && lookup.channelId !== channelId) {
       const raw = await requireWatchConfigJson(watch.watch_id);
       await writeWatchConfigJson(watch.watch_id, withPendingChannel(raw, lookup.channelId));

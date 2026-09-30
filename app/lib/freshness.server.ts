@@ -8,10 +8,7 @@ export interface FreshnessSource {
   snapshot: SourceSnapshot | null;
 }
 
-export function freshnessEntries(
-  sources: readonly FreshnessSource[],
-  now: number,
-): readonly FreshnessEntry[] {
+export function freshnessEntries(sources: readonly FreshnessSource[], now: number): readonly FreshnessEntry[] {
   const mapped: FreshnessEntry[] = [];
   for (const item of sources) {
     const status = sourcePillStatus(item.source, item.snapshot, now);
@@ -20,8 +17,7 @@ export function freshnessEntries(
       key: item.source.key,
       name: sourceName(item.kind, item.source.platform),
       state: status.state,
-      lastLandedAt:
-        status.state === "degraded" ? status.lastGoodAt : (item.snapshot?.fetched_at ?? null),
+      lastLandedAt: status.state === "degraded" ? status.lastGoodAt : (item.snapshot?.fetched_at ?? null),
       reason: status.reason,
     });
   }

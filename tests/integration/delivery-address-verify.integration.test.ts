@@ -5,7 +5,7 @@ import { readDeliveryAddress, saveDeliveryAddress } from "../../app/lib/delivery
 import { confirmDeliveryAddress } from "../../app/lib/verify-delivery-address.server";
 import { ensureWorkspaceForSignIn, firstWorkspaceId } from "../../app/lib/workspace.server";
 
-const USER_ID = "user-dav";
+let USER_ID = "user-dav";
 const SIGN_IN_EMAIL = "owner@0509.io";
 const NOW = "2026-09-28T00:00:00Z";
 const NEW_ADDRESS = "new@0509.io";
@@ -49,6 +49,17 @@ const onlyTarget = async (workspaceId: string): Promise<TargetRow> => {
   return row;
 };
 
+const emailedToken = (rec: Recorder): string => {
+  const link = /https:\/\/0509\.io\/v\/([0-9a-f]{64})/.exec(rec.sent.at(-1)?.text ?? "");
+  if (link === null) throw new Error("expected a confirmation link in the sent email");
+  return link[1];
+};
+
+const sha256Hex = async (value: string): Promise<string> => {
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
+  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
+};
+
 const save = (rec: Recorder, address: string) =>
   saveDeliveryAddress({
     userId: USER_ID,
@@ -60,6 +71,7 @@ const save = (rec: Recorder, address: string) =>
 
 describe("confirm a changed delivery address (0509#5811)", () => {
   beforeEach(async () => {
+    USER_ID = `user-dav-${crypto.randomUUID()}`;
     await env.DB.exec("DELETE FROM email_suppression");
     await env.DB.exec("DELETE FROM send_target");
     await env.DB.exec("DELETE FROM channel");
@@ -75,9 +87,7 @@ describe("confirm a changed delivery address (0509#5811)", () => {
       .bind(USER_ID, SIGN_IN_EMAIL, NOW, NOW)
       .run();
     await ensureWorkspaceForSignIn(env.DB, { userId: USER_ID, request: null, now: NOW });
-    await env.DB.prepare(
-      `UPDATE send_target SET unsubscribe_token = 'old-token' WHERE workspace_id = ?`,
-    )
+    await env.DB.prepare(`UPDATE send_target SET unsubscribe_token = 'old-token' WHERE workspace_id = ?`)
       .bind(firstWorkspaceId(USER_ID))
       .run();
   });
@@ -91,16 +101,17 @@ describe("confirm a changed delivery address (0509#5811)", () => {
 
     const row = await onlyTarget(workspaceId);
     expect(row).toMatchObject({ target_value: NEW_ADDRESS, is_verified: 0, unsubscribe_token: null });
-    const token = row.verify_token;
-    expect(token).toMatch(/^[0-9a-f]{64}$/);
+    const token = emailedToken(rec);
+    expect(row.verify_token).toBe(await sha256Hex(token));
+    expect(row.verify_token).not.toBe(token);
 
     expect(rec.sent).toHaveLength(1);
     expect(rec.sent[0].to).toBe(NEW_ADDRESS);
     expect(rec.sent[0].from).toEqual({ email: "hello@0509.io", name: "Five to Nine" });
     expect(rec.sent[0].subject).toBe("Confirm your delivery email for Five to Nine");
     expect(rec.sent[0].text).toContain(`We sent this to ${NEW_ADDRESS}.`);
-    expect(rec.sent[0].text).toContain(`https://0509.io/v/${String(token)}`);
-    expect(rec.sent[0].html).toContain(`https://0509.io/v/${String(token)}`);
+    expect(rec.sent[0].text).toContain(`https://0509.io/v/${token}`);
+    expect(rec.sent[0].html).toContain(`https://0509.io/v/${token}`);
   });
 
   it("(b) saving the same unverified address again writes a fresh token and sends again", async () => {
@@ -108,25 +119,45 @@ describe("confirm a changed delivery address (0509#5811)", () => {
     const first = recorder();
 
     await save(first, NEW_ADDRESS);
-    const firstToken = (await onlyTarget(workspaceId)).verify_token;
+    const firstHash = (await onlyTarget(workspaceId)).verify_token;
+    const firstToken = emailedToken(first);
     expect(first.sent).toHaveLength(1);
 
     const resend = recorder();
     const result = await save(resend, NEW_ADDRESS);
 
     expect(result).toEqual({ error: null, suppressed: false });
-    const secondToken = (await onlyTarget(workspaceId)).verify_token;
-    expect(secondToken).toMatch(/^[0-9a-f]{64}$/);
+    const secondToken = emailedToken(resend);
+    const secondHash = (await onlyTarget(workspaceId)).verify_token;
+    expect(secondHash).toBe(await sha256Hex(secondToken));
+    expect(secondHash).not.toBe(firstHash);
     expect(secondToken).not.toBe(firstToken);
     expect(resend.sent).toHaveLength(1);
-    expect(resend.sent[0].text).toContain(`https://0509.io/v/${String(secondToken)}`);
+    expect(resend.sent[0].text).toContain(`https://0509.io/v/${secondToken}`);
+  });
+
+  it("(f) saves past the cap return an error and write no token and send no mail", async () => {
+    const workspaceId = firstWorkspaceId(USER_ID);
+    const limit = 5;
+    for (let attempt = 0; attempt < limit + 2; attempt += 1) {
+      await save(recorder(), NEW_ADDRESS);
+    }
+    const before = await onlyTarget(workspaceId);
+    const rec = recorder();
+
+    const result = await save(rec, NEW_ADDRESS);
+
+    expect(result.error).not.toBeNull();
+    expect(result.suppressed).toBe(false);
+    expect(rec.sent).toHaveLength(0);
+    expect(await onlyTarget(workspaceId)).toEqual(before);
   });
 
   it("a rotated token no longer confirms the row", async () => {
     const workspaceId = firstWorkspaceId(USER_ID);
-    await save(recorder(), NEW_ADDRESS);
-    const firstToken = (await onlyTarget(workspaceId)).verify_token;
-    if (firstToken === null) throw new Error("expected a verify token");
+    const first = recorder();
+    await save(first, NEW_ADDRESS);
+    const firstToken = emailedToken(first);
 
     await save(recorder(), "other@0509.io");
     await confirmDeliveryAddress(firstToken);
@@ -186,9 +217,9 @@ describe("confirm a changed delivery address (0509#5811)", () => {
 
   it("confirmDeliveryAddress verifies the row; a second confirm with the same token is a no-op", async () => {
     const workspaceId = firstWorkspaceId(USER_ID);
-    await save(recorder(), NEW_ADDRESS);
-    const token = (await onlyTarget(workspaceId)).verify_token;
-    if (token === null) throw new Error("expected a verify token");
+    const rec = recorder();
+    await save(rec, NEW_ADDRESS);
+    const token = emailedToken(rec);
 
     await confirmDeliveryAddress(token);
     expect(await onlyTarget(workspaceId)).toMatchObject({
@@ -207,15 +238,26 @@ describe("confirm a changed delivery address (0509#5811)", () => {
 
   it("confirmDeliveryAddress treats an expired token like an unknown one", async () => {
     const workspaceId = firstWorkspaceId(USER_ID);
-    await save(recorder(), NEW_ADDRESS);
-    const token = (await onlyTarget(workspaceId)).verify_token;
-    if (token === null) throw new Error("expected a verify token");
+    const rec = recorder();
+    await save(rec, NEW_ADDRESS);
+    const token = emailedToken(rec);
     await env.DB.prepare("UPDATE send_target SET verify_token_expires_at = ? WHERE workspace_id = ?")
       .bind("2020-01-01T00:00:00.000Z", workspaceId)
       .run();
     const before = await onlyTarget(workspaceId);
 
     await confirmDeliveryAddress(token);
+
+    expect(await onlyTarget(workspaceId)).toEqual(before);
+  });
+
+  it("confirmDeliveryAddress does not match the stored hash presented as a token", async () => {
+    const workspaceId = firstWorkspaceId(USER_ID);
+    await save(recorder(), NEW_ADDRESS);
+    const before = await onlyTarget(workspaceId);
+    if (before.verify_token === null) throw new Error("expected a stored verify hash");
+
+    await confirmDeliveryAddress(before.verify_token);
 
     expect(await onlyTarget(workspaceId)).toEqual(before);
   });

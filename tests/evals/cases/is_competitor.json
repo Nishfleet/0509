@@ -1,0 +1,1198 @@
+[
+  {
+    "id": "gymshark-alphalete",
+    "split": "train",
+    "kind": "domain",
+    "self": {
+      "name": "Gymshark",
+      "domain": "gymshark.com",
+      "description": "DTC gym apparel brand"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Alphalete Athletics",
+      "domain": "alphaleteathletics.com",
+      "evidence": [
+        {
+          "source": "gq-magazine.co.uk",
+          "excerpt": "The best activewear brands make working out look good - British GQ names Gymshark and Alphalete among its picks."
+        }
+      ]
+    },
+    "label": true,
+    "why": "sells gym apparel to the same customers, a Gymshark customer could switch"
+  },
+  {
+    "id": "gymshark-youngla",
+    "split": "train",
+    "kind": "domain",
+    "self": {
+      "name": "Gymshark",
+      "domain": "gymshark.com",
+      "description": "DTC gym apparel brand"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Young LA",
+      "domain": "youngla.com",
+      "evidence": [
+        {
+          "source": " reddit.com",
+          "excerpt": "Gymshark vs Young LA: which lifting apparel is worth it in 2026?"
+        }
+      ]
+    },
+    "label": true,
+    "why": "same-category lifting apparel brand, direct substitute"
+  },
+  {
+    "id": "gymshark-lululemon",
+    "split": "train",
+    "kind": "domain",
+    "self": {
+      "name": "Gymshark",
+      "domain": "gymshark.com",
+      "description": "DTC gym apparel brand"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Lululemon",
+      "domain": "lululemon.com",
+      "evidence": [
+        {
+          "source": "vogue.co.uk",
+          "excerpt": "Gymshark and Lululemon both court the same gym-goers with new drops."
+        }
+      ]
+    },
+    "label": true,
+    "why": "activewear substitute, size and price do not matter per the criteria"
+  },
+  {
+    "id": "gymshark-buffbunny",
+    "split": "train",
+    "kind": "domain",
+    "self": {
+      "name": "Gymshark",
+      "domain": "gymshark.com",
+      "description": "DTC gym apparel brand"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Buffbunny Collection",
+      "domain": "buffbunny.com",
+      "evidence": [
+        {
+          "source": " reddit.com",
+          "excerpt": "Buffbunny or Gymshark leggings - help me choose."
+        }
+      ]
+    },
+    "label": true,
+    "why": "smaller rival but still a substitute the customer could switch to"
+  },
+  {
+    "id": "gymshark-menshealth",
+    "split": "train",
+    "kind": "domain",
+    "self": {
+      "name": "Gymshark",
+      "domain": "gymshark.com",
+      "description": "DTC gym apparel brand"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Men's Health",
+      "domain": "menshealth.com",
+      "evidence": [
+        {
+          "source": "menshealth.com",
+          "excerpt": "Inside Gymshark: the UK's fastest-growing gym brand."
+        }
+      ]
+    },
+    "label": false,
+    "why": "publisher reporting on self, not a seller of substitutes"
+  },
+  {
+    "id": "gymshark-jdsports",
+    "split": "train",
+    "kind": "domain",
+    "self": {
+      "name": "Gymshark",
+      "domain": "gymshark.com",
+      "description": "DTC gym apparel brand"
+    },
+    "competitors": [],
+    "item": {
+      "name": "JD Sports",
+      "domain": "jdsports.com",
+      "evidence": [
+        {
+          "source": "jdsports.com",
+          "excerpt": "Gymshark lands at JD Sports - shop the drop in store and online."
+        }
+      ]
+    },
+    "label": false,
+    "why": "retailer stocking self, on the question's false list"
+  },
+  {
+    "id": "gymshark-generalatlantic",
+    "split": "train",
+    "kind": "domain",
+    "self": {
+      "name": "Gymshark",
+      "domain": "gymshark.com",
+      "description": "DTC gym apparel brand"
+    },
+    "competitors": [],
+    "item": {
+      "name": "General Atlantic",
+      "domain": "generalatlantic.com",
+      "evidence": [
+        {
+          "source": "ft.com",
+          "excerpt": "General Atlantic buys stake in Gymshark at valuation above one billion pounds."
+        }
+      ]
+    },
+    "label": false,
+    "why": "investor that funds self, not a competitor"
+  },
+  {
+    "id": "gymshark-self",
+    "split": "train",
+    "kind": "domain",
+    "self": {
+      "name": "Gymshark",
+      "domain": "gymshark.com",
+      "description": "DTC gym apparel brand"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Gymshark",
+      "domain": "gymshark.com",
+      "evidence": [
+        {
+          "source": "gymshark.com",
+          "excerpt": "Gymshark releases its seamless gym leggings collection."
+        }
+      ]
+    },
+    "label": false,
+    "why": "the item is self itself, on the false list"
+  },
+  {
+    "id": "gymshark-crocs",
+    "split": "train",
+    "kind": "domain",
+    "self": {
+      "name": "Gymshark",
+      "domain": "gymshark.com",
+      "description": "DTC gym apparel brand"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Crocs",
+      "domain": "crocs.com",
+      "evidence": [
+        {
+          "source": "news.sky.com",
+          "excerpt": "Gymshark and Crocs top this week's brand-collab news roundup."
+        }
+      ]
+    },
+    "label": false,
+    "why": "unrelated company sharing only a headline with self"
+  },
+  {
+    "id": "gymshark-riopele",
+    "split": "train",
+    "kind": "domain",
+    "self": {
+      "name": "Gymshark",
+      "domain": "gymshark.com",
+      "description": "DTC gym apparel brand"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Riopele",
+      "domain": "riopele.pt",
+      "evidence": [
+        {
+          "source": "just-style.com",
+          "excerpt": "Gymshark sources performance fabrics from Portuguese mill Riopele."
+        }
+      ]
+    },
+    "label": false,
+    "why": "supplier to self, on the false list"
+  },
+  {
+    "id": "notion-coda",
+    "split": "train",
+    "kind": "domain",
+    "self": {
+      "name": "Notion",
+      "domain": "notion.so",
+      "description": "all-in-one workspace app"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Coda",
+      "domain": "coda.io",
+      "evidence": [
+        {
+          "source": "techcrunch.com",
+          "excerpt": "Notion vs Coda: the docs-vs-workspace rivalry explained."
+        }
+      ]
+    },
+    "label": true,
+    "why": "workspace substitute, a Notion customer could switch to Coda"
+  },
+  {
+    "id": "notion-obsidian",
+    "split": "train",
+    "kind": "domain",
+    "self": {
+      "name": "Notion",
+      "domain": "notion.so",
+      "description": "all-in-one workspace app"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Obsidian",
+      "domain": "obsidian.md",
+      "evidence": [
+        {
+          "source": " reddit.com",
+          "excerpt": "Switched my team from Notion to Obsidian - notes and wikis compared."
+        }
+      ]
+    },
+    "label": true,
+    "why": "free-form notes substitute; business model does not matter per the criteria"
+  },
+  {
+    "id": "notion-clickup",
+    "split": "train",
+    "kind": "domain",
+    "self": {
+      "name": "Notion",
+      "domain": "notion.so",
+      "description": "all-in-one workspace app"
+    },
+    "competitors": [],
+    "item": {
+      "name": "ClickUp",
+      "domain": "clickup.com",
+      "evidence": [
+        {
+          "source": " Forbes.com",
+          "excerpt": "ClickUp takes on Notion with new docs and project views."
+        }
+      ]
+    },
+    "label": true,
+    "why": "same-category productivity substitute"
+  },
+  {
+    "id": "notion-asana",
+    "split": "train",
+    "kind": "domain",
+    "self": {
+      "name": "Notion",
+      "domain": "notion.so",
+      "description": "all-in-one workspace app"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Asana",
+      "domain": "asana.com",
+      "evidence": [
+        {
+          "source": "theverge.com",
+          "excerpt": "Asana and Notion both chase the same small-team planning market."
+        }
+      ]
+    },
+    "label": true,
+    "why": "work-management substitute for the same customer"
+  },
+  {
+    "id": "notion-airtable",
+    "split": "train",
+    "kind": "domain",
+    "self": {
+      "name": "Notion",
+      "domain": "notion.so",
+      "description": "all-in-one workspace app"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Airtable",
+      "domain": "airtable.com",
+      "evidence": [
+        {
+          "source": "zapier.com",
+          "excerpt": "Notion vs Airtable: which database-workspace should you pick?"
+        }
+      ]
+    },
+    "label": true,
+    "why": "overlapping workspace-database substitute"
+  },
+  {
+    "id": "notion-techcrunch",
+    "split": "train",
+    "kind": "domain",
+    "self": {
+      "name": "Notion",
+      "domain": "notion.so",
+      "description": "all-in-one workspace app"
+    },
+    "competitors": [],
+    "item": {
+      "name": "TechCrunch",
+      "domain": "techcrunch.com",
+      "evidence": [
+        {
+          "source": "techcrunch.com",
+          "excerpt": "Notion raises at a $10B valuation as the workspace market heats up."
+        }
+      ]
+    },
+    "label": false,
+    "why": "publisher reporting on self, not a competitor"
+  },
+  {
+    "id": "notion-slack",
+    "split": "train",
+    "kind": "domain",
+    "self": {
+      "name": "Notion",
+      "domain": "notion.so",
+      "description": "all-in-one workspace app"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Slack",
+      "domain": "slack.com",
+      "evidence": [
+        {
+          "source": "slack.com",
+          "excerpt": "The Notion app for Slack is here: turn conversations into workspace docs."
+        }
+      ]
+    },
+    "label": false,
+    "why": "integration partner of self, not a seller of substitutes"
+  },
+  {
+    "id": "notion-notionai",
+    "split": "train",
+    "kind": "domain",
+    "self": {
+      "name": "Notion",
+      "domain": "notion.so",
+      "description": "all-in-one workspace app"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Notion AI",
+      "domain": "notion.so",
+      "evidence": [
+        {
+          "source": "notion.so",
+          "excerpt": "Notion AI adds workspace-wide Q&A across your pages."
+        }
+      ]
+    },
+    "label": false,
+    "why": "a product line of self, on the false list"
+  },
+  {
+    "id": "notion-aws",
+    "split": "train",
+    "kind": "domain",
+    "self": {
+      "name": "Notion",
+      "domain": "notion.so",
+      "description": "all-in-one workspace app"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Amazon Web Services",
+      "domain": "aws.amazon.com",
+      "evidence": [
+        {
+          "source": "aws.amazon.com",
+          "excerpt": "Notion scales its workspace on AWS infrastructure."
+        }
+      ]
+    },
+    "label": false,
+    "why": "infrastructure supplier to self, not a competitor"
+  },
+  {
+    "id": "notion-etsy",
+    "split": "train",
+    "kind": "domain",
+    "self": {
+      "name": "Notion",
+      "domain": "notion.so",
+      "description": "all-in-one workspace app"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Etsy",
+      "domain": "etsy.com",
+      "evidence": [
+        {
+          "source": "etsy.com",
+          "excerpt": "Shop thousands of Notion templates from Etsy sellers."
+        }
+      ]
+    },
+    "label": false,
+    "why": "marketplace hosting template sellers for self, on the false list"
+  },
+  {
+    "id": "allbirds-veja",
+    "split": "train",
+    "kind": "domain",
+    "self": {
+      "name": "Allbirds",
+      "domain": "allbirds.com",
+      "description": "sustainable wool runner brand"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Veja",
+      "domain": "veja-store.com",
+      "evidence": [
+        {
+          "source": "theguardian.com",
+          "excerpt": "Allbirds vs Veja: which sustainable sneaker should you buy?"
+        }
+      ]
+    },
+    "label": true,
+    "why": "sustainable sneaker substitute for the same shopper"
+  },
+  {
+    "id": "allbirds-rothys",
+    "split": "train",
+    "kind": "domain",
+    "self": {
+      "name": "Allbirds",
+      "domain": "allbirds.com",
+      "description": "sustainable wool runner brand"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Rothy's",
+      "domain": "rothys.com",
+      "evidence": [
+        {
+          "source": "glamour.com",
+          "excerpt": "Rothy's and Allbirds both court eco-conscious shoe shoppers."
+        }
+      ]
+    },
+    "label": true,
+    "why": "same-category eco footwear substitute"
+  },
+  {
+    "id": "allbirds-onrunning",
+    "split": "train",
+    "kind": "domain",
+    "self": {
+      "name": "Allbirds",
+      "domain": "allbirds.com",
+      "description": "sustainable wool runner brand"
+    },
+    "competitors": [],
+    "item": {
+      "name": "On",
+      "domain": "on-running.com",
+      "evidence": [
+        {
+          "source": "cnbc.com",
+          "excerpt": "On and Allbirds race to make the carbon-neutral running shoe."
+        }
+      ]
+    },
+    "label": true,
+    "why": "running-shoe substitute; enterprise scale does not matter per the criteria"
+  },
+  {
+    "id": "allbirds-vogue",
+    "split": "train",
+    "kind": "domain",
+    "self": {
+      "name": "Allbirds",
+      "domain": "allbirds.com",
+      "description": "sustainable wool runner brand"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Vogue",
+      "domain": "vogue.com",
+      "evidence": [
+        {
+          "source": "vogue.com",
+          "excerpt": "Allbirds named in Vogue's spring footwear picks."
+        }
+      ]
+    },
+    "label": false,
+    "why": "publisher featuring self, not a competitor"
+  },
+  {
+    "id": "allbirds-zappos",
+    "split": "train",
+    "kind": "domain",
+    "self": {
+      "name": "Allbirds",
+      "domain": "allbirds.com",
+      "description": "sustainable wool runner brand"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Zappos",
+      "domain": "zappos.com",
+      "evidence": [
+        {
+          "source": "zappos.com",
+          "excerpt": "Allbirds now stocked on Zappos with free returns."
+        }
+      ]
+    },
+    "label": false,
+    "why": "retailer stocking self, on the false list"
+  },
+  {
+    "id": "allbirds-nzmerino",
+    "split": "train",
+    "kind": "domain",
+    "self": {
+      "name": "Allbirds",
+      "domain": "allbirds.com",
+      "description": "sustainable wool runner brand"
+    },
+    "competitors": [],
+    "item": {
+      "name": "NZ Merino Company",
+      "domain": "nzmerino.co.nz",
+      "evidence": [
+        {
+          "source": "stuff.co.nz",
+          "excerpt": "Allbirds sources traceable merino wool through the NZ Merino Company."
+        }
+      ]
+    },
+    "label": false,
+    "why": "wool supplier to self, not a competitor"
+  },
+  {
+    "id": "test-babbel",
+    "split": "test",
+    "kind": "domain",
+    "self": {
+      "name": "Duolingo",
+      "domain": "duolingo.com",
+      "description": "language-learning app"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Babbel",
+      "domain": "babbel.com",
+      "evidence": [
+        {
+          "source": "theverge.com",
+          "excerpt": "Duolingo vs Babbel: the language-app showdown."
+        }
+      ]
+    },
+    "label": true,
+    "why": "same-category language-learning substitute"
+  },
+  {
+    "id": "test-busuu",
+    "split": "test",
+    "kind": "domain",
+    "self": {
+      "name": "Duolingo",
+      "domain": "duolingo.com",
+      "description": "language-learning app"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Busuu",
+      "domain": "busuu.com",
+      "evidence": [
+        {
+          "source": "busuu.com",
+          "excerpt": "Busuu and Duolingo both teach Spanish to commuters."
+        }
+      ]
+    },
+    "label": true,
+    "why": "language-learning substitute a Duolingo user could switch to"
+  },
+  {
+    "id": "test-rosetta-stone",
+    "split": "test",
+    "kind": "domain",
+    "self": {
+      "name": "Duolingo",
+      "domain": "duolingo.com",
+      "description": "language-learning app"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Rosetta Stone",
+      "domain": "rosettastone.com",
+      "evidence": [
+        {
+          "source": "nytimes.com",
+          "excerpt": "Rosetta Stone and Duolingo fight for the same learners."
+        }
+      ]
+    },
+    "label": true,
+    "why": "incumbent language course for the same customer"
+  },
+  {
+    "id": "test-pearson",
+    "split": "test",
+    "kind": "domain",
+    "self": {
+      "name": "Duolingo",
+      "domain": "duolingo.com",
+      "description": "language-learning app"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Pearson",
+      "domain": "pearson.com",
+      "evidence": [
+        {
+          "source": "pearson.com",
+          "excerpt": "Duolingo partners with Pearson on English certification."
+        }
+      ]
+    },
+    "label": false,
+    "why": "partner of self, on the false list"
+  },
+  {
+    "id": "test-techcrunch",
+    "split": "test",
+    "kind": "domain",
+    "self": {
+      "name": "Duolingo",
+      "domain": "duolingo.com",
+      "description": "language-learning app"
+    },
+    "competitors": [],
+    "item": {
+      "name": "TechCrunch",
+      "domain": "techcrunch.com",
+      "evidence": [
+        {
+          "source": "techcrunch.com",
+          "excerpt": "Duolingo reports record daily users."
+        }
+      ]
+    },
+    "label": false,
+    "why": "publisher reporting on self"
+  },
+  {
+    "id": "test-apple-app-store",
+    "split": "test",
+    "kind": "domain",
+    "self": {
+      "name": "Duolingo",
+      "domain": "duolingo.com",
+      "description": "language-learning app"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Apple App Store",
+      "domain": "apple.com",
+      "evidence": [
+        {
+          "source": "apple.com",
+          "excerpt": "Duolingo is distributed through the Apple App Store."
+        }
+      ]
+    },
+    "label": false,
+    "why": "distribution platform for self"
+  },
+  {
+    "id": "test-sketch",
+    "split": "test",
+    "kind": "domain",
+    "self": {
+      "name": "Figma",
+      "domain": "figma.com",
+      "description": "collaborative design tool"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Sketch",
+      "domain": "sketch.com",
+      "evidence": [
+        {
+          "source": "smashingmagazine.com",
+          "excerpt": "Figma vs Sketch: which UI design tool wins?"
+        }
+      ]
+    },
+    "label": true,
+    "why": "interface-design substitute tool"
+  },
+  {
+    "id": "test-penpot",
+    "split": "test",
+    "kind": "domain",
+    "self": {
+      "name": "Figma",
+      "domain": "figma.com",
+      "description": "collaborative design tool"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Penpot",
+      "domain": "penpot.app",
+      "evidence": [
+        {
+          "source": "penpot.app",
+          "excerpt": "Penpot is the open-source alternative to Figma."
+        }
+      ]
+    },
+    "label": true,
+    "why": "open-source design-tool substitute; business model does not matter"
+  },
+  {
+    "id": "test-adobe-xd",
+    "split": "test",
+    "kind": "domain",
+    "self": {
+      "name": "Figma",
+      "domain": "figma.com",
+      "description": "collaborative design tool"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Adobe XD",
+      "domain": "adobe.com",
+      "evidence": [
+        {
+          "source": "adobe.com",
+          "excerpt": "Adobe XD and Figma both target product designers."
+        }
+      ]
+    },
+    "label": true,
+    "why": "design-tool substitute for the same designer"
+  },
+  {
+    "id": "test-canva",
+    "split": "test",
+    "kind": "domain",
+    "self": {
+      "name": "Figma",
+      "domain": "figma.com",
+      "description": "collaborative design tool"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Canva",
+      "domain": "canva.com",
+      "evidence": [
+        {
+          "source": "canva.com",
+          "excerpt": "Canva and Figma: two different design markets, one comparison."
+        }
+      ]
+    },
+    "label": false,
+    "why": "adjacent marketing-design tool for a different customer, not a substitute"
+  },
+  {
+    "id": "test-notion",
+    "split": "test",
+    "kind": "domain",
+    "self": {
+      "name": "Figma",
+      "domain": "figma.com",
+      "description": "collaborative design tool"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Notion",
+      "domain": "notion.so",
+      "evidence": [
+        {
+          "source": "notion.so",
+          "excerpt": "Embed a live Figma file in any Notion page."
+        }
+      ]
+    },
+    "label": false,
+    "why": "integration partner of self"
+  },
+  {
+    "id": "test-sequoia",
+    "split": "test",
+    "kind": "domain",
+    "self": {
+      "name": "Figma",
+      "domain": "figma.com",
+      "description": "collaborative design tool"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Sequoia",
+      "domain": "sequoiacap.com",
+      "evidence": [
+        {
+          "source": "techcrunch.com",
+          "excerpt": "Sequoia leads Figma Series E."
+        }
+      ]
+    },
+    "label": false,
+    "why": "investor that funds self"
+  },
+  {
+    "id": "test-oatly-barista-edition",
+    "split": "test",
+    "kind": "domain",
+    "self": {
+      "name": "Oatly",
+      "domain": "oatly.com",
+      "description": "oat milk brand"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Oatly Barista Edition",
+      "domain": "oatly.com",
+      "evidence": [
+        {
+          "source": "oatly.com",
+          "excerpt": "Barista Edition is the flagship Oatly product line."
+        }
+      ]
+    },
+    "label": false,
+    "why": "a product line of self"
+  },
+  {
+    "id": "test-califia-farms",
+    "split": "test",
+    "kind": "domain",
+    "self": {
+      "name": "Oatly",
+      "domain": "oatly.com",
+      "description": "oat milk brand"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Califia Farms",
+      "domain": "califiafarms.com",
+      "evidence": [
+        {
+          "source": "bonappetit.com",
+          "excerpt": "Califia Farms and Oatly dominate the oat-milk shelf."
+        }
+      ]
+    },
+    "label": true,
+    "why": "oat-milk substitute for the same buyer"
+  },
+  {
+    "id": "test-alpro",
+    "split": "test",
+    "kind": "domain",
+    "self": {
+      "name": "Oatly",
+      "domain": "oatly.com",
+      "description": "oat milk brand"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Alpro",
+      "domain": "alpro.com",
+      "evidence": [
+        {
+          "source": "theguardian.com",
+          "excerpt": "Alpro vs Oatly: which plant milk should you pour?"
+        }
+      ]
+    },
+    "label": true,
+    "why": "plant-milk substitute, same customer"
+  },
+  {
+    "id": "test-starbucks",
+    "split": "test",
+    "kind": "domain",
+    "self": {
+      "name": "Oatly",
+      "domain": "oatly.com",
+      "description": "oat milk brand"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Starbucks",
+      "domain": "starbucks.com",
+      "evidence": [
+        {
+          "source": "starbucks.com",
+          "excerpt": "Starbucks now stocks Oatly in thousands of stores."
+        }
+      ]
+    },
+    "label": false,
+    "why": "retailer that stocks self, on the false list"
+  },
+  {
+    "id": "test-whole-foods-market",
+    "split": "test",
+    "kind": "domain",
+    "self": {
+      "name": "Oatly",
+      "domain": "oatly.com",
+      "description": "oat milk brand"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Whole Foods Market",
+      "domain": "wholefoodsmarket.com",
+      "evidence": [
+        {
+          "source": "wholefoodsmarket.com",
+          "excerpt": "Find Oatly on the Whole Foods dairy-alternative aisle."
+        }
+      ]
+    },
+    "label": false,
+    "why": "retailer that lists self, on the false list"
+  },
+  {
+    "id": "test-forbes",
+    "split": "test",
+    "kind": "domain",
+    "self": {
+      "name": "Oatly",
+      "domain": "oatly.com",
+      "description": "oat milk brand"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Forbes",
+      "domain": "forbes.com",
+      "evidence": [
+        {
+          "source": "forbes.com",
+          "excerpt": "Forbes profiles the Oatly IPO story."
+        }
+      ]
+    },
+    "label": false,
+    "why": "publisher reporting on self"
+  },
+  {
+    "id": "test-khan-academy",
+    "split": "test",
+    "kind": "domain",
+    "self": {
+      "name": "Duolingo",
+      "domain": "duolingo.com",
+      "description": "language-learning app"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Khan Academy",
+      "domain": "khanacademy.org",
+      "evidence": [
+        {
+          "source": "khanacademy.org",
+          "excerpt": "Khan Academy offers free maths content alongside Duolingo language tips."
+        }
+      ]
+    },
+    "label": false,
+    "why": "free education nonprofit in a different subject, not a language substitute"
+  },
+  {
+    "id": "test-oatly-greater-china",
+    "split": "test",
+    "kind": "domain",
+    "self": {
+      "name": "Oatly",
+      "domain": "oatly.com",
+      "description": "oat milk brand"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Oatly Greater China",
+      "domain": "oatly.com",
+      "evidence": [
+        {
+          "source": "oatly.com",
+          "excerpt": "The Oatly Greater China unit opens a new local plant."
+        }
+      ]
+    },
+    "label": false,
+    "why": "a regional unit of self"
+  },
+  {
+    "id": "test-calm",
+    "split": "test",
+    "kind": "domain",
+    "self": {
+      "name": "Headspace",
+      "domain": "headspace.com",
+      "description": "meditation app"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Calm",
+      "domain": "calm.com",
+      "evidence": [
+        {
+          "source": "wellandgood.com",
+          "excerpt": "Calm and Headspace are the two meditation apps everyone names."
+        }
+      ]
+    },
+    "label": true,
+    "why": "meditation-app substitute for the same subscriber"
+  },
+  {
+    "id": "test-headspace-for-schools",
+    "split": "test",
+    "kind": "domain",
+    "self": {
+      "name": "Headspace",
+      "domain": "headspace.com",
+      "description": "meditation app"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Headspace for Schools",
+      "domain": "headspace.com",
+      "evidence": [
+        {
+          "source": "headspace.com",
+          "excerpt": "Headspace for Schools brings mindfulness to classrooms."
+        }
+      ]
+    },
+    "label": false,
+    "why": "a product line of self"
+  },
+  {
+    "id": "test-duolingo-memrise",
+    "split": "test",
+    "kind": "domain",
+    "self": {
+      "name": "Duolingo",
+      "domain": "duolingo.com",
+      "description": "language-learning app"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Memrise",
+      "domain": "memrise.com",
+      "evidence": [
+        {
+          "source": "cnet.com",
+          "excerpt": "Memrise and Duolingo both promise a new language in minutes a day."
+        }
+      ]
+    },
+    "label": true,
+    "why": "language-learning substitute for the same learner"
+  },
+  {
+    "id": "test-figma-invision",
+    "split": "test",
+    "kind": "domain",
+    "self": {
+      "name": "Figma",
+      "domain": "figma.com",
+      "description": "collaborative design tool"
+    },
+    "competitors": [],
+    "item": {
+      "name": "InVision",
+      "domain": "invisionapp.com",
+      "evidence": [
+        {
+          "source": "producthunt.com",
+          "excerpt": "InVision and Figma both launched new prototyping tools this week."
+        }
+      ]
+    },
+    "label": true,
+    "why": "product-design tool a Figma team could switch to"
+  },
+  {
+    "id": "test-oatly-chobani",
+    "split": "test",
+    "kind": "domain",
+    "self": {
+      "name": "Oatly",
+      "domain": "oatly.com",
+      "description": "oat milk brand"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Chobani",
+      "domain": "chobani.com",
+      "evidence": [
+        {
+          "source": "chobani.com",
+          "excerpt": "Chobani launches an oat-milk line to take on Oatly."
+        }
+      ]
+    },
+    "label": true,
+    "why": "oat-milk line aimed at the same shelf and shopper"
+  },
+  {
+    "id": "test-figma-dropbox",
+    "split": "test",
+    "kind": "domain",
+    "self": {
+      "name": "Figma",
+      "domain": "figma.com",
+      "description": "collaborative design tool"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Dropbox",
+      "domain": "dropbox.com",
+      "evidence": [
+        {
+          "source": "dropbox.com",
+          "excerpt": "Teams store their Figma exports in shared Dropbox folders."
+        }
+      ]
+    },
+    "label": false,
+    "why": "file-storage supplier to self, not a design-tool substitute"
+  }
+]

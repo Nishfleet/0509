@@ -17,10 +17,7 @@ function candidate(name: string, generator: GeneratorKey, sourceUrl: string): Ca
 function dual(name: string, index: number): Candidate {
   return {
     name,
-    evidence: [
-      ev(`https://news.example.com/${index}`, "news"),
-      ev(`https://hn.example.com/${index}`, "hn"),
-    ],
+    evidence: [ev(`https://news.example.com/${index}`, "news"), ev(`https://hn.example.com/${index}`, "hn")],
   };
 }
 
@@ -58,10 +55,7 @@ describe("withBacklog", () => {
 
   it("returns a fresh candidate that made no shortlist slot in rest with its nameKey", () => {
     const freshUnplaced = dual("Fresh Unplaced", 99);
-    const { entries, rest } = withBacklog(
-      [...twentyDuals, STRONGER_FRESH_NEWS, freshUnplaced],
-      [BACKLOG_NEWS],
-    );
+    const { entries, rest } = withBacklog([...twentyDuals, STRONGER_FRESH_NEWS, freshUnplaced], [BACKLOG_NEWS]);
     expect(entries.some((entry) => entry.name === freshUnplaced.name)).toBe(false);
     expect(rest.find((row) => row.name === freshUnplaced.name)?.nameKey).toBe(nameKey(freshUnplaced.name));
   });

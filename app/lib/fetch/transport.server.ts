@@ -1,8 +1,6 @@
-import { parse } from "tldts";
-
 import { browserContent } from "../site/browser-budget.server";
-
-const FETCH_TIMEOUT_MS = 8_000;
+import { BlockedRedirectError, cappedBody, fetchOutbound, targetRefusal } from "./outbound.server";
+import { CRAWLER_USER_AGENT } from "./robots.server";
 
 const MIN_EXTRACTED_CHARS = 200;
 
@@ -10,12 +8,7 @@ const MAX_BODY_BYTES = 5_000_000;
 
 export type Transport = "fetch" | "browser";
 
-export type EscalationReason =
-  | "status"
-  | "challenge"
-  | "thin-text"
-  | "timeout"
-  | "learned";
+export type EscalationReason = "status" | "challenge" | "thin-text" | "timeout" | "learned";
 
 export interface ReadUrlOptions {
   startWith?: Transport;
@@ -42,6 +35,22 @@ type ReadUrlFailure =
 
 export type ReadUrlResult = ReadUrlSuccess | ReadUrlFailure;
 
+export type ReadUrlFailureReason = ReadUrlFailure["reason"];
+
+export class ReadUrlError extends Error {
+  readonly reason: ReadUrlFailureReason;
+
+  constructor(reason: ReadUrlFailureReason) {
+    super(reason);
+    this.name = "ReadUrlError";
+    this.reason = reason;
+  }
+}
+
+export function probeFailureReason(error: unknown): string {
+  return error instanceof ReadUrlError ? error.reason : "probe-failed";
+}
+
 const CHALLENGE_MARKERS = [
   "cf-browser-verification",
   "cf_chl_opt",
@@ -58,7 +67,7 @@ const CHALLENGE_MARKERS = [
 
 const FETCH_HEADERS = {
   accept: "text/html,application/xhtml+xml",
-  "user-agent": "FiveToNineBot/1.0 (+https://0509.io)",
+  "user-agent": CRAWLER_USER_AGENT,
 } as const;
 
 export async function countExtractedChars(html: string): Promise<number> {
@@ -119,25 +128,22 @@ function readField(value: unknown, key: string): unknown {
   return (value as Record<string, unknown>)[key];
 }
 
-function logEscalation(
-  url: string,
-  browserMsUsed: number | null,
-  reason: EscalationReason,
-) {
-  console.log(JSON.stringify({
-    event: "browser-escalation",
-    url,
-    browserMsUsed,
-    reason,
-  }));
+function logEscalation(browserMsUsed: number | null, reason: EscalationReason) {
+  console.log(
+    JSON.stringify({
+      event: "browser-escalation",
+      browserMsUsed,
+      reason,
+    }),
+  );
 }
 
-function deferredByBudget(reason: EscalationReason): ReadUrlFailure {
-  return {
-    ok: false,
-    reason: "deferred",
-    detail: `browser budget refused escalation (${reason})`,
-  };
+async function deferUnlessAllowed(options: ReadUrlOptions, reason: EscalationReason): Promise<ReadUrlFailure | null> {
+  if (!options.mayEscalate) {
+    return { ok: false, reason: "deferred", detail: `no browser budget callback wired (${reason})` };
+  }
+  if (await options.mayEscalate(reason)) return null;
+  return { ok: false, reason: "deferred", detail: `browser budget refused escalation (${reason})` };
 }
 
 function parseBrowserMs(res: Response): number | null {
@@ -155,102 +161,74 @@ class BodyTooLargeError extends Error {
 }
 
 async function cappedText(res: Response): Promise<string> {
-  const declared = Number(res.headers.get("content-length"));
-  if (Number.isFinite(declared) && declared > MAX_BODY_BYTES) {
-    await res.body?.cancel();
-    throw new BodyTooLargeError();
-  }
-  if (res.body === null) return "";
-  let seen = 0;
-  const capped = res.body.pipeThrough(
-    new TransformStream<Uint8Array, Uint8Array>({
-      transform(chunk, controller) {
-        seen += chunk.byteLength;
-        if (seen > MAX_BODY_BYTES) {
-          controller.error(new BodyTooLargeError());
-          return;
-        }
-        controller.enqueue(chunk);
-      },
-    }),
-  );
-  return new Response(capped).text();
+  const bytes = await cappedBody(res, MAX_BODY_BYTES);
+  if (bytes === null) throw new BodyTooLargeError();
+  return new TextDecoder().decode(bytes);
 }
 
-export async function readUrl(
-  url: string,
-  options: ReadUrlOptions = {},
-): Promise<ReadUrlResult> {
+export async function readUrl(url: string, options: ReadUrlOptions = {}): Promise<ReadUrlResult> {
   const started = Date.now();
 
   let target: URL;
   try {
     target = new URL(url);
   } catch (error) {
-    console.error(JSON.stringify({ event: "fetch.url_parse_failed", error: String(error) }));
+    console.error(
+      JSON.stringify({ event: "fetch.url_parse_failed", error: error instanceof Error ? error.name : typeof error }),
+    );
     return { ok: false, reason: "invalid-url", detail: `not a URL: ${url}` };
   }
-  if (target.protocol !== "http:" && target.protocol !== "https:") {
-    return {
-      ok: false,
-      reason: "invalid-url",
-      detail: `unsupported scheme: ${target.protocol}`,
-    };
-  }
-  const host = parse(target.hostname);
-  if (host.isIp === true || host.isIcann !== true) {
-    return {
-      ok: false,
-      reason: "invalid-url",
-      detail: `not a public internet host: ${target.hostname}`,
-    };
+  const refusal = targetRefusal(target);
+  if (refusal !== null) {
+    return { ok: false, reason: "invalid-url", detail: refusal };
   }
 
   if (options.startWith === "browser") {
-    if (!options.mayEscalate || !(await options.mayEscalate("learned"))) {
-      return deferredByBudget("learned");
-    }
+    const deferred = await deferUnlessAllowed(options, "learned");
+    if (deferred) return deferred;
     const learned = await escalate(url, started, "learned");
-    return learned.result ?? {
-      ok: false,
-      reason: "escalation-failed",
-      detail: `learned browser transport; ${learned.cause}`,
-    };
+    return (
+      learned.result ?? {
+        ok: false,
+        reason: "escalation-failed",
+        detail: `learned browser transport; ${learned.cause}`,
+      }
+    );
   }
 
   let fetchStatus: number;
   let fetchHtml: string;
   try {
-    const res = await fetch(url, {
-      headers: FETCH_HEADERS,
-      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
-    });
+    const res = await fetchOutbound(url, { headers: FETCH_HEADERS });
     fetchStatus = res.status;
     fetchHtml = await cappedText(res);
   } catch (err) {
     if (err instanceof BodyTooLargeError) {
       return { ok: false, reason: "too-large", detail: err.message };
     }
+    if (err instanceof BlockedRedirectError) {
+      return { ok: false, reason: "invalid-url", detail: err.message };
+    }
     const detail = `fetch threw (${err instanceof Error ? err.message : String(err)})`;
     if (!(err instanceof Error && err.name === "TimeoutError")) {
       return { ok: false, reason: "unreachable", detail };
     }
-    if (!options.mayEscalate || !(await options.mayEscalate("timeout"))) {
-      return deferredByBudget("timeout");
-    }
+    const deferred = await deferUnlessAllowed(options, "timeout");
+    if (deferred) return deferred;
     const escalation = await escalate(url, started, "timeout");
-    return escalation.result ?? {
-      ok: false,
-      reason: "escalation-failed",
-      detail: `${detail}; ${escalation.cause}`,
-    };
+    return (
+      escalation.result ?? {
+        ok: false,
+        reason: "escalation-failed",
+        detail: `${detail}; ${escalation.cause}`,
+      }
+    );
   }
 
   const refused = await refusalReason(fetchStatus, fetchHtml);
   if (refused) {
-    if (!options.mayEscalate || !(await options.mayEscalate(refused))) {
-      return deferredByBudget(refused);
-    }
+    const deferred = await deferUnlessAllowed(options, refused);
+    if (deferred) return deferred;
     const escalation = await escalate(url, started, refused);
     if (escalation.result !== null) return escalation.result;
     return {
@@ -277,13 +255,13 @@ async function escalate(
 ): Promise<{ result: ReadUrlSuccess | null; cause: string }> {
   const content = await browserContent(url);
   if (!content.ok) {
-    logEscalation(url, null, reason);
+    if (content.kind === "threw") logEscalation(null, reason);
     return { result: null, cause: content.cause };
   }
   const res = content.res;
 
   const browserMsUsed = parseBrowserMs(res);
-  logEscalation(url, browserMsUsed, reason);
+  logEscalation(browserMsUsed, reason);
 
   if (!res.ok) return { result: null, cause: `browser answered ${String(res.status)}` };
 

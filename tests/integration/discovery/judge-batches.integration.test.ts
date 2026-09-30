@@ -73,7 +73,8 @@ describe("Discovery workflow judging", () => {
       calls += 1;
       inFlight += 1;
       peak = Math.max(peak, inFlight);
-      if (calls > 2) await vi.waitFor(async () => expect(await suggestionRows()).toBeGreaterThan(0), { timeout: 5_000 });
+      if (calls > 2)
+        await vi.waitFor(async () => expect(await suggestionRows()).toBeGreaterThan(0), { timeout: 5_000 });
       await new Promise((resolve) => setTimeout(resolve, 10));
       inFlight -= 1;
       return { answers: { is_competitor: { type: "noul", noul: 0.5 } } };

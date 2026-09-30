@@ -20,6 +20,7 @@
   // public internet so a client_id can never reach this zone's own origin.
   "compatibility_flags": ["global_fetch_strictly_public"],
   "main": "./workers/app.ts",
+  "placement": { "mode": "smart" },
   "observability": {
     // p95 request duration per route comes from here, which is how
     // docs/REBUILD-DONE.md's performance gate gets measured without a load
@@ -47,8 +48,8 @@
       "invocation_logs": true,
       // Persisted logs are what docs/REBUILD-DONE.md's performance gate is
       // measured from; a non-persisted log cannot be queried a day later.
-      "persist": true
-    }
+      "persist": true,
+    },
   },
   // Runtime caps, so a runaway path costs a per-invocation error instead of a
   // core-second (0509#5758, audit V30). `workersInvocationsAdaptive`, script
@@ -72,13 +73,13 @@
     // that path. Keeping the number at the paid default leaves today's
     // allowance unchanged while making it explicit; lowering it before #5753
     // lands would cap a walk that is already dying.
-    "subrequests": 10000
+    "subrequests": 10000,
   },
   "upload_source_maps": true,
   "assets": { "run_worker_first": ["/mcp"] },
 
   "durable_objects": {
-    "bindings": [{ "name": "BROWSER_BUDGET", "class_name": "BrowserBudget" }]
+    "bindings": [{ "name": "BROWSER_BUDGET", "class_name": "BrowserBudget" }],
   },
 
   // The pre-rebuild Worker declared one Durable Object class,
@@ -101,7 +102,7 @@
   "migrations": [
     { "tag": "v1", "new_sqlite_classes": ["SelectionEnrichmentLease"] },
     { "tag": "v2", "deleted_classes": ["SelectionEnrichmentLease"] },
-    { "tag": "v3", "new_sqlite_classes": ["BrowserBudget"] }
+    { "tag": "v3", "new_sqlite_classes": ["BrowserBudget"] },
   ],
 
   // BETTER_AUTH_URL must be the canonical origin, never derived from a
@@ -111,7 +112,7 @@
   // TURNSTILE_SECRET_KEY and TURNSTILE_SITE_KEY are Worker secrets too. Listing
   // them under secrets.required makes deploy inherit the values already on the
   // Worker instead of replacing them with a plaintext var.
-  // LANDING_WORKSPACE_ID: the public workspace we run ourselves whose changes the landing ticker shows (#4083). Empty renders an empty strip, never filler.
+  // LANDING_WORKSPACE_ID: the public workspace we run ourselves whose changes the landing ticker and mark section show (#4083, #4084). Empty draws no strip and no marks, never filler.
   // ACCESS_TEAM_DOMAIN / ACCESS_AUD pin the Access application that fronts
   // 0509.io. They are public identifiers — the AUD appears in Access's own
   // login redirect — not secrets. access-preclearance.server.ts uses them to
@@ -133,18 +134,24 @@
     "DODO_PRODUCT_STARTER": "pdt_0NoeiCjBmCJTfOHquf26O",
     "DODO_PRODUCT_AGENCY": "pdt_0NoeiCmf66xTM4sWXDrAj",
     "ACCESS_TEAM_DOMAIN": "https://nish345.cloudflareaccess.com",
-    "ACCESS_AUD": "b4fa400a1848c913b92c3212dc0714fcdbd1b1b66eb24659e4a7cc01c790575d"
+    "ACCESS_AUD": "b4fa400a1848c913b92c3212dc0714fcdbd1b1b66eb24659e4a7cc01c790575d",
   },
   "secrets": {
-    "required": ["BETTER_AUTH_SECRET", "TURNSTILE_SECRET_KEY", "TURNSTILE_SITE_KEY", "DODO_PAYMENTS_API_KEY", "DODO_WEBHOOK_SECRET"]
+    "required": [
+      "BETTER_AUTH_SECRET",
+      "TURNSTILE_SECRET_KEY",
+      "TURNSTILE_SITE_KEY",
+      "DODO_PAYMENTS_API_KEY",
+      "DODO_WEBHOOK_SECRET",
+    ],
   },
 
   "d1_databases": [
     {
       "binding": "DB",
       "database_name": "0509",
-      "database_id": "746c6e3d-782e-443a-82d6-28ca93a16294"
-    }
+      "database_id": "746c6e3d-782e-443a-82d6-28ca93a16294",
+    },
   ],
 
   // Mentions telemetry (#4003 slice 3/6, docs/engines/mentions.md P5.4).
@@ -159,7 +166,7 @@
   // backup a year behind the source.
   "r2_buckets": [
     { "binding": "SNAPSHOTS", "bucket_name": "0509-snapshots" },
-    { "binding": "SNAPSHOTS_BACKUP", "bucket_name": "0509-snapshots-backup" }
+    { "binding": "SNAPSHOTS_BACKUP", "bucket_name": "0509-snapshots-backup" },
   ],
 
   // Identity probe cache (engine 1, issue #4419): a read-through cache for
@@ -179,7 +186,7 @@
   // Namespace 0509-oauth, pinned for the same reason as the one above.
   "kv_namespaces": [
     { "binding": "IDENTITY_CACHE", "id": "583a3ce85fac4da0b811902674481663" },
-    { "binding": "OAUTH_KV", "id": "c74722e9898d4ea5948e50110d2b9f20" }
+    { "binding": "OAUTH_KV", "id": "c74722e9898d4ea5948e50110d2b9f20" },
   ],
 
   // The abuse shield in front of /mcp and /api/v1, keyed per user
@@ -198,7 +205,9 @@
     // OAUTH_KV per call; per client IP, a real app registers once.
     { "name": "AGENT_REGISTER_LIMIT", "namespace_id": "5094", "simple": { "limit": 10, "period": 60 } },
     // Onboarding identity probes, per user; each probe is a site fetch and possibly a Browser Rendering session.
-    { "name": "PROBE_LIMIT", "namespace_id": "5095", "simple": { "limit": 10, "period": 60 } }
+    { "name": "PROBE_LIMIT", "namespace_id": "5095", "simple": { "limit": 10, "period": 60 } },
+    // Sign-in email change requests, per user and per new address (hashed): each one mails two inboxes.
+    { "name": "CHANGE_EMAIL_LIMIT", "namespace_id": "5096", "simple": { "limit": 3, "period": 60 } },
   ],
 
   // Browser Rendering: brand pages bot-gate a plain workerd fetch, so every
@@ -235,7 +244,7 @@
   "queues": {
     "producers": [
       { "queue": "send-email", "binding": "SEND_EMAIL" },
-      { "queue": "fetch-sweep", "binding": "FETCH_SWEEP" }
+      { "queue": "fetch-sweep", "binding": "FETCH_SWEEP" },
     ],
     "consumers": [
       {
@@ -244,16 +253,40 @@
         "max_batch_timeout": 30,
         "max_retries": 5,
         "max_concurrency": 2,
-        "dead_letter_queue": "send-email-dlq"
+        "dead_letter_queue": "send-email-dlq",
       },
       // #4065: a message that exhausts send-email lands here and becomes one alert.
       {
         "queue": "send-email-dlq",
         "max_batch_size": 1,
         "max_batch_timeout": 30,
-        "max_retries": 3
-      }
-    ]
+        "max_retries": 3,
+      },
+      // 0509#5261: the first collection the identity tail queues
+      // (app/lib/identity/tail.server.ts `enqueueFirstSweep`). The numbers are
+      // docs/engines/README.md "What the four share": max_concurrency 20 and
+      // max_retries 3, and the lane never opens a browser — a page that needs
+      // one belongs on page-sweep, so the consumer reads with a plain fetch and
+      // takes a refusal as a retry, not as an escalation. The dead letter queue
+      // is mandatory for the same reason as send-email's: a message that reaches
+      // the retry limit is deleted permanently otherwise, and a dropped first
+      // collection is a brand whose Home page stays empty until the nightly
+      // sweep.
+      {
+        "queue": "fetch-sweep",
+        "max_batch_size": 5,
+        "max_batch_timeout": 30,
+        "max_retries": 3,
+        "max_concurrency": 20,
+        "dead_letter_queue": "fetch-sweep-dlq",
+      },
+      {
+        "queue": "fetch-sweep-dlq",
+        "max_batch_size": 5,
+        "max_batch_timeout": 30,
+        "max_retries": 3,
+      },
+    ],
   },
 
   // The weekly rollover (docs/engines/standing-home.md §2 and P6.3, 0509#4004).
@@ -265,14 +298,14 @@
     {
       "name": "standing-rollover",
       "binding": "STANDING_ROLLOVER",
-      "class_name": "StandingRolloverWorkflow"
+      "class_name": "StandingRolloverWorkflow",
     },
     // Competitor discovery (docs/engines/competitor-discovery.md): one instance
     // when a workspace confirms its card, then one per workspace per night.
     {
       "name": "competitor-discovery",
       "binding": "DISCOVERY",
-      "class_name": "DiscoveryWorkflow"
+      "class_name": "DiscoveryWorkflow",
     },
     // The nightly website sweep (docs/engines/site-change.md). The Workflow's
     // own schedule creates one instance a night, at 02:00 UTC so the changes
@@ -283,7 +316,18 @@
       "name": "site-sweep",
       "binding": "SITE_SWEEP",
       "class_name": "SiteSweepWorkflow",
-      "schedules": ["0 2 * * *"]
+      "schedules": ["0 2 * * *"],
+    },
+    // The nightly hiring sweep (docs/engines/hiring.md): finds each tracked
+    // brand's job board, then reads every watched board. 02:30 UTC — after
+    // the 02:00 site sweep and before the 03:00 standing refresh counts its
+    // new-role signals. One retried step per entity and per board; a step
+    // that cannot be read fails alone.
+    {
+      "name": "hiring-sweep",
+      "binding": "HIRING_SWEEP",
+      "class_name": "HiringSweepWorkflow",
+      "schedules": ["30 2 * * *"],
     },
     // The nightly snapshot backup (0509#5802): copies every object in
     // 0509-snapshots that 0509-snapshots-backup does not yet hold, one
@@ -297,7 +341,7 @@
       "name": "snapshot-backup",
       "binding": "SNAPSHOT_BACKUP",
       "class_name": "SnapshotBackupWorkflow",
-      "schedules": ["0 5 * * *"]
+      "schedules": ["0 5 * * *"],
     },
     // The own-site watch: every hour, each customer's own homepage is
     // probed once with a plain fetch. A 5xx, 404 or no answer is probed
@@ -311,13 +355,13 @@
     {
       "name": "account-delete",
       "binding": "ACCOUNT_DELETE",
-      "class_name": "AccountDeleteWorkflow"
+      "class_name": "AccountDeleteWorkflow",
     },
     {
       "name": "own-site-check",
       "binding": "OWN_SITE_CHECK",
       "class_name": "OwnSiteCheckWorkflow",
-      "schedules": ["0 * * * *"]
+      "schedules": ["0 * * * *"],
     },
     // The nightly news sweep (docs/engines/mentions.md): GDELT and Hacker
     // News, one step per brand per source, paced for GDELT's one request per
@@ -327,17 +371,16 @@
       "name": "mentions-sweep",
       "binding": "MENTIONS",
       "class_name": "MentionsWorkflow",
-      "schedules": ["0 1 * * *"]
+      "schedules": ["0 1 * * *"],
     },
     // The durable tail of a confirmed identity card: persist, seed watches,
-    // start discovery, enqueue the first collection. Producer only — the
-    // consumer that drains fetch-sweep is a later engine, and this Worker's
-    // queue() handler is the email lane.
+    // start discovery, enqueue the first collection. That collection is
+    // drained by the fetch-sweep consumer above (0509#5261).
     {
       "name": "identity-tail",
       "binding": "IDENTITY_TAIL",
-      "class_name": "IdentityTailWorkflow"
-    }
+      "class_name": "IdentityTailWorkflow",
+    },
   ],
 
   "triggers": {
@@ -346,17 +389,17 @@
     // itself. Also the nightly delivery sweeper, which re-enqueues stale
     // pending digests and claims, and the Monday 04:00 UTC D2 competitor
     // refresh.
-    "crons": ["*/5 * * * *", "0 3 * * *", "0 4 * * 1"]
+    "crons": ["*/5 * * * *", "0 3 * * *", "0 4 * * 1"],
   },
 
   "routes": [
     { "pattern": "0509.io", "custom_domain": true },
     { "pattern": "www.0509.io", "custom_domain": true },
-    { "pattern": "api.0509.io", "custom_domain": true }
+    { "pattern": "api.0509.io", "custom_domain": true },
     // The .in hosts are deliberately absent. Their 308 to the .io twins is a
     // zone-level Redirect Rule on the 0509.in zone (phase
     // http_request_dynamic_redirect, ruleset f7743879d6904ebea189b42c85713069),
     // which runs before the Worker and costs no invocation. Adding a route here
     // would put the Worker in that path for nothing.
-  ]
+  ],
 }

@@ -31,10 +31,8 @@ test.skip(
   "the developments feed needs a real session; the local preview Worker cannot mint one",
 );
 
-// Playwright's fixture validator requires an object destructuring pattern
-// here, and no-empty-pattern bans `({})`: the ignored binding is the price.
 test.use({
-  storageState: async ({ browserName: _browserName }, use, testInfo) => {
+  storageState: async ({}, use, testInfo) => {
     await use(onboardedStatePath(testInfo.project.name === "phone-390" ? "phone" : "desktop"));
   },
 });
@@ -71,9 +69,7 @@ test("the developments feed filters by kind and keeps its layout across filters 
         await expect(page).toHaveURL(new RegExp(`[?&]kind=${filter.kind}`));
         // Every rendered row is of the chosen kind; a kind with no live rows
         // shows the feed's own empty li, which carries no data-kind.
-        await expect(
-          list(page).locator(`:scope > li[data-kind]:not([data-kind='${filter.kind}'])`),
-        ).toHaveCount(0);
+        await expect(list(page).locator(`:scope > li[data-kind]:not([data-kind='${filter.kind}'])`)).toHaveCount(0);
       }
       const filteredBox = await list(page).boundingBox();
       expect(filteredBox?.x).toBe(allBox?.x);
@@ -86,9 +82,7 @@ test("the developments feed filters by kind and keeps its layout across filters 
     await expect(list(page).locator(":scope > li[data-kind]:not([data-kind='hiring'])")).toHaveCount(0);
   } else {
     await expect(
-      page.getByText(
-        /Watching from today\.|No changes to the homepage since we started watching\./,
-      ),
+      page.getByText(/Watching from today\.|No changes to the homepage since we started watching\./),
     ).toBeVisible();
   }
 

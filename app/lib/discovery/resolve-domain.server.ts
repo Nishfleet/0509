@@ -1,6 +1,8 @@
 import { getDomain } from "tldts";
 import { z } from "zod";
 
+import { cappedJson, cappedText, fetchOutbound } from "../fetch/outbound.server";
+import { CRAWLER_USER_AGENT } from "../fetch/robots.server";
 import { readThrough } from "../identity/probe-cache.server";
 import { readPageNames } from "./page-names";
 
@@ -12,7 +14,8 @@ export interface Resolution {
 const UNRESOLVED: Resolution = { domain: null, via: "unresolved" };
 const CACHE_TTL_SECONDS = 2592000;
 const REQUEST_TIMEOUT_MS = 8000;
-const USER_AGENT = "0509.io/1.0 (https://0509.io)";
+const MAX_JSON_BYTES = 1024 * 1024;
+const MAX_PAGE_BYTES = 5 * 1024 * 1024;
 
 const resolutionSchema = z.object({
   domain: z.string().nullable(),
@@ -24,10 +27,7 @@ const wikidataSearchSchema = z.object({
 });
 
 const wikidataEntitiesSchema = z.object({
-  entities: z.record(
-    z.string(),
-    z.object({ claims: z.record(z.string(), z.array(z.unknown())) }),
-  ),
+  entities: z.record(z.string(), z.object({ claims: z.record(z.string(), z.array(z.unknown())) })),
 });
 
 const p856ClaimSchema = z.object({
@@ -35,34 +35,43 @@ const p856ClaimSchema = z.object({
 });
 
 function normaliseName(s: string): string {
-  return s.normalize("NFKC").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, "");
+  return s
+    .normalize("NFKC")
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, "");
 }
 
 function slugOf(s: string): string {
-  return s.normalize("NFKD").replace(/\p{M}/gu, "").toLowerCase().replace(/[^a-z0-9]+/g, "");
+  return s
+    .normalize("NFKD")
+    .replace(/\p{M}/gu, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "");
 }
 
-function logLookupFailure(step: "wikidata" | "slug", url: string, error: unknown): void {
+function logLookupFailure(step: "wikidata" | "slug", failure: string): void {
   console.error(
     JSON.stringify({
       event: "discovery.resolve_failed",
       step,
-      url,
-      error: error instanceof Error ? error.message : String(error),
+      error: failure,
     }),
   );
 }
 
 async function wikidataGet(url: string): Promise<unknown> {
   try {
-    const res = await fetch(url, {
-      headers: { "User-Agent": USER_AGENT },
+    const res = await fetchOutbound(url, {
+      headers: { "User-Agent": CRAWLER_USER_AGENT },
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     });
-    if (!res.ok) return null;
-    return await res.json();
+    if (!res.ok) {
+      logLookupFailure("wikidata", `status ${String(res.status)}`);
+      return null;
+    }
+    return await cappedJson(res, MAX_JSON_BYTES);
   } catch (error) {
-    logLookupFailure("wikidata", url, error);
+    logLookupFailure("wikidata", error instanceof Error ? error.name : "unknown");
     return null;
   }
 }
@@ -79,8 +88,7 @@ async function wikidataDomain(name: string): Promise<string | null> {
 
   const entities = wikidataEntitiesSchema.safeParse(
     await wikidataGet(
-      "https://www.wikidata.org/w/api.php?action=wbgetentities&format=json&props=claims&ids=" +
-        encodeURIComponent(id),
+      "https://www.wikidata.org/w/api.php?action=wbgetentities&format=json&props=claims&ids=" + encodeURIComponent(id),
     ),
   );
   if (!entities.success) return null;
@@ -97,14 +105,15 @@ async function slugDomain(name: string): Promise<string | null> {
   if (slug.length === 0) return null;
 
   try {
-    const res = await fetch(`https://${slug}.com/`, {
-      headers: { "User-Agent": USER_AGENT },
+    const res = await fetchOutbound(`https://${slug}.com/`, {
+      headers: { "User-Agent": CRAWLER_USER_AGENT },
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-      redirect: "follow",
     });
     if (!res.ok) return null;
 
-    const names = await readPageNames(await res.text());
+    const html = await cappedText(res, MAX_PAGE_BYTES);
+    if (html === null) return null;
+    const names = await readPageNames(html);
     const target = normaliseName(name);
     if (names.ogSiteName !== null && normaliseName(names.ogSiteName) === target) {
       return `${slug}.com`;
@@ -114,7 +123,7 @@ async function slugDomain(name: string): Promise<string | null> {
     }
     return null;
   } catch (error) {
-    logLookupFailure("slug", `https://${slug}.com/`, error);
+    logLookupFailure("slug", error instanceof Error ? error.name : "unknown");
     return null;
   }
 }

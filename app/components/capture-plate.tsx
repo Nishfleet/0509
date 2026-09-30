@@ -88,12 +88,7 @@ function PairFigure({ caption, shot }: { caption: string; shot: CaptureShot }): 
   );
 }
 
-export function CapturePlate({
-  label,
-  before,
-  after,
-  eager = false,
-}: CapturePlateProps): ReactElement {
+export function CapturePlate({ label, before, after, eager = false }: CapturePlateProps): ReactElement {
   return (
     <Dialog>
       <DialogTrigger

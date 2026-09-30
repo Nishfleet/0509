@@ -14,13 +14,13 @@ import { forgetCompetitor } from "../lib/competitor-forget.server";
 import { handleCompetitorIntent } from "../lib/competitors.server";
 import { readWorkspaceIdForOwner } from "../lib/data/workspace.server";
 import { daysAgoLabel } from "../lib/delivery-alert";
-import { requireSession } from "../lib/require-session.server";
+import { requireFreshSession, requireSession } from "../lib/require-session.server";
 import { captureLabel } from "../lib/site-change";
 
 const FORGET_MISMATCH = "That doesn't match the name. Type it exactly as shown.";
 
-async function workspaceFor(request: Request): Promise<string> {
-  const session = await requireSession(request);
+async function workspaceFor(request: Request, fresh = false): Promise<string> {
+  const session = await (fresh ? requireFreshSession(request) : requireSession(request));
   const workspaceId = await readWorkspaceIdForOwner(session.user.id);
   if (workspaceId === null) throw redirect("/onboarding");
   return workspaceId;
@@ -53,7 +53,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 }
 
 export async function action({ request, params }: Route.ActionArgs) {
-  const workspaceId = await workspaceFor(request);
+  const workspaceId = await workspaceFor(request, true);
   const submitted = await request.formData();
   const intent = submitted.get("intent");
   if (intent === "forget") {

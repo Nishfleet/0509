@@ -9,17 +9,13 @@ export class FixtureState extends DurableObject<FixtureEnv> {
   constructor(ctx: DurableObjectState, env: FixtureEnv) {
     super(ctx, env);
     void ctx.blockConcurrencyWhile(() => {
-      this.ctx.storage.sql.exec(
-        `CREATE TABLE IF NOT EXISTS state (key TEXT PRIMARY KEY, value TEXT NOT NULL)`,
-      );
+      this.ctx.storage.sql.exec(`CREATE TABLE IF NOT EXISTS state (key TEXT PRIMARY KEY, value TEXT NOT NULL)`);
       return Promise.resolve();
     });
   }
 
   get(key: string): string | null {
-    const row = this.ctx.storage.sql
-      .exec<{ value: string }>("SELECT value FROM state WHERE key = ?", key)
-      .toArray()[0];
+    const row = this.ctx.storage.sql.exec<{ value: string }>("SELECT value FROM state WHERE key = ?", key).toArray()[0];
     return row?.value ?? null;
   }
 
@@ -47,18 +43,16 @@ type WallState = "on" | "off";
 
 const WALL_KEY = "bot-wall";
 const WALL_PAGE =
-  '<!doctype html><html><head><title>Just a moment...</title></head><body><p>Checking if the site connection is secure</p></body></html>';
+  "<!doctype html><html><head><title>Just a moment...</title></head><body><p>Checking if the site connection is secure</p></body></html>";
 
-const isWallState = (value: string | null): value is WallState =>
-  value === "on" || value === "off";
+const isWallState = (value: string | null): value is WallState => value === "on" || value === "off";
 
 type PriceVariant = "base" | "raised";
 
 const PRICE_KEY = "price-variant";
 const PRICE_AT_KEY = "price-flipped-at";
 
-const isPriceVariant = (value: string | null): value is PriceVariant =>
-  value === "base" || value === "raised";
+const isPriceVariant = (value: string | null): value is PriceVariant => value === "base" || value === "raised";
 
 const timingSafeEqual = (
   crypto.subtle as SubtleCrypto & {
@@ -159,19 +153,14 @@ function authorize(request: Request, env: FixtureEnv): Response | null {
   }
   const presented = new TextEncoder().encode(request.headers.get("authorization") ?? "");
   const expected = new TextEncoder().encode(`Bearer ${env.FIXTURE_SITE_TOKEN}`);
-  const match =
-    presented.byteLength === expected.byteLength && timingSafeEqual(presented, expected);
+  const match = presented.byteLength === expected.byteLength && timingSafeEqual(presented, expected);
   if (!match) {
     return new Response("forbidden", { status: 403 });
   }
   return null;
 }
 
-async function flip(
-  request: Request,
-  env: FixtureEnv,
-  state: DurableObjectStub<FixtureState>,
-): Promise<Response> {
+async function flip(request: Request, env: FixtureEnv, state: DurableObjectStub<FixtureState>): Promise<Response> {
   const denied = authorize(request, env);
   if (denied) {
     return denied;
@@ -184,11 +173,7 @@ async function flip(
   return new Response(`break mode set to ${requested}`, { status: 200 });
 }
 
-async function wall(
-  request: Request,
-  env: FixtureEnv,
-  state: DurableObjectStub<FixtureState>,
-): Promise<Response> {
+async function wall(request: Request, env: FixtureEnv, state: DurableObjectStub<FixtureState>): Promise<Response> {
   const denied = authorize(request, env);
   if (denied) {
     return denied;
@@ -201,11 +186,7 @@ async function wall(
   return new Response(`bot wall set to ${requested}`, { status: 200 });
 }
 
-async function price(
-  request: Request,
-  env: FixtureEnv,
-  state: DurableObjectStub<FixtureState>,
-): Promise<Response> {
+async function price(request: Request, env: FixtureEnv, state: DurableObjectStub<FixtureState>): Promise<Response> {
   const denied = authorize(request, env);
   if (denied) {
     return denied;

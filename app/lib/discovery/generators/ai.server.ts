@@ -2,14 +2,11 @@ import { env } from "cloudflare:workers";
 import { parse } from "tldts";
 import { z } from "zod";
 
+import { fetchOutbound } from "../../fetch/outbound.server";
+import { CRAWLER_USER_AGENT } from "../../fetch/robots.server";
 import { GATEWAY_ID } from "../../jev/client.server";
-import {
-  defaultFetchText,
-  type Candidate,
-  type FetchText,
-  type Generator,
-  type Subject,
-} from "../types";
+import { defaultFetchText } from "../fetch-text.server";
+import { type Candidate, type FetchText, type Generator, type Subject } from "../types";
 
 const MODEL = "@cf/meta/llama-3.3-70b-instruct-fp8-fast";
 
@@ -71,7 +68,10 @@ async function readSiteText(html: string): Promise<SiteText> {
     })
     .transform(new Response(html, { headers: { "content-type": "text/html;charset=utf-8" } }));
   await rewritten.arrayBuffer();
-  return { title: found.title.trim().slice(0, SNIPPET_LIMIT), description: found.description.trim().slice(0, SNIPPET_LIMIT) };
+  return {
+    title: found.title.trim().slice(0, SNIPPET_LIMIT),
+    description: found.description.trim().slice(0, SNIPPET_LIMIT),
+  };
 }
 
 async function siteTextOf(subject: Subject, fetchText: FetchText): Promise<SiteText> {
@@ -130,32 +130,31 @@ function publicDomain(value: string): string | null {
   return host.domain;
 }
 
-function redirectsInternally(response: Response, from: string): boolean {
-  if (response.status < 300) return false;
-  const location = response.headers.get("location");
-  if (location === null) return true;
-  try {
-    return publicDomain(new URL(location, from).href) === null;
-  } catch {
-    return true;
-  }
-}
-
 async function isLive(domain: string): Promise<boolean> {
-  const url = `https://${domain}/`;
   try {
-    const response = await fetch(url, { method: "HEAD", redirect: "manual", signal: AbortSignal.timeout(DOMAIN_TIMEOUT_MS) });
-    return response.status < 400 && !redirectsInternally(response, url);
+    const response = await fetchOutbound(`https://${domain}/`, {
+      method: "HEAD",
+      headers: { "User-Agent": CRAWLER_USER_AGENT },
+      signal: AbortSignal.timeout(DOMAIN_TIMEOUT_MS),
+    });
+    await response.body?.cancel();
+    return response.status < 300;
   } catch {
     return false;
   }
 }
 
 function cleanName(value: string): string {
-  return value.replace(/\p{Cc}/gu, " ").replace(/\s+/g, " ").trim();
+  return value
+    .replace(/\p{Cc}/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
-async function liveCandidates(subject: Subject, proposals: readonly { name: string; domain: string }[]): Promise<Candidate[]> {
+async function liveCandidates(
+  subject: Subject,
+  proposals: readonly { name: string; domain: string }[],
+): Promise<Candidate[]> {
   const own = parse(subject.domain).domain;
   const seen = new Set<string>();
   const named = proposals.slice(0, MAX_PROPOSALS).flatMap((proposal) => {
@@ -166,11 +165,13 @@ async function liveCandidates(subject: Subject, proposals: readonly { name: stri
     return [{ name, domain }];
   });
   const live = await Promise.all(named.map((item) => isLive(item.domain)));
-  return named.filter((_, index) => live[index]).map((item) => ({
-    name: item.name,
-    domain: item.domain,
-    evidence: [{ sourceUrl: `https://${subject.domain}/`, excerpt: EXCERPT, generator: "ai" }],
-  }));
+  return named
+    .filter((_, index) => live[index])
+    .map((item) => ({
+      name: item.name,
+      domain: item.domain,
+      evidence: [{ sourceUrl: `https://${subject.domain}/`, excerpt: EXCERPT, generator: "ai" }],
+    }));
 }
 
 export const aiGenerator: Generator = async (subject: Subject, fetchText?: FetchText) => {

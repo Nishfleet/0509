@@ -26,8 +26,5 @@ test("an unknown path is a 404 page with one action @smoke", async ({ page }, te
   // Chromium reports the document's own 404 as a console error. That line is
   // the status this test asserts. A 404 for any other URL still fails.
   const ownDocument404 = ownDocument404For(path);
-  expect(
-    await consoleFailures(page, watched, testInfo, ownDocument404),
-    testInfo.project.name,
-  ).toEqual([]);
+  expect(await consoleFailures(page, watched, testInfo, ownDocument404), testInfo.project.name).toEqual([]);
 });

@@ -1,10 +1,17 @@
-import { sourcePillStatus, type SourcePillStatus, type SourceRow, type SourceSnapshot } from "../components/source-pill";
+import {
+  sourcePillStatus,
+  type SourcePillStatus,
+  type SourceRow,
+  type SourceSnapshot,
+} from "../components/source-pill";
 import { registeredToolDescriptors } from "./agent/mcp-tools";
 import { TRIAL_DAYS, TRIAL_TERMS } from "./billing/plans";
-import { LIVE_COVERAGE, PLAN_NOTE, WATCHED_NOUNS } from "./coverage";
+import { LIVE_COVERAGE, PLAN_NOTE } from "./coverage";
 import { FAQ } from "./faq";
+import { LEGAL_UPDATED } from "./legal/document";
 import { planNames, planPriceList } from "./pricing-page";
 import { SITE_URL } from "./structured-data";
+import { watchedClaims } from "./watched-claims";
 
 export interface LlmsTxtSource {
   source: SourceRow;
@@ -13,7 +20,21 @@ export interface LlmsTxtSource {
 
 export const PUBLIC_PATHS = ["/pricing", "/privacy", "/terms"] as const;
 export const SITEMAP_PATHS = ["/pricing", "/privacy", "/terms", "/llms.txt"] as const;
-export const DISALLOWED_PREFIXES = ["/app", "/api", "/mcp", "/u", "/v", "/login", "/onboarding", "/oauth", "/design"] as const;
+export const SITEMAP_LASTMOD: Readonly<Record<string, string>> = {
+  "/privacy": LEGAL_UPDATED,
+  "/terms": LEGAL_UPDATED,
+};
+export const DISALLOWED_PREFIXES = [
+  "/app",
+  "/api",
+  "/mcp",
+  "/u",
+  "/v",
+  "/login",
+  "/onboarding",
+  "/oauth",
+  "/design",
+] as const;
 export const MCP_URL = `${SITE_URL}/mcp`;
 
 const PAGE_SUMMARIES: Record<(typeof PUBLIC_PATHS)[number], { title: string; summary: string }> = {
@@ -27,11 +48,16 @@ const PAGE_SUMMARIES: Record<(typeof PUBLIC_PATHS)[number], { title: string; sum
   },
   "/terms": {
     title: "Terms",
-    summary: "who can use 0509, fair use, agent access, plans and cancelling, and how either side can end the agreement",
+    summary:
+      "who can use 0509, fair use, agent access, plans and cancelling, and how either side can end the agreement",
   },
 };
 
-export function sitemapXml(origin: string, paths: readonly string[]): string {
+export function sitemapXml(
+  origin: string,
+  paths: readonly string[],
+  lastmod: Readonly<Record<string, string>> = {},
+): string {
   const rows = paths.map((path) => {
     const loc = `${origin}${path}`
       .replace(/&/g, "&amp;")
@@ -39,7 +65,8 @@ export function sitemapXml(origin: string, paths: readonly string[]): string {
       .replace(/>/g, "&gt;")
       .replace(/"/g, "&quot;")
       .replace(/'/g, "&apos;");
-    return `  <url><loc>${loc}</loc></url>\n`;
+    const modified = lastmod[path];
+    return `  <url><loc>${loc}</loc>${modified === undefined ? "" : `<lastmod>${modified}</lastmod>`}</url>\n`;
   });
   return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${rows.join("")}</urlset>\n`;
 }
@@ -62,7 +89,7 @@ export function llmsTxt(origin: string, sources: readonly LlmsTxtSource[], now: 
     [
       "# Five to Nine",
       "",
-      `> Five to Nine (0509.io) is a competitor tracker for founders, brands and creators. It finds your competitors for you, watches their ${WATCHED_NOUNS} from public sources, ranks you against them every week, and emails one brief every Monday with a screenshot behind every change.`,
+      `> Five to Nine (0509.io) is a competitor tracker for founders, brands and creators. It finds your competitors for you, watches their ${watchedClaims(sources, now).nouns} from public sources, ranks you against them every week, and emails one brief every Monday with a screenshot behind every change.`,
       "",
       `- Plans: ${prices}. ${TRIAL_TERMS}`,
       `- Agents: every plan includes a read-only API and an MCP server at ${MCP_URL}.`,
@@ -78,7 +105,9 @@ export function llmsTxt(origin: string, sources: readonly LlmsTxtSource[], now: 
       "",
       "## Pages",
       "",
-      ...PUBLIC_PATHS.map((path) => `- [${PAGE_SUMMARIES[path].title}](${origin}${path}): ${PAGE_SUMMARIES[path].summary}`),
+      ...PUBLIC_PATHS.map(
+        (path) => `- [${PAGE_SUMMARIES[path].title}](${origin}${path}): ${PAGE_SUMMARIES[path].summary}`,
+      ),
     ].join("\n") + "\n"
   );
 }
@@ -142,11 +171,5 @@ function llmsWatchesBlock(sources: readonly LlmsTxtSource[], now: number): reado
   if (!degraded) {
     return ["What it watches today:", "", ...lines];
   }
-  return [
-    "What it watches today:",
-    "",
-    "Some sources are not answering today; those lines say so.",
-    "",
-    ...lines,
-  ];
+  return ["What it watches today:", "", "Some sources are not answering today; those lines say so.", "", ...lines];
 }

@@ -1,7 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { hnGenerator } from "../../../app/lib/discovery/generators/hn";
-import { defaultFetchText, type Subject } from "../../../app/lib/discovery/types";
+import { hnGenerator } from "../../../app/lib/discovery/generators/hn.server";
+import { defaultFetchText } from "../../../app/lib/discovery/fetch-text.server";
+import type { Subject } from "../../../app/lib/discovery/types";
 
 const SUBJECT: Subject = { name: "Gymshark", domain: "gymshark.com" };
 
@@ -30,7 +31,10 @@ describe("defaultFetchText", () => {
       headers: { "content-type": "text/plain" },
     });
     Object.defineProperty(response, "url", { value: "https://example.com/ok" });
-    vi.stubGlobal("fetch", vi.fn(async () => response));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => response),
+    );
 
     const result = await defaultFetchText("discovery.test_event")("https://example.com/ok");
 
@@ -49,7 +53,10 @@ describe("defaultFetchText", () => {
       headers: { "content-type": "text/html" },
     });
     Object.defineProperty(response, "url", { value: "https://example.com/fail" });
-    vi.stubGlobal("fetch", vi.fn(async () => response));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => response),
+    );
 
     const result = await defaultFetchText("discovery.test_event")("https://example.com/fail");
 
@@ -91,7 +98,10 @@ describe("defaultFetchText", () => {
 
   it("bounds the fetch with AbortSignal.timeout(8000)", async () => {
     const response = new Response("body", { status: 200, headers: { "content-type": "text/plain" } });
-    vi.stubGlobal("fetch", vi.fn(async () => response));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => response),
+    );
     const timeoutSpy = vi.spyOn(AbortSignal, "timeout");
 
     await defaultFetchText("discovery.test_event")("https://example.com/ok");
@@ -109,7 +119,10 @@ describe("defaultFetchText", () => {
 
   it("gives the hn generator's default fetch a five second timeout", async () => {
     const response = new Response("{}", { status: 200 });
-    vi.stubGlobal("fetch", vi.fn(async () => response));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => response),
+    );
     const timeoutSpy = vi.spyOn(AbortSignal, "timeout");
 
     await hnGenerator(SUBJECT);

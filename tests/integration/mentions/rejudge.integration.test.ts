@@ -59,12 +59,7 @@ function jevAnswering() {
   return vi.fn((_model: string, input: { state: { item: { title: string } }; questions: Record<string, unknown> }) => {
     const [questionId] = Object.keys(input.questions);
     const title = input.state.item.title;
-    const p =
-      questionId === "mention_is_about_brand"
-        ? title.includes("winds")
-          ? 0.03
-          : 0.96
-        : 0.94;
+    const p = questionId === "mention_is_about_brand" ? (title.includes("winds") ? 0.03 : 0.96) : 0.94;
     return Promise.resolve({ answers: { [questionId ?? ""]: { type: "noul", noul: p } } });
   });
 }
@@ -74,9 +69,7 @@ function jevDown() {
 }
 
 async function gdeltTargetFor(brand: string) {
-  const target = (await planTargets()).find(
-    (entry) => entry.pluginKey === "gdelt.doc" && entry.query === brand,
-  );
+  const target = (await planTargets()).find((entry) => entry.pluginKey === "gdelt.doc" && entry.query === brand);
   if (target === undefined) throw new Error(`no gdelt target for ${brand}`);
   return target;
 }
@@ -120,9 +113,7 @@ describe("re-judging unjudged mentions", () => {
     ]);
 
     const reject = rows.find((row) => row.title.includes("winds"));
-    const rejectVerdict = await env.DB.prepare(
-      "SELECT question_id, p FROM jev_verdict WHERE signal_id = ?",
-    )
+    const rejectVerdict = await env.DB.prepare("SELECT question_id, p FROM jev_verdict WHERE signal_id = ?")
       .bind(reject?.id ?? "")
       .all<{ question_id: string; p: number }>();
     expect(rejectVerdict.results).toHaveLength(1);
@@ -135,10 +126,7 @@ describe("re-judging unjudged mentions", () => {
     )
       .bind(kept?.id ?? "")
       .all<{ question_id: string }>();
-    expect(keptVerdicts.results.map((row) => row.question_id)).toEqual([
-      "mention_is_about_brand",
-      "mention_matters",
-    ]);
+    expect(keptVerdicts.results.map((row) => row.question_id)).toEqual(["mention_is_about_brand", "mention_matters"]);
     expect((await readSignalAlerts(env.DB, workspaceId)).map((alert) => alert.title)).toEqual([
       `${brand}: Quillon opens a London flagship`,
     ]);

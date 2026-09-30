@@ -1,9 +1,4 @@
-import {
-  createExecutionContext,
-  env,
-  runInDurableObject,
-  waitOnExecutionContext,
-} from "cloudflare:test";
+import { createExecutionContext, env, runInDurableObject, waitOnExecutionContext } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
 
 import worker from "../../workers/e2e-inbox";
@@ -82,10 +77,7 @@ describe("0509-e2e-inbox", () => {
     await waitOnExecutionContext(ctx);
     const stub = env.INBOX.getByName(to);
     await runInDurableObject(stub, async (_instance: InboxMailbox, state) => {
-      state.storage.sql.exec(
-        "UPDATE message SET created_at = ? WHERE id = 1",
-        Date.now() - 60 * 60 * 1000 - 1,
-      );
+      state.storage.sql.exec("UPDATE message SET created_at = ? WHERE id = 1", Date.now() - 60 * 60 * 1000 - 1);
     });
     expect((await get(messagePath(to))).status).toBe(404);
   });

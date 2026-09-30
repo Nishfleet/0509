@@ -7,7 +7,7 @@ import type { HomeCount, HomeEntity, HomeHistoryRow, HomeSource } from "./home-s
 
 const SELECT_HISTORY = `SELECT entity_id, week_start_at, rank FROM standing WHERE workspace_id = ?1 AND rank IS NOT NULL AND week_start_at IN (SELECT DISTINCT week_start_at FROM standing WHERE workspace_id = ?1 AND rank IS NOT NULL ORDER BY week_start_at DESC LIMIT 4) ORDER BY week_start_at ASC`;
 
-const SELECT_HOME_SOURCES = `SELECT key, kind, platform FROM source WHERE is_enabled = 1 ORDER BY kind ASC, key ASC`;
+const SELECT_HOME_SOURCES = `SELECT key, kind, platform FROM source WHERE is_enabled = 1 AND id IN (SELECT w.source_id FROM watch w JOIN entity e ON e.id = w.entity_id WHERE e.workspace_id = ?1) ORDER BY kind ASC, key ASC`;
 
 const SELECT_HOME_COUNTS = `SELECT s.entity_id, src.key AS source_key, COUNT(*) AS n FROM signal s JOIN source src ON src.id = s.source_id WHERE s.workspace_id = ?1 AND s.is_tombstoned = 0 AND s.observed_at >= (SELECT json_extract(payload_json, '$.period_start') FROM digest WHERE workspace_id = ?1 AND kind = 'weekly' ORDER BY period_end DESC LIMIT 1) GROUP BY s.entity_id, src.key`;
 
@@ -54,11 +54,11 @@ const homeRow = z.object({
 
 const homeRows = z.array(homeRow);
 
-const historyRows = z.array(
-  z.object({ entity_id: z.string(), week_start_at: z.string(), rank: z.number().int() }),
-);
+const historyRows = z.array(z.object({ entity_id: z.string(), week_start_at: z.string(), rank: z.number().int() }));
 
-const sourceRows = z.array(z.object({ key: z.string(), kind: z.enum(["site", "ads", "mentions", "hiring"]), platform: z.string() }));
+const sourceRows = z.array(
+  z.object({ key: z.string(), kind: z.enum(["site", "ads", "mentions", "hiring"]), platform: z.string() }),
+);
 
 const countRows = z.array(z.object({ entity_id: z.string(), source_key: z.string(), n: z.number().int() }));
 
@@ -72,33 +72,26 @@ export interface HomeStandingInputs {
 }
 
 function entityFrom(row: z.infer<typeof homeRow>): HomeEntity | null {
-  if (
-    row.entity_id === null ||
-    row.role === null ||
-    row.domain === null ||
-    row.name === null ||
-    row.state === null
-  ) {
+  if (row.entity_id === null || row.role === null || row.domain === null || row.name === null || row.state === null) {
     return null;
   }
   return { id: row.entity_id, role: row.role, domain: row.domain, name: row.name, state: row.state };
 }
 
-export async function readHomeStandingInputs(
-  db: D1Database,
-  ownerUserId: string,
-): Promise<HomeStandingInputs | null> {
+export async function readHomeStandingInputs(db: D1Database, ownerUserId: string): Promise<HomeStandingInputs | null> {
   const rows = homeRows.parse((await db.prepare(SELECT_HOME_STANDING).bind(ownerUserId).all()).results);
   const first = rows[0];
   if (first === undefined) return null;
   const [historyResult, sourcesResult, countsResult] = await db.batch([
     db.prepare(SELECT_HISTORY).bind(first.workspace_id),
-    db.prepare(SELECT_HOME_SOURCES),
+    db.prepare(SELECT_HOME_SOURCES).bind(first.workspace_id),
     db.prepare(SELECT_HOME_COUNTS).bind(first.workspace_id),
   ]);
   const history = historyRows.parse(historyResult?.results);
   const sources = sourceRows.parse(sourcesResult?.results);
-  const counts = countRows.parse(countsResult?.results).map((row) => ({ entityId: row.entity_id, sourceKey: row.source_key, count: row.n }));
+  const counts = countRows
+    .parse(countsResult?.results)
+    .map((row) => ({ entityId: row.entity_id, sourceKey: row.source_key, count: row.n }));
   return {
     schedule: { timezone: first.timezone, weekday: first.brief_weekday, hour: first.brief_hour },
     entities: rows.flatMap((row) => {

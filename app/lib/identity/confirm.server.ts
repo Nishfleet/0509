@@ -40,21 +40,33 @@ function creatorSite(socials: { platform: string; url: string }[]): Subject | nu
 }
 
 export async function confirmCard(workspaceId: string, userId: string, form: FormData): Promise<boolean> {
+  const startTail = await confirmCardLater(workspaceId, userId, form);
+  if (startTail === null) return false;
+  await startTail();
+  return true;
+}
+
+export async function confirmCardLater(
+  workspaceId: string,
+  userId: string,
+  form: FormData,
+): Promise<(() => Promise<string>) | null> {
   const parsed = confirmSchema.safeParse({
     subject: field(form, "subject"),
     name: field(form, "name"),
     description: field(form, "description"),
     socials: socials(form),
   });
-  if (!parsed.success) return false;
+  if (!parsed.success) return null;
   const normalised = normaliseSubject(parsed.data.subject);
-  if (!normalised.ok) return false;
+  if (!normalised.ok) return null;
   const { subject } = normalised;
   const card = parsed.data;
   const id = crypto.randomUUID();
-  const logoUrl = (await readLogo(subject.registrable)) !== null ? `/app/logos/${id}` : null;
+  const [logo, cached] = await Promise.all([readLogo(subject.registrable), readCachedSiteValues(subject)]);
+  const logoUrl = logo !== null ? `/app/logos/${id}` : null;
   const now = new Date();
-  await insertSelfEntity({
+  const inserted = await insertSelfEntity({
     id,
     workspaceId,
     domain: subject.registrable,
@@ -69,44 +81,41 @@ export async function confirmCard(workspaceId: string, userId: string, form: For
     }),
     now: now.toISOString(),
   });
-  const entityId = await readWorkspaceSelfId(workspaceId);
-  if (entityId === null) return false;
-  const cached = await readCachedSiteValues(subject);
-  if (cached !== null) {
-    const candidates: { edit: FieldEdit; changed: boolean }[] = [
-      {
-        edit: { field: "name", from: cached.name, to: card.name },
-        changed: card.name !== cached.name,
-      },
-      {
-        edit: {
-          field: "description",
-          from: cached.description,
-          to: card.description,
-        },
-        changed: (card.description === "" ? null : card.description) !== cached.description,
-      },
-    ];
-    await insertFieldEdits(
-      candidates
-        .filter((candidate) => candidate.changed)
-        .map((candidate) => ({
-          workspaceId,
-          userId,
-          entityId,
-          edit: candidate.edit,
-          decidedAt: now.toISOString(),
-        })),
-    );
-  }
+  const entityId = inserted ? id : await readWorkspaceSelfId(workspaceId);
+  if (entityId === null) return null;
+  const candidates: { edit: FieldEdit; changed: boolean }[] =
+    !inserted || cached === null
+      ? []
+      : [
+          {
+            edit: { field: "name", from: cached.name, to: card.name },
+            changed: card.name !== cached.name,
+          },
+          {
+            edit: { field: "description", from: cached.description, to: card.description },
+            changed: (card.description === "" ? null : card.description) !== cached.description,
+          },
+        ];
+  const edits = insertFieldEdits(
+    candidates
+      .filter((candidate) => candidate.changed)
+      .map((candidate) => ({
+        workspaceId,
+        userId,
+        entityId,
+        edit: candidate.edit,
+        decidedAt: now.toISOString(),
+      })),
+  );
   const site = subject.kind === "domain" ? null : creatorSite(card.socials);
-  await startIdentityTail({
+  const tailParams = {
     workspaceId,
     entityId,
     name: card.name,
     domain: site?.registrable ?? subject.registrable,
     homepageUrl: subject.kind === "domain" ? subject.url : (site?.url ?? null),
     ...(subject.kind === "domain" ? {} : { handle: subject.registrable }),
-  });
-  return true;
+  };
+  await edits;
+  return () => startIdentityTail(tailParams);
 }

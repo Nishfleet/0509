@@ -47,7 +47,10 @@ export function Price({ source = null }: { source?: StartSource | null }) {
         {PLANS.map((plan) => (
           <li
             key={plan.id}
-            className={cn("min-w-0 border-[1.5px] p-6", plan.id === "starter" ? "border-ink bg-card" : "border-line bg-card")}
+            className={cn(
+              "min-w-0 border-[1.5px] p-6",
+              plan.id === "starter" ? "border-ink bg-card" : "border-line bg-card",
+            )}
           >
             <h3 className={`${eyebrow} text-ink-soft`}>{plan.name}</h3>
             <p className="mt-3 font-display text-[2.4rem] leading-none font-extrabold tracking-[-0.03em]">

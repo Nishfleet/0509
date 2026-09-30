@@ -2,8 +2,7 @@ import type { DatabaseSync } from "node:sqlite";
 
 import { expect, test, type Page } from "@playwright/test";
 
-import { isLocalLane } from "./inbox";
-import { run, seedPreviewSession } from "./preview-session";
+import { isLocalLane, run, seedPreviewSession } from "./inbox";
 
 const BRAND = "Boots & Belle";
 const DOMAIN = "shop.boots-belle.example";
@@ -43,17 +42,16 @@ function seed({ db, suffix, userId }: { db: DatabaseSync; suffix: string; userId
 }
 
 async function openCompetitor(page: Page, width: number): Promise<void> {
-  const cookie = await seedPreviewSession("ad-links", (context) => {
+  const { cookie } = await seedPreviewSession("ad-links", (context) => {
     seed(context);
   });
   await page.setExtraHTTPHeaders({ cookie });
   await page.setViewportSize({ width, height: 844 });
   await page.goto("/app/competitors");
-  await page
-    .getByRole("list", { name: "Competitors" })
-    .getByRole("link", { name: /Boots/ })
-    .first()
-    .press("Enter");
+  // The chip is the row's only pointer path to the competitor page. #5845
+  // reached it by Tab+Enter because the switch's hit area covered the chip;
+  // #5923 un-squeezed the chip out from under the switch, so the spec clicks.
+  await page.getByRole("list", { name: "Competitors" }).getByRole("link", { name: /Boots/ }).first().click();
   await expect(page).toHaveURL(/\/app\/competitors\/ent-/);
 }
 
@@ -84,7 +82,9 @@ test("the competitor header carries Their ads on Meta and Their ads on Google li
 
 test("the competitor header ad links wrap without horizontal scroll at 390px", async ({ page }) => {
   await openCompetitor(page, 390);
-  await expect(page.getByRole("link", { name: `${BRAND}'s ads on Meta (opens in a new tab)`, exact: true })).toBeVisible();
+  await expect(
+    page.getByRole("link", { name: `${BRAND}'s ads on Meta (opens in a new tab)`, exact: true }),
+  ).toBeVisible();
   const widths = await page.evaluate(() => ({
     scrollWidth: document.documentElement.scrollWidth,
     clientWidth: document.documentElement.clientWidth,

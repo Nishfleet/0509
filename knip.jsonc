@@ -24,7 +24,6 @@
     "workers/fixture-site.ts",
     "e2e/*.setup.ts",
     "e2e/*.teardown.ts",
-    "app/components/ui/*.{ts,tsx}"
   ],
   "project": ["app/**/*.{ts,tsx}", "workers/**/*.ts", "e2e/**/*.ts", "tests/**/*.ts"],
 
@@ -36,5 +35,5 @@
   // does not follow CSS imports and says so in its own hint output.
   "ignoreDependencies": ["cloudflare", "@react-router/node", "tailwindcss"],
 
-  "ignore": ["**/+types/**", "docs/design-directions/**", "lighthouserc.cjs"]
+  "ignore": ["**/+types/**", "docs/design-directions/**", "lighthouserc.cjs"],
 }

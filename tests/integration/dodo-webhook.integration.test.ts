@@ -43,8 +43,7 @@ async function deliver(request: Request): Promise<Response> {
   return result;
 }
 
-const planRow = () =>
-  env.DB.prepare("SELECT * FROM plan WHERE workspace_id = ?").bind(WORKSPACE).first<PlanRow>();
+const planRow = () => env.DB.prepare("SELECT * FROM plan WHERE workspace_id = ?").bind(WORKSPACE).first<PlanRow>();
 
 const eventRow = (id: string) =>
   env.DB.prepare("SELECT event_type, processed_at FROM dodo_webhook_event WHERE id = ?")
@@ -122,7 +121,10 @@ describe("Dodo webhook (J13)", () => {
     await deliver(signedRequest("evt_1", eventBody({})));
 
     await deliver(
-      signedRequest("evt_2", eventBody({ type: "subscription.on_hold", timestamp: "2026-09-30T00:00:00Z", data: { status: "on_hold" } })),
+      signedRequest(
+        "evt_2",
+        eventBody({ type: "subscription.on_hold", timestamp: "2026-09-30T00:00:00Z", data: { status: "on_hold" } }),
+      ),
     );
     expect((await readEntitlements(WORKSPACE)).competitors).toBe(5);
 
@@ -140,7 +142,10 @@ describe("Dodo webhook (J13)", () => {
     expect((await readEntitlements(WORKSPACE)).competitors).toBe(15);
 
     await deliver(
-      signedRequest("evt_4", eventBody({ type: "subscription.expired", timestamp: "2026-10-02T00:00:00Z", data: { status: "expired" } })),
+      signedRequest(
+        "evt_4",
+        eventBody({ type: "subscription.expired", timestamp: "2026-10-02T00:00:00Z", data: { status: "expired" } }),
+      ),
     );
     expect((await readEntitlements(WORKSPACE)).competitors).toBe(5);
   });
@@ -166,7 +171,10 @@ describe("Dodo webhook (J13)", () => {
 
   it("does not let an older event overwrite a newer one", async () => {
     await deliver(
-      signedRequest("evt_new", eventBody({ type: "subscription.on_hold", timestamp: "2026-09-30T00:00:00Z", data: { status: "on_hold" } })),
+      signedRequest(
+        "evt_new",
+        eventBody({ type: "subscription.on_hold", timestamp: "2026-09-30T00:00:00Z", data: { status: "on_hold" } }),
+      ),
     );
     await deliver(signedRequest("evt_old", eventBody({ timestamp: "2026-09-29T10:00:05Z" })));
 
@@ -176,7 +184,11 @@ describe("Dodo webhook (J13)", () => {
   it("finds the workspace by subscription id when the event carries no metadata", async () => {
     await deliver(signedRequest("evt_meta", eventBody({})));
 
-    const renewed = eventBody({ type: "subscription.renewed", timestamp: "2026-10-06T10:00:09Z", data: { metadata: {} } });
+    const renewed = eventBody({
+      type: "subscription.renewed",
+      timestamp: "2026-10-06T10:00:09Z",
+      data: { metadata: {} },
+    });
     expect((await deliver(signedRequest("evt_renewed", renewed))).status).toBe(200);
 
     expect((await planRow())?.updated_at).toBe("2026-10-06T10:00:09Z");
@@ -212,5 +224,22 @@ describe("Dodo webhook (J13)", () => {
     expect(await planRow()).toBeNull();
     expect((await eventRow("evt_product"))?.processed_at).not.toBeNull();
     expect(await eventRow("evt_payment")).toMatchObject({ event_type: "payment.succeeded" });
+  });
+
+  it("answers 500 and leaves the event unprocessed when no workspace exists yet, then applies it on redelivery", async () => {
+    const orphan = eventBody({ data: { metadata: {}, subscription_id: "sub_not_yet_linked" } });
+
+    const first = await deliver(signedRequest("evt_orphan", orphan));
+
+    expect(first.status).toBe(500);
+    expect(await planRow()).toBeNull();
+    expect((await eventRow("evt_orphan"))?.processed_at).toBeNull();
+
+    const linked = eventBody({ data: { subscription_id: "sub_not_yet_linked" } });
+    const second = await deliver(signedRequest("evt_orphan", linked));
+
+    expect(second.status).toBe(200);
+    expect((await planRow())?.tier).toBe("starter");
+    expect((await eventRow("evt_orphan"))?.processed_at).not.toBeNull();
   });
 });

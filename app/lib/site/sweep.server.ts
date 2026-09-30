@@ -1,18 +1,15 @@
 import { env } from "cloudflare:workers";
 import { getDomain } from "tldts";
 
+import { insertIncidentAlertStatement } from "../data/alert.server";
+import { openIncidentStatement } from "../data/incident.server";
 import { insertPages, readEntitiesWithoutHomePage } from "../data/page.server";
 import { linkVerdictsStatement } from "../data/jev_verdict.server";
 import { insertChangeSignalStatement } from "../data/signal.server";
 import { readCoveredPagePairs } from "../data/snapshot.server";
 import { readEnabledSourceId } from "../data/source.server";
 import type { SiteSweepTarget } from "../data/watch.server";
-import {
-  insertWatches,
-  markWatchPolled,
-  readSiteSweepTargets,
-  readUnwatchedEntities,
-} from "../data/watch.server";
+import { insertWatches, markWatchPolled, readSiteSweepTargets, readUnwatchedEntities } from "../data/watch.server";
 import { robotsAllows } from "../fetch/robots.server";
 import { normaliseSubject } from "../identity/normalise";
 import { takeBrowserScreenshot } from "./browser-budget.server";
@@ -82,23 +79,21 @@ export async function planSiteSweep(now: string): Promise<SiteSweepTarget[]> {
   await insertWatches(
     unwatched.flatMap((entity) => {
       const url = homeUrl(entity);
-      return url === null
-        ? []
-        : [{ id: crypto.randomUUID(), entityId: entity.id, sourceId, targetKey: url }];
+      return url === null ? [] : [{ id: crypto.randomUUID(), entityId: entity.id, sourceId, targetKey: url }];
     }),
   );
   return [...(await readSiteSweepTargets(SITE_SOURCE_KEY))];
 }
 
-export async function uncoveredItems(
-  items: readonly SiteSweepTarget[],
-  sinceIso: string,
-): Promise<SiteSweepTarget[]> {
+export async function uncoveredItems(items: readonly SiteSweepTarget[], sinceIso: string): Promise<SiteSweepTarget[]> {
   if (items.length === 0) return [];
   const covered = new Set(
-    (await readCoveredPagePairs(sinceIso, items.map((item) => item.watchId))).map(
-      (row) => `${row.watchId}|${row.pageId}`,
-    ),
+    (
+      await readCoveredPagePairs(
+        sinceIso,
+        items.map((item) => item.watchId),
+      )
+    ).map((row) => `${row.watchId}|${row.pageId}`),
   );
   return items.filter((item) => !covered.has(`${item.watchId}|${item.pageId}`));
 }
@@ -108,12 +103,27 @@ export interface SweepTick {
   plannedAt: string;
 }
 
-export async function checkSitePage(target: SiteSweepTarget, tick: SweepTick): Promise<CheckPageResult> {
+export interface CheckSitePageOptions {
+  browser?: boolean;
+}
+
+export async function checkSitePage(
+  target: SiteSweepTarget,
+  tick: SweepTick,
+  options: CheckSitePageOptions = {},
+): Promise<CheckPageResult> {
   if (target.entityRole === "self" && !(await robotsAllows(target.url))) {
-    console.log(JSON.stringify({ event: "site.check_failed", url: target.url, reason: "robots", detail: "disallowed by robots.txt" }));
+    console.log(
+      JSON.stringify({
+        event: "site.check_failed",
+        pageId: target.pageId,
+        reason: "robots",
+        detail: "disallowed by robots.txt",
+      }),
+    );
     return { outcome: "failed", reason: "robots", detail: "disallowed by robots.txt" };
   }
-  const read = await readPage(target, tick.plannedAt);
+  const read = await readPage(target, tick.plannedAt, { browser: options.browser ?? true });
   const result = await checkPage({
     watchId: target.watchId,
     pageId: target.pageId,
@@ -121,16 +131,20 @@ export async function checkSitePage(target: SiteSweepTarget, tick: SweepTick): P
     snapshotId: `${tick.instanceId}-${target.pageId}`,
     before: tick.plannedAt,
     read,
-    mayScreenshot: () =>
-      takeBrowserScreenshot(target.workspaceId, target.entityId, tick.plannedAt.slice(0, 10)),
+    mayScreenshot:
+      options.browser === false
+        ? undefined
+        : () => takeBrowserScreenshot(target.workspaceId, target.entityId, tick.plannedAt.slice(0, 10)),
   });
   if (result.outcome === "failed") {
-    console.log(JSON.stringify({
-      event: "site.check_failed",
-      url: target.url,
-      reason: result.reason,
-      detail: result.detail,
-    }));
+    console.log(
+      JSON.stringify({
+        event: "site.check_failed",
+        pageId: target.pageId,
+        reason: result.reason,
+        detail: result.detail,
+      }),
+    );
     return result;
   }
   await markWatchPolled(target.watchId, new Date().toISOString());
@@ -157,7 +171,9 @@ interface SiteChangeInput {
   evidence: ReturnType<typeof computeBreakageEvidence>;
 }
 
-function changeSignalPayload(input: Pick<SiteChangeInput, "target" | "changed" | "diff"> & { diffKey: string }): string {
+function changeSignalPayload(
+  input: Pick<SiteChangeInput, "target" | "changed" | "diff"> & { diffKey: string },
+): string {
   const { target, changed, diff, diffKey } = input;
   const words = diff?.words ?? [];
   return JSON.stringify({
@@ -198,11 +214,13 @@ async function judgeUnlessFailed(change: SiteChangeInput, signalId: string | nul
   try {
     return await judgeChange(judgeInputFor(change, signalId));
   } catch (error) {
-    console.log(JSON.stringify({
-      event: "site.change_judge_failed",
-      url: change.target.url,
-      error: error instanceof Error ? error.name : "unknown",
-    }));
+    console.log(
+      JSON.stringify({
+        event: "site.change_judge_failed",
+        pageId: change.target.pageId,
+        error: error instanceof Error ? error.name : "unknown",
+      }),
+    );
     return null;
   }
 }
@@ -212,7 +230,16 @@ async function judgeCompetitorChange(change: SiteChangeInput): Promise<JudgedCha
   return judgeUnlessFailed(change, null);
 }
 
-async function fileChangeSignal(change: SiteChangeInput, payloadJson: string, judgment: JudgedChange | null): Promise<string> {
+async function judgeSelfChange(change: SiteChangeInput): Promise<JudgedChange | null> {
+  if (change.target.entityRole !== "self" || change.diff === null) return null;
+  return judgeUnlessFailed(change, null);
+}
+
+async function fileChangeSignal(
+  change: SiteChangeInput,
+  payloadJson: string,
+  judgment: JudgedChange | null,
+): Promise<string> {
   const { target, changed } = change;
   const noteworthy = judgment?.noteworthy ?? null;
   const signalId = crypto.randomUUID();
@@ -247,19 +274,103 @@ async function fileChangeSignal(change: SiteChangeInput, payloadJson: string, ju
   return filed.id;
 }
 
-export async function publishSiteChange(target: SiteSweepTarget, changed: ChangedPage): Promise<string> {
-  const [before, after] = await Promise.all([
-    readText(changed.previousTextKey),
-    readText(changed.textKey),
-  ]);
-  const diff = pageTextDiff(before, after, changed);
+interface BreakageFiling {
+  payloadJson: string;
+  judgment: JudgedChange;
+  band: "alert" | "check";
+}
 
-  const diffKey = `snapshot/site/${target.watchId}/${changed.snapshotId}.diff.json`;
-  if (diff !== null) {
-    await env.SNAPSHOTS.put(diffKey, JSON.stringify({ hunks: diff.hunks }), {
-      httpMetadata: { contentType: "application/json" },
-    });
+function breakageStatements(
+  change: SiteChangeInput,
+  filing: BreakageFiling,
+  ids: { signal: string; incident: string },
+) {
+  const { target, changed, subject } = change;
+  const now = new Date().toISOString();
+  return [
+    insertChangeSignalStatement({
+      id: ids.signal,
+      workspaceId: target.workspaceId,
+      entityId: target.entityId,
+      sourceId: target.sourceId,
+      watchId: target.watchId,
+      snapshotId: changed.snapshotId,
+      title: null,
+      summary: null,
+      aspect: "breakage",
+      url: target.url,
+      payloadJson: filing.payloadJson,
+      observedAt: now,
+    }),
+    openIncidentStatement({
+      id: ids.incident,
+      workspaceId: target.workspaceId,
+      entityId: target.entityId,
+      pageId: target.pageId,
+      kind: "breakage",
+      openedAt: now,
+    }),
+    insertIncidentAlertStatement({
+      id: `incident-${ids.incident}`,
+      workspaceId: target.workspaceId,
+      entityId: target.entityId,
+      pageId: target.pageId,
+      signalId: ids.signal,
+      incidentId: ids.incident,
+      severity: filing.band === "alert" ? "high" : "normal",
+      title: `${subject.domain} looks broken: breakage`,
+      body: null,
+      createdAt: now,
+    }),
+  ];
+}
+
+async function openBreakageIncident(change: SiteChangeInput, filing: BreakageFiling): Promise<void> {
+  const ids = { signal: crypto.randomUUID(), incident: crypto.randomUUID() };
+  const results = await env.DB.batch(breakageStatements(change, filing, ids));
+  if (results[0]?.meta.changes === 1 && filing.judgment.verdictIds.length > 0) {
+    await linkVerdictsStatement({
+      signalId: ids.signal,
+      workspaceId: change.target.workspaceId,
+      verdictIds: filing.judgment.verdictIds,
+    }).run();
   }
+  if (results[1]?.meta.changes === 1 && filing.band === "alert") {
+    await env.SEND_EMAIL.send({ incident_id: ids.incident });
+  }
+}
+
+async function storeDiff(diffKey: string, diff: ReturnType<typeof diffPageText> | null) {
+  if (diff === null) return;
+  await env.SNAPSHOTS.put(diffKey, JSON.stringify({ hunks: diff.hunks }), {
+    httpMetadata: { contentType: "application/json" },
+  });
+}
+
+async function fileUnlessDiscarded(change: SiteChangeInput, payloadJson: string, selfJudgment: JudgedChange | null) {
+  const { target } = change;
+  const competitorJudgment = await judgeCompetitorChange(change);
+  if (competitorJudgment?.noteworthy?.band === "discard") {
+    console.log(
+      JSON.stringify({
+        event: "site.change_discarded",
+        pageId: target.pageId,
+        kind: competitorJudgment.noteworthy.kind,
+      }),
+    );
+    return;
+  }
+  const signalId = await fileChangeSignal(change, payloadJson, selfJudgment ?? competitorJudgment);
+  if (target.entityRole === "self" && change.diff === null) {
+    await judgeUnlessFailed(change, signalId);
+  }
+}
+
+export async function publishSiteChange(target: SiteSweepTarget, changed: ChangedPage): Promise<string> {
+  const [before, after] = await Promise.all([readText(changed.previousTextKey), readText(changed.textKey)]);
+  const diff = pageTextDiff(before, after, changed);
+  const diffKey = `snapshot/site/${target.watchId}/${changed.snapshotId}.diff.json`;
+  await storeDiff(diffKey, diff);
 
   const subject = await env.DB.prepare("SELECT name, domain FROM entity WHERE id = ?1 AND workspace_id = ?2")
     .bind(target.entityId, target.workspaceId)
@@ -275,15 +386,13 @@ export async function publishSiteChange(target: SiteSweepTarget, changed: Change
     evidence: computeBreakageEvidence({ status: changed.status, beforeText: before ?? "", afterText: after ?? "" }),
   };
 
-  const judgment = await judgeCompetitorChange(change);
-  if (judgment?.noteworthy?.band === "discard") {
-    console.log(JSON.stringify({ event: "site.change_discarded", url: target.url, kind: judgment.noteworthy.kind }));
-    return changed.snapshotId;
-  }
-
-  const signalId = await fileChangeSignal(change, changeSignalPayload({ target, changed, diff, diffKey }), judgment);
-  if (target.entityRole === "self") {
-    await judgeUnlessFailed(change, signalId);
+  const payloadJson = changeSignalPayload({ target, changed, diff, diffKey });
+  const selfJudgment = await judgeSelfChange(change);
+  const band = selfJudgment?.selfBreakage?.band;
+  if (selfJudgment !== null && (band === "alert" || band === "check")) {
+    await openBreakageIncident(change, { payloadJson, judgment: selfJudgment, band });
+  } else {
+    await fileUnlessDiscarded(change, payloadJson, selfJudgment);
   }
   return changed.snapshotId;
 }

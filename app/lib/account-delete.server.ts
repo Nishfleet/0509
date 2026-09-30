@@ -7,6 +7,7 @@ import { readWorkspaceIdForOwner, readWorkspaceR2Prefixes } from "./data/workspa
 
 const PAGE_SIZE = 1000;
 const DELETE_INSTANCE_COOKIE = "account-delete";
+const STATUS_DEADLINE_MS = 3000;
 
 export interface AccountDeleteParams {
   prefixes: string[];
@@ -35,12 +36,19 @@ export async function deleteAccount(
 }
 
 async function revokeGrants(helpers: Pick<OAuthHelpers, "listUserGrants" | "revokeGrant">, userId: string) {
+  let failed = 0;
+  let cursor: string | undefined;
   try {
-    const grants = await helpers.listUserGrants(userId, { limit: 100 });
-    await Promise.all(grants.items.map((grant) => helpers.revokeGrant(grant.id, userId)));
-  } catch (error) {
-    console.error(JSON.stringify({ event: "account_delete.grant_revoke_failed", error: String(error) }));
+    do {
+      const grants = await helpers.listUserGrants(userId, { limit: 100, cursor });
+      const settled = await Promise.allSettled(grants.items.map((grant) => helpers.revokeGrant(grant.id, userId)));
+      failed += settled.filter((result) => result.status === "rejected").length;
+      cursor = grants.cursor;
+    } while (cursor !== undefined);
+  } catch {
+    failed += 1;
   }
+  if (failed > 0) console.error(JSON.stringify({ event: "account_delete.grant_revoke_failed", failed }));
 }
 
 function deleteInstanceCookie() {
@@ -69,26 +77,52 @@ export async function readAccountDeleteInstanceId(request: Request): Promise<str
   return typeof parsed === "string" && parsed.length > 0 ? parsed : null;
 }
 
-export async function deleteStoredPage(prefix: string): Promise<{ deleted: number; more: boolean }> {
-  const listed = await env.SNAPSHOTS.list({ prefix, limit: PAGE_SIZE });
+async function deletePage(bucket: R2Bucket, prefix: string): Promise<{ deleted: number; more: boolean }> {
+  const listed = await bucket.list({ prefix, limit: PAGE_SIZE });
   const keys = listed.objects.map((object) => object.key);
-  if (keys.length > 0) await env.SNAPSHOTS.delete(keys);
+  if (keys.length > 0) await bucket.delete(keys);
   return { deleted: keys.length, more: listed.truncated };
+}
+
+export async function deleteStoredPage(prefix: string): Promise<{ deleted: number; more: boolean }> {
+  return deletePage(env.SNAPSHOTS, prefix);
+}
+
+export async function deleteBackupPage(prefix: string): Promise<{ deleted: number; more: boolean }> {
+  return deletePage(env.SNAPSHOTS_BACKUP, prefix);
 }
 
 function isAccountDeleteInstanceMissing(error: unknown): boolean {
   return error instanceof Error && error.message.includes("instance.not_found");
 }
 
-export async function readAccountDeleteProgress(
-  instanceId: string,
-): Promise<AccountDeleteProgress | null> {
+async function lookupInstanceStatus(instanceId: string) {
   const lookup = await env.ACCOUNT_DELETE.get(instanceId).catch((error: unknown) => {
     if (isAccountDeleteInstanceMissing(error)) return null;
     throw error;
   });
-  if (lookup === null) return null;
-  const { status, output } = await lookup.status();
+  return lookup === null ? null : lookup.status();
+}
+
+async function withinDeadline<T>(work: Promise<T>): Promise<T | "timeout"> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const deadline = new Promise<"timeout">((resolve) => {
+    timer = setTimeout(() => {
+      resolve("timeout");
+    }, STATUS_DEADLINE_MS);
+  });
+  try {
+    return await Promise.race([work, deadline]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+export async function readAccountDeleteProgress(instanceId: string): Promise<AccountDeleteProgress | null> {
+  const found = await withinDeadline(lookupInstanceStatus(instanceId));
+  if (found === "timeout") return { rows: "removed", files: "removing", deleted: null };
+  if (found === null) return null;
+  const { status, output } = found;
   if (status === "complete") {
     const deleted =
       typeof output === "object" && output !== null && "deleted" in output && typeof output.deleted === "number"

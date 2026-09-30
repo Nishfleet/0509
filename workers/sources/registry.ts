@@ -6,13 +6,13 @@ import { redditAdapter } from "./mentions/reddit";
 import { youtubeAdapter } from "./mentions/youtube";
 
 const ADAPTERS: Readonly<Record<string, MentionsAdapter>> = {
-	"gdelt.doc": gdelt,
-	"hn.algolia": hnAdapter,
-	"youtube.channel_rss": youtubeAdapter,
-	"medium.tag_rss": mediumAdapter,
-	"reddit.search_rss": redditAdapter,
+  "gdelt.doc": gdelt,
+  "hn.algolia": hnAdapter,
+  "youtube.channel_rss": youtubeAdapter,
+  "medium.tag_rss": mediumAdapter,
+  "reddit.search_rss": redditAdapter,
 };
 
 export function adapterFor(pluginKey: string): MentionsAdapter | undefined {
-	return ADAPTERS[pluginKey];
+  return ADAPTERS[pluginKey];
 }

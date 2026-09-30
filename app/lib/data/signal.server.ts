@@ -4,12 +4,8 @@ import { z } from "zod";
 import type { ScoredSignal } from "../biggest-move";
 import { isFeedKind, type DevelopmentItem } from "../developments";
 import type { WeekEvidence } from "../home-standing";
-import {
-  D3_QUESTION_ID,
-  D6_QUESTION_ID,
-  reliabilitySchema,
-  scoreBucketSchema,
-} from "../standing-score";
+import { ACT_AT, REJECT_AT } from "../jev/thresholds";
+import { D3_QUESTION_ID, D6_QUESTION_ID, reliabilitySchema, scoreBucketSchema } from "../standing-score";
 import type { HiringSignalState, HiringSignalUpdate } from "../hiring/role-lifecycle";
 
 export interface ChangeSignalRow {
@@ -81,9 +77,7 @@ export async function insertHiringSignals(rows: readonly NewHiringSignal[]): Pro
     const chunk = rows.slice(offset, offset + HIRING_BATCH);
     await env.DB.batch(
       chunk.map((row) => {
-        const summaryParts = [row.location, row.team].filter(
-          (part) => part !== null && part !== "",
-        );
+        const summaryParts = [row.location, row.team].filter((part) => part !== null && part !== "");
         const summary = summaryParts.length > 0 ? summaryParts.join(" · ") : null;
         const dedupKey = `${row.watchId}:${row.roleId}`;
         return env.DB.prepare(INSERT_HIRING).bind(
@@ -155,7 +149,8 @@ const INSERT_MENTION = `INSERT INTO signal
 VALUES (?1, ?2, ?3, ?4, ?5, ?6, 'mention', ?7, ?8, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?15, ?16, ?17)
 ON CONFLICT (source_id, dedup_key) DO NOTHING`;
 
-const SEEN_KEYS = "SELECT dedup_key FROM signal WHERE source_id = ?1 AND dedup_key IN (SELECT value FROM json_each(?2))";
+const SEEN_KEYS =
+  "SELECT dedup_key FROM signal WHERE source_id = ?1 AND dedup_key IN (SELECT value FROM json_each(?2))";
 
 export interface MentionSignal {
   id: string;
@@ -390,7 +385,16 @@ export async function readEntityDevelopments(input: {
     .all<DevelopmentRow>();
   return results.flatMap((row) =>
     isFeedKind(row.kind)
-      ? [{ id: row.id, kind: row.kind, title: row.title, summary: row.summary, url: row.url, observedAt: row.observed_at }]
+      ? [
+          {
+            id: row.id,
+            kind: row.kind,
+            title: row.title,
+            summary: row.summary,
+            url: row.url,
+            observedAt: row.observed_at,
+          },
+        ]
       : [],
   );
 }
@@ -426,9 +430,9 @@ export async function readSignalCounts(
 const SELECT_SCORED_SIGNALS = `SELECT * FROM (SELECT s.id, s.kind, s.title, s.summary, s.url, s.observed_at,
   src.platform, src.reliability,
   CASE
-    WHEN s.kind = 'mention' AND v.p >= 0.9 THEN 'mention_matters'
-    WHEN s.kind = 'mention' AND v.p > 0.1 THEN 'mention_normal'
-    WHEN s.kind = 'change' AND v.p >= 0.9 THEN 'site_change_noteworthy'
+    WHEN s.kind = 'mention' AND v.p >= ${String(ACT_AT)} THEN 'mention_matters'
+    WHEN s.kind = 'mention' AND v.p > ${String(REJECT_AT)} THEN 'mention_normal'
+    WHEN s.kind = 'change' AND v.p >= ${String(ACT_AT)} THEN 'site_change_noteworthy'
     WHEN s.kind = 'ad' AND s.aspect IS NOT NULL THEN 'ad_copy_change'
     WHEN s.kind = 'ad' AND s.published_at >= ?3 AND s.published_at < ?4 THEN 'ad_new_creative'
     WHEN s.kind = 'hiring' THEN 'hiring_new_role'
@@ -468,14 +472,7 @@ export async function readScoredSignals(input: {
   until: string;
 }): Promise<ScoredSignal[]> {
   const { results } = await env.DB.prepare(SELECT_SCORED_SIGNALS)
-    .bind(
-      input.workspaceId,
-      input.entityId,
-      input.since,
-      input.until,
-      D6_QUESTION_ID,
-      D3_QUESTION_ID,
-    )
+    .bind(input.workspaceId, input.entityId, input.since, input.until, D6_QUESTION_ID, D3_QUESTION_ID)
     .all();
   return scoredSignalRows.parse(results).flatMap((row) =>
     isFeedKind(row.kind)

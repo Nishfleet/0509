@@ -61,13 +61,15 @@ test.describe("J5", () => {
     await input.fill("fixture.0509.in");
     await input.press("Enter");
 
-    await expect(page).toHaveURL(/\/onboarding\/identity\?subject=fixture\.0509\.in$/);
+    const business = page.getByRole("button", { name: "Yes, a business or creator" });
+    await expect(async () => {
+      if (await business.isVisible()) await business.click();
+      await expect(page).toHaveURL(/\/onboarding\/identity\?subject=fixture\.0509\.in$/, { timeout: 3_000 });
+    }).toPass({ timeout: 30_000 });
     await expect(page.getByRole("status")).toHaveText("We couldn't read that site, so fill in what you can.", {
       timeout: 45_000,
     });
-    await expect(
-      page.getByText("we'll fill this on the first crawl, within the hour", { exact: true }),
-    ).toHaveCount(4);
+    await expect(page.getByText("we'll fill this on the first crawl, within the hour", { exact: true })).toHaveCount(4);
     await expect(page.getByText("looking on the site")).toHaveCount(0);
     await expect(page.getByText("No data")).toHaveCount(0);
     await expect(page.getByText("none found on the site")).toHaveCount(0);
@@ -78,7 +80,7 @@ test.describe("J5", () => {
     await name.press("Escape");
     await page.getByRole("button", { name: "That's me" }).click();
 
-    await expect(page).toHaveURL(/\/onboarding\/competitors$/);
+    await expect(page).toHaveURL(/\/onboarding\/competitors$/, { timeout: 10_000 });
     expect(await consoleFailures(page, watched, testInfo), testInfo.project.name).toEqual([]);
   });
 });

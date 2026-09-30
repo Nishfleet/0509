@@ -50,7 +50,7 @@ test("the privacy page names who helps run 0509 @smoke", async ({ page }) => {
   await page.goto("/privacy");
 
   const helpers = page.locator("section", { has: page.locator("#who-helps") }).locator("dt");
-  await expect(helpers).toContainText(["Cloudflare", "AI model providers", "payment provider", "Sentry", "Gmail", "GitHub"]);
+  await expect(helpers).toContainText(["Cloudflare", "Dodo Payments", "Sentry", "Gmail", "GitHub"]);
 });
 
 test("the privacy page says sharing is a picture and there are no public pages @smoke", async ({ page }) => {
@@ -63,14 +63,12 @@ test("the privacy page says sharing is a picture and there are no public pages @
   await expect(main).toContainText(/no cookie banner/i);
 });
 
-test("the privacy page states retention, deletion, rights, and the 72-hour removal @smoke", async ({
-  page,
-}) => {
+test("the privacy page states retention, deletion, rights, and the 72-hour removal @smoke", async ({ page }) => {
   await page.goto("/privacy");
 
   const main = page.locator("main");
   await expect(main).toContainText(/one year/i);
-  await expect(main).toContainText(/incident records/i);
+  await expect(main).toContainText(/do-not-email/i);
   await expect(main).toContainText(/remove and forget/i);
   await expect(main).toContainText(/72 hours/i);
   await expect(main).toContainText(/data protection authority/i);
@@ -133,9 +131,7 @@ test("the privacy page reaches first paint with no console errors @smoke", async
   expect(await consoleFailures(page, watched, testInfo), testInfo.project.name).toEqual([]);
 });
 
-test("the privacy page serves one ld+json graph naming the organization and breadcrumbs @smoke", async ({
-  page,
-}) => {
+test("the privacy page serves one ld+json graph naming the organization and breadcrumbs @smoke", async ({ page }) => {
   await page.goto("/privacy");
 
   const scripts = page.locator('script[type="application/ld+json"]');

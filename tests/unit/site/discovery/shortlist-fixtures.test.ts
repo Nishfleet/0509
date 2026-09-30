@@ -2,7 +2,7 @@ import { getDomain } from "tldts";
 import { describe, expect, it } from "vitest";
 
 import HN_FIXTURE from "../../../fixtures/hn-gymshark.json?raw";
-import { hnGenerator } from "../../../../app/lib/discovery/generators/hn";
+import { hnGenerator } from "../../../../app/lib/discovery/generators/hn.server";
 import { evidenceLine, shortlist } from "../../../../app/lib/discovery/shortlist";
 import type { Candidate, FetchedText, Subject } from "../../../../app/lib/discovery/types";
 
@@ -44,28 +44,24 @@ describe("shortlist fixtures", () => {
     }
 
     const grouped = new Map(
-      [...new Set(combined.map((candidate) => candidate.name.toLowerCase()))].map(
-        (key): [string, Grouped] => {
-          const evidence = combined
-            .filter((item) => item.name.toLowerCase() === key)
-            .flatMap((item) => item.evidence);
-          const name = combined.find((item) => item.name.toLowerCase() === key)?.name ?? key;
-          return [
-            key,
-            {
-              name,
-              generators: new Set(evidence.map((item) => item.generator)),
-              publishers: new Set(
-                evidence.flatMap((item) => {
-                  if (item.generator !== "news") return [];
-                  const publisher = getDomain(item.sourceUrl);
-                  return publisher === null ? [] : [publisher];
-                }),
-              ),
-            },
-          ];
-        },
-      ),
+      [...new Set(combined.map((candidate) => candidate.name.toLowerCase()))].map((key): [string, Grouped] => {
+        const evidence = combined.filter((item) => item.name.toLowerCase() === key).flatMap((item) => item.evidence);
+        const name = combined.find((item) => item.name.toLowerCase() === key)?.name ?? key;
+        return [
+          key,
+          {
+            name,
+            generators: new Set(evidence.map((item) => item.generator)),
+            publishers: new Set(
+              evidence.flatMap((item) => {
+                if (item.generator !== "news") return [];
+                const publisher = getDomain(item.sourceUrl);
+                return publisher === null ? [] : [publisher];
+              }),
+            ),
+          },
+        ];
+      }),
     );
 
     const shortlistedNames = new Set(lowercaseNames);

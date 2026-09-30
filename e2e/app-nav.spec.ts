@@ -1,12 +1,20 @@
 import { expect, test } from "@playwright/test";
 
-import { sessionStatePath } from "../playwright.config";
+import { onboardedStatePath } from "../playwright.config";
 import { consoleFailures, watchConsole } from "./inbox";
 
 // The session comes from the `session` setup project's storageState (one
 // magic-link sign-in per run). The only test here is production-only, so the
 // missing local state file is never read.
-test.use({ storageState: process.env.PLAYWRIGHT_TEST_BASE_URL ? sessionStatePath : undefined });
+test.use({
+  storageState: async ({}, use, testInfo) => {
+    await use(
+      process.env.PLAYWRIGHT_TEST_BASE_URL
+        ? onboardedStatePath(testInfo.project.name === "phone-390" ? "phone" : "desktop")
+        : undefined,
+    );
+  },
+});
 
 // The signed-in nav walk, production only: the preview Worker has no inbox, so
 // the session setup project does not exist there, and this spec skips rather
@@ -30,7 +38,7 @@ test("a signed-in user reaches the four places by tapping and by Tab+Enter", asy
     page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
 
   // Tapping: start at Competitors by URL, then walk the nav by click, and end
-  // on Home — a fresh address has no self entity, so /app lands on /onboarding.
+  // on Home.
   await page.goto("/app/competitors");
   await expect(page.getByRole("heading", { name: "Competitors" })).toBeVisible();
   expect(await noOverflow()).toBe(0);
@@ -51,7 +59,7 @@ test("a signed-in user reaches the four places by tapping and by Tab+Enter", asy
   await nav.getByRole("link", { name: "Competitors" }).click();
   await page.waitForURL(/\/app\/competitors$/);
   await nav.getByRole("link", { name: "Home" }).click();
-  await page.waitForURL(/\/onboarding$/);
+  await page.waitForURL(/\/app$/);
 
   // Keyboard: a fresh page load before tabbing pins the count from the top of
   // the document — the nav is the first focusable content in the shell, so
@@ -76,7 +84,7 @@ test("a signed-in user reaches the four places by tapping and by Tab+Enter", asy
   await page.keyboard.press("Tab");
   await expect(page.locator(":focus")).toHaveAttribute("href", "/app");
   await page.keyboard.press("Enter");
-  await page.waitForURL(/\/onboarding$/);
+  await page.waitForURL(/\/app$/);
 
   expect(await consoleFailures(page, watched, testInfo), testInfo.project.name).toEqual([]);
 });

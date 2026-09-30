@@ -2,7 +2,12 @@ import { env } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
 
 import { readCompetitors, readDiscoveryContext } from "../../app/lib/data/entity.server";
-import { dismissSuggestion, readUserDismissed, restoreSuggestion, writeDiscoveryResults } from "../../app/lib/data/suggestion.server";
+import {
+  dismissSuggestion,
+  readUserDismissed,
+  restoreSuggestion,
+  writeDiscoveryResults,
+} from "../../app/lib/data/suggestion.server";
 import type { NoulVerdict } from "../../app/lib/jev/client.server";
 
 /**
@@ -86,8 +91,7 @@ interface SuggestionRow {
 }
 
 async function suggestionRow(id: string): Promise<SuggestionRow | null> {
-  return env.DB
-    .prepare("SELECT status, decided_by, decided_at FROM suggestion WHERE id = ?")
+  return env.DB.prepare("SELECT status, decided_by, decided_at FROM suggestion WHERE id = ?")
     .bind(id)
     .first<SuggestionRow>();
 }
@@ -102,9 +106,7 @@ async function suggestionCountForDomain(workspaceId: string, domain: string): Pr
 }
 
 async function entityCountForDomain(workspaceId: string, domain: string): Promise<number> {
-  const row = await env.DB.prepare(
-    "SELECT COUNT(*) AS n FROM entity WHERE workspace_id = ? AND domain = ?",
-  )
+  const row = await env.DB.prepare("SELECT COUNT(*) AS n FROM entity WHERE workspace_id = ? AND domain = ?")
     .bind(workspaceId, domain)
     .first<{ n: number }>();
   return row?.n ?? 0;

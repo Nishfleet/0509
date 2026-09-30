@@ -39,8 +39,7 @@ const sources: readonly RailSource[] = [
       key: "hiring.greenhouse",
       platform: "greenhouse",
       is_enabled: 1,
-      config_json:
-        '{"state":"degraded","reason":"rate-limited","last_good_at":"2026-09-19T06:02:00.000Z"}',
+      config_json: '{"state":"degraded","reason":"rate-limited","last_good_at":"2026-09-19T06:02:00.000Z"}',
     },
     snapshot: null,
   },
@@ -142,9 +141,7 @@ describe("the competitor rail", () => {
     expect(verdictWords("maybe")).toBeNull();
     const unknown = text(render({ verdict: { choice: "maybe", decidedAt: "2026-09-17T00:00:00.000Z" } }));
     expect(unknown).toContain("We ask this every week. The first answer lands after a week of watching.");
-    const empty = text(
-      render({ peers: [], facts: [], sources: [], verdict: null, lastChecked: null }),
-    );
+    const empty = text(render({ peers: [], facts: [], sources: [], verdict: null, lastChecked: null }));
     expect(empty).toContain("No standing yet. It comes with your first weekly brief.");
     expect(empty).toContain("Nothing new from them in the last 30 days.");
     expect(empty).toContain("We ask this every week. The first answer lands after a week of watching.");

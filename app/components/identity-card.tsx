@@ -81,6 +81,7 @@ function EditRow({
   const checkId = useId();
   const saveOnEnter = (event: KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     if (event.key !== "Enter") return;
+    if (event.nativeEvent.isComposing) return;
     event.preventDefault();
     setOpen(false);
     onSave(value);
@@ -130,11 +131,7 @@ function EditRow({
       {edited ? (
         <>
           <span className="font-mono text-[0.7rem] text-ink-soft uppercase">edited by you</span>
-          <button
-            type="button"
-            className="text-[0.88rem] text-ink-soft underline"
-            onClick={onRevert}
-          >
+          <button type="button" className="text-[0.88rem] text-ink-soft underline" onClick={onRevert}>
             use what we found
           </button>
         </>
@@ -144,9 +141,7 @@ function EditRow({
         </span>
       ) : null}
       <input type="hidden" name={name} value={value} />
-      {empty === true ? (
-        <span className="text-[0.88rem] text-ink-soft max-sm:basis-full">{emptyLine}</span>
-      ) : null}
+      {empty === true ? <span className="text-[0.88rem] text-ink-soft max-sm:basis-full">{emptyLine}</span> : null}
     </Row>
   );
 }
@@ -207,10 +202,7 @@ export function Fields({
         }}
         onSave={(value) => {
           setReverted(null);
-          void fetcher.submit(
-            { intent: "draft", subject, field: "name", value },
-            { method: "post" },
-          );
+          void fetcher.submit({ intent: "draft", subject, field: "name", value }, { method: "post" });
         }}
       />
       {site.unfound ? (
@@ -234,17 +226,11 @@ export function Fields({
         reverted={reverted === "description"}
         onRevert={() => {
           setReverted("description");
-          void fetcher.submit(
-            { intent: "revert", subject, field: "description" },
-            { method: "post" },
-          );
+          void fetcher.submit({ intent: "revert", subject, field: "description" }, { method: "post" });
         }}
         onSave={(value) => {
           setReverted(null);
-          void fetcher.submit(
-            { intent: "draft", subject, field: "description", value },
-            { method: "post" },
-          );
+          void fetcher.submit({ intent: "draft", subject, field: "description", value }, { method: "post" });
         }}
       />
       <Row label="socials" check={site.review.socials === "check"}>
@@ -352,7 +338,11 @@ export function IdentityCard({
           {(fields) => (
             <>
               <Fields subject={subject} site={fields} logo={logo} draft={draft} />
-              {message ? <p role="alert" className="pt-3 text-[0.88rem]">{message}</p> : null}
+              {message ? (
+                <p role="alert" className="pt-3 text-[0.88rem]">
+                  {message}
+                </p>
+              ) : null}
               <Button type="submit" size="lg" className="my-5">
                 That&apos;s me
               </Button>

@@ -23,9 +23,9 @@ describe("onboardingTimingLines", () => {
   });
 
   it("marks the input to card line when the card is past the 30s budget", () => {
-    expect(
-      onboardingTimingLines(times({ cardReadyAt: "2026-09-25T10:00:31.000Z" })),
-    ).toContain("Input to card: 31s (over the 30s budget)");
+    expect(onboardingTimingLines(times({ cardReadyAt: "2026-09-25T10:00:31.000Z" }))).toContain(
+      "Input to card: 31s (over the 30s budget)",
+    );
   });
 
   it("marks the card to competitors line when competitors land 61s after the start", () => {
@@ -47,11 +47,7 @@ describe("onboardingTimingLines", () => {
   });
 
   it("reads not yet for every stage that has not been reached", () => {
-    expect(
-      onboardingTimingLines(
-        times({ cardReadyAt: null, competitorsReadyAt: null, firstSignalAt: null }),
-      ),
-    ).toEqual([
+    expect(onboardingTimingLines(times({ cardReadyAt: null, competitorsReadyAt: null, firstSignalAt: null }))).toEqual([
       "Input to card: not yet",
       "Card to competitors: not yet",
       "Competitors to first signal: not yet",

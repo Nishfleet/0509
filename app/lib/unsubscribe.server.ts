@@ -1,7 +1,4 @@
-import {
-  isUnsubscribeTokenKnown,
-  suppressByUnsubscribeToken,
-} from "./data/email_suppression.server";
+import { isUnsubscribeTokenKnown, suppressByUnsubscribeToken } from "./data/email_suppression.server";
 
 export type UnsubscribeOutcome = "unsubscribed" | "invalid_token";
 

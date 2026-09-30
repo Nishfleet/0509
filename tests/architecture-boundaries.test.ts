@@ -20,15 +20,11 @@ const PROBES: Record<string, string> = {
 };
 
 async function writeProbes(): Promise<void> {
-  await Promise.all(
-    Object.entries(PROBES).map(([rel, source]) => writeFile(path.join(REPO_ROOT, rel), source)),
-  );
+  await Promise.all(Object.entries(PROBES).map(([rel, source]) => writeFile(path.join(REPO_ROOT, rel), source)));
 }
 
 async function removeProbes(): Promise<void> {
-  await Promise.all(
-    Object.keys(PROBES).map((rel) => rm(path.join(REPO_ROOT, rel), { force: true })),
-  );
+  await Promise.all(Object.keys(PROBES).map((rel) => rm(path.join(REPO_ROOT, rel), { force: true })));
 }
 
 describe("architecture lint (#4272)", () => {
@@ -40,9 +36,7 @@ describe("architecture lint (#4272)", () => {
       try {
         const eslint = new ESLint({ cwd: REPO_ROOT });
         const results = await eslint.lintFiles(Object.keys(PROBES));
-        const byFile = new Map(
-          results.map((result) => [path.relative(REPO_ROOT, result.filePath), result.messages]),
-        );
+        const byFile = new Map(results.map((result) => [path.relative(REPO_ROOT, result.filePath), result.messages]));
 
         const boundary = byFile.get("app/components/boundary-probe.tsx") ?? [];
         expect(boundary.some((message) => message.ruleId === "boundaries/dependencies")).toBe(true);
@@ -58,9 +52,7 @@ describe("architecture lint (#4272)", () => {
 
         const realClient = await eslint.lintFiles(["app/lib/auth-client.ts"]);
         const realMessages = realClient[0]?.messages ?? [];
-        expect(realMessages.some((message) => message.ruleId === "no-restricted-imports")).toBe(
-          false,
-        );
+        expect(realMessages.some((message) => message.ruleId === "no-restricted-imports")).toBe(false);
 
         const synthetic = await eslint.lintText(
           'import { env } from "cloudflare:workers";\n\nexport const leaked = env;\n',
@@ -69,9 +61,7 @@ describe("architecture lint (#4272)", () => {
         const syntheticMessages = synthetic[0]?.messages ?? [];
         expect(
           syntheticMessages.some(
-            (message) =>
-              message.ruleId === "no-restricted-imports" &&
-              message.message.includes("cloudflare:workers"),
+            (message) => message.ruleId === "no-restricted-imports" && message.message.includes("cloudflare:workers"),
           ),
         ).toBe(true);
       } finally {

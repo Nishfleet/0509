@@ -1,7 +1,7 @@
 import type { Route } from "./+types/onboarding.competitors";
 
 import { useEffect, useState } from "react";
-import { Form, redirect, useRevalidator } from "react-router";
+import { data, Form, redirect, useNavigation, useRevalidator } from "react-router";
 
 import { AddCompetitor, CompetitorMaybes } from "../components/competitor-maybes";
 import { Monogram } from "../components/monogram";
@@ -13,35 +13,41 @@ import { markCompetitorsReady, markWatchingStarted } from "../lib/data/onboardin
 import { readWorkspaceIdForOwner } from "../lib/data/workspace.server";
 import { readDiscoveryState } from "../lib/discovery/start.server";
 import { discoveryNotice, type DiscoveryState } from "../lib/discovery/state";
-import { requireSession } from "../lib/require-session.server";
+import { requireFreshSession, requireSession } from "../lib/require-session.server";
+import { createTimings } from "../lib/server-timing.server";
 import { ONBOARDING_COMPETITORS, workspaceLandingForRequest } from "../lib/workspace.server";
 
 const POLL_MS = 3000;
 const MAX_POLLS = 60;
 
-async function workspaceFor(request: Request): Promise<string> {
-  const session = await requireSession(request);
-  const landing = await workspaceLandingForRequest(request, session.user.id);
+async function workspaceFor(request: Request, fresh = false): Promise<string> {
+  const session = await (fresh ? requireFreshSession(request) : requireSession(request));
+  const landing = await workspaceLandingForRequest(request, session.user);
   if (landing !== null && landing !== ONBOARDING_COMPETITORS) throw redirect(landing);
   const workspaceId = await readWorkspaceIdForOwner(session.user.id);
   if (workspaceId === null) throw redirect("/onboarding");
   return workspaceId;
 }
 
+export function meta() {
+  return [{ title: "Who you're up against · Five to Nine" }];
+}
+
 export async function loader({ request }: Route.LoaderArgs) {
-  const workspaceId = await workspaceFor(request);
-  const [competitors, discovery] = await Promise.all([
-    readOnboardingCompetitors(workspaceId),
-    readDiscoveryState(workspaceId, new Date()),
-  ]);
+  const timings = createTimings();
+  const workspaceId = await timings.measure("workspace", workspaceFor(request));
+  const [competitors, discovery] = await timings.measure(
+    "reads",
+    Promise.all([readOnboardingCompetitors(workspaceId), readDiscoveryState(workspaceId, new Date())]),
+  );
   if (competitors.on.length + competitors.maybes.length > 0) {
-    await markCompetitorsReady(workspaceId, new Date().toISOString());
+    await timings.measure("ready", markCompetitorsReady(workspaceId, new Date().toISOString()));
   }
-  return { ...competitors, discovery };
+  return data({ ...competitors, discovery }, { headers: timings.header() });
 }
 
 export async function action({ request }: Route.ActionArgs) {
-  const workspaceId = await workspaceFor(request);
+  const workspaceId = await workspaceFor(request, true);
   const form = await request.formData();
   if (form.get("intent") === "start") {
     await markWatchingStarted(workspaceId, new Date().toISOString());
@@ -55,17 +61,18 @@ function useDiscoveryPolling(discovery: DiscoveryState): DiscoveryState {
   const stalled = polls >= MAX_POLLS;
   const searching = discovery === "looking" && !stalled;
   const revalidator = useRevalidator();
+  const navigation = useNavigation();
 
   useEffect(() => {
     if (!searching) return;
     const id = setInterval(() => {
       setPolls((count) => count + 1);
-      if (revalidator.state === "idle") void revalidator.revalidate();
+      if (revalidator.state === "idle" && navigation.state === "idle") void revalidator.revalidate();
     }, POLL_MS);
     return () => {
       clearInterval(id);
     };
-  }, [revalidator, searching]);
+  }, [navigation, revalidator, searching]);
 
   return stalled && discovery === "looking" ? "unavailable" : discovery;
 }

@@ -1,6 +1,10 @@
+import { readdirSync, readFileSync } from "node:fs";
 import { readdir, readFile, stat } from "node:fs/promises";
+import { DatabaseSync } from "node:sqlite";
 import { join } from "node:path";
 
+import { betterAuth } from "better-auth";
+import { magicLink } from "better-auth/plugins";
 import { expect, type Page, type TestInfo } from "@playwright/test";
 
 // The J1 mail path, per the amended decision on 0509#3927: Email Routing's
@@ -94,9 +98,7 @@ function decodeQuotedPrintable(input: string): string {
 }
 
 export function decodedBodies(raw: string): string[] {
-  const quoted = /content-transfer-encoding:\s*quoted-printable/i.test(raw)
-    ? decodeQuotedPrintable(raw)
-    : raw;
+  const quoted = /content-transfer-encoding:\s*quoted-printable/i.test(raw) ? decodeQuotedPrintable(raw) : raw;
   const bodies = [quoted];
   const base64Part = /content-transfer-encoding:\s*base64[^]*?\r?\n\r?\n([A-Za-z0-9+/=\r\n]+)/gi;
   for (const match of raw.matchAll(base64Part)) {
@@ -225,7 +227,9 @@ async function localLinks(to: string): Promise<string[]> {
 // re-resolve the token from the environment behind the caller's back.
 function remoteToken(token: string | null): string {
   if (token === null) {
-    throw new Error("an inbox read on a remote lane needs the E2E_INBOX_TOKEN the caller resolved; null is the local lane's marker");
+    throw new Error(
+      "an inbox read on a remote lane needs the E2E_INBOX_TOKEN the caller resolved; null is the local lane's marker",
+    );
   }
   return token;
 }
@@ -368,7 +372,7 @@ export async function settleSignInWidget(page: Page): Promise<void> {
   // never mounted. The local lane has no pre-clearance, so there the field
   // must carry the always-pass test token.
   if (process.env.CF_ACCESS_CLIENT_ID) {
-    await expect(field).toHaveCount(1);
+    await expect(field).toHaveCount(1, { timeout: 30_000 });
     return;
   }
   await expect(field).toHaveValue(/\S/);
@@ -453,9 +457,7 @@ export async function consoleFailures(
 // empty-url guard keeps `new URL("")` from throwing on a location-less error.
 export function ownDocument404For(pathname: string): (entry: ConsoleEntry) => boolean {
   return (entry) =>
-    /status of 404\b/.test(entry.text) &&
-    entry.url.length > 0 &&
-    new URL(entry.url).pathname === pathname;
+    /status of 404\b/.test(entry.text) && entry.url.length > 0 && new URL(entry.url).pathname === pathname;
 }
 
 // J1's core: submit the login form for a fresh e2e+ address, read the real
@@ -531,13 +533,14 @@ export async function signInWithMagicLink(
 // behind — signed out, row still there — and this helper cannot tell the
 // two apart, so that leak is a named gap (#5733), not a solved case.
 
-// 0509#5688 (fleet-manager): the journey specs keep these four accounts on
+// 0509#5688 (fleet-manager): the journey specs keep these five accounts on
 // purpose; the recurring teardown must never delete them. Match these exact
-// addresses, never a pattern. The one-time purge (0509#5730) kept the same
-// four; a later purge may still take them — once the kept-account journey
+// addresses, never a pattern. The one-time purge (0509#5730) kept four
+// of them (not e2e+j8-hard, added by J8, 0509#4124); a later purge may still take them — once the kept-account journey
 // specs land (0509#4123, #4124, #4125, #4128) they create them again.
 const KEPT_JOURNEY_ACCOUNTS: readonly string[] = [
   "e2e+j7@0509.io",
+  "e2e+j8-hard@0509.io",
   "e2e+j8-soft@0509.io",
   "e2e+j9-mentions@0509.io",
   "e2e+j12-rollovers@0509.io",
@@ -556,4 +559,88 @@ export async function deleteCreatedAccount(page: Page, email: string): Promise<v
   await page.getByLabel("Type " + email + " to confirm").fill(email);
   await page.getByRole("button", { name: "Delete my account" }).click();
   await page.waitForURL(/\/login\?deleted=/);
+}
+
+function authSecret(): string {
+  const line = readFileSync(".dev.vars.example", "utf8")
+    .split("\n")
+    .find((entry) => entry.startsWith("BETTER_AUTH_SECRET="));
+  if (line === undefined || line.length <= "BETTER_AUTH_SECRET=".length) {
+    throw new Error("BETTER_AUTH_SECRET missing from .dev.vars.example");
+  }
+  return line.slice("BETTER_AUTH_SECRET=".length);
+}
+
+function previewDatabasePath(): string {
+  const root = ".wrangler/state";
+  const files = readdirSync(root, { recursive: true, encoding: "utf8" }).filter((name) => name.endsWith(".sqlite"));
+  for (const name of files) {
+    const file = join(root, name);
+    const probe = new DatabaseSync(file, { readOnly: true, timeout: 15_000 });
+    try {
+      const row = probe.prepare("SELECT 1 AS ok FROM sqlite_master WHERE type = 'table' AND name = 'signal'").get();
+      if (row !== undefined) return file;
+    } finally {
+      probe.close();
+    }
+  }
+  throw new Error("local preview D1 has no signal table");
+}
+
+export function run(db: DatabaseSync, sql: string, ...values: (string | number | null)[]): void {
+  db.prepare(sql).run(...values);
+}
+
+export async function seedPreviewSession<T = void>(
+  prefix: string,
+  seed: (context: { db: DatabaseSync; suffix: string; userId: string }) => T,
+): Promise<{ cookie: string; seeded: T }> {
+  const suffix = crypto.randomUUID().slice(0, 8);
+  const email = `${prefix}-${suffix}@0509.io`;
+  const db = new DatabaseSync(previewDatabasePath(), { timeout: 15_000 });
+  db.exec("PRAGMA busy_timeout = 15000");
+  db.exec("PRAGMA foreign_keys = ON");
+  const links: string[] = [];
+  const auth = betterAuth({
+    database: db,
+    secret: authSecret(),
+    baseURL: laneOrigin(),
+    advanced: { cookiePrefix: "better-auth" },
+    plugins: [
+      magicLink({
+        expiresIn: 300,
+        sendMagicLink: ({ url }) => {
+          links.push(url);
+          return Promise.resolve();
+        },
+      }),
+    ],
+  });
+  try {
+    await auth.api.signInMagicLink({ body: { email }, headers: new Headers() });
+    const link = links.at(-1);
+    if (link === undefined) throw new Error("magic link was not issued");
+    const response = await auth.handler(new Request(link, { redirect: "manual" }));
+    const cookie = response.headers
+      .getSetCookie()
+      .map((header) => header.split(";")[0])
+      .join("; ");
+    if (cookie === "") throw new Error("magic link created no session cookie");
+    const user = db.prepare('SELECT id FROM "user" WHERE email = ?').get(email) as { id: string } | undefined;
+    if (user === undefined) throw new Error("magic link created no user");
+    const seeded = seed({ db, suffix, userId: user.id });
+    db.exec("PRAGMA wal_checkpoint(PASSIVE)");
+    return { cookie, seeded };
+  } finally {
+    db.close();
+  }
+}
+
+export function readPreview<T>(read: (db: DatabaseSync) => T): T {
+  const db = new DatabaseSync(previewDatabasePath(), { readOnly: true, timeout: 15_000 });
+  try {
+    return read(db);
+  } finally {
+    db.close();
+  }
 }

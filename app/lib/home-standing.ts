@@ -20,11 +20,24 @@ export interface HomeHistoryRow {
   rank: number;
 }
 
-export interface HomeSource { key: string; kind: "site" | "ads" | "mentions" | "hiring"; platform: string }
+export interface HomeSource {
+  key: string;
+  kind: "site" | "ads" | "mentions" | "hiring";
+  platform: string;
+}
 
-export interface HomeCount { entityId: string; sourceKey: string; count: number }
+export interface HomeCount {
+  entityId: string;
+  sourceKey: string;
+  count: number;
+}
 
-export interface HomePill { key: string; label: string; count: number; state: "live" | "none" | "degraded" }
+export interface HomePill {
+  key: string;
+  label: string;
+  count: number;
+  state: "live" | "none" | "degraded";
+}
 
 export interface HomeRow {
   entityId: string;
@@ -66,7 +79,16 @@ export type HomeStanding =
   | { kind: "add-competitor" }
   | { kind: "gathering"; briefAt: string; firstSweepAt: string | null; brands: number }
   | { kind: "unjudged"; whyLine: string }
-  | { kind: "ranked"; rank: number; total: number; whyLine: string; unjudged: boolean; readThisFirst: BriefPayload["read_this_first"]; rows: readonly HomeRow[]; chart: FourWeekChart };
+  | {
+      kind: "ranked";
+      rank: number;
+      total: number;
+      whyLine: string;
+      unjudged: boolean;
+      readThisFirst: BriefPayload["read_this_first"];
+      rows: readonly HomeRow[];
+      chart: FourWeekChart;
+    };
 
 export interface HomeChip {
   name: string;
@@ -158,9 +180,15 @@ function rankedRows(
       const entity = byId.get(brand.entity_id);
       const activity = brand.ad_delta + brand.mention_delta + brand.site_change_count + brand.new_roles;
       const pills = sources.map((source) => {
-        const count = counts.find((entry) => entry.entityId === brand.entity_id && entry.sourceKey === source.key)?.count ?? 0;
+        const count =
+          counts.find((entry) => entry.entityId === brand.entity_id && entry.sourceKey === source.key)?.count ?? 0;
         const degraded = payload.checked.degraded_sources.some((item) => item.key === source.key);
-        return { key: source.key, label: sourceName(source.kind, source.platform), count, state: degraded ? "degraded" : count === 0 ? "none" : "live" } as const;
+        return {
+          key: source.key,
+          label: sourceName(source.kind, source.platform),
+          count,
+          state: degraded ? "degraded" : count === 0 ? "none" : "live",
+        } as const;
       });
       return {
         entityId: brand.entity_id,
@@ -206,7 +234,9 @@ function fourWeekChart(
   const ranksByEntityId = new Map(
     entityIds.map((entityId) => [
       entityId,
-      weeks.map((week) => history.find((entry) => entry.entity_id === entityId && entry.week_start_at === week)?.rank ?? null),
+      weeks.map(
+        (week) => history.find((entry) => entry.entity_id === entityId && entry.week_start_at === week)?.rank ?? null,
+      ),
     ]),
   );
   return {

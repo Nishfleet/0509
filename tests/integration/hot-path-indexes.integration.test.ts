@@ -83,9 +83,7 @@ const HOT_STATEMENTS: readonly HotStatement[] = [
 ];
 
 async function liveIndexColumns(name: string): Promise<string[]> {
-  const index = await env.DB.prepare(
-    "SELECT name FROM sqlite_master WHERE type = 'index' AND name = ?1",
-  )
+  const index = await env.DB.prepare("SELECT name FROM sqlite_master WHERE type = 'index' AND name = ?1")
     .bind(name)
     .first<{ name: string }>();
   expect(index, `${name} is not in the applied migration chain`).not.toBeNull();
@@ -148,9 +146,7 @@ async function unindexedIdColumns(): Promise<string[]> {
       .bind(table.name)
       .all<{ name: string }>();
     for (const index of indexes.results ?? []) {
-      const leading = await env.DB.prepare(
-        "SELECT name FROM pragma_index_info(?1) ORDER BY seqno LIMIT 1",
-      )
+      const leading = await env.DB.prepare("SELECT name FROM pragma_index_info(?1) ORDER BY seqno LIMIT 1")
         .bind(index.name)
         .first<{ name: string }>();
       if (leading !== null) indexed.add(leading.name);

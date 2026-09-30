@@ -8,7 +8,7 @@ intuitive yet exhaustive, like iOS".
 This replaces the old design document wholesale. The app that document described is
 gone: `fa9d48aa4` emptied the tree and the rebuild is generated fresh — React Router 8
 on Workers, Tailwind 4, shadcn/ui on Base UI. **No component, stylesheet, token file or
-class name survives.** What survives is the *visual language*, restated below as values
+class name survives.** What survives is the _visual language_, restated below as values
 and names so the new build can be made from this page alone.
 
 Concept pages proving it: `docs/design-directions/a-final/` (landing, onboarding, Home,
@@ -35,7 +35,8 @@ competitor, alerts — rendered at 1440 and 390).
 7. **Honesty is a design element.** A degraded source says so on the row. A low-confidence
    judgment sits low and says "possibly". A paused brand shows the date it was paused.
    We never round a gap up into a clean number. The one place a degraded row is replaced
-   rather than shown is the landing's all-degraded gate (§2.1), and there it is replaced
+   rather than shown is the landing's all-degraded gate (§2.1), which fires only when every
+   visible mentions source is degraded and site changes are not, and there it is replaced
    by a line that says coverage is rebuilding and what still arrives — never by silence.
 8. **The accent is one colour.** Green marker. Red exists only as the strike on a
    "before" and the rule on an open incident. Nothing else is coloured, ever.
@@ -55,7 +56,7 @@ how it works → what we watch → price → footer.
 **First viewport must contain, in this order:** who it is for (mono eyebrow), the
 outcome (the display headline), one sentence saying what we watch, the one input with the
 price on its button, the microcopy under it, and three real marks caught this morning —
-one of which is the user's *own site*.
+one of which is the user's _own site_.
 
 **The headline is one outcome in plain words and never contains the product name.** The
 pattern is Dovetail's "Finally, all of your customer feedback in one place", Canny's
@@ -78,9 +79,9 @@ who’s gaining on you."**). No exclamation marks anywhere on the page.
   weekly (the share image, §2.8). It is never sample data and never says "sample".
 - "What we watch" is a wrapped pill row, not a card grid. Sources we cannot currently
   reach are shown dimmed with the reason, on the landing as in the app. The one exception
-  is the prospect: when every visible source is degraded, the landing replaces the whole
-  row with a single rebuilding line, because a page that leads with unknowns sells
-  nothing (0509#5674, #5987).
+  is the prospect: when every visible mentions source is degraded and site changes are
+  live or none, the landing replaces the whole row with a single rebuilding line, because a
+  page that leads with unknowns sells nothing (0509#5674, #5987).
 - Exactly one filled button per viewport. The section CTA repeats the hero's.
 
 ### 2.2 Sign in (`/login`)
@@ -138,8 +139,8 @@ a phone shows is one real thing that happened, not a summary of summaries.
   off ends its line at the pause with the word "paused" — it does not fall to zero.
   X axis: four week-start dates in mono caps.
 - **Ranked rows.** Each row is: position, monogram, name and domain, movement, the
-  switch — then, underneath, *that brand's own before-and-after mark for the week's
-  biggest move*, a "Why it moved" sentence, and the source pills for where the week's
+  switch — then, underneath, _that brand's own before-and-after mark for the week's
+  biggest move_, a "Why it moved" sentence, and the source pills for where the week's
   noise came from. A source that produced nothing is shown dim ("Reddit — none"); a
   source that is failing is shown dim with "degraded".
 - **Expansion.** Tapping a row expands it in place, revealing type tabs (Site changes /
@@ -164,7 +165,7 @@ beside it, the snapshot row, and the top of the biggest-move slab.
   turning it back on picks up where it left off."
 - Developments are chronological and mixed by default, filtered by the type chips
   (All / Ads / Site changes / Mentions / Hiring, each with its count). Ads, site changes,
-  mentions and hiring are *filters on one feed*, not four tabs with four layouts.
+  mentions and hiring are _filters on one feed_, not four tabs with four layouts.
 - Right rail at ≥1080px, stacked underneath below that: Peers (the standing, tappable,
   off brands dimmed), Thirty days (facts), Sources on this brand (live/degraded pills
   with the reason), and Jev's last "still a competitor?" verdict with its date and p.
@@ -239,13 +240,13 @@ ever shows a question id, a decision code, a probability, an importance score or
 "Jev" as a system.** This applies to Home, Competitors, Alerts, the brief and the share
 image.
 
-| Never | Instead |
-|---|---|
-| `Jev D3 noteworthy p 0.94, kind: pricing` | "Our read: a real price move, not a test — it is live for everyone and it is their deepest discount yet." |
-| `Jev D3s own_site_breakage p 0.81` | "Our read: this looks like a mistake, not a decision — a conversion page lost its only button and nothing replaced it." |
-| `Jev was unsure at p 0.42` | "We were not sure this mattered, so it sits here rather than in your brief." |
-| `D4 importance 8.6` | (nothing — it decides the order, it is not shown) |
-| "3 of 41 noteworthy · picked by Jev" | "3 of 41 worth knowing" |
+| Never                                     | Instead                                                                                                                 |
+| ----------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| `Jev D3 noteworthy p 0.94, kind: pricing` | "Our read: a real price move, not a test — it is live for everyone and it is their deepest discount yet."               |
+| `Jev D3s own_site_breakage p 0.81`        | "Our read: this looks like a mistake, not a decision — a conversion page lost its only button and nothing replaced it." |
+| `Jev was unsure at p 0.42`                | "We were not sure this mattered, so it sits here rather than in your brief."                                            |
+| `D4 importance 8.6`                       | (nothing — it decides the order, it is not shown)                                                                       |
+| "3 of 41 noteworthy · picked by Jev"      | "3 of 41 worth knowing"                                                                                                 |
 
 Every one of those plain lines carries a **"Why we flagged this"** tap beneath it: a
 small mono link that opens a sheet with the evidence, what was compared, the confidence,
@@ -284,11 +285,11 @@ as **mono pills, not logos** — we do not use another company's mark to borrow 
 The faces, read off the old landing's stylesheet before the wipe
 (`git show 668d2452c:app/app.css`, `--ld-display` and `--ld-mono` at line 2483):
 
-| Role | Face | Weights | Use |
-|---|---|---|---|
-| Display | **Bricolage Grotesque** (variable, `opsz 12..96`) | 700, 800 | Every heading, the rank, the mark, brand names, button labels. **Caps for h1 and h2.** |
-| Body | **Instrument Sans** | 400, 500, 600 | Sentences, takes, descriptions, table text |
-| Mono | **IBM Plex Mono** | 400, 500, 600 | Eyebrows, source pills, ages, counts, ids, Jev verdict lines, axis labels |
+| Role    | Face                                              | Weights       | Use                                                                                    |
+| ------- | ------------------------------------------------- | ------------- | -------------------------------------------------------------------------------------- |
+| Display | **Bricolage Grotesque** (variable, `opsz 12..96`) | 700, 800      | Every heading, the rank, the mark, brand names, button labels. **Caps for h1 and h2.** |
+| Body    | **Instrument Sans**                               | 400, 500, 600 | Sentences, takes, descriptions, table text                                             |
+| Mono    | **IBM Plex Mono**                                 | 400, 500, 600 | Eyebrows, source pills, ages, counts, ids, Jev verdict lines, axis labels              |
 
 Bricolage Grotesque at 800 is the "heavy black grotesk" Nish picked. It was already the
 old landing's display face, so this is continuity, not a new choice. **Inter is gone**:
@@ -301,21 +302,21 @@ The faces are self-hosted under `public/fonts/` — no Google `<link>`, no preco
 Latin subset, `font-display: swap`, three families, served from the app's own origin.
 **Scale** (rem, 16px root). Display sizes are fluid; the clamp is given, not the endpoints.
 
-| Token | Size | Line height | Tracking | Where |
-|---|---|---|---|---|
-| `display-1` | `clamp(2.35rem, 4.6vw, 4.1rem)` | 1.04 | −0.045em | Landing h1, caps |
-| `display-2` | `clamp(1.8rem, 4vw, 3rem)` | 1.04 | −0.04em | Home greeting, competitor name, caps |
-| `display-3` | `clamp(1.7rem, 3.6vw, 2.8rem)` | 1.06 | −0.035em | Landing section h2, caps |
-| `mark-lg` | `clamp(1.4rem, 3.4vw, 2.5rem)` | 1.1 | −0.02em | The mark on landing and the biggest move |
-| `mark-md` | `clamp(1rem, 1.9vw, 1.45rem)` | 1.1 | −0.02em | The mark in read-this-first, incidents |
-| `mark-sm` | `1rem` | 1.1 | −0.02em | The mark on a ranked row or an alert |
-| `title` | `1.15rem` | 1.1 | 0.02em | Block headings, caps |
-| `row-name` | `1.02rem` | 1.2 | −0.015em | Brand name on a row |
-| `body` | `1rem` | 1.55 | 0 | Sentences |
-| `body-sm` | `0.88rem` | 1.5 | 0 | Takes, feed copy |
-| `eyebrow` | `0.72rem` | 1.4 | 0.16em | Mono, caps |
-| `pill` | `0.66rem` | 1.3 | 0.08em | Mono, caps |
-| `meta` | `0.68rem` | 1.4 | 0.06em | Mono ages, ids, Jev lines |
+| Token       | Size                            | Line height | Tracking | Where                                    |
+| ----------- | ------------------------------- | ----------- | -------- | ---------------------------------------- |
+| `display-1` | `clamp(2.35rem, 4.6vw, 4.1rem)` | 1.04        | −0.045em | Landing h1, caps                         |
+| `display-2` | `clamp(1.8rem, 4vw, 3rem)`      | 1.04        | −0.04em  | Home greeting, competitor name, caps     |
+| `display-3` | `clamp(1.7rem, 3.6vw, 2.8rem)`  | 1.06        | −0.035em | Landing section h2, caps                 |
+| `mark-lg`   | `clamp(1.4rem, 3.4vw, 2.5rem)`  | 1.1         | −0.02em  | The mark on landing and the biggest move |
+| `mark-md`   | `clamp(1rem, 1.9vw, 1.45rem)`   | 1.1         | −0.02em  | The mark in read-this-first, incidents   |
+| `mark-sm`   | `1rem`                          | 1.1         | −0.02em  | The mark on a ranked row or an alert     |
+| `title`     | `1.15rem`                       | 1.1         | 0.02em   | Block headings, caps                     |
+| `row-name`  | `1.02rem`                       | 1.2         | −0.015em | Brand name on a row                      |
+| `body`      | `1rem`                          | 1.55        | 0        | Sentences                                |
+| `body-sm`   | `0.88rem`                       | 1.5         | 0        | Takes, feed copy                         |
+| `eyebrow`   | `0.72rem`                       | 1.4         | 0.16em   | Mono, caps                               |
+| `pill`      | `0.66rem`                       | 1.3         | 0.08em   | Mono, caps                               |
+| `meta`      | `0.68rem`                       | 1.4         | 0.06em   | Mono ages, ids, Jev lines                |
 
 Rhythm: vertical spacing is a 4px base — 4 / 8 / 12 / 16 / 22 / 30 / 40 / 64. Block
 headings get 30–40 above and 14 below. Rows are 15–18 of internal padding with a 1px
@@ -331,38 +332,38 @@ rebuild's own tokens. Tailwind 4 `@theme` in one stylesheet; no second source.
 
 ### Light (default)
 
-| Token | Value | Use |
-|---|---|---|
-| `--bone` | `#f4f1e8` | Page ground. Cream, never white |
-| `--card` | `#fffdf6` | Raised surface: cards, rows, rails |
-| `--ink` | `#0e0d0a` | Text, borders, the filled button. Near-black, never `#000` |
-| `--ink-soft` | `#55524a` | Secondary text, thin chart lines. 6.3:1 on bone |
-| `--ink-faint` | `#8e8878` | Hairline text, axis numbers, disabled. **2.9:1 — decorative only** |
-| `--line` | `#ddd6c6` | Hairlines, gridlines |
-| `--green` | `#16c47f` | **The accent.** Marker fill, on-state track, "you" |
-| `--green-ink` | `#064d31` | Text on the green wash. 8.7:1 on wash |
-| `--green-wash` | `#d9f6e8` | Own-site and "you" ground |
-| `--red` | `#e0442c` | The strike on a "before", the incident rule. **Nothing else** |
-| `--on-green` | `#0e0d0a` | Ink on the marker. 8.6:1 |
+| Token          | Value     | Use                                                                |
+| -------------- | --------- | ------------------------------------------------------------------ |
+| `--bone`       | `#f4f1e8` | Page ground. Cream, never white                                    |
+| `--card`       | `#fffdf6` | Raised surface: cards, rows, rails                                 |
+| `--ink`        | `#0e0d0a` | Text, borders, the filled button. Near-black, never `#000`         |
+| `--ink-soft`   | `#55524a` | Secondary text, thin chart lines. 6.3:1 on bone                    |
+| `--ink-faint`  | `#8e8878` | Hairline text, axis numbers, disabled. **2.9:1 — decorative only** |
+| `--line`       | `#ddd6c6` | Hairlines, gridlines                                               |
+| `--green`      | `#16c47f` | **The accent.** Marker fill, on-state track, "you"                 |
+| `--green-ink`  | `#064d31` | Text on the green wash. 8.7:1 on wash                              |
+| `--green-wash` | `#d9f6e8` | Own-site and "you" ground                                          |
+| `--red`        | `#e0442c` | The strike on a "before", the incident rule. **Nothing else**      |
+| `--on-green`   | `#0e0d0a` | Ink on the marker. 8.6:1                                           |
 
 ### Dark
 
 Declared under both `@media (prefers-color-scheme: dark)` scoped to
 `:root:not([data-theme="light"])` and `:root[data-theme="dark"]`.
 
-| Token | Value | Note |
-|---|---|---|
-| `--bone` | `#14130f` | Warm near-black, never `#000` |
-| `--card` | `#1c1a15` | |
-| `--ink` | `#f2efe4` | Warm off-white, never `#fff` |
-| `--ink-soft` | `#a9a294` | |
-| `--ink-faint` | `#7b7568` | |
-| `--line` | `#322e25` | |
-| `--green` | `#2ee59c` | Lifted: the light green is too dark to carry ink at this ground |
-| `--green-ink` | `#9ff0cd` | |
-| `--green-wash` | `#10281f` | |
-| `--red` | `#ff7a63` | Lifted for the strike to read |
-| `--on-green` | `#0e0d0a` | Ink stays dark on the marker in both themes |
+| Token          | Value     | Note                                                            |
+| -------------- | --------- | --------------------------------------------------------------- |
+| `--bone`       | `#14130f` | Warm near-black, never `#000`                                   |
+| `--card`       | `#1c1a15` |                                                                 |
+| `--ink`        | `#f2efe4` | Warm off-white, never `#fff`                                    |
+| `--ink-soft`   | `#a9a294` |                                                                 |
+| `--ink-faint`  | `#7b7568` |                                                                 |
+| `--line`       | `#322e25` |                                                                 |
+| `--green`      | `#2ee59c` | Lifted: the light green is too dark to carry ink at this ground |
+| `--green-ink`  | `#9ff0cd` |                                                                 |
+| `--green-wash` | `#10281f` |                                                                 |
+| `--red`        | `#ff7a63` | Lifted for the strike to read                                   |
+| `--on-green`   | `#0e0d0a` | Ink stays dark on the marker in both themes                     |
 
 ### Colour rules
 
@@ -407,11 +408,11 @@ button and one line saying what it unlocks. Never as an interstitial, never as a
 One control, everywhere, with the same three states. 38×22, square, ink hairline, ink
 thumb, 180ms travel.
 
-| State | Track | Thumb | Label | Row treatment |
-|---|---|---|---|---|
-| **On** | green fill | right | `ON` | normal |
-| **Off** | card fill | left | `OFF` | row dimmed to `--ink-faint`, monogram hairline goes `--line`, chip becomes dashed, sub-line reads "paused <date> · history kept" |
-| **You** | green wash, disabled | right | `YOU` | row on green wash; the control is visible but not operable |
+| State   | Track                | Thumb | Label | Row treatment                                                                                                                    |
+| ------- | -------------------- | ----- | ----- | -------------------------------------------------------------------------------------------------------------------------------- |
+| **On**  | green fill           | right | `ON`  | normal                                                                                                                           |
+| **Off** | card fill            | left  | `OFF` | row dimmed to `--ink-faint`, monogram hairline goes `--line`, chip becomes dashed, sub-line reads "paused <date> · history kept" |
+| **You** | green wash, disabled | right | `YOU` | row on green wash; the control is visible but not operable                                                                       |
 
 A **dismissed** suggestion is not a switch state — it leaves the list entirely and is
 recorded so it is never suggested again. Dismissal is undone only from Settings →
@@ -427,25 +428,26 @@ printed next to the control before it is touched.
 Never "No data". Every empty state says **what will fill it and when**, or gives the one
 action that fills it.
 
-| Where | Copy |
-|---|---|
-| Home, second zero | "We're gathering the first week. Your first read-this-first comes with the brief on Monday 08:00." (a real Workflow time, never "soon") |
-| Read this first, quiet week | "Quiet week. 61 mentions, 2 site changes and no new ads checked — nothing crossed the bar." with the counts tappable |
-| Fewer than two ON brands | "Add a competitor to see where you stand." with the one input inline |
-| A row's evidence tab with nothing | "No site changes this week. We checked /pricing and /home daily — last at 06:02." |
-| Competitor page, just added | "Watching from today. The first mentions land in the nightly sweep; site changes need a second snapshot, so the first mark comes tomorrow." |
-| Alerts, nothing yet | "Nothing has interrupted you. When your own site breaks you'll get an email; everything else waits here." |
-| A degraded source | "X has been rate-limiting us since Friday. We show it as degraded rather than pretend the count is complete." |
+| Where                             | Copy                                                                                                                                    |
+| --------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| Home, second zero                 | "We're gathering the first week. Your first read-this-first comes with the brief on Monday 08:00." (a real Workflow time, never "soon") |
+| Read this first, quiet week       | "Quiet week. 61 mentions, 2 site changes checked — nothing crossed the bar." with the counts tappable                                   |
+| Fewer than two ON brands          | "Add a competitor to see where you stand." with the one input inline                                                                    |
+| A row's evidence tab with nothing | "No site changes this week. We checked /pricing and /home daily — last at 06:02."                                                       |
+| Competitor page, just added       | "Watching from today. We read the homepage every night at 02:00 UTC, and the first change shows here after the second read."            |
+| Alerts, nothing yet               | "Nothing has interrupted you. When your own site breaks you'll get an email; everything else waits here."                               |
+| A degraded source                 | "X has been rate-limiting us since Friday. We show it as degraded rather than pretend the count is complete."                           |
 
 **A chart with one week of data is never hidden.** It renders with its single point and
 the line labelled "first week". This is the rule the other empty states are a special case
-of: a surface that has *some* truth shows that truth at whatever size it is, because
+of: a surface that has _some_ truth shows that truth at whatever size it is, because
 hiding it teaches the user the product is not running. Applies to the standing chart on
 Home and in the share image.
 | Identity card, field pending | "logo: looking on your site" / "we'll fill this on the first crawl, within the hour" |
 
 The landing's all-degraded gate is the one exception (§2.1): with no session to show a
-source's history and every visible source degraded, the public page replaces the pill row
+source's history and every visible mentions source degraded (site changes live or none),
+the public page replaces the pill row
 with the one rebuilding line. Every signed-in surface keeps the degraded row and its reason.
 
 ---
@@ -476,14 +478,14 @@ single column, rail becomes the bottom tab bar).
 
 Only what iOS does: **push, sheet, fade.** Nothing else exists.
 
-| Motion | Duration | Curve |
-|---|---|---|
-| Push (navigate into a brand) | 320ms | `cubic-bezier(.32,.72,0,1)` |
-| Sheet up / down | 380ms / 280ms | same |
-| Row expand in place (height + fade) | 220ms | same |
-| Switch thumb and track | 180ms | same |
-| Fade in of an arriving field or row | 160ms | `linear` |
-| Button press | 140ms | `cubic-bezier(.32,.72,0,1)`, 1px lift only |
+| Motion                              | Duration      | Curve                                      |
+| ----------------------------------- | ------------- | ------------------------------------------ |
+| Push (navigate into a brand)        | 320ms         | `cubic-bezier(.32,.72,0,1)`                |
+| Sheet up / down                     | 380ms / 280ms | same                                       |
+| Row expand in place (height + fade) | 220ms         | same                                       |
+| Switch thumb and track              | 180ms         | same                                       |
+| Fade in of an arriving field or row | 160ms         | `linear`                                   |
+| Button press                        | 140ms         | `cubic-bezier(.32,.72,0,1)`, 1px lift only |
 
 Rules: nothing bounces, nothing scales, nothing parallaxes, nothing auto-plays, no
 skeleton shimmer (a pending field says what will fill it in words instead). Onboarding's
@@ -498,15 +500,15 @@ The landing ticker is the single looping element in the product and it stops und
 Numbers, measured on production, failing the build of a surface that misses them.
 The bar exists because the old landing served in 4.50s (#3842, 2026-09-21 14:50 IST).
 
-| Budget | Limit |
-|---|---|
-| LCP, landing and Home, simulated 4G | **< 1.5 s** |
-| Home JavaScript, gzipped | **< 150 KB** |
-| Chart library, gzipped, on the Home route | **< 30 KB** |
-| Home loader, p95 over 100 loads | < 500 ms |
-| Console errors, any of the seven screens | 0 |
-| Horizontal overflow at 390 | 0 px |
-| CLS | < 0.05 |
+| Budget                                    | Limit        |
+| ----------------------------------------- | ------------ |
+| LCP, landing and Home, simulated 4G       | **< 1.5 s**  |
+| Home JavaScript, gzipped                  | **< 150 KB** |
+| Chart library, gzipped, on the Home route | **< 30 KB**  |
+| Home loader, p95 over 100 loads           | < 500 ms     |
+| Console errors, any of the seven screens  | 0            |
+| Horizontal overflow at 390                | 0 px         |
+| CLS                                       | < 0.05       |
 
 How each is kept:
 
@@ -537,32 +539,32 @@ own. **Nothing in the right column is hand-rolled.** Versions are the ones the a
 pinned on 2026-09-20; `docs/REBUILD-STACK.md` was deleted in the wipe and is being
 re-issued, so the library names and versions are restated here as the contract.
 
-| Our thing | Built from | Notes |
-|---|---|---|
-| Four-place nav (rail + tab bar) | `navigation-menu` + React Router `NavLink` | One component, two layouts by breakpoint |
-| Ranked row | `collapsible` | Expansion in place; open state is a URL param so a row survives reload |
-| Row expansion on mobile | `drawer` (Base UI dialog, bottom side) | The sheet |
-| Type chips / source filters | `toggle-group`, single and multiple | Counts are children, not badges |
-| Brand chips | `badge` + `avatar` | Avatar carries logo.dev with the monogram fallback |
-| Per-brand switch | `switch` | The label is part of the control's hit area |
-| The mark | our composition of `<s>` + `<ins>` on tokens | Semantic HTML, not a component; it appears at four sizes |
-| Capture plate | `aspect-ratio` + `img` | Opens `dialog` for the before/after pair |
-| Four-week standing chart | **uPlot** | Line chart only, styled from the tokens. Recharts and hand-rolled SVG are both out — see §10 |
-| Snapshot cells, facts | `card` with dividers | Never a stat "tile" with a shadow |
-| Identity card fields | `popover` + `input` for tap-to-edit | No `form` wrapper, no labels above fields |
-| Competitors list, alerts feed | `@tanstack/react-table` 9.2.4 headless + our row | Headless only; no themed table library |
-| Developments feed | plain list + `toggle-group` | Chronological; filters do not change the layout |
-| Incident block | `alert` | The only red in the product |
-| Settings rows | `card` + `switch` + `select` + `popover` | Three settings, then the agent block, then the quiet rows |
-| Key / URL with copy | `input` readonly + `button` + `tooltip` | Never a custom clipboard widget |
-| "Why we flagged this" | `drawer` on mobile, `popover` on desktop | The machinery, one tap away |
-| Sheets, dialogs, tooltips, menus | `dialog`, `sheet`, `tooltip`, `dropdown-menu` | Base UI 1.8.0 under all of them |
-| Toasts | `sonner` | Only for "saved" and "undo"; never for alerts |
-| Share image | **Cloudflare Browser Rendering**, screenshotting `app/components/share-image.tsx` at 1080x1080 | One design, not a twin. See §2.8 |
-| Icons | `lucide-react` 1.47.0 | Sparingly: the product's vocabulary is type, not icons |
-| Class merging | `cn` 0.3.0 | |
-| Any input that validates | **TanStack Form 1.33.5 + zod 4.6.5** | The same schema parses `formData` in the action |
-| Tokens | **Tailwind 4.3.3** `@theme` in one stylesheet | No `tailwind.config.ts` theme, no `@apply` component classes |
+| Our thing                        | Built from                                                                                     | Notes                                                                                        |
+| -------------------------------- | ---------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| Four-place nav (rail + tab bar)  | `navigation-menu` + React Router `NavLink`                                                     | One component, two layouts by breakpoint                                                     |
+| Ranked row                       | `collapsible`                                                                                  | Expansion in place; open state is a URL param so a row survives reload                       |
+| Row expansion on mobile          | `drawer` (Base UI dialog, bottom side)                                                         | The sheet                                                                                    |
+| Type chips / source filters      | `toggle-group`, single and multiple                                                            | Counts are children, not badges                                                              |
+| Brand chips                      | `badge` + `avatar`                                                                             | Avatar carries logo.dev with the monogram fallback                                           |
+| Per-brand switch                 | `switch`                                                                                       | The label is part of the control's hit area                                                  |
+| The mark                         | our composition of `<s>` + `<ins>` on tokens                                                   | Semantic HTML, not a component; it appears at four sizes                                     |
+| Capture plate                    | `aspect-ratio` + `img`                                                                         | Opens `dialog` for the before/after pair                                                     |
+| Four-week standing chart         | **uPlot**                                                                                      | Line chart only, styled from the tokens. Recharts and hand-rolled SVG are both out — see §10 |
+| Snapshot cells, facts            | `card` with dividers                                                                           | Never a stat "tile" with a shadow                                                            |
+| Identity card fields             | `popover` + `input` for tap-to-edit                                                            | No `form` wrapper, no labels above fields                                                    |
+| Competitors list, alerts feed    | `@tanstack/react-table` 9.2.4 headless + our row                                               | Headless only; no themed table library                                                       |
+| Developments feed                | plain list + `toggle-group`                                                                    | Chronological; filters do not change the layout                                              |
+| Incident block                   | `alert`                                                                                        | The only red in the product                                                                  |
+| Settings rows                    | `card` + `switch` + `select` + `popover`                                                       | Three settings, then the agent block, then the quiet rows                                    |
+| Key / URL with copy              | `input` readonly + `button` + `tooltip`                                                        | Never a custom clipboard widget                                                              |
+| "Why we flagged this"            | `drawer` on mobile, `popover` on desktop                                                       | The machinery, one tap away                                                                  |
+| Sheets, dialogs, tooltips, menus | `dialog`, `sheet`, `tooltip`, `dropdown-menu`                                                  | Base UI 1.8.0 under all of them                                                              |
+| Toasts                           | `sonner`                                                                                       | Only for "saved" and "undo"; never for alerts                                                |
+| Share image                      | **Cloudflare Browser Rendering**, screenshotting `app/components/share-image.tsx` at 1080x1080 | One design, not a twin. See §2.8                                                             |
+| Icons                            | `lucide-react` 1.47.0                                                                          | Sparingly: the product's vocabulary is type, not icons                                       |
+| Class merging                    | `cn` 0.3.0                                                                                     |                                                                                              |
+| Any input that validates         | **TanStack Form 1.33.5 + zod 4.6.5**                                                           | The same schema parses `formData` in the action                                              |
+| Tokens                           | **Tailwind 4.3.3** `@theme` in one stylesheet                                                  | No `tailwind.config.ts` theme, no `@apply` component classes                                 |
 
 Rules: no component gets a variant that changes its meaning; a new surface composes
 existing components or the surface is wrong. If something here needs to be hand-built,
@@ -597,7 +599,7 @@ scheduled it.
    The product does things; say so in active voice.
 2. **Name the thing.** "Screenshot", not "evidence artifact". "Check", not
    "scan operation". Exception: where the proof vocabulary is load-bearing —
-   *evidence checks* as a billing unit, *proof* on billed surfaces — keep the
+   _evidence checks_ as a billing unit, _proof_ on billed surfaces — keep the
    precise term, because it maps to what the customer pays for.
 3. **No exclamation marks in the app.** Confidence is quiet. (Marketing
    surfaces may earn one; the workspace never.)

@@ -4,29 +4,28 @@ import { Link } from "react-router";
 
 import { PAGE, PageHeading } from "../components/page-heading";
 import { AgentKeys, ConnectedApps, ConnectDetails } from "../components/agent-settings";
-import {
-  createAgentKey,
-  disconnectApp,
-  readAgentAccess,
-  revokeAgentKey,
-} from "../lib/agent/access.server";
+import { createAgentKey, disconnectApp, readAgentAccess, revokeAgentKey } from "../lib/agent/access.server";
 import { oauthHelpersContext } from "../lib/agent/context.server";
 import { MCP_PATH } from "../lib/agent/paths";
-import { requireSession } from "../lib/require-session.server";
+import { requireFreshSession } from "../lib/require-session.server";
+
+export function meta() {
+  return [{ title: "Agents and API · Five to Nine" }];
+}
 
 export function headers() {
   return { "cache-control": "no-store" };
 }
 
 export async function loader({ request, context }: Route.LoaderArgs) {
-  const session = await requireSession(request);
+  const session = await requireFreshSession(request);
   const access = await readAgentAccess(context.get(oauthHelpersContext), request, session.user.id);
   const origin = new URL(request.url).origin;
   return { ...access, mcpUrl: `${origin}${MCP_PATH}`, origin };
 }
 
 export async function action({ request, context }: Route.ActionArgs) {
-  const session = await requireSession(request);
+  const session = await requireFreshSession(request);
   const form = await request.formData();
   const intent = form.get("intent");
   const target = form.get("id");

@@ -13,9 +13,15 @@ vi.mock("../../app/lib/discovery/resolve-domain.server", () => ({
 vi.mock("../../app/lib/discovery/generators/ai.server", () => ({ aiGenerator: () => Promise.resolve([]) }));
 const hn = vi.hoisted(() => ({ run: vi.fn() }));
 
-vi.mock("../../app/lib/discovery/generators/hn", () => ({ hnGenerator: hn.run }));
+vi.mock("../../app/lib/discovery/generators/hn.server", () => ({ hnGenerator: hn.run }));
 
-const SELF = { workspaceId: "ws-generate", name: "Gymshark", domain: "gymshark.com", description: null, kind: "domain" as const };
+const SELF = {
+  workspaceId: "ws-generate",
+  name: "Gymshark",
+  domain: "gymshark.com",
+  description: null,
+  kind: "domain" as const,
+};
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -27,7 +33,9 @@ describe("generateShortlist", () => {
       {
         name: "Alphalete",
         domain: "alphaleteathletics.com",
-        evidence: [{ sourceUrl: "https://news.ycombinator.com/item?id=1", excerpt: "Gymshark and Alphalete", generator: "hn" }],
+        evidence: [
+          { sourceUrl: "https://news.ycombinator.com/item?id=1", excerpt: "Gymshark and Alphalete", generator: "hn" },
+        ],
       },
     ]);
 
@@ -45,7 +53,11 @@ describe("generateShortlist", () => {
     expect(result.shortlisted).toEqual([]);
     expect(errors).toHaveBeenCalledTimes(1);
     expect(errors).toHaveBeenCalledWith(
-      JSON.stringify({ event: "discovery.generator_failed", generator: "hn", message: "hn generator fetch failed with status 503" }),
+      JSON.stringify({
+        event: "discovery.generator_failed",
+        generator: "hn",
+        message: "hn generator fetch failed with status 503",
+      }),
     );
   });
 });

@@ -89,18 +89,14 @@ const seed = async () => {
 };
 
 const snapshotCount = async () => {
-  const row = await env.DB.prepare(
-    "SELECT COUNT(*) AS n FROM snapshot WHERE watch_id = ?",
-  )
+  const row = await env.DB.prepare("SELECT COUNT(*) AS n FROM snapshot WHERE watch_id = ?")
     .bind(WATCH)
     .first<{ n: number }>();
   return row?.n ?? 0;
 };
 
 const distinctKeys = async () => {
-  const rows = await env.DB.prepare(
-    "SELECT DISTINCT payload_r2_key AS key FROM snapshot WHERE watch_id = ?",
-  )
+  const rows = await env.DB.prepare("SELECT DISTINCT payload_r2_key AS key FROM snapshot WHERE watch_id = ?")
     .bind(WATCH)
     .all<{ key: string | null }>();
   return rows.results;

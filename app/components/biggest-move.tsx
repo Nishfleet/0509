@@ -32,9 +32,7 @@ export function BiggestMove({ move, change, quiet }: BiggestMoveProps): ReactEle
   const href = move.url === null ? null : httpUrl(move.url);
   return (
     <article data-testid="biggest-move" className="mt-8 min-w-0 border-t border-line pt-6">
-      <h3 className="font-display text-row-name font-bold [overflow-wrap:anywhere]">
-        {move.title}
-      </h3>
+      <h3 className="font-display text-row-name font-bold [overflow-wrap:anywhere]">{move.title}</h3>
       <p className="mt-2 font-mono text-meta text-ink-soft uppercase">
         {move.source} · {move.when}
       </p>

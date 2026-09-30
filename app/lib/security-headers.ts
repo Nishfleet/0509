@@ -14,11 +14,15 @@ export function contentSecurityPolicy(nonce: string): string {
   ].join("; ");
 }
 
+const TRANSPORT_HEADERS: Readonly<Record<string, string>> = {
+  "Strict-Transport-Security": "max-age=31536000; includeSubDomains",
+  "X-Content-Type-Options": "nosniff",
+};
+
 function documentSecurityHeaders(nonce: string): Readonly<Record<string, string>> {
   return {
     "Content-Security-Policy": contentSecurityPolicy(nonce),
-    "Strict-Transport-Security": "max-age=31536000; includeSubDomains",
-    "X-Content-Type-Options": "nosniff",
+    ...TRANSPORT_HEADERS,
     "X-Frame-Options": "DENY",
     "Referrer-Policy": "same-origin",
     "Cross-Origin-Opener-Policy": "same-origin",
@@ -32,4 +36,12 @@ export function withDocumentSecurityHeaders(headers: Headers, nonce: string): He
     if (!merged.has(name)) merged.set(name, value);
   }
   return merged;
+}
+
+export function withTransportSecurityHeaders(response: Response): Response {
+  const missing = Object.entries(TRANSPORT_HEADERS).filter(([name]) => !response.headers.has(name));
+  if (missing.length === 0 || response.status === 101) return response;
+  const headers = new Headers(response.headers);
+  for (const [name, value] of missing) headers.set(name, value);
+  return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
 }

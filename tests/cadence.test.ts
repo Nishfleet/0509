@@ -6,10 +6,10 @@ import {
   NIGHTLY_CRON,
   OWN_SITE_CHECK_CRON,
   SITE_SWEEP_CRON,
+  SITE_SWEEP_UTC_HOUR,
   SITE_SWEEP_UTC_LABEL,
   WEEKLY_REFRESH_CRON,
 } from "../app/lib/cadence";
-import { SITE_SWEEP_UTC_HOUR } from "../app/lib/onboarding/arrival-estimate";
 
 // 0509#5823: the schedule constants live in app/lib/cadence.ts. The three
 // Workflow schedules and the two trigger crons below are asserted against the

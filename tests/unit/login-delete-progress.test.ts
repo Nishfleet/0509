@@ -56,8 +56,6 @@ describe("Login account-delete progress", () => {
 
   it("tells the customer to write to support when the Workflow stopped", () => {
     const html = render({ id: "wf-4", progress: { rows: "removed", files: "failed", deleted: null } });
-    expect(html).toContain(
-      "Snapshots and screenshots: stopped. Write to support@0509.io and we&#x27;ll finish it.",
-    );
+    expect(html).toContain("Snapshots and screenshots: stopped. Write to support@0509.io and we&#x27;ll finish it.");
   });
 });

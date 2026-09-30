@@ -33,7 +33,12 @@ export async function toolResult<T extends Record<string, unknown>>(read: () => 
   try {
     return result(await read());
   } catch (error) {
-    console.error(JSON.stringify({ event: "agent.mcp_tool_failed", message: error instanceof Error ? error.message : String(error) }));
+    console.error(
+      JSON.stringify({
+        event: "agent.mcp_tool_failed",
+        message: error instanceof Error ? error.message : String(error),
+      }),
+    );
     return { content: [{ type: "text" as const, text: TOOL_FAILED }], isError: true };
   }
 }
@@ -63,11 +68,12 @@ async function createServer(workspaceId: string): Promise<McpServer> {
     standing.name,
     {
       title: standing.title,
-      description: "Where the user ranks against their tracked competitors this week, the movement since last week, the one-line why, and one line per competitor. Paused competitors are left out.",
+      description:
+        "Where the user ranks against their tracked competitors this week, the movement since last week, the one-line why, and one line per competitor. Paused competitors are left out.",
       outputSchema: standingResultSchema,
       annotations: READ_ONLY,
     },
-    async () => result(await readAgentStanding(workspaceId)),
+    async () => toolResult(() => readAgentStanding(workspaceId)),
   );
 
   const brief = namedTool("get_brief");
@@ -88,7 +94,8 @@ async function createServer(workspaceId: string): Promise<McpServer> {
     competitors.name,
     {
       title: competitors.title,
-      description: "The competitors the user tracks, plus the brands suggested as competitors that are waiting for the user's yes.",
+      description:
+        "The competitors the user tracks, plus the brands suggested as competitors that are waiting for the user's yes.",
       outputSchema: competitorsResultSchema,
       annotations: READ_ONLY,
     },
@@ -106,7 +113,7 @@ async function createServer(workspaceId: string): Promise<McpServer> {
       outputSchema: competitorResultSchema,
       annotations: READ_ONLY,
     },
-    async ({ competitorId }) => result(await readAgentCompetitor(workspaceId, competitorId, new Date())),
+    async ({ competitorId }) => toolResult(() => readAgentCompetitor(workspaceId, competitorId, new Date())),
   );
 
   const alerts = namedTool("list_alerts");
@@ -114,7 +121,8 @@ async function createServer(workspaceId: string): Promise<McpServer> {
     alerts.name,
     {
       title: alerts.title,
-      description: "Recent alerts for the user: weekly briefs that could not be delivered, and takedown notices.",
+      description:
+        "Recent alerts for the user: weekly briefs that could not be delivered, takedown notices, site changes, and mentions. A mention we were not sure about says so in its body.",
       outputSchema: alertsResultSchema,
       annotations: READ_ONLY,
     },

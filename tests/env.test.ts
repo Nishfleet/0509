@@ -6,7 +6,12 @@ vi.mock("cloudflare:workers", () => ({
 
 import { env } from "cloudflare:workers";
 
-import { createWorkerEnvCheck, WorkerEnvError, workerEnvFailureResponse } from "../app/lib/env.server";
+import {
+  createWorkerEnvCheck,
+  landingWorkspaceId,
+  WorkerEnvError,
+  workerEnvFailureResponse,
+} from "../app/lib/env.server";
 
 const KEYS = [
   "DB",
@@ -24,6 +29,7 @@ const KEYS = [
   "SIGN_IN_IP_LIMIT",
   "AGENT_REGISTER_LIMIT",
   "PROBE_LIMIT",
+  "CHANGE_EMAIL_LIMIT",
   "LIVENESS_PING_URL",
   "SITE_SWEEP_PING_URL",
 ] as const;
@@ -45,11 +51,13 @@ function configured() {
     SIGN_IN_IP_LIMIT: { limit: () => ({ success: true }) },
     AGENT_REGISTER_LIMIT: { limit: () => ({ success: true }) },
     PROBE_LIMIT: { limit: () => ({ success: true }) },
+    CHANGE_EMAIL_LIMIT: { limit: () => ({ success: true }) },
   };
 }
 
 function useEnv(values: object) {
   for (const key of KEYS) Reflect.deleteProperty(env, key);
+  Reflect.deleteProperty(env, "LANDING_WORKSPACE_ID");
   Object.assign(env, values);
 }
 
@@ -161,7 +169,17 @@ describe("worker env", () => {
       "SIGN_IN_IP_LIMIT",
       "AGENT_REGISTER_LIMIT",
       "PROBE_LIMIT",
+      "CHANGE_EMAIL_LIMIT",
     ]);
+  });
+
+  it("reads the public workspace id and treats a blank one as unset", () => {
+    useEnv({ ...configured(), LANDING_WORKSPACE_ID: "  ws-public  " });
+    expect(landingWorkspaceId()).toBe("ws-public");
+    useEnv({ ...configured(), LANDING_WORKSPACE_ID: "   " });
+    expect(landingWorkspaceId()).toBeNull();
+    useEnv(configured());
+    expect(landingWorkspaceId()).toBeNull();
   });
 
   it("returns 503 and logs the same names", () => {
