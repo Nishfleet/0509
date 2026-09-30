@@ -1,10 +1,14 @@
 import { fetchOutbound } from "../fetch/outbound.server";
+import { CRAWLER_USER_AGENT } from "../fetch/robots.server";
 import type { FetchText } from "./types";
 
 export function defaultFetchText(event: string, timeoutMs = 8_000): FetchText {
   return async (url) => {
     try {
-      const response = await fetchOutbound(url, { headers: {}, signal: AbortSignal.timeout(timeoutMs) });
+      const response = await fetchOutbound(url, {
+        headers: { "user-agent": CRAWLER_USER_AGENT },
+        signal: AbortSignal.timeout(timeoutMs),
+      });
       return {
         ok: response.ok,
         status: response.status,

@@ -142,24 +142,36 @@ describe("readHomeStandingInputs", () => {
     expect(inputs?.entities.some((entity) => entity.domain === "newer.example")).toBe(false);
   });
 
-  it("reads enabled sources and this week's signal counts", async () => {
+  it("reads this workspace's enabled sources and this week's signal counts", async () => {
     await seedDigest("newest", "2026-09-21T07:00:00.000Z", 1);
-    await env.DB.batch(
-      [
+    await env.DB.batch([
+      env.DB.prepare(
+        "INSERT INTO source (id, key, kind, platform, plugin_key) VALUES ('src_home_site_web', 'home.site.web', 'site', 'web', 'site')",
+      ),
+      env.DB.prepare(
+        "INSERT INTO watch (id, entity_id, source_id, target_key) VALUES (?1, ?2, 'src_home_site_web', 'https://own.example')",
+      ).bind(`${WS}_watch_site`, `${WS}_self`),
+      ...[
         [`${WS}_sig_in`, `${WS}_in`, "2026-09-10T00:00:00.000Z", 0],
         [`${WS}_sig_old`, `${WS}_old`, "2026-09-01T00:00:00.000Z", 0],
         [`${WS}_sig_dead`, `${WS}_dead`, "2026-09-10T00:00:00.000Z", 1],
       ].map(([id, dedupKey, observedAt, isTombstoned]) =>
         env.DB.prepare(
-          "INSERT INTO signal (id, workspace_id, entity_id, source_id, kind, dedup_key, observed_at, is_tombstoned) VALUES (?1, ?2, ?3, 'src_site_web', 'site_change', ?4, ?5, ?6)",
+          "INSERT INTO signal (id, workspace_id, entity_id, source_id, kind, dedup_key, observed_at, is_tombstoned) VALUES (?1, ?2, ?3, 'src_home_site_web', 'site_change', ?4, ?5, ?6)",
         ).bind(id, WS, `${WS}_rival`, dedupKey, observedAt, isTombstoned),
       ),
-    );
+    ]);
 
     const inputs = await readHomeStandingInputs(env.DB, USER);
 
-    expect(inputs?.counts).toEqual([{ entityId: `${WS}_rival`, sourceKey: "site.web", count: 1 }]);
-    expect(inputs?.sources).toContainEqual({ key: "site.web", kind: "site", platform: "web" });
+    expect(inputs?.counts).toEqual([{ entityId: `${WS}_rival`, sourceKey: "home.site.web", count: 1 }]);
+    expect(inputs?.sources).toEqual([{ key: "home.site.web", kind: "site", platform: "web" }]);
+  });
+
+  it("returns no sources for a workspace that watches nothing", async () => {
+    const inputs = await readHomeStandingInputs(env.DB, USER);
+
+    expect(inputs?.sources).toEqual([]);
   });
 
   it("returns exactly the four newest frozen ranked weeks, ascending, with no null rank and no unranked week", async () => {

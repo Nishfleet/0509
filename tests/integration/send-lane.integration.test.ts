@@ -1,5 +1,5 @@
 import { env } from "cloudflare:test";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { deliver, handleBatch, type DeliveryMessage } from "../../workers/delivery/consumer";
 import { sendOrThrow } from "../../workers/delivery/send";
@@ -401,6 +401,22 @@ describe("send lane (0509#3979)", () => {
     expect(result.outcome).toBe("no_target");
     expect(rec.sent).toHaveLength(0);
     expect(await readAttempts()).toHaveLength(0);
+  });
+
+  it.each([
+    ["no_row", "DELETE FROM send_target"],
+    ["unverified", "UPDATE send_target SET is_verified = 0"],
+    ["channel_disabled", "UPDATE channel SET is_enabled = 0"],
+  ])("logs delivery.no_target with reason %s", async (reason, statement) => {
+    await env.DB.exec(statement);
+    const digestId = await seedDigest("pending");
+    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
+
+    await deliver(envWith(bindingFor(recorder())), message(digestId));
+
+    const lines = log.mock.calls.map((call) => JSON.parse(String(call[0])) as Record<string, unknown>);
+    log.mockRestore();
+    expect(lines).toContainEqual({ event: "delivery.no_target", digest_id: digestId, workspace_id: WS, reason });
   });
 
   it("reports no_target when the only email target is unverified", async () => {
