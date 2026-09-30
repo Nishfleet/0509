@@ -83,8 +83,7 @@ export async function breakageRepaired(url: string, beforeKey: string | null): P
     console.error(
       JSON.stringify({
         event: "site.own_check_verify_failed",
-        url,
-        error: error instanceof Error ? error.message : String(error),
+        error: error instanceof Error ? error.name : "unknown",
       }),
     );
     return false;

@@ -21,9 +21,9 @@ const KEPT_CONTEXTS = ["runtime", "os"] as const;
 function scrubEvent<T extends ErrorEvent | TransactionEvent>(event: T): T {
   const route = typeof event.tags?.route === "string" ? event.tags.route : undefined;
   const transaction = route ?? (event.transaction === undefined ? undefined : scrubTokenPath(event.transaction));
-  const { extra: _extra, ...rest } = event;
   return {
-    ...rest,
+    ...event,
+    extra: undefined,
     ...(transaction === undefined ? {} : { transaction }),
     request: event.request && {
       method: event.request.method,
