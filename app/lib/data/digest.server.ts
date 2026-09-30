@@ -9,9 +9,11 @@ const INSERT_WEEKLY_DIGEST = `INSERT INTO digest (id, workspace_id, kind, period
 VALUES (?1, ?2, 'weekly', ?3, ?4, ?5, ?6)
 ON CONFLICT (id) DO NOTHING`;
 
-const LIST_BRIEFS = "SELECT id, period_start, period_end, status, sent_at FROM digest WHERE workspace_id = ? AND kind = 'weekly' ORDER BY period_start DESC LIMIT 52";
+const LIST_BRIEFS =
+  "SELECT id, period_start, period_end, status, sent_at FROM digest WHERE workspace_id = ? AND kind = 'weekly' ORDER BY period_start DESC LIMIT 52";
 
-const READ_BRIEF = "SELECT id, period_start, period_end, status, sent_at, payload_json FROM digest WHERE workspace_id = ? AND id = ? AND kind = 'weekly'";
+const READ_BRIEF =
+  "SELECT id, period_start, period_end, status, sent_at, payload_json FROM digest WHERE workspace_id = ? AND id = ? AND kind = 'weekly'";
 
 export interface BriefRow {
   id: string;
@@ -62,13 +64,6 @@ export async function readBrief(
 export async function insertWeeklyDigest(db: D1Database, digest: WeeklyDigest): Promise<void> {
   await db
     .prepare(INSERT_WEEKLY_DIGEST)
-    .bind(
-      digest.id,
-      digest.workspaceId,
-      digest.periodStart,
-      digest.periodEnd,
-      digest.status,
-      digest.payloadJson,
-    )
+    .bind(digest.id, digest.workspaceId, digest.periodStart, digest.periodEnd, digest.status, digest.payloadJson)
     .run();
 }

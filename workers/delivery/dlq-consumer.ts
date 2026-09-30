@@ -1,9 +1,6 @@
 import { captureException } from "@sentry/cloudflare";
 
-import {
-  insertDeliveryFailedAlert,
-  type DeliveryFailedAlert,
-} from "../../app/lib/data/alert.server";
+import { insertDeliveryFailedAlert, type DeliveryFailedAlert } from "../../app/lib/data/alert.server";
 import { markDigestFailed } from "../../app/lib/data/digest.server";
 import { parseMessage } from "./consumer";
 
@@ -56,11 +53,7 @@ export function incidentUndeliveredAlert(input: {
   };
 }
 
-function incidentDeadLetterError(input: {
-  message_id: string;
-  incident_id: string;
-  reason: string;
-}): Error {
+function incidentDeadLetterError(input: { message_id: string; incident_id: string; reason: string }): Error {
   return new Error(
     JSON.stringify({
       event: "send-email-dlq.dead_lettered",
@@ -89,9 +82,7 @@ export async function handleDlqBatch(env: Env, batch: MessageBatch): Promise<str
       continue;
     }
 
-    const digest = await env.DB.prepare(
-      `SELECT workspace_id FROM digest WHERE id = ?`,
-    )
+    const digest = await env.DB.prepare(`SELECT workspace_id FROM digest WHERE id = ?`)
       .bind(parsed.digest_id)
       .first<{ workspace_id: string }>();
     if (!digest) {
@@ -124,11 +115,7 @@ export async function handleDlqBatch(env: Env, batch: MessageBatch): Promise<str
   return ids;
 }
 
-async function deadLetteredIncident(
-  env: Env,
-  messageId: string,
-  incidentId: string,
-): Promise<string | null> {
+async function deadLetteredIncident(env: Env, messageId: string, incidentId: string): Promise<string | null> {
   const incident = await env.DB.prepare(`SELECT workspace_id FROM incident WHERE id = ?`)
     .bind(incidentId)
     .first<{ workspace_id: string }>();
@@ -150,10 +137,9 @@ async function deadLetteredIncident(
     .first<{ error: string | null }>();
   const reason = attempt?.error ?? "no send attempt recorded";
 
-  captureException(
-    incidentDeadLetterError({ message_id: messageId, incident_id: incidentId, reason }),
-    { tags: { queue: "send-email-dlq", incident_id: incidentId } },
-  );
+  captureException(incidentDeadLetterError({ message_id: messageId, incident_id: incidentId, reason }), {
+    tags: { queue: "send-email-dlq", incident_id: incidentId },
+  });
   console.error(
     JSON.stringify({
       event: "delivery.dead_lettered",

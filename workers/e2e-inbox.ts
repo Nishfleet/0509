@@ -36,8 +36,7 @@ export class InboxMailbox extends DurableObject<InboxEnv> {
       raw,
       now,
     );
-    
-    
+
     await this.ctx.storage.setAlarm(now + HOUR_MS);
   }
 
@@ -60,9 +59,6 @@ export class InboxMailbox extends DurableObject<InboxEnv> {
 
 export default {
   async email(message, env) {
-    
-    
-    
     const raw = await new Response(message.raw).text();
     await env.INBOX.getByName(message.to).store(raw);
   },
@@ -77,8 +73,7 @@ export default {
     }
     const presented = new TextEncoder().encode(request.headers.get("authorization") ?? "");
     const expected = new TextEncoder().encode(`Bearer ${env.E2E_INBOX_TOKEN}`);
-    const match =
-      presented.byteLength === expected.byteLength && timingSafeEqual(presented, expected);
+    const match = presented.byteLength === expected.byteLength && timingSafeEqual(presented, expected);
     if (!match) {
       return new Response("forbidden", { status: 403 });
     }

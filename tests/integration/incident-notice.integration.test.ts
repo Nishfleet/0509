@@ -59,9 +59,7 @@ const insertNotice = (id: string, isResolution: 0 | 1) =>
     .run();
 
 const noticeCount = async () => {
-  const row = await env.DB.prepare(
-    "SELECT COUNT(*) AS n FROM incident_notice WHERE page_id = ?",
-  )
+  const row = await env.DB.prepare("SELECT COUNT(*) AS n FROM incident_notice WHERE page_id = ?")
     .bind(PAGE)
     .first<{ n: number }>();
   return row?.n ?? 0;

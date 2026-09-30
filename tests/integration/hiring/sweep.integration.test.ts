@@ -80,9 +80,7 @@ describe("nightly hiring sweep workflow", () => {
       `INSERT OR IGNORE INTO source (id, key, kind, platform, plugin_key, reliability, is_enabled, config_json)
        VALUES ('src_hiring_greenhouse', 'hiring.greenhouse', 'hiring', 'greenhouse', 'hiring.board', 'official_api', 1, '{}')`,
     ).run();
-    await env.DB.prepare(
-      "UPDATE source SET is_enabled = 1 WHERE id = 'src_hiring_greenhouse'",
-    ).run();
+    await env.DB.prepare("UPDATE source SET is_enabled = 1 WHERE id = 'src_hiring_greenhouse'").run();
 
     listing.body = JSON.stringify(NIGHT_ONE);
     calls.length = 0;

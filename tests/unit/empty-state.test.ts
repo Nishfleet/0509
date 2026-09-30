@@ -148,21 +148,27 @@ describe("the component renders a sentence and at most one action, nothing else"
   });
 
   it("an action href must be a same-site path", () => {
-    expect(() => emptyState("Add a competitor to see where you stand.", {
-      kind: "link",
-      label: "Add",
-      href: "javascript:alert(1)",
-    })).toThrow(/same-site path/);
-    expect(() => emptyState("Add a competitor to see where you stand.", {
-      kind: "link",
-      label: "Add",
-      href: "https://example.com",
-    })).toThrow(/same-site path/);
-    expect(() => emptyState("Add a competitor to see where you stand.", {
-      kind: "link",
-      label: "Add",
-      href: "/app/competitors",
-    })).not.toThrow();
+    expect(() =>
+      emptyState("Add a competitor to see where you stand.", {
+        kind: "link",
+        label: "Add",
+        href: "javascript:alert(1)",
+      }),
+    ).toThrow(/same-site path/);
+    expect(() =>
+      emptyState("Add a competitor to see where you stand.", {
+        kind: "link",
+        label: "Add",
+        href: "https://example.com",
+      }),
+    ).toThrow(/same-site path/);
+    expect(() =>
+      emptyState("Add a competitor to see where you stand.", {
+        kind: "link",
+        label: "Add",
+        href: "/app/competitors",
+      }),
+    ).not.toThrow();
   });
 });
 

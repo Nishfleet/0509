@@ -32,10 +32,7 @@ function verifyDenial(error: unknown): string {
   return `verify-error: ${error instanceof Error ? error.message : String(error)}`;
 }
 
-async function denialReason(
-  assertion: string,
-  config: { iss: string; aud: string },
-): Promise<string | null> {
+async function denialReason(assertion: string, config: { iss: string; aud: string }): Promise<string | null> {
   let payload: JWTPayload;
   try {
     const verified = await jwtVerify(assertion, jwksFor(config.iss), {

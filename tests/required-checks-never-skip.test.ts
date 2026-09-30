@@ -35,7 +35,12 @@ function readJobs(file: string, yaml: string): Job[] {
     const body = lines.slice(index + 1, end);
     const key = line.trim().slice(0, -1);
     const named = body.find((l) => /^ {4}name:\s*/.test(l));
-    const reported = named ? named.replace(/^ {4}name:\s*/, "").replace(/^["']|["']$/g, "").trim() : key;
+    const reported = named
+      ? named
+          .replace(/^ {4}name:\s*/, "")
+          .replace(/^["']|["']$/g, "")
+          .trim()
+      : key;
     return { file, key, reported, body };
   });
 }
@@ -63,9 +68,14 @@ describe("required checks always report (0509#5738)", () => {
   });
 
   it("reads a job-level if: when one is there", () => {
-    const yaml = ["on: push", "jobs:", "  semgrep:", "    if: github.event_name != 'x'", "    runs-on: ubuntu-latest", ""].join(
-      "\n",
-    );
+    const yaml = [
+      "on: push",
+      "jobs:",
+      "  semgrep:",
+      "    if: github.event_name != 'x'",
+      "    runs-on: ubuntu-latest",
+      "",
+    ].join("\n");
     const [job] = readJobs("fixture.yml", yaml);
     expect(job.reported).toBe("semgrep");
     expect(job.body.some((l) => /^ {4}if:/.test(l))).toBe(true);

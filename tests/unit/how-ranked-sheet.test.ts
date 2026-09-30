@@ -131,9 +131,7 @@ describe("HowRankedTable", () => {
       multipliers: RANKED.multipliers.filter((entry) => entry.reliability !== "rss"),
     };
     expect(() => renderTable(missingWeight)).toThrow(/Missing weight label for bucket mention_matters/);
-    expect(() => renderTable(missingMultiplier)).toThrow(
-      /Missing multiplier label for reliability rss/,
-    );
+    expect(() => renderTable(missingMultiplier)).toThrow(/Missing multiplier label for reliability rss/);
   });
 });
 

@@ -54,9 +54,7 @@ async function seed(): Promise<void> {
   )
     .bind(userId, `${userId}@0509.io`, NOW)
     .run();
-  await env.DB.prepare(
-    `INSERT INTO workspace (id, name, owner_user_id, created_at) VALUES (?1, 'Owner', ?2, ?3)`,
-  )
+  await env.DB.prepare(`INSERT INTO workspace (id, name, owner_user_id, created_at) VALUES (?1, 'Owner', ?2, ?3)`)
     .bind(workspaceId, userId, NOW)
     .run();
 }
@@ -90,14 +88,14 @@ async function cachedHomepage(name: string, description: string): Promise<void> 
 function stubWeb(html: string): void {
   vi.stubGlobal("fetch", (input: RequestInfo | URL) => {
     const url = input instanceof Request ? input.url : String(input);
-    if (url === "https://gymshark.com/") return Promise.resolve(new Response(html, { status: 200, headers: { "content-type": "text/html" } }));
+    if (url === "https://gymshark.com/")
+      return Promise.resolve(new Response(html, { status: 200, headers: { "content-type": "text/html" } }));
     return Promise.resolve(new Response("", { status: 200 }));
   });
 }
 
 async function settledTail(): Promise<void> {
-  const row = await env.DB
-    .prepare("SELECT id FROM entity WHERE workspace_id = ?1 AND role = 'self'")
+  const row = await env.DB.prepare("SELECT id FROM entity WHERE workspace_id = ?1 AND role = 'self'")
     .bind(workspaceId)
     .first<{ id: string }>();
   if (row === null) return;
@@ -141,8 +139,7 @@ async function insertStoredNote(note: string): Promise<void> {
 }
 
 async function confirmedEntityId(): Promise<string> {
-  const row = await env.DB
-    .prepare("SELECT id FROM entity WHERE workspace_id = ?1 AND role = 'self'")
+  const row = await env.DB.prepare("SELECT id FROM entity WHERE workspace_id = ?1 AND role = 'self'")
     .bind(workspaceId)
     .first<{ id: string }>();
   if (row === null) throw new Error("confirmed entity was not stored");
@@ -150,8 +147,9 @@ async function confirmedEntityId(): Promise<string> {
 }
 
 async function fieldEditRows(id: string): Promise<z.infer<typeof fieldEditNoteSchema>[]> {
-  const { results } = await env.DB
-    .prepare("SELECT note FROM user_decision WHERE entity_id = ?1 AND verdict = ?2 ORDER BY note")
+  const { results } = await env.DB.prepare(
+    "SELECT note FROM user_decision WHERE entity_id = ?1 AND verdict = ?2 ORDER BY note",
+  )
     .bind(id, FIELDS_VERDICT)
     .all<{ note: string }>();
   return results.map((row) => {
@@ -242,11 +240,7 @@ describe("confirmCard field edits", () => {
     stubWeb(HOMEPAGE_HTML);
 
     expect(
-      await confirmCard(
-        workspaceId,
-        userId,
-        form({ subject: DOMAIN, name: "Gymshark", description: "Gym clothes" }),
-      ),
+      await confirmCard(workspaceId, userId, form({ subject: DOMAIN, name: "Gymshark", description: "Gym clothes" })),
     ).toBe(true);
 
     expect(await fieldEditRows(await confirmedEntityId())).toEqual([
@@ -267,11 +261,7 @@ describe("confirmCard field edits", () => {
     });
 
     expect(
-      await confirmCard(
-        workspaceId,
-        userId,
-        form({ subject: DOMAIN, name: "Gymshark", description: "Gym clothes" }),
-      ),
+      await confirmCard(workspaceId, userId, form({ subject: DOMAIN, name: "Gymshark", description: "Gym clothes" })),
     ).toBe(true);
 
     expect(await fieldEditRows(await confirmedEntityId())).toEqual([]);

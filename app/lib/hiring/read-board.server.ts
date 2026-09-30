@@ -22,11 +22,7 @@ export interface BoardResult {
 
 const previousRolesSchema = z.array(z.object({ id: z.string() }));
 
-async function fetchListingPages(
-  platform: BoardPlatform,
-  boardUrl: string,
-  url: string,
-): Promise<OpenRole[] | "gone"> {
+async function fetchListingPages(platform: BoardPlatform, boardUrl: string, url: string): Promise<OpenRole[] | "gone"> {
   const response = await fetchOutbound(url, { headers: {} });
   if (response.status === 404 || response.status === 410) return "gone";
   if (!response.ok) {
@@ -84,8 +80,7 @@ async function fileFreshRoles(input: {
   now: string;
 }): Promise<number> {
   const { target, previous, roles, snapshotId, now } = input;
-  const previousObject =
-    previous.r2Key === null ? null : await env.SNAPSHOTS.get(previous.r2Key);
+  const previousObject = previous.r2Key === null ? null : await env.SNAPSHOTS.get(previous.r2Key);
   if (previousObject === null) throw new Error("hiring.previous_snapshot_missing");
   const stored = previousRolesSchema.parse(JSON.parse(await previousObject.text()));
   const previousIds = new Set(stored.map((role) => role.id));
@@ -147,12 +142,14 @@ export async function readBoard(target: HiringTarget, tick: SweepTick): Promise<
     await markWatchPolled(target.watchId, now);
     return { outcome: "changed", newRoles };
   } catch (error) {
-    console.log(JSON.stringify({
-      event: "hiring.read_failed",
-      watchId: target.watchId,
-      boardUrl: target.boardUrl,
-      error: error instanceof Error ? error.message : String(error),
-    }));
+    console.log(
+      JSON.stringify({
+        event: "hiring.read_failed",
+        watchId: target.watchId,
+        boardUrl: target.boardUrl,
+        error: error instanceof Error ? error.message : String(error),
+      }),
+    );
     throw error;
   }
 }

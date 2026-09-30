@@ -25,10 +25,7 @@ import { consoleFailures, isLocalLane, laneOrigin, watchConsole } from "./inbox"
 // At 390 the `Row` now wraps the empty-line span under the trigger,
 // giving the edit name/about triggers a non-zero bounding box on the unread card.
 // 0509#5557 owns this fix; the 390 lane asserts the triggers are clickable.
-test.skip(
-  !isLocalLane(),
-  "production signs in through the magic-link inbox; the local preview D1 carries the seed",
-);
+test.skip(!isLocalLane(), "production signs in through the magic-link inbox; the local preview D1 carries the seed");
 
 function authSecret(): string {
   const line = readFileSync(".dev.vars.example", "utf8")
@@ -153,7 +150,9 @@ function watchDraftPosts(page: Page): string[] {
   return posts;
 }
 
-test("the identity card editor saves and closes on Enter, with focus back on the trigger", async ({ page }, testInfo) => {
+test("the identity card editor saves and closes on Enter, with focus back on the trigger", async ({
+  page,
+}, testInfo) => {
   test.setTimeout(90_000);
   const watched = watchConsole(page);
   const draftPosts = watchDraftPosts(page);
@@ -168,7 +167,8 @@ test("the identity card editor saves and closes on Enter, with focus back on the
   const name = await openEditor(page, "name");
   await name.fill("Brand One");
   const saveResponse = page.waitForResponse(
-    (response) => response.request().method() === "POST" && new URL(response.url()).pathname === "/onboarding/identity.data",
+    (response) =>
+      response.request().method() === "POST" && new URL(response.url()).pathname === "/onboarding/identity.data",
   );
   await name.press("Enter");
 
@@ -188,7 +188,9 @@ test("the identity card editor saves and closes on Enter, with focus back on the
   expect(await consoleFailures(page, watched, testInfo), testInfo.project.name).toEqual([]);
 });
 
-test("the identity card editor saves and closes on Escape, with focus back on the trigger", async ({ page }, testInfo) => {
+test("the identity card editor saves and closes on Escape, with focus back on the trigger", async ({
+  page,
+}, testInfo) => {
   test.setTimeout(90_000);
   const watched = watchConsole(page);
   const draftPosts = watchDraftPosts(page);
@@ -203,7 +205,8 @@ test("the identity card editor saves and closes on Escape, with focus back on th
   const about = await openEditor(page, "about");
   await about.fill("one line on what we do");
   const saveResponse = page.waitForResponse(
-    (response) => response.request().method() === "POST" && new URL(response.url()).pathname === "/onboarding/identity.data",
+    (response) =>
+      response.request().method() === "POST" && new URL(response.url()).pathname === "/onboarding/identity.data",
   );
   await about.press("Escape");
 

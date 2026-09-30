@@ -41,13 +41,19 @@ interface RegistryRow {
 async function seed(): Promise<void> {
   await env.DB.prepare(
     "INSERT INTO user (id, name, email, emailVerified, createdAt, updatedAt) VALUES (?1, 'Registry perf', ?2, 1, ?3, ?3)",
-  ).bind(USER, `${USER}@example.test`, CREATED_AT).run();
+  )
+    .bind(USER, `${USER}@example.test`, CREATED_AT)
+    .run();
   await env.DB.prepare(
     "INSERT INTO workspace (id, name, owner_user_id, timezone, brief_weekday, brief_hour, created_at) VALUES (?1, 'Registry perf', ?2, 'UTC', 1, 8, ?3)",
-  ).bind(WS, USER, CREATED_AT).run();
+  )
+    .bind(WS, USER, CREATED_AT)
+    .run();
   await env.DB.prepare(
     "INSERT INTO entity (id, workspace_id, role, domain, name, created_at) VALUES (?1, ?2, 'competitor', 'acme.example', 'Acme', ?3)",
-  ).bind(ENTITY, WS, CREATED_AT).run();
+  )
+    .bind(ENTITY, WS, CREATED_AT)
+    .run();
 
   const kinds = ["ads", "mentions", "site", "hiring"] as const;
   const statements: D1PreparedStatement[] = [];
@@ -115,9 +121,7 @@ describe("registry sources read", () => {
       expect(detail.includes("snapshot")).toBe(false);
       expect(detail.includes("CORRELATED")).toBe(false);
     }
-    console.log(
-      `registry-sources explain utc=${new Date().toISOString()} ${details.join(" | ")}`,
-    );
+    console.log(`registry-sources explain utc=${new Date().toISOString()} ${details.join(" | ")}`);
   });
 
   it("reads under 200 rows for the whole registry", async () => {
@@ -134,7 +138,12 @@ describe("registry sources read", () => {
   it("maps the denormalized columns to the same snapshot shape as the subqueries did", async () => {
     const rows = await env.DB.prepare(
       "SELECT key, latest_fetched_at, latest_item_count, latest_canary_count FROM source WHERE key LIKE 'regperf.%'",
-    ).all<{ key: string; latest_fetched_at: string | null; latest_item_count: number | null; latest_canary_count: number | null }>();
+    ).all<{
+      key: string;
+      latest_fetched_at: string | null;
+      latest_item_count: number | null;
+      latest_canary_count: number | null;
+    }>();
     const seeded = new Map(rows.results.map((row) => [row.key, row]));
 
     const registry = await env.DB.prepare(SELECT_REGISTRY_SOURCES).all<RegistryRow>();

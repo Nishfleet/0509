@@ -12,15 +12,7 @@ test.skip(
   "the three treatments are rows in the local preview database; production signs in through the magic-link inbox and has no fixture workspace",
 );
 
-function seed({
-  db,
-  suffix,
-  userId,
-}: {
-  db: DatabaseSync;
-  suffix: string;
-  userId: string;
-}): void {
+function seed({ db, suffix, userId }: { db: DatabaseSync; suffix: string; userId: string }): void {
   const workspaceId = `ws-${suffix}`;
   const onId = `ent-on-${suffix}`;
   const offId = `ent-off-${suffix}`;
@@ -90,14 +82,7 @@ function seed({
       publishedAt,
       observedAt,
     );
-  const verdict = (
-    id: string,
-    signalId: string,
-    entityId: string,
-    p: number,
-    reason: string,
-    decidedAt: string,
-  ) =>
+  const verdict = (id: string, signalId: string, entityId: string, p: number, reason: string, decidedAt: string) =>
     run(
       db,
       `INSERT INTO jev_verdict (id, workspace_id, question_id, input_hash, signal_id, entity_id, p, reason, decided_at)
@@ -196,14 +181,7 @@ function seed({
     "A ticker line, not a move.",
     "2026-09-25T06:00:00.000Z",
   );
-  verdict(
-    `jev-off-${suffix}`,
-    `sig-off-${suffix}`,
-    offId,
-    0.99,
-    "Paused brand reason.",
-    "2026-09-25T06:00:00.000Z",
-  );
+  verdict(`jev-off-${suffix}`, `sig-off-${suffix}`, offId, 0.99, "Paused brand reason.", "2026-09-25T06:00:00.000Z");
 }
 
 function seedSession(): Promise<string> {
@@ -220,9 +198,7 @@ async function measure(page: Page) {
   }));
 }
 
-test("a workspace shows the three mention treatments", async ({
-  page,
-}, testInfo) => {
+test("a workspace shows the three mention treatments", async ({ page }, testInfo) => {
   test.setTimeout(90_000);
   const watched = watchConsole(page);
 
@@ -232,35 +208,19 @@ test("a workspace shows the three mention treatments", async ({
   await expect(page).toHaveURL(/\/app\/alerts/);
   await expect(page.getByTestId("alerts-contract")).toBeVisible();
 
-  const shown = page.locator(
-    '[data-testid="mention-row"][data-treatment="shown"]',
-  );
-  const possibly = page.locator(
-    '[data-testid="mention-row"][data-treatment="possibly"]',
-  );
-  const held = page.locator(
-    '[data-testid="mention-row"][data-treatment="held"]',
-  );
+  const shown = page.locator('[data-testid="mention-row"][data-treatment="shown"]');
+  const possibly = page.locator('[data-testid="mention-row"][data-treatment="possibly"]');
+  const held = page.locator('[data-testid="mention-row"][data-treatment="held"]');
   await expect(shown).toHaveCount(2);
   await expect(possibly).toHaveCount(1);
   await expect(held).toHaveCount(0);
-  await expect(possibly).toContainText(
-    "Possibly. We were not sure this mattered",
-  );
+  await expect(possibly).toContainText("Possibly. We were not sure this mattered");
   await expect(possibly).toContainText("found today");
   await expect(page.getByText("News mentions", { exact: true })).toBeVisible();
-  await expect(
-    page.getByText("Hacker News mentions", { exact: true }),
-  ).toBeVisible();
-  await expect(
-    page.getByText("Medium mentions", { exact: true }),
-  ).toBeVisible();
-  await expect(page.getByText("Paused brand should stay hidden")).toHaveCount(
-    0,
-  );
-  await expect(
-    page.getByText("An old read that should stay hidden."),
-  ).toHaveCount(0);
+  await expect(page.getByText("Hacker News mentions", { exact: true })).toBeVisible();
+  await expect(page.getByText("Medium mentions", { exact: true })).toBeVisible();
+  await expect(page.getByText("Paused brand should stay hidden")).toHaveCount(0);
+  await expect(page.getByText("An old read that should stay hidden.")).toHaveCount(0);
 
   const before = await page.locator("main").innerHTML();
   expect(before).not.toMatch(BANNED);
@@ -275,15 +235,11 @@ test("a workspace shows the three mention treatments", async ({
   await expect(held).toContainText("Zephyrwear ticker line");
   const trigger = held.getByRole("button", { name: "Why we flagged this" });
   await trigger.click();
-  await expect(page.getByTestId("why-flagged-reason")).toHaveText(
-    "Our read: A ticker line, not a move.",
-  );
+  await expect(page.getByTestId("why-flagged-reason")).toHaveText("Our read: A ticker line, not a move.");
   await page.keyboard.press("Escape");
   await expect(page.getByTestId("why-flagged")).toHaveCount(0);
   await expect(trigger).toBeFocused();
-  await expect(page.getByText("Paused brand should stay hidden")).toHaveCount(
-    0,
-  );
+  await expect(page.getByText("Paused brand should stay hidden")).toHaveCount(0);
   const after = await page.locator("main").innerHTML();
   expect(after).not.toMatch(BANNED);
 
@@ -297,8 +253,5 @@ test("a workspace shows the three mention treatments", async ({
     expect(widths.scrollWidth, JSON.stringify(widths)).toBe(widths.clientWidth);
   }
 
-  expect(
-    await consoleFailures(page, watched, testInfo),
-    testInfo.project.name,
-  ).toEqual([]);
+  expect(await consoleFailures(page, watched, testInfo), testInfo.project.name).toEqual([]);
 });

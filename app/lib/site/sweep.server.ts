@@ -7,12 +7,7 @@ import { insertChangeSignalStatement } from "../data/signal.server";
 import { readCoveredPagePairs } from "../data/snapshot.server";
 import { readEnabledSourceId } from "../data/source.server";
 import type { SiteSweepTarget } from "../data/watch.server";
-import {
-  insertWatches,
-  markWatchPolled,
-  readSiteSweepTargets,
-  readUnwatchedEntities,
-} from "../data/watch.server";
+import { insertWatches, markWatchPolled, readSiteSweepTargets, readUnwatchedEntities } from "../data/watch.server";
 import { robotsAllows } from "../fetch/robots.server";
 import { normaliseSubject } from "../identity/normalise";
 import { takeBrowserScreenshot } from "./browser-budget.server";
@@ -82,23 +77,21 @@ export async function planSiteSweep(now: string): Promise<SiteSweepTarget[]> {
   await insertWatches(
     unwatched.flatMap((entity) => {
       const url = homeUrl(entity);
-      return url === null
-        ? []
-        : [{ id: crypto.randomUUID(), entityId: entity.id, sourceId, targetKey: url }];
+      return url === null ? [] : [{ id: crypto.randomUUID(), entityId: entity.id, sourceId, targetKey: url }];
     }),
   );
   return [...(await readSiteSweepTargets(SITE_SOURCE_KEY))];
 }
 
-export async function uncoveredItems(
-  items: readonly SiteSweepTarget[],
-  sinceIso: string,
-): Promise<SiteSweepTarget[]> {
+export async function uncoveredItems(items: readonly SiteSweepTarget[], sinceIso: string): Promise<SiteSweepTarget[]> {
   if (items.length === 0) return [];
   const covered = new Set(
-    (await readCoveredPagePairs(sinceIso, items.map((item) => item.watchId))).map(
-      (row) => `${row.watchId}|${row.pageId}`,
-    ),
+    (
+      await readCoveredPagePairs(
+        sinceIso,
+        items.map((item) => item.watchId),
+      )
+    ).map((row) => `${row.watchId}|${row.pageId}`),
   );
   return items.filter((item) => !covered.has(`${item.watchId}|${item.pageId}`));
 }
@@ -118,7 +111,14 @@ export async function checkSitePage(
   options: CheckSitePageOptions = {},
 ): Promise<CheckPageResult> {
   if (target.entityRole === "self" && !(await robotsAllows(target.url))) {
-    console.log(JSON.stringify({ event: "site.check_failed", url: target.url, reason: "robots", detail: "disallowed by robots.txt" }));
+    console.log(
+      JSON.stringify({
+        event: "site.check_failed",
+        url: target.url,
+        reason: "robots",
+        detail: "disallowed by robots.txt",
+      }),
+    );
     return { outcome: "failed", reason: "robots", detail: "disallowed by robots.txt" };
   }
   const read = await readPage(target, tick.plannedAt, { browser: options.browser ?? true });
@@ -132,16 +132,17 @@ export async function checkSitePage(
     mayScreenshot:
       options.browser === false
         ? undefined
-        : () =>
-            takeBrowserScreenshot(target.workspaceId, target.entityId, tick.plannedAt.slice(0, 10)),
+        : () => takeBrowserScreenshot(target.workspaceId, target.entityId, tick.plannedAt.slice(0, 10)),
   });
   if (result.outcome === "failed") {
-    console.log(JSON.stringify({
-      event: "site.check_failed",
-      url: target.url,
-      reason: result.reason,
-      detail: result.detail,
-    }));
+    console.log(
+      JSON.stringify({
+        event: "site.check_failed",
+        url: target.url,
+        reason: result.reason,
+        detail: result.detail,
+      }),
+    );
     return result;
   }
   await markWatchPolled(target.watchId, new Date().toISOString());
@@ -168,7 +169,9 @@ interface SiteChangeInput {
   evidence: ReturnType<typeof computeBreakageEvidence>;
 }
 
-function changeSignalPayload(input: Pick<SiteChangeInput, "target" | "changed" | "diff"> & { diffKey: string }): string {
+function changeSignalPayload(
+  input: Pick<SiteChangeInput, "target" | "changed" | "diff"> & { diffKey: string },
+): string {
   const { target, changed, diff, diffKey } = input;
   const words = diff?.words ?? [];
   return JSON.stringify({
@@ -209,11 +212,13 @@ async function judgeUnlessFailed(change: SiteChangeInput, signalId: string | nul
   try {
     return await judgeChange(judgeInputFor(change, signalId));
   } catch (error) {
-    console.log(JSON.stringify({
-      event: "site.change_judge_failed",
-      url: change.target.url,
-      error: error instanceof Error ? error.name : "unknown",
-    }));
+    console.log(
+      JSON.stringify({
+        event: "site.change_judge_failed",
+        url: change.target.url,
+        error: error instanceof Error ? error.name : "unknown",
+      }),
+    );
     return null;
   }
 }
@@ -223,7 +228,11 @@ async function judgeCompetitorChange(change: SiteChangeInput): Promise<JudgedCha
   return judgeUnlessFailed(change, null);
 }
 
-async function fileChangeSignal(change: SiteChangeInput, payloadJson: string, judgment: JudgedChange | null): Promise<string> {
+async function fileChangeSignal(
+  change: SiteChangeInput,
+  payloadJson: string,
+  judgment: JudgedChange | null,
+): Promise<string> {
   const { target, changed } = change;
   const noteworthy = judgment?.noteworthy ?? null;
   const signalId = crypto.randomUUID();
@@ -259,10 +268,7 @@ async function fileChangeSignal(change: SiteChangeInput, payloadJson: string, ju
 }
 
 export async function publishSiteChange(target: SiteSweepTarget, changed: ChangedPage): Promise<string> {
-  const [before, after] = await Promise.all([
-    readText(changed.previousTextKey),
-    readText(changed.textKey),
-  ]);
+  const [before, after] = await Promise.all([readText(changed.previousTextKey), readText(changed.textKey)]);
   const diff = pageTextDiff(before, after, changed);
 
   const diffKey = `snapshot/site/${target.watchId}/${changed.snapshotId}.diff.json`;

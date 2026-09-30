@@ -24,16 +24,12 @@ interface SweepRunRow {
 }
 
 const readRun = async (id: string): Promise<SweepRunRow | null> =>
-  env.DB.prepare(
-    `SELECT id, kind, planned_at, finished_at, wall_ms, pages, failed FROM sweep_run WHERE id = ?`,
-  )
+  env.DB.prepare(`SELECT id, kind, planned_at, finished_at, wall_ms, pages, failed FROM sweep_run WHERE id = ?`)
     .bind(id)
     .first<SweepRunRow>();
 
 const countRuns = async (): Promise<number> =>
-  (
-    await env.DB.prepare("SELECT COUNT(*) AS total FROM sweep_run").first<{ total: number }>()
-  )?.total ?? -1;
+  (await env.DB.prepare("SELECT COUNT(*) AS total FROM sweep_run").first<{ total: number }>())?.total ?? -1;
 
 describe("sweep_run records a finished site sweep (0509#5755)", () => {
   beforeEach(async () => {

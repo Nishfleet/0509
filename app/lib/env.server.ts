@@ -37,12 +37,13 @@ const NOTES = {
   PROBE_LIMIT: "one user can run unlimited identity probes",
   LIVENESS_PING_URL: "absence means no monitor; a set value must be an http(s) URL",
   SITE_SWEEP_PING_URL: "absence means no monitor; a set value must be an http(s) URL",
-} as const satisfies Record<
-  (typeof BINDING_NAMES)[number] | "LIVENESS_PING_URL" | "SITE_SWEEP_PING_URL",
-  string
->;
+} as const satisfies Record<(typeof BINDING_NAMES)[number] | "LIVENESS_PING_URL" | "SITE_SWEEP_PING_URL", string>;
 
-const NAMES = [...BINDING_NAMES, "LIVENESS_PING_URL", "SITE_SWEEP_PING_URL"] as const satisfies readonly (keyof typeof NOTES)[];
+const NAMES = [
+  ...BINDING_NAMES,
+  "LIVENESS_PING_URL",
+  "SITE_SWEEP_PING_URL",
+] as const satisfies readonly (keyof typeof NOTES)[];
 
 type EnvName = (typeof NAMES)[number];
 type Snapshot = Record<(typeof NAMES)[number], unknown>;

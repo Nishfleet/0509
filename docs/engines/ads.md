@@ -48,24 +48,24 @@ The probes below show every ad-transparency surface falls into exactly **two** b
 
 ## Live probes — one per platform, all on Gymshark
 
-| # | Platform | Surface | Call | Result |
-|---|---|---|---|---|
-| 1 | **Meta** | Graph `ads_archive` | `GET graph.facebook.com/v23.0/ads_archive?search_terms=gymshark&ad_reached_countries=["GB"]` | **500** `{"error":{"message":"An unknown error has occurred.","type":"OAuthException","code":1,"fbtrace_id":"AXzg5va6rGJWuxBH11ojtGK"}}` at **12:13:06Z** — no token |
-| 2 | **Meta** | Ad Library UI backend | `POST facebook.com/ads/library/async/search_ads/` | **403**, 481 B, a JS challenge body: `fetch('/__rd_verify_Q_6hBQRrniuO4k5xmCsdY_hwHHIwU3qkZAPgY-zRESOhyeKLGw?challenge=3')` at **12:13:07Z** |
-| 3 | **Meta** | Ad Library UI page | `GET facebook.com/ads/library/?q=gymshark&country=GB` | **403**, 481 B, same challenge at **12:13:08Z** |
-| 4 | **Meta** | **through a real browser** | `GET https://0509.io/search?website=gymshark.com` (the deployed Worker's Browser Rendering leg) | **200**, 134,877 B, **15.55 s**, `data-f9-result-source="meta_library_browser"`, at **12:13:25Z** — real ad archive ids **1035896478962196**, **714074828146579**, **1847470879199109** |
-| 5 | **Google** | Ads Transparency RPC | `POST adstransparency.google.com/anji/_/rpc/SearchService/SearchAdvertisers` | **400** `com.google.apps.framework.request.BadRequestException: Trouble converting f.req=… to class com.google.ads.integrity.transparency.reporting.SearchAdvertisersRequest`; a different field shape gave **200 `{}`**, at **12:13:18Z** and **12:14:24Z** |
-| 6 | **Google** | Ads Transparency UI | `GET adstransparency.google.com/?region=GB&domain=gymshark.com` | **200**, 2,565,927 B, **zero** `AR…` advertiser ids and **zero** `CR…` creative ids in the HTML, at **12:14:42Z** — client-rendered |
-| 7 | **TikTok** | Commercial Content Library UI | `GET library.tiktok.com/ads?region=GB&adv_name=gymshark` | **200**, 38,787 B — an app shell, at **12:14:02Z** |
-| 8 | **TikTok** | official Research Ad Library API | `POST open.tiktokapis.com/v2/research/adlib/advertiser/query/` | **401** `{"error":{"code":"access_token_invalid"}}`, `log_id 20260921121402B47E0AD10F81EE04EC74`, at **12:14:02Z** |
-| 9 | **TikTok** | guessed library API paths | `library.tiktok.com/api/v1/{search/advertiser,adv/search,ads/search}` | **404**; `/api/v1/search` → **421 "params error"**, at **12:14:58Z** |
-| 10 | **LinkedIn** | Ad Library | `GET linkedin.com/ad-library/search?keyword=gymshark` | **403**, 4,570 B, at **12:13:20Z** |
-| 11 | **Reddit** | Ad Library | `GET reddit.com/ad-library/` | **200**, 8,408 B, at **12:14:29Z** |
-| 12 | **Snap** | political ads | `GET snap.com/political-ads` | **200**, 603,920 B; `transparency.snap.com` → **no DNS record**, at **12:14:29Z** |
-| 13 | **X** | ad repository | `GET ads.x.com/ad-repository/search?q=gymshark` | **404**, at **12:14:29Z** |
-| 14 | **Pinterest** | ad library | `GET ads.pinterest.com/ad-library/?q=gymshark` | **404**, at **12:14:29Z** |
-| 15 | **Amazon** | ad library | `GET amazon.com/adlib` | **404**, at **12:14:29Z** |
-| 16 | **Apple** | ad transparency | `GET ads.apple.com/transparency` | **404**, at **12:14:29Z** |
+| #   | Platform      | Surface                          | Call                                                                                            | Result                                                                                                                                                                                                                                                       |
+| --- | ------------- | -------------------------------- | ----------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 1   | **Meta**      | Graph `ads_archive`              | `GET graph.facebook.com/v23.0/ads_archive?search_terms=gymshark&ad_reached_countries=["GB"]`    | **500** `{"error":{"message":"An unknown error has occurred.","type":"OAuthException","code":1,"fbtrace_id":"AXzg5va6rGJWuxBH11ojtGK"}}` at **12:13:06Z** — no token                                                                                         |
+| 2   | **Meta**      | Ad Library UI backend            | `POST facebook.com/ads/library/async/search_ads/`                                               | **403**, 481 B, a JS challenge body: `fetch('/__rd_verify_Q_6hBQRrniuO4k5xmCsdY_hwHHIwU3qkZAPgY-zRESOhyeKLGw?challenge=3')` at **12:13:07Z**                                                                                                                 |
+| 3   | **Meta**      | Ad Library UI page               | `GET facebook.com/ads/library/?q=gymshark&country=GB`                                           | **403**, 481 B, same challenge at **12:13:08Z**                                                                                                                                                                                                              |
+| 4   | **Meta**      | **through a real browser**       | `GET https://0509.io/search?website=gymshark.com` (the deployed Worker's Browser Rendering leg) | **200**, 134,877 B, **15.55 s**, `data-f9-result-source="meta_library_browser"`, at **12:13:25Z** — real ad archive ids **1035896478962196**, **714074828146579**, **1847470879199109**                                                                      |
+| 5   | **Google**    | Ads Transparency RPC             | `POST adstransparency.google.com/anji/_/rpc/SearchService/SearchAdvertisers`                    | **400** `com.google.apps.framework.request.BadRequestException: Trouble converting f.req=… to class com.google.ads.integrity.transparency.reporting.SearchAdvertisersRequest`; a different field shape gave **200 `{}`**, at **12:13:18Z** and **12:14:24Z** |
+| 6   | **Google**    | Ads Transparency UI              | `GET adstransparency.google.com/?region=GB&domain=gymshark.com`                                 | **200**, 2,565,927 B, **zero** `AR…` advertiser ids and **zero** `CR…` creative ids in the HTML, at **12:14:42Z** — client-rendered                                                                                                                          |
+| 7   | **TikTok**    | Commercial Content Library UI    | `GET library.tiktok.com/ads?region=GB&adv_name=gymshark`                                        | **200**, 38,787 B — an app shell, at **12:14:02Z**                                                                                                                                                                                                           |
+| 8   | **TikTok**    | official Research Ad Library API | `POST open.tiktokapis.com/v2/research/adlib/advertiser/query/`                                  | **401** `{"error":{"code":"access_token_invalid"}}`, `log_id 20260921121402B47E0AD10F81EE04EC74`, at **12:14:02Z**                                                                                                                                           |
+| 9   | **TikTok**    | guessed library API paths        | `library.tiktok.com/api/v1/{search/advertiser,adv/search,ads/search}`                           | **404**; `/api/v1/search` → **421 "params error"**, at **12:14:58Z**                                                                                                                                                                                         |
+| 10  | **LinkedIn**  | Ad Library                       | `GET linkedin.com/ad-library/search?keyword=gymshark`                                           | **403**, 4,570 B, at **12:13:20Z**                                                                                                                                                                                                                           |
+| 11  | **Reddit**    | Ad Library                       | `GET reddit.com/ad-library/`                                                                    | **200**, 8,408 B, at **12:14:29Z**                                                                                                                                                                                                                           |
+| 12  | **Snap**      | political ads                    | `GET snap.com/political-ads`                                                                    | **200**, 603,920 B; `transparency.snap.com` → **no DNS record**, at **12:14:29Z**                                                                                                                                                                            |
+| 13  | **X**         | ad repository                    | `GET ads.x.com/ad-repository/search?q=gymshark`                                                 | **404**, at **12:14:29Z**                                                                                                                                                                                                                                    |
+| 14  | **Pinterest** | ad library                       | `GET ads.pinterest.com/ad-library/?q=gymshark`                                                  | **404**, at **12:14:29Z**                                                                                                                                                                                                                                    |
+| 15  | **Amazon**    | ad library                       | `GET amazon.com/adlib`                                                                          | **404**, at **12:14:29Z**                                                                                                                                                                                                                                    |
+| 16  | **Apple**     | ad transparency                  | `GET ads.apple.com/transparency`                                                                | **404**, at **12:14:29Z**                                                                                                                                                                                                                                    |
 
 **Probe 4 is the load-bearing one.** Nineteen seconds after Meta's own endpoints returned 403 with a bot challenge to this VPS, the **same upstream, through a real browser in a deployed Worker, returned real ads** — three archive ids anyone can open at `facebook.com/ads/library/?id=1035896478962196`. That single pair is the entire argument for the browser transport, measured rather than asserted, and it is the same finding `REBUILD-KEEPLIST.md` recorded from the other direction.
 
@@ -73,14 +73,14 @@ The probes below show every ad-transparency surface falls into exactly **two** b
 
 ### The build order the probes justify
 
-| Rank | Platform | Transport | Spend | Why here |
-|---|---|---|---|---|
-| 1 | Meta | browser | $0 | proven live today, ids cited; the flagship signal |
-| 2 | Reddit | **fetch** | $0 | the only library that answered a plain datacenter fetch — cheapest signal per unit of work in the whole engine |
-| 3 | Google Ads Transparency | browser | $0 | largest coverage after Meta; UI is client-rendered |
-| 4 | TikTok | **api**, pending approval | $0 | the official Research Ad Library API exists and answered with a typed auth error — **a Nish item: apply for API access**. Browser route on the UI shell meanwhile |
-| 5 | LinkedIn | browser | $0 | 403 to fetch, renders for a browser |
-| 6–10 | Snap, X, Pinterest, Amazon, Apple | **parked** | — | no reachable search surface at the obvious URLs today (404 / NXDOMAIN). Each needs someone to *find the URL*, which is a research task, not an engineering one. Parked with the evidence above so it is not re-probed blind |
+| Rank | Platform                          | Transport                 | Spend | Why here                                                                                                                                                                                                                    |
+| ---- | --------------------------------- | ------------------------- | ----- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1    | Meta                              | browser                   | $0    | proven live today, ids cited; the flagship signal                                                                                                                                                                           |
+| 2    | Reddit                            | **fetch**                 | $0    | the only library that answered a plain datacenter fetch — cheapest signal per unit of work in the whole engine                                                                                                              |
+| 3    | Google Ads Transparency           | browser                   | $0    | largest coverage after Meta; UI is client-rendered                                                                                                                                                                          |
+| 4    | TikTok                            | **api**, pending approval | $0    | the official Research Ad Library API exists and answered with a typed auth error — **a Nish item: apply for API access**. Browser route on the UI shell meanwhile                                                           |
+| 5    | LinkedIn                          | browser                   | $0    | 403 to fetch, renders for a browser                                                                                                                                                                                         |
+| 6–10 | Snap, X, Pinterest, Amazon, Apple | **parked**                | —     | no reachable search surface at the obvious URLs today (404 / NXDOMAIN). Each needs someone to _find the URL_, which is a research task, not an engineering one. Parked with the evidence above so it is not re-probed blind |
 
 This replaces #3891's stated order (Meta, then Google, then "one adapter per remaining platform"): **Reddit moves ahead of Google** because it is a plain fetch, and five platforms are parked with evidence rather than scheduled.
 
@@ -88,14 +88,14 @@ This replaces #3891's stated order (Meta, then Google, then "one adapter per rem
 
 ## Data flow against the schema
 
-| Step | Reads | Writes |
-|---|---|---|
-| Select | `watch JOIN entity WHERE entity.state='on'` and `source.kind='ads'` | — |
-| Collect | `source` (descriptor, rate limit, reliability) | R2: the raw payload per (watch, tick); `snapshot`: **one row** per watch per tick with `payload_r2_key`, `payload_hash`, `item_count`, `fetched_at`, paired in the same `batch()` with the `source` latest-facts update |
-| Diff the ad set | the previous `snapshot.payload_hash` for that watch | nothing when the hash is unchanged — no creative rows, no screenshots, no Jev |
-| New creatives | — | `signal` rows, `kind='ad'`, one **per creative**, never per impression or per element; the creative screenshot and image go to R2 by key |
-| Dedup | existing `signal` rows for the entity | `jev_verdict` (D8) only for the cross-platform / re-upload case |
-| Materiality | `signal` history | `jev_verdict` (D6-style), and `alert` only when the verdict passes |
+| Step            | Reads                                                               | Writes                                                                                                                                                                                                                  |
+| --------------- | ------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Select          | `watch JOIN entity WHERE entity.state='on'` and `source.kind='ads'` | —                                                                                                                                                                                                                       |
+| Collect         | `source` (descriptor, rate limit, reliability)                      | R2: the raw payload per (watch, tick); `snapshot`: **one row** per watch per tick with `payload_r2_key`, `payload_hash`, `item_count`, `fetched_at`, paired in the same `batch()` with the `source` latest-facts update |
+| Diff the ad set | the previous `snapshot.payload_hash` for that watch                 | nothing when the hash is unchanged — no creative rows, no screenshots, no Jev                                                                                                                                           |
+| New creatives   | —                                                                   | `signal` rows, `kind='ad'`, one **per creative**, never per impression or per element; the creative screenshot and image go to R2 by key                                                                                |
+| Dedup           | existing `signal` rows for the entity                               | `jev_verdict` (D8) only for the cross-platform / re-upload case                                                                                                                                                         |
+| Materiality     | `signal` history                                                    | `jev_verdict` (D6-style), and `alert` only when the verdict passes                                                                                                                                                      |
 
 **The two rules this table exists to enforce** (`REBUILD-COST.md`): one `snapshot` row per watch per tick (paired in the same batch with one `source` latest-facts update), and never a row per observed element. A brand running 400 live creatives writes **one** snapshot row on an unchanged tick, and on a changed tick writes only the creatives that are new. The $105 rows-written bill of 2026-09-17 was the other shape.
 
@@ -125,11 +125,11 @@ cron "0 2 * * *"  (daily, 02:00 UTC)
 
 ## Jev decisions used
 
-| Id | Primitive | When it runs | Context pack fields |
-|---|---|---|---|
-| **D8** `duplicate_signal` | Noul | **only** when two creatives are not identical by id — the same ad seen on two platforms, or re-uploaded with a new id | `subject`, `item` = both creatives with their normalised copy hashes, `history_30d` |
-| **D6-style** `ad_move_matters` | Noul | **only** when the ad set changed materially: new creatives ≥ 3, or the set shrank by ≥ 30%, or a new format appeared. Budgeted to **2 calls per brand per day** | `self`, `subject`, `item` = the change summary and up to five creative excerpts, `history_30d` = the brand's last 30 days of ad moves, `user_memory` = "not noteworthy" marks, `reliability` from the `source` row |
-| **D4** `read_this_first` | Noul + Score | weekly, over items that already passed D6 | as the contract defines; ads compete with every other kind here |
+| Id                             | Primitive    | When it runs                                                                                                                                                    | Context pack fields                                                                                                                                                                                                |
+| ------------------------------ | ------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **D8** `duplicate_signal`      | Noul         | **only** when two creatives are not identical by id — the same ad seen on two platforms, or re-uploaded with a new id                                           | `subject`, `item` = both creatives with their normalised copy hashes, `history_30d`                                                                                                                                |
+| **D6-style** `ad_move_matters` | Noul         | **only** when the ad set changed materially: new creatives ≥ 3, or the set shrank by ≥ 30%, or a new format appeared. Budgeted to **2 calls per brand per day** | `self`, `subject`, `item` = the change summary and up to five creative excerpts, `history_30d` = the brand's last 30 days of ad moves, `user_memory` = "not noteworthy" marks, `reliability` from the `source` row |
+| **D4** `read_this_first`       | Noul + Score | weekly, over items that already passed D6                                                                                                                       | as the contract defines; ads compete with every other kind here                                                                                                                                                    |
 
 **Exact id equality is code's job, not Jev's.** Two rows with the same `(platform, ad_archive_id)` are the same ad — ground truth, so `REBUILD-JEV.md`'s exclusion applies and D8 is never called for it. D8 exists for the genuinely ambiguous case, which is the only case worth paying for.
 
@@ -139,14 +139,14 @@ cron "0 2 * * *"  (daily, 02:00 UTC)
 
 Per 1,000 ad pulls, priced from `REBUILD-COST.md` (2026-09-21):
 
-| Leg | Units | Per 1,000 pulls |
-|---|---|---|
-| Browser pull (Meta, Google, LinkedIn) — measured 6.97 s for Gymshark in the cost doc | browser-seconds | 6,970 s = **1.94 browser-hours** → **$0.17** beyond the 10 h allotment |
-| Fetch pull (Reddit, TikTok API once approved) | subrequests | 1,000 — free |
-| Queue | 1 message × 3 ops, plus retries | 3,000 ops — **$0.0012** |
-| R2 | 1 payload PUT + ~2 creative image PUTs on a changed tick | ~3,000 Class A (**$0.0135**), ~0.5 GB-mo (**$0.008**) |
-| D1 | 1 snapshot row always + 1 `source` latest-facts row (both planned — no ads snapshot writer on main yet) + ~2 signal rows on a changed tick (~30% of ticks) | ~2,600 rows — **0.005% of the 50M included** |
-| Jev | ≤2 calls per changed pull ≈ 600 | $0 on the seat, **$0.0096** at the measured market rate |
+| Leg                                                                                  | Units                                                                                                                                                      | Per 1,000 pulls                                                        |
+| ------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| Browser pull (Meta, Google, LinkedIn) — measured 6.97 s for Gymshark in the cost doc | browser-seconds                                                                                                                                            | 6,970 s = **1.94 browser-hours** → **$0.17** beyond the 10 h allotment |
+| Fetch pull (Reddit, TikTok API once approved)                                        | subrequests                                                                                                                                                | 1,000 — free                                                           |
+| Queue                                                                                | 1 message × 3 ops, plus retries                                                                                                                            | 3,000 ops — **$0.0012**                                                |
+| R2                                                                                   | 1 payload PUT + ~2 creative image PUTs on a changed tick                                                                                                   | ~3,000 Class A (**$0.0135**), ~0.5 GB-mo (**$0.008**)                  |
+| D1                                                                                   | 1 snapshot row always + 1 `source` latest-facts row (both planned — no ads snapshot writer on main yet) + ~2 signal rows on a changed tick (~30% of ticks) | ~2,600 rows — **0.005% of the 50M included**                           |
+| Jev                                                                                  | ≤2 calls per changed pull ≈ 600                                                                                                                            | $0 on the seat, **$0.0096** at the measured market rate                |
 
 **Monthly at 100 brands**, daily cadence, Meta + Google browser plus Reddit fetch:
 
@@ -156,19 +156,19 @@ Per 1,000 ad pulls, priced from `REBUILD-COST.md` (2026-09-21):
 - Queues: 27,000 ops → **$0.01**.
 - Jev: ~1,800 calls → **$0 on the seat**, $0.03 at market.
 
-**Total Cloudflare cost at 100 brands: about $0.34 a month**, entirely dominated by browser duration, exactly as `REBUILD-COST.md` predicts. Adding LinkedIn as a third browser platform adds ~$0.08/month. **Adding a platform never changes the shape of this bill; adding a *page* per platform would.**
+**Total Cloudflare cost at 100 brands: about $0.34 a month**, entirely dominated by browser duration, exactly as `REBUILD-COST.md` predicts. Adding LinkedIn as a third browser platform adds ~$0.08/month. **Adding a platform never changes the shape of this bill; adding a _page_ per platform would.**
 
 ## Failure modes and the degraded state the UI shows
 
-| Failure | Detection | What the user sees |
-|---|---|---|
-| A platform starts returning zero for everyone | `snapshot.item_count = 0` across brands for 2 consecutive ticks | that source shows **degraded** on every competitor page with the date it last returned data, and the `assert` step raises it. This is the TikTok silent-failure class; it must be impossible to have a source "active" and empty for 8 days |
-| A platform blocks us | non-2xx or challenge body | marked degraded, **not retried harder** — the rate limit lives on the `source` row and is honoured by the Workflow, never by a sleep loop (`REBUILD-GUARDRAILS.md`) |
-| Browser cap saturated, sweep overruns its window | the `assert` step's coverage count and measured wall clock | ON brands' Meta and Google data stay current; the long tail shows "updated yesterday" with the real timestamp. Nish gets the measured number and the proposed cap the same day |
-| A creative's image 404s | fetch status | the signal shows with copy and a placeholder, never a broken image; the R2 key is absent, not empty |
-| A brand is turned off | `entity.state != 'on'` in the select | collection and alerts stop; history stays; turning it on resumes from where it left off |
-| Jev budget exhausted for the day | budget counter | new creatives are shown as **unreviewed** in the feed, ordered low, and judged on the next tick. Never dropped |
-| Token expiry on an API descriptor | 401 | that source degrades to the browser transport if one exists, otherwise degraded in the UI with "we're reconnecting this source" |
+| Failure                                          | Detection                                                       | What the user sees                                                                                                                                                                                                                          |
+| ------------------------------------------------ | --------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A platform starts returning zero for everyone    | `snapshot.item_count = 0` across brands for 2 consecutive ticks | that source shows **degraded** on every competitor page with the date it last returned data, and the `assert` step raises it. This is the TikTok silent-failure class; it must be impossible to have a source "active" and empty for 8 days |
+| A platform blocks us                             | non-2xx or challenge body                                       | marked degraded, **not retried harder** — the rate limit lives on the `source` row and is honoured by the Workflow, never by a sleep loop (`REBUILD-GUARDRAILS.md`)                                                                         |
+| Browser cap saturated, sweep overruns its window | the `assert` step's coverage count and measured wall clock      | ON brands' Meta and Google data stay current; the long tail shows "updated yesterday" with the real timestamp. Nish gets the measured number and the proposed cap the same day                                                              |
+| A creative's image 404s                          | fetch status                                                    | the signal shows with copy and a placeholder, never a broken image; the R2 key is absent, not empty                                                                                                                                         |
+| A brand is turned off                            | `entity.state != 'on'` in the select                            | collection and alerts stop; history stays; turning it on resumes from where it left off                                                                                                                                                     |
+| Jev budget exhausted for the day                 | budget counter                                                  | new creatives are shown as **unreviewed** in the feed, ordered low, and judged on the next tick. Never dropped                                                                                                                              |
+| Token expiry on an API descriptor                | 401                                                             | that source degrades to the browser transport if one exists, otherwise degraded in the UI with "we're reconnecting this source"                                                                                                             |
 
 ---
 

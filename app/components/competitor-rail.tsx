@@ -105,9 +105,7 @@ function Peers({ entityId, peers }: { entityId: string; peers: readonly RailPeer
 }
 
 function Facts({ facts }: { facts: readonly RailFact[] }): ReactElement {
-  const labelled = facts
-    .map((fact) => factLabel(fact.kind, fact.count))
-    .filter((label) => label !== null);
+  const labelled = facts.map((fact) => factLabel(fact.kind, fact.count)).filter((label) => label !== null);
   if (labelled.length === 0) {
     return <EmptyState sentence="Nothing new from them in the last 30 days." />;
   }
@@ -155,16 +153,12 @@ function Sources({
 function StillCompetitor({ verdict }: { verdict: RailVerdict | null }): ReactElement {
   const words = verdict === null ? null : verdictWords(verdict.choice);
   if (verdict === null || words === null) {
-    return (
-      <EmptyState sentence="We ask this every week. The first answer lands after a week of watching." />
-    );
+    return <EmptyState sentence="We ask this every week. The first answer lands after a week of watching." />;
   }
   return (
     <>
       <p className="font-display text-[1.02rem]">{words}</p>
-      <p className="text-meta text-ink-soft">
-        Checked {DAY_MONTH.format(new Date(verdict.decidedAt))}
-      </p>
+      <p className="text-meta text-ink-soft">Checked {DAY_MONTH.format(new Date(verdict.decidedAt))}</p>
     </>
   );
 }

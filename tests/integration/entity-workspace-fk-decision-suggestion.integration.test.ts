@@ -150,9 +150,9 @@ describe("entity workspace foreign key on user_decision and suggestion (0509#496
         .bind(SUGGESTION)
         .first(),
     ).toEqual({ status: "pending", workspace_id: WS, entity_id: ENTITY });
-    expect(
-      await env.DB.prepare("SELECT entity_id FROM suggestion WHERE id = ?").bind(SUGGESTION_NULL).first(),
-    ).toEqual({ entity_id: null });
+    expect(await env.DB.prepare("SELECT entity_id FROM suggestion WHERE id = ?").bind(SUGGESTION_NULL).first()).toEqual(
+      { entity_id: null },
+    );
 
     const holds = await env.DB.prepare(
       "SELECT name FROM sqlite_master WHERE name LIKE '%_hold' OR name LIKE '\\_fk\\_%' ESCAPE '\\'",
@@ -235,8 +235,6 @@ describe("entity workspace foreign key on user_decision and suggestion (0509#496
     )
       .bind(WS, NOW)
       .run();
-    expect(
-      await env.DB.prepare("SELECT id FROM suggestion WHERE id = 'sug-fk-4965-blocked'").first(),
-    ).toBeNull();
+    expect(await env.DB.prepare("SELECT id FROM suggestion WHERE id = 'sug-fk-4965-blocked'").first()).toBeNull();
   });
 });

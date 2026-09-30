@@ -29,12 +29,7 @@ export function Marks({ marks, now }: { marks: readonly PairedSiteChange[]; now:
                 after={mark.mark.added}
                 before={mark.mark.removed}
                 capture={
-                  <CapturePlate
-                    after={mark.after}
-                    before={mark.before}
-                    eager={index === 0}
-                    label={mark.headline}
-                  />
+                  <CapturePlate after={mark.after} before={mark.before} eager={index === 0} label={mark.headline} />
                 }
                 capturedAt={mark.capturedAt}
                 size="lg"

@@ -3,7 +3,15 @@ import type { ReactElement } from "react";
 import { brandMonogram } from "./brand-chip";
 import { cn } from "../lib/utils";
 
-export function Monogram({ name, self = false, off = false }: { name: string; self?: boolean; off?: boolean }): ReactElement {
+export function Monogram({
+  name,
+  self = false,
+  off = false,
+}: {
+  name: string;
+  self?: boolean;
+  off?: boolean;
+}): ReactElement {
   return (
     <span
       aria-hidden="true"

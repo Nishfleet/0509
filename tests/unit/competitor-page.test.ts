@@ -228,9 +228,7 @@ describe("the competitor page frame", () => {
   });
 
   it("does not open a WhyFlaggedSheet without a verdict", () => {
-    expect(frame({ changes: [change], weekCount: 1, biggestId: "sig-1" })).not.toContain(
-      "Why we flagged this",
-    );
+    expect(frame({ changes: [change], weekCount: 1, biggestId: "sig-1" })).not.toContain("Why we flagged this");
   });
 
   it("says when the first change can land, and freezes the feed at the pause", () => {

@@ -42,10 +42,7 @@ describe("shortlist", () => {
 
   it("counts an article once when two candidates name it (0509#4745)", () => {
     const url = "https://news.google.com/articles/same";
-    const { entries } = partitionShortlist([
-      candidate("Lush", "news", url),
-      candidate("Lush", "news", url),
-    ]);
+    const { entries } = partitionShortlist([candidate("Lush", "news", url), candidate("Lush", "news", url)]);
     expect(entries).toHaveLength(1);
     expect(entries[0].evidence).toHaveLength(1);
   });
@@ -58,13 +55,9 @@ describe("shortlist", () => {
     const { entries, rest } = partitionShortlist(input);
     const entryNames = new Set(entries.map((entry) => entry.name));
     expect(rest.map((notPlaced) => notPlaced.name)).toEqual(
-      input
-        .filter((notPlaced) => !entryNames.has(notPlaced.name))
-        .map((notPlaced) => notPlaced.name),
+      input.filter((notPlaced) => !entryNames.has(notPlaced.name)).map((notPlaced) => notPlaced.name),
     );
-    expect(entries.length + rest.length).toBe(
-      new Set(input.map((each) => each.name)).size,
-    );
+    expect(entries.length + rest.length).toBe(new Set(input.map((each) => each.name)).size);
   });
 
   it("merges two different names that resolve to one domain key", () => {
@@ -94,10 +87,7 @@ describe("shortlist", () => {
     const result = shortlist([
       {
         name: "Publisher",
-        evidence: [
-          ev("https://www.glamourmagazine.co.uk/a", "news"),
-          ev("https://glamourmagazine.co.uk/b", "news"),
-        ],
+        evidence: [ev("https://www.glamourmagazine.co.uk/a", "news"), ev("https://glamourmagazine.co.uk/b", "news")],
       },
       candidate("Bad Url", "news", "not a url"),
     ]);
@@ -182,9 +172,7 @@ describe("shortlist", () => {
       slot: "top",
       nameKeys: [nameKey("Alpha")],
     };
-    expect(evidenceLine(entry)).toBe(
-      "named by 2 news publishers, mentioned in 1 Hacker News thread",
-    );
+    expect(evidenceLine(entry)).toBe("named by 2 news publishers, mentioned in 1 Hacker News thread");
   });
 
   it("builds an evidence line for ads-only entries", () => {
@@ -200,11 +188,17 @@ describe("shortlist", () => {
   });
 
   it("ranks corroborated candidates above ai-only suggestions and keeps the ai-only one via its guaranteed slot", () => {
-    const corroborated = Array.from({ length: SHORTLIST_TOP }, (_, index) => dual(`Corroborated ${String(index)}`, index));
+    const corroborated = Array.from({ length: SHORTLIST_TOP }, (_, index) =>
+      dual(`Corroborated ${String(index)}`, index),
+    );
     const suggested = candidate("Suggested Co", "ai", "https://gymshark.com/", "suggested.com");
     const result = partitionShortlist([suggested, ...corroborated]);
     expect(result.entries).toHaveLength(SHORTLIST_TOP + 1);
-    expect(result.entries[SHORTLIST_TOP]).toMatchObject({ name: "Suggested Co", slot: "guaranteed", generators: ["ai"] });
+    expect(result.entries[SHORTLIST_TOP]).toMatchObject({
+      name: "Suggested Co",
+      slot: "guaranteed",
+      generators: ["ai"],
+    });
     expect(result.entries.slice(0, SHORTLIST_TOP).every((entry) => entry.generators.length === 2)).toBe(true);
   });
 
@@ -212,7 +206,10 @@ describe("shortlist", () => {
     const order = shortlist([
       candidate("Ai Only", "ai", "https://gymshark.com/"),
       candidate("Hn Only", "hn", "https://news.ycombinator.com/item?id=1"),
-      { name: "Both", evidence: [ev("https://news.ycombinator.com/item?id=2", "hn"), ev("https://gymshark.com/", "ai")] },
+      {
+        name: "Both",
+        evidence: [ev("https://news.ycombinator.com/item?id=2", "hn"), ev("https://gymshark.com/", "ai")],
+      },
     ]).map((entry) => entry.name);
     expect(order).toEqual(["Both", "Hn Only", "Ai Only"]);
   });

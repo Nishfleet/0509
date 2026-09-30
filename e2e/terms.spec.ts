@@ -90,9 +90,7 @@ test("the terms page reaches first paint with no console errors @smoke", async (
   expect(await consoleFailures(page, watched, testInfo), testInfo.project.name).toEqual([]);
 });
 
-test("the terms page serves one ld+json graph naming the organization and breadcrumbs @smoke", async ({
-  page,
-}) => {
+test("the terms page serves one ld+json graph naming the organization and breadcrumbs @smoke", async ({ page }) => {
   await page.goto("/terms");
 
   const scripts = page.locator('script[type="application/ld+json"]');

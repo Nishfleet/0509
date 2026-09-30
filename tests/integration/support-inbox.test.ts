@@ -40,9 +40,7 @@ const fakeMessage = (forward: () => Promise<void>, mime = MIME): EmailMessage =>
 
 const deliver = async (inboxEnv: InboxEnv = env, mime = MIME) => {
   const forward = vi.fn(() => Promise.resolve());
-  const fetchSpy = vi
-    .spyOn(globalThis, "fetch")
-    .mockResolvedValue(new Response("{}", { status: 201 }));
+  const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("{}", { status: 201 }));
   const ctx = createExecutionContext();
   await worker.email(fakeMessage(forward, mime), inboxEnv, ctx);
   await waitOnExecutionContext(ctx);
@@ -66,9 +64,10 @@ describe("0509-support-inbox-v2", () => {
   it("stores the delivered mail as a support_report row", async () => {
     await deliver();
 
-    const rows = await env.DB
-      .prepare("SELECT raw, from_domain FROM support_report")
-      .all<{ raw: string; from_domain: string }>();
+    const rows = await env.DB.prepare("SELECT raw, from_domain FROM support_report").all<{
+      raw: string;
+      from_domain: string;
+    }>();
     expect(rows.results).toHaveLength(1);
     expect(rows.results[0]?.raw).toBe(MIME);
     expect(rows.results[0]?.from_domain).toBe("customer.example");
@@ -129,9 +128,7 @@ describe("0509-support-inbox-v2", () => {
 
   it("opens at most 3 issues per sender domain per day and still stores every mail", async () => {
     vi.spyOn(console, "error").mockImplementation(() => undefined);
-    const fetchSpy = vi
-      .spyOn(globalThis, "fetch")
-      .mockResolvedValue(new Response("{}", { status: 201 }));
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("{}", { status: 201 }));
 
     for (let i = 0; i < 5; i += 1) {
       const ctx = createExecutionContext();
@@ -157,9 +154,6 @@ describe("0509-support-inbox-v2", () => {
     expect(row?.id).toBeTruthy();
     expect(forward).toHaveBeenCalledWith("nishant345@gmail.com");
     expect(fetchSpy).not.toHaveBeenCalled();
-    expect(errorSpy).toHaveBeenCalledWith(
-      "support-inbox: SUPPORT_INBOX_GITHUB_TOKEN is not set",
-      row?.id,
-    );
+    expect(errorSpy).toHaveBeenCalledWith("support-inbox: SUPPORT_INBOX_GITHUB_TOKEN is not set", row?.id);
   });
 });

@@ -86,9 +86,7 @@ describe("confirm a changed delivery address (0509#5811)", () => {
       .bind(USER_ID, SIGN_IN_EMAIL, NOW, NOW)
       .run();
     await ensureWorkspaceForSignIn(env.DB, { userId: USER_ID, request: null, now: NOW });
-    await env.DB.prepare(
-      `UPDATE send_target SET unsubscribe_token = 'old-token' WHERE workspace_id = ?`,
-    )
+    await env.DB.prepare(`UPDATE send_target SET unsubscribe_token = 'old-token' WHERE workspace_id = ?`)
       .bind(firstWorkspaceId(USER_ID))
       .run();
   });

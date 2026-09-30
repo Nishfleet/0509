@@ -62,9 +62,7 @@ export function meta(_: Route.MetaArgs) {
 export async function loader(_: Route.LoaderArgs) {
   const now = Date.now();
   const registry = await readRegistrySources();
-  const sources = registry.filter(
-    (entry) => sourcePillStatus(entry.source, entry.snapshot, now).state !== "disabled",
-  );
+  const sources = registry.filter((entry) => sourcePillStatus(entry.source, entry.snapshot, now).state !== "disabled");
   const marks = await readLandingMarks(new Date(now));
   const id: unknown = env.LANDING_WORKSPACE_ID;
   if (typeof id !== "string" || id.trim() === "") return { ticker: [], marks, sources, now };

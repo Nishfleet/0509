@@ -163,7 +163,12 @@ export function listingForBoard(boardUrl: string): BoardListing | null {
   return { platform: documented.platform, slug, listingUrl: documented.listingUrl(slug, host) };
 }
 
-function boardCandidate(host: DocumentedHost, matchedAlias: string, slug: string, via: "nav" | "careers-page"): BoardCandidate {
+function boardCandidate(
+  host: DocumentedHost,
+  matchedAlias: string,
+  slug: string,
+  via: "nav" | "careers-page",
+): BoardCandidate {
   return {
     via,
     platform: host.platform,

@@ -11,8 +11,7 @@ export const sentryOptions = (env: SentryEnv): CloudflareOptions => ({
   beforeBreadcrumb: () => null,
   beforeSend: (event) => {
     const route = typeof event.tags?.route === "string" ? event.tags.route : undefined;
-    const transaction =
-      route ?? (event.transaction === undefined ? undefined : scrubTokenPath(event.transaction));
+    const transaction = route ?? (event.transaction === undefined ? undefined : scrubTokenPath(event.transaction));
     return {
       ...event,
       ...(transaction === undefined ? {} : { transaction }),

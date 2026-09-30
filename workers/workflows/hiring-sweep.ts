@@ -26,11 +26,13 @@ async function settle<T>(label: string, run: () => Promise<T>): Promise<T | null
   try {
     return await run();
   } catch (error) {
-    console.error(JSON.stringify({
-      event: "hiring.sweep_step_failed",
-      step: label,
-      error: error instanceof Error ? error.message : String(error),
-    }));
+    console.error(
+      JSON.stringify({
+        event: "hiring.sweep_step_failed",
+        step: label,
+        error: error instanceof Error ? error.message : String(error),
+      }),
+    );
     return null;
   }
 }
@@ -41,34 +43,23 @@ export class HiringSweep extends WorkflowEntrypoint<Env> {
 
     const plan = await step.do("plan", RETRY, () => planHiringSweep());
 
-    const found = await plan.entities.reduce<Promise<readonly (FoundBoard | null)[]>>(
-      async (done, entity) => {
-        const previous = await done;
-        const label = `find ${entity.id}`;
-        const result = await settle(label, () =>
-          step.do(label, RETRY, () => findBoard(entity)),
-        );
-        return [...previous, result];
-      },
-      Promise.resolve([]),
-    );
+    const found = await plan.entities.reduce<Promise<readonly (FoundBoard | null)[]>>(async (done, entity) => {
+      const previous = await done;
+      const label = `find ${entity.id}`;
+      const result = await settle(label, () => step.do(label, RETRY, () => findBoard(entity)));
+      return [...previous, result];
+    }, Promise.resolve([]));
 
     const targets = await step.do("targets", RETRY, () => readHiringTargets());
 
-    const reads = await targets.reduce<Promise<readonly (BoardResult | null)[]>>(
-      async (done, target) => {
-        const previous = await done;
-        const label = `read ${target.watchId}`;
-        const result = await settle(label, () =>
-          step.do(label, RETRY, () => readBoard(target, tick)),
-        );
-        return [...previous, result];
-      },
-      Promise.resolve([]),
-    );
+    const reads = await targets.reduce<Promise<readonly (BoardResult | null)[]>>(async (done, target) => {
+      const previous = await done;
+      const label = `read ${target.watchId}`;
+      const result = await settle(label, () => step.do(label, RETRY, () => readBoard(target, tick)));
+      return [...previous, result];
+    }, Promise.resolve([]));
 
-    const outcome = (name: BoardResult["outcome"]) =>
-      reads.filter((result) => result?.outcome === name).length;
+    const outcome = (name: BoardResult["outcome"]) => reads.filter((result) => result?.outcome === name).length;
     const summary: HiringSweepOutcome = {
       discovered: found.filter((result) => result?.watched === true).length,
       boards: targets.length,
@@ -76,9 +67,7 @@ export class HiringSweep extends WorkflowEntrypoint<Env> {
       unchanged: outcome("unchanged"),
       changed: outcome("changed"),
       newRoles: reads.reduce((total, result) => total + (result?.newRoles ?? 0), 0),
-      failed:
-        found.filter((result) => result === null).length +
-        reads.filter((result) => result === null).length,
+      failed: found.filter((result) => result === null).length + reads.filter((result) => result === null).length,
     };
     console.log(JSON.stringify({ event: "hiring.sweep", ...summary }));
     return summary;

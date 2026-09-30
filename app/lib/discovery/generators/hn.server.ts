@@ -3,7 +3,15 @@ import { z } from "zod";
 import { coMentions } from "../co-mentions";
 import { htmlToText } from "../html-text";
 import { defaultFetchText } from "../fetch-text.server";
-import { assertFetched, logIfEmpty, type Candidate, type Evidence, type FetchText, type Generator, type Subject } from "../types";
+import {
+  assertFetched,
+  logIfEmpty,
+  type Candidate,
+  type Evidence,
+  type FetchText,
+  type Generator,
+  type Subject,
+} from "../types";
 
 const SEARCH_URL = "https://hn.algolia.com/api/v1/search?query=";
 

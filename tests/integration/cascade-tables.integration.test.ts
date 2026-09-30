@@ -75,10 +75,7 @@ describe("workspace cascade coverage", () => {
   it("every table with workspace_id is owned by the cascade", async () => {
     const closure = await cascadeClosure();
     for (const name of await workspaceIdTables()) {
-      expect(
-        closure,
-        `${name} has workspace_id but no ON DELETE CASCADE path from workspace`,
-      ).toContain(name);
+      expect(closure, `${name} has workspace_id but no ON DELETE CASCADE path from workspace`).toContain(name);
     }
   });
 });

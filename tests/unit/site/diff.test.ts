@@ -26,7 +26,9 @@ describe("diffPageText", () => {
     // "Plans start at $" and the removed and added words are "10" and "12".
     expect(pageDiff.words.some((change) => change.removed === true && change.value.includes("10"))).toBe(true);
     expect(pageDiff.words.some((change) => change.added === true && change.value.includes("12"))).toBe(true);
-    expect(pageDiff.words.some((change) => change.added !== true && change.removed !== true && change.value.endsWith("$"))).toBe(true);
+    expect(
+      pageDiff.words.some((change) => change.added !== true && change.removed !== true && change.value.endsWith("$")),
+    ).toBe(true);
     expect(pageDiff.hunks.length).toBe(1);
     expect(pageDiff.hunks[0]?.oldStart).toBe(1);
     expect(pageDiff.hunks[0]?.lines).toContain("-Plans start at $10.");

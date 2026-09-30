@@ -94,9 +94,7 @@ function decodeQuotedPrintable(input: string): string {
 }
 
 export function decodedBodies(raw: string): string[] {
-  const quoted = /content-transfer-encoding:\s*quoted-printable/i.test(raw)
-    ? decodeQuotedPrintable(raw)
-    : raw;
+  const quoted = /content-transfer-encoding:\s*quoted-printable/i.test(raw) ? decodeQuotedPrintable(raw) : raw;
   const bodies = [quoted];
   const base64Part = /content-transfer-encoding:\s*base64[^]*?\r?\n\r?\n([A-Za-z0-9+/=\r\n]+)/gi;
   for (const match of raw.matchAll(base64Part)) {
@@ -225,7 +223,9 @@ async function localLinks(to: string): Promise<string[]> {
 // re-resolve the token from the environment behind the caller's back.
 function remoteToken(token: string | null): string {
   if (token === null) {
-    throw new Error("an inbox read on a remote lane needs the E2E_INBOX_TOKEN the caller resolved; null is the local lane's marker");
+    throw new Error(
+      "an inbox read on a remote lane needs the E2E_INBOX_TOKEN the caller resolved; null is the local lane's marker",
+    );
   }
   return token;
 }
@@ -453,9 +453,7 @@ export async function consoleFailures(
 // empty-url guard keeps `new URL("")` from throwing on a location-less error.
 export function ownDocument404For(pathname: string): (entry: ConsoleEntry) => boolean {
   return (entry) =>
-    /status of 404\b/.test(entry.text) &&
-    entry.url.length > 0 &&
-    new URL(entry.url).pathname === pathname;
+    /status of 404\b/.test(entry.text) && entry.url.length > 0 && new URL(entry.url).pathname === pathname;
 }
 
 // J1's core: submit the login form for a fresh e2e+ address, read the real

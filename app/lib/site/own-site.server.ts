@@ -1,7 +1,13 @@
 import { env } from "cloudflare:workers";
 
 import { insertIncidentAlertStatement } from "../data/alert.server";
-import { closeIncident, closeIncidentsOutside, openIncident, readOpenBreakageBaselines, readOpenIncidents } from "../data/incident.server";
+import {
+  closeIncident,
+  closeIncidentsOutside,
+  openIncident,
+  readOpenBreakageBaselines,
+  readOpenIncidents,
+} from "../data/incident.server";
 import type { OwnSitePage } from "../data/page.server";
 import { readOwnSitePages } from "../data/page.server";
 import { BlockedRedirectError, fetchOutbound } from "../fetch/outbound.server";
@@ -11,9 +17,7 @@ import { extractPageText } from "./extract-text";
 import { ensureHomePages } from "./sweep.server";
 
 export type OwnSiteHealth =
-  | { state: "healthy" }
-  | { state: "unknown"; reason: string }
-  | { state: "broken"; kind: string };
+  { state: "healthy" } | { state: "unknown"; reason: string } | { state: "broken"; kind: string };
 
 export interface OwnSitePlan {
   pages: OwnSitePage[];
@@ -73,11 +77,13 @@ export async function breakageRepaired(url: string, beforeKey: string | null): P
       signal: AbortSignal.timeout(PROBE_TIMEOUT_MS),
     });
   } catch (error) {
-    console.error(JSON.stringify({
-      event: "site.own_check_verify_failed",
-      url,
-      error: error instanceof Error ? error.message : String(error),
-    }));
+    console.error(
+      JSON.stringify({
+        event: "site.own_check_verify_failed",
+        url,
+        error: error instanceof Error ? error.message : String(error),
+      }),
+    );
     return false;
   }
   const afterText = (await extractPageText(await response.text())).text;

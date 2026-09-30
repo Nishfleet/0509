@@ -8,9 +8,7 @@ import {
 } from "../../app/lib/fetch/transport.server";
 
 const browserHolder = vi.hoisted(() => ({
-  current: undefined as
-    | undefined
-    | (BrowserStub & { calls: string[]; closed: number }),
+  current: undefined as undefined | (BrowserStub & { calls: string[]; closed: number }),
 }));
 
 vi.mock("cloudflare:workers", () => ({
@@ -22,10 +20,7 @@ vi.mock("cloudflare:workers", () => ({
 }));
 
 interface BrowserStub {
-  quickAction(
-    action: "content",
-    options: { url: string },
-  ): Promise<Response>;
+  quickAction(action: "content", options: { url: string }): Promise<Response>;
 }
 
 /**
@@ -110,9 +105,7 @@ afterEach(() => {
 });
 
 /** Swap the outbound `fetch` for one that serves `handlers` by URL. */
-function stubFetch(
-  handlers: Record<string, () => Response | Promise<Response>>,
-) {
+function stubFetch(handlers: Record<string, () => Response | Promise<Response>>) {
   const real = globalThis.fetch;
   const seen: string[] = [];
   const inits: RequestInit[] = [];
@@ -130,8 +123,7 @@ function stubFetch(
 describe("readUrl", () => {
   it("serves a healthy page over plain fetch and never touches the browser", async () => {
     const stub = stubFetch({
-      "https://brand.example.com/": () =>
-        new Response(SUBSTANTIAL_PAGE, { status: 200 }),
+      "https://brand.example.com/": () => new Response(SUBSTANTIAL_PAGE, { status: 200 }),
     });
     const browser = fakeBrowser({
       ok: true,
@@ -160,8 +152,7 @@ describe("readUrl", () => {
 
   it("bounds the plain fetch with AbortSignal.timeout(8000)", async () => {
     const stub = stubFetch({
-      "https://brand.example.com/": () =>
-        new Response(SUBSTANTIAL_PAGE, { status: 200 }),
+      "https://brand.example.com/": () => new Response(SUBSTANTIAL_PAGE, { status: 200 }),
     });
     const browser = fakeBrowser({ ok: true, html: SUBSTANTIAL_PAGE });
     const spy = vi.spyOn(AbortSignal, "timeout");
@@ -206,8 +197,7 @@ describe("readUrl", () => {
 
   it("escalates on a challenge body served with a 200", async () => {
     const stub = stubFetch({
-      "https://challenge.example.com/": () =>
-        new Response(CHALLENGE_PAGE, { status: 200 }),
+      "https://challenge.example.com/": () => new Response(CHALLENGE_PAGE, { status: 200 }),
     });
     const browser = fakeBrowser({
       ok: true,
@@ -231,10 +221,7 @@ describe("readUrl", () => {
   it("escalates on a 200 whose extracted text is under the floor", async () => {
     const stub = stubFetch({
       "https://shell.example.com/": () =>
-        new Response(
-          `<!doctype html><html><body><div id="app"></div></body></html>`,
-          { status: 200 },
-        ),
+        new Response(`<!doctype html><html><body><div id="app"></div></body></html>`, { status: 200 }),
     });
     const browser = fakeBrowser({
       ok: true,
@@ -380,8 +367,7 @@ describe("readUrl", () => {
 
   it("refuses a page that declares more than 5 MB without reading it", async () => {
     const stub = stubFetch({
-      "https://huge.example.com/": () =>
-        new Response("x", { status: 200, headers: { "content-length": "50000000" } }),
+      "https://huge.example.com/": () => new Response("x", { status: 200, headers: { "content-length": "50000000" } }),
     });
     const browser = fakeBrowser({ ok: true, html: SUBSTANTIAL_PAGE });
     try {
@@ -605,9 +591,7 @@ describe("readUrl", () => {
       if (result.ok) return;
       expect(result.reason).toBe("deferred");
       // A vetoed escalation costs nothing: no browser call, no retry.
-      expect(result.detail).toBe(
-        "browser budget refused escalation (status)",
-      );
+      expect(result.detail).toBe("browser budget refused escalation (status)");
       expect(browser.calls).toEqual([]);
     } finally {
       stub.restore();
@@ -749,9 +733,7 @@ describe("readUrl", () => {
       expect(result.ok).toBe(false);
       if (result.ok) return;
       expect(result.reason).toBe("deferred");
-      expect(result.detail).toBe(
-        "browser budget refused escalation (status)",
-      );
+      expect(result.detail).toBe("browser budget refused escalation (status)");
       expect(browser.calls).toEqual([]);
     } finally {
       stub.restore();
@@ -791,9 +773,7 @@ describe("readUrl", () => {
       expect(result.ok).toBe(false);
       if (result.ok) return;
       expect(result.reason).toBe("deferred");
-      expect(result.detail).toBe(
-        "browser budget refused escalation (timeout)",
-      );
+      expect(result.detail).toBe("browser budget refused escalation (timeout)");
       expect(browser.calls).toEqual([]);
     } finally {
       stub.restore();
@@ -827,9 +807,7 @@ describe("countExtractedChars", () => {
   it("counts the 200-character floor boundary as served", async () => {
     const html = `<!doctype html><html><body><p>${"z".repeat(199)}</p></body></html>`;
     const thin = await countExtractedChars(html);
-    const atFloor = await countExtractedChars(
-      `<!doctype html><html><body><p>${"z".repeat(200)}</p></body></html>`,
-    );
+    const atFloor = await countExtractedChars(`<!doctype html><html><body><p>${"z".repeat(200)}</p></body></html>`);
     expect(thin).toBe(199);
     expect(atFloor).toBe(200);
   });

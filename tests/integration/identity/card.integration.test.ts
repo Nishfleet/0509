@@ -37,7 +37,10 @@ function stubWeb(homepage: (url: string) => Response) {
   vi.stubGlobal("fetch", (input: RequestInfo | URL) => {
     const url = input instanceof Request ? input.url : String(input);
     calls.push(url);
-    if (isLogo(url)) return Promise.resolve(new Response(new Uint8Array([1, 2, 3]), { status: 200, headers: { "content-type": "image/png" } }));
+    if (isLogo(url))
+      return Promise.resolve(
+        new Response(new Uint8Array([1, 2, 3]), { status: 200, headers: { "content-type": "image/png" } }),
+      );
     return Promise.resolve(homepage(url));
   });
   return calls;
@@ -117,7 +120,9 @@ beforeEach(async () => {
   }
   await env.DB.prepare(
     `INSERT INTO "user" (id, name, email, emailVerified, createdAt, updatedAt) VALUES ('u1', 'Owner', 'u1@0509.io', 0, ?, ?)`,
-  ).bind(NOW, NOW).run();
+  )
+    .bind(NOW, NOW)
+    .run();
   await env.DB.prepare(`INSERT INTO workspace (id, name, owner_user_id, created_at) VALUES ('ws-1', 'Owner', 'u1', ?)`)
     .bind(NOW)
     .run();
@@ -191,13 +196,10 @@ describe("startCard", () => {
   it("skips an unsafe http og:image without fetching it and stores the DuckDuckGo icon", async () => {
     stubAi(0.95);
     const duckUrl = "https://icons.duckduckgo.com/ip3/example.com.ico";
-    const calls = stubLogoFetch(
-      exampleHtml('<meta property="og:image" content="http://insecure.example/og.png">'),
-      {
-        [duckUrl]: () =>
-          new Response(new Uint8Array([1, 2, 3]), { status: 200, headers: { "content-type": "image/png" } }),
-      },
-    );
+    const calls = stubLogoFetch(exampleHtml('<meta property="og:image" content="http://insecure.example/og.png">'), {
+      [duckUrl]: () =>
+        new Response(new Uint8Array([1, 2, 3]), { status: 200, headers: { "content-type": "image/png" } }),
+    });
     const card = startCard("ws-1", subjectFor("example.com"), []);
     await card.site;
     expect(await card.logo).toBe("data:image/png;base64,AQID");
@@ -211,10 +213,7 @@ describe("startCard", () => {
     // 0509#5890: a v1 entry cached the raw-fetch winner, so a URL storeLogo
     // refuses pinned a logo-less card for the probe TTL. v2 must not parse it.
     const staleUrl = "http://insecure.example/og.png";
-    await env.IDENTITY_CACHE.put(
-      probeKey(subjectFor("example.com"), "icon"),
-      JSON.stringify({ url: staleUrl }),
-    );
+    await env.IDENTITY_CACHE.put(probeKey(subjectFor("example.com"), "icon"), JSON.stringify({ url: staleUrl }));
     const duckUrl = "https://icons.duckduckgo.com/ip3/example.com.ico";
     const calls = stubLogoFetch(exampleHtml(""), {
       [duckUrl]: () =>
@@ -471,7 +470,14 @@ describe("confirmCard", () => {
     const row = await env.DB.prepare(
       "SELECT role, domain, name, identity_json, origin, state, confirmed_at IS NOT NULL AS confirmed, id FROM entity",
     ).first<Record<string, unknown>>();
-    expect(row).toMatchObject({ role: "self", domain: "gymshark.com", name: "Gymshark UK", origin: "manual", state: "on", confirmed: 1 });
+    expect(row).toMatchObject({
+      role: "self",
+      domain: "gymshark.com",
+      name: "Gymshark UK",
+      origin: "manual",
+      state: "on",
+      confirmed: 1,
+    });
     expect(JSON.parse(String(row?.identity_json))).toEqual({
       kind: "domain",
       platform: null,
@@ -490,7 +496,11 @@ describe("confirmCard", () => {
     Reflect.set(env, "AI", { run });
 
     expect(
-      await confirmCard("ws-1", "u1", form({ subject: "https://www.gymshark.com/", name: "Gymshark", description: "" })),
+      await confirmCard(
+        "ws-1",
+        "u1",
+        form({ subject: "https://www.gymshark.com/", name: "Gymshark", description: "" }),
+      ),
     ).toBe(true);
     await settledTail();
 
@@ -519,9 +529,9 @@ describe("confirmCard", () => {
     const stub = stubBrowser(BOT_GATED_HTML);
     installBrowser(stub);
 
-    expect(
-      await confirmCard("ws-1", "u1", form({ subject: domain, name: "Botgated Confirm", description: "" })),
-    ).toBe(true);
+    expect(await confirmCard("ws-1", "u1", form({ subject: domain, name: "Botgated Confirm", description: "" }))).toBe(
+      true,
+    );
     await settledClassification(introspector);
 
     expect(stub.calls).toEqual([]);
@@ -539,9 +549,9 @@ describe("confirmCard", () => {
     const stub = stubBrowser(BOT_GATED_HTML);
     installBrowser(stub);
 
-    expect(
-      await confirmCard("ws-1", "u1", form({ subject: domain, name: "Botgated Positive", description: "" })),
-    ).toBe(true);
+    expect(await confirmCard("ws-1", "u1", form({ subject: domain, name: "Botgated Positive", description: "" }))).toBe(
+      true,
+    );
     await settledClassification(introspector);
 
     expect(stub.calls).toEqual([`https://${domain}/`]);
@@ -593,7 +603,11 @@ describe("confirmCard", () => {
     Reflect.set(env, "AI", { run });
 
     expect(
-      await confirmCard("ws-1", "u1", form({ subject: "https://www.gymshark.com/", name: "Gymshark", description: "" })),
+      await confirmCard(
+        "ws-1",
+        "u1",
+        form({ subject: "https://www.gymshark.com/", name: "Gymshark", description: "" }),
+      ),
     ).toBe(true);
     await settledTail();
 
@@ -630,8 +644,12 @@ describe("confirmCard", () => {
     stubWeb(() => new Response(gym, { status: 200, headers: { "content-type": "text/html" } }));
     await answerHomepage();
     expect(await confirmCard("ws-1", "u1", form({ subject: "gymshark.com", name: "  ", description: "" }))).toBe(false);
-    expect(await confirmCard("ws-1", "u1", form({ subject: "gymshark.com", name: "First", description: "" }))).toBe(true);
-    expect(await confirmCard("ws-1", "u1", form({ subject: "gymshark.com", name: "Second", description: "" }))).toBe(true);
+    expect(await confirmCard("ws-1", "u1", form({ subject: "gymshark.com", name: "First", description: "" }))).toBe(
+      true,
+    );
+    expect(await confirmCard("ws-1", "u1", form({ subject: "gymshark.com", name: "Second", description: "" }))).toBe(
+      true,
+    );
     const { results } = await env.DB.prepare("SELECT name FROM entity").all();
     expect(results).toEqual([{ name: "First" }]);
     await settledTail();

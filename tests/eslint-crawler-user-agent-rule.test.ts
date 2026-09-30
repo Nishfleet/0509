@@ -52,9 +52,13 @@ describe("eslint one-crawler-user-agent rule (#5883)", () => {
     expect(flagged(await lintProbe(`export const ua = "0509.io/1.0 (https://0509.io)";\n`))).toBe(true);
   });
 
-  it("flags a bumped version, so a bump is an edit to the constant, not a new literal", { timeout: 60_000 }, async () => {
-    expect(flagged(await lintProbe(`export const ua = "FiveToNineBot/2.0 (+https://0509.io)";\n`))).toBe(true);
-  });
+  it(
+    "flags a bumped version, so a bump is an edit to the constant, not a new literal",
+    { timeout: 60_000 },
+    async () => {
+      expect(flagged(await lintProbe(`export const ua = "FiveToNineBot/2.0 (+https://0509.io)";\n`))).toBe(true);
+    },
+  );
 
   it("flags the literal inside a template", { timeout: 60_000 }, async () => {
     expect(flagged(await lintProbe("export const ua = `FiveToNineBot/1.0`;\n"))).toBe(true);

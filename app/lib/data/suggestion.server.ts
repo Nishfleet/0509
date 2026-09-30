@@ -80,7 +80,13 @@ function statementsFor(workspaceId: string, result: DiscoveryResult, now: string
   const added =
     status === "auto_on"
       ? [
-          insertAutoCompetitor({ entityId: crypto.randomUUID(), workspaceId, domain: result.domain, name: result.name, now }),
+          insertAutoCompetitor({
+            entityId: crypto.randomUUID(),
+            workspaceId,
+            domain: result.domain,
+            name: result.name,
+            now,
+          }),
           env.DB.prepare(LINK_AUTO_COMPETITOR).bind(workspaceId, result.domain),
         ]
       : [];

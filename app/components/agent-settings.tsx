@@ -19,9 +19,15 @@ function CopyField({ label, value }: { label: string; value: string }) {
   const [copied, setCopied] = useState(false);
   return (
     <div className="mt-3 flex flex-col gap-2 sm:flex-row">
-      <Input readOnly value={value} aria-label={label} className="font-mono text-[0.9rem] sm:flex-1" onFocus={(event) => {
+      <Input
+        readOnly
+        value={value}
+        aria-label={label}
+        className="font-mono text-[0.9rem] sm:flex-1"
+        onFocus={(event) => {
           event.currentTarget.select();
-        }} />
+        }}
+      />
       <Button
         type="button"
         variant="secondary"
@@ -75,7 +81,9 @@ export function ConnectedApps({ apps }: { apps: ConnectedApp[] }) {
         Connected apps
       </h2>
       {apps.length === 0 ? (
-        <p className="mt-2 leading-[1.55] text-ink-soft">None yet. Apps you connect show here, and you can disconnect them any time.</p>
+        <p className="mt-2 leading-[1.55] text-ink-soft">
+          None yet. Apps you connect show here, and you can disconnect them any time.
+        </p>
       ) : (
         <ul className="mt-3 border-b border-line">
           {apps.map((app) => (
@@ -107,7 +115,9 @@ export function AgentKeys({ keys, newKey }: { keys: AgentKey[]; newKey: string |
       </h2>
       {newKey === null ? null : (
         <div role="status" className="mt-3 border-[1.5px] border-ink bg-green-wash p-4">
-          <p className="font-semibold text-green-ink">Copy your new key now. For your safety it won't be shown again.</p>
+          <p className="font-semibold text-green-ink">
+            Copy your new key now. For your safety it won't be shown again.
+          </p>
           <code data-testid="new-api-key" className="mt-2 block font-mono text-[0.9rem] [overflow-wrap:anywhere]">
             {newKey}
           </code>
@@ -115,7 +125,9 @@ export function AgentKeys({ keys, newKey }: { keys: AgentKey[]; newKey: string |
         </div>
       )}
       {keys.length === 0 ? (
-        <p className="mt-2 leading-[1.55] text-ink-soft">No keys yet. A key lets your own code read the same things an app can.</p>
+        <p className="mt-2 leading-[1.55] text-ink-soft">
+          No keys yet. A key lets your own code read the same things an app can.
+        </p>
       ) : (
         <ul className="mt-3 border-b border-line">
           {keys.map((key) => {

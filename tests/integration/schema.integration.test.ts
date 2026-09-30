@@ -20,9 +20,9 @@ describe("0001_rebuild.sql", () => {
 
   it("carries better-auth's six generated tables", async () => {
     for (const name of ["user", "session", "account", "verification", "passkey", "apikey"]) {
-      const row = await env.DB.prepare(
-        "SELECT name FROM sqlite_master WHERE type='table' AND name = ?",
-      ).bind(name).first();
+      const row = await env.DB.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name = ?")
+        .bind(name)
+        .first();
       expect(row, `${name} must exist`).not.toBeNull();
     }
   });

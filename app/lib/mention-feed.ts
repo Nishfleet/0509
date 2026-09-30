@@ -35,11 +35,9 @@ export interface MentionRowModel {
 
 const FOUND_TODAY = "found today";
 
-export const POSSIBLY_LINE =
-  "Possibly. We were not sure this mattered, so it sits here rather than in your brief.";
+export const POSSIBLY_LINE = "Possibly. We were not sure this mattered, so it sits here rather than in your brief.";
 
-export const UNREVIEWED_LINE =
-  "Unreviewed. We have not reviewed this yet, so it sits here rather than in your brief.";
+export const UNREVIEWED_LINE = "Unreviewed. We have not reviewed this yet, so it sits here rather than in your brief.";
 
 export const PENDING_LINE =
   "Pending. This one is still waiting for judgment, so it sits here rather than in your brief.";
@@ -65,8 +63,7 @@ export function mentionsFromRows(rows: readonly MentionReadRow[], now: Date): Me
   return rows.flatMap((row) => {
     const title = row.title?.trim() ?? "";
     if (title === "" || row.url === "") return [];
-    const judged: MentionTreatment | null =
-      row.p === null || !Number.isFinite(row.p) ? null : mentionTreatment(row.p);
+    const judged: MentionTreatment | null = row.p === null || !Number.isFinite(row.p) ? null : mentionTreatment(row.p);
     const treatment: MentionTreatment = row.state === "unjudged" ? "pending" : (judged ?? "unreviewed");
     return [
       {

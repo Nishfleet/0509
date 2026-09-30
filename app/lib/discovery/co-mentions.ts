@@ -5,13 +5,27 @@ const CLAUSE_SPLIT = /[:|?!()]| - | – | — /;
 const ITEM_SPLIT = / and | & | vs\. | vs | versus | or /i;
 
 const MINOR_WORDS: ReadonlySet<string> = new Set([
-  "a", "an", "and", "as", "at", "by", "for", "in", "of", "on", "or", "the", "to", "versus", "vs", "vs.", "with",
+  "a",
+  "an",
+  "and",
+  "as",
+  "at",
+  "by",
+  "for",
+  "in",
+  "of",
+  "on",
+  "or",
+  "the",
+  "to",
+  "versus",
+  "vs",
+  "vs.",
+  "with",
 ]);
 
 function isTitleCase(text: string): boolean {
-  const words = text
-    .split(/\s+/)
-    .filter((word) => /\p{L}/u.test(word) && !MINOR_WORDS.has(word.toLowerCase()));
+  const words = text.split(/\s+/).filter((word) => /\p{L}/u.test(word) && !MINOR_WORDS.has(word.toLowerCase()));
   return words.length >= 2 && words.every((word) => WORD_START.test(word));
 }
 
@@ -26,7 +40,8 @@ export function leadingName(item: string): string | null {
 
 const LIST_INTRO = /\b(?:like|such as|including|e\.g\.,?|for example)\s+(.+)$/i;
 
-const RIVAL_CUE = /\b(?:are|is)\s+(?:\w+\s+){0,2}?(?:alternatives?|competitors?|rivals?)\b|\b(?:better|cheaper) than\b/i;
+const RIVAL_CUE =
+  /\b(?:are|is)\s+(?:\w+\s+){0,2}?(?:alternatives?|competitors?|rivals?)\b|\b(?:better|cheaper) than\b/i;
 
 function namesBesideBrand(item: string, needle: string): string[] {
   const at = item.toLowerCase().indexOf(needle);

@@ -29,14 +29,14 @@ Deploys go through CI: every push to `main` deploys via
 
 ## Where things are
 
-| Path | What |
-|---|---|
-| `app/routes.ts` | Every route; a route not listed here cannot be reached |
-| `app/routes/` | Route modules |
-| `app/lib/` | Shared logic; `*.server.ts` is server-only |
-| `workers/` | The Worker entry, cron, queue and email handlers |
-| `migrations/` | Numbered D1 migrations |
-| `tests/`, `e2e/` | vitest and Playwright |
+| Path             | What                                                   |
+| ---------------- | ------------------------------------------------------ |
+| `app/routes.ts`  | Every route; a route not listed here cannot be reached |
+| `app/routes/`    | Route modules                                          |
+| `app/lib/`       | Shared logic; `*.server.ts` is server-only             |
+| `workers/`       | The Worker entry, cron, queue and email handlers       |
+| `migrations/`    | Numbered D1 migrations                                 |
+| `tests/`, `e2e/` | vitest and Playwright                                  |
 
 ## Read next
 

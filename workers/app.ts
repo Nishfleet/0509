@@ -1,22 +1,12 @@
 import type { OAuthHelpers } from "@cloudflare/workers-oauth-provider";
-import {
-  captureException,
-  instrumentWorkflowWithSentry,
-  setTag,
-  withMonitor,
-  withSentry,
-} from "@sentry/cloudflare";
+import { captureException, instrumentWorkflowWithSentry, setTag, withMonitor, withSentry } from "@sentry/cloudflare";
 import { createRequestHandler } from "react-router";
 
 import { requestContext } from "../app/lib/agent/context.server";
 import { createOAuthProvider } from "../app/lib/agent/oauth.server";
 import { deleteExpiredAuthRows } from "../app/lib/data/auth_expiry.server";
 import { stampFirstSignals } from "../app/lib/data/onboarding_run.server";
-import {
-  startNightlyDiscovery,
-  startWeeklyRefresh,
-  WEEKLY_REFRESH_CRON,
-} from "../app/lib/discovery/start.server";
+import { startNightlyDiscovery, startWeeklyRefresh, WEEKLY_REFRESH_CRON } from "../app/lib/discovery/start.server";
 import { assertWorkerEnv, WorkerEnvError, workerEnvFailureResponse } from "../app/lib/env.server";
 import { pingLiveness } from "../app/lib/liveness-ping.server";
 import { cronMonitor } from "./cron-monitors";
@@ -44,10 +34,7 @@ import { StandingRollover } from "./workflows/standing-rollover";
 type WorkerEnv = Env & { SENTRY_DSN?: string; LIVENESS_PING_URL?: string };
 type OAuthEnv = WorkerEnv & { OAUTH_PROVIDER?: OAuthHelpers };
 
-const requestHandler = createRequestHandler(
-  () => import("virtual:react-router/server-build"),
-  import.meta.env.MODE,
-);
+const requestHandler = createRequestHandler(() => import("virtual:react-router/server-build"), import.meta.env.MODE);
 
 const oauth = createOAuthProvider<OAuthEnv>({
   apiHandler: {

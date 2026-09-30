@@ -23,9 +23,7 @@ export function DeliveryAddress({
       <h2 id="delivery-address" className={BLOCK_HEADING}>
         Delivery email
       </h2>
-      <p className="mt-2 max-w-prose leading-[1.55]">
-        The brief goes here. It starts as the address you sign in with.
-      </p>
+      <p className="mt-2 max-w-prose leading-[1.55]">The brief goes here. It starts as the address you sign in with.</p>
       <Form method="post" action="/app/settings" className="mt-4 flex flex-col gap-3">
         <input type="hidden" name="intent" value="delivery-address" />
         <label htmlFor="delivery-address-input" className="font-mono text-meta text-ink-soft uppercase">
@@ -44,8 +42,7 @@ export function DeliveryAddress({
         />
         {showUnconfirmed ? (
           <p id="delivery-address-unconfirmed" className="mt-2 max-w-prose leading-[1.55]">
-            This address is unconfirmed. We emailed a confirmation link — the brief doesn't go out
-            until you confirm.
+            This address is unconfirmed. We emailed a confirmation link — the brief doesn't go out until you confirm.
           </p>
         ) : null}
         {suppressed ? (

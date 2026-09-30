@@ -38,9 +38,9 @@ const seedAttempt = async (id: string, digestId: string, status: string, attempt
 };
 
 const statuses = async (table: "digest" | "send_attempt") =>
-  (
-    await env.DB.prepare(`SELECT status FROM ${table} ORDER BY id ASC`).all<{ status: string }>()
-  ).results?.map((row) => row.status) ?? [];
+  (await env.DB.prepare(`SELECT status FROM ${table} ORDER BY id ASC`).all<{ status: string }>()).results?.map(
+    (row) => row.status,
+  ) ?? [];
 
 const queueFor = (sent: unknown[]) =>
   ({

@@ -45,7 +45,13 @@ const nextTick = async (name: string) => {
   return { instanceId: name, plannedAt: new Date().toISOString() };
 };
 
-const seedEntity = (id: string, role: "self" | "competitor", domain: string, state: "on" | "off", identityJson = "{}") =>
+const seedEntity = (
+  id: string,
+  role: "self" | "competitor",
+  domain: string,
+  state: "on" | "off",
+  identityJson = "{}",
+) =>
   env.DB.prepare(
     `INSERT INTO entity (id, workspace_id, role, domain, identity_json, origin, state, created_at)
      VALUES (?, ?, ?, ?, ?, 'manual', ?, ?)`,
@@ -54,14 +60,18 @@ const seedEntity = (id: string, role: "self" | "competitor", domain: string, sta
     .run();
 
 const homePageUrls = async () => {
-  const rows = await env.DB.prepare("SELECT entity_id, url FROM page WHERE role = 'home' ORDER BY entity_id")
-    .all<{ entity_id: string; url: string }>();
+  const rows = await env.DB.prepare("SELECT entity_id, url FROM page WHERE role = 'home' ORDER BY entity_id").all<{
+    entity_id: string;
+    url: string;
+  }>();
   return new Map(rows.results.map((row) => [row.entity_id, row.url]));
 };
 
 const watchTargets = async () => {
-  const rows = await env.DB.prepare("SELECT entity_id, target_key FROM watch ORDER BY entity_id")
-    .all<{ entity_id: string; target_key: string }>();
+  const rows = await env.DB.prepare("SELECT entity_id, target_key FROM watch ORDER BY entity_id").all<{
+    entity_id: string;
+    target_key: string;
+  }>();
   return new Map(rows.results.map((row) => [row.entity_id, row.target_key]));
 };
 
@@ -175,7 +185,8 @@ describe("nightly site sweep", () => {
     const changed = await checkSitePage(rival, night3);
     const retried = await checkSitePage(rival, night3);
     expect(retried).toEqual(changed);
-    if (changed.outcome !== "changed" || first.outcome !== "first" || same.outcome !== "unchanged") throw new Error("expected a change");
+    if (changed.outcome !== "changed" || first.outcome !== "first" || same.outcome !== "unchanged")
+      throw new Error("expected a change");
     await publishSiteChange(rival, changed);
     await publishSiteChange(rival, changed);
 
@@ -239,8 +250,12 @@ describe("nightly site sweep", () => {
       await publishSiteChange(rival, changed);
 
       const [signal] = await signals();
-      const filedId = await env.DB.prepare("SELECT id FROM signal WHERE workspace_id = ?").bind(WS).first<{ id: string }>();
-      const verdicts = await env.DB.prepare("SELECT DISTINCT signal_id FROM jev_verdict WHERE entity_id = 'ent-rival'").all<{
+      const filedId = await env.DB.prepare("SELECT id FROM signal WHERE workspace_id = ?")
+        .bind(WS)
+        .first<{ id: string }>();
+      const verdicts = await env.DB.prepare(
+        "SELECT DISTINCT signal_id FROM jev_verdict WHERE entity_id = 'ent-rival'",
+      ).all<{
         signal_id: string | null;
       }>();
       expect(signal).toBeDefined();
@@ -265,7 +280,9 @@ describe("nightly site sweep", () => {
     const filed = await signals();
     expect(filed).toHaveLength(1);
     expect(filed[0]?.aspect).toBe("home");
-    const verdicts = await env.DB.prepare("SELECT COUNT(*) AS n FROM jev_verdict WHERE entity_id = 'ent-rival'").first<{ n: number }>();
+    const verdicts = await env.DB.prepare("SELECT COUNT(*) AS n FROM jev_verdict WHERE entity_id = 'ent-rival'").first<{
+      n: number;
+    }>();
     expect(verdicts?.n).toBe(0);
   });
 
@@ -288,16 +305,21 @@ describe("nightly site sweep", () => {
 
     const filed = await signals();
     expect(filed.map((row) => row.entity_id).sort()).toEqual(["ent-rival", "ent-self"]);
-    const verdicts = await env.DB.prepare("SELECT COUNT(*) AS n FROM jev_verdict WHERE entity_id = 'ent-self'").first<{ n: number }>();
+    const verdicts = await env.DB.prepare("SELECT COUNT(*) AS n FROM jev_verdict WHERE entity_id = 'ent-self'").first<{
+      n: number;
+    }>();
     expect(verdicts?.n).toBe(0);
   });
 
   it("links each same-entity page's verdicts to its own signal when two pages are judged at once", async () => {
     Reflect.set(env, "AI", {
-      async run(_model: string, request: {
-        state: { page: { url: string } };
-        questions: Record<string, { type: string }>;
-      }) {
+      async run(
+        _model: string,
+        request: {
+          state: { page: { url: string } };
+          questions: Record<string, { type: string }>;
+        },
+      ) {
         const kind = request.state.page.url.endsWith("/pricing") ? "launch" : "copy";
         const answers: Record<string, { type: "noul"; noul: number } | { type: "choice"; choice: string }> = {};
         for (const [id, question] of Object.entries(request.questions)) {
@@ -310,8 +332,12 @@ describe("nightly site sweep", () => {
       await env.DB.exec("DELETE FROM jev_verdict");
       await planSiteSweep(NOW);
       await env.DB.batch([
-        env.DB.prepare("INSERT INTO page (id, entity_id, url, role, discovered_at) VALUES ('page-rival-pricing', 'ent-rival', 'https://rival.com/pricing', 'pricing', ?)").bind(NOW),
-        env.DB.prepare("INSERT INTO watch (id, entity_id, source_id, target_key) VALUES ('watch-rival-pricing', 'ent-rival', 'src_site_web', 'https://rival.com/pricing')"),
+        env.DB.prepare(
+          "INSERT INTO page (id, entity_id, url, role, discovered_at) VALUES ('page-rival-pricing', 'ent-rival', 'https://rival.com/pricing', 'pricing', ?)",
+        ).bind(NOW),
+        env.DB.prepare(
+          "INSERT INTO watch (id, entity_id, source_id, target_key) VALUES ('watch-rival-pricing', 'ent-rival', 'src_site_web', 'https://rival.com/pricing')",
+        ),
       ]);
       const targets = (await planSiteSweep(NOW)).filter((t) => t.entityId === "ent-rival");
       expect(targets.map((t) => t.url)).toEqual(["https://rival.com/", "https://rival.com/pricing"]);
@@ -339,7 +365,9 @@ describe("nightly site sweep", () => {
         { url: "https://rival.com/pricing", aspect: "launch", question_id: "change_kind", choice: "launch" },
         { url: "https://rival.com/pricing", aspect: "launch", question_id: "noteworthy_change", choice: null },
       ]);
-      const unlinked = await env.DB.prepare("SELECT COUNT(*) AS n FROM jev_verdict WHERE signal_id IS NULL").first<{ n: number }>();
+      const unlinked = await env.DB.prepare("SELECT COUNT(*) AS n FROM jev_verdict WHERE signal_id IS NULL").first<{
+        n: number;
+      }>();
       expect(unlinked?.n).toBe(0);
     } finally {
       Reflect.deleteProperty(env, "AI");
@@ -403,7 +431,14 @@ describe("nightly site sweep", () => {
       "SELECT kind, pages, failed, wall_ms, planned_at, finished_at FROM sweep_run WHERE id = ?",
     )
       .bind(id)
-      .first<{ kind: string; pages: number; failed: number; wall_ms: number; planned_at: string; finished_at: string }>();
+      .first<{
+        kind: string;
+        pages: number;
+        failed: number;
+        wall_ms: number;
+        planned_at: string;
+        finished_at: string;
+      }>();
     if (run === null) throw new Error("finished sweep wrote no sweep_run row");
     expect(run).toMatchObject({ kind: "site", pages: 2, failed: 0 });
     expect(run.wall_ms).toBe(Date.parse(run.finished_at) - Date.parse(run.planned_at));
@@ -509,9 +544,7 @@ describe("home url resolution", () => {
   });
 
   it("keeps the registrable domain home when the identity has no url", async () => {
-    await seedHomeEntities([
-      { id: "ent-plain", role: "self", domain: "nike.com", identityJson: "{}" },
-    ]);
+    await seedHomeEntities([{ id: "ent-plain", role: "self", domain: "nike.com", identityJson: "{}" }]);
 
     await ensureHomePages(NOW);
 
@@ -574,9 +607,7 @@ describe("home url resolution", () => {
         identityJson: '{"kind":"domain","url":"https://fixture.0509.in/"}',
       },
     ]);
-    await env.DB.prepare(
-      `INSERT INTO page (id, entity_id, url, role, discovered_at) VALUES (?, ?, ?, 'product', ?)`,
-    )
+    await env.DB.prepare(`INSERT INTO page (id, entity_id, url, role, discovered_at) VALUES (?, ?, ?, 'product', ?)`)
       .bind("page-taken", "ent-taken", "https://fixture.0509.in/", NOW)
       .run();
 
@@ -589,25 +620,17 @@ describe("home url resolution", () => {
   });
 
   it("watches one page per entity when the entity already has two home rows", async () => {
-    await seedHomeEntities([
-      { id: "ent-two", role: "self", domain: "nike.com", identityJson: "{}" },
-    ]);
-    await env.DB.prepare(
-      `INSERT INTO page (id, entity_id, url, role, discovered_at) VALUES (?, ?, ?, 'home', ?)`,
-    )
+    await seedHomeEntities([{ id: "ent-two", role: "self", domain: "nike.com", identityJson: "{}" }]);
+    await env.DB.prepare(`INSERT INTO page (id, entity_id, url, role, discovered_at) VALUES (?, ?, ?, 'home', ?)`)
       .bind("page-two-early", "ent-two", "https://nike.com/", new Date(Date.parse(NOW) - 7_200_000).toISOString())
       .run();
-    await env.DB.prepare(
-      `INSERT INTO page (id, entity_id, url, role, discovered_at) VALUES (?, ?, ?, 'home', ?)`,
-    )
+    await env.DB.prepare(`INSERT INTO page (id, entity_id, url, role, discovered_at) VALUES (?, ?, ?, 'home', ?)`)
       .bind("page-two-late", "ent-two", "https://shop.nike.com/", new Date(Date.parse(NOW) - 3_600_000).toISOString())
       .run();
 
     const targets = await planSiteSweep(NOW);
 
-    expect(targets.map((target) => [target.entityId, target.url])).toEqual([
-      ["ent-two", "https://nike.com/"],
-    ]);
+    expect(targets.map((target) => [target.entityId, target.url])).toEqual([["ent-two", "https://nike.com/"]]);
     expect(await rowCount("watch")).toBe(1);
   });
 

@@ -4,15 +4,11 @@ function unknownToken(): string {
   return crypto.randomUUID().replaceAll("-", "");
 }
 
-test("an unknown confirm link is a 200 no-store page that asks to confirm (0509#5811)", async ({
-  page,
-}) => {
+test("an unknown confirm link is a 200 no-store page that asks to confirm (0509#5811)", async ({ page }) => {
   const response = await page.goto(`/v/${unknownToken()}`);
   expect(response?.status()).toBe(200);
   expect(response?.headers()["cache-control"]).toBe("no-store");
-  await expect(
-    page.getByRole("heading", { level: 1, name: "Confirm this address for your brief?" }),
-  ).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "Confirm this address for your brief?" })).toBeVisible();
   await expect(page.getByRole("heading", { level: 1, name: "Address confirmed" })).toHaveCount(0);
 });
 

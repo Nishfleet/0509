@@ -1,10 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import {
-  COST_GUARD_FACTOR,
-  EXPECTED_PER_BRAND_DAY,
-  evaluateCost,
-} from "../../app/lib/observability/cost-guard";
+import { COST_GUARD_FACTOR, EXPECTED_PER_BRAND_DAY, evaluateCost } from "../../app/lib/observability/cost-guard";
 import type { CostLine, DailyUsage } from "../../app/lib/observability/cost-guard";
 
 const AT_FACTOR: DailyUsage = {
@@ -44,12 +40,7 @@ describe("evaluateCost", () => {
   });
 
   it("divides by one when no brand is ON, so the floor still reports", () => {
-    expect(
-      evaluateCost(
-        { day: "2026-09-21", d1RowsWritten: 223287, r2ClassAOps: 0, browserMs: 0 },
-        0,
-      ),
-    ).toEqual([
+    expect(evaluateCost({ day: "2026-09-21", d1RowsWritten: 223287, r2ClassAOps: 0, browserMs: 0 }, 0)).toEqual([
       {
         day: "2026-09-21",
         line: "d1_rows_written",
@@ -61,12 +52,7 @@ describe("evaluateCost", () => {
   });
 
   it("returns every over line in the fixed order", () => {
-    expect(
-      evaluateCost(
-        { day: "2026-09-21", d1RowsWritten: 301, r2ClassAOps: 301, browserMs: 450_001 },
-        10,
-      ),
-    ).toEqual([
+    expect(evaluateCost({ day: "2026-09-21", d1RowsWritten: 301, r2ClassAOps: 301, browserMs: 450_001 }, 10)).toEqual([
       {
         day: "2026-09-21",
         line: "d1_rows_written",

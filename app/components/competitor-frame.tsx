@@ -49,10 +49,7 @@ export function CompetitorFrame({
 }: CompetitorFrameProps): ReactElement {
   const biggest = changes.find((change) => change.id === biggestId) ?? null;
   return (
-    <div
-      data-slot="competitor-frame"
-      className="grid min-w-0 gap-10 min-[1080px]:grid-cols-[minmax(0,1fr)_20rem]"
-    >
+    <div data-slot="competitor-frame" className="grid min-w-0 gap-10 min-[1080px]:grid-cols-[minmax(0,1fr)_20rem]">
       <div className="flex min-w-0 flex-col gap-10">
         <section data-section="snapshot" aria-labelledby="competitor-snapshot" className="min-w-0">
           <h2 id="competitor-snapshot" className={HEADING}>
