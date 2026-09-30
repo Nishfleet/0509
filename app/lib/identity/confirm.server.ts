@@ -55,7 +55,7 @@ export async function confirmCard(workspaceId: string, userId: string, form: For
   const [logo, cached] = await Promise.all([readLogo(subject.registrable), readCachedSiteValues(subject)]);
   const logoUrl = logo !== null ? `/app/logos/${id}` : null;
   const now = new Date();
-  await insertSelfEntity({
+  const inserted = await insertSelfEntity({
     id,
     workspaceId,
     domain: subject.registrable,
@@ -72,7 +72,7 @@ export async function confirmCard(workspaceId: string, userId: string, form: For
   });
   const entityId = await readWorkspaceSelfId(workspaceId);
   if (entityId === null) return false;
-  if (cached !== null) {
+  if (inserted && cached !== null) {
     const candidates: { edit: FieldEdit; changed: boolean }[] = [
       {
         edit: { field: "name", from: cached.name, to: card.name },

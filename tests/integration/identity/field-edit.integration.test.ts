@@ -267,4 +267,26 @@ describe("confirmCard field edits", () => {
     expect(await fieldEditRows(await confirmedEntityId())).toEqual([]);
     await settledTail();
   });
+
+  it("records no rows for a repeated confirm the entity writer discarded", async () => {
+    await seed();
+    await cachedHomepage("Gymshark Ltd", "Gym clothes");
+    stubWeb(HOMEPAGE_HTML);
+
+    expect(
+      await confirmCard(workspaceId, userId, form({ subject: DOMAIN, name: "Gymshark", description: "Gym clothes" })),
+    ).toBe(true);
+    expect(
+      await confirmCard(
+        workspaceId,
+        userId,
+        form({ subject: DOMAIN, name: "Second", description: "Second description" }),
+      ),
+    ).toBe(true);
+
+    expect(await fieldEditRows(await confirmedEntityId())).toEqual([
+      { field: "name", from: "Gymshark Ltd", to: "Gymshark" },
+    ]);
+    await settledTail();
+  });
 });
