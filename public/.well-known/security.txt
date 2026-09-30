@@ -1,0 +1,4 @@
+Contact: mailto:hello@0509.io
+Expires: 2027-09-30T00:00:00.000Z
+Canonical: https://0509.io/.well-known/security.txt
+Preferred-Languages: en
