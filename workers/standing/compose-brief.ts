@@ -29,7 +29,7 @@ const SIGNAL_COUNTS = `SELECT s.entity_id AS entity_id,
        SUM(CASE WHEN s.kind = 'hiring' THEN 1 ELSE 0 END) AS new_roles
 FROM signal s
 JOIN entity e ON e.id = s.entity_id AND e.workspace_id = ?1 AND e.state = 'on'
-WHERE s.workspace_id = ?1 AND s.observed_at >= ?2 AND s.observed_at < ?3 AND s.is_tombstoned = 0
+WHERE s.workspace_id = ?1 AND s.observed_at >= ?2 AND s.observed_at < ?3 AND s.is_tombstoned = 0 AND s.duplicate_of IS NULL
 GROUP BY s.entity_id`;
 
 const SOURCE_COVERAGE = `SELECT src.key AS key,

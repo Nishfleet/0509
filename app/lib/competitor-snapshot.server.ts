@@ -17,7 +17,7 @@ FROM signal s
 LEFT JOIN jev_verdict v ON v.signal_id = s.id
   AND v.question_id = CASE s.kind WHEN 'mention' THEN ?5 WHEN 'change' THEN ?6 END
 WHERE s.workspace_id = ?1 AND s.entity_id = ?2
-  AND s.observed_at >= ?3 AND s.observed_at < ?4 AND s.is_tombstoned = 0`;
+  AND s.observed_at >= ?3 AND s.observed_at < ?4 AND s.is_tombstoned = 0 AND s.duplicate_of IS NULL`;
 
 const SELECT_COMPETITOR_STANDING = `SELECT rank, movement FROM standing
 WHERE workspace_id = ?1 AND entity_id = ?2 AND rank IS NOT NULL

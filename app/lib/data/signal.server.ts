@@ -145,8 +145,9 @@ export async function applyHiringLifecycle(updates: readonly HiringSignalUpdate[
 
 const INSERT_MENTION = `INSERT INTO signal
   (id, workspace_id, entity_id, source_id, watch_id, snapshot_id, kind, title, url, canonical_url, url_hash,
-   author, engagement_json, payload_json, dedup_key, published_at, observed_at, last_seen_at, is_tombstoned, state)
-VALUES (?1, ?2, ?3, ?4, ?5, ?6, 'mention', ?7, ?8, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?15, ?16, ?17)
+   author, engagement_json, payload_json, dedup_key, published_at, observed_at, last_seen_at, is_tombstoned, state,
+   title_hash, norm_url_hash)
+VALUES (?1, ?2, ?3, ?4, ?5, ?6, 'mention', ?7, ?8, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?15, ?16, ?17, ?18, ?19)
 ON CONFLICT (source_id, dedup_key) DO NOTHING`;
 
 const SEEN_KEYS =
@@ -162,6 +163,8 @@ export interface MentionSignal {
   title: string;
   url: string;
   urlHash: string;
+  titleHash: string;
+  normUrlHash: string;
   author: string | null;
   engagementJson: string | null;
   payloadJson: string;
@@ -197,7 +200,63 @@ export function insertMention(signal: MentionSignal): D1PreparedStatement {
     signal.observedAt,
     signal.isNotAboutBrand ? 1 : 0,
     signal.state,
+    signal.titleHash,
+    signal.normUrlHash,
   );
+}
+
+const SELECT_DUPLICATE_CANDIDATE = `SELECT s.id, s.title, s.canonical_url, s.published_at, s.payload_json, src.plugin_key
+FROM signal s JOIN source src ON src.id = s.source_id
+WHERE s.workspace_id = ?1 AND s.entity_id = ?2 AND s.kind = 'mention'
+  AND s.duplicate_of IS NULL AND s.is_tombstoned = 0 AND s.observed_at >= ?3
+  AND (s.title_hash = ?4 OR s.norm_url_hash = ?5)
+ORDER BY s.observed_at DESC, s.id DESC LIMIT 1`;
+
+const SET_DUPLICATE_OF = `UPDATE signal SET duplicate_of = ?2
+WHERE id = ?1 AND kind = 'mention' AND duplicate_of IS NULL AND id <> ?2`;
+
+const duplicateCandidateRow = z.object({
+  id: z.string(),
+  title: z.string(),
+  canonical_url: z.string(),
+  published_at: z.string().nullable(),
+  payload_json: z.string(),
+  plugin_key: z.string(),
+});
+
+export interface DuplicateCandidate {
+  id: string;
+  title: string;
+  url: string;
+  publishedAt: string | null;
+  publisher: string | null;
+  source: string;
+}
+
+export async function findDuplicateCandidate(input: {
+  workspaceId: string;
+  entityId: string;
+  since: string;
+  titleHash: string;
+  normUrlHash: string;
+}): Promise<DuplicateCandidate | null> {
+  const row = await env.DB.prepare(SELECT_DUPLICATE_CANDIDATE)
+    .bind(input.workspaceId, input.entityId, input.since, input.titleHash, input.normUrlHash)
+    .first();
+  if (row === null) return null;
+  const parsed = duplicateCandidateRow.parse(row);
+  return {
+    id: parsed.id,
+    title: parsed.title,
+    url: parsed.canonical_url,
+    publishedAt: parsed.published_at,
+    publisher: mentionPayload.parse(JSON.parse(parsed.payload_json)).publisher ?? null,
+    source: parsed.plugin_key,
+  };
+}
+
+export function markDuplicateOf(signalId: string, survivorId: string): D1PreparedStatement {
+  return env.DB.prepare(SET_DUPLICATE_OF).bind(signalId, survivorId);
 }
 
 const SELECT_UNJUDGED_MENTIONS = `SELECT id, title, canonical_url, published_at, payload_json FROM signal
@@ -252,7 +311,7 @@ export interface RecentSignal {
 }
 
 const SELECT_RECENT_SIGNALS =
-  "SELECT kind, title, summary, url, aspect, observed_at FROM signal WHERE entity_id = ? AND observed_at >= ? AND is_tombstoned = 0 ORDER BY observed_at DESC LIMIT 50";
+  "SELECT kind, title, summary, url, aspect, observed_at FROM signal WHERE entity_id = ? AND observed_at >= ? AND is_tombstoned = 0 AND duplicate_of IS NULL ORDER BY observed_at DESC LIMIT 50";
 
 interface RecentSignalRow {
   kind: string;
@@ -277,7 +336,7 @@ export async function readRecentSignals(entityId: string, since: string): Promis
 
 const SELECT_WEEK_EVIDENCE = `SELECT s.id, src.kind AS source_kind, s.title, s.summary, s.url, s.evidence_url, s.observed_at
 FROM signal s JOIN source src ON src.id = s.source_id
-WHERE s.workspace_id = ?1 AND s.entity_id = ?2 AND s.observed_at >= ?3 AND s.is_tombstoned = 0
+WHERE s.workspace_id = ?1 AND s.entity_id = ?2 AND s.observed_at >= ?3 AND s.is_tombstoned = 0 AND s.duplicate_of IS NULL
 ORDER BY s.observed_at DESC, s.id DESC LIMIT 100`;
 
 interface WeekEvidenceRow {
@@ -363,7 +422,7 @@ export async function readSiteChanges(input: {
 
 const SELECT_ENTITY_DEVELOPMENTS = `SELECT id, kind, title, summary, url, observed_at FROM signal
 WHERE workspace_id = ?1 AND entity_id = ?2 AND kind IN ('ad', 'change', 'mention', 'hiring')
-  AND is_tombstoned = 0 AND observed_at >= ?3 ORDER BY observed_at DESC, id DESC LIMIT ?4`;
+  AND is_tombstoned = 0 AND duplicate_of IS NULL AND observed_at >= ?3 ORDER BY observed_at DESC, id DESC LIMIT ?4`;
 
 interface DevelopmentRow {
   id: string;
@@ -414,7 +473,7 @@ export interface SignalCount {
   count: number;
 }
 
-const COUNT_SIGNALS_BY_KIND = `SELECT kind, COUNT(*) AS n FROM signal WHERE workspace_id = ?1 AND entity_id = ?2 AND observed_at >= ?3 AND is_tombstoned = 0 GROUP BY kind ORDER BY kind`;
+const COUNT_SIGNALS_BY_KIND = `SELECT kind, COUNT(*) AS n FROM signal WHERE workspace_id = ?1 AND entity_id = ?2 AND observed_at >= ?3 AND is_tombstoned = 0 AND duplicate_of IS NULL GROUP BY kind ORDER BY kind`;
 
 export async function readSignalCounts(
   workspaceId: string,
@@ -447,7 +506,7 @@ LEFT JOIN jev_verdict v ON v.id = (
   LIMIT 1
 )
 WHERE s.workspace_id = ?1 AND s.entity_id = ?2
-  AND s.observed_at >= ?3 AND s.observed_at < ?4 AND s.is_tombstoned = 0)
+  AND s.observed_at >= ?3 AND s.observed_at < ?4 AND s.is_tombstoned = 0 AND s.duplicate_of IS NULL)
 WHERE bucket IS NOT NULL
 ORDER BY observed_at DESC, id DESC`;
 

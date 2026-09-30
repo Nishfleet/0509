@@ -1,5 +1,6 @@
 import type { z } from "zod";
 
+import { normUrlHash, titleHash } from "../../app/lib/mentions/normalize";
 import { sha256Hex } from "../../app/lib/sha256";
 import type { mentionItemSchema } from "../sources/mentions/types";
 
@@ -28,6 +29,8 @@ export interface SignalRow {
   title: string;
   canonical_url: string;
   url_hash: string;
+  title_hash: string;
+  norm_url_hash: string;
   dedup_key: string;
   published_at: string | null;
   observed_at: string;
@@ -53,6 +56,8 @@ export async function toSignalRow(item: MentionItem, ctx: SignalRowContext): Pro
     title: item.title,
     canonical_url: item.url,
     url_hash: await sha256Hex(item.url),
+    title_hash: await titleHash(item.title),
+    norm_url_hash: await normUrlHash(item.url),
     dedup_key: item.dedupKey,
     published_at: item.publishedAt,
     observed_at: ctx.observedAt,
