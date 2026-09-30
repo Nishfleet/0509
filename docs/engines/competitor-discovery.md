@@ -76,18 +76,18 @@ HN alone can return nothing on a cold request path, so a second generator, `ai` 
 
 ## Live probes — one per generator, on Gymshark
 
-| #   | Generator                              | Call                                                               | Result                                                                       |
-| --- | -------------------------------------- | ------------------------------------------------------------------ | ---------------------------------------------------------------------------- |
-| 1   | Google News RSS, roundup harvest       | `news.google.com/rss/search?q=%22Gymshark%22%20alternatives`       | **200**, 51,692 B, **0.47 s**, **44 items**, at **12:12:51Z**                |
-| 2   | Google News RSS, plain brand           | `…?q=%22Gymshark%22`                                               | **200**, 125,881 B, **0.56 s**, at **12:12:52Z**                             |
-| 3   | HN Algolia co-mentions                 | `hn.algolia.com/api/v1/search?query=gymshark&tags=(story,comment)` | **200**, 42,243 B, **0.39 s**, **nbHits 146**, at **12:12:53Z**              |
-| 4   | Wikidata name → entity                 | `wbsearchentities?search=Gymshark`                                 | **200**, → `Q56246099`, at **12:14:13Z**                                     |
-| 5   | Wikidata entity → website              | `wbgetentities?ids=Q56246099&props=claims`                         | **200**, `P856 = https://www.gymshark.com/`, at **12:22:33Z**                |
-| 6   | Wikidata same-industry peers (SPARQL)  | `query.wikidata.org/sparql`, `wdt:P452` join                       | **200, 0 rows**, at **12:21:53Z** — see finding 2                            |
-| 7   | SERP route (DuckDuckGo HTML)           | `html.duckduckgo.com/html/?q=gymshark+alternatives`                | **202**, 14,228 B — a challenge, not results, at **12:14:12Z**               |
-| 8   | Reddit search                          | `reddit.com/search.json?q=gymshark`                                | **403**, 189,908 B block page, at **12:15:41Z**                              |
-| 9   | Meta Ad Library, keyword → advertisers | via the deployed Worker's browser leg                              | **200** with real advertiser results, **12:13:25Z** — see the ads engine doc |
-| 10  | Jev D1                                 | `POST 127.0.0.1:4000/jev`                                          | **200**, **p = 0.9**, **0.78 s**, at **12:18:48Z**                           |
+| #   | Generator                              | Call                                                               | Result                                                          |
+| --- | -------------------------------------- | ------------------------------------------------------------------ | --------------------------------------------------------------- |
+| 1   | Google News RSS, roundup harvest       | `news.google.com/rss/search?q=%22Gymshark%22%20alternatives`       | **200**, 51,692 B, **0.47 s**, **44 items**, at **12:12:51Z**   |
+| 2   | Google News RSS, plain brand           | `…?q=%22Gymshark%22`                                               | **200**, 125,881 B, **0.56 s**, at **12:12:52Z**                |
+| 3   | HN Algolia co-mentions                 | `hn.algolia.com/api/v1/search?query=gymshark&tags=(story,comment)` | **200**, 42,243 B, **0.39 s**, **nbHits 146**, at **12:12:53Z** |
+| 4   | Wikidata name → entity                 | `wbsearchentities?search=Gymshark`                                 | **200**, → `Q56246099`, at **12:14:13Z**                        |
+| 5   | Wikidata entity → website              | `wbgetentities?ids=Q56246099&props=claims`                         | **200**, `P856 = https://www.gymshark.com/`, at **12:22:33Z**   |
+| 6   | Wikidata same-industry peers (SPARQL)  | `query.wikidata.org/sparql`, `wdt:P452` join                       | **200, 0 rows**, at **12:21:53Z** — see finding 2               |
+| 7   | SERP route (DuckDuckGo HTML)           | `html.duckduckgo.com/html/?q=gymshark+alternatives`                | **202**, 14,228 B — a challenge, not results, at **12:14:12Z**  |
+| 8   | Reddit search                          | `reddit.com/search.json?q=gymshark`                                | **403**, 189,908 B block page, at **12:15:41Z**                 |
+| 9   | Meta Ad Library, keyword → advertisers | via the deployed Worker's browser leg                              | **200** with real advertiser results, **12:13:25Z**             |
+| 10  | Jev D1                                 | `POST 127.0.0.1:4000/jev`                                          | **200**, **p = 0.9**, **0.78 s**, at **12:18:48Z**              |
 
 **Probe 1, excerpt** — the three highest-ranked items, verbatim titles:
 

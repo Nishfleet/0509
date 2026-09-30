@@ -132,7 +132,7 @@ Five tools, one per thing a human can see. Each takes the workspace from the aut
 | `get_standing`     | this week's rank, score, movement per ON brand, and the why-line | `standing`, `digest.payload_json`             |
 | `list_competitors` | ON, off and dismissed brands with their identity cards and state | `entity`                                      |
 | `list_alerts`      | the alerts feed, filterable by kind and since                    | `alert`                                       |
-| `get_competitor`   | one brand's ads, site changes, mentions and hiring for a window  | `signal` via the `mention` and `change` views |
+| `get_competitor`   | one brand's site changes, mentions and hiring for a window       | `signal` via the `mention` and `change` views |
 | `get_brief`        | the latest weekly brief as structured data                       | `digest`                                      |
 
 Configuration that is load-bearing and easy to miss, each from `docs/REBUILD-STACK.md` §7.1:
