@@ -16,7 +16,7 @@ export function WhyFlaggedSheet({ why }: { why: WhyFlagged }): ReactElement {
         Why we flagged this
       </DialogTrigger>
       <DialogContent className={CONTENT_CLASS}>
-        <DialogTitle className="font-display text-lg font-semibold">Why we flagged this</DialogTitle>
+        <DialogTitle className="font-display text-row-name font-bold">Why we flagged this</DialogTitle>
         <dl data-testid="why-flagged" data-verdict-id={why.verdictId} className="mt-3 font-mono">
           {why.compared.map((field) => (
             <div className={ROW_CLASS} key={field.label}>
