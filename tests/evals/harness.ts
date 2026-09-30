@@ -25,7 +25,7 @@ const JEV_URL = process.env.JEV_URL ?? "http://127.0.0.1:4000/jev";
 
 const JEV_KEY = process.env.LITELLM_JEV_KEY ?? "";
 
-export type Split = "train" | "test";
+type Split = "train" | "test";
 
 export interface EvalRow {
   id: string;
@@ -33,7 +33,7 @@ export interface EvalRow {
   why: string;
 }
 
-export interface EvalEvidence {
+interface EvalEvidence {
   source: string;
   excerpt: string;
 }
@@ -67,13 +67,13 @@ export interface ChoiceEvalQuestion {
   options: Readonly<Record<string, string>>;
 }
 
-export interface Call {
+interface Call {
   model: string;
   p: number | null;
   choice: string | null;
 }
 
-export interface Outcome {
+interface Outcome {
   points: number;
   uncertain: boolean;
   key: string;
