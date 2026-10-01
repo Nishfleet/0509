@@ -96,13 +96,10 @@ describe("the identity card fields", () => {
     expect(label).toContain(`>${INSTAGRAM}</span>`);
   });
 
-  it("holds a name Jev was unsure about as placeholder text inside a check-this row, never as the value", () => {
+  it("submits a name Jev was unsure about as the value, so That's me works without typing", () => {
     const html = render(site({ name: "check", description: "fill", socials: "fill" }));
 
-    const name = input(html, 'name="name"');
-    expect(name).toContain('value=""');
-    expect(name).not.toContain('value="Gymshark"');
-    expect(html).toContain(">Gymshark</span>");
+    expect(input(html, 'name="name"')).toContain('value="Gymshark"');
     expect(html).toContain("check this");
   });
 
