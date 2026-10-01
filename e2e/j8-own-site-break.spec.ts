@@ -56,6 +56,17 @@ function header(raw: string, pattern: RegExp): string {
   return pattern.exec(raw)?.[1]?.trim() ?? "";
 }
 
+// The inbox keeps a message for one hour and the second break can take longer
+// than that to open, so an expired fixed email (404) means nothing newer arrived.
+async function latestMessageId(to: string, token: string): Promise<string | null> {
+  try {
+    return header(await readRawMessage(to, token), MESSAGE_ID);
+  } catch (error) {
+    if (error instanceof InboxReadError && error.status === 404) return null;
+    throw error;
+  }
+}
+
 async function waitForMail(
   to: string,
   token: string,
@@ -196,8 +207,8 @@ for (const { mode, kind, waitMs, account, host } of MODES) {
         "the second break opened on the same UTC day as the first email",
       ).toBe(openDay);
 
-      const later = await readRawMessage(email, token);
-      expect(header(later, MESSAGE_ID), "the second incident sent no second open email that day").toBe(fixedId);
+      const laterId = await latestMessageId(email, token);
+      expect([fixedId, null], "the second incident sent no second open email that day").toContain(laterId);
 
       console.log(
         `j8 mode=${mode} broken-at=${brokenAt.toISOString()} open-message-id=${openId} open-sent-utc=${openSentAt.toISOString()} ` +
