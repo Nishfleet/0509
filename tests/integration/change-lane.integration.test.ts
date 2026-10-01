@@ -1,6 +1,7 @@
 import { env } from "cloudflare:test";
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { saveSlackTarget } from "../../app/lib/data/send_target.server";
 import { CHANGE_DAILY_CAP, deliverChange, handleBatch } from "../../workers/delivery/consumer";
 
 const USER = "user-change-lane";
@@ -187,5 +188,59 @@ describe("rival change email lane (0509#6375)", () => {
 
     expect(results.map((r) => r.outcome)).toEqual(["sent"]);
     expect(acked).toEqual([0]);
+  });
+
+  describe("Slack", () => {
+    const HOOK = "https://hooks.slack.com/services/T0123ABC/B0456DEF/abcDEF123456";
+
+    afterEach(() => {
+      vi.unstubAllGlobals();
+    });
+
+    const connect = async (status: number) => {
+      await env.DB.exec(
+        `INSERT INTO channel (id, key, is_enabled, config_json) VALUES ('chan-slack', 'slack', 1, '{}')`,
+      );
+      await saveSlackTarget(env.DB, { workspaceId: WS, webhookUrl: HOOK, now: "2026-10-01T00:00:00Z" });
+      const posts: { url: string; text: string }[] = [];
+      vi.stubGlobal("fetch", (input: RequestInfo | URL, init?: RequestInit) => {
+        posts.push({ url: String(input), text: (JSON.parse(String(init?.body)) as { text: string }).text });
+        return Promise.resolve(new Response("ok", { status }));
+      });
+      return posts;
+    };
+
+    it("posts the change to the customer's channel once, beside the email", async () => {
+      const posts = await connect(200);
+      const sent: EmailMessageBuilder[] = [];
+
+      expect((await deliverChange(envWith(sent), { signal_id: SIGNAL })).outcome).toBe("sent");
+      await deliverChange(envWith(sent), { signal_id: SIGNAL });
+
+      expect(sent).toHaveLength(1);
+      expect(posts).toHaveLength(1);
+      expect(posts[0]?.url).toBe(HOOK);
+      expect(posts[0]?.text).toContain("*Rival changed its pricing page*");
+      expect(posts[0]?.text).toContain("Before: Pro $12 a month");
+      expect(posts[0]?.text).toContain("After: Pro $15 a month");
+    });
+
+    it("posts nothing when change alerts are off", async () => {
+      const posts = await connect(200);
+      await env.DB.prepare(`UPDATE workspace SET change_alerts = 0 WHERE id = ?`).bind(WS).run();
+
+      expect((await deliverChange(envWith([]), { signal_id: SIGNAL })).outcome).toBe("muted");
+      expect(posts).toHaveLength(0);
+    });
+
+    it("reports a failed post for retry, without sending the email twice", async () => {
+      await connect(404);
+      const sent: EmailMessageBuilder[] = [];
+
+      expect((await deliverChange(envWith(sent), { signal_id: SIGNAL })).outcome).toBe("failed");
+      expect((await deliverChange(envWith(sent), { signal_id: SIGNAL })).outcome).toBe("failed");
+
+      expect(sent).toHaveLength(1);
+    });
   });
 });

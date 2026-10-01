@@ -1,10 +1,12 @@
 import { markDigestSent } from "../../app/lib/data/digest.server";
 import { claimIncidentNotice } from "../../app/lib/data/incident_notice.server";
 import { claimChangeSlot, claimSendAttempt, resolveSendAttempt } from "../../app/lib/data/send_attempt.server";
-import { writeUnsubscribeToken } from "../../app/lib/data/send_target.server";
+import { readSlackTarget, writeUnsubscribeToken } from "../../app/lib/data/send_target.server";
 import type { BriefPayload } from "../../app/lib/brief-payload";
 import { parseBriefPayload } from "../../app/lib/brief-payload";
 import { nextOwnSiteCheck } from "../../app/lib/incident-recheck";
+import { slackEscape } from "../../app/lib/slack-webhook";
+import { postToSlack } from "../../app/lib/slack.server";
 import {
   changeHeadline,
   markFromHunks,
@@ -468,6 +470,57 @@ async function sendChange(
   return capped && result.outcome === "sent" ? { ...result, outcome: "capped" } : result;
 }
 
+function slackText(change: ChangeRow, payload: SiteChangePayload, mark: Awaited<ReturnType<typeof readChangeMark>>) {
+  const headline = changeHeadline({ name: change.name ?? change.domain, isSelf: false, role: payload.page.role });
+  return [
+    `*${slackEscape(headline)}*`,
+    ...(mark?.removed == null ? [] : [`Before: ${slackEscape(mark.removed)}`]),
+    ...(mark?.added == null ? [] : [`After: ${slackEscape(mark.added)}`]),
+    `<${CHANGE_LINK}|See the before and after in Five to Nine>`,
+  ].join("\n");
+}
+
+async function postChangeToSlack(
+  env: Env,
+  input: { change: ChangeRow; payload: SiteChangePayload },
+): Promise<DeliveryResult | null> {
+  const { change, payload } = input;
+  const target = await readSlackTarget(env.DB, change.workspace_id);
+  if (target === null) return null;
+  const idempotencyKey = `change-slack:${change.id}:${target.id}`;
+  const claim = await claimSendAttempt(env.DB, {
+    idempotencyKey,
+    workspaceId: change.workspace_id,
+    targetId: target.id,
+    digestId: null,
+  });
+  if (!claim) return { outcome: "duplicate", attempt_id: null, idempotency_key: idempotencyKey };
+  return sendAndResolve(env, {
+    claimId: claim.id,
+    idempotencyKey,
+    send: async () => {
+      const text = slackText(change, payload, await readChangeMark(env, payload.diffKey));
+      const posted = await postToSlack(target.target_value, text).catch(() => false);
+      return posted ? { outcome: "sent", error: null } : { outcome: "failed", error: "slack did not accept the post" };
+    },
+  });
+}
+
+async function emailChange(
+  env: Env,
+  input: { change: ChangeRow; payload: SiteChangePayload },
+): Promise<DeliveryResult> {
+  const { change, payload } = input;
+  const target = await readTarget(env, change.workspace_id);
+  if (!target) {
+    return noTarget(env, change.workspace_id, { signal_id: change.id });
+  }
+  if (await isSuppressed(env, target.target_value)) {
+    return { outcome: "suppressed", attempt_id: null, idempotency_key: null };
+  }
+  return sendChange(env, { change, payload, target });
+}
+
 export async function deliverChange(env: Env, message: ChangeMessage): Promise<DeliveryResult> {
   const change = await readChange(env, message.signal_id);
   const payload = change === null ? null : parseSiteChangePayload(change.payload_json);
@@ -477,15 +530,9 @@ export async function deliverChange(env: Env, message: ChangeMessage): Promise<D
   if (change.change_alerts === 0) {
     return { outcome: "muted", attempt_id: null, idempotency_key: null };
   }
-
-  const target = await readTarget(env, change.workspace_id);
-  if (!target) {
-    return noTarget(env, change.workspace_id, { signal_id: change.id });
-  }
-  if (await isSuppressed(env, target.target_value)) {
-    return { outcome: "suppressed", attempt_id: null, idempotency_key: null };
-  }
-  return sendChange(env, { change, payload, target });
+  const slack = await postChangeToSlack(env, { change, payload });
+  const email = await emailChange(env, { change, payload });
+  return slack?.outcome === "failed" ? slack : email;
 }
 
 function route(env: Env, parsed: DeliveryMessage): Promise<DeliveryResult> {
