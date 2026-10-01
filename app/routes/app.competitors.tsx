@@ -49,7 +49,7 @@ function CompetitorItem({ competitor }: { competitor: CompetitorRow }) {
   const state = pending === "on" || pending === "off" ? pending : competitor.state;
   const off = state === "off";
   return (
-    <li className="border-t border-line py-4">
+    <li className="border-t border-line py-4 first:border-t-0">
       <div
         data-slot="brand-switch-field"
         data-state={state}
