@@ -1,10 +1,5 @@
 import { browserContent } from "../site/browser-budget.server";
-import {
-  browserContentEmpty,
-  browserRefused,
-  CHALLENGE_MARKERS,
-  type BrowserEngine,
-} from "./browser-refusal";
+import { browserContentEmpty, browserRefused, CHALLENGE_MARKERS, type BrowserEngine } from "./browser-refusal";
 import { BlockedRedirectError, cappedBody, fetchOutbound, targetRefusal } from "./outbound.server";
 import { CRAWLER_USER_AGENT } from "./robots.server";
 
@@ -254,9 +249,7 @@ export async function readUrl(url: string, options: ReadUrlOptions = {}): Promis
   };
 }
 
-async function parseBrowserPage(
-  res: Response,
-): Promise<{ html: string; status: number } | { cause: string }> {
+async function parseBrowserPage(res: Response): Promise<{ html: string; status: number } | { cause: string }> {
   let body: unknown;
   try {
     body = JSON.parse(await cappedText(res));

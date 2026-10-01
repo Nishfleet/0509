@@ -45,14 +45,9 @@ async function quickContentAttempt(
   const { env, url, started, engine } = args;
   let res: Response;
   try {
-    res = await env.BROWSER.quickAction(
-      "content",
-      engine === "kitesurf" ? { url, browser: "kitesurf" } : { url },
-    );
+    res = await env.BROWSER.quickAction("content", engine === "kitesurf" ? { url, browser: "kitesurf" } : { url });
   } catch (error) {
-    console.error(
-      JSON.stringify({ event: "ads.browser_quick_action_failed", engine, error: String(error) }),
-    );
+    console.error(JSON.stringify({ event: "ads.browser_quick_action_failed", engine, error: String(error) }));
     return { result: null, error };
   }
   const msUsedHeader = res.headers.get("x-browser-ms-used");
@@ -85,9 +80,7 @@ async function quickContent(
     throw second.error instanceof Error ? second.error : new Error(String(second.error));
   }
   const browserMsUsed =
-    first.msUsed === undefined && second.msUsed === undefined
-      ? undefined
-      : (first.msUsed ?? 0) + (second.msUsed ?? 0);
+    first.msUsed === undefined && second.msUsed === undefined ? undefined : (first.msUsed ?? 0) + (second.msUsed ?? 0);
   return { ...second.result, browserMsUsed };
 }
 

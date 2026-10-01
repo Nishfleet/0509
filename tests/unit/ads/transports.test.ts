@@ -318,9 +318,7 @@ describe("transportBrowser quick-action leg", () => {
         throw new Error("both engines down");
       }),
     };
-    await expect(transportBrowser(parseAdsDescriptor(descriptor), "acme", dead)).rejects.toThrow(
-      "both engines down",
-    );
+    await expect(transportBrowser(parseAdsDescriptor(descriptor), "acme", dead)).rejects.toThrow("both engines down");
     expect(dead.BROWSER.engines).toEqual(["kitesurf", "chromium"]);
   });
 });
