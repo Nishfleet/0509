@@ -5,9 +5,11 @@ import { writeUnsubscribeToken } from "../../app/lib/data/send_target.server";
 import type { BriefPayload } from "../../app/lib/brief-payload";
 import { parseBriefPayload } from "../../app/lib/brief-payload";
 import { nextOwnSiteCheck } from "../../app/lib/incident-recheck";
+import { changeHeadline, markFromHunks, parseDiffHunks, parseSiteChangePayload } from "../../app/lib/site-change";
 import { pageHost } from "../../app/lib/site/own-site.server";
 
 import { renderBrief } from "./brief-template";
+import { renderChange } from "./change-template";
 import { renderIncidentFixed, renderIncidentOpen } from "./incident-template";
 import { errorText, sendMessage, type SendResult } from "./send";
 
@@ -42,10 +44,23 @@ export interface IncidentMessage {
   incident_id: string;
 }
 
-export type DeliveryMessage = DigestMessage | IncidentMessage;
+export interface ChangeMessage {
+  signal_id: string;
+}
+
+export type DeliveryMessage = DigestMessage | IncidentMessage | ChangeMessage;
 
 type DeliveryOutcome =
-  "sent" | "failed" | "suppressed" | "duplicate" | "no_target" | "no_digest" | "no_incident" | "not_self" | "muted";
+  | "sent"
+  | "failed"
+  | "suppressed"
+  | "duplicate"
+  | "no_target"
+  | "no_digest"
+  | "no_incident"
+  | "not_self"
+  | "muted"
+  | "no_signal";
 
 interface DeliveryResult {
   outcome: DeliveryOutcome;
@@ -55,6 +70,7 @@ interface DeliveryResult {
 
 const EMAIL_CHANNEL_KEY = "email";
 const INCIDENT_LINK = "https://0509.io/app/alerts";
+const CHANGE_LINK = "https://0509.io/app/alerts";
 
 async function readDigest(env: Env, digestId: string): Promise<MessageRow | null> {
   return env.DB.prepare(
@@ -121,7 +137,7 @@ type NoTargetReason = "no_row" | "channel_disabled" | "unverified";
 async function noTarget(
   env: Env,
   workspaceId: string,
-  item: { digest_id: string } | { incident_id: string },
+  item: { digest_id: string } | { incident_id: string } | { signal_id: string },
 ): Promise<DeliveryResult> {
   const row = await env.DB.prepare(
     `SELECT st.is_verified, c.is_enabled
@@ -335,6 +351,93 @@ export async function deliverIncident(env: Env, message: IncidentMessage): Promi
   });
 }
 
+interface ChangeRow {
+  id: string;
+  workspace_id: string;
+  payload_json: string;
+  observed_at: string;
+  name: string | null;
+  domain: string;
+  change_alerts: number;
+  timezone: string;
+}
+
+async function readChange(env: Env, signalId: string): Promise<ChangeRow | null> {
+  return env.DB.prepare(
+    `SELECT s.id, s.workspace_id, s.payload_json, s.observed_at, e.name, e.domain, w.change_alerts, w.timezone
+       FROM signal s
+       JOIN entity e ON e.id = s.entity_id
+       JOIN workspace w ON w.id = s.workspace_id
+      WHERE s.id = ? AND e.role = 'competitor' AND s.is_tombstoned = 0`,
+  )
+    .bind(signalId)
+    .first<ChangeRow>();
+}
+
+async function readChangeMark(env: Env, diffKey: string | null) {
+  if (diffKey === null) return null;
+  const stored = await env.SNAPSHOTS.get(diffKey);
+  const hunks = stored === null ? null : parseDiffHunks(await stored.text());
+  return hunks === null ? null : markFromHunks(hunks);
+}
+
+export async function deliverChange(env: Env, message: ChangeMessage): Promise<DeliveryResult> {
+  const change = await readChange(env, message.signal_id);
+  const payload = change === null ? null : parseSiteChangePayload(change.payload_json);
+  if (change === null || payload === null) {
+    return { outcome: "no_signal", attempt_id: null, idempotency_key: null };
+  }
+  if (change.change_alerts === 0) {
+    return { outcome: "muted", attempt_id: null, idempotency_key: null };
+  }
+
+  const target = await readTarget(env, change.workspace_id);
+  if (!target) {
+    return noTarget(env, change.workspace_id, { signal_id: change.id });
+  }
+  if (await isSuppressed(env, target.target_value)) {
+    return { outcome: "suppressed", attempt_id: null, idempotency_key: null };
+  }
+
+  const idempotencyKey = `change:${change.id}:${target.id}`;
+  const claim = await claimSendAttempt(env.DB, {
+    idempotencyKey,
+    workspaceId: change.workspace_id,
+    targetId: target.id,
+    digestId: null,
+  });
+  if (!claim) {
+    return { outcome: "duplicate", attempt_id: null, idempotency_key: idempotencyKey };
+  }
+
+  return sendAndResolve(env, {
+    claimId: claim.id,
+    idempotencyKey,
+    send: async () => {
+      const rendered = renderChange({
+        headline: changeHeadline({ name: change.name ?? change.domain, isSelf: false, role: payload.page.role }),
+        observed_at: change.observed_at,
+        mark: await readChangeMark(env, payload.diffKey),
+        link: CHANGE_LINK,
+        timezone: change.timezone,
+      });
+      return sendMessage(env.EMAIL, {
+        to: target.target_value,
+        from: "brief@0509.io",
+        subject: rendered.subject,
+        html: rendered.html,
+        text: rendered.text,
+      });
+    },
+  });
+}
+
+function route(env: Env, parsed: DeliveryMessage): Promise<DeliveryResult> {
+  if ("incident_id" in parsed) return deliverIncident(env, parsed);
+  if ("signal_id" in parsed) return deliverChange(env, parsed);
+  return deliver(env, parsed);
+}
+
 export async function handleBatch(env: Env, batch: MessageBatch): Promise<DeliveryResult[]> {
   const results: DeliveryResult[] = [];
   for (const item of batch.messages) {
@@ -344,7 +447,7 @@ export async function handleBatch(env: Env, batch: MessageBatch): Promise<Delive
       results.push({ outcome: "no_digest", attempt_id: null, idempotency_key: null });
       continue;
     }
-    const result = "incident_id" in parsed ? await deliverIncident(env, parsed) : await deliver(env, parsed);
+    const result = await route(env, parsed);
     if (result.outcome === "failed") {
       item.retry();
     } else {
@@ -374,12 +477,15 @@ function toDeliveryMessage(parsed: unknown): DeliveryMessage | null {
   if (parsed === null || typeof parsed !== "object") {
     return null;
   }
-  const candidate = parsed as { digest_id?: unknown; incident_id?: unknown };
+  const candidate = parsed as { digest_id?: unknown; incident_id?: unknown; signal_id?: unknown };
   if (typeof candidate.digest_id === "string") {
     return { digest_id: candidate.digest_id };
   }
   if (typeof candidate.incident_id === "string") {
     return { incident_id: candidate.incident_id };
+  }
+  if (typeof candidate.signal_id === "string") {
+    return { signal_id: candidate.signal_id };
   }
   return null;
 }

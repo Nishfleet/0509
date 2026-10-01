@@ -351,6 +351,12 @@ async function storeDiff(diffKey: string, diff: ReturnType<typeof diffPageText> 
   });
 }
 
+async function emailPricingChange(signalId: string, judgment: JudgedChange | null): Promise<void> {
+  if (judgment?.noteworthy?.band === "publish" && judgment.noteworthy.kind === "pricing") {
+    await env.SEND_EMAIL.send({ signal_id: signalId });
+  }
+}
+
 async function fileUnlessDiscarded(change: SiteChangeInput, payloadJson: string, selfJudgment: JudgedChange | null) {
   const { target } = change;
   const competitorJudgment = await judgeCompetitorChange(change);
@@ -365,6 +371,7 @@ async function fileUnlessDiscarded(change: SiteChangeInput, payloadJson: string,
     return;
   }
   const signalId = await fileChangeSignal(change, payloadJson, selfJudgment ?? competitorJudgment);
+  await emailPricingChange(signalId, competitorJudgment);
   if (target.entityRole === "self" && change.diff === null) {
     await judgeUnlessFailed(change, signalId);
   }
