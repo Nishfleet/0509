@@ -64,7 +64,10 @@ export function LegalPage({ doc }: { doc: LegalDocument }) {
     <div className="mx-auto w-full max-w-[46rem] bg-bone px-6 py-16 text-ink sm:py-24">
       <header>
         <a className="font-display text-base font-bold tracking-[-0.03em] text-ink" href="/">
-          05<span className="bg-green px-[5px] text-on-green">09</span>
+          <span className="sr-only">Five to Nine</span>
+          <span aria-hidden="true">
+            05<span className="bg-green px-[5px] text-on-green">09</span>
+          </span>
         </a>
       </header>
       <main className="mt-8">
