@@ -21,7 +21,9 @@ export function OnboardingFrame({
         <StepBar current={step} />
       </header>
       <main>
-        <h1 className={hideHeading ? "sr-only" : "mt-10 font-display text-display-2 font-extrabold uppercase"}>
+        <h1
+          className={hideHeading ? "sr-only" : "mt-10 max-w-[18ch] font-display text-display-3 font-bold text-balance"}
+        >
           {heading}
         </h1>
         {children}
