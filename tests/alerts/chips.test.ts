@@ -51,6 +51,7 @@ describe("chipOfKind", () => {
       ["change", "site-changes"],
       ["signal", "ads"],
       ["mention", "mentions"],
+      ["hiring", "hiring"],
       ["note", null],
       ["failure", null],
     ];
@@ -68,20 +69,24 @@ describe("itemInChip", () => {
     expect(itemInChip("signal", "mentions")).toBe(false);
   });
 
-  it("shows no feed rows for the two count-only chips", () => {
+  it("keeps hiring rows under Hiring only, and shows no feed rows for Your site", () => {
+    expect(itemInChip("hiring", "hiring")).toBe(true);
     expect(itemInChip("change", "hiring")).toBe(false);
+    expect(itemInChip("hiring", "mentions")).toBe(false);
     expect(itemInChip("mention", "your-site")).toBe(false);
   });
 });
 
 describe("countAlertChips", () => {
-  it("counts All with incidents, each filtered chip from the kinds, and Hiring as zero", () => {
-    expect(countAlertChips(["change", "signal", "signal", "mention", "note", "failure"], 1)).toEqual({
-      all: 7,
+  it("counts All with incidents, and each filtered chip from the kinds", () => {
+    expect(
+      countAlertChips(["change", "signal", "signal", "mention", "hiring", "hiring", "note", "failure"], 1),
+    ).toEqual({
+      all: 9,
       "site-changes": 1,
       ads: 2,
       mentions: 1,
-      hiring: 0,
+      hiring: 2,
       "your-site": 1,
     });
   });

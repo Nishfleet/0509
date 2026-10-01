@@ -44,7 +44,7 @@ describe("identity probe cache", () => {
     expect(PROBE_TTL_SECONDS).toBe(86_400);
     const run = vi.fn(async () => ({ name: "Gymshark" }));
 
-    const value = await cachedProbe(subject, "homepage", NAME_SCHEMA, run);
+    const value = await cachedProbe(subject, "homepage", { schema: NAME_SCHEMA, run: run });
 
     expect(value).toEqual({ name: "Gymshark" });
     expect(run).toHaveBeenCalledTimes(1);
@@ -53,10 +53,10 @@ describe("identity probe cache", () => {
 
   it("a second call on the same key returns the cached value and never runs", async () => {
     const first = vi.fn(async () => ({ name: "Gymshark" }));
-    await cachedProbe(subject, "homepage", NAME_SCHEMA, first);
+    await cachedProbe(subject, "homepage", { schema: NAME_SCHEMA, run: first });
 
     const second = vi.fn(async () => ({ name: "Fresh" }));
-    const value = await cachedProbe(subject, "homepage", NAME_SCHEMA, second);
+    const value = await cachedProbe(subject, "homepage", { schema: NAME_SCHEMA, run: second });
 
     expect(value).toEqual({ name: "Gymshark" });
     expect(second).toHaveBeenCalledTimes(0);
@@ -66,7 +66,7 @@ describe("identity probe cache", () => {
     await env.IDENTITY_CACHE.put(KEY, JSON.stringify({ wrong: true }));
     const run = vi.fn(async () => ({ name: "Gymshark" }));
 
-    const value = await cachedProbe(subject, "homepage", NAME_SCHEMA, run);
+    const value = await cachedProbe(subject, "homepage", { schema: NAME_SCHEMA, run: run });
 
     expect(value).toEqual({ name: "Gymshark" });
     expect(run).toHaveBeenCalledTimes(1);
@@ -78,7 +78,7 @@ describe("identity probe cache", () => {
       throw new Error("probe failed");
     });
 
-    await expect(cachedProbe(subject, "homepage", NAME_SCHEMA, run)).rejects.toThrow("probe failed");
+    await expect(cachedProbe(subject, "homepage", { schema: NAME_SCHEMA, run: run })).rejects.toThrow("probe failed");
     expect(await env.IDENTITY_CACHE.get(KEY, "json")).toBeNull();
   });
 });

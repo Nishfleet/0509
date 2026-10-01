@@ -150,6 +150,20 @@ export function competitorState(context: DiscoveryContext, candidate: ResolvedCa
   };
 }
 
+async function askCandidate(context: DiscoveryContext, candidate: ResolvedCandidate): Promise<NoulVerdict | null> {
+  try {
+    return await askNoul(
+      context.self.workspaceId,
+      context.self.kind === "creator" ? IS_CREATOR_RIVAL : IS_COMPETITOR,
+      competitorState(context, candidate),
+    );
+  } catch (error) {
+    if (!(error instanceof JevUnavailableError)) throw error;
+    console.error(JSON.stringify({ event: "discovery.jev_unavailable", message: error.message }));
+    return null;
+  }
+}
+
 export async function judgeCandidates(
   context: DiscoveryContext,
   candidates: readonly ResolvedCandidate[],
@@ -157,20 +171,8 @@ export async function judgeCandidates(
   const results: DiscoveryResult[] = [];
   let available = true;
   for (const candidate of candidates) {
-    let verdict: NoulVerdict | null = null;
-    if (available) {
-      try {
-        verdict = await askNoul(
-          context.self.workspaceId,
-          context.self.kind === "creator" ? IS_CREATOR_RIVAL : IS_COMPETITOR,
-          competitorState(context, candidate),
-        );
-      } catch (error) {
-        if (!(error instanceof JevUnavailableError)) throw error;
-        console.error(JSON.stringify({ event: "discovery.jev_unavailable", message: error.message }));
-        available = false;
-      }
-    }
+    const verdict: NoulVerdict | null = available ? await askCandidate(context, candidate) : null;
+    available = verdict !== null;
     results.push({ ...candidate, verdict });
   }
   return results;

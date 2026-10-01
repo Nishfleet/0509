@@ -32,8 +32,8 @@ describe("identity card draft", () => {
   });
 
   it("saves each field without losing the one written before it", async () => {
-    await saveDraftField(WORKSPACE, REGISTRABLE, "name", "Gymshark");
-    await saveDraftField(WORKSPACE, REGISTRABLE, "description", "Gym wear");
+    await saveDraftField(WORKSPACE, REGISTRABLE, { field: "name", value: "Gymshark" });
+    await saveDraftField(WORKSPACE, REGISTRABLE, { field: "description", value: "Gym wear" });
 
     expect(await readDraft(WORKSPACE, REGISTRABLE)).toEqual({
       name: "Gymshark",
@@ -48,8 +48,8 @@ describe("identity card draft", () => {
   });
 
   it("clears one field and keeps the other", async () => {
-    await saveDraftField(WORKSPACE, REGISTRABLE, "name", "Gymshark");
-    await saveDraftField(WORKSPACE, REGISTRABLE, "description", "Gym wear");
+    await saveDraftField(WORKSPACE, REGISTRABLE, { field: "name", value: "Gymshark" });
+    await saveDraftField(WORKSPACE, REGISTRABLE, { field: "description", value: "Gym wear" });
 
     await clearDraftField(WORKSPACE, REGISTRABLE, "name");
 
@@ -57,7 +57,7 @@ describe("identity card draft", () => {
   });
 
   it("clears the last field by deleting the KV key", async () => {
-    await saveDraftField(WORKSPACE, REGISTRABLE, "name", "Gymshark");
+    await saveDraftField(WORKSPACE, REGISTRABLE, { field: "name", value: "Gymshark" });
 
     await clearDraftField(WORKSPACE, REGISTRABLE, "name");
 
@@ -65,8 +65,8 @@ describe("identity card draft", () => {
   });
 
   it("reverts a field through the route's one intent path", async () => {
-    await saveDraftField(WORKSPACE, REGISTRABLE, "name", "Gymshark");
-    await saveDraftField(WORKSPACE, REGISTRABLE, "description", "Gym wear");
+    await saveDraftField(WORKSPACE, REGISTRABLE, { field: "name", value: "Gymshark" });
+    await saveDraftField(WORKSPACE, REGISTRABLE, { field: "description", value: "Gym wear" });
     const form = new FormData();
     form.set("intent", "revert");
     form.set("subject", "gymshark.com");

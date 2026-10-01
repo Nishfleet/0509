@@ -1,6 +1,12 @@
 import type { ReactElement } from "react";
 
-import { PENDING_LINE, POSSIBLY_LINE, UNREVIEWED_LINE, type MentionRowModel } from "../lib/mention-feed";
+import {
+  alsoReportedLine,
+  PENDING_LINE,
+  POSSIBLY_LINE,
+  UNREVIEWED_LINE,
+  type MentionRowModel,
+} from "../lib/mention-feed";
 import { WhyFlaggedSheet } from "./why-flagged";
 
 const WHEN_CLASS = "mt-2 block font-mono text-meta text-ink-soft uppercase";
@@ -34,6 +40,11 @@ export function MentionRow({ mention }: { mention: MentionRowModel }): ReactElem
           {mention.when}
         </time>
       </p>
+      {mention.alsoCount > 0 ? (
+        <p data-testid="mention-also" className="mt-2 font-mono text-meta text-ink-soft">
+          {alsoReportedLine(mention.alsoCount)}
+        </p>
+      ) : null}
       {mention.whyFlagged === null ? null : (
         <div className="mt-3">
           <WhyFlaggedSheet why={mention.whyFlagged} />

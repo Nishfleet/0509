@@ -107,12 +107,13 @@ export async function readEntityDomain(workspaceId: string, entityId: string): P
   return row?.domain ?? null;
 }
 
-export async function setCompetitorState(
-  workspaceId: string,
-  entityId: string,
-  state: CompetitorState,
-  now: string,
-): Promise<boolean> {
+export async function setCompetitorState(input: {
+  workspaceId: string;
+  entityId: string;
+  state: CompetitorState;
+  now: string;
+}): Promise<boolean> {
+  const { workspaceId, entityId, state, now } = input;
   const result = await env.DB.prepare(SET_COMPETITOR_STATE).bind(state, now, entityId, workspaceId, state).run();
   return result.meta.changes === 1;
 }

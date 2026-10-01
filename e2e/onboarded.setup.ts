@@ -32,6 +32,12 @@ setup("mint one onboarded session per viewport lane", async ({ browser }) => {
     const context = await browser.newContext({ storageState: accessStatePath });
     const page = await context.newPage();
     page.on("response", (response) => {
+      const reference = response.headers()["x-error-reference"];
+      if (reference !== undefined) {
+        console.log(
+          `error-reference ${lane} ${new URL(response.url()).pathname} ${String(response.status())} ${reference}`,
+        );
+      }
       const timing = response.headers()["server-timing"];
       if (timing === undefined) return;
       console.log(`server-timing ${lane} ${new URL(response.url()).pathname} ${String(response.status())} ${timing}`);

@@ -43,7 +43,7 @@ jobs:
     # Hosted for every event. Public repo: minutes are free and the hosted pool
     # is wider than the 3 owned runners (fleet-ops#5935 reversed 2026-09-22).
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         if: github.event_name != 'deployment_status'
@@ -108,7 +108,10 @@ jobs:
         run: npx vitest run tests/unit/feature-map-proof.test.ts
       - name: Test
         if: github.event_name == 'merge_group'
-        run: npm test
+        run: npx vitest run --project '!node'
+      - name: Test coverage floor
+        if: github.event_name == 'merge_group'
+        run: npx vitest run --project node --coverage
       - name: Build
         if: github.event_name != 'deployment_status'
         run: npm run build

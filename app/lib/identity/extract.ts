@@ -183,8 +183,98 @@ function collectSocials(sameAs: readonly string[], anchors: readonly string[]): 
   return socials;
 }
 
-export async function extractIdentity(html: string, pageUrl: string): Promise<IdentityExtract> {
-  const state: IdentityRewriterState = {
+type MetaField = "ogSiteName" | "ogDescription" | "ogImage" | "metaDescription";
+
+function metaHandler(state: IdentityRewriterState, field: MetaField): HTMLRewriterElementContentHandlers {
+  return {
+    element(element) {
+      state[field] = firstContent(state[field], element.getAttribute("content"));
+    },
+  };
+}
+
+function titleHandler(state: IdentityRewriterState): HTMLRewriterElementContentHandlers {
+  return {
+    text(chunk) {
+      state.titlePending += chunk.text;
+      if (!chunk.lastInTextNode) return;
+      state.title ??= state.titlePending;
+      state.titlePending = "";
+    },
+  };
+}
+
+function ldJsonHandler(state: IdentityRewriterState): HTMLRewriterElementContentHandlers {
+  return {
+    element() {
+      state.ldPending = "";
+    },
+    text(chunk) {
+      if (state.ldPending === null) return;
+      state.ldPending += chunk.text;
+      if (!chunk.lastInTextNode) return;
+      state.ldBlocks.push(state.ldPending);
+      state.ldPending = null;
+    },
+  };
+}
+
+function linkRelHandler(state: IdentityRewriterState, pageUrl: string): HTMLRewriterElementContentHandlers {
+  return {
+    element(element) {
+      const rel = element.getAttribute("rel");
+      const href = element.getAttribute("href");
+      if (rel === null || href === null) return;
+      const tokens = rel.split(/\s+/).map((token) => token.toLowerCase());
+      const resolved = resolveUrl(href, pageUrl);
+      if (resolved === null) return;
+      if (tokens.includes("apple-touch-icon")) {
+        state.appleTouchIcon = firstContent(state.appleTouchIcon, resolved.href);
+      }
+      if (tokens.includes("manifest")) {
+        state.manifestUrl = firstContent(state.manifestUrl, resolved.href);
+      }
+    },
+  };
+}
+
+function anchorHandler(state: IdentityRewriterState, pageUrl: string): HTMLRewriterElementContentHandlers {
+  return {
+    element(element) {
+      const href = element.getAttribute("href");
+      if (href === null) return;
+      const resolved = resolveUrl(href, pageUrl);
+      if (resolved === null) return;
+      state.anchors.push(resolved.href);
+    },
+  };
+}
+
+function navAnchorHandler(state: IdentityRewriterState, pageUrl: string): HTMLRewriterElementContentHandlers {
+  const pageOrigin = new URL(pageUrl).origin;
+  return {
+    element(element) {
+      state.navTitleOpen = false;
+      const href = element.getAttribute("href");
+      if (href === null || href.trim().startsWith("#")) return;
+      const url = resolveUrl(href, pageUrl);
+      if (url === null) return;
+      if (url.origin !== pageOrigin) return;
+      state.navLinks.push(url.href);
+      state.navPages.push({ url: url.href, title: "" });
+      state.navTitleOpen = true;
+    },
+    text(chunk) {
+      if (!state.navTitleOpen) return;
+      const last = state.navPages[state.navPages.length - 1];
+      if (last === undefined) return;
+      state.navPages[state.navPages.length - 1] = { url: last.url, title: last.title + chunk.text };
+    },
+  };
+}
+
+function emptyRewriterState(): IdentityRewriterState {
+  return {
     ogSiteName: null,
     ogDescription: null,
     metaDescription: null,
@@ -200,108 +290,44 @@ export async function extractIdentity(html: string, pageUrl: string): Promise<Id
     navPages: [],
     navTitleOpen: false,
   };
-  const pageOrigin = new URL(pageUrl).origin;
+}
 
-  const rewritten = new HTMLRewriter()
-    .on('meta[property="og:site_name"]', {
-      element(element) {
-        state.ogSiteName = firstContent(state.ogSiteName, element.getAttribute("content"));
-      },
-    })
-    .on('meta[property="og:description"]', {
-      element(element) {
-        state.ogDescription = firstContent(state.ogDescription, element.getAttribute("content"));
-      },
-    })
-    .on('meta[property="og:image"]', {
-      element(element) {
-        state.ogImage = firstContent(state.ogImage, element.getAttribute("content"));
-      },
-    })
-    .on('meta[name="description"]', {
-      element(element) {
-        state.metaDescription = firstContent(state.metaDescription, element.getAttribute("content"));
-      },
-    })
-    .on("title", {
-      text(chunk) {
-        state.titlePending += chunk.text;
-        if (!chunk.lastInTextNode) return;
-        state.title ??= state.titlePending;
-        state.titlePending = "";
-      },
-    })
-    .on('script[type="application/ld+json"]', {
-      element() {
-        state.ldPending = "";
-      },
-      text(chunk) {
-        if (state.ldPending === null) return;
-        state.ldPending += chunk.text;
-        if (!chunk.lastInTextNode) return;
-        state.ldBlocks.push(state.ldPending);
-        state.ldPending = null;
-      },
-    })
-    .on("link[rel]", {
-      element(element) {
-        const rel = element.getAttribute("rel");
-        const href = element.getAttribute("href");
-        if (rel === null || href === null) return;
-        const tokens = rel.split(/\s+/).map((token) => token.toLowerCase());
-        const resolved = resolveUrl(href, pageUrl);
-        if (resolved === null) return;
-        if (tokens.includes("apple-touch-icon")) {
-          state.appleTouchIcon = firstContent(state.appleTouchIcon, resolved.href);
-        }
-        if (tokens.includes("manifest")) {
-          state.manifestUrl = firstContent(state.manifestUrl, resolved.href);
-        }
-      },
-    })
-    .on("a[href]", {
-      element(element) {
-        const href = element.getAttribute("href");
-        if (href === null) return;
-        const resolved = resolveUrl(href, pageUrl);
-        if (resolved === null) return;
-        state.anchors.push(resolved.href);
-      },
-    })
-    .on("nav a[href]", {
-      element(element) {
-        state.navTitleOpen = false;
-        const href = element.getAttribute("href");
-        if (href === null || href.trim().startsWith("#")) return;
-        const url = resolveUrl(href, pageUrl);
-        if (url === null) return;
-        if (url.origin !== pageOrigin) return;
-        state.navLinks.push(url.href);
-        state.navPages.push({ url: url.href, title: "" });
-        state.navTitleOpen = true;
-      },
-      text(chunk) {
-        if (!state.navTitleOpen) return;
-        const last = state.navPages[state.navPages.length - 1];
-        if (last === undefined) return;
-        state.navPages[state.navPages.length - 1] = { url: last.url, title: last.title + chunk.text };
-      },
-    })
-    .transform(new Response(html, { headers: { "content-type": "text/html;charset=utf-8" } }));
-
-  await rewritten.arrayBuffer();
-
-  const organization = readOrganization(state.ldBlocks);
-  const anchors = [...state.anchors];
-  const navLinks = dedupe(state.navLinks);
+function uniqueNavPages(entries: readonly { url: string; title: string }[]): { url: string; title: string }[] {
   const navPages: { url: string; title: string }[] = [];
   const navPageSeen = new Set<string>();
-  for (const entry of state.navPages) {
+  for (const entry of entries) {
     if (navPageSeen.has(entry.url)) continue;
     navPageSeen.add(entry.url);
     const title = entry.title.split(/\s+/).join(" ").trim();
     navPages.push({ url: entry.url, title });
   }
+  return navPages;
+}
+
+async function runRewriter(html: string, state: IdentityRewriterState, pageUrl: string): Promise<void> {
+  const rewritten = new HTMLRewriter()
+    .on('meta[property="og:site_name"]', metaHandler(state, "ogSiteName"))
+    .on('meta[property="og:description"]', metaHandler(state, "ogDescription"))
+    .on('meta[property="og:image"]', metaHandler(state, "ogImage"))
+    .on('meta[name="description"]', metaHandler(state, "metaDescription"))
+    .on("title", titleHandler(state))
+    .on('script[type="application/ld+json"]', ldJsonHandler(state))
+    .on("link[rel]", linkRelHandler(state, pageUrl))
+    .on("a[href]", anchorHandler(state, pageUrl))
+    .on("nav a[href]", navAnchorHandler(state, pageUrl))
+    .transform(new Response(html, { headers: { "content-type": "text/html;charset=utf-8" } }));
+
+  await rewritten.arrayBuffer();
+}
+
+export async function extractIdentity(html: string, pageUrl: string): Promise<IdentityExtract> {
+  const state = emptyRewriterState();
+  await runRewriter(html, state, pageUrl);
+
+  const organization = readOrganization(state.ldBlocks);
+  const anchors = [...state.anchors];
+  const navLinks = dedupe(state.navLinks);
+  const navPages = uniqueNavPages(state.navPages);
   const adLibraryHints = dedupe(anchors.filter(isAdLibraryHint));
 
   return identityExtractSchema.parse({

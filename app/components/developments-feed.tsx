@@ -14,6 +14,33 @@ function findChange(changes: readonly SiteChangeItemData[], id: string): SiteCha
   return changes.find((entry) => entry.id === id);
 }
 
+function DevelopmentArticle({ item }: { item: FeedRow }): ReactElement {
+  const heading = item.title ?? item.summary ?? SOURCE_LABEL[item.kind];
+  return (
+    <article data-testid="development" className="mt-8 min-w-0 border-t border-line pt-6">
+      <h3 className="font-display text-row-name font-bold [overflow-wrap:anywhere]">{heading}</h3>
+      {item.title !== null && item.summary !== null ? (
+        <p className="leading-[1.65] [overflow-wrap:anywhere]">{item.summary}</p>
+      ) : null}
+      <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1">
+        <span data-slot="source-pill" className="border border-line px-1.5 font-mono text-pill uppercase">
+          {SOURCE_LABEL[item.kind]}
+        </span>
+        <span className="font-mono text-meta text-ink-soft uppercase">{item.when}</span>
+      </div>
+    </article>
+  );
+}
+
+function DevelopmentRow({ item, changes }: { item: FeedRow; changes: readonly SiteChangeItemData[] }): ReactElement {
+  const change = item.kind === "change" ? findChange(changes, item.id) : undefined;
+  return (
+    <li data-kind={item.kind}>
+      {change === undefined ? <DevelopmentArticle item={item} /> : <SiteChangeItem change={change} />}
+    </li>
+  );
+}
+
 export function DevelopmentsFeed({
   items,
   changes,
@@ -32,7 +59,7 @@ export function DevelopmentsFeed({
         aria-label="Filter developments"
         value={[filter]}
         onValueChange={(values) => {
-          const next = parseFeedFilter(values[0]);
+          const next = parseFeedFilter(values[0] ?? null);
           setParams(next === "all" ? {} : { [FEED_PARAM]: next }, { replace: true, preventScrollReset: true });
         }}
         className="flex min-w-0 flex-wrap gap-2"
@@ -50,30 +77,7 @@ export function DevelopmentsFeed({
             <EmptyState sentence="Nothing of this kind in the last 90 days." />
           </li>
         ) : (
-          visible.map((item) => {
-            const heading = item.title ?? item.summary ?? SOURCE_LABEL[item.kind];
-            const change = item.kind === "change" ? findChange(changes, item.id) : undefined;
-            return (
-              <li key={item.id} data-kind={item.kind}>
-                {change === undefined ? (
-                  <article data-testid="development" className="mt-8 min-w-0 border-t border-line pt-6">
-                    <h3 className="font-display text-row-name font-bold [overflow-wrap:anywhere]">{heading}</h3>
-                    {item.title !== null && item.summary !== null ? (
-                      <p className="leading-[1.65] [overflow-wrap:anywhere]">{item.summary}</p>
-                    ) : null}
-                    <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1">
-                      <span data-slot="source-pill" className="border border-line px-1.5 font-mono text-pill uppercase">
-                        {SOURCE_LABEL[item.kind]}
-                      </span>
-                      <span className="font-mono text-meta text-ink-soft uppercase">{item.when}</span>
-                    </div>
-                  </article>
-                ) : (
-                  <SiteChangeItem change={change} />
-                )}
-              </li>
-            );
-          })
+          visible.map((item) => <DevelopmentRow key={item.id} item={item} changes={changes} />)
         )}
       </ol>
     </div>

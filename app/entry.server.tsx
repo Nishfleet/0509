@@ -38,12 +38,15 @@ function routePattern(pathname: string, params: Params): string {
   return mapped.join("/");
 }
 
+const errorReferences = new WeakMap<Request, string>();
+
 export const handleError: HandleErrorFunction = (error, { request, params }) => {
   if (request.signal.aborted) return;
   console.error(error);
   if (isRouteErrorResponse(error) && error.status < 500) return;
   const { pathname } = new URL(request.url);
-  captureException(error, { tags: { route: routePattern(pathname, params) } });
+  const reference = captureException(error, { tags: { route: routePattern(pathname, params) } });
+  if (typeof reference === "string") errorReferences.set(request, reference);
 };
 
 export default async function handleRequest(
@@ -79,5 +82,7 @@ export default async function handleRequest(
   }
 
   headers.set("Content-Type", "text/html");
+  const reference = errorReferences.get(request);
+  if (reference !== undefined) headers.set("X-Error-Reference", reference);
   return new Response(body, { headers, status });
 }

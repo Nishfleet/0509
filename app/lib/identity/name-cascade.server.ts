@@ -26,20 +26,17 @@ const PAGE_SOURCES = [
   ["title", "title"],
 ] as const;
 
-export async function resolveBrandName(
-  sources: NameSources,
-  wikidataSearchTerm: string | null,
-): Promise<BrandName | null> {
+function pageBrandName(sources: NameSources): BrandName | null {
   for (const [source, key] of PAGE_SOURCES) {
     const value = sources[key];
     if (value?.trim()) {
       return { name: value.trim(), source };
     }
   }
+  return null;
+}
 
-  const term = wikidataSearchTerm?.trim();
-  if (!term) return null;
-
+async function wikidataBrandName(term: string): Promise<BrandName | null> {
   try {
     const res = await fetchOutbound(
       "https://www.wikidata.org/w/api.php?action=wbsearchentities&format=json&language=en&limit=1&search=" +
@@ -61,4 +58,17 @@ export async function resolveBrandName(
     );
     return null;
   }
+}
+
+export async function resolveBrandName(
+  sources: NameSources,
+  wikidataSearchTerm: string | null,
+): Promise<BrandName | null> {
+  const fromPage = pageBrandName(sources);
+  if (fromPage !== null) return fromPage;
+
+  const term = wikidataSearchTerm?.trim();
+  if (!term) return null;
+
+  return wikidataBrandName(term);
 }

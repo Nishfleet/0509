@@ -140,5 +140,10 @@ async function resolveUncached(name: string): Promise<Resolution> {
 }
 
 export async function resolveDomain(name: string): Promise<Resolution> {
-  return readThrough(resolveKey(name), resolutionSchema, CACHE_TTL_SECONDS, () => resolveUncached(name));
+  return readThrough({
+    key: resolveKey(name),
+    schema: resolutionSchema,
+    ttlSeconds: CACHE_TTL_SECONDS,
+    run: () => resolveUncached(name),
+  });
 }

@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { createRoutesStub, Outlet } from "react-router";
+import { createRoutesStub } from "react-router";
 
 import type * as sonner from "sonner";
 import type { ToasterProps } from "sonner";
@@ -56,7 +56,7 @@ vi.mock("../../app/lib/auth.server", () => ({
 import { toast } from "sonner";
 
 import { Toaster, toastSaved } from "../../app/components/toaster";
-import { Layout } from "../../app/root";
+import { BriefScheduleSettings } from "../../app/components/brief-schedule-settings";
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const SCANNED_DIRS = ["app", "workers"];
@@ -130,12 +130,14 @@ describe("toastSaved", () => {
 });
 
 describe("the mount and the skin", () => {
-  it("mounts exactly one polite live region inside the root Layout", () => {
+  it("mounts exactly one polite live region, where the brief time is saved", () => {
     const Stub = createRoutesStub([
       {
         path: "/",
-        Component: () => createElement(Layout, null, createElement(Outlet)),
-        children: [{ index: true, Component: () => createElement("p", null, "home") }],
+        Component: () =>
+          createElement(BriefScheduleSettings, {
+            schedule: { weekday: 1, hour: 9, timezone: "UTC", pausedAt: null, nextLine: "Next brief Monday" },
+          }),
       },
     ]);
     const html = renderToStaticMarkup(createElement(Stub, { initialEntries: ["/"] }));

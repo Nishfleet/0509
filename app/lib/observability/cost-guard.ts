@@ -1,4 +1,4 @@
-export type CostLine = "d1_rows_written" | "r2_class_a_ops";
+export type CostLine = "d1_rows_written" | "r2_class_a_ops" | "browser_ms_0509";
 
 export interface DailyUsage {
   day: string;
@@ -7,9 +7,12 @@ export interface DailyUsage {
   browserMs: number;
 }
 
+export type CloudflareUsage = Omit<DailyUsage, "browserMs">;
+
 export const EXPECTED_PER_BRAND_DAY: Readonly<Record<CostLine, number>> = {
   d1_rows_written: 10,
   r2_class_a_ops: 10,
+  browser_ms_0509: 15_000,
 };
 
 export const COST_GUARD_FACTOR = 3;
@@ -22,20 +25,29 @@ export interface CostBreach {
   onBrands: number;
 }
 
-const LINES: readonly CostLine[] = ["d1_rows_written", "r2_class_a_ops"];
+export const BROWSER_ONLY_LINES: readonly CostLine[] = ["browser_ms_0509"];
+
+const LINES: readonly CostLine[] = ["d1_rows_written", "r2_class_a_ops", "browser_ms_0509"];
 
 const MEASURED: Readonly<Record<CostLine, (usage: DailyUsage) => number>> = {
   d1_rows_written: (usage) => usage.d1RowsWritten,
   r2_class_a_ops: (usage) => usage.r2ClassAOps,
+  browser_ms_0509: (usage) => usage.browserMs,
 };
 
-export function evaluateCost(usage: DailyUsage, onBrands: number): readonly CostBreach[] {
+export function evaluateCost(
+  usage: DailyUsage,
+  onBrands: number,
+  lines: readonly CostLine[] = LINES,
+): readonly CostBreach[] {
   const divisor = Math.max(onBrands, 1);
-  return LINES.map((line) => ({
-    day: usage.day,
-    line,
-    measuredPerBrand: MEASURED[line](usage) / divisor,
-    expectedPerBrand: EXPECTED_PER_BRAND_DAY[line],
-    onBrands,
-  })).filter((breach) => breach.measuredPerBrand > COST_GUARD_FACTOR * breach.expectedPerBrand);
+  return lines
+    .map((line) => ({
+      day: usage.day,
+      line,
+      measuredPerBrand: MEASURED[line](usage) / divisor,
+      expectedPerBrand: EXPECTED_PER_BRAND_DAY[line],
+      onBrands,
+    }))
+    .filter((breach) => breach.measuredPerBrand > COST_GUARD_FACTOR * breach.expectedPerBrand);
 }

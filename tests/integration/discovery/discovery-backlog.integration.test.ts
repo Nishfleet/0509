@@ -39,9 +39,9 @@ async function rowFor(workspaceId: string, nameKey: string) {
 describe("discovery_backlog", () => {
   it("keeps a candidate that missed the shortlist with its evidence", async () => {
     const workspaceId = await seedWorkspace();
-    await writeBacklog(
+    await writeBacklog({
       workspaceId,
-      [
+      rows: [
         {
           nameKey: "nike",
           name: "Nike",
@@ -49,9 +49,9 @@ describe("discovery_backlog", () => {
           evidence: [evidence("https://www.glamour.co.uk", "Gymshark, Nike and more")],
         },
       ],
-      [],
-      FIRST,
-    );
+      promotedKeys: [],
+      now: FIRST,
+    });
 
     expect(await readBacklog(workspaceId)).toEqual([
       {
@@ -64,15 +64,15 @@ describe("discovery_backlog", () => {
 
   it("accumulates evidence on one row and keeps first_seen_at", async () => {
     const workspaceId = await seedWorkspace();
-    await writeBacklog(
+    await writeBacklog({
       workspaceId,
-      [{ nameKey: "nike", name: "Nike", domain: "nike.com", evidence: [evidence("https://a.example", "one")] }],
-      [],
-      FIRST,
-    );
-    await writeBacklog(
+      rows: [{ nameKey: "nike", name: "Nike", domain: "nike.com", evidence: [evidence("https://a.example", "one")] }],
+      promotedKeys: [],
+      now: FIRST,
+    });
+    await writeBacklog({
       workspaceId,
-      [
+      rows: [
         {
           nameKey: "nike",
           name: "Nike",
@@ -80,9 +80,9 @@ describe("discovery_backlog", () => {
           evidence: [evidence("https://a.example", "one"), evidence("https://b.example", "two")],
         },
       ],
-      [],
-      LATER,
-    );
+      promotedKeys: [],
+      now: LATER,
+    });
 
     const row = await rowFor(workspaceId, "nike");
     expect(row?.evidence_count).toBe(2);
@@ -95,14 +95,14 @@ describe("discovery_backlog", () => {
 
   it("records a promotion with its timestamp and never deletes the row", async () => {
     const workspaceId = await seedWorkspace();
-    await writeBacklog(
+    await writeBacklog({
       workspaceId,
-      [{ nameKey: "nike", name: "Nike", domain: "nike.com", evidence: [evidence("https://a.example", "one")] }],
-      [],
-      FIRST,
-    );
+      rows: [{ nameKey: "nike", name: "Nike", domain: "nike.com", evidence: [evidence("https://a.example", "one")] }],
+      promotedKeys: [],
+      now: FIRST,
+    });
 
-    await writeBacklog(workspaceId, [], ["nike"], PROMOTED_AT);
+    await writeBacklog({ workspaceId, rows: [], promotedKeys: ["nike"], now: PROMOTED_AT });
 
     expect(await readBacklog(workspaceId)).toEqual([]);
     const row = await rowFor(workspaceId, "nike");
@@ -117,12 +117,12 @@ describe("discovery_backlog", () => {
     const workspaceId = await seedWorkspace();
     await env.DB.prepare("DELETE FROM workspace WHERE id = ?").bind(workspaceId).run();
 
-    await writeBacklog(
+    await writeBacklog({
       workspaceId,
-      [{ nameKey: "nike", name: "Nike", domain: "nike.com", evidence: [evidence("https://a.example", "one")] }],
-      [],
-      FIRST,
-    );
+      rows: [{ nameKey: "nike", name: "Nike", domain: "nike.com", evidence: [evidence("https://a.example", "one")] }],
+      promotedKeys: [],
+      now: FIRST,
+    });
 
     const count = await env.DB.prepare("SELECT COUNT(*) AS n FROM discovery_backlog WHERE workspace_id = ?")
       .bind(workspaceId)

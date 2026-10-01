@@ -55,14 +55,7 @@ export function mcpInstructions(sources: readonly FreshnessSource[], now: number
   return `Five to Nine watches the user's competitors (${capabilities}) and ranks the user against them every week. Everything here is read-only and limited to the signed-in user's own workspace.`;
 }
 
-async function createServer(workspaceId: string): Promise<McpServer> {
-  const server = new McpServer(
-    { name: "five-to-nine", title: "Five to Nine", version: "1.0.0" },
-    {
-      instructions: mcpInstructions(await readRegistrySources()),
-    },
-  );
-
+function registerStanding(server: McpServer, workspaceId: string): void {
   const standing = namedTool("get_standing");
   server.registerTool(
     standing.name,
@@ -75,7 +68,9 @@ async function createServer(workspaceId: string): Promise<McpServer> {
     },
     async () => toolResult(() => readAgentStanding(workspaceId)),
   );
+}
 
+function registerBrief(server: McpServer, workspaceId: string): void {
   const brief = namedTool("get_brief");
   server.registerTool(
     brief.name,
@@ -88,7 +83,9 @@ async function createServer(workspaceId: string): Promise<McpServer> {
     },
     async () => toolResult(() => readAgentBrief(workspaceId)),
   );
+}
 
+function registerCompetitors(server: McpServer, workspaceId: string): void {
   const competitors = namedTool("list_competitors");
   server.registerTool(
     competitors.name,
@@ -101,7 +98,9 @@ async function createServer(workspaceId: string): Promise<McpServer> {
     },
     async () => toolResult(() => readAgentCompetitors(workspaceId)),
   );
+}
 
+function registerCompetitor(server: McpServer, workspaceId: string): void {
   const competitor = namedTool("get_competitor");
   server.registerTool(
     competitor.name,
@@ -115,7 +114,9 @@ async function createServer(workspaceId: string): Promise<McpServer> {
     },
     async ({ competitorId }) => toolResult(() => readAgentCompetitor(workspaceId, competitorId, new Date())),
   );
+}
 
+function registerAlerts(server: McpServer, workspaceId: string): void {
   const alerts = namedTool("list_alerts");
   server.registerTool(
     alerts.name,
@@ -128,7 +129,20 @@ async function createServer(workspaceId: string): Promise<McpServer> {
     },
     async () => toolResult(() => readAgentAlerts(workspaceId)),
   );
+}
 
+async function createServer(workspaceId: string): Promise<McpServer> {
+  const server = new McpServer(
+    { name: "five-to-nine", title: "Five to Nine", version: "1.0.0" },
+    {
+      instructions: mcpInstructions(await readRegistrySources()),
+    },
+  );
+  registerStanding(server, workspaceId);
+  registerBrief(server, workspaceId);
+  registerCompetitors(server, workspaceId);
+  registerCompetitor(server, workspaceId);
+  registerAlerts(server, workspaceId);
   return server;
 }
 

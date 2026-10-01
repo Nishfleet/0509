@@ -74,7 +74,13 @@ describe("reviewFields", () => {
       }),
     );
 
-    const review = await reviewFields(WS_ID, SUBJECT, ALL_FIELDS, [], NOW);
+    const review = await reviewFields({
+      workspaceId: WS_ID,
+      subject: SUBJECT,
+      fields: ALL_FIELDS,
+      edited: [],
+      now: NOW,
+    });
 
     expect(review).toEqual({ name: "fill", description: "check", socials: "empty" });
     expect(run).toHaveBeenCalledTimes(1);
@@ -97,7 +103,13 @@ describe("reviewFields", () => {
       }),
     );
 
-    const review = await reviewFields(WS_ID, SUBJECT, ALL_FIELDS, ["name"], NOW);
+    const review = await reviewFields({
+      workspaceId: WS_ID,
+      subject: SUBJECT,
+      fields: ALL_FIELDS,
+      edited: ["name"],
+      now: NOW,
+    });
 
     expect(review).toEqual({ name: "fill", description: "check", socials: "fill" });
     expect(run).toHaveBeenCalledTimes(1);
@@ -111,13 +123,13 @@ describe("reviewFields", () => {
   it("skips Jev entirely when every valued field was edited and shows them as fill", async () => {
     const run = stubAi(runAnswer({ [SOCIALS_ID]: 0.95 }));
 
-    const review = await reviewFields(
-      WS_ID,
-      SUBJECT,
-      { name: "Gymshark", description: "game-changing workout clothes", socials: [] },
-      ["name", "description"],
-      NOW,
-    );
+    const review = await reviewFields({
+      workspaceId: WS_ID,
+      subject: SUBJECT,
+      fields: { name: "Gymshark", description: "game-changing workout clothes", socials: [] },
+      edited: ["name", "description"],
+      now: NOW,
+    });
 
     expect(review).toEqual({ name: "fill", description: "fill", socials: "empty" });
     expect(run).not.toHaveBeenCalled();
@@ -128,7 +140,13 @@ describe("reviewFields", () => {
   it("shows an edited field as fill when Jev cannot be reached", async () => {
     const run = stubAi(() => Promise.reject(new Error("jev down")));
 
-    const review = await reviewFields(WS_ID, SUBJECT, ALL_FIELDS, ["name"], NOW);
+    const review = await reviewFields({
+      workspaceId: WS_ID,
+      subject: SUBJECT,
+      fields: ALL_FIELDS,
+      edited: ["name"],
+      now: NOW,
+    });
 
     expect(review).toEqual({ name: "fill", description: "check", socials: "check" });
     expect(run).toHaveBeenCalledTimes(1);
@@ -139,7 +157,13 @@ describe("reviewFields", () => {
   it("does not ask about a field with no value", async () => {
     const run = stubAi(runAnswer({ [NAME_ID]: 0.95 }));
 
-    const review = await reviewFields(WS_ID, SUBJECT, { name: "Gymshark", description: null, socials: [] }, [], NOW);
+    const review = await reviewFields({
+      workspaceId: WS_ID,
+      subject: SUBJECT,
+      fields: { name: "Gymshark", description: null, socials: [] },
+      edited: [],
+      now: NOW,
+    });
 
     expect(review).toEqual({ name: "fill", description: "empty", socials: "empty" });
     expect(run).toHaveBeenCalledTimes(1);
@@ -149,7 +173,13 @@ describe("reviewFields", () => {
   it("returns check for every valued field and logs nothing when Jev cannot be reached", async () => {
     const run = stubAi(() => Promise.reject(new Error("jev down")));
 
-    const review = await reviewFields(WS_ID, SUBJECT, ALL_FIELDS, [], NOW);
+    const review = await reviewFields({
+      workspaceId: WS_ID,
+      subject: SUBJECT,
+      fields: ALL_FIELDS,
+      edited: [],
+      now: NOW,
+    });
 
     expect(review).toEqual({ name: "check", description: "check", socials: "check" });
     expect(run).toHaveBeenCalledTimes(1);
@@ -160,7 +190,13 @@ describe("reviewFields", () => {
   it("leaves a field with no value empty when Jev cannot be reached", async () => {
     const run = stubAi(() => Promise.reject(new Error("jev down")));
 
-    const review = await reviewFields(WS_ID, SUBJECT, { name: "Gymshark", description: null, socials: [] }, [], NOW);
+    const review = await reviewFields({
+      workspaceId: WS_ID,
+      subject: SUBJECT,
+      fields: { name: "Gymshark", description: null, socials: [] },
+      edited: [],
+      now: NOW,
+    });
 
     expect(review).toEqual({ name: "check", description: "empty", socials: "empty" });
     expect(run).toHaveBeenCalledTimes(1);

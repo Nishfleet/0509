@@ -19,7 +19,7 @@ JOIN entity e ON e.id = s.entity_id AND e.workspace_id = ?1 AND e.state = 'on'
 JOIN source src ON src.id = s.source_id
 LEFT JOIN jev_verdict v ON v.signal_id = s.id
   AND v.question_id = CASE s.kind WHEN 'mention' THEN ?4 WHEN 'change' THEN ?5 END
-WHERE s.workspace_id = ?1 AND s.observed_at >= ?2 AND s.observed_at < ?3 AND s.is_tombstoned = 0
+WHERE s.workspace_id = ?1 AND s.observed_at >= ?2 AND s.observed_at < ?3 AND s.is_tombstoned = 0 AND s.duplicate_of IS NULL
 GROUP BY s.entity_id, bucket, src.reliability
 HAVING bucket IS NOT NULL`;
 

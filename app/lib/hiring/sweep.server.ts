@@ -37,6 +37,8 @@ async function homepageLinks(html: string, base: string): Promise<string[]> {
   return [...new Set(links.filter((link) => link !== null))];
 }
 
+class HomepageDeferredError extends Error {}
+
 export interface FoundBoard {
   entityId: string;
   platform: DiscoveredBoard["platform"];
@@ -51,6 +53,35 @@ export async function planHiringSweep(): Promise<{
   return { entities: await readEntitiesWithoutHiringWatch(), targets: await readHiringTargets() };
 }
 
+async function loadBoard(domain: string, homepage: string): Promise<z.infer<typeof BOARD_SCHEMA>> {
+  const page = await readUrl(homepage);
+  if (!page.ok) {
+    throw page.reason === "deferred"
+      ? new HomepageDeferredError(domain)
+      : new Error(`hiring.homepage_unreadable ${domain}: ${page.reason}`);
+  }
+  const found = await discoverBoard(await homepageLinks(page.html, homepage), domain);
+  return { platform: found.platform, boardUrl: found.boardUrl };
+}
+
+async function readBoardThrough(
+  domain: string,
+  registrable: string,
+  homepage: string,
+): Promise<z.infer<typeof BOARD_SCHEMA> | null> {
+  try {
+    return await readThrough({
+      key: `hiring:${registrable}:board`,
+      schema: BOARD_SCHEMA,
+      ttlSeconds: BOARD_TTL_SECONDS,
+      run: () => loadBoard(domain, homepage),
+    });
+  } catch (error) {
+    if (error instanceof HomepageDeferredError) return null;
+    throw error;
+  }
+}
+
 export async function findBoard(entity: { id: string; domain: string }): Promise<FoundBoard> {
   const registrable = getDomain(entity.domain);
   if (registrable === null || registrable !== entity.domain) {
@@ -58,12 +89,8 @@ export async function findBoard(entity: { id: string; domain: string }): Promise
   }
 
   const homepage = `https://${entity.domain}/`;
-  const board = await readThrough(`hiring:${registrable}:board`, BOARD_SCHEMA, BOARD_TTL_SECONDS, async () => {
-    const page = await readUrl(homepage);
-    if (!page.ok) throw new Error(`hiring.homepage_unreadable ${entity.domain}: ${page.reason}`);
-    const found = await discoverBoard(await homepageLinks(page.html, homepage), entity.domain);
-    return { platform: found.platform, boardUrl: found.boardUrl };
-  });
+  const board = await readBoardThrough(entity.domain, registrable, homepage);
+  if (board === null) return { entityId: entity.id, platform: "none", boardUrl: null, watched: false };
 
   const base = { entityId: entity.id, platform: board.platform, boardUrl: board.boardUrl };
 

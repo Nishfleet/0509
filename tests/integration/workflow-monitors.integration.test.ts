@@ -62,6 +62,7 @@ describe("workflow Sentry cron monitors", () => {
     expect(outcome).toEqual({
       pages: 0,
       failed: 0,
+      gone: 0,
       first: 0,
       unchanged: 0,
       changed: 0,

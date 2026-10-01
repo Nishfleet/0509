@@ -3,6 +3,7 @@ import type { ReactElement } from "react";
 import type { BriefPayload } from "../lib/brief-payload";
 import type { MentionRowModel } from "../lib/mention-feed";
 import { BriefView } from "./brief-view";
+import { HiringRow, type HiringAlertItem } from "./hiring-row";
 import { MentionRow } from "./mention-row";
 import { SiteChangeItem, type SiteChangeItemData } from "./site-change-item";
 import { buttonVariants } from "./ui/button";
@@ -48,7 +49,66 @@ export type AlertFeedItem =
   | { kind: "note"; id: string; at: string; note: TakedownNoteItem }
   | { kind: "failure"; id: string; at: string; failure: DeliveryFailureItem }
   | { kind: "signal"; id: string; at: string; signal: SignalAlertItem }
-  | { kind: "mention"; id: string; at: string; mention: MentionRowModel };
+  | { kind: "mention"; id: string; at: string; mention: MentionRowModel }
+  | { kind: "hiring"; id: string; at: string; hiring: HiringAlertItem };
+
+function TakedownNote({ note }: { note: TakedownNoteItem }): ReactElement {
+  return (
+    <article id={note.id} data-testid="takedown-note" className={CARD}>
+      <h3 className={TITLE}>{note.title}</h3>
+      <time dateTime={note.created_at} className={WHEN_CLASS}>
+        {note.when}
+      </time>
+    </article>
+  );
+}
+
+function SignalAlert({ signal }: { signal: SignalAlertItem }): ReactElement {
+  return (
+    <article id={signal.id} data-testid="signal-alert" className={CARD}>
+      <h3 className={TITLE}>
+        {signal.url === null ? (
+          signal.title
+        ) : (
+          <a href={signal.url} rel="noopener noreferrer nofollow" target="_blank" className={SUMMARY}>
+            {signal.title}
+          </a>
+        )}
+      </h3>
+      {signal.body === null ? null : <p className={BODY}>{signal.body}</p>}
+      <time dateTime={signal.created_at} className={WHEN_CLASS}>
+        {signal.when}
+      </time>
+    </article>
+  );
+}
+
+function DeliveryFailure({ failure }: { failure: DeliveryFailureItem }): ReactElement {
+  return (
+    <article id={failure.id} data-testid="delivery-failure" className={CARD}>
+      <h3 className={TITLE}>{failure.title}</h3>
+      <p className={BODY}>{failure.body}</p>
+      <time dateTime={failure.created_at} className={WHEN_CLASS}>
+        {failure.when}
+      </time>
+      {failure.brief === null ? null : (
+        <details className={DETAILS}>
+          <summary className={READ_BRIEF}>Read the brief</summary>
+          <div className={BRIEF}>
+            <BriefView payload={failure.brief} />
+          </div>
+        </details>
+      )}
+      {failure.digest_id === null ? null : (
+        <p className={BODY}>
+          <a className={SUMMARY} href={`/app/brief/${failure.digest_id}`}>
+            Open it with your past briefs
+          </a>
+        </p>
+      )}
+    </article>
+  );
+}
 
 export function AlertFeedRow({ item, eager }: { item: AlertFeedItem; eager: boolean }): ReactElement {
   if (item.kind === "change") {
@@ -56,14 +116,11 @@ export function AlertFeedRow({ item, eager }: { item: AlertFeedItem; eager: bool
   }
 
   if (item.kind === "note") {
-    return (
-      <article id={item.note.id} data-testid="takedown-note" className={CARD}>
-        <h3 className={TITLE}>{item.note.title}</h3>
-        <time dateTime={item.note.created_at} className={WHEN_CLASS}>
-          {item.note.when}
-        </time>
-      </article>
-    );
+    return <TakedownNote note={item.note} />;
+  }
+
+  if (item.kind === "hiring") {
+    return <HiringRow hiring={item.hiring} />;
   }
 
   if (item.kind === "mention") {
@@ -71,47 +128,8 @@ export function AlertFeedRow({ item, eager }: { item: AlertFeedItem; eager: bool
   }
 
   if (item.kind === "signal") {
-    return (
-      <article id={item.signal.id} data-testid="signal-alert" className={CARD}>
-        <h3 className={TITLE}>
-          {item.signal.url === null ? (
-            item.signal.title
-          ) : (
-            <a href={item.signal.url} rel="noopener noreferrer nofollow" target="_blank" className={SUMMARY}>
-              {item.signal.title}
-            </a>
-          )}
-        </h3>
-        {item.signal.body === null ? null : <p className={BODY}>{item.signal.body}</p>}
-        <time dateTime={item.signal.created_at} className={WHEN_CLASS}>
-          {item.signal.when}
-        </time>
-      </article>
-    );
+    return <SignalAlert signal={item.signal} />;
   }
 
-  return (
-    <article id={item.failure.id} data-testid="delivery-failure" className={CARD}>
-      <h3 className={TITLE}>{item.failure.title}</h3>
-      <p className={BODY}>{item.failure.body}</p>
-      <time dateTime={item.failure.created_at} className={WHEN_CLASS}>
-        {item.failure.when}
-      </time>
-      {item.failure.brief === null ? null : (
-        <details className={DETAILS}>
-          <summary className={READ_BRIEF}>Read the brief</summary>
-          <div className={BRIEF}>
-            <BriefView payload={item.failure.brief} />
-          </div>
-        </details>
-      )}
-      {item.failure.digest_id === null ? null : (
-        <p className={BODY}>
-          <a className={SUMMARY} href={`/app/brief/${item.failure.digest_id}`}>
-            Open it with your past briefs
-          </a>
-        </p>
-      )}
-    </article>
-  );
+  return <DeliveryFailure failure={item.failure} />;
 }

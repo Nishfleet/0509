@@ -1,7 +1,7 @@
 import { env } from "cloudflare:test";
 import { beforeEach, describe, expect, it } from "vitest";
 
-import { insertHiringSignals, type NewHiringSignal } from "../../../app/lib/data/signal.server";
+import { insertHiringSignals, readWorkspaceHiring, type NewHiringSignal } from "../../../app/lib/data/signal.server";
 
 const NOW = "2026-09-24T12:00:00.000Z";
 const USER = "user-hiring-signal";
@@ -201,5 +201,29 @@ describe("hiring signals", () => {
 
     const count = await env.DB.prepare("SELECT COUNT(*) AS n FROM signal WHERE kind = 'hiring'").first<{ n: number }>();
     expect(count?.n).toBe(120);
+  });
+
+  it("reads a workspace's hiring posts newest first, for on brands only, never another workspace's", async () => {
+    await env.DB.prepare(
+      "INSERT INTO entity (id, workspace_id, role, domain, identity_json, origin, state, created_at) VALUES ('ent-off', 'ws-1', 'competitor', 'off.com', '{}', 'manual', 'off', ?)",
+    )
+      .bind(NOW)
+      .run();
+    await env.DB.prepare(
+      "INSERT INTO watch (id, entity_id, source_id, target_key) VALUES ('w-off', 'ent-off', ?, 'https://boards.greenhouse.io/off')",
+    )
+      .bind(SOURCE_ID)
+      .run();
+    await insertHiringSignals([
+      hiringSignal({ id: "old", roleId: "r-old", title: "Older role", publishedAt: "2026-09-10T09:00:00.000Z" }),
+      hiringSignal({ id: "new", roleId: "r-new", title: "Newer role", publishedAt: "2026-09-22T09:00:00.000Z" }),
+      hiringSignal({ id: "theirs", workspaceId: "ws-2", entityId: "ent-2", watchId: "w-2", roleId: "r-x" }),
+      hiringSignal({ id: "paused", entityId: "ent-off", watchId: "w-off", roleId: "r-off" }),
+    ]);
+
+    const posts = await readWorkspaceHiring("ws-1", "2026-09-01T00:00:00.000Z", 30);
+    expect(posts.map((post) => post.id)).toEqual(["new", "old"]);
+    expect(posts[0]).toMatchObject({ title: "Newer role", summary: "Berlin · Platform" });
+    expect(await readWorkspaceHiring("ws-1", "2026-09-15T00:00:00.000Z", 30)).toHaveLength(1);
   });
 });

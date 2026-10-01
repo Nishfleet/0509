@@ -6,6 +6,7 @@
     "verbatimModuleSyntax": true,
     "skipLibCheck": true,
     "strict": true,
+    "noUncheckedIndexedAccess": true,
     "noEmit": true,
     "baseUrl": ".",
     "paths": {

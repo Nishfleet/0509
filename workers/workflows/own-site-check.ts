@@ -53,6 +53,59 @@ async function settle<T>(label: string, run: () => Promise<T>): Promise<T | null
   }
 }
 
+type OwnSitePlan = Awaited<ReturnType<typeof planOwnSiteCheck>>;
+
+function probePages(step: WorkflowStep, plan: OwnSitePlan): Promise<readonly Probed[]> {
+  return plan.pages.reduce<Promise<readonly Probed[]>>(async (done, page) => {
+    const previous = await done;
+    const label = `probe ${page.pageId}`;
+    const health = await settle(label, () => step.do(label, RETRY, () => probeOwnSite(page.url)));
+    return [...previous, { page, health }];
+  }, Promise.resolve([]));
+}
+
+function findRecovered(step: WorkflowStep, plan: OwnSitePlan, probed: readonly Probed[]): Promise<readonly string[]> {
+  return probed.reduce<Promise<readonly string[]>>(async (done, { page, health }) => {
+    const previous = await done;
+    const incidentId = plan.openIncidents[page.pageId];
+    if (health?.state !== "healthy" || incidentId === undefined) return previous;
+    if (!Object.hasOwn(plan.breakage, page.pageId)) return [...previous, incidentId];
+    const label = `verify ${incidentId}`;
+    const repaired = await settle(label, () =>
+      step.do(label, RETRY, () => breakageRepaired(page.url, plan.breakage[page.pageId] ?? null)),
+    );
+    return repaired === true ? [...previous, incidentId] : previous;
+  }, Promise.resolve([]));
+}
+
+function closeRecovered(step: WorkflowStep, recovered: readonly string[]): Promise<number> {
+  return recovered.reduce<Promise<number>>(async (done, incidentId) => {
+    const count = await done;
+    const label = `close ${incidentId}`;
+    const result = await settle(label, () =>
+      step.do(label, RETRY, async () => {
+        await closeOwnSiteIncident(incidentId);
+        return incidentId;
+      }),
+    );
+    return result === null ? count : count + 1;
+  }, Promise.resolve(0));
+}
+
+function openConfirmed(step: WorkflowStep, suspects: readonly Probed[]): Promise<number> {
+  return suspects.reduce<Promise<number>>(async (done, { page }) => {
+    const count = await done;
+    const confirmLabel = `confirm ${page.pageId}`;
+    const confirmed = await settle(confirmLabel, () => step.do(confirmLabel, RETRY, () => probeOwnSite(page.url)));
+    if (confirmed?.state !== "broken") return count;
+    const openLabel = `open ${page.pageId}`;
+    const incidentId = await settle(openLabel, () =>
+      step.do(openLabel, RETRY, () => openOwnSiteIncident(page, confirmed.kind)),
+    );
+    return incidentId === null ? count : count + 1;
+  }, Promise.resolve(0));
+}
+
 export class OwnSiteCheck extends WorkflowEntrypoint<Env> {
   async run(event: WorkflowEvent<unknown>, step: WorkflowStep): Promise<OwnSiteCheckOutcome> {
     return withMonitor("own-site-check", () => this.runCheck(event, step), MONITOR);
@@ -62,52 +115,16 @@ export class OwnSiteCheck extends WorkflowEntrypoint<Env> {
     const plannedAt = event.timestamp.toISOString();
     const plan = await step.do("plan", RETRY, () => planOwnSiteCheck(plannedAt));
 
-    const probed = await plan.pages.reduce<Promise<readonly Probed[]>>(async (done, page) => {
-      const previous = await done;
-      const label = `probe ${page.pageId}`;
-      const health = await settle(label, () => step.do(label, RETRY, () => probeOwnSite(page.url)));
-      return [...previous, { page, health }];
-    }, Promise.resolve([]));
-
-    const recovered = await probed.reduce<Promise<readonly string[]>>(async (done, { page, health }) => {
-      const previous = await done;
-      const incidentId = plan.openIncidents[page.pageId];
-      if (health?.state !== "healthy" || incidentId === undefined) return previous;
-      if (!Object.hasOwn(plan.breakage, page.pageId)) return [...previous, incidentId];
-      const label = `verify ${incidentId}`;
-      const repaired = await settle(label, () =>
-        step.do(label, RETRY, () => breakageRepaired(page.url, plan.breakage[page.pageId] ?? null)),
-      );
-      return repaired === true ? [...previous, incidentId] : previous;
-    }, Promise.resolve([]));
-    const closed = await recovered.reduce<Promise<number>>(async (done, incidentId) => {
-      const count = await done;
-      const label = `close ${incidentId}`;
-      const result = await settle(label, () =>
-        step.do(label, RETRY, async () => {
-          await closeOwnSiteIncident(incidentId);
-          return incidentId;
-        }),
-      );
-      return result === null ? count : count + 1;
-    }, Promise.resolve(0));
+    const probed = await probePages(step, plan);
+    const recovered = await findRecovered(step, plan, probed);
+    const closed = await closeRecovered(step, recovered);
 
     const suspects = probed.filter(
       ({ page, health }) => health?.state === "broken" && plan.openIncidents[page.pageId] === undefined,
     );
     if (suspects.length > 0) await step.sleep("confirm", CONFIRM_AFTER);
 
-    const opened = await suspects.reduce<Promise<number>>(async (done, { page }) => {
-      const count = await done;
-      const confirmLabel = `confirm ${page.pageId}`;
-      const confirmed = await settle(confirmLabel, () => step.do(confirmLabel, RETRY, () => probeOwnSite(page.url)));
-      if (confirmed?.state !== "broken") return count;
-      const openLabel = `open ${page.pageId}`;
-      const incidentId = await settle(openLabel, () =>
-        step.do(openLabel, RETRY, () => openOwnSiteIncident(page, confirmed.kind)),
-      );
-      return incidentId === null ? count : count + 1;
-    }, Promise.resolve(0));
+    const opened = await openConfirmed(step, suspects);
 
     const summary: OwnSiteCheckOutcome = {
       pages: probed.length,

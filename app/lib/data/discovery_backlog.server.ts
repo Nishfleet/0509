@@ -47,12 +47,13 @@ export async function readBacklog(workspaceId: string): Promise<Candidate[]> {
   });
 }
 
-export async function writeBacklog(
-  workspaceId: string,
-  rows: readonly BacklogRow[],
-  promotedKeys: readonly string[],
-  now: string,
-): Promise<void> {
+export async function writeBacklog(input: {
+  workspaceId: string;
+  rows: readonly BacklogRow[];
+  promotedKeys: readonly string[];
+  now: string;
+}): Promise<void> {
+  const { workspaceId, rows, promotedKeys, now } = input;
   if (rows.length === 0 && promotedKeys.length === 0) return;
   const statements = [
     ...rows.map((row) =>

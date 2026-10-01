@@ -166,9 +166,7 @@ async function cappedText(res: Response): Promise<string> {
   return new TextDecoder().decode(bytes);
 }
 
-export async function readUrl(url: string, options: ReadUrlOptions = {}): Promise<ReadUrlResult> {
-  const started = Date.now();
-
+function invalidUrlFailure(url: string): ReadUrlFailure | null {
   let target: URL;
   try {
     target = new URL(url);
@@ -179,71 +177,91 @@ export async function readUrl(url: string, options: ReadUrlOptions = {}): Promis
     return { ok: false, reason: "invalid-url", detail: `not a URL: ${url}` };
   }
   const refusal = targetRefusal(target);
-  if (refusal !== null) {
-    return { ok: false, reason: "invalid-url", detail: refusal };
-  }
+  if (refusal !== null) return { ok: false, reason: "invalid-url", detail: refusal };
+  return null;
+}
 
-  if (options.startWith === "browser") {
-    const deferred = await deferUnlessAllowed(options, "learned");
-    if (deferred) return deferred;
-    const learned = await escalate(url, started, "learned");
-    return (
-      learned.result ?? {
-        ok: false,
-        reason: "escalation-failed",
-        detail: `learned browser transport; ${learned.cause}`,
-      }
-    );
-  }
+type FetchOutcome =
+  | { kind: "page"; status: number; html: string }
+  | { kind: "failure"; failure: ReadUrlFailure }
+  | { kind: "timeout"; detail: string };
 
-  let fetchStatus: number;
-  let fetchHtml: string;
+function classifyFetchError(err: unknown): FetchOutcome {
+  if (err instanceof BodyTooLargeError) {
+    return { kind: "failure", failure: { ok: false, reason: "too-large", detail: err.message } };
+  }
+  if (err instanceof BlockedRedirectError) {
+    return { kind: "failure", failure: { ok: false, reason: "invalid-url", detail: err.message } };
+  }
+  const detail = `fetch threw (${err instanceof Error ? err.message : String(err)})`;
+  if (err instanceof Error && err.name === "TimeoutError") return { kind: "timeout", detail };
+  return { kind: "failure", failure: { ok: false, reason: "unreachable", detail } };
+}
+
+async function tryFetch(url: string): Promise<FetchOutcome> {
   try {
     const res = await fetchOutbound(url, { headers: FETCH_HEADERS });
-    fetchStatus = res.status;
-    fetchHtml = await cappedText(res);
+    const html = await cappedText(res);
+    return { kind: "page", status: res.status, html };
   } catch (err) {
-    if (err instanceof BodyTooLargeError) {
-      return { ok: false, reason: "too-large", detail: err.message };
-    }
-    if (err instanceof BlockedRedirectError) {
-      return { ok: false, reason: "invalid-url", detail: err.message };
-    }
-    const detail = `fetch threw (${err instanceof Error ? err.message : String(err)})`;
-    if (!(err instanceof Error && err.name === "TimeoutError")) {
-      return { ok: false, reason: "unreachable", detail };
-    }
-    const deferred = await deferUnlessAllowed(options, "timeout");
-    if (deferred) return deferred;
-    const escalation = await escalate(url, started, "timeout");
-    return (
-      escalation.result ?? {
-        ok: false,
-        reason: "escalation-failed",
-        detail: `${detail}; ${escalation.cause}`,
-      }
-    );
+    return classifyFetchError(err);
   }
+}
 
-  const refused = await refusalReason(fetchStatus, fetchHtml);
-  if (refused) {
-    const deferred = await deferUnlessAllowed(options, refused);
-    if (deferred) return deferred;
-    const escalation = await escalate(url, started, refused);
-    if (escalation.result !== null) return escalation.result;
-    return {
+interface ReadContext {
+  url: string;
+  started: number;
+  options: ReadUrlOptions;
+}
+
+async function escalateOrFail(
+  ctx: ReadContext,
+  reason: EscalationReason,
+  detailFor: (cause: string) => string,
+): Promise<ReadUrlResult> {
+  const deferred = await deferUnlessAllowed(ctx.options, reason);
+  if (deferred) return deferred;
+  const escalation = await escalate(ctx.url, ctx.started, reason);
+  return (
+    escalation.result ?? {
       ok: false,
       reason: "escalation-failed",
-      detail: `fetch ${String(fetchStatus)} was refused (${refused}); ${escalation.cause}`,
-    };
+      detail: detailFor(escalation.cause),
+    }
+  );
+}
+
+export async function readUrl(url: string, options: ReadUrlOptions = {}): Promise<ReadUrlResult> {
+  const ctx: ReadContext = { url, started: Date.now(), options };
+
+  const invalid = invalidUrlFailure(url);
+  if (invalid !== null) return invalid;
+
+  if (options.startWith === "browser") {
+    return escalateOrFail(ctx, "learned", (cause) => `learned browser transport; ${cause}`);
+  }
+
+  const outcome = await tryFetch(url);
+  if (outcome.kind === "failure") return outcome.failure;
+  if (outcome.kind === "timeout") {
+    return escalateOrFail(ctx, "timeout", (cause) => `${outcome.detail}; ${cause}`);
+  }
+
+  const refused = await refusalReason(outcome.status, outcome.html);
+  if (refused) {
+    return escalateOrFail(
+      ctx,
+      refused,
+      (cause) => `fetch ${String(outcome.status)} was refused (${refused}); ${cause}`,
+    );
   }
 
   return {
     ok: true,
-    html: fetchHtml,
+    html: outcome.html,
     transport: "fetch",
-    status: fetchStatus,
-    ms: Date.now() - started,
+    status: outcome.status,
+    ms: Date.now() - ctx.started,
     escalated: false,
   };
 }

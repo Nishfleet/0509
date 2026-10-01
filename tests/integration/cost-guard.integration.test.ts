@@ -2,7 +2,7 @@ import { env } from "cloudflare:test";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import fixture from "../fixtures/cf-graphql-usage.json";
-import { runCostGuard } from "../../app/lib/observability/run-cost-guard.server";
+import { runCostGuard, runNightlyCostGuard } from "../../app/lib/observability/run-cost-guard.server";
 
 /**
  * cost_alert writer + runCostGuard (0509#4432).
@@ -13,14 +13,13 @@ import { runCostGuard } from "../../app/lib/observability/run-cost-guard.server"
  * run idempotent. Real local D1 with every migration applied.
  */
 
-const usageBody = (rowsWritten: number, requests: number, totalSessionDurationMs: number) => ({
+const usageBody = (rowsWritten: number, requests: number) => ({
   data: {
     viewer: {
       accounts: [
         {
           d1: [{ sum: { rowsWritten } }],
           r2: [{ sum: { requests } }],
-          browser: [{ sum: { totalSessionDurationMs } }],
         },
       ],
     },
@@ -124,7 +123,7 @@ describe("runCostGuard (0509#4432)", () => {
   });
 
   it("trips on the line over threshold and writes one cost_alert row", async () => {
-    stubUsage(usageBody(5000, 0, 0));
+    stubUsage(usageBody(5000, 0));
     const result = await runCostGuard(env.DB, "t", "2026-09-22");
     expect(result.breaches).toHaveLength(1);
     expect(result.breaches[0]?.line).toBe("d1_rows_written");
@@ -152,7 +151,7 @@ describe("runCostGuard (0509#4432)", () => {
     // 91 rows over 3 ON competitors is 30.33/brand, over the factor of three
     // times the documented 10. Over 5 (2 self + 3 competitors) it would be
     // 18.2/brand, which is inside the factor and would have alerted nobody.
-    stubUsage(usageBody(91, 0, 0));
+    stubUsage(usageBody(91, 0));
     const result = await runCostGuard(env.DB, "t", "2026-09-24");
     expect(result.onBrands).toBe(3);
     expect(result.breaches).toEqual([
@@ -178,28 +177,51 @@ describe("runCostGuard (0509#4432)", () => {
   it("counts an ON competitor but not a retired one", async () => {
     await seedBrands();
     await env.DB.prepare("UPDATE entity SET state = 'off' WHERE id = 'e-comp-on-2'").run();
-    stubUsage(usageBody(0, 0, 0));
+    stubUsage(usageBody(0, 0));
     const result = await runCostGuard(env.DB, "t", "2026-09-25");
     expect(result.onBrands).toBe(2);
   });
 
-  it("does not alert on browser_ms: the browser dataset is account-wide, not per brand", async () => {
+  it("alerts on browser_ms_0509 from the Worker's own day counter, not the account-wide dataset", async () => {
     await seedBrands();
-    // 10,000,000 ms is 3,333,333 ms/brand at 3 brands, over 200x the
-    // documented 15,000. The guard must stay silent: the Cloudflare
-    // browser-rendering dataset has no script dimension, so this total is the
-    // whole account's and dividing it by 0509's brand count would attribute
-    // other workers' browser time to 0509 (0509#6086).
-    stubUsage(usageBody(0, 0, 10_000_000));
+    const counter = env.BROWSER_BUDGET.get(env.BROWSER_BUDGET.idFromName("browser-ms:2026-09-26"));
+    await counter.addMs(100_000);
+    await counter.addMs(50_000);
+    stubUsage(usageBody(0, 0));
     const result = await runCostGuard(env.DB, "t", "2026-09-26");
-    expect(result.usage.browserMs).toBe(10_000_000);
+    expect(result.usage.browserMs).toBe(150_000);
+    expect(result.breaches).toEqual([
+      {
+        day: "2026-09-26",
+        line: "browser_ms_0509",
+        measuredPerBrand: 50_000,
+        expectedPerBrand: 15_000,
+        onBrands: 3,
+      },
+    ]);
+    const id = result.alertIds[0];
+    expect(id).toBeDefined();
+    expect(await readAlert(id as string)).toMatchObject({
+      day: "2026-09-26",
+      line: "browser_ms_0509",
+      measured_per_brand: 50_000,
+      expected_per_brand: 15_000,
+      on_brands: 3,
+    });
+  });
+
+  it("stays silent on browser_ms_0509 at or under three times the per-brand figure", async () => {
+    await seedBrands();
+    await env.BROWSER_BUDGET.get(env.BROWSER_BUDGET.idFromName("browser-ms:2026-09-27")).addMs(135_000);
+    stubUsage(usageBody(0, 0));
+    const result = await runCostGuard(env.DB, "t", "2026-09-27");
+    expect(result.usage.browserMs).toBe(135_000);
     expect(result.breaches).toEqual([]);
-    expect(result.alertIds).toEqual([]);
-    expect(await countAlerts("2026-09-26")).toBe(0);
+    expect(await countAlerts("2026-09-27")).toBe(0);
   });
 
   it("is idempotent: a second identical call writes no new row", async () => {
-    stubUsage(usageBody(5000, 0, 0));
+    stubUsage(usageBody(5000, 0));
     const first = await runCostGuard(env.DB, "t", "2026-09-22");
     expect(first.alertIds).toHaveLength(1);
     const again = await runCostGuard(env.DB, "t", "2026-09-22");
@@ -208,7 +230,7 @@ describe("runCostGuard (0509#4432)", () => {
   });
 
   it("writes nothing on a quiet day", async () => {
-    stubUsage(usageBody(0, 0, 0));
+    stubUsage(usageBody(0, 0));
     const result = await runCostGuard(env.DB, "t", "2026-09-23");
     expect(result.breaches).toEqual([]);
     expect(result.alertIds).toEqual([]);
@@ -222,7 +244,68 @@ describe("runCostGuard (0509#4432)", () => {
       day: "2026-09-22",
       d1RowsWritten: 4677,
       r2ClassAOps: 13,
-      browserMs: 157107,
+      browserMs: 0,
     });
+  });
+});
+
+describe("runNightlyCostGuard", () => {
+  beforeEach(async () => {
+    await env.DB.exec("DELETE FROM cost_alert");
+    await clearBrands();
+  });
+
+  afterEach(async () => {
+    await clearBrands();
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  const at = Date.UTC(2026, 8, 29, 3, 0, 0);
+
+  it("guards the previous UTC day from the scheduled instant", async () => {
+    await seedBrands();
+    await env.BROWSER_BUDGET.get(env.BROWSER_BUDGET.idFromName("browser-ms:2026-09-28")).addMs(150_000);
+    stubUsage(usageBody(0, 0));
+    const result = await runNightlyCostGuard(env.DB, "t", at);
+    expect(result.usage.day).toBe("2026-09-28");
+    expect(result.breaches.map((breach) => breach.line)).toEqual(["browser_ms_0509"]);
+    expect(await countAlerts("2026-09-28")).toBe(1);
+  });
+
+  it("without a token evaluates the browser line only and never calls the analytics API", async () => {
+    await seedBrands();
+    await env.BROWSER_BUDGET.get(env.BROWSER_BUDGET.idFromName("browser-ms:2026-09-28")).addMs(150_000);
+    const fetchSpy = vi.fn(async () => new Response("{}", { status: 500 }));
+    vi.stubGlobal("fetch", fetchSpy);
+    const result = await runNightlyCostGuard(env.DB, undefined, at);
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(result.breaches.map((breach) => breach.line)).toEqual(["browser_ms_0509"]);
+    expect(result.alertIds).toHaveLength(1);
+  });
+
+  it("treats an empty token as absent", async () => {
+    await seedBrands();
+    const fetchSpy = vi.fn(async () => new Response("{}", { status: 500 }));
+    vi.stubGlobal("fetch", fetchSpy);
+    await runNightlyCostGuard(env.DB, "", at);
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it("without a token ignores a D1 figure that would breach with one", async () => {
+    await seedBrands();
+    stubUsage(usageBody(5000, 0));
+    const result = await runNightlyCostGuard(env.DB, undefined, Date.UTC(2026, 8, 30, 3, 0, 0));
+    expect(result.breaches).toEqual([]);
+  });
+
+  it("stays silent when the browser line is under threshold", async () => {
+    await seedBrands();
+    await env.BROWSER_BUDGET.get(env.BROWSER_BUDGET.idFromName("browser-ms:2026-10-01")).addMs(135_000);
+    const result = await runNightlyCostGuard(env.DB, undefined, Date.UTC(2026, 9, 2, 3, 0, 0));
+    expect(result.breaches).toEqual([]);
+    expect(await countAlerts("2026-10-01")).toBe(0);
   });
 });

@@ -1,7 +1,6 @@
 import type { Route } from "./+types/login";
 import { env } from "cloudflare:workers";
-import { useEffect, useState } from "react";
-import { data, Form, useActionData, useLoaderData, useNavigate, useNavigation, useSearchParams } from "react-router";
+import { data, Form, useActionData, useLoaderData, useNavigation, useSearchParams } from "react-router";
 
 import { AccountDeleteNotice } from "../components/account-delete-notice";
 import { SIGN_IN_LEDE, SIGN_IN_SHELL, SIGN_IN_TITLE, SignInSent } from "../components/sign-in-sent";
@@ -12,7 +11,6 @@ import { Input } from "../components/ui/input";
 import { Footer } from "../components/footer";
 import { safeReturnTo } from "../lib/agent/paths";
 import { subjectRedirect } from "../lib/onboarding-subject";
-import { authClient } from "../lib/auth-client";
 import { formMagicLinkRequest } from "../lib/auth/login-magic-link.server";
 import { createAuthForRequest } from "../lib/auth.server";
 import {
@@ -20,7 +18,8 @@ import {
   readAccountDeleteInstanceId,
   readAccountDeleteProgress,
 } from "../lib/account-delete.server";
-import { timezoneCookie } from "../lib/timezone";
+import { usePasskeySignIn, type PasskeyState } from "../lib/use-passkey-sign-in";
+import { useTimezoneCookie } from "../lib/use-timezone-cookie";
 
 type LoginActionData = { error: string; sent?: never } | { sent: { email: string; at: number }; error?: never };
 
@@ -55,7 +54,7 @@ export async function action({ request }: Route.ActionArgs) {
   const callbackURL = signInTarget(new URL(request.url).searchParams);
   const response = await (
     await createAuthForRequest(env, request)
-  ).handler(formMagicLinkRequest(env.BETTER_AUTH_URL, request, email, captcha, callbackURL));
+  ).handler(formMagicLinkRequest({ authUrl: env.BETTER_AUTH_URL, request, email, captcha, callbackURL }));
   if (response.status === 200) return { sent: { email, at: Date.now() } };
   const detail = await response.text();
   if (response.status === 429) return { error: "Too many sign-in links. Wait a minute and try again." };
@@ -67,35 +66,49 @@ export async function action({ request }: Route.ActionArgs) {
   return data({ error: "We couldn't send the link. Try again in a minute." }, { status: 503 });
 }
 
+function EmailForm({ busy, turnstileSiteKey }: { busy: boolean; turnstileSiteKey: string }) {
+  return (
+    <Form method="post" className="mt-8 flex flex-col gap-3">
+      <label htmlFor="email" className="font-mono text-eyebrow text-ink-soft uppercase">
+        Email
+      </label>
+      <Input id="email" name="email" type="email" autoComplete="email" inputMode="email" required />
+      <TurnstileWidget siteKey={turnstileSiteKey} startOn="email-focus" />
+      <Button type="submit" size="lg" disabled={busy} className="mt-2">
+        {busy ? "Sending…" : "Email me a link"}
+      </Button>
+    </Form>
+  );
+}
+
+function PasskeyOption({ state, onSignIn }: { state: PasskeyState; onSignIn: () => Promise<void> }) {
+  return (
+    <>
+      <Button
+        type="button"
+        variant="tertiary"
+        className="mt-4 self-start"
+        onClick={() => void onSignIn()}
+        disabled={state === "working"}
+      >
+        {state === "working" ? "Follow the prompt…" : "Use a passkey instead"}
+      </Button>
+      {state === "failed" ? (
+        <p role="alert" className="text-[0.95rem]">
+          Your passkey didn't sign you in. Try it again, or use the email link.
+        </p>
+      ) : null}
+    </>
+  );
+}
+
 export default function Login() {
   const actionData = useActionData<LoginActionData>();
   const deleted = useLoaderData<typeof loader>();
   const busy = useNavigation().state !== "idle";
-  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const [passkeyState, setPasskeyState] = useState<"idle" | "working" | "failed">("idle");
-
-  useEffect(() => {
-    const zone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-    if (!zone) return;
-    void timezoneCookie.serialize(zone, { secure: location.protocol === "https:" }).then((baked) => {
-      document.cookie = baked;
-    });
-  }, []);
-
-  async function signInWithPasskey() {
-    setPasskeyState("working");
-    const result = await authClient.signIn.passkey().catch((error: unknown) => {
-      console.error(JSON.stringify({ event: "login.passkey_sign_in_failed", error: String(error) }));
-      return null;
-    });
-    if (result && !result.error) {
-      await navigate(signInTarget(searchParams));
-      return;
-    }
-    const code = result?.error && "code" in result.error ? result.error.code : "";
-    setPasskeyState(code === "AUTH_CANCELLED" ? "idle" : "failed");
-  }
+  const passkey = usePasskeySignIn(signInTarget(searchParams));
+  useTimezoneCookie();
 
   if (actionData?.sent) {
     return (
@@ -119,30 +132,8 @@ export default function Login() {
             {actionData.error}
           </p>
         ) : null}
-        <Form method="post" className="mt-8 flex flex-col gap-3">
-          <label htmlFor="email" className="font-mono text-eyebrow text-ink-soft uppercase">
-            Email
-          </label>
-          <Input id="email" name="email" type="email" autoComplete="email" inputMode="email" required />
-          <TurnstileWidget siteKey={deleted.turnstileSiteKey} startOn="email-focus" />
-          <Button type="submit" size="lg" disabled={busy} className="mt-2">
-            {busy ? "Sending…" : "Email me a link"}
-          </Button>
-        </Form>
-        <Button
-          type="button"
-          variant="tertiary"
-          className="mt-4 self-start"
-          onClick={() => void signInWithPasskey()}
-          disabled={passkeyState === "working"}
-        >
-          {passkeyState === "working" ? "Follow the prompt…" : "Use a passkey instead"}
-        </Button>
-        {passkeyState === "failed" ? (
-          <p role="alert" className="text-[0.95rem]">
-            Your passkey didn't sign you in. Try it again, or use the email link.
-          </p>
-        ) : null}
+        <EmailForm busy={busy} turnstileSiteKey={deleted.turnstileSiteKey} />
+        <PasskeyOption state={passkey.state} onSignIn={passkey.signIn} />
       </main>
       <Footer />
     </div>

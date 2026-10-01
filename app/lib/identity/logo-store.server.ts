@@ -20,6 +20,10 @@ function logoKey(registrable: string): string {
   return `logo/${registrable}`;
 }
 
+function mediaType(header: string | null): string {
+  return header?.split(";")[0]?.trim().toLowerCase() ?? "";
+}
+
 export async function storeLogo(
   registrable: string,
   url: string,
@@ -39,7 +43,7 @@ export async function storeLogo(
       schemes: ["https:"],
     });
 
-    const contentType = (res.headers.get("content-type") ?? "").split(";")[0].trim().toLowerCase();
+    const contentType = mediaType(res.headers.get("content-type"));
     if (!res.ok || !LOGO_TYPES.has(contentType)) {
       await res.body?.cancel();
       return null;

@@ -158,11 +158,9 @@ const ACKNOWLEDGE_INCIDENT_ALERT = `UPDATE alert SET status = 'acknowledged', re
 
 export async function acknowledgeIncidentAlert(
   db: D1Database,
-  workspaceId: string,
-  alertId: string,
-  at: string,
+  input: { workspaceId: string; alertId: string; at: string },
 ): Promise<void> {
-  await db.prepare(ACKNOWLEDGE_INCIDENT_ALERT).bind(workspaceId, alertId, at).run();
+  await db.prepare(ACKNOWLEDGE_INCIDENT_ALERT).bind(input.workspaceId, input.alertId, input.at).run();
 }
 
 const INSERT_SIGNAL_ALERT = `INSERT INTO alert (id, workspace_id, entity_id, signal_id, kind, severity, title, body, status, created_at)
@@ -205,7 +203,7 @@ export interface SignalAlert {
 
 const SELECT_SIGNAL_ALERTS = `SELECT a.id, a.kind, a.title, a.body, s.url, a.created_at
 FROM alert a
-JOIN signal s ON s.id = a.signal_id AND s.is_tombstoned = 0
+JOIN signal s ON s.id = a.signal_id AND s.is_tombstoned = 0 AND s.duplicate_of IS NULL
 JOIN entity e ON e.id = a.entity_id AND e.state = 'on'
 WHERE a.workspace_id = ? AND a.kind IN ('mention', 'ad')
 ORDER BY a.created_at DESC
