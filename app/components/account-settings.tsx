@@ -44,10 +44,10 @@ export function DeleteAccount({ email, error }: { email: string; error: string |
       <p className="mt-2 max-w-prose leading-[1.55]">Deleting your account removes, for good:</p>
       <ul data-delete="removes" className="mt-2 flex max-w-prose list-disc flex-col gap-1 pl-5 leading-[1.55]">
         <li>Every brand you track, yours included</li>
-        <li>Every signal: site changes, ads, mentions and roles</li>
-        <li>Every site snapshot</li>
+        <li>Everything we found: site changes, ads, mentions and job listings</li>
+        <li>Every saved copy of a website page</li>
         <li>Every screenshot</li>
-        <li>Your published standing card</li>
+        <li>Your shared ranking image</li>
         <li>Your send history and every brief</li>
         <li>Your account, its API keys and connected AI apps</li>
       </ul>

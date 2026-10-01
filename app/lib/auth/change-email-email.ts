@@ -5,7 +5,7 @@ const COPY = {
     subject: "Approve a new sign-in email for Five to Nine",
     headline: "Approve a new sign-in email",
     line: (email: string) =>
-      `Someone asked to change your sign-in email to ${email}. Approve it and we will send that address a last link to confirm.`,
+      `Someone asked to change your sign-in email to ${email}. Approve it and we will send that address one more link to confirm.`,
     button: "Approve change",
     ignore:
       "If this was not you, ignore this message. Nothing changes until both links are used, and your sign-in email stays as it is.",

@@ -69,7 +69,7 @@ describe("the mark", () => {
   it("still renders when the screenshot is missing", () => {
     for (const screenshotUrl of [undefined, "", "   ", "javascript:alert(1)"]) {
       const html = mark({ size: "md", screenshotUrl });
-      expect(html).toContain("screenshot unavailable");
+      expect(html).toContain("Screenshot not available");
       expect(html).toContain("<s");
       expect(html).toContain(sourceUrl);
       expect(html).not.toContain("<img");
@@ -79,10 +79,10 @@ describe("the mark", () => {
   it("shows a capture when a screenshot URL is present", () => {
     const html = mark({ size: "sm", screenshotUrl: "https://cdn.example.com/shot.png" });
     expect(html).toContain('src="https://cdn.example.com/shot.png"');
-    expect(html).toContain(`alt="Capture, ${capturedAt}"`);
-    expect(html).not.toContain("screenshot unavailable");
+    expect(html).toContain(`alt="Screenshot, ${capturedAt}"`);
+    expect(html).not.toContain("Screenshot not available");
     expect(mark({ size: "sm", screenshotUrl: "/captures/shot.png" })).toContain('src="/captures/shot.png"');
-    expect(mark({ size: "email", screenshotUrl: "/captures/shot.png" })).toContain("screenshot unavailable");
+    expect(mark({ size: "email", screenshotUrl: "/captures/shot.png" })).toContain("Screenshot not available");
   });
 
   it("is never shown without a source URL and a captured-at time", () => {

@@ -14,15 +14,15 @@ const RANKED: HowRanked = {
     { key: "mention_matters", label: "Mentions that matter", weight: 3 },
     { key: "mention_normal", label: "Mentions", weight: 1 },
     { key: "site_change_noteworthy", label: "Noteworthy site changes", weight: 4 },
-    { key: "ad_new_creative", label: "New ad creatives", weight: 2 },
-    { key: "ad_copy_change", label: "Ad copy or offer changes", weight: 3 },
-    { key: "hiring_new_role", label: "New roles", weight: 1 },
+    { key: "ad_new_creative", label: "New ads", weight: 2 },
+    { key: "ad_copy_change", label: "Ad wording or offer changes", weight: 3 },
+    { key: "hiring_new_role", label: "New job openings", weight: 1 },
   ],
   multipliers: [
-    { reliability: "official_api", label: "Official API", value: 1 },
-    { reliability: "rss", label: "RSS feed", value: 0.9 },
-    { reliability: "scraped_page", label: "Scraped page", value: 0.6 },
-    { reliability: "best_effort", label: "Best effort", value: 0.5 },
+    { reliability: "official_api", label: "Official data", value: 1 },
+    { reliability: "rss", label: "Public feed", value: 0.9 },
+    { reliability: "scraped_page", label: "Page we read", value: 0.6 },
+    { reliability: "best_effort", label: "Best guess", value: 0.5 },
   ],
   brands: [
     {
@@ -82,12 +82,12 @@ function brandBlock(html: string, name: string): string {
 describe("HowRankedTable", () => {
   it("renders every weight label and value", () => {
     const html = renderTable();
-    expect(html).toContain("What each signal is worth");
+    expect(html).toContain("Points for each kind of activity");
     expect(html).toContain("Mentions that matter");
     expect(html).toContain("Noteworthy site changes");
-    expect(html).toContain("New ad creatives");
-    expect(html).toContain("Ad copy or offer changes");
-    expect(html).toContain("New roles");
+    expect(html).toContain("New ads");
+    expect(html).toContain("Ad wording or offer changes");
+    expect(html).toContain("New job openings");
     expect(html).toContain(">3<");
     expect(html).toContain(">1<");
     expect(html).toContain(">4<");
@@ -96,7 +96,7 @@ describe("HowRankedTable", () => {
 
   it("renders every multiplier as ×value", () => {
     const html = renderTable();
-    expect(html).toContain("How much each source counts");
+    expect(html).toContain("How much we trust each source");
     expect(html).toContain("×1");
     expect(html).toContain("×0.9");
     expect(html).toContain("×0.6");
@@ -105,14 +105,14 @@ describe("HowRankedTable", () => {
 
   it("renders each brand line as n label (multiplier) × weight × multiplier = points", () => {
     const block = brandBlock(renderTable(), "Kindred");
-    expect(block).toContain("2 Mentions that matter (RSS feed) × 3 × 0.9 = 5.4");
+    expect(block).toContain("2 Mentions that matter (Public feed) × 3 × 0.9 = 5.4");
     expect(block).toContain("Total 5.4");
     expect(block).not.toContain("Total —");
   });
 
   it("shows the empty brand a dash total and never 0", () => {
     const block = brandBlock(renderTable(), "Quiet");
-    expect(block).toContain("No signals this week");
+    expect(block).toContain("Nothing this week");
     expect(block).toContain("Total —");
     expect(block).not.toContain("Total 0");
   });
@@ -141,7 +141,7 @@ describe("HowRankedSheet", () => {
   it("renders the trigger text and the title attribute", () => {
     const html = renderSheet();
     expect(html).toContain("How this is ranked");
-    expect(html).toContain('title="ranked by what the internet did about each brand this week"');
+    expect(html).toContain('title="we rank each brand by what happened with it online this week"');
   });
 
   it("keeps the trigger's touch target and underline affordances", () => {

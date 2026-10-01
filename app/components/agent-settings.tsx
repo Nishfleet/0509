@@ -62,7 +62,7 @@ export function ConnectDetails({ mcpUrl, origin }: { mcpUrl: string; origin: str
       </ul>
       <CopyField label="Connector address" value={mcpUrl} />
       <p className="mt-3 text-body-sm text-ink-soft">Connecting with a key instead? Send it in this header.</p>
-      <CopyField label="Header" value="Authorization: Bearer <your key>" />
+      <CopyField label="Authorization header" value="Authorization: Bearer <your key>" />
       <p className="mt-3 text-body-sm text-ink-soft">
         Writing your own code? Make a key below and read the{" "}
         <a className="text-ink underline decoration-1 underline-offset-4" href={`${origin}/api/v1/openapi.json`}>
@@ -109,7 +109,7 @@ export function ConnectedApps({ apps }: { apps: ConnectedApp[] }) {
 
 function keyDetail(key: AgentKey): string {
   return [
-    `Made ${day(key.createdAt)}`,
+    `Created ${day(key.createdAt)}`,
     key.lastUsedAt === null ? "never used" : `last used ${day(key.lastUsedAt)}`,
     ...(key.rateLimitMax === null ? [] : [`up to ${String(key.rateLimitMax)} requests a minute`]),
     ...(key.remaining === null ? [] : [`${String(key.remaining)} requests left`]),

@@ -23,7 +23,7 @@ function render(overrides: Partial<IncidentBlockProps> = {}): string {
 describe("the incident block", () => {
   it("renders the eyebrow, the title, the evidence, the re-check time and the two actions", () => {
     const html = render();
-    expect(html).toContain("OPEN INCIDENT");
+    expect(html).toContain("OPEN PROBLEM");
     expect(html).toContain("var(--color-red)");
     expect(html).toContain("Homepage is 500ing");
     expect(html).toContain("500 Internal Server Error");
@@ -64,13 +64,13 @@ describe("the incident slot", () => {
     const html = renderToStaticMarkup(createElement(IncidentSlot, { incident: null }));
     expect(html).toContain('data-testid="incident-live"');
     expect(html).toContain('aria-live="polite"');
-    expect(html).not.toContain("OPEN INCIDENT");
+    expect(html).not.toContain("OPEN PROBLEM");
   });
 
   it("announces the incident without stealing focus", () => {
     const html = renderToStaticMarkup(createElement(IncidentSlot, { incident: props() }));
     expect(html).toContain('aria-live="polite"');
-    expect(html).toContain("OPEN INCIDENT");
+    expect(html).toContain("OPEN PROBLEM");
     expect(html.toLowerCase()).not.toContain("tabindex");
     expect(html.toLowerCase()).not.toContain("autofocus");
   });

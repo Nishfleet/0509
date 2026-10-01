@@ -29,7 +29,7 @@ export function AddPasskey({ className }: { className?: string }): ReactElement 
         onClick={() => void addPasskey()}
         disabled={state === "working"}
       >
-        {state === "working" ? "Follow the prompt…" : "Add a passkey"}
+        {state === "working" ? "Follow your device's prompt…" : "Add a passkey"}
       </Button>
       {state === "added" ? (
         <p role="status" className="text-[0.95rem]">

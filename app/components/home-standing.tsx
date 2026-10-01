@@ -146,11 +146,11 @@ function rankedBody({
         </div>
       ) : null}
       <ReadThisFirst marks={standing.readThisFirst} unjudged={standing.unjudged} headingLevel={2} />
-      <h2 className={cn(EYEBROW, "mt-8 border-t border-line pt-4")}>Four weeks</h2>
+      <h2 className={cn(EYEBROW, "mt-8 border-t border-line pt-4")}>Your last four weeks</h2>
       <div className="mt-2">
         <FourWeekLine chart={standing.chart} />
       </div>
-      <h2 className={cn(EYEBROW, "mt-8 border-t border-line pt-4")}>This week's standing</h2>
+      <h2 className={cn(EYEBROW, "mt-8 border-t border-line pt-4")}>This week's ranking</h2>
       <ol className="mt-2">
         {standing.rows.map((row) => (
           <RankedRow key={row.entityId} row={row} onSwitch={onSwitch} openId={openId} evidence={evidence} />

@@ -20,10 +20,10 @@ export function CompetitorMaybes({ maybes }: { maybes: readonly Maybe[] }): Reac
   return (
     <section aria-labelledby="maybes-heading" className="mt-12">
       <h2 id="maybes-heading" className={BLOCK_HEADING}>
-        Maybe
+        Possible competitors
       </h2>
-      <p className="mt-1 text-body-sm text-ink-soft">We weren't sure about these. Watch the ones that matter.</p>
-      <ul aria-label="Maybe" className="mt-3 border-b border-line">
+      <p className="mt-1 text-body-sm text-ink-soft">We weren't sure these compete with you. Watch the ones that do.</p>
+      <ul aria-label="Possible competitors" className="mt-3 border-b border-line">
         {maybes.map((maybe) => (
           <li
             key={maybe.suggestionId}
@@ -74,13 +74,13 @@ export function AddCompetitor({
       <Form method="post">
         <input type="hidden" name="intent" value="add" />
         <label htmlFor="add-competitor" className={BLOCK_HEADING}>
-          Add one we missed
+          Add a competitor we missed
         </label>
         <div className="mt-3 flex flex-col gap-3 sm:flex-row">
           <Input
             id="add-competitor"
             name="competitor"
-            placeholder="their website"
+            placeholder="their website address"
             autoComplete="off"
             autoCapitalize="none"
             autoCorrect="off"

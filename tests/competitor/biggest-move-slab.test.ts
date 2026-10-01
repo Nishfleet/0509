@@ -26,7 +26,7 @@ const change: SiteChangeItemData = {
 };
 
 const QUIET =
-  "Nothing scored for this brand in the last 7 days. We checked Website and Ad library, last at 2026-09-24 02:10 UTC.";
+  "Nothing worth scoring for this competitor in the last 7 days. We checked Website and Ad library, last at 2026-09-24 02:10 UTC.";
 
 const READ = "Mentions that matter: 3 × 0.9 = 2.7 points, the most of anything this brand did this week.";
 

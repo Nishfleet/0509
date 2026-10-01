@@ -53,13 +53,13 @@ interface CountCellSpec {
 const COUNT_CELLS: readonly CountCellSpec[] = [
   {
     key: "new_creatives",
-    label: "New ad creatives",
+    label: "New ads",
     kind: "ads",
     count: (counts) => counts.newCreatives,
   },
   {
     key: "copy_changes",
-    label: "Ad copy changes",
+    label: "Ad wording changes",
     kind: "ads",
     count: (counts) => counts.copyChanges,
   },
@@ -77,14 +77,14 @@ const COUNT_CELLS: readonly CountCellSpec[] = [
   },
   {
     key: "new_roles",
-    label: "New roles",
+    label: "New job openings",
     kind: "hiring",
     count: (counts) => counts.newRoles,
   },
 ];
 
-const RANK_REASON = "Ranked when your week closes.";
-const UNWATCHED_REASON = "Not watched for this brand yet.";
+const RANK_REASON = "Your rank appears when the week ends.";
+const UNWATCHED_REASON = "We're not watching this for this competitor yet.";
 
 function rankCell(standing: SnapshotStanding | null): SnapshotCell {
   if (standing === null) {
@@ -112,7 +112,7 @@ function countCell(spec: CountCellSpec, input: SnapshotInput): SnapshotCell {
       label: spec.label,
       value: null,
       movement: null,
-      reason: `${names} did not answer this week.`,
+      reason: `${names} did not respond this week.`,
     };
   }
   return {

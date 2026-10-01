@@ -32,10 +32,10 @@ describe("DeleteAccount", () => {
     const items = [...list.matchAll(/<li>(.*?)<\/li>/g)].map((match) => match[1]);
     expect(items).toEqual([
       "Every brand you track, yours included",
-      "Every signal: site changes, ads, mentions and roles",
-      "Every site snapshot",
+      "Everything we found: site changes, ads, mentions and job listings",
+      "Every saved copy of a website page",
       "Every screenshot",
-      "Your published standing card",
+      "Your shared ranking image",
       "Your send history and every brief",
       "Your account, its API keys and connected AI apps",
     ]);

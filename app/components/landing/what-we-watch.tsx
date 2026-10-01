@@ -10,7 +10,7 @@ export interface WatchedSource {
 }
 
 const REBUILDING =
-  "We're rebuilding coverage of news mentions. Briefs and standing still arrive from site changes; mentions resume as their sources come back.";
+  "We're rebuilding our coverage of news mentions. Your Monday brief and ranking still come from website changes. Mentions will return as their sources come back.";
 
 export function WhatWeWatch({ sources, now }: { sources: readonly WatchedSource[]; now?: number }) {
   const statuses = sources.map((entry) => ({
@@ -23,7 +23,7 @@ export function WhatWeWatch({ sources, now }: { sources: readonly WatchedSource[
   const siteDegraded = shown.some(({ entry, status }) => entry.kind === "site" && status.state === "degraded");
   const gated = allDegraded && !siteDegraded;
   const nouns = [...new Set(statuses.map(({ entry }) => sourceKindNoun(entry.kind)))];
-  const lead = `We read ${nouns.length === 0 ? "public sources" : joinList(nouns)}. A source that stops answering shows here dimmed, with the reason — we never quietly drop it. Last good unknown means we haven't yet checked this kind of source. The first check lands in the daily sweep.`;
+  const lead = `We read ${nouns.length === 0 ? "public sources" : joinList(nouns)}. If a source stops answering, it shows here dimmed with the reason, so we never drop it quietly. "Last good unknown" means we haven't checked that kind of source yet. The first check happens in the next daily check.`;
   return (
     <Section id="what-we-watch" kicker="Public sources only" title="What we watch" lead={lead}>
       {gated ? (

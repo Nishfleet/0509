@@ -17,7 +17,7 @@ const EXAMPLES: readonly {
 }[] = [
   {
     needs: "site.pricing",
-    who: "A rival",
+    who: "A competitor",
     where: "pricing page",
     before: "20% off annual",
     after: "30% off annual",
@@ -25,7 +25,7 @@ const EXAMPLES: readonly {
   },
   {
     needs: "ads.meta",
-    who: "A rival",
+    who: "A competitor",
     where: "3 new Meta ads",
     before: "“Built for serious teams”",
     after: "“Affordable”",
@@ -33,13 +33,20 @@ const EXAMPLES: readonly {
   },
   {
     needs: "site.home",
-    who: "A rival",
+    who: "A competitor",
     where: "homepage",
     before: "“Built for serious teams”",
     after: "“Built for everyone”",
     own: false,
   },
-  { needs: "own.breakage", who: "Your site", where: "homepage", before: "Page loads", after: "Error 503", own: true },
+  {
+    needs: "own.breakage",
+    who: "Your site",
+    where: "homepage",
+    before: "Page loads",
+    after: "Page is down",
+    own: true,
+  },
 ];
 
 const SHOWN = EXAMPLES.filter((example) => isLive(example.needs)).slice(0, 3);
@@ -64,9 +71,9 @@ function HeroProof(): ReactElement {
   return (
     <aside aria-labelledby="hero-proof" className="min-w-0">
       <p id="hero-proof" className={`${eyebrow} text-green-ink`}>
-        How a change reads
+        What a change looks like
       </p>
-      <p className="mt-2 font-mono text-meta text-ink-soft">Worked examples, not live marks.</p>
+      <p className="mt-2 font-mono text-meta text-ink-soft">Examples, not real changes.</p>
       <ul className="mt-4 grid gap-3">
         {SHOWN.map((example) => (
           <ExampleCard key={example.needs} example={example} />
@@ -88,12 +95,13 @@ export function Hero({ nouns }: { nouns: string }) {
             Know where you stand. And who’s gaining on you.
           </h1>
           <p className="mt-6 max-w-[38rem] text-[clamp(1.05rem,1.4vw,1.2rem)] leading-[1.55] text-ink-soft">
-            We watch {nouns} across your market, and we name the rivals for you, so you do not have to know them.
+            We watch {nouns} across your market. We find your competitors for you, so you do not need to know who they
+            are.
           </p>
           <div className="max-w-[38rem]">
             <OneInput
-              label="your website, or a handle"
-              placeholder="your website, or a handle"
+              label="your website address or social username (like @yourbrand)"
+              placeholder="your website address or social username (like @yourbrand)"
               name="subject"
               action="/login"
               method="get"
@@ -103,7 +111,7 @@ export function Hero({ nouns }: { nouns: string }) {
             />
           </div>
           <p className="mt-4 max-w-[38rem] font-mono text-meta text-ink-soft">
-            One input. Sixty seconds to who’s gaining on you.
+            One box to fill in. About a minute to see who’s gaining on you.
           </p>
         </div>
         <HeroProof />

@@ -44,7 +44,7 @@ function brandsBlock(payload: BriefPayload): ReactElement {
       ) : (
         payload.brands.map((brand) => (
           <p key={brand.entity_id} className={LINE}>
-            {brand.name} — {rankText(brand.rank)}
+            {brand.name}: {rankText(brand.rank)}
             {brand.biggest_move === null ? null : ` ${brand.biggest_move}`}
           </p>
         ))
@@ -61,12 +61,12 @@ function ownSiteBlock(payload: BriefPayload): ReactElement {
         <p className={BODY}>Your site looks fine.</p>
       ) : (
         <Fragment>
-          <p className={BODY}>Your site looks broken</p>
+          <p className={BODY}>Your site looks broken.</p>
           {payload.own_site.incidents.map((incident) => (
             <p key={`${incident.page_url} ${incident.observed_at} ${String(incident.is_open)}`} className={LINE}>
               {incident.kind === ""
                 ? incident.page_url
-                : `${incident.kind} on ${incident.page_url} — ${incident.is_open ? "still broken" : "fixed"}`}
+                : `${incident.kind} on ${incident.page_url}, ${incident.is_open ? "still broken" : "fixed"}`}
             </p>
           ))}
         </Fragment>
@@ -80,11 +80,17 @@ function checkedBlock(payload: BriefPayload): ReactElement {
     <section data-brief-block="checked" className={SECTION}>
       <h3 className={HEAD}>What was checked</h3>
       <p className="mt-2 font-mono text-[0.75rem] tracking-[0.04em] text-ink-soft">
-        {payload.checked.mention_count} mentions · {payload.checked.site_change_count} site changes ·{" "}
-        {payload.checked.new_ad_count} new ads
+        {countLabel(payload.checked.mention_count, "mention", "mentions")} ·{" "}
+        {countLabel(payload.checked.site_change_count, "site change", "site changes")} ·{" "}
+        {countLabel(payload.checked.new_ad_count, "new ad", "new ads")}
       </p>
     </section>
   );
+}
+
+function countLabel(count: number, one: string, many: string): string {
+  if (count === 0) return `no ${many}`;
+  return `${String(count)} ${count === 1 ? one : many}`;
 }
 
 function rankText(rank: number | null): string {

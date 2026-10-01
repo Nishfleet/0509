@@ -55,7 +55,8 @@ const quiet: CompetitorFrameProps = {
   developments: [],
   weekCount: 0,
   biggestMove: null,
-  quiet: "Nothing scored for this brand in the last 7 days. We checked website, last at 2026-09-24 02:09 UTC.",
+  quiet:
+    "Nothing worth scoring for this competitor in the last 7 days. We checked website, last at 2026-09-24 02:09 UTC.",
   pages: 0,
   lastChecked: null,
   pausedOn: null,
@@ -145,7 +146,7 @@ describe("the competitor page frame", () => {
       expect(html).toContain('data-slot="competitor-switch"');
       expect(html).toContain('role="switch"');
       expect(html).toContain(
-        "Off stops the watching and the alerts. The history stays, and turning it back on picks up where it left off.",
+        "Turn off to stop watching and alerts. Your history stays, and turning it back on picks up where it left off.",
       );
       expect(html).not.toContain('role="dialog"');
     }

@@ -57,7 +57,7 @@ describe("FirstFilePanel", () => {
     const html = renderToStaticMarkup(
       createElement(FirstFilePanel, { brands: 2, firstSweepAt: null, briefAt: "Monday 08:00" }),
     );
-    expect(html).toContain("as soon as the first sweep is scheduled");
+    expect(html).toContain("once the first check is scheduled");
     expect(html).not.toContain("soon,");
     expect(html).not.toContain("soon.");
   });

@@ -51,7 +51,7 @@ test("the three onboarding screens pass axe at WCAG 2.2 AA in both themes and at
   await page.emulateMedia({ colorScheme: "light" });
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto("/onboarding");
-  const input = page.getByRole("textbox", { name: "your website, or a handle" });
+  const input = page.getByRole("textbox", { name: "your website address or social username (like @yourbrand)" });
   await input.fill("nike.com");
   await input.press("Enter");
   await expect(page).toHaveURL(/\/onboarding\/identity\?subject=nike\.com$/);
@@ -96,11 +96,11 @@ test("screen 1 is operable by keyboard in order (#4149) @own-signin", async ({ p
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto("/onboarding");
 
-  const input = page.getByRole("textbox", { name: "your website, or a handle" });
+  const input = page.getByRole("textbox", { name: "your website address or social username (like @yourbrand)" });
   await expect(input).toBeFocused();
 
   await page.keyboard.press("Tab");
-  await expect(page.getByRole("button", { name: "Draw my card" })).toBeFocused();
+  await expect(page.getByRole("button", { name: "Continue" })).toBeFocused();
 
   await page.keyboard.press("Tab");
   const passkey = page.getByRole("button", { name: "Add a passkey" });
@@ -142,7 +142,7 @@ test("screen 2 is operable by keyboard in order, with one polite live region (#4
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto("/onboarding");
 
-  const input = page.getByRole("textbox", { name: "your website, or a handle" });
+  const input = page.getByRole("textbox", { name: "your website address or social username (like @yourbrand)" });
   await input.fill("nike.com");
   await input.press("Enter");
   await expect(page).toHaveURL(/\/onboarding\/identity\?subject=nike\.com$/);

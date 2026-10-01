@@ -11,7 +11,7 @@ export function CompetitorForget({ name, error }: { name: string; error: string 
         Remove and forget
       </h2>
       <p className="mt-2 max-w-prose leading-[1.55]">
-        We stop tracking {name} and delete every change and screenshot we kept. Turning it off keeps its history; this
+        We stop tracking {name} and delete every change and screenshot we kept. Turning it off keeps its history. This
         does not. This can't be undone.
       </p>
       <Form method="post" className="mt-4 flex flex-col gap-3">

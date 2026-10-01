@@ -10,7 +10,6 @@ import { PAGE, PageHeading } from "../components/page-heading";
 import { SourcePill } from "../components/source-pill";
 import { acknowledgeOwnSiteIncident, loadAlertsPage } from "../lib/alerts-page.server";
 import { parseAlertChip } from "../lib/alert-chips";
-import { briefSendLine } from "../lib/brief-state";
 import { listBriefs } from "../lib/data/digest.server";
 import { readWorkspaceIdForOwner } from "../lib/data/workspace.server";
 import { requireFreshSession, requireSession } from "../lib/require-session.server";
@@ -26,7 +25,7 @@ export async function loader({ request }: Route.LoaderArgs) {
   const page = await loadAlertsPage(session.user.id, parseAlertChip(new URL(request.url).searchParams.get("kind")));
   const workspaceId = await readWorkspaceIdForOwner(session.user.id);
   const latest = workspaceId === null ? undefined : (await listBriefs(env.DB, workspaceId))[0];
-  const failedBrief = latest?.status === "failed" ? { id: latest.id, reason: briefSendLine(latest) } : null;
+  const failedBrief = latest?.status === "failed" ? { id: latest.id } : null;
   return { ...page, failedBrief };
 }
 
@@ -39,12 +38,12 @@ export async function action({ request }: Route.ActionArgs) {
   return { saved: true };
 }
 
-function BriefSendFailed({ failed }: { failed: { id: string; reason: string } }) {
+function BriefSendFailed({ failed }: { failed: { id: string } }) {
   return (
     <p role="alert" data-alert="brief-send-failed" className="mt-4 leading-[1.65]">
-      We could not send your brief ({failed.reason}).{" "}
+      We could not email your weekly brief.{" "}
       <Link className="underline decoration-1 underline-offset-4" to={`/app/brief/${failed.id}`}>
-        Here it is in the app
+        Read it in the app
       </Link>
       .
     </p>
@@ -72,7 +71,7 @@ export default function Page({ loaderData }: Route.ComponentProps) {
     <main className={PAGE}>
       <PageHeading title="Alerts" />
       <p data-testid="alerts-contract" className="mt-2 leading-[1.65] text-ink-soft">
-        One thing here interrupted you by email: your own site.
+        We only email you right away when your own website breaks. Everything else waits here.
       </p>
       {loaderData.failedBrief === null ? null : <BriefSendFailed failed={loaderData.failedBrief} />}
       <IncidentSlot incident={loaderData.openIncident} />
@@ -89,7 +88,7 @@ export default function Page({ loaderData }: Route.ComponentProps) {
       <AlertChips chip={loaderData.chip} counts={loaderData.chipCounts} hiringCapped={loaderData.hiringCapped} />
       {loaderData.chipCounts.all === 0 && loaderData.openIncident === null ? (
         <p className="mt-8 leading-[1.65]">
-          Nothing has interrupted you. When your own site breaks you'll get an email; everything else waits here.
+          Nothing yet. When a competitor changes its website, gets a mention or posts a job, it will show up here.
         </p>
       ) : null}
       <AlertFeed groups={loaderData.groups} />

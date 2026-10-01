@@ -27,14 +27,15 @@ const COPY = {
   next: "Next brief",
   noNext: "Next brief date not set yet",
   unsubscribe: "Unsubscribe",
-  noUnsubscribe: "Unsubscribe is not available right now — reply to this email and we will stop sending.",
+  noUnsubscribe: "Unsubscribe is not available right now. Reply to this email and we will stop sending.",
   degraded: (count: number) =>
-    `${n(count)} ${count === 1 ? "source" : "sources"} did not answer this week, so these counts are short.`,
+    `${n(count)} ${count === 1 ? "source" : "sources"} could not be reached this week, so these counts may be low.`,
   unnamedSource: "One of your sources",
   sources: (count: number) => (count === 1 ? "1 source" : `${n(count)} sources`),
   blind: (source: string, when: string) =>
-    `${source} has not answered since ${when}, so this is not a quiet week we can vouch for.`,
-  blindNever: (source: string) => `${source} has not answered yet, so this is not a quiet week we can vouch for.`,
+    `We could not reach ${source} since ${when}, so we cannot say this was a quiet week.`,
+  blindNever: (source: string) =>
+    `We have not been able to reach ${source} yet, so we cannot say this was a quiet week.`,
 } as const;
 
 function n(value: number): string {

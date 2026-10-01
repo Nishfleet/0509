@@ -36,7 +36,7 @@ export function AgentsSection() {
         prefetch="intent"
         className="mt-3 inline-flex min-h-11 items-center gap-2 font-display font-bold underline decoration-1 underline-offset-4"
       >
-        Connect an agent <span aria-hidden="true">→</span>
+        Connect an AI app <span aria-hidden="true">→</span>
       </Link>
     </section>
   );

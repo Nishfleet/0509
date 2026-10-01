@@ -30,10 +30,10 @@ describe("error page", () => {
       data: LEAK,
     };
     const html = page(error, false, "/this-page-is-not-here");
-    expect(html).toContain("This page is not here");
-    expect(html).toContain("Nothing in the product lives at /this-page-is-not-here.");
+    expect(html).toContain("Page not found");
+    expect(html).toContain("There is no page at /this-page-is-not-here.");
     expect(html).toContain('href="/"');
-    expect(html).toContain("Back to the landing");
+    expect(html).toContain("Back to home");
     expect(html).toContain("rounded-none");
     expect(html).not.toContain(LEAK);
     expect(html).not.toContain("404");
@@ -78,8 +78,8 @@ describe("error page", () => {
     const error = context.errors?.root;
     expect(error).toBeInstanceOf(Error);
     const html = page(error, false, "/blow-up");
-    expect(html).toContain("The product hit a problem");
-    expect(html).toContain("We have been told.");
+    expect(html).toContain("Something went wrong");
+    expect(html).toContain("we have been alerted");
     expect(html).not.toContain(LEAK);
     expect(html).not.toContain("blow-up");
     expect(html).not.toContain("<pre");
@@ -90,7 +90,7 @@ describe("error page", () => {
   it("treats a non-404 route error as the problem page", () => {
     const error = { status: 500, statusText: LEAK, internal: false, data: LEAK };
     const html = page(error, false, "/app");
-    expect(html).toContain("The product hit a problem");
+    expect(html).toContain("Something went wrong");
     expect(html).not.toContain(LEAK);
     expect(html).not.toContain("404");
   });
@@ -117,8 +117,8 @@ describe("error page", () => {
     if (!isRouteErrorResponse(error)) return;
     expect(error.status).toBe(404);
     const html = page(error, true, "/this-page-is-not-here");
-    expect(html).toContain("This page is not here");
-    expect(html).toContain("Nothing in the product lives at /this-page-is-not-here.");
+    expect(html).toContain("Page not found");
+    expect(html).toContain("There is no page at /this-page-is-not-here.");
     expect(html).toContain('href="/app"');
     expect(html).toContain("Back to home");
     expect(html).not.toContain("Not Found");

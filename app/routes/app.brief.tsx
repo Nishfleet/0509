@@ -89,7 +89,7 @@ export default function Page({ loaderData }: Route.ComponentProps) {
                 >
                   Week of {w.week}
                 </Link>
-                {" — "}
+                {": "}
                 {w.line}
               </li>
             ))}

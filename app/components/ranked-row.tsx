@@ -149,6 +149,6 @@ function positionLabel(row: HomeRow): string {
 
 function pillText(pill: HomePill): string {
   if (pill.state === "live") return `${pill.label} · ${String(pill.count)}`;
-  if (pill.state === "degraded") return `${pill.label} — degraded`;
-  return `${pill.label} — none`;
+  if (pill.state === "degraded") return `${pill.label} · not answering`;
+  return `${pill.label} · nothing new`;
 }

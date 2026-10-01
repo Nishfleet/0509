@@ -2,7 +2,7 @@ import type { NoulQuestion } from "./jev/thresholds";
 
 export const D4_QUESTION_ID = "read_this_first";
 
-export const UNJUDGED_WEEK_LINE = "We couldn't judge this week's changes yet.";
+export const UNJUDGED_WEEK_LINE = "We haven't finished reviewing this week's changes yet.";
 
 export const READ_THIS_FIRST: NoulQuestion = {
   id: D4_QUESTION_ID,
@@ -67,5 +67,5 @@ export function pickReadThisFirst(verdicts: readonly D4Verdict[]): string[] {
 }
 
 export function readThisFirstLine(picked: number, judged: number, leadName: string): string {
-  return `${String(picked)} of ${String(judged)} worth knowing this week, led by ${leadName}.`;
+  return `${String(picked)} of ${String(judged)} changes worth reading this week, led by ${leadName}.`;
 }

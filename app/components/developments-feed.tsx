@@ -56,7 +56,7 @@ export function DevelopmentsFeed({
   return (
     <div data-slot="developments-feed" className="flex min-w-0 flex-col gap-4">
       <ToggleGroup
-        aria-label="Filter developments"
+        aria-label="Filter updates"
         value={[filter]}
         onValueChange={(values) => {
           const next = parseFeedFilter(values[0] ?? null);

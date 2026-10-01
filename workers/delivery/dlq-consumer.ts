@@ -7,7 +7,7 @@ import { parseMessage } from "./consumer";
 export const DELIVERY_FAILED_KIND = "delivery_failed";
 export const DLQ_ALERT_PREFIX = "dlq:";
 export const DLQ_INCIDENT_PREFIX = "dlq-incident:";
-export const DELIVERY_FAILED_TITLE = "We could not send your brief — here it is in the app";
+export const DELIVERY_FAILED_TITLE = "We could not send your brief by email, so it is in the app instead";
 
 export const DELIVERY_FAILED_BODY =
   "We tried several times and could not deliver this brief by email, so we have stopped trying. Everything in it is below. Your next brief goes out on its usual day.";

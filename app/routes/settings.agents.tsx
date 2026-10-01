@@ -56,7 +56,7 @@ export default function Page({ loaderData, actionData }: Route.ComponentProps) {
       </nav>
       <PageHeading
         title="Agents and API"
-        lede="Let Claude, ChatGPT, Cursor or your own code read your brief, competitors and alerts. Agents can only read, and only your workspace."
+        lede="Let Claude, ChatGPT, Cursor or your own code read your brief, competitors and alerts. Agents can only read, and only your own account."
       />
       <ConnectDetails mcpUrl={loaderData.mcpUrl} origin={loaderData.origin} />
       <ConnectedApps apps={loaderData.apps} />

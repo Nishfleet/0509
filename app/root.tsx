@@ -16,6 +16,9 @@ export function Layout({ children }: { children: React.ReactNode }) {
       <head>
         <meta charSet="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <link rel="icon" href="/logo.svg" type="image/svg+xml" />
+        <link rel="icon" href="/favicon.ico" sizes="48x48" />
+        <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
         {serverOnly ? null : (
           <>
             <link rel="stylesheet" href="/app-faces.css" />
@@ -66,10 +69,14 @@ export function ErrorBoundary({ error, loaderData }: Route.ErrorBoundaryProps) {
   const where = loaderData?.pathname ?? "this address";
   return (
     <ErrorPage
-      title={notFound ? "This page is not here" : "The product hit a problem"}
-      detail={notFound ? `Nothing in the product lives at ${where}.` : "We have been told."}
+      title={notFound ? "Page not found" : "Something went wrong"}
+      detail={
+        notFound
+          ? `There is no page at ${where}. Check the address, or go back to the home page.`
+          : "This is a problem on our side and we have been alerted. Please try again in a minute."
+      }
       actionHref={signedIn ? "/app" : "/"}
-      actionLabel={signedIn ? "Back to home" : "Back to the landing"}
+      actionLabel="Back to home"
     />
   );
 }

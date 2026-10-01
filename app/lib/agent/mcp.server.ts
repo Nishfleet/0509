@@ -52,7 +52,7 @@ export function mcpInstructions(sources: readonly FreshnessSource[], now: number
     ),
   ];
   const capabilities = nouns.length === 0 ? "public sources" : joinList(nouns);
-  return `Five to Nine watches the user's competitors (${capabilities}) and ranks the user against them every week. Everything here is read-only and limited to the signed-in user's own workspace.`;
+  return `Five to Nine watches the user's competitors (${capabilities}) and ranks the user against them every week. Everything here is read-only and limited to the signed-in user's own account.`;
 }
 
 function registerStanding(server: McpServer, workspaceId: string): void {
@@ -77,7 +77,7 @@ function registerBrief(server: McpServer, workspaceId: string): void {
     {
       title: brief.title,
       description:
-        "The latest weekly brief: where the user ranks against their competitors, the changes worth reading first and why each matters, per-competitor standing, and whether the user's own site had problems.",
+        "The latest weekly brief: where the user ranks against their competitors, the changes worth reading first and why each matters, per-competitor ranking, and whether the user's own site had problems.",
       outputSchema: briefResultSchema,
       annotations: READ_ONLY,
     },

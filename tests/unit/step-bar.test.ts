@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 
 import { ONBOARDING_STEPS, StepBar } from "../../app/components/step-bar";
 
-const LABELS = ["1 your site", "2 your card", "3 your competitors"] as const;
+const LABELS = ["1 Your site", "2 Check details", "3 Competitors"] as const;
 
 function markup(current: 1 | 2 | 3): string {
   return renderToStaticMarkup(createElement(StepBar, { current }));
@@ -12,7 +12,7 @@ function markup(current: 1 | 2 | 3): string {
 
 describe("StepBar", () => {
   it("exports the three onboarding labels in order", () => {
-    expect(ONBOARDING_STEPS).toEqual(["your site", "your card", "your competitors"]);
+    expect(ONBOARDING_STEPS).toEqual(["Your site", "Check details", "Competitors"]);
   });
 
   it.each([1, 2, 3] as const)("marks only step %s as the current step", (current) => {

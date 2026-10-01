@@ -41,7 +41,7 @@ test("the Competitors page is landmarked, ordered and keyboard-operable at 1440 
       await expect(page.getByRole("heading", { level: 1, name: "Competitors" })).toBeVisible();
       await expect(page.getByRole("heading", { level: 1 })).toHaveCount(1);
       await expect(page.getByRole("main")).toHaveCount(1);
-      await expect(page.getByRole("navigation", { name: "Places" })).toBeVisible();
+      await expect(page.getByRole("navigation", { name: "Primary" })).toBeVisible();
 
       // Heading order: the first heading is the h1 and no level is skipped, so
       // the page reads as an outline rather than a flat list of styled text.
@@ -68,7 +68,7 @@ test("the Competitors page is landmarked, ordered and keyboard-operable at 1440 
         order.push(await page.evaluate(() => document.activeElement?.textContent?.trim() ?? ""));
       }
       expect(order).toEqual(["Home", "Competitors", "Alerts", "Settings"]);
-      await expect(page.getByRole("navigation", { name: "Places" }).getByRole("link", { name: "Settings" })).toHaveCSS(
+      await expect(page.getByRole("navigation", { name: "Primary" }).getByRole("link", { name: "Settings" })).toHaveCSS(
         "outline-style",
         "solid",
       );
@@ -79,7 +79,7 @@ test("the Competitors page is landmarked, ordered and keyboard-operable at 1440 
 
       // The add control: Tabbing reaches the labelled input, then the Add
       // button beside it.
-      const add = page.getByLabel("Add one we missed");
+      const add = page.getByLabel("Add a competitor we missed");
       for (let i = 0; i < 60; i += 1) {
         if (await add.evaluate((el) => el === document.activeElement)) break;
         await page.keyboard.press("Tab");

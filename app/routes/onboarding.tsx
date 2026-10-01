@@ -17,7 +17,7 @@ import { startOnboardingRun } from "../lib/data/onboarding_run.server";
 import { createTimings } from "../lib/server-timing.server";
 
 export function meta() {
-  return [{ title: "Start with your website or a handle · Five to Nine" }];
+  return [{ title: "Your website or social username · Five to Nine" }];
 }
 
 export async function loader({ request }: Route.LoaderArgs) {
@@ -80,7 +80,7 @@ export async function action({ request }: Route.ActionArgs) {
   const { taken, workspaceId } = await readTakenAndWorkspace(timings, session.user.id, normalised);
   if (taken) {
     return {
-      message: "This brand asked not to be tracked, so we can't set it up. Try your own website.",
+      message: "This brand asked us not to track it, so we can't set it up. Try your own website address.",
       confirm: null,
     };
   }
@@ -98,22 +98,27 @@ export async function action({ request }: Route.ActionArgs) {
   }
   const target = subjectRedirect(raw);
   if (target) throw redirect(target, { headers: timings.header() });
-  return { message: "We couldn't find anything for that, try the main website.", confirm: null };
+  return {
+    message:
+      "We couldn't find a website or username in that. Try an address like yourbrand.com or a username like @yourbrand.",
+    confirm: null,
+  };
 }
 
 export default function Page({ loaderData, actionData }: Route.ComponentProps) {
   return (
-    <OnboardingFrame step={1} heading="Start with your website or a handle" hideHeading>
+    <OnboardingFrame step={1} heading="Your website or social username" hideHeading>
       <p className="mt-3 max-w-prose leading-[1.55] text-ink-soft">
-        We read it and draw your card, then find who you're up against. A handle like @yourbrand works too.
+        Enter your website address or your social username, like @yourbrand. We'll read it, fill in your details, then
+        find your competitors.
       </p>
       <OneInput
-        label="your website, or a handle"
-        placeholder="your website, or a handle"
+        label="Your website address or social username"
+        placeholder="yourbrand.com or @yourbrand"
         name="subject"
         action="/onboarding"
         message={actionData?.message ?? undefined}
-        submitLabel="Draw my card"
+        submitLabel="Continue"
       />
       {actionData?.confirm ? (
         <Form method="post" action="/onboarding" className="mt-6 flex flex-col gap-3">

@@ -18,11 +18,11 @@ const STATE_TEXT: Record<BrandSwitchState, string> = {
 
 export function brandSwitchNote(state: BrandSwitchState, pausedOn: Date | null): string {
   if (state === "on")
-    return "Off stops the watching and the alerts. The history stays, and turning it back on picks up where it left off.";
-  if (state === "you") return "Your brand · always tracked";
-  if (pausedOn === null) return "paused · history kept";
+    return "Turn off to stop watching and alerts. Your history stays, and turning it back on picks up where it left off.";
+  if (state === "you") return "Your brand, always tracked";
+  if (pausedOn === null) return "Paused, history kept";
   const day = DAY_MONTH.format(pausedOn);
-  return `paused ${day} · history kept`;
+  return `Paused ${day}, history kept`;
 }
 
 export function brandRowClass(state: BrandSwitchState): string {

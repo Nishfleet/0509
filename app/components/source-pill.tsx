@@ -148,10 +148,10 @@ export function SourcePill({
   return (
     <span data-state={status.state} style={pillStyle(status.state === "live")}>
       <span>{name}</span>
-      {status.state === "none" ? <span>— none</span> : null}
+      {status.state === "none" ? <span>· nothing new</span> : null}
       {status.state === "degraded" ? (
         <span>
-          — degraded{status.reason === null ? "" : `: ${status.reason}`} · last good {lastGood ?? "unknown"}
+          · {status.reason ?? "not answering"} · last good {lastGood ?? "unknown"}
         </span>
       ) : null}
     </span>

@@ -99,8 +99,8 @@ again" that is disabled for 30 seconds with the count visible.
 Three screens, each one action, per `docs/REBUILD-ONBOARDING.md`. A mono step bar with
 the current step on the marker runs across the top of all three.
 
-1. **One input.** Placeholder "your website, or a handle". Nothing else on screen.
-2. **Your card.** The heading is "This is you. Fix anything we got wrong." The card
+1. **One input.** Placeholder "yourbrand.com or @yourbrand", button "Continue". Nothing else on screen.
+2. **Check your details.** The heading is "This is you. Fix anything we got wrong." The card
    draws itself field by field as each source lands — each row that has not arrived yet
    says what will fill it ("logo: looking on the site"), never a spinner and never a
    skeleton block. Fields Jev was unsure about (D7 between) sit on the green wash and
@@ -166,8 +166,8 @@ beside it, the snapshot row, and the top of the biggest-move slab.
 - Developments are chronological and mixed by default, filtered by the type chips
   (All / Ads / Site changes / Mentions / Hiring, each with its count). Ads, site changes,
   mentions and hiring are _filters on one feed_, not four tabs with four layouts.
-- Right rail at ≥1080px, stacked underneath below that: Peers (the standing, tappable,
-  off brands dimmed), Thirty days (facts), Sources on this brand (live/degraded pills
+- Right rail at ≥1080px, stacked underneath below that: How you rank (the ranking, tappable,
+  off brands dimmed), Last 30 days (facts), What we watch here (live/degraded pills
   with the reason), and Jev's last "still a competitor?" verdict with its date and p.
 - An OFF brand's page renders identically, with the switch off, a line under the title
   saying when it was paused, and the feed frozen at the pause date with a rule across it.
@@ -428,15 +428,15 @@ printed next to the control before it is touched.
 Never "No data". Every empty state says **what will fill it and when**, or gives the one
 action that fills it.
 
-| Where                             | Copy                                                                                                                                    |
-| --------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| Home, second zero                 | "We're gathering the first week. Your first read-this-first comes with the brief on Monday 08:00." (a real Workflow time, never "soon") |
-| Read this first, quiet week       | "Quiet week. 61 mentions, 2 site changes checked — nothing crossed the bar." with the counts tappable                                   |
-| Fewer than two ON brands          | "Add a competitor to see where you stand." with the one input inline                                                                    |
-| A row's evidence tab with nothing | "No site changes this week. We checked /pricing and /home daily — last at 06:02."                                                       |
-| Competitor page, just added       | "Watching from today. We read the homepage every night at 02:00 UTC, and the first change shows here after the second read."            |
-| Alerts, nothing yet               | "Nothing has interrupted you. When your own site breaks you'll get an email; everything else waits here."                               |
-| A degraded source                 | "X has been rate-limiting us since Friday. We show it as degraded rather than pretend the count is complete."                           |
+| Where                             | Copy                                                                                                                                         |
+| --------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| Home, second zero                 | "We're collecting your first week of data. Your first ranking arrives with your brief on Monday 08:00." (a real Workflow time, never "soon") |
+| Read this first, quiet week       | "Quiet week. We checked 61 mentions and 2 site changes. None were big enough to flag." with the counts tappable                              |
+| Fewer than two ON brands          | "Add a competitor to see where you stand." with the one input inline                                                                         |
+| A row's evidence tab with nothing | "No site changes this week. We checked /pricing and /home daily, most recently at 06:02."                                                    |
+| Competitor page, just added       | "Watching from today. We read the homepage every night at 02:00 UTC, and the first change shows here after the second read."                 |
+| Alerts, nothing yet               | "Nothing yet. When a competitor changes its website, gets a mention or posts a job, it will show up here."                                   |
+| A degraded source                 | "X has been rate-limiting us since Friday. The count may be incomplete."                                                                     |
 
 **A chart with one week of data is never hidden.** It renders with its single point and
 the line labelled "first week". This is the rule the other empty states are a special case

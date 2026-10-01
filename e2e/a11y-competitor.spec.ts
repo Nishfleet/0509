@@ -49,7 +49,7 @@ test("a competitor page passes axe at WCAG 2.2 AA and is keyboard-operable at 14
 
       await expect(page.getByRole("heading", { level: 1 })).toHaveCount(1);
       await expect(page.getByRole("main")).toHaveCount(1);
-      await expect(page.getByRole("navigation", { name: "Places" })).toBeVisible();
+      await expect(page.getByRole("navigation", { name: "Primary" })).toBeVisible();
 
       const levels = await page
         .locator("h1, h2, h3, h4, h5, h6")

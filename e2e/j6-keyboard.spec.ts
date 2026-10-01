@@ -67,7 +67,7 @@ async function watchOneCompetitor(page: Page): Promise<void> {
   await signInWithMagicLink(page, email, requireInboxToken());
 
   await page.goto("/onboarding");
-  const input = page.getByRole("textbox", { name: "your website, or a handle" });
+  const input = page.getByRole("textbox", { name: "your website address or social username (like @yourbrand)" });
   await input.fill("gymshark.com");
   await input.press("Enter");
   await expect(page.getByRole("button", { name: "edit name" })).toBeVisible({ timeout: 30_000 });
@@ -107,7 +107,7 @@ test("the per-brand switch is operable with a keyboard alone @own-signin", async
   // pins the tab count to the top of the document, then the nav's
   // "Competitors" link is two Tabs and an Enter away.
   await page.reload();
-  const nav = page.getByRole("navigation", { name: "Places" });
+  const nav = page.getByRole("navigation", { name: "Primary" });
   await page.keyboard.press("Tab");
   await expect(nav.getByRole("link", { name: "Home" })).toBeFocused();
   await page.keyboard.press("Tab");
@@ -158,7 +158,7 @@ test("the per-brand switch is operable with a keyboard alone @own-signin", async
   const noteId = await toggle.getAttribute("aria-describedby");
   expect(noteId).toBeTruthy();
   const note = page.locator(`[id="${noteId ?? ""}"]`);
-  await expect(note).toContainText("Off stops the watching and the alerts");
+  await expect(note).toContainText("Turn off to stop watching and alerts");
 
   // Space turns the brand off. The change is announced because focus stays on
   // the switch and its aria-checked flips; the line it describes now reads
@@ -176,7 +176,7 @@ test("the per-brand switch is operable with a keyboard alone @own-signin", async
   await page.keyboard.press("Space");
   await expect(toggle).toBeFocused();
   await expect(toggle).toHaveAttribute("aria-checked", "true");
-  await expect(note).toContainText("Off stops the watching and the alerts");
+  await expect(note).toContainText("Turn off to stop watching and alerts");
   console.log(
     `switch[width=${String(width)}] aria-checked=false->true, note="${(await note.textContent())?.trim() ?? ""}"`,
   );

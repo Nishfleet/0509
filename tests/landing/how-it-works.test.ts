@@ -4,7 +4,11 @@ import { describe, expect, it } from "vitest";
 
 import { HowItWorks } from "../../app/components/landing/how-it-works";
 
-const TITLES = ["Paste your site or handle", "Meet who you’re up against", "Read one email on Monday"] as const;
+const TITLES = [
+  "Enter your website or social username",
+  "Meet who you’re up against",
+  "Read one email on Monday",
+] as const;
 
 function markup(): string {
   return renderToStaticMarkup(createElement(HowItWorks));
@@ -50,7 +54,7 @@ describe("landing how-it-works", () => {
 
   it("claims only what the product does today", () => {
     const html = markup();
-    expect(html).toContain("Tap any field to fix it. The card is the form.");
+    expect(html).toContain("Tap any field to fix it.");
     expect(html).toContain("one switch");
     expect(html).toContain("one email on Monday");
     expect(html).not.toMatch(/\bfree\b/i);

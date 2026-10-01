@@ -21,7 +21,7 @@ const VERDICT_WORDS: Record<string, string> = {
 
 const FACT_NOUNS: Record<string, [string, string]> = {
   change: ["site change", "site changes"],
-  hiring: ["new role", "new roles"],
+  hiring: ["new job opening", "new job openings"],
   ad: ["ad", "ads"],
   mention: ["mention", "mentions"],
 };
@@ -71,7 +71,7 @@ export function factLabel(kind: string, count: number): string | null {
 
 function Peers({ entityId, peers }: { entityId: string; peers: readonly RailPeer[] }): ReactElement {
   if (peers.length === 0) {
-    return <EmptyState sentence="No standing yet. It comes with your first weekly brief." />;
+    return <EmptyState sentence="No ranking yet. It arrives with your first weekly brief." />;
   }
   return (
     <ol className={ROW}>
@@ -153,7 +153,7 @@ function Sources({
 function StillCompetitor({ verdict }: { verdict: RailVerdict | null }): ReactElement {
   const words = verdict === null ? null : verdictWords(verdict.choice);
   if (verdict === null || words === null) {
-    return <EmptyState sentence="We ask this every week. The first answer lands after a week of watching." />;
+    return <EmptyState sentence="We check this every week. The first answer arrives after a week of watching." />;
   }
   return (
     <>
@@ -176,19 +176,19 @@ export function CompetitorRail({
     <aside data-slot="competitor-rail" className="flex min-w-0 flex-col gap-10">
       <section data-section="peers" aria-labelledby="competitor-peers" className="min-w-0">
         <h2 id="competitor-peers" className={HEADING}>
-          Peers
+          How you rank
         </h2>
         <Peers entityId={entityId} peers={peers} />
       </section>
       <section data-section="facts" aria-labelledby="competitor-facts" className="min-w-0">
         <h2 id="competitor-facts" className={HEADING}>
-          Thirty days
+          Last 30 days
         </h2>
         <Facts facts={facts} />
       </section>
       <section data-section="sources" aria-labelledby="competitor-sources" className="min-w-0">
         <h2 id="competitor-sources" className={HEADING}>
-          Sources on this brand
+          What we watch here
         </h2>
         <Sources sources={sources} lastChecked={lastChecked} now={now} />
       </section>

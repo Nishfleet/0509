@@ -141,7 +141,7 @@ describe("unjudged week readers", () => {
       expect(text).not.toContain(QUIET);
       expect(text).not.toMatch(RANK);
       expect(text).not.toContain("Quiet week");
-      expect(text).not.toContain("gathering the first week");
+      expect(text).not.toContain("collecting your first week of data");
     }
     expect(email.subject).toBe(UNJUDGED_WEEK_LINE);
     expect(standing.kind).toBe("unjudged");

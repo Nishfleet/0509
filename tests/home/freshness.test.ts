@@ -36,7 +36,7 @@ describe("freshness entries", () => {
     const entry = entryFor(reddit, freshSnapshot);
 
     expect(entry.state).toBe("live");
-    expect(freshnessText(entry)).toContain("landed 2026-09-24 07:00 UTC");
+    expect(freshnessText(entry)).toContain("updated 2026-09-24 07:00 UTC");
   });
 
   it("hides a disabled source", () => {

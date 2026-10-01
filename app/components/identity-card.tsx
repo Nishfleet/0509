@@ -34,7 +34,7 @@ function Row({
       {children}
       {check === true ? (
         <span id={checkId} className="font-mono text-[0.7rem] text-green-ink uppercase">
-          check this
+          please check
         </span>
       ) : null}
     </div>
@@ -115,7 +115,7 @@ function EditStatus({ edited, reverted, onRevert }: Pick<EditRowProps, "edited" 
   if (reverted) {
     return (
       <span role="status" className="text-[0.88rem] text-ink-soft">
-        back to what we found, we will check it again
+        back to what we found, we'll check it again
       </span>
     );
   }
@@ -185,8 +185,8 @@ function Logo({ logo }: { logo: Promise<string | null> }) {
   );
 }
 
-const EMPTY_LINE = "we'll fill this after the first crawl";
-const UNREAD_LINE = "we'll fill this on the first crawl, within the hour";
+const EMPTY_LINE = "we'll fill this in after our first look at your site";
+const UNREAD_LINE = "we'll fill this in within the hour";
 
 const DRAFT_META = {
   name: { label: "name", placeholder: "your brand's name", multiline: false },
@@ -311,7 +311,7 @@ export function Fields({
         <Logo logo={logo} />
       )}
       <DraftRow field="description" site={site} draft={draft} emptyLine={emptyLine} actions={actions} />
-      <Row label="socials" check={site.review.socials === "check"}>
+      <Row label="social links" check={site.review.socials === "check"}>
         <SocialsBody site={site} emptyLine={emptyLine} />
       </Row>
     </>
@@ -325,12 +325,12 @@ export function ArrivalLine({ fields }: { fields: SiteFields }) {
   const checks = [
     fields.review.name === "check" ? "name" : null,
     fields.review.description === "check" ? "about" : null,
-    fields.review.socials === "check" ? "socials" : null,
+    fields.review.socials === "check" ? "social links" : null,
   ].filter((label): label is string => label !== null);
   const list = checks.join(", ");
   return (
     <span className="sr-only">
-      {checks.length === 0 ? "Your card is drawn." : `Your card is drawn. Check this: ${list}.`}
+      {checks.length === 0 ? "Your details are ready." : `Your details are ready. Please check: ${list}.`}
     </span>
   );
 }
@@ -344,7 +344,7 @@ function CreatorLines({ creator }: { creator: CreatorRows | null }) {
           <span className="truncate text-[0.95rem]">{creator.channel}</span>
         </Row>
       )}
-      <Row label="handle">
+      <Row label="username">
         <span className="truncate text-[0.95rem]">{creator.handle}</span>
       </Row>
     </>
@@ -357,7 +357,7 @@ function PendingRows() {
       <Pending label="name" fill="looking on the site" />
       <Pending label="logo" fill="looking on the site" />
       <Pending label="about" fill="looking on the site" />
-      <Pending label="socials" fill="looking on the site" />
+      <Pending label="social links" fill="looking on the site" />
     </>
   );
 }

@@ -37,7 +37,7 @@ describe("OnboardingFrame", () => {
 
   it("keeps screen 3's watching list a polite additions-only live region inside the frame", () => {
     const html = renderToStaticMarkup(
-      createElement(OnboardingFrame, { step: 3, heading: "Who you're up against" }, WATCHING_LIST),
+      createElement(OnboardingFrame, { step: 3, heading: "Your competitors" }, WATCHING_LIST),
     );
 
     expect(html).toContain("<main>");

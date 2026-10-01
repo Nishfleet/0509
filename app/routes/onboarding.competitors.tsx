@@ -30,7 +30,7 @@ async function workspaceFor(request: Request, fresh = false): Promise<string> {
 }
 
 export function meta() {
-  return [{ title: "Who you're up against · Five to Nine" }];
+  return [{ title: "Your competitors · Five to Nine" }];
 }
 
 export async function loader({ request }: Route.LoaderArgs) {
@@ -82,7 +82,7 @@ export default function Page({ loaderData, actionData }: Route.ComponentProps) {
   const notice = discoveryNotice(useDiscoveryPolling(discovery), on.length + maybes.length);
 
   return (
-    <OnboardingFrame step={3} heading="Who you're up against">
+    <OnboardingFrame step={3} heading="Your competitors">
       {notice === null ? null : (
         <p role="status" className="mt-3 max-w-prose leading-[1.55] text-ink-soft">
           {notice}

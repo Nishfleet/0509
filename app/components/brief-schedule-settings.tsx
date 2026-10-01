@@ -121,8 +121,8 @@ export function BriefScheduleSettings({ schedule }: { schedule: ScheduleView }):
         />
       </div>
       <p className="mt-3 text-body-sm text-ink-soft">
-        Time zone: <span className="[overflow-wrap:anywhere] text-ink">{form.timezone.replaceAll("_", " ")}</span>.{" "}
-        {schedule.nextLine}.
+        Time zone: <span className="[overflow-wrap:anywhere] text-ink">{form.timezone.replaceAll("_", " ")}</span>. Next
+        brief: {schedule.nextLine}.
       </p>
       {deviceZone !== null && deviceZone !== form.timezone ? (
         <Button
@@ -138,7 +138,7 @@ export function BriefScheduleSettings({ schedule }: { schedule: ScheduleView }):
       ) : null}
       {form.saved === false ? (
         <p role="alert" className="mt-2 text-[0.95rem]">
-          That time didn&apos;t save. Pick it again.
+          We couldn&apos;t save that time. Pick it again.
         </p>
       ) : null}
       <BriefPauseSetting pausedAt={schedule.pausedAt} timezone={schedule.timezone} />

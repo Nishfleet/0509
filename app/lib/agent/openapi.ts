@@ -41,7 +41,7 @@ export function openApiDocument(origin: string) {
       title: "Five to Nine API",
       version: "1.0.0",
       description:
-        "Read-only access to your own Five to Nine workspace. Create a key in Settings, then send it as 'Authorization: Bearer <key>'. AI agents can use the MCP server at /mcp instead.",
+        "Read-only access to your own Five to Nine account. Create a key in Settings, then send it as 'Authorization: Bearer <key>'. AI agents can use the MCP server at /mcp instead.",
     },
     servers: [{ url: origin }],
     components: {
@@ -56,7 +56,7 @@ export function openApiDocument(origin: string) {
         competitorArgsSchema,
       ),
       [API_PATHS.alerts]: read("Your recent alerts", alertsResultSchema),
-      [API_PATHS.standing]: read("This week's standing against your competitors", standingResultSchema),
+      [API_PATHS.standing]: read("This week's ranking against your competitors", standingResultSchema),
     },
   });
 }

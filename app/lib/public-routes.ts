@@ -86,7 +86,7 @@ export function llmsTxt(origin: string, sources: readonly LlmsTxtSource[], now: 
       ...FAQ.flatMap((entry) => [`**${entry.question}** ${entry.answer}`, ""]),
       "## Agents",
       "",
-      `- [MCP server](${MCP_URL}): add it as a connector in Claude, ChatGPT or Cursor and sign in; read-only, limited to your own workspace`,
+      `- [MCP server](${MCP_URL}): add it as a connector in Claude, ChatGPT or Cursor and sign in; read-only, limited to your own account`,
       ...Object.entries(registeredToolDescriptors).map(([name, tool]) => `- ${name}: ${tool.title}`),
       `- [API reference](${origin}/api/v1/openapi.json): OpenAPI 3.1 for the read-only REST API; send an API key from Settings as a Bearer token`,
       "",
@@ -120,9 +120,9 @@ function llmsWatchQualifier(status: SourcePillStatus): string {
     return " (no data yet)";
   }
   if (status.reason === null) {
-    return " (degraded — not answering today)";
+    return " (not answering today)";
   }
-  return ` (degraded: ${status.reason} — not answering today)`;
+  return ` (not answering today: ${status.reason})`;
 }
 
 function llmsWatchLine(

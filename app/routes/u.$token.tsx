@@ -10,7 +10,7 @@ import { unsubscribe } from "../lib/unsubscribe.server";
 const INVALID_LINK = "This link is not valid";
 
 export function meta(_: Route.MetaArgs) {
-  return [{ title: "Unsubscribe — Five to Nine" }, { name: "robots", content: "noindex, nofollow" }];
+  return [{ title: "Unsubscribe · Five to Nine" }, { name: "robots", content: "noindex, nofollow" }];
 }
 
 export function headers(_: Route.HeadersArgs) {
@@ -35,10 +35,10 @@ export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
   if (!(isRouteErrorResponse(error) && error.status === 404)) {
     return (
       <ErrorPage
-        title="The product hit a problem"
-        detail="We have been told. Nothing was changed."
+        title="Something went wrong"
+        detail="This is a problem on our side and we have been alerted. Nothing was changed. Please try again in a minute."
         actionHref="/"
-        actionLabel="Back to the landing"
+        actionLabel="Back to home"
       />
     );
   }
@@ -46,8 +46,8 @@ export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
     <main className="mx-auto max-w-xl px-4 py-16">
       <h1 className="font-display text-2xl font-semibold tracking-[-0.02em]">{INVALID_LINK}</h1>
       <p className="mt-4 leading-[1.65] text-ink-soft">
-        The unsubscribe link in that email is expired or mistyped, so nothing was changed. Use the link in the most
-        recent brief to stop the weekly email, or email us and we will do it.
+        This unsubscribe link has expired or is incorrect, so nothing was changed. Use the link in your most recent
+        weekly brief, or email us and we will do it for you.
       </p>
       <Footer />
     </main>
@@ -67,8 +67,10 @@ export default function Unsubscribe({ actionData }: Route.ComponentProps) {
 
   return (
     <main className="mx-auto max-w-xl px-4 py-16">
-      <h1 className="font-display text-2xl font-semibold tracking-[-0.02em]">Stop the weekly brief?</h1>
-      <p className="mt-4 leading-[1.65] text-ink-soft">This stops every email from Five to Nine to this address.</p>
+      <h1 className="font-display text-2xl font-semibold tracking-[-0.02em]">Unsubscribe from Five to Nine emails?</h1>
+      <p className="mt-4 leading-[1.65] text-ink-soft">
+        You will stop getting every email from Five to Nine at this address, including the weekly brief.
+      </p>
       <Form method="post" className="mt-8">
         <Button type="submit" size="lg">
           Unsubscribe

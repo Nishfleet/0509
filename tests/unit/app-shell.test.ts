@@ -24,7 +24,7 @@ function anchor(html: string, href: string): string {
 describe("the app shell", () => {
   it("draws the nav on a signed-in route and marks that place current", () => {
     const html = render("/app/alerts");
-    expect(html).toContain('aria-label="Places"');
+    expect(html).toContain('aria-label="Primary"');
     expect(html).toContain('href="/app"');
     expect(html).toContain('href="/app/competitors"');
     expect(html).toContain('href="/app/alerts"');

@@ -114,10 +114,13 @@ describe("public-route manifest", () => {
     const verdict = (urlPath: string) =>
       rules
         .filter((rule) => urlPath.startsWith(rule.path))
-        .reduce<{ allow: boolean; length: number }>(
-          (best, rule) => (rule.path.length > best.length ? { allow: rule.allow, length: rule.path.length } : best),
-          { allow: true, length: -1 },
-        ).allow;
+        .reduce<{
+          allow: boolean;
+          length: number;
+        }>((best, rule) => (rule.path.length > best.length ? { allow: rule.allow, length: rule.path.length } : best), {
+          allow: true,
+          length: -1,
+        }).allow;
     const linked = [...llmsTxt("https://0509.io", []).matchAll(/\]\(https:\/\/0509\.io(\/[^)]*)\)/g)].map(
       (match) => match[1] as string,
     );
@@ -234,7 +237,7 @@ describe("public-route manifest", () => {
     );
     expect(body).toMatch(/^- Site changes: Homepage$/m);
     expect(body).toMatch(/^- Mentions: Hacker News$/m);
-    expect(body).toContain("- Mentions: News (degraded: timed out — not answering today)");
+    expect(body).toContain("- Mentions: News (not answering today: timed out)");
     expect(body).toContain("- Mentions: YouTube (no data yet)");
     expect(body).toContain("Some sources are not answering today; those lines say so.");
     expect(body).toContain("- Your own site: Breakage alerts (Starter and up)");

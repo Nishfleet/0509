@@ -155,7 +155,7 @@ test("the weekly brief arrives from the inbox, in order, and unsubscribe stops t
 
   await signInWithMagicLink(page, email, token);
   await page.goto("/onboarding");
-  const input = page.getByRole("textbox", { name: "your website, or a handle" });
+  const input = page.getByRole("textbox", { name: "your website address or social username (like @yourbrand)" });
   await input.fill("gymshark.com");
   await input.press("Enter");
   await expect(page).toHaveURL(/\/onboarding\/identity\?subject=gymshark\.com$/);
@@ -198,7 +198,7 @@ test("the weekly brief arrives from the inbox, in order, and unsubscribe stops t
   const text = (await page.locator("body").textContent()) ?? "";
   const variant = text.includes("Quiet week:") ? "quiet" : "blind-source";
   expect(
-    text.includes("Quiet week:") || text.includes("not a quiet week we can vouch for"),
+    text.includes("Quiet week:") || text.includes("so we cannot say this was a quiet week"),
     "nothing noteworthy still sends, either as a quiet week or naming a source that has not answered",
   ).toBe(true);
   expect(text, "no D4 picks, so the read-this-first block is the one block a quiet week drops").not.toContain(

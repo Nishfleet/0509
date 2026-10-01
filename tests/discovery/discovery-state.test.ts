@@ -17,14 +17,14 @@ describe("discoveryStateFor", () => {
 });
 
 describe("discoveryNotice", () => {
-  it("says we are reading the news while looking, even with suggestions", () => {
-    expect(discoveryNotice("looking", 0)).toContain("reading the news");
-    expect(discoveryNotice("looking", 2)).toContain("reading the news");
+  it("says we are looking for brands while looking, even with suggestions", () => {
+    expect(discoveryNotice("looking", 0)).toContain("looking for brands");
+    expect(discoveryNotice("looking", 2)).toContain("looking for brands");
   });
 
-  it("says we looked and found no obvious rivals once done with none", () => {
+  it("says we looked and found no obvious competitors once done with none", () => {
     const notice = discoveryNotice("done", 0);
-    expect(notice).toContain("looked and found no obvious rivals");
+    expect(notice).toContain("looked and found no obvious competitors");
     expect(notice).toContain("Add any you know");
   });
 

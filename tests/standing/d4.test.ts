@@ -67,7 +67,7 @@ describe("pickReadThisFirst", () => {
 
 describe("readThisFirstLine", () => {
   it("names the counts and the lead", () => {
-    expect(readThisFirstLine(2, 5, "Acme")).toBe("2 of 5 worth knowing this week, led by Acme.");
+    expect(readThisFirstLine(2, 5, "Acme")).toBe("2 of 5 changes worth reading this week, led by Acme.");
   });
 });
 

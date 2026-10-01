@@ -134,7 +134,7 @@ export function BrandChipRow({
   const add = addHref === undefined ? null : safeHref(addHref);
   return (
     <div
-      aria-label="Your set"
+      aria-label="Brands you watch"
       className="flex w-full max-w-full min-w-0 flex-wrap gap-2"
       data-slot="brand-chip-row"
       role="group"

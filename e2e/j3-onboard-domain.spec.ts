@@ -47,7 +47,7 @@ for (const { width, height } of [
     });
 
     await page.goto("/onboarding");
-    const input = page.getByRole("textbox", { name: "your website, or a handle" });
+    const input = page.getByRole("textbox", { name: "your website address or social username (like @yourbrand)" });
     await input.fill("gymshark.com");
     const started = Date.now();
     await input.press("Enter");
@@ -67,7 +67,7 @@ for (const { width, height } of [
     const listed = page
       .getByRole("list", { name: "Watching" })
       .getByRole("listitem")
-      .or(page.getByRole("list", { name: "Maybe" }).getByRole("listitem"));
+      .or(page.getByRole("list", { name: "Possible competitors" }).getByRole("listitem"));
     await expect(listed.first()).toBeVisible({ timeout: 60_000 });
     const competitorsMs = Date.now() - started;
     test.info().annotations.push({
@@ -89,9 +89,9 @@ for (const { width, height } of [
 
     const panel = page.locator('[data-home="first-file"]');
     await expect(panel).toContainText(
-      /The first site snapshots land by (?:Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday) (?:[01]\d|2[0-3]):[0-5]\d;/,
+      /Your first site snapshots arrive by (?:Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday) (?:[01]\d|2[0-3]):[0-5]\d\./,
     );
-    await expect(panel).not.toContainText("as soon as the first sweep is scheduled");
+    await expect(panel).not.toContainText("once the first check is scheduled");
     const homeMs = Date.now() - started;
     test.info().annotations.push({
       type: "input-to-home-first-file-ms",

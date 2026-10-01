@@ -21,8 +21,8 @@ export function ChangeSignInEmail({ sent, error }: { sent: boolean; error: strin
       />
       {sent ? (
         <p role="status" className="max-w-prose leading-[1.55]">
-          Check that inbox. If the address is free to use, a confirmation link is on its way, and nothing changes until
-          you open it.
+          Check that inbox. If the address can be used, we've sent a confirmation link. Nothing changes until you open
+          it.
         </p>
       ) : null}
       {error === null ? null : (

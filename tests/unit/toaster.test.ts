@@ -136,7 +136,7 @@ describe("the mount and the skin", () => {
         path: "/",
         Component: () =>
           createElement(BriefScheduleSettings, {
-            schedule: { weekday: 1, hour: 9, timezone: "UTC", pausedAt: null, nextLine: "Next brief Monday" },
+            schedule: { weekday: 1, hour: 9, timezone: "UTC", pausedAt: null, nextLine: "Monday" },
           }),
       },
     ]);

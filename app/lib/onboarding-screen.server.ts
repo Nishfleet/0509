@@ -5,7 +5,7 @@ import { readSubjectDecision, insertSubjectDecision } from "./data/user_decision
 import { JevUnavailableError } from "./jev/client.server";
 import { screenPublicSubject } from "./jev/public-subject.server";
 
-export const REFUSAL = "we track brands and creators, not people";
+export const REFUSAL = "Five to Nine tracks brands and creators, not private individuals.";
 
 export type ScreenResult = { kind: "proceed" } | { kind: "refuse"; message: string } | { kind: "ask"; subject: string };
 

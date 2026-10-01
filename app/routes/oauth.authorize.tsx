@@ -51,7 +51,7 @@ export default function Page({ loaderData, actionData }: Route.ComponentProps) {
   return (
     <main className="mx-auto max-w-lg px-4 py-16">
       <h1 className="font-display text-2xl font-semibold tracking-[-0.02em]">
-        An app at <span className="font-mono text-[0.9em]">{view.host}</span> wants to read your workspace
+        An app at <span className="font-mono text-[0.9em]">{view.host}</span> wants to read your Five to Nine account
       </h1>
       {view.claimedName === null ? null : (
         <p className="mt-4 leading-[1.65] text-ink-soft">
@@ -65,7 +65,7 @@ export default function Page({ loaderData, actionData }: Route.ComponentProps) {
         <li>your alerts</li>
       </ul>
       <p className="mt-4 leading-[1.65]">
-        It can't change anything, and it only sees your own workspace. You can disconnect it any time in Settings.
+        It can't change anything, and it only sees your own account. You can disconnect it any time in Settings.
       </p>
       <p className="mt-4 leading-[1.65] text-ink-soft">
         After you answer, you go back to <strong className="font-mono text-[0.9rem]">{view.host}</strong>. If you don't

@@ -86,7 +86,7 @@ export function CompetitorHeader({
 }
 
 const CONSEQUENCE =
-  "Off stops the watching and the alerts. The history stays, and turning it back on picks up where it left off.";
+  "Turn off to stop watching and alerts. Your history stays, and turning it back on picks up where it left off.";
 
 export function CompetitorSwitch({
   state,

@@ -27,7 +27,7 @@ async function workspaceFor(request: Request, fresh = false): Promise<string> {
 }
 
 export function meta({ loaderData }: Route.MetaArgs) {
-  return [{ title: `${loaderData?.competitor.name ?? "Competitor"} — Five to Nine` }];
+  return [{ title: `${loaderData?.competitor.name ?? "Competitor"} · Five to Nine` }];
 }
 
 export function headers() {
