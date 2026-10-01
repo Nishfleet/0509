@@ -25,7 +25,7 @@ function Row({
   return (
     <div
       className={cn(
-        "flex items-baseline gap-4 border-b border-line py-3",
+        "flex items-center gap-4 border-b border-line py-3",
         wrap === true && "max-sm:flex-wrap",
         check === true && "bg-green-wash px-2 text-green-ink",
       )}
@@ -33,7 +33,10 @@ function Row({
       <span className="w-20 shrink-0 font-mono text-[0.75rem] text-ink-soft uppercase">{label}</span>
       {children}
       {check === true ? (
-        <span id={checkId} className="font-mono text-[0.7rem] text-green-ink uppercase">
+        <span
+          id={checkId}
+          className="shrink-0 rounded-sm bg-green px-1.5 py-0.5 text-[0.75rem] font-medium text-on-green"
+        >
           please check
         </span>
       ) : null}
@@ -261,7 +264,7 @@ function SocialsBody({ site, emptyLine }: { site: SiteFields; emptyLine: string 
             <label className="flex min-h-11 min-w-0 items-center gap-3">
               <input
                 type="checkbox"
-                className="size-5 shrink-0"
+                className="size-5 shrink-0 accent-green"
                 name={`social.${social.platform}`}
                 value={social.url}
               />
