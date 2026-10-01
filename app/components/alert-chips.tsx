@@ -30,7 +30,7 @@ export function AlertChips({
           value={entry.key}
           data-testid={"alert-chip-" + entry.key}
           disabled={counts[entry.key] === 0 && entry.key !== chip}
-          className="min-h-11"
+          className="min-h-11 rounded-none border border-line text-ink-soft hover:bg-card hover:text-ink aria-pressed:border-ink aria-pressed:bg-ink aria-pressed:text-bone"
         >
           {entry.label}{" "}
           <span className="font-mono tabular-nums">
