@@ -331,9 +331,9 @@ const STATIC_HOME_FONT_PRELOAD = {
     schema: [],
     messages: {
       preload:
-        "The static home must not preload a font. A preload holds the headline paint until the face arrives, so simulated LCP misses lighthouse-budget.json. The three faces stay on the @font-face rules with font-display: swap. Source: 0509#5580.",
+        "The static home must not preload a font. A preload holds the headline paint until the face arrives, so simulated LCP misses the fleet Lighthouse budget (fleet-ops config/lighthouserc.json). The three faces stay on the @font-face rules with font-display: swap. Source: 0509#5580.",
       fontFace:
-        "The static home must not declare @font-face in the document. A face that finishes before the headline is a simulated-LCP dependency and misses lighthouse-budget.json. The three faces live in /home-faces.css. Source: 0509#5598.",
+        "The static home must not declare @font-face in the document. A face that finishes before the headline is a simulated-LCP dependency and misses the fleet Lighthouse budget (fleet-ops config/lighthouserc.json). The three faces live in /home-faces.css. Source: 0509#5598.",
       scannerLink:
         "The static home must not include a link element. The preload scanner fetches it before the headline paints, which puts /home-faces.css on the simulated LCP chain. Source: 0509#5630.",
       lateFaces:

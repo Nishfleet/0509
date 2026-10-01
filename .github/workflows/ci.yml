@@ -230,7 +230,7 @@ jobs:
 
       - name: Collect Lighthouse against the built Worker
         if: github.event_name != 'deployment_status' && steps.scope.outputs.skip != 'true'
-        # Same budgets as the deployment_status lighthouse job, on the PR, so a
+        # Same budgets as the deployment_status lighthouse audit, on the PR, so a
         # regression is red before merge (poteto 03:24: a trace per change, not
         # per deploy; #4224). lhci starts wrangler dev itself: start-server-command
         # and the ready pattern are stock lhci flags. No loop, no script.
@@ -244,7 +244,7 @@ jobs:
 
       - name: Assert the Lighthouse budgets
         if: github.event_name != 'deployment_status' && steps.scope.outputs.skip != 'true'
-        # lighthouse-budget.pr.json is the deterministic subset of lighthouse-budget.json:
+        # lighthouse-budget.pr.json is the deterministic subset of the fleet budget (fleet-ops config/lighthouserc.json):
         # resource sizes and CLS. The timing rows (LCP, TTI) stay on the deployment_status
         # job: on a shared runner the unchanged page measured LCP 1657 one run and under
         # 1500 the run before (35748475565 vs 35746328688), and a required check that
@@ -264,14 +264,37 @@ jobs:
   lighthouse:
     name: lighthouse
     # The performance half of verification (talk 14:30): correctness says the
-    # feature works, this says it is still fast. Budgets live in
-    # lighthouse-budget.json and are declared at error level, which is the only
-    # thing that fails the job — the action has no `fail:` input, it calls
-    # core.setFailed() for assertions at error level and only annotates warns.
-    # docs/REBUILD-STACK.md 6.3.
+    # feature works, this says it is still fast. The audit and its budgets are
+    # the fleet's, defined once in fleet-ops (lighthouse.yml and
+    # config/lighthouserc.json); this repo passes only the URLs, so no change
+    # here can loosen them. Called at @main on purpose, like the agent-dispatch
+    # stub: .github/zizmor.yml. Not required: it cannot run on a pull request.
     if: github.event_name == 'deployment_status' && github.event.deployment_status.state == 'success'
+    permissions:
+      contents: read
+    uses: Nishfleet/fleet-ops/.github/workflows/lighthouse.yml@main
+    with:
+      # The public pages: no Access, no session, so a deploy sends no
+      # email and needs no secret. /design/landing is the staged homepage
+      # (the landing LCP bar in docs/REBUILD-DONE.md B) and is public until
+      # 0509#4834 moves it to /. The signed-in pages are measured by the
+      # scheduled suite once 0509#6034 lands.
+      urls: |
+        ${{ github.event.deployment_status.environment_url }}/
+        ${{ github.event.deployment_status.environment_url }}/privacy
+        ${{ github.event.deployment_status.environment_url }}/terms
+        ${{ github.event.deployment_status.environment_url }}/design/landing
+
+  lighthouse-report:
+    name: lighthouse-report
+    # What this repo does with the called audit's verdict: open the issue that
+    # dispatches the fix when it is red, close it when it is green. Its own job
+    # because a job that calls a reusable workflow has no steps, and so that
+    # issues: write and actions: write are held by this job and not the audit.
+    needs: [lighthouse]
+    if: always() && github.event_name == 'deployment_status' && github.event.deployment_status.state == 'success'
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 5
     permissions:
       contents: read
       issues: write
@@ -280,39 +303,8 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - name: Audit the deployed URLs against the budgets
-        id: lhci
-        uses: treosh/lighthouse-ci-action@3e7e23fb74242897f95c0ba9cabad3d0227b9b18 # v12
-        with:
-          # The public pages: no Access, no session, so a deploy sends no
-          # email and needs no secret. /design/landing is the staged homepage
-          # (the landing LCP bar in docs/REBUILD-DONE.md B) and is public until
-          # 0509#4834 moves it to /. The signed-in pages are measured by the
-          # scheduled suite once 0509#6034 lands.
-          urls: |
-            ${{ github.event.deployment_status.environment_url }}/
-            ${{ github.event.deployment_status.environment_url }}/privacy
-            ${{ github.event.deployment_status.environment_url }}/terms
-            ${{ github.event.deployment_status.environment_url }}/design/landing
-          budgetPath: ./lighthouse-budget.json
-          configPath: ./lighthouserc.cjs
-          uploadArtifacts: false
-          temporaryPublicStorage: false
-      - name: Print the LCP breakdown of every audited URL
-        if: always()
-        continue-on-error: true
-        run: |
-          for report in .lighthouseci/lhr-*.json; do
-            jq -r '
-              "\(.finalDisplayedUrl // .finalUrl): LCP \(.audits["largest-contentful-paint"].numericValue | round) ms, server \(.audits["server-response-time"].numericValue | round) ms",
-              "  element: \(.audits["largest-contentful-paint-element"].details.items[0].items[0].node.snippet // "n/a")",
-              "  phases: \([.audits["largest-contentful-paint-element"].details.items[1].items[]? | "\(.phase) \(.timing | round) ms"] | join(", "))",
-              "  render-blocking: \([.audits["render-blocking-resources"].details.items[]? | "\(.url) \(.wastedMs | round) ms"] | join(", "))",
-              "  font-display score: \(.audits["font-display"].score)"
-            ' "$report" | tee -a "$GITHUB_STEP_SUMMARY"
-          done
       - name: Open or update the issue that dispatches the fix
-        if: failure() || cancelled()
+        if: needs.lighthouse.result == 'failure' || needs.lighthouse.result == 'cancelled'
         id: red
         uses: JasonEtco/create-an-issue@1b14a70e4d8dc185e5cc76d3bec9eab20257b2c5 # v2.9.2
         env:
@@ -326,13 +318,13 @@ jobs:
       - name: Hand the issue to a worker
         # A GITHUB_TOKEN label fires no workflow, so dispatch by number;
         # agent.yml's Gate sizes it. needs-split alone left #4620 unworked.
-        if: (failure() || cancelled()) && steps.red.outputs.number
+        if: (needs.lighthouse.result == 'failure' || needs.lighthouse.result == 'cancelled') && steps.red.outputs.number
         env:
           GH_TOKEN: ${{ github.token }}
           N: ${{ steps.red.outputs.number }}
         run: gh workflow run agent-dispatch.yml --repo "$GITHUB_REPOSITORY" -f issue="$N"
       - name: Close the issue once this check is green again
-        if: success()
+        if: needs.lighthouse.result == 'success'
         env:
           GH_TOKEN: ${{ github.token }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
