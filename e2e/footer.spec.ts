@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-// This spec traces to the `/`, `/login`, `/privacy` and `/terms` rows in
+// This spec traces to the `/`, `/login`, `/pricing`, `/privacy` and `/terms` rows in
 // .agents/skills/verify/feature-map.md: each route's footer carries the Privacy
 // link, the Terms link and the takedown address support@0509.io, in the same order
 // with the same markup. The landing cannot import the shared Footer (it is a
@@ -11,7 +11,7 @@ import { expect, test } from "@playwright/test";
 // is the contract - the link exists, is visible, is labelled and points at the
 // right destination - plus the source order, which is what "same order" means
 // here.
-const PUBLIC_ROUTES = ["/", "/login", "/privacy", "/terms"] as const;
+const PUBLIC_ROUTES = ["/", "/login", "/pricing", "/privacy", "/terms"] as const;
 
 const PRIVACY_HREF = 'a[href="/privacy"]';
 const TERMS_HREF = 'a[href="/terms"]';

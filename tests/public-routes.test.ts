@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 import routes from "../app/routes";
+import { PLANS, TRIAL_DAYS } from "../app/lib/billing/plans";
 import { LEGAL_UPDATED } from "../app/lib/legal/document";
 import type { SourceRow, SourceSnapshot } from "../app/components/source-pill";
 import {
@@ -219,6 +220,20 @@ describe("public-route manifest", () => {
     for (const p of PUBLIC_PATHS) {
       expect(body).toMatch(new RegExp(`^- \\[[^\\]]+\\]\\(https://0509\\.io${p}\\): \\S`, "m"));
     }
+  });
+
+  it("lists /pricing as a public, sitemapped page whose summary names every plan and the trial", () => {
+    expect(PUBLIC_PATHS as readonly string[]).toContain("/pricing");
+    expect(SITEMAP_PATHS as readonly string[]).toContain("/pricing");
+    expect(isDisallowed("/pricing")).toBe(false);
+    const body = llmsTxt("https://0509.io", healthyRegistry(), NOW);
+    const line = body.split("\n").find((row) => row.startsWith("- [Pricing](https://0509.io/pricing)"));
+    expect(line).toBeDefined();
+    for (const plan of PLANS) {
+      expect(line).toContain(plan.name);
+      expect(body).toContain(`${plan.name} €${String(plan.monthlyPriceEur)}/month`);
+    }
+    expect(line).toContain(`${String(TRIAL_DAYS)}-day trial`);
   });
 
   it("qualifies a mixed live registry at the line, and does not drop the line", () => {
