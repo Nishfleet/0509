@@ -339,6 +339,13 @@ jobs:
           d1() {
             npx wrangler d1 execute 0509 --remote --json --command "$1" | jq -c '.[0].results'
           }
+          ws=" (SELECT id FROM workspace WHERE owner_user_id IN (SELECT id FROM user WHERE email LIKE 'e2e+j8-%@0509.io'))"
+          echo "J8 entities: $(d1 "SELECT e.role, e.state, COUNT(*) AS n, COUNT(p.id) AS home_pages FROM entity e LEFT JOIN page p ON p.entity_id = e.id AND p.role = 'home' WHERE e.workspace_id IN$ws GROUP BY 1, 2")"
+          echo "J8 home hosts: $(d1 "SELECT substr(p.url, 1, 45) AS u FROM page p JOIN entity e ON e.id = p.entity_id WHERE e.role = 'self' AND p.role = 'home' AND e.workspace_id IN$ws")"
+          echo "J8 workspaces: $(d1 "SELECT own_site_alerts, COUNT(*) AS n FROM workspace WHERE id IN$ws GROUP BY 1")"
+          echo "J8 incidents: $(d1 "SELECT kind, COUNT(*) AS n, MAX(opened_at) AS last, SUM(closed_at IS NULL) AS still_open FROM incident WHERE workspace_id IN$ws GROUP BY 1")"
+          echo "J8 sends 48h: $(d1 "SELECT status, COUNT(*) AS n, MAX(attempted_at) AS last FROM send_attempt WHERE workspace_id IN$ws GROUP BY 1")"
+          echo "own-site-check instances: $(npx wrangler workflows instances list own-site-check --date-start "$since" --per-page 100 --json | jq -s -r '(add // []) | group_by(.status) | map("\(.[0].status): \(length)") | join(", ")')"
           failed=0
           missed=""
           cron_instances() {
