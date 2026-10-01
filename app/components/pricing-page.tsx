@@ -23,6 +23,9 @@ export function PricingPage({ source }: { source: StartSource | null }) {
           <h1 className="max-w-[24ch] font-display text-display-2 font-extrabold uppercase">Five to Nine pricing</h1>
         </div>
         <Price source={source} />
+        <p className={`${pageWidth} pb-12 font-mono text-meta text-ink-soft`}>
+          Prices are in euros. At checkout you see your local currency where we can offer it.
+        </p>
       </main>
       <div className={`${pageWidth} pb-12`}>
         <Footer />
