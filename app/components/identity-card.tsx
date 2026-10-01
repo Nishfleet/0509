@@ -231,8 +231,8 @@ function DraftRow({ field, site, draft, emptyLine, actions }: DraftRowProps) {
       key={draft[field] === undefined ? `${field}:found` : `${field}:edited`}
       label={meta.label}
       name={field}
-      initial={draft[field] ?? (check ? "" : (site[field] ?? ""))}
-      placeholder={check ? (site[field] ?? "") : meta.placeholder}
+      initial={draft[field] ?? site[field] ?? ""}
+      placeholder={meta.placeholder}
       check={check}
       empty={site.review[field] === "empty"}
       emptyLine={emptyLine}
