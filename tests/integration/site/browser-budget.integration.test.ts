@@ -84,4 +84,17 @@ describe("BrowserBudget (0509#5294)", () => {
     expect(await readBrowserMsForDay("2026-10-01", "chromium")).toBe(1_500);
     expect(await readBrowserMsForDay("2026-10-01")).toBe(2_500);
   });
+
+  it("does not lose concurrent addMs updates to the same day (0509#6382)", async () => {
+    const counter = env.BROWSER_BUDGET.get(env.BROWSER_BUDGET.idFromName("browser-ms:2026-10-02"));
+    await Promise.all([
+      counter.addMs(100, "kitesurf"),
+      counter.addMs(200, "kitesurf"),
+      counter.addMs(400, "chromium"),
+      counter.addMs(800, "chromium"),
+    ]);
+    expect(await counter.totalMs()).toBe(1_500);
+    expect(await counter.engineMs("kitesurf")).toBe(300);
+    expect(await counter.engineMs("chromium")).toBe(1_200);
+  });
 });

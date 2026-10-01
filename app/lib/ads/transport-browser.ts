@@ -44,15 +44,16 @@ async function quickContentAttempt(
 ): Promise<{ result: BrowserTransportResult | null; msUsed?: number; error?: unknown }> {
   const { env, url, started, engine } = args;
   let res: Response;
+  let body: string;
   try {
     res = await env.BROWSER.quickAction("content", engine === "kitesurf" ? { url, browser: "kitesurf" } : { url });
+    body = await res.text();
   } catch (error) {
     console.error(JSON.stringify({ event: "ads.browser_quick_action_failed", engine, error: String(error) }));
     return { result: null, error };
   }
   const msUsedHeader = res.headers.get("x-browser-ms-used");
   const msUsed = msUsedHeader === null ? NaN : Number(msUsedHeader);
-  const body = await res.text();
   const { payload, status } = unwrapQuickBody(body, res.status);
   const result: BrowserTransportResult = {
     payload,
@@ -68,6 +69,13 @@ async function quickContentAttempt(
   return { result, msUsed: result.browserMsUsed };
 }
 
+function attemptCause(error: unknown): string {
+  if (error === undefined) return "refused or empty";
+  if (error instanceof Error) return error.message;
+  if (typeof error === "string") return error;
+  return JSON.stringify(error) ?? "unprintable";
+}
+
 async function quickContent(
   env: { BROWSER: BrowserBindingLike },
   url: string,
@@ -77,7 +85,7 @@ async function quickContent(
   if (first.result !== null) return first.result;
   const second = await quickContentAttempt({ env, url, started, engine: "chromium" });
   if (second.result === null) {
-    throw second.error instanceof Error ? second.error : new Error(String(second.error));
+    throw new Error(`kitesurf: ${attemptCause(first.error)}; chromium: ${attemptCause(second.error)}`);
   }
   const browserMsUsed =
     first.msUsed === undefined && second.msUsed === undefined ? undefined : (first.msUsed ?? 0) + (second.msUsed ?? 0);

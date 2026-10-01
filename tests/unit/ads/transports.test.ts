@@ -318,7 +318,34 @@ describe("transportBrowser quick-action leg", () => {
         throw new Error("both engines down");
       }),
     };
-    await expect(transportBrowser(parseAdsDescriptor(descriptor), "acme", dead)).rejects.toThrow("both engines down");
+    await expect(transportBrowser(parseAdsDescriptor(descriptor), "acme", dead)).rejects.toThrow(
+      "kitesurf: both engines down; chromium: both engines down",
+    );
     expect(dead.BROWSER.engines).toEqual(["kitesurf", "chromium"]);
+  });
+
+  it("falls back to Chromium when the Kitesurf response body stream rejects", async () => {
+    const engines: string[] = [];
+    const env = {
+      BROWSER: {
+        fetch,
+        quickAction: async (_action: "content", options: QuickOptions): Promise<Response> => {
+          engines.push(options.browser ?? "chromium");
+          if (options.browser === "kitesurf") {
+            return {
+              ok: true,
+              status: 200,
+              headers: new Headers({ "content-type": "application/json" }),
+              text: () => Promise.reject(new Error("body stream broke")),
+            } as unknown as Response;
+          }
+          return new Response(JSON.stringify(page("<html>rendered</html>").body), { status: 200 });
+        },
+      },
+    };
+    const r = await transportBrowser(parseAdsDescriptor(descriptor), "acme", env);
+    expect(r.payload).toBe("<html>rendered</html>");
+    expect(r.browserEngine).toBe("chromium");
+    expect(engines).toEqual(["kitesurf", "chromium"]);
   });
 });

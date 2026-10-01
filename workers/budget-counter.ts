@@ -14,10 +14,13 @@ export class BrowserBudget extends DurableObject {
   }
 
   async addMs(ms: number, engine: "kitesurf" | "chromium"): Promise<void> {
-    const total = (await this.ctx.storage.get<number>(MS_KEY)) ?? 0;
     const engineKey = `${MS_KEY}:${engine}`;
-    const byEngine = (await this.ctx.storage.get<number>(engineKey)) ?? 0;
-    await this.ctx.storage.put({ [MS_KEY]: total + ms, [engineKey]: byEngine + ms });
+    const total = await this.ctx.storage.transaction(async (txn) => {
+      const current = (await txn.get<number>(MS_KEY)) ?? 0;
+      const byEngine = (await txn.get<number>(engineKey)) ?? 0;
+      await txn.put({ [MS_KEY]: current + ms, [engineKey]: byEngine + ms });
+      return current;
+    });
     if (total === 0) await this.ctx.storage.setAlarm(Date.now() + EXPIRE_MS);
   }
 
