@@ -97,7 +97,12 @@ async function watchOneCompetitor(page: Page): Promise<void> {
   await page.getByRole("button", { name: "That's me" }).click();
   await expect(page).toHaveURL(/\/onboarding\/competitors$/, { timeout: 10_000 });
   const watching = page.getByRole("list", { name: "Watching" }).getByRole("listitem");
-  await expect(watching.first().or(page.getByRole("button", { name: /^Watch / }).first())).toBeVisible({
+  await expect(
+    watching
+      .first()
+      .or(page.getByRole("button", { name: /^Watch / }).first())
+      .first(),
+  ).toBeVisible({
     timeout: 60_000,
   });
   if ((await watching.count()) === 0) {
