@@ -18,22 +18,27 @@ import {
 // constants, never against a literal, so the gate reddens the day one of them
 // diverges from the constant it names.
 describe("cadence", () => {
-  it("leaves the four daily Workflows off `schedules` and starts them from triggers.crons", () => {
+  it("leaves the five scheduled Workflows off `schedules` and starts them from triggers.crons", () => {
     const { rawConfig } = experimental_readRawConfig({ config: "wrangler.jsonc" });
-    const daily = ["site-sweep", "mentions-sweep", "hiring-sweep", "snapshot-backup"];
+    const daily = ["site-sweep", "mentions-sweep", "hiring-sweep", "snapshot-backup", "own-site-check"];
     const workflows = (rawConfig.workflows ?? []).filter((workflow) => daily.includes(workflow.name));
-    expect(workflows).toHaveLength(4);
-    expect(workflows.map((workflow) => workflow.schedules)).toEqual([undefined, undefined, undefined, undefined]);
+    expect(workflows).toHaveLength(5);
+    expect(workflows.map((workflow) => workflow.schedules)).toEqual([
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+    ]);
     expect(rawConfig.triggers?.crons).toEqual(
-      expect.arrayContaining([SITE_SWEEP_CRON, MENTIONS_SWEEP_CRON, HIRING_SWEEP_CRON, SNAPSHOT_BACKUP_CRON]),
+      expect.arrayContaining([
+        SITE_SWEEP_CRON,
+        MENTIONS_SWEEP_CRON,
+        HIRING_SWEEP_CRON,
+        SNAPSHOT_BACKUP_CRON,
+        OWN_SITE_CHECK_CRON,
+      ]),
     );
-  });
-
-  it("schedules the own-site-check Workflow on OWN_SITE_CHECK_CRON", () => {
-    const { rawConfig } = experimental_readRawConfig({ config: "wrangler.jsonc" });
-    const ownSiteCheck = (rawConfig.workflows ?? []).find((workflow) => workflow.name === "own-site-check");
-    expect(ownSiteCheck).toBeDefined();
-    expect(ownSiteCheck?.schedules).toEqual([OWN_SITE_CHECK_CRON]);
   });
 
   it("triggers NIGHTLY_CRON and WEEKLY_REFRESH_CRON", () => {

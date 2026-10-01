@@ -9,6 +9,7 @@ function fakeEnv() {
     SITE_SWEEP: { createBatch },
     HIRING_SWEEP: { createBatch },
     SNAPSHOT_BACKUP: { createBatch },
+    OWN_SITE_CHECK: { createBatch },
   };
   return { createBatch, env: bindings as unknown as Parameters<typeof startScheduledWorkflow>[0] };
 }
@@ -33,17 +34,27 @@ describe("startScheduledWorkflow", () => {
     expect(await startScheduledWorkflow(env, "0 1 * * *", at)).toBe(await startScheduledWorkflow(env, "0 1 * * *", at));
   });
 
-  it("maps each daily cron to its own Workflow binding", () => {
+  it("maps each cron to its own Workflow binding", () => {
     expect(Object.values(WORKFLOW_CRONS).map((entry) => entry.binding)).toEqual([
       "MENTIONS",
       "SITE_SWEEP",
       "HIRING_SWEEP",
       "SNAPSHOT_BACKUP",
+      "OWN_SITE_CHECK",
     ]);
+  });
+
+  it("starts the own-site-check instance under an id fixed by the hour", async () => {
+    const { createBatch, env } = fakeEnv();
+    const id = await startScheduledWorkflow(env, "0 * * * *", Date.UTC(2026, 9, 1, 13, 0, 0));
+    expect(id).toBe("own-site-check-2026-10-01T13-00-00-000Z");
+    expect(createBatch).toHaveBeenCalledExactlyOnceWith([{ id }]);
   });
 
   it("recognises only the workflow crons", () => {
     expect(isWorkflowCron("0 5 * * *")).toBe(true);
+    expect(isWorkflowCron("0 * * * *")).toBe(true);
+    expect(isWorkflowCron("*/5 * * * *")).toBe(false);
     expect(isWorkflowCron("0 3 * * *")).toBe(false);
     expect(isWorkflowCron("toString")).toBe(false);
   });
