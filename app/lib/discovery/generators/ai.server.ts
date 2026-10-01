@@ -175,16 +175,6 @@ async function liveCandidates(
 }
 
 export const aiGenerator: Generator = async (subject: Subject, fetchText?: FetchText) => {
-  try {
-    const site = await siteTextOf(subject, fetchText ?? defaultFetchText("discovery.ai_fetch_failed"));
-    return await liveCandidates(subject, await propose(subject, site));
-  } catch (error) {
-    console.error(
-      JSON.stringify({
-        event: "discovery.ai_proposer_failed",
-        message: (error instanceof Error ? error.message : String(error)).slice(0, 300),
-      }),
-    );
-    return [];
-  }
+  const site = await siteTextOf(subject, fetchText ?? defaultFetchText("discovery.ai_fetch_failed"));
+  return liveCandidates(subject, await propose(subject, site));
 };
