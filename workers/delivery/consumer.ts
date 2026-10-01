@@ -67,7 +67,8 @@ type DeliveryOutcome =
   | "no_incident"
   | "not_self"
   | "muted"
-  | "no_signal";
+  | "no_signal"
+  | "capped";
 
 interface DeliveryResult {
   outcome: DeliveryOutcome;
