@@ -1,15 +1,22 @@
 import { markDigestSent } from "../../app/lib/data/digest.server";
 import { claimIncidentNotice } from "../../app/lib/data/incident_notice.server";
-import { claimSendAttempt, resolveSendAttempt } from "../../app/lib/data/send_attempt.server";
+import { claimSendAttempt, countChangeAttemptsSince, resolveSendAttempt } from "../../app/lib/data/send_attempt.server";
 import { writeUnsubscribeToken } from "../../app/lib/data/send_target.server";
 import type { BriefPayload } from "../../app/lib/brief-payload";
 import { parseBriefPayload } from "../../app/lib/brief-payload";
 import { nextOwnSiteCheck } from "../../app/lib/incident-recheck";
-import { changeHeadline, markFromHunks, parseDiffHunks, parseSiteChangePayload } from "../../app/lib/site-change";
+import {
+  changeHeadline,
+  markFromHunks,
+  parseDiffHunks,
+  parseSiteChangePayload,
+  type SiteChangePayload,
+} from "../../app/lib/site-change";
 import { pageHost } from "../../app/lib/site/own-site.server";
 
 import { renderBrief } from "./brief-template";
-import { renderChange } from "./change-template";
+import { SETTINGS_LINK, unsubscribeHeaders, type AlertFooterContext } from "./alert-footer";
+import { renderChange, renderChangeOverflow } from "./change-template";
 import { renderIncidentFixed, renderIncidentOpen } from "./incident-template";
 import { errorText, sendMessage, type SendResult } from "./send";
 
@@ -71,6 +78,7 @@ interface DeliveryResult {
 const EMAIL_CHANNEL_KEY = "email";
 const INCIDENT_LINK = "https://0509.io/app/alerts";
 const CHANGE_LINK = "https://0509.io/app/alerts";
+export const CHANGE_DAILY_CAP = 5;
 
 async function readDigest(env: Env, digestId: string): Promise<MessageRow | null> {
   return env.DB.prepare(
@@ -200,10 +208,7 @@ function render(message: MessageRow, to: string, token: string): EmailMessageBui
     subject: message.subject ?? rendered.subject,
     html: rendered.html,
     text: rendered.text,
-    headers: {
-      "List-Unsubscribe": `<${unsubscribeUrl}>`,
-      "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
-    },
+    headers: unsubscribeHeaders(unsubscribeUrl),
   };
 }
 
@@ -270,7 +275,8 @@ export async function deliver(env: Env, message: DigestMessage): Promise<Deliver
   });
 }
 
-function renderIncidentEmail(incident: IncidentRow, to: string) {
+function renderIncidentEmail(incident: IncidentRow, to: string, token: string) {
+  const unsubscribeUrl = `${UNSUBSCRIBE_BASE_URL}${token}`;
   const site = pageHost(incident.page_url);
   const rendered =
     incident.closed_at === null
@@ -282,6 +288,8 @@ function renderIncidentEmail(incident: IncidentRow, to: string) {
           mark: incident.mark,
           link: INCIDENT_LINK,
           timezone: incident.timezone,
+          unsubscribe_url: unsubscribeUrl,
+          settings_link: SETTINGS_LINK,
         })
       : renderIncidentFixed({
           site,
@@ -289,6 +297,8 @@ function renderIncidentEmail(incident: IncidentRow, to: string) {
           closed_at: incident.closed_at,
           link: INCIDENT_LINK,
           timezone: incident.timezone,
+          unsubscribe_url: unsubscribeUrl,
+          settings_link: SETTINGS_LINK,
         });
   return {
     to,
@@ -296,6 +306,7 @@ function renderIncidentEmail(incident: IncidentRow, to: string) {
     subject: rendered.subject,
     html: rendered.html,
     text: rendered.text,
+    headers: unsubscribeHeaders(unsubscribeUrl),
   };
 }
 
@@ -347,7 +358,10 @@ export async function deliverIncident(env: Env, message: IncidentMessage): Promi
   return sendAndResolve(env, {
     claimId: claim.id,
     idempotencyKey,
-    send: () => sendMessage(env.EMAIL, renderIncidentEmail(incident, target.target_value)),
+    send: async () => {
+      const token = await ensureUnsubscribeToken(env, target);
+      return sendMessage(env.EMAIL, renderIncidentEmail(incident, target.target_value, token));
+    },
   });
 }
 
@@ -381,6 +395,61 @@ async function readChangeMark(env: Env, diffKey: string | null) {
   return hunks === null ? null : markFromHunks(hunks);
 }
 
+async function renderChangeEmail(
+  env: Env,
+  input: { change: ChangeRow; payload: SiteChangePayload; capped: boolean; footer: AlertFooterContext },
+) {
+  const { change, payload, capped, footer } = input;
+  if (capped) return renderChangeOverflow({ ...footer, cap: CHANGE_DAILY_CAP, link: CHANGE_LINK });
+  return renderChange({
+    ...footer,
+    headline: changeHeadline({ name: change.name ?? change.domain, isSelf: false, role: payload.page.role }),
+    observed_at: change.observed_at,
+    mark: await readChangeMark(env, payload.diffKey),
+    link: CHANGE_LINK,
+    timezone: change.timezone,
+  });
+}
+
+async function sendChange(
+  env: Env,
+  input: { change: ChangeRow; payload: SiteChangePayload; target: TargetRow },
+): Promise<DeliveryResult> {
+  const { change, payload, target } = input;
+  const day = new Date().toISOString().slice(0, 10);
+  const sentToday = await countChangeAttemptsSince(env.DB, change.workspace_id, `${day}T00:00:00.000Z`);
+  const capped = sentToday >= CHANGE_DAILY_CAP;
+  const idempotencyKey = capped ? `change-overflow:${change.workspace_id}:${day}` : `change:${change.id}:${target.id}`;
+  const claim = await claimSendAttempt(env.DB, {
+    idempotencyKey,
+    workspaceId: change.workspace_id,
+    targetId: target.id,
+    digestId: null,
+  });
+  if (!claim) {
+    return { outcome: capped ? "capped" : "duplicate", attempt_id: null, idempotency_key: idempotencyKey };
+  }
+
+  const result = await sendAndResolve(env, {
+    claimId: claim.id,
+    idempotencyKey,
+    send: async () => {
+      const token = await ensureUnsubscribeToken(env, target);
+      const footer = { unsubscribe_url: `${UNSUBSCRIBE_BASE_URL}${token}`, settings_link: SETTINGS_LINK };
+      const rendered = await renderChangeEmail(env, { change, payload, capped, footer });
+      return sendMessage(env.EMAIL, {
+        to: target.target_value,
+        from: "brief@0509.io",
+        subject: rendered.subject,
+        html: rendered.html,
+        text: rendered.text,
+        headers: unsubscribeHeaders(footer.unsubscribe_url),
+      });
+    },
+  });
+  return capped && result.outcome === "sent" ? { ...result, outcome: "capped" } : result;
+}
+
 export async function deliverChange(env: Env, message: ChangeMessage): Promise<DeliveryResult> {
   const change = await readChange(env, message.signal_id);
   const payload = change === null ? null : parseSiteChangePayload(change.payload_json);
@@ -398,38 +467,7 @@ export async function deliverChange(env: Env, message: ChangeMessage): Promise<D
   if (await isSuppressed(env, target.target_value)) {
     return { outcome: "suppressed", attempt_id: null, idempotency_key: null };
   }
-
-  const idempotencyKey = `change:${change.id}:${target.id}`;
-  const claim = await claimSendAttempt(env.DB, {
-    idempotencyKey,
-    workspaceId: change.workspace_id,
-    targetId: target.id,
-    digestId: null,
-  });
-  if (!claim) {
-    return { outcome: "duplicate", attempt_id: null, idempotency_key: idempotencyKey };
-  }
-
-  return sendAndResolve(env, {
-    claimId: claim.id,
-    idempotencyKey,
-    send: async () => {
-      const rendered = renderChange({
-        headline: changeHeadline({ name: change.name ?? change.domain, isSelf: false, role: payload.page.role }),
-        observed_at: change.observed_at,
-        mark: await readChangeMark(env, payload.diffKey),
-        link: CHANGE_LINK,
-        timezone: change.timezone,
-      });
-      return sendMessage(env.EMAIL, {
-        to: target.target_value,
-        from: "brief@0509.io",
-        subject: rendered.subject,
-        html: rendered.html,
-        text: rendered.text,
-      });
-    },
-  });
+  return sendChange(env, { change, payload, target });
 }
 
 function route(env: Env, parsed: DeliveryMessage): Promise<DeliveryResult> {

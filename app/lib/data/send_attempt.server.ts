@@ -41,3 +41,11 @@ export async function resolveSendAttempt(
 ): Promise<void> {
   await db.prepare(RESOLVE_ATTEMPT).bind(input.outcome, input.error, input.attemptId).run();
 }
+
+const COUNT_CHANGE_ATTEMPTS = `SELECT COUNT(*) AS n FROM send_attempt
+WHERE workspace_id = ? AND idempotency_key LIKE 'change:%' AND status <> 'failed' AND attempted_at >= ?`;
+
+export async function countChangeAttemptsSince(db: D1Database, workspaceId: string, since: string): Promise<number> {
+  const row = await db.prepare(COUNT_CHANGE_ATTEMPTS).bind(workspaceId, since).first<{ n: number }>();
+  return row?.n ?? 0;
+}

@@ -25,6 +25,8 @@ const OPEN: IncidentOpenContext = {
   mark: "Pricing heading present → absent",
   link: "https://0509.io/site/inc_1",
   timezone: "UTC",
+  unsubscribe_url: "https://0509.io/u/opaque-token",
+  settings_link: "https://0509.io/app/settings",
 };
 
 const FIXED: IncidentFixedContext = {
@@ -33,6 +35,8 @@ const FIXED: IncidentFixedContext = {
   closed_at: "2026-09-23T05:52:00.000Z",
   link: "https://0509.io/site/inc_1",
   timezone: "UTC",
+  unsubscribe_url: "https://0509.io/u/opaque-token",
+  settings_link: "https://0509.io/app/settings",
 };
 
 describe("open incident email", () => {
@@ -75,9 +79,9 @@ describe("fixed incident email", () => {
     expect(renderIncidentFixed(FIXED).subject).toBe("shop.example looks fixed: pricing section missing");
   });
 
-  it("is a single line of text", () => {
+  it("is one line of news before the footer", () => {
     const { text } = renderIncidentFixed(FIXED);
-    expect(text).not.toContain("\n");
+    expect(text.split("\n")).toHaveLength(3);
     expect(text).toContain("We re-checked shop.example at Wed 23 Sept, 05:52 and it looks fixed.");
     expect(text).toContain("https://0509.io/site/inc_1");
   });
@@ -85,6 +89,18 @@ describe("fixed incident email", () => {
   it("links the same url in the html", () => {
     const { html } = renderIncidentFixed(FIXED);
     expect(html).toContain('<a class="brief-ink" href="https://0509.io/site/inc_1">https://0509.io/site/inc_1</a>');
+  });
+});
+
+describe("the alert footer (RFC 8058)", () => {
+  it.each([
+    ["open", renderIncidentOpen(OPEN)],
+    ["fixed", renderIncidentFixed(FIXED)],
+  ])("the %s email links the alert settings and a one-click unsubscribe in text and html", (_name, rendered) => {
+    expect(rendered.text).toContain("Settings: https://0509.io/app/settings");
+    expect(rendered.text).toContain("Unsubscribe: https://0509.io/u/opaque-token");
+    expect(rendered.html).toContain('href="https://0509.io/app/settings"');
+    expect(rendered.html).toContain('href="https://0509.io/u/opaque-token"');
   });
 });
 

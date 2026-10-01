@@ -1,3 +1,4 @@
+import { captureException } from "@sentry/cloudflare";
 import { env } from "cloudflare:workers";
 import { getDomain } from "tldts";
 
@@ -352,8 +353,12 @@ async function storeDiff(diffKey: string, diff: ReturnType<typeof diffPageText> 
 }
 
 async function emailPricingChange(signalId: string, judgment: JudgedChange | null): Promise<void> {
-  if (judgment?.noteworthy?.band === "publish" && judgment.noteworthy.kind === "pricing") {
+  if (judgment?.noteworthy?.band !== "publish" || judgment.noteworthy.kind !== "pricing") return;
+  try {
     await env.SEND_EMAIL.send({ signal_id: signalId });
+  } catch (error) {
+    console.log(JSON.stringify({ event: "site.change_email_enqueue_failed", signalId }));
+    captureException(error, { tags: { queue: "send-email", lane: "change" } });
   }
 }
 

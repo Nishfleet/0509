@@ -1,7 +1,7 @@
 import { env } from "cloudflare:test";
 import { beforeEach, describe, expect, it } from "vitest";
 
-import { deliverChange, handleBatch } from "../../workers/delivery/consumer";
+import { CHANGE_DAILY_CAP, deliverChange, handleBatch } from "../../workers/delivery/consumer";
 
 const USER = "user-change-lane";
 const WS = "ws-change-lane";
@@ -91,6 +91,30 @@ describe("rival change email lane (0509#6375)", () => {
     expect(sent[0].subject).toBe("Rival changed its pricing page");
     expect(sent[0].text).toContain("Before: Pro $12 a month");
     expect(sent[0].text).toContain("After: Pro $15 a month");
+    expect(sent[0].text).toContain("https://0509.io/app/settings");
+    const token = await env.DB.prepare("SELECT unsubscribe_token FROM send_target WHERE id = 'target-change'").first<{
+      unsubscribe_token: string;
+    }>();
+    expect(sent[0].headers).toEqual({
+      "List-Unsubscribe": `<https://0509.io/u/${token?.unsubscribe_token ?? ""}>`,
+      "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
+    });
+  });
+
+  it("stops at the daily cap, sends one notice for the overflow, then nothing more that day", async () => {
+    const ids = Array.from({ length: CHANGE_DAILY_CAP + 2 }, (_, index) => `sig-cap-${String(index)}`);
+    await env.DB.batch(ids.map((id) => insertSignal(id, RIVAL)));
+    const sent: EmailMessageBuilder[] = [];
+
+    const outcomes: string[] = [];
+    for (const id of ids) outcomes.push((await deliverChange(envWith(sent), { signal_id: id })).outcome);
+
+    expect(outcomes).toEqual([...Array<string>(CHANGE_DAILY_CAP).fill("sent"), "capped", "capped"]);
+    expect(sent).toHaveLength(CHANGE_DAILY_CAP + 1);
+    expect(sent.at(-1)?.subject).toBe("More rivals changed price or plan today");
+    expect(
+      sent.slice(0, CHANGE_DAILY_CAP).every((message) => message.subject === "Rival changed its pricing page"),
+    ).toBe(true);
   });
 
   it("sends nothing when the workspace turned change alerts off", async () => {
