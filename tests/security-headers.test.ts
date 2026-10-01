@@ -3,9 +3,11 @@ import { describe, expect, it } from "vitest";
 import { contentSecurityPolicy, withDocumentSecurityHeaders } from "../app/lib/security-headers";
 
 describe("document security headers", () => {
-  it("allows scripts only by this response's nonce", () => {
+  it("allows scripts only by this response's nonce and the one pinned faces script", () => {
     const policy = contentSecurityPolicy("abc");
-    expect(policy).toContain("script-src 'self' 'nonce-abc' 'strict-dynamic' https://challenges.cloudflare.com");
+    expect(policy).toContain(
+      "script-src 'self' 'nonce-abc' 'strict-dynamic' 'sha256-GpODl5NtfRl6mEldBVRam/Wgf0dQcQIEQVBXJek7mCM=' https://challenges.cloudflare.com",
+    );
     expect(policy).toContain("frame-src https://challenges.cloudflare.com");
     expect(policy).not.toContain("'unsafe-eval'");
     expect(policy).toContain("object-src 'none'");

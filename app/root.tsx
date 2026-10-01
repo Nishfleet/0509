@@ -3,35 +3,39 @@ import { isRouteErrorResponse, Links, Meta, Outlet, Scripts, ScrollRestoration, 
 import type { Route } from "./+types/root";
 import { ErrorPage } from "./components/error-page";
 import { hasSessionCookie } from "./lib/auth.server";
+import { FACES_SCRIPT } from "./lib/faces-script";
 import "./app.css";
 
 const SERVER_ONLY_ROUTES: ReadonlySet<string> = new Set(["routes/landing", "routes/privacy", "routes/terms"]);
 
 export function Layout({ children }: { children: React.ReactNode }) {
   const matches = useMatches();
-  const landing = matches.some((match) => match.id === "routes/landing");
   const serverOnly = matches.some((match) => SERVER_ONLY_ROUTES.has(match.id));
   return (
     <html lang="en">
       <head>
         <meta charSet="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
-        <link
-          rel="preload"
-          href="/fonts/bricolage-hero.woff2"
-          as="font"
-          type="font/woff2"
-          crossOrigin="anonymous"
-          fetchPriority="high"
-        />
-        <link
-          rel="preload"
-          href="/fonts/instrument-sans-latin.woff2"
-          as="font"
-          type="font/woff2"
-          crossOrigin="anonymous"
-          fetchPriority={landing ? "high" : undefined}
-        />
+        {serverOnly ? null : (
+          <>
+            <link rel="stylesheet" href="/app-faces.css" />
+            <link
+              rel="preload"
+              href="/fonts/bricolage-hero.woff2"
+              as="font"
+              type="font/woff2"
+              crossOrigin="anonymous"
+              fetchPriority="high"
+            />
+            <link
+              rel="preload"
+              href="/fonts/instrument-sans-latin.woff2"
+              as="font"
+              type="font/woff2"
+              crossOrigin="anonymous"
+            />
+          </>
+        )}
         <Meta />
         <Links />
       </head>
@@ -39,6 +43,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
         {children}
         {serverOnly ? null : <ScrollRestoration />}
         {serverOnly ? null : <Scripts />}
+        {serverOnly ? <script dangerouslySetInnerHTML={{ __html: FACES_SCRIPT }} /> : null}
       </body>
     </html>
   );
