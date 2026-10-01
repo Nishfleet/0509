@@ -55,7 +55,7 @@ function CompetitorItem({ competitor }: { competitor: CompetitorRow }) {
         data-state={state}
         className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-2"
       >
-        <div className="flex min-w-0 flex-[1_1_16rem] items-start gap-3">
+        <div className="flex min-w-0 flex-[1_1_16rem] items-center gap-3">
           <BrandChip name={competitor.name} href={`/app/competitors/${competitor.entityId}`} off={off} />
           <div className="min-w-0">
             <p className="truncate text-body-sm text-ink-soft">{competitor.domain}</p>
