@@ -1,4 +1,10 @@
 import { browserContent } from "../site/browser-budget.server";
+import {
+  browserContentEmpty,
+  browserRefused,
+  CHALLENGE_MARKERS,
+  type BrowserEngine,
+} from "./browser-refusal";
 import { BlockedRedirectError, cappedBody, fetchOutbound, targetRefusal } from "./outbound.server";
 import { CRAWLER_USER_AGENT } from "./robots.server";
 
@@ -22,6 +28,7 @@ interface ReadUrlSuccess {
   status: number;
   ms: number;
   browserMsUsed?: number;
+  browserEngine?: BrowserEngine;
   escalated: boolean;
   escalationReason?: EscalationReason;
 }
@@ -50,20 +57,6 @@ export class ReadUrlError extends Error {
 export function probeFailureReason(error: unknown): string {
   return error instanceof ReadUrlError ? error.reason : "probe-failed";
 }
-
-const CHALLENGE_MARKERS = [
-  "cf-browser-verification",
-  "cf_chl_opt",
-  "just a moment",
-  "checking if the site connection is secure",
-  "attention required! | cloudflare",
-  "enable javascript and cookies to continue",
-  "ddos protection by cloudflare",
-  "détection d'une activité anormale",
-  "unusual traffic from your computer network",
-  "are you a robot",
-  "verification successful. waiting for",
-] as const;
 
 const FETCH_HEADERS = {
   accept: "text/html,application/xhtml+xml",
@@ -117,23 +110,18 @@ async function refusalReason(
   return null;
 }
 
-function browserRefused(status: number, html: string): boolean {
-  if (status < 200 || status > 299) return true;
-  const probe = html.slice(0, 20_000).toLowerCase();
-  return CHALLENGE_MARKERS.some((marker) => probe.includes(marker));
-}
-
 function readField(value: unknown, key: string): unknown {
   if (typeof value !== "object" || value === null) return undefined;
   return (value as Record<string, unknown>)[key];
 }
 
-function logEscalation(browserMsUsed: number | null, reason: EscalationReason) {
+function logEscalation(browserMsUsed: number | null, reason: EscalationReason, engine: BrowserEngine) {
   console.log(
     JSON.stringify({
       event: "browser-escalation",
       browserMsUsed,
       reason,
+      engine,
     }),
   );
 }
@@ -266,55 +254,87 @@ export async function readUrl(url: string, options: ReadUrlOptions = {}): Promis
   };
 }
 
-async function escalate(
-  url: string,
-  started: number,
-  reason: EscalationReason,
-): Promise<{ result: ReadUrlSuccess | null; cause: string }> {
-  const content = await browserContent(url);
+async function parseBrowserPage(
+  res: Response,
+): Promise<{ html: string; status: number } | { cause: string }> {
+  let body: unknown;
+  try {
+    body = JSON.parse(await cappedText(res));
+  } catch (err) {
+    return { cause: `browser body was unreadable (${err instanceof Error ? err.message : String(err)})` };
+  }
+  const html = readField(body, "result");
+  if (typeof html !== "string") return { cause: "browser body had no string result" };
+  const meta = readField(body, "meta");
+  const metaStatus = readField(meta, "status");
+  const status = typeof metaStatus === "number" ? metaStatus : res.status;
+  if (browserRefused(status, html)) {
+    return { cause: `browser page was refused (${String(status)})` };
+  }
+  return { html, status };
+}
+
+interface BrowserAttemptArgs {
+  url: string;
+  started: number;
+  reason: EscalationReason;
+  engine: BrowserEngine;
+}
+
+async function browserAttempt(
+  args: BrowserAttemptArgs,
+): Promise<{ result: ReadUrlSuccess | null; cause: string; msUsed: number | null }> {
+  const { url, started, reason, engine } = args;
+  const content = await browserContent(url, engine);
   if (!content.ok) {
-    if (content.kind === "threw") logEscalation(null, reason);
-    return { result: null, cause: content.cause };
+    if (content.kind === "threw") logEscalation(null, reason, engine);
+    return { result: null, cause: content.cause, msUsed: null };
   }
   const res = content.res;
+  const msUsed = parseBrowserMs(res);
+  logEscalation(msUsed, reason, engine);
 
-  const browserMsUsed = parseBrowserMs(res);
-  logEscalation(browserMsUsed, reason);
+  if (!res.ok) return { result: null, cause: `browser answered ${String(res.status)}`, msUsed };
 
-  if (!res.ok) return { result: null, cause: `browser answered ${String(res.status)}` };
-
-  let html: string;
-  let status: number;
-  try {
-    const body: unknown = JSON.parse(await cappedText(res));
-    const result = readField(body, "result");
-    if (typeof result !== "string") return { result: null, cause: "browser body had no string result" };
-    html = result;
-    const meta = readField(body, "meta");
-    const metaStatus = readField(meta, "status");
-    status = typeof metaStatus === "number" ? metaStatus : res.status;
-  } catch (err) {
-    return {
-      result: null,
-      cause: `browser body was unreadable (${err instanceof Error ? err.message : String(err)})`,
-    };
-  }
-
-  if (browserRefused(status, html)) {
-    return { result: null, cause: `browser page was refused (${String(status)})` };
+  const page = await parseBrowserPage(res);
+  if ("cause" in page) return { result: null, cause: page.cause, msUsed };
+  if (engine === "kitesurf" && browserContentEmpty(page.html)) {
+    return { result: null, cause: "kitesurf returned empty content", msUsed };
   }
 
   return {
     result: {
       ok: true,
-      html,
+      html: page.html,
       transport: "browser",
-      status,
+      status: page.status,
       ms: Date.now() - started,
-      browserMsUsed: browserMsUsed ?? undefined,
+      browserMsUsed: msUsed ?? undefined,
+      browserEngine: engine,
       escalated: true,
       escalationReason: reason,
     },
     cause: "",
+    msUsed,
   };
+}
+
+function sumBrowserMs(first: number | null, second: number | null): number | undefined {
+  if (first === null && second === null) return undefined;
+  return (first ?? 0) + (second ?? 0);
+}
+
+async function escalate(
+  url: string,
+  started: number,
+  reason: EscalationReason,
+): Promise<{ result: ReadUrlSuccess | null; cause: string }> {
+  const first = await browserAttempt({ url, started, reason, engine: "kitesurf" });
+  if (first.result !== null) return { result: first.result, cause: "" };
+  const second = await browserAttempt({ url, started, reason, engine: "chromium" });
+  if (second.result !== null) {
+    second.result.browserMsUsed = sumBrowserMs(first.msUsed, second.msUsed);
+    return { result: second.result, cause: "" };
+  }
+  return { result: null, cause: `kitesurf: ${first.cause}; chromium: ${second.cause}` };
 }

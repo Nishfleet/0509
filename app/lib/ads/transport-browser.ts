@@ -1,15 +1,17 @@
 import { connect, launch, sessions, type Page } from "@cloudflare/puppeteer";
 
+import { browserContentEmpty, browserRefused, type BrowserEngine } from "../fetch/browser-refusal";
 import { renderDescriptorTemplate, type AdsSourceDescriptor } from "./descriptor";
 import type { TransportResult } from "./transport-api";
 
 export interface BrowserBindingLike {
   fetch: typeof fetch;
-  quickAction(action: "content", options: { url: string }): Promise<Response>;
+  quickAction(action: "content", options: { url: string; browser?: "kitesurf" }): Promise<Response>;
 }
 
 export interface BrowserTransportResult extends TransportResult {
   browserMsUsed?: number;
+  browserEngine?: BrowserEngine;
 }
 
 const NAV_TIMEOUT_MS = 30_000;
@@ -30,22 +32,63 @@ function unwrapQuickBody(body: string, fallbackStatus: number): { payload: unkno
   }
 }
 
+interface QuickContentAttempt {
+  env: { BROWSER: BrowserBindingLike };
+  url: string;
+  started: number;
+  engine: BrowserEngine;
+}
+
+async function quickContentAttempt(
+  args: QuickContentAttempt,
+): Promise<{ result: BrowserTransportResult | null; msUsed?: number; error?: unknown }> {
+  const { env, url, started, engine } = args;
+  let res: Response;
+  try {
+    res = await env.BROWSER.quickAction(
+      "content",
+      engine === "kitesurf" ? { url, browser: "kitesurf" } : { url },
+    );
+  } catch (error) {
+    console.error(
+      JSON.stringify({ event: "ads.browser_quick_action_failed", engine, error: String(error) }),
+    );
+    return { result: null, error };
+  }
+  const msUsedHeader = res.headers.get("x-browser-ms-used");
+  const msUsed = msUsedHeader === null ? NaN : Number(msUsedHeader);
+  const body = await res.text();
+  const { payload, status } = unwrapQuickBody(body, res.status);
+  const result: BrowserTransportResult = {
+    payload,
+    status,
+    ms: Date.now() - started,
+    browserMsUsed: Number.isFinite(msUsed) ? msUsed : undefined,
+    browserEngine: engine,
+  };
+  const refused = typeof payload === "string" && browserRefused(status, payload);
+  if (engine === "kitesurf" && (!res.ok || refused || browserContentEmpty(payload))) {
+    return { result: null, msUsed: result.browserMsUsed };
+  }
+  return { result, msUsed: result.browserMsUsed };
+}
+
 async function quickContent(
   env: { BROWSER: BrowserBindingLike },
   url: string,
   started: number,
 ): Promise<BrowserTransportResult> {
-  const res = await env.BROWSER.quickAction("content", { url });
-  const msUsedHeader = res.headers.get("x-browser-ms-used");
-  const msUsed = msUsedHeader === null ? NaN : Number(msUsedHeader);
-  const body = await res.text();
-  const { payload, status } = unwrapQuickBody(body, res.status);
-  return {
-    payload,
-    status,
-    ms: Date.now() - started,
-    browserMsUsed: Number.isFinite(msUsed) ? msUsed : undefined,
-  };
+  const first = await quickContentAttempt({ env, url, started, engine: "kitesurf" });
+  if (first.result !== null) return first.result;
+  const second = await quickContentAttempt({ env, url, started, engine: "chromium" });
+  if (second.result === null) {
+    throw second.error instanceof Error ? second.error : new Error(String(second.error));
+  }
+  const browserMsUsed =
+    first.msUsed === undefined && second.msUsed === undefined
+      ? undefined
+      : (first.msUsed ?? 0) + (second.msUsed ?? 0);
+  return { ...second.result, browserMsUsed };
 }
 
 interface Navigation {

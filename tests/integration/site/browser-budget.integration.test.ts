@@ -66,9 +66,22 @@ describe("BrowserBudget (0509#5294)", () => {
   it("keeps a per-day browser millisecond total independent of the take counters", async () => {
     expect(await readBrowserMsForDay("2026-09-28")).toBe(0);
     const counter = env.BROWSER_BUDGET.get(env.BROWSER_BUDGET.idFromName("browser-ms:2026-09-28"));
-    await counter.addMs(2_000);
-    await counter.addMs(500);
+    await counter.addMs(2_000, "kitesurf");
+    await counter.addMs(500, "chromium");
     expect(await readBrowserMsForDay("2026-09-28")).toBe(2_500);
     expect(await readBrowserMsForDay("2026-09-29")).toBe(0);
+  });
+
+  it("counts Kitesurf and Chromium spend separately inside the same day total (0509#6382)", async () => {
+    const counter = env.BROWSER_BUDGET.get(env.BROWSER_BUDGET.idFromName("browser-ms:2026-10-01"));
+    await counter.addMs(300, "kitesurf");
+    await counter.addMs(700, "kitesurf");
+    await counter.addMs(1_500, "chromium");
+    expect(await counter.engineMs("kitesurf")).toBe(1_000);
+    expect(await counter.engineMs("chromium")).toBe(1_500);
+    expect(await counter.totalMs()).toBe(2_500);
+    expect(await readBrowserMsForDay("2026-10-01", "kitesurf")).toBe(1_000);
+    expect(await readBrowserMsForDay("2026-10-01", "chromium")).toBe(1_500);
+    expect(await readBrowserMsForDay("2026-10-01")).toBe(2_500);
   });
 });

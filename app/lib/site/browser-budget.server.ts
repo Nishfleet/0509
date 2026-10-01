@@ -1,5 +1,7 @@
 import { env } from "cloudflare:workers";
 
+import type { BrowserEngine } from "../fetch/browser-refusal";
+
 const ESCALATIONS_PER_BRAND_PER_DAY = 4;
 const SCREENSHOTS_PER_BRAND_PER_DAY = 4;
 const SHARE_IMAGES_PER_WORKSPACE_PER_DAY = 10;
@@ -8,17 +10,18 @@ function browserMsCounter(day: string) {
   return env.BROWSER_BUDGET.get(env.BROWSER_BUDGET.idFromName(`browser-ms:${day}`));
 }
 
-export async function readBrowserMsForDay(day: string): Promise<number> {
-  return browserMsCounter(day).totalMs();
+export async function readBrowserMsForDay(day: string, engine?: BrowserEngine): Promise<number> {
+  const counter = browserMsCounter(day);
+  return engine === undefined ? counter.totalMs() : counter.engineMs(engine);
 }
 
-async function recordBrowserMs(res: Response): Promise<void> {
+async function recordBrowserMs(res: Response, engine: BrowserEngine): Promise<void> {
   const header = res.headers.get("X-Browser-Ms-Used");
   if (header === null) return;
   const ms = Number(header);
   if (!Number.isFinite(ms) || ms <= 0) return;
   try {
-    await browserMsCounter(new Date().toISOString().slice(0, 10)).addMs(ms);
+    await browserMsCounter(new Date().toISOString().slice(0, 10)).addMs(ms, engine);
   } catch (err) {
     console.error(JSON.stringify({ event: "browser.ms_record_failed", error: String(err) }));
   }
@@ -41,13 +44,17 @@ export async function takeBrowserShareImage(workspaceId: string, day: string): P
 
 export async function browserContent(
   url: string,
+  engine: BrowserEngine = "chromium",
 ): Promise<{ ok: true; res: Response } | { ok: false; kind: "unconfigured" | "threw"; cause: string }> {
   if (!env.BROWSER || typeof env.BROWSER.quickAction !== "function") {
     return { ok: false, kind: "unconfigured", cause: "browser binding is not configured" };
   }
   try {
-    const res = await env.BROWSER.quickAction("content", { url });
-    await recordBrowserMs(res);
+    const res = await env.BROWSER.quickAction(
+      "content",
+      engine === "kitesurf" ? { url, browser: "kitesurf" } : { url },
+    );
+    await recordBrowserMs(res, engine);
     return { ok: true, res };
   } catch (err) {
     return {
@@ -69,7 +76,7 @@ export async function browserScreenshot(
       url,
       viewport: { width: 1440, height: 900 },
     });
-    await recordBrowserMs(res);
+    await recordBrowserMs(res, "chromium");
     if (!res.ok) {
       return { ok: false, cause: `browser answered ${String(res.status)}` };
     }
@@ -93,7 +100,7 @@ export async function browserHtmlScreenshot(
       gotoOptions: { waitUntil: "networkidle0" },
       screenshotOptions: { type: "png" },
     });
-    await recordBrowserMs(response);
+    await recordBrowserMs(response, "chromium");
     if (!response.ok) {
       return { ok: false, cause: `browser answered ${String(response.status)}` };
     }

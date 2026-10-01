@@ -210,14 +210,26 @@ describe("transportApi", () => {
 });
 
 describe("transportBrowser quick-action leg", () => {
-  function stubBinding(body: unknown, headers: Record<string, string> = {}) {
+  interface QuickOptions {
+    url: string;
+    browser?: "kitesurf";
+  }
+
+  function stubBinding(
+    respond: (options: QuickOptions) => { body: unknown; headers?: Record<string, string>; status?: number } | never,
+  ) {
+    const engines: string[] = [];
     return {
+      engines,
       fetch,
-      quickAction: async (_action: "content", _options: { url: string }) =>
-        new Response(JSON.stringify(body), {
-          status: 200,
-          headers: { "content-type": "application/json", ...headers },
-        }),
+      quickAction: async (_action: "content", options: QuickOptions) => {
+        engines.push(options.browser ?? "chromium");
+        const outcome = respond(options);
+        return new Response(JSON.stringify(outcome.body), {
+          status: outcome.status ?? 200,
+          headers: { "content-type": "application/json", ...outcome.headers },
+        });
+      },
     };
   }
 
@@ -228,34 +240,87 @@ describe("transportBrowser quick-action leg", () => {
     reliability: "scraped_page",
   } as const;
 
+  const page = (html: string, status = 200) => ({
+    body: { success: true, result: html, meta: { status } },
+  });
+
   it("unwraps the envelope, takes the page's status, and reports browser-ms", async () => {
     const env = {
-      BROWSER: stubBinding(
-        {
-          success: true,
-          result: "<html>rendered</html>",
-          meta: { status: 200, title: "t" },
-        },
-        { "x-browser-ms-used": "731.5" },
-      ),
+      BROWSER: stubBinding(() => ({
+        body: { success: true, result: "<html>rendered</html>", meta: { status: 200, title: "t" } },
+        headers: { "x-browser-ms-used": "731.5" },
+      })),
     };
     const r = await transportBrowser(parseAdsDescriptor(descriptor), "acme", env);
     expect(r.payload).toBe("<html>rendered</html>");
     expect(r.status).toBe(200);
     expect(r.browserMsUsed).toBe(731.5);
+    expect(r.browserEngine).toBe("kitesurf");
+    expect(env.BROWSER.engines).toEqual(["kitesurf"]);
   });
 
-  it("surfaces the page's own non-2xx from meta.status", async () => {
+  it("surfaces the page's own non-2xx from meta.status once Chromium also sees it", async () => {
     const env = {
-      BROWSER: stubBinding({
-        success: true,
-        result: "<html>challenge</html>",
-        meta: { status: 403 },
-      }),
+      BROWSER: stubBinding(() => ({
+        body: { success: true, result: "<html>challenge</html>", meta: { status: 403 } },
+      })),
     };
     const r = await transportBrowser(parseAdsDescriptor(descriptor), "acme", env);
     expect(r.status).toBe(403);
     expect(r.payload).toBe("<html>challenge</html>");
     expect(r.browserMsUsed).toBeUndefined();
+    // A 403 page is a refusal: Kitesurf tried first, Chromium confirmed.
+    expect(env.BROWSER.engines).toEqual(["kitesurf", "chromium"]);
+  });
+
+  it("falls back to Chromium when Kitesurf serves a challenge page (0509#6382)", async () => {
+    const env = {
+      BROWSER: stubBinding((options) =>
+        options.browser === "kitesurf"
+          ? page("<html><body><h1>Just a moment...</h1><p>checking if the site connection is secure</p></body></html>")
+          : { ...page("<html>rendered</html>"), headers: { "x-browser-ms-used": "500" } },
+      ),
+    };
+    const r = await transportBrowser(parseAdsDescriptor(descriptor), "acme", env);
+    expect(r.payload).toBe("<html>rendered</html>");
+    expect(r.browserEngine).toBe("chromium");
+    expect(env.BROWSER.engines).toEqual(["kitesurf", "chromium"]);
+  });
+
+  it("falls back to Chromium when Kitesurf returns empty content, and sums both legs' ms", async () => {
+    const env = {
+      BROWSER: stubBinding((options) =>
+        options.browser === "kitesurf"
+          ? { ...page("  "), headers: { "x-browser-ms-used": "120" } }
+          : { ...page("<html>rendered</html>"), headers: { "x-browser-ms-used": "480" } },
+      ),
+    };
+    const r = await transportBrowser(parseAdsDescriptor(descriptor), "acme", env);
+    expect(r.payload).toBe("<html>rendered</html>");
+    expect(r.browserEngine).toBe("chromium");
+    expect(r.browserMsUsed).toBe(600);
+    expect(env.BROWSER.engines).toEqual(["kitesurf", "chromium"]);
+  });
+
+  it("falls back to Chromium when the Kitesurf call throws, and rethrows if Chromium throws too", async () => {
+    const env = {
+      BROWSER: stubBinding((options) => {
+        if (options.browser === "kitesurf") throw new Error("kitesurf down");
+        return page("<html>rendered</html>");
+      }),
+    };
+    const r = await transportBrowser(parseAdsDescriptor(descriptor), "acme", env);
+    expect(r.payload).toBe("<html>rendered</html>");
+    expect(env.BROWSER.engines).toEqual(["kitesurf", "chromium"]);
+
+    const dead = {
+      BROWSER: stubBinding(() => {
+        throw new Error("both engines down");
+      }),
+    };
+    await expect(transportBrowser(parseAdsDescriptor(descriptor), "acme", dead)).rejects.toThrow(
+      "both engines down",
+    );
+    expect(dead.BROWSER.engines).toEqual(["kitesurf", "chromium"]);
   });
 });

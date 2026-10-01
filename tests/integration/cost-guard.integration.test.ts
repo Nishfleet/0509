@@ -185,8 +185,8 @@ describe("runCostGuard (0509#4432)", () => {
   it("alerts on browser_ms_0509 from the Worker's own day counter, not the account-wide dataset", async () => {
     await seedBrands();
     const counter = env.BROWSER_BUDGET.get(env.BROWSER_BUDGET.idFromName("browser-ms:2026-09-26"));
-    await counter.addMs(100_000);
-    await counter.addMs(50_000);
+    await counter.addMs(100_000, "chromium");
+    await counter.addMs(50_000, "chromium");
     stubUsage(usageBody(0, 0));
     const result = await runCostGuard(env.DB, "t", "2026-09-26");
     expect(result.usage.browserMs).toBe(150_000);
@@ -212,7 +212,7 @@ describe("runCostGuard (0509#4432)", () => {
 
   it("stays silent on browser_ms_0509 at or under three times the per-brand figure", async () => {
     await seedBrands();
-    await env.BROWSER_BUDGET.get(env.BROWSER_BUDGET.idFromName("browser-ms:2026-09-27")).addMs(135_000);
+    await env.BROWSER_BUDGET.get(env.BROWSER_BUDGET.idFromName("browser-ms:2026-09-27")).addMs(135_000, "chromium");
     stubUsage(usageBody(0, 0));
     const result = await runCostGuard(env.DB, "t", "2026-09-27");
     expect(result.usage.browserMs).toBe(135_000);
@@ -267,7 +267,7 @@ describe("runNightlyCostGuard", () => {
 
   it("guards the previous UTC day from the scheduled instant", async () => {
     await seedBrands();
-    await env.BROWSER_BUDGET.get(env.BROWSER_BUDGET.idFromName("browser-ms:2026-09-28")).addMs(150_000);
+    await env.BROWSER_BUDGET.get(env.BROWSER_BUDGET.idFromName("browser-ms:2026-09-28")).addMs(150_000, "chromium");
     stubUsage(usageBody(0, 0));
     const result = await runNightlyCostGuard(env.DB, "t", at);
     expect(result.usage.day).toBe("2026-09-28");
@@ -277,7 +277,7 @@ describe("runNightlyCostGuard", () => {
 
   it("without a token evaluates the browser line only and never calls the analytics API", async () => {
     await seedBrands();
-    await env.BROWSER_BUDGET.get(env.BROWSER_BUDGET.idFromName("browser-ms:2026-09-28")).addMs(150_000);
+    await env.BROWSER_BUDGET.get(env.BROWSER_BUDGET.idFromName("browser-ms:2026-09-28")).addMs(150_000, "chromium");
     const fetchSpy = vi.fn(async () => new Response("{}", { status: 500 }));
     vi.stubGlobal("fetch", fetchSpy);
     const result = await runNightlyCostGuard(env.DB, undefined, at);
@@ -303,7 +303,7 @@ describe("runNightlyCostGuard", () => {
 
   it("stays silent when the browser line is under threshold", async () => {
     await seedBrands();
-    await env.BROWSER_BUDGET.get(env.BROWSER_BUDGET.idFromName("browser-ms:2026-10-01")).addMs(135_000);
+    await env.BROWSER_BUDGET.get(env.BROWSER_BUDGET.idFromName("browser-ms:2026-10-01")).addMs(135_000, "chromium");
     const result = await runNightlyCostGuard(env.DB, undefined, Date.UTC(2026, 9, 2, 3, 0, 0));
     expect(result.breaches).toEqual([]);
     expect(await countAlerts("2026-10-01")).toBe(0);

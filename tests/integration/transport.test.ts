@@ -20,7 +20,7 @@ vi.mock("cloudflare:workers", () => ({
 }));
 
 interface BrowserStub {
-  quickAction(action: "content", options: { url: string }): Promise<Response>;
+  quickAction(action: "content", options: { url: string; browser?: "kitesurf" }): Promise<Response>;
 }
 
 /**
@@ -55,35 +55,41 @@ const CHALLENGE_PAGE =
  * `close()` that fails loudly if the module ever reaches for the forbidden
  * browser lifecycle.
  */
+type StubOutcome =
+  | { ok: true; html: string; status?: number; browserMs?: string }
+  | { ok: false; throwOnCall?: boolean; status?: number };
+
 function fakeBrowser(
-  response:
-    | { ok: true; html: string; status?: number; browserMs?: string }
-    | { ok: false; throwOnCall?: boolean; status?: number },
-): BrowserStub & { calls: string[]; closed: number } {
+  response: StubOutcome | ((options: { url: string; browser?: "kitesurf" }) => StubOutcome),
+): BrowserStub & { calls: string[]; engines: string[]; closed: number } {
   const calls: string[] = [];
+  const engines: string[] = [];
   const state = { closed: 0 };
   return {
     calls,
+    engines,
     get closed() {
       return state.closed;
     },
-    async quickAction(_action: "content", options: { url: string }) {
+    async quickAction(_action: "content", options: { url: string; browser?: "kitesurf" }) {
       calls.push(options.url);
-      if (!response.ok && response.throwOnCall) {
+      engines.push(options.browser ?? "chromium");
+      const outcome = typeof response === "function" ? response(options) : response;
+      if (!outcome.ok && outcome.throwOnCall) {
         throw new Error("browser run unavailable");
       }
-      if (!response.ok) {
-        return new Response("browser error", { status: response.status ?? 500 });
+      if (!outcome.ok) {
+        return new Response("browser error", { status: outcome.status ?? 500 });
       }
       const headers = new Headers({ "content-type": "application/json" });
-      if (response.browserMs !== undefined) {
-        headers.set("X-Browser-Ms-Used", response.browserMs);
+      if (outcome.browserMs !== undefined) {
+        headers.set("X-Browser-Ms-Used", outcome.browserMs);
       }
       return new Response(
         JSON.stringify({
           success: true,
-          result: response.html,
-          meta: { status: response.status ?? 200 },
+          result: outcome.html,
+          meta: { status: outcome.status ?? 200 },
         }),
         { status: 200, headers },
       );
@@ -408,7 +414,7 @@ describe("readUrl", () => {
     }
   });
 
-  it("does exactly ONE escalation, then a typed failure — no retry loop", async () => {
+  it("tries Kitesurf once, falls back to Chromium once, then a typed failure — no retry loop", async () => {
     const stub = stubFetch({
       "https://gated.example.com/": () => new Response("Forbidden", { status: 403 }),
     });
@@ -419,8 +425,9 @@ describe("readUrl", () => {
       expect(result.ok).toBe(false);
       if (result.ok) return;
       expect(result.reason).toBe("escalation-failed");
-      // One call, not two: the module must not retry.
-      expect(browser.calls).toHaveLength(1);
+      // One Kitesurf attempt, one Chromium fallback, and no third call.
+      expect(browser.engines).toEqual(["kitesurf", "chromium"]);
+      expect(browser.calls).toHaveLength(2);
     } finally {
       stub.restore();
     }
@@ -437,8 +444,9 @@ describe("readUrl", () => {
       expect(result.ok).toBe(false);
       if (result.ok) return;
       expect(result.reason).toBe("escalation-failed");
-      expect(result.detail).toContain("browser answered 429");
-      expect(browser.calls).toHaveLength(1);
+      expect(result.detail).toContain("kitesurf: browser answered 429");
+      expect(result.detail).toContain("chromium: browser answered 429");
+      expect(browser.calls).toHaveLength(2);
     } finally {
       stub.restore();
     }
@@ -460,7 +468,7 @@ describe("readUrl", () => {
       if (result.ok) return;
       expect(result.reason).toBe("escalation-failed");
       expect(result.detail).toContain("browser page was refused (403)");
-      expect(browser.calls).toHaveLength(1);
+      expect(browser.calls).toHaveLength(2);
     } finally {
       stub.restore();
     }
@@ -482,7 +490,91 @@ describe("readUrl", () => {
       if (result.ok) return;
       expect(result.reason).toBe("escalation-failed");
       expect(result.detail).toContain("browser page was refused (200)");
-      expect(browser.calls).toHaveLength(1);
+      expect(browser.calls).toHaveLength(2);
+    } finally {
+      stub.restore();
+    }
+  });
+
+  it("serves the page on Kitesurf and never opens Chromium", async () => {
+    const stub = stubFetch({
+      "https://gated.example.com/": () => new Response("Forbidden", { status: 403 }),
+    });
+    const browser = fakeBrowser({ ok: true, html: SUBSTANTIAL_PAGE, browserMs: "300" });
+    try {
+      install(browser);
+      const result = await readUrl("https://gated.example.com/", { mayEscalate: async () => true });
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.transport).toBe("browser");
+      expect(result.browserEngine).toBe("kitesurf");
+      expect(result.browserMsUsed).toBe(300);
+      expect(browser.engines).toEqual(["kitesurf"]);
+    } finally {
+      stub.restore();
+    }
+  });
+
+  it("falls back to Chromium when Kitesurf answers a challenge page", async () => {
+    const stub = stubFetch({
+      "https://gated.example.com/": () => new Response("Forbidden", { status: 403 }),
+    });
+    const browser = fakeBrowser((options) =>
+      options.browser === "kitesurf"
+        ? { ok: true, html: CHALLENGE_PAGE, browserMs: "200" }
+        : { ok: true, html: SUBSTANTIAL_PAGE, browserMs: "900" },
+    );
+    try {
+      install(browser);
+      const result = await readUrl("https://gated.example.com/", { mayEscalate: async () => true });
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.browserEngine).toBe("chromium");
+      expect(result.html).toBe(SUBSTANTIAL_PAGE);
+      // The reported cost is the whole read's: the refused Kitesurf leg plus
+      // the Chromium leg that served the page.
+      expect(result.browserMsUsed).toBe(1100);
+      expect(browser.engines).toEqual(["kitesurf", "chromium"]);
+    } finally {
+      stub.restore();
+    }
+  });
+
+  it("falls back to Chromium when Kitesurf returns empty content", async () => {
+    const stub = stubFetch({
+      "https://gated.example.com/": () => new Response("Forbidden", { status: 403 }),
+    });
+    const browser = fakeBrowser((options) =>
+      options.browser === "kitesurf"
+        ? { ok: true, html: "   ", browserMs: "150" }
+        : { ok: true, html: SUBSTANTIAL_PAGE, browserMs: "800" },
+    );
+    try {
+      install(browser);
+      const result = await readUrl("https://gated.example.com/", { mayEscalate: async () => true });
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.browserEngine).toBe("chromium");
+      expect(result.html).toBe(SUBSTANTIAL_PAGE);
+      expect(browser.engines).toEqual(["kitesurf", "chromium"]);
+    } finally {
+      stub.restore();
+    }
+  });
+
+  it("still serves Chromium's empty page when both engines return empty", async () => {
+    const stub = stubFetch({
+      "https://gated.example.com/": () => new Response("Forbidden", { status: 403 }),
+    });
+    const browser = fakeBrowser({ ok: true, html: "  " });
+    try {
+      install(browser);
+      const result = await readUrl("https://gated.example.com/", { mayEscalate: async () => true });
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.browserEngine).toBe("chromium");
+      expect(result.html).toBe("  ");
+      expect(browser.engines).toEqual(["kitesurf", "chromium"]);
     } finally {
       stub.restore();
     }
@@ -758,8 +850,10 @@ describe("readUrl", () => {
       const rows = lines
         .filter((line) => line.includes("browser-escalation"))
         .map((line) => JSON.parse(line) as { browserMsUsed: number | null });
-      expect(rows).toHaveLength(1);
+      // Kitesurf throws, Chromium throws: one null-cost line per attempt.
+      expect(rows).toHaveLength(2);
       expect(rows[0]?.browserMsUsed).toBeNull();
+      expect(rows[1]?.browserMsUsed).toBeNull();
     } finally {
       spy.mockRestore();
       stub.restore();
