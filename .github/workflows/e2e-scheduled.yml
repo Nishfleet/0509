@@ -340,6 +340,16 @@ jobs:
             npx wrangler d1 execute 0509 --remote --json --command "$1" | jq -c '.[0].results'
           }
           failed=0
+          missed=""
+          cron_instances() {
+            npx wrangler workflows instances list "$1" --date-start "$since" --per-page 100 --json | jq -s -r --arg prefix "$1-" '(add // []) | map(select(.id | startswith($prefix))) | length'
+          }
+          crons=""
+          for name in mentions-sweep site-sweep hiring-sweep snapshot-backup; do
+            n=$(cron_instances "$name")
+            crons="$crons$name $n, "
+            [ "$n" -gt 0 ] || { missed="$missed$name "; failed=1; }
+          done
           required='["is_competitor","still_competitor","noteworthy_change","own_site_breakage","read_this_first","mention_is_about_brand","mention_matters","page_role","identity_field_confidence.name","identity_field_confidence.description","identity_field_confidence.socials"]'
           verdicts=$(d1 "SELECT question_id, COUNT(*) AS n, MAX(decided_at) AS last FROM jev_verdict GROUP BY question_id")
           missing=$(jq -r --argjson req "$required" '[.[].question_id] as $have | $req - $have | join(", ")' <<< "$verdicts")
@@ -353,6 +363,7 @@ jobs:
           {
             echo "Soak report for the 24 hours before $(date -u +%Y-%m-%dT%H:%MZ) (send counts: $label)."
             echo
+            echo "- cron-started Workflow instances in the last 24 h: ${crons%, }$([ -z "$missed" ] || echo " (FAIL, none for: ${missed% })")"
             echo "- site-sweep Workflow instances: $(instances site-sweep)"
             echo "- site sweeps recorded in sweep_run: $sweeps"
             echo "- standing-rollover Workflow instances: $(instances standing-rollover)"
