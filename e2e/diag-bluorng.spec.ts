@@ -15,7 +15,7 @@ test("diag bluorng onboarding", async ({ page }) => {
       if (r.status() >= 400) log.push(`${r.status()} ${r.request().method()} ${r.url().slice(0, 120)} ref=${r.headers()["x-error-reference"] ?? ""}`);
     });
     await page.goto("/onboarding");
-    const input = page.getByRole("textbox", { name: "your website address or social username (like @yourbrand)" });
+    const input = page.getByRole("textbox", { name: /website address or social username/i });
     await input.fill("bluorng.com");
     await input.press("Enter");
     await page.waitForTimeout(8_000);
