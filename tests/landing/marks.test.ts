@@ -124,7 +124,7 @@ describe("landing marks", () => {
 
   it("names the hero's three literal pairs as examples, so a live mark is never mistaken for one", () => {
     const hero = renderToStaticMarkup(createElement(Hero));
-    expect(hero).toContain("Worked examples, not live marks.");
+    expect(hero).toContain("Examples, not real changes.");
     expect(hero).not.toContain("screenshot");
   });
 });

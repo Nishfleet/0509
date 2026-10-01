@@ -133,7 +133,7 @@ export interface ComposeInput {
 }
 
 function quietWeekLine(mentions: number, siteChanges: number, newAds: number): string {
-  return `Quiet week: ${countPhrase(mentions, "mention", "mentions")} checked, ${countPhrase(siteChanges, "site change", "site changes")}, ${countPhrase(newAds, "new ad", "new ads")}.`;
+  return `Quiet week: ${countPhrase(mentions, "mention", "mentions")}, ${countPhrase(siteChanges, "site change", "site changes")}, ${countPhrase(newAds, "new ad", "new ads")}.`;
 }
 
 export function pausedSentence(names: readonly string[]): string | null {

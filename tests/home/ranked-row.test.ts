@@ -157,15 +157,15 @@ describe("RankedRow", () => {
     expect(render(rowFor("ent_kindred"))).toContain(">#1</span>");
   });
 
-  it("prints a none source as label — none and a degraded source as label — degraded", () => {
+  it("prints a none source as label · nothing new and a degraded source as label · not answering", () => {
     const html = render(rowFor("ent_casetta"));
-    expect(html).toContain("Your site checks source — none");
-    expect(html).toContain("Reddit mentions — degraded");
+    expect(html).toContain("Your site checks source · nothing new");
+    expect(html).toContain("Reddit mentions · not answering");
   });
 
-  it("prints a source that produced nothing as label — none", () => {
+  it("prints a source that produced nothing as label · nothing new", () => {
     const html = render(rowFor("ent_casetta", { ...PAYLOAD, checked: { ...PAYLOAD.checked, degraded_sources: [] } }));
-    expect(html).toContain("Reddit mentions — none");
+    expect(html).toContain("Reddit mentions · nothing new");
   });
 
   it("prints a live source with its count", () => {

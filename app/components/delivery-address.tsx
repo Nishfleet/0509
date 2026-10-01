@@ -41,13 +41,14 @@ function AddressFields({
       />
       {showUnconfirmed ? (
         <p id="delivery-address-unconfirmed" className="mt-2 max-w-prose leading-[1.55]">
-          This address is unconfirmed. We emailed a confirmation link — the brief doesn't go out until you confirm.
+          This address isn't confirmed yet. We emailed you a confirmation link. The brief won't be sent until you
+          confirm.
         </p>
       ) : null}
       {suppressed ? (
         <label className="leading-[1.55]">
           <input type="checkbox" name="resume" value="yes" className="mr-2" />
-          Send to it again
+          Send the brief to this address again
         </label>
       ) : null}
       {hasError ? (

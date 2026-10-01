@@ -80,7 +80,7 @@ describe("the brief's per-brand read, against real D1", () => {
         headline_total: 1,
         headline_movement: 2,
         headline_is_new: false,
-        why_line: "Quiet week: 0 mentions checked, 1 site change, no new ads.",
+        why_line: "Quiet week: 0 mentions, 1 site change, no new ads.",
         read_this_first: [],
         brands: (rows.results ?? []).map((r) => ({
           entity_id: r.entity_id,

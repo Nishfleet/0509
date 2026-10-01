@@ -10,12 +10,12 @@ test("an unknown path is a 404 page with one action @smoke", async ({ page }, te
   expect(response?.status()).toBe(404);
 
   const headline = page.getByRole("heading", { level: 1 });
-  await expect(headline).toHaveText("This page is not here");
-  await expect(page.getByText("Nothing in the product lives at /this-page-is-not-here.")).toBeVisible();
+  await expect(headline).toHaveText("Page not found");
+  await expect(page.getByText("There is no page at /this-page-is-not-here.")).toBeVisible();
 
   const action = page.getByRole("link");
   await expect(action).toHaveCount(1);
-  await expect(action).toHaveText("Back to the landing");
+  await expect(action).toHaveText("Back to home");
   await expect(action).toHaveAttribute("href", "/");
 
   const overflow = await page.evaluate(

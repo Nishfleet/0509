@@ -27,7 +27,10 @@ export async function action({ request, context }: Route.ActionArgs) {
 export default function Page({ loaderData, actionData }: Route.ComponentProps) {
   return (
     <main className={PAGE}>
-      <PageHeading title="Settings" lede="Turn tracking for a brand on or off from its switch in Competitors." />
+      <PageHeading
+        title="Settings"
+        lede="Your brief, plan and account. To pause a competitor, use its switch on the Competitors page."
+      />
       {loaderData.schedule === null ? null : <BriefSection schedule={loaderData.schedule} />}
       <OwnSiteAlertsSetting on={loaderData.ownSiteAlerts} />
       <DismissedBrands dismissed={loaderData.dismissed} />

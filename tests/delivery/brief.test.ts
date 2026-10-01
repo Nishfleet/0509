@@ -396,22 +396,22 @@ describe("footer", () => {
       payload({ checked: { ...payload().checked, degraded_source_keys: ["reddit"] } }),
       CONTEXT,
     );
-    expect(html).toContain("1 source did not answer this week");
-    expect(text).toContain("1 source did not answer this week");
+    expect(html).toContain("1 source could not be reached this week");
+    expect(text).toContain("1 source could not be reached this week");
   });
 });
 
 describe("the quiet week", () => {
   const quiet = payload({
     is_quiet_week: true,
-    why_line: "Quiet week: 61 mentions checked, 14 site changes, no new ads.",
+    why_line: "Quiet week: 61 mentions, 14 site changes, no new ads.",
     read_this_first: [],
   });
 
   it("still sends, with the counts as the why-line", () => {
     const { html, text } = renderBrief(quiet, CONTEXT);
-    expect(html).toContain("Quiet week: 61 mentions checked, 14 site changes, no new ads.");
-    expect(text).toContain("Quiet week: 61 mentions checked, 14 site changes, no new ads.");
+    expect(html).toContain("Quiet week: 61 mentions, 14 site changes, no new ads.");
+    expect(text).toContain("Quiet week: 61 mentions, 14 site changes, no new ads.");
   });
 
   it("drops the empty read-this-first block and keeps the rest", () => {

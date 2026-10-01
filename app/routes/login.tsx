@@ -75,7 +75,7 @@ function EmailForm({ busy, turnstileSiteKey }: { busy: boolean; turnstileSiteKey
       <Input id="email" name="email" type="email" autoComplete="email" inputMode="email" required />
       <TurnstileWidget siteKey={turnstileSiteKey} startOn="email-focus" />
       <Button type="submit" size="lg" disabled={busy} className="mt-2">
-        {busy ? "Sending…" : "Email me a link"}
+        {busy ? "Sending…" : "Send sign-in link"}
       </Button>
     </Form>
   );
@@ -91,7 +91,7 @@ function PasskeyOption({ state, onSignIn }: { state: PasskeyState; onSignIn: () 
         onClick={() => void onSignIn()}
         disabled={state === "working"}
       >
-        {state === "working" ? "Follow the prompt…" : "Use a passkey instead"}
+        {state === "working" ? "Follow your device's prompt…" : "Use a passkey instead"}
       </Button>
       {state === "failed" ? (
         <p role="alert" className="text-[0.95rem]">

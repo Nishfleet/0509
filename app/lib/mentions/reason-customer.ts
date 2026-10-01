@@ -1,9 +1,9 @@
 import { type NoulAction } from "../jev/thresholds";
 
-export const MENTION_MATTERS_WHEN_TRUE = "It reports a move or an event a competitor-watcher would act on or bring up.";
+export const MENTION_MATTERS_WHEN_TRUE = "It reports a move or an event you would want to act on or bring up.";
 
 export const MENTION_MATTERS_WHEN_FALSE =
-  "It is a passing mention, a listicle entry, a stock ticker line, or old news retold.";
+  "It is a passing mention, one name in a long list, a stock price line, or old news retold.";
 
 const REASON_LINES: Readonly<Record<NoulAction, string>> = {
   act: MENTION_MATTERS_WHEN_TRUE,

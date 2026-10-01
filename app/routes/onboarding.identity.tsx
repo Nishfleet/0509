@@ -26,7 +26,7 @@ export function headers({ loaderHeaders }: Route.HeadersArgs) {
 }
 
 export function meta() {
-  return [{ title: "Confirm your card · Five to Nine" }];
+  return [{ title: "Check your details · Five to Nine" }];
 }
 
 export async function loader({ request }: Route.LoaderArgs) {
@@ -107,22 +107,22 @@ export function shouldRevalidate({ formData, defaultShouldRevalidate }: ShouldRe
 export default function Page({ loaderData, actionData }: Route.ComponentProps) {
   const { card, limited } = loaderData;
   const message = limited
-    ? "That's a lot of lookups in a minute. Wait a minute, then try again."
-    : "We couldn't find anything for that, try the main website.";
+    ? "You've tried a lot of addresses in the last minute. Wait a minute, then try again."
+    : "We couldn't find a website or username in that. Try an address like yourbrand.com or a username like @yourbrand.";
   return (
     <OnboardingFrame
       step={2}
-      heading={card === null ? "Start with your website or a handle" : "This is you. Fix anything we got wrong."}
+      heading={card === null ? "Your website or social username" : "Check your details. Fix anything that's wrong."}
       hideHeading={card === null}
     >
       {card === null ? (
         <OneInput
-          label="your website, or a handle"
-          placeholder="your website, or a handle"
+          label="Your website address or social username"
+          placeholder="yourbrand.com or @yourbrand"
           name="subject"
           action="/onboarding"
           message={message}
-          submitLabel="Draw my card"
+          submitLabel="Continue"
         />
       ) : (
         <IdentityCard

@@ -332,7 +332,7 @@ export function homeView(input: HomeStandingInput): HomeView {
   const brandWord = onCount === 1 ? "brand" : "brands";
   const recheckTime = hourAndMinute(input.schedule.timezone, nextHour(input.now));
   const briefTime = dayAndTime(input.schedule.timezone, nextBriefAt(input.schedule, input.now));
-  const footer = `Checked ${String(onCount)} ${brandWord} this week · brief ${briefTime} · your site re-checked at ${recheckTime}`;
+  const footer = `Checked ${String(onCount)} ${brandWord} this week · next brief ${briefTime} · your site is checked again at ${recheckTime}`;
   const standing = homeStanding(input);
   return {
     eyebrow: todayEyebrow(input.schedule.timezone, input.now),

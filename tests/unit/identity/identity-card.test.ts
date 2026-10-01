@@ -64,7 +64,7 @@ describe("the identity card fields", () => {
 
     expect(input(html, 'name="name"')).toContain('value="Gymshark"');
     expect(html).toContain(`value="${INSTAGRAM}"`);
-    expect(html).not.toContain("check this");
+    expect(html).not.toContain("please check");
   });
 
   it("names each edit button by its field and its current value", () => {
@@ -83,7 +83,7 @@ describe("the identity card fields", () => {
     const id = /aria-describedby="([^"]+)"/.exec(html)?.[1];
     expect(id).toBeDefined();
     const marker = new RegExp(`<span id="${id}"[^>]*>([^<]*)</span>`).exec(html);
-    expect(marker?.[1].trim()).toBe("check this");
+    expect(marker?.[1].trim()).toBe("please check");
     expect(accessibleName(html, `aria-describedby="${id}"`)).toBe("edit name: Gymshark");
   });
 
@@ -100,20 +100,20 @@ describe("the identity card fields", () => {
     const html = render(site({ name: "check", description: "fill", socials: "fill" }));
 
     expect(input(html, 'name="name"')).toContain('value="Gymshark"');
-    expect(html).toContain("check this");
+    expect(html).toContain("please check");
   });
 
   it("leaves a rejected field empty and says what will fill it", () => {
     const html = render(site({ name: "fill", description: "empty", socials: "fill" }, { description: null }));
 
-    expect(html).toContain("fill this after the first crawl");
+    expect(html).toContain("fill this in after our first look at your site");
     expect(html).not.toContain("performance apparel");
   });
 
   it("leaves the socials empty with the same line, never the bare none-found wording", () => {
     const html = render(site({ name: "fill", description: "fill", socials: "empty" }, { socials: [] }));
 
-    expect(html).toContain("fill this after the first crawl");
+    expect(html).toContain("fill this in after our first look at your site");
     expect(html).not.toContain("none found on the site");
   });
 
@@ -124,7 +124,7 @@ describe("the identity card fields", () => {
     expect(social).toContain('type="checkbox"');
     expect(social).toContain(`value="${INSTAGRAM}"`);
     expect(social).not.toContain("checked");
-    expect(html).toContain("check this");
+    expect(html).toContain("please check");
   });
 
   it("shows a saved draft over the value Jev read, so a reload keeps the edit", () => {
@@ -148,13 +148,13 @@ describe("the identity card fields", () => {
     expect(input(html, 'name="description"')).toContain('value="my line"');
   });
 
-  it("promises the hourly fill on an unread site, never the after-first-crawl line", () => {
+  it("promises the hourly fill on an unread site, never the after-first-look line", () => {
     const html = render(
       site({ name: "fill", description: "empty", socials: "empty" }, { description: null, socials: [], unfound: true }),
     );
 
-    expect(html).toContain("on the first crawl, within the hour");
-    expect(html).not.toContain("after the first crawl");
+    expect(html).toContain("within the hour");
+    expect(html).not.toContain("after our first look");
   });
 
   it("names the hourly fill on the logo row of an unread site, never none found", () => {
@@ -194,13 +194,13 @@ describe("ArrivalLine", () => {
         fields: site({ name: "check", description: "fill", socials: "check" }),
       }),
     );
-    expect(drawn).toBe('<span class="sr-only">Your card is drawn. Check this: name, socials.</span>');
+    expect(drawn).toBe('<span class="sr-only">Your details are ready. Please check: name, social links.</span>');
 
     const clean = renderToStaticMarkup(
       createElement(ArrivalLine, {
         fields: site({ name: "fill", description: "fill", socials: "fill" }),
       }),
     );
-    expect(clean).toBe('<span class="sr-only">Your card is drawn.</span>');
+    expect(clean).toBe('<span class="sr-only">Your details are ready.</span>');
   });
 });

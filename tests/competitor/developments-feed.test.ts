@@ -170,7 +170,7 @@ describe("the developments feed", () => {
     expect(kinds(html)).toEqual(["hiring", "ad", "change", "mention", "hiring"]);
     expect(html.match(/data-kind=/g)).toHaveLength(5);
     expect(chips(html)).toEqual(["All5", "Ads1", "Site changes1", "Mentions1", "Hiring2"]);
-    expect(html).toContain('aria-label="Filter developments"');
+    expect(html).toContain('aria-label="Filter updates"');
     expect(html).toContain('data-slot="developments-list"');
     expect(html).toContain('data-slot="source-pill"');
     expect(html).toContain('data-testid="development"');

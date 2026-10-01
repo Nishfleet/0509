@@ -5,12 +5,12 @@ import { describe, expect, it } from "vitest";
 import { CompetitorSnapshot } from "../../app/components/competitor-snapshot";
 import type { SnapshotCell } from "../../app/lib/competitor-snapshot";
 
-const dashReason = "Meta ads did not answer this week.";
+const dashReason = "Meta ads did not respond this week.";
 
 const CELLS: readonly SnapshotCell[] = [
   { key: "rank", label: "Rank", value: 2, movement: -1, reason: null },
-  { key: "new_creatives", label: "New ad creatives", value: 0, movement: null, reason: null },
-  { key: "copy_changes", label: "Ad copy changes", value: 1, movement: null, reason: null },
+  { key: "new_creatives", label: "New ads", value: 0, movement: null, reason: null },
+  { key: "copy_changes", label: "Ad wording changes", value: 1, movement: null, reason: null },
   {
     key: "site_changes",
     label: "Noteworthy site changes",
@@ -19,7 +19,7 @@ const CELLS: readonly SnapshotCell[] = [
     reason: dashReason,
   },
   { key: "mentions", label: "Mentions that matter", value: 5, movement: null, reason: null },
-  { key: "new_roles", label: "New roles", value: 4, movement: null, reason: null },
+  { key: "new_roles", label: "New job openings", value: 4, movement: null, reason: null },
 ];
 
 function snapshot(cells: readonly SnapshotCell[]): string {

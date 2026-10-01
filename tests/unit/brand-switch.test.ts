@@ -62,17 +62,17 @@ describe("the brand switch", () => {
 describe("the brand switch note", () => {
   it("prints the consequence for on: off pauses tracking, history kept", () => {
     expect(brandSwitchNote("on", null)).toBe(
-      "Off stops the watching and the alerts. The history stays, and turning it back on picks up where it left off.",
+      "Turn off to stop watching and alerts. Your history stays, and turning it back on picks up where it left off.",
     );
   });
 
   it("prints the paused date for off from the UTC instant", () => {
-    expect(brandSwitchNote("off", new Date("2026-09-22T12:00:00Z"))).toBe("paused 22 Sept · history kept");
-    expect(brandSwitchNote("off", null)).toBe("paused · history kept");
+    expect(brandSwitchNote("off", new Date("2026-09-22T12:00:00Z"))).toBe("Paused 22 Sept, history kept");
+    expect(brandSwitchNote("off", null)).toBe("Paused, history kept");
   });
 
   it("marks you as always tracked", () => {
-    expect(brandSwitchNote("you", null)).toBe("Your brand · always tracked");
+    expect(brandSwitchNote("you", null)).toBe("Your brand, always tracked");
   });
 });
 
@@ -89,14 +89,14 @@ describe("the brand switch field", () => {
     const html = renderField("off", new Date("2026-09-22T12:00:00Z"));
     expect(html).toContain('data-slot="brand-switch-field"');
     expect(html).toContain('data-slot="brand-switch"');
-    expect(html).toContain("paused 22 Sept · history kept");
+    expect(html).toContain("Paused 22 Sept, history kept");
     expect(html).not.toContain('role="dialog"');
   });
 
   it("renders the note in every state", () => {
-    expect(renderField("on", null)).toContain("Off stops the watching and the alerts.");
-    expect(renderField("you", null)).toContain("Your brand · always tracked");
-    expect(renderField("off", null)).toContain("paused · history kept");
+    expect(renderField("on", null)).toContain("Turn off to stop watching and alerts.");
+    expect(renderField("you", null)).toContain("Your brand, always tracked");
+    expect(renderField("off", null)).toContain("Paused, history kept");
   });
 
   it("describes the switch by its note, never in ink-faint", () => {

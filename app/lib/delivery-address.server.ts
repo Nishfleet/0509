@@ -14,7 +14,8 @@ import { readWorkspaceIdForOwner } from "./data/workspace.server";
 import { verifyAddressEmail } from "./verify-address-email";
 
 const INVALID = "Enter an email address, like you@company.com.";
-const SUPPRESSED = 'This address unsubscribed from the brief. Tick "Send to it again" and save to resume.';
+const SUPPRESSED =
+  'This address unsubscribed from the brief. Tick "Send the brief to this address again" and save to resume.';
 const NO_WORKSPACE = "Finish setting up first, then choose where the brief goes.";
 const VERIFY_TOKEN_TTL_MS = 24 * 60 * 60 * 1000;
 const RATE_LIMITED = "Too many confirmation emails. Wait a minute, then save again.";

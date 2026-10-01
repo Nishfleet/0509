@@ -79,7 +79,7 @@ describe("/u/:token (0509#5761)", () => {
 
     expect(html).toContain("This link is not valid");
     expect(html).not.toContain("You&#x27;re unsubscribed");
-    expect(html).not.toContain("Stop the weekly brief?");
+    expect(html).not.toContain("Unsubscribe from Five to Nine emails?");
   });
 
   it("renders the generic problem page for a failure that is not a 404", () => {
@@ -89,7 +89,7 @@ describe("/u/:token (0509#5761)", () => {
     ]) {
       const html = renderBoundary(error);
 
-      expect(html).toContain("The product hit a problem");
+      expect(html).toContain("Something went wrong");
       expect(html).not.toContain("This link is not valid");
     }
   });
@@ -97,7 +97,7 @@ describe("/u/:token (0509#5761)", () => {
   it("renders the confirm form for a live token", () => {
     const html = renderConfirm(false);
 
-    expect(html).toContain("Stop the weekly brief?");
+    expect(html).toContain("Unsubscribe from Five to Nine emails?");
     expect(html).not.toContain("This link is not valid");
   });
 

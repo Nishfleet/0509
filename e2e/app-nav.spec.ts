@@ -33,7 +33,7 @@ test("a signed-in user reaches the four places by tapping and by Tab+Enter", asy
   test.setTimeout(120_000);
   const watched = watchConsole(page);
 
-  const nav = page.getByRole("navigation", { name: "Places" });
+  const nav = page.getByRole("navigation", { name: "Primary" });
   const noOverflow = () =>
     page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
 

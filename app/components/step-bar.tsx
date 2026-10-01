@@ -2,7 +2,7 @@ import type { ReactElement } from "react";
 
 import { cn } from "../lib/utils";
 
-export const ONBOARDING_STEPS = ["your site", "your card", "your competitors"] as const;
+export const ONBOARDING_STEPS = ["Your site", "Check details", "Competitors"] as const;
 
 export function StepBar({ current }: { current: 1 | 2 | 3 }): ReactElement {
   return (

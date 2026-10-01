@@ -100,7 +100,7 @@ test("how it works reads as three ruled steps in order, wide and narrow @smoke",
   const section = page.locator("#how-it-works");
   const steps = section.locator("ol > li");
   await expect(steps).toHaveCount(3);
-  const titles = ["Paste your site or handle", "Meet who you’re up against", "Read one email on Monday"];
+  const titles = ["Enter your website or social username", "Meet who you’re up against", "Read one email on Monday"];
   for (const [index, title] of titles.entries()) {
     await expect(steps.nth(index).getByRole("heading", { level: 3, name: title })).toBeVisible();
   }
@@ -179,10 +179,10 @@ test("the hero's first viewport holds the outcome and the one priced input @smok
   const pieces = [
     hero.getByText("For founders, brands and creators"),
     hero.getByRole("heading", { level: 1, name: "Know where you stand. And who’s gaining on you." }),
-    hero.getByText(/we name the rivals for you, so you do not have to know them/i),
-    hero.getByRole("textbox", { name: "your website, or a handle" }),
+    hero.getByText(/we find your competitors for you, so you do not need to know who they are/i),
+    hero.getByRole("textbox", { name: "your website address or social username (like @yourbrand)" }),
     hero.getByRole("button", { name: /€\d+\/mo/ }),
-    hero.getByText("One input. Sixty seconds to who’s gaining on you."),
+    hero.getByText("One box to fill in. About a minute to see who’s gaining on you."),
   ];
   for (const piece of pieces) {
     await expect(piece).toBeVisible();
@@ -251,7 +251,10 @@ test("the hero's first viewport holds the outcome and the one priced input @smok
 
 test("the hero input carries what you typed to sign-in @smoke", async ({ page }) => {
   await page.goto(PATH);
-  await page.locator("#hero").getByRole("textbox", { name: "your website, or a handle" }).fill("example.com");
+  await page
+    .locator("#hero")
+    .getByRole("textbox", { name: "your website address or social username (like @yourbrand)" })
+    .fill("example.com");
   await page
     .locator("#hero")
     .getByRole("button", { name: /€\d+\/mo/ })

@@ -72,8 +72,8 @@ export interface QuietWeek {
 
 export function quietWeek(mentions: number, siteChanges: number): QuietWeek {
   return {
-    sentence: `Quiet week. ${String(mentions)} mentions, ${String(siteChanges)} site changes checked — nothing crossed the bar.`,
-    action: { kind: "link", label: "Open the counts", href: "/app" },
+    sentence: `Quiet week. We checked ${String(mentions)} mentions and ${String(siteChanges)} site changes. None were big enough to flag.`,
+    action: { kind: "link", label: "See the details", href: "/app" },
   };
 }
 
@@ -83,7 +83,7 @@ export function fewerThanTwoOnBrands(): { sentence: string; action: EmptyStateAc
     action: {
       kind: "input",
       label: "Add a competitor",
-      placeholder: "their site, or a handle",
+      placeholder: "their website or social username",
       name: "competitor",
     },
   };
@@ -91,13 +91,13 @@ export function fewerThanTwoOnBrands(): { sentence: string; action: EmptyStateAc
 
 export function evidenceEmpty(paths: readonly string[], lastCheckedAt: Date): { sentence: string } {
   return {
-    sentence: `No site changes this week. We checked ${paths.join(" and ")} daily — last at ${clock(lastCheckedAt)}.`,
+    sentence: `No site changes this week. We checked ${paths.join(" and ")} daily, most recently at ${clock(lastCheckedAt)}.`,
   };
 }
 
 export function degradedSource(source: string, since: string): { sentence: string } {
   return {
-    sentence: `${source} has been ${since}. We show it as degraded rather than pretend the count is complete.`,
+    sentence: `${source} has been ${since}. The count may be incomplete.`,
   };
 }
 

@@ -29,9 +29,9 @@ export function HowRankedTable({ howRanked }: { howRanked: HowRanked }): ReactEl
   return (
     <section data-testid="how-ranked-table" className="font-mono">
       <h2 className={HEADING_CLASS}>How this is ranked</h2>
-      <p className="mt-2 text-ink-soft">Ranked by what the internet did about each brand this week.</p>
+      <p className="mt-2 text-ink-soft">We rank each brand by what happened with it online this week.</p>
 
-      <h3 className={HEADING_CLASS}>What each signal is worth</h3>
+      <h3 className={HEADING_CLASS}>Points for each kind of activity</h3>
       <ul className="mt-2">
         {howRanked.weights.map((entry) => (
           <li key={entry.key} className={ROW_CLASS}>
@@ -40,7 +40,7 @@ export function HowRankedTable({ howRanked }: { howRanked: HowRanked }): ReactEl
         ))}
       </ul>
 
-      <h3 className={HEADING_CLASS}>How much each source counts</h3>
+      <h3 className={HEADING_CLASS}>How much we trust each source</h3>
       <ul className="mt-2">
         {howRanked.multipliers.map((entry) => (
           <li key={entry.reliability} className={ROW_CLASS}>
@@ -75,7 +75,7 @@ function BrandBlock({
     <article className="mt-4 border-t border-line pt-3" data-testid="how-ranked-brand">
       <h4 className="font-display font-bold">{brand.name}</h4>
       <ul className="mt-1">
-        {isEmpty && <li className={ROW_CLASS}>No signals this week</li>}
+        {isEmpty && <li className={ROW_CLASS}>Nothing this week</li>}
         {brand.lines.map((line) => (
           <li className={ROW_CLASS} key={`${line.bucket}-${line.reliability}`}>
             {`${String(line.n)} ${weightLabelFor(weights, line.bucket)} (${multiplierLabelFor(multipliers, line.reliability)}) × ${format(line.weight)} × ${format(line.multiplier)} = ${format(line.points)}`}

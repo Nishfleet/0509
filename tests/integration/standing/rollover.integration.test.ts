@@ -212,7 +212,7 @@ describe("the weekly rollover Workflow (0509#4004)", () => {
     expect(brief.brands.find((line) => line.name === "Rival C")?.is_new).toBe(true);
     expect(brief.brands.find((line) => line.name === "Rival B")?.mention_delta).toBe(2);
     expect(brief.checked.mention_count).toBe(3);
-    expect(brief.why_line).toBe("We couldn't judge this week's changes yet.");
+    expect(brief.why_line).toBe("We haven't finished reviewing this week's changes yet.");
     expect(brief.is_unjudged).toBe(true);
     expect(brief.is_quiet_week).toBe(false);
     expect(brief.next_brief_at).toBe(nextBriefAt(schedule, closesAt).toISOString());
@@ -388,7 +388,7 @@ describe("the weekly rollover Workflow (0509#4004)", () => {
 
     expect(brief.read_this_first.map((mark) => mark.signal_id)).toEqual([first, second]);
     expect(brief.read_this_first[0]?.entity_name).toBe("Rival A");
-    expect(brief.why_line).toBe("2 of 2 worth knowing this week, led by Rival A.");
+    expect(brief.why_line).toBe("2 of 2 changes worth reading this week, led by Rival A.");
     expect(brief.is_quiet_week).toBe(false);
   });
 
@@ -424,7 +424,7 @@ describe("the weekly rollover Workflow (0509#4004)", () => {
     const brief = parseBriefPayload(digest?.payload_json ?? "");
 
     expect(brief.read_this_first).toEqual([]);
-    expect(brief.why_line).toBe("We couldn't judge this week's changes yet.");
+    expect(brief.why_line).toBe("We haven't finished reviewing this week's changes yet.");
     expect(brief.is_quiet_week).toBe(false);
     expect(brief.is_unjudged).toBe(true);
   });
@@ -512,7 +512,7 @@ describe("the weekly rollover Workflow (0509#4004)", () => {
     expect(brief.is_unjudged).toBe(true);
     expect(brief.is_quiet_week).toBe(false);
     expect(brief.headline_rank).toBeNull();
-    expect(brief.why_line).toBe("We couldn't judge this week's changes yet.");
+    expect(brief.why_line).toBe("We haven't finished reviewing this week's changes yet.");
   });
 });
 

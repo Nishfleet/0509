@@ -16,12 +16,12 @@ export function DismissedBrands({ dismissed }: { dismissed: readonly DismissedSu
   return (
     <section aria-labelledby="settings-dismissed" className="mt-10 border-t border-line pt-4">
       <h2 id="settings-dismissed" className={BLOCK_HEADING}>
-        {`Brands you dismissed (${String(dismissed.length)})`}
+        {`Competitors you dismissed (${String(dismissed.length)})`}
       </h2>
       <p className="mt-2 max-w-prose leading-[1.55]">
-        We won't suggest these again. Bring one back and it returns to your maybes on Competitors.
+        We won't suggest these again. Bring one back and it returns to Possible competitors on the Competitors page.
       </p>
-      <ul aria-label="Brands you dismissed" className="mt-3 border-b border-line">
+      <ul aria-label="Competitors you dismissed" className="mt-3 border-b border-line">
         {dismissed.map((suggestion) => (
           <li
             key={suggestion.suggestionId}

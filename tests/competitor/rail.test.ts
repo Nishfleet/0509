@@ -110,7 +110,7 @@ describe("the competitor rail", () => {
   it("shows recognized thirty-day facts and drops internal fact kinds", () => {
     const visible = text(render());
     expect(visible).toContain("2 site changes");
-    expect(visible).toContain("1 new role");
+    expect(visible).toContain("1 new job opening");
     expect(visible).not.toContain("still_competitor");
     expect(factLabel("change", 1)).toBe("1 site change");
     expect(factLabel("ad", 2)).toBe("2 ads");
@@ -140,11 +140,11 @@ describe("the competitor rail", () => {
   it("uses explicit empty states and the first-read source fallback", () => {
     expect(verdictWords("maybe")).toBeNull();
     const unknown = text(render({ verdict: { choice: "maybe", decidedAt: "2026-09-17T00:00:00.000Z" } }));
-    expect(unknown).toContain("We ask this every week. The first answer lands after a week of watching.");
+    expect(unknown).toContain("We check this every week. The first answer arrives after a week of watching.");
     const empty = text(render({ peers: [], facts: [], sources: [], verdict: null, lastChecked: null }));
-    expect(empty).toContain("No standing yet. It comes with your first weekly brief.");
+    expect(empty).toContain("No ranking yet. It arrives with your first weekly brief.");
     expect(empty).toContain("Nothing new from them in the last 30 days.");
-    expect(empty).toContain("We ask this every week. The first answer lands after a week of watching.");
+    expect(empty).toContain("We check this every week. The first answer arrives after a week of watching.");
     expect(empty).toContain("First read tonight at 02:00 UTC.");
   });
 });

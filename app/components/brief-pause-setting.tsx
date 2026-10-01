@@ -10,7 +10,7 @@ export function BriefPauseSetting({ pausedAt, timezone }: { pausedAt: string | n
     <div className="mt-4">
       {pausedAt !== null ? (
         <p className="text-body-sm text-ink-soft">
-          Paused since {formatPausedSince(pausedAt, timezone)}. Your ranking still updates; the email doesn't come.
+          Paused since {formatPausedSince(pausedAt, timezone)}. Your ranking still updates, but no email is sent.
         </p>
       ) : null}
       <fetcher.Form method="post" action="/app/settings/brief-pause">

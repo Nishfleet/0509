@@ -65,7 +65,7 @@ test("the Alerts page passes axe at WCAG 2.2 AA and is keyboard-operable at 1440
       await expect(page.getByRole("heading", { level: 1, name: "Alerts" })).toBeVisible();
       await expect(page.getByRole("heading", { level: 1 })).toHaveCount(1);
       await expect(page.getByRole("main")).toHaveCount(1);
-      await expect(page.getByRole("navigation", { name: "Places" })).toBeVisible();
+      await expect(page.getByRole("navigation", { name: "Primary" })).toBeVisible();
 
       // Heading order: the first heading is the h1 and no level is skipped, so
       // the page reads as an outline rather than a flat list of styled text.
@@ -86,7 +86,7 @@ test("the Alerts page passes axe at WCAG 2.2 AA and is keyboard-operable at 1440
         order.push(await page.evaluate(() => document.activeElement?.textContent?.trim() ?? ""));
       }
       expect(order).toEqual(["Home", "Competitors", "Alerts", "Settings"]);
-      await expect(page.getByRole("navigation", { name: "Places" }).getByRole("link", { name: "Settings" })).toHaveCSS(
+      await expect(page.getByRole("navigation", { name: "Primary" }).getByRole("link", { name: "Settings" })).toHaveCSS(
         "outline-style",
         "solid",
       );

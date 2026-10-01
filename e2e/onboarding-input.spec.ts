@@ -34,7 +34,7 @@ test("the one input posts and redirects every non-empty value to the card @own-s
 
   await signInWithMagicLink(page, email, token);
 
-  const input = page.getByRole("textbox", { name: "your website, or a handle" });
+  const input = page.getByRole("textbox", { name: "your website address or social username (like @yourbrand)" });
 
   for (const width of [1440, 390]) {
     await page.setViewportSize({ width, height: 900 });
@@ -51,7 +51,7 @@ test("the one input posts and redirects every non-empty value to the card @own-s
 
     await input.press("Enter");
     await expect(page).toHaveURL(/\/onboarding$/);
-    await expect(page.getByRole("status")).toContainText("find anything for that, try the main website");
+    await expect(page.getByRole("status")).toContainText("find a website or username in that");
     await expect(input).toBeFocused();
 
     // The redirects' noise would land in this array; the emptiness proof is

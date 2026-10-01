@@ -27,7 +27,7 @@ function markup(sources: readonly WatchedSource[], now: number = NOW): string {
 // React serializes the apostrophe in a text node as an entity; decode it so an
 // assertion is against the copy as written, not React's escaping.
 function decoded(html: string): string {
-  return html.replaceAll("&#x27;", "'");
+  return html.replaceAll("&#x27;", "'").replaceAll("&quot;", '"');
 }
 
 const LIVE: SourceSnapshot = { fetched_at: "2026-09-26T11:00:00.000Z", item_count: 12 };
@@ -66,7 +66,7 @@ describe("landing what we watch", () => {
       entry({ source: { key: "hn.algolia", name: "hn.algolia", platform: "hn", is_enabled: 1 }, snapshot: LIVE }),
     ]);
     expect(html).toContain('data-state="degraded"');
-    expect(html).toContain("degraded: not answering");
+    expect(html).toContain("· not answering");
     expect(html).toContain("last good 2026-09-20 03:04 UTC");
   });
 
@@ -79,7 +79,7 @@ describe("landing what we watch", () => {
       }),
     ]);
     expect(html).toContain('data-state="degraded"');
-    expect(html).toContain("degraded: no fresh data");
+    expect(html).toContain("· no fresh data");
     expect(html).not.toContain('data-state="live"');
   });
 
@@ -96,8 +96,8 @@ describe("landing what we watch", () => {
       entry({ source: { key: "c.three", name: "c.three", platform: "hn", is_enabled: 1 }, snapshot: LIVE }),
     ]);
     expect(html.match(/data-state="degraded"/g)).toHaveLength(2);
-    expect(html).toContain("degraded: no fresh data");
-    expect(html).toContain("degraded: not answering");
+    expect(html).toContain("· no fresh data");
+    expect(html).toContain("· not answering");
   });
 
   it("replaces the pill row with the one rebuilding line when every visible mentions source is degraded and site changes are live", () => {
@@ -121,7 +121,7 @@ describe("landing what we watch", () => {
     ]);
     const text = decoded(html);
     expect(text).toContain(
-      "We're rebuilding coverage of news mentions. Briefs and standing still arrive from site changes; mentions resume as their sources come back.",
+      "We're rebuilding our coverage of news mentions. Your Monday brief and ranking still come from website changes. Mentions will return as their sources come back.",
     );
     expect(html).not.toContain("data-state=");
     expect(html).not.toContain("last good");
@@ -142,8 +142,8 @@ describe("landing what we watch", () => {
     const text = decoded(html);
     expect(text).not.toContain("We're rebuilding coverage of news mentions");
     expect(html.match(/data-state="degraded"/g)).toHaveLength(2);
-    expect(html).toContain("degraded: timed out");
-    expect(html).toContain("degraded: no fresh data");
+    expect(html).toContain("· timed out");
+    expect(html).toContain("· no fresh data");
   });
 
   it("keeps the degraded pills, with their reasons, when a live source is visible too", () => {
@@ -160,8 +160,8 @@ describe("landing what we watch", () => {
     ]);
     const text = decoded(html);
     expect(text).not.toContain("We're rebuilding coverage of news mentions");
-    expect(html).toContain("degraded: not answering");
-    expect(html).toContain("degraded: rate limited");
+    expect(html).toContain("· not answering");
+    expect(html).toContain("· rate limited");
     expect(html.match(/data-state="degraded"/g)).toHaveLength(2);
     expect(html.match(/data-state="live"/g)).toHaveLength(1);
   });
@@ -187,7 +187,7 @@ describe("landing what we watch", () => {
     expect(text).not.toContain("We're rebuilding coverage of news mentions");
     expect(html).toContain('data-state="degraded"');
     expect(html).toContain('data-state="none"');
-    expect(html).toContain("degraded: not answering");
+    expect(html).toContain("· not answering");
   });
 
   it("does not replace the row when every source is disabled", () => {
@@ -225,7 +225,7 @@ describe("landing what we watch", () => {
       entry({ source: { key: "hn.algolia", name: "hn.algolia", platform: "hn", is_enabled: 1 }, snapshot: LIVE }),
     ]);
     const sentence =
-      "Last good unknown means we haven't yet checked this kind of source. The first check lands in the daily sweep.";
+      '"Last good unknown" means we haven\'t checked that kind of source yet. The first check happens in the next daily check.';
     const text = decoded(html);
     expect(text.indexOf(sentence)).toBeGreaterThanOrEqual(0);
     expect(text.indexOf(sentence)).toBeLessThan(text.indexOf("<ul"));

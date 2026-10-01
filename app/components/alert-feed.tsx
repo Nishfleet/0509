@@ -34,7 +34,7 @@ export function AlertFeed({ groups }: { groups: { group: string; items: AlertFee
             setShowAll(true);
           }}
         >
-          Show all · {hidden} hidden as not a move
+          Show all, including {hidden} we think do not matter
         </button>
       ) : null}
     </>

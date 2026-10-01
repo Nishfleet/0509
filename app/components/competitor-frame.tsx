@@ -50,7 +50,7 @@ function SnapshotSection({ weekCount, pages, lastChecked }: SnapshotProps): Reac
       <dl className="grid grid-cols-1 border border-line min-[480px]:grid-cols-3">
         <Cell label="Site changes" value={String(weekCount)} />
         <Cell label="Pages watched" value={String(pages)} />
-        <Cell label="Last checked" value={lastChecked ?? "Tonight"} />
+        <Cell label="Last checked" value={lastChecked ?? "Not yet"} />
       </dl>
     </section>
   );
@@ -79,11 +79,11 @@ function DevelopmentsSection({ changes, developments, lastChecked, pausedOn }: D
   return (
     <section data-section="developments" aria-labelledby="competitor-developments" className="min-w-0">
       <h2 id="competitor-developments" className={HEADING}>
-        Developments
+        What's new
       </h2>
       {pausedOn === null ? null : (
         <p data-slot="feed-paused" className="border-t border-ink pt-3 text-meta text-ink-soft">
-          Paused {pausedOn}. We stopped checking here; turn it back on to pick up where it left off.
+          Paused {pausedOn}. We've stopped checking. Turn it back on to pick up where it left off.
         </p>
       )}
       {developments.length === 0 ? (

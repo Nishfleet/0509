@@ -40,7 +40,7 @@ describe("the dismissed brands list", () => {
   it("names itself and lists both brands with their domains", () => {
     const html = render([casetta, kindred]);
 
-    expect(html).toContain("Brands you dismissed");
+    expect(html).toContain("Competitors you dismissed");
     expect(html).toContain("Kindred");
     expect(html).toContain("kindred.example");
     expect(html).toContain("Casetta");
@@ -49,8 +49,8 @@ describe("the dismissed brands list", () => {
   });
 
   it("shows the count in the heading", () => {
-    expect(render([casetta, kindred])).toContain("Brands you dismissed (2)");
-    expect(render([kindred])).toContain("Brands you dismissed (1)");
+    expect(render([casetta, kindred])).toContain("Competitors you dismissed (2)");
+    expect(render([kindred])).toContain("Competitors you dismissed (1)");
   });
 
   it("posts the restore intent with each brand's own suggestion id", () => {

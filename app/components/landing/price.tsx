@@ -40,7 +40,7 @@ export function Price() {
       id="price"
       kicker="Three plans"
       title="Pick how closely you watch."
-      lead="Every plan sends the Monday brief with the proof behind every line. Plans differ in how many rivals you follow, how deep we look, and how far back the proof goes."
+      lead="Every plan sends the Monday brief with the proof behind every line. Plans differ in how many competitors you follow, how deep we look, and how far back the proof goes."
     >
       <ul className="grid gap-4 md:grid-cols-3">
         {PLANS.map((plan) => (

@@ -126,7 +126,7 @@ describe("biggestMoveView", () => {
     const view = biggestMoveView(move, now);
 
     expect(view.read).toBe(
-      "Ad copy or offer changes: 3 × 1 = 3 points, the most of anything this brand did this week.",
+      "Ad wording or offer changes: 3 × 1 = 3 points, the most of anything this brand did this week.",
     );
     expect(view.source).toBe("Ad library · meta");
     expect(view.id).toBe("sig-ad");
@@ -144,13 +144,13 @@ describe("biggestMoveView", () => {
 describe("quietWeekSentence", () => {
   it("names the checked sources and the last check time", () => {
     expect(quietWeekSentence(["Website", "Ad library"], "2026-09-24 02:10 UTC")).toBe(
-      "Nothing scored for this brand in the last 7 days. We checked Website and Ad library, last at 2026-09-24 02:10 UTC.",
+      "Nothing worth scoring for this competitor in the last 7 days. We checked Website and Ad library, last at 2026-09-24 02:10 UTC.",
     );
   });
 
   it("says the first read lands tonight when the brand was never checked", () => {
     expect(quietWeekSentence([], null)).toBe(
-      "Nothing scored for this brand in the last 7 days. We watch its website; the first read lands tonight at 02:00 UTC.",
+      "Nothing worth scoring for this competitor in the last 7 days. We watch its website; our first read is tonight at 02:00 UTC.",
     );
   });
 });

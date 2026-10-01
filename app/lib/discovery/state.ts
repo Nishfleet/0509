@@ -9,11 +9,11 @@ export function discoveryStateFor(status: string): DiscoveryState {
 
 export function discoveryNotice(state: DiscoveryState, competitorCount: number): string | null {
   if (state === "looking") {
-    return "We're reading the news for brands named alongside you. They appear here as we find them.";
+    return "We're looking for brands mentioned alongside you. They'll appear here as we find them.";
   }
   if (competitorCount > 0) return null;
   if (state === "done") {
-    return "We looked and found no obvious rivals yet. Add any you know below, or tap Start watching and we'll keep looking every night.";
+    return "We looked and found no obvious competitors yet. Add any you know below, or tap Start watching and we'll keep looking every night.";
   }
-  return "We couldn't look for rivals just now. Add any you know below, or tap Start watching and we'll try again tonight.";
+  return "We couldn't look for competitors just now. Add any you know below, or tap Start watching and we'll try again tonight.";
 }

@@ -51,8 +51,8 @@ export async function loader({ request }: Route.LoaderArgs) {
 function SiteFillLine({ state }: { state: "pending" | "gave_up" }) {
   const text =
     state === "pending"
-      ? "Your site didn't let us in yet. We're trying again every hour for a day and will fill your card when it does."
-      : "We couldn't read your site in a day of trying, so your card keeps what you entered. Everything else is still watched.";
+      ? "We couldn't read your site yet. We'll try again every hour for the next day and fill in your details when we can."
+      : "We couldn't read your site after a day of trying, so we're keeping the details you entered. Everything else is still being watched.";
   return (
     <p role="status" className="mt-6 text-[0.88rem] text-ink-soft">
       {text}

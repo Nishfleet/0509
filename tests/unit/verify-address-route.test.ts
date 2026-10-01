@@ -23,16 +23,16 @@ describe("/v/:token (0509#5811)", () => {
   it("opens the confirmation page for any token", () => {
     const html = renderPage(false);
 
-    expect(html).toContain("Confirm this address for your brief?");
-    expect(html).toContain("Confirm address");
-    expect(html).not.toContain("Address confirmed");
+    expect(html).toContain("Confirm this email address?");
+    expect(html).toContain("Confirm email address");
+    expect(html).not.toContain("Email address confirmed");
   });
 
-  it("shows Address confirmed after POST", () => {
+  it("shows Email address confirmed after POST", () => {
     const html = renderPage(true);
 
-    expect(html).toContain("Address confirmed");
-    expect(html).not.toContain("Confirm this address for your brief?");
+    expect(html).toContain("Email address confirmed");
+    expect(html).not.toContain("Confirm this email address?");
   });
 
   it("answers POST as confirmed for any token, including unknown", async () => {
@@ -43,7 +43,7 @@ describe("/v/:token (0509#5811)", () => {
   it("is no-store and noindex", () => {
     expect(headers({} as never)).toEqual({ "Cache-Control": "no-store" });
     expect(meta({} as never)).toEqual([
-      { title: "Confirm your delivery email — Five to Nine" },
+      { title: "Confirm your email address · Five to Nine" },
       { name: "robots", content: "noindex, nofollow" },
     ]);
   });
