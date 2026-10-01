@@ -167,7 +167,7 @@ test("the per-brand switch is operable with a keyboard alone @own-signin", async
   await expect(toggle).toBeFocused();
   await expect(toggle).toHaveAttribute("aria-checked", "false");
   await expect(page.locator("[data-slot='brand-switch-field']").first()).toHaveAttribute("data-state", "off");
-  await expect(note).toContainText(/paused .*history kept/);
+  await expect(note).toContainText(/Paused .*history kept/);
   console.log(
     `switch[width=${String(width)}] aria-checked=true->false, note="${(await note.textContent())?.trim() ?? ""}"`,
   );
