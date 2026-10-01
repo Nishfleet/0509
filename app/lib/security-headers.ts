@@ -1,7 +1,7 @@
 export function contentSecurityPolicy(nonce: string): string {
   return [
     "default-src 'self'",
-    `script-src 'self' 'nonce-${nonce}' 'strict-dynamic' https://challenges.cloudflare.com`,
+    `script-src 'self' 'nonce-${nonce}' 'strict-dynamic' 'sha256-GpODl5NtfRl6mEldBVRam/Wgf0dQcQIEQVBXJek7mCM=' https://challenges.cloudflare.com`,
     "style-src 'self' 'unsafe-inline'",
     "frame-src https://challenges.cloudflare.com",
     "img-src 'self' data: blob:",

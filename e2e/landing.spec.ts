@@ -17,8 +17,8 @@ test("the landing document paints without a module graph @smoke", async ({ page 
   const head = html.slice(html.indexOf("<head"), html.indexOf("</head>"));
   expect(head).toContain('rel="stylesheet"');
   expect(head).not.toContain('rel="modulepreload"');
-  expect(head).toContain("/fonts/bricolage-hero.woff2");
-  expect(head).not.toContain("bricolage-grotesque-latin");
+  expect(head).not.toContain("/fonts/");
+  expect(head).not.toContain('rel="preload"');
   expect(head).not.toContain('type="module"');
 });
 
@@ -238,7 +238,7 @@ test("the hero's first viewport holds the outcome and the one priced input @smok
   await expectFaceLoaded(page, "Bricolage Grotesque", 800);
   await expectFaceLoaded(page, "Instrument Sans", 400);
   await expectFaceLoaded(page, "IBM Plex Mono", 400);
-  await expect(page.locator('link[rel="preload"][href="/fonts/bricolage-hero.woff2"]')).toHaveCount(1);
+  await expect(page.locator('link[rel="preload"]')).toHaveCount(0);
   await expect(page.locator('link[rel="modulepreload"]')).toHaveCount(0);
 
   if (testInfo.project.name === "phone-390") {
