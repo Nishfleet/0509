@@ -298,6 +298,18 @@ jobs:
           configPath: ./lighthouserc.cjs
           uploadArtifacts: false
           temporaryPublicStorage: false
+      - name: Print the LCP breakdown of every audited URL
+        if: always()
+        run: |
+          for report in .lighthouseci/lhr-*.json; do
+            jq -r '
+              "\(.finalDisplayedUrl // .finalUrl): LCP \(.audits["largest-contentful-paint"].numericValue | round) ms, server \(.audits["server-response-time"].numericValue | round) ms",
+              "  element: \(.audits["largest-contentful-paint-element"].details.items[0].items[0].node.snippet // "n/a")",
+              "  phases: \([.audits["largest-contentful-paint-element"].details.items[1].items[]? | "\(.phase) \(.timing | round) ms"] | join(", "))",
+              "  render-blocking: \([.audits["render-blocking-resources"].details.items[]? | "\(.url) \(.wastedMs | round) ms"] | join(", "))",
+              "  font-display score: \(.audits["font-display"].score)"
+            ' "$report" | tee -a "$GITHUB_STEP_SUMMARY"
+          done
       - name: Open or update the issue that dispatches the fix
         if: failure() || cancelled()
         id: red
