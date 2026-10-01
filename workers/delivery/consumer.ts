@@ -1,6 +1,6 @@
 import { markDigestSent } from "../../app/lib/data/digest.server";
 import { claimIncidentNotice } from "../../app/lib/data/incident_notice.server";
-import { claimSendAttempt, countChangeAttemptsSince, resolveSendAttempt } from "../../app/lib/data/send_attempt.server";
+import { claimChangeSlot, claimSendAttempt, resolveSendAttempt } from "../../app/lib/data/send_attempt.server";
 import { writeUnsubscribeToken } from "../../app/lib/data/send_target.server";
 import type { BriefPayload } from "../../app/lib/brief-payload";
 import { parseBriefPayload } from "../../app/lib/brief-payload";
@@ -412,22 +412,39 @@ async function renderChangeEmail(
   });
 }
 
+async function claimChange(
+  env: Env,
+  input: { change: ChangeRow; target: TargetRow },
+): Promise<{ claim: { id: string } | null; capped: boolean; idempotencyKey: string }> {
+  const { change, target } = input;
+  const day = new Date().toISOString().slice(0, 10);
+  const idempotencyKey = `change:${change.id}:${target.id}`;
+  const slot = await claimChangeSlot(env.DB, {
+    idempotencyKey,
+    workspaceId: change.workspace_id,
+    targetId: target.id,
+    since: `${day}T00:00:00.000Z`,
+    cap: CHANGE_DAILY_CAP,
+  });
+  if (slot.kind === "claimed") return { claim: { id: slot.id }, capped: false, idempotencyKey };
+  if (slot.kind === "duplicate") return { claim: null, capped: false, idempotencyKey };
+  const overflowKey = `change-overflow:${change.workspace_id}:${day}`;
+  const overflow = await claimSendAttempt(env.DB, {
+    idempotencyKey: overflowKey,
+    workspaceId: change.workspace_id,
+    targetId: target.id,
+    digestId: null,
+  });
+  return { claim: overflow, capped: true, idempotencyKey: overflowKey };
+}
+
 async function sendChange(
   env: Env,
   input: { change: ChangeRow; payload: SiteChangePayload; target: TargetRow },
 ): Promise<DeliveryResult> {
   const { change, payload, target } = input;
-  const day = new Date().toISOString().slice(0, 10);
-  const sentToday = await countChangeAttemptsSince(env.DB, change.workspace_id, `${day}T00:00:00.000Z`);
-  const capped = sentToday >= CHANGE_DAILY_CAP;
-  const idempotencyKey = capped ? `change-overflow:${change.workspace_id}:${day}` : `change:${change.id}:${target.id}`;
-  const claim = await claimSendAttempt(env.DB, {
-    idempotencyKey,
-    workspaceId: change.workspace_id,
-    targetId: target.id,
-    digestId: null,
-  });
-  if (!claim) {
+  const { claim, capped, idempotencyKey } = await claimChange(env, { change, target });
+  if (claim === null) {
     return { outcome: capped ? "capped" : "duplicate", attempt_id: null, idempotency_key: idempotencyKey };
   }
 

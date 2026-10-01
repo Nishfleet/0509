@@ -101,6 +101,34 @@ describe("rival change email lane (0509#6375)", () => {
     });
   });
 
+  it("never sends more than the cap when consumers race for the last slots", async () => {
+    const ids = Array.from({ length: CHANGE_DAILY_CAP + 4 }, (_, index) => `sig-race-${String(index)}`);
+    await env.DB.batch(ids.map((id) => insertSignal(id, RIVAL)));
+    const sent: EmailMessageBuilder[] = [];
+
+    const results = await Promise.all(ids.map((id) => deliverChange(envWith(sent), { signal_id: id })));
+
+    const changeEmails = sent.filter((message) => message.subject === "Rival changed its pricing page");
+    const notices = sent.filter((message) => message.subject === "More rivals changed price or plan today");
+    expect(changeEmails).toHaveLength(CHANGE_DAILY_CAP);
+    expect(notices).toHaveLength(1);
+    expect(results.filter((result) => result.outcome === "sent")).toHaveLength(CHANGE_DAILY_CAP);
+    const attempts = await env.DB.prepare(
+      "SELECT COUNT(*) AS n FROM send_attempt WHERE idempotency_key LIKE 'change:%' AND status = 'sent'",
+    ).first<{ n: number }>();
+    expect(attempts?.n).toBe(CHANGE_DAILY_CAP);
+  });
+
+  it("does not send a cap notice for a redelivered change that already went out", async () => {
+    const sent: EmailMessageBuilder[] = [];
+    await deliverChange(envWith(sent), { signal_id: SIGNAL });
+
+    const again = await deliverChange(envWith(sent), { signal_id: SIGNAL });
+
+    expect(again.outcome).toBe("duplicate");
+    expect(sent).toHaveLength(1);
+  });
+
   it("stops at the daily cap, sends one notice for the overflow, then nothing more that day", async () => {
     const ids = Array.from({ length: CHANGE_DAILY_CAP + 2 }, (_, index) => `sig-cap-${String(index)}`);
     await env.DB.batch(ids.map((id) => insertSignal(id, RIVAL)));
