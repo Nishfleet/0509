@@ -5,7 +5,7 @@ labels: agent-ready, critical-path
 
 Run: {{ env.RUN_URL }}
 Head: {{ env.SHA }}
-Budgets: lighthouse-budget.json
+Budgets: Nishfleet/fleet-ops config/lighthouserc.json
 
 Feature-map row (.agents/skills/verify/feature-map.md): `/`, the audited URL.
 
