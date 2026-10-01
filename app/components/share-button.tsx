@@ -4,7 +4,7 @@ import type { ReactElement } from "react";
 import { Button } from "./ui/button";
 
 const SHARE_IMAGE_PATH = "/app/share.png";
-const FILE_NAME = "0509-standing.png";
+const FILE_NAME = "five-to-nine-ranking.png";
 
 function download(file: File): void {
   const url = URL.createObjectURL(file);

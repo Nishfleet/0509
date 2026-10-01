@@ -59,13 +59,22 @@ function Section({ section }: { section: LegalSection }) {
   );
 }
 
+function LegalLogo() {
+  return (
+    <a className="font-display text-base font-bold tracking-[-0.03em] text-ink" href="/">
+      <span className="sr-only">Five to Nine</span>
+      <span aria-hidden="true">
+        05<span className="bg-green px-[5px] text-on-green">09</span>
+      </span>
+    </a>
+  );
+}
+
 export function LegalPage({ doc }: { doc: LegalDocument }) {
   return (
     <div className="mx-auto w-full max-w-[46rem] bg-bone px-6 py-16 text-ink sm:py-24">
       <header>
-        <a className="font-display text-base font-bold tracking-[-0.03em] text-ink" href="/">
-          05<span className="bg-green px-[5px] text-on-green">09</span>
-        </a>
+        <LegalLogo />
       </header>
       <main className="mt-8">
         <h1 className="font-display text-[clamp(1.75rem,3.6vw,2.9rem)] leading-[1.15] font-semibold tracking-[-0.02em]">
