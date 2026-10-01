@@ -40,7 +40,7 @@ test.describe("J4 onboard a creator handle", () => {
       const watched = watchConsole(page);
 
       await page.goto("/onboarding");
-      const input = page.getByRole("textbox", { name: "your website address or social username (like @yourbrand)" });
+      const input = page.getByRole("textbox", { name: /your website address or social username/i });
       await input.fill(SUBJECT);
       const started = Date.now();
       await input.press("Enter");

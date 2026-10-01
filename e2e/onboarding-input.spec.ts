@@ -34,7 +34,7 @@ test("the one input posts and redirects every non-empty value to the card @own-s
 
   await signInWithMagicLink(page, email, token);
 
-  const input = page.getByRole("textbox", { name: "your website address or social username (like @yourbrand)" });
+  const input = page.getByRole("textbox", { name: /your website address or social username/i });
 
   for (const width of [1440, 390]) {
     await page.setViewportSize({ width, height: 900 });

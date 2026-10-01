@@ -56,7 +56,7 @@ async function flip(variant: Variant): Promise<void> {
 }
 
 async function trackFixture(page: Page): Promise<void> {
-  const input = page.getByRole("textbox", { name: "your website address or social username (like @yourbrand)" });
+  const input = page.getByRole("textbox", { name: /your website address or social username/i });
   await input.fill("0509.io");
   await input.press("Enter");
   await expect(page.getByRole("button", { name: "edit name" })).toBeVisible({ timeout: 30_000 });

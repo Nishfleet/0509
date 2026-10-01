@@ -100,7 +100,7 @@ async function signInAndWatchFixture(
 ): Promise<void> {
   await signInWithMagicLink(page, account.email, token, /\/(app|onboarding)/);
   if (page.url().includes("/onboarding")) {
-    const input = page.getByRole("textbox", { name: "your website address or social username (like @yourbrand)" });
+    const input = page.getByRole("textbox", { name: /your website address or social username/i });
     await input.fill(host);
     await input.press("Enter");
     const business = page.getByRole("button", { name: "Yes, a business or creator" });

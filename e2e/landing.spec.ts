@@ -180,7 +180,7 @@ test("the hero's first viewport holds the outcome and the one priced input @smok
     hero.getByText("For founders, brands and creators"),
     hero.getByRole("heading", { level: 1, name: "Know where you stand. And who’s gaining on you." }),
     hero.getByText(/we find your competitors for you, so you do not need to know who they are/i),
-    hero.getByRole("textbox", { name: "your website address or social username (like @yourbrand)" }),
+    hero.getByRole("textbox", { name: /your website address or social username/i }),
     hero.getByRole("button", { name: /€\d+\/mo/ }),
     hero.getByText("One box to fill in. About a minute to see who’s gaining on you."),
   ];
@@ -253,7 +253,7 @@ test("the hero input carries what you typed to sign-in @smoke", async ({ page })
   await page.goto(PATH);
   await page
     .locator("#hero")
-    .getByRole("textbox", { name: "your website address or social username (like @yourbrand)" })
+    .getByRole("textbox", { name: /your website address or social username/i })
     .fill("example.com");
   await page
     .locator("#hero")
