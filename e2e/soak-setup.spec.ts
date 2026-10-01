@@ -9,7 +9,7 @@ test.skip(
 );
 
 const SELF_DOMAIN = "gymshark.com";
-const COMPETITORS = ["nike.com", "adidas.com", "underarmour.com", "lululemon.com"] as const;
+const COMPETITORS = ["nike.com", "adidas.com", "underarmour.com", "lululemon.com", "linear.app"] as const;
 
 async function onboardSelf(page: Page): Promise<void> {
   await page.goto("/onboarding");
@@ -54,10 +54,8 @@ test("soak workspace: one persistent production workspace tracks at least four b
 
   await signInWithMagicLink(page, FIXTURE_ACCOUNTS.soak.email, requireInboxToken(), /\/(app|onboarding)/);
   const alreadyOnboarded = /\/app$/.test(new URL(page.url()).pathname);
-  if (!alreadyOnboarded) {
-    await onboardSelf(page);
-    await addCompetitors(page);
-  }
+  if (!alreadyOnboarded) await onboardSelf(page);
+  await addCompetitors(page);
 
   const brands = await trackedBrands(page);
   console.log(
