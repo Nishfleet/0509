@@ -1,3 +1,4 @@
+import { captureException } from "@sentry/cloudflare";
 import { getDomain } from "tldts";
 
 import type { BacklogRow } from "../data/discovery_backlog.server";
@@ -55,20 +56,28 @@ const GENERATORS = [
   { name: "ai", run: aiGenerator },
 ] as const;
 
+export class DiscoveryUnavailableError extends Error {}
+
+function failureMessage(reason: unknown): string {
+  return (reason instanceof Error ? reason.message : String(reason)).slice(0, 300);
+}
+
 async function settledCandidates(self: DiscoverySelf): Promise<Candidate[]> {
   const subject = { name: self.name, domain: self.domain, description: self.description };
   const runs = await Promise.allSettled(GENERATORS.map((generator) => generator.run(subject)));
-  return runs.flatMap((run, index) => {
-    if (run.status === "fulfilled") return run.value;
-    console.error(
-      JSON.stringify({
-        event: "discovery.generator_failed",
-        generator: GENERATORS[index]?.name,
-        message: (run.reason instanceof Error ? run.reason.message : String(run.reason)).slice(0, 300),
-      }),
+  const failed = runs.flatMap((run, index) =>
+    run.status === "rejected" ? [{ generator: GENERATORS[index]?.name, reason: run.reason as unknown }] : [],
+  );
+  for (const { generator, reason } of failed) {
+    console.error(JSON.stringify({ event: "discovery.generator_failed", generator, message: failureMessage(reason) }));
+  }
+  if (failed.length === runs.length) {
+    throw new DiscoveryUnavailableError(
+      `every discovery generator failed: ${failed.map((item) => `${String(item.generator)}: ${failureMessage(item.reason)}`).join("; ")}`,
     );
-    return [];
-  });
+  }
+  for (const { generator, reason } of failed) captureException(reason, { tags: { discovery_generator: generator } });
+  return runs.flatMap((run) => (run.status === "fulfilled" ? run.value : []));
 }
 
 export function withBacklog(

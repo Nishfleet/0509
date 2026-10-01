@@ -90,18 +90,17 @@ describe("aiGenerator", () => {
     expect(candidates.map((candidate) => candidate.domain)).toEqual(["a.com"]);
   });
 
-  it("degrades to zero candidates when the AI binding throws", async () => {
+  it("fails, rather than returning zero candidates, when the AI binding throws", async () => {
     Reflect.set(env, "AI", { run: vi.fn().mockRejectedValue(new Error("gateway down")) });
-    vi.spyOn(console, "error").mockImplementation(() => undefined);
-    await expect(aiGenerator(SUBJECT, home())).resolves.toEqual([]);
+    await expect(aiGenerator(SUBJECT, home())).rejects.toThrow("gateway down");
   });
 
-  it("degrades to zero candidates on malformed JSON", async () => {
+  it("fails on malformed JSON", async () => {
     vi.spyOn(console, "error").mockImplementation(() => undefined);
     proposes("{not json");
-    await expect(aiGenerator(SUBJECT, home())).resolves.toEqual([]);
+    await expect(aiGenerator(SUBJECT, home())).rejects.toThrow("ai proposer returned malformed JSON");
     proposes({ competitors: "nope" });
-    await expect(aiGenerator(SUBJECT, home())).resolves.toEqual([]);
+    await expect(aiGenerator(SUBJECT, home())).rejects.toThrow("ai proposer returned malformed JSON");
   });
 
   it("still proposes from the card when the homepage cannot be fetched", async () => {
@@ -189,7 +188,7 @@ describe("aiGenerator", () => {
   it("rejects an overlong name and strips control characters from a kept one", async () => {
     vi.spyOn(console, "error").mockImplementation(() => undefined);
     proposes({ competitors: [{ name: "x".repeat(81), domain: "a.com" }] });
-    await expect(aiGenerator(SUBJECT, home())).resolves.toEqual([]);
+    await expect(aiGenerator(SUBJECT, home())).rejects.toThrow("ai proposer returned malformed JSON");
     proposes({ competitors: [{ name: "Al\u0000pha\nlete", domain: "a.com" }] });
     liveHosts("a.com");
     const candidates = await aiGenerator(SUBJECT, home());
