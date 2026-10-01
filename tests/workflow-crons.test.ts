@@ -17,8 +17,14 @@ describe("startScheduledWorkflow", () => {
   it("creates the snapshot-backup instance under an id fixed by the scheduled instant", async () => {
     const { createBatch, env } = fakeEnv();
     const id = await startScheduledWorkflow(env, "0 5 * * *", Date.UTC(2026, 8, 30, 5, 0, 0));
-    expect(id).toBe("snapshot-backup-2026-09-30T05:00:00.000Z");
+    expect(id).toBe("snapshot-backup-2026-09-30T05-00-00-000Z");
     expect(createBatch).toHaveBeenCalledExactlyOnceWith([{ id }]);
+  });
+
+  it("builds an id Workflows accepts: letters, digits, dash and underscore only", async () => {
+    const { env } = fakeEnv();
+    const id = await startScheduledWorkflow(env, "0 1 * * *", Date.UTC(2026, 9, 1, 1, 0, 0));
+    expect(id).toMatch(/^[A-Za-z0-9_][A-Za-z0-9_-]{0,99}$/);
   });
 
   it("gives a double fire of the same instant the same id, so createBatch skips the second", async () => {

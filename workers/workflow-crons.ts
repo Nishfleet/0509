@@ -21,7 +21,7 @@ export async function startScheduledWorkflow(
   const entry = WORKFLOW_CRONS[cron];
   if (!entry) throw new Error(`No workflow for cron ${cron}`);
   const { binding, name } = entry;
-  const id = `${name}-${new Date(scheduledTime).toISOString()}`;
+  const id = `${name}-${new Date(scheduledTime).toISOString().replace(/[:.]/g, "-")}`;
   await env[binding].createBatch([{ id }]);
   return id;
 }
