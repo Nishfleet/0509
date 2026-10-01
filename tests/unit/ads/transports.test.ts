@@ -332,12 +332,9 @@ describe("transportBrowser quick-action leg", () => {
         quickAction: async (_action: "content", options: QuickOptions): Promise<Response> => {
           engines.push(options.browser ?? "chromium");
           if (options.browser === "kitesurf") {
-            return {
-              ok: true,
+            return new Response(new ReadableStream({ start: (c) => c.error(new Error("body stream broke")) }), {
               status: 200,
-              headers: new Headers({ "content-type": "application/json" }),
-              text: () => Promise.reject(new Error("body stream broke")),
-            } as unknown as Response;
+            });
           }
           return new Response(JSON.stringify(page("<html>rendered</html>").body), { status: 200 });
         },
