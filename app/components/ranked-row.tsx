@@ -32,7 +32,7 @@ function toggleOpen(entityId: string, isOpen: boolean): (prev: URLSearchParams) 
 function RowToggle({ row, isOpen }: { row: HomeRow; isOpen: boolean }): ReactElement {
   const [, setSearchParams] = useSearchParams();
   return (
-    <span className="min-w-0">
+    <span className="min-w-0 max-sm:col-span-2">
       <button
         type="button"
         data-slot="row-toggle"
@@ -102,7 +102,9 @@ export function RankedRow({ row, onSwitch, openId, evidence }: RankedRowProps): 
       <span className="font-mono text-[0.88rem]">{positionLabel(row)}</span>
       <RowMonogram row={row} />
       <RowToggle row={row} isOpen={isOpen} />
-      <span className="text-right font-mono text-eyebrow text-ink-soft uppercase">{row.movement}</span>
+      <span className="text-right font-mono text-eyebrow text-ink-soft uppercase max-sm:col-span-3 max-sm:col-start-3 max-sm:row-start-2 max-sm:text-left">
+        {row.movement}
+      </span>
       <BrandSwitch
         state={row.self ? "you" : "on"}
         brandName={row.name}
