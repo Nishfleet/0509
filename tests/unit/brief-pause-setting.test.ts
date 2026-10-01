@@ -29,6 +29,6 @@ describe("BriefPauseSetting", () => {
     expect(html).toContain("Resume the brief");
     expect(html).toContain('value="resume"');
     expect(html).toContain("Paused since Friday 25 September.");
-    expect(html).toMatch(/doesn.{1,6}t come/);
+    expect(html).toContain("no email is sent");
   });
 });
