@@ -358,7 +358,6 @@
       "name": "own-site-check",
       "binding": "OWN_SITE_CHECK",
       "class_name": "OwnSiteCheckWorkflow",
-      "schedules": ["0 * * * *"],
     },
     // The nightly news sweep (docs/engines/mentions.md): GDELT and Hacker
     // News, one step per brand per source, paced for GDELT's one request per
@@ -386,14 +385,25 @@
     // pending digests and claims, and the Monday 04:00 UTC D2 competitor
     // refresh.
     //
-    // Also the four daily Workflow starts: 01:00 mentions-sweep, 02:00
-    // site-sweep, 02:30 hiring-sweep, 05:00 snapshot-backup (0509#6289). The
+    // Also the Workflow starts: 01:00 mentions-sweep, 02:00 site-sweep, 02:30
+    // hiring-sweep, 05:00 snapshot-backup (0509#6289) and the hourly
+    // own-site-check (0509#4124). The
     // Workflow-level `schedules` bind was skipped around redeploys (this Worker
     // deploys 20-90 times a day; snapshot-backup's never fired), so the
     // `scheduled` handler creates each instance with createBatch under the id
     // `<name>-<scheduled instant>`, which skips an id that already exists.
-    // own-site-check stays on `schedules`: hourly, it loses one hour at most.
-    "crons": ["*/5 * * * *", "0 1 * * *", "0 2 * * *", "30 2 * * *", "0 3 * * *", "0 4 * * 1", "0 5 * * *"],
+    // own-site-check was left on `schedules` and its J8 run saw no incident
+    // email in 75 minutes, so it starts from the cron like the rest.
+    "crons": [
+      "*/5 * * * *",
+      "0 * * * *",
+      "0 1 * * *",
+      "0 2 * * *",
+      "30 2 * * *",
+      "0 3 * * *",
+      "0 4 * * 1",
+      "0 5 * * *",
+    ],
   },
 
   "routes": [
