@@ -24,17 +24,8 @@ export const SITEMAP_LASTMOD: Readonly<Record<string, string>> = {
   "/privacy": LEGAL_UPDATED,
   "/terms": LEGAL_UPDATED,
 };
-export const DISALLOWED_PREFIXES = [
-  "/app",
-  "/api",
-  "/mcp",
-  "/u",
-  "/v",
-  "/login",
-  "/onboarding",
-  "/oauth",
-  "/design",
-] as const;
+export const DISALLOWED_PREFIXES = ["/app", "/api", "/u", "/v", "/login", "/onboarding", "/oauth", "/design"] as const;
+export const AGENT_PATHS = ["/mcp", "/api/v1/openapi.json"] as const;
 export const MCP_URL = `${SITE_URL}/mcp`;
 
 const PAGE_SUMMARIES: Record<(typeof PUBLIC_PATHS)[number], { title: string; summary: string }> = {
@@ -76,6 +67,7 @@ export function robotsTxt(origin: string): string {
     [
       "User-agent: *",
       "Allow: /",
+      ...AGENT_PATHS.map((path) => `Allow: ${path}`),
       ...DISALLOWED_PREFIXES.map((prefix) => `Disallow: ${prefix}`),
       "",
       `Sitemap: ${origin}/sitemap.xml`,
