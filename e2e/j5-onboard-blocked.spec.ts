@@ -57,7 +57,7 @@ test.describe("J5", () => {
     const watched = watchConsole(page);
 
     await page.goto("/onboarding");
-    const input = page.getByRole("textbox", { name: "your website address or social username (like @yourbrand)" });
+    const input = page.getByRole("textbox", { name: /your website address or social username/i });
     await input.fill("fixture.0509.in");
     await input.press("Enter");
 

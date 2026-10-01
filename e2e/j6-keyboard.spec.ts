@@ -67,7 +67,7 @@ async function watchOneCompetitor(page: Page): Promise<void> {
   await signInWithMagicLink(page, email, requireInboxToken());
 
   await page.goto("/onboarding");
-  const input = page.getByRole("textbox", { name: "your website address or social username (like @yourbrand)" });
+  const input = page.getByRole("textbox", { name: /your website address or social username/i });
   await input.fill("gymshark.com");
   await input.press("Enter");
   await expect(page.getByRole("button", { name: "edit name" })).toBeVisible({ timeout: 30_000 });
