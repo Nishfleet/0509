@@ -81,8 +81,7 @@ function checkedBlock(payload: BriefPayload): ReactElement {
       <h3 className={HEAD}>What was checked</h3>
       <p className="mt-2 font-mono text-[0.75rem] tracking-[0.04em] text-ink-soft">
         {countLabel(payload.checked.mention_count, "mention", "mentions")} ·{" "}
-        {countLabel(payload.checked.site_change_count, "site change", "site changes")} ·{" "}
-        {countLabel(payload.checked.new_ad_count, "new ad", "new ads")}
+        {countLabel(payload.checked.site_change_count, "site change", "site changes")}
       </p>
     </section>
   );

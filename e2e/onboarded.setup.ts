@@ -54,7 +54,7 @@ setup("mint one onboarded session per viewport lane", async ({ browser }) => {
       writeFileSync(onboardedEmailPath(lane), email);
 
       await page.goto("/onboarding");
-      const input = page.getByRole("textbox", { name: "your website address or social username (like @yourbrand)" });
+      const input = page.getByRole("textbox", { name: /your website address or social username/i });
       await input.fill("gymshark.com");
       await input.press("Enter");
 

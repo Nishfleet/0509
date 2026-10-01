@@ -11,7 +11,6 @@ import { homeView } from "../lib/home-standing";
 import { readHomeReads, resolveOpenId } from "../lib/home-page.server";
 import { readHomeStandingInputs } from "../lib/home-standing.server";
 import { freshnessEntries } from "../lib/freshness.server";
-import { onboardingTimingLines } from "../lib/onboarding/timings";
 import { requireSession } from "../lib/require-session.server";
 import { createTimings } from "../lib/server-timing.server";
 import { useRevalidateOnVisible } from "../lib/use-revalidate-on-visible";
@@ -30,7 +29,7 @@ export async function loader({ request }: Route.LoaderArgs) {
   if (inputs === null) throw redirect("/onboarding");
   const payload = inputs.payload;
   const openId = resolveOpenId(new URL(request.url).searchParams.get("open"), payload, inputs.entities);
-  const { sources, siteFill, howRanked, moves, times, evidence } = await timings.measure(
+  const { sources, siteFill, howRanked, moves, evidence } = await timings.measure(
     "reads",
     readHomeReads(workspaceId, payload, openId),
   );
@@ -42,7 +41,6 @@ export async function loader({ request }: Route.LoaderArgs) {
       howRanked,
       freshness: freshnessEntries(sources, Date.now()),
       siteFill,
-      timings: times === null ? [] : onboardingTimingLines(times),
     },
     { headers: timings.header() },
   );
@@ -60,7 +58,7 @@ function SiteFillLine({ state }: { state: "pending" | "gave_up" }) {
   );
 }
 
-function HomeFooter({ line, timings }: { line: string; timings: readonly string[] }) {
+function HomeFooter({ line }: { line: string }) {
   return (
     <>
       <p className="font-mono text-eyebrow text-ink-soft">{line}</p>
@@ -69,15 +67,6 @@ function HomeFooter({ line, timings }: { line: string; timings: readonly string[
           Read this week's brief
         </Link>
       </p>
-      {timings.length > 0 ? (
-        <ul aria-label="Onboarding timings" className="mt-3">
-          {timings.map((timing) => (
-            <li key={timing} className="font-mono text-eyebrow text-ink-soft">
-              {timing}
-            </li>
-          ))}
-        </ul>
-      ) : null}
     </>
   );
 }
@@ -86,10 +75,7 @@ export default function Page({ loaderData }: Route.ComponentProps) {
   const fetcher = useFetcher();
   useRevalidateOnVisible(loaderData.view.standing.kind !== "ranked");
   return (
-    <HomePageFrame
-      eyebrow={loaderData.view.eyebrow}
-      footer={<HomeFooter line={loaderData.view.footer} timings={loaderData.timings} />}
-    >
+    <HomePageFrame eyebrow={loaderData.view.eyebrow} footer={<HomeFooter line={loaderData.view.footer} />}>
       <HomeStanding
         view={loaderData.view}
         howRanked={loaderData.howRanked}

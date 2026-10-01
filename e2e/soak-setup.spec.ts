@@ -13,7 +13,7 @@ const COMPETITORS = ["nike.com", "adidas.com", "underarmour.com", "lululemon.com
 
 async function onboardSelf(page: Page): Promise<void> {
   await page.goto("/onboarding");
-  const input = page.getByRole("textbox", { name: "your website address or social username (like @yourbrand)" });
+  const input = page.getByRole("textbox", { name: /your website address or social username/i });
   await input.fill(SELF_DOMAIN);
   await input.press("Enter");
   await expect(page.getByRole("button", { name: "edit name" })).toBeVisible({ timeout: 45_000 });

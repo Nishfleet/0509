@@ -47,7 +47,7 @@ for (const { width, height } of [
     });
 
     await page.goto("/onboarding");
-    const input = page.getByRole("textbox", { name: "your website address or social username (like @yourbrand)" });
+    const input = page.getByRole("textbox", { name: /your website address or social username/i });
     await input.fill("gymshark.com");
     const started = Date.now();
     await input.press("Enter");

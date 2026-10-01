@@ -155,7 +155,7 @@ test("the weekly brief arrives from the inbox, in order, and unsubscribe stops t
 
   await signInWithMagicLink(page, email, token);
   await page.goto("/onboarding");
-  const input = page.getByRole("textbox", { name: "your website address or social username (like @yourbrand)" });
+  const input = page.getByRole("textbox", { name: /your website address or social username/i });
   await input.fill("gymshark.com");
   await input.press("Enter");
   await expect(page).toHaveURL(/\/onboarding\/identity\?subject=gymshark\.com$/);

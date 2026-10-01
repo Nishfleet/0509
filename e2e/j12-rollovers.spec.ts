@@ -29,7 +29,7 @@ function switchFor(page: Page, domain: string): Locator {
 
 async function onboardSelf(page: Page): Promise<void> {
   await page.goto("/onboarding");
-  const input = page.getByRole("textbox", { name: "your website address or social username (like @yourbrand)" });
+  const input = page.getByRole("textbox", { name: /your website address or social username/i });
   await input.fill(SELF_DOMAIN);
   await input.press("Enter");
   await expect(page).toHaveURL(/\/onboarding\/identity\?subject=gymshark\.com$/);
