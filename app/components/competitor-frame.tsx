@@ -1,4 +1,4 @@
-import type { ReactElement } from "react";
+import type { CSSProperties, ReactElement } from "react";
 
 import { BiggestMove } from "./biggest-move";
 import { DevelopmentsFeed } from "./developments-feed";
@@ -47,10 +47,13 @@ function SnapshotSection({ weekCount, pages, lastChecked }: SnapshotProps): Reac
       <h2 id="competitor-snapshot" className={HEADING}>
         This week
       </h2>
-      <dl className="grid grid-cols-1 border border-line min-[480px]:grid-cols-3">
-        <Cell label="Site changes" value={String(weekCount)} />
+      <dl
+        className="grid grid-cols-1 border border-line min-[480px]:[grid-template-columns:repeat(var(--cols),minmax(0,1fr))]"
+        style={{ "--cols": (weekCount > 0 ? 1 : 0) + 1 + (lastChecked === null ? 0 : 1) } as CSSProperties}
+      >
+        {weekCount > 0 ? <Cell label="Site changes" value={String(weekCount)} /> : null}
         <Cell label="Pages watched" value={String(pages)} />
-        <Cell label="Last checked" value={lastChecked ?? "Not yet"} />
+        {lastChecked === null ? null : <Cell label="Last checked" value={lastChecked} />}
       </dl>
     </section>
   );

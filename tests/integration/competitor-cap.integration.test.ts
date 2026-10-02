@@ -1,5 +1,5 @@
 import { env } from "cloudflare:test";
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { handleCompetitorIntent } from "../../app/lib/competitors.server";
 
@@ -12,6 +12,14 @@ import { handleCompetitorIntent } from "../../app/lib/competitors.server";
  */
 
 let seededRuns = 0;
+
+beforeEach(() => {
+  vi.stubGlobal("fetch", () => Promise.resolve(new Response("not found", { status: 404 })));
+});
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
 
 async function seedUser(id: string, email: string): Promise<void> {
   await env.DB.prepare(

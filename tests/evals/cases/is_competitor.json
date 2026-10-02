@@ -1194,5 +1194,189 @@
     },
     "label": false,
     "why": "file-storage supplier to self, not a design-tool substitute"
+  },
+  {
+    "id": "ai-allbirds-hoka",
+    "split": "test",
+    "kind": "domain",
+    "self": {
+      "name": "Allbirds",
+      "domain": "allbirds.com",
+      "description": "Sustainable everyday shoes made from merino wool and eucalyptus fiber"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Hoka",
+      "domain": "hoka.com",
+      "evidence": [
+        {
+          "source": "allbirds.com",
+          "excerpt": "Proposed by a language model reading the brand's own site; not corroborated by any other source. Its reason: Sells cushioned running and everyday shoes to the same comfort-minded buyers."
+        }
+      ]
+    },
+    "label": true,
+    "why": "sells running and everyday shoes to the same buyers"
+  },
+  {
+    "id": "ai-allbirds-vans",
+    "split": "train",
+    "kind": "domain",
+    "self": {
+      "name": "Allbirds",
+      "domain": "allbirds.com",
+      "description": "Sustainable everyday shoes made from merino wool and eucalyptus fiber"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Vans",
+      "domain": "vans.com",
+      "evidence": [
+        {
+          "source": "allbirds.com",
+          "excerpt": "Proposed by a language model reading the brand's own site; not corroborated by any other source. Its reason: Sells casual everyday sneakers to the same customers."
+        }
+      ]
+    },
+    "label": true,
+    "why": "casual shoe brand an Allbirds customer could pick instead"
+  },
+  {
+    "id": "hn-allbirds-amazon",
+    "split": "test",
+    "kind": "domain",
+    "self": {
+      "name": "Allbirds",
+      "domain": "allbirds.com",
+      "description": "Sustainable everyday shoes made from merino wool and eucalyptus fiber"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Amazon",
+      "domain": "amazon.it",
+      "evidence": [
+        {
+          "source": "news.ycombinator.com",
+          "excerpt": "Named alongside Allbirds in a Hacker News thread about online shopping."
+        }
+      ]
+    },
+    "label": false,
+    "why": "marketplace that stocks self, not a shoe brand"
+  },
+  {
+    "id": "hn-allbirds-warby",
+    "split": "train",
+    "kind": "domain",
+    "self": {
+      "name": "Allbirds",
+      "domain": "allbirds.com",
+      "description": "Sustainable everyday shoes made from merino wool and eucalyptus fiber"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Warby Parker",
+      "domain": "warbyparker.com",
+      "evidence": [
+        {
+          "source": "news.ycombinator.com",
+          "excerpt": "Warby Parker and Allbirds both came up in a thread about direct-to-consumer brands."
+        }
+      ]
+    },
+    "label": false,
+    "why": "eyewear, a different category that only shares a DTC story"
+  },
+  {
+    "id": "ai-linear-jira",
+    "split": "train",
+    "kind": "domain",
+    "self": {
+      "name": "Linear",
+      "domain": "linear.app",
+      "description": "Issue tracking and project planning tool for software teams"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Jira",
+      "domain": "atlassian.com",
+      "evidence": [
+        {
+          "source": "linear.app",
+          "excerpt": "Proposed by a language model reading the brand's own site; not corroborated by any other source. Its reason: Issue tracking and sprint planning for software teams."
+        }
+      ]
+    },
+    "label": true,
+    "why": "issue tracker a Linear customer could switch to"
+  },
+  {
+    "id": "ai-linear-asana",
+    "split": "test",
+    "kind": "domain",
+    "self": {
+      "name": "Linear",
+      "domain": "linear.app",
+      "description": "Issue tracking and project planning tool for software teams"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Asana",
+      "domain": "asana.com",
+      "evidence": [
+        {
+          "source": "linear.app",
+          "excerpt": "Proposed by a language model reading the brand's own site; not corroborated by any other source. Its reason: Project and task management for teams."
+        }
+      ]
+    },
+    "label": true,
+    "why": "work and project tracker bought by the same teams"
+  },
+  {
+    "id": "hn-linear-github",
+    "split": "train",
+    "kind": "domain",
+    "self": {
+      "name": "Linear",
+      "domain": "linear.app",
+      "description": "Issue tracking and project planning tool for software teams"
+    },
+    "competitors": [],
+    "item": {
+      "name": "GitHub",
+      "domain": "github.com",
+      "evidence": [
+        {
+          "source": "news.ycombinator.com",
+          "excerpt": "Linear syncs issues with GitHub pull requests, mentioned together in a thread about developer workflows."
+        }
+      ]
+    },
+    "label": false,
+    "why": "hosts the code Linear integrates with, not a substitute"
+  },
+  {
+    "id": "ai-gymshark-lululemon",
+    "split": "test",
+    "kind": "domain",
+    "self": {
+      "name": "Gymshark",
+      "domain": "gymshark.com",
+      "description": "DTC gym apparel brand"
+    },
+    "competitors": [],
+    "item": {
+      "name": "Lululemon",
+      "domain": "lululemon.com",
+      "evidence": [
+        {
+          "source": "gymshark.com",
+          "excerpt": "Proposed by a language model reading the brand's own site; not corroborated by any other source. Its reason: Sells premium athletic apparel to gym-goers."
+        }
+      ]
+    },
+    "label": true,
+    "why": "premium activewear for the same gym-going customers"
   }
 ]

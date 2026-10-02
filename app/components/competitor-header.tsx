@@ -68,7 +68,10 @@ export function CompetitorHeader({
         <span aria-hidden="true"> / </span>
         <span aria-current="page">{name}</span>
       </nav>
-      <div data-slot="competitor-identity" className="flex min-w-0 flex-wrap items-center gap-x-6 gap-y-3">
+      <div
+        data-slot="competitor-identity"
+        className="flex min-w-0 flex-wrap items-start justify-between gap-x-6 gap-y-3"
+      >
         <div className="min-w-0">
           <h1 className="font-display text-display-2 font-extrabold break-words uppercase">{name}</h1>
           <p className="text-body-sm [overflow-wrap:anywhere] text-ink-soft">{domain}</p>
