@@ -6,6 +6,8 @@ type SentryEnv = Env & { SENTRY_DSN?: string };
 
 const TOKEN_PATH_PREFIXES = ["/u/", "/v/"] as const;
 const REDACTED = "[redacted]";
+const DEPTH_CAP = 6;
+const SEEN_CAP = 2000;
 
 export const sentryOptions = (env: SentryEnv): CloudflareOptions => ({
   dsn: env.SENTRY_DSN,
@@ -17,6 +19,59 @@ export const sentryOptions = (env: SentryEnv): CloudflareOptions => ({
   integrations: [consoleLoggingIntegration({ levels: ["warn", "error"] })],
   beforeSendLog: scrubLog,
 });
+
+function scrubLog(log: SentryLog): SentryLog {
+  return {
+    ...log,
+    message: scrubText(String(log.message)),
+    attributes: scrubEntries(Object.entries(log.attributes ?? {}), 0),
+  };
+}
+
+interface Walk {
+  containers: WeakSet<object>;
+  visited: number;
+}
+
+function scrubEntries(entries: [string, unknown][], depth: number, walk?: Walk): Record<string, unknown> {
+  const scrubbed = new Map<string, unknown>();
+  for (const [key, entry] of entries) {
+    scrubbed.set(uniqueKey(scrubbed, scrubText(key)), scrubLogValue(entry, depth, walk));
+  }
+  return Object.fromEntries(scrubbed);
+}
+
+function uniqueKey(taken: Map<string, unknown>, key: string): string {
+  if (!taken.has(key)) return key;
+  let suffix = 2;
+  while (taken.has(`${key}#${String(suffix)}`)) suffix += 1;
+  return `${key}#${String(suffix)}`;
+}
+
+function scrubLogValue(value: unknown, depth = 0, walk?: Walk): unknown {
+  if (typeof value === "string") return scrubText(value);
+  if (isTraversable(value)) return scrubContainer(value, depth, walk ?? { containers: new WeakSet(), visited: 0 });
+  return value;
+}
+
+function scrubContainer(value: object, depth: number, walk: Walk): unknown {
+  if (Object.prototype.toString.call(value) === "[object Date]") return value;
+  if (depth >= DEPTH_CAP || walk.visited >= SEEN_CAP || walk.containers.has(value)) return REDACTED;
+  walk.visited += 1;
+  walk.containers.add(value);
+  if (Array.isArray(value)) return value.map((entry) => scrubLogValue(entry, depth + 1, walk));
+  if (!isPlainObject(value)) return REDACTED;
+  return scrubEntries(Object.entries(value), depth + 1, walk);
+}
+
+function isTraversable(value: unknown): value is object {
+  return value !== null && typeof value === "object";
+}
+
+function isPlainObject(value: object): boolean {
+  const prototype: unknown = Object.getPrototypeOf(value);
+  return prototype === Object.prototype || prototype === null;
+}
 
 const URL_PATTERN = /https?:\/\/[^\s"'<>)]+/g;
 const EMAIL_PATTERN = /[^\s@"'<>]+@[^\s@"'<>]+/g;
@@ -44,21 +99,6 @@ function scrubEvent<T extends ErrorEvent | TransactionEvent>(event: T): T {
           ...(entry.value === undefined ? {} : { value: scrubText(entry.value) }),
         })),
       },
-    }),
-  };
-}
-
-function scrubLog(log: SentryLog): SentryLog {
-  return {
-    ...log,
-    message: scrubText(log.message),
-    ...(log.attributes && {
-      attributes: Object.fromEntries(
-        Object.entries(log.attributes).map(([key, value]) => [
-          key,
-          typeof value === "string" ? scrubText(value) : value,
-        ]),
-      ),
     }),
   };
 }

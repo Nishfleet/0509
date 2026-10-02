@@ -1,6 +1,6 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { createRoutesStub } from "react-router";
+import { createRoutesStub, UNSAFE_DataRouterNavigationContext, type Navigation } from "react-router";
 import { describe, expect, it, vi } from "vitest";
 
 const holder = vi.hoisted(() => ({ known: false, outcome: "invalid_token" as string }));
@@ -43,6 +43,57 @@ function renderConfirm(unsubscribed: boolean): string {
       },
     }),
   );
+}
+
+function navigationAt(state: Navigation["state"]): Navigation {
+  if (state === "idle") {
+    return {
+      state,
+      location: undefined,
+      matches: undefined,
+      historyAction: undefined,
+      formMethod: undefined,
+      formAction: undefined,
+      formEncType: undefined,
+      formData: undefined,
+      json: undefined,
+      text: undefined,
+    };
+  }
+  return {
+    state,
+    location: { pathname: "/u/t", search: "", hash: "", state: null, key: "k" },
+    matches: [],
+    historyAction: "POP",
+    formMethod: state === "submitting" ? "post" : undefined,
+    formAction: state === "submitting" ? "/u/t" : undefined,
+    formEncType: state === "submitting" ? "application/x-www-form-urlencoded" : undefined,
+    formData: state === "submitting" ? new FormData() : undefined,
+    json: undefined,
+    text: undefined,
+  };
+}
+
+function renderFormAt(state: Navigation["state"]): string {
+  const Stub = createRoutesStub([
+    {
+      id: "routes/u.$token",
+      path: "/u/:token",
+      Component: () =>
+        createElement(
+          UNSAFE_DataRouterNavigationContext.Provider,
+          { value: { navigation: navigationAt(state), revalidation: "idle" } },
+          createElement(Unsubscribe, { actionData: undefined } as never),
+        ),
+    },
+  ]);
+  return renderToStaticMarkup(createElement(Stub, { initialEntries: ["/u/t"] }));
+}
+
+function submitButton(html: string): string {
+  const match = html.match(/<button[^>]*type="submit"[\s\S]*?<\/button>/);
+  if (match === null) throw new Error(`no submit button in ${html}`);
+  return match[0];
 }
 
 describe("/u/:token (0509#5761)", () => {
@@ -122,5 +173,27 @@ describe("/u/:token (0509#5761)", () => {
     expect(link).toContain("min-h-11");
     expect(link).toContain("inline-flex");
     expect(link).toContain("items-center");
+  });
+
+  describe("the Unsubscribe button reports its pending state (0509#6641)", () => {
+    it("is enabled and reads Unsubscribe while nothing is in flight", () => {
+      const html = submitButton(renderFormAt("idle"));
+      expect(html).toContain(">Unsubscribe<");
+      expect(html).not.toContain('disabled=""');
+      expect(html).not.toContain("Unsubscribing…");
+    });
+
+    it("is disabled and reads Unsubscribing… while the POST is submitting", () => {
+      const html = submitButton(renderFormAt("submitting"));
+      expect(html).toContain('disabled=""');
+      expect(html).toContain("Unsubscribing…");
+      expect(html).not.toContain(">Unsubscribe<");
+    });
+
+    it("stays disabled while the action and loader settle after submitting", () => {
+      const html = submitButton(renderFormAt("loading"));
+      expect(html).toContain('disabled=""');
+      expect(html).toContain("Unsubscribing…");
+    });
   });
 });

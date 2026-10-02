@@ -1,6 +1,9 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 
 const TURNSTILE_SCRIPT = "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit";
+
+const LOAD_FAILED_NOTICE =
+  "We couldn't load the check that stops bots. Turn off any content blocker for this page, reload, and try again.";
 
 interface TurnstileApi {
   render: (
@@ -50,6 +53,7 @@ export function turnstileResponse(): string {
 
 export function TurnstileWidget({ siteKey, startOn }: { siteKey: string; startOn: "email-focus" | "mount" }) {
   const container = useRef<HTMLDivElement>(null);
+  const [failed, setFailed] = useState(false);
   useEffect(() => {
     const element = container.current;
     if (!element) return;
@@ -66,22 +70,33 @@ export function TurnstileWidget({ siteKey, startOn }: { siteKey: string; startOn
             "response-field-name": "cf-turnstile-response",
           });
         })
-        .catch(() => undefined);
+        .catch((error: unknown) => {
+          if (cancelled) return;
+          console.error(JSON.stringify({ event: "turnstile.load_failed", reason: String(error) }));
+          setFailed(true);
+        });
     };
     const email = document.getElementById("email");
-    if (startOn === "mount") {
-      start();
-    } else if (email instanceof HTMLInputElement) {
+    if (startOn === "mount") start();
+    else if (email instanceof HTMLInputElement) {
       email.addEventListener("focus", start, { once: true });
       if (document.activeElement === email) start();
-    } else {
-      return;
-    }
+    } else return;
     return () => {
       cancelled = true;
       if (email instanceof HTMLInputElement) email.removeEventListener("focus", start);
       if (widgetId !== null) window.turnstile?.remove(widgetId);
     };
   }, [siteKey, startOn]);
-  return <div ref={container} data-sitekey={siteKey} data-turnstile="" />;
+  const notice = failed && (
+    <p role="alert" className="text-[0.95rem]">
+      {LOAD_FAILED_NOTICE}
+    </p>
+  );
+  return (
+    <>
+      <div ref={container} data-sitekey={siteKey} data-turnstile="" />
+      {notice}
+    </>
+  );
 }

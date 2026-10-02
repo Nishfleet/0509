@@ -9,6 +9,8 @@ import { defaultFetchText } from "../fetch-text.server";
 import { type Candidate, type FetchText, type Generator, type Subject } from "../types";
 
 export const MODEL = "@cf/openai/gpt-oss-120b";
+const SECOND_MODEL = "@cf/nvidia/nemotron-3-120b-a12b";
+const MODELS = [MODEL, SECOND_MODEL] as const;
 
 const MAX_PROPOSALS = 10;
 
@@ -139,9 +141,9 @@ export function proposalBody(raw: unknown): unknown {
   return jsonOf(answer.data.response ?? answer.data.choices?.[0]?.message.content);
 }
 
-async function propose(subject: Subject, site: SiteText): Promise<Proposal[]> {
+async function propose(model: (typeof MODELS)[number], subject: Subject, site: SiteText): Promise<Proposal[]> {
   const raw: unknown = await env.AI.run(
-    MODEL,
+    model,
     {
       messages: messagesFor(subject, site),
       max_tokens: MAX_TOKENS,
@@ -184,7 +186,7 @@ function cleanName(value: string): string {
 async function liveCandidates(subject: Subject, proposals: readonly Proposal[]): Promise<Candidate[]> {
   const own = parse(subject.domain).domain;
   const seen = new Set<string>();
-  const named = proposals.slice(0, MAX_PROPOSALS).flatMap((proposal) => {
+  const named = proposals.slice(0, MODELS.length * MAX_PROPOSALS).flatMap((proposal) => {
     const domain = publicDomain(proposal.domain);
     const name = cleanName(proposal.name);
     if (domain === null || name === "" || domain === own || seen.has(domain)) return [];
@@ -207,7 +209,17 @@ async function liveCandidates(subject: Subject, proposals: readonly Proposal[]):
     }));
 }
 
+async function proposeFromAll(subject: Subject, site: SiteText): Promise<Proposal[]> {
+  const runs = await Promise.allSettled(MODELS.map((model) => propose(model, subject, site)));
+  const answered = runs.flatMap((run) => (run.status === "fulfilled" ? [run.value] : []));
+  const failed = runs.find((run) => run.status === "rejected");
+  if (answered.length === 0 && failed !== undefined) {
+    throw failed.reason instanceof Error ? failed.reason : new Error(String(failed.reason));
+  }
+  return answered.flat();
+}
+
 export const aiGenerator: Generator = async (subject: Subject, fetchText?: FetchText) => {
   const site = await siteTextOf(subject, fetchText ?? defaultFetchText("discovery.ai_fetch_failed"));
-  return liveCandidates(subject, await propose(subject, site));
+  return liveCandidates(subject, await proposeFromAll(subject, site));
 };

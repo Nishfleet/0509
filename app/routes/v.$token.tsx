@@ -1,5 +1,5 @@
 import type { Route } from "./+types/v.$token";
-import { Form } from "react-router";
+import { Form, useNavigation } from "react-router";
 
 import { Footer } from "../components/footer";
 import { Button } from "../components/ui/button";
@@ -19,6 +19,7 @@ export async function action({ params }: Route.ActionArgs) {
 }
 
 export default function VerifyAddress({ actionData }: Route.ComponentProps) {
+  const confirming = useNavigation().state !== "idle";
   if (actionData?.confirmed) {
     return (
       <main className="mx-auto max-w-xl px-4 py-16">
@@ -39,8 +40,8 @@ export default function VerifyAddress({ actionData }: Route.ComponentProps) {
         can close this page.
       </p>
       <Form method="post" className="mt-8">
-        <Button type="submit" size="lg">
-          Confirm email address
+        <Button type="submit" size="lg" disabled={confirming}>
+          {confirming ? "Confirming…" : "Confirm email address"}
         </Button>
       </Form>
       <Footer />

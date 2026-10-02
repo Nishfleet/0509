@@ -6,6 +6,7 @@ import {
   FEED_PARAM,
   SOURCE_LABEL,
   countByKind,
+  emptyFeedSentence,
   filterFeed,
   isFeedKind,
   parseFeedFilter,
@@ -134,5 +135,17 @@ describe("SOURCE_LABEL", () => {
 
   it("covers all and only the feed kinds", () => {
     expect(Object.keys(SOURCE_LABEL).sort()).toEqual([...FEED_KINDS].sort());
+  });
+});
+
+describe("emptyFeedSentence", () => {
+  it("promises updates will arrive on the All filter", () => {
+    expect(emptyFeedSentence("all")).toBe(
+      "Nothing yet. Site changes, mentions, ads and jobs show up here as we find them.",
+    );
+  });
+
+  it("keeps the filtered-out kind wording for a kind", () => {
+    expect(emptyFeedSentence("mention")).toBe("Nothing of this kind in the last 90 days.");
   });
 });
