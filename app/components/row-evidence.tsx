@@ -46,6 +46,7 @@ function EvidenceTab({ kind, label, active, panelId, onSelect }: EvidenceTabProp
 function EvidenceItem({ item }: { item: WeekEvidence }): ReactElement {
   const image = item.evidenceUrl === null ? null : httpUrl(item.evidenceUrl);
   const href = item.url === null ? null : httpUrl(item.url);
+  const label = item.title ?? item.summary ?? "Untitled";
   return (
     <li data-slot="evidence-row" className="flex min-w-0 items-start gap-3">
       {image === null ? null : (
@@ -57,10 +58,16 @@ function EvidenceItem({ item }: { item: WeekEvidence }): ReactElement {
         />
       )}
       <span className="min-w-0">
-        <span className="block truncate">{item.title ?? item.summary ?? "Untitled"}</span>
+        <span className="block truncate">{label}</span>
         <span className="block font-mono text-eyebrow text-ink-soft">{shortUtc(item.observedAt)}</span>
         {href === null ? null : (
-          <a href={href} target="_blank" rel="noreferrer" className="text-[0.88rem] underline">
+          <a
+            href={href}
+            target="_blank"
+            rel="noreferrer"
+            aria-label={`Source: ${label} (opens in a new tab)`}
+            className="inline-flex min-h-11 items-center text-[0.88rem] underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink focus-visible:outline-solid"
+          >
             Source
           </a>
         )}
