@@ -35,11 +35,11 @@ export interface SchemaView {
   fields: FieldView[];
 }
 
-export function isRecord(value: unknown): value is JsonRecord {
+function isRecord(value: unknown): value is JsonRecord {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-export function refName(ref: string): string {
+function refName(ref: string): string {
   const name = ref.split("/").at(-1);
   if (name === undefined || name === "") {
     throw new Error(`OpenAPI $ref has no name: ${ref}`);
