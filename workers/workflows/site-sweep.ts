@@ -8,6 +8,7 @@ import { pingLiveness } from "../../app/lib/liveness-ping.server";
 import {
   CHUNK_SIZE,
   checkSitePage,
+  classifyCompetitorSites,
   planSiteSweep,
   publishSiteChange,
   uncoveredItems,
@@ -124,6 +125,7 @@ export class SiteSweep extends WorkflowEntrypoint<Env & { SITE_SWEEP_PING_URL?: 
       instanceId: event.instanceId,
       plannedAt: plannedAt(event.timestamp, event.schedule?.scheduledTime),
     };
+    await settle("classify", () => step.do("classify", RETRY, () => classifyCompetitorSites(tick.plannedAt)));
     const targets = await step.do("plan", RETRY, () => planSiteSweep(tick.plannedAt));
 
     const outcomes = await checkTargets(step, targets, tick);
