@@ -61,7 +61,10 @@ function Section({ section }: { section: LegalSection }) {
 
 function LegalLogo() {
   return (
-    <a className="font-display text-base font-bold tracking-[-0.03em] text-ink" href="/">
+    <a
+      className="inline-flex min-h-11 items-center font-display text-base font-bold tracking-[-0.03em] text-ink"
+      href="/"
+    >
       <span className="sr-only">Five to Nine</span>
       <span aria-hidden="true">
         05<span className="bg-green px-[5px] text-on-green">09</span>
