@@ -22,9 +22,21 @@ const MIN_TOTAL = 50;
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 
-const JEV_URL = process.env.JEV_URL ?? "http://127.0.0.1:4000/jev";
-
 const JEV_KEY = process.env.LITELLM_JEV_KEY ?? "";
+
+const CF_ACCOUNT = process.env.CLOUDFLARE_ACCOUNT_ID ?? "";
+
+const CF_TOKEN = process.env.CLOUDFLARE_API_TOKEN ?? "";
+
+const VIA_GATEWAY = JEV_KEY === "" && CF_ACCOUNT !== "" && CF_TOKEN !== "";
+
+const GATEWAY_MODEL = "typesafe/jev";
+
+const JEV_URL =
+  process.env.JEV_URL ??
+  (VIA_GATEWAY
+    ? `https://gateway.ai.cloudflare.com/v1/${CF_ACCOUNT}/default/workers-ai/${GATEWAY_MODEL}`
+    : "http://127.0.0.1:4000/jev");
 
 type Split = "train" | "test";
 
@@ -137,19 +149,26 @@ function selectedSplits(): Split[] {
 
 const JEV_TIMEOUT_MS = 60_000;
 
+function withoutModel(body: unknown): unknown {
+  const { model: _model, ...rest } = body as { model?: string };
+  return rest;
+}
+
 async function postJev(body: unknown): Promise<JevResponse> {
   // The bearer token rides in a header, never a command line or a log line.
   const response = await fetch(JEV_URL, {
     method: "POST",
-    headers: { "content-type": "application/json", authorization: `Bearer ${JEV_KEY}` },
-    body: JSON.stringify(body),
+    headers: { "content-type": "application/json", authorization: `Bearer ${VIA_GATEWAY ? CF_TOKEN : JEV_KEY}` },
+    body: JSON.stringify(VIA_GATEWAY ? withoutModel(body) : body),
     signal: AbortSignal.timeout(JEV_TIMEOUT_MS),
   });
   if (!response.ok) {
     const detail = (await response.text()).slice(0, 200);
     throw new Error(`jev POST failed with ${String(response.status)}: ${detail}`);
   }
-  const parsed = (await response.json()) as JevResponse;
+  const raw = (await response.json()) as JevResponse & { result?: JevResponse; response?: JevResponse | string };
+  const unwrapped = typeof raw.response === "string" ? (JSON.parse(raw.response) as JevResponse) : raw.response;
+  const parsed: JevResponse = VIA_GATEWAY ? { model: GATEWAY_MODEL, ...(unwrapped ?? raw.result ?? raw) } : raw;
   if (typeof parsed.model !== "string") throw new Error("jev response carried no model version");
   return parsed;
 }
@@ -380,5 +399,5 @@ export function formatReport(report: EvalReport): string {
 }
 
 export function jevKeyPresent(): boolean {
-  return JEV_KEY !== "";
+  return JEV_KEY !== "" || VIA_GATEWAY;
 }
