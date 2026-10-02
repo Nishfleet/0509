@@ -1,4 +1,4 @@
-import { LOST_CHANNEL_REASON, NO_CHANNEL_REASON } from "./mentions/youtube-channel";
+import { LOST_CHANNEL_REASON, NO_CHANNEL_REASON } from "./mentions/channel-reasons";
 
 const GENERIC = "not updating right now";
 
