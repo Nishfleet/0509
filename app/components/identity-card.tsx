@@ -445,7 +445,7 @@ export function IdentityCard({
 function ConfirmButton({ confirming }: { confirming: boolean }) {
   return (
     <Button type="submit" size="lg" className="my-5" disabled={confirming}>
-      {confirming ? "Saving…" : "That&apos;s me"}
+      {confirming ? "Saving…" : "That's me"}
     </Button>
   );
 }
