@@ -26,27 +26,30 @@ describe("httpUrl", () => {
     expect(httpUrl("http://rival.com")).toBe("http://rival.com/");
   });
 
-  it("returns null and logs one http_url.parse_failed line when the value does not parse", () => {
+  it("returns null and logs one http_url.parse_failed line per value that does not parse", () => {
     const error = vi.spyOn(console, "error").mockImplementation(() => undefined);
     try {
-      expect(httpUrl("not a url")).toBeNull();
-      expect(httpUrl("rival.com")).toBeNull();
-      expect(error).toHaveBeenCalledTimes(2);
-      const logged = JSON.parse(String(error.mock.calls[0]?.[0])) as {
-        event: string;
-        error: string;
-      };
-      expect(logged.event).toBe("http_url.parse_failed");
-      expect(logged.error.length).toBeGreaterThan(0);
+      for (const value of ["not a url", "rival.com", "//rival.com"]) {
+        error.mockClear();
+        expect(httpUrl(value)).toBeNull();
+        expect(error).toHaveBeenCalledOnce();
+        const logged = JSON.parse(String(error.mock.calls[0]?.[0])) as {
+          event: string;
+          error: string;
+        };
+        expect(logged.event).toBe("http_url.parse_failed");
+        expect(logged.error.length).toBeGreaterThan(0);
+      }
     } finally {
       error.mockRestore();
     }
   });
 
-  it("rejects a non-http protocol that parses cleanly, with no parse_failed log", () => {
+  it("rejects a non-http protocol that parses cleanly, whatever the case, with no parse_failed log", () => {
     const error = vi.spyOn(console, "error").mockImplementation(() => undefined);
     try {
       expect(httpUrl("javascript:alert(1)")).toBeNull();
+      expect(httpUrl("JavaScript:alert(1)")).toBeNull();
       expect(httpUrl("data:text/html,x")).toBeNull();
       expect(httpUrl("ftp://rival.com")).toBeNull();
       expect(httpUrl("mailto:a@b.co")).toBeNull();
