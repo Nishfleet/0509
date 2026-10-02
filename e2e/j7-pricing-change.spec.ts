@@ -91,6 +91,14 @@ test("J7 a fixture price flip reaches Alerts as a before-and-after mark @own-sig
     FIXTURE_ACCOUNTS.j7.maxCompetitors,
   );
 
+  if ((await listed.filter({ hasText: "fixture.0509.in" }).count()) === 0) {
+    await page.getByLabel("Add a competitor we missed").fill("fixture.0509.in");
+    await page.getByRole("button", { name: "Add", exact: true }).click();
+    await expect(listed.filter({ hasText: "fixture.0509.in" })).toHaveCount(1);
+    await flip(variant === "raised" ? "base" : "raised");
+    test.skip(true, "J7: the account was not watching the fixture; added it and flipped the price for the next sweeps");
+  }
+
   if (flippedAt === "") {
     await flip("raised");
     test.skip(flippedAt === "", "J7: flipped the fixture price to raised; the next 02:00 UTC sweep reads it");
