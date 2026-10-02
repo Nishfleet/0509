@@ -28,7 +28,24 @@ export async function startScheduledWorkflow(
   const entry = WORKFLOW_CRONS[cron];
   if (!entry) throw new Error(`No workflow for cron ${cron}`);
   const { binding, name } = entry;
-  const id = `${name}-${new Date(scheduledTime).toISOString().replace(/[:.]/g, "-")}`;
+  const instant = new Date(scheduledTime).toISOString();
+  const id = `${name}-${cron === OWN_SITE_CHECK_CRON ? instant.replace(/[:.]/g, "-") : instant.slice(0, 10)}`;
   await env[binding].createBatch([{ id }]);
   return id;
+}
+
+function dailyCrons(): WorkflowCron[] {
+  return Object.keys(WORKFLOW_CRONS).filter(
+    (cron): cron is WorkflowCron => isWorkflowCron(cron) && cron !== OWN_SITE_CHECK_CRON,
+  );
+}
+
+export function startMissedDailyWorkflows(env: Parameters<typeof startScheduledWorkflow>[0], now: number) {
+  const dayStart = Date.UTC(new Date(now).getUTCFullYear(), new Date(now).getUTCMonth(), new Date(now).getUTCDate());
+  const due = dailyCrons().flatMap((cron) => {
+    const [minute = "0", hour = "0"] = cron.split(" ");
+    const scheduledTime = dayStart + (Number(hour) * 60 + Number(minute)) * 60_000;
+    return scheduledTime <= now ? [{ cron, scheduledTime }] : [];
+  });
+  return Promise.allSettled(due.map(({ cron, scheduledTime }) => startScheduledWorkflow(env, cron, scheduledTime)));
 }
