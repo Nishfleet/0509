@@ -3,7 +3,10 @@ import { Webhook } from "standardwebhooks";
 import { z } from "zod";
 
 import { markWebhookEventProcessed, recordWebhookEvent } from "../data/dodo_webhook_event.server";
-import { readWorkspaceIdBySubscription, upsertSubscriptionPlan } from "../data/plan.server";
+import { readPlanSubscription, readWorkspaceIdBySubscription, upsertSubscriptionPlan } from "../data/plan.server";
+import { isCheckoutProof } from "./checkout-proof.server";
+import { entitledTier } from "./entitlements";
+import { PLANS, type PlanId } from "./plans";
 import { planIdForProduct } from "./products.server";
 
 const envelope = z.object({
@@ -30,6 +33,43 @@ function log(event: string, fields: Record<string, string>): void {
   console.log(JSON.stringify({ event, ...fields }));
 }
 
+const RANK = new Map<PlanId, number>(PLANS.map((plan, index) => [plan.id, index]));
+
+function rank(tier: string): number {
+  return RANK.get(tier as PlanId) ?? 0;
+}
+
+type Workspace = { kind: "found"; id: string } | { kind: "retry" } | { kind: "ignore" };
+
+async function resolveWorkspace(data: z.infer<typeof subscriptionData>): Promise<Workspace> {
+  const known = await readWorkspaceIdBySubscription(data.subscription_id);
+  if (known !== null) return { kind: "found", id: known };
+  const claimed = data.metadata?.workspace_id;
+  if (claimed === undefined) {
+    log("billing.webhook_no_workspace", { subscription: data.subscription_id });
+    return { kind: "retry" };
+  }
+  if (!(await isCheckoutProof(claimed, data.product_id, data.metadata?.proof))) {
+    log("billing.webhook_unproven", { subscription: data.subscription_id });
+    return { kind: "ignore" };
+  }
+  return { kind: "found", id: claimed };
+}
+
+async function displacesBetterPlan(input: {
+  workspaceId: string;
+  subscriptionId: string;
+  tier: PlanId;
+}): Promise<boolean> {
+  const current = await readPlanSubscription(input.workspaceId);
+  if (current === null || current.subscriptionId === input.subscriptionId) return false;
+  const entitled = entitledTier(
+    { tier: current.tier, status: current.status, currentPeriodEnd: current.currentPeriodEnd },
+    new Date(),
+  );
+  return rank(entitled) > rank(input.tier);
+}
+
 async function applySubscription(body: unknown, type: string, timestamp: string): Promise<"done" | "retry"> {
   const parsed = subscriptionEvent.safeParse(body);
   if (!parsed.success) {
@@ -42,10 +82,13 @@ async function applySubscription(body: unknown, type: string, timestamp: string)
     log("billing.webhook_unknown_product", { type, product: data.product_id });
     return "done";
   }
-  const workspaceId = data.metadata?.workspace_id ?? (await readWorkspaceIdBySubscription(data.subscription_id));
-  if (workspaceId === null || workspaceId === undefined) {
-    log("billing.webhook_no_workspace", { type, subscription: data.subscription_id });
-    return "retry";
+  const workspace = await resolveWorkspace(data);
+  if (workspace.kind === "retry") return "retry";
+  if (workspace.kind === "ignore") return "done";
+  const workspaceId = workspace.id;
+  if (await displacesBetterPlan({ workspaceId, subscriptionId: data.subscription_id, tier })) {
+    log("billing.webhook_lower_tier_ignored", { type, subscription: data.subscription_id });
+    return "done";
   }
   const cancelledNow = data.status === "cancelled" && data.cancel_at_next_billing_date !== true;
   await upsertSubscriptionPlan({

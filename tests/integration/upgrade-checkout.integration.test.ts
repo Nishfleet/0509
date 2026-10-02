@@ -1,6 +1,7 @@
 import { env } from "cloudflare:test";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { checkoutProof } from "../../app/lib/billing/checkout-proof.server";
 import checkoutSession from "../fixtures/dodo/checkout-session-created.json";
 
 vi.mock("../../app/lib/require-session.server", () => ({
@@ -49,7 +50,11 @@ describe("upgrade checkout (J13)", () => {
       product_cart: [{ product_id: "pdt_test_starter", quantity: 1 }],
       customer: { email: "upgrade@example.com" },
       subscription_data: { trial_period_days: 7 },
-      metadata: { workspace_id: "ws-upgrade", plan: "starter" },
+      metadata: {
+        workspace_id: "ws-upgrade",
+        plan: "starter",
+        proof: await checkoutProof("ws-upgrade", "pdt_test_starter"),
+      },
       return_url: "https://0509.io/app/competitors?upgraded=starter",
     });
   });
