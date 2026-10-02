@@ -3,6 +3,7 @@ import type { Route } from "./+types/app.alerts";
 import { env } from "cloudflare:workers";
 import { Link } from "react-router";
 
+import { AlertChipEmpty } from "../components/alert-chip-empty";
 import { AlertChips } from "../components/alert-chips";
 import { AlertFeed } from "../components/alert-feed";
 import { IncidentSlot } from "../components/incident-block";
@@ -103,7 +104,9 @@ export default function Page({ loaderData }: Route.ComponentProps) {
         <p className="mt-8 leading-[1.65]">
           Nothing yet. When a competitor changes its website, gets a mention or posts a job, it will show up here.
         </p>
-      ) : null}
+      ) : (
+        <AlertChipEmpty chip={loaderData.chip} counts={loaderData.chipCounts} groups={loaderData.groups} />
+      )}
       <AlertFeed groups={loaderData.groups} />
       {loaderData.offLine === null ? null : (
         <p data-testid="alerts-off-footer" className="mt-10 border-t border-line pt-6 leading-[1.65] text-ink-soft">
