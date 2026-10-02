@@ -6,11 +6,13 @@ import { BrandSwitchField } from "../components/brand-switch";
 import { CompetitorForget } from "../components/competitor-forget";
 import { CompetitorFrame } from "../components/competitor-frame";
 import { CompetitorHeader, DAY_MONTH } from "../components/competitor-header";
+import { CompetitorYoutube } from "../components/competitor-youtube";
 import { CompetitorSnapshot } from "../components/competitor-snapshot";
 import { readCompetitorPage } from "../lib/competitor-page.server";
 import { snapshotCells } from "../lib/competitor-snapshot";
 import { readCompetitorSnapshot } from "../lib/competitor-snapshot.server";
 import { forgetCompetitor } from "../lib/competitor-forget.server";
+import { saveCompetitorYoutube } from "../lib/competitor-youtube.server";
 import { handleCompetitorIntent } from "../lib/competitors.server";
 import { readWorkspaceIdForOwner } from "../lib/data/workspace.server";
 import { daysAgoLabel } from "../lib/delivery-alert";
@@ -63,12 +65,30 @@ export async function action({ request, params }: Route.ActionArgs) {
     const outcome = await forgetCompetitor(workspaceId, params.entityId, typeof confirm === "string" ? confirm : "");
     if (outcome === "forgotten") throw redirect("/app/competitors");
     if (outcome === "missing") throw new Response("We don't track that competitor.", { status: 404 });
-    return { message: null, forgetError: FORGET_MISMATCH };
+    return { message: null, forgetError: FORGET_MISMATCH, youtubeError: null };
+  }
+  if (intent === "youtube") {
+    const link = submitted.get("youtube");
+    const saved = await saveCompetitorYoutube(workspaceId, params.entityId, typeof link === "string" ? link : "");
+    return { message: null, forgetError: null, youtubeError: saved.ok ? null : saved.message };
   }
   const form = new FormData();
   form.set("intent", intent === "on" || intent === "off" ? intent : "");
   form.set("entityId", params.entityId);
-  return { ...(await handleCompetitorIntent(workspaceId, form)), forgetError: null };
+  return { ...(await handleCompetitorIntent(workspaceId, form)), forgetError: null, youtubeError: null };
+}
+
+function CompetitorFoot(props: {
+  name: string;
+  youtubeUrl: string | null;
+  errors: { youtubeError: string | null; forgetError: string | null } | undefined;
+}) {
+  return (
+    <>
+      <CompetitorYoutube url={props.youtubeUrl} error={props.errors?.youtubeError ?? null} />
+      <CompetitorForget name={props.name} error={props.errors?.forgetError ?? null} />
+    </>
+  );
 }
 
 export default function Page({ loaderData, actionData }: Route.ComponentProps) {
@@ -109,7 +129,7 @@ export default function Page({ loaderData, actionData }: Route.ComponentProps) {
         unreadable={loaderData.watch.unreadable}
         rail={{ ...loaderData.rail, entityId: competitor.id, now: loaderData.now }}
       />
-      <CompetitorForget name={competitor.name} error={actionData?.forgetError ?? null} />
+      <CompetitorFoot name={competitor.name} youtubeUrl={loaderData.youtubeUrl} errors={actionData} />
     </main>
   );
 }

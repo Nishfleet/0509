@@ -1,8 +1,9 @@
 import { env } from "cloudflare:test";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { readEntitiesWithoutHomePage } from "../../../app/lib/data/page.server";
 import { readUnwatchedEntities } from "../../../app/lib/data/watch.server";
+import { ensureHomePages } from "../../../app/lib/site/sweep.server";
 
 const NOW = "2026-10-02T02:00:00Z";
 const USER = "user-bad-identity";
@@ -47,5 +48,17 @@ describe("one unreadable identity row", () => {
       [BAD, null],
       [GOOD, "https://good-rival.com/"],
     ]);
+  });
+
+  it("falls back to the domain and logs the entity id only", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    await ensureHomePages(NOW);
+    const logged = warn.mock.calls.map((call) => String(call[0])).filter((line) => line.includes(BAD));
+    warn.mockRestore();
+    expect(logged).toEqual([JSON.stringify({ event: "site-sweep.identity-json-invalid", entityId: BAD })]);
+    const home = await env.DB.prepare("SELECT url FROM page WHERE entity_id = ?1 AND role = 'home'")
+      .bind(BAD)
+      .first<{ url: string }>();
+    expect(home?.url).toBe("https://bad-rival.com/");
   });
 });
