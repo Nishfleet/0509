@@ -264,6 +264,7 @@ function SocialsBody({ site, emptyLine }: { site: SiteFields; emptyLine: string 
             <label className="flex min-h-11 min-w-0 items-center gap-3">
               <input
                 type="checkbox"
+                defaultChecked
                 className="size-5 shrink-0 accent-green"
                 name={`social.${social.platform}`}
                 value={social.url}
@@ -338,6 +339,32 @@ export function ArrivalLine({ fields }: { fields: SiteFields }) {
   );
 }
 
+export function CheckHint({ fields }: { fields: SiteFields }) {
+  const review = fields.review;
+  if (fields.unfound || ![review.name, review.description, review.socials].includes("check")) return null;
+  const socials = review.socials === "check" ? " Untick any social link that isn't yours." : "";
+  return (
+    <span className="block pb-3">{`Rows marked "please check" may not be right. Tap a row to fix it.${socials}`}</span>
+  );
+}
+
+function ArrivalNotes({ site }: { site: Promise<SiteFields> }) {
+  return (
+    <p role="status" className="text-[0.88rem] text-ink-soft">
+      <Suspense fallback={null}>
+        <Await resolve={site}>
+          {(fields) => (
+            <>
+              <ArrivalLine fields={fields} />
+              <CheckHint fields={fields} />
+            </>
+          )}
+        </Await>
+      </Suspense>
+    </p>
+  );
+}
+
 function CreatorLines({ creator }: { creator: CreatorRows | null }) {
   if (creator === null) return null;
   return (
@@ -388,11 +415,8 @@ export function IdentityCard({
       <Row label="site">
         <span className="truncate text-[0.95rem]">{domain}</span>
       </Row>
-      <p role="status" className="text-[0.88rem] text-ink-soft">
-        <Suspense fallback={null}>
-          <Await resolve={site}>{(fields) => <ArrivalLine fields={fields} />}</Await>
-        </Suspense>
-      </p>
+      <ArrivalNotes site={site} />
+
       <CreatorLines creator={creator} />
       <Suspense fallback={<PendingRows />}>
         <Await resolve={site}>

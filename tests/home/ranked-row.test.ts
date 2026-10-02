@@ -159,7 +159,7 @@ describe("RankedRow", () => {
 
   it("prints a none source as label · nothing new and a degraded source as label · not answering", () => {
     const html = render(rowFor("ent_casetta"));
-    expect(html).toContain("Your site checks source · nothing new");
+    expect(html).toContain("Website checks · nothing new");
     expect(html).toContain("Reddit mentions · not answering");
   });
 
@@ -169,7 +169,7 @@ describe("RankedRow", () => {
   });
 
   it("prints a live source with its count", () => {
-    expect(render(rowFor("ent_kindred"))).toContain("Your site checks source · 3");
+    expect(render(rowFor("ent_kindred"))).toContain("Website checks · 3");
   });
 
   it("prints Why it moved only when the row has a why", () => {
