@@ -38,15 +38,24 @@ export interface ProbeLoader<T> {
   run: () => Promise<T>;
 }
 
+export function cacheUnavailable(action: "read" | "write"): () => null {
+  return () => {
+    console.error(JSON.stringify({ event: "identity.cache_unavailable", action }));
+    return null;
+  };
+}
+
 export async function readThrough<T>({ key, schema, ttlSeconds, run }: ReadThroughOptions<T>): Promise<T> {
-  const hit = await env.IDENTITY_CACHE.get(key, "json");
+  const hit = await env.IDENTITY_CACHE.get(key, "json").catch(cacheUnavailable("read"));
   const parsed = hit === null ? null : schema.safeParse(hit);
   if (parsed?.success) {
     return parsed.data;
   }
 
   const value = await run();
-  await env.IDENTITY_CACHE.put(key, JSON.stringify(value), { expirationTtl: ttlSeconds });
+  await env.IDENTITY_CACHE.put(key, JSON.stringify(value), { expirationTtl: ttlSeconds }).catch(
+    cacheUnavailable("write"),
+  );
   return value;
 }
 

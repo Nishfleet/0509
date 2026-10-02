@@ -156,6 +156,15 @@ describe("aiGenerator", () => {
     expect(candidates.map((candidate) => candidate.domain)).toEqual(["a.com"]);
   });
 
+  it("still finds rivals when the cache cannot be read or written", async () => {
+    proposes({ competitors: [{ name: "Alpha", domain: "a.com" }] });
+    liveHosts("gymshark.com", "a.com");
+    vi.spyOn(env.IDENTITY_CACHE, "get").mockRejectedValue(new Error("kv down"));
+    vi.spyOn(env.IDENTITY_CACHE, "put").mockRejectedValue(new Error("kv down"));
+    const candidates = await aiGenerator(SUBJECT, home());
+    expect(candidates.map((candidate) => candidate.domain)).toEqual(["a.com"]);
+  });
+
   it("asks the models again when the brand's name or description changed", async () => {
     const run = proposes({ competitors: [{ name: "Alpha", domain: "a.com" }] });
     liveHosts("gymshark.com", "a.com");
