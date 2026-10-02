@@ -76,10 +76,8 @@ export async function readArchiveCopy(url: string, now: Date): Promise<ReadUrlRe
 
 export async function readOrArchive(
   read: ReadUrlResult,
-  url: string,
-  now: Date,
-  allowArchive: boolean,
+  archive: { url: string; now: Date; allowed: boolean },
 ): Promise<ReadUrlResult> {
-  if (read.ok || !allowArchive || read.reason !== "escalation-failed") return read;
-  return (await readArchiveCopy(url, now)) ?? read;
+  if (read.ok || !archive.allowed || read.reason !== "escalation-failed") return read;
+  return (await readArchiveCopy(archive.url, archive.now)) ?? read;
 }

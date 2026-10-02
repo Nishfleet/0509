@@ -8,7 +8,7 @@ import { readEnabledSourceId, readEnabledSources } from "../data/source.server";
 import { insertWatches, readEntityWatches } from "../data/watch.server";
 import type { EntityWatch, NewWatch } from "../data/watch.server";
 import { readOrArchive } from "../fetch/archive.server";
-import { readUrl, probeFailureReason } from "../fetch/transport.server";
+import { readUrl, probeFailureReason, type ReadUrlResult } from "../fetch/transport.server";
 import { discoverBoard } from "../hiring/discover-board.server";
 import { sha256Hex } from "../sha256";
 import { brandBudget, readCachedSiteProof, readSiteCard } from "./card.server";
@@ -57,6 +57,15 @@ export async function persistTail(params: IdentityTailParams): Promise<{ entityI
   return { entityId };
 }
 
+async function readHome(
+  params: IdentityTailParams,
+  homepageUrl: string,
+  archive: { now: Date; allowed: boolean },
+): Promise<ReadUrlResult> {
+  const live = await readUrl(homepageUrl, { mayEscalate: brandBudget(params.workspaceId, params.domain) });
+  return readOrArchive(live, { url: homepageUrl, ...archive });
+}
+
 export async function classifyTailPages(
   params: IdentityTailParams,
   now: string,
@@ -64,12 +73,10 @@ export async function classifyTailPages(
 ): Promise<boolean> {
   if (params.handle !== undefined || params.homepageUrl === null) return false;
   try {
-    const page = await readOrArchive(
-      await readUrl(params.homepageUrl, { mayEscalate: brandBudget(params.workspaceId, params.domain) }),
-      params.homepageUrl,
-      new Date(now),
-      options.archive === true,
-    );
+    const page = await readHome(params, params.homepageUrl, {
+      now: new Date(now),
+      allowed: options.archive === true,
+    });
     if (!page.ok) {
       const subjectSha256 = await sha256Hex(params.domain);
       console.log(

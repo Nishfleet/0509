@@ -34,7 +34,11 @@ export async function readPage(
     startWith: learnedBrowser ? "browser" : "fetch",
     mayEscalate: escalation(options, target, day),
   });
-  const read = await readOrArchive(live, target.url, new Date(now), target.entityRole !== "self");
+  const read = await readOrArchive(live, {
+    url: target.url,
+    now: new Date(now),
+    allowed: target.entityRole !== "self",
+  });
   if (!read.ok) {
     if (read.reason === "deferred") await markPageDeferred(target.pageId, now);
     return read;
