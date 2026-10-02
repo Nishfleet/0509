@@ -347,12 +347,15 @@ jobs:
           newest_instances() {
             npx wrangler workflows instances list "$1" --per-page 3 --json | jq -s -r '(add // []) | if length == 0 then "none ever" else map("\(.id) \(.status)") | join("; ") end'
           }
+          describe_newest() {
+            npx wrangler workflows instances describe "$1" latest --json | jq -c '{status, output, failed: [.steps[]? | select(.success == false) | {name, error}]}' | head -c 1200
+          }
           crons=""
           newest=""
           for name in mentions-sweep site-sweep hiring-sweep snapshot-backup; do
             n=$(cron_instances "$name") || n=unreadable
             crons="$crons$name $n, "
-            [[ "$n" =~ ^[1-9][0-9]*$ ]] || { missed="$missed$name "; failed=1; newest="$newest$name newest: $(newest_instances "$name" || echo unreadable); "; }
+            [[ "$n" =~ ^[1-9][0-9]*$ ]] || { missed="$missed$name "; failed=1; newest="$newest$name newest: $(newest_instances "$name" || echo unreadable), described: $(describe_newest "$name" || echo unreadable); "; }
           done
           required='["is_competitor","still_competitor","noteworthy_change","own_site_breakage","read_this_first","mention_is_about_brand","mention_matters","page_role","identity_field_confidence.name","identity_field_confidence.description","identity_field_confidence.socials"]'
           verdicts=$(d1 "SELECT question_id, COUNT(*) AS n, MAX(decided_at) AS last FROM jev_verdict GROUP BY question_id")
