@@ -112,6 +112,12 @@ describe("the competitor page frame", () => {
     expect(html).not.toContain("shut_down");
   });
 
+  it("makes the breadcrumb link a 44px-tall tap target", () => {
+    const html = header({ name: "Kindred", domain: "kindred.example", state: "on", stateChangedAt: null });
+    const link = html.match(/<a\b[^>]*href="\/app\/competitors"[^>]*>/)?.[0] ?? "";
+    expect(link).toContain("min-h-11");
+  });
+
   it("renders the blocks in DESIGN.md 2.5 order", () => {
     const html = render(
       createElement(
