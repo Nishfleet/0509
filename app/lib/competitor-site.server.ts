@@ -23,7 +23,10 @@ const COOLDOWN_MS = 60_000;
 const MAX_SITES_PER_COMPETITOR = 5;
 const FETCH_HEADERS = { accept: "text/html,application/xhtml+xml", "user-agent": CRAWLER_USER_AGENT } as const;
 
-type Refusal = { ok: false; message: string };
+interface Refusal {
+  ok: false;
+  message: string;
+}
 
 export function parseSiteInput(raw: string, brandDomain: string): { ok: true; url: string } | Refusal {
   const trimmed = raw.trim();

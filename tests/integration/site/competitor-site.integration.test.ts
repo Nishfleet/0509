@@ -20,7 +20,11 @@ const GROUP = "https://rival-group.com/";
 const PRESS = "https://press.rival-group.org/";
 const HTML = `<html><head><title>Rival group</title></head><body><main><p>${"Rival group publishes its results and opens new stores across the region. ".repeat(6)}</p></main></body></html>`;
 
-type Answer = { status: number; body: string; location?: string };
+interface Answer {
+  status: number;
+  body: string;
+  location?: string;
+}
 
 function stubWeb(answers: Record<string, Answer>): string[] {
   const seen: string[] = [];
