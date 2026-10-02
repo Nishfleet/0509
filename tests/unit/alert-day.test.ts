@@ -7,7 +7,7 @@ const NEW_YORK_NOW = new Date("2026-09-24T03:00:00Z");
 
 describe("an alert, put in its day group by the workspace clock", () => {
   it("puts today's alert in New, even one from before the reading hour in UTC", () => {
-    expect(alertDayGroup("2026-09-24T01:00:00Z", UTC_NOW, "UTC")).toBe("New");
+    expect(alertDayGroup("2026-09-24T01:00:00Z", UTC_NOW, "UTC")).toBe("Today");
   });
 
   it("puts yesterday's alert in Yesterday, down to the minute", () => {
@@ -19,11 +19,11 @@ describe("an alert, put in its day group by the workspace clock", () => {
   });
 
   it("treats a timestamp in the future as New", () => {
-    expect(alertDayGroup("2026-09-25T00:00:00Z", UTC_NOW, "UTC")).toBe("New");
+    expect(alertDayGroup("2026-09-25T00:00:00Z", UTC_NOW, "UTC")).toBe("Today");
   });
 
   it("reads the day group in the workspace's timezone, not the reader's", () => {
-    expect(alertDayGroup("2026-09-23T12:00:00Z", NEW_YORK_NOW, "America/New_York")).toBe("New");
+    expect(alertDayGroup("2026-09-23T12:00:00Z", NEW_YORK_NOW, "America/New_York")).toBe("Today");
     expect(alertDayGroup("2026-09-23T02:00:00Z", NEW_YORK_NOW, "America/New_York")).toBe("Yesterday");
   });
 });
@@ -38,7 +38,7 @@ describe("alerts, grouped by the day a customer reads them", () => {
 
   it("returns the groups in reading order, each newest first, and drops the empty ones", () => {
     expect(groupByDay(ITEMS, UTC_NOW, "UTC")).toEqual([
-      { group: "New", items: [ITEMS[3], ITEMS[2]] },
+      { group: "Today", items: [ITEMS[3], ITEMS[2]] },
       { group: "Earlier", items: [ITEMS[1], ITEMS[0]] },
     ]);
   });
