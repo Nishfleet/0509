@@ -42,6 +42,7 @@ describe("the API reference page", () => {
     expect(html).toContain(`${ORIGIN}${MCP_PATH}`);
     expect(html).toContain(`href="${SETTINGS}"`);
     expect(html).toContain("per colo");
+    expect(html).toContain("per user");
     expect(html).toContain("eventually consistent");
     expect(html).toContain("120");
   });

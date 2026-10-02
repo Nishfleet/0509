@@ -66,8 +66,9 @@ function LimitsBlock({ settingsHref }: { settingsHref: string }) {
         Rate limits
       </h2>
       <p className={BODY}>
-        The edge shield allows 120 requests a minute. It is per colo and eventually consistent, so a burst can trip in
-        one region and not another. Each key also has its own quota, shown in <SettingsLink href={settingsHref} />.
+        The edge shield allows 120 requests a minute per user. It is per colo and eventually consistent, so a burst can
+        trip in one region and not another. Each key also has its own quota, shown in{" "}
+        <SettingsLink href={settingsHref} />.
       </p>
     </section>
   );
