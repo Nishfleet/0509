@@ -32,13 +32,9 @@ export interface DevelopmentItem {
   observedAt: string;
 }
 
-const NOTHING_FOR_A_KIND = "Nothing of this kind in the last 90 days.";
-
-const NOTHING_YET = "Nothing yet. Site changes, mentions, ads and jobs show up here as we find them.";
-
 export function emptyFeedSentence(filter: FeedFilter): string {
-  if (filter === "all") return NOTHING_YET;
-  return NOTHING_FOR_A_KIND;
+  if (filter === "all") return "Nothing yet. Site changes, mentions, ads and jobs show up here as we find them.";
+  return "Nothing of this kind in the last 90 days.";
 }
 
 export function isFeedKind(value: string): value is FeedKind {
