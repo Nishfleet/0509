@@ -204,7 +204,7 @@ export async function removeSignedInPasskey(env: AuthEnv, request: Request, id: 
   const session = await auth.api.getSession({ headers: request.headers, query: FRESH });
   if (!session) return "stale";
   if (Date.now() - new Date(session.session.createdAt).getTime() >= FRESH_SESSION_SECONDS * 1000) return "stale";
-  await auth.api.deletePasskey({ body: { id }, headers: request.headers });
+  await auth.api.deletePasskey({ body: { id }, headers: request.headers, query: FRESH });
   return "removed";
 }
 
