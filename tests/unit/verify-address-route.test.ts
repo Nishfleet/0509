@@ -18,24 +18,30 @@ import VerifyAddress, { action, headers, meta } from "../../app/routes/v.$token"
 // same pattern).
 const harness = vi.hoisted(() => ({
   state: "idle" as Navigation["state"],
+  posted: true,
 }));
 
 vi.mock("react-router", async (importOriginal) => {
   const actual = await importOriginal<ReactRouterModule>();
   return {
     ...actual,
-    useNavigation: (): Navigation => ({
-      state: harness.state,
-      location: { pathname: "/v/t", search: "", hash: "", state: null, key: "k" },
-      matches: [],
-      historyAction: "POP",
-      formMethod: harness.state === "idle" ? undefined : "post",
-      formAction: harness.state === "idle" ? undefined : "/v/t",
-      formEncType: undefined,
-      formData: new FormData(),
-      json: undefined,
-      text: undefined,
-    }),
+    // The stub's own navigation is idle, so only the pending states are
+    // replaced. Every other test in this file keeps the real hook.
+    useNavigation: (...args: Parameters<typeof actual.useNavigation>): Navigation =>
+      harness.state === "idle"
+        ? actual.useNavigation(...args)
+        : ({
+            state: harness.state,
+            location: { pathname: "/v/t", search: "", hash: "", state: null, key: "k" },
+            matches: [],
+            historyAction: "POP",
+            formMethod: harness.posted ? "post" : undefined,
+            formAction: harness.posted ? "/v/t" : undefined,
+            formEncType: undefined,
+            formData: harness.posted ? new FormData() : undefined,
+            json: undefined,
+            text: undefined,
+          } as Navigation),
   };
 });
 
@@ -49,14 +55,16 @@ function renderPage(confirmed: boolean): string {
   );
 }
 
-function renderPending(state: Exclude<Navigation["state"], "idle">): string {
+function renderPending(state: Exclude<Navigation["state"], "idle">, posted = true): string {
   harness.state = state;
+  harness.posted = posted;
   return renderPage(false);
 }
 
 describe("/v/:token (0509#5811)", () => {
   beforeEach(() => {
     harness.state = "idle";
+    harness.posted = true;
   });
 
   it("opens the confirmation page for any token", () => {
@@ -82,7 +90,17 @@ describe("/v/:token (0509#5811)", () => {
   });
 
   it("keeps the Confirm button disabled while the navigation settles after the post", () => {
+    // The reached page drops the form, so this is the defensive half of the
+    // disable: the state the router is in while the action completes.
     const html = renderPending("loading");
+    expect(html).toContain("Confirming…");
+    expect(/<button\b[^>]*\bdisabled\b[^>]*>/.exec(html)).not.toBeNull();
+  });
+
+  it("keeps the Confirm button disabled while a revalidation runs with no form in flight", () => {
+    // Keyed on the navigation state alone, as the issue asks, not on the
+    // submission's own form metadata.
+    const html = renderPending("loading", false);
     expect(html).toContain("Confirming…");
     expect(/<button\b[^>]*\bdisabled\b[^>]*>/.exec(html)).not.toBeNull();
   });
