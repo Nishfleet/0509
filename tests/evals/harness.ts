@@ -170,7 +170,8 @@ function withoutModel(body: unknown): unknown {
 }
 
 function unwrapJev(value: unknown): JevResponse {
-  const inner = (value as { response?: unknown }).response;
+  const { response, result } = value as { response?: unknown; result?: unknown };
+  const inner = result ?? response;
   if (typeof inner === "string") return JSON.parse(inner) as JevResponse;
   return (inner ?? value) as JevResponse;
 }
@@ -196,7 +197,8 @@ async function postJev(body: unknown): Promise<JevResponse> {
     ).run(GATEWAY_MODEL as never, withoutModel(body) as never, {
       gateway: { id: GATEWAY_ID },
     });
-    return { model: GATEWAY_MODEL, ...unwrapJev(raw) };
+    const unwrapped = unwrapJev(raw);
+    return { ...unwrapped, model: typeof unwrapped.model === "string" ? unwrapped.model : GATEWAY_MODEL };
   }
   const response = await fetch(JEV_URL, {
     method: "POST",
