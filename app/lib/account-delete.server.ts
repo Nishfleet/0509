@@ -77,19 +77,24 @@ export async function readAccountDeleteInstanceId(request: Request): Promise<str
   return typeof parsed === "string" && parsed.length > 0 ? parsed : null;
 }
 
-async function deletePage(bucket: R2Bucket, prefix: string): Promise<{ deleted: number; more: boolean }> {
-  const listed = await bucket.list({ prefix, limit: PAGE_SIZE });
+export interface DeletedPage {
+  deleted: number;
+  cursor: string | null;
+}
+
+async function deletePage(bucket: R2Bucket, prefix: string, cursor: string | null): Promise<DeletedPage> {
+  const listed = await bucket.list({ prefix, limit: PAGE_SIZE, ...(cursor === null ? {} : { cursor }) });
   const keys = listed.objects.map((object) => object.key);
   if (keys.length > 0) await bucket.delete(keys);
-  return { deleted: keys.length, more: listed.truncated };
+  return { deleted: keys.length, cursor: listed.truncated ? listed.cursor : null };
 }
 
-export async function deleteStoredPage(prefix: string): Promise<{ deleted: number; more: boolean }> {
-  return deletePage(env.SNAPSHOTS, prefix);
+export async function deleteStoredPage(prefix: string, cursor: string | null): Promise<DeletedPage> {
+  return deletePage(env.SNAPSHOTS, prefix, cursor);
 }
 
-export async function deleteBackupPage(prefix: string): Promise<{ deleted: number; more: boolean }> {
-  return deletePage(env.SNAPSHOTS_BACKUP, prefix);
+export async function deleteBackupPage(prefix: string, cursor: string | null): Promise<DeletedPage> {
+  return deletePage(env.SNAPSHOTS_BACKUP, prefix, cursor);
 }
 
 function isAccountDeleteInstanceMissing(error: unknown): boolean {
