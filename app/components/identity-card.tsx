@@ -109,7 +109,11 @@ function EditStatus({ edited, reverted, onRevert }: Pick<EditRowProps, "edited" 
     return (
       <>
         <span className="font-mono text-[0.7rem] text-ink-soft uppercase">edited by you</span>
-        <button type="button" className="text-[0.88rem] text-ink-soft underline" onClick={onRevert}>
+        <button
+          type="button"
+          className="inline-flex min-h-11 items-center text-[0.88rem] text-ink-soft underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink focus-visible:outline-solid"
+          onClick={onRevert}
+        >
           use what we found
         </button>
       </>
