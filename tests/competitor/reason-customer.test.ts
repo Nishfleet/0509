@@ -12,7 +12,7 @@ describe("retireReasonLine", () => {
   });
 
   it("falls back to the active line for a code the map does not know", () => {
-    expect(retireReasonLine("went_public")).toBe("We're not sure it still competes with you");
+    expect(retireReasonLine("no_such_reason")).toBe("We're not sure it still competes with you");
   });
 
   it("falls back to the active line for the inherited toString name", () => {
