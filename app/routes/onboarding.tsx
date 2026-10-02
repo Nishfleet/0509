@@ -1,12 +1,12 @@
 import type { Route } from "./+types/onboarding";
 
-import { Form, redirect } from "react-router";
+import { redirect } from "react-router";
 
 import { requireFreshSession, requireSession } from "../lib/require-session.server";
 import { ONBOARDING_COMPETITORS, workspaceLandingForRequest } from "../lib/workspace.server";
 import { OneInput } from "../components/one-input";
 import { OnboardingFrame } from "../components/onboarding-frame";
-import { Button } from "../components/ui/button";
+import { SubjectConfirm } from "../components/onboarding-subject-confirm";
 import { subjectRedirect } from "../lib/onboarding-subject";
 import { isTakenDown } from "../lib/data/takedown.server";
 import { readWorkspaceIdForOwner } from "../lib/data/workspace.server";
@@ -122,18 +122,7 @@ export default function Page({ loaderData, actionData }: Route.ComponentProps) {
         submitLabel="Continue"
       />
       {actionData?.confirm ? (
-        <Form method="post" action="/onboarding" className="mt-6 flex flex-col gap-3">
-          <p>Is {actionData.confirm.subject} a business or a public creator?</p>
-          <input type="hidden" name="subject" value={actionData.confirm.raw} />
-          <div className="flex flex-wrap gap-3">
-            <Button type="submit" name="answer" value="business" size="lg">
-              Yes, a business or creator
-            </Button>
-            <Button type="submit" name="answer" value="person" variant="secondary" size="lg">
-              No, it's a person
-            </Button>
-          </div>
-        </Form>
+        <SubjectConfirm subject={actionData.confirm.subject} raw={actionData.confirm.raw} />
       ) : null}
       <footer className="mt-16 flex flex-wrap items-center gap-x-4 border-t border-line pt-4 font-mono text-meta text-ink-soft">
         <p className="[overflow-wrap:anywhere]">Signed in as {loaderData.email}</p>
