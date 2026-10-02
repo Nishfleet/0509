@@ -1,9 +1,19 @@
-import { createElement, type ReactElement } from "react";
+import { createElement, type ReactElement, type ReactNode } from "react";
+import type * as ReactModule from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { createMemoryRouter, createRoutesStub, RouterProvider } from "react-router";
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { AgentKeys, ConnectedApps, ConnectDetails } from "../../app/components/agent-settings";
+import {
+  AgentKeys,
+  ConnectedApps,
+  ConnectDetails,
+  COPY_DEADLINE_MS,
+  CopyFailureNote,
+  CopyKey,
+  copyKeyLabel,
+  copyToClipboard,
+} from "../../app/components/agent-settings";
 
 const MCP_URL = "https://0509.io/mcp";
 const ORIGIN = "https://0509.io";
@@ -285,5 +295,250 @@ describe("the connect block on /app/settings/agents", () => {
     const html = markup();
     expect(html).not.toContain("<img");
     expect(html).not.toContain("<svg");
+  });
+});
+
+// #6648: CopyKey's clipboard write had no .then(onOk, onFail), so a refused
+// write (permission denied, insecure context, some in-app browsers) left an
+// unhandled rejection and no message on screen, right under the notice that
+// says the key is never shown again. The copy boundary, the state the button
+// reads and the sentence it shows are the three real app units under test;
+// the node project has no DOM, so navigator is stubbed per case exactly as
+// tests/unit/share-button.test.ts does (#6619).
+
+const NEW_KEY = "0509_live_secret_value";
+
+let unhandled: unknown[] = [];
+function recordUnhandled(reason: unknown): void {
+  unhandled.push(reason);
+}
+
+// Node reports an unhandled rejection only after the microtask queue drains, so
+// every claim below waits for that drain before reading the list. Reading it
+// first would make the claim unable to fail.
+async function settledUnhandled(): Promise<unknown[]> {
+  await new Promise((resolve) => setImmediate(resolve));
+  return unhandled;
+}
+
+function stubClipboard(writeText: (value: string) => Promise<void>): void {
+  vi.stubGlobal("navigator", { clipboard: { writeText: vi.fn(writeText) } });
+}
+
+beforeEach(() => {
+  unhandled = [];
+  process.on("unhandledRejection", recordUnhandled);
+});
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+  vi.restoreAllMocks();
+  process.off("unhandledRejection", recordUnhandled);
+});
+
+describe("copying a new API key", () => {
+  it("reports copied and asks the clipboard for the value when the write resolves", async () => {
+    const written: string[] = [];
+    stubClipboard((value) => {
+      written.push(value);
+      return Promise.resolve();
+    });
+
+    await expect(copyToClipboard(NEW_KEY)).resolves.toBe("copied");
+
+    expect(written).toEqual([NEW_KEY]);
+    expect(await settledUnhandled()).toEqual([]);
+  });
+
+  it("reports failed instead of rejecting when the browser refuses the write", async () => {
+    stubClipboard(() => Promise.reject(new DOMException("write refused", "NotAllowedError")));
+
+    await expect(copyToClipboard(NEW_KEY)).resolves.toBe("failed");
+
+    expect(await settledUnhandled()).toEqual([]);
+  });
+
+  // An insecure context or an in-app browser leaves navigator.clipboard absent,
+  // so reading .writeText throws before a promise exists. The chain starts from
+  // Promise.resolve() so that throw is a rejection the onFail arm handles.
+  it("reports failed and raises nothing when navigator.clipboard is absent", async () => {
+    vi.stubGlobal("navigator", {});
+
+    await expect(copyToClipboard(NEW_KEY)).resolves.toBe("failed");
+
+    expect(await settledUnhandled()).toEqual([]);
+  });
+
+  it("reports failed and raises nothing when reading writeText throws synchronously", async () => {
+    vi.stubGlobal("navigator", {
+      clipboard: {
+        get writeText() {
+          throw new TypeError("writeText is read-only");
+        },
+      },
+    });
+
+    await expect(copyToClipboard(NEW_KEY)).resolves.toBe("failed");
+
+    expect(await settledUnhandled()).toEqual([]);
+  });
+
+  it("reports failed instead of hanging when the browser never settles the write", async () => {
+    vi.useFakeTimers();
+    try {
+      stubClipboard(() => new Promise<void>(() => undefined));
+
+      const outcome = copyToClipboard(NEW_KEY, COPY_DEADLINE_MS);
+      await vi.advanceTimersByTimeAsync(COPY_DEADLINE_MS);
+
+      await expect(outcome).resolves.toBe("failed");
+    } finally {
+      vi.useRealTimers();
+    }
+    expect(await settledUnhandled()).toEqual([]);
+  });
+
+  it("still reports copied when the write resolves before the deadline", async () => {
+    vi.useFakeTimers();
+    try {
+      stubClipboard(() => Promise.resolve());
+
+      const outcome = copyToClipboard(NEW_KEY, COPY_DEADLINE_MS);
+      await vi.advanceTimersByTimeAsync(COPY_DEADLINE_MS - 1);
+
+      await expect(outcome).resolves.toBe("copied");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("reads Copied on the button once the write resolved, and keeps its resting label otherwise", () => {
+    expect(copyKeyLabel("copied")).toBe("Copied");
+    expect(copyKeyLabel("idle")).toBe("Copy key");
+    expect(copyKeyLabel("failed")).toBe("Copy key");
+  });
+
+  it("says to copy the key by hand after a failed write, as a status the screen reader reads", () => {
+    const html = renderToStaticMarkup(createElement(CopyFailureNote, { subject: "key above" }));
+    expect(html).toContain('role="status"');
+    expect(html).toContain("Copy failed. Select the key above and copy it by hand.");
+  });
+
+  it("names the connect field instead of pointing above it when a CopyField write fails", () => {
+    const html = renderToStaticMarkup(createElement(CopyFailureNote, { subject: "connector address" }));
+    expect(html).toContain('role="status"');
+    expect(html).toContain("Copy failed. Select the connector address and copy it by hand.");
+  });
+
+  it("never prints the key when the write is refused", async () => {
+    const logged: unknown[] = [];
+    const spy = vi.spyOn(console, "error").mockImplementation((...args: unknown[]) => {
+      logged.push(args);
+    });
+    stubClipboard(() => Promise.reject(new DOMException("write refused", "NotAllowedError")));
+
+    await expect(copyToClipboard(NEW_KEY)).resolves.toBe("failed");
+
+    spy.mockRestore();
+    expect(JSON.stringify(logged)).not.toContain("live_secret_value");
+  });
+
+  it("shows the resting copy button and no failure sentence on the new-key notice", () => {
+    const html = renderToStaticMarkup(createElement(CopyKey, { value: NEW_KEY }));
+    expect(html).toContain(copyKeyLabel("idle"));
+    expect(html).not.toContain("Copy failed");
+  });
+
+  // The failure sentence tells the person to select the key above, so the key
+  // has to be on screen in the same notice, above the button. This is the only
+  // place CopyKey is rendered.
+  it("puts the key on screen above the copy button in the new-key notice", () => {
+    const Stub = createRoutesStub([
+      { path: "/", Component: () => createElement(AgentKeys, { keys: [], newKey: NEW_KEY }) },
+    ]);
+    const html = renderToStaticMarkup(createElement(Stub, { initialEntries: ["/"] }));
+    const key = html.indexOf(`>${NEW_KEY}<`);
+    const button = html.indexOf(copyKeyLabel("idle"));
+    expect(key).toBeGreaterThan(-1);
+    expect(button).toBeGreaterThan(key);
+    expect(html).toContain("it won&#x27;t be shown again");
+  });
+});
+
+// The click path end to end: the button's real onClick, the real
+// copyToClipboard, the real setState wiring and the real failure render. The
+// node project has no DOM, so the button and the state hook are stubbed with
+// the same shape tests/competitor/competitor-pending-buttons.test.ts uses for
+// useNavigation: the stubbed button hands the harness its onClick, and the
+// stubbed useState is a one-slot store so the settled outcome can be rendered
+// again. Everything between the click and the second render is the shipped
+// code, so deleting `.then(setState)` or the failure note fails these tests.
+const clicked = vi.hoisted(() => ({
+  state: "idle" as "idle" | "copied" | "failed",
+  onClick: null as null | (() => void),
+}));
+
+function stubCopyClick(outcome: "resolves" | "rejects"): void {
+  vi.resetModules();
+  clicked.state = "idle";
+  clicked.onClick = null;
+  vi.doMock("react", async (importOriginal) => {
+    const actual = await importOriginal<typeof ReactModule>();
+    return {
+      ...actual,
+      useState: (): [string, (next: "idle" | "copied" | "failed") => void] => [
+        clicked.state,
+        (next) => {
+          clicked.state = next;
+        },
+      ],
+    };
+  });
+  vi.doMock("../../app/components/ui/button", () => ({
+    Button: (props: { onClick?: () => void; children?: ReactNode }) => {
+      clicked.onClick = props.onClick ?? null;
+      return createElement("button", { type: "button" }, props.children);
+    },
+  }));
+  stubClipboard(
+    outcome === "resolves"
+      ? () => Promise.resolve()
+      : () => Promise.reject(new DOMException("write refused", "NotAllowedError")),
+  );
+}
+
+async function clickAndRender(element: () => Promise<ReactElement>): Promise<string> {
+  const Component = await element();
+  renderToStaticMarkup(Component);
+  if (clicked.onClick === null) {
+    throw new Error("the copy button rendered no onClick");
+  }
+  clicked.onClick();
+  expect(await settledUnhandled()).toEqual([]);
+  return renderToStaticMarkup(Component);
+}
+
+describe("the copy button wires a refused write to the failure sentence", () => {
+  it("shows the resting label and the failure sentence after a refused write", async () => {
+    stubCopyClick("rejects");
+    const { CopyKey: ClickedCopyKey } = await import("../../app/components/agent-settings");
+    const html = await clickAndRender(async () => createElement(ClickedCopyKey, { value: NEW_KEY }));
+    expect(html).toContain(copyKeyLabel("failed"));
+    expect(html).toContain("Copy failed. Select the key above and copy it by hand.");
+  });
+
+  it("shows Copied and no failure sentence after a write that resolves", async () => {
+    stubCopyClick("resolves");
+    const { CopyKey: ClickedCopyKey } = await import("../../app/components/agent-settings");
+    const html = await clickAndRender(async () => createElement(ClickedCopyKey, { value: NEW_KEY }));
+    expect(html).toContain("Copied");
+    expect(html).not.toContain("Copy failed");
+  });
+
+  it("names the connect field when its own Copy write is refused", async () => {
+    stubCopyClick("rejects");
+    const { ConnectDetails: ClickedConnect } = await import("../../app/components/agent-settings");
+    const html = await clickAndRender(async () => createElement(ClickedConnect, { mcpUrl: MCP_URL, origin: ORIGIN }));
+    expect(html).toContain("Copy failed. Select the connector address and copy it by hand.");
   });
 });

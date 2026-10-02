@@ -1,4 +1,5 @@
 import { useState } from "react";
+import type { ReactElement } from "react";
 import { Form, useNavigation } from "react-router";
 
 import type { AgentKey, ConnectedApp } from "../lib/agent/access";
@@ -15,8 +16,39 @@ function day(iso: string): string {
   return DAY.format(new Date(iso));
 }
 
+export const COPY_DEADLINE_MS = 2_000;
+
+export function copyToClipboard(value: string, deadlineMs = COPY_DEADLINE_MS): Promise<"copied" | "failed"> {
+  const write = Promise.resolve()
+    .then(() => navigator.clipboard.writeText(value))
+    .then(
+      () => "copied" as const,
+      () => "failed" as const,
+    );
+  return Promise.race([
+    write,
+    new Promise<"copied" | "failed">((settle) => {
+      setTimeout(() => {
+        settle("failed");
+      }, deadlineMs);
+    }),
+  ]);
+}
+
+export function copyKeyLabel(state: "idle" | "copied" | "failed"): string {
+  return state === "copied" ? "Copied" : "Copy key";
+}
+
+export function CopyFailureNote({ subject }: { subject: string }): ReactElement {
+  return (
+    <p role="status" className="mt-2 text-body-sm text-ink-soft">
+      Copy failed. Select the {subject} and copy it by hand.
+    </p>
+  );
+}
+
 function CopyField({ label, value }: { label: string; value: string }) {
-  const [copied, setCopied] = useState(false);
+  const [state, setState] = useState<"idle" | "copied" | "failed">("idle");
   return (
     <div className="mt-3 flex flex-col gap-2 sm:flex-row">
       <Input
@@ -33,13 +65,12 @@ function CopyField({ label, value }: { label: string; value: string }) {
         variant="secondary"
         size="lg"
         onClick={() => {
-          void navigator.clipboard.writeText(value).then(() => {
-            setCopied(true);
-          });
+          void copyToClipboard(value).then(setState);
         }}
       >
-        {copied ? "Copied" : "Copy"}
+        {state === "copied" ? "Copied" : "Copy"}
       </Button>
+      {state === "failed" ? <CopyFailureNote subject={label.toLowerCase()} /> : null}
     </div>
   );
 }
@@ -210,20 +241,20 @@ export function AgentKeys({ keys, newKey }: { keys: AgentKey[]; newKey: string |
   );
 }
 
-function CopyKey({ value }: { value: string }) {
-  const [copied, setCopied] = useState(false);
+export function CopyKey({ value }: { value: string }) {
+  const [state, setState] = useState<"idle" | "copied" | "failed">("idle");
   return (
-    <Button
-      type="button"
-      variant="secondary"
-      className="mt-3"
-      onClick={() => {
-        void navigator.clipboard.writeText(value).then(() => {
-          setCopied(true);
-        });
-      }}
-    >
-      {copied ? "Copied" : "Copy key"}
-    </Button>
+    <div className="mt-3">
+      <Button
+        type="button"
+        variant="secondary"
+        onClick={() => {
+          void copyToClipboard(value).then(setState);
+        }}
+      >
+        {copyKeyLabel(state)}
+      </Button>
+      {state === "failed" ? <CopyFailureNote subject="key above" /> : null}
+    </div>
   );
 }
