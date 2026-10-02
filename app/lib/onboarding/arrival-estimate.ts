@@ -1,4 +1,4 @@
-import { SITE_SWEEP_UTC_HOUR } from "../cadence";
+import { SITE_SWEEP_ALLOWANCE_HOURS, SITE_SWEEP_UTC_HOUR } from "../cadence";
 import type { HomeSource } from "../home-standing";
 
 export function nextSiteSweepAt(now: Date): Date {
@@ -16,5 +16,6 @@ export interface FirstSweepInput {
 export function firstSiteSweepAt(input: FirstSweepInput): Date | null {
   const sweepScheduled = input.sources.some((source) => source.kind === "site");
   if (!sweepScheduled) return null;
-  return nextSiteSweepAt(input.now);
+  const start = nextSiteSweepAt(input.now);
+  return new Date(start.getTime() + SITE_SWEEP_ALLOWANCE_HOURS * 3_600_000);
 }

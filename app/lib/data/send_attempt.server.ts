@@ -10,6 +10,14 @@ RETURNING id`;
 
 const RESOLVE_ATTEMPT = `UPDATE send_attempt SET status = ?, error = ? WHERE id = ?`;
 
+const SENT_UNRECORDED = `SELECT a.id FROM send_attempt a
+  JOIN digest d ON d.id = a.digest_id
+ WHERE a.idempotency_key = ? AND a.status = 'sent' AND d.status <> 'sent'`;
+
+export async function readUnrecordedSend(db: D1Database, idempotencyKey: string): Promise<{ id: string } | null> {
+  return db.prepare(SENT_UNRECORDED).bind(idempotencyKey).first<{ id: string }>();
+}
+
 export async function claimSendAttempt(
   db: D1Database,
   input: {

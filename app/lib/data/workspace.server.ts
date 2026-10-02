@@ -35,19 +35,19 @@ export interface WorkspaceDb {
   };
 }
 
-const INSERT_WORKSPACE = `INSERT INTO workspace (id, name, owner_user_id, timezone, brief_weekday, brief_hour, created_at)
-VALUES (?, ?, ?, ?, 1, 8, ?)
+const INSERT_WORKSPACE = `INSERT INTO workspace (id, name, owner_user_id, timezone, brief_weekday, brief_hour, created_at, fixture)
+VALUES (?, ?, ?, ?, 1, 8, ?, ?)
 ON CONFLICT(id) DO NOTHING`;
 
 const FILL_TIMEZONE = `UPDATE workspace SET timezone = ? WHERE id = ? AND timezone = 'UTC'`;
 
 export async function insertWorkspace(
   db: WorkspaceDb,
-  input: { id: string; name: string; ownerUserId: string; timezone: string; createdAt: string },
+  input: { id: string; name: string; ownerUserId: string; timezone: string; createdAt: string; fixture: boolean },
 ): Promise<void> {
   await db
     .prepare(INSERT_WORKSPACE)
-    .bind(input.id, input.name, input.ownerUserId, input.timezone, input.createdAt)
+    .bind(input.id, input.name, input.ownerUserId, input.timezone, input.createdAt, input.fixture ? 1 : 0)
     .run();
 }
 

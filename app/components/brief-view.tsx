@@ -30,7 +30,7 @@ function headlineBlock(payload: BriefPayload): ReactElement {
             ? `You're #${String(payload.headline_rank)} of ${String(payload.headline_total)} this week`
             : "Add a competitor to see where you stand"}
       </h2>
-      <p className={BODY}>{payload.why_line}</p>
+      {payload.is_unjudged ? null : <p className={BODY}>{payload.why_line}</p>}
     </section>
   );
 }
