@@ -5,6 +5,14 @@ import { markSourceBlocked, recordSourceCanary } from "../../app/lib/data/source
 import { adapterFor } from "../sources/registry";
 import { UpstreamBlockedError } from "../sources/mentions/types";
 
+export async function recordUpstreamBlock(sourceId: string, pluginKey: string, status: number): Promise<void> {
+  if (status === 429) {
+    console.warn(JSON.stringify({ event: "mentions.rate_limited", source: pluginKey, status }));
+    return;
+  }
+  await markSourceBlocked(sourceId, status);
+}
+
 export async function runCanary(source: CanarySource, now: string): Promise<number> {
   const adapter = adapterFor(source.pluginKey);
   let count = 0;
@@ -14,7 +22,7 @@ export async function runCanary(source: CanarySource, now: string): Promise<numb
       count = result.canaryCount;
     } catch (error) {
       if (error instanceof UpstreamBlockedError) {
-        await markSourceBlocked(source.id, error.status);
+        await recordUpstreamBlock(source.id, source.pluginKey, error.status);
         return 0;
       }
       count = 0;

@@ -15,7 +15,7 @@ import {
   resolveUnjudgedMention,
 } from "../../app/lib/data/signal.server";
 import { insertWatchSnapshot } from "../../app/lib/data/snapshot.server";
-import { markSourceBlocked, markSourceTimedOut } from "../../app/lib/data/source.server";
+import { markSourceTimedOut } from "../../app/lib/data/source.server";
 import type { WatchRow } from "../../app/lib/data/watch.server";
 import {
   markWatchPolled,
@@ -48,7 +48,7 @@ import {
 } from "../../app/lib/mentions/youtube-channel";
 import { sha256Hex } from "../../app/lib/sha256";
 import { storedDedupKey, toSignalRow, type MentionItem, type SignalRow } from "./map";
-import { writeSourcePoint } from "./canary";
+import { recordUpstreamBlock, writeSourcePoint } from "./canary";
 import { adapterFor } from "../sources/registry";
 import { youtubeAdapter } from "../sources/mentions/youtube";
 import { isUpstreamTimeout, UpstreamBlockedError } from "../sources/mentions/types";
@@ -651,11 +651,7 @@ async function sweepYoutubeTarget(
 }
 
 async function skipBlockedTarget(target: MentionTarget, status: number): Promise<TargetOutcome> {
-  if (status === 429) {
-    console.warn(JSON.stringify({ event: "mentions.rate_limited", source: target.pluginKey, status }));
-  } else {
-    await markSourceBlocked(target.sourceId, status);
-  }
+  await recordUpstreamBlock(target.sourceId, target.pluginKey, status);
   return { items: 0, stored: 0, unjudged: 0, skipped: target.watches.length };
 }
 
