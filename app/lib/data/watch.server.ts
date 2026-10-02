@@ -179,7 +179,7 @@ ON CONFLICT (entity_id, source_id, target_key) DO NOTHING`;
 const SELECT_WATCHES = `SELECT w.id AS watch_id, w.target_key, e.id AS entity_id, e.workspace_id, e.role,
   COALESCE(NULLIF(e.name, ''), e.domain) AS name, e.domain,
   s.id AS source_id, s.plugin_key, s.reliability,
-  COALESCE(json_extract(s.config_json, '$.min_interval_seconds'), 0) AS min_interval_seconds
+  COALESCE(json_extract(CASE WHEN json_valid(s.config_json) THEN s.config_json ELSE '{}' END, '$.min_interval_seconds'), 0) AS min_interval_seconds
 FROM watch w
 JOIN entity e ON e.id = w.entity_id AND e.state = 'on'
 JOIN source s ON s.id = w.source_id AND s.kind = ?1 AND s.is_enabled = 1

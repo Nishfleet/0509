@@ -98,7 +98,7 @@ export async function readEnabledSources(
 }
 
 const CANARY_SOURCES = `SELECT id, plugin_key, canary_query,
-COALESCE(json_extract(config_json, '$.min_interval_seconds'), 0) AS min_interval_seconds FROM source
+COALESCE(json_extract(CASE WHEN json_valid(config_json) THEN config_json ELSE '{}' END, '$.min_interval_seconds'), 0) AS min_interval_seconds FROM source
 WHERE kind = 'mentions' AND is_enabled = 1 AND canary_query IS NOT NULL
 ORDER BY id`;
 
