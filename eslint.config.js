@@ -130,6 +130,13 @@ const CATCH_RETURNS_NULL = {
     "A catch whose only statement is `return null` swallows the error, so a thrown fetch or a bug fails as silently as a real 'not found'. Give the clause an error binding and a logged failure path (or rethrow). Source: 0509#4462.",
 };
 
+const MIN_H_11_ANCHOR = {
+  selector:
+    "JSXOpeningElement[name.name=/^(a|Link)$/] > JSXAttribute[name.name='className'] > Literal[value!=/min-h-11/]",
+  message:
+    "An interactive <a> or <Link> needs min-h-11 on its className string (44px tap target, DESIGN.md). Source: 0509#6591, 0509#6533.",
+};
+
 const FEED_STATE_LITERAL = {
   selector: "ObjectExpression > Property[key.name='feedState'][value.value=/^(ok|stale|error)$/]",
   message:
@@ -556,6 +563,7 @@ export default tseslint.config(
         ...NO_USER_DATA_IN_LOGS,
         RAW_DML_WRITER,
         FEED_STATE_LITERAL,
+        MIN_H_11_ANCHOR,
       ],
     },
   },
@@ -605,6 +613,34 @@ export default tseslint.config(
         ...NO_USER_DATA_IN_LOGS,
         RAW_DML_WRITER,
         FEED_STATE_LITERAL,
+      ],
+    },
+  },
+
+  {
+    // 44px tap-target anchors (min-h-11). Scoped to the interactive-anchor
+    // surfaces that already carry the token (footer, competitor-page header,
+    // identity-card, brand-switch, landing header, empty-state) so
+    // sentence-inline anchors stay out by file list, not disable comments.
+    // Footer is in the block above because that block is the last match for
+    // footer.tsx (the support-address exemption). Flat config replaces
+    // no-restricted-syntax wholesale, so this restates the client list.
+    // Source: 0509#6591, 0509#6533.
+    files: [
+      "app/components/competitor-header.tsx",
+      "app/components/identity-card.tsx",
+      "app/components/brand-switch.tsx",
+      "app/components/landing/header.tsx",
+      "app/components/empty-state.tsx",
+    ],
+    rules: {
+      "no-restricted-syntax": [
+        "error",
+        ...BANNED_SYNTAX.filter((rule) => rule !== BARE_FETCH),
+        ...NO_USER_DATA_IN_LOGS,
+        RAW_DML_WRITER,
+        FEED_STATE_LITERAL,
+        MIN_H_11_ANCHOR,
       ],
     },
   },
