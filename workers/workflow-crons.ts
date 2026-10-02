@@ -75,3 +75,10 @@ export function startMissedDailyWorkflows(env: CronEnv, now: number) {
   });
   return Promise.allSettled(due.map(({ cron, scheduledTime }) => startInstance(env, cron, scheduledTime)));
 }
+
+export async function startMissedWorkflows(env: CronEnv, now: number) {
+  return [
+    ...(await startMissedDailyWorkflows(env, now)),
+    ...(await Promise.allSettled([startMissedOwnSiteCheck(env, now)])),
+  ];
+}
