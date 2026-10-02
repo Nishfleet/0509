@@ -22,9 +22,7 @@ export function ContentRow({ content }: { content: ContentAlertItem }): ReactEle
           {content.title}
         </a>
       </h3>
-      <p className="mt-2 leading-[1.65]">
-        {content.brand} published {content.title}
-      </p>
+      <p className="mt-2 leading-[1.65]">{content.brand} published a new post</p>
       {content.excerpt === null ? null : <p className="mt-2 leading-[1.65] text-ink-soft">{content.excerpt}</p>}
       <time dateTime={content.at} className={WHEN_CLASS}>
         {content.when}
