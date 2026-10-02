@@ -70,6 +70,28 @@ function LegalLogo() {
   );
 }
 
+function OnThisPage({ sections }: { sections: readonly LegalSection[] }) {
+  const linkClass = "inline-flex min-h-11 items-center text-ink-soft underline-offset-4 hover:text-ink hover:underline";
+  return (
+    <nav aria-label="On this page" className="mt-10 border-y border-line py-5">
+      <ol className="grid gap-x-6 gap-y-0 text-[0.92rem] sm:grid-cols-2">
+        {sections.map((section) => (
+          <li key={section.id}>
+            <a className={linkClass} href={`#${section.id}`}>
+              {section.heading}
+            </a>
+          </li>
+        ))}
+        <li>
+          <a className={linkClass} href="#contact">
+            Contact
+          </a>
+        </li>
+      </ol>
+    </nav>
+  );
+}
+
 export function LegalPage({ doc }: { doc: LegalDocument }) {
   return (
     <div className="mx-auto w-full max-w-[46rem] bg-bone px-6 py-16 text-ink sm:py-24">
@@ -84,22 +106,7 @@ export function LegalPage({ doc }: { doc: LegalDocument }) {
           Last updated <time dateTime={LEGAL_UPDATED}>{updatedLabel}</time>
         </p>
         <p className="mt-6 leading-[1.65] text-ink-soft">{doc.intro}</p>
-        <nav aria-label="On this page" className="mt-10 border-y border-line py-5">
-          <ol className="grid gap-x-6 gap-y-2 text-[0.92rem] sm:grid-cols-2">
-            {doc.sections.map((section) => (
-              <li key={section.id}>
-                <a className="text-ink-soft underline-offset-4 hover:text-ink hover:underline" href={`#${section.id}`}>
-                  {section.heading}
-                </a>
-              </li>
-            ))}
-            <li>
-              <a className="text-ink-soft underline-offset-4 hover:text-ink hover:underline" href="#contact">
-                Contact
-              </a>
-            </li>
-          </ol>
-        </nav>
+        <OnThisPage sections={doc.sections} />
         {doc.sections.map((section) => (
           <Section key={section.id} section={section} />
         ))}
