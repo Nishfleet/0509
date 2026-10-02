@@ -105,6 +105,9 @@ describe("/u/:token (0509#5761)", () => {
     const html = renderConfirm(true);
 
     expect(html).toContain("You&#x27;re unsubscribed");
+    expect(html).toContain("Changed your mind?");
+    expect(html).toContain('href="/app/settings"');
+    expect(html).not.toContain("No more email");
     expect(html).not.toContain("This link is not valid");
   });
 });
