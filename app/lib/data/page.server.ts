@@ -197,7 +197,7 @@ export interface OwnSitePage {
   url: string;
 }
 
-const ENTITIES_WITHOUT_HOME = `SELECT e.id AS id, e.domain AS domain, json_extract(e.identity_json, '$.url') AS url
+const ENTITIES_WITHOUT_HOME = `SELECT e.id AS id, e.domain AS domain, CASE WHEN json_valid(e.identity_json) THEN json_extract(e.identity_json, '$.url') END AS url
 FROM entity e
 WHERE e.state = 'on'
   AND NOT EXISTS (SELECT 1 FROM page p WHERE p.entity_id = e.id AND p.role = 'home')
