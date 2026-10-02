@@ -3,16 +3,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { ESLint } from "eslint";
-import {
-  _INTERNAL_flushLogsBuffer,
-  captureException,
-  createStackParser,
-  flush,
-  getClient,
-  initAndBind,
-  nodeStackLineParser,
-} from "@sentry/core";
-import { CloudflareClient } from "@sentry/cloudflare";
+import { CloudflareClient, captureException, flush, setCurrentClient } from "@sentry/cloudflare";
 import { beforeAll, afterEach, describe, expect, it } from "vitest";
 import { sentryOptions } from "../../workers/sentry";
 
@@ -34,18 +25,22 @@ function fakeTransport() {
   };
 }
 
-// The client the Worker gets. `initAndBind` is what `@sentry/cloudflare`'s own
-// init() ends in (the SDK ships no top-level `init`), so overriding only the
-// dsn, the transport and the stack parser keeps every option `sentryOptions`
-// declares — `enableLogs`, `consoleLoggingIntegration()`, `beforeSendLog` —
-// the ones under test.
+// The client the Worker gets. `@sentry/core`'s `initAndBind` is exactly these
+// three steps, and v10 of the SDK ships no top-level `init`, so building the
+// client from `sentryOptions` with only what a test must know how to send
+// overridden keeps every option under test — `enableLogs`,
+// `consoleLoggingIntegration()`, `beforeSendLog` — the ones the Worker runs:
+// the dsn, the recording transport, and a stack parser that drops frames
+// because no assertion here reads a stack frame.
 function initProductionOptions(): void {
-  initAndBind(CloudflareClient, {
+  const client = new CloudflareClient({
     ...sentryOptions({} as unknown as Env),
     dsn: "https://examplePublicKey@o0.ingest.sentry.io/0",
     transport: fakeTransport,
-    stackParser: createStackParser([10, nodeStackLineParser]),
+    stackParser: () => [],
   });
+  setCurrentClient(client);
+  client.init();
 }
 
 interface LogItem {
@@ -101,10 +96,6 @@ describe("Sentry Logs (#6604)", () => {
   it("ships one log item per console line, in Sentry's own log envelope", async () => {
     console.log(JSON.stringify({ event: "probe.one_line", workspaceId: "ws_1" }));
 
-    const client = getClient();
-    if (client) {
-      _INTERNAL_flushLogsBuffer(client);
-    }
     await flush();
 
     const matching = logItems().filter((log) => log.body?.includes("probe.one_line"));
@@ -122,7 +113,7 @@ describe("Sentry Logs (#6604)", () => {
     expect(eventTraceIds()).toContain(probeLog?.trace_id);
   });
 
-  it("scrubs customer data out of the log it ships, under the #5786 gate", () => {
+  it("scrubs customer data out of the log it ships, under the #5786 gate", async () => {
     // A value a name-based selector cannot see: `contact` and `back` are not
     // on 0509#5786's banned list, so the gate lets the line through. The log
     // hook is what keeps their contents out of Sentry.
@@ -135,10 +126,7 @@ describe("Sentry Logs (#6604)", () => {
       }),
     );
 
-    const client = getClient();
-    if (client) {
-      _INTERNAL_flushLogsBuffer(client);
-    }
+    await flush();
 
     const [body] = logItems()
       .map((log) => log.body ?? "")
