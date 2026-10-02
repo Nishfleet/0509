@@ -172,6 +172,20 @@ export async function readUnwatchedPricingPages(sourceId: string): Promise<{ ent
   return pricingPageRows.parse(rows.results).map((row) => ({ entityId: row.entity_id, url: row.url }));
 }
 
+const INSERT_ALTERNATE_PAGE = `INSERT INTO page (id, entity_id, url, role, transport, transport_tested_at, discovered_at)
+VALUES (?1, ?2, ?3, 'blog', ?4, ?5, ?5)
+ON CONFLICT (entity_id, url) DO NOTHING`;
+
+export async function insertAlternatePage(input: {
+  entityId: string;
+  url: string;
+  transport: "fetch" | "browser";
+  at: string;
+}): Promise<void> {
+  const { entityId, url, transport, at } = input;
+  await env.DB.prepare(INSERT_ALTERNATE_PAGE).bind(crypto.randomUUID(), entityId, url, transport, at).run();
+}
+
 const RECORD_TRANSPORT =
   "UPDATE page SET transport = ?2, transport_reason = ?3, transport_tested_at = ?4, deferred_at = NULL WHERE id = ?1";
 

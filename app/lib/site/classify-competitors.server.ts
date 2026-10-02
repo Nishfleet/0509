@@ -1,5 +1,6 @@
 import { markPageDeferred, readCompetitorsToClassify } from "../data/page.server";
 import { classifyTailPages } from "../identity/tail.server";
+import { adoptAlternateHomes } from "./alternate-home.server";
 import { ensureHomePages } from "./sweep.server";
 
 const CLASSIFY_PER_SWEEP = 10;
@@ -20,5 +21,6 @@ export async function classifyCompetitorSites(now: string): Promise<number> {
     );
     if (!read) await markPageDeferred(competitor.homePageId, now);
   }
+  await adoptAlternateHomes(now);
   return competitors.length;
 }
