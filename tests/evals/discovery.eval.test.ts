@@ -131,19 +131,43 @@ describe.skipIf(!jevKeyPresent())("eval: discovery competitor questions against 
       expect(report.splits.length).toBeGreaterThan(0);
     },
   );
-  it("proposer_seeded: recall of the first pass versus first pass plus a pass seeded with the confirmed rivals", async () => {
+  it("proposer_models: customer-sees recall, stability, latency and tokens per proposer model", async () => {
     const rows = await loadCases<SeededCase>("proposer_recall", ["self", "site", "expected"]);
     const domainsOnly = z.object({ competitors: z.array(z.object({ name: z.string(), domain: z.string() })) });
     const registrable = (value: string): string => parse(value).domain ?? value.toLowerCase();
-    const propose = async (row: SeededCase, found: string[]): Promise<{ name: string; domain: string }[]> => {
+    const usage = { calls: 0, ms: 0, prompt: 0, completion: 0, unparsed: 0 };
+    const textOf = (result: unknown): string => {
+      const loose = result as { response?: unknown; choices?: { message?: { content?: unknown } }[] };
+      if (typeof loose.response === "string") return loose.response;
+      if (loose.response !== undefined && loose.response !== null) return JSON.stringify(loose.response);
+      const content = loose.choices?.[0]?.message?.content;
+      return typeof content === "string" ? content : "";
+    };
+    const propose = async (model: string, row: SeededCase): Promise<{ name: string; domain: string }[]> => {
       const subject = { name: row.self.name, domain: row.self.domain, description: row.self.description };
-      const result = (await postWorkersAi(MODEL, {
-        messages: messagesFor(subject, row.site, found),
+      const started = Date.now();
+      const result = await postWorkersAi(model, {
+        messages: messagesFor(subject, row.site),
         response_format: { type: "json_schema", json_schema: RESPONSE_SCHEMA },
-        max_tokens: MAX_TOKENS,
-      })) as { response?: unknown };
-      const body: unknown = typeof result.response === "string" ? JSON.parse(result.response) : result.response;
-      return domainsOnly.parse(body).competitors;
+        max_tokens: model === MODEL ? MAX_TOKENS : 4000,
+      });
+      const tokens = (result as { usage?: { prompt_tokens?: number; completion_tokens?: number } }).usage;
+      usage.calls += 1;
+      usage.ms += Date.now() - started;
+      usage.prompt += tokens?.prompt_tokens ?? 0;
+      usage.completion += tokens?.completion_tokens ?? 0;
+      const text = textOf(result).replace(/^```(?:json)?\s*|\s*```$/g, "");
+      const parsed = domainsOnly.safeParse(
+        (() => {
+          try {
+            return JSON.parse(text) as unknown;
+          } catch {
+            return null;
+          }
+        })(),
+      );
+      if (!parsed.success) usage.unparsed += 1;
+      return parsed.success ? parsed.data.competitors : [];
     };
     const keeps = async (row: SeededCase, item: { name: string; domain: string }): Promise<boolean> => {
       const state = {
@@ -177,40 +201,17 @@ describe.skipIf(!jevKeyPresent())("eval: discovery competitor questions against 
     const recall = (row: SeededCase, domains: Set<string>): number =>
       row.expected.filter((aliases) => aliases.some((alias) => domains.has(registrable(alias)))).length /
       row.expected.length;
-    type Arm = "one" | "union2" | "seeded";
     const shownByRun = new Map<string, Set<string>[]>();
-    const keptOf = async (
-      row: SeededCase,
-      items: { name: string; domain: string }[],
-    ): Promise<{ name: string; domain: string }[]> => {
-      const kept: { name: string; domain: string }[] = [];
-      for (const item of items) if (await keeps(row, item)) kept.push(item);
-      return kept;
-    };
     const ask =
-      (arm: Arm): Ask<SeededCase> =>
+      (model: string): Ask<SeededCase> =>
       async (row) => {
-        const first = await propose(row, []);
-        const second = arm === "one" ? [] : await propose(row, arm === "seeded" ? first.map((item) => item.name) : []);
-        const seen = new Set<string>();
-        const items = [...first, ...second].filter((item) => {
-          const domain = registrable(item.domain);
-          if (seen.has(domain)) return false;
-          seen.add(domain);
-          return true;
-        });
-        const kept = arm === "seeded" ? await keptOf(row, first) : [];
-        const rest =
-          arm === "seeded"
-            ? await keptOf(
-                row,
-                second.filter((item) => !kept.some((k) => registrable(k.domain) === registrable(item.domain))),
-              )
-            : await keptOf(row, items);
-        const domains = new Set([...kept, ...rest].map((item) => registrable(item.domain)));
-        const key = `${arm}|${row.self.domain}`;
+        const items = await propose(model, row);
+        const kept: { name: string; domain: string }[] = [];
+        for (const item of items) if (await keeps(row, item)) kept.push(item);
+        const domains = new Set(kept.map((item) => registrable(item.domain)));
+        const key = `${model}|${row.self.domain}`;
         shownByRun.set(key, [...(shownByRun.get(key) ?? []), domains]);
-        return { model: MODEL, p: null, choice: [...domains].join(",") };
+        return { model, p: null, choice: [...domains].join(",") };
       };
     const score: Score<SeededCase> = (row, call) => {
       const points = recall(row, new Set((call.choice ?? "").split(",").filter((entry) => entry !== "")));
@@ -220,20 +221,28 @@ describe.skipIf(!jevKeyPresent())("eval: discovery competitor questions against 
       const union = new Set([...a, ...b]).size;
       return union === 0 ? 1 : [...a].filter((x) => b.has(x)).length / union;
     };
-    const stability = (arm: Arm): number => {
+    const stability = (model: string): number => {
       const scores: number[] = [];
       for (const [key, runs] of shownByRun) {
-        if (!key.startsWith(`${arm}|`)) continue;
+        if (!key.startsWith(`${model}|`)) continue;
         for (let i = 0; i < runs.length; i++)
           for (let j = i + 1; j < runs.length; j++) scores.push(jaccard(runs[i]!, runs[j]!));
       }
       return scores.reduce((sum, v) => sum + v, 0) / Math.max(scores.length, 1);
     };
-    const per = 2 + 10 * 2 * 2;
-    for (const arm of ["one", "union2", "seeded"] as const) {
-      const report = await runEval(`proposer_stability_${arm}`, rows, ask(arm), score, per);
+    const per = 1 + 10 * 2;
+    for (const model of [
+      MODEL,
+      "@cf/nvidia/nemotron-3-120b-a12b",
+      "@cf/openai/gpt-oss-120b",
+      "@cf/deepseek-ai/deepseek-v4-pro-0813",
+    ]) {
+      Object.assign(usage, { calls: 0, ms: 0, prompt: 0, completion: 0, unparsed: 0 });
+      const report = await runEval(`proposer_model_${model}`, rows, ask(model), score, per);
       console.log(formatReport(report));
-      console.log(`STABILITY ${arm} mean_pairwise_jaccard=${stability(arm).toFixed(3)}`);
+      console.log(
+        `MODEL ${model} stability=${stability(model).toFixed(3)} calls=${String(usage.calls)} mean_ms=${String(Math.round(usage.ms / Math.max(usage.calls, 1)))} prompt_tokens=${String(usage.prompt)} completion_tokens=${String(usage.completion)} unparsed=${String(usage.unparsed)}`,
+      );
       expect(report.splits.length).toBeGreaterThan(0);
     }
   });
