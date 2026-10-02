@@ -14,10 +14,15 @@ export const SIGN_IN_SHELL = "mx-auto flex min-h-dvh w-full max-w-[420px] min-w-
 export const SIGN_IN_TITLE = "font-display text-display-2 mt-10 font-extrabold uppercase";
 export const SIGN_IN_LEDE = "text-ink-soft mt-3 leading-[1.55] [overflow-wrap:anywhere]";
 
-export function SignInSent({ email, turnstileSiteKey }: { email: string; turnstileSiteKey: string }) {
-  const submit = useSubmit();
-  const busy = useNavigation().state !== "idle";
-  const wait = useCountdown(RESEND_AFTER_SECONDS);
+export function SignInSent({
+  email,
+  turnstileSiteKey,
+  onChangeEmail,
+}: {
+  email: string;
+  turnstileSiteKey: string;
+  onChangeEmail: () => void;
+}) {
   const minutes = String(MAGIC_LINK_TTL_SECONDS / 60);
   const heading = useRef<HTMLHeadingElement>(null);
 
@@ -39,24 +44,36 @@ export function SignInSent({ email, turnstileSiteKey }: { email: string; turnsti
           once and expires in {minutes} minutes.
         </p>
         <TurnstileWidget siteKey={turnstileSiteKey} startOn="mount" />
-        <Button
-          type="button"
-          variant="secondary"
-          size="lg"
-          className="mt-8 self-start"
-          disabled={wait > 0 || busy}
-          onClick={() => void submit({ email, "cf-turnstile-response": turnstileResponse() }, { method: "post" })}
-        >
-          {wait > 0 ? `Send it again in ${String(wait)}s` : busy ? "Sending…" : "Send it again"}
-        </Button>
-        <p role="status" className="sr-only">
-          {wait > 0
-            ? `You can send it again in ${String(RESEND_AFTER_SECONDS)} seconds.`
-            : "You can send it again now."}
-        </p>
+        <ResendControls email={email} onChangeEmail={onChangeEmail} />
       </main>
       <Footer />
     </div>
+  );
+}
+
+function ResendControls({ email, onChangeEmail }: { email: string; onChangeEmail: () => void }) {
+  const submit = useSubmit();
+  const busy = useNavigation().state !== "idle";
+  const wait = useCountdown(RESEND_AFTER_SECONDS);
+  return (
+    <>
+      <Button
+        type="button"
+        variant="secondary"
+        size="lg"
+        className="mt-8 self-start"
+        disabled={wait > 0 || busy}
+        onClick={() => void submit({ email, "cf-turnstile-response": turnstileResponse() }, { method: "post" })}
+      >
+        {wait > 0 ? `Send it again in ${String(wait)}s` : busy ? "Sending…" : "Send it again"}
+      </Button>
+      <Button type="button" variant="tertiary" className="mt-2 self-start" onClick={onChangeEmail}>
+        Use a different email
+      </Button>
+      <p role="status" className="sr-only">
+        {wait > 0 ? `You can send it again in ${String(RESEND_AFTER_SECONDS)} seconds.` : "You can send it again now."}
+      </p>
+    </>
   );
 }
 
