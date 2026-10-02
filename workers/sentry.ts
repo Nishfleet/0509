@@ -1,5 +1,6 @@
-import type { CloudflareOptions, ErrorEvent } from "@sentry/cloudflare";
+import { consoleLoggingIntegration, type CloudflareOptions, type ErrorEvent } from "@sentry/cloudflare";
 
+type SentryLog = Parameters<NonNullable<CloudflareOptions["beforeSendLog"]>>[0];
 type TransactionEvent = Parameters<NonNullable<CloudflareOptions["beforeSendTransaction"]>>[0];
 type SentryEnv = Env & { SENTRY_DSN?: string };
 
@@ -12,6 +13,9 @@ export const sentryOptions = (env: SentryEnv): CloudflareOptions => ({
   beforeBreadcrumb: () => null,
   beforeSend: scrubEvent,
   beforeSendTransaction: scrubEvent,
+  enableLogs: true,
+  integrations: [consoleLoggingIntegration({ levels: ["warn", "error"] })],
+  beforeSendLog: scrubLog,
 });
 
 const URL_PATTERN = /https?:\/\/[^\s"'<>)]+/g;
@@ -40,6 +44,21 @@ function scrubEvent<T extends ErrorEvent | TransactionEvent>(event: T): T {
           ...(entry.value === undefined ? {} : { value: scrubText(entry.value) }),
         })),
       },
+    }),
+  };
+}
+
+function scrubLog(log: SentryLog): SentryLog {
+  return {
+    ...log,
+    message: scrubText(log.message),
+    ...(log.attributes && {
+      attributes: Object.fromEntries(
+        Object.entries(log.attributes).map(([key, value]) => [
+          key,
+          typeof value === "string" ? scrubText(value) : value,
+        ]),
+      ),
     }),
   };
 }
