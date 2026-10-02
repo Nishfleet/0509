@@ -66,7 +66,7 @@ afterEach(() => {
 });
 
 describe("handleCompetitorIntent intent=add", () => {
-  it("stores a typed website with no stored name when the site gives none", async () => {
+  it("names a typed website after its domain when the site gives no name", async () => {
     const workspaceId = await seedWorkspace();
     vi.stubGlobal("fetch", NOT_FOUND);
     const result = await handleCompetitorIntent(workspaceId, addForm("gymshark.com"));
@@ -91,7 +91,7 @@ describe("handleCompetitorIntent intent=add", () => {
       workspace_id: workspaceId,
       role: "competitor",
       domain: "gymshark.com",
-      name: null,
+      name: "Gymshark",
       origin: "manual",
       state: "on",
     });
