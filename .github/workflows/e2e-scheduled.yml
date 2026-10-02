@@ -313,9 +313,9 @@ jobs:
           set -euo pipefail
           since=$(date -u -d '48 hours ago' +%Y-%m-%dT%H:%M:%SZ)
           npx wrangler workflows instances list snapshot-backup --date-start "$since" --per-page 100 --json | jq -s -r 'add // [] | .[] | [.id, .status, .created_on, .trigger_source] | @tsv' | tee instances.tsv
-          for id in $(cut -f1 instances.tsv | grep '^snapshot-backup-'); do
+          cut -f1 instances.tsv | grep '^snapshot-backup-' | while read -r id; do
             echo "== $id"
-            npx wrangler workflows instances describe snapshot-backup "$id"
+            npx wrangler workflows instances describe snapshot-backup "$id" < /dev/null
           done
   soak-report:
     name: soak-report
