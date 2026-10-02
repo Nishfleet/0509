@@ -77,7 +77,8 @@ export const PRIVACY: LegalDocument = {
           term: "Cloudflare",
           details: [
             "Hosting, the database, file storage, screenshots, sending email, the sign-in check that keeps bots out (Turnstile), and Workers AI, which runs the AI models that decide which changes matter and why, and read text off an image.",
-            "Sees everything 0509 stores, because 0509 runs on it. The AI models see the public material we collected and the names of your brand and competitors, never your email or payment details.",
+            "Sees everything 0509 stores, because 0509 runs on it. The AI models see the public material we collected and the names of your brand and competitors, never your sign-in email or payment details.",
+            "Mail you send to support@0509.io arrives through Cloudflare Email Routing and is stored in our own support inbox on Cloudflare, attachments included.",
           ],
         },
         {
@@ -96,7 +97,7 @@ export const PRIVACY: LegalDocument = {
         },
         {
           term: "Google (Gmail)",
-          details: ["Our support inbox.", "Sees the emails you send us."],
+          details: ["Our support inbox. Mail to support@0509.io is forwarded to it.", "Sees the emails you send us."],
         },
         {
           term: "GitHub",
