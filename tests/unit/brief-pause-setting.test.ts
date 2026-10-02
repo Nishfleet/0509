@@ -61,6 +61,13 @@ describe("BriefPauseSetting", () => {
     expect(html).toContain("no email is sent");
   });
 
+  it("reads Paused since an unknown date when the stored instant is not a date", () => {
+    const html = render({ pausedAt: "garbage", timezone: "Europe/London" });
+    expect(html).toContain("Paused since an unknown date");
+    expect(html).toContain("no email is sent");
+    expect(html).not.toContain("Invalid");
+  });
+
   it("disables the button and reads Saving while the request runs", () => {
     const html = renderSetting({ pausedAt: null, timezone: "Europe/London" }, "submitting");
     expect(html).toContain("Saving…");

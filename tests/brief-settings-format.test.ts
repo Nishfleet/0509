@@ -10,6 +10,10 @@ describe("formatPausedSince", () => {
   it("shifts the day and weekday for a zone ahead of UTC", () => {
     expect(formatPausedSince("2026-10-02T23:30:00Z", "Asia/Kolkata")).toBe("Saturday 3 October");
   });
+
+  it("names the date unknown instead of throwing when the stored instant is not a date", () => {
+    expect(formatPausedSince("garbage", "UTC")).toBe("an unknown date");
+  });
 });
 
 describe("hourLabel", () => {
