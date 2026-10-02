@@ -7,6 +7,7 @@ import { createAuth, deleteSignedInUser } from "../../app/lib/auth.server";
 import { firstWorkspaceId } from "../../app/lib/workspace.server";
 import {
   deleteAccount,
+  deleteStoredPage,
   readAccountDeleteProgress,
   sealAccountDeleteInstanceId,
 } from "../../app/lib/account-delete.server";
@@ -74,13 +75,14 @@ const count = async (sql: string, ...values: unknown[]) =>
 describe("delete my account", () => {
   beforeEach(async () => {
     links.length = 0;
+    await env.DB.exec("DELETE FROM email_suppression");
     await env.DB.exec("DELETE FROM apikey");
     await env.DB.exec("DELETE FROM verification");
     await env.DB.exec("DELETE FROM workspace");
     await env.DB.exec('DELETE FROM "user"');
   });
 
-  it("deletes the user, their sessions, API keys, workspace and every owned row", async () => {
+  it("suppresses and cancels first, then deletes the user, sessions, API keys, workspace and every owned row", async () => {
     const { cookie, userId } = await signIn();
     const workspaceId = firstWorkspaceId(userId);
     await env.DB.prepare(
@@ -91,6 +93,31 @@ describe("delete my account", () => {
       .run();
     await auth.api.createApiKey({ body: { name: "script" }, headers: new Headers({ cookie }) });
     expect(await count("SELECT COUNT(*) AS n FROM apikey WHERE referenceId = ?", userId)).toBe(1);
+    await env.DB.exec("DROP TABLE IF EXISTS delete_probe");
+    await env.DB.exec("CREATE TABLE delete_probe (suppressed INTEGER, digest_status TEXT)");
+    await env.DB.exec(
+      "CREATE TRIGGER delete_probe_trigger BEFORE DELETE ON workspace BEGIN INSERT INTO delete_probe SELECT (SELECT COUNT(*) FROM email_suppression WHERE address = 'to@0509.io'), (SELECT status FROM digest WHERE id = 'dig-leaving'); END",
+    );
+    await env.DB.exec("INSERT OR IGNORE INTO channel (id, key) VALUES ('chan-leaving', 'email-leaving')");
+    await env.DB.prepare(
+      `INSERT INTO send_target (id, workspace_id, channel_id, target_value, is_verified, created_at)
+       VALUES ('tgt-leaving', ?, 'chan-leaving', 'to@0509.io', 1, '2026-09-24T00:00:00Z')`,
+    )
+      .bind(workspaceId)
+      .run();
+    await env.DB.prepare(
+      `INSERT INTO digest (id, workspace_id, kind, period_start, period_end, status, subject, payload_json)
+       VALUES ('dig-leaving', ?, 'weekly', '2026-09-15', '2026-09-22', 'pending', 'brief', '{}')`,
+    )
+      .bind(workspaceId)
+      .run();
+
+    const twoDaysOn = new Date(Date.now() + 2 * 24 * 60 * 60 * 1000);
+    expect(await deleteSignedInUser(authEnv, settingsRequest(cookie), twoDaysOn)).toBeNull();
+    expect(await count("SELECT COUNT(*) AS n FROM email_suppression")).toBe(0);
+    expect(await env.DB.prepare("SELECT status FROM digest WHERE id = 'dig-leaving'").first()).toEqual({
+      status: "pending",
+    });
 
     const headers = await deleteSignedInUser(authEnv, settingsRequest(cookie), new Date());
 
@@ -100,6 +127,30 @@ describe("delete my account", () => {
     expect(await count("SELECT COUNT(*) AS n FROM apikey WHERE referenceId = ?", userId)).toBe(0);
     expect(await count("SELECT COUNT(*) AS n FROM workspace WHERE id = ?", workspaceId)).toBe(0);
     expect(await count("SELECT COUNT(*) AS n FROM entity WHERE workspace_id = ?", workspaceId)).toBe(0);
+  });
+
+  it("pages the stored files with a cursor and the Workflow deletes every page", async () => {
+    const keys = Array.from(
+      { length: 1005 },
+      (_, index) => `snapshot/site/watch-big/${String(index).padStart(5, "0")}`,
+    );
+    await Promise.all(keys.map((key) => env.SNAPSHOTS.put(key, "x")));
+
+    const first = await deleteStoredPage("snapshot/site/watch-big/", null);
+    expect(first.deleted).toBe(1000);
+    expect(first.cursor).not.toBeNull();
+    const second = await deleteStoredPage("snapshot/site/watch-big/", first.cursor);
+    expect(second).toEqual({ deleted: 5, cursor: null });
+    expect((await env.SNAPSHOTS.list({ prefix: "snapshot/site/watch-big/" })).objects).toHaveLength(0);
+
+    await Promise.all(keys.map((key) => env.SNAPSHOTS.put(key, "x")));
+    const id = "account-delete-pages";
+    await using introspector = await introspectWorkflowInstance(env.ACCOUNT_DELETE, id);
+    await env.ACCOUNT_DELETE.create({ id, params: { prefixes: ["snapshot/site/watch-big/"] } });
+    await introspector.waitForStatus("complete");
+
+    expect(await introspector.getOutput()).toEqual({ deleted: 1005 });
+    expect((await env.SNAPSHOTS.list({ prefix: "snapshot/site/watch-big/" })).objects).toHaveLength(0);
   });
 
   it("asks for a fresh sign-in when the session is older than a day, and deletes nothing", async () => {
