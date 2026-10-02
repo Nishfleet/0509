@@ -3,12 +3,7 @@ import { getDomain } from "tldts";
 
 import { insertIncidentAlertStatement } from "../data/alert.server";
 import { openIncidentStatement } from "../data/incident.server";
-import {
-  insertPages,
-  readCompetitorsToClassify,
-  readEntitiesWithoutHomePage,
-  readUnwatchedPricingPages,
-} from "../data/page.server";
+import { insertPages, readEntitiesWithoutHomePage, readUnwatchedPricingPages } from "../data/page.server";
 import { linkVerdictsStatement } from "../data/jev_verdict.server";
 import { insertChangeSignalStatement } from "../data/signal.server";
 import { readCoveredPagePairs } from "../data/snapshot.server";
@@ -17,7 +12,6 @@ import type { SiteSweepTarget } from "../data/watch.server";
 import { insertWatches, markWatchPolled, readSiteSweepTargets, readUnwatchedEntities } from "../data/watch.server";
 import { robotsAllows } from "../fetch/robots.server";
 import { normaliseSubject } from "../identity/normalise";
-import { classifyTailPages } from "../identity/tail.server";
 import { takeBrowserScreenshot } from "./browser-budget.server";
 import { computeBreakageEvidence } from "./breakage-evidence";
 import type { CheckPageResult } from "./check-page.server";
@@ -74,26 +68,6 @@ export async function ensureHomePages(now: string): Promise<void> {
         : [{ id: crypto.randomUUID(), entityId: entity.id, url, role: "home" as const, discoveredAt: now }];
     }),
   );
-}
-
-const CLASSIFY_PER_SWEEP = 10;
-
-export async function classifyCompetitorSites(now: string): Promise<number> {
-  await ensureHomePages(now);
-  const competitors = await readCompetitorsToClassify(CLASSIFY_PER_SWEEP);
-  for (const competitor of competitors) {
-    await classifyTailPages(
-      {
-        workspaceId: competitor.workspaceId,
-        entityId: competitor.entityId,
-        name: competitor.name,
-        domain: competitor.domain,
-        homepageUrl: competitor.homepageUrl,
-      },
-      now,
-    );
-  }
-  return competitors.length;
 }
 
 export async function planSiteSweep(now: string): Promise<SiteSweepTarget[]> {

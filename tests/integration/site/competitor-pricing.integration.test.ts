@@ -1,7 +1,8 @@
 import { env } from "cloudflare:test";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { classifyCompetitorSites, planSiteSweep } from "../../../app/lib/site/sweep.server";
+import { classifyCompetitorSites } from "../../../app/lib/site/classify-competitors.server";
+import { planSiteSweep } from "../../../app/lib/site/sweep.server";
 
 const NOW = "2026-10-02T02:00:00Z";
 const USER = "user-comp-pricing";

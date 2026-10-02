@@ -5,10 +5,10 @@ import { withMonitor } from "@sentry/cloudflare";
 
 import { recordSweepRun } from "../../app/lib/data/sweep_run.server";
 import { pingLiveness } from "../../app/lib/liveness-ping.server";
+import { classifyCompetitorSites } from "../../app/lib/site/classify-competitors.server";
 import {
   CHUNK_SIZE,
   checkSitePage,
-  classifyCompetitorSites,
   planSiteSweep,
   publishSiteChange,
   uncoveredItems,
