@@ -64,8 +64,6 @@ describe("alerts, grouped by the day a customer reads them", () => {
   it("keeps a stable order when several times cannot be read", () => {
     const first = { id: "first", at: "garbage" };
     const second = { id: "second", at: "nonsense" };
-    expect(groupByDay([first, second], UTC_NOW, "UTC")).toEqual([
-      { group: "Earlier", items: [first, second] },
-    ]);
+    expect(groupByDay([first, second], UTC_NOW, "UTC")).toEqual([{ group: "Earlier", items: [first, second] }]);
   });
 });

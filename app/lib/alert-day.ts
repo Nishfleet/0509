@@ -26,7 +26,7 @@ export function groupByDay<T extends { at: string }>(
   now: Date,
   timeZone: string,
 ): { group: DayGroup; items: T[] }[] {
-  const sorted = [...items].sort((a, b) => (time(b.at) - time(a.at)) || 0);
+  const sorted = [...items].sort((a, b) => time(b.at) - time(a.at) || 0);
   return DAY_GROUPS.map((group) => ({
     group,
     items: sorted.filter((item) => alertDayGroup(item.at, now, timeZone) === group),
