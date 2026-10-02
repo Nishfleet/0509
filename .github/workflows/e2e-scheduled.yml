@@ -345,7 +345,7 @@ jobs:
             npx wrangler workflows instances list "$1" --date-start "$since" --per-page 100 --json | jq -s -r --arg prefix "$1-" '(add // []) | map(select(.id | startswith($prefix))) | length'
           }
           newest_instances() {
-            npx wrangler workflows instances list "$1" --per-page 3 --json | jq -s -r '(add // []) | if length == 0 then "none ever" else map("\(.id) \(.status)") | join("; ") end'
+            npx wrangler workflows instances list "$1" --per-page 12 --json | jq -s -r '(add // []) | if length == 0 then "none ever" else map("\(.id) \(.status)") | join("; ") end'
           }
           describe_newest() {
             npx wrangler workflows instances describe "$1" latest --json | jq -c '{status, output, failed: [.steps[]? | select(.success == false) | {name, error}]}' | head -c 1200
