@@ -105,6 +105,16 @@ describe("readHomeStandingInputs", () => {
     expect(inputs?.entities.find((entity) => entity.domain === "noname.example")?.name).toBe("noname.example");
   });
 
+  it("reads the same inputs in one trip when the workspace id is already known", async () => {
+    await seedDigest("newest", "2026-09-21T07:00:00.000Z", 1);
+
+    const lookedUp = await readHomeStandingInputs(env.DB, USER);
+    const known = await readHomeStandingInputs(env.DB, USER, WS);
+
+    expect(known).toEqual(lookedUp);
+    expect(known?.entities).toHaveLength(3);
+  });
+
   it("returns null for a user with no workspace", async () => {
     expect(await readHomeStandingInputs(env.DB, "user_nobody")).toBeNull();
   });

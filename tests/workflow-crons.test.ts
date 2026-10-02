@@ -3,6 +3,8 @@ import { describe, expect, it, vi } from "vitest";
 import {
   isWorkflowCron,
   startMissedDailyWorkflows,
+  startMissedOwnSiteCheck,
+  startOwnSiteCheckHour,
   startScheduledWorkflow,
   WORKFLOW_CRONS,
 } from "../workers/workflow-crons";
@@ -56,7 +58,7 @@ describe("startScheduledWorkflow", () => {
   it("starts the own-site-check instance under an id fixed by the hour", async () => {
     const { createBatch, env } = fakeEnv();
     const id = await startScheduledWorkflow(env, "0 * * * *", Date.UTC(2026, 9, 1, 13, 0, 0));
-    expect(id).toBe("own-site-check-2026-10-01T13-00-00-000Z");
+    expect(id).toBe("own-site-check-2026-10-01T13");
     expect(createBatch).toHaveBeenCalledExactlyOnceWith([{ id }]);
   });
 
@@ -88,6 +90,36 @@ describe("startScheduledWorkflow", () => {
       { id: "hiring-sweep-2026-10-02", created: true },
       { id: "feed-sweep-2026-10-02", created: true },
     ]);
+  });
+
+  it("gives the cron tick and the Workflow's own schedule one id per hour, so the second start is a no-op", async () => {
+    const { createBatch, env } = fakeEnv(new Set(["own-site-check-2026-10-02T06"]));
+    const fromCron = await startScheduledWorkflow(env, "0 * * * *", Date.UTC(2026, 9, 2, 6, 0, 23));
+    const fromNative = await startOwnSiteCheckHour(env, Date.UTC(2026, 9, 2, 6, 0, 9));
+    expect(fromCron).toBe("own-site-check-2026-10-02T06");
+    expect(fromNative).toEqual({ id: "own-site-check-2026-10-02T06", created: false });
+    expect(createBatch).toHaveBeenCalledTimes(2);
+  });
+
+  it("still starts the hour from the Workflow's own schedule when the cron tick never ran", async () => {
+    const { env } = fakeEnv();
+    expect(await startOwnSiteCheckHour(env, Date.UTC(2026, 9, 2, 6, 0, 9))).toEqual({
+      id: "own-site-check-2026-10-02T06",
+      created: true,
+    });
+  });
+
+  it("starts the previous hour when its instance is missing, and leaves one that exists alone", async () => {
+    const missing = fakeEnv(new Set(["own-site-check-2026-10-02T05"]));
+    expect(await startMissedOwnSiteCheck(missing.env, Date.UTC(2026, 9, 2, 7, 0, 12))).toEqual({
+      id: "own-site-check-2026-10-02T06",
+      created: true,
+    });
+    const present = fakeEnv(new Set(["own-site-check-2026-10-02T06"]));
+    expect(await startMissedOwnSiteCheck(present.env, Date.UTC(2026, 9, 2, 7, 0, 12))).toEqual({
+      id: "own-site-check-2026-10-02T06",
+      created: false,
+    });
   });
 
   it("recognises only the workflow crons", () => {

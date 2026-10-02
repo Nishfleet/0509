@@ -28,18 +28,38 @@ export function isWorkflowCron(cron: string): cron is WorkflowCron {
 
 type CronEnv = Pick<Env, (typeof WORKFLOW_CRONS)[WorkflowCron]["binding"]>;
 
-async function startInstance(env: CronEnv, cron: WorkflowCron, scheduledTime: number) {
+function entryFor(cron: WorkflowCron) {
   const entry = WORKFLOW_CRONS[cron];
   if (!entry) throw new Error(`No workflow for cron ${cron}`);
-  const { binding, name } = entry;
+  return entry;
+}
+
+function instanceId(cron: WorkflowCron, scheduledTime: number) {
   const instant = new Date(scheduledTime).toISOString();
-  const id = `${name}-${cron === OWN_SITE_CHECK_CRON ? instant.replace(/[:.]/g, "-") : instant.slice(0, 10)}`;
-  const started = await env[binding].createBatch([{ id }]);
+  return `${entryFor(cron).name}-${cron === OWN_SITE_CHECK_CRON ? instant.slice(0, 13) : instant.slice(0, 10)}`;
+}
+
+async function createOnce(workflow: Pick<Env["OWN_SITE_CHECK"], "createBatch">, id: string) {
+  const started = await workflow.createBatch([{ id }]);
   return { id, created: started.length > 0 };
+}
+
+function startInstance(env: CronEnv, cron: WorkflowCron, scheduledTime: number) {
+  return createOnce(env[entryFor(cron).binding], instanceId(cron, scheduledTime));
 }
 
 export async function startScheduledWorkflow(env: CronEnv, cron: WorkflowCron, scheduledTime: number) {
   return (await startInstance(env, cron, scheduledTime)).id;
+}
+
+const HOUR_MS = 3_600_000;
+
+export async function startOwnSiteCheckHour(env: Pick<Env, "OWN_SITE_CHECK">, at: number) {
+  return createOnce(env.OWN_SITE_CHECK, instanceId(OWN_SITE_CHECK_CRON, Math.floor(at / HOUR_MS) * HOUR_MS));
+}
+
+export function startMissedOwnSiteCheck(env: Pick<Env, "OWN_SITE_CHECK">, now: number) {
+  return startOwnSiteCheckHour(env, now - HOUR_MS);
 }
 
 function dailyCrons(): WorkflowCron[] {
@@ -56,4 +76,11 @@ export function startMissedDailyWorkflows(env: CronEnv, now: number) {
     return scheduledTime <= now ? [{ cron, scheduledTime }] : [];
   });
   return Promise.allSettled(due.map(({ cron, scheduledTime }) => startInstance(env, cron, scheduledTime)));
+}
+
+export async function startMissedWorkflows(env: CronEnv, now: number) {
+  return [
+    ...(await startMissedDailyWorkflows(env, now)),
+    ...(await Promise.allSettled([startMissedOwnSiteCheck(env, now)])),
+  ];
 }

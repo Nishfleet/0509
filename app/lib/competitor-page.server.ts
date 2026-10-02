@@ -1,7 +1,7 @@
 import { env } from "cloudflare:workers";
 
 import type { CompetitorEntity } from "./data/entity.server";
-import { readCompetitor } from "./data/entity.server";
+import { readCompetitor, readCompetitorSocials } from "./data/entity.server";
 import type { PeerRow } from "./data/standing.server";
 import { readLatestPeers } from "./data/standing.server";
 import type { SignalCount } from "./data/signal.server";
@@ -30,6 +30,7 @@ export interface CompetitorPage {
   weekCount: number;
   biggestMove: BiggestMoveView | null;
   quiet: string;
+  youtubeUrl: string | null;
   rail: {
     peers: readonly PeerRow[];
     facts: readonly SignalCount[];
@@ -52,17 +53,19 @@ export async function readCompetitorPage(
   if (competitor === null) return null;
   const anchor = historyAnchor(competitor.state, competitor.stateChangedAt, now);
   const weekStart = daysBefore(anchor, 7);
-  const [watch, changes, developments, peers, facts, sources, verdict, scored, weightResult] = await Promise.all([
-    readSiteWatchSummary(workspaceId, entityId),
-    readSiteChangeViews({ workspaceId, entityId, since: daysBefore(anchor, HISTORY_DAYS), limit: HISTORY_LIMIT }),
-    readEntityDevelopments({ workspaceId, entityId, since: daysBefore(now, HISTORY_DAYS), limit: FEED_LIMIT }),
-    readLatestPeers(env.DB, workspaceId),
-    readSignalCounts(workspaceId, entityId, daysBefore(now, FACT_DAYS)),
-    readEntitySources(workspaceId, entityId),
-    readLastStillCompetitor(workspaceId, entityId),
-    readScoredSignals({ workspaceId, entityId, since: weekStart, until: anchor.toISOString() }),
-    env.DB.prepare(ALL_WEIGHTS).all(),
-  ]);
+  const [watch, changes, developments, peers, facts, sources, verdict, scored, weightResult, socials] =
+    await Promise.all([
+      readSiteWatchSummary(workspaceId, entityId),
+      readSiteChangeViews({ workspaceId, entityId, since: daysBefore(anchor, HISTORY_DAYS), limit: HISTORY_LIMIT }),
+      readEntityDevelopments({ workspaceId, entityId, since: daysBefore(now, HISTORY_DAYS), limit: FEED_LIMIT }),
+      readLatestPeers(env.DB, workspaceId),
+      readSignalCounts(workspaceId, entityId, daysBefore(now, FACT_DAYS)),
+      readEntitySources(workspaceId, entityId),
+      readLastStillCompetitor(workspaceId, entityId),
+      readScoredSignals({ workspaceId, entityId, since: weekStart, until: anchor.toISOString() }),
+      env.DB.prepare(ALL_WEIGHTS).all(),
+      readCompetitorSocials(workspaceId, entityId),
+    ]);
   const weights = weightsAsOf(weightRows.parse(weightResult.results), weekStart);
   const move = pickBiggestMove(scored, weights);
   return {
@@ -76,6 +79,7 @@ export async function readCompetitorPage(
       [...new Set(sources.map((row) => row.source.platform))],
       watch.lastPolledAt === null ? null : captureLabel(watch.lastPolledAt),
     ),
+    youtubeUrl: socials?.find((social) => social.platform === "youtube")?.url ?? null,
     rail: { peers, facts, sources, verdict },
   };
 }
