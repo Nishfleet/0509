@@ -15,6 +15,7 @@ import { normaliseSubject } from "../lib/identity/normalise";
 import { screenOnboardingSubject } from "../lib/onboarding-screen.server";
 import { startOnboardingRun } from "../lib/data/onboarding_run.server";
 import { createTimings } from "../lib/server-timing.server";
+import { useTimezoneCookie } from "../lib/use-timezone-cookie";
 
 export function meta() {
   return [{ title: "Your website or social username · Five to Nine" }];
@@ -106,6 +107,7 @@ export async function action({ request }: Route.ActionArgs) {
 }
 
 export default function Page({ loaderData, actionData }: Route.ComponentProps) {
+  useTimezoneCookie();
   return (
     <OnboardingFrame step={1} heading="Your website or social username" hideHeading>
       <p className="mt-3 max-w-prose leading-[1.55] text-ink-soft">

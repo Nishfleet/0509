@@ -1,6 +1,5 @@
 import type { ReactElement, ReactNode } from "react";
 
-import { useTimezoneCookie } from "../lib/use-timezone-cookie";
 import { StepBar } from "./step-bar";
 import { Footer } from "./footer";
 import { ONBOARDING_PAGE } from "./page-heading";
@@ -16,7 +15,6 @@ export function OnboardingFrame({
   hideHeading?: boolean;
   children: ReactNode;
 }): ReactElement {
-  useTimezoneCookie();
   return (
     <div className={ONBOARDING_PAGE}>
       <header>
