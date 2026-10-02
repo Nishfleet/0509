@@ -83,7 +83,10 @@ describe("sharePicture", () => {
       canShare: () => true,
       share: vi.fn(() => Promise.resolve()),
     });
-    vi.stubGlobal("fetch", vi.fn(() => Promise.resolve(okResponse())));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() => Promise.resolve(okResponse())),
+    );
 
     const done = await sharePicture();
 
@@ -97,7 +100,10 @@ describe("sharePicture", () => {
       canShare: () => true,
       share: vi.fn(() => Promise.reject(abortError())),
     });
-    vi.stubGlobal("fetch", vi.fn(() => Promise.resolve(okResponse())));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() => Promise.resolve(okResponse())),
+    );
 
     const done = await sharePicture();
 
@@ -111,7 +117,10 @@ describe("sharePicture", () => {
       canShare: () => true,
       share: vi.fn(() => Promise.reject(notAllowedError())),
     });
-    vi.stubGlobal("fetch", vi.fn(() => Promise.resolve(okResponse())));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() => Promise.resolve(okResponse())),
+    );
 
     const done = await sharePicture();
 
@@ -125,7 +134,10 @@ describe("sharePicture", () => {
 
   it("downloads without sharing when navigator has no canShare", async () => {
     vi.stubGlobal("navigator", {});
-    vi.stubGlobal("fetch", vi.fn(() => Promise.resolve(okResponse())));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() => Promise.resolve(okResponse())),
+    );
 
     const done = await sharePicture();
 
