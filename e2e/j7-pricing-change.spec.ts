@@ -86,7 +86,7 @@ test("J7 a fixture price flip reaches Alerts as a before-and-after mark @own-sig
   if (new URL(page.url()).pathname.startsWith("/onboarding")) await trackFixture(page);
 
   await page.goto("/app/competitors");
-  const listed = page.getByRole("list", { name: "Competitors" }).getByRole("listitem");
+  const listed = page.getByRole("list", { name: "Competitors", exact: true }).getByRole("listitem");
   expect(await listed.count(), "the j7 account holds more competitors than its journey needs").toBeLessThanOrEqual(
     FIXTURE_ACCOUNTS.j7.maxCompetitors,
   );

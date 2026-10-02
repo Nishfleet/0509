@@ -16,7 +16,7 @@ test("every watched brand's page leads with its biggest move or the quiet-week s
 
   await signInWithMagicLink(page, FIXTURE_ACCOUNTS.soak.email, requireInboxToken(), /\/app/);
   await page.goto("/app/competitors");
-  const links = page.getByRole("list", { name: "Competitors" }).getByRole("link");
+  const links = page.getByRole("list", { name: "Competitors", exact: true }).getByRole("link");
   await expect(links.first()).toBeVisible();
   const hrefs = await links.evaluateAll((anchors) => anchors.map((anchor) => anchor.getAttribute("href") ?? ""));
   expect(hrefs.length).toBeGreaterThanOrEqual(4);

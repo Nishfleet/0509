@@ -73,7 +73,7 @@ const PREVIEW_STARTER_PRODUCT = "pdt_preview_starter";
 
 async function addUntilCap(page: Page): Promise<void> {
   const cap = page.getByText(/Your plan watches up to 5 competitors/);
-  const list = page.getByRole("list", { name: "Competitors" });
+  const list = page.getByRole("list", { name: "Competitors", exact: true });
   for (let attempt = 0; attempt < 6; attempt += 1) {
     if (await cap.isVisible()) return;
     const domain = `j13${crypto.randomUUID().replaceAll("-", "").slice(0, 10)}.com`;
