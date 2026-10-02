@@ -1,4 +1,5 @@
-import { describe, expect, it } from "vitest";
+import { CloudflareClient, createTransport, setCurrentClient } from "@sentry/cloudflare";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { sentryOptions } from "../workers/sentry";
 
@@ -6,6 +7,10 @@ type BeforeSend = NonNullable<ReturnType<typeof sentryOptions>["beforeSend"]>;
 type SentryEvent = Parameters<BeforeSend>[0];
 
 const options = sentryOptions({});
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
 
 async function beforeSend(event: SentryEvent): Promise<SentryEvent> {
   const send = options.beforeSend;
@@ -145,9 +150,38 @@ describe("Sentry beforeSend", () => {
     expect(result?.request?.url).toBe("https://0509.io/v/[redacted]");
   });
 
-  it("turns Logs on for console warnings and errors only", () => {
+  it("turns Logs on for console warnings and errors only", async () => {
     expect(options.enableLogs).toBe(true);
-    expect(options.integrations).toHaveLength(1);
+    const sent: string[] = [];
+    vi.spyOn(console, "log").mockImplementation(() => undefined);
+    vi.spyOn(console, "info").mockImplementation(() => undefined);
+    vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const client = new CloudflareClient({
+      ...options,
+      dsn: "https://key@o0.ingest.sentry.io/0",
+      stackParser: () => [],
+      integrations: options.integrations,
+      transport: () =>
+        createTransport({ recordDroppedEvent: () => undefined }, (request) => {
+          sent.push(String(request.body));
+          return Promise.resolve({ statusCode: 200 });
+        }),
+    });
+    setCurrentClient(client);
+    client.init();
+
+    console.log("plain-log-line");
+    console.info("info-line");
+    console.warn("warn-line");
+    console.error("error-line");
+    await client.flush(2000);
+
+    const body = sent.join("\n");
+    expect(body).toContain("warn-line");
+    expect(body).toContain("error-line");
+    expect(body).not.toContain("plain-log-line");
+    expect(body).not.toContain("info-line");
   });
 
   it("scrubs emails, token paths and string attributes from a log line", () => {
