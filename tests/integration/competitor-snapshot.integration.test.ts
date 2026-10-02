@@ -211,7 +211,7 @@ describe("readCompetitorSnapshot against real D1", () => {
     });
     const byKey = new Map(snapshot.sources.map((source) => [source.kind, source]));
     expect(byKey.get("site")?.answered).toBe(true);
-    expect(byKey.get("site")?.name).toBe("Your site checks source");
+    expect(byKey.get("site")?.name).toBe("Website checks");
     expect(byKey.get("ads")?.answered).toBe(false);
     expect(byKey.get("ads")?.name).toBe("Meta ads");
   });

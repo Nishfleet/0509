@@ -121,7 +121,7 @@ describe("the competitor rail", () => {
   it("shows each source's live or degraded state and recorded reason", () => {
     const html = render();
     expect(html).toContain('data-state="degraded"');
-    expect(text(html)).toContain("rate-limited");
+    expect(text(html)).toContain("not updating right now");
     expect(html).toContain('data-state="live"');
   });
 

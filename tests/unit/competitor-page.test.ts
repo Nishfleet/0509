@@ -201,7 +201,7 @@ describe("the competitor page frame", () => {
     ];
     const html = frame({ rail: { ...quiet.rail, sources } });
     expect(html).toContain('data-state="degraded"');
-    expect(html).toContain(LOST_CHANNEL_REASON);
+    expect(html).toContain("finding the channel again");
     expect(html).not.toMatch(/>\s*Website\s*</);
   });
 
