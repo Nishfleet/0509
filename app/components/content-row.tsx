@@ -20,6 +20,7 @@ export function ContentRow({ content }: { content: ContentAlertItem }): ReactEle
       <h3 className={TITLE}>
         <a href={content.url} rel="noopener noreferrer nofollow" target="_blank" className={LINK}>
           {content.title}
+          <span className="sr-only"> (opens in a new tab)</span>
         </a>
       </h3>
       <p className="mt-2 leading-[1.65]">

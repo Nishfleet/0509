@@ -241,3 +241,50 @@ describe("hiring row", () => {
     expect(html).toContain("Zephyrwear is hiring<");
   });
 });
+
+describe("new-tab link a11y", () => {
+  const NEW_TAB_TEXT = " (opens in a new tab)";
+  const TITLE = "Spring pricing update";
+
+  const signalItem = {
+    ...SIGNAL_ITEM,
+    signal: { ...SIGNAL_ITEM.signal, title: TITLE },
+  };
+  const mentionItem = {
+    ...MENTION_ITEM,
+    mention: { ...MENTION_ITEM.mention, title: TITLE },
+  };
+  const hiringItem = {
+    ...HIRING_ITEM,
+    hiring: { ...HIRING_ITEM.hiring, title: TITLE },
+  };
+  const contentItem = {
+    ...CONTENT_ITEM,
+    content: { ...CONTENT_ITEM.content, title: TITLE },
+  };
+
+  function linkTextContent(html: string): string {
+    const match = html.match(/<a\b[^>]*>[\s\S]*?<\/a>/);
+    const inner = match?.[0].slice(match[0].indexOf(">") + 1, match[0].lastIndexOf("</a>")) ?? "";
+    return inner.replace(/<[^>]*>/g, "");
+  }
+
+  function renderItem(item: AlertFeedItem): string {
+    return renderToStaticMarkup(createElement(AlertFeedRow, { item, eager: false }));
+  }
+
+  for (const [kind, item] of [
+    ["signal", signalItem],
+    ["mention", mentionItem],
+    ["hiring", hiringItem],
+    ["content", contentItem],
+  ] as const) {
+    it(`renders the ${kind} link with sr-only new-tab text`, () => {
+      const html = renderItem(item);
+      expect(linkTextContent(html)).toBe(`${TITLE}${NEW_TAB_TEXT}`);
+      expect(html).toContain(`<span class="sr-only">${NEW_TAB_TEXT}</span>`);
+      expect(html).toContain('target="_blank"');
+      expect(html).toContain('rel="noopener noreferrer nofollow"');
+    });
+  }
+});

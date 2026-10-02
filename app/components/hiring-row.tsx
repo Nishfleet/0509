@@ -20,6 +20,7 @@ export function HiringRow({ hiring }: { hiring: HiringAlertItem }): ReactElement
       <h3 className={TITLE}>
         <a href={hiring.url} rel="noopener noreferrer nofollow" target="_blank" className={LINK}>
           {hiring.title}
+          <span className="sr-only"> (opens in a new tab)</span>
         </a>
       </h3>
       <p className="mt-2 leading-[1.65]">
