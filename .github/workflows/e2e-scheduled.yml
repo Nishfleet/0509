@@ -343,6 +343,27 @@ jobs:
             echo "- browser content $u -> $code $(head -c 160 br.tmp | tr '\n' ' ')" >> $out
           done
           gh issue comment 4730 --body-file $out
+      - name: DIAG probe retailers and sitemaps for adidas
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          UA='FiveToNineBot/1.0 (+https://0509.io)'
+          out=probe2.md
+          echo "DIAG retailers and sitemaps (GitHub runner), $(date -u +%FT%TZ)" > $out
+          curl -sS -m 25 -A "$UA" https://www.adidas.com/robots.txt -o robots2.tmp || true
+          echo "- robots Sitemap lines: $(grep -i '^sitemap' robots2.tmp | head -12 | tr '\n' ' ')" >> $out
+          probe() {
+            code=$(curl -sS -m 30 -L -A "$UA" -o body2.tmp -w '%{http_code} %{size_download}' "$1" 2>&1 || true)
+            title=$(grep -o -i '<title[^>]*>[^<]*' body2.tmp 2>/dev/null | head -1 | head -c 70 || true)
+            prices=$(grep -o -E '(£|€|\$)[0-9]+([.,][0-9]{2})?' body2.tmp 2>/dev/null | head -3 | tr '\n' ' ' || true)
+            echo "- GET $1 -> $code ${title} | prices: ${prices}" >> $out
+          }
+          for u in $(grep -i '^sitemap' robots2.tmp | head -4 | awk '{print $2}' | tr -d '\r'); do probe "$u"; done
+          curl -sS -m 25 -A "$UA" https://www.zalando.co.uk/robots.txt -o /dev/null -w '%{http_code}\n' >> /dev/null || true
+          for u in https://www.zalando.co.uk/adidas/ https://www.zalando.co.uk/adidas-originals-trainers/ https://www.footlocker.co.uk/en/category/brands/adidas.html https://www.jdsports.co.uk/brand/adidas/ https://www.jdsports.co.uk/men/mens-footwear/brand/adidas/ https://www.asos.com/adidas/cat/?cid=4766 https://www.sportsdirect.com/adidas https://www.zalando.de/adidas/ https://www.amazon.com/stores/adidas/page/D8D3EAF0-28F9-4B9A-8E9D-9F2B5B6BE0D1; do probe "$u"; done
+          gh issue comment 4730 --body-file $out
       - name: Post the day's soak numbers on the issue
         env:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
