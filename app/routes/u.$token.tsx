@@ -1,5 +1,5 @@
 import type { Route } from "./+types/u.$token";
-import { Form, isRouteErrorResponse } from "react-router";
+import { Form, isRouteErrorResponse, useNavigation } from "react-router";
 
 import { ErrorPage } from "../components/error-page";
 import { Footer } from "../components/footer";
@@ -55,6 +55,8 @@ export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
 }
 
 export default function Unsubscribe({ actionData }: Route.ComponentProps) {
+  const navigation = useNavigation();
+  const unsubscribing = navigation.state !== "idle";
   if (actionData?.unsubscribed) {
     return (
       <main className="mx-auto max-w-xl px-4 py-16">
@@ -83,8 +85,8 @@ export default function Unsubscribe({ actionData }: Route.ComponentProps) {
         arrive when you ask for one.
       </p>
       <Form method="post" className="mt-8">
-        <Button type="submit" size="lg">
-          Unsubscribe
+        <Button type="submit" size="lg" disabled={unsubscribing}>
+          {unsubscribing ? "Unsubscribing…" : "Unsubscribe"}
         </Button>
       </Form>
       <Footer />

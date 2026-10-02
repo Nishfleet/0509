@@ -1,6 +1,6 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { createRoutesStub } from "react-router";
+import { createRoutesStub, UNSAFE_DataRouterNavigationContext, type Navigation } from "react-router";
 import { describe, expect, it, vi } from "vitest";
 
 const holder = vi.hoisted(() => ({ known: false, outcome: "invalid_token" as string }));
@@ -43,6 +43,28 @@ function renderConfirm(unsubscribed: boolean): string {
       },
     }),
   );
+}
+
+function renderFormAt(navigation: { state: Navigation["state"] }): string {
+  const Stub = createRoutesStub([
+    {
+      id: "routes/u.$token",
+      path: "/u/:token",
+      Component: () =>
+        createElement(
+          UNSAFE_DataRouterNavigationContext.Provider,
+          { value: { navigation } },
+          createElement(Unsubscribe, { actionData: undefined } as never),
+        ),
+    },
+  ]);
+  return renderToStaticMarkup(createElement(Stub, { initialEntries: ["/u/t"] }));
+}
+
+function submitButton(html: string): string {
+  const match = html.match(/<button[^>]*type="submit"[\s\S]*?<\/button>/);
+  if (match === null) throw new Error(`no submit button in ${html}`);
+  return match[0];
 }
 
 describe("/u/:token (0509#5761)", () => {
@@ -122,5 +144,27 @@ describe("/u/:token (0509#5761)", () => {
     expect(link).toContain("min-h-11");
     expect(link).toContain("inline-flex");
     expect(link).toContain("items-center");
+  });
+
+  describe("the Unsubscribe button reports its pending state (0509#6641)", () => {
+    it("is enabled and reads Unsubscribe while nothing is in flight", () => {
+      const html = submitButton(renderFormAt({ state: "idle" }));
+      expect(html).toContain(">Unsubscribe<");
+      expect(html).not.toContain('disabled=""');
+      expect(html).not.toContain("Unsubscribing…");
+    });
+
+    it("is disabled and reads Unsubscribing… while the POST is submitting", () => {
+      const html = submitButton(renderFormAt({ state: "submitting" }));
+      expect(html).toContain('disabled=""');
+      expect(html).toContain("Unsubscribing…");
+      expect(html).not.toContain(">Unsubscribe<");
+    });
+
+    it("stays disabled while the action and loader settle after submitting", () => {
+      const html = submitButton(renderFormAt({ state: "loading" }));
+      expect(html).toContain('disabled=""');
+      expect(html).toContain("Unsubscribing…");
+    });
   });
 });
