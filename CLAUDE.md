@@ -94,6 +94,8 @@ tsconfig.json` is a no-op here — `tsconfig.json` is `"files": []` plus two
 project references, so without `-b` it checks zero files and exits 0. Never
 cite it as type evidence.
 
+Signing in locally needs the `--var` overrides in `.agents/skills/verify/SKILL.md` (`BETTER_AUTH_URL` is pinned to production in `wrangler.jsonc`, so the emailed link would point at 0509.io).
+
 **`npm run e2e` has two modes and the environment picks.** With
 `PLAYWRIGHT_TEST_BASE_URL` unset, `playwright.config.ts` starts `wrangler dev`
 itself and tests the built Worker — that is what `preview-assert` runs on every
@@ -101,7 +103,7 @@ PR. With it set, there is no local server and the suite runs against that URL �
 that is what the `deployment_status` job runs against production. Same
 assertions both times.
 
-**Run it before the PR opens.** A change under `app/`, `workers/` or `e2e/`
+**Run it before the PR opens.** A diff that touches only `docs/` or `.agents/` runs `npx prettier --check` on the changed files and nothing else. A change under `app/`, `workers/` or `e2e/`
 runs the specs that cover it locally first, in preview mode, by file:
 `npm run e2e -- e2e/<name>.spec.ts` (Playwright's own file filter). Nothing
 is pasted into the PR body: `preview-assert` runs the whole suite at the PR
@@ -136,7 +138,8 @@ they name were plans and many never existed. The real layout is below.
   `competitor/`, `feeds/`, `hiring/`, `mentions/`, `standing/`, `agent/` for the
   API and MCP, `data/` for the table writers).
 - `app/lib/*.ts` — shared pure logic.
-- `app/lib/public-routes.ts` — the public paths, sitemap, robots.txt and llms.txt.
+- `app/lib/ads/` is retained code for a dropped feature (J10, #3974); do not extend it.
+- `app/lib/public-routes.ts` — the sitemap paths, robots.txt and llms.txt.
 - `workers/app.ts` — the Worker entry and the `scheduled` handler.
 - `workers/workflows/` — the Workflows (site, feed, hiring and mentions sweeps,
   discovery, snapshot backup, standing rollover, account delete).
@@ -217,7 +220,7 @@ Service daily quota (Nish 2026-09-28).
 - **Jev decides every typed decision** (`docs/REBUILD-JEV.md`, D1–D9). Code never guesses with regexes where a judgment is needed; Jev internals are never shown to customers.
 - **Cost** (`docs/REBUILD-COST.md`): writes batched, blobs in R2, counters in KV/DO, Browser Rendering capped at 10 concurrent sessions as a config value. Raising the cap needs Nish's yes with the cost in the PR, and is never left to degrade customers.
 - **Guardrails** (`docs/REBUILD-GUARDRAILS.md`): brands and creators only, never private individuals; disposable identities for collection; paid data providers only with Nish's yes.
-- **The site is gated until the audit passes.** `app/lib/public-routes.ts` lists the public paths; `/login`, `/app`, `/onboarding`, `/api/auth` sit behind Cloudflare Access (Nish by email, agents by the service token in `~/.config/cloudflare/access-0509-agents.env`). A bare `curl` returning 302 to `cloudflareaccess.com` is the gate, not a bug. `0509.in` is a zone Redirect Rule, never code.
+- **The site is gated until the audit passes.** Which paths bypass Access is set in Cloudflare, not in code; a route's feature-map row says whether it is public (`/u/:token` is). `/login`, `/app`, `/onboarding`, `/api/auth` sit behind Cloudflare Access (Nish by email, agents by the service token in `~/.config/cloudflare/access-0509-agents.env`). A bare `curl` returning 302 to `cloudflareaccess.com` is the gate, not a bug. `0509.in` is a zone Redirect Rule, never code.
 - **Two orchestrator sessions work this repo.** Lanes are posted on #3842; before touching a file in the other lane, post one line there.
 
 ## Docs
