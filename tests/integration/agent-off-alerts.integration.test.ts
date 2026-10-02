@@ -13,11 +13,7 @@ const ON_CHANGE_ID = "sig_agent_off_alerts_on";
 const OFF_CHANGE_ID = "sig_agent_off_alerts_off";
 const CHANGE_SEEN_AT = new Date().toISOString();
 
-async function seedCompetitorChange(input: {
-  entityId: string;
-  domain: string;
-  signalId: string;
-}): Promise<void> {
+async function seedCompetitorChange(input: { entityId: string; domain: string; signalId: string }): Promise<void> {
   const watchId = `watch_${input.entityId}`;
   const pageId = `page_${input.entityId}`;
   const beforeSnapshotId = `snap_${input.entityId}_before`;
