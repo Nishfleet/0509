@@ -17,6 +17,20 @@ describe("clientIp", () => {
   it("returns null when no cf-connecting-ip header arrived", () => {
     expect(clientIp(new Request("https://0509.io/"))).toBeNull();
   });
+
+  it("returns the raw header value when it is empty or whitespace", () => {
+    // The edge always sends one real IP, so this only pins the passthrough: an
+    // empty value is not turned into null, and its bucket is its own.
+    expect(clientIp(new Request("https://0509.io/", { headers: { "cf-connecting-ip": "" } }))).toBe("");
+    expect(clientIp(new Request("https://0509.io/", { headers: { "cf-connecting-ip": "   " } }))).toBe("");
+  });
+
+  it("returns a multi-value header verbatim, without parsing", () => {
+    const request = new Request("https://0509.io/", {
+      headers: { "cf-connecting-ip": "203.0.113.9, 10.0.0.1" },
+    });
+    expect(clientIp(request)).toBe("203.0.113.9, 10.0.0.1");
+  });
 });
 
 describe("ipBucketKey", () => {
@@ -28,21 +42,20 @@ describe("ipBucketKey", () => {
     expect(ipBucketKey(null)).toBe("ip:absent");
   });
 
-  // #6574 case 5 asks that ipBucketKey(null) differ from ipBucketKey("absent").
-  // That cannot hold next to case 4: null is pinned to the literal "ip:absent",
-  // so the string value "absent" maps to that same key (asserted below) and the
-  // two can never differ. The satisfiable reading, and the one the issue's
-  // Problem names ("instead of producing a key like `ip:null`"), is that a
-  // missing IP never becomes a value-shaped key. The contradiction is reported
-  // in the PR body.
   it("keeps the missing-IP bucket out of value-shaped and identified buckets", () => {
+    // #6574 case 5 asks that ipBucketKey(null) differ from ipBucketKey("absent"),
+    // but case 4 pins null to the literal "ip:absent", so the string "absent"
+    // maps to that same key and the two can never differ. The satisfiable
+    // reading, and the one the Problem names ("instead of producing a key like
+    // `ip:null`"), is that a missing IP never becomes a value-shaped key. The
+    // contradiction is reported in the PR body and issue #6581.
+    expect(ipBucketKey(null)).toBe("ip:absent");
     expect(ipBucketKey(null)).not.toBe(ipBucketKey("null"));
     expect(ipBucketKey(null)).not.toBe(ipBucketKey("203.0.113.9"));
   });
 
-  it("puts the literal string 'absent' in the same bucket as a missing IP", () => {
-    // Characterises the collision #6574 case 5 calls impossible, so the finding
-    // stays visible in code rather than only in the issue thread.
-    expect(ipBucketKey("absent")).toBe(ipBucketKey(null));
+  it("gives an empty header its own bucket, not the missing-IP bucket", () => {
+    expect(ipBucketKey("")).toBe("ip:");
+    expect(ipBucketKey("")).not.toBe(ipBucketKey(null));
   });
 });
