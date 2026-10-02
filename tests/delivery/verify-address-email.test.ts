@@ -31,7 +31,8 @@ describe("verifyAddressEmail (0509#6554)", () => {
 
   it("puts the link behind the confirm button", () => {
     const { html } = verifyAddressEmail({ email: EMAIL, url: LINK });
-    expect(html).toContain('href="https://0509.io/v?t=1&amp;u=2"');
-    expect(html).toContain("Confirm this address");
+    const anchor = html.slice(html.indexOf("<a "), html.indexOf("</a>") + 4);
+    expect(anchor).toContain('href="https://0509.io/v?t=1&amp;u=2"');
+    expect(anchor).toContain("Confirm this address");
   });
 });
