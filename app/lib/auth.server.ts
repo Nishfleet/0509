@@ -121,6 +121,7 @@ function authPlugins(env: AuthEnv, options?: { captcha?: boolean }) {
     apiKey({
       defaultPrefix: API_KEY_PREFIX,
       maximumNameLength: 60,
+      enableMetadata: true,
       rateLimit: { enabled: true, timeWindow: 60_000, maxRequests: 120 },
     }),
   ];

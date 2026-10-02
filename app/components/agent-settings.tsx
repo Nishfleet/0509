@@ -170,6 +170,14 @@ function NewKeyNotice({ newKey }: { newKey: string }) {
   );
 }
 
+function DuplicateKeyNotice() {
+  return (
+    <p role="status" className="mt-3 border-[1.5px] border-ink p-4 leading-[1.55]">
+      That key was already created. Its secret is only shown once; delete it and make a new one if you didn't copy it.
+    </p>
+  );
+}
+
 function KeyRow({ apiKey }: { apiKey: AgentKey }) {
   const navigation = useNavigation();
   const deleting =
@@ -199,12 +207,13 @@ function KeyRow({ apiKey }: { apiKey: AgentKey }) {
   );
 }
 
-function CreateKeyForm() {
+function CreateKeyForm({ submission }: { submission: string }) {
   const navigation = useNavigation();
   const making = navigation.state !== "idle" && navigation.formData?.get("intent") === "create-key";
   return (
     <Form method="post" className="mt-6">
       <input type="hidden" name="intent" value="create-key" />
+      <input type="hidden" name="submission" value={submission} />
       <label htmlFor="key-name" className={BLOCK_HEADING}>
         Name
       </label>
@@ -218,13 +227,24 @@ function CreateKeyForm() {
   );
 }
 
-export function AgentKeys({ keys, newKey }: { keys: AgentKey[]; newKey: string | null }) {
+export function AgentKeys({
+  keys,
+  newKey,
+  duplicate,
+  submission,
+}: {
+  keys: AgentKey[];
+  newKey: string | null;
+  duplicate: boolean;
+  submission: string;
+}) {
   return (
     <section aria-labelledby="agents-keys" className={BLOCK}>
       <h2 id="agents-keys" className={BLOCK_HEADING}>
         API keys
       </h2>
       {newKey === null ? null : <NewKeyNotice newKey={newKey} />}
+      {duplicate ? <DuplicateKeyNotice /> : null}
       {keys.length === 0 ? (
         <p className="mt-2 leading-[1.55] text-ink-soft">
           No keys yet. A key lets your own code read the same things an app can.
@@ -236,7 +256,7 @@ export function AgentKeys({ keys, newKey }: { keys: AgentKey[]; newKey: string |
           ))}
         </ul>
       )}
-      <CreateKeyForm />
+      <CreateKeyForm submission={submission} />
     </section>
   );
 }
