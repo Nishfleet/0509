@@ -126,10 +126,12 @@ function endpointFrom(path: string, item: JsonRecord): EndpointView[] {
         return view === null ? [] : [view];
       }),
     ],
-    responses: Object.entries(isRecord(operation.responses) ? operation.responses : {}).flatMap(([status, response]) => {
-      const view = responseView(status, response);
-      return view === null ? [] : [view];
-    }),
+    responses: Object.entries(isRecord(operation.responses) ? operation.responses : {}).flatMap(
+      ([status, response]) => {
+        const view = responseView(status, response);
+        return view === null ? [] : [view];
+      },
+    ),
   }));
 }
 

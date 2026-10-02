@@ -114,7 +114,9 @@ describe("the API reference page", () => {
           post: { summary: "write", responses: { "200": { description: "created" } } },
         },
       },
-      components: { securitySchemes: { apiKey: { type: "http", scheme: "bearer", description: "An API key from Settings" } } },
+      components: {
+        securitySchemes: { apiKey: { type: "http", scheme: "bearer", description: "An API key from Settings" } },
+      },
     });
     expect(html).toContain('id="get-api-v1-brief"');
     expect(html).toContain('id="post-api-v1-brief"');
