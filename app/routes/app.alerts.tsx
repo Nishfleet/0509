@@ -20,11 +20,17 @@ export function meta() {
 
 const WHEN_CLASS = "mt-2 block font-mono text-meta text-ink-soft uppercase";
 
+async function readLatestBrief(userId: string) {
+  const workspaceId = await readWorkspaceIdForOwner(userId);
+  return workspaceId === null ? undefined : (await listBriefs(env.DB, workspaceId))[0];
+}
+
 export async function loader({ request }: Route.LoaderArgs) {
   const session = await requireSession(request);
-  const page = await loadAlertsPage(session.user.id, parseAlertChip(new URL(request.url).searchParams.get("kind")));
-  const workspaceId = await readWorkspaceIdForOwner(session.user.id);
-  const latest = workspaceId === null ? undefined : (await listBriefs(env.DB, workspaceId))[0];
+  const [page, latest] = await Promise.all([
+    loadAlertsPage(session.user.id, parseAlertChip(new URL(request.url).searchParams.get("kind"))),
+    readLatestBrief(session.user.id),
+  ]);
   const failedBrief = latest?.status === "failed" ? { id: latest.id } : null;
   return { ...page, failedBrief };
 }

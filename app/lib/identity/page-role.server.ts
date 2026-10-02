@@ -5,6 +5,23 @@ import { readPageHashes, upsertJudgedPages, type JudgedPage } from "../data/page
 import { askChoice, type ChoiceQuestion } from "../jev/client.server";
 import { sha256Hex } from "../sha256";
 
+const NAV_PAGES_JUDGED = 40;
+
+const PRICING_LOOKING = /pric|plans?\b|packages?\b|subscri|buy|shop|store|catalog/i;
+
+function pathOf(url: string): string {
+  try {
+    return new URL(url).pathname;
+  } catch {
+    return url;
+  }
+}
+
+function pricingLookingFirst(pages: readonly NavPage[]): NavPage[] {
+  const looks = (page: NavPage) => PRICING_LOOKING.test(`${pathOf(page.url)} ${page.title}`);
+  return [...pages.filter(looks), ...pages.filter((page) => !looks(page))];
+}
+
 export interface NavPage {
   url: string;
   title: string;
@@ -48,7 +65,11 @@ export async function classifyNavPages({
   now,
 }: ClassifyNavPagesInput): Promise<readonly JudgedPage[]> {
   const hashes = await readPageHashes(entity.id);
-  const targets = await Promise.all(pages.map(async (page) => ({ page, hash: await pageHash(page) })));
+  const targets = await Promise.all(
+    pricingLookingFirst(pages)
+      .slice(0, NAV_PAGES_JUDGED)
+      .map(async (page) => ({ page, hash: await pageHash(page) })),
+  );
   const stale = targets.filter((target) => hashes.get(target.page.url) !== target.hash);
   if (stale.length === 0) return [];
 
