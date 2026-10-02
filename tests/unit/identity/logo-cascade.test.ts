@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { logoCandidateUrls } from "../../../app/lib/identity/logo-cascade";
+import { logoCandidatesFor, logoCandidateUrls } from "../../../app/lib/identity/logo-cascade";
 
 /**
  * The cascade is a pure ordered list; the guarded fetch lives in storeLogo.
@@ -43,5 +43,19 @@ describe("logoCandidateUrls", () => {
         registrableDomain: "gymshark.com",
       }),
     ).toEqual([duckUrl]);
+  });
+});
+
+describe("logoCandidatesFor", () => {
+  it("drops the share image for a website, where it is a banner and not a logo", () => {
+    expect(logoCandidateUrls(logoCandidatesFor("domain", candidates))).toEqual([
+      "https://a.test/logo.png",
+      "https://a.test/apple.png",
+      duckUrl,
+    ]);
+  });
+
+  it("keeps the share image for a profile, where it is the avatar", () => {
+    expect(logoCandidatesFor("profile", candidates)).toEqual(candidates);
   });
 });
