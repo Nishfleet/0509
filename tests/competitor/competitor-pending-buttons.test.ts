@@ -11,6 +11,12 @@ import { CompetitorYoutube } from "../../app/components/competitor-youtube";
 // Both competitor forms post to the same route, so the pending state has to be
 // scoped to the form that owns the in-flight intent. The harness stands in for
 // the router's own navigation so each state is rendered for real.
+//
+// The router keeps the submission's formData from "submitting" through the
+// "loading" that follows it, and drops it only when the navigation returns to
+// "idle" (getSubmittingNavigation/getLoadingNavigation in
+// node_modules/react-router/dist/development/lib/router/router.js), so the
+// harness keeps formData for both states that carry a submission.
 const harness = vi.hoisted(() => ({
   state: "idle" as Navigation["state"],
   intent: null as string | null,
@@ -127,6 +133,13 @@ describe("the competitor address forms report their own pending state", () => {
     harness.intent = "site";
     expect(isDisabled(openTag(render(SITE)))).toBe(true);
     expect(isDisabled(openTag(render(YOUTUBE)))).toBe(false);
+  });
+
+  it("keeps the channel button disabled while the action and loader settle", () => {
+    harness.state = "loading";
+    harness.intent = "youtube";
+    expect(isDisabled(openTag(render(YOUTUBE)))).toBe(true);
+    expect(isDisabled(openTag(render(SITE)))).toBe(false);
   });
 
   it("leaves both buttons alone while a revalidation runs with no form in flight", () => {
