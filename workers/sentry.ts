@@ -1,3 +1,4 @@
+import { consoleLoggingIntegration } from "@sentry/cloudflare";
 import type { CloudflareOptions, ErrorEvent } from "@sentry/cloudflare";
 
 type TransactionEvent = Parameters<NonNullable<CloudflareOptions["beforeSendTransaction"]>>[0];
@@ -8,6 +9,8 @@ const REDACTED = "[redacted]";
 
 export const sentryOptions = (env: SentryEnv): CloudflareOptions => ({
   dsn: env.SENTRY_DSN,
+  enableLogs: true,
+  integrations: [consoleLoggingIntegration()],
   sendDefaultPii: false,
   beforeBreadcrumb: () => null,
   beforeSend: scrubEvent,
