@@ -188,9 +188,9 @@ async function isLive(domain: string): Promise<boolean> {
 
 async function cachedLive(domain: string): Promise<boolean> {
   const key = `discovery:live:${domain}`;
-  if ((await env.IDENTITY_CACHE.get(key)) === "1") return true;
+  if ((await env.IDENTITY_CACHE.get(key).catch(() => null)) === "1") return true;
   const live = await isLive(domain);
-  if (live) await env.IDENTITY_CACHE.put(key, "1", { expirationTtl: PROPOSALS_TTL_SECONDS });
+  if (live) await env.IDENTITY_CACHE.put(key, "1", { expirationTtl: PROPOSALS_TTL_SECONDS }).catch(() => undefined);
   return live;
 }
 
