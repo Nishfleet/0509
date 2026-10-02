@@ -78,7 +78,7 @@ describe("signedHeaders with a key", () => {
     const log = vi.spyOn(console, "error").mockImplementation(() => undefined);
     await signedHeaders(URL_UNDER_TEST, { "user-agent": CRAWLER_USER_AGENT }, NOW);
     expect(log.mock.calls.flat().join(" ")).not.toContain("SECRET-D-VALUE");
-    expect(log).toHaveBeenCalledWith(JSON.stringify({ event: "web_bot_auth.key_unreadable" }));
+    expect(log).toHaveBeenCalledWith(JSON.stringify({ event: "web_bot_auth.key_unreadable", kind: "json" }));
   });
 
   it("signs each request with a fresh nonce", async () => {

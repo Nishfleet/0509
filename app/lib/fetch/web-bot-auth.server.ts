@@ -28,20 +28,26 @@ interface SignRequest {
 
 let memo: { raw: string; key: SigningKey | null; signer: Promise<WebBotSigner> | null } | null = null;
 
+function unreadable(kind: "json" | "shape"): null {
+  console.error(JSON.stringify({ event: "web_bot_auth.key_unreadable", kind }));
+  return null;
+}
+
 function parseKey(raw: string): SigningKey | null {
+  let json: unknown;
   try {
-    const parsed = signingKey.safeParse(JSON.parse(raw));
-    return parsed.success ? parsed.data : null;
-  } catch {
-    return null;
+    json = JSON.parse(raw);
+  } catch (error) {
+    return unreadable(error instanceof SyntaxError ? "json" : "shape");
   }
+  const parsed = signingKey.safeParse(json);
+  return parsed.success ? parsed.data : unreadable("shape");
 }
 
 export function readSigningKey(raw: unknown): SigningKey | null {
   if (typeof raw !== "string") return null;
   if (memo?.raw === raw) return memo.key;
   const key = parseKey(raw);
-  if (key === null) console.error(JSON.stringify({ event: "web_bot_auth.key_unreadable" }));
   memo = { raw, key, signer: null };
   return key;
 }
