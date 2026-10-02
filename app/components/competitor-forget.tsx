@@ -1,10 +1,12 @@
-import { Form } from "react-router";
+import { Form, useNavigation } from "react-router";
 
 import { BLOCK_HEADING } from "./page-heading";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 
 export function CompetitorForget({ name, error }: { name: string; error: string | null }) {
+  const navigation = useNavigation();
+  const working = navigation.state !== "idle" && navigation.formData?.get("intent") === "forget";
   return (
     <section aria-labelledby="forget-competitor" className="border-t border-line pt-4">
       <h2 id="forget-competitor" className={BLOCK_HEADING}>
@@ -33,8 +35,8 @@ export function CompetitorForget({ name, error }: { name: string; error: string 
             {error}
           </p>
         )}
-        <Button type="submit" variant="secondary" size="lg" className="self-start border-red">
-          Remove and forget {name}
+        <Button type="submit" variant="secondary" size="lg" className="self-start border-red" disabled={working}>
+          {working ? "Removing…" : `Remove and forget ${name}`}
         </Button>
       </Form>
     </section>
