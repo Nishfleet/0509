@@ -30,17 +30,23 @@ function scrubLog(log: SentryLog): SentryLog {
   };
 }
 
-function scrubLogValue(value: unknown, depth = 0, seen?: WeakSet<object>): unknown {
+interface Walk {
+  containers: WeakSet<object>;
+  visited: number;
+}
+
+function scrubLogValue(value: unknown, depth = 0, walk?: Walk): unknown {
   if (typeof value === "string") return scrubText(value);
-  if (isTraversable(value)) return scrubContainer(value, depth, seen ?? new WeakSet());
+  if (isTraversable(value)) return scrubContainer(value, depth, walk ?? { containers: new WeakSet(), visited: 0 });
   return value;
 }
-function scrubContainer(value: object, depth: number, seen: WeakSet<object>): unknown {
-  if (depth >= DEPTH_CAP || seen.size >= SEEN_CAP || seen.has(value)) return REDACTED;
-  seen.add(value);
-  if (Array.isArray(value)) return value.map((entry) => scrubLogValue(entry, depth + 1, seen));
+function scrubContainer(value: object, depth: number, walk: Walk): unknown {
+  if (depth >= DEPTH_CAP || walk.visited >= SEEN_CAP || walk.containers.has(value)) return REDACTED;
+  walk.visited += 1;
+  walk.containers.add(value);
+  if (Array.isArray(value)) return value.map((entry) => scrubLogValue(entry, depth + 1, walk));
   if (isOpaqueObject(value)) return value;
-  return Object.fromEntries(Object.entries(value).map(([key, entry]) => [key, scrubLogValue(entry, depth + 1, seen)]));
+  return Object.fromEntries(Object.entries(value).map(([key, entry]) => [key, scrubLogValue(entry, depth + 1, walk)]));
 }
 
 function isTraversable(value: unknown): value is object {
