@@ -8,6 +8,7 @@ import {
   AgentKeys,
   ConnectedApps,
   ConnectDetails,
+  COPY_DEADLINE_MS,
   CopyFailureNote,
   CopyKey,
   copyKeyLabel,
@@ -382,6 +383,35 @@ describe("copying a new API key", () => {
     expect(await settledUnhandled()).toEqual([]);
   });
 
+  it("reports failed instead of hanging when the browser never settles the write", async () => {
+    vi.useFakeTimers();
+    try {
+      stubClipboard(() => new Promise<void>(() => undefined));
+
+      const outcome = copyToClipboard(NEW_KEY, COPY_DEADLINE_MS);
+      await vi.advanceTimersByTimeAsync(COPY_DEADLINE_MS);
+
+      await expect(outcome).resolves.toBe("failed");
+    } finally {
+      vi.useRealTimers();
+    }
+    expect(await settledUnhandled()).toEqual([]);
+  });
+
+  it("still reports copied when the write resolves before the deadline", async () => {
+    vi.useFakeTimers();
+    try {
+      stubClipboard(() => Promise.resolve());
+
+      const outcome = copyToClipboard(NEW_KEY, COPY_DEADLINE_MS);
+      await vi.advanceTimersByTimeAsync(COPY_DEADLINE_MS - 1);
+
+      await expect(outcome).resolves.toBe("copied");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("reads Copied on the button once the write resolved, and keeps its resting label otherwise", () => {
     expect(copyKeyLabel("copied")).toBe("Copied");
     expect(copyKeyLabel("idle")).toBe("Copy key");
@@ -477,29 +507,38 @@ function stubCopyClick(outcome: "resolves" | "rejects"): void {
   );
 }
 
-async function clickAndRenderCopyKey(): Promise<string> {
-  const { CopyKey: ClickedCopyKey } = await import("../../app/components/agent-settings");
-  renderToStaticMarkup(createElement(ClickedCopyKey, { value: NEW_KEY }));
+async function clickAndRender(element: () => Promise<ReactElement>): Promise<string> {
+  const Component = await element();
+  renderToStaticMarkup(Component);
   if (clicked.onClick === null) {
     throw new Error("the copy button rendered no onClick");
   }
   clicked.onClick();
   expect(await settledUnhandled()).toEqual([]);
-  return renderToStaticMarkup(createElement(ClickedCopyKey, { value: NEW_KEY }));
+  return renderToStaticMarkup(Component);
 }
 
 describe("the copy button wires a refused write to the failure sentence", () => {
   it("shows the resting label and the failure sentence after a refused write", async () => {
     stubCopyClick("rejects");
-    const html = await clickAndRenderCopyKey();
+    const { CopyKey: ClickedCopyKey } = await import("../../app/components/agent-settings");
+    const html = await clickAndRender(async () => createElement(ClickedCopyKey, { value: NEW_KEY }));
     expect(html).toContain(copyKeyLabel("failed"));
     expect(html).toContain("Copy failed. Select the key above and copy it by hand.");
   });
 
   it("shows Copied and no failure sentence after a write that resolves", async () => {
     stubCopyClick("resolves");
-    const html = await clickAndRenderCopyKey();
+    const { CopyKey: ClickedCopyKey } = await import("../../app/components/agent-settings");
+    const html = await clickAndRender(async () => createElement(ClickedCopyKey, { value: NEW_KEY }));
     expect(html).toContain("Copied");
     expect(html).not.toContain("Copy failed");
+  });
+
+  it("names the connect field when its own Copy write is refused", async () => {
+    stubCopyClick("rejects");
+    const { ConnectDetails: ClickedConnect } = await import("../../app/components/agent-settings");
+    const html = await clickAndRender(async () => createElement(ClickedConnect, { mcpUrl: MCP_URL, origin: ORIGIN }));
+    expect(html).toContain("Copy failed. Select the connector address and copy it by hand.");
   });
 });
