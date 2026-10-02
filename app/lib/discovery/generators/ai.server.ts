@@ -12,7 +12,8 @@ export const MODEL = "@cf/meta/llama-3.3-70b-instruct-fp8-fast";
 
 const MAX_PROPOSALS = 10;
 
-export const MAX_TOKENS = 1_500;
+const MAX_TOKENS = 1_500;
+const TEMPERATURE = 0.2;
 
 const DOMAIN_TIMEOUT_MS = 5_000;
 
@@ -30,7 +31,7 @@ const EXCERPT = "Proposed by a language model reading the brand's own site; not 
 
 const REASON_MAX = 160;
 
-export const RESPONSE_SCHEMA = {
+const RESPONSE_SCHEMA = {
   type: "object",
   properties: {
     competitors: {
@@ -96,6 +97,12 @@ async function siteTextOf(subject: Subject, fetchText: FetchText): Promise<SiteT
   return readSiteText(page.body.slice(0, HTML_LIMIT));
 }
 
+export const REQUEST_PARAMS = {
+  max_tokens: MAX_TOKENS,
+  temperature: TEMPERATURE,
+  response_format: { type: "json_schema", json_schema: RESPONSE_SCHEMA },
+} as const;
+
 export function messagesFor(subject: Subject, site: SiteText): { role: "system" | "user"; content: string }[] {
   return [
     {
@@ -130,8 +137,7 @@ async function propose(subject: Subject, site: SiteText): Promise<Proposal[]> {
     MODEL,
     {
       messages: messagesFor(subject, site),
-      max_tokens: MAX_TOKENS,
-      response_format: { type: "json_schema", json_schema: RESPONSE_SCHEMA },
+      ...REQUEST_PARAMS,
     },
     { gateway: { id: GATEWAY_ID }, signal: AbortSignal.timeout(AI_TIMEOUT_MS) },
   );
