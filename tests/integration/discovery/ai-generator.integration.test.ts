@@ -55,11 +55,12 @@ describe("aiGenerator", () => {
     ]);
     const [model, input, options] = run.mock.calls[0] as [
       string,
-      { messages: { content: string }[]; response_format: { type: string } },
+      { messages: { content: string }[]; response_format: { type: string }; max_tokens: number },
       unknown,
     ];
     expect(model).toBe("@cf/meta/llama-3.3-70b-instruct-fp8-fast");
     expect(input.response_format.type).toBe("json_schema");
+    expect(input.max_tokens).toBeGreaterThanOrEqual(1_000);
     expect(input.messages[1]?.content).toContain("Gymshark | Gymwear");
     expect(input.messages[1]?.content).toContain("Fitness apparel and accessories");
     expect(options).toMatchObject({ gateway: { id: "default" } });
@@ -75,6 +76,13 @@ describe("aiGenerator", () => {
     liveHosts("realco.com");
     const candidates = await aiGenerator(SUBJECT, home());
     expect(candidates.map((candidate) => candidate.name)).toEqual(["Real Co"]);
+  });
+
+  it("keeps a real brand whose site is slow to answer", async () => {
+    proposes({ competitors: [{ name: "Slow Co", domain: "slowco.com" }] });
+    vi.spyOn(globalThis, "fetch").mockRejectedValue(new DOMException("timed out", "TimeoutError"));
+    const candidates = await aiGenerator(SUBJECT, home());
+    expect(candidates.map((candidate) => candidate.name)).toEqual(["Slow Co"]);
   });
 
   it("drops the subject's own domain and duplicate proposals", async () => {

@@ -70,7 +70,7 @@ HN alone can return nothing on a cold request path, so a second generator, `ai` 
 
 - Input: the identity card's name, domain and description, plus the homepage `<title>` and meta description read from a plain `fetch` with `HTMLRewriter`. An unreachable homepage still proposes from the card.
 - Output: up to 10 `{ name, domain }` pairs, validated with `zod`. Malformed JSON or an AI binding error is logged and yields zero candidates; the run does not fail.
-- Invented domains: each proposed domain is reduced to its registrable domain and must answer a `HEAD` request within 5 seconds, or it is dropped. The subject's own domain and repeats are dropped there; known, dismissed and taken-down domains are dropped by `resolveShortlist` like every other candidate.
+- Invented domains: each proposed domain is reduced to its registrable domain and must answer a `HEAD` request within 5 seconds, or it is dropped (a slow answer keeps it; only an error or 404, 410, 5xx drops it). The subject's own domain and repeats are dropped there; known, dismissed and taken-down domains are dropped by `resolveShortlist` like every other candidate.
 - Evidence count 0, "suggested": an `ai` candidate carries one `Evidence` with `generator: "ai"` that says it is uncorroborated. Ranking counts corroboration as the number of generators other than `ai`, so anything HN also found ranks above any `ai`-only candidate, and an `ai` candidate that another generator confirms gains rank. `ai` keeps its one guaranteed judgment slot. The evidence line reads "Suggested from your site, not yet seen elsewhere".
 - Jev still judges: every proposed name goes through D1 (`is_competitor`) with the same thresholds; the model never decides what is a competitor.
 
