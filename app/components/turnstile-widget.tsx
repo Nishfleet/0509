@@ -1,6 +1,46 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 
-const TURNSTILE_SCRIPT = "https://challenges.cloudflare.com/turnstile/v0/api.js";
+const TURNSTILE_SCRIPT = "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit";
+
+interface TurnstileApi {
+  render: (
+    container: HTMLElement,
+    options: {
+      sitekey: string;
+      appearance: "interaction-only";
+      tabindex: number;
+      "response-field-name": string;
+    },
+  ) => string;
+  remove: (widgetId: string) => void;
+}
+
+declare global {
+  interface Window {
+    turnstile?: TurnstileApi;
+  }
+}
+
+let loading: Promise<TurnstileApi> | null = null;
+
+function loadTurnstile(): Promise<TurnstileApi> {
+  loading ??= new Promise<TurnstileApi>((resolve, reject) => {
+    const script = document.createElement("script");
+    script.src = TURNSTILE_SCRIPT;
+    script.async = true;
+    script.onload = () => {
+      if (window.turnstile) resolve(window.turnstile);
+      else reject(new Error("turnstile did not initialise"));
+    };
+    script.onerror = () => {
+      loading = null;
+      script.remove();
+      reject(new Error("turnstile failed to load"));
+    };
+    document.head.appendChild(script);
+  });
+  return loading;
+}
 
 export function turnstileResponse(): string {
   const field = document.querySelector('input[name="cf-turnstile-response"]');
@@ -9,38 +49,39 @@ export function turnstileResponse(): string {
 }
 
 export function TurnstileWidget({ siteKey, startOn }: { siteKey: string; startOn: "email-focus" | "mount" }) {
+  const container = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    let script: HTMLScriptElement | undefined;
+    const element = container.current;
+    if (!element) return;
+    let widgetId: string | null = null;
+    let cancelled = false;
     const start = () => {
-      if (script) return;
-      script = document.createElement("script");
-      script.src = TURNSTILE_SCRIPT;
-      script.async = true;
-      document.head.appendChild(script);
+      loadTurnstile()
+        .then((api) => {
+          if (cancelled || widgetId !== null) return;
+          widgetId = api.render(element, {
+            sitekey: siteKey,
+            appearance: "interaction-only",
+            tabindex: -1,
+            "response-field-name": "cf-turnstile-response",
+          });
+        })
+        .catch(() => undefined);
     };
+    const email = document.getElementById("email");
     if (startOn === "mount") {
       start();
-      return () => {
-        if (script) script.remove();
-      };
+    } else if (email instanceof HTMLInputElement) {
+      email.addEventListener("focus", start, { once: true });
+      if (document.activeElement === email) start();
+    } else {
+      return;
     }
-    const email = document.getElementById("email");
-    if (!(email instanceof HTMLInputElement)) return;
-    email.addEventListener("focus", start);
-    if (document.activeElement === email) start();
     return () => {
-      email.removeEventListener("focus", start);
-      if (script) script.remove();
+      cancelled = true;
+      if (email instanceof HTMLInputElement) email.removeEventListener("focus", start);
+      if (widgetId !== null) window.turnstile?.remove(widgetId);
     };
-  }, [startOn]);
-  return (
-    <div
-      className="cf-turnstile"
-      data-sitekey={siteKey}
-      data-appearance="interaction-only"
-      data-tabindex="-1"
-      data-response-field="true"
-      data-response-field-name="cf-turnstile-response"
-    />
-  );
+  }, [siteKey, startOn]);
+  return <div ref={container} data-sitekey={siteKey} data-turnstile="" />;
 }

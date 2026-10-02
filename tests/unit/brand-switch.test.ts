@@ -19,6 +19,14 @@ function renderField(state: BrandSwitchState, pausedOn: Date | null): string {
 }
 
 describe("the brand switch", () => {
+  it("takes its accessible name from a given label, for switches that are not about a brand", () => {
+    const html = renderToStaticMarkup(
+      createElement(BrandSwitch, { state: "on", brandName: "", label: "Immediate alerts for your own site" }),
+    );
+    expect(html).toContain('aria-label="Immediate alerts for your own site"');
+    expect(html).toContain("data-checked:bg-green");
+  });
+
   it("renders on: checked, operable, labelled ON", () => {
     const html = render("on");
     expect(html.startsWith("<label")).toBe(true);

@@ -1,6 +1,7 @@
 import { env } from "cloudflare:workers";
 import DodoPayments from "dodopayments";
 
+import { checkoutProof } from "./checkout-proof.server";
 import { TRIAL_DAYS, type PlanId } from "./plans";
 import { productIdFor, testerProductId } from "./products.server";
 
@@ -21,8 +22,12 @@ async function startCheckout(input: CheckoutInput & { product: string; planId: P
       product_cart: [{ product_id: input.product, quantity: 1 }],
       customer: { email: input.email },
       ...(input.trialDays === undefined ? {} : { subscription_data: { trial_period_days: input.trialDays } }),
-      metadata: { workspace_id: input.workspaceId, plan: input.planId },
-      return_url: `${env.BETTER_AUTH_URL}/app/competitors?upgraded=${input.planId}`,
+      metadata: {
+        workspace_id: input.workspaceId,
+        plan,
+        proof: await checkoutProof(input.workspaceId, input.product),
+      },
+      return_url: `${env.BETTER_AUTH_URL}/app/competitors?upgraded=${plan}`,
     });
     return session.checkout_url ?? null;
   } catch (error) {

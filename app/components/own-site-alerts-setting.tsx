@@ -1,7 +1,7 @@
 import type { ReactElement } from "react";
 import { useFetcher } from "react-router";
 
-import { Switch } from "./ui/switch";
+import { BrandSwitch } from "./brand-switch";
 
 const ROW = "mt-10 border-t border-line pt-4";
 const NOTE = "mt-2 max-w-prose text-body-sm leading-[1.55] text-ink-soft";
@@ -21,9 +21,10 @@ function AlertSwitch({ on, intent, label, note, testId }: AlertSwitchProps): Rea
     <section className={ROW} data-testid={testId}>
       <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
         <span className="flex-1 leading-[1.55]">{label}</span>
-        <Switch
-          checked={on}
-          aria-label={label}
+        <BrandSwitch
+          state={on ? "on" : "off"}
+          brandName={label}
+          label={label}
           onCheckedChange={(checked) => {
             void fetcher.submit({ intent, value: checked ? "on" : "off" }, { method: "post" });
           }}

@@ -9,6 +9,7 @@ vi.mock("../../app/lib/require-session.server", () => ({
   requireFreshSession: async () => session,
 }));
 
+import { checkoutProof } from "../../app/lib/billing/checkout-proof.server";
 import { planIdForProduct } from "../../app/lib/billing/products.server";
 import { loader } from "../../app/routes/app.tester";
 
@@ -49,7 +50,11 @@ describe("tester checkout", () => {
     const body = JSON.parse(String(fetchSpy.mock.calls[0]?.[1]?.body));
     expect(body).toMatchObject({
       product_cart: [{ product_id: "pdt_test_tester", quantity: 1 }],
-      metadata: { workspace_id: "ws-user-tester", plan: "starter" },
+      metadata: {
+        workspace_id: "ws-user-tester",
+        plan: "starter",
+        proof: await checkoutProof("ws-user-tester", "pdt_test_tester"),
+      },
     });
     expect(body).not.toHaveProperty("subscription_data");
   });
@@ -61,6 +66,19 @@ describe("tester checkout", () => {
 
     await expect(loader(testerRequest())).rejects.toMatchObject({ status: 404 });
     expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it("refuses a workspace that already has a paid plan and never calls Dodo", async () => {
+    await seedOwner("user-tester", "tester@example.com");
+    await env.DB.prepare(
+      `INSERT OR REPLACE INTO plan (id, workspace_id, tier, status, provider_customer_id, provider_subscription_id, current_period_end, updated_at)
+       VALUES ('plan-paid', 'ws-user-tester', 'agency', 'active', 'cus_paid', 'sub_paid', '2099-01-01T00:00:00Z', '2026-09-30T00:00:00Z')`,
+    ).run();
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+
+    await expect(loader(testerRequest())).rejects.toMatchObject({ status: 409 });
+    expect(fetchSpy).not.toHaveBeenCalled();
+    await env.DB.prepare("DELETE FROM plan WHERE workspace_id = 'ws-user-tester'").run();
   });
 
   it("gives the tester product the Starter plan", () => {

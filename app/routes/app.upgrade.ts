@@ -9,6 +9,10 @@ import { requireFreshSession } from "../lib/require-session.server";
 
 const UNAVAILABLE = { message: "Upgrading isn't available right now. Try again in a few minutes." };
 
+export function loader() {
+  return redirect("/app/settings");
+}
+
 export async function action({ request }: Route.ActionArgs) {
   const session = await requireFreshSession(request);
   const planId = (await request.formData()).get("plan");
