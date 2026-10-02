@@ -6,7 +6,7 @@ describe("document security headers", () => {
   it("allows scripts only by this response's nonce and the one pinned faces script", () => {
     const policy = contentSecurityPolicy("abc");
     expect(policy).toContain(
-      "script-src 'self' 'nonce-abc' 'strict-dynamic' 'sha256-GpODl5NtfRl6mEldBVRam/Wgf0dQcQIEQVBXJek7mCM=' https://challenges.cloudflare.com",
+      "script-src 'self' 'nonce-abc' 'strict-dynamic' 'sha256-gG2BFN3YiWnjq6AQ/Aq8EeGxy1R5WtfNuRPF6Gpc170=' https://challenges.cloudflare.com",
     );
     expect(policy).toContain("frame-src https://challenges.cloudflare.com");
     expect(policy).not.toContain("'unsafe-eval'");
