@@ -10,10 +10,10 @@ export const SITE_UNREADABLE_ERROR =
   "We couldn't read that website either. Try another page of it, like their news or investor page.";
 export const SITE_ROBOTS_ERROR = "That website asks bots to stay out, so we can't watch it.";
 
-function isPublicWebUrl(url: URL): boolean {
-  const host = parse(url.hostname);
+function publicHost(url: URL): string | null {
+  const { hostname, isIp, isIcann } = parse(url.href);
   const web = url.protocol === "https:" || url.protocol === "http:";
-  return web && url.username === "" && url.password === "" && host.isIp !== true && host.isIcann === true;
+  return web && url.username === "" && url.password === "" && isIp !== true && isIcann === true ? hostname : null;
 }
 
 export function parseSiteInput(
@@ -25,7 +25,8 @@ export function parseSiteInput(
   const candidate = /^[a-z][a-z0-9+.-]*:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
   if (!URL.canParse(candidate)) return { ok: false, message: SITE_INVALID_ERROR };
   const url = new URL(candidate);
-  if (!isPublicWebUrl(url)) return { ok: false, message: SITE_INVALID_ERROR };
-  if (getDomain(url.hostname) === getDomain(brandDomain)) return { ok: false, message: SITE_SAME_ERROR };
-  return { ok: true, url: `https://${url.hostname}${url.pathname}` };
+  const host = publicHost(url);
+  if (host === null) return { ok: false, message: SITE_INVALID_ERROR };
+  if (getDomain(host) === getDomain(brandDomain)) return { ok: false, message: SITE_SAME_ERROR };
+  return { ok: true, url: `https://${host}${url.pathname}` };
 }
