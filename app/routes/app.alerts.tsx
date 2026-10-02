@@ -84,7 +84,12 @@ export default function Page({ loaderData }: Route.ComponentProps) {
       {loaderData.sources.length > 0 ? (
         <p data-testid="alerts-sources" className="mt-4 flex flex-wrap gap-2">
           {loaderData.sources.map((entry) => (
-            <SourcePill key={entry.source.key} source={entry.source} snapshot={entry.snapshot} now={loaderData.now} />
+            <SourcePill
+              key={entry.source.key}
+              source={{ ...entry.source, kind: entry.kind }}
+              snapshot={entry.snapshot}
+              now={loaderData.now}
+            />
           ))}
         </p>
       ) : null}

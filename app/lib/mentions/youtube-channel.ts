@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import { normaliseSubject } from "../identity/normalise";
+import { LOST_CHANNEL_REASON, NO_CHANNEL_REASON } from "./channel-reasons";
 
 const socialSchema = z.object({ platform: z.string(), url: z.string() });
 
@@ -24,9 +25,7 @@ const identitySchema = z.object({
 
 const jsonObject = z.record(z.string(), z.unknown());
 
-export const LOST_CHANNEL_REASON = "we lost the channel, re-resolving";
-
-export const NO_CHANNEL_REASON = "no YouTube channel on the confirmed card";
+export { LOST_CHANNEL_REASON, NO_CHANNEL_REASON };
 
 interface LostChannelFlag {
   reason: string;
