@@ -179,7 +179,7 @@ ON CONFLICT (entity_id, url) DO NOTHING`;
 export async function insertAlternatePage(input: {
   entityId: string;
   url: string;
-  role: "blog" | "pricing";
+  role: "blog" | "pricing" | "other";
   transport: "fetch" | "browser";
   at: string;
 }): Promise<void> {
