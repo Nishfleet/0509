@@ -134,7 +134,12 @@ describe("workspace deletion", () => {
     expect(suppression).toEqual({ reason: "workspace_deleted" });
 
     const prefixes = await readWorkspaceR2Prefixes("ws-del");
-    expect(prefixes).toEqual(["card/ws-del/", "snapshot/site/watch-del/", "snapshot/hiring/watch-del/"]);
+    expect(prefixes).toEqual([
+      "card/ws-del/",
+      "snapshot/site/watch-del/",
+      "snapshot/hiring/watch-del/",
+      "snapshot/feed/watch-del/",
+    ]);
 
     await deleteWorkspace("ws-del");
 

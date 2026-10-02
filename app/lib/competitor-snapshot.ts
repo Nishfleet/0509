@@ -1,4 +1,6 @@
-export type SnapshotKind = "ads" | "mentions" | "site" | "hiring";
+import type { SourceKind } from "./source-kind";
+
+export type SnapshotKind = SourceKind;
 
 export interface SnapshotCounts {
   newCreatives: number;

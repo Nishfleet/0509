@@ -60,6 +60,11 @@
       "class_name": "HiringSweepWorkflow",
     },
     {
+      "name": "feed-sweep-test",
+      "binding": "FEED_SWEEP",
+      "class_name": "FeedSweepWorkflow",
+    },
+    {
       "name": "snapshot-backup-test",
       "binding": "SNAPSHOT_BACKUP",
       "class_name": "SnapshotBackupWorkflow",

@@ -2,6 +2,7 @@ import { experimental_readRawConfig } from "wrangler";
 import { describe, expect, it } from "vitest";
 
 import {
+  FEED_SWEEP_CRON,
   HIRING_SWEEP_CRON,
   MENTIONS_SWEEP_CRON,
   NIGHTLY_CRON,
@@ -18,12 +19,13 @@ import {
 // constants, never against a literal, so the gate reddens the day one of them
 // diverges from the constant it names.
 describe("cadence", () => {
-  it("leaves the five scheduled Workflows off `schedules` and starts them from triggers.crons", () => {
+  it("leaves the six scheduled Workflows off `schedules` and starts them from triggers.crons", () => {
     const { rawConfig } = experimental_readRawConfig({ config: "wrangler.jsonc" });
-    const daily = ["site-sweep", "mentions-sweep", "hiring-sweep", "snapshot-backup", "own-site-check"];
+    const daily = ["site-sweep", "mentions-sweep", "hiring-sweep", "feed-sweep", "snapshot-backup", "own-site-check"];
     const workflows = (rawConfig.workflows ?? []).filter((workflow) => daily.includes(workflow.name));
-    expect(workflows).toHaveLength(5);
+    expect(workflows).toHaveLength(6);
     expect(workflows.map((workflow) => workflow.schedules)).toEqual([
+      undefined,
       undefined,
       undefined,
       undefined,
@@ -35,6 +37,7 @@ describe("cadence", () => {
         SITE_SWEEP_CRON,
         MENTIONS_SWEEP_CRON,
         HIRING_SWEEP_CRON,
+        FEED_SWEEP_CRON,
         SNAPSHOT_BACKUP_CRON,
         OWN_SITE_CHECK_CRON,
       ]),

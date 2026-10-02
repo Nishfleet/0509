@@ -6,4 +6,5 @@ export const OWN_SITE_CHECK_CRON = "0 * * * *";
 export const NIGHTLY_CRON = "0 3 * * *";
 export const WEEKLY_REFRESH_CRON = "0 4 * * 1";
 export const HIRING_SWEEP_CRON = "30 2 * * *";
+export const FEED_SWEEP_CRON = "45 2 * * *";
 export const SNAPSHOT_BACKUP_CRON = "0 5 * * *";
