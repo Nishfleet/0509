@@ -6,6 +6,7 @@ export default [
   route("terms", "routes/terms.tsx"),
   route("robots.txt", "routes/robots[.]txt.ts"),
   route("sitemap.xml", "routes/sitemap[.]xml.ts"),
+  route(".well-known/http-message-signatures-directory", "routes/[.]well-known.http-message-signatures-directory.ts"),
   layout("routes/app-layout.tsx", [
     route("app", "routes/app.home.tsx"),
     route("app/competitors", "routes/app.competitors.tsx"),

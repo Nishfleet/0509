@@ -1,5 +1,7 @@
 import { parse } from "tldts";
 
+import { signedHeaders } from "./web-bot-auth.server";
+
 const FETCH_TIMEOUT_MS = 8_000;
 
 const MAX_REDIRECTS = 5;
@@ -76,7 +78,7 @@ export async function fetchOutbound(url: string, init: OutboundInit): Promise<Re
   for (let hop = 0; hop <= MAX_REDIRECTS; hop += 1) {
     const res = await fetch(request.url, {
       method: request.method,
-      headers: request.headers,
+      headers: await signedHeaders(request.url, request.headers, new Date()),
       body: request.body,
       redirect: "manual",
       signal,

@@ -26,7 +26,7 @@ describe("pingLiveness", () => {
 
     const pending = pingLiveness(PING_URL);
     expect(pending).toBeInstanceOf(Promise);
-    expect(fetchSpy).toHaveBeenCalledOnce();
+    await vi.waitFor(() => expect(fetchSpy).toHaveBeenCalledOnce());
     expect(fetchSpy).toHaveBeenCalledWith(PING_URL, expect.any(Object));
     const signal = seen?.signal;
     expect(signal).toBeInstanceOf(AbortSignal);
