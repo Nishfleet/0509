@@ -8,7 +8,9 @@ import { BrandSwitch, DAY_MONTH } from "./brand-switch";
 export { DAY_MONTH };
 
 export function competitorPausedLine(stateChangedAt: string | null, stateReason: string | null = null): string {
-  const base = stateChangedAt === null ? "Paused" : `Paused ${DAY_MONTH.format(new Date(stateChangedAt))}`;
+  const pausedDate = stateChangedAt === null ? null : new Date(stateChangedAt);
+  const base =
+    pausedDate === null || Number.isNaN(pausedDate.getTime()) ? "Paused" : `Paused ${DAY_MONTH.format(pausedDate)}`;
   const why = pausedReasonLine(stateReason);
   return why === undefined ? base : `${base} · ${why}`;
 }
