@@ -23,7 +23,10 @@ const SUBJECT = {
   domain: "allbirds.com",
   description: "Sustainable shoes and apparel made from natural materials like merino wool and tree fiber.",
 };
-const SITE = { title: "Allbirds | Comfortable, Sustainable Shoes", description: "Shop sustainable shoes made from natural materials." };
+const SITE = {
+  title: "Allbirds | Comfortable, Sustainable Shoes",
+  description: "Shop sustainable shoes made from natural materials.",
+};
 
 describe.skipIf(!workersAiPresent())("probe: larger proposer models", () => {
   it("prints the result shape of each model", async () => {
@@ -45,7 +48,9 @@ describe.skipIf(!workersAiPresent())("probe: larger proposer models", () => {
             `PROBE ${model} ${variant} ms=${String(Date.now() - started)} keys=${Object.keys(result as object).join(",")} raw=${JSON.stringify(result).slice(0, 700)}`,
           );
         } catch (error) {
-          console.log(`PROBE ${model} ${variant} ms=${String(Date.now() - started)} ERROR ${String(error).slice(0, 300)}`);
+          console.log(
+            `PROBE ${model} ${variant} ms=${String(Date.now() - started)} ERROR ${String(error).slice(0, 300)}`,
+          );
         }
       }
     }

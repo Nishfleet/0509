@@ -164,6 +164,11 @@ let callBudget = 0;
 
 let callsUsed = 0;
 
+export function setCallBudget(n: number): void {
+  callsUsed = 0;
+  callBudget = n;
+}
+
 function withoutModel(body: unknown): unknown {
   const { model: _model, ...rest } = body as { model?: string };
   return rest;
