@@ -28,8 +28,8 @@ function render(navigation: { state: string; formData?: FormData }): string {
 }
 
 function button(html: string): string {
-  const match = html.match(/<button[\s\S]*?<\/button>/);
-  if (match === null) throw new Error(`no button in ${html}`);
+  const match = html.match(/<button[^>]*type="submit"[\s\S]*?<\/button>/);
+  if (match === null) throw new Error(`no submit button in ${html}`);
   return match[0];
 }
 
@@ -48,6 +48,13 @@ describe("the change-sign-in-email button (0509#6566)", () => {
     expect(html).toContain('disabled=""');
     expect(html).toContain("Sending…");
     expect(html).not.toContain("Send confirmation link");
+  });
+
+  it("stays disabled through the redirect that follows the change-email action", () => {
+    const html = button(render({ state: "loading", formData: formData("change-email") }));
+
+    expect(html).toContain('disabled=""');
+    expect(html).toContain("Sending…");
   });
 
   it("stays enabled while another settings form is submitting", () => {
