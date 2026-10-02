@@ -31,7 +31,7 @@ const ONE_KEY = [makeKey("a", "Only")];
 const TWO_KEYS = [makeKey("a", "Laptop"), makeKey("b", "Nightly bot")];
 
 function keysScreen(): ReactElement {
-  return createElement(AgentKeys, { keys: ONE_KEY, newKey: null, submission: SUBMISSION });
+  return createElement(AgentKeys, { keys: ONE_KEY, newKey: null, duplicate: false, submission: SUBMISSION });
 }
 
 const TWO_APPS = [
@@ -53,16 +53,22 @@ function buttons(html: string): string[] {
 // FormData on the navigation, so the pending render is the one the
 // browser makes.
 function pendingCreateKey() {
-  return pendingSubmit(createElement(AgentKeys, { keys: TWO_KEYS, newKey: null, submission: SUBMISSION }), {
-    intent: "create-key",
-  });
+  return pendingSubmit(
+    createElement(AgentKeys, { keys: TWO_KEYS, newKey: null, duplicate: false, submission: SUBMISSION }),
+    {
+      intent: "create-key",
+    },
+  );
 }
 
 function pendingRevokeKey(id: string) {
-  return pendingSubmit(createElement(AgentKeys, { keys: TWO_KEYS, newKey: null, submission: SUBMISSION }), {
-    intent: "revoke-key",
-    id,
-  });
+  return pendingSubmit(
+    createElement(AgentKeys, { keys: TWO_KEYS, newKey: null, duplicate: false, submission: SUBMISSION }),
+    {
+      intent: "revoke-key",
+      id,
+    },
+  );
 }
 
 function pendingSubmit(element: ReactElement, fields: Record<string, string>) {
@@ -110,7 +116,32 @@ function pendingDisconnect(intent: string, id: string | null) {
   };
 }
 
+function stubbed(element: ReactElement): string {
+  const Stub = createRoutesStub([{ path: "/", Component: () => element }]);
+  return renderToStaticMarkup(createElement(Stub, { initialEntries: ["/"] }));
+}
+
 describe("AgentKeys", () => {
+  it("says a repeated submit was already created, and shows no secret", () => {
+    const html = stubbed(
+      createElement(AgentKeys, { keys: ONE_KEY, newKey: null, duplicate: true, submission: SUBMISSION }),
+    );
+
+    expect(html).toContain(
+      "That key was already created. Its secret is only shown once; delete it and make a new one if you didn&#x27;t copy it.",
+    );
+    expect(html).not.toContain("new-api-key");
+  });
+
+  it("shows no repeat line on a first submit", () => {
+    const html = stubbed(
+      createElement(AgentKeys, { keys: ONE_KEY, newKey: "0509_secret", duplicate: false, submission: SUBMISSION }),
+    );
+
+    expect(html).not.toContain("already created");
+    expect(html).toContain("0509_secret");
+  });
+
   it("shows each key's rate limit and remaining requests when capped", () => {
     const Stub = createRoutesStub([
       {
@@ -138,6 +169,7 @@ describe("AgentKeys", () => {
               },
             ],
             newKey: null,
+            duplicate: false,
             submission: SUBMISSION,
           }),
       },
@@ -182,7 +214,8 @@ describe("AgentKeys", () => {
     const Stub = createRoutesStub([
       {
         path: "/",
-        Component: () => createElement(AgentKeys, { keys: TWO_KEYS, newKey: null, submission: SUBMISSION }),
+        Component: () =>
+          createElement(AgentKeys, { keys: TWO_KEYS, newKey: null, duplicate: false, submission: SUBMISSION }),
       },
     ]);
     const html = renderToStaticMarkup(createElement(Stub, { initialEntries: ["/"] }));

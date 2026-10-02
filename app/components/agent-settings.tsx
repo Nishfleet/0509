@@ -139,6 +139,14 @@ function NewKeyNotice({ newKey }: { newKey: string }) {
   );
 }
 
+function DuplicateKeyNotice() {
+  return (
+    <p role="status" className="mt-3 border-[1.5px] border-ink p-4 leading-[1.55]">
+      That key was already created. Its secret is only shown once; delete it and make a new one if you didn't copy it.
+    </p>
+  );
+}
+
 function KeyRow({ apiKey }: { apiKey: AgentKey }) {
   const navigation = useNavigation();
   const deleting =
@@ -191,10 +199,12 @@ function CreateKeyForm({ submission }: { submission: string }) {
 export function AgentKeys({
   keys,
   newKey,
+  duplicate,
   submission,
 }: {
   keys: AgentKey[];
   newKey: string | null;
+  duplicate: boolean;
   submission: string;
 }) {
   return (
@@ -203,6 +213,7 @@ export function AgentKeys({
         API keys
       </h2>
       {newKey === null ? null : <NewKeyNotice newKey={newKey} />}
+      {duplicate ? <DuplicateKeyNotice /> : null}
       {keys.length === 0 ? (
         <p className="mt-2 leading-[1.55] text-ink-soft">
           No keys yet. A key lets your own code read the same things an app can.

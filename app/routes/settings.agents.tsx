@@ -9,8 +9,6 @@ import { oauthHelpersContext } from "../lib/agent/context.server";
 import { MCP_PATH } from "../lib/agent/paths";
 import { requireFreshSession } from "../lib/require-session.server";
 
-const SUBMISSION = /^[0-9a-f-]{36}$/;
-
 export function meta() {
   return [{ title: "Agents and API · Five to Nine" }];
 }
@@ -32,20 +30,14 @@ export async function action({ request, context }: Route.ActionArgs) {
   const intent = form.get("intent");
   const target = form.get("id");
 
-  if (intent === "create-key") {
-    const submitted = form.get("name");
-    const name = typeof submitted === "string" && submitted.trim() !== "" ? submitted.trim().slice(0, 60) : "My agent";
-    const token = form.get("submission");
-    const submission = typeof token === "string" && SUBMISSION.test(token) ? token : crypto.randomUUID();
-    return { newKey: await createAgentKey(request, name, submission) };
-  }
+  if (intent === "create-key") return await createAgentKey(request, form);
   if (intent === "revoke-key" && typeof target === "string") {
     await revokeAgentKey(request, target);
   }
   if (intent === "disconnect-app" && typeof target === "string") {
     await disconnectApp(context.get(oauthHelpersContext), session.user.id, target);
   }
-  return { newKey: null };
+  return { newKey: null, duplicate: false };
 }
 
 export default function Page({ loaderData, actionData }: Route.ComponentProps) {
@@ -68,7 +60,12 @@ export default function Page({ loaderData, actionData }: Route.ComponentProps) {
       />
       <ConnectDetails mcpUrl={loaderData.mcpUrl} origin={loaderData.origin} />
       <ConnectedApps apps={loaderData.apps} />
-      <AgentKeys keys={loaderData.keys} newKey={actionData?.newKey ?? null} submission={loaderData.submission} />
+      <AgentKeys
+        keys={loaderData.keys}
+        newKey={actionData?.newKey ?? null}
+        duplicate={actionData?.duplicate ?? false}
+        submission={loaderData.submission}
+      />
     </main>
   );
 }

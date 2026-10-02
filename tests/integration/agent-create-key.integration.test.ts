@@ -42,20 +42,28 @@ async function signedInRequest(): Promise<Request> {
 const keyRows = async (name: string) =>
   (await env.DB.prepare("SELECT COUNT(*) AS n FROM apikey WHERE name = ?").bind(name).first<{ n: number }>())?.n ?? -1;
 
+function createForm(name: string, submission: string): FormData {
+  const form = new FormData();
+  form.set("name", name);
+  form.set("submission", submission);
+  return form;
+}
+
 describe("create-key is idempotent per submission", () => {
   beforeAll(() => {
     Object.assign(env, { BETTER_AUTH_SECRET: SECRET });
   });
 
-  it("two submits with one submission id mint one key, and the second shows no secret", async () => {
+  it("two submits with one submission id mint one key, and the second reports a duplicate with no secret", async () => {
     const request = await signedInRequest();
     const submission = crypto.randomUUID();
 
-    const first = await createAgentKey(request, "double-click", submission);
-    const second = await createAgentKey(request, "double-click", submission);
+    const first = await createAgentKey(request, createForm("double-click", submission));
+    const second = await createAgentKey(request, createForm("double-click", submission));
 
-    expect(first?.startsWith("0509_")).toBe(true);
-    expect(second).toBeNull();
+    expect(first.newKey?.startsWith("0509_")).toBe(true);
+    expect(first.duplicate).toBe(false);
+    expect(second).toEqual({ newKey: null, duplicate: true });
     expect(await keyRows("double-click")).toBe(1);
   });
 
@@ -64,21 +72,42 @@ describe("create-key is idempotent per submission", () => {
     const submission = crypto.randomUUID();
 
     const settled = await Promise.all([
-      createAgentKey(request, "racing", submission),
-      createAgentKey(request, "racing", submission),
+      createAgentKey(request, createForm("racing", submission)),
+      createAgentKey(request, createForm("racing", submission)),
     ]);
 
-    expect(settled.filter((key) => key !== null)).toHaveLength(1);
+    expect(settled.filter((result) => result.newKey !== null)).toHaveLength(1);
+    expect(settled.filter((result) => result.duplicate)).toHaveLength(1);
     expect(await keyRows("racing")).toBe(1);
   });
 
   it("a new submission id after the page reloads mints a second key", async () => {
     const request = await signedInRequest();
 
-    await createAgentKey(request, "again", crypto.randomUUID());
-    const second = await createAgentKey(request, "again", crypto.randomUUID());
+    await createAgentKey(request, createForm("again", crypto.randomUUID()));
+    const second = await createAgentKey(request, createForm("again", crypto.randomUUID()));
 
-    expect(second?.startsWith("0509_")).toBe(true);
+    expect(second.newKey?.startsWith("0509_")).toBe(true);
     expect(await keyRows("again")).toBe(2);
+  });
+
+  it("a form with no submission id still mints a key, named My agent by default", async () => {
+    const request = await signedInRequest();
+
+    const result = await createAgentKey(request, new FormData());
+
+    expect(result.newKey?.startsWith("0509_")).toBe(true);
+    expect(await keyRows("My agent")).toBeGreaterThan(0);
+  });
+
+  it("rethrows the create error, not the lookup error, when the create fails and the lookup fails too", async () => {
+    const signedOut = new Request(`${ORIGIN}/app/settings/agents`, { method: "POST", headers: { origin: ORIGIN } });
+
+    const failure = await createAgentKey(signedOut, createForm("nobody", crypto.randomUUID())).catch(
+      (error: unknown) => error,
+    );
+
+    expect(failure).toBeInstanceOf(Error);
+    expect(await keyRows("nobody")).toBe(0);
   });
 });

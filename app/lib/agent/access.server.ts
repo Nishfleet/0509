@@ -2,7 +2,7 @@ import type { OAuthHelpers } from "@cloudflare/workers-oauth-provider";
 import { env } from "cloudflare:workers";
 
 import { createAuth } from "../auth.server";
-import type { AgentKey, ConnectedApp } from "./access";
+import type { AgentKey, ConnectedApp, CreateKeyResult } from "./access";
 
 const FRESH = { disableCookieCache: true };
 
@@ -39,18 +39,29 @@ export async function readAgentAccess(
   };
 }
 
+const SUBMISSION = /^[0-9a-f-]{36}$/;
+
+function formText(form: FormData, field: string): string | null {
+  const value = form.get(field);
+  return typeof value === "string" ? value : null;
+}
+
 async function submissionMinted(request: Request, submission: string): Promise<boolean> {
   const listed = await createAuth(env).api.listApiKeys({ headers: request.headers });
   return listed.apiKeys.some((key) => Reflect.get(key.metadata ?? {}, "submission") === submission);
 }
 
-export async function createAgentKey(request: Request, name: string, submission: string): Promise<string | null> {
+export async function createAgentKey(request: Request, form: FormData): Promise<CreateKeyResult> {
+  const submitted = formText(form, "name")?.trim() ?? "";
+  const name = submitted === "" ? "My agent" : submitted.slice(0, 60);
+  const token = formText(form, "submission");
+  const submission = token !== null && SUBMISSION.test(token) ? token : crypto.randomUUID();
   try {
     const body = { name, metadata: { submission } };
     const created = await createAuth(env).api.createApiKey({ body, headers: request.headers, query: FRESH });
-    return created.key;
+    return { newKey: created.key, duplicate: false };
   } catch (error) {
-    if (await submissionMinted(request, submission)) return null;
+    if (await submissionMinted(request, submission).catch(() => false)) return { newKey: null, duplicate: true };
     throw error;
   }
 }
