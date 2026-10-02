@@ -21,13 +21,21 @@ const POST: ContentAlertItem = {
 };
 
 describe("a content row", () => {
-  it("reads as '<Brand> published <title>' and links out in a new tab", () => {
+  it("names the brand and says it published a new post, and links out in a new tab", () => {
     const html = renderToStaticMarkup(createElement(ContentRow, { content: POST }));
-    expect(html).toContain("Rival published Launching Rival 2");
+    expect(html).toContain("Rival published a new post");
     expect(html).toContain('href="https://rival.com/blog/2"');
     expect(html).toContain('target="_blank"');
     expect(html).toContain('rel="noopener noreferrer nofollow"');
     expect(html).toContain("A big release");
+  });
+
+  it("prints the post title once, not again in the brand sentence", () => {
+    const html = renderToStaticMarkup(
+      createElement(ContentRow, { content: { ...POST, title: "Spring pricing update", brand: "Gymshark" } }),
+    );
+    expect(html.split("Spring pricing update")).toHaveLength(2);
+    expect(html).toContain("Gymshark published a new post");
   });
 
   it("leaves the excerpt line out when the feed gave none", () => {
