@@ -8,15 +8,15 @@ import { GATEWAY_ID } from "../../jev/client.server";
 import { defaultFetchText } from "../fetch-text.server";
 import { type Candidate, type FetchText, type Generator, type Subject } from "../types";
 
-export const MODEL = "@cf/meta/llama-3.3-70b-instruct-fp8-fast";
+export const MODEL = "@cf/openai/gpt-oss-120b";
 
 const MAX_PROPOSALS = 10;
 
-export const MAX_TOKENS = 1_500;
+export const MAX_TOKENS = 4_000;
 
 const DOMAIN_TIMEOUT_MS = 5_000;
 
-const AI_TIMEOUT_MS = 20_000;
+const AI_TIMEOUT_MS = 60_000;
 
 const HTML_LIMIT = 200_000;
 
@@ -56,7 +56,10 @@ const proposalSchema = z.object({
   ),
 });
 
-const answerSchema = z.object({ response: z.unknown() });
+const answerSchema = z.object({
+  response: z.unknown().optional(),
+  choices: z.array(z.object({ message: z.object({ content: z.unknown() }) })).optional(),
+});
 
 interface Proposal {
   name: string;
@@ -116,13 +119,19 @@ export function messagesFor(subject: Subject, site: SiteText): { role: "system" 
 }
 
 function jsonOf(response: unknown): unknown {
-  if (typeof response !== "string") return response;
+  if (typeof response !== "string") return response ?? null;
   try {
     return JSON.parse(response);
   } catch (error) {
     console.error(JSON.stringify({ event: "discovery.ai_unparseable", error: String(error) }));
     return null;
   }
+}
+
+export function proposalBody(raw: unknown): unknown {
+  const answer = answerSchema.safeParse(raw);
+  if (!answer.success) return null;
+  return jsonOf(answer.data.response ?? answer.data.choices?.[0]?.message.content);
 }
 
 async function propose(subject: Subject, site: SiteText): Promise<Proposal[]> {
@@ -135,8 +144,7 @@ async function propose(subject: Subject, site: SiteText): Promise<Proposal[]> {
     },
     { gateway: { id: GATEWAY_ID }, signal: AbortSignal.timeout(AI_TIMEOUT_MS) },
   );
-  const answer = answerSchema.safeParse(raw);
-  const parsed = proposalSchema.safeParse(answer.success ? jsonOf(answer.data.response) : null);
+  const parsed = proposalSchema.safeParse(proposalBody(raw));
   if (!parsed.success) throw new Error("ai proposer returned malformed JSON");
   return parsed.data.competitors.slice(0, MAX_PROPOSALS);
 }
