@@ -31,13 +31,23 @@ async function startInstance(env: CronEnv, cron: WorkflowCron, scheduledTime: nu
   if (!entry) throw new Error(`No workflow for cron ${cron}`);
   const { binding, name } = entry;
   const instant = new Date(scheduledTime).toISOString();
-  const id = `${name}-${cron === OWN_SITE_CHECK_CRON ? instant.replace(/[:.]/g, "-") : instant.slice(0, 10)}`;
+  const id = `${name}-${cron === OWN_SITE_CHECK_CRON ? instant.slice(0, 13) : instant.slice(0, 10)}`;
   const started = await env[binding].createBatch([{ id }]);
   return { id, created: started.length > 0 };
 }
 
 export async function startScheduledWorkflow(env: CronEnv, cron: WorkflowCron, scheduledTime: number) {
   return (await startInstance(env, cron, scheduledTime)).id;
+}
+
+const HOUR_MS = 3_600_000;
+
+export async function startOwnSiteCheckHour(env: Pick<Env, "OWN_SITE_CHECK">, at: number) {
+  return startInstance(env, OWN_SITE_CHECK_CRON, Math.floor(at / HOUR_MS) * HOUR_MS);
+}
+
+export function startMissedOwnSiteCheck(env: Pick<Env, "OWN_SITE_CHECK">, now: number) {
+  return startOwnSiteCheckHour(env, now - HOUR_MS);
 }
 
 function dailyCrons(): WorkflowCron[] {
