@@ -350,6 +350,7 @@ jobs:
           describe_newest() {
             npx wrangler workflows instances describe "$1" latest --json | jq -c '{status, output, failed: [.steps[]? | select(.success == false) | {name, error}]}' | head -c 1200
           }
+          other_newest="own-site-check newest: $(newest_instances own-site-check || echo unreadable); site-sweep newest: $(newest_instances site-sweep || echo unreadable)"
           jev_logs() {
             curl -sS -X POST -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" -H "Content-Type: application/json" \
               "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/observability/telemetry/query" \
@@ -381,7 +382,7 @@ jobs:
           {
             echo "Soak report for the 24 hours before $(date -u +%Y-%m-%dT%H:%MZ) (send counts: $label)."
             echo
-            echo "- cron-started Workflow instances in the last 24 h (newest 100 each): ${crons%, }$([ -z "$missed" ] || echo " (FAIL, none or unreadable for: ${missed% }; ${newest% })")"
+            echo "- cron-started Workflow instances in the last 24 h (newest 100 each): ${crons%, }$([ -z "$missed" ] || echo " (FAIL, none or unreadable for: ${missed% }; ${newest% }; ${other_newest})")"
             echo "- site-sweep Workflow instances: $(instances site-sweep)"
             echo "- site sweeps recorded in sweep_run: $sweeps"
             echo "- standing-rollover Workflow instances: $(instances standing-rollover)"
