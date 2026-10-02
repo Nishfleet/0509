@@ -4,6 +4,8 @@ import type { Candidate, Evidence, GeneratorKey } from "./types";
 
 export const SHORTLIST_TOP = 20;
 
+export const AI_GUARANTEED = 5;
+
 export const GENERATOR_ORDER: readonly GeneratorKey[] = ["news", "hn", "ads", "ai"];
 
 export interface ShortlistEntry {
@@ -158,11 +160,15 @@ export function partitionShortlist(candidates: readonly Candidate[]): {
   const placed = new Set<Scored>(top);
 
   for (const key of GENERATOR_ORDER) {
-    if (entries.some((entry) => isSoleGenerator(entry.generators, key))) continue;
-    const next = sorted.find((item) => !placed.has(item) && isSoleGenerator(item.generators, key));
-    if (next === undefined) continue;
-    placed.add(next);
-    entries.push(toEntry(next, "guaranteed"));
+    const wanted = key === "ai" ? AI_GUARANTEED : 1;
+    const held = entries.filter((entry) => isSoleGenerator(entry.generators, key)).length;
+    const next = sorted
+      .filter((item) => !placed.has(item) && isSoleGenerator(item.generators, key))
+      .slice(0, Math.max(0, wanted - held));
+    for (const item of next) {
+      placed.add(item);
+      entries.push(toEntry(item, "guaranteed"));
+    }
   }
 
   const rest: Candidate[] = sorted

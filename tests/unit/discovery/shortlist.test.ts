@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  AI_GUARANTEED,
   evidenceLine,
   GENERATOR_ORDER,
   SHORTLIST_TOP,
@@ -200,6 +201,18 @@ describe("shortlist", () => {
       generators: ["ai"],
     });
     expect(result.entries.slice(0, SHORTLIST_TOP).every((entry) => entry.generators.length === 2)).toBe(true);
+  });
+
+  it("keeps several ai-only suggestions when corroborated candidates fill the top twenty", () => {
+    const corroborated = Array.from({ length: SHORTLIST_TOP }, (_, index) => dual(`Full ${String(index)}`, index));
+    const suggested = Array.from({ length: AI_GUARANTEED + 3 }, (_, index) =>
+      candidate(`Suggested ${String(index)}`, "ai", "https://allbirds.com/", `suggested${String(index)}.com`),
+    );
+    const result = partitionShortlist([...suggested, ...corroborated]);
+    const kept = result.entries.filter((entry) => entry.slot === "guaranteed");
+    expect(kept).toHaveLength(AI_GUARANTEED);
+    expect(kept.every((entry) => entry.generators.length === 1 && entry.generators[0] === "ai")).toBe(true);
+    expect(result.rest).toHaveLength(3);
   });
 
   it("ranks an ai-only suggestion below a single-source candidate and an ai-agreed one above it", () => {
