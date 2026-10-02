@@ -74,16 +74,24 @@ export async function readJudgedPricingUrl(entityId: string): Promise<string | n
 }
 
 const COMPETITORS_TO_CLASSIFY = `SELECT e.id AS entity_id, e.workspace_id AS workspace_id, e.domain AS domain,
-       COALESCE(NULLIF(e.name, ''), e.domain) AS name, p.url AS url
+       COALESCE(NULLIF(e.name, ''), e.domain) AS name, p.id AS page_id, p.url AS url
 FROM entity e
 JOIN page p ON p.entity_id = e.id AND p.role = 'home'
 WHERE e.role = 'competitor' AND e.state = 'on'
   AND NOT EXISTS (SELECT 1 FROM page j WHERE j.entity_id = e.id AND j.role_decided_for_hash IS NOT NULL)
+  AND (p.deferred_at IS NULL OR p.deferred_at < ?2)
 ORDER BY random()
 LIMIT ?1`;
 
 const competitorRows = z.array(
-  z.object({ entity_id: z.string(), workspace_id: z.string(), domain: z.string(), name: z.string(), url: z.string() }),
+  z.object({
+    entity_id: z.string(),
+    workspace_id: z.string(),
+    domain: z.string(),
+    name: z.string(),
+    page_id: z.string(),
+    url: z.string(),
+  }),
 );
 
 export interface CompetitorToClassify {
@@ -91,16 +99,21 @@ export interface CompetitorToClassify {
   workspaceId: string;
   domain: string;
   name: string;
+  homePageId: string;
   homepageUrl: string;
 }
 
-export async function readCompetitorsToClassify(limit: number): Promise<readonly CompetitorToClassify[]> {
-  const rows = await env.DB.prepare(COMPETITORS_TO_CLASSIFY).bind(limit).all();
+const UNREADABLE_SITE_BACKOFF_MS = 3 * 86_400_000;
+
+export async function readCompetitorsToClassify(limit: number, now: string): Promise<readonly CompetitorToClassify[]> {
+  const retryAfter = new Date(Date.parse(now) - UNREADABLE_SITE_BACKOFF_MS).toISOString();
+  const rows = await env.DB.prepare(COMPETITORS_TO_CLASSIFY).bind(limit, retryAfter).all();
   return competitorRows.parse(rows.results).map((row) => ({
     entityId: row.entity_id,
     workspaceId: row.workspace_id,
     domain: row.domain,
     name: row.name,
+    homePageId: row.page_id,
     homepageUrl: row.url,
   }));
 }

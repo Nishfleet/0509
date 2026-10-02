@@ -1,4 +1,4 @@
-import { readCompetitorsToClassify } from "../data/page.server";
+import { markPageDeferred, readCompetitorsToClassify } from "../data/page.server";
 import { classifyTailPages } from "../identity/tail.server";
 import { ensureHomePages } from "./sweep.server";
 
@@ -6,9 +6,9 @@ const CLASSIFY_PER_SWEEP = 10;
 
 export async function classifyCompetitorSites(now: string): Promise<number> {
   await ensureHomePages(now);
-  const competitors = await readCompetitorsToClassify(CLASSIFY_PER_SWEEP);
+  const competitors = await readCompetitorsToClassify(CLASSIFY_PER_SWEEP, now);
   for (const competitor of competitors) {
-    await classifyTailPages(
+    const read = await classifyTailPages(
       {
         workspaceId: competitor.workspaceId,
         entityId: competitor.entityId,
@@ -18,6 +18,7 @@ export async function classifyCompetitorSites(now: string): Promise<number> {
       },
       now,
     );
+    if (!read) await markPageDeferred(competitor.homePageId, now);
   }
   return competitors.length;
 }

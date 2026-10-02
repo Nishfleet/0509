@@ -100,4 +100,23 @@ describe("a competitor's pricing page", () => {
     expect(await classifyCompetitorSites("2026-10-03T02:00:00Z")).toBe(0);
     expect(run).not.toHaveBeenCalled();
   });
+
+  it("is not fetched again for three days when its home page cannot be read", async () => {
+    const homeFetches = vi.fn();
+    vi.stubGlobal("fetch", (input: RequestInfo | URL) => {
+      const url = input instanceof Request ? input.url : String(input);
+      if (url === HOME) homeFetches();
+      return Promise.resolve(new Response("", { status: 503 }));
+    });
+
+    await classifyCompetitorSites(NOW);
+    const first = homeFetches.mock.calls.length;
+    expect(first).toBeGreaterThanOrEqual(1);
+
+    await classifyCompetitorSites("2026-10-03T02:00:00Z");
+    expect(homeFetches.mock.calls.length).toBe(first);
+
+    await classifyCompetitorSites("2026-10-06T02:00:00Z");
+    expect(homeFetches.mock.calls.length).toBeGreaterThan(first);
+  });
 });

@@ -56,8 +56,8 @@ export async function persistTail(params: IdentityTailParams): Promise<{ entityI
   return { entityId };
 }
 
-export async function classifyTailPages(params: IdentityTailParams, now: string): Promise<void> {
-  if (params.handle !== undefined || params.homepageUrl === null) return;
+export async function classifyTailPages(params: IdentityTailParams, now: string): Promise<boolean> {
+  if (params.handle !== undefined || params.homepageUrl === null) return false;
   try {
     const page = await readUrl(params.homepageUrl, { mayEscalate: brandBudget(params.workspaceId, params.domain) });
     if (!page.ok) {
@@ -70,7 +70,7 @@ export async function classifyTailPages(params: IdentityTailParams, now: string)
           subjectSha256,
         }),
       );
-      return;
+      return false;
     }
     const extract = await extractIdentity(page.html, params.homepageUrl);
     await classifyNavPages({
@@ -79,6 +79,7 @@ export async function classifyTailPages(params: IdentityTailParams, now: string)
       pages: extract.navPages,
       now,
     });
+    return true;
   } catch (error) {
     const subjectSha256 = await sha256Hex(params.domain);
     console.log(
@@ -89,6 +90,7 @@ export async function classifyTailPages(params: IdentityTailParams, now: string)
         subjectSha256,
       }),
     );
+    return false;
   }
 }
 
