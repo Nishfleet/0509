@@ -57,6 +57,8 @@ describe("the business or creator question buttons", () => {
     const router = routerWith(NEVER);
     void submit(router, "business");
     const html = markup(router);
+    expect(html).toContain('name="subject"');
+    expect(html).toContain('value="acme.example"');
     expect(button(html, "business")).toContain('disabled=""');
     expect(button(html, "business")).toContain(">Saving…<");
     expect(button(html, "person")).toContain('disabled=""');
@@ -74,11 +76,17 @@ describe("the business or creator question buttons", () => {
   });
 
   it("re-enables both buttons when the action returns an error instead of completing", async () => {
-    const router = routerWith(() => Promise.resolve({ message: "that did not work", confirm: null }));
+    // The error path in app/routes/onboarding.tsx keeps `confirm` set (the route
+    // unmounts the form only on the answer paths that leave no question to
+    // repeat), so the rendered form after the action is what the user sees.
+    const router = routerWith(() => Promise.resolve({ message: "that did not work", confirm: "acme.example" }));
     await submit(router, "person");
     expect(router.state.navigation.state).toBe("idle");
     const html = markup(router);
     expect(button(html, "person")).not.toContain('disabled=""');
     expect(button(html, "business")).not.toContain('disabled=""');
+    expect(button(html, "person")).toContain(PERSON);
+    expect(button(html, "business")).toContain(">Yes, a business or creator<");
+    expect(html).not.toContain(">Saving");
   });
 });
