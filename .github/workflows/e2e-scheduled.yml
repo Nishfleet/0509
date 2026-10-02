@@ -345,6 +345,7 @@ jobs:
           echo "J8 workspaces: $(d1 "SELECT own_site_alerts, COUNT(*) AS n FROM workspace WHERE id IN$ws GROUP BY 1")"
           echo "J8 incidents: $(d1 "SELECT kind, COUNT(*) AS n, MAX(opened_at) AS last, SUM(closed_at IS NULL) AS still_open FROM incident WHERE workspace_id IN$ws GROUP BY 1")"
           echo "J8 watches: $(d1 "SELECT e.role, w.is_active, substr(w.target_key,1,40) AS t, w.last_polled_at AS polled, COUNT(sn.id) AS snaps, MAX(sn.fetched_at) AS last_snap FROM watch w JOIN entity e ON e.id = w.entity_id LEFT JOIN snapshot sn ON sn.watch_id = w.id WHERE e.workspace_id IN$ws GROUP BY w.id")"
+          echo "J8 snapshots: $(d1 "SELECT substr(w.target_key,9,14) AS host, sn.fetched_at, substr(sn.payload_hash,1,10) AS h, sn.item_count AS n, substr(sn.id,1,34) AS id FROM snapshot sn JOIN watch w ON w.id = sn.watch_id JOIN entity e ON e.id = w.entity_id WHERE e.workspace_id IN$ws AND w.target_key LIKE 'https://j8-%' ORDER BY sn.fetched_at")"
           echo "J8 signals: $(d1 "SELECT kind, aspect, COUNT(*) AS n, MAX(observed_at) AS last FROM signal WHERE workspace_id IN$ws GROUP BY 1, 2")"
           echo "J8 verdicts: $(d1 "SELECT question_id, ROUND(p, 2) AS p, decided_at FROM jev_verdict WHERE workspace_id IN$ws ORDER BY decided_at DESC LIMIT 10")"
           echo "J8 sends 48h: $(d1 "SELECT status, COUNT(*) AS n, MAX(attempted_at) AS last FROM send_attempt WHERE workspace_id IN$ws GROUP BY 1")"
