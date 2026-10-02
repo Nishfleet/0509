@@ -144,4 +144,22 @@ describe("Sentry beforeSend", () => {
     expect(result?.transaction).toBe("GET /v/[redacted]");
     expect(result?.request?.url).toBe("https://0509.io/v/[redacted]");
   });
+
+  it("turns Logs on for console warnings and errors only", () => {
+    expect(options.enableLogs).toBe(true);
+    expect(options.integrations).toHaveLength(1);
+  });
+
+  it("scrubs emails, token paths and string attributes from a log line", () => {
+    const send = options.beforeSendLog;
+    if (send === undefined) throw new Error("the Sentry options have no beforeSendLog");
+    const result = send({
+      level: "error",
+      message: "failed for a@b.co at https://0509.io/u/abc?x=1",
+      attributes: { url: "https://0509.io/v/abc?x=1", count: 3 },
+    });
+
+    expect(result?.message).toBe("failed for [redacted] at https://0509.io/u/[redacted]");
+    expect(result?.attributes).toEqual({ url: "https://0509.io/v/[redacted]", count: 3 });
+  });
 });

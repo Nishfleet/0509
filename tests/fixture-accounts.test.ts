@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { FIXTURE_ACCOUNTS, isFixtureAccount } from "../app/lib/fixture-accounts";
+import { FIXTURE_ACCOUNTS, isFixtureAccount, isPerRunFixtureEmail } from "../app/lib/fixture-accounts";
 
 // 0509#6020: the fixed journey accounts are literals here so a typo in
 // the module fails this test instead of passing through it.
@@ -46,5 +46,13 @@ describe("fixture accounts", () => {
       expect(Number.isInteger(account.maxCompetitors)).toBe(true);
       expect(account.maxCompetitors).toBeGreaterThanOrEqual(0);
     }
+  });
+
+  it("marks per-run e2e addresses as fixtures and never the six fixed accounts or real users", () => {
+    expect(isPerRunFixtureEmail("e2e+j3-123@0509.io")).toBe(true);
+    expect(isPerRunFixtureEmail("E2E+abc@0509.io")).toBe(true);
+    for (const email of FIXED) expect(isPerRunFixtureEmail(email)).toBe(false);
+    expect(isPerRunFixtureEmail("someone@gymshark.com")).toBe(false);
+    expect(isPerRunFixtureEmail("e2e+x@example.com")).toBe(false);
   });
 });

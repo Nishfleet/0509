@@ -1,5 +1,4 @@
 import { env } from "cloudflare:workers";
-import { NonRetryableError } from "cloudflare:workflows";
 
 import { insertSignalAlert } from "../../app/lib/data/alert.server";
 import type { DiscoveryContext } from "../../app/lib/data/entity.server";
@@ -687,7 +686,7 @@ export async function sweepTarget(
   } catch (error) {
     if (error instanceof UpstreamBlockedError) {
       await markSourceBlocked(target.sourceId, error.status);
-      throw new NonRetryableError(error.message, "UpstreamBlockedError");
+      return { items: 0, stored: 0, unjudged: 0, skipped: target.watches.length };
     }
     if (isUpstreamTimeout(error)) {
       await markSourceTimedOut(target.sourceId);
