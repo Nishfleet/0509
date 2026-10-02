@@ -187,6 +187,7 @@ describe("an alert feed row", () => {
         ? { ...FAILURE_ITEM, failure: { ...FAILURE_ITEM.failure, body: null } }
         : FAILURE_ITEM;
     const html = render(item);
+    expect(html).not.toContain(`<p class="${BODY_CLASS}"`);
     expect(html).not.toContain(`<p class="${BODY_CLASS}"></p>`);
     expect(html).toContain(`${ROW_NAME_TITLE}We stopped trying to send your brief</h3>`);
     expect(html).toContain("4 days ago");
