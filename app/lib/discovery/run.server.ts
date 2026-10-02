@@ -16,6 +16,7 @@ import type { ShortlistEntry } from "./shortlist";
 import type { Candidate, Evidence } from "./types";
 
 const EVIDENCE_KEPT = 5;
+const CATEGORY_FLOOR = 0.5;
 export const JUDGE_BATCH_SIZE = 2;
 
 export interface ShortlistedCandidate {
@@ -187,7 +188,9 @@ async function askCompetitorAndCategory(context: DiscoveryContext, state: unknow
 export function keepOnlyIfBoth(verdicts: readonly NoulVerdict[]): NoulVerdict {
   const [first, ...rest] = verdicts;
   if (first === undefined) throw new Error("no verdicts to combine");
-  return { ...first, p: Math.min(first.p, ...rest.map((verdict) => verdict.p)) };
+  const lowest = Math.min(first.p, ...rest.map((verdict) => verdict.p));
+  const offCategory = rest.some((verdict) => verdict.p < CATEGORY_FLOOR);
+  return { ...first, p: offCategory ? 0 : lowest };
 }
 
 async function askCandidate(context: DiscoveryContext, candidate: ResolvedCandidate): Promise<NoulVerdict | null> {
