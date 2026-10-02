@@ -63,6 +63,10 @@ describe("the connect block on /app/settings/agents", () => {
     expect(markup()).toContain("Authorization: Bearer &lt;your key&gt;");
   });
 
+  it("links the API reference page", () => {
+    expect(markup()).toContain(`href="${ORIGIN}/api/docs"`);
+  });
+
   it("names its clients as text-only pills, Claude then ChatGPT then Cursor", () => {
     const html = markup();
     const pills = [...html.matchAll(/<li[^>]*data-testid="agent-client"[^>]*>(.*?)<\/li>/g)].map((match) => match[1]);

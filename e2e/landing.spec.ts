@@ -145,7 +145,7 @@ test("the agents section hands a visitor's agent the MCP address and the API doc
   for (const name of ["Claude", "Cursor", "ChatGPT"]) {
     await expect(agents.getByText(name, { exact: true })).toBeVisible();
   }
-  await expect(agents.getByRole("link", { name: "Read the API docs" })).toHaveAttribute("href", "/api/v1/openapi.json");
+  await expect(agents.getByRole("link", { name: "Read the API docs" })).toHaveAttribute("href", "/api/docs");
   expect(await consoleFailures(page, watched, testInfo), testInfo.project.name).toEqual([]);
 
   await testInfo.attach(`agents-${testInfo.project.name}`, {

@@ -65,7 +65,7 @@ export function ConnectDetails({ mcpUrl, origin }: { mcpUrl: string; origin: str
       <CopyField label="Authorization header" value="Authorization: Bearer <your key>" />
       <p className="mt-3 text-body-sm text-ink-soft">
         Writing your own code? Make a key below and read the{" "}
-        <a className="text-ink underline decoration-1 underline-offset-4" href={`${origin}/api/v1/openapi.json`}>
+        <a className="text-ink underline decoration-1 underline-offset-4" href={`${origin}/api/docs`}>
           API reference
         </a>
         .

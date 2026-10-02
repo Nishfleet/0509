@@ -22,7 +22,7 @@ describe("landing agents", () => {
 
   it("links to the API docs instead of embedding them, and says agent reads are part of every plan", () => {
     const html = markup();
-    expect(html).toContain('href="/api/v1/openapi.json"');
+    expect(html).toContain('href="/api/docs"');
     expect(html).toContain("Read the API docs");
     expect(html).not.toContain("<iframe");
     // The three names are text pills, never another company's mark.
