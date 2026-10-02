@@ -1,9 +1,11 @@
-import { Form } from "react-router";
+import { Form, useNavigation } from "react-router";
 
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 
 export function ChangeSignInEmail({ sent, error }: { sent: boolean; error: string | null }) {
+  const navigation = useNavigation();
+  const sending = navigation.state !== "idle" && navigation.formData?.get("intent") === "change-email";
   return (
     <Form method="post" action="/app/settings" className="mt-4 flex flex-col gap-3">
       <input type="hidden" name="intent" value="change-email" />
@@ -30,8 +32,8 @@ export function ChangeSignInEmail({ sent, error }: { sent: boolean; error: strin
           {error}
         </p>
       )}
-      <Button type="submit" variant="secondary" size="lg" className="self-start">
-        Send confirmation link
+      <Button type="submit" variant="secondary" size="lg" className="self-start" disabled={sending}>
+        {sending ? "Sending…" : "Send confirmation link"}
       </Button>
     </Form>
   );

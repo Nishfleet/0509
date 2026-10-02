@@ -7,9 +7,10 @@ SELECT target_value, 'unsubscribed', ?
 ON CONFLICT(address) DO NOTHING`;
 
 const SUPPRESS_WORKSPACE_TARGETS = `INSERT INTO email_suppression (address, reason, created_at)
-SELECT target_value, 'workspace_deleted', ?
-  FROM send_target
- WHERE workspace_id = ?
+SELECT t.target_value, 'workspace_deleted', ?
+  FROM send_target t
+  JOIN channel c ON c.id = t.channel_id
+ WHERE t.workspace_id = ? AND c.key = 'email'
 ON CONFLICT(address) DO NOTHING`;
 
 const SELECT_SUPPRESSION = `SELECT address FROM email_suppression WHERE address = ?`;

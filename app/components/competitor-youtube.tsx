@@ -1,5 +1,5 @@
 import type { ReactElement } from "react";
-import { Form } from "react-router";
+import { Form, useNavigation } from "react-router";
 
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
@@ -13,6 +13,8 @@ export interface CompetitorYoutubeProps {
 }
 
 export function CompetitorYoutube({ url, error }: CompetitorYoutubeProps): ReactElement {
+  const navigation = useNavigation();
+  const saving = navigation.state !== "idle" && navigation.formData?.get("intent") === "youtube";
   return (
     <section data-section="youtube" aria-labelledby="competitor-youtube" className="min-w-0">
       <h2 id="competitor-youtube" className={HEADING}>
@@ -43,8 +45,8 @@ export function CompetitorYoutube({ url, error }: CompetitorYoutubeProps): React
             {error}
           </p>
         )}
-        <Button type="submit" variant="secondary" className="self-start">
-          Save channel
+        <Button type="submit" variant="secondary" className="self-start" disabled={saving}>
+          {saving ? "Checking…" : "Save channel"}
         </Button>
       </Form>
     </section>

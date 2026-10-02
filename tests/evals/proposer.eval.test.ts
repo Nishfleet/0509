@@ -2,7 +2,13 @@ import { parse } from "tldts";
 import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 
-import { MAX_TOKENS, MODEL, RESPONSE_SCHEMA, messagesFor } from "../../app/lib/discovery/generators/ai.server";
+import {
+  MAX_TOKENS,
+  MODEL,
+  RESPONSE_FORMAT,
+  messagesFor,
+  proposalBody,
+} from "../../app/lib/discovery/generators/ai.server";
 import {
   formatReport,
   loadCases,
@@ -33,9 +39,7 @@ function registrable(value: string): string {
 const domainsOnly = z.object({ competitors: z.array(z.object({ domain: z.string() })) });
 
 function proposed(result: unknown): string[] {
-  const response = (result as { response?: unknown }).response;
-  const body: unknown = typeof response === "string" ? JSON.parse(response) : response;
-  return domainsOnly.parse(body).competitors.map((entry) => registrable(entry.domain));
+  return domainsOnly.parse(proposalBody(result)).competitors.map((entry) => registrable(entry.domain));
 }
 
 const ask: Ask<ProposerCase> = async (row) => {
@@ -44,7 +48,7 @@ const ask: Ask<ProposerCase> = async (row) => {
       { name: row.self.name, domain: row.self.domain, description: row.self.description },
       row.site,
     ),
-    response_format: { type: "json_schema", json_schema: RESPONSE_SCHEMA },
+    response_format: RESPONSE_FORMAT,
     max_tokens: MAX_TOKENS,
   });
   return { model: MODEL, p: null, choice: proposed(result).join(",") };

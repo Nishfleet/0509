@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Form } from "react-router";
+import { Form, useNavigation } from "react-router";
 
 import type { AgentKey, ConnectedApp } from "../lib/agent/access";
 import { BLOCK_HEADING } from "./page-heading";
@@ -148,6 +148,8 @@ function KeyRow({ apiKey }: { apiKey: AgentKey }) {
 }
 
 function CreateKeyForm() {
+  const navigation = useNavigation();
+  const making = navigation.state !== "idle" && navigation.formData?.get("intent") === "create-key";
   return (
     <Form method="post" className="mt-6">
       <input type="hidden" name="intent" value="create-key" />
@@ -156,8 +158,8 @@ function CreateKeyForm() {
       </label>
       <div className="mt-2 flex flex-col gap-2 sm:flex-row">
         <Input id="key-name" name="name" maxLength={60} placeholder="My agent" className="sm:flex-1" />
-        <Button type="submit" variant="secondary" size="lg">
-          Make a key
+        <Button type="submit" variant="secondary" size="lg" disabled={making}>
+          {making ? "Making…" : "Make a key"}
         </Button>
       </div>
     </Form>
