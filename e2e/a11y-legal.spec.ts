@@ -40,6 +40,13 @@ for (const path of ["/privacy", "/terms"]) {
           expect(levels[i] - levels[i - 1]).toBeLessThanOrEqual(1);
         }
 
+        // DESIGN.md:473: 44px minimum. The legal logo carries the same wordmark
+        // markup as /login (0509#6531), and with no height class it is one text
+        // line, about 19px. Measured, at every width this spec already walks.
+        const logoBox = await page.getByRole("link", { name: "Five to Nine" }).boundingBox();
+        if (logoBox === null) throw new Error("the legal logo has no box");
+        expect(logoBox.height).toBeGreaterThanOrEqual(44);
+
         const takedown = page.getByRole("contentinfo").getByRole("link", { name: "support@0509.io" });
         await expect(takedown).toBeVisible();
         await expect(takedown).toHaveAttribute("href", "mailto:support@0509.io");
