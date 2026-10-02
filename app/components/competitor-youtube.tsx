@@ -3,6 +3,7 @@ import { Form } from "react-router";
 
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
+import { YOUTUBE_LINK_MAX } from "../lib/competitor-youtube";
 
 const HEADING = "mb-3 font-mono text-eyebrow text-ink-soft uppercase";
 
@@ -32,6 +33,7 @@ export function CompetitorYoutube({ url, error }: CompetitorYoutubeProps): React
           inputMode="url"
           autoComplete="off"
           required
+          maxLength={YOUTUBE_LINK_MAX}
           placeholder="youtube.com/@theirname"
           aria-invalid={error === null ? undefined : true}
           aria-describedby={error === null ? undefined : "competitor-youtube-error"}

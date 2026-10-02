@@ -192,7 +192,8 @@ export interface OwnSitePage {
   url: string;
 }
 
-const ENTITIES_WITHOUT_HOME = `SELECT e.id AS id, e.domain AS domain, CASE WHEN json_valid(e.identity_json) THEN json_extract(e.identity_json, '$.url') END AS url
+const ENTITIES_WITHOUT_HOME = `SELECT e.id AS id, e.domain AS domain, CASE WHEN json_valid(e.identity_json) THEN json_extract(e.identity_json, '$.url') END AS url,
+       json_valid(e.identity_json) AS identity_valid
 FROM entity e
 WHERE e.state = 'on'
   AND NOT EXISTS (SELECT 1 FROM page p WHERE p.entity_id = e.id AND p.role = 'home')
@@ -207,7 +208,14 @@ JOIN page p ON p.entity_id = e.id AND p.role = 'home'
 WHERE e.role = 'self' AND e.state = 'on'
 ORDER BY e.workspace_id, p.id`;
 
-const entityRows = z.array(z.object({ id: z.string(), domain: z.string(), url: z.string().nullable() }));
+const entityRows = z.array(
+  z.object({
+    id: z.string(),
+    domain: z.string(),
+    url: z.string().nullable(),
+    identity_valid: z.number().transform((flag) => flag === 1),
+  }),
+);
 
 export type EntityWithoutHomePage = z.infer<typeof entityRows>[number];
 

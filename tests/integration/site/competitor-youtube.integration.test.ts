@@ -1,8 +1,20 @@
 import { env } from "cloudflare:test";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { YOUTUBE_LINK_ERROR, saveCompetitorYoutube } from "../../../app/lib/competitor-youtube.server";
+vi.mock("../../../app/lib/require-session.server", () => ({
+  requireSession: () => Promise.resolve({ user: { id: "user-comp-youtube" } }),
+  requireFreshSession: () => Promise.resolve({ user: { id: "user-comp-youtube" } }),
+}));
+
+import {
+  YOUTUBE_LINK_ERROR,
+  YOUTUBE_LINK_MAX,
+  YOUTUBE_TOO_LONG_ERROR,
+  YOUTUBE_VIDEO_ERROR,
+} from "../../../app/lib/competitor-youtube";
+import { saveCompetitorYoutube } from "../../../app/lib/competitor-youtube.server";
 import { readCompetitorSocials } from "../../../app/lib/data/entity.server";
+import { action } from "../../../app/routes/app.competitor";
 
 const NOW = "2026-10-02T02:00:00Z";
 const USER = "user-comp-youtube";
@@ -73,6 +85,49 @@ describe("saveCompetitorYoutube", () => {
     expect(saved).toEqual({ ok: false, message: YOUTUBE_LINK_ERROR });
     expect((await readCompetitorSocials(WS, RIVAL))?.[0]?.url).toBe("https://www.youtube.com/watch?v=abc");
     expect(await watchConfig()).toBe(BROKEN);
+  });
+
+  it.each([
+    ["javascript:alert(1)", YOUTUBE_LINK_ERROR],
+    ["data:text/html,<script>alert(1)</script>", YOUTUBE_LINK_ERROR],
+    ["https://youtu.be/dQw4w9WgXcQ", YOUTUBE_VIDEO_ERROR],
+    ["https://www.youtube.com/watch?v=dQw4w9WgXcQ", YOUTUBE_VIDEO_ERROR],
+    ["youtube.com/shorts/abc", YOUTUBE_VIDEO_ERROR],
+    [`youtube.com/@${"a".repeat(YOUTUBE_LINK_MAX)}`, YOUTUBE_TOO_LONG_ERROR],
+  ])("refuses %s with a plain reason and changes nothing", async (input, message) => {
+    expect(await saveCompetitorYoutube(WS, RIVAL, input)).toEqual({ ok: false, message });
+    expect((await readCompetitorSocials(WS, RIVAL))?.[0]?.url).toBe("https://www.youtube.com/watch?v=abc");
+    expect(await watchConfig()).toBe(BROKEN);
+  });
+
+  it("adds the channel when the card had no links at all", async () => {
+    await env.DB.prepare("UPDATE entity SET identity_json = '{}' WHERE id = ?1").bind(RIVAL).run();
+    expect(await saveCompetitorYoutube(WS, RIVAL, "https://www.youtube.com/@rivalshop")).toEqual({ ok: true });
+    expect(await readCompetitorSocials(WS, RIVAL)).toEqual([
+      { platform: "youtube", url: "https://www.youtube.com/@rivalshop" },
+    ]);
+  });
+
+  it("leaves a card it cannot read alone and keeps the lookup flags", async () => {
+    await env.DB.prepare("UPDATE entity SET identity_json = 'not json {' WHERE id = ?1").bind(RIVAL).run();
+    const saved = await saveCompetitorYoutube(WS, RIVAL, "youtube.com/@rivalshop");
+    expect(saved.ok).toBe(false);
+    expect(await watchConfig()).toBe(BROKEN);
+  });
+
+  it("saves through the page's own action for the signed-in owner", async () => {
+    const body = new FormData();
+    body.set("intent", "youtube");
+    body.set("youtube", "youtube.com/@rivalshop");
+    const request = new Request(`https://0509.io/app/competitors/${RIVAL}`, { method: "POST", body });
+    const args = { request, params: { entityId: RIVAL }, context: {} } as unknown as Parameters<typeof action>[0];
+    expect(await action(args)).toMatchObject({ youtubeError: null });
+    expect((await readCompetitorSocials(WS, RIVAL))?.at(-1)?.url).toBe("https://www.youtube.com/@rivalshop");
+
+    body.set("youtube", "https://youtu.be/dQw4w9WgXcQ");
+    expect(await action({ ...args, request: new Request(request.url, { method: "POST", body }) })).toMatchObject({
+      youtubeError: YOUTUBE_VIDEO_ERROR,
+    });
   });
 
   it("will not touch another workspace's competitor", async () => {
