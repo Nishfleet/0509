@@ -111,6 +111,45 @@ describe("aiGenerator", () => {
     await expect(aiGenerator(SUBJECT, home())).rejects.toThrow("gateway down");
   });
 
+  it("asks both models and keeps the brands from both answers", async () => {
+    const run = vi
+      .fn()
+      .mockResolvedValueOnce({ response: { competitors: [{ name: "Alpha", domain: "a.com" }] } })
+      .mockResolvedValueOnce({
+        choices: [
+          {
+            message: {
+              content: JSON.stringify({
+                competitors: [
+                  { name: "Alpha", domain: "a.com" },
+                  { name: "Beta", domain: "b.com" },
+                ],
+              }),
+            },
+          },
+        ],
+      });
+    Reflect.set(env, "AI", { run });
+    liveHosts("a.com", "b.com");
+    const candidates = await aiGenerator(SUBJECT, home());
+    expect(run.mock.calls.map((call) => call[0])).toEqual([
+      "@cf/openai/gpt-oss-120b",
+      "@cf/nvidia/nemotron-3-120b-a12b",
+    ]);
+    expect(candidates.map((candidate) => candidate.domain)).toEqual(["a.com", "b.com"]);
+  });
+
+  it("keeps the answer that came back when the other model fails", async () => {
+    const run = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("gateway down"))
+      .mockResolvedValueOnce({ response: { competitors: [{ name: "Alpha", domain: "a.com" }] } });
+    Reflect.set(env, "AI", { run });
+    liveHosts("a.com");
+    const candidates = await aiGenerator(SUBJECT, home());
+    expect(candidates.map((candidate) => candidate.domain)).toEqual(["a.com"]);
+  });
+
   it("fails on malformed JSON", async () => {
     vi.spyOn(console, "error").mockImplementation(() => undefined);
     proposes("{not json");
