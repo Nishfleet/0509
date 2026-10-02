@@ -192,6 +192,8 @@ async function ensureUnsubscribeToken(env: Env, target: TargetRow): Promise<stri
 
 const UNSUBSCRIBE_BASE_URL = "https://0509.io/u/";
 
+const BRIEF_SENDER = { email: "brief@0509.io", name: "Five to Nine" };
+
 function briefOf(message: MessageRow): BriefPayload {
   try {
     return parseBriefPayload(message.payload_json);
@@ -207,7 +209,7 @@ function render(message: MessageRow, to: string, token: string): EmailMessageBui
   const rendered = renderBrief(payload, { unsubscribe_url: unsubscribeUrl, asset_base_url: null });
   return {
     to,
-    from: "brief@0509.io",
+    from: BRIEF_SENDER,
     subject: message.subject ?? rendered.subject,
     html: rendered.html,
     text: rendered.text,
@@ -305,7 +307,7 @@ function renderIncidentEmail(incident: IncidentRow, to: string, token: string) {
         });
   return {
     to,
-    from: "brief@0509.io",
+    from: BRIEF_SENDER,
     subject: rendered.subject,
     html: rendered.html,
     text: rendered.text,
@@ -459,7 +461,7 @@ async function sendChange(
       const rendered = await renderChangeEmail(env, { change, payload, capped, footer });
       return sendMessage(env.EMAIL, {
         to: target.target_value,
-        from: "brief@0509.io",
+        from: BRIEF_SENDER,
         subject: rendered.subject,
         html: rendered.html,
         text: rendered.text,
