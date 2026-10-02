@@ -8,6 +8,8 @@ test("ux account section @own-signin", async ({ page }) => {
   const email = `e2e+uxa${crypto.randomUUID().replaceAll("-", "").slice(0, 10)}@0509.io`;
   await signInWithMagicLink(page, email, token);
   await page.goto("/app/settings");
+  await page.getByRole("tab", { name: /^account$/i }).or(page.getByRole("link", { name: /^account$/i })).first().click();
+  await page.waitForTimeout(1500);
   const text = await page.evaluate(() => document.body.innerText);
-  console.log(`ACCOUNTTEXT ${JSON.stringify(text.slice(-2600))}`);
+  console.log(`ACCOUNTTEXT ${JSON.stringify(text.slice(0, 2600))}`);
 });
