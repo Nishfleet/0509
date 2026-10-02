@@ -1,6 +1,7 @@
 import { env } from "cloudflare:test";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { readCompetitorsToClassify } from "../../../app/lib/data/page.server";
 import { classifyCompetitorSites } from "../../../app/lib/site/classify-competitors.server";
 import { planSiteSweep } from "../../../app/lib/site/sweep.server";
 
@@ -324,5 +325,101 @@ describe("a competitor's pricing page", () => {
     const afterSecond = homeFetches.mock.calls.length;
     await classifyCompetitorSites("2026-10-04T02:00:00Z");
     expect(homeFetches.mock.calls.length).toBe(afterSecond);
+  });
+
+  describe("rival social links", () => {
+    const SOCIAL_HTML = `<html><head><title>Rival</title></head><body><nav><a href="/plans">Plans</a></nav>
+<main><p>${"We make training clothes for people who train hard and rest harder. ".repeat(6)}</p></main>
+<footer><a href="https://www.youtube.com/@rivalshop">YouTube</a></footer></body></html>`;
+    const BARE_HTML = `<html><head><title>Rival</title></head><body><nav><a href="/plans">Plans</a></nav>
+<main><p>${"We make training clothes for people who train hard and rest harder. ".repeat(6)}</p></main></body></html>`;
+
+    function serve(html: string | null) {
+      const homeFetches = vi.fn(() =>
+        Promise.resolve(
+          html === null
+            ? new Response("", { status: 500 })
+            : new Response(html, { status: 200, headers: { "content-type": "text/html" } }),
+        ),
+      );
+      vi.stubGlobal("fetch", (input: RequestInfo | URL) => {
+        const url = input instanceof Request ? input.url : String(input);
+        return url === HOME ? homeFetches() : Promise.resolve(new Response("", { status: 404 }));
+      });
+      return homeFetches;
+    }
+
+    async function identityOf(
+      id: string,
+    ): Promise<{ socials?: { platform: string; url: string }[]; socialsReadAt?: string }> {
+      const row = await env.DB.prepare("SELECT identity_json FROM entity WHERE id = ?1")
+        .bind(id)
+        .first<{ identity_json: string }>();
+      return JSON.parse(row?.identity_json ?? "{}") as {
+        socials?: { platform: string; url: string }[];
+        socialsReadAt?: string;
+      };
+    }
+
+    it("does not overwrite socials the rival already has", async () => {
+      const mine = JSON.stringify({ socials: [{ platform: "youtube", url: "https://www.youtube.com/@mine" }] });
+      await env.DB.prepare("UPDATE entity SET identity_json = ?2 WHERE id = ?1").bind(RIVAL, mine).run();
+      serve(SOCIAL_HTML);
+
+      await classifyCompetitorSites(NOW);
+
+      expect((await identityOf(RIVAL)).socials).toEqual([
+        { platform: "youtube", url: "https://www.youtube.com/@mine" },
+      ]);
+    });
+
+    it("leaves the owner's own brand untouched", async () => {
+      await env.DB.prepare('UPDATE entity SET identity_json = \'{"kind":"domain"}\' WHERE id = ?1').bind(SELF).run();
+      serve(SOCIAL_HTML);
+
+      await classifyCompetitorSites(NOW);
+
+      expect(await identityOf(SELF)).toEqual({ kind: "domain" });
+    });
+
+    it("marks a rival with no social links as read so it is not fetched again", async () => {
+      const homeFetches = serve(BARE_HTML);
+
+      await classifyCompetitorSites(NOW);
+      const identity = await identityOf(RIVAL);
+      expect(identity.socials).toEqual([]);
+      expect(identity.socialsReadAt).toBe(NOW);
+      const after = homeFetches.mock.calls.length;
+
+      await classifyCompetitorSites("2026-10-03T02:00:00Z");
+      expect(homeFetches.mock.calls.length).toBe(after);
+    });
+
+    it("does not retry an unreadable home page before the three-day backoff", async () => {
+      const homeFetches = serve(null);
+
+      await classifyCompetitorSites(NOW);
+      const after = homeFetches.mock.calls.length;
+      expect((await identityOf(RIVAL)).socialsReadAt).toBeUndefined();
+
+      await classifyCompetitorSites("2026-10-03T02:00:00Z");
+      expect(homeFetches.mock.calls.length).toBe(after);
+    });
+
+    it("lists rivals to read without failing on one whose saved identity is not valid JSON", async () => {
+      await env.DB.prepare("UPDATE entity SET identity_json = 'not json' WHERE id = ?1").bind(RIVAL).run();
+      await env.DB.prepare(
+        "INSERT INTO page (id, entity_id, url, role, discovered_at) VALUES ('pg-bad-json', ?1, ?2, 'home', ?3)",
+      )
+        .bind(RIVAL, HOME, NOW)
+        .run();
+      await env.DB.prepare(
+        "INSERT INTO page (id, entity_id, url, role, role_decided_for_hash, discovered_at) VALUES ('pg-bad-json-2', ?1, 'https://rival-shop.com/about', 'other', 'h', ?2)",
+      )
+        .bind(RIVAL, NOW)
+        .run();
+
+      await expect(readCompetitorsToClassify(10, NOW)).resolves.toEqual([]);
+    });
   });
 });

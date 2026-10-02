@@ -415,7 +415,7 @@ export async function readCompetitors(
 }
 
 const FILL_COMPETITOR_SOCIALS =
-  "UPDATE entity SET identity_json = json_set(identity_json, '$.socials', json(?3), '$.socialsReadAt', ?4) WHERE id = ?1 AND workspace_id = ?2 AND role = 'competitor' AND coalesce(json_array_length(identity_json, '$.socials'), 0) = 0";
+  "UPDATE entity SET identity_json = json_set(identity_json, '$.socials', json(?3), '$.socialsReadAt', ?4) WHERE id = ?1 AND workspace_id = ?2 AND role = 'competitor' AND json_valid(identity_json) AND coalesce(json_array_length(identity_json, '$.socials'), 0) = 0";
 
 export async function fillCompetitorSocials(input: {
   workspaceId: string;
