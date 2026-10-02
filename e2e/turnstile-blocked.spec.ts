@@ -52,15 +52,17 @@ test("the working bot check shows no failure notice on /login @smoke", async ({ 
   const response = await page.goto("/login");
   expect(response?.status()).toBe(200);
 
-  // The script is allowed here, so the widget mints its response field and no
-  // paragraph is rendered. The widget's own container is the mount proof.
-  await expect(page.locator("[data-turnstile]")).toHaveCount(1);
-  await expect(page.getByRole("alert")).toHaveCount(0);
-  // Focus the email field, which is what starts the load on /login
-  // (startOn="email-focus"), and give the load a beat to settle. On the local
-  // lane the widget mints the always-pass test token; on production the Access
-  // pre-clearance means no token is expected. The absence of the failure
-  // paragraph is the assertion in both.
+  // The script is allowed here, so the widget loads and api.render injects its
+  // response field. That field is the positive signal: without it, "no alert"
+  // would be measured inside the window before a slow load fails, and a real
+  // false failure would pass this test.
   await page.locator("#email").focus();
+  const field = page.locator('input[name="cf-turnstile-response"]');
+  await expect(field).toHaveCount(1, { timeout: 30_000 });
+  // Then, and only then, the absence claim: the response field with no
+  // failure notice beside it. On production the Access pre-clearance means no
+  // token is expected, so the field's existence is the settled load signal in
+  // both lanes.
   await expect(page.getByRole("alert")).toHaveCount(0);
+  await expect(page.locator("[data-turnstile]")).toHaveCount(1);
 });

@@ -70,9 +70,9 @@ export function TurnstileWidget({ siteKey, startOn }: { siteKey: string; startOn
             "response-field-name": "cf-turnstile-response",
           });
         })
-        .catch(() => {
+        .catch((error: unknown) => {
           if (cancelled) return;
-          console.error(JSON.stringify({ event: "turnstile.load_failed" }));
+          console.error(JSON.stringify({ event: "turnstile.load_failed", reason: String(error) }));
           setFailed(true);
         });
     };
