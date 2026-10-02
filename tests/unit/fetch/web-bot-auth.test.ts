@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { verify } from "web-bot-auth";
 import { verifierFromJWK } from "web-bot-auth/crypto";
 
@@ -22,6 +22,10 @@ const NOW = new Date("2026-10-02T10:00:00Z");
 
 beforeEach(() => {
   delete vars.env.WEB_BOT_AUTH_KEY;
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
 });
 
 describe("signedHeaders without a key", () => {
@@ -55,6 +59,26 @@ describe("signedHeaders with a key", () => {
       now: NOW,
     });
     expect(verified.keyid).toBe(verifier.keyid);
+    expect(out.get("signature-input")).toContain('tag="web-bot-auth"');
+    expect(out.get("signature-input")).toContain(`keyid="${verifier.keyid}"`);
+  });
+
+  it("fails open when signing throws, and logs a constant that carries nothing from the key", async () => {
+    const broken = JSON.stringify({ ...TEST_KEY, x: "!!not-a-point!!", d: "SECRET-D-VALUE" });
+    vars.env.WEB_BOT_AUTH_KEY = broken;
+    const log = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const headers = { "user-agent": CRAWLER_USER_AGENT };
+    expect(await signedHeaders(URL_UNDER_TEST, headers, NOW)).toBe(headers);
+    expect(log.mock.calls.flat().join(" ")).not.toContain("SECRET-D-VALUE");
+    expect(log).toHaveBeenCalledWith(JSON.stringify({ event: "web_bot_auth.sign_failed" }));
+  });
+
+  it("never echoes unparseable secret text into the log", async () => {
+    vars.env.WEB_BOT_AUTH_KEY = '{"d":"SECRET-D-VALUE" oops';
+    const log = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    await signedHeaders(URL_UNDER_TEST, { "user-agent": CRAWLER_USER_AGENT }, NOW);
+    expect(log.mock.calls.flat().join(" ")).not.toContain("SECRET-D-VALUE");
+    expect(log).toHaveBeenCalledWith(JSON.stringify({ event: "web_bot_auth.key_unreadable" }));
   });
 
   it("signs each request with a fresh nonce", async () => {

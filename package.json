@@ -44,7 +44,7 @@
     "tldts": "^7.4.14",
     "uplot": "1.6.32",
     "uplot-react": "1.2.4",
-    "web-bot-auth": "^0.2.0",
+    "web-bot-auth": "0.2.0",
     "zod": "^4.6.5",
     "zod-openapi": "^6.0.2"
   },
