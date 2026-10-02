@@ -12,8 +12,6 @@ import { required } from "../../app/lib/required";
 
 const JUDGE_CHUNK = 10;
 
-export { READ_THIS_FIRST } from "../../app/lib/read-this-first";
-
 const WEEK_ITEMS = `SELECT s.id AS signal_id, s.entity_id AS entity_id, s.kind AS kind, s.title AS title, s.summary AS summary,
        s.url AS url, s.aspect AS aspect, s.observed_at AS observed_at
 FROM signal s

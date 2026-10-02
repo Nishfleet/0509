@@ -3,7 +3,7 @@ import { env as workerEnv } from "cloudflare:workers";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { readOpenBreakageBaselines } from "../../../app/lib/data/incident.server";
-import { nextOwnSiteCheck } from "../../../app/lib/incident-recheck";
+import { nextHour } from "../../../app/lib/home-standing";
 import { checkPage } from "../../../app/lib/site/check-page.server";
 import { planSiteSweep, publishSiteChange } from "../../../app/lib/site/sweep.server";
 import { formatDate } from "../../../workers/delivery/brief-template";
@@ -278,7 +278,7 @@ describe("own-site incident re-check round-trip on the fixture Worker (0509#4047
     expect(incident).toMatchObject({ kind: "breakage", closed_at: null });
     expect(incident.opened_at).toMatch(ISO_UTC);
 
-    const recheckAt = nextOwnSiteCheck(new Date(incident.opened_at));
+    const recheckAt = nextHour(new Date(incident.opened_at)).toISOString();
 
     // The baseline the close lane resolves is the one the paved opener stored
     // as previousTextKey (the shape COALESCE now reads on either dialect).

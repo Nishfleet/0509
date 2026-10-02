@@ -4,7 +4,7 @@ import { claimChangeSlot, claimSendAttempt, resolveSendAttempt } from "../../app
 import { readSlackTarget, writeUnsubscribeToken } from "../../app/lib/data/send_target.server";
 import type { BriefPayload } from "../../app/lib/brief-payload";
 import { parseBriefPayload } from "../../app/lib/brief-payload";
-import { nextOwnSiteCheck } from "../../app/lib/incident-recheck";
+import { nextHour } from "../../app/lib/home-standing";
 import { slackEscape } from "../../app/lib/slack-webhook";
 import { postToSlack } from "../../app/lib/slack.server";
 import {
@@ -287,7 +287,7 @@ function renderIncidentEmail(incident: IncidentRow, to: string, token: string) {
           site,
           kind: incident.kind,
           opened_at: incident.opened_at,
-          recheck_at: nextOwnSiteCheck(new Date(incident.opened_at)),
+          recheck_at: nextHour(new Date(incident.opened_at)).toISOString(),
           mark: incident.mark,
           link: INCIDENT_LINK,
           timezone: incident.timezone,
