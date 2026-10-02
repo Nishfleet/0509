@@ -172,75 +172,18 @@ export async function readUnwatchedPricingPages(sourceId: string): Promise<{ ent
   return pricingPageRows.parse(rows.results).map((row) => ({ entityId: row.entity_id, url: row.url }));
 }
 
-const BLOCKED_RIVALS = `SELECT e.id AS entity_id, e.workspace_id AS workspace_id, e.domain AS domain
-FROM entity e
-WHERE e.role = 'competitor' AND e.state = 'on'
-  AND EXISTS (SELECT 1 FROM page h WHERE h.entity_id = e.id AND h.role = 'home' AND h.deferred_at IS NOT NULL)
-  AND NOT EXISTS (
-    SELECT 1 FROM page a
-    JOIN watch w ON w.entity_id = a.entity_id AND w.target_key = a.url AND w.is_active = 1
-    WHERE a.entity_id = e.id AND a.role = 'blog' AND a.role_decided_for_hash IS NULL AND a.deferred_at IS NULL
-  )
-ORDER BY random()
-LIMIT ?1`;
+const INSERT_ALTERNATE_PAGE = `INSERT INTO page (id, entity_id, url, role, transport, transport_tested_at, discovered_at)
+VALUES (?1, ?2, ?3, 'blog', ?4, ?5, ?5)
+ON CONFLICT (entity_id, url) DO NOTHING`;
 
-const blockedRivalRows = z.array(z.object({ entity_id: z.string(), workspace_id: z.string(), domain: z.string() }));
-
-export interface BlockedRival {
-  entityId: string;
-  workspaceId: string;
-  domain: string;
-}
-
-export async function readBlockedRivals(limit: number): Promise<readonly BlockedRival[]> {
-  const rows = await env.DB.prepare(BLOCKED_RIVALS).bind(limit).all();
-  return blockedRivalRows
-    .parse(rows.results)
-    .map((row) => ({ entityId: row.entity_id, workspaceId: row.workspace_id, domain: row.domain }));
-}
-
-const RECENT_ALTERNATE_ATTEMPTS =
-  "SELECT url FROM page WHERE entity_id = ?1 AND role = 'other' AND role_decided_for_hash IS NULL AND deferred_at >= ?2";
-
-export async function readRecentAlternateAttempts(entityId: string, since: string): Promise<ReadonlySet<string>> {
-  const rows = await env.DB.prepare(RECENT_ALTERNATE_ATTEMPTS).bind(entityId, since).all();
-  return new Set(
-    z
-      .array(z.object({ url: z.string() }))
-      .parse(rows.results)
-      .map((row) => row.url),
-  );
-}
-
-const RECORD_ALTERNATE_ATTEMPT = `INSERT INTO page (id, entity_id, url, role, transport, transport_reason, transport_tested_at, deferred_at, discovered_at)
-VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?7)
-ON CONFLICT (entity_id, url) DO UPDATE SET
-  role = excluded.role,
-  transport = excluded.transport,
-  transport_reason = excluded.transport_reason,
-  transport_tested_at = excluded.transport_tested_at,
-  deferred_at = excluded.deferred_at
-WHERE page.role_decided_for_hash IS NULL`;
-
-export async function recordAlternateAttempt(input: {
+export async function insertAlternatePage(input: {
   entityId: string;
   url: string;
+  transport: "fetch" | "browser";
   at: string;
-  outcome: { adopted: true; transport: "fetch" | "browser" } | { adopted: false; reason: string };
 }): Promise<void> {
-  const { entityId, url, at, outcome } = input;
-  await env.DB.prepare(RECORD_ALTERNATE_ATTEMPT)
-    .bind(
-      crypto.randomUUID(),
-      entityId,
-      url,
-      outcome.adopted ? "blog" : "other",
-      outcome.adopted ? outcome.transport : null,
-      outcome.adopted ? null : outcome.reason,
-      at,
-      outcome.adopted ? null : at,
-    )
-    .run();
+  const { entityId, url, transport, at } = input;
+  await env.DB.prepare(INSERT_ALTERNATE_PAGE).bind(crypto.randomUUID(), entityId, url, transport, at).run();
 }
 
 const RECORD_TRANSPORT =

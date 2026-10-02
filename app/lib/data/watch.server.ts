@@ -259,10 +259,72 @@ export async function deactivateWatch(watchId: string): Promise<void> {
   await env.DB.prepare(DEACTIVATE_WATCH).bind(watchId).run();
 }
 
+const ALTERNATE_MARKER = (alias: string): string =>
+  `coalesce(CASE WHEN json_valid(${alias}.config_json) THEN json_extract(${alias}.config_json, '$.alternateHome') END, 0) = 1`;
+
+const BLOCKED_RIVALS = `SELECT e.id AS entity_id, e.workspace_id AS workspace_id, e.domain AS domain
+FROM entity e
+WHERE e.role = 'competitor' AND e.state = 'on'
+  AND EXISTS (SELECT 1 FROM page h WHERE h.entity_id = e.id AND h.role = 'home' AND h.deferred_at IS NOT NULL)
+  AND NOT EXISTS (SELECT 1 FROM watch w WHERE w.entity_id = e.id AND w.is_active = 1 AND ${ALTERNATE_MARKER("w")})
+ORDER BY random()
+LIMIT ?1`;
+
+const blockedRivalRows = z.array(z.object({ entity_id: z.string(), workspace_id: z.string(), domain: z.string() }));
+
+export interface BlockedRival {
+  entityId: string;
+  workspaceId: string;
+  domain: string;
+}
+
+export async function readBlockedRivals(limit: number): Promise<readonly BlockedRival[]> {
+  const rows = await env.DB.prepare(BLOCKED_RIVALS).bind(limit).all();
+  return blockedRivalRows
+    .parse(rows.results)
+    .map((row) => ({ entityId: row.entity_id, workspaceId: row.workspace_id, domain: row.domain }));
+}
+
+const ALTERNATE_ATTEMPTS = `SELECT w.target_key AS url FROM watch w
+WHERE w.entity_id = ?1 AND w.source_id = ?2
+  AND (NOT (${ALTERNATE_MARKER("w")}) OR CASE WHEN json_valid(w.config_json) THEN json_extract(w.config_json, '$.at') END >= ?3)`;
+
+export async function readAlternateAttempts(
+  entityId: string,
+  sourceId: string,
+  since: string,
+): Promise<ReadonlySet<string>> {
+  const rows = await env.DB.prepare(ALTERNATE_ATTEMPTS).bind(entityId, sourceId, since).all();
+  return new Set(
+    z
+      .array(z.object({ url: z.string() }))
+      .parse(rows.results)
+      .map((row) => row.url),
+  );
+}
+
+const RECORD_ALTERNATE_ATTEMPT = `INSERT INTO watch (id, entity_id, source_id, target_key, is_active, config_json)
+VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+ON CONFLICT (entity_id, source_id, target_key) DO UPDATE SET is_active = excluded.is_active, config_json = excluded.config_json
+WHERE ${ALTERNATE_MARKER("watch")}`;
+
+export async function recordAlternateAttempt(input: {
+  entityId: string;
+  sourceId: string;
+  url: string;
+  at: string;
+  outcome: { adopted: true } | { adopted: false; reason: string };
+}): Promise<void> {
+  const { entityId, sourceId, url, at, outcome } = input;
+  const config = JSON.stringify({ alternateHome: 1, at, ...(outcome.adopted ? {} : { reason: outcome.reason }) });
+  await env.DB.prepare(RECORD_ALTERNATE_ATTEMPT)
+    .bind(crypto.randomUUID(), entityId, sourceId, url, outcome.adopted ? 1 : 0, config)
+    .run();
+}
+
 const SITE_WATCH_SUMMARY = `SELECT COUNT(*) AS pages, MAX(w.last_polled_at) AS last_polled_at,
        (EXISTS (SELECT 1 FROM page hp WHERE hp.entity_id = ?2 AND hp.role = 'home' AND hp.deferred_at IS NOT NULL)
-        AND NOT EXISTS (SELECT 1 FROM page ap WHERE ap.entity_id = ?2 AND ap.role = 'blog' AND ap.role_decided_for_hash IS NULL
-          AND ap.deferred_at IS NULL AND EXISTS (SELECT 1 FROM watch aw WHERE aw.entity_id = ap.entity_id AND aw.target_key = ap.url AND aw.is_active = 1))) AS unreadable
+        AND NOT EXISTS (SELECT 1 FROM watch aw WHERE aw.entity_id = ?2 AND aw.is_active = 1 AND ${ALTERNATE_MARKER("aw")})) AS unreadable
 FROM watch w
 JOIN source src ON src.id = w.source_id AND src.kind = 'site'
 JOIN entity e ON e.id = w.entity_id AND e.workspace_id = ?1
