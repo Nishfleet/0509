@@ -202,6 +202,79 @@ describe("Sentry Logs (#6604)", () => {
     expect(attribute(shipped, "at")).toBe('"1970-01-01T00:00:00.000Z"');
   });
 
+  it("scrubs attribute keys at every level and keeps both values when two keys collapse", async () => {
+    logger.warn("probe.keys", {
+      "ada@customer.example": 1,
+      "bo@customer.example": 2,
+      kept: 3,
+      nested: { "cy@customer.example": 4, "di@customer.example": 5 },
+    });
+
+    await flush();
+
+    const [shipped] = logItems().filter((log) => log.body?.includes("probe.keys"));
+    const keys = Object.keys(shipped?.attributes ?? {});
+    expect(keys.filter((key) => key.includes("customer.example"))).toEqual([]);
+    expect(attribute(shipped, "[redacted]")).toBe("1");
+    expect(attribute(shipped, "[redacted]#2")).toBe("2");
+    expect(attribute(shipped, "kept")).toBe("3");
+    expect(attribute(shipped, "nested")).toBe('{"[redacted]":4,"[redacted]#2":5}');
+  });
+
+  it("redacts a value that is not a plain object, array or Date, so nothing rides a hidden getter or toJSON", async () => {
+    class Hidden {
+      toJSON(): string {
+        return "ada@customer.example";
+      }
+    }
+    logger.warn("probe.opaque", {
+      failure: new Error("ada@customer.example"),
+      hidden: new Hidden(),
+      table: new Map([["who", "ada@customer.example"]]),
+      at: new Date(0),
+    });
+
+    await flush();
+
+    const [shipped] = logItems().filter((log) => log.body?.includes("probe.opaque"));
+    expect(shipped).toBeDefined();
+    expect(attribute(shipped, "failure")).toBe("[redacted]");
+    expect(attribute(shipped, "hidden")).toBe("[redacted]");
+    expect(attribute(shipped, "table")).toBe("[redacted]");
+    expect(attribute(shipped, "at")).toBe('"1970-01-01T00:00:00.000Z"');
+  });
+
+  it("redacts every container past the 2000 visited cap, never copying one through", async () => {
+    logger.warn("probe.wide", {
+      rows: Array.from({ length: 2500 }, () => ({ who: "ada@customer.example" })),
+    });
+
+    await flush();
+
+    const [shipped] = logItems().filter((log) => log.body?.includes("probe.wide"));
+    const rows = JSON.parse(attribute(shipped, "rows")) as unknown[];
+    expect(rows).toHaveLength(2500);
+    expect(rows[0]).toEqual({ who: "[redacted]" });
+    expect(rows[1998]).toEqual({ who: "[redacted]" });
+    expect(rows[1999]).toBe("[redacted]");
+    expect(rows[2499]).toBe("[redacted]");
+    expect(attribute(shipped, "rows")).not.toContain("customer.example");
+  });
+
+  it("scrubs the template and parameter attributes of a formatted log line", async () => {
+    const email = "ada@customer.example";
+    logger.warn(logger.fmt`probe.formatted ${email} signed in`);
+
+    await flush();
+
+    const [shipped] = logItems().filter((log) => log.body?.includes("probe.formatted"));
+    expect(shipped).toBeDefined();
+    expect(shipped?.body).not.toContain("customer.example");
+    expect(attribute(shipped, "sentry.message.template")).toBe("probe.formatted %s signed in");
+    expect(attribute(shipped, "sentry.message.parameter.0")).toBe("[redacted]");
+    expect(JSON.stringify(shipped)).not.toContain("customer.example");
+  });
+
   it("keeps the live console lines under the #5786 log gate", { timeout: 60_000 }, async () => {
     const eslint = new ESLint({ cwd: REPO_ROOT });
     for (const rel of ["workers/sentry.ts", "workers/app.ts", "workers/standing/nightly.ts"]) {
