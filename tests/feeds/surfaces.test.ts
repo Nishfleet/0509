@@ -80,13 +80,13 @@ describe("the developments feed", () => {
 });
 
 describe("coverage", () => {
-  it("lists the feeds as not live, so no public claim names them yet", () => {
+  it("lists the feeds as live, so the public claim names them", () => {
     const group = COVERAGE.find((entry) => entry.kind === "Blog and changelog");
     expect(group?.sources).toEqual([
-      { id: "content.feed", label: "Blog and changelog feeds", live: false, sourceKey: "feed.rss" },
+      { id: "content.feed", label: "Blog and changelog feeds", live: true, sourceKey: "feed.rss" },
     ]);
-    expect(LIVE_COVERAGE.some((entry) => entry.kind === "Blog and changelog")).toBe(false);
-    expect(WATCHED_NOUNS).not.toContain("blog");
-    expect(FEATURES.join(" ")).not.toContain("Blog and changelog");
+    expect(LIVE_COVERAGE.some((entry) => entry.kind === "Blog and changelog")).toBe(true);
+    expect(WATCHED_NOUNS).toContain("blog and changelog posts");
+    expect(FEATURES.join(" ")).toContain("Blog and changelog");
   });
 });

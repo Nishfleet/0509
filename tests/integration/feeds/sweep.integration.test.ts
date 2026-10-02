@@ -78,6 +78,24 @@ describe("nightly feed sweep workflow", () => {
     expect(web.calls).toEqual([]);
   });
 
+  it("limits the sweep to the pilot workspace's owner while the source names one", async () => {
+    const pilot = (email: string) =>
+      env.DB.prepare(
+        "UPDATE source SET config_json = json_object('robots', 'honoured', 'pilot', ?) WHERE key = 'feed.rss'",
+      )
+        .bind(email)
+        .run();
+
+    await pilot("someone-else@0509.io");
+    expect(await planFeedSweep()).toEqual({ entities: [], targets: [] });
+    expect(await runSweep("feed-pilot-out")).toMatchObject({ discovered: 0, feeds: 0, failed: 0 });
+    expect(web.calls).toEqual([]);
+
+    await pilot("feed-sweep@0509.io");
+    expect((await planFeedSweep()).entities.map((entity) => entity.id)).toEqual(["ent-rival"]);
+    expect(await runSweep("feed-pilot-in")).toMatchObject({ discovered: 1, feeds: 1, first: 1 });
+  });
+
   it("discovers the declared feed, baselines it, then files the new post on the next night", async () => {
     const first = await runSweep("feed-night-1");
 
