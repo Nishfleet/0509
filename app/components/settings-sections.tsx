@@ -27,8 +27,7 @@ export function SettingsJumps({ hasBrief, hasPlan }: { hasBrief: boolean; hasPla
     >
       <ul className="flex flex-wrap gap-x-5 gap-y-1 min-[1000px]:flex-col min-[1000px]:gap-y-0">
         {JUMPS.filter(
-          (jump) =>
-            (jump.href !== "#settings-brief" || hasBrief) && (jump.href !== "#settings-plan" || hasPlan),
+          (jump) => (jump.href !== "#settings-brief" || hasBrief) && (jump.href !== "#settings-plan" || hasPlan),
         ).map((jump) => (
           <li key={jump.href}>
             <a
