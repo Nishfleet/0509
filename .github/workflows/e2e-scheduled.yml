@@ -31,7 +31,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: e2e-scheduled-${{ inputs.spec && 'spec' || github.event.schedule == '30 6 * * *' && 'soak' || inputs.journey == 'soak-report' && 'soak' || inputs.journey == 'suite' && 'suite' || github.event.schedule == '17 4 * * *' && 'signin' || inputs.journey == 'signin' && 'signin' || startsWith(inputs.journey, 'j8-') && 'j8' || 'j12' }}
+  group: e2e-scheduled-${{ inputs.journey == 'proof-4012' && 'proof4012' || inputs.spec && 'spec' || github.event.schedule == '30 6 * * *' && 'soak' || inputs.journey == 'soak-report' && 'soak' || inputs.journey == 'suite' && 'suite' || github.event.schedule == '17 4 * * *' && 'signin' || inputs.journey == 'signin' && 'signin' || startsWith(inputs.journey, 'j8-') && 'j8' || 'j12' }}
   cancel-in-progress: false
 
 jobs:
