@@ -126,3 +126,18 @@ export async function setOwnSiteAlerts(workspaceId: string, ownSiteAlerts: boole
     .bind(ownSiteAlerts ? 1 : 0, workspaceId)
     .run();
 }
+
+const SELECT_CHANGE_ALERTS = "SELECT change_alerts FROM workspace WHERE id = ?";
+
+const UPDATE_CHANGE_ALERTS = "UPDATE workspace SET change_alerts = ? WHERE id = ?";
+
+export async function readChangeAlerts(workspaceId: string): Promise<boolean> {
+  const row = await env.DB.prepare(SELECT_CHANGE_ALERTS).bind(workspaceId).first<{ change_alerts: number | null }>();
+  return (row?.change_alerts ?? 1) === 1;
+}
+
+export async function setChangeAlerts(workspaceId: string, changeAlerts: boolean): Promise<void> {
+  await env.DB.prepare(UPDATE_CHANGE_ALERTS)
+    .bind(changeAlerts ? 1 : 0, workspaceId)
+    .run();
+}

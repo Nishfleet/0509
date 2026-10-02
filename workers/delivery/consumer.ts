@@ -1,13 +1,22 @@
 import { markDigestSent } from "../../app/lib/data/digest.server";
 import { claimIncidentNotice } from "../../app/lib/data/incident_notice.server";
-import { claimSendAttempt, resolveSendAttempt } from "../../app/lib/data/send_attempt.server";
+import { claimChangeSlot, claimSendAttempt, resolveSendAttempt } from "../../app/lib/data/send_attempt.server";
 import { writeUnsubscribeToken } from "../../app/lib/data/send_target.server";
 import type { BriefPayload } from "../../app/lib/brief-payload";
 import { parseBriefPayload } from "../../app/lib/brief-payload";
 import { nextOwnSiteCheck } from "../../app/lib/incident-recheck";
+import {
+  changeHeadline,
+  markFromHunks,
+  parseDiffHunks,
+  parseSiteChangePayload,
+  type SiteChangePayload,
+} from "../../app/lib/site-change";
 import { pageHost } from "../../app/lib/site/own-site.server";
 
 import { renderBrief } from "./brief-template";
+import { SETTINGS_LINK, unsubscribeHeaders, type AlertFooterContext } from "./alert-footer";
+import { renderChange, renderChangeOverflow } from "./change-template";
 import { renderIncidentFixed, renderIncidentOpen } from "./incident-template";
 import { errorText, sendMessage, type SendResult } from "./send";
 
@@ -42,10 +51,24 @@ export interface IncidentMessage {
   incident_id: string;
 }
 
-export type DeliveryMessage = DigestMessage | IncidentMessage;
+export interface ChangeMessage {
+  signal_id: string;
+}
+
+export type DeliveryMessage = DigestMessage | IncidentMessage | ChangeMessage;
 
 type DeliveryOutcome =
-  "sent" | "failed" | "suppressed" | "duplicate" | "no_target" | "no_digest" | "no_incident" | "not_self" | "muted";
+  | "sent"
+  | "failed"
+  | "suppressed"
+  | "duplicate"
+  | "no_target"
+  | "no_digest"
+  | "no_incident"
+  | "not_self"
+  | "muted"
+  | "no_signal"
+  | "capped";
 
 interface DeliveryResult {
   outcome: DeliveryOutcome;
@@ -55,6 +78,8 @@ interface DeliveryResult {
 
 const EMAIL_CHANNEL_KEY = "email";
 const INCIDENT_LINK = "https://0509.io/app/alerts";
+const CHANGE_LINK = "https://0509.io/app/alerts";
+export const CHANGE_DAILY_CAP = 5;
 
 async function readDigest(env: Env, digestId: string): Promise<MessageRow | null> {
   return env.DB.prepare(
@@ -121,7 +146,7 @@ type NoTargetReason = "no_row" | "channel_disabled" | "unverified";
 async function noTarget(
   env: Env,
   workspaceId: string,
-  item: { digest_id: string } | { incident_id: string },
+  item: { digest_id: string } | { incident_id: string } | { signal_id: string },
 ): Promise<DeliveryResult> {
   const row = await env.DB.prepare(
     `SELECT st.is_verified, c.is_enabled
@@ -184,10 +209,7 @@ function render(message: MessageRow, to: string, token: string): EmailMessageBui
     subject: message.subject ?? rendered.subject,
     html: rendered.html,
     text: rendered.text,
-    headers: {
-      "List-Unsubscribe": `<${unsubscribeUrl}>`,
-      "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
-    },
+    headers: unsubscribeHeaders(unsubscribeUrl),
   };
 }
 
@@ -254,7 +276,8 @@ export async function deliver(env: Env, message: DigestMessage): Promise<Deliver
   });
 }
 
-function renderIncidentEmail(incident: IncidentRow, to: string) {
+function renderIncidentEmail(incident: IncidentRow, to: string, token: string) {
+  const unsubscribeUrl = `${UNSUBSCRIBE_BASE_URL}${token}`;
   const site = pageHost(incident.page_url);
   const rendered =
     incident.closed_at === null
@@ -266,6 +289,8 @@ function renderIncidentEmail(incident: IncidentRow, to: string) {
           mark: incident.mark,
           link: INCIDENT_LINK,
           timezone: incident.timezone,
+          unsubscribe_url: unsubscribeUrl,
+          settings_link: SETTINGS_LINK,
         })
       : renderIncidentFixed({
           site,
@@ -273,6 +298,8 @@ function renderIncidentEmail(incident: IncidentRow, to: string) {
           closed_at: incident.closed_at,
           link: INCIDENT_LINK,
           timezone: incident.timezone,
+          unsubscribe_url: unsubscribeUrl,
+          settings_link: SETTINGS_LINK,
         });
   return {
     to,
@@ -280,6 +307,7 @@ function renderIncidentEmail(incident: IncidentRow, to: string) {
     subject: rendered.subject,
     html: rendered.html,
     text: rendered.text,
+    headers: unsubscribeHeaders(unsubscribeUrl),
   };
 }
 
@@ -331,8 +359,139 @@ export async function deliverIncident(env: Env, message: IncidentMessage): Promi
   return sendAndResolve(env, {
     claimId: claim.id,
     idempotencyKey,
-    send: () => sendMessage(env.EMAIL, renderIncidentEmail(incident, target.target_value)),
+    send: async () => {
+      const token = await ensureUnsubscribeToken(env, target);
+      return sendMessage(env.EMAIL, renderIncidentEmail(incident, target.target_value, token));
+    },
   });
+}
+
+interface ChangeRow {
+  id: string;
+  workspace_id: string;
+  payload_json: string;
+  observed_at: string;
+  name: string | null;
+  domain: string;
+  change_alerts: number;
+  timezone: string;
+}
+
+async function readChange(env: Env, signalId: string): Promise<ChangeRow | null> {
+  return env.DB.prepare(
+    `SELECT s.id, s.workspace_id, s.payload_json, s.observed_at, e.name, e.domain, w.change_alerts, w.timezone
+       FROM signal s
+       JOIN entity e ON e.id = s.entity_id
+       JOIN workspace w ON w.id = s.workspace_id
+      WHERE s.id = ? AND e.role = 'competitor' AND s.is_tombstoned = 0`,
+  )
+    .bind(signalId)
+    .first<ChangeRow>();
+}
+
+async function readChangeMark(env: Env, diffKey: string | null) {
+  if (diffKey === null) return null;
+  const stored = await env.SNAPSHOTS.get(diffKey);
+  const hunks = stored === null ? null : parseDiffHunks(await stored.text());
+  return hunks === null ? null : markFromHunks(hunks);
+}
+
+async function renderChangeEmail(
+  env: Env,
+  input: { change: ChangeRow; payload: SiteChangePayload; capped: boolean; footer: AlertFooterContext },
+) {
+  const { change, payload, capped, footer } = input;
+  if (capped) return renderChangeOverflow({ ...footer, cap: CHANGE_DAILY_CAP, link: CHANGE_LINK });
+  return renderChange({
+    ...footer,
+    headline: changeHeadline({ name: change.name ?? change.domain, isSelf: false, role: payload.page.role }),
+    observed_at: change.observed_at,
+    mark: await readChangeMark(env, payload.diffKey),
+    link: CHANGE_LINK,
+    timezone: change.timezone,
+  });
+}
+
+async function claimChange(
+  env: Env,
+  input: { change: ChangeRow; target: TargetRow },
+): Promise<{ claim: { id: string } | null; capped: boolean; idempotencyKey: string }> {
+  const { change, target } = input;
+  const day = new Date().toISOString().slice(0, 10);
+  const idempotencyKey = `change:${change.id}:${target.id}`;
+  const slot = await claimChangeSlot(env.DB, {
+    idempotencyKey,
+    workspaceId: change.workspace_id,
+    targetId: target.id,
+    since: `${day}T00:00:00.000Z`,
+    cap: CHANGE_DAILY_CAP,
+  });
+  if (slot.kind === "claimed") return { claim: { id: slot.id }, capped: false, idempotencyKey };
+  if (slot.kind === "duplicate") return { claim: null, capped: false, idempotencyKey };
+  const overflowKey = `change-overflow:${change.workspace_id}:${day}`;
+  const overflow = await claimSendAttempt(env.DB, {
+    idempotencyKey: overflowKey,
+    workspaceId: change.workspace_id,
+    targetId: target.id,
+    digestId: null,
+  });
+  return { claim: overflow, capped: true, idempotencyKey: overflowKey };
+}
+
+async function sendChange(
+  env: Env,
+  input: { change: ChangeRow; payload: SiteChangePayload; target: TargetRow },
+): Promise<DeliveryResult> {
+  const { change, payload, target } = input;
+  const { claim, capped, idempotencyKey } = await claimChange(env, { change, target });
+  if (claim === null) {
+    return { outcome: capped ? "capped" : "duplicate", attempt_id: null, idempotency_key: idempotencyKey };
+  }
+
+  const result = await sendAndResolve(env, {
+    claimId: claim.id,
+    idempotencyKey,
+    send: async () => {
+      const token = await ensureUnsubscribeToken(env, target);
+      const footer = { unsubscribe_url: `${UNSUBSCRIBE_BASE_URL}${token}`, settings_link: SETTINGS_LINK };
+      const rendered = await renderChangeEmail(env, { change, payload, capped, footer });
+      return sendMessage(env.EMAIL, {
+        to: target.target_value,
+        from: "brief@0509.io",
+        subject: rendered.subject,
+        html: rendered.html,
+        text: rendered.text,
+        headers: unsubscribeHeaders(footer.unsubscribe_url),
+      });
+    },
+  });
+  return capped && result.outcome === "sent" ? { ...result, outcome: "capped" } : result;
+}
+
+export async function deliverChange(env: Env, message: ChangeMessage): Promise<DeliveryResult> {
+  const change = await readChange(env, message.signal_id);
+  const payload = change === null ? null : parseSiteChangePayload(change.payload_json);
+  if (change === null || payload === null) {
+    return { outcome: "no_signal", attempt_id: null, idempotency_key: null };
+  }
+  if (change.change_alerts === 0) {
+    return { outcome: "muted", attempt_id: null, idempotency_key: null };
+  }
+
+  const target = await readTarget(env, change.workspace_id);
+  if (!target) {
+    return noTarget(env, change.workspace_id, { signal_id: change.id });
+  }
+  if (await isSuppressed(env, target.target_value)) {
+    return { outcome: "suppressed", attempt_id: null, idempotency_key: null };
+  }
+  return sendChange(env, { change, payload, target });
+}
+
+function route(env: Env, parsed: DeliveryMessage): Promise<DeliveryResult> {
+  if ("incident_id" in parsed) return deliverIncident(env, parsed);
+  if ("signal_id" in parsed) return deliverChange(env, parsed);
+  return deliver(env, parsed);
 }
 
 export async function handleBatch(env: Env, batch: MessageBatch): Promise<DeliveryResult[]> {
@@ -344,7 +503,7 @@ export async function handleBatch(env: Env, batch: MessageBatch): Promise<Delive
       results.push({ outcome: "no_digest", attempt_id: null, idempotency_key: null });
       continue;
     }
-    const result = "incident_id" in parsed ? await deliverIncident(env, parsed) : await deliver(env, parsed);
+    const result = await route(env, parsed);
     if (result.outcome === "failed") {
       item.retry();
     } else {
@@ -374,12 +533,15 @@ function toDeliveryMessage(parsed: unknown): DeliveryMessage | null {
   if (parsed === null || typeof parsed !== "object") {
     return null;
   }
-  const candidate = parsed as { digest_id?: unknown; incident_id?: unknown };
+  const candidate = parsed as { digest_id?: unknown; incident_id?: unknown; signal_id?: unknown };
   if (typeof candidate.digest_id === "string") {
     return { digest_id: candidate.digest_id };
   }
   if (typeof candidate.incident_id === "string") {
     return { incident_id: candidate.incident_id };
+  }
+  if (typeof candidate.signal_id === "string") {
+    return { signal_id: candidate.signal_id };
   }
   return null;
 }

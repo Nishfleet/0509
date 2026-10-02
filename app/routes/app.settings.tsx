@@ -3,7 +3,7 @@ import type { Route } from "./+types/app.settings";
 import { DeleteAccount, ExportData } from "../components/account-settings";
 import { DismissedBrands } from "../components/dismissed-brands";
 import { Footer } from "../components/footer";
-import { OwnSiteAlertsSetting } from "../components/own-site-alerts-setting";
+import { ChangeAlertsSetting, OwnSiteAlertsSetting } from "../components/own-site-alerts-setting";
 import { PlanSection } from "../components/plan-settings";
 import { PAGE, PageHeading } from "../components/page-heading";
 import { AccountSection, AgentsSection, BriefSection } from "../components/settings-sections";
@@ -33,6 +33,7 @@ export default function Page({ loaderData, actionData }: Route.ComponentProps) {
       />
       {loaderData.schedule === null ? null : <BriefSection schedule={loaderData.schedule} />}
       <OwnSiteAlertsSetting on={loaderData.ownSiteAlerts} />
+      <ChangeAlertsSetting on={loaderData.changeAlerts} />
       <DismissedBrands dismissed={loaderData.dismissed} />
       <AgentsSection />
       <PlanSection plan={loaderData.plan} />

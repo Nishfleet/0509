@@ -12,8 +12,10 @@ import { readPlanSummary } from "./data/plan.server";
 import { readUserDismissed, restoreSuggestion } from "./data/suggestion.server";
 import {
   readBriefScheduleForOwner,
+  readChangeAlerts,
   readOwnSiteAlerts,
   readWorkspaceIdForOwner,
+  setChangeAlerts,
   setOwnSiteAlerts,
 } from "./data/workspace.server";
 import { readDeliveryAddress, saveDeliveryAddress } from "./delivery-address.server";
@@ -62,17 +64,22 @@ export async function readSettings(user: SettingsUser) {
         };
   const workspaceId = await readWorkspaceIdForOwner(user.id);
   const ownSiteAlerts = workspaceId === null ? true : await readOwnSiteAlerts(workspaceId);
+  const changeAlerts = workspaceId === null ? true : await readChangeAlerts(workspaceId);
   const dismissed = workspaceId === null ? [] : await readUserDismissed(workspaceId);
   const delivery = await readDeliveryAddress(user.id, user.email);
   const plan = workspaceId === null ? null : await readPlanSummary(workspaceId);
-  return { email: user.email, schedule, ownSiteAlerts, dismissed, delivery, plan };
+  return { email: user.email, schedule, ownSiteAlerts, changeAlerts, dismissed, delivery, plan };
 }
 
-async function saveOwnSiteAlerts(userId: string, form: FormData): Promise<SettingsResult> {
+async function saveSwitch(
+  userId: string,
+  form: FormData,
+  write: (workspaceId: string, on: boolean) => Promise<void>,
+): Promise<SettingsResult> {
   const workspaceId = await readWorkspaceIdForOwner(userId);
   const next = form.get("value") === "on" ? true : form.get("value") === "off" ? false : null;
   if (workspaceId === null || next === null) return result({ saved: false });
-  await setOwnSiteAlerts(workspaceId, next);
+  await write(workspaceId, next);
   return result({ saved: true });
 }
 
@@ -148,7 +155,8 @@ export async function runSettingsIntent(
 ): Promise<SettingsResult> {
   const form = await request.formData();
   const intent = form.get("intent");
-  if (intent === "own-site-alerts") return saveOwnSiteAlerts(user.id, form);
+  if (intent === "own-site-alerts") return saveSwitch(user.id, form, setOwnSiteAlerts);
+  if (intent === "change-alerts") return saveSwitch(user.id, form, setChangeAlerts);
   if (intent === "sign-out") throw redirect("/login", { headers: await signOut(env, request) });
   if (intent === "delivery-address") return saveAddress(user, form);
   if (intent === "change-email") return changeEmail(request, form);

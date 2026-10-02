@@ -234,4 +234,53 @@ describe("own-site alert in one sweep pass", () => {
     expect(alerts?.n).toBe(0);
     expect(send).not.toHaveBeenCalled();
   });
+  let rivals = 0;
+
+  const sweepRivalChange = async (): Promise<string> => {
+    rivals += 1;
+    const id = `ent-rival-change-${String(rivals)}`;
+    await seedEntity(id, "competitor", `rival-change-${String(rivals)}.com`, "Rival");
+    const rival = (await planSiteSweep(NOW)).find((target) => target.entityId === id);
+    if (rival === undefined) throw new Error("expected the rival homepage target");
+    await sweepOnePage(rival, await tick("baseline-rival"));
+    holder.html = BROKEN_HTML;
+    await sweepOnePage(rival, await tick("changed-rival"));
+    const signal = await env.DB.prepare("SELECT id FROM signal WHERE entity_id = ?").bind(id).first<{ id: string }>();
+    if (signal === null) throw new Error("expected the filed change signal");
+    return signal.id;
+  };
+
+  it("a published pricing change on a competitor queues exactly one change email", async () => {
+    jevAnswers.choice.set("change_kind", "pricing");
+
+    const signalId = await sweepRivalChange();
+
+    expect(send).toHaveBeenCalledTimes(1);
+    expect(send).toHaveBeenCalledWith({ signal_id: signalId });
+  });
+
+  it.each([
+    ["a copy change", 0.95, "copy"],
+    ["a pricing change the judge is unsure about", 0.5, "pricing"],
+  ])("%s on a competitor queues no email but is still filed", async (_name, p, kind) => {
+    jevAnswers.noul.set("noteworthy_change", p);
+    jevAnswers.choice.set("change_kind", kind);
+
+    await sweepRivalChange();
+
+    expect(send).not.toHaveBeenCalled();
+    const filed = await env.DB.prepare(
+      "SELECT COUNT(*) AS n FROM signal WHERE entity_id LIKE 'ent-rival-change-%'",
+    ).first<{
+      n: number;
+    }>();
+    expect(filed?.n).toBe(1);
+  });
+
+  it("a failed queue send is logged and reported, and never breaks the sweep", async () => {
+    jevAnswers.choice.set("change_kind", "pricing");
+    send.mockRejectedValue(new Error("queue down"));
+
+    await expect(sweepRivalChange()).resolves.toEqual(expect.any(String));
+  });
 });
