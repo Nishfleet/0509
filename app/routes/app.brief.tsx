@@ -3,6 +3,7 @@ import type { Route } from "./+types/app.brief";
 import { env } from "cloudflare:workers";
 import { Link, redirect } from "react-router";
 
+import { BriefUnavailable } from "../components/brief-unavailable";
 import { BriefView } from "../components/brief-view";
 import { FirstBriefNote } from "../components/first-brief-note";
 import { PAGE, PageHeading } from "../components/page-heading";
@@ -18,7 +19,6 @@ const PREVIOUS_LIST = "mt-10 border-t border-line pt-6";
 const PREVIOUS_HEADING = "font-display text-row-name font-bold [overflow-wrap:anywhere]";
 const PREVIOUS_LINK = "inline-flex min-h-11 items-center underline decoration-1 underline-offset-4";
 const BRIEF_LINE = "mt-2 font-mono text-[0.75rem] tracking-[0.04em] text-ink-soft uppercase";
-const FALLBACK = "This brief could not be shown here.";
 export function meta() {
   return [{ title: "Your brief · Five to Nine" }];
 }
@@ -71,11 +71,7 @@ export default function Page({ loaderData }: Route.ComponentProps) {
             Week of {selected.week} · {selected.line}
           </p>
           <div className="mt-6">
-            {selected.payload === null ? (
-              <p className="leading-[1.65]">{FALLBACK}</p>
-            ) : (
-              <BriefView payload={selected.payload} />
-            )}
+            {selected.payload === null ? <BriefUnavailable /> : <BriefView payload={selected.payload} />}
           </div>
         </>
       )}
