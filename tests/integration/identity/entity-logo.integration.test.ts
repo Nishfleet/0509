@@ -30,7 +30,7 @@ beforeEach(async () => {
   )
     .bind(NOW)
     .run();
-  await env.SNAPSHOTS.put("logo/gymshark.com", "logo-bytes", {
+  await env.SNAPSHOTS.put("logo/v3/gymshark.com", "logo-bytes", {
     httpMetadata: { contentType: "image/png" },
   });
 });
