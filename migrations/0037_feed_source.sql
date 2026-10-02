@@ -19,7 +19,12 @@
 -- reliability 'rss': the reader parses a public RSS or Atom feed and needs no
 -- browser transport or API key. Additive only: one INSERT statement with one
 -- row; nothing altered or deleted.
+--
+-- config_json carries the robots policy every source row must have
+-- (tests/integration/source-conduct.integration.test.ts, 0023_source_conduct.sql):
+-- 'honoured', because fetchFeed asks robotsAllows() before every feed and
+-- homepage request, as the YouTube channel feed does.
 
 INSERT INTO source (id, key, kind, platform, plugin_key, reliability, is_enabled, config_json) VALUES
-  ('src_site_feed', 'feed.rss', 'site', 'feed', 'feed.rss', 'rss', 0, '{}')
+  ('src_site_feed', 'feed.rss', 'site', 'feed', 'feed.rss', 'rss', 0, '{"robots":"honoured"}')
 ON CONFLICT (key) DO NOTHING;
