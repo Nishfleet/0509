@@ -16,7 +16,9 @@ describe("bearerToken (0509#6573)", () => {
     expect(bearerToken(requestWith("BEARER abc"))).toBe("abc");
   });
 
-  it("ignores padding around the scheme and the token", () => {
+  it("ignores extra whitespace between the scheme and the token", () => {
+    // Headers drops the padding at the ends, so the run of spaces between
+    // scheme and token is what this case covers.
     expect(bearerToken(requestWith("  Bearer   abc  "))).toBe("abc");
   });
 
@@ -26,6 +28,12 @@ describe("bearerToken (0509#6573)", () => {
 
   it("returns null for another scheme", () => {
     expect(bearerToken(requestWith("Basic abc"))).toBeNull();
+    expect(bearerToken(requestWith("Token abc"))).toBeNull();
+  });
+
+  it("returns null when Bearer is not the first word", () => {
+    expect(bearerToken(requestWith("NotBearer abc"))).toBeNull();
+    expect(bearerToken(requestWith("Basic Bearer abc"))).toBeNull();
   });
 
   it("returns null when Bearer carries no token", () => {
