@@ -60,8 +60,31 @@ function result(fields: Partial<SettingsResult>): SettingsResult {
   };
 }
 
+const NO_WORKSPACE_SETTINGS = {
+  ownSiteAlerts: true,
+  changeAlerts: true,
+  slackConnected: false,
+  dismissed: [],
+  plan: null,
+};
+
+async function readWorkspaceSettings(workspaceId: string) {
+  const [ownSiteAlerts, changeAlerts, slackTarget, dismissed, plan] = await Promise.all([
+    readOwnSiteAlerts(workspaceId),
+    readChangeAlerts(workspaceId),
+    readSlackTarget(env.DB, workspaceId),
+    readUserDismissed(workspaceId),
+    readPlanSummary(workspaceId),
+  ]);
+  return { ownSiteAlerts, changeAlerts, slackConnected: slackTarget !== null, dismissed, plan };
+}
+
 export async function readSettings(user: SettingsUser) {
-  const owned = await readBriefScheduleForOwner(user.id);
+  const [owned, workspaceId, delivery] = await Promise.all([
+    readBriefScheduleForOwner(user.id),
+    readWorkspaceIdForOwner(user.id),
+    readDeliveryAddress(user.id, user.email),
+  ]);
   const schedule =
     owned === null
       ? null
@@ -69,14 +92,18 @@ export async function readSettings(user: SettingsUser) {
           ...owned.schedule,
           nextLine: formatBriefAt(nextBriefAt(owned.schedule, new Date()), owned.schedule.timezone),
         };
-  const workspaceId = await readWorkspaceIdForOwner(user.id);
-  const ownSiteAlerts = workspaceId === null ? true : await readOwnSiteAlerts(workspaceId);
-  const changeAlerts = workspaceId === null ? true : await readChangeAlerts(workspaceId);
-  const slackConnected = workspaceId === null ? false : (await readSlackTarget(env.DB, workspaceId)) !== null;
-  const dismissed = workspaceId === null ? [] : await readUserDismissed(workspaceId);
-  const delivery = await readDeliveryAddress(user.id, user.email);
-  const plan = workspaceId === null ? null : await readPlanSummary(workspaceId);
-  return { email: user.email, schedule, ownSiteAlerts, changeAlerts, slackConnected, dismissed, delivery, plan };
+  const workspace = workspaceId === null ? null : await readWorkspaceSettings(workspaceId);
+  const { ownSiteAlerts, changeAlerts, slackConnected, dismissed, plan } = workspace ?? NO_WORKSPACE_SETTINGS;
+  return {
+    email: user.email,
+    schedule,
+    ownSiteAlerts,
+    changeAlerts,
+    slackConnected,
+    dismissed,
+    delivery,
+    plan,
+  };
 }
 
 async function saveSwitch(
