@@ -82,7 +82,7 @@ const MOVE: SiteChangeView = {
   observedAt: "2026-09-20T10:00:00.000Z",
   capturedAt: "2026-09-20 10:05 UTC",
   wordsChanged: 42,
-  viaArchive: false,
+  provenance: null,
   sentence: "30 words added, 12 removed.",
   mark: { removed: "Free for every team", added: "Free for open source" },
   before: { missing: "No screenshot of the earlier version" },

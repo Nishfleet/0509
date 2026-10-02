@@ -18,7 +18,7 @@ function view(overrides: Partial<SiteChangeView> & Pick<SiteChangeView, "id">): 
     observedAt: "2026-09-24T02:10:00.000Z",
     capturedAt: "2026-09-24 02:10 UTC",
     wordsChanged: 2,
-    viaArchive: false,
+    provenance: null,
     sentence: "1 word added, 1 word removed.",
     mark: { removed: "Plans from $10.", added: "Plans from $12." },
     before: { src: `/app/changes/${overrides.id}/before`, capturedAt: "2026-09-22 02:00 UTC" },

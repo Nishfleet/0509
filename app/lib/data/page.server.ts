@@ -173,17 +173,18 @@ export async function readUnwatchedPricingPages(sourceId: string): Promise<{ ent
 }
 
 const INSERT_ALTERNATE_PAGE = `INSERT INTO page (id, entity_id, url, role, transport, transport_tested_at, discovered_at)
-VALUES (?1, ?2, ?3, 'blog', ?4, ?5, ?5)
+VALUES (?1, ?2, ?3, ?6, ?4, ?5, ?5)
 ON CONFLICT (entity_id, url) DO NOTHING`;
 
 export async function insertAlternatePage(input: {
   entityId: string;
   url: string;
+  role: "blog" | "pricing";
   transport: "fetch" | "browser";
   at: string;
 }): Promise<void> {
-  const { entityId, url, transport, at } = input;
-  await env.DB.prepare(INSERT_ALTERNATE_PAGE).bind(crypto.randomUUID(), entityId, url, transport, at).run();
+  const { entityId, url, role, transport, at } = input;
+  await env.DB.prepare(INSERT_ALTERNATE_PAGE).bind(crypto.randomUUID(), entityId, url, transport, at, role).run();
 }
 
 const RECORD_TRANSPORT =

@@ -21,8 +21,8 @@ function OneSided({ added, removed }: { added: string | null; removed: string | 
   );
 }
 
-function ArchiveNote({ via }: { via: boolean }): ReactElement | null {
-  return via ? <p className={WHEN_CLASS}>From a public archive copy</p> : null;
+function ProvenanceNote({ text }: { text: string | null }): ReactElement | null {
+  return text === null ? null : <p className={WHEN_CLASS}>{text}</p>;
 }
 
 export function SiteChangeItem({
@@ -58,7 +58,7 @@ export function SiteChangeItem({
         )}
       </div>
       <p className="mt-2 leading-[1.65]">{change.sentence}</p>
-      <ArchiveNote via={change.viaArchive} />
+      <ProvenanceNote text={change.provenance} />
       <time dateTime={change.observedAt} className={WHEN_CLASS}>
         {change.when}
       </time>

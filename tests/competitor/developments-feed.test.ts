@@ -110,7 +110,7 @@ const MATCHED_CHANGE: SiteChangeItemData = {
   observedAt: "2026-09-13T10:00:00Z",
   capturedAt: "2026-09-13T10:05:00Z",
   wordsChanged: 8,
-  viaArchive: false,
+  provenance: null,
   sentence: "The compare table moved above the fold.",
   mark: { removed: "Facts and numbers", added: "Now with anecdotes" },
   before: { src: "https://shots.example/before.png", capturedAt: "2026-09-12T10:05:00Z" },
