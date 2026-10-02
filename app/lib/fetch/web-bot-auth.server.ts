@@ -20,18 +20,27 @@ const signingKey = z.looseObject({
 
 type SigningKey = z.infer<typeof signingKey>;
 
+interface SignRequest {
+  url: string;
+  headers: HeadersInit;
+  now: Date;
+}
+
 let memo: { raw: string; key: SigningKey | null; signer: Promise<WebBotSigner> | null } | null = null;
+
+function parseKey(raw: string): SigningKey | null {
+  try {
+    const parsed = signingKey.safeParse(JSON.parse(raw));
+    return parsed.success ? parsed.data : null;
+  } catch {
+    return null;
+  }
+}
 
 export function readSigningKey(raw: unknown): SigningKey | null {
   if (typeof raw !== "string") return null;
   if (memo?.raw === raw) return memo.key;
-  let key: SigningKey | null = null;
-  try {
-    const parsed = signingKey.safeParse(JSON.parse(raw));
-    key = parsed.success ? parsed.data : null;
-  } catch {
-    key = null;
-  }
+  const key = parseKey(raw);
   if (key === null) console.error(JSON.stringify({ event: "web_bot_auth.key_unreadable" }));
   memo = { raw, key, signer: null };
   return key;
@@ -56,7 +65,8 @@ function memoSigner(key: SigningKey): Promise<WebBotSigner> {
   return memo.signer;
 }
 
-async function signed(url: string, headers: HeadersInit, key: SigningKey, now: Date): Promise<HeadersInit> {
+async function signed(request: SignRequest, key: SigningKey): Promise<HeadersInit> {
+  const { url, headers, now } = request;
   try {
     const out = new Headers(headers);
     out.set(SIGNATURE_AGENT_HEADER, `${AGENT_KEY}="${SITE_URL}";type=directory`);
@@ -79,5 +89,5 @@ async function signed(url: string, headers: HeadersInit, key: SigningKey, now: D
 export function signedHeaders(url: string, headers: HeadersInit, now: Date): HeadersInit | Promise<HeadersInit> {
   const key = configuredKey();
   if (key === null || new Headers(headers).get("user-agent") !== CRAWLER_USER_AGENT) return headers;
-  return signed(url, headers, key, now);
+  return signed({ url, headers, now }, key);
 }
