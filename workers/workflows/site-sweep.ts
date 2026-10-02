@@ -14,6 +14,7 @@ import {
   uncoveredItems,
 } from "../../app/lib/site/sweep.server";
 import { plannedAt } from "../../app/lib/workflow-time";
+import { isNativeSchedule } from "../workflow-crons";
 
 const RETRY: WorkflowStepConfig = {
   retries: { limit: 3, delay: "30 seconds", backoff: "exponential" },
@@ -116,7 +117,8 @@ async function recordRun(
 }
 
 export class SiteSweep extends WorkflowEntrypoint<Env & { SITE_SWEEP_PING_URL?: string }> {
-  async run(event: WorkflowEvent<unknown>, step: WorkflowStep): Promise<SiteSweepOutcome> {
+  async run(event: WorkflowEvent<unknown>, step: WorkflowStep): Promise<SiteSweepOutcome | null> {
+    if (isNativeSchedule(event)) return null;
     return withMonitor("site-sweep", () => this.runSweep(event, step), MONITOR);
   }
 

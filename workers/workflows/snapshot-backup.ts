@@ -4,6 +4,7 @@ import { WorkflowEntrypoint } from "cloudflare:workers";
 import { withMonitor } from "@sentry/cloudflare";
 
 import { copyMissingPage } from "../../app/lib/snapshot-backup.server";
+import { isNativeSchedule } from "../workflow-crons";
 
 const RETRY: WorkflowStepConfig = {
   retries: { limit: 5, delay: "30 seconds", backoff: "exponential" },
@@ -38,7 +39,8 @@ async function copyPages(
 }
 
 export class SnapshotBackup extends WorkflowEntrypoint<Env> {
-  async run(_event: WorkflowEvent<unknown>, step: WorkflowStep): Promise<BackupTotals> {
+  async run(event: WorkflowEvent<unknown>, step: WorkflowStep): Promise<BackupTotals | null> {
+    if (isNativeSchedule(event)) return null;
     return withMonitor(
       "snapshot-backup",
       async () => {
