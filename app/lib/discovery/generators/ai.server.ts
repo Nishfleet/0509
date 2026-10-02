@@ -12,6 +12,8 @@ const MODEL = "@cf/meta/llama-3.3-70b-instruct-fp8-fast";
 
 const MAX_PROPOSALS = 10;
 
+const MAX_TOKENS = 1_500;
+
 const DOMAIN_TIMEOUT_MS = 5_000;
 
 const AI_TIMEOUT_MS = 20_000;
@@ -128,6 +130,7 @@ async function propose(subject: Subject, site: SiteText): Promise<Proposal[]> {
     MODEL,
     {
       messages: messagesFor(subject, site),
+      max_tokens: MAX_TOKENS,
       response_format: { type: "json_schema", json_schema: RESPONSE_SCHEMA },
     },
     { gateway: { id: GATEWAY_ID }, signal: AbortSignal.timeout(AI_TIMEOUT_MS) },
@@ -153,8 +156,8 @@ async function isLive(domain: string): Promise<boolean> {
     });
     await response.body?.cancel();
     return response.status !== 404 && response.status !== 410 && response.status < 500;
-  } catch {
-    return false;
+  } catch (error) {
+    return error instanceof DOMException && error.name === "TimeoutError";
   }
 }
 
