@@ -100,12 +100,12 @@ describe("delete my account", () => {
     await env.DB.exec(
       "CREATE TRIGGER delete_probe_trigger BEFORE DELETE ON workspace BEGIN INSERT INTO delete_probe SELECT (SELECT COUNT(*) FROM email_suppression WHERE address = 'to@0509.io'), (SELECT status FROM digest WHERE id = 'dig-leaving'); END",
     );
-    await env.DB.exec("INSERT OR IGNORE INTO channel (id, key) VALUES ('chan-leaving', 'email-leaving')");
     await env.DB.prepare(
       `INSERT INTO send_target (id, workspace_id, channel_id, target_value, is_verified, created_at)
-       VALUES ('tgt-leaving', ?, 'chan-leaving', 'to@0509.io', 1, '2026-09-24T00:00:00Z')`,
+       VALUES ('tgt-leaving', ?, (SELECT id FROM channel WHERE key = 'email'), 'to@0509.io', 1, '2026-09-24T00:00:00Z'),
+              ('tgt-slack', ?, (SELECT id FROM channel WHERE key = 'slack'), 'https://hooks.slack.test/T0/B0/secret', 1, '2026-09-24T00:00:00Z')`,
     )
-      .bind(workspaceId)
+      .bind(workspaceId, workspaceId)
       .run();
     await env.DB.prepare(
       `INSERT INTO digest (id, workspace_id, kind, period_start, period_end, status, subject, payload_json)
@@ -133,6 +133,7 @@ describe("delete my account", () => {
       { suppressed: 1, digest_status: "cancelled" },
     ]);
     expect(await count("SELECT COUNT(*) AS n FROM email_suppression WHERE address = 'to@0509.io'")).toBe(1);
+    expect(await count("SELECT COUNT(*) AS n FROM email_suppression WHERE address LIKE 'https://%'")).toBe(0);
     expect(await count("SELECT COUNT(*) AS n FROM email_suppression WHERE address = ?", ADDRESS)).toBe(1);
   });
 
