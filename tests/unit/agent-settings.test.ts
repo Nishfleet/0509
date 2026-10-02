@@ -66,14 +66,16 @@ function pendingCreateKey() {
   };
 }
 
-function pendingDisconnect() {
+function pendingDisconnect(intent: string, id: string | null) {
   const gate: { release: () => void } = { release: () => undefined };
   const settled = new Promise<void>((resolve) => {
     gate.release = resolve;
   });
   const formData = new FormData();
-  formData.set("intent", "disconnect-app");
-  formData.set("id", "g1");
+  formData.set("intent", intent);
+  if (id !== null) {
+    formData.set("id", id);
+  }
   const router = createMemoryRouter([{ id: "r", path: "/", Component: appsScreen, action: () => settled }], {
     initialEntries: ["/"],
   });
@@ -177,7 +179,7 @@ describe("ConnectedApps", () => {
   });
 
   it("disables only the pressed app's Disconnect button and labels it Disconnecting… while the disconnect-app submit is in flight", () => {
-    const pending = pendingDisconnect();
+    const pending = pendingDisconnect("disconnect-app", "g1");
     const html = pending.html();
     const disconnects = buttons(html).filter((button) => button.includes("Disconnect"));
     expect(disconnects).toHaveLength(2);
@@ -191,8 +193,17 @@ describe("ConnectedApps", () => {
     expect(other).not.toContain("Disconnecting…");
   });
 
+  it("leaves the Disconnect buttons enabled while a revoke-key submit is in flight", () => {
+    const pending = pendingDisconnect("revoke-key", "a");
+    const html = pending.html();
+    const disconnects = buttons(html).filter((button) => button.includes("Disconnect"));
+    expect(disconnects.every((button) => button.includes(">Disconnect</button>"))).toBe(true);
+    expect(disconnects.every((button) => !button.includes('disabled=""'))).toBe(true);
+    expect(disconnects.every((button) => !button.includes("Disconnecting…"))).toBe(true);
+  });
+
   it("restores the enabled Disconnect buttons once the submit lands", async () => {
-    const pending = pendingDisconnect();
+    const pending = pendingDisconnect("disconnect-app", "g1");
     expect(pending.html()).toContain("Disconnecting…");
     await pending.settle();
     const html = pending.html();

@@ -76,7 +76,10 @@ export function ConnectDetails({ mcpUrl, origin }: { mcpUrl: string; origin: str
 
 function DisconnectButton({ app }: { app: ConnectedApp }) {
   const navigation = useNavigation();
-  const leaving = navigation.state !== "idle" && navigation.formData?.get("id") === app.grantId;
+  const leaving =
+    navigation.state !== "idle" &&
+    navigation.formData?.get("intent") === "disconnect-app" &&
+    navigation.formData?.get("id") === app.grantId;
   return (
     <Button type="submit" variant="tertiary" aria-label={`Disconnect ${app.name}`} disabled={leaving}>
       {leaving ? "Disconnecting…" : "Disconnect"}
