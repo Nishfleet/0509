@@ -164,11 +164,6 @@ let callBudget = 0;
 
 let callsUsed = 0;
 
-export function setCallBudget(n: number): void {
-  callsUsed = 0;
-  callBudget = n;
-}
-
 function withoutModel(body: unknown): unknown {
   const { model: _model, ...rest } = body as { model?: string };
   return rest;
@@ -451,12 +446,15 @@ export async function runEval<T extends EvalRow>(
   rows: readonly T[],
   ask: Ask<T>,
   score: Score<T>,
+  callsPerAsk = 1,
 ): Promise<EvalReport> {
   const models = new Set<string>();
   const splits: SplitScore[] = [];
   const wanted = selectedSplits();
   callsUsed = 0;
-  callBudget = Math.ceil(rows.filter((row) => wanted.includes(row.split)).length * REPEATS * BUDGET_MARGIN);
+  callBudget = Math.ceil(
+    rows.filter((row) => wanted.includes(row.split)).length * REPEATS * callsPerAsk * BUDGET_MARGIN,
+  );
   for (const split of wanted) {
     const picked = rows.filter((row) => row.split === split);
     if (picked.length === 0) throw new Error(`${questionId} has no ${split} cases to score`);
