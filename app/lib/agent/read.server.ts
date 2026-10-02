@@ -18,6 +18,11 @@ LIMIT 1`;
 
 const SELECT_OFF_ENTITIES = `SELECT id FROM entity WHERE workspace_id = ? AND state = 'off'`;
 
+async function offEntityIds(workspaceId: string): Promise<Set<string>> {
+  const off = await env.DB.prepare(SELECT_OFF_ENTITIES).bind(workspaceId).all<{ id: string }>();
+  return new Set(off.results.map((row) => row.id));
+}
+
 function briefReadFirst(payload: BriefPayload): NonNullable<BriefResult["brief"]>["readThisFirst"] {
   return payload.read_this_first.map((mark) => ({
     competitor: mark.entity_name,
@@ -97,12 +102,8 @@ export async function readAgentCompetitors(workspaceId: string): Promise<Competi
 }
 
 export async function readAgentStanding(workspaceId: string): Promise<StandingResult> {
-  const [{ brief }, off] = await Promise.all([
-    readAgentBrief(workspaceId),
-    env.DB.prepare(SELECT_OFF_ENTITIES).bind(workspaceId).all<{ id: string }>(),
-  ]);
+  const [{ brief }, hidden] = await Promise.all([readAgentBrief(workspaceId), offEntityIds(workspaceId)]);
   if (brief === null) return { standing: null };
-  const hidden = new Set(off.results.map((row) => row.id));
   return { standing: { ...brief.headline, lines: brief.standing.filter((line) => !hidden.has(line.competitorId)) } };
 }
 
@@ -119,8 +120,11 @@ export async function readAgentCompetitor(
   competitorId: string,
   now: Date,
 ): Promise<CompetitorResult> {
-  const page = await readCompetitorPage(workspaceId, competitorId, now);
-  if (page === null) return { competitor: null };
+  const [page, hidden] = await Promise.all([
+    readCompetitorPage(workspaceId, competitorId, now),
+    offEntityIds(workspaceId),
+  ]);
+  if (page === null || hidden.has(competitorId)) return { competitor: null };
   return {
     competitor: {
       id: page.competitor.id,
