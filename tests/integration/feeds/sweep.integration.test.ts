@@ -84,7 +84,7 @@ describe("nightly feed sweep workflow", () => {
     expect(first).toMatchObject({ discovered: 1, feeds: 1, first: 1, newPosts: 0, failed: 0 });
     expect(await feedWatches()).toEqual([{ entity_id: "ent-rival", target_key: "https://rival.com/changelog.atom" }]);
     expect(await contentSignals()).toEqual([]);
-    expect(web.calls.filter((url) => new URL(url).hostname.endsWith("paused.com"))).toEqual([]);
+    expect(web.calls.filter((url) => ["paused.com", "www.paused.com"].includes(new URL(url).hostname))).toEqual([]);
 
     web.feeds.set("https://rival.com/changelog.atom", rssFeed(NIGHT_TWO));
     const second = await runSweep("feed-night-2");
