@@ -1,3 +1,5 @@
+import { sha256Hex } from "../sha256";
+
 const WRITE_UNSUBSCRIBE_TOKEN = `UPDATE send_target SET unsubscribe_token = ? WHERE id = ? AND unsubscribe_token IS NULL`;
 
 const SELECT_EMAIL_TARGET = `SELECT st.target_value, st.is_verified FROM send_target st
@@ -42,11 +44,6 @@ SELECT 'st-email-' || w.id, w.id, c.id, u.email, u.emailVerified, ?
    AND NOT EXISTS (
      SELECT 1 FROM send_target st WHERE st.workspace_id = w.id AND st.channel_id = c.id
    )`;
-
-async function sha256Hex(value: string): Promise<string> {
-  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
-  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
-}
 
 interface TargetDb {
   prepare(query: string): {
