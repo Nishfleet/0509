@@ -30,8 +30,7 @@ function IncidentActions({ alertId, url }: { alertId: string; url: string }): Re
         rel="noopener noreferrer"
         className="inline-flex min-h-11 items-center font-mono text-[0.75rem] tracking-[0.04em] uppercase underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink focus-visible:outline-solid"
       >
-        Open your site →
-        <span className="sr-only"> (opens in a new tab)</span>
+        Open your site →<span className="sr-only"> (opens in a new tab)</span>
       </a>
       <Form method="post">
         <input type="hidden" name="intent" value="acknowledge" />
