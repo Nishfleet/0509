@@ -1,10 +1,12 @@
 import { useState, type ReactElement } from "react";
+import { useRevalidator } from "react-router";
 
 import { authClient } from "../lib/auth-client";
 import { Button } from "./ui/button";
 
 export function AddPasskey({ className }: { className?: string }): ReactElement {
   const [state, setState] = useState<"idle" | "working" | "added" | "failed">("idle");
+  const { revalidate } = useRevalidator();
 
   async function addPasskey() {
     setState("working");
@@ -14,6 +16,7 @@ export function AddPasskey({ className }: { className?: string }): ReactElement 
     });
     if (result && !result.error) {
       setState("added");
+      void revalidate();
       return;
     }
     const code = result?.error && "code" in result.error ? result.error.code : "";
