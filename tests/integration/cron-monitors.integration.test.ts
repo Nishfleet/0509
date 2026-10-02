@@ -1,8 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import { WEEKLY_REFRESH_CRON } from "../../app/lib/discovery/start.server";
+import { NIGHTLY_CRON, WEEKLY_REFRESH_CRON } from "../../app/lib/cadence";
 import { cronMonitor } from "../../workers/cron-monitors";
-import { NIGHTLY_CRON } from "../../workers/delivery/sweeper";
 
 /**
  * Every scheduled cron's Sentry Cron Monitor (0509#5750, parent 0509#5736).

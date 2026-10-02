@@ -1,3 +1,5 @@
+import { sha256Hex } from "../sha256";
+
 export interface FeedItem {
   id: string;
   title: string;
@@ -292,17 +294,12 @@ export function parseFeed(xml: string, base: string, now: Date): FeedItem[] | nu
   return newestFirst(unique).slice(0, MAX_FEED_ITEMS);
 }
 
-export async function itemKey(id: string): Promise<string> {
-  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(id));
-  return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
-}
-
 export async function keyItems(items: readonly FeedItem[]): Promise<KeyedFeedItem[]> {
-  return Promise.all(items.map(async (item) => ({ ...item, key: await itemKey(item.id) })));
+  return Promise.all(items.map(async (item) => ({ ...item, key: await sha256Hex(item.id) })));
 }
 
 export async function hashItemKeys(items: readonly KeyedFeedItem[]): Promise<string> {
-  return itemKey(
+  return sha256Hex(
     items
       .map((item) => item.key)
       .sort()

@@ -8,6 +8,7 @@ import type { readHiringTargets } from "../data/watch.server";
 import { deactivateWatch, markWatchPolled } from "../data/watch.server";
 import { cappedText, fetchOutbound } from "../fetch/outbound.server";
 import { CRAWLER_USER_AGENT } from "../fetch/robots.server";
+import { sha256Hex } from "../sha256";
 import type { SweepTick } from "../site/sweep.server";
 import { listingForBoard } from "./discover-board.server";
 import type { BoardPlatform } from "./listing";
@@ -51,8 +52,7 @@ function dedupeRoles(fetched: readonly OpenRole[]): OpenRole[] {
 
 async function hashRoleIds(roles: readonly OpenRole[]): Promise<string> {
   const ids = roles.map((role) => role.id).sort();
-  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(ids.join("\n")));
-  return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+  return sha256Hex(ids.join("\n"));
 }
 
 async function storeBoardSnapshot(input: {

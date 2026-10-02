@@ -5,10 +5,10 @@ import {
   attributes,
   hashItemKeys,
   isFeedDocument,
-  itemKey,
   keyItems,
   parseFeed,
 } from "../../app/lib/feeds/parse-feed";
+import { sha256Hex } from "../../app/lib/sha256";
 
 const NOW = new Date("2026-10-02T03:00:00Z");
 const BASE = "https://rival.com/feed";
@@ -158,10 +158,10 @@ describe("isFeedDocument", () => {
 
 describe("item keys", () => {
   it("hashes an id to the same 64-character key every time", async () => {
-    const first = await itemKey("post-2");
+    const first = await sha256Hex("post-2");
     expect(first).toMatch(/^[0-9a-f]{64}$/);
-    expect(await itemKey("post-2")).toBe(first);
-    expect(await itemKey("post-3")).not.toBe(first);
+    expect(await sha256Hex("post-2")).toBe(first);
+    expect(await sha256Hex("post-3")).not.toBe(first);
   });
 
   it("gives a list the same hash whatever its order", async () => {
