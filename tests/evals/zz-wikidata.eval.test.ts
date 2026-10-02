@@ -89,4 +89,43 @@ describe("diag: wikidata same-industry candidates", () => {
     }
     expect(rows.length).toBeGreaterThan(0);
   });
+  it("prints brands named by the customer's own pages", async () => {
+    const rows = await loadCases<Case>("proposer_recall", ["self", "expected"]);
+    const totals: Record<string, { points: number; cases: number; fetched: number }> = {};
+    for (const row of rows) {
+      const found = new Set<string>();
+      let fetched = 0;
+      for (const path of ["/", "/about", "/press", "/blog", "/alternatives", "/compare"]) {
+        try {
+          const response = await fetch(`https://${row.self.domain}${path}`, {
+            headers: { "User-Agent": AGENT },
+            signal: AbortSignal.timeout(8000),
+          });
+          if (!response.ok) continue;
+          fetched += 1;
+          const html = (await response.text()).slice(0, 400000);
+          for (const match of html.matchAll(/https?:\/\/([a-z0-9.-]+\.[a-z]{2,})/gi)) {
+            found.add(registrable(match[1] ?? ""));
+          }
+        } catch {
+          continue;
+        }
+      }
+      const hits = row.expected.filter((aliases) => aliases.some((alias) => found.has(registrable(alias)))).length;
+      const recall = hits / row.expected.length;
+      const bucket = (totals[row.split] ??= { points: 0, cases: 0, fetched: 0 });
+      bucket.points += recall;
+      bucket.cases += 1;
+      if (fetched > 0) bucket.fetched += 1;
+      console.log(
+        `OWN ${row.id} ${row.split} pages=${String(fetched)} hosts=${String(found.size)} recall=${recall.toFixed(2)}`,
+      );
+    }
+    for (const [split, bucket] of Object.entries(totals)) {
+      console.log(
+        `OWN TOTAL ${split} cases=${String(bucket.cases)} fetched=${String(bucket.fetched)} meanRecall=${(bucket.points / bucket.cases).toFixed(4)}`,
+      );
+    }
+    expect(rows.length).toBeGreaterThan(0);
+  }, 900000);
 });
