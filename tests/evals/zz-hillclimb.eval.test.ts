@@ -54,16 +54,17 @@ interface Arm {
   reasoning?: "low" | "medium" | "high";
   context?: boolean;
   extra?: string;
+  models?: string[];
 }
 
 const SELLS_FIRST =
   " Choose competitors by what they sell, not by values, style or audience: include the best-known brands that sell the same kind of product to the same customers, even when their brand image is very different.";
 
+const NEMOTRON = "@cf/nvidia/nemotron-3-120b-a12b";
+
 const ARMS: Arm[] = [
-  { id: "base2", samples: 1 },
-  { id: "union2b", samples: 2 },
-  { id: "union3", samples: 3 },
-  { id: "sells_first", samples: 1, extra: SELLS_FIRST },
+  { id: "base3", samples: 1 },
+  { id: "two_models", samples: 2, models: [MODEL, NEMOTRON] },
 ];
 
 const registrable = (value: string): string => parse(value).domain ?? value.toLowerCase();
@@ -106,9 +107,9 @@ describe.skipIf(!workersAiPresent())("hillclimb: gpt-oss proposer arms", () => {
       const shown = new Map<string, Set<string>[]>();
       let ms = 0;
       let calls = 0;
-      const propose = async (row: Row): Promise<{ name: string; domain: string }[]> => {
+      const propose = async (row: Row, model: string): Promise<{ name: string; domain: string }[]> => {
         const started = Date.now();
-        const result = await postWorkersAi(MODEL, {
+        const result = await postWorkersAi(model, {
           messages: arm.context
             ? messagesWithContext(row)
             : messagesFor(
@@ -154,7 +155,9 @@ describe.skipIf(!workersAiPresent())("hillclimb: gpt-oss proposer arms", () => {
         }
       };
       const ask: Ask<Row> = async (row) => {
-        const batches = await Promise.all(Array.from({ length: arm.samples }, () => propose(row)));
+        const batches = await Promise.all(
+          Array.from({ length: arm.samples }, (_, index) => propose(row, arm.models?.[index] ?? MODEL)),
+        );
         const unique = new Map<string, { name: string; domain: string }>();
         for (const item of batches.flat()) unique.set(registrable(item.domain), item);
         const kept: string[] = [];
