@@ -209,7 +209,7 @@ describe("judgeCandidates", () => {
     const results = await judgeCandidates(context, [candidate("Patagonia", "patagonia.com")]);
 
     expect(run).toHaveBeenCalledTimes(1);
-    expect(results[0]?.verdict).toMatchObject({ questionId: "is_competitor", p: 0.04 });
+    expect(results[0]?.verdict).toMatchObject({ questionId: "is_competitor", p: 0 });
   });
 
   it("drops a candidate whose category answer is below the floor even when it is above the reject line", async () => {
