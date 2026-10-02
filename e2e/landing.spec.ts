@@ -83,7 +83,7 @@ test("the landing never leads with a full row of dimmed sources @smoke", async (
   // The all-degraded gate counts mentions sources only (#6064): when the site
   // source (site.page) is itself degraded the normal dimmed rows render, so a
   // fully dimmed row is allowed only then and never otherwise.
-  const siteDegraded = await watch.locator('[data-state="degraded"]', { hasText: "site.page" }).count();
+  const siteDegraded = await watch.locator('[data-state="degraded"]', { hasText: "Website checks" }).count();
   expect(degraded === pills && pills > 0 && siteDegraded === 0).toBe(false);
   if (row === 0) {
     // The gate leaves the one rebuilding line where the row was; a bare section
