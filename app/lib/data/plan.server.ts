@@ -7,24 +7,26 @@ interface PlanRow {
   tier: string;
   status: string;
   current_period_end: string | null;
+  trialing: number;
   limits_json: string;
   provider_customer_id: string | null;
 }
 
 const SELECT_PLAN =
-  "SELECT tier, status, current_period_end, limits_json, provider_customer_id FROM plan WHERE workspace_id = ?";
+  "SELECT tier, status, current_period_end, trialing, limits_json, provider_customer_id FROM plan WHERE workspace_id = ?";
 
 const SELECT_WORKSPACE_BY_SUBSCRIPTION = "SELECT workspace_id FROM plan WHERE provider_subscription_id = ?";
 
 const UPSERT_SUBSCRIPTION = `INSERT INTO plan
-  (id, workspace_id, tier, status, provider_customer_id, provider_subscription_id, current_period_end, updated_at)
-SELECT ?, id, ?, ?, ?, ?, ?, ? FROM workspace WHERE id = ?
+  (id, workspace_id, tier, status, provider_customer_id, provider_subscription_id, current_period_end, trialing, updated_at)
+SELECT ?, id, ?, ?, ?, ?, ?, ?, ? FROM workspace WHERE id = ?
 ON CONFLICT(workspace_id) DO UPDATE SET
   tier = excluded.tier,
   status = excluded.status,
   provider_customer_id = excluded.provider_customer_id,
   provider_subscription_id = excluded.provider_subscription_id,
   current_period_end = excluded.current_period_end,
+  trialing = excluded.trialing,
   updated_at = excluded.updated_at
 WHERE ? = 1 OR excluded.updated_at >= plan.updated_at`;
 
@@ -54,6 +56,7 @@ export async function readPlanSummary(workspaceId: string): Promise<PlanSummary>
     tier: isPlanId(tier) ? tier : "scout",
     status: row === null ? "none" : row.status,
     currentPeriodEnd: row === null ? null : row.current_period_end,
+    trialing: row !== null && row.trialing === 1,
     billed: row !== null && row.provider_customer_id !== null,
   };
 }
@@ -110,6 +113,7 @@ export interface SubscriptionPlan {
   customerId: string;
   subscriptionId: string;
   currentPeriodEnd: string | null;
+  trialing: boolean;
   updatedAt: string;
 }
 
@@ -122,6 +126,7 @@ export async function upsertSubscriptionPlan(input: SubscriptionPlan): Promise<v
       input.customerId,
       input.subscriptionId,
       input.currentPeriodEnd,
+      input.trialing ? 1 : 0,
       input.updatedAt,
       input.workspaceId,
       input.replace === true ? 1 : 0,

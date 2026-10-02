@@ -7,6 +7,7 @@ import { readPlanSubscription, readWorkspaceIdBySubscription, upsertSubscription
 import { isCheckoutProof } from "./checkout-proof.server";
 import { isSubscriptionLive } from "./entitlements";
 import { planIdForProduct, testerProductId } from "./products.server";
+import { isTrialing } from "./trial";
 
 const envelope = z.object({
   type: z.string(),
@@ -19,6 +20,8 @@ const subscriptionData = z.object({
   product_id: z.string(),
   status: z.string(),
   next_billing_date: z.string().nullish(),
+  created_at: z.string().nullish(),
+  trial_period_days: z.number().nullish(),
   cancel_at_next_billing_date: z.boolean().nullish(),
   customer: z.object({ customer_id: z.string() }),
   metadata: z.record(z.string(), z.string()).nullish(),
@@ -102,6 +105,13 @@ async function applySubscription(body: unknown, type: string, timestamp: string)
     customerId: data.customer.customer_id,
     subscriptionId: data.subscription_id,
     currentPeriodEnd: cancelledNow ? null : (data.next_billing_date ?? null),
+    trialing:
+      data.status === "active" &&
+      isTrialing({
+        createdAt: data.created_at,
+        nextBillingDate: data.next_billing_date,
+        trialDays: data.trial_period_days,
+      }),
     updatedAt: timestamp,
     replace: change === "takeover",
   });
