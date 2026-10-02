@@ -61,10 +61,9 @@ function row(html: string, ariaLabel: string): string {
 describe("the Add a competitor field and its error", () => {
   // Every message handleCompetitorIntent can return for intent=add is an error,
   // so the field carries the failure and announces it as one. Before this the
-  // same message was a role=status, which a screen reader reads politely only
-  // when nothing else happens, and the input said nothing at all.
-  // renderToStaticMarkup escapes the apostrophe, so the emitted message is
-  // ESCAPED. The input below is the raw message, as the route passes it.
+  // same message was a role=status, read politely only when nothing else
+  // happens, and the input said nothing at all. renderToStaticMarkup escapes
+  // the apostrophe, so the message is asserted in its escaped form.
   const ERROR = "We couldn't read that. Try their main website, like brand.com.";
   const ERROR_ESCAPED = "We couldn&#x27;t read that. Try their main website, like brand.com.";
 
