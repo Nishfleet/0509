@@ -52,6 +52,10 @@ describe("agoLabel", () => {
   it("labels an unparseable observation as date unknown", () => {
     expect(agoLabel("garbage", new Date("2026-09-24T12:00:00.000Z"))).toBe("date unknown");
   });
+
+  it("labels an unparseable now as date unknown", () => {
+    expect(agoLabel("2026-09-24T11:00:00.000Z", new Date("nope"))).toBe("date unknown");
+  });
 });
 
 describe("tickerItems", () => {
