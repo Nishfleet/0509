@@ -1,5 +1,5 @@
 import { Suspense, useId, useState, type KeyboardEvent, type ReactNode } from "react";
-import { Await, Form, useFetcher } from "react-router";
+import { Await, Form, useFetcher, useNavigation } from "react-router";
 
 import type { CardDraft, CreatorRows, DraftField, SiteFields } from "../lib/identity/card-fields";
 import { cn } from "../lib/utils";
@@ -413,6 +413,7 @@ export function IdentityCard({
   draft: CardDraft;
   message: string | undefined;
 }) {
+  const confirming = useNavigation().state !== "idle";
   return (
     <Form method="post" className="mt-8 max-w-xl border-[1.5px] border-ink bg-card px-4">
       <input type="hidden" name="subject" value={subject} />
@@ -432,13 +433,19 @@ export function IdentityCard({
                   {message}
                 </p>
               ) : null}
-              <Button type="submit" size="lg" className="my-5">
-                That&apos;s me
-              </Button>
+              <ConfirmButton confirming={confirming} />
             </>
           )}
         </Await>
       </Suspense>
     </Form>
+  );
+}
+
+function ConfirmButton({ confirming }: { confirming: boolean }) {
+  return (
+    <Button type="submit" size="lg" className="my-5" disabled={confirming}>
+      {confirming ? "Saving…" : "That&apos;s me"}
+    </Button>
   );
 }
