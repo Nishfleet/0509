@@ -36,6 +36,11 @@ const EXTRA = [
   { name: "On", domain: "on.com", reason: "Sells running and lifestyle sneakers." },
   { name: "Hoka", domain: "hoka.com", reason: "Sells cushioned running shoes." },
   { name: "Vans", domain: "vans.com", reason: "Sells casual sneakers and skate shoes." },
+  { name: "New Balance", domain: "newbalance.com", reason: "Sells athletic and lifestyle sneakers." },
+  { name: "Nike", domain: "nike.com", reason: "Sells athletic shoes and apparel." },
+  { name: "Adidas", domain: "adidas.com", reason: "Sells sneakers and sportswear." },
+  { name: "Brooks", domain: "brooksrunning.com", reason: "Sells running shoes." },
+  { name: "Thousand Fell", domain: "thousandfell.com", reason: "Sells recycled-material sneakers." },
 ];
 
 function stateOf(entry: { name: string; domain: string; reason: string }): unknown {
@@ -63,7 +68,7 @@ function stateOf(entry: { name: string; domain: string; reason: string }): unkno
 describe.skipIf(!workersAiPresent())("diag: allbirds proposals", () => {
   it("prints proposals and both judgments", async () => {
     setCallBudget(1000);
-    for (let sample = 0; sample < 5; sample += 1) {
+    for (let sample = 0; sample < 10; sample += 1) {
       const raw = (await postWorkersAi(MODEL, {
         messages: messagesFor(SELF, SITE),
         response_format: { type: "json_schema", json_schema: RESPONSE_SCHEMA },
