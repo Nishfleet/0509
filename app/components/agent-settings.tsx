@@ -17,10 +17,12 @@ function day(iso: string): string {
 }
 
 export function copyToClipboard(value: string): Promise<"copied" | "failed"> {
-  return navigator.clipboard.writeText(value).then(
-    () => "copied" as const,
-    () => "failed" as const,
-  );
+  return Promise.resolve()
+    .then(() => navigator.clipboard.writeText(value))
+    .then(
+      () => "copied" as const,
+      () => "failed" as const,
+    );
 }
 
 export function copyKeyLabel(state: "idle" | "copied" | "failed"): string {

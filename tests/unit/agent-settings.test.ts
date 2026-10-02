@@ -218,6 +218,31 @@ describe("copying a new API key", () => {
     expect(unhandled).toEqual([]);
   });
 
+  // An insecure context or an in-app browser leaves navigator.clipboard absent,
+  // so reading .writeText throws before a promise exists. The chain starts from
+  // Promise.resolve() so that throw is a rejection the onFail arm handles.
+  it("reports failed and raises nothing when navigator.clipboard is absent", async () => {
+    vi.stubGlobal("navigator", {});
+
+    await expect(copyToClipboard(NEW_KEY)).resolves.toBe("failed");
+
+    expect(unhandled).toEqual([]);
+  });
+
+  it("reports failed and raises nothing when reading writeText throws synchronously", async () => {
+    vi.stubGlobal("navigator", {
+      clipboard: {
+        get writeText() {
+          throw new TypeError("writeText is read-only");
+        },
+      },
+    });
+
+    await expect(copyToClipboard(NEW_KEY)).resolves.toBe("failed");
+
+    expect(unhandled).toEqual([]);
+  });
+
   it("reads Copied on the button once the write resolved, and keeps its resting label otherwise", () => {
     expect(copyKeyLabel("copied")).toBe("Copied");
     expect(copyKeyLabel("idle")).toBe("Copy key");
@@ -247,5 +272,20 @@ describe("copying a new API key", () => {
     const html = renderToStaticMarkup(createElement(CopyKey, { value: NEW_KEY }));
     expect(html).toContain(copyKeyLabel("idle"));
     expect(html).not.toContain("Copy failed");
+  });
+
+  // The failure sentence tells the person to select the key above, so the key
+  // has to be on screen in the same notice, above the button. This is the only
+  // place CopyKey is rendered.
+  it("puts the key on screen above the copy button in the new-key notice", () => {
+    const Stub = createRoutesStub([
+      { path: "/", Component: () => createElement(AgentKeys, { keys: [], newKey: NEW_KEY }) },
+    ]);
+    const html = renderToStaticMarkup(createElement(Stub, { initialEntries: ["/"] }));
+    const key = html.indexOf(`>${NEW_KEY}<`);
+    const button = html.indexOf(copyKeyLabel("idle"));
+    expect(key).toBeGreaterThan(-1);
+    expect(button).toBeGreaterThan(key);
+    expect(html).toContain("it won&#x27;t be shown again");
   });
 });
