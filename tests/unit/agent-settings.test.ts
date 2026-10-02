@@ -12,17 +12,21 @@ function markup(): string {
   return renderToStaticMarkup(createElement(ConnectDetails, { mcpUrl: MCP_URL, origin: ORIGIN }));
 }
 
-const ONE_KEY = [
-  {
-    id: "a",
-    name: "Only",
+function makeKey(id: string, name: string) {
+  return {
+    id,
+    name,
     start: "0509_ab",
     createdAt: "2026-09-01T00:00:00.000Z",
     lastUsedAt: null,
     rateLimitMax: null,
     remaining: null,
-  },
-];
+  };
+}
+
+const ONE_KEY = [makeKey("a", "Only")];
+
+const TWO_KEYS = [makeKey("a", "Laptop"), makeKey("b", "Nightly bot")];
 
 function keysScreen(): ReactElement {
   return createElement(AgentKeys, { keys: ONE_KEY, newKey: null });
@@ -38,13 +42,23 @@ function buttons(html: string): string[] {
 // FormData on the navigation, so the pending render is the one the
 // browser makes.
 function pendingCreateKey() {
+  return pendingSubmit(createElement(AgentKeys, { keys: TWO_KEYS, newKey: null }), { intent: "create-key" });
+}
+
+function pendingRevokeKey(id: string) {
+  return pendingSubmit(createElement(AgentKeys, { keys: TWO_KEYS, newKey: null }), { intent: "revoke-key", id });
+}
+
+function pendingSubmit(element: ReactElement, fields: Record<string, string>) {
   const gate: { release: () => void } = { release: () => undefined };
   const settled = new Promise<void>((resolve) => {
     gate.release = resolve;
   });
   const formData = new FormData();
-  formData.set("intent", "create-key");
-  const router = createMemoryRouter([{ id: "r", path: "/", Component: keysScreen, action: () => settled }], {
+  for (const [field, value] of Object.entries(fields)) {
+    formData.set(field, value);
+  }
+  const router = createMemoryRouter([{ id: "r", path: "/", Component: () => element, action: () => settled }], {
     initialEntries: ["/"],
   });
   const submit = router.navigate("/", { formMethod: "post", formData });
@@ -119,9 +133,43 @@ describe("AgentKeys", () => {
   it("leaves the revoke button enabled while the create-key submit is in flight", () => {
     const pending = pendingCreateKey();
     const html = pending.html();
-    const revoke = buttons(html).find((button) => button.includes("Delete")) ?? "";
+    const revoke = buttons(html).find((button) => button.includes('aria-label="Delete Laptop"')) ?? "";
     expect(revoke).not.toContain('disabled=""');
     expect(revoke).not.toContain("Making…");
+  });
+
+  it("names each Delete button with the key it removes", () => {
+    const Stub = createRoutesStub([
+      {
+        path: "/",
+        Component: () => createElement(AgentKeys, { keys: TWO_KEYS, newKey: null }),
+      },
+    ]);
+    const html = renderToStaticMarkup(createElement(Stub, { initialEntries: ["/"] }));
+    expect(html).toContain('aria-label="Delete Laptop"');
+    expect(html).toContain('aria-label="Delete Nightly bot"');
+  });
+
+  it("disables only the clicked key's Delete button and relabels it Deleting… while the revoke submit is in flight", () => {
+    const pending = pendingRevokeKey("b");
+    const html = pending.html();
+    const deleting = buttons(html).find((button) => button.includes("Deleting…")) ?? "";
+    expect(deleting).toContain('aria-label="Deleting Nightly bot"');
+    expect(deleting).toContain('disabled=""');
+    const laptop = buttons(html).find((button) => button.includes('aria-label="Delete Laptop"')) ?? "";
+    expect(laptop).not.toContain('disabled=""');
+    expect(laptop).toContain("Delete</button>");
+  });
+
+  it("restores the Delete button once the revoke lands", async () => {
+    const pending = pendingRevokeKey("b");
+    expect(pending.html()).toContain("Deleting…");
+    await pending.settle();
+    const html = pending.html();
+    const laptop = buttons(html).find((button) => button.includes('aria-label="Delete Laptop"')) ?? "";
+    expect(html).toContain('aria-label="Delete Nightly bot"');
+    expect(laptop).not.toContain('disabled=""');
+    expect(html).not.toContain("Deleting…");
   });
 
   it("restores the enabled Make a key button once the submit lands", async () => {
