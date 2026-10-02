@@ -65,7 +65,7 @@ export default function Unsubscribe({ actionData }: Route.ComponentProps) {
         </p>
         <p className="mt-4 leading-[1.65] text-ink-soft">
           Changed your mind? Sign in, open{" "}
-          <a className="underline underline-offset-4" href="/app/settings">
+          <a className="inline-flex min-h-11 items-center underline underline-offset-4" href="/app/settings">
             Settings
           </a>
           , tick "Send the brief to this address again" and save.
