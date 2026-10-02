@@ -1,3 +1,4 @@
+import { readCompetitorName } from "./competitor/site-name.server";
 import { addManualCompetitor, setCompetitorState } from "./data/entity.server";
 import { nextPlan, type PlanId } from "./billing/plans";
 import { readEntitlements, readPlanTier } from "./data/plan.server";
@@ -34,21 +35,25 @@ async function upgradePlanIdFor(workspaceId: string): Promise<PlanId | null> {
   return next === null ? null : next.id;
 }
 
+type Target = { domain: string; name: string | null } | CompetitorActionResult;
+
+async function targetOf(raw: string, normalised: ReturnType<typeof normaliseSubject>): Promise<Target> {
+  if (normalised.ok) {
+    const { registrable } = normalised.subject;
+    return { domain: registrable, name: await readCompetitorName(registrable) };
+  }
+  const resolution = await resolveDomain(raw.trim());
+  return resolution.domain === null ? UNRESOLVED : { domain: resolution.domain, name: raw.trim() };
+}
+
 async function addCompetitor(workspaceId: string, raw: string, now: string): Promise<CompetitorActionResult> {
   const normalised = normaliseSubject(raw);
   if (normalised.ok && normalised.subject.kind !== "domain") return COULD_NOT_READ;
   if (!normalised.ok && normalised.reason === "empty") return COULD_NOT_READ;
 
-  let domain: string;
-  let name: string | null = null;
-  if (normalised.ok) {
-    domain = normalised.subject.registrable;
-  } else {
-    const resolution = await resolveDomain(raw.trim());
-    if (resolution.domain === null) return UNRESOLVED;
-    domain = resolution.domain;
-    name = raw.trim();
-  }
+  const target = await targetOf(raw, normalised);
+  if ("message" in target) return target;
+  const { domain, name } = target;
 
   if (await isTakenDown(domain)) return { message: "That brand asked not to be tracked, so we can't add it." };
   const cap = (await readEntitlements(workspaceId)).competitors;

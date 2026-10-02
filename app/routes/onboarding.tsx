@@ -5,7 +5,6 @@ import { Form, redirect } from "react-router";
 import { requireFreshSession, requireSession } from "../lib/require-session.server";
 import { ONBOARDING_COMPETITORS, workspaceLandingForRequest } from "../lib/workspace.server";
 import { OneInput } from "../components/one-input";
-import { AddPasskey } from "../components/passkey-button";
 import { OnboardingFrame } from "../components/onboarding-frame";
 import { Button } from "../components/ui/button";
 import { subjectRedirect } from "../lib/onboarding-subject";
@@ -15,6 +14,7 @@ import { normaliseSubject } from "../lib/identity/normalise";
 import { screenOnboardingSubject } from "../lib/onboarding-screen.server";
 import { startOnboardingRun } from "../lib/data/onboarding_run.server";
 import { createTimings } from "../lib/server-timing.server";
+import { useTimezoneCookie } from "../lib/use-timezone-cookie";
 
 export function meta() {
   return [{ title: "Your website or social username · Five to Nine" }];
@@ -106,6 +106,7 @@ export async function action({ request }: Route.ActionArgs) {
 }
 
 export default function Page({ loaderData, actionData }: Route.ComponentProps) {
+  useTimezoneCookie();
   return (
     <OnboardingFrame step={1} heading="Your website or social username" hideHeading>
       <p className="mt-3 max-w-prose leading-[1.55] text-ink-soft">
@@ -136,7 +137,6 @@ export default function Page({ loaderData, actionData }: Route.ComponentProps) {
       ) : null}
       <footer className="mt-16 flex flex-wrap items-center gap-x-4 border-t border-line pt-4 font-mono text-meta text-ink-soft">
         <p className="[overflow-wrap:anywhere]">Signed in as {loaderData.email}</p>
-        <AddPasskey />
       </footer>
     </OnboardingFrame>
   );

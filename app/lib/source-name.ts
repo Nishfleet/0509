@@ -28,6 +28,7 @@ const KIND_NOUNS: Readonly<Record<string, string>> = {
 };
 
 export function sourceName(kind: string, platform: string): string {
+  if (kind === "site") return "Website checks";
   const noun = KIND_NOUNS[kind] ?? "updates";
   const brand = PLATFORM_NAMES[platform];
   return brand === undefined ? `Your ${noun} source` : `${brand} ${noun}`;

@@ -1,6 +1,7 @@
 import { env } from "cloudflare:test";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { readCompetitorsToClassify } from "../../../app/lib/data/page.server";
 import { classifyCompetitorSites } from "../../../app/lib/site/classify-competitors.server";
 import { planSiteSweep } from "../../../app/lib/site/sweep.server";
 
@@ -118,5 +119,312 @@ describe("a competitor's pricing page", () => {
 
     await classifyCompetitorSites("2026-10-06T02:00:00Z");
     expect(homeFetches.mock.calls.length).toBeGreaterThan(first);
+  });
+
+  it("judges at most 40 navigation links and watches at most 3 pricing pages for one brand", async () => {
+    const links = Array.from(
+      { length: 60 },
+      (_, index) => `<a href="/plans-${String(index)}">Plan ${String(index)}</a>`,
+    );
+    const html = `<html><head><title>Rival</title></head><body><nav>${links.join("")}</nav>
+<main><p>${"We make training clothes for people who train hard and rest harder. ".repeat(6)}</p></main></body></html>`;
+    vi.stubGlobal("fetch", (input: RequestInfo | URL) => {
+      const url = input instanceof Request ? input.url : String(input);
+      if (url === HOME)
+        return Promise.resolve(new Response(html, { status: 200, headers: { "content-type": "text/html" } }));
+      return Promise.resolve(new Response("", { status: 404 }));
+    });
+    const run = vi.fn((_model: string, request: { questions: Record<string, { type: string }> }) =>
+      Promise.resolve({
+        answers: { page_role: { type: request.questions["page_role"]?.type ?? "choice", choice: "pricing" } },
+      }),
+    );
+    Reflect.set(env, "AI", { run });
+
+    await classifyCompetitorSites(NOW);
+    await planSiteSweep(NOW);
+
+    expect(run.mock.calls).toHaveLength(40);
+    expect((await pricingWatches()).filter((target) => target !== HOME)).toHaveLength(3);
+  });
+
+  it("judges a pricing-looking link first even when it is the last of 60", async () => {
+    const links = Array.from({ length: 59 }, (_, index) => `<a href="/p${String(index)}">Page ${String(index)}</a>`);
+    const html = `<html><head><title>Rival</title></head><body><nav>${links.join("")}<a href="/pricing">Pricing</a></nav>
+<main><p>${"We make training clothes for people who train hard and rest harder. ".repeat(6)}</p></main></body></html>`;
+    vi.stubGlobal("fetch", (input: RequestInfo | URL) => {
+      const url = input instanceof Request ? input.url : String(input);
+      if (url === HOME)
+        return Promise.resolve(new Response(html, { status: 200, headers: { "content-type": "text/html" } }));
+      return Promise.resolve(new Response("", { status: 404 }));
+    });
+    Reflect.set(env, "AI", {
+      run: (_model: string, request: { questions: Record<string, { type: string }> }) =>
+        Promise.resolve({
+          answers: {
+            page_role: {
+              type: request.questions["page_role"]?.type ?? "choice",
+              choice: JSON.stringify(request).includes("/pricing") ? "pricing" : "other",
+            },
+          },
+        }),
+    });
+
+    await classifyCompetitorSites(NOW);
+    await planSiteSweep(NOW);
+
+    expect(await pricingWatches()).toContain("https://rival-shop.com/pricing");
+  });
+
+  async function seedWatchedPages(prefix: string, count: number, watched: number): Promise<string[]> {
+    await planSiteSweep(NOW);
+    const source = await env.DB.prepare("SELECT id FROM source WHERE key = 'site.web'").first<{ id: string }>();
+    const urls = Array.from({ length: count }, (_, index) => `https://rival-shop.com/${prefix}-${String(index)}`);
+    await env.DB.batch(
+      urls.flatMap((url, index) => [
+        env.DB.prepare(
+          "INSERT INTO page (id, entity_id, url, role, role_decided_for_hash, discovered_at) VALUES (?1, ?2, ?3, 'pricing', 'h', ?4)",
+        ).bind(`pg-${prefix}-${String(index)}`, RIVAL, url, NOW),
+        ...(index < watched
+          ? [
+              env.DB.prepare("INSERT INTO watch (id, entity_id, source_id, target_key) VALUES (?1, ?2, ?3, ?4)").bind(
+                `w-${prefix}-${String(index)}`,
+                RIVAL,
+                source?.id,
+                url,
+              ),
+            ]
+          : []),
+      ]),
+    );
+    return urls;
+  }
+
+  async function watchStates(prefix: string): Promise<Record<string, number>> {
+    const rows = await env.DB.prepare(
+      "SELECT target_key, is_active FROM watch WHERE entity_id = ?1 AND target_key LIKE ?2 ORDER BY target_key",
+    )
+      .bind(RIVAL, `%/${prefix}-%`)
+      .all<{ target_key: string; is_active: number }>();
+    return Object.fromEntries(rows.results.map((row) => [row.target_key.split("/").pop() ?? "", row.is_active]));
+  }
+
+  it("trims a rival's existing pricing watches to the first 3, keeps the rows, and keeps them off", async () => {
+    await seedWatchedPages("trim", 6, 6);
+
+    await planSiteSweep(NOW);
+    await planSiteSweep(NOW);
+
+    expect(await watchStates("trim")).toEqual({
+      "trim-0": 1,
+      "trim-1": 1,
+      "trim-2": 1,
+      "trim-3": 0,
+      "trim-4": 0,
+      "trim-5": 0,
+    });
+  });
+
+  it("stops watching a page re-judged as something else and gives its slot to the next pricing page", async () => {
+    await seedWatchedPages("slot", 4, 3);
+    await env.DB.prepare("UPDATE page SET role = 'other' WHERE id = 'pg-slot-0'").run();
+
+    await planSiteSweep(NOW);
+
+    expect(await watchStates("slot")).toEqual({ "slot-0": 0, "slot-1": 1, "slot-2": 1, "slot-3": 1 });
+  });
+
+  it("watches a new pricing page in a freed slot and turns a switched-off watch back on", async () => {
+    await seedWatchedPages("free", 3, 3);
+    await env.DB.prepare("UPDATE page SET role = 'other' WHERE id = 'pg-free-0'").run();
+    await planSiteSweep(NOW);
+    await env.DB.prepare(
+      "INSERT INTO page (id, entity_id, url, role, role_decided_for_hash, discovered_at) VALUES ('pg-free-new', ?1, 'https://rival-shop.com/free-new', 'pricing', 'h', ?2)",
+    )
+      .bind(RIVAL, NOW)
+      .run();
+    await planSiteSweep(NOW);
+    expect(await watchStates("free")).toEqual({ "free-0": 0, "free-1": 1, "free-2": 1, "free-new": 1 });
+
+    await env.DB.prepare("UPDATE page SET role = 'pricing' WHERE id = 'pg-free-0'").run();
+    await env.DB.prepare("UPDATE page SET role = 'other' WHERE id = 'pg-free-new'").run();
+    await planSiteSweep(NOW);
+    expect(await watchStates("free")).toEqual({ "free-0": 1, "free-1": 1, "free-2": 1, "free-new": 0 });
+  });
+
+  it("never switches off the owner's own page watches, home watches, or watches from other sources", async () => {
+    const urls = await seedWatchedPages("keep", 5, 5);
+    const source = await env.DB.prepare("SELECT id FROM source WHERE key = 'site.web'").first<{ id: string }>();
+    const other = await env.DB.prepare("SELECT id FROM source WHERE key <> 'site.web' LIMIT 1").first<{ id: string }>();
+    const ownPricing = Array.from({ length: 5 }, (_, index) => `https://owner-shop.com/plans-${String(index)}`);
+    const ownAbout = "https://owner-shop.com/about";
+    await env.DB.batch([
+      ...[...ownPricing.map((url) => [url, "pricing"]), [ownAbout, "other"]].flatMap(([url, role], index) => [
+        env.DB.prepare(
+          "INSERT INTO page (id, entity_id, url, role, role_decided_for_hash, discovered_at) VALUES (?1, ?2, ?3, ?4, 'h', ?5)",
+        ).bind(`pg-own-${String(index)}`, SELF, url, role, NOW),
+        env.DB.prepare("INSERT INTO watch (id, entity_id, source_id, target_key) VALUES (?1, ?2, ?3, ?4)").bind(
+          `w-own-${String(index)}`,
+          SELF,
+          source?.id,
+          url,
+        ),
+      ]),
+      env.DB.prepare("INSERT INTO watch (id, entity_id, source_id, target_key) VALUES ('w-other', ?1, ?2, ?3)").bind(
+        RIVAL,
+        other?.id,
+        urls[4],
+      ),
+    ]);
+
+    await planSiteSweep(NOW);
+    await planSiteSweep(NOW);
+
+    const rows = await env.DB.prepare(
+      "SELECT entity_id, target_key, is_active FROM watch WHERE entity_id = ?1 OR (entity_id = ?2 AND target_key = ?3) ORDER BY entity_id, target_key",
+    )
+      .bind(SELF, RIVAL, HOME)
+      .all<{ entity_id: string; target_key: string; is_active: number }>();
+    expect(rows.results.map((row) => [row.entity_id, row.target_key, row.is_active])).toEqual([
+      [RIVAL, HOME, 1],
+      [SELF, "https://owner-shop.com/", 1],
+      [SELF, ownAbout, 1],
+      ...ownPricing.map((url) => [SELF, url, 1]),
+    ]);
+    const otherSource = await env.DB.prepare("SELECT is_active FROM watch WHERE id = 'w-other'").first<{
+      is_active: number;
+    }>();
+    expect(otherSource?.is_active).toBe(1);
+  });
+
+  it("saves the social links found on a rival's home page, once, including for a brand judged before", async () => {
+    const html = `<html><head><title>Rival</title></head><body><nav><a href="/plans">Plans</a></nav>
+<main><p>${"We make training clothes for people who train hard and rest harder. ".repeat(6)}</p></main>
+<footer><a href="https://www.youtube.com/@rivalshop">YouTube</a><a href="https://www.instagram.com/rivalshop">Instagram</a></footer></body></html>`;
+    const homeFetches = vi.fn(() =>
+      Promise.resolve(new Response(html, { status: 200, headers: { "content-type": "text/html" } })),
+    );
+    vi.stubGlobal("fetch", (input: RequestInfo | URL) => {
+      const url = input instanceof Request ? input.url : String(input);
+      return url === HOME ? homeFetches() : Promise.resolve(new Response("", { status: 404 }));
+    });
+    const identity = async () =>
+      JSON.parse(
+        (
+          await env.DB.prepare("SELECT identity_json FROM entity WHERE id = ?1")
+            .bind(RIVAL)
+            .first<{ identity_json: string }>()
+        )?.identity_json ?? "{}",
+      ) as { socials?: { platform: string; url: string }[]; socialsReadAt?: string };
+
+    await classifyCompetitorSites(NOW);
+    expect((await identity()).socials?.map((social) => social.platform)).toEqual(["youtube", "instagram"]);
+    expect((await identity()).socials?.[0]?.url).toBe("https://www.youtube.com/@rivalshop");
+    const afterFirst = homeFetches.mock.calls.length;
+
+    await env.DB.prepare("UPDATE entity SET identity_json = '{}' WHERE id = ?1").bind(RIVAL).run();
+    await classifyCompetitorSites("2026-10-03T02:00:00Z");
+    expect((await identity()).socials).toHaveLength(2);
+    expect(homeFetches.mock.calls.length).toBeGreaterThan(afterFirst);
+
+    const afterSecond = homeFetches.mock.calls.length;
+    await classifyCompetitorSites("2026-10-04T02:00:00Z");
+    expect(homeFetches.mock.calls.length).toBe(afterSecond);
+  });
+
+  describe("rival social links", () => {
+    const SOCIAL_HTML = `<html><head><title>Rival</title></head><body><nav><a href="/plans">Plans</a></nav>
+<main><p>${"We make training clothes for people who train hard and rest harder. ".repeat(6)}</p></main>
+<footer><a href="https://www.youtube.com/@rivalshop">YouTube</a></footer></body></html>`;
+    const BARE_HTML = `<html><head><title>Rival</title></head><body><nav><a href="/plans">Plans</a></nav>
+<main><p>${"We make training clothes for people who train hard and rest harder. ".repeat(6)}</p></main></body></html>`;
+
+    function serve(html: string | null) {
+      const homeFetches = vi.fn(() =>
+        Promise.resolve(
+          html === null
+            ? new Response("", { status: 500 })
+            : new Response(html, { status: 200, headers: { "content-type": "text/html" } }),
+        ),
+      );
+      vi.stubGlobal("fetch", (input: RequestInfo | URL) => {
+        const url = input instanceof Request ? input.url : String(input);
+        return url === HOME ? homeFetches() : Promise.resolve(new Response("", { status: 404 }));
+      });
+      return homeFetches;
+    }
+
+    async function identityOf(
+      id: string,
+    ): Promise<{ socials?: { platform: string; url: string }[]; socialsReadAt?: string }> {
+      const row = await env.DB.prepare("SELECT identity_json FROM entity WHERE id = ?1")
+        .bind(id)
+        .first<{ identity_json: string }>();
+      return JSON.parse(row?.identity_json ?? "{}") as {
+        socials?: { platform: string; url: string }[];
+        socialsReadAt?: string;
+      };
+    }
+
+    it("does not overwrite socials the rival already has", async () => {
+      const mine = JSON.stringify({ socials: [{ platform: "youtube", url: "https://www.youtube.com/@mine" }] });
+      await env.DB.prepare("UPDATE entity SET identity_json = ?2 WHERE id = ?1").bind(RIVAL, mine).run();
+      serve(SOCIAL_HTML);
+
+      await classifyCompetitorSites(NOW);
+
+      expect((await identityOf(RIVAL)).socials).toEqual([
+        { platform: "youtube", url: "https://www.youtube.com/@mine" },
+      ]);
+    });
+
+    it("leaves the owner's own brand untouched", async () => {
+      await env.DB.prepare('UPDATE entity SET identity_json = \'{"kind":"domain"}\' WHERE id = ?1').bind(SELF).run();
+      serve(SOCIAL_HTML);
+
+      await classifyCompetitorSites(NOW);
+
+      expect(await identityOf(SELF)).toEqual({ kind: "domain" });
+    });
+
+    it("marks a rival with no social links as read so it is not fetched again", async () => {
+      const homeFetches = serve(BARE_HTML);
+
+      await classifyCompetitorSites(NOW);
+      const identity = await identityOf(RIVAL);
+      expect(identity.socials).toEqual([]);
+      expect(identity.socialsReadAt).toBe(NOW);
+      const after = homeFetches.mock.calls.length;
+
+      await classifyCompetitorSites("2026-10-03T02:00:00Z");
+      expect(homeFetches.mock.calls.length).toBe(after);
+    });
+
+    it("does not retry an unreadable home page before the three-day backoff", async () => {
+      const homeFetches = serve(null);
+
+      await classifyCompetitorSites(NOW);
+      const after = homeFetches.mock.calls.length;
+      expect((await identityOf(RIVAL)).socialsReadAt).toBeUndefined();
+
+      await classifyCompetitorSites("2026-10-03T02:00:00Z");
+      expect(homeFetches.mock.calls.length).toBe(after);
+    });
+
+    it("lists rivals to read without failing on one whose saved identity is not valid JSON", async () => {
+      await env.DB.prepare("UPDATE entity SET identity_json = 'not json' WHERE id = ?1").bind(RIVAL).run();
+      await env.DB.prepare(
+        "INSERT INTO page (id, entity_id, url, role, discovered_at) VALUES ('pg-bad-json', ?1, ?2, 'home', ?3)",
+      )
+        .bind(RIVAL, HOME, NOW)
+        .run();
+      await env.DB.prepare(
+        "INSERT INTO page (id, entity_id, url, role, role_decided_for_hash, discovered_at) VALUES ('pg-bad-json-2', ?1, 'https://rival-shop.com/about', 'other', 'h', ?2)",
+      )
+        .bind(RIVAL, NOW)
+        .run();
+
+      await expect(readCompetitorsToClassify(10, NOW)).resolves.toEqual([]);
+    });
   });
 });

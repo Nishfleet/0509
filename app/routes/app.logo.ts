@@ -1,6 +1,8 @@
 import type { Route } from "./+types/app.logo";
 
+import { readEntityDomain } from "../lib/data/entity.server";
 import { readWorkspaceIdForOwner } from "../lib/data/workspace.server";
+import { backfillLogo } from "../lib/identity/card.server";
 import { readEntityLogo } from "../lib/identity/logo-store.server";
 import { requireSession } from "../lib/require-session.server";
 
@@ -14,7 +16,9 @@ function notFound(): Response {
 export async function loader({ request, params }: Route.LoaderArgs) {
   const session = await requireSession(request);
   const workspaceId = await readWorkspaceIdForOwner(session.user.id);
-  const object = workspaceId === null ? null : await readEntityLogo(workspaceId, params.entityId);
+  const kept = workspaceId === null ? null : await readEntityLogo(workspaceId, params.entityId);
+  const domain = workspaceId === null || kept !== null ? null : await readEntityDomain(workspaceId, params.entityId);
+  const object = kept ?? (domain === null ? null : await backfillLogo(domain));
   if (object === null) return notFound();
   return new Response(object.body, {
     headers: {

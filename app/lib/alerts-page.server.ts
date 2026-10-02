@@ -26,17 +26,21 @@ import { daysBefore, readSiteChangeViews } from "./site-changes.server";
 const HIRING_LIMIT = 100;
 
 async function readWorkspaceAlertInputs(workspaceId: string, now: Date) {
-  const competitors = (await readCompetitors(workspaceId)).competitors;
-  const failures = await readDeliveryFailures(env.DB, workspaceId);
-  const notes = await readTakedownNotes(env.DB, workspaceId);
-  const incidents = await readOwnSiteIncidents(env.DB, workspaceId);
-  const signals = await readSignalAlerts(env.DB, workspaceId);
-  const mentions = await readMentionFeed(workspaceId, now);
-  const hiring = await readWorkspaceHiring(workspaceId, daysBefore(now, 30), HIRING_LIMIT);
-  const sources = await readWorkspaceMentionSources(workspaceId);
-  const changes = await readSiteChangeViews({ workspaceId, entityId: null, since: daysBefore(now, 30), limit: 30 });
-  const timeZone = await readWorkspaceTimezone(workspaceId);
-  const open = await readOpenIncidentBlock(env.DB, workspaceId);
+  const [competitorList, failures, notes, incidents, signals, mentions, hiring, sources, changes, timeZone, open] =
+    await Promise.all([
+      readCompetitors(workspaceId),
+      readDeliveryFailures(env.DB, workspaceId),
+      readTakedownNotes(env.DB, workspaceId),
+      readOwnSiteIncidents(env.DB, workspaceId),
+      readSignalAlerts(env.DB, workspaceId),
+      readMentionFeed(workspaceId, now),
+      readWorkspaceHiring(workspaceId, daysBefore(now, 30), HIRING_LIMIT),
+      readWorkspaceMentionSources(workspaceId),
+      readSiteChangeViews({ workspaceId, entityId: null, since: daysBefore(now, 30), limit: 30 }),
+      readWorkspaceTimezone(workspaceId),
+      readOpenIncidentBlock(env.DB, workspaceId),
+    ]);
+  const competitors = competitorList.competitors;
   return { competitors, failures, notes, incidents, signals, mentions, hiring, sources, changes, timeZone, open };
 }
 
@@ -156,9 +160,8 @@ function buildPastIncidents(inputs: AlertInputs, now: Date) {
     }));
 }
 
-export async function loadAlertsPage(userId: string, chip: AlertChipKey) {
+export async function loadAlertsPage(workspaceId: string | null, chip: AlertChipKey) {
   const now = new Date();
-  const workspaceId = await readWorkspaceIdForOwner(userId);
   const inputs = await readAlertInputs(workspaceId, now);
   const items = buildAlertItems(inputs, now);
   return {

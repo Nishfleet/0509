@@ -103,14 +103,6 @@ test("screen 1 is operable by keyboard in order (#4149) @own-signin", async ({ p
   await expect(page.getByRole("button", { name: "Continue" })).toBeFocused();
 
   await page.keyboard.press("Tab");
-  const passkey = page.getByRole("button", { name: "Add a passkey" });
-  await expect(passkey).toBeFocused();
-  await testInfo.attach("focus-passkey", {
-    body: await page.screenshot(),
-    contentType: "image/png",
-  });
-
-  await page.keyboard.press("Tab");
   const support = page.getByRole("link", { name: "support@0509.io" });
   await expect(support).toBeFocused();
   await testInfo.attach("focus-support", {

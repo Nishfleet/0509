@@ -22,9 +22,21 @@ const MIN_TOTAL = 50;
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 
-const JEV_URL = process.env.JEV_URL ?? "http://127.0.0.1:4000/jev";
-
 const JEV_KEY = process.env.LITELLM_JEV_KEY ?? "";
+
+const CF_ACCOUNT = process.env.CLOUDFLARE_ACCOUNT_ID ?? "";
+
+const CF_TOKEN = process.env.CLOUDFLARE_API_TOKEN ?? "";
+
+const VIA_GATEWAY = JEV_KEY === "" && CF_ACCOUNT !== "" && CF_TOKEN !== "";
+
+const GATEWAY_MODEL = "typesafe/jev";
+
+const JEV_URL =
+  process.env.JEV_URL ??
+  (VIA_GATEWAY
+    ? `https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT}/ai/run/${GATEWAY_MODEL}`
+    : "http://127.0.0.1:4000/jev");
 
 type Split = "train" | "test";
 
@@ -137,19 +149,39 @@ function selectedSplits(): Split[] {
 
 const JEV_TIMEOUT_MS = 60_000;
 
+const BUDGET_MARGIN = 1.2;
+
+let callBudget = 0;
+
+let callsUsed = 0;
+
+function withoutModel(body: unknown): unknown {
+  const { model: _model, ...rest } = body as { model?: string };
+  return rest;
+}
+
+function unwrapJev(value: unknown): JevResponse {
+  const inner = (value as { response?: unknown }).response;
+  if (typeof inner === "string") return JSON.parse(inner) as JevResponse;
+  return (inner ?? value) as JevResponse;
+}
+
 async function postJev(body: unknown): Promise<JevResponse> {
+  if (callsUsed >= callBudget) throw new Error(`eval stopped: Jev call budget of ${String(callBudget)} spent`);
+  callsUsed += 1;
   // The bearer token rides in a header, never a command line or a log line.
   const response = await fetch(JEV_URL, {
     method: "POST",
-    headers: { "content-type": "application/json", authorization: `Bearer ${JEV_KEY}` },
-    body: JSON.stringify(body),
+    headers: { "content-type": "application/json", authorization: `Bearer ${VIA_GATEWAY ? CF_TOKEN : JEV_KEY}` },
+    body: JSON.stringify(VIA_GATEWAY ? withoutModel(body) : body),
     signal: AbortSignal.timeout(JEV_TIMEOUT_MS),
   });
   if (!response.ok) {
     const detail = (await response.text()).slice(0, 200);
     throw new Error(`jev POST failed with ${String(response.status)}: ${detail}`);
   }
-  const parsed = (await response.json()) as JevResponse;
+  const raw = (await response.json()) as JevResponse & { result?: unknown };
+  const parsed: JevResponse = VIA_GATEWAY ? { model: GATEWAY_MODEL, ...unwrapJev(raw.result ?? raw) } : raw;
   if (typeof parsed.model !== "string") throw new Error("jev response carried no model version");
   return parsed;
 }
@@ -291,6 +323,8 @@ export interface EvalReport {
   repeats: number;
   jevUrl: string;
   splits: SplitScore[];
+  callsUsed: number;
+  callBudget: number;
 }
 
 async function scoreSplit<T extends EvalRow>(
@@ -352,14 +386,25 @@ export async function runEval<T extends EvalRow>(
 ): Promise<EvalReport> {
   const models = new Set<string>();
   const splits: SplitScore[] = [];
-  for (const split of selectedSplits()) {
+  const wanted = selectedSplits();
+  callsUsed = 0;
+  callBudget = Math.ceil(rows.filter((row) => wanted.includes(row.split)).length * REPEATS * BUDGET_MARGIN);
+  for (const split of wanted) {
     const picked = rows.filter((row) => row.split === split);
     if (picked.length === 0) throw new Error(`${questionId} has no ${split} cases to score`);
     const scored = await scoreSplit(split, picked, ask, score);
     for (const model of scored.models) models.add(model);
     splits.push(scored.score);
   }
-  return { questionId, model: [...models].join(","), repeats: REPEATS, jevUrl: JEV_URL, splits };
+  return {
+    questionId,
+    model: [...models].join(","),
+    repeats: REPEATS,
+    jevUrl: JEV_URL,
+    splits,
+    callsUsed,
+    callBudget,
+  };
 }
 
 export function formatReport(report: EvalReport): string {
@@ -374,11 +419,15 @@ export function formatReport(report: EvalReport): string {
     train === undefined
       ? ""
       : `\ntrain maybes: ${train.maybeIds.join(", ") || "none"}\ntrain wrong: ${train.wrongIds.join(", ") || "none"}`;
-  return [`question ${report.questionId}\tmodel ${report.model}\trepeats ${report.repeats}`, rows, uncertain].join(
-    "\n",
-  );
+  return [
+    `question ${report.questionId}\tmodel ${report.model}\trepeats ${report.repeats}\tjev calls ${report.callsUsed}/${report.callBudget}`,
+    rows,
+    uncertain,
+  ].join("\n");
 }
 
 export function jevKeyPresent(): boolean {
-  return JEV_KEY !== "";
+  const present = JEV_KEY !== "" || VIA_GATEWAY;
+  if (!present && process.env.CI === "true") throw new Error("CI has no Jev credentials, so no case would be scored");
+  return present;
 }

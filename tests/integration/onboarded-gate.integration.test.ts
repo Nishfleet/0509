@@ -1,4 +1,5 @@
 import { env } from "cloudflare:test";
+import { RouterContextProvider } from "react-router";
 import { describe, expect, it, vi } from "vitest";
 
 import { insertSelfEntity } from "../../app/lib/data/entity.server";
@@ -11,7 +12,7 @@ vi.mock("../../app/lib/require-session.server", () => ({
   }),
 }));
 
-import { requireOnboarded } from "../../app/lib/require-onboarded.server";
+import { onboardedContext, requireOnboarded } from "../../app/lib/require-onboarded.server";
 
 async function seedUser(id: string, email: string) {
   const now = "2026-09-28T00:00:00.000Z";
@@ -33,7 +34,7 @@ function gateRequest(userId: string): Request {
 }
 
 async function redirectedTo(request: Request): Promise<string | null> {
-  const thrown = await requireOnboarded({ request }).then(
+  const thrown = await requireOnboarded({ request, context: new RouterContextProvider() }).then(
     () => null,
     (error) => error,
   );
@@ -77,6 +78,9 @@ describe("requireOnboarded against real D1", () => {
     expect(await redirectedTo(request)).toBe("/onboarding/competitors");
 
     await markWatchingStarted(workspaceId, "2026-09-28T00:01:00.000Z");
-    await expect(requireOnboarded({ request })).resolves.toBeUndefined();
+    const context = new RouterContextProvider();
+    await expect(requireOnboarded({ request, context })).resolves.toBeUndefined();
+    expect(context.get(onboardedContext).workspaceId).toBe(workspaceId);
+    expect(context.get(onboardedContext).session.user.id).toBe("user-gate-2");
   });
 });

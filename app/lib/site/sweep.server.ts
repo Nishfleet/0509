@@ -4,7 +4,12 @@ import { getDomain } from "tldts";
 
 import { insertIncidentAlertStatement } from "../data/alert.server";
 import { openIncidentStatement } from "../data/incident.server";
-import { insertPages, readEntitiesWithoutHomePage, readUnwatchedPricingPages } from "../data/page.server";
+import {
+  insertPages,
+  readEntitiesWithoutHomePage,
+  readUnwatchedPricingPages,
+  syncPricingWatches,
+} from "../data/page.server";
 import { linkVerdictsStatement } from "../data/jev_verdict.server";
 import { insertChangeSignalStatement } from "../data/signal.server";
 import { readCoveredPagePairs } from "../data/snapshot.server";
@@ -53,7 +58,10 @@ function enteredHomeUrl(entity: { domain: string; url: string | null }): string 
   return entered.subject.url;
 }
 
-function homeUrl(entity: { domain: string; url: string | null }): string | null {
+function homeUrl(entity: { id: string; domain: string; url: string | null; identity_valid: boolean }): string | null {
+  if (!entity.identity_valid) {
+    console.warn(JSON.stringify({ event: "site-sweep.identity-json-invalid", entityId: entity.id }));
+  }
   const entered = enteredHomeUrl(entity);
   if (entered !== null) return entered;
   return getDomain(entity.domain) === entity.domain ? `https://${entity.domain}/` : null;
@@ -83,6 +91,7 @@ export async function planSiteSweep(now: string): Promise<SiteSweepTarget[]> {
       return url === null ? [] : [{ id: crypto.randomUUID(), entityId: entity.id, sourceId, targetKey: url }];
     }),
   );
+  await syncPricingWatches(sourceId);
   const pricing = await readUnwatchedPricingPages(sourceId);
   await insertWatches(
     pricing.map((page) => ({ id: crypto.randomUUID(), entityId: page.entityId, sourceId, targetKey: page.url })),

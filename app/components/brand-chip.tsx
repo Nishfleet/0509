@@ -90,7 +90,7 @@ function BrandAvatar({ logo, monogram, self, off }: BrandAvatarProps): ReactElem
       {logo === null ? null : (
         <AvatarImage
           alt=""
-          className="absolute inset-0 size-full rounded-none object-cover data-error:hidden"
+          className="absolute inset-0 size-full rounded-none object-contain data-error:hidden"
           height={BOX}
           keepMounted
           src={logo}

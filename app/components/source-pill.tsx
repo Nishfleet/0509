@@ -2,10 +2,13 @@ import type { CSSProperties, ReactElement } from "react";
 
 import { readWatchConfig } from "../lib/mentions/youtube-channel";
 import { shortUtc } from "../lib/short-utc";
+import { sourceName } from "../lib/source-name";
+import { plainSourceReason } from "../lib/source-status-words";
 
 export interface SourceRow {
   key: string;
   platform: string;
+  kind?: string;
   is_enabled: number | boolean;
   name?: string | null;
   degraded_reason?: string | null;
@@ -143,7 +146,10 @@ export function SourcePill({
 }): ReactElement | null {
   const status = sourcePillStatus(source, snapshot, now);
   if (status.state === "disabled") return null;
-  const name = blankToNull(source.name) ?? blankToNull(source.platform) ?? source.key;
+  const name =
+    source.kind === undefined
+      ? (blankToNull(source.name) ?? blankToNull(source.platform) ?? source.key)
+      : sourceName(source.kind, source.platform);
   const lastGood = lastGoodLabel(status.lastGoodAt);
   return (
     <span data-state={status.state} style={pillStyle(status.state === "live")}>
@@ -151,7 +157,8 @@ export function SourcePill({
       {status.state === "none" ? <span>· nothing new</span> : null}
       {status.state === "degraded" ? (
         <span>
-          · {status.reason ?? "not answering"} · last good {lastGood ?? "unknown"}
+          · {plainSourceReason(status.reason)}
+          {lastGood === null ? "" : ` · last updated ${lastGood}`}
         </span>
       ) : null}
     </span>

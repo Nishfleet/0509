@@ -4,37 +4,40 @@ import { env } from "cloudflare:workers";
 import { Link, redirect } from "react-router";
 
 import { BriefView } from "../components/brief-view";
-import { EmptyState } from "../components/empty-state";
+import { FirstBriefNote } from "../components/first-brief-note";
 import { PAGE, PageHeading } from "../components/page-heading";
+import { formatBriefAt } from "../lib/brief-settings";
+import { nextBriefAt } from "../lib/brief-schedule";
 import { briefSendLine } from "../lib/brief-state";
 import { readBriefPayload } from "../lib/brief-payload";
 import { listBriefs, readBrief } from "../lib/data/digest.server";
-import { readWorkspaceIdForOwner } from "../lib/data/workspace.server";
-import { requireSession } from "../lib/require-session.server";
+import { readBriefScheduleForOwner } from "../lib/data/workspace.server";
+import { onboardedContext } from "../lib/require-onboarded.server";
 
 const PREVIOUS_LIST = "mt-10 border-t border-line pt-6";
 const PREVIOUS_HEADING = "font-display text-row-name font-bold [overflow-wrap:anywhere]";
 const PREVIOUS_LINK = "underline decoration-1 underline-offset-4";
 const BRIEF_LINE = "mt-2 font-mono text-[0.75rem] tracking-[0.04em] text-ink-soft uppercase";
 const FALLBACK = "This brief could not be shown here.";
-const EMPTY_SENTENCE =
-  "Your first brief arrives after your first full week of tracking. It will appear here as well as in your inbox.";
-
 export function meta() {
   return [{ title: "Your brief · Five to Nine" }];
 }
 
-export async function loader({ request, params }: Route.LoaderArgs) {
-  const session = await requireSession(request);
-  const workspaceId = await readWorkspaceIdForOwner(session.user.id);
+export async function loader({ params, context }: Route.LoaderArgs) {
+  const { session, workspaceId } = context.get(onboardedContext);
   if (workspaceId === null) throw redirect("/onboarding");
+  const owned = await readBriefScheduleForOwner(session.user.id);
+  if (owned === null) throw redirect("/onboarding");
+  const { schedule } = owned;
   const weeks = await listBriefs(env.DB, workspaceId);
   const selectedId = params.digestId ?? weeks[0]?.id ?? null;
   const brief = selectedId === null ? null : await readBrief(env.DB, workspaceId, selectedId);
   if (params.digestId !== undefined && brief === null) {
     throw new Response("That brief isn't here.", { status: 404 });
   }
+  const now = new Date();
   return {
+    firstBriefAt: formatBriefAt(nextBriefAt(schedule, now), schedule.timezone),
     weeks: weeks.map((w) => ({
       id: w.id,
       week: w.period_start.slice(0, 10),
@@ -60,7 +63,7 @@ export default function Page({ loaderData }: Route.ComponentProps) {
       <PageHeading title="Your weekly brief" />
       {selected === null ? (
         <div className="mt-6">
-          <EmptyState sentence={EMPTY_SENTENCE} />
+          <FirstBriefNote arrivesAt={loaderData.firstBriefAt} />
         </div>
       ) : (
         <>

@@ -1,7 +1,7 @@
 import { env, introspectWorkflow } from "cloudflare:test";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { readCachedSiteProof, startCard } from "../../../app/lib/identity/card.server";
+import { backfillLogo, readCachedSiteProof, startCard } from "../../../app/lib/identity/card.server";
 import { confirmCard } from "../../../app/lib/identity/confirm.server";
 import { extractIdentity } from "../../../app/lib/identity/extract";
 import { normaliseSubject } from "../../../app/lib/identity/normalise";
@@ -162,7 +162,7 @@ describe("startCard", () => {
     expect(site.review).toEqual({ name: "fill", description: "fill", socials: "fill" });
     expect(site.unfound).toBe(false);
     expect(await card.logo).toBe("data:image/png;base64,AQID");
-    expect(await env.SNAPSHOTS.get("logo/gymshark.com")).not.toBeNull();
+    expect(await env.SNAPSHOTS.get("logo/v3/gymshark.com")).not.toBeNull();
   });
 
   function exampleHtml(head: string): string {
@@ -206,7 +206,7 @@ describe("startCard", () => {
     expect(await card.logo).toBe("data:image/png;base64,AQID");
     expect(calls.filter((url) => url === duckUrl)).toHaveLength(1);
     expect(calls).not.toContain("http://insecure.example/og.png");
-    expect(await env.SNAPSHOTS.get("logo/example.com")).not.toBeNull();
+    expect(await env.SNAPSHOTS.get("logo/v3/example.com")).not.toBeNull();
   });
 
   it("re-probes past a stale icon entry that holds a URL the guarded fetch refuses", async () => {
@@ -227,10 +227,11 @@ describe("startCard", () => {
     expect(calls).not.toContain(staleUrl);
   });
 
-  it("stores the first candidate the guarded fetch keeps, and never fetches the rest", async () => {
+  it("stores the first candidate the guarded fetch keeps, and never reads a domain's og:image", async () => {
     stubAi(0.95);
     const ldUrl = `https://${LOGO_HOST}/ld.png`;
     const ogUrl = `https://${LOGO_HOST}/og.png`;
+    const duckUrl = "https://icons.duckduckgo.com/ip3/example.com.ico";
     const calls = stubLogoFetch(
       exampleHtml(
         `<meta property="og:image" content="${ogUrl}">
@@ -238,17 +239,16 @@ describe("startCard", () => {
       ),
       {
         [ldUrl]: () => new Response("<html></html>", { status: 200, headers: { "content-type": "text/html" } }),
-        [ogUrl]: () =>
+        [duckUrl]: () =>
           new Response(new Uint8Array([4, 5, 6]), { status: 200, headers: { "content-type": "image/png" } }),
       },
     );
     const card = startCard("ws-1", subjectFor("example.com"), []);
     await card.site;
     expect(await card.logo).toBe("data:image/png;base64,BAUG");
-    expect(calls.filter((url) => url === ogUrl)).toHaveLength(1);
     expect(calls).toContain(ldUrl);
-    expect(calls).not.toContain("https://icons.duckduckgo.com/ip3/example.com.ico");
-    expect(await env.SNAPSHOTS.get("logo/example.com")).not.toBeNull();
+    expect(calls).not.toContain(ogUrl);
+    expect(await env.SNAPSHOTS.get("logo/v3/example.com")).not.toBeNull();
   });
 
   it("caches a versioned miss when every candidate fails the guarded fetch", async () => {
@@ -257,15 +257,27 @@ describe("startCard", () => {
     const ogUrl = `https://${LOGO_HOST}/og.png`;
     const duckUrl = "https://icons.duckduckgo.com/ip3/example.com.ico";
     const calls = stubLogoFetch(exampleHtml(`<meta property="og:image" content="${ogUrl}">`), {
-      [ogUrl]: () => new Response(null, { status: 404 }),
       [duckUrl]: () => new Response(null, { status: 404 }),
     });
     const card = startCard("ws-1", subject, []);
     await card.site;
     expect(await card.logo).toBeNull();
-    expect(calls).toContain(ogUrl);
+    expect(calls).not.toContain(ogUrl);
     expect(calls).toContain(duckUrl);
-    expect(await env.IDENTITY_CACHE.get(probeKey(subject, "icon"), "json")).toEqual({ v: 2, url: null });
+    expect(await env.IDENTITY_CACHE.get(probeKey(subject, "icon"), "json")).toEqual({ v: 3, url: null });
+  });
+
+  it("backfills a saved brand's logo from the homepage when the stored one is missing", async () => {
+    stubAi(0.95);
+    const duckUrl = "https://icons.duckduckgo.com/ip3/example.com.ico";
+    stubLogoFetch(exampleHtml(""), {
+      [duckUrl]: () =>
+        new Response(new Uint8Array([7, 8, 9]), { status: 200, headers: { "content-type": "image/png" } }),
+    });
+    expect(await env.SNAPSHOTS.get("logo/v3/example.com")).toBeNull();
+    const object = await backfillLogo("example.com");
+    expect(object).not.toBeNull();
+    expect(new Uint8Array(await (object as R2ObjectBody).arrayBuffer())).toEqual(new Uint8Array([7, 8, 9]));
   });
 
   it("reads the homepage once a day, not once per visit", async () => {
@@ -543,7 +555,9 @@ describe("confirmCard", () => {
   it("saves the card, with the user's edits, as the workspace's own brand", async () => {
     stubWeb(() => new Response(gym, { status: 200, headers: { "content-type": "text/html" } }));
     await answerHomepage();
-    await env.SNAPSHOTS.put("logo/gymshark.com", new Uint8Array([1]), { httpMetadata: { contentType: "image/png" } });
+    await env.SNAPSHOTS.put("logo/v3/gymshark.com", new Uint8Array([1]), {
+      httpMetadata: { contentType: "image/png" },
+    });
     const saved = await confirmCard(
       "ws-1",
       "u1",

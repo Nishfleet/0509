@@ -26,7 +26,8 @@ const INSERT_WATCH = `INSERT INTO watch (id, entity_id, source_id, target_key)
 VALUES (?1, ?2, ?3, ?4)
 ON CONFLICT (entity_id, source_id, target_key) DO NOTHING`;
 
-const UNWATCHED_ENTITIES = `SELECT e.id AS id, e.domain AS domain, json_extract(e.identity_json, '$.url') AS url
+const UNWATCHED_ENTITIES = `SELECT e.id AS id, e.domain AS domain, CASE WHEN json_valid(e.identity_json) THEN json_extract(e.identity_json, '$.url') END AS url,
+       json_valid(e.identity_json) AS identity_valid
 FROM entity e
 WHERE e.state = 'on'
   AND NOT EXISTS (SELECT 1 FROM watch w WHERE w.entity_id = e.id AND w.source_id = ?1)
@@ -55,7 +56,14 @@ ORDER BY e.workspace_id, e.id, p.url`;
 
 const entityRows = z.array(z.object({ id: z.string(), domain: z.string() }));
 
-const unwatchedEntityRows = z.array(z.object({ id: z.string(), domain: z.string(), url: z.string().nullable() }));
+const unwatchedEntityRows = z.array(
+  z.object({
+    id: z.string(),
+    domain: z.string(),
+    url: z.string().nullable(),
+    identity_valid: z.number().transform((flag) => flag === 1),
+  }),
+);
 
 type UnwatchedEntity = z.infer<typeof unwatchedEntityRows>[number];
 
@@ -259,7 +267,8 @@ export async function deactivateWatch(watchId: string): Promise<void> {
   await env.DB.prepare(DEACTIVATE_WATCH).bind(watchId).run();
 }
 
-const SITE_WATCH_SUMMARY = `SELECT COUNT(*) AS pages, MAX(w.last_polled_at) AS last_polled_at
+const SITE_WATCH_SUMMARY = `SELECT COUNT(*) AS pages, MAX(w.last_polled_at) AS last_polled_at,
+       EXISTS (SELECT 1 FROM page hp WHERE hp.entity_id = ?2 AND hp.role = 'home' AND hp.deferred_at IS NOT NULL) AS unreadable
 FROM watch w
 JOIN source src ON src.id = w.source_id AND src.kind = 'site'
 JOIN entity e ON e.id = w.entity_id AND e.workspace_id = ?1
@@ -268,13 +277,14 @@ WHERE w.entity_id = ?2 AND w.is_active = 1`;
 export interface SiteWatchSummary {
   pages: number;
   lastPolledAt: string | null;
+  unreadable: boolean;
 }
 
 export async function readSiteWatchSummary(workspaceId: string, entityId: string): Promise<SiteWatchSummary> {
   const row = await env.DB.prepare(SITE_WATCH_SUMMARY)
     .bind(workspaceId, entityId)
-    .first<{ pages: number; last_polled_at: string | null }>();
-  return { pages: row?.pages ?? 0, lastPolledAt: row?.last_polled_at ?? null };
+    .first<{ pages: number; last_polled_at: string | null; unreadable: number }>();
+  return { pages: row?.pages ?? 0, lastPolledAt: row?.last_polled_at ?? null, unreadable: row?.unreadable === 1 };
 }
 
 const ENTITY_R2_PREFIXES = `SELECT w.id AS id
