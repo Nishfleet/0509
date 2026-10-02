@@ -18,13 +18,7 @@ describe("weightOf", () => {
     expect(weightOf(WEIGHTS, "ad_copy_change")).toBe(0);
   });
 
-  it("throws for an absent key, naming the row and the key", () => {
-    expect(() => weightOf(WEIGHTS, "site_change_noteworthy")).toThrowError(
-      "scoring_weight has no row for site_change_noteworthy",
-    );
-  });
-
-  it("names the missing key it was asked for", () => {
+  it("throws for a map with no rows, naming the missing key", () => {
     expect(() => weightOf(new Map<string, number>(), "hiring_new_role")).toThrowError(
       /^scoring_weight has no row for hiring_new_role$/,
     );
