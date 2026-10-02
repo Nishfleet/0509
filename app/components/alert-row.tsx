@@ -89,7 +89,7 @@ function DeliveryFailure({ failure }: { failure: DeliveryFailureItem }): ReactEl
   return (
     <article id={failure.id} data-testid="delivery-failure" className={CARD}>
       <h3 className={TITLE}>{failure.title}</h3>
-      <p className={BODY}>{failure.body}</p>
+      {failure.body === null ? null : <p className={BODY}>{failure.body}</p>}
       <time dateTime={failure.created_at} className={WHEN_CLASS}>
         {failure.when}
       </time>

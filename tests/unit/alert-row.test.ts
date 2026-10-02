@@ -8,6 +8,7 @@ import type { BriefPayload } from "../../app/lib/brief-payload";
 
 const ROW_NAME_TITLE = '<h3 class="font-display text-row-name font-bold [overflow-wrap:anywhere]">';
 const META_WHEN = 'class="mt-2 block font-mono text-meta text-ink-soft uppercase"';
+const BODY_CLASS = "mt-2 leading-[1.65]";
 const READ_BRIEF_CLASS = buttonVariants({ variant: "tertiary", className: "cursor-pointer" });
 
 const HIRING_ITEM: AlertFeedItem = {
@@ -178,6 +179,22 @@ describe("an alert feed row", () => {
     expect(html).toContain("4 days ago");
     expect(html).not.toContain("Read the brief");
     expect(html).not.toContain("/app/brief/");
+  });
+
+  it("omits the body paragraph for a delivery failure with no body, keeping the title and date", () => {
+    const item: AlertFeedItem =
+      FAILURE_ITEM.kind === "failure"
+        ? { ...FAILURE_ITEM, failure: { ...FAILURE_ITEM.failure, body: null } }
+        : FAILURE_ITEM;
+    const html = render(item);
+    expect(html).not.toContain(`<p class="${BODY_CLASS}"></p>`);
+    expect(html).toContain(`${ROW_NAME_TITLE}We stopped trying to send your brief</h3>`);
+    expect(html).toContain("4 days ago");
+  });
+
+  it("still renders the body paragraph for a delivery failure with a body", () => {
+    const html = render(FAILURE_ITEM);
+    expect(html).toContain(`<p class="${BODY_CLASS}">The brief did not go out. We will not try again.</p>`);
   });
 
   it("keeps Read the brief a no-JS summary wearing the tertiary button look and a 44px target", () => {
