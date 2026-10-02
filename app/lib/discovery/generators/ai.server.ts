@@ -4,7 +4,7 @@ import { z } from "zod";
 
 import { fetchOutbound } from "../../fetch/outbound.server";
 import { CRAWLER_USER_AGENT } from "../../fetch/robots.server";
-import { readThrough } from "../../identity/probe-cache.server";
+import { cacheUnavailable, readThrough } from "../../identity/probe-cache.server";
 import { GATEWAY_ID } from "../../jev/client.server";
 import { sha256Hex } from "../../sha256";
 import { defaultFetchText } from "../fetch-text.server";
@@ -188,9 +188,10 @@ async function isLive(domain: string): Promise<boolean> {
 
 async function cachedLive(domain: string): Promise<boolean> {
   const key = `discovery:live:${domain}`;
-  if ((await env.IDENTITY_CACHE.get(key).catch(() => null)) === "1") return true;
+  if ((await env.IDENTITY_CACHE.get(key).catch(cacheUnavailable("read"))) === "1") return true;
   const live = await isLive(domain);
-  if (live) await env.IDENTITY_CACHE.put(key, "1", { expirationTtl: PROPOSALS_TTL_SECONDS }).catch(() => undefined);
+  if (live)
+    await env.IDENTITY_CACHE.put(key, "1", { expirationTtl: PROPOSALS_TTL_SECONDS }).catch(cacheUnavailable("write"));
   return live;
 }
 

@@ -38,7 +38,7 @@ export interface ProbeLoader<T> {
   run: () => Promise<T>;
 }
 
-function cacheUnavailable(action: "read" | "write"): () => null {
+export function cacheUnavailable(action: "read" | "write"): () => null {
   return () => {
     console.error(JSON.stringify({ event: "identity.cache_unavailable", action }));
     return null;
