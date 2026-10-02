@@ -12,6 +12,16 @@ export interface KeyedFeedItem extends FeedItem {
   key: string;
 }
 
+export interface FeedScan {
+  blocksVisited: number;
+  charsScanned: number;
+}
+
+export interface ParseFeedOptions {
+  now: Date;
+  scan?: FeedScan;
+}
+
 export const MAX_FEED_ITEMS = 20;
 
 const MAX_ITEM_AGE_DAYS = 30;
@@ -90,17 +100,29 @@ function plainText(raw: string, limit: number): string {
 
 const NAME_END = /[\s>/]/;
 
-function openTagAt(lower: string, name: string, from: number): { start: number; end: number } | null {
+function scanIndexOf(text: string, needle: string, opts: { from: number; scan?: FeedScan }): number {
+  const found = text.indexOf(needle, opts.from);
+  if (opts.scan !== undefined) {
+    opts.scan.charsScanned += (found === -1 ? text.length : found + needle.length) - opts.from;
+  }
+  return found;
+}
+
+function openTagAt(
+  lower: string,
+  name: string,
+  opts: { from: number; scan?: FeedScan },
+): { start: number; end: number } | null {
   const needle = `<${name}`;
-  let at = lower.indexOf(needle, from);
+  let at = scanIndexOf(lower, needle, opts);
   while (at !== -1) {
     const next = lower.charAt(at + needle.length);
     if (NAME_END.test(next)) {
-      const end = lower.indexOf(">", at + needle.length);
+      const end = scanIndexOf(lower, ">", { from: at + needle.length, scan: opts.scan });
       if (end === -1 || end - at > MAX_TAG_CHARS) return null;
       return { start: at, end };
     }
-    at = lower.indexOf(needle, at + needle.length);
+    at = scanIndexOf(lower, needle, { from: at + needle.length, scan: opts.scan });
   }
   return null;
 }
@@ -113,7 +135,7 @@ interface Element {
 
 function elementAt(block: Block, name: string, from: number): Element | null {
   const { source, lower } = block;
-  const open = openTagAt(lower, name, from);
+  const open = openTagAt(lower, name, { from });
   if (open === null) return null;
   const head = source.slice(open.start + name.length + 1, open.end);
   if (head.endsWith("/")) return { attrs: head.slice(0, -1), inner: null, after: open.end + 1 };
@@ -144,17 +166,19 @@ function asciiLower(text: string): string {
   return text.replace(/[A-Z]+/g, (run) => run.toLowerCase());
 }
 
-function entryBlocks(xml: string): Block[] {
+function entryBlocks(xml: string, scan: FeedScan): Block[] {
   const lower = asciiLower(xml);
+  scan.charsScanned += xml.length;
   const blocks: Block[] = [];
   let at = 0;
   while (blocks.length < MAX_BLOCKS) {
-    const items = openTagAt(lower, "item", at);
-    const entries = openTagAt(lower, "entry", at);
+    const items = openTagAt(lower, "item", { from: at, scan });
+    const entries = openTagAt(lower, "entry", { from: at, scan });
     const open = items === null ? entries : entries === null || items.start < entries.start ? items : entries;
     if (open === null) break;
+    scan.blocksVisited += 1;
     const name = open === items ? "item" : "entry";
-    const close = lower.indexOf(`</${name}`, open.end + 1);
+    const close = scanIndexOf(lower, `</${name}`, { from: open.end + 1, scan });
     if (close === -1) break;
     at = close + name.length + 2;
     if (close - open.end > MAX_BLOCK_CHARS) continue;
@@ -275,11 +299,11 @@ export function isFeedDocument(xml: string): boolean {
   return FEED_ROOT.test(xml.slice(0, 4096));
 }
 
-export function parseFeed(xml: string, base: string, now: Date): FeedItem[] | null {
+export function parseFeed(xml: string, base: string, options: ParseFeedOptions): FeedItem[] | null {
   if (!isFeedDocument(xml)) return null;
-  const cutoff = now.getTime() - MAX_ITEM_AGE_DAYS * DAY_MS;
+  const cutoff = options.now.getTime() - MAX_ITEM_AGE_DAYS * DAY_MS;
   const items: FeedItem[] = [];
-  for (const block of entryBlocks(xml)) {
+  for (const block of entryBlocks(xml, options.scan ?? { blocksVisited: 0, charsScanned: 0 })) {
     const item = toItem(block, base);
     if (item === null) continue;
     if (item.publishedAt !== null && Date.parse(item.publishedAt) < cutoff) continue;
