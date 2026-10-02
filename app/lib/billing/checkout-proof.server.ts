@@ -15,14 +15,20 @@ function hexToBytes(hex: string): Uint8Array<ArrayBuffer> | null {
   return bytes;
 }
 
-function signingKey(usage: "sign" | "verify"): Promise<CryptoKey> {
-  return crypto.subtle.importKey(
-    "raw",
-    new TextEncoder().encode(env.BETTER_AUTH_SECRET),
-    { name: "HMAC", hash: "SHA-256" },
-    false,
-    [usage],
-  );
+let cached: { secret: string; key: Promise<CryptoKey> } | null = null;
+
+function signingKey(): Promise<CryptoKey> {
+  const secret = env.BETTER_AUTH_SECRET;
+  if (cached?.secret !== secret) {
+    cached = {
+      secret,
+      key: crypto.subtle.importKey("raw", new TextEncoder().encode(secret), { name: "HMAC", hash: "SHA-256" }, false, [
+        "sign",
+        "verify",
+      ]),
+    };
+  }
+  return cached.key;
 }
 
 function message(workspaceId: string, productId: string): Uint8Array<ArrayBuffer> {
@@ -30,7 +36,7 @@ function message(workspaceId: string, productId: string): Uint8Array<ArrayBuffer
 }
 
 export async function checkoutProof(workspaceId: string, productId: string): Promise<string> {
-  const signature = await crypto.subtle.sign("HMAC", await signingKey("sign"), message(workspaceId, productId));
+  const signature = await crypto.subtle.sign("HMAC", await signingKey(), message(workspaceId, productId));
   return bytesToHex(new Uint8Array(signature));
 }
 
@@ -41,5 +47,5 @@ export async function isCheckoutProof(
 ): Promise<boolean> {
   const bytes = hexToBytes(proof ?? "");
   if (bytes === null) return false;
-  return crypto.subtle.verify("HMAC", await signingKey("verify"), bytes, message(workspaceId, productId));
+  return crypto.subtle.verify("HMAC", await signingKey(), bytes, message(workspaceId, productId));
 }

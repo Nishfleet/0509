@@ -6,7 +6,6 @@ import { markWebhookEventProcessed, recordWebhookEvent } from "../data/dodo_webh
 import { readPlanSubscription, readWorkspaceIdBySubscription, upsertSubscriptionPlan } from "../data/plan.server";
 import { isCheckoutProof } from "./checkout-proof.server";
 import { entitledTier } from "./entitlements";
-import { PLANS, type PlanId } from "./plans";
 import { planIdForProduct } from "./products.server";
 
 const envelope = z.object({
@@ -33,12 +32,6 @@ function log(event: string, fields: Record<string, string>): void {
   console.log(JSON.stringify({ event, ...fields }));
 }
 
-const RANK = new Map<PlanId, number>(PLANS.map((plan, index) => [plan.id, index]));
-
-function rank(tier: string): number {
-  return RANK.get(tier as PlanId) ?? 0;
-}
-
 type Workspace = { kind: "found"; id: string } | { kind: "retry" } | { kind: "ignore" };
 
 async function resolveWorkspace(data: z.infer<typeof subscriptionData>): Promise<Workspace> {
@@ -56,18 +49,19 @@ async function resolveWorkspace(data: z.infer<typeof subscriptionData>): Promise
   return { kind: "found", id: claimed };
 }
 
-async function displacesBetterPlan(input: {
+async function supersedesCurrent(input: {
   workspaceId: string;
   subscriptionId: string;
-  tier: PlanId;
+  type: string;
 }): Promise<boolean> {
+  if (input.type === "subscription.active") return false;
   const current = await readPlanSubscription(input.workspaceId);
   if (current === null || current.subscriptionId === input.subscriptionId) return false;
   const entitled = entitledTier(
     { tier: current.tier, status: current.status, currentPeriodEnd: current.currentPeriodEnd },
     new Date(),
   );
-  return rank(entitled) > rank(input.tier);
+  return entitled !== "scout";
 }
 
 async function applySubscription(body: unknown, type: string, timestamp: string): Promise<"done" | "retry"> {
@@ -86,8 +80,8 @@ async function applySubscription(body: unknown, type: string, timestamp: string)
   if (workspace.kind === "retry") return "retry";
   if (workspace.kind === "ignore") return "done";
   const workspaceId = workspace.id;
-  if (await displacesBetterPlan({ workspaceId, subscriptionId: data.subscription_id, tier })) {
-    log("billing.webhook_lower_tier_ignored", { type, subscription: data.subscription_id });
+  if (await supersedesCurrent({ workspaceId, subscriptionId: data.subscription_id, type })) {
+    log("billing.webhook_other_subscription_ignored", { type, subscription: data.subscription_id });
     return "done";
   }
   const cancelledNow = data.status === "cancelled" && data.cancel_at_next_billing_date !== true;

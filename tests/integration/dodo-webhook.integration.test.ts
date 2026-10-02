@@ -308,43 +308,71 @@ describe("Dodo webhook (J13)", () => {
       expect(await planRow()).toBeNull();
     });
 
-    it("does not let a different subscription with a lower tier displace an entitled plan", async () => {
-      await deliver(signedRequest("evt_first", eventBody({})));
-      const scoutProof = await checkoutProof(WORKSPACE, "pdt_test_scout");
-      const oldScout = eventBody({
-        timestamp: "2026-10-01T00:00:00Z",
-        data: {
-          subscription_id: "sub_old_scout",
-          product_id: "pdt_test_scout",
-          status: "cancelled",
-          cancel_at_next_billing_date: false,
-          metadata: { workspace_id: WORKSPACE, plan: "scout", proof: scoutProof },
-        },
-      });
+    const scoutMetadata = async () => ({
+      workspace_id: WORKSPACE,
+      plan: "scout",
+      proof: await checkoutProof(WORKSPACE, "pdt_test_scout"),
+    });
 
-      await deliver(signedRequest("evt_old_scout", oldScout));
+    it("ignores the end or renewal of an earlier subscription once another one is current", async () => {
+      await deliver(signedRequest("evt_first", eventBody({})));
+      const earlier = async (type: string, status: string) =>
+        eventBody({
+          type,
+          timestamp: "2026-10-01T00:00:00Z",
+          data: {
+            subscription_id: "sub_old_scout",
+            product_id: "pdt_test_scout",
+            status,
+            cancel_at_next_billing_date: false,
+            metadata: await scoutMetadata(),
+          },
+        });
+
+      await deliver(signedRequest("evt_old_cancel", await earlier("subscription.cancelled", "cancelled")));
+      await deliver(signedRequest("evt_old_renew", await earlier("subscription.renewed", "active")));
 
       expect(await planRow()).toMatchObject({ tier: "starter", provider_subscription_id: "sub_7EeHq2ewQuadropD2ra" });
     });
 
-    it("lets a proven upgrade to a higher tier replace the earlier subscription", async () => {
-      const scoutProof = await checkoutProof(WORKSPACE, "pdt_test_scout");
+    it("lets a proven upgrade replace the earlier subscription", async () => {
       await deliver(
         signedRequest(
           "evt_scout",
           eventBody({
-            data: {
-              subscription_id: "sub_scout",
-              product_id: "pdt_test_scout",
-              metadata: { workspace_id: WORKSPACE, plan: "scout", proof: scoutProof },
-            },
+            data: { subscription_id: "sub_scout", product_id: "pdt_test_scout", metadata: await scoutMetadata() },
           }),
         ),
       );
+      expect(await planRow()).toMatchObject({ tier: "scout", provider_subscription_id: "sub_scout" });
 
       await deliver(signedRequest("evt_upgrade", eventBody({ timestamp: "2026-10-01T00:00:00Z" })));
 
       expect(await planRow()).toMatchObject({ tier: "starter", provider_subscription_id: "sub_7EeHq2ewQuadropD2ra" });
+    });
+
+    it("records a deliberate downgrade bought through a new proven checkout while the old plan is still paid", async () => {
+      await deliver(
+        signedRequest(
+          "evt_starter",
+          eventBody({
+            data: { cancel_at_next_billing_date: true, status: "cancelled", next_billing_date: "2099-01-01T00:00:00Z" },
+          }),
+        ),
+      );
+      expect((await planRow())?.tier).toBe("starter");
+
+      await deliver(
+        signedRequest(
+          "evt_downgrade",
+          eventBody({
+            timestamp: "2026-10-01T00:00:00Z",
+            data: { subscription_id: "sub_scout", product_id: "pdt_test_scout", metadata: await scoutMetadata() },
+          }),
+        ),
+      );
+
+      expect(await planRow()).toMatchObject({ tier: "scout", provider_subscription_id: "sub_scout" });
     });
   });
 });
