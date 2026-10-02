@@ -212,6 +212,22 @@ describe("judgeCandidates", () => {
     expect(results[0]?.verdict).toMatchObject({ questionId: "is_competitor", p: 0.04 });
   });
 
+  it("drops a candidate whose category answer is below the floor even when it is above the reject line", async () => {
+    const workspaceId = await seedWorkspace();
+    const context = await readDiscoveryContext(workspaceId);
+    if (context === null) throw new Error("seed failed");
+    const run = vi.fn(() =>
+      Promise.resolve({
+        answers: { is_competitor: { type: "noul", noul: 0.62 }, same_product_category: { type: "noul", noul: 0.15 } },
+      }),
+    );
+    Reflect.set(env, "AI", { run });
+
+    const results = await judgeCandidates(context, [candidate("Patagonia", "patagonia.com")]);
+
+    expect(results[0]?.verdict).toMatchObject({ questionId: "is_competitor", p: 0 });
+  });
+
   it("keeps the candidate unjudged for the user to confirm when the category answer is missing", async () => {
     const workspaceId = await seedWorkspace();
     const context = await readDiscoveryContext(workspaceId);
