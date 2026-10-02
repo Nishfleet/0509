@@ -9,6 +9,14 @@ describe("isTrialing", () => {
     expect(isTrialing({ createdAt: created, nextBillingDate: "2026-10-06T10:00:00.000Z", trialDays: 7 })).toBe(true);
   });
 
+  it("is true when the next billing date lands a few minutes past the trial end", () => {
+    expect(isTrialing({ createdAt: created, nextBillingDate: "2026-10-06T10:05:00.000Z", trialDays: 7 })).toBe(true);
+  });
+
+  it("is false when the next billing date is a day past the trial end", () => {
+    expect(isTrialing({ createdAt: created, nextBillingDate: "2026-10-07T10:00:00.000Z", trialDays: 7 })).toBe(false);
+  });
+
   it("is false once the next billing date is a later cycle", () => {
     expect(isTrialing({ createdAt: created, nextBillingDate: "2026-11-06T10:00:00.000Z", trialDays: 7 })).toBe(false);
   });
