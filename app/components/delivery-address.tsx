@@ -1,4 +1,4 @@
-import { Form } from "react-router";
+import { Form, useNavigation } from "react-router";
 
 import { BLOCK_HEADING } from "./page-heading";
 import { Button } from "./ui/button";
@@ -69,6 +69,8 @@ export function DeliveryAddress({
   error: string | null;
   suppressed: boolean;
 }) {
+  const navigation = useNavigation();
+  const saving = navigation.state !== "idle" && navigation.formData?.get("intent") === "delivery-address";
   return (
     <section aria-labelledby="delivery-address" className="mt-10 border-t border-line pt-6">
       <h2 id="delivery-address" className={BLOCK_HEADING}>
@@ -77,8 +79,8 @@ export function DeliveryAddress({
       <p className="mt-2 max-w-prose leading-[1.55]">The brief goes here. It starts as the address you sign in with.</p>
       <Form method="post" action="/app/settings" className="mt-4 flex flex-col gap-3">
         <AddressFields delivery={delivery} error={error} suppressed={suppressed} />
-        <Button type="submit" variant="secondary" size="lg" className="self-start">
-          Save
+        <Button type="submit" variant="secondary" size="lg" className="self-start" disabled={saving}>
+          {saving ? "Saving…" : "Save"}
         </Button>
       </Form>
     </section>
