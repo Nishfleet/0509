@@ -1,4 +1,5 @@
 import {
+  FEED_SWEEP_CRON,
   HIRING_SWEEP_CRON,
   MENTIONS_SWEEP_CRON,
   OWN_SITE_CHECK_CRON,
@@ -10,6 +11,7 @@ export const WORKFLOW_CRONS = {
   [MENTIONS_SWEEP_CRON]: { binding: "MENTIONS", name: "mentions-sweep" },
   [SITE_SWEEP_CRON]: { binding: "SITE_SWEEP", name: "site-sweep" },
   [HIRING_SWEEP_CRON]: { binding: "HIRING_SWEEP", name: "hiring-sweep" },
+  [FEED_SWEEP_CRON]: { binding: "FEED_SWEEP", name: "feed-sweep" },
   [SNAPSHOT_BACKUP_CRON]: { binding: "SNAPSHOT_BACKUP", name: "snapshot-backup" },
   [OWN_SITE_CHECK_CRON]: { binding: "OWN_SITE_CHECK", name: "own-site-check" },
 } as const satisfies Record<string, { binding: keyof Env; name: string }>;

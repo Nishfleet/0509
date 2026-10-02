@@ -100,6 +100,52 @@ export async function insertHiringSignals(rows: readonly NewHiringSignal[]): Pro
   }
 }
 
+export interface NewContentSignal {
+  id: string;
+  workspaceId: string;
+  entityId: string;
+  sourceId: string;
+  watchId: string;
+  snapshotId: string | null;
+  itemKey: string;
+  title: string;
+  excerpt: string | null;
+  url: string;
+  publishedAt: string | null;
+  observedAt: string;
+}
+
+const INSERT_CONTENT = `INSERT INTO signal
+  (id, workspace_id, entity_id, source_id, watch_id, snapshot_id, kind, title, summary,
+   url, evidence_url, payload_json, dedup_key, published_at, observed_at, last_seen_at)
+VALUES (?1, ?2, ?3, ?4, ?5, ?6, 'content', ?7, ?8, ?9, ?9, '{"platform":"feed"}', ?10, ?11, ?12, ?12)
+ON CONFLICT (source_id, dedup_key) DO NOTHING`;
+
+export async function insertContentSignals(rows: readonly NewContentSignal[]): Promise<void> {
+  if (rows.length === 0) return;
+  for (let offset = 0; offset < rows.length; offset += HIRING_BATCH) {
+    const chunk = rows.slice(offset, offset + HIRING_BATCH);
+    await env.DB.batch(
+      chunk.map((row) =>
+        env.DB.prepare(INSERT_CONTENT).bind(
+          row.id,
+          row.workspaceId,
+          row.entityId,
+          row.sourceId,
+          row.watchId,
+          row.snapshotId,
+          row.title,
+          row.excerpt,
+          row.url,
+          `${row.watchId}:${row.itemKey}`,
+          row.publishedAt,
+          row.observedAt,
+        ),
+      ),
+    );
+  }
+}
+
 export const SELECT_HIRING_SIGNAL_STATES = `SELECT id, dedup_key, last_seen_at, payload_json FROM signal
 WHERE kind = 'hiring' AND watch_id = ?1 AND is_tombstoned = 0`;
 
