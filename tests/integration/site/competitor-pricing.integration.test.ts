@@ -290,4 +290,39 @@ describe("a competitor's pricing page", () => {
     expect(home.results.length).toBeGreaterThan(0);
     expect(home.results.every((row) => row.is_active === 1)).toBe(true);
   });
+
+  it("saves the social links found on a rival's home page, once, including for a brand judged before", async () => {
+    const html = `<html><head><title>Rival</title></head><body><nav><a href="/plans">Plans</a></nav>
+<main><p>${"We make training clothes for people who train hard and rest harder. ".repeat(6)}</p></main>
+<footer><a href="https://www.youtube.com/@rivalshop">YouTube</a><a href="https://www.instagram.com/rivalshop">Instagram</a></footer></body></html>`;
+    const homeFetches = vi.fn(() =>
+      Promise.resolve(new Response(html, { status: 200, headers: { "content-type": "text/html" } })),
+    );
+    vi.stubGlobal("fetch", (input: RequestInfo | URL) => {
+      const url = input instanceof Request ? input.url : String(input);
+      return url === HOME ? homeFetches() : Promise.resolve(new Response("", { status: 404 }));
+    });
+    const identity = async () =>
+      JSON.parse(
+        (
+          await env.DB.prepare("SELECT identity_json FROM entity WHERE id = ?1")
+            .bind(RIVAL)
+            .first<{ identity_json: string }>()
+        )?.identity_json ?? "{}",
+      ) as { socials?: { platform: string; url: string }[]; socialsReadAt?: string };
+
+    await classifyCompetitorSites(NOW);
+    expect((await identity()).socials?.map((social) => social.platform)).toEqual(["youtube", "instagram"]);
+    expect((await identity()).socials?.[0]?.url).toBe("https://www.youtube.com/@rivalshop");
+    const afterFirst = homeFetches.mock.calls.length;
+
+    await env.DB.prepare("UPDATE entity SET identity_json = '{}' WHERE id = ?1").bind(RIVAL).run();
+    await classifyCompetitorSites("2026-10-03T02:00:00Z");
+    expect((await identity()).socials).toHaveLength(2);
+    expect(homeFetches.mock.calls.length).toBeGreaterThan(afterFirst);
+
+    const afterSecond = homeFetches.mock.calls.length;
+    await classifyCompetitorSites("2026-10-04T02:00:00Z");
+    expect(homeFetches.mock.calls.length).toBe(afterSecond);
+  });
 });
