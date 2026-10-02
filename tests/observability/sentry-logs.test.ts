@@ -25,10 +25,10 @@ function fakeTransport() {
   };
 }
 
-// The client the Worker gets. `@sentry/core`'s `initAndBind` is exactly these
-// three steps, and v10 of the SDK ships no top-level `init`, so building the
-// client from `sentryOptions` with only what a test must know how to send
-// overridden keeps every option under test — `enableLogs`,
+// The client the Worker gets. The SDK's internal `initAndBind` is exactly these
+// three steps, and the package's own entry point ships no top-level `init` in
+// v10, so building the client from `sentryOptions` with only what a test must
+// know how to send overridden keeps every option under test — `enableLogs`,
 // `consoleLoggingIntegration()`, `beforeSendLog` — the ones the Worker runs:
 // the dsn, the recording transport, and a stack parser that drops frames
 // because no assertion here reads a stack frame.
