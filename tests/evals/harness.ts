@@ -149,6 +149,10 @@ function selectedSplits(): Split[] {
 
 const JEV_TIMEOUT_MS = 60_000;
 
+const MAX_CALLS = Number(process.env.EVAL_MAX_CALLS ?? 6000);
+
+let callsMade = 0;
+
 function withoutModel(body: unknown): unknown {
   const { model: _model, ...rest } = body as { model?: string };
   return rest;
@@ -161,6 +165,8 @@ function unwrapJev(value: unknown): JevResponse {
 }
 
 async function postJev(body: unknown): Promise<JevResponse> {
+  callsMade += 1;
+  if (callsMade > MAX_CALLS) throw new Error(`eval stopped: more than ${String(MAX_CALLS)} Jev calls in one run`);
   // The bearer token rides in a header, never a command line or a log line.
   const response = await fetch(JEV_URL, {
     method: "POST",
