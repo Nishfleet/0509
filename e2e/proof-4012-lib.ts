@@ -55,38 +55,54 @@ export function captureIds(email: string): Ids {
 }
 
 export function counts(ids: Ids): Record<string, number> {
-  const parts = [
-    `SELECT 'user' AS t, COUNT(*) AS n FROM "user" WHERE id = '${ids.userId}'`,
-    `SELECT 'session', COUNT(*) FROM session WHERE userId = '${ids.userId}'`,
-    `SELECT 'account', COUNT(*) FROM account WHERE userId = '${ids.userId}'`,
-    `SELECT 'apikey', COUNT(*) FROM apikey WHERE referenceId = '${ids.userId}'`,
-    `SELECT 'passkey', COUNT(*) FROM passkey WHERE userId = '${ids.userId}'`,
-    `SELECT 'workspace', COUNT(*) FROM workspace WHERE id = '${ids.workspaceId}'`,
-    ...ids.wsTables.map((t) => `SELECT '${t}', COUNT(*) FROM ${t} WHERE workspace_id = '${ids.workspaceId}'`),
-    `SELECT 'watch', COUNT(*) FROM watch WHERE entity_id IN (${q(ids.entities)}) OR id IN (${q(ids.watches)})`,
-    `SELECT 'page', COUNT(*) FROM page WHERE entity_id IN (${q(ids.entities)}) OR id IN (${q(ids.pages)})`,
-    `SELECT 'snapshot', COUNT(*) FROM snapshot WHERE watch_id IN (${q(ids.watches)})`,
-    `SELECT 'incident_notice', COUNT(*) FROM incident_notice WHERE incident_id IN (${q(ids.incidents)}) OR page_id IN (${q(ids.pages)})`,
-    `SELECT 'email_suppression(address)', COUNT(*) FROM email_suppression WHERE address = '${ids.email}'`,
+  const parts: [string, string][] = [
+    ["user", `SELECT COUNT(*) AS n FROM "user" WHERE id = '${ids.userId}'`],
+    ["session", `SELECT COUNT(*) AS n FROM session WHERE userId = '${ids.userId}'`],
+    ["account", `SELECT COUNT(*) AS n FROM account WHERE userId = '${ids.userId}'`],
+    ["apikey", `SELECT COUNT(*) AS n FROM apikey WHERE referenceId = '${ids.userId}'`],
+    ["passkey", `SELECT COUNT(*) AS n FROM passkey WHERE userId = '${ids.userId}'`],
+    ["workspace", `SELECT COUNT(*) AS n FROM workspace WHERE id = '${ids.workspaceId}'`],
+    ...ids.wsTables.map((t): [string, string] => [
+      t,
+      `SELECT COUNT(*) AS n FROM ${t} WHERE workspace_id = '${ids.workspaceId}'`,
+    ]),
+    ["watch", `SELECT COUNT(*) AS n FROM watch WHERE entity_id IN (${q(ids.entities)}) OR id IN (${q(ids.watches)})`],
+    ["page", `SELECT COUNT(*) AS n FROM page WHERE entity_id IN (${q(ids.entities)}) OR id IN (${q(ids.pages)})`],
+    ["snapshot", `SELECT COUNT(*) AS n FROM snapshot WHERE watch_id IN (${q(ids.watches)})`],
+    [
+      "incident_notice",
+      `SELECT COUNT(*) AS n FROM incident_notice WHERE incident_id IN (${q(ids.incidents)}) OR page_id IN (${q(ids.pages)})`,
+    ],
   ];
-  try {
-    const rows = d1(parts.join(" UNION ALL "));
-    return Object.fromEntries(rows.map((row) => [String(row.t), Number(row.n)]));
-  } catch (error) {
-    log("combined count query failed; falling back to one query per table", String(error).slice(0, 800));
-  }
   const result: Record<string, number> = {};
-  for (const part of parts) {
-    const label = /SELECT '([^']+)'/.exec(part)?.[1] ?? part.slice(0, 40);
+  for (const [label, sql] of parts) {
     try {
-      const rows = d1(part);
-      result[label] = Number(Object.values(rows[0] ?? { n: -1 })[Object.keys(rows[0] ?? { n: 0 }).length - 1]);
+      result[label] = Number(d1(sql)[0]?.n ?? -1);
     } catch (error) {
       result[label] = -1;
       log(`count query failed for ${label}`, String(error).slice(0, 400));
     }
   }
   return result;
+}
+
+const SECRET_SHAPE = /hooks\.slack\.com|https?:\/\/|webhook|xox[a-z]-/i;
+
+export function suppressionRows(email: string): Record<string, unknown>[] {
+  return d1(`SELECT address, reason, created_at FROM email_suppression WHERE address = '${email}'`);
+}
+
+export function digestRows(workspaceId: string): Record<string, unknown>[] {
+  return d1(`SELECT status, COUNT(*) AS n FROM digest WHERE workspace_id = '${workspaceId}' GROUP BY status`);
+}
+
+export function pendingDigests(workspaceId: string): number {
+  const rows = d1(`SELECT COUNT(*) AS n FROM digest WHERE workspace_id = '${workspaceId}' AND status = 'pending'`);
+  return Number(rows[0]?.n ?? -1);
+}
+
+export function hasSecretShape(rows: Record<string, unknown>[]): boolean {
+  return rows.some((row) => Object.values(row).some((value) => SECRET_SHAPE.test(String(value))));
 }
 
 export function messageHeaders(raw: string) {
