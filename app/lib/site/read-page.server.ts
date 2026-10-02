@@ -1,5 +1,6 @@
 import { markPageDeferred, recordPageTransport } from "../data/page.server";
 import type { SiteSweepTarget } from "../data/watch.server";
+import { readOrArchive } from "../fetch/archive.server";
 import type { ReadUrlResult } from "../fetch/transport.server";
 import { readUrl } from "../fetch/transport.server";
 import { takeBrowserEscalation } from "./browser-budget.server";
@@ -29,14 +30,16 @@ export async function readPage(
     target.transportTestedAt !== null &&
     Date.parse(now) - Date.parse(target.transportTestedAt) < RETEST_MS;
   const day = now.slice(0, 10);
-  const read = await readUrl(target.url, {
+  const live = await readUrl(target.url, {
     startWith: learnedBrowser ? "browser" : "fetch",
     mayEscalate: escalation(options, target, day),
   });
+  const read = await readOrArchive(live, target.url, new Date(now), target.entityRole !== "self");
   if (!read.ok) {
     if (read.reason === "deferred") await markPageDeferred(target.pageId, now);
     return read;
   }
+  if (read.fromArchive === true) return read;
   if (!learnedBrowser) {
     await recordPageTransport({
       pageId: target.pageId,

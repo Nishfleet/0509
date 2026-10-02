@@ -56,6 +56,7 @@ async function toView(row: SiteChangeRow, payload: SiteChangePayload): Promise<S
     observedAt: row.observed_at,
     capturedAt: captureLabel(row.after_at ?? row.observed_at),
     wordsChanged: payload.wordsAdded + payload.wordsRemoved,
+    viaArchive: payload.viaArchive === true,
     sentence: wordsSentence(payload.wordsAdded, payload.wordsRemoved),
     mark: await readMark(payload.diffKey),
     before: shot(row.id, "before", { key: payload.before.screenshotKey, at: row.before_at }),

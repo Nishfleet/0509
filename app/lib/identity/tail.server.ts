@@ -7,6 +7,7 @@ import type { NewPage } from "../data/page.server";
 import { readEnabledSourceId, readEnabledSources } from "../data/source.server";
 import { insertWatches, readEntityWatches } from "../data/watch.server";
 import type { EntityWatch, NewWatch } from "../data/watch.server";
+import { readOrArchive } from "../fetch/archive.server";
 import { readUrl, probeFailureReason } from "../fetch/transport.server";
 import { discoverBoard } from "../hiring/discover-board.server";
 import { sha256Hex } from "../sha256";
@@ -56,10 +57,19 @@ export async function persistTail(params: IdentityTailParams): Promise<{ entityI
   return { entityId };
 }
 
-export async function classifyTailPages(params: IdentityTailParams, now: string): Promise<boolean> {
+export async function classifyTailPages(
+  params: IdentityTailParams,
+  now: string,
+  options: { archive?: boolean } = {},
+): Promise<boolean> {
   if (params.handle !== undefined || params.homepageUrl === null) return false;
   try {
-    const page = await readUrl(params.homepageUrl, { mayEscalate: brandBudget(params.workspaceId, params.domain) });
+    const page = await readOrArchive(
+      await readUrl(params.homepageUrl, { mayEscalate: brandBudget(params.workspaceId, params.domain) }),
+      params.homepageUrl,
+      new Date(now),
+      options.archive === true,
+    );
     if (!page.ok) {
       const subjectSha256 = await sha256Hex(params.domain);
       console.log(

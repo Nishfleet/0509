@@ -54,6 +54,7 @@ export function SiteChangeItem({
         )}
       </div>
       <p className="mt-2 leading-[1.65]">{change.sentence}</p>
+      {change.viaArchive ? <p className={WHEN_CLASS}>From a public archive copy</p> : null}
       <time dateTime={change.observedAt} className={WHEN_CLASS}>
         {change.when}
       </time>

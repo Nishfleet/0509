@@ -16,6 +16,7 @@ const siteChangePayload = z.object({
   diffKey: z.string().nullable(),
   wordsAdded: z.number().int().nonnegative(),
   wordsRemoved: z.number().int().nonnegative(),
+  viaArchive: z.boolean().optional(),
 });
 
 export type SiteChangePayload = z.output<typeof siteChangePayload>;
@@ -114,6 +115,7 @@ export interface SiteChangeView {
   observedAt: string;
   capturedAt: string;
   wordsChanged: number;
+  viaArchive: boolean;
   sentence: string;
   mark: ChangeMark | null;
   before: ChangeShot;

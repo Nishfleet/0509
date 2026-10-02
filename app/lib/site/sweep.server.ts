@@ -143,7 +143,7 @@ export async function checkSitePage(
     before: tick.plannedAt,
     read,
     mayScreenshot:
-      options.browser === false
+      options.browser === false || (read.ok && read.fromArchive === true)
         ? undefined
         : () => takeBrowserScreenshot(target.workspaceId, target.entityId, tick.plannedAt.slice(0, 10)),
   });
@@ -208,6 +208,7 @@ function changeSignalPayload(
     wordsRemoved: words.filter((c) => c.removed).reduce((n, c) => n + wordCount(c.value), 0),
     status: changed.status,
     transport: changed.transport,
+    ...(changed.viaArchive ? { viaArchive: true } : {}),
   });
 }
 

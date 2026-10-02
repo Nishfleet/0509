@@ -101,18 +101,28 @@ describe("alternate hosts for a rival whose home page blocks us", () => {
     expect((await readSiteWatchSummary(WS, RIVAL)).unreadable).toBe(true);
   });
 
-  it("does not retry a candidate that already has a judged page, within three days", async () => {
+  it("adopts a candidate that already has a judged page and leaves that page row as it was", async () => {
     await env.DB.prepare(
-      "INSERT INTO page (id, entity_id, url, role, role_decided_for_hash, discovered_at) VALUES ('page-alt-judged', ?1, ?2, 'blog', 'hash', ?3)",
+      "INSERT INTO page (id, entity_id, url, role, role_decided_for_hash, discovered_at) VALUES ('page-alt-judged', ?1, ?2, 'product', 'judged-hash', ?3)",
     )
       .bind(RIVAL, NEWS, NOW)
       .run();
-    const seen = stubWeb({ [NEWS]: { status: 403, body: "x" } });
+    stubWeb({ [NEWS]: { status: 200, body: NEWS_HTML } });
     await classifyCompetitorSites(on());
-    const first = seen.filter((url) => url === NEWS).length;
-    expect(first).toBeGreaterThanOrEqual(1);
+
+    const pages = await env.DB.prepare(
+      "SELECT id, role, role_decided_for_hash, deferred_at FROM page WHERE entity_id = ?1 AND url = ?2",
+    )
+      .bind(RIVAL, NEWS)
+      .all();
+    expect(pages.results).toEqual([
+      { id: "page-alt-judged", role: "product", role_decided_for_hash: "judged-hash", deferred_at: null },
+    ]);
+    expect(await activeWatches()).toContain(NEWS);
+
+    const seen = stubWeb({ [NEWS]: { status: 200, body: NEWS_HTML } });
     await classifyCompetitorSites(on(1));
-    expect(seen.filter((url) => url === NEWS).length).toBe(first);
+    expect(seen).not.toContain(NEWS);
   });
 
   it("watches the first readable alternate and drops the 'couldn't read' note", async () => {

@@ -18,6 +18,7 @@ export async function classifyCompetitorSites(now: string): Promise<number> {
         homepageUrl: competitor.homepageUrl,
       },
       now,
+      { archive: true },
     );
     if (!read) await markPageDeferred(competitor.homePageId, now);
   }
