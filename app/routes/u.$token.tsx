@@ -59,7 +59,17 @@ export default function Unsubscribe({ actionData }: Route.ComponentProps) {
     return (
       <main className="mx-auto max-w-xl px-4 py-16">
         <h1 className="font-display text-2xl font-semibold tracking-[-0.02em]">You're unsubscribed</h1>
-        <p className="mt-4 leading-[1.65] text-ink-soft">No more email will be sent to this address.</p>
+        <p className="mt-4 leading-[1.65] text-ink-soft">
+          We won't send the weekly brief or alerts to this address any more. Sign-in links still arrive when you ask for
+          one.
+        </p>
+        <p className="mt-4 leading-[1.65] text-ink-soft">
+          Changed your mind? Sign in, open{" "}
+          <a className="underline underline-offset-4" href="/app/settings">
+            Settings
+          </a>
+          , tick "Send the brief to this address again" and save.
+        </p>
         <Footer />
       </main>
     );
@@ -69,7 +79,8 @@ export default function Unsubscribe({ actionData }: Route.ComponentProps) {
     <main className="mx-auto max-w-xl px-4 py-16">
       <h1 className="font-display text-2xl font-semibold tracking-[-0.02em]">Unsubscribe from Five to Nine emails?</h1>
       <p className="mt-4 leading-[1.65] text-ink-soft">
-        You will stop getting every email from Five to Nine at this address, including the weekly brief.
+        You will stop getting the weekly brief and all alerts from Five to Nine at this address. Sign-in links still
+        arrive when you ask for one.
       </p>
       <Form method="post" className="mt-8">
         <Button type="submit" size="lg">

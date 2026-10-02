@@ -7,6 +7,7 @@ import {
   isFeedDocument,
   keyItems,
   parseFeed,
+  type FeedScan,
 } from "../../app/lib/feeds/parse-feed";
 import { sha256Hex } from "../../app/lib/sha256";
 
@@ -26,7 +27,7 @@ describe("parseFeed", () => {
         <guid isPermaLink="false">post-2</guid><pubDate>Wed, 30 Sep 2026 10:00:00 GMT</pubDate>
         <description><![CDATA[<p>The <b>biggest</b> release &amp; more.</p>]]></description></item>`),
       BASE,
-      NOW,
+      { now: NOW },
     );
     expect(items).toEqual([
       {
@@ -46,7 +47,7 @@ describe("parseFeed", () => {
         <id>tag:rival.com,2026:42</id><published>2026-10-01T08:30:00Z</published>
         <summary>Exports no longer time out.</summary></entry>`),
       "https://rival.com/changelog.xml",
-      NOW,
+      { now: NOW },
     );
     expect(items).toEqual([
       {
@@ -66,7 +67,7 @@ describe("parseFeed", () => {
           `<entry><title>Post</title><link href="https://rival.com/p"/><updated>2026-09-29T00:00:00Z</updated></entry>`,
         ),
         BASE,
-        NOW,
+        { now: NOW },
       ) ?? [];
     expect(item).toMatchObject({ id: "https://rival.com/p", excerpt: null, publishedAt: "2026-09-29T00:00:00.000Z" });
   });
@@ -79,7 +80,7 @@ describe("parseFeed", () => {
         <item><title>Mail</title><link>mailto:a@b.co</link></item>
         <item><title>Fine</title><link>https://rival.com/ok</link></item>`),
       BASE,
-      NOW,
+      { now: NOW },
     );
     expect(items?.map((item) => item.title)).toEqual(["Fine"]);
   });
@@ -90,7 +91,7 @@ describe("parseFeed", () => {
         <item><title>Edge</title><link>https://rival.com/edge</link><pubDate>Sun, 06 Sep 2026 10:00:00 GMT</pubDate></item>
         <item><title>Undated</title><link>https://rival.com/undated</link></item>`),
       BASE,
-      NOW,
+      { now: NOW },
     );
     expect(items?.map((item) => item.title)).toEqual(["Edge", "Undated"]);
   });
@@ -101,7 +102,7 @@ describe("parseFeed", () => {
       (_unused, index) =>
         `<item><title>Post ${String(index)}</title><link>https://rival.com/p/${String(index)}</link><pubDate>${new Date(Date.UTC(2026, 8, 20, index)).toUTCString()}</pubDate></item>`,
     ).join("");
-    const items = parseFeed(rss(many), BASE, NOW) ?? [];
+    const items = parseFeed(rss(many), BASE, { now: NOW }) ?? [];
     expect(items).toHaveLength(MAX_FEED_ITEMS);
     expect(items[0]?.title).toBe("Post 29");
     expect(items.at(-1)?.title).toBe("Post 10");
@@ -109,7 +110,7 @@ describe("parseFeed", () => {
 
   it("keeps one copy of an item that appears twice under the same guid", () => {
     const twice = `<item><title>Same</title><link>https://rival.com/s</link><guid>g1</guid></item>`;
-    expect(parseFeed(rss(twice + twice), BASE, NOW)).toHaveLength(1);
+    expect(parseFeed(rss(twice + twice), BASE, { now: NOW })).toHaveLength(1);
   });
 
   it("truncates a long title and excerpt", () => {
@@ -119,7 +120,7 @@ describe("parseFeed", () => {
           `<item><title>${"t".repeat(500)}</title><link>https://rival.com/l</link><description>${"d ".repeat(400)}</description></item>`,
         ),
         BASE,
-        NOW,
+        { now: NOW },
       ) ?? [];
     expect(item?.title).toHaveLength(200);
     expect(item?.excerpt?.length).toBeLessThanOrEqual(200);
@@ -131,20 +132,20 @@ describe("parseFeed", () => {
       parseFeed(
         rss(`<item><title>A&#8217;s &#x41; &#99999999; plan</title><link>https://rival.com/e</link></item>`),
         BASE,
-        NOW,
+        { now: NOW },
       ) ?? [];
     expect(item?.title).toBe("A’s A plan");
   });
 
   it("returns null for HTML, JSON and an empty body, and an empty list for a feed with no items", () => {
-    expect(parseFeed("<!doctype html><html><body>hi</body></html>", BASE, NOW)).toBeNull();
-    expect(parseFeed('{"items":[]}', BASE, NOW)).toBeNull();
-    expect(parseFeed("", BASE, NOW)).toBeNull();
-    expect(parseFeed(rss(""), BASE, NOW)).toEqual([]);
+    expect(parseFeed("<!doctype html><html><body>hi</body></html>", BASE, { now: NOW })).toBeNull();
+    expect(parseFeed('{"items":[]}', BASE, { now: NOW })).toBeNull();
+    expect(parseFeed("", BASE, { now: NOW })).toBeNull();
+    expect(parseFeed(rss(""), BASE, { now: NOW })).toEqual([]);
   });
 
   it("does not read the channel's own title or link as an item", () => {
-    expect(parseFeed(rss(""), BASE, NOW)).toEqual([]);
+    expect(parseFeed(rss(""), BASE, { now: NOW })).toEqual([]);
   });
 });
 
@@ -176,14 +177,17 @@ describe("item keys", () => {
   });
 });
 
-const HOSTILE_CEILING_MS = 10_000;
+// The scanner probes the document once per direction per candidate block, so a
+// linear pass reads a small constant times the input size; a regression that
+// rescans per candidate reads far more.
+const MAX_DOC_SCANS = 5;
 
 describe("parseFeed on hostile input", () => {
   const TWO_MIB = 2 * 1024 * 1024;
-  const timed = (xml: string) => {
-    const started = performance.now();
-    const items = parseFeed(xml, BASE, NOW);
-    return { items, ms: performance.now() - started };
+  const scanned = (xml: string) => {
+    const scan: FeedScan = { blocksVisited: 0, charsScanned: 0 };
+    const items = parseFeed(xml, BASE, { now: NOW, scan });
+    return { items, scan };
   };
 
   it.each([
@@ -193,7 +197,7 @@ describe("parseFeed on hostile input", () => {
     ["unclosed CDATA openers", "<![CDATA["],
     ["bare angle brackets", "<"],
     ["unclosed title and description tags", "<title><description>"],
-  ])("stays fast on a 2 MiB feed of %s", (_label, unit) => {
+  ])("scans a 2 MiB feed of %s a bounded number of times", (_label, unit) => {
     const filler = unit.repeat(Math.floor(TWO_MIB / unit.length));
     const documents = [
       rss(filler),
@@ -202,8 +206,9 @@ describe("parseFeed on hostile input", () => {
     ];
 
     for (const xml of documents) {
-      const { ms } = timed(xml);
-      expect(ms).toBeLessThan(HOSTILE_CEILING_MS);
+      const { scan } = scanned(xml);
+      expect(scan.blocksVisited).toBeLessThanOrEqual(2);
+      expect(scan.charsScanned).toBeLessThanOrEqual(MAX_DOC_SCANS * xml.length);
     }
   });
 
@@ -212,18 +217,21 @@ describe("parseFeed on hostile input", () => {
       { length: 5000 },
       (_, i) => `<item><title>Post ${i}</title><link>https://rival.com/p/${i}</link></item>`,
     ).join("");
+    const xml = rss(many);
 
-    const { items, ms } = timed(rss(many));
+    const { items, scan } = scanned(xml);
 
     expect(items).toHaveLength(MAX_FEED_ITEMS);
-    expect(ms).toBeLessThan(HOSTILE_CEILING_MS);
+    expect(scan.blocksVisited).toBeLessThanOrEqual(200);
+    // One remaining-document scan per visited candidate plus fixed passes.
+    expect(scan.charsScanned).toBeLessThanOrEqual(250 * xml.length);
   });
 
   it("skips an item block over the size cap and still reads the next one", () => {
     const huge = `<item><title>Huge</title><link>https://rival.com/huge</link><description>${"x".repeat(30_000)}</description></item>`;
     const fine = "<item><title>Fine</title><link>https://rival.com/fine</link></item>";
 
-    expect(parseFeed(rss(huge + fine), BASE, NOW)?.map((item) => item.title)).toEqual(["Fine"]);
+    expect(parseFeed(rss(huge + fine), BASE, { now: NOW })?.map((item) => item.title)).toEqual(["Fine"]);
   });
 
   it("never expands entities or reads files: a DOCTYPE entity stays literal text", () => {
@@ -231,7 +239,7 @@ describe("parseFeed on hostile input", () => {
       <rss version="2.0"><channel><item><title>&xxe; and &lol;</title><link>https://rival.com/x</link>
       <description>&xxe;</description></item></channel></rss>`;
 
-    const items = parseFeed(xml, BASE, NOW);
+    const items = parseFeed(xml, BASE, { now: NOW });
 
     expect(items).toHaveLength(1);
     expect(items?.[0]?.title).toBe("&xxe; and &lol;");
@@ -244,21 +252,23 @@ describe("parseFeed on hostile input", () => {
     const xml = `<?xml version="1.0"?><!DOCTYPE rss [<!ENTITY lol0 "lol">${laughs}]><rss><channel>
       <item><title>&lol9; &#x110000; &#0; ok</title><link>https://rival.com/y</link></item></channel></rss>`;
 
-    const { items, ms } = timed(xml);
+    const { items, scan } = scanned(xml);
 
     expect(items?.[0]?.title).toBe("&lol9; ok");
-    expect(ms).toBeLessThan(HOSTILE_CEILING_MS);
+    expect(scan.charsScanned).toBeLessThanOrEqual(MAX_DOC_SCANS * xml.length);
   });
 
-  it("stays fast on a feed of many link tags with very long attribute runs", () => {
+  it("scans a feed of many link tags with very long attribute runs a bounded number of times", () => {
     const longRun = "a".repeat(1990);
     const noQuotes = `<link ${longRun}>`.repeat(1000);
     const manyNames = `<link ${"x=1 ".repeat(450)}>`.repeat(1000);
     const unclosedQuote = `<link href="${longRun}>`.repeat(1000);
 
     for (const filler of [noQuotes, manyNames, unclosedQuote]) {
-      const { ms } = timed(rss(`<item><title>Real</title>${filler}<link>https://rival.com/a</link></item>`));
-      expect(ms).toBeLessThan(HOSTILE_CEILING_MS);
+      const xml = rss(`<item><title>Real</title>${filler}<link>https://rival.com/a</link></item>`);
+      const { scan } = scanned(xml);
+      expect(scan.blocksVisited).toBeLessThanOrEqual(2);
+      expect(scan.charsScanned).toBeLessThanOrEqual(MAX_DOC_SCANS * xml.length);
     }
   });
 
@@ -268,7 +278,10 @@ describe("parseFeed on hostile input", () => {
         `<ITEM><TITLE>Upper case tags</TITLE><LINK>https://rival.com/upper</LINK></ITEM>`,
     );
 
-    expect(parseFeed(xml, BASE, NOW)?.map((item) => item.title)).toEqual(["İİİİİ İstanbul", "Upper case tags"]);
+    expect(parseFeed(xml, BASE, { now: NOW })?.map((item) => item.title)).toEqual([
+      "İİİİİ İstanbul",
+      "Upper case tags",
+    ]);
   });
 });
 

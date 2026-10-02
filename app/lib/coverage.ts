@@ -69,7 +69,7 @@ export const COVERAGE = [
     kind: "Blog and changelog",
     noun: "blog and changelog posts",
     origin: "public RSS and Atom feeds",
-    sources: [{ id: "content.feed", label: "Blog and changelog feeds", live: false, sourceKey: "feed.rss" }],
+    sources: [{ id: "content.feed", label: "Blog and changelog feeds", live: true, sourceKey: "feed.rss" }],
   },
   {
     kind: "Your own site",

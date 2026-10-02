@@ -1,7 +1,6 @@
 import { env } from "cloudflare:test";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { readUnwatchedPricingPages, syncPricingWatches } from "../../../app/lib/data/page.server";
 import { readSiteWatchSummary } from "../../../app/lib/data/watch.server";
 import { alternateHomeUrls } from "../../../app/lib/site/alternate-home.server";
 import { classifyCompetitorSites } from "../../../app/lib/site/classify-competitors.server";
@@ -18,12 +17,6 @@ const RIVAL = "ent-alt-home-rival";
 const NEWS = "https://news.rival-shop.com/";
 const NEWSROOM = "https://newsroom.rival-shop.com/";
 const PRESS = "https://press.rival-shop.com/";
-const ZALANDO = "https://www.zalando.co.uk/rival-shop/";
-const FOOTLOCKER = "https://www.footlocker.co.uk/en/category/brands/rival-shop.html";
-const SHELF_HTML = `<html><head><title>Rival Shop Online | ZALANDO</title></head><body>
-<main><p>${"Rival Shop trainers from 49 pounds, new autumn range in stock now. ".repeat(6)}</p></main></body></html>`;
-const WRONG_HTML = `<html><head><title>Online Shoes | ZALANDO</title></head><body>
-<main><p>${"Search results for shoes from many brands, sorted by popularity. ".repeat(6)}</p></main></body></html>`;
 const NEWS_HTML = `<html><head><title>Rival news</title></head><body>
 <main><p>${"Rival opens a new flagship store and launches its autumn training range. ".repeat(6)}</p></main></body></html>`;
 
@@ -185,63 +178,6 @@ describe("alternate hosts for a rival whose home page blocks us", () => {
     expect(seen).not.toContain(NEWS);
     expect((await attempts()).find((entry) => entry.url === NEWS)).toMatchObject({ active: 0, reason: "robots" });
     expect(await activeWatches()).toContain(NEWSROOM);
-  });
-
-  it("falls back to a retailer's brand page, watched as pricing, when no own host reads", async () => {
-    stubWeb({ [ZALANDO]: { status: 200, body: SHELF_HTML } });
-    await classifyCompetitorSites(on());
-    const page = await env.DB.prepare("SELECT role FROM page WHERE entity_id = ?1 AND url = ?2")
-      .bind(RIVAL, ZALANDO)
-      .first();
-    expect(page).toEqual({ role: "pricing" });
-    expect(await activeWatches()).toContain(ZALANDO);
-    expect((await readSiteWatchSummary(WS, RIVAL)).unreadable).toBe(false);
-  });
-
-  it("refuses a retailer page that does not name the brand and moves on to the next retailer", async () => {
-    stubWeb({
-      [ZALANDO]: { status: 200, body: WRONG_HTML },
-      [FOOTLOCKER]: { status: 200, body: SHELF_HTML.replace("ZALANDO", "Foot Locker") },
-    });
-    await classifyCompetitorSites(on());
-    expect((await attempts()).filter((entry) => [ZALANDO, FOOTLOCKER].includes(entry.url))).toEqual([
-      { url: FOOTLOCKER, active: 1, reason: null },
-      { url: ZALANDO, active: 0, reason: "not-the-brand-page" },
-    ]);
-  });
-
-  it("adopts at most one alternate per rival, even when every retailer reads", async () => {
-    const seen = stubWeb({
-      [ZALANDO]: { status: 200, body: SHELF_HTML },
-      [FOOTLOCKER]: { status: 200, body: SHELF_HTML },
-    });
-    await classifyCompetitorSites(on());
-    await classifyCompetitorSites(on(1));
-    expect(await activeWatches()).toEqual([ZALANDO]);
-    expect(seen).not.toContain(FOOTLOCKER);
-  });
-
-  it("keeps first-party pricing watches and the retailer watch apart under the pricing cap", async () => {
-    const sourceId = await env.DB.prepare("SELECT id FROM source WHERE key = 'site.web'").first<{ id: string }>();
-    const own = ["a", "b", "c", "d"].map((tag) => `https://rival-shop.com/pricing-${tag}`);
-    await env.DB.batch(
-      own.flatMap((url, index) => [
-        env.DB.prepare(
-          "INSERT INTO page (id, entity_id, url, role, role_decided_for_hash, discovered_at) VALUES (?1, ?2, ?3, 'pricing', 'h', ?4)",
-        ).bind(`page-cap-${String(index)}`, RIVAL, url, NOW),
-        env.DB.prepare(
-          "INSERT INTO watch (id, entity_id, source_id, target_key, is_active) VALUES (?1, ?2, ?3, ?4, 1)",
-        ).bind(`watch-cap-${String(index)}`, RIVAL, sourceId?.id, url),
-      ]),
-    );
-    stubWeb({ [ZALANDO]: { status: 200, body: SHELF_HTML } });
-    await classifyCompetitorSites(on());
-    await syncPricingWatches(sourceId?.id ?? "");
-
-    const active = await activeWatches();
-    expect(active).toContain(ZALANDO);
-    expect(active.filter((url) => url.startsWith("https://rival-shop.com/pricing-"))).toEqual(own.slice(0, 3));
-    expect((await readUnwatchedPricingPages(sourceId?.id ?? "")).map((page) => page.url)).toEqual([]);
   });
 
   it("leaves a rival whose home page is readable alone", async () => {

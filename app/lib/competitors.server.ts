@@ -1,3 +1,4 @@
+import { nameFromDomain } from "./competitor/domain-name";
 import { readCompetitorName } from "./competitor/site-name.server";
 import { addManualCompetitor, setCompetitorState } from "./data/entity.server";
 import { nextPlan, type PlanId } from "./billing/plans";
@@ -40,7 +41,7 @@ type Target = { domain: string; name: string | null } | CompetitorActionResult;
 async function targetOf(raw: string, normalised: ReturnType<typeof normaliseSubject>): Promise<Target> {
   if (normalised.ok) {
     const { registrable } = normalised.subject;
-    return { domain: registrable, name: await readCompetitorName(registrable) };
+    return { domain: registrable, name: (await readCompetitorName(registrable)) ?? nameFromDomain(registrable) };
   }
   const resolution = await resolveDomain(raw.trim());
   return resolution.domain === null ? UNRESOLVED : { domain: resolution.domain, name: raw.trim() };

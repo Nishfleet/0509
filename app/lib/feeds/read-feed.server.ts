@@ -114,7 +114,7 @@ export async function readFeed(target: FeedTarget, tick: SweepTick): Promise<Fee
     await markWatchPolled(target.watchId, now);
     return { outcome: "unchanged", newPosts: 0 };
   }
-  const parsed = parseFeed(fetched.body, target.feedUrl, new Date(now));
+  const parsed = parseFeed(fetched.body, target.feedUrl, { now: new Date(now) });
   if (parsed === null) return { outcome: "unreadable", newPosts: 0 };
 
   await rememberValidators(target.watchId, config, fetched.validators);

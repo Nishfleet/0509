@@ -11,6 +11,7 @@ import { Input } from "../components/ui/input";
 import { Footer } from "../components/footer";
 import { safeReturnTo } from "../lib/agent/paths";
 import { subjectRedirect } from "../lib/onboarding-subject";
+import { deadLinkMessage } from "../lib/login-link-error";
 import { formMagicLinkRequest } from "../lib/auth/login-magic-link.server";
 import { createAuthForRequest } from "../lib/auth.server";
 import {
@@ -33,14 +34,16 @@ export function meta() {
 
 export async function loader({ request }: Route.LoaderArgs) {
   const turnstileSiteKey = env.TURNSTILE_SITE_KEY;
-  const id = new URL(request.url).searchParams.get("deleted");
+  const search = new URL(request.url).searchParams;
+  const linkError = deadLinkMessage(search);
+  const id = search.get("deleted");
   if (id === null || id === "" || (await readAccountDeleteInstanceId(request)) !== id) {
-    return data({ turnstileSiteKey, id: null, progress: null });
+    return data({ turnstileSiteKey, linkError, id: null, progress: null });
   }
   const progress = await readAccountDeleteProgress(id);
   const finished = progress?.files === "removed";
   const headers = finished ? { "set-cookie": await clearAccountDeleteInstanceId() } : undefined;
-  return data({ turnstileSiteKey, id, progress }, { headers });
+  return data({ turnstileSiteKey, linkError, id, progress }, { headers });
 }
 
 export async function action({ request }: Route.ActionArgs) {
@@ -127,9 +130,9 @@ export default function Login() {
         {deleted.progress === null || deleted.id === null ? null : (
           <AccountDeleteNotice id={deleted.id} progress={deleted.progress} />
         )}
-        {actionData?.error ? (
+        {(actionData?.error ?? deleted.linkError) ? (
           <p role="alert" className="mt-8 text-[0.95rem]">
-            {actionData.error}
+            {actionData?.error ?? deleted.linkError}
           </p>
         ) : null}
         <EmailForm busy={busy} turnstileSiteKey={deleted.turnstileSiteKey} />

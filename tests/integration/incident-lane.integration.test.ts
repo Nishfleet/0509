@@ -193,7 +193,7 @@ describe("incident lane (0509#4364)", () => {
     expect(result.idempotency_key).toBe(`incident:${INCIDENT_A}:open`);
     expect(rec.sent).toHaveLength(1);
     expect(rec.sent[0].to).toBe(TARGET);
-    expect(rec.sent[0].from).toBe("brief@0509.io");
+    expect(rec.sent[0].from).toEqual({ email: "brief@0509.io", name: "Five to Nine" });
     expect(rec.sent[0].subject).toBe(`${PAGE_HOST} looks broken: ${KIND}`);
     expect(rec.sent[0].text).toContain("What changed: Checkout was 500ing");
     expect(rec.sent[0].html).toContain("https://0509.io/app/alerts");
