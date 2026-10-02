@@ -21,7 +21,8 @@ export function meta() {
 export async function loader({ request, context }: Route.LoaderArgs) {
   const timings = createTimings();
   const { session, workspaceId } = context.get(onboardedContext);
-  const inputs = await timings.measure("standing", readHomeStandingInputs(env.DB, session.user.id));
+  if (workspaceId === null) throw redirect("/onboarding");
+  const inputs = await timings.measure("standing", readHomeStandingInputs(env.DB, session.user.id, workspaceId));
   if (inputs === null) throw redirect("/onboarding");
   const payload = inputs.payload;
   const openId = resolveOpenId(new URL(request.url).searchParams.get("open"), payload, inputs.entities);

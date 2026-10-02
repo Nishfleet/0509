@@ -78,15 +78,40 @@ function entityFrom(row: z.infer<typeof homeRow>): HomeEntity | null {
   return { id: row.entity_id, role: row.role, domain: row.domain, name: row.name, state: row.state };
 }
 
-export async function readHomeStandingInputs(db: D1Database, ownerUserId: string): Promise<HomeStandingInputs | null> {
-  const rows = homeRows.parse((await db.prepare(SELECT_HOME_STANDING).bind(ownerUserId).all()).results);
+async function readStandingBatch(db: D1Database, ownerUserId: string, knownWorkspaceId: string | undefined) {
+  const standing = db.prepare(SELECT_HOME_STANDING).bind(ownerUserId);
+  if (knownWorkspaceId !== undefined) {
+    const [standingResult, historyResult, sourcesResult, countsResult] = await db.batch([
+      standing,
+      db.prepare(SELECT_HISTORY).bind(knownWorkspaceId),
+      db.prepare(SELECT_HOME_SOURCES).bind(knownWorkspaceId),
+      db.prepare(SELECT_HOME_COUNTS).bind(knownWorkspaceId),
+    ]);
+    return { rows: homeRows.parse(standingResult?.results), historyResult, sourcesResult, countsResult };
+  }
+  const rows = homeRows.parse((await standing.all()).results);
   const first = rows[0];
-  if (first === undefined) return null;
+  if (first === undefined) return { rows, historyResult: undefined, sourcesResult: undefined, countsResult: undefined };
   const [historyResult, sourcesResult, countsResult] = await db.batch([
     db.prepare(SELECT_HISTORY).bind(first.workspace_id),
     db.prepare(SELECT_HOME_SOURCES).bind(first.workspace_id),
     db.prepare(SELECT_HOME_COUNTS).bind(first.workspace_id),
   ]);
+  return { rows, historyResult, sourcesResult, countsResult };
+}
+
+export async function readHomeStandingInputs(
+  db: D1Database,
+  ownerUserId: string,
+  knownWorkspaceId?: string,
+): Promise<HomeStandingInputs | null> {
+  const { rows, historyResult, sourcesResult, countsResult } = await readStandingBatch(
+    db,
+    ownerUserId,
+    knownWorkspaceId,
+  );
+  const first = rows[0];
+  if (first === undefined) return null;
   const history = historyRows.parse(historyResult?.results);
   const sources = sourceRows.parse(sourcesResult?.results);
   const counts = countRows

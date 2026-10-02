@@ -56,10 +56,23 @@ describe("an instance started by a Workflow's own registered schedule", () => {
     schedule: { cron: "0 2 * * *", scheduledTime: Date.UTC(2026, 9, 2, 2, 0, 0) },
   } as unknown as WorkflowEvent<unknown>;
 
-  it("does no work and checks no monitor in, so the Worker cron is the only scheduler", async () => {
+  it("does no work and checks no monitor in, so the Worker cron is the only scheduler of the daily sweeps", async () => {
     expect(await makeWorkflow(siteSweep).run(scheduled, immediateStep)).toBeNull();
     expect(await makeWorkflow(mentionsSweep).run(scheduled, immediateStep)).toBeNull();
-    expect(await makeWorkflow(ownSiteCheck).run(scheduled, immediateStep)).toBeNull();
+    expect(monitorMock).not.toHaveBeenCalled();
+  });
+
+  it("starts the own-site-check hour for itself and does no other work", async () => {
+    const createBatch = vi.fn((batch: { id: string }[]) => Promise.resolve([...batch]));
+    const workflow = makeWorkflow(ownSiteCheck);
+    Object.assign(workflow, { env: { OWN_SITE_CHECK: { createBatch } } });
+    const hourly = {
+      ...event,
+      timestamp: new Date(Date.UTC(2026, 9, 2, 6, 0, 9)),
+      schedule: { cron: "0 * * * *", scheduledTime: Date.UTC(2026, 9, 2, 6, 0, 0) },
+    } as unknown as WorkflowEvent<unknown>;
+    expect(await workflow.run(hourly, immediateStep)).toBeNull();
+    expect(createBatch).toHaveBeenCalledExactlyOnceWith([{ id: "own-site-check-2026-10-02T06" }]);
     expect(monitorMock).not.toHaveBeenCalled();
   });
 });

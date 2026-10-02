@@ -26,7 +26,8 @@ const INSERT_WATCH = `INSERT INTO watch (id, entity_id, source_id, target_key)
 VALUES (?1, ?2, ?3, ?4)
 ON CONFLICT (entity_id, source_id, target_key) DO NOTHING`;
 
-const UNWATCHED_ENTITIES = `SELECT e.id AS id, e.domain AS domain, CASE WHEN json_valid(e.identity_json) THEN json_extract(e.identity_json, '$.url') END AS url
+const UNWATCHED_ENTITIES = `SELECT e.id AS id, e.domain AS domain, CASE WHEN json_valid(e.identity_json) THEN json_extract(e.identity_json, '$.url') END AS url,
+       json_valid(e.identity_json) AS identity_valid
 FROM entity e
 WHERE e.state = 'on'
   AND NOT EXISTS (SELECT 1 FROM watch w WHERE w.entity_id = e.id AND w.source_id = ?1)
@@ -55,7 +56,14 @@ ORDER BY e.workspace_id, e.id, p.url`;
 
 const entityRows = z.array(z.object({ id: z.string(), domain: z.string() }));
 
-const unwatchedEntityRows = z.array(z.object({ id: z.string(), domain: z.string(), url: z.string().nullable() }));
+const unwatchedEntityRows = z.array(
+  z.object({
+    id: z.string(),
+    domain: z.string(),
+    url: z.string().nullable(),
+    identity_valid: z.number().transform((flag) => flag === 1),
+  }),
+);
 
 type UnwatchedEntity = z.infer<typeof unwatchedEntityRows>[number];
 

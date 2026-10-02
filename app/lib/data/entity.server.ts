@@ -1,4 +1,9 @@
 import { env } from "cloudflare:workers";
+import { z } from "zod";
+
+const identitySocials = z.object({
+  socials: z.array(z.object({ platform: z.string(), url: z.string() })).optional(),
+});
 
 export type CompetitorState = "on" | "off";
 
@@ -100,6 +105,45 @@ export async function readCompetitor(workspaceId: string, entityId: string): Pro
     stateChangedAt: row.state_changed_at,
     stateReason: row.state_reason,
   };
+}
+
+const SELECT_COMPETITOR_IDENTITY =
+  "SELECT identity_json FROM entity WHERE id = ? AND workspace_id = ? AND role = 'competitor' AND json_valid(identity_json)";
+
+const REPLACE_COMPETITOR_YOUTUBE = `UPDATE entity SET identity_json = json_set(identity_json, '$.socials', json_insert(
+  (SELECT json_group_array(json(je.value)) FROM json_each(identity_json, '$.socials') je
+   WHERE je.type = 'object' AND CASE WHEN je.type = 'object' THEN json_extract(je.value, '$.platform') END IS NOT 'youtube'),
+  '$[#]', json(?3)))
+WHERE id = ?1 AND workspace_id = ?2 AND role = 'competitor' AND json_valid(identity_json)
+  AND coalesce(json_type(identity_json, '$.socials'), 'array') = 'array'`;
+
+const RESET_YOUTUBE_WATCH =
+  "UPDATE watch SET config_json = json_remove(CASE WHEN json_valid(config_json) THEN config_json ELSE '{}' END, '$.channelId', '$.pendingChannelId', '$.degraded', '$.noChannel'), last_polled_at = NULL WHERE entity_id = ?1 AND source_id = 'src_mentions_youtube' AND entity_id IN (SELECT id FROM entity WHERE id = ?1 AND workspace_id = ?2 AND role = 'competitor' AND json_valid(identity_json) AND coalesce(json_type(identity_json, '$.socials'), 'array') = 'array')";
+
+export async function readCompetitorSocials(
+  workspaceId: string,
+  entityId: string,
+): Promise<readonly { platform: string; url: string }[] | null> {
+  const row = await env.DB.prepare(SELECT_COMPETITOR_IDENTITY)
+    .bind(entityId, workspaceId)
+    .first<{ identity_json: string }>();
+  if (row === null) return null;
+  const parsed = identitySocials.safeParse(JSON.parse(row.identity_json));
+  return parsed.success ? (parsed.data.socials ?? []) : null;
+}
+
+export async function replaceCompetitorYoutube(input: {
+  workspaceId: string;
+  entityId: string;
+  url: string;
+}): Promise<boolean> {
+  const { workspaceId, entityId, url } = input;
+  const social = JSON.stringify({ platform: "youtube", url });
+  const [updated] = await env.DB.batch([
+    env.DB.prepare(REPLACE_COMPETITOR_YOUTUBE).bind(entityId, workspaceId, social),
+    env.DB.prepare(RESET_YOUTUBE_WATCH).bind(entityId, workspaceId),
+  ]);
+  return (updated?.meta.changes ?? 0) > 0;
 }
 
 export async function readEntityDomain(workspaceId: string, entityId: string): Promise<string | null> {
