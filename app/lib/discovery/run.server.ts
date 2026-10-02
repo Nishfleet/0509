@@ -16,7 +16,7 @@ import type { ShortlistEntry } from "./shortlist";
 import type { Candidate, Evidence } from "./types";
 
 const EVIDENCE_KEPT = 5;
-export const CATEGORY_FLOOR = 0.5;
+const CATEGORY_FLOOR = 0.5;
 export const JUDGE_BATCH_SIZE = 2;
 
 export interface ShortlistedCandidate {
