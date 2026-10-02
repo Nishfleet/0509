@@ -47,11 +47,14 @@ describe("the brief page's Previous briefs heading", () => {
 // The display that makes the box real is asserted with it, so dropping
 // `inline-flex` does not leave a gate that still passes.
 describe("the brief page's Previous briefs links", () => {
-  it("gives each Week of link a 44px-tall tap target", async () => {
+  it("keeps aria-current and gives each Week of link a 44px-tall tap target", async () => {
     const html = await briefHtml();
-    const nav = html.slice(html.indexOf('aria-label="Previous briefs"'), html.indexOf("</nav>"));
-    const links = nav.match(/<a\b[^>]*>/g) ?? [];
-    expect(links).toHaveLength(1);
+    const navStart = html.indexOf('aria-label="Previous briefs"');
+    expect(navStart).toBeGreaterThan(-1);
+    const navEnd = html.indexOf("</nav>", navStart);
+    expect(navEnd).toBeGreaterThan(navStart);
+    const links = html.slice(navStart, navEnd).match(/<a\b[^>]*>/g) ?? [];
+    expect(links.length).toBeGreaterThan(0);
     for (const link of links) {
       expect(link).toContain("min-h-11");
       expect(link).toContain("inline-flex");
