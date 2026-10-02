@@ -34,9 +34,10 @@ function Action({ action }: { action: EmptyStateAction }): ReactNode {
       <label className="mt-3 flex flex-col items-start gap-2 sm:flex-row sm:items-center sm:gap-3">
         <span className="font-display text-[1.02rem] uppercase">{action.label}</span>
         <input
-          className="w-full min-w-0 border border-line px-3 py-2 text-[0.88rem] sm:flex-1"
+          className="min-h-11 w-full min-w-0 border border-line px-3 py-2 text-[0.88rem] sm:flex-1"
           name={action.name}
           placeholder={action.placeholder}
+          type="text"
           aria-label={action.label}
         />
       </label>
