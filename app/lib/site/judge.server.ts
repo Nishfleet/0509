@@ -1,6 +1,5 @@
-import { env } from "cloudflare:workers";
-
 import { countVerdictsSince, insertVerdicts, readVerdictIds, type VerdictRow } from "../data/jev_verdict.server";
+import { readRecentSignals } from "../data/signal.server";
 import {
   askChoice,
   askNoul,
@@ -11,14 +10,14 @@ import {
   type NoulVerdict,
 } from "../jev/client.server";
 import { ACT_AT, REJECT_AT } from "../jev/thresholds";
+import { daysBefore } from "../site-changes.server";
 import type { BreakageEvidence } from "./breakage-evidence";
 
 const JEV_JUDGMENTS_PER_BRAND_PER_DAY = 6;
 
 const HISTORY_DAYS = 30;
 
-const HISTORY_SQL =
-  "SELECT COALESCE(summary, title) AS summary FROM signal WHERE entity_id = ?1 AND kind = 'change' AND observed_at >= ?2 AND COALESCE(summary, title) IS NOT NULL ORDER BY observed_at DESC LIMIT 20";
+const HISTORY_LIMIT = 20;
 
 const BREAKAGE_ALERT_P = 0.5;
 
@@ -93,12 +92,17 @@ export interface ChangeStateInput {
   evidence: BreakageEvidence;
 }
 
-export interface ChangeState {
+export interface HistoryEntry {
+  kind: string | null;
+  at: string;
+}
+
+export interface ChangeState<H = HistoryEntry> {
   subject: { name: string | null; domain: string };
   isSelf: boolean;
   page: { url: string; role: string | null };
   item: { hunks: readonly { lines: readonly string[] }[]; evidence: BreakageEvidence };
-  history_30d: readonly (string | null)[];
+  history_30d: readonly H[];
 }
 
 export interface JudgeInput extends ChangeStateInput {
@@ -107,7 +111,7 @@ export interface JudgeInput extends ChangeStateInput {
   signalId: string | null;
 }
 
-export function changeState(input: ChangeStateInput, history30d: readonly (string | null)[]): ChangeState {
+export function changeState<H>(input: ChangeStateInput, history30d: readonly H[]): ChangeState<H> {
   return {
     subject: input.subject,
     isSelf: input.isSelf,
@@ -115,10 +119,6 @@ export function changeState(input: ChangeStateInput, history30d: readonly (strin
     item: { hunks: input.hunks, evidence: input.evidence },
     history_30d: history30d,
   };
-}
-
-interface HistoryRow {
-  summary: string | null;
 }
 
 function breakageBandOf(p: number): BreakageBand["band"] {
@@ -136,10 +136,6 @@ function noteworthyBandOf(p: number, kind: string): NoteworthyBand["band"] {
 
 function todayStartIso(now: Date): string {
   return `${now.toISOString().slice(0, 10)}T00:00:00.000Z`;
-}
-
-function daysBeforeIso(now: Date, days: number): string {
-  return new Date(now.getTime() - days * 24 * 60 * 60 * 1000).toISOString();
 }
 
 function verdictRow(input: {
@@ -165,9 +161,17 @@ function verdictRow(input: {
   };
 }
 
-async function readHistory30d(entityId: string, sinceIso: string): Promise<(string | null)[]> {
-  const result = await env.DB.prepare(HISTORY_SQL).bind(entityId, sinceIso).all<HistoryRow>();
-  return result.results.map((row) => row.summary);
+async function readHistory30d(entityId: string, since: string): Promise<HistoryEntry[]> {
+  const recent = await readRecentSignals(entityId, since);
+  return recent
+    .filter((row) => row.kind === "change")
+    .slice(0, HISTORY_LIMIT)
+    .map((row) => ({ kind: row.aspect, at: row.observedAt }));
+}
+
+function logJevUnavailable(error: JevUnavailableError): null {
+  console.error(JSON.stringify({ event: "site.jev_unavailable", message: error.message }));
+  return null;
 }
 
 async function storeVerdicts(rows: readonly VerdictRow[]): Promise<readonly string[]> {
@@ -175,7 +179,7 @@ async function storeVerdicts(rows: readonly VerdictRow[]): Promise<readonly stri
   return readVerdictIds(rows);
 }
 
-type ChangeStateValue = ReturnType<typeof changeState>;
+type ChangeStateValue = ChangeState;
 
 function deferredResult(selfBreakage: BreakageBand | null): JudgedChange {
   return { deferred: true, selfBreakage, noteworthy: null, verdictIds: [] };
@@ -190,7 +194,7 @@ async function judgeSelfBreakage(
   try {
     breakage = await askNoul(input.workspaceId, D3S_BREAKAGE, state);
   } catch (error) {
-    if (error instanceof JevUnavailableError) return null;
+    if (error instanceof JevUnavailableError) return logJevUnavailable(error);
     throw error;
   }
   const p = breakage.p;
@@ -220,7 +224,7 @@ async function judgeNoteworthy(
       askChoice(input.workspaceId, D3_KIND, state),
     ]);
   } catch (error) {
-    if (error instanceof JevUnavailableError) return null;
+    if (error instanceof JevUnavailableError) return logJevUnavailable(error);
     throw error;
   }
   const p = noul.p;
@@ -242,7 +246,7 @@ export async function judgeChange(input: JudgeInput): Promise<JudgedChange> {
   const usedToday = await countVerdictsSince(input.entityId, todayStartIso(now));
   if (usedToday >= JEV_JUDGMENTS_PER_BRAND_PER_DAY) return deferredResult(null);
 
-  const history30d = await readHistory30d(input.entityId, daysBeforeIso(now, HISTORY_DAYS));
+  const history30d = await readHistory30d(input.entityId, daysBefore(now, HISTORY_DAYS));
   const state = changeState(input, history30d);
 
   const self = input.isSelf ? await judgeSelfBreakage(input, state, decidedAt) : undefined;
