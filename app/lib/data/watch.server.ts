@@ -259,7 +259,8 @@ export async function deactivateWatch(watchId: string): Promise<void> {
   await env.DB.prepare(DEACTIVATE_WATCH).bind(watchId).run();
 }
 
-const SITE_WATCH_SUMMARY = `SELECT COUNT(*) AS pages, MAX(w.last_polled_at) AS last_polled_at
+const SITE_WATCH_SUMMARY = `SELECT COUNT(*) AS pages, MAX(w.last_polled_at) AS last_polled_at,
+       EXISTS (SELECT 1 FROM page hp WHERE hp.entity_id = ?2 AND hp.role = 'home' AND hp.deferred_at IS NOT NULL) AS unreadable
 FROM watch w
 JOIN source src ON src.id = w.source_id AND src.kind = 'site'
 JOIN entity e ON e.id = w.entity_id AND e.workspace_id = ?1
@@ -268,13 +269,14 @@ WHERE w.entity_id = ?2 AND w.is_active = 1`;
 export interface SiteWatchSummary {
   pages: number;
   lastPolledAt: string | null;
+  unreadable: boolean;
 }
 
 export async function readSiteWatchSummary(workspaceId: string, entityId: string): Promise<SiteWatchSummary> {
   const row = await env.DB.prepare(SITE_WATCH_SUMMARY)
     .bind(workspaceId, entityId)
-    .first<{ pages: number; last_polled_at: string | null }>();
-  return { pages: row?.pages ?? 0, lastPolledAt: row?.last_polled_at ?? null };
+    .first<{ pages: number; last_polled_at: string | null; unreadable: number }>();
+  return { pages: row?.pages ?? 0, lastPolledAt: row?.last_polled_at ?? null, unreadable: row?.unreadable === 1 };
 }
 
 const ENTITY_R2_PREFIXES = `SELECT w.id AS id

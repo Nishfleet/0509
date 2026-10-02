@@ -20,6 +20,7 @@ export interface CompetitorFrameProps {
   pages: number;
   lastChecked: string | null;
   pausedOn: string | null;
+  unreadable: boolean;
   rail: Omit<CompetitorRailProps, "lastChecked">;
 }
 
@@ -73,9 +74,18 @@ function BiggestMoveSection({ biggestMove, quiet, changes }: BiggestMoveSectionP
   );
 }
 
-type DevelopmentsSectionProps = Pick<CompetitorFrameProps, "changes" | "developments" | "lastChecked" | "pausedOn">;
+type DevelopmentsSectionProps = Pick<
+  CompetitorFrameProps,
+  "changes" | "developments" | "lastChecked" | "pausedOn" | "unreadable"
+>;
 
-function DevelopmentsSection({ changes, developments, lastChecked, pausedOn }: DevelopmentsSectionProps): ReactElement {
+function DevelopmentsSection({
+  changes,
+  developments,
+  lastChecked,
+  pausedOn,
+  unreadable,
+}: DevelopmentsSectionProps): ReactElement {
   return (
     <section data-section="developments" aria-labelledby="competitor-developments" className="min-w-0">
       <h2 id="competitor-developments" className={HEADING}>
@@ -86,6 +96,12 @@ function DevelopmentsSection({ changes, developments, lastChecked, pausedOn }: D
           Paused {pausedOn}. We've stopped checking. Turn it back on to pick up where it left off.
         </p>
       )}
+      {unreadable ? (
+        <p data-slot="site-unreadable" className="border-t border-ink pt-3 text-meta text-ink-soft">
+          We couldn't read their website. It may block automated visits. We'll keep trying, and we're still watching
+          everything else about them.
+        </p>
+      ) : null}
       {developments.length === 0 ? (
         <EmptyState sentence={developmentsEmpty(lastChecked)} />
       ) : (
@@ -104,6 +120,7 @@ export function CompetitorFrame({
   pages,
   lastChecked,
   pausedOn,
+  unreadable,
   rail,
 }: CompetitorFrameProps): ReactElement {
   return (
@@ -116,6 +133,7 @@ export function CompetitorFrame({
           developments={developments}
           lastChecked={lastChecked}
           pausedOn={pausedOn}
+          unreadable={unreadable}
         />
       </div>
       <CompetitorRail {...rail} lastChecked={lastChecked} />

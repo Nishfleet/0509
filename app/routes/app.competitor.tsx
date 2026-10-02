@@ -104,6 +104,7 @@ export default function Page({ loaderData, actionData }: Route.ComponentProps) {
         pages={loaderData.watch.pages}
         lastChecked={loaderData.lastChecked}
         pausedOn={pausedAt === null ? null : DAY_MONTH.format(new Date(pausedAt))}
+        unreadable={loaderData.watch.unreadable}
         rail={{ ...loaderData.rail, entityId: competitor.id, now: loaderData.now }}
       />
       <CompetitorForget name={competitor.name} error={actionData?.forgetError ?? null} />

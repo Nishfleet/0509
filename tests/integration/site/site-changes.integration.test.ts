@@ -173,9 +173,19 @@ describe("site changes a customer can see", () => {
     expect(page?.changes.map((view) => view.id)).toEqual(["sig-paused"]);
     expect(page?.weekCount).toBe(1);
     expect(page?.biggestMove).toBeNull();
-    expect(page?.watch).toEqual({ pages: 1, lastPolledAt: "2026-09-23T02:10:00.000Z" });
+    expect(page?.watch).toEqual({ pages: 1, lastPolledAt: "2026-09-23T02:10:00.000Z", unreadable: false });
     expect(page?.rail.verdict).toBeNull();
     expect(page?.rail.facts.every((fact) => fact.count > 0)).toBe(true);
+  });
+
+  it("flags a brand whose home page is marked unreadable, and clears it when the mark is gone", async () => {
+    await env.DB.prepare("UPDATE page SET deferred_at = ?2 WHERE entity_id = ?1 AND role = 'home'")
+      .bind("paused", "2026-09-23T02:00:00.000Z")
+      .run();
+    expect((await readCompetitorPage("ws-mine", "paused", NOW))?.watch.unreadable).toBe(true);
+
+    await env.DB.prepare("UPDATE page SET deferred_at = NULL WHERE entity_id = ?1").bind("paused").run();
+    expect((await readCompetitorPage("ws-mine", "paused", NOW))?.watch.unreadable).toBe(false);
   });
 
   it("returns the seeded developments newest first", async () => {
