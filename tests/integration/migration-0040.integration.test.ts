@@ -46,6 +46,10 @@ const OWNERS: Owner[] = [
 
 // The UPDATE, taken from the migration rather than restated here, so the test
 // cannot pass against a copy that has drifted from the file that ships.
+//
+// It asserts exactly one match: a future version of this migration that adds a
+// second UPDATE over workspace.fixture must fail this file, not leave the new
+// statement untested while the old one keeps the case green.
 function backfillUpdate(): string {
   const found: D1Migration | undefined = env.TEST_MIGRATIONS.find((migration) =>
     migration.name.endsWith("_workspace_fixture.sql"),
@@ -53,9 +57,11 @@ function backfillUpdate(): string {
   if (found === undefined) throw new Error("0040_workspace_fixture.sql is missing from TEST_MIGRATIONS");
   // Not anchored: a leading comment line, or a quoted identifier, would
   // otherwise lose the statement the migration is supposed to ship.
-  const update = found.queries.find((query) => /update\s+workspace\s+set\s+fixture/i.test(query));
-  if (update === undefined) throw new Error("0040_workspace_fixture.sql no longer sets workspace.fixture");
-  return update;
+  const updates = found.queries.filter((query) => /update\s+workspace\s+set\s+fixture/i.test(query));
+  if (updates.length !== 1) {
+    throw new Error(`0040_workspace_fixture.sql holds ${updates.length} UPDATEs over workspace.fixture`);
+  }
+  return updates[0] as string;
 }
 
 async function seed(): Promise<void> {
@@ -107,10 +113,11 @@ describe("the 0040 backfill UPDATE", () => {
     expect(isPerRunFixtureEmail("e2e+abc123@0509.io")).toBe(true);
     for (const email of FIXTURE_EMAILS) expect(isPerRunFixtureEmail(email)).toBe(false);
 
-    const notIn = /email\s+not\s+in\s*\(([^)]*)\)/i.exec(backfillUpdate())?.[1] ?? "";
-    expect(notIn).not.toBe("");
     // Matched as bare addresses, so the check fails on the emails themselves
     // rather than on how the SQL quotes them.
+    const update = backfillUpdate();
+    const notIn = /email\s+not\s+in\s*\(([^)]*)\)/i.exec(update)?.[1] ?? "";
+    expect(notIn).not.toBe("");
     expect((notIn.match(/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+/g) ?? []).sort()).toEqual([...FIXTURE_EMAILS].sort());
   });
 });
