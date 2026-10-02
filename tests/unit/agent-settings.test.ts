@@ -1,9 +1,16 @@
 import { createElement, type ReactElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { createMemoryRouter, createRoutesStub, RouterProvider } from "react-router";
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { AgentKeys, ConnectDetails } from "../../app/components/agent-settings";
+import {
+  AgentKeys,
+  ConnectDetails,
+  CopyFailureNote,
+  CopyKey,
+  copyKeyLabel,
+  copyToClipboard,
+} from "../../app/components/agent-settings";
 
 const MCP_URL = "https://0509.io/mcp";
 const ORIGIN = "https://0509.io";
@@ -155,5 +162,90 @@ describe("the connect block on /app/settings/agents", () => {
     const html = markup();
     expect(html).not.toContain("<img");
     expect(html).not.toContain("<svg");
+  });
+});
+
+// #6648: CopyKey's clipboard write had no .then(onOk, onFail), so a refused
+// write (permission denied, insecure context, some in-app browsers) left an
+// unhandled rejection and no message on screen, right under the notice that
+// says the key is never shown again. The copy boundary, the state the button
+// reads and the sentence it shows are the three real app units under test;
+// the node project has no DOM, so navigator is stubbed per case exactly as
+// tests/unit/share-button.test.ts does (#6619).
+
+const NEW_KEY = "0509_live_secret_value";
+
+let unhandled: unknown[] = [];
+function recordUnhandled(reason: unknown): void {
+  unhandled.push(reason);
+}
+
+function stubClipboard(writeText: (value: string) => Promise<void>): void {
+  vi.stubGlobal("navigator", { clipboard: { writeText: vi.fn(writeText) } });
+}
+
+beforeEach(() => {
+  unhandled = [];
+  process.on("unhandledRejection", recordUnhandled);
+});
+
+afterEach(async () => {
+  // Let Node's unhandledRejection bookkeeping run before the claim is read.
+  await new Promise((resolve) => setImmediate(resolve));
+  vi.unstubAllGlobals();
+  process.off("unhandledRejection", recordUnhandled);
+});
+
+describe("copying a new API key", () => {
+  it("reports copied and asks the clipboard for the value when the write resolves", async () => {
+    const written: string[] = [];
+    stubClipboard((value) => {
+      written.push(value);
+      return Promise.resolve();
+    });
+
+    await expect(copyToClipboard(NEW_KEY)).resolves.toBe("copied");
+
+    expect(written).toEqual([NEW_KEY]);
+    expect(unhandled).toEqual([]);
+  });
+
+  it("reports failed instead of rejecting when the browser refuses the write", async () => {
+    stubClipboard(() => Promise.reject(new DOMException("write refused", "NotAllowedError")));
+
+    await expect(copyToClipboard(NEW_KEY)).resolves.toBe("failed");
+
+    expect(unhandled).toEqual([]);
+  });
+
+  it("reads Copied on the button once the write resolved, and keeps its resting label otherwise", () => {
+    expect(copyKeyLabel("copied")).toBe("Copied");
+    expect(copyKeyLabel("idle")).toBe("Copy key");
+    expect(copyKeyLabel("failed")).toBe("Copy key");
+  });
+
+  it("says to copy the key by hand after a failed write, as a status the screen reader reads", () => {
+    const html = renderToStaticMarkup(createElement(CopyFailureNote, { subject: "key" }));
+    expect(html).toContain('role="status"');
+    expect(html).toContain("Copy failed. Select the key above and copy it by hand.");
+  });
+
+  it("never prints the key when the write is refused", async () => {
+    const logged: unknown[] = [];
+    const spy = vi.spyOn(console, "error").mockImplementation((...args: unknown[]) => {
+      logged.push(args);
+    });
+    stubClipboard(() => Promise.reject(new DOMException("write refused", "NotAllowedError")));
+
+    await expect(copyToClipboard(NEW_KEY)).resolves.toBe("failed");
+
+    spy.mockRestore();
+    expect(JSON.stringify(logged)).not.toContain("live_secret_value");
+  });
+
+  it("shows the resting copy button and no failure sentence on the new-key notice", () => {
+    const html = renderToStaticMarkup(createElement(CopyKey, { value: NEW_KEY }));
+    expect(html).toContain(copyKeyLabel("idle"));
+    expect(html).not.toContain("Copy failed");
   });
 });

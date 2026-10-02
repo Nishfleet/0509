@@ -1,4 +1,5 @@
 import { useState } from "react";
+import type { ReactElement } from "react";
 import { Form, useNavigation } from "react-router";
 
 import type { AgentKey, ConnectedApp } from "../lib/agent/access";
@@ -15,8 +16,27 @@ function day(iso: string): string {
   return DAY.format(new Date(iso));
 }
 
+export function copyToClipboard(value: string): Promise<"copied" | "failed"> {
+  return navigator.clipboard.writeText(value).then(
+    () => "copied" as const,
+    () => "failed" as const,
+  );
+}
+
+export function copyKeyLabel(state: "idle" | "copied" | "failed"): string {
+  return state === "copied" ? "Copied" : "Copy key";
+}
+
+export function CopyFailureNote({ subject }: { subject: string }): ReactElement {
+  return (
+    <p role="status" className="mt-2 text-body-sm text-ink-soft">
+      Copy failed. Select the {subject} above and copy it by hand.
+    </p>
+  );
+}
+
 function CopyField({ label, value }: { label: string; value: string }) {
-  const [copied, setCopied] = useState(false);
+  const [state, setState] = useState<"idle" | "copied" | "failed">("idle");
   return (
     <div className="mt-3 flex flex-col gap-2 sm:flex-row">
       <Input
@@ -33,13 +53,12 @@ function CopyField({ label, value }: { label: string; value: string }) {
         variant="secondary"
         size="lg"
         onClick={() => {
-          void navigator.clipboard.writeText(value).then(() => {
-            setCopied(true);
-          });
+          void copyToClipboard(value).then(setState);
         }}
       >
-        {copied ? "Copied" : "Copy"}
+        {state === "copied" ? "Copied" : "Copy"}
       </Button>
+      {state === "failed" ? <CopyFailureNote subject="text" /> : null}
     </div>
   );
 }
@@ -189,20 +208,20 @@ export function AgentKeys({ keys, newKey }: { keys: AgentKey[]; newKey: string |
   );
 }
 
-function CopyKey({ value }: { value: string }) {
-  const [copied, setCopied] = useState(false);
+export function CopyKey({ value }: { value: string }) {
+  const [state, setState] = useState<"idle" | "copied" | "failed">("idle");
   return (
-    <Button
-      type="button"
-      variant="secondary"
-      className="mt-3"
-      onClick={() => {
-        void navigator.clipboard.writeText(value).then(() => {
-          setCopied(true);
-        });
-      }}
-    >
-      {copied ? "Copied" : "Copy key"}
-    </Button>
+    <div className="mt-3">
+      <Button
+        type="button"
+        variant="secondary"
+        onClick={() => {
+          void copyToClipboard(value).then(setState);
+        }}
+      >
+        {copyKeyLabel(state)}
+      </Button>
+      {state === "failed" ? <CopyFailureNote subject="key" /> : null}
+    </div>
   );
 }
