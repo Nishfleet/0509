@@ -46,7 +46,7 @@ export const RESPONSE_SCHEMA = {
   required: ["competitors"],
 } as const;
 
-export const proposalSchema = z.object({
+const proposalSchema = z.object({
   competitors: z.array(
     z.object({
       name: z.string().max(NAME_MAX),
