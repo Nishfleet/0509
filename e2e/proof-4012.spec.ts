@@ -11,10 +11,17 @@ const log = (label: string, value: unknown) => console.log(`PROOF4012 ${label} $
 
 function d1(sql: string): Record<string, unknown>[] {
   if (!/^\s*(SELECT|PRAGMA foreign_keys\s*$)/i.test(sql)) throw new Error("read-only proof: SELECT only");
-  const out = execFileSync("npx", ["wrangler", "d1", "execute", "0509", "--remote", "--json", "--command", sql], {
-    encoding: "utf8",
-    maxBuffer: 20_000_000,
-  });
+  let out: string;
+  try {
+    out = execFileSync("npx", ["wrangler", "d1", "execute", "0509", "--remote", "--json", "--command", sql], {
+      encoding: "utf8",
+      maxBuffer: 20_000_000,
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+  } catch (error) {
+    const e = error as { stdout?: string; stderr?: string };
+    throw new Error(`D1 read failed: ${String(e.stderr ?? "").slice(0, 600)} ${String(e.stdout ?? "").slice(0, 600)}`);
+  }
   const parsed: { results: Record<string, unknown>[] }[] = JSON.parse(out);
   return parsed[0].results;
 }
@@ -66,8 +73,24 @@ function counts(ids: Ids): Record<string, number> {
     `SELECT 'incident_notice', COUNT(*) FROM incident_notice WHERE incident_id IN (${q(ids.incidents)}) OR page_id IN (${q(ids.pages)})`,
     `SELECT 'email_suppression(address)', COUNT(*) FROM email_suppression WHERE address = '${ids.email}'`,
   ];
-  const rows = d1(parts.join(" UNION ALL "));
-  return Object.fromEntries(rows.map((row) => [String(row.t ?? Object.values(row)[0]), Number(Object.values(row)[1])]));
+  try {
+    const rows = d1(parts.join(" UNION ALL "));
+    return Object.fromEntries(rows.map((row) => [String(row.t), Number(row.n)]));
+  } catch (error) {
+    log("combined count query failed; falling back to one query per table", String(error).slice(0, 800));
+  }
+  const result: Record<string, number> = {};
+  for (const part of parts) {
+    const label = /SELECT '([^']+)'/.exec(part)?.[1] ?? part.slice(0, 40);
+    try {
+      const rows = d1(part);
+      result[label] = Number(Object.values(rows[0] ?? { n: -1 })[Object.keys(rows[0] ?? { n: 0 }).length - 1]);
+    } catch (error) {
+      result[label] = -1;
+      log(`count query failed for ${label}`, String(error).slice(0, 400));
+    }
+  }
+  return result;
 }
 
 async function r2List(bucket: string, prefix: string): Promise<{ status: number; keys: string[] | null; body: string }> {
@@ -218,7 +241,6 @@ test("J14 proof 0509#4012: fresh workspace with data, delete, counts before and 
     inboxAfter = { error: String(error) };
   }
   log("inbox after delete+wait", { waitedMs: WAIT_MS, checkedAt: new Date().toISOString(), inboxAfter });
-  log("COUNTS AFTER (re-read post-wait)", counts(ids));
 
   const nonZero = Object.entries(after).filter(([, n]) => n !== 0);
   log("nonZeroAfter", nonZero);
