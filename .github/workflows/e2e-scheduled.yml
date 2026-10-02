@@ -350,12 +350,18 @@ jobs:
           describe_newest() {
             npx wrangler workflows instances describe "$1" latest --json | jq -c '{status, output, failed: [.steps[]? | select(.success == false) | {name, error}]}' | head -c 1200
           }
+          jev_logs() {
+            curl -sS -X POST -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" -H "Content-Type: application/json" \
+              "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/observability/telemetry/query" \
+              -d "{\"queryId\":\"mentions-jev\",\"timeframe\":{\"from\":$(( $(date -u -d '24 hours ago' +%s) * 1000 )),\"to\":$(( $(date -u +%s) * 1000 ))},\"view\":\"events\",\"limit\":3,\"parameters\":{\"datasets\":[\"cloudflare-workers\"],\"filters\":[{\"key\":\"\$metadata.message\",\"operation\":\"includes\",\"type\":\"string\",\"value\":\"mentions.jev_unavailable\"}]}}" \
+              | jq -r '[.. | objects | select(has("message")) | .message | tostring] | .[0:3] | join(" | ")' | tr '\n' ' ' | head -c 1500
+          }
           crons=""
           newest=""
           for name in mentions-sweep site-sweep hiring-sweep snapshot-backup; do
             n=$(cron_instances "$name") || n=unreadable
             crons="$crons$name $n, "
-            [[ "$n" =~ ^[1-9][0-9]*$ ]] || { missed="$missed$name "; failed=1; newest="$newest$name newest: $(newest_instances "$name" || echo unreadable), described: $(describe_newest "$name" || echo unreadable); "; }
+            [[ "$n" =~ ^[1-9][0-9]*$ ]] || { missed="$missed$name "; failed=1; newest="$newest$name newest: $(newest_instances "$name" || echo unreadable), described: $(describe_newest "$name" || echo unreadable), jev log: $([ "$name" = mentions-sweep ] && jev_logs || echo n/a); "; }
           done
           required='["is_competitor","still_competitor","noteworthy_change","own_site_breakage","read_this_first","mention_is_about_brand","mention_matters","page_role","identity_field_confidence.name","identity_field_confidence.description","identity_field_confidence.socials"]'
           verdicts=$(d1 "SELECT question_id, COUNT(*) AS n, MAX(decided_at) AS last FROM jev_verdict GROUP BY question_id")
