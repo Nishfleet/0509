@@ -149,9 +149,11 @@ function selectedSplits(): Split[] {
 
 const JEV_TIMEOUT_MS = 60_000;
 
-const MAX_CALLS = Number(process.env.EVAL_MAX_CALLS ?? 6000);
+const BUDGET_MARGIN = 1.2;
 
-let callsMade = 0;
+let callBudget = 0;
+
+let callsUsed = 0;
 
 function withoutModel(body: unknown): unknown {
   const { model: _model, ...rest } = body as { model?: string };
@@ -165,8 +167,8 @@ function unwrapJev(value: unknown): JevResponse {
 }
 
 async function postJev(body: unknown): Promise<JevResponse> {
-  callsMade += 1;
-  if (callsMade > MAX_CALLS) throw new Error(`eval stopped: more than ${String(MAX_CALLS)} Jev calls in one run`);
+  if (callsUsed >= callBudget) throw new Error(`eval stopped: Jev call budget of ${String(callBudget)} spent`);
+  callsUsed += 1;
   // The bearer token rides in a header, never a command line or a log line.
   const response = await fetch(JEV_URL, {
     method: "POST",
@@ -321,6 +323,8 @@ export interface EvalReport {
   repeats: number;
   jevUrl: string;
   splits: SplitScore[];
+  callsUsed: number;
+  callBudget: number;
 }
 
 async function scoreSplit<T extends EvalRow>(
@@ -382,14 +386,25 @@ export async function runEval<T extends EvalRow>(
 ): Promise<EvalReport> {
   const models = new Set<string>();
   const splits: SplitScore[] = [];
-  for (const split of selectedSplits()) {
+  const wanted = selectedSplits();
+  callsUsed = 0;
+  callBudget = Math.ceil(rows.filter((row) => wanted.includes(row.split)).length * REPEATS * BUDGET_MARGIN);
+  for (const split of wanted) {
     const picked = rows.filter((row) => row.split === split);
     if (picked.length === 0) throw new Error(`${questionId} has no ${split} cases to score`);
     const scored = await scoreSplit(split, picked, ask, score);
     for (const model of scored.models) models.add(model);
     splits.push(scored.score);
   }
-  return { questionId, model: [...models].join(","), repeats: REPEATS, jevUrl: JEV_URL, splits };
+  return {
+    questionId,
+    model: [...models].join(","),
+    repeats: REPEATS,
+    jevUrl: JEV_URL,
+    splits,
+    callsUsed,
+    callBudget,
+  };
 }
 
 export function formatReport(report: EvalReport): string {
@@ -404,11 +419,15 @@ export function formatReport(report: EvalReport): string {
     train === undefined
       ? ""
       : `\ntrain maybes: ${train.maybeIds.join(", ") || "none"}\ntrain wrong: ${train.wrongIds.join(", ") || "none"}`;
-  return [`question ${report.questionId}\tmodel ${report.model}\trepeats ${report.repeats}`, rows, uncertain].join(
-    "\n",
-  );
+  return [
+    `question ${report.questionId}\tmodel ${report.model}\trepeats ${report.repeats}\tjev calls ${report.callsUsed}/${report.callBudget}`,
+    rows,
+    uncertain,
+  ].join("\n");
 }
 
 export function jevKeyPresent(): boolean {
-  return JEV_KEY !== "" || VIA_GATEWAY;
+  const present = JEV_KEY !== "" || VIA_GATEWAY;
+  if (!present && process.env.CI === "true") throw new Error("CI has no Jev credentials, so no case would be scored");
+  return present;
 }
