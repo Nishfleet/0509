@@ -11,6 +11,7 @@ const TABS = [
   { kind: "ads", label: "Ads" },
   { kind: "mentions", label: "Mentions" },
   { kind: "hiring", label: "Hiring" },
+  { kind: "content", label: "Blog posts" },
 ] as const;
 
 interface EvidenceTabProps {

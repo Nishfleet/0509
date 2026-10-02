@@ -24,9 +24,11 @@ const validatorsSchema = z.object({
   lastModified: z.string().nullable().optional(),
 });
 
-const configSchema = z.record(z.string(), z.unknown());
+const configSchema = z.looseObject({ feed: validatorsSchema.optional().catch(undefined) });
 
-function parseConfig(json: string | null): Record<string, unknown> {
+type WatchConfig = z.infer<typeof configSchema>;
+
+function parseConfig(json: string | null): WatchConfig {
   if (json === null) return {};
   try {
     const parsed = configSchema.safeParse(JSON.parse(json));
@@ -36,17 +38,12 @@ function parseConfig(json: string | null): Record<string, unknown> {
   }
 }
 
-function validatorsOf(config: Record<string, unknown>): FeedValidators | null {
-  const parsed = validatorsSchema.safeParse(config["feed"]);
-  if (!parsed.success) return null;
-  return { etag: parsed.data.etag ?? null, lastModified: parsed.data.lastModified ?? null };
+function validatorsOf(config: WatchConfig): FeedValidators | null {
+  if (config.feed === undefined) return null;
+  return { etag: config.feed.etag ?? null, lastModified: config.feed.lastModified ?? null };
 }
 
-async function rememberValidators(
-  watchId: string,
-  config: Record<string, unknown>,
-  validators: FeedValidators,
-): Promise<void> {
+async function rememberValidators(watchId: string, config: WatchConfig, validators: FeedValidators): Promise<void> {
   const next = { ...config, feed: validators };
   if (JSON.stringify(next) === JSON.stringify(config)) return;
   await writeWatchConfigJson(watchId, JSON.stringify(next));

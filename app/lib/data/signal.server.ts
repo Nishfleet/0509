@@ -6,6 +6,7 @@ import { isFeedKind, type DevelopmentItem } from "../developments";
 import type { WeekEvidence } from "../home-standing";
 import { ACT_AT, REJECT_AT } from "../jev/thresholds";
 import { D3_QUESTION_ID, D6_QUESTION_ID, reliabilitySchema, scoreBucketSchema } from "../standing-score";
+import { effectiveKindSql } from "../source-kind";
 import type { HiringSignalState, HiringSignalUpdate } from "../hiring/role-lifecycle";
 
 export interface ChangeSignalRow {
@@ -380,7 +381,7 @@ export async function readRecentSignals(entityId: string, since: string): Promis
   }));
 }
 
-const SELECT_WEEK_EVIDENCE = `SELECT s.id, src.kind AS source_kind, s.title, s.summary, s.url, s.evidence_url, s.observed_at
+const SELECT_WEEK_EVIDENCE = `SELECT s.id, ${effectiveKindSql("src")} AS source_kind, s.title, s.summary, s.url, s.evidence_url, s.observed_at
 FROM signal s JOIN source src ON src.id = s.source_id
 WHERE s.workspace_id = ?1 AND s.entity_id = ?2 AND s.observed_at >= ?3 AND s.is_tombstoned = 0 AND s.duplicate_of IS NULL
 ORDER BY s.observed_at DESC, s.id DESC LIMIT 100`;
@@ -467,7 +468,7 @@ export async function readSiteChanges(input: {
 }
 
 const SELECT_ENTITY_DEVELOPMENTS = `SELECT id, kind, title, summary, url, observed_at FROM signal
-WHERE workspace_id = ?1 AND entity_id = ?2 AND kind IN ('ad', 'change', 'mention', 'hiring')
+WHERE workspace_id = ?1 AND entity_id = ?2 AND kind IN ('ad', 'change', 'mention', 'hiring', 'content')
   AND is_tombstoned = 0 AND duplicate_of IS NULL AND observed_at >= ?3 ORDER BY observed_at DESC, id DESC LIMIT ?4`;
 
 interface DevelopmentRow {
@@ -621,5 +622,19 @@ export type HiringPost = z.infer<typeof workspaceHiringRows>[number];
 
 export async function readWorkspaceHiring(workspaceId: string, since: string, limit: number): Promise<HiringPost[]> {
   const { results } = await env.DB.prepare(SELECT_WORKSPACE_HIRING).bind(workspaceId, since, limit).all();
+  return workspaceHiringRows.parse(results);
+}
+
+const SELECT_WORKSPACE_CONTENT = `SELECT s.id, s.title, s.summary, s.url, s.published_at, s.observed_at, COALESCE(NULLIF(e.name, ''), e.domain) AS brand
+FROM signal s
+JOIN entity e ON e.id = s.entity_id AND e.workspace_id = s.workspace_id AND e.role = 'competitor' AND e.state = 'on'
+WHERE s.workspace_id = ?1 AND s.kind = 'content' AND s.is_tombstoned = 0 AND s.title IS NOT NULL AND s.url IS NOT NULL
+  AND COALESCE(s.published_at, s.observed_at) >= ?2
+ORDER BY COALESCE(s.published_at, s.observed_at) DESC, s.id DESC LIMIT ?3`;
+
+export type ContentPost = z.infer<typeof workspaceHiringRows>[number];
+
+export async function readWorkspaceContent(workspaceId: string, since: string, limit: number): Promise<ContentPost[]> {
+  const { results } = await env.DB.prepare(SELECT_WORKSPACE_CONTENT).bind(workspaceId, since, limit).all();
   return workspaceHiringRows.parse(results);
 }

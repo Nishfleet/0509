@@ -3,11 +3,12 @@ import { z } from "zod";
 import { readBriefPayload } from "./brief-payload";
 import type { BriefPayload } from "./brief-payload";
 import type { BriefSchedule } from "./brief-schedule";
+import { SOURCE_KINDS, effectiveKindSql } from "./source-kind";
 import type { HomeCount, HomeEntity, HomeHistoryRow, HomeSource } from "./home-standing";
 
 const SELECT_HISTORY = `SELECT entity_id, week_start_at, rank FROM standing WHERE workspace_id = ?1 AND rank IS NOT NULL AND week_start_at IN (SELECT DISTINCT week_start_at FROM standing WHERE workspace_id = ?1 AND rank IS NOT NULL ORDER BY week_start_at DESC LIMIT 4) ORDER BY week_start_at ASC`;
 
-const SELECT_HOME_SOURCES = `SELECT key, kind, platform FROM source WHERE is_enabled = 1 AND id IN (SELECT w.source_id FROM watch w JOIN entity e ON e.id = w.entity_id WHERE e.workspace_id = ?1) ORDER BY kind ASC, key ASC`;
+const SELECT_HOME_SOURCES = `SELECT key, ${effectiveKindSql("source")} AS kind, platform FROM source WHERE is_enabled = 1 AND id IN (SELECT w.source_id FROM watch w JOIN entity e ON e.id = w.entity_id WHERE e.workspace_id = ?1) ORDER BY kind ASC, key ASC`;
 
 const SELECT_HOME_COUNTS = `SELECT s.entity_id, src.key AS source_key, COUNT(*) AS n FROM signal s JOIN source src ON src.id = s.source_id WHERE s.workspace_id = ?1 AND s.is_tombstoned = 0 AND s.observed_at >= (SELECT json_extract(payload_json, '$.period_start') FROM digest WHERE workspace_id = ?1 AND kind = 'weekly' ORDER BY period_end DESC LIMIT 1) GROUP BY s.entity_id, src.key`;
 
@@ -56,9 +57,7 @@ const homeRows = z.array(homeRow);
 
 const historyRows = z.array(z.object({ entity_id: z.string(), week_start_at: z.string(), rank: z.number().int() }));
 
-const sourceRows = z.array(
-  z.object({ key: z.string(), kind: z.enum(["site", "ads", "mentions", "hiring"]), platform: z.string() }),
-);
+const sourceRows = z.array(z.object({ key: z.string(), kind: z.enum(SOURCE_KINDS), platform: z.string() }));
 
 const countRows = z.array(z.object({ entity_id: z.string(), source_key: z.string(), n: z.number().int() }));
 

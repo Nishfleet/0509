@@ -12,7 +12,7 @@ export interface KeyedFeedItem extends FeedItem {
 
 export const MAX_FEED_ITEMS = 20;
 
-export const MAX_ITEM_AGE_DAYS = 30;
+const MAX_ITEM_AGE_DAYS = 30;
 
 const MAX_TITLE_CHARS = 200;
 
@@ -65,10 +65,23 @@ function plainText(raw: string, limit: number): string {
   return text.length > limit ? `${text.slice(0, limit - 1).trimEnd()}…` : text;
 }
 
-function firstTag(block: string, names: readonly string[]): string | null {
+const TAG_PATTERNS = {
+  title: /<title(?:\s[^>]*)?>([\s\S]*?)<\/title\s*>/i,
+  description: /<description(?:\s[^>]*)?>([\s\S]*?)<\/description\s*>/i,
+  summary: /<summary(?:\s[^>]*)?>([\s\S]*?)<\/summary\s*>/i,
+  guid: /<guid(?:\s[^>]*)?>([\s\S]*?)<\/guid\s*>/i,
+  id: /<id(?:\s[^>]*)?>([\s\S]*?)<\/id\s*>/i,
+  pubDate: /<pubDate(?:\s[^>]*)?>([\s\S]*?)<\/pubDate\s*>/i,
+  published: /<published(?:\s[^>]*)?>([\s\S]*?)<\/published\s*>/i,
+  updated: /<updated(?:\s[^>]*)?>([\s\S]*?)<\/updated\s*>/i,
+  date: /<dc:date(?:\s[^>]*)?>([\s\S]*?)<\/dc:date\s*>/i,
+} as const;
+
+type TagName = keyof typeof TAG_PATTERNS;
+
+function firstTag(block: string, names: readonly TagName[]): string | null {
   for (const name of names) {
-    const found = new RegExp(`<${name}(?:\\s[^>]*)?>([\\s\\S]*?)</${name}\\s*>`, "i").exec(block);
-    const inner = found?.[1];
+    const inner = TAG_PATTERNS[name].exec(block)?.[1];
     if (inner !== undefined) return inner;
   }
   return null;
@@ -107,7 +120,7 @@ function entryLink(block: string, base: string): string | null {
 }
 
 function entryDate(block: string): string | null {
-  const raw = firstTag(block, ["pubDate", "published", "updated", "dc:date"]);
+  const raw = firstTag(block, ["pubDate", "published", "updated", "date"]);
   if (raw === null) return null;
   const parsed = Date.parse(collapse(decodeEntities(unwrapCdata(raw))));
   return Number.isNaN(parsed) ? null : new Date(parsed).toISOString();

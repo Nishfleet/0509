@@ -6,6 +6,7 @@ import { daysBefore } from "./site-changes.server";
 import { ACT_AT } from "./jev/thresholds";
 import { D3_QUESTION_ID, D6_QUESTION_ID } from "./standing-score";
 import { sourceName } from "./source-name";
+import { SOURCE_KINDS, effectiveKindSql } from "./source-kind";
 import { required } from "./required";
 
 const SELECT_COMPETITOR_COUNTS = `SELECT
@@ -24,14 +25,14 @@ const SELECT_COMPETITOR_STANDING = `SELECT rank, movement FROM standing
 WHERE workspace_id = ?1 AND entity_id = ?2 AND rank IS NOT NULL
 ORDER BY week_start_at DESC LIMIT 1`;
 
-const SELECT_COMPETITOR_COVERAGE = `SELECT src.key AS key, src.kind AS kind, src.platform AS platform,
+const SELECT_COMPETITOR_COVERAGE = `SELECT src.key AS key, ${effectiveKindSql("src")} AS kind, src.platform AS platform,
   MAX(CASE WHEN sn.fetched_at >= ?3 AND sn.fetched_at < ?4 THEN 1 ELSE 0 END) AS answered
 FROM watch w
 JOIN entity e ON e.id = w.entity_id AND e.workspace_id = ?1
 JOIN source src ON src.id = w.source_id AND src.is_enabled = 1
 LEFT JOIN snapshot sn ON sn.watch_id = w.id
 WHERE w.entity_id = ?2 AND w.is_active = 1
-GROUP BY src.key, src.kind, src.platform
+GROUP BY src.key, kind, src.platform
 ORDER BY src.key`;
 
 const countRow = z.object({
@@ -46,7 +47,7 @@ const countRows = z.tuple([countRow]);
 
 const standingRows = z.array(z.object({ rank: z.number().int(), movement: z.number().int().nullable() }));
 
-const sourceKind = z.enum(["ads", "mentions", "site", "hiring"]);
+const sourceKind = z.enum(SOURCE_KINDS);
 
 const coverageRows = z.array(
   z.object({

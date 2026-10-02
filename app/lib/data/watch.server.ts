@@ -336,5 +336,9 @@ ORDER BY w.id`;
 
 export async function readEntityR2Prefixes(workspaceId: string, entityId: string): Promise<string[]> {
   const { results } = await env.DB.prepare(ENTITY_R2_PREFIXES).bind(workspaceId, entityId).all<{ id: string }>();
-  return results.flatMap((row) => [`snapshot/site/${row.id}/`, `snapshot/hiring/${row.id}/`, `snapshot/feed/${row.id}/`]);
+  return results.flatMap((row) => [
+    `snapshot/site/${row.id}/`,
+    `snapshot/hiring/${row.id}/`,
+    `snapshot/feed/${row.id}/`,
+  ]);
 }

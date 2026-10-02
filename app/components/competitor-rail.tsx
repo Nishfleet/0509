@@ -24,6 +24,7 @@ const FACT_NOUNS: Record<string, [string, string]> = {
   hiring: ["new job opening", "new job openings"],
   ad: ["ad", "ads"],
   mention: ["mention", "mentions"],
+  content: ["new post", "new posts"],
 };
 
 export interface RailPeer {

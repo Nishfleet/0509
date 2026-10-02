@@ -165,11 +165,11 @@ describe("the developments feed", () => {
     feedFilterHarness.setSearchParams = null;
   });
 
-  it("lists every row under five labelled count chips on the bare page", () => {
+  it("lists every row under six labelled count chips on the bare page", () => {
     const html = render("/");
     expect(kinds(html)).toEqual(["hiring", "ad", "change", "mention", "hiring"]);
     expect(html.match(/data-kind=/g)).toHaveLength(5);
-    expect(chips(html)).toEqual(["All5", "Ads1", "Site changes1", "Mentions1", "Hiring2"]);
+    expect(chips(html)).toEqual(["All5", "Ads1", "Site changes1", "Mentions1", "Hiring2", "Blog posts0"]);
     expect(html).toContain('aria-label="Filter updates"');
     expect(html).toContain('data-slot="developments-list"');
     expect(html).toContain('data-slot="source-pill"');
@@ -180,14 +180,14 @@ describe("the developments feed", () => {
     const html = render("/?kind=hiring");
     expect(html.match(/data-kind=/g)).toHaveLength(2);
     expect(kinds(html)).toEqual(["hiring", "hiring"]);
-    expect(chips(html)).toEqual(["All5", "Ads1", "Site changes1", "Mentions1", "Hiring2"]);
+    expect(chips(html)).toEqual(["All5", "Ads1", "Site changes1", "Mentions1", "Hiring2", "Blog posts0"]);
   });
 
   it("falls back to the whole feed for an unknown kind", () => {
     const html = render("/?kind=bogus");
     expect(html.match(/data-kind=/g)).toHaveLength(5);
     expect(kinds(html)).toEqual(["hiring", "ad", "change", "mention", "hiring"]);
-    expect(chips(html)).toEqual(["All5", "Ads1", "Site changes1", "Mentions1", "Hiring2"]);
+    expect(chips(html)).toEqual(["All5", "Ads1", "Site changes1", "Mentions1", "Hiring2", "Blog posts0"]);
   });
 
   it("keeps one list element for every filter, empty rows included", () => {
