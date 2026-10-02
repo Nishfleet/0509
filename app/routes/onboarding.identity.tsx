@@ -12,6 +12,7 @@ import { readWorkspaceIdForOwner } from "../lib/data/workspace.server";
 import { executionContext } from "../lib/agent/context.server";
 import { creatorRows, editedFields, isDraftSave } from "../lib/identity/card-fields";
 import { applyDraftIntent, readDraft } from "../lib/identity/card-draft.server";
+import { warmDiscovery } from "../lib/discovery/warm.server";
 import { startCard, withinProbeLimit } from "../lib/identity/card.server";
 import { confirmCardLater } from "../lib/identity/confirm.server";
 import { normaliseSubject } from "../lib/identity/normalise";
@@ -29,7 +30,7 @@ export function meta() {
   return [{ title: "Check your details · Five to Nine" }];
 }
 
-export async function loader({ request }: Route.LoaderArgs) {
+export async function loader({ request, context }: Route.LoaderArgs) {
   const timings = createTimings();
   const { raw, subject, taken, landing, workspaceId, userId } = await readSubjectAccess(request, timings);
   if (!landing) throw redirect("/app");
@@ -48,13 +49,19 @@ export async function loader({ request }: Route.LoaderArgs) {
   ]);
   if (!withinLimit) return { card: null, limited: true };
   const shown = subject.kind === "domain" ? subject.registrable : (subject.url ?? `@${subject.registrable}`);
+  const started = startCard(workspaceId, subject, editedFields(draft));
+  context.get(executionContext).waitUntil(
+    warmDiscovery(subject, started.site).catch((error: unknown) => {
+      captureException(error, { tags: { step: "discovery-warm" } });
+    }),
+  );
   return data(
     {
       card: {
         subject: raw,
         creator: creatorRows(subject),
         domain: shown,
-        ...timeCard(workspaceId, startCard(workspaceId, subject, editedFields(draft))),
+        ...timeCard(workspaceId, started),
         draft,
       },
       limited: false,

@@ -1,7 +1,7 @@
 import { env } from "cloudflare:test";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { aiGenerator } from "../../../app/lib/discovery/generators/ai.server";
+import { aiGenerator, warmProposals } from "../../../app/lib/discovery/generators/ai.server";
 import type { FetchedText, Subject } from "../../../app/lib/discovery/types";
 
 const SUBJECT: Subject = { name: "Gymshark", domain: "gymshark.com", description: "Fitness apparel" };
@@ -30,6 +30,11 @@ function answering(answers: Record<string, Response>): ReturnType<typeof vi.spyO
 function liveHosts(...hosts: string[]): void {
   answering(Object.fromEntries(hosts.map((host) => [host, new Response(null, { status: 200 })])));
 }
+
+beforeEach(async () => {
+  const stored = await env.IDENTITY_CACHE.list();
+  for (const key of stored.keys) await env.IDENTITY_CACHE.delete(key.name);
+});
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -137,6 +142,26 @@ describe("aiGenerator", () => {
       "@cf/nvidia/nemotron-3-120b-a12b",
     ]);
     expect(candidates.map((candidate) => candidate.domain)).toEqual(["a.com", "b.com"]);
+  });
+
+  it("reuses the answers a warm-up stored instead of asking the models again", async () => {
+    const run = proposes({ competitors: [{ name: "Alpha", domain: "a.com" }] });
+    liveHosts("gymshark.com", "a.com");
+    await warmProposals(SUBJECT);
+    expect(run).toHaveBeenCalledTimes(2);
+    const asked = vi.spyOn(globalThis, "fetch").mockClear();
+    const candidates = await aiGenerator(SUBJECT, home());
+    expect(run).toHaveBeenCalledTimes(2);
+    expect(asked).not.toHaveBeenCalled();
+    expect(candidates.map((candidate) => candidate.domain)).toEqual(["a.com"]);
+  });
+
+  it("asks the models again when the brand's name or description changed", async () => {
+    const run = proposes({ competitors: [{ name: "Alpha", domain: "a.com" }] });
+    liveHosts("gymshark.com", "a.com");
+    await warmProposals(SUBJECT);
+    await aiGenerator({ ...SUBJECT, description: "Gym clothes" }, home());
+    expect(run).toHaveBeenCalledTimes(4);
   });
 
   it("keeps the answer that came back when the other model fails", async () => {

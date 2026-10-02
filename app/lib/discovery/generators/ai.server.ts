@@ -4,7 +4,9 @@ import { z } from "zod";
 
 import { fetchOutbound } from "../../fetch/outbound.server";
 import { CRAWLER_USER_AGENT } from "../../fetch/robots.server";
+import { readThrough } from "../../identity/probe-cache.server";
 import { GATEWAY_ID } from "../../jev/client.server";
+import { sha256Hex } from "../../sha256";
 import { defaultFetchText } from "../fetch-text.server";
 import { type Candidate, type FetchText, type Generator, type Subject } from "../types";
 
@@ -19,6 +21,8 @@ export const MAX_TOKENS = 4_000;
 const DOMAIN_TIMEOUT_MS = 5_000;
 
 const AI_TIMEOUT_MS = 60_000;
+
+const PROPOSALS_TTL_SECONDS = 3_600;
 
 const HTML_LIMIT = 200_000;
 
@@ -53,15 +57,15 @@ export const RESPONSE_FORMAT = {
   json_schema: { name: "competitors", schema: RESPONSE_SCHEMA },
 } as const;
 
-const proposalSchema = z.object({
-  competitors: z.array(
-    z.object({
-      name: z.string().max(NAME_MAX),
-      domain: z.string().max(DOMAIN_MAX),
-      reason: z.string().max(REASON_MAX).optional(),
-    }),
-  ),
+const proposalItemSchema = z.object({
+  name: z.string().max(NAME_MAX),
+  domain: z.string().max(DOMAIN_MAX),
+  reason: z.string().max(REASON_MAX).optional(),
 });
+
+const proposalSchema = z.object({ competitors: z.array(proposalItemSchema) });
+
+const proposalListSchema = z.array(proposalItemSchema);
 
 const answerSchema = z.object({
   response: z.unknown().optional(),
@@ -72,6 +76,12 @@ interface Proposal {
   name: string;
   domain: string;
   reason?: string | undefined;
+}
+
+interface NamedProposal {
+  name: string;
+  domain: string;
+  reason: string;
 }
 
 interface SiteText {
@@ -176,6 +186,14 @@ async function isLive(domain: string): Promise<boolean> {
   }
 }
 
+async function cachedLive(domain: string): Promise<boolean> {
+  const key = `discovery:live:${domain}`;
+  if ((await env.IDENTITY_CACHE.get(key)) === "1") return true;
+  const live = await isLive(domain);
+  if (live) await env.IDENTITY_CACHE.put(key, "1", { expirationTtl: PROPOSALS_TTL_SECONDS });
+  return live;
+}
+
 function cleanName(value: string): string {
   return value
     .replace(/\p{Cc}/gu, " ")
@@ -183,17 +201,30 @@ function cleanName(value: string): string {
     .trim();
 }
 
-async function liveCandidates(subject: Subject, proposals: readonly Proposal[]): Promise<Candidate[]> {
+function nameProposals(subject: Subject, proposals: readonly Proposal[]): NamedProposal[] {
   const own = parse(subject.domain).domain;
   const seen = new Set<string>();
-  const named = proposals.slice(0, MODELS.length * MAX_PROPOSALS).flatMap((proposal) => {
+  return proposals.slice(0, MAX_PROPOSALS).flatMap((proposal) => {
     const domain = publicDomain(proposal.domain);
     const name = cleanName(proposal.name);
     if (domain === null || name === "" || domain === own || seen.has(domain)) return [];
     seen.add(domain);
     return [{ name, domain, reason: cleanName(proposal.reason ?? "") }];
   });
-  const live = await Promise.all(named.map((item) => isLive(item.domain)));
+}
+
+async function liveCandidates(
+  subject: Subject,
+  named: readonly NamedProposal[],
+  checks: Map<string, Promise<boolean>>,
+): Promise<Candidate[]> {
+  const live = await Promise.all(
+    named.map((item) => {
+      const known = checks.get(item.domain) ?? cachedLive(item.domain);
+      checks.set(item.domain, known);
+      return known;
+    }),
+  );
   return named
     .filter((_, index) => live[index])
     .map((item) => ({
@@ -209,17 +240,63 @@ async function liveCandidates(subject: Subject, proposals: readonly Proposal[]):
     }));
 }
 
-async function proposeFromAll(subject: Subject, site: SiteText): Promise<Proposal[]> {
-  const runs = await Promise.allSettled(MODELS.map((model) => propose(model, subject, site)));
+type Model = (typeof MODELS)[number];
+
+type SiteReader = () => Promise<SiteText>;
+
+function lazySite(subject: Subject, fetchText: FetchText | undefined): SiteReader {
+  let pending: Promise<SiteText> | undefined;
+  return () => {
+    pending ??= siteTextOf(subject, fetchText ?? defaultFetchText("discovery.ai_fetch_failed"));
+    return pending;
+  };
+}
+
+async function cachedProposals(model: Model, subject: Subject, readSite: SiteReader): Promise<Proposal[]> {
+  const asked = await sha256Hex(JSON.stringify([model, subject.domain, subject.name, subject.description ?? null]));
+  return readThrough({
+    key: `discovery:proposals:${asked}`,
+    schema: proposalListSchema,
+    ttlSeconds: PROPOSALS_TTL_SECONDS,
+    run: async () => propose(model, subject, await readSite()),
+  });
+}
+
+interface Source {
+  subject: Subject;
+  readSite: SiteReader;
+  checks: Map<string, Promise<boolean>>;
+}
+
+async function candidatesFrom(model: Model, { subject, readSite, checks }: Source): Promise<Candidate[]> {
+  return liveCandidates(subject, nameProposals(subject, await cachedProposals(model, subject, readSite)), checks);
+}
+
+export async function warmProposals(subject: Subject): Promise<void> {
+  const source: Source = { subject, readSite: lazySite(subject, undefined), checks: new Map() };
+  await Promise.allSettled(MODELS.map((model) => candidatesFrom(model, source)));
+}
+
+function mergedByDomain(lists: readonly (readonly Candidate[])[]): Candidate[] {
+  const seen = new Set<string>();
+  return lists.flat().filter((candidate) => {
+    const domain = candidate.domain ?? candidate.name;
+    if (seen.has(domain)) return false;
+    seen.add(domain);
+    return true;
+  });
+}
+
+async function candidatesFromAll(subject: Subject, readSite: SiteReader): Promise<Candidate[]> {
+  const source: Source = { subject, readSite, checks: new Map() };
+  const runs = await Promise.allSettled(MODELS.map((model) => candidatesFrom(model, source)));
   const answered = runs.flatMap((run) => (run.status === "fulfilled" ? [run.value] : []));
   const failed = runs.find((run) => run.status === "rejected");
   if (answered.length === 0 && failed !== undefined) {
     throw failed.reason instanceof Error ? failed.reason : new Error(String(failed.reason));
   }
-  return answered.flat();
+  return mergedByDomain(answered);
 }
 
-export const aiGenerator: Generator = async (subject: Subject, fetchText?: FetchText) => {
-  const site = await siteTextOf(subject, fetchText ?? defaultFetchText("discovery.ai_fetch_failed"));
-  return liveCandidates(subject, await proposeFromAll(subject, site));
-};
+export const aiGenerator: Generator = (subject: Subject, fetchText?: FetchText) =>
+  candidatesFromAll(subject, lazySite(subject, fetchText));
