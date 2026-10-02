@@ -132,8 +132,11 @@ export async function readAgentCompetitor(
   competitorId: string,
   now: Date,
 ): Promise<CompetitorResult> {
-  const page = await readCompetitorPage(workspaceId, competitorId, now);
-  if (page === null) return { competitor: null };
+  const [page, hidden] = await Promise.all([
+    readCompetitorPage(workspaceId, competitorId, now),
+    offEntityIds(workspaceId),
+  ]);
+  if (page === null || hidden.has(competitorId)) return { competitor: null };
   return {
     competitor: {
       id: page.competitor.id,
