@@ -322,17 +322,34 @@ export async function recordAlternateAttempt(input: {
   url: string;
   at: string;
   outcome: { adopted: true } | { adopted: false; reason: string };
+  origin?: "customer";
 }): Promise<void> {
-  const { entityId, sourceId, url, at, outcome } = input;
-  const config = JSON.stringify({ alternateHome: 1, at, ...(outcome.adopted ? {} : { reason: outcome.reason }) });
+  const { entityId, sourceId, url, at, outcome, origin } = input;
+  const config = JSON.stringify({
+    alternateHome: 1,
+    at,
+    ...(origin === "customer" ? { customer: 1 } : {}),
+    ...(outcome.adopted ? {} : { reason: outcome.reason }),
+  });
   await env.DB.prepare(RECORD_ALTERNATE_ATTEMPT)
     .bind(crypto.randomUUID(), entityId, sourceId, url, outcome.adopted ? 1 : 0, config)
     .run();
 }
 
+const CUSTOMER_MARKER = (alias: string): string =>
+  `${ALTERNATE_MARKER(alias)} AND coalesce(CASE WHEN json_valid(${alias}.config_json) THEN json_extract(${alias}.config_json, '$.customer') END, 0) = 1`;
+
+const RETIRE_CUSTOMER_SITES = `UPDATE watch SET is_active = 0
+WHERE entity_id = ?1 AND target_key <> ?2 AND is_active = 1 AND ${CUSTOMER_MARKER("watch")}`;
+
+export async function retireCustomerSites(entityId: string, keepUrl: string): Promise<void> {
+  await env.DB.prepare(RETIRE_CUSTOMER_SITES).bind(entityId, keepUrl).run();
+}
+
 const SITE_WATCH_SUMMARY = `SELECT COUNT(*) AS pages, MAX(w.last_polled_at) AS last_polled_at,
        (EXISTS (SELECT 1 FROM page hp WHERE hp.entity_id = ?2 AND hp.role = 'home' AND hp.deferred_at IS NOT NULL)
-        AND NOT EXISTS (SELECT 1 FROM watch aw WHERE aw.entity_id = ?2 AND aw.is_active = 1 AND ${ALTERNATE_MARKER("aw")})) AS unreadable
+        AND NOT EXISTS (SELECT 1 FROM watch aw WHERE aw.entity_id = ?2 AND aw.is_active = 1 AND ${ALTERNATE_MARKER("aw")})) AS unreadable,
+       (SELECT cw.target_key FROM watch cw WHERE cw.entity_id = ?2 AND cw.is_active = 1 AND ${CUSTOMER_MARKER("cw")} LIMIT 1) AS customer_site
 FROM watch w
 JOIN source src ON src.id = w.source_id AND src.kind = 'site'
 JOIN entity e ON e.id = w.entity_id AND e.workspace_id = ?1
@@ -342,13 +359,19 @@ export interface SiteWatchSummary {
   pages: number;
   lastPolledAt: string | null;
   unreadable: boolean;
+  customerSite: string | null;
 }
 
 export async function readSiteWatchSummary(workspaceId: string, entityId: string): Promise<SiteWatchSummary> {
   const row = await env.DB.prepare(SITE_WATCH_SUMMARY)
     .bind(workspaceId, entityId)
-    .first<{ pages: number; last_polled_at: string | null; unreadable: number }>();
-  return { pages: row?.pages ?? 0, lastPolledAt: row?.last_polled_at ?? null, unreadable: row?.unreadable === 1 };
+    .first<{ pages: number; last_polled_at: string | null; unreadable: number; customer_site: string | null }>();
+  return {
+    pages: row?.pages ?? 0,
+    lastPolledAt: row?.last_polled_at ?? null,
+    unreadable: row?.unreadable === 1,
+    customerSite: row?.customer_site ?? null,
+  };
 }
 
 const ENTITY_R2_PREFIXES = `SELECT w.id AS id
