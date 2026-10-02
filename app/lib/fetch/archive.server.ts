@@ -4,7 +4,7 @@ import { cappedJson, cappedText, fetchOutbound } from "./outbound.server";
 import { CRAWLER_USER_AGENT } from "./robots.server";
 import { refusalReason, type ReadUrlResult } from "./transport.server";
 
-export const ARCHIVE_MAX_AGE_MS = 3 * 86_400_000;
+const ARCHIVE_MAX_AGE_MS = 3 * 86_400_000;
 
 const AVAILABILITY_URL = "https://archive.org/wayback/available";
 const MAX_BYTES = 5_000_000;
@@ -26,7 +26,7 @@ export function waybackStamp(date: Date): string {
   return date.toISOString().replace(/\D/g, "").slice(0, 14);
 }
 
-export function stampTime(stamp: string): number {
+function stampTime(stamp: string): number {
   const iso = `${stamp.slice(0, 4)}-${stamp.slice(4, 6)}-${stamp.slice(6, 8)}T${stamp.slice(8, 10)}:${stamp.slice(10, 12)}:${stamp.slice(12, 14)}Z`;
   return Date.parse(iso);
 }
