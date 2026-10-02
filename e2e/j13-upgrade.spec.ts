@@ -1,3 +1,4 @@
+import { createHmac } from "node:crypto";
 import { readFileSync } from "node:fs";
 
 import { expect, test, type Page } from "@playwright/test";
@@ -127,7 +128,13 @@ async function deliverPreviewWebhook(page: Page, workspaceId: string): Promise<v
       status: "active",
       next_billing_date: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
       customer: { customer_id: `cus_${workspaceId}` },
-      metadata: { workspace_id: workspaceId, plan: "starter" },
+      metadata: {
+        workspace_id: workspaceId,
+        plan: "starter",
+        proof: createHmac("sha256", devVar("BETTER_AUTH_SECRET"))
+          .update(`dodo-checkout-v1\n${workspaceId}\n${PREVIEW_STARTER_PRODUCT}`)
+          .digest("hex"),
+      },
     },
   });
   const signedAt = new Date();
