@@ -4,9 +4,8 @@ Five to Nine watches your competitors' websites and mentions, and emails
 you a weekly brief with screenshot proof of what changed. `0509.io` is its
 domain (05:09 = five to nine).
 
-The app was rebuilt from scratch starting 2026-09-20. While the rebuild is in
-progress the public site is a placeholder and sign-in sits behind Cloudflare
-Access.
+The app was rebuilt from scratch starting 2026-09-20. Until launch, sign-in
+and the app sit behind Cloudflare Access.
 
 ## Stack
 
@@ -19,7 +18,7 @@ its version is justified in [`docs/REBUILD-STACK.md`](docs/REBUILD-STACK.md).
 ```bash
 npm run dev        # local dev server
 npm test           # vitest
-npm run lint       # eslint and knip
+npm run lint       # eslint, knip, jscpd and prettier
 npm run typecheck  # the only real type gate
 npm run e2e        # Playwright against a local wrangler dev, or PLAYWRIGHT_TEST_BASE_URL
 ```
@@ -34,7 +33,7 @@ Deploys go through CI: every push to `main` deploys via
 | `app/routes.ts`  | Every route; a route not listed here cannot be reached |
 | `app/routes/`    | Route modules                                          |
 | `app/lib/`       | Shared logic; `*.server.ts` is server-only             |
-| `workers/`       | The Worker entry, cron, queue and email handlers       |
+| `workers/`       | The Worker entry, cron, Workflows, queue and email     |
 | `migrations/`    | Numbered D1 migrations                                 |
 | `tests/`, `e2e/` | vitest and Playwright                                  |
 
