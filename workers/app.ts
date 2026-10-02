@@ -1,7 +1,15 @@
 import type { OAuthHelpers } from "@cloudflare/workers-oauth-provider";
-import { captureException, instrumentWorkflowWithSentry, setTag, withMonitor, withSentry } from "@sentry/cloudflare";
+import {
+  captureException,
+  captureMessage,
+  instrumentWorkflowWithSentry,
+  setTag,
+  withMonitor,
+  withSentry,
+} from "@sentry/cloudflare";
 import { createRequestHandler } from "react-router";
 
+import { OWN_SITE_CHECK_CRON } from "../app/lib/cadence";
 import { requestContext } from "../app/lib/agent/context.server";
 import { createOAuthProvider } from "../app/lib/agent/oauth.server";
 import { deleteExpiredAuthRows } from "../app/lib/data/auth_expiry.server";
@@ -32,7 +40,7 @@ import { SiteSweep } from "./workflows/site-sweep";
 import { SnapshotBackup } from "./workflows/snapshot-backup";
 import { MentionsSweep } from "./workflows/mentions";
 import { StandingRollover } from "./workflows/standing-rollover";
-import { isWorkflowCron, startScheduledWorkflow } from "./workflow-crons";
+import { isWorkflowCron, startMissedDailyWorkflows, startScheduledWorkflow } from "./workflow-crons";
 
 type WorkerEnv = Env & { SENTRY_DSN?: string; LIVENESS_PING_URL?: string; CLOUDFLARE_API_TOKEN?: string };
 type OAuthEnv = WorkerEnv & { OAUTH_PROVIDER?: OAuthHelpers };
@@ -83,6 +91,14 @@ const handler = {
       }
       if (isWorkflowCron(controller.cron)) {
         await startScheduledWorkflow(env, controller.cron, controller.scheduledTime);
+        if (controller.cron === OWN_SITE_CHECK_CRON) {
+          const missed = await startMissedDailyWorkflows(env, controller.scheduledTime);
+          missed.forEach((result) => {
+            if (result.status === "rejected") captureException(result.reason);
+            else if (result.value.created)
+              captureMessage(`Missed daily Workflow started: ${result.value.id}`, "warning");
+          });
+        }
         return;
       }
       const ping = pingLiveness(env.LIVENESS_PING_URL);

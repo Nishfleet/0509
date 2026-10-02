@@ -1,9 +1,16 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { isWorkflowCron, startScheduledWorkflow, WORKFLOW_CRONS } from "../workers/workflow-crons";
+import {
+  isWorkflowCron,
+  startMissedDailyWorkflows,
+  startScheduledWorkflow,
+  WORKFLOW_CRONS,
+} from "../workers/workflow-crons";
 
-function fakeEnv() {
-  const createBatch = vi.fn(() => Promise.resolve([]));
+function fakeEnv(existing = new Set<string>()) {
+  const createBatch = vi.fn((batch: { id: string }[]) =>
+    Promise.resolve(existing.has(batch[0]?.id ?? "") ? [] : [...batch]),
+  );
   const bindings = {
     MENTIONS: { createBatch },
     SITE_SWEEP: { createBatch },
@@ -15,10 +22,10 @@ function fakeEnv() {
 }
 
 describe("startScheduledWorkflow", () => {
-  it("creates the snapshot-backup instance under an id fixed by the scheduled instant", async () => {
+  it("creates the snapshot-backup instance under an id fixed by the day", async () => {
     const { createBatch, env } = fakeEnv();
     const id = await startScheduledWorkflow(env, "0 5 * * *", Date.UTC(2026, 8, 30, 5, 0, 0));
-    expect(id).toBe("snapshot-backup-2026-09-30T05-00-00-000Z");
+    expect(id).toBe("snapshot-backup-2026-09-30");
     expect(createBatch).toHaveBeenCalledExactlyOnceWith([{ id }]);
   });
 
@@ -49,6 +56,35 @@ describe("startScheduledWorkflow", () => {
     const id = await startScheduledWorkflow(env, "0 * * * *", Date.UTC(2026, 9, 1, 13, 0, 0));
     expect(id).toBe("own-site-check-2026-10-01T13-00-00-000Z");
     expect(createBatch).toHaveBeenCalledExactlyOnceWith([{ id }]);
+  });
+
+  it("starts a daily job a missed tick left out, and none that is not due yet", async () => {
+    const { createBatch, env } = fakeEnv();
+    const results = await startMissedDailyWorkflows(env, Date.UTC(2026, 9, 2, 2, 10, 0));
+    expect(results.every((result) => result.status === "fulfilled")).toBe(true);
+    expect(createBatch.mock.calls.flat().flat()).toEqual([
+      { id: "mentions-sweep-2026-10-02" },
+      { id: "site-sweep-2026-10-02" },
+    ]);
+  });
+
+  it("gives the catch-up the same id as the cron tick, so a normal day starts each job once", async () => {
+    const { createBatch, env } = fakeEnv();
+    const tick = await startScheduledWorkflow(env, "0 1 * * *", Date.UTC(2026, 9, 2, 1, 0, 23));
+    const catchUp = Date.UTC(2026, 9, 2, 6, 0, 0);
+    await startMissedDailyWorkflows(env, catchUp);
+    const ids = createBatch.mock.calls.flat().flat();
+    expect(ids.filter((entry) => entry.id.startsWith("mentions-sweep"))).toEqual([{ id: tick }, { id: tick }]);
+  });
+
+  it("reports only the instances the catch-up really created, and leaves a failed or running one alone", async () => {
+    const { env } = fakeEnv(new Set(["mentions-sweep-2026-10-02"]));
+    const results = await startMissedDailyWorkflows(env, Date.UTC(2026, 9, 2, 3, 0, 0));
+    expect(results.flatMap((result) => (result.status === "fulfilled" ? [result.value] : []))).toEqual([
+      { id: "mentions-sweep-2026-10-02", created: false },
+      { id: "site-sweep-2026-10-02", created: true },
+      { id: "hiring-sweep-2026-10-02", created: true },
+    ]);
   });
 
   it("recognises only the workflow crons", () => {
