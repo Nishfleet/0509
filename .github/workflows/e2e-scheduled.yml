@@ -389,6 +389,7 @@ jobs:
           gdelt=$(d1 "SELECT COUNT(*) AS n FROM snapshot sn JOIN watch w ON w.id = sn.watch_id JOIN source s ON s.id = w.source_id WHERE s.key = 'gdelt.doc' AND sn.item_count > 0 AND sn.fetched_at >= '$since'" | jq -r '.[0].n')
           mentions=$(d1 "SELECT COUNT(*) AS n FROM signal WHERE kind = 'mention' AND observed_at >= '$since'" | jq -r '.[0].n')
           [ "$gdelt" -gt 0 ] && [ "$mentions" -gt 0 ] || failed=1
+          users=$(d1 "SELECT COUNT(*) AS total, SUM((email LIKE 'e2e+%@0509.io' OR email LIKE 'canary%' OR email LIKE '%@fixture.0509.in') AND email NOT IN ('e2e+j7@0509.io', 'e2e+j8-hard@0509.io', 'e2e+j8-soft@0509.io', 'e2e+j8-hard-v2@0509.io', 'e2e+j8-soft-v2@0509.io', 'e2e+j9-mentions@0509.io', 'e2e+j12-rollovers@0509.io', 'e2e+soak@0509.io')) AS leftover FROM \"user\"" | jq -r '.[0] | "\(.total) users, \(.leftover) leftover test accounts (the eight kept journey accounts are not counted)"')
           pricing=$(d1 "SELECT e.domain AS brand, p.url IS NOT NULL AS judged, COUNT(DISTINCT w.id) AS watches, COUNT(sn.id) AS snapshots FROM entity e LEFT JOIN page p ON p.entity_id = e.id AND p.role = 'pricing' AND p.role_decided_for_hash IS NOT NULL LEFT JOIN watch w ON w.entity_id = e.id AND w.target_key = p.url AND w.is_active = 1 AND w.source_id = (SELECT id FROM source WHERE key = 'site.web') LEFT JOIN snapshot sn ON sn.watch_id = w.id AND sn.fetched_at >= '$since' WHERE e.role = 'competitor' AND e.state = 'on'$scope GROUP BY e.id ORDER BY e.domain")
           pricing_lines=$(jq -r 'map("\(.brand) " + (if .judged == 0 then "no pricing page judged" elif .watches == 0 then "pricing page judged, NO WATCH" elif .snapshots == 0 then "watched, no snapshot" else "watched, \(.snapshots) snapshots" end)) | join("; ")' <<< "$pricing")
           pricing_bad=$(jq -r '[.[] | select(.judged == 1 and (.watches == 0 or .snapshots == 0))] | length' <<< "$pricing")
@@ -406,6 +407,7 @@ jobs:
             echo "- enabled sources with an active watch: $([ -z "$stale" ] && echo "all fetched in the last 24 h or marked degraded" || echo "FAIL, stale and not degraded: $stale")"
             echo "- sources marked blocked: $blocked"
             echo "- #6110 news: $gdelt gdelt.doc snapshots with items, $mentions mention signals in the last 24 h$([ "$gdelt" -gt 0 ] && [ "$mentions" -gt 0 ] || echo " (FAIL)")"
+            echo "- user table (0509#5731): $users"
             echo "- pricing-page watches, soak brands: $pricing_lines$([ "$pricing_bad" -eq 0 ] && [ "$pricing_any" -gt 0 ] || echo " (FAIL, $pricing_any brands have a judged pricing page and $pricing_bad of those lack a watch or a snapshot)")"
             echo "- healthchecks.io dead-man and site-sweep pings: not read, no healthchecks.io read key is a repository secret"
             echo "- new Sentry issues: not read, no Sentry auth token is a repository secret"
