@@ -45,32 +45,38 @@ describe("the competitor snapshot card", () => {
     expect(html).toContain("divide-x");
     expect(html).toContain("divide-y");
     expect(html).toContain("divide-line");
-    expect(html).toContain("lg:grid-cols-6");
+    expect(html).toContain("--cols");
     expect(html).not.toContain("shadow");
     expect(html).not.toContain("rounded");
   });
 
-  it("keeps the six data-cell elements in the input order", () => {
+  it("draws a tile only for a cell that has a number, in input order", () => {
     const html = snapshot(CELLS);
     const keys = [...html.matchAll(/data-cell="([^"]+)"/g)].map((match) => match[1]);
-    expect(keys).toEqual(["rank", "new_creatives", "copy_changes", "site_changes", "mentions", "new_roles"]);
+    expect(keys).toEqual(["rank", "new_creatives", "copy_changes", "mentions", "new_roles"]);
   });
 
   it("renders a zero as 0 and never as a dash", () => {
     const html = snapshot([cellFor("new_creatives")]);
     expect(html).toContain(">0<");
     expect(html).not.toContain("—");
-    expect(html).not.toContain("<details");
   });
 
-  it("reveals the reason on tap with the native details element", () => {
+  it("says why a cell has no number in one line instead of drawing an empty tile", () => {
     const html = snapshot([cellFor("site_changes")]);
-    expect(html).toContain("<details>");
-    expect(html).toContain("<summary");
-    expect(html).toContain("cursor-pointer");
-    expect(html).toContain(`aria-label="No number: ${dashReason}"`);
-    expect(html).toContain(`>—</summary>`);
-    expect(html).toContain(`<p class="text-meta text-ink-soft">${dashReason}</p>`);
+    expect(html).not.toContain("data-cell");
+    expect(html).not.toContain("<dl");
+    expect(html).not.toContain("<details");
+    expect(visibleText(html)).toBe(`Noteworthy site changes: ${dashReason}`);
+  });
+
+  it("groups cells that share a reason into one line", () => {
+    const reason = "Not watched for this competitor yet.";
+    const html = snapshot([
+      { key: "new_creatives", label: "New ads", value: null, movement: null, reason },
+      { key: "copy_changes", label: "Ad wording changes", value: null, movement: null, reason },
+    ]);
+    expect(visibleText(html)).toBe(`New ads, Ad wording changes: ${reason}`);
   });
 
   it("prefixes the rank value and appends its movement label", () => {
