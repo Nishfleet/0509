@@ -1,4 +1,5 @@
-import { createElement, type ReactElement } from "react";
+import { createElement, type ReactElement, type ReactNode } from "react";
+import type * as ReactModule from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { createMemoryRouter, createRoutesStub, RouterProvider } from "react-router";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -330,6 +331,7 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  vi.restoreAllMocks();
   process.off("unhandledRejection", recordUnhandled);
 });
 
@@ -430,5 +432,74 @@ describe("copying a new API key", () => {
     expect(key).toBeGreaterThan(-1);
     expect(button).toBeGreaterThan(key);
     expect(html).toContain("it won&#x27;t be shown again");
+  });
+});
+
+// The click path end to end: the button's real onClick, the real
+// copyToClipboard, the real setState wiring and the real failure render. The
+// node project has no DOM, so the button and the state hook are stubbed with
+// the same shape tests/competitor/competitor-pending-buttons.test.ts uses for
+// useNavigation: the stubbed button hands the harness its onClick, and the
+// stubbed useState is a one-slot store so the settled outcome can be rendered
+// again. Everything between the click and the second render is the shipped
+// code, so deleting `.then(setState)` or the failure note fails these tests.
+const clicked = vi.hoisted(() => ({
+  state: "idle" as "idle" | "copied" | "failed",
+  onClick: null as null | (() => void),
+}));
+
+function stubCopyClick(outcome: "resolves" | "rejects"): void {
+  vi.resetModules();
+  clicked.state = "idle";
+  clicked.onClick = null;
+  vi.doMock("react", async (importOriginal) => {
+    const actual = await importOriginal<typeof ReactModule>();
+    return {
+      ...actual,
+      useState: (): [string, (next: "idle" | "copied" | "failed") => void] => [
+        clicked.state,
+        (next) => {
+          clicked.state = next;
+        },
+      ],
+    };
+  });
+  vi.doMock("../../app/components/ui/button", () => ({
+    Button: (props: { onClick?: () => void; children?: ReactNode }) => {
+      clicked.onClick = props.onClick ?? null;
+      return createElement("button", { type: "button" }, props.children);
+    },
+  }));
+  stubClipboard(
+    outcome === "resolves"
+      ? () => Promise.resolve()
+      : () => Promise.reject(new DOMException("write refused", "NotAllowedError")),
+  );
+}
+
+async function clickAndRenderCopyKey(): Promise<string> {
+  const { CopyKey: ClickedCopyKey } = await import("../../app/components/agent-settings");
+  renderToStaticMarkup(createElement(ClickedCopyKey, { value: NEW_KEY }));
+  if (clicked.onClick === null) {
+    throw new Error("the copy button rendered no onClick");
+  }
+  clicked.onClick();
+  expect(await settledUnhandled()).toEqual([]);
+  return renderToStaticMarkup(createElement(ClickedCopyKey, { value: NEW_KEY }));
+}
+
+describe("the copy button wires a refused write to the failure sentence", () => {
+  it("shows the resting label and the failure sentence after a refused write", async () => {
+    stubCopyClick("rejects");
+    const html = await clickAndRenderCopyKey();
+    expect(html).toContain(copyKeyLabel("failed"));
+    expect(html).toContain("Copy failed. Select the key above and copy it by hand.");
+  });
+
+  it("shows Copied and no failure sentence after a write that resolves", async () => {
+    stubCopyClick("resolves");
+    const html = await clickAndRenderCopyKey();
+    expect(html).toContain("Copied");
+    expect(html).not.toContain("Copy failed");
   });
 });
