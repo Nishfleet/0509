@@ -2,6 +2,7 @@ import { Link } from "react-router";
 
 import { BLOCK_HEADING } from "./page-heading";
 import { AddPasskey } from "./passkey-button";
+import { PasskeyList } from "./passkey-list";
 import { BriefScheduleSettings } from "./brief-schedule-settings";
 import { ChangeSignInEmail } from "./change-sign-in-email";
 import { DeliveryAddress } from "./delivery-address";
@@ -82,10 +83,12 @@ interface AccountResult {
 export function AccountSection({
   email,
   delivery,
+  passkeys,
   result,
 }: {
   email: string;
   delivery: ComponentProps<typeof DeliveryAddress>["delivery"];
+  passkeys: ComponentProps<typeof PasskeyList>["passkeys"];
   result: AccountResult | undefined;
 }) {
   return (
@@ -102,6 +105,7 @@ export function AccountSection({
         error={result?.deliveryError ?? null}
         suppressed={result?.deliverySuppressed ?? false}
       />
+      <PasskeyList passkeys={passkeys} />
       <div className="mt-2 flex flex-wrap items-start gap-x-6">
         <AddPasskey />
         <SignOut />

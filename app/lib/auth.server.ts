@@ -199,6 +199,15 @@ export async function deleteSignedInUser(env: AuthEnv, request: Request, now: Da
   return headers;
 }
 
+export async function removeSignedInPasskey(env: AuthEnv, request: Request, id: string): Promise<"removed" | "stale"> {
+  const auth = createAuth(env);
+  const session = await auth.api.getSession({ headers: request.headers, query: FRESH });
+  if (!session) return "stale";
+  if (Date.now() - new Date(session.session.createdAt).getTime() >= FRESH_SESSION_SECONDS * 1000) return "stale";
+  await auth.api.deletePasskey({ body: { id }, headers: request.headers, query: FRESH });
+  return "removed";
+}
+
 export async function requestEmailChange(
   env: AuthEnv & { CHANGE_EMAIL_LIMIT: RateLimit },
   request: Request,
