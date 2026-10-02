@@ -149,8 +149,10 @@ describe("aiGenerator", () => {
     liveHosts("gymshark.com", "a.com");
     await warmProposals(SUBJECT);
     expect(run).toHaveBeenCalledTimes(2);
+    const asked = vi.spyOn(globalThis, "fetch").mockClear();
     const candidates = await aiGenerator(SUBJECT, home());
     expect(run).toHaveBeenCalledTimes(2);
+    expect(asked).not.toHaveBeenCalled();
     expect(candidates.map((candidate) => candidate.domain)).toEqual(["a.com"]);
   });
 

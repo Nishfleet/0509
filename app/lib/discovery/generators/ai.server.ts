@@ -186,6 +186,14 @@ async function isLive(domain: string): Promise<boolean> {
   }
 }
 
+async function cachedLive(domain: string): Promise<boolean> {
+  const key = `discovery:live:${domain}`;
+  if ((await env.IDENTITY_CACHE.get(key)) === "1") return true;
+  const live = await isLive(domain);
+  if (live) await env.IDENTITY_CACHE.put(key, "1", { expirationTtl: PROPOSALS_TTL_SECONDS });
+  return live;
+}
+
 function cleanName(value: string): string {
   return value
     .replace(/\p{Cc}/gu, " ")
@@ -212,7 +220,7 @@ async function liveCandidates(
 ): Promise<Candidate[]> {
   const live = await Promise.all(
     named.map((item) => {
-      const known = checks.get(item.domain) ?? isLive(item.domain);
+      const known = checks.get(item.domain) ?? cachedLive(item.domain);
       checks.set(item.domain, known);
       return known;
     }),
@@ -265,8 +273,8 @@ async function candidatesFrom(model: Model, { subject, readSite, checks }: Sourc
 }
 
 export async function warmProposals(subject: Subject): Promise<void> {
-  const readSite = lazySite(subject, undefined);
-  await Promise.allSettled(MODELS.map((model) => cachedProposals(model, subject, readSite)));
+  const source: Source = { subject, readSite: lazySite(subject, undefined), checks: new Map() };
+  await Promise.allSettled(MODELS.map((model) => candidatesFrom(model, source)));
 }
 
 function mergedByDomain(lists: readonly (readonly Candidate[])[]): Candidate[] {
