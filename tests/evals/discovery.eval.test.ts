@@ -4,7 +4,9 @@ import type { DiscoveryContext } from "../../app/lib/data/entity.server";
 import {
   IS_COMPETITOR,
   IS_CREATOR_RIVAL,
+  SAME_CATEGORY,
   competitorState,
+  keepOnlyIfBoth,
   type ResolvedCandidate,
 } from "../../app/lib/discovery/run.server";
 import {
@@ -12,6 +14,7 @@ import {
   jevKeyPresent,
   loadCases,
   makeNoulAsk,
+  makeNoulsAsk,
   noulScore,
   runEval,
   type Ask,
@@ -72,6 +75,24 @@ describe.skipIf(!jevKeyPresent())("eval: discovery competitor questions against 
     const ask: Ask<DiscoveryCase> = (row) => makeNoulAsk(IS_CREATOR_RIVAL)(stateFor(row));
     const score: Score<DiscoveryCase> = noulScore;
     const report = await runEval("is_creator_rival", rows, ask, score);
+    console.log(formatReport(report));
+    expect(report.splits.length).toBeGreaterThan(0);
+  });
+
+  it("candidate_keep_baseline: scores IS_COMPETITOR alone on AI-proposed candidates", async () => {
+    const rows = await loadCases<DiscoveryCase>("same_category", ["kind", "self", "competitors", "item", "label"]);
+    const ask: Ask<DiscoveryCase> = (row) => makeNoulAsk(IS_COMPETITOR)(stateFor(row));
+    const report = await runEval("candidate_keep_baseline", rows, ask, noulScore);
+    console.log(formatReport(report));
+    expect(report.splits.length).toBeGreaterThan(0);
+  });
+
+  it("candidate_keep_with_category: scores IS_COMPETITOR plus SAME_CATEGORY as shipped", async () => {
+    const rows = await loadCases<DiscoveryCase>("same_category", ["kind", "self", "competitors", "item", "label"]);
+    const combine = (ps: number[]): number =>
+      keepOnlyIfBoth(ps.map((p) => ({ questionId: "", inputHash: "", p, cached: false }))).p;
+    const ask: Ask<DiscoveryCase> = (row) => makeNoulsAsk([IS_COMPETITOR, SAME_CATEGORY], combine)(stateFor(row));
+    const report = await runEval("candidate_keep_with_category", rows, ask, noulScore);
     console.log(formatReport(report));
     expect(report.splits.length).toBeGreaterThan(0);
   });
