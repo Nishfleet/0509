@@ -35,7 +35,7 @@ const GATEWAY_MODEL = "typesafe/jev";
 const JEV_URL =
   process.env.JEV_URL ??
   (VIA_GATEWAY
-    ? `https://gateway.ai.cloudflare.com/v1/${CF_ACCOUNT}/default/workers-ai/${GATEWAY_MODEL}`
+    ? `https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT}/ai/run/${GATEWAY_MODEL}`
     : "http://127.0.0.1:4000/jev");
 
 type Split = "train" | "test";
@@ -154,6 +154,12 @@ function withoutModel(body: unknown): unknown {
   return rest;
 }
 
+function unwrapJev(value: unknown): JevResponse {
+  const inner = (value as { response?: unknown }).response;
+  if (typeof inner === "string") return JSON.parse(inner) as JevResponse;
+  return (inner ?? value) as JevResponse;
+}
+
 async function postJev(body: unknown): Promise<JevResponse> {
   // The bearer token rides in a header, never a command line or a log line.
   const response = await fetch(JEV_URL, {
@@ -166,9 +172,8 @@ async function postJev(body: unknown): Promise<JevResponse> {
     const detail = (await response.text()).slice(0, 200);
     throw new Error(`jev POST failed with ${String(response.status)}: ${detail}`);
   }
-  const raw = (await response.json()) as JevResponse & { result?: JevResponse; response?: JevResponse | string };
-  const unwrapped = typeof raw.response === "string" ? (JSON.parse(raw.response) as JevResponse) : raw.response;
-  const parsed: JevResponse = VIA_GATEWAY ? { model: GATEWAY_MODEL, ...(unwrapped ?? raw.result ?? raw) } : raw;
+  const raw = (await response.json()) as JevResponse & { result?: unknown };
+  const parsed: JevResponse = VIA_GATEWAY ? { model: GATEWAY_MODEL, ...unwrapJev(raw.result ?? raw) } : raw;
   if (typeof parsed.model !== "string") throw new Error("jev response carried no model version");
   return parsed;
 }
