@@ -5,7 +5,7 @@ import type { RouterContextProvider } from "react-router";
 
 import { deleteAccount } from "./account-delete.server";
 import { oauthHelpersContext } from "./agent/context.server";
-import { requestEmailChange, signOut } from "./auth.server";
+import { removeSignedInPasskey, requestEmailChange, signOut } from "./auth.server";
 import { nextBriefAt } from "./brief-schedule";
 import { formatBriefAt, parseBriefSchedule } from "./brief-settings";
 import { readPlanSummary } from "./data/plan.server";
@@ -31,6 +31,8 @@ const EMAIL_LIMITED = "Too many tries. Wait a minute and try again.";
 const SLACK_INVALID = "That is not a Slack webhook address. It starts with https://hooks.slack.com/services/.";
 const SLACK_FAILED = "Slack did not accept a test message. Check the address and try again.";
 const SIGN_IN_AGAIN = "For your safety, sign out and sign back in, then delete your account.";
+const PASSKEY_SIGN_IN_AGAIN = "For your safety, sign out and sign back in, then remove your passkey.";
+const PASSKEY_FAILED = "The passkey wasn't removed. Try again.";
 
 interface SettingsUser {
   id: string;
@@ -45,6 +47,7 @@ export interface SettingsResult {
   emailChangeSent: boolean;
   emailChangeError: string | null;
   slackError: string | null;
+  passkeyError: string | null;
 }
 
 function result(fields: Partial<SettingsResult>): SettingsResult {
@@ -56,6 +59,7 @@ function result(fields: Partial<SettingsResult>): SettingsResult {
     emailChangeSent: false,
     emailChangeError: null,
     slackError: null,
+    passkeyError: null,
     ...fields,
   };
 }
@@ -181,6 +185,24 @@ async function removeAccount(
   throw redirect(`/login?deleted=${encodeURIComponent(deleted.instanceId)}`, { headers: deleted.headers });
 }
 
+async function removePasskey(request: Request, form: FormData): Promise<SettingsResult> {
+  const raw = form.get("passkeyId");
+  const id = typeof raw === "string" ? raw : "";
+  if (id === "") return result({ passkeyError: PASSKEY_FAILED });
+  try {
+    const outcome = await removeSignedInPasskey(env, request, id);
+    return outcome === "stale" ? result({ passkeyError: PASSKEY_SIGN_IN_AGAIN }) : result({ saved: true });
+  } catch (failed) {
+    console.error(
+      JSON.stringify({
+        event: "settings.passkey_remove_failed",
+        error: failed instanceof Error ? failed.name : "unknown",
+      }),
+    );
+    return result({ passkeyError: PASSKEY_FAILED });
+  }
+}
+
 async function restore(userId: string, form: FormData): Promise<SettingsResult> {
   const workspaceId = await readWorkspaceIdForOwner(userId);
   const rawId = form.get("suggestionId");
@@ -201,6 +223,25 @@ async function saveSchedule(userId: string, form: FormData): Promise<SettingsRes
   return result({ saved: true });
 }
 
+interface IntentCall {
+  user: SettingsUser;
+  request: Request;
+  form: FormData;
+  context: Readonly<RouterContextProvider>;
+}
+
+const INTENTS = new Map<string, (call: IntentCall) => Promise<SettingsResult>>([
+  ["own-site-alerts", (c) => saveSwitch(c.user.id, c.form, setOwnSiteAlerts)],
+  ["change-alerts", (c) => saveSwitch(c.user.id, c.form, setChangeAlerts)],
+  ["slack-save", (c) => connectSlack(c.user.id, c.form)],
+  ["slack-remove", (c) => disconnectSlack(c.user.id)],
+  ["delivery-address", (c) => saveAddress(c.user, c.form)],
+  ["change-email", (c) => changeEmail(c.request, c.form)],
+  ["delete-account", (c) => removeAccount(c.user, c.form, c)],
+  ["passkey-remove", (c) => removePasskey(c.request, c.form)],
+  ["restore-suggestion", (c) => restore(c.user.id, c.form)],
+]);
+
 export async function runSettingsIntent(
   user: SettingsUser,
   request: Request,
@@ -208,14 +249,7 @@ export async function runSettingsIntent(
 ): Promise<SettingsResult> {
   const form = await request.formData();
   const intent = form.get("intent");
-  if (intent === "own-site-alerts") return saveSwitch(user.id, form, setOwnSiteAlerts);
-  if (intent === "change-alerts") return saveSwitch(user.id, form, setChangeAlerts);
-  if (intent === "slack-save") return connectSlack(user.id, form);
-  if (intent === "slack-remove") return disconnectSlack(user.id);
   if (intent === "sign-out") throw redirect("/login", { headers: await signOut(env, request) });
-  if (intent === "delivery-address") return saveAddress(user, form);
-  if (intent === "change-email") return changeEmail(request, form);
-  if (intent === "delete-account") return removeAccount(user, form, { request, context });
-  if (intent === "restore-suggestion") return restore(user.id, form);
-  return saveSchedule(user.id, form);
+  const handler = typeof intent === "string" ? INTENTS.get(intent) : undefined;
+  return handler === undefined ? saveSchedule(user.id, form) : handler({ user, request, form, context });
 }
