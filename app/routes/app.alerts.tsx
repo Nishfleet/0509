@@ -47,7 +47,10 @@ function BriefSendFailed({ failed }: { failed: { id: string } }) {
   return (
     <p role="alert" data-alert="brief-send-failed" className="mt-4 leading-[1.65]">
       We could not email your weekly brief.{" "}
-      <Link className="underline decoration-1 underline-offset-4" to={`/app/brief/${failed.id}`}>
+      <Link
+        className="inline-flex min-h-11 items-center underline decoration-1 underline-offset-4"
+        to={`/app/brief/${failed.id}`}
+      >
         Read it in the app
       </Link>
       .

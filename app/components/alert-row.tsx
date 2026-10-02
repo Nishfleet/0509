@@ -15,7 +15,7 @@ const CARD = "mt-8 border-t border-line pt-6";
 const TITLE = "font-display text-row-name font-bold [overflow-wrap:anywhere]";
 const BODY = "mt-2 leading-[1.65]";
 const DETAILS = "mt-4";
-const SUMMARY = "cursor-pointer underline decoration-1 underline-offset-4";
+const SUMMARY = "inline-flex min-h-11 cursor-pointer items-center underline decoration-1 underline-offset-4";
 const READ_BRIEF = buttonVariants({ variant: "tertiary", className: "cursor-pointer" });
 const BRIEF = "mt-4";
 
