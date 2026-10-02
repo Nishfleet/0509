@@ -1,25 +1,11 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test } from "@playwright/test";
 
+import { readSettings } from "./proof-4062-lib";
 import { requireInboxToken, signInWithMagicLink } from "./inbox";
 
 test.setTimeout(300_000);
-
-export async function readSettings(page: Page) {
-  await page.goto("/app/settings");
-  const day = Number(await page.getByLabel("Day").inputValue());
-  const hour = Number(await page.getByLabel("Time").inputValue());
-  const text = (await page.getByText(/Time zone:.*Next\s+brief:/).first().innerText()).replace(/\s+/g, " ");
-  const timezone = /Time zone: (.+?)\. Next brief: (.+)\.$/.exec(text);
-  return {
-    day,
-    hour,
-    timezone: (timezone?.[1] ?? "").replaceAll(" ", "_"),
-    nextLine: timezone?.[2] ?? text,
-    at: new Date().toISOString(),
-  };
-}
 
 test("proof 4062 phase A: fresh account, onboard, first brief-day change", async ({ page, context }) => {
   const email = `e2e+${crypto.randomUUID().replaceAll("-", "").slice(0, 12)}@0509.io`;

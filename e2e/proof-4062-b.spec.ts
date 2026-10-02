@@ -3,7 +3,7 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { expect, test } from "@playwright/test";
 
 import { nextBriefAt } from "../app/lib/brief-schedule";
-import { readSettings } from "./proof-4062-a.spec";
+import { readSettings } from "./proof-4062-lib";
 
 test.use({ storageState: "e2e/.auth/proof-session.json" });
 test.setTimeout(180_000);
