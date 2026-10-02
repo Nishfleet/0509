@@ -1,10 +1,17 @@
 import type { ReactElement } from "react";
-import { Form } from "react-router";
+import { Form, useNavigation } from "react-router";
 
 import { BLOCK_HEADING } from "./page-heading";
 import { Button } from "./ui/button";
 
+function slackSubmitting(navigation: ReturnType<typeof useNavigation>, connected: boolean): boolean {
+  if (navigation.state === "idle") return false;
+  const intent = connected ? "slack-remove" : "slack-save";
+  return navigation.formData?.get("intent") === intent;
+}
+
 export function SlackAlertsSetting({ connected, error }: { connected: boolean; error: string | null }): ReactElement {
+  const saving = slackSubmitting(useNavigation(), connected);
   return (
     <section
       aria-labelledby="slack-alerts"
@@ -44,8 +51,8 @@ export function SlackAlertsSetting({ connected, error }: { connected: boolean; e
             {error}
           </p>
         )}
-        <Button type="submit" variant="secondary" size="lg" className="self-start">
-          {connected ? "Disconnect Slack" : "Connect Slack"}
+        <Button type="submit" variant="secondary" size="lg" className="self-start" disabled={saving}>
+          {saving ? "Saving…" : connected ? "Disconnect Slack" : "Connect Slack"}
         </Button>
       </Form>
     </section>

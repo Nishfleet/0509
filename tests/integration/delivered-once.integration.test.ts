@@ -6,6 +6,7 @@ import type { BriefPayload } from "../../app/lib/brief-payload";
 import { READ_THIS_FIRST } from "../../app/lib/read-this-first";
 import { deliver } from "../../workers/delivery/consumer";
 import { composeBrief } from "../../workers/standing/compose-brief";
+import { insertSignalDeliveries } from "../../app/lib/data/signal_delivery.server";
 import { judgeWeek } from "../../workers/standing/read-this-first";
 
 interface Recorder {
@@ -55,18 +56,24 @@ const seedDigest = async (id: string, payload: BriefPayload, periodStart: string
     .run();
 };
 
-const deliveryRow = (attemptId: string | null, signalId: string, deliveredAt: string) =>
-  env.DB.prepare(
-    `INSERT INTO signal_delivery (id, workspace_id, signal_id, channel_id, send_attempt_id, delivered_at)
-     VALUES (lower(hex(randomblob(16))), ?1, ?2, ?3, ?4, ?5)
-     ON CONFLICT (signal_id, channel_id) DO NOTHING`,
-  ).bind(WS, signalId, CHANNEL, attemptId, deliveredAt);
-
-const deliveries = async (): Promise<string[]> =>
+const deliveries = async () =>
   (
-    (await env.DB.prepare("SELECT signal_id FROM signal_delivery ORDER BY signal_id").all<{ signal_id: string }>())
-      .results ?? []
-  ).map((row) => row.signal_id);
+    await env.DB.prepare(
+      "SELECT id, workspace_id, signal_id, channel_id, send_attempt_id, delivered_at FROM signal_delivery ORDER BY signal_id",
+    ).all<{
+      id: string;
+      workspace_id: string;
+      signal_id: string;
+      channel_id: string;
+      send_attempt_id: string | null;
+      delivered_at: string;
+    }>()
+  ).results;
+
+const statusOf = (table: "send_attempt" | "digest", id: string) =>
+  env.DB.prepare(`SELECT status, ${table === "digest" ? "sent_at" : "error"} AS extra FROM ${table} WHERE id = ?`)
+    .bind(id)
+    .first<{ status: string; extra: string | null }>();
 
 const stubJev = () => {
   const run = vi.fn(async () => ({
@@ -76,7 +83,7 @@ const stubJev = () => {
   return run;
 };
 
-const weekOne = async () => {
+const weekOne = async (rec = recorder()) => {
   const payload = await composeBrief(env.DB, {
     workspaceId: WS,
     schedule: MONDAY,
@@ -84,7 +91,12 @@ const weekOne = async () => {
     readThisFirst: { picks: [SIG_A, SIG_B], judged: 2, unjudged: false },
   });
   await seedDigest("digest-w1", payload, "2026-09-14", "2026-09-21");
-  return deliver(envWith(bindingFor(recorder())), { digest_id: "digest-w1" });
+  return deliver(envWith(bindingFor(rec)), { digest_id: "digest-w1" });
+};
+
+const composeAndDeliverWeekTwo = async (payload: BriefPayload) => {
+  await seedDigest("digest-w2", payload, "2026-09-18", "2026-09-25");
+  return deliver(envWith(bindingFor(recorder())), { digest_id: "digest-w2" });
 };
 
 describe("delivered once across weeks (0509#4063)", () => {
@@ -147,6 +159,45 @@ describe("delivered once across weeks (0509#4063)", () => {
     Reflect.deleteProperty(env, "AI");
   });
 
+  it("a sent brief writes one signal_delivery row per quoted signal in the resolution batch", async () => {
+    const rec = recorder();
+    const result = await weekOne(rec);
+
+    expect(result.outcome).toBe("sent");
+    expect(rec.sent).toHaveLength(1);
+    const sentAt = (await statusOf("digest", "digest-w1"))?.extra;
+    const rows = await deliveries();
+    expect(rows.map((row) => row.signal_id)).toEqual([SIG_A, SIG_B]);
+    for (const row of rows) {
+      expect(row.workspace_id).toBe(WS);
+      expect(row.channel_id).toBe(CHANNEL);
+      expect(row.send_attempt_id).toBe(result.attempt_id);
+      expect(row.delivered_at).toBe(sentAt);
+    }
+    expect(await statusOf("send_attempt", result.attempt_id ?? "")).toEqual({ status: "sent", extra: null });
+    expect((await statusOf("digest", "digest-w1"))?.status).toBe("sent");
+  });
+
+  it("a second resolution of the same send adds nothing", async () => {
+    const first = await weekOne();
+    const snapshot = await deliveries();
+    const rec = recorder();
+    const again = await deliver(envWith(bindingFor(rec)), { digest_id: "digest-w1" });
+
+    expect(again.outcome).toBe("duplicate");
+    expect(rec.sent).toHaveLength(0);
+    await env.DB.batch([
+      insertSignalDeliveries(env.DB, {
+        workspaceId: WS,
+        channelId: CHANNEL,
+        sendAttemptId: first.attempt_id ?? "",
+        deliveredAt: "2026-09-30T00:00:00.000Z",
+        signalIds: [SIG_A, SIG_B, SIG_A],
+      }),
+    ]);
+    expect(await deliveries()).toEqual(snapshot);
+  });
+
   it("the next week's brief skips a delivered signal even when the windows overlap and a re-crawl moved last_seen_at", async () => {
     stubJev();
 
@@ -161,15 +212,6 @@ describe("delivered once across weeks (0509#4063)", () => {
 
     const week1 = await weekOne();
     expect(week1.outcome).toBe("sent");
-
-    // The send-resolution batch that writes signal_delivery rows is the
-    // pending #5548 re-cut, so the fixture inserts the two rows directly.
-    // The picker's NOT EXISTS reads signal_id only: the tail asserts both
-    // rows exist under that key.
-    await env.DB.batch([
-      deliveryRow(week1.attempt_id, SIG_A, "2026-09-21T08:00:00.000Z"),
-      deliveryRow(week1.attempt_id, SIG_B, "2026-09-21T08:00:00.000Z"),
-    ]);
 
     await env.DB.prepare("UPDATE signal SET last_seen_at = '2026-09-24T00:00:00.000Z' WHERE id IN (?1, ?2)")
       .bind(SIG_A, SIG_B)
@@ -186,7 +228,75 @@ describe("delivered once across weeks (0509#4063)", () => {
     });
     expect(payload.read_this_first.map((mark) => mark.signal_id)).toEqual([SIG_C]);
 
+    const weekTwo = await composeAndDeliverWeekTwo(payload);
+    expect(weekTwo.outcome).toBe("sent");
     const rows = await deliveries();
-    expect(rows).toEqual([SIG_A, SIG_B]);
+    expect(rows.map((row) => [row.signal_id, row.send_attempt_id])).toEqual([
+      [SIG_A, week1.attempt_id],
+      [SIG_B, week1.attempt_id],
+      [SIG_C, weekTwo.attempt_id],
+    ]);
+  });
+
+  it("a crash between resolving the attempt and the batch is repaired on redelivery, rows written once", async () => {
+    const payload = await composeBrief(env.DB, {
+      workspaceId: WS,
+      schedule: MONDAY,
+      week: WEEK_1,
+      readThisFirst: { picks: [SIG_A, SIG_B], judged: 2, unjudged: false },
+    });
+    await seedDigest("digest-w1", payload, "2026-09-14", "2026-09-21");
+    await env.DB.prepare(
+      `INSERT INTO send_attempt (id, workspace_id, send_target_id, digest_id, idempotency_key, status, attempted_at)
+       VALUES ('att-crash', ?1, ?2, 'digest-w1', ?3, 'sent', '2026-09-21T08:00:00.000Z')`,
+    )
+      .bind(WS, TARGET_ID, `digest:digest-w1:${TARGET_ID}`)
+      .run();
+
+    const rec = recorder();
+    const repaired = await deliver(envWith(bindingFor(rec)), { digest_id: "digest-w1" });
+    expect(repaired).toMatchObject({ outcome: "sent", attempt_id: "att-crash" });
+    expect(rec.sent).toHaveLength(0);
+    expect((await statusOf("digest", "digest-w1"))?.status).toBe("sent");
+    const rows = await deliveries();
+    expect(rows.map((row) => [row.signal_id, row.send_attempt_id])).toEqual([
+      [SIG_A, "att-crash"],
+      [SIG_B, "att-crash"],
+    ]);
+
+    const again = await deliver(envWith(bindingFor(rec)), { digest_id: "digest-w1" });
+    expect(again.outcome).toBe("duplicate");
+    expect(await deliveries()).toEqual(rows);
+  });
+
+  it("a quiet-week brief writes no rows", async () => {
+    const payload = await composeBrief(env.DB, {
+      workspaceId: WS,
+      schedule: MONDAY,
+      week: WEEK_1,
+      readThisFirst: { picks: [], judged: 0, unjudged: false },
+    });
+    await seedDigest("digest-w1", payload, "2026-09-14", "2026-09-21");
+    const result = await deliver(envWith(bindingFor(recorder())), { digest_id: "digest-w1" });
+
+    expect(result.outcome).toBe("sent");
+    expect(await deliveries()).toEqual([]);
+  });
+
+  it("a quoted signal deleted before the send is skipped and the send still resolves", async () => {
+    const payload = await composeBrief(env.DB, {
+      workspaceId: WS,
+      schedule: MONDAY,
+      week: WEEK_1,
+      readThisFirst: { picks: [SIG_A, SIG_B], judged: 2, unjudged: false },
+    });
+    await seedDigest("digest-w1", payload, "2026-09-14", "2026-09-21");
+    await env.DB.prepare("DELETE FROM jev_verdict WHERE signal_id = ?").bind(SIG_A).run();
+    await env.DB.prepare("DELETE FROM signal WHERE id = ?").bind(SIG_A).run();
+    const result = await deliver(envWith(bindingFor(recorder())), { digest_id: "digest-w1" });
+
+    expect(result.outcome).toBe("sent");
+    expect((await statusOf("digest", "digest-w1"))?.status).toBe("sent");
+    expect((await deliveries()).map((row) => row.signal_id)).toEqual([SIG_B]);
   });
 });

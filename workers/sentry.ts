@@ -1,8 +1,7 @@
-import { consoleLoggingIntegration } from "@sentry/cloudflare";
-import type { CloudflareOptions, ErrorEvent } from "@sentry/cloudflare";
+import { consoleLoggingIntegration, type CloudflareOptions, type ErrorEvent } from "@sentry/cloudflare";
 
-type TransactionEvent = Parameters<NonNullable<CloudflareOptions["beforeSendTransaction"]>>[0];
 type SentryLog = Parameters<NonNullable<CloudflareOptions["beforeSendLog"]>>[0];
+type TransactionEvent = Parameters<NonNullable<CloudflareOptions["beforeSendTransaction"]>>[0];
 type SentryEnv = Env & { SENTRY_DSN?: string };
 
 const TOKEN_PATH_PREFIXES = ["/u/", "/v/"] as const;
@@ -10,13 +9,13 @@ const REDACTED = "[redacted]";
 
 export const sentryOptions = (env: SentryEnv): CloudflareOptions => ({
   dsn: env.SENTRY_DSN,
-  enableLogs: true,
-  integrations: [consoleLoggingIntegration()],
   sendDefaultPii: false,
   beforeBreadcrumb: () => null,
   beforeSend: scrubEvent,
-  beforeSendLog: scrubLog,
   beforeSendTransaction: scrubEvent,
+  enableLogs: true,
+  integrations: [consoleLoggingIntegration({ levels: ["warn", "error"] })],
+  beforeSendLog: scrubLog,
 });
 
 function scrubLog(log: SentryLog): SentryLog {

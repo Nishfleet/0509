@@ -1,5 +1,5 @@
 import type { ReactElement } from "react";
-import { Form } from "react-router";
+import { Form, useNavigation } from "react-router";
 
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
@@ -13,6 +13,8 @@ export interface CompetitorSiteProps {
 }
 
 export function CompetitorSite({ url, error }: CompetitorSiteProps): ReactElement {
+  const navigation = useNavigation();
+  const saving = navigation.state !== "idle" && navigation.formData?.get("intent") === "site";
   return (
     <section data-section="other-site" aria-labelledby="competitor-site" className="min-w-0">
       <h2 id="competitor-site" className={HEADING}>
@@ -44,8 +46,8 @@ export function CompetitorSite({ url, error }: CompetitorSiteProps): ReactElemen
             {error}
           </p>
         )}
-        <Button type="submit" variant="secondary" className="self-start">
-          Watch this website
+        <Button type="submit" variant="secondary" className="self-start" disabled={saving}>
+          {saving ? "Checking…" : "Watch this website"}
         </Button>
       </Form>
     </section>

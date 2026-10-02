@@ -20,7 +20,7 @@ This replaces the earlier fleet-written cost doc wholesale. Nothing was carried 
 
 Sources: [D1 pricing](https://developers.cloudflare.com/d1/platform/pricing/), [KV pricing](https://developers.cloudflare.com/kv/platform/pricing/), [Browser Rendering pricing](https://developers.cloudflare.com/browser-rendering/pricing/), [Workers AI pricing](https://developers.cloudflare.com/workers-ai/platform/pricing/), [usage-based products](https://developers.cloudflare.com/billing/).
 
-**Jev is not on this sheet.** It runs through TypeSafe via the LiteLLM router, not Workers AI, so its cost is a seat cost and is budgeted per engine packet. Workers AI appears here only for OCR and translation.
+**Jev is not on this sheet.** It runs through TypeSafe via the LiteLLM router, not Workers AI, so its cost is a seat cost and is budgeted per engine packet. Workers AI appears here for OCR and translation, and for the rival proposer in discovery (`@cf/openai/gpt-oss-120b`, one call per onboarding): measured on 150 calls it averages about 200 input and 760 output tokens, so about 58 neurons or $0.0006 a call, against about 71 neurons for the `llama-3.3-70b-instruct-fp8-fast` it replaced.
 
 ## What one brand costs per day
 

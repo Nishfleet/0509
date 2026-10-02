@@ -94,7 +94,7 @@ describe("Sentry Logs (#6604)", () => {
   });
 
   it("ships one log item per console line, in Sentry's own log envelope", async () => {
-    console.log(JSON.stringify({ event: "probe.one_line", workspaceId: "ws_1" }));
+    console.warn(JSON.stringify({ event: "probe.one_line", workspaceId: "ws_1" }));
 
     await flush();
 
@@ -103,9 +103,19 @@ describe("Sentry Logs (#6604)", () => {
     expect(matching[0]?.body).toContain("workspaceId");
   });
 
+  it("keeps an info console line out of Logs, so only warn and error ship", async () => {
+    console.log(JSON.stringify({ event: "probe.info_line" }));
+    console.warn(JSON.stringify({ event: "probe.warn_line" }));
+
+    await flush();
+
+    expect(logItems().filter((log) => log.body?.includes("probe.info_line"))).toHaveLength(0);
+    expect(logItems().filter((log) => log.body?.includes("probe.warn_line"))).toHaveLength(1);
+  });
+
   it("adds the trace id of the error captured in the same request to the log line", async () => {
     captureException(new Error("probe error"));
-    console.log("probe log");
+    console.warn("probe log");
     await flush();
 
     const probeLog = logItems().find((log) => log.body?.includes("probe log"));
@@ -117,7 +127,7 @@ describe("Sentry Logs (#6604)", () => {
     // A value a name-based selector cannot see: `contact` and `back` are not
     // on 0509#5786's banned list, so the gate lets the line through. The log
     // hook is what keeps their contents out of Sentry.
-    console.log(
+    console.warn(
       JSON.stringify({
         event: "probe.redaction",
         workspaceId: "ws_1",
