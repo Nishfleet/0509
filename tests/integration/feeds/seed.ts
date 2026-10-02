@@ -26,7 +26,9 @@ export async function resetFeedFixtures(ids: { user: string; workspace: string; 
   )
     .bind(ids.workspace, ids.user, NOW)
     .run();
-  await env.DB.prepare("UPDATE source SET is_enabled = 1 WHERE key = 'feed.rss'").run();
+  await env.DB.prepare(
+    `UPDATE source SET is_enabled = 1, config_json = '{"robots":"honoured"}' WHERE key = 'feed.rss'`,
+  ).run();
 }
 
 export const seedEntity = (workspace: string, id: string, domain: string, state: "on" | "off" = "on") =>

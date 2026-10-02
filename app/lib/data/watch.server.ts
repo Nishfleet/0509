@@ -263,10 +263,14 @@ export async function readHiringTargets(): Promise<readonly HiringTarget[]> {
   }));
 }
 
+const IN_PILOT = `(json_extract(CASE WHEN json_valid(src.config_json) THEN src.config_json ELSE '{}' END, '$.pilot') IS NULL
+  OR e.workspace_id IN (SELECT ws.id FROM workspace ws JOIN user u ON u.id = ws.owner_user_id
+    WHERE u.email = json_extract(CASE WHEN json_valid(src.config_json) THEN src.config_json ELSE '{}' END, '$.pilot')))`;
+
 const ENTITIES_WITHOUT_FEED_WATCH = `SELECT e.id AS id, e.domain AS domain
 FROM entity e
 JOIN source src ON src.key = 'feed.rss' AND src.is_enabled = 1
-WHERE e.state = 'on'
+WHERE e.state = 'on' AND ${IN_PILOT}
   AND NOT EXISTS (SELECT 1 FROM watch w WHERE w.entity_id = e.id AND w.source_id = src.id AND w.is_active = 1)
 ORDER BY e.id`;
 
@@ -275,7 +279,7 @@ const FEED_TARGETS = `SELECT e.workspace_id AS workspace_id, e.id AS entity_id, 
 FROM watch w
 JOIN source src ON src.id = w.source_id AND src.key = 'feed.rss' AND src.is_enabled = 1
 JOIN entity e ON e.id = w.entity_id AND e.state = 'on'
-WHERE w.is_active = 1
+WHERE w.is_active = 1 AND ${IN_PILOT}
 ORDER BY e.workspace_id, e.id, w.id`;
 
 const feedTargetRows = z.array(

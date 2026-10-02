@@ -36,4 +36,4 @@ Only title, link, a 200-character plain-text excerpt, the date and a hash are st
 
 ## Going live
 
-Not in this PR. After a real brand's feed has been read in production, one PR flips `migrations/00NN_enable_feed_source.sql` (`UPDATE source SET is_enabled = 1 WHERE id = 'src_site_feed'`) and `content.feed` to `live: true` in `app/lib/coverage.ts`, together, because `tests/integration/coverage.integration.test.ts` matches the two.
+`migrations/0038_feed_pilot.sql` turns the source on with `config_json.pilot` set to the soak account's email, and `content.feed` is `live: true` with it (the coverage test requires both). While `pilot` is set, `readEntitiesWithoutFeedWatch` and `readFeedTargets` (`app/lib/data/watch.server.ts`, `IN_PILOT`) only see entities of the workspace that account owns. Once the soak report shows the feeds reading cleanly, a data-only migration removes `pilot` and every workspace is swept.
