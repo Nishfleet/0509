@@ -378,6 +378,137 @@ describe("Dodo webhook (J13)", () => {
       expect(await planRow()).toMatchObject({ tier: "scout", provider_subscription_id: "sub_scout" });
     });
 
+    it.each([
+      ["missing", ""],
+      ["unreadable", "not a time"],
+      ["in the future", "2099-01-01T00:00:00Z"],
+    ])("still lets a newer proven active replace a current row whose time is %s", async (_label, stored) => {
+      await deliver(
+        signedRequest(
+          "evt_scout",
+          eventBody({
+            data: { subscription_id: "sub_scout", product_id: "pdt_test_scout", metadata: await scoutMetadata() },
+          }),
+        ),
+      );
+      await env.DB.prepare("UPDATE plan SET updated_at = ? WHERE workspace_id = ?").bind(stored, WORKSPACE).run();
+
+      await deliver(signedRequest("evt_upgrade", eventBody({ timestamp: "2026-10-01T00:00:00Z" })));
+
+      expect(await planRow()).toMatchObject({ tier: "starter", provider_subscription_id: "sub_7EeHq2ewQuadropD2ra" });
+    });
+
+    describe("the tester product", () => {
+      const TESTER = "pdt_test_tester";
+      const testerEvent = async (
+        overrides: { type?: string; timestamp?: string; proof?: string } = {},
+      ): Promise<string> =>
+        eventBody({
+          ...(overrides.type === undefined ? {} : { type: overrides.type }),
+          ...(overrides.timestamp === undefined ? {} : { timestamp: overrides.timestamp }),
+          data: {
+            subscription_id: "sub_tester",
+            product_id: TESTER,
+            metadata: {
+              workspace_id: WORKSPACE,
+              plan: "starter",
+              proof: overrides.proof ?? (await checkoutProof(WORKSPACE, TESTER)),
+            },
+          },
+        });
+      const agencyActive = async (timestamp: string) =>
+        eventBody({
+          timestamp,
+          data: {
+            subscription_id: "sub_agency",
+            product_id: "pdt_test_agency",
+            metadata: {
+              workspace_id: WORKSPACE,
+              plan: "agency",
+              proof: await checkoutProof(WORKSPACE, "pdt_test_agency"),
+            },
+          },
+        });
+
+      it("gives a proven tester subscription the Starter plan", async () => {
+        await deliver(signedRequest("evt_tester", await testerEvent()));
+
+        expect(await planRow()).toMatchObject({ tier: "starter", provider_subscription_id: "sub_tester" });
+      });
+
+      it("ignores a tester event whose proof was made for another product or workspace", async () => {
+        const forged = await checkoutProof(WORKSPACE, "pdt_test_starter");
+        const other = await checkoutProof("ws-elsewhere", TESTER);
+
+        await deliver(signedRequest("evt_forged_product", await testerEvent({ proof: forged })));
+        await deliver(signedRequest("evt_forged_workspace", await testerEvent({ proof: other })));
+
+        expect(await planRow()).toBeNull();
+      });
+
+      it("never lets a tester checkout finished after buying a paid plan downgrade the workspace", async () => {
+        await deliver(signedRequest("evt_agency", await agencyActive("2026-10-01T00:00:00Z")));
+
+        await deliver(signedRequest("evt_tester_late", await testerEvent({ timestamp: "2026-10-02T00:00:00Z" })));
+
+        expect(await planRow()).toMatchObject({ tier: "agency", provider_subscription_id: "sub_agency" });
+
+        await deliver(
+          signedRequest(
+            "evt_agency_renewed",
+            eventBody({
+              type: "subscription.renewed",
+              timestamp: "2026-10-03T00:00:00Z",
+              data: { subscription_id: "sub_agency", product_id: "pdt_test_agency", status: "active" },
+            }),
+          ),
+        );
+        expect(await planRow()).toMatchObject({ tier: "agency", provider_subscription_id: "sub_agency" });
+      });
+
+      it("ignores a replayed older tester active once a newer subscription is current", async () => {
+        await deliver(signedRequest("evt_agency", await agencyActive("2026-10-01T00:00:00Z")));
+        await env.DB.prepare("UPDATE plan SET status = 'cancelled', current_period_end = NULL WHERE workspace_id = ?")
+          .bind(WORKSPACE)
+          .run();
+
+        await deliver(signedRequest("evt_tester_old", await testerEvent({ timestamp: "2026-09-30T00:00:00Z" })));
+
+        expect(await planRow()).toMatchObject({ tier: "agency", provider_subscription_id: "sub_agency" });
+      });
+
+      it("lets a tester subscription replace one that has ended", async () => {
+        await deliver(signedRequest("evt_agency", await agencyActive("2026-10-01T00:00:00Z")));
+        await env.DB.prepare("UPDATE plan SET status = 'cancelled', current_period_end = NULL WHERE workspace_id = ?")
+          .bind(WORKSPACE)
+          .run();
+
+        await deliver(signedRequest("evt_tester", await testerEvent({ timestamp: "2026-10-02T00:00:00Z" })));
+
+        expect(await planRow()).toMatchObject({ tier: "starter", provider_subscription_id: "sub_tester" });
+      });
+    });
+
+    it("ignores an unproven active for another subscription on a workspace that already has one", async () => {
+      await deliver(signedRequest("evt_first", eventBody({})));
+
+      await deliver(
+        signedRequest(
+          "evt_takeover",
+          eventBody({
+            timestamp: "2026-10-02T00:00:00Z",
+            data: {
+              subscription_id: "sub_attacker",
+              product_id: "pdt_test_scout",
+              metadata: { workspace_id: WORKSPACE, plan: "scout", proof: "00" },
+            },
+          }),
+        ),
+      );
+
+      expect(await planRow()).toMatchObject({ tier: "starter", provider_subscription_id: "sub_7EeHq2ewQuadropD2ra" });
+    });
+
     it("lets a proven upgrade replace the earlier subscription", async () => {
       await deliver(
         signedRequest(

@@ -242,5 +242,27 @@ describe("rival change email lane (0509#6375)", () => {
 
       expect(sent).toHaveLength(1);
     });
+
+    it("re-posts once when Slack recovers on retry, never repeats the email and then stays quiet", async () => {
+      await connect(404);
+      const sent: EmailMessageBuilder[] = [];
+      expect((await deliverChange(envWith(sent), { signal_id: SIGNAL })).outcome).toBe("failed");
+
+      const posts: string[] = [];
+      vi.stubGlobal("fetch", (input: RequestInfo | URL) => {
+        posts.push(String(input));
+        return Promise.resolve(new Response("ok", { status: 200 }));
+      });
+
+      expect((await deliverChange(envWith(sent), { signal_id: SIGNAL })).outcome).toBe("duplicate");
+      await deliverChange(envWith(sent), { signal_id: SIGNAL });
+
+      expect(posts).toEqual([HOOK]);
+      expect(sent).toHaveLength(1);
+      const attempts = await env.DB.prepare(
+        "SELECT idempotency_key, status FROM send_attempt WHERE idempotency_key LIKE 'change-slack:%'",
+      ).all<{ idempotency_key: string; status: string }>();
+      expect(attempts.results.map((row) => row.status)).toEqual(["sent"]);
+    });
   });
 });

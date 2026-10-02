@@ -26,7 +26,7 @@ ON CONFLICT(workspace_id) DO UPDATE SET
   provider_subscription_id = excluded.provider_subscription_id,
   current_period_end = excluded.current_period_end,
   updated_at = excluded.updated_at
-WHERE excluded.updated_at >= plan.updated_at`;
+WHERE ? = 1 OR excluded.updated_at >= plan.updated_at`;
 
 async function readPlan(workspaceId: string): Promise<{ tier: string; row: PlanRow | null }> {
   const row = await env.DB.prepare(SELECT_PLAN).bind(workspaceId).first<PlanRow>();
@@ -104,6 +104,7 @@ export async function readPlanSubscription(workspaceId: string): Promise<PlanSub
 
 export interface SubscriptionPlan {
   workspaceId: string;
+  replace?: boolean;
   tier: PlanId;
   status: string;
   customerId: string;
@@ -123,6 +124,7 @@ export async function upsertSubscriptionPlan(input: SubscriptionPlan): Promise<v
       input.currentPeriodEnd,
       input.updatedAt,
       input.workspaceId,
+      input.replace === true ? 1 : 0,
     )
     .run();
 }
