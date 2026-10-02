@@ -50,6 +50,20 @@ const makeWorkflow = <T extends object>(workflow: { prototype: T }): T => {
   return instance;
 };
 
+describe("an instance started by a Workflow's own registered schedule", () => {
+  const scheduled = {
+    ...event,
+    schedule: { cron: "0 2 * * *", scheduledTime: Date.UTC(2026, 9, 2, 2, 0, 0) },
+  } as unknown as WorkflowEvent<unknown>;
+
+  it("does no work and checks no monitor in, so the Worker cron is the only scheduler", async () => {
+    expect(await makeWorkflow(siteSweep).run(scheduled, immediateStep)).toBeNull();
+    expect(await makeWorkflow(mentionsSweep).run(scheduled, immediateStep)).toBeNull();
+    expect(await makeWorkflow(ownSiteCheck).run(scheduled, immediateStep)).toBeNull();
+    expect(monitorMock).not.toHaveBeenCalled();
+  });
+});
+
 describe("workflow Sentry cron monitors", () => {
   it("checks site-sweep in on its 02:00 UTC monitor and returns the zeroed sweep", async () => {
     const outcome = await makeWorkflow(siteSweep).run(event, immediateStep);

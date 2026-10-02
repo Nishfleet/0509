@@ -7,6 +7,7 @@ import { readCanarySources } from "../../app/lib/data/source.server";
 import { runCanary } from "../mentions/canary";
 import type { TargetOutcome } from "../mentions/sweep";
 import { planTargets, sweepTarget } from "../mentions/sweep";
+import { isNativeSchedule } from "../workflow-crons";
 
 const RETRY: WorkflowStepConfig = {
   retries: { limit: 2, delay: "10 seconds", backoff: "exponential" },
@@ -28,7 +29,8 @@ export interface MentionsOutcome {
 }
 
 export class MentionsSweep extends WorkflowEntrypoint<Env> {
-  async run(event: WorkflowEvent<unknown>, step: WorkflowStep): Promise<MentionsOutcome> {
+  async run(event: WorkflowEvent<unknown>, step: WorkflowStep): Promise<MentionsOutcome | null> {
+    if (isNativeSchedule(event)) return null;
     return withMonitor("mentions-sweep", () => this.runMentions(event, step), MONITOR);
   }
 

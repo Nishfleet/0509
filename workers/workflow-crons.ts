@@ -16,6 +16,10 @@ export const WORKFLOW_CRONS = {
 
 type WorkflowCron = Extract<keyof typeof WORKFLOW_CRONS, string>;
 
+export function isNativeSchedule(event: { schedule?: unknown }): boolean {
+  return event.schedule !== undefined;
+}
+
 export function isWorkflowCron(cron: string): cron is WorkflowCron {
   return Object.hasOwn(WORKFLOW_CRONS, cron);
 }
