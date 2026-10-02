@@ -8,7 +8,7 @@ import { GATEWAY_ID } from "../../jev/client.server";
 import { defaultFetchText } from "../fetch-text.server";
 import { type Candidate, type FetchText, type Generator, type Subject } from "../types";
 
-const MODEL = "@cf/meta/llama-3.3-70b-instruct-fp8-fast";
+export const MODEL = "@cf/meta/llama-3.3-70b-instruct-fp8-fast";
 
 const MAX_PROPOSALS = 10;
 
@@ -30,7 +30,7 @@ const EXCERPT = "Proposed by a language model reading the brand's own site; not 
 
 const REASON_MAX = 160;
 
-const RESPONSE_SCHEMA = {
+export const RESPONSE_SCHEMA = {
   type: "object",
   properties: {
     competitors: {
@@ -46,7 +46,7 @@ const RESPONSE_SCHEMA = {
   required: ["competitors"],
 } as const;
 
-const proposalSchema = z.object({
+export const proposalSchema = z.object({
   competitors: z.array(
     z.object({
       name: z.string().max(NAME_MAX),
@@ -96,7 +96,7 @@ async function siteTextOf(subject: Subject, fetchText: FetchText): Promise<SiteT
   return readSiteText(page.body.slice(0, HTML_LIMIT));
 }
 
-function messagesFor(subject: Subject, site: SiteText): { role: "system" | "user"; content: string }[] {
+export function messagesFor(subject: Subject, site: SiteText): { role: "system" | "user"; content: string }[] {
   return [
     {
       role: "system",

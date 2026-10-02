@@ -166,9 +166,31 @@ function unwrapJev(value: unknown): JevResponse {
   return (inner ?? value) as JevResponse;
 }
 
-async function postJev(body: unknown): Promise<JevResponse> {
-  if (callsUsed >= callBudget) throw new Error(`eval stopped: Jev call budget of ${String(callBudget)} spent`);
+function spendCall(): void {
+  if (callsUsed >= callBudget) throw new Error(`eval stopped: call budget of ${String(callBudget)} spent`);
   callsUsed += 1;
+}
+
+export async function postWorkersAi(model: string, body: unknown): Promise<unknown> {
+  if (CF_ACCOUNT === "" || CF_TOKEN === "")
+    throw new Error("Workers AI needs CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_API_TOKEN");
+  spendCall();
+  const response = await fetch(`https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT}/ai/run/${model}`, {
+    method: "POST",
+    headers: { "content-type": "application/json", authorization: `Bearer ${CF_TOKEN}` },
+    body: JSON.stringify(body),
+    signal: AbortSignal.timeout(JEV_TIMEOUT_MS),
+  });
+  if (!response.ok) {
+    const detail = (await response.text()).slice(0, 200);
+    throw new Error(`workers ai POST failed with ${String(response.status)}: ${detail}`);
+  }
+  const raw = (await response.json()) as { result?: unknown };
+  return raw.result;
+}
+
+async function postJev(body: unknown): Promise<JevResponse> {
+  spendCall();
   // The bearer token rides in a header, never a command line or a log line.
   const response = await fetch(JEV_URL, {
     method: "POST",
@@ -424,6 +446,13 @@ export function formatReport(report: EvalReport): string {
     rows,
     uncertain,
   ].join("\n");
+}
+
+export function workersAiPresent(): boolean {
+  const present = CF_ACCOUNT !== "" && CF_TOKEN !== "";
+  if (!present && process.env.CI === "true")
+    throw new Error("CI has no Workers AI credentials, so no case would be scored");
+  return present;
 }
 
 export function jevKeyPresent(): boolean {
