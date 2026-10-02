@@ -61,6 +61,7 @@ describe("aiGenerator", () => {
     expect(model).toBe("@cf/meta/llama-3.3-70b-instruct-fp8-fast");
     expect(input.response_format.type).toBe("json_schema");
     expect(input.max_tokens).toBeGreaterThanOrEqual(1_000);
+    expect(input.messages[0]?.content).toContain("same kind of product");
     expect(input.messages[1]?.content).toContain("Gymshark | Gymwear");
     expect(input.messages[1]?.content).toContain("Fitness apparel and accessories");
     expect(options).toMatchObject({ gateway: { id: "default" } });
