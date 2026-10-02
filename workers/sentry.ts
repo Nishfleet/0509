@@ -6,6 +6,8 @@ type SentryEnv = Env & { SENTRY_DSN?: string };
 
 const TOKEN_PATH_PREFIXES = ["/u/", "/v/"] as const;
 const REDACTED = "[redacted]";
+const DEPTH_CAP = 6;
+const SEEN_CAP = 2000;
 
 export const sentryOptions = (env: SentryEnv): CloudflareOptions => ({
   dsn: env.SENTRY_DSN,
@@ -28,15 +30,27 @@ function scrubLog(log: SentryLog): SentryLog {
   };
 }
 
-function scrubLogValue(value: unknown, depth = 0): unknown {
+function scrubLogValue(value: unknown, depth = 0, seen?: WeakSet<object>): unknown {
   if (typeof value === "string") return scrubText(value);
-  if (value !== null && typeof value === "object" && depth < 3) {
-    if (Array.isArray(value)) return value.map((entry) => scrubLogValue(entry, depth + 1));
-    return Object.fromEntries(
-      Object.entries(value as Record<string, unknown>).map(([key, entry]) => [key, scrubLogValue(entry, depth + 1)]),
-    );
-  }
+  if (isTraversable(value)) return scrubContainer(value, depth, seen ?? new WeakSet());
   return value;
+}
+function scrubContainer(value: object, depth: number, seen: WeakSet<object>): unknown {
+  if (depth >= DEPTH_CAP || seen.size >= SEEN_CAP || seen.has(value)) return REDACTED;
+  seen.add(value);
+  if (Array.isArray(value)) return value.map((entry) => scrubLogValue(entry, depth + 1, seen));
+  if (isOpaqueObject(value)) return value;
+  return Object.fromEntries(Object.entries(value).map(([key, entry]) => [key, scrubLogValue(entry, depth + 1, seen)]));
+}
+
+function isTraversable(value: unknown): value is object {
+  return value !== null && typeof value === "object";
+}
+
+function isOpaqueObject(value: object): boolean {
+  if (Object.entries(value).length > 0) return false;
+  const prototype: unknown = Object.getPrototypeOf(value);
+  return isTraversable(prototype) && prototype !== Object.prototype;
 }
 
 const URL_PATTERN = /https?:\/\/[^\s"'<>)]+/g;

@@ -1,10 +1,17 @@
-import { mkdir, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { ESLint } from "eslint";
-import { CloudflareClient, captureException, flush, setCurrentClient } from "@sentry/cloudflare";
-import { beforeAll, afterEach, describe, expect, it } from "vitest";
+import {
+  CloudflareClient,
+  captureException,
+  flush,
+  getCurrentScope,
+  logger,
+  setCurrentClient,
+} from "@sentry/cloudflare";
+import { beforeAll, afterAll, afterEach, describe, expect, it } from "vitest";
 import { sentryOptions } from "../../workers/sentry";
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
@@ -46,6 +53,15 @@ function initProductionOptions(): void {
 interface LogItem {
   body?: string;
   trace_id?: string;
+  attributes?: Record<string, { value?: unknown; type?: string }>;
+}
+
+// The SDK ships each log attribute as one `{ value, type }` pair. A container
+// arrives as a JSON string in that `value`, so the redaction is asserted on
+// the text Sentry will actually store.
+function attribute(item: LogItem | undefined, key: string): string {
+  const entry = item?.attributes?.[key];
+  return typeof entry?.value === "string" ? entry.value : JSON.stringify(entry?.value ?? null);
 }
 
 interface EnvelopeItem {
@@ -79,10 +95,19 @@ function eventTraceIds(): string[] {
     .filter((traceId): traceId is string => typeof traceId === "string");
 }
 
+const clientBeforeTheSuite = getCurrentScope().getClient();
+
 beforeAll(initProductionOptions);
 
 afterEach(() => {
   envelopes.length = 0;
+});
+
+// The suite binds a global Sentry client, so hand the process back the one it
+// had. Without this, a later test file in the same worker would log into this
+// recording transport instead of its own.
+afterAll(() => {
+  if (clientBeforeTheSuite !== undefined) setCurrentClient(clientBeforeTheSuite);
 });
 
 describe("Sentry Logs (#6604)", () => {
@@ -148,6 +173,35 @@ describe("Sentry Logs (#6604)", () => {
     expect(body).toContain("[redacted]");
   });
 
+  it("scrubs a customer value nested inside an attribute object and an array", async () => {
+    // The same probe through `Sentry.logger` instead of a console string, so
+    // the value travels as a log attribute rather than inside the message.
+    // Removing the recursive walk in `scrubLogValue` fails this test.
+    const cycle: Record<string, unknown> = { note: "cycle.ada@customer.example" };
+    cycle.self = cycle;
+    logger.warn("probe.nested", {
+      contact: { name: "ada@customer.example" },
+      links: ["https://0509.io/u/tok-SECRET", { inner: "bo@customer.example" }],
+      deep: { a: { b: { c: { d: { e: { f: "deep@customer.example" } } } } } },
+      cycle,
+      at: new Date(0),
+    });
+
+    await flush();
+
+    const [shipped] = logItems().filter((log) => log.body?.includes("probe.nested"));
+    expect(shipped).toBeDefined();
+    expect(attribute(shipped, "contact")).toBe('{"name":"[redacted]"}');
+    expect(attribute(shipped, "links")).toBe('["https://0509.io/u/[redacted]",{"inner":"[redacted]"}]');
+    // Past the depth cap the subtree is redacted whole, never copied through.
+    expect(attribute(shipped, "deep")).toBe('{"a":{"b":{"c":{"d":{"e":{"f":"[redacted]"}}}}}}');
+    // A self-referencing attribute terminates and is redacted.
+    expect(attribute(shipped, "cycle")).toContain("[redacted]");
+    expect(attribute(shipped, "cycle")).not.toContain("ada@customer.example");
+    // A `Date` keeps its own shape instead of becoming `{}`.
+    expect(attribute(shipped, "at")).toBe('"1970-01-01T00:00:00.000Z"');
+  });
+
   it("keeps the live console lines under the #5786 log gate", { timeout: 60_000 }, async () => {
     const eslint = new ESLint({ cwd: REPO_ROOT });
     for (const rel of ["workers/sentry.ts", "workers/app.ts", "workers/standing/nightly.ts"]) {
@@ -158,8 +212,11 @@ describe("Sentry Logs (#6604)", () => {
   });
 
   it("keeps the #5786 gate firing on the log path a console line takes", { timeout: 60_000 }, async () => {
-    const probe = path.join(REPO_ROOT, "app/lib", "probe-sentry-logs-tmp.ts");
-    await mkdir(path.dirname(probe), { recursive: true });
+    // eslint applies the gate through the `app/**` block, so the probe has to
+    // live under app/. The directory name is unique per run, so an interrupted
+    // run cannot leave an artifact a later run reads.
+    const scratch = await mkdtemp(path.join(REPO_ROOT, "app", "sentry-logs-probe-"));
+    const probe = path.join(scratch, "probe.ts");
     await writeFile(probe, "declare const subject: { registrable: string };\nconsole.log(subject.registrable);\n");
     try {
       const eslint = new ESLint({ cwd: REPO_ROOT });
@@ -167,7 +224,7 @@ describe("Sentry Logs (#6604)", () => {
       const messages = results.flatMap((result) => result.messages).map((message) => message.message);
       expect(messages.some((message) => message.includes(USER_DATA_MESSAGE))).toBe(true);
     } finally {
-      await rm(probe, { force: true });
+      await rm(scratch, { force: true, recursive: true });
     }
   });
 });
