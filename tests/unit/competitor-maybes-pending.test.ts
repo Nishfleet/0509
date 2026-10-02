@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { createMemoryRouter, RouterProvider } from "react-router";
 import { describe, expect, it } from "vitest";
 
-import { CompetitorMaybes } from "../../app/components/competitor-maybes";
+import { AddCompetitor, CompetitorMaybes } from "../../app/components/competitor-maybes";
 import { RetireQuestions } from "../../app/components/retire-questions";
 
 // Every row here posts to the route with the row's own suggestionId, so the
@@ -40,12 +40,55 @@ function questions(submission: { suggestionId: string; intent: string } | null):
   return render(createElement(RetireQuestions, { questions: [MAYBE_A, MAYBE_B] }), submission);
 }
 
+function addForm(message: string | undefined): string {
+  return render(createElement(AddCompetitor, { message }), null);
+}
+
+function input(html: string): string {
+  const inputs = html.match(/<input\b[^>]*>/g) ?? [];
+  const found = inputs.find((tag) => tag.includes('id="add-competitor"'));
+  if (found === undefined) throw new Error("no add-competitor input in the rendered form");
+  return found;
+}
+
 function row(html: string, ariaLabel: string): string {
   const buttons = html.match(/<button\b[^>]*>[\s\S]*?<\/button>/g) ?? [];
   const found = buttons.find((button) => button.includes(`aria-label="${ariaLabel}"`));
   if (found === undefined) throw new Error(`no ${ariaLabel} button in the rendered rows`);
   return found;
 }
+
+describe("the Add a competitor field and its error", () => {
+  // Every message handleCompetitorIntent can return for intent=add is an error,
+  // so the field carries the failure and announces it as one. Before this the
+  // same message was a role=status, read politely only when nothing else
+  // happens, and the input said nothing at all. renderToStaticMarkup escapes
+  // the apostrophe, so the message is asserted in its escaped form.
+  const ERROR = "We couldn't read that. Try their main website, like brand.com.";
+  const ERROR_ESCAPED = "We couldn&#x27;t read that. Try their main website, like brand.com.";
+
+  it("marks the input invalid and points it at the alert when a message is set", () => {
+    const html = addForm(ERROR);
+    expect(input(html)).toContain('aria-invalid="true"');
+    expect(input(html)).toContain('aria-describedby="add-competitor-error"');
+  });
+
+  it("renders the message as an alert carrying the id the input describes", () => {
+    const html = addForm(ERROR);
+    const alert = html.match(/<p\b[^>]*role="alert"[^>]*>/);
+    if (alert === null) throw new Error("no role=alert paragraph in the rendered form");
+    expect(alert[0]).toContain('id="add-competitor-error"');
+    expect(html).toContain(`>${ERROR_ESCAPED}</p>`);
+  });
+
+  it("carries neither attribute and renders no paragraph when there is no message", () => {
+    const html = addForm(undefined);
+    expect(input(html)).not.toContain("aria-invalid");
+    expect(input(html)).not.toContain("aria-describedby");
+    expect(html).not.toContain("add-competitor-error");
+    expect(html).not.toContain('role="alert"');
+  });
+});
 
 describe("the Maybe Watch and Dismiss buttons", () => {
   it("leaves both rows live and unlabelled as pending when nothing is submitting", () => {

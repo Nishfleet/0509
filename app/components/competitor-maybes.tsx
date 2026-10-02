@@ -102,13 +102,15 @@ export function AddCompetitor({
             spellCheck={false}
             enterKeyHint="go"
             className="sm:flex-1"
+            aria-invalid={message ? true : undefined}
+            aria-describedby={message ? "add-competitor-error" : undefined}
           />
           <Button type="submit" variant="secondary" size="lg" disabled={adding}>
             {adding ? "Adding…" : "Add"}
           </Button>
         </div>
         {message ? (
-          <p role="status" className="mt-3 text-[0.95rem]">
+          <p id="add-competitor-error" role="alert" className="mt-3 text-[0.95rem]">
             {message}
           </p>
         ) : null}
