@@ -238,6 +238,37 @@ describe("delivered once across weeks (0509#4063)", () => {
     ]);
   });
 
+  it("a crash between resolving the attempt and the batch is repaired on redelivery, rows written once", async () => {
+    const payload = await composeBrief(env.DB, {
+      workspaceId: WS,
+      schedule: MONDAY,
+      week: WEEK_1,
+      readThisFirst: { picks: [SIG_A, SIG_B], judged: 2, unjudged: false },
+    });
+    await seedDigest("digest-w1", payload, "2026-09-14", "2026-09-21");
+    await env.DB.prepare(
+      `INSERT INTO send_attempt (id, workspace_id, send_target_id, digest_id, idempotency_key, status, attempted_at)
+       VALUES ('att-crash', ?1, ?2, 'digest-w1', ?3, 'sent', '2026-09-21T08:00:00.000Z')`,
+    )
+      .bind(WS, TARGET_ID, `digest:digest-w1:${TARGET_ID}`)
+      .run();
+
+    const rec = recorder();
+    const repaired = await deliver(envWith(bindingFor(rec)), { digest_id: "digest-w1" });
+    expect(repaired).toMatchObject({ outcome: "sent", attempt_id: "att-crash" });
+    expect(rec.sent).toHaveLength(0);
+    expect((await statusOf("digest", "digest-w1"))?.status).toBe("sent");
+    const rows = await deliveries();
+    expect(rows.map((row) => [row.signal_id, row.send_attempt_id])).toEqual([
+      [SIG_A, "att-crash"],
+      [SIG_B, "att-crash"],
+    ]);
+
+    const again = await deliver(envWith(bindingFor(rec)), { digest_id: "digest-w1" });
+    expect(again.outcome).toBe("duplicate");
+    expect(await deliveries()).toEqual(rows);
+  });
+
   it("a quiet-week brief writes no rows", async () => {
     const payload = await composeBrief(env.DB, {
       workspaceId: WS,

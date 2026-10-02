@@ -372,8 +372,10 @@ describe("send lane (0509#3979)", () => {
     expect(row.status).toBe("sent");
 
     const second = await deliver(envWith(bindingFor(rec)), message(digestId));
-    expect(second.outcome).toBe("duplicate");
+    expect(second.outcome).toBe("sent");
     expect(rec.sent).toHaveLength(1);
+    const third = await deliver(envWith(bindingFor(rec)), message(digestId));
+    expect(third.outcome).toBe("duplicate");
   });
 
   it("returns no_digest for a work item whose digest row is gone", async () => {

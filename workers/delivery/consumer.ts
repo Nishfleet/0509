@@ -1,6 +1,11 @@
 import { markDigestSentStatement } from "../../app/lib/data/digest.server";
 import { claimIncidentNotice } from "../../app/lib/data/incident_notice.server";
-import { claimChangeSlot, claimSendAttempt, resolveSendAttempt } from "../../app/lib/data/send_attempt.server";
+import {
+  claimChangeSlot,
+  claimSendAttempt,
+  readUnrecordedSend,
+  resolveSendAttempt,
+} from "../../app/lib/data/send_attempt.server";
 import { readSlackTarget, writeUnsubscribeToken } from "../../app/lib/data/send_target.server";
 import { insertSignalDeliveries } from "../../app/lib/data/signal_delivery.server";
 import type { BriefPayload } from "../../app/lib/brief-payload";
@@ -266,7 +271,7 @@ export async function deliver(env: Env, message: DigestMessage): Promise<Deliver
     digestId: digest.id,
   });
   if (!claim) {
-    return { outcome: "duplicate", attempt_id: null, idempotency_key: idempotencyKey };
+    return resumeSent(env, { digest, target, idempotencyKey });
   }
 
   return sendAndResolve(env, {
@@ -279,6 +284,19 @@ export async function deliver(env: Env, message: DigestMessage): Promise<Deliver
     },
     onSent: () => recordBriefSent(env, { digest, target, attemptId: claim.id }),
   });
+}
+
+async function resumeSent(
+  env: Env,
+  input: { digest: MessageRow; target: TargetRow; idempotencyKey: string },
+): Promise<DeliveryResult> {
+  const { digest, target, idempotencyKey } = input;
+  const unrecorded = await readUnrecordedSend(env.DB, idempotencyKey);
+  if (!unrecorded) {
+    return { outcome: "duplicate", attempt_id: null, idempotency_key: idempotencyKey };
+  }
+  await recordBriefSent(env, { digest, target, attemptId: unrecorded.id });
+  return { outcome: "sent", attempt_id: unrecorded.id, idempotency_key: idempotencyKey };
 }
 
 interface BriefSent {
