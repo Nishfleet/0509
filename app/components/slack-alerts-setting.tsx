@@ -1,10 +1,10 @@
 import type { ReactElement } from "react";
-import { Form, useNavigation, type Navigation } from "react-router";
+import { Form, useNavigation } from "react-router";
 
 import { BLOCK_HEADING } from "./page-heading";
 import { Button } from "./ui/button";
 
-function slackSubmitting(navigation: Navigation, connected: boolean): boolean {
+function slackSubmitting(navigation: ReturnType<typeof useNavigation>, connected: boolean): boolean {
   if (navigation.state === "idle") return false;
   const intent = connected ? "slack-remove" : "slack-save";
   return navigation.formData?.get("intent") === intent;
