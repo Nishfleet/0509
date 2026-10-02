@@ -76,7 +76,7 @@ export async function ensureHomePages(now: string): Promise<void> {
   );
 }
 
-export const CLASSIFY_PER_SWEEP = 10;
+const CLASSIFY_PER_SWEEP = 10;
 
 export async function classifyCompetitorSites(now: string): Promise<number> {
   await ensureHomePages(now);
