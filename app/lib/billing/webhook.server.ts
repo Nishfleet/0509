@@ -5,7 +5,8 @@ import { z } from "zod";
 import { markWebhookEventProcessed, recordWebhookEvent } from "../data/dodo_webhook_event.server";
 import { readPlanSubscription, readWorkspaceIdBySubscription, upsertSubscriptionPlan } from "../data/plan.server";
 import { isCheckoutProof } from "./checkout-proof.server";
-import { planIdForProduct } from "./products.server";
+import { isSubscriptionLive } from "./entitlements";
+import { planIdForProduct, testerProductId } from "./products.server";
 
 const envelope = z.object({
   type: z.string(),
@@ -53,11 +54,13 @@ type Displacement = "same" | "stale" | "takeover";
 async function displacement(input: {
   workspaceId: string;
   subscriptionId: string;
+  productId: string;
   type: string;
   timestamp: string;
 }): Promise<Displacement> {
   const current = await readPlanSubscription(input.workspaceId);
   if (current === null || current.subscriptionId === input.subscriptionId) return "same";
+  if (input.productId === testerProductId() && isSubscriptionLive(current, new Date())) return "stale";
   if (input.type !== "subscription.active") return "stale";
   const since = Date.parse(current.updatedAt);
   if (!Number.isFinite(since) || since > Date.now()) return "takeover";
@@ -80,7 +83,13 @@ async function applySubscription(body: unknown, type: string, timestamp: string)
   if (workspace.kind === "retry") return "retry";
   if (workspace.kind === "ignore") return "done";
   const workspaceId = workspace.id;
-  const change = await displacement({ workspaceId, subscriptionId: data.subscription_id, type, timestamp });
+  const change = await displacement({
+    workspaceId,
+    subscriptionId: data.subscription_id,
+    productId: data.product_id,
+    type,
+    timestamp,
+  });
   if (change === "stale") {
     log("billing.webhook_other_subscription_ignored", { type, subscription: data.subscription_id });
     return "done";
