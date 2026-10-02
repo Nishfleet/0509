@@ -185,7 +185,6 @@ export async function postWorkersAi(model: string, body: unknown): Promise<unkno
   const ai = await aiBinding();
   return ai.run(model as never, body as never, {
     gateway: { id: GATEWAY_ID },
-    signal: AbortSignal.timeout(JEV_TIMEOUT_MS),
   });
 }
 
@@ -196,7 +195,6 @@ async function postJev(body: unknown): Promise<JevResponse> {
       await aiBinding()
     ).run(GATEWAY_MODEL as never, withoutModel(body) as never, {
       gateway: { id: GATEWAY_ID },
-      signal: AbortSignal.timeout(JEV_TIMEOUT_MS),
     });
     return { model: GATEWAY_MODEL, ...unwrapJev(raw) };
   }
