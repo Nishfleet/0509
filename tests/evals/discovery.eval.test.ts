@@ -1,4 +1,6 @@
+import { parse } from "tldts";
 import { describe, expect, it, vi } from "vitest";
+import { z } from "zod";
 
 import type { DiscoveryContext } from "../../app/lib/data/entity.server";
 import {
@@ -9,6 +11,7 @@ import {
   keepOnlyIfBoth,
   type ResolvedCandidate,
 } from "../../app/lib/discovery/run.server";
+import { MAX_TOKENS, MODEL, RESPONSE_SCHEMA, messagesFor } from "../../app/lib/discovery/generators/ai.server";
 import { REJECT_AT } from "../../app/lib/jev/thresholds";
 import {
   formatReport,
@@ -17,9 +20,11 @@ import {
   makeNoulAsk,
   makeNoulsAsk,
   noulScore,
+  postWorkersAi,
   runEval,
   type Ask,
   type DiscoveryCase,
+  type EvalRow,
   type Score,
 } from "./harness";
 
@@ -28,8 +33,13 @@ vi.mock("../../app/lib/jev/client.server", () => ({
   askNoul: () => Promise.resolve(null),
   askNouls: () => Promise.resolve([]),
   askChoice: () => Promise.resolve(null),
+  GATEWAY_ID: "default",
   JevUnavailableError: class JevUnavailableError extends Error {},
 }));
+vi.mock("../../app/lib/fetch/outbound.server", () => ({
+  fetchOutbound: () => Promise.reject(new Error("no network")),
+}));
+vi.mock("../../app/lib/fetch/robots.server", () => ({ CRAWLER_USER_AGENT: "eval" }));
 vi.mock("../../app/lib/discovery/resolve-domain.server", () => ({
   resolveDomain: () => Promise.resolve({ domain: null }),
 }));
@@ -59,6 +69,12 @@ function stateFor(row: DiscoveryCase): unknown {
     line: row.item.evidence.map((item) => item.excerpt).join("; "),
   };
   return competitorState(context, candidate);
+}
+
+interface SeededCase extends EvalRow {
+  self: { name: string; domain: string; description: string };
+  site: { title: string; description: string };
+  expected: string[][];
 }
 
 describe.skipIf(!jevKeyPresent())("eval: discovery competitor questions against Jev", () => {
@@ -115,4 +131,78 @@ describe.skipIf(!jevKeyPresent())("eval: discovery competitor questions against 
       expect(report.splits.length).toBeGreaterThan(0);
     },
   );
+  it("proposer_seeded: recall of the first pass versus first pass plus a pass seeded with the confirmed rivals", async () => {
+    const rows = await loadCases<SeededCase>("proposer_recall", ["self", "site", "expected"]);
+    const domainsOnly = z.object({ competitors: z.array(z.object({ name: z.string(), domain: z.string() })) });
+    const registrable = (value: string): string => parse(value).domain ?? value.toLowerCase();
+    const propose = async (row: SeededCase, found: string[]): Promise<{ name: string; domain: string }[]> => {
+      const subject = { name: row.self.name, domain: row.self.domain, description: row.self.description };
+      const result = (await postWorkersAi(MODEL, {
+        messages: messagesFor(subject, row.site, found),
+        response_format: { type: "json_schema", json_schema: RESPONSE_SCHEMA },
+        max_tokens: MAX_TOKENS,
+      })) as { response?: unknown };
+      const body: unknown = typeof result.response === "string" ? JSON.parse(result.response) : result.response;
+      return domainsOnly.parse(body).competitors;
+    };
+    const keeps = async (row: SeededCase, item: { name: string; domain: string }): Promise<boolean> => {
+      const state = {
+        self: { name: row.self.name, domain: row.self.domain, description: row.self.description },
+        competitor_set: [],
+        item: {
+          name: item.name,
+          domain: item.domain,
+          evidence: [
+            {
+              source: row.self.domain,
+              excerpt:
+                "Proposed by a language model reading the brand's own site; not corroborated by any other source",
+            },
+          ],
+        },
+        user_memory: { dismissed_domains: [] },
+        reliability: { hn: "best_effort" },
+      };
+      const combine = (ps: number[]): number =>
+        keepOnlyIfBoth(ps.map((p) => ({ questionId: "", inputHash: "", p, cached: false }))).p;
+      const call = await makeNoulsAsk([IS_COMPETITOR, SAME_CATEGORY], combine)(state);
+      return (call.p ?? 0) > REJECT_AT;
+    };
+    const recall = (row: SeededCase, domains: Set<string>): number =>
+      row.expected.filter((aliases) => aliases.some((alias) => domains.has(registrable(alias)))).length /
+      row.expected.length;
+    const ask =
+      (second: boolean): Ask<SeededCase> =>
+      async (row) => {
+        const first = await propose(row, []);
+        const kept: { name: string; domain: string }[] = [];
+        for (const item of first) if (await keeps(row, item)) kept.push(item);
+        const extra = second
+          ? await propose(
+              row,
+              kept.map((item) => item.name),
+            )
+          : [];
+        const extraKept: { name: string; domain: string }[] = [];
+        for (const item of extra) if (await keeps(row, item)) extraKept.push(item);
+        const domains = new Set([...kept, ...extraKept].map((item) => registrable(item.domain)));
+        return { model: MODEL, p: null, choice: [...domains].join(",") };
+      };
+    const score: Score<SeededCase> = (row, call) => {
+      const points = recall(row, new Set((call.choice ?? "").split(",").filter((entry) => entry !== "")));
+      return { points, uncertain: false, key: points.toFixed(2) };
+    };
+    const per = 1 + 10 * 2 + 1 + 10 * 2;
+    for (const second of [false, true]) {
+      const report = await runEval(
+        `proposer_seeded_${second ? "two_pass" : "one_pass"}`,
+        rows,
+        ask(second),
+        score,
+        per,
+      );
+      console.log(formatReport(report));
+      expect(report.splits.length).toBeGreaterThan(0);
+    }
+  });
 });
