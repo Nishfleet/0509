@@ -380,6 +380,7 @@ jobs:
           [ "$gdelt" -gt 0 ] && [ "$mentions" -gt 0 ] || failed=1
           pricing=$(d1 "SELECT e.domain AS brand, p.url IS NOT NULL AS judged, COUNT(DISTINCT w.id) AS watches, COUNT(sn.id) AS snapshots FROM entity e LEFT JOIN page p ON p.entity_id = e.id AND p.role = 'pricing' AND p.role_decided_for_hash IS NOT NULL LEFT JOIN watch w ON w.entity_id = e.id AND w.target_key = p.url AND w.is_active = 1 AND w.source_id = (SELECT id FROM source WHERE key = 'site.web') LEFT JOIN snapshot sn ON sn.watch_id = w.id AND sn.fetched_at >= '$since' WHERE e.role = 'competitor' AND e.state = 'on'$scope GROUP BY e.id ORDER BY e.domain")
           pricing_lines=$(jq -r 'map("\(.brand) " + (if .judged == 0 then "no pricing page judged" elif .watches == 0 then "pricing page judged, NO WATCH" elif .snapshots == 0 then "watched, no snapshot" else "watched, \(.snapshots) snapshots" end)) | join("; ")' <<< "$pricing")
+          diag_pages=$(d1 "SELECT e.domain AS brand, p.role AS role, COUNT(*) AS n, MAX(p.transport) AS transport, MAX(p.transport_reason) AS reason, MAX(p.deferred_at) AS deferred FROM entity e JOIN page p ON p.entity_id = e.id WHERE e.role = 'competitor' AND e.state = 'on'$scope GROUP BY e.id, p.role ORDER BY e.domain, p.role" | jq -c '.' | head -c 3000)
           pricing_bad=$(jq -r '[.[] | select(.judged == 1 and (.watches == 0 or .snapshots == 0))] | length' <<< "$pricing")
           pricing_any=$(jq -r '[.[] | select(.judged == 1)] | length' <<< "$pricing")
           [ "$pricing_bad" -eq 0 ] && [ "$pricing_any" -gt 0 ] || failed=1
@@ -394,7 +395,8 @@ jobs:
             echo "- Jev verdicts: $([ -z "$missing" ] && echo "every required question has a row" || echo "FAIL, no rows for: $missing"); duplicate_signal (informational): $dup"
             echo "- enabled sources with an active watch: $([ -z "$stale" ] && echo "all fetched in the last 24 h or marked degraded" || echo "FAIL, stale and not degraded: $stale")"
             echo "- #6110 news: $gdelt gdelt.doc snapshots with items, $mentions mention signals in the last 24 h$([ "$gdelt" -gt 0 ] && [ "$mentions" -gt 0 ] || echo " (FAIL)")"
-            echo "- pricing-page watches, soak brands: $pricing_lines$([ "$pricing_bad" -eq 0 ] && [ "$pricing_any" -gt 0 ] || echo " (FAIL, $pricing_any brands have a judged pricing page and $pricing_bad of those lack a watch or a snapshot)")"
+            echo "- DIAG pages by role: $diag_pages"
+          echo "- pricing-page watches, soak brands: $pricing_lines$([ "$pricing_bad" -eq 0 ] && [ "$pricing_any" -gt 0 ] || echo " (FAIL, $pricing_any brands have a judged pricing page and $pricing_bad of those lack a watch or a snapshot)")"
             echo "- healthchecks.io dead-man and site-sweep pings: not read, no healthchecks.io read key is a repository secret"
             echo "- new Sentry issues: not read, no Sentry auth token is a repository secret"
           } > comment.md
