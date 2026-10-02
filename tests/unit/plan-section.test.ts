@@ -13,13 +13,13 @@ function render(plan: PlanSummary): string {
 
 describe("PlanSection", () => {
   it("offers the next plan to someone with no payment set up", () => {
-    const html = render({ tier: "scout", status: "none", currentPeriodEnd: null, billed: false });
+    const html = render({ tier: "scout", status: "none", currentPeriodEnd: null, trialing: false, billed: false });
     expect(html).toContain("Upgrade to Starter");
     expect(html).toContain("€46/mo");
   });
 
   it("offers manage or cancel, not an upgrade, to a subscriber", () => {
-    const html = render({ tier: "starter", status: "active", currentPeriodEnd: null, billed: true });
+    const html = render({ tier: "starter", status: "active", currentPeriodEnd: null, trialing: false, billed: true });
     expect(html).toContain("Manage or cancel plan");
     expect(html).not.toContain("Upgrade to");
   });

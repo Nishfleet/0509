@@ -60,6 +60,7 @@ export interface PlanSummary {
   tier: PlanId;
   status: string;
   currentPeriodEnd: string | null;
+  trialing: boolean;
   billed: boolean;
 }
 

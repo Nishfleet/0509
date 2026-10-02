@@ -47,6 +47,7 @@ describe("plan billing readers", () => {
       tier: "scout",
       status: "none",
       currentPeriodEnd: null,
+      trialing: false,
       billed: false,
     });
   });
@@ -57,6 +58,7 @@ describe("plan billing readers", () => {
       tier: "starter",
       status: "active",
       currentPeriodEnd: "2099-01-01T00:00:00.000Z",
+      trialing: false,
       billed: true,
     });
   });

@@ -15,6 +15,7 @@ interface PlanRow {
   provider_customer_id: string;
   provider_subscription_id: string;
   current_period_end: string;
+  trialing: number;
   updated_at: string;
 }
 
@@ -94,6 +95,24 @@ describe("Dodo webhook (J13)", () => {
     });
     expect((await readEntitlements(WORKSPACE)).competitors).toBe(15);
     expect((await eventRow("evt_active_1"))?.processed_at).not.toBeNull();
+  });
+
+  it("marks a subscription trialing while next_billing_date is the first charge", async () => {
+    await deliver(signedRequest("evt_trial", eventBody({})));
+
+    expect((await planRow())?.trialing).toBe(1);
+  });
+
+  it("does not mark a subscription trialing without a trial", async () => {
+    await deliver(signedRequest("evt_no_trial", eventBody({ data: { trial_period_days: 0 } })));
+
+    expect((await planRow())?.trialing).toBe(0);
+  });
+
+  it("does not mark a subscription trialing that is on hold", async () => {
+    await deliver(signedRequest("evt_hold", eventBody({ data: { status: "on_hold" } })));
+
+    expect((await planRow())?.trialing).toBe(0);
   });
 
   it("applies a redelivered webhook-id once", async () => {
