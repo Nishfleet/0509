@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { createRoutesStub } from "react-router";
 import type { Navigation } from "react-router";
 import type * as ReactRouterModule from "react-router";
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi, beforeEach } from "vitest";
 
 import { CompetitorSite } from "../../app/components/competitor-site";
 import { CompetitorYoutube } from "../../app/components/competitor-youtube";
@@ -62,13 +62,18 @@ function label(html: string): string {
 // The button's own class list carries `disabled:pointer-events-none`, so the
 // attribute is matched on its own and not as a substring of the class string.
 function isDisabled(tag: string): boolean {
-  return /\sdisabled(?:=|\s|$)/.test(tag);
+  return /(?:^|\s)disabled(?:\s|>|=|$)/.test(tag);
 }
 
 const SITE = createElement(CompetitorSite, { url: null, error: null });
 const YOUTUBE = createElement(CompetitorYoutube, { url: null, error: null });
 
 describe("the competitor address forms report their own pending state", () => {
+  beforeEach(() => {
+    harness.state = "idle";
+    harness.intent = null;
+  });
+
   it("leaves both buttons live and on their own label while nothing is in flight", () => {
     harness.state = "idle";
     harness.intent = null;
@@ -108,13 +113,20 @@ describe("the competitor address forms report their own pending state", () => {
     expect(label(render(SITE))).toBe("Watch this website");
   });
 
-  it("leaves both buttons alone while the other form on the page is submitting", () => {
+  it("leaves both buttons alone while an unrelated intent submits", () => {
     harness.state = "submitting";
     harness.intent = "add";
     expect(isDisabled(openTag(render(SITE)))).toBe(false);
     expect(label(render(SITE))).toBe("Watch this website");
     expect(isDisabled(openTag(render(YOUTUBE)))).toBe(false);
     expect(label(render(YOUTUBE))).toBe("Save channel");
+  });
+
+  it("keeps the site button disabled while the action and loader settle", () => {
+    harness.state = "loading";
+    harness.intent = "site";
+    expect(isDisabled(openTag(render(SITE)))).toBe(true);
+    expect(isDisabled(openTag(render(YOUTUBE)))).toBe(false);
   });
 
   it("leaves both buttons alone while a revalidation runs with no form in flight", () => {
