@@ -650,6 +650,15 @@ async function sweepYoutubeTarget(
   return { items, stored, unjudged, skipped };
 }
 
+async function skipBlockedTarget(target: MentionTarget, status: number): Promise<TargetOutcome> {
+  if (status === 429) {
+    console.warn(JSON.stringify({ event: "mentions.rate_limited", source: target.pluginKey, status }));
+  } else {
+    await markSourceBlocked(target.sourceId, status);
+  }
+  return { items: 0, stored: 0, unjudged: 0, skipped: target.watches.length };
+}
+
 export async function sweepTarget(
   target: MentionTarget,
   now: string,
@@ -684,10 +693,7 @@ export async function sweepTarget(
     }
     return { items: result.items.length, stored, unjudged, skipped: 0 };
   } catch (error) {
-    if (error instanceof UpstreamBlockedError) {
-      await markSourceBlocked(target.sourceId, error.status);
-      return { items: 0, stored: 0, unjudged: 0, skipped: target.watches.length };
-    }
+    if (error instanceof UpstreamBlockedError) return await skipBlockedTarget(target, error.status);
     if (isUpstreamTimeout(error)) {
       await markSourceTimedOut(target.sourceId);
       return { items: 0, stored: 0, unjudged: 0, skipped: target.watches.length };
