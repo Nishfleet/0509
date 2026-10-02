@@ -43,7 +43,10 @@ function Action({ action }: { action: EmptyStateAction }): ReactNode {
     );
   }
   return (
-    <a className="mt-3 inline-block font-display text-[1.02rem] uppercase" href={href(action.href)}>
+    <a
+      className="mt-1 inline-flex min-h-11 items-center font-display text-[1.02rem] uppercase"
+      href={href(action.href)}
+    >
       {action.label}
     </a>
   );
