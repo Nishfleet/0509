@@ -103,8 +103,14 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npx playwright install --with-deps chromium
+      - name: Exchange the Access service token for its cookie
+        run: npm run e2e -- --project=setup --retries=0 --reporter=github,list
+        env:
+          PLAYWRIGHT_TEST_BASE_URL: https://0509.io
+          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
       - name: J14 proof against production
-        run: npm run e2e -- e2e/proof-4012.spec.ts --project=desktop-1440 --retries=0 --workers=1 --reporter=list
+        run: npm run e2e -- e2e/proof-4012.spec.ts --project=desktop-1440 --no-deps --retries=0 --workers=1 --reporter=list
         env:
           PLAYWRIGHT_TEST_BASE_URL: https://0509.io
           CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}

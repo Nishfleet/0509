@@ -127,18 +127,25 @@ test("J14 proof 0509#4012: fresh workspace with data, delete, counts before and 
   await expect(page.getByText("looking on the site")).toHaveCount(0, { timeout: 60_000 });
   await page.getByRole("button", { name: "That's me" }).click();
   await expect(page).toHaveURL(/\/onboarding\/competitors$/, { timeout: 20_000 });
-  const listed = page
-    .getByRole("list", { name: "Watching" })
-    .getByRole("listitem")
-    .or(page.getByRole("list", { name: "Possible competitors" }).getByRole("listitem"));
-  await expect(listed.first()).toBeVisible({ timeout: 90_000 });
   const watching = page.getByRole("list", { name: "Watching" }).getByRole("listitem");
+  const candidate = watching.first().or(page.getByRole("button", { name: /^Watch / }).first()).first();
+  for (let attempt = 1; attempt <= 4; attempt++) {
+    if (await candidate.isVisible({ timeout: 30_000 }).catch(() => false)) break;
+    log("competitors screen not ready; reloading", { attempt, errorShown: await page.getByRole("heading", { name: "Something went wrong" }).isVisible() });
+    await page.reload();
+  }
+  await expect(candidate).toBeVisible({ timeout: 30_000 });
   if ((await watching.count()) === 0) {
     await page.getByRole("button", { name: /^Watch / }).first().click();
     await expect(watching.first()).toBeVisible();
   }
   await page.getByRole("button", { name: "Start watching" }).click();
   await expect(page).toHaveURL(/\/app$/, { timeout: 60_000 });
+  await page.goto("/app/competitors");
+  await page.locator("#add-competitor").fill("nike.com");
+  await page.getByRole("button", { name: "Add" }).click();
+  const row = page.getByRole("list", { name: "Competitors", exact: true }).getByRole("listitem").filter({ hasText: "nike.com" });
+  await expect(row.getByRole("switch")).toBeChecked({ timeout: 30_000 });
 
   const pragma = d1("PRAGMA foreign_keys");
   log("PRAGMA foreign_keys (remote read)", pragma);
