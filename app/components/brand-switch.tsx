@@ -20,7 +20,7 @@ export function brandSwitchNote(state: BrandSwitchState, pausedOn: Date | null):
   if (state === "on")
     return "Turn off to stop watching and alerts. Your history stays, and turning it back on picks up where it left off.";
   if (state === "you") return "Your brand, always tracked";
-  if (pausedOn === null) return "Paused, history kept";
+  if (pausedOn === null || Number.isNaN(pausedOn.getTime())) return "Paused, history kept";
   const day = DAY_MONTH.format(pausedOn);
   return `Paused ${day}, history kept`;
 }

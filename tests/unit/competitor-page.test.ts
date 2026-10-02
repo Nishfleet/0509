@@ -90,6 +90,8 @@ describe("the competitor page frame", () => {
   it("formats the paused line in en-GB UTC", () => {
     expect(competitorPausedLine("2026-09-22T12:00:00.000Z")).toBe("Paused 22 Sept");
     expect(competitorPausedLine(null)).toBe("Paused");
+    expect(competitorPausedLine("not a date")).toBe("Paused");
+    expect(competitorPausedLine("not a date", "shut_down")).toBe("Paused · looks like it shut down");
   });
 
   it("reads state_reason in lowercase customer words and never shows a code", () => {
