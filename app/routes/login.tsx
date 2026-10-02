@@ -86,6 +86,15 @@ function EmailForm({ busy, turnstileSiteKey }: { busy: boolean; turnstileSiteKey
   );
 }
 
+function SignInError({ message }: { message: string | null | undefined }) {
+  if (!message) return null;
+  return (
+    <p role="alert" className="mt-8 text-[0.95rem]">
+      {message}
+    </p>
+  );
+}
+
 export default function Login() {
   const actionData = useActionData<LoginActionData>();
   const deleted = useLoaderData<typeof loader>();
@@ -120,11 +129,7 @@ export default function Login() {
         {deleted.progress === null || deleted.id === null ? null : (
           <AccountDeleteNotice id={deleted.id} progress={deleted.progress} />
         )}
-        {(actionData?.error ?? deleted.linkError) ? (
-          <p role="alert" className="mt-8 text-[0.95rem]">
-            {actionData?.error ?? deleted.linkError}
-          </p>
-        ) : null}
+        <SignInError message={actionData?.error ?? deleted.linkError} />
         <EmailForm busy={busy} turnstileSiteKey={deleted.turnstileSiteKey} />
         <PasskeyOption state={passkey.state} onSignIn={passkey.signIn} />
       </main>
