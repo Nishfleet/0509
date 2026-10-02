@@ -76,7 +76,7 @@ export interface QuietWeek {
 
 export function quietWeek(mentions: number, siteChanges: number): QuietWeek {
   return {
-    sentence: `Quiet week. We checked ${String(mentions)} mentions and ${String(siteChanges)} site changes. None were big enough to flag.`,
+    sentence: `Quiet week. We checked ${String(mentions)} ${mentions === 1 ? "mention" : "mentions"} and ${String(siteChanges)} ${siteChanges === 1 ? "site change" : "site changes"}. None were big enough to flag.`,
     action: { kind: "link", label: "See the details", href: "/app" },
   };
 }

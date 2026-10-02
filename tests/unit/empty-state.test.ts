@@ -58,6 +58,18 @@ describe("DESIGN.md 7 empty states", () => {
     expect(links(html)[0]).toContain('href="/app"');
   });
 
+  it("a quiet week of exactly one names the singular nouns (#6666)", () => {
+    const { sentence } = quietWeek(1, 1);
+    expect(sentence).toContain("1 mention and 1 site change");
+    expect(sentence).not.toContain("1 mentions");
+    expect(sentence).not.toContain("1 site changes");
+  });
+
+  it("a quiet week of zero keeps the plural nouns (#6666)", () => {
+    const { sentence } = quietWeek(0, 0);
+    expect(sentence).toContain("0 mentions and 0 site changes");
+  });
+
   it("fewer than two ON brands carries the one inline input", () => {
     const { sentence, action } = fewerThanTwoOnBrands();
     expect(action.kind).toBe("input");
