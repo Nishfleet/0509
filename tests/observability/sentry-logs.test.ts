@@ -3,7 +3,6 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { ESLint } from "eslint";
-import { afterEach, describe, expect, it } from "vitest";
 import {
   _INTERNAL_flushLogsBuffer,
   captureException,
@@ -13,74 +12,94 @@ import {
   initAndBind,
   nodeStackLineParser,
 } from "@sentry/core";
-import { CloudflareClient, consoleLoggingIntegration } from "@sentry/cloudflare";
+import { CloudflareClient } from "@sentry/cloudflare";
+import { beforeAll, afterEach, describe, expect, it } from "vitest";
 import { sentryOptions } from "../../workers/sentry";
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 
+const USER_DATA_MESSAGE = "never carry customer data or prompt input";
+
 const envelopes: unknown[] = [];
 
+// A transport that records instead of sending, with the return shapes
+// `Transport` declares.
 function fakeTransport() {
   return {
-    send(envelope: unknown) {
+    send: (envelope: unknown) => {
       envelopes.push(envelope);
+      return Promise.resolve({});
     },
-    async flush() {},
-    async close() {},
+    flush: () => Promise.resolve(true),
   };
 }
+
+// The client the Worker gets. `initAndBind` is what `@sentry/cloudflare`'s own
+// init() ends in (the SDK ships no top-level `init`), so overriding only the
+// dsn, the transport and the stack parser keeps every option `sentryOptions`
+// declares — `enableLogs`, `consoleLoggingIntegration()`, `beforeSendLog` —
+// the ones under test.
+function initProductionOptions(): void {
+  initAndBind(CloudflareClient, {
+    ...sentryOptions({} as unknown as Env),
+    dsn: "https://examplePublicKey@o0.ingest.sentry.io/0",
+    transport: fakeTransport,
+    stackParser: createStackParser([10, nodeStackLineParser]),
+  });
+}
+
+interface LogItem {
+  body?: string;
+  trace_id?: string;
+}
+
+interface EnvelopeItem {
+  header: { type?: string; trace?: { trace_id?: string } };
+  logs?: LogItem[];
+}
+
+function items(): EnvelopeItem[] {
+  return envelopes.flatMap((envelope) => {
+    const [, items] = envelope as [Record<string, unknown>, [unknown, unknown][]];
+    return items.map(([header, data]) => ({
+      header: header as EnvelopeItem["header"],
+      logs: (data as { items?: LogItem[] }).items,
+    }));
+  });
+}
+
+function logItems(): LogItem[] {
+  return items()
+    .filter((item) => item.header.type === "log")
+    .flatMap((item) => item.logs ?? []);
+}
+
+/** The trace every error event ships in its envelope header, which is what Sentry ingests. */
+function eventTraceIds(): string[] {
+  return envelopes
+    .map((envelope) => {
+      const [headers] = envelope as [Record<string, unknown>, unknown[]];
+      return (headers.trace as { trace_id?: string } | undefined)?.trace_id;
+    })
+    .filter((traceId): traceId is string => typeof traceId === "string");
+}
+
+beforeAll(initProductionOptions);
 
 afterEach(() => {
   envelopes.length = 0;
 });
 
-const USER_DATA_MESSAGE = "never carry customer data or prompt input";
-
-function initClient(): void {
-  initAndBind(CloudflareClient, {
-    dsn: "https://examplePublicKey@o0.ingest.sentry.io/0",
-    enableLogs: true,
-    integrations: [consoleLoggingIntegration()],
-    defaultIntegrations: false,
-    transport: fakeTransport,
-    // `@sentry/cloudflare`'s own init() supplies this from its vendored
-    // workerd stack parser; the SDK ships no top-level init, so the test
-    // builds the same client the Worker gets.
-    stackParser: createStackParser([10, nodeStackLineParser]),
-  });
-}
-
-function logBodies(): string[] {
-  const client = getClient();
-  if (client) {
-    _INTERNAL_flushLogsBuffer(client);
-  }
-  const bodies: string[] = [];
-  for (const envelope of envelopes) {
-    const [, items] = envelope as [unknown, unknown[]];
-    for (const item of items) {
-      const [header, data] = item as [unknown, unknown];
-      if ((header as { type?: string }).type !== "log") continue;
-      for (const log of (data as { items: Array<{ body?: string }> }).items) {
-        if (log.body) bodies.push(log.body);
-      }
-    }
-  }
-  return bodies;
-}
-
 describe("Sentry Logs (#6604)", () => {
   it("sentryOptions enables Logs and registers consoleLoggingIntegration", () => {
     const opts = sentryOptions({} as unknown as Env);
     expect(opts.enableLogs).toBe(true);
-    const integrations = opts.integrations as Array<{ name: string }>;
-    expect(integrations.some((i) => i.name === "ConsoleLogs")).toBe(true);
+    const integrations = opts.integrations as { name: string }[];
+    expect(integrations.some((integration) => integration.name === "ConsoleLogs")).toBe(true);
   });
 
-  it("a console log shares trace id with an error captured in the same scope", async () => {
-    initClient();
-    captureException(new Error("probe error"));
-    console.log("probe log");
+  it("ships one log item per console line, in Sentry's own log envelope", async () => {
+    console.log(JSON.stringify({ event: "probe.one_line", workspaceId: "ws_1" }));
 
     const client = getClient();
     if (client) {
@@ -88,47 +107,50 @@ describe("Sentry Logs (#6604)", () => {
     }
     await flush();
 
-    const logTraceIds: string[] = [];
-    const eventTraceIds: string[] = [];
-    for (const envelope of envelopes) {
-      const [, items] = envelope as [unknown, unknown[]];
-      for (const item of items) {
-        const [header, data] = item as [unknown, unknown];
-        const h = header as { type?: string };
-        if (h.type === "log") {
-          const container = data as { items: Array<{ trace_id?: string }> };
-          for (const log of container.items) {
-            if (log.trace_id) logTraceIds.push(log.trace_id);
-          }
-        }
-        if (h.type === "event") {
-          const ev = data as { contexts?: { trace?: { trace_id?: string } } };
-          if (ev.contexts?.trace?.trace_id) eventTraceIds.push(ev.contexts.trace.trace_id);
-        }
-      }
-    }
-
-    expect(logTraceIds.length).toBeGreaterThan(0);
-    expect(eventTraceIds.length).toBeGreaterThan(0);
-    expect(eventTraceIds.some((id) => logTraceIds.includes(id))).toBe(true);
+    const matching = logItems().filter((log) => log.body?.includes("probe.one_line"));
+    expect(matching).toHaveLength(1);
+    expect(matching[0]?.body).toContain("workspaceId");
   });
 
-  it("carries the operator id the gate allows and nothing the gate bans", () => {
-    initClient();
-    // The shape the nightly crons log: the event name and the count an
-    // operator reads. workspaceId is the one id 0509#5786 allows.
-    console.log(JSON.stringify({ event: "standing.nightly", workspaceId: "ws_1", catchUps: 2 }));
+  it("adds the trace id of the error captured in the same request to the log line", async () => {
+    captureException(new Error("probe error"));
+    console.log("probe log");
+    await flush();
 
-    const bodies = logBodies();
-    expect(bodies).toHaveLength(1);
-    expect(bodies[0]).toContain("standing.nightly");
-    expect(bodies[0]).toContain("ws_1");
-    for (const banned of ["email", "userId", "ip", "prompt", "token", "subject", "password"]) {
-      expect(bodies[0]).not.toContain(banned);
-    }
+    const probeLog = logItems().find((log) => log.body?.includes("probe log"));
+    expect(probeLog?.trace_id).toBeDefined();
+    expect(eventTraceIds()).toContain(probeLog?.trace_id);
   });
 
-  it("leaves the live log lines workers/app.ts and workers/sentry.ts under the #5786 gate", { timeout: 60_000 }, async () => {
+  it("scrubs customer data out of the log it ships, under the #5786 gate", () => {
+    // A value a name-based selector cannot see: `contact` and `back` are not
+    // on 0509#5786's banned list, so the gate lets the line through. The log
+    // hook is what keeps their contents out of Sentry.
+    console.log(
+      JSON.stringify({
+        event: "probe.redaction",
+        workspaceId: "ws_1",
+        contact: "ada@customer.example",
+        back: "https://0509.io/u/tok-SECRET",
+      }),
+    );
+
+    const client = getClient();
+    if (client) {
+      _INTERNAL_flushLogsBuffer(client);
+    }
+
+    const [body] = logItems()
+      .map((log) => log.body ?? "")
+      .filter((logBody) => logBody.includes("probe.redaction"));
+    expect(body).toContain("probe.redaction");
+    expect(body).toContain("ws_1");
+    expect(body).not.toContain("ada@customer.example");
+    expect(body).not.toContain("tok-SECRET");
+    expect(body).toContain("[redacted]");
+  });
+
+  it("keeps the live console lines under the #5786 log gate", { timeout: 60_000 }, async () => {
     const eslint = new ESLint({ cwd: REPO_ROOT });
     for (const rel of ["workers/sentry.ts", "workers/app.ts", "workers/standing/nightly.ts"]) {
       const results = await eslint.lintFiles([path.join(REPO_ROOT, rel)]);
@@ -137,8 +159,8 @@ describe("Sentry Logs (#6604)", () => {
     }
   });
 
-  it("still flags a customer-data value on the log path a console line takes", { timeout: 60_000 }, async () => {
-    const probe = path.join(REPO_ROOT, "app/lib/probe-sentry-logs-tmp.ts");
+  it("keeps the #5786 gate firing on the log path a console line takes", { timeout: 60_000 }, async () => {
+    const probe = path.join(REPO_ROOT, "app/lib", "probe-sentry-logs-tmp.ts");
     await mkdir(path.dirname(probe), { recursive: true });
     await writeFile(probe, "declare const subject: { registrable: string };\nconsole.log(subject.registrable);\n");
     try {

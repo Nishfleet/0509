@@ -2,6 +2,7 @@ import { consoleLoggingIntegration } from "@sentry/cloudflare";
 import type { CloudflareOptions, ErrorEvent } from "@sentry/cloudflare";
 
 type TransactionEvent = Parameters<NonNullable<CloudflareOptions["beforeSendTransaction"]>>[0];
+type SentryLog = Parameters<NonNullable<CloudflareOptions["beforeSendLog"]>>[0];
 type SentryEnv = Env & { SENTRY_DSN?: string };
 
 const TOKEN_PATH_PREFIXES = ["/u/", "/v/"] as const;
@@ -14,8 +15,30 @@ export const sentryOptions = (env: SentryEnv): CloudflareOptions => ({
   sendDefaultPii: false,
   beforeBreadcrumb: () => null,
   beforeSend: scrubEvent,
+  beforeSendLog: scrubLog,
   beforeSendTransaction: scrubEvent,
 });
+
+function scrubLog(log: SentryLog): SentryLog {
+  return {
+    ...log,
+    message: scrubText(String(log.message)),
+    attributes: Object.fromEntries(
+      Object.entries(log.attributes ?? {}).map(([key, value]) => [key, scrubLogValue(value)]),
+    ),
+  };
+}
+
+function scrubLogValue(value: unknown, depth = 0): unknown {
+  if (typeof value === "string") return scrubText(value);
+  if (value !== null && typeof value === "object" && depth < 3) {
+    if (Array.isArray(value)) return value.map((entry) => scrubLogValue(entry, depth + 1));
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>).map(([key, entry]) => [key, scrubLogValue(entry, depth + 1)]),
+    );
+  }
+  return value;
+}
 
 const URL_PATTERN = /https?:\/\/[^\s"'<>)]+/g;
 const EMAIL_PATTERN = /[^\s@"'<>]+@[^\s@"'<>]+/g;
