@@ -11,8 +11,8 @@ import { SourcePill } from "../components/source-pill";
 import { acknowledgeOwnSiteIncident, loadAlertsPage } from "../lib/alerts-page.server";
 import { parseAlertChip } from "../lib/alert-chips";
 import { listBriefs } from "../lib/data/digest.server";
-import { readWorkspaceIdForOwner } from "../lib/data/workspace.server";
-import { requireFreshSession, requireSession } from "../lib/require-session.server";
+import { onboardedContext } from "../lib/require-onboarded.server";
+import { requireFreshSession } from "../lib/require-session.server";
 
 export function meta() {
   return [{ title: "Alerts · Five to Nine" }];
@@ -20,16 +20,15 @@ export function meta() {
 
 const WHEN_CLASS = "mt-2 block font-mono text-meta text-ink-soft uppercase";
 
-async function readLatestBrief(userId: string) {
-  const workspaceId = await readWorkspaceIdForOwner(userId);
+async function readLatestBrief(workspaceId: string | null) {
   return workspaceId === null ? undefined : (await listBriefs(env.DB, workspaceId))[0];
 }
 
-export async function loader({ request }: Route.LoaderArgs) {
-  const session = await requireSession(request);
+export async function loader({ request, context }: Route.LoaderArgs) {
+  const { workspaceId } = context.get(onboardedContext);
   const [page, latest] = await Promise.all([
-    loadAlertsPage(session.user.id, parseAlertChip(new URL(request.url).searchParams.get("kind"))),
-    readLatestBrief(session.user.id),
+    loadAlertsPage(workspaceId, parseAlertChip(new URL(request.url).searchParams.get("kind"))),
+    readLatestBrief(workspaceId),
   ]);
   const failedBrief = latest?.status === "failed" ? { id: latest.id } : null;
   return { ...page, failedBrief };
@@ -84,7 +83,12 @@ export default function Page({ loaderData }: Route.ComponentProps) {
       {loaderData.sources.length > 0 ? (
         <p data-testid="alerts-sources" className="mt-4 flex flex-wrap gap-2">
           {loaderData.sources.map((entry) => (
-            <SourcePill key={entry.source.key} source={entry.source} snapshot={entry.snapshot} now={loaderData.now} />
+            <SourcePill
+              key={entry.source.key}
+              source={{ ...entry.source, kind: entry.kind }}
+              snapshot={entry.snapshot}
+              now={loaderData.now}
+            />
           ))}
         </p>
       ) : null}

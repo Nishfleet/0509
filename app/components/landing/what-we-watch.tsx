@@ -23,7 +23,7 @@ export function WhatWeWatch({ sources, now }: { sources: readonly WatchedSource[
   const siteDegraded = shown.some(({ entry, status }) => entry.kind === "site" && status.state === "degraded");
   const gated = allDegraded && !siteDegraded;
   const nouns = [...new Set(statuses.map(({ entry }) => sourceKindNoun(entry.kind)))];
-  const lead = `We read ${nouns.length === 0 ? "public sources" : joinList(nouns)}. If a source stops answering, it shows here dimmed with the reason, so we never drop it quietly. "Last good unknown" means we haven't checked that kind of source yet. The first check happens in the next daily check.`;
+  const lead = `We read ${nouns.length === 0 ? "public sources" : joinList(nouns)}. If a source stops answering, it shows here dimmed with the reason, so we never drop it quietly. A source with no "last updated" time hasn't been checked yet. The first check happens in the next daily check.`;
   return (
     <Section id="what-we-watch" kicker="Public sources only" title="What we watch" lead={lead}>
       {gated ? (
@@ -32,7 +32,7 @@ export function WhatWeWatch({ sources, now }: { sources: readonly WatchedSource[
         <ul className="flex flex-wrap gap-2">
           {shown.map(({ entry }) => (
             <li key={entry.source.key}>
-              <SourcePill source={entry.source} snapshot={entry.snapshot} now={now} />
+              <SourcePill source={{ ...entry.source, kind: entry.kind }} snapshot={entry.snapshot} now={now} />
             </li>
           ))}
         </ul>

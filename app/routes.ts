@@ -11,6 +11,7 @@ export default [
     route("app/competitors", "routes/app.competitors.tsx"),
     route("app/competitors/:entityId", "routes/app.competitor.tsx"),
     route("app/upgrade", "routes/app.upgrade.ts"),
+    route("app/tester", "routes/app.tester.ts"),
     route("app/alerts", "routes/app.alerts.tsx"),
     route("app/brief/:digestId?", "routes/app.brief.tsx"),
   ]),

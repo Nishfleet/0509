@@ -78,7 +78,12 @@ const COMPETITORS_TO_CLASSIFY = `SELECT e.id AS entity_id, e.workspace_id AS wor
 FROM entity e
 JOIN page p ON p.entity_id = e.id AND p.role = 'home'
 WHERE e.role = 'competitor' AND e.state = 'on'
-  AND NOT EXISTS (SELECT 1 FROM page j WHERE j.entity_id = e.id AND j.role_decided_for_hash IS NOT NULL)
+  AND (
+    NOT EXISTS (SELECT 1 FROM page j WHERE j.entity_id = e.id AND j.role_decided_for_hash IS NOT NULL)
+    OR CASE WHEN json_valid(e.identity_json)
+         THEN json_extract(e.identity_json, '$.socialsReadAt') IS NULL AND coalesce(json_array_length(e.identity_json, '$.socials'), 0) = 0
+         ELSE 0 END
+  )
   AND (p.deferred_at IS NULL OR p.deferred_at < ?2)
 ORDER BY random()
 LIMIT ?1`;
@@ -192,7 +197,7 @@ export interface OwnSitePage {
   url: string;
 }
 
-const ENTITIES_WITHOUT_HOME = `SELECT e.id AS id, e.domain AS domain, json_extract(e.identity_json, '$.url') AS url
+const ENTITIES_WITHOUT_HOME = `SELECT e.id AS id, e.domain AS domain, CASE WHEN json_valid(e.identity_json) THEN json_extract(e.identity_json, '$.url') END AS url
 FROM entity e
 WHERE e.state = 'on'
   AND NOT EXISTS (SELECT 1 FROM page p WHERE p.entity_id = e.id AND p.role = 'home')

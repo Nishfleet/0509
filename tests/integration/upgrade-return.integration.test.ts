@@ -1,15 +1,22 @@
 import { env } from "cloudflare:test";
+import { RouterContextProvider } from "react-router";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("../../app/lib/require-session.server", () => ({
   requireSession: async () => ({ user: { id: "user-return", email: "return@example.com" } }),
 }));
 
+import { onboardedContext } from "../../app/lib/require-onboarded.server";
 import { loader } from "../../app/routes/app.competitors";
 
 function competitorsLoader(search: string): ReturnType<typeof loader> {
   const request = new Request(`https://0509.io/app/competitors${search}`);
-  return loader({ request, params: {}, context: {} } as unknown as Parameters<typeof loader>[0]);
+  const context = new RouterContextProvider();
+  context.set(onboardedContext, {
+    session: { user: { id: "user-return", email: "return@example.com" } },
+    workspaceId: "ws-return",
+  } as never);
+  return loader({ request, params: {}, context } as unknown as Parameters<typeof loader>[0]);
 }
 
 describe("competitors loader after checkout (J13)", () => {

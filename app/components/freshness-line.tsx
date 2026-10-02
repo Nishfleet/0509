@@ -1,6 +1,7 @@
 import type { ReactElement } from "react";
 
 import { shortUtc } from "../lib/short-utc";
+import { plainSourceReason } from "../lib/source-status-words";
 
 export interface FreshnessEntry {
   key: string;
@@ -12,9 +13,8 @@ export interface FreshnessEntry {
 
 export function freshnessText(entry: FreshnessEntry): string {
   if (entry.state === "degraded") {
-    return `${entry.name}: ${entry.reason ?? "not answering"} · last good ${
-      entry.lastLandedAt === null ? "never" : shortUtc(entry.lastLandedAt)
-    }`;
+    const lastUpdated = entry.lastLandedAt === null ? "" : ` · last updated ${shortUtc(entry.lastLandedAt)}`;
+    return `${entry.name}: ${plainSourceReason(entry.reason)}${lastUpdated}`;
   }
   return entry.lastLandedAt === null
     ? `${entry.name}: no data yet`

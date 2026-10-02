@@ -9,6 +9,7 @@ import { PLANS, TRIAL_TERMS } from "./billing/plans";
 import { LIVE_COVERAGE, PLAN_NOTE } from "./coverage";
 import { FAQ } from "./faq";
 import { LEGAL_UPDATED } from "./legal/document";
+import { plainSourceReason } from "./source-status-words";
 import { SITE_URL } from "./structured-data";
 import { watchedClaims } from "./watched-claims";
 
@@ -122,7 +123,7 @@ function llmsWatchQualifier(status: SourcePillStatus): string {
   if (status.reason === null) {
     return " (not answering today)";
   }
-  return ` (not answering today: ${status.reason})`;
+  return ` (not answering today: ${plainSourceReason(status.reason)})`;
 }
 
 function llmsWatchLine(

@@ -17,7 +17,7 @@ const LOGO_TYPES = new Set([
 ]);
 
 function logoKey(registrable: string): string {
-  return `logo/${registrable}`;
+  return `logo/v3/${registrable}`;
 }
 
 function mediaType(header: string | null): string {
