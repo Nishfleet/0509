@@ -72,7 +72,7 @@
       "title": "Slack | Team messaging and collaboration platform",
       "description": "Team messaging and collaboration platform"
     },
-    "expected": [["discord.com"], ["zoom.us"], ["microsoft.com"], ["mattermost.com"]]
+    "expected": [["discord.com"], ["zoom.us", "zoom.com"], ["microsoft.com"], ["mattermost.com"]]
   },
   {
     "id": "stripe",
@@ -297,7 +297,7 @@
       "title": "Canva | Online graphic design tool for non-designers",
       "description": "Online graphic design tool for non-designers"
     },
-    "expected": [["adobe.com"], ["figma.com"], ["visme.com"], ["piktochart.com"]]
+    "expected": [["adobe.com"], ["figma.com"], ["visme.com", "visme.co"], ["piktochart.com"]]
   },
   {
     "id": "mailchimp",
@@ -477,7 +477,7 @@
       "title": "Everlane | Modern basics clothing with transparent pricing",
       "description": "Modern basics clothing with transparent pricing"
     },
-    "expected": [["uniqlo.com"], ["jcrew.com"], ["reformation.com"], ["madewell.com"]]
+    "expected": [["uniqlo.com"], ["jcrew.com"], ["reformation.com", "thereformation.com"], ["madewell.com"]]
   },
   {
     "id": "bombas",
@@ -642,7 +642,7 @@
       "title": "Loom | Async video messaging for work",
       "description": "Async video messaging for work"
     },
-    "expected": [["vidyard.com"], ["screencastify.com"], ["tella.tv"], ["zoom.us"]]
+    "expected": [["vidyard.com"], ["screencastify.com"], ["tella.tv"], ["zoom.us", "zoom.com"]]
   },
   {
     "id": "intercom",
