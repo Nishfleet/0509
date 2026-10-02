@@ -3,21 +3,26 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
 import { ApiReference } from "../../app/components/api-reference";
-import { schemaFields, schemaLabel } from "../../app/lib/agent/api-docs";
+import { schemaFields, schemaLabel, type JsonRecord } from "../../app/lib/agent/api-docs";
 import { openApiDocument } from "../../app/lib/agent/openapi";
 import { MCP_PATH } from "../../app/lib/agent/paths";
+import { headers } from "../../app/routes/api-docs";
 
 const ORIGIN = "https://0509.io";
 const SETTINGS = "/app/settings/agents";
 
-function page(): string {
+function page(document: JsonRecord = openApiDocument(ORIGIN)): string {
   return renderToStaticMarkup(
     createElement(ApiReference, {
-      document: openApiDocument(ORIGIN),
+      document,
       mcpUrl: `${ORIGIN}${MCP_PATH}`,
       settingsHref: SETTINGS,
     }),
   ).replaceAll("&#x27;", "'");
+}
+
+function cloneDocument(): JsonRecord {
+  return JSON.parse(JSON.stringify(openApiDocument(ORIGIN))) as JsonRecord;
 }
 
 describe("the API reference page", () => {
@@ -67,5 +72,55 @@ describe("the API reference page", () => {
     const html = page();
     expect(html).toContain(">API reference<");
     expect(html).not.toContain("!");
+  });
+
+  it("still renders the other paths when one path item has no operation", () => {
+    const document = cloneDocument();
+    const paths = document.paths;
+    if (!paths || typeof paths !== "object") throw new Error("expected paths");
+    (paths as JsonRecord)["/api/v1/ghost"] = { $ref: "#/paths/unused" };
+    const html = page(document);
+    expect(html).toContain("/api/v1/brief");
+    expect(html).not.toContain("/api/v1/ghost");
+  });
+
+  it("still renders when a response has no description", () => {
+    const document = cloneDocument();
+    const paths = document.paths;
+    if (!paths || typeof paths !== "object") throw new Error("expected paths");
+    const brief = (paths as JsonRecord)["/api/v1/brief"];
+    if (!brief || typeof brief !== "object") throw new Error("expected brief");
+    const get = (brief as JsonRecord).get;
+    if (!get || typeof get !== "object") throw new Error("expected get");
+    const responses = (get as JsonRecord).responses;
+    if (!responses || typeof responses !== "object") throw new Error("expected responses");
+    (responses as JsonRecord)["599"] = {};
+    expect(page(document)).toContain("/api/v1/brief");
+  });
+
+  it("still renders bearer instructions when the security scheme is missing", () => {
+    const document = cloneDocument();
+    delete document.components;
+    const html = page(document);
+    expect(html).toContain("Authorization: Bearer");
+    expect(html).toContain("/api/v1/brief");
+  });
+
+  it("gives each method its own heading id when a path has two operations", () => {
+    const html = page({
+      paths: {
+        "/api/v1/brief": {
+          get: { summary: "read", responses: { "200": { description: "ok" } } },
+          post: { summary: "write", responses: { "200": { description: "created" } } },
+        },
+      },
+      components: { securitySchemes: { apiKey: { type: "http", scheme: "bearer", description: "An API key from Settings" } } },
+    });
+    expect(html).toContain('id="get-api-v1-brief"');
+    expect(html).toContain('id="post-api-v1-brief"');
+  });
+
+  it("does not cache a request-time origin", () => {
+    expect(headers()).toEqual({ "cache-control": "no-store" });
   });
 });

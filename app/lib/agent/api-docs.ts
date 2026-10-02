@@ -41,9 +41,7 @@ export function isRecord(value: unknown): value is JsonRecord {
 
 export function refName(ref: string): string {
   const name = ref.split("/").at(-1);
-  if (name === undefined || name === "") {
-    throw new Error(`OpenAPI $ref has no name: ${ref}`);
-  }
+  if (name === undefined || name === "") return "schema";
   return decodeURIComponent(name);
 }
 
@@ -68,10 +66,8 @@ function asList(value: unknown): unknown[] {
   return Array.isArray(value) ? value : [];
 }
 
-function paramView(parameter: unknown): ParamView {
-  if (!isRecord(parameter) || typeof parameter.name !== "string") {
-    throw new Error("OpenAPI parameter is missing a name");
-  }
+function paramView(parameter: unknown): ParamView | null {
+  if (!isRecord(parameter) || typeof parameter.name !== "string") return null;
   const where = typeof parameter.in === "string" ? parameter.in : "query";
   return {
     name: parameter.name,
@@ -94,10 +90,8 @@ function responseShape(schema: unknown, fields: FieldView[]): string {
   return schemaLabel(schema);
 }
 
-function responseView(status: string, response: unknown): ResponseView {
-  if (!isRecord(response) || typeof response.description !== "string") {
-    throw new Error(`OpenAPI response ${status} is missing a description`);
-  }
+function responseView(status: string, response: unknown): ResponseView | null {
+  if (!isRecord(response) || typeof response.description !== "string") return null;
   const schema = jsonSchema(response);
   const fields = schemaFields(schema);
   return {
@@ -116,31 +110,32 @@ function operations(item: JsonRecord): { method: string; operation: JsonRecord }
 
 function endpointFrom(path: string, item: JsonRecord): EndpointView[] {
   const ops = operations(item);
-  if (ops.length === 0) {
-    throw new Error(`OpenAPI path ${path} has no operation`);
-  }
-  const shared = asList(item.parameters).map(paramView);
+  if (ops.length === 0) return [];
+  const shared = asList(item.parameters).flatMap((parameter) => {
+    const view = paramView(parameter);
+    return view === null ? [] : [view];
+  });
   return ops.map(({ method, operation }) => ({
     path,
     method,
     summary: typeof operation.summary === "string" ? operation.summary : path,
-    parameters: [...shared, ...asList(operation.parameters).map(paramView)],
-    responses: Object.entries(isRecord(operation.responses) ? operation.responses : {}).map(([status, response]) =>
-      responseView(status, response),
-    ),
+    parameters: [
+      ...shared,
+      ...asList(operation.parameters).flatMap((parameter) => {
+        const view = paramView(parameter);
+        return view === null ? [] : [view];
+      }),
+    ],
+    responses: Object.entries(isRecord(operation.responses) ? operation.responses : {}).flatMap(([status, response]) => {
+      const view = responseView(status, response);
+      return view === null ? [] : [view];
+    }),
   }));
 }
 
 export function endpointViews(document: JsonRecord): EndpointView[] {
-  if (!isRecord(document.paths)) {
-    throw new Error("OpenAPI document has no paths");
-  }
-  return Object.entries(document.paths).flatMap(([path, item]) => {
-    if (!isRecord(item)) {
-      throw new Error(`OpenAPI path ${path} is not an object`);
-    }
-    return endpointFrom(path, item);
-  });
+  if (!isRecord(document.paths)) return [];
+  return Object.entries(document.paths).flatMap(([path, item]) => (isRecord(item) ? endpointFrom(path, item) : []));
 }
 
 function fieldView(name: string, schema: unknown): FieldView {
@@ -167,9 +162,6 @@ export function bearerCopy(document: JsonRecord): string {
   const components = isRecord(document.components) ? document.components : {};
   const schemes = isRecord(components.securitySchemes) ? components.securitySchemes : {};
   const apiKey = schemes.apiKey;
-  if (!isRecord(apiKey) || apiKey.scheme !== "bearer") {
-    throw new Error("OpenAPI document is missing the bearer security scheme");
-  }
-  const description = typeof apiKey.description === "string" ? apiKey.description : "";
-  return description;
+  if (!isRecord(apiKey) || apiKey.scheme !== "bearer") return "";
+  return typeof apiKey.description === "string" ? apiKey.description : "";
 }

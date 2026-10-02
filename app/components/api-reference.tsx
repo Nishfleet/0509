@@ -29,6 +29,7 @@ function SettingsLink({ href }: { href: string }) {
 }
 
 function AuthBlock({ document, settingsHref }: { document: JsonRecord; settingsHref: string }) {
+  const copy = bearerCopy(document);
   return (
     <section aria-labelledby="authentication" className="mt-14 scroll-mt-6">
       <h2 className={HEADING} id="authentication">
@@ -38,7 +39,7 @@ function AuthBlock({ document, settingsHref }: { document: JsonRecord; settingsH
         Send a key from <SettingsLink href={settingsHref} /> as:
       </p>
       <p className={`mt-3 ${MONO}`}>{`Authorization: Bearer <key>`}</p>
-      <p className={BODY}>{bearerCopy(document)}.</p>
+      {copy === "" ? null : <p className={BODY}>{copy}.</p>}
     </section>
   );
 }
@@ -114,7 +115,7 @@ function ResponseList({ responses }: { responses: ResponseView[] }) {
 }
 
 function Endpoint({ endpoint }: { endpoint: EndpointView }) {
-  const id = endpoint.path.replaceAll(/[^a-z0-9]+/gi, "-").replaceAll(/^-|-$/g, "");
+  const id = `${endpoint.method}-${endpoint.path}`.replaceAll(/[^a-z0-9]+/gi, "-").replaceAll(/^-|-$/g, "");
   return (
     <article aria-labelledby={id} className="mt-10 min-w-0 border-t border-line pt-6">
       <h3 className={MONO} id={id}>

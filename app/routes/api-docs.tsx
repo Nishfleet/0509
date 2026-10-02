@@ -11,6 +11,10 @@ export function meta() {
   ];
 }
 
+export function headers() {
+  return { "cache-control": "no-store" };
+}
+
 export function loader({ request }: Route.LoaderArgs) {
   const origin = new URL(request.url).origin;
   return {
