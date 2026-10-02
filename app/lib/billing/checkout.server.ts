@@ -2,7 +2,7 @@ import { env } from "cloudflare:workers";
 import DodoPayments from "dodopayments";
 
 import { checkoutProof } from "./checkout-proof.server";
-import { TRIAL_DAYS, type PlanId } from "./plans";
+import { TRIAL_DAYS, type BillingInterval, type PlanId } from "./plans";
 import { productIdFor, testerProductId } from "./products.server";
 
 interface CheckoutInput {
@@ -37,8 +37,14 @@ async function startCheckout(input: CheckoutInput & { product: string; planId: P
   }
 }
 
-export function createCheckoutUrl(input: CheckoutInput & { planId: PlanId }): Promise<string | null> {
-  return startCheckout({ ...input, product: productIdFor(input.planId), trialDays: TRIAL_DAYS });
+export function createCheckoutUrl(
+  input: CheckoutInput & { planId: PlanId; interval?: BillingInterval },
+): Promise<string | null> {
+  return startCheckout({
+    ...input,
+    product: productIdFor(input.planId, input.interval ?? "monthly"),
+    trialDays: TRIAL_DAYS,
+  });
 }
 
 export function createTesterCheckoutUrl(input: CheckoutInput): Promise<string | null> {
