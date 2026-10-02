@@ -85,7 +85,8 @@ export async function readEnabledSourceId(key: string): Promise<string | null> {
   return row?.id ?? null;
 }
 
-const ENABLED_BY_KIND = "SELECT id, key FROM source WHERE kind = ?1 AND is_enabled = 1 ORDER BY key";
+const ENABLED_BY_KIND =
+  "SELECT id, key FROM source WHERE kind = ?1 AND platform <> 'feed' AND is_enabled = 1 ORDER BY key";
 
 const enabledSourceRows = z.array(z.object({ id: z.string(), key: z.string() }));
 

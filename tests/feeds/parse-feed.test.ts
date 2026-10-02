@@ -174,3 +174,76 @@ describe("item keys", () => {
     expect(await hashItemKeys(await keyItems(items.slice(0, 1)))).not.toBe(forward);
   });
 });
+
+describe("parseFeed on hostile input", () => {
+  const TWO_MIB = 2 * 1024 * 1024;
+  const timed = (xml: string) => {
+    const started = performance.now();
+    const items = parseFeed(xml, BASE, NOW);
+    return { items, ms: performance.now() - started };
+  };
+
+  it.each([
+    ["unclosed item tags", "<item>"],
+    ["unclosed entry tags", "<entry>"],
+    ["unclosed link tags inside one item", "<link>"],
+    ["unclosed CDATA openers", "<![CDATA["],
+    ["bare angle brackets", "<"],
+    ["unclosed title and description tags", "<title><description>"],
+  ])("stays fast on a 2 MiB feed of %s", (_label, unit) => {
+    const filler = unit.repeat(Math.floor(TWO_MIB / unit.length));
+    const documents = [
+      rss(filler),
+      rss(`<item><title>Real post</title><link>https://rival.com/a</link>${filler}</item>`),
+      rss(`<item>${filler}`),
+    ];
+
+    for (const xml of documents) {
+      const { ms } = timed(xml);
+      expect(ms).toBeLessThan(1500);
+    }
+  });
+
+  it("keeps only the first 200 blocks and the newest 20 items of a huge feed", () => {
+    const many = Array.from(
+      { length: 5000 },
+      (_, i) => `<item><title>Post ${i}</title><link>https://rival.com/p/${i}</link></item>`,
+    ).join("");
+
+    const { items, ms } = timed(rss(many));
+
+    expect(items).toHaveLength(MAX_FEED_ITEMS);
+    expect(ms).toBeLessThan(1500);
+  });
+
+  it("skips an item block over the size cap and still reads the next one", () => {
+    const huge = `<item><title>Huge</title><link>https://rival.com/huge</link><description>${"x".repeat(30_000)}</description></item>`;
+    const fine = "<item><title>Fine</title><link>https://rival.com/fine</link></item>";
+
+    expect(parseFeed(rss(huge + fine), BASE, NOW)?.map((item) => item.title)).toEqual(["Fine"]);
+  });
+
+  it("never expands entities or reads files: a DOCTYPE entity stays literal text", () => {
+    const xml = `<?xml version="1.0"?><!DOCTYPE rss [<!ENTITY xxe SYSTEM "file:///etc/passwd"><!ENTITY lol "lol">]>
+      <rss version="2.0"><channel><item><title>&xxe; and &lol;</title><link>https://rival.com/x</link>
+      <description>&xxe;</description></item></channel></rss>`;
+
+    const items = parseFeed(xml, BASE, NOW);
+
+    expect(items).toHaveLength(1);
+    expect(items?.[0]?.title).toBe("&xxe; and &lol;");
+    expect(items?.[0]?.excerpt).toBe("&xxe;");
+    expect(JSON.stringify(items)).not.toContain("root:");
+  });
+
+  it("does not follow a billion-laughs chain and treats numeric entities safely", () => {
+    const laughs = Array.from({ length: 9 }, (_, i) => `<!ENTITY lol${i + 1} "&lol${i};&lol${i};&lol${i};">`).join("");
+    const xml = `<?xml version="1.0"?><!DOCTYPE rss [<!ENTITY lol0 "lol">${laughs}]><rss><channel>
+      <item><title>&lol9; &#x110000; &#0; ok</title><link>https://rival.com/y</link></item></channel></rss>`;
+
+    const { items, ms } = timed(xml);
+
+    expect(items?.[0]?.title).toBe("&lol9; ok");
+    expect(ms).toBeLessThan(1500);
+  });
+});

@@ -9,7 +9,7 @@ import {
   readWeekEvidence,
   readWorkspaceContent,
 } from "../../../app/lib/data/signal.server";
-import { readEntitySources, readRegistrySources } from "../../../app/lib/data/source.server";
+import { readEnabledSources, readEntitySources, readRegistrySources } from "../../../app/lib/data/source.server";
 import {
   insertWatches,
   readEntityR2Prefixes,
@@ -64,6 +64,15 @@ describe("a feed watch is never a site watch", () => {
     expect(await readSiteSweepTargets("feed.rss")).toEqual([]);
     expect(await readSiteSweepTarget("watch-feed")).toBeNull();
     expect((await readSiteSweepTarget("watch-site"))?.url).toBe(HOME_URL);
+  });
+
+  it("is never returned by readEnabledSources('site'), even once the feed source is enabled", async () => {
+    await env.DB.prepare("UPDATE source SET is_enabled = 1 WHERE key = 'feed.rss'").run();
+
+    const keys = (await readEnabledSources("site")).map((source) => source.key);
+
+    expect(keys).not.toContain("feed.rss");
+    expect(keys).toContain("site.web");
   });
 
   it("is left out of the site watch summary's page count", async () => {

@@ -3,6 +3,7 @@ import { WorkflowEntrypoint } from "cloudflare:workers";
 
 import { withMonitor } from "@sentry/cloudflare";
 
+import { readEnabledSourceId } from "../../app/lib/data/source.server";
 import { readFeedTargets } from "../../app/lib/data/watch.server";
 import type { FeedResult } from "../../app/lib/feeds/read-feed.server";
 import { readFeed } from "../../app/lib/feeds/read-feed.server";
@@ -32,6 +33,17 @@ export interface FeedSweepOutcome {
   failed: number;
 }
 
+const IDLE: FeedSweepOutcome = {
+  discovered: 0,
+  feeds: 0,
+  first: 0,
+  unchanged: 0,
+  changed: 0,
+  unreadable: 0,
+  newPosts: 0,
+  failed: 0,
+};
+
 async function settle<T>(label: string, run: () => Promise<T>): Promise<T | null> {
   try {
     return await run();
@@ -55,6 +67,13 @@ export class FeedSweep extends WorkflowEntrypoint<Env> {
 
   private async runSweep(event: WorkflowEvent<unknown>, step: WorkflowStep): Promise<FeedSweepOutcome> {
     const tick = { instanceId: event.instanceId, plannedAt: event.timestamp.toISOString() };
+
+    const enabled = await step.do(
+      "source enabled",
+      RETRY,
+      async () => (await readEnabledSourceId("feed.rss")) !== null,
+    );
+    if (!enabled) return { ...IDLE };
 
     const plan = await step.do("plan", RETRY, () => planFeedSweep());
 

@@ -20,13 +20,15 @@ const MAX_EXCERPT_CHARS = 200;
 
 const MAX_BLOCKS = 200;
 
+const MAX_BLOCK_CHARS = 20_000;
+
+const MAX_TAG_CHARS = 2_000;
+
+const MAX_FIELD_CHARS = 8_000;
+
 const DAY_MS = 86_400_000;
 
 const FEED_ROOT = /<(rss|feed)[\s>]/i;
-
-const ENTRY_BLOCK = /<(item|entry)(?:\s[^>]*)?>([\s\S]*?)<\/\1\s*>/gi;
-
-const LINK_TAG = /<link\b([^>]*?)(?:\/>|>([\s\S]*?)<\/link\s*>)/gi;
 
 const ATTRIBUTE = /([a-zA-Z:-]+)\s*=\s*(?:"([^"]*)"|'([^']*)')/g;
 
@@ -51,7 +53,29 @@ function decodeEntities(text: string): string {
 }
 
 function unwrapCdata(text: string): string {
-  return text.replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, (_match, inner: string) => inner);
+  let out = "";
+  let at = 0;
+  for (;;) {
+    const open = text.indexOf("<![CDATA[", at);
+    if (open === -1) return out + text.slice(at);
+    const close = text.indexOf("]]>", open + 9);
+    if (close === -1) return out + text.slice(at);
+    out += text.slice(at, open) + text.slice(open + 9, close);
+    at = close + 3;
+  }
+}
+
+function stripTags(text: string): string {
+  let out = "";
+  let at = 0;
+  for (;;) {
+    const open = text.indexOf("<", at);
+    if (open === -1) return out + text.slice(at);
+    const close = text.indexOf(">", open + 1);
+    if (close === -1) return out + text.slice(at);
+    out += `${text.slice(at, open)} `;
+    at = close + 1;
+  }
 }
 
 function collapse(text: string): string {
@@ -59,32 +83,80 @@ function collapse(text: string): string {
 }
 
 function plainText(raw: string, limit: number): string {
-  const decoded = decodeEntities(unwrapCdata(raw));
-  const withoutTags = decoded.replace(/<[^>]*>/g, " ");
-  const text = collapse(decodeEntities(withoutTags));
+  const decoded = decodeEntities(unwrapCdata(raw.slice(0, MAX_FIELD_CHARS)));
+  const text = collapse(decodeEntities(stripTags(decoded)));
   return text.length > limit ? `${text.slice(0, limit - 1).trimEnd()}…` : text;
 }
 
-const TAG_PATTERNS = {
-  title: /<title(?:\s[^>]*)?>([\s\S]*?)<\/title\s*>/i,
-  description: /<description(?:\s[^>]*)?>([\s\S]*?)<\/description\s*>/i,
-  summary: /<summary(?:\s[^>]*)?>([\s\S]*?)<\/summary\s*>/i,
-  guid: /<guid(?:\s[^>]*)?>([\s\S]*?)<\/guid\s*>/i,
-  id: /<id(?:\s[^>]*)?>([\s\S]*?)<\/id\s*>/i,
-  pubDate: /<pubDate(?:\s[^>]*)?>([\s\S]*?)<\/pubDate\s*>/i,
-  published: /<published(?:\s[^>]*)?>([\s\S]*?)<\/published\s*>/i,
-  updated: /<updated(?:\s[^>]*)?>([\s\S]*?)<\/updated\s*>/i,
-  date: /<dc:date(?:\s[^>]*)?>([\s\S]*?)<\/dc:date\s*>/i,
-} as const;
+const NAME_END = /[\s>/]/;
 
-type TagName = keyof typeof TAG_PATTERNS;
-
-function firstTag(block: string, names: readonly TagName[]): string | null {
-  for (const name of names) {
-    const inner = TAG_PATTERNS[name].exec(block)?.[1];
-    if (inner !== undefined) return inner;
+function openTagAt(lower: string, name: string, from: number): { start: number; end: number } | null {
+  const needle = `<${name}`;
+  let at = lower.indexOf(needle, from);
+  while (at !== -1) {
+    const next = lower.charAt(at + needle.length);
+    if (NAME_END.test(next)) {
+      const end = lower.indexOf(">", at + needle.length);
+      if (end === -1 || end - at > MAX_TAG_CHARS) return null;
+      return { start: at, end };
+    }
+    at = lower.indexOf(needle, at + needle.length);
   }
   return null;
+}
+
+interface Element {
+  attrs: string;
+  inner: string | null;
+  after: number;
+}
+
+function elementAt(block: Block, name: string, from: number): Element | null {
+  const { source, lower } = block;
+  const open = openTagAt(lower, name, from);
+  if (open === null) return null;
+  const head = source.slice(open.start + name.length + 1, open.end);
+  if (head.endsWith("/")) return { attrs: head.slice(0, -1), inner: null, after: open.end + 1 };
+  const close = lower.indexOf(`</${name}`, open.end + 1);
+  if (close === -1) return { attrs: head, inner: null, after: open.end + 1 };
+  const closeEnd = lower.indexOf(">", close);
+  return {
+    attrs: head,
+    inner: source.slice(open.end + 1, close),
+    after: closeEnd === -1 ? close + name.length + 2 : closeEnd + 1,
+  };
+}
+
+function firstTag(block: Block, names: readonly string[]): string | null {
+  for (const name of names) {
+    const inner = elementAt(block, name, 0)?.inner;
+    if (inner !== undefined && inner !== null) return inner;
+  }
+  return null;
+}
+
+interface Block {
+  source: string;
+  lower: string;
+}
+
+function entryBlocks(xml: string): Block[] {
+  const lower = xml.toLowerCase();
+  const blocks: Block[] = [];
+  let at = 0;
+  while (blocks.length < MAX_BLOCKS) {
+    const items = openTagAt(lower, "item", at);
+    const entries = openTagAt(lower, "entry", at);
+    const open = items === null ? entries : entries === null || items.start < entries.start ? items : entries;
+    if (open === null) break;
+    const name = open === items ? "item" : "entry";
+    const close = lower.indexOf(`</${name}`, open.end + 1);
+    if (close === -1) break;
+    at = close + name.length + 2;
+    if (close - open.end > MAX_BLOCK_CHARS) continue;
+    blocks.push({ source: xml.slice(open.end + 1, close), lower: lower.slice(open.end + 1, close) });
+  }
+  return blocks;
 }
 
 export function attributes(source: string): Map<string, string> {
@@ -103,36 +175,39 @@ function resolveHttp(href: string, base: string): string | null {
   return url.protocol === "https:" || url.protocol === "http:" ? url.href : null;
 }
 
-function entryLink(block: string, base: string): string | null {
+function entryLink(block: Block, base: string): string | null {
   let textual: string | null = null;
-  for (const match of block.matchAll(LINK_TAG)) {
-    const attrs = attributes(match[1] ?? "");
+  let at = 0;
+  for (let seen = 0; seen < 50; seen += 1) {
+    const element = elementAt(block, "link", at);
+    if (element === null) break;
+    at = element.after;
+    const attrs = attributes(element.attrs);
     const href = attrs.get("href");
     if (href !== undefined) {
       const rel = attrs.get("rel");
       if (rel === undefined || rel.toLowerCase() === "alternate") return resolveHttp(href, base);
       continue;
     }
-    const text = match[2];
-    if (textual === null && text !== undefined) textual = collapse(decodeEntities(unwrapCdata(text)));
+    if (textual === null && element.inner !== null) textual = collapse(decodeEntities(unwrapCdata(element.inner)));
   }
   return textual === null ? null : resolveHttp(textual, base);
 }
 
-function entryDate(block: string): string | null {
-  const raw = firstTag(block, ["pubDate", "published", "updated", "date"]);
+function entryDate(block: Block): string | null {
+  const raw = firstTag(block, ["pubdate", "published", "updated", "dc:date"]);
   if (raw === null) return null;
   const parsed = Date.parse(collapse(decodeEntities(unwrapCdata(raw))));
   return Number.isNaN(parsed) ? null : new Date(parsed).toISOString();
 }
 
-function entryId(block: string, url: string): string {
+function entryId(block: Block, url: string): string {
   const raw = firstTag(block, ["guid", "id"]);
   const id = raw === null ? "" : collapse(decodeEntities(unwrapCdata(raw)));
   return id === "" ? url : id;
 }
 
-function toItem(block: string, base: string): FeedItem | null {
+function toItem(block: Block, base: string): FeedItem | null {
   const url = entryLink(block, base);
   const rawTitle = firstTag(block, ["title"]);
   if (url === null || rawTitle === null) return null;
@@ -168,9 +243,8 @@ export function parseFeed(xml: string, base: string, now: Date): FeedItem[] | nu
   if (!isFeedDocument(xml)) return null;
   const cutoff = now.getTime() - MAX_ITEM_AGE_DAYS * DAY_MS;
   const items: FeedItem[] = [];
-  for (const match of xml.matchAll(ENTRY_BLOCK)) {
-    if (items.length >= MAX_BLOCKS) break;
-    const item = toItem(match[2] ?? "", base);
+  for (const block of entryBlocks(xml)) {
+    const item = toItem(block, base);
     if (item === null) continue;
     if (item.publishedAt !== null && Date.parse(item.publishedAt) < cutoff) continue;
     items.push(item);
