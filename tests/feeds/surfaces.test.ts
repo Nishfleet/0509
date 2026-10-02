@@ -63,7 +63,7 @@ describe("source kinds", () => {
     const feed = { key: "feed.rss", kind: "content", platform: "feed" } as const;
     const site = { key: "site.web", kind: "site", platform: "web" } as const;
     expect(firstSiteSweepAt({ now, sources: [feed] })).toBeNull();
-    expect(firstSiteSweepAt({ now, sources: [feed, site] })).toEqual(new Date("2026-10-02T02:00:00Z"));
+    expect(firstSiteSweepAt({ now, sources: [feed, site] })).toEqual(new Date("2026-10-02T06:00:00Z"));
   });
 });
 

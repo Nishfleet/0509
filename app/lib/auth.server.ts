@@ -5,6 +5,9 @@ import { apiKey } from "@better-auth/api-key";
 import { passkey } from "@better-auth/passkey";
 
 import { API_KEY_PREFIX } from "./agent/paths";
+import { cancelPendingDigests } from "./data/digest.server";
+import { suppressWorkspaceTargets } from "./data/email_suppression.server";
+import { readWorkspaceIdForOwner } from "./data/workspace.server";
 import { ensureWorkspaceForSignIn } from "./workspace.server";
 import { accessPrecleared } from "./auth/access-preclearance.server";
 import { changeEmailEmail } from "./auth/change-email-email";
@@ -138,7 +141,10 @@ export function createAuth(env: AuthEnv, options?: { captcha?: boolean; validate
       cookieCache: { enabled: true, maxAge: SESSION_COOKIE_CACHE_SECONDS },
     },
     user: {
-      deleteUser: { enabled: true },
+      deleteUser: {
+        enabled: true,
+        beforeDelete: ({ id }) => silenceWorkspace(env.DB, id),
+      },
       changeEmail: {
         enabled: true,
         updateEmailWithoutVerification: false,
@@ -178,6 +184,13 @@ export async function createAuthForRequest(env: AuthEnv, request: Request) {
 export async function signOut(env: AuthEnv, request: Request): Promise<Headers> {
   const { headers } = await createAuth(env).api.signOut({ headers: request.headers, returnHeaders: true });
   return headers;
+}
+
+async function silenceWorkspace(db: D1Database, userId: string): Promise<void> {
+  const workspaceId = await readWorkspaceIdForOwner(userId);
+  if (workspaceId === null) return;
+  await suppressWorkspaceTargets(workspaceId);
+  await cancelPendingDigests(db, workspaceId);
 }
 
 export async function deleteSignedInUser(env: AuthEnv, request: Request, now: Date): Promise<Headers | null> {
