@@ -12,7 +12,7 @@ export const MODEL = "@cf/meta/llama-3.3-70b-instruct-fp8-fast";
 
 const MAX_PROPOSALS = 10;
 
-const MAX_TOKENS = 1_500;
+export const MAX_TOKENS = 1_500;
 
 const DOMAIN_TIMEOUT_MS = 5_000;
 

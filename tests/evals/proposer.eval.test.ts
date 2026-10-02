@@ -1,7 +1,13 @@
 import { parse } from "tldts";
 import { describe, expect, it, vi } from "vitest";
 
-import { MODEL, RESPONSE_SCHEMA, messagesFor, proposalSchema } from "../../app/lib/discovery/generators/ai.server";
+import {
+  MAX_TOKENS,
+  MODEL,
+  RESPONSE_SCHEMA,
+  messagesFor,
+  proposalSchema,
+} from "../../app/lib/discovery/generators/ai.server";
 import {
   formatReport,
   loadCases,
@@ -42,6 +48,7 @@ const ask: Ask<ProposerCase> = async (row) => {
       row.site,
     ),
     response_format: { type: "json_schema", json_schema: RESPONSE_SCHEMA },
+    max_tokens: MAX_TOKENS,
   });
   return { model: MODEL, p: null, choice: proposed(result).join(",") };
 };
