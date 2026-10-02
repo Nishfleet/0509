@@ -12,6 +12,13 @@ test("speed probe: signed-in page timings", async ({ page }) => {
   page.on("response", (response) => {
     const timing = response.headers()["server-timing"];
     if (timing !== undefined) server.set(new URL(response.url()).pathname, timing);
+    const placement = response.headers()["cf-placement"];
+    const ray = response.headers()["cf-ray"];
+    if (response.request().resourceType() === "document") {
+      console.log(
+        `PLACEMENT ${new URL(response.url()).pathname} placement=${placement ?? "none"} ray=${ray ?? "none"}`,
+      );
+    }
   });
   for (const path of PAGES) {
     for (let run = 1; run <= 3; run += 1) {
