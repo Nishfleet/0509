@@ -1,15 +1,13 @@
 import type { Route } from "./+types/login";
 import { env } from "cloudflare:workers";
 import { useState } from "react";
-import { data, Form, useActionData, useLoaderData, useNavigation, useSearchParams } from "react-router";
+import { data, useActionData, useLoaderData, useNavigation, useSearchParams } from "react-router";
 
 import { AccountDeleteNotice } from "../components/account-delete-notice";
+import { SignInEmailForm, SignInError } from "../components/sign-in-email-form";
 import { SIGN_IN_LEDE, SIGN_IN_SHELL, SIGN_IN_TITLE, SignInSent } from "../components/sign-in-sent";
 import { PasskeyOption } from "../components/passkey-option";
-import { TurnstileWidget } from "../components/turnstile-widget";
 import { Wordmark } from "../components/wordmark";
-import { Button } from "../components/ui/button";
-import { Input } from "../components/ui/input";
 import { Footer } from "../components/footer";
 import { safeReturnTo } from "../lib/agent/paths";
 import { subjectRedirect } from "../lib/onboarding-subject";
@@ -71,30 +69,6 @@ export async function action({ request }: Route.ActionArgs) {
   return data({ error: "We couldn't send the link. Try again in a minute." }, { status: 503 });
 }
 
-function EmailForm({ busy, turnstileSiteKey }: { busy: boolean; turnstileSiteKey: string }) {
-  return (
-    <Form method="post" className="mt-8 flex flex-col gap-3">
-      <label htmlFor="email" className="font-mono text-eyebrow text-ink-soft uppercase">
-        Email
-      </label>
-      <Input id="email" name="email" type="email" autoComplete="email" inputMode="email" required />
-      <TurnstileWidget siteKey={turnstileSiteKey} startOn="email-focus" />
-      <Button type="submit" size="lg" disabled={busy} className="mt-2">
-        {busy ? "Sending…" : "Send sign-in link"}
-      </Button>
-    </Form>
-  );
-}
-
-function SignInError({ message }: { message: string | null | undefined }) {
-  if (!message) return null;
-  return (
-    <p role="alert" className="mt-8 text-[0.95rem]">
-      {message}
-    </p>
-  );
-}
-
 export default function Login() {
   const actionData = useActionData<LoginActionData>();
   const deleted = useLoaderData<typeof loader>();
@@ -103,6 +77,8 @@ export default function Login() {
   const passkey = usePasskeySignIn(signInTarget(searchParams));
   const [dismissedAt, setDismissedAt] = useState<number | null>(null);
   useTimezoneCookie();
+
+  const error = actionData?.error ?? deleted.linkError ?? "";
 
   const sent = actionData?.sent;
   if (sent && sent.at !== dismissedAt) {
@@ -129,8 +105,8 @@ export default function Login() {
         {deleted.progress === null || deleted.id === null ? null : (
           <AccountDeleteNotice id={deleted.id} progress={deleted.progress} />
         )}
-        <SignInError message={actionData?.error ?? deleted.linkError} />
-        <EmailForm busy={busy} turnstileSiteKey={deleted.turnstileSiteKey} />
+        <SignInError message={error} />
+        <SignInEmailForm busy={busy} turnstileSiteKey={deleted.turnstileSiteKey} error={error} />
         <PasskeyOption state={passkey.state} onSignIn={passkey.signIn} />
       </main>
       <Footer />
