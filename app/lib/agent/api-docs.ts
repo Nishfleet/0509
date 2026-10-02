@@ -108,10 +108,10 @@ function responseView(status: string, response: unknown): ResponseView {
 }
 
 function operations(item: JsonRecord): { method: string; operation: JsonRecord }[] {
-  return METHODS.filter((method) => isRecord(item[method])).map((method) => ({
-    method,
-    operation: item[method],
-  }));
+  return METHODS.flatMap((method) => {
+    const operation = item[method];
+    return isRecord(operation) ? [{ method, operation }] : [];
+  });
 }
 
 function endpointFrom(path: string, item: JsonRecord): EndpointView[] {
