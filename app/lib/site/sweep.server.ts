@@ -8,7 +8,7 @@ import {
   insertPages,
   readEntitiesWithoutHomePage,
   readUnwatchedPricingPages,
-  trimPricingWatches,
+  syncPricingWatches,
 } from "../data/page.server";
 import { linkVerdictsStatement } from "../data/jev_verdict.server";
 import { insertChangeSignalStatement } from "../data/signal.server";
@@ -88,7 +88,7 @@ export async function planSiteSweep(now: string): Promise<SiteSweepTarget[]> {
       return url === null ? [] : [{ id: crypto.randomUUID(), entityId: entity.id, sourceId, targetKey: url }];
     }),
   );
-  await trimPricingWatches(sourceId);
+  await syncPricingWatches(sourceId);
   const pricing = await readUnwatchedPricingPages(sourceId);
   await insertWatches(
     pricing.map((page) => ({ id: crypto.randomUUID(), entityId: page.entityId, sourceId, targetKey: page.url })),

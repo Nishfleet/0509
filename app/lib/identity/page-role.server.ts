@@ -9,8 +9,16 @@ const NAV_PAGES_JUDGED = 40;
 
 const PRICING_LOOKING = /pric|plans?\b|packages?\b|subscri|buy|shop|store|catalog/i;
 
+function pathOf(url: string): string {
+  try {
+    return new URL(url).pathname;
+  } catch {
+    return url;
+  }
+}
+
 function pricingLookingFirst(pages: readonly NavPage[]): NavPage[] {
-  const looks = (page: NavPage) => PRICING_LOOKING.test(`${new URL(page.url).pathname} ${page.title}`);
+  const looks = (page: NavPage) => PRICING_LOOKING.test(`${pathOf(page.url)} ${page.title}`);
   return [...pages.filter(looks), ...pages.filter((page) => !looks(page))];
 }
 

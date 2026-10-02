@@ -120,36 +120,43 @@ export async function readCompetitorsToClassify(limit: number, now: string): Pro
 
 const PRICING_PAGES_WATCHED = 3;
 
-const ACTIVE_PAGE_WATCHES = `SELECT w.id AS id, w.entity_id AS entity_id, p.rowid AS page_rowid
-FROM watch w
-JOIN page p ON p.entity_id = w.entity_id AND p.url = w.target_key AND COALESCE(p.role, '') <> 'home'
-WHERE w.source_id = ?1 AND w.is_active = 1`;
+const RANKED_PRICING_PAGES = `SELECT p.entity_id AS entity_id, p.url AS url,
+       ROW_NUMBER() OVER (PARTITION BY p.entity_id ORDER BY p.rowid) AS position
+FROM page p
+JOIN entity e ON e.id = p.entity_id AND e.state = 'on'
+WHERE p.role = 'pricing' AND p.role_decided_for_hash IS NOT NULL`;
 
-const TRIM_PRICING_WATCHES = `UPDATE watch SET is_active = 0
-WHERE id IN (
-  SELECT id FROM (
-    SELECT id, ROW_NUMBER() OVER (PARTITION BY entity_id ORDER BY page_rowid) AS position
-    FROM (${ACTIVE_PAGE_WATCHES})
-    WHERE entity_id IN (SELECT id FROM entity WHERE role = 'competitor')
-  )
-  WHERE position > ?2
+const WANTED_PRICING_WATCH = `EXISTS (
+  SELECT 1 FROM (${RANKED_PRICING_PAGES}) r
+  WHERE r.position <= ?2 AND r.entity_id = watch.entity_id AND r.url = watch.target_key
 )`;
 
-export async function trimPricingWatches(sourceId: string): Promise<void> {
-  await env.DB.prepare(TRIM_PRICING_WATCHES).bind(sourceId, PRICING_PAGES_WATCHED).run();
+const STOP_UNWANTED_PRICING_WATCHES = `UPDATE watch SET is_active = 0
+WHERE source_id = ?1 AND is_active = 1
+  AND entity_id IN (SELECT id FROM entity WHERE state = 'on')
+  AND EXISTS (
+    SELECT 1 FROM page p
+    WHERE p.entity_id = watch.entity_id AND p.url = watch.target_key
+      AND p.role IS NOT NULL AND p.role <> 'home' AND p.role_decided_for_hash IS NOT NULL
+      AND EXISTS (SELECT 1 FROM page h WHERE h.entity_id = p.entity_id AND h.role = 'home' AND h.url <> p.url)
+  )
+  AND NOT ${WANTED_PRICING_WATCH}`;
+
+const RESUME_WANTED_PRICING_WATCHES = `UPDATE watch SET is_active = 1
+WHERE source_id = ?1 AND is_active = 0 AND ${WANTED_PRICING_WATCH}`;
+
+export async function syncPricingWatches(sourceId: string): Promise<void> {
+  await env.DB.batch([
+    env.DB.prepare(STOP_UNWANTED_PRICING_WATCHES).bind(sourceId, PRICING_PAGES_WATCHED),
+    env.DB.prepare(RESUME_WANTED_PRICING_WATCHES).bind(sourceId, PRICING_PAGES_WATCHED),
+  ]);
 }
 
-const UNWATCHED_PRICING_PAGES = `SELECT c.entity_id AS entity_id, c.url AS url
-FROM (
-  SELECT p.entity_id AS entity_id, p.url AS url,
-         ROW_NUMBER() OVER (PARTITION BY p.entity_id ORDER BY p.rowid) AS position
-  FROM page p
-  JOIN entity e ON e.id = p.entity_id AND e.state = 'on'
-  WHERE p.role = 'pricing' AND p.role_decided_for_hash IS NOT NULL
-    AND NOT EXISTS (SELECT 1 FROM watch w WHERE w.entity_id = p.entity_id AND w.source_id = ?1 AND w.target_key = p.url)
-) c
-WHERE c.position <= ?2 - (SELECT COUNT(*) FROM (${ACTIVE_PAGE_WATCHES}) a WHERE a.entity_id = c.entity_id)
-ORDER BY c.entity_id, c.url`;
+const UNWATCHED_PRICING_PAGES = `SELECT r.entity_id AS entity_id, r.url AS url
+FROM (${RANKED_PRICING_PAGES}) r
+WHERE r.position <= ?2
+  AND NOT EXISTS (SELECT 1 FROM watch w WHERE w.entity_id = r.entity_id AND w.source_id = ?1 AND w.target_key = r.url)
+ORDER BY r.entity_id, r.url`;
 
 const pricingPageRows = z.array(z.object({ entity_id: z.string(), url: z.string() }));
 

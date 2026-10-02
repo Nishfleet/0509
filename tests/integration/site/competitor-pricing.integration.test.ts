@@ -175,48 +175,19 @@ describe("a competitor's pricing page", () => {
     expect(await pricingWatches()).toContain("https://rival-shop.com/pricing");
   });
 
-  it("trims a rival's existing pricing watches to the first 3 and keeps the rest from coming back", async () => {
+  async function seedWatchedPages(prefix: string, count: number, watched: number): Promise<string[]> {
     await planSiteSweep(NOW);
     const source = await env.DB.prepare("SELECT id FROM source WHERE key = 'site.web'").first<{ id: string }>();
-    const urls = Array.from({ length: 6 }, (_, index) => `https://rival-shop.com/plans-${String(index)}`);
+    const urls = Array.from({ length: count }, (_, index) => `https://rival-shop.com/${prefix}-${String(index)}`);
     await env.DB.batch(
       urls.flatMap((url, index) => [
         env.DB.prepare(
           "INSERT INTO page (id, entity_id, url, role, role_decided_for_hash, discovered_at) VALUES (?1, ?2, ?3, 'pricing', 'h', ?4)",
-        ).bind(`pg-trim-${String(index)}`, RIVAL, url, NOW),
-        env.DB.prepare("INSERT INTO watch (id, entity_id, source_id, target_key) VALUES (?1, ?2, ?3, ?4)").bind(
-          `w-trim-${String(index)}`,
-          RIVAL,
-          source?.id,
-          url,
-        ),
-      ]),
-    );
-
-    await planSiteSweep(NOW);
-    await planSiteSweep(NOW);
-
-    const active = await env.DB.prepare(
-      "SELECT target_key FROM watch WHERE entity_id = ?1 AND is_active = 1 AND target_key LIKE '%/plans-%' ORDER BY target_key",
-    )
-      .bind(RIVAL)
-      .all<{ target_key: string }>();
-    expect(active.results.map((row) => row.target_key)).toEqual(urls.slice(0, 3));
-  });
-
-  it("does not watch a fourth pricing page when one of the three is judged something else", async () => {
-    await planSiteSweep(NOW);
-    const source = await env.DB.prepare("SELECT id FROM source WHERE key = 'site.web'").first<{ id: string }>();
-    const urls = Array.from({ length: 4 }, (_, index) => `https://rival-shop.com/plans-${String(index)}`);
-    await env.DB.batch(
-      urls.flatMap((url, index) => [
-        env.DB.prepare(
-          "INSERT INTO page (id, entity_id, url, role, role_decided_for_hash, discovered_at) VALUES (?1, ?2, ?3, 'pricing', 'h', ?4)",
-        ).bind(`pg-drift-${String(index)}`, RIVAL, url, NOW),
-        ...(index < 3
+        ).bind(`pg-${prefix}-${String(index)}`, RIVAL, url, NOW),
+        ...(index < watched
           ? [
               env.DB.prepare("INSERT INTO watch (id, entity_id, source_id, target_key) VALUES (?1, ?2, ?3, ?4)").bind(
-                `w-drift-${String(index)}`,
+                `w-${prefix}-${String(index)}`,
                 RIVAL,
                 source?.id,
                 url,
@@ -225,15 +196,58 @@ describe("a competitor's pricing page", () => {
           : []),
       ]),
     );
-    await env.DB.prepare("UPDATE page SET role = 'other' WHERE id = 'pg-drift-0'").run();
+    return urls;
+  }
+
+  async function watchStates(prefix: string): Promise<Record<string, number>> {
+    const rows = await env.DB.prepare(
+      "SELECT target_key, is_active FROM watch WHERE entity_id = ?1 AND target_key LIKE ?2 ORDER BY target_key",
+    )
+      .bind(RIVAL, `%/${prefix}-%`)
+      .all<{ target_key: string; is_active: number }>();
+    return Object.fromEntries(rows.results.map((row) => [row.target_key.split("/").pop() ?? "", row.is_active]));
+  }
+
+  it("trims a rival's existing pricing watches to the first 3, keeps the rows, and keeps them off", async () => {
+    await seedWatchedPages("trim", 6, 6);
+
+    await planSiteSweep(NOW);
+    await planSiteSweep(NOW);
+
+    expect(await watchStates("trim")).toEqual({
+      "trim-0": 1,
+      "trim-1": 1,
+      "trim-2": 1,
+      "trim-3": 0,
+      "trim-4": 0,
+      "trim-5": 0,
+    });
+  });
+
+  it("stops watching a page re-judged as something else and gives its slot to the next pricing page", async () => {
+    await seedWatchedPages("slot", 4, 3);
+    await env.DB.prepare("UPDATE page SET role = 'other' WHERE id = 'pg-slot-0'").run();
 
     await planSiteSweep(NOW);
 
-    const active = await env.DB.prepare(
-      "SELECT target_key FROM watch WHERE entity_id = ?1 AND is_active = 1 AND target_key LIKE '%/plans-%'",
+    expect(await watchStates("slot")).toEqual({ "slot-0": 0, "slot-1": 1, "slot-2": 1, "slot-3": 1 });
+  });
+
+  it("watches a new pricing page in a freed slot and turns a switched-off watch back on", async () => {
+    await seedWatchedPages("free", 3, 3);
+    await env.DB.prepare("UPDATE page SET role = 'other' WHERE id = 'pg-free-0'").run();
+    await planSiteSweep(NOW);
+    await env.DB.prepare(
+      "INSERT INTO page (id, entity_id, url, role, role_decided_for_hash, discovered_at) VALUES ('pg-free-new', ?1, 'https://rival-shop.com/free-new', 'pricing', 'h', ?2)",
     )
-      .bind(RIVAL)
-      .all();
-    expect(active.results).toHaveLength(3);
+      .bind(RIVAL, NOW)
+      .run();
+    await planSiteSweep(NOW);
+    expect(await watchStates("free")).toEqual({ "free-0": 0, "free-1": 1, "free-2": 1, "free-new": 1 });
+
+    await env.DB.prepare("UPDATE page SET role = 'pricing' WHERE id = 'pg-free-0'").run();
+    await env.DB.prepare("UPDATE page SET role = 'other' WHERE id = 'pg-free-new'").run();
+    await planSiteSweep(NOW);
+    expect(await watchStates("free")).toEqual({ "free-0": 1, "free-1": 1, "free-2": 1, "free-new": 0 });
   });
 });
