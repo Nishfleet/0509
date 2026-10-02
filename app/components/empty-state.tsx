@@ -39,6 +39,11 @@ function Action({ action }: { action: EmptyStateAction }): ReactNode {
           placeholder={action.placeholder}
           type="text"
           aria-label={action.label}
+          autoComplete="off"
+          autoCapitalize="none"
+          autoCorrect="off"
+          spellCheck={false}
+          enterKeyHint="go"
         />
       </label>
     );
