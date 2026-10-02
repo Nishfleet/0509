@@ -1,6 +1,6 @@
 import { env } from "cloudflare:workers";
 
-const DOMAIN = "dodo-checkout-v1";
+import { checkoutProofMessage } from "./checkout-proof";
 
 function bytesToHex(bytes: Uint8Array): string {
   return Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
@@ -32,7 +32,7 @@ function signingKey(): Promise<CryptoKey> {
 }
 
 function message(workspaceId: string, productId: string): Uint8Array<ArrayBuffer> {
-  return new TextEncoder().encode(`${DOMAIN}\n${workspaceId}\n${productId}`);
+  return new TextEncoder().encode(checkoutProofMessage(workspaceId, productId));
 }
 
 export async function checkoutProof(workspaceId: string, productId: string): Promise<string> {

@@ -335,6 +335,49 @@ describe("Dodo webhook (J13)", () => {
       expect(await planRow()).toMatchObject({ tier: "starter", provider_subscription_id: "sub_7EeHq2ewQuadropD2ra" });
     });
 
+    it("ignores the end of an older subscription after a deliberate downgrade to scout", async () => {
+      await deliver(signedRequest("evt_starter", eventBody({})));
+      await deliver(
+        signedRequest(
+          "evt_downgrade",
+          eventBody({
+            timestamp: "2026-10-01T00:00:00Z",
+            data: { subscription_id: "sub_scout", product_id: "pdt_test_scout", metadata: await scoutMetadata() },
+          }),
+        ),
+      );
+
+      await deliver(
+        signedRequest(
+          "evt_old_end",
+          eventBody({
+            type: "subscription.cancelled",
+            timestamp: "2026-10-02T00:00:00Z",
+            data: { status: "cancelled", cancel_at_next_billing_date: false },
+          }),
+        ),
+      );
+
+      expect(await planRow()).toMatchObject({ tier: "scout", provider_subscription_id: "sub_scout" });
+    });
+
+    it("ignores a delayed subscription.active for an older subscription", async () => {
+      await deliver(
+        signedRequest(
+          "evt_scout",
+          eventBody({
+            timestamp: "2026-10-01T00:00:00Z",
+            data: { subscription_id: "sub_scout", product_id: "pdt_test_scout", metadata: await scoutMetadata() },
+          }),
+        ),
+      );
+
+      await deliver(signedRequest("evt_replay", eventBody({ timestamp: "2026-09-30T00:00:00Z" })));
+      await deliver(signedRequest("evt_replay_same", eventBody({ timestamp: "2026-10-01T00:00:00Z" })));
+
+      expect(await planRow()).toMatchObject({ tier: "scout", provider_subscription_id: "sub_scout" });
+    });
+
     it("lets a proven upgrade replace the earlier subscription", async () => {
       await deliver(
         signedRequest(

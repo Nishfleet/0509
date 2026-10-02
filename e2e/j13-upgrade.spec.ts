@@ -4,6 +4,7 @@ import { readFileSync } from "node:fs";
 import { expect, test, type Page } from "@playwright/test";
 import { Webhook } from "standardwebhooks";
 
+import { checkoutProofMessage } from "../app/lib/billing/checkout-proof";
 import {
   consoleFailures,
   deleteCreatedAccount,
@@ -132,7 +133,7 @@ async function deliverPreviewWebhook(page: Page, workspaceId: string): Promise<v
         workspace_id: workspaceId,
         plan: "starter",
         proof: createHmac("sha256", devVar("BETTER_AUTH_SECRET"))
-          .update(`dodo-checkout-v1\n${workspaceId}\n${PREVIEW_STARTER_PRODUCT}`)
+          .update(checkoutProofMessage(workspaceId, PREVIEW_STARTER_PRODUCT))
           .digest("hex"),
       },
     },
