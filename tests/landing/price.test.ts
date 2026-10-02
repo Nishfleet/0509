@@ -9,13 +9,20 @@ function markup(): string {
   return renderToStaticMarkup(createElement(Price));
 }
 
+function section(html: string): string {
+  const start = html.indexOf('<section id="price"');
+  const end = html.indexOf("</section>", start);
+  return html.slice(start, end);
+}
+
 describe("landing price", () => {
   it("renders every plan from the module with its name and price, inside the price section", () => {
     const html = markup();
     expect(html).toContain('id="price"');
+    const body = section(html);
     for (const plan of PLANS) {
-      expect(html).toContain(plan.name);
-      expect(html).toContain(`€${String(plan.monthlyPriceEur)}`);
+      expect(body).toContain(plan.name);
+      expect(body).toContain(`€${String(plan.monthlyPriceEur)}<`);
     }
   });
 
@@ -30,9 +37,9 @@ describe("landing price", () => {
     expect(html).not.toContain("!");
   });
 
-  it("carries one filled Start watching button with the first plan's price", () => {
+  it("carries one filled Start watching link with the first plan's price", () => {
     const html = markup();
-    expect(html.match(/href="\/login"/g)).toHaveLength(1);
+    expect(html.match(/href="\/login"/g) ?? []).toHaveLength(1);
     const anchor = html.match(/<a\b[^>]*href="\/login"[^>]*>[\s\S]*?<\/a>/)?.[0] ?? "";
     expect(anchor).toContain("Start watching");
     expect(anchor).toContain(monthlyPrice(PLANS[0].monthlyPriceEur));
