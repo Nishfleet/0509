@@ -20,7 +20,7 @@ on:
       journey:
         description: Journey to run now
         type: choice
-        options: [none, j12, suite, signin, j8-hard, j8-soft, soak-report]
+        options: [none, j12, suite, signin, j8-hard, j8-soft, soak-report, proof-4141]
         default: none
       spec:
         description: 'One spec or a filter to run now against https://0509.io, e.g. e2e/j3-onboard-domain.spec.ts (0509 sign-up verdict, 2026-09-28)'
@@ -74,8 +74,14 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npx playwright install --with-deps chromium
+      - name: Exchange the Access service token for its cookie
+        run: npm run e2e -- --project=setup --retries=0 --reporter=github,list
+        env:
+          PLAYWRIGHT_TEST_BASE_URL: https://0509.io
+          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
       - name: Run the spec against production
-        run: npm run e2e -- "$SPEC" --project=desktop-1440 --retries=0 --reporter=github,list
+        run: npm run e2e -- "$SPEC" --project=desktop-1440 --no-deps --retries=0 --workers=1 --reporter=github,list
         env:
           SPEC: ${{ inputs.spec }}
           PLAYWRIGHT_TEST_BASE_URL: https://0509.io
@@ -289,6 +295,34 @@ jobs:
           [ -z "$N" ] || gh issue close "$N" --repo "$GITHUB_REPOSITORY" --reason completed --comment "Green again on $RUN_URL."
       - name: Red unless every shard passed
         run: test "$SHARDS" = success
+  proof-4141:
+    name: proof-4141
+    if: inputs.journey == 'proof-4141' && inputs.spec == ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Read the proof account's onboarding_run row
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          set -euo pipefail
+          email=$(tr -d '[:space:]' < e2e/proof-4141.email)
+          [[ "$email" =~ ^e2e\+p4141[0-9a-f]{10}@0509\.io$ ]]
+          echo "NOW_UTC $(date -u +%Y-%m-%dT%H:%M:%SZ) account $email"
+          npx wrangler d1 execute 0509 --remote --json --command "SELECT o.id, o.started_at, o.card_ready_at, o.competitors_ready_at, o.watching_started_at, o.first_signal_at, w.created_at AS workspace_created_at, w.timezone, w.brief_weekday, w.brief_hour FROM onboarding_run o JOIN workspace w ON w.id = o.workspace_id WHERE o.user_id IN (SELECT id FROM user WHERE email = '$email')" | jq -c '.[0].results'
+          npx wrangler d1 execute 0509 --remote --json --command "SELECT s.kind, COUNT(*) AS n, MIN(s.observed_at) AS first_observed, MAX(s.observed_at) AS last_observed FROM signal s WHERE s.workspace_id IN (SELECT id FROM workspace WHERE owner_user_id IN (SELECT id FROM user WHERE email = '$email')) GROUP BY s.kind" | jq -c '.[0].results'
+          npx wrangler d1 execute 0509 --remote --json --command "SELECT MAX(finished_at) AS last_site_sweep_finished FROM sweep_run" | jq -c '.[0].results'
   soak-report:
     name: soak-report
     # Reads counts only, never rows: no email, report text or other customer
