@@ -394,8 +394,11 @@
     // deploys 20-90 times a day; snapshot-backup's never fired), so the
     // `scheduled` handler creates each instance with createBatch under the id
     // `<name>-<scheduled instant>`, which skips an id that already exists.
-    // own-site-check was left on `schedules` and its J8 run saw no incident
-    // email in 75 minutes, so it starts from the cron like the rest.
+    // own-site-check starts from the cron like the rest, under one id per
+    // hour (`own-site-check-<date>T<hour>`). Its Workflow-level schedule
+    // still fires and starts that same id, and every tick starts the hour
+    // before it if missing, so one skipped cron tick cannot skip an hour
+    // (J8 run 36964422899 lost the 06:00 check and its "looks fixed" email).
     "crons": [
       "*/5 * * * *",
       "0 * * * *",

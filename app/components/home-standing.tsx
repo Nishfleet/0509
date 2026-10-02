@@ -5,6 +5,7 @@ import { Form } from "react-router";
 import { BrandChipRow } from "./brand-chip";
 import { EmptyState, fewerThanTwoOnBrands } from "./empty-state";
 import { FirstFilePanel } from "./first-file-panel";
+import { FirstWeekSteps } from "./first-week-steps";
 import { FourWeekLine } from "./four-week-line";
 import { HowRankedSheet } from "./how-ranked-sheet";
 import { PAGE } from "./page-heading";
@@ -110,6 +111,7 @@ function body({ view, howRanked, onSwitch, openId, evidence }: BodyInput): React
     return (
       <div className="mt-6">
         <FirstFilePanel brands={standing.brands} firstSweepAt={standing.firstSweepAt} briefAt={standing.briefAt} />
+        <FirstWeekSteps />
       </div>
     );
   }

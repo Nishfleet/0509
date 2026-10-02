@@ -58,7 +58,10 @@ function enteredHomeUrl(entity: { domain: string; url: string | null }): string 
   return entered.subject.url;
 }
 
-function homeUrl(entity: { domain: string; url: string | null }): string | null {
+function homeUrl(entity: { id: string; domain: string; url: string | null; identity_valid: boolean }): string | null {
+  if (!entity.identity_valid) {
+    console.warn(JSON.stringify({ event: "site-sweep.identity-json-invalid", entityId: entity.id }));
+  }
   const entered = enteredHomeUrl(entity);
   if (entered !== null) return entered;
   return getDomain(entity.domain) === entity.domain ? `https://${entity.domain}/` : null;

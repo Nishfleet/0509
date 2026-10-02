@@ -112,4 +112,22 @@ describe("extractIdentity", () => {
     expect(card.navLinks).toEqual(["https://www.gymshark.com/men"]);
     expect(card.navPages).toEqual([{ url: "https://www.gymshark.com/men", title: "Men" }]);
   });
+
+  it("prefers a YouTube channel link over an earlier video link", async () => {
+    const html = `<html><body>
+<a href="https://www.youtube.com/watch?v=abc123">Watch</a>
+<a href="https://www.youtube.com/@rivalshop">YouTube</a>
+<a href="https://www.youtube.com/c/rival">Older</a></body></html>`;
+    const card = await extractIdentity(html, pageUrl);
+    expect(card.socials.filter((s) => s.platform === "youtube")).toEqual([
+      { platform: "youtube", url: "https://www.youtube.com/@rivalshop" },
+    ]);
+  });
+
+  it("keeps the first YouTube link when none is a channel page", async () => {
+    const html = `<html><body><a href="https://www.youtube.com/watch?v=one">One</a>
+<a href="https://www.youtube.com/watch?v=two">Two</a></body></html>`;
+    const card = await extractIdentity(html, pageUrl);
+    expect(card.socials.map((s) => s.url)).toEqual(["https://www.youtube.com/watch?v=one"]);
+  });
 });
