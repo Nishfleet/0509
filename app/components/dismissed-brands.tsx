@@ -12,8 +12,12 @@ export interface DismissedSuggestion {
   dismissedAt: string;
 }
 
+export function restoreFetcherKey(suggestionId: string): string {
+  return `restore-${suggestionId}`;
+}
+
 function DismissedRow({ suggestion }: { suggestion: DismissedSuggestion }): ReactElement {
-  const fetcher = useFetcher({ key: `restore-${suggestion.suggestionId}` });
+  const fetcher = useFetcher({ key: restoreFetcherKey(suggestion.suggestionId) });
   const busy = fetcher.state !== "idle";
 
   return (

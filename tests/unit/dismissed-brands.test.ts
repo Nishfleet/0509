@@ -4,7 +4,7 @@ import { createMemoryRouter, RouterProvider } from "react-router";
 import { describe, expect, it } from "vitest";
 
 import type { DismissedSuggestion } from "../../app/components/dismissed-brands";
-import { DismissedBrands } from "../../app/components/dismissed-brands";
+import { DismissedBrands, restoreFetcherKey } from "../../app/components/dismissed-brands";
 
 const kindred: DismissedSuggestion = {
   suggestionId: "sug-dismissed-kindred",
@@ -23,16 +23,30 @@ const casetta: DismissedSuggestion = {
 const ROUTE_ID = "settings";
 const ROUTE_PATH = "/app/settings";
 
-// The key each row gives its own fetcher. Nothing here mocks react-router:
-// this is the key the component passes to useFetcher, so the row's own live
-// fetcher is the one these tests submit through.
-function restoreKeyFor(suggestionId: string): string {
-  return `restore-${suggestionId}`;
-}
-
 // A route action that never settles, so a restore stays in flight for the
 // whole render, the way a request the server has not answered yet does.
 const NEVER = () => new Promise(() => undefined);
+
+// Waits until this fetcher is submitting, and gives up after two seconds so a
+// key that stops matching fails the test instead of hanging the suite.
+async function waitForSubmitting(router: ReturnType<typeof createMemoryRouter>, fetcherKey: string): Promise<void> {
+  let settle: () => void = () => undefined;
+  const arrived = new Promise<void>((resolve) => {
+    settle = resolve;
+  });
+  const unsubscribe = router.subscribe((state) => {
+    if (state.fetchers.get(fetcherKey)?.state === "submitting") settle();
+  });
+  const timer = setTimeout(() => {
+    settle();
+  }, 2000);
+  await arrived;
+  clearTimeout(timer);
+  unsubscribe();
+  if (router.state.fetchers.get(fetcherKey)?.state !== "submitting") {
+    throw new Error("the restore never reached the submitting state");
+  }
+}
 
 function screen(dismissed: readonly DismissedSuggestion[]): ReactElement {
   return createElement(DismissedBrands, { dismissed });
@@ -61,15 +75,9 @@ async function renderWhileRestoring(): Promise<string> {
   const formData = new FormData();
   formData.set("intent", "restore-suggestion");
   formData.set("suggestionId", "sug-dismissed-kindred");
-  // Render only once the router has the post in flight, so a change in when
-  // that state lands fails loudly here instead of flipping the assertions.
-  const inFlight = new Promise<void>((resolve) => {
-    router.subscribe((state) => {
-      if (state.fetchers.get(restoreKeyFor(kindred.suggestionId))?.state === "submitting") resolve();
-    });
-  });
-  void router.fetch(restoreKeyFor(kindred.suggestionId), ROUTE_ID, ROUTE_PATH, { formMethod: "post", formData });
-  await inFlight;
+  const key = restoreFetcherKey(kindred.suggestionId);
+  void router.fetch(key, ROUTE_ID, ROUTE_PATH, { formMethod: "post", formData });
+  await waitForSubmitting(router, key);
   return renderToStaticMarkup(createElement(RouterProvider, { router }));
 }
 
@@ -148,7 +156,7 @@ describe("the dismissed brands list", () => {
     expect(buttonWith(row, "Kindred")).not.toContain('disabled=""');
   });
 
-  it("posts to the settings route itself, the route that renders the list", () => {
+  it("submits the restore to the route that renders the list, not to a reload", () => {
     const row = rowHtml(render([kindred]), "sug-dismissed-kindred");
 
     expect(row).toContain(`action="${ROUTE_PATH}"`);
