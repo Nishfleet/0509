@@ -77,8 +77,8 @@ describe("the source pill", () => {
   it("renders a source with no capture at all as degraded, never as quiet-week", () => {
     const html = pill(reddit, null);
     expect(html).toContain('data-state="degraded"');
-    expect(html).toContain("no fresh data");
-    expect(html).toContain("last good unknown");
+    expect(html).toContain("no new data yet");
+    expect(html).not.toContain("last updated");
     expect(html).not.toContain("· nothing new");
     expect(sourcePillStatus(reddit, null, NOW).state).toBe("degraded");
   });
@@ -91,9 +91,9 @@ describe("the source pill", () => {
     };
     const html = pill(source, quietSnapshot);
     expect(html).toContain('data-state="degraded"');
-    expect(html).toContain("· has been rate-limiting");
-    expect(html).toContain("has been rate-limiting us since Friday");
-    expect(html).toContain("last good 2026-09-19 06:02 UTC");
+    expect(html).toContain("· not updating right now");
+    expect(html).not.toContain("rate-limiting");
+    expect(html).toContain("last updated 2026-09-19 06:02 UTC");
     expect(html).not.toContain("var(--green");
     expect(sourcePillStatus(source, null, NOW).state).toBe("degraded");
   });
@@ -107,7 +107,7 @@ describe("the source pill", () => {
     const html = pill(reddit, silent);
     expect(html).toContain('data-state="degraded"');
     expect(html).toContain("not answering");
-    expect(html).toContain("last good unknown");
+    expect(html).not.toContain("last updated");
     expect(html).not.toContain('data-state="live"');
     expect(sourcePillStatus(reddit, silent, NOW).state).toBe("degraded");
   });
@@ -120,17 +120,18 @@ describe("the source pill", () => {
     };
     const html = pill(source, liveSnapshot);
     expect(html).toContain('data-state="degraded"');
-    expect(html).toContain("not answering since Friday");
-    expect(html).toContain("last good 2026-09-19 06:02 UTC");
+    expect(html).toContain("not updating right now");
+    expect(html).not.toContain("since Friday");
+    expect(html).toContain("last updated 2026-09-19 06:02 UTC");
     expect(sourcePillStatus(source, liveSnapshot, NOW).lastGoodAt).toBe("2026-09-19T06:02:00.000Z");
   });
 
-  it("says 'no reason recorded' when a degraded row carries no reason", () => {
+  it("says it is not updating right now when a degraded row carries no reason", () => {
     const source: SourceRow = { ...reddit, config_json: '{"state":"degraded"}' };
     const html = pill(source, null);
     expect(html).toContain('data-state="degraded"');
-    expect(html).toContain("no reason recorded");
-    expect(html).toContain("last good unknown");
+    expect(html).toContain("not updating right now");
+    expect(html).not.toContain("last updated");
   });
 
   it("renders nothing at all for a disabled source, however the flag arrives", () => {
@@ -185,14 +186,14 @@ describe("the source pill", () => {
     };
     const html = pill(reddit, stale);
     expect(html).toContain('data-state="degraded"');
-    expect(html).toContain("no fresh data");
-    expect(html).toContain("last good 2026-09-19 06:02 UTC");
+    expect(html).toContain("no new data yet");
+    expect(html).toContain("last updated 2026-09-19 06:02 UTC");
     expect(html).not.toContain("· nothing new");
     expect(sourcePillStatus(reddit, stale, NOW).state).toBe("degraded");
     const unparseable: SourceSnapshot = { item_count: 9, fetched_at: "yesterday" };
     const unparseableHtml = pill(reddit, unparseable);
     expect(unparseableHtml).toContain('data-state="degraded"');
-    expect(unparseableHtml).toContain("last good unknown");
+    expect(unparseableHtml).not.toContain("last updated");
     expect(sourcePillStatus(reddit, unparseable, NOW).state).toBe("degraded");
   });
 
@@ -211,16 +212,16 @@ describe("the source pill", () => {
     };
     const html = pill(source, quietSnapshot);
     expect(html).toContain('data-state="degraded"');
-    expect(html).toContain("we lost the channel, re-resolving");
-    expect(html).toContain("last good unknown");
-    expect(html).not.toContain("last good 2026-09-24 23:01 UTC");
+    expect(html).toContain("finding the channel again");
+    expect(html).not.toContain("last updated");
+    expect(html).not.toContain("last updated 2026-09-24 23:01 UTC");
     expect(html).not.toContain("· nothing new");
     expect(sourcePillStatus(source, quietSnapshot, NOW).state).toBe("degraded");
     expect(sourcePillStatus(reddit, quietSnapshot, NOW).state).toBe("none");
     const broken: SourceRow = { ...source, watch_config_json: "{" };
     const brokenHtml = pill(broken, quietSnapshot);
     expect(brokenHtml).toContain('data-state="degraded"');
-    expect(brokenHtml).toContain("watch config is unreadable");
+    expect(brokenHtml).toContain("not updating right now");
     expect(brokenHtml).not.toContain("· nothing new");
   });
 
@@ -240,7 +241,7 @@ describe("the source pill", () => {
     };
     expect(sourcePillStatus(source, quietSnapshot, NOW).lastGoodAt).toBe("2026-09-19T06:02:00.000Z");
     const html = pill(source, quietSnapshot);
-    expect(html).toContain("last good 2026-09-19 06:02 UTC");
+    expect(html).toContain("last updated 2026-09-19 06:02 UTC");
     expect(html).not.toContain("2026-09-24 23:01");
   });
 
@@ -252,7 +253,7 @@ describe("the source pill", () => {
     const nameless: SourceRow = { key: "reddit.search_rss", platform: "  ", is_enabled: 1 };
     expect(pill(nameless, liveSnapshot)).toContain("reddit.search_rss");
     expect(pill({ ...reddit, last_good_at: "not a date", degraded_reason: "broke" }, liveSnapshot)).toContain(
-      "last good not a date",
+      "last updated not a date",
     );
   });
 });

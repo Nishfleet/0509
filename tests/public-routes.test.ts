@@ -237,7 +237,7 @@ describe("public-route manifest", () => {
     );
     expect(body).toMatch(/^- Site changes: Homepage$/m);
     expect(body).toMatch(/^- Mentions: Hacker News$/m);
-    expect(body).toContain("- Mentions: News (not answering today: timed out)");
+    expect(body).toContain("- Mentions: News (not answering today: slow to answer)");
     expect(body).toContain("- Mentions: YouTube (no data yet)");
     expect(body).toContain("Some sources are not answering today; those lines say so.");
     expect(body).toContain("- Your own site: Breakage alerts (Starter and up)");
