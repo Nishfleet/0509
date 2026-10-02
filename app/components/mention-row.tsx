@@ -27,6 +27,7 @@ export function MentionRow({ mention }: { mention: MentionRowModel }): ReactElem
       <h3 className={TITLE}>
         <a href={mention.url} rel="noopener noreferrer nofollow" target="_blank" className={LINK}>
           {mention.title}
+          <span className="sr-only"> (opens in a new tab)</span>
         </a>
       </h3>
       {mention.treatment === "possibly" ? <p className="mt-2 leading-[1.65]">{POSSIBLY_LINE}</p> : null}

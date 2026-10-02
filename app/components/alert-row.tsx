@@ -74,6 +74,7 @@ function SignalAlert({ signal }: { signal: SignalAlertItem }): ReactElement {
         ) : (
           <a href={signal.url} rel="noopener noreferrer nofollow" target="_blank" className={SUMMARY}>
             {signal.title}
+            <span className="sr-only"> (opens in a new tab)</span>
           </a>
         )}
       </h3>

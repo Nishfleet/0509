@@ -259,3 +259,73 @@ describe("hiring row", () => {
     expect(html).toContain("Zephyrwear is hiring<");
   });
 });
+
+describe("new-tab link a11y", () => {
+  const NEW_TAB_TEXT = " (opens in a new tab)";
+  const LINK_TITLE = "Spring pricing update";
+
+  const signalItem = {
+    ...SIGNAL_ITEM,
+    signal: { ...SIGNAL_ITEM.signal, title: LINK_TITLE },
+  };
+  const mentionItem = {
+    ...MENTION_ITEM,
+    mention: { ...MENTION_ITEM.mention, title: LINK_TITLE },
+  };
+  const hiringItem = {
+    ...HIRING_ITEM,
+    hiring: { ...HIRING_ITEM.hiring, title: LINK_TITLE },
+  };
+  const contentItem = {
+    ...CONTENT_ITEM,
+    content: { ...CONTENT_ITEM.content, title: LINK_TITLE },
+  };
+
+  const LINK_CLASS = "inline-flex min-h-11 items-center underline decoration-1 underline-offset-4";
+  const SUMMARY_CLASS = "inline-flex min-h-11 cursor-pointer items-center underline decoration-1 underline-offset-4";
+
+  function newTabAnchor(html: string): string {
+    return html.match(/<a\b[^>]*>[\s\S]*?<span class="sr-only">[\s\S]*?<\/span>[\s\S]*?<\/a>/)?.[0] ?? "";
+  }
+
+  function openingTag(anchor: string): string {
+    return anchor.slice(0, anchor.indexOf(">") + 1);
+  }
+
+  function textContent(anchor: string): string {
+    const inner = anchor.slice(anchor.indexOf(">") + 1, anchor.lastIndexOf("</a>"));
+    return inner.replace(/<[^>]*>/g, "");
+  }
+
+  function renderItem(item: AlertFeedItem): string {
+    return renderToStaticMarkup(createElement(AlertFeedRow, { item, eager: false }));
+  }
+
+  for (const [kind, item, linkClass] of [
+    ["signal", signalItem, SUMMARY_CLASS],
+    ["mention", mentionItem, LINK_CLASS],
+    ["hiring", hiringItem, LINK_CLASS],
+    ["content", contentItem, LINK_CLASS],
+  ] as const) {
+    it(`names the new tab in the ${kind} link's accessible name and keeps its class tokens`, () => {
+      const anchor = newTabAnchor(renderItem(item));
+      const open = openingTag(anchor);
+      expect(textContent(anchor)).toBe(`${LINK_TITLE}${NEW_TAB_TEXT}`);
+      expect(anchor).toContain(`<span class="sr-only">${NEW_TAB_TEXT}</span>`);
+      expect(open).toContain(`class="${linkClass}"`);
+      expect(open).toContain('target="_blank"');
+      expect(open).toContain('rel="noopener noreferrer nofollow"');
+    });
+  }
+
+  it("leaves a signal heading plain when the alert has no url", () => {
+    const item: AlertFeedItem = {
+      ...SIGNAL_ITEM,
+      signal: { ...SIGNAL_ITEM.signal, title: LINK_TITLE, url: null },
+    };
+    const html = renderItem(item);
+    expect(html).toContain(`>${LINK_TITLE}</h3>`);
+    expect(html).not.toContain("sr-only");
+    expect(html).not.toContain(NEW_TAB_TEXT);
+  });
+});
