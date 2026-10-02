@@ -15,6 +15,15 @@ import { loadCases, postWorkersAi, setCallBudget, workersAiPresent, type EvalRow
 vi.mock("../../app/lib/fetch/outbound.server", () => ({
   fetchOutbound: () => Promise.reject(new Error("no network")),
 }));
+vi.mock("../../app/lib/discovery/html-text", () => ({
+  htmlToText: (html: string) =>
+    Promise.resolve(
+      html
+        .replace(/<[^>]+>/g, " ")
+        .replace(/&#x27;|&quot;/g, "'")
+        .replace(/&amp;/g, "&"),
+    ),
+}));
 vi.mock("../../app/lib/fetch/robots.server", () => ({ CRAWLER_USER_AGENT: "eval" }));
 vi.mock("../../app/lib/jev/client.server", () => ({ GATEWAY_ID: "default" }));
 
