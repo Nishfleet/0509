@@ -62,13 +62,25 @@ const SELLS_FIRST =
 
 const NEMOTRON = "@cf/nvidia/nemotron-3-120b-a12b";
 
+const GLM53 = "@cf/zai-org/glm-5.3";
+const GLM52 = "@cf/zai-org/glm-5.2";
+const KIMI25 = "@cf/moonshotai/kimi-k2.5";
+
 const ARMS: Arm[] = [
-  { id: "base3", samples: 1 },
-  { id: "two_models", samples: 2, models: [MODEL, NEMOTRON] },
+  { id: "base4", samples: 1 },
+  { id: "union2c", samples: 2 },
+  { id: "two_models2", samples: 2, models: [MODEL, NEMOTRON] },
+  { id: "gptoss_glm53", samples: 2, models: [MODEL, GLM53] },
+  { id: "gptoss_glm52", samples: 2, models: [MODEL, GLM52] },
+  { id: "gptoss_kimi25", samples: 2, models: [MODEL, KIMI25] },
 ];
 
 const registrable = (value: string): string => parse(value).domain ?? value.toLowerCase();
 const proposals = z.object({ competitors: z.array(z.object({ name: z.string(), domain: z.string() })) });
+
+async function withTimeout(call: Promise<unknown>): Promise<unknown> {
+  return Promise.race([call, new Promise<null>((resolve) => setTimeout(() => resolve(null), 90_000))]);
+}
 
 function withExtra(
   messages: ReturnType<typeof messagesFor>,
@@ -107,21 +119,28 @@ describe.skipIf(!workersAiPresent())("hillclimb: gpt-oss proposer arms", () => {
       const shown = new Map<string, Set<string>[]>();
       let ms = 0;
       let calls = 0;
+      let timeouts = 0;
       const propose = async (row: Row, model: string): Promise<{ name: string; domain: string }[]> => {
         const started = Date.now();
-        const result = await postWorkersAi(model, {
-          messages: arm.context
-            ? messagesWithContext(row)
-            : messagesFor(
-                { name: row.self.name, domain: row.self.domain, description: row.self.description },
-                row.site,
-              ),
-          response_format: RESPONSE_FORMAT,
-          max_tokens: MAX_TOKENS,
-          ...(arm.reasoning === undefined ? {} : { reasoning: { effort: arm.reasoning } }),
-        });
+        const result = await withTimeout(
+          postWorkersAi(model, {
+            messages: arm.context
+              ? messagesWithContext(row)
+              : messagesFor(
+                  { name: row.self.name, domain: row.self.domain, description: row.self.description },
+                  row.site,
+                ),
+            response_format: RESPONSE_FORMAT,
+            max_tokens: MAX_TOKENS,
+            ...(arm.reasoning === undefined ? {} : { reasoning: { effort: arm.reasoning } }),
+          }),
+        );
         ms += Date.now() - started;
         calls += 1;
+        if (result === null) {
+          timeouts += 1;
+          return [];
+        }
         const parsed = proposals.safeParse(proposalBody(result));
         return parsed.success ? parsed.data.competitors : [];
       };
@@ -185,7 +204,7 @@ describe.skipIf(!workersAiPresent())("hillclimb: gpt-oss proposer arms", () => {
           for (let j = i + 1; j < runs.length; j++) overlaps.push(jaccard(runs[i]!, runs[j]!));
       const stability = overlaps.reduce((sum, v) => sum + v, 0) / Math.max(overlaps.length, 1);
       console.log(
-        `ARM ${arm.id} stability=${stability.toFixed(3)} proposer_calls=${String(calls)} mean_ms=${String(Math.round(ms / Math.max(calls, 1)))}`,
+        `ARM ${arm.id} stability=${stability.toFixed(3)} proposer_calls=${String(calls)} timeouts=${String(timeouts)} mean_ms=${String(Math.round(ms / Math.max(calls, 1)))}`,
       );
       for (const row of rows) {
         const seen = new Set((shown.get(row.self.domain) ?? []).flatMap((run) => [...run]));
