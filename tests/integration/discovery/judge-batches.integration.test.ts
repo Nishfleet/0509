@@ -51,31 +51,27 @@ afterEach(() => {
 
 describe("judgeBatches", () => {
   it("splits candidates into batches of at most the batch size, in order", () => {
-    const candidates = Array.from({ length: 12 }, (_, index) => ({
+    const candidates = Array.from({ length: JUDGE_BATCH_SIZE * 2 + 1 }, (_, index) => ({
       name: `Rival ${String(index)}`,
       domain: `rival${String(index)}.example`,
       evidence: [],
       line: "",
     })) satisfies ResolvedCandidate[];
     const batches = judgeBatches(candidates);
-    expect(batches.map((batch) => batch.length)).toEqual([JUDGE_BATCH_SIZE, JUDGE_BATCH_SIZE, 2]);
+    expect(batches.map((batch) => batch.length)).toEqual([JUDGE_BATCH_SIZE, JUDGE_BATCH_SIZE, 1]);
     expect(batches.flat()).toEqual(candidates);
   });
 });
 
 describe("Discovery workflow judging", () => {
-  it("judges batches concurrently and writes each batch as it lands", async () => {
+  it("judges every batch at once so the first rivals show within one Jev round trip", async () => {
     await seedWorkspace();
-    let calls = 0;
     let inFlight = 0;
     let peak = 0;
     const run = vi.fn(async () => {
-      calls += 1;
       inFlight += 1;
       peak = Math.max(peak, inFlight);
-      if (calls > 2)
-        await vi.waitFor(async () => expect(await suggestionRows()).toBeGreaterThan(0), { timeout: 5_000 });
-      await new Promise((resolve) => setTimeout(resolve, 10));
+      await new Promise((resolve) => setTimeout(resolve, 25));
       inFlight -= 1;
       return { answers: { is_competitor: { type: "noul", noul: 0.5 } } };
     });
@@ -89,7 +85,7 @@ describe("Discovery workflow judging", () => {
     await instance.waitForStatus("complete");
 
     expect(run).toHaveBeenCalledTimes(CANDIDATES);
-    expect(peak).toBe(2);
+    expect(peak).toBe(CANDIDATES / JUDGE_BATCH_SIZE);
     expect(await suggestionRows()).toBe(CANDIDATES);
   });
 });

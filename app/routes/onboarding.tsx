@@ -5,7 +5,6 @@ import { Form, redirect } from "react-router";
 import { requireFreshSession, requireSession } from "../lib/require-session.server";
 import { ONBOARDING_COMPETITORS, workspaceLandingForRequest } from "../lib/workspace.server";
 import { OneInput } from "../components/one-input";
-import { AddPasskey } from "../components/passkey-button";
 import { OnboardingFrame } from "../components/onboarding-frame";
 import { Button } from "../components/ui/button";
 import { subjectRedirect } from "../lib/onboarding-subject";
@@ -138,7 +137,6 @@ export default function Page({ loaderData, actionData }: Route.ComponentProps) {
       ) : null}
       <footer className="mt-16 flex flex-wrap items-center gap-x-4 border-t border-line pt-4 font-mono text-meta text-ink-soft">
         <p className="[overflow-wrap:anywhere]">Signed in as {loaderData.email}</p>
-        <AddPasskey />
       </footer>
     </OnboardingFrame>
   );

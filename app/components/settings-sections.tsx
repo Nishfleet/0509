@@ -10,6 +10,36 @@ import type { ComponentProps } from "react";
 
 const BLOCK = "mt-10 border-t border-line pt-4";
 
+const JUMPS = [
+  { href: "#settings-brief", label: "Brief and alerts" },
+  { href: "#settings-agents", label: "Agents and API" },
+  { href: "#settings-plan", label: "Plan" },
+  { href: "#settings-account", label: "Account" },
+  { href: "#export-data", label: "Your data" },
+] as const;
+
+export function SettingsJumps() {
+  return (
+    <nav
+      aria-label="Settings sections"
+      className="mt-6 min-[1000px]:sticky min-[1000px]:top-10 min-[1000px]:mt-14 min-[1000px]:self-start"
+    >
+      <ul className="flex flex-wrap gap-x-5 gap-y-1 min-[1000px]:flex-col min-[1000px]:gap-y-0">
+        {JUMPS.map((jump) => (
+          <li key={jump.href}>
+            <a
+              href={jump.href}
+              className="inline-flex min-h-11 items-center font-mono text-eyebrow text-ink-soft uppercase underline decoration-1 underline-offset-4 hover:text-ink"
+            >
+              {jump.label}
+            </a>
+          </li>
+        ))}
+      </ul>
+    </nav>
+  );
+}
+
 export function BriefSection({ schedule }: { schedule: ComponentProps<typeof BriefScheduleSettings>["schedule"] }) {
   return (
     <section aria-labelledby="settings-brief" className={BLOCK}>

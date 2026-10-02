@@ -154,6 +154,36 @@ describe("aiGenerator", () => {
     expect(candidates.map((candidate) => candidate.name)).toEqual(["Ok"]);
   });
 
+  it("keeps a domain that blocks crawlers with 403 or 429, since the brand exists", async () => {
+    proposes({
+      competitors: [
+        { name: "Guarded", domain: "guarded.com" },
+        { name: "Busy", domain: "busy.com" },
+      ],
+    });
+    answering({
+      "guarded.com": new Response(null, { status: 403 }),
+      "busy.com": new Response(null, { status: 429 }),
+    });
+    const candidates = await aiGenerator(SUBJECT, home());
+    expect(candidates.map((candidate) => candidate.name)).toEqual(["Guarded", "Busy"]);
+  });
+
+  it("gives the judge the model's own reason as evidence, and the plain note when it gave none", async () => {
+    proposes({
+      competitors: [
+        { name: "Alphalete", domain: "alphaleteathletics.com", reason: "Sells gym wear to the same lifters." },
+        { name: "Ryderwear", domain: "ryderwear.com" },
+      ],
+    });
+    liveHosts("alphaleteathletics.com", "ryderwear.com");
+    const candidates = await aiGenerator(SUBJECT, home());
+    expect(candidates[0]?.evidence[0]?.excerpt).toContain("Sells gym wear to the same lifters.");
+    expect(candidates[1]?.evidence[0]?.excerpt).toBe(
+      "Proposed by a language model reading the brand's own site; not corroborated by any other source",
+    );
+  });
+
   it("rejects IP literals, localhost and internal or local hosts without fetching them", async () => {
     proposes({
       competitors: ["10.0.0.1", "localhost", "db.internal", "printer.local", "http://169.254.169.254/"].map(
