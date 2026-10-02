@@ -35,7 +35,7 @@ export default function Page({ loaderData, actionData }: Route.ComponentProps) {
         lede="Your brief, plan and account. To pause a competitor, use its switch on the Competitors page."
       />
       <div className="min-[1000px]:grid min-[1000px]:grid-cols-[11rem_minmax(0,1fr)] min-[1000px]:gap-10">
-        <SettingsJumps />
+        <SettingsJumps hasBrief={loaderData.schedule !== null} hasPlan={loaderData.plan !== null} />
         <div className="max-w-3xl min-w-0">
           {loaderData.schedule === null ? null : <BriefSection schedule={loaderData.schedule} />}
           <OwnSiteAlertsSetting on={loaderData.ownSiteAlerts} />
