@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 import {
+  isNativeSchedule,
   isWorkflowCron,
   startMissedDailyWorkflows,
   startMissedOwnSiteCheck,
@@ -128,5 +129,23 @@ describe("startScheduledWorkflow", () => {
     expect(isWorkflowCron("*/5 * * * *")).toBe(false);
     expect(isWorkflowCron("0 3 * * *")).toBe(false);
     expect(isWorkflowCron("toString")).toBe(false);
+  });
+});
+
+describe("isNativeSchedule", () => {
+  it("is true for a cron tick the runtime delivers", () => {
+    expect(isNativeSchedule({ schedule: "0 5 * * *" })).toBe(true);
+  });
+
+  it("is true for a Workflow's own schedule, which carries no cron string", () => {
+    expect(isNativeSchedule({ schedule: null })).toBe(true);
+  });
+
+  it("is false for a manual start, which has no schedule field", () => {
+    expect(isNativeSchedule({})).toBe(false);
+  });
+
+  it("is false when the schedule field is there but undefined", () => {
+    expect(isNativeSchedule({ schedule: undefined })).toBe(false);
   });
 });
