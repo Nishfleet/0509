@@ -13,7 +13,7 @@ export interface DismissedSuggestion {
 }
 
 function DismissedRow({ suggestion }: { suggestion: DismissedSuggestion }): ReactElement {
-  const fetcher = useFetcher();
+  const fetcher = useFetcher({ key: `restore-${suggestion.suggestionId}` });
   const busy = fetcher.state !== "idle";
 
   return (

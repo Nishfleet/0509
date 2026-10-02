@@ -1,8 +1,7 @@
 import { createElement, type ReactElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import type * as ReactRouterModule from "react-router";
 import { createMemoryRouter, RouterProvider } from "react-router";
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 
 import type { DismissedSuggestion } from "../../app/components/dismissed-brands";
 import { DismissedBrands } from "../../app/components/dismissed-brands";
@@ -22,19 +21,16 @@ const casetta: DismissedSuggestion = {
 };
 
 const ROUTE_ID = "settings";
-const FETCHER_KEY = "restore-kindred";
+const ROUTE_PATH = "/app/settings";
 
-// Every row calls useFetcher, and a fetcher's key is React's own useId unless
-// the caller names it. The rows are rendered inside a real memory router below,
-// and these tests name the fetcher so one of them can fetch through the router
-// and land in the submitting state a real click produces. useFetcher({ key })
-// is the public API for a fetcher the caller addresses.
-vi.mock("react-router", async (importOriginal) => {
-  const actual = await importOriginal<typeof ReactRouterModule>();
-  return { ...actual, useFetcher: () => actual.useFetcher({ key: FETCHER_KEY }) };
-});
+// The key each row gives its own fetcher. Nothing here mocks react-router:
+// this is the key the component passes to useFetcher, so the row's own live
+// fetcher is the one these tests submit through.
+function restoreKeyFor(suggestionId: string): string {
+  return `restore-${suggestionId}`;
+}
 
-// A route action that never settles, so the restore stays in flight for the
+// A route action that never settles, so a restore stays in flight for the
 // whole render, the way a request the server has not answered yet does.
 const NEVER = () => new Promise(() => undefined);
 
@@ -43,34 +39,38 @@ function screen(dismissed: readonly DismissedSuggestion[]): ReactElement {
 }
 
 function render(dismissed: readonly DismissedSuggestion[]): string {
-  const router = createMemoryRouter([{ id: ROUTE_ID, path: "/", Component: () => screen(dismissed), action: NEVER }], {
-    initialEntries: ["/"],
-  });
+  const router = createMemoryRouter(
+    [{ id: ROUTE_ID, path: ROUTE_PATH, Component: () => screen(dismissed), action: NEVER }],
+    {
+      initialEntries: [ROUTE_PATH],
+    },
+  );
   return renderToStaticMarkup(createElement(RouterProvider, { router }));
 }
 
-// The same row and the same router, with the restore post already in flight on
-// the row's own fetcher: this is the render the browser makes while the
-// request runs, which is what a document-reloading form never showed.
-function renderWhileRestoring(): string {
-  const router = createMemoryRouter([{ id: ROUTE_ID, path: "/", Component: () => screen([kindred]), action: NEVER }], {
-    initialEntries: ["/"],
-  });
+// The same two rows on the same router, with Kindred's restore post already
+// in flight on Kindred's own fetcher: this is the render the browser makes
+// while the request runs, which is what a document-reloading form never showed.
+async function renderWhileRestoring(): Promise<string> {
+  const router = createMemoryRouter(
+    [{ id: ROUTE_ID, path: ROUTE_PATH, Component: () => screen([casetta, kindred]), action: NEVER }],
+    {
+      initialEntries: [ROUTE_PATH],
+    },
+  );
   const formData = new FormData();
   formData.set("intent", "restore-suggestion");
   formData.set("suggestionId", "sug-dismissed-kindred");
-  void router.fetch(FETCHER_KEY, ROUTE_ID, "/", { formMethod: "post", formData });
+  // Render only once the router has the post in flight, so a change in when
+  // that state lands fails loudly here instead of flipping the assertions.
+  const inFlight = new Promise<void>((resolve) => {
+    router.subscribe((state) => {
+      if (state.fetchers.get(restoreKeyFor(kindred.suggestionId))?.state === "submitting") resolve();
+    });
+  });
+  void router.fetch(restoreKeyFor(kindred.suggestionId), ROUTE_ID, ROUTE_PATH, { formMethod: "post", formData });
+  await inFlight;
   return renderToStaticMarkup(createElement(RouterProvider, { router }));
-}
-
-// The opening tag and the text between the tags: the class list holds
-// "disabled:" utilities, so the pair is what tells a disabled button apart.
-function buttonWith(html: string, name: string): string {
-  const start = html.indexOf(`aria-label="Bring back ${name}"`);
-  if (start < 0) throw new Error(`no bring back button for ${name}`);
-  const open = html.lastIndexOf("<button", start);
-  const close = html.indexOf("</button>", start);
-  return html.slice(open, close + "</button>".length);
 }
 
 function rowHtml(html: string, suggestionId: string): string {
@@ -80,6 +80,17 @@ function rowHtml(html: string, suggestionId: string): string {
   const liClose = html.indexOf("</li>", start);
   if (liOpen < 0 || liClose < 0) throw new Error(`row bounds not found for ${suggestionId}`);
   return html.slice(liOpen, liClose + "</li>".length);
+}
+
+// The opening tag and the text between the tags: the class list also holds
+// "disabled:" utilities, so the pair is what tells a disabled button apart.
+function buttonWith(row: string, name: string): string {
+  const labelled = row.indexOf(`aria-label="Bring back ${name}"`);
+  if (labelled < 0) throw new Error(`no bring back button for ${name}`);
+  const open = row.lastIndexOf("<button", labelled);
+  const close = row.indexOf("</button>", labelled);
+  if (open < 0 || close < 0) throw new Error(`button bounds not found for ${name}`);
+  return row.slice(open, close + "</button>".length);
 }
 
 describe("the dismissed brands list", () => {
@@ -130,25 +141,35 @@ describe("the dismissed brands list", () => {
   });
 
   it("leaves the bring back button enabled and at rest while nothing is in flight", () => {
-    const button = buttonWith(render([kindred]), "Kindred");
+    const row = rowHtml(render([kindred]), "sug-dismissed-kindred");
 
-    expect(button).toContain(">Bring back</button>");
-    expect(button).not.toContain("Bringing back…");
-    expect(button).not.toContain('disabled=""');
+    expect(buttonWith(row, "Kindred")).toContain(">Bring back</button>");
+    expect(buttonWith(row, "Kindred")).not.toContain("Bringing back…");
+    expect(buttonWith(row, "Kindred")).not.toContain('disabled=""');
   });
 
-  it("keeps the restore intent and its own suggestion id while the restore runs", () => {
-    const row = rowHtml(renderWhileRestoring(), "sug-dismissed-kindred");
+  it("posts to the settings route itself, the route that renders the list", () => {
+    const row = rowHtml(render([kindred]), "sug-dismissed-kindred");
+
+    expect(row).toContain(`action="${ROUTE_PATH}"`);
+    expect(row).toContain('method="post"');
+  });
+
+  it("keeps the restore intent and its own suggestion id while the restore runs", async () => {
+    const row = rowHtml(await renderWhileRestoring(), "sug-dismissed-kindred");
 
     expect(row).toContain('value="restore-suggestion"');
     expect(row).toContain('value="sug-dismissed-kindred"');
+    expect(buttonWith(row, "Kindred")).toContain('disabled=""');
+    expect(buttonWith(row, "Kindred")).toContain("Bringing back…");
+    expect(buttonWith(row, "Kindred")).not.toContain(">Bring back</button>");
   });
 
-  it("disables the bring back button and reads Bringing back… while the restore runs", () => {
-    const button = buttonWith(renderWhileRestoring(), "Kindred");
+  it("disables only the row being restored and leaves the other row's button ready", async () => {
+    const row = rowHtml(await renderWhileRestoring(), "sug-dismissed-casetta");
 
-    expect(button).toContain('disabled=""');
-    expect(button).toContain("Bringing back…");
-    expect(button).not.toContain(">Bring back</button>");
+    expect(buttonWith(row, "Casetta")).toContain(">Bring back</button>");
+    expect(buttonWith(row, "Casetta")).not.toContain('disabled=""');
+    expect(buttonWith(row, "Casetta")).not.toContain("Bringing back…");
   });
 });
