@@ -22,6 +22,14 @@ describe("isYoutubeChannelId", () => {
     expect(isYoutubeChannelId(CHANNEL_ID.slice(0, -1))).toBe(false);
   });
 
+  it("rejects an id one character long", () => {
+    expect(isYoutubeChannelId(`${CHANNEL_ID}x`)).toBe(false);
+  });
+
+  it("rejects a well-formed id carrying a character the pattern does not allow", () => {
+    expect(isYoutubeChannelId(`UC${CHANNEL_ID.slice(2, -1)}!`)).toBe(false);
+  });
+
   it("rejects a lowercase-prefixed id", () => {
     expect(isYoutubeChannelId(`uc${CHANNEL_ID.slice(2)}`)).toBe(false);
   });
@@ -47,6 +55,18 @@ describe("identityHasYoutubeUrl", () => {
     });
 
     expect(identityHasYoutubeUrl(raw)).toBe(true);
+  });
+
+  it("is true for a youtube handle url, which normalises to the same platform", () => {
+    const raw = identityJson({ socials: [{ platform: "youtube", url: "https://www.youtube.com/@someone" }] });
+
+    expect(identityHasYoutubeUrl(raw)).toBe(true);
+  });
+
+  it("is false for a youtube-declared social whose url is not a youtube url", () => {
+    const raw = identityJson({ socials: [{ platform: "youtube", url: "https://example.com/somebody" }] });
+
+    expect(identityHasYoutubeUrl(raw)).toBe(false);
   });
 
   it("is false when socials hold only another platform", () => {
