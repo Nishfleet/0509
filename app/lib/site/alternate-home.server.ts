@@ -6,7 +6,7 @@ import { robotsAllows } from "../fetch/robots.server";
 import { readUrl } from "../fetch/transport.server";
 import { takeBrowserEscalation } from "./browser-budget.server";
 import { alternateCandidates, ownHostUrls, type AlternateCandidate } from "./alternate-sources";
-import { namesBrand, readPageHeadline } from "./page-headline";
+import { namesBrand, readPageTitle } from "./page-headline";
 
 const BLOCKED_RIVALS_PER_SWEEP = 3;
 const RETRY_AFTER_MS = 3 * 86_400_000;
@@ -22,7 +22,7 @@ async function attempt(rival: BlockedRival, candidate: AlternateCandidate, now: 
     mayEscalate: () => takeBrowserEscalation(rival.workspaceId, rival.entityId, day),
   });
   if (!read.ok) return { adopted: false, reason: read.reason };
-  if (candidate.brand !== null && !namesBrand(await readPageHeadline(read.html), candidate.brand)) {
+  if (candidate.brand !== null && !namesBrand(await readPageTitle(read.html), candidate.brand)) {
     return { adopted: false, reason: "not-the-brand-page" };
   }
   return { adopted: true, transport: read.transport };

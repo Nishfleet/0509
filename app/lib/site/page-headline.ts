@@ -1,28 +1,17 @@
-export interface PageHeadline {
-  title: string;
-  heading: string;
-}
-
-export async function readPageHeadline(html: string): Promise<PageHeadline> {
-  const found = { title: "", heading: "", headingDone: false };
+export async function readPageTitle(html: string): Promise<string> {
+  let title = "";
   const rewritten = new HTMLRewriter()
     .on("title", {
       text(chunk) {
-        found.title += chunk.text;
-      },
-    })
-    .on("h1", {
-      element() {
-        if (found.heading !== "") found.headingDone = true;
-      },
-      text(chunk) {
-        if (!found.headingDone) found.heading += chunk.text;
+        title += chunk.text;
       },
     })
     .transform(new Response(html, { headers: { "content-type": "text/html;charset=utf-8" } }));
   await rewritten.arrayBuffer();
-  return { title: found.title.trim(), heading: found.heading.trim() };
+  return title.trim();
 }
+
+const NOT_A_BRAND_PAGE = /\b(?:not found|404|error|no results|search|sign in|log in)\b/i;
 
 function words(text: string): string {
   return ` ${text
@@ -31,8 +20,8 @@ function words(text: string): string {
     .trim()} `;
 }
 
-export function namesBrand(headline: PageHeadline, brand: string): boolean {
+export function namesBrand(title: string, brand: string): boolean {
   const needle = words(brand);
-  if (needle.trim() === "") return false;
-  return words(headline.title).includes(needle) || words(headline.heading).includes(needle);
+  if (needle.trim() === "" || NOT_A_BRAND_PAGE.test(title)) return false;
+  return words(title).includes(needle);
 }

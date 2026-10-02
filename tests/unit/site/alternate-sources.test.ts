@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import { alternateCandidates, brandToken, isOffBrandHost } from "../../../app/lib/site/alternate-sources";
-import { namesBrand, readPageHeadline } from "../../../app/lib/site/page-headline";
+import { alternateCandidates, brandToken, offBrandSite } from "../../../app/lib/site/alternate-sources";
+import { namesBrand, readPageTitle } from "../../../app/lib/site/page-headline";
 import { provenanceNote } from "../../../app/lib/site-change";
 
 describe("alternate sources for a blocked rival", () => {
@@ -22,21 +22,31 @@ describe("alternate sources for a blocked rival", () => {
     expect(alternateCandidates("localhost")).toEqual([]);
   });
 
-  it("knows a retailer's page from the brand's own", () => {
-    expect(isOffBrandHost("https://www.zalando.co.uk/adidas/", "adidas.com")).toBe(true);
-    expect(isOffBrandHost("https://news.adidas.com/", "www.adidas.com")).toBe(false);
+  it("names the retailer's site, never the brand's own", () => {
+    expect(offBrandSite("https://www.zalando.co.uk/adidas/", "adidas.com")).toBe("zalando.co.uk");
+    expect(offBrandSite("https://news.adidas.com/", "www.adidas.com")).toBeNull();
   });
 
-  it("accepts a page whose title or first heading names the brand, whole words only", async () => {
-    const shop = await readPageHeadline(
-      "<html><head><title>Adidas Online Shop | ZALANDO</title></head><body><h1>Shoes</h1><h1>More</h1></body></html>",
+  it("reads the title of a page", async () => {
+    expect(await readPageTitle("<html><head><title> Adidas Online Shop | ZALANDO </title></head></html>")).toBe(
+      "Adidas Online Shop | ZALANDO",
     );
-    expect(shop).toEqual({ title: "Adidas Online Shop | ZALANDO", heading: "Shoes" });
-    expect(namesBrand(shop, "adidas")).toBe(true);
-    expect(namesBrand({ title: "Not Found", heading: "Adidas originals" }, "adidas")).toBe(true);
-    expect(namesBrand({ title: "Not Found", heading: "Oops" }, "adidas")).toBe(false);
-    expect(namesBrand({ title: "Online shop", heading: "Cotton trainers" }, "on")).toBe(false);
-    expect(namesBrand({ title: "On Running | Shoes", heading: "" }, "on-running")).toBe(true);
+    expect(await readPageTitle("<html><body>no title</body></html>")).toBe("");
+  });
+
+  it("accepts a title that names the brand as whole words", () => {
+    expect(namesBrand("Adidas Online Shop | ZALANDO.CO.UK", "adidas")).toBe(true);
+    expect(namesBrand("All adidas | Foot Locker UK", "adidas")).toBe(true);
+    expect(namesBrand("On Running | Shoes", "on-running")).toBe(true);
+  });
+
+  it("refuses home pages, search pages, soft 404s and look-alike words", () => {
+    expect(namesBrand("Online Shoes | ZALANDO.CO.UK", "adidas")).toBe(false);
+    expect(namesBrand("Search results for adidas | JD Sports", "adidas")).toBe(false);
+    expect(namesBrand("Not Found | adidas", "adidas")).toBe(false);
+    expect(namesBrand("404 - adidas page", "adidas")).toBe(false);
+    expect(namesBrand("Cotton trainers | Online shop", "on")).toBe(false);
+    expect(namesBrand("", "adidas")).toBe(false);
   });
 
   it("words the provenance note", () => {
