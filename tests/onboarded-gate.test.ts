@@ -1,11 +1,16 @@
+import { RouterContextProvider } from "react-router";
 import { describe, expect, it, vi } from "vitest";
 
 vi.mock("cloudflare:workers", () => ({ env: {} }));
 
-import { requireOnboarded } from "../app/lib/require-onboarded.server";
+import { onboardedContext, requireOnboarded } from "../app/lib/require-onboarded.server";
 import routes from "../app/routes";
 import AppLayout, { middleware } from "../app/routes/app-layout";
 import AppSettingsLayout, * as appSettingsLayout from "../app/routes/app-settings-layout";
+
+vi.mock("../app/lib/data/workspace.server", () => ({
+  readWorkspaceIdForOwner: async () => "ws-1",
+}));
 
 vi.mock("../app/lib/require-session.server", () => ({
   requireSession: async () => ({ user: { id: "user-1" } }),
@@ -25,7 +30,10 @@ describe("requireOnboarded", () => {
       landing.value = resumePoint;
       let thrown: unknown;
       try {
-        await requireOnboarded({ request: new Request("https://0509.io/app/alerts") });
+        await requireOnboarded({
+          request: new Request("https://0509.io/app/alerts"),
+          context: new RouterContextProvider(),
+        });
       } catch (error) {
         thrown = error;
       }
@@ -38,7 +46,11 @@ describe("requireOnboarded", () => {
 
   it("resolves when the workspace has no resume point", async () => {
     landing.value = null;
-    await expect(requireOnboarded({ request: new Request("https://0509.io/app/alerts") })).resolves.toBeUndefined();
+    const context = new RouterContextProvider();
+    await expect(
+      requireOnboarded({ request: new Request("https://0509.io/app/alerts"), context }),
+    ).resolves.toBeUndefined();
+    expect(context.get(onboardedContext)).toEqual({ session: { user: { id: "user-1" } }, workspaceId: "ws-1" });
   });
 });
 
