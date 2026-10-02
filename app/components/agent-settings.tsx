@@ -168,12 +168,13 @@ function KeyRow({ apiKey }: { apiKey: AgentKey }) {
   );
 }
 
-function CreateKeyForm() {
+function CreateKeyForm({ submission }: { submission: string }) {
   const navigation = useNavigation();
   const making = navigation.state !== "idle" && navigation.formData?.get("intent") === "create-key";
   return (
     <Form method="post" className="mt-6">
       <input type="hidden" name="intent" value="create-key" />
+      <input type="hidden" name="submission" value={submission} />
       <label htmlFor="key-name" className={BLOCK_HEADING}>
         Name
       </label>
@@ -187,7 +188,15 @@ function CreateKeyForm() {
   );
 }
 
-export function AgentKeys({ keys, newKey }: { keys: AgentKey[]; newKey: string | null }) {
+export function AgentKeys({
+  keys,
+  newKey,
+  submission,
+}: {
+  keys: AgentKey[];
+  newKey: string | null;
+  submission: string;
+}) {
   return (
     <section aria-labelledby="agents-keys" className={BLOCK}>
       <h2 id="agents-keys" className={BLOCK_HEADING}>
@@ -205,7 +214,7 @@ export function AgentKeys({ keys, newKey }: { keys: AgentKey[]; newKey: string |
           ))}
         </ul>
       )}
-      <CreateKeyForm />
+      <CreateKeyForm submission={submission} />
     </section>
   );
 }

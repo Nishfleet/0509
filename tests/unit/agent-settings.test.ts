@@ -24,12 +24,14 @@ function makeKey(id: string, name: string) {
   };
 }
 
+const SUBMISSION = "6f1d2c3b-0a4e-4b8f-9c7d-1e2f3a4b5c6d";
+
 const ONE_KEY = [makeKey("a", "Only")];
 
 const TWO_KEYS = [makeKey("a", "Laptop"), makeKey("b", "Nightly bot")];
 
 function keysScreen(): ReactElement {
-  return createElement(AgentKeys, { keys: ONE_KEY, newKey: null });
+  return createElement(AgentKeys, { keys: ONE_KEY, newKey: null, submission: SUBMISSION });
 }
 
 const TWO_APPS = [
@@ -51,11 +53,16 @@ function buttons(html: string): string[] {
 // FormData on the navigation, so the pending render is the one the
 // browser makes.
 function pendingCreateKey() {
-  return pendingSubmit(createElement(AgentKeys, { keys: TWO_KEYS, newKey: null }), { intent: "create-key" });
+  return pendingSubmit(createElement(AgentKeys, { keys: TWO_KEYS, newKey: null, submission: SUBMISSION }), {
+    intent: "create-key",
+  });
 }
 
 function pendingRevokeKey(id: string) {
-  return pendingSubmit(createElement(AgentKeys, { keys: TWO_KEYS, newKey: null }), { intent: "revoke-key", id });
+  return pendingSubmit(createElement(AgentKeys, { keys: TWO_KEYS, newKey: null, submission: SUBMISSION }), {
+    intent: "revoke-key",
+    id,
+  });
 }
 
 function pendingSubmit(element: ReactElement, fields: Record<string, string>) {
@@ -131,6 +138,7 @@ describe("AgentKeys", () => {
               },
             ],
             newKey: null,
+            submission: SUBMISSION,
           }),
       },
     ]);
@@ -174,7 +182,7 @@ describe("AgentKeys", () => {
     const Stub = createRoutesStub([
       {
         path: "/",
-        Component: () => createElement(AgentKeys, { keys: TWO_KEYS, newKey: null }),
+        Component: () => createElement(AgentKeys, { keys: TWO_KEYS, newKey: null, submission: SUBMISSION }),
       },
     ]);
     const html = renderToStaticMarkup(createElement(Stub, { initialEntries: ["/"] }));

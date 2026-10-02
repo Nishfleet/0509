@@ -39,9 +39,20 @@ export async function readAgentAccess(
   };
 }
 
-export async function createAgentKey(request: Request, name: string): Promise<string> {
-  const created = await createAuth(env).api.createApiKey({ body: { name }, headers: request.headers, query: FRESH });
-  return created.key;
+async function submissionMinted(request: Request, submission: string): Promise<boolean> {
+  const listed = await createAuth(env).api.listApiKeys({ headers: request.headers });
+  return listed.apiKeys.some((key) => Reflect.get(key.metadata ?? {}, "submission") === submission);
+}
+
+export async function createAgentKey(request: Request, name: string, submission: string): Promise<string | null> {
+  try {
+    const body = { name, metadata: { submission } };
+    const created = await createAuth(env).api.createApiKey({ body, headers: request.headers, query: FRESH });
+    return created.key;
+  } catch (error) {
+    if (await submissionMinted(request, submission)) return null;
+    throw error;
+  }
 }
 
 export async function revokeAgentKey(request: Request, keyId: string): Promise<void> {

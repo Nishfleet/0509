@@ -9,6 +9,8 @@ import { oauthHelpersContext } from "../lib/agent/context.server";
 import { MCP_PATH } from "../lib/agent/paths";
 import { requireFreshSession } from "../lib/require-session.server";
 
+const SUBMISSION = /^[0-9a-f-]{36}$/;
+
 export function meta() {
   return [{ title: "Agents and API · Five to Nine" }];
 }
@@ -21,7 +23,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
   const session = await requireFreshSession(request);
   const access = await readAgentAccess(context.get(oauthHelpersContext), request, session.user.id);
   const origin = new URL(request.url).origin;
-  return { ...access, mcpUrl: `${origin}${MCP_PATH}`, origin };
+  return { ...access, mcpUrl: `${origin}${MCP_PATH}`, origin, submission: crypto.randomUUID() };
 }
 
 export async function action({ request, context }: Route.ActionArgs) {
@@ -33,7 +35,9 @@ export async function action({ request, context }: Route.ActionArgs) {
   if (intent === "create-key") {
     const submitted = form.get("name");
     const name = typeof submitted === "string" && submitted.trim() !== "" ? submitted.trim().slice(0, 60) : "My agent";
-    return { newKey: await createAgentKey(request, name) };
+    const token = form.get("submission");
+    const submission = typeof token === "string" && SUBMISSION.test(token) ? token : crypto.randomUUID();
+    return { newKey: await createAgentKey(request, name, submission) };
   }
   if (intent === "revoke-key" && typeof target === "string") {
     await revokeAgentKey(request, target);
@@ -64,7 +68,7 @@ export default function Page({ loaderData, actionData }: Route.ComponentProps) {
       />
       <ConnectDetails mcpUrl={loaderData.mcpUrl} origin={loaderData.origin} />
       <ConnectedApps apps={loaderData.apps} />
-      <AgentKeys keys={loaderData.keys} newKey={actionData?.newKey ?? null} />
+      <AgentKeys keys={loaderData.keys} newKey={actionData?.newKey ?? null} submission={loaderData.submission} />
     </main>
   );
 }
