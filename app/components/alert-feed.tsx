@@ -35,7 +35,11 @@ export function AlertFeed({ groups }: { groups: { group: string; items: AlertFee
             setShowAll((open) => !open);
           }}
         >
-          {showAll ? `Hide the ${hidden} we think do not matter` : `Show all, including ${hidden} we think do not matter`}
+          {showAll ? (
+            <>Hide the {hidden} we think do not matter</>
+          ) : (
+            <>Show all, including {hidden} we think do not matter</>
+          )}
         </button>
       ) : null}
     </>
