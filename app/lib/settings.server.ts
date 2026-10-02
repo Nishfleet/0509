@@ -9,20 +9,27 @@ import { requestEmailChange, signOut } from "./auth.server";
 import { nextBriefAt } from "./brief-schedule";
 import { formatBriefAt, parseBriefSchedule } from "./brief-settings";
 import { readPlanSummary } from "./data/plan.server";
+import { readSlackTarget, removeSlackTarget, saveSlackTarget } from "./data/send_target.server";
 import { readUserDismissed, restoreSuggestion } from "./data/suggestion.server";
 import {
   readBriefScheduleForOwner,
+  readChangeAlerts,
   readOwnSiteAlerts,
   readWorkspaceIdForOwner,
+  setChangeAlerts,
   setOwnSiteAlerts,
 } from "./data/workspace.server";
 import { readDeliveryAddress, saveDeliveryAddress } from "./delivery-address.server";
+import { parseSlackWebhook } from "./slack-webhook";
+import { postToSlack } from "./slack.server";
 import { saveBriefSchedule } from "./standing/reschedule.server";
 
 const MISMATCH = "That doesn't match your email. Type it exactly to delete your account.";
 const EMAIL_INVALID = "Enter an email address, like you@company.com.";
 const EMAIL_FAILED = "We couldn't send the link. For your safety, sign out and back in, then try again.";
 const EMAIL_LIMITED = "Too many tries. Wait a minute and try again.";
+const SLACK_INVALID = "That is not a Slack webhook address. It starts with https://hooks.slack.com/services/.";
+const SLACK_FAILED = "Slack did not accept a test message. Check the address and try again.";
 const SIGN_IN_AGAIN = "For your safety, sign out and sign back in, then delete your account.";
 
 interface SettingsUser {
@@ -37,6 +44,7 @@ export interface SettingsResult {
   deliverySuppressed: boolean;
   emailChangeSent: boolean;
   emailChangeError: string | null;
+  slackError: string | null;
 }
 
 function result(fields: Partial<SettingsResult>): SettingsResult {
@@ -47,6 +55,7 @@ function result(fields: Partial<SettingsResult>): SettingsResult {
     deliverySuppressed: false,
     emailChangeSent: false,
     emailChangeError: null,
+    slackError: null,
     ...fields,
   };
 }
@@ -62,17 +71,41 @@ export async function readSettings(user: SettingsUser) {
         };
   const workspaceId = await readWorkspaceIdForOwner(user.id);
   const ownSiteAlerts = workspaceId === null ? true : await readOwnSiteAlerts(workspaceId);
+  const changeAlerts = workspaceId === null ? true : await readChangeAlerts(workspaceId);
+  const slackConnected = workspaceId === null ? false : (await readSlackTarget(env.DB, workspaceId)) !== null;
   const dismissed = workspaceId === null ? [] : await readUserDismissed(workspaceId);
   const delivery = await readDeliveryAddress(user.id, user.email);
   const plan = workspaceId === null ? null : await readPlanSummary(workspaceId);
-  return { email: user.email, schedule, ownSiteAlerts, dismissed, delivery, plan };
+  return { email: user.email, schedule, ownSiteAlerts, changeAlerts, slackConnected, dismissed, delivery, plan };
 }
 
-async function saveOwnSiteAlerts(userId: string, form: FormData): Promise<SettingsResult> {
+async function saveSwitch(
+  userId: string,
+  form: FormData,
+  write: (workspaceId: string, on: boolean) => Promise<void>,
+): Promise<SettingsResult> {
   const workspaceId = await readWorkspaceIdForOwner(userId);
   const next = form.get("value") === "on" ? true : form.get("value") === "off" ? false : null;
   if (workspaceId === null || next === null) return result({ saved: false });
-  await setOwnSiteAlerts(workspaceId, next);
+  await write(workspaceId, next);
+  return result({ saved: true });
+}
+
+async function connectSlack(userId: string, form: FormData): Promise<SettingsResult> {
+  const workspaceId = await readWorkspaceIdForOwner(userId);
+  const raw = form.get("webhook");
+  const webhookUrl = parseSlackWebhook(typeof raw === "string" ? raw : "");
+  if (workspaceId === null || webhookUrl === null) return result({ slackError: SLACK_INVALID });
+  const text = "Five to Nine is connected. Price and plan changes will post here.";
+  const accepted = await postToSlack(webhookUrl, text);
+  if (!accepted) return result({ slackError: SLACK_FAILED });
+  await saveSlackTarget(env.DB, { workspaceId, webhookUrl, now: new Date().toISOString() });
+  return result({ saved: true });
+}
+
+async function disconnectSlack(userId: string): Promise<SettingsResult> {
+  const workspaceId = await readWorkspaceIdForOwner(userId);
+  if (workspaceId !== null) await removeSlackTarget(env.DB, workspaceId);
   return result({ saved: true });
 }
 
@@ -148,7 +181,10 @@ export async function runSettingsIntent(
 ): Promise<SettingsResult> {
   const form = await request.formData();
   const intent = form.get("intent");
-  if (intent === "own-site-alerts") return saveOwnSiteAlerts(user.id, form);
+  if (intent === "own-site-alerts") return saveSwitch(user.id, form, setOwnSiteAlerts);
+  if (intent === "change-alerts") return saveSwitch(user.id, form, setChangeAlerts);
+  if (intent === "slack-save") return connectSlack(user.id, form);
+  if (intent === "slack-remove") return disconnectSlack(user.id);
   if (intent === "sign-out") throw redirect("/login", { headers: await signOut(env, request) });
   if (intent === "delivery-address") return saveAddress(user, form);
   if (intent === "change-email") return changeEmail(request, form);

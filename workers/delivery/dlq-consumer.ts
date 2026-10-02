@@ -82,6 +82,12 @@ export async function handleDlqBatch(env: Env, batch: MessageBatch): Promise<str
       continue;
     }
 
+    if ("signal_id" in parsed) {
+      console.error(JSON.stringify({ event: "delivery.dead_lettered", signal_id: parsed.signal_id }));
+      item.ack();
+      continue;
+    }
+
     const digest = await env.DB.prepare(`SELECT workspace_id FROM digest WHERE id = ?`)
       .bind(parsed.digest_id)
       .first<{ workspace_id: string }>();

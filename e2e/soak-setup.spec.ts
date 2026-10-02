@@ -37,7 +37,7 @@ async function addCompetitors(page: Page): Promise<void> {
 
 async function trackedBrands(page: Page): Promise<number> {
   await page.goto("/app/competitors");
-  const switches = page.getByRole("list", { name: "Competitors" }).getByRole("switch");
+  const switches = page.getByRole("list", { name: "Competitors", exact: true }).getByRole("switch");
   await expect(switches.first()).toBeVisible();
   let on = 0;
   for (const tracking of await switches.all()) {

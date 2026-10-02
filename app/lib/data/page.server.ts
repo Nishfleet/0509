@@ -73,6 +73,65 @@ export async function readJudgedPricingUrl(entityId: string): Promise<string | n
   return row?.url ?? null;
 }
 
+const COMPETITORS_TO_CLASSIFY = `SELECT e.id AS entity_id, e.workspace_id AS workspace_id, e.domain AS domain,
+       COALESCE(NULLIF(e.name, ''), e.domain) AS name, p.id AS page_id, p.url AS url
+FROM entity e
+JOIN page p ON p.entity_id = e.id AND p.role = 'home'
+WHERE e.role = 'competitor' AND e.state = 'on'
+  AND NOT EXISTS (SELECT 1 FROM page j WHERE j.entity_id = e.id AND j.role_decided_for_hash IS NOT NULL)
+  AND (p.deferred_at IS NULL OR p.deferred_at < ?2)
+ORDER BY random()
+LIMIT ?1`;
+
+const competitorRows = z.array(
+  z.object({
+    entity_id: z.string(),
+    workspace_id: z.string(),
+    domain: z.string(),
+    name: z.string(),
+    page_id: z.string(),
+    url: z.string(),
+  }),
+);
+
+export interface CompetitorToClassify {
+  entityId: string;
+  workspaceId: string;
+  domain: string;
+  name: string;
+  homePageId: string;
+  homepageUrl: string;
+}
+
+const UNREADABLE_SITE_BACKOFF_MS = 3 * 86_400_000;
+
+export async function readCompetitorsToClassify(limit: number, now: string): Promise<readonly CompetitorToClassify[]> {
+  const retryAfter = new Date(Date.parse(now) - UNREADABLE_SITE_BACKOFF_MS).toISOString();
+  const rows = await env.DB.prepare(COMPETITORS_TO_CLASSIFY).bind(limit, retryAfter).all();
+  return competitorRows.parse(rows.results).map((row) => ({
+    entityId: row.entity_id,
+    workspaceId: row.workspace_id,
+    domain: row.domain,
+    name: row.name,
+    homePageId: row.page_id,
+    homepageUrl: row.url,
+  }));
+}
+
+const UNWATCHED_PRICING_PAGES = `SELECT p.entity_id AS entity_id, p.url AS url
+FROM page p
+JOIN entity e ON e.id = p.entity_id AND e.state = 'on'
+WHERE p.role = 'pricing' AND p.role_decided_for_hash IS NOT NULL
+  AND NOT EXISTS (SELECT 1 FROM watch w WHERE w.entity_id = p.entity_id AND w.source_id = ?1 AND w.target_key = p.url)
+ORDER BY p.entity_id, p.url`;
+
+const pricingPageRows = z.array(z.object({ entity_id: z.string(), url: z.string() }));
+
+export async function readUnwatchedPricingPages(sourceId: string): Promise<{ entityId: string; url: string }[]> {
+  const rows = await env.DB.prepare(UNWATCHED_PRICING_PAGES).bind(sourceId).all();
+  return pricingPageRows.parse(rows.results).map((row) => ({ entityId: row.entity_id, url: row.url }));
+}
+
 const RECORD_TRANSPORT =
   "UPDATE page SET transport = ?2, transport_reason = ?3, transport_tested_at = ?4, deferred_at = NULL WHERE id = ?1";
 

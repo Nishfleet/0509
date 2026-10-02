@@ -22,7 +22,10 @@ setup.setTimeout(480_000);
 async function addCompetitor(page: Page, domain: string): Promise<void> {
   await page.locator("#add-competitor").fill(domain);
   await page.getByRole("button", { name: "Add" }).click();
-  const row = page.getByRole("list", { name: "Competitors" }).getByRole("listitem").filter({ hasText: domain });
+  const row = page
+    .getByRole("list", { name: "Competitors", exact: true })
+    .getByRole("listitem")
+    .filter({ hasText: domain });
   await expect(row.getByRole("switch")).toBeChecked({ timeout: 30_000 });
 }
 

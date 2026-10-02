@@ -71,7 +71,7 @@ async function openWatchedCompetitor(page: Page): Promise<void> {
   // non-deterministic after onboarding (the brand chip falls back to a title
   // cased handle) while the per-row domain `<p>` is app/routes/app.competitors.tsx.
   await page
-    .getByRole("list", { name: "Competitors" })
+    .getByRole("list", { name: "Competitors", exact: true })
     .getByRole("listitem")
     .filter({ hasText: "adidas.com" })
     .getByRole("link")

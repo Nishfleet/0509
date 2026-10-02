@@ -171,7 +171,7 @@ test("two weekly rollovers: the stored standing matches Home and the brief, and 
   if (page.url().includes("/onboarding")) await onboardSelf(page);
 
   await page.goto("/app/competitors");
-  const items = page.getByRole("list", { name: "Competitors" }).getByRole("listitem");
+  const items = page.getByRole("list", { name: "Competitors", exact: true }).getByRole("listitem");
   expect(
     await items.count(),
     "the j12-rollovers account holds more competitors than its journey needs",

@@ -8,6 +8,11 @@ test.skip(
   "J8 needs the production fixture Worker on j8-hard.fixture.0509.in and j8-soft.fixture.0509.in, the hourly own-site check and the mail inbox; the preview lane has none of them",
 );
 
+// Soft mode needs a good baseline: a nightly sweep only reports a change against
+// the page it read the night before. Dispatch j8-soft about 00:30 UTC, on an
+// account that already went through one 02:00 UTC sweep with the fixture off, so
+// the break lands before the next sweep (run 36952916004 broke a fresh account
+// minutes before its first sweep, which then took the broken page as its baseline).
 const POLL_INTERVAL_MS = 30_000;
 const TICK_WAIT_MS = 75 * 60_000;
 const SWEEP_WAIT_MS = 90 * 60_000;
@@ -133,7 +138,7 @@ async function signInAndWatchFixture(
     await expect(page).toHaveURL(/\/app$/, { timeout: 30_000 });
   }
   await page.goto("/app/competitors");
-  const items = page.getByRole("list", { name: "Competitors" }).getByRole("listitem");
+  const items = page.getByRole("list", { name: "Competitors", exact: true }).getByRole("listitem");
   expect(await items.count(), "the J8 account holds a competitor its journey never adds").toBeLessThanOrEqual(
     account.maxCompetitors,
   );

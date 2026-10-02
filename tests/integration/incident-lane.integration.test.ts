@@ -197,6 +197,9 @@ describe("incident lane (0509#4364)", () => {
     expect(rec.sent[0].subject).toBe(`${PAGE_HOST} looks broken: ${KIND}`);
     expect(rec.sent[0].text).toContain("What changed: Checkout was 500ing");
     expect(rec.sent[0].html).toContain("https://0509.io/app/alerts");
+    expect(rec.sent[0].headers?.["List-Unsubscribe-Post"]).toBe("List-Unsubscribe=One-Click");
+    expect(rec.sent[0].headers?.["List-Unsubscribe"]).toMatch(/^<https:\/\/0509\.io\/u\/[0-9a-f]{64}>$/);
+    expect(rec.sent[0].text).toContain("Settings: https://0509.io/app/settings");
 
     const attempts = await readAttempts();
     expect(attempts).toHaveLength(1);

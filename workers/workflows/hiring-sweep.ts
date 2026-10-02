@@ -8,6 +8,7 @@ import type { BoardResult } from "../../app/lib/hiring/read-board.server";
 import { readBoard } from "../../app/lib/hiring/read-board.server";
 import type { FoundBoard } from "../../app/lib/hiring/sweep.server";
 import { findBoard, planHiringSweep } from "../../app/lib/hiring/sweep.server";
+import { isNativeSchedule } from "../workflow-crons";
 
 const RETRY: WorkflowStepConfig = {
   retries: { limit: 3, delay: "30 seconds", backoff: "exponential" },
@@ -46,7 +47,8 @@ async function settle<T>(label: string, run: () => Promise<T>): Promise<T | null
 }
 
 export class HiringSweep extends WorkflowEntrypoint<Env> {
-  async run(event: WorkflowEvent<unknown>, step: WorkflowStep): Promise<HiringSweepOutcome> {
+  async run(event: WorkflowEvent<unknown>, step: WorkflowStep): Promise<HiringSweepOutcome | null> {
+    if (isNativeSchedule(event)) return null;
     return withMonitor("hiring-sweep", () => this.runSweep(event, step), MONITOR);
   }
 

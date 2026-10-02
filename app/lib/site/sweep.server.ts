@@ -1,9 +1,10 @@
+import { captureException } from "@sentry/cloudflare";
 import { env } from "cloudflare:workers";
 import { getDomain } from "tldts";
 
 import { insertIncidentAlertStatement } from "../data/alert.server";
 import { openIncidentStatement } from "../data/incident.server";
-import { insertPages, readEntitiesWithoutHomePage } from "../data/page.server";
+import { insertPages, readEntitiesWithoutHomePage, readUnwatchedPricingPages } from "../data/page.server";
 import { linkVerdictsStatement } from "../data/jev_verdict.server";
 import { insertChangeSignalStatement } from "../data/signal.server";
 import { readCoveredPagePairs } from "../data/snapshot.server";
@@ -81,6 +82,10 @@ export async function planSiteSweep(now: string): Promise<SiteSweepTarget[]> {
       const url = homeUrl(entity);
       return url === null ? [] : [{ id: crypto.randomUUID(), entityId: entity.id, sourceId, targetKey: url }];
     }),
+  );
+  const pricing = await readUnwatchedPricingPages(sourceId);
+  await insertWatches(
+    pricing.map((page) => ({ id: crypto.randomUUID(), entityId: page.entityId, sourceId, targetKey: page.url })),
   );
   return [...(await readSiteSweepTargets(SITE_SOURCE_KEY))];
 }
@@ -351,6 +356,16 @@ async function storeDiff(diffKey: string, diff: ReturnType<typeof diffPageText> 
   });
 }
 
+async function emailPricingChange(signalId: string, judgment: JudgedChange | null): Promise<void> {
+  if (judgment?.noteworthy?.band !== "publish" || judgment.noteworthy.kind !== "pricing") return;
+  try {
+    await env.SEND_EMAIL.send({ signal_id: signalId });
+  } catch (error) {
+    console.log(JSON.stringify({ event: "site.change_email_enqueue_failed", signalId }));
+    captureException(error, { tags: { queue: "send-email", lane: "change" } });
+  }
+}
+
 async function fileUnlessDiscarded(change: SiteChangeInput, payloadJson: string, selfJudgment: JudgedChange | null) {
   const { target } = change;
   const competitorJudgment = await judgeCompetitorChange(change);
@@ -365,6 +380,7 @@ async function fileUnlessDiscarded(change: SiteChangeInput, payloadJson: string,
     return;
   }
   const signalId = await fileChangeSignal(change, payloadJson, selfJudgment ?? competitorJudgment);
+  await emailPricingChange(signalId, competitorJudgment);
   if (target.entityRole === "self" && change.diff === null) {
     await judgeUnlessFailed(change, signalId);
   }
