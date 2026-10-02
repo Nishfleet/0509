@@ -17,7 +17,9 @@ function backfillUpdate(): string {
     migration.name.endsWith("_workspace_fixture.sql"),
   );
   if (found === undefined) throw new Error("0040_workspace_fixture.sql is missing from TEST_MIGRATIONS");
-  const update = found.queries.find((query) => /^update\s+workspace\s+set\s+fixture/i.test(query.trimStart()));
+  // Not anchored: a leading comment line in the SQL, or a quoted identifier,
+  // would otherwise lose the update the migration is supposed to ship.
+  const update = found.queries.find((query) => /update\s+workspace\s+set\s+fixture/i.test(query));
   if (update === undefined) throw new Error("0040_workspace_fixture.sql no longer sets workspace.fixture");
   return update;
 }
@@ -73,31 +75,34 @@ describe("the 0040 backfill for workspaces that predate the fixture column", () 
   // back 1). user.email is globally unique and the case above already inserted
   // e2e+j12-rollovers@0509.io, so those users are cleared first; ON DELETE
   // CASCADE takes their workspaces and entities with them.
-  //
   // One owner row per case, seeded with fixture = 0. Only the per-run owner
   // carries an e2e+@0509.io address, so the fixed accounts differ from it by
-  // local part alone, and the two real customers differ by domain: the LIKE is
-  // anchored on @0509.io, and the off-domain one is the same local part on a
-  // different host, so it must stay 0 too.
+  // local part alone and the real customers differ by domain: the LIKE is
+  // anchored on @0509.io, and "ada@example.com" also comes back 0 from the
+  // sibling case, so the off-domain one must match it.
   const PRE_EXISTING: { owner: string; email: string }[] = [
     { owner: "backfill-per-run", email: "e2e+backfill-run@0509.io" },
-    ...FIXTURE_EMAILS.map((email, index) => ({ owner: `backfill-fixed-${String(index)}`, email })),
+    ...FIXTURE_EMAILS.map((email, index) => ({ owner: `backfill-fixed-${index}`, email })),
     { owner: "backfill-customer", email: "ada@example.com" },
     { owner: "backfill-off-domain", email: "e2e+backfill-run@example.com" },
   ];
 
+  // The seed's emails, so the clear below cannot drift from the cases listed
+  // above. The sibling case owns ada@example.com and e2e+j12-rollovers@0509.io,
+  // and user.email is globally unique, so those users are cleared before the
+  // seed and restored in afterAll where nothing else depends on them.
+  const SEED_EMAILS = PRE_EXISTING.map((row) => row.email);
+
   async function seedPreExisting(): Promise<void> {
+
     const at = "2026-09-22T12:00:00.000Z";
-    // The fixed-account addresses are global singletons in user and the case
-    // above owns one of them, so clear those users first and the seed below is
-    // the only row carrying each address.
-    await env.DB.prepare(
-      `DELETE FROM "user" WHERE email IN (${FIXTURE_EMAILS.map(() => "?").join(", ")})`,
-    )
-      .bind(...FIXTURE_EMAILS)
-      .run();
-    await env.DB.prepare('DELETE FROM "user" WHERE email IN (?, ?, ?)')
-      .bind("e2e+backfill-run@0509.io", "e2e+backfill-run@example.com", "ada@example.com")
+    // The fixed-account addresses are global singletons in user and the sibling
+    // case above owns two of them, so clear those users first: the seed below is
+    // then the only row carrying each address, and ON DELETE CASCADE takes the
+    // workspaces and entities with them.
+    const placeholders = SEED_EMAILS.map(() => "?").join(", ");
+    await env.DB.prepare(`DELETE FROM "user" WHERE email IN (${placeholders})`)
+      .bind(...SEED_EMAILS)
       .run();
 
     const statements = PRE_EXISTING.flatMap(({ owner, email }) => [
@@ -122,11 +127,14 @@ describe("the 0040 backfill for workspaces that predate the fixture column", () 
     for (const email of FIXTURE_EMAILS) expect(isPerRunFixtureEmail(email)).toBe(false);
 
     // The UPDATE in the migration names exactly those six as excluded, so a
-    // rename or a seventh account in the app cannot drift from the SQL.
+    // rename or a seventh account in the app cannot drift from the SQL. Both
+    // quote styles are stripped, so the drift check fails for the emails
+    // themselves rather than for the quoting.
     const update = backfillUpdate();
     const notIn = /email\s+not\s+in\s*\(([^)]*)\)/i.exec(update)?.[1] ?? "";
     expect(notIn).not.toBe("");
-    expect((notIn.match(/[^',(\s]+/g) ?? []).sort()).toEqual([...FIXTURE_EMAILS].sort());
+    const address = /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+/g;
+    expect((notIn.match(address) ?? []).sort()).toEqual([...FIXTURE_EMAILS].sort());
 
     // Before: nothing is marked.
     const before = await env.DB.prepare("SELECT id, fixture FROM workspace WHERE id LIKE 'w-backfill-%' ORDER BY id").all<{
@@ -152,6 +160,10 @@ describe("the 0040 backfill for workspaces that predate the fixture column", () 
     expect(after.results).toHaveLength(PRE_EXISTING.length);
   });
 
+  // Clears only this case's rows. The sibling case already ran and asserted
+  // on its own, and the two users it shares an address with were deleted by
+  // seedPreExisting, so nothing later in this file reads a row this case put in
+  // the shared D1.
   afterAll(async () => {
     await env.DB.batch([
       env.DB.prepare("DELETE FROM workspace WHERE id LIKE 'w-backfill-%'"),
