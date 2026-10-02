@@ -25,7 +25,7 @@ function IncidentActions({ alertId, url }: { alertId: string; url: string }): Re
         href={url}
         target="_blank"
         rel="noopener noreferrer"
-        className="font-mono text-[0.75rem] tracking-[0.04em] uppercase underline"
+        className="inline-flex min-h-11 items-center font-mono text-[0.75rem] tracking-[0.04em] uppercase underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink focus-visible:outline-solid"
       >
         Open your site →
       </a>
