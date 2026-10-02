@@ -310,6 +310,39 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      - name: DIAG probe routes into blocked rivals
+        continue-on-error: true
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          UA='FiveToNineBot/1.0 (+https://0509.io)'
+          out=probe.md
+          echo "DIAG route probe (from a GitHub runner; browser rows run on Cloudflare), $(date -u +%FT%TZ)" > $out
+          d1() { npx wrangler d1 execute 0509 --remote --json --command "$1" | jq -c '.[0].results'; }
+          echo "- deferred home pages by domain: $(d1 "SELECT e.domain AS d, COUNT(DISTINCT e.workspace_id) AS ws, MAX(p.deferred_at) AS deferred, MAX(p.transport) AS t, MAX(p.transport_reason) AS r FROM entity e JOIN page p ON p.entity_id = e.id AND p.role = 'home' WHERE e.role = 'competitor' AND e.state = 'on' AND p.deferred_at IS NOT NULL GROUP BY e.domain ORDER BY e.domain" | head -c 3000)" >> $out
+          echo "- competitor domains tracked: $(d1 "SELECT COUNT(DISTINCT domain) AS n FROM entity WHERE role = 'competitor' AND state = 'on'")" >> $out
+          probe() {
+            code=$(curl -sS -m 25 -A "$UA" -o body.tmp -w '%{http_code} %{size_download}' "$1" 2>&1 || true)
+            title=$(grep -o -i '<title[^>]*>[^<]*' body.tmp 2>/dev/null | head -1 | head -c 80 || true)
+            echo "- GET $1 -> $code ${title}" >> $out
+          }
+          for h in www.adidas.com adidas.com www.adidas.co.uk www.adidas.de www.adidas.fr www.adidas-group.com news.adidas.com m.adidas.com; do
+            probe "https://$h/robots.txt"
+          done
+          curl -sS -m 25 -A "$UA" https://www.adidas.com/robots.txt -o robots.tmp || true
+          echo "- adidas.com robots.txt first lines: $(head -c 600 robots.tmp | tr '\n' '|')" >> $out
+          echo "- adidas.com robots Sitemap lines: $(grep -i '^sitemap' robots.tmp | head -5 | tr '\n' ' ')" >> $out
+          for u in https://www.adidas.com/ https://www.adidas.co.uk/ https://www.adidas-group.com/en/ https://news.adidas.com/ https://www.adidas.com/sitemap.xml https://www.adidas.com/us/sitemap.xml; do probe "$u"; done
+          echo "- wayback availability: $(curl -sS -m 25 'https://archive.org/wayback/available?url=adidas.com' | head -c 400)" >> $out
+          echo "- wayback cdx: $(curl -sS -m 25 'https://web.archive.org/cdx/search/cdx?url=adidas.com&limit=-3&output=json&fl=timestamp,statuscode&filter=statuscode:200' | head -c 300)" >> $out
+          for u in https://www.adidas.com/ https://www.adidas.co.uk/ https://www.adidas-group.com/en/ https://news.adidas.com/; do
+            code=$(curl -sS -m 90 -X POST -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" -H 'content-type: application/json' -d "{\"url\":\"$u\"}" -o br.tmp -w '%{http_code} %{size_download}' "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/browser-rendering/content" 2>&1 || true)
+            echo "- browser content $u -> $code $(head -c 160 br.tmp | tr '\n' ' ')" >> $out
+          done
+          gh issue comment 4730 --body-file $out
       - name: Post the day's soak numbers on the issue
         env:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
