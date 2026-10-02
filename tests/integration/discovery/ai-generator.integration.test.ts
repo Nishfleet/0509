@@ -58,12 +58,20 @@ describe("aiGenerator", () => {
       { messages: { content: string }[]; response_format: { type: string }; max_tokens: number },
       unknown,
     ];
-    expect(model).toBe("@cf/meta/llama-3.3-70b-instruct-fp8-fast");
+    expect(model).toBe("@cf/openai/gpt-oss-120b");
     expect(input.response_format.type).toBe("json_schema");
     expect(input.max_tokens).toBeGreaterThanOrEqual(1_000);
     expect(input.messages[1]?.content).toContain("Gymshark | Gymwear");
     expect(input.messages[1]?.content).toContain("Fitness apparel and accessories");
     expect(options).toMatchObject({ gateway: { id: "default" } });
+  });
+
+  it("reads the list from a chat-completion answer, the shape the larger models return", async () => {
+    const content = JSON.stringify({ competitors: [{ name: "Alphalete", domain: "alphaleteathletics.com" }] });
+    Reflect.set(env, "AI", { run: vi.fn().mockResolvedValue({ choices: [{ message: { content } }] }) });
+    liveHosts("alphaleteathletics.com");
+    const candidates = await aiGenerator(SUBJECT, home());
+    expect(candidates.map((candidate) => candidate.domain)).toEqual(["alphaleteathletics.com"]);
   });
 
   it("drops a hallucinated domain that does not resolve", async () => {
