@@ -160,6 +160,11 @@ function sourcePill(html: string): string {
   return match && match[1] !== undefined ? match[1] : "";
 }
 
+function headingAnchor(html: string): string | null {
+  const match = html.match(/<h3[^>]*>([\s\S]*?)<\/h3>/);
+  return match && match[1] !== undefined ? match[1] : null;
+}
+
 describe("the developments feed", () => {
   beforeEach(() => {
     feedFilterHarness.onValueChange = null;
@@ -226,6 +231,36 @@ describe("the developments feed", () => {
     expect(change.match(/<p[ >]/g)).toBeNull();
     expect(sourcePill(change)).toBe("Website");
     expect(change).toContain("12 Sept");
+  });
+  it("links a heading that carries an accepted https url out to that url in a new tab", () => {
+    const html = render("/?kind=mention");
+    const anchor = headingAnchor(html);
+    expect(anchor).toContain('href="https://forum.example/t/1"');
+    expect(anchor).toContain('rel="noopener noreferrer nofollow"');
+    expect(anchor).toContain('target="_blank"');
+    expect(anchor).toContain('class="inline-flex min-h-11 items-center underline decoration-1 underline-offset-4"');
+    expect(anchor).toContain("Designer role posted");
+    expect(anchor).toContain("opens in a new tab");
+  });
+
+  it("keeps the heading plain when the url is null or not an http url", () => {
+    const hiring = render("/?kind=hiring");
+    expect(hiring).not.toContain("<a ");
+    expect(headingAnchor(hiring)).toBe("Staff engineer, billing");
+    const denied: readonly FeedRow[] = [
+      {
+        id: "d9",
+        kind: "mention",
+        title: "Kept plain",
+        summary: null,
+        url: "javascript:alert(1)",
+        observedAt: "2026-09-16T13:00:00Z",
+        when: "9 Sept",
+      },
+    ];
+    const html = render("/?kind=mention", denied);
+    expect(html).not.toContain("<a ");
+    expect(html).toContain(">Kept plain<");
   });
 
   it("hands a change row whose id matches to the site-change item, which carries the mark", () => {
