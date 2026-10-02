@@ -344,11 +344,15 @@ jobs:
           cron_instances() {
             npx wrangler workflows instances list "$1" --date-start "$since" --per-page 100 --json | jq -s -r --arg prefix "$1-" '(add // []) | map(select(.id | startswith($prefix))) | length'
           }
+          newest_instances() {
+            npx wrangler workflows instances list "$1" --per-page 3 --json | jq -s -r '(add // []) | if length == 0 then "none ever" else map("\(.id) \(.status)") | join("; ") end'
+          }
           crons=""
+          newest=""
           for name in mentions-sweep site-sweep hiring-sweep snapshot-backup; do
             n=$(cron_instances "$name") || n=unreadable
             crons="$crons$name $n, "
-            [[ "$n" =~ ^[1-9][0-9]*$ ]] || { missed="$missed$name "; failed=1; }
+            [[ "$n" =~ ^[1-9][0-9]*$ ]] || { missed="$missed$name "; failed=1; newest="$newest$name newest: $(newest_instances "$name" || echo unreadable); "; }
           done
           required='["is_competitor","still_competitor","noteworthy_change","own_site_breakage","read_this_first","mention_is_about_brand","mention_matters","page_role","identity_field_confidence.name","identity_field_confidence.description","identity_field_confidence.socials"]'
           verdicts=$(d1 "SELECT question_id, COUNT(*) AS n, MAX(decided_at) AS last FROM jev_verdict GROUP BY question_id")
@@ -368,7 +372,7 @@ jobs:
           {
             echo "Soak report for the 24 hours before $(date -u +%Y-%m-%dT%H:%MZ) (send counts: $label)."
             echo
-            echo "- cron-started Workflow instances in the last 24 h (newest 100 each): ${crons%, }$([ -z "$missed" ] || echo " (FAIL, none or unreadable for: ${missed% })")"
+            echo "- cron-started Workflow instances in the last 24 h (newest 100 each): ${crons%, }$([ -z "$missed" ] || echo " (FAIL, none or unreadable for: ${missed% }; ${newest% })")"
             echo "- site-sweep Workflow instances: $(instances site-sweep)"
             echo "- site sweeps recorded in sweep_run: $sweeps"
             echo "- standing-rollover Workflow instances: $(instances standing-rollover)"
