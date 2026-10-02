@@ -71,10 +71,7 @@ describe("tickerItems", () => {
   });
 
   it("labels an unparseable observed_at as date unknown", () => {
-    const items = tickerItems(
-      [siteChangeRow({ observed_at: "garbage" })],
-      new Date("2026-09-24T12:00:00.000Z"),
-    );
+    const items = tickerItems([siteChangeRow({ observed_at: "garbage" })], new Date("2026-09-24T12:00:00.000Z"));
     expect(items).toEqual([
       { id: "sig-1", text: "Acme changed its pricing page", ago: "date unknown" } satisfies TickerItem,
     ]);
