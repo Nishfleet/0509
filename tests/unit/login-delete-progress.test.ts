@@ -62,4 +62,19 @@ describe("Login account-delete progress", () => {
       "Saved page copies and screenshots: stopped. Write to support@0509.io and we&#x27;ll finish it.",
     );
   });
+
+  // DESIGN.md: tap targets are 44px minimum. min-h-11 is 44px in this repo
+  // (tests/unit/onboarding-competitors.test.ts), and a box only reaches that
+  // height when inline-flex puts the text in a line box and items-center keeps
+  // it centred, so all three tokens are asserted.
+  it('gives "Check again" a 44px-tall tap target', () => {
+    const html = render({ id: "wf-5", progress: { rows: "removed", files: "removing", deleted: null } });
+
+    const link = html.match(/<a\b[^>]*href="\/login\?deleted=wf-5"[^>]*>/)?.[0] ?? "";
+
+    expect(link).toContain("min-h-11");
+    expect(link).toContain("inline-flex");
+    expect(link).toContain("items-center");
+    expect(link).toContain("underline");
+  });
 });
