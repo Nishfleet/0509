@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { createRoutesStub } from "react-router";
 import { describe, expect, it } from "vitest";
 
-import { ArrivalLine, Fields } from "../../../app/components/identity-card";
+import { ArrivalLine, CheckHint, Fields } from "../../../app/components/identity-card";
 import type { CardDraft, CardReview, SiteFields } from "../../../app/lib/identity/card-fields";
 
 const INSTAGRAM = "https://instagram.com/gymshark";
@@ -117,13 +117,13 @@ describe("the identity card fields", () => {
     expect(html).not.toContain("none found on the site");
   });
 
-  it("offers a social Jev was unsure about as an unchecked box carrying the url", () => {
+  it("offers a social Jev was unsure about as a ticked box carrying the url, so unticking removes it", () => {
     const html = render(site({ name: "fill", description: "fill", socials: "check" }));
 
     const social = input(html, 'name="social.instagram"');
     expect(social).toContain('type="checkbox"');
     expect(social).toContain(`value="${INSTAGRAM}"`);
-    expect(social).not.toContain("checked");
+    expect(social).toContain("checked");
     expect(html).toContain("please check");
   });
 
@@ -202,5 +202,23 @@ describe("ArrivalLine", () => {
       }),
     );
     expect(clean).toBe('<span class="sr-only">Your details are ready.</span>');
+  });
+});
+
+describe("CheckHint", () => {
+  function hint(fields: ReturnType<typeof site>): string {
+    return renderToStaticMarkup(createElement(CheckHint, { fields }));
+  }
+
+  it("says what please check means, and asks to untick social links that are not theirs", () => {
+    const text = hint(site({ name: "check", description: "fill", socials: "check" }));
+
+    expect(text).toContain("may not be right. Tap a row to fix it.");
+    expect(text).toContain("Untick any social link that isn&#x27;t yours.");
+  });
+
+  it("leaves out the social line when the links are sure, and says nothing when nothing needs a check", () => {
+    expect(hint(site({ name: "check", description: "fill", socials: "fill" }))).not.toContain("Untick");
+    expect(hint(site({ name: "fill", description: "fill", socials: "fill" }))).toBe("");
   });
 });

@@ -104,7 +104,7 @@ the current step on the marker runs across the top of all three.
    draws itself field by field as each source lands — each row that has not arrived yet
    says what will fill it ("logo: looking on the site"), never a spinner and never a
    skeleton block. Fields Jev was unsure about (D7 between) sit on the green wash and
-   read "check this". Every row is tap-to-edit. One action: "That's me".
+   read "please check", and a short line under the card says what that means; social links Jev was unsure about come ticked, to untick. Every row is tap-to-edit. One action: "That's me".
 3. **Who you're up against.** Accepted competitors (D1 p ≥ 0.9) listed ON with a
    one-line reason each; maybes below on the bone ground, off, with Jev's reason and its
    probability. "Add one we missed" is the same one input, inline, at the bottom of the
