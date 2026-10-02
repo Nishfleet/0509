@@ -149,8 +149,7 @@ function fieldView(name: string, schema: unknown): FieldView {
 }
 
 export function schemaFields(schema: unknown): FieldView[] {
-  const ref = schemaRef(schema);
-  if (ref !== null) return [{ name: refName(ref), type: refName(ref), description: "" }];
+  if (schemaRef(schema) !== null) return [];
   if (!isRecord(schema) || !isRecord(schema.properties)) return [];
   return Object.entries(schema.properties).map(([name, property]) => fieldView(name, property));
 }

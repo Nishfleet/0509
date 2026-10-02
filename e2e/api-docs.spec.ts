@@ -19,6 +19,8 @@ test("the API reference is generated from the OpenAPI document @smoke", async ({
   for (const path of paths) {
     await expect(main, path).toContainText(path);
   }
+  await expect(main).toContainText("competitorId");
+  await expect(main).toContainText("Missing or invalid API key");
   await expect(main).toContainText("Authorization: Bearer");
   await expect(main).toContainText("/mcp");
   await expect(page.getByRole("link", { name: "Settings" }).first()).toHaveAttribute("href", "/app/settings/agents");
