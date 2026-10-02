@@ -36,7 +36,26 @@ const GATEWAY_MODEL = "typesafe/jev";
 
 const JEV_URL = VIA_GATEWAY ? "workers-ai binding" : (process.env.JEV_URL ?? "http://127.0.0.1:4000/jev");
 
-const GATEWAY_ID = "default";
+// Evals bill a gateway of their own so a spend limit on it can cap them; the
+// production gateway "default" shares the account's AI credits with customers.
+const GATEWAY_ID = process.env.EVAL_GATEWAY_ID ?? "evals";
+
+const GATEWAY_MISSING = /gateway/i;
+
+async function onEvalGateway<T>(call: () => Promise<T>): Promise<T> {
+  try {
+    return await call();
+  } catch (error) {
+    const message = String(error);
+    if (GATEWAY_MISSING.test(message) && /not found|not exist|configure|unknown/i.test(message)) {
+      throw new Error(
+        `eval gateway "${GATEWAY_ID}" is not usable (${message.slice(0, 200)}). Create it in the Cloudflare dashboard under AI Gateway, with a spend limit, or set EVAL_GATEWAY_ID.`,
+        { cause: error },
+      );
+    }
+    throw error;
+  }
+}
 
 const WRANGLER_CONFIG = path.join(HERE, "..", "..", "wrangler.jsonc");
 
@@ -194,18 +213,17 @@ export async function postWorkersAi(model: string, body: unknown): Promise<unkno
   return withOneRetry(async () => {
     spendCall();
     const ai = await aiBinding();
-    return ai.run(model as never, body as never, { gateway: { id: GATEWAY_ID } });
+    return onEvalGateway(() => ai.run(model as never, body as never, { gateway: { id: GATEWAY_ID } }));
   });
 }
 
 async function postJev(body: unknown): Promise<JevResponse> {
   spendCall();
   if (VIA_GATEWAY) {
-    const raw = await (
-      await aiBinding()
-    ).run(GATEWAY_MODEL as never, withoutModel(body) as never, {
-      gateway: { id: GATEWAY_ID },
-    });
+    const ai = await aiBinding();
+    const raw = await onEvalGateway(() =>
+      ai.run(GATEWAY_MODEL as never, withoutModel(body) as never, { gateway: { id: GATEWAY_ID } }),
+    );
     const unwrapped = unwrapJev(raw);
     return { ...unwrapped, model: typeof unwrapped.model === "string" ? unwrapped.model : GATEWAY_MODEL };
   }
