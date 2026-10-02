@@ -78,7 +78,7 @@ export const PRIVACY: LegalDocument = {
           details: [
             "Hosting, the database, file storage, screenshots, sending email, the sign-in check that keeps bots out (Turnstile), and Workers AI, which runs the AI models that decide which changes matter and why, and read text off an image.",
             "Sees everything 0509 stores, because 0509 runs on it. The AI models see the public material we collected and the names of your brand and competitors, never your sign-in email or payment details.",
-            "Mail you send to support@0509.io arrives through Cloudflare Email Routing and is stored in our own support inbox on Cloudflare, attachments included. That inbox's AI, on Workers AI, reads each message to draft a reply for us. It drafts only; it does not send.",
+            "Mail you send to support@0509.io arrives through Cloudflare Email Routing and is stored in our own support inbox on Cloudflare, attachments included.",
           ],
         },
         {
