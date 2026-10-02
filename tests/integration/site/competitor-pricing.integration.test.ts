@@ -255,19 +255,20 @@ describe("a competitor's pricing page", () => {
     const urls = await seedWatchedPages("keep", 5, 5);
     const source = await env.DB.prepare("SELECT id FROM source WHERE key = 'site.web'").first<{ id: string }>();
     const other = await env.DB.prepare("SELECT id FROM source WHERE key <> 'site.web' LIMIT 1").first<{ id: string }>();
+    const ownPricing = Array.from({ length: 5 }, (_, index) => `https://owner-shop.com/plans-${String(index)}`);
+    const ownAbout = "https://owner-shop.com/about";
     await env.DB.batch([
-      env.DB.prepare(
-        "INSERT INTO page (id, entity_id, url, role, role_decided_for_hash, discovered_at) VALUES ('pg-own-0', ?1, 'https://owner-shop.com/pricing', 'pricing', 'h', ?2)",
-      ).bind(SELF, NOW),
-      env.DB.prepare(
-        "INSERT INTO page (id, entity_id, url, role, role_decided_for_hash, discovered_at) VALUES ('pg-own-1', ?1, 'https://owner-shop.com/about', 'other', 'h', ?2)",
-      ).bind(SELF, NOW),
-      env.DB.prepare(
-        "INSERT INTO watch (id, entity_id, source_id, target_key) VALUES ('w-own-0', ?1, ?2, 'https://owner-shop.com/pricing')",
-      ).bind(SELF, source?.id),
-      env.DB.prepare(
-        "INSERT INTO watch (id, entity_id, source_id, target_key) VALUES ('w-own-1', ?1, ?2, 'https://owner-shop.com/about')",
-      ).bind(SELF, source?.id),
+      ...[...ownPricing.map((url) => [url, "pricing"]), [ownAbout, "other"]].flatMap(([url, role], index) => [
+        env.DB.prepare(
+          "INSERT INTO page (id, entity_id, url, role, role_decided_for_hash, discovered_at) VALUES (?1, ?2, ?3, ?4, 'h', ?5)",
+        ).bind(`pg-own-${String(index)}`, SELF, url, role, NOW),
+        env.DB.prepare("INSERT INTO watch (id, entity_id, source_id, target_key) VALUES (?1, ?2, ?3, ?4)").bind(
+          `w-own-${String(index)}`,
+          SELF,
+          source?.id,
+          url,
+        ),
+      ]),
       env.DB.prepare("INSERT INTO watch (id, entity_id, source_id, target_key) VALUES ('w-other', ?1, ?2, ?3)").bind(
         RIVAL,
         other?.id,
@@ -278,16 +279,20 @@ describe("a competitor's pricing page", () => {
     await planSiteSweep(NOW);
     await planSiteSweep(NOW);
 
-    const state = await env.DB.prepare("SELECT id, is_active FROM watch WHERE id IN ('w-own-0','w-own-1','w-other')")
-      .all<{ id: string; is_active: number }>()
-      .then((rows) => Object.fromEntries(rows.results.map((row) => [row.id, row.is_active])));
-    expect(state).toEqual({ "w-own-0": 1, "w-own-1": 1, "w-other": 1 });
-    const home = await env.DB.prepare(
-      "SELECT is_active FROM watch WHERE entity_id IN (?1, ?2) AND target_key IN (?3, ?4)",
+    const rows = await env.DB.prepare(
+      "SELECT entity_id, target_key, is_active FROM watch WHERE entity_id = ?1 OR (entity_id = ?2 AND target_key = ?3) ORDER BY entity_id, target_key",
     )
-      .bind(SELF, RIVAL, "https://owner-shop.com/", HOME)
-      .all<{ is_active: number }>();
-    expect(home.results.length).toBeGreaterThan(0);
-    expect(home.results.every((row) => row.is_active === 1)).toBe(true);
+      .bind(SELF, RIVAL, HOME)
+      .all<{ entity_id: string; target_key: string; is_active: number }>();
+    expect(rows.results.map((row) => [row.entity_id, row.target_key, row.is_active])).toEqual([
+      [RIVAL, HOME, 1],
+      [SELF, "https://owner-shop.com/", 1],
+      [SELF, ownAbout, 1],
+      ...ownPricing.map((url) => [SELF, url, 1]),
+    ]);
+    const otherSource = await env.DB.prepare("SELECT is_active FROM watch WHERE id = 'w-other'").first<{
+      is_active: number;
+    }>();
+    expect(otherSource?.is_active).toBe(1);
   });
 });
