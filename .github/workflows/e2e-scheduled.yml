@@ -20,7 +20,7 @@ on:
       journey:
         description: Journey to run now
         type: choice
-        options: [none, j12, suite, signin, j8-hard, j8-soft, soak-report]
+        options: [none, j12, suite, signin, j8-hard, j8-soft, soak-report, proof-4012]
         default: none
       spec:
         description: 'One spec or a filter to run now against https://0509.io, e.g. e2e/j3-onboard-domain.spec.ts (0509 sign-up verdict, 2026-09-28)'
@@ -86,6 +86,33 @@ jobs:
       - name: Print what the page showed when it failed
         # Playwright writes the page snapshot next to each failure; printing it
         # is how a failure is read, since nothing is uploaded.
+        if: failure()
+        run: tail -n +1 test-results/*/error-context.md
+  proof-4012:
+    name: proof-4012
+    if: inputs.journey == 'proof-4012' && inputs.spec == ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - name: J14 proof against production
+        run: npm run e2e -- e2e/proof-4012.spec.ts --project=desktop-1440 --retries=0 --workers=1 --reporter=list
+        env:
+          PLAYWRIGHT_TEST_BASE_URL: https://0509.io
+          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+          E2E_INBOX_TOKEN: ${{ secrets.E2E_INBOX_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      - name: Print what the page showed when it failed
         if: failure()
         run: tail -n +1 test-results/*/error-context.md
   signin:
