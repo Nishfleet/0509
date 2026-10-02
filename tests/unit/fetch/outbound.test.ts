@@ -1,6 +1,12 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { BlockedRedirectError, cappedJson, cappedText, fetchOutbound } from "../../../app/lib/fetch/outbound.server";
+import {
+  BlockedRedirectError,
+  cappedJson,
+  cappedText,
+  fetchOutbound,
+  targetRefusal,
+} from "../../../app/lib/fetch/outbound.server";
 
 function streamed(chunks: string[]): Response {
   const encoder = new TextEncoder();
@@ -65,6 +71,30 @@ describe("fetchOutbound", () => {
     );
     await expect(fetchOutbound("https://foo.localhost/", { headers: {} })).rejects.toBeInstanceOf(BlockedRedirectError);
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+});
+
+describe("targetRefusal", () => {
+  it("accepts a public ICANN http(s) host", () => {
+    expect(targetRefusal(new URL("https://example.com/"))).toBeNull();
+    expect(targetRefusal(new URL("http://www.example.co.uk/"))).toBeNull();
+  });
+
+  it("refuses a scheme that is not in the allow-list", () => {
+    expect(targetRefusal(new URL("ftp://example.com/"))).toBe("unsupported scheme: ftp:");
+    expect(targetRefusal(new URL("http://example.com/"), ["https:"])).toBe("unsupported scheme: http:");
+  });
+
+  it("refuses a host that is an IP address", () => {
+    for (const raw of ["https://127.0.0.1/", "https://10.0.0.5/", "https://[::1]/"]) {
+      expect(targetRefusal(new URL(raw))).toMatch(/^not a public internet host: /);
+    }
+  });
+
+  it("refuses a host that is not a public ICANN domain", () => {
+    for (const raw of ["https://localhost/", "https://intranet/", "https://printer.local/"]) {
+      expect(targetRefusal(new URL(raw))).toMatch(/^not a public internet host: /);
+    }
   });
 });
 
