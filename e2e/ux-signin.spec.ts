@@ -1,6 +1,6 @@
 import { test, type Page } from "@playwright/test";
 
-import { deleteCreatedAccount, requireInboxToken, signInWithMagicLink } from "./inbox";
+import { deleteCreatedAccount, requireInboxToken, settleSignInWidget, staleLinks, waitForMagicLink } from "./inbox";
 
 let createdEmail = "";
 test.afterEach(async ({ page }, testInfo) => {
@@ -76,10 +76,14 @@ test("ux signin check @own-signin", async ({ page, context, browser }) => {
   await page.goto("/login");
   await page.locator('input[name="email"]').fill(dirty);
   console.log(`TYPED ${JSON.stringify(await page.locator('input[name="email"]').inputValue())}`);
-  const { link } = await signInWithMagicLink(page, dirty, token).catch(async (e) => {
-    console.log(`STEPFAIL signin ${String(e).slice(0, 300)}`);
-    throw e;
-  });
+  await settleSignInWidget(page);
+  const stale = await staleLinks(email, token);
+  await page.locator('button[type="submit"]').click();
+  await page.getByRole("heading", { level: 1, name: "Check your email" }).waitFor({ timeout: 30000 });
+  await record(page, "s04b-sent-state");
+  const link = await waitForMagicLink(email, token, stale);
+  await page.goto(link);
+  await page.waitForTimeout(2000);
   await record(page, "s05-after-link-landing");
 
   await step(page, "s06-login-while-signed-in", () => page.goto("/login"));
