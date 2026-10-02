@@ -9,6 +9,7 @@ import { PlanSection } from "../components/plan-settings";
 import { PageHeading } from "../components/page-heading";
 import { AccountSection, AgentsSection, BriefSection, SettingsJumps } from "../components/settings-sections";
 import { requireFreshSession, requireSession } from "../lib/require-session.server";
+import { readPasskeys } from "../lib/passkeys.server";
 import { readSettings, runSettingsIntent } from "../lib/settings.server";
 
 export function meta() {
@@ -17,7 +18,8 @@ export function meta() {
 
 export async function loader({ request }: Route.LoaderArgs) {
   const session = await requireSession(request);
-  return readSettings(session.user);
+  const [settings, passkeys] = await Promise.all([readSettings(session.user), readPasskeys(request)]);
+  return { ...settings, passkeys };
 }
 
 export async function action({ request, context }: Route.ActionArgs) {
@@ -42,7 +44,12 @@ export default function Page({ loaderData, actionData }: Route.ComponentProps) {
           <DismissedBrands dismissed={loaderData.dismissed} />
           <AgentsSection />
           <PlanSection plan={loaderData.plan} />
-          <AccountSection email={loaderData.email} delivery={loaderData.delivery} result={actionData} />
+          <AccountSection
+            email={loaderData.email}
+            delivery={loaderData.delivery}
+            passkeys={loaderData.passkeys}
+            result={actionData}
+          />
           <ExportData />
           <DeleteAccount email={loaderData.email} error={actionData?.deleteError ?? null} />
         </div>
