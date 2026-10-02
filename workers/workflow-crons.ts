@@ -20,18 +20,20 @@ export function isWorkflowCron(cron: string): cron is WorkflowCron {
   return Object.hasOwn(WORKFLOW_CRONS, cron);
 }
 
-export async function startScheduledWorkflow(
-  env: Pick<Env, (typeof WORKFLOW_CRONS)[WorkflowCron]["binding"]>,
-  cron: WorkflowCron,
-  scheduledTime: number,
-): Promise<string> {
+type CronEnv = Pick<Env, (typeof WORKFLOW_CRONS)[WorkflowCron]["binding"]>;
+
+async function startInstance(env: CronEnv, cron: WorkflowCron, scheduledTime: number) {
   const entry = WORKFLOW_CRONS[cron];
   if (!entry) throw new Error(`No workflow for cron ${cron}`);
   const { binding, name } = entry;
   const instant = new Date(scheduledTime).toISOString();
   const id = `${name}-${cron === OWN_SITE_CHECK_CRON ? instant.replace(/[:.]/g, "-") : instant.slice(0, 10)}`;
-  await env[binding].createBatch([{ id }]);
-  return id;
+  const started = await env[binding].createBatch([{ id }]);
+  return { id, created: started.length > 0 };
+}
+
+export async function startScheduledWorkflow(env: CronEnv, cron: WorkflowCron, scheduledTime: number) {
+  return (await startInstance(env, cron, scheduledTime)).id;
 }
 
 function dailyCrons(): WorkflowCron[] {
@@ -40,12 +42,12 @@ function dailyCrons(): WorkflowCron[] {
   );
 }
 
-export function startMissedDailyWorkflows(env: Parameters<typeof startScheduledWorkflow>[0], now: number) {
+export function startMissedDailyWorkflows(env: CronEnv, now: number) {
   const dayStart = Date.UTC(new Date(now).getUTCFullYear(), new Date(now).getUTCMonth(), new Date(now).getUTCDate());
   const due = dailyCrons().flatMap((cron) => {
     const [minute = "0", hour = "0"] = cron.split(" ");
     const scheduledTime = dayStart + (Number(hour) * 60 + Number(minute)) * 60_000;
     return scheduledTime <= now ? [{ cron, scheduledTime }] : [];
   });
-  return Promise.allSettled(due.map(({ cron, scheduledTime }) => startScheduledWorkflow(env, cron, scheduledTime)));
+  return Promise.allSettled(due.map(({ cron, scheduledTime }) => startInstance(env, cron, scheduledTime)));
 }

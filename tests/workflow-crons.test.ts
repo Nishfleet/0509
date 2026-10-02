@@ -7,8 +7,10 @@ import {
   WORKFLOW_CRONS,
 } from "../workers/workflow-crons";
 
-function fakeEnv() {
-  const createBatch = vi.fn(() => Promise.resolve([]));
+function fakeEnv(existing = new Set<string>()) {
+  const createBatch = vi.fn((batch: { id: string }[]) =>
+    Promise.resolve(existing.has(batch[0]?.id ?? "") ? [] : [...batch]),
+  );
   const bindings = {
     MENTIONS: { createBatch },
     SITE_SWEEP: { createBatch },
@@ -73,6 +75,16 @@ describe("startScheduledWorkflow", () => {
     await startMissedDailyWorkflows(env, catchUp);
     const ids = createBatch.mock.calls.flat().flat();
     expect(ids.filter((entry) => entry.id.startsWith("mentions-sweep"))).toEqual([{ id: tick }, { id: tick }]);
+  });
+
+  it("reports only the instances the catch-up really created, and leaves a failed or running one alone", async () => {
+    const { env } = fakeEnv(new Set(["mentions-sweep-2026-10-02"]));
+    const results = await startMissedDailyWorkflows(env, Date.UTC(2026, 9, 2, 3, 0, 0));
+    expect(results.flatMap((result) => (result.status === "fulfilled" ? [result.value] : []))).toEqual([
+      { id: "mentions-sweep-2026-10-02", created: false },
+      { id: "site-sweep-2026-10-02", created: true },
+      { id: "hiring-sweep-2026-10-02", created: true },
+    ]);
   });
 
   it("recognises only the workflow crons", () => {

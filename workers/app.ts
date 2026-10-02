@@ -1,5 +1,12 @@
 import type { OAuthHelpers } from "@cloudflare/workers-oauth-provider";
-import { captureException, instrumentWorkflowWithSentry, setTag, withMonitor, withSentry } from "@sentry/cloudflare";
+import {
+  captureException,
+  captureMessage,
+  instrumentWorkflowWithSentry,
+  setTag,
+  withMonitor,
+  withSentry,
+} from "@sentry/cloudflare";
 import { createRequestHandler } from "react-router";
 
 import { OWN_SITE_CHECK_CRON } from "../app/lib/cadence";
@@ -88,6 +95,8 @@ const handler = {
           const missed = await startMissedDailyWorkflows(env, controller.scheduledTime);
           missed.forEach((result) => {
             if (result.status === "rejected") captureException(result.reason);
+            else if (result.value.created)
+              captureMessage(`Missed daily Workflow started: ${result.value.id}`, "warning");
           });
         }
         return;
