@@ -305,7 +305,7 @@ describe("Home standing", () => {
   it("says when the first standing comes while the first week is still open", () => {
     const html = render({ payload: null });
     expect(html).toContain(
-      `We&#x27;re collecting your first week of data: ${WATCHED_NOUNS} for 3 brands. Your first site snapshots arrive by Friday 03:00. Your first ranking arrives with your brief on Monday 08:00.`,
+      `We&#x27;re collecting your first week of data: ${WATCHED_NOUNS} for 3 brands. Your first site snapshots arrive on Friday 25 September, around 07:00 BST. Your first ranking arrives with your brief on Monday 08:00.`,
     );
     expect(html).toContain('data-home="first-file"');
     expect(html).toContain("Good morning.</h1>");
@@ -385,7 +385,7 @@ describe("Home standing", () => {
     );
     const standing = homeStanding(GATHERING_INPUT);
     if (standing.kind !== "gathering") throw new Error("expected a gathering standing");
-    expect(standing.firstSweepAt).toBe("Friday 03:00");
+    expect(standing.firstSweepAt).toBe("Friday 25 September, around 07:00 BST");
     expect(homeView(GATHERING_INPUT).standing).toEqual(standing);
   });
 

@@ -89,7 +89,7 @@ for (const { width, height } of [
 
     const panel = page.locator('[data-home="first-file"]');
     await expect(panel).toContainText(
-      /Your first site snapshots arrive by (?:Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday) (?:[01]\d|2[0-3]):[0-5]\d\./,
+      /Your first site snapshots arrive on (?:Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday) \d{1,2} [A-Z][a-z]+, around (?:[01]\d|2[0-3]):[0-5]\d \S+\./,
     );
     await expect(panel).not.toContainText("once the first check is scheduled");
     const homeMs = Date.now() - started;
