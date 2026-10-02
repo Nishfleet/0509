@@ -64,6 +64,7 @@ describe("app layout middleware", () => {
       "app/competitors",
       "app/competitors/:entityId",
       "app/upgrade",
+      "app/tester",
       "app/alerts",
       "app/brief/:digestId?",
     ]);
