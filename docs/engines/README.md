@@ -1,5 +1,10 @@
 # Engine designs — P3
 
+**History, not a map.** These are the design packets written before the build.
+File paths in them are planned names; many were never created or live
+elsewhere (the Workflows are in `workers/workflows/`, not `workers/*-workflow.ts`).
+Find the real code with `ls` or grep.
+
 One file per engine, in the P3 build order (umbrella #3842):
 
 | Order | Engine                              | Issue | File                                                 |
