@@ -32,7 +32,7 @@ export function copyKeyLabel(state: "idle" | "copied" | "failed"): string {
 export function CopyFailureNote({ subject }: { subject: string }): ReactElement {
   return (
     <p role="status" className="mt-2 text-body-sm text-ink-soft">
-      Copy failed. Select the {subject} above and copy it by hand.
+      Copy failed. Select the {subject} and copy it by hand.
     </p>
   );
 }
@@ -60,7 +60,7 @@ function CopyField({ label, value }: { label: string; value: string }) {
       >
         {state === "copied" ? "Copied" : "Copy"}
       </Button>
-      {state === "failed" ? <CopyFailureNote subject="text" /> : null}
+      {state === "failed" ? <CopyFailureNote subject={label.toLowerCase()} /> : null}
     </div>
   );
 }
@@ -223,7 +223,7 @@ export function CopyKey({ value }: { value: string }) {
       >
         {copyKeyLabel(state)}
       </Button>
-      {state === "failed" ? <CopyFailureNote subject="key" /> : null}
+      {state === "failed" ? <CopyFailureNote subject="key above" /> : null}
     </div>
   );
 }

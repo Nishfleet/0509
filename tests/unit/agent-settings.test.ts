@@ -180,6 +180,14 @@ function recordUnhandled(reason: unknown): void {
   unhandled.push(reason);
 }
 
+// Node reports an unhandled rejection only after the microtask queue drains, so
+// every claim below waits for that drain before reading the list. Reading it
+// first would make the claim unable to fail.
+async function settledUnhandled(): Promise<unknown[]> {
+  await new Promise((resolve) => setImmediate(resolve));
+  return unhandled;
+}
+
 function stubClipboard(writeText: (value: string) => Promise<void>): void {
   vi.stubGlobal("navigator", { clipboard: { writeText: vi.fn(writeText) } });
 }
@@ -189,9 +197,7 @@ beforeEach(() => {
   process.on("unhandledRejection", recordUnhandled);
 });
 
-afterEach(async () => {
-  // Let Node's unhandledRejection bookkeeping run before the claim is read.
-  await new Promise((resolve) => setImmediate(resolve));
+afterEach(() => {
   vi.unstubAllGlobals();
   process.off("unhandledRejection", recordUnhandled);
 });
@@ -207,7 +213,7 @@ describe("copying a new API key", () => {
     await expect(copyToClipboard(NEW_KEY)).resolves.toBe("copied");
 
     expect(written).toEqual([NEW_KEY]);
-    expect(unhandled).toEqual([]);
+    expect(await settledUnhandled()).toEqual([]);
   });
 
   it("reports failed instead of rejecting when the browser refuses the write", async () => {
@@ -215,7 +221,7 @@ describe("copying a new API key", () => {
 
     await expect(copyToClipboard(NEW_KEY)).resolves.toBe("failed");
 
-    expect(unhandled).toEqual([]);
+    expect(await settledUnhandled()).toEqual([]);
   });
 
   // An insecure context or an in-app browser leaves navigator.clipboard absent,
@@ -226,7 +232,7 @@ describe("copying a new API key", () => {
 
     await expect(copyToClipboard(NEW_KEY)).resolves.toBe("failed");
 
-    expect(unhandled).toEqual([]);
+    expect(await settledUnhandled()).toEqual([]);
   });
 
   it("reports failed and raises nothing when reading writeText throws synchronously", async () => {
@@ -240,7 +246,7 @@ describe("copying a new API key", () => {
 
     await expect(copyToClipboard(NEW_KEY)).resolves.toBe("failed");
 
-    expect(unhandled).toEqual([]);
+    expect(await settledUnhandled()).toEqual([]);
   });
 
   it("reads Copied on the button once the write resolved, and keeps its resting label otherwise", () => {
@@ -250,9 +256,15 @@ describe("copying a new API key", () => {
   });
 
   it("says to copy the key by hand after a failed write, as a status the screen reader reads", () => {
-    const html = renderToStaticMarkup(createElement(CopyFailureNote, { subject: "key" }));
+    const html = renderToStaticMarkup(createElement(CopyFailureNote, { subject: "key above" }));
     expect(html).toContain('role="status"');
     expect(html).toContain("Copy failed. Select the key above and copy it by hand.");
+  });
+
+  it("names the connect field instead of pointing above it when a CopyField write fails", () => {
+    const html = renderToStaticMarkup(createElement(CopyFailureNote, { subject: "connector address" }));
+    expect(html).toContain('role="status"');
+    expect(html).toContain("Copy failed. Select the connector address and copy it by hand.");
   });
 
   it("never prints the key when the write is refused", async () => {
