@@ -165,8 +165,14 @@ describe.skipIf(!jevKeyPresent())("eval: discovery competitor questions against 
       };
       const combine = (ps: number[]): number =>
         keepOnlyIfBoth(ps.map((p) => ({ questionId: "", inputHash: "", p, cached: false }))).p;
-      const call = await makeNoulsAsk([IS_COMPETITOR, SAME_CATEGORY], combine)(state);
-      return (call.p ?? 0) > REJECT_AT;
+      for (let attempt = 0; ; attempt++) {
+        try {
+          const call = await makeNoulsAsk([IS_COMPETITOR, SAME_CATEGORY], combine)(state);
+          return (call.p ?? 0) > REJECT_AT;
+        } catch (error) {
+          if (attempt >= 3) throw error;
+        }
+      }
     };
     const recall = (row: SeededCase, domains: Set<string>): number =>
       row.expected.filter((aliases) => aliases.some((alias) => domains.has(registrable(alias)))).length /
