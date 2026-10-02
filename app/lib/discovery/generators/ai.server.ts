@@ -30,7 +30,7 @@ const EXCERPT = "Proposed by a language model reading the brand's own site; not 
 
 const REASON_MAX = 160;
 
-export const RESPONSE_SCHEMA = {
+const RESPONSE_SCHEMA = {
   type: "object",
   properties: {
     competitors: {
@@ -44,6 +44,11 @@ export const RESPONSE_SCHEMA = {
     },
   },
   required: ["competitors"],
+} as const;
+
+export const RESPONSE_FORMAT = {
+  type: "json_schema",
+  json_schema: { name: "competitors", schema: RESPONSE_SCHEMA },
 } as const;
 
 const proposalSchema = z.object({
@@ -140,7 +145,7 @@ async function propose(subject: Subject, site: SiteText): Promise<Proposal[]> {
     {
       messages: messagesFor(subject, site),
       max_tokens: MAX_TOKENS,
-      response_format: { type: "json_schema", json_schema: RESPONSE_SCHEMA },
+      response_format: RESPONSE_FORMAT,
     },
     { gateway: { id: GATEWAY_ID }, signal: AbortSignal.timeout(AI_TIMEOUT_MS) },
   );
