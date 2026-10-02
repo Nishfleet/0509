@@ -78,6 +78,7 @@ describe("the brand switch note", () => {
     expect(brandSwitchNote("off", new Date("2026-09-22T12:00:00Z"))).toBe("Paused 22 Sept, history kept");
     expect(brandSwitchNote("off", null)).toBe("Paused, history kept");
     expect(brandSwitchNote("off", new Date("nope"))).toBe("Paused, history kept");
+    expect(brandSwitchNote("off", new Date(NaN))).toBe("Paused, history kept");
   });
 
   it("marks you as always tracked", () => {
