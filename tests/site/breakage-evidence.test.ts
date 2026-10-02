@@ -44,7 +44,11 @@ describe("computeBreakageEvidence", () => {
     expect(vanished.pricesAfter).toBe(0);
     expect(vanished.pricesVanished).toBe(true);
 
-    const pricedOnBoth = computeBreakageEvidence({ status: 200, beforeText: "From £40 a month", afterText: "From £45" });
+    const pricedOnBoth = computeBreakageEvidence({
+      status: 200,
+      beforeText: "From £40 a month",
+      afterText: "From £45",
+    });
     expect(pricedOnBoth.pricesAfter).toBe(1);
     expect(pricedOnBoth.pricesVanished).toBe(false);
 
