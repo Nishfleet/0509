@@ -5,7 +5,8 @@ import { z } from "zod";
 import { markWebhookEventProcessed, recordWebhookEvent } from "../data/dodo_webhook_event.server";
 import { readPlanSubscription, readWorkspaceIdBySubscription, upsertSubscriptionPlan } from "../data/plan.server";
 import { isCheckoutProof } from "./checkout-proof.server";
-import { planIdForProduct } from "./products.server";
+import { isSubscriptionLive } from "./entitlements";
+import { planIdForProduct, testerProductId } from "./products.server";
 
 const envelope = z.object({
   type: z.string(),
@@ -48,16 +49,22 @@ async function resolveWorkspace(data: z.infer<typeof subscriptionData>): Promise
   return { kind: "found", id: claimed };
 }
 
-async function isStaleSubscription(input: {
+type Displacement = "same" | "stale" | "takeover";
+
+async function displacement(input: {
   workspaceId: string;
   subscriptionId: string;
+  productId: string;
   type: string;
   timestamp: string;
-}): Promise<boolean> {
+}): Promise<Displacement> {
   const current = await readPlanSubscription(input.workspaceId);
-  if (current === null || current.subscriptionId === input.subscriptionId) return false;
-  if (input.type !== "subscription.active") return true;
-  return !(Date.parse(input.timestamp) > Date.parse(current.updatedAt));
+  if (current === null || current.subscriptionId === input.subscriptionId) return "same";
+  if (input.productId === testerProductId() && isSubscriptionLive(current, new Date())) return "stale";
+  if (input.type !== "subscription.active") return "stale";
+  const since = Date.parse(current.updatedAt);
+  if (!Number.isFinite(since) || since > Date.now()) return "takeover";
+  return Date.parse(input.timestamp) > since ? "same" : "stale";
 }
 
 async function applySubscription(body: unknown, type: string, timestamp: string): Promise<"done" | "retry"> {
@@ -76,7 +83,14 @@ async function applySubscription(body: unknown, type: string, timestamp: string)
   if (workspace.kind === "retry") return "retry";
   if (workspace.kind === "ignore") return "done";
   const workspaceId = workspace.id;
-  if (await isStaleSubscription({ workspaceId, subscriptionId: data.subscription_id, type, timestamp })) {
+  const change = await displacement({
+    workspaceId,
+    subscriptionId: data.subscription_id,
+    productId: data.product_id,
+    type,
+    timestamp,
+  });
+  if (change === "stale") {
     log("billing.webhook_other_subscription_ignored", { type, subscription: data.subscription_id });
     return "done";
   }
@@ -89,6 +103,7 @@ async function applySubscription(body: unknown, type: string, timestamp: string)
     subscriptionId: data.subscription_id,
     currentPeriodEnd: cancelledNow ? null : (data.next_billing_date ?? null),
     updatedAt: timestamp,
+    replace: change === "takeover",
   });
   return "done";
 }

@@ -204,7 +204,7 @@ describe("mentions feed", () => {
     );
     expect(mentions.map((mention) => mention.treatment)).toEqual(["shown", "pending"]);
     const html = renderToStaticMarkup(
-      createElement(AlertFeed, { groups: [{ group: "New", items: mentions.map(item) }] }),
+      createElement(AlertFeed, { groups: [{ group: "Today", items: mentions.map(item) }] }),
     );
     expect(html.match(/data-testid="mention-row"/g)).toHaveLength(2);
     expect(html).toContain('data-treatment="shown"');
@@ -225,7 +225,7 @@ describe("mentions feed", () => {
       NOW,
     );
     const html = renderToStaticMarkup(
-      createElement(AlertFeed, { groups: [{ group: "New", items: mentions.map(item) }] }),
+      createElement(AlertFeed, { groups: [{ group: "Today", items: mentions.map(item) }] }),
     );
     expect(html).toContain("Zephyrwear opens a London flagship");
     expect(html).not.toContain("Zephyrwear ticker line");

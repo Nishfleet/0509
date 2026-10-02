@@ -16,13 +16,14 @@ import { saveCompetitorYoutube } from "../lib/competitor-youtube.server";
 import { handleCompetitorIntent } from "../lib/competitors.server";
 import { readWorkspaceIdForOwner } from "../lib/data/workspace.server";
 import { daysAgoLabel } from "../lib/delivery-alert";
-import { requireFreshSession, requireSession } from "../lib/require-session.server";
+import { onboardedContext } from "../lib/require-onboarded.server";
+import { requireFreshSession } from "../lib/require-session.server";
 import { captureLabel } from "../lib/site-change";
 
 const FORGET_MISMATCH = "That doesn't match the name. Type it exactly as shown.";
 
-async function workspaceFor(request: Request, fresh = false): Promise<string> {
-  const session = await (fresh ? requireFreshSession(request) : requireSession(request));
+async function freshWorkspaceFor(request: Request): Promise<string> {
+  const session = await requireFreshSession(request);
   const workspaceId = await readWorkspaceIdForOwner(session.user.id);
   if (workspaceId === null) throw redirect("/onboarding");
   return workspaceId;
@@ -36,8 +37,9 @@ export function headers() {
   return { "cache-control": "private, no-store" };
 }
 
-export async function loader({ request, params }: Route.LoaderArgs) {
-  const workspaceId = await workspaceFor(request);
+export async function loader({ params, context }: Route.LoaderArgs) {
+  const { workspaceId } = context.get(onboardedContext);
+  if (workspaceId === null) throw redirect("/onboarding");
   const now = new Date();
   const [page, snapshot] = await Promise.all([
     readCompetitorPage(workspaceId, params.entityId, now),
@@ -55,7 +57,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 }
 
 export async function action({ request, params }: Route.ActionArgs) {
-  const workspaceId = await workspaceFor(request, true);
+  const workspaceId = await freshWorkspaceFor(request);
   const submitted = await request.formData();
   const intent = submitted.get("intent");
   if (intent === "forget") {

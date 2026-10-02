@@ -1,7 +1,7 @@
 import { env } from "cloudflare:workers";
 import { NonRetryableError } from "cloudflare:workflows";
 
-import { readSelfEntityId } from "../data/entity.server";
+import { fillCompetitorSocials, readSelfEntityId } from "../data/entity.server";
 import { insertPages, readJudgedPricingUrl } from "../data/page.server";
 import type { NewPage } from "../data/page.server";
 import { readEnabledSourceId, readEnabledSources } from "../data/source.server";
@@ -73,6 +73,12 @@ export async function classifyTailPages(params: IdentityTailParams, now: string)
       return false;
     }
     const extract = await extractIdentity(page.html, params.homepageUrl);
+    await fillCompetitorSocials({
+      workspaceId: params.workspaceId,
+      entityId: params.entityId,
+      socialsJson: JSON.stringify(extract.socials),
+      readAt: now,
+    });
     await classifyNavPages({
       workspaceId: params.workspaceId,
       entity: { id: params.entityId, domain: params.domain },

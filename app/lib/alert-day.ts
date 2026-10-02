@@ -1,6 +1,6 @@
-export type DayGroup = "New" | "Yesterday" | "Earlier";
+export type DayGroup = "Today" | "Yesterday" | "Earlier";
 
-const DAY_GROUPS: readonly DayGroup[] = ["New", "Yesterday", "Earlier"];
+const DAY_GROUPS: readonly DayGroup[] = ["Today", "Yesterday", "Earlier"];
 
 function localDay(at: Date, timeZone: string): string {
   return new Intl.DateTimeFormat("en-CA", { timeZone, year: "numeric", month: "2-digit", day: "2-digit" }).format(at);
@@ -10,7 +10,7 @@ export function alertDayGroup(at: string, now: Date, timeZone: string): DayGroup
   const today = localDay(now, timeZone);
   const yesterday = new Date(Date.parse(`${today}T00:00:00Z`) - 86_400_000).toISOString().slice(0, 10);
   const atDay = localDay(new Date(at), timeZone);
-  if (atDay >= today) return "New";
+  if (atDay >= today) return "Today";
   if (atDay === yesterday) return "Yesterday";
   return "Earlier";
 }

@@ -6,12 +6,11 @@ import { data, Link, redirect, useFetcher } from "react-router";
 import { FreshnessLine } from "../components/freshness-line";
 import { HomePageFrame, HomeStanding } from "../components/home-standing";
 import { ShareButton } from "../components/share-button";
-import { readWorkspaceIdForOwner } from "../lib/data/workspace.server";
 import { homeView } from "../lib/home-standing";
 import { readHomeReads, resolveOpenId } from "../lib/home-page.server";
 import { readHomeStandingInputs } from "../lib/home-standing.server";
 import { freshnessEntries } from "../lib/freshness.server";
-import { requireSession } from "../lib/require-session.server";
+import { onboardedContext } from "../lib/require-onboarded.server";
 import { createTimings } from "../lib/server-timing.server";
 import { useRevalidateOnVisible } from "../lib/use-revalidate-on-visible";
 
@@ -19,13 +18,10 @@ export function meta() {
   return [{ title: "Home · Five to Nine" }];
 }
 
-export async function loader({ request }: Route.LoaderArgs) {
+export async function loader({ request, context }: Route.LoaderArgs) {
   const timings = createTimings();
-  const session = await timings.measure("session", requireSession(request));
-  const [inputs, workspaceId] = await timings.measure(
-    "standing",
-    Promise.all([readHomeStandingInputs(env.DB, session.user.id), readWorkspaceIdForOwner(session.user.id)]),
-  );
+  const { session, workspaceId } = context.get(onboardedContext);
+  const inputs = await timings.measure("standing", readHomeStandingInputs(env.DB, session.user.id));
   if (inputs === null) throw redirect("/onboarding");
   const payload = inputs.payload;
   const openId = resolveOpenId(new URL(request.url).searchParams.get("open"), payload, inputs.entities);
