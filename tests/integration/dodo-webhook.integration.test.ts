@@ -1,7 +1,8 @@
 import { env } from "cloudflare:test";
 import { Webhook } from "standardwebhooks";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeAll, beforeEach, describe, expect, it } from "vitest";
 
+import { checkoutProof } from "../../app/lib/billing/checkout-proof.server";
 import { readEntitlements } from "../../app/lib/data/plan.server";
 import { action } from "../../app/routes/api.webhooks.dodo";
 import subscriptionActive from "../fixtures/dodo/subscription-active.json";
@@ -17,11 +18,21 @@ interface PlanRow {
   updated_at: string;
 }
 
+let proof = "";
+
+beforeAll(async () => {
+  proof = await checkoutProof(WORKSPACE, "pdt_test_starter");
+});
+
 function eventBody(overrides: { type?: string; timestamp?: string; data?: Record<string, unknown> }): string {
   return JSON.stringify({
     ...subscriptionActive,
     ...overrides,
-    data: { ...subscriptionActive.data, ...overrides.data },
+    data: {
+      ...subscriptionActive.data,
+      metadata: { workspace_id: WORKSPACE, plan: "starter", proof },
+      ...overrides.data,
+    },
   });
 }
 
@@ -241,5 +252,170 @@ describe("Dodo webhook (J13)", () => {
     expect(second.status).toBe(200);
     expect((await planRow())?.tier).toBe("starter");
     expect((await eventRow("evt_orphan"))?.processed_at).not.toBeNull();
+  });
+
+  describe("a subscription our server did not start", () => {
+    const VICTIM = "ws-victim";
+    const seedVictim = async () => {
+      await env.DB.prepare(
+        `INSERT INTO workspace (id, name, owner_user_id, timezone, brief_weekday, brief_hour, created_at)
+         VALUES (?, 'Victim', 'user-webhook', 'UTC', 1, 8, '2026-09-29T00:00:00Z')`,
+      )
+        .bind(VICTIM)
+        .run();
+      await env.DB.prepare(
+        `INSERT INTO plan (id, workspace_id, tier, status, provider_customer_id, provider_subscription_id, current_period_end, updated_at)
+         VALUES ('plan-victim', ?, 'agency', 'active', 'cus_victim', 'sub_victim', '2026-12-01T00:00:00Z', '2026-09-30T00:00:00Z')`,
+      )
+        .bind(VICTIM)
+        .run();
+    };
+    const victimPlan = () =>
+      env.DB.prepare("SELECT tier, provider_subscription_id FROM plan WHERE workspace_id = ?")
+        .bind(VICTIM)
+        .first<{ tier: string; provider_subscription_id: string }>();
+
+    it("ignores metadata with no proof and answers 200 so Dodo does not retry", async () => {
+      const forged = eventBody({ data: { metadata: { workspace_id: WORKSPACE } } });
+
+      const response = await deliver(signedRequest("evt_forged", forged));
+
+      expect(response.status).toBe(200);
+      expect(await planRow()).toBeNull();
+      expect((await eventRow("evt_forged"))?.processed_at).not.toBeNull();
+    });
+
+    it("ignores a proof that does not match the workspace or the product", async () => {
+      await seedVictim();
+      const stolen = eventBody({ data: { metadata: { workspace_id: VICTIM, plan: "starter", proof } } });
+      const wrongProduct = await checkoutProof(WORKSPACE, "pdt_test_agency");
+
+      await deliver(signedRequest("evt_stolen", stolen));
+      await deliver(
+        signedRequest(
+          "evt_product",
+          eventBody({ data: { metadata: { workspace_id: WORKSPACE, plan: "starter", proof: wrongProduct } } }),
+        ),
+      );
+      await deliver(
+        signedRequest(
+          "evt_garbage",
+          eventBody({ data: { metadata: { workspace_id: WORKSPACE, plan: "starter", proof: "not hex" } } }),
+        ),
+      );
+
+      expect(await victimPlan()).toEqual({ tier: "agency", provider_subscription_id: "sub_victim" });
+      expect(await planRow()).toBeNull();
+    });
+
+    const scoutMetadata = async () => ({
+      workspace_id: WORKSPACE,
+      plan: "scout",
+      proof: await checkoutProof(WORKSPACE, "pdt_test_scout"),
+    });
+
+    it("ignores the end or renewal of an earlier subscription once another one is current", async () => {
+      await deliver(signedRequest("evt_first", eventBody({})));
+      const earlier = async (type: string, status: string) =>
+        eventBody({
+          type,
+          timestamp: "2026-10-01T00:00:00Z",
+          data: {
+            subscription_id: "sub_old_scout",
+            product_id: "pdt_test_scout",
+            status,
+            cancel_at_next_billing_date: false,
+            metadata: await scoutMetadata(),
+          },
+        });
+
+      await deliver(signedRequest("evt_old_cancel", await earlier("subscription.cancelled", "cancelled")));
+      await deliver(signedRequest("evt_old_renew", await earlier("subscription.renewed", "active")));
+
+      expect(await planRow()).toMatchObject({ tier: "starter", provider_subscription_id: "sub_7EeHq2ewQuadropD2ra" });
+    });
+
+    it("ignores the end of an older subscription after a deliberate downgrade to scout", async () => {
+      await deliver(signedRequest("evt_starter", eventBody({})));
+      await deliver(
+        signedRequest(
+          "evt_downgrade",
+          eventBody({
+            timestamp: "2026-10-01T00:00:00Z",
+            data: { subscription_id: "sub_scout", product_id: "pdt_test_scout", metadata: await scoutMetadata() },
+          }),
+        ),
+      );
+
+      await deliver(
+        signedRequest(
+          "evt_old_end",
+          eventBody({
+            type: "subscription.cancelled",
+            timestamp: "2026-10-02T00:00:00Z",
+            data: { status: "cancelled", cancel_at_next_billing_date: false },
+          }),
+        ),
+      );
+
+      expect(await planRow()).toMatchObject({ tier: "scout", provider_subscription_id: "sub_scout" });
+    });
+
+    it("ignores a delayed subscription.active for an older subscription", async () => {
+      await deliver(
+        signedRequest(
+          "evt_scout",
+          eventBody({
+            timestamp: "2026-10-01T00:00:00Z",
+            data: { subscription_id: "sub_scout", product_id: "pdt_test_scout", metadata: await scoutMetadata() },
+          }),
+        ),
+      );
+
+      await deliver(signedRequest("evt_replay", eventBody({ timestamp: "2026-09-30T00:00:00Z" })));
+      await deliver(signedRequest("evt_replay_same", eventBody({ timestamp: "2026-10-01T00:00:00Z" })));
+
+      expect(await planRow()).toMatchObject({ tier: "scout", provider_subscription_id: "sub_scout" });
+    });
+
+    it("lets a proven upgrade replace the earlier subscription", async () => {
+      await deliver(
+        signedRequest(
+          "evt_scout",
+          eventBody({
+            data: { subscription_id: "sub_scout", product_id: "pdt_test_scout", metadata: await scoutMetadata() },
+          }),
+        ),
+      );
+      expect(await planRow()).toMatchObject({ tier: "scout", provider_subscription_id: "sub_scout" });
+
+      await deliver(signedRequest("evt_upgrade", eventBody({ timestamp: "2026-10-01T00:00:00Z" })));
+
+      expect(await planRow()).toMatchObject({ tier: "starter", provider_subscription_id: "sub_7EeHq2ewQuadropD2ra" });
+    });
+
+    it("records a deliberate downgrade bought through a new proven checkout while the old plan is still paid", async () => {
+      await deliver(
+        signedRequest(
+          "evt_starter",
+          eventBody({
+            data: { cancel_at_next_billing_date: true, status: "cancelled", next_billing_date: "2099-01-01T00:00:00Z" },
+          }),
+        ),
+      );
+      expect((await planRow())?.tier).toBe("starter");
+
+      await deliver(
+        signedRequest(
+          "evt_downgrade",
+          eventBody({
+            timestamp: "2026-10-01T00:00:00Z",
+            data: { subscription_id: "sub_scout", product_id: "pdt_test_scout", metadata: await scoutMetadata() },
+          }),
+        ),
+      );
+
+      expect(await planRow()).toMatchObject({ tier: "scout", provider_subscription_id: "sub_scout" });
+    });
   });
 });
