@@ -38,17 +38,22 @@ function proposed(result: unknown): string[] {
   return domainsOnly.parse(body).competitors.map((entry) => registrable(entry.domain));
 }
 
-const ask: Ask<ProposerCase> = async (row) => {
-  const result = await postWorkersAi(MODEL, {
-    messages: messagesFor(
-      { name: row.self.name, domain: row.self.domain, description: row.self.description },
-      row.site,
-    ),
-    response_format: { type: "json_schema", json_schema: RESPONSE_SCHEMA },
-    max_tokens: MAX_TOKENS,
-  });
-  return { model: MODEL, p: null, choice: proposed(result).join(",") };
-};
+function askUnion(samples: number): Ask<ProposerCase> {
+  return async (row) => {
+    const subject = { name: row.self.name, domain: row.self.domain, description: row.self.description };
+    const results = await Promise.all(
+      Array.from({ length: samples }, () =>
+        postWorkersAi(MODEL, {
+          messages: messagesFor(subject, row.site),
+          response_format: { type: "json_schema", json_schema: RESPONSE_SCHEMA },
+          max_tokens: MAX_TOKENS,
+        }),
+      ),
+    );
+    const union = [...new Set(results.flatMap(proposed))];
+    return { model: MODEL, p: null, choice: union.join(",") };
+  };
+}
 
 const recall: Score<ProposerCase> = (row, call) => {
   const found = new Set((call.choice ?? "").split(",").map(registrable));
@@ -57,9 +62,9 @@ const recall: Score<ProposerCase> = (row, call) => {
 };
 
 describe.skipIf(!workersAiPresent())("eval: discovery proposer recall against Workers AI", () => {
-  it("proposer_recall: scores the shipped proposer prompt on both splits", async () => {
+  it.each([1, 2, 3])("proposer_recall: unions %i proposal samples per run on both splits", async (samples) => {
     const rows = await loadCases<ProposerCase>("proposer_recall", ["self", "site", "expected"]);
-    const report = await runEval("proposer_recall", rows, ask, recall);
+    const report = await runEval(`proposer_recall_union_${String(samples)}`, rows, askUnion(samples), recall, samples);
     console.log(formatReport(report));
     expect(report.splits.length).toBeGreaterThan(0);
   });
