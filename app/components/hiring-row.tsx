@@ -2,7 +2,7 @@ import type { ReactElement } from "react";
 
 const WHEN_CLASS = "mt-2 block font-mono text-meta text-ink-soft uppercase";
 const TITLE = "font-display text-row-name font-bold [overflow-wrap:anywhere]";
-const LINK = "underline decoration-1 underline-offset-4";
+const LINK = "inline-flex min-h-11 items-center underline decoration-1 underline-offset-4";
 
 export interface HiringAlertItem {
   id: string;

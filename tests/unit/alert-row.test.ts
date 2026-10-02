@@ -122,6 +122,40 @@ const SIGNAL_ITEM: AlertFeedItem = {
   },
 };
 
+const MENTION_ITEM: AlertFeedItem = {
+  kind: "mention",
+  id: "mention-1",
+  at: "2026-09-24T01:00:00Z",
+  mention: {
+    id: "mention-1",
+    title: "Zephyrwear: A launch post",
+    url: "https://news.example.com/zephyr",
+    sourceName: "news.example.com",
+    publishedAt: "2026-09-24T01:00:00Z",
+    observedAt: "2026-09-24T01:00:00Z",
+    treatment: "shown",
+    when: "today",
+    why: null,
+    whyFlagged: null,
+    alsoCount: 0,
+  },
+};
+
+const CONTENT_ITEM: AlertFeedItem = {
+  kind: "content",
+  id: "content-1",
+  at: "2026-09-24T01:00:00Z",
+  content: {
+    id: "content-1",
+    title: "Zephyrwear: A new blog post",
+    brand: "Zephyrwear",
+    excerpt: null,
+    url: "https://brand.example.com/post",
+    at: "2026-09-24T01:00:00Z",
+    when: "today",
+  },
+};
+
 function render(item: AlertFeedItem): string {
   return renderToStaticMarkup(createElement(AlertFeedRow, { item, eager: false }));
 }
@@ -177,6 +211,15 @@ describe("an alert feed row", () => {
   it("never renders a question id, a probability or a confidence label", () => {
     const html = `${render(NOTE_ITEM)}${render(FAILURE_ITEM)}${render(SIGNAL_ITEM)}`;
     expect(html).not.toMatch(/probability|confidence|question/i);
+  });
+
+  it("keeps the content, hiring and mention headline links on a 44px tap target", () => {
+    const link = (item: AlertFeedItem): string => render(item).match(/<a\b[^>]*>/)?.[0] ?? "";
+    for (const item of [CONTENT_ITEM, HIRING_ITEM, MENTION_ITEM]) {
+      expect(link(item)).toContain("min-h-11");
+      expect(link(item)).toContain("inline-flex");
+      expect(link(item)).toContain("items-center");
+    }
   });
 });
 
