@@ -29,7 +29,7 @@ const change: SiteChangeItemData = {
   observedAt: "2026-09-24T02:10:00.000Z",
   capturedAt: "2026-09-24 02:09 UTC",
   wordsChanged: 5,
-  viaArchive: false,
+  provenance: null,
   sentence: "3 words added, 2 removed.",
   mark: { removed: "Plans from $10.", added: "Plans from $12." },
   before: { src: "/app/changes/sig-1/before", capturedAt: "2026-09-23 02:09 UTC" },

@@ -105,6 +105,14 @@ export function captureLabel(at: string): string {
   return shortUtc(at);
 }
 
+export function provenanceNote(source: { viaArchive: boolean; seenOn: string | null }): string | null {
+  const parts = [
+    ...(source.seenOn === null ? [] : [`Seen on ${source.seenOn}`]),
+    ...(source.viaArchive ? ["From a public archive copy"] : []),
+  ];
+  return parts.length === 0 ? null : parts.join(" · ");
+}
+
 export interface SiteChangeView {
   id: string;
   entityId: string;
@@ -115,7 +123,7 @@ export interface SiteChangeView {
   observedAt: string;
   capturedAt: string;
   wordsChanged: number;
-  viaArchive: boolean;
+  provenance: string | null;
   sentence: string;
   mark: ChangeMark | null;
   before: ChangeShot;

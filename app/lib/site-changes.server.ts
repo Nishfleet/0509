@@ -3,6 +3,7 @@ import { env } from "cloudflare:workers";
 import type { SiteChangeRow } from "./data/signal.server";
 import { readSiteChangePayload, readSiteChanges } from "./data/signal.server";
 import { landingWorkspaceId } from "./env.server";
+import { offBrandSite } from "./site/alternate-sources";
 import type { ChangeMark, ChangeShot, PairedSiteChange, SiteChangePayload, SiteChangeView } from "./site-change";
 import { whyFlagged } from "./why-flagged";
 import {
@@ -13,6 +14,7 @@ import {
   parseDiffHunks,
   parseSiteChangePayload,
   pickLandingMarks,
+  provenanceNote,
   wordsSentence,
 } from "./site-change";
 
@@ -44,6 +46,10 @@ async function readMark(diffKey: string | null): Promise<ChangeMark | null> {
   return hunks === null ? null : markFromHunks(hunks);
 }
 
+function seenOn(row: SiteChangeRow, payload: SiteChangePayload): string | null {
+  return row.entity_role === "self" ? null : offBrandSite(payload.page.url, row.entity_domain);
+}
+
 async function toView(row: SiteChangeRow, payload: SiteChangePayload): Promise<SiteChangeView> {
   const isSelf = row.entity_role === "self";
   return {
@@ -56,7 +62,7 @@ async function toView(row: SiteChangeRow, payload: SiteChangePayload): Promise<S
     observedAt: row.observed_at,
     capturedAt: captureLabel(row.after_at ?? row.observed_at),
     wordsChanged: payload.wordsAdded + payload.wordsRemoved,
-    viaArchive: payload.viaArchive === true,
+    provenance: provenanceNote({ viaArchive: payload.viaArchive === true, seenOn: seenOn(row, payload) }),
     sentence: wordsSentence(payload.wordsAdded, payload.wordsRemoved),
     mark: await readMark(payload.diffKey),
     before: shot(row.id, "before", { key: payload.before.screenshotKey, at: row.before_at }),
