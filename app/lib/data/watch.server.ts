@@ -260,7 +260,9 @@ export async function deactivateWatch(watchId: string): Promise<void> {
 }
 
 const SITE_WATCH_SUMMARY = `SELECT COUNT(*) AS pages, MAX(w.last_polled_at) AS last_polled_at,
-       EXISTS (SELECT 1 FROM page hp WHERE hp.entity_id = ?2 AND hp.role = 'home' AND hp.deferred_at IS NOT NULL) AS unreadable
+       (EXISTS (SELECT 1 FROM page hp WHERE hp.entity_id = ?2 AND hp.role = 'home' AND hp.deferred_at IS NOT NULL)
+        AND NOT EXISTS (SELECT 1 FROM page ap WHERE ap.entity_id = ?2 AND ap.role = 'blog' AND ap.role_decided_for_hash IS NULL
+          AND ap.deferred_at IS NULL AND EXISTS (SELECT 1 FROM watch aw WHERE aw.entity_id = ap.entity_id AND aw.target_key = ap.url AND aw.is_active = 1))) AS unreadable
 FROM watch w
 JOIN source src ON src.id = w.source_id AND src.kind = 'site'
 JOIN entity e ON e.id = w.entity_id AND e.workspace_id = ?1
