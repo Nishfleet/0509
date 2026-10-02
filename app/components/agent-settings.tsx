@@ -74,6 +74,16 @@ export function ConnectDetails({ mcpUrl, origin }: { mcpUrl: string; origin: str
   );
 }
 
+function DisconnectButton({ app }: { app: ConnectedApp }) {
+  const navigation = useNavigation();
+  const leaving = navigation.state !== "idle" && navigation.formData?.get("id") === app.grantId;
+  return (
+    <Button type="submit" variant="tertiary" aria-label={`Disconnect ${app.name}`} disabled={leaving}>
+      {leaving ? "Disconnecting…" : "Disconnect"}
+    </Button>
+  );
+}
+
 export function ConnectedApps({ apps }: { apps: ConnectedApp[] }) {
   return (
     <section aria-labelledby="agents-apps" className={BLOCK}>
@@ -95,9 +105,7 @@ export function ConnectedApps({ apps }: { apps: ConnectedApp[] }) {
               <Form method="post">
                 <input type="hidden" name="intent" value="disconnect-app" />
                 <input type="hidden" name="id" value={app.grantId} />
-                <Button type="submit" variant="tertiary" aria-label={`Disconnect ${app.name}`}>
-                  Disconnect
-                </Button>
+                <DisconnectButton app={app} />
               </Form>
             </li>
           ))}

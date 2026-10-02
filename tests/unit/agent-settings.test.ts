@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { createMemoryRouter, createRoutesStub, RouterProvider } from "react-router";
 import { describe, expect, it } from "vitest";
 
-import { AgentKeys, ConnectDetails } from "../../app/components/agent-settings";
+import { AgentKeys, ConnectedApps, ConnectDetails } from "../../app/components/agent-settings";
 
 const MCP_URL = "https://0509.io/mcp";
 const ORIGIN = "https://0509.io";
@@ -28,6 +28,15 @@ function keysScreen(): ReactElement {
   return createElement(AgentKeys, { keys: ONE_KEY, newKey: null });
 }
 
+const TWO_APPS = [
+  { grantId: "g1", name: "Notion", connectedAt: "2026-09-01T00:00:00.000Z" },
+  { grantId: "g2", name: "Linear", connectedAt: "2026-09-01T00:00:00.000Z" },
+];
+
+function appsScreen(): ReactElement {
+  return createElement(ConnectedApps, { apps: TWO_APPS });
+}
+
 function buttons(html: string): string[] {
   return [...html.matchAll(/<button\b[^>]*>[\s\S]*?<\/button>/g)].map((match) => match[0]);
 }
@@ -45,6 +54,27 @@ function pendingCreateKey() {
   const formData = new FormData();
   formData.set("intent", "create-key");
   const router = createMemoryRouter([{ id: "r", path: "/", Component: keysScreen, action: () => settled }], {
+    initialEntries: ["/"],
+  });
+  const submit = router.navigate("/", { formMethod: "post", formData });
+  return {
+    html: () => renderToStaticMarkup(createElement(RouterProvider, { router })),
+    settle: async () => {
+      gate.release();
+      await submit;
+    },
+  };
+}
+
+function pendingDisconnect() {
+  const gate: { release: () => void } = { release: () => undefined };
+  const settled = new Promise<void>((resolve) => {
+    gate.release = resolve;
+  });
+  const formData = new FormData();
+  formData.set("intent", "disconnect-app");
+  formData.set("id", "g1");
+  const router = createMemoryRouter([{ id: "r", path: "/", Component: appsScreen, action: () => settled }], {
     initialEntries: ["/"],
   });
   const submit = router.navigate("/", { formMethod: "post", formData });
@@ -133,6 +163,43 @@ describe("AgentKeys", () => {
     expect(makeKey).toContain("Make a key");
     expect(makeKey).not.toContain('disabled=""');
     expect(html).not.toContain("Making…");
+  });
+});
+
+describe("ConnectedApps", () => {
+  it("leaves both Disconnect buttons enabled with their resting labels", () => {
+    const Stub = createRoutesStub([{ path: "/", Component: appsScreen }]);
+    const html = renderToStaticMarkup(createElement(Stub, { initialEntries: ["/"] }));
+    const disconnects = buttons(html).filter((button) => button.includes("Disconnect"));
+    expect(disconnects).toHaveLength(2);
+    expect(disconnects.every((button) => button.includes(">Disconnect</button>"))).toBe(true);
+    expect(disconnects.every((button) => !button.includes('disabled=""'))).toBe(true);
+  });
+
+  it("disables only the pressed app's Disconnect button and labels it Disconnecting… while the disconnect-app submit is in flight", () => {
+    const pending = pendingDisconnect();
+    const html = pending.html();
+    const disconnects = buttons(html).filter((button) => button.includes("Disconnect"));
+    expect(disconnects).toHaveLength(2);
+    const leaving = disconnects.find((button) => button.includes('aria-label="Disconnect Notion"')) ?? "";
+    const other = disconnects.find((button) => button.includes('aria-label="Disconnect Linear"')) ?? "";
+    expect(leaving).toContain('disabled=""');
+    expect(leaving).toContain("Disconnecting…");
+    expect(leaving).not.toContain(">Disconnect</button>");
+    expect(other).toContain(">Disconnect</button>");
+    expect(other).not.toContain('disabled=""');
+    expect(other).not.toContain("Disconnecting…");
+  });
+
+  it("restores the enabled Disconnect buttons once the submit lands", async () => {
+    const pending = pendingDisconnect();
+    expect(pending.html()).toContain("Disconnecting…");
+    await pending.settle();
+    const html = pending.html();
+    const disconnects = buttons(html).filter((button) => button.includes("Disconnect"));
+    expect(disconnects.every((button) => button.includes(">Disconnect</button>"))).toBe(true);
+    expect(disconnects.every((button) => !button.includes('disabled=""'))).toBe(true);
+    expect(html).not.toContain("Disconnecting…");
   });
 });
 
