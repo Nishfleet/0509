@@ -1,6 +1,8 @@
-import { createElement } from "react";
+import { createElement, type ReactElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it } from "vitest";
+import type * as ReactRouterModule from "react-router";
+import { createMemoryRouter, RouterProvider } from "react-router";
+import { describe, expect, it, vi } from "vitest";
 
 import type { DismissedSuggestion } from "../../app/components/dismissed-brands";
 import { DismissedBrands } from "../../app/components/dismissed-brands";
@@ -19,8 +21,56 @@ const casetta: DismissedSuggestion = {
   dismissedAt: "2026-09-21T16:40:00.000Z",
 };
 
+const ROUTE_ID = "settings";
+const FETCHER_KEY = "restore-kindred";
+
+// Every row calls useFetcher, and a fetcher's key is React's own useId unless
+// the caller names it. The rows are rendered inside a real memory router below,
+// and these tests name the fetcher so one of them can fetch through the router
+// and land in the submitting state a real click produces. useFetcher({ key })
+// is the public API for a fetcher the caller addresses.
+vi.mock("react-router", async (importOriginal) => {
+  const actual = await importOriginal<typeof ReactRouterModule>();
+  return { ...actual, useFetcher: () => actual.useFetcher({ key: FETCHER_KEY }) };
+});
+
+// A route action that never settles, so the restore stays in flight for the
+// whole render, the way a request the server has not answered yet does.
+const NEVER = () => new Promise(() => undefined);
+
+function screen(dismissed: readonly DismissedSuggestion[]): ReactElement {
+  return createElement(DismissedBrands, { dismissed });
+}
+
 function render(dismissed: readonly DismissedSuggestion[]): string {
-  return renderToStaticMarkup(createElement(DismissedBrands, { dismissed }));
+  const router = createMemoryRouter([{ id: ROUTE_ID, path: "/", Component: () => screen(dismissed), action: NEVER }], {
+    initialEntries: ["/"],
+  });
+  return renderToStaticMarkup(createElement(RouterProvider, { router }));
+}
+
+// The same row and the same router, with the restore post already in flight on
+// the row's own fetcher: this is the render the browser makes while the
+// request runs, which is what a document-reloading form never showed.
+function renderWhileRestoring(): string {
+  const router = createMemoryRouter([{ id: ROUTE_ID, path: "/", Component: () => screen([kindred]), action: NEVER }], {
+    initialEntries: ["/"],
+  });
+  const formData = new FormData();
+  formData.set("intent", "restore-suggestion");
+  formData.set("suggestionId", "sug-dismissed-kindred");
+  void router.fetch(FETCHER_KEY, ROUTE_ID, "/", { formMethod: "post", formData });
+  return renderToStaticMarkup(createElement(RouterProvider, { router }));
+}
+
+// The opening tag and the text between the tags: the class list holds
+// "disabled:" utilities, so the pair is what tells a disabled button apart.
+function buttonWith(html: string, name: string): string {
+  const start = html.indexOf(`aria-label="Bring back ${name}"`);
+  if (start < 0) throw new Error(`no bring back button for ${name}`);
+  const open = html.lastIndexOf("<button", start);
+  const close = html.indexOf("</button>", start);
+  return html.slice(open, close + "</button>".length);
 }
 
 function rowHtml(html: string, suggestionId: string): string {
@@ -34,7 +84,7 @@ function rowHtml(html: string, suggestionId: string): string {
 
 describe("the dismissed brands list", () => {
   it("renders nothing when no brand has been dismissed", () => {
-    expect(render([])).toBe("");
+    expect(renderToStaticMarkup(createElement(DismissedBrands, { dismissed: [] }))).toBe("");
   });
 
   it("names itself and lists both brands with their domains", () => {
@@ -77,5 +127,28 @@ describe("the dismissed brands list", () => {
 
     expect(row).not.toMatch(/>\s*Dismissed\s*</);
     expect(row).not.toMatch(/>\s*2026-09-20\s*</);
+  });
+
+  it("leaves the bring back button enabled and at rest while nothing is in flight", () => {
+    const button = buttonWith(render([kindred]), "Kindred");
+
+    expect(button).toContain(">Bring back</button>");
+    expect(button).not.toContain("Bringing back…");
+    expect(button).not.toContain('disabled=""');
+  });
+
+  it("keeps the restore intent and its own suggestion id while the restore runs", () => {
+    const row = rowHtml(renderWhileRestoring(), "sug-dismissed-kindred");
+
+    expect(row).toContain('value="restore-suggestion"');
+    expect(row).toContain('value="sug-dismissed-kindred"');
+  });
+
+  it("disables the bring back button and reads Bringing back… while the restore runs", () => {
+    const button = buttonWith(renderWhileRestoring(), "Kindred");
+
+    expect(button).toContain('disabled=""');
+    expect(button).toContain("Bringing back…");
+    expect(button).not.toContain(">Bring back</button>");
   });
 });
