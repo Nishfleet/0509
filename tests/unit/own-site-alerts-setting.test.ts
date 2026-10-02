@@ -19,10 +19,13 @@ describe("the own-site alerts setting", () => {
     expect(html).toContain('aria-label="Immediate alerts for your own site"');
     const describedBy = /aria-describedby="([^"]+)"/.exec(html)?.[1];
     expect(describedBy).toBeDefined();
-    expect(html).toContain(`id="${describedBy}"`);
-    expect(html).toContain(
-      "Off stops the email when your site looks broken. The alert still shows in Alerts.",
-    );
+    const note =
+      /<p id="([^"]+)"[^>]*>\s*Off stops the email when your site looks broken\. The alert still shows in Alerts\.\s*<\/p>/.exec(
+        html,
+      );
+    expect(note).toBeDefined();
+    expect(note?.[1]).toBe(describedBy);
+    expect(html).toContain("Off stops the email when your site looks broken. The alert still shows in Alerts.");
   });
 
   it("renders the note text in its own element in both on and off states", () => {
@@ -42,7 +45,12 @@ describe("the change alerts setting", () => {
     expect(html).toContain('aria-label="Immediate alerts when a rival changes price or plan"');
     const describedBy = /aria-describedby="([^"]+)"/.exec(html)?.[1];
     expect(describedBy).toBeDefined();
-    expect(html).toContain(`id="${describedBy}"`);
+    const note =
+      /<p id="([^"]+)"[^>]*>\s*Off stops the email\. The change still shows in Alerts and in your Monday brief\.\s*<\/p>/.exec(
+        html,
+      );
+    expect(note).toBeDefined();
+    expect(note?.[1]).toBe(describedBy);
     expect(html).toContain("Off stops the email. The change still shows in Alerts and in your Monday brief.");
   });
 
