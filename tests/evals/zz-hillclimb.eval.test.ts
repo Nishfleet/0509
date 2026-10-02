@@ -53,18 +53,29 @@ interface Arm {
   samples: number;
   reasoning?: "low" | "medium" | "high";
   context?: boolean;
+  extra?: string;
 }
 
+const SELLS_FIRST =
+  " Choose competitors by what they sell, not by values, style or audience: include the best-known brands that sell the same kind of product to the same customers, even when their brand image is very different.";
+
 const ARMS: Arm[] = [
-  { id: "base", samples: 1 },
-  { id: "context", samples: 1, context: true },
-  { id: "effort_low", samples: 1, reasoning: "low" },
-  { id: "effort_high", samples: 1, reasoning: "high" },
-  { id: "union2", samples: 2 },
+  { id: "base2", samples: 1 },
+  { id: "union2b", samples: 2 },
+  { id: "union3", samples: 3 },
+  { id: "sells_first", samples: 1, extra: SELLS_FIRST },
 ];
 
 const registrable = (value: string): string => parse(value).domain ?? value.toLowerCase();
 const proposals = z.object({ competitors: z.array(z.object({ name: z.string(), domain: z.string() })) });
+
+function withExtra(
+  messages: ReturnType<typeof messagesFor>,
+  extra: string | undefined,
+): ReturnType<typeof messagesFor> {
+  if (extra === undefined) return messages;
+  return messages.map((m) => (m.role === "system" ? { ...m, content: m.content + extra } : m));
+}
 
 function messagesWithContext(row: Row): ReturnType<typeof messagesFor> {
   const base = messagesFor(
