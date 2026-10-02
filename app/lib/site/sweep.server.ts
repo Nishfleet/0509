@@ -4,7 +4,12 @@ import { getDomain } from "tldts";
 
 import { insertIncidentAlertStatement } from "../data/alert.server";
 import { openIncidentStatement } from "../data/incident.server";
-import { insertPages, readEntitiesWithoutHomePage, readUnwatchedPricingPages } from "../data/page.server";
+import {
+  insertPages,
+  readEntitiesWithoutHomePage,
+  readUnwatchedPricingPages,
+  syncPricingWatches,
+} from "../data/page.server";
 import { linkVerdictsStatement } from "../data/jev_verdict.server";
 import { insertChangeSignalStatement } from "../data/signal.server";
 import { readCoveredPagePairs } from "../data/snapshot.server";
@@ -83,6 +88,7 @@ export async function planSiteSweep(now: string): Promise<SiteSweepTarget[]> {
       return url === null ? [] : [{ id: crypto.randomUUID(), entityId: entity.id, sourceId, targetKey: url }];
     }),
   );
+  await syncPricingWatches(sourceId);
   const pricing = await readUnwatchedPricingPages(sourceId);
   await insertWatches(
     pricing.map((page) => ({ id: crypto.randomUUID(), entityId: page.entityId, sourceId, targetKey: page.url })),

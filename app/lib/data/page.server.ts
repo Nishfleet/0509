@@ -118,17 +118,52 @@ export async function readCompetitorsToClassify(limit: number, now: string): Pro
   }));
 }
 
-const UNWATCHED_PRICING_PAGES = `SELECT p.entity_id AS entity_id, p.url AS url
+const PRICING_PAGES_WATCHED = 3;
+
+const RANKED_PRICING_PAGES = `SELECT p.entity_id AS entity_id, p.url AS url,
+       ROW_NUMBER() OVER (PARTITION BY p.entity_id ORDER BY p.rowid) AS position
 FROM page p
 JOIN entity e ON e.id = p.entity_id AND e.state = 'on'
-WHERE p.role = 'pricing' AND p.role_decided_for_hash IS NOT NULL
-  AND NOT EXISTS (SELECT 1 FROM watch w WHERE w.entity_id = p.entity_id AND w.source_id = ?1 AND w.target_key = p.url)
-ORDER BY p.entity_id, p.url`;
+WHERE p.role = 'pricing' AND p.role_decided_for_hash IS NOT NULL`;
+
+const WANTED_PRICING_WATCH = `EXISTS (
+  SELECT 1 FROM (${RANKED_PRICING_PAGES}) r
+  WHERE r.position <= ?2 AND r.entity_id = watch.entity_id AND r.url = watch.target_key
+)`;
+
+const STOP_UNWANTED_PRICING_WATCHES = `UPDATE watch SET is_active = 0
+WHERE source_id = ?1 AND is_active = 1
+  AND entity_id IN (SELECT id FROM entity WHERE state = 'on' AND role = 'competitor')
+  AND EXISTS (
+    SELECT 1 FROM page p
+    WHERE p.entity_id = watch.entity_id AND p.url = watch.target_key
+      AND p.role IS NOT NULL AND p.role <> 'home' AND p.role_decided_for_hash IS NOT NULL
+      AND EXISTS (SELECT 1 FROM page h WHERE h.entity_id = p.entity_id AND h.role = 'home' AND h.url <> p.url)
+  )
+  AND NOT ${WANTED_PRICING_WATCH}`;
+
+const RESUME_WANTED_PRICING_WATCHES = `UPDATE watch SET is_active = 1
+WHERE source_id = ?1 AND is_active = 0
+  AND entity_id IN (SELECT id FROM entity WHERE role = 'competitor')
+  AND ${WANTED_PRICING_WATCH}`;
+
+export async function syncPricingWatches(sourceId: string): Promise<void> {
+  await env.DB.batch([
+    env.DB.prepare(STOP_UNWANTED_PRICING_WATCHES).bind(sourceId, PRICING_PAGES_WATCHED),
+    env.DB.prepare(RESUME_WANTED_PRICING_WATCHES).bind(sourceId, PRICING_PAGES_WATCHED),
+  ]);
+}
+
+const UNWATCHED_PRICING_PAGES = `SELECT r.entity_id AS entity_id, r.url AS url
+FROM (${RANKED_PRICING_PAGES}) r
+WHERE r.position <= ?2
+  AND NOT EXISTS (SELECT 1 FROM watch w WHERE w.entity_id = r.entity_id AND w.source_id = ?1 AND w.target_key = r.url)
+ORDER BY r.entity_id, r.url`;
 
 const pricingPageRows = z.array(z.object({ entity_id: z.string(), url: z.string() }));
 
 export async function readUnwatchedPricingPages(sourceId: string): Promise<{ entityId: string; url: string }[]> {
-  const rows = await env.DB.prepare(UNWATCHED_PRICING_PAGES).bind(sourceId).all();
+  const rows = await env.DB.prepare(UNWATCHED_PRICING_PAGES).bind(sourceId, PRICING_PAGES_WATCHED).all();
   return pricingPageRows.parse(rows.results).map((row) => ({ entityId: row.entity_id, url: row.url }));
 }
 
