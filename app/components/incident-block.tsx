@@ -32,7 +32,10 @@ function IncidentActions({ alertId, url }: { alertId: string; url: string }): Re
       <form method="post">
         <input type="hidden" name="intent" value="acknowledge" />
         <input type="hidden" name="alertId" value={alertId} />
-        <button type="submit" className="border border-ink px-4 py-2">
+        <button
+          type="submit"
+          className="min-h-11 border border-ink px-4 py-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink focus-visible:outline-solid"
+        >
           I meant to do this
         </button>
       </form>
@@ -68,7 +71,9 @@ export function IncidentBlock({
       </p>
       <IncidentActions alertId={alertId} url={url} />
       <details className="mt-4">
-        <summary className="cursor-pointer">Why we flagged this</summary>
+        <summary className="flex min-h-11 cursor-pointer items-center focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink focus-visible:outline-solid">
+          Why we flagged this
+        </summary>
         <p className="mt-2 leading-[1.65]">
           We count your homepage as broken when it shows a server error, a page not found error (404 or 410), or does
           not load at all, two checks in a row, five minutes apart.
