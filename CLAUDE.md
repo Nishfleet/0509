@@ -54,6 +54,7 @@ not so you can follow them from memory — lint will tell you.
   A route that writes directly becomes the second writer the moment a second
   route needs the row.
 - **Routes are thin.** 150 lines, enforced. Logic goes to `app/lib/`.
+- **Lean functions.** In `app/` and `workers/`: 50 lines, complexity 10, depth 3, 3 parameters. Code already over is listed in `eslint-suppressions.json` and cannot grow. Source: 0509#5783.
 - **Comments are banned in app code.** Not style — agents use a comment to
   justify a workaround instead of fixing the thing, and the next agent copies
   the pattern. Decided by Nish, 2026-09-21, from the talk at 23:02. What stock
@@ -161,7 +162,8 @@ passkey, API keys) · D1 · Tailwind 4 · vitest 4.1.11 with
 
 Every dependency and every version is justified with a vendor doc URL in
 `docs/REBUILD-STACK.md`. **Adding a dependency that is not in that file is a
-rejection**, not a review comment.
+rejection**, not a review comment. The row format is asserted by
+`tests/stack-dependencies.test.ts`.
 
 ## What gates a merge
 
@@ -183,7 +185,8 @@ AI grader: CI is the gate, and a PR that touches `.github/`, `migrations/`,
 coordinator reviews it before it merges.
 
 `lighthouse` runs on `deployment_status` and `e2e-production` (the sharded full
-suite in `e2e-scheduled.yml`, dispatched with `journey=suite`) runs on demand.
+suite in `e2e-scheduled.yml`, dispatched with `journey=suite`) runs on demand. To run one spec against production from any branch, dispatch
+`e2e-scheduled.yml` on that ref with the `spec` input (`e2e/<name>.spec.ts`).
 Neither is **required**, deliberately: they cannot run on a pull request, and a
 required check that cannot report blocks the queue forever. The suite is off the
 deploy path because every sign-in in it sends a real email against the Email
