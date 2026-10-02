@@ -131,7 +131,12 @@ describe.skipIf(!jevKeyPresent())("eval: discovery competitor questions against 
       expect(report.splits.length).toBeGreaterThan(0);
     },
   );
-  it("proposer_models: customer-sees recall, stability, latency and tokens per proposer model", async () => {
+  it.each([
+    MODEL,
+    "@cf/nvidia/nemotron-3-120b-a12b",
+    "@cf/openai/gpt-oss-120b",
+    "@cf/deepseek-ai/deepseek-v4-pro-0813",
+  ])("proposer_models: customer-sees recall, stability, latency and tokens for %s", async (model) => {
     const rows = await loadCases<SeededCase>("proposer_recall", ["self", "site", "expected"]);
     const domainsOnly = z.object({ competitors: z.array(z.object({ name: z.string(), domain: z.string() })) });
     const registrable = (value: string): string => parse(value).domain ?? value.toLowerCase();
@@ -231,19 +236,12 @@ describe.skipIf(!jevKeyPresent())("eval: discovery competitor questions against 
       return scores.reduce((sum, v) => sum + v, 0) / Math.max(scores.length, 1);
     };
     const per = 1 + 10 * 2;
-    for (const model of [
-      MODEL,
-      "@cf/nvidia/nemotron-3-120b-a12b",
-      "@cf/openai/gpt-oss-120b",
-      "@cf/deepseek-ai/deepseek-v4-pro-0813",
-    ]) {
-      Object.assign(usage, { calls: 0, ms: 0, prompt: 0, completion: 0, unparsed: 0 });
-      const report = await runEval(`proposer_model_${model}`, rows, ask(model), score, per);
-      console.log(formatReport(report));
-      console.log(
-        `MODEL ${model} stability=${stability(model).toFixed(3)} calls=${String(usage.calls)} mean_ms=${String(Math.round(usage.ms / Math.max(usage.calls, 1)))} prompt_tokens=${String(usage.prompt)} completion_tokens=${String(usage.completion)} unparsed=${String(usage.unparsed)}`,
-      );
-      expect(report.splits.length).toBeGreaterThan(0);
-    }
+    Object.assign(usage, { calls: 0, ms: 0, prompt: 0, completion: 0, unparsed: 0 });
+    const report = await runEval(`proposer_model_${model}`, rows, ask(model), score, per);
+    console.log(formatReport(report));
+    console.log(
+      `MODEL ${model} stability=${stability(model).toFixed(3)} calls=${String(usage.calls)} mean_ms=${String(Math.round(usage.ms / Math.max(usage.calls, 1)))} prompt_tokens=${String(usage.prompt)} completion_tokens=${String(usage.completion)} unparsed=${String(usage.unparsed)}`,
+    );
+    expect(report.splits.length).toBeGreaterThan(0);
   });
 });
