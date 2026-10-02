@@ -38,14 +38,16 @@ export class MentionsSweep extends WorkflowEntrypoint<Env> {
     const now = event.timestamp.toISOString();
     const targets = await step.do("plan", RETRY, () => planTargets());
     const canarySources = await step.do("canary plan", RETRY, () => readCanarySources());
-    const canaryEntries: [string, number][] = [];
+    const canaryEntries: [string, number | null][] = [];
     for (const source of canarySources) {
       canaryEntries.push([source.id, await step.do(`canary ${source.pluginKey}`, RETRY, () => runCanary(source, now))]);
       if (source.minIntervalSeconds > 0) {
         await step.sleep(`pace canary ${source.pluginKey}`, source.minIntervalSeconds * 1000);
       }
     }
-    const counts = new Map<string, number>(canaryEntries);
+    const counts = new Map<string, number>(
+      canaryEntries.flatMap(([id, count]): [string, number][] => (count === null ? [] : [[id, count]])),
+    );
     const outcomes: (TargetOutcome | null)[] = [];
     for (const [index, target] of targets.entries()) {
       try {
