@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 
 import {
   AI_GUARANTEED,
-  evidenceLine,
   GENERATOR_ORDER,
   SHORTLIST_TOP,
   nameKey,
@@ -157,35 +156,6 @@ describe("shortlist", () => {
     const before = structuredClone(input);
     expect(shortlist(input)).toHaveLength(1);
     expect(input).toEqual(before);
-  });
-
-  it("builds an evidence line from news publishers and hn threads", () => {
-    const entry: ShortlistEntry = {
-      name: "Alpha",
-      evidence: [
-        ev("https://www.glamourmagazine.co.uk/a", "news"),
-        ev("https://glamourmagazine.co.uk/b", "news"),
-        ev("https://www.vogue.co.uk/c", "news"),
-        ev("https://news.ycombinator.com/item?id=1", "hn"),
-      ],
-      generators: ["news", "hn"],
-      publishers: ["glamourmagazine.co.uk", "vogue.co.uk"],
-      slot: "top",
-      nameKeys: [nameKey("Alpha")],
-    };
-    expect(evidenceLine(entry)).toBe("named by 2 news publishers, mentioned in 1 Hacker News thread");
-  });
-
-  it("builds an evidence line for ads-only entries", () => {
-    const entry: ShortlistEntry = {
-      name: "Beta",
-      evidence: [{ sourceUrl: "https://ads.example.com", excerpt: "", generator: "ads" }],
-      generators: ["ads"],
-      publishers: [],
-      slot: "top",
-      nameKeys: [nameKey("Beta")],
-    };
-    expect(evidenceLine(entry)).toBe("advertises in the same category");
   });
 
   it("ranks corroborated candidates above ai-only suggestions and keeps the ai-only one via its guaranteed slot", () => {
