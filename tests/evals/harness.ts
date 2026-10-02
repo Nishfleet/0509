@@ -280,6 +280,31 @@ export function makeNoulAsk(question: NoulEvalQuestion): StateAsk {
   };
 }
 
+export function makeNoulsAsk(questions: readonly NoulEvalQuestion[], combine: (ps: number[]) => number): StateAsk {
+  return async (state) => {
+    const body = await postJev({
+      model: "jev-latest",
+      state,
+      questions: Object.fromEntries(
+        questions.map((question) => [
+          question.id,
+          {
+            type: "noul",
+            instructions: question.instructions,
+            criteria: { true: question.whenTrue, false: question.whenFalse },
+          },
+        ]),
+      ),
+    });
+    const ps = questions.map((question) => {
+      const answer = answerOf(body, question.id);
+      if (typeof answer.noul !== "number") throw new Error(`jev answer missing a noul: ${question.id}`);
+      return answer.noul;
+    });
+    return { model: body.model as string, p: combine(ps), choice: null };
+  };
+}
+
 export function makeChoiceAsk(question: ChoiceEvalQuestion): StateAsk {
   return async (state) => {
     const body = await postJev({

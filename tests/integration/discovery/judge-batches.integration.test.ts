@@ -73,7 +73,9 @@ describe("Discovery workflow judging", () => {
       peak = Math.max(peak, inFlight);
       await new Promise((resolve) => setTimeout(resolve, 25));
       inFlight -= 1;
-      return { answers: { is_competitor: { type: "noul", noul: 0.5 } } };
+      return {
+        answers: { is_competitor: { type: "noul", noul: 0.5 }, same_product_category: { type: "noul", noul: 0.5 } },
+      };
     });
     Reflect.set(env, "AI", { run });
 

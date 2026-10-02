@@ -6,7 +6,7 @@ import type { DiscoveryContext, DiscoverySelf } from "../data/entity.server";
 import type { DiscoveryResult } from "../data/suggestion.server";
 import { takenDownAmong } from "../data/takedown.server";
 import type { NoulQuestion, NoulVerdict } from "../jev/client.server";
-import { askNoul, JevUnavailableError } from "../jev/client.server";
+import { askNoul, askNouls, JevUnavailableError } from "../jev/client.server";
 import { evidenceLine } from "./evidence-line";
 import { aiGenerator } from "./generators/ai.server";
 import { hnGenerator } from "./generators/hn.server";
@@ -40,6 +40,16 @@ export const IS_COMPETITOR: NoulQuestion = {
     "It sells a substitute product or service to the same kind of customer as `self`: a customer of `self` could switch to it. Its size, age, price or business model (free, open-source, enterprise, startup, incumbent) does not matter.",
   whenFalse:
     "It is a publisher, retailer, marketplace, supplier, partner, investor, a product line of `self`, `self` itself, or an unrelated company that only shares a headline.",
+};
+
+export const SAME_CATEGORY: NoulQuestion = {
+  id: "same_product_category",
+  instructions:
+    "Does `item` mainly sell the same kind of product or service that `self` mainly sells? Judge the product category: what a customer actually buys from each. Do not count shared values, audience, price, style or business model. A shoe brand and a clothing brand are different categories even when both are sustainable and sold to the same people; a meal kit and a restaurant are different categories. `self.description` says what `self` sells and `item.evidence` says what `item` sells.",
+  whenTrue:
+    "What `item` mainly sells is the same kind of product or service as what `self` mainly sells, so a buyer shopping for one would consider the other.",
+  whenFalse:
+    "What `item` mainly sells is a different kind of product or service, even if it shares `self`'s values, audience, customers, style or business model.",
 };
 
 export const IS_CREATOR_RIVAL: NoulQuestion = {
@@ -159,13 +169,32 @@ export function competitorState(context: DiscoveryContext, candidate: ResolvedCa
   };
 }
 
-async function askCandidate(context: DiscoveryContext, candidate: ResolvedCandidate): Promise<NoulVerdict | null> {
+async function askCompetitorAndCategory(context: DiscoveryContext, state: unknown): Promise<NoulVerdict> {
   try {
-    return await askNoul(
-      context.self.workspaceId,
-      context.self.kind === "creator" ? IS_CREATOR_RIVAL : IS_COMPETITOR,
-      competitorState(context, candidate),
+    return keepOnlyIfBoth(await askNouls(context.self.workspaceId, [IS_COMPETITOR, SAME_CATEGORY], state));
+  } catch (error) {
+    if (error instanceof JevUnavailableError) throw error;
+    console.error(
+      JSON.stringify({
+        event: "discovery.category_check_failed",
+        error: error instanceof Error ? error.name : "unknown",
+      }),
     );
+    return askNoul(context.self.workspaceId, IS_COMPETITOR, state);
+  }
+}
+
+export function keepOnlyIfBoth(verdicts: readonly NoulVerdict[]): NoulVerdict {
+  const [first, ...rest] = verdicts;
+  if (first === undefined) throw new Error("no verdicts to combine");
+  return { ...first, p: Math.min(first.p, ...rest.map((verdict) => verdict.p)) };
+}
+
+async function askCandidate(context: DiscoveryContext, candidate: ResolvedCandidate): Promise<NoulVerdict | null> {
+  const state = competitorState(context, candidate);
+  try {
+    if (context.self.kind === "creator") return await askNoul(context.self.workspaceId, IS_CREATOR_RIVAL, state);
+    return await askCompetitorAndCategory(context, state);
   } catch (error) {
     if (!(error instanceof JevUnavailableError)) throw error;
     console.error(JSON.stringify({ event: "discovery.jev_unavailable", message: error.message }));
