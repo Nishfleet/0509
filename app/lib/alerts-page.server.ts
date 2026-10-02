@@ -160,9 +160,8 @@ function buildPastIncidents(inputs: AlertInputs, now: Date) {
     }));
 }
 
-export async function loadAlertsPage(userId: string, chip: AlertChipKey) {
+export async function loadAlertsPage(workspaceId: string | null, chip: AlertChipKey) {
   const now = new Date();
-  const workspaceId = await readWorkspaceIdForOwner(userId);
   const inputs = await readAlertInputs(workspaceId, now);
   const items = buildAlertItems(inputs, now);
   return {

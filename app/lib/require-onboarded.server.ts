@@ -1,10 +1,26 @@
-import { redirect } from "react-router";
+import { createContext, redirect, type RouterContextProvider } from "react-router";
 
+import { readWorkspaceIdForOwner } from "./data/workspace.server";
 import { requireSession } from "./require-session.server";
 import { workspaceLandingForRequest } from "./workspace.server";
 
-export async function requireOnboarded({ request }: { request: Request }): Promise<void> {
+export const onboardedContext = createContext<{
+  session: Awaited<ReturnType<typeof requireSession>>;
+  workspaceId: string | null;
+}>();
+
+export async function requireOnboarded({
+  request,
+  context,
+}: {
+  request: Request;
+  context: Pick<RouterContextProvider, "set">;
+}): Promise<void> {
   const session = await requireSession(request);
-  const landing = await workspaceLandingForRequest(request, session.user);
+  const [landing, workspaceId] = await Promise.all([
+    workspaceLandingForRequest(request, session.user),
+    readWorkspaceIdForOwner(session.user.id),
+  ]);
   if (landing !== null) throw redirect(landing);
+  context.set(onboardedContext, { session, workspaceId });
 }

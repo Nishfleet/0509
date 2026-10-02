@@ -17,28 +17,30 @@ import type { CompetitorRow } from "../lib/data/entity.server";
 import { readCompetitors } from "../lib/data/entity.server";
 import { readPlanTier } from "../lib/data/plan.server";
 import { readWorkspaceIdForOwner } from "../lib/data/workspace.server";
-import { requireFreshSession, requireSession } from "../lib/require-session.server";
+import { onboardedContext } from "../lib/require-onboarded.server";
+import { requireFreshSession } from "../lib/require-session.server";
 
 export function meta() {
   return [{ title: "Competitors · Five to Nine" }];
 }
 
-async function workspaceFor(request: Request, fresh = false): Promise<string> {
-  const session = await (fresh ? requireFreshSession(request) : requireSession(request));
+async function freshWorkspaceFor(request: Request): Promise<string> {
+  const session = await requireFreshSession(request);
   const workspaceId = await readWorkspaceIdForOwner(session.user.id);
   if (workspaceId === null) throw redirect("/onboarding");
   return workspaceId;
 }
 
-export async function loader({ request }: Route.LoaderArgs) {
-  const workspaceId = await workspaceFor(request);
+export async function loader({ request, context }: Route.LoaderArgs) {
+  const { workspaceId } = context.get(onboardedContext);
+  if (workspaceId === null) throw redirect("/onboarding");
   const wanted = new URL(request.url).searchParams.get("upgraded");
   const [competitors, tier] = await Promise.all([readCompetitors(workspaceId), readPlanTier(workspaceId)]);
   return { ...competitors, tier, wanted: isPlanId(wanted) ? wanted : null };
 }
 
 export async function action({ request }: Route.ActionArgs) {
-  const workspaceId = await workspaceFor(request, true);
+  const workspaceId = await freshWorkspaceFor(request);
   return handleCompetitorIntent(workspaceId, await request.formData());
 }
 

@@ -9,8 +9,7 @@ import { PAGE, PageHeading } from "../components/page-heading";
 import { briefSendLine } from "../lib/brief-state";
 import { readBriefPayload } from "../lib/brief-payload";
 import { listBriefs, readBrief } from "../lib/data/digest.server";
-import { readWorkspaceIdForOwner } from "../lib/data/workspace.server";
-import { requireSession } from "../lib/require-session.server";
+import { onboardedContext } from "../lib/require-onboarded.server";
 
 const PREVIOUS_LIST = "mt-10 border-t border-line pt-6";
 const PREVIOUS_HEADING = "font-display text-row-name font-bold [overflow-wrap:anywhere]";
@@ -24,9 +23,8 @@ export function meta() {
   return [{ title: "Your brief · Five to Nine" }];
 }
 
-export async function loader({ request, params }: Route.LoaderArgs) {
-  const session = await requireSession(request);
-  const workspaceId = await readWorkspaceIdForOwner(session.user.id);
+export async function loader({ params, context }: Route.LoaderArgs) {
+  const { workspaceId } = context.get(onboardedContext);
   if (workspaceId === null) throw redirect("/onboarding");
   const weeks = await listBriefs(env.DB, workspaceId);
   const selectedId = params.digestId ?? weeks[0]?.id ?? null;
