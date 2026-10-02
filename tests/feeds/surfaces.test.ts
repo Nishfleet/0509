@@ -50,7 +50,7 @@ describe("source kinds", () => {
   it("names a feed source by its platform, never as a site check", () => {
     expect(sourceName("content", "feed")).toBe("Blog and changelog posts");
     expect(sourceKindNoun("content")).toBe("posts");
-    expect(sourceName("site", "web")).toBe("Your site checks source");
+    expect(sourceName("site", "web")).toBe("Website checks");
   });
 
   it("reports a feed source as the content kind in SQL and leaves every other platform as it is", () => {
