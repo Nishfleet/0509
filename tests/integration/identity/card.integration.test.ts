@@ -227,10 +227,11 @@ describe("startCard", () => {
     expect(calls).not.toContain(staleUrl);
   });
 
-  it("stores the first candidate the guarded fetch keeps, and never fetches the rest", async () => {
+  it("stores the first candidate the guarded fetch keeps, and never reads a domain's og:image", async () => {
     stubAi(0.95);
     const ldUrl = `https://${LOGO_HOST}/ld.png`;
     const ogUrl = `https://${LOGO_HOST}/og.png`;
+    const duckUrl = "https://icons.duckduckgo.com/ip3/example.com.ico";
     const calls = stubLogoFetch(
       exampleHtml(
         `<meta property="og:image" content="${ogUrl}">
@@ -238,16 +239,15 @@ describe("startCard", () => {
       ),
       {
         [ldUrl]: () => new Response("<html></html>", { status: 200, headers: { "content-type": "text/html" } }),
-        [ogUrl]: () =>
+        [duckUrl]: () =>
           new Response(new Uint8Array([4, 5, 6]), { status: 200, headers: { "content-type": "image/png" } }),
       },
     );
     const card = startCard("ws-1", subjectFor("example.com"), []);
     await card.site;
     expect(await card.logo).toBe("data:image/png;base64,BAUG");
-    expect(calls.filter((url) => url === ogUrl)).toHaveLength(1);
     expect(calls).toContain(ldUrl);
-    expect(calls).not.toContain("https://icons.duckduckgo.com/ip3/example.com.ico");
+    expect(calls).not.toContain(ogUrl);
     expect(await env.SNAPSHOTS.get("logo/v3/example.com")).not.toBeNull();
   });
 
@@ -257,15 +257,14 @@ describe("startCard", () => {
     const ogUrl = `https://${LOGO_HOST}/og.png`;
     const duckUrl = "https://icons.duckduckgo.com/ip3/example.com.ico";
     const calls = stubLogoFetch(exampleHtml(`<meta property="og:image" content="${ogUrl}">`), {
-      [ogUrl]: () => new Response(null, { status: 404 }),
       [duckUrl]: () => new Response(null, { status: 404 }),
     });
     const card = startCard("ws-1", subject, []);
     await card.site;
     expect(await card.logo).toBeNull();
-    expect(calls).toContain(ogUrl);
+    expect(calls).not.toContain(ogUrl);
     expect(calls).toContain(duckUrl);
-    expect(await env.IDENTITY_CACHE.get(probeKey(subject, "icon"), "json")).toEqual({ v: 2, url: null });
+    expect(await env.IDENTITY_CACHE.get(probeKey(subject, "icon"), "json")).toEqual({ v: 3, url: null });
   });
 
   it("backfills a saved brand's logo from the homepage when the stored one is missing", async () => {

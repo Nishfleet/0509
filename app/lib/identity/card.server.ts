@@ -9,7 +9,7 @@ import type { CardReview, CardValues, DraftField, SiteFields } from "./card-fiel
 import { extractIdentity } from "./extract";
 import { reviewFields } from "./field-confidence.server";
 import { readLogo, storeLogo } from "./logo-store.server";
-import { logoCandidateUrls } from "./logo-cascade";
+import { logoCandidatesFor, logoCandidateUrls } from "./logo-cascade";
 import type { LogoCandidates } from "./logo-cascade";
 import { resolveBrandName } from "./name-cascade.server";
 import { normaliseSubject } from "./normalise";
@@ -39,7 +39,7 @@ function hasIdentity(card: SiteCard): boolean {
 
 const readSiteCardSchema = siteCardSchema.refine(hasIdentity);
 
-const ICON_PROBE_V = 2;
+const ICON_PROBE_V = 3;
 
 const logoSchema = z.object({ v: z.literal(ICON_PROBE_V), url: z.string().nullable() });
 
@@ -240,10 +240,12 @@ async function logoDataUrl(subject: Subject, card: SiteCard): Promise<string | n
   const cached = await cachedProbe(subject, "icon", {
     schema: logoSchema,
     run: async () => {
-      const url = await firstStorableLogoUrl({
-        ...card.logoCandidates,
-        registrableDomain: subject.registrable,
-      });
+      const url = await firstStorableLogoUrl(
+        logoCandidatesFor(subject.kind === "domain" ? "domain" : "profile", {
+          ...card.logoCandidates,
+          registrableDomain: subject.registrable,
+        }),
+      );
       return { v: ICON_PROBE_V, url };
     },
   });
