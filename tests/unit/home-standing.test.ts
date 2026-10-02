@@ -15,10 +15,10 @@ import {
   homeView,
   movementLabel,
   nextHour,
-  nextSiteSweepAt,
   type HomeEntity,
   type HomeHistoryRow,
 } from "../../app/lib/home-standing";
+import { nextSiteSweepAt } from "../../app/lib/onboarding/arrival-estimate";
 
 const SCHEDULE: BriefSchedule = { timezone: "Europe/London", weekday: 1, hour: 8 };
 const THURSDAY_MORNING = new Date("2026-09-24T06:30:00.000Z");
@@ -406,6 +406,13 @@ describe("Home standing", () => {
   it("rounds nextHour up to the next hour boundary", () => {
     expect(nextHour(new Date("2026-09-24T10:17:00Z"))).toEqual(new Date("2026-09-24T11:00:00.000Z"));
     expect(nextHour(new Date("2026-09-24T10:00:00Z"))).toEqual(new Date("2026-09-24T11:00:00.000Z"));
+    expect(nextHour(new Date("2026-09-25T23:59:00Z"))).toEqual(new Date("2026-09-26T00:00:00.000Z"));
+  });
+
+  it("does not mutate the Date nextHour is given", () => {
+    const now = new Date("2026-09-25T10:15:00.000Z");
+    nextHour(now);
+    expect(now.toISOString()).toBe("2026-09-25T10:15:00.000Z");
   });
 
   it("builds the footer with the brand count, brief time and own-site re-check, singular for one brand", () => {

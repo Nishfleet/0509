@@ -21,12 +21,11 @@ to read it.
    carries the issue or commit it came from in its own message** — a rule whose
    reason is lost gets deleted by the next person who trips on it.
 3. **Rules.** This file. Guidance an agent will usually read and sometimes miss.
-4. **Skills.** The house skills in the vault.
+4. **Skills.** `.agents/skills/`.
 5. **Style guide.** Only a human reviewer enforces this, and at our PR rate that
    is not enforcement. Anything that lives only here is a hole.
 
 Source: Lauren Tan, _What I learned from reviewing 2,500 agent PRs_, 15:38.
-Transcript in the vault, `00 Inbox/agent-drop/claude/vps/2026-09-21-poteto-2500-prs-talk-transcript.md`.
 
 The design that put this in place, with every rule's provenance and the
 rejected alternatives: `docs/REBUILD-TRUST.md`.
@@ -84,6 +83,7 @@ npm run lint       # eslint . && knip && jscpd && prettier --check .
 npm run format     # prettier --write .
 npm test           # vitest run
 npm run e2e        # playwright test
+npm run eval       # vitest run --config vitest.evals.config.ts
 npm run deploy     # wrangler deploy
 npm run verify:start # chrome-devtools start, headless, Playwright's Chromium, --no-sandbox
 npm run verify:stop  # chrome-devtools stop
@@ -94,6 +94,8 @@ tsconfig.json` is a no-op here — `tsconfig.json` is `"files": []` plus two
 project references, so without `-b` it checks zero files and exits 0. Never
 cite it as type evidence.
 
+Signing in locally needs the `--var` overrides in `.agents/skills/verify/SKILL.md` (`BETTER_AUTH_URL` is pinned to production in `wrangler.jsonc`, so the emailed link would point at 0509.io).
+
 **`npm run e2e` has two modes and the environment picks.** With
 `PLAYWRIGHT_TEST_BASE_URL` unset, `playwright.config.ts` starts `wrangler dev`
 itself and tests the built Worker — that is what `preview-assert` runs on every
@@ -101,7 +103,7 @@ PR. With it set, there is no local server and the suite runs against that URL �
 that is what the `deployment_status` job runs against production. Same
 assertions both times.
 
-**Run it before the PR opens.** A change under `app/`, `workers/` or `e2e/`
+**Run it before the PR opens.** A diff that touches only `docs/` or `.agents/` runs `npx prettier --check` on the changed files and nothing else. A change under `app/`, `workers/` or `e2e/`
 runs the specs that cover it locally first, in preview mode, by file:
 `npm run e2e -- e2e/<name>.spec.ts` (Playwright's own file filter). Nothing
 is pasted into the PR body: `preview-assert` runs the whole suite at the PR
@@ -120,13 +122,29 @@ workers out on 2026-09-23. Chromium is already installed on this host
 
 ## Architecture
 
+Find code by listing the directory or grepping the name, not by reading docs.
+`docs/engines/*.md` and `docs/REBUILD-*.md` are design history: the file paths
+they name were plans and many never existed. The real layout is below.
+
 - `app/routes.ts` — the route registry. A route not listed here cannot be
   reached. `.agents/skills/verify/feature-map.md` describes every one of them and is updated in
-  the same PR that changes one.
+  the same PR that changes one. The file is about 165 KB: search it for the
+  route path (`grep -n "app/alerts" .agents/skills/verify/feature-map.md`) and read
+  only that row. Never read the whole file.
 - `app/routes/*` — route modules: loader, action, component.
-- `app/lib/*.server.ts` — server-only. Bindings, database, auth.
+- `app/components/` — shared UI.
+- `app/lib/*.server.ts` — server-only: bindings, database, auth, page loaders.
+  `app/lib/<domain>/` holds one subject each (`billing/`, `jev/`, `discovery/`,
+  `competitor/`, `feeds/`, `hiring/`, `mentions/`, `standing/`, `agent/` for the
+  API and MCP, `data/` for the table writers).
 - `app/lib/*.ts` — shared pure logic.
+- `app/lib/ads/` is retained code for a dropped feature (J10, #3974); do not extend it.
+- `app/lib/public-routes.ts` — the sitemap paths, robots.txt and llms.txt.
 - `workers/app.ts` — the Worker entry and the `scheduled` handler.
+- `workers/workflows/` — the Workflows (site, feed, hiring and mentions sweeps,
+  discovery, snapshot backup, standing rollover, account delete).
+  `workers/delivery/` sends email, `workers/standing/` builds the weekly brief,
+  `workers/sources/` is the fetch-sweep queue, `workers/mentions/` the mention sweep.
 - `migrations/` — numbered D1 SQL. `wrangler d1 migrations list` is the
   authority on what is applied; do not restate a number here.
 - `tests/` — vitest. Most of `tests/` is the node project (pure logic).
@@ -202,16 +220,19 @@ Service daily quota (Nish 2026-09-28).
 - **Jev decides every typed decision** (`docs/REBUILD-JEV.md`, D1–D9). Code never guesses with regexes where a judgment is needed; Jev internals are never shown to customers.
 - **Cost** (`docs/REBUILD-COST.md`): writes batched, blobs in R2, counters in KV/DO, Browser Rendering capped at 10 concurrent sessions as a config value. Raising the cap needs Nish's yes with the cost in the PR, and is never left to degrade customers.
 - **Guardrails** (`docs/REBUILD-GUARDRAILS.md`): brands and creators only, never private individuals; disposable identities for collection; paid data providers only with Nish's yes.
-- **The site is gated until the audit passes.** `/` and `/api/health` are public; `/login`, `/app`, `/onboarding`, `/api/auth` sit behind Cloudflare Access (Nish by email, agents by the service token in `~/.config/cloudflare/access-0509-agents.env`). A bare `curl` returning 302 to `cloudflareaccess.com` is the gate, not a bug. `0509.in` is a zone Redirect Rule, never code.
+- **The site is gated until the audit passes.** Which paths bypass Access is set in Cloudflare, not in code; a route's feature-map row says whether it is public (`/u/:token` is). `/login`, `/app`, `/onboarding`, `/api/auth` sit behind Cloudflare Access (Nish by email, agents by the service token in `~/.config/cloudflare/access-0509-agents.env`). A bare `curl` returning 302 to `cloudflareaccess.com` is the gate, not a bug. `0509.in` is a zone Redirect Rule, never code.
 - **Two orchestrator sessions work this repo.** Lanes are posted on #3842; before touching a file in the other lane, post one line there.
 
 ## Docs
 
 `DESIGN.md` (the design system — read it before any UI work) ·
-`.agents/skills/verify/feature-map.md` (what exists and how to reach it) ·
+`.agents/skills/verify/feature-map.md` (what exists and how to reach it; search, never read whole) ·
 `docs/REBUILD-TRUST.md` (verification, the ladder, the gardener) ·
 `docs/REBUILD-STACK.md` (every dependency, probed) ·
 `docs/REBUILD-DONE.md` (the definition of complete) ·
 `docs/REBUILD-SCHEMA.md`, `REBUILD-DELIVERY.md`, `REBUILD-ONBOARDING.md`,
-`REBUILD-STANDING.md`, `REBUILD-COST.md`, `REBUILD-JEV.md`,
-`REBUILD-KEEPLIST.md`.
+`REBUILD-STANDING.md`, `REBUILD-STANDING-CARD.md`, `REBUILD-COST.md`,
+`REBUILD-JEV.md`, `REBUILD-CREATORS.md`, `REBUILD-MENTIONS.md`,
+`REBUILD-GUARDRAILS.md`, `REBUILD-KEEPLIST.md` (old-app findings, so its paths
+are the old tree) · `docs/USER-REPORTS.md` · `docs/ga-metrics.md` ·
+`docs/engines/` (design packets, history only) · `docs/design-directions/`.

@@ -3,6 +3,8 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { getPlatformProxy, type PlatformProxy } from "wrangler";
+
 import { noulAction } from "../../app/lib/jev/thresholds";
 import type { NoulAction } from "../../app/lib/jev/thresholds";
 import type { BreakageEvidence } from "../../app/lib/site/breakage-evidence";
@@ -32,11 +34,18 @@ const VIA_GATEWAY = JEV_KEY === "" && CF_ACCOUNT !== "" && CF_TOKEN !== "";
 
 const GATEWAY_MODEL = "typesafe/jev";
 
-const JEV_URL =
-  process.env.JEV_URL ??
-  (VIA_GATEWAY
-    ? `https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT}/ai/run/${GATEWAY_MODEL}`
-    : "http://127.0.0.1:4000/jev");
+const JEV_URL = VIA_GATEWAY ? "workers-ai binding" : (process.env.JEV_URL ?? "http://127.0.0.1:4000/jev");
+
+const GATEWAY_ID = "default";
+
+const WRANGLER_CONFIG = path.join(HERE, "..", "..", "wrangler.jsonc");
+
+let platform: Promise<PlatformProxy<{ AI: Ai }>> | undefined;
+
+async function aiBinding(): Promise<Ai> {
+  platform ??= getPlatformProxy<{ AI: Ai }>({ configPath: WRANGLER_CONFIG, persist: false });
+  return (await platform).env.AI;
+}
 
 type Split = "train" | "test";
 
@@ -161,9 +170,19 @@ function withoutModel(body: unknown): unknown {
 }
 
 function unwrapJev(value: unknown): JevResponse {
-  const inner = (value as { response?: unknown }).response;
+  const { response, result } = value as { response?: unknown; result?: unknown };
+  const inner = result ?? response;
   if (typeof inner === "string") return JSON.parse(inner) as JevResponse;
   return (inner ?? value) as JevResponse;
+}
+
+async function withOneRetry<T>(call: () => Promise<T>): Promise<T> {
+  try {
+    return await call();
+  } catch (error) {
+    if (!String(error).includes("Network connection lost")) throw error;
+    return call();
+  }
 }
 
 function spendCall(): void {
@@ -172,38 +191,35 @@ function spendCall(): void {
 }
 
 export async function postWorkersAi(model: string, body: unknown): Promise<unknown> {
-  if (CF_ACCOUNT === "" || CF_TOKEN === "")
-    throw new Error("Workers AI needs CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_API_TOKEN");
-  spendCall();
-  const response = await fetch(`https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT}/ai/run/${model}`, {
-    method: "POST",
-    headers: { "content-type": "application/json", authorization: `Bearer ${CF_TOKEN}` },
-    body: JSON.stringify(body),
-    signal: AbortSignal.timeout(JEV_TIMEOUT_MS),
+  return withOneRetry(async () => {
+    spendCall();
+    const ai = await aiBinding();
+    return ai.run(model as never, body as never, { gateway: { id: GATEWAY_ID } });
   });
-  if (!response.ok) {
-    const detail = (await response.text()).slice(0, 200);
-    throw new Error(`workers ai POST failed with ${String(response.status)}: ${detail}`);
-  }
-  const raw = (await response.json()) as { result?: unknown };
-  return raw.result;
 }
 
 async function postJev(body: unknown): Promise<JevResponse> {
   spendCall();
-  // The bearer token rides in a header, never a command line or a log line.
+  if (VIA_GATEWAY) {
+    const raw = await (
+      await aiBinding()
+    ).run(GATEWAY_MODEL as never, withoutModel(body) as never, {
+      gateway: { id: GATEWAY_ID },
+    });
+    const unwrapped = unwrapJev(raw);
+    return { ...unwrapped, model: typeof unwrapped.model === "string" ? unwrapped.model : GATEWAY_MODEL };
+  }
   const response = await fetch(JEV_URL, {
     method: "POST",
-    headers: { "content-type": "application/json", authorization: `Bearer ${VIA_GATEWAY ? CF_TOKEN : JEV_KEY}` },
-    body: JSON.stringify(VIA_GATEWAY ? withoutModel(body) : body),
+    headers: { "content-type": "application/json", authorization: `Bearer ${JEV_KEY}` },
+    body: JSON.stringify(body),
     signal: AbortSignal.timeout(JEV_TIMEOUT_MS),
   });
   if (!response.ok) {
     const detail = (await response.text()).slice(0, 200);
     throw new Error(`jev POST failed with ${String(response.status)}: ${detail}`);
   }
-  const raw = (await response.json()) as JevResponse & { result?: unknown };
-  const parsed: JevResponse = VIA_GATEWAY ? { model: GATEWAY_MODEL, ...unwrapJev(raw.result ?? raw) } : raw;
+  const parsed = (await response.json()) as JevResponse;
   if (typeof parsed.model !== "string") throw new Error("jev response carried no model version");
   return parsed;
 }

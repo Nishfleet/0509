@@ -3,9 +3,10 @@ import { env } from "cloudflare:test";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { BriefPayload } from "../../app/lib/brief-payload";
+import { READ_THIS_FIRST } from "../../app/lib/read-this-first";
 import { deliver } from "../../workers/delivery/consumer";
 import { composeBrief } from "../../workers/standing/compose-brief";
-import { judgeWeek, READ_THIS_FIRST } from "../../workers/standing/read-this-first";
+import { judgeWeek } from "../../workers/standing/read-this-first";
 
 interface Recorder {
   sent: EmailMessageBuilder[];

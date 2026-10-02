@@ -19,7 +19,7 @@ import { readMentionFeed } from "./data/mention.server";
 import { readWorkspaceMentionSources } from "./data/source.server";
 import { readWorkspaceIdForOwner, readWorkspaceTimezone } from "./data/workspace.server";
 import { daysAgoLabel } from "./delivery-alert";
-import { nextOwnSiteCheck } from "./incident-recheck";
+import { nextHour } from "./home-standing";
 import { withoutMentionAlerts } from "./mention-feed";
 import { offBrandsSentence } from "./off-brands";
 import { daysBefore, readSiteChangeViews } from "./site-changes.server";
@@ -181,7 +181,7 @@ function buildAlertItems(inputs: AlertInputs, now: Date) {
 function buildOpenIncident(inputs: AlertInputs, now: Date) {
   const { open, timeZone } = inputs;
   if (open === null) return null;
-  const recheckAt = nextOwnSiteCheck(now);
+  const recheckAt = nextHour(now).toISOString();
   return {
     alertId: open.alert_id,
     title: open.title,

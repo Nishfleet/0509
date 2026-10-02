@@ -1,7 +1,8 @@
 import { env } from "cloudflare:test";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { judgeWeek, READ_THIS_FIRST } from "../../../workers/standing/read-this-first";
+import { READ_THIS_FIRST } from "../../../app/lib/read-this-first";
+import { judgeWeek } from "../../../workers/standing/read-this-first";
 /**
  * The weekly D4 pass against the real D1 schema the deploy ships.
  *
