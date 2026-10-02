@@ -12,6 +12,7 @@ import { readLogo, storeLogo } from "./logo-store.server";
 import { logoCandidatesFor, logoCandidateUrls } from "./logo-cascade";
 import type { LogoCandidates } from "./logo-cascade";
 import { resolveBrandName } from "./name-cascade.server";
+import { normaliseSubject } from "./normalise";
 import type { Subject } from "./normalise";
 import { cachedProbe, probeKey } from "./probe-cache.server";
 
@@ -259,6 +260,16 @@ async function logoDataUrl(subject: Subject, card: SiteCard): Promise<string | n
   const stored = await storeLogo(subject.registrable, url);
   if (stored === null) return null;
   return toDataUrl(stored.contentType, stored.bytes);
+}
+
+export async function backfillLogo(registrable: string): Promise<R2ObjectBody | null> {
+  const normalised = normaliseSubject(registrable);
+  if (!normalised.ok || normalised.subject.kind !== "domain") return null;
+  const subject = normalised.subject;
+  const { card, reached } = await readSiteCard(subject, () => Promise.resolve(false));
+  if (!reached) return null;
+  await logoDataUrl(subject, card);
+  return readLogo(subject.registrable);
 }
 
 export function startCard(
