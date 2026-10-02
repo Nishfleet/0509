@@ -120,11 +120,22 @@ test("a registered passkey is listed in Settings and can be removed @own-signin"
     const registered = page.waitForResponse((response) =>
       response.url().includes("/api/auth/passkey/verify-registration"),
     );
+    // The new passkey must appear in the list without a full-page reload, and
+    // the in-place revalidation must re-run the Settings loader (a ?_data= fetch).
+    // A reload would miss the heading and then pass; a client-side navigate()
+    // would also pass, so require the data fetch react-router issues for it.
+    const fullReloads: string[] = [];
+    const loaderRevalidations: string[] = [];
+    page.on("request", (request) => {
+      if (request.isNavigationRequest()) fullReloads.push(request.url());
+      if (new URL(request.url()).searchParams.has("_data")) loaderRevalidations.push(request.url());
+    });
     await page.getByRole("button", { name: /add a passkey/i }).click();
     expect((await registered).status()).toBe(200);
 
-    await page.goto("/app/settings");
     await expect(page.getByRole("heading", { name: "Your passkeys" })).toBeVisible();
+    expect(fullReloads, `unexpected reload: ${fullReloads.join(", ")}`).toEqual([]);
+    expect(loaderRevalidations.length, "Settings loader did not re-run").toBeGreaterThanOrEqual(1);
     await page.screenshot({ path: testInfo.outputPath("passkey-listed.png") });
 
     await page.getByRole("button", { name: /^Remove /i }).click();

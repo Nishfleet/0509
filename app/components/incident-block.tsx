@@ -1,4 +1,5 @@
 import type { ReactElement } from "react";
+import { Form, useNavigation } from "react-router";
 
 export interface IncidentBlockProps {
   alertId: string;
@@ -19,6 +20,8 @@ export function IncidentSlot({ incident }: { incident: IncidentBlockProps | null
 }
 
 function IncidentActions({ alertId, url }: { alertId: string; url: string }): ReactElement {
+  const navigation = useNavigation();
+  const acknowledging = navigation.state !== "idle" && navigation.formData?.get("alertId") === alertId;
   return (
     <div className="mt-4 flex flex-wrap items-center gap-4">
       <a
@@ -29,16 +32,17 @@ function IncidentActions({ alertId, url }: { alertId: string; url: string }): Re
       >
         Open your site →
       </a>
-      <form method="post">
+      <Form method="post">
         <input type="hidden" name="intent" value="acknowledge" />
         <input type="hidden" name="alertId" value={alertId} />
         <button
           type="submit"
+          disabled={acknowledging}
           className="min-h-11 border border-ink px-4 py-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink focus-visible:outline-solid"
         >
-          I meant to do this
+          {acknowledging ? "Saving…" : "I meant to do this"}
         </button>
-      </form>
+      </Form>
     </div>
   );
 }

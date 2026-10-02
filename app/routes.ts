@@ -39,6 +39,7 @@ export default [
   route("api/v1/alerts", "routes/api.v1.alerts.ts"),
   route("api/v1/standing", "routes/api.v1.standing.ts"),
   route("api/v1/openapi.json", "routes/api.v1.openapi[.]json.ts"),
+  route("api/docs", "routes/api-docs.tsx"),
   route("onboarding", "routes/onboarding.tsx"),
   route("*", "routes/unmatched.tsx"),
   route("onboarding/competitors", "routes/onboarding.competitors.tsx"),

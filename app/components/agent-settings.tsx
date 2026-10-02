@@ -65,12 +65,25 @@ export function ConnectDetails({ mcpUrl, origin }: { mcpUrl: string; origin: str
       <CopyField label="Authorization header" value="Authorization: Bearer <your key>" />
       <p className="mt-3 text-body-sm text-ink-soft">
         Writing your own code? Make a key below and read the{" "}
-        <a className="text-ink underline decoration-1 underline-offset-4" href={`${origin}/api/v1/openapi.json`}>
+        <a className="text-ink underline decoration-1 underline-offset-4" href={`${origin}/api/docs`}>
           API reference
         </a>
         .
       </p>
     </section>
+  );
+}
+
+function DisconnectButton({ app }: { app: ConnectedApp }) {
+  const navigation = useNavigation();
+  const leaving =
+    navigation.state !== "idle" &&
+    navigation.formData?.get("intent") === "disconnect-app" &&
+    navigation.formData?.get("id") === app.grantId;
+  return (
+    <Button type="submit" variant="tertiary" aria-label={`Disconnect ${app.name}`} disabled={leaving}>
+      {leaving ? "Disconnecting…" : "Disconnect"}
+    </Button>
   );
 }
 
@@ -95,9 +108,7 @@ export function ConnectedApps({ apps }: { apps: ConnectedApp[] }) {
               <Form method="post">
                 <input type="hidden" name="intent" value="disconnect-app" />
                 <input type="hidden" name="id" value={app.grantId} />
-                <Button type="submit" variant="tertiary" aria-label={`Disconnect ${app.name}`}>
-                  Disconnect
-                </Button>
+                <DisconnectButton app={app} />
               </Form>
             </li>
           ))}
@@ -129,6 +140,11 @@ function NewKeyNotice({ newKey }: { newKey: string }) {
 }
 
 function KeyRow({ apiKey }: { apiKey: AgentKey }) {
+  const navigation = useNavigation();
+  const deleting =
+    navigation.state !== "idle" &&
+    navigation.formData?.get("intent") === "revoke-key" &&
+    navigation.formData.get("id") === apiKey.id;
   return (
     <li data-testid="api-key" className={ROW}>
       <p className="min-w-0">
@@ -139,8 +155,13 @@ function KeyRow({ apiKey }: { apiKey: AgentKey }) {
       <Form method="post">
         <input type="hidden" name="intent" value="revoke-key" />
         <input type="hidden" name="id" value={apiKey.id} />
-        <Button type="submit" variant="tertiary">
-          Delete
+        <Button
+          type="submit"
+          variant="tertiary"
+          aria-label={deleting ? `Deleting ${apiKey.name}` : `Delete ${apiKey.name}`}
+          disabled={deleting}
+        >
+          {deleting ? "Deleting…" : "Delete"}
         </Button>
       </Form>
     </li>

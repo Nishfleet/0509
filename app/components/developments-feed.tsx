@@ -3,7 +3,15 @@ import type { ReactElement } from "react";
 import { useSearchParams } from "react-router";
 
 import type { DevelopmentItem } from "../lib/developments";
-import { FEED_FILTERS, FEED_PARAM, SOURCE_LABEL, countByKind, filterFeed, parseFeedFilter } from "../lib/developments";
+import {
+  FEED_FILTERS,
+  FEED_PARAM,
+  SOURCE_LABEL,
+  countByKind,
+  emptyFeedSentence,
+  filterFeed,
+  parseFeedFilter,
+} from "../lib/developments";
 import { EmptyState } from "./empty-state";
 import { SiteChangeItem, type SiteChangeItemData } from "./site-change-item";
 import { ToggleGroup, ToggleGroupItem } from "./ui/toggle-group";
@@ -74,7 +82,7 @@ export function DevelopmentsFeed({
       <ol data-slot="developments-list" className="flex min-w-0 flex-col">
         {visible.length === 0 ? (
           <li>
-            <EmptyState sentence="Nothing of this kind in the last 90 days." />
+            <EmptyState sentence={emptyFeedSentence(filter)} />
           </li>
         ) : (
           visible.map((item) => <DevelopmentRow key={item.id} item={item} changes={changes} />)

@@ -23,6 +23,14 @@ async function offEntityIds(workspaceId: string): Promise<Set<string>> {
   return new Set(off.results.map((row) => row.id));
 }
 
+function hideOffBrands(payload: BriefPayload, hidden: Set<string>): BriefPayload {
+  return {
+    ...payload,
+    brands: payload.brands.filter((line) => !hidden.has(line.entity_id)),
+    read_this_first: payload.read_this_first.filter((mark) => !hidden.has(mark.entity_id)),
+  };
+}
+
 function briefReadFirst(payload: BriefPayload): NonNullable<BriefResult["brief"]>["readThisFirst"] {
   return payload.read_this_first.map((mark) => ({
     competitor: mark.entity_name,
@@ -50,24 +58,25 @@ function briefStanding(payload: BriefPayload): NonNullable<BriefResult["brief"]>
   }));
 }
 
-function toBrief(payload: BriefPayload): NonNullable<BriefResult["brief"]> {
+function toBrief(payload: BriefPayload, hidden: Set<string>): NonNullable<BriefResult["brief"]> {
+  const visible = hideOffBrands(payload, hidden);
   return {
-    periodStart: payload.period_start,
-    periodEnd: payload.period_end,
-    timezone: payload.timezone,
+    periodStart: visible.period_start,
+    periodEnd: visible.period_end,
+    timezone: visible.timezone,
     headline: {
-      rank: payload.headline_rank,
-      of: payload.headline_total,
-      movement: payload.headline_movement,
-      isNew: payload.headline_is_new,
-      why: payload.why_line,
+      rank: visible.headline_rank,
+      of: visible.headline_total,
+      movement: visible.headline_movement,
+      isNew: visible.headline_is_new,
+      why: visible.why_line,
     },
-    quietWeek: payload.is_quiet_week,
-    readThisFirst: briefReadFirst(payload),
-    standing: briefStanding(payload),
+    quietWeek: visible.is_quiet_week,
+    readThisFirst: briefReadFirst(visible),
+    standing: briefStanding(visible),
     ownSite: {
-      status: payload.own_site.status,
-      incidents: payload.own_site.incidents.map((incident) => ({
+      status: visible.own_site.status,
+      incidents: visible.own_site.incidents.map((incident) => ({
         pageUrl: incident.page_url,
         kind: incident.kind,
         observedAt: incident.observed_at,
@@ -75,22 +84,25 @@ function toBrief(payload: BriefPayload): NonNullable<BriefResult["brief"]> {
       })),
     },
     checked: {
-      mentions: payload.checked.mention_count,
-      siteChanges: payload.checked.site_change_count,
-      newAds: payload.checked.new_ad_count,
-      sourcesDown: payload.checked.degraded_sources.map((source) => ({
+      mentions: visible.checked.mention_count,
+      siteChanges: visible.checked.site_change_count,
+      newAds: visible.checked.new_ad_count,
+      sourcesDown: visible.checked.degraded_sources.map((source) => ({
         name: source.name ?? source.key,
         lastLandedAt: source.last_landed_at,
       })),
     },
-    nextBriefAt: payload.next_brief_at,
+    nextBriefAt: visible.next_brief_at,
   };
 }
 
 export async function readAgentBrief(workspaceId: string): Promise<BriefResult> {
-  const row = await env.DB.prepare(SELECT_LATEST_BRIEF).bind(workspaceId).first<{ payload_json: string }>();
+  const [row, hidden] = await Promise.all([
+    env.DB.prepare(SELECT_LATEST_BRIEF).bind(workspaceId).first<{ payload_json: string }>(),
+    offEntityIds(workspaceId),
+  ]);
   const payload = row === null ? null : readBriefPayload(row.payload_json);
-  return { brief: payload === null ? null : toBrief(payload) };
+  return { brief: payload === null ? null : toBrief(payload, hidden) };
 }
 
 export async function readAgentCompetitors(workspaceId: string): Promise<CompetitorsResult> {
@@ -102,9 +114,9 @@ export async function readAgentCompetitors(workspaceId: string): Promise<Competi
 }
 
 export async function readAgentStanding(workspaceId: string): Promise<StandingResult> {
-  const [{ brief }, hidden] = await Promise.all([readAgentBrief(workspaceId), offEntityIds(workspaceId)]);
+  const { brief } = await readAgentBrief(workspaceId);
   if (brief === null) return { standing: null };
-  return { standing: { ...brief.headline, lines: brief.standing.filter((line) => !hidden.has(line.competitorId)) } };
+  return { standing: { ...brief.headline, lines: brief.standing } };
 }
 
 function changeBody(change: SiteChangeView): string {

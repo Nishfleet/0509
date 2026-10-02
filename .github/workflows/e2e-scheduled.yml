@@ -378,6 +378,7 @@ jobs:
             crons="$crons$name $n, "
             [[ "$n" =~ ^[1-9][0-9]*$ ]] || { missed="$missed$name "; failed=1; }
           done
+          blocked=$(d1 "SELECT key, degraded_reason AS reason FROM source WHERE degraded_reason LIKE 'blocked:%' ORDER BY key" | jq -r 'if length == 0 then "none" else map("\(.key) (\(.reason))") | join(", ") end')
           required='["is_competitor","still_competitor","noteworthy_change","own_site_breakage","read_this_first","mention_is_about_brand","mention_matters","page_role","identity_field_confidence.name","identity_field_confidence.description","identity_field_confidence.socials"]'
           verdicts=$(d1 "SELECT question_id, COUNT(*) AS n, MAX(decided_at) AS last FROM jev_verdict GROUP BY question_id")
           missing=$(jq -r --argjson req "$required" '[.[].question_id] as $have | $req - $have | join(", ")' <<< "$verdicts")
@@ -403,6 +404,7 @@ jobs:
             echo "- send_attempt rows by status: $sends"
             echo "- Jev verdicts: $([ -z "$missing" ] && echo "every required question has a row" || echo "FAIL, no rows for: $missing"); duplicate_signal (informational): $dup"
             echo "- enabled sources with an active watch: $([ -z "$stale" ] && echo "all fetched in the last 24 h or marked degraded" || echo "FAIL, stale and not degraded: $stale")"
+            echo "- sources marked blocked: $blocked"
             echo "- #6110 news: $gdelt gdelt.doc snapshots with items, $mentions mention signals in the last 24 h$([ "$gdelt" -gt 0 ] && [ "$mentions" -gt 0 ] || echo " (FAIL)")"
             echo "- pricing-page watches, soak brands: $pricing_lines$([ "$pricing_bad" -eq 0 ] && [ "$pricing_any" -gt 0 ] || echo " (FAIL, $pricing_any brands have a judged pricing page and $pricing_bad of those lack a watch or a snapshot)")"
             echo "- healthchecks.io dead-man and site-sweep pings: not read, no healthchecks.io read key is a repository secret"

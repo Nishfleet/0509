@@ -29,7 +29,7 @@ export function Agents() {
           <p className={`${eyebrow} mt-6 text-ink-soft`}>Try asking</p>
           <p className="mt-2 font-mono text-[0.9rem] text-ink-soft">“Where do I stand this week, and what changed?”</p>
           <p className="mt-6">
-            <a className="text-ink underline decoration-1 underline-offset-4" href="/api/v1/openapi.json">
+            <a className="text-ink underline decoration-1 underline-offset-4" href="/api/docs">
               Read the API docs
             </a>
           </p>
