@@ -111,6 +111,14 @@ describe("the component renders a sentence and at most one action, nothing else"
     expect(html).toContain(">See the details</a>");
   });
 
+  it("gives the action link a 44px-tall tap target", () => {
+    const { sentence, action } = quietWeek(61, 2);
+    const link = links(emptyState(sentence, action))[0];
+    expect(link).toContain("min-h-11");
+    expect(link).toContain("inline-flex");
+    expect(link).toContain("items-center");
+  });
+
   it("renders exactly one input when given an input action", () => {
     const { sentence, action } = fewerThanTwoOnBrands();
     const html = emptyState(sentence, action);
