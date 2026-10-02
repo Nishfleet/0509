@@ -11,7 +11,7 @@ import { Input } from "../components/ui/input";
 import { Footer } from "../components/footer";
 import { safeReturnTo } from "../lib/agent/paths";
 import { subjectRedirect } from "../lib/onboarding-subject";
-import { deadLinkMessage } from "../lib/auth/link-error";
+import { deadLinkMessage } from "../lib/login-link-error";
 import { formMagicLinkRequest } from "../lib/auth/login-magic-link.server";
 import { createAuthForRequest } from "../lib/auth.server";
 import {

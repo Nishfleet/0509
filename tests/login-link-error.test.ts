@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { DEAD_LINK_MESSAGE, deadLinkMessage } from "../app/lib/auth/link-error";
+import { DEAD_LINK_MESSAGE, deadLinkMessage } from "../app/lib/login-link-error";
 
 describe("deadLinkMessage", () => {
   it.each(["INVALID_TOKEN", "EXPIRED_TOKEN", "ATTEMPTS_EXCEEDED"])("explains %s", (code) => {
