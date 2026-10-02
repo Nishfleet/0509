@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   MAX_FEED_ITEMS,
+  attributes,
   hashItemKeys,
   isFeedDocument,
   itemKey,
@@ -245,5 +246,40 @@ describe("parseFeed on hostile input", () => {
 
     expect(items?.[0]?.title).toBe("&lol9; ok");
     expect(ms).toBeLessThan(1500);
+  });
+
+  it("stays fast on a feed of many link tags with very long attribute runs", () => {
+    const longRun = "a".repeat(1990);
+    const noQuotes = `<link ${longRun}>`.repeat(1000);
+    const manyNames = `<link ${"x=1 ".repeat(450)}>`.repeat(1000);
+    const unclosedQuote = `<link href="${longRun}>`.repeat(1000);
+
+    for (const filler of [noQuotes, manyNames, unclosedQuote]) {
+      const { ms } = timed(rss(`<item><title>Real</title>${filler}<link>https://rival.com/a</link></item>`));
+      expect(ms).toBeLessThan(1500);
+    }
+  });
+
+  it("keeps item boundaries right when lowercasing would change a character's length", () => {
+    const xml = rss(
+      `<item><title>İİİİİ İstanbul</title><link>https://rival.com/istanbul</link></item>` +
+        `<ITEM><TITLE>Upper case tags</TITLE><LINK>https://rival.com/upper</LINK></ITEM>`,
+    );
+
+    expect(parseFeed(xml, BASE, NOW)?.map((item) => item.title)).toEqual(["İİİİİ İstanbul", "Upper case tags"]);
+  });
+});
+
+describe("attributes", () => {
+  it("reads quoted attributes of either quote style, the first of a repeated name, and skips unquoted ones", () => {
+    const found = attributes(` href="https://rival.com/a?x=1&amp;y=2" REL='alternate' href="ignored" bare data=nope`);
+
+    expect(Object.fromEntries(found)).toEqual({ href: "https://rival.com/a?x=1&y=2", rel: "alternate" });
+  });
+
+  it("gives up cleanly on an unclosed quote", () => {
+    expect(Object.fromEntries(attributes(`rel="alternate" href="https://rival.com/never-closed`))).toEqual({
+      rel: "alternate",
+    });
   });
 });

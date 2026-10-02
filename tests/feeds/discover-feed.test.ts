@@ -9,6 +9,27 @@ import {
 
 const HOME = "https://rival.com/";
 
+describe("feedLinksFromHtml on hostile input", () => {
+  it("stays fast on 2 MiB of unclosed link tags or one huge attribute run, and still finds a real link", () => {
+    const real = `<link rel="alternate" type="application/rss+xml" href="/feed.xml">`;
+    const unclosed = "<link ".repeat(Math.floor((2 * 1024 * 1024) / 6));
+    const longRun = `<link ${"a".repeat(2_000_000)}>`;
+
+    for (const filler of [unclosed, longRun]) {
+      const started = performance.now();
+      const found = feedLinksFromHtml(`${real}${filler}`, HOME);
+      expect(performance.now() - started).toBeLessThan(1500);
+      expect(found).toEqual([new URL("/feed.xml", HOME).href]);
+    }
+  });
+
+  it("reads upper-case tags and ignores a tag that only starts with link", () => {
+    const html = `<LINK REL="alternate" TYPE="application/atom+xml" HREF="/atom.xml"><linkage rel="alternate" type="application/rss+xml" href="/nope">`;
+
+    expect(feedLinksFromHtml(html, HOME)).toEqual([new URL("/atom.xml", HOME).href]);
+  });
+});
+
 describe("feedLinksFromHtml", () => {
   it("finds RSS and Atom alternates, in either attribute order, with relative and absolute hrefs", () => {
     const html = `<head>

@@ -30,8 +30,6 @@ const DAY_MS = 86_400_000;
 
 const FEED_ROOT = /<(rss|feed)[\s>]/i;
 
-const ATTRIBUTE = /([a-zA-Z:-]+)\s*=\s*(?:"([^"]*)"|'([^']*)')/g;
-
 const NAMED_ENTITIES: Readonly<Record<string, string>> = {
   lt: "<",
   gt: ">",
@@ -140,8 +138,12 @@ interface Block {
   lower: string;
 }
 
+function asciiLower(text: string): string {
+  return text.replace(/[A-Z]+/g, (run) => run.toLowerCase());
+}
+
 function entryBlocks(xml: string): Block[] {
-  const lower = xml.toLowerCase();
+  const lower = asciiLower(xml);
   const blocks: Block[] = [];
   let at = 0;
   while (blocks.length < MAX_BLOCKS) {
@@ -159,11 +161,43 @@ function entryBlocks(xml: string): Block[] {
   return blocks;
 }
 
+const NAME_CHAR = /[A-Za-z:-]/;
+
+const SPACE = /\s/;
+
+function skipSpace(source: string, from: number): number {
+  let at = from;
+  while (at < source.length && SPACE.test(source.charAt(at))) at += 1;
+  return at;
+}
+
+function nameEnd(source: string, from: number): number {
+  let at = from;
+  while (at < source.length && NAME_CHAR.test(source.charAt(at))) at += 1;
+  return at;
+}
+
 export function attributes(source: string): Map<string, string> {
   const found = new Map<string, string>();
-  for (const match of source.matchAll(ATTRIBUTE)) {
-    const name = match[1]?.toLowerCase();
-    if (name !== undefined && !found.has(name)) found.set(name, decodeEntities(match[2] ?? match[3] ?? ""));
+  let at = 0;
+  while (at < source.length) {
+    const end = nameEnd(source, at);
+    if (end === at) {
+      at += 1;
+      continue;
+    }
+    const equals = skipSpace(source, end);
+    const quote = source.charAt(equals) === "=" ? source.charAt(skipSpace(source, equals + 1)) : "";
+    if (quote !== '"' && quote !== "'") {
+      at = end;
+      continue;
+    }
+    const valueStart = skipSpace(source, equals + 1) + 1;
+    const close = source.indexOf(quote, valueStart);
+    if (close === -1) break;
+    const name = source.slice(at, end).toLowerCase();
+    if (!found.has(name)) found.set(name, decodeEntities(source.slice(valueStart, close)));
+    at = close + 1;
   }
   return found;
 }

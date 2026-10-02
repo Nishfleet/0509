@@ -6,7 +6,9 @@ export const MAX_FEED_CANDIDATES = 8;
 
 const FEED_TYPES: ReadonlySet<string> = new Set(["application/rss+xml", "application/atom+xml"]);
 
-const LINK_TAG = /<link\b[^>]*>/gi;
+const MAX_LINK_TAGS = 400;
+
+const MAX_LINK_TAG_CHARS = 2_000;
 
 function httpsHref(href: string, base: string): string | null {
   const trimmed = href.trim();
@@ -16,10 +18,24 @@ function httpsHref(href: string, base: string): string | null {
   return url.protocol === "https:" ? url.href : null;
 }
 
+function linkTags(html: string): string[] {
+  const lower = html.replace(/[A-Z]+/g, (run) => run.toLowerCase());
+  const tags: string[] = [];
+  let at = lower.indexOf("<link");
+  while (at !== -1 && tags.length < MAX_LINK_TAGS) {
+    const end = lower.indexOf(">", at + 5);
+    if (end === -1) break;
+    const boundary = /[\s>/]/.test(lower.charAt(at + 5));
+    if (boundary && end - at <= MAX_LINK_TAG_CHARS) tags.push(html.slice(at + 5, end));
+    at = lower.indexOf("<link", end + 1);
+  }
+  return tags;
+}
+
 export function feedLinksFromHtml(html: string, base: string): string[] {
   const found: string[] = [];
-  for (const match of html.matchAll(LINK_TAG)) {
-    const attrs = attributes(match[0]);
+  for (const tag of linkTags(html)) {
+    const attrs = attributes(tag);
     const type = attrs.get("type")?.trim().toLowerCase();
     const rel = attrs.get("rel")?.toLowerCase().split(/\s+/) ?? [];
     const href = attrs.get("href");
