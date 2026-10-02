@@ -12,8 +12,17 @@ const BLOCK = "mt-10 border-t border-line pt-4";
 const ROW = "flex flex-wrap items-center justify-between gap-x-4 gap-y-1 border-t border-line py-3";
 const CLIENTS = ["Claude", "ChatGPT", "Cursor"];
 
+// A key or connected-app row holds a timestamp that arrived as data, so one
+// bad value reaches this function and Intl.DateTimeFormat#format throws
+// RangeError on the resulting Invalid Date, which took down the whole page.
+// A value Date.parse rejects says "date unknown" instead, the same fallback
+// app/lib/delivery-alert.ts uses.
 function day(iso: string): string {
-  return DAY.format(new Date(iso));
+  const ms = Date.parse(iso);
+  if (Number.isNaN(ms)) {
+    return "date unknown";
+  }
+  return DAY.format(new Date(ms));
 }
 
 export const COPY_DEADLINE_MS = 2_000;

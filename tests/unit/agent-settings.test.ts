@@ -265,6 +265,38 @@ describe("AgentKeys", () => {
     expect(makeKey).not.toContain('disabled=""');
     expect(html).not.toContain("Making…");
   });
+
+  // One row with a bad timestamp took down the whole page: day() formatted the
+  // value through Intl.DateTimeFormat, which throws RangeError on an Invalid
+  // Date. day() now says "date unknown" for a value Date.parse rejects, so the
+  // row still renders.
+  it("says date unknown instead of throwing when a key's createdAt is unparseable", () => {
+    const html = stubbed(
+      createElement(AgentKeys, {
+        keys: [{ ...makeKey("a", "Broken"), createdAt: "garbage" }],
+        newKey: null,
+        duplicate: false,
+        submission: SUBMISSION,
+      }),
+    );
+
+    expect(html).toContain("Created date unknown · never used");
+    expect(html).not.toContain("Invalid");
+  });
+
+  it("says date unknown for a key whose lastUsedAt is unparseable but still shows a valid createdAt", () => {
+    const html = stubbed(
+      createElement(AgentKeys, {
+        keys: [{ ...makeKey("a", "Broken"), lastUsedAt: "garbage" }],
+        newKey: null,
+        duplicate: false,
+        submission: SUBMISSION,
+      }),
+    );
+
+    expect(html).toContain("Created 1 Sept 2026 · last used date unknown");
+    expect(html).not.toContain("Invalid");
+  });
 });
 
 describe("ConnectedApps", () => {
@@ -310,6 +342,17 @@ describe("ConnectedApps", () => {
     expect(disconnects.every((button) => button.includes(">Disconnect</button>"))).toBe(true);
     expect(disconnects.every((button) => !button.includes('disabled=""'))).toBe(true);
     expect(html).not.toContain("Disconnecting…");
+  });
+
+  // A connected-app row holds a timestamp the MCP client sent, so a bad one
+  // reaches the same day() a bad key timestamp does.
+  it("says date unknown instead of throwing when an app's connectedAt is unparseable", () => {
+    const html = stubbed(
+      createElement(ConnectedApps, { apps: [{ grantId: "g1", name: "Notion", connectedAt: "garbage" }] }),
+    );
+
+    expect(html).toContain("Connected date unknown");
+    expect(html).not.toContain("Invalid");
   });
 });
 
