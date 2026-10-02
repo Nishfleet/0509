@@ -47,8 +47,12 @@ export async function action({ request, context }: Route.ActionArgs) {
 export default function Page({ loaderData, actionData }: Route.ComponentProps) {
   return (
     <main className={PAGE}>
-      <nav aria-label="Breadcrumb" className="mb-4 font-mono text-meta text-ink-soft uppercase">
-        <Link to="/app/settings" prefetch="intent" className="underline decoration-1 underline-offset-4">
+      <nav aria-label="Breadcrumb" className="mb-4 flex items-center font-mono text-meta text-ink-soft uppercase">
+        <Link
+          to="/app/settings"
+          prefetch="intent"
+          className="inline-flex min-h-11 items-center underline decoration-1 underline-offset-4"
+        >
           Settings
         </Link>
         <span aria-hidden="true"> / </span>
