@@ -36,7 +36,12 @@ test("a competitor page passes axe at WCAG 2.2 AA and is keyboard-operable at 14
       await page.setViewportSize(viewport);
       await page.emulateMedia({ colorScheme });
       await page.goto("/app/competitors");
-      await page.getByRole("list", { name: "Competitors" }).getByRole("listitem").first().getByRole("link").click();
+      await page
+        .getByRole("list", { name: "Competitors", exact: true })
+        .getByRole("listitem")
+        .first()
+        .getByRole("link")
+        .click();
       await expect(page).toHaveURL(/\/app\/competitors\/[^/]+$/);
 
       const results = await new AxeBuilder({ page })

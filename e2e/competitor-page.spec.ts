@@ -42,7 +42,7 @@ test.describe("a watched competitor page leads with the switch and its consequen
 
     await page.goto("/app/competitors");
     await page
-      .getByRole("list", { name: "Competitors" })
+      .getByRole("list", { name: "Competitors", exact: true })
       .getByRole("listitem")
       .filter({ hasText: "nike.com" })
       .getByRole("link")

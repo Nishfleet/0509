@@ -133,7 +133,7 @@ async function signInAndWatchFixture(
     await expect(page).toHaveURL(/\/app$/, { timeout: 30_000 });
   }
   await page.goto("/app/competitors");
-  const items = page.getByRole("list", { name: "Competitors" }).getByRole("listitem");
+  const items = page.getByRole("list", { name: "Competitors", exact: true }).getByRole("listitem");
   expect(await items.count(), "the J8 account holds a competitor its journey never adds").toBeLessThanOrEqual(
     account.maxCompetitors,
   );
