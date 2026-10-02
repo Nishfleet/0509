@@ -17,6 +17,7 @@ function fakeEnv(existing = new Set<string>()) {
     MENTIONS: { createBatch },
     SITE_SWEEP: { createBatch },
     HIRING_SWEEP: { createBatch },
+    FEED_SWEEP: { createBatch },
     SNAPSHOT_BACKUP: { createBatch },
     OWN_SITE_CHECK: { createBatch },
   };
@@ -48,6 +49,7 @@ describe("startScheduledWorkflow", () => {
       "MENTIONS",
       "SITE_SWEEP",
       "HIRING_SWEEP",
+      "FEED_SWEEP",
       "SNAPSHOT_BACKUP",
       "OWN_SITE_CHECK",
     ]);
@@ -86,6 +88,7 @@ describe("startScheduledWorkflow", () => {
       { id: "mentions-sweep-2026-10-02", created: false },
       { id: "site-sweep-2026-10-02", created: true },
       { id: "hiring-sweep-2026-10-02", created: true },
+      { id: "feed-sweep-2026-10-02", created: true },
     ]);
   });
 

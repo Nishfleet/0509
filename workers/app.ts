@@ -34,6 +34,7 @@ import {
 } from "./sources/fetch-sweep-consumer";
 import { AccountDelete } from "./workflows/account-delete";
 import { Discovery } from "./workflows/discovery";
+import { FeedSweep } from "./workflows/feed-sweep";
 import { HiringSweep } from "./workflows/hiring-sweep";
 import { OwnSiteCheck } from "./workflows/own-site-check";
 import { SiteSweep } from "./workflows/site-sweep";
@@ -149,6 +150,8 @@ export class IdentityTailWorkflow extends instrumentWorkflowWithSentry(sentryOpt
 export class SiteSweepWorkflow extends instrumentWorkflowWithSentry(sentryOptions, SiteSweep) {}
 
 export class HiringSweepWorkflow extends instrumentWorkflowWithSentry(sentryOptions, HiringSweep) {}
+
+export class FeedSweepWorkflow extends instrumentWorkflowWithSentry(sentryOptions, FeedSweep) {}
 
 export class SnapshotBackupWorkflow extends instrumentWorkflowWithSentry(sentryOptions, SnapshotBackup) {}
 

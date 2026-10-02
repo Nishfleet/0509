@@ -143,7 +143,13 @@ describe("forgetCompetitor", () => {
     });
     expect(create).toHaveBeenCalledTimes(1);
     expect(create).toHaveBeenCalledWith({
-      params: { prefixes: ["snapshot/site/watch-competitor-a/", "snapshot/hiring/watch-competitor-a/"] },
+      params: {
+        prefixes: [
+          "snapshot/site/watch-competitor-a/",
+          "snapshot/hiring/watch-competitor-a/",
+          "snapshot/feed/watch-competitor-a/",
+        ],
+      },
     });
 
     expect(await count("entity", "competitor-b")).toBe(1);
