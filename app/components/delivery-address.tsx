@@ -46,8 +46,8 @@ function AddressFields({
         </p>
       ) : null}
       {suppressed ? (
-        <label className="leading-[1.55]">
-          <input type="checkbox" name="resume" value="yes" className="mr-2" />
+        <label className="flex min-h-11 items-center gap-3 leading-[1.55]">
+          <input type="checkbox" name="resume" value="yes" className="size-5 shrink-0 accent-green" />
           Send the brief to this address again
         </label>
       ) : null}
