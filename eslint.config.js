@@ -82,7 +82,7 @@ const UNSCOPED_WRITER_PATTERNS = [
   // would break the reads and the workspace-scoped schedule writer.
   {
     group: ["**/data/digest.server"],
-    importNames: ["markDigestSent", "markDigestFailed"],
+    importNames: ["markDigestSent", "markDigestSentStatement", "markDigestFailed"],
     message: UNSCOPED_WRITER_MESSAGE,
   },
   {
