@@ -57,7 +57,9 @@ test("the privacy page says support mail is stored and forwarded @smoke", async 
   await page.goto("/privacy");
 
   const helpers = page.locator("section", { has: page.locator("#who-helps") });
-  await expect(helpers).toContainText(/support@0509\.io arrives through Cloudflare Email Routing and is stored in our own support inbox/);
+  await expect(helpers).toContainText(
+    /support@0509\.io arrives through Cloudflare Email Routing and is stored in our own support inbox/,
+  );
   await expect(helpers).toContainText(/Mail to support@0509\.io is forwarded to it/);
 });
 
