@@ -3,7 +3,7 @@ import { env } from "cloudflare:workers";
 import type { SiteChangeRow } from "./data/signal.server";
 import { readSiteChangePayload, readSiteChanges } from "./data/signal.server";
 import { landingWorkspaceId } from "./env.server";
-import { isOffBrandHost } from "./site/alternate-sources";
+import { offBrandSite } from "./site/alternate-sources";
 import type { ChangeMark, ChangeShot, PairedSiteChange, SiteChangePayload, SiteChangeView } from "./site-change";
 import { whyFlagged } from "./why-flagged";
 import {
@@ -47,8 +47,7 @@ async function readMark(diffKey: string | null): Promise<ChangeMark | null> {
 }
 
 function seenOn(row: SiteChangeRow, payload: SiteChangePayload): string | null {
-  if (row.entity_role === "self" || !isOffBrandHost(payload.page.url, row.entity_domain)) return null;
-  return new URL(payload.page.url).hostname.replace(/^www\./, "");
+  return row.entity_role === "self" ? null : offBrandSite(payload.page.url, row.entity_domain);
 }
 
 async function toView(row: SiteChangeRow, payload: SiteChangePayload): Promise<SiteChangeView> {

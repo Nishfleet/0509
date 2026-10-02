@@ -35,6 +35,7 @@ export function alternateCandidates(domain: string): AlternateCandidate[] {
   return [...own, ...retail];
 }
 
-export function isOffBrandHost(pageUrl: string, domain: string): boolean {
-  return getDomain(new URL(pageUrl).hostname) !== getDomain(domain);
+export function offBrandSite(pageUrl: string, domain: string): string | null {
+  const site = getDomain(pageUrl);
+  return site === null || site === getDomain(domain) ? null : site;
 }
