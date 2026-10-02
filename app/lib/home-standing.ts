@@ -5,7 +5,6 @@ import { firstSiteSweepAt } from "./onboarding/arrival-estimate";
 import type { SiteChangeView } from "./site-change";
 import { sourceName } from "./source-name";
 import type { SourceKind } from "./source-kind";
-export { nextSiteSweepAt } from "./onboarding/arrival-estimate";
 
 export interface HomeEntity {
   id: string;

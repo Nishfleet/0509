@@ -10,8 +10,6 @@ export interface DiscoveryParams {
 
 const BATCH_LIMIT = 100;
 
-export { WEEKLY_REFRESH_CRON } from "../cadence";
-
 function discoveryInstanceId(workspaceId: string, now: Date, mode: "create" | "refresh"): string {
   const date = now.toISOString().slice(0, 10);
   return mode === "refresh" ? `refresh-${workspaceId}-${date}` : `discovery-${workspaceId}-${date}`;

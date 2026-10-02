@@ -1,5 +1,4 @@
-import { WEEKLY_REFRESH_CRON } from "../app/lib/discovery/start.server";
-import { NIGHTLY_CRON } from "./delivery/sweeper";
+import { NIGHTLY_CRON, WEEKLY_REFRESH_CRON } from "../app/lib/cadence";
 
 const LIVENESS_CRON = "*/5 * * * *";
 
