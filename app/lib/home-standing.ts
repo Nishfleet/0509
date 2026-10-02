@@ -151,6 +151,20 @@ function dayAndTime(timezone: string, at: Date): string {
   return `${day} ${hourAndMinute(timezone, at)}`;
 }
 
+export function arrivalAround(timezone: string, at: Date): string {
+  const date = new Intl.DateTimeFormat("en-GB", {
+    timeZone: timezone,
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+  }).format(at);
+  const zone =
+    new Intl.DateTimeFormat("en-GB", { timeZone: timezone, timeZoneName: "short" })
+      .formatToParts(at)
+      .find((part) => part.type === "timeZoneName")?.value ?? timezone;
+  return `${date.replace(",", "")}, around ${hourAndMinute(timezone, at)} ${zone}`;
+}
+
 function todayEyebrow(timezone: string, now: Date): string {
   return new Intl.DateTimeFormat("en-GB", {
     timeZone: timezone,
@@ -272,7 +286,7 @@ function gatheringStanding(input: HomeStandingInput, onBrands: number): HomeStan
   return {
     kind: "gathering",
     briefAt: dayAndTime(input.schedule.timezone, nextBriefAt(input.schedule, input.now)),
-    firstSweepAt: at === null ? null : dayAndTime(input.schedule.timezone, at),
+    firstSweepAt: at === null ? null : arrivalAround(input.schedule.timezone, at),
     brands: onBrands,
   };
 }
