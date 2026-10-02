@@ -60,6 +60,7 @@ const quiet: CompetitorFrameProps = {
   pages: 0,
   lastChecked: null,
   pausedOn: null,
+  unreadable: false,
   rail: {
     entityId: "ent-1",
     peers: [],
@@ -79,6 +80,12 @@ function header(props: CompetitorHeaderProps): string {
 }
 
 describe("the competitor page frame", () => {
+  it("says plainly when the rival's website could not be read, and says nothing otherwise", () => {
+    expect(frame({ unreadable: true })).toContain("We couldn&#x27;t read their website");
+    expect(frame({ unreadable: true })).toContain("keep trying");
+    expect(frame()).not.toContain("read their website");
+  });
+
   it("formats the paused line in en-GB UTC", () => {
     expect(competitorPausedLine("2026-09-22T12:00:00.000Z")).toBe("Paused 22 Sept");
     expect(competitorPausedLine(null)).toBe("Paused");
