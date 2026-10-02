@@ -32,6 +32,11 @@ export interface DevelopmentItem {
   observedAt: string;
 }
 
+export function emptyFeedSentence(filter: FeedFilter): string {
+  if (filter === "all") return "Nothing yet. Site changes, mentions, ads and jobs show up here as we find them.";
+  return "Nothing of this kind in the last 90 days.";
+}
+
 export function isFeedKind(value: string): value is FeedKind {
   return FEED_KINDS.some((kind) => kind === value);
 }

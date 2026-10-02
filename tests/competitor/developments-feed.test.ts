@@ -201,6 +201,12 @@ describe("the developments feed", () => {
     expect(empty).toContain("Nothing of this kind in the last 90 days.");
   });
 
+  it("promises updates will arrive on the empty All filter, not a filtered-out message", () => {
+    const empty = render("/", []);
+    expect(empty).toContain("Nothing yet. Site changes, mentions, ads and jobs show up here as we find them.");
+    expect(empty).not.toContain("Nothing of this kind in the last 90 days.");
+  });
+
   it("titles a row by title, then summary, then the source label", () => {
     const titled = render("/?kind=hiring");
     expect(titled).toContain(">Staff engineer, billing<");
