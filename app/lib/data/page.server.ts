@@ -120,17 +120,36 @@ export async function readCompetitorsToClassify(limit: number, now: string): Pro
 
 const PRICING_PAGES_WATCHED = 3;
 
-const UNWATCHED_PRICING_PAGES = `SELECT r.entity_id AS entity_id, r.url AS url
+const ACTIVE_PAGE_WATCHES = `SELECT w.id AS id, w.entity_id AS entity_id, p.rowid AS page_rowid
+FROM watch w
+JOIN page p ON p.entity_id = w.entity_id AND p.url = w.target_key AND COALESCE(p.role, '') <> 'home'
+WHERE w.source_id = ?1 AND w.is_active = 1`;
+
+const TRIM_PRICING_WATCHES = `UPDATE watch SET is_active = 0
+WHERE id IN (
+  SELECT id FROM (
+    SELECT id, ROW_NUMBER() OVER (PARTITION BY entity_id ORDER BY page_rowid) AS position
+    FROM (${ACTIVE_PAGE_WATCHES})
+    WHERE entity_id IN (SELECT id FROM entity WHERE role = 'competitor')
+  )
+  WHERE position > ?2
+)`;
+
+export async function trimPricingWatches(sourceId: string): Promise<void> {
+  await env.DB.prepare(TRIM_PRICING_WATCHES).bind(sourceId, PRICING_PAGES_WATCHED).run();
+}
+
+const UNWATCHED_PRICING_PAGES = `SELECT c.entity_id AS entity_id, c.url AS url
 FROM (
   SELECT p.entity_id AS entity_id, p.url AS url,
          ROW_NUMBER() OVER (PARTITION BY p.entity_id ORDER BY p.rowid) AS position
   FROM page p
   JOIN entity e ON e.id = p.entity_id AND e.state = 'on'
   WHERE p.role = 'pricing' AND p.role_decided_for_hash IS NOT NULL
-) r
-WHERE r.position <= ?2
-  AND NOT EXISTS (SELECT 1 FROM watch w WHERE w.entity_id = r.entity_id AND w.source_id = ?1 AND w.target_key = r.url)
-ORDER BY r.entity_id, r.url`;
+    AND NOT EXISTS (SELECT 1 FROM watch w WHERE w.entity_id = p.entity_id AND w.source_id = ?1 AND w.target_key = p.url)
+) c
+WHERE c.position <= ?2 - (SELECT COUNT(*) FROM (${ACTIVE_PAGE_WATCHES}) a WHERE a.entity_id = c.entity_id)
+ORDER BY c.entity_id, c.url`;
 
 const pricingPageRows = z.array(z.object({ entity_id: z.string(), url: z.string() }));
 

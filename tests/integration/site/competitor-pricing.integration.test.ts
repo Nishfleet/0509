@@ -143,7 +143,97 @@ describe("a competitor's pricing page", () => {
     await classifyCompetitorSites(NOW);
     await planSiteSweep(NOW);
 
-    expect(run.mock.calls.length).toBeLessThanOrEqual(40);
+    expect(run.mock.calls).toHaveLength(40);
     expect((await pricingWatches()).filter((target) => target !== HOME)).toHaveLength(3);
+  });
+
+  it("judges a pricing-looking link first even when it is the last of 60", async () => {
+    const links = Array.from({ length: 59 }, (_, index) => `<a href="/p${String(index)}">Page ${String(index)}</a>`);
+    const html = `<html><head><title>Rival</title></head><body><nav>${links.join("")}<a href="/pricing">Pricing</a></nav>
+<main><p>${"We make training clothes for people who train hard and rest harder. ".repeat(6)}</p></main></body></html>`;
+    vi.stubGlobal("fetch", (input: RequestInfo | URL) => {
+      const url = input instanceof Request ? input.url : String(input);
+      if (url === HOME)
+        return Promise.resolve(new Response(html, { status: 200, headers: { "content-type": "text/html" } }));
+      return Promise.resolve(new Response("", { status: 404 }));
+    });
+    Reflect.set(env, "AI", {
+      run: (_model: string, request: { questions: Record<string, { type: string }> }) =>
+        Promise.resolve({
+          answers: {
+            page_role: {
+              type: request.questions["page_role"]?.type ?? "choice",
+              choice: JSON.stringify(request).includes("/pricing") ? "pricing" : "other",
+            },
+          },
+        }),
+    });
+
+    await classifyCompetitorSites(NOW);
+    await planSiteSweep(NOW);
+
+    expect(await pricingWatches()).toContain("https://rival-shop.com/pricing");
+  });
+
+  it("trims a rival's existing pricing watches to the first 3 and keeps the rest from coming back", async () => {
+    await planSiteSweep(NOW);
+    const source = await env.DB.prepare("SELECT id FROM source WHERE key = 'site.web'").first<{ id: string }>();
+    const urls = Array.from({ length: 6 }, (_, index) => `https://rival-shop.com/plans-${String(index)}`);
+    await env.DB.batch(
+      urls.flatMap((url, index) => [
+        env.DB.prepare(
+          "INSERT INTO page (id, entity_id, url, role, role_decided_for_hash, discovered_at) VALUES (?1, ?2, ?3, 'pricing', 'h', ?4)",
+        ).bind(`pg-trim-${String(index)}`, RIVAL, url, NOW),
+        env.DB.prepare("INSERT INTO watch (id, entity_id, source_id, target_key) VALUES (?1, ?2, ?3, ?4)").bind(
+          `w-trim-${String(index)}`,
+          RIVAL,
+          source?.id,
+          url,
+        ),
+      ]),
+    );
+
+    await planSiteSweep(NOW);
+    await planSiteSweep(NOW);
+
+    const active = await env.DB.prepare(
+      "SELECT target_key FROM watch WHERE entity_id = ?1 AND is_active = 1 AND target_key LIKE '%/plans-%' ORDER BY target_key",
+    )
+      .bind(RIVAL)
+      .all<{ target_key: string }>();
+    expect(active.results.map((row) => row.target_key)).toEqual(urls.slice(0, 3));
+  });
+
+  it("does not watch a fourth pricing page when one of the three is judged something else", async () => {
+    await planSiteSweep(NOW);
+    const source = await env.DB.prepare("SELECT id FROM source WHERE key = 'site.web'").first<{ id: string }>();
+    const urls = Array.from({ length: 4 }, (_, index) => `https://rival-shop.com/plans-${String(index)}`);
+    await env.DB.batch(
+      urls.flatMap((url, index) => [
+        env.DB.prepare(
+          "INSERT INTO page (id, entity_id, url, role, role_decided_for_hash, discovered_at) VALUES (?1, ?2, ?3, 'pricing', 'h', ?4)",
+        ).bind(`pg-drift-${String(index)}`, RIVAL, url, NOW),
+        ...(index < 3
+          ? [
+              env.DB.prepare("INSERT INTO watch (id, entity_id, source_id, target_key) VALUES (?1, ?2, ?3, ?4)").bind(
+                `w-drift-${String(index)}`,
+                RIVAL,
+                source?.id,
+                url,
+              ),
+            ]
+          : []),
+      ]),
+    );
+    await env.DB.prepare("UPDATE page SET role = 'other' WHERE id = 'pg-drift-0'").run();
+
+    await planSiteSweep(NOW);
+
+    const active = await env.DB.prepare(
+      "SELECT target_key FROM watch WHERE entity_id = ?1 AND is_active = 1 AND target_key LIKE '%/plans-%'",
+    )
+      .bind(RIVAL)
+      .all();
+    expect(active.results).toHaveLength(3);
   });
 });
