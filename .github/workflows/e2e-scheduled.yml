@@ -352,6 +352,9 @@ jobs:
           echo "J7 entities: $(d1 "SELECT e.role, e.state, e.domain, (SELECT COUNT(*) FROM signal s WHERE s.entity_id = e.id) AS signals FROM entity e WHERE e.workspace_id IN$wj7")"
           echo "J8 signals: $(d1 "SELECT kind, aspect, COUNT(*) AS n, MAX(observed_at) AS last FROM signal WHERE workspace_id IN$ws GROUP BY 1, 2")"
           echo "J8 verdicts: $(d1 "SELECT question_id, ROUND(p, 2) AS p, decided_at FROM jev_verdict WHERE workspace_id IN$ws ORDER BY decided_at DESC LIMIT 10")"
+          echo "J8 incident rows: $(d1 "SELECT substr(page_id,1,8) AS pg, kind, opened_at, closed_at FROM incident WHERE workspace_id IN$ws ORDER BY opened_at DESC LIMIT 6")"
+          echo "J8 notices: $(d1 "SELECT substr(page_id,1,8) AS pg, sent_on, sent_at, is_resolution FROM incident_notice WHERE page_id IN (SELECT page_id FROM incident WHERE workspace_id IN$ws) ORDER BY sent_at DESC LIMIT 6")"
+          echo "J8 attempts: $(d1 "SELECT status, attempted_at, substr(idempotency_key,1,12) AS k, substr(idempotency_key,-5) AS tail FROM send_attempt WHERE workspace_id IN$ws ORDER BY attempted_at DESC LIMIT 8")"
           echo "J8 sends 48h: $(d1 "SELECT status, COUNT(*) AS n, MAX(attempted_at) AS last FROM send_attempt WHERE workspace_id IN$ws GROUP BY 1")"
           echo "own-site-check instances: $(npx wrangler workflows instances list own-site-check --date-start "$since" --per-page 100 --json | jq -s -r '(add // []) | group_by(.status) | map("\(.[0].status): \(length)") | join(", ")')"
           failed=0
