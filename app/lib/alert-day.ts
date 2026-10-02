@@ -8,7 +8,7 @@ function localDay(at: Date, timeZone: string): string {
 
 function time(at: string): number {
   const parsed = Date.parse(at);
-  return Number.isNaN(parsed) ? Number.NEGATIVE_INFINITY : parsed;
+  return Number.isNaN(parsed) ? Number.MIN_SAFE_INTEGER : parsed;
 }
 
 export function alertDayGroup(at: string, now: Date, timeZone: string): DayGroup {
