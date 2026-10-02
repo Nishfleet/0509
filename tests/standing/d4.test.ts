@@ -1,6 +1,14 @@
 import { describe, expect, it } from "vitest";
 
-import { D4_QUESTION_ID, pickReadThisFirst, readThisFirstLine, type D4Verdict } from "../../app/lib/read-this-first";
+import {
+  D4_QUESTION_ID,
+  pickReadThisFirst,
+  readThisFirstLine,
+  readThisFirstState,
+  type D4Verdict,
+  type ReadThisFirstEntity,
+  type ReadThisFirstItem,
+} from "../../app/lib/read-this-first";
 
 const verdict = (signalId: string, p: number, observedAt: string): D4Verdict => ({
   signalId,
@@ -68,6 +76,120 @@ describe("pickReadThisFirst", () => {
 describe("readThisFirstLine", () => {
   it("names the counts and the lead", () => {
     expect(readThisFirstLine(2, 5, "Acme")).toBe("2 of 5 changes worth reading this week, led by Acme.");
+  });
+});
+
+describe("readThisFirstState", () => {
+  const item: ReadThisFirstItem = {
+    kind: "change",
+    title: "Adidas raises flagship shoe prices 12%",
+    summary: "A 12% increase lands this week.",
+    url: "https://example.com/a",
+    aspect: null,
+    observed_at: "2026-09-20T10:00:00.000Z",
+  };
+
+  const entity = (id: string, role: string, name: string, domain: string): ReadThisFirstEntity => ({
+    id,
+    role,
+    name,
+    domain,
+  });
+
+  const base = {
+    item,
+    itemEntityId: "ent_adidas",
+    entity: entity("ent_adidas", "competitor", "Adidas", "adidas.com"),
+    self: { name: "Nike", domain: "nike.com" },
+    entities: [
+      entity("ent_puma", "competitor", "Puma", "puma.com"),
+      entity("ent_adidas", "competitor", "Adidas", "adidas.com"),
+      entity("ent_nike", "self", "Nike", "nike.com"),
+    ],
+  };
+
+  it("packs exactly the state the standing worker sends Jev", () => {
+    expect(readThisFirstState(base)).toEqual({
+      self: { name: "Nike", domain: "nike.com" },
+      subject: { name: "Adidas", domain: "adidas.com" },
+      competitor_set: ["puma.com"],
+      item: {
+        kind: "change",
+        title: "Adidas raises flagship shoe prices 12%",
+        summary: "A 12% increase lands this week.",
+        url: "https://example.com/a",
+        aspect: null,
+        observed_at: "2026-09-20T10:00:00.000Z",
+      },
+    });
+  });
+
+  it("keeps only competitor entities and drops the entity the item belongs to", () => {
+    const state = readThisFirstState({
+      ...base,
+      entities: [
+        entity("ent_puma", "competitor", "Puma", "puma.com"),
+        entity("ent_adidas", "competitor", "Adidas", "adidas.com"),
+        entity("ent_nike", "self", "Nike", "nike.com"),
+        entity("ent_other", "supplier", "Supplier Co", "supplier.example"),
+      ],
+    }) as { competitor_set: string[] };
+    expect(state.competitor_set).toEqual(["puma.com"]);
+  });
+
+  it("keeps the domains of every other competitor, in order", () => {
+    const state = readThisFirstState({
+      ...base,
+      itemEntityId: "ent_nowhere",
+      entities: [
+        entity("ent_puma", "competitor", "Puma", "puma.com"),
+        entity("ent_adidas", "competitor", "Adidas", "adidas.com"),
+        entity("ent_nike", "self", "Nike", "nike.com"),
+        entity("ent_reebok", "competitor", "Reebok", "reebok.com"),
+      ],
+    }) as { competitor_set: string[] };
+    expect(state.competitor_set).toEqual(["puma.com", "adidas.com", "reebok.com"]);
+  });
+
+  it("sends the subject entity as name and domain only", () => {
+    const state = readThisFirstState(base) as { subject: unknown };
+    expect(state.subject).toEqual({ name: "Adidas", domain: "adidas.com" });
+    expect(Object.keys(state.subject as object).sort()).toEqual(["domain", "name"]);
+  });
+
+  it("carries the six item fields and drops anything else on the input item", () => {
+    const state = readThisFirstState({
+      ...base,
+      item: { ...item, id: "sig_1", entity_id: "ent_adidas", source_url: "https://example.com/a" },
+    }) as { item: unknown };
+    expect(state.item).toEqual({
+      kind: "change",
+      title: "Adidas raises flagship shoe prices 12%",
+      summary: "A 12% increase lands this week.",
+      url: "https://example.com/a",
+      aspect: null,
+      observed_at: "2026-09-20T10:00:00.000Z",
+    });
+    expect(Object.keys(state.item as object).sort()).toEqual([
+      "aspect",
+      "kind",
+      "observed_at",
+      "summary",
+      "title",
+      "url",
+    ]);
+  });
+
+  it("passes a null self through as null and a real self through unchanged", () => {
+    const withoutSelf = readThisFirstState({ ...base, self: null }) as { self: unknown };
+    expect(withoutSelf.self).toBeNull();
+    const withSelf = readThisFirstState(base) as { self: unknown };
+    expect(withSelf.self).toEqual({ name: "Nike", domain: "nike.com" });
+  });
+
+  it("gives an empty competitor set when there are no entities", () => {
+    const state = readThisFirstState({ ...base, entities: [] }) as { competitor_set: string[] };
+    expect(state.competitor_set).toEqual([]);
   });
 });
 
