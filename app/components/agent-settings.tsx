@@ -129,6 +129,11 @@ function NewKeyNotice({ newKey }: { newKey: string }) {
 }
 
 function KeyRow({ apiKey }: { apiKey: AgentKey }) {
+  const navigation = useNavigation();
+  const deleting =
+    navigation.state !== "idle" &&
+    navigation.formData?.get("intent") === "revoke-key" &&
+    navigation.formData.get("id") === apiKey.id;
   return (
     <li data-testid="api-key" className={ROW}>
       <p className="min-w-0">
@@ -139,8 +144,13 @@ function KeyRow({ apiKey }: { apiKey: AgentKey }) {
       <Form method="post">
         <input type="hidden" name="intent" value="revoke-key" />
         <input type="hidden" name="id" value={apiKey.id} />
-        <Button type="submit" variant="tertiary">
-          Delete
+        <Button
+          type="submit"
+          variant="tertiary"
+          aria-label={deleting ? `Deleting ${apiKey.name}` : `Delete ${apiKey.name}`}
+          disabled={deleting}
+        >
+          {deleting ? "Deleting…" : "Delete"}
         </Button>
       </Form>
     </li>
