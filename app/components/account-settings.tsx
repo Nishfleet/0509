@@ -1,4 +1,4 @@
-import { Form } from "react-router";
+import { Form, useNavigation } from "react-router";
 
 import { BLOCK_HEADING } from "./page-heading";
 import { Button } from "./ui/button";
@@ -36,6 +36,8 @@ export function ExportData() {
 }
 
 export function DeleteAccount({ email, error }: { email: string; error: string | null }) {
+  const navigation = useNavigation();
+  const working = navigation.state !== "idle" && navigation.formData?.get("intent") === "delete-account";
   return (
     <section aria-labelledby="delete-account" className="mt-10 border-t border-line pt-4">
       <h2 id="delete-account" className={BLOCK_HEADING}>
@@ -71,8 +73,8 @@ export function DeleteAccount({ email, error }: { email: string; error: string |
             {error}
           </p>
         )}
-        <Button type="submit" variant="secondary" size="lg" className="self-start border-red">
-          Delete my account
+        <Button type="submit" variant="secondary" size="lg" className="self-start border-red" disabled={working}>
+          {working ? "Deleting…" : "Delete my account"}
         </Button>
       </Form>
     </section>
