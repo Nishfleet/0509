@@ -1,4 +1,9 @@
 import { env } from "cloudflare:workers";
+import { z } from "zod";
+
+const identitySocials = z.object({
+  socials: z.array(z.object({ platform: z.string(), url: z.string() })).optional(),
+});
 
 export type CompetitorState = "on" | "off";
 
@@ -100,6 +105,39 @@ export async function readCompetitor(workspaceId: string, entityId: string): Pro
     stateChangedAt: row.state_changed_at,
     stateReason: row.state_reason,
   };
+}
+
+const SELECT_COMPETITOR_IDENTITY =
+  "SELECT identity_json FROM entity WHERE id = ? AND workspace_id = ? AND role = 'competitor' AND json_valid(identity_json)";
+
+const SET_COMPETITOR_SOCIALS =
+  "UPDATE entity SET identity_json = json_set(identity_json, '$.socials', json(?3)) WHERE id = ?1 AND workspace_id = ?2 AND role = 'competitor' AND json_valid(identity_json)";
+
+const RESET_YOUTUBE_WATCH =
+  "UPDATE watch SET config_json = json_remove(CASE WHEN json_valid(config_json) THEN config_json ELSE '{}' END, '$.channelId', '$.pendingChannelId', '$.degraded', '$.noChannel'), last_polled_at = NULL WHERE entity_id = ?1 AND source_id = 'src_mentions_youtube' AND entity_id IN (SELECT id FROM entity WHERE id = ?1 AND workspace_id = ?2 AND role = 'competitor')";
+
+export async function readCompetitorSocials(
+  workspaceId: string,
+  entityId: string,
+): Promise<readonly { platform: string; url: string }[] | null> {
+  const row = await env.DB.prepare(SELECT_COMPETITOR_IDENTITY)
+    .bind(entityId, workspaceId)
+    .first<{ identity_json: string }>();
+  if (row === null) return null;
+  const parsed = identitySocials.safeParse(JSON.parse(row.identity_json));
+  return parsed.success ? (parsed.data.socials ?? []) : null;
+}
+
+export async function setCompetitorSocials(input: {
+  workspaceId: string;
+  entityId: string;
+  socials: readonly { platform: string; url: string }[];
+}): Promise<void> {
+  const { workspaceId, entityId, socials } = input;
+  await env.DB.batch([
+    env.DB.prepare(SET_COMPETITOR_SOCIALS).bind(entityId, workspaceId, JSON.stringify(socials)),
+    env.DB.prepare(RESET_YOUTUBE_WATCH).bind(entityId, workspaceId),
+  ]);
 }
 
 export async function readEntityDomain(workspaceId: string, entityId: string): Promise<string | null> {
