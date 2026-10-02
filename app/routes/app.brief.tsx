@@ -16,7 +16,7 @@ import { onboardedContext } from "../lib/require-onboarded.server";
 
 const PREVIOUS_LIST = "mt-10 border-t border-line pt-6";
 const PREVIOUS_HEADING = "font-display text-row-name font-bold [overflow-wrap:anywhere]";
-const PREVIOUS_LINK = "underline decoration-1 underline-offset-4";
+const PREVIOUS_LINK = "inline-flex min-h-11 items-center underline decoration-1 underline-offset-4";
 const BRIEF_LINE = "mt-2 font-mono text-[0.75rem] tracking-[0.04em] text-ink-soft uppercase";
 const FALLBACK = "This brief could not be shown here.";
 export function meta() {

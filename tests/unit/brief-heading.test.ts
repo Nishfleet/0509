@@ -42,3 +42,21 @@ describe("the brief page's Previous briefs heading", () => {
     expect(html).not.toContain("text-lg font-semibold");
   });
 });
+
+// `min-h-11` is the unit of 44px in this repo (tests/unit/onboarding-competitors.test.ts).
+// The display that makes the box real is asserted with it, so dropping
+// `inline-flex` does not leave a gate that still passes.
+describe("the brief page's Previous briefs links", () => {
+  it("gives each Week of link a 44px-tall tap target", async () => {
+    const html = await briefHtml();
+    const nav = html.slice(html.indexOf('aria-label="Previous briefs"'), html.indexOf("</nav>"));
+    const links = nav.match(/<a\b[^>]*>/g) ?? [];
+    expect(links).toHaveLength(1);
+    for (const link of links) {
+      expect(link).toContain("min-h-11");
+      expect(link).toContain("inline-flex");
+      expect(link).toContain("items-center");
+    }
+    expect(links[0]).toContain('aria-current="page"');
+  });
+});
