@@ -278,7 +278,10 @@ describe("parseFeed on hostile input", () => {
         `<ITEM><TITLE>Upper case tags</TITLE><LINK>https://rival.com/upper</LINK></ITEM>`,
     );
 
-    expect(parseFeed(xml, BASE, { now: NOW })?.map((item) => item.title)).toEqual(["İİİİİ İstanbul", "Upper case tags"]);
+    expect(parseFeed(xml, BASE, { now: NOW })?.map((item) => item.title)).toEqual([
+      "İİİİİ İstanbul",
+      "Upper case tags",
+    ]);
   });
 });
 

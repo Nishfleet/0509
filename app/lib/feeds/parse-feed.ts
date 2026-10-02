@@ -106,7 +106,11 @@ function scanIndexOf(text: string, needle: string, opts: { from: number; scan?: 
   return found;
 }
 
-function openTagAt(lower: string, name: string, opts: { from: number; scan?: FeedScan }): { start: number; end: number } | null {
+function openTagAt(
+  lower: string,
+  name: string,
+  opts: { from: number; scan?: FeedScan },
+): { start: number; end: number } | null {
   const needle = `<${name}`;
   let at = scanIndexOf(lower, needle, opts);
   while (at !== -1) {
