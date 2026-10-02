@@ -24,6 +24,7 @@ const ALL_ANSWERING = [
   row("hiring.ashby", FRESH),
   row("hiring.workable", FRESH),
   row("hiring.smartrecruiters", FRESH),
+  row("feed.rss", FRESH),
 ];
 
 describe("watchedClaims", () => {
