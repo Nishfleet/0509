@@ -93,4 +93,14 @@ describe("the biggest-move slab", () => {
     expect(html).not.toContain("Open the source");
     expect(html).toContain(READ);
   });
+
+  it("gives the source link the whole 44px tap target, not just the min-h-11 token", () => {
+    const html = slab({ move: move(), change: null, quiet: QUIET });
+    const link = html.match(/<a\b[^>]*href="https:\/\/example\.com\/post\/1"[^>]*>/)?.[0] ?? "";
+    expect(link).toContain("min-h-11");
+    expect(link).toContain("inline-flex");
+    expect(link).toContain("items-center");
+    expect(link).toContain("focus-visible:outline-2");
+    expect(link).toContain("focus-visible:outline-offset-2");
+  });
 });
