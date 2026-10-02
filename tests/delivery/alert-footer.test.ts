@@ -7,7 +7,8 @@ import {
   unsubscribeHeaders,
 } from "../../workers/delivery/alert-footer";
 
-const UNSUBSCRIBE_URL = 'https://0509.io/u/token?w=ws_1&t=abc"def';
+const UNSUBSCRIBE_URL = "https://0509.io/u/token?w=ws_1&t=abc";
+const HOSTILE_URL = 'https://0509.io/u/token?w=ws_1&t=abc"def';
 const CTX: AlertFooterContext = {
   unsubscribe_url: UNSUBSCRIBE_URL,
   settings_link: SETTINGS_LINK,
@@ -28,7 +29,7 @@ describe("the alert email's footer html (0509#6511)", () => {
   });
 
   it("escapes a URL that carries an ampersand and a quote, and never leaks either raw into an href", () => {
-    const { html } = renderAlertFooter(CTX);
+    const { html } = renderAlertFooter({ ...CTX, unsubscribe_url: HOSTILE_URL });
     expect(html).toContain('href="https://0509.io/u/token?w=ws_1&amp;t=abc&quot;def"');
     expect(html).not.toContain('href="https://0509.io/u/token?w=ws_1&t=abc"def"');
   });
