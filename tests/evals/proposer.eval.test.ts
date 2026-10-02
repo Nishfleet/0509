@@ -1,13 +1,8 @@
 import { parse } from "tldts";
 import { describe, expect, it, vi } from "vitest";
+import { z } from "zod";
 
-import {
-  MAX_TOKENS,
-  MODEL,
-  RESPONSE_SCHEMA,
-  messagesFor,
-  proposalSchema,
-} from "../../app/lib/discovery/generators/ai.server";
+import { MAX_TOKENS, MODEL, RESPONSE_SCHEMA, messagesFor } from "../../app/lib/discovery/generators/ai.server";
 import {
   formatReport,
   loadCases,
@@ -35,10 +30,12 @@ function registrable(value: string): string {
   return parse(value).domain ?? value.toLowerCase();
 }
 
+const domainsOnly = z.object({ competitors: z.array(z.object({ domain: z.string() })) });
+
 function proposed(result: unknown): string[] {
   const response = (result as { response?: unknown }).response;
   const body: unknown = typeof response === "string" ? JSON.parse(response) : response;
-  return proposalSchema.parse(body).competitors.map((entry) => registrable(entry.domain));
+  return domainsOnly.parse(body).competitors.map((entry) => registrable(entry.domain));
 }
 
 const ask: Ask<ProposerCase> = async (row) => {
