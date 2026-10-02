@@ -44,6 +44,7 @@ export function BiggestMove({ move, change, quiet }: BiggestMoveProps): ReactEle
           className="inline-flex min-h-11 items-center underline decoration-1 underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink focus-visible:outline-solid"
         >
           Open the source
+          <span className="sr-only"> (opens in a new tab)</span>
         </a>
       )}
       {read}
