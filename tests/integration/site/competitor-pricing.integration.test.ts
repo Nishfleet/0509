@@ -250,4 +250,44 @@ describe("a competitor's pricing page", () => {
     await planSiteSweep(NOW);
     expect(await watchStates("free")).toEqual({ "free-0": 1, "free-1": 1, "free-2": 1, "free-new": 0 });
   });
+
+  it("never switches off the owner's own page watches, home watches, or watches from other sources", async () => {
+    const urls = await seedWatchedPages("keep", 5, 5);
+    const source = await env.DB.prepare("SELECT id FROM source WHERE key = 'site.web'").first<{ id: string }>();
+    const other = await env.DB.prepare("SELECT id FROM source WHERE key <> 'site.web' LIMIT 1").first<{ id: string }>();
+    await env.DB.batch([
+      env.DB.prepare(
+        "INSERT INTO page (id, entity_id, url, role, role_decided_for_hash, discovered_at) VALUES ('pg-own-0', ?1, 'https://owner-shop.com/pricing', 'pricing', 'h', ?2)",
+      ).bind(SELF, NOW),
+      env.DB.prepare(
+        "INSERT INTO page (id, entity_id, url, role, role_decided_for_hash, discovered_at) VALUES ('pg-own-1', ?1, 'https://owner-shop.com/about', 'other', 'h', ?2)",
+      ).bind(SELF, NOW),
+      env.DB.prepare(
+        "INSERT INTO watch (id, entity_id, source_id, target_key) VALUES ('w-own-0', ?1, ?2, 'https://owner-shop.com/pricing')",
+      ).bind(SELF, source?.id),
+      env.DB.prepare(
+        "INSERT INTO watch (id, entity_id, source_id, target_key) VALUES ('w-own-1', ?1, ?2, 'https://owner-shop.com/about')",
+      ).bind(SELF, source?.id),
+      env.DB.prepare("INSERT INTO watch (id, entity_id, source_id, target_key) VALUES ('w-other', ?1, ?2, ?3)").bind(
+        RIVAL,
+        other?.id,
+        urls[4],
+      ),
+    ]);
+
+    await planSiteSweep(NOW);
+    await planSiteSweep(NOW);
+
+    const state = await env.DB.prepare("SELECT id, is_active FROM watch WHERE id IN ('w-own-0','w-own-1','w-other')")
+      .all<{ id: string; is_active: number }>()
+      .then((rows) => Object.fromEntries(rows.results.map((row) => [row.id, row.is_active])));
+    expect(state).toEqual({ "w-own-0": 1, "w-own-1": 1, "w-other": 1 });
+    const home = await env.DB.prepare(
+      "SELECT is_active FROM watch WHERE entity_id IN (?1, ?2) AND target_key IN (?3, ?4)",
+    )
+      .bind(SELF, RIVAL, "https://owner-shop.com/", HOME)
+      .all<{ is_active: number }>();
+    expect(home.results.length).toBeGreaterThan(0);
+    expect(home.results.every((row) => row.is_active === 1)).toBe(true);
+  });
 });

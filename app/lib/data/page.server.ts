@@ -133,7 +133,7 @@ const WANTED_PRICING_WATCH = `EXISTS (
 
 const STOP_UNWANTED_PRICING_WATCHES = `UPDATE watch SET is_active = 0
 WHERE source_id = ?1 AND is_active = 1
-  AND entity_id IN (SELECT id FROM entity WHERE state = 'on')
+  AND entity_id IN (SELECT id FROM entity WHERE state = 'on' AND role = 'competitor')
   AND EXISTS (
     SELECT 1 FROM page p
     WHERE p.entity_id = watch.entity_id AND p.url = watch.target_key
@@ -143,7 +143,9 @@ WHERE source_id = ?1 AND is_active = 1
   AND NOT ${WANTED_PRICING_WATCH}`;
 
 const RESUME_WANTED_PRICING_WATCHES = `UPDATE watch SET is_active = 1
-WHERE source_id = ?1 AND is_active = 0 AND ${WANTED_PRICING_WATCH}`;
+WHERE source_id = ?1 AND is_active = 0
+  AND entity_id IN (SELECT id FROM entity WHERE role = 'competitor')
+  AND ${WANTED_PRICING_WATCH}`;
 
 export async function syncPricingWatches(sourceId: string): Promise<void> {
   await env.DB.batch([
