@@ -97,10 +97,7 @@ async function connectSlack(userId: string, form: FormData): Promise<SettingsRes
   const webhookUrl = parseSlackWebhook(typeof raw === "string" ? raw : "");
   if (workspaceId === null || webhookUrl === null) return result({ slackError: SLACK_INVALID });
   const text = "Five to Nine is connected. Price and plan changes will post here.";
-  const accepted = await postToSlack(webhookUrl, text).catch((error: unknown) => {
-    console.error(JSON.stringify({ event: "settings.slack_test_failed", error: String(error) }));
-    return false;
-  });
+  const accepted = await postToSlack(webhookUrl, text);
   if (!accepted) return result({ slackError: SLACK_FAILED });
   await saveSlackTarget(env.DB, { workspaceId, webhookUrl, now: new Date().toISOString() });
   return result({ saved: true });

@@ -242,6 +242,14 @@ describe("deliverChange to Slack", () => {
     expect(text).toContain("After: Pro $15 a month");
   });
 
+  it("keeps the Slack post out of the email cap", async () => {
+    slots.readSlackTarget.mockResolvedValue(SLACK);
+    await deliverChange(fakeEnv(), { signal_id: "sig-1" });
+    expect(slots.claimChangeSlot).toHaveBeenCalledTimes(1);
+    expect(slots.claimChangeSlot.mock.calls[0]?.[1].idempotencyKey).toBe("change:sig-1:tgt-1");
+    expect(slots.claimSendAttempt.mock.calls[0]?.[1].idempotencyKey).toBe("change-slack:sig-1:tgt-slack");
+  });
+
   it("posts without a before and after when the stored diff is missing", async () => {
     slots.readSlackTarget.mockResolvedValue(SLACK);
     world.diff = null;

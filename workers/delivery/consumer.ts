@@ -500,7 +500,7 @@ async function postChangeToSlack(
     idempotencyKey,
     send: async () => {
       const text = slackText(change, payload, await readChangeMark(env, payload.diffKey));
-      const posted = await postToSlack(target.target_value, text).catch(() => false);
+      const posted = await postToSlack(target.target_value, text);
       return posted ? { outcome: "sent", error: null } : { outcome: "failed", error: "slack did not accept the post" };
     },
   });
