@@ -17,7 +17,7 @@ describe("pingLiveness", () => {
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 
-  it("POSTs with an abort signal that fires at the deadline", async () => {
+  it("POSTs with an abort signal set to the 10 s deadline", async () => {
     const seen: (RequestInit | undefined)[] = [];
     const fetchSpy = vi.fn((_url: string, init?: RequestInit) => {
       seen.push(init);
