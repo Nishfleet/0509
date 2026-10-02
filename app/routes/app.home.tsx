@@ -59,8 +59,8 @@ function HomeFooter({ line }: { line: string }) {
   return (
     <>
       <p className="font-mono text-eyebrow text-ink-soft">{line}</p>
-      <p className="mt-3">
-        <Link className="underline decoration-1 underline-offset-4" to="/app/brief">
+      <p className="mt-1">
+        <Link className="inline-flex min-h-11 items-center underline decoration-1 underline-offset-4" to="/app/brief">
           Read this week's brief
         </Link>
       </p>
