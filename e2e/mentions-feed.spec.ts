@@ -229,7 +229,8 @@ test("a workspace shows the three mention treatments", async ({ page }, testInfo
     contentType: "image/png",
   });
 
-  await page.getByTestId("mentions-show-all").click();
+  await page.getByTestId("mentions-show-all").focus();
+  await page.keyboard.press("Enter");
   await expect(held).toHaveCount(1);
   await expect(held).toContainText("Zephyrwear ticker line");
 
@@ -240,14 +241,14 @@ test("a workspace shows the three mention treatments", async ({ page }, testInfo
   await expect(reveal).toHaveAttribute("aria-expanded", "true");
   await expect(reveal).toHaveText(/Hide the \d+ we think do not matter/);
 
-  // A second click hides the held rows again.
-  await reveal.click();
+  // A second keyboard activation hides the held rows again.
+  await page.keyboard.press("Enter");
   await expect(held).toHaveCount(0);
   await expect(reveal).toHaveAttribute("aria-expanded", "false");
   await expect(reveal).toHaveText(/Show all, including \d+ we think do not matter/);
 
   // Re-open so the rest of this test inspects the held rows.
-  await reveal.click();
+  await page.keyboard.press("Enter");
   await expect(held).toHaveCount(1);
   const trigger = held.getByRole("button", { name: "Why we flagged this" });
   await trigger.click();
