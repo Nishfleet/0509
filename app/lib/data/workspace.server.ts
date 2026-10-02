@@ -59,7 +59,7 @@ export async function readWorkspaceR2Prefixes(workspaceId: string): Promise<stri
   const { results } = await env.DB.prepare(SELECT_WORKSPACE_WATCHES).bind(workspaceId).all<{ id: string }>();
   return [
     `card/${workspaceId}/`,
-    ...results.flatMap((row) => [`snapshot/site/${row.id}/`, `snapshot/hiring/${row.id}/`]),
+    ...results.flatMap((row) => [`snapshot/site/${row.id}/`, `snapshot/hiring/${row.id}/`, `snapshot/feed/${row.id}/`]),
   ];
 }
 

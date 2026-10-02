@@ -1,0 +1,757 @@
+[
+  {
+    "id": "allbirds",
+    "split": "train",
+    "why": "Allbirds: well-known public brand; expected rivals are widely recognised competitors of Allbirds",
+    "self": {
+      "name": "Allbirds",
+      "domain": "allbirds.com",
+      "description": "Sustainable everyday shoes made from merino wool and tree fibre"
+    },
+    "site": {
+      "title": "Allbirds | Sustainable everyday shoes made from merino wool and tree fibre",
+      "description": "Sustainable everyday shoes made from merino wool and tree fibre"
+    },
+    "expected": [["on.com", "on-running.com"], ["hoka.com"], ["vans.com"], ["rothys.com"]]
+  },
+  {
+    "id": "warby-parker",
+    "split": "test",
+    "why": "Warby Parker: well-known public brand; expected rivals are widely recognised competitors of Warby Parker",
+    "self": {
+      "name": "Warby Parker",
+      "domain": "warbyparker.com",
+      "description": "Prescription glasses and sunglasses sold online and in stores"
+    },
+    "site": {
+      "title": "Warby Parker | Prescription glasses and sunglasses sold online and in stores",
+      "description": "Prescription glasses and sunglasses sold online and in stores"
+    },
+    "expected": [["zennioptical.com"], ["eyebuydirect.com"], ["glassesusa.com"], ["ray-ban.com"]]
+  },
+  {
+    "id": "notion",
+    "split": "train",
+    "why": "Notion: well-known public brand; expected rivals are widely recognised competitors of Notion",
+    "self": {
+      "name": "Notion",
+      "domain": "notion.so",
+      "description": "Connected workspace for notes, docs and projects"
+    },
+    "site": {
+      "title": "Notion | Connected workspace for notes, docs and projects",
+      "description": "Connected workspace for notes, docs and projects"
+    },
+    "expected": [["coda.io"], ["airtable.com"], ["clickup.com"], ["evernote.com"]]
+  },
+  {
+    "id": "linear",
+    "split": "train",
+    "why": "Linear: well-known public brand; expected rivals are widely recognised competitors of Linear",
+    "self": {
+      "name": "Linear",
+      "domain": "linear.app",
+      "description": "Issue tracking and project planning for software teams"
+    },
+    "site": {
+      "title": "Linear | Issue tracking and project planning for software teams",
+      "description": "Issue tracking and project planning for software teams"
+    },
+    "expected": [["atlassian.com"], ["asana.com"], ["clickup.com"], ["shortcut.com"]]
+  },
+  {
+    "id": "slack",
+    "split": "test",
+    "why": "Slack: well-known public brand; expected rivals are widely recognised competitors of Slack",
+    "self": {
+      "name": "Slack",
+      "domain": "slack.com",
+      "description": "Team messaging and collaboration platform"
+    },
+    "site": {
+      "title": "Slack | Team messaging and collaboration platform",
+      "description": "Team messaging and collaboration platform"
+    },
+    "expected": [["discord.com"], ["zoom.us"], ["microsoft.com"], ["mattermost.com"]]
+  },
+  {
+    "id": "stripe",
+    "split": "train",
+    "why": "Stripe: well-known public brand; expected rivals are widely recognised competitors of Stripe",
+    "self": {
+      "name": "Stripe",
+      "domain": "stripe.com",
+      "description": "Online payment processing and billing for internet businesses"
+    },
+    "site": {
+      "title": "Stripe | Online payment processing and billing for internet businesses",
+      "description": "Online payment processing and billing for internet businesses"
+    },
+    "expected": [["adyen.com"], ["paypal.com"], ["squareup.com", "square.com"], ["checkout.com"]]
+  },
+  {
+    "id": "shopify",
+    "split": "test",
+    "why": "Shopify: well-known public brand; expected rivals are widely recognised competitors of Shopify",
+    "self": {
+      "name": "Shopify",
+      "domain": "shopify.com",
+      "description": "Ecommerce platform to build and run an online store"
+    },
+    "site": {
+      "title": "Shopify | Ecommerce platform to build and run an online store",
+      "description": "Ecommerce platform to build and run an online store"
+    },
+    "expected": [["bigcommerce.com"], ["wix.com"], ["squarespace.com"], ["woocommerce.com"]]
+  },
+  {
+    "id": "figma",
+    "split": "train",
+    "why": "Figma: well-known public brand; expected rivals are widely recognised competitors of Figma",
+    "self": {
+      "name": "Figma",
+      "domain": "figma.com",
+      "description": "Collaborative interface design tool in the browser"
+    },
+    "site": {
+      "title": "Figma | Collaborative interface design tool in the browser",
+      "description": "Collaborative interface design tool in the browser"
+    },
+    "expected": [["sketch.com"], ["canva.com"], ["adobe.com"], ["penpot.app"]]
+  },
+  {
+    "id": "spotify",
+    "split": "train",
+    "why": "Spotify: well-known public brand; expected rivals are widely recognised competitors of Spotify",
+    "self": {
+      "name": "Spotify",
+      "domain": "spotify.com",
+      "description": "Music and podcast streaming service"
+    },
+    "site": {
+      "title": "Spotify | Music and podcast streaming service",
+      "description": "Music and podcast streaming service"
+    },
+    "expected": [["apple.com"], ["youtube.com"], ["tidal.com"], ["deezer.com"]]
+  },
+  {
+    "id": "netflix",
+    "split": "test",
+    "why": "Netflix: well-known public brand; expected rivals are widely recognised competitors of Netflix",
+    "self": {
+      "name": "Netflix",
+      "domain": "netflix.com",
+      "description": "Subscription streaming of films and series"
+    },
+    "site": {
+      "title": "Netflix | Subscription streaming of films and series",
+      "description": "Subscription streaming of films and series"
+    },
+    "expected": [["hulu.com"], ["disneyplus.com"], ["max.com", "hbomax.com"], ["primevideo.com", "amazon.com"]]
+  },
+  {
+    "id": "peloton",
+    "split": "train",
+    "why": "Peloton: well-known public brand; expected rivals are widely recognised competitors of Peloton",
+    "self": {
+      "name": "Peloton",
+      "domain": "onepeloton.com",
+      "description": "Connected exercise bikes, treadmills and live classes"
+    },
+    "site": {
+      "title": "Peloton | Connected exercise bikes, treadmills and live classes",
+      "description": "Connected exercise bikes, treadmills and live classes"
+    },
+    "expected": [["echelonfit.com"], ["nordictrack.com"], ["bowflex.com"], ["tonal.com"]]
+  },
+  {
+    "id": "gymshark",
+    "split": "test",
+    "why": "Gymshark: well-known public brand; expected rivals are widely recognised competitors of Gymshark",
+    "self": {
+      "name": "Gymshark",
+      "domain": "gymshark.com",
+      "description": "Gym and fitness apparel for training"
+    },
+    "site": {
+      "title": "Gymshark | Gym and fitness apparel for training",
+      "description": "Gym and fitness apparel for training"
+    },
+    "expected": [["lululemon.com"], ["nike.com"], ["aloyoga.com"], ["fabletics.com"]]
+  },
+  {
+    "id": "glossier",
+    "split": "train",
+    "why": "Glossier: well-known public brand; expected rivals are widely recognised competitors of Glossier",
+    "self": {
+      "name": "Glossier",
+      "domain": "glossier.com",
+      "description": "Skincare and minimal makeup direct to consumer"
+    },
+    "site": {
+      "title": "Glossier | Skincare and minimal makeup direct to consumer",
+      "description": "Skincare and minimal makeup direct to consumer"
+    },
+    "expected": [["fentybeauty.com"], ["rarebeauty.com"], ["iliabeauty.com"], ["milkmakeup.com"]]
+  },
+  {
+    "id": "casper",
+    "split": "train",
+    "why": "Casper: well-known public brand; expected rivals are widely recognised competitors of Casper",
+    "self": {
+      "name": "Casper",
+      "domain": "casper.com",
+      "description": "Mattresses and sleep products sold online"
+    },
+    "site": {
+      "title": "Casper | Mattresses and sleep products sold online",
+      "description": "Mattresses and sleep products sold online"
+    },
+    "expected": [["purple.com"], ["tempur-pedic.com"], ["sleepnumber.com"], ["nectarsleep.com"]]
+  },
+  {
+    "id": "oatly",
+    "split": "test",
+    "why": "Oatly: well-known public brand; expected rivals are widely recognised competitors of Oatly",
+    "self": {
+      "name": "Oatly",
+      "domain": "oatly.com",
+      "description": "Oat-based milk and dairy alternatives"
+    },
+    "site": {
+      "title": "Oatly | Oat-based milk and dairy alternatives",
+      "description": "Oat-based milk and dairy alternatives"
+    },
+    "expected": [["alpro.com"], ["silk.com"], ["ripplefoods.com"], ["califiafarms.com"]]
+  },
+  {
+    "id": "dollar-shave-club",
+    "split": "train",
+    "why": "Dollar Shave Club: well-known public brand; expected rivals are widely recognised competitors of Dollar Shave Club",
+    "self": {
+      "name": "Dollar Shave Club",
+      "domain": "dollarshaveclub.com",
+      "description": "Razors and grooming products by subscription"
+    },
+    "site": {
+      "title": "Dollar Shave Club | Razors and grooming products by subscription",
+      "description": "Razors and grooming products by subscription"
+    },
+    "expected": [["harrys.com"], ["gillette.com"], ["billie.com"], ["schick.com"]]
+  },
+  {
+    "id": "chewy",
+    "split": "test",
+    "why": "Chewy: well-known public brand; expected rivals are widely recognised competitors of Chewy",
+    "self": {
+      "name": "Chewy",
+      "domain": "chewy.com",
+      "description": "Online pet food and pet supplies retailer"
+    },
+    "site": {
+      "title": "Chewy | Online pet food and pet supplies retailer",
+      "description": "Online pet food and pet supplies retailer"
+    },
+    "expected": [["petco.com"], ["petsmart.com"], ["amazon.com"]]
+  },
+  {
+    "id": "zoom",
+    "split": "train",
+    "why": "Zoom: well-known public brand; expected rivals are widely recognised competitors of Zoom",
+    "self": {
+      "name": "Zoom",
+      "domain": "zoom.us",
+      "description": "Video meetings and team chat"
+    },
+    "site": {
+      "title": "Zoom | Video meetings and team chat",
+      "description": "Video meetings and team chat"
+    },
+    "expected": [["webex.com"], ["microsoft.com"], ["google.com"], ["goto.com", "gotomeeting.com"]]
+  },
+  {
+    "id": "dropbox",
+    "split": "train",
+    "why": "Dropbox: well-known public brand; expected rivals are widely recognised competitors of Dropbox",
+    "self": {
+      "name": "Dropbox",
+      "domain": "dropbox.com",
+      "description": "Cloud file storage and sharing"
+    },
+    "site": {
+      "title": "Dropbox | Cloud file storage and sharing",
+      "description": "Cloud file storage and sharing"
+    },
+    "expected": [["box.com"], ["google.com"], ["microsoft.com"], ["apple.com"]]
+  },
+  {
+    "id": "canva",
+    "split": "test",
+    "why": "Canva: well-known public brand; expected rivals are widely recognised competitors of Canva",
+    "self": {
+      "name": "Canva",
+      "domain": "canva.com",
+      "description": "Online graphic design tool for non-designers"
+    },
+    "site": {
+      "title": "Canva | Online graphic design tool for non-designers",
+      "description": "Online graphic design tool for non-designers"
+    },
+    "expected": [["adobe.com"], ["figma.com"], ["visme.com"], ["piktochart.com"]]
+  },
+  {
+    "id": "mailchimp",
+    "split": "train",
+    "why": "Mailchimp: well-known public brand; expected rivals are widely recognised competitors of Mailchimp",
+    "self": {
+      "name": "Mailchimp",
+      "domain": "mailchimp.com",
+      "description": "Email marketing and automation platform"
+    },
+    "site": {
+      "title": "Mailchimp | Email marketing and automation platform",
+      "description": "Email marketing and automation platform"
+    },
+    "expected": [["klaviyo.com"], ["constantcontact.com"], ["hubspot.com"], ["brevo.com", "sendinblue.com"]]
+  },
+  {
+    "id": "squarespace",
+    "split": "test",
+    "why": "Squarespace: well-known public brand; expected rivals are widely recognised competitors of Squarespace",
+    "self": {
+      "name": "Squarespace",
+      "domain": "squarespace.com",
+      "description": "Website builder and hosting with design templates"
+    },
+    "site": {
+      "title": "Squarespace | Website builder and hosting with design templates",
+      "description": "Website builder and hosting with design templates"
+    },
+    "expected": [["wix.com"], ["wordpress.com"], ["shopify.com"], ["webflow.com"]]
+  },
+  {
+    "id": "duolingo",
+    "split": "train",
+    "why": "Duolingo: well-known public brand; expected rivals are widely recognised competitors of Duolingo",
+    "self": {
+      "name": "Duolingo",
+      "domain": "duolingo.com",
+      "description": "Gamified language learning app"
+    },
+    "site": {
+      "title": "Duolingo | Gamified language learning app",
+      "description": "Gamified language learning app"
+    },
+    "expected": [["babbel.com"], ["rosettastone.com"], ["busuu.com"], ["memrise.com"]]
+  },
+  {
+    "id": "coursera",
+    "split": "train",
+    "why": "Coursera: well-known public brand; expected rivals are widely recognised competitors of Coursera",
+    "self": {
+      "name": "Coursera",
+      "domain": "coursera.org",
+      "description": "Online courses and degrees from universities"
+    },
+    "site": {
+      "title": "Coursera | Online courses and degrees from universities",
+      "description": "Online courses and degrees from universities"
+    },
+    "expected": [["udemy.com"], ["edx.org"], ["skillshare.com"], ["linkedin.com"]]
+  },
+  {
+    "id": "airbnb",
+    "split": "test",
+    "why": "Airbnb: well-known public brand; expected rivals are widely recognised competitors of Airbnb",
+    "self": {
+      "name": "Airbnb",
+      "domain": "airbnb.com",
+      "description": "Marketplace for short-term home rentals"
+    },
+    "site": {
+      "title": "Airbnb | Marketplace for short-term home rentals",
+      "description": "Marketplace for short-term home rentals"
+    },
+    "expected": [["vrbo.com"], ["booking.com"], ["expedia.com"], ["tripadvisor.com"]]
+  },
+  {
+    "id": "uber",
+    "split": "train",
+    "why": "Uber: well-known public brand; expected rivals are widely recognised competitors of Uber",
+    "self": {
+      "name": "Uber",
+      "domain": "uber.com",
+      "description": "Ride-hailing and delivery platform"
+    },
+    "site": {
+      "title": "Uber | Ride-hailing and delivery platform",
+      "description": "Ride-hailing and delivery platform"
+    },
+    "expected": [["lyft.com"], ["bolt.eu"], ["grab.com"]]
+  },
+  {
+    "id": "doordash",
+    "split": "test",
+    "why": "DoorDash: well-known public brand; expected rivals are widely recognised competitors of DoorDash",
+    "self": {
+      "name": "DoorDash",
+      "domain": "doordash.com",
+      "description": "Restaurant and grocery delivery"
+    },
+    "site": {
+      "title": "DoorDash | Restaurant and grocery delivery",
+      "description": "Restaurant and grocery delivery"
+    },
+    "expected": [["ubereats.com"], ["grubhub.com"], ["instacart.com"]]
+  },
+  {
+    "id": "robinhood",
+    "split": "train",
+    "why": "Robinhood: well-known public brand; expected rivals are widely recognised competitors of Robinhood",
+    "self": {
+      "name": "Robinhood",
+      "domain": "robinhood.com",
+      "description": "Commission-free stock and crypto investing app"
+    },
+    "site": {
+      "title": "Robinhood | Commission-free stock and crypto investing app",
+      "description": "Commission-free stock and crypto investing app"
+    },
+    "expected": [["webull.com"], ["etrade.com"], ["schwab.com"], ["fidelity.com"]]
+  },
+  {
+    "id": "coinbase",
+    "split": "train",
+    "why": "Coinbase: well-known public brand; expected rivals are widely recognised competitors of Coinbase",
+    "self": {
+      "name": "Coinbase",
+      "domain": "coinbase.com",
+      "description": "Cryptocurrency exchange and wallet"
+    },
+    "site": {
+      "title": "Coinbase | Cryptocurrency exchange and wallet",
+      "description": "Cryptocurrency exchange and wallet"
+    },
+    "expected": [["binance.com"], ["kraken.com"], ["gemini.com"], ["crypto.com"]]
+  },
+  {
+    "id": "wise",
+    "split": "test",
+    "why": "Wise: well-known public brand; expected rivals are widely recognised competitors of Wise",
+    "self": {
+      "name": "Wise",
+      "domain": "wise.com",
+      "description": "International money transfers and multi-currency accounts"
+    },
+    "site": {
+      "title": "Wise | International money transfers and multi-currency accounts",
+      "description": "International money transfers and multi-currency accounts"
+    },
+    "expected": [["revolut.com"], ["remitly.com"], ["westernunion.com"], ["paypal.com"]]
+  },
+  {
+    "id": "patagonia",
+    "split": "train",
+    "why": "Patagonia: well-known public brand; expected rivals are widely recognised competitors of Patagonia",
+    "self": {
+      "name": "Patagonia",
+      "domain": "patagonia.com",
+      "description": "Outdoor clothing and gear with an environmental focus"
+    },
+    "site": {
+      "title": "Patagonia | Outdoor clothing and gear with an environmental focus",
+      "description": "Outdoor clothing and gear with an environmental focus"
+    },
+    "expected": [["thenorthface.com"], ["arcteryx.com"], ["columbia.com"], ["rei.com"]]
+  },
+  {
+    "id": "everlane",
+    "split": "test",
+    "why": "Everlane: well-known public brand; expected rivals are widely recognised competitors of Everlane",
+    "self": {
+      "name": "Everlane",
+      "domain": "everlane.com",
+      "description": "Modern basics clothing with transparent pricing"
+    },
+    "site": {
+      "title": "Everlane | Modern basics clothing with transparent pricing",
+      "description": "Modern basics clothing with transparent pricing"
+    },
+    "expected": [["uniqlo.com"], ["jcrew.com"], ["reformation.com"], ["madewell.com"]]
+  },
+  {
+    "id": "bombas",
+    "split": "train",
+    "why": "Bombas: well-known public brand; expected rivals are widely recognised competitors of Bombas",
+    "self": {
+      "name": "Bombas",
+      "domain": "bombas.com",
+      "description": "Comfortable socks and basics that donate to those in need"
+    },
+    "site": {
+      "title": "Bombas | Comfortable socks and basics that donate to those in need",
+      "description": "Comfortable socks and basics that donate to those in need"
+    },
+    "expected": [["stance.com"], ["darntough.com"], ["smartwool.com"], ["happysocks.com"]]
+  },
+  {
+    "id": "brooklinen",
+    "split": "train",
+    "why": "Brooklinen: well-known public brand; expected rivals are widely recognised competitors of Brooklinen",
+    "self": {
+      "name": "Brooklinen",
+      "domain": "brooklinen.com",
+      "description": "Bedding and sheets sold direct to consumers"
+    },
+    "site": {
+      "title": "Brooklinen | Bedding and sheets sold direct to consumers",
+      "description": "Bedding and sheets sold direct to consumers"
+    },
+    "expected": [["parachutehome.com"], ["bollandbranch.com"], ["westelm.com"]]
+  },
+  {
+    "id": "away",
+    "split": "test",
+    "why": "Away: well-known public brand; expected rivals are widely recognised competitors of Away",
+    "self": {
+      "name": "Away",
+      "domain": "awaytravel.com",
+      "description": "Suitcases and travel bags"
+    },
+    "site": {
+      "title": "Away | Suitcases and travel bags",
+      "description": "Suitcases and travel bags"
+    },
+    "expected": [["monos.com"], ["samsonite.com"], ["tumi.com"], ["rimowa.com"]]
+  },
+  {
+    "id": "oura",
+    "split": "train",
+    "why": "Oura: well-known public brand; expected rivals are widely recognised competitors of Oura",
+    "self": {
+      "name": "Oura",
+      "domain": "ouraring.com",
+      "description": "Smart ring that tracks sleep and readiness"
+    },
+    "site": {
+      "title": "Oura | Smart ring that tracks sleep and readiness",
+      "description": "Smart ring that tracks sleep and readiness"
+    },
+    "expected": [["whoop.com"], ["garmin.com"], ["fitbit.com"], ["apple.com"]]
+  },
+  {
+    "id": "whoop",
+    "split": "test",
+    "why": "Whoop: well-known public brand; expected rivals are widely recognised competitors of Whoop",
+    "self": {
+      "name": "Whoop",
+      "domain": "whoop.com",
+      "description": "Wearable strap for recovery and strain tracking"
+    },
+    "site": {
+      "title": "Whoop | Wearable strap for recovery and strain tracking",
+      "description": "Wearable strap for recovery and strain tracking"
+    },
+    "expected": [["ouraring.com"], ["garmin.com"], ["fitbit.com"], ["polar.com"]]
+  },
+  {
+    "id": "sonos",
+    "split": "train",
+    "why": "Sonos: well-known public brand; expected rivals are widely recognised competitors of Sonos",
+    "self": {
+      "name": "Sonos",
+      "domain": "sonos.com",
+      "description": "Wireless home speakers and soundbars"
+    },
+    "site": {
+      "title": "Sonos | Wireless home speakers and soundbars",
+      "description": "Wireless home speakers and soundbars"
+    },
+    "expected": [["bose.com"], ["jbl.com"], ["marshall.com"], ["apple.com"]]
+  },
+  {
+    "id": "gopro",
+    "split": "train",
+    "why": "GoPro: well-known public brand; expected rivals are widely recognised competitors of GoPro",
+    "self": {
+      "name": "GoPro",
+      "domain": "gopro.com",
+      "description": "Action cameras for sports and adventure"
+    },
+    "site": {
+      "title": "GoPro | Action cameras for sports and adventure",
+      "description": "Action cameras for sports and adventure"
+    },
+    "expected": [["dji.com"], ["insta360.com"], ["sony.com"], ["garmin.com"]]
+  },
+  {
+    "id": "ring",
+    "split": "test",
+    "why": "Ring: well-known public brand; expected rivals are widely recognised competitors of Ring",
+    "self": {
+      "name": "Ring",
+      "domain": "ring.com",
+      "description": "Video doorbells and home security cameras"
+    },
+    "site": {
+      "title": "Ring | Video doorbells and home security cameras",
+      "description": "Video doorbells and home security cameras"
+    },
+    "expected": [["arlo.com"], ["simplisafe.com"], ["google.com"], ["wyze.com"]]
+  },
+  {
+    "id": "zapier",
+    "split": "train",
+    "why": "Zapier: well-known public brand; expected rivals are widely recognised competitors of Zapier",
+    "self": {
+      "name": "Zapier",
+      "domain": "zapier.com",
+      "description": "No-code automation connecting web apps"
+    },
+    "site": {
+      "title": "Zapier | No-code automation connecting web apps",
+      "description": "No-code automation connecting web apps"
+    },
+    "expected": [["make.com"], ["n8n.io"], ["ifttt.com"], ["workato.com"]]
+  },
+  {
+    "id": "calendly",
+    "split": "test",
+    "why": "Calendly: well-known public brand; expected rivals are widely recognised competitors of Calendly",
+    "self": {
+      "name": "Calendly",
+      "domain": "calendly.com",
+      "description": "Online appointment scheduling"
+    },
+    "site": {
+      "title": "Calendly | Online appointment scheduling",
+      "description": "Online appointment scheduling"
+    },
+    "expected": [["cal.com"], ["acuityscheduling.com"], ["savvycal.com"], ["doodle.com"]]
+  },
+  {
+    "id": "loom",
+    "split": "train",
+    "why": "Loom: well-known public brand; expected rivals are widely recognised competitors of Loom",
+    "self": {
+      "name": "Loom",
+      "domain": "loom.com",
+      "description": "Async video messaging for work"
+    },
+    "site": {
+      "title": "Loom | Async video messaging for work",
+      "description": "Async video messaging for work"
+    },
+    "expected": [["vidyard.com"], ["screencastify.com"], ["tella.tv"], ["zoom.us"]]
+  },
+  {
+    "id": "intercom",
+    "split": "train",
+    "why": "Intercom: well-known public brand; expected rivals are widely recognised competitors of Intercom",
+    "self": {
+      "name": "Intercom",
+      "domain": "intercom.com",
+      "description": "Customer messaging and support platform"
+    },
+    "site": {
+      "title": "Intercom | Customer messaging and support platform",
+      "description": "Customer messaging and support platform"
+    },
+    "expected": [["zendesk.com"], ["drift.com"], ["freshworks.com"], ["helpscout.com"]]
+  },
+  {
+    "id": "datadog",
+    "split": "test",
+    "why": "Datadog: well-known public brand; expected rivals are widely recognised competitors of Datadog",
+    "self": {
+      "name": "Datadog",
+      "domain": "datadoghq.com",
+      "description": "Monitoring and observability for cloud applications"
+    },
+    "site": {
+      "title": "Datadog | Monitoring and observability for cloud applications",
+      "description": "Monitoring and observability for cloud applications"
+    },
+    "expected": [["newrelic.com"], ["dynatrace.com"], ["splunk.com"], ["grafana.com"]]
+  },
+  {
+    "id": "vercel",
+    "split": "train",
+    "why": "Vercel: well-known public brand; expected rivals are widely recognised competitors of Vercel",
+    "self": {
+      "name": "Vercel",
+      "domain": "vercel.com",
+      "description": "Frontend cloud platform for deploying web apps"
+    },
+    "site": {
+      "title": "Vercel | Frontend cloud platform for deploying web apps",
+      "description": "Frontend cloud platform for deploying web apps"
+    },
+    "expected": [["netlify.com"], ["cloudflare.com"], ["render.com"], ["heroku.com"]]
+  },
+  {
+    "id": "supabase",
+    "split": "test",
+    "why": "Supabase: well-known public brand; expected rivals are widely recognised competitors of Supabase",
+    "self": {
+      "name": "Supabase",
+      "domain": "supabase.com",
+      "description": "Open source Postgres backend platform"
+    },
+    "site": {
+      "title": "Supabase | Open source Postgres backend platform",
+      "description": "Open source Postgres backend platform"
+    },
+    "expected": [
+      ["firebase.google.com", "firebase.com"],
+      ["appwrite.io"],
+      ["neon.tech", "neon.com"],
+      ["planetscale.com"]
+    ]
+  },
+  {
+    "id": "twilio",
+    "split": "train",
+    "why": "Twilio: well-known public brand; expected rivals are widely recognised competitors of Twilio",
+    "self": {
+      "name": "Twilio",
+      "domain": "twilio.com",
+      "description": "Communication APIs for SMS, voice and email"
+    },
+    "site": {
+      "title": "Twilio | Communication APIs for SMS, voice and email",
+      "description": "Communication APIs for SMS, voice and email"
+    },
+    "expected": [["vonage.com"], ["bird.com", "messagebird.com"], ["plivo.com"], ["sinch.com"]]
+  },
+  {
+    "id": "tesla",
+    "split": "train",
+    "why": "Tesla: well-known public brand; expected rivals are widely recognised competitors of Tesla",
+    "self": {
+      "name": "Tesla",
+      "domain": "tesla.com",
+      "description": "Electric vehicles and energy storage"
+    },
+    "site": {
+      "title": "Tesla | Electric vehicles and energy storage",
+      "description": "Electric vehicles and energy storage"
+    },
+    "expected": [["rivian.com"], ["lucidmotors.com"], ["ford.com"], ["byd.com"]]
+  },
+  {
+    "id": "sweetgreen",
+    "split": "test",
+    "why": "Sweetgreen: well-known public brand; expected rivals are widely recognised competitors of Sweetgreen",
+    "self": {
+      "name": "Sweetgreen",
+      "domain": "sweetgreen.com",
+      "description": "Fast-casual salad and bowl restaurants"
+    },
+    "site": {
+      "title": "Sweetgreen | Fast-casual salad and bowl restaurants",
+      "description": "Fast-casual salad and bowl restaurants"
+    },
+    "expected": [["chipotle.com"], ["cava.com"], ["panerabread.com"], ["justsalad.com"]]
+  }
+]

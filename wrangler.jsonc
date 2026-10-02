@@ -329,6 +329,17 @@
       "binding": "HIRING_SWEEP",
       "class_name": "HiringSweepWorkflow",
     },
+    // The nightly blog and changelog feed sweep (docs/engines/content.md):
+    // finds each tracked brand's RSS or Atom feed, then reads every watched
+    // feed with a conditional GET. 02:45 UTC, after the 02:30 hiring sweep and
+    // before the 03:00 standing refresh. One retried step per entity and per
+    // feed; a step that cannot be read fails alone. Inert until the
+    // `feed.rss` source row is enabled.
+    {
+      "name": "feed-sweep",
+      "binding": "FEED_SWEEP",
+      "class_name": "FeedSweepWorkflow",
+    },
     // The nightly snapshot backup (0509#5802): copies every object in
     // 0509-snapshots that 0509-snapshots-backup does not yet hold, one
     // retried step per page of up to 200 objects, preserving httpMetadata.
@@ -388,7 +399,7 @@
     // refresh.
     //
     // Also the Workflow starts: 01:00 mentions-sweep, 02:00 site-sweep, 02:30
-    // hiring-sweep, 05:00 snapshot-backup (0509#6289) and the hourly
+    // hiring-sweep, 02:45 feed-sweep, 05:00 snapshot-backup (0509#6289) and the hourly
     // own-site-check (0509#4124). The
     // Workflow-level `schedules` bind was skipped around redeploys (this Worker
     // deploys 20-90 times a day; snapshot-backup's never fired), so the
@@ -405,6 +416,7 @@
       "0 1 * * *",
       "0 2 * * *",
       "30 2 * * *",
+      "45 2 * * *",
       "0 3 * * *",
       "0 4 * * 1",
       "0 5 * * *",

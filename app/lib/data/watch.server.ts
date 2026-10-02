@@ -46,7 +46,7 @@ const SITE_SWEEP_TARGET_JOIN = `SELECT e.workspace_id AS workspace_id,
        p.transport AS transport,
        p.transport_tested_at AS transport_tested_at
 FROM watch w
-JOIN source src ON src.id = w.source_id AND src.is_enabled = 1
+JOIN source src ON src.id = w.source_id AND src.is_enabled = 1 AND src.platform <> 'feed'
 JOIN entity e ON e.id = w.entity_id AND e.state = 'on'
 JOIN page p ON p.entity_id = e.id AND p.url = w.target_key
 WHERE w.is_active = 1`;
@@ -263,6 +263,55 @@ export async function readHiringTargets(): Promise<readonly HiringTarget[]> {
   }));
 }
 
+const ENTITIES_WITHOUT_FEED_WATCH = `SELECT e.id AS id, e.domain AS domain
+FROM entity e
+JOIN source src ON src.key = 'feed.rss' AND src.is_enabled = 1
+WHERE e.state = 'on'
+  AND NOT EXISTS (SELECT 1 FROM watch w WHERE w.entity_id = e.id AND w.source_id = src.id AND w.is_active = 1)
+ORDER BY e.id`;
+
+const FEED_TARGETS = `SELECT e.workspace_id AS workspace_id, e.id AS entity_id, w.source_id AS source_id,
+       w.id AS watch_id, w.target_key AS feed_url
+FROM watch w
+JOIN source src ON src.id = w.source_id AND src.key = 'feed.rss' AND src.is_enabled = 1
+JOIN entity e ON e.id = w.entity_id AND e.state = 'on'
+WHERE w.is_active = 1
+ORDER BY e.workspace_id, e.id, w.id`;
+
+const feedTargetRows = z.array(
+  z.object({
+    workspace_id: z.string(),
+    entity_id: z.string(),
+    source_id: z.string(),
+    watch_id: z.string(),
+    feed_url: z.string(),
+  }),
+);
+
+export interface FeedTarget {
+  workspaceId: string;
+  entityId: string;
+  sourceId: string;
+  watchId: string;
+  feedUrl: string;
+}
+
+export async function readEntitiesWithoutFeedWatch(): Promise<readonly { id: string; domain: string }[]> {
+  const rows = await env.DB.prepare(ENTITIES_WITHOUT_FEED_WATCH).all();
+  return entityRows.parse(rows.results);
+}
+
+export async function readFeedTargets(): Promise<readonly FeedTarget[]> {
+  const rows = await env.DB.prepare(FEED_TARGETS).all();
+  return feedTargetRows.parse(rows.results).map((row) => ({
+    workspaceId: row.workspace_id,
+    entityId: row.entity_id,
+    sourceId: row.source_id,
+    watchId: row.watch_id,
+    feedUrl: row.feed_url,
+  }));
+}
+
 export async function deactivateWatch(watchId: string): Promise<void> {
   await env.DB.prepare(DEACTIVATE_WATCH).bind(watchId).run();
 }
@@ -368,7 +417,7 @@ const SITE_WATCH_SUMMARY = `SELECT COUNT(*) AS pages, MAX(w.last_polled_at) AS l
         AND NOT EXISTS (SELECT 1 FROM watch aw WHERE aw.entity_id = ?2 AND aw.is_active = 1 AND ${ALTERNATE_MARKER("aw")})) AS unreadable,
        (SELECT cw.target_key FROM watch cw JOIN entity ce ON ce.id = cw.entity_id AND ce.workspace_id = ?1 WHERE cw.entity_id = ?2 AND cw.is_active = 1 AND ${CUSTOMER_MARKER("cw")} LIMIT 1) AS customer_site
 FROM watch w
-JOIN source src ON src.id = w.source_id AND src.kind = 'site'
+JOIN source src ON src.id = w.source_id AND src.kind = 'site' AND src.platform <> 'feed'
 JOIN entity e ON e.id = w.entity_id AND e.workspace_id = ?1
 WHERE w.entity_id = ?2 AND w.is_active = 1`;
 
@@ -399,5 +448,9 @@ ORDER BY w.id`;
 
 export async function readEntityR2Prefixes(workspaceId: string, entityId: string): Promise<string[]> {
   const { results } = await env.DB.prepare(ENTITY_R2_PREFIXES).bind(workspaceId, entityId).all<{ id: string }>();
-  return results.flatMap((row) => [`snapshot/site/${row.id}/`, `snapshot/hiring/${row.id}/`]);
+  return results.flatMap((row) => [
+    `snapshot/site/${row.id}/`,
+    `snapshot/hiring/${row.id}/`,
+    `snapshot/feed/${row.id}/`,
+  ]);
 }

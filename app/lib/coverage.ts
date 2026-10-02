@@ -66,6 +66,12 @@ export const COVERAGE = [
     ],
   },
   {
+    kind: "Blog and changelog",
+    noun: "blog and changelog posts",
+    origin: "public RSS and Atom feeds",
+    sources: [{ id: "content.feed", label: "Blog and changelog feeds", live: false, sourceKey: "feed.rss" }],
+  },
+  {
     kind: "Your own site",
     sources: [{ id: "own.breakage", label: "Breakage alerts", live: true, plan: "starter", instant: true }],
   },

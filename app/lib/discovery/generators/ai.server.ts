@@ -8,9 +8,11 @@ import { GATEWAY_ID } from "../../jev/client.server";
 import { defaultFetchText } from "../fetch-text.server";
 import { type Candidate, type FetchText, type Generator, type Subject } from "../types";
 
-const MODEL = "@cf/meta/llama-3.3-70b-instruct-fp8-fast";
+export const MODEL = "@cf/meta/llama-3.3-70b-instruct-fp8-fast";
 
 const MAX_PROPOSALS = 10;
+
+const MAX_TOKENS = 1_500;
 
 const DOMAIN_TIMEOUT_MS = 5_000;
 
@@ -28,7 +30,7 @@ const EXCERPT = "Proposed by a language model reading the brand's own site; not 
 
 const REASON_MAX = 160;
 
-const RESPONSE_SCHEMA = {
+export const RESPONSE_SCHEMA = {
   type: "object",
   properties: {
     competitors: {
@@ -44,7 +46,7 @@ const RESPONSE_SCHEMA = {
   required: ["competitors"],
 } as const;
 
-const proposalSchema = z.object({
+export const proposalSchema = z.object({
   competitors: z.array(
     z.object({
       name: z.string().max(NAME_MAX),
@@ -94,7 +96,7 @@ async function siteTextOf(subject: Subject, fetchText: FetchText): Promise<SiteT
   return readSiteText(page.body.slice(0, HTML_LIMIT));
 }
 
-function messagesFor(subject: Subject, site: SiteText): { role: "system" | "user"; content: string }[] {
+export function messagesFor(subject: Subject, site: SiteText): { role: "system" | "user"; content: string }[] {
   return [
     {
       role: "system",
@@ -128,6 +130,7 @@ async function propose(subject: Subject, site: SiteText): Promise<Proposal[]> {
     MODEL,
     {
       messages: messagesFor(subject, site),
+      max_tokens: MAX_TOKENS,
       response_format: { type: "json_schema", json_schema: RESPONSE_SCHEMA },
     },
     { gateway: { id: GATEWAY_ID }, signal: AbortSignal.timeout(AI_TIMEOUT_MS) },
@@ -153,8 +156,8 @@ async function isLive(domain: string): Promise<boolean> {
     });
     await response.body?.cancel();
     return response.status !== 404 && response.status !== 410 && response.status < 500;
-  } catch {
-    return false;
+  } catch (error) {
+    return error instanceof DOMException && error.name === "TimeoutError";
   }
 }
 
