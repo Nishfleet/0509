@@ -35,6 +35,7 @@ test("a passkey registered on first sign-in signs in on its own @own-signin", as
   createdEmail = email;
 
   await signInWithMagicLink(page, email, token);
+  await page.goto("/app/settings");
 
   const watched = watchConsole(page);
 

@@ -8,7 +8,7 @@ vi.mock("../../app/lib/require-session.server", () => ({
   requireFreshSession: async () => ({ user: { id: "user-upgrade", email: "upgrade@example.com" } }),
 }));
 
-import { action } from "../../app/routes/app.upgrade";
+import { action, loader } from "../../app/routes/app.upgrade";
 
 async function seedOwner(): Promise<void> {
   await env.DB.prepare(
@@ -32,6 +32,13 @@ afterEach(() => {
 });
 
 describe("upgrade checkout (J13)", () => {
+  it("sends a plain visit to the upgrade link back to Settings", () => {
+    const result = loader();
+
+    expect(result.status).toBe(302);
+    expect(result.headers.get("Location")).toBe("/app/settings");
+  });
+
   it("creates a Dodo test-mode checkout session for the plan and redirects to its url", async () => {
     await seedOwner();
     const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(Response.json(checkoutSession, { status: 200 }));
