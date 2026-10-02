@@ -9,31 +9,43 @@ const RETRY: WorkflowStepConfig = {
   timeout: "5 minutes",
 };
 
-async function emptyPrefix(
-  step: WorkflowStep,
-  prefix: string,
-  progress: { page: number; total: number },
-): Promise<number> {
-  const { page, total } = progress;
-  const result = await step.do(`delete ${prefix} page ${String(page)}`, RETRY, () => deleteStoredPage(prefix));
-  const sum = total + result.deleted;
-  return result.more ? emptyPrefix(step, prefix, { page: page + 1, total: sum }) : sum;
+interface Progress {
+  page: number;
+  total: number;
+  cursor: string | null;
 }
 
-async function emptyBackupPrefix(step: WorkflowStep, prefix: string, page: number): Promise<void> {
-  const result = await step.do(`delete backup ${prefix} page ${String(page)}`, RETRY, () => deleteBackupPage(prefix));
-  if (result.more) await emptyBackupPrefix(step, prefix, page + 1);
+async function emptyPrefix(step: WorkflowStep, prefix: string, progress: Progress): Promise<number> {
+  const { page, total, cursor } = progress;
+  const result = await step.do(`delete ${prefix} page ${String(page)}`, RETRY, () => deleteStoredPage(prefix, cursor));
+  const sum = total + result.deleted;
+  return result.cursor === null
+    ? sum
+    : emptyPrefix(step, prefix, { page: page + 1, total: sum, cursor: result.cursor });
+}
+
+interface BackupProgress {
+  page: number;
+  cursor: string | null;
+}
+
+async function emptyBackupPrefix(step: WorkflowStep, prefix: string, progress: BackupProgress): Promise<void> {
+  const { page, cursor } = progress;
+  const result = await step.do(`delete backup ${prefix} page ${String(page)}`, RETRY, () =>
+    deleteBackupPage(prefix, cursor),
+  );
+  if (result.cursor !== null) await emptyBackupPrefix(step, prefix, { page: page + 1, cursor: result.cursor });
 }
 
 export class AccountDelete extends WorkflowEntrypoint<Env, AccountDeleteParams> {
   async run(event: WorkflowEvent<AccountDeleteParams>, step: WorkflowStep): Promise<{ deleted: number }> {
     const deleted = await event.payload.prefixes.reduce<Promise<number>>(
-      async (done, prefix) => emptyPrefix(step, prefix, { page: 0, total: await done }),
+      async (done, prefix) => emptyPrefix(step, prefix, { page: 0, total: await done, cursor: null }),
       Promise.resolve(0),
     );
     await event.payload.prefixes.reduce<Promise<void>>(async (done, prefix) => {
       await done;
-      await emptyBackupPrefix(step, prefix, 0);
+      await emptyBackupPrefix(step, prefix, { page: 0, cursor: null });
     }, Promise.resolve());
     return { deleted };
   }

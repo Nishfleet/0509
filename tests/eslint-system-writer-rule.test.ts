@@ -39,7 +39,7 @@ const NON_ROUTE_IMPORT = `import * as probe from "./data/watch.server";\nexport 
 
 // Scoped by import NAME, not by module: routes legitimately import other
 // names from these two modules, so a whole-module ban would break them.
-const MARK_DIGEST_SENT = `import { markDigestSent } from "../lib/data/digest.server";\nexport const probe = markDigestSent;\n`;
+const MARK_DIGEST_SENT = `import { markDigestSentStatement } from "../lib/data/digest.server";\nexport const probe = markDigestSentStatement;\n`;
 const MARK_DIGEST_FAILED = `import { markDigestFailed } from "../lib/data/digest.server";\nexport const probe = markDigestFailed;\n`;
 const DELETE_WORKSPACE = `import { deleteWorkspace } from "../lib/data/workspace.server";\nexport const probe = deleteWorkspace;\n`;
 const WORKSPACE_NAMESPACE = `import * as probe from "../lib/data/workspace.server";\nexport const probeKeys = Object.keys(probe);\n`;
@@ -98,7 +98,7 @@ describe("eslint unscoped system writer route rule (#4705/#5125)", () => {
     expect(result.messages.some((m) => m.includes(MARKER))).toBe(false);
   });
 
-  it("rejects a route importing markDigestSent by name", { timeout: 60_000 }, async () => {
+  it("rejects a route importing markDigestSentStatement by name", { timeout: 60_000 }, async () => {
     const result = await lintProbe("app/routes/probe-system-writer-tmp.tsx", MARK_DIGEST_SENT);
     expect(result.ignored).toBe(false);
     expect(result.messages.some((m) => m.includes(MARKER))).toBe(true);

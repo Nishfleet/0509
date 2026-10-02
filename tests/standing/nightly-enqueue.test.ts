@@ -50,6 +50,13 @@ function fakeDb(
 }
 
 describe("nightly standing enqueue (0509#5753)", () => {
+  it("selects only non-fixture workspaces (0509#5774)", async () => {
+    const { prepares, db } = fakeDb([], []);
+    await loadNightlyPlan(db, NOW);
+    const select = prepares.find((sql) => sql.includes("FROM entity"));
+    expect(select).toContain("w.fixture = 0");
+  });
+
   it("loads every due workspace with two queries and one createBatch, never per-workspace scoring", async () => {
     const count = 50;
     const rows = Array.from({ length: count }, (_, index) => scheduleRow(`ws_${String(index)}`));
