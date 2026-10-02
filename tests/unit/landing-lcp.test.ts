@@ -122,6 +122,9 @@ describe("static home LCP critical path", () => {
     const script = html.slice(scriptAt, html.indexOf("</script>", scriptAt));
     expect(script).toContain('addEventListener("load"');
     expect(script).toContain('faces.href = "/home-faces.css"');
+    // load alone races first paint: the faces must also wait for the
+    // first-contentful-paint entry or they land on the LCP path (0509#6432).
+    expect(script).toContain("first-contentful-paint");
     expect(faces).toContain("/fonts/bricolage-hero.woff2");
     expect(faces).toContain("/fonts/instrument-sans-latin.woff2");
     expect(faces).toContain("/fonts/ibm-plex-mono-latin-400.woff2");
