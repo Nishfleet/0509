@@ -1,4 +1,5 @@
 const DAY_MS = 86_400_000;
+const TRIAL_END_TOLERANCE_MS = 3_600_000;
 
 export function isTrialing(input: {
   createdAt: string | null | undefined;
@@ -9,5 +10,5 @@ export function isTrialing(input: {
   const created = Date.parse(input.createdAt ?? "");
   const next = Date.parse(input.nextBillingDate ?? "");
   if (Number.isNaN(created) || Number.isNaN(next)) return false;
-  return next <= created + input.trialDays * DAY_MS;
+  return next <= created + input.trialDays * DAY_MS + TRIAL_END_TOLERANCE_MS;
 }
