@@ -18,6 +18,19 @@ LIMIT 1`;
 
 const SELECT_OFF_ENTITIES = `SELECT id FROM entity WHERE workspace_id = ? AND state = 'off'`;
 
+async function offEntityIds(workspaceId: string): Promise<Set<string>> {
+  const off = await env.DB.prepare(SELECT_OFF_ENTITIES).bind(workspaceId).all<{ id: string }>();
+  return new Set(off.results.map((row) => row.id));
+}
+
+function hideOffBrands(payload: BriefPayload, hidden: Set<string>): BriefPayload {
+  return {
+    ...payload,
+    brands: payload.brands.filter((line) => !hidden.has(line.entity_id)),
+    read_this_first: payload.read_this_first.filter((mark) => !hidden.has(mark.entity_id)),
+  };
+}
+
 function briefReadFirst(payload: BriefPayload): NonNullable<BriefResult["brief"]>["readThisFirst"] {
   return payload.read_this_first.map((mark) => ({
     competitor: mark.entity_name,
@@ -83,9 +96,12 @@ function toBrief(payload: BriefPayload): NonNullable<BriefResult["brief"]> {
 }
 
 export async function readAgentBrief(workspaceId: string): Promise<BriefResult> {
-  const row = await env.DB.prepare(SELECT_LATEST_BRIEF).bind(workspaceId).first<{ payload_json: string }>();
+  const [row, hidden] = await Promise.all([
+    env.DB.prepare(SELECT_LATEST_BRIEF).bind(workspaceId).first<{ payload_json: string }>(),
+    offEntityIds(workspaceId),
+  ]);
   const payload = row === null ? null : readBriefPayload(row.payload_json);
-  return { brief: payload === null ? null : toBrief(payload) };
+  return { brief: payload === null ? null : toBrief(hideOffBrands(payload, hidden)) };
 }
 
 export async function readAgentCompetitors(workspaceId: string): Promise<CompetitorsResult> {
@@ -97,13 +113,9 @@ export async function readAgentCompetitors(workspaceId: string): Promise<Competi
 }
 
 export async function readAgentStanding(workspaceId: string): Promise<StandingResult> {
-  const [{ brief }, off] = await Promise.all([
-    readAgentBrief(workspaceId),
-    env.DB.prepare(SELECT_OFF_ENTITIES).bind(workspaceId).all<{ id: string }>(),
-  ]);
+  const { brief } = await readAgentBrief(workspaceId);
   if (brief === null) return { standing: null };
-  const hidden = new Set(off.results.map((row) => row.id));
-  return { standing: { ...brief.headline, lines: brief.standing.filter((line) => !hidden.has(line.competitorId)) } };
+  return { standing: { ...brief.headline, lines: brief.standing } };
 }
 
 function changeBody(change: SiteChangeView): string {
