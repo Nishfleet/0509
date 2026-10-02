@@ -119,4 +119,31 @@ describe("a competitor's pricing page", () => {
     await classifyCompetitorSites("2026-10-06T02:00:00Z");
     expect(homeFetches.mock.calls.length).toBeGreaterThan(first);
   });
+
+  it("judges at most 40 navigation links and watches at most 3 pricing pages for one brand", async () => {
+    const links = Array.from(
+      { length: 60 },
+      (_, index) => `<a href="/plans-${String(index)}">Plan ${String(index)}</a>`,
+    );
+    const html = `<html><head><title>Rival</title></head><body><nav>${links.join("")}</nav>
+<main><p>${"We make training clothes for people who train hard and rest harder. ".repeat(6)}</p></main></body></html>`;
+    vi.stubGlobal("fetch", (input: RequestInfo | URL) => {
+      const url = input instanceof Request ? input.url : String(input);
+      if (url === HOME)
+        return Promise.resolve(new Response(html, { status: 200, headers: { "content-type": "text/html" } }));
+      return Promise.resolve(new Response("", { status: 404 }));
+    });
+    const run = vi.fn((_model: string, request: { questions: Record<string, { type: string }> }) =>
+      Promise.resolve({
+        answers: { page_role: { type: request.questions["page_role"]?.type ?? "choice", choice: "pricing" } },
+      }),
+    );
+    Reflect.set(env, "AI", { run });
+
+    await classifyCompetitorSites(NOW);
+    await planSiteSweep(NOW);
+
+    expect(run.mock.calls.length).toBeLessThanOrEqual(40);
+    expect((await pricingWatches()).filter((target) => target !== HOME)).toHaveLength(3);
+  });
 });

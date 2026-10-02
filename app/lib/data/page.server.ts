@@ -118,17 +118,24 @@ export async function readCompetitorsToClassify(limit: number, now: string): Pro
   }));
 }
 
-const UNWATCHED_PRICING_PAGES = `SELECT p.entity_id AS entity_id, p.url AS url
-FROM page p
-JOIN entity e ON e.id = p.entity_id AND e.state = 'on'
-WHERE p.role = 'pricing' AND p.role_decided_for_hash IS NOT NULL
-  AND NOT EXISTS (SELECT 1 FROM watch w WHERE w.entity_id = p.entity_id AND w.source_id = ?1 AND w.target_key = p.url)
-ORDER BY p.entity_id, p.url`;
+const PRICING_PAGES_WATCHED = 3;
+
+const UNWATCHED_PRICING_PAGES = `SELECT r.entity_id AS entity_id, r.url AS url
+FROM (
+  SELECT p.entity_id AS entity_id, p.url AS url,
+         ROW_NUMBER() OVER (PARTITION BY p.entity_id ORDER BY p.rowid) AS position
+  FROM page p
+  JOIN entity e ON e.id = p.entity_id AND e.state = 'on'
+  WHERE p.role = 'pricing' AND p.role_decided_for_hash IS NOT NULL
+) r
+WHERE r.position <= ?2
+  AND NOT EXISTS (SELECT 1 FROM watch w WHERE w.entity_id = r.entity_id AND w.source_id = ?1 AND w.target_key = r.url)
+ORDER BY r.entity_id, r.url`;
 
 const pricingPageRows = z.array(z.object({ entity_id: z.string(), url: z.string() }));
 
 export async function readUnwatchedPricingPages(sourceId: string): Promise<{ entityId: string; url: string }[]> {
-  const rows = await env.DB.prepare(UNWATCHED_PRICING_PAGES).bind(sourceId).all();
+  const rows = await env.DB.prepare(UNWATCHED_PRICING_PAGES).bind(sourceId, PRICING_PAGES_WATCHED).all();
   return pricingPageRows.parse(rows.results).map((row) => ({ entityId: row.entity_id, url: row.url }));
 }
 

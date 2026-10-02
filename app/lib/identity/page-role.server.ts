@@ -5,6 +5,8 @@ import { readPageHashes, upsertJudgedPages, type JudgedPage } from "../data/page
 import { askChoice, type ChoiceQuestion } from "../jev/client.server";
 import { sha256Hex } from "../sha256";
 
+const NAV_PAGES_JUDGED = 40;
+
 export interface NavPage {
   url: string;
   title: string;
@@ -48,7 +50,9 @@ export async function classifyNavPages({
   now,
 }: ClassifyNavPagesInput): Promise<readonly JudgedPage[]> {
   const hashes = await readPageHashes(entity.id);
-  const targets = await Promise.all(pages.map(async (page) => ({ page, hash: await pageHash(page) })));
+  const targets = await Promise.all(
+    pages.slice(0, NAV_PAGES_JUDGED).map(async (page) => ({ page, hash: await pageHash(page) })),
+  );
   const stale = targets.filter((target) => hashes.get(target.page.url) !== target.hash);
   if (stale.length === 0) return [];
 
