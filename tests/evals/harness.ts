@@ -176,16 +176,25 @@ function unwrapJev(value: unknown): JevResponse {
   return (inner ?? value) as JevResponse;
 }
 
+async function withOneRetry<T>(call: () => Promise<T>): Promise<T> {
+  try {
+    return await call();
+  } catch (error) {
+    if (!String(error).includes("Network connection lost")) throw error;
+    return call();
+  }
+}
+
 function spendCall(): void {
   if (callsUsed >= callBudget) throw new Error(`eval stopped: call budget of ${String(callBudget)} spent`);
   callsUsed += 1;
 }
 
 export async function postWorkersAi(model: string, body: unknown): Promise<unknown> {
-  spendCall();
-  const ai = await aiBinding();
-  return ai.run(model as never, body as never, {
-    gateway: { id: GATEWAY_ID },
+  return withOneRetry(async () => {
+    spendCall();
+    const ai = await aiBinding();
+    return ai.run(model as never, body as never, { gateway: { id: GATEWAY_ID } });
   });
 }
 
