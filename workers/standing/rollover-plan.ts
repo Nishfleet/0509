@@ -15,7 +15,7 @@ const UNRANKED_LOOKBACK_MS = 16 * 24 * 60 * 60 * 1000;
 const WORKSPACE_SCHEDULES = `SELECT DISTINCT w.id, w.timezone, w.brief_weekday, w.brief_hour, w.brief_paused_at
 FROM entity e
 INNER JOIN workspace w ON w.id = e.workspace_id
-WHERE e.role = 'self' AND e.state = 'on'
+WHERE e.role = 'self' AND e.state = 'on' AND w.fixture = 0
 ORDER BY w.id`;
 
 const WORKSPACE_SCHEDULE = `SELECT id, timezone, brief_weekday, brief_hour, brief_paused_at FROM workspace WHERE id = ?1`;
