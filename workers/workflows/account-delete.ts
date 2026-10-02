@@ -24,13 +24,17 @@ async function emptyPrefix(step: WorkflowStep, prefix: string, progress: Progres
     : emptyPrefix(step, prefix, { page: page + 1, total: sum, cursor: result.cursor });
 }
 
-async function emptyBackupPrefix(step: WorkflowStep, prefix: string, progress: Progress): Promise<void> {
+interface BackupProgress {
+  page: number;
+  cursor: string | null;
+}
+
+async function emptyBackupPrefix(step: WorkflowStep, prefix: string, progress: BackupProgress): Promise<void> {
   const { page, cursor } = progress;
   const result = await step.do(`delete backup ${prefix} page ${String(page)}`, RETRY, () =>
     deleteBackupPage(prefix, cursor),
   );
-  if (result.cursor !== null)
-    await emptyBackupPrefix(step, prefix, { page: page + 1, total: 0, cursor: result.cursor });
+  if (result.cursor !== null) await emptyBackupPrefix(step, prefix, { page: page + 1, cursor: result.cursor });
 }
 
 export class AccountDelete extends WorkflowEntrypoint<Env, AccountDeleteParams> {
@@ -41,7 +45,7 @@ export class AccountDelete extends WorkflowEntrypoint<Env, AccountDeleteParams> 
     );
     await event.payload.prefixes.reduce<Promise<void>>(async (done, prefix) => {
       await done;
-      await emptyBackupPrefix(step, prefix, { page: 0, total: 0, cursor: null });
+      await emptyBackupPrefix(step, prefix, { page: 0, cursor: null });
     }, Promise.resolve());
     return { deleted };
   }

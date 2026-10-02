@@ -75,6 +75,8 @@ const count = async (sql: string, ...values: unknown[]) =>
 describe("delete my account", () => {
   beforeEach(async () => {
     links.length = 0;
+    await env.DB.exec("DROP TRIGGER IF EXISTS delete_probe_trigger");
+    await env.DB.exec("DROP TABLE IF EXISTS delete_probe");
     await env.DB.exec("DELETE FROM email_suppression");
     await env.DB.exec("DELETE FROM apikey");
     await env.DB.exec("DELETE FROM verification");
@@ -127,6 +129,11 @@ describe("delete my account", () => {
     expect(await count("SELECT COUNT(*) AS n FROM apikey WHERE referenceId = ?", userId)).toBe(0);
     expect(await count("SELECT COUNT(*) AS n FROM workspace WHERE id = ?", workspaceId)).toBe(0);
     expect(await count("SELECT COUNT(*) AS n FROM entity WHERE workspace_id = ?", workspaceId)).toBe(0);
+    expect((await env.DB.prepare("SELECT suppressed, digest_status FROM delete_probe").all()).results).toEqual([
+      { suppressed: 1, digest_status: "cancelled" },
+    ]);
+    expect(await count("SELECT COUNT(*) AS n FROM email_suppression WHERE address = 'to@0509.io'")).toBe(1);
+    expect(await count("SELECT COUNT(*) AS n FROM email_suppression WHERE address = ?", ADDRESS)).toBe(1);
   });
 
   it("pages the stored files with a cursor and the Workflow deletes every page", async () => {
@@ -146,10 +153,20 @@ describe("delete my account", () => {
     await Promise.all(keys.map((key) => env.SNAPSHOTS.put(key, "x")));
     const id = "account-delete-pages";
     await using introspector = await introspectWorkflowInstance(env.ACCOUNT_DELETE, id);
+    await introspector.modify(async (modifier) => {
+      await modifier.disableRetryDelays();
+      await modifier.mockStepError({ name: "delete snapshot/site/watch-big/ page 1" }, new Error("R2 interrupted"), 1);
+    });
     await env.ACCOUNT_DELETE.create({ id, params: { prefixes: ["snapshot/site/watch-big/"] } });
     await introspector.waitForStatus("complete");
 
     expect(await introspector.getOutput()).toEqual({ deleted: 1005 });
+    const pageZero = await introspector.waitForStepResult({ name: "delete snapshot/site/watch-big/ page 0" });
+    expect(pageZero).toMatchObject({ deleted: 1000, cursor: expect.any(String) });
+    expect(await introspector.waitForStepResult({ name: "delete snapshot/site/watch-big/ page 1" })).toEqual({
+      deleted: 5,
+      cursor: null,
+    });
     expect((await env.SNAPSHOTS.list({ prefix: "snapshot/site/watch-big/" })).objects).toHaveLength(0);
   });
 

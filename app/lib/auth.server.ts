@@ -141,7 +141,10 @@ export function createAuth(env: AuthEnv, options?: { captcha?: boolean; validate
       cookieCache: { enabled: true, maxAge: SESSION_COOKIE_CACHE_SECONDS },
     },
     user: {
-      deleteUser: { enabled: true },
+      deleteUser: {
+        enabled: true,
+        beforeDelete: ({ id }) => silenceWorkspace(env.DB, id),
+      },
       changeEmail: {
         enabled: true,
         updateEmailWithoutVerification: false,
@@ -196,7 +199,6 @@ export async function deleteSignedInUser(env: AuthEnv, request: Request, now: Da
   if (!session) return null;
   const age = now.getTime() - new Date(session.session.createdAt).getTime();
   if (age >= FRESH_SESSION_SECONDS * 1000) return null;
-  await silenceWorkspace(env.DB, session.user.id);
   const { apiKeys } = await auth.api.listApiKeys({ headers: request.headers });
   await Promise.all(
     apiKeys.map((key) => auth.api.deleteApiKey({ body: { keyId: key.id }, headers: request.headers, query: FRESH })),
