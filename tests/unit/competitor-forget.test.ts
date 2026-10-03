@@ -39,8 +39,10 @@ function isDisabled(button: string): boolean {
 }
 
 function confirmInput(html: string): string {
-  const start = html.lastIndexOf("<input", html.indexOf('id="confirm-name"'));
-  return html.slice(start, html.indexOf(">", start));
+  const inputs = html.match(/<input\b[^>]*>/g) ?? [];
+  const found = inputs.find((tag) => tag.includes('id="confirm-name"'));
+  if (found === undefined) throw new Error("no confirm-name input in the rendered form");
+  return found;
 }
 
 describe("CompetitorForget", () => {
@@ -77,9 +79,6 @@ describe("CompetitorForget", () => {
   });
 
   it("asks the keyboard not to autocorrect or spell-check the name you type", () => {
-    // React 19 renders these props verbatim (camelCase) in static markup, so assert
-    // the exact string it writes; the HTML parser lowercases the attribute names
-    // when a phone loads the page, which is what turns autocorrect off.
     const input = confirmInput(render());
     expect(input).toContain('autoCapitalize="none"');
     expect(input).toContain('autoCorrect="off"');
