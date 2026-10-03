@@ -241,6 +241,8 @@ describe("AgentKeys", () => {
     expect(makeKey).toContain("Make a key");
     expect(makeKey).not.toContain("Making…");
     expect(makeKey).not.toContain('disabled=""');
+    const keyName = html.match(/<input\b[^>]*id="key-name"[^>]*>/)?.[0] ?? "";
+    expect(keyName).toContain('autoComplete="off"');
   });
 
   it("disables the Make a key button and labels it Making… while the create-key submit is in flight", () => {
