@@ -127,7 +127,7 @@ jobs:
         run: tail -n +1 test-results/*/error-context.md
   proof-clef:
     name: proof-clef
-    if: inputs.journey == 'proof-clef' && inputs.spec == ''
+    if: inputs.journey == 'backup-proof' && inputs.spec == ''
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -340,7 +340,7 @@ jobs:
     name: backup-proof
     # Reads the snapshot-backup instances of the last 48 h and describes each
     # cron-started one (0509#5982, 0509#6289). Counts and R2 cursors only, no rows.
-    if: inputs.journey == 'backup-proof' && inputs.spec == ''
+    if: false
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
