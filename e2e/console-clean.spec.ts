@@ -2,7 +2,13 @@ import { expect, test } from "@playwright/test";
 import type { RouteConfigEntry } from "@react-router/dev/routes";
 import routes from "../app/routes";
 
-import { consoleFailures, ownDocument404For, watchConsole, type ConsoleEntry } from "./inbox";
+import {
+  consoleFailures,
+  ownDocument404For,
+  prefetchRefused503,
+  watchConsole,
+  type ConsoleEntry,
+} from "./inbox";
 
 function screenPaths(entries: RouteConfigEntry[], parent: string): string[] {
   const paths: string[] = [];
@@ -76,4 +82,74 @@ test.fail("the collector catches a deliberate page error @smoke", async ({ page 
   });
   await caught;
   expect(await consoleFailures(page, watched, testInfo)).toEqual([]);
+});
+
+const PREFETCH_REFUSED = "prefetch refused: disabled for worker requests";
+
+test("the collector drops a Cloudflare prefetch-refused 503 @smoke", async ({ page }, testInfo) => {
+  const watched = watchConsole(page);
+  await page.route("**/prefetch-refused.data", (route) =>
+    route.fulfill({
+      status: 503,
+      headers: { "cf-speculation-refused": PREFETCH_REFUSED },
+      body: "",
+    }),
+  );
+  await page.goto("/");
+  await expect(page.locator("main")).toBeVisible();
+  const caught = page.waitForEvent("console", {
+    predicate: (message) => message.type() === "error" && /status of 503\b/.test(message.text()),
+  });
+  await page.evaluate(
+    () =>
+      new Promise<void>((resolve) => {
+        const script = document.createElement("script");
+        script.src = "/prefetch-refused.data";
+        script.onload = () => {
+          resolve();
+        };
+        script.onerror = () => {
+          resolve();
+        };
+        document.head.appendChild(script);
+      }),
+  );
+  await caught;
+  expect(watched.prefetchRefused.some((url) => url.endsWith("/prefetch-refused.data"))).toBe(true);
+  expect(watched.consoleErrors.filter(prefetchRefused503(watched.prefetchRefused))).not.toHaveLength(0);
+  expect(await consoleFailures(page, watched, testInfo)).toEqual([]);
+});
+
+test("the collector still fails a same-origin 503 that is not prefetch-refused @smoke", async ({
+  page,
+}, testInfo) => {
+  const watched = watchConsole(page);
+  await page.route("**/plain-503.data", (route) =>
+    route.fulfill({
+      status: 503,
+      body: "",
+    }),
+  );
+  await page.goto("/");
+  await expect(page.locator("main")).toBeVisible();
+  const caught = page.waitForEvent("console", {
+    predicate: (message) => message.type() === "error" && /status of 503\b/.test(message.text()),
+  });
+  await page.evaluate(
+    () =>
+      new Promise<void>((resolve) => {
+        const script = document.createElement("script");
+        script.src = "/plain-503.data";
+        script.onload = () => {
+          resolve();
+        };
+        script.onerror = () => {
+          resolve();
+        };
+        document.head.appendChild(script);
+      }),
+  );
+  await caught;
+  const failures = await consoleFailures(page, watched, testInfo);
+  expect(failures.some((line) => /status of 503\b/.test(line) && line.includes("/plain-503.data"))).toBe(true);
 });
