@@ -154,8 +154,12 @@ function keyDetail(key: AgentKey): string {
   return [
     `Created ${day(key.createdAt)}`,
     key.lastUsedAt === null ? "never used" : `last used ${day(key.lastUsedAt)}`,
-    ...(key.rateLimitMax === null ? [] : [`up to ${String(key.rateLimitMax)} requests a minute`]),
-    ...(key.remaining === null ? [] : [`${String(key.remaining)} requests left`]),
+    ...(key.rateLimitMax === null
+      ? []
+      : [`up to ${String(key.rateLimitMax)} ${key.rateLimitMax === 1 ? "request" : "requests"} a minute`]),
+    ...(key.remaining === null
+      ? []
+      : [`${String(key.remaining)} ${key.remaining === 1 ? "request" : "requests"} left`]),
   ].join(" · ");
 }
 
