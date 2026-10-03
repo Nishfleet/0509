@@ -135,6 +135,22 @@ describe("biggestMoveView", () => {
     expect(view.when).toBe("2 days ago");
   });
 
+  it("says point, not points, for a one-point move", () => {
+    const onePoint = biggestMoveView(
+      {
+        ...move,
+        signal: signal({ id: "sig-mention", bucket: "mention_normal", reliability: "official_api" }),
+        weight: 1,
+        multiplier: 1,
+        points: 1,
+      },
+      now,
+    );
+
+    expect(onePoint.read).toBe("Mentions: 1 × 1 = 1 point, the most of anything this brand did this week.");
+    expect(onePoint.read).not.toContain("1 points");
+  });
+
   it("falls back to the summary, then to the source label, for the title", () => {
     expect(biggestMoveView(move, now).title).toBe("Fresh copy on the winter sale");
     expect(biggestMoveView({ ...move, signal: { ...move.signal, summary: null } }, now).title).toBe("Ad library");

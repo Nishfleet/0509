@@ -32,7 +32,7 @@ test("every watched brand's page leads with its biggest move or the quiet-week s
     const quiet = slab.getByText(/^Nothing worth scoring for this competitor in the last 7 days\./);
     const kind = (await read.count()) === 1 ? "move" : "quiet";
     if (kind === "move") {
-      await expect(read).toContainText(/\d+ × \d+ = \d+ points, the most of anything this brand did this week\.$/);
+      await expect(read).toContainText(/\d+ × \d+ = \d+ point(s)?, the most of anything this brand did this week\.$/);
       await expect(quiet).toHaveCount(0);
     } else {
       await expect(quiet).toBeVisible();
