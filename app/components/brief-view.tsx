@@ -57,6 +57,7 @@ function ownSiteBlock(payload: BriefPayload): ReactElement {
   const fine = payload.own_site.status === "ok";
   return (
     <section data-brief-block="own-site" className={SECTION}>
+      <h3 className={HEAD}>Your site</h3>
       {fine ? (
         <p className={BODY}>Your site looks fine.</p>
       ) : (
