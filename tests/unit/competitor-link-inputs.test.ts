@@ -6,13 +6,21 @@ import { describe, expect, it } from "vitest";
 import { CompetitorSite } from "../../app/components/competitor-site";
 import { CompetitorYoutube } from "../../app/components/competitor-youtube";
 
-// CompetitorSite and CompetitorYoutube are address fields. On a phone their
-// native keyboard otherwise capitalises the first letter, autocorrects the
-// handle in a YouTube link, and shows "return" on a field that submits on
-// Enter, so the rendered <Input> must carry the full set of mobile hints the
-// sibling inputs (app/components/one-input.tsx, app/components/competitor-maybes.tsx)
-// already use.
+// Both are address fields, so a phone keyboard would otherwise capitalise the
+// first letter of the domain and autocorrect the handle of a YouTube link. The
+// sibling address inputs already carry the four hints
+// (app/components/one-input.tsx:33-36, app/components/competitor-maybes.tsx:97-100).
+// renderToStaticMarkup writes React's camelCase prop names into the markup, so
+// the hints are asserted as spellCheck/enterKeyHint, the way tests/unit/
+// one-input.test.ts asserts them for the sibling input.
 const NEVER = () => new Promise(() => undefined);
+
+const HINTS = [
+  'autoCapitalize="none"',
+  'autoCorrect="off"',
+  'spellCheck="false"',
+  'enterKeyHint="go"',
+];
 
 function render(element: ReactElement): string {
   const router = createMemoryRouter(
@@ -32,18 +40,8 @@ function input(html: string, id: string): string {
   return found;
 }
 
-// renderToStaticMarkup writes React's camelCase prop names into the markup,
-// so the hints are asserted as spellCheck/enterKeyHint, the way tests/unit/
-// one-input.test.ts asserts them for the sibling input.
-const HINTS = [
-  'autoCapitalize="none"',
-  'autoCorrect="off"',
-  'spellCheck="false"',
-  'enterKeyHint="go"',
-];
-
-describe("CompetitorSite mobile keyboard hints", () => {
-  it("adds the full set of phone hints to the website input", () => {
+describe("the competitor address fields carry the mobile keyboard hints", () => {
+  it("hints the another-website input", () => {
     const html = render(createElement(CompetitorSite, { url: null, error: null }));
     const field = input(html, "competitor-site-url");
     for (const hint of HINTS) {
@@ -51,28 +49,8 @@ describe("CompetitorSite mobile keyboard hints", () => {
     }
   });
 
-  it("keeps the hints present even when there is an error", () => {
-    const html = render(createElement(CompetitorSite, { url: null, error: "bad" }));
-    const field = input(html, "competitor-site-url");
-    for (const hint of HINTS) {
-      expect(field).toContain(hint);
-    }
-  });
-});
-
-describe("CompetitorYoutube mobile keyboard hints", () => {
-  it("adds the full set of phone hints to the channel link input", () => {
-    const html = render(
-      createElement(CompetitorYoutube, { url: null, error: null }),
-    );
-    const field = input(html, "competitor-youtube-url");
-    for (const hint of HINTS) {
-      expect(field).toContain(hint);
-    }
-  });
-
-  it("keeps the hints present even when there is an error", () => {
-    const html = render(createElement(CompetitorYoutube, { url: null, error: "bad" }));
+  it("hints the YouTube channel input", () => {
+    const html = render(createElement(CompetitorYoutube, { url: null, error: null }));
     const field = input(html, "competitor-youtube-url");
     for (const hint of HINTS) {
       expect(field).toContain(hint);
