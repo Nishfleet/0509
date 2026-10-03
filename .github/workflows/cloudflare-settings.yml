@@ -47,8 +47,8 @@ jobs:
         run: |
           for name in support brief; do
             id=$(npx --yes "$WRANGLER" email routing rules list 0509.io | awk -v m="Matchers: to:$name@0509.io" '/^Rule:/ {id=$2} $0 ~ m"$" {print id}')
-            if [ -n "$id" ]; then verb="update 0509.io $id"; else verb="create 0509.io"; fi
-            npx --yes "$WRANGLER" email routing rules $verb --name "$name" \
+            if [ -n "$id" ]; then verb=(update 0509.io "$id"); else verb=(create 0509.io); fi
+            npx --yes "$WRANGLER" email routing rules "${verb[@]}" --name "$name" \
               --match-type literal --match-field to --match-value "$name@0509.io" \
               --action-type worker --action-value 0509-support-inbox-v2
           done
