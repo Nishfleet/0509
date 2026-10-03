@@ -20,7 +20,7 @@ function shot(overrides: Partial<Parameters<typeof ShotImage>[0]> = {}): string 
 describe("ShotImage", () => {
   it("renders one img with the given src, size, class and async decode", () => {
     const html = shot();
-    expect(html.match(/<img\b/g)).toHaveLength(1);
+    expect(html.match(/<img\b/g) ?? []).toHaveLength(1);
     expect(html).toContain('alt=""');
     expect(html).toContain('decoding="async"');
     expect(html).toContain('src="/after.png?w=208"');
@@ -52,7 +52,7 @@ describe("ShotImage", () => {
 describe("MissingShot", () => {
   it("renders the reason in a span that carries the capture-missing slot", () => {
     const html = renderToStaticMarkup(createElement(MissingShot, { text: "Capture failed: timeout" }));
-    expect(html.match(/<span\b/g)).toHaveLength(1);
+    expect(html.match(/<span\b/g) ?? []).toHaveLength(1);
     expect(html).toContain('data-slot="capture-missing"');
     expect(html).toContain("Capture failed: timeout");
   });
