@@ -16,6 +16,10 @@ describe("BrandChip refuses a name or an href it cannot show", () => {
   it("renders nothing for an href that is not a safe web address", () => {
     expect(BrandChip({ name: "On", href: "javascript:alert(1)" })).toBeNull();
     expect(BrandChip({ name: "On", href: "//evil.example" })).toBeNull();
+    expect(BrandChip({ name: "On", href: "data:text/html,<script>alert(1)</script>" })).toBeNull();
+    expect(BrandChip({ name: "On", href: "JaVaScRiPt:alert(1)" })).toBeNull();
+    expect(BrandChip({ name: "On", href: "  javascript:alert(1)  " })).toBeNull();
+    expect(BrandChip({ name: "On", href: "vbscript:msgbox(1)" })).toBeNull();
   });
 });
 
@@ -23,8 +27,8 @@ describe("BrandChip anchors an https href without leaking the opener", () => {
   it("renders the brand name and adds rel=noreferrer", () => {
     const html = chip({ name: "On", href: "https://a.example" });
     expect(html).toContain('href="https://a.example/"');
-    expect(html).toContain('rel="noreferrer"');
-    expect(html).toContain("On");
+    expect(html).toMatch(/rel="[^"]*noreferrer/);
+    expect(html).toContain(">On</span>");
   });
 });
 
@@ -43,11 +47,17 @@ describe("BrandChip names the flags it was given", () => {
 });
 
 describe("BrandChip only loads a logo from this site", () => {
+  it("renders a logo served from this site", () => {
+    expect(chip({ name: "On", href: "https://a.example", logoUrl: "/brands/on.png" })).toContain(
+      'src="/brands/on.png"',
+    );
+  });
+
   it("drops a logo served from another origin and keeps the monogram", () => {
     const html = chip({ name: "On", href: "https://a.example", logoUrl: "https://cdn.example/x.png" });
     expect(html).not.toContain("<img");
     expect(html).not.toContain("cdn.example");
-    expect(html).toContain(">O<");
+    expect(html).toContain(">O</span>");
   });
 });
 
@@ -56,6 +66,7 @@ describe("BrandChipRow shows the add link only when it has somewhere to go", () 
     const html = renderToStaticMarkup(
       createElement(BrandChipRow, { brands: [{ name: "On", href: "https://a.example/on" }] }),
     );
+    expect(html).toContain(">On</span>");
     expect(html).not.toContain("+ Add a competitor");
   });
 
