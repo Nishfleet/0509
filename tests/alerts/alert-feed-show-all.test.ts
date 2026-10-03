@@ -53,7 +53,9 @@ describe("alert feed reveal button", () => {
     expect(html).toMatch(
       /<button[^>]*data-testid="mentions-show-all"[^>]*aria-expanded="false"[^>]*>\s*Show all, including \d+ we think (?:do|does) not matter\s*<\/button>/,
     );
-    expect(html).not.toMatch(/<button[^>]*data-testid="mentions-show-all"[^>]*>\s*Hide the \d+ we think (?:do|does) not matter/);
+    expect(html).not.toMatch(
+      /<button[^>]*data-testid="mentions-show-all"[^>]*>\s*Hide the \d+ we think (?:do|does) not matter/,
+    );
   });
 
   it("renders no reveal button when nothing is held", () => {

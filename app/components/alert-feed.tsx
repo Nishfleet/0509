@@ -36,9 +36,13 @@ export function AlertFeed({ groups }: { groups: { group: string; items: AlertFee
           }}
         >
           {showAll ? (
-            <>Hide the {hidden} we think {hidden === 1 ? "does not matter" : "do not matter"}</>
+            <>
+              Hide the {hidden} we think {hidden === 1 ? "does not matter" : "do not matter"}
+            </>
           ) : (
-            <>Show all, including {hidden} we think {hidden === 1 ? "does not matter" : "do not matter"}</>
+            <>
+              Show all, including {hidden} we think {hidden === 1 ? "does not matter" : "do not matter"}
+            </>
           )}
         </button>
       ) : null}
