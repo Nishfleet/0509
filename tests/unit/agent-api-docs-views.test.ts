@@ -7,8 +7,11 @@ describe("endpointViews", () => {
     expect(() => endpointViews({})).toThrow("OpenAPI document has no paths");
   });
 
-  it("throws when a path value is not an object or has no operation", () => {
+  it("throws when a path value is not an object", () => {
     expect(() => endpointViews({ paths: { "/x": 1 } })).toThrow("OpenAPI path /x is not an object");
+  });
+
+  it("throws when a path has no operation", () => {
     expect(() => endpointViews({ paths: { "/x": {} } })).toThrow("OpenAPI path /x has no operation");
   });
 
@@ -66,10 +69,39 @@ describe("endpointViews", () => {
     ]);
   });
 
-  it("throws when a parameter has no name or a response has no description", () => {
+  it("keeps shared and operation parameters even when they share a name", () => {
+    expect(
+      endpointViews({
+        paths: {
+          "/x": {
+            parameters: [{ name: "id", in: "query", schema: { type: "string" } }],
+            get: {
+              parameters: [{ name: "id", in: "query", schema: { type: "number" } }],
+            },
+          },
+        },
+      }),
+    ).toEqual([
+      {
+        path: "/x",
+        method: "get",
+        summary: "/x",
+        parameters: [
+          { name: "id", where: "query", required: false, type: "string", description: "" },
+          { name: "id", where: "query", required: false, type: "number", description: "" },
+        ],
+        responses: [],
+      },
+    ]);
+  });
+
+  it("throws when a parameter has no name", () => {
     expect(() => endpointViews({ paths: { "/x": { get: { parameters: [{}] } } } })).toThrow(
       "OpenAPI parameter is missing a name",
     );
+  });
+
+  it("throws when a response has no description", () => {
     expect(() => endpointViews({ paths: { "/x": { get: { responses: { "200": {} } } } } })).toThrow(
       "OpenAPI response 200 is missing a description",
     );
@@ -85,7 +117,7 @@ describe("endpointViews", () => {
 });
 
 describe("schemaViews", () => {
-  it("returns no views without schemas, and skips $ref schemas", () => {
+  it("returns no views without schemas, and empty fields for a whole-schema $ref", () => {
     expect(schemaViews({})).toEqual([]);
     expect(
       schemaViews({
@@ -134,11 +166,34 @@ describe("schemaViews", () => {
       },
     ]);
   });
+
+  it("labels a property $ref, an items $ref, a missing properties key, and a null field", () => {
+    expect(
+      schemaViews({
+        components: {
+          schemas: {
+            WithRef: { properties: { n: { $ref: "#/components/schemas/Err" } } },
+            WithList: { properties: { xs: { type: "array", items: { $ref: "#/components/schemas/Err" } } } },
+            NoProps: { type: "string" },
+            NullField: { properties: { n: null } },
+          },
+        },
+      }),
+    ).toEqual([
+      { name: "WithRef", fields: [{ name: "n", type: "Err", description: "" }] },
+      { name: "WithList", fields: [{ name: "xs", type: "Err list", description: "" }] },
+      { name: "NoProps", fields: [] },
+      { name: "NullField", fields: [{ name: "n", type: "value", description: "" }] },
+    ]);
+  });
 });
 
 describe("bearerCopy", () => {
   it("throws without a bearer scheme, and returns the description otherwise", () => {
     expect(() => bearerCopy({})).toThrow("OpenAPI document is missing the bearer security scheme");
+    expect(() => bearerCopy({ components: { securitySchemes: { apiKey: { scheme: "basic" } } } })).toThrow(
+      "OpenAPI document is missing the bearer security scheme",
+    );
     expect(bearerCopy({ components: { securitySchemes: { apiKey: { scheme: "bearer" } } } })).toBe("");
     expect(
       bearerCopy({
