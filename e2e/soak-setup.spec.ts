@@ -9,7 +9,7 @@ test.skip(
 );
 
 const SELF_DOMAIN = "gymshark.com";
-const COMPETITORS = ["nike.com", "adidas.com", "underarmour.com", "lululemon.com", "linear.app"] as const;
+const COMPETITORS = ["nike.com", "adidas.com", "underarmour.com", "lululemon.com", "linear.app", "vercel.com"] as const;
 
 async function onboardSelf(page: Page): Promise<void> {
   await page.goto("/onboarding");
