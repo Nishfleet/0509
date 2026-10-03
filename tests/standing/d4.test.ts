@@ -77,6 +77,14 @@ describe("readThisFirstLine", () => {
   it("names the counts and the lead", () => {
     expect(readThisFirstLine(2, 5, "Acme")).toBe("2 of 5 changes worth reading this week, led by Acme.");
   });
+
+  it("says change, not changes, when one change was judged", () => {
+    expect(readThisFirstLine(1, 1, "Acme")).toBe("1 of 1 change worth reading this week, led by Acme.");
+  });
+
+  it("keeps the plural noun when one of several was picked", () => {
+    expect(readThisFirstLine(1, 3, "Acme")).toBe("1 of 3 changes worth reading this week, led by Acme.");
+  });
 });
 
 describe("readThisFirstState", () => {
