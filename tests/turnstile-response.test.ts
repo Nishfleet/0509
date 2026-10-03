@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { turnstileResponse } from "../app/components/turnstile-widget";
 
@@ -8,56 +8,58 @@ class FakeInputElement {
   constructor(public value: string) {}
 }
 
-let match: unknown = null;
-let queried: string | null = null;
+const querySelector = vi.fn();
 
 function stubDocument(): void {
-  vi.stubGlobal("document", {
-    querySelector: (selector: string) => {
-      queried = selector;
-      return match;
-    },
-  });
+  // The node project has no `document` or `HTMLInputElement`, so both are
+  // stubbed: querySelector returns the per-test fixture, and HTMLInputElement
+  // is the stub class the source's `instanceof` check resolves against.
+  vi.stubGlobal("document", { querySelector });
   vi.stubGlobal("HTMLInputElement", FakeInputElement);
 }
 
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
+
 describe("turnstileResponse", () => {
-  afterEach(() => {
-    vi.unstubAllGlobals();
+  beforeEach(() => {
+    querySelector.mockReset();
   });
 
   it("queries the turnstile response field", () => {
-    match = null;
+    querySelector.mockReturnValue(null);
     stubDocument();
 
     turnstileResponse();
 
-    expect(queried).toBe(SELECTOR);
+    expect(querySelector).toHaveBeenCalledWith(SELECTOR);
   });
 
   it("returns an empty string when nothing matches", () => {
-    match = null;
+    querySelector.mockReturnValue(null);
     stubDocument();
 
     expect(turnstileResponse()).toBe("");
+    expect(querySelector).toHaveBeenCalledWith(SELECTOR);
   });
 
   it("returns an empty string when the match is not an input element", () => {
-    match = { value: "  tok-123  " };
+    querySelector.mockReturnValue({ value: "  tok-123  " });
     stubDocument();
 
     expect(turnstileResponse()).toBe("");
   });
 
   it("returns the trimmed value of the matched input element", () => {
-    match = new FakeInputElement("  tok-123  ");
+    querySelector.mockReturnValue(new FakeInputElement("  tok-123  "));
     stubDocument();
 
     expect(turnstileResponse()).toBe("tok-123");
   });
 
   it("returns an empty string when the value is only whitespace", () => {
-    match = new FakeInputElement("   ");
+    querySelector.mockReturnValue(new FakeInputElement("   "));
     stubDocument();
 
     expect(turnstileResponse()).toBe("");
