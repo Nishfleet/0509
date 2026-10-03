@@ -38,4 +38,12 @@ describe("isBillingRefusal", () => {
   it("does not match undefined", () => {
     expect(isBillingRefusal(undefined)).toBe(false);
   });
+
+  it("does not match null", () => {
+    expect(isBillingRefusal(null)).toBe(false);
+  });
+
+  it("does not match an empty string", () => {
+    expect(isBillingRefusal("")).toBe(false);
+  });
 });
