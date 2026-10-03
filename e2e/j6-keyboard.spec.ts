@@ -109,10 +109,12 @@ test("the per-brand switch is operable with a keyboard alone @own-signin", async
   }
 
   // J6 starts here; the pointer is done for the rest of the test. A reload
-  // pins the tab count to the top of the document, then the nav's
-  // "Competitors" link is two Tabs and an Enter away.
+  // pins the tab count to the top of the document. The skip link is first,
+  // then the nav's "Competitors" link is two more Tabs and an Enter away.
   await page.reload();
   const nav = page.getByRole("navigation", { name: "Primary" });
+  await page.keyboard.press("Tab");
+  await expect(page.getByRole("link", { name: "Skip to content" })).toBeFocused();
   await page.keyboard.press("Tab");
   await expect(nav.getByRole("link", { name: "Home" })).toBeFocused();
   await page.keyboard.press("Tab");
@@ -121,16 +123,16 @@ test("the per-brand switch is operable with a keyboard alone @own-signin", async
   await expect(page).toHaveURL(/\/app\/competitors$/);
   await expect(page.getByRole("heading", { level: 1, name: "Competitors" })).toBeVisible();
 
-  // The focus-order contract: from the top of a freshly loaded page the four
-  // Places come first and in this order. At 390 they are the fixed bottom tab
+  // The focus-order contract: from the top of a freshly loaded page the skip
+  // link is first, then the four Places. At 390 they are the fixed bottom tab
   // bar — same order, different chrome.
   await page.reload();
   const order: string[] = [];
-  for (let i = 0; i < 4; i += 1) {
+  for (let i = 0; i < 5; i += 1) {
     await page.keyboard.press("Tab");
     order.push(await page.evaluate(() => document.activeElement?.textContent?.trim() ?? ""));
   }
-  expect(order).toEqual(["Home", "Competitors", "Alerts", "Settings"]);
+  expect(order).toEqual(["Skip to content", "Home", "Competitors", "Alerts", "Settings"]);
   const viewport = page.viewportSize();
   if (viewport === null) throw new Error("page.viewportSize() returned null");
   const width = viewport.width;
