@@ -81,12 +81,19 @@ describe("share card", () => {
 
   it("shows This week when period_end cannot be parsed (share-card.ts:15)", () => {
     const unparseable = card({ period_end: "not-a-date" });
-    if (unparseable === null) throw new Error("a card is still shared when period_end cannot be parsed");
+    if (unparseable === null)
+      throw new Error("expected the card to fall back to 'This week' but shareCard returned null");
     expect(unparseable.week).toBe("This week");
   });
 
   it("formats the week in the schedule's time zone, not in UTC (share-card.ts:16)", () => {
-    const london = card({ period_end: "2026-09-21T20:00:00.000Z" });
+    const london = shareCard({
+      payload: payload({ period_end: "2026-09-21T20:00:00.000Z" }),
+      entities: ENTITIES,
+      schedule: { timezone: "Europe/London", weekday: 1, hour: 8 },
+      history: [],
+      now: NOW,
+    });
     if (london === null) throw new Error("London fixture has no ranking");
     expect(london.week).toBe("Week to 21 September");
 
