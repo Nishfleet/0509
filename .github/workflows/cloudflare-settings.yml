@@ -1,0 +1,57 @@
+name: cloudflare-settings
+
+# Cloudflare settings that live outside wrangler.jsonc, applied with stock
+# wrangler commands, on demand and from main only (Nish 2026-10-03). Never runs
+# on push or schedule. R2: the backup bucket carries the same per-prefix
+# retention as 0509-snapshots (0509#5950). Email Routing: support@ and brief@
+# (the weekly brief's reply address) go to the support-inbox Worker (0509#5699).
+# Safe to re-run: the lifecycle `set` replaces the whole rule list, and each
+# address is updated if its rule exists and created if it does not. No install
+# step: this job holds the Cloudflare token, so it runs the lockfile's wrangler
+# version straight from npx with install scripts off.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cloudflare-settings
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    name: apply
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      NPM_CONFIG_IGNORE_SCRIPTS: "true"
+      WRANGLER: wrangler@4.144.0
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+      - name: Backup bucket lifecycle rules, before
+        run: npx --yes "$WRANGLER" r2 bucket lifecycle list 0509-snapshots-backup
+      - name: Set the backup bucket lifecycle rules
+        run: npx --yes "$WRANGLER" r2 bucket lifecycle set 0509-snapshots-backup --file .github/cloudflare/r2-backup-lifecycle.json --force
+      - name: Backup bucket lifecycle rules, after
+        run: npx --yes "$WRANGLER" r2 bucket lifecycle list 0509-snapshots-backup
+      - name: Route support@ and brief@ to the support-inbox Worker
+        run: |
+          set -o pipefail
+          for name in support brief; do
+            id=$(npx --yes "$WRANGLER" email routing rules list 0509.io | awk -v m="Matchers: to:$name@0509.io" '/^Rule:/ {id=$2} $0 ~ m"$" {print id}')
+            if [ -n "$id" ]; then verb=(update 0509.io "$id"); else verb=(create 0509.io); fi
+            npx --yes "$WRANGLER" email routing rules "${verb[@]}" --name "$name" \
+              --match-type literal --match-field to --match-value "$name@0509.io" \
+              --action-type worker --action-value 0509-support-inbox-v2
+          done
+      - name: Email Routing rules, after
+        run: npx --yes "$WRANGLER" email routing rules list 0509.io
