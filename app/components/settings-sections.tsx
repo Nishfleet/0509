@@ -19,14 +19,16 @@ const JUMPS = [
   { href: "#export-data", label: "Your data" },
 ] as const;
 
-export function SettingsJumps() {
+export function SettingsJumps({ hasBrief, hasPlan }: { hasBrief: boolean; hasPlan: boolean }) {
   return (
     <nav
       aria-label="Settings sections"
       className="mt-6 min-[1000px]:sticky min-[1000px]:top-10 min-[1000px]:mt-14 min-[1000px]:self-start"
     >
       <ul className="flex flex-wrap gap-x-5 gap-y-1 min-[1000px]:flex-col min-[1000px]:gap-y-0">
-        {JUMPS.map((jump) => (
+        {JUMPS.filter(
+          (jump) => (jump.href !== "#settings-brief" || hasBrief) && (jump.href !== "#settings-plan" || hasPlan),
+        ).map((jump) => (
           <li key={jump.href}>
             <a
               href={jump.href}
