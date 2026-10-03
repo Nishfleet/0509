@@ -35,6 +35,10 @@ export function CompetitorSite({ url, error }: CompetitorSiteProps): ReactElemen
           type="text"
           inputMode="url"
           autoComplete="off"
+          autoCapitalize="none"
+          autoCorrect="off"
+          spellCheck={false}
+          enterKeyHint="go"
           required
           maxLength={SITE_LINK_MAX}
           placeholder="adidas-group.com"
