@@ -51,14 +51,33 @@ describe("alert feed reveal button", () => {
     // Assert on the reveal button itself, not any other aria-expanded on the
     // page (the "Why we flagged" dialog trigger also carries aria-expanded).
     expect(html).toMatch(
-      /<button[^>]*data-testid="mentions-show-all"[^>]*aria-expanded="false"[^>]*>\s*Show all, including \d+ we think do not matter\s*<\/button>/,
+      /<button[^>]*data-testid="mentions-show-all"[^>]*aria-expanded="false"[^>]*>\s*Show all, including \d+ we think (?:do|does) not matter\s*<\/button>/,
     );
-    expect(html).not.toMatch(/<button[^>]*data-testid="mentions-show-all"[^>]*>\s*Hide the \d+ we think do not matter/);
+    expect(html).not.toMatch(/<button[^>]*data-testid="mentions-show-all"[^>]*>\s*Hide the \d+ we think (?:do|does) not matter/);
   });
 
   it("renders no reveal button when nothing is held", () => {
     const html = feed(mentionsFromRows([row({ id: "shown", p: 0.9 })], NOW));
     expect(html).not.toContain('data-testid="mentions-show-all"');
     expect(html).not.toMatch(/Show all/);
+  });
+
+  it("uses the singular phrase when exactly one item is held", () => {
+    const html = feed(mentionsFromRows([row({ id: "held-one", p: 0.1 }), row({ id: "shown-one", p: 0.9 })], NOW));
+    expect(html).toMatch(
+      /<button[^>]*data-testid="mentions-show-all"[^>]*aria-expanded="false"[^>]*>\s*Show all, including 1 we think does not matter\s*<\/button>/,
+    );
+  });
+
+  it("keeps the plural phrase when more than one item is held", () => {
+    const html = feed(
+      mentionsFromRows(
+        [row({ id: "held-a", p: 0.05 }), row({ id: "held-b", p: 0.05 }), row({ id: "shown-many", p: 0.9 })],
+        NOW,
+      ),
+    );
+    expect(html).toMatch(
+      /<button[^>]*data-testid="mentions-show-all"[^>]*aria-expanded="false"[^>]*>\s*Show all, including 2 we think do not matter\s*<\/button>/,
+    );
   });
 });

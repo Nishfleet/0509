@@ -239,13 +239,13 @@ test("a workspace shows the three mention treatments", async ({ page }, testInfo
   await expect(reveal).toBeVisible();
   await expect(reveal).toBeFocused();
   await expect(reveal).toHaveAttribute("aria-expanded", "true");
-  await expect(reveal).toHaveText(/Hide the \d+ we think do not matter/);
+  await expect(reveal).toHaveText(/Hide the \d+ we think (?:do|does) not matter/);
 
   // A second keyboard activation hides the held rows again.
   await page.keyboard.press("Enter");
   await expect(held).toHaveCount(0);
   await expect(reveal).toHaveAttribute("aria-expanded", "false");
-  await expect(reveal).toHaveText(/Show all, including \d+ we think do not matter/);
+  await expect(reveal).toHaveText(/Show all, including \d+ we think (?:do|does) not matter/);
 
   // Re-open so the rest of this test inspects the held rows.
   await page.keyboard.press("Enter");
