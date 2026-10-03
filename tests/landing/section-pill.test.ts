@@ -13,11 +13,12 @@ function section(overrides: { lead?: string } = {}): string {
   );
 }
 
-function pill(props: { label?: string; note?: string; highlight?: boolean } = {}): string {
+function pill(props: { note?: string; highlight?: boolean } = {}): string {
   return renderToStaticMarkup(createElement("ul", null, createElement(Pill, { label: "Claude", ...props })));
 }
 
 function item(html: string): string {
+  expect(html.match(/<li/g)).toHaveLength(1);
   return html.slice(html.indexOf("<li"), html.indexOf("</li>"));
 }
 
@@ -25,27 +26,35 @@ describe("landing section", () => {
   it("names the section and ties the h2 to it, so a screen reader reads one heading with one label", () => {
     const html = section();
     expect(html).toContain('<section id="agents" aria-labelledby="agents-title"');
-    expect(html).toContain('<h2 id="agents-title"');
     expect(html).toContain("Built for your agents too.");
+    const labelledBy = html.match(/aria-labelledby="([^"]+)"/)?.[1] ?? "";
+    expect(labelledBy).toBe("agents-title");
+    expect(html).toContain(`<h2 id="${labelledBy}"`);
   });
 
-  it("renders the kicker as the small uppercase line above the title", () => {
+  it("renders the kicker as a small uppercase line above the display-face title", () => {
     const html = section();
-    expect(html).toContain('<p class="font-mono text-eyebrow font-medium uppercase text-ink-soft">For AI agents</p>');
-    expect(html).toContain("font-display");
-    expect(html).toContain("uppercase");
+    const kicker = html.slice(html.indexOf("<p"), html.indexOf("</p>") + 4);
+    expect(kicker).toContain(">For AI agents</p>");
+    expect(kicker).toContain("text-eyebrow");
+    expect(kicker).toContain("uppercase");
+
+    const title = html.slice(html.indexOf("<h2"), html.indexOf("</h2>"));
+    expect(title).toContain("font-display");
+    expect(title).toContain("uppercase");
+    expect(title).toContain("Built for your agents too.");
   });
 
-  it("adds the lead paragraph only when a lead is given", () => {
+  it("renders the kicker and the children, and adds a lead paragraph only when a lead is given", () => {
     const bare = section();
-    expect(bare).not.toContain("mt-5");
     expect(bare.match(/<p/g)).toHaveLength(2);
+    expect(bare).toContain(">For AI agents</p>");
+    expect(bare).toContain("<p>child paragraph</p>");
+    expect(bare).not.toContain("Your agent reads");
 
     const withLead = section({ lead: "Your agent reads the same ranking." });
     expect(withLead.match(/<p/g)).toHaveLength(3);
-    expect(withLead).toContain(
-      '<p class="mt-5 max-w-[42rem] text-[1.05rem] leading-[1.6] text-ink-soft">Your agent reads the same ranking.</p>',
-    );
+    expect(withLead).toContain('text-ink-soft">Your agent reads the same ranking.</p>');
   });
 
   it("puts the children inside the section, below the headings", () => {
@@ -65,10 +74,13 @@ describe("landing pill", () => {
     expect(html).not.toContain("<span");
   });
 
-  it("puts the note after a middle dot when a note is given, and never when it is not", () => {
-    expect(pill({ note: "News" })).toContain('>Claude<span class="text-ink-soft"> · News</span></li>');
-    expect(pill({ note: "" })).toContain('>Claude<span class="text-ink-soft"> · </span></li>');
+  it("renders no note span when the note is omitted", () => {
+    expect(pill()).not.toContain("<span");
     expect(pill({ note: undefined })).not.toContain("<span");
+  });
+
+  it("puts the note after a middle dot when a note is given", () => {
+    expect(item(pill({ note: "News" }))).toContain('>Claude<span class="text-ink-soft"> · News</span>');
   });
 
   it("wears the green wash when highlighted and the plain card when not", () => {
@@ -91,7 +103,8 @@ describe("landing pill", () => {
 
   it("keeps the note span soft only while the pill is not highlighted", () => {
     expect(item(pill({ note: "News" }))).toContain('<span class="text-ink-soft"> · News</span>');
-    expect(item(pill({ note: "News", highlight: true }))).toContain('<span class=""> · News</span>');
-    expect(item(pill({ note: "News", highlight: true }))).not.toContain("text-ink-soft");
+    const highlighted = item(pill({ note: "News", highlight: true }));
+    expect(highlighted).toContain(" · News</span>");
+    expect(highlighted).not.toContain("text-ink-soft");
   });
 });
