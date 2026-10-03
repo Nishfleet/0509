@@ -58,6 +58,26 @@ describe("feedLinksFromHtml", () => {
   });
 });
 
+describe("feedLinksFromHtml edge cases", () => {
+  it("skips empty or unparseable hrefs and keeps a valid sibling", () => {
+    const html = `
+      <link rel="alternate" type="application/rss+xml" href="">
+      <link rel="alternate" type="application/rss+xml" href="   ">
+      <link rel="alternate" type="application/rss+xml" href="http://">
+      <link rel="alternate" type="application/rss+xml" href="/valid.xml">
+    `;
+    expect(feedLinksFromHtml(html, HOME)).toEqual([new URL("/valid.xml", HOME).href]);
+  });
+
+  it("skips a feed link with no rel attribute and keeps one with rel=alternate", () => {
+    const html = `
+      <link type="application/rss+xml" href="/norel.xml">
+      <link rel="alternate" type="application/rss+xml" href="/withrel.xml">
+    `;
+    expect(feedLinksFromHtml(html, HOME)).toEqual([new URL("/withrel.xml", HOME).href]);
+  });
+});
+
 describe("feedCandidates", () => {
   it("puts the declared feed first, then the common paths, without repeats", () => {
     const html = `<link rel="alternate" type="application/atom+xml" href="/atom.xml">`;
@@ -77,6 +97,11 @@ describe("feedCandidates", () => {
     expect(feedCandidates(null, "https://rival.com/")).toEqual(
       COMMON_FEED_PATHS.map((path) => `https://rival.com${path}`),
     );
+  });
+
+  it("returns nothing for a plain-http homepage and every common path for an https one", () => {
+    expect(feedCandidates(null, "http://rival.com/")).toEqual([]);
+    expect(feedCandidates(null, HOME)).toEqual(COMMON_FEED_PATHS.map((path) => new URL(path, HOME).href));
   });
 
   it("caps the list", () => {
