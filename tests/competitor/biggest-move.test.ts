@@ -141,7 +141,8 @@ describe("pickBiggestMove", () => {
       observedAt: "2026-09-20T10:00:00.000Z",
     });
 
-    expect("sig-beta" > "sig-alpha").toBe(true);
+    // "sig-beta" sorts above "sig-alpha", so the test cannot hide a win by
+    // the smaller id behind JS string order.
     expect(pickBiggestMove([beta, alpha], WEIGHTS)?.signal.id).toBe("sig-beta");
     expect(pickBiggestMove([alpha, beta], WEIGHTS)?.signal.id).toBe("sig-beta");
   });
