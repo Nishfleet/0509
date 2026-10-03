@@ -82,6 +82,17 @@ describe("/v/:token (0509#5811)", () => {
     expect(html).not.toContain("Confirm this email address?");
   });
 
+  it("links on to the app after POST, so the page is not a dead end (0509#6762)", () => {
+    // The person arrives from an email link, often on a phone, with no tab
+    // open on the app. The pre-confirm page keeps its single action, so this
+    // link is the confirmed view's only way back in.
+    const html = renderPage(true);
+
+    expect(html).toMatch(/<a\b[^>]*href="\/app"/);
+    expect(html).toContain("Open Five to Nine");
+    expect(renderPage(false)).not.toContain('href="/app"');
+  });
+
   it("keeps the Confirm button disabled and reading Confirming… while the post is in flight", () => {
     const html = renderPending("submitting");
     expect(html).toContain("Confirm this email address?");
