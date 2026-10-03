@@ -1,10 +1,19 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { verify } from "web-bot-auth";
+import type * as CryptoModule from "web-bot-auth/crypto";
 import { verifierFromJWK } from "web-bot-auth/crypto";
 
-const vars = vi.hoisted(() => ({ env: {} as Record<string, string> }));
+const vars = vi.hoisted(() => ({ env: {} as Record<string, string>, failSigner: false }));
 
 vi.mock("cloudflare:workers", () => ({ env: vars.env }));
+vi.mock("web-bot-auth/crypto", async (importOriginal) => {
+  const original = await importOriginal<typeof CryptoModule>();
+  return {
+    ...original,
+    signerFromJWK: (key: Parameters<typeof original.signerFromJWK>[0]) =>
+      vars.failSigner ? Promise.reject(new Error("signer rejected")) : original.signerFromJWK(key),
+  };
+});
 
 import { CRAWLER_USER_AGENT } from "../../../app/lib/fetch/crawler-identity";
 import { directoryBody, readSigningKey, signedHeaders } from "../../../app/lib/fetch/web-bot-auth.server";
@@ -22,6 +31,7 @@ const NOW = new Date("2026-10-02T10:00:00Z");
 
 beforeEach(() => {
   delete vars.env.WEB_BOT_AUTH_KEY;
+  vars.failSigner = false;
 });
 
 afterEach(() => {
@@ -71,6 +81,17 @@ describe("signedHeaders with a key", () => {
     expect(await signedHeaders(URL_UNDER_TEST, headers, NOW)).toBe(headers);
     expect(log.mock.calls.flat().join(" ")).not.toContain("SECRET-D-VALUE");
     expect(log).toHaveBeenCalledWith(JSON.stringify({ event: "web_bot_auth.sign_failed" }));
+  });
+
+  it("builds a new signer after a rejected one, so a later fix works without a redeploy", async () => {
+    vars.env.WEB_BOT_AUTH_KEY = JSON.stringify({ ...TEST_KEY, kid: "retry-key" });
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const headers = { "user-agent": CRAWLER_USER_AGENT };
+    vars.failSigner = true;
+    expect(await signedHeaders(URL_UNDER_TEST, headers, NOW)).toBe(headers);
+    vars.failSigner = false;
+    const out = new Headers(await signedHeaders(URL_UNDER_TEST, headers, NOW));
+    expect(out.get("signature")).not.toBeNull();
   });
 
   it("never echoes unparseable secret text into the log", async () => {
