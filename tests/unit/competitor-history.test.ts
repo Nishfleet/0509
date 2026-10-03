@@ -21,4 +21,8 @@ describe("historyAnchor", () => {
   it("returns now when a future pause is given (clock skew guard)", () => {
     expect(historyAnchor("off", "2026-09-25T08:00:00.000Z", NOW)).toEqual(NOW);
   });
+
+  it("returns now when the pause instant is exactly now", () => {
+    expect(historyAnchor("off", NOW.toISOString(), NOW)).toEqual(NOW);
+  });
 });
