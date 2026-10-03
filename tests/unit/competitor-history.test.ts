@@ -21,4 +21,15 @@ describe("historyAnchor", () => {
   it("returns now when a future pause is given (clock skew guard)", () => {
     expect(historyAnchor("off", "2026-09-25T08:00:00.000Z", NOW)).toEqual(NOW);
   });
+
+  it("returns now when the pause instant is exactly now", () => {
+    expect(historyAnchor("off", NOW.toISOString(), NOW)).toEqual(NOW);
+  });
+
+  it("pins the comparison boundary one millisecond either side of now", () => {
+    const oneMsBefore = new Date(NOW.getTime() - 1);
+    const oneMsAfter = new Date(NOW.getTime() + 1);
+    expect(historyAnchor("off", oneMsBefore.toISOString(), NOW)).toEqual(oneMsBefore);
+    expect(historyAnchor("off", oneMsAfter.toISOString(), NOW)).toEqual(NOW);
+  });
 });
