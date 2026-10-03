@@ -16,7 +16,7 @@ import type { BreakageEvidence } from "../../app/lib/site/breakage-evidence";
 
 const REPEATS = 3;
 
-const CONCURRENCY = 8;
+const CONCURRENCY = 2;
 
 const MIN_PER_SPLIT = 20;
 
