@@ -39,6 +39,8 @@ export function OneInput({
           enterKeyHint="go"
           required={required}
           maxLength={maxLength}
+          aria-invalid={message ? true : undefined}
+          aria-describedby={message ? "one-input-message" : undefined}
           className="sm:flex-1"
         />
         <Button type="submit" size="lg">
@@ -46,7 +48,7 @@ export function OneInput({
         </Button>
       </div>
       {message ? (
-        <p role="status" className="mt-3 text-[0.95rem]">
+        <p id="one-input-message" role="status" className="mt-3 text-[0.95rem]">
           {message}
         </p>
       ) : null}
