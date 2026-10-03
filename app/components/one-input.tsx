@@ -3,6 +3,18 @@ import type { ReactNode } from "react";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 
+interface OneInputProps {
+  label: string;
+  placeholder: string;
+  name: string;
+  action: string;
+  method?: "get" | "post";
+  message?: string | undefined;
+  submitLabel: ReactNode;
+  required?: boolean;
+  maxLength?: number;
+}
+
 export function OneInput({
   label,
   placeholder,
@@ -13,17 +25,7 @@ export function OneInput({
   submitLabel,
   required = false,
   maxLength,
-}: {
-  label: string;
-  placeholder: string;
-  name: string;
-  action: string;
-  method?: "get" | "post";
-  message?: string | undefined;
-  submitLabel: ReactNode;
-  required?: boolean;
-  maxLength?: number;
-}) {
+}: OneInputProps) {
   return (
     <form method={method} action={action} className="mt-8">
       <div className="flex flex-col gap-3 sm:flex-row">
