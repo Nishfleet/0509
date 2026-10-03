@@ -16,7 +16,7 @@ export function AccountDeleteNotice({ id, progress }: { id: string; progress: De
         ? `Saved page copies and screenshots: stopped. Write to ${SUPPORT_ADDRESS} and we'll finish it.`
         : progress.deleted === null
           ? "Saved page copies and screenshots: removed"
-          : `Saved page copies and screenshots: removed (${String(progress.deleted)} files)`;
+          : `Saved page copies and screenshots: removed (${String(progress.deleted)} ${progress.deleted === 1 ? "file" : "files"})`;
   return (
     <section data-delete="progress" aria-live="polite">
       <h2 className={SIGN_IN_TITLE}>Your account is deleted</h2>
